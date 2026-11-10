@@ -1,13 +1,15 @@
 module
 
 public import Definitions.Core.Game
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Decisive games, and batches that read only one way
 
 A game is decisive (`Decisive`) when every message type it asks for is inhabited (`Productive`), so that every position
 has a run to the end, and two of its runs end differently (`Reaches`): for a verdict, some run accepts and some run
-rejects. C-Flock's soundness states the same three over its own games (`FlockSoundness.Discharge.Exec.SessionLDecisive`,
+rejects. Flock's soundness states the same three over its own games (`FlockSoundness.Discharge.Exec.SessionLDecisive`,
 whose `audit_tile_decisive_verdict` is a one-stage audit's verdict being decisive).
 
 `batch` is not injective: `[ret false, send Bool fun _ => ret true]` and `[send Bool fun _ => ret false, ret true]` have
@@ -18,7 +20,7 @@ unambiguous (`Verity.Game.unambiguous_of_decisive`); a constant game can break i
 (`Verity.Game.not_unambiguous_of_constant`).
 
 **Existential, so no completeness claim.** `Reaches` picks the messages and the coins. The accepting run of a decisive
-verdict game may need messages the honest prover never sends and coins that fall its way: C-Flock's all-zero run
+verdict game may need messages the honest prover never sends and coins that fall its way: Flock's all-zero run
 accepts every table, satisfiable or not. Decisiveness says nothing about how often the honest prover, or any prover, is
 accepted.
 -/

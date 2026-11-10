@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.Bandwidth.Game
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The bandwidth audit v0 with a second secret the chip's view determines

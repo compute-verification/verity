@@ -6,7 +6,7 @@
             "run_record": "art:4bc894c68a07c3947a61c23263c4e062762359b73c7883dca4b3b2fca9ff16fc"},
     "captured_utc": "2026-10-16"
   },
-  "cublas_route_scan": {"run_record": "art:25d1b501ceb55aaf04ef28d0b34431bcc02a9b3038d5575bb813dca7f22eaa49"},
+  "cublas_route_scan": {"run_record": "art:e97608d2cf64a3d489defaf31289f706144c3a7ee29713c6e93be56f12cca4d9"},
   "cublas_cc12_probes": {"run_records": ["art:db886b970d327bb2f2e2253fdac0fbb8dae098c646f2f641c16ba1280214f750",
                                          "art:916168fad15230f7bacb35eb2b2388351b267dd47fd8ef22d56072beffbd3d53",
                                          "art:13a8b8e6f6378f42b3eb297db5d78c90ac8999b8fb5dfc1cca02b93c4dd660bf"]},
@@ -73,8 +73,6 @@
   "glm53_tp8_allreduce_capture": {"run_records": ["art:4a6503ce29cbd49b808dffe32566e4f74e3933199fdd347dec4a2238e73058f7",
                                                   "art:aef3c209534e1cf90640cd9bda04a931d041f8553437e917346d6e24283507ea",
                                                   "art:6562ff46905ed10fe4372ee070a97ecc6d36725f313e4834a44e78fb3acb3f7a"]},
-  "rmsnorm_fused_cuda_b1_row": {"closed": "2026-09-08"},
-  "dense_quarantine": {"by": "lane dense"},
   "glm53_multimem_replay": {"run_record": "art:51501071fac6c0aa4d40c5fab867667b1aefa0d971b9036e27b1d9e331829687"},
   "tp4_nccl_tree_replay": {"run_records": ["art:471f07d6e0d54babb6552460ee8c02ac5c94160ba6d03b639848aa44c48132d1",
                                            "art:810937f8e54906606040a9cc3c50a3f64d5bbfd2208b2690a66cff8ae23d175b",

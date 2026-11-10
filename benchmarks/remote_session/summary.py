@@ -1,7 +1,7 @@
 """A run's sessions in a few lines, from its `verifier.json` and `prover.json` (`run.sh`'s outputs): each honest
 session's verdict, γ terms and costs, each kv session's verdict and the blocks it appended, released and read after the
 seed, and for each skip fraction F the sessions accepted against the rate the samples predict,
-Π_t C(U_t − F·N·L_t, s) / C(U_t, s) over the windows drawn, and the samples that landed on a dropped block.
+Π_t C(U_t − F·N·L_t, s) / C(U_t, s) over the windows sampled, and the samples that landed on a dropped block.
 
     python summary.py OUT [--json]
     python summary.py OUT OUT ... [--json]      the skip sessions of several runs, pooled
@@ -54,7 +54,7 @@ def summarize(out: Path) -> dict:
             kv.append(row)
         else:
             dropped = ps["dropped_count"] if "dropped_count" in ps else len(ps["dropped"])
-            # The chance this session is accepted: every one of its W windows drawn clean, at the passes each made
+            # The chance this session is accepted: every one of its W windows sampled clean, at the passes each made
             # (a window a rejected session never reached, at the mean of those it did).
             mean = round(sum(passes) / len(passes))
             row["p_accept"] = math.prod(miss(L * N, L * dropped, s)

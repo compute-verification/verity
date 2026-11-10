@@ -1,17 +1,48 @@
 module
 
+public import Mathlib.Data.UInt
+public import Proofs.Flock.Claims.Complete.Zk.Coins
 public import Proofs.Flock.Claims.Recursion.DeployOuter
 public import Proofs.Flock.Claims.Recursion.Scope
-public import Proofs.Flock.Claims.Complete.Zk.Honest
-public import Proofs.Flock.Claims.Complete.Zk.Coins
-public import Definitions.Claims.Recursion
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The compiled verifier in public-coin form (`RecDeploy.V`) and its record (`deployRec`)
 
 The shipped recursive verifier is the inner session, then `flock-verify verify --zk` once per V* part with that part's
 recursive inputs (`--rec-inner`, `--rec-part J`, `--rec-bindings`, the inner statement's files, the inner session's
-record and the coin server's transcript). `RecDeploy.V` is that as one `Claims.Verifier` over Flock's live coins
+record and the challenger's live-coin part's transcript). `RecDeploy.V` is that as one `Claims.Verifier` over Flock's live coins
 (`FlockDeploy.Coin`):
 
 * **Statement.** `x` is the canonical bytes (`RecX.encode`) of what the verifier holds before the run: the inner
@@ -21,14 +52,14 @@ record and the coin server's transcript). `RecDeploy.V` is that as one `Claims.V
   V*'s shared rows (`--rec-rows`) are no part of `x`: they are staged (below). `parse` and `scopeCheck` are the
   deployed parser's (`Flock.RecScope.parseOf`, `scopeCheckOf`) at
   `decodeR`: what `readX` reads (it refuses unless the inner statement's dimensions read, `RecVStar.innerOf`, Flock's
-  plain verifier sets the inner statement up, its statement check passes and it carries a draw, which at one table is
+  plain verifier sets the inner statement up, its statement check passes and it carries a sample, which at one table is
   the public file's header's, `innerOk`, and there is
   one part per V*
   statement of the verifier's inner shape, `RecVStar.statements`, each part's circuit V*'s statement's of its index,
   `partsVStar`, as each part's session holds it, `RecVStar.checkCircuit`), as the verifier's inner
   shape and the inner statement's files with no records (`readOf`), where the setup's checks accept that shape
-  (`RecScope.accepts`). The V* records are run messages, so the statement carries no draws, and `scopeCheck` reads
-  only the inner scope check: the compiled verifier refuses the draw and shape conditions at each session's decision
+  (`RecScope.accepts`). The V* records are run messages, so the statement carries no samples, and `scopeCheck` reads
+  only the inner scope check: the compiled verifier refuses the sample and shape conditions at each session's decision
   (`DeployScope`). `parse` reads no circuit commitment: the shipped verifier has no private-circuit form of the
   compiled statement.
 * **Rounds.** The inner session's `k_I = IV.k (x_I)` rounds, then one staging round (`kS`), each message answered by
@@ -40,14 +71,14 @@ record and the coin server's transcript). `RecDeploy.V` is that as one `Claims.V
   registered entries (its running sums' chain, committed under its own salts), the inner session's record is the
   prover's, and so are V*'s shared rows (`--rec-rows`: `acc0`, `rec-top-L<l>` and `rec-c<k>`, registrations of the
   prover's values), one set for every part. So the prover sends them, after the inner rounds and before any V*
-  session, as the staging round's message (`encStage`); the coin server's transcript of the inner rounds is the
+  session, as the staging round's message (`encStage`); the challenger's live-coin part's transcript of the inner rounds is the
   verifier's own (`Brings.tr`). The deployed composer (`flock-verify rec-compose`) accepts only where every part was
   checked against one staged rows file and one set of every other input the parts share, each part at its own index
   (`ComposeParts.composed_parts`: each part is then `partRaw`'s form, up to a SHA-512 collision). That the parts'
   sessions are one run of `V` is the open condition C10 `OneRun` (`ComposeParts`), which needs the service's
   interactive-run record.
 * **V\* statements.** Part `s`'s statement is what the prover staged (`Stage.ofMsg`: the part's public file, the
-  inner session's record and the shared rows off the staging message, the transcript the coin server's), in the part's
+  inner session's record and the shared rows off the staging message, the transcript the challenger's live-coin part's), in the part's
   recursive flags (`staged`). Its numbers (`numsOf`: `VO`'s rounds and `deployZkRec`'s errors, `N₀` and weight) are to be the ones `x`
   fixes (`nums`, those of a staged statement that sets up, when one does): the compiled verifier refuses a part whose
   staged statement has others, and `vstar` reads such a part as that statement (`vstarAt`), so every V* statement
@@ -61,7 +92,7 @@ being the one the prover staged (`ract_sess`). `next_acc`: the whole run
 accepts only at the last session's last round, where the outer verifier accepts.
 
 `deployRec IV ivScope b` is the record the recursion's claims read, at the inner verifier `IV`, its scope check and
-what the deployment brings (`Brings`): the coin server's transcript, the stager `stage` reads, the outer witnesses'
+what the deployment brings (`Brings`): the challenger's live-coin part's transcript, the stager `stage` reads, the outer witnesses'
 readers (`Readers`: the inner messages and the SHA-512 evaluations they record), each outer session's `--zk` leaf counts
 and the reference prover's pieces. `innerView` runs `IV` at the claim's oracle on those messages and the run's first
 `k_I` coins. The hm96 key is the pinned one (`Hm96.Default512`). The record's `stage` lays out the staging message
@@ -163,15 +194,15 @@ structure XR where
   shape : RecVStar.Inner
   dims : RecVStar.Inner
 
-/-- The draw `FlockDeploy.drawOfJ` reads off a record whose `unit_draw` is `u`, rebuilt (`Flock.norm`), or none where it
+/-- The sample `FlockDeploy.drawOfJ` reads off a record whose `unit_draw` is `u`, rebuilt (`Flock.norm`), or none where it
 is absent or `null`. -/
 def drawOfU : Option Json → Option Json
   | some .null => none
   | some d => some (Flock.norm d)
   | none => none
 
-/-- **The session's draw is the statement's at one table**: at one table the setup reads the session's `unitDraw` back
-from the public file's header, so this is where the two can differ; at several tables the setup sets it to the draw. -/
+/-- **The session's sample is the statement's at one table**: at one table the setup reads the session's `unitDraw` back
+from the public file's header, so this is where the two can differ; at several tables the setup sets it to the sample. -/
 def drawTiedB (s : FlockDeploy.Ins) (spec : SessionSpec) (sts : Array Stmt) : Bool :=
   sts.size != 1 || FlockDeploy.drawEq (drawOfU spec.unitDraw) s.read.draw
 
@@ -181,10 +212,10 @@ theorem drawTiedB_iff {s : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array St
   by_cases h : sts.size = 1 <;> simp [h]
 
 /-- **Flock's own checks on the inner statement**: Flock's plain verifier sets it up (`FlockDeploy.setupOf false`), its
-statement check passes (`Readable.Read.check`, `ProvedScope.check`), it carries a draw, the inner session's record's
-(`Raw.draw`): the recursion's inner session is drawn, and the compiled verifier refuses a session over an inner
+statement check passes (`Readable.Read.check`, `ProvedScope.check`), it carries a sample, the inner session's record's
+(`Raw.draw`): the recursion's inner session is sampled, and the compiled verifier refuses a session over an inner
 session whose record holds none (`RecSetup.innerDrawn`, `noInnerDraw`), and at one table the public file's header
-carries that draw (`drawTiedB`): the deployed verifier refuses a record whose draw is not the session's (`Draw.check`,
+carries that sample (`drawTiedB`): the deployed verifier refuses a record whose sample is not the session's (`Draw.check`,
 U1, in `Record.check`), and at one table the session's is the header's. -/
 def innerOk (inner : Claims.Msg) : Except String Unit :=
   match FlockDeploy.setupOf false inner with
@@ -244,7 +275,7 @@ def partsVStar (shape : RecVStar.Inner) (parts : List PartX) (vs : Array VStar.S
     | _, _ => false
 
 /-- The compiled statement's reading before the parts' circuits are held to V\*'s: its bytes decode, the inner
-statement's decode and set up (`RecVStar.innerOf`) and pass Flock's own setup and statement check with a draw
+statement's decode and set up (`RecVStar.innerOf`) and pass Flock's own setup and statement check with a sample
 (`innerOk`), the verifier's own inner shape reads (`RecVStar.Inner.ofJson`), and there is one part per V* statement of
 that shape, whose circuit names the statement's message-round ports (`portsNamed`), the last part's RecCap's port
 `top` (`capPorted`). -/
@@ -307,9 +338,9 @@ theorem readX_of_pre {x : Claims.Msg} {r : XR} (h : readXPre x = some r) {vs : A
   simp [h, hvs, hp, Except.toOption]
 
 /-- How Flock's plain verifier is told to set the inner statement `w` up, as each staged V* statement hands it to the
-verifier (`--rec-inner-statement`, `--rec-inner-statement-coins`, `--rec-inner-tables`, `--rec-inner-draw`): its
-`--statement`, `--coins`, lookup tables and draw. -/
-def innerFormOf (w : Raw) : RecCoins.InnerForm := ⟨w.statement, w.osCoins, w.tables, w.draw⟩
+verifier (`--rec-inner-statement`, `--rec-inner-tables`, `--rec-inner-draw`): its `--statement`, lookup tables and
+sample. -/
+def innerFormOf (w : Raw) : RecCoins.InnerForm := ⟨w.statement, w.tables, w.draw⟩
 
 /-- The inner statement's files as each staged V* statement hands them to check 5 (`--rec-inner-circuit`,
 `--rec-inner-public`, `--rec-inner-partition`), with how the inner statement is set up (`innerFormOf`), its program
@@ -329,7 +360,7 @@ def decodeR (x : Claims.Msg) : Option RecScope.Read := (readX x).map readOf
 
 /-- **The claims' parser**: the deployed parser (`RecScope.parseOf`) at `decodeR`: where the setup's checks accept the
 inner shape (`RecScope.accepts`), the inner statement's bytes, its dimensions as check 5 sets it up, no circuit
-commitment, the form off the verifier's own inner shape, and no draw (the V* records are run messages; their draws are
+commitment, the form off the verifier's own inner shape, and no sample (the V* records are run messages; their samples are
 refused at the run, `DeployScope`). -/
 def parse (x : Claims.Msg) : Option Claims.Recursion.CompiledStatement := RecScope.parseOf decodeR x
 
@@ -349,7 +380,7 @@ def nS (x : Claims.Msg) : ℕ :=
 /-! ## The V* statements -/
 
 /-- **The V* parts' staged inputs**, read off the compiled statement and the rounds before the sessions as the run
-shows them: each part's public file, the inner session's record, the coin server's transcript, and V*'s shared rows
+shows them: each part's public file, the inner session's record, the challenger's live-coin part's transcript, and V*'s shared rows
 (`--rec-rows`), one set every part reads. -/
 structure Stage where
   pub : Claims.Msg → List (Claims.Msg × Claims.Out) → ℕ → ByteArray
@@ -382,8 +413,8 @@ def stageOf (ms : List (Claims.Msg × Claims.Out)) : Option (List ByteArray × B
   decodeStage ((ms.getLast?.map Prod.fst).getD [])
 
 /-- **The staged inputs as the compiled verifier reads them** off the rounds `ms` before the sessions: each part's
-public file, the inner session's record and V*'s shared rows off the staging message, `ms`' last, and the coin
-server's transcript `tr` of the inner rounds before it; empty where the staging message doesn't read. -/
+public file, the inner session's record and V*'s shared rows off the staging message, `ms`' last, and the challenger's
+live-coin part's transcript `tr` of the inner rounds before it; empty where the staging message doesn't read. -/
 def Stage.ofMsg (tr : Claims.Msg → List (Claims.Msg × Claims.Out) → ByteArray) : Stage where
   pub _ ms s := ((stageOf ms).bind fun p => p.1[s]?).getD ByteArray.empty
   record _ ms := ((stageOf ms).map (·.2.1)).getD ByteArray.empty
@@ -409,7 +440,6 @@ def partRaw (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Cla
   transcript := some (st.transcript x ms)
   registration := r.w.registration
   innerStatement := some r.innerRaw.statement
-  innerStatementCoins := some r.innerRaw.osCoins
   innerTables := some r.innerRaw.tables
   innerDraw := r.innerRaw.draw
   recLinks := r.w.links
@@ -454,7 +484,7 @@ noncomputable def vstar (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × 
   (List.range (nS x)).map (vstarAt st x ms)
 
 /-- **Part `s`'s numbers in the record**: `nums`', with the outer session's `--zk` leaf counts at its V* statement
-(`zl`: Flock's `n_L`, the leaves before the coins, and `n_B`, those of one draw's answers). -/
+(`zl`: Flock's `n_L`, the leaves before the coins, and `n_B`, those of one sample's answers). -/
 noncomputable def numsZk (zl : Claims.Msg → ℕ × ℕ) (st : Stage) (x : Claims.Msg) (s : ℕ) : Claims.Recursion.Nums :=
   { nums st x s with
     leaves := (zl (staged st x (pick st x s) s)).1
@@ -611,7 +641,7 @@ def innerView (H : Claims.Msg → Claims.Msg) (IV : Claims.Verifier Coin) (rd : 
   (Claims.run H (Claims.replay (rd.msgs x ws)) IV (xIOf x) () fun i => Claims.coinSeq r i.val).seen
 
 /-- **The inputs of the SHA-512 evaluations the inner verifier makes on the inner messages the outer witnesses give**:
-its run's calls at `H`, at the coins `c` (a draw's, whose first are the inner session's). -/
+its run's calls at `H`, at the coins `c` (a sample's, whose first are the inner session's). -/
 def innerCallsOf (H : Claims.Msg → Claims.Msg) (IV : Claims.Verifier Coin) (rd : Readers) (x : Claims.Msg)
     (c : ℕ → Coin) (ws : List Claims.Flock.Wit) : List Claims.Msg :=
   (Claims.run H (Claims.replay (rd.msgs x ws)) IV (xIOf x) () fun i => c i.val).vLog.map Prod.fst
@@ -638,7 +668,7 @@ structure Stager where
   record : Claims.Msg → List (Claims.Msg × Claims.Out) → List Claims.Msg → ByteArray
   rows : Claims.Msg → List (Claims.Msg × Claims.Out) → List Claims.Msg → ByteArray
 
-/-- **What the deployment brings** besides the inner verifier: the coin server's transcript of the inner rounds (`tr`),
+/-- **What the deployment brings** besides the inner verifier: the challenger's live-coin part's transcript of the inner rounds (`tr`),
 the stager the record's `stage` reads (`hs`) and the number of commit strings it lays out (`nC`), the outer witnesses'
 readers (`rd`), each V* statement's `--zk` leaf counts (`zl`: Flock's `n_L` and `n_B`, which
 `Flock.zk_deployZk_of_models` takes as its parameters), the reference prover's pieces (`ref`), and the inputs of the
@@ -652,7 +682,7 @@ structure Brings where
   ref : RefParts
   setup : Claims.Msg → List Claims.Msg := fun _ => []
 
-/-- The staged inputs the compiled verifier reads: the staging message's, at the coin server's transcript. -/
+/-- The staged inputs the compiled verifier reads: the staging message's, at the challenger's live-coin part's transcript. -/
 def Brings.st (b : Brings) : Stage := Stage.ofMsg b.tr
 
 /-- **The staging message of a stager** at the inner rounds `ms` and the commit strings `cs`: its public file of each
@@ -746,7 +776,7 @@ noncomputable def εO (x : Claims.Msg) : ℝ :=
 
 open Classical in
 /-- **The V\* statements the masked verifier can accept** against `H` (`FlockComplete.readyZk` at the recursive setup):
-one table, its setup against `H` the one at SHA-512, a drawn session, under `2^56` bytes, and the keyed coin tree. -/
+one table, its setup against `H` the one at SHA-512, a sampled session, under `2^56` bytes, and the keyed coin tree. -/
 noncomputable def readyO (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : Bool :=
   match setupO x with
   | some (s, spec, sts) => sts.size == 1 && s.base.read.draw.isSome && decide (x.length < 2 ^ 56) &&

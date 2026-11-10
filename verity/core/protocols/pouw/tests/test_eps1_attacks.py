@@ -2,7 +2,7 @@
 window's credit without doing its work, as a test on the scheme's spot check and seed.
 
 The scheme serves `O = (W + c) Xᵀ` exactly on sm_120's H1 (co32c-u16) with the fx1 fold, commits
-a thread's receipt (its eight chain words), and draws the thread's whole call as a unit.  The drawn unit's proof is
+a thread's receipt (its eight chain words), and samples the thread's whole call as a unit.  The sampled proof block's proof is
 `PouwCallCheck_v1{KS, FOLD "fx1", OUT "chains"}` (`circuit.segment`), which recomputes every absorbed word from the
 committed operand leaves and the public noise, from `T_{-1} = 0`; the noise is `eps1_reference.noise` of the per-call seed
 `seed_j = SHA-512(TAG ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j))`.  Each attack below leaves one
@@ -22,8 +22,8 @@ import random
 import numpy as np
 import pytest
 
-from verity.core.protocols.pouw.circuit import eps1_reference as EPS
-from verity.core.protocols.pouw.circuit import segment as SG
+from verity.ml.protocols.pouw.circuit import eps1_reference as EPS
+from verity.ml.protocols.pouw.circuit import segment as SG
 
 M32 = SG.M32
 SALT = bytes(range(32))

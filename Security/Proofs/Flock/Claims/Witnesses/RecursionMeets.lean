@@ -1,11 +1,42 @@
 module
 
-public import Proofs.Flock.Claims.Witnesses.Recursion
-public import Proofs.Flock.Claims.DeployEfficient
+public import Proofs.Flock.Claims.Recursion.Assumptions.PlainLeaves
+public import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
+public import Proofs.Flock.Claims.Recursion.DeployChecked
 public import Proofs.Flock.Claims.Recursion.DeployComplete
 public import Proofs.Flock.Claims.Recursion.DeployStop
-public import Proofs.Flock.Claims.Recursion.DeployChecked
-public import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployEfficient
 
 /-!
 # Antecedent witnesses: the ZK-recursion compiler's claims at the deployed record
@@ -32,7 +63,7 @@ read:
   `FlockDeploy.listWithin_zkTrim`), where the recursion's KS theorems sit;
 * `ZK_meets`, `ZKPriv_meets`: the deployed outer record is masked;
 * `ZKStop_meets`: the deployed outer record is masked, and the compiled verifier's record with its stop
-  (`RecDeploy.deployRecStop`) is one whose prover `ZKStop` reads is `refPStop` on the tape each statement draws
+  (`RecDeploy.deployRecStop`) is one whose prover `ZKStop` reads is `refPStop` on the tape each statement samples
   (`RecDeploy.prover_deployRecStop`), which sends the empty message wherever its stop has fired
   (`RecDeploy.refPStop_halted`), and whose stop fires at the first round on every statement out of scope or whose
   inner statement the inner verifier can't accept (`RecDeploy.halted_of_statement`), and nowhere before the staging
@@ -47,7 +78,7 @@ read:
   which `Flock.RecScope.scopeMatches_deployed` reads;
 * `Complete_meets`, `Nontrivial_meets`: the readable scope holds a statement of the one kind the compiled verifier
   accepts, the dense form (candidate 3's inner table: `m = 25`, `k_log = 22`, three regions), with a V* session that
-  draws every unit, and none of the holo or sparse ones it refuses (RecSparse `(18, 13, 6, 0)` and R at `(23, 2)`)
+  samples every unit, and none of the holo or sparse ones it refuses (RecSparse `(18, 13, 6, 0)` and R at `(23, 2)`)
   (`inScope_kinds`);
 * `Complete_meets_deployed`: the compiled verifier's record (`RecDeploy.deployRec`) states an error below `1` on every
   statement it can accept (`RecDeploy.readyRec`) whose inner session is one the numbers are stated at
@@ -63,16 +94,16 @@ open Claims Claims.Recursion
 
 /-! ## The readable scope's kinds -/
 
-/-- A V* session's full draw over four units. -/
+/-- A V* session's full sample over four units. -/
 def fullDraw4 : Recursion.DrawRecord := ⟨some 4, 4, [0, 1, 2, 3], []⟩
 
 /-- A statement at candidate 3's inner table (`m = 25`, `k_log = 22`, three regions, eight claims), its circuits private
-or not (`holo`), with no RecSparse phase and no R, and one V* session that draws every unit. -/
+or not (`holo`), with no RecSparse phase and no R, and one V* session that samples every unit. -/
 def denseStmt (holo : Bool) : Recursion.CompiledStatement :=
   ⟨[], none, none, ⟨25, 22, 3, 8, holo, none, none, false⟩, [some fullDraw4], none⟩
 
 /-- Candidate 3's sparse statement: its inner table, the RecSparse phase `(18, 13, 6, 0)`, R at `(23, 2)`, the inner
-statement's dimensions the form's, its unit range inside the block, and one V* session that draws every unit. -/
+statement's dimensions the form's, its unit range inside the block, and one V* session that samples every unit. -/
 def sparseStmt (holo : Bool) : Recursion.CompiledStatement :=
   ⟨[], some (25, 22, 3), none, ⟨25, 22, 3, 8, holo, some (18, 13, 6, 0), some (23, 2), true⟩, [some fullDraw4], none⟩
 
@@ -95,7 +126,7 @@ theorem sparseStmt_out (holo : Bool) : ¬ InScope (sparseStmt holo) := by
   rintro ⟨-, -, -, -, -, ⟨-, hs, -⟩, -⟩
   simp [sparseStmt] at hs
 
-/-- **The readable scope holds the dense form, and only it**: a dense statement with a V* session that draws every unit
+/-- **The readable scope holds the dense form, and only it**: a dense statement with a V* session that samples every unit
 is in scope, and the holo form and candidate 3's sparse phase, which the compiled verifier refuses
 (`RecSetup.denseOnly`), are not. -/
 theorem inScope_kinds :
@@ -202,7 +233,7 @@ theorem ZKPriv_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readab
   rfl
 
 /-- `ZKStop`'s checkable antecedents at the deployment: the deployed outer record is masked; the prover `ZKStop` reads
-at the compiled verifier's record with its stop is `refPStop` on the tape `tapeOf x` draws, and `refPStop` sends the
+at the compiled verifier's record with its stop is `refPStop` on the tape `tapeOf x` samples, and `refPStop` sends the
 empty message wherever the stop has fired; the stop fires at the first round on every statement out of scope or whose
 inner statement the inner verifier can't accept, and, at an inner-ready statement in scope, nowhere before the staging
 round where every answer is a coin's bytes and no prefix of the transcript holds a bad inner coin. -/

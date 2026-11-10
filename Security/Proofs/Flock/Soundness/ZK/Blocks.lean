@@ -1,10 +1,10 @@
 module
 
-public import Proofs.Flock.Soundness.ZK.Adaptivity
 public import Mathlib.Data.Fin.VecNotation
-public import Mathlib.Data.Fintype.Pi
 public import Mathlib.Data.Fintype.Prod
 public import Mathlib.Tactic.FinCases
+public import Proofs.Flock.Soundness.ZK.Adaptivity
+import Mathlib.Tactic.NormNum.Basic
 
 /-!
 # Zero knowledge: `Adaptivity`'s two lemmas for four blocks of randomness

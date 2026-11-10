@@ -3,6 +3,8 @@ module
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoTrack
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoWeight
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoFinal
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The honest Ligerito against the model's steps

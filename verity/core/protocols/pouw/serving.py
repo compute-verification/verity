@@ -9,7 +9,7 @@ scheme names, the schedules a pass may run under, and what one pass publishes.
   ``pearl-c-{nvfp4|mxfp4}-{version}[-{hashing}]`` for Pearl-C4.  Every name in use parses and prints back unchanged.
 * `Schedule` (`SCHEDULES`): which step groups of a call leave the critical path, and at what priority; `schedule_refusals`
   says which placements a format forbids (A's tree stays on the main lane unless the format seeds forming per row).
-* `PassCommitment`: what one pass on one rank publishes before any draw; `MANIFEST_SCHEMA` names the retained pass the
+* `PassCommitment`: what one pass on one rank publishes before any sample; `MANIFEST_SCHEMA` names the retained pass the
   verifier reads.
 * `KernelVariant`, `StepIO`, `ShapeRule` and `GateRecord`: a kernel as content-addressed data, what each of its call steps
   reads and writes, the shapes it takes, and the device gate that admits it to serving (`variant_refusals`).  Loading a
@@ -59,14 +59,14 @@ _FP4 = re.compile(r"pearl-c-(?P<precision>nvfp4|mxfp4)-(?P<forming>v[0-9]+)(?:-(
 
 @dataclass(frozen=True)
 class SchemeId:
-    """A Pearl-C scheme by its parts.  ``hashing`` h0 is left out of the name, and ``prices`` names another device's W1
-    prices (``@sm_120``), as `PearlC` names its instances."""
+    """A Pearl-C scheme by its parts.  ``hashing`` is h3 unless named; h0 is left out of the name, and ``prices`` names
+    another device's W1 prices (``@sm_120``), as `PearlC` names its instances."""
 
     family: str
     device: str
     forming: str
     precision: str
-    hashing: str = "h0"
+    hashing: str = "h3"
     prices: str | None = None
 
     def __post_init__(self) -> None:
@@ -182,7 +182,7 @@ def schedule_refusals(fmt: HashFormat, s: Schedule) -> list[str]:
 
 MANIFEST_SCHEMA = domains.POUW_PASS_MANIFEST
 #: the manifests a verifier reads: this one, and the MVP's (`verity_vllm.protocols.pouw.pearl_c`), v1 (salted
-#: from a beacon, before epoch coins) only as a replay of a recorded pass
+#: from a beacon, before the execution phase's coins) only as a replay of a recorded pass
 MANIFEST_SCHEMAS_READ = (MANIFEST_SCHEMA, domains.VLLM_PEARL_C_RUN, domains.VLLM_PEARL_C_RUN_V1)
 
 
@@ -329,7 +329,7 @@ POUW_V2 = "verity/pouw/v2"
 #: the lead's IADD3 fold (the word plus its row and column sources, less a1 . C and T . G by two IDP4A, is
 #: 0x4B400000 + p, p = A_i . B_j, read as fp32; then FADD -1.5 2^23, FMUL s_i and FMUL s_j) serves verity_int8's epilogue
 #: on p bit for bit while |p| <= 2^22, whatever the scales; 2^22 + 1 reads back as 2^22 + 2. The lead's v2 Definition
-#: (`verity.core.protocols.pouw.circuit.lead`) states the same bound; once it is in the tree this reads its constant
+#: (`verity.ml.protocols.pouw.circuit.lead`) states the same bound; once it is in the tree this reads its constant
 LEAD_FOLD_BOUND = 1 << 22
 #: the run-time choices that select the lead's layout (blc4a-t64-e7-s1 under ROT and FOLD) from its kernel directory's
 #: binary, which builds the other layouts too: they enter the source digest, so the id is the lead's, and serving runs

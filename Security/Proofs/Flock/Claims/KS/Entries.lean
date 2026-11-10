@@ -9,11 +9,11 @@ public import Proofs.Flock.Claims.KS.LevelZeroAcc
 `exists_ne_of_off₀L_sc` (`OffSC`) needs, of a salted output, that its level-0 openings verify, sit below `2^d`, and are,
 with their rows, the deployed reader's entries. This file proves all three at flock-verify's acceptance:
 
-* `Claims.Flock.slotOpensL_entries`: a rep whose first request is level 0's, at the positions `Flock.positions` draws
+* `Claims.Flock.slotOpensL_entries`: a rep whose first request is level 0's, at the positions `Flock.positions` samples
   from `coins`, with one opened row per position, opens at level 0 exactly the entries `zkRepCols` reads off `coins`
   and those rows, in order.
 * `Claims.Flock.plainRepColsOf_ok`, `Claims.Flock.lt_of_mem_positions`: the deployed plain reader's entries at a proof
-  that decodes are `zkRepCols`'s, and a drawn position is below `2^d` at a level `fast100` uses.
+  that decodes are `zkRepCols`'s, and a sampled position is below `2^d` at a level `fast100` uses.
 * `Claims.Flock.exists_ne_of_entries`: `exists_ne_of_off₀L_sc` with the entries given as one list equation.
 * `accepts_opens₀L`: when `Accepts I t`, whether or not the outputs are hidden, at every table, every pair of the
   reps' runs on the proof files' messages and the streams' coins whose salted output accepts at a cap has every level-0
@@ -32,7 +32,7 @@ open FlockSoundness FlockSoundness.Discharge.Exec
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **A rep's level-0 openings are the reader's entries**: when the rep's first request is level 0's, at the positions
-`Flock.positions` draws from `coins`, `q` of them, and its openings are `rows`, one per position, its level-0 openings'
+`Flock.positions` samples from `coins`, `q` of them, and its openings are `rows`, one per position, its level-0 openings'
 positions and rows are `zkRepCols`'s entries, in order. -/
 theorem slotOpensL_entries {D Sl : Type} (out : Model.OutCL 𝔽 D Sl) (r : ℕ) (lv : _root_.Flock.Level)
     (coins : Array _root_.Flock.F128) (rows : Array (Array _root_.Flock.F128)) (R : Model.Req)
@@ -51,7 +51,7 @@ theorem slotOpensL_entries {D Sl : Type} (out : Model.OutCL 𝔽 D Sl) (r : ℕ)
     simp only [List.length_map, List.length_zipIdx] at h1
     simp [hop, hrows, h1]
 
-/-- An entry `zkRepCols` reads is at a drawn position. -/
+/-- An entry `zkRepCols` reads is at a sampled position. -/
 theorem fst_mem_positions_of_mem_zkRepCols {lv : _root_.Flock.Level} {coins : Array _root_.Flock.F128}
     {rows : Array (Array _root_.Flock.F128)} {e : ℕ × List 𝔽} (he : e ∈ zkRepCols lv coins rows) :
     e.1 ∈ (_root_.Flock.positions lv coins).toList := by
@@ -59,7 +59,7 @@ theorem fst_mem_positions_of_mem_zkRepCols {lv : _root_.Flock.Level} {coins : Ar
   obtain ⟨pr, hpr, rfl⟩ := List.mem_map.1 he
   exact (List.of_mem_zip hpr).1
 
-/-- A position `Flock.positions` draws at a level of the model's shape is below `2^d`. -/
+/-- A position `Flock.positions` samples at a level of the model's shape is below `2^d`. -/
 theorem lt_of_mem_positions {lv : _root_.Flock.Level} (hl : Refine.LevelSeam lv) {coins : Array _root_.Flock.F128}
     {p : ℕ} (hp : p ∈ (_root_.Flock.positions lv coins).toList) : p < 2 ^ lv.d := by
   rw [← Refine.positions_eq lv hl coins] at hp
@@ -87,7 +87,7 @@ theorem plainRepColsOf_ok {sh : _root_.Flock.Shape} {rounds : Array _root_.Flock
 and rows are `os`, an output that opens a position off the oracle of `C` without a self-clash has the reader look up a
 column off `C`. -/
 theorem exists_ne_of_entries {D Sl : Type} (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
-    (Lf : Merkle.Leaf (List 𝔽) Sl D H) (sch : Accounting.Schedule) (cap₀ : Model.Cap D)
+    (Lf : Merkle.Leaf (List 𝔽) Sl D H) (sch : FlockSoundness.Accounting.Schedule) (cap₀ : Model.Cap D)
     (out : Model.OutCL 𝔽 D Sl) {N : ℕ} (hN : N = 2 ^ (lvOf sch 0).logLen) (C : Fin N → List 𝔽) (d : ℕ)
     (os : List (ℕ × List 𝔽)) (hcap : out.cap₀ = cap₀)
     (hver : ∀ x ∈ opens₀L sch out,

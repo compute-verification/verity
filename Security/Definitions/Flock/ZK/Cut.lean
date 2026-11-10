@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Flock.ZK.Table
+import Mathlib.Tactic.NormNum.Inv
+import Mathlib.Tactic.NormNum.Pow
 
 /-!
 # Zero knowledge: what a prover that stops has sent

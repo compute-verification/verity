@@ -1,6 +1,23 @@
 module
 
-public import Proofs.Flock.C3.RegLevels.LgCoins
+import all Init.Data.Repr
+public import Proofs.Flock.Recursive.HoloMap
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.C3.RegLevels.StackedCoins
+import Proofs.Flock.C3.RegLevels.TopHold
 
 /-!
 # R's rounds in the history's order are the ones META's shape gives R's held stream

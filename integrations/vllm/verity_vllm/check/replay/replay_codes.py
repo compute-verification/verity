@@ -2,7 +2,7 @@
 
 A reason the replay could not evaluate (`population.not_evaluable`, keyed by its text) carries a code in
 `population.not_evaluable_codes`: {"class": a why class, "family": the Program family the reason counts, "domain": the family is in the
-replay version's stated domain (`NOT_YET`), "tags": the rulings that name the gap}.  An unevaluated stratum carries `classes`, and the
+replay version's stated domain (`NOT_YET`), "tags": the ids of the findings that name the gap}.  An unevaluated stratum carries `classes`, and the
 sample carries `seed_form` (SEED_FORMS, stamped by the Commit that chose the seed).  The verdict reads those fields, never the texts, so
 rewording a message cannot reclassify an outcome.
 

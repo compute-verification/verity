@@ -33,7 +33,7 @@ from typing import Any, Callable, Sequence
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition
 from verity.ml.circuits.evaluation import MissingValue
-from verity.ml.circuits.evaluation.reference import RegisteredTable, resolve, standalone_call
+from verity.ml.circuits.evaluation.reference import RegisteredTable, _flat, resolve, standalone_call
 from verity.ml.circuits.evaluation.reference import evaluate as reference
 from verity.ml.circuits.layout import WIDE_FAN_IN
 from verity.ml.circuits.refs import runs
@@ -285,11 +285,11 @@ class _Wide:
         if j < 0:
             j += self.n
         if not 0 <= j < self.n:
-            raise IndexError(j)
+            raise IndexError("tuple index out of range")
         for start, cnt, seq, lo in self.segs:
             if j < start + cnt:
                 return self.V[seq[lo + j - start]]
-        raise IndexError(j)
+        raise IndexError("tuple index out of range")
 
     def all(self) -> bool:
         return all(self.V[w] for _start, cnt, seq, lo in self.segs for w in seq[lo:lo + cnt])
@@ -458,16 +458,6 @@ def _run(body: Body, V: list, off: int, memo: _Memo, lanes: bool) -> None:
             raise MissingValue(f"Input gate {off + st[1]} has no prescribed value in the transcript")
         else:  # pragma: no cover
             raise AssertionError(op)
-
-
-def _flat(args: Sequence[Any]) -> list[int]:
-    out: list[int] = []
-    for a in args:
-        if isinstance(a, int):
-            out.append(a)
-        else:
-            out.extend(int(v) for v in a)
-    return out
 
 
 def compiled(t: Any) -> Body | None:

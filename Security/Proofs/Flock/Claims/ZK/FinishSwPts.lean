@@ -1,19 +1,54 @@
 module
 
-public import Proofs.Flock.Claims.ZK.FinishSwFw
 public import Proofs.Flock.Claims.Complete.ZkTables.View
+public import Proofs.Flock.Claims.ZK.FinishSrc
+public import Proofs.Flock.Claims.ZK.FinishSwFw
+public import Proofs.Flock.Claims.ZK.SimPiopGo
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Zk.RingSwitch
+import Proofs.Flock.Claims.ZK.FinishSwRows
 
 /-!
-# The firewall's PIOP's points and switched claims at the coins
+# The ZK server's PIOP's points and switched claims at the coins
 
-`repCut_fw`'s `hlig` reads the firewall's PIOP's switched claims (`basisVals sws`) and the log it leaves (`l₃.size`).
+`repCut_fw`'s `hlig` reads the ZK server's PIOP's switched claims (`basisVals sws`) and the log it leaves (`l₃.size`).
 Answered by `asksCut`, those are the coins' alone, whatever the masked values: the zerocheck's `z`, `ρ` and `r` are its
 coins' (`ZcOutAt`), the lincheck's `r'` and `r_in` are its coins' (`LcOutAt`), and a ring switch's switched claims are
-`Rs.sws` at its coins of claims with its claims' points. So the firewall's are the session's closed form at any trace.
+`Rs.sws` at its coins of claims with its claims' points. So the ZK server's are the session's closed form at any trace.
 
 * `zerocheckCut_at`, `lincheckCut_at`: a returned zerocheck's and lincheck's points, and the bodies each sent.
 * `ringSwitchCut_sws`: a returned ring switch's switched claims, and the bodies it sent.
-* **`piopFw_at`**: the firewall's PIOP's switched claims are `Rs.sws` of the closed-form claims (`Zc.out`, `Lc.out` at
+* **`piopFw_at`**: the ZK server's PIOP's switched claims are `Rs.sws` of the closed-form claims (`Zc.out`, `Lc.out` at
   any trace) at the coins from its base, after `3 + (m − 6) + 3 + (k_log − 6) + (2 + |extras|) + 1` bodies.
 -/
 
@@ -228,7 +263,7 @@ theorem ringSwitchCut_sws (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ → 
     obtain ⟨⟨rfl, -⟩, rfl⟩ := hx
     exact hR.2
 
-/-- **The firewall's PIOP's switched claims at the coins**: answered by `asksCut` from `l`, where the firewall's PIOP
+/-- **The ZK server's PIOP's switched claims at the coins**: answered by `asksCut` from `l`, where the ZK server's PIOP
 returns, its switched claims are `Rs.sws` of the closed-form claims at any trace `tr` (the zerocheck's and lincheck's
 points are their coins', and a switched claim reads its claim's point alone, `Rs.sws_congr`) at the ring switch's coins,
 and it sent `3 + (m − 6) + 3 + (k_log − 6) + (2 + |extras|) + 1` bodies, all before the cut's stop `n`. -/

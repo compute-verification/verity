@@ -2,6 +2,8 @@ module
 
 public import Definitions.Flock.Session
 public import Definitions.Flock.Merkle
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # The compiled protocol: Merkle caps, openings after the last coin (`Flock.Ligerito`, `Flock.Merkle`)

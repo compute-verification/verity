@@ -1,7 +1,10 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Placed.Keyed
 public import Proofs.Flock.Soundness.Discharge.Aliased.KeysP
+public import Proofs.Flock.Soundness.Discharge.Const.Inst
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Placed.Keyed
+import Proofs.Flock.Soundness.Discharge.Placed.Wiring
 
 /-!
 # The circuit's program on Δ's source keys with public inputs

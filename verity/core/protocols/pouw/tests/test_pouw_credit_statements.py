@@ -1,5 +1,5 @@
 """`credit.window` and `credit.period_credit` on a window's statements, each call's proof files: credit runs the
-verifier of record itself (`one_stage.proofs.verify`) on the circuit file the period's open committed for the call's K,
+verifier itself (`one_stage.proofs.verify`) on the circuit file the period's open committed for the call's K,
 with the partition object and the ``--registered`` file it builds from the committed descriptor and the window's entries,
 and credits nothing from a verdict the evidence carries.
 
@@ -9,7 +9,7 @@ SHA-512 of every file it was handed (the circuit file, the public file, the prog
 ``--registered`` file, those two as the JSON they hold, whose key order the verifier doesn't read) and the units its
 session sampled. `prove` makes those proofs with the files a prover would hold,
 the ``--registered`` file `h1window.table_reads_file`'s form, so a window is credited only when credit handed the
-verifier the files the prover proved against. `sampled_proofs/tests/test_proofs.py` holds the real verifier to
+verifier the files the prover proved against. `spot/tests/test_proofs.py` holds the real verifier to
 rejecting tampered proof bytes and to the circuit file's digest; `test_pouw_credit.py` holds `credit.registered_file`
 to `h1window.table_reads_file` byte for byte."""
 from __future__ import annotations
@@ -24,9 +24,9 @@ from pathlib import Path
 import pytest
 
 from verity.core.protocols.pouw import credit as Cr
-from verity.core.protocols.pouw.circuit import live_reads as LR
-from verity.core.protocols.sampled_proofs import challenger as Ch
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+from verity.core.protocols.pouw import live_reads as LR
+from verity.core.protocols.spot import challenger as Ch
+from verity.core.protocols.spot.one_stage import proofs as PF
 
 PKG = Path(__file__).resolve().parents[1] / "lean/check/tests"
 for _name in ("pouw_rounds_cases", "pouw_credit_cases"):
@@ -212,7 +212,7 @@ def test_a_window_carrying_verdicts_and_no_proof_files_is_refused(seed, tmp_path
 @pytest.mark.parametrize("seed", SEEDS)
 @pytest.mark.parametrize("part", ["proof", "public", "drawn-units"])
 def test_tampered_proof_files_fail_the_window(seed, part, tmp_path, verifier):
-    """One byte of a session's proof or of its public file changed: the verifier of record rejects the session, so the
+    """One byte of a session's proof or of its public file changed: the verifier rejects the session, so the
     window is refused whole (no partial credit, no retry)."""
     d, statements = window(seed, tmp_path)
     s = random.Random(seed).choice(statements)
@@ -252,7 +252,7 @@ def test_a_circuit_file_other_than_the_committed_one_is_refused_before_the_verif
 @pytest.mark.parametrize("seed", SEEDS)
 def test_statements_the_draw_did_not_ask_for_are_refused(seed, tmp_path, verifier):
     """A call proved twice (a retry), a statement of a call no sampled proof block is in, a statement whose session proved a unit
-    of another call, and a drawn call with no statement: each refuses the window."""
+    of another call, and a sampled call with no statement: each refuses the window."""
     d, statements = window(seed, tmp_path)
     assert credit(d, statements + [statements[0]])[1] == (
         "outcome", f"call {statements[0]['call']} has two statements: a call's drawn units are proved in one "
@@ -390,7 +390,7 @@ def _j10r_rows(d: dict, s: dict, call: int, blocks: list[tuple[int, int]]) -> di
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_j10r_units_public_row_holds_the_call_and_blocks_credit_derives(seed, tmp_path, verifier):
     """A J10-R window's unit's public row is today's, then its ``call``, its call's first position u0 (the
-    one its seed_c is drawn at), and its ``blocks``, `core_check.j10r_blocks` of its tile (I, J) = (t // (n/C),
+    one its seed_c is sampled at), and its ``blocks``, `core_check.j10r_blocks` of its tile (I, J) = (t // (n/C),
     t % (n/C)) at the call's slot M, its K and the tile: credit derives both from the committed layout, as it builds
     the rest of the row. A statement whose units drew their noise at another unit's blocks, at another call's u0, or at
     blocks one off was proved against another file, so its session is rejected and the window refused whole."""

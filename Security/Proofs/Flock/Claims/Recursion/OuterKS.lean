@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Recursion.KS
 public import Proofs.Flock.Claims.Recursion.CostExp
+public import Definitions.Claims.RecursionGeneric.Session
 
 @[expose] public section
 
@@ -76,20 +77,7 @@ theorem UnifMap.pi {A B : Type} [Fintype A] [Fintype B] {φ : A → B} (hφ : Un
     simp only [hc]
     exact (hφ.prod (UnifMap.pi hφ m)) fun q => G (e' q)
 
-/-! ## One session's prover -/
-
-/-- What a verifier's answer tells the prover: the message, or nothing once it decided. -/
-def outMsg : Out → Msg
-  | .msg m => m
-  | _ => []
-
-/-- **The prover of one session**: `P` at tape `ω`, after the messages `pre` of the rounds before the session. -/
-def sessProver {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (pre : List (Msg × Out)) : Prover Unit :=
-  ⟨fun _ hist _ => P.next x (pre.map (fun p => (p.1, outMsg p.2)) ++ hist) ω⟩
-
-/-- The `n` coins from round `o` on. -/
-def sessCoins {Coin : Type} [Inhabited Coin] {k : ℕ} (o : ℕ) (d : Fin k → Coin) (n : ℕ) : Fin n → Coin :=
-  fun i => coinSeq d (o + i.val)
+/-! ## One session's prover (`outMsg`, `sessProver` and `sessCoins` are `Definitions.Claims.RecursionGeneric.Session`'s) -/
 
 /-- Session `s`'s V* statement in the run at coins `r`, read off its inner and staging rounds' messages. -/
 def sessStmt {Coin W : Type} [Inhabited Coin] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) {Ω : Type}
@@ -152,6 +140,12 @@ theorem fork_fork {Coin : Type} {k : ℕ} (o : ℕ) (r d e : Fin k → Coin) : f
   funext i
   by_cases hi : i.val < o <;> simp [fork, hi]
 
+theorem fork_fork_le {Coin : Type} {k : ℕ} {o o' : ℕ} (h : o ≤ o') (R d : Fin k → Coin) :
+    fork o' R (fork o R d) = fork o' R d := by
+  funext i
+  simp only [fork]
+  split_ifs <;> first | rfl | omega
+
 theorem fork_add_fork {Coin : Type} {k : ℕ} (o j : ℕ) (r d d' : Fin k → Coin) :
     fork o r (fork (o + j) d d') = fork (o + j) (fork o r d) d' := by
   funext i
@@ -199,7 +193,7 @@ theorem sessP_fork {Coin W Col T : Type} [Inhabited Coin] (H : Msg → Msg) (D :
 
 /-! ## Session `s`'s extraction is the outer Flock's `E^rep` at the session's prover -/
 
-theorem waitAcc_eval_map {R₁ R₂ : Type} (H : Msg → Msg) (run₁ : R₁ → Trace) (run₂ : R₂ → Trace) (μ : R₁ → R₂)
+theorem waitAcc_eval_map {R₁ R₂ : Type} (H : Msg → Msg) (run₁ : R₁ → Transcript) (run₂ : R₂ → Transcript) (μ : R₁ → R₂)
     (k : ℕ) : ∀ (rs : List R₁) (acc : List Seen), (∀ r ∈ rs, (run₁ r).seen = (run₂ (μ r)).seen) →
       ((waitAcc k rs acc).eval H run₁).1 = ((waitAcc k (rs.map μ) acc).eval H run₂).1
   | [], _, _ => rfl
@@ -211,7 +205,7 @@ theorem waitAcc_eval_map {R₁ R₂ : Type} (H : Msg → Msg) (run₁ : R₁ →
       rw [h r List.mem_cons_self]
       exact waitAcc_eval_map H run₁ run₂ μ k rs _ fun r' hr' => h r' (List.mem_cons_of_mem _ hr')
 
-theorem firstWait_eval_map {R₁ R₂ W' Op : Type} (H : Msg → Msg) (run₁ : R₁ → Trace) (run₂ : R₂ → Trace)
+theorem firstWait_eval_map {R₁ R₂ W' Op : Type} (H : Msg → Msg) (run₁ : R₁ → Transcript) (run₂ : R₂ → Transcript)
     (μ : R₁ → R₂) (k : ℕ) (opens : Seen → List Op) (assemble : List Op → Option W') (check : W' → Bool) :
     ∀ rss : List (List R₁), (∀ l ∈ rss, ∀ r ∈ l, (run₁ r).seen = (run₂ (μ r)).seen) →
       ((firstWait k opens assemble check rss).eval H run₁).1 =
@@ -249,7 +243,7 @@ theorem EOs_eval_acc {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhab
         ((List.finRange (D.nums x s).waits).map fun i => (List.finRange (D.nums x s).cap).map fun j =>
           fork (offO H D I DO P x ω s r) r (c i j))).eval H
         (servedRun H (viewing (D.session x s)) (run H P D.V x ω))).1.map fun w => (sessStmt H D I P x ω s r, w) := by
-  simp only [Extractor.eval, EOs, RP.eval, Trace.seen, hacc, ↓reduceIte]
+  simp only [Extractor.eval, EOs, RP.eval, Transcript.seen, hacc, ↓reduceIte]
   rw [RP.eval_bind_ret, serve_eq, (RP.serve_eval H _ _ _).1]
   rfl
 
@@ -261,7 +255,7 @@ theorem flockE_eval_acc {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inha
         (Flock.check DO.parse y)
         ((List.finRange (DO.waits y)).map fun i => (List.finRange (DO.cap y)).map (ρ i))).eval H
         (run H Q DO.V y ())).1 := by
-  simp only [Extractor.eval, Flock.E, ERep, RP.eval, Trace.seen, hacc, ↓reduceIte]
+  simp only [Extractor.eval, Flock.E, ERep, RP.eval, Transcript.seen, hacc, ↓reduceIte]
 
 /-- `SessionRuns` at a prefix some continuation of which accepts: every fork at the session's first round shows the
 session prover's run, and the outer verifier's calls in it are the compiled verifier's. -/
@@ -433,7 +427,7 @@ theorem prefix_bad_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inha
       _ = 0 := Pr_false
       _ ≤ _ := (D.nums x s).κ_nonneg (hε x s)
 
-/-- **Every prefix, averaged**: a draw is a fork of a draw at session `s`'s first round (`Ex_fork`), so session `s`'s
+/-- **Every prefix, averaged**: a sample is a fork of a sample at session `s`'s first round (`Ex_fork`), so session `s`'s
 failure is the average over prefixes of `prefix_bad_le`'s. -/
 theorem PrBad_EOs_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T} (hF : Flock.KS H DO)
@@ -531,8 +525,8 @@ theorem sessPrB_mul_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inh
   · rw [zero_mul]
     exact Finset.sum_nonneg fun j _ => Pr_nonneg _
 
-/-- **The collision term, averaged**: `𝔼[Pr[B] at the session prover]·k_s ≤ k(x)·Pr[B]`. A draw's prefix is a fork of
-a draw (`Ex_fork`), so the session's forks at rounds `off + j`, `j < k_s`, are among the compiled verifier's `k(x)`
+/-- **The collision term, averaged**: `𝔼[Pr[B] at the session prover]·k_s ≤ k(x)·Pr[B]`. A sample's prefix is a fork of
+a sample (`Ex_fork`), so the session's forks at rounds `off + j`, `j < k_s`, are among the compiled verifier's `k(x)`
 round guesses (`SessionRounds`). -/
 theorem Ex_sessPrB_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}

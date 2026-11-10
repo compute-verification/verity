@@ -55,7 +55,7 @@ def ClaimReadsAt (s : VStar.Stmt) (own : Array Registered.Port) : Prop :=
     | _ => False
 
 /-- The `c_k` the verifier holds of stream `s`, each with its round: a rep's from the prover's record
-(`InnerCommits.reps`), a sparse phase's and R's from the coin server's (`InnerCommits.streams`). -/
+(`InnerCommits.reps`), a sparse phase's and R's from the challenger's live-coin part's (`InnerCommits.streams`). -/
 def heldCommits (cs : InnerCommits) : HoloStream → Option (Array (Nat × ByteArray))
   | .rep x => cs.reps[x.val]?
   | .sparse x => (cs.stream? s!"{SPARSE}/rep{x.val}").map (·.commits)

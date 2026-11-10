@@ -19,7 +19,7 @@ NOW = dt.datetime(2026, 9, 30, 20, 41, tzinfo=UTC)
     (dt.datetime(2026, 9, 30, 20, 41), "1:41 PM PDT (20:41Z)"),                         # naive is UTC
     (NOW.timestamp(), "1:41 PM PDT (20:41Z)"),
     (f"{NOW.timestamp():.6f}", "1:41 PM PDT (20:41Z)"),                                   # a Slack ts
-    ("2026-11-01T08:30Z", "1:30 AM PDT (08:30Z)"),                                        # 2026-11-01: the last PDT hour
+    ("2026-11-01T08:30Z", "1:30 AM PDT (08:30Z)"),                                        # the day DST ends: the last PDT hour
     ("2026-11-01T09:30Z", "1:30 AM PST (09:30Z)"),                                        # the same wall time, an hour later
     ("2026-11-01T20:00Z", "12:00 PM PST (20:00Z)"),
     ("2026-10-01T06:05Z", "11:05 PM PDT (06:05Z)"),                                       # the Pacific day is the day before
@@ -57,6 +57,8 @@ def test_slack_dates_leaves_a_time_without_a_date_as_written(text):
      _token("2026-10-01T06:05Z", "30 Sep 11:05 PM PDT (06:05Z)")),
     (dt.datetime(2026, 12, 31, 23, 0, tzinfo=UTC), "3 Jan 01:00Z",  # the year nearest now
      _token("2027-01-03T01:00Z", "2 Jan 5:00 PM PST (01:00Z)")),
+    (NOW, "due Tue 3 Nov 02:00Z", f"due {_token('2026-11-03T02:00Z', 'Mon 2 Nov 6:00 PM PST (02:00Z)')}"),  # across midnight
+    (NOW, "Wednesday, Oct 14, 14:55Z", _token("2026-10-14T14:55Z", "Wed 14 Oct 7:55 AM PDT (14:55Z)")),
 ])
 def test_slack_dates_uses_the_date_written_before_the_time(now, text, want):
     assert slack_dates(text, now) == want
@@ -65,6 +67,7 @@ def test_slack_dates_uses_the_date_written_before_the_time(now, text, want):
 @pytest.mark.parametrize("text", [
     "14 Oct 7:55 AM PDT (15:55Z)",                                  # the two zones disagree
     "31 Feb 10:00Z",
+    "Tue 22:00Z",                                                    # a weekday is no date
 ])
 def test_slack_dates_leaves_an_impossible_dated_time_as_written(text):
     assert slack_dates(text, NOW) == text

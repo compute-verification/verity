@@ -44,7 +44,7 @@ def _splitmix(x: np.ndarray) -> np.ndarray:
         return z ^ (z >> np.uint64(31))
 
 
-#: exponent ranges [lo, hi] of the drawn bf16 words, per kind and tensor
+#: exponent ranges [lo, hi] of the sampled bf16 words, per kind and tensor
 KINDS = {
     "unit": {"q": (121, 128), "kv": (121, 128)},          # |x| in [2^-6, 4): ordinary scores
     "wide": {"q": (117, 131), "kv": (119, 129)},          # scores spread over hundreds: deep exp underflow

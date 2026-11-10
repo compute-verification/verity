@@ -65,9 +65,17 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
+<<<<<<< 99c8914848ef788e008018a5dc84bd535d48d62c
 from verity.core.protocols import registration as REG
 from verity.core.protocols.certifier import advice as I1
 from verity.ml.windows import interface as IF
+||||||| merged common ancestors
+from verity.core.protocols.certifier import advice as I1
+from verity.ml.circuits.codec import canonical_json
+=======
+import verity.core.protocols.certifier.advice as I1
+from verity.ml.circuits.codec import canonical_json
+>>>>>>> fa1fc89f64f1a57fa1d2d62892c18eb3a29f7627
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine import step_trace as ST
 
@@ -98,7 +106,13 @@ def registered_compiler(name: str = COMPILER, digest: str | None = None, cap_bit
     the integration's import closure (`source_identity.closure()`) in this git work tree."""
     if digest is None:
         from verity_vllm.pipeline import source_identity as SI
+<<<<<<< 99c8914848ef788e008018a5dc84bd535d48d62c
         digest = IF.compiler_digest(name, SI.TREE, [g.removesuffix("/**") for g in SI.closure()])
+||||||| merged common ancestors
+        digest = compiler_digest(name, SI.code_identity(SI.TREE)["sha256"])
+=======
+        digest = compiler_digest(name, SI.code_identity_of("the advice digest", SI.TREE)["sha256"])
+>>>>>>> fa1fc89f64f1a57fa1d2d62892c18eb3a29f7627
     return AW.Capped(Compiler(name, digest), cap_bits)
 
 

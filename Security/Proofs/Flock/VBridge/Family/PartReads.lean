@@ -1,6 +1,19 @@
 module
 
 public import Proofs.Flock.VBridge.Family.Registered
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # VBridge G at V*'s family: the parts' row columns and the reads at them
@@ -109,7 +122,7 @@ def PartPortsOne : Prop :=
 record custody). **A part's registered read is at `own`'s entry of its port's name, at the position it gives the
 unit.** At every accepted outer proof, a registered read `(u, q)` of part `p`'s session (at a row port, `v` or `out`)
 has as its port an entry of `own` named as `q`, whose position for unit `u` is the read's. `ZkOuter.hown`
-(`OwnReads`) says it at the drawn outcomes, at the drawn statement's label of `u`, which is `u` at a part's units;
+(`OwnReads`) says it at the sampled outcomes, at the sampled statement's label of `u`, which is `u` at a part's units;
 acceptance of an arbitrary outcome does not give it, and `rd` is the family's field. -/
 def ReadsOwn : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o →

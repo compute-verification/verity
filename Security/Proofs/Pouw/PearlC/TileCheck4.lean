@@ -1,8 +1,11 @@
 module
 
-public import Definitions.Pouw.PearlC.TileCheck4
 public import Proofs.Pouw.PearlC.TileCheck8
-public import Proofs.Pouw.PearlC.Tile4Circuit
+public import Definitions.Pouw.PearlC.WholeCircuit4
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Core.Circuit
+import Proofs.Pouw.PearlC.Tile4Circuit
 
 /-!
 # `pc4`'s tile check: its units are its templates (proofs)
@@ -164,13 +167,13 @@ section Whole4
 variable (M K N TM TN : ℕ)
 
 /-- `whole4`'s RowB block. -/
-def blockB4 : BlockKind := ⟨(row4B K).spec ops, rowIn K true, N, portB8 M N K⟩
+def blockB4 : Block := ⟨(row4B K).spec ops, rowIn K true, N, portB8 M N K⟩
 
 /-- `whole4`'s RowA block. -/
-def blockA4 : BlockKind := ⟨(row4A K).spec ops, rowIn K false, M, portA8 M N K⟩
+def blockA4 : Block := ⟨(row4A K).spec ops, rowIn K false, M, portA8 M N K⟩
 
 /-- `whole4`'s tile block. -/
-def blockT4 : BlockKind := ⟨tile4Spec K TM TN, tile4In K TM TN, M / TM * (N / TN), portT4 M N K TM TN⟩
+def blockT4 : Block := ⟨tile4Spec K TM TN, tile4In K TM TN, M / TM * (N / TN), portT4 M N K TM TN⟩
 
 theorem whole4_B : (whole4 ops M K N TM TN).blocks =
     [] ++ blockB4 ops M K N :: [blockA4 ops M K N, blockT4 M K N TM TN] := rfl
@@ -183,22 +186,22 @@ theorem whole4_T : (whole4 ops M K N TM TN).blocks =
 
 theorem rowB4_eq (j a : ℕ) : rowB4 M N K j a = (whole4 ops M K N TM TN).nIn + blocksLen [] +
     j * (blockB4 ops M K N).len + (a - (blockB4 ops M K N).nIn) := by
-  simp only [rowB4, whole4, blocksLen, BlockKind.len, blockB4, Rows.spec, add_zero]
+  simp only [rowB4, whole4, blocksLen, Block.len, blockB4, Rows.spec, add_zero]
 
 theorem rowA4_eq (i a : ℕ) : rowA4 M N K i a = (whole4 ops M K N TM TN).nIn + blocksLen [blockB4 ops M K N] +
     i * (blockA4 ops M K N).len + (a - (blockA4 ops M K N).nIn) := by
-  simp only [rowA4, whole4, blocksLen, BlockKind.len, blockB4, blockA4, Rows.spec, add_zero]
+  simp only [rowA4, whole4, blocksLen, Block.len, blockB4, blockA4, Rows.spec, add_zero]
 
 theorem tile4_eq (e a : ℕ) : tile4 M N K TM TN e a = (whole4 ops M K N TM TN).nIn +
     blocksLen [blockB4 ops M K N, blockA4 ops M K N] + e * (blockT4 M K N TM TN).len +
       (a - (blockT4 M K N TM TN).nIn) := by
-  simp only [tile4, tiles4, blocksLen, BlockKind.len, blockB4, blockA4, blockT4, whole4, add_zero, Nat.add_assoc]
+  simp only [tile4, tiles4, blocksLen, Block.len, blockB4, blockA4, blockT4, whole4, add_zero, Nat.add_assoc]
   rfl
 
 theorem whole4_N : (whole4 ops M K N TM TN).spec.toCircuit.N = in8 M N K + N * ((row4B K).N - rowIn K true) +
     M * ((row4A K).N - rowIn K false) + M / TM * (N / TN) * (tile4N K TM TN - tile4In K TM TN) := by
   show in8 M N K + blocksLen _ = _
-  simp only [blocksLen, BlockKind.len, whole4, add_zero, Nat.add_assoc]
+  simp only [blocksLen, Block.len, whole4, add_zero, Nat.add_assoc]
   rfl
 
 /-! ### Inputs -/
@@ -267,7 +270,7 @@ theorem hnT4 : (blockT4 M K N TM TN).nIn ≤ (blockT4 M K N TM TN).S.N := by
 
 /-! ### Every port reads a gate of its input's width -/
 
-theorem hfit4B (X : (whole4 ops M K N TM TN).spec.toCircuit.Transcript) {j : ℕ} (hj : j < N) :
+theorem hfit4B (X : (whole4 ops M K N TM TN).spec.toCircuit.Trace) {j : ℕ} (hj : j < N) :
     ∀ a < (blockB4 ops M K N).nIn,
       val X ((blockB4 ops M K N).port j a) < 2 ^ ((blockB4 ops M K N).S.gate a).w := by
   intro a ha
@@ -279,7 +282,7 @@ theorem hfit4B (X : (whole4 ops M K N TM TN).spec.toCircuit.Transcript) {j : ℕ
   rw [Rows.gate_in ops (row4B K) ha, ← inW4_portB8 M K N hj ha]
   exact h
 
-theorem hfit4A (X : (whole4 ops M K N TM TN).spec.toCircuit.Transcript) {i : ℕ} (hi : i < M) :
+theorem hfit4A (X : (whole4 ops M K N TM TN).spec.toCircuit.Trace) {i : ℕ} (hi : i < M) :
     ∀ a < (blockA4 ops M K N).nIn,
       val X ((blockA4 ops M K N).port i a) < 2 ^ ((blockA4 ops M K N).S.gate a).w := by
   intro a ha
@@ -298,7 +301,7 @@ theorem tile4Gate_w {a : ℕ} (ha : a < tile4In K TM TN) : (tile4Gate K TM TN a)
   unfold tile4Gate
   split_ifs <;> rfl
 
-theorem hfit4T (h16 : 16 ∣ K) (X : (whole4 ops M K N TM TN).spec.toCircuit.Transcript) {e : ℕ}
+theorem hfit4T (h16 : 16 ∣ K) (X : (whole4 ops M K N TM TN).spec.toCircuit.Trace) {e : ℕ}
     (he : e < M / TM * (N / TN)) : ∀ a < (blockT4 M K N TM TN).nIn,
       val X ((blockT4 M K N TM TN).port e a) < 2 ^ ((blockT4 M K N TM TN).S.gate a).w := by
   intro a ha
@@ -500,28 +503,28 @@ section Cuts4
 variable (M K N TM TN : ℕ)
 
 /-- RowB `j`'s cut holds on its inputs the transcript's values at its ports. -/
-theorem cutB4_input (X : (whole4 ops M K N TM TN).spec.toCircuit.Transcript) {j : ℕ} (hj : j < N) {a : ℕ}
+theorem cutB4_input (X : (whole4 ops M K N TM TN).spec.toCircuit.Trace) {j : ℕ} (hj : j < N) {a : ℕ}
     (ha : a < rowIn K true) :
     val ((whole4 ops M K N TM TN).cut X (blockB4 ops M K N) j) a = val X (portB8 M N K j a) :=
   (whole4 ops M K N TM TN).cut_input (whole4_B ops M K N TM TN) hj X (hinB4 ops M K N)
     (hfit4B ops M K N TM TN X hj) (hnB4 ops M K N) ha
 
 /-- RowA `i`'s cut holds on its inputs the transcript's values at its ports. -/
-theorem cutA4_input (X : (whole4 ops M K N TM TN).spec.toCircuit.Transcript) {i : ℕ} (hi : i < M) {a : ℕ}
+theorem cutA4_input (X : (whole4 ops M K N TM TN).spec.toCircuit.Trace) {i : ℕ} (hi : i < M) {a : ℕ}
     (ha : a < rowIn K false) :
     val ((whole4 ops M K N TM TN).cut X (blockA4 ops M K N) i) a = val X (portA8 M N K i a) :=
   (whole4 ops M K N TM TN).cut_input (whole4_A ops M K N TM TN) hi X (hinA4 ops M K N)
     (hfit4A ops M K N TM TN X hi) (hnA4 ops M K N) ha
 
 /-- Tile `e`'s cut holds on its inputs the transcript's values at its ports. -/
-theorem cutT4_input (h16 : 16 ∣ K) (X : (whole4 ops M K N TM TN).spec.toCircuit.Transcript) {e : ℕ}
+theorem cutT4_input (h16 : 16 ∣ K) (X : (whole4 ops M K N TM TN).spec.toCircuit.Trace) {e : ℕ}
     (he : e < M / TM * (N / TN)) {a : ℕ} (ha : a < tile4In K TM TN) :
     val ((whole4 ops M K N TM TN).cut X (blockT4 M K N TM TN) e) a = val X (portT4 M N K TM TN e a) :=
   (whole4 ops M K N TM TN).cut_input (whole4_T ops M K N TM TN) he X (hinT4 M K N TM TN)
     (hfit4T ops M K N TM TN h16 X he) (hnT4 M K N TM TN) ha
 
 /-- Where RowB `j` is correct, its committed gates hold its cut's values. -/
-theorem cutB4_at (X : (whole4 ops M K N TM TN).spec.toCircuit.Transcript) {j : ℕ} (hj : j < N)
+theorem cutB4_at (X : (whole4 ops M K N TM TN).spec.toCircuit.Trace) {j : ℕ} (hj : j < N)
     (hX : (whole4 ops M K N TM TN).part.Correct X
       ⟨_, (whole4 ops M K N TM TN).unit_lt (whole4_B ops M K N TM TN) hj⟩)
     {a : ℕ} (ha1 : rowIn K true ≤ a) (ha2 : a < (row4B K).N) {h : rowB4 M N K j a < _}
@@ -533,7 +536,7 @@ theorem cutB4_at (X : (whole4 ops M K N TM TN).spec.toCircuit.Transcript) {j : �
     (hfit4B ops M K N TM TN X hj) hX ha1 ha2 (fin_mem (rowB4_eq ops M K N TM TN j a) hcom)
 
 /-- Where RowA `i` is correct, its committed gates hold its cut's values. -/
-theorem cutA4_at (X : (whole4 ops M K N TM TN).spec.toCircuit.Transcript) {i : ℕ} (hi : i < M)
+theorem cutA4_at (X : (whole4 ops M K N TM TN).spec.toCircuit.Trace) {i : ℕ} (hi : i < M)
     (hX : (whole4 ops M K N TM TN).part.Correct X
       ⟨_, (whole4 ops M K N TM TN).unit_lt (whole4_A ops M K N TM TN) hi⟩)
     {a : ℕ} (ha1 : rowIn K false ≤ a) (ha2 : a < (row4A K).N) {h : rowA4 M N K i a < _}
@@ -545,7 +548,7 @@ theorem cutA4_at (X : (whole4 ops M K N TM TN).spec.toCircuit.Transcript) {i : �
     (hfit4A ops M K N TM TN X hi) hX ha1 ha2 (fin_mem (rowA4_eq ops M K N TM TN i a) hcom)
 
 /-- Where tile `e` is correct, its committed gates hold its cut's values. -/
-theorem cutT4_at (h16 : 16 ∣ K) (X : (whole4 ops M K N TM TN).spec.toCircuit.Transcript) {e : ℕ}
+theorem cutT4_at (h16 : 16 ∣ K) (X : (whole4 ops M K N TM TN).spec.toCircuit.Trace) {e : ℕ}
     (he : e < M / TM * (N / TN))
     (hX : (whole4 ops M K N TM TN).part.Correct X
       ⟨_, (whole4 ops M K N TM TN).unit_lt (whole4_T ops M K N TM TN) he⟩)
@@ -657,7 +660,7 @@ theorem h16_of {K : ℕ} (hk : 64 ∣ K) : 16 ∣ K := Nat.dvd_trans (by norm_nu
 
 section Chain4
 
-variable (M K N TM TN : ℕ) (X : (whole4 ops M K N TM TN).spec.toCircuit.Transcript) {i j : ℕ}
+variable (M K N TM TN : ℕ) (X : (whole4 ops M K N TM TN).spec.toCircuit.Trace) {i j : ℕ}
   (hTM : TM ∣ M) (hTN : TN ∣ N) (hi : i < M) (hj : j < N) (hk : 64 ∣ K)
 
 include hTM hTN hi hj hk

@@ -40,7 +40,7 @@ proved by Flock `prove --zk` behind the Lean ZK server and held by Lean `verify 
   `--zk`'s shape (`stage`).
 * **The served rows** (`served_rows`): the Commit side registers each unit's window under the run root (a stand-in: the
   partition's digest) before the sample, a row each block of G steps (``--g``, P by default: one ``srv`` row a unit; at
-  G < P the unit is `compile_slice.CompileSliceBlocks_v1`, its rows ``srv0`` …): the served rows, but ``table``'s,
+  G < P the unit is `compile_slice.CompileSliceRowGroups_v1`, its rows ``srv0`` …): the served rows, but ``table``'s,
   which are the schedule its server served (its own rows, the hit taken), so its ``cache`` check alone refuses it.
   Every unit's ``srv`` rows are its window's but ``sixpass-own``'s, which are its own run's.
 * **The bindings**, checked natively by the verifier on the row commitments b‖c the public file holds: each unit's
@@ -385,7 +385,7 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Pat
         want[f"{name}/{p_}"] = w
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": w["leaves"], "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
-    law = M.D.parse_law(f"stratified:{n}")
+    law = M.D.parse_design(f"stratified:{n}")
     win = {"kind": "stand-in", "of": f"the compile slice's {sg.slice} window (compile_slice_zk.py)",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
            "link": "compile_slice: each unit's adv row is the advice registration's row, its cert row the certified "

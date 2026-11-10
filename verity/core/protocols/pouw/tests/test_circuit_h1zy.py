@@ -20,12 +20,12 @@ from verity.ml.circuits.program import Program, is_input
 from verity.ml.circuits.refs import runs
 from verity.ml.circuits.types import Array
 
-from verity.core.protocols.pouw.circuit import h1tile as H
-from verity.core.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.pouw.circuit import h1zy as Z
-from verity.core.protocols.pouw.circuit import reference as REF
-from verity.core.protocols.pouw.circuit import seeds as SD
-from verity.core.protocols.pouw.circuit import segment as SG
+from verity.ml.protocols.pouw.circuit import h1tile as H
+from verity.ml.protocols.pouw.circuit import h1window as HW
+from verity.ml.protocols.pouw.circuit import h1zy as Z
+from verity.ml.protocols.pouw.circuit import reference as REF
+from verity.ml.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import segment as SG
 
 M32 = (1 << 32) - 1
 
@@ -691,7 +691,7 @@ def _split(rows, scales, n):
 
 @pytest.mark.parametrize("r,c,k,n", [(4, 8, 64, 2), (32, 32, 6144, 2), (32, 32, 14336, 4)])
 def test_the_unit_on_chunk_rows_reads_the_tables_chunk_rows_and_returns_the_units_outputs(r, c, k, n):
-    """`PouwH1TileZyChunks` takes the window's tile parameters (`h1window.TILE_PARAMS`): n R A and n C B rows of `ROW`(K / n)
+    """`PouwH1TileZyChunks` takes the execution phase's tile parameters (`h1window.TILE_PARAMS`): n R A and n C B rows of `ROW`(K / n)
     in place of UNIT's R and C of `ROW`(K), then UNIT's record, salt, position and roots, and returns UNIT's receipt and ok
     with its ports (the salt a coin, the receipt a sink, so it is no seed); `window_unit` binds it at the served K past
     4096 with n = `chunks`(K), and UNIT itself up to 4096."""
@@ -721,7 +721,7 @@ def test_a_unit_on_chunk_rows_of_another_unit_or_chunking_is_refused(bindings, w
 
 
 def test_a_window_unit_at_a_chunked_k_is_refused_over_v3_and_v4():
-    """Past `CHUNK_MAX` a drawn leaf is proved as lanes in chunks, which only v1 has: `window_unit` refuses v3 there (the
+    """Past `CHUNK_MAX` a sampled leaf is proved as lanes in chunks, which only v1 has: `window_unit` refuses v3 there (the
     wrapper's refusal) and v4 anywhere (the zy unit's), and takes v3 at K <= 4096."""
     for defn, why in ((H.PouwH1Tile3, "over PouwH1Tile_v1"), (H.PouwH1Tile4, "an H1 tile")):
         with pytest.raises(ValueError, match=why):

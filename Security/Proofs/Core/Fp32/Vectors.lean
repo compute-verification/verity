@@ -3,11 +3,11 @@ module
 public import Definitions.Core.Fp32
 
 /-!
-# Vectors: `verity.ml.fp32`'s primitives
+# Vectors: `verity.ml.circuits.ops.fp32`'s primitives
 
-Each theorem is one input of a primitive of `verity.ml.fp32` and the word its Python evaluator returns,
+Each theorem is one input of a primitive of `verity.ml.circuits.ops.fp32` and the word its Python evaluator returns,
 checked by the kernel against the definition of the same name in `Verity.Fp32`.
-`packages/verity/tests/ml/test_lean_fp32_vectors.py` checks the same vectors against the Python, and that
+`verity/ml/circuits/ops/tests/test_lean_fp32_vectors.py` checks the same vectors against the Python, and that
 they reach every case the Python distinguishes, so a change on either side fails a build: the definitions
 cannot drift silently. That test, run as a script, writes this file.
 -/

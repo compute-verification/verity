@@ -1,8 +1,11 @@
 module
 
 public import Proofs.Flock.Soundness.Refine.Paths
+public import Proofs.Flock.Soundness.Refine.Rep
 public import Proofs.Flock.Soundness.Refine.Seam
 public import Proofs.Flock.Soundness.Session
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Refine.Plays
 
 /-!
 # The verifier refines the model's table (`Flock.Verify`, `Flock.Record`)

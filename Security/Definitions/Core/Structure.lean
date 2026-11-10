@@ -19,7 +19,7 @@ named below are proved in `Proofs.Core.Structure`.
   by another `E`, and a theorem names the class it covers by the `E` it takes.
 * **Decompositions.** Any `Partition` of the computed gates is a decomposition; an ordered (schedulable) one (`Ordered`)
   has an acyclic block-level dependency graph (`Dep`). Blocks have at most `c` gates (`AtScale`) or exactly `c`
-  (`ExactScale`, padded as `Pad` pads), and then `|C| = c · n` (`size_computed_of_exact`). A time-ordered partition
+  (`ExactScale`), and then `|C| = c · n` (`size_computed_of_exact`). A time-ordered partition
   (`TimeOrdered`) gives each block a location and a period, no block reading a later period; the blocks before each
   period form a prefix (`TimeOrdered.upto_isPrefix`), and distinct periods make it ordered
   (`TimeOrdered.ordered_of_injective`).
@@ -40,7 +40,7 @@ named below are proved in `Proofs.Core.Structure`.
   (`Method.profile`) is the vectors whose cell it lies in.
 
 **Where it meets Accounting.** Core cannot import Accounting, so Accounting reads these. An `Actual.Run` is an
-`Execution` (`A.toCircuit`, `val`, `faithful`) once its protocol's baseline is given. `Slowdown.Task`'s coin draws the
+`Execution` (`A.toCircuit`, `val`, `faithful`) once its protocol's baseline is given. `Slowdown.Task`'s coin samples the
 task's input, a method's external input here; a method's `coins` are its own randomness, neither the task's nor the
 verifier's (`Verity.Coins`). A class of methods `𝔐` gives the `Slowdown.Class` of pairs `(C, x)` whose runs on every
 input realize evaluations of one method of `𝔐`, the same for every `x`.
@@ -67,9 +67,9 @@ open Finset
 gates and other (external) input gates left open. -/
 structure Method where
   /-- the circuit and its registered gates -/
-  d : Declaration
+  d : RegisteredCircuit
   /-- the registered values, read at `θ` only -/
-  registered : d.D.Transcript
+  registered : d.D.Trace
   /-- the coin gates -/
   coins : Finset (Fin d.D.N)
   /-- coin gates are input gates outside `θ` -/
@@ -85,7 +85,7 @@ def external : Finset (Fin M.d.D.N) :=
 
 /-- The input assignment on external input `x` and coin `ω`: registered gates take their registered values, coin gates
 `ω`'s, and the rest `x`'s. -/
-def assign (x ω : M.d.D.Transcript) : M.d.D.Transcript := fun g =>
+def assign (x ω : M.d.D.Trace) : M.d.D.Trace := fun g =>
   if g ∈ M.d.θ then M.registered g else if g ∈ M.coins then ω g else x g
 
 end Method
@@ -95,20 +95,20 @@ structure Evaluation where
   /-- the method -/
   M : Method
   /-- the external input -/
-  x : M.d.D.Transcript
+  x : M.d.D.Trace
   /-- the coin -/
-  ω : M.d.D.Transcript
+  ω : M.d.D.Trace
 
 /-- An evaluation's trace: its method's circuit evaluated on its input assignment. -/
-def Evaluation.trace (e : Evaluation) : e.M.d.D.Transcript := e.M.d.D.eval (e.M.assign e.x e.ω)
+def Evaluation.trace (e : Evaluation) : e.M.d.D.Trace := e.M.d.D.eval (e.M.assign e.x e.ω)
 
 /-- **An execution**: a declaration and the values its gates held, each computed gate's value its operation on them.
 `Actual.Run` is one once its baseline is given; `Accounting.Requirement.Execution` is a schedule, not this. -/
 structure Execution where
   /-- the circuit that ran and its registered gates -/
-  d : Declaration
+  d : RegisteredCircuit
   /-- the values its gates held -/
-  val : d.D.Transcript
+  val : d.D.Trace
   /-- each computed gate's value is its operation on them (`Placed.Faithful`) -/
   faithful : ∀ g, d.D.isInput g = false → val g = d.D.op g val
 
@@ -159,27 +159,27 @@ inductive Provenance (Λ L : Type) where
 
 /-- **The provenance of gate `a`** in the partition `P` of `d`: registered in `θ`, else produced by its block, else
 external from `source a`. -/
-def provenance (d : Declaration) {Λ : Type} {n : ℕ} (source : Fin d.D.N → Λ) (P : Partition d.D n) (a : Fin d.D.N) :
-    Provenance Λ (Fin n) :=
+def provenance (d : RegisteredCircuit) {Λ : Type} {n : ℕ} (source : Fin d.D.N → Λ) (P : Partition d.D n)
+    (a : Fin d.D.N) : Provenance Λ (Fin n) :=
   if a ∈ d.θ then .registered else
     match P.unit a with
     | some u => .produced u
     | none => .external (source a)
 
 /-- **The registered reads** of `B`: the gates of `in(B)` in `θ`. -/
-def registeredIn (d : Declaration) (B : Finset (Fin d.D.N)) : Finset (Fin d.D.N) := d.D.into B ∩ d.θ
+def registeredIn (d : RegisteredCircuit) (B : Finset (Fin d.D.N)) : Finset (Fin d.D.N) := d.D.into B ∩ d.θ
 
 /-- **The external reads** of `B`: the input gates of `in(B)` outside `θ`. -/
-def externalIn (d : Declaration) (B : Finset (Fin d.D.N)) : Finset (Fin d.D.N) :=
+def externalIn (d : RegisteredCircuit) (B : Finset (Fin d.D.N)) : Finset (Fin d.D.N) :=
   (d.unregistered B).filter fun a => d.D.isInput a = true
 
 /-- **The produced reads** of `B`: the computed gates of `in(B)`. -/
-def producedIn (d : Declaration) (B : Finset (Fin d.D.N)) : Finset (Fin d.D.N) :=
+def producedIn (d : RegisteredCircuit) (B : Finset (Fin d.D.N)) : Finset (Fin d.D.N) :=
   (d.unregistered B).filter fun a => ¬ d.D.isInput a = true
 
 open Classical in
 /-- **The reads of `B` from the source `s`**: its external reads that `source` tags `s`. -/
-noncomputable def externalFrom (d : Declaration) {Λ : Type} (source : Fin d.D.N → Λ) (s : Λ)
+noncomputable def externalFrom (d : RegisteredCircuit) {Λ : Type} (source : Fin d.D.N → Λ) (s : Λ)
     (B : Finset (Fin d.D.N)) : Finset (Fin d.D.N) :=
   (externalIn d B).filter fun a => source a = s
 
@@ -191,7 +191,7 @@ def producedFrom (C : Circuit) (B' B : Finset (Fin C.N)) : Finset (Fin C.N) := C
 /-- **Scale `c`**: every block of `P` has at most `c` gates. -/
 def AtScale {C : Circuit} {n : ℕ} (P : Partition C n) (c : ℕ) : Prop := ∀ u, C.size (P.gates u) ≤ c
 
-/-- **Exact scale `c`**: every block of `P` has exactly `c` gates, padded where it would have fewer (`Pad`). -/
+/-- **Exact scale `c`**: every block of `P` has exactly `c` gates. -/
 def ExactScale {C : Circuit} {n : ℕ} (P : Partition C n) (c : ℕ) : Prop := ∀ u, C.size (P.gates u) = c
 
 /-- **The total** of a per-block quantity `q` over the blocks of `P`. -/
@@ -237,7 +237,7 @@ structure Crossing {C : Circuit} {n : ℕ} (P : Partition C n) where
 
 /-- **The information in `S`** under the description-length function `I`: `I` of `S`'s values in `X`, in gate order.
 `I = LDL M t r` is the local description length; `I = length` is the wire bits. -/
-def info (I : List Bool → ℕ∞) (C : Circuit) (X : C.Transcript) (S : Finset (Fin C.N)) : ℕ∞ :=
+def info (I : List Bool → ℕ∞) (C : Circuit) (X : C.Trace) (S : Finset (Fin C.N)) : ℕ∞ :=
   I (C.bits X (S.sort (· ≤ ·)))
 
 /-! ### Time-ordered partitions -/
@@ -278,13 +278,13 @@ def outputsOf (v : Fin n) : Finset (Fin C.N) := (F.toPartition.gates v).filter f
 
 /-- **The information block `v` hands on with timing `t`** under `I`, on the values `X`: `handsOn`'s crossings measured
 by description length rather than wire bits. -/
-noncomputable def infoHandsOn (I : List Bool → ℕ∞) (X : C.Transcript) (t : Timing) (v : Fin n) : ℕ∞ :=
+noncomputable def infoHandsOn (I : List Bool → ℕ∞) (X : C.Trace) (t : Timing) (v : Fin n) : ℕ∞ :=
   info I C X (F.handsOn t v)
 
 end TimeOrdered
 
 /-- **A crossing's three labels**, independent of each other: provenance, destination and timing. -/
-def labels (d : Declaration) {n m : ℕ} {Loc Λ : Type} (F : TimeOrdered d.D n Loc m) (source : Fin d.D.N → Λ)
+def labels (d : RegisteredCircuit) {n m : ℕ} {Loc Λ : Type} (F : TimeOrdered d.D n Loc m) (source : Fin d.D.N → Λ)
     (x : Crossing F.toPartition) : Provenance Λ (Fin n) × Destination n × Option Timing :=
   (provenance d source F.toPartition x.gate, x.dest, F.timing x.gate x.dest)
 
@@ -312,7 +312,8 @@ instance instLEResources : LE Resources where
     r.carried ≤ r'.carried ∧ r.sent ≤ r'.sent
 
 /-- **The resource vector** of the time-ordered partition `F` of `d`, in wire bits. -/
-noncomputable def resources (d : Declaration) {n m : ℕ} {Loc : Type} (F : TimeOrdered d.D n Loc m) : Resources where
+noncomputable def resources (d : RegisteredCircuit) {n m : ℕ} {Loc : Type} (F : TimeOrdered d.D n Loc m) :
+    Resources where
   blocks := n
   work := d.D.size d.D.computed
   fresh := total F.toPartition fun B => d.D.width (d.unregistered B)
@@ -323,7 +324,7 @@ noncomputable def resources (d : Declaration) {n m : ℕ} {Loc : Type} (F : Time
 /-- **A family of decompositions**: the time-ordered partitions, at locations `Loc`, it admits of each declaration. -/
 structure Family (Loc : Type) where
   /-- the decompositions it admits -/
-  admits : (d : Declaration) → (n m : ℕ) → TimeOrdered d.D n Loc m → Prop
+  admits : (d : RegisteredCircuit) → (n m : ℕ) → TimeOrdered d.D n Loc m → Prop
 
 namespace Family
 
@@ -359,11 +360,11 @@ noncomputable def fewestBlocks (𝓡 : Set Resources) (k : ℕ) : ℕ∞ :=
 /-! ### Classes of methods -/
 
 /-- **A class fixed across inputs and coins**: the methods whose every evaluation has the property `p`. -/
-def everywhere (p : Evaluation → Prop) : Set Method := {M | ∀ x ω : M.d.D.Transcript, p ⟨M, x, ω⟩}
+def everywhere (p : Evaluation → Prop) : Set Method := {M | ∀ x ω : M.d.D.Trace, p ⟨M, x, ω⟩}
 
 /-- **The worst case** of `q` over a method's external inputs and coins. -/
 noncomputable def worst (q : Evaluation → ℕ∞) (M : Method) : ℕ∞ :=
-  ⨆ (x : M.d.D.Transcript) (ω : M.d.D.Transcript), q ⟨M, x, ω⟩
+  ⨆ (x : M.d.D.Trace) (ω : M.d.D.Trace), q ⟨M, x, ω⟩
 
 /-- **The cell of `r`**: the methods that attain a vector at most `r` on every external input and coin. -/
 noncomputable def within {Loc : Type} (E : Setoid Evaluation) (𝔉 : Family Loc) (r : Resources) :

@@ -16,13 +16,13 @@ set_option Elab.async false
 its single gates are the constant, the zero, and each unit's public gates (`Layout.keyPubOf`), whose bit is the unit's
 public input word's in the population's public file (`pubBitOf`):
 
-* `pub_siteHP`: at a drawn unit's site (`BcSiteHP`), a stacked unit input whose key is bit `t` of public word `q` holds
+* `pub_siteHP`: at a sampled proof block's site (`BcSiteHP`), a stacked unit input whose key is bit `t` of public word `q` holds
   bit `t` of word `q` of the proved unit's public inputs (`pub_block`, `Hidden.inVal_drawnP`);
-* `rowOfHP`, `keyReadersHP`: `Layout.Readers.ofRows` at those rows, at each drawn unit's site (`siteAddrHP`), and single
+* `rowOfHP`, `keyReadersHP`: `Layout.Readers.ofRows` at those rows, at each sampled proof block's site (`siteAddrHP`), and single
   gates with `Layout.keyGateP (pubBitOf pi popOf) (fun _ _ => false)`; a public gate is no row's bit (`rowOfHP_pub`);
 * `keyProgHP_copies`: Δ's copies, from `copy_siteHP` at an input row (its key a message bit, so off a public leaf) and
   `out_copyHP` at an output row (`out_copy_keyP`);
-* `keyProgHP_bcPinned`: each row's `b ‖ c` at a drawn unit's site is the population's (`bc_site_ofHP`);
+* `keyProgHP_bcPinned`: each row's `b ‖ c` at a sampled proof block's site is the population's (`bc_site_ofHP`);
 * `keyProgHP_gate`, `keyProgHP_valPinned`: the single gates are the constant, the zero and the public gates
   (`Layout.single_gateP`, with every computed committed gate an output row's bit, `OutsOutP`), holding 1, 0
   (`constCols_keyProgHP`, `zeroCols_keyProgHP`) and the public input words' bits (`pub_siteHP`);
@@ -38,7 +38,7 @@ variable {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ} {pi : HmIn.Ports}
 
 /-! ## Public gates at a site -/
 
-/-- **A drawn unit's input at a public leaf holds its public word's bit**: in a satisfying witness of an accepted
+/-- **A sampled proof block's input at a public leaf holds its public word's bit**: in a satisfying witness of an accepted
 statement at public inputs, at a site (`BcSiteHP`: block `o`, template instance `g`, proved unit `u`), a stacked unit
 input whose key is bit `t` of public word `q` holds bit `t` of word `q` of `u`'s public inputs in the population's
 public file (`pub_block`, `Hidden.inVal_drawnP`). -/
@@ -258,7 +258,7 @@ variable {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → List (TabS
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   (si : SitesHP plan tab)
 
-/-- **Bit `k` of row `q` at a drawn unit's site** at public inputs (`keyRowAddrH`). -/
+/-- **Bit `k` of row `q` at a sampled proof block's site** at public inputs (`keyRowAddrH`). -/
 noncomputable def keyRowAddrHP (S : Finset (Fin n)) (R : Reg) (u : Fin n) (q : Fin c.ports.size) (k : ℕ) :
     Fin (2 ^ (Partition.tabOf plan tab S R u).S.m) :=
   if h : u ∈ S then
@@ -266,14 +266,14 @@ noncomputable def keyRowAddrHP (S : Finset (Fin n)) (R : Reg) (u : Fin n) (q : F
       (Typed.msgCol (si.acc S R u h).st.c (si.vu S R u h) q.val (k / 8) (k % 8))
   else ⟨0, Nat.two_pow_pos _⟩
 
-/-- **Row `q`'s `b ‖ c` at a drawn unit's site** at public inputs (`keyBcAddrH`). -/
+/-- **Row `q`'s `b ‖ c` at a sampled proof block's site** at public inputs (`keyBcAddrH`). -/
 noncomputable def keyBcAddrHP (S : Finset (Fin n)) (R : Reg) (u : Fin n) (q : Fin c.ports.size) (j : Fin 128)
     (t : Fin 8) : Fin (2 ^ (Partition.tabOf plan tab S R u).S.m) :=
   if h : u ∈ S then
     siteAddrHP (si.acc S R u h) (si.o S R u h) (Layout.bcAddr (si.acc S R u h).st.c (si.vu S R u h) q.val j.val t.val)
   else ⟨0, Nat.two_pow_pos _⟩
 
-/-- **Row `q`'s salt at a drawn unit's site** at public inputs (`keySaltAddrH`). -/
+/-- **Row `q`'s salt at a sampled proof block's site** at public inputs (`keySaltAddrH`). -/
 noncomputable def keySaltAddrHP (S : Finset (Fin n)) (R : Reg) (u : Fin n)
     (q : (Fin n × Fin c.ports.size) ⊕ Fin (keyN c hU n)) (j : Fin 192) (t : Fin 8) :
     Fin (2 ^ (Partition.tabOf plan tab S R u).S.m) :=
@@ -353,8 +353,8 @@ theorem keyProgHP_copies : (keyReadersHP hparse hpi outs popOf).Copies (keyPlace
     exact this
 
 include hparse hpi in
-/-- **The rows' `b ‖ c` at `keyProgP`'s sites in hidden-output tables is the registration's**: at each row a drawn
-unit reads, the bytes at its `hm96` output are the population's `b ‖ c` of the unit (`bc_site_ofHP`, at a
+/-- **The rows' `b ‖ c` at `keyProgP`'s sites in hidden-output tables is the registration's**: at each row a sampled
+proof block reads, the bytes at its `hm96` output are the population's `b ‖ c` of the unit (`bc_site_ofHP`, at a
 `BcSiteHP`). -/
 theorem keyProgHP_bcPinned
     (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
@@ -372,11 +372,11 @@ theorem keyProgHP_bcPinned
   exact this
 
 include hparse hpi ho hrf houts in
-/-- **A single gate at a drawn unit's site holds the registration's bit**: when every input a row reads has a key with
+/-- **A single gate at a sampled proof block's site holds the registration's bit**: when every input a row reads has a key with
 public inputs (`KeysRowP`), a committed gate that is no row's bit is the zero, the constant, a public gate of the unit,
 or a computed gate (`Layout.single_gateP`); a computed one is a returned output's (`OutsOutP`), so an output row's bit.
 So the gate holds 0, 1 (`zeroCols_keyProgHP`, `constCols_keyProgHP`) or, at a public gate, the unit's public input
-word's bit (`pub_siteHP`, at each drawn unit's site, `BcSiteHP`). -/
+word's bit (`pub_siteHP`, at each sampled proof block's site, `BcSiteHP`). -/
 theorem keyProgHP_gate (hkeys : KeysRowP c hU pi (portRowW c))
     (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
       BcSiteHP (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)

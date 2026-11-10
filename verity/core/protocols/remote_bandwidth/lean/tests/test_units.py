@@ -1,9 +1,9 @@
 """The Python of PoUB's verifier held to the Lean's pieces (`remote-audit-difftest`, the definition), each on
-drawn inputs that include what both sides must refuse: the codec's decode (`codec.decode`, under the seed's key, a bound key
+sampled inputs that include what both sides must refuse: the codec's decode (`codec.decode`, under the seed's key, a bound key
 and an append's coin), a plan (`receipts.Plan`: its length, digest and chunks) and its change (`Plan.changed`), a receipt
 (`receipts.receipter`, both kinds and both row counts), a frame-v3-sha512 opening (`verity.ml.commitments.verify_opening`
 over a range domain), a leaf's receipt (`receipts.leaf_receipt`), a window's draws (`AuditRun.close`'s), a
-registration's digest (`audit.Registration.digest`), and the registration `audit.register` makes, its codec seed drawn
+registration's digest (`audit.Registration.digest`), and the registration `audit.register` makes, its codec seed sampled
 from the verifier's secret and a nonce. `test_session.py` holds the whole verifier."""
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ def sized(n: int, *, near: bool = True) -> st.SearchStrategy:
 
 
 def blocks() -> st.SearchStrategy:
-    """A 4096-byte chunk: drawn bytes, or one of every byte's extremes as int8."""
+    """A 4096-byte chunk: sampled bytes, or one of every byte's extremes as int8."""
     return st.one_of(st.binary(max_size=8).map(lambda s: expand(s, codec.BLOCK_BYTES)),
                      st.sampled_from([b"\x80", b"\x7f", b"\xff", b"\0", b"\x80\x7f"]).map(
                          lambda b: (b * codec.BLOCK_BYTES)[:codec.BLOCK_BYTES]))
@@ -151,7 +151,7 @@ def fault(draw, n: int) -> int:
 
 @st.composite
 def plan_runs(draw, extent: int) -> list:
-    """A plan of distinct chunks of a store of `extent`, in a drawn order."""
+    """A plan of distinct chunks of a store of `extent`, in a sampled order."""
     order = draw(st.permutations(sorted(draw(st.sets(st.integers(0, min(extent, 2 ** 64 - 1) - 1), min_size=1,
                                                      max_size=10)))))
     return [list(r) for r in Plan.of(order, min(extent, 2 ** 64 - 1)).runs]
@@ -186,7 +186,7 @@ def plan_changed(v) -> list:
 @st.composite
 def change_inputs(draw) -> dict:
     """A plan's change: chunks it holds removed along its runs and chunks it then doesn't hold added, or one of a
-    shrinking store, drawn runs for the change, a change that removes every chunk, or drawn runs for the plan."""
+    shrinking store, sampled runs for the change, a change that removes every chunk, or sampled runs for the plan."""
     f = fault(draw, 4)
     blocks = draw(st.integers(1, 10))
     extent = blocks - 1 if f == 1 else blocks + draw(st.integers(0, 4))
@@ -252,7 +252,7 @@ def opening(v) -> bool:
 
 @st.composite
 def opening_inputs(draw) -> dict:
-    """An opening of a drawn tree over a range domain, as is or with one field changed."""
+    """An opening of a sampled tree over a range domain, as is or with one field changed."""
     binding = expand(draw(st.binary(max_size=8)), draw(st.sampled_from([64, 64, 32])))
     owner, start, count = draw(st.sampled_from([0, -1, -2, 3])), draw(st.integers(0, 40)), draw(st.integers(1, 20))
     schema = draw(st.sampled_from([receipts.SCHEMA, "verity/remote-bandwidth/coins/v0"]))

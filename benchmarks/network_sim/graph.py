@@ -43,7 +43,7 @@ def network(dc: Datacenter) -> tuple[dict[str, str], list[tuple[LinkEntry, str, 
     """The network the exports stand up: each node's role (`block`, or a fabric device's kind) and each link between
     two nodes, with the node at each end."""
     def node(x: str) -> str:
-        b = dc.block_of(x)
+        b = dc.zone_of(x)
         return b.name if b else x
 
     roles = {b.name: "block" for b in dc.blocks} | {d.name: d.kind for d in dc.fabric}

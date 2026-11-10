@@ -1,7 +1,39 @@
 module
 
 public import Proofs.Flock.SoundAtBridge.Served
-public import Proofs.Flock.C3.Compose.RowsReg
+public import Batteries.Data.ByteArray
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.C3.Compose.RowsReg
 
 /-!
 # A session's registered reads built from `own`, its registrants' openings as data
@@ -14,7 +46,7 @@ that `own` names (`CanonRead`), through `own`'s first port of that name (`ownPor
 read at `own`'s root). Every other field of `s` is kept.
 
 `servedRegistered_canon`: where every port of `own` has one read (the leaf verifier's `PouwWindow.Lanes.checkOneRead`),
-every unit of `canon s op` has its served roots registered (`ServedRegistered`). A read's position at any draw is that
+every unit of `canon s op` has its served roots registered (`ServedRegistered`). A read's position at any sample is that
 port's position at the unit's index, and with one read only index `0` has one.
 -/
 
@@ -87,7 +119,7 @@ def canon (op : s.Openings) : RowsSession := { s with rdU := s.canonReads op }
 
 /-- **At one read per port, the reads built from `own` register the served roots**: where every port of `own` has one
 read, each unit of `canon s op` reads exactly its rows of the ports `own` names, through `ownPort`, at the position
-`ownPort` gives it at every draw that proves it (only index `0` has a position). -/
+`ownPort` gives it at every sample that proves it (only index `0` has a position). -/
 theorem servedRegistered_canon (op : s.Openings) (h1 : ∀ pt ∈ s.own, pt.reads.size = 1) (u : Fin s.n) :
     (s.canon op).ServedRegistered u := by
   refine ⟨fun _ => Iff.rfl, fun q hn => ⟨rfl, ?_⟩⟩

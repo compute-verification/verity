@@ -467,7 +467,8 @@ theorem zk_replay_rows (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : Byt
     · have hi' : ¬ i.val < s'.2.reverse.size := by simp [hs'sz, hi]
       have hidx : S.kLog - 6 + (i.val - s'.2.reverse.size) = i.val := by simp [hs'sz]; omega
       rw [dite_eq_right hi, dite_eq_right hi', Array.getElem_extract,
-        ← getElem!_pos s.2 _ (by simp [hs'sz] at *; omega), hidx, hsget _ i.isLt, Nat.zero_add, getElem!_eq_getD]
+        ← getElem!_pos s.2 _ (by have := i.isLt; simp only [Array.size_reverse, hs'sz, hssz]; omega), hidx,
+        hsget _ i.isLt, Nat.zero_add, getElem!_eq_getD]
   case c1 =>
     intro w
     simp only [abcClaims_one]

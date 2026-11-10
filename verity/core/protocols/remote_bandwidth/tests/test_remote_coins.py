@@ -1,4 +1,4 @@
-"""The audit's coins from the proof system's challenger as a service (`sampled_proofs.remote`), served on a thread over a
+"""The audit's coins from the proof system's challenger as a service (`spot.remote`), served on a thread over a
 socket pair: a session whose coins that service released is accepted, and what it signed holds them
 (`AuditRun.released_reason`). Under the auditor's ledger (`AuditRun.trusted_reason`) a session's coins are those of the
 one challenger session the ledger opens for the session's own window R inside its period, run from a tree the host's
@@ -22,8 +22,8 @@ import pytest
 
 from test_remote_bandwidth import SCHEDULE, Entropy, drive, finish, params, store  # noqa: F401
 from verity.core.protocols.remote_bandwidth import coins
-from verity.core.protocols.sampled_proofs import challenger as C
-from verity.core.protocols.sampled_proofs import remote as R
+from verity.core.protocols.spot import challenger as C
+from verity.core.protocols.spot import remote as R
 from verity.ml.crypto import lms
 
 KEY = lms.keygen(lms.Params(64, 4, 4), bytes([7]) * 64)
@@ -32,9 +32,9 @@ HOST = "test-challenger"
 LANE = "memory-accounting"
 APPENDS = 8
 CIRCUIT = hashlib.sha512(b"verity/remote-bandwidth/v0").hexdigest()
-MAIN = R.main_lines(Path(__file__).resolve().parents[2] / "sampled_proofs" / "tests" / "fixtures" /
+MAIN = R.main_lines(Path(__file__).resolve().parents[2] / "spot" / "tests" / "fixtures" /
                     "main-first-parent.txt")
-"""Main's first-parent history, newest first, from c81c31e6d5 back to 6c2de12715: sampled_proofs' fixture."""
+"""Main's first-parent history, newest first, from c81c31e6d5 back to 6c2de12715: spot' fixture."""
 PIN = MAIN[0]
 PINS = [C.pin_line(PIN, PIN, "2026-10-22T11:07:28Z")]
 """The host's pins log as infra published it when it repinned the challenger's host to `PIN`; every open seals it unless a
@@ -307,10 +307,11 @@ def test_an_openings_coin_opened_before_its_windows_root_is_refused(store, tmp_p
 
 
 def test_a_coin_asked_for_ahead_goes_in_one_round_trip_with_the_coin_before_it(store, tmp_path, sign):
-    """`SessionCoins.ahead`: window 0's openings coin and σ_1 after its root go in one `open_many`, the openings coin first,
-    and σ_1 is then taken from the batch with no frame sent: the same coins, the same roots recorded for each family
-    and the challenger's release log byte for byte as asking them one after the other. σ_1 asked for after another
-    root, or a coin asked for ahead that is not its family's next, is refused, the latter before any frame is sent."""
+    """`SessionCoins.ahead`: window 0's openings coin and chal_1 after its root go in one `open_many`, the openings coin
+    first, and chal_1 is then taken from the batch with no frame sent: the same coins, the same roots recorded for each
+    family and the challenger's release log byte for byte as asking them one after the other. chal_1 asked for after
+    another root, or a coin asked for ahead that is not its family's next, is refused, the latter before any frame is
+    sent."""
     root = hashlib.sha512(b"window 0's root").digest()
 
     def ask(directory, ahead: bool):

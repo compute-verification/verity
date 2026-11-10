@@ -83,7 +83,7 @@ theorem ofEntry_entry (e : Core.Site.Entry) : ofEntry (entry e) = e := by
   simp only [entry, ofEntry, List.map_map, Function.comp_def, ofSheet_sheet, ofLoc_loc, ofLink_link, List.map_id']
 
 theorem ofRegEntry_regEntry (e : Core.Site.Registration.Entry) : ofRegEntry (regEntry e) = e := by
-  cases e; simp only [regEntry, ofRegEntry, ofEntry_entry]
+  cases e; simp only [regEntry, ofRegEntry, Verity.Registration.Entry.previous, Verity.Registration.Entry.added, ofEntry_entry]
 
 theorem sheet_injective : Function.Injective sheet := fun a b h => by
   rw [← ofSheet_sheet a, ← ofSheet_sheet b, h]
@@ -343,6 +343,17 @@ theorem log_append (l l' : Core.Site.Registration) : log (l ++ l') = log l ++ lo
 
 theorem log_take (l : Core.Site.Registration) (i : Nat) : log (l.take i) = (log l).take i := List.map_take
 
+theorem items_log : ∀ l : Core.Site.Registration, Verity.Registration.items (log l) = []
+  | [] => rfl
+  | .site _ _ :: l => items_log l
+
+/-- A code log registers no item, and a site entry declares no day, so an entry it denotes registers none twice. -/
+theorem once_regEntry (l : Core.Site.Registration) (e : Core.Site.Registration.Entry) :
+    Verity.Registration.Entry.Once (log l) (regEntry e) := by
+  cases e
+  simp [Verity.Registration.Entry.Once, Verity.Registration.Entry.ItemsOnce, Verity.Registration.Entry.DayOnce,
+    items_log, regEntry, Verity.Registration.Entry.items, Verity.Registration.Entry.declared?]
+
 /-- What a check's result says of the log it checked: an accepted log is valid, with the spec's Site of it; a refusal
 at `i` follows a valid prefix of `i` entries, and is the spec's refusal of the next. -/
 def Says (D : Digests) (A : Auditor) (c : Composite) (l : Core.Site.Registration) :
@@ -386,8 +397,7 @@ theorem go_says (D : Digests) (A : Auditor) (c : Composite) :
           (Verity.Site.ofLog (log p)) (Verity.Registration.head (digests D) (composite c) (log p)) (regEntry e) := by
         rw [← hS, ← hh, ← Verity.Registration.Entry.refusal_eq_none_iff, ← hr]; rfl
       have hv' : Verity.Registration.Valid (digests D) (auditor A) (composite c) (log (p ++ [e])) := by
-        rw [log_append]
-        exact Verity.Registration.valid_append_singleton.mpr ⟨hv, hev, by cases e; simp [regEntry]⟩
+        rw [log_append]; exact Verity.Registration.valid_append_singleton.mpr ⟨hv, hev, once_regEntry p e⟩
       have := ih (p ++ [e]) (S.add e.added) (D.entry e)
         (by
           rw [site_add, hS, log_append]

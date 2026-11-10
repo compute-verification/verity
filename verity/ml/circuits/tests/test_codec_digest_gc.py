@@ -10,14 +10,6 @@ import pytest
 from verity.ml.circuits import codec as C
 
 
-@pytest.fixture
-def collector():
-    was = gc.isenabled()
-    gc.enable()
-    yield
-    (gc.enable if was else gc.disable)()
-
-
 def test_a_digest_streams_with_the_collector_off_and_leaves_it_as_it_was(collector, monkeypatch) -> None:
     seen = []
 

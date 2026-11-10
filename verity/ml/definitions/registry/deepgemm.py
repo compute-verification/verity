@@ -4,7 +4,7 @@ those commits.
 
 On Hopper `is_deep_gemm_e8m0_used()` holds and `VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER=1` is the default, so a 128x128-block FP8 linear
 is `FlashInferFp8DeepGEMMDynamicBlockScaledKernel` (kernels/linear/scaled_mm/flashinfer.py:149-330).  Its weights are processed by
-`deepgemm_post_process_fp8_weight_block` (fp8_utils.py:1111-1175) and are derived Inputs (fp8.md §2: the served words are bound,
+`deepgemm_post_process_fp8_weight_block` (fp8_utils.py:1111-1175) and are derived Inputs (the served words are bound,
 `kernels.deepgemm_twins` re-derives them): DeepSeek-V4's e8m0 scales upcast as `byte << 23` (fp8_utils.py:1071-1080: byte 0 is +0,
 0xFF is +inf; no requantisation), GLM-5.3's f32 scales requantised to powers of two by `requant_weight_ue8m0_inplace`
 (fp8_utils.py:1011-1068).  `apply_block_scaled_mm` passes the bf16 input to `dynamic_flashinfer_deepgemm_blockscale_gemm`, which branches

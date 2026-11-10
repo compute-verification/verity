@@ -1,7 +1,46 @@
 module
 
-public import Proofs.Flock.Claims.KS.Entries
-public import Proofs.Flock.Soundness.Discharge.ZkExec.Verdict
+public import Proofs.Flock.Claims.ZkCols
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.Entries
+import Proofs.Flock.Claims.KS.LevelZeroAcc
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+import Proofs.Flock.Soundness.Discharge.ZkExec.Verdict
+import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictOpens
+import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 
 /-!
 # The masked reader's level-0 entries at a rep's run
@@ -11,7 +50,7 @@ are, with their rows' witness lanes, the masked reader's entries. This file prov
 acceptance, the masked `Entries`:
 
 * `Claims.Flock.slotOpensZ_entries`: a masked rep whose first request is level 0's, at the positions `Flock.positions`
-  draws from `coins`, with one opened row per position, opens at level 0 exactly the entries `zkRepCols` reads off
+  samples from `coins`, with one opened row per position, opens at level 0 exactly the entries `zkRepCols` reads off
   `coins` and those rows, in order, at every width the rows are cut to.
 * `Claims.Flock.zkRepColsOf_ok`: the masked reader's entries at a proof that decodes are `zkRepCols`'s at level 0, the
   coins of round `zkQueryRound` and the proof's level-0 rows, cut to the witness lanes.
@@ -36,7 +75,7 @@ open FlockSoundness FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkS
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **A masked rep's level-0 openings are the reader's entries**: when the rep's first request is level 0's, at the
-positions `Flock.positions` draws from `coins`, `q` of them, and its openings are `rows`, one per position, its level-0
+positions `Flock.positions` samples from `coins`, `q` of them, and its openings are `rows`, one per position, its level-0
 openings' positions and rows, each cut to `w` symbols, are `zkRepCols`'s entries cut to `w`, in order. -/
 theorem slotOpensZ_entries {D Sl : Type} (out : OutZC 𝔽 D Sl) (r : ℕ) (lv : _root_.Flock.Level)
     (coins : Array _root_.Flock.F128) (rows : Array (Array _root_.Flock.F128)) (R : Model.Req)

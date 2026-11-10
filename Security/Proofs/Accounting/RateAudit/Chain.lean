@@ -9,7 +9,7 @@ public import Proofs.Accounting.RateAudit.Windows
 /-!
 # Chained passes: the proof
 
-**Sequencing.** Fix every pass's coins but pass `j`'s. Pass `j`'s device and the root its seed is drawn at are then
+**Sequencing.** Fix every pass's coins but pass `j`'s. Pass `j`'s device and the root its seed is sampled at are then
 fixed functions of the store (`Chain.device`, `Chain.root`), and its coins are a stream, an oracle family over roots
 and a sample. Split the family at the root the store picks: the family is the oracle at that root together with the
 family elsewhere (`rootSplit`), a relabelling of the coins for each store, so the oracle at the root is uniform and

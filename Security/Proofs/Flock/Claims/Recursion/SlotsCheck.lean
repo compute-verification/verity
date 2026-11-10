@@ -1,8 +1,57 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.SlotsCommit
-public import Proofs.Flock.Claims.Recursion.VStarLinks
 public import Proofs.Flock.Claims.Recursion.DeployComplete
+public import Proofs.Flock.Claims.Recursion.SlotsCommit
+import all Init.Data.String.Basic
+import all Init.Data.String.Pattern.Basic
+import all Init.Data.String.Pattern.String
+import all Init.Data.String.Slice
+import all Init.Data.String.TakeDrop
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.DeployScope
+import Proofs.Flock.Claims.Scope.Fit
+import Proofs.Flock.Claims.Scope.Setup
+import Proofs.Flock.Recursive.VStarCheck
+import Proofs.Flock.Soundness.Discharge.Hidden.Delta
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.Hm.Bc
+import Proofs.Flock.Soundness.Discharge.Hm.Site
+import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
+import Std.Data.String.ToNat
+import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!
 # The hm96 slots' commit strings at the outer relation
@@ -677,8 +726,8 @@ theorem oneFull_staged {st : Stage} {s : ℕ} {x xO : Claims.Msg} {i : RecIns} {
   exact oneFull_ok h1
 
 /-- **A staged RecCap part's table holds all its `N` instances**: `checkStmt` makes its population `N`
-(`staged_scope`), and `RecSetup.oneFull` its instances at least its population's (`oneFull_staged`), so a table drawn
-short, which proves only its drawn units (`HmRow.drawn`), never stages. -/
+(`staged_scope`), and `RecSetup.oneFull` its instances at least its population's (`oneFull_staged`), so a table sampled
+short, which proves only its sampled proof blocks (`HmRow.drawn`), never stages. -/
 theorem capFull_staged {st : Stage} {s : ℕ} {x xO : Claims.Msg} {i : RecIns} {spec : Flock.SessionSpec}
     {sts : Array Flock.Stmt} {r : XR} {l N : ℕ} (hS : StagedPart st s x xO) (hsu : setupO xO = some (i, spec, sts))
     (hr : readX x = some r) (hcap : (Flock.RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.cap l N))
@@ -775,7 +824,7 @@ open Flock
 open Claims (Msg Out)
 open FlockDeploy (Coin)
 
-/-- **`KSLin2` at the model of the coin server's record (`recTr`), with the slots' commit strings proved**:
+/-- **`KSLin2` at the model of the challenger's live-coin part's record (`recTr`), with the slots' commit strings proved**:
 `ksLin2_deployed_slots` with `HmSlotsCommit` from `hmSlotsCommit_of_full`. -/
 theorem ksLin2_deployed_full (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
@@ -799,7 +848,7 @@ theorem ksLin2_deployed_full (b : Brings) (aux : Msg → ℕ → Flock.RecRecord
   intro bR L Bd D bL hP
   exact ksLin2_deployed_slots b aux nOf hd rest fin wE join final w hP hmSlotsCommit_of_full
 
-/-- **`BitsLin2` at the model of the coin server's record (`recTr`), with the slots' commit strings proved**:
+/-- **`BitsLin2` at the model of the challenger's live-coin part's record (`recTr`), with the slots' commit strings proved**:
 `bitsLin2_deployed_slots` with `HmSlotsCommit` from `hmSlotsCommit_of_full`. -/
 theorem bitsLin2_deployed_full (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)

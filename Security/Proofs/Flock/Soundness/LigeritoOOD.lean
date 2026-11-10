@@ -1,6 +1,17 @@
 module
 
-public import Proofs.Flock.Soundness.LigeritoLevels
+public import Definitions.Core.Game
+public import Definitions.Flock.Ligerito
+public import Mathlib.RingTheory.Henselian
+public import Mathlib.RingTheory.RegularLocalRing.Defs
+public import Mathlib.RingTheory.SimpleRing.Principal
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.Soundness.LigeritoCoins
+import Proofs.Flock.Soundness.OpeningPhase
+import Proofs.Flock.Soundness.ZerocheckPhase
+import VCVio.Prelude.Core
 
 /-!
 # Out-of-domain binding (`Flock.Ligerito` step 6)

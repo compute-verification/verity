@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pouw.Assumptions.Dimension.EmbedAssumptions
+public import Definitions.Pouw.Assumptions.Dimension.OpenPipe
 
 /-!
 # M4090 and the embedding theorem (trusted statements; draft semantics)

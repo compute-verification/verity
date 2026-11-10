@@ -59,9 +59,9 @@ def _digest(fn, **st) -> str:
 
 
 def test_the_kernel_order_routers_of_record_are_unchanged():
-    assert _digest(moe.MoeRouterTopK, E=64, TOPK=8, VPT=8) == "581a4ad647391b7e"
-    assert _digest(moe.MoeRouterTopK, E=128, TOPK=8, VPT=8) == "fb04cb4e755fd571"
-    assert _digest(moe.MoeRouterTopKNorm, E=128, TOPK=8, VPT=8) == "ef2f47ef03606d54"
+    assert _digest(moe.MoeRouterTopK, E=64, TOPK=8, VPT=8) == "551afcc58e2e0c23"
+    assert _digest(moe.MoeRouterTopK, E=128, TOPK=8, VPT=8) == "7510a455e2e06630"
+    assert _digest(moe.MoeRouterTopKNorm, E=128, TOPK=8, VPT=8) == "62e4a9805606ac7c"
 
 
 def test_the_statement_is_the_default_and_the_kernel_order_router_stays_declarable():

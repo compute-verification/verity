@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 from verity.core.protocols.pouw import leaf_lanes as LL
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import seeds as SD
 
 _spec = importlib.util.spec_from_file_location("h1_lanes_run", Path(__file__).resolve().parents[1] / "h1_lanes" / "run.py")
 RN = sys.modules[_spec.name] = importlib.util.module_from_spec(_spec)
@@ -41,7 +41,7 @@ def _old_known_rows(ctx, w, kind: str, ln: int | None, index: int) -> dict:
 
 @pytest.mark.parametrize("seed", [1, 2, 3])
 def test_the_known_rows_are_the_harness_own(seed: int):
-    """Seed 1's leaf is h1_lanes' (every row admitted, `leaf_data`), the others' admit bits drawn."""
+    """Seed 1's leaf is h1_lanes' (every row admitted, `leaf_data`), the others' admit bits sampled."""
     rng = random.Random(seed)
     position = rng.getrandbits(64)
     leaf = RN.leaf_data(seed, 32, rng.randbytes(64), position)
@@ -65,7 +65,7 @@ def _rows_or_refusal(fn, ctx, w, kind: str, ln: int | None, index: int):
 
 
 def test_off_the_served_leaf_the_known_rows_refuse_and_take_what_the_harness_did():
-    """Admit rows of any length and positions in and out of a u64 (the inputs `PouwWindow.knownRows`' difftest draws
+    """Admit rows of any length and positions in and out of a u64 (the inputs `PouwWindow.knownRows`' difftest samples
     through `known_rows`): the rows, or the refusal, are the old harness's."""
     rng = random.Random(0)
     refused = 0

@@ -37,6 +37,7 @@ import numpy as np
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.codec import descriptor_id
+from verity.ml.circuits.types import remove_axis
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.config import option
 from verity_vllm.pipeline import cpu_replay as CR
@@ -101,9 +102,19 @@ def to_words(bits: np.ndarray, widths: list[int]) -> np.ndarray:
     return out
 
 
+def _member(nd: Any) -> tuple[list[Any], Any, list[bool]]:
+    """A row's Definition's argument and return types, and which arguments are mapped over its members: a batch's member's (mapped
+    on axis 0), else the node's own."""
+    if nd.form != "batch":
+        return [a.type for a in nd.args], nd.out, [False] * len(nd.args)
+    return ([a.type if ax is None else remove_axis(a.type, ax)[1] for a, ax in zip(nd.args, nd.axes)], nd.out.elem,
+            [ax is not None for ax in nd.axes])
+
+
 class BooleanRows:
     """The row evaluator `evaluate.ROW_EVALUATORS` takes: row ``i``'s Call (root node ``K + i`` of the Program) evaluated by the
-    Boolean version of its Definition on the row's operands, its output keyed by member where the row commits one, else by port."""
+    Boolean version of its Definition on the row's operands, its output keyed by member where the row commits one, else by port.
+    A batch row is its members in turn, each evaluated on its slice of every mapped operand and the shared ones whole."""
 
     def __init__(self, nodes: list[Any], K: int, log: Path | None = None, seconds_per_vu: float = 60.0) -> None:
         self.nodes, self.K, self.log, self.seconds_per_vu = nodes, K, log, seconds_per_vu
@@ -125,11 +136,12 @@ class BooleanRows:
             if b is not None:
                 params, ret = b.signature()
                 words = [BL.word_type(t) for _, t in params]
-                if nd.form not in ("call", "primitive"):
-                    b, self.why[spec] = None, f"a {nd.form} node, not a Call"
-                elif not BL.is_boolean(b) or words != [a.type for a in nd.args] or BL.word_type(ret) != nd.out:
+                types, out, _ = _member(nd)
+                if nd.form not in ("call", "primitive", "batch") or any(ax not in (None, 0) for ax in nd.axes):
+                    b, self.why[spec] = None, f"a {nd.form} node, not a Call or a batch over axis 0"
+                elif not BL.is_boolean(b) or words != types or BL.word_type(ret) != out:
                     self.why[spec] = (f"{b.id} does not keep the Call's boundary: on words it takes {words} and returns "
-                                      f"{BL.word_type(ret)}, the Call {[a.type for a in nd.args]} and {nd.out}")[:400]
+                                      f"{BL.word_type(ret)}, the Call {types} and {out}")[:400]
                     b = None
             self._fn[spec], self.sigma[spec] = b, (b.id if b is not None else None)
         if self.sigma[spec] is None:
@@ -143,8 +155,10 @@ class BooleanRows:
         nd, line = self.nodes[self.K + i], {"i": i, "spec": r["spec"]}
         try:
             b = self.version(r["spec"], nd)
-            bits = [to_bits(ops[g], BL.elements(BL.bit_type(a.type)))[None, :] for g, a in enumerate(nd.args)]
-            words = to_words(np.asarray(evaluate_bits(b, *bits)).reshape(-1), BL.elements(BL.bit_type(nd.out)))
+            types, out, mapped = _member(nd)
+            words = np.concatenate([to_words(np.asarray(evaluate_bits(b, *(
+                to_bits(ops[g][m * t.leaves:(m + 1) * t.leaves] if mapped[g] else ops[g], BL.elements(BL.bit_type(t)))[None, :]
+                for g, t in enumerate(types)))).reshape(-1), BL.elements(BL.bit_type(out))) for m in range(nd.n)])
         except Declined as e:
             self._write(line | {"why": str(e)[:400]})
             raise
@@ -157,7 +171,7 @@ class BooleanRows:
     def peak_bytes(self, vu: dict) -> int:
         """A bound on the bytes one pick's evaluation (`__call__`) allocates, times `PEAK_MARGIN`: the bits of every argument, with
         each conversion's element-width list and one run's temporaries (`to_bits`), the bit-sliced evaluation (`bits.peak_bytes`), and
-        the output's words (`to_words`).  Its operands are views of the weights or a few committed words, and are not counted; a row
+        the output's words (`to_words`), a batch's members' words held besides.  Its operands are views of the weights or a few committed words, and are not counted; a row
         with no Boolean version is declined before it allocates (0)."""
         from verity.ml.circuits.evaluation.bits import peak_bytes
 
@@ -170,11 +184,13 @@ class BooleanRows:
         def port(t: Any) -> tuple[int, int, int, int]:   # elements, bits, a run's elements, the widest element
             return t.leaves, BL.bit_type(t).leaves, min(_RUN_MAX, t.leaves), max(t.width_set() or {1})
 
-        args = [port(a.type) for a in nd.args]
-        e, n, k, w = port(nd.out)
+        types, out, _ = _member(nd)
+        args = [port(t) for t in types]
+        e, n, k, w = port(out)
         convert = max((16 * e_ + 8 * k_ * (1 + 2 * w_) for e_, _, k_, w_ in args), default=0)
         words = n + 8 * n + 24 * e + 8 * k * (w + 1)
-        return int(PEAK_MARGIN * (sum(a[1] for a in args) + max(peak_bytes(b, 1), convert, words)))
+        held = 16 * nd.out.leaves if nd.form == "batch" else 0
+        return int(PEAK_MARGIN * (sum(a[1] for a in args) + max(peak_bytes(b, 1), convert, words) + held))
 
     def prewarm(self, picked: list[dict]) -> dict[str, str]:
         """Each picked spec's Boolean version compiled in the parent, before the replay forks (`driver._prewarm_evaluators`)."""

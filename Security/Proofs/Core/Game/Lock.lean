@@ -1,7 +1,8 @@
 module
 
 public import Proofs.Core.Game.Expect
-public import Proofs.Core.Game.Interleave
+import Mathlib.Algebra.Order.Chebyshev
+import Proofs.Core.Game.Basic
 public import Definitions.Core.Game.Lock
 
 /-!

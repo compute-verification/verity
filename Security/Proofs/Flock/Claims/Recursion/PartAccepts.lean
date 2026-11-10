@@ -1,6 +1,40 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.FinOpen
+public import Proofs.Flock.Claims.Recursion.RecRecord
 public import Proofs.Flock.Claims.Recursion.TopsOpens
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.SlotsCheck
 
 /-!
 # `PartChecksBV` at what each part's circuit accepts (`PartAccepts`), and the corollaries without it
@@ -32,7 +66,7 @@ of the code side's choice (one stated against the element-level verdict's steps,
 both facts does.
 
 `ksLin2_deployed_partAccepts` and `bitsLin2_deployed_partAccepts` are `ksLin2_deployed_recRead` and
-`bitsLin2_deployed_recRead` at the coin server's record (`recTr`), with the pair replaced by `DecompB` at
+`bitsLin2_deployed_recRead` at the challenger's live-coin part's record (`recTr`), with the pair replaced by `DecompB` at
 `PartAccepts`, the same premise, `ReadsBackB` from `readsBack_recTr` (`recRead` reads that record back at every
 accepted run) and `ReadersTrue` from `readersTrue_layoutBTops` (every hm96 slot `layoutBTops` reads outputs its commit
 string at the outer relation, `hmSlotsCommit_of_full`). What they take: `DecompB` there, and nothing else.
@@ -132,7 +166,7 @@ open Flock
 open Claims (Msg Out)
 open FlockDeploy (Coin)
 
-/-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)` and the coin server's record
+/-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)` and the challenger's live-coin part's record
 (`recTr`), from `DecompB` alone**: `ksLin2_deployed_recRead` at the brings whose transcript is
 `recTr aux nOf hd recRest`, with its inner check `PartAccepts` (`partChecksBV_partAccepts`), `recRead` reading that
 transcript back (`readsBack_recTr`) and the readers' calls true (`readersTrue_layoutBTops`,
@@ -159,7 +193,7 @@ theorem ksLin2_deployed_partAccepts (b : Brings) (aux : Msg → ℕ → Flock.Re
     (fun shape hsh => (Claims.Recursion.VStarB.exists_chk_iff _ _ _ _ _ _ _ _).2 (hD shape hsh))
     (readersTrue_layoutBTops (finOpen rest) Bd.IVStar bR _ hmSlotsCommit_of_full)
 
-/-- **`BitsLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)` and the coin server's record
+/-- **`BitsLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)` and the challenger's live-coin part's record
 (`recTr`), from `DecompB` alone**: `bitsLin2_deployed_recRead` at `recTr aux nOf hd recRest`, with its inner check
 `PartAccepts`, `ReadsBackB` from `readsBack_recTr` and `ReadersTrue` from `readersTrue_layoutBTops`. It reads
 `StrictBirthday` and `ExpectedCR`, the named SHA-512 collision assumptions, and `ksLin2_deployed_partAccepts`'s open

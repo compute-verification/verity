@@ -1,15 +1,46 @@
 module
 
 public import Definitions.NetworkCertifier.SampledAudit
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The sampled audit's charge: what the faulty proof blocks add to the leak
+# The sampled audit's charge: what the incorrect proof blocks add to the leak
 
 Definitions only. An accepted sampled audit gives `Accepted` by the circuit's Program at `δ`, with the declared advice
-holding values at the faulty proof blocks' committed gates (`RAcc`, `Definitions.NetworkCertifier.SampledAudit`). Those
+holding values at the incorrect proof blocks' committed gates (`RAcc`, `Definitions.NetworkCertifier.SampledAudit`). Those
 values are the prover's to choose, and so is which proof blocks are faulty, so the leak bound of a sampled audit
-charges, beyond the inputs the circuit reads besides the ingress, the faulty proof blocks' committed bits (`faultyBits`)
-and the choice of faulty set among the ones `RAcc δ` allows (`faultySets`). The sequences it counts are
+charges, beyond the inputs the circuit reads besides the ingress, the incorrect proof blocks' committed bits (`faultyBits`)
+and the choice of incorrect set among the ones `RAcc δ` allows (`faultySets`). The sequences it counts are
 `AccSeqsSampled`.
 -/
 
@@ -19,18 +50,18 @@ namespace NetTiming
 
 open Claims Claims.Sampling
 
-/-- **The faulty units' committed bits**: over the slots `F` of the partition `P`, each proof unit's gates that its
+/-- **The incorrect proof blocks' committed bits**: over the slots `F` of the partition `P`, each proof block's gates that its
 boundary commits (`committed`). -/
 def faultyBits (C : Prog) (P : Partition) (F : Finset ℕ) : ℕ :=
   ∑ v ∈ F, committed C (P.blocks.getD v [])
 
 open Classical in
-/-- **The possible faulty sets at `δ`**: the sets of `P`'s slots that are in `M_δ` and hold no slot sampled `all`, the
-faulty sets `RAcc δ` allows. At `δ ≥ miss(1)` none is non-empty. -/
+/-- **The possible incorrect sets at `δ`**: the sets of `P`'s slots that are in `M_δ` and hold no slot sampled `all`, the
+incorrect sets `RAcc δ` allows. At `δ ≥ miss(1)` none is non-empty. -/
 noncomputable def faultySets (d : Design) (P : Partition) (δ : ℝ) : Finset (Finset ℕ) :=
   (Finset.range P.blocks.length).powerset.filter fun F => F ∈ d.M P δ ∧ Disjoint F (allSlots d P)
 
-/-- **Accepted with the faulty set `F`**: some declared advice `(a, free)` makes the first `k` steps `Accepted` by the
+/-- **Accepted with the incorrect set `F`**: some declared advice `(a, free)` makes the first `k` steps `Accepted` by the
 circuit's Program, with `a`, the inputs other than the ingress, among `As`, and `free` holding values only at the
 committed gates of `F`'s units (`FaultyGate`). -/
 def AcceptedFaulty {L K S : ℕ} (C : Prog) (P : Partition) (lay : BoundaryGates L S) (k : ℕ) (As : Set (ℕ → Bool))
@@ -39,7 +70,7 @@ def AcceptedFaulty {L K S : ℕ} (C : Prog) (P : Partition) (lay : BoundaryGates
     Accepted (circuitProgram C lay k) op k o (a, free)
 
 /-- **The sequences a sampled audit accepts at `δ`**: the observation sequences of length `n`, with jitter below `D`,
-accepted with some possible faulty set at `δ` (`AcceptedFaulty`). -/
+accepted with some possible incorrect set at `δ` (`AcceptedFaulty`). -/
 def AccSeqsSampled {L K S : ℕ} (C : Prog) (P : Partition) (d : Design) (lay : BoundaryGates L S) (n : ℕ)
     (As : Set (ℕ → Bool)) (δ : ℝ) (op : ℕ → List (Obs L K S) → List Bool) (D : ℕ) : Set (List (Obs L K S)) :=
   {o | o.length = n ∧ (∀ x ∈ o, x.jitter < D) ∧ ∃ F ∈ faultySets d P δ, AcceptedFaulty C P lay n As F op o}
@@ -52,7 +83,7 @@ def AccSeqsSampled {L K S : ℕ} (C : Prog) (P : Partition) (d : Design) (lay : 
 whatever the circuit, since the Program reads no other input. With `R` the registered inputs, the count leaves out
 the values the registration commits. -/
 
-/-- **Inputs among `As` suffice** at `δ` for the inputs `ρ`: a sequence accepted with a possible faulty set and the
+/-- **Inputs among `As` suffice** at `δ` for the inputs `ρ`: a sequence accepted with a possible incorrect set and the
 inputs `ρ` besides the ingress is accepted with that set and inputs among `As`. -/
 def AdviceIn {L S : ℕ} (K : ℕ) (C : Prog) (P : Partition) (d : Design) (lay : BoundaryGates L S) (k : ℕ) (ρ : ℕ → Bool)
     (As : Set (ℕ → Bool)) (δ : ℝ) : Prop :=

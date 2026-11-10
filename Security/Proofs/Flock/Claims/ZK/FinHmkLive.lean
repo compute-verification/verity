@@ -1,24 +1,57 @@
 module
 
-public import Proofs.Flock.Claims.ZK.FinishZc
-public import Proofs.Flock.Claims.ZK.FinishTau
 public import Proofs.Flock.Claims.ZK.FinPads
-public import Proofs.Flock.Claims.ZK.L0PinCoins
+public import Proofs.Flock.Claims.ZK.FinishRep
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.FinishSwPts
+import Proofs.Flock.Claims.ZK.FinishTau
+import Proofs.Flock.Claims.ZK.FinishZc
+import Proofs.Flock.Claims.ZK.L0PinCoins
 
 /-!
 # `hmk` from the proofs: a rep's masked values below `zp 64` are the request's plus its pads
 
-`tauFw_at`'s `hmk` asks that below `zp 64` the view's masked values be the firewall's request's values plus its pads.
+`tauFw_at`'s `hmk` asks that below `zp 64` the view's masked values be the ZK server's request's values plus its pads.
 The zerocheck and lincheck send every masked value below `zp 64` and return them as their proofs (`zerocheckCut_proof`,
 `lincheckCut_proof`): `round_1_ab`, `round_1_c`, the residual rounds, `final_a`, `final_b`, `final_c`, the lincheck's
-rounds and `z_partial`. `eraseZ` keeps both proofs. So where the firewall's rep at `vals` and `pads` (`repFwC`) and a cut
+rounds and `z_partial`. `eraseZ` keeps both proofs. So where the ZK server's rep at `vals` and `pads` (`repFwC`) and a cut
 rep from a source (`repCut`) both return, at proofs equal up to `eraseZ`, the source's masked values below `zp 64` are
 `vals + pads.h`, whatever answers either run.
 
 * `zcProofOf`, `lcProofOf`: the zerocheck's and lincheck's proofs at the masked values `mk`.
 * `mk_eq_of_proofs`: the two proofs at `mk'` and at `mk` agree only where `mk'` and `mk` agree below `zp 64`.
 * `piop_proofs`: a zerocheck, lincheck and ring switch answered by `asksCut` that returned have those proofs.
-* `repFwC_proofs`, `repCut_proofs`: so do a returned firewall's rep and a returned cut rep.
+* `repFwC_proofs`, `repCut_proofs`: so do a returned ZK server's rep and a returned cut rep.
 * **`masked_of_eraseZ`**: the source's masked values below `zp 64` are `vals + pads.h`.
 -/
 
@@ -126,12 +159,12 @@ theorem lcProofOf_k0 (m kLog k0 k0' : ℕ) (mk : ℕ → F128) :
     lcProofOf (_root_.Flock.Zk.PadLayout.new m kLog k0') mk = lcProofOf (_root_.Flock.Zk.PadLayout.new m kLog k0) mk :=
   rfl
 
-theorem fst_go {α : Type} {m : TMW PS α} {s : Transcript} {l : Array Claims.Msg} {a : α} {t : Transcript}
+theorem fst_go {α : Type} {m : TMW PS α} {s : Flock.Transcript} {l : Array Claims.Msg} {a : α} {t : Flock.Transcript}
     (h : ((m.run s).go l).1 = .ok (a, t)) : (m.run s).go l = (.ok (a, t), ((m.run s).go l).2) :=
   Prod.ext h rfl
 
-theorem runPost_apply {α : Type} {m : TMW PS α} {P : α → Transcript → Array Claims.Msg → Prop} (hm : RunPost m P)
-    {s : Transcript} {l : Array Claims.Msg} {a : α} {t : Transcript} {l' : Array Claims.Msg}
+theorem runPost_apply {α : Type} {m : TMW PS α} {P : α → Flock.Transcript → Array Claims.Msg → Prop} (hm : RunPost m P)
+    {s : Flock.Transcript} {l : Array Claims.Msg} {a : α} {t : Flock.Transcript} {l' : Array Claims.Msg}
     (e : (m.run s).go l = (.ok (a, t), l')) : P a t l' :=
   hm s l a t l' e
 
@@ -140,7 +173,7 @@ lincheck at `mk` followed by a ring switch with a claim, all returned, sent thei
 returned `zcProofOf` and `lcProofOf` at `mk`. -/
 theorem piop_proofs (coin : ℕ → ℕ → F128) (n : ℕ) {st : _root_.Flock.Setup} (hm : 14 ≤ st.m)
     (hkL : st.fold.kLog = st.kLog) (k0 : ℕ) {cap root : ByteArray} {mk : ℕ → F128} {sv : ℕ → Array F128}
-    {claims : Array Claim} (hc : claims.size ≠ 0) {t₀ t₁ t₂ t₃ : Transcript} {l l₁ l₂ l₃ : Array Claims.Msg}
+    {claims : Array Claim} (hc : claims.size ≠ 0) {t₀ t₁ t₂ t₃ : Flock.Transcript} {l l₁ l₂ l₃ : Array Claims.Msg}
     {zp : _root_.Flock.ZerocheckProof} {zc : _root_.Flock.ZcOut} {lp : _root_.Flock.LincheckProof}
     {lc : _root_.Flock.LcOut} {ss : Array (Array F128)} {T : F128} {sws : Array _root_.Flock.Switched}
     (h₁ : ((zerocheckCut (asksCut coin n) st.m st.digest cap root (_root_.Flock.Zk.PadLayout.new st.m st.kLog k0)
@@ -166,12 +199,12 @@ theorem piop_proofs (coin : ℕ → ℕ → F128) (n : ℕ) {st : _root_.Flock.S
   rw [hkL] at elp
   exact ⟨e.1.1.1, elp⟩
 
-/-- **A returned firewall's rep has the PIOP proofs of its masked values `vals + pads.h`.** -/
+/-- **A returned ZK server's rep has the PIOP proofs of its masked values `vals + pads.h`.** -/
 theorem repFwC_proofs (coin : ℕ → ℕ → F128) (n : ℕ) (hs : _root_.Flock.Hashes PS) {st : _root_.Flock.Setup}
     (hm : 14 ≤ st.m) (hkL : st.fold.kLog = st.kLog) {sch : _root_.Flock.Schedule} {tPad rep : ℕ} {dom : ByteArray}
     {g : Array F128} {cm0 : FlockComplete.Commit} {extras : Array Claim} {pads : FlockComplete.PadsZk}
     {ic : FlockComplete.InnerCommit} {vals : Array F128} {extra lanePad : ℕ → ℕ → F128} {salt : ℕ → ℕ → ByteArray}
-    {t₀ : Transcript} {l : Array Claims.Msg} {p : _root_.Flock.Zk.ZkProof} {t : Transcript} {l' : Array Claims.Msg}
+    {t₀ : Flock.Transcript} {l : Array Claims.Msg} {p : _root_.Flock.Zk.ZkProof} {t : Flock.Transcript} {l' : Array Claims.Msg}
     (h : ((_root_.Flock.Firewall.Finish.repFwC (asksCut coin n) hs st sch tPad rep dom g cm0 extras pads ic vals extra
       lanePad salt).run t₀).go l = (.ok (p, t), l')) :
     p.proof.zerocheck = zcProofOf (_root_.Flock.Zk.PadLayout.new st.m st.kLog sch.k0) (fun i => vals[i]! + pads.h[i]!) ∧
@@ -198,8 +231,8 @@ theorem repFwC_proofs (coin : ℕ → ℕ → F128) (n : ℕ) (hs : _root_.Flock
 theorem repCut_proofs (coin : ℕ → ℕ → F128) (n : ℕ) (hs : _root_.Flock.Hashes PS) {st : _root_.Flock.Setup}
     (hm : 14 ≤ st.m) (hkL : st.fold.kLog = st.kLog) {sch : _root_.Flock.Schedule} {rep : ℕ} {dom : ByteArray}
     {cm0 : FlockComplete.Commit} {extras : Array Claim} {ic : FlockComplete.InnerCommit} {src : FlockComplete.RepSrc}
-    {prior : Array (List F128)} {words : List ℕ} {t₀ : Transcript} {l : Array Claims.Msg}
-    {p : _root_.Flock.Zk.ZkProof} {t : Transcript} {l' : Array Claims.Msg}
+    {prior : Array (List F128)} {words : List ℕ} {t₀ : Flock.Transcript} {l : Array Claims.Msg}
+    {p : _root_.Flock.Zk.ZkProof} {t : Flock.Transcript} {l' : Array Claims.Msg}
     (h : ((FlockComplete.repCut (asksCut coin n) hs st sch rep dom cm0 extras ic src prior words).run t₀).go l =
       (.ok (p, t), l')) :
     p.proof.zerocheck = zcProofOf (_root_.Flock.Zk.PadLayout.new st.m st.kLog sch.k0) src.masked ∧
@@ -216,7 +249,7 @@ theorem repCut_proofs (coin : ℕ → ℕ → F128) (n : ℕ) (hs : _root_.Flock
   exact piop_proofs coin n hm hkL sch.k0
     (by rw [Array.size_append, FlockComplete.abcClaims_size]; omega) h₁ h₂ h₃'
 
-/-- **The source's masked values below `zp 64` are the firewall's `vals + pads.h`**: where the firewall's rep at `vals`
+/-- **The source's masked values below `zp 64` are the ZK server's `vals + pads.h`**: where the ZK server's rep at `vals`
 and `pads` and a cut rep from `src`, at one setup and any schedules (`k₀` places nothing below `zp 64`), both return,
 each answered by `asksCut` at any coins and stop, at proofs equal up to `eraseZ`. -/
 theorem masked_of_eraseZ (coin coin' : ℕ → ℕ → F128) (n n' : ℕ) (hs hs' : _root_.Flock.Hashes PS)
@@ -225,7 +258,7 @@ theorem masked_of_eraseZ (coin coin' : ℕ → ℕ → F128) (n n' : ℕ) (hs hs
     {cm0 cm0' : FlockComplete.Commit} {extras extras' : Array Claim} {pads : FlockComplete.PadsZk}
     {ic ic' : FlockComplete.InnerCommit} {vals : Array F128} {extra lanePad : ℕ → ℕ → F128}
     {salt : ℕ → ℕ → ByteArray} {src : FlockComplete.RepSrc} {prior : Array (List F128)} {words : List ℕ}
-    {t₀ t₀' : Transcript} {l l₀ : Array Claims.Msg} {p p' : _root_.Flock.Zk.ZkProof} {t t' : Transcript}
+    {t₀ t₀' : Flock.Transcript} {l l₀ : Array Claims.Msg} {p p' : _root_.Flock.Zk.ZkProof} {t t' : Flock.Transcript}
     {l₀' : Array Claims.Msg}
     (hF : (((_root_.Flock.Firewall.Finish.repFwC (asksCut coin n) hs st sch tPad rep dom g cm0 extras pads ic vals extra
       lanePad salt).run t₀).go l).1 = .ok (p, t))

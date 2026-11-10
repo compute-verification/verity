@@ -1,6 +1,5 @@
 module
 
-public import Definitions.Pouw.Assumptions.Dimension.Assumptions
 public import Definitions.Pouw.Assumptions.Dimension.Mixing
 public import Definitions.Pouw.Dimension.Causal
 public import Definitions.Pouw.Assumptions.NCP.RouteUWord
@@ -117,21 +116,21 @@ def AlgBoundU : Prop :=
     CheckpointIndependent k 16 R → U ⊆ range N → (∀ f ∈ L, f ∈ V0 N m n k) → H16 P → OutputsU β k m n N R A B U P L →
     16 * (U.card * (m * n) * (3 * k / 16 - 1)) ≤ cost P
 
-/-- **Theorem D on route U is sharp** (`AlgSharp` for route-U words): below `γ₀ = 16/(3k)` some H_16 program on the
+/-- **Theorem D on route U is sharp** (`AlgSharp` for route-U words): below `g₀ = 16/(3k)` some H_16 program on the
 noise coordinates outputs the non-final route-U words and TT_NCP's event holds for it. -/
 def AlgSharpU : Prop :=
-  ∀ (β : ℤ) (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ) (γ₀ : ℝ),
-    16 ∣ k → 0 < k → U ⊆ range N → U.Nonempty → 0 < m * n → γ₀ < 16 / (3 * k : ℝ) →
+  ∀ (β : ℤ) (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ) (g₀ : ℝ),
+    16 ∣ k → 0 < k → U ⊆ range N → U.Nonempty → 0 < m * n → g₀ < 16 / (3 * k : ℝ) →
     ∃ P : List (Instr (Noise N m n k)), H16 P ∧ OutputsU β k m n N R A B U P (coords N m n k) ∧
-      (cost P : ℝ) / (1 - γ₀) < ∑ _u ∈ U, 3 * ((m * k * n : ℕ) : ℝ)
+      (cost P : ℝ) / (1 - g₀) < ∑ _u ∈ U, 3 * ((m * k * n : ℕ) : ℝ)
 
 /-- **TT_NCP in AlgM_16 on route U** (`TTNCPAlg` for route-U words). -/
 def TTNCPAlgU : Prop :=
   ∀ (β : ℤ) (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
-    (L : List (Noise N m n k → ℚ)) (P : List (Instr (Noise N m n k))) (γ₀ : ℝ),
+    (L : List (Noise N m n k → ℚ)) (P : List (Instr (Noise N m n k))) (g₀ : ℝ),
     16 ∣ k → 0 < k → CheckpointIndependent k 16 R → U ⊆ range N → (∀ f ∈ L, f ∈ V0 N m n k) → H16 P →
-    OutputsU β k m n N R A B U P L → 16 / (3 * k : ℝ) ≤ γ₀ → γ₀ < 1 →
-    ¬ ((cost P : ℝ) / (1 - γ₀) < ∑ _u ∈ U, 3 * ((m * k * n : ℕ) : ℝ))
+    OutputsU β k m n N R A B U P L → 16 / (3 * k : ℝ) ≤ g₀ → g₀ < 1 →
+    ¬ ((cost P : ℝ) / (1 - g₀) < ∑ _u ∈ U, 3 * ((m * k * n : ℕ) : ℝ))
 
 /-- **Theorem D with causal inputs on route U** (`AlgBoundCausal` for route-U words). -/
 def AlgBoundCausalU : Prop :=

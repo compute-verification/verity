@@ -64,13 +64,14 @@ from verity_config.settings import SHARED
 HERE = Path(__file__).resolve().parent
 E2E = HERE.parents[2] / "examples" / "h200"
 sys.path[:0] = [str(HERE), str(E2E)]
-import slots as S
-import slots_gpu as G
 from e2e_h200 import commit as CM
 from e2e_h200.driver import Driver, Params
 from e2e_h200.shape import SHAPES
 from e2e_h200.store import GeneratorStore
 from e2e_h200.weights import Weights
+
+import slots as S
+import slots_gpu as G
 
 MODES = ("serve", "commit", "serial", "low", "high", "equal", "low-thread", "high-thread")
 OVERLAPPED = ("low", "high", "equal", "low-thread", "high-thread")

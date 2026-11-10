@@ -1,11 +1,49 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.BoundRouteCols
 public import Proofs.Flock.Claims.Recursion.BoundRouteMergedLin
 public import Proofs.Flock.Claims.Recursion.KSLin2
-public import Proofs.Flock.Claims.Recursion.LastBindsEC
-public import Proofs.Flock.Claims.Recursion.CallsAgree
-public import Proofs.Flock.Claims.Recursion.VStarCross
 public import Proofs.Flock.Claims.Recursion.SetupCalls
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Bridge.Hm96Tree
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Recursion.BoundAccepts
+import Proofs.Flock.Claims.Recursion.BoundRoute
+import Proofs.Flock.Claims.Recursion.DeployFacts
+import Proofs.Flock.Claims.Recursion.DeployMargin
+import Proofs.Flock.Claims.Recursion.DeploySessions
+import Proofs.Flock.Claims.Recursion.FlockKSRecord
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # `KSLin2` at the deployment (route 2C)
@@ -41,7 +79,7 @@ theorem dec_out_C [DecidableEq Col] (H : Msg → Msg) (Bd : Bound Coin Col T) (i
   | none => rfl
   | some ws => exact (innerView_C H Bd ivScope b hCF x r ws).1
 
-/-- A draw's inner view accepts at `deployRecC` where it does at the deployed record: `E_O` reads no inner view, and
+/-- A sample's inner view accepts at `deployRecC` where it does at the deployed record: `E_O` reads no inner view, and
 `dec` decides alike (`dec_out_C`). -/
 theorem accAtI_C {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] (H : Msg → Msg) (Bd : Bound Coin Col T)
     (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T')
@@ -130,7 +168,7 @@ theorem ksLin2_of_C {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] [Zero 
       try exact Iff.rfl
   exact hE.trans_le h
 
-/-- **`ksLin2_of_C` at the V finders**: the finders read the calls at each draw's coins (`Deploy.callsAt`), which are
+/-- **`ksLin2_of_C` at the V finders**: the finders read the calls at each sample's coins (`Deploy.callsAt`), which are
 the same at both records, and the inner view only through `accAtI` (`PrFCI_C`, `PrF0I_C`). -/
 theorem ksLin2_of_C_setup {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] [Zero Col'] (H : Msg → Msg)
     (Bd : Bound Coin Col T) (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings)

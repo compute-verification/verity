@@ -1,4 +1,4 @@
-"""Onsite's real components' cases for the composition's difftest, each with the answer its Python verifier gives it
+"""Onsite's real subprotocols' cases for the composition's difftest, each with the answer its Python verifier gives it
 (`reference.Recorded`), all on one store: the committed 9-block `C*` of the remote bandwidth audit's fixture
 (`remote_bandwidth/tests/fixtures/p2-store.json`), registered for PoUB-P2 on its PoUS setup. Space's
 (`pous.period.audit` of that `C*` on node `n0`, signed by a key at S1's deployed parameters, `mc_cases.deployed_signer`)
@@ -73,7 +73,7 @@ def _with_setup(case: dict, setup_of: dict, trusted: tuple[bytes, ...]) -> tuple
     point = RUN.Point(P2.P2Params(q["w"], q["c0"], q["blocks_per_segment"], q["segments"]),
                       p["point"]["k"], p["point"]["limit_ns"])
     answer = pous.answer(point, mc.SCHEMES, trusted, RUN.Setup.from_json(json.loads(bytes.fromhex(case["commitment"]))),
-                         bytes.fromhex(ev["digests"]), RUN.ChallengerRecord.from_json(ev["session"]),
+                         bytes.fromhex(ev["digests"]), RUN.ChallengePhaseRecord.from_json(ev["session"]),
                          bytes.fromhex(p["session_id"]), setup_inputs=pous.setup_inputs(setup_of))
     return case | {"evidence": canonical_json_bytes(ev).hex()}, answer
 

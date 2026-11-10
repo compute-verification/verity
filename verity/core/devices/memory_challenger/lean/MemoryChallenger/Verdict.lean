@@ -1,13 +1,13 @@
 module
 
 public import CoreProtocol.Protocol
-public import MemoryChallenger.Records
 public import MemoryChallenger.SignedMessage
+public import Lms.Verify
 
 /-!
 # The verdict on a signed session
 
-`memory_challenger.verdict`: the check of a signed session against its commitment, released with it. It checks the
+`memory_challenger.verdict`: the check of a signed session against the commitment published before it. It checks the
 signature under a trusted key and an accepted scheme, the header against the commitment, every revealed index against
 its coin opening, every `H(block)` against the expected digest of that block of `C`, and every round on time within
 `Δ + RTT`. It fails closed: an unknown scheme, an untrusted key or a bad signature rejects, whatever the rounds. The
@@ -61,7 +61,7 @@ def KNOWN_SCHEMES : Schemes := SCHEMES ++ TEST_SCHEMES
 
 /-- Python's `repr` of a string, for the scheme in a reason: single quotes unless the string holds `'` and no `"`; `\`,
 the quote, `\t \n \r` escaped, other ASCII controls and DEL as `\xhh`. Characters past ASCII are written as they are,
-which is Python's `repr` for the printable ones (all a difftest draws). -/
+which is Python's `repr` for the printable ones (all a difftest samples). -/
 def pyRepr (s : String) : String := Id.run do
   let q := if s.contains '\'' && !s.contains '"' then '"' else '\''
   let hex2 := fun (n : Nat) =>

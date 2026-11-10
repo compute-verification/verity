@@ -19,8 +19,8 @@ composites, root batches and scans) for `PER_FIXTURE` instances each, then six o
 value, read or not, then twelve on whole members of a batch returning leaves of two arguments they share, each another
 node's (`shared`), then `mistyped_vectors.cases()`'s (`mistyped`: references that name leaves of other widths than
 their types give them, which both sides refuse as `program`, and their well-typed neighbours), then
-`difftest_vectors.pinned()`'s two (θ every
-input, refused, and θ the registered one, accepted). θ is no input node, every one (refused, `theta-not-registered`,
+`difftest_vectors.pinned()`'s three (θ every
+input, refused, θ the registered one, accepted, and a declaration with a constant gate, accepted). θ is no input node, every one (refused, `theta-not-registered`,
 where one is bound per run), the registered ones or a random set of them. A division puts every Call in one IU, each in
 its own, runs of consecutive Calls or a random assignment, and a Call without gates in any IU or none. `Γ` and `α` are
 set as `difftest_vectors` sets them, at, below or above the division's largest IU and its fresh input per gate. About a third of the

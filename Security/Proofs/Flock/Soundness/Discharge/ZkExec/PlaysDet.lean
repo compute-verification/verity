@@ -2,7 +2,9 @@ module
 
 public import Proofs.Flock.Soundness.Refine.Run
 public import Mathlib.SetTheory.Cardinal.Finite
-public import Mathlib.SetTheory.Cardinal.NatCard
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
+import Mathlib.SetTheory.Cardinal.NatCard
 
 /-!
 # A run has one result

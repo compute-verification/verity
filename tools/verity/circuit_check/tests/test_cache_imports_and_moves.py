@@ -14,16 +14,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from test_cache import FILES, HARNESS, KERNEL_FILES, REPO, _bindings, _edit, _entry, _move
-
-
-def _tree(tmp: Path, extra: dict[str, str]) -> Path:
-    subprocess.run(["git", "init", "-q", str(tmp)], check=True)
-    for rel, text in {**FILES, **extra}.items():
-        p = tmp / rel
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(text.lstrip("\n"))
-    return tmp
+from test_cache import HARNESS, KERNEL_FILES, REPO, _bindings, _edit, _entry, _move, _tree
 
 
 def _harness(check: str = "check") -> str:

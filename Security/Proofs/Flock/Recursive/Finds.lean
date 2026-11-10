@@ -2,6 +2,21 @@ module
 
 public import Proofs.Flock.Recursive.Transfer
 public import Proofs.Flock.Recursive.Multi
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Recursion: forks, the runs of the prover's own strategy that find a SHA-512 collision
@@ -116,12 +131,12 @@ def SessForkZ (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) : Pr
     (selfSFinderZ A Hs T pre post cap₀ σ).Finds Hs.H
 
 theorem sessCRZ_of_not_fork {σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))}
-    (h : ¬ SessForkZ A Hs T pre post cap₀ σ) : SessCRZ A Hs T pre post cap₀ σ 0 0 where
-  fork r hr ℓ hℓ := Finder.cr_of_not_finds (fun hf => h (Or.inl ⟨r, hr, ℓ, hℓ, hf⟩)) 0
-  pads r hr := Finder.cr_of_not_finds (fun hf => h (Or.inr (Or.inl ⟨r, hr, hf⟩))) 0
-  tau r hr := Finder.cr_of_not_finds (fun hf => h (Or.inr (Or.inr (Or.inl ⟨r, hr, hf⟩)))) 0
-  level0 := Finder.cr_of_not_finds (fun hf => h (Or.inr (Or.inr (Or.inr (Or.inl hf))))) 0
-  self := Finder.cr_of_not_finds (fun hf => h (Or.inr (Or.inr (Or.inr (Or.inr hf))))) 0
+    (h : ¬ SessForkZ A Hs T pre post cap₀ σ) : SessCRZ A Hs T pre post cap₀ σ 0 0 :=
+  ⟨fun r hr ℓ hℓ => Finder.cr_of_not_finds (fun hf => h (Or.inl ⟨r, hr, ℓ, hℓ, hf⟩)) 0,
+    fun r hr => Finder.cr_of_not_finds (fun hf => h (Or.inr (Or.inl ⟨r, hr, hf⟩))) 0,
+    fun r hr => Finder.cr_of_not_finds (fun hf => h (Or.inr (Or.inr (Or.inl ⟨r, hr, hf⟩)))) 0,
+    Finder.cr_of_not_finds (fun hf => h (Or.inr (Or.inr (Or.inr (Or.inl hf))))) 0,
+    Finder.cr_of_not_finds (fun hf => h (Or.inr (Or.inr (Or.inr (Or.inr hf))))) 0⟩
 
 end Session
 
@@ -139,8 +154,8 @@ theorem tableCRZ_of_not_fork {ts : List (TabZK F mPts)} {j : Fin ts.length} {τ 
     (h : ¬ TableForkZ A Hs ts j τ) : TableCRZ A Hs ts j τ 0 0 :=
   sessCRZ_of_not_fork A Hs _ _ _ _ h
 
-/-- **The drawn tables' error**: after each draw, the largest over the plan's tables of its `bound` over
-`1 − N₀/(ek)`, averaged over the draw (`ksAvgStrictZ` with no finder budget). -/
+/-- **The sampled tables' error**: after each sample, the largest over the plan's tables of its `bound` over
+`1 − N₀/(ek)`, averaged over the sample (`ksAvgStrictZ` with no finder budget). -/
 noncomputable def tableErrZ {n : ℕ} {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts)) (L : Law n)
     (k : ℕ) (R : Reg) : ℝ≥0∞ :=
   avg fun ω : L.Ω => ⨆ j : Fin (planZ (L.draw ω) R).length,
@@ -154,14 +169,14 @@ end Batch
 
 section Link
 
-variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
+variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
   {L : Law n} {decode : DecoderZK (C := C) planZ tab} {Dh : Type}
   {Hc : List UInt8 → Dh} (vb : ValueBindingZ A P planZ tab decode Hc) (wo : vb.Pos → vb.Opening)
   (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R)
 
-/-- **A fork of the registered-value finders**: for some commit string `c` a draw can read, a trial from the prover's
+/-- **A fork of the registered-value finders**: for some commit string `c` a sample can read, a trial from the prover's
 continuation reads at `c` a value other than the registrant's opening of `c`'s registered commitment, and the two
 openings are a collision of `Hc` (`regFinderZC`). -/
 def RegForkZC (k Rw : ℕ) : Prop :=
@@ -172,7 +187,7 @@ theorem regCRZC_of_not_fork {k Rw : ℕ} (h : ¬ RegForkZC A Hs P planZ tab vb w
     RegCRZC A Hs P planZ tab vb wo R τ k Rw 0 :=
   fun c _ => Finder.cr_of_not_finds (fun hf => h ⟨c, inferInstance, hf⟩) 0
 
-/-- **A fork of the link finders**: for some commit string `c` a draw can read, the link finder's trials from the
+/-- **A fork of the link finders**: for some commit string `c` a sample can read, the link finder's trials from the
 prover's continuation (`finderG`, `M` further trials) open `c` to two different values, a collision of `Hc`
 (`outCZC`). -/
 def LinkForkZC (k Rw M : ℕ) : Prop :=
@@ -186,7 +201,7 @@ theorem linkCRZC_of_not_fork {k Rw M : ℕ} (h : ¬ LinkForkZC A Hs P planZ tab 
   fun c _ => crExpected_of_not_finds (fun hf => h ⟨c, inferInstance, hf⟩)
     (finderCost_nonneg _ fun e => by simp [cTZC])
 
-/-- **`Q_s`**: the expected number of commit strings the drawn units read. -/
+/-- **`Q_s`**: the expected number of commit strings the sampled proof blocks read. -/
 noncomputable def qsZC (L : Law n) : ℝ :=
   ∑ c : vb.Pos, (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω
 
@@ -241,7 +256,7 @@ end Leaves
 variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm β : Type}
   {outer : Reg → L.Ω → List (Cm × I.Coin) → Game β}
 
-/-- **A property of the prover's strategy at the start of some outer session it reaches**, after some draw `ω` and
+/-- **A property of the prover's strategy at the start of some outer session it reaches**, after some sample `ω` and
 transcript `t` (`AllAt`'s dual). -/
 def ExAt (σ : Strategy (recGame L Reg I Cm outer))
     (P : (ω : L.Ω) → (t : List (Cm × I.Coin)) → Strategy (outer σ.1 ω t) → Prop) : Prop :=

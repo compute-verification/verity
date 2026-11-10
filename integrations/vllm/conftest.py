@@ -2,14 +2,22 @@
 
 A re-executed `verity.ml.circuits.defs` is a second module with its own empty REGISTRY; every registry module first imported against it registers
 into that orphan for the rest of the process, so the failure surfaces in whichever later file shares the worker, never in the test that
-caused it.  The guard fails the causing test by name and puts the original modules back."""
+caused it.  The guard fails the causing test by name and puts the original modules back.
+
+Every process of the suite runs under the engine profile's fixed Inductor switches (`engine.env.FIXED`), pinned before any test
+module imports torch, as an engine's process is: torch reads them when `torch._inductor.config` is imported, so a test that builds
+engine arguments (`engine.env.require_inductor`) doesn't depend on which module imported Inductor first."""
 from __future__ import annotations
 
 import sys
 
 import pytest
 
-import verity.ml.circuits.defs  # noqa: F401  (loaded before the first test, so the guard's snapshot always holds it)
+from verity_vllm.engine import env as _engine_env
+
+_engine_env.pin({k: _engine_env.ENGINE[k] for k in _engine_env.FIXED})
+
+import verity.ml.circuits.defs  # noqa: E402,F401  (loaded before the first test, so the guard's snapshot always holds it)
 
 
 _MISSING = object()

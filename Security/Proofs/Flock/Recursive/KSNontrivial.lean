@@ -1,11 +1,44 @@
 module
 
-public import Proofs.Flock.Recursive.KSStatement
-public import Proofs.Flock.Claims.Recursion.VCallsAt
-public import Proofs.Flock.Claims.Recursion.PlainKSAbortFails
-public import Proofs.Flock.Claims.Recursion.LamDeployed
-public import Proofs.Flock.Claims.Witnesses.RecursionLin2
 public import Proofs.Flock.Claims.Recursion.Assumptions.KSFixture
+public import Proofs.Flock.Claims.Recursion.PlainKSAbortFails
+public import Proofs.Flock.Claims.Witnesses.RecursionLin2
+public import Proofs.Flock.Recursive.KSStatement
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployEfficient
+import Proofs.Flock.Claims.Recursion.DeployMargin
+import Proofs.Flock.Claims.Recursion.DeployScope
 
 /-!
 # `RecursiveKS` at the verifier that accepts everything (the Lean check's `nontrivial`)
@@ -19,7 +52,7 @@ the dense statements stay deployed. `RecursiveKSAtAll` is `RecursiveKSAt` there.
 
 * **The nontrivial lemma** (`recursiveKS_nontrivial`): `RecursiveKS`'s `RecursiveKSAtRec` at accept-all is false at
   every brings, from one named assumption, `RecDeploy.KSFixture`: some bytes the deployed readers read as a dense compiled
-  statement with a V\* session whose inner statement passes `PlainIn`'s checks (`DeployedParses`), with a coin-server
+  statement with a V\* session whose inner statement passes `PlainIn`'s checks (`DeployedParses`), with a live-coin
   record at whose transcript its V\* parts are in scope (`PartsInScope`). The inner statement need not be false. The
   silent prover is accepted on every run; the accepting record stages no V\* statement, so each session's statement is
   empty, which the outer Flock's parser refuses (`RecDeploy.zkRec_parse_nil`), and `E*` extracts nothing
@@ -109,14 +142,14 @@ theorem prBad_acc {W Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (V 
   rw [hE]
   exact id
 
-theorem eval_bind_fst {R α β : Type} (H : Msg → Msg) (run : R → Trace) (p : RP R α) (f : α → RP R β) :
+theorem eval_bind_fst {R α β : Type} (H : Msg → Msg) (run : R → Transcript) (p : RP R α) (f : α → RP R β) :
     ((p.bind f).eval H run).1 = ((f (p.eval H run).1).eval H run).1 :=
   (Claims.RP.eval_bind H run p f).1
 
 /-- Waits whose assemble step never assembles return nothing, however their reruns are served. -/
 theorem eval_serve_firstWait_none {R₁ R₂ W' Op : Type} (q : R₁ → RP R₂ Seen) (k : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W') (check : W' → Bool) (h : ∀ os, assemble os = none) (H : Msg → Msg)
-    (run : R₂ → Trace) : ∀ rss : List (List R₁),
+    (run : R₂ → Transcript) : ∀ rss : List (List R₁),
     ((serve q (firstWait k opens assemble check rss)).eval H run).1 = none
   | [] => rfl
   | rs :: rss => by
@@ -127,7 +160,7 @@ theorem eval_serve_firstWait_none {R₁ R₂ W' Op : Type} (q : R₁ → RP R₂
     exact eval_serve_firstWait_none q k opens assemble check h H run rss
 
 /-- `collect` gives up where its first program does. -/
-theorem eval_collect_none {R α : Type} (H : Msg → Msg) (run : R → Trace) (p : RP R (Option α))
+theorem eval_collect_none {R α : Type} (H : Msg → Msg) (run : R → Transcript) (p : RP R (Option α))
     (ps : List (RP R (Option α))) (hp : (p.eval H run).1 = none) : ((collect (p :: ps)).eval H run).1 = none := by
   rw [collect, eval_bind_fst, hp]
   rfl
@@ -137,7 +170,7 @@ which the outer Flock's parser refuses, so its first session's waits assemble no
 theorem EO_none_of_vstar_nil {W : Type} (H : Msg → Msg) (A : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') (x : Msg)
     (hs : ∀ ps, A.vstar x ps = []) (hS : 0 < A.nS x) (hP : DO.parse [] = none)
-    (run : (Fin (A.V.k x) → Coin) → Trace) (d : Fin (A.V.k x) → Coin) (c : (EO A I DO decO).C x) :
+    (run : (Fin (A.V.k x) → Coin) → Transcript) (d : Fin (A.V.k x) → Coin) (c : (EO A I DO decO).C x) :
     (((EO A I DO decO).ext x d c).eval H run).1 = none := by
   have hA : ∀ (xs : List Msg) (s : ℕ) os, xs = [] →
       Flock.assemble DO.parse DO.table decO DO.read (xs.getD s []) os = none := by
@@ -157,7 +190,7 @@ theorem EO_none_of_vstar_nil {W : Type} (H : Msg → Msg) (A : Deploy Coin) (I :
     exact eval_serve_firstWait_none _ _ _ _ _ (fun os => hA _ _ os (hs _)) H run _
   · rfl
 
-/-- **`E*` extracts nothing where the record stages no V\* statement**: `E_O` gives up on the judged draw, so the
+/-- **`E*` extracts nothing where the record stages no V\* statement**: `E_O` gives up on the judged sample, so the
 inner view there is rejected (`dec`) and the inner `E^rep` stops. -/
 theorem E_none_of_vstar_nil {W : Type} (H : Msg → Msg) (A : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') (x : Msg)
@@ -436,7 +469,7 @@ theorem plainIn_of_parses {x : Msg} (h : RecDeploy.DeployedParses x) :
 values, is false at the verifier that accepts everything (`RecAt.acceptAll` of the deployment's compiled record), at
 every brings, from the named assumption
 `RecDeploy.KSFixture`: some bytes the deployed readers read as a dense compiled statement with a V\* session whose
-inner statement is in the plain scope (`DeployedParses`), with a coin-server record at whose transcript its V\* parts
+inner statement is in the plain scope (`DeployedParses`), with a live-coin record at whose transcript its V\* parts
 are in scope (`PartsInScope`). Everything else is proved here: the statement is dense (`denseAt_of_parses`) and in the
 plain scope (`plainIn_of_parses`); the silent prover is accepted on every run, and the accepting record stages no V\*
 statement, which the outer Flock's parser refuses (`RecDeploy.zkRec_parse_nil`), so `E*` extracts nothing and

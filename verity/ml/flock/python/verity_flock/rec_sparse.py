@@ -32,7 +32,7 @@ sends a round's coefficients without ``c_1 = claim + Σ_{i >= 2} c_i``, characte
 ``P(n) = 64 ⌈n / 8⌉`` words (whole M0 rows), its words past the elements unread.
 
 * ``h``, ``pre<j>``, ``v2``, ``sc<j>``, ``u``, ``vt``: the rep's sparse-phase messages, one port each, as the ZK server committed
-  them (each a row the statement reads under the coin server's record, as `rec_residuals`' ``m<i>``). ``h`` is the inner
+  them (each a row the statement reads under the challenger's record, as `rec_residuals`' ``m<i>``). ``h`` is the inner
   session's h round (`rec_algebra.h_round`, absorbed before r′ and ζ_c), which the rep's algebra (`rec_residuals.InnerRepCheck`)
   reads at the same row for its lincheck check L4′.
 * ``claim``: the registered claim's value, the row the registered opening's algebra reads (row r rep r's) as a witness
@@ -61,7 +61,7 @@ of u16 words per port, one output row. Its ANDs are ``ands`` and `copy_rows`' (l
 InnerRepCheck's parts (`rec_residuals.write_rows`).
 
 **The prover** (`prove`, T = 1: one hidden circuit, the slots' factor ``Ũ`` its range's layout) runs a rep's phase on coins it
-flips one round at a time (``draw``: the coin server's, through the proxy), from the circuit's `entries`, which `table` lays
+flips one round at a time (``draw``: the challenger's, through the proxy), from the circuit's `entries`, which `table` lays
 out as R's cells (cell ``k + 2^NU p``, byte ``i >> 3``, bit ``i & 7``, zero cells to fast100's least m). It checks every sum it
 sends against the claim before it, and its registered claim is R's value at the coins' point (`table_value`).
 """
@@ -737,7 +737,7 @@ def statement(sh: Shape, n: int):
     import time
     from types import SimpleNamespace
 
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
 
     from . import circuit as FC
 
@@ -759,7 +759,7 @@ def registrations(sh: Shape, program: str, inst: Sequence[Mapping[str, list[int]
     """The prover's registered values of the row ports, from `session_rows`' instances: each port as ``rec-sparse-<port>``, row r
     rep r's, but ``tau``, the session's one row, and ``claim``, ``rec-claim`` (`rec_outer.CLAIM_VALUE`, which the registered
     opening reads too). ``salts``: per port, its rows' salts (default fresh)."""
-    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
+    from verity.core.protocols.spot.one_stage import registered as RG
     from .rec_outer import CLAIM_VALUE
 
     sh = _shape(sh)
@@ -992,7 +992,7 @@ def prove(sh: Shape, ents: Sequence[tuple[int, int, int, int]], pts: Mapping, U:
     """One rep's sparse phase at T = 1 (the module docstring): ``ents`` the hidden circuit's `entries`, ``pts`` the rep's
     `inner_points` (``alpha``, ``z``, ``x_rest``, ``y_rest``), ``U`` its slots' `layout_factors`, ``h`` the 64 elements of the
     rep's h round. Each round's message goes to ``draw(elements, n)``, which answers its n coins (v2's and the claim's
-    rounds none: the claim goes last, so the coin server records the ``c_k`` that ``rec-claim``'s rows must be);
+    rounds none: the claim goes last, so the challenger records the ``c_k`` that ``rec-claim``'s rows must be);
     ``workers`` processes share H3's entry rounds. Returns the coins and the messages as `rows` takes them (``claim`` the
     registered claim's value). AssertionError if a sum the phase sends is not the claim before it (``ents`` are not the
     circuit h was folded from)."""

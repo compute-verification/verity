@@ -1,13 +1,29 @@
 module
 
-public import Proofs.Flock.Recursive.Guarantees
 public import Proofs.Flock.Soundness.Discharge.ZkView.OsSalts
+public import Proofs.Flock.Recursive.Statements
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Recursive.Guarantees
+import Proofs.Flock.Soundness.CROnly.Hiding
+import Proofs.Flock.Soundness.ZK.Hiding
 
 /-!
 # The recursive audit's zero knowledge at the operating system's salts
 
-The firewall reads each commitment's salt from the operating system, 192 bytes (A3, `uniform/io-getrandombytes`), where
-`Flock.Guarantees.RecursiveZK` draws it uniformly from `ZkView.Salt`. This module takes the guarantee to those salts:
+The ZK server reads each commitment's salt from the operating system, 192 bytes (A3, `uniform/io-getrandombytes`), where
+`Flock.Guarantees.RecursiveZK` samples it uniformly from `ZkView.Salt`. This module takes the guarantee to those salts:
 
 * `firewallLeaf_os`: the executable's leaf of `SHA-512(msg)` at the OS's bytes `b` is `firewallLeaf msg (saltOfBytes b)`.
 * `recursiveZK_os_le`, `recursiveZK_os_gap`: `RecursiveZK` with the salts decoded from `nh` streams of a byte source that
@@ -26,14 +42,14 @@ open scoped ENNReal
 
 section ZK
 
-/-- **The firewall's commitment at the OS's bytes**: the executable's leaf of `SHA-512(msg)` at the 192 bytes `b` the
+/-- **The ZK server's commitment at the OS's bytes**: the executable's leaf of `SHA-512(msg)` at the 192 bytes `b` the
 operating system gives is `firewallLeaf msg (saltOfBytes b)`. -/
 theorem firewallLeaf_os (msg : ByteArray) (b : Fin 192 → Fin 256) :
     Hm96.Default512.leaf (Sha512.hash msg) (FlockSoundness.Audit.Law.streamOf b) =
       Flock.Guarantees.firewallLeaf msg (ZkView.saltOfBytes b) :=
   ZkView.leaf_os _ b (Sha512.hash_size _)
 
-/-- **`RecursiveZK` at the OS's salts** (A3 per test), at any hm96 hiding bound `δ`: the firewall's salt `i` is
+/-- **`RecursiveZK` at the OS's salts** (A3 per test), at any hm96 hiding bound `δ`: the ZK server's salt `i` is
 `saltOfBytes (t o i)`, stream `i` of a byte source `t` on `Ωos` (`uniform/io-getrandombytes`), and the outer session's
 witness holds those salts. Where the source passes the event's test up to `η` at every auditor's, prover's and outer
 session's outcome, the auditor's whole view is within `ε_o + n_h·δ + η` of the same simulator as `RecursiveZK`'s. -/

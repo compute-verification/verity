@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Statements
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # A tape from its groups

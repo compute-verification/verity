@@ -4,8 +4,9 @@ values `_stage_unit_at_base` does (`stage_unit`'s code before the stager, less i
 nothing) on `test_pouw_rows`' statements and a Boolean unit; a stager's rounds share its pin and are each the statement of
 their own rows; a lowering output that is not the reference's is refused, naming the first such instance, on both of the
 check's paths (bit-sliced for a Boolean Definition, the reference for the rest); and the stager's circuit renders the unit's
-netlist once, the slot nets not again, and is the circuit composed with every netlist rendered afresh; and under
-FLOCK_PLAIN_LEAVES=1 it names the plain leaf scheme."""
+netlist once, the slot nets not again, and is the circuit composed with every netlist rendered afresh; under
+FLOCK_PLAIN_LEAVES=1 it names the plain leaf scheme; and `member_stager` is the stager of a window member's rows,
+refused while any switch `class_statement` reads at import is set."""
 from __future__ import annotations
 
 import hashlib
@@ -27,7 +28,7 @@ from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 from verity_flock import ir_lower as IL
-from verity.core.protocols.pouw.circuit import leaves as L, pc4
+from verity.ml.protocols.pouw.circuit import leaves as L, pc4
 
 #: a Boolean unit (a + b over 20 bits with its carry, a & c, and w[0] & w[2047] ^ w[1000]), its parameters' leaves off word
 #: boundaries in two rows that split c's, its 34-bit output padded to three words; w's row spans SHA-512 blocks, as a composed
@@ -88,7 +89,7 @@ def _tile(m: str) -> tuple:
 
 def _anchor() -> tuple:
     """`test_pouw_anchors_are_public_input_ports_held_to_the_verifiers_recomputation`' statement: three public input ports."""
-    from verity.core.protocols.pouw.circuit.anchors import public_ports
+    from verity.ml.protocols.pouw.circuit.anchors import public_ports
 
     spec = importlib.util.spec_from_file_location("pouw_regions_vectors", POUW_TESTS / "pouw_regions_vectors.py")
     RV = importlib.util.module_from_spec(spec)
@@ -160,7 +161,7 @@ def test_a_bound_stager_names_its_definition_and_the_partition_and_its_rounds_th
     template (core's digest of its Program), the partition and the program; a round's header names the units it is given; the
     class is the unbound stager's; a round staged as another input set, on the one circuit, binds other frame domains; and
     only a bound stager's round takes indices."""
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
     from verity.ml.circuits.codec import descriptor_id, program_digest
     from verity.ml.circuits.program import Program
 
@@ -188,6 +189,31 @@ def test_a_bound_stager_names_its_definition_and_the_partition_and_its_rounds_th
         plain.stage(rows, tmp_path / "plain", b"k" * 32, indices=range(5))
     with pytest.raises(ValueError, match="exactly partition and program"):
         CS.UnitStager(*args, bind={"partition": bind["partition"]})
+
+
+#: a template laid out a row per input and per output, x's row spanning SHA-512 blocks as a composed circuit needs one row to
+MEMBER_TOY = bind(definition("MemberStagerToy", 1, lambda C, x, y: [C.AND(x[i], x[1024 + i]) ^ y[i] for i in range(16)],
+                             (("x", Array(2048, BIT)), ("y", Array(16, BIT))), Array(16, BIT), register=False))
+MEMBER = SimpleNamespace(rows=(("x", 128), ("y", 1)), outs=(("o", 1),), schema=lambda port: V2)
+
+
+@pytest.mark.slow
+def test_a_members_stager_is_the_unit_stager_of_its_rows():
+    """`member_stager` of a member laying its template out a row per input and per output is the `UnitStager` over those
+    rows at 16 bits a word, named by the template's id: its pin that stager's, bound as given."""
+    st = CS.member_stager(MEMBER_TOY, MEMBER, None)
+    assert st.pin == CS.UnitStager(MEMBER_TOY, f"unit/{MEMBER_TOY.id}", [("x", V2, 2048, ["x"]), ("y", V2, 16, ["y"])],
+                                   [(V2, (0,))]).pin
+
+
+@pytest.mark.parametrize(("switch", "value"), [("PACK_WORDS", True), ("CORE_ROWS", True), ("PLAIN_LEAVES", True),
+                                               ("OWN_ROWS", True), ("GEMM_TILE", (4, 4))])
+def test_a_members_stager_refuses_a_process_with_a_switch_set_naming_it(switch, value, monkeypatch):
+    """`member_stager` is refused while any switch `class_statement` reads at import is set, the message naming it: a
+    member's file is the one made with every switch unset, which an auditor rebuilds."""
+    monkeypatch.setattr(CS, switch, value)
+    with pytest.raises(ValueError, match=f"FLOCK_{switch}"):
+        CS.member_stager(MEMBER_TOY, MEMBER, None)
 
 
 @pytest.mark.slow
@@ -237,7 +263,7 @@ def test_the_stagers_circuit_renders_the_units_netlist_once_and_is_the_uncached_
 
 
 def _bound_toy() -> tuple:
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
 
     args, rows, _kw = _toy(2)
     obj = P.partition(P.mixed_population_program([(TOY, 3), (TOY, 5)]), P.template_instances_query([TOY]))
@@ -286,6 +312,41 @@ def test_a_stager_writes_its_circuit_as_it_composes_it(which, tmp_path, monkeypa
     monkeypatch.setattr(IL, "netlist", netlist)
     _same(tmp_path / "whole", whole.stage(rows, tmp_path / "whole", b"k" * 32, **round_kw), tmp_path / "streamed",
           st.stage(rows, tmp_path / "streamed", b"k" * 32, **round_kw), st.circuit)
+
+
+def _packed_toy(w: int = 16) -> object:
+    """A unit returning its public ``w`` (``w`` 8-bit leaves) beside four 32-bit scales ``s`` and a 2048-bit row ``x``."""
+    sig = ((("w", Array(w, Value(8))), ("s", Array(4, Value(32))), ("x", Array(128, Value(16)))), Array(w, Value(8)))
+    return bind(CompositeDefinition(f"PackedPublicToy{w}", 1, (), lambda S: sig, lambda B, S, w, s, x: w, register=False))
+
+
+def test_a_packed_public_port_lays_its_leaves_out_as_a_row_does():
+    """`unit_ports`' public ports: each leaf in its own u16 words by default, with ``packed`` the parameter's leaves
+    concatenated as a row's (16 8-bit leaves in 8 words, not 16), the row after them either way; a packed port of a part word
+    is refused."""
+    for packed, words in ((False, [16, 8, 128]), (True, [8, 8, 128])):
+        ports, out_words, row_words = CS.unit_ports(_packed_toy(), "unit/packed-toy", [("x", ["x"])], ("w", "s"), packed)
+        step, s0 = (8, 128) if packed else (16, 256)
+        assert row_words == words and out_words == [8] and len(ports.ins) == sum(words)
+        assert ports.leaves[:16] == tuple(tuple(range(step * i, step * i + 8)) for i in range(16))
+        assert ports.leaves[16:20] == tuple(tuple(range(s0 + 32 * i, s0 + 32 * i + 32)) for i in range(4))
+        assert ports.leaves[20] == tuple(range(16 * (words[0] + 8), 16 * (words[0] + 9)))
+    with pytest.raises(ValueError, match="public port w is 24 bits"):
+        CS.unit_ports(_packed_toy(3), "unit/packed-toy", [("x", ["x"])], ("w", "s"), True)
+
+
+@pytest.mark.slow
+def test_a_packed_public_port_stages_on_the_rows_own_words(tmp_path):
+    """A stager with ``packed`` stages its public ports as the row's own words: the IR reference reads the unit's ``w`` there
+    on every instance (the unit returns it), and the circuit's ``w`` port is half the words of the default layout's."""
+    rng = np.random.default_rng(0)
+    w = rng.integers(0, 1 << 16, (3, 8), dtype=np.uint16)
+    rows = {"w": w, "s": rng.integers(0, 1 << 16, (3, 8), dtype=np.uint16), "x": rng.integers(0, 1 << 16, (3, 128), dtype=np.uint16)}
+    pins = {p: {"seed": "00", "derivation": "test/packed"} for p in ("w", "s")}
+    got = CS.stage_unit(_packed_toy(), "unit/packed-toy", [("x", V2, 2048, ["x"])], [(V2, (0,))], rows, tmp_path, b"k" * 32,
+                        public_inputs=pins, packed=True)
+    assert np.array_equal(got["outs"]["o0"], w)
+    assert {p["port"]: p["words"] for p in got["meta"]["public_inputs"]} == {"w": 8, "s": 8}
 
 
 def test_a_unit_lowering_drops_its_circuit_once_laid_out(monkeypatch):

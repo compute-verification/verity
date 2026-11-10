@@ -86,6 +86,13 @@ def ffma(a, b, c) -> np.ndarray:
         return _gpu(DR.fma_rn(a, b, c))
 
 
+def fdiv(a, b) -> np.ndarray:
+    """`div.rn.f32`: RN(a / b) with subnormals, every NaN 0x7FFFFFFF."""
+    a, b = np.broadcast_arrays(_w(a), _w(b))
+    with np.errstate(all="ignore"):
+        return _gpu(DR.div_rn(a, b))
+
+
 def neg(x) -> np.ndarray:
     return _w(x) ^ U32(0x80000000)
 

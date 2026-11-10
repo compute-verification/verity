@@ -1,14 +1,15 @@
 """vLLM's own switches, and the one place the integration writes them into the process environment.
 
-The pins are ``setdefault``s: a value the operator exported wins. vLLM, torch and ``huggingface_hub`` read several of
-these once, at import or at engine construction, so each caller pins before it imports them. A ``TargetProfile``'s
-``env()`` and the compiled-engine cache switches are overrides, written with plain assignment.
+The pins are ``setdefault``s: a value the operator exported wins, except a `FIXED` one's, which `pin` refuses. vLLM, torch and
+``huggingface_hub`` read several of these once, at import or at engine construction, so each caller pins before it imports them.
+A ``TargetProfile``'s ``env()`` and the compiled-engine cache switches are overrides, written with plain assignment.
 
 Stdlib only, and nothing from ``verity_vllm``: every layer may call it (the config it needs comes in as arguments).
 """
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 from collections.abc import Mapping
 from typing import Any
@@ -20,6 +21,10 @@ ENGINE = {
     "VLLM_ENABLE_V1_MULTIPROCESSING": "0",
     "VLLM_USE_FLASHINFER_SAMPLER": "0",
     "VLLM_DISABLE_SHARED_EXPERTS_STREAM": "1",
+    # At torch's default a reduction kernel's tiling is a per-process runtime choice.  torch reads the variable once, when
+    # torch._inductor.config is imported, so it is in the environment before that import in every process that compiles: this
+    # one, and each TP rank, which inherits it when vLLM spawns it.
+    "TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK": "0",
 }
 #: Why `ENGINE` sets each switch (a served Commit's record carries it: `engine.served`).
 REASONS = {
@@ -34,7 +39,14 @@ REASONS = {
                                           "moves it to an aux stream at <= VLLM_SHARED_EXPERTS_STREAM_TOKEN_THRESHOLD (256) tokens and the "
                                           "log's order is no longer the execution order operand_provenance (G5) takes it to be; costs the "
                                           "shared/routed overlap there, on shared-expert models only; value- and Program-neutral",
+    "TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK": "at 1, torch's default, Inductor adds a halved R0_BLOCK tiling to a reduction kernel at its "
+                                          "first launch in each process, times both and keeps the faster, without caching the pick; the "
+                                          "tilings sum in different orders, so two processes of one engine can differ in a bit.  At 0 "
+                                          "every process runs the kernel's static tiling",
 }
+#: The `ENGINE` switches an operator's export can't change (`pin` refuses another inherited value), each with the
+#: ``torch._inductor.config`` attribute it sets and the value that attribute reads under the pin (`require_inductor`).
+FIXED = {"TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK": ("dynamic_scale_rblock", False)}
 
 #: The meta-device instantiation of the pinned model class (``program/frontend/vllm_meta.py``).  Batch invariance is the Build
 #: target's (``TargetProfile.env()``, applied before vLLM is imported), which is the workload's execution label's, not the profile's.
@@ -75,12 +87,34 @@ def served_defaults() -> dict[str, str]:
 
 def pin(pins: Mapping[str, str]) -> dict[str, str]:
     for k, v in pins.items():
+        if k in FIXED and os.environ.get(k, v) != v:
+            raise RuntimeError(f"fail-closed: this process inherited {k}={os.environ[k]!r}, and an engine runs only at {k}={v} "
+                               f"(engine.env.ENGINE: {REASONS[k]}); unset it")
+    for k, v in pins.items():
         os.environ.setdefault(k, v)
     return {k: os.environ[k] for k in pins}
 
 
+def require_inductor(engine_kwargs: Mapping[str, Any]) -> None:
+    """Before ``LLM(**engine_kwargs)`` in this process: refuse an engine whose Inductor reads a `FIXED` switch otherwise than `ENGINE`
+    pins it, because ``torch._inductor.config`` was imported before the pin (it read the variable then; a forked TP rank keeps
+    what it read), or because the engine's ``compilation_config.inductor_compile_config`` sets the attribute over it."""
+    cfg = sys.modules.get("torch._inductor.config")
+    cc = engine_kwargs.get("compilation_config")
+    over = cc.get("inductor_compile_config") if isinstance(cc, Mapping) else getattr(cc, "inductor_compile_config", None)
+    for k, (attr, want) in FIXED.items():
+        if cfg is not None and getattr(cfg, attr, want) != want:
+            raise RuntimeError(f"fail-closed: torch._inductor.config was imported before {k}={ENGINE[k]} was pinned, and read "
+                               f"{attr}={getattr(cfg, attr)!r}: pin the engine environment (engine_profile.apply_env) before "
+                               "anything imports torch._dynamo, torch._inductor or vllm")
+        if isinstance(over, Mapping) and attr in over and over[attr] != want:
+            raise RuntimeError(f"fail-closed: compilation_config.inductor_compile_config sets {attr}={over[attr]!r}, over "
+                               f"{k}={ENGINE[k]} (engine.env.ENGINE); leave it out")
+
+
 def apply_engine(hf_home: str | None) -> dict[str, str]:
-    """``ENGINE``, the checkpoint store's ``HF_HOME`` and ``HF_HUB_OFFLINE=1``; returns the ``ENGINE`` values in force."""
+    """``ENGINE``, the checkpoint store's ``HF_HOME`` and ``HF_HUB_OFFLINE=1``; returns the ``ENGINE`` values in force, which an
+    engine records as its ``env_flags``.  An inherited `FIXED` switch at another value is refused (`pin`)."""
     got = pin(ENGINE)
     if hf_home:
         os.environ.setdefault("HF_HOME", hf_home)

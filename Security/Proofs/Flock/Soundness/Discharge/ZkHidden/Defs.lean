@@ -2,12 +2,26 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # The `--zk` tables of a hidden-output session
 
 ZkLink's `DrawSetupZK`, `tableAtZK`, `tablesAtZK` and `DrawOkZK` (`ZkLink/TablesAt.lean`) for `Stmt.setupHidden`, which
-`Stmt.setupTables` calls under a tag with hidden outputs (`HiddenExec.setupOne`): the draw's setup is HiddenExec's
+`Stmt.setupTables` calls under a tag with hidden outputs (`HiddenExec.setupOne`): the sample's setup is HiddenExec's
 `DrawSetupH` at `zkInputs I` in place of Integrate's `DrawSetup`, and the table is built from it as `DrawSetupZK.tabAt`
 builds it, field for field.
 
@@ -29,8 +43,8 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {n : ℕ} (I : Inputs) (mPts : ℕ)
 
-/-- **A draw `verify --zk` sets up under hidden outputs**: `DrawSetupZK` with a `DrawSetupH` at `zkInputs I`
-(setupHidden accepts the draw under the `--zk` tags and coin tree) for its `DrawSetup`. -/
+/-- **A sample `verify --zk` sets up under hidden outputs**: `DrawSetupZK` with a `DrawSetupH` at `zkInputs I`
+(setupHidden accepts the sample under the `--zk` tags and coin tree) for its `DrawSetup`. -/
 structure DrawSetupZKH (S : Finset (Fin n)) (d : Lean.Json) where
   x : DrawSetupH (zkInputs I) mPts S d
   sch : Flock.Schedule
@@ -67,7 +81,7 @@ def innerDom : Fin (innerN (layOf y.x.st y.sch)) ↪ 𝔽 :=
     simp only [Nat.toUInt64_eq, UInt64.toNat_ofNat', Nat.mod_eq_of_lt (hlt a), Nat.mod_eq_of_lt (hlt b)] at this
     exact Fin.ext (by omega)⟩
 
-/-- **The `--zk` table of a hidden-output draw**, at statement regions `regs` (`DrawSetupZK.tabAt`). -/
+/-- **The `--zk` table of a hidden-output sample**, at statement regions `regs` (`DrawSetupZK.tabAt`). -/
 noncomputable def tabAt (regs : List (Model.Region y.x.st.c.kLog (y.x.st.m - y.x.st.c.kLog)))
     (hregs : ∀ R ∈ regs, R.free.Nodup ∧ R.free.length ≤ PT_LOCAL) : TabZK 𝔽 mPts where
   S := stmtOf y.x.st y.x.wf.1 regs
@@ -100,10 +114,10 @@ noncomputable def tabAt (regs : List (Model.Region y.x.st.c.kLog (y.x.st.m - y.x
   hL := y.hL
   hδ := le_rfl
 
-/-- The draw's `--zk` table: setupHidden's statement at its regions. -/
+/-- The sample's `--zk` table: setupHidden's statement at its regions. -/
 noncomputable def table : TabZK 𝔽 mPts := y.tabAt (regionsOf y.x.st) (stmtOf_linkLayout y.x.st y.x.wf.1 y.x.wf.2).1
 
-/-- A refused draw's `--zk` table: the statement with `contra`'s regions, which no witness satisfies. -/
+/-- A refused sample's `--zk` table: the statement with `contra`'s regions, which no witness satisfies. -/
 noncomputable def refused : TabZK 𝔽 mPts :=
   y.tabAt (regionsOf y.x.st ++ Integrate.DrawSetup.contra y.x.st.c.kLog (y.x.st.m - y.x.st.c.kLog)) y.x.refused_wf
 
@@ -112,22 +126,22 @@ end DrawSetupZKH
 variable {Reg : Type} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
 
 open Classical in
-/-- **The hidden-output `--zk` table at draw `S`** (`tableAtZK` under hidden outputs): the draw's table when
-`verify --zk` sets up the draw's JSON `dj S` with setupHidden, and otherwise the reference setup `y₀`'s refused table. -/
+/-- **The hidden-output `--zk` table at sample `S`** (`tableAtZK` under hidden outputs): the sample's table when
+`verify --zk` sets up the sample's JSON `dj S` with setupHidden, and otherwise the reference setup `y₀`'s refused table. -/
 noncomputable def tableAtZKH (S : Finset (Fin n)) : TabZK 𝔽 mPts :=
   if h : Nonempty (DrawSetupZKH I mPts S (dj S)) then (Classical.choice h).table else y₀.refused
 
 /-- **The hidden-output `--zk` tables** (`tablesAtZK` under hidden outputs): `tableAtZKH` at every registration. -/
 noncomputable abbrev tablesAtZKH : Finset (Fin n) → Reg → TabZK 𝔽 mPts := fun S _ => tableAtZKH dj y₀ S
 
-/-- The one-table hidden-output `--zk` plan: at draw `S`, the table `tableAtZKH … S`, for every registration. -/
+/-- The one-table hidden-output `--zk` plan: at sample `S`, the table `tableAtZKH … S`, for every registration. -/
 noncomputable abbrev planAtZKH : Finset (Fin n) → Reg → List (TabZK 𝔽 mPts) := fun S _ => [tableAtZKH dj y₀ S]
 
-/-- Every drawn unit is in the plan's one table. -/
+/-- Every sampled proof block is in the plan's one table. -/
 abbrev tabAtZKH : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planAtZKH (Reg := Reg) dj y₀ S R).length :=
   fun _ _ _ => ⟨0, Nat.zero_lt_one⟩
 
-/-- **The challenger's draw at `S`, at `--zk` under hidden outputs** (`DrawOkZK` with `setupHidden` for `setupH`): it
+/-- **The challenger's sample at `S`, at `--zk` under hidden outputs** (`DrawOkZK` with `setupHidden` for `setupH`): it
 proves `S`, and setupHidden sets up at it under the `--zk` tags and coin tree with `mPts` link points. -/
 def DrawOkZKH (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : Finset (Fin n)) : Prop :=
   (∀ D, Draw.UnitDraw.ofJson (dj S) = .ok D → ∀ u ∈ S, u.val ∈ D.proved) ∧

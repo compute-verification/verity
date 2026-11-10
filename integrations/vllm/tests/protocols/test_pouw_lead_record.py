@@ -30,8 +30,13 @@ def test_the_record_publishes_its_window_and_calls_in_order():
     rec.a_root(calls[1], b"\x21" * 64)
     rec.words(b"\x10" * 64)
     pc = rec.publish()
-    sha = lambda b: hashlib.sha512(b).digest()  # noqa: E731
-    hdr = lambda c: b"".join(v.to_bytes(8, "big") for v in (c.pass_index, c.index, c.linear, c.m, c.k, c.n))  # noqa: E731
+
+    def sha(b: bytes) -> bytes:
+        return hashlib.sha512(b).digest()
+
+    def hdr(c: Call) -> bytes:
+        return b"".join(v.to_bytes(8, "big") for v in (c.pass_index, c.index, c.linear, c.m, c.k, c.n))
+
     assert LR.header(calls[1]) == hdr(calls[1])
     assert rec.a_roots == [b"\x20" * 64, b"\x21" * 64]
     assert pc.activation_roots == sha(b"\x20" * 64 + b"\x21" * 64)

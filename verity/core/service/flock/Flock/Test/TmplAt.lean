@@ -6,10 +6,10 @@ marked `ident` (`identOk`) placed at the input rows.
 -/
 module
 
-public import Flock.TmplAt
 public import Flock.Test.Tmpl
-meta import Flock.TmplAt
+public import Flock.TmplAt
 meta import Flock.Test.Tmpl
+meta import Flock.TmplAt
 
 @[expose] public section
 

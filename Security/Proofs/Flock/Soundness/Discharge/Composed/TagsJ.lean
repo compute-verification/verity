@@ -1,6 +1,13 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Exec.Setup
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Refine.Walk
+import VCVio.Prelude.Core
 
 /-!
 # Table `j`'s tags: the identity alone differs, which the circuit and public parses do not read

@@ -1,6 +1,38 @@
 module
 
 public import Proofs.Flock.Claims.KS.PlainClashLater
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.PlainDrawK
 
 /-!
 # The live self-clash past level 0, at `wrPDK keep`
@@ -12,7 +44,7 @@ outcome (`recordsLiveAtDK_wrPDK`), and the clashes they give by `laterEntriesCla
 * `laterEntries_wrPDK`, `laterClash_wrPDK`, `laterEntries_wrPDHK`, `laterClash_wrPDHK`: `laterEntries_wrPD`,
   `laterClash_wrPD`, `laterEntries_wrPDH`, `laterClash_wrPDH` at `wrPDK keep`.
 * `plain_laterEntriesAtK`, `plain_laterClashAtK`, `plain_laterEntriesHAtK`, `plain_laterClashHAtK`: those at the
-  statement's draw, at `plainTab`.
+  statement's sample, at `plainTab`.
 
 The run-level half (`rawLevelCols_plain`, `plainClashQL`, `plainSimLaterClashAt`) reads `P`'s run at the verifier, and
 is not restated here.
@@ -110,7 +142,7 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The deployed plain decoders' later entries at `plainTab`, at the draw, at `wrPDK keep`**:
+/-- **The deployed plain decoders' later entries at `plainTab`, at the sample, at `wrPDK keep`**:
 `plain_laterEntriesAtK_of` at what `wrPDK keep` writes for `o` (`plain_laterEntriesAt`). -/
 theorem plain_laterEntriesAtK (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
@@ -131,7 +163,7 @@ theorem plain_laterEntriesAtK (keep : Bool → Bool)
   plain_laterEntriesAtK_of keep hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay o
     (recordsLiveAtDK_wrPDK keep _ d o) hacc pend' hp
 
-/-- **The deployed plain decoders' self-clash past level 0 at `plainTab`, at the draw, at `wrPDK keep`**:
+/-- **The deployed plain decoders' self-clash past level 0 at `plainTab`, at the sample, at `wrPDK keep`**:
 `laterEntriesClashK_of` at `plain_laterEntriesAtK`. -/
 theorem plain_laterClashAtK (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
@@ -152,7 +184,7 @@ theorem plain_laterClashAtK (keep : Bool → Bool)
   laterEntriesClashK_of keep
     (plain_laterEntriesAtK keep hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay o hacc pend' hp) hcl
 
-/-- **The deployed plain decoders' later entries at `plainTab`, at the draw, at hidden outputs under hm96 leaves, at
+/-- **The deployed plain decoders' later entries at `plainTab`, at the sample, at hidden outputs under hm96 leaves, at
 `wrPDK keep`**: `plain_laterEntriesHAtK_of` at what `wrPDK keep` writes for `o` (`plain_laterEntriesHAt`). -/
 theorem plain_laterEntriesHAtK (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
@@ -174,7 +206,7 @@ theorem plain_laterEntriesHAtK (keep : Bool → Bool)
   plain_laterEntriesHAtK_of keep hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay o
     (recordsLiveAtDK_wrPDK keep _ d o) hacc pend' hp
 
-/-- **The deployed plain decoders' self-clash past level 0 at `plainTab`, at the draw, at hidden outputs under hm96
+/-- **The deployed plain decoders' self-clash past level 0 at `plainTab`, at the sample, at hidden outputs under hm96
 leaves, at `wrPDK keep`**: `laterEntriesClashK_of` at `plain_laterEntriesHAtK`. -/
 theorem plain_laterClashHAtK (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)

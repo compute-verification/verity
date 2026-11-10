@@ -2,8 +2,8 @@
 # The bandwidth audit's receipts on a GPU against serve.py's fixture and the CPU reference, and their cost at the store's
 # size (bw_check.py), from build.sh's lib for the toy's decode path; cwd = the source tree's root:
 #
-#   research run --on vy-dc-h200-3 --project verity --campaign e2e-demo --source . --cwd source --timeout 30m \
-#     --env GPU_LEASE_WHO=LANE --send /tmp/p2lib.tar -- bash benchmarks/torch_gpu/p2_stage/bw.sh
+#   research run --on H200_NODE --project verity --source . --cwd source --timeout 30m \
+#     --send /tmp/p2lib.tar -- bash benchmarks/torch_gpu/p2_stage/bw.sh
 #
 # Under one untimed lease of at most LEASE_MIN minutes (default 10), refused if it could reach one of QUIET's periods
 # (each START/END in UTC, space-separated; none by default). RANDOM units of random C* (default 262144) against the reference, SAMPLE of them (default 4000) from
@@ -11,9 +11,7 @@
 set -uo pipefail
 O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs
 D=benchmarks/torch_gpu/p2_stage
-for v in ${VERITY_BENCH_VENV:-} /workspace/jobs/venv312 /workspace/cp/venv312; do
-  [ -z "${PY:-}" ] && [ -x "$v/bin/python3" ] && PY=$v/bin/python3
-done
+PY=${PY:-$(. benchmarks/harness/env.sh && echo "$VENV/bin/python3")} || [ -z "${VERITY_BENCH_VENV:-}" ] || exit 2
 PY=${PY:-python3}
 "$PY" -c 'import torch' 2>/dev/null || { PATH=$HOME/.local/bin:$PATH uv sync -q --all-packages --extra torch > "$O/sync.log" 2>&1; PY=$PWD/.venv/bin/python; }
 TV=$($PY -c 'import torch; print(torch.version.cuda or "")' 2>/dev/null)

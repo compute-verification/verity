@@ -2,12 +2,14 @@ module
 
 public import Definitions.Accounting.Guarantees.Compose
 public import Proofs.Accounting.TS.Drawn
+public import Proofs.Accounting.Lemmas.Compose
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # A prover's `δ_bind` through `ecr/sha-512`: proof
 
 `Accounting.Guarantees.Compose.BindingOfECR`. With `M = Pr[MovedIn w]` and `Φ` the fork form at `L`'s cuts,
-`DrawnBindingOfFork` gives `M² ≤ |L|²·Φ`, and the premise `Φ ≤ Pr[F finds] + κ`. AM–GM (`(M − 2δ')² ≥ 0`) gives
+`SampledBindingOfFork` gives `M² ≤ |L|²·Φ`, and the premise `Φ ≤ Pr[F finds] + κ`. AM–GM (`(M − 2δ')² ≥ 0`) gives
 `M ≤ δ' + M²/(4δ')` (`le_add_sq_div`). If `F` meets `ecr/sha-512`, `Pr[F finds] ≤ E[cost F]/2^256` is the claim itself,
 and the real bound passes to `ENNReal` (`ofReal_add_le`, `ofReal_mul`). If it doesn't, the bound is `⊤` unless `L` is
 empty, and then `M² ≤ 0`.
@@ -59,7 +61,7 @@ theorem ofReal_le_of_sq_le {M Φ γ P e κ δ' : ℝ} (hδ : 0 < δ') (hγ : 0 �
 open Classical in
 theorem bindingOfECR : Accounting.Guarantees.Compose.BindingOfECR := by
   intro J Q Pos V _ C B _ _ S m s pf w L H F κ δ' hL hδ hfork
-  exact ofReal_le_of_sq_le hδ (by positivity) (Accounting.SecurityProofs.TS.DrawnBindingOfFork C B S m s pf w L hL)
+  exact ofReal_le_of_sq_le hδ (by positivity) (Accounting.SecurityProofs.TS.SampledBindingOfFork C B S m s pf w L hL)
     hfork _ (fun h => h)
 
 end Accounting.SecurityProofs.Compose.Binding

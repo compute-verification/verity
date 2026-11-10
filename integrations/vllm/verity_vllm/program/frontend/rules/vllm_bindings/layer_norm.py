@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from verity.ml.circuits.refs import Coll
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import from_rows, norm_kind, rows_of, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.operands import _row_value, aten
+from verity_vllm.program.frontend.rules.common import from_rows, norm_kind, row_value, rows_of, shape
+from verity_vllm.program.frontend.rules.vllm_bindings.operands import aten
 from verity.ml.definitions.registry import layer_norm as _LN
 
 
@@ -35,13 +35,13 @@ class LayerNormAtenRule(OpRule):
 
     def applies(self, node, ctx):
         x, ns, w, b, eps = self._operands(node)
-        r = _row_value(ctx, x, "x")
+        r = row_value(ctx, x, "x")
         if r:
             return r
         if w is None or b is None:
             return "numerics_unregistered: LayerNormAten_v1 is the affine layer norm with both weight and bias"
         for nm, t in (("weight", w), ("bias", b)):
-            r = _row_value(ctx, t, nm)
+            r = row_value(ctx, t, nm)
             if r:
                 return r
             if not isinstance(ctx.val(t), Coll):

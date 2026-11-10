@@ -1,6 +1,6 @@
 /-
 A composition of core protocols, the common part of onsite and remote Verity: one `Core.Protocol` whose check runs each
-subprotocol's own `answer` on that subprotocol's case, and decides by reject dominance.
+subprotocol's own `answer` on that subprotocol's case, and decides so that any rejection rejects the whole.
 
 * It rejects when any subprotocol rejects, whatever the others answer, so an undecided subprotocol never hides a
   rejection. It also rejects when the cases don't fit the composition (a subprotocol unknown, missing, repeated or out of
@@ -126,7 +126,7 @@ def decodeParams (j : Json) : V (List Named) := do
 def decodeCommitment (b : ByteArray) : V ByteArray :=
   if b.size = 64 then .ok b else .error s!"the binding of the components' digests is 64 bytes, not {b.size}"
 
-/-- Read in place (`Core.Canonical`), as `canonicalJson` and `Flock.unhex` would read it: a component's evidence can be
+/-- Read in place (`Core.Canonical`), as `canonicalJson` and `Flock.unhex` would read it: a subprotocol's evidence can be
 gigabytes of hex (PoUS's `C*`). -/
 def decodeEvidence (b : ByteArray) : V (List Case) := do
   (← entries (← Canonical.read b).1 "the composition's evidence").mapM fun x => do

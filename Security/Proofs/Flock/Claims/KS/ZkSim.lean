@@ -1,14 +1,49 @@
 module
 
-public import Proofs.Flock.Claims.KS.ZkClashRaw
-public import Proofs.Flock.Claims.KS.ZkAbortJR
-public import Proofs.Flock.Claims.KS.ZkSlackFit
+public import Proofs.Flock.Claims.KS.FnFork
 public import Proofs.Flock.Claims.KS.ForkCoupling
 public import Proofs.Flock.Claims.KS.PlainWire
-public import Proofs.Flock.Claims.KS.Rounds
 public import Proofs.Flock.Claims.KS.RoundsNZk
-public import Proofs.Flock.Claims.KS.ZkBoundJ
-public import Proofs.Flock.VBridge.Family.Lig
+public import Proofs.Flock.Claims.KS.ZkAbortJR
+public import Proofs.Flock.Claims.KS.ZkClashRaw
+public import Proofs.Flock.Claims.KS.ZkSlackFit
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.DeployTables
+import Proofs.Flock.Claims.KS.ConflictRun
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.VBridge.Family.Lig
 
 /-!
 # The masked simulator
@@ -910,7 +945,7 @@ def ZkSimAbort {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mP
 
 end Gen
 
-/-- **The lockstep**: at every masked statement in scope that sets up, at C-Flock ZK's padded tables, and every prover
+/-- **The lockstep**: at every masked statement in scope that sets up, at Flock ZK's padded tables, and every prover
 `P` and its tape `ω`, the masked simulator simulates `P`'s accepting runs at `zkΦ`'s coins on the masked wire
 (`ZkSimRun`): its live outcome is the view of each record `P`'s run decides on. -/
 def ZkSimRunAt (x : Claims.Msg) : Prop :=
@@ -929,7 +964,7 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The lockstep**: at every masked statement in scope that sets up, at C-Flock ZK's padded tables, and every prover
+/-- **The lockstep**: at every masked statement in scope that sets up, at Flock ZK's padded tables, and every prover
 `P` and its tape `ω`, the masked simulator simulates `P`'s accepting runs at `zkΦ`'s coins on the masked wire
 (`ZkSimRun`): its live outcome is the view of each record `P`'s run decides on. -/
 def ZkSimRunAt (x : Claims.Msg) : Prop :=
@@ -946,8 +981,8 @@ def ZkSimRunAt (x : Claims.Msg) : Prop :=
 
 end Gen
 
-/-- **The abort**: at every masked statement in scope that sets up at a draw `d`, every prover and tape, every table
-`j` and table of full-width columns, where `P`'s masked run at `zkΦ`'s coins is rejected the live verdict at the draw
+/-- **The abort**: at every masked statement in scope that sets up at a sample `d`, every prover and tape, every table
+`j` and table of full-width columns, where `P`'s masked run at `zkΦ`'s coins is rejected the live verdict at the sample
 (`AccTxJ`) fails at the masked simulator's outcome (`ZkSimAbort`). -/
 def ZkSimAbortAt (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
@@ -966,8 +1001,8 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The abort**: at every masked statement in scope that sets up at a draw `d`, every prover and tape, every table
-`j` and table of full-width columns, where `P`'s masked run at `zkΦ`'s coins is rejected the live verdict at the draw
+/-- **The abort**: at every masked statement in scope that sets up at a sample `d`, every prover and tape, every table
+`j` and table of full-width columns, where `P`'s masked run at `zkΦ`'s coins is rejected the live verdict at the sample
 (`AccTxJ`) fails at the masked simulator's outcome (`ZkSimAbort`). -/
 def ZkSimAbortAt (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
@@ -1120,7 +1155,7 @@ end Gen
 
 open Classical in
 /-- **The simulated fork bounds the model's rewinding advantage**: at every masked statement in scope that sets up at a
-draw, every prover and tape, every table `j` and table of full-width columns, the masked simulator's fork advantage at
+sample, every prover and tape, every table `j` and table of full-width columns, the masked simulator's fork advantage at
 each event (`zkAdvSim`) is at most the simulated fork at `zkΦ` at the event's round (`simForkPr` at the live fork
 `forkN`). -/
 def ZkSimForkLe (x : Claims.Msg) : Prop :=
@@ -1143,7 +1178,7 @@ variable [S : ZkSetup]
 
 open Classical in
 /-- **The simulated fork bounds the model's rewinding advantage**: at every masked statement in scope that sets up at a
-draw, every prover and tape, every table `j` and table of full-width columns, the masked simulator's fork advantage at
+sample, every prover and tape, every table `j` and table of full-width columns, the masked simulator's fork advantage at
 each event (`zkAdvSim`) is at most the simulated fork at `zkΦ` at the event's round (`simForkPr` at the live fork
 `forkN`). -/
 def ZkSimForkLe (x : Claims.Msg) : Prop :=
@@ -1163,7 +1198,7 @@ def ZkSimForkLe (x : Claims.Msg) : Prop :=
 end Gen
 
 /-- **A self-clash at an accepting run's view is a column clash or a collision**: at every masked statement in scope
-that sets up, at its draw `d`, every prover and tape, every table `j` and table of full-width columns, and every coins
+that sets up, at its sample `d`, every prover and tape, every table `j` and table of full-width columns, and every coins
 at which `V true` accepts `P` deciding a record, a decoded self-clash of table `j` at the record's live outcome
 (`LiveSelfClashZ` at `viewOf`) gives two different columns the run's reps open at one position of some table, or a
 collision among the run's verifier calls. -/
@@ -1197,7 +1232,7 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **A self-clash at an accepting run's view is a column clash or a collision**: at every masked statement in scope
-that sets up, at its draw `d`, every prover and tape, every table `j` and table of full-width columns, and every coins
+that sets up, at its sample `d`, every prover and tape, every table `j` and table of full-width columns, and every coins
 at which `V true` accepts `P` deciding a record, a decoded self-clash of table `j` at the record's live outcome
 (`LiveSelfClashZ` at `viewOf`) gives two different columns the run's reps open at one position of some table, or a
 collision among the run's verifier calls. -/

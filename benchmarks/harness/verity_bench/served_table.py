@@ -70,7 +70,7 @@ class Protocol:
 @dataclass(frozen=True)
 class Live:
     """A live PoUW row: `arm`'s decode step over `control`'s, timed in run `run` on `device`, read from the
-    `summary.json` and `stop.json` under `out` in the run's record (`hb_sbench.py`/`sbench.sh`'s layout). Each is an
+    `summary.json` and `stop.json` under `out` in the run's record (`sbench.sh`'s layout). Each is an
     entry of the `runs` meta of an art of record `LIVE`."""
 
     device: str

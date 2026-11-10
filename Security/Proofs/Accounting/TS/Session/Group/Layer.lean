@@ -2,18 +2,50 @@ module
 
 public import Proofs.Accounting.TS.Session.Lanes.Layer
 public import PouwWindow.KnownRows
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# A leaf's proof layer through a group of linked C-Flock sessions, any shape
+# A leaf's proof layer through a group of linked Flock sessions, any shape
 
-A drawn leaf too big for one C-Flock block is proved as a group of one-unit statements: `L` lanes, each in `n` chunks
+A sampled leaf too big for one Flock block is proved as a group of one-unit statements: `L` lanes, each in `n` chunks
 along `K`, and one combine, `G = L n + 1` sessions (`Ix L n`: `some (l, c)` lane `l`'s chunk `c`, `none` the combine).
 The 32 × 32 leaf's option-A group (`Accounting.TS.Lanes.leafLayer`) is `L = 32`, `n = 1`, indexed by `Option (Fin 32)`.
 
 * `SessionChecks`: what the leaf verifier asks of each of the group's sessions, `leafLayer`'s acceptance at one
   statement: flock-verify `--zk --registered` accepts it, with its known-content check (`Registered.checkKnownAll`), its
   complete check (`Registered.checkComplete`) and its known-read check (`KnownRead.check`, at the known content and the
-  ports read in full), and `pouw-leaf-own`'s checks of its registered file (`PouwWindow.Lanes.checkOwn`), of its draw
+  ports read in full), and `pouw-leaf-own`'s checks of its registered file (`PouwWindow.Lanes.checkOwn`), of its sample
   (`PouwWindow.Lanes.checkFull`, every unit of a non-empty population) and of its reads (`checkOneRead`).
 * `okKnown`: statement `k`'s known content, the other known ports' rows the verifier builds (`known`) and then its `o0`
   row 1 under its salt, as `PouwWindow.Lanes.knownRows` ends every statement's.
@@ -44,7 +76,7 @@ theorem card_ix (L n : ℕ) : Fintype.card (Ix L n) = L * n + 1 := by
 
 /-- **What the leaf verifier asks of one of a group's sessions**: flock-verify `--zk --registered` accepts its outcome
 `o`, its known-content check at `known`, its complete check and its known-read check at `known` and the ports `full`
-it reads in full included, and `pouw-leaf-own`'s checks of its registered file (the ports `want`), of its draw (every
+it reads in full included, and `pouw-leaf-own`'s checks of its registered file (the ports `want`), of its sample (every
 unit of a non-empty population) and of its reads (one read at each port) pass. -/
 def SessionChecks (s : RowsSession) (o : s.Out) (known : Known) (full : Array String)
     (want : List _root_.Flock.Registered.Port) : Prop :=

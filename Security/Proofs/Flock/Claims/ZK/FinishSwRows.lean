@@ -1,18 +1,55 @@
 module
 
+public import Proofs.Flock.Claims.ZK.FinishSrc
 public import Proofs.Flock.Claims.ZK.FinishSwTau
 public import Proofs.Flock.Claims.ZK.FinishTau
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Zk.ConsLincheck
+import Proofs.Flock.Soundness.Discharge.Composed.Inner.LincheckReplay
+import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckReplay
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
+import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
 
 /-!
-# The firewall's seven constraints as `SwRows`
+# The ZK server's seven constraints as `SwRows`
 
-`FinishSwTau.swSrcE_innerSrc_rows` asks that the firewall's constraints at `repCut_fw`'s `hinner` be the worker's
+`FinishSwTau.swSrcE_innerSrc_rows` asks that the ZK server's constraints at `repCut_fw`'s `hinner` be the worker's
 view's first seven rows (`SwRows`): seven constraints, each of the layout's length, with `rowsSwE`'s coefficients.
 `FinishTau.tauFw` gives the coefficients as whole forms (`ofZk`), `FinishTau.tauFw_at_coef` by coefficient with level
 0's lengths; the replay's lengths are its own.
 
 * `Composed.replay_asz`: `Zk.replay`'s three constraints and its `ab` and `c` values have the layout's length.
-* `Composed.fwCons_asz`: so, where level 0's two rows do too, the firewall's constraints (the replay's, the two
+* `Composed.fwCons_asz`: so, where level 0's two rows do too, the ZK server's constraints (the replay's, the two
   ring-switch rows and level 0's) are seven, each of the layout's length.
 * **`Masked.swRows_of`**: at those, constraints that are `rowsSwE`'s first seven as whole forms are `SwRows`.
 * **`Masked.swRows_coef`**: the same by coefficient, level 0's lengths `nE + 4`, the inner layout's.
@@ -22,7 +59,7 @@ view's first seven rows (`SwRows`): seven constraints, each of the layout's leng
 @[expose] public section
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
 
 namespace FlockSoundness.Discharge.Composed
 open Flock Model ZkSession ZkView ZK Refine
@@ -46,7 +83,7 @@ theorem replay_asz {st : Setup} {lay : Zk.PadLayout} {p : Flock.Proof} {root : B
   · rw [hcv]
     simp [ZerocheckMasked.fcL, Zk.Lin.masked]
 
-/-- **The firewall's constraints are seven, each of the layout's length**: the replay's three, the two ring-switch
+/-- **The ZK server's constraints are seven, each of the layout's length**: the replay's three, the two ring-switch
 rows on its `ab` and `c` values, and level 0's two, where those have the layout's length. -/
 theorem fwCons_asz {st : Setup} {lay : Zk.PadLayout} {p : Flock.Proof} {root : ByteArray} {t t' : Flock.Transcript}
     {rp : Zk.Replayed} (hm : 14 ≤ st.m) (h : Zk.replay st lay p root t = .ok (rp, t')) (ss : Array (Array F128))
@@ -121,7 +158,7 @@ open FlockSoundness.Refine (fOf)
 
 namespace Masked
 
-/-- **The firewall's constraints as `SwRows`**: where the replay returned (`hm`, `hrp`) and level 0's two rows have the
+/-- **The ZK server's constraints as `SwRows`**: where the replay returned (`hm`, `hrp`) and level 0's two rows have the
 layout's length, constraints whose first seven rows are `rowsSwE`'s as whole forms (`ofZk`, as `tauFw` gives them)
 are `SwRows`. -/
 theorem swRows_of (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
@@ -142,7 +179,7 @@ theorem swRows_of (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.
   obtain ⟨hsz, hasz⟩ := Composed.fwCons_asz hm hrp ss hl
   exact ⟨hsz, hasz, fun k i => congrArg (fun l => ZkSession.Lin.coef l i) (hrow k.val k.isLt)⟩
 
-/-- **The firewall's constraints as `SwRows` by coefficient**: `swRows_of` where the first seven rows are `rowsSwE`'s
+/-- **The ZK server's constraints as `SwRows` by coefficient**: `swRows_of` where the first seven rows are `rowsSwE`'s
 coefficient by coefficient (as `tauFw_at_coef` gives them), level 0's two of `nE + 4`, the inner layout's length. -/
 theorem swRows_coef (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)

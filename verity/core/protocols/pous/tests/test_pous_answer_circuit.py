@@ -14,7 +14,7 @@ from verity.ml.circuits.evaluation import bits as EB
 from verity.ml.commitments import hm96
 from verity.ml.commitments.gates.sha512 import pad_tail
 from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
-from verity.core.protocols.pous import answer_circuit as A
+from verity.ml.protocols.pous import answer_circuit as A
 
 RNG = random.Random(9)
 INST = hm96.SHA512

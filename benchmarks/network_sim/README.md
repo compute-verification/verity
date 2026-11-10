@@ -11,8 +11,8 @@ outside every zone, and `two_sites` joins two leaf-spines by a WAN between their
 - `graph.py`: the exports, which read any `Datacenter` that validates, a fleet's merged one included: the netns plan
   `mockdc.py` stands up, and Shadow's GML. `python graph.py --blocks 2 --netns` prints `leaf_spine(2)`'s plan, and
   `--fleet` `two_sites(2)`'s.
-- `records.py`: the certifier's published records as `datacenter.observe.PortRecord`s (port, sampling period,
-  counts, digest), the records an honest run declares by port and sampling period, and the certifiers' parameters as the
+- `records.py`: the certifier's published records as `datacenter.observe.PortRecord`s (port, execution phase,
+  counts, digest), the records an honest run declares by port and execution phase, and the certifiers' parameters as the
   declaration's `Cadence`; `datacenter.check_records` audits them.
 - `mockdc.py`: a declaration's netns plan stood up on one host, the certifier's proxy on each zone's uplink, both
   audits, and the account's charge for each zone.
@@ -69,8 +69,8 @@ random bit per request; `late`, which holds a request in execution phase 0 past 
 event at a position the Program doesn't have; or `maintenance`, honest with its certifier down for execution phase 1
 (below). Each zone is audited twice. The certifier's audit is `audit.Audit`'s `check_link` and `check_ingress_link`
 on its raw and committed records. The datacenter record check is `datacenter.check_records` on its records as `datacenter.observe.PortRecord`s against the ones an honest run of the Program publishes: each port
-(`b0.cert:out` for what leaves the zone, `b0.cert:in` for what enters it) needs a record for each sampling period, with
-the declared counts and digest, and each carried sampling period leaves log2 of the sync set's size bits of timing
+(`b0.cert:out` for what leaves the zone, `b0.cert:in` for what enters it) needs a record for each execution phase, with
+the declared counts and digest, and each carried execution phase leaves log2 of the sync set's size bits of timing
 advice. The declaration's cadence is the certifiers' calibrated parameters: frames of 4,096 bytes, buckets of 100 ticks
 of 1 ms, execution phases of 60 buckets and 16 jitter classes (syncs). Each zone's wire is also compared with the
 honest zone's. `DIR/summary.json` has the verdicts and the timing, and `DIR/b0/` a zone's records (`records.json` as
@@ -216,5 +216,5 @@ are read.
 N3, the content check (every frame a certified link carried is a committed crossing), was prototyped here: in the clear
 over the certifiers' records and as Boolean circuits over an execution phase, `N3Window_v3` to `N3Window_v5`, that no Spec
 ran. It is retired, superseded by the network certifier's step-indexed scan
-(`verity/core/protocols/certifier/ingress_scan.py` and `egress.py`), which `benchmarks/network_traces/scan_zk.py` proves
+(`verity/ml/protocols/certifier/ingress_scan.py` and `egress.py`), which `benchmarks/network_traces/scan_zk.py` proves
 in zero knowledge.

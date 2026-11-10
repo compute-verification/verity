@@ -1,6 +1,7 @@
 module
 
 public import CertifierDevice.IssuerDifftest
+meta import CertifierDevice.IssuerDifftest
 
 /-! The issuer difftest's run (`runs` in `lean-audit.json`): `CertifierDevice.IssuerDifftest.main`, audited under
 `CertifierDevice`. It holds `certificate.Issuer` to `Issuer.certify` call for call on the generated records. -/

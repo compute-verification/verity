@@ -1,19 +1,54 @@
 module
 
-public import Definitions.NetworkCertifier.Guarantees.SampledCharge
+public import Definitions.NetworkCertifier.SampledCharge
 public import Proofs.NetworkCertifier.Advice
-public import Mathlib.Tactic.Ring
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.Order.CompletePartialOrder
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.NetworkCertifier.Counting
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The sampled audit's charge (`Guarantees.SampledCharge`)
 
 A gate's value under held gates reads only the gates it depends on (`valOver_congr_inp`). The layout fits the program
 (`BoundaryGates.Fits`), so step `t`'s egress gates depend on no later step's ingress, and holding every committed gate
-of the faulty units at the value it takes over the whole horizon leaves each step's egress rows as they were
+of the incorrect proof blocks at the value it takes over the whole horizon leaves each step's egress rows as they were
 (`valOver_hold`, `rows_holdAll`). So an accepted sequence is accepted with advice that holds each of those gates at one
 bit, and the count is Theorem 3's with that advice (`encard_acceptedFaulty_le`): the inputs besides the ingress, one bit
-per committed gate of the faulty units, and the jitter code, summed over the possible faulty sets
-(`encard_accSeqsSampled_le`). At `δ ≥ miss(1)` the only possible faulty set is empty (`eq_empty_of_mem_faultySets`).
+per committed gate of the incorrect proof blocks, and the jitter code, summed over the possible incorrect sets
+(`encard_accSeqsSampled_le`). At `δ ≥ miss(1)` the only possible incorrect set is empty (`eq_empty_of_mem_faultySets`).
 -/
 
 @[expose] public section
@@ -214,7 +249,7 @@ theorem encard_biUnion_le {α ι : Type} [DecidableEq ι] (s : Finset ι) (f : �
     rw [Finset.set_biUnion_insert, Finset.sum_insert hi]
     exact (Set.encard_union_le _ _).trans (add_le_add le_rfl ih)
 
-/-- **One faulty set's count.** The sequences accepted with the faulty set `F` number at most
+/-- **One incorrect set's count.** The sequences accepted with the incorrect set `F` number at most
 `#As · 2^(faultyBits F) · D^n`: each maps injectively to its inputs besides the ingress, the bit at which `holdAll` holds
 each committed gate of `F`'s units, and its jitter code. -/
 theorem encard_acceptedFaulty_le (C : Prog) (P : Partition) (lay : BoundaryGates L S) (n : ℕ) (hfits : lay.Fits C n)
@@ -280,7 +315,7 @@ theorem encard_acceptedFaulty_le (C : Prog) (P : Partition) (lay : BoundaryGates
         have h := Nat.mul_le_mul_right (D ^ n) (Nat.pow_le_pow_right (n := 2) (by norm_num) (card_faultyGateSet_le C P F))
         exact mul_le_mul' le_rfl (by exact_mod_cast h)
 
-/-- At `δ ≥ miss(1)` the only possible faulty set is empty: a non-empty set of slots is accepted with probability at
+/-- At `δ ≥ miss(1)` the only possible incorrect set is empty: a non-empty set of slots is accepted with probability at
 most `miss(1)`, so it is not in `M_δ`. -/
 theorem eq_empty_of_mem_faultySets (d : Design) (P : Partition) {δ : ℝ} (hδ : d.miss P 1 ≤ δ) {F : Finset ℕ}
     (hF : F ∈ faultySets d P δ) : F = ∅ := by

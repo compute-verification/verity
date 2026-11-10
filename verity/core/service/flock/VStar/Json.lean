@@ -1,6 +1,5 @@
 module
 
-public import Lean.Data.Json
 public import VStar.InnerRepCheck
 
 /-!

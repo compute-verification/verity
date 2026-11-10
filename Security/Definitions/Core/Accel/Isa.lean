@@ -2,24 +2,31 @@ module
 
 public import Definitions.Core.TC.Spec
 public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Mathlib.Algebra.Group.Nat.Defs
+public import Mathlib.Data.Int.Notation
+public import Mathlib.Tactic.Attr.Core
+public import Mathlib.Tactic.ToDual
+import Mathlib.Data.Finset.Attr
+import Mathlib.Tactic.Finiteness.Attr
+import Mathlib.Tactic.SetLike
 
 /-!
 # The ACCEL ops (trusted)
 
-The machine 𝓜's instructions: a handful of coarse classes (`Opcode`), each at least as powerful a unit of its resource as
+The machine 𝓜's instructions: a handful of coarse classes (`Op`), each at least as powerful a unit of its resource as
 any instruction of the card it covers (`Assumptions.CardWithinAccel`). What a class computes is the card's own
 (`Open`, the card's semantics, which no table states): the ops fix only what an instruction reads, what it writes and
 its units (`Card.use`). Two things have semantics here, the ones an honest kernel needs: a move copies its
 words unchanged, and an integer MMA is exact within the table's range (P1, `Card.Exact`). Every MMA's dot is a function
 of its accumulator and its pairs' products (P2, `ProductForm`).
 
-* **tensor** (`Opcode.mma`, `Opcode.mmaSp`): an MMA tile of any shape `m × n × k` on one of the card's MMA opcodes (operand
+* **tensor** (`Op.mma`, `Op.mmaSp`): an MMA tile of any shape `m × n × k` on one of the card's MMA opcodes (operand
   formats, 32- or 64-bit accumulators): output `(i, j)` is the opcode's dot of accumulator `(i, j)` with row `i` of `A`
   and column `j` of `B` (`mmaEval`), so each of its `m·n·k` products meets one output; a 2:4 sparse tile keeps `k/2`
   pairs a row, chosen by metadata (`mmaSpEval`);
-* **lane** (`Opcode.lane`): one of the card's lane functions, from at most `Pipe.nIn` register words to two;
-* **move** (`Opcode.move`): `n` words of one store, read once, to `k` copies in another, unchanged;
-* **read-modify-write** (`Opcode.atom`, `Opcode.red`): one of the card's functions of a memory word and two register words to
+* **lane** (`Op.lane`): one of the card's lane functions, from at most `Pipe.nIn` register words to two;
+* **move** (`Op.move`): `n` words of one store, read once, to `k` copies in another, unchanged;
+* **read-modify-write** (`Op.atom`, `Op.red`): one of the card's functions of a memory word and two register words to
   the new word and a returned word (atomics), or of `n` words of one store into `n` words of another (reductions);
 * **branch** (`Machine.Instr.bra`), on a predicate bit.
 
@@ -274,7 +281,7 @@ def Open.ProductForm (x : Open) : Prop :=
     Accel.ProductForm (x.fa o) (x.fb o) (k / 2) (x.dotSp o k)
 
 /-- **The ACCEL ops** at the card's semantics `x`. -/
-inductive Opcode (x : Open) where
+inductive Op (x : Open) where
   /-- an MMA tile of opcode `o` at shape `sh`, `A` read from store `sa` and `B` from `sb` (accumulators in registers) -/
   | mma (o : x.Mma) (sh : Shape) (sa sb : Store)
   /-- a 2:4 sparse tile at logical shape `sh`, its kept `A` from `sa`, its metadata from registers and `B` from `sb` -/
@@ -291,11 +298,11 @@ inductive Opcode (x : Open) where
 /-- The `i`th word of `v`, zero past the end. -/
 def getD {n : ℕ} (v : Fin n → Word) (i : ℕ) : Word := if h : i < n then v ⟨i, h⟩ else 0
 
-namespace Opcode
+namespace Op
 
 variable {x : Open}
 
-def nIn : Opcode x → ℕ
+def nIn : Op x → ℕ
   | .mma o sh _ _ => sh.wa (x.fa o) + sh.wb (x.fb o) + sh.m * sh.n * accWords (x.wide o)
   | .mmaSp o sh _ _ => sh.waSp (x.fa o) + sh.wsel + sh.wb (x.fb o) + sh.m * sh.n * accWords (x.wide o)
   | .lane o => (x.pipe o).nIn
@@ -303,7 +310,7 @@ def nIn : Opcode x → ℕ
   | .atom _ _ => 3
   | .red _ _ n _ => 2 * n
 
-def nOut : Opcode x → ℕ
+def nOut : Op x → ℕ
   | .mma o sh _ _ | .mmaSp o sh _ _ => sh.m * sh.n * accWords (x.wide o)
   | .lane _ => 2
   | .move _ _ n k => k * n
@@ -311,7 +318,7 @@ def nOut : Opcode x → ℕ
   | .red _ _ n _ => n
 
 /-- The store input `i` is read from. -/
-def inStore : (o : Opcode x) → Fin o.nIn → Store
+def inStore : (o : Op x) → Fin o.nIn → Store
   | .mma o sh sa sb, i =>
     if i.val < sh.wa (x.fa o) then sa else if i.val < sh.wa (x.fa o) + sh.wb (x.fb o) then sb else .reg
   | .mmaSp o sh sa sb, i =>
@@ -324,14 +331,14 @@ def inStore : (o : Opcode x) → Fin o.nIn → Store
   | .red s t n _, i => if i.val < n then s else t
 
 /-- The store output `i` is written to. -/
-def outStore : (o : Opcode x) → Fin o.nOut → Store
+def outStore : (o : Op x) → Fin o.nOut → Store
   | .mma .., _ | .mmaSp .., _ | .lane _, _ => .reg
   | .move _ t _ _, _ => t
   | .atom s _, i => if i.val = 0 then s else .reg
   | .red _ t _ _, _ => t
 
 /-- What an opcode writes: its output words from its input words. -/
-def eval : (o : Opcode x) → (Fin o.nIn → Word) → Fin o.nOut → Word
+def eval : (o : Op x) → (Fin o.nIn → Word) → Fin o.nOut → Word
   | .mma o sh _ _, v, i => mmaEval (x.dot o sh.k) (x.fa o) (x.fb o) (x.wide o) sh (getD v) i.val
   | .mmaSp o sh _ _, v, i => mmaSpEval (x.dotSp o sh.k) (x.fa o) (x.fb o) (x.wide o) sh (getD v) i.val
   | .lane o, v, i => x.lane o (getD v) i
@@ -339,6 +346,6 @@ def eval : (o : Opcode x) → (Fin o.nIn → Word) → Fin o.nOut → Word
   | .atom _ o, v, i => x.atom o (getD v 0) (getD v 1) (getD v 2) i
   | .red _ _ n o, v, i => x.atom o (getD v (n + i.val)) (getD v i.val) 0 0
 
-end Opcode
+end Op
 
 end Verity.Accel

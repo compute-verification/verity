@@ -1,6 +1,5 @@
 module
 
-public import Flock.Annot
 public import Flock.AnnotExpand
 
 /-!

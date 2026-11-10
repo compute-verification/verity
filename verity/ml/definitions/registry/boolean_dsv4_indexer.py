@@ -122,10 +122,10 @@ class GateOps:
         return NOT(sub(self.C, flip(b), flip(a), 32)[1])
 
 
-def traced(name: str, statics: list[str], signature, body, word):
-    """The Boolean Definition ``name_v2{statics}``: `dsv4_indexer`'s ``body`` over `GateOps`, traced per binding, its word view
-    ``word`` at the same statics."""
-    sig = signature(BITS)
+def traced(name: str, statics: list[str], signature, body, word, bits: SimpleNamespace = BITS, ops: type = GateOps):
+    """The Boolean Definition ``name_v2{statics}``: a word module's ``body`` over the steps ``ops`` (`dsv4_indexer`'s over
+    `GateOps`), traced per binding at ``signature(bits)``, its word view ``word`` at the same statics."""
+    sig = signature(bits)
 
     def build(S):
         counts = [len(BL.elements(t)) for _, t in sig(S)[0]]
@@ -135,7 +135,7 @@ def traced(name: str, statics: list[str], signature, body, word):
             for n in counts:
                 parts.append(list(elements[i:i + n]))
                 i += n
-            return body(GateOps(C), S, *parts)
+            return body(ops(C), S, *parts)
         return run
 
     return EW.specialized(name, 2, statics, build, sig, doc=f"`{word.name}_v1`'s body on bits: {(body.__doc__ or '').strip()}",

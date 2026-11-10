@@ -177,9 +177,9 @@ FlashMlaBlockV2 = flat("FlashMlaBlock", 2, ["D", "BN", "FIRST", "DOT", "SCALE"],
 
 def _split(B, S, q, k, sink=None):
     """`FlashMlaSplit_v1`'s body on bits over `FlashMlaBlock_v2`."""
-    def block_of(first):
+    def tile_of(first):
         return bind(FlashMlaBlockV2, D=S.D, BN=S.BN, FIRST=first, DOT=S.DOT, SCALE=S.SCALE)
-    return F.split(bit_ops(B), S, block_of, q, k, sink)
+    return F.split(bit_ops(B), S, tile_of, q, k, sink)
 
 
 FlashMlaSplitV2 = flat("FlashMlaSplit", 2, ["NB", "D", "BN", "PARTIAL", "DOT", "SCALE"], lambda S: F._split_type(S, BIT_T), _split,

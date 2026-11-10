@@ -1,12 +1,57 @@
 module
 
-public import Flock.JsonParse
+public import Aesop.BuiltinRules
+public import Batteries.Tactic.OpenPrivate
 public import Flock.Canon
+public import Flock.JsonParse
+public import Mathlib.Data.Subtype
+public import Mathlib.Tactic.Attr.Core
+public import Mathlib.Tactic.Basic
+public import Mathlib.Tactic.ToAdditive
 public import Proofs.Flock.Claims.Complete.Json.Value
 public import Proofs.Flock.Claims.Complete.Prover.Print
 public import Std.Data.TreeMap.Raw.Lemmas
 public import Std.Data.TreeMap.Raw.WF
-public import Batteries.Tactic.OpenPrivate
+import all Init.Data.Array.QSort.Basic
+import all Init.Data.Int.Repr
+import all Init.Data.Repr
+import all Lean.Data.Json.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.BitVec
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The verifier's parser reads back what the printers print
@@ -35,7 +80,7 @@ open Claims.Json
 
 /-! ## `Array.qsort` permutes -/
 
-theorem loop_perm {α} {n} (lt : α → α → Bool) (lo hi : Nat) (hhi : hi < n) (pivot : α) :
+private theorem loop_perm {α} {n} (lt : α → α → Bool) (lo hi : Nat) (hhi : hi < n) (pivot : α) :
     ∀ (as : Vector α n) (i k : Nat) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi),
     (Array.qpartition.loop lt lo hi hhi pivot as i k ilo ik w).2.Perm as := by
   intro as i k ilo ik w
@@ -64,7 +109,7 @@ theorem qpartition_perm {α} {n} (as : Vector α n) (lt : α → α → Bool) (l
     · exact Vector.swap_perm hi hj
   exact ((sw _ _ _ _ _ _).trans (sw _ _ _ _ _ _)).trans (sw _ _ _ _ _ _)
 
-theorem sort_perm {α} (lt : α → α → Bool) {n} :
+private theorem sort_perm {α} (lt : α → α → Bool) {n} :
     ∀ (as : Vector α n) (lo hi : Nat) (w : lo ≤ hi) (hlo : lo < n) (hhi : hi < n),
     (Array.qsort.sort lt as lo hi w hlo hhi).Perm as := by
   intro as lo hi w hlo hhi

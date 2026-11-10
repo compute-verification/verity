@@ -1,6 +1,5 @@
 module
 
-public import Definitions.Pouw.Dimension.Defs
 public import Definitions.Pouw.Assumptions.Dimension.Assumptions
 public import Definitions.Pouw.Assumptions.NCP.Chain
 

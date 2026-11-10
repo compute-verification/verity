@@ -1,4 +1,4 @@
-"""j10r.py prepare|summarize: `run.py`'s protocol for a drawn J10-R leaf: one leaf of a one-call window over J10-R's
+"""j10r.py prepare|summarize: `run.py`'s protocol for a sampled J10-R leaf: one leaf of a one-call window over J10-R's
 `PouwH1Tile_v5` (16 × 16 by default, ``H1L_RC``) proved as its statements as `pouw.leaf_lanes`' J10-R leaf stages them
 (``j10r``): each lane in `weights.chunks`(K) chunks (`PouwH1LaneZyChunk_v2`, the whole lane `PouwH1LaneZy_v2` at
 n = 1), then `PouwH1Combine_v2`, which folds every lane's and chunk's ok row into the leaf's one ok. Each statement is
@@ -46,13 +46,13 @@ from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E40
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.core.protocols.pouw import leaf_lanes as LL  # noqa: E402
 from verity.core.protocols.pouw import weights as W  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1tile as H  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1window as HW  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1zy as Z  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import produced as PR  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registration as R  # noqa: E402
+from verity.ml.protocols.pouw.circuit import h1tile as H  # noqa: E402
+from verity.ml.protocols.pouw.circuit import h1window as HW  # noqa: E402
+from verity.ml.protocols.pouw.circuit import h1zy as Z  # noqa: E402
+from verity.core.protocols.spot.one_stage import partition as P  # noqa: E402
+from verity.core.protocols.spot.one_stage import produced as PR  # noqa: E402
+from verity.core.protocols.spot.one_stage import registered as G  # noqa: E402
+from verity.core.protocols.spot.one_stage import registration as R  # noqa: E402
 
 RC = tuple(int(x) for x in os.environ.get("H1L_RC", "16x16").split("x"))
 RN.RC = RC

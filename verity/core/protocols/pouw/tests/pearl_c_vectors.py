@@ -21,8 +21,8 @@ from pathlib import Path
 
 from verity.core.protocols.pouw.audit import ROW_SCHEMA, activation_binding, commit_rows, hm96_salt
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, Tile
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
 
 OUT = Path(__file__).with_name("vectors") / "pearl_c.json"
 #: (case, shape, tile rows, tile cols, unit index, weight id, test instance, forming[, hashing])

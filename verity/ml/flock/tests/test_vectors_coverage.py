@@ -5,7 +5,7 @@ which only shrinks. The forms, each read from where the verifier or the agreemen
 - each statement version (`Flock.Tags.all` and `Tags.templated`), covered by a replayable or live set whose
   `lean_statement` it is;
 - each record check (the `S<n>` reasons the verifier writes), covered by an expectation whose `why` names it;
-- each coin mode of a plain session (`--coins`: `seed`, the default, and `os`), covered by a set staged with it;
+- each coin mode of a plain session (`seed`, without `--coins`, and `--coins tree`), covered by a set staged with it;
 - each outcome `agree.py` compares: an accepted and a rejected expectation, an intended divergence (upstream accepts what
   the Lean verifier refuses), each of its `--lean-refuses…` markers on a set, and a set without `--program`
   (`agree.NO_PROGRAM`).
@@ -103,7 +103,7 @@ def accepted(e) -> bool | None:
 
 def forms() -> set[str]:
     return ({f"statement {s}" for s in statements()} | {f"check {c}" for c in checks()}
-            | {"coins seed", "coins os"}
+            | {"coins seed", "coins tree"}
             | {"outcome accepted", "outcome rejected", "outcome upstream_accepted", "outcome no_program"}
             | {f"outcome {k}" for k in refusal_markers()})
 

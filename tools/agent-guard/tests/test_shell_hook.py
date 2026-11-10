@@ -1,5 +1,7 @@
 """`.cursor/hooks.json`'s shell hook refuses commands that print the environment and lets everything else through."""
+import importlib.util
 import json
+import re
 import os
 import shutil
 import subprocess
@@ -36,6 +38,51 @@ def test_cursor_runs_the_hook_on_every_shell_command_and_blocks_if_it_fails():
     (entry,) = json.loads((ROOT / ".cursor/hooks.json").read_text())["hooks"]["beforeShellExecution"]
     assert entry["command"].startswith("sh -c 'h=tools/agent-guard/hook.sh;") and entry["command"].endswith(" guard shell_hook.py")
     assert entry["failClosed"] is True and "matcher" not in entry
+
+
+def guard_module(name: str, monkeypatch):
+    monkeypatch.syspath_prepend(str(HOOK.parent))
+    return importlib.import_module(name)
+
+
+def test_cursor_reads_the_hooks_file_as_its_json_says(monkeypatch):
+    """Cursor reads hooks.json as JSONC, stripping `//...` and `/*...*/` inside strings too. A cache glob `.../*/` in each
+    command deleted the text between the shell hook's `/*` and the next `*/`: Cursor then ran no shell hook (no secret
+    refusal, no inbox delivery) and no Task hook, and ran task_hook.py on shell commands that named Task."""
+    inbox = guard_module("inbox", monkeypatch)
+    text = (ROOT / ".cursor/hooks.json").read_text()
+    assert inbox.as_cursor_reads(text) == json.loads(text)
+    assert sorted(json.loads(text)["hooks"]) == ["beforeShellExecution", "preToolUse", "stop"]
+    old = json.dumps({"version": 1, "hooks": {
+        "beforeShellExecution": [{"command": "ls -td c/*/ | head -1; run shell_hook.py", "failClosed": True}],
+        "preToolUse": [{"command": "ls -td c/*/ | head -1; run task_hook.py", "matcher": m}
+                       for m in ("Task", "CallDynamicTool", "^MCP:")]}})
+    assert inbox.as_cursor_reads(old) == {"version": 1, "hooks": {"beforeShellExecution": [
+        {"command": "ls -td c | head -1; run task_hook.py", "matcher": m} for m in ("Task", "^MCP:")]}}
+
+
+def test_the_shell_hook_judges_a_pretooluse_shell_event_like_a_beforeshellexecution_one():
+    def ask(command):
+        event = {"hook_event_name": "preToolUse", "tool_name": "Shell", "tool_input": {"command": command, "cwd": str(ROOT)}}
+        out = subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True, check=True,
+                             env={**os.environ, "AGENT_GUARD_MIN_AVAIL": "0"}).stdout
+        return json.loads(out)["permission"]
+
+    assert ask("env | cut -d= -f1") == "deny" and ask("ls") == "allow"
+
+
+def test_each_hook_run_records_its_events_key_names_and_never_a_value(event_log):
+    W = "bc-44444444-4444-4444-8444-444444444444"
+    subprocess.run([sys.executable, HOOK], input=json.dumps({"hook_event_name": "beforeShellExecution", "conversation_id": W,
+                                                             "command": "echo not-to-be-copied", "cwd": "/"}),
+                   capture_output=True, text=True, check=True)
+    subprocess.run([sys.executable, HOOK], input="not json", capture_output=True, text=True, check=True)
+    text = event_log.read_text()
+    first, second = (json.loads(ln) for ln in text.splitlines())
+    assert "not-to-be-copied" not in text
+    assert (first["hook"], first["event"], first["conversation_id"]) == ("shell_hook.py", "beforeShellExecution", W)
+    assert first["keys"] == ["command", "conversation_id", "cwd", "hook_event_name"]
+    assert second["keys"] == "str" and second["conversation_id"] is None
 
 
 def test_a_checkout_without_the_guard_runs_the_cached_copy_so_a_branch_switch_cant_lock_the_agent_out(tmp_path):
@@ -104,6 +151,12 @@ def test_a_checkout_without_the_guard_runs_the_cached_copy_so_a_branch_switch_ca
     "ps -f -u research",
     "ps -o args -C git",
     "ps -p 1,2 -o args",
+    "ps -ef --forest | grep -v -E 'xfce|dbus' | tail -30",  # an inverted filter prints every other line
+    "ps -eo pid,etime,args | grep -v kworker",
+    "ps aux | grep -iv lake",
+    "ps aux | rg --invert-match lake",
+    "ps aux | grep --inv lake",
+    "ssh n1 'ps -ef | grep -v grep'",
     "cat /proc/*/cmdline",
     "tmux -f /exec-daemon/tmux.portal.conf show-environment -g | cut -d= -f1",   # a multi-line key's lines
     "tmux show-environment",
@@ -152,6 +205,7 @@ def test_a_command_that_would_print_the_environment_is_refused(command):
     "ps -u research",
     "ps -eo pid,args | grep \"[p]ytest\"",
     "ps aux | rg -i lake",
+    "ps -ef | grep -v grep | grep \"[p]ython\"",
     "ssh n1 'ps -eo pid,args | grep \"[s]lot.py\"'",
     "pgrep -af quick_tier",
     "tmux show-environment -g DISPLAY",
@@ -199,6 +253,10 @@ def test_builds_and_tests_are_refused_on_an_agent_vm_and_light_ones_only_while_i
     passes = ("research run --on auto -- uv run pytest -q", "uv run research run --on m --source . -- lake build",
               "ssh n1 'cd /w && pytest'", "git status", "AGENT_GUARD_LOCAL_OK=1 uv run pytest -q tests/", "rg pytest tools/", "ls")
     meminfo.write_text("MemTotal:       16000000 kB\nMemFree:          100000 kB\nMemAvailable:    6000000 kB\n")
+    for command in ("cd tools/research && python -m pytest -x", "cd t && uv run pytest tests; echo done"):
+        advice = re.search(r"`(research run --on auto -- [^`]+)`", answer(command, **gate)["agent_message"]).group(1)
+        assert advice.startswith("research run --on auto -- bash -lc ") and verdict(advice, **gate) == "allow", \
+            f"the advice for a compound command passes the hook: {advice}"
     for command in always:
         out = answer(command, **gate)
         assert out["permission"] == "deny", command
@@ -212,10 +270,43 @@ def test_builds_and_tests_are_refused_on_an_agent_vm_and_light_ones_only_while_i
         assert "1.9 GiB of 15.3 GiB available" in out["agent_message"] and "research run --on auto" in out["agent_message"]
     for command in passes:
         assert verdict(command, **gate) == "allow", command
-    meminfo.write_text("MemTotal:       16000000 kB\nMemFree:          100000 kB\nMemAvailable:    6000000 kB\n")
-    (cgroup / "memory.max").write_text(f"{8 * 2**30}\n")         # a cgroup limit tighter than the VM: its headroom counts
+    (tmp_path / "vmstat").write_text(f"balloon_inflate {3 * 2**20}\nballoon_deflate {2**20}\n")     # 8 GiB in the balloon
+    assert verdict("uv run pytest -q tests/test_x.py", **gate) == "allow", \
+        "memory the balloon holds is available: the VM gets it back as it asks"
+
+
+def cgroup_gate(tmp_path: Path, stat: str | None) -> dict[str, str]:
+    """The memory gate's overrides for a VM with most of its 15.3 GiB available, under a cgroup limit of 8 GiB with 7 GiB in use
+    whose memory.stat is `stat` (None: there is none)."""
+    meminfo, cgroup = tmp_path / "meminfo", tmp_path / "cg"
+    cgroup.mkdir()
+    meminfo.write_text("MemTotal:       16000000 kB\nMemFree:          100000 kB\nMemAvailable:   14000000 kB\n")
+    (cgroup / "memory.max").write_text(f"{8 * 2**30}\n")
     (cgroup / "memory.current").write_text(f"{7 * 2**30}\n")
-    assert verdict("uv run pytest -q tests/test_x.py", **gate) == "deny"
+    if stat is not None:
+        (cgroup / "memory.stat").write_text(stat)
+    return {"AGENT_GUARD_MEMINFO": str(meminfo), "AGENT_GUARD_MIN_AVAIL": "0.25", "AGENT_GUARD_CGROUP": str(cgroup)}
+
+
+def test_under_a_cgroup_limit_its_inactive_file_cache_counts_as_available(tmp_path):
+    """Under a cgroup limit tighter than the VM, the headroom is taken over the cgroup's working set: memory.current less
+    memory.stat's inactive_file, the file cache the kernel reclaims on demand (as container runtimes count it), so a cache that
+    fills the cgroup doesn't refuse a one-file test run while most of its memory is free; active_file still counts as used."""
+    gate = cgroup_gate(tmp_path, f"anon {2 * 2**30}\nfile {5 * 2**30}\ninactive_file {4 * 2**30}\nactive_file {2**30}\n")
+    assert verdict("uv run pytest -q tests/test_x.py", **gate) == "allow"
+    (tmp_path / "cg" / "memory.stat").write_text(f"anon {2 * 2**30}\nfile {5 * 2**30}\ninactive_file {2**29}\nactive_file {9 * 2**29}\n")
+    out = answer("uv run pytest -q tests/test_x.py", **gate)
+    assert out["permission"] == "deny" and "1.5 GiB of 8.0 GiB available" in out["agent_message"]
+
+
+def test_under_a_cgroup_limit_without_memory_stat_all_of_memory_current_counts(tmp_path):
+    """Where memory.stat can't be read, or names no inactive_file, the headroom is the limit less all of memory.current."""
+    gate = cgroup_gate(tmp_path, None)
+    out = answer("uv run pytest -q tests/test_x.py", **gate)
+    assert out["permission"] == "deny" and "1.0 GiB of 8.0 GiB available" in out["agent_message"]
+    (tmp_path / "cg" / "memory.stat").write_text(f"anon {7 * 2**30}\nfile 0\n")
+    out = answer("uv run pytest -q tests/test_x.py", **gate)
+    assert out["permission"] == "deny" and "1.0 GiB of 8.0 GiB available" in out["agent_message"]
 
 
 @pytest.mark.parametrize("command", [
@@ -267,23 +358,154 @@ def test_a_message_pushed_from_one_vm_is_pulled_and_delivered_on_another_once(tm
     for clone in (coord, worker, other):
         subprocess.run(["git", "clone", "-q", str(origin), str(clone)], check=True, capture_output=True, env=env)
 
+    W = "bc-22222222-2222-4222-8222-222222222222"
+
     def tool(*args, inbox=tmp_path / "unused"):
         return subprocess.run([sys.executable, INBOX_TOOL, *args], env={**env, "AGENT_INBOX": str(inbox)}, check=True,
                               capture_output=True, text=True).stdout
 
-    tool("send", "bc-w", "--text", "restack on main", "--repo", str(coord))
-    tool("send", "bc-w", "--text", "then mark it ready", "--repo", str(coord))
+    tool("send", W, "--text", "restack on main", "--repo", str(coord))
+    tool("send", W, "--text", "then mark it ready", "--repo", str(coord))
     box = tmp_path / "worker-inbox"
-    assert "2 new message(s)" in tool("pull", "bc-w", "--repo", str(worker), inbox=box)
-    assert "0 new message(s)" in tool("pull", "bc-w", "--repo", str(worker), inbox=box)
-    first = hook("ls", "bc-w", box)
+    assert "2 new message(s)" in tool("pull", W, "--repo", str(worker), inbox=box)
+    assert "0 new message(s)" in tool("pull", W, "--repo", str(worker), inbox=box)
+    first = hook("ls", W, box)
     assert first["permission"] == "deny"
     assert "restack on main" in first["user_message"] and "then mark it ready" in first["user_message"]
-    assert hook("ls", "bc-w", box) == {"permission": "allow"}
-    assert "0 new message(s)" in tool("pull", "bc-w", "--repo", str(other), inbox=tmp_path / "other-inbox")
-    tool("send", "bc-w", "--text", "and one more", "--repo", str(coord))
-    assert "1 new message(s)" in tool("pull", "bc-w", "--repo", str(worker), inbox=box)
-    assert "and one more" in hook("ls", "bc-w", box)["user_message"]
+    assert hook("ls", W, box) == {"permission": "allow"}
+    assert "0 new message(s)" in tool("pull", W, "--repo", str(other), inbox=tmp_path / "other-inbox")
+    tool("send", W, "--text", "and one more", "--repo", str(coord))
+    assert "1 new message(s)" in tool("pull", W, "--repo", str(worker), inbox=box)
+    assert "and one more" in hook("ls", W, box)["user_message"]
+
+
+def test_a_sender_learns_when_a_target_hook_is_not_taking_its_messages_and_the_target_can_check_its_own_vm(tmp_path, monkeypatch):
+    """One branch held every message for three hours while each `send` said only "pushed". `status` and a later `send` say a
+    message has waited past STALE_S unpulled; `check` on the target's VM says whether its hook polls. Every `send` says a
+    target whose turn ended (one finished before its stop messages reached it) takes nothing until resumed."""
+    origin, coord, worker = (tmp_path / n for n in ("origin.git", "coord", "worker"))
+    env = {**os.environ, **GIT_ENV}
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True, capture_output=True, env=env)
+    for clone in (coord, worker):
+        subprocess.run(["git", "clone", "-q", str(origin), str(clone)], check=True, capture_output=True, env=env)
+    W = "bc-33333333-3333-4333-8333-333333333333"
+
+    def tool(*args, inbox=tmp_path / "unused", poll="30"):
+        return subprocess.run([sys.executable, INBOX_TOOL, *args], env={**env, "AGENT_INBOX": str(inbox), "AGENT_INBOX_POLL_S": poll},
+                              capture_output=True, text=True)
+
+    assert "is empty" in tool("status", W, "--repo", str(coord)).stdout
+    sent = tool("send", W, "--text", "fresh", "--repo", str(coord))
+    assert "FINISHED or IDLE" in sent.stdout and "resume it with Task" in sent.stdout   # MEMPOOL: a finished target never pulls
+    assert "earlier" not in sent.stderr
+    second = tool("send", W, "--text", "fresh too", "--repo", str(coord))
+    assert "1 earlier message(s) uncollected since" in second.stderr and "NOT DELIVERED" not in second.stderr
+    fresh = tool("status", W, "--repo", str(coord))
+    assert fresh.returncode == 0 and "within its hook's poll interval" in fresh.stdout
+    spec = importlib.util.spec_from_file_location("inbox_tool", INBOX_TOOL)
+    sys.path.insert(0, str(INBOX_TOOL.parent))
+    try:
+        inbox = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(inbox)
+    finally:
+        sys.path.remove(str(INBOX_TOOL.parent))
+    for k, v in GIT_ENV.items():
+        monkeypatch.setenv(k, v)
+    old = "[2026-01-01T00:00Z] abcdefabcdef\nthe 04:33Z heads-up\n\n"
+    inbox.commit(coord, W, old, inbox.tip(coord, W), "an old message")
+    stale = tool("status", W, "--repo", str(coord))
+    assert stale.returncode == 1 and "NOT DELIVERED" in stale.stdout and "2026-01-01T00:00Z" in stale.stdout
+    assert "resumed with Task" in stale.stdout
+    again = tool("send", W, "--text", "one more", "--repo", str(coord))
+    assert again.returncode == 0
+    assert "NOT DELIVERED YET: 1 earlier message(s) uncollected since 2026-01-01T00:00Z: this agent's VM is not pulling" in again.stderr
+    box = tmp_path / "worker-inbox"
+    assert tool("pull", W, "--repo", str(worker), inbox=box).returncode == 0
+    assert "is empty" in tool("status", W, "--repo", str(coord)).stdout
+    shutil.copytree(ROOT / ".cursor", worker / ".cursor")
+    off = tool("check", W, "--repo", str(worker), inbox=tmp_path / "quiet-inbox")
+    assert off.returncode == 1 and "NOT POLLING" in off.stdout and f"inbox/{W}" in off.stdout
+    (box / f"{W}.polled").touch()
+    unseen = tool("check", W, "--repo", str(worker), inbox=box)
+    assert unseen.returncode == 1 and f"PROBLEM: no shell hook has run for {W}" in unseen.stdout
+    hook("ls", W, box)
+    assert tool("check", W, "--repo", str(worker), inbox=box).returncode == 0
+    assert "AGENT_INBOX_POLL_S is off" in tool("check", W, "--repo", str(worker), inbox=box, poll="off").stdout
+
+
+def test_a_coordinators_self_check_sends_itself_a_message_its_next_commands_deliver_and_names_a_hooks_file_cursor_misreads(tmp_path):
+    """`selftest` is delivery end to end: it pushes a message to the agent's own inbox branch and clears its poll mark, so its
+    next command's hook pulls it and the one after is refused with it. It also says, at once, when Cursor reads no shell hook
+    here or this agent's hook has never run."""
+    origin, vm = tmp_path / "origin.git", tmp_path / "vm"
+    env = {**os.environ, **GIT_ENV}
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True, capture_output=True, env=env)
+    subprocess.run(["git", "clone", "-q", str(origin), str(vm)], check=True, capture_output=True, env=env)
+    A, box = "bc-55555555-5555-4555-8555-555555555555", tmp_path / "inbox"
+    shutil.copytree(ROOT / ".cursor", vm / ".cursor")
+    box.mkdir()
+    (box / f"{A}.polled").touch()
+
+    def selftest(*args):
+        return subprocess.run([sys.executable, INBOX_TOOL, "selftest", *args, "--repo", str(vm)], capture_output=True,
+                              text=True, env={**env, "AGENT_INBOX": str(box), "CURSOR_CONVERSATION_ID": A})
+
+    hook("true", A, box)
+    ok = selftest()
+    token = re.search(r"self-check ([0-9a-f]{8}) pushed", ok.stdout)[1]
+    assert ok.returncode == 0 and "PROBLEM" not in ok.stdout, ok.stdout + ok.stderr
+    assert not (box / f"{A}.polled").exists(), "the next command's hook pulls at once"
+    subprocess.run([sys.executable, INBOX_TOOL, "pull", A, "--repo", str(vm)], check=True, capture_output=True,
+                   env={**env, "AGENT_INBOX": str(box)})
+    delivered = hook("true", A, box)
+    assert delivered["permission"] == "deny" and f"inbox self-check {token}" in delivered["agent_message"]
+
+    hooks = vm / ".cursor/hooks.json"
+    hooks.write_text(hooks.read_text().replace("/[0-9a-f]*/", "/*/"))
+    other = "bc-66666666-6666-4666-8666-666666666666"
+    bad = selftest(other)
+    assert bad.returncode == 1 and f"pushed to origin's inbox/{other}" in bad.stdout
+    assert f"PROBLEM: Cursor reads {hooks.resolve()} otherwise than its JSON says" in bad.stdout
+    assert "the steps beforeShellExecution, stop" in bad.stdout and "PROBLEM: Cursor reads no shell hook" in bad.stdout
+    assert f"PROBLEM: no shell hook has run for {other}" in bad.stdout
+
+
+STOP_HOOK = ROOT / "tools/agent-guard/stop_hook.py"
+
+
+def stop(conversation: str, inbox: Path, status: str = "completed", roots: tuple[str, ...] = (), poll: str = "off") -> dict:
+    event = {"hook_event_name": "stop", "conversation_id": conversation, "status": status, "loop_count": 0,
+             "workspace_roots": list(roots)}
+    out = subprocess.run([sys.executable, STOP_HOOK], input=json.dumps(event), capture_output=True, text=True, check=True,
+                         env={**os.environ, **GIT_ENV, "AGENT_INBOX": str(inbox), "AGENT_INBOX_POLL_S": poll}).stdout
+    return json.loads(out)
+
+
+def test_a_message_still_queued_when_a_turn_completes_is_its_follow_up_once(tmp_path):
+    """A worker that ends its turn with no further shell command never met the shell hook's refusal, so a message sent after
+    its last command waited until it was resumed by hand. The stop hook hands it to Cursor as the turn's follow-up."""
+    W = "bc-77777777-7777-4777-8777-777777777777"
+    queue(W, "park the PR", tmp_path)
+    assert stop(W, tmp_path, status="aborted") == {}
+    assert stop("bc-other", tmp_path) == {}
+    first = stop(W, tmp_path)
+    assert "park the PR" in first["followup_message"] and "stop hook" in first["followup_message"]
+    assert stop(W, tmp_path) == {}
+    assert hook("ls", W, tmp_path) == {"permission": "allow"}, "delivered once, by whichever hook took it"
+    assert "park the PR" in (tmp_path / f"{W}.delivered").read_text()
+
+
+def test_the_stop_hook_pulls_a_message_pushed_from_another_vm_first(tmp_path):
+    origin, coord, worker = (tmp_path / n for n in ("origin.git", "coord", "agent/repos/verity"))
+    env = {**os.environ, **GIT_ENV}
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True, capture_output=True, env=env)
+    for clone in (coord, worker):
+        subprocess.run(["git", "clone", "-q", str(origin), str(clone)], check=True, capture_output=True, env=env)
+    W = "bc-88888888-8888-4888-8888-888888888888"
+    subprocess.run([sys.executable, INBOX_TOOL, "send", W, "--text", "stop and report", "--repo", str(coord)], check=True,
+                   capture_output=True, env=env)
+    got = stop(W, tmp_path / "inbox", roots=(str(tmp_path / "agent"),), poll="30")
+    assert "stop and report" in got["followup_message"]
 
 
 def test_the_hook_starts_a_pull_at_most_once_per_interval_and_never_when_off(tmp_path):
@@ -301,41 +523,70 @@ def test_the_hook_starts_a_pull_at_most_once_per_interval_and_never_when_off(tmp
     assert ask("30") == {"permission": "allow"} and mark.stat().st_mtime == 10**10, "polled again within the interval"
 
 
+def test_the_pull_runs_from_the_checkout_under_a_root_that_is_not_one(tmp_path):
+    """A Task-launched cloud agent's workspace root is /agent, its checkout /agent/repos/verity: a pull from the root itself
+    fails in git, so that agent's messages never arrive."""
+    (tmp_path / "agent/repos/verity/.git").mkdir(parents=True)
+    (tmp_path / "ws/.git").mkdir(parents=True)
+
+    def checkout(root, cwd):
+        return subprocess.run([sys.executable, "-c", "import sys; sys.path.insert(0, sys.argv[1]); import shell_hook; "
+                               "print(shell_hook.checkout(*sys.argv[2:]))", str(HOOK.parent), root, cwd],
+                              capture_output=True, text=True, check=True).stdout.strip()
+
+    assert checkout(str(tmp_path / "agent"), "/tmp") == str(tmp_path / "agent/repos/verity")
+    assert checkout(str(tmp_path / "ws"), "/tmp") == str(tmp_path / "ws")
+    assert checkout(str(tmp_path / "empty"), "/tmp") == "/tmp"
+    assert checkout("", "/tmp") == "/tmp"
+
+
 def test_a_queued_message_refuses_the_agents_next_command_once_with_the_message_as_its_text(tmp_path):
-    queue("bc-worker", "rebase on main first", tmp_path)
-    queue("bc-worker", "then mark nothing", tmp_path)
-    first = hook("ls", "bc-worker", tmp_path)
+    queue("bc-11111111-1111-4111-8111-111111111111", "rebase on main first", tmp_path)
+    queue("bc-11111111-1111-4111-8111-111111111111", "then mark nothing", tmp_path)
+    first = hook("ls", "bc-11111111-1111-4111-8111-111111111111", tmp_path)
     assert first["permission"] == "deny"
     assert "re-run it exactly as it was" in first["user_message"]
     assert "rebase on main first" in first["user_message"] and "then mark nothing" in first["user_message"]
-    assert hook("ls", "bc-worker", tmp_path) == {"permission": "allow"}
-    assert "rebase on main first" in (tmp_path / "bc-worker.delivered").read_text()
+    assert hook("ls", "bc-11111111-1111-4111-8111-111111111111", tmp_path) == {"permission": "allow"}
+    assert "rebase on main first" in (tmp_path / "bc-11111111-1111-4111-8111-111111111111.delivered").read_text()
 
 
 def test_a_message_is_only_its_agents_and_a_secret_refusal_keeps_it_queued(tmp_path):
-    queue("bc-worker", "hello", tmp_path)
-    assert hook("ls", "bc-other", tmp_path) == {"permission": "allow"}
-    refused = hook("env | cut -d= -f1", "bc-worker", tmp_path)
+    queue("bc-11111111-1111-4111-8111-111111111111", "hello", tmp_path)
+    assert hook("ls", "bc-22222222-2222-4222-8222-222222222222", tmp_path) == {"permission": "allow"}
+    refused = hook("env | cut -d= -f1", "bc-11111111-1111-4111-8111-111111111111", tmp_path)
     assert refused["permission"] == "deny" and "hello" not in refused["user_message"]
-    assert "hello" in hook("ls", "bc-worker", tmp_path)["user_message"]
+    assert "hello" in hook("ls", "bc-11111111-1111-4111-8111-111111111111", tmp_path)["user_message"]
 
 
 def test_the_inbox_list_says_since_when_a_message_is_pending(tmp_path):
-    queue("bc-worker", "first", tmp_path)
-    queue("bc-worker", "second", tmp_path)
-    queue("bc-done", "delivered", tmp_path)
-    hook("ls", "bc-done", tmp_path)
+    queue("bc-11111111-1111-4111-8111-111111111111", "first", tmp_path)
+    queue("bc-11111111-1111-4111-8111-111111111111", "second", tmp_path)
+    queue("bc-33333333-3333-4333-8333-333333333333", "delivered", tmp_path)
+    hook("ls", "bc-33333333-3333-4333-8333-333333333333", tmp_path)
     listed = subprocess.run([sys.executable, INBOX_TOOL, "list"], env={**os.environ, "AGENT_INBOX": str(tmp_path)},
                             check=True, capture_output=True, text=True).stdout.splitlines()
-    stamp = (tmp_path / "bc-worker.md").read_text().splitlines()[0].strip("[]")
-    assert any(x.startswith("pending   bc-worker ") and x.endswith(f"bytes  since {stamp}") for x in listed)
-    assert any(x.startswith("delivered bc-done ") and "since" not in x for x in listed)
+    stamp = (tmp_path / "bc-11111111-1111-4111-8111-111111111111.md").read_text().splitlines()[0].strip("[]")
+    assert any(x.startswith("pending   bc-11111111-1111-4111-8111-111111111111 ") and x.endswith(f"bytes  since {stamp}") for x in listed)
+    assert any(x.startswith("delivered bc-33333333-3333-4333-8333-333333333333 ") and "since" not in x for x in listed)
+
+
+def test_send_refuses_an_id_the_hook_would_never_deliver_to(tmp_path):
+    """The hook reads the whole conversation id, so a message queued under an id prefix was never delivered."""
+    inbox, repo = tmp_path / "inbox", tmp_path / "not-a-checkout"
+    repo.mkdir()
+    for agent in ("bc-prefix", "bc-worker", "../etc/passwd", ""):
+        for where in (["--local"], ["--repo", str(repo)]):
+            p = subprocess.run([sys.executable, INBOX_TOOL, "send", agent, "--text", "x", *where], capture_output=True,
+                               text=True, env={**os.environ, "AGENT_INBOX": str(inbox)})
+            assert p.returncode != 0 and "full agent id" in p.stderr, (agent, where)
+    assert not inbox.exists() and not any(repo.iterdir())
 
 
 def test_an_unreadable_inbox_or_a_path_as_an_id_never_blocks_a_command(tmp_path):
     inbox = tmp_path / "not-a-dir"
     inbox.write_text("")
-    assert hook("ls", "bc-worker", inbox) == {"permission": "allow"}
+    assert hook("ls", "bc-11111111-1111-4111-8111-111111111111", inbox) == {"permission": "allow"}
     assert hook("ls", "../etc/passwd", tmp_path) == {"permission": "allow"}
 
 
@@ -377,6 +628,11 @@ def test_one_agent_per_checkout_switching_another_agents_worktree_or_pushing_its
     subprocess.run([sys.executable, str(ROOT / "tools/agent-guard/worktree_guard.py"), "hand", "coord", "bc-worker"], check=True,
                    capture_output=True, env={**os.environ, **env})
     assert ask("git push origin coord", "bc-worker")["permission"] == "allow"
+    hand = "python3 tools/agent-guard/worktree_guard.py hand coord bc-third"
+    out = ask(hand, "bc-coord")
+    assert out["permission"] == "deny" and "belongs to agent bc-worker" in out["agent_message"], "only the owner hands a branch on"
+    assert ask(hand, "bc-worker")["permission"] == "allow"
+    assert ask("python3 tools/agent-guard/worktree_guard.py hand unregistered bc-third", "bc-coord")["permission"] == "allow"
     assert ask("git checkout lane", "")["permission"] == "allow", "no conversation id: nothing to judge"
 
 
@@ -404,6 +660,14 @@ def test_a_push_that_would_update_main_or_next_and_a_config_that_prints_tokens_a
         assert out["permission"] == "deny" and "HEAD:refs/heads/<your-branch>" in out["agent_message"], command
     assert ask("git push origin main", "")["permission"] == "deny", "whoever runs it"
     for command in ("git push origin HEAD:refs/heads/cursor/mine", "git push -u origin cursor/mine", "git log -1"):
+        assert ask(command)["permission"] == "allow", command
+    for command in ("B=main; git push origin HEAD:refs/heads/$B", 'git push origin "HEAD:$B"', "git push origin $(echo main)",
+                    "git -C $D push origin cursor/mine", "git switch $B", "git checkout -b ${B}x", "git worktree add ../wt -b $B"):
+        out = ask(command)
+        assert out["permission"] == "deny" and "expands only after the guard" in out["agent_message"], command
+    assert ask("git push origin `echo cursor/mine`")["permission"] == "deny"
+    assert ask("git push origin HEAD:refs/heads/$B", "")["permission"] == "deny", "whoever runs it"
+    for command in ('git checkout -- "$F"', 'git log -1 "$REV"', "git push origin HEAD:refs/heads/cursor/mine && echo $?"):
         assert ask(command)["permission"] == "allow", command
     repair = "AGENT_GUARD_PUSH_NEXT_OK='restore next to abc under the queue lock' git push --force-with-lease=next:bad origin abc:next"
     assert ask(repair)["permission"] == "allow"
@@ -446,4 +710,32 @@ def test_a_merge_on_a_vm_that_never_ran_boot_sh_first_gets_the_record_merge_driv
     assert ask("git merge-tree --write-tree --name-only origin/next FETCH_HEAD") == "allow"
     assert driver() == "python3 m.py %O %A %B %P"
     subprocess.run(["git", "-C", str(ws), "config", "merge.lean-audit.driver", "mine"], check=True, env={**os.environ, **GIT_ENV})
-    assert ask("git merge origin/main") == "allow" and driver() == "mine", "a driver already set is left as it is"
+    assert ask("git merge origin/main") == "allow" and driver() == "mine", "without origin/main, one already set stays"
+
+
+def test_a_merge_sets_origin_main_s_merge_drivers_over_an_older_command(tmp_path):
+    """Git runs a driver from the worktree of the side merged into, and a VM keeps the command it was given: one whose
+    command ran that worktree's merge.py merged main's lock into an old branch by the branch's older copy, which collapsed
+    Security's lock to one `reads` group.  So where the repository has origin/main, each record driver whose value differs
+    from origin/main's RECORD_DRIVER is set to it, whatever the checkout's own clone.py says."""
+    ws = tmp_path / "ws"
+    clone_py = ws / "tools/research/src/research/clone.py"
+    clone_py.parent.mkdir(parents=True)
+    env = {**os.environ, **GIT_ENV}
+
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(ws), *args], capture_output=True, text=True, env=env, check=True).stdout.strip()
+    git("init", "-q")
+    clone_py.write_text('RECORD_DRIVER = {"merge.lean-audit.name": "n", "merge.lean-audit.driver": "python3 main.py %O %A %B %P"}\n')
+    git("add", "-A")
+    git("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "-m", "main")
+    git("update-ref", "refs/remotes/origin/main", "HEAD")
+    clone_py.write_text('RECORD_DRIVER = {"merge.lean-audit.driver": "python3 worktree.py %O %A %B %P"}\n')
+    git("config", "merge.lean-audit.driver", "python3 old.py %O %A %B %P")
+    git("config", "merge.lean-audit.name", "n")
+    out = subprocess.run([sys.executable, HOOK], input=json.dumps({"hook_event_name": "beforeShellExecution",
+                                                                     "command": "git merge --no-edit origin/main",
+                                                                     "cwd": str(ws)}),
+                         capture_output=True, text=True, env={**env, "AGENT_GUARD_MIN_AVAIL": "0"}, check=True)
+    assert json.loads(out.stdout)["permission"] == "allow", out.stderr
+    assert git("config", "--get", "merge.lean-audit.driver") == "python3 main.py %O %A %B %P"

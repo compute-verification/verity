@@ -1,4 +1,4 @@
-"""Option A's partials (`served_h1/partials.py`): a drawn leaf's 32 lane partials are `h1tile.reference` split by lane
+"""Option A's partials (`served_h1/partials.py`): a sampled leaf's 32 lane partials are `h1tile.reference` split by lane
 (each lane's `lane_sets` absorbed from its fold keys, its chains' y and z XORs after each set, lanes in order), their
 XOR over lanes is the leaf's receipt as `receipts.call_receipts` and `h1tile.reference` give it and as serving commits
 it under the step's live rows (a dead row block's partials and receipt zero), the batch is the leaves one by one in
@@ -19,9 +19,9 @@ import numpy as np
 import pytest
 import torch
 
-from verity.core.protocols.pouw.circuit import h1tile as HT
-from verity.core.protocols.pouw.circuit import seeds as SD
-from verity.core.protocols.pouw.circuit import segment as SG
+from verity.ml.protocols.pouw.circuit import h1tile as HT
+from verity.ml.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import segment as SG
 
 HERE = Path(__file__).resolve().parents[1] / "served_h1"
 

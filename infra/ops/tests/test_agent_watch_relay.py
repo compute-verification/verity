@@ -1,5 +1,5 @@
 """Infra's relay posts each line the agent watch adds to events.jsonl on the control pod, once, from the offset it last posted;
-what the watch leaves for a person leads with @top and rings @top's inbox."""
+what the watch leaves for a person leads with top's handle and rings top's inbox."""
 import importlib.util
 import json
 import subprocess
@@ -171,8 +171,8 @@ def test_a_stopped_worker_leads_with_its_lanes_handle_and_rings_that_inbox(relay
 
 
 def test_a_worker_whose_lane_no_handle_owns_rings_infra_and_says_so_never_posted_unrung(relay):
-    """#agent-alerts 1792438328.270299 (19 Oct): G2-1, learned from a Task call of proofs' generation 3 after generation 4 took
-    the inbox, was posted with lane '' and no handle, and rang nobody."""
+    """A worker learned from a Task call of a coordinator's older generation, after a newer one took the inbox, is posted
+    under its handle and rings it, never with lane '' and nobody rung."""
     infra, kernels = (relay.slack.tag(relay.slack.entry(relay.REG, h)) for h in ("infra", "kernels"))
     g2, h1, p = ("bc-a8b63bc4-8d5b-53be-aaf8-35339162d81a", "bc-33333333-3333-3333-3333-333333333333",
                  "bc-8f4b652b-17bc-5055-a120-b56940b7c7a9")
@@ -198,7 +198,7 @@ def test_a_worker_whose_lane_no_handle_owns_rings_infra_and_says_so_never_posted
 
 
 def test_runs_whose_sender_no_handle_owns_are_one_post_that_rings_infra(relay):
-    """Before, the watch dropped these to its log ("which no handle owns: not rung", 753 runs of 93 senders on 19 Oct)."""
+    """Runs whose sender no handle owns are posted and rung, never dropped to the watch's log."""
     infra, aede = relay.slack.tag(relay.slack.entry(relay.REG, "infra")), "bc-aede327f-c2cf-5f24-a40a-309e7bb815f4"
     runs = [{"run": "r20261019-052718-24a9", "node": "vy-nebius-2", "sender": f"https://cursor.com/agents/{aede}",
              "what": "r20261019-052718-24a9", "rc": 8, "state": "failed", "after": "6 s", "at": "2026-10-19T05:28:12Z"},
@@ -227,7 +227,7 @@ def test_a_wake_cursor_refuses_with_409_posts_nothing(relay):
 
 
 def test_a_silent_coordinator_rings_top(relay):
-    """TOP-90 row 37: memory-accounting's coordinator hung 01:47-04:39Z, and only its own handle was rung."""
+    """A silent coordinator rings top, not only its own handle, which can't answer while it hangs."""
     co = PROOFS_INBOX["holder"]
     rec = {"kind": "silent", "agent": co, "name": "verity: proofs", "run": "run-r", "handle": "proofs", "lane": "proofs",
            "minutes": 60, "active_minutes": 300, "window": 1, "since": "2026-10-26T02:00:00Z", "owner": "top"}
@@ -302,7 +302,7 @@ def test_a_silent_agent_and_an_ended_run_lead_with_the_records_handle_and_ring_i
 
 
 def test_a_run_whose_sender_is_in_a_turn_is_posted_and_rings_no_one(relay):
-    """INF-277: the leads' survey (27 Oct 02:00Z) put run-end rings at most of their inboxes. A sender ACTIVE at its run's end
+    """Run-end rings would be most of the leads' inboxes. A sender ACTIVE at its run's end
     sees the end itself; one that then idles is resumed by the watch (`idle_after_run`), so nobody is rung."""
     w, co = "bc-22222222-2222-2222-2222-222222222222", PROOFS_INBOX["holder"]
     relay.log_text["text"] = "\n".join(json.dumps(r) for r in [
@@ -348,9 +348,8 @@ def test_a_ring_run_that_fails_leaves_the_alert_posted_once(relay):
 
 
 def test_a_record_the_relay_cant_render_goes_to_infra_as_raw_json_never_a_sentence_of_question_marks(relay):
-    """#agent-alerts 20:14:59Z, 19 Oct: "*Agent watch:* run 6 runs (?) of lane None ended rc=? after ? on ?." was the watch's
-    grouped unknown-sender record through a relay that didn't know it. Now this relay renders it, and anything it doesn't know,
-    or that lacks what its sentence reads, is posted raw to @infra."""
+    """The watch's grouped unknown-sender record renders as a sentence, never as "run 6 runs (?) of lane None ended rc=?",
+    and a record this relay doesn't know, or that lacks what its sentence reads, is posted raw to infra."""
     infra = relay.slack.tag(relay.slack.entry(relay.REG, "infra"))
     grouped = {"t": "2026-10-19T20:18:45Z", "kind": "run_ended", "agent": "", "name": "", "run": "r20261019-195914-0b94",
                "handle": None, "role": "unknown", "count": 1, "runs": [
@@ -424,7 +423,7 @@ def test_a_failure_the_watch_acted_on_leads_with_its_owner_and_rings_that_inbox(
 
 
 def test_a_renamed_handle_is_rung_by_its_new_name(relay):
-    """hash became kernels on 18 Oct; lanes' notes and workers.d still carry hash."""
+    """A renamed handle (hash, now kernels) is rung by its new name; lanes' notes and workers.d may still carry the old."""
     assert relay.RENAMED.get("hash") == "kernels"
     relay.log_text["text"] = json.dumps({"kind": "worker_idle", "agent": "bc-x", "name": "H1", "run": "", "lane": "hash",
                                          "handle": "hash", "at": "2026-10-18T20:06:00Z"}) + "\n"
@@ -433,7 +432,7 @@ def test_a_renamed_handle_is_rung_by_its_new_name(relay):
 
 
 def test_workers_that_stopped_together_are_one_post_to_the_lane_naming_each_and_its_wake_up(relay):
-    """INF-126: 14 of proofs' workers stopped within 14 min. One post leads with @proofs and rings its inbox once, naming each
+    """Many of one lane's workers stopping together make one post that leads with the lane's handle and rings its inbox once, naming each
     worker and the wake-ups two said they set; a lone worker's record carries its wake-up too."""
     proofs, co = relay.slack.tag(relay.slack.entry(relay.REG, "proofs")), PROOFS_INBOX["holder"]
     names = ["REC1", "G2-1", "REC2", "G2-7", "ZKS10", "M18b", "G2-4", "INT7", "KSF1", "FIX2595", "G2-3", "G2-2", "G2-6", "G2-8"]
@@ -460,7 +459,7 @@ def test_workers_that_stopped_together_are_one_post_to_the_lane_naming_each_and_
 
 
 def test_a_run_its_own_lane_cancelled_and_a_relaunch_declined_are_posted_quietly_and_ring_no_one(relay):
-    """INF-141 (b): a run its lane cancelled ended rc=143 by its own hand: no "resume it", no ring, no handle tagged. A relaunch
+    """A run its lane cancelled ended rc=143 by its own hand: no "resume it", no ring, no handle tagged. A relaunch
     the watch declined (the worker reported back) is the same: on record in the channel, nothing for anyone to do."""
     w = "bc-6f3f0e29-409b-53b4-9bb0-5f9d68b71c23"
     relay.log_text["text"] = "\n".join(json.dumps(r) for r in [
@@ -498,7 +497,7 @@ def test_a_listed_workers_run_end_says_the_watch_resumes_it(relay):
 
 
 def test_a_restart_never_posts_a_line_again_even_with_its_offset_lost(relay):
-    """INF-141 (a): the sent-set beside the offset keeps each line posted; a relay restarted from offset 0 (a lost or reset
+    """The sent-set beside the offset keeps each line posted; a relay restarted from offset 0 (a lost or reset
     offset file, a new pod tree) skips every line it already posted and posts only the new one."""
     relay.log_text["text"] = line("run-1") + "\n" + line("run-2") + "\n"
     relay.once()
@@ -510,7 +509,7 @@ def test_a_restart_never_posts_a_line_again_even_with_its_offset_lost(relay):
 
 
 def test_a_slack_read_cut_short_skips_the_doorbells_and_still_posts(relay, monkeypatch):
-    """22:21Z 19 Oct: conversations.replies came back short (http.client.IncompleteRead, no OSError) and the relay exited."""
+    """A short conversations.replies answer (http.client.IncompleteRead, no OSError) doesn't stop the relay."""
     def short(api, now):
         raise relay.http.client.IncompleteRead(b"x" * 10, 5)
     monkeypatch.setattr(relay, "bells", short)
@@ -520,7 +519,7 @@ def test_a_slack_read_cut_short_skips_the_doorbells_and_still_posts(relay, monke
 
 
 def test_a_holder_held_unread_is_posted_and_rings_top(relay):
-    """top, 24 Oct 21:50Z: a holder that sat in a streaming worker's call for an hour rings @top."""
+    """A holder that sat in a streaming worker's call for an hour rings top."""
     top = relay.slack.tag(relay.slack.entry(relay.REG, "top"))
     co = PROOFS_INBOX["holder"]
     relay.log_text["text"] = json.dumps(

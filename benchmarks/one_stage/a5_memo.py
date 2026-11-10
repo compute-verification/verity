@@ -1,7 +1,7 @@
 """a5's checks by the verifier, each asked once per input (`memo`, which `a5.main` runs under, each audit's summary.json
 counting the checks asked and reused as ``verifier_checks``): a check the verifier answered is reused while every argument
-it reads is the same, so the negatives' fresh streams, which register the honest registration and draw the honest sample
-on its bytes, don't send the window's whole registration to the Lean verifier of record again.
+it reads is the same, so the negatives' fresh streams, which register the honest registration and sample the honest sample
+on its bytes, don't send the window's whole registration to the Lean verifier again.
 
 Each of `PURE`'s checks is a function of its arguments on both sides (the Lean's piece and the Python beside it), so the
 same arguments are the same verdict. A check is keyed by the SHA-512 of its name, `verifier.RECORD_VERDICT` and every
@@ -25,8 +25,8 @@ from typing import Any, Callable, Iterator
 
 from verity.ml.circuits.codec import canonical_json, program_digest
 from verity.ml.circuits.program import Program
-from verity.core.protocols.sampled_proofs.one_stage import verifier as V
-from verity.core.protocols.sampled_proofs.one_stage.verdict import Verdict
+from verity.core.protocols.spot.one_stage import verifier as V
+from verity.core.protocols.spot.one_stage.verdict import Verdict
 
 PURE = ("check", "check_public", "select", "audit_record")
 

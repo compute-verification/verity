@@ -6,11 +6,11 @@ import torch
 
 from verity.ml.circuits.refs import Coll
 from verity.ml.circuits.types import Array, Value
-from verity_vllm.program.frontend.derive import Alloc
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import call_args, dtype_is, from_rows, rows_of, scalar_kind, shape
+from verity_vllm.program.frontend.rules.common import (and_mul_operands, call_args, dtype_is, from_rows, row_value, rows_of, scalar_kind,
+                                                      shape)
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
-from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, _row_value, aten
+from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, aten
 from verity.ml.definitions.registry.dsv4_moe import limit_bits
 
 
@@ -51,7 +51,7 @@ class ScalarTensorMulRule(OpRule):
         if ops is None:
             return f"neither operand is a scalar tensor (shapes {shape(ctx, node.args[0])} x {shape(ctx, node.args[1])})"
         x, sc = ops
-        r = _row_value(ctx, x, "x")
+        r = row_value(ctx, x, "x")
         if r:
             return r
         if not dtype_is(ctx, sc, BF16):
@@ -70,20 +70,6 @@ class ScalarTensorMulRule(OpRule):
         ctx.record(self, node, {"N": N, "rows": len(rows), "scalar_shape": list(shape(ctx, sc))}, emitted=f"{fn.id} x{len(rows)}")
 
 
-def _and_mul_operands(node, ctx):
-    """An `act_and_mul` kernel's `(out!, x[.., 2I])`: x a bf16 row value, out an allocation (or value) of [.., I]."""
-    out, x = node.args[:2]
-    r = _row_value(ctx, x, "x")
-    if r:
-        return r
-    if not isinstance(ctx.val(out), (Alloc, Coll)):
-        return "out is not an allocation/value"
-    xs, os_ = shape(ctx, x), shape(ctx, out)
-    if xs[-1] % 2 or os_ != xs[:-1] + (xs[-1] // 2,):
-        return f"out {os_} vs x {xs}"
-    return True
-
-
 class GeluTanhAndMulRule(InPlaceRule):
     """`_C.gelu_tanh_and_mul(out!, x[.., 2I])` -> `gelu_tanh_mul{I}` (GeluTanhMul_v1) per row; `out` is rebound (mirrors SiluAndMul)."""
     modes = frozenset({"profile"})
@@ -95,7 +81,7 @@ class GeluTanhAndMulRule(InPlaceRule):
         return targets_for("gelu_tanh_and_mul")
 
     def applies(self, node, ctx):
-        return _and_mul_operands(node, ctx)
+        return and_mul_operands(node, ctx)
 
     def emit(self, node, ctx):
         out, x = node.args[:2]
@@ -131,7 +117,7 @@ class SiluAndMulWithClampRule(InPlaceRule):
             return f"numerics_unregistered: {e}"
         if not ctx.vocab.has("silu_mul_clamp"):
             return "numerics_unregistered: the vocabulary has no silu_mul_clamp (SiluMulClamp_v1{I,LIMIT})"
-        return _and_mul_operands(node, ctx)
+        return and_mul_operands(node, ctx)
 
     def emit(self, node, ctx):
         a = call_args(node)
@@ -155,7 +141,7 @@ class Bf16ScalarChainRule(OpRule):
 
     def applies(self, node, ctx):
         x = node.args[0]
-        r = _row_value(ctx, x, "x")
+        r = row_value(ctx, x, "x")
         if r:
             return r
         if node.target is aten.tanh.default:

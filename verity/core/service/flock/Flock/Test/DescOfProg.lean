@@ -8,6 +8,7 @@ its refusal. Each program lists its callees in another order than the decoder nu
 -/
 module
 
+public import Flock.TemplateQuery
 public import Flock.Test.RegProgram
 meta import Flock.Test.RegProgram
 

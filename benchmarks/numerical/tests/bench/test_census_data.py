@@ -158,7 +158,7 @@ def test_every_target_is_a_subcircuit_bound_to_its_exact_instruction() -> None:
 
 def test_every_subcircuit_is_bound_to_a_registry_instruction() -> None:
     """Every subcircuit's semantics is an exact instruction of the registry, with its operand datatype and a stable id; a
-    subcircuit need not have a (legacy) target: the H100 BF16 wgmma one (lane wgmma-bf16) came after the targets froze."""
+    subcircuit need not have a (legacy) target: the H100 BF16 wgmma one came after the targets froze."""
     gemm = [s for s in census.SUBCIRCUITS.values() if s.template == "gemm-coordinate"]
     for s in gemm:
         ins = INSTRUCTIONS[s.parameters.semantics]
@@ -226,7 +226,7 @@ def test_workloads_are_the_regression_rows_template_mix() -> None:
     assert (r101.vus, gemm, r101.model.name, r101.serving.hardware_class) == (46558, 18400, "Llama-3.2-1B", "l40s")
 
 
-#: bench-spine's input-set generator keys on these template ids (cursor/bench-spine-5777, bench/templates.py); the census must
+#: bench-spine's input-set generator keys on these template ids (`verity_flock.subcircuit_templates`); the census must
 #: name them alike.
 BENCH_SPINE_TEMPLATES = {"gemm-coordinate", "attention-head", "rope-head", "rmsnorm-fused-cuda", "rmsnorm-triton", "silu-mul",
                          "gumbel-top-p-token-select"}
@@ -249,7 +249,7 @@ def test_the_l40s_line_is_the_datasheets_dense_peak() -> None:
     assert "accumulate" in bf16.methodology and bf16.name == "L40S"
 
 
-#: Bound subcircuit ids as bench-spine's generator writes them (bench/templates.py: GEMM, FA2 head, RoPE, the row templates with
+#: Bound subcircuit ids as bench-spine's generator writes them (`verity_flock.subcircuit_templates`: GEMM, FA2 head, RoPE, the row templates with
 #: a float EPS slug) and as the other census templates bind: every one must validate.
 BOUND_ID_EXAMPLES = (
     "gemm-coordinate/k1536/sm90-wgmma-e4m3", "gemm-coordinate/k2048/sm80-mma-bf16", "gemm-coordinate/k2560/sm90-wgmma-bf16",
@@ -318,7 +318,7 @@ def test_every_template_carries_a_work_model() -> None:
 
 def test_memory_bound_templates_carry_a_bandwidth_work_model_and_the_h100_its_bandwidth() -> None:
     """The four non-GEMM templates Flock has cells on: bytes per input over their ports (bench-spine's templates), evaluated at
-    their #101 bindings; the H100's HBM3 bandwidth is the denominator."""
+    their row 101 bindings; the H100's HBM3 bandwidth is the denominator."""
     want = {"rope-head/d64/neox-bf16": 6 * 64, "silu-mul/i8192/bf16": 6 * 8192, "rmsnorm-fused-cuda/n2048-eps1e-05/bf16": 10 * 2048,
             "rmsnorm-triton/n2048-eps1e-05/bf16": 6 * 2048}
     for sid, nbytes in want.items():

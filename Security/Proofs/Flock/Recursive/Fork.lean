@@ -1,7 +1,8 @@
 module
 
 public import Proofs.Flock.Recursive.Defs
-public import Proofs.Flock.Soundness.StrictCR
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Recursion: binding a stage to a reference opening fixed before its coin

@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.Remote.Run
 public import Definitions.Accounting.RateAuditDeployed
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The deployed game's session as a run of the remote audit (trusted)

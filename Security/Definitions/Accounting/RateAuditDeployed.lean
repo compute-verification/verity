@@ -9,7 +9,7 @@ public import Definitions.Accounting.RateAuditPooled
 
 The game the composed guarantee (`Definitions/Accounting/Guarantees/RateAuditDeployed.lean`) is about: a session of `n`
 windows on one store, each window `P` chained passes seeded by Fiat–Shamir, which the prover may grind, closed by one
-pooled draw of `d` openings. It puts together what the pieces state separately:
+pooled sample of `d` openings. It puts together what the pieces state separately:
 
 * **the chip** (`PIChip`) is `RateAuditInteractive.lean`'s, with sends and side sources that answer what it sent, and
   with `RateAuditPartial.lean`'s partial completion in place of the all-or-nothing rebuild: `complete j x g` obtains
@@ -21,14 +21,28 @@ pooled draw of `d` openings. It puts together what the pieces state separately:
 * **the window** (`DeployedWindow`) is `RateAuditRemote.lean`'s `GrindChain` of such devices: pass `j`'s root is one
   of `G` candidates the earlier passes' coins and the store fix, picked as any function of pass `j`'s whole oracle
   family, and pass `j`'s device may depend on the pick;
+<<<<<<< ours
 * **the session** (`DeployedSession`) is `RateAuditPooled.lean`'s `Session` of such windows: window `w`'s prover is
   any function of the earlier windows' coins, their draws among them, and each window draws `d` of its `P·N`
+||||||| base
+* **the session** (`DeployedSession`) is `RateAuditHorizon.lean`'s `Session` of such windows: window `w`'s prover is
+  any function of the earlier windows' coins, their draws among them, and each window draws `d` of its `P·N`
+=======
+* **the session** (`DeployedSession`) is `RateAuditHorizon.lean`'s `Session` of such windows: window `w`'s prover is
+  any function of the earlier windows' coins, their samples among them, and each window samples `d` of its `P·N`
+>>>>>>> theirs
   receipts after its last root (`WindowCoins`).
 
 A receipt is the oracle's tag `H(σ, R, j, E_j)` of the whole word; the deployed receipt hashes a 16-row sketch of it,
 which this game does not model (the PR's gap list). What the guarantee charges for each route to a word without
 reading it is a named term of `γ` (`muChip`, `muLink`, `muRebuild`, `muLambda`), each a fraction of a pass's `N·b`
+<<<<<<< ours
 bits; the draw's shortfall is `d̄` over the monitoring period and `d_w` in a window.
+||||||| base
+bits; the draw's shortfall is `d̄` over the horizon and `d_w` in a window.
+=======
+bits; the sample's shortfall is `d̄` over the horizon and `d_w` in a window.
+>>>>>>> theirs
 -/
 
 @[expose] public section
@@ -201,7 +215,7 @@ def oracle (A : DeployedWindow P N b h ρ S L q r s G) (j : Fin P) (E : Store N 
     (ω : Fin P → PassCoins N b h ρ r s) : Oracle N b h ρ :=
   (ω j).2.1 (A.cand j (fun i => ω i.1) E (A.kept j E ω))
 
-/-- The window's correct receipts, as the (pass, word) pairs whose opening its pooled draw passes. -/
+/-- The window's correct receipts, as the (pass, word) pairs whose opening its pooled sample passes. -/
 def correctAll (A : DeployedWindow P N b h ρ S L q r s G) (E : Store N b) (ω : Fin P → PassCoins N b h ρ r s) :
     Finset (Fin P × Fin N) :=
   Finset.univ.filter (fun p => p.2 ∈ (A.dev p.1 E ω).correct E (ω p.1).1 (A.oracle p.1 E ω))
@@ -214,8 +228,8 @@ def reads {τ : ℕ} (A : DeployedWindow P N b h ρ S L q r s G) (tier : ℕ →
 
 end DeployedWindow
 
-/-- A deployed session of `n` windows on one store, each closed by its pooled draw of `d` openings: window `w`'s prover
-is any function of the earlier windows' coins, their draws among them. -/
+/-- A deployed session of `n` windows on one store, each closed by its pooled sample of `d` openings: window `w`'s prover
+is any function of the earlier windows' coins, their samples among them. -/
 structure DeployedSession (n P N b h ρ S L q r s d G : ℕ) where
   window : (w : Fin n) → ({v : Fin n // v < w} → WindowCoins P N b h ρ r s d) → DeployedWindow P N b h ρ S L q r s G
 
@@ -248,7 +262,7 @@ noncomputable def muRebuild (N b rounds cRoot F : ℕ) : ℝ := (rebuildBits b r
 /-- `μ_λ`: the compression slack `λ` a pass, as a fraction of the pass's `N·b`. -/
 noncomputable def muLambda (N b lam : ℕ) : ℝ := lam / (N * b)
 
-/-- A pass's `γ` beside the draw: `μ_chip + μ_link + μ_rebuild + μ_λ`. -/
+/-- A pass's `γ` beside the sample: `μ_chip + μ_link + μ_rebuild + μ_λ`. -/
 noncomputable def gammaPass (N b ρ S L lam rounds cRoot F : ℕ) : ℝ :=
   muChip N b S + muLink N b ρ L + muRebuild N b rounds cRoot F + muLambda N b lam
 

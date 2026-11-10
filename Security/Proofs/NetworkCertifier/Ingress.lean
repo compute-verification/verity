@@ -1,6 +1,10 @@
 module
 
 public import Proofs.NetworkCertifier.Advice
+public import Definitions.NetworkCertifier.Ingress
+import Mathlib.Data.Sym.Sym2.Init
+import Proofs.NetworkCertifier.Counting
+import Proofs.NetworkCertifier.Occupancy
 
 /-!
 # The ingress timing bound

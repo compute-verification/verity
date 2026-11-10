@@ -1,6 +1,10 @@
 module
 
 public import Proofs.Flock.Claims.Bridge.Dead
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import VCVio.Prelude.Core
 
 /-!
 # The simulation's returns are the decoded live outcomes

@@ -1,7 +1,7 @@
 module
 
 public import PouwCommit.Tagged
-public import Identity.Domains
+public import Identity.Domains.Pouw
 
 /-!
 # The protocol's bindings (`verity.core.protocols.pouw.audit`)
@@ -10,9 +10,17 @@ What each of the protocol's trees is bound to, and the one root over the weights
 
     weight_binding(w)            = tagged("verity/pouw/weight-rows/v1", w)
     activation_binding(salt, i)  = tagged("verity/pouw/activation-rows/v1", salt, i)
+<<<<<<< ours
     fold_roots(tag, roots)       = tagged(tag, w₀, root₀, w₁, root₁, …)                       in increasing w
     weights_root(roots)          = fold_roots("verity/pouw/weights/v1", roots)
     transcript_binding(epoch)    = tagged("verity/pouw/transcript/v1", epoch.salt, epoch.weights_root)
+||||||| base
+    weights_root(roots)          = tagged("verity/pouw/weights/v1", w₀, root₀, w₁, root₁, …)   in increasing w
+    transcript_binding(epoch)    = tagged("verity/pouw/transcript/v1", epoch.salt, epoch.weights_root)
+=======
+    weights_root(roots)          = tagged("verity/pouw/weights/v1", w₀, root₀, w₁, root₁, …)   in increasing w
+    transcript_binding(execution phase)    = tagged("verity/pouw/transcript/v1", epoch.salt, epoch.weights_root)
+>>>>>>> theirs
 -/
 
 @[expose] public section

@@ -32,12 +32,13 @@ from typing import Any, Iterable, Sequence
 
 import numpy as np
 
+from verity.ml.circuits.codec import definition_digest
 from verity.ml.circuits.defs import bind
 
 from verity_vllm.config import option
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.pipeline.vu_export import template_of
-from verity.ml.definitions.encoding import definition_digest, encode_specialization, word_values
+from verity.ml.definitions.encoding import encode_specialization, word_values
 from verity.ml.definitions import word as word_query
 from verity_vllm.query.program_view import ProgramView, _read_instance_header, from_instances, iter_instance_rows, spec_base, spec_statics
 
@@ -522,7 +523,7 @@ _WORD_FIELDS = ("units_per_call", "gates", "committed_interior_words", "free_gat
 def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0, *, log=None, substitute: dict[str, Any] | None = None,
                     max_gates: str | None = None) -> dict[str, Any]:
     """`g` with each group's `Q_word_v1` rule (`word_query.unit_rule` of its specialization: units, gates, free gates and committed
-    interior words per Call, the unit classes -- kind, first boundary gate's primitive and activation, gates per unit, |out(S)|, the
+    interior words per Call, the size classes -- kind, first boundary gate's primitive and activation, gates per unit, |out(S)|, the
     primitives of one unit -- and the violations) and the row's totals, with `taps`: every committed interior value class of the row by
     (activation family, primitive), its words and bytes, where serving commits it today (`word_query.committed_today`) or the kernel a
     new tap goes in.  A varying group (attention's T) is partitioned at every recorded value, or at its key-block boundaries with the
@@ -641,7 +642,7 @@ def catalog(graph_dir: str | Path) -> dict[str, Any]:
         defs, ids = definitions(roots)
         dig: dict[str, str] = {}
         for k, d in defs.items():
-            h = dig[k] = definition_digest(d)
+            h = dig[k] = definition_digest({f: v for f, v in d.items() if f != "fold"})  # the fold hints are the graph's, not the entry's
             shards.setdefault(h[:2], {})[h] = {"id": k, "definition": d}
             e = index.setdefault(k, {"digest": h, "form": d.get("form"), "rows": []})
             if row not in e["rows"]:
@@ -659,7 +660,7 @@ def catalog(graph_dir: str | Path) -> dict[str, Any]:
         with gzip.open(root / "definitions" / f"{p2}.json.gz", "wt") as fh:
             json.dump(m, fh, separators=(",", ":"))
     (root / "definitions" / "index.json").write_text(json.dumps({"schema": f"{SCHEMA}/definitions", "shard": "definitions/<digest[:2]>.json.gz",
-                                                                 "digest": "sha256 of the definition's canonical JSON (verity.ml.circuits.codec.canonical_json), fold hints excluded",
+                                                                 "digest": "the definition's digest (verity.ml.circuits.codec.definition_digest, PROTOCOL.md 4.8)",
                                                                  "definitions": index}, separators=(",", ":")) + "\n")
     return index
 

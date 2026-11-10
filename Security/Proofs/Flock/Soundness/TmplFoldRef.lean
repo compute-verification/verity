@@ -1,9 +1,13 @@
 module
 
+public import Proofs.Flock.Level3.Fold
+public import Proofs.Flock.Level3.FoldStmt
 public import Proofs.Flock.Level3.FoldedBase
 public import Proofs.Flock.Soundness.SparseRows
-public import Flock.TmplFold
-public import Flock.NetAt
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Level3.Assembly
+import Proofs.Flock.Level3.Nodes
 
 /-!
 # The template fold's reference, in closed form

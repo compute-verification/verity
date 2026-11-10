@@ -15,6 +15,8 @@ at most `2^-k` (`card_rows_le`). `nonCollision` is `Accounting.Guarantees.Sketch
 
 @[expose] public section
 
+open Verity.Game renaming prPMF → prob
+
 namespace Accounting.TagProofs
 
 open Accounting.Tag Finset

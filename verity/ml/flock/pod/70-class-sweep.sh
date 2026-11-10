@@ -6,8 +6,10 @@
 # one, or either, outside the token-select Calls.
 # env: BINARY= PYBIN= (skip the build and the venv: a local dry run)
 #      GRAPH=path/to/<row>.program.json | DEFS=path/to/defs.json | PROGRAM=path/to/module.py:FUNC (a Program's Calls)  SHAPES=path/to/shapes.txt
+#      RESOLVER=path/to/module.py:FUNC (GRAPH and DEFS name Definitions by id: FUNC(id) is the registered Definition an id names,
+#      class_statement --resolver; refused without one)
 #      PARTITION=q-word (partition_units' spec; q-template-instance: a population program's instances, each one unit)
-#      FLOCK_DRAW_LAW=path/to/law.json (each session proves the units the verifier samples by this law at Register: serve --draw-law)
+#      FLOCK_DRAW_LAW=path/to/law.json (each session proves the units the verifier samples by this sampling design at Register: serve --draw-law)
 #      SELECT=table-free  MODULES= (a module-path prefix)
 #      BATCH=auto  WARM=1  RUNS=3  SELFTEST=25  JOBS=1 (shapes staged in parallel)  GPU=1  SM (from nvidia-smi)  PORT=7710
 #      SELFTEST_GPU=1 (the selftests on the GPU, its paths against each other and the CPU's included)  SELFTEST_CASES=a,b (only these)
@@ -30,12 +32,18 @@
 #      for a prover in another pod that runs with FC_VERIFIERS=DIR; give SM)  SERVE_POINTS=1 (with SERVE_ONLY: that many provers'
 #      sessions, one prover after another, on the same verifier processes)
 #      BUILD_ONLY=1 (build, print BINARY= and SELFTEST_BINARY= and stop; give SM without a GPU)
-#      FC_COINS=os (M0's sessions on per-round OS coins: no seed, no PRF; seed: the binary's default, M0's step-0 seed). A verifier
-#      pod runs this script too, so both sides agree; a selftest build seeds whatever it says
+#      FC_COINS=tree (M0's sessions on the keyed coin tree; empty: M0's step-0 seed, which the Lean verifier refuses). A
+#      verifier pod runs this script too, so both sides agree; a selftest build seeds whatever it says
+#      FLOCK_CHALLENGER=1 (with FC_COINS=tree or FLOCK_ZK=1, the default: each verifier process takes its sessions' coin trees
+#      from its own challenger, pod/challenger.sh, and its records are held to the challenger's release log; class_statement's
+#      record names each challenger's exit and audit, and a point passes only if they all do)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
-export FC_COINS=${FC_COINS:-os}
+export FC_COINS=${FC_COINS:-tree}
+if [ "$FC_COINS" = tree ] || [ "${FLOCK_ZK:-0}" = 1 ]; then export FLOCK_CHALLENGER=${FLOCK_CHALLENGER:-1}; else export FLOCK_CHALLENGER=0; fi
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/fcs}/out}; W=${FLOCK_WORK:-/workspace}/flock-circuit; mkdir -p $O $W
+[ "${BUILD_ONLY:-0}" = 1 ] || [ -n "${PROGRAM:-}" ] || [ -n "${RESOLVER:-}" ] \
+  || { echo "REFUSED: GRAPH and DEFS name Definitions by id: RESOLVER=MODULE:FUNC binds them (FUNC(id), the registered Definition)"; exit 2; }
 G=${GPU:-1}
 SM=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}; SM=${SM:-89}
 if [ -z "${BINARY:-}" ]; then   # BINARY / PYBIN: a prebuilt flock-circuit and a Python with numpy (a local dry run)
@@ -79,6 +87,12 @@ if [ -z "${PYBIN:-}" ]; then
   PYBIN=$W/py/bin/python3
 fi
 export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src
+# the challengers' Lean, where this pod serves sessions (not a staging run, nor a prover whose verifier is another pod's)
+if [ "$FLOCK_CHALLENGER" = 1 ] && [ "${STAGE_ONLY:-0}" != 1 ] && [ -z "${FC_VERIFIERS:-}" ]; then
+  export CHALLENGER_REPO=$REPO CHALLENGER_PY=$PYBIN CHALLENGER_WORK=$O/challenger-build
+  . verity/ml/flock/pod/challenger.sh
+  challenger_build; challenger_built || exit 1
+fi
 [ -x /usr/bin/time ] || { apt-get install -y -qq time >/dev/null 2>&1 || { apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq time >/dev/null 2>&1; }; }   # the prover's own peak memory
 nvidia-smi -L 2>/dev/null | tee $O/host.txt; lscpu | grep -E 'Model name|^CPU\(s\)' | tee -a $O/host.txt; free -g | tee -a $O/host.txt
 G_=; [ $G = 1 ] && G_=--gpu
@@ -93,7 +107,7 @@ SEL=(); [ -n "${SHAPES:-}" ] && SEL+=(--shapes "$SHAPES"); [ "${SELFTEST_LARGEST
 [ "${STAGE_ONLY:-0}" = 1 ] && SEL+=(--stage-only)
 [ "${STAGE_ONLY:-0}" = 1 ] && [ "${STATEMENT_DIGEST:-0}" = 1 ] && SEL+=(--statement-digest)
 [ -n "${SERVE_ONLY:-}" ] && SEL+=(--serve-only "$SERVE_ONLY" --serve-points "${SERVE_POINTS:-1}")
-$PYBIN -m verity_flock.class_statement "${SRC[@]}" ${MODULES:+--modules "$MODULES"} --partition "${PARTITION:-q-word}" --out $O/classes \
+$PYBIN -m verity_flock.class_statement "${SRC[@]}" ${MODULES:+--modules "$MODULES"} ${RESOLVER:+--resolver "$RESOLVER"} --partition "${PARTITION:-q-word}" --out $O/classes \
   --binary $B --selftest-binary $SB "${SEL[@]}" --batch ${BATCH:-auto} ${N:+--n $N} --jobs ${JOBS:-1} --warm ${WARM:-1} --runs ${RUNS:-3} --selftest ${SELFTEST:-25} \
   --port ${PORT:-7710} --protocol ${PROTOCOL:-sweep-v0} ${SELFTEST_GPU:+--selftest-gpu} ${SELFTEST_CASES:+--selftest-cases "$SELFTEST_CASES"} \
   ${SELFTEST_JOBS:+--selftest-jobs $SELFTEST_JOBS} ${SELFTEST_CASE_MIB:+--selftest-case-mib $SELFTEST_CASE_MIB} $G_

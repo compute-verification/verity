@@ -1,7 +1,13 @@
 module
 
-public import Definitions.Flock.Game.Expect
+public import Definitions.Flock.Game
 public import Mathlib.Analysis.SpecialFunctions.Exp
+import Mathlib.Algebra.Order.BigOperators.Expect
+import Mathlib.Algebra.Order.Field.Power
+import Mathlib.Analysis.Complex.Order
+import Mathlib.Analysis.Complex.Trigonometric
+import Mathlib.Data.EReal.Inv
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Extraction by filling: the extractor's own table

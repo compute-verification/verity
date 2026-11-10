@@ -57,11 +57,11 @@ def test_gumbel_noise_stream_keys_and_distribution():
     g = R.gumbel_noise(0, 32, V)
     assert g.dtype == np.float32 and g.shape == (V,)
     assert abs(float(g.mean()) - 0.5772) < 0.03      # Euler-Mascheroni: standard Gumbel mean
-    # the stream key is (seed, position): a different position or a different seed (the n=2 child: seed + 1) is a new draw
+    # the stream key is (seed, position): a different position or a different seed (the n=2 child: seed + 1) is a new sample
     assert R.gumbel_seed_of(0, 32) != R.gumbel_seed_of(0, 33) != R.gumbel_seed_of(1, 33)
     assert not np.array_equal(g, R.gumbel_noise(0, 33, V)) and not np.array_equal(g, R.gumbel_noise(1, 32, V))
     assert np.array_equal(g, R.gumbel_noise(0, 32, V))
-    # the same vocab index draws the same noise whatever the vocab size (keys = vocab index)
+    # the same vocab index samples the same noise whatever the vocab size (keys = vocab index)
     assert np.array_equal(g[:1000], R.gumbel_noise(0, 32, 1000))
     # drafting salt moves the stream
     assert R.gumbel_seed_of(0, 32, is_drafting=True) == R.gumbel_seed_of(0, 32 + (1 << 30))

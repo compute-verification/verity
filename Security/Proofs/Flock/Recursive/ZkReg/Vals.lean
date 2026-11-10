@@ -3,12 +3,28 @@ module
 public import Proofs.Flock.Recursive.ZkReg.DrawnRefines
 public import Proofs.Flock.Recursive.ZkReg.RegLink
 public import Proofs.Flock.Soundness.Registered.ReadsX
+public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The committed values of a `--zk --registered` session at its registered reads
 
 `zk_session_regValsR`: in `flock-verify verify --zk --registered F` sessions of `J` hidden-output tables, at the committed
-values the simulation `simZHJ` decodes (`XplurZC` at the rows `rsZHJS`, whose value binding is `vbHJ`), no drawn unit
+values the simulation `simZHJ` decodes (`XplurZC` at the rows `rsZHJS`, whose value binding is `vbHJ`), no sampled proof block
 reads a registered read whose session leaf is the registrant's and whose committed value is not the registrant's, except
 with probability `ε_ks + δ_link + δ_reg` (`RegValsSound`'s event, at `layShHJ`'s registered reads `rd`). The registrant's
 opening of each commit string is its row and salt (`regOpenZ`), whose `hm96X` leaf at its encoding is `rd.leaf`; `δ_reg = regTermZC` is
@@ -48,7 +64,7 @@ def regOpenZ {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → L
 /-- **The committed values of a `--zk --registered` session are the registered values at its registered reads**, except
 with probability `ε_ks + δ_link + δ_reg`: for every registered-reads record `rd` of `layShHJ`, with `cr/sha-512` at
 budgets `qF, qS` for the knowledge finders of `τ`'s simulation (`hCR`) and at budget `qW` for its registered-value finders
-(`hW`), an accepted session whose draw has a unit reading a wire `g` at a registered read, whose session leaf there is
+(`hW`), an accepted session whose sample has a unit reading a wire `g` at a registered read, whose session leaf there is
 the registrant's, and whose committed bit on `g` is not the registrant's value's, has probability at most
 `ksAvgStrictZ + linkBoundZC + regTermZC`. -/
 theorem zk_session_regValsR
@@ -61,11 +77,11 @@ theorem zk_session_regValsR
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hscope : Layout.scopeOkH c = true)
-    -- the law
+    -- the sampling design
     (Lv : Law n)
-    -- the coin server's draw at each of the law's draws
+    -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, DrawOkZKHJ I dj mPts (Lv.draw ω))
-    -- the verify command's tags and the coin server's record of the live session
+    -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -153,7 +169,7 @@ theorem regBadZ_of_leaf {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (F
   · exact hleaf.symm
   · exact absurd (rd.read_row _ hread) hrow
 
-/-- **`zk_session_regValsR` with the wrong units counted too**: on its assumptions, an accepted session whose draw meets
+/-- **`zk_session_regValsR` with the incorrect proof blocks counted too**: on its assumptions, an accepted session whose sample meets
 the units that compute wrongly or read a registered-value disagreement (`regWrongZ`, at the registrant's opening
 `regOpenZ` and the simulation's registration), both at the committed values, has probability at most
 `ksAvgStrictZ + linkBoundZC + regTermZC` (`zk_flock_regDrawnC_cr`). -/
@@ -167,11 +183,11 @@ theorem zk_session_regDrawnR
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hscope : Layout.scopeOkH c = true)
-    -- the law
+    -- the sampling design
     (Lv : Law n)
-    -- the coin server's draw at each of the law's draws
+    -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, DrawOkZKHJ I dj mPts (Lv.draw ω))
-    -- the verify command's tags and the coin server's record of the live session
+    -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)

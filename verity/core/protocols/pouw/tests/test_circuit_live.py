@@ -10,11 +10,11 @@ import pytest
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
-from verity.core.protocols.pouw.circuit import h1window as W
-from verity.core.protocols.pouw.circuit import live as L
-from verity.core.protocols.pouw.circuit import live_reads as LR
-from verity.core.protocols.sampled_proofs.one_stage import partition as P
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.ml.protocols.pouw.circuit import h1window as W
+from verity.ml.protocols.pouw.circuit import live as L
+from verity.core.protocols.pouw import live_reads as LR
+from verity.core.protocols.spot.one_stage import partition as P
+from verity.core.protocols.spot.one_stage import registered as G
 
 M32 = (1 << 32) - 1
 
@@ -134,7 +134,7 @@ def test_ok_iff_exactly_the_first_m_slots_name_admitted_requests(edit, want):
 
 
 def _mixed():
-    """T = 8, round 2 of a per-round window: requests 0 and 1 admitted in round 0 (cap 4) and decoding, request 2 admitted in
+    """T = 8, round 2 of a per-round execution phase: requests 0 and 1 admitted in round 0 (cap 4) and decoding, request 2 admitted in
     round 2 with a 4-token prompt and prefilling, request 3 admitted in round 0 with cap 2 and so done."""
     req = [[0, 0, 0, 4, 6], [1, 0, 6, 4, 2], [2, 2, 2, 8, 4], [3, 0, 8, 2, 1]] + [[0] * L.HEADER] * 4
     return [1, 2, 3, 3, 3, 3, 0, 0], req, 6, 2
@@ -157,7 +157,7 @@ def test_a_mixed_round_is_held_to_each_request_s_prefill_or_decode(edit, want):
 
 @pytest.mark.slow
 def test_m_reaches_the_leaf_count_not_the_window_slot():
-    """T is the tables' leaf count (the pouw setting ``rows``), below the window's slot M when it isn't a power of two: at
+    """T is the tables' leaf count (the pouw setting ``rows``), below the execution phase's slot M when it isn't a power of two: at
     T = 96 (M = 128) every slot may be served, and an m past T is refused though it is within M."""
     assert W.slot(96, (32, 32)) == 128
     req = [[q, 0, 20 * q, 16, 20] for q in range(5)] + [[0] * L.HEADER] * 91

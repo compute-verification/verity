@@ -1,9 +1,9 @@
 """The ingress tie through the proof system (`tie_service`): each bucket row of an ingress execution phase of the
 network certifier's
 cells proved as IoTieRequest (a stand-in proof, `standin.prove_tie`, its rows read off the warden's root and decided by
-the verifier of record on its own lanes), and `tie_service.IoTieVerdict` built from the stream's outcomes of record
+the verifier on its own lanes), and `tie_service.IoTieVerdict` built from the stream's outcomes of record
 alone. An honest link is tied, and `Ties`, the tie, its stream and the release, gives the verdict only on its own link
-and stream; the verifier's registered reads name every port of the statement, as C-Flock's Lean verifier requires
+and stream; the verifier's registered reads name every port of the statement, as Flock's Lean verifier requires
 (`Registered.checkComplete`, which the stand-in mirrors); a carried field count, a forged advice and the swapped split
 are refused, as are an output 0 or rows under fresh salts, an outcome on another
 advice, in the clear or late, a stream short of the advice's windows, out of order or past them, a profile that frames
@@ -25,8 +25,8 @@ from verity.core.protocols.certifier import advice as ADV, head_check as HC, io_
     tie_service as TS, warden as W, warden_rows as WR
 from verity.core.protocols.certifier.active import id_request
 from verity.core.protocols.certifier.certificate import Direction
-from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.one_stage import registered as G, registration as R
+from verity.core.protocols.spot import service as S
+from verity.core.protocols.spot.one_stage import registered as G, registration as R
 
 import standin
 
@@ -74,7 +74,7 @@ SERVED = _serve()
 
 class Run:
     """An ingress link's tie: the network certifier's cells of each window (`warden_rows.Cells`, under fixed salts), the
-    challenger's stream on injected coins and clock, and each window decided by the verifier of record on a stand-in
+    challenger's stream on injected coins and clock, and each window decided by the verifier on a stand-in
     proof, the in-the-clear check beside it."""
 
     def __init__(self, tmp_path, link=LINK, params=PARAMS, served=SERVED) -> None:

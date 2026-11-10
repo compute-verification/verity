@@ -1,6 +1,10 @@
 module
 
+public import Proofs.Flock.EndToEnd.Period.Run
 public import Proofs.Flock.EndToEnd.Period.Union
+import Mathlib.Analysis.Real.Sqrt
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Game
 
 /-!
 # A period's run: the product of the escapes

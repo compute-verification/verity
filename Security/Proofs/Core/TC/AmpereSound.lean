@@ -1,7 +1,14 @@
 module
 
-public import Proofs.Core.TC.Sound
-public import Proofs.Core.TC.Ampere.Complete
+public import Definitions.Core.Assumptions
+public import Definitions.Core.TC.Bridge
+public import Proofs.Core.TC.Ampere.Group
+public import Proofs.Core.TC.Proofs.Prod
+import Proofs.Core.TC.Ampere.Complete
+import Proofs.Core.TC.Ampere.Step
+import Proofs.Core.TC.Ampere.Words
+import Proofs.Core.TC.Proofs.Words
+import Proofs.Core.TC.Sound
 
 /-!
 # The step relation is the step semantics, on the Ampere/Ada pipeline

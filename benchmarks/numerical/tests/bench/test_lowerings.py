@@ -1,11 +1,11 @@
-"""Per-template lowering modules (``bench.lowerings``): every family has one module per catalogue template, each declaring
+"""Per-template lowering modules (``verity_flock.lowerings``): every family has one module per catalogue template, each declaring
 what it lowers; today's GEMM cells resolve to the relation names their pod scripts take."""
 from __future__ import annotations
 
 import pytest
 
-from verity_numerical.bench import lowerings as L
-from verity_numerical.bench import templates as TM
+from verity_flock import lowerings as L
+from verity_flock import subcircuit_templates as TM
 
 FAMILIES = sorted(L.DIRECTORIES)
 EXAMPLES = [TM.subcircuit(t.id, **t.example) for t in TM.TEMPLATES.values()]
@@ -35,7 +35,7 @@ def test_unlowered_templates_say_why(family):
         if sub.template.id in LOWERED.get(family, ()):
             assert why is None and isinstance(reg.supports(sub, "vllm-v1"), str)
         elif sub.template.id != "gemm-coordinate":
-            assert isinstance(why, str) and family in why
+            assert isinstance(why, str) and family.removeprefix("C-") in why
 
 
 CELLS = [("C-Flock", "gemm-coordinate/k1536/sm90-mma-bf16", "frame-v3/blake3-keyed", "bf16-hopper"),
@@ -96,7 +96,8 @@ def test_flock_stage_writes_an_input_set_range(tmp_path):
 
     import numpy as np
 
-    from verity_numerical.bench import generate as G, input_sets as IS
+    from verity_numerical.bench import generate as G
+    from verity_flock import input_sets as IS
 
     sub = TM.parse_subcircuit_id("gemm-coordinate/k2048/sm80-mma-bf16")
     stage = L.registry("C-Flock").stage(sub)

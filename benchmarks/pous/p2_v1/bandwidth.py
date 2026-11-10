@@ -33,9 +33,9 @@ the one the session ended with), sends the request and answers each pass,
 each window's openings (each unit's four blocks from the segment files with their PoUS vk paths, `VkPaths`, from the
 store's row digests) and returns the verifier's answer, written to `OUT/session.json` with each step's timings, and
 the line `BW VERDICT ...`. `--skip-layer L` is a cheat: it neither reads nor decodes layer L's tensors, and the
-receipts of the units they hold are from what was read, so a draw that lands there is rejected (`receipt`). `--cache`
+receipts of the units they hold are from what was read, so a sample that lands there is rejected (`receipt`). `--cache`
 is another: every pass after the session's first reads nothing of the store and replays the first pass's σ from its
-cache under the pass's seed, so a draw of a later pass is rejected (`receipt`).
+cache under the pass's seed, so a sample of a later pass is rejected (`receipt`).
 
 **The case.** The verifier sends the session's core case before its answer (`p2_party`'s `{"case": ...}`, `p2_case`):
 `--case-dir DIR` writes it with its answer, `case.json` and `answer.json`, into DIR (0700, each file 0600), the
@@ -565,7 +565,7 @@ class Prover:
 
     def _spot(self, seed: bytes, sigma: Any, ys: np.ndarray, cheat: bool) -> int:
         """A few positions' σ held to `p2.Sketcher` on their unit's bytes from the store (not on a pass that `cheat`s)
-        and their y to hashlib: the plan's first, its last and `spot` drawn from the seed."""
+        and their y to hashlib: the plan's first, its last and `spot` sampled from the seed."""
         plan, rows = self.engine.plan, self.registration.rows
         rng = np.random.default_rng(int.from_bytes(seed[:8], "big"))
         positions = sorted({0, plan.length - 1, *rng.integers(0, plan.length, self.spot).tolist()})

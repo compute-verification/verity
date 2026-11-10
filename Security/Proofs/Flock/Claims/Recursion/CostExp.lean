@@ -1,7 +1,46 @@
 module
 
+public import Definitions.Claims.Recursion
+public import Proofs.Flock.Claims.ERepCost
 public import Proofs.Flock.Claims.Recursion.Cost
-public import Proofs.Flock.Claims.Recursion.Hybrid
+public import Proofs.Flock.Claims.Recursion.Serve
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.Fork
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Recursion.Hybrid
 
 /-!
 # The recursion's expected cost: Wald's argument over forks
@@ -9,7 +48,7 @@ public import Proofs.Flock.Claims.Recursion.Hybrid
 `E_O`'s waits at V* session `s` rerun forks of the judged run at the session's first round `off_s`: the coins before it
 the judged run's, the rest fresh. `off_s` is read off the judged run's first `k_I` messages (`D.vstar`), which read only
 its first `k_I ≤ off_s` coins (`run_msgs_take`), so `off_s` is fixed by the coins before it (`PrefixDet`). Swapping two
-coin draws' coins from that round on is then an involution (`swapAt_swapAt`), so a fork of a uniform draw is uniform
+coin samples' coins from that round on is then an involution (`swapAt_swapAt`), so a fork of a uniform sample is uniform
 (`Ex_fork`), and an accepted judged run weighs a function of the prefix by the prefix's acceptance probability
 (`Ex_acc_fork`). With one wait's `ε·N ≤ k` (`waitRuns_exp`) at each prefix, session `s`'s waits add at most `m′_s·k_s`
 in expectation (`forkWaits_exp`), once an accepted run shows session `s` accepting (`SessionAccepts`, a fact of the
@@ -26,7 +65,7 @@ open Claims
 /-! ## A run's first messages read only its first coins -/
 
 theorem stepWith_prefix {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vn : List Msg → OC Out) :
-    ∀ (N : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+    ∀ (N : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       t.msgs <+: (stepWith H P x ω vn N hist as t).msgs
   | 0, _, _, _ => List.prefix_refl _
   | N + 1, hist, as, t => by
@@ -38,7 +77,7 @@ theorem stepWith_prefix {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) 
     · exact List.prefix_append _ _
 
 theorem stepWith_take {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vn vn' : List Msg → OC Out) :
-    ∀ (N n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace) (L : ℕ), L = t.msgs.length + n →
+    ∀ (N n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript) (L : ℕ), L = t.msgs.length + n →
       (∀ bs : List Msg, bs.length ≤ as.length + n → vn bs = vn' bs) →
       (stepWith H P x ω vn N hist as t).msgs.take L = (stepWith H P x ω vn' N hist as t).msgs.take L
   | 0, _, _, _, _, _, _, _ => rfl
@@ -74,14 +113,14 @@ theorem run_msgs_take {Ω Coin : Type} [Inhabited Coin] (H : Msg → Msg) (P : P
 
 /-! ## Forks at a round the coins before it fix -/
 
-/-- **`off` is read off the coins before it**: two draws that agree before `off r` have one `off`. -/
+/-- **`off` is read off the coins before it**: two samples that agree before `off r` have one `off`. -/
 def PrefixDet {Coin : Type} {k : ℕ} (off : (Fin k → Coin) → ℕ) : Prop :=
   ∀ r r' : Fin k → Coin, (∀ i : Fin k, i.val < off r → r i = r' i) → off r' = off r
 
 theorem fork_agree {Coin : Type} {k : ℕ} (off : ℕ) (r d : Fin k → Coin) :
     ∀ i : Fin k, i.val < off → r i = fork off r d i := fun i hi => by simp [fork, hi]
 
-/-- Two draws with their coins from the first's `off` on swapped. -/
+/-- Two samples with their coins from the first's `off` on swapped. -/
 def swapAt {Coin : Type} {k : ℕ} (off : (Fin k → Coin) → ℕ) (p : (Fin k → Coin) × (Fin k → Coin)) :
     (Fin k → Coin) × (Fin k → Coin) :=
   (fork (off p.1) p.1 p.2, fork (off p.1) p.2 p.1)
@@ -93,7 +132,7 @@ theorem swapAt_swapAt {Coin : Type} {k : ℕ} {off : (Fin k → Coin) → ℕ} (
   simp only [swapAt, h]
   refine Prod.ext (funext fun i => ?_) (funext fun i => ?_) <;> by_cases hi : i.val < off r <;> simp [fork, hi]
 
-/-- **A fork of a uniform draw is uniform**, at a round its coins before it fix. -/
+/-- **A fork of a uniform sample is uniform**, at a round its coins before it fix. -/
 theorem Ex_fork {Coin : Type} [Fintype Coin] [Nonempty Coin] {k : ℕ} {off : (Fin k → Coin) → ℕ}
     (hoff : PrefixDet off) (F : (Fin k → Coin) → ℝ) :
     Ex (fun p : (Fin k → Coin) × (Fin k → Coin) => F (fork (off p.1) p.1 p.2)) = Ex F := by
@@ -107,7 +146,7 @@ theorem Ex_fork {Coin : Type} [Fintype Coin] [Nonempty Coin] {k : ℕ} {off : (F
   rw [h, Ex_prod]
   simp only [Ex_const]
 
-/-- **An accepted draw weighs a function of its prefix by the prefix's acceptance probability**: for `g` read off the
+/-- **An accepted sample weighs a function of its prefix by the prefix's acceptance probability**: for `g` read off the
 coins before `off`, `𝔼[1[A] · g] = 𝔼_r[Pr_d[A(fork r d)] · g(r)]`. -/
 theorem Ex_acc_fork {Coin : Type} [Fintype Coin] [Nonempty Coin] {k : ℕ} {off : (Fin k → Coin) → ℕ}
     (hoff : PrefixDet off) (A : (Fin k → Coin) → Prop) [DecidablePred A] (g : (Fin k → Coin) → ℝ)
@@ -121,12 +160,12 @@ theorem Ex_acc_fork {Coin : Type} [Fintype Coin] [Nonempty Coin] {k : ℕ} {off 
   simp only [hgr]
   rw [Ex_mul_right, Ex_ind]
 
-/-- **Waits over forks**: `m` waits, each over `K` forks of the judged draw at a round `off` its coins before it fix,
-stopping at `kk` accepted runs, and started only when the judged draw accepted, add at most `m·kk` reruns in
+/-- **Waits over forks**: `m` waits, each over `K` forks of the judged sample at a round `off` its coins before it fix,
+stopping at `kk` accepted runs, and started only when the judged sample accepted, add at most `m·kk` reruns in
 expectation. At each prefix one wait makes `N` reruns with `ε·N ≤ kk` (`waitRuns_exp`), `ε` the prefix's acceptance
-probability, which is the judged draw's weight there (`Ex_acc_fork`). -/
+probability, which is the judged sample's weight there (`Ex_acc_fork`). -/
 theorem forkWaits_exp {Coin : Type} [Fintype Coin] [Nonempty Coin] {k : ℕ} {off : (Fin k → Coin) → ℕ}
-    (hoff : PrefixDet off) (run' : (Fin k → Coin) → Trace) (kk m K : ℕ) :
+    (hoff : PrefixDet off) (run' : (Fin k → Coin) → Transcript) (kk m K : ℕ) :
     Ex (fun s : (Fin k → Coin) × (Fin m → Fin K → Fin k → Coin) =>
       (if (run' s.1).out = .acc then (1 : ℝ) else 0) *
         ∑ i, (waitRuns (fun d => run' (fork (off s.1) s.1 d)) kk ((List.finRange K).map (s.2 i)) 0 : ℝ)) ≤
@@ -170,7 +209,7 @@ def SessionAccepts {Coin : Type} (D : Deploy Coin) : Prop :=
 
 /-- Session `s`'s view of the prover's run at coins `r`, as `E_O`'s waits see a rerun. -/
 def sessRun {Coin : Type} [Inhabited Coin] (H : Msg → Msg) (D : Deploy Coin) {Ω : Type} (P : Prover Ω) (x : Msg)
-    (ω : Ω) (s : ℕ) (r : Fin (D.V.k x) → Coin) : Trace :=
+    (ω : Ω) (s : ℕ) (r : Fin (D.V.k x) → Coin) : Transcript :=
   servedRun H (viewing (D.session x s)) (run H P D.V x ω) r
 
 /-- Session `s`'s first round in the run at coins `r`: the inner rounds, then the earlier sessions' rounds at the V*
@@ -191,19 +230,19 @@ theorem offO_prefixDet {Coin W Col T : Type} [Inhabited Coin] (H : Msg → Msg) 
     h i (by unfold offO; omega)
   simp only [offO, hm]
 
-theorem serve_viewing_runs {R α : Type} (H : Msg → Msg) (run : R → Trace) (f : Seen → Seen) (p : RP R α) :
+theorem serve_viewing_runs {R α : Type} (H : Msg → Msg) (run : R → Transcript) (f : Seen → Seen) (p : RP R α) :
     ((serve (viewing f) p).eval H run).2.2 = (p.eval H (servedRun H (viewing f) run)).2.2 := by
   rw [serve_eq, (RP.serve_eval H _ run p).2.2, RP.eval_runs_eq]
   simp only [viewing_runs, List.map_const', List.sum_replicate, smul_eq_mul, mul_one]
 
-theorem waitRuns_map {R R' : Type} (run : R' → Trace) (g : R → R') (k : ℕ) :
+theorem waitRuns_map {R R' : Type} (run : R' → Transcript) (g : R → R') (k : ℕ) :
     ∀ (rs : List R) (a : ℕ), waitRuns run k (rs.map g) a = waitRuns (fun r => run (g r)) k rs a
   | [], _ => rfl
   | r :: rs, a => by simp only [List.map_cons, waitRuns, waitRuns_map run g k rs]
 
-/-- **Served waits rerun the prover once per wait rerun**: each wait at draws `ρ i`, rerunning at `g (ρ i j)` seen
+/-- **Served waits rerun the prover once per wait rerun**: each wait at samples `ρ i`, rerunning at `g (ρ i j)` seen
 through `f`, reruns as one wait over the served runs. -/
-theorem servedWaits_runs_le {R W' Op Dr : Type} (H : Msg → Msg) (run : R → Trace) (f : Seen → Seen) (k : ℕ)
+theorem servedWaits_runs_le {R W' Op Dr : Type} (H : Msg → Msg) (run : R → Transcript) (f : Seen → Seen) (k : ℕ)
     (opens : Seen → List Op) (assemble : List Op → Option W') (check : W' → Bool) {m K : ℕ} (g : Dr → R)
     (ρ : Fin m → Fin K → Dr) :
     ((serve (viewing f) (firstWait k opens assemble check

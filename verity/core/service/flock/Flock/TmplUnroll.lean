@@ -11,6 +11,7 @@ the description knows the flat net exists without building it.
 module
 
 public import Flock.TmplApart
+public import Flock.TmplRows
 
 @[expose] public section
 

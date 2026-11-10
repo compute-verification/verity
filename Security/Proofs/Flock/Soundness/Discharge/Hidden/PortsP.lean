@@ -1,6 +1,24 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
+public import Proofs.Flock.Soundness.ExecCheck
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.ExecParse
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # The public leaves `HmIn.parse` accepted, and the rows `HmIn.delta` keeps
@@ -50,6 +68,7 @@ theorem mapM_size {α β ε : Type} {f : α → Except ε β} {xs : Array α} {y
       subst h
       rw [List.size_toArray, list_mapM_length hl, Array.length_toList]
 
+-- `walk_step` down `HmIn.parse`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **What `HmIn.parse` accepted**: no public input port and no public leaf map, or public input ports with one public
 leaf map per unit, each as long as its `leaves_in`. -/
@@ -110,6 +129,7 @@ theorem parse_noPorts {c : Circuit} {pi : HmIn.Ports} (h : HmIn.parse c = .ok pi
   · exact h1
   · rw [he] at hne; cases hne
 
+-- `walk_step` down `HmIn.parse`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **Each public leaf is a public word**: with public input ports, every leaf of a unit's public leaf map is below the
 ports' words. -/

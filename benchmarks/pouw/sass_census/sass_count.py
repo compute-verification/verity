@@ -2,7 +2,7 @@
 
 `count` reads `cuobjdump -sass` (or `nvdisasm`) text on stdin and writes one JSON object: for each architecture a
 section names (`arch = sm_90a`, `code for sm_100a`), its functions, its instructions, and each dotted opcode's count
-with its first instruction as an example (`IMMA.16832.S8.S8`: `R4, R8, R12, R4`). `merge` folds those objects into one
+with its first instruction as an example (`IMMA.16832.S8.S8`: `R4, R8, R6, R4`). `merge` folds those objects into one
 census an architecture: every dotted opcode, its count, the sources it appears in, an example, and its base opcode.
 
     cuobjdump -sass lib.so | python sass_count.py count --source libcublasLt > lt.json

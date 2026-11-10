@@ -1,6 +1,13 @@
 module
 
 public import Proofs.Flock.VBridge.Sparse.Plays
+public import Proofs.Flock.VBridge.Sparse.Residuals
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Refine.Arith
+import VCVio.Prelude.Core
 
 /-!
 # `RecSparse_v1` accepts exactly when the rep's sparse phase does

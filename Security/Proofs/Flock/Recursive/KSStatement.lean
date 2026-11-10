@@ -1,10 +1,39 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.KSLin2R
-public import Proofs.Flock.Claims.Recursion.DeployedR
 public import Proofs.Flock.Claims.Recursion.DeployedBrings
 public import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
 public import Proofs.Flock.Claims.Recursion.KSLinks
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The recursive verifier's knowledge soundness at the deployed reader (trusted)
@@ -12,7 +41,7 @@ public import Proofs.Flock.Claims.Recursion.KSLinks
 `RecursiveKSAt` is `KSLin2On` at SHA-512 at the deployed relation (`Flock.Readable.relation`), at the bound record
 whose steps are the deployed recursive verifier's (`FlockDeploy.nextR rd`) and whose columns are the ones it opens,
 trimmed (`FlockDeploy.deployPlainTrimR`), at V\*'s layout of record `DeployedR.layR rest` (every hm96 call the
-deployed circuit performs, recorded), the coin server's record
+deployed circuit performs, recorded), the challenger's live-coin part's record
 (`recTr aux nOf hd recRest`), the deployed caps (`FlockDeploy.KS.CpDep`) and the dense statements (`DenseAt`).
 
 It is stated at the deployment's parameters (the reader `rd`, V\*'s last message's reader `final`, the last part's
@@ -20,7 +49,7 @@ pieces `rest`, the weights `wE` and `w`, the brings `b` and the record's `aux`, 
 guarantee `RecursiveKS` is this at the deployed values: the reader `DeployedR.rdR`, V\*'s last message's reader
 `DeployedR.finalR`, the last part's pieces `OpenRows.elemR`, the weights `DeployedR.wER` and `DeployedR.wR` and
 the brings' setup `deployedB` (the compiled verifier's own evaluations), for every other field of the brings and every
-record the coin server keeps (`aux`, `nOf`, `hd`, `recRest`).
+record the challenger's live-coin part keeps (`aux`, `nOf`, `hd`, `recRest`).
 -/
 
 @[expose] public section
@@ -58,7 +87,7 @@ def RecursiveKSAt (rd : Msg → Option FinalP)
       (RecDeploy.DeployedR.layR rest)) rd final wE w
 
 /-- **Knowledge soundness of the recursive verifier at the deployed reader** (`RecursiveKSAt` at the deployed values),
-for every other field of the brings and every record the coin server keeps. -/
+for every other field of the brings and every record the challenger's live-coin part keeps. -/
 def RecursiveKS : Prop :=
   ∀ (b : RecDeploy.Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8),
@@ -67,7 +96,7 @@ def RecursiveKS : Prop :=
 
 /-- **Knowledge soundness of the recursive verifier at the linked relation, at a compiled record** `D`: `RecursiveKSAtRec`
 with the linked relation (`Claims.Recursion.RL`: the deployed relation, and the link clause `Q` at the inner witness and
-the link table's rows), the extractor that reads the table's rows off its judged draw's outer witnesses (`rows`), and
+the link table's rows), the extractor that reads the table's rows off its judged sample's outer witnesses (`rows`), and
 one more term, the link finder's `Pr[B_L]` over the inputs `ins` reads (`Claims.Recursion.KSLin2LinkOn`). -/
 def RecursiveKSLinkAtRec {Tb : Type} (D : Claims.Recursion.RecAt Coin) (rd : Msg → Option FinalP)
     (final : Msg → Option (List (List (Msg × RecDeploy.Salt)) × Msg)) (wE w : Msg → ℝ)

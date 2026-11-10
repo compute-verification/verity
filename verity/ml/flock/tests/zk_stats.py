@@ -1,8 +1,8 @@
-"""C-Flock ZK: real against simulated transcripts of ``flock-circuit --zk`` on the checked fields.
+"""Flock ZK: real against simulated transcripts of ``flock-circuit --zk`` on the checked fields.
 
 Input: the ``ZKREAL``, ``ZKSIM`` and ``ZKCONTROL`` lines of ``flock-circuit zkstat --zk --n N`` (one verifier coin seed; the
-real sessions draw fresh prover seeds; the simulator sees only the public statement and those coins; the control is the same
-prover with zero pads and a zero mask slot, i.e. the non-ZK session's values in C-Flock ZK's format). For each field
+real sessions sample fresh prover seeds; the simulator sees only the public statement and those coins; the control is the same
+prover with zero pads and a zero mask slot, i.e. the non-ZK session's values in Flock ZK's format). For each field
 class it runs four tests:
 
 * ``bytes``: two-sample chi-square on the byte histogram (256 bins), real against simulated;
@@ -17,7 +17,7 @@ coordinate after Ligerito's code switch is always 0) and are excluded and counte
 Rep 1's value equal to rep 0's in every run is a reuse of randomness across the reps, which fails the class
 (``reused_across_reps``), with one exception: the level-0 rows (``lig_rows0``) at a sample slot where both reps opened the same
 level-0 position (``lig_rows0_q``, from the verifier's record). Both reps open the one level-0 codeword, so such a row is one
-observation of the session, not two; it is excluded and counted (``shared_by_the_reps``). Likewise the inner proof draws its
+observation of the session, not two; it is excluded and counted (``shared_by_the_reps``). Likewise the inner proof samples its
 168 query positions with replacement: a column whose position (``inner_open_q``, from the coins) repeats an earlier one in the
 same rep's list is one observation, excluded and counted (``repeated_positions``).
 

@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import types
 
-from verity.ml.circuits.defs import CompositeDefinition, FunctionDefinition, PrimitiveDefinition, SpecializedDefinition, primitive
+from verity.ml.circuits.defs import CompositeDefinition, primitive
 from verity.ml.circuits.ops.prims import HopperBF16WgmmaDot16
 from verity.ml.circuits.silicon.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
 from verity.ml.definitions.registry import b1
@@ -177,19 +177,10 @@ def SERVE_HOPPER(C: dict, LP: int, STEPS: int):
 
 #: b1 call name -> Hopper call name, for capture mappings written against b1's names (`correspondence.py`).
 CALL_NAMES: dict[str, str] = {k: v.name for k, v in PORTED.items()}
-#: The full binding table by name (composites and primitives), for `structural_diff`.
-NAME_MAP: dict[str, str] = {**CALL_NAMES, **{k: v.name for k, v in _BoundPrims._over.items()}}
-
-
-def set_conformance(status: dict[str, str]) -> None:
-    """Set conformance statuses from evidence (the profile's `expectations.json` / conformance run)."""
-    by_name = {d.name: d for d in HOPPER_COMPOSITES + [Fa3InvSum]}  # HopperBF16WgmmaDot16's conformance is core's
-    for name, st in status.items():
-        by_name[name].conformance = st
 
 
 # ---------------------------------------------------------------------------------------------------------
-# bindings as data, and the structural comparison that backs "same structure, different bindings"
+# bindings as data
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -209,53 +200,3 @@ def bindings() -> dict:
     out["BN"] = {"binding": str(KBLOCK_N_FA3), "kind": "implicit-static", "ta1": str(b1.BN), "changed": True,
                  "note": "kBlockN, a module constant of b1.py read by AttnBlock/AttentionHead (should be a static parameter)"}
     return out
-
-
-def _fn_key(fn: FunctionDefinition, names: dict[str, str]) -> tuple:
-    if isinstance(fn, SpecializedDefinition):
-        return ("spec", names.get(fn.name, fn.name), fn.version, tuple((k, _static_repr(v, names)) for k, v in fn.bindings.items()))
-    return ("prim", names.get(fn.name, fn.name), fn.version)
-
-
-def _static_repr(v, names: dict[str, str]):
-    if isinstance(v, FunctionDefinition):
-        return _fn_key(v, names)
-    if isinstance(v, dict):
-        return tuple(sorted((k, _static_repr(x, names)) for k, x in v.items()))
-    if isinstance(v, (list, tuple)):
-        return tuple(_static_repr(x, names) for x in v)
-    return v
-
-
-def structural_diff(a: SpecializedDefinition, b: SpecializedDefinition, names: dict[str, str] | None = None,
-                    stop: frozenset[str] = frozenset(), _seen: set | None = None) -> list[dict]:
-    """Node-for-node comparison of two specialised bodies: forms, argument references, output types, batch axes and
-    counts, annotations, and callee identity with `names` applied to `a`'s side (b1 name -> port name).  Recurses
-    into callee pairs (each pair once) except into definitions named in `stop`.  Returns the differences."""
-    names = names or {}
-    seen = _seen if _seen is not None else set()
-    key = (a.id, b.id)
-    if key in seen:
-        return []
-    seen.add(key)
-    diffs: list[dict] = []
-    where = f"{a.id} vs {b.id}"
-    ba, bb = a.body, b.body
-    if ba.params != bb.params or ba.ret_type != bb.ret_type:
-        diffs.append({"where": where, "what": "signature", "a": repr((ba.params, ba.ret_type)), "b": repr((bb.params, bb.ret_type))})
-    if len(ba.nodes) != len(bb.nodes):
-        diffs.append({"where": where, "what": "node count", "a": len(ba.nodes), "b": len(bb.nodes)})
-        return diffs
-    if repr(ba.ret) != repr(bb.ret):
-        diffs.append({"where": where, "what": "return refs", "a": repr(ba.ret), "b": repr(bb.ret)})
-    for k, (na, nb) in enumerate(zip(ba.nodes, bb.nodes)):
-        for f in ("form", "axes", "n", "n_xs", "name", "out"):
-            if getattr(na, f) != getattr(nb, f):
-                diffs.append({"where": where, "node": k, "what": f, "a": repr(getattr(na, f)), "b": repr(getattr(nb, f))})
-        if len(na.args) != len(nb.args) or any(repr(x.refs) != repr(y.refs) or x.type != y.type for x, y in zip(na.args, nb.args)):
-            diffs.append({"where": where, "node": k, "what": "args", "a": repr([x.refs for x in na.args]), "b": repr([y.refs for y in nb.args])})
-        if _fn_key(na.fn, names) != _fn_key(nb.fn, {}):
-            diffs.append({"where": where, "node": k, "what": "callee", "a": na.fn.id, "b": nb.fn.id})
-        elif isinstance(na.fn, SpecializedDefinition) and na.fn.name not in stop:
-            diffs.extend(structural_diff(na.fn, nb.fn, names, stop, seen))
-    return diffs

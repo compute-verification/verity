@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pous.P2.Cost
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # A location's window with the ring's oracle locations (trusted)

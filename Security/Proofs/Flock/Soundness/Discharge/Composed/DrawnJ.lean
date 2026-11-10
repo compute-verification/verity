@@ -3,17 +3,17 @@ module
 public import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
 
 /-!
-# The drawn units of one `--zk` session of `J` tables, at flock-verify's acceptance
+# The sampled proof blocks of one `--zk` session of `J` tables, at flock-verify's acceptance
 
 `zk_session_soundJ_custody_reg` is the count curve: it bounds flock-verify's acceptance with "at least `K₀` units wrong",
-an event the prover's strategy fixes before the draw, because `zk_headline_exec_tables` carries only such events. This
-file carries an event of the draw too, and bounds the drawn units' correctness:
+an event the prover's strategy fixes before the sample, because `zk_headline_exec_tables` carries only such events. This
+file carries an event of the sample too, and bounds the sampled proof blocks' correctness:
 
-* `execRefinesZK_tables_drawn`: `execRefinesZK_tables` with an event `E` of the draw on both sides. Both audits'
-  outcomes carry the draw, and the refinement is one inequality at each of the law's draws, where `E` is fixed;
+* `execRefinesZK_tables_drawn`: `execRefinesZK_tables` with an event `E` of the sample on both sides. Both audits'
+  outcomes carry the sample, and the refinement is one inequality at each of the sampling design's samples, where `E` is fixed;
 * `ZkLink.zk_flock_drawnC_reg`: `Audit.extraction_audit_drawn` at `analysisZCReg`, so in the compiled batched audit
   `Pr[accepts ∧ some drawn unit is in wrongRegZ] ≤ ε_ks + δ_link`;
-* `zk_session_soundJ_custody_drawn_reg`: the same at flock-verify's acceptance, at the coin server's custody, with
+* `zk_session_soundJ_custody_drawn_reg`: the same at flock-verify's acceptance, at the challenger's live-coin part's custody, with
   `ksAvgStrictZ` for `ε_ks`. Its bound has no miss term, so it needs no A3.
 -/
 
@@ -41,8 +41,9 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [In
   (fin : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → Fin 2 → Array ByteArray → List Msg)
   (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → Cap D) (N : ℕ) {L : Law n}
 
-/-- **R11 at `--zk` for sessions of `J` tables, with an event of the draw**: flock-verify `--zk` accepts the live audit
-at a draw in `E` no likelier than the compiled batched audit, played by `simZJ … τ`, accepts at a draw in `E`. -/
+/-- **The refinement at `--zk` for sessions of `J` tables, with an event of the sample**: flock-verify `--zk` accepts the
+live audit at a sample in `E` no likelier than the compiled batched audit, played by `simZJ … τ`, accepts at a sample in
+`E`. -/
 theorem execRefinesZK_tables_drawn (hdec : DecodesOnZKJ A Hs planZ I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOfZJ dg planZ N wr))) (E : Finset (Fin n) → Prop) :
     prob (fun o => LiveAcceptsZK I o ∧ E o.2.1) (auditLive L Reg (liveOfZJ dg planZ N wr)) τ ≤
@@ -81,13 +82,13 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
 variable {D Sl : Type} [Inhabited D] [Inhabited Sl]
-variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
+variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
   {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : ValueBindingZ A P planZ tab decode Hc) {L : Law n}
 
-/-- **The drawn units of the compiled `--zk` audit, against the registration**: it accepts with a drawn unit in
+/-- **The sampled proof blocks of the compiled `--zk` audit, against the registration**: it accepts with a sampled proof block in
 `wrongRegZ` with probability at most `ε_ks + δ_link`, `zk_flock_countC_reg`'s terms without the miss term. -/
 theorem zk_flock_drawnC_reg (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k Rw M : ℕ}
     (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
@@ -103,8 +104,8 @@ theorem zk_flock_drawnC_reg (hlow : LoweringSoundZK A P planZ tab decode) (hown 
     (zc_knowledgeSound_reg A Hs P planZ tab vb _ _ hlow hown hj)
     (zk_linkSoundC_reg A Hs P planZ tab vb hlow hown hRw hM hρ hr hj ht) σ
 
-/-- **The drawn units of the compiled `--zk` audit, against the registration, at the value layer of any values `Xv`**:
-it accepts with a drawn unit in `wrongRegZ` at `XlayerZC (Xv R τ)` with probability at most `ε_ks` plus the link bound
+/-- **The sampled proof blocks of the compiled `--zk` audit, against the registration, at the value layer of any values `Xv`**:
+it accepts with a sampled proof block in `wrongRegZ` at `XlayerZC (Xv R τ)` with probability at most `ε_ks` plus the link bound
 from the binding errors against `Xv` (`errBoundZC`). -/
 theorem zk_flock_drawnC_reg_at (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k Rw : ℕ}
     (hRw : 1 ≤ Rw) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
@@ -131,8 +132,8 @@ open scoped ENNReal
 
 variable {n : ℕ} {Reg : Type}
 
-/-- **The drawn units of one `--zk` sampled session of `J` tables, against the public file, at the coin server's
-custody.** For any live prover `τ`, flock-verify `--zk` accepts with some drawn unit in `wrongRegZ` with probability at
+/-- **The sampled proof blocks of one `--zk` sampled session of `J` tables, against the public file, at the challenger's live-coin part's
+custody.** For any live prover `τ`, flock-verify `--zk` accepts with some sampled proof block in `wrongRegZ` with probability at
 most `ε_ks + δ_link`: `zk_session_soundJ_custody_reg`'s terms without the miss term, so without A3. -/
 theorem zk_session_soundJ_custody_drawn_reg
     (I : Inputs) (ht : I.tags.typed = false)

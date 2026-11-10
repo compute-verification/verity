@@ -27,7 +27,7 @@ use flock_field::F128;
 use flock_merkle::hm96;
 
 use crate::circuit::{compress, lanes, port_cols, transpose64, SHA512_IV, SHA512_K};
-use crate::ir_block::IrUnitNet;
+use crate::ir_block::{IrUnitNet, RowRead};
 
 const WORD: usize = 128;
 /// A row source: [`ZERO`], [`ONE`], or `2 + 64 w + i` for bit `i` of tape word `w`.
@@ -392,12 +392,12 @@ impl NativeSha {
         // a commit row's B form is the constant column: it matches only a commit candidate (and an AND row only an AND's), so a
         // folded carry row whose values equal the next commit's cannot take that commit's place
         let matches = |c: (u32, u32), r: usize| {
-            (c.1 == ONE) == (net.b[r] == [net.const_pos])
+            (c.1 == ONE) == net.b.row_is(r, &[net.const_pos])
                 && batches.iter().all(|b| sliced(&b.tapes, c.0) == b.a[r] && sliced(&b.tapes, c.1) == b.b[r])
         };
         let mut k = 0;
         for r in in_bits..out_start {
-            if net.a[r].is_empty() && net.b[r].is_empty() {
+            if net.a.row_len(r) == 0 && net.b.row_len(r) == 0 {
                 continue;
             }
             while k < cands.len() && !matches(cands[k], r) {
@@ -657,7 +657,7 @@ mod tests {
             let derive_s = t.elapsed().as_secs_f64();
             for r in plan.in_bits..plan.out_start {
                 let commit = plan.rows[r].1 == ONE && plan.rows[r].0 != ONE;
-                assert_eq!(commit, net.b[r] == [net.const_pos], "{}: row {r} ({})", net.name, plan.describe(r));
+                assert_eq!(commit, net.b.row_is(r, &[net.const_pos]), "{}: row {r} ({})", net.name, plan.describe(r));
             }
             let census = plan.census();
             assert!(!census.contains_key("other"), "{}: rows of no kind: {census:?}", net.name);

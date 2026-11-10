@@ -2,6 +2,8 @@ module
 
 public import Definitions.Flock.Defs
 public import Definitions.Flock.Holo
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Recursion: hidden unit circuits' class, registered table and registered schedule

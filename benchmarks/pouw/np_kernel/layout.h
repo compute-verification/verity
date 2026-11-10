@@ -86,10 +86,10 @@ static inline int kidx(int t, int l, int K) {
 }
 
 // The certifier's coin feed for a call of R committed rows (pad_rows) and C committed columns (pad_cols): u32 words,
-// each coin drawn raw by the certifier once it holds root(A_j), in this order:
+// each coin flipped raw by the certifier once it holds root(A_j), in this order:
 //   row words  R coin_words(S) words, row i's from word i coin_words(S): bit e is a1[i, e] (e < 4), bit t + 3 the step bit
 //              b_t[i] (0-based t = 1 .. S - 1), every other bit 0 (b at step 0 enters no word)
-//   G words    under the tag layout C words, column j's byte e the int8 G[e, j] in [-3, 3], drawn by g_word_of
+//   G words    under the tag layout C words, column j's byte e the int8 G[e, j] in [-3, 3], sampled by g_word_of
 //   u words    under XU=1 R words, row i's u word
 // The lane-coin words (one a (64-row tile, step, column)) follow in the same release.
 static inline long long feed_words(int R, int S, int C) {
@@ -106,7 +106,7 @@ static inline uint32_t g_word(const int* G) {
   return w;
 }
 static inline int g_of(uint32_t w, int e) { return (int8_t)(uint8_t)(w >> (8 * e)); }
-// G by rejection: a 32-bit draw u is kept when u < 2401 floor(2^32 / 2401) = 4,294,966,424 (872 of the 2^32 are
+// G by rejection: a 32-bit sample u is kept when u < 2401 floor(2^32 / 2401) = 4,294,966,424 (872 of the 2^32 are
 // rejected and redrawn), and G[e, j] is digit e of u mod 2401 in base 7, minus 3, so G is uniform on [-3, 3]^4 exactly
 constexpr uint32_t G_KEEP = 2401u * (uint32_t)(4294967296ull / 2401u);
 static inline bool g_word_of(uint32_t u, uint32_t* w) {
@@ -149,7 +149,7 @@ static inline int lane_a(int i, int t, int l, int K, int S, const int8_t* x, con
   }
   return v;
 }
-// B' step t lane l for column j, y its K data entries: G its four digits (null: 0, as before G's draw); with lw, w is the
+// B' step t lane l for column j, y its K data entries: G its four digits (null: 0, as before G's sample); with lw, w is the
 // column's lane-coin word at step t (bytes 0-2 the coins, byte 3 coin_word_top's), copied over B' lanes 28-31 by the GEMM
 // (ssn_k's cv)
 static inline int lane_b(int j, int t, int l, int K, int S, const int8_t* y, const int* G, bool lw, uint32_t w) {

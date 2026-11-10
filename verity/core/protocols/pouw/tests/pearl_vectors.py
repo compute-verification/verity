@@ -8,7 +8,7 @@ Pearl's outputs (large arrays as SHA-256 of their bytes).  To regenerate, with a
     VERITY_VEC_IN=/tmp/in.json VERITY_VEC_OUT=/tmp/out.json cargo test --release --lib verity_vectors
     python verity/core/protocols/pouw/tests/pearl_vectors.py pin /tmp/out.json
 
-`outputs()` computes the same outputs with `verity.core.protocols.pouw.schemes.pearl_kw`; the test compares them to the pinned file.
+`outputs()` computes the same outputs with `verity.ml.protocols.pouw.schemes.pearl_kw`; the test compares them to the pinned file.
 """
 
 from __future__ import annotations

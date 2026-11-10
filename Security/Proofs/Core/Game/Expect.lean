@@ -1,7 +1,10 @@
 module
 
-public import Proofs.Core.Game.Basic
 public import Proofs.Core.Game.Rewinding
+public import Definitions.Core.Game
+import Mathlib.Algebra.Order.Chebyshev
+import Mathlib.Basic.ENNReal.BigOperators
+import Proofs.Core.Game.Basic
 public import Definitions.Core.Game.Expect
 
 /-!

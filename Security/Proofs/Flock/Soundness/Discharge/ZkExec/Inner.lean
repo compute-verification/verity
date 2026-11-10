@@ -1,8 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Statements
-public import Proofs.Flock.Soundness.Refine.Exec
-public import Proofs.Flock.Soundness.Refine.Table
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # flock-verify `--zk`'s inner proof accepts (live/PROTOCOL.md §5)

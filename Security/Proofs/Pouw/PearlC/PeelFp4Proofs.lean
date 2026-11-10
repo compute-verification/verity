@@ -3,6 +3,9 @@ module
 public import Definitions.Pouw.PearlC.DeviceFp4
 public import Proofs.Pouw.PearlC.Fp4Freeze
 public import Proofs.Pouw.PearlC.PeelExactProofs
+import Mathlib.Algebra.BigOperators.Fin
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # P2 on Pearl-C4's U, `Fp4Dev.peelFp4` (staging, nothing pinned)

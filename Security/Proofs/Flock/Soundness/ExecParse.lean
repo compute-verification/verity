@@ -1,6 +1,11 @@
 module
 
 public import Proofs.Flock.Soundness.ExecPlacement
+public import Proofs.Flock.Soundness.ExecDelta
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Soundness.SparseRows
 
 /-!
 # What the parsers accepted, and Δ's first loop

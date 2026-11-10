@@ -1,7 +1,49 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.HonestHalf
-public import Proofs.Flock.Claims.Recursion.VStarRowsFit
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.HhHeld
+import Proofs.Flock.Claims.Recursion.HonestPartsLayR
+import Proofs.Flock.Claims.Recursion.HonestRun
+import Proofs.Flock.Claims.Recursion.MoreSlotsAll
+import Proofs.Flock.Claims.Recursion.NumsFixedR
+import Proofs.Flock.Claims.Recursion.RoundWords
+import Proofs.Flock.Claims.Recursion.SchedDense
+import Proofs.Flock.Claims.Recursion.VStarFinal
+import Proofs.Flock.Claims.Recursion.VStarPortNames
+import Proofs.Flock.Claims.Recursion.VStarRowsFit
+import Proofs.Flock.Claims.Recursion.VStarTopsOk
+import Proofs.Flock.Claims.Recursion.VStarTraceAt
 public import Proofs.Flock.Claims.Recursion.IrDep
 
 /-!
@@ -46,7 +88,7 @@ open RecDeploy.HonestHalf
 where the reference prover `refP`'s run is accepted and satisfies V\*, no recorded calls collide and the reps' tops
 differ (`TopsAt`), `PartAccepts` holds at every part `s < nS x`.
 
-The premises are about Lean's `refP`; the run witnessing them (`HonestFixture`) used Python's builder and C-Flock's CPU
+The premises are about Lean's `refP`; the run witnessing them (`HonestFixture`) used Python's builder and Flock's CPU
 prover. `HonestFixture`'s docstring says which difftest ties the two: `test_vstar_trace_difftest`, with
 `vstar-trace --sat`. -/
 theorem honest_half_tops (mask : ℕ → ℕ → Bool) (b0 : Brings) (x : Msg)

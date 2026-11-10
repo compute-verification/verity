@@ -175,7 +175,7 @@ def test_a_change_no_key_reads_plans_as_the_checked_commit_and_one_a_suite_reads
 
 
 def test_a_job_off_the_merge_gate_is_planned_and_required_of_no_check(P, tmp_path):
-    """circuit-check and ratchet-gate are off the merge gate (ci.toml's `gate = false`): their parts are listed, none required, so
+    """circuit-check and ratchet-gate are off the merge gate (policy.toml's `off_gate`): their parts are listed, none required, so
     `research merge --verdicts` admits a commit whose targets no check passed."""
     root = tmp_path / "tree"
     _tree(root)
@@ -341,3 +341,19 @@ def test_a_plan_on_a_machine_ships_the_commit_with_this_plan_and_the_packs_and_r
                                            "--base", "B", f"--pack=r1={i}/pack-0.tar.gz", f"--pack=={i}/pack-1.tar.xz"]
     assert notes == ["planned on m in run r20261019-000000-abcd, on the 2 packs gathered where it was asked"]
     assert len(_git(repo, "worktree", "list").splitlines()) == 1
+
+
+def test_a_pack_cut_short_or_corrupt_is_a_note_of_the_plan_and_the_rest_planned(P, tmp_path, monkeypatch):
+    """`--tree` plans from the packs `--pack` names: one whose compressed stream turns corrupt, where `tarfile` leaves lzma's
+    error as it is, is noted refused like one holding anything but verdict entries, and planned without."""
+    V = P._load("plan_verdicts", HERE / "verdicts.py")
+    V._write(pack := tmp_path / "cut.tar.xz", [(f"tests/k{i}.json", b"{}" * (1 << 16)) for i in range(8)], xz=True)
+    raw = bytearray(pack.read_bytes())
+    raw[len(raw) * 3 // 4] ^= 0xFF
+    pack.write_bytes(bytes(raw))
+    seen = {}
+    monkeypatch.setattr(P, "plan_tree", lambda tree, sources, agreement, local, own: seen.update(sources=sources) or [])
+    monkeypatch.setattr(P, "_git", lambda *args, repo: "")
+    monkeypatch.setattr(P, "document", lambda parts, commit, tree, base, sources, notes: notes)
+    notes = P.inner(P.parser().parse_args(["--tree", str(tmp_path), "--pack", f"r-cut={pack}"]))
+    assert notes == ["r-cut: its pack is refused (LZMAError: Corrupt input data)"] and seen["sources"] == []

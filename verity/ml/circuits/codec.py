@@ -138,20 +138,6 @@ def _part_key(p: Refs) -> tuple:
     return ("e", p.items)
 
 
-def _flat_keys(r: Concat) -> tuple[list[Refs], tuple]:
-    """`_flat_parts(r)` and their `_part_key`s. A `Concat` cut from a `PartLog` reuses the keys of the log's parts."""
-    if r.prefix is not None:
-        log, j = r.prefix
-        tail = r.parts[j:]
-        if log.leaf_parts(j) and not any(isinstance(p, Concat) for p in tail):
-            memo = log.memo.setdefault("codec.part_keys", [])
-            if len(memo) < j:
-                memo.extend(_part_key(p) for p in log.parts[len(memo):j])
-            return r.parts, tuple(memo[:j]) + tuple(_part_key(p) for p in tail)
-    parts = _flat_parts(r)
-    return parts, tuple(_part_key(p) for p in parts)
-
-
 class _BodyEncoder:
     """Reference encoding within one body. v0: `Refs.to_json` verbatim. v1: flat `concat`s and the alias rule
     (PROTOCOL.md §4.5): the whole reference sequence of every encoded node argument is remembered, and a later
@@ -163,7 +149,9 @@ class _BodyEncoder:
     def __init__(self, schema: str = SCHEMA_V0, tables: _Tables | None = None) -> None:
         self.schema = schema
         self.tables = tables
-        self.seqs: dict[tuple, tuple[int, int]] = {}
+        self.seqs: dict[int, tuple[int, int]] = {}   # a recorded part list's id -> the first argument (k, a) it was
+        self.trie: dict[tuple[int, tuple], int] = {}  # (a part list's id, a part's `_part_key`) -> the id of the list one longer
+        self.token = object()                         # this encoder's entry in a `PartLog`'s memo
         if schema != SCHEMA_V0 and tables is None:
             raise ValueError(f"{schema} bodies are encoded within a descriptor (interning tables)")
 
@@ -173,21 +161,52 @@ class _BodyEncoder:
     def type(self, t) -> Any:
         return t.to_json() if self.tables is None else self.tables.type(t)
 
+    def _longer(self, i: int, p: Refs) -> int:
+        key = (i, _part_key(p))
+        hit = self.trie.get(key)
+        if hit is None:
+            hit = self.trie[key] = len(self.trie) + 1
+        return hit
+
+    def _prefixes(self, r: Concat) -> tuple[list[Refs], list[int], int]:
+        """(`_flat_parts(r)`, ids, j): ids[m], for m <= j, is the id of the part list parts[:m], 0 the empty one's. Two part lists
+        have one id exactly when their `_part_key`s are equal. A `Concat` cut from a `PartLog` reads its log's ids, kept in the log
+        and extended to the longest cut seen, so a key sequence one row longer than the call before costs O(1)."""
+        if r.prefix is not None:
+            log, j = r.prefix
+            tail = r.parts[j:]
+            if log.leaf_parts(j) and not any(isinstance(p, Concat) for p in tail):
+                owner, ids = log.memo.get("codec.prefix_ids", (None, None))
+                if owner is not self.token:
+                    ids = [0]
+                    log.memo["codec.prefix_ids"] = (self.token, ids)
+                for p in log.parts[len(ids) - 1:j]:
+                    ids.append(self._longer(ids[-1], p))
+                return r.parts, ids, j
+        return _flat_parts(r), [0], 0
+
     def refs(self, r: Refs, at: tuple[int, int] | None = None) -> Any:
         if self.schema == SCHEMA_V0 or not isinstance(r, Concat):
             return r.to_json()
-        parts, keys = _flat_keys(r)
-        n = len(keys)
+        parts, ids, j = self._prefixes(r)
+        n = len(parts)
+        more = [ids[j]]
+        for p in parts[j:]:
+            more.append(self._longer(more[-1], p))
+
+        def of(m: int) -> int:
+            return ids[m] if m <= j else more[m - j]
+
         out: list | None = None
         for m in range(n, max(1, n - ALIAS_WINDOW - 1), -1):  # m >= 2, suffix <= ALIAS_WINDOW parts
-            hit = self.seqs.get(keys[:m])
+            hit = self.seqs.get(of(m))
             if hit is not None and (at is None or hit[0] < at[0]):
                 out = [{"alias": list(hit)}] + [p.to_json() for p in parts[m:]]
                 break
         if out is None:
             out = [p.to_json() for p in parts]
         if at is not None and n > 1:
-            self.seqs.setdefault(keys, at)
+            self.seqs.setdefault(of(n), at)
         return out[0] if len(out) == 1 else {"concat": out}
 
 
@@ -209,8 +228,8 @@ def _encode_node(n: BodyNode, enc: _BodyEncoder | None = None, k: int = 0) -> di
 
 
 def _encode_body(b: Body, schema: str = SCHEMA_V0, tables: _Tables | None = None) -> dict:
-    """One body. The default is the v0 (verbatim, self-contained) form, which is also what `definition_digest`
-    consumers hash; `encode_program` passes the descriptor's schema and interning tables."""
+    """One body. The default is the v0 (verbatim, self-contained) form; `encode_program` passes the descriptor's schema and
+    interning tables."""
     enc = _BodyEncoder(schema, tables)
     return {
         "params": [[name, t.to_json()] for name, t in b.params],
@@ -243,7 +262,8 @@ def _encode_definition(fn: FunctionDefinition, schema: str = SCHEMA_V0, tables: 
 
 
 def definition_entry(fn: FunctionDefinition) -> dict:
-    """The self-contained (v0) descriptor entry of one definition (PROTOCOL.md §4.7): what a digest of the definition alone hashes."""
+    """The self-contained (v0) descriptor entry of one definition (PROTOCOL.md §4.7): `definition_digest(definition_entry(fn))`
+    is `fn`'s digest."""
     return _encode_definition(fn)
 
 
@@ -313,6 +333,12 @@ def encode_program(program, schema: str = SCHEMA) -> dict:
         desc.update(tables.to_json())
     _check_domain(desc)
     return desc
+
+
+def definitions(program) -> dict[str, FunctionDefinition]:
+    """The definitions `encode_program` records for `program`, by descriptor id: those a decoder of its descriptor
+    holds."""
+    return _walk(program, lambda fid, fn: None)
 
 
 def _walk(program, done: Callable[[str, FunctionDefinition], None]) -> dict[str, FunctionDefinition]:
@@ -530,6 +556,51 @@ def descriptor_size(program_or_desc) -> int:
     if isinstance(program_or_desc, dict):
         return len(canonical_json({k: v for k, v in program_or_desc.items() if k != "annotations"}))
     return sum(map(len, descriptor_chunks(program_or_desc)))
+
+
+def canonical_entry(entry: dict, desc: dict | None = None) -> dict:
+    """The entry `definition_digest` hashes (PROTOCOL.md §4.8): `entry`, a definition of either schema (of `desc`, whose
+    `callees` and `types` a v1 entry indexes), with each node's callee id and types inline, every alias replaced by the parts it
+    stands for and every concatenation flat, written as its one part when it has one.  One definition has one canonical entry,
+    whichever schema, alias choice or nesting of concatenations wrote it."""
+    if entry.get("form") != "composite":
+        return dict(entry)
+    tables = desc if desc is not None and "callees" in desc else None
+    body, seen = entry["body"], []
+
+    def parts(j: Any, k: int) -> list:
+        if "alias" in j:
+            n, a = j["alias"]
+            if not (_nat(n) and _nat(a) and n < k and a < len(seen[n])):
+                raise ValueError(f"{entry.get('id')}: alias {j['alias']} names no argument of a node before node {k}")
+            return seen[n][a]
+        if "concat" in j:
+            return [p for x in j["concat"] for p in parts(x, k)]
+        return [j]
+
+    def flat(ps: list) -> Any:
+        return ps[0] if len(ps) == 1 else {"concat": ps}
+
+    def inline(x: Any, table: str) -> Any:
+        if tables is not None:
+            return _at(tables[table], x, table)
+        if _int(x):
+            raise ValueError(f"{entry.get('id')}: an interned entry needs its descriptor's `{table}`")
+        return x
+
+    nodes = []
+    for k, nd in enumerate(body["nodes"]):
+        row = [parts(a["refs"], k) for a in nd["args"]]
+        seen.append(row)
+        args = [dict(a, type=inline(a["type"], "types"), refs=flat(ps)) for a, ps in zip(nd["args"], row)]
+        nodes.append(dict(nd, fn=inline(nd["fn"], "callees"), args=args, out=inline(nd["out"], "types")))
+    return dict(entry, body=dict(body, nodes=nodes, ret=flat(parts(body["ret"], len(seen)))))
+
+
+def definition_digest(entry: dict, desc: dict | None = None) -> str:
+    """Hex SHA-512 of the canonical JSON of `canonical_entry(entry, desc)`: a definition's digest, the same in any program and
+    from either schema's bytes (`definition_entry(fn)` is `fn`'s entry outside a descriptor)."""
+    return hashlib.sha512(canonical_json(canonical_entry(entry, desc))).hexdigest()
 
 
 # ---------------------------------------------------------------------------------------------------------

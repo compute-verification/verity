@@ -16,7 +16,7 @@ query it. Here is that record at the deployed plain verifier, and the read sets 
   own level columns (`plain_liveOpening`'s proof, stopped at the columns).
 * `CpDep`: one position per rep `r < 2`, level `ℓ + 1` below table 0's `fast100` levels and position of that level;
   its round is the plain fork round `forkRound`, and its coins query it where the level's query coin
-  (`plainQRound`, `plainQN`) draws it. A statement without a plain table-0 schedule has none.
+  (`plainQRound`, `plainQN`) samples it. A statement without a plain table-0 schedule has none.
 * `rdAt`: what an aborting run reads at a position, the rows its level columns hold there where it accepts, at any
   lane count.
 * `Pr_rdAt_le_capHit`: `Pr_rdOff_le_capHit` at `CpDep` and `rdAt`. A run reads something exactly where it opens the
@@ -48,7 +48,7 @@ theorem plain_liveRow {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false
     (hacc : (Claims.run sha512 P (V false) x ω (plainΦ x spec st (u, r'))).out = .acc)
     (hA : AcceptsAtD ins.read.I (some d) (wrPD ins.read.I d (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN
       (plainDg spec) (plainW spec (plain_mPts hs hin hset).1) sha512 (plainSim P x spec st) x (ω, u) r')))
-    {sch : Accounting.Schedule} {out : Model.OutCL 𝔽 Dig (List UInt8)} {k : ℕ} (hk : k < 2)
+    {sch : FlockSoundness.Accounting.Schedule} {out : Model.OutCL 𝔽 Dig (List UInt8)} {k : ℕ} (hk : k < 2)
     (hL : LaterEntriesAt sch ins.read.I d (wrPD ins.read.I d (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN
       (plainDg spec) (plainW spec (plain_mPts hs hin hset).1) sha512 (plainSim P x spec st) x (ω, u) r')) out k) :
     ∀ ℓ, 1 ≤ ℓ → ∀ q v, (q, v) ∈ (slotOpensL out k ℓ (lvOf sch ℓ).queries).map (fun x => (x.1, x.2.1)) →
@@ -152,7 +152,7 @@ def depRound (x : Claims.Msg) (j : DepIdx x) : ℕ :=
   | some (spec, st, sch) => forkRound spec st sch.k0 j.1.val j.2.1.val
   | none => 0
 
-/-- Whether coins `cs` query a position: its level's query coin draws it. -/
+/-- Whether coins `cs` query a position: its level's query coin samples it. -/
 def depOpens (x : Claims.Msg) (j : DepIdx x) (cs : ℕ → Coin) : Bool :=
   match depSetup x with
   | some (spec, st, sch) =>
@@ -254,7 +254,7 @@ theorem depL_eq {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stm
   rw [depSetup_eq hs hst hsch]
 
 /-- **A cap position's read sets at the deployed plain verifier, linearly**: `Pr_rdOff_le_capHit` at `CpDep`'s
-position `i` and `rdAt` at its rep, slot and position. Where a run reads something it accepts and its coins draw the
+position `i` and `rdAt` at its rep, slot and position. Where a run reads something it accepts and its coins sample the
 position (`plain_levelCols_queried`), and two runs sharing the coins before the plain fork round reading two rows
 there tie a collision (`plain_levelTie`). -/
 theorem Pr_rdAt_le_capHitK (keepV : Bool → Bool) {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A] [Nonempty A] (P : Claims.Prover Ω)

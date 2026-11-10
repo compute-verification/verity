@@ -12,19 +12,46 @@ The libraries are build products, not sources: they land in :func:`build_dir`, a
 sources and the compiler flags (override with ``VERITY_NUMERICS_BUILD_DIR``), and are compiled on first use by whoever needs them.
 Nothing is ever written under the repository: a build into ``cpp/build/`` left a ``lib*.so.*.tmp`` in the tree while a concurrent
 check's repository guard looked.
+
+A model's library is loaded as a :class:`Model`, whose every call raises the audit event ``CALLED`` with the sources its build
+compiles: a library is a build product, loaded once a process from wherever its build directory is, so which sources a computation
+ran is said at each call (circuit-check's tracer keys a check that called a model on their content, `circuit_check.cache.MODEL`).
 """
 from __future__ import annotations
 
 import contextlib
+import ctypes
 import hashlib
 import os
 import subprocess
+import sys
 import tempfile
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
 CPP_DIR = Path(__file__).resolve().parent / "cpp"
 CXX_FLAGS = ("-O2", "-std=c++17", "-fPIC", "-shared", "-ffp-contract=off")
+#: the audit event (`sys.audit`) each call of a `Model`'s function raises, with the model's sources (absolute paths)
+CALLED = "verity.numerics.model"
+
+
+class Model(ctypes.CDLL):
+    """``ctypes.CDLL`` of the library at ``path``, built from ``sources`` (every file its build compiles, the ones a source
+    includes among them): each call of one of its functions raises `CALLED` with them first."""
+
+    def __init__(self, path: str | os.PathLike, sources: Sequence[str | os.PathLike]):
+        super().__init__(os.fspath(path))
+        self.sources = tuple(str(Path(s).resolve()) for s in sources)
+        sources, base = self.sources, self._FuncPtr
+
+        class _FuncPtr(base):
+            _flags_, _restype_ = base._flags_, base._restype_
+
+            def __call__(self, *args):
+                sys.audit(CALLED, sources)
+                return super().__call__(*args)
+
+        self._FuncPtr = _FuncPtr
 
 
 def cxx() -> str:
@@ -109,6 +136,15 @@ def atomic_build(lib: Path, sources: Sequence[Path], compile_to: Callable[[Path]
             with contextlib.suppress(FileNotFoundError):
                 tmp_p.unlink()
     return lib
+
+
+def load(build: Callable[..., Path], sources: Sequence[str | os.PathLike]) -> Model:
+    """The library ``build()`` publishes, opened as a `Model` of ``sources``; rebuilt once with ``build(force=True)`` when it
+    fails to open."""
+    try:
+        return Model(build(), sources)
+    except OSError:  # a stale or foreign-platform .so (e.g. copied from another machine): rebuild here
+        return Model(build(force=True), sources)
 
 
 def cxx_compile(out: Path, src: Path, *, cwd: Path | None = None, extra: Sequence[str] = ()) -> None:

@@ -7,7 +7,6 @@ builders' live ANDs, and are pinned by gate count and program digest. Bf16AddF2f
 from __future__ import annotations
 
 import itertools
-import json
 import zlib
 from types import SimpleNamespace
 
@@ -17,16 +16,16 @@ import pytest
 from verity import settings
 from verity.ml.circuits import evaluation as E
 from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation.reference import standalone_call
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import codec
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, SpecializedDefinition, bind
+from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.types import Array
 from verity.ml.circuits.ops import fp32 as W
 from verity.ml.kernels import tc as K
 from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import Circuit, const_bits
+from verity.ml.circuits.boolean.forms import const_bits
+
+from _boolean_checks import assert_live_ands, assert_pinned
 
 DEFS = [EW.F32Add, EW.F32Mul, EW.F32Fma, EW.F32Div, EW.F32AddV4, EW.F32MulV4, EW.F32FmaV4, EW.F32DivV4, EW.Bf16AddF2fp, EW.Bf16Add,
         EW.Bf16MulBf16, EW.Bf16MulF32, EW.I32Add]
@@ -93,25 +92,12 @@ def _agree(target, inputs) -> None:
 
 @pytest.mark.parametrize("d", DEFS, ids=lambda d: f"{d.name}_v{d.version}")
 def test_pinned_counts_and_digests(d) -> None:
-    target = bind(d)
-    ands, xors, nots, digest = PINS[target.id]
-    assert BL.is_boolean(target)
-    assert BS.compile(target).counts == {"and": ands, "xor": xors, "not": nots}
-    prog, _ = standalone_call(target)
-    desc = codec.encode_program(prog)
-    assert codec.program_digest(desc) == digest
-    D = codec.decode_program(json.loads(codec.canonical_json(desc)), REGISTRY)
-    assert D.gates == prog.gates and codec.program_digest(codec.encode_program(D)) == digest
+    assert_pinned(bind(d), PINS)
 
 
 @pytest.mark.parametrize("d", DEFS, ids=lambda d: f"{d.name}_v{d.version}")
 def test_the_ands_are_the_builders_live_ands(d) -> None:
-    T = d.traced()
-    params = [t for _, t in d.signature(None)[0]]
-    C = Circuit(cse=True)
-    ins = TR._elements_in(C, params)
-    C.output("out", TR._flat_out(d.build(C, *ins), d.signature(None)[1]))
-    assert T.counts["and"] == C.counts()["ands"] == PINS[f"{d.name}_v{d.version}"][0]
+    assert_live_ands(d, PINS)
 
 
 @pytest.mark.parametrize("d", DEFS, ids=lambda d: f"{d.name}_v{d.version}")

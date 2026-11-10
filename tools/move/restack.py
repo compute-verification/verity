@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
-"""`tools/move/restack.py BRANCH... --move-commit SHA [--script S [--script-arg ARG]...] [--onto REF] [--main REF] [--push-to NEWBRANCH] [--dry-run] [--json]`: carry an open
+"""`tools/move/restack.py BRANCH... [--move-commit SHA... [--script S [--script-arg ARG]...]] [--onto REF] [--main REF] [--push-to NEWBRANCH] [--dry-run] [--json]`: carry an open
 branch across a generated layout move by running the move's own script on it, instead of rebasing it.
+
+With no `--move-commit`, the moves are every commit `--main` (default origin/main) has and the branch lacks whose message
+has a move line, oldest first: `Move: MAP` runs `tools/move/rename.py --map MAP`, as drive and `stage.py` write it, and
+`Layout-move: MAP` (with `--no-lock` when the move ran so) runs `tools/move/layout.py --map MAP`, as `stage.py` writes it.
+The branch crosses each in turn as below, the last merging `--onto` (default `--main`), so one command carries it across a
+window's moves. A `--move-commit` without `--script` runs its own move line's script, else `layout.py`; with `--script`,
+that script and its `--script-arg`s.
 
 A layout move is one commit M that `python3 tools/move/layout.py` (with its map, `tools/move/layout_map.toml`) wrote by running at
 the root of a checkout of its parent B. Because the move is a deterministic, idempotent codemod, a branch is migrated by the
@@ -33,6 +40,8 @@ every branch is clean or up to date, 1 otherwise.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import fcntl
 import json
 import os
 import re
@@ -50,6 +59,9 @@ SCRIPT_ARGS: tuple[str, ...] = ()
 BRANCH_ARGS = {"tools/move/layout.py": ("--report-splits",)}
 SCRIPT_DIR = "tools/move"
 TRAILER_MOVE, TRAILER_OF = "Restack-move", "Restack-of"
+#: a move commit's line naming its map, and so its script (`stage.py` writes both kinds, drive's queue `Move:`)
+MOVE_LINE = re.compile(r"^(Move|Layout-move): (tools/move/[\w.-]+\.toml)((?: --no-lock)?)$", re.M)
+LINE_SCRIPT = {"Move": "tools/move/rename.py", "Layout-move": "tools/move/layout.py"}
 #: the result's own list of pins, whose `--regen` runs every stale pin's command
 PINS = "tools/verity/check/pins.py"
 #: a Lean package's lock: where both sides changed it, the result takes `--onto`'s and its owner regenerates it
@@ -57,6 +69,9 @@ LOCK = "lean-audit.json"
 #: a pinned digest list, which the result's own pins step regenerates: where both sides changed it, the result takes
 #: `--onto`'s too
 PINNED = "TRUSTED.sha256"
+#: the clone's worktree lock, in its git directory, under the name `research.queue.WORKTREES_LOCK` gives it: a scratch
+#: worktree is added and forgotten holding it alone, and every fetch the queue runs holds it shared
+WORKTREES_LOCK = "research-worktrees.lock"
 
 
 class ScriptFailed(Exception):
@@ -68,6 +83,46 @@ def git(*args: str, cwd: str | None = None, input: bytes | None = None, ok: tupl
     if p.returncode not in ok:
         raise RuntimeError(f"git {' '.join(args)}: {p.stderr.decode(errors='replace').strip()}")
     return p
+
+
+@contextlib.contextmanager
+def worktrees_locked(cwd: str | None):
+    """Hold the clone's worktree lock alone. `git worktree add` writes a placeholder HEAD before the real one, and a fetch in
+    the same clone reads every worktree's HEAD: one that read the placeholder fails (`bad object worktrees/restack-…/HEAD`)."""
+    with open(os.path.join(cwd or ".", out("rev-parse", "--git-common-dir", cwd=cwd), WORKTREES_LOCK), "a") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        yield
+
+
+def add_worktree(wt: str, commit: str, cwd: str | None) -> None:
+    """Check ``commit`` out at ``wt`` as a scratch worktree: registered under the clone's worktree lock with no checkout, so
+    its HEAD is the real one before the lock goes, and filled after."""
+    with worktrees_locked(cwd):
+        git("worktree", "add", "--no-checkout", "--detach", "--quiet", wt, commit, cwd=cwd)
+    git("reset", "--hard", "--quiet", cwd=wt)
+
+
+def drop_worktree(wt: str, cwd: str | None) -> None:
+    """Delete scratch worktree ``wt``, then have the clone forget it under its worktree lock. Its result is already read, so
+    nothing here fails a restack: a file the script's tools left read-only goes too."""
+
+    def writable(func, path, _exc):
+        # Only the worktree's own directories change mode: a file in it may be a symlink or a hard link to one outside,
+        # and deleting it needs only its directory's permission.
+        os.chmod(os.path.dirname(path) or ".", 0o755)
+        if os.path.isdir(path) and not os.path.islink(path):
+            os.chmod(path, 0o755)
+            shutil.rmtree(path, ignore_errors=True)
+        else:
+            try:
+                func(path)
+            except OSError as e:
+                print(f"restack.py: left {path} in the scratch worktree: {e}", file=sys.stderr)
+
+    if os.path.lexists(wt):
+        shutil.rmtree(wt, **({"onexc": writable} if sys.version_info >= (3, 12) else {"onerror": writable}))
+    with worktrees_locked(cwd):
+        git("worktree", "prune", cwd=cwd, ok=tuple(range(256)))
 
 
 def out(*args: str, cwd: str | None = None) -> str:
@@ -161,9 +216,9 @@ def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[st
     if SCRIPT not in script:
         raise SystemExit(f"the move's base {base[:12]} has no {SCRIPT}")
     restored = sorted(p for p in script.keys() | mine.keys() if script.get(p) != mine.get(p))
-    with tempfile.TemporaryDirectory(prefix="restack-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="restack-", ignore_cleanup_errors=True) as tmp:
         wt = os.path.join(tmp, os.path.basename(tmp))  # a unique worktree name, so restacks can run side by side
-        git("worktree", "add", "--detach", "--quiet", wt, merged, cwd=cwd)
+        add_worktree(wt, merged, cwd)
         try:
             if restored:
                 # committed, so that the script sees a clean checkout (layout.py refuses a dirty one)
@@ -182,8 +237,7 @@ def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[st
                     git("rm", "-q", "-f", "--ignore-unmatch", "--", path, cwd=wt)
             return out("write-tree", cwd=wt), restored, output
         finally:
-            git("worktree", "remove", "--force", wt, cwd=cwd, ok=(0, 128))
-            git("worktree", "prune", cwd=cwd)
+            drop_worktree(wt, cwd)
 
 
 def regen_pins(result: str, python: str, cwd: str | None) -> tuple[str | None, list[str], bool]:
@@ -191,9 +245,9 @@ def regen_pins(result: str, python: str, cwd: str | None) -> tuple[str | None, l
     it changed nothing, the tail of its output, whether every pin is fresh after). A tree without the list has no pins to run."""
     if git("cat-file", "-e", f"{result}:{PINS}", cwd=cwd, ok=(0, 128)).returncode:
         return None, [], True
-    with tempfile.TemporaryDirectory(prefix="restack-pins-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="restack-pins-", ignore_cleanup_errors=True) as tmp:
         wt = os.path.join(tmp, os.path.basename(tmp))
-        git("worktree", "add", "--detach", "--quiet", wt, result, cwd=cwd)
+        add_worktree(wt, result, cwd)
         try:
             p = subprocess.run([python, PINS, "--regen"], cwd=wt, capture_output=True)
             output = (p.stdout + p.stderr).decode(errors="replace").strip().splitlines()[-15:]
@@ -201,8 +255,7 @@ def regen_pins(result: str, python: str, cwd: str | None) -> tuple[str | None, l
             tree = out("write-tree", cwd=wt)
             return (None if tree == tree_of(result, cwd) else tree), output, p.returncode == 0
         finally:
-            git("worktree", "remove", "--force", wt, cwd=cwd, ok=(0, 128))
-            git("worktree", "prune", cwd=cwd)
+            drop_worktree(wt, cwd)
 
 
 def with_pins(r: dict, result: str, python: str, cwd: str | None, pins: bool) -> dict:
@@ -309,6 +362,52 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
     return r
 
 
+def move_line(commit: str, cwd: str | None) -> tuple[str, tuple[str, ...]] | None:
+    """The script and arguments ``commit``'s move line names, or None when it has none."""
+    m = MOVE_LINE.search(out("log", "-1", "--format=%B", commit, cwd=cwd))
+    return (LINE_SCRIPT[m[1]], ("--map", m[2], *m[3].split())) if m else None
+
+
+def moves_on(ref: str, head: str, cwd: str | None) -> list[tuple[str, str, tuple[str, ...]]]:
+    """The moves ``ref`` has and ``head`` lacks, oldest first: (commit, script, arguments) of each commit with a move line."""
+    log = out("log", "--topo-order", "--reverse", "--no-merges", "--format=%H%x00%B%x1e", ref, f"^{head}", cwd=cwd)
+    found = []
+    for rec in filter(None, (x.strip() for x in log.split("\x1e"))):
+        commit, body = rec.split("\x00", 1)
+        if m := MOVE_LINE.search(body):
+            found.append((commit, LINE_SCRIPT[m[1]], ("--map", m[2], *m[3].split())))
+    return found
+
+
+def carry(branch: str, moves: list[tuple[str, str, tuple[str, ...]]], onto: str | None = None, base: str | None = None,
+          python: str = sys.executable, cwd: str | None = None, pins: bool = True, main: str | None = None) -> dict:
+    """``branch`` restacked across each of ``moves`` in order, each with its own script and arguments, the last merging
+    ``onto``: the last step's outcome (`restack`'s), or the first that isn't clean, with `crossed`, the moves it crossed."""
+    global SCRIPT, SCRIPT_ARGS
+    head, tip, crossed, locks = rev(branch, cwd), branch, [], []
+    if not moves:
+        return {"branch": branch, "head": head, "crossed": [], "status": "no-moves", "plain": {"status": "clean", "files": []},
+                "error": f"no move to cross: merge {main or onto} as usual"}
+    for i, (move, script, args) in enumerate(moves):
+        SCRIPT, SCRIPT_ARGS = script, tuple(args)
+        last = i == len(moves) - 1
+        r = restack(tip, move, onto if last else None, base if len(moves) == 1 else None, python, cwd,
+                    pins=pins and last, main=main)
+        r = {**r, "branch": branch, "head": head, "crossed": crossed}
+        if r["status"] not in ("clean", "up-to-date", "locks-stale"):
+            return r
+        crossed = [*crossed, move]
+        locks += [f for f in r.get("files", []) if r["status"] == "locks-stale" and f not in locks]
+        if last:
+            break
+        tip = r["result"]
+    if locks and r["status"] != "locks-stale":
+        r = {**r, "status": "locks-stale", "files": locks,
+             "error": f"the Lean locks {', '.join(locks)} took the moves' side: regenerate them on the result "
+                      "(tools/verity/lean/check.py --update) before marking it"}
+    return {**r, "crossed": crossed}
+
+
 def push(result: str, new: str, remote: str, cwd: str | None) -> None:
     if git("ls-remote", "--exit-code", remote, f"refs/heads/{new}", cwd=cwd, ok=(0, 2)).returncode == 0:
         raise SystemExit(f"--push-to {new}: {remote} already has that branch; nothing pushed")
@@ -317,10 +416,14 @@ def push(result: str, new: str, remote: str, cwd: str | None) -> None:
 
 def line(r: dict) -> str:
     plain = f"plain merge {r['plain']['status']}" + (f" ({len(r['plain']['files'])})" if r["plain"]["files"] else "")
+    if len(r.get("crossed", [])) > 1 or r["status"] not in ("clean", "up-to-date", "no-moves") and r.get("crossed"):
+        plain += f"; crossed {len(r['crossed'])} moves: {', '.join(c[:12] for c in r['crossed'])}"
+        if r["status"] not in ("clean", "up-to-date", "locks-stale"):
+            plain += f"; stopped at the move {r['move'][:12]}"
     if r["status"] in ("clean", "up-to-date"):
         return f"{r['branch']}: {r['status']} {r['result'][:12]}  [{plain}]"
-    if r["status"] in ("script-failed", "pins-stale", "locks-stale", "based-after"):
-        at = f" {r['result'][:12]}" if r["status"] not in ("script-failed", "based-after") else ""
+    if r["status"] in ("script-failed", "pins-stale", "locks-stale", "based-after", "no-moves"):
+        at = f" {r['result'][:12]}" if r["status"] not in ("script-failed", "based-after", "no-moves") else ""
         return f"{r['branch']}: {r['status']}{at}  [{plain}]\n    " + r["error"].replace("\n", "\n    ")
     return f"{r['branch']}: conflicted at {r['step']} ({len(r['files'])})  [{plain}]\n" + "".join(f"    {f}\n" for f in r["files"])
 
@@ -329,15 +432,18 @@ def main(argv: list[str] | None = None) -> int:
     global SCRIPT, SCRIPT_ARGS
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("branches", nargs="+", metavar="BRANCH")
-    ap.add_argument("--move-commit", required=True, metavar="SHA", help="the commit layout.py generated")
-    ap.add_argument("--onto", metavar="REF", help="what to merge last: the moved main (default: the move commit)")
-    ap.add_argument("--base", metavar="REF", help="the tree the move ran on (default: the move commit's parent)")
+    ap.add_argument("--move-commit", action="append", default=[], metavar="SHA",
+                    help="a move's commit, repeated in order (default: each move --main has and the branch lacks, by its "
+                         "move line)")
+    ap.add_argument("--onto", metavar="REF",
+                    help="what to merge last: the moved main (default: the last --move-commit, else --main)")
+    ap.add_argument("--base", metavar="REF", help="the tree one --move-commit ran on (default: its parent)")
     ap.add_argument("--main", default="origin/main", metavar="REF",
                     help="main, when it resolves: a branch that shares a commit after the move's base with it or --onto is "
                          "refused (default origin/main)")
-    ap.add_argument("--python", default=sys.executable, help="the interpreter that runs layout.py")
-    ap.add_argument("--script", default=SCRIPT, help=f"the move's script, under {SCRIPT_DIR}/ (default {SCRIPT}; a rename "
-                                                    "move's is tools/move/rename.py)")
+    ap.add_argument("--python", default=sys.executable, help="the interpreter that runs the move's script")
+    ap.add_argument("--script", help=f"one --move-commit's script, under {SCRIPT_DIR}/ (default: its move line's, else "
+                                     f"{SCRIPT}; a rename move's is tools/move/rename.py)")
     ap.add_argument("--script-arg", action="append", default=[], metavar="ARG",
                     help="an argument for the script, repeated in order; one that starts with - as --script-arg=ARG "
                          "(a rename move: --script tools/move/rename.py --script-arg=--map --script-arg tools/move/MAP.toml)")
@@ -347,14 +453,18 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-pins", action="store_true", help=f"don't run the result's {PINS} --regen")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    if not a.script.startswith(SCRIPT_DIR + "/"):
+    if a.script is not None and not a.script.startswith(SCRIPT_DIR + "/"):
         ap.error(f"--script: a script under {SCRIPT_DIR}/")
-    SCRIPT, SCRIPT_ARGS = a.script, tuple(a.script_arg)
+    if (a.script or a.script_arg or a.base) and len(a.move_commit) != 1:
+        ap.error("--script, --script-arg and --base are one --move-commit's")
     if a.push_to and len(a.branches) != 1:
         ap.error("--push-to takes one branch")
+    named = [(m, a.script or SCRIPT, tuple(a.script_arg)) if a.script or a.script_arg
+             else (m, *(move_line(m, None) or (SCRIPT, ()))) for m in a.move_commit]
     results = []
     for b in a.branches:
-        r = restack(b, a.move_commit, a.onto, a.base, a.python, pins=not a.no_pins, main=a.main)
+        moves = named or moves_on(a.main, b, None)
+        r = carry(b, moves, a.onto or (None if named else a.main), a.base, a.python, pins=not a.no_pins, main=a.main)
         results.append(r)
         if not a.json:
             print(line(r), flush=True)
@@ -369,7 +479,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"pushed {r['result'][:12]} to {a.remote} {a.push_to}")
     if a.json:
         print(json.dumps(results, indent=2))
-    return 0 if all(r["status"] in ("clean", "up-to-date") for r in results) else 1
+    return 0 if all(r["status"] in ("clean", "up-to-date", "no-moves") for r in results) else 1
 
 
 if __name__ == "__main__":

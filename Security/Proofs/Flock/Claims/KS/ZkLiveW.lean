@@ -1,6 +1,41 @@
 module
 
 public import Proofs.Flock.Claims.KS.ZkBoundW
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployTables
+import Proofs.Flock.Claims.KS.Deploy
+import Proofs.Flock.Claims.KS.Range
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Every masked table's bound from the live sessions, off the table on a witness lane
@@ -337,7 +372,7 @@ def ZkLiveAccWJ (x : Claims.Msg) : Prop :=
     ZkLiveAccAtWJ execArith Discharge.ZkExec.hs512 (wideJ true) x (zkTabs h0 L hz hk hlay)
 
 /-- **Every masked table's bound at a statement in scope, off the table on a witness lane**, the escapes counted per
-round: `zk_tableBoundJAccAtR_of_liveW` at C-Flock ZK's padded tables (`zk_atTabs`). -/
+round: `zk_tableBoundJAccAtR_of_liveW` at Flock ZK's padded tables (`zk_atTabs`). -/
 theorem zk_tableBoundJAccAtR_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -353,7 +388,7 @@ theorem zk_tableBoundJAccAtR_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
 end Gen
 
 /-- **Every masked table's bound at a statement in scope, off the table on a witness lane**, the escapes counted per
-round: `zk_tableBoundJAccAtR_of_liveW` at C-Flock ZK's padded tables (`zk_atTabs`). -/
+round: `zk_tableBoundJAccAtR_of_liveW` at Flock ZK's padded tables (`zk_atTabs`). -/
 theorem zk_tableBoundJAccAtR_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)

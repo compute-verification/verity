@@ -1,8 +1,8 @@
 """Registered FP32 square root: `PouwF32SqrtRn_v1`, sqrt.rn.f32 as the GPU computes it (ρ's root in Pearl's statistics,
 and the IEEE slow path of a served kernel's `sqrt.rn`).  Its Boolean version is `PouwF32SqrtRn_v2` (PoUW's
-`verity.core.protocols.pouw.circuit.boolean`, from `ops.boolean.sqrt.f32_sqrt_rn`).
+`verity.ml.protocols.pouw.circuit.boolean`, from `ops.boolean.sqrt.f32_sqrt_rn`).
 
-Provenance.  PoUW registered it in `verity.core.protocols.pouw.circuit.words` (same id, signature, conformance status and
+Provenance.  PoUW registered it in `verity.ml.protocols.pouw.circuit.words` (same id, signature, conformance status and
 evaluator), which re-exports it from here.
 """
 from __future__ import annotations

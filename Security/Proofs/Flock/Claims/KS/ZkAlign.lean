@@ -110,7 +110,7 @@ omit [Inhabited D] [Inhabited Sl] in
 open Classical in
 /-- **An opened position at a rep's cap is one of its openings there.** -/
 theorem opRZ_mem {H : List UInt8 → D} {E : Merkle.Enc (List 𝔽) D} {Lf : Merkle.Leaf (List 𝔽) Sl D H}
-    {sch : Accounting.Schedule} {r ℓ : ℕ} {cap : Model.Cap D} {out : OutZC 𝔽 D Sl}
+    {sch : FlockSoundness.Accounting.Schedule} {r ℓ : ℕ} {cap : Model.Cap D} {out : OutZC 𝔽 D Sl}
     {p : Fin (2 ^ (lvOf sch ℓ).logLen)} (h : (opRZ H E Lf sch r ℓ cap out p).isSome) :
     ∃ x ∈ slotOpensZ out r ℓ (lvOf sch ℓ).queries, x.1 = p.val := by
   unfold opRZ Exec.opOfL at h
@@ -239,7 +239,7 @@ theorem advRSZ_le_forkC (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : Ta
 
 /-- **The filtered conflict is `0` at a run rejecting a table up to `n`.** -/
 theorem ind_conflictAcc_dead (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H)
-    (sch : Accounting.Schedule) (n r ℓ : ℕ) (d : Model.Cap D) {b b' : List (OutZC 𝔽 D Sl)}
+    (sch : FlockSoundness.Accounting.Schedule) (n r ℓ : ℕ) (d : Model.Cap D) {b b' : List (OutZC 𝔽 D Sl)}
     (h : ¬ AccUpTo n b ∨ ¬ AccUpTo n b') :
     ind (fun x : List (OutZC 𝔽 D Sl) × List (OutZC 𝔽 D Sl) => ∃ p,
       Rewinding.ConflictAt (opRAccZ H E Lf sch n r ℓ d) x p) (b, b') = 0 := by
@@ -371,7 +371,7 @@ end Session
 /-! ## At the masked simulator -/
 
 /-- **The simulated fork reaches each cap's slot after its masked fork round**: at every masked statement in scope
-that sets up at a draw, every prover and tape, every table `j` and table of columns, the primed prover at the simulated
+that sets up at a sample, every prover and tape, every table `j` and table of columns, the primed prover at the simulated
 strategy after `Commit` (`zkSimAt`) reaches rep `r`'s level-`ℓ + 1` table node after `zkRd j i` coins (`SlotRSZ`). -/
 def ZkSlotAlign (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
@@ -392,7 +392,7 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **The simulated fork reaches each cap's slot after its masked fork round**: at every masked statement in scope
-that sets up at a draw, every prover and tape, every table `j` and table of columns, the primed prover at the simulated
+that sets up at a sample, every prover and tape, every table `j` and table of columns, the primed prover at the simulated
 strategy after `Commit` (`zkSimAt`) reaches rep `r`'s level-`ℓ + 1` table node after `zkRd j i` coins (`SlotRSZ`). -/
 def ZkSlotAlign (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)

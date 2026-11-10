@@ -1,0 +1,15 @@
+{
+ "schema": "spot-card/v1",
+ "slot": "commitment",
+ "model": null,
+ "status": "modeled",
+ "provisional": true,
+ "source": "SHA-512 hiding rows on the whole H200 at 4 KiB rows: 5.21e11 B/s measured at 16 KiB rows, at 91.5 B a compression",
+ "runs": ["r20261027-042422-85b2"],
+ "owner": "@proofs",
+ "value": {
+  "hash_rate": 3.98e11,
+  "device": "H200",
+  "scheme": "SHA-512 hiding rows, 4 KiB"
+ }
+}

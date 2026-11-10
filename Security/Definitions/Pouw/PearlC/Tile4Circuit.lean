@@ -1,7 +1,9 @@
 module
 
-public import Definitions.Pouw.PearlC.TileCircuit
 public import Definitions.Pouw.PearlC.DeviceFp4
+public import Definitions.Pouw.PearlC.Fp4
+public import Definitions.Pouw.PearlC.TileCircuit
+import Mathlib.Algebra.Order.AbsoluteValue.Basic
 
 /-!
 # Pearl-C4's tile unit as a core circuit (definitions only)
@@ -19,7 +21,7 @@ public import Definitions.Pouw.PearlC.DeviceFp4
     64 code pairs and 4 scale bytes per operand, with no promotion. The last is `C̃_ij` (`c4Gate`);
   * **U**: four `HopperBF16WgmmaDot16_v1` steps (`TileCircuit.peelF`) from `C̃_ij` over the slices of `P_A,i` and
     `P_B,j`, as in `pc8`. The last is `U_ij` (`u4Gate`).
-* **One proof unit** (`Spec.part`) holds every computed gate.
+* **One proof block** (`Spec.part`) holds every computed gate.
 
 Which gate reads which, the widths and the outputs are checked against the template's `CallGraph`, with the checked
 templates' descriptor digests pinned, by `tests/test_circuit_tile_lean.py`. The trusted part is as in `TileCircuit`: the
@@ -58,7 +60,7 @@ def atom4F (first : Bool) (l : List ℕ) : ℕ :=
 /-- One gate of an entry's block, at position `r` of the block and gate `g`: the chain's `K/64` firings over `A′_i`'s
 codes from gate `a` and scale bytes from `sa` and `B̃_j`'s from `b` and `sb`, then U's four K16 steps over the 64 BF16
 words of `P_A,i` from gate `pa` and of `P_B,j` from gate `pb`. -/
-def entry4Gate (K a b sa sb pa pb g r : ℕ) : GateRow :=
+def entry4Gate (K a b sa sb pa pb g r : ℕ) : Gate :=
   if r < K / 64 then
     ⟨32, false, (if r = 0 then [] else [g - 1]) ++ (List.range 64).map (a + 64 * r + ·) ++
         (List.range 64).map (b + 64 * r + ·) ++ (List.range 4).map (sa + 4 * r + ·) ++
@@ -82,7 +84,7 @@ def entry4Base (K TM TN i j : ℕ) : ℕ := tile4In K TM TN + (i * TN + j) * blo
 
 /-- `Pc4Tile_v1{K, TM, TN}`'s gates: the inputs (see the module docstring), then entry `(i, j)`'s block (`entry4Gate`)
 for each entry in row-major order. -/
-def tile4Gate (K TM TN g : ℕ) : GateRow :=
+def tile4Gate (K TM TN g : ℕ) : Gate :=
   if g < TM * K then ⟨4, true, [], fun _ => 0⟩
   else if g < TM * row4 K then ⟨8, true, [], fun _ => 0⟩
   else if g < TM * row4 K + TN * K then ⟨4, true, [], fun _ => 0⟩

@@ -8,8 +8,8 @@ selected is `CutlassFp8BlockScaledMMKernel` (`VLLM_USE_DEEP_GEMM=0`; the DeepGEM
                          Ws.T [K/G,cdiv(N,G)] (view of the f32 [cdiv(N,G),K/G] `weight_scale_inv` parameter), bias=None)
         -> Compute(ScaledMmFp8BlockSharedScale_v1{K,N,G}, rows=M, (PerRow(x_q), PerRow(x_s), Shared(W), Shared(Ws)), (PerRow(out),))
 
-The GEMM's Definition is the record target's `fp8_scale_construction`: `ScaledMmFp8BlockSharedScale_v1` by default (each weight
-block's scale products once), `ScaledMmFp8Block_v1` under `per-coordinate`; one function, one signature.
+The GEMM's Definition is the record target's `fp8_scale_construction`: `ScaledMmFp8BlockSharedScale_v1` (each weight block's scale
+products once), `ScaledMmFp8Block_v1`'s function and signature.
 
 Both registered Definitions (`verity.ml.definitions.registry.fp8`) are pinned bit for bit on the H100 against these kernels (the module's
 `_QUANT_CONF` / `_BLOCK_CONF` conformance notes).  The GEMM Definition is the blockwise CUTLASS kernel's

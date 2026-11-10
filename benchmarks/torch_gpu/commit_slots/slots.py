@@ -403,7 +403,7 @@ def edge_layout() -> CommitShape:
     return CommitShape("commit-slots/edge/v1", (g0, g1))
 
 
-FIXTURE = Path(__file__).resolve().parent / "fixtures" / "commit-slots-v1.json"
+FIXTURE = Path(__file__).resolve().parent.parent.parent.parent / "verity" / "ml" / "commitments" / "tests" / "fixtures" / "commit-slots-v1.json"
 
 
 def _layout_json(layout: CommitShape) -> dict[str, Any]:

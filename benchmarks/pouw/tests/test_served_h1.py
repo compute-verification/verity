@@ -17,7 +17,7 @@ verifier checks the coins from the session as the gate publishes it and the audi
 of both (`remote.trusted_session`), under the key its key.json holds, ``(checked)`` only against the key's deployment
 record, the window's root and its period, and refuses a record under another key, a ledger core refuses, a session the
 manifest doesn't name, outside the window's period or opened for another layout, a round root the challenger didn't
-receive, a salt that isn't its round's coin's, and a draw after another root; an address without its session id is
+receive, a salt that isn't its round's coin's, and a sample after another root; an address without its session id is
 refused, and with neither the coins are in-process and labelled not certified; serve.py refuses ``--gate``, naming
 vllm's H1 path as the gated served window of record."""
 from __future__ import annotations
@@ -423,13 +423,13 @@ class _Host:
     `directory` (`remote.open_session`) beside an empty hellos.jsonl, serving one session (`remote.serve`, its hello
     carrying `secret`) on its own clock, and once it has ended (`ended`) its end entry sealing out/'s files.  The
     ledger's entries, the record and the close are signed with one test key at its next leaf each.  Published as the
-    gate does: request.json and open.json beside the challenger's out/ (`directory`).  A draw session (`rounds` None,
-    `open_draw`) is opened withheld (`withhold`) on the draw root, in its `parent`'s ledger and period."""
+    gate does: request.json and open.json beside the challenger's out/ (`directory`).  A sample session (`rounds` None,
+    `open_draw`) is opened withheld (`withhold`) on the sample root, in its `parent`'s ledger and period."""
 
     def __init__(self, tmp_path, epoch: int = EPOCH, rounds: int | None = ROUNDS, host: str = "vy-challenger-1",
                  root: bytes = ROOT, secret: bytes = bytes([5]) * 32, sid: str = SID, withhold: bool = False,
                  parent: _Host | None = None) -> None:
-        from verity.core.protocols.sampled_proofs import remote as R
+        from verity.core.protocols.spot import remote as R
         from verity.ml.crypto import lms
         self.tmp_path, self.epoch, self.host, self.sid, self.draw = tmp_path, epoch, host, sid, None
         self.R, self.directory, self.secret = R, tmp_path / ("session" if parent is None else "draw") / "out", secret
@@ -475,7 +475,7 @@ class _Host:
         return lms.sign_at(self.private, next(self.leaves), message).encode()
 
     def open_draw(self, root: bytes, withhold: bool = True) -> CO.Endpoint:
-        """The window's draw session, reserved and opened (withheld unless `withhold` is False) on the draw root `root`
+        """The window's sample session, reserved and opened (withheld unless `withhold` is False) on the sample root `root`
         in this host's ledger, as `coins.gate_draw` asks the gate for it: its client's session (no commitment)."""
         self.draw = _Host(self.tmp_path, self.epoch, None, self.host, root, bytes([6]) * 32, DRAW_SID, withhold, self)
         return CO.Endpoint(DRAW_SID, self.draw.address, self.draw.secret)
@@ -521,7 +521,7 @@ def _serve_window(cs, sv, calls: list[dict], root: bytes) -> dict:
     """A served window's coin path on `cs`: the salt coin after the window's root, round s's coin after step s's round
     root and the step's units under its live salt, then the sampling coin after the receipts root; the manifest, its window
     `WINDOW`."""
-    from verity.core.protocols.pouw.circuit import h1tile as HT
+    from verity.ml.protocols.pouw.circuit import h1tile as HT
     salt = cs.salt(root)
     log = []
     for s in sorted({c["step"] for c in calls}):
@@ -543,7 +543,7 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
     """A window's coins from the challenger off the node (`coins.open_coins` over `RemoteChallenger`): salt, one round a
     step and the sample, each opened there after the root the window sent.  The verifier (`coins.py check`) reads only the
     session as the gate publishes it (out/ beside request.json and open.json), every head of the auditor's ledger and
-    the window's manifest, recomputes the round roots, salts and draw root from the manifest's committed roots, and
+    the window's manifest, recomputes the round roots, salts and sample root from the manifest's committed roots, and
     passes it under the key key.json holds, ``(checked)`` only when it names the key's deployment record, the window's
     root and its period and all match.  The ledger and the session's files are core's to accept
     (`remote.trusted_session`): it refuses a key.json with another key, a key other than the record's, a root the
@@ -552,7 +552,7 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
     without the host's pins log or the verifier's first-parent history of main, or whose pin isn't on that history
     (`challenger.pinned_session`).  The check itself
     refuses a session the manifest doesn't name, a manifest naming another window, a window outside the verifier's
-    period, an open of another layout, and a window whose round root, opening, salt or draw root isn't what the
+    period, an open of another layout, and a window whose round root, opening, salt or sample root isn't what the
     challenger logged."""
     from verity.ml.crypto import lms
     SV = _load("serve")
@@ -674,8 +674,8 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
 
 
 def test_an_off_node_draw_coin_comes_only_from_a_withheld_draw_session(tmp_path, monkeypatch):
-    """Off the node the draw coin (`Coins.draw`) is its own draw session's, opened withheld on the draw root: with no gate
-    to open one at, the draw is refused before any coin opens, and so is a draw session whose challenger answers its
+    """Off the node the sampling coin (`Coins.draw`) is its own sample session's, opened withheld on the sample root: with no gate
+    to open one at, the sample is refused before any coin opens, and so is a sample session whose challenger answers its
     hello with a commitment (one the gate opened plain, so its root was out before the prover's)."""
     after = hashlib.sha512(b"the draw root").digest()
     for env in (CO.GATE_ENV, CO.PEER_ENV):
@@ -698,7 +698,7 @@ def test_round_coins_pipelined_off_node_open_each_after_its_root_in_order(tmp_pa
     each coin comes back opened after its own root, round by round in the challenger's own release log and under
     `order_reason`; closing waits for the coins still out, then closes the session.  In process the same roots open at
     once, and a root past the epoch's rounds is refused before it is sent."""
-    from verity.core.protocols.sampled_proofs import remote as R
+    from verity.core.protocols.spot import remote as R
     host = _Host(tmp_path, rounds=4)
     cs = CO.open_coins(host.session, EPOCH, 4)
     roots = [hashlib.sha512(b"round %d" % i).digest() for i in range(4)]
@@ -753,7 +753,7 @@ def test_the_draw_coin_and_its_time_are_read_under_the_lock_round_roots_are_sent
 def _pipe_server(sock, challenger, answers: list[str]) -> None:
     """The challenger's side of a `RoundPipe` stream for its refusals: the hello's commitment, then each open frame's
     reply as `answers` names it in turn ("ok" its coin, "refuse" a refusal, "other" the next coin's opening)."""
-    from verity.core.protocols.sampled_proofs import remote as R
+    from verity.core.protocols.spot import remote as R
     w = R._Wire(sock)
     w.recv()
     w.send({"type": "commitment", "commitment": challenger.commitment.to_json()})
@@ -771,7 +771,7 @@ def _pipe_server(sock, challenger, answers: list[str]) -> None:
 def test_round_coins_pipelined_refuse_every_later_round_after_a_refusal_or_a_bad_opening(answer, why):
     """A `RoundPipe` whose challenger refuses round 1's open, or answers it with another coin's opening, ends the session:
     round 1's coin and every later one are refused, round 0's (back before) is kept, and no root is sent after."""
-    from verity.core.protocols.sampled_proofs import remote as R
+    from verity.core.protocols.spot import remote as R
     lay = CO.layout(EPOCH, 4)
     ch = CO.Ch.LiveChallenger(lay["scheme"], lay["epoch"], lay["families"], random.Random("host").randbytes)
     a, b = socket.socketpair()
@@ -847,7 +847,7 @@ def test_a_window_is_reserved_then_opened_on_the_callers_root_and_its_secret_is_
 
 
 def test_a_draw_session_is_reserved_withheld_and_an_open_that_answers_its_root_is_refused():
-    """`coins.gate_draw` reserves the draw session ``--withhold`` and opens it on the draw root with no flag of its own
+    """`coins.gate_draw` reserves the sample session ``--withhold`` and opens it on the sample root with no flag of its own
     (the gate withholds what its reserve marked): the session holds no commitment, and its secret is the session's
     alone. A reserve the gate answers plain is refused before any open, and so is an open answer that hands out the
     session's coin commitment root before its end, that isn't marked withheld, or whose challenger signed no record."""

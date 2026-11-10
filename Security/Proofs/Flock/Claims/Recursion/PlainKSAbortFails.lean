@@ -1,7 +1,41 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.BoundDeploy
 public import Proofs.Flock.Claims.DeployEfficient
+public import Proofs.Flock.Claims.NumbersDeploy
+public import Proofs.Flock.Claims.Recursion.BoundDeploy
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Recursion.DeployMargin
 
 /-!
 # (P1) `Bound.PlainKSAbort` fails at an element-level verifier `KSBoundRouteCols` quantifies over
@@ -39,7 +73,7 @@ open Claims
 /-- A verifier whose steps accept whatever they read accepts at the first round and calls `H` nowhere. -/
 theorem stepWith_acc {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out)
     (hv : ∀ as, vnext as = .ret .acc) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), 0 < n →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), 0 < n →
       (stepWith H P x ω vnext n hist as t).out = .acc ∧ (stepWith H P x ω vnext n hist as t).vLog = t.vLog
   | 0, _, _, _, h => absurd h (Nat.lt_irrefl 0)
   | _ + 1, _, _, _, _ => by simp [stepWith, hv, OC.eval]
@@ -64,7 +98,7 @@ section Acc
 variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
 /-- At a statement with no witness, a prover that never aborts against a verifier that accepts at its first round
-fails `E^rep` at every draw. -/
+fails `E^rep` at every sample. -/
 theorem prBadAbort_acc (H : Msg → Msg) (I : Inner Coin W) (x : Msg) (hv : ∀ as cs, I.V.next x as cs = .ret .acc)
     (hk : 0 < I.V.k x) (hx : ∀ w, ¬ I.R x w) {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A] [Nonempty A]
     (P : Prover Ω) :

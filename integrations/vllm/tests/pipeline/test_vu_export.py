@@ -236,16 +236,16 @@ def test_an_fp8_block_coordinate_is_the_row_word(tmp_path, N):
     f32 = lambda a: np.asarray(a, dtype=np.float32).view(np.uint32)       # noqa: E731
     xq, w, sx, ws = _e4m3(rng, K), _e4m3(rng, (N, K)), f32(rng.uniform(1e-3, 0.1, K // G)), f32(rng.uniform(1e-3, 0.1, (-(-N // G), K // G)))
     st, ops = {"K": K, "N": N, "G": G}, [xq, sx, w.reshape(-1), ws.reshape(-1)]
-    out = EV.evaluate("ScaledMmFp8Block_v1", st, [[xq], [sx], [], []], [None, None, ops[2], ops[3]])
-    insts = VX.decompose("ScaledMmFp8Block_v1", st, ops, out, lambda n, k: list(range(0, n, n // k)), VX.Limits(gemm_coords_per_row=8))
+    out = EV.evaluate("ScaledMmFp8BlockSharedScale_v1", st, [[xq], [sx], [], []], [None, None, ops[2], ops[3]])
+    insts = VX.decompose("ScaledMmFp8BlockSharedScale_v1", st, ops, out, lambda n, k: list(range(0, n, n // k)), VX.Limits(gemm_coords_per_row=8))
     assert len(insts) == 8 and {i.set_name for i in insts} == {f"gemm-coordinate-fp8-block{G}-hopper-e4m3-k{K}"}
     for i in insts:
         n = i.sub["n"]
         assert np.array_equal(i.ports["w"], w[n]) and np.array_equal(i.ports["sw"], ws[n // G]) and int(i.ports["y"][0]) == int(out["0"][n])
     with pytest.raises(VX.DecompositionMismatch):
-        VX.decompose("ScaledMmFp8Block_v1", st, ops, {"0": out["0"] ^ 1}, lambda n, k: [0], VX.Limits())
+        VX.decompose("ScaledMmFp8BlockSharedScale_v1", st, ops, {"0": out["0"] ^ 1}, lambda n, k: [0], VX.Limits())
     lim = VX.Limits(gemm_coords_per_row=5)
-    _root, ev, sets = _store_one(tmp_path, "ScaledMmFp8Block_v1", st, ops, out, [None, None, {"field": "w", "range": [0, N * K]},
+    _root, ev, sets = _store_one(tmp_path, "ScaledMmFp8BlockSharedScale_v1", st, ops, out, [None, None, {"field": "w", "range": [0, N * K]},
                                                                                    {"field": "ws", "range": [0, ws.size]}], lim)
     wa = ev["args"][2]
     assert wa["weight"]["dtype"] == "u8" and wa["weight"]["shape"] == [N, K] and len(wa["sample"]["rows"]) == 5 and "sample" not in ev["args"][3]

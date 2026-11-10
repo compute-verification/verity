@@ -4,10 +4,13 @@
 # verifier on a separate pod serving its own public files (no rows). The cell's input set arrives as inputs/<digest>.tar.
 #   ROLE=prover   TEMPLATE POINTS PER RUNS VERIFIER=host:port RTT_TARGET=host:22 LOOPBACK=1 OPERATOR [ART]   (GPU build)
 #   ROLE=verifier TEMPLATE POINTS PER RUNS OPERATOR                                                        (CPU build; serves on :7501)
-#   FC_COINS=os (both roles: per-round OS coins, no seed and no PRF; seed: the binary's default)
+#   FC_COINS=tree (both roles: the challenger's keyed coin tree, every server the verifier pod or LOOPBACK=1 runs on its own
+#   challenger, pod/challenger.sh, its records audited against the challenger's release log; empty: the binary's default,
+#   seed coins)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
-export FC_COINS=${FC_COINS:-os}
+export FC_COINS=${FC_COINS:-tree}
+if [ "$FC_COINS" = tree ]; then export FLOCK_CHALLENGER=${FLOCK_CHALLENGER:-1}; else export FLOCK_CHALLENGER=0; fi
 REPO=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=${RESEARCH_RUN_DIR:-/tmp/flock-circuit-cell}/out; W=/workspace/flock-circuit; mkdir -p $O $W
 ROLE=${ROLE:-prover}; TEMPLATE=${TEMPLATE:?}; POINTS=${POINTS:?}; PER=${PER:-1073741824}; RUNS=${RUNS:-5}
 G=1; [ $ROLE = verifier ] && G=0
@@ -22,6 +25,12 @@ B=/workspace/flock-gpu-link/flock/target/release/flock-circuit; sha256sum $B | t
 [ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
 export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
+# the challengers' Lean, where this pod serves sessions: the verifier role's servers and LOOPBACK=1's
+if [ "$FLOCK_CHALLENGER" = 1 ] && { [ $ROLE = verifier ] || [ -n "${LOOPBACK:-}" ]; }; then
+  export CHALLENGER_REPO=$REPO CHALLENGER_PY=python3 CHALLENGER_WORK=$O/challenger-build
+  . verity/ml/flock/pod/challenger.sh
+  challenger_build; challenger_built || exit 1
+fi
 rm -rf $W/set && mkdir -p $W/set && tar -xf $(ls $I/*.tar | head -1) -C $W/set || exit 1
 SET=$(dirname $(find $W/set -name manifest.json | head -1))
 lscpu | grep -E 'Model name|^CPU\(s\)' | tee $O/host.txt; echo threads $TH | tee -a $O/host.txt; nvidia-smi -L 2>/dev/null | tee -a $O/host.txt

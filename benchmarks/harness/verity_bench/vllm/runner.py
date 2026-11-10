@@ -24,7 +24,7 @@ from verity_bench import settings
 from verity_bench.vllm import result as result_format
 from verity_bench.vllm.arms import (H1, Arm, Target, build_bound, h1_config, is_h1, plugin, protocols_config,
                                     window_steps)
-from verity_bench.vllm.presets import SAMPLING, Preset, SweepPoint
+from verity_bench.vllm.presets import GREEDY, Preset, SweepPoint
 
 METRICS = ("time_per_output_token_s", "time_to_first_token_s", "tokens_per_s", "peak_gpu_memory_bytes")
 # Recorded for an arm at a point only when its every rep and the baseline's have it (the engine exposes its scheduler;
@@ -979,9 +979,8 @@ class _VllmEngine:
 
         measured = phase == "measure"
         requests = self._requests(point)
-        sampling = SAMPLING[point.sampling]
         params = lambda r: SamplingParams(max_tokens=r.max_tokens, ignore_eos=True,  # noqa: E731
-                                          detokenize=False, seed=r.seed, **sampling)
+                                          detokenize=False, seed=r.seed, **GREEDY)
         returns: list[tuple[float, dict[str, int]]] = []
 
         def on_step(outs: list[Any]) -> None:

@@ -1,7 +1,40 @@
 module
 
 public import Proofs.Flock.Claims.Bridge.LiveZk
-public import Proofs.Flock.Soundness.Discharge.Tables.Session
+import Flock.With.Deployed
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Soundness.Game
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The live plain session decided by flock-verify, and the old salted transfer
@@ -9,7 +42,7 @@ public import Proofs.Flock.Soundness.Discharge.Tables.Session
 `LiveZk` without `--zk`: the live session (`Live.liveV`) decided by flock-verify's verdict on the transcript `wr x o`
 the outcome is written as, every SHA-512 call of the verdict an oracle query (`Hashes.oc`, `DeployOC`):
 
-* `verdictPL I t`: `Accepts`' steps as an `OC` program: the session's statement set up from `I` and the record's draw,
+* `verdictPL I t`: `Accepts`' steps as an `OC` program: the session's statement set up from `I` and the record's sample,
   then `verifyWithM Hashes.oc`. `verdictPL_eval`: against `H`, it accepts exactly when `verifyWith (hOf H)` does;
   `verdictPL_sha`: against SHA-512 (`shaH`), exactly when `Accepts` holds.
 * `Pr_acc_plain`: `Claims.run`'s acceptance with an event `Q` of the outcome, against SHA-512, is `liveSession`'s
@@ -28,7 +61,7 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge FlockSoundness.
   FlockSoundness.Discharge.Exec Claims.Bridge.Live Claims.Bridge.LiveZk
 
 /-- **flock-verify's verdict as an oracle program**: `Accepts`' setup, then the verifier over `OC`. -/
-def verdictPL (I : Inputs) (t : Transcript) : OC Bool :=
+def verdictPL (I : Inputs) (t : Exec.Transcript) : OC Bool :=
   match setupOf I t.record with
   | .error _ => .ret false
   | .ok (spec, sts) =>
@@ -38,7 +71,7 @@ def verdictPL (I : Inputs) (t : Transcript) : OC Bool :=
         | .error _ => false)
 
 /-- **Against `H`, it is `verifyWith (hOf H)`'s verdict.** -/
-theorem verdictPL_eval (H : Msg → Msg) (I : Inputs) (t : Transcript) :
+theorem verdictPL_eval (H : Msg → Msg) (I : Inputs) (t : Exec.Transcript) :
     ((verdictPL I t).eval H).1 = true ↔ ∃ spec sts, setupOf I t.record = .ok (spec, sts) ∧
       _root_.Flock.verifyWith (hOf H) spec (sts.map _root_.Flock.Setup.ofCircuit) t.record t.proofs = .ok () := by
   unfold verdictPL
@@ -58,7 +91,7 @@ theorem verdictPL_eval (H : Msg → Msg) (I : Inputs) (t : Transcript) :
       e | ⟨⟩ <;> simp [OC.eval]
 
 /-- **Against SHA-512, it is flock-verify's acceptance.** -/
-theorem verdictPL_sha (I : Inputs) (t : Transcript) : ((verdictPL I t).eval shaH).1 = true ↔ Accepts I t := by
+theorem verdictPL_sha (I : Inputs) (t : Exec.Transcript) : ((verdictPL I t).eval shaH).1 = true ↔ Accepts I t := by
   rw [verdictPL_eval, hOf_shaH]
   unfold Accepts
   refine exists_congr fun spec => exists_congr fun sts => and_congr_right fun h1 => ?_
@@ -69,7 +102,7 @@ open Classical in
 `liveSession`'s probability that flock-verify accepts the written transcript and `Q` holds. -/
 theorem Pr_acc_plain (nMax : ℕ) (J mPts N : Msg → ℕ) (dg : ByteArray → ByteArray)
     (w : (x : Msg) → Wire nMax (J x) (mPts x)) (I : Msg → Inputs)
-    (wr : (x : Msg) → LiveOutJ (J x) (mPts x) → Transcript) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
+    (wr : (x : Msg) → LiveOutJ (J x) (mPts x) → Exec.Transcript) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (Q : LiveOutJ (J x) (mPts x) → Prop) :
     Pr (fun r : Fin ((liveV nMax J mPts N dg w fun x o => verdictPL (I x) (wr x o)).k x) → LCoin nMax =>
         (run shaH P (liveV nMax J mPts N dg w fun x o => verdictPL (I x) (wr x o)) x ω r).out = .acc ∧
@@ -88,7 +121,7 @@ most the salted session's acceptance against the simulated strategy of `liveStra
 theorem Pr_acc_plain_le {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Nonempty D] [Inhabited D]
     [Inhabited Sl] (nMax : ℕ) (mPts N : Msg → ℕ) (ts : (x : Msg) → List (TabSpec (mPts x)))
     (dg : ByteArray → ByteArray) (w : (x : Msg) → Wire nMax (ts x).length (mPts x)) (I : Msg → Inputs)
-    (wr : (x : Msg) → LiveOutJ (ts x).length (mPts x) → Transcript) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
+    (wr : (x : Msg) → LiveOutJ (ts x).length (mPts x) → Exec.Transcript) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (Q : LiveOutJ (ts x).length (mPts x) → Prop) (A : Model.Arith FlockLevel3.GF128 K) (Hc : List UInt8 → D)
     (E : Merkle.Enc (List FlockLevel3.GF128) D) (Lf : Merkle.Leaf (List FlockLevel3.GF128) Sl D Hc)
     (opn : Array ByteArray → Fin (ts x).length → Model.Opens FlockLevel3.GF128 D × Model.Salts Sl)

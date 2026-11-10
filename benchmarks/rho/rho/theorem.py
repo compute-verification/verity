@@ -2,7 +2,7 @@
 
 Everything here is in gates and counted weight. A **block** has a budget `(c, k)` (`Budget`): its gates and its
 unregistered input bits. A training class gives a per-block cap `q_T(c, k)` (`Cap`), the most counted weight a block
-with that budget holds; an attack gives a construction's count instead. A **serving block** (`ServingBlock`) is one
+with that budget holds; an attack gives a construction's count instead. A **serving block** (`ServerBlock`) is one
 server between two consecutive wipes, padded to `c_S` gates; each `Cut` of it is one valid partition, its blocks plus
 its uncertified gates `U` by route, and an argument of the bound's minimum:
 
@@ -91,7 +91,7 @@ class Cut:
 
 
 @dataclass(frozen=True)
-class ServingBlock:
+class ServerBlock:
     """`count` serving blocks of one kind over the monitoring period, each of `gates` (`c_S`, at capacity): its cuts
     (the arguments of the bound's minimum) and its layout (what a protocol-abiding strategy gets, for attacks; None:
     unconstrained), and `mfu`, the share of its gates a construction uses."""
@@ -106,11 +106,11 @@ class ServingBlock:
 
 @dataclass(frozen=True)
 class Partition:
-    """The actual circuit as serving blocks, and the dark leaves: `eps_dark` of the inventory's capacity, of which a
+    """The actual circuit as serving blocks, and the dark leaves: `eps_unreg` of the inventory's capacity, of which a
     construction uses `dark_mfu`."""
 
-    serving: tuple[ServingBlock, ...]
-    eps_dark: float
+    serving: tuple[ServerBlock, ...]
+    eps_unreg: float
     dark_mfu: float = 1.0
 
 
@@ -127,7 +127,7 @@ class Share:
 Side = Literal["bound", "attack"]
 
 
-def terms(block: ServingBlock, cut: Cut, cap: Cap, w: float, u: float | None = None) -> dict[str, float]:
+def terms(block: ServerBlock, cut: Cut, cap: Cap, w: float, u: float | None = None) -> dict[str, float]:
     """`cut`'s argument of the minimum, term by term, over `w c_S`: each block kind's `n · min(q(c, k), u c)` and each
     route's `q_U(U) = u U` (`u` defaults to `w`)."""
     u = w if u is None else u
@@ -138,7 +138,7 @@ def terms(block: ServingBlock, cut: Cut, cap: Cap, w: float, u: float | None = N
     return out
 
 
-def local(block: ServingBlock, cap: Cap, w: float, side: Side = "bound", u: float | None = None) -> Share:
+def local(block: ServerBlock, cap: Cap, w: float, side: Side = "bound", u: float | None = None) -> Share:
     """The serving-block bound's local minimum: under a bound, the least of `block`'s cuts; under an attack, its layout
     at `mfu`. Never more than the block's own gates hold (`u c_S`, or `mfu` of `w c_S` for a construction)."""
     u = w if u is None or side == "attack" else u
@@ -185,7 +185,7 @@ class Overhead:
 
     padded: float
     g: float
-    eps_dark: float
+    eps_unreg: float
     dark: float
     efficiency: float
     serving: Mapping[str, Share]
@@ -205,8 +205,8 @@ class Overhead:
     def monitored(self) -> float:
         """The share of the adversary's counted weight held on monitored gates: the protocols do their job for this
         algorithm when it is small (`g ≪ ε_dark`), and not when it is near 1."""
-        rate = self.dark + (1 - self.eps_dark) * self.g
-        return (1 - self.eps_dark) * self.g / rate if rate > 0 else 0.0
+        rate = self.dark + (1 - self.eps_unreg) * self.g
+        return (1 - self.eps_unreg) * self.g / rate if rate > 0 else 0.0
 
     def multiple(self, mfu: float) -> float:
         """The hardware multiple over the reference training algorithm at `mfu`. Under a bound, `multiple_bound`: the
@@ -216,7 +216,7 @@ class Overhead:
         idle."""
         if self.side == "attack":
             return max(1.0, mfu * self.padded)
-        return multiple_bound(mfu, self.dark / self.efficiency, (1 - self.eps_dark) * self.g / self.efficiency,
+        return multiple_bound(mfu, self.dark / self.efficiency, (1 - self.eps_unreg) * self.g / self.efficiency,
                               self.reference_efficiency)
 
     def rates(self) -> dict[str, float]:
@@ -226,7 +226,7 @@ class Overhead:
         attack = self.side == "attack"
         scale = 1 / (self.efficiency * (self.mfu if attack or not self.reference_efficiency else 1.0))
         dark = self.dark * (scale if attack else 1 / self.efficiency)
-        return {"dark": dark} | {t: (1 - self.eps_dark) * v * scale for t, v in self.terms.items()}
+        return {"dark": dark} | {t: (1 - self.eps_unreg) * v * scale for t, v in self.terms.items()}
 
 
 def overhead(partition: Partition, cap: Cap, w: float, efficiency: float = 1.0, side: Side = "bound",
@@ -248,15 +248,15 @@ def overhead(partition: Partition, cap: Cap, w: float, efficiency: float = 1.0, 
         for term, v in s.terms.items():
             out[term] = out.get(term, 0.0) + weights[name] * v / total
     g = math.fsum(weights[n] * s.value for n, s in shares.items()) / total if total else 0.0
-    dark = partition.eps_dark * (u / w if side == "bound" else partition.dark_mfu)
-    return Overhead(padded(dark, g, efficiency, partition.eps_dark), g, partition.eps_dark, dark, efficiency, shares,
+    dark = partition.eps_unreg * (u / w if side == "bound" else partition.dark_mfu)
+    return Overhead(padded(dark, g, efficiency, partition.eps_unreg), g, partition.eps_unreg, dark, efficiency, shares,
                     out, side, mfu, reference_efficiency)
 
 
-def padded(dark: float, g: float, efficiency: float = 1.0, eps_dark: float | None = None) -> float:
+def padded(dark: float, g: float, efficiency: float = 1.0, eps_unreg: float | None = None) -> float:
     """The padded size ratio `|A| / T_0` when the dark leaves hold `dark` of the inventory's weight at capacity and the
-    monitored `1 − ε_dark` hold `g` of theirs (`eps_dark` defaults to `dark`)."""
-    rate = dark + (1 - (dark if eps_dark is None else eps_dark)) * g
+    monitored `1 − ε_dark` hold `g` of theirs (`eps_unreg` defaults to `dark`)."""
+    rate = dark + (1 - (dark if eps_unreg is None else eps_unreg)) * g
     return efficiency / rate if rate > 0 else math.inf
 
 

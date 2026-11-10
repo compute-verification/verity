@@ -1,12 +1,53 @@
 module
 
+public import Proofs.Flock.Claims.DeployVK
 public import Proofs.Flock.Claims.KS.PlainDrawKDefs
-public import Proofs.Flock.Claims.Recursion.FlockKSDeployK
 public import Proofs.Flock.Claims.Recursion.CallsBridgeE
+public import Proofs.Flock.Claims.Recursion.FlockKSDeployK
 public import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
+import Flock.With.Deployed
+import Flock.With.SetupEq
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Bridge.CustodyPlain
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.KS.PlainQueryRound
+import Proofs.Flock.Claims.KS.Width
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# The plain verdict at the statement's draw, at `VK keep`
+# The plain verdict at the statement's sample, at `VK keep`
 
 `PlainDraw`'s verdict at every `keep`, the facts about `PlainDrawKDefs`' definitions: flock-verify's acceptance is
 `verifyWithMK keep` at SHA-512 (`With.std`), the record decodes through `Record.decodeWithK keep`, and a recorded round
@@ -21,7 +62,7 @@ digest.
   (`recordsLiveAtDK_id_of`); the element-level acceptance holds wherever the shipped one does
   (`acceptsAtDK_true_of_acceptsAtD`).
 * `recordsLiveAtDK_of_checks`, `acceptsAtDK_of_decide`: an accepting decision of `VK keep` at SHA-512 is accepted at the
-  setup at its statement's draw and records its live outcome there up to the rounds' digests.
+  setup at its statement's sample and records its live outcome there up to the rounds' digests.
 * `cols_plainK`: `cols_plain` with the verdict read through `keep`.
 * `plainVerdictAtK_of_run`: `plainVerdictAtK` (`plainVerdictAt` at `wrPDK`), which every accepting run of `VK keep`
   with no column off `C` has at its live outcome, on every draw-carrying record. At `keep := id` the run is one of
@@ -44,7 +85,7 @@ theorem named_of_setupAtD {I : Exec.Inputs} {dr : Option Json} {spec : SessionSp
     (h : setupAtD I dr = .ok (spec, sts)) : ∀ s ∈ sts.map _root_.Flock.Setup.ofCircuit, s.merkle.Named :=
   With.named_ofCircuit (With.setupTables_named _ _ _ _ _ _ _ _ _ _ _ _ _ _ h)
 
-/-- **`AcceptsAtDK id` is `AcceptsAtD`**: on every session the setup at a draw sets up, `verify` is
+/-- **`AcceptsAtDK id` is `AcceptsAtD`**: on every session the setup at a sample sets up, `verify` is
 `verifyWith Sha512.hash`. -/
 theorem acceptsAtD_iff_acceptsAtDK_id (I : Exec.Inputs) (dr : Option Json) (t : Exec.Transcript) :
     AcceptsAtD I dr t ↔ AcceptsAtDK id I dr t := by
@@ -53,7 +94,7 @@ theorem acceptsAtD_iff_acceptsAtDK_id (I : Exec.Inputs) (dr : Option Json) (t : 
   rw [verify_eq_verifyWith _ _ _ _ (named_of_setupAtD hs)]
   exact Iff.rfl
 
-/-- **The element-level acceptance at a draw holds wherever `AcceptsAtD` does** (`verifyWithE_of_verifyWith`). -/
+/-- **The element-level acceptance at a sample holds wherever `AcceptsAtD` does** (`verifyWithE_of_verifyWith`). -/
 theorem acceptsAtDK_true_of_acceptsAtD {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript}
     (h : AcceptsAtD I dr t) : AcceptsAtDK (fun _ => true) I dr t := by
   obtain ⟨spec, sts, hs, hv⟩ := (acceptsAtD_iff_acceptsAtDK_id I dr t).1 h
@@ -130,7 +171,7 @@ theorem forall₂_map_congr {α β γ : Type} {R : α → β → Prop} {f : α �
     rw [List.map_cons, List.map_cons, H _ _ (by simp) hab,
       forall₂_map_congr hl fun a b hb h => H a b (List.mem_cons_of_mem _ hb) h]
 
-/-- **Custody gives `RecordsLiveAtDK`**: where the custody checks pass on a plain statement that sets up at its draw
+/-- **Custody gives `RecordsLiveAtDK`**: where the custody checks pass on a plain statement that sets up at its sample
 `d` with no `--public-inputs`, the last message's record and proof files are a record of the run's live outcome
 (`viewOf`) at the setup at `d` through every `keep`: the decoder's rounds are `liveOf`'s in coin count, coins and bytes
 (`decodeWithK_live`), and custody retains every live round's bytes, so they agree after `Round.erase`. -/
@@ -185,8 +226,8 @@ theorem decideK_sha512 (keep : Bool → Bool) {x : Claims.Msg} {as : List Claims
   obtain ⟨hins, hs⟩ := setupOf_some (act_decide ha)
   exact ⟨hv, hc, hs, readOf_zk (x := x) (by simp [readOf, hins]), publicInputs_none_of_checks hc⟩
 
-/-- **An accepting decision of `VK keep` at SHA-512 is accepted through `keep` at the setup at its statement's draw**,
-on a record of its live outcome there up to the rounds' digests, whatever draw the record carries
+/-- **An accepting decision of `VK keep` at SHA-512 is accepted through `keep` at the setup at its statement's sample**,
+on a record of its live outcome there up to the rounds' digests, whatever sample the record carries
 (`acceptsAtD_of_decide` at every `keep`). -/
 theorem acceptsAtDK_of_decide (keep : Bool → Bool) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
@@ -251,10 +292,10 @@ theorem coins_getElem?_of_erase {xs ys : List Round} (h : xs.map Round.erase = y
   have e := congrArg (fun l : List Round => l[j]?.map (fun rd : Round => rd.coins)) h
   simpa only [List.getElem?_map, Option.map_map, Function.comp_def, Round.erase_coins] using e
 
-/-- **The deployed event gives the verdict at the draw, at every `keep`**: an accepting run of `VK keep` at SHA-512
-decides on its messages and coins, and at its statement's draw `d`, if the run's reader looks up no column off `C` at
+/-- **The deployed event gives the verdict at the sample, at every `keep`**: an accepting run of `VK keep` at SHA-512
+decides on its messages and coins, and at its statement's sample `d`, if the run's reader looks up no column off `C` at
 table 0, `plainVerdictAtK keep` holds at the run's live outcome (`viewOf`, at any `mPts`) and its link's root, whatever
-draw its record carries (`plainVerdictAt_of_run` at `nextK keep`): `verifyWithMK keep` accepts the last message at the
+sample its record carries (`plainVerdictAt_of_run` at `nextK keep`): `verifyWithMK keep` accepts the last message at the
 setup at `d` (`acceptsAtDK_of_decide`), so it accepts what `wrPDK` writes, whose rep streams' coins are the run's
 (`coins_getElem?_of_erase`), and those are the reader's columns (`cols_plainK`). -/
 theorem plainVerdictAtK_of_run (keep : Bool → Bool) (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg}

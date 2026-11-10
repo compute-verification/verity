@@ -2,12 +2,12 @@
 `Accounting.Guarantees.Remote.HeldOverTime` (time-held) and `HeldOverTimeLinks` (link-charged),
 `Security/Definitions/Accounting/Guarantees/RemoteHeld.lean`, read over each stretch of a session's groups, in exact
 rationals.  It is computed here and in its Lean, `lean/RemoteAudit/Line.lean`, held to this by the difftest
-(`lean/tests/test_line.py`, every refusal compared word for word): `benchmarks/remote_session/verifier.py`'s
+(`lean/tests/test_line.py`, every refusal compared word for word): `verity/core/protocols/remote_bandwidth/session/verifier.py`'s
 `paced_line` (its diagnostic, on the verifier's clock) and `auditor_line.py` (the line of record, on the challenger's
 clock) read it.  The declared outputs' paced forms (`ledger.memory`) are the same arithmetic in floats, over the whole
 session as one stretch (`session_lost`); floats are otherwise for display only, outside this module.
 
-A paced session is groups g = 0..C, group g's coin σ_g released at s_g, its n_g passes ending at its last root's
+A paced session is groups g = 0..C, group g's coin chal_g released at s_g, its n_g passes ending at its last root's
 arrival a_g, and the registered chunks of each kind its passes read (`Group`).  e_g = max(a_g, s_(g+1)) (a_C for the
 last) and L_g = e_g − s_g hold its reads; Δ_g = s_(g+1) − s_g (L_C for the last).  Stretch m is the `per` groups
 [lo, hi) = [m·per, (m + 1)·per), for each m before the last full stretch, so the group after it (hi) is in the
@@ -486,7 +486,7 @@ SHARED = ("a record drawn more than one window a coin (groups_per_coin) at one w
 
 
 def draws_of(g: int, ws: Sequence[Mapping]) -> list[tuple[int, int]]:
-    """The samples of a record drawn `g` windows a coin, as the pooled bound reads them (`audit.pooled_windows`): draw c is
+    """The samples of a record sampled `g` windows a coin, as the pooled bound reads them (`audit.pooled_windows`): draw c is
     windows cg … min((c + 1)g, W) − 1, its receipts U and its samples theirs summed."""
     return [(sum(receipts(w) for w in ws[a:a + g]), sum(w["drawn"] for w in ws[a:a + g])) for a in range(0, len(ws), g)]
 
@@ -497,7 +497,7 @@ def of_summary(record: Mapping, samples: int, seen: Sequence[Seen],
     request writes it) and what the auditor saw of each of its windows: group t is window t, its passes the record's
     and its times and reads `seen[t]`'s, and window t's receipts and draws are the record's (Σ lengths_t, drawn_t).
     Refused unless the auditor saw each of the record's windows and each window drew min(s, U_t) of its receipts at
-    the session's `samples` s, as the verifier's sample does. Drawn `g` > 1 windows a coin (`groups_per_coin`), the
+    the session's `samples` s, as the verifier's sample does. Sampled `g` > 1 windows a coin (`groups_per_coin`), the
     windows are the record's samples (`draws_of`), each refused unless it sampled min(s, U) of its U receipts and has fewer
     than `audit.RECEIPT_LIMIT` (2^64), as `receive` holds each window to: the memory model's sample reads at most
     2^64 − 1 receipts (`Properties.RemoteAudit.Line.receiptMax`), and a sample's windows' receipts need not be."""
@@ -558,7 +558,7 @@ def line_of_record(record: Mapping, *, registration: audit.Registration, samples
                    clock: str = "record") -> Line:
     """The line of an accepted session's record: `line` at its groups and windows (`of_summary`, at the record's
     `groups_per_coin` g, 1 when it doesn't name it: above 1 the windows are its samples) and its registered chunks (the
-    record's `blocks`, the registration the session ran on). Refused for a record drawn more than one window a coin at
+    record's `blocks`, the registration the session ran on). Refused for a record sampled more than one window a coin at
     one window in flight (`SHARED`), then for a record not of `registration` (`unregistered`, the Lean's
     `lineOfRegistered`), whose chunks the line would credit. On the record's `clock` the times seen are held to the
     record's, refused after `of_summary`'s refusals where they differ (`times_off`); on another (`CLOCKS`) the record

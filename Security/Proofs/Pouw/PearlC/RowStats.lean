@@ -1,6 +1,12 @@
 module
 
 public import Proofs.Pouw.PearlC.Block4Sem
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Fp8Atom.Fp32Proofs
+import Proofs.Pouw.PearlC.Fp4Freeze
+import Proofs.Pouw.PearlC.TileValues
 
 /-!
 # A row's `α` and `β` by magnitudes (proofs)

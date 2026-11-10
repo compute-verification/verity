@@ -1,0 +1,57 @@
+{
+ "schema": "spot-card/v1",
+ "slot": "references",
+ "model": "GLM-5.3",
+ "status": "modeled",
+ "provisional": false,
+ "source": "GLM-5.3's weight sizes and the shares of them a weights claim names, for Figure 1's exfiltration panel beside the FP8 line figure1.py already draws from the workload card's weights_bytes. FP4 is 4 bits a parameter over the pinned checkpoint zai-org/GLM-5.3 at aca966e4e02791568aa6a4ced368624b3d897f42 (integrations/vllm/manifests/checkpoints.json, role GLM53): 753,329,940,480 parameters by the hub's safetensors metadata at that revision (751,226,191,872 F8_E4M3, 2,103,729,152 BF16, 19,456 F32). FP8 is the checkpoint's 755.7 GB. A 4-bit copy carries no scales, so it is the smallest copy that is the weights; NVFP4 with an E4M3 scale per 16 is 4.5 bits a parameter (423.8 GB)",
+ "runs": [],
+ "owner": "@proofs",
+ "value": {
+  "lines": [
+   {
+    "panel": "exfiltration",
+    "label": "GLM-5.3's weights at FP4 (376.7 GB)",
+    "unit": "bit",
+    "value": 3013319761920.0,
+    "source": "753,329,940,480 parameters (hub safetensors metadata at aca966e4) x 4 bits"
+   },
+   {
+    "panel": "exfiltration",
+    "label": "10% of GLM-5.3's FP4 weights",
+    "unit": "bit",
+    "value": 301331976192.0,
+    "source": "0.1 x the FP4 line"
+   },
+   {
+    "panel": "exfiltration",
+    "label": "1% of GLM-5.3's FP4 weights",
+    "unit": "bit",
+    "value": 30133197619.2,
+    "source": "0.01 x the FP4 line"
+   },
+   {
+    "panel": "exfiltration",
+    "label": "10% of GLM-5.3's FP8 weights",
+    "unit": "bit",
+    "value": 604560000000.0,
+    "source": "0.1 x the checkpoint's 755.7 GB (workload card weights_bytes) x 8"
+   },
+   {
+    "panel": "exfiltration",
+    "label": "1% of GLM-5.3's FP8 weights",
+    "unit": "bit",
+    "value": 60456000000.0,
+    "source": "0.01 x the checkpoint's 755.7 GB (workload card weights_bytes) x 8"
+   },
+   {
+    "panel": "exfiltration",
+    "label": "1,000 SparseLoCo syncs of GLM-5.3 (8.0 TB)",
+    "unit": "bit",
+    "value": 64152000000000.0,
+    "source": "SparseLoCo (Sarfi, Therien, Lidin, Belilovsky, arXiv 2508.15706) Table 1: 5.45 MB a sync for a 512M-parameter model at 0.78% density and 2 bits (loss 2.79, DiLoCo 2.76), scaled to 753,329,940,480 parameters: 8.02 GB a sync; at 3.12% density, the setting that beats DiLoCo (2.70), 25.3 GB. rho's sparseloco-1000 line (17 TB) is the same scaling at DeepSeek-V4-Pro's 1.6T"
+   }
+  ]
+ },
+ "art": "art:f531585c3d3793d97d5830aaf06ae21112eb7d83bb0d652b9306b5b0317a58f7"
+}

@@ -1,0 +1,12 @@
+{
+ "definitions": {
+  "F32ExpRn_v2": {
+   "and": 6484,
+   "type": "4a542988ff9d3be161a1ca094b2cc379896b00e780297f479d19b7d7483cc2156bc527d5f40bff1260bbafae81d8e9a626f4ada872f154cd53316dae8bca8d0f"
+  },
+  "F32LogRn_v2": {
+   "and": 3541,
+   "type": "6b39ff0343e439de56a9ca63e7f8aff5970536df159fcd0bfcb7d4b24da4d35049e6e6648b960331ee8f004c6f0f388f87478ce6acfcdf602f4cb8bd07831937"
+  }
+ }
+}

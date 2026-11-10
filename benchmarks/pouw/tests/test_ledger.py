@@ -1,6 +1,6 @@
 """The attempt ledger (`harness/ledger.py`, written by `harness/verify.py`): every arm row of a verified run becomes one
-``kernel-attempt/v1`` record named by its kernel variant, with its parent, tier, gate version, metrics, step times, γ at
-both FP32 prices and the verifier's lines; a verifier's negative control is judged; records publish into the evidence
+``kernel-attempt/v1`` record named by its kernel variant, with its parent, tier, gate version, metrics, step times, the
+gap at both FP32 prices and the verifier's lines; a verifier's negative control is judged; records publish into the evidence
 store once (content-addressed, labels not repeated); and the store's records come back as `panel.py` rows that follow the
 panel's rules (a screen never plots, a measurement stands only with every verifier field)."""
 
@@ -66,7 +66,7 @@ def variant(tmp_path: Path, text: str = "kernel v1") -> dict:
 #: an arm's own `Work.gamma` (GPU 1's `pearlc_arm.gamma`: its device record's readings at one price), which the ledger keeps
 #: as the arm's claim and never publishes
 ARM_GAMMA = {"cap": "3/1000", "floor": "1/1000", "basis": "Derived at the device record's prices"}
-#: γ of v2-hot on the wide-store cast at 8,192³, the larger of its two twins (the loop price's), from the pins
+#: the gap of v2-hot on the wide-store cast at 8,192³, the larger of its two twins (the loop price's), from the pins
 V2_HOT_872 = P.lookup(P.load(), "pearl-c-sm120/v2-hot", "cast-8.72", 8192, 8192)
 
 
@@ -165,9 +165,9 @@ def records_of(tmp_path: Path) -> dict[str, dict]:
     return records(run_dir)
 
 
-# ---- γ at both FP32 prices, from the price twins ---------------------------------------------------------------------------
+# ---- the gap at both FP32 prices, from the price twins ---------------------------------------------------------------------------
 
-#: pins as the Lean store and the staged twins print them: v2 at the statement's cast and 8.00
+#: pins as the Lean store and the staged twins print them, under their names from before the gap's rename: v2 at the statement's cast and 8.00
 #: (in the Lean store), v2 on the wide-store cast at the loop price, a rounded twin (the loop price at the record's own cast),
 #: v2-hot's value lemma, and Pearl-C4's chain-only value lemma
 PINS = {
@@ -260,35 +260,38 @@ def test_price_twins_read_each_pin_s_statement_path_price_and_value_and_skip_wha
                                                                              Fraction(26680734301, 1376663200000))
 
 
-LIFTED = "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192"
-LIFTED_G = "Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192"
+LIFTED = "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_8192"
+LIFTED_G = "Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_8192"
 LIFTED_SOURCE = """namespace Pouw.Guarantees.PearlC
 
 open Pouw.PearlC Pouw.PearlC.Assumptions
 
-def GammaSm120v1LoopCast8p72Rev1Cap1000_8192 : Prop :=
+def GapSm120v1LoopCast8p72Rev1Cap1000_8192 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.PearlC.CostModel Q R S)
     (sem : PearlCSem Q R S),
     TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
-    Pouw.PearlC.Gγ CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+    Pouw.PearlC.GGap CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
       (pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh8192)
-      ((1648180439 / 446072750000 : ℚ) : ℝ) εPearlC
+      ((1648180439 / 446072750000 : ℚ) : ℝ) δPearlC
 
 end Pouw.Guarantees.PearlC
 """
 
 
 def lifted_audit(tmp_path: Path, source: str = LIFTED_SOURCE, recorded: bool = True) -> tuple[dict, Path]:
+    """The audit and its Lean root, `G`'s source in the audit's definitions tree when ``recorded``, else in its proofs tree."""
     lean = tmp_path / "Security"
-    (lean / "Definitions" / "Pouw" / "Guarantees").mkdir(parents=True)
-    (lean / "Definitions" / "Pouw" / "Guarantees" / "PearlC.lean").write_text(source)
+    tree = "Definitions" if recorded else "Proofs"
+    (lean / tree / "Pouw" / "Guarantees").mkdir(parents=True)
+    (lean / tree / "Pouw" / "Guarantees" / "PearlC.lean").write_text(source)
     audit = {"guarantees": {LIFTED: {"type_hash": "l", "signature": [f"{LIFTED} :", f"  {LIFTED_G}"]}},
-             "reads": {"Definitions.Pouw.Guarantees.PearlC": {"definitions": {LIFTED_G: "h"} if recorded else {}, "pins": [LIFTED]}}}
+             "trees": {"definitions": ["Definitions"], "proofs": ["Proofs"]},
+             "reads": {"Definitions.Pouw.Guarantees.PearlC": {"definitions": {LIFTED_G: "h"}}}}
     return audit, lean
 
 
 def test_a_lifted_guarantee_s_twin_is_read_from_its_recorded_definition(tmp_path):
-    """A twin pinned as `X : G` is the twin its old theorem was: γ, cast, prices and cap read off `G`'s body."""
+    """A twin pinned as `X : G` is the twin its old theorem was: the gap, cast, prices and cap read off `G`'s body."""
     audit, lean = lifted_audit(tmp_path)
     (row,) = P.extract(P.guarantees(audit), "t", {LIFTED: "l"}, P.lifted_definitions(audit, lean))
     old = P.parse("Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192",
@@ -298,9 +301,9 @@ def test_a_lifted_guarantee_s_twin_is_read_from_its_recorded_definition(tmp_path
 
 @pytest.mark.parametrize("source, recorded, match", [
     (LIFTED_SOURCE, False, "no Guarantees definition"),
-    (LIFTED_SOURCE.replace("def GammaSm120", "def OtherSm120"), True, "no Guarantees definition"),
+    (LIFTED_SOURCE.replace("def GapSm120", "def OtherSm120"), True, "no Guarantees definition"),
     (LIFTED_SOURCE.replace("namespace Pouw.Guarantees.PearlC\n", "namespace Pouw.Guarantees\n"), True, "no Guarantees definition"),
-    (LIFTED_SOURCE.replace("((1648180439 / 446072750000 : ℚ) : ℝ)", "γ"), True, "states no literal γ"),
+    (LIFTED_SOURCE.replace("((1648180439 / 446072750000 : ℚ) : ℝ)", "g"), True, "states no literal gap"),
     (LIFTED_SOURCE.replace("(218 / 25 - ", "(16 - "), True, "prices the cast"),
 ])
 def test_a_lifted_twin_without_a_recorded_definition_stating_its_gamma_fails_closed(tmp_path, source, recorded, match):
@@ -312,8 +315,8 @@ def test_a_lifted_twin_without_a_recorded_definition_stating_its_gamma_fails_clo
 
 
 def test_a_store_pin_the_repository_holds_lifted_is_one_twin_the_store_s(tmp_path):
-    """The store's pins keep their names from before the lift; the repository's lifted copy of one is the same pin, not
-    a second twin stating it."""
+    """The store's pins keep their names from before the lift and the gap's rename; the repository's lifted copy of one
+    is the same pin, not a second twin stating it."""
     old = "Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192"
     audit, lean = lifted_audit(tmp_path)
     (lean / "lean-audit.json").write_text(json.dumps(audit))
@@ -377,7 +380,7 @@ def test_the_checked_in_table_gives_the_panel_s_published_gamma(statement, path,
 @pytest.mark.parametrize("n, issue, loop", [(8192, "205211/55610750", "1648180439/446072750000"),
                                              (16384, "5273/1466810", "1058166877/294158650000")])
 def test_v1_publishes_at_its_cap_1_1000_from_both_price_twins(n, issue, loop):
-    """v1's statement is at 1/1,000 now: its twins at the cast 8.72 are DeviceSm120CapRev1Gamma's at FADD 8.00 (0.36901% at
+    """v1's statement is at 1/1,000 now: its twins at the cast 8.72 are DeviceSm120CapRev1Gap's at FADD 8.00 (0.36901% at
     8,192³, 0.35949% at 16,384³) and the loop-price twin's (0.36949%, 0.35973%), the larger published; its 1/400 twins
     are history."""
     t = P.load()
@@ -385,7 +388,7 @@ def test_v1_publishes_at_its_cap_1_1000_from_both_price_twins(n, issue, loop):
     assert g["cap"] == "1/1000" and g["missing"] == [] and g["pins"] == ["pinned"]
     assert {p: v["gamma"] for p, v in g["by_price"].items()} == {"8": issue, "1047/125": loop}
     assert (g["published"], g["published_at"]) == (loop, "1047/125")
-    assert g["by_price"]["8"]["pin"] == f"Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_{n}"
+    assert g["by_price"]["8"]["pin"] == f"Pouw.SecurityProofs.PearlC.GapSm120v1Cast8p72Rev1Cap1000_{n}"
     assert all(P.lookup(t, "pearl-c-sm120/v1", path, n, n)["by_price"] == {} for path in ("cast-8", "cast-16", "cast-32.06"))
     assert P.lookup(t, "pearl-c-sm120/v2", "cast-8.72", n, n)["published"] is not None
 
@@ -399,20 +402,20 @@ LLAMA = {(6144, 4096): ("508661/135634400", "851373343/226641700000"),
 @pytest.mark.parametrize("nk", list(LLAMA), ids=lambda nk: f"n{nk[0]}k{nk[1]}")
 def test_v1_publishes_at_llama_3_1_8b_s_linears_from_both_price_twins(nk):
     """A linear (n, k) that isn't a pinned cube reads its own twins, at any batch m: Llama-3.1-8B's four at the cast 8.72
-    and the cap 1/1,000 (`ServedFadd8Rev1Gamma` at FADD 8.00, `ServedRev1Gamma` at the loop price), the larger published."""
+    and the cap 1/1,000 (`ServedFadd8Rev1Gap` at FADD 8.00, `ServedRev1Gap` at the loop price), the larger published."""
     (n, k), (issue, loop) = nk, LLAMA[nk]
     g = P.lookup(P.load(), "pearl-c-sm120/v1", "cast-8.72", n, k)
     assert g["missing"] == [] and g["pins"] == ["pinned"] and (g["shape"], g["layout"]) == (None, None)
     assert {p: v["gamma"] for p, v in g["by_price"].items()} == {"8": issue, "1047/125": loop}
     assert (g["published"], g["published_at"]) == (loop, "1047/125")
-    assert g["by_price"]["8"]["pin"] == f"Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n{n}k{k}"
+    assert g["by_price"]["8"]["pin"] == f"Pouw.SecurityProofs.PearlC.GapSm120v1Cast8p72Rev1Cap1000_n{n}k{k}"
 
 
 def test_a_layout_reads_its_own_twins_whose_gamma_is_its_worst_linear_s():
     t = P.load()
     g = P.lookup(t, "pearl-c-sm120/v1", "cast-8.72", None, None, layout="llama31_8b")
     assert g["missing"] == [] and (g["published"], g["published_at"]) == (LLAMA[(4096, 14336)][1], "1047/125")
-    assert g["by_price"]["1047/125"]["pin"] == "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b"
+    assert g["by_price"]["1047/125"]["pin"] == "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_llama31_8b"
     assert P.lookup(t, "pearl-c-sm120/v1", "cast-8.72", 6144, 4096, layout="qwen3_8b")["missing"] == [
         f"a forming-credited twin of pearl-c-sm120/v1 on cast-8.72 at layout qwen3_8b, FADD {f}, cap 1/1000"
         for f in ("8", "1047/125")]
@@ -480,6 +483,8 @@ def test_verify_writes_one_record_per_arm_and_shape_with_everything_the_ledger_k
     assert m["steps"]["phase_groups"]["after"] == ["tile_hash", "screen"]
     assert m["gamma"]["published"] == V2_HOT_872["published"] and m["gamma"]["path"] == "cast-8.72"
     assert m["gamma"]["by_price"] == V2_HOT_872["by_price"] and m["gamma"]["arm_claim"] == ARM_GAMMA
+    g = Fraction(V2_HOT_872["published"])
+    assert Fraction(m["gamma"]["eps"]) == L.eps(g) == g / (1 - g) > g
     assert m["hypothesis"] == "tile hashing on the side lane hides it under the next call"
     assert m["mechanism"] == ["cast:packed-sts64", "hash:side-stream"] and m["approach"] == "pouw/pearl-c-sm120"
     assert m["verify"]["accepted"] and RUN in m["verify"]["transcript"]
@@ -502,7 +507,7 @@ def test_the_run_s_flags_win_over_the_arm_s_lineage_and_a_bare_arm_still_gets_a_
     assert m["hypothesis"] == "a run's own line" and m["parent"] == "pearl-c-sm120/0123456789ab" and r["refs"] == {}
     assert m["tier"] == "2a" and r["labels"] == [[L.KERNEL_OUTCOME, "dropped"], [L.KERNEL_REASON, "slower than its parent"]]
     assert m["missing"] == ["variant", "the priced path (GateRecord.prices, from the variant's prices)"]
-    assert m["gamma"]["published"] is None and m["gamma"]["arm_claim"] is None
+    assert m["gamma"]["published"] is None and m["gamma"]["eps"] is None and m["gamma"]["arm_claim"] is None
     assert m["gate"]["variant"] is None and m["gate"]["controls_rejected"]
 
 
@@ -613,7 +618,9 @@ def test_store_records_come_back_as_panel_rows_under_the_panel_s_rules(tmp_path)
     assert r["kind"] == "measured" and r["line"] == "pearl-c-sm120" and r["version"] == "v2-hot" and r["attempt"] is None
     assert r["verifier"]["negative_control"].startswith("REJECT") and r["sm_clock_mhz"]["baseline"] == [2091.0, 2093.0]
     assert r["gamma"] == float(Fraction(V2_HOT_872["published"])) and r["decode_method"] == "dependent-chain"
-    assert r["precision"] == "fp8" and "γ cast-8.72 at FADD 1047/125, the larger, from staged price twins" in r["description"]
+    eps = float(L.eps(Fraction(V2_HOT_872["published"])))
+    assert r["precision"] == "fp8" and (f"ε {eps:.4%} from the gap on cast-8.72 at FADD 1047/125, the larger, from staged "
+                                        "price twins") in r["description"]
     assert r["source"].endswith("(kernel-attempt/v1)") and var["id"] in r["description"] and "store_refused" not in r
 
     screen = tmp_path / "screen" / RUN

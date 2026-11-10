@@ -1,7 +1,8 @@
 module
 
 public import Definitions.Pouw.Fp8Atom.H1TLemmas
-public import Proofs.Pouw.Fp8Atom.Fp32Proofs
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Fp8Atom.Fp32Proofs
 
 /-!
 # H-1T: the statements `H1TRunningWords` still needs (staging, unpinned)

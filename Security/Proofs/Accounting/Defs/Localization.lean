@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Accounting.Actual
-public import Mathlib.Logic.Relation
 
 /-!
 # Reach

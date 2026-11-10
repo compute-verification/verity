@@ -1,14 +1,16 @@
 """The count of `(c, k)`-inference blocks (`NciCheck.Count`) against the Python reference: the Python half.
 
 `verity/core/protocols/network/nci/lean/scripts/count_difftest_vectors.py` writes 1,669 instances of the count (1,500
-random, 6 on each distinct descriptor of the circuits fixtures, 7 worked by hand) and `scripts/nci_reference.py`'s
-`check_count` on each. `check` runs the Lean half in its Lean audit (`runs` in that package's `lean-audit.json`):
-`NciCheck/CountDifftestMain.lean` fails unless `NciCheck.Count.check` gives Python's result on every instance. The audit
-checks the data against the record's SHA-256 and caches its pass on the Lean package's files alone, so the first test is
-what says the data is still what the generator and the reference write. The second checks that the generator reaches what
-its docstring says, the third the hand-worked rows, and the fourth that what the count gives bounds what the unrolled
-circuit holds: each block's gates are the row's, its reads from outside it that are not θ's gates at most the row's
-fresh bits, and the blocks cover the computed gates once each.
+random, 6 on each distinct descriptor of the circuits fixtures, 7 worked by hand) and, on each,
+`scripts/nci_reference.py`'s `check_count_detail` (the whole verdict, for the private record) and `check_count` (what
+the count publishes, the judgment against n). `check` runs the Lean half in its Lean audit (`runs` in that package's
+`lean-audit.json`): `NciCheck/CountDifftestMain.lean` fails unless `NciCheck.Count.checkDetail` and
+`NciCheck.Count.check` give Python's results on every instance. The audit checks the data against the record's SHA-256
+and caches its pass on the Lean package's files alone, so the first test is what says the data is still what the
+generator and the reference write. The second checks that the generator reaches what its docstring says and that the
+published result is the judgment alone, the third the hand-worked rows, and the fourth that what the count gives bounds
+what the unrolled circuit holds: each block's gates are the row's, its reads from outside it that are not θ's gates at
+most the row's fresh bits, and the blocks cover the computed gates once each.
 """
 
 from __future__ import annotations
@@ -40,7 +42,8 @@ def test_the_data_is_what_the_audit_pins(tmp_path):
     """All 1,669 instances and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
-    assert RUN["args"] == ["{count_difftest/instances.jsonl}", "{count_difftest/python.jsonl}", str(vectors.total())]
+    assert RUN["args"] == ["{count_difftest/instances.jsonl}", "{count_difftest/detail.jsonl}",
+                           "{count_difftest/public.jsonl}", str(vectors.total())]
 
 
 def _seeds() -> list[int]:
@@ -50,7 +53,9 @@ def _seeds() -> list[int]:
 
 def test_the_generator_covers_what_it_says():
     made = [vectors.instance(s) for s in _seeds()]
-    results = [reference.check_count(m["instance"]) for m in made]
+    results = [reference.check_count_detail(m["instance"]) for m in made]
+    published = [reference.check_count(m["instance"]) for m in made]
+    assert published == [r if "error" in r else {"complies": r["complies"]} for r in results]
     shapes = {m["shape"] for m in made}
     assert set(vectors.vectors.SHAPES) | {"transposed"} <= shapes
     assert {f"fixture:{name}" for name, _ in vectors.desc.fixtures()} <= shapes
@@ -66,9 +71,12 @@ def test_the_generator_covers_what_it_says():
 
 
 def test_the_hand_worked_rows():
-    """`hands()`: the rows, total and verdicts worked out in its docstring."""
+    """`hands()`: the rows, total and verdicts worked out in its docstring, and of them only the judgment published."""
+    assert [reference.check_count(i) for i in vectors.hands()] == [
+        {"complies": True}, {"complies": False}, {"complies": False}, {"complies": False}, {"complies": True},
+        {"complies": True}, {"error": "gate-in-no-block"}]
     blk, h = [vectors.BLK, 6, 4, 2], [vectors.H, 5, 16, 1]
-    got = [reference.check_count(i) for i in vectors.hands()]
+    got = [reference.check_count_detail(i) for i in vectors.hands()]
     assert got == [
         {"blocks": [blk, h], "total": 3, "complies": True, "failure": None},
         {"blocks": [blk, h], "total": 3, "complies": False, "failure": [0, "gates"]},
@@ -91,7 +99,7 @@ def test_the_rows_bound_the_unrolled_blocks():
     insts = [vectors.instance(s)["instance"] for s in _seeds()] + vectors.hands()
     checked = 0
     for inst in insts:
-        res = reference.check_count(inst)
+        res = reference.check_count_detail(inst)
         if "error" in res:
             continue
         program = reference.desc_program(inst["program"])

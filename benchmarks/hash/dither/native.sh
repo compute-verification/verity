@@ -8,12 +8,11 @@
 # receipts are a side computation, not a served number). Every arm samples without FlashInfer's JIT sampler, as
 # served_h1 does. Each arm runs on its leased GPU's NUMA node (numabind.py, DITHER_NUMA=0 unbound; numa.ARM.json and the
 # arm's "numa" say which). Env: NATIVE_ARGS (extra native.py flags), LEASE (gpu-lease flags, default "--max-min 14"),
-# VERITY_BENCH_VENV.
+# VERITY_BENCH_VENV (the Python's environment, else the node's that benchmarks/harness/env.sh finds).
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
-PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
-[ -x "$PY" ] || PY=$(. benchmarks/harness/env.sh && echo "$VENV/bin/python") || exit 2
+PY=$(. benchmarks/harness/env.sh && echo "$VENV/bin/python") || exit 2
 mkdir -p "$OUT"
 # the venv's bin holds ninja, which any JIT build vLLM or FlashInfer starts needs
 export PATH=$(dirname "$PY"):$PATH VLLM_USE_FLASHINFER_SAMPLER=0

@@ -1,7 +1,40 @@
 module
 
-public import Proofs.Flock.Claims.ZK.Congr
 public import Proofs.Flock.Claims.DeployCode
+public import Proofs.Flock.Claims.ZK.Congr
+public import Proofs.Flock.Claims.ZK.GK
+public import Proofs.Flock.Claims.ZK.Statement
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # Flock's `ZK` at the masked record's reference prover
@@ -9,7 +42,7 @@ public import Proofs.Flock.Claims.DeployCode
 `Claims.Flock.ZK` reads a masked record (`Claims.Flock.ZkDeploy`): its reference prover in the masked interaction
 (`ZkDeploy.prover`, the record's `P` behind the `Hello` and the opening checks) and its simulator (`ZkDeploy.S`). The
 proofs prove `Claims.Flock.ZKAt`, the same form at a committed-coin protocol's prover (`Proto.prover`). This module
-carries one to the other, by `zkmalR_congr` (`Congr`):
+carries one to the other, by `zkmalR_congr_on` (`Congr`):
 
 * `zkOf`: the masked record at a protocol `G`, `FlockDeploy.deployZk` with `G`'s nonce, tape, `Hello`, abort and opening
   check, a reading of each opening as its coin (`coinOf`), the reference prover's tape at `G`'s (`tapeOf`), and a
@@ -99,17 +132,20 @@ theorem zkOf_prover (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readabl
     | false => exact ⟨rfl, List.Subset.refl _⟩
 
 /-- **`Claims.Flock.ZK` at the masked record of a committed-coin protocol**, from `ZKAt` at its prover: where `G`'s
-rounds are `Hello` and the deployed verifier's (`deployZk_proto_k`) and its messages are the reference prover's
-(`Proto.Honest`), at `γ ≥ 0`. -/
+rounds are `Hello` and the deployed verifier's at the relation's statements (`deployZk_proto_k`) and its messages are
+the reference prover's (`Proto.Honest`), at `γ ≥ 0`. -/
 theorem zk_zkOf (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (G : Proto Flock.Wit)
     (coinOf : Msg → Msg) (tapeOf : G.Nonce × G.Rand → FlockComplete.TapeZk) (S : Simulator) {H : Msg → Msg}
-    {εzk γ : Msg → ℝ} (hγ : ∀ x, 0 ≤ γ x) (hk : ∀ x, G.k x = (FlockDeploy.deployZk rel).V.k x + 1)
+    {εzk γ : Msg → ℝ} (hγ : ∀ x, 0 ≤ γ x)
+    (hk : ∀ x w, Flock.R (FlockDeploy.deployZk rel).parse x w → G.k x = (FlockDeploy.deployZk rel).V.k x + 1)
     (hG : G.Honest H FlockComplete.ZkTables.honestPR coinOf tapeOf)
     (h : Claims.Flock.ZKAt H (FlockDeploy.deployZk rel) G.prover S εzk γ) :
     Claims.Flock.ZK H (zkOf rel G coinOf tapeOf S) εzk γ :=
-  ⟨h.1, zkmalR_congr hγ
-    (fun w x hist ω hh => (zkOf_prover rel G coinOf tapeOf S H hG w x hist ω (lt_of_lt_of_eq hh (hk x).symm)).1)
-    (fun w x hist ω hh => (zkOf_prover rel G coinOf tapeOf S H hG w x hist ω (lt_of_lt_of_eq hh (hk x).symm)).2)
+  ⟨h.1, zkmalR_congr_on hγ
+    (fun w x hR hist ω hh =>
+      (zkOf_prover rel G coinOf tapeOf S H hG w x hist ω (lt_of_lt_of_eq hh (hk x w hR).symm)).1)
+    (fun w x hR hist ω hh =>
+      (zkOf_prover rel G coinOf tapeOf S H hG w x hist ω (lt_of_lt_of_eq hh (hk x w hR).symm)).2)
     h.2⟩
 
 end Claims.ZKMal

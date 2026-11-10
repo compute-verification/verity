@@ -1,7 +1,12 @@
 module
 
 public import Properties.NetworkPeriod
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
+import all Init.Data.Array.Basic
+public import Mathlib.Algebra.GroupWithZero.Nat
+import Mathlib.Algebra.BigOperators.Fin
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
 # Each form's `K` bounds `PeriodLeakAccepted`'s count: the proofs of `ClockKBoundsCount` and `RowsKBoundsCount`

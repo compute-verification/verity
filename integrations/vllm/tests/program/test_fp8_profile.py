@@ -60,8 +60,7 @@ def test_qwen3_fp8_role_derives_a_profile_with_the_fp8_patterns_first():
     assert names[:2] == ["PerTokenGroupFp8Quant", "CutlassScaledMmFp8Block"]      # specific kernels first
     assert p.patterns[0].group == 128 and p.patterns[1].group == 128
     assert "RMSNormTritonLaunch" in names and "GemmLaunch" in names
-    assert p.notes["fp8"]["families"] == ["Fp8GroupQuant_v1{K,G}", "ScaledMmFp8BlockSharedScale_v1{K,N,G} (fp8_scale_construction per-coordinate: "
-                                          "ScaledMmFp8Block_v1{K,N,G})"]
+    assert p.notes["fp8"]["families"] == ["Fp8GroupQuant_v1{K,G}", "ScaledMmFp8BlockSharedScale_v1{K,N,G}"]
     mod = importlib.import_module(f"verity_vllm.observe.fold.profiles.dense_{ROLE}")
     assert mod.PROVENANCE["QK_NORM"] == "hand" and mod.PROVENANCE["FP8_BLOCK"] == "hf-config"
 
@@ -234,13 +233,12 @@ def test_cutlass_scaled_mm_binds_the_declared_scale_construction():
 
     node = _node("_C.cutlass_scaled_mm.default", MM_SCHEMA, mm_args())
     specs = {}
-    for scale in (None, "shared-per-block", "per-coordinate"):
+    for scale in (None, "shared-per-block"):
         tp = TargetProfile(compute_capability=(9, 0), num_sms=132, fp8_block_gemm="cutlass", fp8_scale_construction=scale)
         r = CutlassScaledMmFp8Block(group=G).match(node, _ctx(target=tp))
         assert isinstance(r, Compute), r
         specs[scale] = spec_label(r.spec)
     assert specs[None] == specs["shared-per-block"] == f"ScaledMmFp8BlockSharedScale_v1{{K={K},N={N},G={G}}}"
-    assert specs["per-coordinate"] == f"ScaledMmFp8Block_v1{{K={K},N={N},G={G}}}"
 
 
 def test_cutlass_scaled_mm_refuses_non_hopper_targets_bias_and_other_scale_shapes():

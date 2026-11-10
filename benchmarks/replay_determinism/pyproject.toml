@@ -1,0 +1,5 @@
+# Replay determinism's harness and its tests. Not a package: `replay_det.py` serves and replays on a GPU node (`run.sh`), and
+# its row fingerprint and `compare.py`'s comparisons run here as a suite (`uv run tools/verity/check/suites.py
+# benchmarks/replay_determinism`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]

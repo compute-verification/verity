@@ -30,8 +30,8 @@ E.pads(dids, trees, first, n); E.root(leaves, dids)        # pads; each tree's r
 E.counts()                                                 # the host twin's compressions and ChaCha20 chunks
 ```
 
-`tensors` are (slots, …) with contiguous slot rows. `SaltKey` draws row r's salt in slot s as ChaCha20 chunks 3r … 3r + 2
-under the key with nonce `nonce0 + s` (C-Flock's `hm96_salt`, commit_slots' `row_salts`). The leaf kernel runs at 1 or
+`tensors` are (slots, …) with contiguous slot rows. `SaltKey` derives row r's salt in slot s as ChaCha20 chunks 3r … 3r + 2
+under the key with nonce `nonce0 + s` (Flock's `hm96_salt`, commit_slots' `row_salts`). The leaf kernel runs at 1 or
 2 CTAs an SM (`leaves(..., minb=)`), on all the device's SMs or `leaves(..., sms=)` of them, for a stream on a green
 context of that many (commit_slots' `Plan(sms=)`). Calls run on the current torch stream.
 
@@ -58,20 +58,13 @@ The default is `0000`; `pouw` is commit_gpu's `sha::compress`. `rows.cu` builds 
 - `engine.py`: the call.
 - `settings.py`: the variables `engine.py` reads.
 - `check.py`: the engine against the reference: every variant, edge sizes, the H200 layer on sampled slots.
-- `bench.py`: the variant and leaf-kernel sweeps, and whole steps at the H200 example's shape.
+- `bench.py`: the variant and leaf-kernel sweeps, and whole steps at the H200 demo's shape.
 - `sass.py`: opcode counts per variant.
-- `sass_count.py`: one kernel's SASS counts per main-loop iteration, by opcode and issue pipe (`ruler.sh`'s pipe mix).
+- `sass_count.py`: one kernel's SASS counts per main-loop iteration, by opcode and issue pipe (`hashcat.sh`'s pipe mix).
 - `gpu.sh`: one leased GPU run.
-- `ruler.sh`: the variants on commit_gpu's ruler (`commit_gpu sha` built with `-DSHA_SX`, gated by `reference.py check`)
-  against its default build.
 - `hashcat.sh`, `hashcat_forms.cu`, `hashcat_summary.py`: hashcat's SHA-512 kernels against the default compression in
   one lease at one locked SM clock; `hashcat_summary.py`'s `VERDICT overall` line says whether any of them is faster.
-- `lowreg.cuh`, `lowreg.cu`, `lowreg_check.py`: the compression's rounds split so that the chaining value or the schedule
-  can live in shared memory, for a hash warpgroup that shares its SM's registers with MMA warpgroups.
-- `beside.cu`, `beside.sh`, `beside_check.py`, `beside_summary.py`: hash warpgroups beside the exact s8 linear's MMA
-  warpgroups in one CTA, hashing the finished O tiles from shared memory. One lease, gates before timing.
-- `beside_probe.cu`, `beside_probe.sh`: which CTA shapes and register splits ptxas builds.
-- `tests/`: the host twin always, every variant on a CUDA device; beside's gate and summary on synthetic outputs.
+- `tests/`: the host twin always, every variant on a CUDA device.
 
 From the tree's root, on a CUDA GPU (an H200 for the H200 layer) with CUDA torch, CUDA's nvcc and `gpu-lease`:
 

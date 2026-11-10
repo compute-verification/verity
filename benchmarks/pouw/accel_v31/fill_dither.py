@@ -1,5 +1,5 @@
 """The GPU's no-fold call (v31lib's Prover over libv31.so) checked against the reference itself,
-`verity/core/protocols/pouw/circuit/dither.py`, rather than v31.py's numpy forms of it, on filler calls (the pad,
+`verity/ml/protocols/pouw/circuit/dither.py`, rather than v31.py's numpy forms of it, on filler calls (the pad,
 `dither.Shape` with `o` False: T_1 .. T_S a tile) and served calls (an operand A, `o` True: T_1 .. T_{S-1} and then O a
 tile). On each case: the call's seeds (`dither.fill_seeds` for a filler, `dither.seeds` for a served call) as the device's
 seed buffer holds them (v31's `fill_seeds_bytes`), read back stream by stream against dither's byte for byte, the
@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import v31
 import v31lib
 
-from verity.core.protocols.pouw.circuit import dither
+from verity.ml.protocols.pouw.circuit import dither
 
 # NAME M N K LP L ROW KIND CHEAT FULL: KIND fill (the pad, from fill seeds) or served (an operand A, from served seeds;
 # operands in -127 .. 126, as a served root refuses a row of A + d_A or B + d_B spanning -128 .. 128); FULL 1: the whole

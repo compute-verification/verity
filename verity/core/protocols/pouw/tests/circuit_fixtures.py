@@ -10,9 +10,9 @@ import types
 from collections import Counter
 
 from verity.ml.circuits.types import Tuple
-from verity.core.protocols.pouw.circuit import leaves as L
-from verity.core.protocols.pouw.circuit import reference as R
-from verity.core.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.circuit import leaves as L
+from verity.ml.protocols.pouw.circuit import reference as R
+from verity.ml.protocols.pouw.schemes import pearl_c as C
 
 
 def f32(x: float) -> int:
@@ -45,7 +45,7 @@ def tile_digests(tile: tuple[int, int], c, u) -> tuple[int, ...]:
     for rs in range(len(c) // tm):
         for cs in range(len(c[0]) // tn):
             part = lambda x: [list(x[rs * tm + i][cs * tn:(cs + 1) * tn]) for i in range(tm)]   # noqa: E731
-            digest = C.leaf(types.SimpleNamespace(c=part(c), u=part(u)))
+            digest = C.leaf(types.SimpleNamespace(c=part(c), u=part(u)), hashing="h0")
             out += [int.from_bytes(digest[4 * w:4 * w + 4], "little") for w in range(8)]
     return tuple(out)
 

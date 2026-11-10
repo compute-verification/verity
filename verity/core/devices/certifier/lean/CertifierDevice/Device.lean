@@ -49,7 +49,7 @@ proxy event by event:
   `pouwWindow`) the bucketer enqueues the certifier's own frame, `saltFrame p placeholder`, at the head of the queue,
   ahead of that bucket's arrivals and of any queue carried over, so it leaves in that bucket's slot 0. When the ingress
   certifier releases it, the proxy queues p's salt
-  (`values[p]`, the certifier's coins, drawn outside the device) in that frame in place of the placeholder for a server
+  (`values[p]`, the certifier's coins, flipped outside the device) in that frame in place of the placeholder for a server
   connection of its own: the first opens it (`connectSalt`, answered `saltConnected` or `saltRefused`, which is
   `delivery-refused` on ingress), and each frame is written (`writeSalt`) once the one before it is drained
   (`saltDelivered`). Nothing is read from it. The reveal and its custody are outside the device.
@@ -128,7 +128,7 @@ structure ProverConfig where
   prior : Array Past := #[]
 
 /-- The proxy's salt (`Proxy(salt=…)`): one salt of `bits` bits per PoUW window of `pouwWindow` certifier windows, PoUW
-window p's `values[p]`. They are the certifier's own coins (`active.py` draws p's at p's first ingress tick, the driver
+window p's `values[p]`. They are the certifier's own coins (`active.py` samples p's at p's first ingress tick, the driver
 all of them before its first tick); the device reads p's only once p's salt frame is released. -/
 structure SaltSource where
   values : Array ByteArray

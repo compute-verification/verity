@@ -82,14 +82,14 @@ M = 35
 INSTANCES = {2048: 2048, 4096: 2048, 8192: 1024, 16384: 512, 32768: 256}
 #: a session's coins, as the sweep's record names them (`verity_flock.circuit.coins`): `os-seed-prf` (the binary's default: the
 #: verifier's 256-bit OS-random seed, committed at Hello and opened in the verdict, every round's coins its SHA-256 counter-mode
-#: PRF) or `live-os` (FC_COINS=os, 70-class-sweep.sh's default: the verifier's OS draws, round by round); points under different
-#: coin modes are never compared
+#: PRF) or `coin-tree` (FC_COINS=tree, 70-class-sweep.sh's default: the challenger's keyed coin tree); points under different coin
+#: modes are never compared
 COINS = {"os-seed-prf": "os-seed-prf: the verifier's OS-random seed under a SHA-512 commitment, its coins a SHA-256 counter-mode PRF",
-         "live-os": "live-os: the verifier's OS draws, round by round"}
+         "coin-tree": "coin-tree: every round's coins the keyed coin tree's, the challenger's under serve --tree-from"}
 #: the proof-system scheme a point measured, from its coins (docs/protocol-schemes.md): flock-i-v1 is M0's configuration (SHA-512
 #: Merkle, two Fast100 repetitions, os-seed-prf coins, the batched session, the tile layout); written into every point, never
 #: inferred later
-SCHEMES = {"os-seed-prf": "flock-i-v1", "live-os": "flock-i-v1+livecoins"}
+SCHEMES = {"os-seed-prf": "flock-i-v1", "coin-tree": "flock-i-v1+cointree"}
 POINT_SCHEMA, ROLLUP_SCHEMA = "verity/hillclimb-point/v0", "verity/hillclimb-rollup/v0"
 def definition(dtype: str) -> re.Pattern:
     name, dot = DTYPES[dtype][:2]

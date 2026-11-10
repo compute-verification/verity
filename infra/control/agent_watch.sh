@@ -1,5 +1,5 @@
 #!/bin/sh
-# The agent watch (INF-69): free cloud agents whose run is held, from the control pod. Code: /data/infra/agent_watch.py (infra/ops's
+# The agent watch: free cloud agents whose run is held, from the control pod. Code: /data/infra/agent_watch.py (infra/ops's
 # verity_ops/agent_watch.py, standard library only). The key goes only into the environment: /data/agent-watch/cursor.env (root,
 # 0600, one CURSOR_API_KEY= line) is sourced. Until it exists the loop waits and says so once. Findings: /data/agent-watch/events.jsonl,
 # which infra's relay posts (infra/control/agent_watch_relay.py). Log: /data/agent-watch/watch.log. Coordinators come from the
@@ -8,7 +8,7 @@
 # store_private.agent_watch_status as AGENT_WATCH_PG_URL, the store indexer's URL, read from store-index.env with
 # store_index.sh's sed (its URL has `&`); without that file the watch publishes nothing.
 # Workers (Task subagents) come from the same notes clone's recent notes and $DIR/workers.d/*.json.
-# Pushes, for the silent rule, are read with `git ls-remote` and the read-only deploy key fixtures_export.sh fetches with. The nodes
+# Pushes, for the silent rule, are read with `git ls-remote` over https with verity-drive's App token (gh_app_token.sh), as fixtures_export.sh fetches. The nodes
 # whose ended runs ring their sender are $DIR/nodes.json (a copy of agent_watch_nodes.json, read each sweep), their hosts the notes
 # clone's machines.d.
 # While $DIR/wake exists the watch starts a run on a coordinator ready to wake (--wake); remove the file to go back to recording.
@@ -23,7 +23,9 @@ mkdir -p "$DIR"
 exec 9> /root/agent-watch.lock
 flock -n 9 || { echo "$(date -u +%FT%TZ) another copy holds /root/agent-watch.lock" >> "$LOG"; exit 0; }
 val() { sed -n "s/^$1=//p" "$2" | tr -d "\"'"; }
-export GIT_SSH_COMMAND="ssh -i /data/state/secrets/verity-deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/data/state/secrets/known_hosts"
+export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=url.https://github.com/compute-verification/verity.git.insteadOf \
+  GIT_CONFIG_VALUE_0=git@github.com:compute-verification/verity.git GIT_CONFIG_KEY_1=credential.helper \
+  GIT_CONFIG_VALUE_1='!/data/infra/gh_app_token.sh git'
 export GIT_TERMINAL_PROMPT=0
 said=
 while :; do

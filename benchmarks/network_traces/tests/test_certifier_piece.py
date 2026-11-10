@@ -4,7 +4,7 @@ and its outcome. The piece, on a serve dir whose window was the network certifie
 (the run `test_warden_chain.gate_run` publishes in the gate's layout), runs as `served_verdicts.py pieces` runs it and writes
 `network-period`'s answer only when the chain accepted and the window's requests are certified ones in the scan's
 link-window: the period mirror's certifier/v0 accept (`period_case`), its profile with the placement (the certifier on
-the kept gate's host, the checks on the prover's node), then goes through `served_verdicts.py record` into the window
+the kept gate's host, the checks on the developer's node), then goes through `served_verdicts.py record` into the window
 report and the block record's certifier leg, which `block_record.check` holds and its schema admits, and its case.json
 is the three files `network-period` read, as `composite.py` reads a piece's case; the chain's endpoint report, with
 each Commit window's counts, stays in the kept run. A window request the warden didn't certify is
@@ -40,7 +40,7 @@ import jsonschema
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
-ROOT = HERE.parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(HERE), str(Path(__file__).resolve().parent), str(ROOT / "benchmarks" / "one_stage")]
 
 import certifier_piece as CP  # noqa: E402
@@ -52,7 +52,7 @@ from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity_e2e_demo import block_record as BR  # noqa: E402
 
 PERIOD_CASE = ROOT / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
-SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v1.schema.json").read_text())
+SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v2.schema.json").read_text())
 K = 3
 #: the gate's end of a rehearsal its check passed, and of one whose every request was late past the network certifier's
 #: D·τ
@@ -153,7 +153,8 @@ def _piece_cmd(tmp_path: Path, chain: Path, answer: dict, cmd: str | None = None
     """The piece's command, its `network-period` `_stub_lean`'s answering ``answer``."""
     lean = lean or _stub_lean(tmp_path, answer)
     cmd = cmd or f'mkdir -p "$RESEARCH_RUN_DIR" && cp -r {shlex.quote(str(chain / "out"))} "$RESEARCH_RUN_DIR/"'
-    return (f"{shlex.quote(sys.executable)} {shlex.quote(str(HERE / 'certifier_piece.py'))} piece \"$@\" "
+    piece = ROOT / "benchmarks/network_traces/certifier_piece.py"
+    return (f"{shlex.quote(sys.executable)} {shlex.quote(str(piece))} piece \"$@\" "
             f"--lean {shlex.quote(str(lean))} --chain-cmd {shlex.quote(cmd)}")
 
 
@@ -167,7 +168,7 @@ def _integrity() -> dict:
 def _record(monkeypatch, capsys, serve: Path, pieces: Path) -> tuple[dict | None, dict]:
     """`served_verdicts.py record` over the pieces `pieces` ran, sampled proofs' row an accept: the block record (None
     where none was written) and the ``RECORD`` line."""
-    monkeypatch.setattr(S, "sampled_proofs_row", lambda d, run=None: _integrity())
+    monkeypatch.setattr(S, "spot_row", lambda d, run=None: _integrity())
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     out = pieces.parent / "record"
     capsys.readouterr()

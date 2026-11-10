@@ -1,7 +1,39 @@
 module
 
-public import Proofs.Flock.Claims.KS.ZkTrimW
 public import Proofs.Flock.Claims.KS.ZkFirst
+public import Proofs.Flock.Claims.KS.ZkTrimW
+public import Proofs.Flock.Claims.KS.ZkXferW
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The masked chain from a simulator
@@ -13,7 +45,7 @@ an accepting run or fork with its collision (`zkForkEv`, `zkEv₁`) and the mixt
 `P`'s roots (`zkRoot`), two of those bounds come from deterministic facts about `P'` (`ZkSimWJ`):
 
 * the first, from `P'` simulating `P`'s accepting runs at `Φ` (`ZkSimRun`), by `zk_first_of_sim`, with no premise on
-  the record's draw;
+  the record's sample;
 * the self-clash bound, from a live self-clash at `P'`'s outcome giving an accepting run of `P` at `Φ` with a
   collision among the verifier's calls (`ZkClashRun`), by `liveMix_le_Pr`;
 * the fork bounds at `P'`'s strategies (`Adv`'s three and level 0's `Adv₀`) are asked as they are, each at most its
@@ -119,8 +151,8 @@ end Gen
 
 open Classical in
 /-- **A simulator of each masked prover at the witness-lane verdict**: at a masked statement in scope that sets up at
-a draw, for each prover `P`, injective fork rounds for every table's events and, at each tape `ω`, a live prover `P'`
-of the session at C-Flock ZK's padded tables with a finite tape `τ` and coins `Φ` of `V true` at the tape and the live
+a sample, for each prover `P`, injective fork rounds for every table's events and, at each tape `ω`, a live prover `P'`
+of the session at Flock ZK's padded tables with a finite tape `τ` and coins `Φ` of `V true` at the tape and the live
 coins, of uniform law, whose strategies send `P`'s roots (`zkRoot`), that simulates `P`'s accepting runs at `Φ`
 (`ZkSimRun`), and at each table `j` and table of full-width columns, whose live self-clashes give `P`'s accepting runs
 with a collision there (`ZkClashRun`) and whose strategies' fork bounds after `Commit` at the deployed decoders right
@@ -213,8 +245,8 @@ variable [S : ZkSetup]
 
 open Classical in
 /-- **A simulator of each masked prover at the witness-lane verdict**: at a masked statement in scope that sets up at
-a draw, for each prover `P`, injective fork rounds for every table's events and, at each tape `ω`, a live prover `P'`
-of the session at C-Flock ZK's padded tables with a finite tape `τ` and coins `Φ` of `V true` at the tape and the live
+a sample, for each prover `P`, injective fork rounds for every table's events and, at each tape `ω`, a live prover `P'`
+of the session at Flock ZK's padded tables with a finite tape `τ` and coins `Φ` of `V true` at the tape and the live
 coins, of uniform law, whose strategies send `P`'s roots (`zkRoot`), that simulates `P`'s accepting runs at `Φ`
 (`ZkSimRun`), and at each table `j` and table of full-width columns, whose live self-clashes give `P`'s accepting runs
 with a collision there (`ZkClashRun`) and whose strategies' fork bounds after `Commit` at the deployed decoders right

@@ -10,7 +10,7 @@ The executors, as they stand:
 - **vy-nebius-2, CPUs only:** a systemd scope with the memory cap, pinned to the project's CPUs, CUDA hidden, and node 2's ops
   daemon pauses a guest through a timed window. A guest gets `cpus` CPUs of its share in whole cores of its own (`cores` in
   the placement: the machine's `research cpu-hold` claims them, waits while none are free, and puts them in this wrapper in
-  place of the share), at nice 0: every queued run had all of 48-95 at nice 19, 34 at once at load 1000 (19 Oct), and nice
+  place of the share), at nice 0: every queued run had all of 48-95 at nice 19, 34 at once at load 1000, and nice
   orders nothing between scopes. The scope holds the CPUs itself (`AllowedCPUs=`), so a workload's own `taskset` can't
   leave them; systemd drops that without a word where user@.service doesn't delegate cpuset (research's
   pods/nebius/user-cpuset.conf), so the wrapper starts nothing (exit 70) unless the scope's cpuset is the pin.
@@ -19,6 +19,8 @@ The executors, as they stand:
   (network-accounting, art:894c0447). An idle scope runs only on CPU time its siblings leave. A job that takes its GPUs
   with gpu-lease itself, around each GPU step (`gpu_host`, `research run --queue --gpu-host`), is a GPU job's host: its scope
   runs at normal weight, as a GPU job's runner does, so its verifier and replays between leases don't wait on idle CPU time.
+  Its runner names the node's lease tool in `GPU_LEASE` (node 1's with its pool's `N1_LEASE_ENV` beside it), so the workload
+  takes its leases where the queue would.
 - **vy-nebius-1, GPUs:** Kueue's, lent per process by `n1_lease.py` (infra/nebius): node 1's `gpu-lease` copy waits on
   `/run/gpu-lease`, the controller grows its pool of 1-GPU holder Jobs in `provers` for the waiter, and the lease takes a holder's
   GPU. Only with `gpu_executor = "n1-lease"` on the node in the description (the cutover's one-line switch); without it such
@@ -86,8 +88,9 @@ def wrappers(cluster: Cluster, j: Job, node: str, run_id: str, kind: str | None 
     guest = cluster.standing(j.project, node) != OWNER
     pin = cpuset.format(allowed_cpus(cluster, cluster.nodes[node], j))
     nice = guest and not claims_cores(cluster, j, node)
+    host_lease = ([*N1_LEASE_ENV, f"GPU_LEASE={GPU_LEASE_N1}"] if node == NODE1 else [f"GPU_LEASE={GPU_LEASE}"]) if gpu_host else []
     runner = ["env", f"GPU_LEASE_WHO={f'{kind}:' if kind else ''}{j.submitter}", f"RESEARCH_RUN_ID={run_id}", "CUDA_VISIBLE_DEVICES=",
-              "systemd-run", "--user", "--scope", "--quiet", "--collect", "--unit", f"cluster-{run_id}",
+              *host_lease, "systemd-run", "--user", "--scope", "--quiet", "--collect", "--unit", f"cluster-{run_id}",
               "-p", f"MemoryMax={j.memory_gib}G", "-p", "MemorySwapMax=0", "-p", f"AllowedCPUs={pin}",
               *(["-p", "CPUWeight=idle"] if node == NODE1 and not j.gpus and not gpu_host else []), "--",
               "sh", "-c", CPUSET_CHECK, "cpuset-check", pin, "taskset", "-c", pin, *(["nice", "-n", "19"] if nice else [])]

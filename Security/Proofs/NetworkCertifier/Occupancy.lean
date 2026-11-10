@@ -1,10 +1,10 @@
 module
 
 public import Definitions.NetworkCertifier.Grid
-public import Mathlib.Data.Sym.Card
 public import Mathlib.Data.Set.Card
-public import Mathlib.Order.Interval.Finset.Fin
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Data.Sym.Card
+import Mathlib.Order.Interval.Finset.Fin
 
 /-!
 # Proposition 2: timing is occupancy, its counts, and tightness

@@ -1,6 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.HarmBudget
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The cumulative harm budget over a lifetime of one-stage audits
@@ -9,9 +12,9 @@ public import Proofs.Flock.Soundness.Audit.HarmBudget
 `L m`: before each, the prover chooses to stop (accepting) or to run it, and a rejected audit ends
 the session. The prover's choices are adaptive, so the number of rounds is a stopping time.
 
-For a prover strategy `s`, `lifePlay A N s` is its run tree (`Adaptive.Play`), each round's wrong
-units being those of its committed transcript (`Analysis.committedOf`), which the prover's state at
-registration fixes before the round's draw. It is faithful: its acceptance is the lifetime's
+For a prover strategy `s`, `lifePlay A N s` is its run tree (`Adaptive.Play`), each round's incorrect
+proof blocks being those of its committed transcript (`Analysis.committedOf`), which the prover's state at
+registration fixes before the round's sample. It is faithful: its acceptance is the lifetime's
 (`life_accept`). Each round's drawn-unit bound is `audit_drawn` (`drawn_lifePlay`), so `harm_budget`
 gives the lifetime's bound (`life_harm_budget`):
 $$\Pr\Big[\text{accept} \wedge \sum_{t \le T} h(\mathrm{wrong}(X_t)) \ge H\Big]
@@ -126,8 +129,8 @@ section Stage
 
 variable {L : Law n} {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
 
-/-- The run tree of one audit and what follows it: a round over the committed transcript's wrong
-units. -/
+/-- The run tree of one audit and what follows it: a round over the committed transcript's incorrect
+proof blocks. -/
 noncomputable def roundPlay (A : Analysis L Reg session) {next : Game Bool} {N : ℕ}
     (rest : Strategy next → Play n N) (t : Strategy ((audit L Reg session).bind (afterAudit next))) :
     Play n (N + 1) :=
@@ -189,7 +192,7 @@ theorem drawn_term {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n
     exact le_antisymm (prob_mono (fun _ ho => ⟨ho, fun h' => hd h'.symm⟩) _ _) (prob_mono (fun _ ho => ho.1) _ _)
 
 theorem drawn_roundPlay (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.LinkSound δlink) {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n N}
+    (hlink : A.BindSound δlink) {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n N}
     {err : ℕ → ℝ≥0∞} (hpass : ∀ t, (rest t).pass = 1) (hrest : ∀ t, (rest t).Drawn err)
     (hN : εks + δlink ≤ err N) (t : Strategy ((audit L Reg session).bind (afterAudit next))) :
     (roundPlay A rest t).Drawn err := by
@@ -225,7 +228,7 @@ theorem laws_goPlay (A : Analysis L Reg session) {S : Law n → Prop} (hL : S L)
   | false, _ => trivial
 
 theorem drawn_goPlay (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.LinkSound δlink) {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n N}
+    (hlink : A.BindSound δlink) {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n N}
     {err : ℕ → ℝ≥0∞} (hpass : ∀ t, (rest t).pass = 1) (hrest : ∀ t, (rest t).Drawn err)
     (hN : εks + δlink ≤ err N) :
     ∀ (go : Bool) (t : Strategy (cond go ((audit L Reg session).bind (afterAudit next)) (.ret true))),
@@ -256,7 +259,7 @@ theorem laws_stagePlay (A : Analysis L Reg session) {S : Law n → Prop} (hL : S
   laws_goPlay A hL hrest s.1 s.2
 
 theorem drawn_stagePlay (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.LinkSound δlink) {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n N}
+    (hlink : A.BindSound δlink) {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n N}
     {err : ℕ → ℝ≥0∞} (hpass : ∀ t, (rest t).pass = 1) (hrest : ∀ t, (rest t).Drawn err)
     (hN : εks + δlink ≤ err N) (s : Strategy (stage L Reg session next)) : (stagePlay A rest s).Drawn err :=
   drawn_goPlay A hks hlink hpass hrest hN s.1 s.2
@@ -278,7 +281,7 @@ section Life
 
 variable {L : ℕ → Law n} {Reg : ℕ → Type} {session : (m : ℕ) → Finset (Fin n) → Reg m → Game Bool}
 
-/-- **The run tree of a lifetime** under a prover strategy, round `m`'s wrong units those of its
+/-- **The run tree of a lifetime** under a prover strategy, round `m`'s incorrect proof blocks those of its
 committed transcript under the analysis `A m`. -/
 noncomputable def lifePlay (A : (m : ℕ) → Analysis (L m) (Reg m) (session m)) :
     (N : ℕ) → Strategy (life L Reg session N) → Play n N
@@ -298,7 +301,7 @@ theorem pass_lifePlay (A : (m : ℕ) → Analysis (L m) (Reg m) (session m)) :
   | N + 1, s => pass_stagePlay (A N) (lifePlay A N) s
 
 theorem drawn_lifePlay (A : (m : ℕ) → Analysis (L m) (Reg m) (session m)) {εks δlink : ℕ → ℝ≥0∞}
-    (hks : ∀ m, (A m).KnowledgeSound (εks m)) (hlink : ∀ m, (A m).LinkSound (δlink m)) :
+    (hks : ∀ m, (A m).KnowledgeSound (εks m)) (hlink : ∀ m, (A m).BindSound (δlink m)) :
     ∀ (N : ℕ) (s : Strategy (life L Reg session N)), (lifePlay A N s).Drawn fun m => εks m + δlink m
   | 0, _ => trivial
   | N + 1, s => drawn_stagePlay (A N) (hks N) (hlink N) (pass_lifePlay A N) (drawn_lifePlay A hks hlink N) le_rfl s
@@ -315,7 +318,7 @@ condition with weights `π`, harms `h` with `λ h ≤ π` and `λ ≥ 0`, and ev
 lifetime accepts with total harm `Σ_t h(wrong(X_t))` at least `H` with probability at most
 `e^{−λH} + Σ_{m<N} (ε_ks,m + δ_link,m)`. -/
 theorem life_harm_budget (A : (m : ℕ) → Analysis (L m) (Reg m) (session m)) {εks δlink : ℕ → ℝ≥0∞}
-    (hks : ∀ m, (A m).KnowledgeSound (εks m)) (hlink : ∀ m, (A m).LinkSound (δlink m))
+    (hks : ∀ m, (A m).KnowledgeSound (εks m)) (hlink : ∀ m, (A m).BindSound (δlink m))
     {π h : Fin n → ℝ} (hL : ∀ m, (L m).Design π) {lam : ℝ} (hlam0 : 0 ≤ lam) (hlam : ∀ u, lam * h u ≤ π u)
     (H : ℝ) (N : ℕ) (s : Strategy (life L Reg session N)) :
     (lifePlay A N s).prEv h (fun acc x => acc = true ∧ H ≤ x) 0 ≤

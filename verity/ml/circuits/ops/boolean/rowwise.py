@@ -48,47 +48,26 @@ from typing import Any
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.types import Array
 from verity.ml.circuits.silicon import fp
-from verity.ml.circuits.boolean.forms import OR, const_bits, mux, or_reduce
+from verity.ml.circuits.boolean.forms import const_bits, mux, or_reduce
 from verity.ml.circuits.boolean.gather import gather
 from verity.ml.circuits.boolean.trace import definition
 
 from .. import fp32 as W
 from . import rmsnorm as R
 from .elementwise import bf16_add_f2fp, specialized
-from .mufu import mufu_ex2
-from .scalar import bf16_key, gt_u
+from .softmax_row import LOG2E, softmax_exp, softmax_max
 
 __all__ = ["EMBEDDING_FILL", "EmbeddingCoordinate", "F32SumPartHalf", "LOG2E", "RmsNormRecipHalf", "RmsSumSqPartHalf", "SoftmaxMax",
            "SoftmaxOut", "SoftmaxRecip", "embedding_coordinate", "softmax_exp", "softmax_max", "softmax_out", "softmax_recip"]
 
 BF16 = U16 = Array(16, BL.BIT)
 F32 = Array(32, BL.BIT)
-#: RN32(log2 e)
-LOG2E = 0x3FB8AA3B
 ONE_F = 0x3F800000
 _NAN = fp.F32_NAN_PTX
 #: the word a token outside the vocabulary selects (`Embedding_v1`'s fill)
 EMBEDDING_FILL = 0x7FFF
 #: the widest vocabulary a 16-bit token indexes
 MAX_V = 1 << 16
-
-
-def softmax_max(C, xs):
-    """``m``: the first greatest of the bf16 words ``xs`` in `bf16_key`'s order (+0 and -0 one key), or 0x7FFF when any is a
-    NaN. The running word and its key are both selected, so each word's key is made once."""
-    nan, key = bf16_key(C, xs[0])
-    m = list(xs[0])
-    for x in xs[1:]:
-        n, k = bf16_key(C, x)
-        take = gt_u(C, k, key)
-        m, key, nan = mux(C, take, x, m), mux(C, take, k, key), OR(C, nan, n)
-    return mux(C, nan, const_bits(W.BF16_NAN_F2FP, 16), m)
-
-
-def softmax_exp(C, x, m):
-    """``e = MUFU.EX2.FTZ(RN(RN(f32(x) - f32(m)) * L))`` of bf16 words x and m."""
-    d = fp.f32_add(C, fp.bf16_to_f32(x), fp.f32_neg(fp.bf16_to_f32(m)), nan_word=_NAN)
-    return mufu_ex2(C, fp.f32_mul(C, d, fp.f32_const(LOG2E), nan_word=_NAN))
 
 
 def softmax_recip(C, xs, m):

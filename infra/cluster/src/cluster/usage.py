@@ -30,7 +30,7 @@ read without utilization (node 2's sampler reads no NVML in a timed window, so a
 **Useful, today** (`USEFUL_TODAY`): busy time inside a holding the node's records name, a lease or a pod. Busy time on a
 GPU that only memory or a process holds (`NO_POD`, `NO_LEASE`), or a lease pool outside its leases (`POOL_UNLEASED`),
 isn't. No filler rule applies: neither node marks filler work (no fill job on node 2 has a `filler=` header, no Job on
-node 1 a `verity.dev/filler` label; 3 Oct). The vision's useful is narrower, the busy time of a run whose kind's declared
+node 1 a `verity.dev/filler` label). The vision's useful is narrower, the busy time of a run whose kind's declared
 outputs landed in the store. That needs each holding's run, which the readings don't carry yet (node 1: the pod DCGM
 names, which the store's `attempts.host` records, as `pool_n1.py`'s delivered rule joins them; node 2: a lease's `run=`,
 which `gpu-lease/usage/v1` records and the ledger's `end` records carry), and the store's verdict that the run's declared
@@ -60,7 +60,7 @@ POOL_UNLEASED = "lease pool, not leased"
 NOT_USEFUL = (NO_POD, NO_LEASE, POOL_UNLEASED)
 USEFUL_TODAY = ("busy inside a lease or a pod the node's records name; not on a GPU only memory or a process holds, nor in a "
                 "lease pool's pod outside its leases")
-TARGET_BUSY_PCT = 95.0    # Daniel: per node and hour, >= 95% of the GPU time busy
+TARGET_BUSY_PCT = 95.0    # the target: per node and hour, >= 95% of the GPU time busy
 TARGET_USEFUL_PCT = 90.0  # and >= 90% of the busy time useful
 STALE_S = 2 * 3600        # the console records an hour within minutes of its end
 SETTLE_S = 180            # after an hour ends, its last minute's DCGM scrape and sampler lines are in by then

@@ -1,7 +1,8 @@
 module
 
-public import Lean.Data.Json
 public import Flock.Canon
+public import Lean.Data.Json.FromToJson.Basic
+public import Lean.Data.Json.Parser
 
 /-!
 # The difftest server: a port's Lean functions behind a line protocol

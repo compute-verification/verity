@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pouw.Assumptions.NCP.Chain
+public import Definitions.Pouw.NCP.Relation
 public import Definitions.Pouw.NCP.RouteU
 
 /-!

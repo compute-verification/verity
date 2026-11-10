@@ -1,6 +1,5 @@
 module
 
-public import Flock.Statement
 public import Proofs.Flock.Verifier.Registered
 
 /-!

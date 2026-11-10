@@ -1,16 +1,29 @@
 module
 
 public import Definitions.Pous.Game.Prob
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The bandwidth audit v0 in the random-oracle model
 
 The game behind the bandwidth audit v0.
 A device holds a store `E` of `N` blocks of `b` bits in device memory. The verifier reveals a fresh seed `σ`; the prover
+<<<<<<< ours
 must commit, before a deadline, to the tag `H(σ, j, E_j)` of every block `j`; the verifier then checks `s` blocks drawn
 uniformly. Ingress is the number of bits the chip read from device memory in the window. The guarantee, PoUB's
 per-pass lemma (`Definitions/Accounting/Guarantees/RemotePass.lean`), bounds the probability that a device is accepted
 while its ingress falls short of the store by more than what it could have held or obtained another way.
+||||||| base
+must commit, before a deadline, to the tag `H(σ, j, E_j)` of every block `j`; the verifier then checks `s` blocks drawn
+uniformly. Ingress is the number of bits the chip read from device memory in the window. The guarantee
+(`Definitions/Accounting/Guarantees/Bandwidth.lean`) bounds the probability that a device is accepted while its ingress falls
+short of the store by more than what it could have held or obtained another way.
+=======
+must commit, before a deadline, to the tag `H(σ, j, E_j)` of every block `j`; the verifier then checks `s` blocks sampled
+uniformly. Ingress is the number of bits the chip read from device memory in the window. The guarantee
+(`Definitions/Accounting/Guarantees/Bandwidth.lean`) bounds the probability that a device is accepted while its ingress falls
+short of the store by more than what it could have held or obtained another way.
+>>>>>>> theirs
 
 **The random oracle.** `H(σ, ·, ·)` at the fresh seed is a uniform function `O : Fin N × Bits b → Bits h`, and the
 device reaches it only through `tag` queries during the window. Nothing the device computed before `σ` depends on `O`.
@@ -20,12 +33,12 @@ memory (read only through `ingress`, which counts each bit) and side sources (re
 bits per run; `c` stands for `cap · T`, every side channel's capacity over the window). During the window the chip runs
 a program `Chip` from its state, querying the oracle, reading device memory and side sources, and regenerating blocks
 (`regen j` returns `E_j`, at most `G` times per run: the window over the regeneration time `R_regen`, times the
-devices that regenerate). It outputs a tag for every block. The sample `I` is drawn after the output and independently
+devices that regenerate). It outputs a tag for every block. The sample `I` is sampled after the output and independently
 of it, which is what the commitment before the deadline enforces. A program remembers every answer it has had, so the
 chip's working memory in the window is unbounded: `S` bounds only what is on chip when the seed arrives, and writing to
 device memory to read it back gains a device nothing.
 
-**What is a parameter.** `S`, `c` and `G` are bounds the device class is drawn with; the claims registry names the
+**What is a parameter.** `S`, `c` and `G` are bounds the device class is sampled with; the claims registry names the
 measurement that falsifies each for a deployed device (`bandwidth-s-chip`, `bandwidth-side-cap`,
 `bandwidth-regen-time`). Treating the stored blocks as uniform, apart from regeneration, is the claim
 `bandwidth-instantiation`; reading the deployed tag as the random oracle is `random-oracle`.

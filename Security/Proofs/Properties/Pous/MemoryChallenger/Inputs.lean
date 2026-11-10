@@ -1,7 +1,13 @@
 module
 
 public import Proofs.Properties.Pous.MemoryChallenger.Tree
-public import Mathlib.Data.List.Forall2
+public import Batteries.Data.List.Basic
+import Batteries.Lean.Except
+import Mathlib.Data.Finset.Attr
+import Mathlib.Data.List.Forall2
+import Mathlib.Tactic.Bound.Init
+import Mathlib.Tactic.Finiteness.Attr
+import Mathlib.Tactic.SetLike
 
 /-!
 # What the session's hashes read

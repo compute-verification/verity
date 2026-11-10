@@ -114,7 +114,8 @@ def test_a_record_naming_one_in_flight_with_a_coin_before_the_root_before_it_is_
 
 
 def test_a_challenger_log_with_a_coin_before_the_root_before_it_is_refused_at_one_in_flight(store) -> None:
-    """The two-in-flight session's log opens σ_1 after R, before window 0's root: held to one in flight it is refused."""
+    """The two-in-flight session's log opens chal_1 after R, before window 0's root: held to one in flight it is
+    refused."""
     s, _ = honest(store, 1, 2)
     signed, received = logged(s)
     windows, appends = [w.roots for w in s.windows], [a[2].root for a in s._appends]

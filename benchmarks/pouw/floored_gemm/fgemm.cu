@@ -89,7 +89,7 @@ __host__ __device__ constexpr uint32_t mix32(uint32_t x) {
 // (mi, 0..3), TB1's two pair operands side by side in k, one m16n8k32 a row block. TB2WC and TB1WC are them chained.
 // DUOS is DUO with a receipt word a 32-step segment: after segment s each thread folds its chains into R_s, stores it at
 // R[(tile KS + s) NCT + thread] (KS = K / 32) and re-keys them from (seed, tile, thread, s + 1)
-// (verity/core/protocols/pouw/circuit/segment.py)
+// (verity/ml/protocols/pouw/circuit/segment.py)
 enum Kind { NONE = 0, DUO = 1, DUO2 = 2, ADD3 = 3, MUL2 = 4, TB4 = 5, TB2 = 6, TB1 = 7, TB4C = 8, TB1C = 9, TB2W = 10, TB1W = 11,
             TB2WC = 12, TB1WC = 13, DUOS = 14 };
 __host__ __device__ constexpr bool is_tb(int k) { return k >= TB4 && k <= TB1WC; }

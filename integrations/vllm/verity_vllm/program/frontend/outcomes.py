@@ -13,7 +13,8 @@ REASONS = ("mutation", "decomposition", "custom_op_without_binding", "side_input
 _CODE_TO_REASON = {"E_MUTATION": "mutation", "E_HIDDEN_STATE": "hidden_state", "E_DYNAMIC_CONTROL_FLOW": "dynamic_control_flow",
                    "E_UNSUPPORTED_VIEW": "unsupported_view", "E_SHAPE": "shape", "E_WIDTH": "shape", "E_EXPORT": "export",
                    "E_IDENTITY": "identity", "E_UNREGISTERED_OP": "decomposition", "E_OPAQUE_HOST": "side_input",
-                   "E_STATIC": "shape", "E_ARITY": "shape", "E_RETURN_TYPE": "shape", "E_DEAD_GATES": "shape"}
+                   "E_STATIC": "shape", "E_ARITY": "shape", "E_RETURN_TYPE": "shape", "E_DEAD_GATES": "shape",
+                   "E_SURVEY_HOLES": "side_input"}
 
 
 @dataclass

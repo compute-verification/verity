@@ -3,8 +3,8 @@
 `research cpu-hold --cpus N --from LIST --wrap K --who NAME [--rank R] [--ack FIFO] -- CMD...` takes at least N CPUs of LIST in whole cores
 (every SMT sibling of a core, CPU_ROOT's topology) that no live claim holds, records them as the claim CLAIMS/NAME.cpus, and
 execs CMD with LIST replaced by them in its first K arguments (the queue's wrapper: its scope's AllowedCPUs=, its cpuset check
-and its taskset), so the run's pid is unchanged. Node 2's queued Verity runs all ran on all of 48-95, 34 of them at load 1000
-(18-19 Oct), one suite on 0.9 cores; claimed cores are the run's alone.
+and its taskset), so the run's pid is unchanged. Without claims node 2's queued Verity runs would all run on all of 48-95, dozens at
+once, leaving a suite under one core; claimed cores are the run's alone.
 
 A claim is live while its file is flock'ed: this process locks it and leaves the descriptor to CMD, which holds it while anything
 in the run's scope keeps it open (the runner does, through custody); a file nobody locks is a claim whose run ended, and the next
@@ -15,7 +15,7 @@ While the cores aren't free it waits in a line, reading the claims again every P
 CLAIMS/wait.<ns>.<NAME> (`ticket_name`), and only the first live one may take cores, so a run asking for many isn't passed for
 ever by smaller ones (and the fill runner starts no pool job while one waits). The line is by class, then oldest first: `--rank R`
 is the class's priority less the default class's (the queue's placement, `cores.rank`), so drive's gates aren't behind every lane
-job queued before them (INF-147). With `--ack FIFO` (the launch's, remote.LAUNCH_ACK) a wait
+job queued before them. With `--ack FIFO` (the launch's, remote.LAUNCH_ACK) a wait
 acknowledges the launch as it starts, as disk-hold's does. A run asking for more cores than LIST has exits 2 at once.
 """
 from __future__ import annotations

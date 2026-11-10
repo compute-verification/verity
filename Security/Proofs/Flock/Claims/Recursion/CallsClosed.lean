@@ -1,11 +1,47 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.CallsR
-public import Proofs.Flock.Claims.Recursion.VerdictFramedJson
-public import Proofs.Flock.Claims.Recursion.NextRRows
-public import Proofs.Flock.Claims.NumbersDeploy
-public import Proofs.Flock.Claims.Recursion.InnerSetupCount
 public import Proofs.Flock.Claims.Recursion.AcceptedScope
+public import Proofs.Flock.Claims.Recursion.DeployedBrings
+public import Proofs.Flock.Claims.Recursion.InnerSetupCount
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.Recursion.CallsDecision
+import Proofs.Flock.Claims.Recursion.CallsR
+import Proofs.Flock.Claims.Recursion.IVStarCalls
+import Proofs.Flock.Claims.Recursion.NextRRows
+import Proofs.Flock.Claims.Recursion.VerdictFramedJson
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # `c_V = 2^24` at a plain session in scope
@@ -15,7 +51,7 @@ streams are the reps' (`jAt_recJ_streams`): `2·n` of them at `n ≤ 64` tables 
 rep's rounds, `2200` at a session in scope (`repLens_le_in`); and `readPs` reads `2·n` proofs. The verdict runs at the
 session the setup returns against `H`, which has at most `64` tables at any hash too (`setupWith_tables`). So a
 decision calls SHA-512 at most `2^24` times on every run (`decisionAtS_calls_in`). With the inner setup's
-`c_B = SetupCount.innerB ≤ 2^43` at any hash (`innerSetupCalls_le_acc`), its inputs (`innerSetupIns_le_acc`) and the
+`c_B = SetupCount.innerB ≤ 2^32` at any hash (`innerSetupCalls_le_acc`), its inputs (`innerSetupIns_le_acc`) and the
 scope (`plainIn_of_run_acc`), all read from an accepted run, `λ₂ ≥ 100` holds at KS's deployed record with no count
 premise (`lamLin2_R_ge_in`).
 -/
@@ -32,6 +68,7 @@ section Walk
 
 open FlockSoundness.Refine FlockSoundness.Discharge.Exec
 
+-- `walk_step` down `Stmt.setupTablesWith`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **`setupTables_le` at any hash**: at most `Tags.MAX_TABLES` tables, and the spec names one per statement. -/
 theorem setupTablesWith_le {h₀ : ByteArray → ByteArray} {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ}
@@ -241,13 +278,14 @@ theorem lamLin2_R_ge_in (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
   obtain ⟨s, spec, sts, hin⟩ := plainIn_of_run_acc hacc
   have hB : ∀ v, FlockDeploy.setupOf false (xIOf x) = some v →
       FlockDeploy.setupCallsOf (Claims.hOf H) v.1.read ≤ SetupCount.innerB := fun v hv => by
-    obtain ⟨s', spec', sts', hset, hle⟩ := innerSetupCalls_le_acc hacc
+    obtain ⟨s', spec', sts', hset, -, hle⟩ := innerSetupCalls_le_acc hacc
     rw [hset] at hv
     cases hv
     exact hle _
   have hc : 2 ^ 28 + (SetupCount.innerB + 2 ^ 24) ≤ 2 ^ 55 :=
     le_trans (Nat.add_le_add_left (Nat.add_le_add_right SetupCount.innerB_le (2 ^ 24)) (2 ^ 28)) (by norm_num)
-  exact lamLin2_R_ge_acc' rel b L rd colsE wE join rowIn final w decI H hacc (innerSetupIns_le_acc hacc) ps
+  exact lamLin2_R_ge_acc' rel b L rd colsE wE join rowIn final w decI H hacc
+    ((innerSetupIns_le_acc hacc).trans (by norm_num)) ps
     SetupCount.innerB (2 ^ 24) hB
     (fun _ _ _ _ _ _ _ _ _ _ _ ha hw => FlockDeploy.KS.decisionAtS_calls_in H hin ha hw) hc
 

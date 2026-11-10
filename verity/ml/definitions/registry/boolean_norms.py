@@ -40,9 +40,9 @@ returns beside its sum (`RMSNormSquare_v1`, `RMSNormSquareFma_v1`, `RMSNormThrea
 own, shared through `forms`' CSE); the rest are the output piece, which reads both decodes. So the row's members share no gate,
 and Triton's output pass recomputes nothing of the thread pass that reads the same x.
 
-MUFU: ``RSQRT``, ``SQRT``, ``SCALEA`` and ``RCP`` are statics: Definitions on bits whose word Definitions are `RsqrtApprox_v1`,
-`MufuSqrtFtz_v1`, `DivFullScaleA_v1` (or `_v2`, equal on the numerator 1.0) and `DivFullRcp_v1`, or, until proofs' Boolean MUFU
-Definitions exist, those word ids themselves (`MUFU_WORD`). A word id is called on words: the norm packs a value into its word
+MUFU: ``RSQRT``, ``SQRT``, ``SCALEA`` and ``RCP`` are statics: Definitions on bits (`verity.ml.circuits.ops.boolean.mufu`) whose
+word Definitions are `RsqrtApprox_v1`, `MufuSqrtFtz_v1`, `DivFullScaleA_v1` (or `_v2`, equal on the numerator 1.0) and
+`DivFullRcp_v1`, or those word ids themselves (`MUFU_WORD`). A word id is called on words: the norm packs a value into its word
 (`PackF32_v1`) and unpacks a word into bits (`UnpackF32_v1`) once each, when a Call first needs that form (`_F32`), so Triton's
 rms goes from `MufuSqrtFtz_v1` to both division pieces as one word. Those Calls and the word ids are the only word gates left
 in a norm. `rcp(N)` is a constant of the specialization, folded when it is built (`DivFullRcp_v1` of the word N), as is every
@@ -157,7 +157,7 @@ def UnpackF32(B, S, v):
     return array_of([B.call(bit_at(32), v, B.call(const(32, j))) for j in range(32)])
 
 
-#: the norms' MUFU statics at their word ids, until proofs' Boolean MUFU Definitions replace them
+#: the norms' MUFU statics at their word ids
 MUFU_WORD: dict = {"RSQRT": P.RsqrtApprox, "SQRT": P.MufuSqrtFtz, "SCALEA": P.DivFullScaleA, "RCP": P.DivFullRcp}
 CUDA_WORD: dict = {"RSQRT": MUFU_WORD["RSQRT"]}
 TRITON_WORD: dict = {k: MUFU_WORD[k] for k in ("SQRT", "SCALEA", "RCP")}

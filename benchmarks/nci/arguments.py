@@ -5,8 +5,7 @@
 * ``premises``: theorems, assumptions, constructions, estimates, policy rules and models, each with its ``status`` and
   references: findings (``sources/``), parameter estimates, Lean names (``Security/lean-audit.json``), library
   algorithms and board rows.
-* ``attacks``: from the red teams and the workstreams, each with its severity, the claims it targets, its status and
-  repair (a premise id or prose).
+* ``attacks``: each with its severity, the claims it targets, its status and repair (a premise id or prose).
 * ``plans``: the evidence the blue teams proposed, with the round-2 red team's verdict.
 """
 
@@ -46,7 +45,7 @@ def problems(lock: Path | None = None, root: Path = HERE) -> list[str]:
     lean = None
     if lock is not None:
         pol = json.loads(lock.read_text())
-        lean = set(pol["guarantees"]) | set(pol["assumptions"])
+        lean = set(pol["guarantees"]) | set(pol["assumptions"]) | set(pol.get("open") or {}) | set(pol.get("domain") or {})
     claims = {c["id"]: c for c in a["claims"]}
     premises = {p["id"]: p for p in a["premises"]}
     attacks = {x["id"]: x for x in a["attacks"]}

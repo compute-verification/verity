@@ -1,8 +1,43 @@
 module
 
-public import Proofs.Flock.Claims.ZK.L0Pin
+public import Flock.Firewall.Drive
+public import Proofs.Flock.Claims.ZK.FinishBridge
 public import Proofs.Flock.Claims.ZK.FinishLive
+public import Proofs.Flock.Claims.ZK.FrameOpenCut
 public import Proofs.Flock.Claims.ZK.FramePlan
+public import Proofs.Flock.Claims.ZK.L0Pin
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.FinishLig
 
 /-!
 # Level 0's scheduled rounds, fed
@@ -299,7 +334,7 @@ theorem fr_link (coin : Nat → Nat → F128) (n : Nat) (coins : Got) (a b : Arr
     FR coin n coins ((stepAsks coins true).link a b) ((asksCut coin n).link a b) :=
   fr_fail _ fun _ => rfl
 
-/-- `asksCut` as the firewall's `Asks`. -/
+/-- `asksCut` as the ZK server's `Asks`. -/
 def cutAsks (coin : Nat → Nat → F128) (n : Nat) : _root_.Flock.Firewall.Finish.Asks PS :=
   ⟨(asksCut coin n).link, (asksCut coin n).round⟩
 

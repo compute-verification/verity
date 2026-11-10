@@ -2,6 +2,8 @@ module
 
 public import Definitions.Pouw.Dimension.Causal
 public import Proofs.Pouw.Dimension.Proofs
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.NCP.RelationWitness
 
 /-!
 # Theorem D with causal inputs: proofs

@@ -113,4 +113,22 @@ def twice : String := file.compress.replace "\"a1\":" "\"a0\":"
 #guard JsonKeys.dupKey "{\"r\": [{\"k\": 1, \"k\": 2}]}" == some "\"k\""
 #guard JsonKeys.dupKey "{\"p\": {\"a\": {\"root\": \"00\", \"leaves\": 1, \"root\": \"01\"}}}" == some "\"root\""
 
+/-! A name a later port repeats is one `Registered.ofJson` refuses (`dupName?`), as `Json`'s type admits it though no
+parse builds it. -/
+
+def own : Array Registered.Port := (Registered.ofJson file).toOption.getD #[]
+
+#guard own.size == 2 && Registered.dupName? own.toList == none
+#guard Registered.dupName? (own.toList ++ [own[0]!]) == some "a0"
+
+/-- `file` with its ports object holding `a0`'s entry twice, a tree no insertion builds. -/
+def twicePorts : Json :=
+  let e := (file.getObjValD "ports").getObjValD "a0"
+  Json.mkObj [("format", Json.str Registered.FORMAT),
+    ("ports", Json.obj ⟨⟨.inner 2 "a0" e .leaf (.inner 1 "a0" e .leaf .leaf)⟩⟩)]
+
+#guard (Registered.portsOf twicePorts).toOption.map (·.size) == some 2
+#guard (match Registered.ofJson twicePorts with | .error e => e | .ok _ => "") ==
+  "registered reads: port a0 twice: a verdict reports one port per name, and each check reads a name's port"
+
 end Flock.Test.RegRows

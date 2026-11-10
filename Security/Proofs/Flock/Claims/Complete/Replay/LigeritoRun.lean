@@ -1,6 +1,42 @@
 module
 
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoModel
+import Flock.With.Eq
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.BitVec
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The verifier's Ligerito returns on the model's rounds
@@ -397,7 +433,7 @@ theorem oodFixed_size (levels : Array (Array F256)) (h : ∀ l ∈ levels.toList
 
 /-! ## The Merkle openings -/
 
-/-- Where level `j`'s query coins are drawn, counted from Ligerito's first round: level 0's after `k0 + 6` rounds, an
+/-- Where level `j`'s query coins are flipped, counted from Ligerito's first round: level 0's after `k0 + 6` rounds, an
 inner level's eleven later per level, and the last level's four rounds sooner than an inner level's would be. -/
 def qOff (sch : Schedule) (j : ℕ) : ℕ :=
   if j < sch.levels.size - 1 then sch.k0 + 6 + 11 * j else sch.k0 + 2 + 11 * j
@@ -421,7 +457,7 @@ def MerkleOk (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) (cap : Array B
       (opening p cap (sch.levels.size - 1) j).2.1 (opening p cap (sch.levels.size - 1) j).2.2.1
       (opening p cap (sch.levels.size - 1) j).2.2.2 (2 ^ (sch.levels.getD j default).lanes) = .ok ()
 
-/-- Level `j`'s Merkle check, at a query drawn at round `k + qOff sch j`. -/
+/-- Level `j`'s Merkle check, at a query sampled at round `k + qOff sch j`. -/
 theorem MerkleOk.at {hs : Hashes V} {ms : MerkleScheme} {sch : Schedule} {cap : Array ByteArray}
     {p : LigeritoProof} {cf : ℕ → ℕ → F128} {k : ℕ} (h : MerkleOk hs ms sch cap p cf k) {j : ℕ}
     (hj : j < sch.levels.size) {k' : ℕ} (hk : k' = k + qOff sch j) {c : Array ByteArray}

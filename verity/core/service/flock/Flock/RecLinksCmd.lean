@@ -1,7 +1,8 @@
 module
 
-public import Lean.Data.Json
+public import Flock.JsonParse
 public import Flock.RecLinks
+public import Lean.Data.Json.FromToJson.Basic
 
 /-!
 `flock-rec-links`'s command: `Flock.RecLinks.check` on each case of a vectors file (`verity/rec-links-vectors/v1`, written
@@ -53,7 +54,7 @@ def cmd (args : List String) : IO UInt32 := do
   let [path] := args | IO.eprintln "usage: flock-rec-links VECTORS"; return 2
   let text ← IO.FS.readFile path
   let out : Except String (Array String) := do
-    let j ← Json.parse text
+    let j ← JsonParse.parse text
     if (j.getObjValAs? String "format").toOption != some VECTORS_FORMAT then throw s!"not a {VECTORS_FORMAT} file"
     (← j.getObjValAs? (Array Json) "cases").mapM verdict
   match out with

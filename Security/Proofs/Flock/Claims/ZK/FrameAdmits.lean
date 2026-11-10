@@ -1,9 +1,41 @@
 module
 
-public import Proofs.Flock.Claims.ZK.FrameZK
-public import Proofs.Flock.Claims.ZK.FinishRound
 public import Proofs.Flock.Claims.ZK.AdmitsOf
+public import Proofs.Flock.Claims.ZK.FinishRound
+public import Proofs.Flock.Claims.ZK.FrameLoop
+public import Proofs.Flock.Claims.ZK.FrameZK
 public import Proofs.Flock.Claims.ZK.LinkRecheck
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # `FrameAdmits` at the session loop: the tables' side and the frame's
@@ -73,7 +105,7 @@ theorem frameAdmits_of_unrefused (nr : Msg → ℕ → ℕ) (T : CoinLayer.Table
   fun ν t κ m₀ ρ₀ ops hl hlive hok hr => hT x _ fun hx => hU hx ν t κ m₀ ρ₀ ops hl hlive hok hr
 
 /-- **`FinalRoundEq` at the session loop's own frames** from the tables admitting unrefused coins, the frames refusing
-every fault and the firewall's `Finish` being the session's (`finalRoundEq_of_finishIs`, at `loop_last`). -/
+every fault and the ZK server's `Finish` being the session's (`finalRoundEq_of_finishIs`, at `loop_last`). -/
 theorem finalRoundEq_ofLoop (T : CoinLayer.TableData) (vs : (CoinLayer.session Loop.loopNr T).SwVals)
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand))

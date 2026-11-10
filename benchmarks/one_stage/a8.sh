@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-stage audit, run A8, on a CPU machine: one window of PoUB's openings proved in zero knowledge
 # through the opening unit (a8.py), honest and with a tampered block, and the cost points, on hidden_zk's builds (its
-# job.sh, sourced: Flock's flock-circuit and the Lean flock-verify). From a clone, since the verifier of record builds
+# job.sh, sourced: Flock's flock-circuit and the Lean flock-verify). From a clone, since the verifier builds
 # the sampled-proofs Lean in the tree:
 #   A8_MEM_GB=96 bash benchmarks/one_stage/a8.sh
 #   (a job run from a clone of the tree)
@@ -18,7 +18,7 @@ source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
 export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 setup
-(cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/core/service/spot && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 ARMS=${A8_ARMS:-fw,nofw}
 if [[ ,$ARMS, == *,fw,* ]]; then

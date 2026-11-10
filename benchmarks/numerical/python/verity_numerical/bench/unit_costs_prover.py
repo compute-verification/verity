@@ -9,7 +9,7 @@ instances, its block ``2^k_log`` bits per instance and ``D = 2^dense_m`` bits in
 netlist shared by the instances, plus the SHA-512 and hm96 glue), the prove's median time, the prover process's wall time
 (circuit load included) and peak RSS (GiB), and the prover's threads.
 
-**The law** (:func:`fit`): each of RSS, prove time and process wall time is affine in (D / 2^30, circuit bytes / GiB), by
+**The sampling design** (:func:`fit`): each of RSS, prove time and process wall time is affine in (D / 2^30, circuit bytes / GiB), by
 least squares: RSS over every record, unweighted; the times over the 32-thread records, weighted by 1 / y² (relative
 residuals). The fitted coefficients and every residual are in the output.
 
@@ -29,12 +29,12 @@ the prover time per audit, Σ sessions x session time (with the slot sumcheck be
 largest power of two Z at which a B = 16 session at the workload's least ρ is in range and fits one node's memory
 (:data:`NODE_GIB`; :data:`GPU_GIB` for one GPU's, the CPU law taken as a bound on the CUDA prover's). A unit over the cap
 is split below the subcircuit into ceil(z / cap) pieces, its pieces in a bucket of their own at the cap (sessions
-ceil(p X / B) for X of its units drawn); every other unit keeps its dp4 bucket.
+ceil(p X / B) for X of its units sampled); every other unit keeps its dp4 bucket.
 
 **dp4t** (:func:`menu_t`): dp4 places on nonzeros alone, so a rare unregistered type in a bucket of registered ones pads
 every session's slots to its template. dp4t keys the body's buckets by (template class, Z): registered types by their
 registered unit's template (every GEMM tc step one class, at every K), generic types by their whole subcircuit's, each
-class within a factor of two; at most :data:`BUCKETS_T` buckets, the dp on Z within each class. A class drawn fewer than
+class within a factor of two; at most :data:`BUCKETS_T` buckets, the dp on Z within each class. A class sampled fewer than
 :data:`RARE_DRAWS` times per audit is rare: each of its types a bucket of its own, at B = 1 or 16, with the public count at
 its 1 − 2⁻⁴⁰ quantile, like the tail. The menu stays fixed per model. The caps are dp4's (the cap search's session holds
 the workload's largest templates). The what-if registers every generic body type sampled at least :data:`RARE_DRAWS` times
@@ -86,11 +86,11 @@ CAP_SEARCH = tuple(range(16, 41))
 #: ρ for the power-of-two table: RoPE's and RMSNorm's registered layouts (GEMM's is 27.9, attention's 27.9-29.6)
 RHO_TABLE = 26.5
 MENU_K = 4
-#: ``dp4t``: at most this many body buckets, keyed by (template class, Z); a class drawn fewer than :data:`RARE_DRAWS` times
+#: ``dp4t``: at most this many body buckets, keyed by (template class, Z); a class sampled fewer than :data:`RARE_DRAWS` times
 #: per audit (mean) is rare, each of its types a bucket of its own at B = 1 or 16 (whichever costs less at the public count)
 BUCKETS_T = 8
 RARE_DRAWS = 16
-#: candidate 3's slot sumcheck, measured by proofs' K1 on vy-nebius-2's 32 threads (art:10599a37d2ec; upper bounds,
+#: candidate 3's slot sumcheck, measured by proofs' K1 on vy-nebius-2's 32 threads (upper bounds,
 #: Lean builds loaded the node): ns per entry per rep at ν = 20 and 28, the middle of wide-Morton (the band's low end) and
 #: uniform columns (its high end, the worst case); reps; the committed bits' bytes per entry (8; 64 encoded at rate 1/8);
 #: and the working set per entry (peak RSS 37 GiB at ν = 28). F4's estimate before it: 13 ns (10-16) at ν = 20.
@@ -220,10 +220,10 @@ def lstsq(xs: Sequence[Sequence[float]], ys: Sequence[float], ws: Sequence[float
     return _solve(A, b)
 
 
-#: each law's features (0: D / 2^30, 1: circuit bytes / GiB, 2: one block's bits, 2^k_log / 2^30); prove time leaves out the
+#: each sampling design's features (0: D / 2^30, 1: circuit bytes / GiB, 2: one block's bits, 2^k_log / 2^30); prove time leaves out the
 #: circuit text, whose coefficient fitted with it is negative and below its error
 LAWS = {"rss_gib": (0, 1, 2), "prove_s": (0, 2), "wall_s": (0, 1, 2)}
-#: the column as posted at b41137f42: every law over (D, circuit bytes), fitted on :data:`HIDDEN_ZK`
+#: the column as posted at b41137f42: every sampling design over (D, circuit bytes), fitted on :data:`HIDDEN_ZK`
 POSTED_LAWS = {"rss_gib": (0, 1), "prove_s": (0, 1), "wall_s": (0, 1)}
 
 
@@ -367,7 +367,7 @@ def staging_fit(ladder: Sequence[tuple] = STAGING) -> dict[str, list[float]]:
 
 def staging(net: Mapping[str, Any], law: Mapping[str, Sequence[float]],
             registered: Sequence[tuple] = REGISTERED_STAGING) -> dict[str, float]:
-    """One template shape's staging: the law at the ANDs it lowers, a registered type's at least its measured staging."""
+    """One template shape's staging: the sampling design at the ANDs it lowers, a registered type's at least its measured staging."""
     out = {k: _at(c, [net["ands"] / 1e6]) for k, c in law.items()}
     if net["kind"] == "registered" and registered:
         out = {"wall_s": max(out["wall_s"], *(r[4] for r in registered)),

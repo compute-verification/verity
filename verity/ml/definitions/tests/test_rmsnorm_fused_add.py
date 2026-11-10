@@ -2,7 +2,7 @@
 on [j·C, (j+1)·C), its res the whole residual row, the tail reading the parts' r in order), return `RMSNormFusedCuda_v2`'s
 two outputs word for word: on Gaussian rows at three scales, on uniformly random words (NaN, ±inf, ±0 and subnormals among
 them), and on rows whose residual add, squares or variance overflow, underflow or cancel. Their gates are v2's, and at
-Llama-3.2-1B's down_proj each unit fits a C-Flock proof block where v2 does not."""
+Llama-3.2-1B's down_proj each unit fits a Flock proof block where v2 does not."""
 from __future__ import annotations
 
 import importlib.util
@@ -23,7 +23,7 @@ from verity.ml.windows import interface as IF
 CASES = [(2048, 1e-5, 256), (2048, 1e-6, 2048), (576, 1e-5, 64), (1536, 1e-5, 512), pytest.param(4096, 1e-5, 256, marks=pytest.mark.slow),
          (16, 1e-6, 4)]
 MAX, INF, NAN, TINY, BIG = 0x7F7F, 0x7F80, 0x7FC1, 0x0001, 0x5F80  # bf16: the largest finite, +inf, a NaN, 2^-133, 2^64
-#: C-Flock's proof block needs a row with a SHA-512 compression before its last block, so a row over this many bytes
+#: Flock's proof block needs a row with a SHA-512 compression before its last block, so a row over this many bytes
 SHA512_LAST_BLOCK_BYTES = 111
 ROWS = 256
 

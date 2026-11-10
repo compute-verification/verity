@@ -17,4 +17,10 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         # Head 32 keeps the catalog's cost down; the served head 256 is the same id at D=256, which `circuit-check` takes on demand
         ("AttentionSplit_v1", lambda: bind(fa3_split.AttentionSplit, T=161, NH=1, KVH=1, D=32, BN=80, MASKED_FROM=1, PER=1,
                                            DOT=hopper.HopperBF16WgmmaDot16, INV=hopper.Fa3InvSum)),
+        # the same row with its lse: unsplit, as a context launch's row of 161 keys runs it (only its first block guarded), and
+        # in the three splits above
+        ("AttentionHeadLse_v1", lambda: bind(fa3_split.AttentionHeadLse, T=161, D=32, BN=80, MASKED_FROM=2,
+                                             DOT=hopper.HopperBF16WgmmaDot16, INV=hopper.Fa3InvSum)),
+        ("AttentionHeadSplitLse_v1", lambda: bind(fa3_split.AttentionHeadSplitLse, T=161, D=32, BN=80, MASKED_FROM=1, PER=1,
+                                                  DOT=hopper.HopperBF16WgmmaDot16, INV=hopper.Fa3InvSum)),
     ]

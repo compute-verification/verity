@@ -26,7 +26,6 @@ public import Flock.DeriveCheck
 public import Flock.Layout
 public import Flock.Net
 public import Flock.Tags
-public import Flock.JsonParse
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -98,7 +97,7 @@ def infoIn (held : Array Held) (x : String) : Option TableInfo := (held.find? (�
 /-- The held tables' words by SHA-512. -/
 def wordsIn (held : Array Held) (x : String) : Option (Array Nat) := (held.find? (·.sha512 == x)).map (·.words)
 
-/-- **A typed statement's unit class,** as the verifier derives it: META's checked types and layouts, the tables it
+/-- **A typed statement's size class,** as the verifier derives it: META's checked types and layouts, the tables it
 holds, the unit's layout, and `deriveChecked`'s rows on exactly those, with the run that returned them (`hd`). An accepted
 typed statement carries it (`Circuit.cls`), and every net the verifier folds for it is built from `done` (`netOfD`). -/
 structure Class where

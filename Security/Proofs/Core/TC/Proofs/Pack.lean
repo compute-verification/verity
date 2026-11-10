@@ -1,6 +1,8 @@
 module
 
-public import Proofs.Core.TC.Proofs.Words
+public import Definitions.Core.TC.Bridge
+import Proofs.Core.TC.Proofs.Group
+import Proofs.Core.TC.Proofs.Words
 
 /-!
 # The unit boundary: `pack_relation` is `pack_value` then `cvt.rn.bf16.f32`

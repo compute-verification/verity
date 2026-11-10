@@ -1,6 +1,9 @@
 module
 
 public import Definitions.Flock.Merkle
+public import Mathlib.Tactic.Basic
+import Mathlib.Tactic.Push
+import Mathlib.Tactic.SplitIfs
 
 /-!
 # Merkle binding

@@ -153,6 +153,24 @@ def test_each_router_pin_refuses_by_name(call, needle, on_target):
     assert "GroupedTopk[vllm-moe]_v1" in hint and needle in hint, hint
 
 
+class _LaunchedRouter(_Router):
+    def forward(self, logits):
+        from verity_vllm.program.frontend.rules.vllm_bindings import observations as OB
+        with OB.launch_region(0, "tokens"):
+            return super().forward(logits)
+
+
+def test_the_router_kernel_is_the_launchs_not_the_requests(on_target):
+    """vLLM launches `grouped_topk` over the step's tokens: a request's 2 rows in a step of 1,100 run the warp kernel at 256 experts."""
+    from verity_vllm.program.frontend import targets as TG
+    on_target(H200)
+    VB.observe_launch_context(TG.parse_launch_context({"batch": [[[M, 0], [1100 - M, 7]]]}))
+    with torch.fx.traceback.preserve_node_meta():
+        rep = _derive(_LaunchedRouter(256), (_logits(256),))
+    assert rep.program is not None, rep.unsupported
+    assert _ids(rep) == [bind(MOE.MoeRouterSigmoidBias, E=256, TOPK=TOPK, SCALE=RSF, KERNEL="warp").id] * M
+
+
 # -- the fused activation quant ----------------------------------------------------------------------------------------------
 
 

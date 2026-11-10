@@ -80,7 +80,7 @@ theorem forkC_simSessG {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [No
 
 /-- **The dead branches' empty openings open nothing.** -/
 theorem opRL_nul {D Sl : Type} [Inhabited Sl] (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
-    (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : Accounting.Schedule) (r ℓ : ℕ) (d cap : Model.Cap D)
+    (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : FlockSoundness.Accounting.Schedule) (r ℓ : ℕ) (d cap : Model.Cap D)
     (pend : Model.PendL 𝔽 D × Model.PendL 𝔽 D) (p : Fin (2 ^ (lvOf sch ℓ).logLen)) :
     opRL Hc E Lf sch r ℓ d (tableOutL Hc E Lf cap pend (nulOp (D := D) (Sl := Sl))) p = none := by
   unfold opRL opOfL
@@ -160,7 +160,7 @@ def CapAtL {D Sl : Type} (r ℓ : ℕ) (out : Model.OutCL 𝔽 D Sl) (d : Model.
 /-- **The fork event at rep `r`'s level `ℓ + 1`**: table 0's outputs in both runs record one cap `d` for it and open a
 position of it to different rows. -/
 def ForkEvL {D Sl : Type} [Inhabited D] [Inhabited Sl] (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
-    (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : Accounting.Schedule) (r ℓ : ℕ) (a a' : List (Model.OutCL 𝔽 D Sl)) :
+    (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : FlockSoundness.Accounting.Schedule) (r ℓ : ℕ) (a a' : List (Model.OutCL 𝔽 D Sl)) :
     Prop :=
   ∃ d, CapAtL r ℓ (a.getD 0 dfltOutL) d ∧ CapAtL r ℓ (a'.getD 0 dfltOutL) d ∧
     ∃ p, Rewinding.ConflictAt (fun outs : List (Model.OutCL 𝔽 D Sl) =>
@@ -168,18 +168,18 @@ def ForkEvL {D Sl : Type} [Inhabited D] [Inhabited Sl] (Hc : List UInt8 → D) (
 
 /-- Table 0's output opens some position at rep `r`'s level `ℓ + 1`. -/
 def OpensAtL {D Sl : Type} [Inhabited D] [Inhabited Sl] (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
-    (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : Accounting.Schedule) (r ℓ : ℕ) (a : List (Model.OutCL 𝔽 D Sl)) :
+    (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : FlockSoundness.Accounting.Schedule) (r ℓ : ℕ) (a : List (Model.OutCL 𝔽 D Sl)) :
     Prop :=
   ∃ d p, (opRL Hc E Lf sch r (ℓ + 1) d (a.getD 0 dfltOutL) p).isSome
 
 theorem forkEvL_opens {D Sl : Type} [Inhabited D] [Inhabited Sl] (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
-    (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : Accounting.Schedule) (r ℓ : ℕ) (a a' : List (Model.OutCL 𝔽 D Sl))
+    (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : FlockSoundness.Accounting.Schedule) (r ℓ : ℕ) (a a' : List (Model.OutCL 𝔽 D Sl))
     (h : ForkEvL Hc E Lf sch r ℓ a a') : OpensAtL Hc E Lf sch r ℓ a ∧ OpensAtL Hc E Lf sch r ℓ a' :=
   let ⟨d, _, _, p, h₁, h₂, _⟩ := h
   ⟨⟨d, p, h₁⟩, ⟨d, p, h₂⟩⟩
 
 theorem not_opensAtL_nul {D Sl : Type} [Inhabited D] [Inhabited Sl] (Hc : List UInt8 → D)
-    (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : Accounting.Schedule) (r ℓ : ℕ)
+    (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (sch : FlockSoundness.Accounting.Schedule) (r ℓ : ℕ)
     (cap : Model.Cap D) (pend : Model.PendL 𝔽 D × Model.PendL 𝔽 D) (outs : List (Model.OutCL 𝔽 D Sl))
     (h : outs.getD 0 dfltOutL = tableOutL Hc E Lf cap pend (nulOp (D := D) (Sl := Sl))) :
     ¬ OpensAtL Hc E Lf sch r ℓ outs := by
@@ -192,7 +192,7 @@ theorem not_opensAtL_nul {D Sl : Type} [Inhabited D] [Inhabited Sl] (Hc : List U
 open Flock FlockSoundness.Discharge
 open Lean (Json)
 
-/-- The decoders `plainAdv` reads: right, at the verdict at the draw, for accepting with no level-0 opening off `C`
+/-- The decoders `plainAdv` reads: right, at the verdict at the sample, for accepting with no level-0 opening off `C`
 unless it self-clashes. -/
 abbrev PlainHDec {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
@@ -256,11 +256,11 @@ def PlainAlignQ {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l
       _ (plainSimAt L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn hdec hw P ω C u)
 
 /-- **The live fork event at the concrete simulator**: the live outcomes at live coins `r₁` and `r₂` decode, at the
-verdict at the draw, to outputs with `ForkEvL` at rep `r`'s level `ℓ + 1`. -/
+verdict at the sample, to outputs with `ForkEvL` at rep `r`'s level `ℓ + 1`. -/
 def PlainLiveFork {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {spec : SessionSpec} (st : Stmt)
     (T : TabSpec spec.mPts) (hw : 2 * spec.mPts ≤ 65536) (I : Exec.Inputs) (d : Json)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
-    (sch : Accounting.Schedule) (C : Fin (wordLen false x) → List 𝔽) (u : plainTape x)
+    (sch : FlockSoundness.Accounting.Schedule) (C : Fin (wordLen false x) → List 𝔽) (u : plainTape x)
     (r₁ r₂ : Fin (plainN x + 2) → LCoin 65536) (r : Fin 2) (ℓ : ℕ) : Prop :=
   LiveEv (Claims.Bridge.RetOK (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Refine.leaf512 cap pend os)
       (plainVerdictAt I d C (plainRoot P x ω)) opn (plainDec T) (fun _ _ => true) (fun _ _ _ => [])
@@ -276,7 +276,7 @@ accepts `P` at `plainΦ x` at both live coins, the verifier's calls in the two r
 def PlainForkQ {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {spec : SessionSpec} (st : Stmt)
     (T : TabSpec spec.mPts) (hw : 2 * spec.mPts ≤ 65536) (I : Exec.Inputs) (d : Json)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
-    (sch : Accounting.Schedule) : Prop :=
+    (sch : FlockSoundness.Accounting.Schedule) : Prop :=
   ∀ (C : Fin (wordLen false x) → List 𝔽) (u : plainTape x) (r₁ r₂ : Fin (plainN x + 2) → LCoin 65536) (r : Fin 2)
     (ℓ : ℕ), PlainLiveFork P x ω st T hw I d opn sch C u r₁ r₂ r ℓ →
     (Claims.run sha512 P (V false) x ω (plainΦ x spec st (u, r₁))).out = .acc →
@@ -371,7 +371,7 @@ theorem plainAdv_le_of {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
 which collide by `PlainForkQ`. -/
 theorem pairEv_of_forkQ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {spec : SessionSpec} {st : Stmt}
     {T : TabSpec spec.mPts} {hw : 2 * spec.mPts ≤ 65536} {I : Exec.Inputs} {d : Json}
-    {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)} {sch : Accounting.Schedule}
+    {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)} {sch : FlockSoundness.Accounting.Schedule}
     {C : Fin (wordLen false x) → List 𝔽}
     (habort : PlainSimAbort P x ω spec.mPts plainN (plainDg spec) (plainW spec hw) (plainSim P x spec st)
       (plainΦ x spec st) (plainVerdictAt I d C (plainRoot P x ω)))
@@ -400,7 +400,7 @@ theorem plainSimForkLe_of {x : Claims.Msg} (ha : PlainForkAlign x) (hc : PlainFo
 /-! ## At `VK keep`
 
 The concrete simulator's fork advantage at every `keep`: `plainSimK keep`, the runs of `VK keep` and the verdict at the
-draw `plainVerdictAtK keep`. The originals read `plainVerdictAt`, which `plainVerdictAtK id` is not definitionally, so
+sample `plainVerdictAtK keep`. The originals read `plainVerdictAt`, which `plainVerdictAtK id` is not definitionally, so
 they stay beside these. -/
 
 /-- The decoders `plainAdvK keep` reads (`PlainHDec` at `plainVerdictAtK keep`). -/
@@ -471,7 +471,7 @@ def PlainAlignQK (keep : Bool → Bool) {spec : SessionSpec} {st : Stmt} (L : La
 def PlainLiveForkK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     {spec : SessionSpec} (st : Stmt) (T : TabSpec spec.mPts) (hw : 2 * spec.mPts ≤ 65536) (I : Exec.Inputs)
     (d : Json) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
-    (sch : Accounting.Schedule) (C : Fin (wordLen false x) → List 𝔽) (u : plainTape x)
+    (sch : FlockSoundness.Accounting.Schedule) (C : Fin (wordLen false x) → List 𝔽) (u : plainTape x)
     (r₁ r₂ : Fin (plainN x + 2) → LCoin 65536) (r : Fin 2) (ℓ : ℕ) : Prop :=
   LiveEv (Claims.Bridge.RetOK (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Refine.leaf512 cap pend os)
       (plainVerdictAtK keep I d C (plainRoot P x ω)) opn (plainDec T) (fun _ _ => true) (fun _ _ _ => [])
@@ -486,7 +486,7 @@ def PlainLiveForkK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x 
 def PlainForkQK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {spec : SessionSpec}
     (st : Stmt) (T : TabSpec spec.mPts) (hw : 2 * spec.mPts ≤ 65536) (I : Exec.Inputs) (d : Json)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
-    (sch : Accounting.Schedule) : Prop :=
+    (sch : FlockSoundness.Accounting.Schedule) : Prop :=
   ∀ (C : Fin (wordLen false x) → List 𝔽) (u : plainTape x) (r₁ r₂ : Fin (plainN x + 2) → LCoin 65536) (r : Fin 2)
     (ℓ : ℕ), PlainLiveForkK keep P x ω st T hw I d opn sch C u r₁ r₂ r ℓ →
     (Claims.run sha512 P (VK keep) x ω (plainΦ x spec st (u, r₁))).out = .acc →
@@ -574,7 +574,7 @@ theorem plainAdv_le_ofK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionS
 theorem pairEv_of_forkQK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {spec : SessionSpec} {st : Stmt} {T : TabSpec spec.mPts} {hw : 2 * spec.mPts ≤ 65536} {I : Exec.Inputs}
     {d : Json} {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)}
-    {sch : Accounting.Schedule} {C : Fin (wordLen false x) → List 𝔽}
+    {sch : FlockSoundness.Accounting.Schedule} {C : Fin (wordLen false x) → List 𝔽}
     (habort : PlainSimAbortK keep P x ω spec.mPts plainN (plainDg spec) (plainW spec hw) (plainSimK keep P x spec st)
       (plainΦ x spec st) (plainVerdictAtK keep I d C (plainRoot P x ω)))
     (hq : PlainForkQK keep P x ω st T hw I d opn sch) {u : plainTape x} {r₁ r₂ : Fin (plainN x + 2) → LCoin 65536}

@@ -1,6 +1,6 @@
 """research.withdraw: `research cancel` of a run still held on its machine (disk-hold, cpu-hold) ends exactly the hold processes
-that name the run's ack FIFO and records the run Withdrawn. On 19 Oct infra withdrew 20 such runs by hand, because the cancel
-refused a run with no status.json. The process table here is a directory laid out as /proc, whose signals the test applies."""
+that name the run's ack FIFO and records the run Withdrawn, rather than refuse a run with no status.json and leave it to be
+withdrawn by hand. The process table here is a directory laid out as /proc, whose signals the test applies."""
 from __future__ import annotations
 
 import fcntl

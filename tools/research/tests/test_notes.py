@@ -37,6 +37,25 @@ def test_checkpoint_goes_under_the_front_matter_newest_first_and_sets_status(tmp
     assert (row["state"], row["commit"], row["checkpoint_at"], row["text"]) == ("blocked", "abc1234", "21:00Z", "waiting on the pod")
 
 
+def test_checkpoint_names_its_writer_in_origin_and_keeps_what_the_origin_already_names(tmp_path):
+    w, c, s = ("bc-11111111-1111-4111-8111-111111111111", "bc-22222222-2222-4222-8222-222222222222",
+               "bc-33333333-3333-4333-8333-333333333333")
+    p = _report(tmp_path, "lane-o", "# lane-o\n", 5)
+    notes.checkpoint(tmp_path, "lane-o", "open", "first", commit="abc1234", now=NOW, agent=w)
+    assert f"\norigin: {w}\n---\n" in p.read_text()
+
+    origin = f"origin: cloud worker zy (bc-11111111) of the coordinator ({c}), branch cursor/zy-1234"
+    p.write_text(FRONT.format(lane="lane-o", status="open").replace("---\n\n", f"{origin}\n---\n\n", 1) + "# lane-o\n")
+    notes.checkpoint(tmp_path, "lane-o", "open", "second", commit="abc1234", now=NOW, agent=w)
+    assert f"\n{origin}\n" in p.read_text()
+    notes.checkpoint(tmp_path, "lane-o", "open", "third", commit="abc1234", now=NOW, agent=s)
+    front = p.read_text().split("\n---\n", 1)[0]
+    assert front.count("origin:") == 1 and f"{origin}; checkpoint by {s}" in front
+    notes.checkpoint(tmp_path, "lane-o", "open", "fourth", commit="abc1234", now=NOW, agent=s)
+    notes.checkpoint(tmp_path, "lane-o", "open", "fifth", commit="abc1234", now=NOW)
+    assert p.read_text().count(s) == 1 and c in p.read_text() and "cursor/zy-1234" in p.read_text()
+
+
 def test_checkpoint_survives_the_store_mounts_eagain_without_doubling_its_line(tmp_path, monkeypatch):
     # the Project store's mount answers EAGAIN on rewrites of a recently written file, sometimes after the write landed
     p = _report(tmp_path, "lane-e", "# lane-e\n", 5)
@@ -150,8 +169,8 @@ def test_newest_checkpoint_wins_wherever_it_sits_and_times_before_midnight_are_y
 
 
 def test_a_newer_open_checkpoint_after_a_final_one_reopens_the_lane_despite_its_final_section(tmp_path):
-    # verify-night-3 2026-09-26: "## FINAL" from an earlier round made the reopened lane final, done at the report's mtime, and
-    # the reaper took the pod the reopened lane had just created
+    # a "## FINAL" from an earlier round must not make the reopened lane final, done at the report's mtime, or the reaper takes
+    # the pod the reopened lane has just created
     body = ("CHECKPOINT 7585828 (20:40Z) [open] reopened for another round: NOT final\n"
             "CHECKPOINT 906255b (18:49Z) [final] round done\n\n## FINAL\n\nround done, pods terminated\n")
     row = notes.lane_status(_report(tmp_path, "l", body, 10), NOW, 45)
@@ -1034,7 +1053,7 @@ def test_scheduled_runs_launch_once_per_utc_day_or_iso_week_at_or_after_their_ti
     def at(days: float = 0, minutes: float = 0, state: dict | None = None) -> list[str]:
         return notes.run_lines(tmp_path, NOW + dt.timedelta(days=days, minutes=minutes), state, run=run, new_id=lambda: next(ids))
 
-    state, home = {}, Path.home()                                  # NOW: Wednesday 2026-09-23 21:00Z, ISO week 39
+    state, home = {}, Path.home()                                  # NOW: a Wednesday, 21:00Z, ISO week 39
     assert at(state=state) == ["21:00Z LAUNCHED lean-fresh r1 on vy-lean"]
     assert calls == [([sys.executable, "-m", "research", "run", "--id", "r1", *FRESH], f"{home}/src", home / "src", notes.RUN_LAUNCH_TIMEOUT_S)]
     assert state["run"]["lean-fresh"] == {"period": "2026-09-23", "run": "r1", "rc": 0}
@@ -1127,7 +1146,7 @@ def test_guardian_kills_go_to_the_owning_lanes_inbox_by_machine_pod_hint_or_cwd(
 
 
 def test_snapshot_refuses_git_data_by_name_and_by_content(tmp_path):
-    """The notes repo is public: a git bundle, pack or index (14 bundles of the private repo were found there, 2026-09-27) is never
+    """The notes repo is public: a git bundle, pack or index (a bundle of the private repo, say) is never
     committed, whatever its name, and is reported as refused."""
     root = tmp_path / "notes"
     _git(tmp_path, "init", "-q", "-b", "main", str(root))

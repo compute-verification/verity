@@ -8,7 +8,7 @@ public import Std.Data.HashSet
 `Accounting.Requirement` (`Security/Definitions/Accounting/Requirement.lean`) on one instance: a declared circuit's
 wiring, one scheduled execution of it and a layout of its values (`Instance`), the audit's store (`Store`), and a
 placement of the execution on devices (`Placement`), whose regions, ingress and credits are PoUW's over the placed
-execution (`Definitions/Accounting/Guarantees/RequirementPouw.lean`). A step is always an engine step, never a device tick.
+execution (`Proofs/Accounting/Lemmas/RequirementPouw.lean`). A step is always an engine step, never a device tick.
 This is code, so it requires nothing of `Security/`: `Properties.Accounting.Requirement` states that each function here
 is the definition it computes, on the wiring, execution, layout, store and placement an instance denotes, and
 `Proofs.Properties.Accounting.Requirement` proves it. `requirement-difftest` serves these functions to the difftest, which

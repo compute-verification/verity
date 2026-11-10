@@ -37,7 +37,7 @@ def _counts(doc: Any, where: str, name: str) -> dict[str, int]:
 
 @dataclass(frozen=True)
 class BlockClass:
-    definition: str                                   # the session Definition's SHA-512 (`partition_v2.definition_digest`)
+    definition: str                                   # the session Definition's SHA-512 (`partition_v2.id_digest`)
     slots: int                                        # its window class's slots: a window's blocks
     steps: int                                        # and steps
     gates: int                                        # a block's Boolean gates, by the table

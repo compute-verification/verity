@@ -1,6 +1,7 @@
 module
 
 public import NetworkCertifier.ChargeDifftest
+meta import NetworkCertifier.ChargeDifftest
 
 /-! The charge difftest's run (`runs` in `lean-audit.json`): `NetworkCertifier.AdviceV1.ChargeDifftest.main`, audited
 under `NetworkCertifier`.

@@ -2,7 +2,8 @@
 (`verity.ml.circuits.ops.boolean.scalar`) by their builders: each step and cast and the AND lower to exactly the circuit of the piece
 their word primitive lowers to (the same ANDs and the same nonzeros of the AND rows), and the coordinate to
 `GemmCoordinate_v2`'s, whose words it evaluates to. A Boolean Definition whose builder commits keeps its commits as rows, so
-its AND operands stay a few bits however many activations are chained."""
+its AND operands stay a few bits however many activations are chained. The embedding's selection lowers by its builder to
+its trace's ANDs and computes its reference."""
 from __future__ import annotations
 
 import numpy as np
@@ -13,6 +14,7 @@ from verity.ml.circuits import evaluation as E
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.trace import definition
 from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.kernels import tc as K
 from verity.ml.circuits.ops import prims as P
@@ -20,6 +22,7 @@ from verity.ml.circuits.ops import scalar as S
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.boolean import scalar as BSC
 from verity.ml.circuits.types import Array
+from verity.ml.commitments.gates import embedding as EM
 from verity_flock import ir_lower as IL
 from verity_flock.gf2 import Circuit
 
@@ -207,6 +210,26 @@ def test_a_definition_with_statics_lowers_by_its_builder_on_them() -> None:
         got_s, fail = C.evaluate({f"in{j}": IL.slice_words(cols[:, j], 1) for j in range(cols.shape[1])}, T)
         assert not fail
         assert np.array_equal(IL.unslice_words(got_s["out"], T), _pack(E.evaluate_batch(d, s, x).astype(np.uint64)))
+
+
+#: `trace.part`s at their circuit-check bindings (the embedding's selection at its smallest)
+PARTS = [pytest.param(EM.EmbeddingReadSelect, dict(V=2, H=1), id="embedding-select")]
+
+
+@pytest.mark.parametrize("defn,statics", PARTS)
+def test_a_part_lowers_by_its_builder_to_its_traces_ands_and_reference(defn, statics) -> None:
+    """The lowering runs the part's builder on its statics (`ir_lower._boolean_activation`): its trace's ANDs, and its
+    reference's outputs on random inputs."""
+    d, T, rng = bind(defn, **statics), 64, np.random.default_rng(9)
+    widths = [t.leaves for _, t in d.signature()[0]]
+    C, _ = _lower(d, [1] * sum(widths))
+    assert C.counts()["ands"] == defn.traced(*(statics[k] for k in defn.statics)).counts["and"]
+    cols = [_bits(rng, T, w) for w in widths]
+    flat = np.concatenate(cols, axis=1)
+    got_s, fail = C.evaluate({f"in{j}": IL.slice_words(flat[:, j], 1) for j in range(flat.shape[1])}, T)
+    assert not fail
+    want = evaluate_bits(d, *(c.astype(np.uint8) for c in cols)).reshape(T, -1).astype(np.uint64)
+    assert np.array_equal(IL.unslice_words(got_s["out"], T), _pack(want))
 
 
 @pytest.mark.parametrize("n", [2, 3, 8, 33])

@@ -14,6 +14,7 @@ from types import ModuleType, SimpleNamespace
 
 import pytest
 
+from verity_vllm.engine import served as SV
 from verity_vllm.pipeline import cli
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
@@ -28,7 +29,7 @@ RUN = {"wall_s": 0.5, "iterations": 2, "step_wall_s": [0.2, 0.3], "generated_tok
 SERVED = {"VLLM_BATCH_INVARIANT": False, "VLLM_USE_DEEP_GEMM": False, "VLLM_DISABLE_SHARED_EXPERTS_STREAM": True,
           "VLLM_USE_FLASHINFER_SAMPLER": False, "VLLM_USE_V2_MODEL_RUNNER": True, "NCCL_P2P_DISABLE": None, "disable_custom_all_reduce": False,
           "enforce_eager": True, "compilation_mode": "NONE", "cudagraph_mode": "NONE", "attention_backend": None, "flash_attn_version": None,
-          "moe_backend": "triton"}
+          "moe_backend": "triton", **{k: SV.DEFAULTS[k] for k in SV.COLLECTIVE_SWITCHES if k not in ("disable_custom_all_reduce", "NCCL_P2P_DISABLE")}}
 
 
 class _LLM:
@@ -63,7 +64,8 @@ class _LLM:
 @pytest.fixture
 def stand_ins(monkeypatch):
     """The drivers' engine-side calls stood in, and the target's environment knobs restored after the test; ``use(llm, target)``
-    returns the profiles the Commit's guard was given."""
+    returns the profiles the Commit's guard was given.  Inductor's config is unloaded for the test: another test in the same worker
+    may have imported it before the engine's pin, which `engine.env.require_inductor` refuses."""
     from verity_vllm import protocols as PO
     from verity_vllm.engine import engine_profile as prof
     from verity_vllm.engine import handle
@@ -80,6 +82,7 @@ def stand_ins(monkeypatch):
         vllm = ModuleType("vllm")
         vllm.LLM = llm
         monkeypatch.setitem(sys.modules, "vllm", vllm)
+        monkeypatch.delitem(sys.modules, "torch._inductor.config", raising=False)
         for owner, name, value in [(prof, "apply_env", lambda: {"VLLM_BATCH_INVARIANT": "1"}), (prof, "checkpoint_for", lambda case, path: {"repo": "org/model"}),
                                    (prof, "engine_kwargs", lambda cp, **kw: dict(kw)), (handle, "model_runner", lambda llm: 1 / 0),
                                    (va, "load_workload", lambda path, max_tokens: json.loads(json.dumps(WORKLOAD))),

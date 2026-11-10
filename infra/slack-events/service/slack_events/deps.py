@@ -23,7 +23,7 @@ CACHE_NS = "slack-events"
 LAST_SUCCESS = "last-success-at"                                 # when a delivery or a cron last finished
 LAST_DONE = "last-done-at"                                       # when the consumer last finished a message (no cron writes it)
 LAST_ENQUEUED = "last-enqueued-at"                               # when the app last published an event
-STALL_RUNG = "stall-rung-at"                                     # when the watchdog last rang @comms for a stalled consumer
+STALL_RUNG = "stall-rung-at"                                     # when the watchdog last rang STALL_TO for a stalled consumer
 CANARY_SENT = "canary-sent-at"                                   # when the watchdog last published its synthetic event
 CANARY_DONE = "canary-done-at"                                   # when the consumer last finished one
 DEAD = "dead-letters"                                            # {"count", "since"}: dead letters since the record began
@@ -92,6 +92,14 @@ class VercelQueue:
             pass
 
 
+def vercel_oidc() -> str:
+    """The deployment's OIDC token as the vercel SDK finds it: the request's x-vercel-oidc-token header, then
+    VERCEL_OIDC_TOKEN, then VERCEL_OIDC_TOKEN_FILE. A function's environment usually lacks the variable at run time."""
+    from vercel.oidc import get_vercel_oidc_token_sync
+
+    return get_vercel_oidc_token_sync()
+
+
 def runtime_cache() -> Cache:
     from vercel.cache import RuntimeCache  # noqa: PLC0415
 
@@ -105,5 +113,6 @@ def production() -> Deps:
     rs, env = vendor.slack(), os.environ
     if not env.get("SLACK_BOT_TOKEN"):
         raise RuntimeError("SLACK_BOT_TOKEN is not set: the service posts and reads with Verity's bot, never the broker")
+    rs.OIDC_TOKEN = vercel_oidc
     return Deps(rs=rs, registry=vendor.registry(), cache=runtime_cache(), queue=VercelQueue(),
                 slack=rs.Slack(env["SLACK_BOT_TOKEN"], direct=True), clock=time.time, env=env)

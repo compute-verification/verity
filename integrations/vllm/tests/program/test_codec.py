@@ -1,5 +1,5 @@
-"""Descriptor codec: nested-static dependency discovery (frontend rulings §8.3), identity conflicts (§8.1),
-and digest stability of the v0 encoding for programs whose encoding did not change."""
+"""Descriptor codec: nested-static dependency discovery, identity conflicts, and digest stability of the v0 encoding for
+programs whose encoding did not change."""
 
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ def LinearOps(B, S, x, W):
 @composite("TwoLinears", 1, ["M", "opsA", "opsB"],
            lambda S: ((("x", A2), ("W", Array(S.M, A2))), Array(2, Array(S.M, V16))))
 def TwoLinears(B, S, x, W):
-    """`bind(Row, ops=opsA)` and `bind(Row, ops=opsB)` coexist in one program (ruling §8.3)."""
+    """`bind(Row, ops=opsA)` and `bind(Row, ops=opsB)` coexist in one program."""
     a = B.call(bind(LinearOps, M=S.M, ops=S.opsA), x, W)
     b = B.call(bind(LinearOps, M=S.M, ops=S.opsB), x, W)
     return B.call(bind(Stack2, M=S.M), a, b)
@@ -142,7 +142,7 @@ def _dot_body_b(B, S, x, w):
 
 
 def test_two_bodies_for_one_fully_qualified_specialization_are_rejected():
-    """Ruling §8.1: within one program a fully qualified specialization resolves to one body; a conflicting
+    """Within one program a fully qualified specialization resolves to one body; a conflicting
     definition is an `IdentityConflict`, never first-wins."""
     da, db = _dot_like(_dot_body_a), _dot_like(_dot_body_b)
     top = CompositeDefinition("TopConflict", 1, (), lambda S: ((("x", A2), ("w", A2)), Array(2, V16)),
@@ -247,7 +247,7 @@ def test_unbound_composite_as_a_static_value_is_not_encodable():
         encode_program(Program(bind(TopUnbound, f=NeedsK)))
 
 
-# -- zero-stride broadcasts (ruling §8.5): `[z, z, z]` compacts, `[z0, z1, z2]` does not -------------------------
+# -- zero-stride broadcasts: `[z, z, z]` compacts, `[z0, z1, z2]` does not -------------------------
 
 def test_concat_normalises_repeated_references_to_one_value_into_a_zero_stride_strided():
     from verity.ml.circuits.refs import Affine, Concat, Strided, concat, is_broadcast

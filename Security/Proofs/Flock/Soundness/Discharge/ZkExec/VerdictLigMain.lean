@@ -1,6 +1,27 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigRun
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsStatements
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigModel
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigPad
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
+import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigFinal
+import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigRun
+import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
 # The hiding Ligerito accepts
@@ -237,7 +258,7 @@ theorem zk_ligerito_accepts (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128
     rw [← Array.length_toList, hlane1]
     simp [consumed_length]
   have hini : lane.1.toList.map gOf = (consumed t₉.rounds t₉.k (t₉.k + sch.k0)).map
-      fun c => execArith.ofLimbs (fOf c[0]!) (fOf c[1]!) := by
+      fun c => execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!) := by
     rw [hlane1]
     simp only [List.nil_append, List.map_map]
     refine List.map_congr_left fun c _ => ?_

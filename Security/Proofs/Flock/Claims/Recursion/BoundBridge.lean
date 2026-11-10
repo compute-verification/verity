@@ -1,6 +1,47 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.BoundDeploy
 public import Proofs.Flock.Claims.Recursion.BoundRoute
+public import Proofs.Flock.Claims.Recursion.BoundRun
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Bridge.Hm96Tree
+import Proofs.Flock.Claims.Finder
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Recursion.FlockKSRecord
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The bridge at the bound record (option (d))
@@ -26,7 +67,7 @@ sees what `E^rep` at `IVStar` sees, off the runs that open otherwise (`Bound.Bad
 
 At the deployed bound record `ans` is a coin's bytes, which a decoder inverts, so the bridge holds there at every
 choice the code side makes (`RecDeploy.bridge_bdDeployed`), which `KSBoundRouteCols`' route takes
-(`RecDeploy.ksBoundRoute_of_bridge_cols`, at the deployed outer relation `RecDeploy.ksBoundRouteCols_outer`).
+(`RecDeploy.ksBoundRoute_of_bridge_cols`); no theorem takes it at the deployed outer relation.
 -/
 
 @[expose] public section
@@ -92,7 +133,7 @@ theorem zip_range_map {β : Type} (l : List Msg) (g : ℕ → β) {k : ℕ} (h :
 replayed message is the prover's, so the verifier answers alike. -/
 theorem stepWith_replay_same {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω)
     (vn : List Msg → OC Out) (ms : List Msg) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t t' : Trace), hist.length = t.msgs.length →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t t' : Transcript), hist.length = t.msgs.length →
       t'.msgs = t.msgs → t'.vLog = t.vLog →
       (∀ j, t.msgs.length ≤ j → j < (stepWith H P x ω vn n hist as t).msgs.length →
         ms.getD j [] = ((stepWith H P x ω vn n hist as t).msgs.map Prod.fst).getD j []) →
@@ -137,7 +178,7 @@ its calls the verifier's at each prefix. -/
 theorem stepWith_replay_known (H : Msg → Msg) (x : Msg) (vn : List Msg → OC Out) (ms : List Msg) (k : ℕ)
     (b : ℕ → Out) (hv : ∀ j < k, ((vn ((List.range (j + 1)).map fun i => ms.getD i [])).eval H).1 = b j)
     (hb : ∀ j, j + 1 < k → ∃ m, b j = .msg m) (hlast : b (k - 1) = .acc) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), hist.length = t.msgs.length →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), hist.length = t.msgs.length →
       as = (List.range t.msgs.length).map (fun i => ms.getD i []) → t.msgs.length + (n + 1) = k →
       stepWith H (replay ms) x () vn (n + 1) hist as t =
         { msgs := t.msgs ++ (List.range' t.msgs.length (n + 1)).map (fun i => (ms.getD i [], b i)),
@@ -208,7 +249,7 @@ theorem run_replay_known {C : Type} [Inhabited C] (H : Msg → Msg) (V : Verifie
 
 /-! ## `E^rep` at two openings -/
 
-theorem waitAcc_rel₂ {R Op : Type} (H : Msg → Msg) (run₁ run₂ : R → Trace) (opens₁ opens₂ : Seen → List Op) (k : ℕ)
+theorem waitAcc_rel₂ {R Op : Type} (H : Msg → Msg) (run₁ run₂ : R → Transcript) (opens₁ opens₂ : Seen → List Op) (k : ℕ)
     (h : ∀ r, ((run₁ r).seen.out = .acc ↔ (run₂ r).seen.out = .acc) ∧
       ((run₁ r).seen.out = .acc → opens₁ (run₁ r).seen = opens₂ (run₂ r).seen)) :
     ∀ (rs : List R) (acc₁ acc₂ : List Seen), acc₁.length = acc₂.length → acc₁.flatMap opens₁ = acc₂.flatMap opens₂ →
@@ -232,7 +273,7 @@ theorem waitAcc_rel₂ {R Op : Type} (H : Msg → Msg) (run₁ run₂ : R → Tr
         simp only [hv, hv', ↓reduceIte]
         exact waitAcc_rel₂ H run₁ run₂ opens₁ opens₂ k h rs _ _ hl hf
 
-theorem firstWait_rel₂ {R W Op : Type} (H : Msg → Msg) (run₁ run₂ : R → Trace) (opens₁ opens₂ : Seen → List Op)
+theorem firstWait_rel₂ {R W Op : Type} (H : Msg → Msg) (run₁ run₂ : R → Transcript) (opens₁ opens₂ : Seen → List Op)
     (k : ℕ) (assemble : List Op → Option W) (check : W → Bool)
     (h : ∀ r, ((run₁ r).seen.out = .acc ↔ (run₂ r).seen.out = .acc) ∧
       ((run₁ r).seen.out = .acc → opens₁ (run₁ r).seen = opens₂ (run₂ r).seen)) :
@@ -250,7 +291,7 @@ theorem firstWait_rel₂ {R W Op : Type} (H : Msg → Msg) (run₁ run₂ : R �
 
 /-- **`E^rep` at two openings of two runs gives one result** where the runs accept alike and, where they accept, open
 alike. -/
-theorem erep_rel₂ {D W Op : Type} (H : Msg → Msg) (run₁ run₂ : D → Trace) (m k K : ℕ) (opens₁ opens₂ : Seen → List Op)
+theorem erep_rel₂ {D W Op : Type} (H : Msg → Msg) (run₁ run₂ : D → Transcript) (m k K : ℕ) (opens₁ opens₂ : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) (d₀ : D) (ρ : Fin m → Fin K → D)
     (h : ∀ r, ((run₁ r).seen.out = .acc ↔ (run₂ r).seen.out = .acc) ∧
       ((run₁ r).seen.out = .acc → opens₁ (run₁ r).seen = opens₂ (run₂ r).seen)) :
@@ -263,10 +304,10 @@ theorem erep_rel₂ {D W Op : Type} (H : Msg → Msg) (run₁ run₂ : D → Tra
   · rw [ite_eq_right hv, ite_eq_right fun h' => hv ((h d₀).1.2 h')]
     rfl
 
-/-- **An event at some draw `E^rep` reruns at is at most `1 + m·k` times as likely as at one draw** (Wald's identity at
-the event's indicator as the weight), over a tape, the judged draw and the waits' draws. -/
+/-- **An event at some sample `E^rep` reruns at is at most `1 + m·k` times as likely as at one sample** (Wald's identity at
+the event's indicator as the weight), over a tape, the judged sample and the waits' samples. -/
 theorem Pr_exists_rerun_draws {D W Op : Type} [Fintype D] [Nonempty D] {Ω : Type} [Fintype Ω] (H : Msg → Msg)
-    (run : Ω → D → Trace) (m k K : ℕ) (opens : Seen → List Op) (assemble : List Op → Option W) (check : W → Bool)
+    (run : Ω → D → Transcript) (m k K : ℕ) (opens : Seen → List Op) (assemble : List Op → Option W) (check : W → Bool)
     (Q : Ω → D → Prop) :
     Pr (fun s : Ω × D × (Fin m → Fin K → D) =>
       ∃ d ∈ (erep m k K opens assemble check s.2.1 s.2.2).rerunsAt H (run s.1), Q s.1 d) ≤
@@ -541,7 +582,7 @@ theorem Bound.accFacts (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) {Ω :
         simp only [Function.comp, Bound.ansAt, show i + 1 < Bd.DE.V.k x by omega, ↓reduceIte]
       · simp only [Bound.ansAt, show ¬ (Bd.DE.V.k x - 1 + 1 < Bd.DE.V.k x) by omega, ↓reduceIte]
     unfold Bound.openView
-    simp only [Trace.seen]
+    simp only [Transcript.seen]
     rw [hlast]
     simp only [hf, hsnd, zip_range_map _ _ hol, hacc]
 
@@ -606,10 +647,10 @@ noncomputable def Bound.plurKeep [Fintype A] (ω : Ω) (r : Fin (Bd.DE.V.k x) �
 
 /-- `P`'s run against `IVStar`, as it may abort, opened where it accepts, and aborted elsewhere: what `E^rep` at `DE`
 sees of it. -/
-def Bound.openRun (ω : Ω) (d : (Fin (Bd.IVStar.k x) → Coin) × A) : Trace :=
+def Bound.openRun (ω : Ω) (d : (Fin (Bd.IVStar.k x) → Coin) × A) : Transcript :=
   if (abortRun H P Bd.IVStar x keep ω d).out = .acc then
     ⟨(Bd.openView (abortRun H P Bd.IVStar x keep ω d).seen).msgs, [], [], .acc⟩
-  else abortTrace
+  else abortTranscript
 
 variable {Bd H x P keep}
 
@@ -620,7 +661,7 @@ theorem Bound.gA_run {ω : Ω} {d : (Fin (Bd.IVStar.k x) → Coin) × A} (h : Bd
   by_cases hk : keep ω d.1 d.2 = true
   · exact ⟨hk, abortRun_of_keep hk⟩
   · rw [ite_eq_right hk] at h
-    simp [abortTrace] at h
+    simp [abortTranscript] at h
 
 /-- **On the plurality, the plurality prover's run is `P`'s run opened**: it sends at each round what `P`'s run opens
 there, which `DE` answers as `IVStar` does, so it accepts, sees `P`'s run opened, and makes only calls `P`'s run makes. -/
@@ -680,7 +721,7 @@ theorem Bound.plurRun [Fintype A] (decC : Msg → Msg → Coin) (hdec : ∀ x c,
     (by simp only [Bound.ansAt, show ¬ (Bd.DE.V.k x - 1 + 1 < Bd.DE.V.k x) by omega, ↓reduceIte])
   rw [hcongr, hrun, hov]
   refine ⟨?_, h2, fun e he => ?_⟩
-  · simp only [Trace.seen, h1, h2]
+  · simp only [Transcript.seen, h1, h2]
   · obtain ⟨j, hj, hej⟩ := h3 e he
     exact (hag j hj).2 e hej
 
@@ -697,9 +738,9 @@ theorem Bound.openRun_rel (ω : Ω) (d : (Fin (Bd.IVStar.k x) → Coin) × A) :
     rw [e]
     exact ⟨⟨fun _ => rfl, fun _ => h⟩,
       fun _ => Bd.openView_eq_of_acc (v := (abortRun H P Bd.IVStar x keep ω d).seen) h⟩
-  · have e : Bd.openRun H x P keep ω d = abortTrace := ite_eq_right h
+  · have e : Bd.openRun H x P keep ω d = abortTranscript := ite_eq_right h
     rw [e]
-    exact ⟨⟨fun h' => absurd h' h, fun h' => by simp [abortTrace, Trace.seen] at h'⟩, fun h' => absurd h' h⟩
+    exact ⟨⟨fun h' => absurd h' h, fun h' => by simp [abortTranscript, Transcript.seen] at h'⟩, fun h' => absurd h' h⟩
 
 /-- **Off the bad runs, the plurality prover's aborting runs show `E^rep` at `DE` what `P`'s runs opened show it**: a
 run on the plurality is kept and is `P`'s run opened (`plurRun`); a run `IVStar` rejects aborts at both. -/
@@ -721,7 +762,7 @@ theorem Bound.openRun_seen [Fintype A] (decC : Msg → Msg → Coin) (hdec : ∀
     have hk : ¬ Bd.plurKeep H x P keep ω d.1 d.2 = true := by
       simp only [Bound.plurKeep, decide_eq_true_eq]
       exact fun h => hg h.1
-    have e : Bd.openRun H x P keep ω d = abortTrace := ite_eq_right hg'
+    have e : Bd.openRun H x P keep ω d = abortTranscript := ite_eq_right hg'
     rw [e]
     unfold abortRun
     rw [ite_eq_right hk]
@@ -740,12 +781,12 @@ theorem Bound.plurAbort_vLog [Fintype A] (decC : Msg → Msg → Coin) (hdec : �
     exact (Bound.plurRun decC hdec ω d hk'.1 hk'.2).2.2 e he
   · unfold abortRun at he
     rw [ite_eq_right hk] at he
-    simp [abortTrace] at he
+    simp [abortTranscript] at he
 
 /-- **`E^rep` at `IVStar` fails at most as `E^rep` at `DE` fails against the plurality prover's aborting runs, plus
 `N_I` times one run's chance to be bad**: off the bad runs `E^rep` reruns at, it sees at `DE` what it sees at
 `IVStar` (`openRun_rel`, `openRun_seen`), and the judged run is the plurality prover's, accepted; a bad rerun costs
-`N_I` times one draw's (`Pr_exists_rerun_draws`). -/
+`N_I` times one sample's (`Pr_exists_rerun_draws`). -/
 theorem Bound.PrBadAbort_le [Fintype Ω] [Fintype A] [Nonempty A] (decI : List (ℕ × Col) → List T)
     (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c) :
     (Inner.ofFlock Bd.deploy decI).PrBadAbort H x P keep ≤

@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
-public import Proofs.Flock.Soundness.Game.Batch
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The compiled `--zk` table with its digests read as caps

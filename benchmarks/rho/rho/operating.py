@@ -11,7 +11,7 @@ the registry).
   location at once. Remotely nothing bounds it (0 s).
 * **Incorrect outputs** (`incorrect.*`): a block the sampled proofs let go unchecked returns outputs the adversary
   chose, in certified egress, in either regime. Each incorrect step carries `step_bits` and is sampled with chance
-  `q`, and a drawn one ends its identity, so time doesn't bound the channel; detection does. Its row gives the bits it
+  `q`, and a sampled one ends its identity, so time doesn't bound the channel; detection does. Its row gives the bits it
   carries before the first detection, except with chance `δ`, and the chance of detection moving each reference.
 """
 
@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from rho.params import Registry
-from rho.scenario import Result, Scenario
+from rho.scenario import YEAR, Result, Scenario
 
 
 @dataclass(frozen=True)
@@ -45,7 +45,7 @@ def work(result: Result, flops: float) -> dict[str, float]:
     s = result.scenario
     f, phi = s.context.fleet, s.total_phi
     gates = s.context.units.gates(flops)
-    dark = f.eps_dark * f.dark_mfu * phi
+    dark = f.eps_unreg * f.dark_mfu * phi
     return {"unencumbered": gates / (f.mfu_train * phi), "lower bound": result.lo * gates / (s.mfu * phi),
             "best attack": result.attack * gates / (s.mfu * phi), "dark pool": gates / dark if dark > 0 else math.inf}
 
@@ -61,9 +61,9 @@ def exfil(scenario: Scenario, bits: float) -> dict[str, float]:
 
 @dataclass(frozen=True)
 class Incorrect:
-    """The incorrect-outputs channel: `identities` identities, each ended by its first drawn incorrect step."""
+    """The incorrect-outputs channel: `identities` identities, each ended by its first sampled incorrect step."""
 
-    #: the sampled proofs' draw rate per step (1 where every unit is proved)
+    #: the sampled proofs' sample rate per step (1 where every unit is proved)
     q: float
     delta: float
     #: the output bits an incorrect step chooses
@@ -96,7 +96,7 @@ class Row:
 
 def incorrect(registry: Registry, scenario: Scenario) -> Row:
     """The incorrect-outputs row at the regime's identities, at the reporting confidence `incorrect.delta`. A sampled
-    regime draws at its own rate (`Detection.q`, with its step bits and floor); an unsampled one proves every unit
+    regime samples at its own rate (`Detection.q`, with its step bits and floor); an unsampled one proves every unit
     (`q = 1`); unmonitored, nothing detects it."""
     refs = {n: registry[f"exfil.{n}.bits"] for n in registry.names("exfil")}
     d = getattr(_inner(scenario.regime), "detection", None)
@@ -120,7 +120,7 @@ def human(seconds: float) -> str:
     """`seconds` in the largest unit that keeps it at least 1 (s, min, h, days, years)."""
     if math.isinf(seconds):
         return "never"
-    for unit, size in (("years", 365 * 86400.0), ("days", 86400.0), ("h", 3600.0), ("min", 60.0)):
+    for unit, size in (("years", YEAR), ("days", 86400.0), ("h", 3600.0), ("min", 60.0)):
         if seconds >= size:
             return f"{seconds / size:.3g} {unit}"
     return f"{seconds:.3g} s"

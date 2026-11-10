@@ -1,6 +1,6 @@
-# units: the H200 example's non-matmul proof blocks on the H200 and the RTX PRO 6000
+# units: the H200 demo's non-matmul proof blocks on the H200 and the RTX PRO 6000
 
-GPU kernels for the proof blocks between the matmuls of the H200 example's model (`examples/h200/`: MQA decoder, width
+GPU kernels for the proof blocks between the matmuls of the H200 demo's model (`examples/h200/`: MQA decoder, width
 16384, 52 layers, 256 query heads of 64, one KV head, MLP 65536, byte vocabulary, context 32), each word for word its CPU
 twin, both in circuits' forms (the CPU replay's templates, `ops.quant`'s quantizer, `ops.rows`' row Definitions).
 `build.sh` builds `units.cu` for sm_90a (the H200) and sm_120a (the RTX PRO 6000), and `lib.py` loads the cubin of the
@@ -42,7 +42,7 @@ uv sync --all-packages --extra torch-cpu
 PROCS=16 bash benchmarks/torch_gpu/units/build.sh /tmp/units-ship
 mkdir -p IN && tar -C /tmp/units-ship -cf IN/units-ship.tar .
 # on an H200 with CUDA torch and `gpu-lease`: the sweeps, the check at B = 1, 7, 128, 4096, 16384 and 20480, then timing
-# at 4096 and 16384 (with IN/units-old.tar, an earlier build's ship, timed beside it if present)
+# at 4096 and 16384
 OUT=DIR IN=IN bash benchmarks/torch_gpu/units/session.sh
 # on an RTX PRO 6000: the sweeps alone, ops 0 to 10
 SWEEP_ONLY=1 OUT=DIR IN=IN bash benchmarks/torch_gpu/units/session.sh

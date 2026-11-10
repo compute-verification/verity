@@ -2,7 +2,8 @@ module
 
 public import Definitions.Accounting.Physical
 public import Proofs.Accounting.Actual.Split
-public import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
 # The physical assumptions' first consequences

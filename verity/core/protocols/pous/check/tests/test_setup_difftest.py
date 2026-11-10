@@ -419,7 +419,7 @@ def test_the_function_agrees(name, fn_server):
 
 
 def test_t_rejects_a_candidate(fn_server):
-    """Keys whose t is not the first candidate (`t_index > 0`), found by search at w = 24, which a run draws rarely."""
+    """Keys whose t is not the first candidate (`t_index > 0`), found by search at w = 24, which a run samples rarely."""
     q, rng, found = P2.P2Params(*REJECTING, 1 << 16, 1 << 20), random.Random(20261007), 0
     while found < 4:
         i = {"w": q.w, "c0": q.c0, "salt": rng.randbytes(24).hex(), "s": rng.randrange(1 << 20), "j": rng.randrange(1 << 16)}

@@ -1,8 +1,8 @@
 """`registry.sparse_mla_split` (FA3's sparse MLA with the key range split and recombined), `boolean_sparse_mla_split` and the
 numpy twins `kernels.sparse_mla_split_twins`: MUFU.LG2's model reproduces the sm_120 measurement at either end of C0's range and
 leaves only the powers of two below 1 open; the split counts and boundaries are the kernel's; one split is `SparseMlaHead_v1`; the
-twins are the word Definitions word for word; a split head is softmax attention within bf16 rounding; the Boolean versions agree
-with their word views."""
+twins are the word Definitions word for word; a split head is softmax attention within bf16 rounding; the combine's lse is one
+FFMA and the splits' logsumexp within rounding; the Boolean versions agree with their word views."""
 from __future__ import annotations
 
 __models__ = ("zai-org/GLM-5.3",)
@@ -19,6 +19,7 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation.reference import evaluate
 from verity.ml.definitions import boolean as SW
+from verity.ml.definitions.numerics import derived_rows as DR
 from verity.ml.definitions.numerics import sparse_mla_split_twins as TW
 from verity.ml.definitions.registry import boolean_sparse_mla_split as BX
 from verity_vllm.program import mla_capture as MC
@@ -427,6 +428,74 @@ def test_an_empty_split_changes_nothing_and_none_gives_zeros() -> None:
     with_empty = np.array([lse[0], W.NEG_INF, lse[1], lse[2]], U32)
     assert np.array_equal(_combine(with_empty, o), _combine(lse, o[[0, 2, 3]]))
     assert not _combine(np.full(4, W.NEG_INF, U32), o).any()
+
+
+# --- the combine's lse ----------------------------------------------------------------------------------------------------------
+
+def _combine_lse_word(NSPLIT: int, DV: int):
+    return bind(W.SparseMlaCombineLse, NSPLIT=NSPLIT, DV=DV, INV=FA3["INV"])
+
+
+def _combine_lse(lse, o) -> tuple[np.ndarray, int]:
+    lse, o = np.asarray(lse, U32), np.asarray(o, U32)
+    got = evaluate(_combine_lse_word(len(lse), o.shape[1]), lse.tolist(), o.reshape(-1).tolist())
+    return np.asarray(got[:-1], dtype=U32), int(got[-1])
+
+
+@pytest.mark.parametrize("NSPLIT", [1, 2, 3, 16, 28, 32])
+def test_the_combine_lse_twin_is_the_word(NSPLIT: int) -> None:
+    """`test_the_combine_twin_is_the_word`'s rows, with rows of no split and NaN lanes planted: the twin, whose max is FMNMX's,
+    gives the word's output and lse, and the output is `SparseMlaCombine_v1`'s."""
+    DV, rng = 8, np.random.default_rng(NSPLIT + 40)
+    word = _combine_lse_word(NSPLIT, DV)
+    lse0, o0 = _inputs(word, 96, NSPLIT + 40)
+    lse1 = _lse_rows(rng, 96, NSPLIT)
+    lse1[:8] = W.NEG_INF
+    lse1[np.arange(8, 16), rng.integers(0, NSPLIT, 8)] = np.array([0x7FC00000, 0xFFC00001] * 4, U32)
+    lse = np.concatenate([lse0, lse1])
+    o = np.concatenate([o0, (rng.standard_normal((96, NSPLIT, DV)).astype(np.float32)).view(U32)])
+    out, got = TW.combine_lse_rows(lse, o)
+    want = _flat(E.evaluate_batch(word, lse, o))[0]
+    assert np.array_equal(np.concatenate([out, got[:, None]], axis=1).astype(np.uint64), want)
+    assert np.array_equal(want[:, :DV], _flat(E.evaluate_batch(_combine_word(NSPLIT, DV), lse, o))[0])
+    assert (got[96:104] == W.NEG_INF).all() and (got[104:112] == W.QNAN).all()
+
+
+def test_the_combine_lse_is_one_ffma_where_one_rounding_shows() -> None:
+    """The SASS stores `logf(sum) + max` as one FFMA.FTZ(MUFU.LG2(sum), LN2, max): on rows where an unfused FMUL then FADD
+    rounds to another word, found through the twin, the Definition gives the FFMA's word."""
+    NSPLIT, DV = 3, 8
+    rng = np.random.default_rng(31)
+    lse = (rng.standard_normal((4096, NSPLIT)).astype(np.float32) * np.float32(8)).view(U32)
+    o = np.zeros((4096, NSPLIT, DV), U32)
+    _, fused = TW.combine_lse_rows(lse, o)
+    _, mx, tot = TW._combine(lse, o, DR.fa3_inv_sum)
+    unfused = DR.add_ftz(DR.mul_ftz(TW.mufu_lg2_words(tot), np.full(tot.shape, W.LN2, U32)), mx)
+    hits = np.flatnonzero(fused != unfused)
+    assert hits.size >= 8
+    for r in hits[:8]:
+        assert _combine_lse(lse[r], o[r])[1] == fused[r] != unfused[r]
+
+
+def test_the_combine_lse_is_the_logsumexp_within_rounding() -> None:
+    rng = np.random.default_rng(32)
+    for NSPLIT in (2, 5, 32):
+        lse = _lse_rows(rng, 64, NSPLIT)
+        lse[:, 0] = (rng.standard_normal(64).astype(np.float32) * np.float32(8)).view(U32)
+        _, got = TW.combine_lse_rows(lse, np.zeros((64, NSPLIT, 4), U32))
+        ref = np.logaddexp.reduce(lse.view(np.float32).astype(np.float64), axis=1)
+        assert np.all(np.abs(got.view(np.float32) - ref) <= 2 ** -14 * np.maximum(1.0, np.abs(ref)))
+
+
+def test_one_split_keeps_its_lse_and_no_split_gives_neg_inf() -> None:
+    """One split: the sum is 1, MUFU.LG2(1) = +0, and the lse comes back word for word.  No split (every lane -inf): the sum is
+    0, and the lse is -inf beside a zero output."""
+    o = np.random.default_rng(33).standard_normal((4, 16)).astype(np.float32).view(U32)
+    for v in (0.0, -3.5, 17.25, 1e-30):
+        w = int(np.float32(v).view(U32))
+        assert _combine_lse([w], o[:1])[1] == w
+    out, lse = _combine_lse(np.full(4, W.NEG_INF, U32), o)
+    assert lse == W.NEG_INF and not out.any()
 
 
 # --- the Boolean versions -------------------------------------------------------------------------------------------------------

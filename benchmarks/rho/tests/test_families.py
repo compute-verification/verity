@@ -3,7 +3,7 @@ from dataclasses import replace
 
 import pytest
 from rho import families, instances
-from rho.families import KINDS, Adapter, Nci, Partial, Seed, algorithms, family
+from rho.families import KINDS, Adapter, Distill, Full, Nci, Partial, Seed, algorithms, family
 from rho.instances import RUN_KINDS, Run
 from rho.params import Registry
 from rho.profile import Profile
@@ -26,7 +26,7 @@ def test_every_family_gives_a_profile_at_every_model(name):
                 f.profile(model, RUN)
             continue
         p = f.profile(model, RUN)
-        assert 0 < p.kappa <= 1 and p.state_bits > 0 and p.legs and p.fanout
+        assert 0 < p.kappa <= 1 and p.state_bits > 0 and p.fanout
 
 
 def test_every_kind_has_a_family():
@@ -77,9 +77,9 @@ def test_lora_state_matches_the_hand_counts():
     assert family(REG, "tinylora-13").profile(qwen, RUN).state_bits == 272
 
 
-def test_an_adapter_is_outside_update_hardness_and_its_chain_is_its_rank():
+def test_an_adapter_is_outside_update_hardness_and_its_threads_d_is_its_rank():
     p = family(REG, "lora-r16").profile(MODELS["kimi-k2"], RUN)
-    assert p.b is None and p.bcol is None and p.legs == p.thread_d == 16
+    assert p.b is None and p.thread_d == 16
     assert p.b_w == REG["family.full.b_w"]
     # an activation into B reaches B's d_out products: the widest is the dense layer's gate and up, 18,432
     assert family(REG, "lora-r16").sizes(MODELS["kimi-k2"])[2] == 18432
@@ -150,12 +150,13 @@ def test_a_family_key_its_kind_lacks_is_refused():
 #: the fields the classes and attacks read beyond `thread_c`, at the values tests/test_classes.py and test_attacks.py
 #: give Kimi K2 full pretraining, and how near the derivation from the matrices comes
 KIMI = {"kappa_forward": (0.294, 0.005), "kappa_wgrad": (0.294, 0.005), "layers": (61, 0), "layer_weights": (4e8, 0.01),
-        "layer_bits": (1.04e12 * 2.5 / 61, 0), "thread_k": (2e7, 0), "entry_width": (512, 0), "c_w": (2.5, 0),
+        "layer_bits": (1.04e12 * 2.5 / 61, 0), "thread_k": (2e7, 0), "c_w": (2.5, 0),
         "c_a": (4, 0), "price": (2.8, 0), "price_max": (8, 0), "gamma": (1, 0), "beta_v": (0.63, 0),
         "map_width": (7168, 0), "map_width_min": (7168, 0), "h_eff": (17, 0), "b_ps": (1, 0), "step_tokens": (6.7e7, 0),
         "token_state_bits": (5.9e11, 0.005), "shared_state_bits": (1.18e10, 0.012), "flops_per_token": (2.07e11, 0.002),
         "cut_bits": (2 * 28672, 0), "token_bits": (20, 0), "decode_flops": (0, 0), "tile_weight_bits": (8, 0),
-        "beta_x_marginal": (2.6, 0), "psum_bits": (16, 0), "tile_inputs": (7168, 0), "tile_outputs": (4096, 0)}
+        "beta_x_marginal": (2.6, 0), "psum_bits": (16, 0), "tile_inputs": (7168, 0), "tile_outputs": (4096, 0),
+        "outputs_per_product": (3.1e-4, 1e-4)}
 _FIELDS = list(Profile.__dataclass_fields__)
 FILLED = ["c_w", "c_a", *_FIELDS[_FIELDS.index("thread_c") + 1:]]
 
@@ -176,7 +177,9 @@ def test_every_family_fills_every_field_at_every_model(name):
             continue
         p = f.profile(model, RUN)
         unknown = {n for n in FILLED if getattr(p, n) is None}
-        assert unknown == ({"kappa_wgrad"} if isinstance(f, Seed) else set()), (model.name, unknown)
+        # only a kind whose counted products are whole matrices' states the outputs a product (the min-cut bound)
+        expected = set() if isinstance(f, (Full, Distill)) else {"outputs_per_product"}
+        assert unknown == expected | ({"kappa_wgrad"} if isinstance(f, Seed) else set()), (model.name, unknown)
 
 
 def test_the_counted_sets_are_kappa_py_s():
@@ -209,7 +212,7 @@ def test_an_adapter_s_shape_is_the_adapter_s():
     assert p.token_state_bits == pytest.approx(per_token * (p.b_w + REG["family.full.grad_bits"]))
     # the dense layer's MLP adapter: 16 x (2 x (7168 + 18432) + (18432 + 7168))
     assert p.layer_weights == 16 * 3 * (7168 + 18432)
-    assert (p.tile_inputs, p.tile_outputs) == (7168, 16) and p.entry_width == 16
+    assert (p.tile_inputs, p.tile_outputs) == (7168, 16)
     tied = family(REG, "tinylora").profile(kimi, RUN)
     assert tied.state_splits is False and tied.decode_flops > 0 and tied.layer_weights <= REG["family.tinylora.params"]
 

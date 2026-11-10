@@ -1,10 +1,5 @@
 module
 
-public import Flock.Canon
-public import PousCheck.Merkle
-public import PousCheck.Challenge
-public import PousCheck.Wire
-public import PousCheck.Certificate
 public import PousCheck.Audit
 
 /-!

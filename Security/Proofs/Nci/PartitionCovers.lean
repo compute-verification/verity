@@ -18,7 +18,7 @@ namespace Nci.SecurityProofs
 open Verity Nci.Covering Finset
 
 /-- Proof block `u`'s completion `I ∪ in(I)`, with inputs `in(I)`, on a circuit of positive fan-in. -/
-def completion {d : Declaration} {B : ℕ} (P : Partition d.D B)
+def completion {d : RegisteredCircuit} {B : ℕ} (P : Partition d.D B)
     (hfan : ∀ g, d.D.isInput g = false → (d.D.reads g).Nonempty) (u : Fin B) : Subcircuit d.D where
   gates := P.gates u ∪ d.D.into (P.gates u)
   ins := d.D.into (P.gates u)
@@ -44,9 +44,8 @@ theorem PartitionCovers : Guarantees.PartitionCovers := by
   refine ⟨completion P hP.boolean.fanin_pos, ⟨fun u => ⟨?_, hP.reads u⟩, ?_⟩, fun u => ⟨rfl, rfl⟩⟩
   · calc (P.gates u ∪ d.D.into (P.gates u)).card ≤ (P.gates u).card + (d.D.into (P.gates u)).card :=
           card_union_le _ _
-      _ ≤ c + univ.sup fun u => (d.D.into (P.gates u)).card := by
-          rw [hP.card u]
-          exact Nat.add_le_add_left (le_sup (f := fun u => (d.D.into (P.gates u)).card) (mem_univ u)) c
+      _ ≤ c + univ.sup fun u => (d.D.into (P.gates u)).card :=
+          Nat.add_le_add (hP.card u) (le_sup (f := fun u => (d.D.into (P.gates u)).card) (mem_univ u))
   · intro g hg
     have hi : d.D.isInput g = false := by
       cases h : d.D.isInput g

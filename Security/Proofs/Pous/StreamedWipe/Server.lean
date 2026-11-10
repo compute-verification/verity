@@ -1,7 +1,10 @@
 module
 
 public import Definitions.Pous.Guarantees.StreamedWipeServer
-public import Proofs.Pous.StreamedWipe.Family
+import Mathlib.Analysis.Complex.ExponentialBounds
+import Proofs.Pous.StreamedWipe.Bound
+import Proofs.Pous.StreamedWipe.Deployed
+import Proofs.Pous.StreamedWipe.Family
 
 /-!
 # The streamed-label wipe per server, with the count of the missing labels

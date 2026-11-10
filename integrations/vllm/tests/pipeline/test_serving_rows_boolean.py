@@ -20,7 +20,7 @@ import pytest
 
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import REGISTRY, bind
-from verity.core.protocols.sampled_proofs.one_stage import draw as DR, partition as P, registration as R
+from verity.core.protocols.spot.one_stage import draw as DR, partition as P, registration as R
 from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import deferred_rows as DRW
 from verity_vllm.pipeline import replay_bundle as RB
@@ -106,7 +106,7 @@ def test_a_boolean_templates_window_commits_the_word_rows_and_passes_the_verifie
     ports = {f"{ROPE_BITS}/{p}": {"leaves": HEADS, "domain": R.window_domain(P.program_digest(program), part, f"{ROPE_BITS}/{p}",
                                                                              CS.ROW_SCHEMA, HEADS, c["run_root"])}
              for p in ("x", "cs", "out")}
-    v = R.check(rec, program, query, DR.parse_law(LAW), CS.SCHEME, ports,
+    v = R.check(rec, program, query, DR.parse_design(LAW), CS.SCHEME, ports,
                 leaf_layer=CS.leaf_layer({ROPE_BITS: (wdir / "m0-public.bin").read_bytes()}))
     assert v.ok, v.detail
     assert (win["partition_digest"], word["partition_digest"] != part) == (part, True)

@@ -1,17 +1,34 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkExec.LiveStatements
-public import Proofs.Flock.Soundness.Discharge.ZkExec.Verdict
-public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRun
-public import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
-public import Proofs.Flock.Soundness.Discharge.Exec.Merkle
-public import Proofs.Flock.Soundness.Discharge.Exec.Retained
-public import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
+import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+import Proofs.Flock.Soundness.Discharge.Exec.Retained
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRun
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsCut
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsFrames
+import Proofs.Flock.Soundness.Discharge.ZkExec.Verdict
+import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 
 /-!
 # `RunsZC` at the live `--zk` tables, from `TablesAtZKLive`
 
-`runsZC_live`: at each of the law's draws, on an outcome flock-verify `--zk` accepts, `TablesAtZKLive` puts the draw's
+`runsZC_live`: at each of the sampling design's samples, on an outcome flock-verify `--zk` accepts, `TablesAtZKLive` puts the sample's
 table at `tablesAtZK` (`DrawSetupZK.table`, at the executable's dimensions, pads and inner code: `table_seam`,
 `table_lay`), the acceptance peels to the one table's two `verifyRep` successes (`setupTables_ok`, `zk_verify_ok`) and
 each rep's run (`zk_verifyRep_ok`), `zk_rep_run_plays` makes each run a `RepRun` for `decAtZ` at the result it plays on
@@ -31,12 +48,12 @@ section Table
 
 variable {n mPts : ℕ} {I : Inputs} {S : Finset (Fin n)} {d : Lean.Json}
 
-/-- A draw's `--zk` table is at the executable's dimensions. -/
+/-- A sample's `--zk` table is at the executable's dimensions. -/
 theorem table_seam (y : ZkLink.DrawSetupZK I mPts S d) :
     ZkTabSeam y.table (Setup.ofCircuit y.x.st) y.sch y.tPad :=
   ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
-/-- A draw's `--zk` table has the executable's pads and inner code. -/
+/-- A sample's `--zk` table has the executable's pads and inner code. -/
 theorem table_lay (y : ZkLink.DrawSetupZK I mPts S d) : ZkTabLay y.table (Setup.ofCircuit y.x.st) y.sch := by
   constructor <;> intros <;> rfl
 
@@ -80,7 +97,7 @@ theorem zk_rep_run_plays {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig S
   · rw [hσ]
     exact hcut
 
-/-- **`RunsZC` at the live `--zk` tables, at the law's draws** (`RunsZCLive`): `TablesAtZKLive` at the draw, the two
+/-- **`RunsZC` at the live `--zk` tables, at the sampling design's samples** (`RunsZCLive`): `TablesAtZKLive` at the sample, the two
 reps' `verifyRep` successes, `zk_rep_run_plays` for each rep, and `zk_table_verdict` at the two results. -/
 theorem runsZC_live : RunsZCLive := by
   intro n mPts Reg I ht dj S₀ y₀ wr L hTab hT hRec hDraw ω R o hacc

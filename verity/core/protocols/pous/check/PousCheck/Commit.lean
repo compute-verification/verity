@@ -1,6 +1,5 @@
 module
 
-public import Flock.Canon
 public import PousCheck.P2
 public import Identity.Tagged
 

@@ -2,6 +2,7 @@ module
 
 public import Properties.Flock.Circuit.Rows
 public import Properties.Flock.Circuit.Keys
+import Mathlib.Tactic.Ring.RingNF
 
 /-!
 # The circuit's program on Δ's source keys

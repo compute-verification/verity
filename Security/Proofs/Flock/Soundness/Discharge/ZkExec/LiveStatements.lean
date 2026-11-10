@@ -2,6 +2,20 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
 public import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Coin
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # `RunsZC` at the live `--zk` tables, from `TablesAtZKLive` (statement)
@@ -13,9 +27,9 @@ ends. Its pieces are proved or frozen apart: the per-rep runs (`zk_rep_plays`, `
 
 * `nXZ`, `decAtZ`, `opnAtZ`: the non-ZK session's `nX`, `decAt` and `opnAt` at `--zk`: the table's number of extra
   claims, the decoder `decZ` at the table's dimensions, and the openings `opnZ` at the statement setupH sets up at the
-  record's draw under the `--zk` tags and its `--zk` schedule, on the first two proof files.
-* `RunsZCLive`: given `TablesAtZKLive`, the tags (`TagsOk`), `wr` the challenger's record and its draw at each of the
-  law's draws, `RunsZC` holds at the law's draws (`RunsOnZC`) at `tablesAtZK` with those, no tail and `capOfRoot`.
+  record's sample under the `--zk` tags and its `--zk` schedule, on the first two proof files.
+* `RunsZCLive`: given `TablesAtZKLive`, the tags (`TagsOk`), `wr` the challenger's record and its sample at each of the
+  sampling design's samples, `RunsZC` holds at the sampling design's samples (`RunsOnZC`) at `tablesAtZK` with those, no tail and `capOfRoot`.
 -/
 
 @[expose] public section
@@ -33,13 +47,13 @@ variable {n mPts : ℕ} {Reg : Type}
 noncomputable def nXZ (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts) (S : Finset (Fin n)) (R : Reg) : ℕ :=
   (Model.extraClaims (T S R).S (T S R).ptLocal mPts (fun _ _ => (0 : 𝔽))).length
 
-/-- **The `--zk` decoder at draw `S`**: `decZ` on the wires after round 0 at the table's dimensions, number of claims,
+/-- **The `--zk` decoder at sample `S`**: `decZ` on the wires after round 0 at the table's dimensions, number of claims,
 schedule, padding columns and pads. -/
 noncomputable def decAtZ (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts) (S : Finset (Fin n)) (R : Reg) :
     ℕ → ByteArray → List Msg :=
   decZ (wRestZ (T S R).S.m (T S R).S.kLog (2 + nXZ T S R) (T S R).sch (T S R).t (T S R).np)
 
-/-- **The `--zk` openings at draw `S`**: `opnZ` at the statement setupH sets up at the record's draw `dj S` under the
+/-- **The `--zk` openings at sample `S`**: `opnZ` at the statement setupH sets up at the record's sample `dj S` under the
 `--zk` tags and coin tree, and its `--zk` schedule, on the first two proof files. -/
 noncomputable def opnAtZ (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts) (I : Inputs) (dj : Finset (Fin n) → Lean.Json)
     (S : Finset (Fin n)) (R : Reg) (proofs : Array ByteArray) : ZkLink.OpensZ 𝔽 Dig (List UInt8) :=
@@ -49,11 +63,11 @@ noncomputable def opnAtZ (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts) (I : I
     | .error _ => default
   | .error _ => default
 
-/-- **`RunsZC` at the live `--zk` tables, at the law's draws** (R11b's message half at `--zk`). Given that wherever
+/-- **`RunsZC` at the live `--zk` tables, at the sampling design's samples** (the decoder premise's message half at `--zk`). Given that wherever
 flock-verify accepts the `--zk` table is the executable's (`TablesAtZKLive`), on untyped one-table inputs under the tags
-`TagsOk` fixes, with `wr` the challenger's record of the live `--zk` session and each of the law's draws proving its
+`TagsOk` fixes, with `wr` the challenger's record of the live `--zk` session and each of the sampling design's samples proving its
 units at `mPts` link points (`DrawOkZK` at `L.draw ω`: the link points depend on `|S|`, so no `mPts` holds at every
-draw), `RunsZC` holds at the law's draws (`RunsOnZC`) at the tables `tablesAtZK` under `hm96-sha512/v1` (`hs512`), with
+sample), `RunsZC` holds at the sampling design's samples (`RunsOnZC`) at the tables `tablesAtZK` under `hm96-sha512/v1` (`hs512`), with
 the decoder `decAtZ`, the openings `opnAtZ`, no tail and `capOfRoot`. The reference setup `y₀` is data. -/
 def RunsZCLive : Prop :=
   ∀ {n mPts : ℕ} {Reg : Type} (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)

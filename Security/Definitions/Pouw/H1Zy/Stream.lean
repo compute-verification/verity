@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Pouw.H1Zy.Chain
-public import Definitions.Pouw.H1Zy.Tile
 
 /-!
 # `PouwH1LaneZy_v1{PouwH1Tile_v3}` on words (trusted)

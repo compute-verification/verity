@@ -1,7 +1,12 @@
 module
 
-public import Proofs.Pouw.Receipt.Run
+public import Definitions.Pouw.Receipt.Duo
 public import Mathlib.SetTheory.Cardinal.Finite
+import Mathlib.Data.BitVec
+import Mathlib.Tactic.NormNum.Ineq
+import Mathlib.Tactic.NormNum.Pow
+import Proofs.Pouw.Receipt.Duo
+import Proofs.Pouw.Receipt.Run
 
 /-!
 # duo runs: four words bound anywhere in a run, checkpoints every four words, and the kernel of long runs

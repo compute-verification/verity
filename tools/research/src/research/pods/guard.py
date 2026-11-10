@@ -26,8 +26,8 @@ TERMINATING_S seconds is not terminated again (the API lists it for a while afte
 termination is one log line and an entry in the state's `terminated`.  `--dry-run` logs WOULD-TERMINATE, calls no DELETE, and keeps
 its own files.  After acting, the guard records, then reads budgets.toml again for the next poll (a notes clone: from its origin).
 
-Fail closed.  A fault on the guard's own machine never stops enforcement and never loosens a limit (2026-09-28 18:10 PT: the control
-pod's disk filled, every guard died on its state write, and nothing enforced any cap for 15 minutes).
+Fail closed.  A fault on the guard's own machine never stops enforcement and never loosens a limit (a full disk on the control pod
+must not end the guard on its state write and leave every cap unenforced).
   * Each poll decides and terminates from memory first, then records.  Every log, state and pid write is best effort: a failure is
     kept in memory (`faults`), printed to stderr when it starts and when it clears, and written into the state once a write succeeds.
   * A read that fails keeps the last value read: budgets.toml that cannot be fetched, parsed or validated keeps the last good budgets
@@ -104,7 +104,7 @@ def paths(dry_run: bool = False, log: str | None = None) -> dict[str, Path]:
 
 
 def parse_time(s: str | None) -> float | None:
-    """Epoch seconds from ISO 8601 or RunPod's `2026-09-23 20:49:55.033 +0000 UTC`; None when absent or unparseable."""
+    """Epoch seconds from ISO 8601 or RunPod's `YYYY-MM-DD HH:MM:SS.fff +0000 UTC`; None when absent or unparseable."""
     if not s:
         return None
     t = str(s).strip().removesuffix(" UTC")
@@ -462,7 +462,7 @@ def run(cfg: Config, api: Any = None, *, poll_s: float = 60.0, log_path: str | N
         if budgets is not None:
             try:
                 poll(api, budgets, cfg, state, clock(), log)
-            except Exception as err:  # noqa: BLE001 -- a safety loop must outlive a network blip (budget_cap.py, 2026-09-09)
+            except Exception as err:  # noqa: BLE001 -- a safety loop must outlive a network blip
                 log(f"poll failed: {type(err).__name__}: {err}")
         rec.save(state)
         budgets = refresh(cfg, state, budgets, clock(), log)

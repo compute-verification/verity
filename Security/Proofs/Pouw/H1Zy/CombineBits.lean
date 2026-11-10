@@ -2,6 +2,9 @@ module
 
 public import Definitions.Pouw.H1Zy.CombineBits
 public import Proofs.Pouw.H1Zy.Combine
+import Mathlib.Data.Finset.Attr
+import Mathlib.Tactic.Finiteness.Attr
+import Mathlib.Tactic.SetLike
 
 /-!
 # The combine's pieces on bits compute their word views, and so does their composition

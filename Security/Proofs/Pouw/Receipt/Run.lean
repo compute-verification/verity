@@ -1,7 +1,11 @@
 module
 
-public import Proofs.Pouw.Receipt.Duo
-public import Mathlib.Data.Fin.Tuple.Basic
+public import Definitions.Pouw.Receipt.Duo
+import Mathlib.Data.Finset.Attr
+import Mathlib.Tactic.NormNum.Ineq
+import Mathlib.Tactic.NormNum.Pow
+import Mathlib.Tactic.SetLike
+import Proofs.Pouw.Receipt.Duo
 
 /-!
 # duo's step is a bijection of the state, and a run binds each word at every state

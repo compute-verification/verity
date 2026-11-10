@@ -1,5 +1,7 @@
 module
 
+public import Definitions.Core.TC.Relation
+public import Definitions.Core.TC.Spec
 public import Proofs.Core.TC.Proofs.Prod
 
 /-!

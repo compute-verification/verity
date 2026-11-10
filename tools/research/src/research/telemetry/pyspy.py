@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -24,6 +25,9 @@ from typing import Any
 MAX_PROCS = 16
 DUMP_TIMEOUT_S = 30.0
 MISSING = "py-spy is not on PATH"
+#: py-spy's `Process <pid>: <argv>` header: the workload's whole command line, whose flags can name what a run must keep private
+#: (a served window's number), and custody uploads logs/stall-*.txt; the dump keeps only the pid and comm
+ARGV_LINE = re.compile(r"^Process (\d+): .*$", re.M)
 
 
 def _stat(proc: Path, pid: int) -> tuple[str, list[str]] | None:
@@ -79,7 +83,7 @@ def dump(procs: list[tuple[int, str]], *, run: Callable[..., Any] = subprocess.r
     for pid, comm in procs:
         try:
             r = run([exe, "dump", "--pid", str(pid), "--nonblocking"], capture_output=True, timeout=DUMP_TIMEOUT_S)
-            rc, text = r.returncode, r.stdout.decode(errors="replace")
+            rc, text = r.returncode, ARGV_LINE.sub(lambda m: f"Process {m[1]}: ({comm})", r.stdout.decode(errors="replace"))
             if rc:
                 text += f"[py-spy rc {rc}] {r.stderr.decode(errors='replace').strip()}\n"
         except subprocess.TimeoutExpired:

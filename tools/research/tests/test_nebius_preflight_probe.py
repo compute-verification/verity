@@ -10,7 +10,7 @@ _spec = importlib.util.spec_from_file_location("nebius_preflight_probe", NEBIUS 
 P = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(P)
 
-# what `research run --on vy-nebius-1 --preflight check -- true` printed on 2 Oct (00:51Z without the bundles' URLs, 00:52Z with)
+# what `research run --on vy-nebius-1 --preflight check -- true` prints without the bundles' URLs, then with them
 REFUSED = """research: preflight tools/verity/check/preflight.py on vy-nebius-1: FAILED in 0.7 s
 research: preflight: uv 0.12.20
 research: run r20261002-005132-46b6 refused on vy-nebius-1 (PreflightFailed): the machine failed the preflight tools/verity/check/preflight.py (exit 1): Security/Proofs: its Lean dependencies (32c884ee1ea4) are not warm here and the run carries no URL for their bundle

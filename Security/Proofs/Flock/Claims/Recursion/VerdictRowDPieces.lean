@@ -1,7 +1,39 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.VerdictRowD
 public import Proofs.Flock.Claims.Recursion.OpenPieces
+public import Proofs.Flock.Claims.Recursion.VerdictRowD
+public import Proofs.Flock.Claims.Recursion.VerdictRows
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # Row D of the verdict from the `rec-open` pieces
@@ -12,7 +44,7 @@ The `rec-open` pieces (`OpenPieces`) hold, each, where its query opens at the si
 * `DecAt.side`: rep `r` of table `i`'s side at the decision: the table's schedule, and the rep's cap and Ligerito proof.
 * `DecAt.rowD_of_pieces`: `RowD` from row G's `merkle` and `fast`, row C's `decode` and the pieces, where the pieces
   cover every query of every level of the rep (`hcover`), read the rep's side off the messages (`hside`) and, at the
-  verifier rows, the position the rows draw for their query off the coins (`hpos`, the coin tie).
+  verifier rows, the position the rows sample for their query off the coins (`hpos`, the coin tie).
 -/
 
 @[expose] public section
@@ -36,7 +68,7 @@ def side : OpenSide :=
 
 /-- **Row D from the `rec-open` pieces**: at table `i`'s plain scheme and `fast100` schedule and rep `r`'s decoded
 file, where every query `j` of every level `ℓ` is some piece's (`hcover`), the pieces of rep `r` read its side
-(`hside`) and, at the verifier rows, the position the rows draw for their query (`hpos`), and every piece holds,
+(`hside`) and, at the verifier rows, the position the rows sample for their query (`hpos`), and every piece holds,
 every level's queries pass (`rowD_of_queries`). -/
 theorem rowD_of_pieces
     (hmerkle : (D.files cls i).st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted")

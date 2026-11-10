@@ -1,10 +1,25 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Inst.Place
-public import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
-public import Proofs.Flock.Soundness.Discharge.Hidden.Unpin
 public import Proofs.Flock.Soundness.Discharge.Hidden.Flat
+public import Proofs.Flock.Soundness.Discharge.Hidden.Unpin
 public import Proofs.Flock.Soundness.Discharge.Inst.Order
+public import Proofs.Flock.Soundness.Discharge.Inst.Place
+public import Proofs.Flock.Soundness.Discharge.Inst.Rows
+public import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 
 /-!
 # A pinned statement's witness satisfies its statement without Δ's pinned copies

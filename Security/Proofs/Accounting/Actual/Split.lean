@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Accounting.Actual
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
 # The split: what a region reads is what its location carried in plus what crossed its boundary

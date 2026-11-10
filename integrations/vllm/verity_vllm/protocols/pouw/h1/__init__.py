@@ -1,5 +1,5 @@
-"""PoUW's H1 + fx1 (`eps1-sm120-h1fx1`, `verity.core.protocols.pouw.circuit.h1tile`) on the eager int8_exact row: each
-served int8 linear call as its own Program on bits, which `verity.core.protocols.pouw.circuit.compile` takes to H1 tile units.
+"""PoUW's H1 + fx1 (`eps1-sm120-h1fx1`, `verity.ml.protocols.pouw.circuit.h1tile`) on the eager int8_exact row: each
+served int8 linear call as its own Program on bits, which `verity.ml.protocols.pouw.circuit.compile` takes to H1 tile units.
 
 * **The Program** (`program(k, n, m)`): one call's linear. Its A is the call's A table (x [m, k] s8 rows, sx [m] f32 scales:
   the served rows as the Commit taps `Int8RowQuant_v1` /0 and /1, then empty rows), its B the layer's int8 weight rows and
@@ -78,10 +78,10 @@ from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
 from verity.core.protocols.pouw.audit import HM96_WEIGHTS, weight_binding
-from verity.core.protocols.pouw.circuit import compile as C, h1tile as H
+from verity.ml.protocols.pouw.circuit import compile as C, h1tile as H
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw.credit import CREDIT
-from verity.core.protocols.sampled_proofs.challenger import CoinError
+from verity.core.protocols.spot.challenger import CoinError
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.ops.boolean import gemm as BG
@@ -108,7 +108,7 @@ PROGRAM, PROGRAM_META = "window-program.json.gz", "window-program.meta.json"
 SALT_TAG = b"verity/pouw/h1/program-salt/v1\0"
 #: the one coin source a credited window's coins come from (`pouw_h1_challenger`)
 CHALLENGER = "challenger"
-#: the credit refusal of every call of a window whose coins the auditor's challenger didn't draw
+#: the credit refusal of every call of a window whose coins the auditor's challenger didn't sample
 IN_PROCESS = ("credit: coins-not-the-auditors: the window's coins were held in the serving process, not drawn by the "
               "auditor host's challenger (the pouw setting 'challenger'), so it credits nothing")
 
@@ -202,7 +202,7 @@ def units(k: int, n: int, m: int) -> int:
 
 #: this process's 32-byte key for its weight trees' leaf salts (`weight_root`): from the OS's CSPRNG when the module is first
 #: imported (a forked child keeps its parent's) and held only in memory, never written to a record, a manifest or the store;
-#: a tensor-parallel rank draws its own, since each commits only the weights it holds
+#: a tensor-parallel rank samples its own, since each commits only the weights it holds
 WEIGHT_KEY = os.urandom(32)
 
 
@@ -289,7 +289,7 @@ class Call:
 #: call, as JSON (its roots and receipt root, hex)
 Listener = Callable[[Call, Any, Any, Any, Any], Mapping[str, Any] | None]
 #: ``opener(requests_root)``: given round 0's request table's root, the window's Program salt, its round coins (a
-#: `LiveRecord`), its draw coin (`pouw_h1_window.DrawSession`) and what its commitment records (`H1Run.open_window`)
+#: `LiveRecord`), its sampling coin (`pouw_h1_window.DrawSession`) and what its commitment records (`H1Run.open_window`)
 Opener = Callable[[bytes], tuple[bytes, Any, Any, Mapping[str, Any]]]
 
 
@@ -312,7 +312,7 @@ class H1Run:
     ``a/<K>@<s>`` whole (`pouw_h1_served.Served.segments`), is recorded with
     ``rounds`` (a `LiveRecord` over a live challenger's round family), which opens round s's coin only after it, and
     `finish` opens ``draw``'s coin (its own withheld session, `pouw_h1_window.DrawSession`) after the window's `draw_root`.
-    ``key`` is the prover's hm96 salt key for the request, slot and call tables, drawn for the run (`os.urandom`) unless
+    ``key`` is the prover's hm96 salt key for the request, slot and call tables, sampled for the run (`os.urandom`) unless
     given. ``prover`` (else ``served``'s) is the prover's private directory (`pouw_h1_prover`): it keeps the key and each
     served call's A rows, scales and z/y records, so a sampled proof block opens after the close (DRAWN1); without it their leaves
     open only while the run is held (`open_request`, `open_slot`). ``admission`` is `pouw_h1_requests.ROUND0` (admit in round 0 only) or ``PER_ROUND``; ``coin_source`` is

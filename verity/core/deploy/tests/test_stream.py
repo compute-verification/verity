@@ -46,7 +46,7 @@ class U64:
 
 
 class Pinger:
-    """Pings, reads its clock and draws three coins in one step; records the reading, pings the coins' length, waits
+    """Pings, reads its clock and flips three coins in one step; records the reading, pings the coins' length, waits
     until the time the pong names, and finishes with its clock's reading then."""
 
     def __init__(self) -> None:

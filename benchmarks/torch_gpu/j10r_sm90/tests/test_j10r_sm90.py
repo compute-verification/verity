@@ -1,5 +1,5 @@
 """The fixtures' inputs and their writer and reader, on the CPU: the restated served weights equal the seeded generator
-(values read from its module), the step's unit positions and sampled units, and `fixtures.expected` at a shrunken linear
+(values read from its module), the step's unit positions and sampled proof blocks, and `fixtures.expected` at a shrunken linear
 against `h1tile.j10r_reference` called directly, with a tampered array refused by `fixtures.load`."""
 from __future__ import annotations
 
@@ -11,11 +11,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import shape as S
-
 import fixtures as F
-from verity.core.protocols.pouw.circuit import h1tile as HT
-from verity.core.protocols.pouw.circuit import seeds as SD
+import shape as S
+from verity.ml.protocols.pouw.circuit import h1tile as HT
+from verity.ml.protocols.pouw.circuit import seeds as SD
 
 #: per linear: B's row 0 [:4], its last row [-4:], and its first and last channel scales' f32 words, from the generator's
 #: weights module at the frozen shape
@@ -28,7 +27,7 @@ GENERATOR = {"q": ([-22, 16, -79, 90], [111, 22, -24, 35], 0x370F91F7, 0x3759C24
 
 
 @pytest.mark.parametrize("linear", list(GENERATOR))
-def test_the_served_weights_are_allp_ifaces(linear):
+def test_the_served_weights_are_allp_ifaces(linear: str) -> None:
     n, k = S.LINEARS[linear]
     first, last, s0, s1 = GENERATOR[linear]
     b = S.weight_rows(linear, [0, n - 1])
@@ -39,7 +38,7 @@ def test_the_served_weights_are_allp_ifaces(linear):
     assert (int(sw.view(np.uint32)[0]), int(sw.view(np.uint32)[-1])) == (s0, s1)
 
 
-def test_a_steps_units_are_numbered_in_order_without_overlap():
+def test_a_steps_units_are_numbered_in_order_without_overlap() -> None:
     for m in S.MS:
         assert S.base(S.ORDER[0], m) == S.POS0[m]
         for prev, nxt in zip(S.ORDER, S.ORDER[1:]):
@@ -50,7 +49,7 @@ def test_a_steps_units_are_numbered_in_order_without_overlap():
 
 @pytest.mark.parametrize("linear", list(S.LINEARS))
 @pytest.mark.parametrize("m", S.MS)
-def test_the_sampled_units_hold_the_grids_corners_and_middle(linear, m):
+def test_the_sampled_units_hold_the_grids_corners_and_middle(linear: str, m: int) -> None:
     nrb, ncb = m // S.T, S.LINEARS[linear][0] // S.T
     got = S.picks(linear, m)
     assert got == S.picks(linear, m) and got == sorted(set(got)) and len(got) == S.PICKS
@@ -60,14 +59,15 @@ def test_the_sampled_units_hold_the_grids_corners_and_middle(linear, m):
     assert S.T * len({u // ncb for u in got}) <= S.T * S.PICKS
 
 
-def test_the_activations_carry_the_special_rows_at_both_ends():
+def test_the_activations_carry_the_special_rows_at_both_ends() -> None:
     a = S.activation_rows("kv", 4096, [0, 1, 2, 3, 4095, 4094, 100])
     assert (a[0] == 127).all() and (a[1] == -128).all() and (a[3] == 0).all() and (a[4] == 127).all()
     assert a[2, :2].tolist() == [-128, 127] and (a[5] == -128).all()
     assert S.special_of(4096, 100) is None and len(set(a[6].tolist())) > 100
 
 
-def test_the_fixtures_are_the_definitions_and_a_changed_word_is_refused(tmp_path, monkeypatch):
+def test_the_fixtures_are_the_definitions_and_a_changed_word_is_refused(tmp_path: Path,
+                                                                         monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(S.LINEARS, "kv", (64, 512))
     doc = F.expected(tmp_path, ["kv"], [4096], 6, 1, 1)
     c = doc["calls"]["kv-4096"]

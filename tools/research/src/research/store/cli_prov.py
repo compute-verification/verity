@@ -5,7 +5,7 @@
     research data attempt publish RUN_DIR|RUN_ID [--tool SPEC] [--force] | --all [--runs-dir D]
     research data custody RUN_DIR|RUN_ID [--publish [--force [--runner-gone]]] | --triage [--verify] [--older-min N] [--runs-dir D ...]   run custody on the remote (store.custody)
 
-`research.store.cli` (lane store-core) owns the `research data` dispatcher and merges COMMANDS into its table; `main` here is the
+`research.store.cli` owns the `research data` dispatcher and merges COMMANDS into its table; `main` here is the
 same dispatch for tests and for `python -m research.store.cli_prov`.
 """
 from __future__ import annotations
@@ -349,7 +349,8 @@ def _publish_line(out: dict[str, Any], where: str) -> str:
 def cmd_attempt(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research data attempt")
     sub = ap.add_subparsers(dest="verb", required=True)
-    pub = sub.add_parser("publish", help="what `research run` calls at the end; usable after the fact on any finished run dir")
+    pub = sub.add_parser("publish", help="what `research run` calls at the end; usable after the fact on any finished run dir but one "
+                                         "with run custody (`research data custody RUN --publish` publishes that with its run record)")
     pub.add_argument("run", nargs="?", metavar="RUN_DIR|RUN_ID", help="run directory, id, or unique prefix under --runs-dir")
     pub.add_argument("--all", action="store_true", help="every finished run under --runs-dir not yet in the store")
     pub.add_argument("--tool", default=None, metavar="NAME|module:NAME", help="declaration to publish under (default: job.json's `store.tool`, else argv[0])")
@@ -385,10 +386,16 @@ def cmd_attempt(argv: list[str]) -> int:
             return 1
     if ns.all:
         dirs += [p for p in sorted(root.iterdir()) if p.is_dir() and (p / "job.json").exists() and p not in dirs] if root.is_dir() else []
+    from .custody import custody_run
+
     results = []
     worst = 0
     for d in dirs:
-        out = A.publish(d, tool=tool, store=st, force=ns.force)
+        if why := custody_run(d):
+            out = {"published": False, "error": f"a run with run custody ({why}) needs its run record in its attempt, which this publish "
+                                                f"leaves out for good: research data custody {d} --publish"}
+        else:
+            out = A.publish(d, tool=tool, store=st, force=ns.force)
         results.append({"run_dir": str(d), **out})
         if not out.get("published"):
             worst = 1

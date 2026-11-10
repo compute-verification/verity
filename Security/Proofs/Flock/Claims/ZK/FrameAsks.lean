@@ -67,6 +67,13 @@ theorem ot_eq {α : Type} {ns ns' : List ℕ} {Q : α → Prop} {p : TMW OpenM �
     OT I ns' Q p :=
   e ▸ h
 
+theorem ot_throw {α : Type} {ns : List ℕ} {Q : α → Prop} (e : String) : OT I ns Q (throw e : TMW OpenM α) :=
+  fun _ _ _ _ => trivial
+
+theorem ot_throw_bind {α β : Type} {ns : List ℕ} {R : β → Prop} (e : String) (f : α → TMW OpenM β) :
+    OT I ns R (throw e >>= f) :=
+  ot_eq (ot_bind (Q := fun _ => False) (ms := []) (ot_throw e) fun _ h => h.elim) (List.append_nil ns)
+
 theorem ot_liftTM {α : Type} (x : _root_.Flock.Transcript.TM α) : OT I [] (fun _ => True) (liftTM x : TMW OpenM α) := by
   intro t got rest hI
   rcases hx : x t with e | r

@@ -25,6 +25,11 @@ TOOL = _module("repo_check_tool", ROOT / "tools" / "verity" / "check" / "tool.py
 HANDLES = {"ci", "lean", "proofs"}
 
 
+@pytest.fixture(autouse=True)
+def _provers(provers):
+    return provers(CHECK)
+
+
 def test_the_declaration_names_check_pys_jobs_in_their_groups_and_order(tmp_path):
     declared: dict[int, list[str]] = {}
     for j in D.load():
@@ -35,7 +40,7 @@ def test_the_declaration_names_check_pys_jobs_in_their_groups_and_order(tmp_path
 
 def test_check_runs_the_groups_order_and_halts_as_they_were_before_ci_toml_held_them(tmp_path):
     runs = [[name for name, _argv, _cwd in g] for g in CHECK.groups(tmp_path, 2)]
-    assert runs == [["pytest"], ["flock-circuit-build", "circuit-check", "flock-rust-tests"],
+    assert runs == [["pytest"], ["flock-circuit-build", "flock-rust-tests", "circuit-check"],
                     ["lean-build", "lean-unit-cut", "lean-agreement"], ["lean-audit"], ["lean-changed"], ["lean-suites"],
                     ["ratchet-gate"]]
     assert CHECK.HALTS == {"lean-changed"} and CHECK.HALTS_ON == {"flock-circuit-build": "error: could not compile"}
@@ -100,27 +105,49 @@ def test_a_malformed_declaration_is_refused_with_the_reason(body, why):
         _parse(body)
 
 
-def test_a_job_off_the_gate_parses_and_ci_toml_takes_circuit_check_and_ratchet_gate_off_it():
-    """circuit-check runs after landing, off the gate, until `circuit-check --all` fits inside the rest of the check; ratchet-gate
-    runs there too, reporting without blocking a merge, and no plan names it."""
-    a, b = _parse('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\ngate = false\n[[job]]\nname = "b"\nowner = "ci"\ngroup = 2\n')
+def test_drive_s_policy_takes_circuit_check_and_ratchet_gate_off_the_gate():
+    """Which jobs gate a merge is drive's policy (policy.toml's `off_gate`), not ci.toml's: circuit-check runs after landing, off
+    the gate, until `circuit-check --all` fits inside the rest of the check; ratchet-gate runs there too, reporting without
+    blocking a merge, and no plan names it."""
+    a, b = D.parse('schema = "ci/v0"\n[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\n[[job]]\nname = "b"\nowner = "ci"\ngroup = 2\n',
+                   HANDLES, off=("a",))
     assert (a.gate, b.gate) == (False, True) and D.gated([a, b]) == [b]
+    assert D.off_gate() == ("circuit-check", "ratchet-gate")
     assert [j.name for j in D.load() if not j.gate] == ["circuit-check", "ratchet-gate"]
     assert CHECK.OFF_GATE == ("circuit-check", "ratchet-gate")
     assert not any("ratchet-gate" in shard for plan in D.plans().values() for shard in plan)
 
 
-@pytest.mark.parametrize("body, why", [
-    ('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\ngate = "no"\n', "gate must be bool"),
-    ('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\ngate = false\nmerge_requires = ["x/"]\n', "merge_requires on a job off the gate"),
-    ('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\ngate = false\n[[job]]\nname = "b"\nowner = "ci"\ngroup = 1\nneeds = ["a"]\n',
+def test_without_a_policy_every_job_gates(tmp_path):
+    assert D.off_gate(tmp_path / "policy.toml") == ()
+    assert all(j.gate for j in D.load(policy=tmp_path / "policy.toml"))
+
+
+def test_ci_toml_refuses_a_gate_key_and_names_where_it_went():
+    with pytest.raises(D.DeclarationError, match="drive's policy, not ci.toml's: name the job in policy.toml's off_gate"):
+        _parse('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\ngate = false\n')
+
+
+@pytest.mark.parametrize("body, off, why", [
+    ('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\nmerge_requires = ["x/"]\n', ("a",), "merge_requires on a job off the gate"),
+    ('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\n[[job]]\nname = "b"\nowner = "ci"\ngroup = 1\nneeds = ["a"]\n', ("a",),
      "job b is on the gate and waits on a, which is off it"),
-    ('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\ngate = false\n[[job]]\nname = "b"\nowner = "ci"\ngroup = 2\nafter = "a"\n',
+    ('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\n[[job]]\nname = "b"\nowner = "ci"\ngroup = 2\nafter = "a"\n', ("a",),
      "job b is on the gate and waits on a, which is off it"),
+    ('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\n', ("z",), "off_gate names z, which ci.toml doesn't declare"),
 ])
-def test_a_job_off_the_gate_that_a_merge_or_a_job_on_it_would_need_is_refused(body, why):
+def test_a_job_off_the_gate_that_a_merge_or_a_job_on_it_would_need_is_refused(body, off, why):
     with pytest.raises(D.DeclarationError, match=why):
-        _parse(body)
+        D.parse('schema = "ci/v0"\n' + body, HANDLES, off=off)
+
+
+def test_an_unreadable_policy_is_refused(tmp_path):
+    (p := tmp_path / "policy.toml").write_text("off_gate = [1]\n")
+    with pytest.raises(D.DeclarationError, match="off_gate must be a list of job names"):
+        D.off_gate(p)
+    p.write_text("off_gate = [\n")
+    with pytest.raises(D.DeclarationError, match="not TOML"):
+        D.off_gate(p)
 
 
 def test_a_wrong_schema_is_refused():
@@ -149,7 +176,7 @@ def _run_two_groups(tmp_path, monkeypatch, first_status: str):
     monkeypatch.setattr(CHECK.threading, "Event", Event)
     monkeypatch.setattr(CHECK, "preflight", lambda: [])
     monkeypatch.setattr(CHECK, "take_lean_deps_urls", lambda out: None)
-    monkeypatch.setattr(CHECK.subprocess, "run", lambda *a, **k: None)
+    monkeypatch.setattr(CHECK, "prebuild", lambda out, steps: None)
     monkeypatch.setattr(CHECK, "groups", lambda out, n, cache, urls, **kw: [[("a", ["true"], tmp_path)], [("b", ["true"], tmp_path)]])
     monkeypatch.setattr(CHECK, "_step", step)
     ok, results = CHECK.run(tmp_path, 2)

@@ -109,7 +109,7 @@ def honest(prover, t, i, challenges, previous, plan):
 
 def drive(store, p: Params, schedule: timing.Schedule, *, tiles=None, verifier_tiles=None, run=honest, plan=None,
           sent=None, label=b"coins", coins_=None):
-    """Replay `schedule` against a session: `σ_0` released at 0 and each boundary message on time, each pass computed
+    """Replay `schedule` against a session: `chal_0` released at 0 and each boundary message on time, each pass computed
     as its root arrives, chained from the pass before.  `plan(t, i)` is pass (t, i)'s plan (None: the whole store);
     `run(prover, t, i, challenges, previous, plan)` replaces the honest pass and `sent(ps)` the runs sent with its
     root.  `tiles` is the stub of PoUW's tiles under a registration that binds z, and None under one that does not.
@@ -304,8 +304,8 @@ def test_receipts_committed_under_another_plan_reject(store) -> None:
 
 
 def test_the_ledger_counts_every_gamma_term(store) -> None:
-    """A chained session's span is its passes, a gap g after each, and its two ends: `σ_0`'s trip down before the first
-    pass, and after the last boundary the pass in flight's slack and its root's trip up."""
+    """A chained session's span is its passes, a gap g after each, and its two ends: `chal_0`'s trip down before the
+    first pass, and after the last boundary the pass in flight's slack and its root's trip up."""
     s, prover, passes, clock = drive(store, params(samples=1000), SCHEDULE)
     finish(s, prover, passes, clock)
     r = s.record()
@@ -384,7 +384,7 @@ def synthetic(lengths: tuple[int, ...], drawn: int, delta: float) -> audit.Recor
 
 
 def test_the_ledger_reads_the_openings_per_window_and_over_the_horizon() -> None:
-    """The hybrid claim at 2^-40, as `Accounting.Guarantees.RateSessionDraw` reads it: 7 windows of 2,773
+    """The hybrid claim at 2^-40, as `Accounting.Guarantees.RateSessionSample` reads it: 7 windows of 2,773
     openings each (d·n ≥ 18,470) are short by under 0.15% over the horizon, and by under 1% in every window, together.
     Read per window, each window's own bound at δ is about 1% of its receipts, with 7·δ in all."""
     n, d, u, delta = 7, 2773, 100_000, 2.0 ** -40

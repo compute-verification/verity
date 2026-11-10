@@ -2,6 +2,10 @@ module
 
 public import Proofs.Flock.Soundness.Refine.Lincheck
 public import Proofs.Flock.Soundness.Refine.Frames
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import VCVio.Prelude.Core
 
 /-!
 # The lincheck accepts when its checks hold (`Flock.Piop`)

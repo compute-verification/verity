@@ -1,6 +1,6 @@
 module
 
-public import Lean.Data.Json
+public import Lean.Data.Json.Basic
 
 /-!
 # JSON as Python's `json.dumps(v, sort_keys=True, separators=(",", ":"))` writes it

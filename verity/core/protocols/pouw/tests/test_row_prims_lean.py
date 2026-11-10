@@ -1,5 +1,5 @@
 """The Lean word functions of PoUW's row-unit primitives (`Security/Definitions/Pouw/PearlC/RowPrims.lean`) are
-`verity.core.protocols.pouw.circuit.words`': `lean/scripts/row_prims_vectors.py`, run again, writes the vectors the kernel checks
+`verity.ml.protocols.pouw.circuit.words`': `lean/scripts/row_prims_vectors.py`, run again, writes the vectors the kernel checks
 (`RowPrimVectors.lean`, `Proofs/Pouw/PearlC/RowPrimChecks.lean`) byte for byte, each expected word the primitive's
 own `evaluate`."""
 from __future__ import annotations
@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip("verity.core.protocols.pouw.circuit.words", reason="the row primitives are `verity.core.protocols.pouw.circuit.words`'")
+pytest.importorskip("verity.ml.protocols.pouw.circuit.words", reason="the row primitives are `verity.ml.protocols.pouw.circuit.words`'")
 
 LEAN = Path(__file__).resolve().parents[5] / "Security"
 SCRIPT = Path(__file__).resolve().parents[1] / "lean" / "scripts" / "row_prims_vectors.py"

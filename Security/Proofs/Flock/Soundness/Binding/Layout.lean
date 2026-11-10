@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Audit.FlockLink
 public import Proofs.Flock.Soundness.Binding.Leaf
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The layout of registered leaves, and its value binding
@@ -11,7 +12,7 @@ structure, `Partition.ValueBinding`. This file builds one (`Layout.binding`) fro
 
 * **the layout** (`Layout`): the commit strings (`Pos`: the leaves under the serving roots) and the values behind them
   (`Val`: a row), the commit string that holds each wire and each value's bit on it, the leaf digest the registration
-  commits to at each commit string (`regLeaf`), and what a drawn unit's table's witness reads at a commit string: a value
+  commits to at each commit string (`regLeaf`), and what a sampled proof block's table's witness reads at a commit string: a value
   and a salt, read at fixed addresses (`row`, `salt`: the bits at `rowAt`, the bytes at `saltAt`). One fact about the
   layout, `decode_row`: in a satisfying witness, the decoder's bit on each of the unit's wires is the bit of the row the
   witness holds at the wire's commit string;
@@ -34,21 +35,21 @@ open Game Model Accounting Extract Refine Audit
 /-- The executable's field. -/
 local notation "𝔽" => FlockLevel3.GF128
 
-variable {C : Circuit} {n : ℕ} (P : Audit.Partition C n) {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Audit.Partition C n) {Reg : Type} {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
-/-- The message type of drawn unit `u`'s table. -/
+/-- The message type of sampled proof block `u`'s table. -/
 abbrev Msg (S : Finset (Fin n)) (R : Reg) (u : Fin n) : Type :=
   Message 𝔽 (Audit.Partition.tabOf plan tab S R u).sch.k0 (Audit.Partition.tabOf plan tab S R u).sch.level₀.logCols
 
-/-- The witness a message of drawn unit `u`'s table packs. -/
+/-- The witness a message of sampled proof block `u`'s table packs. -/
 noncomputable abbrev wit (S : Finset (Fin n)) (R : Reg) (u : Fin n) (M : Msg plan tab S R u) :
     Witness (Audit.Partition.tabOf plan tab S R u).S.m :=
   witnessOf execArith (Audit.Partition.tabOf plan tab S R u).S.m (Audit.Partition.tabOf plan tab S R u).sch.k0
     (Audit.Partition.tabOf plan tab S R u).sch.level₀.logCols M
 
-/-- A message of drawn unit `u`'s table packs a witness that satisfies the table's statement. -/
+/-- A message of sampled proof block `u`'s table packs a witness that satisfies the table's statement. -/
 def Sat (S : Finset (Fin n)) (R : Reg) (u : Fin n) (M : Msg plan tab S R u) : Prop :=
   (Audit.Partition.tabOf plan tab S R u).S.Satisfies (wit plan tab S R u M)
 
@@ -62,9 +63,9 @@ def bitsAt {m N : ℕ} (z : Witness m) (a : Fin N → Fin (2 ^ m)) : Fin N → B
 def bytesAt {m N : ℕ} (z : Witness m) (a : Fin N → Fin 8 → Fin (2 ^ m)) : List UInt8 :=
   List.ofFn fun j => byteOf (bitsAt z (a j))
 
-/-- **The layout of the drawn units' committed wires in registered leaves.** The commit strings (`Pos`, the leaves under
+/-- **The layout of the sampled proof blocks' committed wires in registered leaves.** The commit strings (`Pos`, the leaves under
 the serving roots) and their values (`Val`), the commit string holding each wire (`pos`) and a value's bit on it (`bit`),
-and the registered leaf digests (`regLeaf`). Where a drawn unit's table's witness holds each commit string's value and
+and the registered leaf digests (`regLeaf`). Where a sampled proof block's table's witness holds each commit string's value and
 salt, at fixed addresses: the value's `rowBits p` bits (`rowAt`), which `rowOf` reads as a value, and the salt's 192
 bytes, bit by bit (`saltAt`). `decode_row`: in a satisfying witness the decoder's bit on each of the unit's wires is the
 bit of the value the witness holds at the wire's commit string. -/
@@ -97,7 +98,7 @@ namespace Layout
 
 variable (lay : Layout P plan tab decode) (scheme : lay.Pos → ExplicitLeaf lay.Val)
 
-/-- The value a drawn unit's table's message holds at commit string `p`: `rowOf` of the witness's bits at `rowAt`. -/
+/-- The value a sampled proof block's table's message holds at commit string `p`: `rowOf` of the witness's bits at `rowAt`. -/
 noncomputable def row (S : Finset (Fin n)) (R : Reg) (u : Fin n) (M : Msg plan tab S R u) (p : lay.Pos) : lay.Val :=
   lay.rowOf p (bitsAt (wit plan tab S R u M) (lay.rowAt S R u p))
 
@@ -105,7 +106,7 @@ noncomputable def row (S : Finset (Fin n)) (R : Reg) (u : Fin n) (M : Msg plan t
 noncomputable def salt (S : Finset (Fin n)) (R : Reg) (u : Fin n) (M : Msg plan tab S R u) (p : lay.Pos) : List UInt8 :=
   bytesAt (wit plan tab S R u M) (lay.saltAt S R u p)
 
-/-- **The registration fact**: in a satisfying witness of a drawn unit's table, the leaf of the value and salt the
+/-- **The registration fact**: in a satisfying witness of a sampled proof block's table, the leaf of the value and salt the
 witness holds at each of the unit's commit strings is the registered leaf there. -/
 def Registered : Prop :=
   ∀ S R u, u ∈ S → ∀ M, Sat plan tab S R u M → ∀ g ∈ P.io u,
@@ -114,7 +115,7 @@ def Registered : Prop :=
 /-- An opening of a commit string: the commit string, a value and a salt. -/
 abbrev Opening : Type := lay.Pos × lay.Val × List UInt8
 
-/-- What a drawn unit's table's message opens commit string `p` to: `p`, and the value and salt it holds there. -/
+/-- What a sampled proof block's table's message opens commit string `p` to: `p`, and the value and salt it holds there. -/
 noncomputable def openingAt (S : Finset (Fin n)) (R : Reg) (u : Fin n) (M : Msg plan tab S R u) (p : lay.Pos) : lay.Opening :=
   (p, lay.row S R u M p, lay.salt S R u M p)
 
@@ -134,7 +135,7 @@ theorem collide_spec (o o' : lay.Opening) (hc : lay.com scheme o = lay.com schem
 
 /-- **The value binding of a layout**, given its leaf schemes and the registration fact: an opening is a commit string, a
 value and a salt; its commitment the commit string and its leaf; the registered commitment at `p` is `p` and the
-registered leaf; a drawn unit's table's message opens `p` to the value and salt it holds there; and `collide` is the leaf
+registered leaf; a sampled proof block's table's message opens `p` to the value and salt it holds there; and `collide` is the leaf
 scheme's extractor. -/
 noncomputable def binding (hreg : lay.Registered scheme) : P.ValueBinding plan tab decode H512 where
   Pos := lay.Pos

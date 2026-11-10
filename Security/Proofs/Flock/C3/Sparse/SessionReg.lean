@@ -1,10 +1,28 @@
 module
 
-public import Proofs.Flock.C3.Sparse.MsgsLayers
-public import Proofs.Flock.C3.PubRows.Shape
-public import Proofs.Flock.C3.Opening.SessionCoins
-public import Proofs.Flock.C3.Compose.RsFacts
 public import Proofs.Flock.C3.Reps.WRead
+public import Proofs.Flock.C3.Sparse.MsgsLayers
+public import Proofs.Flock.C3.VStarList.Shape
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.C3.Compose.RsFacts
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.VBridge.Pinned
+import Proofs.Flock.VBridge.Sparse.Unit
 
 /-!
 # `SparseSessionAt` from the sparse session's acceptance
@@ -26,8 +44,8 @@ array) and coins whose phase coins are check 5's (`csOf`).
   shape (`unitShape`, the inner shape's `sparse` entry, `SparseIs`) and check 5 gives both reps' coins.
 * `sparseSessionAt_of_regs`: `SparseSessionAt`, and its copy with `un.val = i.val` (the h-half tie's pin, K's
   `h_of_sessionAt`), from that, the constant 1 (`hone`), the message columns' registrations
-  (`hkeys`, which `bitAt_of_regBit` makes `wSparse`'s bits; `SessionKeys.lean`'s `hkeys_of_rows` produces it from
-  `RecSparse.check`'s rows, `checkOwn`'s reads file and `RowsRegisteredC3`), and the registrations of `v` (`hv`),
+  (`hkeys`, which `bitAt_of_regBit` makes `wSparse`'s bits; nothing in the tree derives it from `RecSparse.check`'s
+  rows), and the registrations of `v` (`hv`),
   `tau` (`htau`) and the zero outputs (`hz`), which the verifier does not check against the coins (`rec-sparse-tau`
   and `rec-sparse-zero` are the prover's registrations, and no check reads their rows).
 -/
@@ -356,8 +374,7 @@ copy 0 holds at the message columns (`wSparse`) and coins `c` whose phase coins 
 check 5's (`sparseCoins_of_accepted`, at `C` by `c3_eq_of_held`) at the inner shape's RecSparse shape
 (`c3Of_sparse`); the unit is the verifier's at that shape (`ParseFacts.recSparse`, `sparseParams_of_check`); its message
 columns a row reads register `wSparse`'s bits where they register any (`hkeys`, `bitAt_of_regBit` in the session's
-layer, which agrees with the registrant, and `nw_eq_msum`; `SessionKeys.lean`'s `hkeys_of_rows` produces `hkeys` from
-`sparseColKeys_of_check`, `sparseOwnNames_of_checkOwn` and `RowsRegisteredC3`). The constant 1 (`hone`), `v`'s
+layer, which agrees with the registrant, and `nw_eq_msum`). `hkeys`, the constant 1 (`hone`), `v`'s
 registered verifier row (`hv`), `tau`'s registered slots' types (`htau`) and the registered zero outputs (`hz`) are
 taken as given. -/
 theorem sparseSessionAt_of_regs (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)

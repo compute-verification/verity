@@ -152,6 +152,19 @@ def _cached_prefix_words(pi: ProgramIndex, store: CommittedStore, rid: str, pnam
     return out
 
 
+def _run_words(store: CommittedStore, f: dict, rid: str, engine_step: int, lo: int, hi: int, inputs_rec: list) -> np.ndarray:
+    """Leaves [lo, hi) of the `run` field `f`: the request's committed `run_values` words of the step that reads it, one u8 a
+    `Value<1>` leaf, refused by name when one is not a bit."""
+    elo, ehi = lo - int(f["offset"]), hi - int(f["offset"])
+    w, why = store.words(rid, engine_step, f["op_path"], f["member"], elo, ehi)
+    if w is None:
+        raise _Unresolved(why)
+    if w.dtype != np.uint8 or int(np.max(w, initial=0)) > 1:
+        raise _Unresolved(f"run value {f['name']} [{elo}, {ehi}) of ({rid}, step {engine_step}): committed as {w.dtype} words that are not bits")
+    inputs_rec.append({"kind": "committed", "identity": [rid, engine_step, f["op_path"], f["member"], [elo, ehi]]})
+    return w
+
+
 def _schedule_witness(pi: ProgramIndex, store: CommittedStore, r: dict, d: dict, rid: str, arrive: int, pname: str, lo: int, hi: int,
                       inputs_rec: list) -> np.ndarray:
     """The witness keys of a MoeAlignRanks_v1 row (`format.SCHEDULE_PARAM`): its OWN committed rank, so the row reproduces that rank
@@ -215,15 +228,18 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
                     inputs_rec.append({"kind": "weights", "field": fname, "range": [flo, fhi], "bits": bits})
                     wref = {"field": fname, "range": [flo, fhi]}
                 elif a in pi.supplied:
-                    binding, fields = pi.supplied[a]
-                    f = fields.get(lo)
-                    if f is None or hi - lo != 1:
+                    binding = pi.supplied[a][0]
+                    f = pi.supplied_field(a, lo, hi)
+                    if f is None:
                         raise _Unresolved(f"{pname} slice [{lo}, {hi}) is not one field of the supplied layout")
-                    if binding != "registration":
+                    if "op_path" in f:
+                        words.append(_run_words(store, f, rid, arrive + d["step"], lo, hi, inputs_rec))
+                    elif binding != "registration":
                         raise _Unresolved(f"run value {pname}.{f['name']}: the run Record's values are not read by the replay yet")
-                    # the registered value as the build's layout records it: what registration binds, never a committed word
-                    words.append(np.array([f["bits"]], dtype=_NP_BY_BITS[int(f["width"])] if int(f["width"]) in _NP_BY_BITS else np.uint64))
-                    inputs_rec.append({"kind": "registered", "param": pname, "field": f["name"], "bits": f"0x{f['bits']:x}"})
+                    else:
+                        # the registered value as the build's layout records it: what registration binds, never a committed word
+                        words.append(np.array([f["bits"]], dtype=_NP_BY_BITS[int(f["width"])] if int(f["width"]) in _NP_BY_BITS else np.uint64))
+                        inputs_rec.append({"kind": "registered", "param": pname, "field": f["name"], "bits": f"0x{f['bits']:x}"})
                 elif pname in (SEED_PARAM, RM.SPLITS_PARAM):
                     # the sampler's named INPUTS: the committed runner.sampler/seed word of THIS (step, request) and,
                     # under derived S, the committed runner.sampler/splits word of the event the Program's slice names (`splits[s]` = the
@@ -351,6 +367,20 @@ def plane_ports(d: dict) -> dict[str, str]:
     return {str(j): m[0] for j, m in enumerate(d["members"])} if d.get("plane_kind") else {}
 
 
+def evaluated(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int, int], np.ndarray | None], r: dict, rid: str,
+              arrive: int, inputs_rec: list) -> tuple[dict[str, np.ndarray] | None, str | None]:
+    """Row `r` of request `rid` evaluated from its committed inputs (`_evaluate_row`) -> (its outputs, None), or (None, why) when an
+    input is unresolved or the evaluator raised; an opening that doesn't verify is raised."""
+    try:
+        return _evaluate_row(pi, store, weights, r, rid, arrive, inputs_rec, depth=0, interior={}), None
+    except _Unresolved as u:
+        return None, str(u)
+    except OpeningNotVerified:
+        raise
+    except Exception as e:  # noqa: BLE001
+        return None, f"evaluator error: {e!r}"[:300]
+
+
 def _replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int, int], np.ndarray | None], vu: dict, arrive: int,
                rec: dict[str, Any]) -> dict[str, Any]:
     r = pi.by_i[vu["i"]]
@@ -359,15 +389,9 @@ def _replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, 
     fam, st = d["family"], d["statics"]
     rec.update({"i": vu["i"], "spec": r["spec"], "request_id": rid, "step": d["step"], "engine_step": arrive + d["step"], "op_path": d["op_path"],
                 "row": d["row"], "phase": vu["phase"], "inputs": []})
-    try:
-        got = _evaluate_row(pi, store, weights, r, rid, arrive, rec["inputs"], depth=0, interior={})
-    except _Unresolved as u:
-        rec["why"] = str(u)
-        return rec | {"result": None}
-    except OpeningNotVerified:
-        raise
-    except Exception as e:  # noqa: BLE001
-        rec["why"] = f"evaluator error: {e!r}"[:300]
+    got, why = evaluated(pi, store, weights, r, rid, arrive, rec["inputs"])
+    if why is not None:
+        rec["why"] = why
         return rec | {"result": None}
     if len(got) > 1:
         got = by_member(got, pi.member_of_port(vu["i"]) or plane_ports(d))

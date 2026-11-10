@@ -16,8 +16,8 @@ from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.refs import runs
 from verity.ml.circuits.types import Array
-from verity.core.protocols.pouw.circuit import h1tile as H
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import h1tile as H
+from verity.ml.protocols.pouw.circuit import seeds as SD
 
 pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment) are not on this tree")
 SALT = hashlib.sha512(b"salt").digest()
@@ -247,7 +247,7 @@ def test_j10r_tile_is_its_reference(d, stream):
 
 def test_no_scheme_takes_j10r():
     """J10-R is a Definition only: every registered scheme's units still bind v1 or v3."""
-    from verity.core.protocols.pouw.circuit import compile as C
+    from verity.ml.protocols.pouw.circuit import compile as C
 
     for name in (H.SCHEME, H.SCHEME_V3):
         assert {u.defn for u in C._scheme(name).units.values()} <= {H.PouwH1Tile, H.PouwH1Tile3}

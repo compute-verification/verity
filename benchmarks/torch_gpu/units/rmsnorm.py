@@ -16,9 +16,14 @@ contracted (-fmad=false).
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 import words as W
+
+if TYPE_CHECKING:
+    import torch
 
 CHUNK, GROUP = 128, 64
 #: the words a CTA's shared memory holds (units.cu's RQ uint4s)
@@ -50,7 +55,8 @@ def twin(x: np.ndarray, w: np.ndarray, eps: int = W.EPS) -> dict:
     return {"out": out, "chunks": chunks, "groups": groups, "rs": rs}
 
 
-def gpu(x, w, *, eps: int = W.EPS, out=None, units: bool = False, parts: dict | None = None):
+def gpu(x: torch.Tensor, w: torch.Tensor, *, eps: int = W.EPS, out: torch.Tensor | None = None, units: bool = False,
+        parts: dict | None = None) -> torch.Tensor | tuple[torch.Tensor, dict]:
     """units_rmsnorm on x (R, N) and w (N,) bf16 CUDA tensors -> out (R, N) bf16; with ``units`` (or ``parts``, the
     caller's tensors for some of them), (out, {"chunks", "groups", "rs"}), int32 tensors of the f32 words."""
     import torch

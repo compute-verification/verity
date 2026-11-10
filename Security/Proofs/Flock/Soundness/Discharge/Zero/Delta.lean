@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.ExecFlatCopies
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The zero as Δ writes it (`hZero`, e2e)

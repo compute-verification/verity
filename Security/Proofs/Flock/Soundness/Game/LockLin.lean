@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Soundness.Game.Lock
+public import Proofs.Flock.Soundness.Game
 public import Proofs.Flock.Soundness.LinkFinder
 
 /-!
@@ -123,7 +123,7 @@ theorem expect_linkG [Nonempty P] (g : Game α) (s : Strategy g) (M : ℕ) (F : 
       (∑ p, expect (fun x => F (p, x)) (LinkFinder.finderG g M) (LinkFinder.finderStrat g s M)) /
         Fintype.card P := by
   unfold linkG linkStrat
-  rw [expect_bind, expect_draw]
+  rw [expect_bind, Verity.Game.expect_draw]
   congr 1
   exact Finset.sum_congr rfl fun p _ => expect_map _ _ _ _
 

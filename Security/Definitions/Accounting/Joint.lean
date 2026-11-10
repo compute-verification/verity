@@ -7,7 +7,7 @@ public import Definitions.Pouw.Basic.Prob
 # A joint audit's run, and what each audit's guarantee says about it (trusted)
 
 A joint audit runs three audits on one device at once: the compute audit (PoUW), the bandwidth audit and the capacity
-audit (PoUS). Each draws coins of its own (`ΩW`, `ΩQ`, `ΩS`), uniformly and independently (`Pouw.pr` over the product),
+audit (PoUS). Each flips coins of its own (`ΩW`, `ΩQ`, `ΩS`), uniformly and independently (`Pouw.pr` over the product),
 and has an account and a window of its own. The device sees every coin, so its schedule is a function of all three.
 
 Each audit's guarantee is stated in the shape of PoUW's `Pouw.Guarantees.EndToEnd`, on its own account and its own
@@ -21,13 +21,13 @@ account's charge alone: what the other accounts use is neither credited to it no
 * `CapacitySound S ε`: the device memory the capacity account held over its window, in bit-ticks (one bit held for one
   tick is one bit-tick), certificate `S * len` bit-ticks, which is S bits on average (S_cert).
 
-The events these guarantees bound quantify over the audit's own coins; they are not about the coin drawn. At a value of
+The events these guarantees bound quantify over the audit's own coins; they are not about the coin flipped. At a value of
 the other audits' coins, an account is short when its charge is below the certificate on every one of the audit's own
 coins, so its worst case over them is below the certificate (`ComputeShort`, `BandwidthShort`, `CapacityShort`). The
 other accounts are covert when their charges are beyond the residual (the device's capacity over the window, less the
 certificate) on every one of the audit's own coins (`ComputeCovert`, `BandwidthCovert`, `CapacityCovert`). A device
-that does little charged work and a lot of covert work on a few of the compute coins is in neither event. A per-run
-reading, at the coins drawn, is not claimed yet; lane `ra-per-run` is proving it by truncation.
+that does little charged work and a lot of covert work on a few of the compute coins is in neither event. The per-run
+reading, at the coins flipped, is `Run.ComputeSoundPerRun` and the two beside it (`Definitions.Accounting.PerRun`).
 -/
 
 @[expose] public section
@@ -130,6 +130,13 @@ probability at most `ε` over the compute coins. -/
 def ComputeSound (p : Price) (W ε : ℝ) : Prop :=
   ∀ (o : ΩQ × ΩS) (T : ℝ), 0 ≤ T → (∀ x : ΩW, (r.work p (x, o) : ℝ) ≤ T) →
     Pouw.pr (fun x : ΩW => r.accepts .compute (x, o) ∧ T < W) ≤ ε
+
+/-- **The compute audit's guarantee unless a break**: `ComputeSound` with the event's compute coins restricted to those
+at which `brk` doesn't hold. PoUW gives it with `brk` the device's run finding a SHA-512 collision among the inputs it
+hashed (`Pouw.Adversary.Breaks`); with `brk` false it is `ComputeSound`. -/
+def ComputeSoundUnless (p : Price) (W ε : ℝ) (brk : ΩW → ΩQ × ΩS → Prop) : Prop :=
+  ∀ (o : ΩQ × ΩS) (T : ℝ), 0 ≤ T → (∀ x : ΩW, (r.work p (x, o) : ℝ) ≤ T) →
+    Pouw.pr (fun x : ΩW => r.accepts .compute (x, o) ∧ T < W ∧ ¬ brk x o) ≤ ε
 
 /-- **The bandwidth audit's guarantee, at certificate `Q` and error `ε`**: at any value of the other audits' coins, if
 the bandwidth account reads at most `B` bits from device memory on every bandwidth coin, the bandwidth audit accepts

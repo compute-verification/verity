@@ -4,15 +4,15 @@ exists (deploy.toml installs it on vy-nebius-cpu-1), stop every live `research r
 (`through_slot`).
 
 With `--renice N` (vy-nebius-1's vy-direct-nice.timer, marker /etc/vy/direct-runs-nice) it stops nothing: it renices each such
-run's processes to N, so the train checks' slots win the cores (top, 18 Oct: node 1 at load 410-468 on 192 cores, most of it lanes'
-direct runs), and logs each run once, when it is first reniced.
+run's processes to N, so the train checks' slots win the cores over lanes' direct runs, and logs each run once, when it is first
+reniced.
 
 With `--auditor` (an auditor host's vy-auditor-only.timer, marker AUDITOR), it stops every live run whose command is not one of the
 marker's lines (`auditor_allows`): the host runs the auditor's own service and nothing else (AGENTS.md's auditor-trusted devices;
 vy-challenger-1's marker lists no command, since its challenger runs as `auditor` through benchmarks/live_challenger/auditor.py).
 
-A run outside slot.py lands beside the slots' checks without their lock or cores, and on cpu-1 three did in one night (8 Oct),
-taking the slice from 586G to 647G beside a merge check. research.remote's launcher refuses such a run before it starts; this
+A run outside slot.py lands beside the slots' checks without their lock or cores, and a few such runs take the slice to its
+memory limit beside a merge check. research.remote's launcher refuses such a run before it starts; this
 stops one launched from a shipped tree that predates that refusal: SIGTERM to the workload's process group (status.json's pgid,
 when a member's environment names the run's RESEARCH_RUN_DIR), and to every other process of the run but its runner, which
 then records the run failed. Each stop is a line of LOG. vy-slot-only.timer runs it every minute. Stdlib only: deploy.toml
@@ -38,17 +38,17 @@ LOG = Path("/workspace/monitoring/slot-only.jsonl")
 #: slot.py from a shipped tree
 SLOT_PATHS = ("tools/verity/check/slot.py",)
 #: `env CHECK_SLOTS=...` before slot.py: a pool of its own, with its own line, in one of these files (vy-nebius-cpu-1's
-#: `proofs` pool, 13 Oct), so a lane's runs never queue behind the merge checks
+#: `proofs` pool), so a lane's runs never queue behind the merge checks
 POOL = re.compile(r"CHECK_SLOTS=/workspace/research/locks/[A-Za-z0-9_-]+/slots")
 LOCKS, POOL_NAME = "/workspace/research/locks", re.compile(r"[A-Za-z0-9_-]+")
-#: `research run --pool NAME`'s pools: `research` is any lane's research runs, where `research run --on auto` spills (INF-27,
-#: cpu-1's /workspace/research/locks/research/slots: 8-53 since 19 Oct, cores no check slot holds), `proofs` is proofs' Lean pool,
+#: `research run --pool NAME`'s pools: `research` is any lane's research runs, where `research run --on auto` spills
+#: (cpu-1's /workspace/research/locks/research/slots: 8-53, cores no check slot holds), `proofs` is proofs' Lean pool,
 #: `network` is network-accounting's proving pool (cpu-1, cpu-2, cpu-4, cpu-5 and node 1 hold one), `soundness` is soundness's
-#: Lean pool (cpu-4, s0-s11, since 26 Oct)
+#: Lean pool (cpu-4, s0-s11)
 POOLS = {"research": "/workspace/research/locks/research/slots", "proofs": "/workspace/research/locks/proofs/slots",
          "network": "/workspace/research/locks/network/slots", "soundness": "/workspace/research/locks/soundness/slots"}
 #: how long a timed `research run --pool` waits in its pool's line for a slot by default (slot.py --wait-max; `--pool-wait`): an
-#: hour lost proofs' runs their place in a saturated pool each hour (INF-153)
+#: hour would lose a run its place in a saturated pool each hour
 POOL_WAIT_S = 14400
 
 
@@ -56,7 +56,7 @@ def in_pool(pool: str, lane: str, command: list[str], run_max: float | None = No
     """CMD as a run in `pool`, the one way a lane's run takes it: `env CHECK_SLOTS=POOL python3 tools/verity/check/slot.py --by
     LANE [--wait-max POOL_WAIT_S --run-max S] -- nice -n 19 CMD...`, with slot.py from the run's own shipped tree (so the run's
     cwd is its source).  `run_max` is the run's --timeout: slot.py counts it from taking the slot, so the wait in the pool's line
-    isn't spent from it (INF-106), and a run with no slot in `wait_s` exits NOT_STARTED (75) without running CMD.  The
+    isn't spent from it, and a run with no slot in `wait_s` exits NOT_STARTED (75) without running CMD.  The
     runner's own timeout must then cover both (`research run --pool` makes it wait_s + S)."""
     if not POOL_NAME.fullmatch(pool):
         raise ValueError(f"no pool {pool!r}: a pool is a name of letters, digits, '_' or '-' (the pools every node may have are "
@@ -85,8 +85,8 @@ def through_slot(command: object) -> bool:
 
 
 def refusal(machine_marker: Path = MARKER, pools: dict[str, str] | None = None) -> str:
-    """Why the launcher refuses a run outside slot.py here, naming the `research run --pool` pools this machine has (27 Oct: lanes
-    sent `verity lean try --on vy-nebius-1` without `--pool`, and one wrapped slot.py by hand)."""
+    """Why the launcher refuses a run outside slot.py here, naming the `research run --pool` pools this machine has, so a run sent
+    without `--pool` learns the flag that sends it, rather than wrapping slot.py by hand."""
     have = sorted(p for p, f in (POOLS if pools is None else pools).items() if Path(f).is_file())
     send = (f"add `--pool {'|'.join(have)}` to `research run` or `verity lean try`, which sends CMD through that pool's slots"
             if have else "send it as `python3 tools/verity/check/slot.py [--by NAME] -- CMD...`, which `check.py --record --on` does")

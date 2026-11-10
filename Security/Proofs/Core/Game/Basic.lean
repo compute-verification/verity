@@ -1,11 +1,10 @@
 module
 
-public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Basic.ENNReal.BigOperators
-public import Mathlib.Basic.ENNReal.Inv
-public import Mathlib.Order.CompleteLattice.Basic
 public import Definitions.Core.Game
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Inv
 
 /-!
 # Games: the monad laws, values, and bounds over one coin
@@ -170,7 +169,7 @@ theorem value_bind_le (g : Game α) (f : α → Game β) (p : β → Prop) (D : 
         _ = avg (fun c => value (fun a => ¬ D a) (k c)) + ε₂ := by rw [avg_add, avg_const]
         _ = _ := rfl
 
-/-- The value of drawing a coin and ending is the probability of the event. -/
+/-- The value of sampling a coin and ending is the probability of the event. -/
 theorem value_coin_ret (p : α → Prop) (C : Type) [Fintype C] [Nonempty C] (f : C → α) :
     value p (.coin C fun c => .ret (f c)) = prCoin fun c => p (f c) := by
   classical

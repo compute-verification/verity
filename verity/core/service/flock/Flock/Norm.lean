@@ -1,11 +1,10 @@
 /-
 A parsed JSON value rebuilt: `JsonParse.parse` builds an object's tree in the order its keys arrived, so where the verifier
-keeps a parsed value (a draw) it keeps `norm` of it, whose trees depend only on each object's fields.
+keeps a parsed value (a sample) it keeps `norm` of it, whose trees depend only on each object's fields.
 -/
 module
 
-public import Lean.Data.Json
-public import Flock.JsonParse
+public import Lean.Data.Json.Basic
 
 @[expose] public section
 
@@ -20,7 +19,7 @@ def normObj (fields : List (String × Json)) : Std.TreeMap.Raw String Json compa
 
 mutual
 /-- **A JSON value with every object rebuilt** (`normObj`): `JsonParse.parse` builds a tree in the order the keys arrived,
-which no proof can see into, so where the verifier keeps a parsed value (a draw) it keeps this instead, a well-formed
+which no proof can see into, so where the verifier keeps a parsed value (a sample) it keeps this instead, a well-formed
 tree that is the same value for any two inputs with the same fields at each key. -/
 def norm : Json → Json
   | .arr ⟨a⟩ => .arr ⟨normList a⟩

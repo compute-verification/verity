@@ -1,6 +1,38 @@
 module
 
-public import Proofs.Flock.Claims.ZK.FinishRound
+public import Proofs.Flock.Claims.ZK.Release
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.Refine
 
 /-!
 # The frames took every round's coins on a live history
@@ -29,6 +61,9 @@ namespace LeanRelease
 
 open _root_.Flock.Firewall.Frame (Masker)
 
+theorem cfg_eq_cfgAt {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) :
+    L.cfg x ρ h = L.cfgAt x ρ h.length := rfl
+
 /-- **A live history's prefixes are live.** -/
 theorem live_take {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hl : L.toSrv.live wk x w ρ κ h = true) (i : ℕ) :
@@ -51,14 +86,9 @@ is checked at; else the rep's answer is discarded and the next rep starts at its
 theorem coins_taken_of_answered {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg))
     (hn : 3 ≤ h.length) {m : Masker} (ha : L.answered x ρ h = .ok m) :
     L.opens x ρ h = true ∧ ∃ s, (L.prog x h).answer (L.cfgAt x ρ (h.length - 1)) (L.coinsOf x h) = .ok s := by
-  cases ho : L.opens x ρ h with
-  | false =>
-    rw [L.answered_of_not_opens x ρ h ho] at ha
-    cases ha
-  | true =>
-    refine ⟨rfl, ?_⟩
-    rw [L.answered_of_opens x ρ h ho] at ha
-    unfold frameAnswer at ha
+  obtain ⟨ho, -, ha⟩ := answered_ok ha
+  refine ⟨ho, ?_⟩
+  · unfold frameAnswer at ha
     split at ha
     · unfold takeAt at ha
       rw [if_neg (by omega)] at ha
@@ -68,7 +98,7 @@ theorem coins_taken_of_answered {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ
           unfold cfg cfgAt
           rw [hs]
         rw [hc]
-        exact ⟨m, ha⟩
+        exact ⟨m, (bind_rankStop_ok ha).1⟩
       · rw [if_neg (fun e => hs (of_decide_eq_true e))] at ha
         cases hp : (L.prog x h).answer (L.cfgAt x ρ (h.length - 1)) (L.coinsOf x h) with
         | error e =>

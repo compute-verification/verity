@@ -2,6 +2,21 @@ module
 
 public import Proofs.Flock.VBridge.Compiled
 public import Proofs.Flock.Soundness.Refine.RepConverse
+public import Proofs.Flock.VBridge.Algebra.Ligerito
+public import Proofs.Flock.VBridge.Algebra.Lincheck
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # `Runs`' zerocheck and lincheck checks from E
@@ -64,7 +79,7 @@ theorem coins_at {R : Array Round} {k k' n : ℕ} {c : Array F128} (hne : NoEmpt
 
 theorem coin_one {R : Array Round} {k k' : ℕ} {c : Array F128} (hne : NoEmpty (R.map (·.coins)))
     (h : (CoinSource.ofRounds (R.map (·.coins))).round k 1 = .ok c) (hk : k = k') :
-    (R[k']!).coins.getD 0 0 = c[0]! := by
+    (R[k']!).coins.getD 0 0 = (c)[0]! := by
   subst hk
   obtain ⟨hc, hn⟩ := coin_of_round hne h
   rw [hc, Array.getD_eq_getD_getElem?, getElem!_pos c 0 (by omega), Array.getElem?_eq_getElem (by omega),

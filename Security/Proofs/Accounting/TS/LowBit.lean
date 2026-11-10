@@ -3,6 +3,7 @@ module
 public import Definitions.Accounting.Guarantees.TS.LowBit
 public import Mathlib.Data.FinEnum
 public import Mathlib.Data.Fintype.Card
+public import Proofs.Accounting.Lemmas.TS.LowBit
 
 /-!
 # A one-register fold's low bit

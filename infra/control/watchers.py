@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The control pod's watchers (INF-131): one supervisor for the loops that watch the system, which ran in tmux on agent VMs and
+"""The control pod's watchers: one supervisor for the loops that watch the system, which ran in tmux on agent VMs and
 stopped whenever a VM was suspended: suspending any agent VM stops nothing that watches the system.
 
     watchers.py run [--config PATH]      supervise every loop (watchers.sh runs it; one at a time: it holds the config's `lock`)

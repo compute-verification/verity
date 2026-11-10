@@ -1,8 +1,11 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Exec.Setup
+public import Proofs.Flock.Soundness.Discharge.Exec.Event
 public import Proofs.Flock.Soundness.Discharge.Exec.Tables
 public import Proofs.Flock.Soundness.Refine.Frames
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # The production statements retain every round's bytes

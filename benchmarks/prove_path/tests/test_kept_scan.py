@@ -29,7 +29,7 @@ from typing import Any
 
 import pytest
 
-from verity.core.protocols.certifier import ingress_scan as IS
+from verity.ml.protocols.certifier import ingress_scan as IS
 from verity.core.protocols.certifier import warden as W
 from verity.core.protocols.certifier.active import id_request
 from verity.core.protocols.certifier.certificate import Issuer, LmsSigner

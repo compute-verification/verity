@@ -5,7 +5,7 @@ The reference decodes the protocol's formats (`NetworkCheck/Check.lean`'s module
 `check_link` on each egress link, then `check_ingress_link` on each ingress link, under the certifier's `LmsKey` in its
 session. The cases are generated spatial units: an honest network certifier (`grid.Certifier` driven by
 `schedule.run_shaper` on the egress links, fed directly on the ingress links) whose records `certificate.Issuer` signs with
-a small LMS key in a drawn certifier session, then one change
+a small LMS key in a sampled certifier session, then one change
 (`MUTATIONS`), each aimed at one path of the audit, and malformed parameters, commitments and evidence. The issuer
 certifies no incomplete record, so the `status` change either leaves its faulted window uncertified or signs its head
 anyway (`_signed_anyway`), as only a forger could, which is what keeps the check's status path reachable."""

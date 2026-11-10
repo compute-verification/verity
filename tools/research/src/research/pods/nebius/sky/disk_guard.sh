@@ -1,6 +1,6 @@
 #!/bin/sh
 # disk_guard.sh check | status | release: vy-nebius-1's /workspace guard (a systemd timer every minute, from cluster_up.sh).
-# At VY_DISK_HOLD_PCT (80, infra's mark at 4:38 PM PDT Sep 30) it sets stopPolicy: Hold on every queue whose jobs write to /workspace (VY_DISK_QUEUES), so Kueue
+# At VY_DISK_HOLD_PCT (80) it sets stopPolicy: Hold on every queue whose jobs write to /workspace (VY_DISK_QUEUES), so Kueue
 # admits nothing new; admitted workloads keep running, and it deletes nothing. While the disk stays at or above the mark it
 # re-asserts the hold every tick, so the quiet hour's release can't undo it. Below VY_DISK_RELEASE_PCT (75) it releases only the
 # queues it held itself (VY_DISK_STATE), and never inside the quiet hour (12:30-13:30Z), whose own release follows. Each hold and

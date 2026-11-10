@@ -341,14 +341,14 @@ def check_split_statics(NB: int) -> None:
         raise ValueError(f"FlashMlaSplit: NB={NB} blocks")
 
 
-def split(o: Ops, S, block_of, q, k, sink=None):
-    """`FlashMlaSplit_v1`'s body, ``block_of(first)`` the bound block."""
+def split(o: Ops, S, tile_of, q, k, sink=None):
+    """`FlashMlaSplit_v1`'s body, ``tile_of(first)`` the bound block."""
     B, NB, BN = o.B, S.NB, S.BN
     check_split_statics(NB)
     nm = l = acc = None
     for b in range(NB):
         kb = k[b * BN:(b + 1) * BN]
-        res = B.call(block_of(True), q, kb) if b == 0 else B.call(block_of(False), q, kb, nm, l, acc)
+        res = B.call(tile_of(True), q, kb) if b == 0 else B.call(tile_of(False), q, kb, nm, l, acc)
         nm, l, acc = res[0], res[1], res[2]
     total = o.add(o.add(l[0], l[1]), o.add(l[2], l[3]))
     empty = o.eq(total, o.word(0))
@@ -374,9 +374,9 @@ def _split_type(S, T: Types = WORD_T):
 def FlashMlaSplit(B, S, q, k, sink=None):
     """One split of one head: NB `FlashMlaBlock_v1`s in ascending block order from the constant state, then the module docstring's
     step 3: the bf16 head output with the sink folded in, or (PARTIAL, one of several splits) the f32 partial and its lse."""
-    def block_of(first):
+    def tile_of(first):
         return bind(FlashMlaBlock, D=S.D, BN=S.BN, FIRST=first, DOT=S.DOT, SCALE=S.SCALE)
-    return split(word_ops(B), S, block_of, q, k, sink)
+    return split(word_ops(B), S, tile_of, q, k, sink)
 
 
 # ---- the combine and the decode ---------------------------------------------------------------------------------------------

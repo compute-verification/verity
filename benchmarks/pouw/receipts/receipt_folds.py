@@ -232,7 +232,7 @@ def e2e_xin_absorb(y: list[int], p: list[int], xa0, xa1) -> list[int]:
 # ---- the folds and what is proved about each -------------------------------------------------------------------------------
 
 #: Per fold: its step, its state, the keys it reads, its rotations into an XOR (None: words enter by addition), the key rule
-#: each schedule draws its multipliers under, and its soundness status (``status`` one of proved, open, pairs-only,
+#: each schedule samples its multipliers under, and its soundness status (``status`` one of proved, open, pairs-only,
 #: retired; ``needs`` the open premises; ``ref`` where it is stated).
 FOLDS = {
     "duo": {"step": duo_step, "state": ("y", "z"), "keys": ("a0", "a1", "k0", "k1"), "xor_rotations": (),

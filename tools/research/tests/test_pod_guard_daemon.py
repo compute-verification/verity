@@ -320,7 +320,7 @@ def test_terminate_fails_when_both_apis_refuse_and_without_a_key_calls_nothing(t
 
 
 def test_daemon_terminates_through_the_real_path_with_the_pod_key(tmp_path):
-    """The 2026-09-24 pod run: with GUARD_TERMINATE_CMD unset the daemon must reach the API with the key from the environ file."""
+    """As on a pod: with GUARD_TERMINATE_CMD unset the daemon must reach the API with the key from the environ file."""
     import sys
 
     api = FakeRunPod()
@@ -440,6 +440,36 @@ def test_fetch_all_with_a_mismatch_writes_no_marker(tmp_path, monkeypatch):
     rec = remote.fetch(local, everything=True)
     assert rec["preserved"] is False and "fetched_marker" not in rec and not (d / ".fetched").exists()
     assert rec["preserve_error"]["mismatched_or_missing"] == ["a.txt"]
+
+
+def _tar_exiting(tmp_path: Path, monkeypatch, rc: int) -> None:
+    """A `tar` first on PATH that archives as the real one does, then exits `rc` (1: GNU tar's "file changed as we read it")."""
+    real = subprocess.run(["sh", "-c", "command -v tar"], capture_output=True, text=True, check=True).stdout.strip()
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "tar").write_text(f'#!/bin/sh\n{real} "$@"\necho "tar: ./resources.jsonl: file changed as we read it" >&2\nexit {rc}\n')
+    (bin_dir / "tar").chmod(0o755)
+    monkeypatch.setenv("PATH", str(bin_dir), prepend=os.pathsep)
+
+
+@pytest.mark.parametrize("everything", [False, True])
+def test_fetch_takes_a_file_still_written_at_the_run_end(tmp_path, monkeypatch, everything):
+    d, local = _fake_machine(tmp_path, monkeypatch, {"status.json": b'{"state": "done", "rc": 0}', "resources.jsonl": b"{}\n"})
+    _tar_exiting(tmp_path, monkeypatch, 1)
+    rec = remote.fetch(local, everything=everything)
+    assert "last_fetch_error" not in rec and rec["last_observed"]["state"] == "done", rec
+    assert json.loads((local / "status.json").read_text())["rc"] == 0
+
+
+def test_fetch_still_fails_on_a_fatal_tar_or_a_missing_run_dir(tmp_path, monkeypatch):
+    d, local = _fake_machine(tmp_path, monkeypatch, {"status.json": b'{"state": "done", "rc": 0}'})
+    with monkeypatch.context() as m:
+        _tar_exiting(tmp_path, m, 2)
+        assert remote.fetch(local)["last_fetch_error"]["rc"] != 0
+    rec = json.loads((local / "remote.json").read_text())
+    rec["remote_run_dir"] = str(tmp_path / "no-such-run")
+    (local / "remote.json").write_text(json.dumps(rec))
+    assert remote.fetch(local)["last_fetch_error"]["rc"] != 0
 
 
 def test_fetch_all_streams_the_run_instead_of_holding_it(tmp_path, monkeypatch):

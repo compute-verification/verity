@@ -7,9 +7,11 @@ whose `+` and `*` are the executable's.
 -/
 module
 
-public import Proofs.Flock.Level3.GF128Field
 public import Mathlib.Algebra.Polynomial.SpecificDegree
-public import Mathlib.Algebra.CharP.Lemmas
+public import Proofs.Flock.Level3.GF128Field
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Mathlib.RingTheory.LocalRing.Basic
 
 @[expose] public section
 

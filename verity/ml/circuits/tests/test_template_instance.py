@@ -1,6 +1,6 @@
 """`Q_template_instance` v0 and `Q_template_instances` v0 (`verity.ml.circuits.partition_object.TemplatePartition`): the object, its digest and
 the evaluation -- units, their instances' gates, inputs and outputs, the derived committed set -- from descriptor bytes, and every
-refusal, against `template_instance_vectors.json`.  `python verity/ml/circuits/tests/test_template_instance.py --write` rewrites it."""
+refusal, against `template_instance_vectors.json`.  Its `--write` rewrites it; `REWRITE` names the command that runs it."""
 from __future__ import annotations
 
 import json
@@ -17,6 +17,8 @@ from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
 
 PATH = Path(__file__).parent / "template_instance_vectors.json"
+REWRITE = ("the vectors differ from the tree's; a change meant to move them rewrites them with "
+           "`uv run python tools/verity/check/pins.py --write verity/ml/circuits/tests/template_instance_vectors.json`")
 V32 = Value(32)
 M32 = (1 << 32) - 1
 
@@ -149,14 +151,14 @@ def live() -> dict:
 
 
 def test_the_descriptors_and_ids(live):
-    assert live["descriptors"] == VECTORS["descriptors"] and live["template_ids"] == VECTORS["template_ids"]
+    assert live["descriptors"] == VECTORS["descriptors"] and live["template_ids"] == VECTORS["template_ids"], REWRITE
     assert SCALE_ID == 'TScale_v1{N=2,C={"f64":"0x1.8000000000000p+0"}}' and Scale.id == "TScale_v1{N=2,C=1.5}"
     assert PO.template_id(Scale) == PO.template_id(SCALE_ID) == SCALE_ID and PO.template_id(Scale.id) == Scale.id
 
 
 @pytest.mark.parametrize("n", range(len(CASES)), ids=[c[0] for c in CASES])
 def test_the_evaluation_from_the_bytes(live, n):
-    assert live["cases"][n] == VECTORS["cases"][n]
+    assert live["cases"][n] == VECTORS["cases"][n], REWRITE
     label, name, q, want = VECTORS["cases"][n]
     assert PO.validate(want["object"]).ok and want["verify"]
     assert _evaluated(PROGRAMS[name], q) == want                                       # the built program agrees with its bytes
@@ -177,11 +179,12 @@ def test_the_mixed_program_commits_the_value_across_units():
 
 @pytest.mark.parametrize("n", range(len(REFUSED)), ids=[r[0] for r in REFUSED])
 def test_the_query_refuses(live, n):
-    assert live["refused"][n] == VECTORS["refused"][n] and VECTORS["refused"][n][3].startswith("('query-inapplicable',)")
+    assert live["refused"][n] == VECTORS["refused"][n], REWRITE
+    assert VECTORS["refused"][n][3].startswith("('query-inapplicable',)")
 
 
 def test_a_program_that_is_not_topological_and_served(live):
-    assert live["order_refused"] == VECTORS["order_refused"] and live["served_unsupported"] == VECTORS["served_unsupported"]
+    assert live["order_refused"] == VECTORS["order_refused"] and live["served_unsupported"] == VECTORS["served_unsupported"], REWRITE
     codes, (detail,) = VECTORS["order_refused"]
     assert codes == ["query-inapplicable"] and detail["node"] == 2 and detail["why"] == "not topological"
     assert VECTORS["served_unsupported"] == ["served-unsupported"]
@@ -191,7 +194,8 @@ def test_a_program_that_is_not_topological_and_served(live):
 
 @pytest.mark.parametrize("n", range(len(MALFORMED)), ids=[m[0] for m in MALFORMED])
 def test_the_object_form(live, n):
-    assert live["malformed"][n] == VECTORS["malformed"][n] and VECTORS["malformed"][n][2] in (["query-params"], ["query-unknown"])
+    assert live["malformed"][n] == VECTORS["malformed"][n], REWRITE
+    assert VECTORS["malformed"][n][2] in (["query-params"], ["query-unknown"])
 
 
 if __name__ == "__main__" and "--write" in sys.argv:

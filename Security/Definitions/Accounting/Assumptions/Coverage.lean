@@ -1,7 +1,8 @@
 module
 
 public import Definitions.Accounting.Slowdown
-public import Mathlib.Basic.ENNReal.Real
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Coverage of efficient methods

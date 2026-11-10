@@ -1,7 +1,40 @@
 module
 
-public import Mathlib
 public import Proofs.Accounting.TS.Session.Lanes.Layer
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # Dense credit counts the served rows (`PouwLiveSlots_v1`, rule A)
@@ -11,7 +44,7 @@ gate-signed request table under the window-open root. Round `s`'s request table 
 `s`'s root (round 0's under round-0-only admission): each round's session decodes its own, so a call's view is its round's
 tables, never round 0's by construction. Both tables are hiding leaves, so credit counts round `s`'s
 served rows `m_s` through one proof a round, every round, of `PouwLiveSlots_v1{T}`
-(`verity/core/protocols/pouw/circuit/live.py`) at the public `m_s`. `T` is the tables' leaf count, the pouw setting
+(`verity/ml/protocols/pouw/circuit/live.py`) at the public `m_s`. `T` is the tables' leaf count, the pouw setting
 `rows`; credit's tile grid is over the window's slot `M ≥ T` (`h1window.slot`, a power of two), and `m_s ≤ T`.
 
 * `liveOk`: **the unit on words** (`circuit.live.live_ok`) at round `s`. `m ≤ T`; the entries (prompt length ≠ 0) are a
@@ -32,7 +65,7 @@ served rows `m_s` through one proof a round, every round, of `PouwLiveSlots_v1{T
 * `dense_credit`, `dense_credit_of_sessions`: **dense credit is `Σ_c m_{s(c)}·n_c·K_c`**. The rows rule A credits, times
   each call's `n·K`, sum to the public rows': over accepted views, then over accepted sessions through the premise.
 * `Dead`, `dead_iff_rows`, `population`: a tile is dead iff every one of its rows is at or past `m`. Its admit bits
-  `[i < m]` are then all 0, so its receipt is `h1tile`'s canonical dead-tile receipt. The draw's population is the live
+  `[i < m]` are then all 0, so its receipt is `h1tile`'s canonical dead-tile receipt. The sample's population is the live
   tiles.
 * `population_work`, `credit_le_work`, `zero_call`, `population_admits`, `dead_not_drawn`, `live_credit`: over that
   population. Its work, `Σ_c ⌈m_c/R⌉·(n_c/C)·R·C·K_c`, is at least the credit. A call with `m = 0` has no unit and earns
@@ -255,7 +288,7 @@ theorem dense_credit_of_sessions {ι σ : Type} (calls : Finset ι) (step : ι �
   sum_congr rfl fun c hc => by
     rw [liveOk_admitted (liveOk_of_accept (hchk c hc) _ (heval c hc) (hok c hc)), hm c hc]
 
-/-! ## Tiles and the draw's population -/
+/-! ## Tiles and the sample's population -/
 
 /-- **Row block `ti` of an `R`-row tile is dead at `m`**: its first row, and so every row, is at or past `m`. -/
 def Dead (R m ti : ℕ) : Prop := m ≤ R * ti
@@ -301,7 +334,7 @@ theorem liveBlocks_card {R M m : ℕ} (hR : 0 < R) (hRM : R ∣ M) (hm : m ≤ M
     omega
   rw [this, card_range]
 
-/-- **The dense draw's population**: each call's live tiles `(c, ti, tj)`, row block `ti` live at the call's public
+/-- **The dense sample's population**: each call's live tiles `(c, ti, tj)`, row block `ti` live at the call's public
 `m c` and column block `tj` one of its `n c / C`, in row-block-major order. -/
 def population {ι : Type} (calls : Finset ι) (R C M : ℕ) (m n : ι → ℕ) : Finset (Σ _ : ι, ℕ × ℕ) :=
   calls.sigma fun c => liveBlocks R M (m c) ×ˢ range (n c / C)
@@ -340,7 +373,7 @@ theorem zero_call {ι : Type} (calls : Finset ι) {R C M : ℕ} (m n : ι → �
   rw [he, h0] at hu
   omega
 
-/-- **No dead tile is in the population**: a tile whose rows are all at or past its call's `m` is never drawn. -/
+/-- **No dead tile is in the population**: a tile whose rows are all at or past its call's `m` is never sampled. -/
 theorem dead_not_drawn {ι : Type} (calls : Finset ι) {R C M : ℕ} (m n : ι → ℕ) (u : Σ _ : ι, ℕ × ℕ)
     (hd : Dead R (m u.1) u.2.1) : u ∉ population calls R C M m n := by
   intro hu
@@ -361,8 +394,8 @@ theorem population_admits {ι σ : Type} (calls : Finset ι) (step : ι → σ) 
 /-- **Dense credit over the live population.** `T` is the round tables' leaf count (the pouw setting `rows`), and `M`,
 at least `T`, the window's slot (`h1window.slot`), whose `M / R` row blocks are credit's tile grid. Where each call's round
 has its `PouwLiveSlots_v1{T}` session accepted at the call's public row `m c` and at its step's round `round (step c)`
-(`hs`: the decoded `s`, so the per-request bound is the call's own round's, not one the prover picks), and the draw's
-population `P` is the live tiles (a dead tile, every row at or past `m c`, never drawn): every `m c` is at most `T`; in
+(`hs`: the decoded `s`, so the per-request bound is the call's own round's, not one the prover picks), and the sample's
+population `P` is the live tiles (a dead tile, every row at or past `m c`, never sampled): every `m c` is at most `T`; in
 the call's round each request holds at most what it `takesAt` that round (its prompt length in the round that admitted
 it, one row in a later round within its cap, none otherwise), so a request decoding there holds at most one slot, and
 `m c` is at most what the round's entries take, so no request's padded rows are credited; the rows rule A credits, times

@@ -1,15 +1,51 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.OpensReads
-public import Proofs.Flock.Soundness.ExecDraw
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+public import Proofs.Flock.Claims.Recursion.RecRecord
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.C3.VStarList.Accepts
+import Proofs.Flock.Claims.Recursion.DeployHonest
+import Proofs.Flock.Claims.Recursion.DeployScope
+import Proofs.Flock.Claims.Recursion.OpensReads
 
 /-!
-# The coins a staged part's check 5 computes `v` at are the coins the coin server's transcript shows
+# The coins a staged part's check 5 computes `v` at are the coins the challenger's live-coin part's transcript shows
 
 Check 5 (`RecCoins.checkResiduals`) computes each rep's `v` at its rounds' coins as the inner session's record holds them:
 `Inner.load` decodes that record (`Record.decode`), and `Inner.rounds r` is its stream `<table>/rep<r>`'s coins, round by
 round (`load_rounds`). `PartComputes` evaluates at the coins the V\* statement's transcript shows (`showsTr recRead`):
-the coin server's record read in its own format (`RecRecord.readFull`). This file ties the two, from the verifier's code
+the challenger's live-coin part's record read in its own format (`RecRecord.readFull`). This file ties the two, from the verifier's code
 alone, with no premise on JSON.
 
 The tie runs through the transcript's JSON, which the recursive setup reads twice (`RecSetup.commits`):
@@ -546,7 +582,7 @@ theorem jsonRounds_both {tr : Json} {rounds : Array Json} {L : List (Option (Lis
 theorem some_beq_some {α : Type} [BEq α] [LawfulBEq α] {a b : α} : ((some a == some b) = true) ↔ a = b := by
   simp
 
-/-- **The coin tie, in the verifier's code**: where `innerCommits` and `checkReads` pass on the coin server's transcript
+/-- **The coin tie, in the verifier's code**: where `innerCommits` and `checkReads` pass on the challenger's live-coin part's transcript
 (`tt`, its JSON `tr`) and the inner session's record (`record`), and `Record.decode` decodes that record, each round
 `m` of the record's stream `name` has the coins of a round of the record `checkReads` reads in its own format
 (`readFull`): of that stream, at round `sp m`, where `sp` is the identity or skips the one split round of a holo
@@ -683,7 +719,7 @@ theorem atC3_record {src : Option RecCoins.Source} {inner : Option RecVStar.Inne
     split <;> rfl
   · subst h; rfl
 
-/-- **The coin tie at a staged part**: the coin server's record `R` that `recRead` reads off the V\* statement
+/-- **The coin tie at a staged part**: the challenger's live-coin part's record `R` that `recRead` reads off the V\* statement
 (`shownOf`), and wherever check 5 loads the inner statement from its source (`Source.atC3`, `Inner.load`), each round
 `m` of rep `r`'s coins is the coins of `R`'s round of rep `r`'s stream at round `sp m`, `sp` the identity or skipping
 the one split round. -/

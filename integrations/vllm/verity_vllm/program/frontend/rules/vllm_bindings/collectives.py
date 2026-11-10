@@ -9,10 +9,9 @@ from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import StaticIndex
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import from_rows, rows_of, shape
+from verity_vllm.program.frontend.rules.common import from_rows, row_value, rows_of, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (active_allreduce_settings, active_target_profile,
                                                                            launch_tokens_of)
-from verity_vllm.program.frontend.rules.vllm_bindings.operands import _row_value
 from verity.ml.definitions.registry import tp_allreduce
 
 
@@ -82,7 +81,7 @@ class AllReduce2Rule(OpRule):
 
     def applies(self, node, ctx):
         for nm, a in (("a", node.args[0]), ("b", node.args[1])):
-            r = _row_value(ctx, a, nm)
+            r = row_value(ctx, a, nm)
             if r:
                 return r
         if shape(ctx, node.args[0]) != shape(ctx, node.args[1]):
@@ -114,7 +113,7 @@ class AllGather2Rule(OpRule):
 
     def applies(self, node, ctx):
         for nm, a in (("a", node.args[0]), ("b", node.args[1])):
-            r = _row_value(ctx, a, nm)
+            r = row_value(ctx, a, nm)
             if r:
                 return r
         if shape(ctx, node.args[0]) != shape(ctx, node.args[1]):
@@ -195,7 +194,7 @@ class AllReduceRule(OpRule):
         if len(parts) <= 2:
             return f"world {len(parts)}: the two-rank collective is AllReduce2 (recorded identity)"
         for i, a in enumerate(parts):
-            r = _row_value(ctx, a, f"part_rank{i}")
+            r = row_value(ctx, a, f"part_rank{i}")
             if r:
                 return r
         shapes = {shape(ctx, a) for a in parts}
@@ -238,10 +237,10 @@ class FusedAllReduceRmsNormRule(OpRule):
     def applies(self, node, ctx):
         parts = _tp_parts(node)
         for i, a in enumerate(parts):
-            if (r := _row_value(ctx, a, f"part_rank{i}")):
+            if (r := row_value(ctx, a, f"part_rank{i}")):
                 return r
         residual, weight, eps = node.args[1:4]
-        if (r := _row_value(ctx, residual, "residual")) or (r := _row_value(ctx, weight, "weight")):
+        if (r := row_value(ctx, residual, "residual")) or (r := row_value(ctx, weight, "weight")):
             return r
         shapes = {shape(ctx, a) for a in parts}
         if len(shapes) != 1 or shape(ctx, residual) not in shapes:
@@ -291,7 +290,7 @@ class AllGatherRule(OpRule):
         if len(parts) <= 2:
             return f"world {len(parts)}: the two-rank collective is AllGather2 (recorded identity)"
         for i, a in enumerate(parts):
-            r = _row_value(ctx, a, f"part_rank{i}")
+            r = row_value(ctx, a, f"part_rank{i}")
             if r:
                 return r
         shapes = {shape(ctx, a) for a in parts}
@@ -327,7 +326,7 @@ class EmbeddingShardRule(OpRule):
 
     def applies(self, node, ctx):
         ids, table, start, end = node.args[:4]
-        r = _row_value(ctx, table, "shard")
+        r = row_value(ctx, table, "shard")
         if r:
             return r
         shp = shape(ctx, table)

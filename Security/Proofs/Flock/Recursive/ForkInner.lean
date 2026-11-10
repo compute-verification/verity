@@ -1,7 +1,24 @@
 module
 
-public import Proofs.Flock.Recursive.Registrants
 public import Proofs.Flock.Recursive.ForkRuns
+public import Proofs.Flock.Recursive.Registrants
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Recursive.Compose
+import Proofs.Flock.Recursive.StageRead
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Recursion: the inner protocol's soundness in fork form, through the recursive audit
@@ -9,7 +26,7 @@ public import Proofs.Flock.Recursive.ForkRuns
 `zk_sessions_recursive_fork_inner` (`Compile`) is `zk_sessions_recursive_fork` with `InnerSoundForkOn` in place of
 `InnerSound`. The chain from `commit_and_prove_upto` to `zk_sessions_recursive_fork` reads `InnerSound` once, at the
 leaves of the recursive prover's own strategy (`commit_and_prove_upto`'s `hZle`), so here it is restated with that use
-as its hypothesis, `InnerAtLeaves`: at every draw whose statement is false, the leaves' average of the indicator that
+as its hypothesis, `InnerAtLeaves`: at every sample whose statement is false, the leaves' average of the indicator that
 the relabelled transcript is accepted and that some outer outcome the leaf reaches accepts and decodes to it is at most
 `εin`.
 
@@ -51,7 +68,7 @@ variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {β : Type}
   {outer : Reg → L.Ω → List (Cm × I.Coin) → Game β}
 
 open Classical in
-/-- **The inner bound at the recursive prover's own leaves**, at the reference openings `ref`: at every draw `ω`, the
+/-- **The inner bound at the recursive prover's own leaves**, at the reference openings `ref`: at every sample `ω`, the
 average over the round coins of the indicator that the statement `x R ω` is false, the inner verifier accepts it on the
 relabelled transcript (the simulated inner prover's, `refStrat`), and some outcome of the outer session the leaf reaches
 accepts (`Acc`) and decodes (`wmsg ∘ dec`) to that transcript, is at most `εin`. -/
@@ -65,7 +82,7 @@ def InnerAtLeaves (σ : Strategy (recGame L Reg I Cm outer)) (Acc : Reg → L.Ω
             (t.map Prod.snd) = relabel (ref ω) t then 1 else 0) (σ.2 ω) ≤ εin
 
 open Classical in
-/-- **The inner bound at the prover's own leaves, at a reading `rd` of the decoded transcript**: at every draw, the
+/-- **The inner bound at the prover's own leaves, at a reading `rd` of the decoded transcript**: at every sample, the
 leaves' average of the indicator that the statement is false and some outer outcome the leaf reaches accepts, decodes to
 a transcript `rd` holds of, and the inner verifier accepts that transcript, is at most `εin`. `InnerAtLeaves` is it at
 `rd` := the relabelled transcript (`InnerAtLeaves.toZ`). -/
@@ -604,7 +621,7 @@ theorem zk_sessions_recursive_fork_on
     exact mul_le_mul' le_rfl hsl
 
 /-- **The inner protocol's soundness in fork form bounds the inner term at the prover's own leaves**, at every choice of
-reference openings, unless the recursive prover has an inner fork (the body of `InnerForkRec`: at some draw and round,
+reference openings, unless the recursive prover has an inner fork (the body of `InnerForkRec`: at some sample and round,
 two continuations of `σ` whose decoded inner transcripts `pick` reads as a collision of `H`).
 
 It reads `InnerSoundForkOn` at the simulated inner prover `refStrat` and at `G` := the inner transcripts `u` such that

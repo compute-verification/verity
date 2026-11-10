@@ -2,6 +2,8 @@ module
 
 public import Definitions.Core.Blocks
 public import Definitions.Pous.Model.StreamedWipe
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The streamed-label wipe on the device model (trusted)
@@ -12,12 +14,12 @@ runs it: the memory challenger streams `n` labels of 512 bits into the device's 
 at a time and reads each label back under a deadline.
 
 * **The labels** (`Labels n`): the table of `n` labels of 512 bits. The deployed labels are SHA-512's PRF of a key the
-  challenger draws and keeps (`prf/sha-512`): `prf K` for a uniform key `K`.
+  challenger samples and keeps (`prf/sha-512`): `prf K` for a uniform key `K`.
 * **The spot reads** (`Reads n k`): `k` indices into the labels, uniform and independent.
 * **The prover's strategy** (`Strategy`): any fill of the device's state from its state at the boundary and the labels,
   with any egress, any answer to each spot read from the device's state when the fill ends, the egress, the reads
   revealed before it in order and its own index, and any state it leaves for the block. Nothing constrains it but its
-  type. The type is what the auditor's devices enforce, each a premise on one party, as Daniel names them: the memory
+  type. The type is what the auditor's devices enforce, each a premise on one party: the memory
   challenger is `Faithful` (it reveals read `j + 1` only once read `j`'s answer arrived on time, so no answer reads a
   later index) and `Secret` (it keeps its key, so nothing of the labels reaches the device but the stream), and the
   site is `Covered` (every bit that leaves the device during the wipe crosses a link a network certifier watches, so the

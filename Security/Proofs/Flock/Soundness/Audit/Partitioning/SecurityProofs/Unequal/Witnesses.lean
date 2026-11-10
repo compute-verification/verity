@@ -1,13 +1,14 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.Partitioning.Model
+import Proofs.Flock.Soundness.Audit.Law
 
 /-!
 # Proofs of three of `Partitioning.Witness`'s instances
 
 `achievability_witness`, `granularity_witness` and `unequal_witness` have the statements of `Witness.achievability`,
 `Witness.granularity` and `Witness.unequal`, word for word. This file imports only `Partitioning.Model`, so `Witness` can
-import it. `Law.subset n n` draws every unit, so every set doing positive work escapes it with probability 0
+import it. `Law.subset n n` samples every unit, so every set doing positive work escapes it with probability 0
 (`meetsTarget_subset_self`).
 -/
 
@@ -23,7 +24,7 @@ theorem log_two_le : Real.log 2 ≤ 1 := by
   have := Real.log_le_sub_one_of_pos (two_pos : (0 : ℝ) < 2)
   linarith
 
-/-- The law drawing every unit meets every positive target. -/
+/-- The sampling design sampling every unit meets every positive target. -/
 theorem meetsTarget_subset_self {n : ℕ} (w : Fin n → ℝ) {C δ : ℝ} (hC : 0 < C) (hδ : 0 ≤ δ) :
     MeetsTarget (Law.subset n n le_rfl) w C δ := fun B hB => by
   have hne : B.Nonempty := by

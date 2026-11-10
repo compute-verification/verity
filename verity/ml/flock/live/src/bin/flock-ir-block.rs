@@ -350,7 +350,7 @@ fn forge_aggregate(inst: &IrInstances, cm: &CutMap, t: &Tables) -> IrInstances {
     })
 }
 
-/// Red-team-flock-2's IR4 file: the tail's eps (its smallest positive constant) x 100, every instance's cut words recomputed
+/// A forged instances file: the tail's eps (its smallest positive constant) x 100, every instance's cut words recomputed
 /// with that tail and every unit's outputs recomputed from its inputs. Returns the file and the forged tail.
 fn forge_eps(inst: &IrInstances, cm: &CutMap, net: &IrUnitNet, t: &Tables) -> (IrInstances, Vec<Op>) {
     let mut tail = cm.tail.clone();

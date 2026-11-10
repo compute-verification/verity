@@ -304,7 +304,7 @@ theorem isRegisteredId_iff (id : String) :
   simp [isRegisteredId]
 
 theorem circuitOf_registered {P : Prog} {c : GateTable} (h : circuitOf P = .ok c) {g : ℕ} (hg : g < gates P) :
-    c.registered[g]! = true ↔ IsRegistered P g := by
+    c.registered[g]! = true ↔ IsBoundAtRegistration P g := by
   obtain ⟨p, ops, w, ⟨⟨sc, hs⟩, -, -⟩, -, hx⟩ := (gateOf_ok P g _).1 ((circuitOf_ok P c h).2.2.2.2 g hg)
   simp only [Prod.mk.injEq] at hx
   obtain ⟨-, -, hq, -⟩ := hx
@@ -400,7 +400,7 @@ theorem thetaStep_error' {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) (
   rw [thetaStep_error, ThetaFault, hN]
   have hb : ∀ g < gates P, (c.isInput[g]! = false ↔ ¬ IsInput P g) := fun g hg => by
     rw [← circuitOf_isInput hc hg]; simp
-  have hq : ∀ g < gates P, (c.registered[g]! = false ↔ ¬ IsRegistered P g) := fun g hg => by
+  have hq : ∀ g < gates P, (c.registered[g]! = false ↔ ¬ IsBoundAtRegistration P g) := fun g hg => by
     rw [← circuitOf_registered hc hg]; simp
   constructor
   · rintro (h | ⟨rfl, g, hg, hlt, hin⟩ | ⟨rfl, g, hg, hlt, hin, hreg⟩ | ⟨rfl, g, hg, hlt, hin, hreg, hm⟩)
@@ -948,7 +948,7 @@ theorem card_filter_fin (N : ℕ) (p : ℕ → Prop) [DecidablePred p] :
 
 /-- The setting of a verdict: the Program's circuit `c`, the checked division `dv`, a declaration `d` the Program lays
 out with the baseline θ names, and a partition `U` that the owners are. -/
-structure Setting (P : Prog) (theta owner : Array Json) (c : GateTable) (dv : Division) (d : Verity.Declaration)
+structure Setting (P : Prog) (theta owner : Array Json) (c : GateTable) (dv : Division) (d : Verity.RegisteredCircuit)
     (n : ℕ) (U : Verity.Partition d.D n) : Prop where
   hc : circuitOf P = .ok c
   hd : divisionOf c theta owner = .ok dv
@@ -958,7 +958,7 @@ structure Setting (P : Prog) (theta owner : Array Json) (c : GateTable) (dv : Di
 
 namespace Setting
 
-variable {P : Prog} {theta owner : Array Json} {c : GateTable} {dv : Division} {d : Verity.Declaration} {n : ℕ}
+variable {P : Prog} {theta owner : Array Json} {c : GateTable} {dv : Division} {d : Verity.RegisteredCircuit} {n : ℕ}
   {U : Verity.Partition d.D n} (S : Setting P theta owner c dv d n U)
 include S
 

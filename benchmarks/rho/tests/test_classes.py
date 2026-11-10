@@ -1,8 +1,8 @@
 """Each class's count against the Kimi K2 numbers its Lean docstring (or E1's draft) states, and the class layer's rules:
 counted sets, premise shares, `Outside`, monotonicity in `k`, and every cited premise listed in `data/premises.toml`.
 
-Lean's overheads are in its cover model's units, `α₀ s / a` with `s = 4.52·10¹⁶` gates and `α₀` forward products per
-gate (0.147, or 0.301 with Dgrad); E1's are `c / (κ a)` at matched compute `c = φ k` with `κ = 6` FLOPs per product.
+Lean's overheads are in its cover model's units, `α₀ s / a` with `s = 4.52·10¹⁶` gates and `α₀ = 0.147` forward
+products per gate; E1's are `c / (κ a)` at matched compute `c = φ k` with `κ = 6` FLOPs per product.
 """
 
 import importlib.util
@@ -28,16 +28,15 @@ from rho.theorem import Budget
 
 K = 2e7
 S = 4.52e16
-FWD, DGRAD = 0.147, 0.301
+FWD = 0.147
 PHI = 6.7e9
 
 #: Kimi K2 full pretraining with every field the classes read, at the values their docstrings use
 KIMI = Profile(
-    name="full", kappa=0.602, state_bits=1.04e12 * 16, b=2.5, b_w=2.5, c_w=2.5, c_a=4, b_a=4, f=4, width=390,
-    beta_x=0.87, legs=512, fanout=37248, per_param=2, vocab=163840, bcol=1, thread_d=10, thread_e=37248, thread_c=2,
-    kappa_forward=0.294, kappa_wgrad=0.294, layers=61, layer_weights=4e8, layer_bits=1.04e12 * 2.5 / 61,
-    thread_k=2e7, entry_width=512, price=2.8, price_max=8, gamma=1, beta_v=0.63, map_width=7168, map_width_min=7168,
-    h_eff=17, b_ps=1, step_tokens=6.7e7)
+    name="full", kappa=0.602, state_bits=1.04e12 * 16, b=2.5, b_w=2.5, c_w=2.5, c_a=4, b_a=4, beta_x=0.87,
+    fanout=37248, thread_d=10, thread_e=37248, thread_c=2, kappa_forward=0.294, kappa_wgrad=0.294, layers=61,
+    layer_weights=4e8, layer_bits=1.04e12 * 2.5 / 61, thread_k=2e7, price=2.8, price_max=8, gamma=1, beta_v=0.63,
+    map_width=7168, map_width_min=7168, h_eff=17, b_ps=1, step_tokens=6.7e7, outputs_per_product=3.1e-4)
 DECLARED = FlopBudget(6.4e16, K)
 WINDOW = FlopBudget(5.5e20, 7.3e11)
 
@@ -50,42 +49,14 @@ def e1(a, k=K):
     return PHI * k / (6 * a)
 
 
-def test_fanout_matches_its_docstrings():
-    assert math.isclose(gates(FWD, classes.fanout(K, 2.5, 512, 37248, 1, 163840, 1)), 8900, rel_tol=0.01)
-    a = classes.fanout(K, 2.5, 512, 37248, 2, 163840, 1)
-    assert math.isclose(a / K - 1, 41026, rel_tol=1e-4)
-    assert math.isclose(gates(DGRAD, a), 1.66e4, rel_tol=0.01)
-    assert math.isclose(gates(FWD, classes.fanout_read(K, 2.5, 4, 512, 37248, 1, 163840, 1)), 3.6e4, rel_tol=0.01)
-    assert math.isclose(gates(DGRAD, classes.fanout_read(K, 2.5, 4, 512, 37248, 2, 163840, 1)), 7.3e4, rel_tol=0.01)
-    assert math.isclose(gates(FWD, K * 37248), 8900, rel_tol=0.01)
-
-
-def test_partial_sums_match_their_docstrings():
-    assert math.isclose(gates(FWD, classes.partial_sum(K, 2.5, 4, 390, 37248)), 6.1e4, rel_tol=0.02)
-    assert math.isclose(gates(FWD, classes.partial_sum_keyed(K, 2.5, 512, 37248, 163840, 1, 512)), 1.6e4, rel_tol=0.02)
-    assert math.isclose(gates(FWD, classes.partial_sum_keyed(K, 2.5, 512, 37248, 163840, 2.5, 512)), 1.9e4,
-                        rel_tol=0.02)
-    r = max(classes.ps_rate(2.5, 1, 390, 37248, 2 * K, i / 1000) for i in range(1001))
-    assert math.isclose(r, 9.6e-5, rel_tol=0.02)
-    assert classes.partial_sum_keyed(K, 2.5, 100, 37248, 163840, 1, 512) == math.inf
-
-
 def test_the_covering_family_matches_its_docstrings():
     assert math.isclose(gates(FWD, classes.chained(K, 2.5, 4)), 166, rel_tol=0.01)
-    assert math.isclose(gates(FWD, classes.covering_additive(K, 2.5, 4)), 660, rel_tol=0.01)
     assert classes.covering(K, 2.5, 4) == (K / 2.5) ** 2 + K
     assert classes.covering(K, 4, 4) == classes.chained(K, 4, 4)
-    mb = 8e6
-    assert math.isclose(gates(FWD, mb * mb), 104, rel_tol=0.01)
-    assert math.isclose(gates(FWD, classes.covering_priced(mb, 16, 6.7, 16)), 104 * 6.7 * 16, rel_tol=0.01)
-    assert math.isclose(gates(FWD, classes.covering_priced(mb, 6.7, 6.7, 16)), 104 * 6.7 ** 2, rel_tol=0.01)
-    assert math.isclose(classes.covering_priced(K, 4, 2.5, 2.5), classes.chained(K, 2.5, 4))
 
 
-def test_the_cover_theorem_is_the_covering_count_at_c_a_one_and_aligned_at_f():
+def test_the_cover_theorem_is_the_covering_count_at_c_a_one():
     assert classes.cover(K, 2.5) == classes.chained(K, 2.5, 1)
-    assert classes.cover_aligned(K, 2.5, 1) == classes.cover(K, 2.5)
-    assert classes.cover_aligned(K, 2.5, 4) == classes.chained(K, 2.5, 4)
 
 
 def _nci_search():
@@ -138,20 +109,16 @@ def test_premise_shares():
 
 
 def test_a_count_on_another_set_is_converted_to_the_profiles_counted_products_and_divided_by_its_share():
-    for name in ("covering-two-costs", "cover-chained"):
-        a = CLASSES[name].allowance(KIMI)(DECLARED)
-        assert math.isclose(a, classes.chained(K, 2.5, 4) * 0.602 / 0.294 * 61 / 60)
+    a = CLASSES["covering-two-costs"].allowance(KIMI)(DECLARED)
+    assert math.isclose(a, classes.chained(K, 2.5, 4) * 0.602 / 0.294 * 61 / 60)
     assert math.isclose(CLASSES["cover"].allowance(KIMI)(DECLARED), classes.cover(K, 2.5) * 61 / 60)
     assert math.isclose(CLASSES["fanout-priced"].allowance(KIMI)(DECLARED),
                         classes.fanout_priced(K, 37248, 0.87) * 0.602 / 0.294 * 61 / 60)
     assert math.isclose(CLASSES["accumulator"].allowance(KIMI)(DECLARED),
                         classes.accumulator(K, 17, 1, 6.7e7) * 0.602 / 0.294)
-    assert counted(KIMI, "keyed") == 1.0
-    assert math.isclose(counted(replace(KIMI, per_param=1), "keyed"), 0.602 / 0.294)
-    assert math.isclose(CLASSES["fanout"].allowance(replace(KIMI, per_param=1))(DECLARED),
-                        classes.fanout(K, 2.5, 512, 37248, 1, 163840, 1) * 0.602 / 0.294)
+    assert counted(KIMI, "kappa") == 1.0 and math.isclose(counted(KIMI, "kappa_forward"), 0.602 / 0.294)
     for arg in CLASSES.values():
-        assert arg.counts in ("kappa", "keyed") or arg.counts in Profile.__dataclass_fields__
+        assert arg.counts in Profile.__dataclass_fields__
 
 
 def test_at_the_serving_block_only_the_linear_counts_cap():
@@ -186,9 +153,9 @@ def test_every_premise_a_class_cites_is_listed_with_a_known_standing():
 
 
 def test_premise_status_is_the_weakest_and_never_strengthens_with_k():
-    assert premise_status(CLASSES["fanout"].cites, K) == "supported"
-    assert premise_status(CLASSES["fanout-read"].cites, K) == "contested"
-    assert premise_status(CLASSES["partial-sum"].cites, WINDOW.inputs) == "refuted"
+    assert premise_status(CLASSES["cover"].cites, K) == "supported"
+    assert premise_status(CLASSES["threaded"].cites, K) == "assumed"
+    assert premise_status(CLASSES["fanout-priced"].cites, WINDOW.inputs) == "contested"
     assert premise_status(("Nci.Guarantees.CoveringBound",), K) == "supported"
     for arg in CLASSES.values():
         s = [STANDINGS.index(premise_status(arg.cites, 10 ** e)) for e in range(4, 13)]

@@ -15,6 +15,7 @@ import math
 
 import numpy as np
 
+from ..registry.torch_train import SM120_SMS, SM120_THREADS
 from .derived_rows import as_f32, as_u32, bf16_to_f32_words, f2fp_bf16, fma_rn
 
 U32 = np.uint32
@@ -346,46 +347,57 @@ NROWS_PER_THREAD = 10
 EMBEDDING_FEATURE_MAX = 3072
 
 
+def _scalar_t(g) -> tuple:
+    """The gradient g's words as (g, its f32 words, the store of an f32 word as scalar_t): bf16 words (uint16) widen and store
+    by F2FP; f32 words (uint32) are their own."""
+    g = np.asarray(g)
+    if g.dtype == np.uint16:
+        return g, f32, bf16
+    if g.dtype == U32:
+        return g, (lambda x: np.asarray(x, U32)), (lambda x: np.asarray(x, U32))
+    raise TypeError(f"embedding gradient words are uint16 (bf16) or uint32 (f32), not {g.dtype}")
+
+
 def embedding_backward_sort(t, g, entries) -> np.ndarray:
-    """``embedding_dense_backward_cuda``'s sort path, deterministic, for the given entries: rows of (M,) ids t and (M, H) bf16
-    gradients g. ``radix_sort_pairs`` of (id, position) is stable, so an entry's segment is its positions in order;
-    ``compute_grad_weight`` sums each NROWS_PER_THREAD of them from +0 and ``sum_and_scatter`` the partials from +0, stored as
-    bf16. Returns (len(entries), H) bf16."""
-    t, g = np.asarray(t, U32).reshape(-1), np.asarray(g, np.uint16)
+    """``embedding_dense_backward_cuda``'s sort path, deterministic, for the given entries: rows of (M,) ids t and (M, H)
+    gradients g, bf16 words or f32 words (`_scalar_t`). ``radix_sort_pairs`` of (id, position) is stable, so an entry's segment
+    is its positions in order; ``compute_grad_weight`` sums each NROWS_PER_THREAD of them from +0 in f32 and
+    ``sum_and_scatter`` the partials from +0, stored as g's type. Returns (len(entries), H) words of g's type."""
+    t, (g, wide, store) = np.asarray(t, U32).reshape(-1), _scalar_t(g)
     order = np.argsort(t, kind="stable")
-    out = np.zeros((len(entries), g.shape[1]), np.uint16)
+    out = np.zeros((len(entries), g.shape[1]), g.dtype)
     for k, e in enumerate(entries):
         seg = order[t[order] == e]
         tot = np.zeros(g.shape[1], U32)
         for a in range(0, len(seg), NROWS_PER_THREAD):
             p = np.zeros(g.shape[1], U32)
             for i in seg[a:a + NROWS_PER_THREAD]:
-                p = add(p, f32(g[i]))
+                p = add(p, wide(g[i]))
             tot = add(tot, p)
-        out[k] = bf16(tot)
+        out[k] = store(tot)
     return out
 
 
 def embedding_backward_feature(t, g, entries) -> np.ndarray:
     """``embedding_backward_feature_kernel`` for the given entries: per chunk of 32 consecutive positions, the first position
-    holding the entry is the leader, whose f32 gradient adds the chunk's later ones in order; ``grad_weight += bf16(sum)`` is
-    bf16(f32(grad_weight) + f32(bf16(sum))), from +0."""
-    t, g = np.asarray(t, U32).reshape(-1), np.asarray(g, np.uint16)
-    out = np.zeros((len(entries), g.shape[1]), np.uint16)
+    holding the entry is the leader, whose f32 gradient adds the chunk's later ones in order, then ``grad_weight +=
+    scalar_t(sum)`` from +0: for bf16 words bf16(f32(grad_weight) + f32(bf16(sum))), for f32 words grad_weight + sum."""
+    t, (g, wide, store) = np.asarray(t, U32).reshape(-1), _scalar_t(g)
+    out = np.zeros((len(entries), g.shape[1]), g.dtype)
     for k, e in enumerate(entries):
         for a in range(0, len(t), 32):
             peers = a + np.flatnonzero(t[a:a + 32] == e)
             if len(peers):
-                s = f32(g[peers[0]])
+                s = wide(g[peers[0]])
                 for i in peers[1:]:
-                    s = add(s, f32(g[i]))
-                out[k] = bf16(add(f32(out[k]), f32(bf16(s))))
+                    s = add(s, wide(g[i]))
+                out[k] = store(add(wide(out[k]), wide(store(s))))
     return out
 
 
 def embedding_dense_backward(t, g, entries) -> np.ndarray:
-    """``embedding_dense_backward_cuda`` (``padding_idx`` -1, no ``scale_grad_by_freq``): the feature kernel up to 3072 ids,
-    else the sort path."""
+    """``embedding_dense_backward_cuda`` (``padding_idx`` -1, no ``scale_grad_by_freq``) on bf16 or f32 gradient words: the
+    feature kernel up to 3072 ids, else the sort path."""
     f = embedding_backward_feature if np.size(t) <= EMBEDDING_FEATURE_MAX else embedding_backward_sort
     return f(t, g, entries)
 
@@ -395,8 +407,6 @@ NORM_LANES = NORM_THREADS * ILP
 F32_ONE, BF16_ONE = 0x3F800000, 0x3F80
 #: f32(1e-6), clip_grad's ``total_norm + 1e-6``
 EPS_1E6 = 0x358637BD
-#: the largest L `vector_norm` reduces in one CTA without a global reduce (values per thread below 256)
-VECTOR_NORM_MAX = 255 * 512
 
 
 def sqrt(a) -> np.ndarray:
@@ -412,17 +422,12 @@ def block_reduce_sum(v) -> np.ndarray:
     return warp_reduce(np.concatenate([w, np.zeros_like(w)], axis=-1), add)
 
 
-def lpnorm_lane(c: int, aligned: bool) -> tuple[int, int]:
-    """(thread, accumulator) of a chunk's lane c, its elements 2048j + c: (c // 4, c % 4) on LpNormFunctor's 4-vector path,
-    else (c % 512, c // 512)."""
-    return (c // ILP, c % ILP) if aligned else (c % NORM_THREADS, c // NORM_THREADS)
-
-
 def lpnorm_chunks(x, aligned: bool | None = None) -> np.ndarray:
     """`LpNormFunctor<BFloat16, L2>`'s f32 partial of each 65536-element chunk of one tensor's bf16 words x. Chunk element
-    2048j + c is lane c's j-th; each lane's ``acc = fma(x, x, acc)`` from +0 in j's order is accumulator `lpnorm_lane` of its
-    thread, on the 4-vector path when numel % 4 == 0 and the pointer is 8-byte aligned (``aligned``, by default numel % 4 == 0:
-    the caching allocator's pointers are aligned); each thread's ((((0 + a0) + a1) + a2) + a3), then `block_reduce_sum`.
+    2048j + c is lane c's j-th; each lane's ``acc = fma(x, x, acc)`` from +0 in j's order is accumulator c % 4 of thread c // 4
+    on the 4-vector path, taken when numel % 4 == 0 and the pointer is 8-byte aligned (``aligned``, by default numel % 4 == 0:
+    the caching allocator's pointers are aligned), else accumulator c // 512 of thread c % 512; each thread's
+    ((((0 + a0) + a1) + a2) + a3), then `block_reduce_sum`.
     Elements past the end are +0: every partial is +0, positive, +inf or NaN, to which adding +0 changes nothing."""
     x = np.asarray(x, np.uint16).reshape(-1)
     n = x.size
@@ -465,44 +470,69 @@ def _last_pow2(n: int) -> int:
     return 1 << (n.bit_length() - 1)
 
 
-def vector_norm_config(L: int) -> tuple[bool, int]:
-    """Reduce.cuh's ``setReduceConfig`` for one output of L contiguous inputs: (vectorize_input, block_width): vectorized when
-    L >= 128, block_width the last power of two of L // 4 (vectorized) or L, at most 512; one row of threads."""
+def reduce_config(L: int) -> tuple[bool, int, int]:
+    """Reduce.cuh's ``setReduceConfig`` for one output of L >= 1 contiguous inputs on the RTX PRO 6000 (sm_120):
+    (vectorize_input, block_width, CTAs). Vectorized when L >= 128, block_width the last power of two of L // 4 (vectorized) or
+    L, at most 512; one row of threads. From 256 values a thread (``ceil(L / block_width)``) the input is split across CTAs:
+    the device's grid of such CTAs (188 multiprocessors of 1536 threads: 564 of 512), clamped to ``ceil(values / 256)`` ..
+    ``ceil(values / 16)``. Up to L = 4,620,288 (9,024 values a thread) that is ``ceil(values / 16)``, the same on any GPU whose
+    grid is at least as large; past it the multiprocessor count sets it."""
     vec = L >= 128
-    return vec, min(_last_pow2(L // 4 if vec else L), 512)
+    bw = min(_last_pow2(L // 4 if vec else L), 512)
+    vpt = -(-L // bw)
+    if vpt < 256:
+        return vec, bw, 1
+    grid = SM120_SMS * (SM120_THREADS // bw)
+    return vec, bw, min(max(grid, -(-vpt // 256)), -(-vpt // 16))
 
 
-def vector_norm(h) -> tuple[int, int]:
-    """``torch.linalg.vector_norm(h, 2)`` of L contiguous bf16 words at an aligned pointer, 1 <= L <= VECTOR_NORM_MAX:
-    `reduce_kernel` with ``NormTwoOps<BFloat16, float, BFloat16>``, ``acc = fma(d, d, acc)``. Thread x's four accumulators
-    from +0: vectorized, its 4-vectors x + bw r while their last element is below L, element i into accumulator i, then the
-    tail element L - L % 4 + x into accumulator 0; else its elements x + bw m into accumulator m % 4. Each thread's
-    ((a0 + a1) + a2) + a3, the tree over the bw threads (`block_x_reduce`, halves added), sqrt.rn: (the f32, its bf16)."""
-    x = f32(np.asarray(h, np.uint16).reshape(-1))
+def reduce_all(x, square: bool) -> int:
+    """One output of `reduce_kernel` over the L contiguous f32 words x (a bf16 tensor's widened) at an aligned pointer, before
+    its projection: ``NormTwoOps``' ``acc = fma(d, d, acc)`` (``square``) or sum's ``acc + d``, every accumulator from +0, at
+    `reduce_config`'s launch. Thread g = c bw + t (t the lane of CTA c) has four accumulators: vectorized, its 4-vectors
+    g + bw · CTAs · r while their last element is below L, element i into accumulator i, then CTA 0's tail element
+    L - L % 4 + t into accumulator 0; else its elements t + bw m into accumulator m % 4. Each thread's ((a0 + a1) + a2) + a3,
+    each CTA's tree over its bw threads (`block_x_reduce`, halves added). Past one CTA, the last CTA's lane t adds
+    ``0 + p[t] + p[t + bw] + ...`` of the CTAs' partials p, then its tree."""
+    x = np.asarray(x, U32).reshape(-1)
     L = x.size
-    if not 1 <= L <= VECTOR_NORM_MAX:
-        raise ValueError(f"vector_norm models 1 <= L <= {VECTOR_NORM_MAX}, not {L}")
-    vec, bw = vector_norm_config(L)
-    t = np.arange(bw)
-    acc = np.zeros((ILP, bw), U32)
+    vec, bw, ctas = reduce_config(L)
+    T = bw * ctas
+    t = np.arange(T)
+    acc = np.zeros((ILP, T), U32)
 
     def step(a, e):
         d = x[np.minimum(e, L - 1)]
-        return np.where(e < L, fma(d, d, a), a)
+        return np.where(e < L, fma(d, d, a) if square else add(a, d), a)
 
     if vec:
-        for r in range(-(-(L // ILP) // bw)):
-            v = t + bw * r
+        for r in range(-(-(L // ILP) // T)):
+            v = t + T * r
             for i in range(ILP):
                 acc[i] = np.where(v < L // ILP, step(acc[i], ILP * v + i), acc[i])
         acc[0] = step(acc[0], L - L % ILP + t)
     else:
         for m in range(-(-L // bw)):
             acc[m % ILP] = step(acc[m % ILP], t + bw * m)
-    s = add(add(add(acc[0], acc[1]), acc[2]), acc[3])
-    while s.size > 1:
-        s = add(s[:s.size // 2], s[s.size // 2:])
-    f = sqrt(s).reshape(-1)
+    s = add(add(add(acc[0], acc[1]), acc[2]), acc[3]).reshape(ctas, bw)
+    while s.shape[1] > 1:
+        s = add(s[:, :s.shape[1] // 2], s[:, s.shape[1] // 2:])
+    p = s[:, 0]
+    if ctas > 1:
+        w = np.zeros(bw, U32)
+        for j in range(0, ctas, bw):
+            k = min(bw, ctas - j)
+            w[:k] = add(w[:k], p[j:j + k])
+        while w.size > 1:
+            w = add(w[:w.size // 2], w[w.size // 2:])
+        p = w
+    return int(p[0])
+
+
+def vector_norm(h) -> tuple[int, int]:
+    """``torch.linalg.vector_norm(h, 2)`` of L contiguous bf16 words at an aligned pointer: `reduce_kernel` with
+    ``NormTwoOps<BFloat16, float, BFloat16>`` (`reduce_all`, squares), sqrt.rn: (the f32, its bf16)."""
+    f = sqrt(U32(reduce_all(f32(np.asarray(h, np.uint16).reshape(-1)), square=True))).reshape(-1)
     return int(f[0]), int(bf16(f)[0])
 
 

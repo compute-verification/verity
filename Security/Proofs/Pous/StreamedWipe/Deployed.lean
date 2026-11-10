@@ -1,8 +1,8 @@
 module
 
-public import Mathlib.Analysis.Complex.ExponentialBounds
-public import Mathlib.Data.Nat.Choose.Bounds
-public import Proofs.Pous.StreamedWipe.Bound
+public import Definitions.Pous.Guarantees.StreamedWipe
+import Mathlib.Analysis.Complex.ExponentialBounds
+import Proofs.Pous.StreamedWipe.Bound
 
 /-!
 # The streamed-label wipe at 2.6 TB and 74,000 challenges

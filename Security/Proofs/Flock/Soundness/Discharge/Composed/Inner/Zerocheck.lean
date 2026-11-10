@@ -1,6 +1,10 @@
 module
 
 public import Proofs.Flock.Level3
+public import Proofs.Flock.Level3.Nodes
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Level3.Pinned
 
 /-!
 # The clear zerocheck is complete at every coin with `r_j ≠ 1`

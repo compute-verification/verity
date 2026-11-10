@@ -1,6 +1,5 @@
 module
 
-public import Identity.Domains
 public import Identity.Sha512
 public import Identity.Tagged
 

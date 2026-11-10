@@ -60,7 +60,7 @@ def table_rows(inst: bytes, text: str, port: str, n: int) -> tuple[list[list[int
 
 def forge(stmt: Path, inner: Path, port: str, out: Path) -> dict:
     """`out/<case>` (honest, bc, stmt, value: the module docstring) from the statement `stmt`; what each changed."""
-    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
+    from verity.core.protocols.spot.one_stage import registered as RG
     from verity_flock import rec_outer as O
     from verity_flock import circuit as FC
 
@@ -220,8 +220,9 @@ def main() -> int:
     inner = sorted((dd / "inner").glob("s[0-9]*"), key=lambda p: int(p.name[1:]))[-1]
     (n,) = [p.name[4:-4] for p in (dd / "stage").glob("pub-*.bin")]
     inner_flags = ["--rec-inner-circuit", str(dd / "stage/circuit.txt"), "--rec-inner-public", str(dd / f"stage/pub-{n}.bin"),
-                   "--rec-inner-partition", str(dd / "stage/partition.json"), "--rec-inner-statement",
-                   "verity/flock-circuit+plain-leaves", "--rec-inner-statement-coins", "os", "--rec-inner-draw",
+                   "--rec-inner-partition", str(dd / "stage/partition.json"), "--rec-inner-program",
+                   str(dd / "stage/program.json"), "--rec-inner-statement",
+                   "verity/flock-circuit+plain-leaves", "--rec-inner-draw",
                    str(dd / "stage/draw.json"), "--rec-inner-session", str(inner / "session"), "--rec-inner-transcript",
                    str(inner / "public.json")]
     sess = {s: dd / "v-sess" / s for s in sorted({CASES[k][0] for k in kinds})}

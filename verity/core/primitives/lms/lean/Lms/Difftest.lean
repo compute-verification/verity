@@ -1,7 +1,8 @@
 module
 
 public import Lms.Verify
-public import Lean.Data.Json
+public import Lean.Data.Json.FromToJson.Basic
+public import Lean.Data.Json.Parser
 
 /-!
 # The difftest: LMS verification against `lms.py`, on generated keys and signatures

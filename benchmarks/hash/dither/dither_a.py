@@ -8,13 +8,13 @@ z/y records under round s's root before coin s (the receipts need no z of their 
 arm outside the statement's order (-so), which this module's arms all are.
 
 Serving stream, per int8-exact linear (`dithera::mm`, one op opaque to Inductor): exactlin's quantizer, which also stores
-the call's live rows and scales (rows < m, unless the step's flags say no-write) into the window's A slot
+the call's live rows and scales (rows < m, unless the step's flags say no-write) into the execution phase's A slot
 (`exactlin_quant_rows_dithera`); then exactlin's GEMM at exactlin's config for the call (`exactlin.pick`), whose
-epilogue stores z = X W^T into the window's z slot (rows < m; rows m to T zero, from extra row tiles past M) beside
+epilogue stores z = X W^T into the execution phase's z slot (rows < m; rows m to T zero, from extra row tiles past M) beside
 y = dequant(z), exact-fused's y bit for bit (`dithera_mm`, `dithera_mm_tma`).
 
-Side stream, forked after the quantizer (it reads only window-owned buffers): the call's A table (`h1c_a_call`, the
-window's form: DITHER_A_FORM, 3 unless set), its seeds (h1r version 0, from the window's salt and root(A_j), root(B_j))
+Side stream, forked after the quantizer (it reads only execution-phase-owned buffers): the call's A table (`h1c_a_call`, the
+execution phase's form: DITHER_A_FORM, 3 unless set), its seeds (h1r version 0, from the execution phase's salt and root(A_j), root(B_j))
 and its receipts of the noised product T = (A + N_A)(B + N_B)^T only, no peel and no z: h1r's block or split form per
 call (`unit="h1r"`: versions 3 and 4, wide where the call's column tiles outnumber the SMs, as dither-1s-mix's units)
 or h1u.cu's kh_unit_ws (`unit="kh"`), or the K split build's kh_one (`unit="hbk"`, h1k where the call's live units
@@ -24,11 +24,11 @@ staging receipts into the plan's, which the receipt trees commit, unless the ste
 and under F_FAULT flips bit FAULT_SHIFT of word 0 of unit 0's receipt of every call.  The side stream joins the serving
 stream at the forward's last call, and under piecewise graphs at every qkv call too (each piece's capture must join its
 forks, and a piece ends at an attention).  Between steps dither_one's DitherState builds the admit and z tables, the step
-trees, the round and the receipt trees, as dither-1s's: the A table before the call's units, z before the draw, the
+trees, the round and the receipt trees, as dither-1s's: the A table before the call's units, z before the sample, the
 step and receipt trees between steps, and nothing waits on the side stream but those.  With z="zy" (the arms' -zy) z
-is committed as the per-unit z/y leaves instead of the window's row z tables: the epilogue writes one record a 32 x 32 unit (its z,
+is committed as the per-unit z/y leaves instead of the execution phase's row z tables: the epilogue writes one record a 32 x 32 unit (its z,
 then its y = dequant(z); a slot past m is zero codes under s_a = +0, so its z is 0 and its y h1zy's dq(0, +0, s_w), as
-`scaled_mm_zy`'s) and the window builds every call's leaf table between steps in the row z tables'
+`scaled_mm_zy`'s) and the execution phase builds every call's leaf table between steps in the row z tables'
 place, beside the receipt trees, each root the call's leaf of the z-step tree, so the round over them still comes before
 the sample (every leaf in its registered root before the sampling coin, nothing written after it).  With ao="a" (the arms' -ao) the
 A tables run on a third stream above the units' priority: A_w waits on its quantizer and the units of call w on
@@ -39,11 +39,11 @@ same on NA_MULTI A streams, call w's on stream w % NA_MULTI, since no call's tab
 counter is in its own prefix words), and a join waits on every A stream used since the last; ao="mn" (-aomn; hbk
 and hbr) is "ms" with each call's noise there too, after its seeds (kh_one_noise into a ring of NA_MULTI workspaces,
 the side stream's kh_one_units reading it), so the side stream runs the units alone.  With pt=True (-pt) the
-window builds the receipt trees and the admit tables between steps on streams of their own (`DitherState.tree_streams`).
+execution phase builds the receipt trees and the admit tables between steps on streams of their own (`DitherState.tree_streams`).
 With ls=True (-ls) each step's seeds read the live salt of the round before it (`DitherState.step_salt`).
 The round's leaves are a-step, admit-step, z-step, then y-step (under "zy") and receipt-step (`dither_one.ROUND_EXTRA`).
 Under "zy" the serving stream copies each call's served y, the bytes the next layer reads, into y records after its GEMM
-(`dithera_ycommit`, dq(0, +0, s_w) past m as the records'); between steps the window builds the served y's tables, whose
+(`dithera_ycommit`, dq(0, +0, s_w) past m as the records'); between steps the execution phase builds the served y's tables, whose
 roots are the y-step leaves, and a y table over the zy records' y halves, and a call whose two roots differ refuses its
 step. The
 receipt-step leaf is the calls' receipt-table roots, so the round recorded before the next coin fixes the receipts;
@@ -58,14 +58,14 @@ step's noise read (the statement's order needs the units after their round's coi
 `check` on the gate, control and fault captures (each step's buffers 0xA5 before its kernels wrote them): every call's
 A, admit and z roots and the round against commit.py; z = A B^T (int_mm, the A the A table committed) on every call and
 zero past m; the served y (dumped) = dequant(z); every record's y (-zy) = dequant(z) at s_a, and dq(0, +0, s_w) past m,
-as the served y's records; every receipt = h1r v1's on the saved slots under the window's salt and
+as the served y's records; every receipt = h1r v1's on the saved slots under the execution phase's salt and
 the CPU's roots (another unit implementation); three units' receipts by H1V3's Definition on the CPU (`h1v3_unit`), and
 their receipts and z by H1V3's own code with the peel (`h1v3_itself`: this source's h1tile unless DITHER_H1V3_TREE names a
 tree; one without the peel is refused).  The control (nothing written: the A slot, z, receipts) must be refused on z and on the receipts; the
 fault must be refused on the receipts at exactly the flipped words, z and y untouched; "fault_y" (bit 0 of every call's
 served y[0, 0] flipped in place) must be refused at run time on every call's y root, every other commitment kept; and
 "fault_rr" (the round recorded without the receipt roots) must be refused on the receipt-step leaf and the round alone.
-With DITHER_LANE_REFS the gate's check also holds the step's drawn leaves' lane partials (served_h1/partials.py, on the
+With DITHER_LANE_REFS the gate's check also holds the step's sampled leaves' lane partials (served_h1/partials.py, on the
 cpu and the served h1u build's kh_lanes) to each other and to the receipts, and to SERVE-REG's gated lane
 (`lane_refs.served`): in the gate (=1), or after serving from the records it saves (=PATH, `lane_refs.py PATH`).
 """
@@ -74,6 +74,7 @@ from __future__ import annotations
 import ctypes as C
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
@@ -83,16 +84,23 @@ import triton.language as tl
 import dither_fused as DF
 import dither_one as DO
 import forms as F
-from dither_fused import CM, CR, H1R, Call, unwords
 import h1c as H1CM
+from dither_fused import CM, CR, H1R, Call, unwords
 from h1c import Dom, Tab
-from hb_side import auto_j
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "exactlin"))
 import exactlin as EL
 from verity_config.settings import of
 
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+
 settings = of(__file__)
+
+
+def auto_j(units: int, nb: int, sms: int) -> int:
+    """The largest J (noise chunks a lane) that still leaves about 64 warps an SM."""
+    return max(1, min(32, (units * nb) // (32 * sms * 64)))
 
 
 def arm_label() -> dict:
@@ -109,7 +117,7 @@ UNITS = ("h1r", "kh", "hbk", "hbr"); KONE = ("hbk", "hbr")
 # z's commitment: "row" each slot's N int32 a hiding leaf (dither_one's z table, built between steps); "zy" the per-unit
 # leaf: one hiding leaf a credited UR x UC unit holding its z (int32) then its y = dequant(z)
 # (bf16), past m z 0 and y dq(0, +0, s_w) (h1zy's empty slot), which the epilogue writes as one record a unit and the
-# window commits between steps (ZY_KIND, provisional until INT-TIE names the fields); "none" no z stored
+# execution phase commits between steps (ZY_KIND, provisional until INT-TIE names the fields); "none" no z stored
 # and no z table, y only: the leaves'
 # cost floor, never credited
 ZMODES = {"none": 0, "row": 1, "zy": 2}
@@ -123,7 +131,7 @@ ZY_KIND = "zy-unit-table"
 # records' y halves) in this one domain and label, so their roots are equal exactly when the bytes are
 Y_KIND = "y-unit-table"
 ZY1_ENV = "DITHER_ZY1"
-# "1": the z/y and y tables' rows in a row tile past m take their x from `dead_rows` (hashed once a window, from the
+# "1": the z/y and y tables' rows in a row tile past m take their x from `dead_rows` (hashed once an execution phase, from the
 # bytes such a row holds) and hash no segments; the same leaves and roots
 ZDEAD_ENV = "DITHER_ZDEAD"
 # "1" (-zy under DITHER_ZDEAD): the compare of the served y with the records' y halves made on their bytes in
@@ -165,7 +173,7 @@ def exactlin_quant_rows_dithera(x_ptr, q_ptr, s_ptr, slot_ptr, scale_ptr, S_ptr,
     q = tl.minimum(tl.maximum(q, -127), 127).to(tl.int8)
     tl.store(q_ptr + row * stride_q + offs, q, mask=mask)
     tl.store(s_ptr + row, s)
-    # the window's A slot: S = (parity, m, pad, flags), F_NW_TILES = 2
+    # the execution phase's A slot: S = (parity, m, pad, flags), F_NW_TILES = 2
     m = tl.load(S_ptr + 1)
     flags = tl.load(S_ptr + 3)
     if (row < m) & ((flags & 2) == 0):
@@ -179,7 +187,7 @@ def _dithera_epilogue(acc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, offs_m, o
     mask_m = offs_m < M
     mask_n = offs_n < N
     EL._epilogue(acc, sa_ptr, sb_ptr, c_ptr, offs_m, offs_n, mask_m, mask_n, stride_cm)
-    if (flags & 1) != 0:    # F_DUMP: the served y into the window's dump too
+    if (flags & 1) != 0:    # F_DUMP: the served y into the execution phase's dump too
         EL._epilogue(acc, sa_ptr, sb_ptr, d_ptr, offs_m, offs_n, mask_m, mask_n, N)
     if ZL != 0:
         if (flags & 2) == 0:    # F_NW_TILES: no z (nor y leaf)
@@ -388,7 +396,8 @@ class Side:
     def label(self) -> dict:
         return F.form_of("dither-a", self.z, self.in_order, self.unadopted(), self.adopted())
 
-    def __init__(self, win: DO.DitherState, unit: str, h1u: str | None, z: str = "row", ao: str = "", pt: bool = False):
+    def __init__(self, win: DO.DitherState, unit: str, h1u: str | None, z: str = "row", ao: str = "",
+                 pt: bool = False) -> None:
         if unit not in UNITS:
             raise ValueError(f"dither-a's unit: one of {UNITS}, not {unit!r}")
         if ao not in AO or (ao in AO_SEEDS and unit == "h1r") or (ao == "mn" and unit not in KONE):
@@ -435,7 +444,7 @@ class Side:
         self.zy: list[torch.Tensor] = []
         self.ysv: list[torch.Tensor] = []
         if z != "row":
-            # the window's row z tables are never built: under "zy" its z/y leaf tables are, between steps in their
+            # the execution phase's row z tables are never built: under "zy" its z/y leaf tables are, between steps in their
             # place
             zset, build = win.pre["z"], win.c.build
             win.c.build = lambda st, step, domains=True: None if st is zset else build(st, step, domains)
@@ -518,7 +527,8 @@ class Side:
             self.ys = torch.empty((win.t, nmax), dtype=torch.bfloat16, device=dev)
             self.s_unit = torch.zeros_like(win.S)
 
-    def gemm(self, w: int, xq: torch.Tensor, s_a: torch.Tensor, wt: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor):
+    def gemm(self, w: int, xq: torch.Tensor, s_a: torch.Tensor, wt: torch.Tensor, s_w: torch.Tensor,
+             y: torch.Tensor) -> None:
         win = self.win
         M, k = xq.shape
         n = wt.shape[0]
@@ -569,13 +579,13 @@ class Side:
 
     def dead_rows(self) -> list[dict]:
         """$DITHER_ZDEAD's `Tab` fields, each call's {"zy": its z/y table's, "y": its y tables'}: a row tile past m (the
-        window's `live` 0) holds z 0 and y dq(0, +0, s_w) in every step, so each column tile's x is hashed here once."""
+        execution phase's `live` 0) holds z 0 and y dq(0, +0, s_w) in every step, so each column tile's x is hashed here once."""
         from verity_vllm.engine import int8_exact as E
         win, out = self.win, []
         for w in range(win.L):
             (ur, uc), n = self.unit_of[w], win.nk[w][0]
             if ur != 32:
-                raise RuntimeError(f"${ZDEAD_ENV}: the window's live flags are 32-row blocks, linear {w}'s units {ur} rows")
+                raise RuntimeError(f"${ZDEAD_ENV}: the execution phase's live flags are 32-row blocks, linear {w}'s units {ur} rows")
             pad = E.dequantize(torch.zeros((1, n), dtype=torch.int32, device=win.dev),
                                torch.zeros(1, dtype=torch.float32, device=win.dev), win.sw[w]).view(torch.int16)
             pad = pad.reshape(n // uc, 1, uc).expand(n // uc, ur, uc).cpu().numpy().astype("<i2")
@@ -585,9 +595,9 @@ class Side:
         return out
 
     def y_leaves(self) -> None:
-        """Between steps (the window's `before_mid`): the served y's tables, whose roots are the round's y-step leaves,
+        """Between steps (the execution phase's `before_mid`): the served y's tables, whose roots are the round's y-step leaves,
         and the units' y tables (under DITHER_ZY1 built with the z tables); `ybad` the calls whose two roots differ (a
-        refused window); under YCMP_ENV, at a step no capture reads, the calls `dithera_ycommit` flagged."""
+        refused execution phase); under YCMP_ENV, at a step no capture reads, the calls `dithera_ycommit` flagged."""
         win = self.win
         roots = self.ycmp is None or win.cap is not None
         if not self.zy1:
@@ -607,7 +617,7 @@ class Side:
             self.ycmp.zero_()
 
     def seeds(self, w: int, st: int) -> int:
-        """kh's, hbk's and hbr's seeds of call w (h1r version 0), from the window's salt and the call's A root."""
+        """kh's, hbk's and hbr's seeds of call w (h1r version 0), from the execution phase's salt and the call's A root."""
         win = self.win
         return win.r.lib.h1r_launch(win.plan.table.data_ptr() + win.call_bytes * w, 1, win.units[w], self.ks1[w],
                                     win.salt.data_ptr(), win.step_base.data_ptr(), win.plan.seeds.data_ptr(),
@@ -845,13 +855,13 @@ _LIB.impl("mm", _mm_cuda, "CUDA")
 
 
 @torch.library.register_fake(f"{LIB}::mm")
-def _mm_fake(x, w, s_w, idx):
+def _mm_fake(x: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, idx: int) -> torch.Tensor:
     return x.new_empty((x.shape[0], w.shape[0]), dtype=torch.bfloat16)
 
 
 def patch(t: int, h1c: str, h1o: str, unit: str = "h1r", h1u: str | None = None, key: bytes | None = None,
           z: str = "row", ao: str = "", pt: bool = False, ls: bool = False) -> None:
-    """dither_one's patch (its weights' registry, the window's libraries), then every int8-exact linear's `apply`
+    """dither_one's patch (its weights' registry, the execution phase's libraries), then every int8-exact linear's `apply`
     through ``dithera::mm`` (before the engine is built, in its process)."""
     from verity_vllm.engine import int8_vllm as IV
     if unit not in UNITS or z not in ZMODES or ao not in AO:
@@ -864,7 +874,8 @@ def patch(t: int, h1c: str, h1o: str, unit: str = "h1r", h1u: str | None = None,
     settings.setdefault("DITHER_A_FORM", "3")
     DO.patch(t=t, h1c=h1c, h1o=h1o, key=key, gate=True)
 
-    def apply(self, layer, x, bias=None):
+    def apply(self: IV.Int8PlainLinearMethod, layer: torch.nn.Module, x: torch.Tensor,
+              bias: torch.Tensor | None = None) -> torch.Tensor:
         if bias is not None or x.dtype != torch.bfloat16:
             raise ValueError(f"{self.prefix}: dither-a takes bf16 activations and no bias")
         lead, k = x.shape[:-1], x.shape[-1]
@@ -877,7 +888,7 @@ def patch(t: int, h1c: str, h1o: str, unit: str = "h1r", h1u: str | None = None,
     IV.Int8PlainLinearMethod.apply = apply
 
 
-def stats(win: DO.DitherState):
+def stats(win: DO.DitherState) -> Callable[[], dict]:
     def doc() -> dict:
         return {**win.stats(), **arm_label(), "dither_a": SIDE[0].info() if SIDE else None}
     return doc
@@ -886,13 +897,13 @@ def stats(win: DO.DitherState):
 # -- the gate ----------------------------------------------------------------------------------------------------------------
 
 # N > 0: `check` hashes a table's leaves in a spawned pool of N processes once it has POOL_MIN rows or more (a prefill
-# capture's 2.75M z/y units take ~4 min on one core); unset or 0, in this process
+# capture has 2.75M z/y units); unset or 0, in this process
 CHECK_WORKERS_ENV = "DITHER_CHECK_WORKERS"
 POOL_MIN = 4096
 _POOL: list = []
 
 
-def table_root(dom, key: bytes, label: str, rows) -> bytes:
+def table_root(dom: CM.CommitmentDomain, key: bytes, label: str, rows: Sequence[bytes] | np.ndarray) -> bytes:
     """`CM.levels`' root over each row's `CM.leaf` (rows: byte strings or a 2-D uint8 array), the leaves hashed in
     CHECK_WORKERS_ENV's pool when there are POOL_MIN or more."""
     n = settings.get(CHECK_WORKERS_ENV)
@@ -917,7 +928,7 @@ def table_root(dom, key: bytes, label: str, rows) -> bytes:
 
 def check(win: DO.DitherState, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3, g: dict | None = None,
           r_round: dict | None = None) -> dict:
-    """`which`'s capture (`g`, else the window's) against references other than the served kernels (the module
+    """`which`'s capture (`g`, else the execution phase's) against references other than the served kernels (the module
     docstring's list).  `r_round` ({"s", "leaves", "root"}: dither_so's round s + D - 1) is the round that carries the
     capture's receipts when that is not the capture's own: its receipt-step leaf and its root are checked there
     (round's "receipt_step" and "receipt_root"), and the capture's own round's receipt-step leaf, an earlier step's

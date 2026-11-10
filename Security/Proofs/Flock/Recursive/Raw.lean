@@ -2,22 +2,37 @@ module
 
 public import Proofs.Flock.Recursive.Flock
 public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
-public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
-public import Mathlib.Data.Fintype.EquivFin
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Recursion: V*'s sessions as the prover supplies them (gap 8)
 
 A session of V*'s statement is the verifier's own inputs, record writer and registered reads (`ZkOuterR`), at the live
 session of its statement's `J` tables. That its inputs parse to V*'s circuit, load V*'s population and set up at some
-draw is not taken: the verifier of record's checks establish it at a session that verifies
+sample is not taken: the verifier's checks establish it at a session that verifies
 (`Proofs.Flock.Recursive.Loads`). The proof's sessions (`ZkOuter`) carry that typing in their fields, so this file
 builds them from the raw ones and carries the prover's strategy across:
 
 * `ZkOuterR.Typable`: the inputs pass the statement check with the verifier's registered reads (`ScopeZR`) at
-  untemplated tags, their circuit is V*'s, their registered population has V*'s units, and table 0 sets up at some draw. `ZkOuterR.build` is
+  untemplated tags, their circuit is V*'s, their registered population has V*'s units, and table 0 sets up at some sample. `ZkOuterR.build` is
   the typed session then, with the same game up to the casts along its table count (`build_sigma`).
 * `ZkOuter.refuse`: the session with one own port, named outside the circuit (`freshOwn`). It accepts no transcript
   (`not_acceptsZKR_fresh`): the setup's first table has the circuit (`setup_zero_c`), `Registered.check` runs
@@ -43,7 +58,7 @@ open scoped ENNReal
 set_option genSizeOfSpec false in
 set_option genInjectivity false in
 /-- **V*'s `--zk --registered` session at one history, as the prover supplies it**: the verifier's inputs `I`, its own
-ports `own`, the draw file `dj` and the record writer `wr` of the live session of `J` tables, with `ZkOuterD`'s
+ports `own`, the sample file `dj` and the record writer `wr` of the live session of `J` tables, with `ZkOuterD`'s
 `hDraw`, `hTags` and `hJ` (the verifier's own table count is `J`). The registrant's record of the registered reads
 `rd`, and `hown`, are `ZkOuterD`'s at each typing of the session (`ht`, a setup `y₀` at table 0, the parse `hc` and the
 load `hpub`), which they read. -/
@@ -66,7 +81,7 @@ structure ZkOuterR (mPts nv J : ℕ) (Reg' : Type) (c : Flock.Circuit) (hU : Bui
     OwnReadsHJ I own c (pubZ I) (wr (Lv.draw ω) R' o) ((rd ht S₀ d₀ y₀ hc hpub).restrict (rowIn (Lv.draw ω))).isRead
       (rd ht S₀ d₀ y₀ hc hpub).port (rd ht S₀ d₀ y₀ hc hpub).readAt
 
-/-- V*'s live session of `J` tables at a draw and registration, its outcome written by `wr`. -/
+/-- V*'s live session of `J` tables at a sample and registration, its outcome written by `wr`. -/
 def liveJ {nv : ℕ} {Reg' : Type} (dg : ByteArray → ByteArray) (J mPts N : ℕ)
     (wr : Finset (Fin nv) → Reg' → LiveOutJ J mPts → Exec.Transcript) (S : Finset (Fin nv)) (R : Reg') :
     Game Exec.Transcript :=
@@ -77,7 +92,7 @@ def castOut {J J' : ℕ} (h : J' = J) (mPts : ℕ) (o : LiveOutJ J' mPts) : Live
   cast (congrArg (fun J => LiveOutJ J mPts) h) o
 
 /-- **Implications at every outcome of `liveJ`'s live audit bound probabilities**: at the registration the prover sends,
-each of the law's draws and each output of the live session written by `wr`. -/
+each of the sampling design's samples and each output of the live session written by `wr`. -/
 theorem prob_auditLive_liveJ_mono {nv : ℕ} {Lv : Law nv} {Reg' : Type} {J mPts : ℕ} (dg : ByteArray → ByteArray)
     (N : ℕ) (wr : Finset (Fin nv) → Reg' → LiveOutJ J mPts → Exec.Transcript)
     (τ : Strategy (auditLive Lv Reg' (liveJ dg J mPts N wr))) {p q : Reg' × Finset (Fin nv) × Exec.Transcript → Prop}
@@ -139,7 +154,7 @@ def ofBase (τ₀ : Strategy (baseGame Lv Reg' dg J mPts N)) : Strategy (x.game 
 
 /-- **The session types**: its inputs pass the statement check with the verifier's registered reads (`ScopeZR`) at
 untemplated tags, their circuit is `c`, their registered population has `nv` units, and table 0 sets up at some
-draw. -/
+sample. -/
 def Typable : Prop :=
   ScopeZR x.I ∧ x.I.tags.isTmpl = false ∧ circZ x.I = c ∧ (pubZ x.I).n = nv ∧
     ∃ (S₀ : Finset (Fin nv)) (d₀ : Lean.Json), Nonempty (DrawSetupZHJ (inputsJ x.I 0) mPts S₀ d₀)
@@ -156,10 +171,10 @@ theorem Typable.hpub (hx : x.Typable) : HmOut.loadPublic (zkTags x.I) c x.I.publ
   have h := hx.1.loadH x.hTags.1
   rwa [hx.2.2.1] at h
 
-/-- A draw table 0 of the typed session sets up at. -/
+/-- A sample table 0 of the typed session sets up at. -/
 noncomputable def Typable.S₀ (hx : x.Typable) : Finset (Fin nv) := hx.2.2.2.2.choose
 
-/-- Table 0's draw file at `Typable.S₀`. -/
+/-- Table 0's sample file at `Typable.S₀`. -/
 noncomputable def Typable.d₀ (hx : x.Typable) : Lean.Json := hx.2.2.2.2.choose_spec.choose
 
 /-- The typed session's setup of table 0 at `Typable.S₀`. -/

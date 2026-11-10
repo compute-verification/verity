@@ -41,17 +41,22 @@ import math
 import statistics
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
 import triton
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1] / "hash" / "exactlin"))
-import bench as B  # noqa: E402
-import fixture as FX  # noqa: E402
 import kbench  # noqa: E402
 import kgate  # noqa: E402
+
+import bench as B  # noqa: E402
+import fixture as FX  # noqa: E402
 import run as R  # noqa: E402
 import wgmma as W  # noqa: E402
 
@@ -74,7 +79,7 @@ def linears(models: tuple[str, ...]) -> list[tuple[str, str, int, int]]:
     return out
 
 
-def probe():
+def probe() -> Callable[[], list[int | None]]:
     """[SM clock MHz, board power W] of torch's GPU (NVML, by the device's UUID: NVML's indices ignore
     CUDA_VISIBLE_DEVICES), or [None, None]."""
     try:
@@ -104,7 +109,7 @@ def split(o: torch.Tensor, planes: torch.Tensor) -> None:
 class Linear:
     """One (N, K) at M: X, weight copies, O copies and the bytes derived from them, outputs, and the arms."""
 
-    def __init__(self, n: int, k: int, m: int, seed: int):
+    def __init__(self, n: int, k: int, m: int, seed: int) -> None:
         self.n, self.k, self.m = n, k, m
         cw, co = copies(n * k), copies(4 * m * n)
         self.calls = max(cw, co)
@@ -123,19 +128,19 @@ class Linear:
         self.z = torch.empty((m, n), dtype=torch.int32, device="cuda")
         self.gates: dict = {}
 
-    def loop(self, one):
-        def f():
+    def loop(self, one: Callable[[int], None]) -> Callable[[], None]:
+        def f() -> None:
             for i in range(self.calls):
                 one(i)
         return f
 
-    def wg_one(self, cfg: W.Cfg):
-        def one(i):
+    def wg_one(self, cfg: W.Cfg) -> Callable[[int], None]:
+        def one(i: int) -> None:
             wt = self.ws[i % len(self.ws)]
             W.scaled_mm(self.x, self.sa, wt.w, wt.sw, self.y, cfg)
         return one
 
-    def lt_one(self, i):
+    def lt_one(self, i: int) -> None:
         mm(self.x, self.ws[i % len(self.ws)].w, self.z)
 
     def gate_wg(self, cfgs: list[W.Cfg]) -> list[W.Cfg]:
@@ -159,22 +164,22 @@ class Linear:
         torch.cuda.empty_cache()
         return ok
 
-    def read_one(self):
+    def read_one(self) -> Callable[[int], None]:
         n = self.m * self.n
         tile = 4096
         iters = max(1, min(16, n // (tile * 4 * 132)))
         grid = triton.cdiv(n, tile * iters)
         out = torch.empty(grid, dtype=torch.int32, device="cuda")
 
-        def one(i):
+        def one(i: int) -> None:
             B.read_kernel[(grid,)](self.os[i % len(self.os)], out, n, BLOCK=tile, ITERS=iters, num_warps=8)
         return one
 
-    def split_one(self, i):
+    def split_one(self, i: int) -> None:
         j = i % len(self.os)
         split(self.os[j], self.planes[j])
 
-    def cut_one(self, i):
+    def cut_one(self, i: int) -> None:
         j = i % len(self.os)
         self.lows[j].copy_(self.os[j])
 
@@ -182,11 +187,11 @@ class Linear:
 class Reduction:
     """The public matrices and outputs of one r, and its arms' single calls."""
 
-    def __init__(self, lin: Linear, r: int, seed: int):
+    def __init__(self, lin: Linear, r: int, seed: int) -> None:
         self.lin, self.r = lin, r
         g = torch.Generator(device="cuda").manual_seed(seed)
 
-        def codes(*shape):
+        def codes(*shape: int) -> torch.Tensor:
             return torch.randint(-128, 128, shape, generator=g, dtype=torch.int16, device="cuda").to(torch.int8)
         m, n = lin.m, lin.n
         self.mats = {"bytes4": [codes(r, 4 * n)], "planes": list(codes(4, r, n).unbind(0)), "trunc": [codes(r, n)]}
@@ -200,11 +205,11 @@ class Reduction:
         return {"bytes4": lambda: [lin.os[j].view(torch.int8)], "planes": lambda: list(lin.planes[j].unbind(0)),
                 "trunc": lambda: [lin.lows[j]]}[form]()
 
-    def one(self, form: str, backend: str, shift: int = 0):
+    def one(self, form: str, backend: str, shift: int = 0) -> Callable[[int], None]:
         lin, mats = self.lin, self.mats[form]
         cfg = W.default_cfg(lin.m, self.r, mats[0].shape[1])
 
-        def call(i):
+        def call(i: int) -> None:
             for b, (a, rm) in enumerate(zip(self.operands(form, (i - shift) % len(lin.os)), mats)):
                 if backend == "lt":
                     mm(a, rm, self.z[b])
@@ -221,13 +226,13 @@ class Reduction:
         return sum(R.diff(self.y[b], R.reference(self.z[b], self.one_m, self.one_r)) for b in range(nb))
 
 
-def beside(lin: Linear, gemm_one, red_one):
+def beside(lin: Linear, gemm_one: Callable[[int], None], red_one: Callable[[int], None]) -> Callable[[], None]:
     """Call by call: fork, the reduction on a side stream, the GEMM on the caller's, join."""
     side = torch.cuda.Stream()
     forks = [torch.cuda.Event() for _ in range(lin.calls)]
     joins = [torch.cuda.Event() for _ in range(lin.calls)]
 
-    def f():
+    def f() -> None:
         main = torch.cuda.current_stream()
         for i in range(lin.calls):
             forks[i].record(main)
@@ -240,7 +245,7 @@ def beside(lin: Linear, gemm_one, red_one):
     return f
 
 
-def tried(lin: Linear, name: str, f) -> bool:
+def tried(lin: Linear, name: str, f: Callable[[], object]) -> bool:
     try:
         f()
         torch.cuda.synchronize()
@@ -256,8 +261,8 @@ def clock_med(items: list) -> list:
     return [statistics.median(v[0] for v in vals), statistics.median(v[1] for v in vals)] if vals else [None, None]
 
 
-def measure(model: str, name: str, n: int, k: int, m: int, rs: tuple[int, ...], reps: int, clock, read_gbs: float,
-            kern) -> dict:
+def measure(model: str, name: str, n: int, k: int, m: int, rs: tuple[int, ...], reps: int,
+            clock: Callable[[], list[int | None]], read_gbs: float, kern: R.Kernel) -> dict:
     lin = Linear(n, k, m, seed=1000 + n + k)
     cfgs = lin.gate_wg(list(dict.fromkeys([kern.pick(m, n, k)] + [W.Cfg.parse(t) for t in SERVED_CFGS])))
     if not cfgs:
@@ -363,7 +368,7 @@ def per_tmac(x: float) -> str:
 
 
 def table(rows: list[dict], summary: dict, rs: tuple[int, ...], meta: dict) -> str:
-    def us(v, key, digits=0):
+    def us(v: dict | None, key: str, digits: int = 0) -> str:
         return "-" if v is None or v.get(key) is None else f"{v[key]:,.{digits}f}"
 
     lines = [f"M = {rows[0]['m']:,}; microseconds a call, medians; DRAM read {meta['read_gbs']:,.0f} GB/s measured.", ""]

@@ -1,0 +1,16 @@
+{
+ "tokens": {"value": 8192, "status": "M",
+            "source": "T 8,192 a step: 8 sequences of 1,024-id prompts, one step a window (b921, note:compute-research/20261028T1600Z-finding-commit-bytes)"},
+ "sequences": {"value": 8, "status": "M", "source": "b921's 8 sequences a step"},
+ "committed": {"value": 13628428480, "status": "M",
+               "source": "bytes b921 committed in every full window (Q_word_v1, every Call's outputs; art:291c27d31367bb75b2035d35f34857cb84e19095c873cd1c57eda5ecb61bf526)"},
+ "hash_fast": {"value": 5.21e11, "status": "M", "source": "SHA-512 rows on the whole H200, 16 KiB rows (r20261027-042422-85b2)"},
+ "hash_slow": {"value": 3.98e11, "status": "D",
+               "source": "the same at b921's 4 KiB rows: 85b2's bar x 91.5 B a compression (note:compute-research/20261028T1600Z-finding-commit-bytes)"},
+ "peak_macs": {"value": 9.895e14, "status": "A",
+               "source": "H200 int8 dense, 4,096 MACs an SM-clock x 132 SMs at 1,830 MHz (the data sheet's 1,979 TOPS), to state h in MAC-times"},
+ "step_s": {"value": 0.02614, "status": "M", "source": "the stock T 8,192 step, b57f (r20261028-112958-eeb0), for a week of windows"},
+ "token_bytes": {"value": 4, "status": "A", "source": "a token id as a u32, as a request's boundary commits it"},
+ "price": {"value": 1.0, "status": "A",
+           "source": "a GPU-second proving (RTX PRO 6000, where the cost model was measured) priced as a GPU-second hashing on the H200; --weight scales the commitment against it"}
+}

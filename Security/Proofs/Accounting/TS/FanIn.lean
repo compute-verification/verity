@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Accounting.TS.Price
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # The fan-in count, and FOLD-OPT and FILL-OPT from it

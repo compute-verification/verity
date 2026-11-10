@@ -25,32 +25,18 @@ class Profile:
     b: float | None = None
     #: `b_w`: bits a small subcircuit pays per weight it uses (`WeightsIncompressible`)
     b_w: float | None = None
-    #: `c_w`, `c_a`: the chained costs, per weight and per activation (`CoverTrainingChained`, `CoveringBoundTwoCosts`)
+    #: `c_w`, `c_a`: the chained costs, per weight and per activation (`CoveringBound`, `CoveringBoundTwoCosts`)
     c_w: float | None = None
     c_a: float | None = None
 
     # Activations and values
     #: `b_a`: bits per novel activation read (`WeightsIncompressible`'s activation side, `ThreadedThrottled`)
     b_a: float | None = None
-    #: `f`: bits per value read (`ValueReadHardness`, `ActivationReads`)
-    f: float | None = None
-    #: `a`: an accumulation entry's width (`ActivationReads`, `psRate`)
-    width: float | None = None
     #: `β_x`: fresh bits a block pays per counted activation it uses, at a rate that survives replay (the draft's
     #: Proposition 3; measured on exact blocks)
     beta_x: float | None = None
-
-    # The keyed token structure (`Keyed`)
-    #: `d`: legs of a token's accumulation chain
-    legs: int | None = None
     #: `aOut`: counted products per activation value
     fanout: float | None = None
-    #: `c`: counted products per parameter per token (1 forward, 2 with Dgrad on the forward's tokens)
-    per_param: float | None = None
-    #: `V`: vocabulary (embedding columns)
-    vocab: int | None = None
-    #: `bcol`: bits per embedding column entry (`ColumnsIncompressible`)
-    bcol: float | None = None
 
     # Threads (`Threading`, `ThreadedThrottled`)
     #: `d`: novel values of a thread a small subcircuit may read before `e` stops binding
@@ -65,6 +51,8 @@ class Profile:
     kappa_forward: float | None = None
     #: `κ` of the weight-gradient products alone (the accumulators of E1's Corollary 4a)
     kappa_wgrad: float | None = None
+    #: output values per counted product, the min-cut bound's `Work.O / Work.N` before an output's width
+    outputs_per_product: float | None = None
 
     # Depth (`MulBlocks.Upstream`, `ActivationChainedAt`) and layers
     #: `L`: layers a token's computation passes through
@@ -77,10 +65,8 @@ class Profile:
     layer_bits: float | None = None
     #: the block size up to which the `Threading` certificate is checked (`ReferenceThreaded`: `S ≤ 2·10⁷`)
     thread_k: float | None = None
-    #: `n`: an accumulation entry's width (`Cube.Wide`; kv_b's 512 in Kimi K2)
-    entry_width: float | None = None
 
-    # Prices (`ParameterHardPricedAt`)
+    # Prices (E1's Proposition 3′)
     #: `Σ_b p_b / |𝓜*|`: the chained blocks' mean weight price, bits
     price: float | None = None
     #: `t`: the price ceiling, `p i ≤ t` for every weight

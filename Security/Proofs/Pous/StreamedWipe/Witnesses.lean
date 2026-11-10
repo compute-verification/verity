@@ -1,8 +1,10 @@
 module
 
-public import Mathlib.Data.Fintype.BigOperators
 public import Definitions.Pous.Claims.StreamedWipeServer
 public import Proofs.Pous.StreamedWipe.Honest
+import Mathlib.Basic.ENNReal.Inv
+import Mathlib.Data.Fintype.BigOperators
+import Proofs.Pous.Prob
 
 /-!
 # The streamed-label wipe per server: each claim's honest and nontrivial lemmas
@@ -55,7 +57,7 @@ theorem keepAll_keeps {N k b q M E : ℕ} (h : q ≤ M) (z : Bits q) (L : Fin N 
 
 theorem pr_of_forall {α : Type} [Fintype α] [Nonempty α] {P : α → Prop} (h : ∀ x, P x) : pr P = 1 := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   rw [Finset.filter_true_of_mem fun x _ => h x, Finset.card_univ]
   exact ENNReal.div_self (by exact_mod_cast Fintype.card_ne_zero) (ENNReal.natCast_ne_top _)
 
@@ -102,7 +104,7 @@ theorem winRealBy_le_of_keep_const (V : Acceptance) {N k b q M E κ : ℕ} (prf 
   have h2 : (2⁻¹ : ℝ≥0∞) ^ q * 2 ^ q = 1 := by
     rw [← ENNReal.inv_pow]
     exact ENNReal.inv_mul_cancel (pow_ne_zero _ two_ne_zero) (ENNReal.pow_ne_top ENNReal.ofNat_ne_top)
-  unfold winRealBy pr
+  unfold winRealBy; simp only [Pous.pr_eq_card]
   apply ENNReal.div_le_of_le_mul
   rw [htot, Nat.cast_mul, Nat.cast_pow, Nat.cast_ofNat, ← mul_assoc, h2, one_mul]
   exact_mod_cast hcard
@@ -174,8 +176,17 @@ theorem StreamedWipeMeetsServer5GB_fails : ¬ StreamedWipeMeetsServer5GB acceptA
       (keepAll _ _ _ _ _ _ (by decide +kernel)) le_rfl)
 
 /-- **`StreamedWipeMeetsServerH200`'s honest lemma**: the premises of the 5 GB form hold at the deployed H200 as
+<<<<<<< ours
 measured (`h200`): its fill of `n = 2,319,974,400` labels and `R = 18,211,667,968` bits (2.28 GB) outside it, at
 the deployed `k = 5500` and `r = 62`. -/
+||||||| base
+measured in r20261026-003454-bfd2 (`h200`, `art:213936fe824d1f844fe4bb0cbc4749fcc364e0dc38757c9fa73848a7872bfaa4`):
+its fill of `n = 2,319,974,400` labels and `R = 18,211,667,968` bits (2.28 GB) outside it, at the deployed `k = 5500`
+and `r = 62`. -/
+=======
+measured (`h200`): its fill of `n = 2,319,974,400` labels and `R = 18,211,667,968` bits (2.28 GB) outside it, at the
+deployed `k = 5500` and `r = 62`. -/
+>>>>>>> theirs
 theorem StreamedWipeMeetsServerH200_meets :
     h200.Ms = 512 * h200.n + h200.R ∧ 0 < h200.n ∧ 0 < h200.r ∧
       (h200.r - 1) ^ h200.k * 2 ^ 129 ≤ h200.r ^ h200.k ∧ OperatingPoint h200.n h200.r h200.k h200.R := by

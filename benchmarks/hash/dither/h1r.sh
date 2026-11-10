@@ -17,7 +17,6 @@ grep -A2 "h1r_units_k\|h1r_seeds" "$OUT/build.log" | grep -i "registers\|spill" 
 "$CUDA/bin/nvcc" -O3 -std=c++17 -I verity/ml/kernels -gencode arch=compute_120a,code=sm_120a -cubin \
   -o "$S/noise.cubin" integrations/vllm/verity_vllm/protocols/pouw/pouw_cuda/noise.cu > "$OUT/nvcc-noise.txt" 2>&1 \
   || { echo "h1r: NVCC_FAIL noise.cu"; tail -20 "$OUT/nvcc-noise.txt"; exit 11; }
-[ -x /workspace/jobs/venv312/bin/python3 ] && PY=${PY:-/workspace/jobs/venv312/bin/python3}
 PY=${PY:-$(. benchmarks/harness/env.sh && echo "$VENV/bin/python3")} || exit 2
 export PYTHONPATH=$ROOT:$ROOT/benchmarks/pouw/served_h1:$ROOT/benchmarks/hash/dither
 nvidia-smi --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu --format=csv -l 1 > "$OUT/smi.csv" 2>/dev/null &

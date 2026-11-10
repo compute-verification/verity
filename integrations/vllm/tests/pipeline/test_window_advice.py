@@ -65,6 +65,34 @@ def test_a_window_that_opens_anywhere_but_where_the_last_closed_is_refused():
         WA.follows(W2, WA.Advice((stranger,), _steps((0, 4, 1)), (0,), (AT_CLOSE,)))
 
 
+def _not_following(last: WA.Advice, advice: WA.Advice) -> tuple[str, str]:
+    with pytest.raises(WA.NotFollowing) as e:
+        WA.follows(last, advice)
+    assert str(e.value).startswith(f"{e.value.code}: ")
+    return e.value.code, e.value.request
+
+
+def test_follows_names_what_doesnt_follow_and_pairs_each_carried_request_with_where_the_last_window_left_it():
+    """`follows` pairs each carried request with its place in the last window, and refuses by name: a request the last
+    window left with outputs to keep and this one doesn't carry (``dropped``), one it didn't leave or left in another order
+    (``order``), another record (``record``), and each counter of the state at the open that isn't the one at the close."""
+    assert WA.follows(W1, W2) == [(0, 0)]
+    b = WA.RequestAdvice("b", 3, 1, "eos")
+    assert _not_following(W1, WA.Advice((b,), _steps((0, 0, 3)), (0,))) == ("dropped", "a")
+    assert _not_following(W2, WA.Advice((WA.RequestAdvice("c", 3, 4, "length"),), _steps((0, 4, 1)), (0,), (AT_CLOSE,))) == \
+        ("order", "c")
+    longer = WA.RequestAdvice("a", 3, 5, "length")
+    assert _not_following(W1, WA.Advice((longer,), _steps((0, 4, 1), (0, 5, 1), (0, 6, 1)), (0, 1, 2), (AT_CLOSE,))) == \
+        ("record", "a")
+    one = _steps((0, 4, 1))
+    for counter, state, steps, release in (("C", WA.Carried(1, 4, 2, ((0, 4),)), one, (0,)),
+                                           ("computed", WA.Carried(0, 3, 2, ((0, 3),)), _steps((0, 3, 1), (0, 4, 1)), (0,)),
+                                           ("kept", WA.Carried(0, 4, 3, ((0, 4),)), one, ()),
+                                           ("made", WA.Carried(0, 4, 2, ((1, 4),)), one, (0,))):
+        assert _not_following(W1, WA.Advice((A,), steps, release, (state,))) == (counter, "a")
+    assert set(WA.FOLLOWS) == {"order", "dropped", "record", "C", "computed", "kept", "made"}
+
+
 def test_decode_refuses_a_version_1_string_version_0_can_say(monkeypatch):
     a = WA.Advice((WA.RequestAdvice("a", 3, 2, "length"),), _steps((0, 0, 3), (0, 3, 1)), (0, 1))
     monkeypatch.setattr(WA.Advice, "version", property(lambda self: WA.VERSION))

@@ -14,7 +14,7 @@ The device gate runs first and nothing else runs when it fails (exit 3):
   mufu     `fa2_target_capture_gpu.mufu`: MUFU ex2 / rcp, which the sigmoid reads, are core's tables on all 2^32 inputs.
   launch   the kernel each launch ran (torch.profiler): `single_group_topk_block_kernel<float, float, int, SIGMOID, 256, 8>` for at most
            1024 tokens, `single_group_topk_warp_kernel<...>` for more (`grouped_topk_kernels.cu` `launch`).
-  rows     `rows(seed, n)`: groups of 64 rows sharing one bias (the kernel reads one bias per expert for a whole launch), drawn to reach
+  rows     `rows(seed, n)`: groups of 64 rows sharing one bias (the kernel reads one bias per expert for a whole launch), sampled to reach
            the router's edges: ties in the score and in score + bias, a bias that decides, score + bias == 0, the sigmoid's polynomial,
            MUFU and saturated ranges and their boundaries, subnormal, huge and non-finite logits and biases, fewer finite experts
            than slots and none.  Each group runs as one block launch and, tiled past 1024 tokens, as one warp launch, twice each.

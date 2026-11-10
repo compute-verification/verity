@@ -4,13 +4,13 @@ public import PouwCheck.Credit
 public import PouwWindow.RegFile
 
 /-!
-# A window unit's leaf statements: their tile and the placement of the values they read
+# An execution phase unit's leaf statements: their tile and the placement of the values they read
 
-A drawn unit of a window Program (tile `t` of call `c`, its K's template) is proved as its leaf's 33 statements
+A sampled proof block of an execution phase Program (tile `t` of call `c`, its K's template) is proved as its leaf's 33 statements
 (`PouwWindow.Lanes.lanePorts`, `combinePorts`), each reading the leaf's rows of the values `a`, `b`, `zy` and
-`receipt` and the partials (`PouwWindow.Lanes.regReads`). The window registers them as tables: the call's round's A
+`receipt` and the partials (`PouwWindow.Lanes.regReads`). The execution phase registers them as tables: the call's round's A
 table of K, the weights' B of K, the call's z table and its receipt table. `placeOf` places each value in its table
-from the unit's base row, from the window's committed descriptor and its round log alone, as `Credit.registeredFile`
+from the unit's base row, from the execution phase's committed descriptor and its round log alone, as `Credit.registeredFile`
 places the tile statement's reads (`h1window.table_reads`):
 
 * `a`: round s's A table of K `<prefix>a/<K>@<s>` from row `M·j + R·ti`, j the call's place among its round's calls of
@@ -25,7 +25,7 @@ places the tile statement's reads (`h1window.table_reads`):
 The tile's rounds are the round log's (`steps`, its calls the rounds' equal blocks), and its prefix and layout the
 descriptor's Program (`Credit.programOf`, `Credit.layoutOf`, `Credit.prefixOf`). `leafOwn?` is
 `PouwWindow.Lanes.leafOwn?` at that tile and placement, which `pouw-leaf-own-window` runs (`leafOwnCmd`). Its cost is
-the descriptor's bytes and the window's calls.
+the descriptor's bytes and the execution phase's calls.
 -/
 
 @[expose] public section
@@ -34,7 +34,7 @@ namespace PouwCheck.LeafOwn
 
 open Lean (Json)
 
-/-- **Unit `u`'s call and tile** in the window `layout` (`Credit.callWork`'s units, call after call): `(c, t)`. -/
+/-- **Unit `u`'s call and tile** in the execution phase `layout` (`Credit.callWork`'s units, call after call): `(c, t)`. -/
 def unitAt (layout : Json) (u : Nat) : Except String (Nat × Nat) := do
   let sizes := (Credit.callWork layout).map (·.1)
   let mut u0 := 0
@@ -43,7 +43,7 @@ def unitAt (layout : Json) (u : Nat) : Except String (Nat × Nat) := do
     u0 := u0 + size
   throw s!"the window has {u0} units, not a unit {u}"
 
-/-- **Call `call`'s tile and unit `t`'s placement** in the window `layout` of prefix `pre` over `steps` rounds: the
+/-- **Call `call`'s tile and unit `t`'s placement** in the execution phase `layout` of prefix `pre` over `steps` rounds: the
 call's K's leaf tile (`⟨R, C, K⟩`) and each value's table and base row (the module's list). -/
 def placeOf (pre : String) (layout : Json) (steps call t : Nat) :
     Except String (PouwWindow.Lanes.Tile × (String → String × Nat)) := do
@@ -85,9 +85,9 @@ def placeOf (pre : String) (layout : Json) (steps call t : Nat) :
     else PouwWindow.Lanes.selfPlace v
   pure (PouwWindow.Lanes.Tile.mk r c k, place)
 
-/-- **The leaf verifier's check of unit `u`'s statement `k`'s file** in the window whose committed descriptor is
+/-- **The leaf verifier's check of unit `u`'s statement `k`'s file** in the execution phase whose committed descriptor is
 `descriptor` and whose round log is `rounds`: `PouwWindow.Lanes.leafOwn?` at the unit's tile and placement
-(`placeOf`), against the window's accepted registration and the leaf's produced record, every value's rows
+(`placeOf`), against the execution phase's accepted registration and the leaf's produced record, every value's rows
 `hm96-sha512/row/v2`. -/
 def leafOwn? (descriptor : ByteArray) (rounds registration produced file : Json) (u : Nat) (k : Option Nat) :
     Except String Unit := do
@@ -100,8 +100,8 @@ def leafOwn? (descriptor : ByteArray) (rounds registration produced file : Json)
   PouwWindow.Lanes.leafOwn? registration produced file place T k Flock.HmRow.ROW_SCHEMA_V2
 
 /-- **`pouw-leaf-own-window DESCRIPTOR ROUNDS REGISTRATION PRODUCED REGISTERED UNIT (LANE | combine) SESSION...`**:
-`leafOwn?` on the window's descriptor (its bytes), its round log, its registration, the leaf's produced record and the
-statement's `--registered` file, at the window's unit `UNIT`, then `checkFull` on each session directory's record
+`leafOwn?` on the execution phase's descriptor (its bytes), its round log, its registration, the leaf's produced record and the
+statement's `--registered` file, at the execution phase's unit `UNIT`, then `checkFull` on each session directory's record
 (`SESSION/session.json`, at least one). It prints `OWN {"accepted", "why"?}` and exits 0 where it accepts, 1 where it
 refuses and 2 on a usage error. -/
 def leafOwnCmd (args : List String) : IO UInt32 := do

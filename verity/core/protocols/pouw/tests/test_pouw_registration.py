@@ -1,5 +1,5 @@
 """Registered weights (`registration`): one rule for Pearl-C4 and served FP8's Pearl-C, and the keyed transforms' key,
-sampled from the epoch's salt coin after the weights' root is recorded and refused for any other salt."""
+sampled from the execution phase's salt coin after the weights' root is recorded and refused for any other salt."""
 
 from __future__ import annotations
 
@@ -11,9 +11,9 @@ import epoch_coins as E
 from verity.core.protocols.pouw import registration as R
 from verity.core.protocols.pouw.audit import Epoch, Workload, weights_root
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
-from verity.core.protocols.pouw.schemes import get
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c4 as F
+from verity.ml.protocols.pouw.schemes import get
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_c4 as F
 from verity.ml.randomness import derive
 
 FP8, FP4 = "pearl-c-sm120-v1-h3", "pearl-c-nvfp4-v0"
@@ -117,7 +117,7 @@ def test_the_rotation_key_is_the_salt_coins_and_moves_with_the_coin_and_the_weig
 
 
 def test_no_rotation_key_exists_before_the_weights_root_is_recorded():
-    """A coin opened after anything but this epoch's weights' root keys nothing: the prover can't have the key while it
+    """A coin opened after anything but this execution phase's weights' root keys nothing: the prover can't have the key while it
     still chooses the weights."""
     epoch, _ = _started()
     early = E.challenger().open("salt", weights_root({0: b"\x09" * 64, 1: b"\x02" * 64}))

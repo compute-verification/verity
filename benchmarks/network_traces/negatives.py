@@ -1,4 +1,4 @@
-"""negatives: what network accounting of arbitrary vLLM usage must refuse, beside honest traffic, each a pure function on a run's artifacts that
+"""negatives: what network certification of arbitrary vLLM usage must refuse, beside honest traffic, each a pure function on a run's artifacts that
 writes a tampered copy, and each naming the check that refuses it by its refusal code.
 
     python benchmarks/network_traces/negatives.py table [--markdown]
@@ -26,7 +26,7 @@ writes a tampered copy, and each naming the check that refuses it by its refusal
 
 **The checks and their codes** (`Negative.code`). A code is ``CHECK.PART``: the check that refuses it, and the part of
 it that fails. On the proof system's stream every refusal shows only ``reject`` (the violation's kind stays in the
-verifier); the code is what the verifier of record establishes, which `n2` reads here in the clear for N2's checks:
+verifier); the code is what the verifier establishes, which `n2` reads here in the clear for N2's checks:
 - ``NetworkHeadCheck_v2.{opening,fields,counts,signed}``: N2's head check of each end (`head_check.reference_parts`):
   the head opens under the registered root, its fields (link, end, window, grid, status complete), its counts the
   profile's row, and its record digest under the certifier's salt the certificate's signed digest;
@@ -72,7 +72,7 @@ verdict and none is `ok` false, else 1.
 requests at the link's cell size (each from its record, `--ids` as serve-openai writes it: prompt ids, user and what it
 brought), each window's arriving whole so their request cells are the honest `received`'s (`certified_ingress`), under
 the warden's framing (`link_framing`). Each advice negative is IoTieRequest's reference on every bucket row on the
-verifier's lanes from its advice and the warden's release (`request_tie`), whose verdict the verifier of record takes
+verifier's lanes from its advice and the warden's release (`request_tie`), whose verdict the verifier takes
 from its own tie source (`tie_service.Ties`).
 
 `Negative.waits` names the interfaces a negative waits on; one with none runs. `table` renders the registry.
@@ -814,7 +814,7 @@ def request_tie(Q, cells: Ingress, link) -> tuple[bool, ...]:
     row of the window against the verifier's lanes of the bucket (`io_request.lanes`: the advice's prompt lengths in
     its order and the network certifier's release); every window refused where the release isn't the network certifier's
     schedule for the advice's requests or doesn't put `received`'s request cells in each window
-    (`tie_service.IngressTie.tie`). The verifier of record takes the verdict from IoTieRequest proofs it verified; this
+    (`tie_service.IngressTie.tie`). The verifier takes the verdict from IoTieRequest proofs it verified; this
     is their reference in the clear."""
     refused, T = (False,) * len(link.received), cells.T
     lens = [q.prompt_len for q in link.advice.requests]

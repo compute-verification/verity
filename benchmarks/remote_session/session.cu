@@ -30,15 +30,60 @@
 // rb_set takes the payload tree's constants as it takes a pass's: row_prefix = sha512_row_v2_prefix(32768), the
 // payload domain's id, salt_in = D(store salt) ‖ key ‖ label, positions = N.
 //
-// The SHA-512 compressions and the row/v2 digests of the receipt tree's leaves are libvc's device functions
-// (`../hash/lib/vc_device.cuh`); the hm96 leaf after its salt and the frame-v3 leaf, pad and node are reader.cu's
-// (`hm96_leaf`, `node_of`, rc's `pad_rt`), under its pass constants kC, kL, kNodeTpl and gNib, which its rb_set,
-// rb_chain_set and rb_chain set. reader.cu's own kernels (rb_leaves, rb_pads, rb_tree and level_kernel) hash the same
-// tree unfused, one kernel a level: the fused one's cross-check.
-#include "../hash/lib/vc_device.cuh"
+// The row/v2 digests of the receipt tree's leaves are `hash_words`, over the GPU's one SHA-512 (`sha::`,
+// verity/ml/kernels/sha512.cuh); the hm96 leaf after its salt and the frame-v3 leaf, pad and node are the GPU's one row
+// commitment (`rc`, verity/ml/kernels/row_commit.cuh) as reader.cu takes it (`hm96_leaf`, `node_of`, rc's `pad_rt`),
+// under its pass constants kC, kL, kNodeTpl and gNib, which its rb_set, rb_chain_set and rb_chain set. reader.cu's own
+// kernels (rb_leaves, rb_pads, rb_tree and level_kernel) hash the same tree unfused, one kernel a level: the fused one's
+// cross-check.
+#include "../../verity/ml/kernels/row_commit.cuh"
 #include "../codec_tensor/reader.cu"
 
 namespace rb {
+
+// n native words from p: 16-byte vector loads through the non-coherent cache
+__device__ __forceinline__ void ld_w(const u64 *p, u64 *d, int n) {
+#pragma unroll
+  for (int i = 0; i < n / 2; ++i) {
+    const ulonglong2 v = __ldg(reinterpret_cast<const ulonglong2 *>(p) + i);
+    d[2 * i] = v.x;
+    d[2 * i + 1] = v.y;
+  }
+}
+
+// SHA-512 from chaining value cv after `pre` bytes (whole blocks) over n words at p (a message of 8 n bytes, its words
+// as SHA-512 reads them; 16-byte aligned, read through the non-coherent cache): a row/v2 digest over 64-byte digests
+// kept as words. kw: when n % 16 == 0, the scheduled all-padding last block for pre + 8 n bytes, or null.
+__device__ __forceinline__ void hash_words(const u64 *cv, u64 pre, const u64 *p, u32 n, u64 *x, const u64 *kw) {
+  rc::cpy8(x, cv);
+  const u32 full = n / 16;
+#pragma unroll 1
+  for (u32 b = 0; b < full; ++b) {
+    u64 W[16];
+    ld_w(p + 16 * b, W, 16);
+    sha::compress(x, W);
+  }
+  const u32 rem = n - 16 * full;
+  if (rem == 0 && kw) {
+    sha::compress_kw(x, kw);
+    return;
+  }
+  u64 W[16];
+  const u64 *q = p + 16 * full;
+#pragma unroll
+  for (int i = 0; i < 16; ++i) W[i] = (u32)i < rem ? __ldg(q + i) : (u32)i == rem ? 0x8000000000000000ull : 0;
+  const u64 bits = (pre + 8ull * n) * 8;
+  if (rem <= 13) {
+    W[15] = bits;
+    sha::compress(x, W);
+  } else {
+    sha::compress(x, W);
+#pragma unroll
+    for (int i = 0; i < 15; ++i) W[i] = 0;
+    W[15] = bits;
+    sha::compress(x, W);
+  }
+}
 
 // Payload leaves [c0, c0 + n) from their blocks (data, leaf c0's first), into dig.
 __global__ void __launch_bounds__(128) payload_leaves_kernel(const uint4 *__restrict__ data, u64 c0, u64 n,
@@ -423,7 +468,7 @@ __global__ void wait_kernel(const unsigned *flag, unsigned want) {
 // a tile's receipts are whole cache lines, so no line of them is cached before it is written.
 __device__ __forceinline__ void pass_leaf(const u64 *__restrict__ Y, u64 c, u64 (&d)[8]) {
   u64 x[8];
-  vc::hash_words(kC.row_mid, 128, Y, 8 * PER_LEAF, x, kC.kw_xpad);
+  hash_words(kC.row_mid, 128, Y, 8 * PER_LEAF, x, kC.kw_xpad);
   hm96_leaf(c, x, d);
 }
 
@@ -600,8 +645,8 @@ __device__ __forceinline__ void mapped_leaf(const u64 *__restrict__ Y, u64 c, u6
   }
   const int m = c + 1 < leaves ? PER_LEAF : (int)(n - PER_LEAF * c);
   u64 x[8];
-  if (m == PER_LEAF) vc::hash_words(kC.row_mid, 128, Y, 8 * PER_LEAF, x, kC.kw_xpad);
-  else vc::hash_words(kC.row_mid_last, 128, Y, 8 * m, x, nullptr);
+  if (m == PER_LEAF) hash_words(kC.row_mid, 128, Y, 8 * PER_LEAF, x, kC.kw_xpad);
+  else hash_words(kC.row_mid_last, 128, Y, 8 * m, x, nullptr);
   hm96_leaf(c, x, d);
 }
 

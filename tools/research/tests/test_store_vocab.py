@@ -40,10 +40,12 @@ def fs_remote(env):
 RESULT_KEYS = ("candidate", "proof_class", "soundness", "K", "B", "hardware", "authentication", "campaign", "relation", "mode", "zk", "overhead",
                "seconds_per_vu", "track", "scope", "label", "note", "assumptions", "omitted", "domain", "breakthrough",
                "lane", "question", "cited-by", "row", "sweep", "arm", "stage", "source", "superseded_by", "of-record", "goal", "abandoned", "withdrawn", "replay_set", "replay_expect", "interaction_attempt_of", "hash", "sharing", "fold",
-               "pipeline", "kernel_outcome", "kernel_reason", "memory-line-of-record", "run_of_record", "unit_lowering")
+               "pipeline", "kernel_outcome", "kernel_reason", "memory-line-of-record", "run_of_record", "unit_lowering",
+               "compile_cost")
 VERIFICATION_KEYS = ("verified", "verifier", "verifier_seconds", "independently_verified", "verified_by", "finding", "same_device", "below_bar", "outcome",
                      "grant", "ready", "reviewed", "lean_review", "landed", "commit_map", "custody", "source-lost", "challenger-key", "challenger-ledger",
-                     "challenger-pins", "challenger-models", "verdict", "executor_shadow", "tasks_graph")
+                     "challenger-pins", "challenger-models", "verdict", "executor_shadow", "tasks_graph", "verity_graph", "result",
+                     "label_auth", "label_delegation")
 EVIDENCE_KEYS = ("instruction", "model", "model_agrees", "model_status", "model_rejected", "evidence", "family", "instances_dataset", "instances_tier",
                  "mismatches", "target", "device", "instances_manifest_sha256", "component", "jobs", "level", "anchor", "dtype", "staged",
                  "circuits")
@@ -80,7 +82,7 @@ def test_check_is_enum_and_bool_only_and_reads_values_as_the_catalog_does():
     assert vocab.check("verified", "accepted") is None
     assert "not one of accepted, rejected, not-transferable, no-dumps" in vocab.check("verified", "yes")
     assert vocab.check("model_agrees", True) is None and vocab.check("model_agrees", False) is None
-    assert "is a string; the key's form is bool" in vocab.check("model_agrees", "true")                    # the word is not the value (hygiene 2026-09-23)
+    assert "is a string; the key's form is bool" in vocab.check("model_agrees", "true")                    # the word is not the value
     assert "is a string; the key's form is bool" in vocab.check("model_agrees", "True")                    # a Python repr: the same complaint
     assert vocab.check("model_agrees", "yes") and vocab.check("zk", 1)
     assert vocab.check("proof_class", "non-zk") and vocab.check("proof_class", "NON_ZK_PROOF") is None
@@ -171,7 +173,7 @@ def test_label_refuses_what_the_vocabulary_cannot_place_unless_off_vocab(env, ca
 
 
 def test_lane_shorthand_folds_into_one_spelling(env, capsys):
-    """The 2026-09-22/23 lane shorthand: synonyms are written under one key, the adopted concepts are keys of their own."""
+    """Lane shorthand: synonyms are written under one key, the adopted concepts are keys of their own."""
     st = LocalStore()
     for key, value, want in (("axis", "l", ("sweep", "l")), ("milestone", "1M-vu", ("arm", "1M-vu")), ("tree", "main@6babe27", ("source", "main@6babe27")),
                              ("release", "lane/x@ec45c0b", ("source", "lane/x@ec45c0b")), ("verifier_note", "Rust", ("note", "Rust")),
@@ -274,7 +276,7 @@ def test_a_memory_line_of_record_is_the_leans_and_names_the_auditor_run_that_wro
 
 
 def test_label_writes_the_canonical_key_and_form(env, capsys):
-    """Hygiene (2026-09-23): the file holds the vocabulary's spelling and form -- a real boolean for zk / model_agrees /
+    """The file holds the vocabulary's spelling and form -- a real boolean for zk / model_agrees /
     independently_verified, an int for B, `note` for `notes` / `verify_note`, `verifier` for `checker`, `A-GKR` for candidate `A` --
     whatever the caller typed; stderr says what was rewritten.  A ref written as a label is refused unless --off-vocab."""
     st = LocalStore()

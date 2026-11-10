@@ -1,14 +1,16 @@
 module
 
-public import Definitions.Nci.Guarantees
 public import Proofs.Nci.Inequalities
 public import Proofs.Nci.LoomisWhitney
+public import Proofs.Nci.Cut
+public import Proofs.Nci.CutWitness
 public import Proofs.Core
 public import Proofs.Nci.Chain
 public import Proofs.Nci.Throttling
 public import Proofs.Nci.Support
 public import Proofs.Nci.Reads
 public import Proofs.Nci.Pull
+public import Proofs.Nci.Rate
 public import Proofs.Nci.Threads
 public import Proofs.Nci.Layered
 public import Proofs.Nci.Contained
@@ -36,18 +38,18 @@ public import Proofs.Nci.Covering
 public import Proofs.Nci.CoveringWitness
 public import Proofs.Nci.CoveringTwoCosts
 public import Proofs.Nci.CoveringTwoCostsWitness
-public import Proofs.Nci.CoveringPriced
-public import Proofs.Nci.CoveringPricedWitness
 public import Proofs.Nci.Cover
 public import Proofs.Nci.PartitionCovers
 public import Proofs.Nci.CompliesCK
-public import Proofs.Nci.Ldl
+public import Proofs.Nci.Witnesses
+public import Proofs.Nci.Formalism
+public import Proofs.Nci.Lemmas
 
 /-!
 # Proofs of NCI's guarantees
 
-The read bound intersects each IU of the containing declaration with the contained circuit's gates (`pull`,
-`Proofs.Nci.Pull`), each piece reading no more novel information than its IU.
+The read bound intersects each inference block of the containing declaration with the reference circuit's gates
+(`pull`, `Proofs.Nci.Pull`), each piece reading no more fresh input bits than its block.
 -/
 
 @[expose] public section
@@ -57,10 +59,11 @@ namespace Nci.SecurityProofs
 open Verity Finset
 
 theorem ReadBound : Guarantees.ReadBound := by
-  intro Γ α c d M ⟨n, P, hP⟩ hB
-  have hsize : ∀ u, c.D.size ((pull M P).gates u) ≤ Γ := fun u => (card_pull_gates_le u).trans (hP u).1
-  have hle : Reads Γ c ≤ ∑ u, novelReads c ((pull M P).gates u) := Nat.sInf_le ⟨n, pull M P, hsize, rfl⟩
-  calc (Reads Γ c : ℝ) ≤ ∑ u, (novelReads c ((pull M P).gates u) : ℝ) := by exact_mod_cast hle
+  intro Γ α r d M hd hB
+  obtain ⟨n, P, hP⟩ := hd
+  have hsize : ∀ u, r.D.size ((pull M P).gates u) ≤ Γ := fun u => (card_pull_gates_le u).trans (hP u).1
+  have hle : Reads Γ r ≤ ∑ u, novelReads r ((pull M P).gates u) := Nat.sInf_le ⟨n, pull M P, hsize, rfl⟩
+  calc (Reads Γ r : ℝ) ≤ ∑ u, (novelReads r ((pull M P).gates u) : ℝ) := by exact_mod_cast hle
     _ ≤ ∑ u, (novelReads d (P.gates u) : ℝ) :=
         Finset.sum_le_sum fun u _ => by exact_mod_cast novelReads_pull M hB P u
     _ ≤ ∑ u, α * (d.D.size (P.gates u) : ℝ) := Finset.sum_le_sum fun u _ => (hP u).2
@@ -70,13 +73,16 @@ theorem ReadBound : Guarantees.ReadBound := by
         exact_mod_cast P.sum_card_gates
 
 theorem Inference : Guarantees.Inference := by
-  intro Γ α d n P prompt hsize hreads hprompt
-  have hc : Complies Γ α d := by
-    refine ⟨n, P, fun u => ⟨hsize u, le_trans ?_ (hprompt u)⟩⟩
-    unfold novelReads
-    refine Nat.cast_le.2 (Finset.sum_le_sum_of_subset fun a ha => ?_)
-    rw [Finset.mem_sdiff] at ha
-    exact (Finset.mem_union.1 (hreads u ha.1)).resolve_left ha.2
+  intro c k d B P prompt hB hS
+  obtain ⟨hcard, hreads, hprompt⟩ := hS
+  have hc : Complies c k d := by
+    refine ⟨B, P, ⟨hB, fun u => (hcard u).le, fun u => ?_⟩⟩
+    have hsub : d.unregistered (P.gates u) ⊆ prompt u := fun a ha => by
+      rw [RegisteredCircuit.unregistered, Finset.mem_sdiff] at ha
+      exact (Finset.mem_union.1 (hreads u ha.1)).resolve_left ha.2
+    have hw : d.D.width (prompt u) = (prompt u).card := by
+      simp [Circuit.width, hB.one_bit]
+    exact (Finset.card_le_card hsub).trans (hw.symm.le.trans (hprompt u))
   refine ⟨hc, le_trans (iInf₂_le d ⟨Verity.SecurityProofs.ContainsImplements d d (Containment.refl d.D)
     fun _ _ h => h, hc⟩) ENNReal.div_self_le_one⟩
 

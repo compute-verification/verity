@@ -1,12 +1,16 @@
 module
 
-public import Mathlib.Data.List.Basic
-public import Mathlib.Tactic.DeriveFintype
+public import Mathlib.Data.Nat.Notation
+public import Mathlib.Tactic.Attr.Core
+public import Mathlib.Tactic.ToDual
+import Mathlib.Data.Finset.Attr
+import Mathlib.Tactic.Finiteness.Attr
+import Mathlib.Tactic.SetLike
 
 /-!
 # The `fast100` schedule (`Flock.Schedule`)
 
-The verifier of record pins Flock's `fast100` Ligerito profile and runs it twice on one root.
+The verifier pins Flock's `fast100` Ligerito profile and runs it twice on one root.
 This file is the schedule table of `Flock.Schedule` as data, for every `m` the profile supports (22 to 35).
 Level `ℓ` of a schedule is a Reed–Solomon code of rate `2^-logInvRate` on messages of
 `2^logCols` columns (codeword length `2^(logCols + logInvRate)`), interleaved over `2^lanes`

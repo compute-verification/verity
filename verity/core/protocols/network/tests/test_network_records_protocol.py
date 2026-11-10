@@ -2,7 +2,13 @@
 with the grid compared and without it) against `audit.py`, through the difftest harness.
 
 The cases are `test_network_check_protocol`'s generated spatial units, their records published as one kind
+<<<<<<< 99c8914848ef788e008018a5dc84bd535d48d62c
 (`KINDS`): all raw (`grid.BlockGrid`), all committed (`commitment.commit`), all certified, or mixed, each record's kind drawn
+||||||| merged common ancestors
+(`KINDS`): all raw (`grid.Record`), all committed (`commitment.commit`), all certified, or mixed, each record's kind drawn
+=======
+(`KINDS`): all raw (`grid.Record`), all committed (`commitment.commit`), all certified, or mixed, each record's kind sampled
+>>>>>>> fa1fc89f64f1a57fa1d2d62892c18eb3a29f7627
 and the changed record's the kind its change needs. Each kind gets the changes that apply to it (`EXPECT`), and the
 record-kind negative controls: a raw grid slot changed, a raw record relabelled to another link, a committed digest
 changed, and a committed status in the clear that disagrees with its digest either way. The reference decodes the

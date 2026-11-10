@@ -33,7 +33,7 @@ from verity.ml.definitions.registry import sparse_mla_split as W
 from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.program_view import spec_statics
 
-from verity.core.protocols.sampled_proofs.one_stage import draw as D
+from verity.core.protocols.spot.one_stage import draw as D
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
@@ -110,7 +110,7 @@ def window(s: Served, tmpls=TMPLS, caps=CAPS, law: dict | None = None) -> CS.Bin
     """The window of ``s``'s rows over ``tmpls`` (`members`) under ``law`` (one unit of each template by default)."""
     ms = members(s, tmpls, caps)
     defs = [(SRW.template(t).fn, sum(m.n for m in ms if m.template == t)) for t in tmpls]
-    return CS.Binding(*CS.population_program(defs, several=True), law or D.parse_law("stratified:1"), "ab" * 32, tuple(ms))
+    return CS.Binding(*CS.population_program(defs, several=True), law or D.parse_design("stratified:1"), "ab" * 32, tuple(ms))
 
 
 def read(s: Served, ms, tmpls=TMPLS) -> list[tuple[dict, list]]:

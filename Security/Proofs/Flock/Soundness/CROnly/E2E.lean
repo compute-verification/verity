@@ -1,7 +1,10 @@
 module
 
 public import Proofs.Flock.Soundness.Headline
-public import Proofs.Flock.Soundness.CROnly.Link
+public import Proofs.Flock.Soundness.CROnly.Defs
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Binding.E2E
+import Proofs.Flock.Soundness.CROnly.Link
 
 /-!
 # The end-to-end theorems under `cr/sha-512` alone
@@ -14,7 +17,7 @@ prover bounded as `LinkCR`'s are. The bound is the original's at the per-run cos
 hypotheses are all instances of `cr/sha-512` (`hCRs`, `hKS`, `hT`), beside A3 (`hA3`), which is about the verifier's
 byte source.
 
-At the best budget, `q³ = t'·2^512`, the link term's `2t'(1 + k)/2^256` becomes `3(1 + k)·q²/2^512`
+At the best budget, `q³ = t'·2^512`, the binding error's `2t'(1 + k)/2^256` becomes `3(1 + k)·q²/2^512`
 (`linkBoundE_at_cube`).
 
 **Scope.** Every theorem here, in `E2EMore` and in `Registered`, is about the non-ZK session (`batchedSession`), whose
@@ -34,7 +37,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 section Generic
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
@@ -263,7 +266,7 @@ theorem prog_e2e_drawn
 end Session
 
 /-- **The headline under `cr/sha-512` alone: the count curve on the statement's rows, under SHA-512, at the live
-draw.** `Prog.flock_headline` with `LinkCRStrict` for `LinkCR`: every cryptographic hypothesis is an instance of
+sample.** `Prog.flock_headline` with `LinkCRStrict` for `LinkCR`: every cryptographic hypothesis is an instance of
 `SHA512CRStrict` (`cr/sha-512`), for finders built from the prover bounded: the link finders stopped at `q` (`hCRs`),
 the tables' knowledge finders (`hKS`) and the serving roots' rewinding finder (`hT`). The other hypotheses are the
 headline's, A3 (`hA3`) among them. The bound is `miss(K) + ε_ks + δ_link + δ_tree`, with `δ_link = linkBoundE` at the

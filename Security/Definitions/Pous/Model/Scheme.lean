@@ -26,7 +26,7 @@ structure Scheme (M : IdealModel) : Type 1 where
   B : ℕ
   ℓ : ℕ
   B_pos : 0 < B
-  /-- The encoder's coins, drawn uniformly and erased after encoding. -/
+  /-- The encoder's coins, flipped uniformly and erased after encoding. -/
   Coins : Type
   [fintypeCoins : Fintype Coins]
   [nonemptyCoins : Nonempty Coins]

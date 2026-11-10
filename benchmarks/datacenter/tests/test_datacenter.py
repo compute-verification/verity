@@ -7,7 +7,8 @@ import struct
 from dataclasses import replace
 
 import pytest
-from verity.core.protocols.sampled_proofs.one_stage import registration as one_stage
+from verity.core.protocols import registration
+from verity.core.protocols.spot.one_stage import registration as one_stage
 from verity.ml.circuits import partition_object
 from verity.ml.circuits.census import census
 from verity.ml.circuits.codec import program_digest
@@ -15,6 +16,7 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.boolean.gemm import GEMM_SM120_E4M3, GemmCoordinateE4m3
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple
+from verity.ml.commitments import advice
 
 from datacenter import (FLEET_CLOSED, SALT_CUSTODY, SERVED_PARTITION, Accounts, Assumption, Cadence, Carried, Challenge,
                         Computed, Credit, Datacenter, Deviation, DeviceEntry, Entered, Fleet, Held, Interval, LinkEntry,
@@ -102,7 +104,7 @@ def test_a_program_of_registered_definitions_has_census_values_work_and_its_eval
 
 @pytest.mark.slow
 def test_each_blocks_computed_claim_rests_on_its_proof_units_under_the_registered_partition(setup):
-    """The sampled proofs draw proof blocks from the Program's partition, which one-stage registers with the Program (the
+    """The sampled proofs sample proof blocks from the Program's partition, which one-stage registers with the Program (the
     record names the query's digest, the partition's and the population). A block's proof blocks are that partition's
     whose gates run there, read with the verifier's copy of the query and held to the record (proofs, review 4): under
     Q_word v1 at X = 16 each linear is 32 units, one a coordinate, so each stage's block rests its `Computed` claim on its
@@ -140,11 +142,12 @@ def test_pouws_compiled_program_is_placed_with_its_salt_entering_at_the_blocks_c
     import sys
     from pathlib import Path
 
-    from verity.core.protocols.pouw.circuit import compile as pouw
-    from verity.core.protocols.pouw.circuit import h1tile
+    from verity.ml.protocols.pouw.circuit import compile as pouw
+    from verity.ml.protocols.pouw.circuit import h1tile
     from datacenter.models import s8_grid
 
-    spec = importlib.util.spec_from_file_location("pouw_proved_ticks", Path(__file__).parents[2] / "pouw/proved_ticks.py")
+    spec = importlib.util.spec_from_file_location("pouw_proved_ticks",
+                                                  Path(__file__).parents[3] / "benchmarks/pouw/proved_ticks.py")
     PT = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(PT)
     compiled = pouw.compile(s8_grid(), h1tile.SCHEME).program
@@ -180,11 +183,12 @@ def test_pouws_one_stream_program_is_placed_and_credits_z_at_its_k():
     import sys
     from pathlib import Path
 
-    from verity.core.protocols.pouw.circuit import compile as pouw
-    from verity.core.protocols.pouw.circuit import h1tile
+    from verity.ml.protocols.pouw.circuit import compile as pouw
+    from verity.ml.protocols.pouw.circuit import h1tile
     from datacenter.models import s8_grid
 
-    spec = importlib.util.spec_from_file_location("pouw_proved_ticks", Path(__file__).parents[2] / "pouw/proved_ticks.py")
+    spec = importlib.util.spec_from_file_location("pouw_proved_ticks",
+                                                  Path(__file__).parents[3] / "benchmarks/pouw/proved_ticks.py")
     PT = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(PT)
     assert h1tile.SCHEME_V3 == PT.SCHEME_V3
@@ -269,6 +273,16 @@ def test_crossings_are_derived_from_the_placement_including_inputs_and_delivery(
     for x in crossings(p):
         assert any(dc.port(*h) for h in hops(x.path, x.src))
     assert set(traffic(p)) == {Port(c, d) for c in ("a.cert", "b.cert") for d in ("ingress", "egress")}
+
+
+def test_the_registered_inputs_are_a_theta_item_of_the_registration_log():
+    """`register`'s commitment is what the registration log registers: one θ item, which a log's information entry
+    takes and whose view reads back with the root, the rows and the domain the commitment's leaves are hashed under."""
+    log = registration.chain("onsite", [registration.Information((REG.theta(),))])
+    t = registration.check(registration.Auditor(), "onsite", log).view().value(",".join(REG.values))
+    assert t == REG.theta() and t["root"] == REG.root.hex() and t["leaves"] == len(REG.rows.rows)
+    assert t["domain"] == advice.domain(REG.rows.binding, len(REG.rows.rows)).domain_id.hex()
+    assert t["words"] * t.get("word_bits", 16) == REG.rows.n_bits
 
 
 def test_a_registered_value_has_a_copy_in_every_block_that_reads_it_unless_held_in_one():
@@ -470,7 +484,7 @@ NOISED = program("Noised", {"x": VEC, "w1": MAT, "w2": MAT, "z": VEC}, VEC, nois
 def test_work_is_pinned_to_a_block_only_by_data_it_must_consume_there_or_a_named_premise(setup):
     """A helper holding the registered weights needs only small inputs and outputs, so crossing bytes
     alone attribute nothing. Fresh data from a trusted device that only the block receives pins the work there: a helper
-    could get it only through the block's certified egress. So does the named premise that the fleet is closed."""
+    could get it only through the block's certified egress. So does the proposed assumption that the fleet is closed."""
     dc, p = setup
     profile = p.public(Plan(EPOCH))
     claims = audit(run(p, INPUTS, Plan(EPOCH)), profile)
@@ -544,7 +558,7 @@ def test_the_joint_ledger_credits_each_units_time_and_memory_once(setup):
     night = Plan(EPOCH, wipes=wipes("b.gpu"))
     honest = account(audit(run(p, INPUTS, night), p.public(night)), p.public(night))
     assert honest.sound and {(x.unit, x.resource, x.grade) for x in honest.credits} == {
-        ("dc0", "compute:mac", None), ("dc0", "compute:cuda", None), ("b.gpu", "held", None)}   # the prover system's
+        ("dc0", "compute:mac", None), ("dc0", "compute:cuda", None), ("b.gpu", "held", None)}   # the whole datacenter's
     closed = account(audit(run(p, INPUTS, night), p.public(night)), p.public(night), assume=(FLEET_CLOSED,))
     assert {(x.unit, x.grade) for x in closed.credits if x.resource.startswith("compute")} == {
         ("a", "fleet-closed"), ("b", "fleet-closed")}

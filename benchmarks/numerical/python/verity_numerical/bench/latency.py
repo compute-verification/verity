@@ -302,7 +302,7 @@ CATALOG: dict[str, Design] = {
 #
 # A's critical path (measured by the transcript's trip counter, archive/gkr/src/main.rs) is
 #     depth = 1 (message 2a) + max(lookup chain, checker chain) + 2 (Ligero r, Q)
-#     lookup chain(n)  = 1 + sum_{k=0}^{n-1} (ceil(k / c) + 1)     the R16 fractional-GKR tree: level k is a k-round
+#     lookup chain(n)  = 1 + sum_{k=0}^{n-1} (ceil(k / c) + 1)     the range table's fractional-GKR tree: level k is a k-round
 #                                                                  sumcheck followed by one (mu, lambda) message
 #     checker chain    = sum over the 6 layers of (ceil(b / c) + 2 ceil(s_in / c) + 1)   (no alpha on the last layer)
 # Every instance (9 tables, 2 segments) already runs in lock-step; within an instance the rounds are inherently serial
@@ -312,7 +312,7 @@ CATALOG: dict[str, Design] = {
 # pieces' endpoints as Ligero linear functionals; the piece below starts from a random point sampled after com_1).
 
 def lookup_chain(n: int, c: int = 1, cuts: Sequence[int] = ()) -> int:
-    """Critical-path messages of the R16 fractional GKR of dimension ``n`` with ``c`` variables per message and the
+    """Critical-path messages of the range table's fractional GKR of dimension ``n`` with ``c`` variables per message and the
     tree cut (committed) at the given levels: the longest piece plus the root's lambda message."""
 
     bounds = [0, *sorted(set(cuts)), n]
@@ -337,7 +337,7 @@ def a_depth_options(n_r16: int, layers: Sequence[tuple[int, int]], committed: fl
     sumcheck buckets by (d+1)^c / ((d+1) c) (PROTOCOL.md 5.4; the GPU's sumcheck share is ``sumcheck_share_gpu``,
     fused_sumcheck_4090.md: 55-69%); committing more elements scales the commit/open buckets (``commit_share_gpu``)."""
 
-    t = 65_536  # |R16|
+    t = 65_536  # the 16-bit range table's size
     base_l, base_c = lookup_chain(n_r16), checker_chain(layers)
     base = 1 + max(base_l, base_c) + 2
 
@@ -544,8 +544,8 @@ def measured_row(result: Mapping[str, Any]) -> dict[str, Any]:
 
 
 #: The checker GKR's per-layer (b, s_in) at B = 4096 (96 x 4096 = 393,216 unit copies, b = 19; 826 wires): fitted to
-#: the measured checker chain 197 of r20260922-074606-be7b (6 x 19 + 2 x 39 + 5); the B = 64 run's 167 is
-#: 6 x 13 + 2 x 42 + 5. The R16 fractional tree has n = 26 levels (352 = measured lookup chain).
+#: the measured checker chain 197 (6 x 19 + 2 x 39 + 5); the B = 64 run's 167 is
+#: 6 x 13 + 2 x 42 + 5. The 16-bit range table's fractional tree has n = 26 levels (352 = measured lookup chain).
 A_CHECKER_LAYERS_B4096: tuple[tuple[int, int], ...] = ((19, 7), (19, 7), (19, 7), (19, 6), (19, 6), (19, 6))
 A_R16_LEVELS_B4096 = 26
 A_COMMITTED_B4096 = 44_937 * 4096

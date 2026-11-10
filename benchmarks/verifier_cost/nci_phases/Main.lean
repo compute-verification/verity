@@ -4,7 +4,7 @@ import NciCheck
 `nci-phases INSTANCE [TOP [BIG]]`: `NciCheck.Desc.evaluate`'s steps on one `nci-check --policy` instance, each timed, one
 `PHASE {json}` line per step on stdout (milliseconds, resident and peak RSS in MB): the file's read, the instance's JSON
 parse, `NciCheck.parse`, three of the decoder's parts on their own (the program text's JSON parse, `Flock.canon` of it and
-SHA-512 of that, each a step `Flock.Program.decode` takes, on the whole descriptor), C-Flock's decoder
+SHA-512 of that, each a step `Flock.Program.decode` takes, on the whole descriptor), Flock's decoder
 (`Flock.Program.decode`, which parses the program's text again and hashes it),
 `NciCheck.Widths.reinterpretation`, `Prog.orderViolation`, the layout checks, `walkable`, `analyze` split into each reached
 Definition's summary (`summarize`, callees first, the `TOP` slowest named with their body nodes and return pieces, and

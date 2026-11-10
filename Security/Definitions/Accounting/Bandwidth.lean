@@ -5,6 +5,7 @@ public import Definitions.Accounting.Bandwidth.Relay
 public import Definitions.Accounting.Bandwidth.Interactive
 public import Definitions.Accounting.Bandwidth.Joint
 public import Definitions.Accounting.Bandwidth.Causal
+import Mathlib.Basic.ENNReal.Real
 
 /-! The bandwidth audit v0: its game in the random-oracle model (`Bandwidth/Game.lean`), the same game with side
 sources that may relay tags (`Bandwidth/Relay.lean`), with side sources that answer what the chip sent

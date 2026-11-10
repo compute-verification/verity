@@ -46,11 +46,11 @@ SAMPLED = "runner.sampler/sampled_token_ids"
 
 
 def _make(match: dict, *, swap: list[str] | None = None, rank: int = 1) -> _Stub:
-    """The rank's committed sampled ids (int64 [2, 1] per step) committed; `s.rc` = the run commitment, `s.ids[step]` = the retained buffer."""
+    """The rank's committed sampled ids (int64 [2, 1] per step) committed; `s.rc` = the run commitment, `s.ids[step]` = the committed bytes."""
     from tests.check.opened import commit_host_steps
 
     s = _Stub()
-    s.ids = {st: bytearray(np.asarray([TOK["A"][st], TOK["B"][st]], dtype=np.int64).reshape(-1, 1).tobytes()) for st in range(3)}
+    s.ids = {st: np.asarray([TOK["A"][st], TOK["B"][st]], dtype=np.int64).reshape(-1, 1).tobytes() for st in range(3)}
     com, s.rc = commit_host_steps({st: [(SAMPLED, b, 0, "int64", (2, 1))] for st, b in s.ids.items()})
     # two requests of EQUAL prompt length (5) and equal max_tokens (3): prefill step 0, decode steps 1, 2; engine ids carry vLLM's -<hex> suffix
     com.step_rows = {0: [("A-1a2b3c4d", 0, 5), ("B-9f8e7d6c", 5, 10)], 1: [("A-1a2b3c4d", 0, 1), ("B-9f8e7d6c", 1, 2)], 2: [("A-1a2b3c4d", 0, 1), ("B-9f8e7d6c", 1, 2)]}
@@ -100,8 +100,11 @@ def test_match_record_shorter_than_the_run_is_a_mismatch_and_no_record_means_not
 def test_a_sampled_id_changed_after_the_commit_to_agree_with_the_match_record_is_not_verified_and_not_ok():
     """The Match record says r0's 3rd token is 99; the rank committed 13.  After the commit the retained id is changed to 99 -- a compare
     of the committer's memory would attribute every row.  The opening of step 2 does not verify against the run root: not ok, named."""
+    torch = pytest.importorskip("torch")
+    from tests.check.opened import retained_block
+
     s = _make({"r0": [11, 12, 99], "r1": [21, 22, 23]})
-    s.ids[2][:8] = np.int64(99).tobytes()
+    retained_block(s._tp2_commit["com"], 2)[:8] = torch.frombuffer(bytearray(np.int64(99).tobytes()), dtype=torch.uint8)
     r = s._tp2_attribution(s.rc)
     assert r["ok"] is False and r["steps_checked"] == 2 and r["mismatches_n"] == 1
     assert r["mismatches"][0]["step"] == 2 and r["mismatches"][0]["why"].startswith("opened value not verified")

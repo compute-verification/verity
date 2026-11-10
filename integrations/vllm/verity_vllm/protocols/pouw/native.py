@@ -1,8 +1,8 @@
 """`ncp-v2`'s committed values computed natively: every unit's outputs from numpy and hashlib, each hashed as it is made.
 
-A call's values are its Program's (`verity.core.protocols.pouw.circuit.ncp2.linear`), and evaluating that gate by gate costs about 26
+A call's values are its Program's (`verity.ml.protocols.pouw.circuit.ncp2.linear`), and evaluating that gate by gate costs about 26
 hours per Qwen2.5-0.5B forward at 16 rows. `Native` computes the same values unit by unit instead, and `NativeWeight` its
-weight side's (`ncp2.weight`). They follow the partitions' numbering (`verity.core.protocols.pouw.circuit.partition.units`) and each
+weight side's (`ncp2.weight`). They follow the partitions' numbering (`verity.ml.protocols.pouw.circuit.partition.units`) and each
 template's output-leaf order, and work from the inputs and the byte layouts `ncp2`'s docstring states:
 
     form_y   Y = [B + F₁ | B − F₁∘π⁻¹ | B + F₁ − F₁∘π⁻¹] (s8) for 16 columns, then c₀ = −β·Σ Y mod 2³² (the weight side's)
@@ -28,9 +28,9 @@ from functools import cache, cached_property
 from typing import Callable, Mapping
 
 import numpy as np
-from verity.core.protocols.pouw.circuit import ncp2
-from verity.core.protocols.pouw.circuit import reference as R
-from verity.core.protocols.pouw.circuit.ncp2 import D, Shape
+from verity.ml.protocols.pouw.circuit import ncp2
+from verity.ml.protocols.pouw.circuit import reference as R
+from verity.ml.protocols.pouw.circuit.ncp2 import D, Shape
 
 from verity.ml.kernels.tc import f32_to_bf16_rn_batch
 from verity.ml.circuits.ops.scalar import F32_NAN_PTX

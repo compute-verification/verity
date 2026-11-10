@@ -14,8 +14,7 @@ was rejected.
 A spatial unit has one clock. The audit keeps each window's sync (`Audit.syncs`), set by the first egress link checked
 for that window, and a link that declares a different sync for the window is an `advice` violation there. The bound on
 accepted runs charges one sync per window for all links, `#Σ_sync^W` values over W windows (Lean
-`Properties.NetworkCertifier.EncardAcceptedObservationsLe`, whose timing advice is `Fin W → Σ_sync`): 7 bits per window
-at 16 × 8. A sync per
+`SecurityProofs.EncardAccSeqsLeSync`, whose timing advice is `Fin W → Sync`): 7 bits per window at 16 × 8. A sync per
 link would be advice of `#Σ_sync^(L·W)`, which that bound doesn't cover.
 
 The Program's grids are computed from the syncs as declared, out-of-set values included, so a declared sync outside the
@@ -23,7 +22,7 @@ set, or other than the unit's, is an `advice` violation in its own window only. 
 its own and earlier windows (`schedule.expected_grids`), so such a sync never changes an earlier window's verdict.
 
 A record may come raw or committed (`commitment`: its digest, with padding elided). A committed record's grid check
-compares its digest with the digest of the Program's grid, which is exact up to a SHA-256 collision.
+compares its digest with the digest of the Program's grid, which is exact up to a SHA-512 collision.
 
 A record may also come certified (`certificate`): the record head, the certifier's salt for it and the network
 certificate, which signs the head's digest under that salt; the head and the salt are witness. The audit checks that

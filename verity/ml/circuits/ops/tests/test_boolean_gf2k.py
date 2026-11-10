@@ -3,19 +3,16 @@ with its reference on random elements, Gf128Mul has Karatsuba's 2,187 ANDs, and 
 program digest."""
 from __future__ import annotations
 
-import json
 import random
 
 import numpy as np
 import pytest
 
-from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.evaluation.reference import standalone_call
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import codec
-from verity.ml.circuits.defs import REGISTRY, bind
+from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.boolean import gf2k as G
+
+from _boolean_checks import assert_pinned
 
 #: a residual schema with every term kind, operands of one and three terms, a squared operand, a residual of added terms only
 #: and an empty one
@@ -148,14 +145,7 @@ def test_gfresiduals_refuses_a_product_of_a_missing_operand() -> None:
 
 @pytest.mark.parametrize("target", TARGETS, ids=lambda t: t.id)
 def test_pinned_counts_and_digests(target) -> None:
-    ands, xors, nots, digest = PINS[target.id]
-    assert BL.is_boolean(target)
-    assert BS.compile(target).counts == {"and": ands, "xor": xors, "not": nots}
-    prog, _ = standalone_call(target)
-    desc = codec.encode_program(prog)
-    assert codec.program_digest(desc) == digest
-    D = codec.decode_program(json.loads(codec.canonical_json(desc)), REGISTRY)
-    assert D.gates == prog.gates and codec.program_digest(codec.encode_program(D)) == digest
+    assert_pinned(target, PINS)
 
 
 def test_karatsuba_ands_are_one_per_base_product() -> None:

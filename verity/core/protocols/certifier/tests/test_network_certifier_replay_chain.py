@@ -12,7 +12,7 @@ import pytest
 
 from verity.core.protocols.certifier import replay_chain as RC
 from verity.core.protocols.certifier.head_check import ands
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import registered as G
 from verity.ml.circuits.boolean.forms import Circuit
 
 SMALL = RC.Shape(R=3, W=2, A=3, L=40, NB=20, IW=4, Q=5, D=6, P=3, K=3)

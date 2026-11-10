@@ -166,7 +166,7 @@ def RateDisplacement : Prop :=
 
 /-- **A chained pass is a fresh audit, with side sources that ignore the oracle.** For every chained prover over `P`
 passes with `r`-bit roots (`Rate.Chain`: pass `j`'s interactive device of `RateAudit`'s class and the root its seed is
-drawn at, each any function of the earlier passes' coins, the root also of the store) whose devices' side sources
+sampled at, each any function of the earlier passes' coins, the root also of the store) whose devices' side sources
 ignore the oracle, over a uniform store and each pass's uniform stream, oracle family and sample, and for every pass
 `j`: the probability that pass `j` is accepted at its seed's oracle with its compute within `F` and its footprint short
 of `RateAudit`'s floor is at most `RateAudit`'s error, `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ`.
@@ -299,7 +299,7 @@ is at most `P·(N/2^h + 2^q/2^λ)`.
 
 **The reading.** The route `Paid` of the remote audit for a window, `correct·b ≤ paid + P·λ`: the reads summed over
 passes and tiers, the rebuilt words, state `S` and link bits `L − ρ` at each pass boundary, and `λ` a pass; nothing
-outside the node, whose side sources cannot query the oracle. No sample is drawn, so it holds with the window-wide
+outside the node, whose side sources cannot query the oracle. No sample is sampled, so it holds with the window-wide
 sample, which the route `Sampled` prices. A word read in pass `j − 1` serves pass `j` only through the `S` bits on chip
 when `root_{j−1}` is fixed, because pass `j`'s oracle is fresh at that root.
 

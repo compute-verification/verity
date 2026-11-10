@@ -1,9 +1,11 @@
 # vLLM scheduler traces under varied traffic
 
-Real vLLM V1 scheduler traces for network accounting's advice: what serving made unpredictable, step by step, under
+Real vLLM V1 scheduler traces for network certification's advice: what serving made unpredictable, step by step, under
 Poisson traffic. Plain vLLM's OpenAI server on one RTX PRO 6000, with the integration's batch-invariant eager engine
-(bi-eager). `corpus.MODELS` lists the models: `llama32_1b` (unsloth/Llama-3.2-1B, bf16) and
-`llama31_8b_int8` (`verity-int8/Llama-3.1-8B-INT8` with the int8_exact linears, `--quantization verity_int8`).
+(bi-eager), or on a whole 8-GPU H200 node at TP8. `corpus.MODELS` lists the models: `llama32_1b` (unsloth/Llama-3.2-1B,
+bf16), `llama31_8b_int8` (`verity-int8/Llama-3.1-8B-INT8` with the int8_exact linears, `--quantization verity_int8`)
+and `glm53` (GLM-5.3, block-FP8, at TP8 with vLLM's own kernels, at a rate given with `--rate`). A request stops on the
+checkpoint's end-of-text ids (`corpus.stop_ids`), which the corpus's meta.json records as `eos_token_ids`.
 
 - `vllm_trace_plugin.py`: a vLLM general plugin. In the engine core it wraps the scheduler's `add_request`, `schedule`,
   `update_from_output` and `_free_request`, and appends each request handed to the scheduler, each step's scheduled
@@ -37,6 +39,19 @@ Poisson traffic. Plain vLLM's OpenAI server on one RTX PRO 6000, with the integr
   late cell read came from: `warden_probe.py` (the relay's every tick, publish and collection), `host_sample.py` (the
   host's load every 100 ms) and the client's own event loop record (`corpus.drive_warden`); the summary lays each late
   tick against them (`summary.late_ticks`).
+- `corpus.py run --admit tick` serves under the certified tick (`verity_vllm.pipeline.serve_admit`, which vLLM's
+  server loads through `verity_vllm.pipeline.tick_plugin`): the engine adds the requests whose release bucket closed by
+  its logical clock, in release order, so that batch composition is a function of the certified releases and the advice
+  v1 sends no timing. In a warden trace the network certifier in front of the server sends the release headers and
+  streams the watermark (`warden_serve.py serve --watermark`), and the summary takes each request's release from what
+  the server got, where the certifier's log agrees (`summary.feed_releases`); a run behind it shows the network
+  certifier's code in front of the server on the serving host, not on a host the prover doesn't control. With no
+  network certifier in front of the server, the client stands in for it (`corpus.StandIn`): it numbers each request and
+  puts it in the bucket of its send, in the release headers, and streams the watermark. The hostile schedulers' traces
+  don't take the tick. τ_sat and τ_free are calibrated on a trace of the same server on the
+  same host (`--tick-from`; `corpus.py tick TRACE_DIR` prints them) or given (`--tick-ms`). The hook also records the
+  scheduler's KV pool (`engine.json`), which the replay reads. `tick.sh`: GLM-5.3's load point under the tick on a whole
+  H200 node, beside the same load admitted on arrival, then the advice v1 over both (its header has its command).
 - `run.sh`: the job on a leased GPU of a node (its header has its command and resources). `join.sh`: its summaries,
   comparison and the scheduler replay's table on a CPU node, for a GPU job run with `JOIN=0`. A summarized corpus is
   published in the evidence store as `vllm-trace-corpus/v1`, which `benchmarks/network_e2e/encodings/trace_corpus.py`

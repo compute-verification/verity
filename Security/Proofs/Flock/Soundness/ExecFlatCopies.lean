@@ -2,7 +2,12 @@ module
 
 public import Proofs.Flock.Soundness.ExecFlatClass
 public import Proofs.Flock.Soundness.Types.ProgramPlaces
-public import Properties.Flock.Circuit.Keys
+public import Proofs.Flock.Soundness.ExecSetup
+public import Proofs.Flock.Soundness.ExecTyped
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.ExecTemplateSetup
+import Proofs.Flock.Soundness.SparseRows
+import Proofs.Flock.Soundness.Types.Parts
 
 /-!
 # A typed flat class's input copies and forced-zero rows (1e for flat classes)

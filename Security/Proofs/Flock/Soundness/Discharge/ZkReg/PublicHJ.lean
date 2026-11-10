@@ -1,7 +1,26 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
 public import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
+public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
+import Proofs.Flock.Soundness.Discharge.Tables.Headline
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
+import Proofs.Flock.Soundness.Game
 
 /-!
 # `zk_session_soundHJR_custody`, "wrong" measured against the public file
@@ -15,7 +34,7 @@ second conjunct ties, at each read the verifier owns, to the root `--registered 
 
 * `rsZHJS_wrongRegZ`: the registered commit strings are the public file's (`keyLayoutH`'s population is `fun _ => pub`),
   so `wrongRegZ` is one set at every registration.
-* `zk_session_soundHJR_custody_drawn_reg`: the drawn units' form of the first conjunct,
+* `zk_session_soundHJR_custody_drawn_reg`: the sampled proof blocks' form of the first conjunct,
   `Pr[flock-verify accepts ∧ some drawn unit in wrongRegZ] ≤ ε_ks + δ_link`, without A3, and the same second conjunct.
 -/
 
@@ -106,9 +125,9 @@ theorem zk_session_soundHJR_custody_reg
   exact add_le_add (add_le_add (Tables.execOS_subset_miss_le kd hkd Lb src hA3 K₀)
     (ksAvgZC_le_strict execArith hs512 (planZHJ dj y₀) k (reg σ) (cont σ) hCR)) le_rfl
 
-/-- **One hidden-output `--zk --registered` sampled session of `J` tables is sound at the units it draws, and its
-registered reads are checked.** `zk_session_soundHJR_custody_reg`'s first conjunct at the drawn units: the executable
-verifier accepts and some unit the session drew is in `wrongRegZ`. The draw is the session's, so no law over it is
+/-- **One hidden-output `--zk --registered` sampled session of `J` tables is sound at the units it samples, and its
+registered reads are checked.** `zk_session_soundHJR_custody_reg`'s first conjunct at the sampled proof blocks: the executable
+verifier accepts and some unit the session drew is in `wrongRegZ`. The sample is the session's, so no sampling design over it is
 assumed (no A3, no `kd ≤ n`). -/
 theorem zk_session_soundHJR_custody_drawn_reg
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)

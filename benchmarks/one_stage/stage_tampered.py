@@ -12,7 +12,7 @@ import json
 import numpy as np
 
 from verity_flock import circuit as FC
-from verity_numerical.bench.input_sets import InputSet
+from verity_flock.input_sets import InputSet
 
 
 class Flipped:

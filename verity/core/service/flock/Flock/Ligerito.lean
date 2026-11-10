@@ -3,9 +3,8 @@ The dense Ligerito opening and its Merkle caps (`Flock.Merkle`).
 -/
 module
 
-public import Flock.Opening
-public import Flock.Schedule
 public import Flock.Merkle
+public import Flock.Piop
 
 @[expose] public section
 

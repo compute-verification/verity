@@ -37,6 +37,7 @@ class Engine:
     tensor_parallel_size: int | None = None
     max_num_seqs: int | None = None
     max_num_batched_tokens: int | None = None
+    long_prefill_token_threshold: int | None = None
     max_model_len: int | None = None
     gpu_memory_utilization: float | None = None
     kv_cache_memory_bytes: int | None = None
@@ -45,6 +46,7 @@ class Engine:
     async_scheduling: bool | None = None
     enforce_eager: bool | None = None
     execution: str | None = None
+    engine_class: str | None = None
     dtype: str | None = None
     quantization: str | None = None
     compilation_config: Mapping[str, Any] | None = None

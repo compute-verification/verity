@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Pous.Chain.Family
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # The band store with a public encoder at every segment count from 1 to 2^64

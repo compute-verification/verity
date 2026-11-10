@@ -1,7 +1,11 @@
 module
 
-public import Proofs.Core.TC.AmpereSound
-public import Proofs.Core.TC.Proofs.Pack
+public import Definitions.Core.TC.Bridge
+import Proofs.Core.TC.Ampere.Words
+import Proofs.Core.TC.AmpereSound
+import Proofs.Core.TC.Proofs.Pack
+import Proofs.Core.TC.Proofs.Words
+import Proofs.Core.TC.Sound
 
 /-!
 # The unit boundary: the committed BF16 word

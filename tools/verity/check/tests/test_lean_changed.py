@@ -305,7 +305,9 @@ def test_the_facts_are_read_in_the_sandbox(tmp_path, monkeypatch):
     lake.chmod(0o755)
     assert LC.records("c", tree, str(lake)) == []
     assert (store / "dep" / "Dep.olean").read_text() == "kept"
-    assert (pkg / ".lake" / "lean-changed-facts" / "facts.json").is_file()
+    work = pkg / ".lake" / "lean-changed-facts"
+    assert not (work / LC.AUDIT.FACTS).exists(), "nothing reads the facts after the comparison, so none is kept"
+    assert not list(work.glob("lean-facts-*")), "the program wrote them under `.lake`, and they are gone"
 
 
 def test_the_sandbox_keeps_the_dependencies_read_only_and_the_build_writable(tmp_path):

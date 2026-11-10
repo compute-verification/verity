@@ -122,7 +122,7 @@ def test_a_lock_held_under_a_dead_owners_line_is_held_not_free(c, tmp_path):
 
 
 def test_a_gpu_with_live_foreign_memory_is_held_so_a_whole_node_grant_waits(c, tmp_path):
-    """21 Oct, vy-nebius-2: a vLLM engine outside any lease held GPU 7 (`7.foreign`); the planner counted 7 free and granted
+    """On vy-nebius-2, a vLLM engine outside any lease held GPU 7 (`7.foreign`); the planner counted 7 free and granted
     all 8 to a prover, which gpu-lease refused, so 0-6 sat idle. A `.foreign` naming a live pid is held; a dead one isn't."""
     gl, proc = tmp_path / "gl", tmp_path / "proc"
     gl.mkdir()
@@ -248,7 +248,7 @@ def test_live_mode_grants_through_gpu_lease_agent_mode_and_observes_the_lease_it
 
 
 def test_a_waiter_pinned_to_more_gpus_than_it_asks_for_is_granted_only_from_them(c, tmp_path):
-    """5:55 PM PDT on 30 Sep: a `gpu-lease 1 --on 2,3,4,5,6,7` request read without its `on=` was granted GPU 0, which gpu-lease
+    """A `gpu-lease 1 --on 2,3,4,5,6,7` request read without its `on=` was granted GPU 0, which gpu-lease
     can't take, and the node sat idle behind it. `on=` naming more GPUs than the request is its pool."""
     from cluster.plan import Start, plan
     line = "pid=355694 n=1 on=2,3,4,5,6,7 run=r1 who=w since=2026-10-01T00:51:49Z max=20 preempt=1"

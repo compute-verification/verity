@@ -1,9 +1,22 @@
 module
 
-public import Proofs.Flock.VBridge.Compiled
-public import Proofs.Flock.VBridge.InnerAccepts
 public import Proofs.Flock.Soundness.Refine.RepConverse
+public import Proofs.Flock.VBridge.Compiled
 public import Proofs.Flock.VBridge.Full
+public import Proofs.Flock.VBridge.InnerAccepts
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # VBridge G item 5: `StagesAccept` from one table's files and both reps' runs
@@ -144,7 +157,7 @@ theorem stagesAccept_of_runs
     ((wmsg (layers zs dg N k Rw R ω t R₂ τ)).zip (t.map Prod.snd)) (hfiles R ω t R₂ τ o h) (hruns R ω t R₂ τ o h halg)
 
 /-- **VBridge G on the verifier's own definitions**, from the pieces still open: `vbridge_compiled` at `ℐ`, with
-`StagesAccept` from one table's files and both reps' runs (`stagesAccept_of_runs`) and `VFullR` from V*'s full draw
+`StagesAccept` from one table's files and both reps' runs (`stagesAccept_of_runs`) and `VFullR` from V*'s full sample
 (`vFullR_of_read`). -/
 theorem vbridge_exec
     (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')

@@ -2,6 +2,8 @@ module
 
 public import Definitions.Flock.Sparse
 public import Flock.RecAlgebra
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # `RecSparse_v1` over F
@@ -16,7 +18,7 @@ the selected entries and the sums `out` takes, which is what a forms bridge for 
 
 w is the message ports' elements in order (`message_ports`): `h` (64), `pre0 … pre5` (`c₀, c₂`), `v2`, `sc<j>`
 (`c₀, c₂ … c_deg`), `u` (`P'`), with `T > 1` `vt` (`T`), and `claim`. `SCoins` is `rec_sparse.SparsePublics`: the inner rep's
-`α`, `z`, `x_rest`, `y_rest`, the layout factors `U`, and the phase's own coins `cs` in the order drawn: `ζ_c` (6),
+`α`, `z`, `x_rest`, `y_rest`, the layout factors `U`, and the phase's own coins `cs` in the order sampled: `ζ_c` (6),
 `ζ_r` (6), `r_k` (`ν`), `r_s` (`S_LOG`), `ζ_p` (`P_LOG`), `ρ_t` (`T_LOG`).
 -/
 
@@ -119,7 +121,7 @@ def sparseS : GfS := ⟨nw sh, nv sh, ((opList sh).map fun t => #[t]).toArray, (
 
 /-! ## The verifier's row -/
 
-/-- `rec_sparse.SparsePublics`, with the phase's own coins `cs` in the order drawn. -/
+/-- `rec_sparse.SparsePublics`, with the phase's own coins `cs` in the order sampled. -/
 structure SCoins where
   alpha : F128
   z : F128

@@ -16,11 +16,9 @@ deadline: a lower bound on the work (`Pouw.Guarantees.EndToEnd`), freshness (pre
   audit accepts. A transcript received after `td` is rejected, whatever it holds.
 * **The budget** (`Adversary.BoundedBy`): `Adversary.Bounded` with the online phase's cost replaced by what the run
   spends after the salt and by the deadline.
-* **What the deadline reads of an adversary** (`Adversaries`): its preprocessing, the transcript it commits, and its
-  online phase's cost and oracle calls. `CostModel.adversaries` reads them in this game; Pearl-C's game reads its own.
 
-Time meets the cost model only through the named assumption `Pouw.Assumptions.HonestClock`, stated once over
-`Adversaries` for both games; `Pouw.Guarantees.WorkBetweenSaltAndDeadline` is the guarantee.
+Time meets the cost model only through the named assumption `Pouw.Assumptions.HonestClock`;
+`Pouw.Guarantees.WorkBetweenSaltAndDeadline` is the guarantee.
 -/
 
 @[expose] public section
@@ -40,7 +38,7 @@ structure TimedRun (Q R S : Type) where
 def TimedRun.spentIn (run : TimedRun Q R S) (H : Q → R) (s : S) (a b : ℝ) : ℝ := run.spent H s b - run.spent H s a
 
 /-- **The verifier's rule at the deadline `td`**: it received the transcript by `td`, and the audit with the samples `c`
-accepts (every sampled unit is in `K`). -/
+accepts (every sampled proof block is in `K`). -/
 def AcceptsBy (run : TimedRun Q R S) (td : ℝ) (H : Q → R) (s : S) {w : ℕ → ℕ} {N t : ℕ} (K : Finset ℕ)
     (c : Fin t → Ticket w N) : Prop :=
   run.tr H s ≤ td ∧ AuditAccepts K c
@@ -51,20 +49,5 @@ def Adversary.BoundedBy {CM : CostModel Q R S} (A : Adversary CM) (U : Workload)
     (q : ℕ) : Prop :=
   ∀ (H : Q → R) (s : S), run.spentIn H s run.ts td ≤ T ∧
     A.pre.calls H + CM.calls A.online H U A.act (A.pre.eval H) s ≤ q
-
-/-- What the deadline reads of a game's adversaries, of type `Adv`: each one's preprocessing, the transcript in `Out` it
-commits on oracle `H` and salt `s`, and its online phase's cost and oracle calls there. -/
-structure Adversaries (Q R S Adv Out : Type) where
-  pre : Adv → QTree Q R State
-  transcript : Adv → (Q → R) → S → Out
-  cost : Adv → (Q → R) → S → ℝ
-  calls : Adv → (Q → R) → S → ℕ
-
-/-- The adversaries of the cost model `CM` on the workload `U`, as the deadline reads them. -/
-def CostModel.adversaries (CM : CostModel Q R S) (U : Workload) : Adversaries Q R S (Adversary CM) Transcript where
-  pre A := A.pre
-  transcript A := A.transcript U
-  cost A H s := CM.cost A.online H U A.act (A.pre.eval H) s
-  calls A H s := CM.calls A.online H U A.act (A.pre.eval H) s
 
 end Pouw

@@ -1,6 +1,44 @@
 module
 
+public import Definitions.Claims.RecursionLin
+public import Proofs.Flock.Claims.Witnesses.Recursion
 public import Proofs.Flock.Claims.Witnesses.RecursionLin
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.ExponentialBounds
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
 
 /-!
 # The witnesses of the recursion's claims with the inner Flock's roots linear
@@ -12,7 +50,7 @@ records (`ksRAt` with `ksB`), where the outer witnesses record no call, so `B_I`
 inner statement has no cap position, and `Fdev`'s tail `β₂/(M+1)` is below `1/4` at `M = ⌈4β₂⌉` (`tail_lt_quarter`);
 there `κ < 1/6` (`ksD_κ_lt_sixth`), so `λ₂ > 0` (`ksB_lamLin2_pos`). Their `meets` witnesses are `Inner.KSAbort`'s and
 `KSBound`'s: the claims read the same decoders. The toy records stage no V\* statement, so `B_I` and `Fdev` over the
-draws' evaluations (`BinnerV`, `FdevV`) find nothing either (`drawCalls_noCalls`).
+samples' evaluations (`BinnerV`, `FdevV`) find nothing either (`drawCalls_noCalls`).
 -/
 
 @[expose] public section
@@ -94,7 +132,7 @@ theorem f0I_expectedCR_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursi
   rw [f0I_pr_noCalls H D hc I DO decO P x R]
   exact div_nonneg (Ex_nonneg fun _ => Nat.cast_nonneg _) (by positivity)
 
-/-- A draw's evaluations are none where the outer witnesses record no call and the compiled verifier stages no V\*
+/-- A sample's evaluations are none where the outer witnesses record no call and the compiled verifier stages no V\*
 statement. -/
 theorem drawCalls_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Deploy Coin)
     (hc : ∀ x (r : Fin (D.V.k x) → Coin) ws, D.callsAt H x r ws = []) (hs : ∀ x ps, D.vstar x ps = []) (I : Recursion.Inner Coin W)
@@ -104,7 +142,7 @@ theorem drawCalls_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.De
   rw [hc, hs]
   rfl
 
-/-- `B_I` over the draws' evaluations finds nothing where there are none. -/
+/-- `B_I` over the samples' evaluations finds nothing where there are none. -/
 theorem binnerV_pr_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Deploy Coin)
     (hc : ∀ x (r : Fin (D.V.k x) → Coin) ws, D.callsAt H x r ws = []) (hs : ∀ x ps, D.vstar x ps = []) (I : Recursion.Inner Coin W)
     (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') {Ω : Type} [Fintype Ω] [Nonempty Ω]
@@ -115,7 +153,7 @@ theorem binnerV_pr_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.D
   · rintro ⟨u, v, h, -⟩
     simp only [BinnerV, drawCalls_noCalls H D hc hs, List.append_nil, findColl, reduceCtorEq] at h
 
-/-- `Fdev` over the draws' evaluations finds nothing where there are none. -/
+/-- `Fdev` over the samples' evaluations finds nothing where there are none. -/
 theorem fdevV_pr_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Deploy Coin)
     (hc : ∀ x (r : Fin (D.V.k x) → Coin) ws, D.callsAt H x r ws = []) (hs : ∀ x ps, D.vstar x ps = []) (I : Recursion.Inner Coin W)
     (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') {Ω : Type} [Fintype Ω] [Nonempty Ω]
@@ -124,7 +162,7 @@ theorem fdevV_pr_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Dep
   rw [Pr_congr fun s => iff_false_intro ?_]
   · exact Pr_false
   · rintro ⟨u, v, h, -⟩
-    simp only [FdevV, linkOutV, drawCalls_noCalls H D hc hs, List.append_nil, findColl, reduceCtorEq] at h
+    simp only [FdevV, linkOutV, drawCalls_noCalls H D hc hs, List.append_nil, findColl, ite_self, reduceCtorEq] at h
 
 theorem prBinnerV_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Deploy Coin)
     (hc : ∀ x (r : Fin (D.V.k x) → Coin) ws, D.callsAt H x r ws = []) (hs : ∀ x ps, D.vstar x ps = []) (I : Recursion.Inner Coin W)

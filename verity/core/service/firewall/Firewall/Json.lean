@@ -4,14 +4,17 @@ write them (`live/src/firewall_record_vectors.json`):
 
 * `op`, `{"op": [NAME, ARGS…], "record": TEXT}`: one call on the record, `{"record": TEXT', "result": R}`. `open` gives
   the session's id, `{"refused": why}` or `{"error": why}`; `admit` gives `{"release_ms": t or null}` or
-  `{"refused": why}`; `stop` whether it recorded the stop; `failures` the count; `finish`, `release` and `slot` null.
+  `{"refused": why}`; `stop` whether it recorded the stop; `failures` the count; `finish`, `release` and `slot` null;
+  `register` (the record after its number, hex: the op's record is `be64 n` and those bytes) the number it took;
+  `registrations` (a session, a part and the numbers its statement reads, or why its commitments are none of the
+  server's) null or `{"refused": why}`.
 * `outer`, `{"now_ms", "part", "prove", "ready", "record", "send", "session"}`: one outer session, the stages
   `Firewall.Loop` runs (`decide`, then `stopAt` or `settle`) in turn on the record with the clock at `now_ms`,
   `{"outcome", "record", "sent_at", "why"}`. `prove` and `ready` are `"ok"`, `{"err": why}` or `{"panic": msg}`; `send` is
   the challenger's verdict (a boolean) or `{"panic": msg}`. `sent_at` is the release time a session that was sent waited
   for, if it had one.
 
-A record the firewall can't read, and an op that isn't one of these with arguments of their types, are rejected. An open's
+A record the ZK server can't read, and an op that isn't one of these with arguments of their types, are rejected. An open's
 statements, budget and schedule are checked before the record is read, as Python checks them.
 -/
 module
@@ -91,6 +94,21 @@ def opFn (input : Json) : V Json := do
     let (s, p) := (← arg 1 "session", ← arg 2 "part")
     let r ← read
     pure (answer r Json.null (slot r.events s p))
+  | "register", 2 =>
+    let rest ← Flock.unhex (← arg 1 "the record after its number")
+    let r ← read
+    let ((n, _), evs) := register r.events fun n => (Flock.be64 n.toUInt64 ++ rest, none)
+    pure (answer r (Json.num n) evs)
+  | "registrations", 4 =>
+    let (s, p) := (← arg 1 "session", ← arg 2 "part")
+    let reads ← match op[3]! with
+      | Json.str why => pure (Except.error why)
+      | Json.arr ks => Except.ok <$> ks.mapM (Flock.J.asNat · "op: a registration")
+      | _ => throw "op: reads is not a list of registrations or a why"
+    let r ← read
+    match admitReads r.events s p reads with
+    | (.ok (), evs) => pure (answer r Json.null evs)
+    | (.error why, evs) => pure (answer r (obj1 "refused" (Json.str why)) evs)
   | name, n => throw s!"op: {name} with {n - 1} arguments is not an op of the record"
 
 private def runOf (j : Json) (what : String) : V Run :=

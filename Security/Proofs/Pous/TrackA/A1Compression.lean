@@ -1,16 +1,10 @@
 module
 
-public import Mathlib.Algebra.BigOperators.Ring.Finset
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Data.Fintype.Powerset
-public import Mathlib.Tactic.FieldSimp
-public import Mathlib.Tactic.GCongr
-public import Mathlib.Tactic.Linarith
-public import Definitions.Pous
-public import Definitions.Pous.Assumptions
-public import Proofs.Pous.Statements
-public import Proofs.Pous.Sanity
-public import Proofs.Pous.Accounting.Numbers
+public import Definitions.Pous.Game.Prob
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
+import Proofs.Pous.Sanity
 
 /-!
 # A1, the compression lemma: `PousProofs.a1_compression_card` and `a1_compression_pr`, as drafted

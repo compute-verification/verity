@@ -468,7 +468,7 @@ def independent_gemm_coordinate(node: Any, opened_inputs: Mapping[str, Any], j: 
 
 
 RELATION_IDS = {
-    "gemm.bf16.v1": ("gemm", independent_gemm, "Hawkeye-derived Ampere mma.sync chain (silicon.AMPERE_BF16_M16N8K16) over ascending K tiles + declared epilogue, RNE to BF16; validated bit-exact against vLLM's batch-invariant matmul_kernel_persistent on the A100 (numerics.md). Coverage-gated: predicts only on the validated (kernel path, K, N, epilogue) families, else RelationError('unresolved: ...')."),
+    "gemm.bf16.v1": ("gemm", independent_gemm, "Hawkeye-derived Ampere mma.sync chain (silicon.AMPERE_BF16_M16N8K16) over ascending K tiles + declared epilogue, RNE to BF16; validated bit-exact against vLLM's batch-invariant matmul_kernel_persistent on the A100. Coverage-gated: predicts only on the validated (kernel path, K, N, epilogue) families, else RelationError('unresolved: ...')."),
     "lm_head.bf16.v1": ("lm_head", independent_gemm, "gemm.bf16.v1 at the vocab shape (K=1536, N=151936, no bias); same coverage gate."),
     "gemm.bf16.coordinate.v1": ("gemm", independent_gemm_coordinate, "Scalar gate: one coordinate of gemm.bf16.v1 from the opened input row and weight column, pure-Python tc_dot chain."),
 }

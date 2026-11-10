@@ -1,8 +1,32 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
 public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
-public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysInner
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysReplay
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsFrames
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+import Proofs.Flock.Soundness.Refine.Opening
+import Proofs.Flock.Soundness.Refine.Plays
 
 /-!
 # A `--zk` rep's requested rows verify
@@ -139,14 +163,14 @@ theorem foldRoundsC_len (p : LigeritoProof) :
   | k + 1, a, sM, qM, c :: cs, hl, hs => by
       rw [Model.foldRoundsC, show kMsgs p a (k + 1) = kMsg p.messages[a]! :: kMsgs p (a + 1) k by
         simp [kMsgs, List.range'_succ]]
-      have hk : Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!)) := by
+      have hk : Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!)) := by
         unfold Model.drawK
         exact Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawVec c (hs c (by simp)) (by omega)) (Plays.pure _)
           (by simp) (by simp)
       obtain ⟨⟨rs, s'', q'⟩, hrest, hlen⟩ := foldRoundsC_len p k (a + 1)
-        (fun o => (qM o).eval (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!)))
+        (fun o => (qM o).eval (execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!)))
         (fun o => Model.fromMsg (gOf p.messages[a]!.1, gOf p.messages[a]!.2)
-          ((qM o).eval (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!)))) cs (by simpa using hl)
+          ((qM o).eval (execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!)))) cs (by simpa using hl)
         fun c' h => hs c' (by simp [h])
       refine ⟨_, Plays.bind' hk (Plays.bind' (Plays.recv _ (gOf p.messages[a]!.1, gOf p.messages[a]!.2))
         (Plays.bind' hrest (Plays.pure _) (List.append_nil _).symm (List.append_nil _).symm) rfl rfl) (by simp [kMsg])

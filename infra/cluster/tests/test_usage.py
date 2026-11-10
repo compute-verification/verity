@@ -1,6 +1,6 @@
 """`cluster.usage`: per node, owner, kind and UTC hour, the GPU-seconds held, busy, idle, unmeasured and useful, from per-minute
-readings and pool leases in the console's shapes (node 1's DCGM minutes and n1_lease.py spans, node 2's sampler minutes, 3 Oct
-2026); the held-idle lines derived from them; the record; and `cluster usage hourly | wasters`."""
+readings and pool leases in the console's shapes (node 1's DCGM minutes and n1_lease.py spans, node 2's sampler
+minutes); the held-idle lines derived from them; the record; and `cluster usage hourly | wasters`."""
 from __future__ import annotations
 
 import argparse

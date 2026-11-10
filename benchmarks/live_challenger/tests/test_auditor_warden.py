@@ -385,6 +385,28 @@ def test_a_warden_rehearsals_sampling_is_recorded_and_passed_on_every_request(ho
     assert A.warden_command(older, tmp_path, "u")[-4:] == ["--temperature", "0.0", "--top-p", "1.0"]
 
 
+def test_a_warden_rehearsals_watermark_is_recorded_and_passed_on_only_when_asked(host, tmp_path):
+    """`--watermark` is recorded (``watermark: true``) only when given, and its run is the same rehearsal with
+    `rehearse --watermark` added: the traffic, schedule and minutes are the same, since the stream changes nothing
+    the warden certifies."""
+    rc, out = gate(host, REQUEST + ["--watermark", "--tokens", "64"], started=[])
+    assert rc == 0, out
+    req = json.loads((host.certifier / json.loads(out)["run"] / "request.json").read_text())
+    rc, out = gate(host, REQUEST + ["--tokens", "64"], started=[], token="cd34")
+    plain = json.loads((host.certifier / json.loads(out)["run"] / "request.json").read_text())
+    assert req["watermark"] is True and "watermark" not in plain
+    assert {k: v for k, v in req.items() if k not in ("watermark", "run")} == \
+        {k: v for k, v in plain.items() if k != "run"}
+    argv, without = A.warden_command(req, tmp_path, "u"), A.warden_command(plain, tmp_path, "u")
+    at = without.index("--max-tokens")
+    assert argv == [*without[:at], "--watermark", *without[at:]]
+    assert A.warden_command(plain | {"watermark": False}, tmp_path, "u") == without
+    refusals = [gate(host, REQUEST + extra + ["--minutes", "3"], started=[], token="ef56") for extra in
+                ([], ["--watermark"])]
+    assert refusals[0] == refusals[1] and refusals[0][0] == 3
+    assert "--minutes 3: 100 requests take" in json.loads(refusals[0][1])["refused"]
+
+
 PROMPTS = [[70001, 3], [5], [7]]
 SCAN = REQUEST + ["--scan", "--prompts", "--height", "10"]
 

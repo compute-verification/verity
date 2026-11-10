@@ -1,6 +1,11 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Tables.Sim
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.List.GetD
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import VCVio.Prelude.Core
 
 /-!
 # A simulation's dead branches, answered with a fixed message

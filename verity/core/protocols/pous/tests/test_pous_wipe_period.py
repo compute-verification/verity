@@ -196,7 +196,7 @@ def test_the_party_follows_period_json(tmp_path) -> None:
     assert WP.placement("n0", "a")["kind"] == "own-host"
     simulated = WP.placement("n0", "n0", simulated=True)
     assert simulated["kind"] == "simulated" and simulated[WP.PREMISE].startswith("simulated: ")
-    with pytest.raises(ValueError, match="simulated placement runs the memory challenger on the prover's node"):
+    with pytest.raises(ValueError, match="simulated placement runs the memory challenger on the developer's node"):
         WP.placement("n0", "a", simulated=True)
 
 
@@ -225,7 +225,7 @@ def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> N
     answer = W.leg(period, "n0", out)
     assert answer["verdict"] == "accept", answer
     assert answer["public"]["certified"] is False and answer["public"]["memory_bits"] == M
-    assert answer["profile"]["placement"]["trusted-host"] == "holds: the memory challenger ran on auditor, not the prover's n0"
+    assert answer["profile"]["placement"]["trusted-host"] == "holds: the memory challenger ran on auditor, not the developer's n0"
     case = json.loads((out / "wipe.case.json").read_text())
     assert sorted(case) == ["commitment", "evidence", "params"]
     record = json.loads((out / "wipe.json").read_text())

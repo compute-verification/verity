@@ -7,11 +7,11 @@ public import Definitions.Pouw.PearlC.Sha512
 # Pearl-C's noise as SHA-512 gives it (trusted; definitions only)
 
 `PearlCSem.noise` is abstract: the named assumptions take the noise as a function of the oracle `H`. This module is the
-noise Pearl-C's h3 hashing actually draws, as a function of the salt, the weight's commitment root and the committed
+noise Pearl-C's h3 hashing actually samples, as a function of the salt, the weight's commitment root and the committed
 activations, through the spec's own SHA-512 (`Sha512.digest`), not a random oracle. A statement that wants the noise of
 the deployment instantiates `PearlCSem` with `sha512Sem`; the oracle `H` is then unused, and what is uniform is the salt.
 
-The rules, op for op, are `verity/core/protocols/pouw/schemes/pearl_c.py` (h3, row-seeded, forming v1):
+The rules, op for op, are `verity/ml/protocols/pouw/schemes/pearl_c.py` (h3, row-seeded, forming v1):
 - `s512 role msg` (`pearl_c.s512`): the first 32 bytes of SHA-512 over the role's label block
   (`"pearl-c/h3s/<role>\0"` zero-padded to 128 bytes) and `msg`.
 - `seedB` (`pearl_c.seed_b`): `s512 "seed-B" (salt ‖ root_B)`, one per weight and salt.
@@ -30,7 +30,7 @@ The rules, op for op, are `verity/core/protocols/pouw/schemes/pearl_c.py` (h3, r
 
 **What is a parameter.**
 - The salt's bytes, `salt : S → List ℕ`: the 32-byte epoch salt (`identifier.SALT_BYTES`, `coins.COIN_BYTES`) is
-  `Salt32`, uniform when the game draws `s : Salt32` uniformly.
+  `Salt32`, uniform when the game samples `s : Salt32` uniformly.
 - `rootB w`, the 64-byte root of weight `w`'s hiding commitment. It is fixed with the weights before the salt, and its
   opening (the leaves' salts) is the committer's randomness, so the noise does not determine it from the weight codes.
 - `fc`, `alpha`, `beta` and `floor` are the base `PearlCSem`'s: only the noise is pinned here.
@@ -119,8 +119,8 @@ open NoiseSha512
 variable {Q R S : Type}
 
 /-- **Pearl-C's semantics with SHA-512's noise**: `base` with its noise replaced by `unitNoise` at the salt's bytes
-`salt s` and the root `rootB (wid u)` of the unit's weight. The oracle is unused. -/
+`salt s` and the root `rootB (fixedId u)` of the unit's weight. The oracle is unused. -/
 def sha512Sem (base : PearlCSem Q R S) (salt : S → List ℕ) (rootB : ℕ → List ℕ) : PearlCSem Q R S :=
-  { base with noise := fun _ s U u act => unitNoise (salt s) (rootB (U.layout.wid u)) (U.layout.shape u) u act }
+  { base with noise := fun _ s U u act => unitNoise (salt s) (rootB (U.layout.fixedId u)) (U.layout.shape u) u act }
 
 end Pouw.PearlC

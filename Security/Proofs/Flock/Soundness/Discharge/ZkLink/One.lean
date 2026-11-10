@@ -1,7 +1,10 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
-public import Proofs.Flock.Soundness.Discharge.Exec.Live
+public import Proofs.Flock.Soundness.Refine.LiveSim
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Exec.Live
+import Proofs.Flock.Soundness.Refine.Plays
 
 /-!
 # One compiled `--zk` table as `Refine.modelTable`

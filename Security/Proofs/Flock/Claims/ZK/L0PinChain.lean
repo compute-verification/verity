@@ -1,19 +1,52 @@
 module
 
-public import Proofs.Flock.Claims.ZK.L0PinLive
+public import Proofs.Flock.Claims.ZK.FrameOpenLive
 public import Proofs.Flock.Claims.ZK.FrameState
+public import Proofs.Flock.Claims.ZK.L0PinLive
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.FrameTaken
 
 /-!
 # A live history's level-0 messages are its bodies at the frame's pads
 
 From the binding on, the frame's state moves through level 0's masked rounds by their values (`answered_openBind`,
-`answered_l0`), so where the firewall schedules the opening's binding and then level 0's bodies at zero pads, each at
-its count, a live history's messages are the binding and the bodies at the rep's draws' pads:
+`answered_l0`), so where the ZK server schedules the opening's binding and then level 0's bodies at zero pads, each at
+its count, a live history's messages are the binding and the bodies at the rep's samples' pads:
 
 * **The rounds' places** (`l0Off`, `l0N`, `l0K`, `l0Nc`, `nPiop_ood`, `l0_size`, `l0Sent_at`): body `1 ≤ i ≤ k₀ + 2`
   absorbs `l0N i` values from `l0Off i` past the algebraic phase's position, which is level 0's out-of-domain pad's
   absorbed place, and squeezes `l0Nc i` coins of kind `l0K i`.
-* **`LeanRelease.l0_chain`**: the binding's message is the binding, and body `i`'s is the body at the draws' pads,
+* **`LeanRelease.l0_chain`**: the binding's message is the binding, and body `i`'s is the body at the samples' pads,
   tagged `0`.
 -/
 
@@ -137,9 +170,9 @@ open FlockSoundness.Refine (Frame encs)
 
 /-- **A live history's level-0 messages**: where the frame takes the coins before round `J` outside a masked phase,
 past the algebraic phase's opening and before level 0, at the algebraic phase's last position, rounds `J` to
-`J + k₀ + 2` are one rep's frame rounds, the stream answers each with its count, and the firewall schedules round `J`
+`J + k₀ + 2` are one rep's frame rounds, the stream answers each with its count, and the ZK server schedules round `J`
 as the opening's binding with `z`'s squeeze and round `J + i` as level 0's body `i` at zero pads with its counts,
-round `J`'s message is the binding and round `J + i`'s the body at the rep's draws' pads, tagged `0`. -/
+round `J`'s message is the binding and round `J + i`'s the body at the rep's samples' pads, tagged `0`. -/
 theorem l0_chain {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hl : L.toSrv.live wk x w ρ κ h = true)
     (hown : L.toSrv.OwnHist L.fillOf wk x w ρ κ h) (hle : h.length ≤ L.last x)

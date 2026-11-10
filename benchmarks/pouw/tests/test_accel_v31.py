@@ -109,7 +109,7 @@ def test_timeline_of_fill_once_under_ltw(tmp_path, capsys):
 
 
 # ------------------------------------------------------------------------------------------------------------ known answers
-# Known answers of verity/core/protocols/pouw/circuit/dither.py (`values_buffer`, `commit` under salts(Ks, 3 leaves),
+# Known answers of verity/ml/protocols/pouw/circuit/dither.py (`values_buffer`, `commit` under salts(Ks, 3 leaves),
 # `pad_rows`, `Shape.domain`) on salt bytes 0..63, coin 64..127, operand-root receipt 128..191, Ks 192..255, call 3, and B
 # (and the served A) from default_rng(11)
 DITHER = {
@@ -203,7 +203,7 @@ def test_fill_verdicts(cheat, served, L):
 
 
 def test_fill_refuses_t_past_8():
-    """t = min(L, K) / L' is at most 8 (dither/PROTOCOL.md, "The segment and the noise tile"): L 8,192 at L' 256 is
+    """t = min(L, K) / L' is at most 8 (dither/PROTOCOL.md, "The segment and the noise repeat length"): L 8,192 at L' 256 is
     refused at K 16,384 and L 4,096 at L' 512 passes, as do the defaults, L >= K at L' >= K / 8, and every call the GPU's
     gates (v31lib.GATES and PIPELINE) and fill_dither.py's cases build."""
     with pytest.raises(ValueError, match="at most 8"):

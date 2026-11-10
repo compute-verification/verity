@@ -276,10 +276,10 @@ def local(tmp_path, monkeypatch):
 
 def test_a_local_run_spawns_job_exec_and_keeps_the_workloads_command_in_its_record(local):
     runs_root, got, runs = local
-    assert cli.main(["run", "--runs-dir", str(runs_root), "--id", "l1", "--job-user", "vyjob", "--env", "FOO=1", "--no-sampler",
+    assert cli.main(["run", "--runs-dir", str(runs_root), "--id", "r20260101-000000-0a11", "--job-user", "vyjob", "--env", "FOO=1", "--no-sampler",
                      "--", "echo", "hi"]) == 0
-    d = runs_root / "l1"
-    assert got["cmd"] == jobuser.spawn_argv(["echo", "hi"], "vyjob", "research-job-l1", ["FOO"]) and got["mode"] == 0o1777
+    d = runs_root / "r20260101-000000-0a11"
+    assert got["cmd"] == jobuser.spawn_argv(["echo", "hi"], "vyjob", "research-job-r20260101-000000-0a11", ["FOO"]) and got["mode"] == 0o1777
     job = json.loads((d / "job.json").read_text())
     assert job["execution"]["command"] == ["echo", "hi"] and job["run"]["job_user"] == "vyjob"
     assert [c[2] for c in runs.calls] == ["systemctl", "find", "chown"] and got["finish"] == ([], [])
@@ -304,7 +304,7 @@ def test_a_run_dir_the_job_user_still_owns_part_of_is_not_published(local, monke
     monkeypatch.setattr(jobuser, "finish", lambda *a, **k: ([], ["out/x"]))
     published = []
     monkeypatch.setattr(cli, "_publish_attempt", lambda *a, **k: published.append(a))
-    assert cli.main(["run", "--runs-dir", str(runs_root), "--id", "u1", "--job-user", "vyjob", "--no-sampler", "--", "true"]) == 3
+    assert cli.main(["run", "--runs-dir", str(runs_root), "--id", "r20260101-000000-0b21", "--job-user", "vyjob", "--no-sampler", "--", "true"]) == 3
     assert published == [] and "refused to publish: 1 entry" in capsys.readouterr().err
 
 

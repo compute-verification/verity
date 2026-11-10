@@ -3,7 +3,7 @@
 measured beside the flat form, at any K and R × C tile. A leaf is proved as one of two units: ``tile``, the whole tile
 (`h1window.tile_unit`, the statement `pouw_h1_circuits` writes), or its ``lane`` (`h1zy.lane`, one circuit for every
 lane, the lane index public) and ``combine`` (`h1zy.combine`), the statements `h1_lanes` stages, which
-`h1window.leaf_unit` derives at a K of whole lanes. Each must fit C-Flock's block (``k_log <= 27``).
+`h1window.leaf_unit` derives at a K of whole lanes. Each must fit Flock's block (``k_log <= 27``).
 
 * ``lower K R C OUT [--unit tile|lane|combine] [--form structural|flat] [--staging fast|library] [--bind leaf|zero]
   [--path FILE] [--program FILE]``: a tile through `pouw_h1_circuits._lower` itself (the ``--lower`` command's body,
@@ -11,7 +11,7 @@ lane, the lane index public) and ``combine`` (`h1zy.combine`), the statements `h
   rows, in this process, bound to its leaf Program's partition and digest as a served window's verifier derives them
   (`leaf_bind`, the default; its descriptor to ``--program``), or with ``--bind zero`` to `ZERO_BIND`; at ``fast`` (the
   default) `fast_stage` patches the library first, for the same bytes. OUT (JSON): the lowering (its class; the rows
-  C-Flock proves below the root, the commits among them and the ANDs, `_counts`; the template's Definitions, rows and
+  Flock proves below the root, the commits among them and the ANDs, `_counts`; the template's Definitions, rows and
   calls), its seconds and peak RSS before compose and at the end, the binding, and the file's bytes, SHA-512 and META
   block and binding fields; or the refusal, before lowering (`refusal`) or compose's (a block past ``K_MAX``, ``k_log``
   the block it needs) with the lowering's counts. The file goes to FILE, else to a scratch directory removed at exit.
@@ -50,7 +50,7 @@ H1_PROVE = ROOT / "benchmarks" / "pouw" / "h1_prove"
 ZERO_BIND = {"partition": "0" * 128, "program": "0" * 128}
 #: a lane's or combine's binding: its leaf Program's (`leaf_bind`, the default), or `ZERO_BIND`
 BINDS = ("leaf", "zero")
-#: META's fields that say how the statement fills C-Flock's block
+#: META's fields that say how the statement fills Flock's block
 BLOCK = ("format", "statement", "layout", "k_log", "unit_log", "vus_per_block", "per_vu")
 SEED = 20261028
 UNITS = ("tile", "lane", "combine")
@@ -74,7 +74,7 @@ def _h1unit(form: str):
 def refusal(unit: str, k: int, r: int, c: int) -> str | None:
     """Why the R × C leaf at K has no ``unit`` statement, decided before anything is lowered; None when it has one."""
     from verity.core.protocols.pouw import weights as W
-    from verity.core.protocols.pouw.circuit import h1zy as Z
+    from verity.ml.protocols.pouw.circuit import h1zy as Z
     if unit not in UNITS:
         return f"a leaf's statement is one of {', '.join(UNITS)}, not {unit!r}"
     if r <= 0 or c <= 0 or r % 4 or c % 8 or k < 64 or k % 32:
@@ -97,9 +97,9 @@ def leaf_statement(U, unit: str, k: int, r: int, c: int) -> tuple:
     """``unit``'s Definition (`h1zy.lane` or `h1zy.combine` over the leaf's tile, as `h1window.leaf_unit` derives it at a
     K of whole lanes) and its input rows, as `h1_lanes`' ``stager`` stages them."""
     from verity.core.protocols.pouw import leaf_lanes as LL
-    from verity.core.protocols.pouw.circuit import h1tile as H
-    from verity.core.protocols.pouw.circuit import h1window as HW
-    from verity.core.protocols.pouw.circuit import h1zy as Z
+    from verity.ml.protocols.pouw.circuit import h1tile as H
+    from verity.ml.protocols.pouw.circuit import h1window as HW
+    from verity.ml.protocols.pouw.circuit import h1zy as Z
     from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
     t = HW.h1_tile(k, (r, c), H.PouwH1Tile3 if U.tile() == "v3" else None)
     wp = 2 * LL.words(k)
@@ -119,8 +119,8 @@ def window(U, k: int, r: int, c: int):
     """A served window of one call at K over the R × C tile: `h1window.program` over `h1window.tile_unit` at K on
     `h1unit.tile`'s H1 tile. `h1window.leaf_program` reads only the window's template at K, so every served window's
     leaf Programs at K are this one's."""
-    from verity.core.protocols.pouw.circuit import h1tile as H
-    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.protocols.pouw.circuit import h1tile as H
+    from verity.ml.protocols.pouw.circuit import h1window as HW
     h1 = H.PouwH1Tile3 if U.tile() == "v3" else None
     return HW.program((("w", k, c),), (("w", 0),), r, (r, c), unit=lambda kk: HW.tile_unit(kk, (r, c), h1))
 
@@ -134,8 +134,8 @@ def leaf_bind(U, unit: str, k: int, r: int, c: int) -> tuple[object, dict, bytes
     """``unit``'s Definition, binding and leaf Program descriptor as a served window's verifier derives them (`credit`'s
     lanes form): `h1window.leaf_program`'s one-call Program of its wrapper over the lane or combine, a population of one,
     bound as ``{partition: its partition object's digest, program: the descriptor's SHA-512}``."""
-    from verity.core.protocols.pouw.circuit import h1window as HW
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.ml.protocols.pouw.circuit import h1window as HW
+    from verity.core.protocols.spot.one_stage import partition as P
     win = window(U, k, r, c)
     program, query = HW.leaf_program(win, k, unit)
     if P.units(program, query) != 1:
@@ -194,7 +194,7 @@ def _keep_totals(CS, got: dict) -> None:
 
 
 def _counts(low, struct: dict | None = None, commits: int | None = None) -> dict:
-    """The lowering's counts. ``rows``: the rows C-Flock proves below the root (a template's from ``struct``, its
+    """The lowering's counts. ``rows``: the rows Flock proves below the root (a template's from ``struct``, its
     `_Lowerer.total`; a flat unit's AND and table-read rows). ``commits``: those of them that commit a linear form rather
     than AND two (``A = form, B = 1``: `struct_lower`'s past ``support`` at a call boundary, `Circuit.commit`'s).
     ``ands``: a template's rows less its commits; a flat unit's layout count, its commits included, as the harness counts
@@ -215,20 +215,25 @@ def _counts(low, struct: dict | None = None, commits: int | None = None) -> dict
 
 
 def _file(path: Path) -> dict:
-    """The file's first line, its META line's bytes and its SHA-512, read in chunks: a templated file's META holds the
-    whole template."""
+    """The file's first line, its META line's bytes, a templated file's template lines (its template section's header
+    ``TEMPLATE n``; None for a flat file) and its SHA-512, read in chunks."""
+    from verity_flock.circuit import TMPL_SECTION
+
     h, newlines, at = hashlib.sha512(), [], 0
     with open(path, "rb") as f:
         while b := f.read(1 << 24):
             h.update(b)
             start = 0
-            while len(newlines) < 2 and (nl := b.find(b"\n", start)) >= 0:
+            while len(newlines) < 3 and (nl := b.find(b"\n", start)) >= 0:
                 newlines.append(at + nl)
                 start = nl + 1
             at += len(b)
     with open(path, "rb") as f:
         head = f.read(newlines[0]).decode()
-    return {"head": head, "meta_bytes": newlines[1] - newlines[0] - 1, "sha512": h.hexdigest()}
+        f.seek(newlines[1] + 1)
+        section = f.read(newlines[2] - newlines[1] - 1).split() if len(newlines) > 2 else []
+    lines = int(section[1]) if len(section) == 2 and section[0] == TMPL_SECTION.encode() else None
+    return {"head": head, "meta_bytes": newlines[1] - newlines[0] - 1, "template_lines": lines, "sha512": h.hexdigest()}
 
 
 def _done(args, rec: dict) -> int:
@@ -253,15 +258,15 @@ def check(args) -> int:
     """`credit`'s lanes form on the lane file LANE and combine file COMBINE at K over the R × C tile, as a period that
     commits them as ``lane<K>`` and ``combine<K>`` reads them: the served window (`window`) within `lanes_shape`; each
     file's leaf Program, `h1window.leaf_program`'s descriptor, `leaf_of` the unit `leaf_unit_id` reads off the window's
-    descriptor; each file's META bound as the verifier of record holds it (``program_sha512`` that descriptor's SHA-512,
+    descriptor; each file's META bound as the verifier holds it (``program_sha512`` that descriptor's SHA-512,
     ``partition`` the digest of `leaf_partition_of`, the object credit hands the verifier, which is
     `partition.partition`'s of the leaf Program); and the circuit files with their leaf Programs in the lanes form
     (`lanes_files`, `form_of`)."""
     U = _h1unit("structural")
     from verity.core.protocols.pouw import credit as Cr
     from verity.core.protocols.pouw import leaf_lanes as LL
-    from verity.core.protocols.pouw.circuit import h1window as HW
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.ml.protocols.pouw.circuit import h1window as HW
+    from verity.core.protocols.spot.one_stage import partition as P
     t0 = time.time()
     win = window(U, args.k, args.r, args.c)
     raw = _descriptor(win)
@@ -327,9 +332,8 @@ def lower(args) -> int:
 
     def meta_captured(text):
         m = meta_of(text)
-        tl = m.get("template")
-        got["meta"] = {**{k: m.get(k) for k in BLOCK}, "template_lines": len(tl) if isinstance(tl, list) else None,
-                       "program_sha512": m.get("program_sha512"), "partition": m.get("partition")}
+        got["meta"] = {**{k: m.get(k) for k in BLOCK}, "program_sha512": m.get("program_sha512"),
+                       "partition": m.get("partition")}
         return m
 
     CS.unit_lowering, FC.meta_of = captured, meta_captured
@@ -406,7 +410,7 @@ def _instances(U, shape, rng) -> tuple[list[str], dict[str, np.ndarray], list[tu
 
 def _reference(U, shape, rows: dict, i: int, pub: tuple) -> tuple[np.ndarray, int]:
     """`h1zy.reference` on instance ``i``'s words, as `h1_prove/stage.py` holds a staged round to it."""
-    from verity.core.protocols.pouw.circuit import h1zy as Z
+    from verity.ml.protocols.pouw.circuit import h1zy as Z
     a = [U.split_row(rows[f"a{x}"][i]) for x in range(shape.r)]
     b = [U.split_row(rows[f"b{x}"][i]) for x in range(shape.c)]
     salt, pos, roots = pub

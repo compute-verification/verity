@@ -1,6 +1,40 @@
 module
 
 public import Proofs.Flock.Claims.Bridge.Hm96Tree
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Bridge.Transport
+import VCVio.Prelude.Core
 
 /-!
 # Committed coins at a verifier that may answer a round with nothing
@@ -54,7 +88,7 @@ def CProver.atM {Ω : Type} (P : CProver Ω) (h : Msg) (π : ℕ → Msg) : Prov
 sends the root of `r` before the prover's first message and opens round `j`'s coin with its answer, except where that
 answer is `[]`; `V` decides on the coins `r`. -/
 def runCM {Coin Ω T : Type} [Inhabited Coin] (H : Msg → Msg) (P : CProver Ω) (V : Verifier Coin) (x : Msg)
-    (C : CoinTree Coin T (V.k x)) (ω : Ω) (r : Fin (V.k x) → Coin) (τ : T) : Trace :=
+    (C : CoinTree Coin T (V.k x)) (ω : Ω) (r : Fin (V.k x) → Coin) (τ : T) : Transcript :=
   run H (P.atM (C.hello r τ) (openSeq (C.opn r τ))) V x ω r
 
 /-- **The simulator's opening reads only its round's answer**: two answer lists of one length with one last answer get
@@ -96,7 +130,7 @@ with `[]` have the same rounds. -/
 theorem stepWith_congrOr {Coin : Type} (H : Msg → Msg) {Ω Ω' : Type} (P : Prover Ω) (P' : Prover Ω')
     (V : Verifier Coin) (x : Msg) (ω : Ω) (ω' : Ω') (ans : Coin → Msg) (r : ℕ → Coin)
     (hV : AnswersCoinOrNil H V x ans) (hP : ∀ hist, AnsweredOr ans r hist → P.next x hist ω = P'.next x hist ω') :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), AnsweredOr ans r hist →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), AnsweredOr ans r hist →
       hist.length = as.length →
       stepWith H P x ω (fun as => V.next x as ((List.range as.length).map r)) n hist as t =
         stepWith H P' x ω' (fun as => V.next x as ((List.range as.length).map r)) n hist as t := by
@@ -162,7 +196,7 @@ has probability within `δ_hide` of the same event at `Claims.run` of the simula
 theorem runCM_near {Coin Ω T : Type} [Fintype Coin] [Inhabited Coin] [Fintype Ω] [Nonempty Ω] [Fintype T]
     (H : Msg → Msg) (V : Verifier Coin) (x : Msg) (C : CoinTree Coin T (V.k x)) (ans : Coin → Msg) (S : OnlineSim)
     {δ_hide : ℝ} (hS : SimHides C ans S δ_hide) (hL : S.LastOnly) (hV : AnswersCoinOrNil H V x ans) (P : CProver Ω)
-    (Ev : Ω → (Fin (V.k x) → Coin) → Trace → Prop) :
+    (Ev : Ω → (Fin (V.k x) → Coin) → Transcript → Prop) :
     |Pr (fun p : Ω × (Fin (V.k x) → Coin) × T => Ev p.1 p.2.1 (runCM H P V x C p.1 p.2.1 p.2.2)) -
       Pr (fun p : (Ω × S.Tape) × (Fin (V.k x) → Coin) => Ev p.1.1 p.2 (run H (simProverM S V.k P) V x p.1 p.2))| ≤
       δ_hide := by
@@ -228,7 +262,7 @@ theorem Pr_runCM_le_hm96 {Coin B Y C T₀ : Type} [Fintype Coin] [Inhabited Coin
     (T : Hm96Tree Coin B Y C T₀ (V.k x)) {δ₁ : ℝ≥0∞} (hH : Hm96Hiding T.My T.cs δ₁) (hδ : δ₁ ≠ ⊤) (ans : Coin → Msg)
     (hans : Function.Injective ans) (hV : AnswersCoinOrNil H V x ans) :
     ∃ S : OnlineSim, ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : CProver Ω)
-      (Ev : Ω → (Fin (V.k x) → Coin) → Trace → Prop),
+      (Ev : Ω → (Fin (V.k x) → Coin) → Transcript → Prop),
       Pr (fun p : Ω × (Fin (V.k x) → Coin) × (Fin (V.k x) → Y) × T₀ =>
           Ev p.1 p.2.1 (runCM H P V x T.tree p.1 p.2.1 p.2.2)) ≤
         Pr (fun p : (Ω × S.Tape) × (Fin (V.k x) → Coin) => Ev p.1.1 p.2 (run H (simProverM S V.k P) V x p.1 p.2)) +

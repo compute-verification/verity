@@ -17,13 +17,15 @@ from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation.reference import standalone_call
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import codec
-from verity.ml.circuits.defs import REGISTRY, bind
+from verity.ml.circuits.defs import bind
 from verity.ml.kernels import tc as K
 from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import Circuit
 from verity.ml.circuits.silicon import fp
+
+from _boolean_checks import assert_agrees, assert_pinned
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -92,14 +94,7 @@ TARGETS = [bind(BG.F2fpBf16), *STEPS, AMPERE_K64, HOPPER_K64, HOPPER_V3_K64, *DO
 
 @pytest.mark.parametrize("target", TARGETS, ids=[t.id for t in TARGETS])
 def test_pinned_counts_and_digests(target) -> None:
-    ands, xors, nots, digest = PINS[target.id]
-    assert BL.is_boolean(target)
-    assert BS.compile(target).counts == {"and": ands, "xor": xors, "not": nots}
-    prog, _ = standalone_call(target)
-    desc = codec.encode_program(prog)
-    assert codec.program_digest(desc) == digest
-    D = codec.decode_program(json.loads(codec.canonical_json(desc)), REGISTRY)
-    assert D.gates == prog.gates and codec.program_digest(codec.encode_program(D)) == digest
+    assert_pinned(target, PINS)
 
 
 #: each Boolean GEMM composite, its step width k and the rest of a binding
@@ -157,27 +152,18 @@ def test_the_ands_are_the_builders_live_ands(d) -> None:
     assert T.counts["and"] == C.counts()["ands"] - commits == PINS[f"{d.name}_v{d.version}"][0]
 
 
-def _agree(target, inputs) -> None:
-    word = TR.word_of(target)
-    got = BS.evaluate_words(target, *inputs).astype(np.uint64)
-    ref = E.evaluate_batch(word, *inputs).astype(np.uint64)
-    assert got.shape == ref.shape
-    bad = np.flatnonzero(got.reshape(len(got), -1) != ref.reshape(len(ref), -1))
-    assert not bad.size, f"{target.id}: {bad.size} instances differ from {word.id}, first {bad[:5]}"
-
-
 def test_the_cast_agrees_with_f2fp_v1() -> None:
     rng = np.random.default_rng(11)
     hi = np.repeat(np.arange(1 << 16, dtype=np.uint32), 4) << np.uint32(16)
     lo = np.tile(np.array([0, 0x7FFF, 0x8000, 0x8001], np.uint32), 1 << 16)
     words = np.concatenate([hi | lo, rng.integers(0, 1 << 32, 200_000, dtype=np.uint64).astype(np.uint32)])
-    _agree(bind(BG.F2fpBf16), [words])
+    assert_agrees(bind(BG.F2fpBf16), [words])
 
 
 @pytest.mark.parametrize("target", STEPS, ids=[t.id for t in STEPS])
 def test_the_steps_agree_with_their_word_steps(target) -> None:
     params, _ = E.batch.signature_of(TR.word_of(target))
-    _agree(target, K.sample_tc(np.random.default_rng(12), 20_000, params))
+    assert_agrees(target, K.sample_tc(np.random.default_rng(12), 20_000, params))
 
 
 #: one word of each special class in both signs: NaNs (quiet, signalling, all-ones payload), the infinities, the zeros, the least
@@ -259,7 +245,7 @@ def test_the_step_without_its_stand_ins_is_the_step_on_every_special_class(stand
     want = BS.evaluate_words(stand_in, acc, a, b).astype(np.uint64)
     bad = np.flatnonzero(got.reshape(len(acc)) != want.reshape(len(acc)))
     assert not bad.size, f"{raw.id}: {bad.size} of {len(acc)} differ from {stand_in.id}, first {bad[:5]}"
-    _agree(raw, [acc, a, b])
+    assert_agrees(raw, [acc, a, b])
     out = got.reshape(len(acc)).astype(np.uint32)
     finite = ((acc & 0x7F800000) != 0x7F800000) & ((a & 0x7F80) != 0x7F80).all(1) & ((b & 0x7F80) != 0x7F80).all(1)
     inf = (out & 0x7FFFFFFF) == 0x7F800000
@@ -282,8 +268,8 @@ def test_the_fp8_steps_and_coordinates_agree_with_their_word_definitions(target)
     rng = np.random.default_rng(17)
     params, _ = E.batch.signature_of(TR.word_of(target))
     sampled = K.sample_tc(rng, 20_000, params)
-    _agree(target, sampled)
-    _agree(target, _finite_e4m3(rng, sampled))
+    assert_agrees(target, sampled)
+    assert_agrees(target, _finite_e4m3(rng, sampled))
 
 
 def test_the_e5m2_step_agrees_with_its_word_step() -> None:
@@ -292,10 +278,10 @@ def test_the_e5m2_step_agrees_with_its_word_step() -> None:
     target = bind(BG.BlackwellE5m2QmmaDot32)
     params, _ = E.batch.signature_of(TR.word_of(target))
     sampled = K.sample_tc_e5m2(rng, 20_000, params)
-    _agree(target, sampled)
+    assert_agrees(target, sampled)
     uniform = [rng.integers(0, 1 << (32 if a.dtype == np.uint32 else 8), a.shape, dtype=np.uint64).astype(a.dtype) for a in sampled]
-    _agree(target, uniform)
-    _agree(target, [a if a.dtype == np.uint32 else np.where((a & 0x7C) == 0x7C, a & 0xFB, a).astype(np.uint8) for a in uniform])
+    assert_agrees(target, uniform)
+    assert_agrees(target, [a if a.dtype == np.uint32 else np.where((a & 0x7C) == 0x7C, a & 0xFB, a).astype(np.uint8) for a in uniform])
 
 
 @pytest.mark.parametrize("target,model", FP4, ids=[t.id for t, _ in FP4])
@@ -304,9 +290,9 @@ def test_the_fp4_steps_and_coordinates_agree_with_their_word_definitions(target,
     rng = np.random.default_rng(18)
     params, _ = E.batch.signature_of(TR.word_of(target))
     sampled = K._sample_block_scaled(model)(rng, 20_000, params)
-    _agree(target, sampled)
+    assert_agrees(target, sampled)
     n_scales = 2
-    _agree(target, [rng.integers(0, 1 << 32, a.shape, dtype=np.uint64).astype(np.uint32) if a.dtype == np.uint32 else
+    assert_agrees(target, [rng.integers(0, 1 << 32, a.shape, dtype=np.uint64).astype(np.uint32) if a.dtype == np.uint32 else
                     rng.integers(0, 256 if j >= len(sampled) - n_scales else 16, a.shape, dtype=np.uint64).astype(np.uint8)
                     for j, a in enumerate(sampled)])
 
@@ -329,7 +315,7 @@ def test_the_s8_step_agrees_with_its_word_step_and_clamps_at_d() -> None:
     acc[: n // 4] = 0x7FFFFFFF - edge[: n // 4]
     acc[n // 4: n // 2] = 0x80000000 + edge[n // 4:]
     a, b = _s8_operands(rng, n, 32)
-    _agree(S8[0], [acc, a, b])
+    assert_agrees(S8[0], [acc, a, b])
     exact = acc.view(np.int32).astype(np.int64) + (a.view(np.int8).astype(np.int64) * b.view(np.int8)).sum(1)
     got = BS.evaluate_words(S8[0], acc, a, b).astype(np.uint32).view(np.int32)
     assert np.array_equal(got, np.clip(exact, -(1 << 31), (1 << 31) - 1))
@@ -341,7 +327,7 @@ def test_the_s32_cast_agrees_with_its_word_cast_and_numpy() -> None:
     words = np.concatenate([rng.integers(0, 1 << 32, 100_000, dtype=np.uint64).astype(np.uint32),
                             (np.uint32(1) << np.arange(32, dtype=np.uint32)) + np.uint32(1),
                             np.array([0, 1, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF, 0x01000001, 0x01000003], np.uint32)])
-    _agree(S8[1], [words])
+    assert_agrees(S8[1], [words])
     assert np.array_equal(BS.evaluate_words(S8[1], words).astype(np.uint32), words.view(np.int32).astype(np.float32).view(np.uint32))
 
 
@@ -350,12 +336,12 @@ def test_the_s8_accumulator_and_coordinate_agree_with_their_word_definitions() -
     rng = np.random.default_rng(23)
     n = 2000
     x, w = _s8_operands(rng, n, 64)
-    _agree(S8[2], [x, w])
+    assert_agrees(S8[2], [x, w])
     sx = (np.abs(rng.standard_normal(n)) / 127).astype(np.float32).view(np.uint32)
     sw = (np.abs(rng.standard_normal(n)) * 0.02 / 127).astype(np.float32).view(np.uint32)
-    _agree(S8[3], [x, sx, w, sw])
+    assert_agrees(S8[3], [x, sx, w, sw])
     u = rng.integers(0, 1 << 32, (2, n), dtype=np.uint64).astype(np.uint32)
-    _agree(S8[3], [x, u[0], w, u[1]])
+    assert_agrees(S8[3], [x, u[0], w, u[1]])
 
 
 def test_the_row_split_s8_coordinate_agrees_with_its_word_definition_and_is_the_unsplit_coordinate() -> None:
@@ -367,7 +353,7 @@ def test_the_row_split_s8_coordinate_agrees_with_its_word_definition_and_is_the_
     sx = (np.abs(rng.standard_normal(n)) / 127).astype(np.float32).view(np.uint32)
     sw = rng.integers(0, 1 << 32, n, dtype=np.uint64).astype(np.uint32)
     parts = [x[:, :32], x[:, 32:], sx, w[:, :32], w[:, 32:], sw]
-    _agree(ROWS, parts)
+    assert_agrees(ROWS, parts)
     assert np.array_equal(BS.evaluate_words(ROWS, *parts), BS.evaluate_words(S8[3], x, sx, w, sw))
 
 
@@ -387,7 +373,7 @@ def test_the_residual_coordinate_agrees_with_its_word_definition_and_is_the_coor
     special = np.array([0x0000, 0x8000, 0x0001, 0x8001, 0x7F7F, 0xFF7F, 0x7F80, 0xFF80, 0x7FC0, 0xFFC0, 0x7F81], np.uint16)
     r = rng.integers(0, 1 << 16, n, dtype=np.uint32).astype(np.uint16)
     r[:len(special)], r[len(special):2 * len(special)] = special, y[len(special):2 * len(special)] ^ np.uint16(0x8000)
-    _agree(RESIDUAL, parts + [r])
+    assert_agrees(RESIDUAL, parts + [r])
     assert np.array_equal(BS.evaluate_words(RESIDUAL, *parts, r).reshape(n), BS.evaluate_words(EW.Bf16AddF2fp, r, y).reshape(n))
 
 
@@ -399,7 +385,7 @@ def test_the_padded_coordinate_agrees_with_its_word_definition_and_is_the_coordi
     for T in (1, 5, 16, 17, 31, 32):
         target = bind(BG.GemmCoordinatePad, T=T, K=32, **BG.GEMM_HOPPER)
         assert TR.word_of(target).id == f"GemmCoordinatePad_v1{{T={T},K=32,DOT=HopperBF16WgmmaDot16_v1}}"
-        _agree(target, [xs[:, :T], ws[:, :T]])
+        assert_agrees(target, [xs[:, :T], ws[:, :T]])
 
         def pad(a):
             return np.concatenate([a[:, :T], np.zeros((len(a), 32 - T), a.dtype)], axis=1)
@@ -418,7 +404,7 @@ def test_the_pv_row_agrees_with_its_word_definition_and_is_the_padded_coordinate
         assert TR.word_of(target).id == f"PvRow_v1{{T={T},K=32,D=64,DOT=HopperBF16WgmmaDot16_v1}}"
         p, v = xs[:n, :T], ws.reshape(n, D, 32)[:, :, :T].transpose(0, 2, 1)
         vs = [np.ascontiguousarray(v[:, t]) for t in range(T)]
-        _agree(target, [p, *vs])
+        assert_agrees(target, [p, *vs])
         pad = bind(BG.GemmCoordinatePad, T=T, K=32, **BG.GEMM_HOPPER)
         cols = np.stack([BS.evaluate_words(pad, p, np.ascontiguousarray(v[:, :, d])).reshape(n) for d in range(D)], axis=1)
         assert np.array_equal(BS.evaluate_words(target, p, *vs).reshape(n, D), cols)
@@ -437,7 +423,7 @@ def test_the_padded_pv_row_agrees_with_its_word_definition_at_every_key_count() 
     p[past & (np.arange(T) % 3 == 0)] = 0x7F80
     v[past, 0], v[past, 1] = 0x7F80, 0x7FC0
     vs = [np.ascontiguousarray(v[:, t]) for t in range(T)]
-    _agree(PVROWPAD, [p, *vs, counts])
+    assert_agrees(PVROWPAD, [p, *vs, counts])
     got = BS.evaluate_words(PVROWPAD, p, *vs, counts).reshape(heads, D)
     for n in (1, 2, 5, 17, 31, 32):
         at = np.flatnonzero(counts == n)
@@ -456,9 +442,9 @@ def test_the_scaled_s8_matmul_agrees_with_scaled_mm_s8_v1() -> None:
     w = np.stack([w, np.roll(w, 1, axis=0), np.roll(w, 2, axis=0)], axis=1)
     sx = (np.abs(rng.standard_normal(n)) / 127).astype(np.float32).view(np.uint32)
     sw = (np.abs(rng.standard_normal((n, 3))) * 0.02 / 127).astype(np.float32).view(np.uint32)
-    _agree(target, [x, sx, w, sw])
+    assert_agrees(target, [x, sx, w, sw])
     special = np.array([0, 0x80000000, 1, 0x7F7FFFFF, 0x7F800000, 0xFF800000, 0x7FC00000, 0x7F800001], np.uint32)
-    _agree(target, [x, rng.choice(special, n), w, rng.choice(special, (n, 3))])
+    assert_agrees(target, [x, rng.choice(special, n), w, rng.choice(special, (n, 3))])
 
 
 @pytest.mark.parametrize("target", DOTS, ids=lambda t: t.id)
@@ -466,7 +452,7 @@ def test_the_dot_agrees_with_dot_bf16_v2(target) -> None:
     word = TR.word_of(target)
     assert word.id == f"DotBf16_v2{{K={target.bindings['K']},DOT={TR.word_of(target.bindings['DOT']).id}}}"
     params, _ = E.batch.signature_of(word)
-    _agree(target, K.sample_tc(np.random.default_rng(15), 4000, params))
+    assert_agrees(target, K.sample_tc(np.random.default_rng(15), 4000, params))
 
 
 @pytest.mark.parametrize("target", [AMPERE_K64, HOPPER_K64, HOPPER_V3_K64], ids=lambda t: t.id)
@@ -474,7 +460,7 @@ def test_the_coordinate_agrees_with_gemm_coordinate_v2(target) -> None:
     word = TR.word_of(target)
     assert word.id == f"GemmCoordinate_v2{{K=64,DOT={TR.word_of(target.bindings['DOT']).id}}}"
     params, _ = E.batch.signature_of(word)
-    _agree(target, K.sample_tc(np.random.default_rng(13), 4000, params))
+    assert_agrees(target, K.sample_tc(np.random.default_rng(13), 4000, params))
 
 
 @pytest.mark.parametrize("target", GEMMS, ids=lambda t: t.id)
@@ -483,7 +469,7 @@ def test_the_gemm_agrees_with_gemm_v2(target) -> None:
     assert word.id == f"Gemm_v2{{K=32,N=3,DOT={TR.word_of(target.bindings['DOT']).id}}}"
     params, _ = E.batch.signature_of(TR.word_of(bind(BG.GemmCoordinate, K=32, DOT=target.bindings["DOT"])))
     xs, ws = K.sample_tc(np.random.default_rng(16), 3 * 2000, params)
-    _agree(target, [xs.reshape(2000, 3, 32)[:, 0], ws.reshape(2000, 3, 32)])
+    assert_agrees(target, [xs.reshape(2000, 3, 32)[:, 0], ws.reshape(2000, 3, 32)])
 
 
 def test_the_bit_sliced_evaluator_is_the_ir_oracle_here() -> None:

@@ -1,6 +1,10 @@
 module
 
-public import Mathlib.Algebra.Order.Field.Rat
+public import Mathlib.Data.Rat.Init
+public import Mathlib.Tactic.ToAdditive
+import Mathlib.Tactic.Bound.Init
+import Mathlib.Tactic.Finiteness.Attr
+import Mathlib.Tactic.SetLike
 
 /-!
 # The OCP E4M3 codec (trusted definitions)

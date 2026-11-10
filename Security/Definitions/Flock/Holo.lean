@@ -2,6 +2,8 @@ module
 
 public import Definitions.Flock.Sparse
 public import Definitions.Flock.Session
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # The holographic table: two reps with hidden units, then the registered opening
@@ -102,7 +104,7 @@ def regPhase {α : Type} (A : Arith F K) (S : Statement) (sh : SparseShape) (uni
   | _ => pure no
 
 /-- **One holographic table's session**, in the recorded order: the prover commits the level-0 table `C₀`, the
-verifier draws the link points, and the prover runs two reps with hidden units in any interleaving; then the reps'
+verifier samples the link points, and the prover runs two reps with hidden units in any interleaving; then the reps'
 sparse phases, rep 0's and then rep 1's, and the registered opening (`regPhase`), which Ligerito at the registered
 schedule `rsch` checks against the registered word `Creg`. Returns whether all of it accepted, and the committed
 table. -/

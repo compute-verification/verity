@@ -46,7 +46,7 @@ def test_linear_on_the_cpu_is_the_twin(m: int) -> None:
 def test_linear_refuses_what_the_definition_does_not_bind() -> None:
     assert IM.K_LIMIT == G.S8_K_LIMIT
 
-    def ops(m, k, n, dtype=torch.int8):
+    def ops(m: int, k: int, n: int, dtype: torch.dtype = torch.int8) -> tuple[torch.Tensor, ...]:
         return torch.zeros(m, k, dtype=dtype), torch.ones(m), torch.zeros(n, k, dtype=torch.int8), torch.ones(n)
 
     for args, why in ((ops(2, 48, 8), "K = 48"), (ops(1, 1 << 17, 8), "K = 131072"), (ops(2, 64, 12), "N = 12"),

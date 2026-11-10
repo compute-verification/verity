@@ -10,7 +10,7 @@ end-to-end vectors through it, and the Lean's samples (`PouwCommit.Draws`) are d
    derives its noise from (salt, matmul, roots), and every tile yields checked values and a digest.  The useful output is
    assembled from the tiles.
 4. **Transcript.**  A Merkle root over every tile's digest, in matmul order and then tile order (core's `tile_refs`).
-5. **Selection.**  `Sampled`: ``derive(source, "verity/pouw/audit/v1", {"transcript": root, "salt": salt})`` draws t
+5. **Selection.**  `Sampled`: ``derive(source, "verity/pouw/audit/v1", {"transcript": root, "salt": salt})`` samples t
    tiles independently, each with probability ``W_ref(tile)/W`` (Lean `WorkWeightedSampling`); on an epoch with coins the
    source is the epoch's sampling coin, which the challenger opens after the verifier recorded the transcript.  `Lottery` is
    Pearl's mining rule, not one of the audit's laws, and stays unwired: the tiles whose digest, read little-endian, is at
@@ -20,8 +20,8 @@ end-to-end vectors through it, and the Lean's samples (`PouwCommit.Draws`) are d
 
 The protocol owns every outer coin (the salt and the sample), and both are the challenger's live coins.  A scheme's noise is
 its own derivation from the salt and the prover's roots, Fiat-Shamir inside the scheme.  The row and tile trees are core's
-(`audit.commit_rows`, `rows_domain`, `transcript_domain`), framed SHA-256 unless the scheme names another frame hash in
-``commitment_hash`` (`commitment_hash`), and an opening's value under ``"hm96-sha512"`` carries its salt, which
+(`audit.commit_rows`, `rows_domain`, `transcript_domain`) under the frame hash the scheme names in ``commitment_hash``
+(`commitment_hash`), ``"hm96-sha512"`` when it names none, and an opening's value under ``"hm96-sha512"`` carries its salt, which
 `audit.opened_value` strips before the scheme reads the value.
 """
 
@@ -48,8 +48,8 @@ AUDIT_DOMAIN = "verity/pouw/audit/v1"
 
 
 def commitment_hash(scheme: PoUWScheme) -> str:
-    """The frame hash of a scheme's row and tile trees: its ``commitment_hash``, SHA-256 by default."""
-    return getattr(scheme, "commitment_hash", "sha256")
+    """The frame hash of a scheme's row and tile trees: its ``commitment_hash``, `HM96` (hashing format h3's) by default."""
+    return getattr(scheme, "commitment_hash", HM96)
 
 
 def draw_coin(epoch: Epoch, challenger: Challenger, after: bytes) -> tuple[bytes | None, str | None]:
@@ -167,7 +167,7 @@ def tickets(scheme: PoUWScheme, workload: Workload, refs: Sequence[TileRef]) -> 
 
 @dataclass(frozen=True, slots=True)
 class Sampled:
-    """t independent work-weighted draws with replacement (Lean `WorkWeightedSampling`: δ_s = (1 − ε_s)^t)."""
+    """t independent work-weighted samples with replacement (Lean `WorkWeightedSampling`: δ_s = (1 − ε_s)^t)."""
 
     t: int
 
@@ -196,8 +196,9 @@ class Lottery:
 @dataclass(frozen=True, slots=True)
 class WorkProfile:
     """What an accepted audit establishes, by Lean `EndToEnd`: for every ε_s in (0, 1] and every operator whose online
-    cost is at most T, ``Pr[accept ∧ T < (1 − γ)(1 − ε_s)·W] ≤ (1 − ε_s)^t + η``, under the certificate's conjecture and
-    hypotheses, with W the workload's total W_ref.  Without a γ only the sampling half holds: the incorrect tiles carry at
+    cost is at most T, ``Pr[accept ∧ T < (1 − g)(1 − ε_s)·W] ≤ (1 − ε_s)^t + δ``, under the certificate's conjecture and
+    hypotheses, with g the gap, δ the failure probability and W the workload's total W_ref.  Without a gap only the
+    sampling half holds: the incorrect tiles carry at
     most ε_s·W, except with probability (1 − ε_s)^t.  A lottery selection gives neither bound."""
 
     scheme: str
@@ -212,16 +213,19 @@ class WorkProfile:
         return (1 - Fraction(eps_s)) ** self.drawn if self.sampled else None
 
     def certified(self, eps_s: Fraction) -> Fraction | None:
-        """The work certified, (1 − γ)(1 − ε_s)·W, or None without a γ or a sampled audit."""
-        g = self.certificate.gamma
+        """The work certified, (1 − g)(1 − ε_s)·W, or None without a gap or a sampled audit."""
+        g = self.certificate.gap
         return None if g is None or not self.sampled else (1 - g) * (1 - Fraction(eps_s)) * self.work
 
     def to_json(self) -> dict:
+        """``gamma0`` and ``gamma`` keep the stored names of the target gap g₀ and the gap g (records written before the
+        rename hold them); ``eps`` is the advantage ε = g/(1 − g)."""
         c = self.certificate
         return {"scheme": self.scheme, "work": self.work, "drawn": self.drawn, "sampled": self.sampled,
-                "conjecture": c.conjecture, "gamma0": None if c.gamma0 is None else str(c.gamma0), "omega": str(c.omega),
-                "gamma": None if c.gamma is None else str(c.gamma), "claims": list(c.claims), "theorems": list(c.theorems),
-                "hypotheses": list(c.hypotheses), "allowances": list(c.allowances), "parameters": dict(c.parameters)}
+                "conjecture": c.conjecture, "gamma0": None if c.gap0 is None else str(c.gap0), "omega": str(c.omega),
+                "gamma": None if c.gap is None else str(c.gap), "eps": None if c.eps is None else str(c.eps),
+                "claims": list(c.claims), "theorems": list(c.theorems), "hypotheses": list(c.hypotheses),
+                "allowances": list(c.allowances), "parameters": dict(c.parameters)}
 
 
 @dataclass(frozen=True, slots=True)
@@ -293,7 +297,7 @@ class Verifier:
 
     def audit(self, prover: Prover, transcript: Transcript, selection: Sampled | Lottery, source: bytes | Challenger
               ) -> Audit:
-        """Draw, open and check the selected tiles.  On an epoch with a coin commitment `source` is the challenger, asked
+        """Sample, open and check the selected tiles.  On an epoch with a coin commitment `source` is the challenger, asked
         for the epoch's sampling coin after the transcript is recorded; on one without, the sample's bare source bytes."""
         if len(transcript.activation_roots) != len(self.epoch.workload.matmuls):
             return Audit(False, (), (), None)

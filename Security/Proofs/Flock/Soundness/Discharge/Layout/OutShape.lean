@@ -2,6 +2,9 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Layout.OutRegion
 public import Proofs.Flock.Soundness.ParseUnitPre
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.ExecCheck
+import Proofs.Flock.Soundness.ExecCircuit
 
 @[expose] public section
 

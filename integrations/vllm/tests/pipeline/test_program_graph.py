@@ -140,7 +140,7 @@ def test_catalog_deduplicates_specializations_across_rows(tmp_path):
     for p in (tmp_path / "graphs" / "definitions").glob("*.json.gz"):
         shards.update(json.loads(gzip.open(p, "rt").read()))
     assert len(shards) == len({e["digest"] for e in ix.values()})
-    assert all(PG.definition_digest(v["definition"]) == h for h, v in shards.items())
+    assert all(PG.definition_digest({k: x for k, x in v["definition"].items() if k != "fold"}) == h for h, v in shards.items())
     ops = json.loads((tmp_path / "graphs" / "rowA.ops.json").read_text())["ops"]
     for o in ops:                                          # a varying group: every value of its range; else its one spec
         want = 1

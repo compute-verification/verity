@@ -54,7 +54,7 @@ window under its signed record, so a reader holds the declared syncs to the cert
   with its `circuit-check` report, not a Lean one: the network certifier's Lean issuer already signs the salted form
   (`CertifierDevice.Issuer.clock`).
 - **What it rests on** is what the record certificate rests on: LMS's unforgeability (`euf-cma/lms-sha512-n64`), and a
-  certifier that is the auditor's device, on a host the prover doesn't control. A certifier run on the prover's own
+  certifier that is the auditor's device, on a host the developer doesn't control. A certifier run on the developer's own
   machine (a rehearsal's against an endpoint on its own loopback) signs whatever that machine runs, so there its signed
   syncs prove no more than its records do.
 - **Tests:** `tests/test_network_certifier_signed_clocks.py` covers the clock commitment; a window's sync only from

@@ -11,7 +11,7 @@ methods of `Scheduler` (the `AsyncScheduler` inherits them):
     scheduler resumes them), each request at most `MAX_FORCED` times, so every request still finishes;
   - shuffles the running list and the waiting queue: the order the scheduler serves and admits requests in, which Model
     Runner V2 keeps among rows of one size (`sort_batch_req_ids` is a stable sort by row size);
-  - holds back a random share of the waiting requests (a share drawn per call) and the ones it just preempted, and puts them
+  - holds back a random share of the waiting requests (a share sampled per call) and the ones it just preempted, and puts them
     back at the front of the queue after the call; when nothing runs it leaves at least one request admissible.
 
   The real `schedule` then admits what it can of the rest, under its own checks (the token budget, the KV blocks, the

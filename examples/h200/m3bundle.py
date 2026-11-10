@@ -8,17 +8,17 @@ tree ``prove_bundle.py --step`` proves: ``blocks/<g>/window/`` (a one-member win
     python examples/h200/m3bundle.py build --private DIR --registration REG.json --draw DRAW.json \\
         --receipt RECEIPT.json --weights OPEN.json --out TREE [--workers W]
 
-* **Which block.** Drawn g is slot ``g // units_per_slot``'s layout unit ``g % units_per_slot`` (`replay_bundle.block_of`),
+* **Which block.** Sampled g is slot ``g // units_per_slot``'s layout unit ``g % units_per_slot`` (`replay_bundle.position_of`),
   unit ``index`` of its family (`m3draw.families`). A gather's unit is no proof block (the Program has its parts'
   references and no Definition for it), and an embedding at a prompt position reads ingress: each is a visible failure,
   written to ``summary.json``, and never resampled. A norm's gain (one registered word a row) is a port of
   `RegisteredRead`\\ s, the embedding's token past the prompt the argmax its sequence committed a step before, and a PV
   block's V row past n a row of no reads (all zero).
-* **weights** (where the weights registration's witness is): every registered row a drawn block reads (`window.Locator.locate`'s
+* **weights** (where the weights registration's witness is): every registered row a sampled block reads (`window.Locator.locate`'s
   `Registered` pieces), opened from the commit's state (`weights_commit.State`): its bytes, salt, string and path,
   each checked against the registered root (``REG.verify_read``).
 * **replay** (the card's part): the run again under the prover's salt secret with kv_reads' `KeepingDriver` for the sampled
-  proof blocks' slots, every step root and slot root held to the registered ``roots.json`` (exit 5 otherwise), and the drawn
+  proof blocks' slots, every step root and slot root held to the registered ``roots.json`` (exit 5 otherwise), and the sampled
   slots' committed rows at every step written to ``--private`` (0600, the prover's).
 * **build** (CPU only): per block, its ports' bytes from the committed rows (`Locator.inputs`, `Locator.outputs`) and the
   opened weights, as one unit of the Program's Definition of its family (`definition`); the window commits each whole
@@ -53,7 +53,7 @@ from e2e_h200.commit import _slots, layout as commit_layout  # noqa: E402
 from e2e_h200.plan import EPS_KEY  # noqa: E402
 from e2e_h200.shape import PV_K, SHAPES  # noqa: E402
 from e2e_h200.window import Locator, Registered, Run, Segment  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
+from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.ops.boolean import gemm as BG  # noqa: E402
 from verity.ml.circuits.ops.boolean import quant as BQ  # noqa: E402
@@ -130,10 +130,10 @@ def lockstep(steps: int, slots: int) -> list[_At]:
 
 
 def blocks_of(reg: dict, draw: dict, fams: list) -> list[dict]:
-    """Each drawn g's slot, layout unit, family and index."""
+    """Each sampled g's slot, layout unit, family and index."""
     out = []
     for g in draw["units"]:
-        b, u = RB.block_of(reg, g)
+        b, u = RB.position_of(reg, g)
         fam, idx = M3.locate(fams, u)
         out.append({"g": int(g), "slot": int(b), "unit": int(u), "family": fam, "index": int(idx)})
     return out
@@ -349,7 +349,7 @@ def bundle_block(blk: dict, st: dict, com: RB.Commitment, win: Locator, weights:
 
     circuit = IF.Circuit(f"{LOOP}/{fam}", ((fn, 1),))
     run_root = hashlib.sha512(f"{LOOP}/{reg['run']}/{blk['g']}".encode()).hexdigest()
-    iw = IF.Window(circuit, run_root, D.parse_law("subset:1"), 1)
+    iw = IF.Window(circuit, run_root, D.parse_design("subset:1"), 1)
     tid = circuit.ids[0]
     iw._recorded[tid] = [IF._Recorded([], [], [*data["rows"].values(), *data["outs"].values()], c, 1, 0)]
     (m,) = iw.window.members
@@ -372,7 +372,7 @@ def bundle_block(blk: dict, st: dict, com: RB.Commitment, win: Locator, weights:
 
     doc, pay = RB.build(wdir, [0], commitment=com, locate=locate, binding=binding_of(win.family(fam).template),
                         coords=lambda label, offset: dict(label), reads=lambda cc, t, p: reads.get(p), weights=weights,
-                        draw={"source": "live", "law": D.parse_law("subset:1"), "receipt": receipt, "coins": COINS},
+                        draw={"source": "live", "law": D.parse_design("subset:1"), "receipt": receipt, "coins": COINS},
                         workers=workers)
     RB.write(doc, pay, out, "bundle")
     rec = json.loads((wdir / "registration.json").read_text())

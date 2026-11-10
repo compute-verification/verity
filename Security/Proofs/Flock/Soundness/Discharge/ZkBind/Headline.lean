@@ -3,12 +3,25 @@ module
 public import Proofs.Flock.Soundness.Discharge.ZkBind.Place
 public import Proofs.Flock.Soundness.Discharge.ZkBind.Bind
 public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The compiled `--zk` count curve on the circuit's program
 
 `ZkLink.zk_flock_countC_execOS_cr` at the circuit's program on Δ's source keys (`Placed.keyProg c hU n`), with each
-drawn unit placed at its site in its `--zk` table's accepted statement (`place := si.placeKey hU hparse outs`), and the
+sampled proof block placed at its site in its `--zk` table's accepted statement (`place := si.placeKey hU hparse outs`), and the
 committed transcript the plurality value layer of the rows' binding (`vb := rs.bindingZ hHm`). Its `place` and `vb`
 hypotheses become the sites (`si`), the parse (`hparse`), the layout (`lay`, `rs`) and `HmRowComputes` (`hHm`).
 -/
@@ -29,9 +42,9 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
 /-- **The compiled `--zk` count curve on the circuit's units, every term on the accepted assumptions.** If
 `execAccept` holds, the probability that at least `K` units of the circuit's program (`keyProg c hU n`) are wrong at
 the committed values (the plurality value layer of the rows' binding) is at most
-`miss(K) + ε_ks + δ_link + δ_tree`, as in `zk_flock_countC_execOS_cr`. Each drawn unit is read at its template instance and block in its
+`miss(K) + ε_ks + δ_link + δ_tree`, as in `zk_flock_countC_execOS_cr`. Each sampled proof block is read at its template instance and block in its
 `--zk` table's accepted statement (`si`, every such table's circuit file parsing to `c`), and the committed values are
-the rows the drawn tables' witnesses hold under the registered leaves (`lay`, `rs`), bound by `HmRowComputes`
+the rows the sampled tables' witnesses hold under the registered leaves (`lay`, `rs`), bound by `HmRowComputes`
 (`hHm`). -/
 theorem zk_flock_countC_execOS_keyProg (hA : A.Correct) {c : Flock.Circuit} (hU : FlockSoundness.Built c.unit)
     (si : SitesZ planZ tab)

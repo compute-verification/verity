@@ -1,5 +1,5 @@
 """sqrt.rn.f32 on bits, as a circuit over `forms`: `f32_sqrt_rn` (``PouwF32SqrtRn_v1``) and the digit-by-digit root it takes
-(`isqrt`).  PoUW's `PouwF32SqrtRn_v2` (`verity.core.protocols.pouw.circuit.boolean`) is traced from `f32_sqrt_rn`.
+(`isqrt`).  PoUW's `PouwF32SqrtRn_v2` (`verity.ml.protocols.pouw.circuit.boolean`) is traced from `f32_sqrt_rn`.
 
 * `f32_sqrt_rn`: the significand normalized, the exponent made even by doubling it, and a digit-by-digit root (`isqrt`) of
   the 50-bit radicand to 25 bits; the last bit rounds, since no square root of a float lies halfway between two (the

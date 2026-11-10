@@ -9,8 +9,8 @@ public import Proofs.Flock.Soundness.ExecDraw
 /-!
 # Salts from the operating system (A3)
 
-C-Flock reads every hm96 leaf salt from the operating system, 192 bytes a leaf (`getrandom`, the kernel's
-`getrandom(2)`), as the recursive audit's firewall and a registrant do. The hiding and zero-knowledge theorems draw each
+Flock reads every hm96 leaf salt from the operating system, 192 bytes a leaf (`getrandom`, the kernel's
+`getrandom(2)`), as the recursive audit's firewall and a registrant do. The hiding and zero-knowledge theorems sample each
 salt uniformly from `Salt`, hm96-sha512's 1536 salt bits. The step between the two is A3 per test
 (`Assumptions.UniformRandomBytesTest`, `uniform/io-getrandombytes`: the operating system's bytes pass the test as
 independent uniform bytes do, up to `η`), taken at the one event each theorem bounds, and `η` enters its bound. No

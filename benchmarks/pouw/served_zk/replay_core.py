@@ -23,7 +23,7 @@ Without ``--runs`` it selects every `job.sh` attempt in the evidence store and f
   and Lean's.  In a window of the 336-byte entry rows an ACCEPT opening must open and a REJECT one must not;
   the windows before them hold entries of an earlier layout, so theirs compare Python with Lean only.
 * **coin cases** go to `core_check.pass_epoch` and `core_check.draw` and Lean's (`of_record`): ``select`` (the recorded
-  draw from the challenger's coin commitment, its sampling coin's opening, the stream's digest, the receipt and draw.json),
+  sample from the challenger's coin commitment, its sampling coin's opening, the stream's digest, the receipt and draw.json),
   with generated controls (a unit changed, the coin tampered, opened after another registration, another stream or
   receipt, one unit fewer under the registration's K), each refused; and where ``--pass RUN=MANIFEST`` gives the run's pass (its ``served_run``),
   ``receive-honest``'s pass and the coin controls ``receive-coin-<case>`` and ``receive-unrecorded``, regenerated as
@@ -296,7 +296,7 @@ class Sides:
         self.record = OR.Record()
 
     def coin(self, kind: str, x: dict) -> tuple[Any, bool]:
-        """Lean's outcome of a pass or draw check, and whether Python's is the same (`of_record`)."""
+        """Lean's outcome of a pass or sample check, and whether Python's is the same (`of_record`)."""
         try:
             return (self.record.pass_epoch if kind == "pass" else self.record.draw)(x), True
         except OR.Disagree as e:

@@ -2,6 +2,9 @@ module
 
 public import Definitions.Pouw.PearlC.WholeCircuit
 public import Proofs.Pouw.PearlC.TileCircuit
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Core.Circuit
 
 /-!
 # A unit of a composed table is its template (proofs)
@@ -23,7 +26,7 @@ namespace Pouw.PearlC.WholeCircuit
 open Pouw.PearlC.TileCircuit
 
 /-- **An evaluation is correct for every unit**: recomputing a unit from the evaluation gives the evaluation back. -/
-theorem localEval_eval {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n) (a : C.Transcript) (u : Fin n) :
+theorem localEval_eval {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n) (a : C.Trace) (u : Fin n) :
     P.localEval (C.eval a) u = C.eval a := by
   funext g
   induction g using WellFoundedLT.induction with
@@ -38,20 +41,20 @@ theorem localEval_eval {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n)
       exact C.op_congr g _ _ fun x hx => ih x (C.reads_lt g x hx)
     · exact P.localEval_of_not_mem _ h
 
-theorem correct_eval {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n) (a : C.Transcript) (u : Fin n) :
+theorem correct_eval {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n) (a : C.Trace) (u : Fin n) :
     P.Correct (C.eval a) u := fun g _ _ => by rw [localEval_eval]
 
 /-! ## Laying out blocks -/
 
-theorem blocksLen_append : ∀ (L1 L2 : List BlockKind), blocksLen (L1 ++ L2) = blocksLen L1 + blocksLen L2
+theorem blocksLen_append : ∀ (L1 L2 : List Block), blocksLen (L1 ++ L2) = blocksLen L1 + blocksLen L2
   | [], _ => by simp [blocksLen]
   | B :: L1, L2 => by simp only [List.cons_append, blocksLen, blocksLen_append L1 L2]; omega
 
-theorem unitCount_append : ∀ (L1 L2 : List BlockKind), unitCount (L1 ++ L2) = unitCount L1 + unitCount L2
+theorem unitCount_append : ∀ (L1 L2 : List Block), unitCount (L1 ++ L2) = unitCount L1 + unitCount L2
   | [], _ => by simp [unitCount]
   | B :: L1, L2 => by simp only [List.cons_append, unitCount, unitCount_append L1 L2]; omega
 
-theorem locate_left : ∀ (L1 L2 : List BlockKind) (o u g : ℕ), o ≤ g → g < o + blocksLen L1 →
+theorem locate_left : ∀ (L1 L2 : List Block) (o u g : ℕ), o ≤ g → g < o + blocksLen L1 →
     locate (L1 ++ L2) o u g = locate L1 o u g
   | [], _, o, _, g, h1, h2 => by simp only [blocksLen] at h2; omega
   | B :: L1, L2, o, u, g, h1, h2 => by
@@ -60,7 +63,7 @@ theorem locate_left : ∀ (L1 L2 : List BlockKind) (o u g : ℕ), o ≤ g → g 
     · rfl
     · exact locate_left L1 L2 _ _ g (by omega) (by simp only [blocksLen] at h2; omega)
 
-theorem locate_u_lt : ∀ (L : List BlockKind) (o u g : ℕ) {l : Loc}, o ≤ g → locate L o u g = some l →
+theorem locate_u_lt : ∀ (L : List Block) (o u g : ℕ) {l : Loc}, o ≤ g → locate L o u g = some l →
     l.u < u + unitCount L
   | [], _, _, _, _, _, h => by simp [locate] at h
   | B :: L, o, u, g, l, hog, h => by
@@ -73,7 +76,7 @@ theorem locate_u_lt : ∀ (L : List BlockKind) (o u g : ℕ) {l : Loc}, o ≤ g 
     · have := locate_u_lt L _ _ g (by omega) h
       simp only [unitCount]; omega
 
-theorem locate_mid (B : BlockKind) (L2 : List BlockKind) : ∀ (L1 : List BlockKind) (o u g : ℕ),
+theorem locate_mid (B : Block) (L2 : List Block) : ∀ (L1 : List Block) (o u g : ℕ),
     o + blocksLen L1 ≤ g → g < o + blocksLen L1 + B.cnt * B.len →
     locate (L1 ++ B :: L2) o u g = some ⟨B, o + blocksLen L1, u + unitCount L1 + (g - (o + blocksLen L1)) / B.len,
       (g - (o + blocksLen L1)) / B.len, B.nIn + (g - (o + blocksLen L1)) % B.len⟩
@@ -87,7 +90,7 @@ theorem locate_mid (B : BlockKind) (L2 : List BlockKind) : ∀ (L1 : List BlockK
     rw [ite_eq_right (by omega), locate_mid B L2 L1 (o + B'.cnt * B'.len) (u + B'.cnt) g (by omega) (by omega)]
     simp only [Nat.add_assoc]
 
-theorem blocksOK_mid (B : BlockKind) (L2 : List BlockKind) : ∀ (L1 : List BlockKind) (o : ℕ), BlocksOK (L1 ++ B :: L2) o →
+theorem blocksOK_mid (B : Block) (L2 : List Block) : ∀ (L1 : List Block) (o : ℕ), BlocksOK (L1 ++ B :: L2) o →
     ∀ q < B.cnt, ∀ a < B.nIn, B.port q a < o + blocksLen L1
   | [], o, h => by simpa [blocksLen] using h.1
   | _ :: L1, o, h => by
@@ -100,7 +103,7 @@ theorem blocksOK_mid (B : BlockKind) (L2 : List BlockKind) : ∀ (L1 : List Bloc
 
 namespace Whole
 
-variable (W : Whole) {L1 L2 : List BlockKind} {B : BlockKind} (hW : W.blocks = L1 ++ B :: L2) {q : ℕ} (hq : q < B.cnt)
+variable (W : Whole) {L1 L2 : List Block} {B : Block} (hW : W.blocks = L1 ++ B :: L2) {q : ℕ} (hq : q < B.cnt)
 include hW hq
 
 theorem unit_lt : unitCount L1 + q < unitCount W.blocks := by
@@ -108,7 +111,7 @@ theorem unit_lt : unitCount L1 + q < unitCount W.blocks := by
 
 theorem inst_lt {a : ℕ} (ha1 : B.nIn ≤ a) (ha : a < B.S.N) :
     W.nIn + blocksLen L1 + q * B.len + (a - B.nIn) < W.spec.toCircuit.N := by
-  have := mul_add_lt (L := B.len) hq (show a - B.nIn < B.len by unfold BlockKind.len; omega)
+  have := mul_add_lt (L := B.len) hq (show a - B.nIn < B.len by unfold Block.len; omega)
   show _ < W.nIn + blocksLen W.blocks
   rw [hW, blocksLen_append]; simp only [blocksLen]; omega
 
@@ -123,7 +126,7 @@ theorem port_lt_N {a : ℕ} (ha : a < B.nIn) : B.port q a < W.spec.toCircuit.N :
 theorem locate_inst {a : ℕ} (ha1 : B.nIn ≤ a) (ha2 : a < B.S.N) :
     locate W.blocks W.nIn 0 (W.nIn + blocksLen L1 + q * B.len + (a - B.nIn)) =
       some ⟨B, W.nIn + blocksLen L1, unitCount L1 + q, q, a⟩ := by
-  have hlt : a - B.nIn < B.len := by unfold BlockKind.len; omega
+  have hlt : a - B.nIn < B.len := by unfold Block.len; omega
   have := mul_add_lt (L := B.len) hq hlt
   rw [hW, locate_mid B L2 L1 _ 0 _ (by omega) (by omega)]
   have hd : (W.nIn + blocksLen L1 + q * B.len + (a - B.nIn) - (W.nIn + blocksLen L1)) = q * B.len + (a - B.nIn) := by
@@ -165,17 +168,17 @@ theorem unit_ne {g : Fin W.spec.toCircuit.N} (hg : g.val < W.nIn + blocksLen L1)
     · simp
 
 /-- Instance `q` of a block cut out of `X`: the template evaluated on the values `X` gives its ports. -/
-def cut (X : W.spec.toCircuit.Transcript) (B : BlockKind) (q : ℕ) : B.S.toCircuit.Transcript :=
+def cut (X : W.spec.toCircuit.Trace) (B : Block) (q : ℕ) : B.S.toCircuit.Trace :=
   B.S.toCircuit.eval fun a => BitVec.ofNat _ (val X (B.port q a))
 
 omit hW hq in
-theorem cut_correct (X : W.spec.toCircuit.Transcript) (B : BlockKind) (q : ℕ) : B.S.part.Correct (W.cut X B q) 0 :=
+theorem cut_correct (X : W.spec.toCircuit.Trace) (B : Block) (q : ℕ) : B.S.part.Correct (W.cut X B q) 0 :=
   correct_eval _ _ _
 
 /-- **The cut is the composed table's unit, gate by gate**: where the template's inputs are its first `nIn` gates and
 each port's value fits its input's width, every template gate's value in the cut is the unit's local evaluation at its
 copy. -/
-theorem cut_val (X : W.spec.toCircuit.Transcript) (hin : ∀ a < B.S.N, (B.S.gate a).input = true ↔ a < B.nIn)
+theorem cut_val (X : W.spec.toCircuit.Trace) (hin : ∀ a < B.S.N, (B.S.gate a).input = true ↔ a < B.nIn)
     (hfit : ∀ a < B.nIn, val X (B.port q a) < 2 ^ (B.S.gate a).w) :
     ∀ a < B.S.N, val (W.cut X B q) a =
       val (W.part.localEval X ⟨_, W.unit_lt hW hq⟩) (B.reloc (W.nIn + blocksLen L1) q a) := by
@@ -187,18 +190,18 @@ theorem cut_val (X : W.spec.toCircuit.Transcript) (hin : ∀ a < B.S.N, (B.S.gat
     · have hp := W.port_lt hW hq hi
       have hpN := W.port_lt_N hW hq hi
       rw [cut, Spec.val_input _ _ ha ((hin a ha).2 hi), BitVec.toNat_ofNat, Nat.mod_eq_of_lt (hfit a hi),
-        BlockKind.reloc, ite_eq_left hi, val_of_lt _ hpN, val_of_lt _ hpN,
+        Block.reloc, ite_eq_left hi, val_of_lt _ hpN, val_of_lt _ hpN,
         W.part.localEval_of_not_mem X (W.unit_ne hW hq (g := ⟨_, hpN⟩) hp)]
     · have hc : (B.S.gate a).input = false := by
         cases h : (B.S.gate a).input
         · rfl
         · exact absurd ((hin a ha).1 h) hi
       have hN := W.inst_lt hW hq (not_lt.1 hi) ha
-      rw [cut, Spec.val_gate _ _ ha hc, BlockKind.reloc, ite_eq_right hi, val_of_lt _ hN,
+      rw [cut, Spec.val_gate _ _ ha hc, Block.reloc, ite_eq_right hi, val_of_lt _ hN,
         W.part.localEval_of_mem X (W.unit_inst hW hq (not_lt.1 hi) ha)]
       show _ = (BitVec.ofNat (W.gate _).w ((W.gate _).f ((W.gate _).rd.map _))).toNat
       rw [BitVec.toNat_ofNat, W.gate_inst hW hq (not_lt.1 hi) ha]
-      simp only [BlockKind.gateAt, List.map_map]
+      simp only [Block.gateAt, List.map_map]
       congr 2
       apply List.map_congr_left
       intro a' ha'
@@ -206,20 +209,20 @@ theorem cut_val (X : W.spec.toCircuit.Transcript) (hin : ∀ a < B.S.N, (B.S.gat
       exact ih a' this (by omega)
 
 /-- The cut's inputs are the ports' values. -/
-theorem cut_input (X : W.spec.toCircuit.Transcript) (hin : ∀ a < B.S.N, (B.S.gate a).input = true ↔ a < B.nIn)
+theorem cut_input (X : W.spec.toCircuit.Trace) (hin : ∀ a < B.S.N, (B.S.gate a).input = true ↔ a < B.nIn)
     (hfit : ∀ a < B.nIn, val X (B.port q a) < 2 ^ (B.S.gate a).w) (hnN : B.nIn ≤ B.S.N) {a : ℕ} (ha : a < B.nIn) :
     val (W.cut X B q) a = val X (B.port q a) := by
   have hpN := W.port_lt_N hW hq ha
-  rw [W.cut_val hW hq X hin hfit a (by omega), BlockKind.reloc, ite_eq_left ha, val_of_lt _ hpN, val_of_lt _ hpN,
+  rw [W.cut_val hW hq X hin hfit a (by omega), Block.reloc, ite_eq_left ha, val_of_lt _ hpN, val_of_lt _ hpN,
     W.part.localEval_of_not_mem X (W.unit_ne hW hq (g := ⟨_, hpN⟩) (W.port_lt hW hq ha))]
 
 /-- **A correct unit's committed gates are the cut's.** -/
-theorem cut_committed (X : W.spec.toCircuit.Transcript) (hin : ∀ a < B.S.N, (B.S.gate a).input = true ↔ a < B.nIn)
+theorem cut_committed (X : W.spec.toCircuit.Trace) (hin : ∀ a < B.S.N, (B.S.gate a).input = true ↔ a < B.nIn)
     (hfit : ∀ a < B.nIn, val X (B.port q a) < 2 ^ (B.S.gate a).w) (hX : W.part.Correct X ⟨_, W.unit_lt hW hq⟩)
     {a : ℕ} (ha1 : B.nIn ≤ a) (ha2 : a < B.S.N)
     (hcom : (⟨_, W.inst_lt hW hq ha1 ha2⟩ : Fin W.spec.toCircuit.N) ∈ W.part.committed) :
     val X (W.nIn + blocksLen L1 + q * B.len + (a - B.nIn)) = val (W.cut X B q) a := by
-  rw [W.cut_val hW hq X hin hfit a ha2, BlockKind.reloc, ite_eq_right (by omega), val_of_lt _ (W.inst_lt hW hq ha1 ha2),
+  rw [W.cut_val hW hq X hin hfit a ha2, Block.reloc, ite_eq_right (by omega), val_of_lt _ (W.inst_lt hW hq ha1 ha2),
     val_of_lt _ (W.inst_lt hW hq ha1 ha2), hX _ hcom (W.unit_inst hW hq ha1 ha2)]
 
 /-- A unit's gate reads the ports of the template inputs it reads. -/
@@ -229,8 +232,8 @@ theorem port_reads {a a' : ℕ} (ha1 : B.nIn ≤ a) (ha2 : a < B.S.N) (ha' : a' 
   simp only [Spec.toCircuit, Finset.mem_filter, Finset.mem_univ, true_and]
   show B.port q a' ∈ (W.gate _).rd
   rw [W.gate_inst hW hq ha1 ha2]
-  simp only [BlockKind.gateAt, List.mem_map]
-  exact ⟨a', h, by simp [BlockKind.reloc, ha']⟩
+  simp only [Block.gateAt, List.mem_map]
+  exact ⟨a', h, by simp [Block.reloc, ha']⟩
 
 /-- **A port a unit's gate reads is committed**: an input, or a gate of an earlier unit. -/
 theorem port_committed {a a' : ℕ} (ha1 : B.nIn ≤ a) (ha2 : a < B.S.N) (ha' : a' < B.nIn)

@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.Bandwidth.Game
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The bandwidth audit v0 with relayed tags
@@ -8,7 +9,7 @@ public import Definitions.Accounting.Bandwidth.Game
 `Game.lean`'s game, except that the side sources may depend on the oracle as well as the store. A peer that holds a
 copy of `E` and computes tags after the seed can relay them over a side channel; each bit the chip reads that way is a
 side read, counted against `c` as before. The on-chip state and device memory are still laid out from `E` before the
-seed, so neither can depend on the oracle, and the sample is still drawn after the output.
+seed, so neither can depend on the oracle, and the sample is still sampled after the output.
 -/
 
 @[expose] public section

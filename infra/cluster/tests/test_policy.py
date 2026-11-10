@@ -1,5 +1,5 @@
 """`cluster policy`: the description's policy keys and their owners, and `diff` against node outputs in the shapes the live
-nodes return (3 Oct 2026): drift, undeclared and unknown keys, the exit codes, and that the commands only read, and read only
+nodes return: drift, undeclared and unknown keys, the exit codes, and that the commands only read, and read only
 the lease pools' own variables of a process's environment."""
 from __future__ import annotations
 

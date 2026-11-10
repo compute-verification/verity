@@ -43,7 +43,7 @@ import a5
 import compose_circuit as CM
 from composite import canonical, write_private
 
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+from verity.core.protocols.spot.one_stage import proofs as PF
 
 ID = "verity/sampled-proofs/one-stage/v2"
 TREE = Path(__file__).resolve().parents[2]

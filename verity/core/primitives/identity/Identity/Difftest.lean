@@ -1,7 +1,7 @@
 module
 
 public import Difftest
-public import Identity
+public import Identity.Tagged
 
 /-!
 # The identity difftest: `Identity`'s functions behind `Difftest.serve`

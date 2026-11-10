@@ -24,6 +24,8 @@ public import Proofs.Flock.Soundness.Refine.Table
 public import Proofs.Flock.Soundness.Refine.StmtOf
 public import Proofs.Flock.Soundness.Refine.Regions
 public import Proofs.Flock.Soundness.Refine.Walk
+public import Proofs.Flock.Soundness.Refine.OkLe
+public import Proofs.Flock.Soundness.Refine.Lookups
 public import Proofs.Flock.Soundness.Refine.Setup
 public import Proofs.Flock.Soundness.Refine.Live
 public import Proofs.Flock.Soundness.Refine.LiveSim
@@ -32,5 +34,6 @@ public import Proofs.Flock.Soundness.Refine.Frames
 public import Proofs.Flock.Soundness.Refine.Salted
 public import Proofs.Flock.Soundness.Refine.LincheckConverse
 public import Proofs.Flock.Soundness.Refine.RepConverse
+import Mathlib.Combinatorics.Matroid.Init
 
 @[expose] public section

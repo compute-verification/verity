@@ -1,5 +1,5 @@
 """The harness in protocol mode, against the core protocol interface's toy protocol (`CoreProtocol.Example`, its
-`core-protocol-example serve`): its Python reference agrees on every drawn case, valid and malformed, and a reference wrong
+`core-protocol-example serve`): its Python reference agrees on every sampled case, valid and malformed, and a reference wrong
 in the verdict, the commitment or the profile is caught and shrunk, while one wrong only in the reason passes."""
 
 from __future__ import annotations

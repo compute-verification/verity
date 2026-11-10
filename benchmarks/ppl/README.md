@@ -170,7 +170,7 @@ Built in, and a run whose gates fail reports nothing: `results.json` holds the g
 exits 1.
 
 - `int8_range`: every integer product's operands within int8, on every call.
-- `grid_range`: instead of `int8_range`, for a quantizer that declares a wider grid (block-scaled E2M1, ±180): every
+- `grid_range`: instead of `int8_range`, for a quantizer that declares a wider grid (E2M1 with scale groups, ±180): every
   operand within that bound, on every call.
 - `accumulator`: each product's s32 accumulator, bounded a priori by k max|x| max|w|, on every call (a wider grid's
   product, FP32 chunks summed in float64, its wide operand split into base-16 limbs when chunks would be short: within

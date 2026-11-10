@@ -188,16 +188,29 @@ def pull_targets(store: LocalStore, targets: list[str], *, jobs: int = 1) -> dic
 
 
 def pull_prefix(store: LocalStore, prefix: str) -> dict:
-    """`pull_targets` for every target whose id starts with `prefix` and has assertions on the remote, from one listing of their
-    common key prefix (`pr:12@`: each head of pull request 12).
+    """`pull_prefixes` of one prefix."""
+    return pull_prefixes(store, [prefix])
+
+
+def pull_prefixes(store: LocalStore, prefixes: list[str], *, jobs: int = 1) -> dict:
+    """`pull_targets` for every target whose id starts with one of `prefixes` and has assertions on the remote, from one listing of
+    each prefix's common key prefix (`pr:12@`: each head of pull request 12), and the GETs, `jobs` at once.
         {"pulled": [content hash, ...], "bad": ["<key>: <why>", ...], "targets": [target, ...]}"""
     r = store._require_remote()  # noqa: SLF001
-    d = ids.target_dirname(prefix)
+
+    def listed(prefix: str) -> dict[str, dict[str, str]]:
+        d, out = ids.target_dirname(prefix), {}
+        for k in r.list(f"{PREFIX}{d}"):
+            if m := KEY_RE.match(k):
+                out.setdefault(prefix + m.group(1)[len(d):], {})[m.group(2)] = k
+        return out
+
+    todo = list(dict.fromkeys(prefixes))
     listing: dict[str, dict[str, str]] = {}
-    for k in r.list(f"{PREFIX}{d}"):
-        if m := KEY_RE.match(k):
-            listing.setdefault(prefix + m.group(1)[len(d):], {})[m.group(2)] = k
-    return _pull(store, r, sorted(listing.items())) | {"targets": sorted(listing)}
+    with ThreadPoolExecutor(max_workers=max(1, min(jobs, len(todo)))) as ex:
+        for got in ex.map(listed, todo):
+            listing.update(got)
+    return _pull(store, r, sorted(listing.items()), jobs=jobs) | {"targets": sorted(listing)}
 
 
 def _pull(store: LocalStore, r: Remote, listings: Iterable[tuple[str, dict[str, str]]], jobs: int = 1) -> dict:

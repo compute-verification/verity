@@ -3,7 +3,7 @@ same case (`answer_of`: the case decoded as the Lean decodes it, then `pous.peri
 `certify` and `profile`): every field of the answer but its reason, the certified `s_bits`, `eps` and the profile's gaps
 among them.
 
-Under `--test` (`testProtocol`, the test signers' schemes alone) the cases are `test_run`'s drawn runs over honest setups,
+Under `--test` (`testProtocol`, the test signers' schemes alone) the cases are `test_run`'s sampled runs over honest setups,
 honest and under one edit of the run, of its session or of its JSON, each as the protocol's case with its setup's own
 commitment and evidence, those under one edit of the case's framing, and those under one edit of the setup's evidence
 (another setup's, a bit of its commitment, salt or `C*` off, `C*` cut short, the setup missing). Under the deployed
@@ -15,7 +15,7 @@ encode). The period's setup case is the setup protocol's (`pous-setup`), which a
 store's setup (a run committed to a different setup) is refused, for the tie's reason.
 
 `pous-run serve`'s `certify` (`PousCheck.RunProtocol.certifyFn`) against `period.certify` and `period.profile` at points
-no setup could reach: drawn about each certificate's edges (labels per segment, segments, `k`, `Δ + RTT`, the width), and
+no setup could reach: sampled about each certificate's edges (labels per segment, segments, `k`, `Δ + RTT`, the width), and
 Demo B's `C*`, 1038 segments of `2^16` labels, where both publish `PeriodHeldDemo`'s 1,060,008,348,186 bits."""
 
 from __future__ import annotations
@@ -318,7 +318,7 @@ def test_a_run_committed_to_another_setup_is_refused(deployed_server) -> None:
 
 @pytest.mark.slow
 def test_drawn_runs_agree(test_server) -> None:
-    """`test_run`'s drawn runs over honest setups (`SETUPS`) as cases under `--test`, and under one edit of the case's
+    """`test_run`'s sampled runs over honest setups (`SETUPS`) as cases under `--test`, and under one edit of the case's
     framing or of its setup's commitment and evidence."""
     rs = runs(stores=SETUPS)
     cases = documents(rs).map(case_of)

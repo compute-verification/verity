@@ -5,7 +5,7 @@ carry ONE root id `Root[Derived[..]{SRC=..}]` over two bodies -- SRC names the i
 Pinned so the exemption cannot widen: (1) the FIXED POPULATION counts DECLARED requests, not distinct shapes --
 two identical requests (one digest, one component object) are two members with two disjoint address intervals; (2) the exemption is the
 root's ONLY: a callee under one id with two bodies is refused by name in the SAME compose whose roots collide (the fail-closed
-E_IDENTITY rule does not spill), and an equal callee is shared (one object); (3) the request root id is not a name in the workload's
+E_IDENTITY rule does not spill); (3) the request root id is not a name in the workload's
 namespace at all -- the component is `WorkloadRequest{program_digest, program_fn}`, keyed by the descriptor digest -- so nothing of
 record can key on the colliding id.  Tests that need the exemption skip BY NAME on a tree without it (there the refusal is the root's)."""
 from __future__ import annotations
@@ -94,29 +94,6 @@ def test_the_request_root_id_is_not_a_name_in_the_workload_namespace():
     comps = [k for k in defs if k.startswith("WorkloadRequest_v1{")]
     assert len(comps) == 2 and all(f'program_digest="{program_digest(_desc(3, T))}"' in " ".join(comps) for T in (2, 3))
     assert sum(1 for k in defs if k.startswith("Root[")) == 1          # the workload's own root, nothing else
-
-
-def test_one_root_id_over_two_bodies_composes_and_the_shared_callee_is_one_object():
-    """The exemption's positive, with the callee in view: same SRC (one root id) over T=2 / T=3 bodies, both calling the SAME
-    `PadrevLayer_v1{K=1}` (equal bodies) -> composes by digest; the callee is canonicalised to ONE object shared by both components;
-    the root id is in neither the canon nor the workload's definitions; population Σ cap with two disjoint intervals."""
-    La, Lb = _layer("a"), _layer("a")
-    d2, d3 = encode_program(Program(_derived_like(3, 2, La))), encode_program(Program(_derived_like(3, 3, Lb)))
-    assert d2["root"] == d3["root"] and d2["definitions"][d2["root"]] != d3["definitions"][d3["root"]]
-    canon: dict = {}
-    c2 = _component_or_skip(d2, 3, canon)
-    c3 = _component_or_skip(d3, 3, canon)
-    assert d2["root"] not in canon and "PadrevLayer_v1{K=1}" in canon
-    layer_objs = {id(n.fn) for c in (c2, c3) for n in c.fn.body.nodes if n.fn.id == "PadrevLayer_v1{K=1}"}
-    assert len(layer_objs) == 1
-    wl = W.WorkloadProgram([W.WorkloadRequest("r0", 0, 3, 3, 0, c2, T=2), W.WorkloadRequest("r1", 1, 3, 4, 0, c3, T=3)], manifest_digest="m" * 8, lag=0)
-    defs = encode_program(wl.program)["definitions"]
-    assert d2["root"] not in defs and "PadrevLayer_v1{K=1}" in defs
-    pop = wl.population()
-    assert pop["component_calls"] == 2 and pop["components_partition_non_input_gates"]
-    (a0, b0), (a1, b1) = pop["component_intervals"]
-    assert b0 == a1 and (b1 - a1) - (b0 - a0) == c3.body_gates - c2.body_gates > 0
-    assert [r["programmed_steps"]["count"] for r in wl.chronology()["requests"]] == [3, 4]
 
 
 def test_the_exemption_is_the_roots_only_a_colliding_callee_in_the_same_compose_is_refused_by_name():

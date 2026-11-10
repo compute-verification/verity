@@ -1,7 +1,7 @@
 """`move-check`: certify that BASE..HEAD is a pure move: drive's queue lands a layout move it regenerated on `next` only once this
 certifies it. It relaxes no gate: a certified move still goes through `check`.
 
-    uv run python tools/verity/check/move_check.py BASE HEAD [--map OLD=NEW ...] [--json]
+    uv run python tools/verity/check/move_check.py BASE HEAD [--map OLD=NEW ...] [--words MAP] [--json]
 
 Every path git sees changed must be one of:
 - a rename with byte-identical content and mode (git's 100% rename);
@@ -36,7 +36,8 @@ Every path git sees changed must be one of:
   `reads` byte for byte (a `reads` key, a module's name, may follow the module's move), may change the structural `roots`,
   `proved_in` (each entry a Lake package at HEAD) and `dependencies` (the fetched modules the package imports, which a
   split shares out and the Lean check holds to the build), and changes any other field only by moved paths and module
-  names; a `runs` entry may move to another lock the range touches (a proofs package's new one), its runner module
+  names, a moved path there too left where it is a word (a reason that calls a conclusion `Security`, when the directory
+  of that name moves); a `runs` entry may move to another lock the range touches (a proofs package's new one), its runner module
   renamed, its package-relative paths following the move and its `why` changed only by moved paths from the root, and
   must end up in exactly one, otherwise unchanged (`runs_moved`);
 - a new `lakefile.toml`, `lakefile.lean`, `lake-manifest.json`, `lean-audit.json` or `lean-toolchain` at the root of a new
@@ -52,6 +53,9 @@ Every path git sees changed must be one of:
 - in a JSON pin of `tools/verity/check/pins.py`, a Lake manifest's digest rewritten likewise, since a move changes a
   manifest only in where its path packages sit, which no pinned output reads (`manifest_pin`);
 - an entry appended to research's `moves.json` whose paths agree with the range's (`moves_change`);
+- a new, empty `__init__.py` in a directory at or above a `.py` file the range moved there out of a package (its old
+  directory had an `__init__.py`), and no higher than the root of that file's package after the move (`[roots] new` of a
+  path map under `tools/move/` at BASE): the package level `tools/move/layout.py` writes so the module imports by its new name;
 - any of these after the move scripts' word maps (`tools/move/*.toml` with `[words]`, read at BASE) are applied, as
   `tools/move/rename.py` applies them, with only the words that rename what the range moved: a path the map moves to
   where the range moved it, or a Lean module likewise; or a Lean declaration of a `.lean` file the range edits, to a name
@@ -59,7 +63,14 @@ Every path git sees changed must be one of:
   names (a `[[words_in]]` entry's words
   in the files its globs match; `word_maps`). A text file the words alone rewrite into its new text is an edit of that
   kind, whatever the file, and so is one that also drops each list entry the words made a repeat of the one before it
-  (`merged`).
+  (`merged`); a JSON file may come back with each object whose keys were sorted and that renamed keys leave out of
+  order sorted again, as `rename.py` writes it (`resorted`).
+A move by a word map with `scope = "prose"` (`--words MAP`, else the map HEAD's `Move: tools/move/NAME.toml` line names, as
+BASE has it) is judged by that map instead (`Terms`): each file it edits is BASE's text with some of the map's words
+replaced, each in prose (a comment, a docstring, Markdown's text); or in Python or Lean code, as part of a name it renames to
+one the file doesn't spell at BASE, the same in every file, and not one a lock's records name; or in a literal or a data
+file, as a path or module the range moved. Otherwise a string literal and a data file keep their bytes, and a file a JSON
+pin records stays as it was.
 Anything else is refused, with what differed and its first offending hunk. Exit 0 certified, 1 refused, 2 on a usage or
 git error.
 
@@ -754,7 +765,7 @@ def lock_change(old: str, new: str, new_path: str, pmap: dict[str, str], lmods: 
             if copy:
                 continue
             return f"`{k}` removed", field_hunk(k, a[k], None)
-        if not same_value(module_sub(substitute(a[k], pmap), lmods), b[k]):
+        if not same_value(module_sub(substitute(a[k], pmap), lmods), b[k]) and not partly(a[k], b[k], pmap):
             return f"`{k}` changed beyond moved paths and module names", field_hunk(k, a[k], b[k])
     here = posixpath.dirname(new_path)
     for k in ("roots", "proved_in"):
@@ -903,6 +914,13 @@ def json_pins() -> dict[str, str]:
     return {p.path: p.under for p in mod.PINS if p.key is not None}
 
 
+@functools.cache
+def json_pin_keys() -> dict[str, tuple[str, str]]:
+    """`json_pins`, each with its JSON key: {pin: (key, the directory its paths are below)}."""
+    json_pins()
+    return {p.path: (p.key, p.under) for p in sys.modules["move_check_pins"].PINS if p.key is not None}
+
+
 def manifest_pin(x: str, y: str, under: str, base: Tree, head: Tree, pmap: dict[str, str]) -> bool:
     """Whether a JSON pin's line ``y`` is its line ``x`` at BASE with a Lake manifest's digest at BASE rewritten to its digest
     at HEAD, under its path moved by the map."""
@@ -940,10 +958,28 @@ def base_maps(base: Tree) -> list[tuple[dict, object]]:
             continue
         try:
             data = tomllib.loads(base.text(p) or "")
-            if data.get("words") or data.get("words_in"):
+            if (data.get("words") or data.get("words_in")) and not data.get("scope"):
                 out.append((data, R.Words(data)))
         except (tomllib.TOMLDecodeError, SystemExit, KeyError, TypeError, AttributeError):
             continue
+    return out
+
+
+def package_roots(base: Tree) -> set[str]:
+    """The directory of each import package after a move, as the path maps at BASE give it (`[roots] new` of each `.toml`
+    under `tools/move/`, at any depth: a layout's maps may sit in a directory of their own): `tools/move/layout.py` writes
+    package levels from a moved module up to its root and no higher."""
+    out = set()
+    for p in base.files:
+        if not (p.startswith(MAPS) and p.endswith(".toml")):
+            continue
+        try:
+            roots = tomllib.loads(base.text(p) or "").get("roots")
+        except tomllib.TOMLDecodeError as e:
+            raise SystemExit(f"move-check: {p} doesn't parse at BASE, so the package roots it may name can't be read: {e}") from e
+        new = roots.get("new") if isinstance(roots, dict) else None
+        if isinstance(new, dict):
+            out |= {d.strip("/") for d in new.values() if isinstance(d, str)}
     return out
 
 
@@ -1068,12 +1104,167 @@ def merged(old: str, new: str) -> str:
 
 
 def worded(text: str, path: str, maps: list, lock: bool = False) -> str:
-    """``text`` with each word map applied as `tools/move/rename.py` applies it: not to a file the map excludes, and in a
-    lock, not to the records."""
+    """``text`` with each word map applied as `tools/move/rename.py` applies it: not to a file the map excludes, in a
+    lock not to the records, and in a JSON file with each sorted object whose keys it renames sorted again (`resorted`)."""
+    R = _rename()
     for w in maps:
         if not w.excluded(path):
-            text = w.sub(text, path, _rename().record_spans(text) if lock else [])
+            text = R.resorted(text, w.sub(text, path, R.record_spans(text) if lock else []), path)
     return text
+
+
+#: a move commit's line naming its word map (`research.queue`'s `MOVE_TRAILER_RE`)
+MOVE_LINE = re.compile(r"^Move: (tools/move/[\w.-]+\.toml)$", re.M)
+#: a name as Python or Lean spells it, one part of a dotted name
+NAME = {"python": re.compile(r"[^\W\d]\w*"), "lean": re.compile(r"[^\W\d][\w'!?]*")}
+NAME_CHAR = {"python": re.compile(r"\w"), "lean": re.compile(r"[\w'!?]")}
+#: what a path or a dotted module in a literal may hold
+TOKEN_CHAR = re.compile(r"[^\s\"'`()\[\]{}<>,;=]")
+
+
+def scoped_map(base: Tree, head: str, cwd: str | None, path: str | None = None) -> tuple[str, dict] | None:
+    """The word map a move with `scope = "prose"` renames by (``path``, else the `Move:` line of HEAD's message), as BASE has
+    it; None for any other move."""
+    if path is None:
+        m = MOVE_LINE.search(git("log", "-1", "--format=%B", head, cwd=cwd).decode(errors="replace"))
+        path = m and m.group(1)
+    try:
+        data = tomllib.loads(base.text(path) or "") if path else {}
+    except tomllib.TOMLDecodeError as e:
+        raise SystemExit(f"move-check: the move's word map {path} doesn't parse at BASE: {e}") from e
+    return (path, data) if data.get("scope") == "prose" and data.get("words") else None
+
+
+class Terms:
+    """The certificate of a move by a word map with `scope = "prose"`: each file it edits must be BASE's text with some of the
+    map's words (as `tools/move/rename.py` matches them in that file) replaced, and each one replaced must stand in prose (a
+    comment, a docstring, Markdown's text, `rename.regions`); or in Python or Lean code, as a part of a name renamed to one
+    the file doesn't spell at BASE, the same name in every file, and not a Lean name a lock records (its record follows a
+    rename only by `check.py --update --moved`, which a regenerated move doesn't run); or in a literal or a data file, as a
+    path or module the range moved. A string literal and a data file otherwise keep their bytes, so a wire format, a
+    record key or a message stays as it was. A file a JSON pin records is not edited at all: the pin's command, which a
+    move doesn't run, regenerates it."""
+
+    def __init__(self, base: Tree, map_path: str, data: dict, pmap: dict[str, str], lmods: dict[str, str]):
+        R = _rename()
+        self.R, self.map, self.words, self.pmap, self.lmods = R, map_path, R.Words(data), pmap, lmods
+        self.records = set()
+        for p in base.files:
+            if posixpath.basename(p) == "lean-audit.json":
+                self.records |= set(NAME["lean"].findall(base.text(p) or ""))
+        self.pinned: dict[str, str] = {}
+        for pin, (key, under) in json_pin_keys().items():
+            for rel in json.loads(base.text(pin) or "{}").get(key, {}):
+                self.pinned[posixpath.normpath(posixpath.join(under, rel))] = pin
+        self.names: dict[str, dict[str, list[str]]] = {}
+
+    def change(self, a: str, b: str, old: str, new: str) -> tuple[str, str | None] | None:
+        """Why ``b`` (file ``new`` at HEAD) isn't a certified edit of ``a`` (``old`` at BASE), or None."""
+        if old in self.pinned:
+            return (f"the JSON pin {self.pinned[old]} records this file's digest: its command regenerates the pin, which a move "
+                    "doesn't run, so the move leaves the file as it is", None)
+        if self.words.excluded(old):
+            return f"{self.map} excludes this file", None
+        pattern, repl = self.words.rules(old, a)
+        sites = [(m.start(), m.end(), self.R._rewrapped(m.group(0), repl[m.lastindex - 1]) if "\n" in m.group(0)
+                  else repl[m.lastindex - 1]) for m in pattern.finditer(a)]
+        applied = aligned(a, b, sites)
+        if applied is None:
+            al, bl = a.splitlines(), b.splitlines()
+            return f"edit beyond the words of {self.map}", first_unexplained(al, bl, al, bl)
+        spans, lang = self.R.regions(old, a), self.R.language(old, a)
+        spelled = None
+        for s, e, at, to in applied:
+            kinds = {self.R.kind_at(spans, i) for i in range(s, e) if not a[i].isspace()}
+            if kinds == {self.R.PROSE}:
+                continue
+            if kinds == {self.R.CODE} and lang in NAME:
+                was, now = around(a, s, e, NAME_CHAR[lang]), around(b, at, at + len(to), NAME_CHAR[lang])
+                if spelled is None:
+                    spelled = names_outside_prose(a, spans, lang, self.R)
+                if now in spelled:
+                    return (f"renames {was} to {now}, which {old} spells at BASE: the two names would merge",
+                            line_hunk(a, b, s, at))
+                if lang == "lean" and (set(was.split(".")) & self.records):
+                    return (f"renames {was}, which a lock's records name: a record follows a rename only by "
+                            "`check.py --update --moved`, which a regenerated move doesn't run", line_hunk(a, b, s, at))
+                self.names.setdefault(was, {}).setdefault(now, []).append(new)
+                continue
+            if kinds <= {self.R.LITERAL, self.R.CODE}:
+                ta, tb = around(a, s, e, TOKEN_CHAR), around(b, at, at + len(to), TOKEN_CHAR)
+                if ta != tb and (substitute(ta, self.pmap) == tb or module_sub(ta, self.lmods) == tb):
+                    continue
+            where = "a string literal or a data file" if self.R.LITERAL in kinds else f"{lang} code"
+            return (f"renames {a[s:e]!r} to {to!r} in {where}, which keeps its bytes but for moved paths",
+                    line_hunk(a, b, s, at))
+        return None
+
+    def conflicts(self) -> list[tuple[str, str]]:
+        """(path, why) for each file that renames a name otherwise than another file does."""
+        out = []
+        for was, nows in sorted(self.names.items()):
+            if len(nows) > 1:
+                told = ", ".join(f"{n} in {fs[0]}" for n, fs in sorted(nows.items()))
+                out += [(f, f"renames {was} to different names in different files ({told})")
+                        for fs in nows.values() for f in dict.fromkeys(fs)]
+        return out
+
+
+def names_outside_prose(text: str, spans: list, lang: str, R) -> set[str]:
+    """The names ``text`` spells in its code and literals."""
+    out, i = set(), 0
+    for s, e, k in [*spans, (len(text), len(text), R.PROSE)]:
+        if k == R.PROSE:
+            out |= set(NAME[lang].findall(text, i, s))
+            i = e
+    return out
+
+
+def around(text: str, s: int, e: int, char: re.Pattern) -> str:
+    """``text[s:e]`` widened to the run of ``char`` it stands in."""
+    while s > 0 and char.match(text[s - 1]):
+        s -= 1
+    while e < len(text) and char.match(text[e]):
+        e += 1
+    return text[s:e]
+
+
+def line_hunk(a: str, b: str, s: int, at: int) -> str:
+    """The line of ``a`` at ``s`` and of ``b`` at ``at``, as a hunk."""
+    def line(t: str, i: int) -> str:
+        return t[t.rfind("\n", 0, i) + 1:(t.find("\n", i) + 1 or len(t) + 1) - 1]
+    return f"-{line(a, s)}\n+{line(b, at)}"
+
+
+def aligned(a: str, b: str, sites: list[tuple[int, int, str]]) -> list[tuple[int, int, int, str]] | None:
+    """The ``sites`` of ``a`` ((start, end, replacement), in order, apart) that ``b`` replaces, each with where its
+    replacement starts in ``b``, when ``b`` is ``a`` with some of them replaced; None when it isn't."""
+    frontier: dict[int, None] = {0: None}
+    back: list[dict[int, tuple[int, bool]]] = []
+    i = 0
+    for s, e, to in sites:
+        gap, nxt = a[i:s], {}
+        for j in frontier:
+            if b.startswith(gap, j):
+                k = j + len(gap)
+                if b.startswith(a[s:e], k):
+                    nxt.setdefault(k + e - s, (j, False))
+                if b.startswith(to, k):
+                    nxt.setdefault(k + len(to), (j, True))
+        if not nxt:
+            return None
+        back.append(nxt)
+        frontier, i = nxt, e
+    end = next((j for j in frontier if len(b) - j == len(a) - i and b.endswith(a[i:])), None)
+    if end is None:
+        return None
+    out = []
+    for (s, e, to), step in zip(reversed(sites), reversed(back)):
+        j, used = step[end]
+        if used:
+            out.append((s, e, end - len(to), to))
+        end = j
+    return out[::-1]
 
 
 def copy_change(name: str, old: str, new: str, src_path: str, new_path: str, pmap: dict[str, str], lmods: dict[str, str],
@@ -1136,7 +1327,8 @@ def declared(base: Tree, head: Tree) -> dict[str, str]:
     return out
 
 
-def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str | None = None) -> dict:
+def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str | None = None,
+            words: str | None = None) -> dict:
     extra = extra or {}
     dotted = {o: n for o, n in extra.items() if "/" not in o}
     B, H = Tree(base, cwd), Tree(head, cwd)
@@ -1190,6 +1382,10 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
                 moves.update(dict.fromkeys(filter(None, (B.module(o), H.module(n))), (bp, hp)))
     report = {"base": base, "head": head, "map": dict(sorted(pmap.items())), "lean_modules": dict(sorted(lmods.items())),
               "renames": [], "edits": [], "refusals": []}
+    scoped = scoped_map(B, head, cwd, words)
+    terms = Terms(B, *scoped, pmap, lmods) if scoped else None
+    if scoped:
+        report["words"] = scoped[0]
 
     def refuse(e: dict, reason: str, h: str | None = None) -> None:
         report["refusals"].append({"path": e["new"], **({"old": e["old"]} if e["old"] != e["new"] else {}),
@@ -1206,6 +1402,19 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
 
     def new_lake(p: str) -> bool:
         return new_dir(p) and H.is_package(p) and posixpath.join(p, "lean-audit.json") in H.set
+
+    roots = sorted(package_roots(B), key=len, reverse=True)
+
+    def package_level(d: str) -> bool:
+        """Whether an empty `__init__.py` added in `d` is a package level the move needs: a module the range moved to `d` or
+        below it was a package's at BASE, so it is importable by its new name only if each directory from it up to its
+        package's root is a package (`tools/move/layout.py` writes these, and none above the root)."""
+        for o, n in renamed:
+            if n.endswith(".py") and n.startswith(d + "/") and posixpath.join(posixpath.dirname(o), "__init__.py") in B.set:
+                root = next((r for r in roots if n.startswith(r + "/")), None)
+                if root is not None and (d == root or d.startswith(root + "/")):
+                    return True
+        return False
 
     new_projects = set()
     for e in entries:
@@ -1262,6 +1471,9 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             else:
                 report["edits"].append({"path": new, "copy_of": src_path, "kind": "copy"})
             continue
+        if st == "A" and name == "__init__.py" and text(e, 1) == "" and package_level(posixpath.dirname(new)):
+            report["edits"].append({"path": new, "kind": "package level"})
+            continue
         if st not in "RM":
             refuse(e, {"A": "added", "D": "deleted", "C": "copied", "T": "type changed"}.get(st, f"status {st}"))
             continue
@@ -1277,6 +1489,12 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             refuse(e, "edited, not UTF-8 text")
             continue
         same, pins = a == b, name == PINS and posixpath.basename(old) == PINS
+        if terms is not None and not same and not pins and k not in ("lock", "moves"):
+            if why := terms.change(a, b, old, new):
+                refuse(e, *why)
+            else:
+                report["edits"].append({"path": new, **({"old": old} if old != new else {}), "kind": "words"})
+            continue
         at_base = a.splitlines()
         if not same and not pins and old != MOVES:
             a, unworded = worded(a, old, maps, lock=k == "lock"), a
@@ -1337,6 +1555,8 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             report["renames"].append({"old": old, "new": new})
         else:
             report["edits"].append({"path": new, **({"old": old} if old != new else {}), "kind": k})
+    for path, why in terms.conflicts() if terms else ():
+        report["refusals"].append({"path": path, "status": "M", "reason": why, "hunk": None})
     runs_moved(entries, B, H, pmap, lmods, report["refusals"])
     report["certified"] = not report["refusals"]
     return report
@@ -1410,7 +1630,8 @@ def runs_moved(entries: list[dict], B: Tree, H: Tree, pmap: dict[str, str], lmod
 
 def summary(r: dict) -> str:
     span = f"{r['base']}..{r['head']}"
-    counts = f"{len(r['renames'])} renames, {len(r['edits'])} path-only edits"
+    edits = f"edits by {r['words']}'s words" if r.get("words") else "path-only edits"
+    counts = f"{len(r['renames'])} renames, {len(r['edits'])} {edits}"
     if r["certified"]:
         return f"move-check: certified {span} is a pure move ({counts})"
     return f"move-check: refused {span}: {len(r['refusals'])} paths are not part of a pure move ({counts})"
@@ -1422,6 +1643,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("head")
     ap.add_argument("--map", action="append", default=[], metavar="OLD=NEW", help="an extra path (or dotted module) mapping")
     ap.add_argument("--json", action="store_true", help="print the report as JSON; the summary goes to stderr")
+    ap.add_argument("--words", metavar="MAP", help="the word map, at BASE, a move with `scope = \"prose\"` renames by "
+                    "(default: the `Move:` line of HEAD's message)")
     args = ap.parse_args(argv)
     extra = {}
     for m in args.map:
@@ -1430,7 +1653,7 @@ def main(argv: list[str] | None = None) -> int:
             ap.error(f"--map {m!r}: expected OLD=NEW")
         extra[old.strip("/")] = new.strip("/")
     try:
-        r = certify(args.base, args.head, extra)
+        r = certify(args.base, args.head, extra, words=args.words)
     except subprocess.CalledProcessError as e:
         print(f"move-check: git {' '.join(e.cmd[3:])}: {e.stderr.decode(errors='replace').strip()}", file=sys.stderr)
         return 2

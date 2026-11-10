@@ -1,4 +1,4 @@
-//! The challenger's interactive-run record of one recursive run (`verity/rec-run/v1`), as its coin servers write it: one
+//! The challenger's interactive-run record of one recursive run (`verity/rec-run/v1`), as its live-coin parts write it: one
 //! event a line, in order. The challenger's operator writes the staging (V*'s shared rows and shared set) before any
 //! session and the close after the last; between them each `flock-circuit serve --rec-run FILE --rec-part J` appends an
 //! `open` for every `Hello` it answers with coins, before that answer (which carries the session's fresh coin key) leaves.
@@ -12,7 +12,7 @@ use serde_json::json;
 
 use crate::{Req, Resp, Server, hex};
 
-/// One coin server's side of the run's record: the file the operator staged, and the V* part its sessions are opened for.
+/// One live-coin part's side of the run's record: the file the operator staged, and the V* part its sessions are opened for.
 pub struct RunLog {
     path: std::path::PathBuf,
     part: usize,

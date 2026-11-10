@@ -1,22 +1,19 @@
 module
 
 public import Difftest
-public import PouwWindow.Json
 public import PouwWindow.Length
 public import PouwWindow.Statement
 public import PouwWindow.Inputs
 public import PouwWindow.Rounds
-public import PouwWindow.Lanes
 public import PouwWindow.KnownRows
 public import PouwWindow.RegFile
-public import PouwWindow.FullDraw
 
 /-!
-# The difftest's functions: the window's Lean behind `Difftest.serve`
+# The difftest's functions: the execution phase's Lean behind `Difftest.serve`
 
 One function per ported function of `window.py`, each on a JSON object of its arguments, for the shared harness
 (`verity/core/difftest`): an output, or `.error` where Python raises `ValueError` (a reject). The port's
-suite (`tests/test_difftest.py`, and `tests/test_lanes.py` for a drawn leaf's statements) draws the inputs and holds each
+suite (`tests/test_difftest.py`, and `tests/test_lanes.py` for a sampled leaf's statements) samples the inputs and holds each
 to Python.
 
 * `on_grid`, `floor_point`, `pad`, `level`, `bucket` (`bits`, `n`); `point`, `work_at` (`bits`, `ell`); `levels` (`bits`,
@@ -33,24 +30,24 @@ to Python.
 * a call's record: `record_digest` (`record`); `record_problem` (`row`, `record`);
 * the side trees: `side_row` (`words`, `index`); `side_index` (`row`); `side_domain` (`window`, `side`); `pad_node`
   (`domain`, `level`, `index`); `side_levels` (`domain`, `leaves`); `side_path` (`domain`, `leaves`, `index`);
-* the window statement: `window_problem` (`rows`, `work`, `bound`, `root_h3`, `bits`, and `records`, `indices` or null);
+* the execution phase statement: `window_problem` (`rows`, `work`, `bound`, `root_h3`, `bits`, and `records`, `indices` or null);
 * the public inputs: `session_cap` (`k_log`, `per_block`); `sessions` (`k`, `cap`); `instance_ts` (`registration`,
   `drawn`, `sigma`, `cap`); `public_inputs` (those and `domain_h3`); `layout_constants`.
-* a live window: `live_epoch_reason` (`commitment`, the challenger's live coin commitment); `round_key` (`commitment`,
+* a live execution phase: `live_epoch_reason` (`commitment`, the challenger's live coin commitment); `round_key` (`commitment`,
   `coin`, `round`, `root`).
-* a drawn leaf's statements (`PouwWindow.Lanes`, held to `h1zy.statement_ports` and to the lowered circuits' port
+* a sampled leaf's statements (`PouwWindow.Lanes`, held to `h1zy.statement_ports` and to the lowered circuits' port
   records): `n_digits` (`ks`); `lane_ports` (`r`, `c`, `k`, `lane`); `combine_ports` (`r`, `c`, `k`); a J10-R leaf's
   `j10r_lane_ports` (`r`, `c`, `k`, `n` the lane's chunks, `lane`, `chunk`) and `j10r_combine_ports` (`r`, `c`, `k`,
   `n`); `field_of` (those, `lane` null for the combine, `n` null or absent for v1's, and `path`); `wires` (those);
   `wire_of` (those and `wire`).
-* a drawn leaf's known rows (`PouwWindow.KnownRows`, held to `h1_lanes`' `known_rows` by `tests/test_known_rows.py`):
+* a sampled leaf's known rows (`PouwWindow.KnownRows`, held to `h1_lanes`' `known_rows` by `tests/test_known_rows.py`):
   `known_rows` (`admit` 0/1 list, `salt` and the two `roots` 64-byte hex, `position` a u64, `lane` or null for the
   combine): each known port's rows' words.
-* a drawn leaf's registered files (`PouwWindow.RegFile`, held to `leaf_lanes.registered_file` at
+* a sampled leaf's registered files (`PouwWindow.RegFile`, held to `leaf_lanes.registered_file` at
   `leaf_lanes.verifier_entries` by `tests/test_reg_file.py`): `registered_file` (`registration` and `produced` records,
   `r`, `c`, `k`, `lane` or null, `known` an object of ports); `leaf_own` (those records, the tile and
   statement, and the `file`): `true` where `pouw-leaf-own` accepts the file, a reject where it refuses; `full_draw`
-  (`record`, a session record's text): `true` where `PouwWindow.Lanes.checkFull` accepts its draw, a reject where it
+  (`record`, a session record's text): `true` where `PouwWindow.Lanes.checkFull` accepts its sample, a reject where it
   refuses.
 
 A domain `{binding, count}` is `CommitmentDomain(binding, OWNER, RangeIndexedDomain(0, count), hash="sha512")`; bytes are
@@ -283,11 +280,11 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
     pure (hexJ (← publicInputs? (← get j "registration") (← arr j "drawn").toList (← get j "sigma") (← int j "cap")
       (← hex j "domain_h3")))),
   ("live_epoch_reason", fun j => do
-    pure (toJson (liveEpochReason (← SampledProofs.Challenger.LiveCommitment.ofJson (← get j "commitment"))))),
+    pure (toJson (liveEpochReason (← Spot.Challenger.LiveCommitment.ofJson (← get j "commitment"))))),
   ("draw_epoch_reason", fun j => do
-    pure (toJson (drawEpochReason (← SampledProofs.Challenger.LiveCommitment.ofJson (← get j "commitment"))))),
+    pure (toJson (drawEpochReason (← Spot.Challenger.LiveCommitment.ofJson (← get j "commitment"))))),
   ("round_key", fun j => do
-    let c ← SampledProofs.Challenger.LiveCommitment.ofJson (← get j "commitment")
+    let c ← Spot.Challenger.LiveCommitment.ofJson (← get j "commitment")
     pure (hexJ (← roundKey c (← hex j "coin") (← nat j "round") (← hex j "root")))),
   ("layout_constants", fun _ => pure <| Json.mkObj [("T_BITS", toJson tBits),
     ("DEPTHS", Json.mkObj (sides.map fun s => (s.name, toJson s.depth))), ("PORT", toJson port),

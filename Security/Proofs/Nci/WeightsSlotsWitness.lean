@@ -1,7 +1,9 @@
 module
 
 public import Proofs.Nci.FitSlotsWitness
-public import Proofs.Nci.Threads
+public import Definitions.Nci.Assumptions.Threads
+import Mathlib.Data.NNRat.Floor
+import Proofs.Nci.Threads
 
 /-!
 # A subcircuit across an optimizer step: `WeightsIncompressibleSlots` holds where `WeightsIncompressible` fails

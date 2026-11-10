@@ -1,4 +1,4 @@
-"""The hierarchical VU store: a run's sampled units kept inside the circuit they came from, and the query that cuts instance sets.
+"""The hierarchical VU store: a run's sampled proof blocks kept inside the circuit they came from, and the query that cuts instance sets.
 
 The stored form of a VU export (`vllm-vu-store/v1`); flat instance sets (`vllm-vu-set/v1`) are the output of `extract`, and the
 default extraction is exactly the sets `vu_export` defines.

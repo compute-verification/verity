@@ -6,23 +6,24 @@ and root's receipt on the challenger's come back to the nanosecond, and so the l
 (`identity`, checked; the script exits 1 when it fails).
 
 The loop replayed is `verifier.py`'s at k = 1, as a session's record shows it, and a record of another form is refused:
-at root g the verifier asks the challenger for openings coin g and σ_(g+2) in one round trip (`coins.SessionCoins.ahead`),
-sends window g's draws (its `draws_sent_ns` D_g), then σ_(g+2) (its `released_ns` R_(g+2)); σ_0 and σ_1 each go alone,
-stamped before they are asked (`audit.AuditRun._release`), and the last two groups' openings coins go alone. Group g's
-root arrives at A_g. The prover's record (`prover.json`) has each pass from its coin's arrival to its root, ph_g, and
-from its root to its send, gp_g, and τ, half the verifier↔prover round trip (verifier.json's `rtt` median), puts them on
-the verifier's clock: root g seen at S_g = A_g − τ − gp_g, coin g arrived at C_g = S_g − ph_g. So:
+at root g the verifier asks the challenger for openings coin g and chal_(g+2) in one round trip
+(`coins.SessionCoins.ahead`), sends window g's draws (its `draws_sent_ns` D_g), then chal_(g+2) (its `released_ns`
+R_(g+2)); chal_0 and chal_1 each go alone, stamped before they are asked (`audit.AuditRun._release`), and the last two
+groups' openings coins go alone. Group g's root arrives at A_g. The prover's record (`prover.json`) has each pass from
+its coin's arrival to its root, ph_g, and from its root to its send, gp_g, and τ, half the verifier↔prover round trip
+(verifier.json's `rtt` median), puts them on the verifier's clock: root g seen at S_g = A_g − τ − gp_g, coin g arrived
+at C_g = S_g − ph_g. So:
 
 - *The prover.* Pass g runs from max(C_g, root g − 1 sent) for S_g − that, its recorded time; coin g takes C_g − R_g
-  from its stamp, which for σ_0 and σ_1 holds their fetch.
+  from its stamp, which for chal_0 and chal_1 holds their fetch.
 - *The verifier.* It takes root g at Q_g = max(A_g, b_g), once it has sent window g's boundary b_g (`boundary_ns`:
-  σ_(g+1), or the close after the last window), and its exchange X_g = D_g − Q_g is the challenger's own time P_g
+  chal_(g+1), or the close after the last window), and its exchange X_g = D_g − Q_g is the challenger's own time P_g
   (first receipt to last release of the round trip, on its log) and net_g, the rest: the network both ways and the
-  verifier's time around it. The session's round trip r0 is the least net_g (or σ_0's fetch, R_1 − R_0 less its P, if
-  less). Round trip r takes r0 − r off every exchange and off σ_0's and σ_1's fetches, and keeps each exchange's excess
-  over r0 (a queue behind other work, compute, jitter); σ_1 leaves no sooner than its window allows. Window g + 1's
-  boundary leaves its recorded step after D_g. Root 0 also waits on σ_1's fetch, which the loop's record doesn't
-  stamp: it is taken as coin 1's arrival at the prover less τ, C_1 − τ, which moves with the fetch.
+  verifier's time around it. The session's round trip r0 is the least net_g (or chal_0's fetch, R_1 − R_0 less its P, if
+  less). Round trip r takes r0 − r off every exchange and off chal_0's and chal_1's fetches, and keeps each exchange's
+  excess over r0 (a queue behind other work, compute, jitter); chal_1 leaves no sooner than its window allows. Window
+  g + 1's boundary leaves its recorded step after D_g. Root 0 also waits on chal_1's fetch, which the loop's record
+  doesn't stamp: it is taken as coin 1's arrival at the prover less τ, C_1 − τ, which moves with the fetch.
 - *The challenger.* Its receipt of root g's request and its release of each coin move with the verifier's times, each
   crossing half of r0 − r shorter. The auditor's-clock line reads a release and a later receipt, one crossing each way,
   so the split doesn't move it.
@@ -54,7 +55,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import auditor_line as al  # noqa: E402
-from verity.core.protocols.sampled_proofs import remote  # noqa: E402
+from verity.core.protocols.spot import remote  # noqa: E402
 
 RTT_MS = (0.3, 1.15, 10.0, 25.0, 50.0)
 """The round trips a row is replayed at by default, ms: in-region and a few farther."""
@@ -77,12 +78,12 @@ def log_coins(lines: list[str]) -> list[tuple[str, int, str, int, int]]:
 
 @dataclass(frozen=True)
 class SessionTimes:
-    """A session's times as the replay reads them, ns: the verifier's series R, A, D and the auditor's Ra (σ_g's
+    """A session's times as the replay reads them, ns: the verifier's series R, A, D and the auditor's Ra (chal_g's
     release) and Aa (root g's first receipt), with the residuals that rebuild them."""
     n: int
     tau: int
     window: int
-    """The window's stated length: σ_1 leaves no sooner than this after σ_0."""
+    """The window's stated length: chal_1 leaves no sooner than this after chal_0."""
     R: list[int]
     A: list[int]
     D: list[int]
@@ -98,13 +99,13 @@ class SessionTimes:
     P: list[int]
     """The challenger's own time in that exchange."""
     step: list[int]
-    """b_(g+1) − D_g: window g + 1's boundary (σ_(g+2), or the close after the last) after window g's samples."""
+    """b_(g+1) − D_g: window g + 1's boundary (chal_(g+2), or the close after the last) after window g's samples."""
     to_aa: list[int]
     """Aa_g − Q_g."""
     from_ra: list[int]
-    """For σ_0 and σ_1 Ra_g − R_g; for the rest D_(g−2) − Ra_g."""
+    """For chal_0 and chal_1 Ra_g − R_g; for the rest D_(g−2) − Ra_g."""
     fetch0: int
-    """σ_0's fetch less the challenger's time: R_1 − R_0 − its P."""
+    """chal_0's fetch less the challenger's time: R_1 − R_0 − its P."""
 
     @property
     def net(self) -> list[int]:

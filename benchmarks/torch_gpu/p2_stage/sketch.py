@@ -1,4 +1,4 @@
-"""PoUB's receipts beside the staging decode: each pass's sketch of every unit of `C*` as the decode
+"""PoUB's receipts beside the store's load: each pass's sketch of every unit of `C*` as the decode
 reads it, the units' receipts and the pass's root, bit for bit `remote_bandwidth.p2`'s (the interface is `PROTOCOL.md`
 §11 of `verity/core/protocols/remote_bandwidth`; the fixture is `benchmarks/pous/p2_v1/serve.py fixture`). ::
 
@@ -43,11 +43,11 @@ from typing import Any
 
 import numpy as np
 import torch
+from verity_config.settings import of
 
 from verity.core.protocols.remote_bandwidth import p2
 from verity.core.protocols.remote_bandwidth import receipts as R
 from verity.ml.kernels import SHA512
-from verity_config.settings import of
 
 settings = of(__file__)
 HERE = Path(__file__).resolve().parent

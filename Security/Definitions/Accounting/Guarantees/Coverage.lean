@@ -2,6 +2,8 @@ module
 
 public import Definitions.Accounting.Assumptions.Coverage
 public import Definitions.Accounting.CoverageToy
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The floor under coverage

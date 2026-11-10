@@ -28,6 +28,8 @@ adversary's fork finders.
 
 @[expose] public section
 
+open Claims renaming Ex → expect
+
 namespace Pouw.RelativeSecurity
 
 open Finset
@@ -192,7 +194,7 @@ theorem SlpG.parityForm_err_ovJ (φ : ZMod (2 ^ 32) →+* ZMod 2) {N : ℕ}
   exact h
 
 open Classical in
-/-- **Charge-pure one-sided overlapped calls add up**: at every bit point of the draws, the round's run has at least
+/-- **Charge-pure one-sided overlapped calls add up**: at every bit point of the samples, the round's run has at least
 `L` products per cell-block, of any call, not short of products. -/
 theorem SlpG.card_full_le_ovJ (φ : ZMod (2 ^ 32) →+* ZMod 2) {N : ℕ}
     (P : SlpG (OJBits St n L B n') (ZMod (2 ^ 32)) N) (hOk : ∀ j, P.isProd j = true → OneSidedAtJ (P.prod j))

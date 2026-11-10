@@ -17,7 +17,8 @@ refused. One line per part, then the count; the exit is 0 only when there is a p
 forgery is refused.
 
 With ``--compose BIN`` (85's V* parts), the recursive statement's verdict is Lean's, not this script's:
-``BIN rec-compose`` (`RecCompose.check`) over DIR's ``rec-inner.json``, its one shared rows file ``rows.json``, the
+``BIN rec-compose`` (`RecCompose.check`) over DIR's ``rec-inner.json``, its one shared rows file ``rows.json``, the link
+table's ``--rec-links ROOT:N`` in ``rec-links.txt`` when the inner population is wired (85's REC_LINKS=1), the
 challenger's interactive-run record ``rec-run.json`` and the V* parts' logs (the honest parts 85 gave V*'s inputs,
 ``own-PART.txt``) accepts only when there is one part per V* statement, each one ``--zk`` session accepted at the SHA-512
 of that one rows file and of that inner shape, every part having read one set of the other inputs V*'s parts share and
@@ -25,9 +26,9 @@ no two sessions one coin key (`RecCompose.Accepts`), and the record shows the pa
 session opened per part, each the composed one, the close last (`RecCompose.OneRun`); the step fails unless it does.
 Each forgery of a V* part, put in that part's place, must be refused by it too. The record is the one the challenger
 kept while the parts ran, ``rec-run.jsonl`` (`run_record`): 85's oprove under MODES=firewall (one session per staged
-statement) stages ``rows.json`` and the shared set every part is given before any session, each V* part's coin server
+statement) stages ``rows.json`` and the shared set every part is given before any session, each V* part's challenger
 logs every ``Hello`` it answers as an open of that part (``flock-circuit serve --rec-run``), and oprove closes it after
-the last session; a staged forgery's coin server logs into a record of its own (``rec-run-FORGERY.jsonl``), whose opens
+the last session; a staged forgery's challenger logs into a record of its own (``rec-run-FORGERY.jsonl``), whose opens
 stand in for its part's (``rec-run-FORGERY.json``), while a forged inner, verified over the honest sessions, keeps
 theirs. Without one, the record is DIR's ``rec-run.json``. A composition with no record to read, or no ``REC-COMPOSE``
 line, is neither accepted nor refused, and fails the step. A run of some of V*'s
@@ -165,7 +166,7 @@ def events_of(f: Path) -> list:
 def run_record(d: Path, names: list[str]) -> Path:
     """The run's record (``verity/rec-run/v1``) for the parts ``names``: the challenger's ``rec-run.jsonl`` event for
     event (``rec-run.json``). A staged forgery among ``names`` (one with its own ``own-FORGERY.txt``) was proved on a
-    coin server of its own, which logged its opens in ``rec-run-FORGERY.jsonl``: they replace its part's, before the
+    challenger of its own, which logged its opens in ``rec-run-FORGERY.jsonl``: they replace its part's, before the
     close (``rec-run-FORGERY.json``). A forgery verified over its part's honest session (a forged inner) keeps that
     part's opens. Without ``rec-run.jsonl``, DIR's ``rec-run.json`` as given."""
     from verity_flock import rec_compose as RC
@@ -185,15 +186,17 @@ def run_record(d: Path, names: list[str]) -> Path:
 
 
 def compose(binary: str, d: Path, logs: list[Path]) -> tuple[bool | None, str]:
-    """``binary rec-compose`` over ``logs`` at DIR's ``rec-inner.json``, ``rows.json`` and the run's record for those logs'
-    parts (`run_record`). (accepted, its line); accepted is None when there is no record to compose over, which is
-    neither Lean's acceptance nor its refusal."""
+    """``binary rec-compose`` over ``logs`` at DIR's ``rec-inner.json``, ``rows.json``, the link table's ``--rec-links``
+    when DIR has ``rec-links.txt`` (85's REC_LINKS=1), and the run's record for those logs' parts (`run_record`).
+    (accepted, its line); accepted is None when there is no record to compose over, which is neither Lean's acceptance
+    nor its refusal."""
     try:
         run = run_record(d, [f.stem for f in logs])
     except (OSError, ValueError) as e:
         return None, f"no interactive-run record from rec-run.jsonl ({e})"
+    links = ["--rec-links", (d / "rec-links.txt").read_text().strip()] if (d / "rec-links.txt").is_file() else []
     r = subprocess.run([binary, "rec-compose", "--rec-inner", str(d / "rec-inner.json"), "--rec-rows", str(d / "rows.json"),
-                        "--rec-run", str(run), *map(str, logs)], capture_output=True, text=True, check=False)
+                        *links, "--rec-run", str(run), *map(str, logs)], capture_output=True, text=True, check=False)
     line = next((ln for ln in r.stdout.splitlines() if ln.startswith("REC-COMPOSE ")), None)
     if line is None:
         return None, f"exit {r.returncode}: {r.stderr.strip()[-300:]!r}"

@@ -1,16 +1,47 @@
 module
 
 public import Proofs.Flock.SoundAtBridge.Reduce
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
-# `SoundAtBridge`'s layer premises hold together, and its event is C-Flock's
+# `SoundAtBridge`'s layer premises hold together, and its event is Flock's
 
 `soundAtBridge_nonvacuous` is the bridge's witness, as `ZkReg/NonVacuousHJ.lean` is `zk_session_soundHJR`'s: at any
-family of C-Flock sessions, the layer `rowsLayer` that reads them (accepted where flock-verify accepts, opened at the
-value layer, its relation that every drawn unit is right) meets `AcceptedLive`, `OpenedPlurAt` at `δo = 0` and
+family of Flock sessions, the layer `rowsLayer` that reads them (accepted where flock-verify accepts, opened at the
+value layer, its relation that every sampled proof block is right) meets `AcceptedLive`, `OpenedPlurAt` at `δo = 0` and
 `RelOfRows` together; a proof of it is unsound exactly where its session's outcome is `RowsSession.BadU` (flock-verify
-accepts and a drawn unit is wrong or its rows are off at its own reads), so `SoundAtBridge`'s conclusion there is
-C-Flock's event and no weaker one; and a finite bound on every session's `n · bound` meets the `δ` hypothesis at its
+accepts and a sampled proof block is wrong or its rows are off at its own reads), so `SoundAtBridge`'s conclusion there is
+Flock's event and no weaker one; and a finite bound on every session's `n · bound` meets the `δ` hypothesis at its
 real value.
 -/
 
@@ -24,13 +55,13 @@ open scoped ENNReal
 
 variable {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type}
 
-/-- **`SoundAtBridge`'s layer premises hold together, and its event is C-Flock's.** At any family of sessions `sess`
+/-- **`SoundAtBridge`'s layer premises hold together, and its event is Flock's.** At any family of sessions `sess`
 with outcomes `out`, any reading `rows` of a session's value layer and any rightness `right`, the layer
 `rowsLayer sess out rows right` meets `AcceptedLive`, `OpenedPlurAt` at `δo = 0` and `RelOfRows`; its proof `i` of
 round `w` is unsound on the path `x` exactly where `(sess x w i).BadU (out x w i)`; and a bound `B ≠ ⊤` on every
 session's `n · bound` meets `n · bound ≤ ofReal δ` at `δ = B.toReal ≥ 0`. Not covered: `WindowLaw`,
 `RowsSession.CR` (`EndToEndRegisteredRows`' `cr/sha-512` and `ecr/sha-512` instances) and a
-session's existence (`ZkReg.zk_session_soundHJR_nonvacuous` covers its draw hypotheses). -/
+session's existence (`ZkReg.zk_session_soundHJR_nonvacuous` covers its sample hypotheses). -/
 theorem soundAtBridge_nonvacuous (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V)
     (right : Paths Ω S → (Fin S → Fin nπ → V) → Prop) :

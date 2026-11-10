@@ -10,14 +10,16 @@
     "CoreComposition.Blobs",
     "CoreComposition.Cases",
     "CoreComposition.Tie",
+    "CoreRemote",
     "MemoryChallenger.WipeProtocol",
     "NciCheck.Protocol",
     "NetworkCheck.Period",
     "PousCheck.RunProtocol",
     "PouwCheck.Period",
     "RemoteAudit.P2Protocol",
-    "SampledProofs.OneStage",
-    "SampledProofs.OneStageZk"
+    "Spot.OneStage",
+    "Spot.OneStageZk",
+    "VStarRecursive.Sampled"
    ],
    "except": [],
    "why": "the program is code: the core interface, C-Flock's Lean and its components' ports, no Mathlib and nothing of Security"

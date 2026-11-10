@@ -1,11 +1,11 @@
 #!/bin/sh
-# `research msg ARGS` on the control pod, as root (INF-123): for a handle holder who needs a credential that lives only here, such as
+# `research msg ARGS` on the control pod, as root: for a handle holder who needs a credential that lives only here, such as
 # `slack-app export|diff|apply` (the app configuration token pair) and `chat open|close|list`. Over ssh:
 #   research pods ssh vy-control-verity -- env RESEARCH_AGENT_URL=https://cursor.com/agents/<id> /data/infra/msg.sh chat list
 # Code and registry: /data/infra/msg-repo, a sparse checkout (tools/research, .agents/skills/using-slack) of origin's $REF (default
-# main; a PR's head is pull/N/head), fetched with the read-only deploy key on every call. Credentials go only into the environment:
+# main; a PR's head is pull/N/head), fetched over https with verity-drive's App token on every call. Credentials go only into the environment:
 # SLACK_BOT_TOKEN from /data/state/secrets/msg.env (root, 0600); the app's token pair is /data/slack-app/token.json
-# ($RESEARCH_SLACK_APP_STATE), the one copy (top and comms, 19 Oct 15:33Z), which `slack-app` rotates in place.
+# ($RESEARCH_SLACK_APP_STATE), the one copy, which `slack-app` rotates in place.
 # The notes (inbox routes; people.d, which `chat open` pushes) are its own clone,
 # /data/infra/msg-notes, made once from the steward's with its origin and credential helper and pulled on every call, so it never
 # writes the clone the budgets guard reads. A command that writes the registry leaves it in the checkout until the next call;
@@ -16,7 +16,9 @@ N=/data/infra/msg-notes
 ST=/data/steward/research-notes
 REG=.agents/skills/using-slack/registry.json
 REF=${REF:-main}
-export GIT_SSH_COMMAND="ssh -i $S/verity-deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$S/known_hosts"
+export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=url.https://github.com/compute-verification/verity.git.insteadOf \
+  GIT_CONFIG_VALUE_0=git@github.com:compute-verification/verity.git GIT_CONFIG_KEY_1=credential.helper \
+  GIT_CONFIG_VALUE_1='!/data/infra/gh_app_token.sh git'
 export GIT_TERMINAL_PROMPT=0 LC_ALL=C.UTF-8
 exec 9> /root/msg.lock
 flock 9

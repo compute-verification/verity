@@ -1,8 +1,13 @@
 module
 
+public import Definitions.Flock.Compiled
+public import Proofs.Flock.Soundness.Model.Compiled
 public import Proofs.Flock.Soundness.Refine.Live
 public import Proofs.Flock.Soundness.Refine.Plays
-public import Proofs.Flock.Soundness.Model.Compiled
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import VCVio.Prelude.Core
 
 /-!
 # The table's simulation (the transfer, R11c)
@@ -10,13 +15,13 @@ public import Proofs.Flock.Soundness.Model.Compiled
 A live prover for one table's session (`liveTable`) is simulated in the model's table (`modelTable`, which `tableC` is,
 `tableC_eq_modelTable`). The simulated prover sends the cap `root_B` decodes to, shares the link points, and follows the
 rounds: for a round on rep `r`'s stream, the model's rep `r` takes the messages decoded from the round's bytes, then
-draws its coins with the live round's. At the end it takes the reps' final messages and the openings, decoded from the
+flips its coins with the live round's. At the end it takes the reps' final messages and the openings, decoded from the
 proof files. Wherever the model's game doesn't fit what was decoded, no accepted live run goes on, and the model plays
 any strategy.
 
 * `PlaysT g ts a`: `g`, played with the typed steps `ts` (messages and coins, in order), ends with `a`.
 * `Decodes`: on every accepted live outcome, each rep's model game runs on the tape decoded from its stream and its
-  proof file (`repTape`), and the model accepts those runs. This is what the refinement and framing (R11b) provide.
+  proof file (`repTape`), and the model accepts those runs. This is what the refinement and framing (the decoder premise) provide.
 * `live_le`: against any live prover, the live verdict's probability is at most the model's against the simulated
   prover.
 -/
@@ -384,7 +389,7 @@ variable (dg : ByteArray → ByteArray) (dec : ℕ → ByteArray → List Msg) (
   (fin : Fin 2 → Array ByteArray → List Msg) (capOf : ByteArray → Cp)
 
 open Classical in
-/-- The first rep's coin, drawn with the live round's: matched when the model's coin has the type the round decodes to;
+/-- The first rep's coin, flipped with the live round's: matched when the model's coin has the type the round decodes to;
 past any other node no accepted run goes on. -/
 noncomputable def coinAt₀ (rootB : ByteArray) (pts : Fin 2 → Fin mPts → 𝔽) (n : ℕ) (acc : List Round × List Round)
     (b : ByteArray) (k : ℕ) (g₁ : Game P) (h₁ : AllInh g₁)

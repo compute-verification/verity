@@ -4,9 +4,11 @@ a left shift is multiplication by a power of `X`, and a number split at bit `w` 
 -/
 module
 
-public import Mathlib.Algebra.Polynomial.Div
-public import Mathlib.Data.ZMod.Basic
+public import Mathlib.Algebra.Polynomial.Degree.Defs
 public import Mathlib.Data.Nat.Bitwise
+public import Mathlib.Data.ZMod.Defs
+import Mathlib.Algebra.Polynomial.Coeff
+import Mathlib.Data.ZMod.Basic
 
 @[expose] public section
 

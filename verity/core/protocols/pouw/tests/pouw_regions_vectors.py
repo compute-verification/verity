@@ -16,12 +16,12 @@ import hashlib
 import json
 from pathlib import Path
 
-from verity.core.protocols.pouw.circuit import pc4, pc8, rowk
-from verity.core.protocols.pouw.circuit.anchors import TileAnchors, region_bytes
+from verity.ml.protocols.pouw.circuit import pc4, pc8, rowk
+from verity.ml.protocols.pouw.circuit.anchors import TileAnchors, region_bytes
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c4 as F
-from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_c4 as F
+from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES
 
 OUT = Path(__file__).with_name("vectors") / "pouw_regions.json"
 ROWS, COLS = (7, 300), (2, 41)
@@ -44,8 +44,8 @@ def part(case: str, name: str) -> bytes:
 def anchors(case: str, circuit: str, k: int, dev: str | None, row_k: int | None = None) -> TileAnchors:
     ctx = Context(part(case, "salt"), Matmul(3, Shape(2, k, 2), 9), part(case, "root_a"), part(case, "root_b"))
     if circuit == "pc4":
-        return TileAnchors.of(F.PearlC4("nvfp4"), ctx, pc4.Shape(2, k, 2, tile=(1, 1), row_k=row_k), ROWS, COLS)
-    return TileAnchors.of(C.PearlC(forming="v1", device=DEVICES[dev]), ctx,
+        return TileAnchors.of(F.PearlC4("nvfp4", hashing="h0"), ctx, pc4.Shape(2, k, 2, tile=(1, 1), row_k=row_k), ROWS, COLS)
+    return TileAnchors.of(C.PearlC(forming="v1", device=DEVICES[dev], hashing="h0"), ctx,
                           pc8.Shape(2, k, 2, tile=(1, 1), dev=dev, row_k=row_k), ROWS, COLS)
 
 

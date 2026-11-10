@@ -2,7 +2,7 @@
 # commit_slots on one leased GPU (cwd = the source tree's root): outside the lease, the engine's build (sha512_rows; nvcc,
 # for this GPU) and its host twin's; under one lease of at most LEASE_MIN minutes, the GPU tests, check.py (the roots
 # against the CPU reference's, the frozen layout at 4,096 to 20,480 slots on sampled slots) and bench.py (GB/s and share of
-# the step). Python is PY (CUDA torch), with the tree on PYTHONPATH.
+# the step). Python is PY (CUDA torch; default benchmarks/harness/env.sh's), with the tree on PYTHONPATH.
 #
 #   OUT=DIR bash benchmarks/torch_gpu/commit_slots/gpu.sh
 #
@@ -15,8 +15,7 @@
 set -uo pipefail
 O=${OUT:?}
 ROOT=$PWD D=benchmarks/torch_gpu/commit_slots
-for v in /workspace/jobs/venv312 /workspace/cp/venv312; do [ -z "${PY:-}" ] && [ -x "$v/bin/python3" ] && PY=$v/bin/python3; done
-PY=${PY:-python3}
+PY=${PY:-$(. benchmarks/harness/env.sh && echo "$VENV/bin/python3")} || exit 2
 TV=$($PY -c 'import torch; print(torch.version.cuda or "")' 2>/dev/null)
 for c in "/usr/local/cuda-$TV" /usr/local/cuda /usr/local/cuda-13.0; do [ -x "$c/bin/nvcc" ] && { CUDA=$c; break; }; done
 export PATH=${CUDA:-/usr/local/cuda}/bin:$PATH PYTHONPATH=$ROOT:$ROOT/$D:$ROOT/tools/config PYTHONDONTWRITEBYTECODE=1

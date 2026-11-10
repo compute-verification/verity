@@ -1,24 +1,27 @@
-# The staging decode: P2's decode (memory-accounting's libp2v1.so, unchanged) of a layer's matrices into plaintext staging
+# The store's load: P2's decode (memory-accounting's libp2v1.so, unchanged) of a layer's matrices into plaintext load
 # buffers, and the exact W8A8 GEMM on them. layer.py and session.sh run on a GPU node; the CPU parts they are checked
-# with (the store's layout, the scatter, the reference decode of a block, the toy store through the staging path, the
+# with (the store's layout, the scatter, the reference decode of a block, the toy store through the load path, the
 # GEMM twin against the Definition) run here as a suite.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
 [tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = ["tests/test_sketch.py"]
 # layout.py reads the registered scheme (verity.core.protocols.pous.schemes.p2) and the P2 spec's reference
 # (benchmarks/pous/p2_v1: reference.py, pinned by vectors.json; stage.py imports gpu.py); the toy test reads P2's toy
 # store (p2_v1/store-toy); gemm.py's check evaluates
 # ScaledMmS8Coordinate_v1 (verity.ml.circuits), and what those import; full.py's GEMM is s8_linear's int_mm.py.
 # sketch.py's receipts are PoUB's (verity.core.protocols.remote_bandwidth, which imports
-# sampled_proofs and the profile), held to serve.py's fixture (p2_v1/serve.py, store.py), with sha512_rows' engine
+# spot and the profile), held to serve.py's fixture (p2_v1/serve.py, store.py), with sha512_rows' engine
 # and its host twin's sources. sketch.py and that engine read their variables through their settings.py, on
 # verity_config.settings.
 inputs = ["tools/config/verity_config",
           "verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/pous", "verity/core/protocols/interface",
+          "verity/ml/protocols/__init__.py", "verity/ml/protocols/pous",
           "verity/core/protocols/record.py",
-          "verity/core/protocols/remote_bandwidth", "verity/core/protocols/sampled_proofs",
+          "verity/core/protocols/remote_bandwidth", "verity/core/protocols/spot",
           "verity/core/protocols/profile.py",
           "verity/core/primitives/identity", "verity/core/primitives/randomness",
           "verity/ml/__init__.py", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness",

@@ -2,7 +2,11 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Exec.CompiledTableL
 public import Proofs.Flock.Soundness.Discharge.Exec.SessionL
-public import Proofs.Flock.Soundness.Session
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.CompiledAlign
+import Proofs.Flock.Soundness.Extract
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.Soundness.Soundness
 
 /-!
 # A salted table inside a batched session
@@ -44,7 +48,7 @@ theorem tableOrcL_eq (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 �
         tableOrcAfterL (D := D) (Sl := Sl) A S sch hm ptLocal mPts C₀ pts :=
   rfl
 
-/-- **A batched session after `Commit`** (`Flock.Record`): one link-point draw, then the games
+/-- **A batched session after `Commit`** (`Flock.Record`): one link-point sample, then the games
 `pre`, the table with level-0 cap `cap₀`, and the games `post`, concurrently. -/
 noncomputable def sessAfterL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)

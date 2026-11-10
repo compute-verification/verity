@@ -5,7 +5,7 @@ unit of its ``tile``), as PoUW's verifier samples them (core's `credit.drawn`).
                      --pin SHA512 --pins LOG --main FILE --descriptor PROGRAM[.gz] [--out DRAWN.json]
 
 CALLS.json is the window's ``pouw-h1-calls.json``; DIR the challenger session's directory as the auditor's gate fetched it
-(``fetch/<session>/out``), never the prover's bundle, and DRAW its draw session's; each ``--ledger`` a published head of the auditor's signed ledger;
+(``fetch/<session>/out``), never the prover's bundle, and DRAW its sample session's; each ``--ledger`` a published head of the auditor's signed ledger;
 ``--pin`` the SHA-512 of the challenger's public key, the verifier's own configuration; ``--pins`` the challenger host's
 pins log as infra published it, a line a pin; ``--main`` the verifier's own ``git rev-list --first-parent origin/main``;
 PROGRAM the window Program's descriptor (the rehearsal's ``window-program.json.gz``), whose SHA-512 must be the circuit the
@@ -36,8 +36,8 @@ import json
 from pathlib import Path
 
 from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.sampled_proofs import remote
-from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveOpening, ledger_head, pinned_session
+from verity.core.protocols.spot import remote
+from verity.core.protocols.spot.challenger import CoinError, LiveOpening, ledger_head, pinned_session
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
 

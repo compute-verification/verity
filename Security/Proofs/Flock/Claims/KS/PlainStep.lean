@@ -1,7 +1,48 @@
 module
 
 public import Proofs.Flock.Claims.KS.PlainLock
-public import Proofs.Flock.Claims.Recursion.PlainK
+public import Proofs.Flock.Claims.KS.PlainDraw
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.DeployTables
+import Proofs.Flock.Claims.KS.Width
+import Proofs.Flock.Claims.Recursion.FlockKSDeployK
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.VBridge.Family.Lig
+import Std.Tactic.BVDecide.Normalize.BitVec
 
 /-!
 # The plain simulator's rounds are the record's
@@ -571,7 +612,7 @@ theorem plainSimLockstep (x : Claims.Msg) : PlainSimLockstep x := fun _ hs hin _
 
 /-! ## The abort -/
 
-/-- **The verdict at the draw refuses an outcome without proof files**: what `wrPD` writes has the outcome's proof
+/-- **The verdict at the sample refuses an outcome without proof files**: what `wrPD` writes has the outcome's proof
 files wherever `verify` accepts it (`recordsLiveAtD_wrPD`), and `verify` refuses none (`not_acceptsAtD_nil`). -/
 theorem not_plainVerdictAt_nil (I : Discharge.Exec.Inputs) (d : Lean.Json) {N mPts : ℕ} (C : Fin N → List 𝔽)
     (rootB₀ : Array ByteArray) {o : LiveOutJ 1 mPts} (h : o.proofs = #[]) : ¬ plainVerdictAt I d C rootB₀ o := by
@@ -607,7 +648,7 @@ theorem plainSim_proofs_nil {Ω : Type} (P : Claims.Prover Ω) {x : Claims.Msg} 
   plainSim_proofs_nilK id (Ω := Ω) (P := P) (x := x) (ω := ω) (ins := ins) (spec := spec) (sts := sts) (st := st) (hset := hset) (hw := hw) (hm1 := hm1) (u := u) (r' := r') (hna := hna)
 
 /-- **The abort** (`PlainSimAbort`): at every plain statement in scope with one table, every prover `P` and its tape
-`ω`, the plain simulator's live outcome fails the verdict at any draw wherever `P`'s run at `plainΦ`'s coins is
+`ω`, the plain simulator's live outcome fails the verdict at any sample wherever `P`'s run at `plainΦ`'s coins is
 rejected. -/
 def PlainSimAbortAt (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)

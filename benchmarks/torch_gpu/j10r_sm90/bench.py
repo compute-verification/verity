@@ -36,20 +36,23 @@ import sys
 import time
 from functools import partial
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import fixtures as F
 import shape as S
 import units as UN
-
-import fixtures as F
 
 #: the plain arms a units arm is measured against, each with its serial arms (BASE+NAME)
 BASELINES = ("plain", "wgmma")
 
-def plain_of():
+def plain_of() -> tuple[str, Callable[..., torch.Tensor]]:
     """(name, fn(x, sx, w, sw)): s8_linear's `int_mm.linear`, the fused epilogue where Triton is, else the eager one."""
     spec = importlib.util.spec_from_file_location("int_mm", Path(__file__).resolve().parents[1] / "s8_linear" / "int_mm.py")
     mod = sys.modules["int_mm"] = importlib.util.module_from_spec(spec)
@@ -72,7 +75,7 @@ def wgmma_of(path: str | None) -> dict | None:
     W, table = mods["wgmma"], mods["configs"].CONFIGS.get("wgmma:sm_90", {})
     lib = W.lib()
 
-    def cfg(m: int, n: int, k: int):
+    def cfg(m: int, n: int, k: int) -> object:
         rows = table.get((n, k))
         if not rows:
             return W.default_cfg(m, n, k, lib.sms)
@@ -97,7 +100,8 @@ def tiles(z: torch.Tensor, n: int, picks: list[int]) -> np.ndarray:
                      for u in picks]).view(np.uint32)
 
 
-def bench_call(key: str, c: dict, arrays: dict, libs: dict, plain, args, scratch: Path, wg: dict | None = None) -> dict:
+def bench_call(key: str, c: dict, arrays: dict, libs: dict, plain: Callable[..., torch.Tensor],
+               args: argparse.Namespace, scratch: Path, wg: dict | None = None) -> dict:
     lin, m, n = c["linear"], c["m"], c["n"]
     a = torch.from_numpy(np.ascontiguousarray(S.whole("a", lin, m, scratch, args.jobs))).cuda()
     b = torch.from_numpy(np.ascontiguousarray(S.whole("b", lin, m, scratch, args.jobs))).cuda()

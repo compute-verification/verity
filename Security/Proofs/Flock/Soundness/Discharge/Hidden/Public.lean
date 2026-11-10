@@ -1,7 +1,26 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Hidden.Defs
 public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
-public import Proofs.Flock.Soundness.Discharge.Layout.OutSite
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.Exec.Setup
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.Layout.OutSite
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # What a hidden-output statement takes from the public file (`PublicExposes`)
@@ -51,7 +70,7 @@ theorem foldl_extract_zero (a : Array ℕ) (w : ℕ) (hw : w = 0) (L : Array ℕ
   | nil => intro acc; rfl
   | cons x l ih => intro acc; rw [List.foldl_cons, ih]; simp
 
-/-- A hidden-output statement's drawn public file holds no output word. -/
+/-- A hidden-output statement's sampled public file holds no output word. -/
 theorem drawn_outputs_nil {c : Circuit} {pop pub : Public} {d : Lean.Json} (h : HmOut.drawn c pop d = .ok pub) :
     pub.outputs = #[] := by
   obtain ⟨D, -, hout⟩ := Layout.drawn_outputs h

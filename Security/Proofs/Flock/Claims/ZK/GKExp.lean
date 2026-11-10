@@ -1,8 +1,50 @@
 module
 
+public import Mathlib.NumberTheory.LucasLehmer
 public import Proofs.Flock.Claims.ERepCost
 public import Proofs.Flock.Claims.ZK.GKCost
+public import Proofs.Flock.Claims.ZK.GKProof
+public import Proofs.Flock.Claims.ZK.Statement
 public import Proofs.Flock.Soundness.ZK.GK.Theorem
+public import Std.Tactic.BVDecide.Normalize.BitVec
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Soundness.Game
+import Std.Tactic.BVDecide.Normalize.Prop
+import VCVio.Prelude.Core
 
 /-!
 # The Goldreich–Kahan simulator with estimation, in expected polynomial time
@@ -22,7 +64,7 @@ empty transcript.
   (`sim_hyb₁`, `hyb₁_hyb₂`, `hyb₂_real`) on the old `Model`, built from the protocol at each nonce (`Proto.model`),
   whose `bind_real` is `real_eq_of_not_mism`, `PrefinalClose` is `PrefixHides` and `RewindClose` is `SHVZK`. Hybrid 1's
   binding failure is a rewind with the honest prover's messages; `PrefixHides` moves its first run to the real one, where
-  it is a collision of two real runs on one nonce (`rwMism_coll`), `Fork`'s event;
+  it is a collision of two real runs on one nonce (`rwMism_coll`), `Fork`'s event (`Proto.hyb₁_bind_le`);
 * `Proto.gkE_costExp`: at most `(1 + 5t)·runBound` calls in expectation over its coins against every verifier, for every
   cap `M` (`SimCost`, the old `sim_runs_ev`); `Proto.gkE_cost`: at most `(1 + 5M)·runBound` on every coin
   (`SimCostLe`, the old `sim_runs_le`);
@@ -32,9 +74,9 @@ empty transcript.
 one. The cap costs `t/M` in `ε_zk` and nothing in the expected cost, which is uniform in `M`; at `M = t·3^t` its term is
 the rewinds' `3^{-t}`, and only the worst case grows with it.
 
-**The coins.** `gk` draws its coins as it goes (a `Rand` program); the simulator reads them from tapes fixed in advance,
+**The coins.** `gk` flips its coins as it goes (a `Rand` program); the simulator reads them from tapes fixed in advance,
 the nonce and the first run's tape, `M` dummy-witness tapes and `4M` SHVZK tapes, each read at most once (`gkT`). The
-two have one law (`ev_gkT`, from `ev_estimateT` and `ev_rewindsT`).
+two have one sampling design (`ev_gkT`, from `ev_estimateT` and `ev_rewindsT`).
 -/
 
 @[expose] public section
@@ -140,7 +182,7 @@ def gkT {V Cd Cr : Type} (dummy : Cd → V) (rw : V → Cr → V) (comp : V → 
     afterT (dummy ω₀) (rw (dummy ω₀)) comp (bad (dummy ω₀)) (4 * M) (estimateT (fun ω => comp (dummy ω)) M t ωs) σs
   else (.view (dummy ω₀), 1)
 
-/-- **`gk` and `gkT` have one law.** -/
+/-- **`gk` and `gkT` have one sampling design.** -/
 theorem ev_gkT {V Cd Cr : Type} [Fintype Cd] [Nonempty Cd] [Fintype Cr] [Nonempty Cr] (dummy : Cd → V)
     (rw : V → Cr → V) (comp : V → Bool) (bad : V → V → Bool) (t M : ℕ) (f : GOut V × ℕ → ℝ) :
     Ex (fun q : Cd × (Fin M → Cd) × (Fin (4 * M) → Cr) => f (gkT dummy rw comp bad t M q.1 q.2.1 q.2.2)) =
@@ -780,6 +822,45 @@ theorem rwMism_coll (G : Proto W) (H : Msg → Msg) (hC : G.Binding H) {Θ : Typ
 
 /-! ## The theorems -/
 
+/-- **Hybrid 1's binding failure** is at most `δ_A` plus `4M` times the collision of two real runs on the nonce:
+`PrefixHides` moves its first run to the real one, where it is `rwMism_coll`'s collision for one of the `4M` tapes. -/
+theorem hyb₁_bind_le (G : Proto W) (H : Msg → Msg) (R : Rel W) (δA : Msg → ℝ) (hA : G.PrefixHides H R δA)
+    (hC : G.Binding H) (x : Msg) (w : W) (hR : R x w) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = G.k x)
+    (ν : G.Nonce) (t M : ℕ) :
+    FlockSoundness.ZK.GK.Rand.pr
+        (fun o => FlockSoundness.ZK.GK.Out.bindBy (G.model H (fun as => ((Vs.next x as θ).eval H).1) x w ν).bad o.1)
+        ((G.model H (fun as => ((Vs.next x as θ).eval H).1) x w ν).hyb₁ t M) ≤
+      δA x + Pr (fun p : G.Rand × G.Rand => G.collR H Vs θ x w ν p.1 p.2) * (4 * M) := by
+  set ask : List Msg → Out := fun as => ((Vs.next x as θ).eval H).1 with hask
+  set PC := Pr (fun p : G.Rand × G.Rand => G.collR H Vs θ x w ν p.1 p.2) with hPC
+  have e1 : FlockSoundness.ZK.GK.Rand.pr
+      (fun o => FlockSoundness.ZK.GK.Out.bindBy (G.model H ask x w ν).bad o.1) ((G.model H ask x w ν).hyb₁ t M) =
+      Pr (fun q : G.Rand × (Fin M → G.Rand) × (Fin (4 * M) → G.Rand) =>
+        FlockSoundness.ZK.GK.Out.bindBy (G.badT H x ν)
+          (gkT (G.dumT H ask x ν) (G.rwRT H ask x w ν) (G.compT H x ν) (G.badT H x ν) t M q.1 q.2.1 q.2.2).1) :=
+    (ev_gkT _ _ _ _ t M _).symm.trans (Ex_ind_comp _ _)
+  have e2 : |Pr (fun q : G.Rand × (Fin M → G.Rand) × (Fin (4 * M) → G.Rand) =>
+        G.rwMism H ask x w ν (G.view0 H x ν (interact ask (G.pmR H x w ν q.1) (G.k x) [])) q.2.2) -
+      Pr (fun q : G.Rand × (Fin M → G.Rand) × (Fin (4 * M) → G.Rand) =>
+        G.rwMism H ask x w ν (G.view0 H x ν (interact ask (G.pmD H x ν q.1) (G.k x) [])) q.2.2)| ≤ δA x :=
+    G.hyb_prefix H R δA hA x w hR Vs θ hk ν (S := (Fin M → G.Rand) × (Fin (4 * M) → G.Rand)) Prod.snd
+      fun v σs => G.rwMism H ask x w ν v σs
+  have e3 : Pr (fun q : G.Rand × (Fin M → G.Rand) × (Fin (4 * M) → G.Rand) =>
+        G.rwMism H ask x w ν (G.view0 H x ν (interact ask (G.pmR H x w ν q.1) (G.k x) [])) q.2.2) ≤
+      PC * (4 * M) := by
+    rw [Pr_mid (β := Fin M → G.Rand)
+      fun r σs => G.rwMism H ask x w ν (G.view0 H x ν (interact ask (G.pmR H x w ν r) (G.k x) [])) σs]
+    refine (Pr_mono fun p h => G.rwMism_coll H hC Vs θ x w ν hk p.1 p.2 h).trans ?_
+    have := Pr_exists_coord_le (4 * M) (G.collR H Vs θ x w ν)
+    push_cast at this
+    linarith
+  rw [e1]
+  refine (Pr_mono (q := fun q : G.Rand × (Fin M → G.Rand) × (Fin (4 * M) → G.Rand) =>
+      G.rwMism H ask x w ν (G.view0 H x ν (interact ask (G.pmD H x ν q.1) (G.k x) [])) q.2.2)
+    fun q h => G.hyb₁_bind_rwMism H ask x w ν t M q.1 q.2.1 q.2.2 h).trans ?_
+  have := abs_le.mp e2
+  linarith [this.1, this.2]
+
 /-- **The Goldreich–Kahan simulator with estimation meets `ZKmalR`** at
 `ε_zk(x) = 4·δ_A(x) + 4t·δ_B(x) + 3^{-t} + t/M` and `γ = 4M`, for a protocol whose dummy-witness run hides the witness
 until the last coin, whose messages at a fixed coin vector are simulated and whose opening check binds. The session
@@ -809,34 +890,8 @@ theorem gkE_zk (G : Proto W) (H : Msg → Msg) (R : Rel W) (t M : ℕ) (hM : 0 <
         FlockSoundness.ZK.GK.Rand.ev f ((G.model H ask x w ν).sim t M) = Ex fun q => f (g q) :=
       fun f => (ev_gkT _ _ _ _ t M f).symm
     have hbind : FlockSoundness.ZK.GK.Rand.pr (fun o => FlockSoundness.ZK.GK.Out.bindBy (G.model H ask x w ν).bad o.1)
-        ((G.model H ask x w ν).hyb₁ t M) ≤ δA x + PC * (4 * M) := by
-      have e1 : FlockSoundness.ZK.GK.Rand.pr
-          (fun o => FlockSoundness.ZK.GK.Out.bindBy (G.model H ask x w ν).bad o.1) ((G.model H ask x w ν).hyb₁ t M) =
-          Pr (fun q : G.Rand × (Fin M → G.Rand) × (Fin (4 * M) → G.Rand) =>
-            FlockSoundness.ZK.GK.Out.bindBy (G.badT H x ν)
-              (gkT (G.dumT H ask x ν) (G.rwRT H ask x w ν) (G.compT H x ν) (G.badT H x ν) t M q.1 q.2.1 q.2.2).1) :=
-        (ev_gkT _ _ _ _ t M _).symm.trans (Ex_ind_comp _ _)
-      have e2 : |Pr (fun q : G.Rand × (Fin M → G.Rand) × (Fin (4 * M) → G.Rand) =>
-            G.rwMism H ask x w ν (G.view0 H x ν (interact ask (G.pmR H x w ν q.1) (G.k x) [])) q.2.2) -
-          Pr (fun q : G.Rand × (Fin M → G.Rand) × (Fin (4 * M) → G.Rand) =>
-            G.rwMism H ask x w ν (G.view0 H x ν (interact ask (G.pmD H x ν q.1) (G.k x) [])) q.2.2)| ≤ δA x :=
-        G.hyb_prefix H R δA hA x w hR Vs θ hk ν (S := (Fin M → G.Rand) × (Fin (4 * M) → G.Rand)) Prod.snd
-          fun v σs => G.rwMism H ask x w ν v σs
-      have e3 : Pr (fun q : G.Rand × (Fin M → G.Rand) × (Fin (4 * M) → G.Rand) =>
-            G.rwMism H ask x w ν (G.view0 H x ν (interact ask (G.pmR H x w ν q.1) (G.k x) [])) q.2.2) ≤
-          PC * (4 * M) := by
-        rw [Pr_mid (β := Fin M → G.Rand)
-          fun r σs => G.rwMism H ask x w ν (G.view0 H x ν (interact ask (G.pmR H x w ν r) (G.k x) [])) σs]
-        refine (Pr_mono fun p h => G.rwMism_coll H hC Vs θ x w ν hk p.1 p.2 h).trans ?_
-        have := Pr_exists_coord_le (4 * M) (G.collR H Vs θ x w ν)
-        push_cast at this
-        linarith
-      rw [e1]
-      refine (Pr_mono (q := fun q : G.Rand × (Fin M → G.Rand) × (Fin (4 * M) → G.Rand) =>
-          G.rwMism H ask x w ν (G.view0 H x ν (interact ask (G.pmD H x ν q.1) (G.k x) [])) q.2.2)
-        fun q h => G.hyb₁_bind_rwMism H ask x w ν t M q.1 q.2.1 q.2.2 h).trans ?_
-      have := abs_le.mp e2
-      linarith [this.1, this.2]
+        ((G.model H ask x w ν).hyb₁ t M) ≤ δA x + PC * (4 * M) :=
+      G.hyb₁_bind_le H R δA hA hC x w hR Vs θ hk ν t M
     have close : ∀ φ : List (Msg × Out) → ℝ, (∀ v, 0 ≤ φ v) → (∀ v, φ v ≤ 1) →
         |Ex (fun q => FlockSoundness.ZK.GK.Out.val φ (g q).1) -
           FlockSoundness.ZK.GK.avgR (fun r => φ ((G.model H ask x w ν).real r))| ≤ ε + PC * (4 * M) := by

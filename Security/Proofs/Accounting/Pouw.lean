@@ -1,8 +1,10 @@
 module
 
 public import Definitions.Accounting.Guarantees.Pouw
-public import Proofs.Accounting.Device
-public import Proofs.Pouw.Game
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Accounting.Device
+import Proofs.Pouw.Game
+import Proofs.Pouw.Prob
 
 /-!
 # Proof that PoUW's guarantee is a joint run's compute guarantee

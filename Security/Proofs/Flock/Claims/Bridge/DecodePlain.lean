@@ -1,9 +1,38 @@
 module
 
 public import Proofs.Flock.Claims.Bridge.CustodyPlain
-public import Proofs.Flock.Soundness.Discharge.DecodeZL.Assemble
-public import Proofs.Flock.Soundness.Discharge.DecodeZL.OP
-public import Proofs.Flock.Soundness.Discharge.DecodeZL.LIG
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Assemble
 
 /-!
 # The deployed plain decoders at `wrP`, at one table
@@ -18,9 +47,9 @@ tables (`LiveOutJ`, `DecodesTable`). At `J = 1` the two meet:
 * `wrP1`, `recordsLive_wrP1`: `wrP` at one table, read at one table's outcome, records the live session
   (`DecodeZL.RecordsLive`); where `verify` accepts what `wrP` writes, it accepts what `wrP1` writes for the outcome's
   `oneOf` (`accepts_wrP1_oneOf`).
-* `decodesTable_wrP`: at a draw `S` that sets the table up at `mPts` link points (`DrawOk`), under the verify command's
+* `decodesTable_wrP`: at a sample `S` that sets the table up at `mPts` link points (`DrawOk`), under the verify command's
   tags (`TagsOk`), the deployed decoders are right at `wrP` (`DecodesTable`, `Pr_acc_plain_le`'s `hdec`), from
-  `decodesOn_exec` at the law of the one draw `S`.
+  `decodesOn_exec` at the sampling design of the one sample `S`.
 -/
 
 @[expose] public section
@@ -86,9 +115,9 @@ theorem accepts_wrP1_oneOf {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj : F
   · exact absurd h (not_accepts_nil _ _)
 
 /-- **The deployed plain decoders are right at `wrP`, at one table** (`DecodesTable`: `LivePlain.Pr_acc_plain_le`'s
-`hdec` at the table `tablesAt` sets up): at a draw `S` that sets the table up at `mPts` link points (`DrawOk`), under
-the verify command's tags (`TagsOk`), on a circuit whose outputs are its units', from `decodesOn_exec` at the law of the
-one draw `S`. -/
+`hdec` at the table `tablesAt` sets up): at a sample `S` that sets the table up at `mPts` link points (`DrawOk`), under
+the verify command's tags (`TagsOk`), on a circuit whose outputs are its units', from `decodesOn_exec` at the sampling design of the
+one sample `S`. -/
 theorem decodesTable_wrP {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet) {mPts : ℕ}
     (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : Integrate.DrawSetup I mPts S₀ (dj S₀)) {Reg : Type}

@@ -20,6 +20,7 @@ Run (pod, venv with the pinned vLLM, SmolLM2 snapshot under $HF_HOME):
       python -m pytest tests/program/test_artifact_applicability_independent.py -q -rA
 Env: CBTEST_OUT (build outputs; default a tmp dir), CBTEST_REUSE=1 (reuse finished builds under CBTEST_OUT), CBTEST_JOBS (parallel
 builds, default 6), CBTEST_GPU_HOST=1 (also run the GPU-visible host-mismatch build), CBTEST_SKIP_BUILDS=1 (static tests only).
+The reference hosts' recorded manifests are `test_artifact_applicability_independent_of_record`.
 """
 
 from __future__ import annotations
@@ -177,20 +178,6 @@ def test_static_manifest_declared_capability_is_not_a_string_literal():
         for m in re.finditer(r"compute capability[\"']\s*,\s*[\"']value[\"']\s*:\s*([\"'][^\"']*[\"'])", code):
             bad.append((str(p.relative_to(REPO)), m.group(1)))
     assert not bad, f"manifest 'compute capability' value is a string literal (stale-manifest bug, a1): {bad}"
-
-
-def test_static_reference_hosts_share_the_program_digest():
-    """(iii)/(v) on the recorded artefacts (laptop-runnable): every construction host that built B0 request 8/4 for the sm_89
-    profile — a 4090 with its GPU visible, a host without a GPU, an L40S with it hidden — recorded the same Program digest."""
-    seen = []
-    for p in R9_REFERENCE_MANIFESTS:
-        if p.exists():
-            m = json.load(open(p))
-            seen.append((str(p.relative_to(REPO)), (m.get("program") or {}).get("digest"), (m.get("construction") or {}).get("cuda_available")))
-    if not seen:
-        pytest.skip("reference manifests not in this checkout (sparse tree without out/gen)")
-    assert all(d == B0_REQUEST_8_4_DIGEST for _p, d, _c in seen), seen
-    print(f"\n[cb-test] reference hosts: {seen}")
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -609,7 +596,7 @@ def test_i_c_artifact_identity_distinguishes_targets_even_when_digests_are_equal
         else:
             print(f"\n[cb-test] {o.name}: identity is opaque (no target-named component); distinctness shown, attribution to the target not separable")
         if o.digest == base.digest:
-            print(f"\n[cb-test] {o.name}: Program digest identical to base ({o.digest}) — allowed by the ruling — identity differs: OK")
+            print(f"\n[cb-test] {o.name}: Program digest identical to base ({o.digest}) — allowed: the circuit is unchanged (contract item 5) — identity differs: OK")
 
 
 @needs_builder
@@ -1151,8 +1138,8 @@ def _r9_recorded_applicability(m: dict) -> dict:
 
 @needs_builder
 @pytest.mark.skipif(os.environ.get("CBTEST_GPU_HOST") != "1", reason="CBTEST_GPU_HOST=1 to run the GPU-visible host-mismatch build")
-def test_ruling_c_cp_cb8_gpu_construction_equals_the_r9_hosts(builds):
-    """Rule (c): the GPU-visible construction on an L40S (142 SMs) for the 128-SM/8.9 profile must carry the same
+def test_gpu_visible_construction_equals_the_baseline_hosts(builds):
+    """The GPU-visible construction on an L40S (142 SMs) for the 128-SM/8.9 profile must carry the same
     Program digest AND the same artifact identity as the baseline constructions without a GPU and on a 4090. The baseline hosts built
     on the pre-fix code (no identity), so their identity is RECOMPUTED under the fix's published definition from what they recorded:
     same construction code (the fix's `construction_version`, a code fact), the default profile, and their recorded applicability
@@ -1183,5 +1170,5 @@ def test_ruling_c_cp_cb8_gpu_construction_equals_the_r9_hosts(builds):
         ident_ref = recompute(substituted)
         assert ident_ref == doc_gpu["identity"], f"identity recomputed for {p} differs: {ident_ref} vs the GPU-visible build's {doc_gpu['identity']}"
         host = (m.get("construction") or {}).get("cuda_available")
-        print(f"\n[cb-test] ruling (c): {p.relative_to(REPO)} (cuda_available={host}) -> digest {m['program']['digest'][:16]}…, identity {ident_ref[:16]}… == the GPU-visible build's")
+        print(f"\n[cb-test] baseline host: {p.relative_to(REPO)} (cuda_available={host}) -> digest {m['program']['digest'][:16]}…, identity {ident_ref[:16]}… == the GPU-visible build's")
     print(f"[cb-test] applicability fields not recorded by the baseline manifests (taken from the identical vLLM wheel pin on the GPU-visible host): {unrecorded}")

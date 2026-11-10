@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Core.Accel.Machine
+public import Definitions.Core.Accel.Card
 
 /-!
 # The RTX PRO 6000 Server Edition's numbers (trusted)

@@ -1,9 +1,9 @@
 # The live challenger
 
 The proof system's challenger, as it runs on the auditor's host: it measures nothing. `serve.py` serves one session's coins
-to one prover client (`verity.core.protocols.sampled_proofs.remote`), with its record signed by the host's LMS key and written
+to one prover client (`verity.core.protocols.spot.remote`), with its record signed by the host's LMS key and written
 before the first coin, and its release log signed when the session ends. The coins are the operating system's, as the Lean
-verifier of record reads them.
+verifier reads them.
 
 - `auditor.py` is the host's service: the `vy-challenger-gate` verbs, run as the `auditor` user from a pinned tree, open one
   session a window and record each in a signed, append-only ledger before its first coin. It also keeps the periods, each
@@ -14,7 +14,7 @@ verifier of record reads them.
 - `publish.sh` puts the host's pins log, ledger, model registry and every ended session into the evidence store; the control
   pod runs it on a loop.
 - `run.sh` is a development session: `serve.py` as a `research run` on another machine, which tunnels its port to the
-  prover's machine (`PEER`). It needs `PORT`, `SCHEME`, `FAMILIES`, `SESSION` and `PEER`, so it runs through
+  developer's machine (`PEER`). It needs `PORT`, `SCHEME`, `FAMILIES`, `SESSION` and `PEER`, so it runs through
   `research run ... -- bash benchmarks/live_challenger/run.sh` (its header has the full command), not bare
   `verity bench live_challenger`.
 

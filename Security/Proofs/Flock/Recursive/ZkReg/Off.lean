@@ -1,18 +1,21 @@
 module
 
 public import Proofs.Flock.Soundness.Registered.ReadsX
-public import Proofs.Flock.Soundness.Discharge.Exec.Live
+public import Proofs.Flock.Soundness.Discharge.Exec.Event
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.Soundness.Registered.Binding
 
 /-!
-# Registered reads off the registrant's leaf, at the outcome's draw
+# Registered reads off the registrant's leaf, at the outcome's sample
 
 `ReadsX.prob_off_le` bounds the probability that a registered read's session leaf is not the registrant's at one
 registration and one set of reads. In a live session both are the outcome's: the registration is the one the prover sent,
-and the verifier checks only the reads of the units it draws. So:
+and the verifier checks only the reads of the units it samples. So:
 
 * `rowIn S`: a commit string that is a row of a unit of `S`; `ReadsX.restrict`: the reads at the positions `A` keeps;
 * `ReadsX.prob_offOn_le`: `prob_off_le` with the reads, the registration and the paths read off the outcome;
-* `prob_auditLive_draw`: an event of the live audit's draw alone has the law's probability (implications at every
+* `prob_auditLive_draw`: an event of the live audit's sample alone has the sampling design's probability (implications at every
   outcome of the session bound probabilities: `prob_auditLive_liveOfZJ_mono`, `Proofs.Flock.Recursive.Flock`);
 * `reg_cast`: a strategy's registration survives a cast along an equation of sessions.
 -/
@@ -38,7 +41,7 @@ namespace FlockSoundness.Registered
 open Game Refine Binding Audit
 open scoped ENNReal
 
-variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
@@ -89,7 +92,7 @@ namespace FlockSoundness.Discharge.Recursion
 open Game Audit Exec Refine
 open scoped ENNReal
 
-/-- **An event of the live audit's draw alone has the law's probability.** -/
+/-- **An event of the live audit's sample alone has the sampling design's probability.** -/
 theorem prob_auditLive_draw {n : ℕ} {L : Law n} {Reg : Type} (live : Finset (Fin n) → Reg → Game Exec.Transcript)
     (τ : Strategy (auditLive L Reg live)) (Q : Finset (Fin n) → Prop) :
     prob (fun o => Q o.2.1) (auditLive L Reg live) τ = prCoin fun ω => Q (L.draw ω) := by

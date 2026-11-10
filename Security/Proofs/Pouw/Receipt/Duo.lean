@@ -2,9 +2,9 @@ module
 
 public import Definitions.Pouw.Receipt.Duo
 public import Mathlib.Basic.Finite.Prod
-public import Mathlib.Data.Fintype.Card
 public import Mathlib.Data.Nat.Prime.Basic
 public import Mathlib.Tactic.LinearCombination
+import Mathlib.Data.BitVec
 
 /-!
 # duo's words are bound: one word, and runs of two, three and four words at every state

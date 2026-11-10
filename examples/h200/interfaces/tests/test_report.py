@@ -17,7 +17,7 @@ from verity_e2e_demo import block_record as R
 from verity_e2e_demo import report as D
 
 FIXTURES = Path(__file__).parent / "fixtures"
-SCHEMA = json.loads((Path(R.__file__).parent / "schemas" / "block-record.v1.schema.json").read_text())
+SCHEMA = json.loads((Path(R.__file__).parent / "schemas" / "block-record.v2.schema.json").read_text())
 SECTIONS = ["# Demo A: one H200, one block", "## 1. Ran and proved, on one H200, one block", "### Visible failures",
             "## 2. Measured on the demo: the inputs to the scaling claim",
             "## 3. Computed from the same theorem and the measured costs, not run", "## What the demo didn't show",
@@ -192,7 +192,7 @@ def test_a_stub_caveat_drops_once_the_measurements_show_it_fixed() -> None:
     out = _draft([rec])
     assert LIVE_SALT in out and OUTPUT_TIE in out and "ReLU and per-row quantize are not proved units" in out
     assert "This block drew k = 2, not M3's handful of 8." in out
-    assert "run on the prover's node for the demo" in out
+    assert "run on the developer's node for the demo" in out
     assert SALT_ORDER in out
     fixed = _draft([rec], {**_m(), "fixed": {"pouw-live-salt": "run r1", "torch-loop-wiring": "run r2"}})
     assert LIVE_SALT not in fixed and OUTPUT_TIE in fixed and "ReLU and per-row" not in fixed
@@ -272,7 +272,7 @@ def test_the_pytorch_dry_run_renders_labelled() -> None:
     assert R.check(rec) == {}
     out = _draft([rec], _load("demo-a-dry-run.measurements"), record_label="PyTorch dry run")
     assert out.splitlines()[2].startswith("> The PyTorch dry run's numbers are not marked in place")
-    assert "sampled proofs, PoUW and the network certifier: **accept**." in out.replace("\n", " ")
+    assert "SPOT, PoUW and the network certifier: **accept**." in out.replace("\n", " ")
     assert "k = 64 units, drawn uniformly over the whole partition (1,024 units across 1 subcircuits" in out.replace(
         "\n", " ")
     assert "53 sessions (r20261025-230005-b71a)" in out

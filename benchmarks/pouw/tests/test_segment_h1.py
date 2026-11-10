@@ -1,6 +1,6 @@
 """`PouwCallCheck_v1`'s word view (`segment.call_check`) is cgemm.cu's served H1 receipt: on a random 128 x 128 tile it
 accepts the receipts `cgemm_ref` derives (`checked_strip.co32c_words`, then `derive.tile_receipts` over T_1 .. T_last, O',
-D_1 .. D_(m-1); for fx1, over those words times `fx1_key`), thread by thread from the thread's leaves, coin and draw, and
+D_1 .. D_(m-1); for fx1, over those words times `fx1_key`), thread by thread from the thread's leaves, coin and sample, and
 refuses each with one bit changed."""
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.core.protocols.pouw.circuit import segment as SG
+from verity.ml.protocols.pouw.circuit import segment as SG
 
 POUW = Path(__file__).resolve().parents[1]
 

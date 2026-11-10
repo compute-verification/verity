@@ -1,8 +1,12 @@
 module
 
+public import Definitions.Core.Game
+public import Mathlib.Analysis.Real.Sqrt
 public import Proofs.Flock.Soundness.CROnly.Hm96Defs
-public import Mathlib.Algebra.BigOperators.Field
-public import Mathlib.Algebra.Order.Chebyshev
+import Mathlib.Algebra.BigOperators.Field
+import Mathlib.Algebra.Order.Chebyshev
+import Proofs.Flock.Soundness.Assumptions
+import Proofs.Flock.Soundness.Game
 
 /-!
 # hm96 hiding from the universal hash

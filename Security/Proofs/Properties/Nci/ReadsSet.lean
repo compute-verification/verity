@@ -1,7 +1,31 @@
 module
 
+public import Proofs.Properties.Nci.ReadsExact
 public import Proofs.Properties.Nci.ReadsOneNode
-public import Proofs.Properties.Nci.OperandsResolve
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Core.QSort
+import Proofs.Properties.Nci.Lemmas
+import Proofs.Properties.Nci.OperandsResolve
+import Proofs.Properties.Accounting.Remote.Sort
+import Std.Data.HashSet.Lemmas
 
 /-!
 # `ReadsExact.RootSet` from the decoder's facts: gates located with their operands, and the statements it is proved through
@@ -1954,7 +1978,7 @@ theorem carrySet (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d)
       simp only [pure, Except.pure, Except.ok.injEq] at hy3
       subst hy3
       obtain ⟨t, ht1, ht2, rfl⟩ :=
-        hG _ (Std.HashSet.mem_toArray.1 (Array.mem_toList_iff.1 (qsort_mem (fun x => x) _ hl)))
+        hG _ (Std.HashSet.mem_toArray.1 (Array.mem_toList_iff.1 (Verity.QSort.ByKey.qsort_mem (fun x => x) _ hl)))
       have hag1 := init_agree c sc hn hT (by omega)
         (fun j' h1 h2 => by rw [show j' = ch.at t by omega]; exact hGt t ht1 ht2) hv'
       have htT := (hup t ht2).1

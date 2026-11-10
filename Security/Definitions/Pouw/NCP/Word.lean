@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Pouw.Basic.Prob
-public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
@@ -124,20 +123,20 @@ def constAdv (x : ℕ → ℕ → ℤ) : Adversary := ⟨fun u p => .const (x u 
 
 /-! ## Pinned statements -/
 
-/-- **R_word-NCP's bound**: `Pr[16·Σ_{u ∈ K'} n_u > cost/(1 − γ₀)] ≤ Σ_u 2^−(γ₀·n_u − F_u)`. -/
+/-- **R_word-NCP's bound**: `Pr[16·Σ_{u ∈ K'} n_u > cost/(1 − g₀)] ≤ Σ_u 2^−(g₀·n_u − F_u)`. -/
 def WordBound : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] (n : ℕ → ℕ) (X : Ω → ℕ → ℕ → ℤ) (N : ℕ) (A : Adversary) (γ₀ : ℝ),
-    0 ≤ γ₀ → γ₀ < 1 → Valid n A → NzNCP n X →
-    pr (fun ω => (cost n N A : ℝ) / (1 - γ₀) < 16 * ∑ u ∈ correctSet n X N A ω, (n u : ℝ)) ≤
-      ∑ u ∈ range N, (2 : ℝ) ^ (-(γ₀ * n u - identCount n X A u))
+  ∀ (Ω : Type) [Fintype Ω] (n : ℕ → ℕ) (X : Ω → ℕ → ℕ → ℤ) (N : ℕ) (A : Adversary) (g₀ : ℝ),
+    0 ≤ g₀ → g₀ < 1 → Valid n A → NzNCP n X →
+    pr (fun ω => (cost n N A : ℝ) / (1 - g₀) < 16 * ∑ u ∈ correctSet n X N A ω, (n u : ℝ)) ≤
+      ∑ u ∈ range N, (2 : ℝ) ^ (-(g₀ * n u - identCount n X A u))
 
 /-- **The floor**: `c` output entries per unit, `w` checked words per entry (`w = 3k/16` for NCP), and at most one
-identity per entry. The bound is `N·2^−(c·(γ₀·w − 1))`, below 1 per unit iff `γ₀ > 1/w = 16/(3k)`. -/
+identity per entry. The bound is `N·2^−(c·(g₀·w − 1))`, below 1 per unit iff `g₀ > 1/w = 16/(3k)`. -/
 def WordFloor : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] (n : ℕ → ℕ) (X : Ω → ℕ → ℕ → ℤ) (N : ℕ) (A : Adversary) (γ₀ : ℝ) (w c : ℕ),
-    0 ≤ γ₀ → γ₀ < 1 → Valid n A → NzNCP n X → (∀ u, n u = w * c) → FinalOnly n X A (fun _ => c) →
-    pr (fun ω => (cost n N A : ℝ) / (1 - γ₀) < 16 * ∑ u ∈ correctSet n X N A ω, (n u : ℝ)) ≤
-      N * (2 : ℝ) ^ (-(c * (γ₀ * w - 1)))
+  ∀ (Ω : Type) [Fintype Ω] (n : ℕ → ℕ) (X : Ω → ℕ → ℕ → ℤ) (N : ℕ) (A : Adversary) (g₀ : ℝ) (w c : ℕ),
+    0 ≤ g₀ → g₀ < 1 → Valid n A → NzNCP n X → (∀ u, n u = w * c) → FinalOnly n X A (fun _ => c) →
+    pr (fun ω => (cost n N A : ℝ) / (1 - g₀) < 16 * ∑ u ∈ correctSet n X N A ω, (n u : ℝ)) ≤
+      N * (2 : ℝ) ^ (-(c * (g₀ * w - 1)))
 
 /-- **NzNCP is satisfiable**: independent uniform bits, `M` positions per unit. -/
 def WordNzWitness : Prop :=
@@ -151,11 +150,11 @@ def WordFinalWitness : Prop :=
 /-- **Zero noise**: values that do not depend on the noise satisfy NzNCP vacuously, but every rule of the
 all-constant adversary is an identity (`F_u = n_u`), it costs 0, and it wins with probability 1. -/
 def WordZeroNoise : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (n : ℕ → ℕ) (x : ℕ → ℕ → ℤ) (N : ℕ) (γ₀ : ℝ),
-    γ₀ < 1 → (∃ u < N, 0 < n u) →
+  ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (n : ℕ → ℕ) (x : ℕ → ℕ → ℤ) (N : ℕ) (g₀ : ℝ),
+    g₀ < 1 → (∃ u < N, 0 < n u) →
     NzNCP n (fun (_ : Ω) => x) ∧ cost n N (constAdv x) = 0 ∧
       (∀ u, identCount n (fun (_ : Ω) => x) (constAdv x) u = n u) ∧
-      pr (fun ω : Ω => (cost n N (constAdv x) : ℝ) / (1 - γ₀) <
+      pr (fun ω : Ω => (cost n N (constAdv x) : ℝ) / (1 - g₀) <
         16 * ∑ u ∈ correctSet n (fun (_ : Ω) => x) N (constAdv x) ω, (n u : ℝ)) = 1
 
 end Pouw.NCP.Word

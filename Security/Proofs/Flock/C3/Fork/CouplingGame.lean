@@ -1,6 +1,9 @@
 module
 
-public import Proofs.Flock.Soundness.Game.Lock
+public import Definitions.Flock.Game
+import Mathlib.Analysis.Real.Sqrt
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Game
 
 /-!
 # a1l, step 1: games under relabelling, and a lockstep beside another

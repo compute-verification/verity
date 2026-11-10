@@ -1,7 +1,7 @@
 """The transformer's sampling plan (`transformer.py`): its DAG's units are their Definitions' and counted right, a unit is
 credited its ANDs whatever the cut, the frontier prices every serve-time commitment and is monotone, the chosen plan's
 certificate recomputes through core's `Stratified`, the pooled bound is IntegrityHorizon's in the uniform case, the
-hand-off's work law draws the plan's k and its windows are IntegrityPeriodLog's, and the large model fills the card and
+hand-off's work sampling design samples the plan's k and its windows are IntegrityPeriodLog's, and the large model fills the card and
 meets the target share."""
 
 from __future__ import annotations
@@ -15,8 +15,8 @@ from types import SimpleNamespace
 import pytest
 
 import transformer as T
-from verity.core.protocols.sampled_proofs.one_stage.draw import work_k
-from verity.core.protocols.sampled_proofs.optimize import Candidate
+from verity.core.protocols.spot.one_stage.draw import work_k
+from verity.core.protocols.spot.optimize import Candidate
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import gemm as G
@@ -140,5 +140,5 @@ def test_large_model_meets_the_target_share():
     assert big.plan is not None
     r = T.recertify(big.plan, big.cands, T.DELTAS[0], exact_count=False)
     assert r["ands"] <= T.TARGET_SHARE * big.dag.work * (1 + 1e-9)
-    assert {c.scale for c in big.cm.serve} >= {"requests", "pouw:h1", "bandwidth"} and big.cm.replay["request"].units \
+    assert {c.scale for c in big.cm.serve} >= {"requests", "pouw:h1", "bandwidth"} and big.cm.replay["request"].replay_blocks \
         == T.LARGE.requests

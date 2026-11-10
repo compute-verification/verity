@@ -1,7 +1,8 @@
 """Drive's alarms: whatever is past its bound rings its owner once, and again only every `ALARM_EVERY_S` while it stays past
-it.  A step of drive's after-landing run past `SLOW_STEP_FACTOR` times its median (lean-audit's of its machine's runs) rings
-its ci.toml job's owner; a member of `next` marked ready `STUCK_S` ago and not landed rings the owner of what holds it; a red
-on `checked` rings the culprit's lane and the owner of what failed, never ci and top beside them."""
+it.  A step a run of drive's after-landing run or lock run runs (an open step span of its own) past `SLOW_STEP_FACTOR`
+times its median (lean-audit's of its machine's runs) and `STEP_FLOOR_S` rings its ci.toml job's owner; a member of
+`next` marked ready `STUCK_S` ago and not landed rings the owner of what holds it; a red on `checked` rings the
+culprit's lane and the owner of what failed, never ci and top beside them."""
 from __future__ import annotations
 
 import json
@@ -9,7 +10,7 @@ import time
 
 import pytest
 
-from research.drive import ALARM_EVERY_S, AFTER_LANDING, LEAN_STEP, PREFLIGHT, STUCK_S, Driver, running_steps
+from research.drive import ALARM_EVERY_S, AFTER_LANDING, LEAN_STEP, PREFLIGHT, STEP_FLOOR_S, STUCK_S, Driver, running_steps
 from test_drive_review import Review, _move_main, _owning
 from test_queue import World, _git
 
@@ -21,8 +22,10 @@ JOBS = {"pytest": ("suites", 1), "flock-circuit-build": ("proofs", 2), "circuit-
         "lean-suites": ("ci", 5), "ratchet-gate": ("vllm", 4)}
 CI_TOML = 'schema = "ci/v0"\n' + "".join(
     f'[[job]]\nname = "{s}"\nowner = "{JOBS[s][0]}"\ngroup = {JOBS[s][1]}\n'
-    + ('gate = false\n' if s in ("circuit-check", "ratchet-gate") else "")
     + ('after = "lean-build"\n' if s == "lean-suites" else "") for s in AFTER_LANDING)
+#: `CI_TOML` with drive's policy taking circuit-check and ratchet-gate off the merge gate, as in the tree
+TREE = {"tools/verity/check/ci.toml": CI_TOML,
+        "tools/verity/check/policy.toml": 'schema = "policy/v0"\noff_gate = ["circuit-check", "ratchet-gate"]\n'}
 
 
 @pytest.fixture
@@ -34,12 +37,23 @@ def _utc(t: float) -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t))
 
 
-def _run_dir(root, rid: str, start: float, steps: list[dict]):
-    """A check's run dir: its root span opened at ``start``, and ``steps`` (each with its `ended` time) in its steps.jsonl."""
+def _span(rid: str, sid: str, parent: str | None, name: str, start: float, end: float | None) -> str:
+    return json.dumps({"trace_id": rid, "span_id": sid, "parent_span_id": parent, "name": name, "start_utc": _utc(start),
+                       "end_utc": None if end is None else _utc(end), "status": None if end is None else "ok",
+                       "attributes": {} if parent is None else {"step": name}}) + "\n"
+
+
+def _run_dir(root, rid: str, start: float, steps: list[dict], running: tuple[tuple[str, float], ...] = ()):
+    """A check's run dir as check.py writes it: its root span opened at ``start``; ``steps`` (each with its `ended` time) in
+    its steps.jsonl, each a step span opened and then completed; and a step span still open for each of ``running``."""
     d = root / rid
     d.mkdir(parents=True, exist_ok=True)
-    (d / "spans.jsonl").write_text(json.dumps({"trace_id": rid, "span_id": "root", "parent_span_id": None, "name": "check",
-                                               "start_utc": _utc(start), "end_utc": None, "status": None}) + "\n")
+    spans = [_span(rid, "root", None, "check", start, None)]
+    for i, s in enumerate(steps):
+        began = s["ended"] - float(s.get("seconds") or 0.0)
+        spans += [_span(rid, f"s{i}", "root", s["step"], began, None), _span(rid, f"s{i}", "root", s["step"], began, s["ended"])]
+    spans += [_span(rid, f"r{i}", "root", step, since, None) for i, (step, since) in enumerate(running)]
+    (d / "spans.jsonl").write_text("".join(spans))
     (d / "steps.jsonl").write_text("".join(json.dumps({**{k: v for k, v in s.items() if k != "ended"},
                                                        "ended_utc": _utc(s["ended"])}) + "\n" for s in steps))
     return d
@@ -55,24 +69,22 @@ def _rings(h, says: str) -> list[str]:
     return [p for p in h.posts if says in p]
 
 
-def test_running_steps_follow_the_preflights_then_each_group_in_order():
-    jobs = [{"name": n, "owner": o, "group": g, **({"after": "lean-build"} if n == "lean-suites" else {})}
-            for n, (o, g) in JOBS.items()]
-    steps = list(AFTER_LANDING)
+def test_running_steps_are_the_steps_a_run_opened_and_has_not_completed(tmp_path):
+    """A shard of the after-landing run opens only its own steps: shard 1 runs lean-audit and pytest, and the steps the other
+    shards run (the Rust build, ratchet-gate, the Lean build and suites) never read as running in it."""
     pre = _preflights(0.0)
-    assert running_steps(pre[:1], steps, jobs, 0.0) == {PREFLIGHT[1]: 20.0}
-    assert running_steps([], steps, jobs, 0.0) == {PREFLIGHT[0]: 0.0}
-    got = running_steps([*pre, {"step": "pytest", "status": "passed", "ended_utc": _utc(500)},
-                         {"step": "flock-circuit-build", "status": "failed", "ended_utc": _utc(300)},
-                         {"step": "lean-changed", "status": "passed", "ended_utc": _utc(100)}], steps, jobs, 0.0)
-    # group 1 is done, group 2 stopped at its failure, lean-suites waits for lean-build, which runs
-    assert got == {"lean-build": 100.0, "ratchet-gate": 60.0}
-    assert running_steps([pre[0], {**pre[1], "status": "failed"}], steps, jobs, 0.0) == {}
+    d = _run_dir(tmp_path, "r-shard-1", 0.0, [*pre, {"step": "pytest", "status": "passed", "seconds": 400.0, "ended": 500.0}],
+                 running=((LEAN_STEP, 60.0),))
+    assert running_steps(d) == {LEAN_STEP: 60.0}
+    d = _run_dir(tmp_path, "r-shard-2", 0.0, pre[:1], running=((PREFLIGHT[1], 20.0),))
+    assert running_steps(d) == {PREFLIGHT[1]: 20.0}
+    assert running_steps(_run_dir(tmp_path, "r-ended", 0.0, pre)) == {}
+    assert running_steps(tmp_path / "no-such-run") == {}
 
 
 def _landed(world: World, monkeypatch, **kw) -> Review:
     """#1 landed on `checked` under `CI_TOML`, its after-landing run `r-post-0` running."""
-    _move_main(world, {"tools/verity/check/ci.toml": CI_TOML})
+    _move_main(world, TREE)
     h = Review(world, monkeypatch, land_into="checked", **kw)
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     h.review(1)
@@ -87,7 +99,7 @@ def test_a_step_past_one_and_a_half_times_its_median_rings_its_owner_once_an_int
     state["drive"]["step_s"] = {"postland pytest": [["r1", 600.0], ["r2", 600.0], ["r3", 700.0]]}
     h.q.save_state(state)
     start = h.clock
-    h.evidence = [_run_dir(tmp_path, "r-post-0", start, _preflights(start))]
+    h.evidence = [_run_dir(tmp_path, "r-post-0", start, _preflights(start), running=(("pytest", start + 60),))]
     h.clock = start + 60 + 890                                 # pytest has run 890 s, under 1.5 times its median of 600 s
     h.tick()
     assert not _rings(h, "has run"), h.posts
@@ -103,6 +115,25 @@ def test_a_step_past_one_and_a_half_times_its_median_rings_its_owner_once_an_int
     h.tick()
     assert len(_rings(h, "has run")) == 2                      # still past it an interval later
     assert not [p for p in _rings(h, "has run") if not p.startswith("@suites ")], h.posts
+
+
+def test_a_shard_rings_only_its_own_steps_and_a_step_of_seconds_only_past_the_floor(world, monkeypatch, tmp_path):
+    """A shard running pytest rings pytest's owner alone, never the owners of ratchet-gate and the Rust build, which other
+    shards run; and a step whose passes take seconds rings only once it has run `STEP_FLOOR_S`."""
+    h = _landed(world, monkeypatch)
+    state = h.q.load_state()
+    state["drive"]["step_s"] = {f"postland {s}": [["r1", 10.0], ["r2", 10.0], ["r3", 12.0]]
+                                for s in ("ratchet-gate", "flock-circuit-build", "pytest")}
+    h.q.save_state(state)
+    start = h.clock
+    h.evidence = [_run_dir(tmp_path, "r-post-0", start, _preflights(start), running=(("pytest", start + 60),))]
+    h.clock = start + 60 + STEP_FLOOR_S - 10                   # past 1.5 times pytest's median of 10 s, under the floor
+    h.tick()
+    assert not _rings(h, "has run"), h.posts
+    h.clock += 20
+    h.tick()
+    (ring,) = _rings(h, "has run")
+    assert ring.startswith("@suites queue: step pytest of the after-landing run of `checked`"), ring
 
 
 def test_an_ended_runs_uncached_passes_are_its_steps_durations(world, monkeypatch, tmp_path):
@@ -128,7 +159,8 @@ def test_lean_audits_median_is_its_machines_with_three_passes_there_and_says_whi
     h.run_state["r-post-0"] = ("running", None, None, None, "m2")
     start, ready = h.clock, h.clock + 100
     h.evidence = [_run_dir(tmp_path, "r-post-0", start, [*_preflights(start), *(
-        {"step": s, "status": "passed", "seconds": 1.0, "ended": ready} for s in AFTER_LANDING[:5] if JOBS[s][1] == 3)])]
+        {"step": s, "status": "passed", "seconds": 1.0, "ended": ready} for s in AFTER_LANDING[:5] if JOBS[s][1] == 3)],
+        running=((LEAN_STEP, ready),))]
     h.clock = ready + 1000                                     # past 1.5 times every machine's median, under m2's
     h.tick()
     assert not _rings(h, "has run"), h.posts
@@ -169,7 +201,7 @@ def test_a_ready_pr_unlanded_two_hours_for_its_land_verdict_rings_the_reviewer_o
 def test_a_held_member_below_rings_its_own_owner_for_the_ready_prs_above_it(world, monkeypatch):
     _owning(world, {"lane-1": [], "lane-2": [], "lane-3": []})
     marks: dict[int, str] = {}
-    h = Review(world, monkeypatch, land_into="checked", reviewed_first=False, marked_at=lambda n, head: marks.get(n))
+    h = Review(world, monkeypatch, land_into="checked", marked_at=lambda n, head: marks.get(n))
     for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
         world.gh.put(n, world.change({f: f"{n}\n"}))
     marks.update({1: _utc(h.clock - 3 * 3600), 2: _utc(h.clock - 3 * 3600), 3: _utc(h.clock - 600)})
@@ -184,18 +216,29 @@ def test_a_held_member_below_rings_its_own_owner_for_the_ready_prs_above_it(worl
     assert len(_rings(h, "not landed")) == 1
 
 
-def test_a_reviewed_pr_waiting_on_its_running_lean_check_rings_the_lean_audits_owner(world, monkeypatch):
-    _move_main(world, {"tools/verity/check/ci.toml": CI_TOML})
-    marks: dict[int, str] = {}
-    h = Review(world, monkeypatch, land_into="checked", marked_at=lambda n, head: marks.get(n))
-    lock = json.dumps({"guarantees": {"T": "2"}, "reads": {}, "dependencies": {"M": "1"}})
-    world.gh.put(1, world.change({"pkg/lean-audit.json": lock}))
-    marks[1] = _utc(h.clock - STUCK_S)
-    h.review(1)
+def test_a_lock_runs_lean_audit_past_one_and_a_half_times_its_median_rings_its_owner(world, monkeypatch, tmp_path):
+    """The lock run after a Lean landing is a check of drive's that the slow-step alarm watches: its lean-audit, past 1.5 times
+    the median of the lock runs' uncached passes of it, rings lean-audit's ci.toml owner."""
+    from test_drive_locks import LEAN, _lands, _locks
+
+    _move_main(world, TREE)
+    h = _locks(world, monkeypatch)
+    tip = _lands(h, {1: LEAN})
+    (rid,) = h.lock_ids()
+    state = h.q.load_state()
+    state["drive"]["step_s"] = {f"lean {LEAN_STEP}": [["r1", 600.0], ["r2", 600.0], ["r3", 600.0]]}
+    h.q.save_state(state)
+    start = h.clock
+    h.evidence = [_run_dir(tmp_path, rid, start, _preflights(start), running=((LEAN_STEP, start + 60),))]
+    h.clock = start + 60 + 890                                 # lean-audit has run 890 s, under 1.5 times its median of 600 s
     h.tick()
-    (rid,) = h.lean_ids()
-    (ring,) = _rings(h, "not landed")
-    assert ring.startswith(f"@{JOBS[LEAN_STEP][0]} queue: ") and f"held by the Lean check {rid} of " in ring, ring
+    assert not _rings(h, "has run"), h.posts
+    h.clock += 20
+    h.tick()
+    (ring,) = _rings(h, "has run")
+    assert ring.startswith(f"@{JOBS[LEAN_STEP][0]} queue: step {LEAN_STEP} of the lock run of `checked` {tip[:12]} "
+                           f"(run {rid}) has run 15 min"), ring
+    assert ring.endswith("past 1.5 times its median of 10 min over drive's uncached passes of it in runs r1, r2, r3"), ring
 
 
 def test_the_behind_alarm_names_an_older_commits_red_as_not_yet_run_at_the_tip_not_as_red(world, monkeypatch):

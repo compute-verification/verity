@@ -7,7 +7,7 @@ public import Proofs.Flock.Claims.KS.PlainClashRunK
 # The live self-clash at plain SHA-512 leaves, at `VK keep`
 
 `PlainLeafClash`'s run-level half over the verifier `VK keep`: `plainDecQUK`, `PlainClashQUK`, `plainClashQ₀UK`,
-`plainClashQ_orUK`, `plainClashQLUK` and `plainSimClashHUK`, from `PlainLeafClashK`'s clashes at the draw.
+`plainClashQ_orUK`, `plainClashQLUK` and `plainSimClashHUK`, from `PlainLeafClashK`'s clashes at the sample.
 -/
 
 @[expose] public section
@@ -47,7 +47,7 @@ def PlainClashQUK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x :
 theorem plainClashQ₀UK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
-    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : Accounting.Schedule)
+    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : FlockSoundness.Accounting.Schedule)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8))
     (hE : ∀ o : LiveOutJ 1 spec.mPts, AcceptsAtDK keep ins.read.I (some d) (wrPDK keep ins.read.I d o) →
       ∀ pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig,
@@ -134,7 +134,7 @@ theorem plainClashQ_orUK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover �
 theorem plainClashQLUK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
-    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : Accounting.Schedule)
+    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : FlockSoundness.Accounting.Schedule)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8))
     (hE : ∀ o : LiveOutJ 1 spec.mPts, AcceptsAtDK keep ins.read.I (some d) (wrPDK keep ins.read.I d o) →
       ∀ pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig,

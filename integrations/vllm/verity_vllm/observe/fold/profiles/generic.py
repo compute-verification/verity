@@ -58,7 +58,7 @@ from verity_vllm.observe.fold.profiles.gen_llama_patterns import ADA_TUNED_GEMM,
 from verity_vllm.observe.fold.profiles.gen_ln_patterns import ResidualAddPattern, with_ln_patterns
 from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import (FUSED_MOE_NUM_STAGES, FUSED_MOE_NUM_WARPS, FUSED_MOE_PINS, MOE_CONSTRUCTION_PATTERNS,
                                   MOE_FP8_CONSTRUCTION_PATTERNS, ROUTER_VPT_BY_E, MoEFusedExperts, MoEFusedExpertsFp8)
-from verity_vllm.observe.fold.profiles.gen_marlin_moe_patterns import SCHEDULE, MoEMarlinSharedExperts
+from verity_vllm.observe.fold.profiles.gen_marlin_moe_patterns import MoEMarlinSharedExperts
 from verity_vllm.observe.fold.profiles.gen_shared_moe_patterns import MoEFusedSharedExpertsFp8
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
@@ -580,7 +580,7 @@ def _mhc_profile(role: str, cfg: dict[str, Any], src: dict[str, Any], C: dict[st
                            "marlin_served": MHC.MARLIN_SERVED.pattern},
     }
     return Profile(id=profile_id(role, C, world), patterns=patterns, config=C, weight_field=make_weight_field(cfg, C), accepted=False,
-                   kernel_allowlist=base.KERNEL_ALLOWLIST, notes=notes, weights_type=wtype, witnesses=(SCHEDULE,) if world > 1 else ())
+                   kernel_allowlist=base.KERNEL_ALLOWLIST, notes=notes, weights_type=wtype)
 
 
 def build_profile(role: str, world: int = 1, *, moe_construction: str | None = None, fused_moe_pins: dict[str, Any] | None = None,
@@ -671,8 +671,8 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
                             "kernels": ["_C.per_token_group_fp8_quant (per_token_group_quant_8bit_kernel)",
                                         "_C.cutlass_scaled_mm blockwise (cutlass_3x_gemm_fp8_blockwise<bf16>, sm90)"],
                             "env": ["VLLM_USE_DEEP_GEMM=0 (the DeepGEMM JIT path is not modelled)", "VLLM_USE_FLASHINFER_SAMPLER=0"],
-                            "families": ["Fp8GroupQuant_v1{K,G}", "ScaledMmFp8BlockSharedScale_v1{K,N,G} (fp8_scale_construction per-coordinate: "
-                                         "ScaledMmFp8Block_v1{K,N,G})"], "quantization_config": C.get("quantization_config")}
+                            "families": ["Fp8GroupQuant_v1{K,G}", "ScaledMmFp8BlockSharedScale_v1{K,N,G}"],
+                            "quantization_config": C.get("quantization_config")}
     if arch in _MOE_ARCHES:
         moe = next(p for p in patterns if isinstance(p, (MoEFusedExperts, MoEFusedSharedExpertsFp8)))
         E, T, I, H = C["NUM_EXPERTS"], C["TOPK"], C["I"], C["H"]

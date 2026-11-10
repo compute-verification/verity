@@ -16,30 +16,14 @@ from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import (attention_scale, dtype_is, from_rows, kv_logs, norm_kind, refuse_cached_prefix, rows_of,
-                                                      shape)
+from verity_vllm.program.frontend.rules.common import (and_mul_operands, attention_scale, dtype_is, from_rows, kv_logs, norm_kind,
+                                                      refuse_cached_prefix, row_value, rows_of, shape)
 from verity_vllm.program.frontend.rules.reference import LinearRule
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 from verity_vllm.program.frontend.targets import UnregisteredTarget
 
 aten = torch.ops.aten
 BF16 = torch.bfloat16
-
-
-def _row_tensor(ctx, a, name: str, dtype=BF16) -> str | None:
-    """Precondition helper: `a` is a value collection of `dtype` with rank >= 1."""
-    if not isinstance(a, torch.fx.Node):
-        return f"{name} is not a graph value"
-    v = ctx.val(a)
-    if isinstance(v, Alloc):
-        return None  # allocation: fine as a write target
-    if not isinstance(v, Coll):
-        return f"{name} is not a value collection ({type(v).__name__})"
-    if not dtype_is(ctx, a, dtype):
-        return f"numerics_unregistered: {name} has dtype {ctx.dtype_of(a)}; the profile's kinds are {dtype}"
-    if not shape(ctx, a):
-        return f"{name} is a scalar"
-    return None
 
 
 class EmbeddingRule(OpRule):
@@ -55,7 +39,7 @@ class EmbeddingRule(OpRule):
 
     def applies(self, node, ctx):
         table, ids = node.args[0], node.args[1]
-        r = _row_tensor(ctx, table, "table")
+        r = row_value(ctx, table, "table")
         if r:
             return r
         if len(shape(ctx, table) or ()) != 2:
@@ -99,7 +83,7 @@ class ArgmaxTokenSelectRule(OpRule):
         return {aten.argmax.default}
 
     def applies(self, node, ctx):
-        r = _row_tensor(ctx, node.args[0], "logits")
+        r = row_value(ctx, node.args[0], "logits")
         if r:
             return r
         shp = shape(ctx, node.args[0])
@@ -136,7 +120,7 @@ class ResidualAddRule(OpRule):
 
     def applies(self, node, ctx):
         for nm, a in (("a", node.args[0]), ("b", node.args[1])):
-            r = _row_tensor(ctx, a, nm)
+            r = row_value(ctx, a, nm)
             if r:
                 return r
         if shape(ctx, node.args[0]) != shape(ctx, node.args[1]):
@@ -258,7 +242,7 @@ class RmsNormRule(InPlaceRule):
         if (r := _without_batch_invariance("_C.rms_norm", "the batch-invariant Triton _rms_norm_kernel RMSNormTriton_v1 states")):
             return r
         out, x, w, eps = node.args[:4]
-        r = _row_tensor(ctx, x, "x") or _row_tensor(ctx, w, "weight")
+        r = row_value(ctx, x, "x") or row_value(ctx, w, "weight")
         if r:
             return r
         if not isinstance(ctx.val(out), (Alloc, Coll)):
@@ -297,7 +281,7 @@ class FusedAddRmsNormRule(InPlaceRule):
 
     def applies(self, node, ctx):
         x, res, w, eps = node.args[:4]
-        r = _row_tensor(ctx, x, "x") or _row_tensor(ctx, res, "residual") or _row_tensor(ctx, w, "weight")
+        r = row_value(ctx, x, "x") or row_value(ctx, res, "residual") or row_value(ctx, w, "weight")
         if r:
             return r
         if isinstance(ctx.val(x), Alloc) or isinstance(ctx.val(res), Alloc):
@@ -351,11 +335,11 @@ class RotaryEmbeddingRule(InPlaceRule):
         pos, q, k, head_size, cache, is_neox = node.args[:6]
         if not isinstance(ctx.val(pos), StaticIndex):
             return "positions is not static structure (a computed value would make the computation data-dependent)"
-        r = _row_tensor(ctx, q, "query") or _row_tensor(ctx, cache, "cos_sin_cache")
+        r = row_value(ctx, q, "query") or row_value(ctx, cache, "cos_sin_cache")
         if r:
             return r
         if k is not None:
-            r = _row_tensor(ctx, k, "key")
+            r = row_value(ctx, k, "key")
             if r:
                 return r
         if not is_neox:
@@ -415,16 +399,7 @@ class SiluAndMulRule(InPlaceRule):
         return targets_for("silu_and_mul")
 
     def applies(self, node, ctx):
-        out, x = node.args[:2]
-        r = _row_tensor(ctx, x, "x")
-        if r:
-            return r
-        if not isinstance(ctx.val(out), (Alloc, Coll)):
-            return "out is not an allocation/value"
-        xs, os_ = shape(ctx, x), shape(ctx, out)
-        if xs[-1] % 2 or os_ != xs[:-1] + (xs[-1] // 2,):
-            return f"out {os_} vs x {xs}"
-        return True
+        return and_mul_operands(node, ctx)
 
     def emit(self, node, ctx):
         out, x = node.args[:2]
@@ -460,7 +435,7 @@ class UnifiedAttentionRule(StateRule):
     def applies(self, node, ctx):
         q, k, v, layer_name = node.args[:4]
         for nm, a in (("query", q), ("key", k), ("value", v)):
-            r = _row_tensor(ctx, a, nm)
+            r = row_value(ctx, a, nm)
             if r:
                 return r
             if isinstance(ctx.val(a), Alloc):

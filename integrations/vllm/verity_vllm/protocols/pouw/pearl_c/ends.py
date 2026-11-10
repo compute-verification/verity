@@ -14,15 +14,24 @@ from pathlib import Path
 from typing import Any
 
 from verity.core.protocols.pouw.audit import Epoch, Workload, transcript_domain
+from verity.core.protocols.pouw.core_check import MANIFEST_SCHEMA
 from verity.core.protocols.pouw.protocol import Matmul
-from verity.core.protocols.pouw.schemes import pearl_c_work as PW
+from verity.ml.protocols.pouw.schemes import pearl_c_work as PW
 from verity.core.protocols.pouw.serving import Schedule, SchemeId
 
+<<<<<<< 99c8914848ef788e008018a5dc84bd535d48d62c
 from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _linked, _put, _zeros, joined, write_behind, write_manifest
 from verity_vllm.protocols.pouw.pearl_c.host import behind as host_behind
 from verity_vllm.protocols.pouw.pearl_c.manifest import MANIFEST_SCHEMA, session_head
 from verity_vllm.protocols.pouw.pearl_c.screen import excluded, excluded_host
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY
+||||||| merged common ancestors
+from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _linked, _put, _write, _zeros, write_manifest
+from verity_vllm.protocols.pouw.pearl_c.manifest import MANIFEST_SCHEMA, session_head
+=======
+from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _linked, _put, _write, _zeros, write_manifest
+from verity_vllm.protocols.pouw.pearl_c.manifest import session_head
+>>>>>>> fa1fc89f64f1a57fa1d2d62892c18eb3a29f7627
 
 
 @dataclass

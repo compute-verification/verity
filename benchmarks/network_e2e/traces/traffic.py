@@ -4,7 +4,7 @@ Every trace serves the same requests in the same order; only the arrival times d
 scaled by 1 / rate. A request's prompt is token ids:
 
 * its length L from a mixture over [16, 1024] (`LENGTHS`: log-uniform short, uniform medium and long);
-* with probability `SHARED`, one of `PREFIXES` shared prefixes in front (a group drawn with weight 1 / (g + 1), the longest
+* with probability `SHARED`, one of `PREFIXES` shared prefixes in front (a group sampled with weight 1 / (g + 1), the longest
   that leaves at least `MIN_BODY` tokens), so later requests of a group hit the prefix cache: BOS, the start of the group's
   own document, then a blank line, `PREFIXES[g]` tokens in all, a multiple of the 16-token block;
 * then a body: BOS when there is no prefix, then the L - p tokens of a document that end `gap` tokens before its end, where

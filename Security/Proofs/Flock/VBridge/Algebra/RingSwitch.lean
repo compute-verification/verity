@@ -1,7 +1,13 @@
 module
 
-public import Proofs.Flock.VBridge.Algebra.Lincheck
 public import Proofs.Flock.Soundness.Refine.Opening
+public import Proofs.Flock.VBridge.Algebra.Eval
+public import Proofs.Flock.VBridge.Algebra.Lincheck
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.VBridge.Algebra.Zerocheck
+import VCVio.Prelude.Core
 
 /-!
 # V*'s ring-switch residuals are zero only when ring switching's checks pass
@@ -195,7 +201,7 @@ theorem rsClaims_spec (M : Messages α) :
       · rw [Array.getElem?_append_right (by simp), show k + (j + 1) = k + 1 + j by omega]; simpa using h2
       · rw [Array.getElem?_append_right (by simp)]; simpa using h3
 
-/-- **Ring switching's coins.** The rounds `ringSwitch` draws from: `r''_k` for each claim, then the batching coins
+/-- **Ring switching's coins.** The rounds `ringSwitch` samples from: `r''_k` for each claim, then the batching coins
 `γ`; and what it returns. -/
 theorem ringSwitch_spec {M : Messages α} {claims : Array (AClaim α)} (hn : claims.size ≠ 0) {k k' : Nat}
     {src : CoinSource} {rsr : Array α} {rs : RsPts α} (h : ringSwitch M claims k src = .ok ((rsr, rs), k')) :

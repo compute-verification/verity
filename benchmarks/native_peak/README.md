@@ -8,7 +8,7 @@ a proof.
 - `bf16`: square GEMMs through `torch.matmul` (cuBLAS, FP32 accumulate).
 - `e4m3`: FP8 GEMMs through `torch._scaled_mm` with unit scales and FP32 output, skipped where the card has no FP8 tensor
   cores.
-- `nvfp4` (sm_120 only): the block-scaled FP4 `mma.sync` instruction itself (`mma_peak_fp4.cu`), register-resident on every
+- `nvfp4` (sm_120 only): the FP4 `mma.sync` instruction itself, with scale groups (`mma_peak_fp4.cu`), register-resident on every
   warp of every SM, so an instruction peak rather than a GEMM; a cuBLASLt NVFP4 GEMM is attempted beside it.
 
 Each size runs warm-up GEMMs, then a sustained phase so that clocks and power settle (sampled by `nvidia-smi`), then timed

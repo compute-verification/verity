@@ -24,7 +24,15 @@ counts the non-empty ones).  `max` is the warp's FMNMX.FTZ butterfly as lane 0 s
 first), guarded to 0 at -inf; `scale_i = ex2((lse_i - max) * LOG2E)` (`expf`); `sum` the warp's FADD.FTZ butterfly of `0 + scale_i`;
 `w_i = scale_i * INV(sum)`; then over the splits in order `acc = w_s > 0 ? fma(w_s, O_s, acc) : acc` from +0 (FSETP.GT.FTZ), and
 `out = bf16(acc)` (`SparseMlaCombine_v1`).  FMNMX.FTZ is `F32Max_v1` (the block's row max) up to the sign of a zero and a NaN
-operand; every reader of the max (the -inf guard, FADD.FTZ) maps either to the same word.
+operand; every reader of the max (the -inf guard, FADD.FTZ, the lse's FFMA.FTZ) maps either to the same word.
+
+The combine's lse.  The kernel also stores the row's lse, `logf(sum) + lse_max` (flash_fwd_combine_kernel.h:606, written at
+:640), which a caller reads when it asks for one (vLLM's dense prefill with context, `return_softmax_lse`).  The SASS is one
+`FFMA.FTZ(MUFU.LG2(sum), LN2, max)`, max the butterfly's before its -inf guard (`SparseMlaCombineLse_v1`).  The guard changes no
+lse word: at a max of -inf every scale is 0, and either reading gives -inf.  At a finite max the sum is at least 1 (the max's own
+lane adds ex2(0)), so the sign of a zero max never shows.  A NaN lane makes the sum NaN, and the lse is FFMA's NaN, 0x7FFFFFFF,
+whatever the max (`F32FmaFtz_v2`; the `_v1` FMAs return 0x7FC00000, which no output of the combine showed before this one).  No
+split end writes a NaN lse, since a NaN or infinite max makes its sum NaN and its lse -inf.
 
 MUFU.LG2 (`MufuLg2Ftz_v1`, `lg2.approx.ftz.f32`).  The fraction v(m) of log2(1.m) in units of 2^-36 is the special-function unit's
 quadratic interpolator, `verity.ml.circuits.ops.boolean.mufu.Fit` over `mufu_lg2.json` (64 segments of 2^17 mantissas, the square
@@ -42,6 +50,7 @@ Registered functions (all `Name_v1`):
   SparseMlaSplitEnd{DV,INV,SCALE}               (m, l[4], o[DV]) -> (o_partial[DV], lse)
   SparseMlaSplitPart{T,DR,DV,BN,DOT,INV,SCALE}  (q_nope: DV bf16, q_rope: DR bf16, kv: T x (DV+DR) bf16) -> (o_partial[DV], lse)
   SparseMlaCombine{NSPLIT,DV,INV}               (lse: NSPLIT f32, o: NSPLIT x DV f32) -> DV bf16
+  SparseMlaCombineLse{NSPLIT,DV,INV}            (lse: NSPLIT f32, o: NSPLIT x DV f32) -> (DV bf16, lse)
   SparseMlaHeadSplit{T,NS,DR,DV,BN,DOT,INV,SCALE}  (q_nope: DV bf16, q_rope: DR bf16, kv: T x (DV+DR) bf16) -> DV bf16
   SparseMlaSplit{T,NS,NH,DR,DV,BN,DOT,INV,SCALE}   (q_nope: NH x DV, q_rope: NH x DR, kv: T x (DV+DR)) -> NH x DV bf16
 
@@ -82,6 +91,10 @@ BLOCK_N, MAX_SPLIT_BATCH = 64, 992
 
 _CONF = ("model-untested: read from vllm-flash-attn 506341a1's FA3 split path, combine kernel and their SASS (the module "
          "docstring's files) at hdim 64 / hdimv 512; tests/properties/glm53_fa3_split_capture_gpu.py is its hardware check")
+_COMBINE_LSE_CONF = ("model-untested: SparseMlaCombine_v1 and the lse the combine kernel stores, read from vllm-flash-attn "
+                     "506341a1's flash_fwd_combine_kernel.h and its cc 9.0 SASS (the module docstring); no capture records that "
+                     "lse yet, and the check that would establish it is tests/properties/glm53_fa3_prefill_capture_gpu.py with "
+                     "return_softmax_lse on a launch that splits")
 _LG2_CONF = ("model-untested on cc 9.0: fit to cc 12.0's lg2.approx.ftz.f32 (every mantissa at [1, 2) and 2^20 random words, "
              f"{EVIDENCE['cc12_difftest']['run_record']}, 0 mismatches); total on encodings, `mufu_lg2_undetermined` names the words the measurement "
              "leaves open; tests/properties/glm53_fa3_split_capture_gpu.py measures cc 9.0")
@@ -249,7 +262,7 @@ def check_split_statics(T: int, NS: int) -> None:
 
 # --- the bodies (one per Definition, over `sparse_mla.Steps`) ------------------------------------------------------------
 
-WORD = {**M.WORD, "lg2": MufuLg2Ftz, "nez": F32NeZeroFtz, "gtz": F32GtZeroFtz, "sel": SC.SelectI32}
+WORD = {**M.WORD, "lg2": MufuLg2Ftz, "nez": F32NeZeroFtz, "gtz": F32GtZeroFtz, "sel": SC.SelectI32, "fma_v2": P.F32FmaFtzV2}
 
 
 def word_steps(B) -> M.Steps:
@@ -290,33 +303,40 @@ def _lane_tree(op, lanes: list, keys: list):
     return lanes[0]
 
 
-def combine(st: M.Steps, S, INV, lse, o):
-    """`SparseMlaCombine`'s body: the warp's max and sum over NSPLIT lanes and the -inf pads, the weights, the ordered FMAs."""
+def combine(st: M.Steps, S, INV, lse, o, with_lse: bool = False):
+    """`SparseMlaCombine`'s body: the warp's max and sum over NSPLIT lanes and the -inf pads, the weights, the ordered FMAs;
+    ``with_lse`` (`SparseMlaCombineLse`) also the lse the kernel stores, (out, fma(lg2(sum), LN2, the unguarded max)), its NaN
+    the GPU's (``fma_v2``: the stored word is the one place a NaN's bits show)."""
     NSPLIT, DV, B = S.NSPLIT, S.DV, st.B
     if not 1 <= NSPLIT <= LANES:
         raise ValueError(f"SparseMlaCombine: NSPLIT={NSPLIT} splits, the warp holds 1 to {LANES}")
     pad = st.word(NEG_INF)
     vals, keys = [lse[i] for i in range(NSPLIT)] + [pad] * (LANES - NSPLIT), list(range(NSPLIT)) + ["pad"] * (LANES - NSPLIT)
-    cur = st.guard(_lane_tree(st.max, vals, keys))
+    mx = _lane_tree(st.max, vals, keys)
+    cur = st.guard(mx)
     log2e, zero = st.word(LOG2E), st.word(0)
     scale = [st.ex2(st.mul(st.sub(lse[i], cur), log2e)) for i in range(NSPLIT)]
     pad_scale = st.add(zero, st.ex2(st.mul(st.sub(pad, cur), log2e))) if NSPLIT < LANES else None
     terms = [st.add(zero, s) for s in scale] + [pad_scale] * (LANES - NSPLIT)
-    inv = B.call(INV, _lane_tree(st.add, terms, keys))
+    tot = _lane_tree(st.add, terms, keys)
+    inv = B.call(INV, tot)
     acc = array_of([zero] * DV)
     for s in range(NSPLIT):
         w = st.mul(scale[s], inv)
         acc = B.batch(st._defs["sel"], st.gtz(w), B.batch(st._defs["fma"], w, o[s], acc, axes=(None, 0, 0)), acc,
                       axes=(None, 0, 0))
-    return B.batch(st._defs["cvt"], acc, axes=(0,))
+    out = B.batch(st._defs["cvt"], acc, axes=(0,))
+    if not with_lse:
+        return out
+    return tuple_of(out, st.fma_v2(st.lg2(tot), st.word(LN2), mx))
 
 
 def _q(st: M.Steps, KW: int, q_nope, q_rope):
     return Coll(Array(KW, st.bf16), concat([q_rope.refs, q_nope.refs]))
 
 
-def split_part(st: M.Steps, T: int, BN: int, KW: int, block_of, end, q, kv, b0: int, b1: int):
-    """One split: blocks [b0, b1) of ``kv``'s T keys last to first (``block_of(nvis, first)``, its first visited one FIRST, the
+def split_part(st: M.Steps, T: int, BN: int, KW: int, tile_of, end, q, kv, b0: int, b1: int):
+    """One split: blocks [b0, b1) of ``kv``'s T keys last to first (``tile_of(nvis, first)``, its first visited one FIRST, the
     keys' last block zero-padded), then ``end``: the split's (o_partial, lse)."""
     B = st.B
     m = l = o = None
@@ -327,13 +347,13 @@ def split_part(st: M.Steps, T: int, BN: int, KW: int, block_of, end, q, kv, b0: 
             row = Coll(Array(KW, st.bf16), concat([st.zero16().refs] * KW))
             kvb = Coll(Array(BN, Array(KW, st.bf16)), concat([kvb.refs] + [row.refs] * (BN - hi + lo)))
         first = b == b1 - 1
-        r = B.call(block_of(hi - lo, True), q, kvb) if first else B.call(block_of(hi - lo, False), q, kvb, m, l, o)
+        r = B.call(tile_of(hi - lo, True), q, kvb) if first else B.call(tile_of(hi - lo, False), q, kvb, m, l, o)
         m, l, o = r[0], r[1], r[2]
     return B.call(end, m, l, o)
 
 
-def head_split(st: M.Steps, S, block_of, unsplit, end, combine_of, q_nope, q_rope, kv):
-    """`SparseMlaHeadSplit`'s body: ``unsplit`` the token's head when NS = 1; else each split's `split_part` (``block_of(nvis,
+def head_split(st: M.Steps, S, tile_of, unsplit, end, combine_of, q_nope, q_rope, kv):
+    """`SparseMlaHeadSplit`'s body: ``unsplit`` the token's head when NS = 1; else each split's `split_part` (``tile_of(nvis,
     first)``, ``end``) and ``combine_of(nsplit)``."""
     B, T, NS, DR, DV, BN = st.B, S.T, S.NS, S.DR, S.DV, S.BN
     check_split_statics(T, NS)
@@ -343,18 +363,18 @@ def head_split(st: M.Steps, S, block_of, unsplit, end, combine_of, q_nope, q_rop
     q = _q(st, KW, q_nope, q_rope)
     lses, parts = [], []
     for b0, b1 in split_blocks(T, NS, BN):
-        e = split_part(st, T, BN, KW, block_of, end, q, kv, b0, b1)
+        e = split_part(st, T, BN, KW, tile_of, end, q, kv, b0, b1)
         parts.append(e[0])
         lses.append(e[1])
     return B.call(combine_of(len(parts)), array_of(lses), array_of(parts))
 
 
-def part(st: M.Steps, S, block_of, end, q_nope, q_rope, kv):
+def part(st: M.Steps, S, tile_of, end, q_nope, q_rope, kv):
     """`SparseMlaSplitPart`'s body: `split_part` over all of its T keys."""
     if S.T < 1:
         raise ValueError(f"SparseMlaSplitPart: T={S.T} keys")
     KW = S.DR + S.DV
-    return split_part(st, S.T, S.BN, KW, block_of, end, _q(st, KW, q_nope, q_rope), kv, 0, -(-S.T // S.BN))
+    return split_part(st, S.T, S.BN, KW, tile_of, end, _q(st, KW, q_nope, q_rope), kv, 0, -(-S.T // S.BN))
 
 
 # --- the Definitions --------------------------------------------------------------------------------------------------------
@@ -376,7 +396,7 @@ def _part_type(S, bf16=BF16, f32=F32):
 
 
 def part_blocks(S, block):
-    """``block``'s binding for `split_part`'s ``block_of(nvis, first)``."""
+    """``block``'s binding for `split_part`'s ``tile_of(nvis, first)``."""
     return lambda nvis, first: bind(block, DR=S.DR, DV=S.DV, NVIS=nvis, FIRST=first, BN=S.BN, DOT=S.DOT, SCALE=S.SCALE)
 
 
@@ -401,6 +421,18 @@ def SparseMlaCombine(B, S, lse, o):
     return combine(word_steps(B), S, S.INV, lse, o)
 
 
+def _combine_lse_type(S, bf16=BF16, f32=F32):
+    return ((("lse", Array(S.NSPLIT, f32)), ("o", Array(S.NSPLIT, Array(S.DV, f32)))), Tuple(Array(S.DV, bf16), f32))
+
+
+@composite("SparseMlaCombineLse", 1, ["NSPLIT", "DV", "INV"], _combine_lse_type, conformance=_COMBINE_LSE_CONF)
+def SparseMlaCombineLse(B, S, lse, o):
+    """`SparseMlaCombine_v1{NSPLIT, DV, INV}` with the row's lse the kernel stores, `logf(sum) + max`: `F32FmaFtz_v2(
+    MufuLg2Ftz_v1(sum), LN2, max)`, sum the butterfly sum the weights divide by and max the warp max before its -inf guard
+    (`_v2`: a NaN lse is the GPU's 0x7FFFFFFF)."""
+    return combine(word_steps(B), S, S.INV, lse, o, with_lse=True)
+
+
 def _head_split_type(S, bf16=BF16):
     return M._head_type(S, bf16)
 
@@ -410,11 +442,11 @@ def SparseMlaHeadSplit(B, S, q_nope, q_rope, kv):
     """One query head over T selected KV rows in NS splits (`split_blocks`): `SparseMlaHead_v1` at NS = 1; else each split's
     `SparseMlaBlock_v1`s last to first (its first visited one FIRST, the token's last block zero-padded), its
     `SparseMlaSplitEnd_v1`, and `SparseMlaCombine_v1` over the non-empty splits."""
-    def block_of(nvis, first):
+    def tile_of(nvis, first):
         return bind(M.SparseMlaBlock, DR=S.DR, DV=S.DV, NVIS=nvis, FIRST=first, BN=S.BN, DOT=S.DOT, SCALE=S.SCALE)
     unsplit = bind(M.SparseMlaHead, T=S.T, DR=S.DR, DV=S.DV, BN=S.BN, DOT=S.DOT, INV=S.INV, SCALE=S.SCALE)
     end = bind(SparseMlaSplitEnd, DV=S.DV, INV=S.INV, SCALE=S.SCALE)
-    return head_split(word_steps(B), S, block_of, unsplit, end, lambda n: bind(SparseMlaCombine, NSPLIT=n, DV=S.DV, INV=S.INV),
+    return head_split(word_steps(B), S, tile_of, unsplit, end, lambda n: bind(SparseMlaCombine, NSPLIT=n, DV=S.DV, INV=S.INV),
                       q_nope, q_rope, kv)
 
 
@@ -429,4 +461,5 @@ def SparseMlaSplit(B, S, q_nope, q_rope, kv):
     return B.batch(hd, q_nope, q_rope, kv, axes=(0, 0, None))
 
 
-SPARSE_MLA_SPLIT_COMPOSITES = [SparseMlaSplitEnd, SparseMlaSplitPart, SparseMlaCombine, SparseMlaHeadSplit, SparseMlaSplit]
+SPARSE_MLA_SPLIT_COMPOSITES = [SparseMlaSplitEnd, SparseMlaSplitPart, SparseMlaCombine, SparseMlaCombineLse, SparseMlaHeadSplit,
+                               SparseMlaSplit]

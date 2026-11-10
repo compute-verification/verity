@@ -85,7 +85,7 @@ def SquaringFloor (F : Field) (e εnum εden : ℕ) : Prop :=
 /-- **`chain-sum`: chained squarings cost their sum.** If one squaring mod `p` costs `e` nonlinear units
 (`SquaringFloor F e ε`), then computing words of the masked `k`-round codec over `F` costs `k · S · e` nonlinear units
 a word, `S = Field.squarings F`: every restricted circuit (`Restricted B`) with the codec's inputs that computes `q`
-distinct words (each below `p`), byte for byte less their parity, on more than `ε` of the draws has
+distinct words (each below `p`), byte for byte less their parity, on more than `ε` of the samples has
 `q · k · S · e · (n − 1) ≤ nonlinear C · (n − 1) + runBits C · k · S · e` (`Gates.EncodeBound`). Each word costs its
 `k · S` squarings, or its `n − 1` bits as run input.
 

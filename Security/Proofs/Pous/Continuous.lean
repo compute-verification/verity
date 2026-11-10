@@ -5,7 +5,7 @@ public import Proofs.Pous.Continuous.Verdict
 public import Proofs.Pous.Continuous.VerdictCode
 public import Proofs.Pous.Continuous.Verifier
 public import Proofs.Pous.Continuous.PerAnswer
-public import Proofs.Pous.Continuous.Band
+public import Proofs.Pous.Chain.Family
 public import Proofs.Pous.Continuous.Complete
 public import Proofs.Pous.Continuous.TimeAverage
 public import Proofs.Pous.Continuous.BandTimeAverage
@@ -26,19 +26,17 @@ responder that runs on its clock. The statements are `Pous.Guarantees.PerAnswer`
 * `Continuous/PerAnswer.lean`: both guarantees from `TimedINC` (`PousContinuous.per_answer`,
   `PousContinuous.continuous_audit`; pinned as `Pous.SecurityProofs.PerAnswer` and
   `Pous.SecurityProofs.ContinuousAudit`).
-* `Continuous/Band.lean`: `ContinuousAudit` on the 64 KiB band at `D = 5` from its unconditional certificate,
-  `ε_proof = 3182352/2^28` (`PousContinuous.band64_continuous`, `band64_epsProof`), not pinned.
 * `Continuous/Complete.lean`: completeness, `Pous.Guarantees.ContinuousComplete`: a responder whose rounds miss at
   rate at most `q` is rejected with probability at most `P[Bin(n, q) > f₀]`, by the graded audit's tail rule
   (`PousContinuous.continuous_complete`; pinned as `Pous.SecurityProofs.ContinuousComplete`). The honest responder
   is the case `q = 0` (`honest_complete`, not pinned).
-* `Continuous/TimeAverage.lean`: the memory challenger draws the arrivals, and the bound reads the memory at every idle
+* `Continuous/TimeAverage.lean`: the memory challenger samples the arrivals, and the bound reads the memory at every idle
   slot (`PousContinuous.continuous_time_average`; pinned as `Pous.SecurityProofs.ContinuousTimeAverage`).
 * `Continuous/BandTimeAverage.lean`: that bound on the `N`-segment band at every `D ≤ 510`, `k ≤ 900`
   (`PousContinuous.band_cont_time_average_row`), and the rows `D = 0, 1, 2, 5`
   (`PousContinuous.band_family_continuous_time_average`; pinned as
   `Pous.SecurityProofs.BandFamilyContinuousTimeAverage`).
-* `Continuous/Verdict.lean`: the verdict as one proof unit, `PousVerdict_v1{K, M, LIMIT}`: its output is `1` iff
+* `Continuous/Verdict.lean`: the verdict as one proof block, `PousVerdict_v1{K, M, LIMIT}`: its output is `1` iff
   `contAccepts M` holds on the records its openings determine (`PousVerdict.verdictProg_accepts`,
   `PousVerdict.verdict_accepts`), not pinned.
 * `Continuous/VerdictCode.lean`: the unit's executable code (`PousCheck.Verdict`, which the difftest runs against the

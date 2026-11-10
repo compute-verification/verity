@@ -2,6 +2,8 @@ module
 
 public import Properties.Pous
 public import Definitions.Pous.P2.Cost
+public import Mathlib.Data.ZMod.Basic
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Proofs of the PoUS setup check's properties (`Properties.Pous`), and what is not a claim

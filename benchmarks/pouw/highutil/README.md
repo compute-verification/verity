@@ -3,7 +3,7 @@
 Llama-3-8B's four linear layers (QKV 6144 x 4096, O 4096 x 4096, gate-and-up 28672 x 4096, down 4096 x 14336) at
 M = 16,384, s8 x s8 with int32 accumulation, called back to back on one RTX PRO 6000 (sm_120) or H200 (sm_90a). Each call goes through
 Dither's no-fold receipt (v31.py's `Fill`, its shapes and commit phase per `verity/core/protocols/pouw/dither/PROTOCOL.md` v3.2) on accel_v31's prover, with a live
-challenger session a period. The report is the certified share: credited MACs over θ's INT8 tensor peak times the wall
+challenger session a period. The report is the utilization: credited MACs over θ's INT8 tensor peak times the wall
 time, and γ against plain cuBLASLt on the same calls, interleaved. The free compute at the GPU is ε_skip + ε_undecl, and
 the protocol's own work counts as verified at the public best's cost, so `breakdown.py` gives each period's time by
 resource for pricing it there; `summary.json` only bounds ε_undecl by 1 - the utilization.
@@ -13,7 +13,7 @@ resource for pricing it there; `summary.json` only bounds ε_undecl by 1 - the u
   small shapes `prep --small` writes, through v31.py's reference prover.
 - The period's GPU driver (`period.GpuDriver`) runs each layer's calls through accel_v31's binding (`v31lib.Prover` over
   `libv31.so`, one Prover a layer, all driven by one thread since the binding's contexts share their streams, each
-  call's commit beside the next call's compute), with both operands of every transformer block on the GPU. L is 16,384,
+  call's commit beside the next call's compute), with both operands of every layer on the GPU. L is 16,384,
   so every call has one segment (S = 1), and under `V31_LTW=1` (run.sh's default) a call at S = 1 takes cuBLASLt's int32
   X W'^T in place of v31's GEMM. Dither's argument covers a segment of at most 8 L' (`T_MAX`), and v31 takes L' <= 1024,
   so a call takes the least L' from 512 to `--lp-max` that covers its K (`period.lp_of`), and down (K = 14,336, which

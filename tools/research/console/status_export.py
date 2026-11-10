@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Verity's security status as one canonical document, `verity/status/v0`, for the site's status page: every guarantee a
-`lean-audit.json` lists, proved outright or resting on named assumptions, each lock's named assumptions, and the results of
+`lean-audit.json` lists, proved outright or resting on premises, each lock's listed premises (its named assumptions,
+`kind` `assumption`, its open premises, `kind` `open` with the `issue` and `due` date that discharge them, and its domain
+hypotheses, `kind` `domain` with the `why` that says what each restricts: part of what a guarantee says, which it doesn't
+rest on), and the results of
 record the tree's data files name. Stdlib only; it reads the tree at one commit through git, never the working files.
 
     status_export.py --root REPO [--rev REV] [--facts DIR] --out FILE
@@ -8,13 +11,14 @@ record the tree's data files name. Stdlib only; it reads the tree at one commit 
 - `packages`: every lock git tracks at REV (default HEAD) outside a `tests/` directory, by the package's path.
 - A guarantee's `assumptions` are those its lock record takes as hypotheses and, with `--facts`, the premises its statement
   takes through its definitions, by the Lean audit's own rule (`premised`). DIR is a Lean audit's output directory
-  (`lean-audit/` of a `check` or records run): `audit-<package path, each run of other characters as _>/facts.json`, and
-  `proved-in-*/facts.json` beside it for the packages its `proved_in` names. A guarantee has `premises_read` when one of
-  those holds it as a theorem whose signature is its lock record's.
+  (`lean-audit/` of a `check` run; a records run keeps only its package's own facts, not its provers'): `audit-<package
+  path, each run of other characters as _>/facts.json.gz`, and `proved-in-*/facts.json.gz` beside it for the packages its
+  `proved_in` names (an older audit's `facts.json` where it holds no `.gz`). A guarantee has `premises_read` when one of those holds it as a theorem whose signature is its lock
+  record's.
 - `status`: `assumes` with an assumption, `proved` with none and its premises read, `unknown` with none and its premises
   not read.
-- `results`: each `art:` id a table's runs of record name (`RENDERERS`, read as literals, never imported) and each example's
-  `[evidence]` (`examples/*/example.toml`); run ids are counted, not exported.
+- `results`: each `art:` id a table's runs of record name (`RENDERERS`, read as literals, never imported) and each demo's
+  `[evidence]` (`examples/*/demo.toml`); run ids are counted, not exported.
 
 The document is written as `canonical` bytes. Prints one JSON line: the counts, the bytes written and their SHA-256.
 """
@@ -23,6 +27,7 @@ from __future__ import annotations
 import argparse
 import ast
 import fnmatch
+import gzip
 import hashlib
 import json
 import os
@@ -36,7 +41,7 @@ SCHEMA = "verity/status/v0"
 LOCK = "lean-audit.json"
 ART = re.compile(r"art:[0-9a-f]{64}")
 RUN = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
-EXAMPLES = "examples/*/example.toml"
+DEMOS = "examples/*/demo.toml"
 #: a table renderer's path -> {the call naming a row's runs of record: how its `what` reads, from the call's first argument}
 RENDERERS = {"benchmarks/harness/verity_bench/served_table.py": {"Protocol": "{}", "Breakdown": "{}, where its time goes by span"}}
 
@@ -67,10 +72,12 @@ def package_of(lock: str) -> str:
 
 
 def facts_sources(facts: Path, package: str) -> list[dict]:
-    """The facts documents a Lean audit wrote for ``package`` under ``facts``: its own, then each `proved_in` package's."""
+    """The facts documents a Lean audit wrote for ``package`` under ``facts``: its own, then each `proved_in` package's,
+    each its `facts.json.gz`, else an older audit's `facts.json`."""
     work = facts / f"audit-{re.sub(r'[^A-Za-z0-9]+', '_', package)}"
-    paths = [work / "facts.json", *sorted(work.glob("proved-in-*/facts.json"))]
-    return [json.loads(p.read_text()) for p in paths if p.is_file()]
+    found = [next((p for p in (d / "facts.json.gz", d / "facts.json") if p.is_file()), None)
+             for d in [work, *sorted(work.glob("proved-in-*"))]]
+    return [json.loads(gzip.decompress(p.read_bytes()) if p.suffix == ".gz" else p.read_bytes()) for p in found if p]
 
 
 def own_modules(f: dict) -> set[str]:
@@ -108,7 +115,7 @@ def premised(lock: dict, sources: list[dict]) -> dict[str, list[str] | None]:
     it}: each premise headed by a constant of an `Assumptions` module or of a module the repository builds, and one that is
     an alias of listed assumptions as those (check.py's `judge` and `assumption_records`)."""
     own = set().union(*map(own_modules, sources)) if sources else set()
-    listed = set(lock.get("assumptions") or {})
+    listed = set(lock.get("assumptions") or {}) | set(lock.get("open") or {}) | set(lock.get("domain") or {})
     heads: dict[str, set[str] | None] = {}
     unfolds: dict = {}
     for name, rec in sorted((lock.get("guarantees") or {}).items()):
@@ -144,18 +151,28 @@ def lean_status(locks: dict[str, dict], facts: Path | None) -> tuple[list[dict],
     packages, guarantees, assumptions = [], [], []
     for path, lock in sorted(locks.items()):
         pkg = package_of(path)
-        gs, named = lock.get("guarantees") or {}, lock.get("assumptions") or {}
-        named = named if isinstance(named, dict) else {}
-        packages.append({"path": pkg, "guarantees": len(gs), "assumptions": len(named)})
+        gs = lock.get("guarantees") or {}
+        named, opened, scoped = (x if isinstance(x, dict) else {} for x in (lock.get(k) or {} for k in (
+            "assumptions", "open", "domain")))
+        packages.append({"path": pkg, "guarantees": len(gs), "assumptions": len(named), "open": len(opened),
+                         "domain": len(scoped)})
         prem = premised(lock, facts_sources(facts, pkg)) if facts else {}
         for name, rec in gs.items():
             read = prem.get(name)
-            got = sorted(set(rec.get("assumptions") or []) | set(read or []))
+            taken = set(rec.get("assumptions") or []) | set(read or [])
+            got = sorted(taken - set(scoped))
             guarantees.append({"name": name, "package": pkg, "owner": rec.get("owner") or "",
                                "statement": list(rec.get("signature") or []), "assumptions": got,
+                               "domain": sorted(taken & set(scoped)),
                                "premises_read": read is not None, "status": status_of(got, read is not None)})
-        assumptions += [{"name": a, "package": pkg, "owner": (r or {}).get("owner") or "", "digest": (r or {}).get("digest")}
-                        for a, r in named.items()]
+        assumptions += [{"name": a, "package": pkg, "owner": (r or {}).get("owner") or "", "digest": (r or {}).get("digest"),
+                         "kind": "assumption"} for a, r in named.items()]
+        assumptions += [{"name": a, "package": pkg, "owner": (r or {}).get("owner") or "", "digest": (r or {}).get("digest"),
+                         "kind": "open", "issue": (r or {}).get("issue"), "due": (r or {}).get("due")}
+                        for a, r in opened.items()]
+        assumptions += [{"name": a, "package": pkg, "owner": (r or {}).get("owner") or "", "digest": (r or {}).get("digest"),
+                         "kind": "domain", "why": (r or {}).get("why"), "cites": (r or {}).get("cites")}
+                        for a, r in scoped.items()]
     key = lambda e: (e["package"], e["name"])  # noqa: E731
     return sorted(packages, key=lambda p: p["path"]), sorted(guarantees, key=key), sorted(assumptions, key=key)
 
@@ -182,12 +199,12 @@ def renderer_records(text: str, calls: dict[str, str]) -> list[tuple[str, str, s
     return out
 
 
-def example_records(text: str, name: str) -> list[tuple[str, str, str | None]]:
-    """(id, what, None) for each run of record an example's `[evidence]` names: its `runs` and each premise's run."""
+def demo_records(text: str, name: str) -> list[tuple[str, str, str | None]]:
+    """(id, what, None) for each run of record a demo's `[evidence]` names: its `runs` and each premise's run."""
     ev = tomllib.loads(text).get("evidence") or {}
-    out = [(r, f"the {name} example's run of record", None) for r in names(ev.get("runs"))]
+    out = [(r, f"the {name} demo's run of record", None) for r in names(ev.get("runs"))]
     for premise, v in sorted((ev.get("premises") or {}).items()):
-        out += [(r, f"{premise}, measured for the {name} example", None) for r in names(v)]
+        out += [(r, f"{premise}, measured for the {name} demo", None) for r in names(v)]
     return out
 
 
@@ -197,8 +214,8 @@ def results(root: Path, rev: str, files: list[str]) -> tuple[list[dict], int]:
     for path, calls in sorted(RENDERERS.items()):
         if path in files:
             found += renderer_records(show(root, rev, path), calls)
-    for path in sorted(p for p in files if fnmatch.fnmatch(p, EXAMPLES)):
-        found += example_records(show(root, rev, path), path.split("/")[1])
+    for path in sorted(p for p in files if fnmatch.fnmatch(p, DEMOS)):
+        found += demo_records(show(root, rev, path), path.split("/")[1])
     arts = {(i, what, table) for i, what, table in found if ART.fullmatch(i)}
     out = [{"art": i, "kind": None, "what": what, "table": table} for i, what, table in sorted(arts, key=lambda t: (t[0], t[1], t[2] or ""))]
     return out, len({i for i, _, _ in found if RUN.fullmatch(i)})
@@ -219,7 +236,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--root", type=Path, required=True, help="the repository")
     ap.add_argument("--rev", default="HEAD", help="the commit whose tree is read (default HEAD)")
-    ap.add_argument("--facts", type=Path, help="a Lean audit's output directory, its audit-*/facts.json")
+    ap.add_argument("--facts", type=Path, help="a Lean audit's output directory, its audit-*/facts.json.gz")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args(argv)
     if a.facts and not a.facts.is_dir():

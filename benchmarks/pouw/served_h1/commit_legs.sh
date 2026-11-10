@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # A served Llama-3.1-8B int8 Commit window's legs on one GPU, one after another: pouw_h1_gpu.py --workload fill --served
 # --commit --negatives --receipts --credit --live-dump (h1u.cu's -hbc build), under `gpu-lease 1`. LEGS: space-separated
-# v1 | j10r | v1-live | j10r-live (j10r: --j10r, J10-R's tile unit). A -live leg draws every window's coins from a live
+# v1 | j10r | v1-live | j10r-live (j10r: --j10r, J10-R's tile unit). A -live leg flips every window's coins from a live
 # gate session (--peer) and needs GATE (the forced-command ssh line to the challenger), CHALLENGER (the window's
 # 127.0.0.1:PORT) and PEER (this node's name in the challenger's /etc/vy/peers). It opens a period at its Commit window
-# (--period, PERIOD, default commit-<UTC>-<leg>: cap 2, the window's session and its draw session, its circuit, draw K,
+# (--period, PERIOD, default commit-<UTC>-<leg>: cap 2, the window's session and its sample session, its circuit, sample K,
 # T and --length, the --declare's fixed length
 # that core's credit holds the window to, and --circuit-files from CIRCUITS: a pouw_h1_circuits --live 32,4 directory
 # of the declared Program, sent with the run), closed once that window's session has ended; it refuses to start while the
-# key's lane (GATE_LANE, default vllm) has a period open, and saves each live leg's Commit session tree and its draw
+# key's lane (GATE_LANE, default vllm) has a period open, and saves each live leg's Commit session tree and its sample
 # session's (GATE fetch, $OUT/<leg>/commit-session.tgz and commit-draw-session.tgz) for pouw_h1_gpu.py --check-challenger
 # (its --draw-dir). The units kernel is built for the node's card
 # (arch.sh: ARCH, 120a or 90a); LEG_ARGS are more pouw_h1_gpu.py flags for every leg (another int8 pin: --base-role

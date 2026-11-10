@@ -1,7 +1,9 @@
 module
 
-public import Proofs.Flock.Soundness.Game.Basic
 public import Flock.Transcript
+public import Definitions.Flock.Game
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # A run of a game, and the rounds a run of the executable consumes

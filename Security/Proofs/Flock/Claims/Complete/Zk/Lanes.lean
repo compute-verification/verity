@@ -1,9 +1,41 @@
 module
 
 public import Proofs.Flock.Claims.Complete.Zk.Skeleton
-public import Proofs.Flock.Claims.DeployRoundsZk
-public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLane
-public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSizes
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployRounds
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSizes
+import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLane
 
 /-!
 # Level 0's lane phase gives its constraints wherever the masked Ligerito returns (`LaneConstraints`)
@@ -40,6 +72,7 @@ theorem lforIn_count {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (sz :
       have := lforIn_count body sz hb n (a + 1) s₁ st₁ t₁ s' st' t' h₂
       omega
 
+-- one proof down `Zk.ligeritoWith`'s unfolded run, a `*_bind` step per bind, each step's state in context
 set_option maxHeartbeats 1000000 in
 /-- **The masked Ligerito's record**: one out-of-domain value and `k0` lane challenges, whatever the hashes are. -/
 theorem zkLigeritoWith_rec (hs : Hashes V) (ms : MerkleScheme) (sch : Schedule) (T : F128)

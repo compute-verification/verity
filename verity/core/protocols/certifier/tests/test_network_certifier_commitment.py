@@ -39,7 +39,7 @@ def test_digest_binds_link_window_status_and_params():
     grid = ((b"x", None),)
     params = GridParams(buckets=1, allocation=2, frame_bytes=1)
     base = record_digest("l", 0, grid, COMPLETE, params)
-    assert len(bytes.fromhex(base)) == 32
+    assert len(bytes.fromhex(base)) == 64
     assert base != record_digest("m", 0, grid, COMPLETE, params)
     assert base != record_digest("l", 1, grid, COMPLETE, params)
     assert base != record_digest("l", 0, grid, Status(Reason.OVERFLOW), params)

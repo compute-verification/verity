@@ -4,6 +4,7 @@ public import Proofs.Accounting.Headline.Encoding
 public import Proofs.Accounting.Headline.Luck
 public import Proofs.Accounting.Headline.Whole
 public import Definitions.Accounting.Guarantees.Headline
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # sm_120's headline at the data sheet

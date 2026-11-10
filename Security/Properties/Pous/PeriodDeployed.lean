@@ -1,6 +1,7 @@
 module
 
 public import Properties.Pous.Period
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # PoUS over one period at the deployed ring budget
@@ -25,15 +26,11 @@ floor give, outside both regions.
   floor still stays within it. `RING_Q = 2^20` key queries and `RING_L = 2^64` ring operations an answer, far above what any device
   does in 854 µs and far below `2^169`.
 * `PeriodHeldDeployed`: `PeriodHeld` at `(RING_D, RING_Q, RING_L)`, so `P2RingAuditSecure` is taken only there.
-* `PeriodHeldHonest`, the honest lemma of `PeriodHeld` and `PeriodHeldDeployed`: at an honest period (`honestRun`, a
-  device that holds all of `C*` in its capacity account at every tick of the session's `105` rounds) and its honest
-  strategy (`honestStrategy`, which keeps all of `C` and answers by lookup), the device model (`DeviceModel`) holds at
-  the deployed budget and the instantiation (`Instantiates`) holds, for every audit under a 32-byte session id; the
-  certificate `HONEST_S = 63,000,000` bits is positive and fits the state bound beside the device's on-chip state and
-  side channel; and the budget is the deadline's at the floor.
-* `PeriodHeldNontrivial`, their nontrivial lemma: at a period whose capacity account holds nothing (`emptyRun`), a
-  verifier that accepts everything fails the conclusion wherever the period's data holds no break, and the bound's
-  event is false at the honest period.
+* The honest period (`honestRun`, a device that holds all of `C*` in its capacity account at every tick of the
+  session's `105` rounds), its honest strategy (`honestStrategy`, which keeps all of `C` and answers by lookup), the
+  empty period (`emptyRun`) and the certificate `HONEST_S = 63,000,000` bits: what the honest and nontrivial lemmas of
+  `PeriodHeld` and `PeriodHeldDeployed`, `PeriodHeldHonest` and `PeriodHeldNontrivial`
+  (`Security/Proofs/Pous/Lemmas/PeriodDeployed.lean`), are stated at.
 
 The step from the deployed device to the ring model is two premises, and no theorem here discharges either: the device
 model (`DeviceModel`: the state at each round boundary within `B + S_chip + ∑ cap_i · round`, and each on-time answer
@@ -72,23 +69,25 @@ def RING_L : ℕ := 2 ^ 64
 
 /-- **PoUS's per-period guarantee at the deployed ring budget.** `PeriodHeld` with `P2RingAuditSecure` and
 `DeviceModel` at `(RING_D, RING_Q, RING_L) = (16,446, 2^20, 2^64)`, the budget `pous-ring-speed` derives from
-`Δ + RTT` and the round floor (this module's header): for every joint run whose capacity coins are the ring game's,
-every period's audit `P`, every prover strategy `τ` of its device under the device model at that budget and the
-instantiation (`Instantiates`), every certificate `S` with `S · len + S_chip + ∑ cap_i · round ≤ S₀` and every value
-of the other audits' coins, the verifier's whole decision accepts the period with no break while the capacity account
-held fewer than `S · len` bit-ticks with probability at most `δ + ε_max`. -/
+`Δ + RTT` and the round floor (this module's header): given the coin commitments' hiding, for every joint run whose
+capacity coins are the ring game's, every period's audit `P`, every prover strategy `τ` of its device under the device
+model at that budget and the instantiation (`Instantiates`), every
+certificate `S` with `S · len + S_chip + ∑ cap_i · round ≤ S₀` and every value of the other audits' coins, the
+verifier's whole decision accepts the period with no break while the capacity account held fewer than `S · len`
+bit-ticks with probability at most `δ + ε_max`. -/
 def PeriodHeldDeployed : Prop :=
-  Pous.P2.Assumptions.P2RingAuditSecure RING_D RING_Q RING_L →
-    ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
-      (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
-      (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) (round : ℕ) (S : ℝ),
-      DeviceModel r P τ RING_D RING_Q RING_L round → Instantiates P τ →
-        S * (r.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ Pous.EndToEnd.S →
-          ∀ o : ΩW × ΩQ,
-            Pouw.pr (fun x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
-                P.Accepts (o.1, o.2, x) ∧ ¬ P.Break (o.1, o.2, x) ∧
-                  (r.held (o.1, o.2, x) : ℝ) < S * (r.win .capacity).len) ≤
-              (Params.δ : ℝ) + Params.εMax.toReal
+  Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131) →
+    Pous.P2.Assumptions.P2RingAuditSecure RING_D RING_Q RING_L →
+      ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
+        (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+        (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) (round : ℕ) (S : ℝ),
+        DeviceModel r P τ RING_D RING_Q RING_L round → Instantiates P τ →
+          S * (r.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ Pous.EndToEnd.S →
+            ∀ o : ΩW × ΩQ,
+              Pouw.pr (fun x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
+                  P.Accepts (o.1, o.2, x) ∧ ¬ P.Break (o.1, o.2, x) ∧
+                    (r.held (o.1, o.2, x) : ℝ) < S * (r.win .capacity).len) ≤
+                (Params.δ : ℝ) + Params.εMax.toReal
 
 /-! ## The honest period -/
 
@@ -125,44 +124,10 @@ def emptyRun : Accounting.Run honestDevice Unit Unit Unit
 looking its block up, with no query, keeping its state. -/
 noncomputable def honestStrategy : Strategy Unit Unit where
   pre _ _ _ C _ := List.ofFn (codeEquiv sch.B sch.ℓ C)
-  step _ _ _ _ σ i := .ret ((codeEquiv sch.B sch.ℓ).symm (fun k => σ.getD k.val false) i, σ)
+  step _ _ _ _ _ σ i := .ret ((codeEquiv sch.B sch.ℓ).symm (fun k => σ.getD k.val false) i, σ)
 
 /-- The honest certificate, in bits on average over the session's `105` rounds: `63,000,000`, within
 `(S₀ − S_chip − c) / 105` (`PeriodHeld`'s peak grading, `Pous.Period`'s header). -/
 def HONEST_S : ℕ := 63000000
-
-/-- **The honest lemma of `PeriodHeld` and `PeriodHeldDeployed`: their hypotheses hold at the honest period.** At
-`honestRun` on `honestDevice`, with one tick a round, and the honest strategy (`honestStrategy`), for every audit `P`
-whose designated session id has 32 bytes, as the memory challenger's ids do: the device model (`DeviceModel`) holds at
-the deployed budget (each answer is a lookup, no query, and the state is `C`'s `FULL` bits, which the account holds at
-every tick), and the instantiation (`Instantiates`) holds (the code's draw never fails, and a lookup returns the
-challenged block of `C`); the certificate `HONEST_S` is positive and fits `S₀` beside the device's on-chip state and its
-side channel's capacity over a round; and the budget is the deadline's at the measured floor (art:23a323f3,
-r20260929-060834-0ec4): `DEADLINE_ROUNDS ≤ RING_D`, with `RING_D + 1` rounds taking at least 1.995 × `LIMIT_NS` at
-`ROUND_NS`. `P2RingAuditSecure` is an open conjecture, not a fact of the instance. -/
-def PeriodHeldHonest : Prop :=
-  (∀ P : Audits Unit Unit, P.sid.size = 32 →
-      DeviceModel honestRun P honestStrategy RING_D RING_Q RING_L 1 ∧ Instantiates P honestStrategy) ∧
-    0 < (HONEST_S : ℝ) * (honestRun.win .capacity).len ∧
-    (HONEST_S : ℝ) * (honestRun.win .capacity).len + honestDevice.chip +
-        ((∑ i, honestDevice.cap i * 1 : ℕ) : ℝ) ≤ Pous.EndToEnd.S ∧
-    DEADLINE_ROUNDS ≤ RING_D ∧
-    (1995 / 1000 : ℚ) * LIMIT_NS ≤ (RING_D + 1) * ROUND_NS
-
-/-- **The nontrivial lemma of `PeriodHeld` and `PeriodHeldDeployed`.** At the empty period, a verifier that accepts
-everything (`P.Accepts` replaced by `True`) fails their conclusion at the certificate `HONEST_S`, wherever the period's
-data holds no break: the account held nothing, so the event has probability 1. And the conclusion's event is false at
-the honest period, for every audit and coin, since its account held `105 · FULL` bit-ticks. A concrete audit with no
-break needs SHA-512 on each of the table's `2^20` strings, so the first conjunct takes it as a hypothesis. -/
-def PeriodHeldNontrivial : Prop :=
-  (∀ (P : Audits Unit Unit) (o : Unit × Unit),
-      (∀ x, ¬ P.Break (o.1, o.2, x)) →
-        ¬ Pouw.pr (fun x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
-            True ∧ ¬ P.Break (o.1, o.2, x) ∧
-              (emptyRun.held (o.1, o.2, x) : ℝ) < HONEST_S * (emptyRun.win .capacity).len) ≤
-          (Params.δ : ℝ) + Params.εMax.toReal) ∧
-    ∀ (P : Audits Unit Unit) (o : Unit × Unit) (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams),
-      ¬ (P.Accepts (o.1, o.2, x) ∧ ¬ P.Break (o.1, o.2, x) ∧
-          (honestRun.held (o.1, o.2, x) : ℝ) < HONEST_S * (honestRun.win .capacity).len)
 
 end Pous.Period

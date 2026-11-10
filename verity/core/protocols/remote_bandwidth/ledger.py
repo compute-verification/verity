@@ -22,7 +22,7 @@ The memory line counts registered blocks only.  δ is the horizon's (the record'
 pass) plus the coin commitment's hiding terms (`hiding`), the receipts' binding term (`binding`), under sketch-sha512
 `timing.sketch_failure` over the session, and the sample's rejection (`rejection`): the statements' δc and δs, and
 `LineHeld`'s Σ_t hide_t, bind and Σ_t k_t/2^64 at the record's `samples`.  `LineHeld`'s error also carries the
-windows' PRF advantages, which are named (`PRF_CLAIM`) and in no δ here.  γ's errors carry `PooledDraw`'s terms beyond
+windows' PRF advantages, which are named (`PRF_CLAIM`) and in no δ here.  γ's errors carry `PooledSample`'s terms beyond
 δ by name (`draw`), which have no hiding term since the prover is sent the coin commitment only at the end, the
 advantages named with their claim and priced in neither."""
 from __future__ import annotations
@@ -46,7 +46,7 @@ REJECTION_LOG2 = 64
 DELTA_PARTS = ("profile", "slack", "hiding", "binding", "sketch", "rejection")
 """The memory line's δ parts (`delta_parts`), in the order `memory` adds them."""
 PRF_CLAIM = "prf/sha-512"
-"""The claim that prices `PooledDraw`'s and `LineHeld`'s Σ_t Adv(prf t), one oracle-access distinguisher a window
+"""The claim that prices `PooledSample`'s and `LineHeld`'s Σ_t Adv(prf t), one oracle-access distinguisher a window
 reading its k_t first blocks: a term with no numeric value, so it is named beside δ and γ's errors and in none of
 them."""
 
@@ -153,9 +153,9 @@ row digest."""
 
 
 def rejection(record: audit.Record) -> float:
-    """The sample's rejection, `PooledDraw`'s and `LineHeld`'s Σ_t k_t/2^64: 2^-`REJECTION_LOG2` a receipt draw t
+    """The sample's rejection, `PooledSample`'s and `LineHeld`'s Σ_t k_t/2^64: 2^-`REJECTION_LOG2` a receipt draw t
     requested, k_t the record's `samples` in every sample (the k at which `DrawsOfRecord` holds), one sample a window, or
-    ⌈W/g⌉ draws at `groups_per_coin` g.  Not the receipts drawn (`profile.drawn`, min(k_t, U_t), short of k_t in a sample
+    ⌈W/g⌉ draws at `groups_per_coin` g.  Not the receipts sampled (`profile.drawn`, min(k_t, U_t), short of k_t in a sample
     that opens all its receipts): the statement's error is a constant, and a sample's U_t is the prover's.  Refused for a
     record that states no `samples`.  Exact: the samples are an integer."""
     if record.samples is None:
@@ -168,7 +168,7 @@ def hiding(record: audit.Record) -> float:
     """The coin commitment's hiding terms over the record's n windows, `LineHeld`'s Σ_t hide_t (`Committed.hide`):
     window t's two distances between coin t's hm96 leaf and a leaf committing zeros, each within 2^-192 under the
     pinned key, n·2^-191 in all (claims `statistical-hiding`, `common-reference-string`, `hash-derived-key`).  The
-    prover is sent the commitment only at the session's end (`coins.py`), so `PooledDraw` reads no hiding term and
+    prover is sent the commitment only at the session's end (`coins.py`), so `PooledSample` reads no hiding term and
     `draw` charges none; the memory line's δ keeps it while `LineHeld` states it."""
     return hiding_over(len(record.windows))
 
@@ -230,7 +230,7 @@ def binding(record: audit.Record, node: Node) -> float:
 
 @dataclass(frozen=True, slots=True)
 class SamplingTerms:
-    """`PooledDraw`'s terms beyond its δ, each by name: the rejection (`rejection`) and the receipts' binding term
+    """`PooledSample`'s terms beyond its δ, each by name: the rejection (`rejection`) and the receipts' binding term
     (`binding`), what reading the record's openings as the deployed draw over receipts its roots hold costs.  `total`
     is their sum.  The windows' PRF advantages Σ_t Adv(prf t) are the third term, which `PRF_CLAIM` prices with no
     numeric value: `to_json` names it, and `total` holds none of it."""
@@ -268,7 +268,7 @@ class Gamma:
     """γ against one R, `capacity_bytes_per_s`: the session's terms (`audit.GammaTerms`, read per window at Wδ, `gamma`,
     and over the horizon at δ, `gamma_horizon`) and `windows`, the same over each span γ is declared over (`windows`:
     a paced session's fixed windows), each as a fraction of R over its own span.  `error` and `error_horizon` are the
-    ledger's with the sketch's term and the draw's (`draw`: `PooledDraw`'s rejection and binding terms, the PRF
+    ledger's with the sketch's term and the draw's (`draw`: `PooledSample`'s rejection and binding terms, the PRF
     advantages named) added: both readings read the record's openings, each window's or pooled."""
 
     capacity_bytes_per_s: float

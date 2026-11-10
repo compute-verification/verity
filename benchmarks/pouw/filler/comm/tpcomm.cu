@@ -840,7 +840,7 @@ struct KCheck {
   bool clean() const { return !whole_bad && !whole_ctl && !warps_bad && !warps_ctl; }
 };
 // up to n whole tiles (their warps' receipts XOR to pfill's dfill_ref; dfill_ref at S - 8 must differ) and n cut warps
-// (kf_ref_warp at their q; at q - KF_PJ must differ) of the launch(es) at slot0.., drawn with rng
+// (kf_ref_warp at their q; at q - KF_PJ must differ) of the launch(es) at slot0.., sampled with rng
 static KCheck kf_sample(const PFill& f, const KRecs& k, int slot0, int nsl, unsigned long long ep, int n, std::mt19937_64& rng) {
   KCheck r;
   const int full = f.full();
@@ -953,7 +953,7 @@ static int pf_gate(Rank& R) {
   return fails;
 }
 
-// after an arm, on the last rep's records: every collective's shape (kf_shape) and n whole tiles and n cut warps drawn
+// after an arm, on the last rep's records: every collective's shape (kf_shape) and n whole tiles and n cut warps sampled
 // over the collectives
 static void pf_check(Rank& R, int n, long* shape_bad, long* cut_warps, KCheck* ck, unsigned long long* pairs_last,
                      unsigned long long* whole_last) {
@@ -966,7 +966,7 @@ static void pf_check(Rank& R, int n, long* shape_bad, long* cut_warps, KCheck* c
   *ck = kf_sample(f, k, 0, f.nslots, ep, n, rng);
 }
 
-// n recorded deferred chunks (q = full, drawn with rng) of the last timed step: each warp receipt against tp_defer_ref_warp,
+// n recorded deferred chunks (q = full, sampled with rng) of the last timed step: each warp receipt against tp_defer_ref_warp,
 // and a control at Sd - 4 fragments that must differ
 struct DCheck {
   long whole = 0, whole_bad = 0, whole_ctl = 0;

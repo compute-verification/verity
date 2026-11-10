@@ -321,6 +321,22 @@ def test_a_word_read_at_another_width_is_refused(how, where, built, monkeypatch)
     assert codes(v) == ["reinterpretation"] and v.reasons[0]["definitions"] == {where: 1}, v.reasons
 
 
+def test_a_field_of_every_row_of_a_mixed_tuple_array_is_checked_by_structure(monkeypatch):
+    """A batch's argument that reads one field of each row of an earlier batch's output (a `Strided` over a mixed-width tuple
+    array, the field wider than the residue cap) is decided by the field's widths, not leaf by leaf: at its own width it passes
+    with `_Widths.leaf` refusing any call, and read at another width or shifted into the next field it is refused."""
+    rows, k, s = 64, 6144, 48
+    row = TupleT((Array(k, S8), Array(s, S32)))
+    W = _Widths((), [type("Out", (), {"out": Array(rows, row)})()])
+    codes = Strided("n", 0, 0, k, row.leaves, 1, rows * k)
+    monkeypatch.setattr(_Widths, "leaf", lambda *_: pytest.fail("checked leaf by leaf"))
+    assert W.first(Coll(Array(rows, Array(k, S8)), codes)) is None
+    assert W.first(Coll(Array(rows, Array(s, S32)), Strided("n", 0, k, s, row.leaves, 1, rows * s))) is None
+    monkeypatch.undo()
+    assert W.first(Coll(Array(rows, Array(k, S32)), codes))[0] == 0
+    assert W.first(Coll(Array(rows, Array(k, S8)), Strided("n", 0, s, k, row.leaves, 1, rows * k)))[0] == k - s
+
+
 def _carry_program() -> tuple[Program, list[int]]:
     """Red team attack 1 in miniature: a column sum by an IMMA chain from zero (in window), then its carry t -> (t mod 256,
     t div 256) by I32Rem and I32Div, a comparison carry by I32Le and SelectI32, a bit carry by U32And, a split-K combine of two

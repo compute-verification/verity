@@ -1,4 +1,4 @@
-"""γ accounting for the PoUW schemes under W1 on the RTX 4090 (the problem statement's cost model; Derived).
+"""Gap accounting for the PoUW schemes under W1 on the RTX 4090 (the problem statement's cost model; Derived).
 
     uv run python benchmarks/pouw/gamma.py [--json OUT] [--workload benchmarks/pouw/workloads.json]
 
@@ -7,10 +7,10 @@ at peak), marks each term checked or unchecked (an unchecked term is work an adv
 derives:
 
 - Ω: W_ref over the work the scheme's conjecture credits (NCP: the 3k-deep GEMM, 3·m·k·n; Pearl: its FP8 GEMM);
-- γ where the scheme names γ_0: γ = 1 − (1 − γ_0)/Ω (Lean `gammaFromTTNCP`), the conservative reduction, at a k with
-  γ_0 >= d/(3k) only (TT_NCP's premise; a shape below it is refused);
-- γ's floor from unchecked work: skippable/W_ref, whatever the conjecture;
-- hashing (free in γ, reported as overhead): hashed bytes and SHAKE256-priced units per useful MAC;
+- the gap g where the scheme names a target gap g₀: g = 1 − (1 − g₀)/Ω (Lean `gapFromTTNCP`), the conservative reduction,
+  at a k with g₀ >= d/(3k) only (TT_NCP's premise; a shape below it is refused); an adversary's advantage is g/(1 − g);
+- the gap's floor from unchecked work: skippable/W_ref, whatever the conjecture;
+- hashing (free in the gap, reported as overhead): hashed bytes and SHAKE256-priced units per useful MAC;
 - the overhead against the plain GEMM of the same datatype, in W1 units.
 
 Prices (problem statement §3.1, measured on one RTX 4090): int8 `mma` 1 per MAC; FP8 `mma` with FP32 accumulate 2 per MAC;
@@ -33,7 +33,7 @@ SHAKE_PER_WORD = 2100
 D = 16                      # NCP's checked depth
 R = 32                      # Pearl's noise rank
 GAMMA0_NCP = Fraction(1, 200)
-WORKLOAD = Path(__file__).with_name("workloads.json")
+WORKLOAD = Path(__file__).resolve().parents[2] / "benchmarks/pouw/workloads.json"
 
 
 @dataclass(frozen=True)
@@ -47,7 +47,7 @@ class Term:
 def ncp_terms(m: int, k: int, n: int) -> list[Term]:
     """Route U at β = 128, f = 24, with sub-word extraction priced:
     the schedule whose biased accumulator is ``ncp-v1``'s checked values (Lean `wrefU 24`).  The retired unbiased sums would
-    cost 36 units per position (γ = 1.08% at n = 2,048)."""
+    cost 36 units per position (a gap of 1.08% at n = 2,048)."""
     return [
         Term("GEMM m x 3k x n, int8 mma (u8 x s8)", 3 * m * k * n * MAC_INT8, True, "the credited work"),
         Term("E_1 fields from hash output, one LOP3 per 4", 4 * m * k, True),
@@ -91,12 +91,13 @@ class Row:
     wref: int
     credited: int
     omega: str
-    gamma: str | None
+    gamma: str | None                     # the gap g and its floor, under verity-pouw/gamma/v1's keys
     gamma_floor: str
     overhead_vs_plain_gemm: str
     hashed_bytes_per_useful_mac: float
     hash_units_per_useful_mac: float | None
     terms: list[dict]
+    eps: str | None = None                # the advantage ε = g/(1 − g)
 
 
 def pct(x: Fraction) -> str:
@@ -105,7 +106,7 @@ def pct(x: Fraction) -> str:
 
 def row(scheme: str, m: int, k: int, n: int) -> Row:
     if scheme == "ncp-v1" and GAMMA0_NCP * 3 * k < D:
-        raise ValueError(f"ncp-v1 at k = {k}: γ_0 = {GAMMA0_NCP} is under d/(3k) = {Fraction(D, 3 * k)}, where TT_NCP is "
+        raise ValueError(f"ncp-v1 at k = {k}: g₀ = {GAMMA0_NCP} is under d/(3k) = {Fraction(D, 3 * k)}, where TT_NCP is "
                          "not claimed (Lean `TTNCP`'s premise; the one-segment adversary wins below it)")
     if scheme == "ncp-v1":
         terms, credited, plain = ncp_terms(m, k, n), 3 * m * k * n, m * k * n * MAC_INT8
@@ -119,7 +120,8 @@ def row(scheme: str, m: int, k: int, n: int) -> Row:
     omega = Fraction(wref, credited)
     gamma = 1 - (1 - GAMMA0_NCP) / omega if scheme == "ncp-v1" else None
     return Row(scheme, (m, k, n), wref, credited, f"{float(omega):.5f}", None if gamma is None else pct(gamma),
-               pct(Fraction(skippable, wref)), f"{wref / plain:.4f}", hashed / (m * k * n), hash_units, [asdict(t) for t in terms])
+               pct(Fraction(skippable, wref)), f"{wref / plain:.4f}", hashed / (m * k * n), hash_units, [asdict(t) for t in terms],
+               None if gamma is None else pct(gamma / (1 - gamma)))
 
 
 def uncovered_fraction(model: dict) -> float:
@@ -142,10 +144,10 @@ def main() -> None:
            "model": model["id"], "uncovered_lm_head_fraction": uncovered_fraction(model)}
     if args.json:
         args.json.write_text(json.dumps(out, indent=1))
-    print(f"{'scheme':14} {'(m, k, n)':22} {'Ω':>8} {'γ':>9} {'γ floor':>9} {'W1 vs plain':>11} {'hash B/MAC':>10}")
+    print(f"{'scheme':14} {'(m, k, n)':22} {'Ω':>8} {'ε':>9} {'gap':>9} {'gap floor':>9} {'W1 vs plain':>11} {'hash B/MAC':>10}")
     for r in rows:
-        print(f"{r.scheme:14} {str(r.shape):22} {r.omega:>8} {r.gamma or '—':>9} {r.gamma_floor:>9} {r.overhead_vs_plain_gemm:>11} "
-              f"{r.hashed_bytes_per_useful_mac:10.4f}")
+        print(f"{r.scheme:14} {str(r.shape):22} {r.omega:>8} {r.eps or '—':>9} {r.gamma or '—':>9} {r.gamma_floor:>9} "
+              f"{r.overhead_vs_plain_gemm:>11} {r.hashed_bytes_per_useful_mac:10.4f}")
     print(f"{model['id']}: lm_head is {out['uncovered_lm_head_fraction']:.1%} of a decode token's GEMM MACs (uncovered)")
 
 

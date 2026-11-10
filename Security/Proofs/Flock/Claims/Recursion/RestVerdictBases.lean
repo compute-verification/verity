@@ -1,9 +1,40 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.VerdictPieces
-public import Proofs.Flock.Claims.Recursion.NextShaDec
-public import Proofs.Flock.Claims.Recursion.DeployChecked
-public import Proofs.Flock.Claims.JsonNorm
+public import Proofs.Flock.Claims.Recursion.VerdictParts
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.JsonNorm
+import Proofs.Flock.Claims.Recursion.DeployChecked
 
 /-!
 # `hrest`'s base checks: the verdict's other checks hold off any witnesses
@@ -11,13 +42,13 @@ public import Proofs.Flock.Claims.JsonNorm
 `decompB_lastSplitP` asks every check the inventory gives no part to hold at the readers' messages of any witnesses
 (`hrest`). Among them are the four checks of `VerdictR` other than the verdict (`VerdictP.bases`), wherever `ownB`
 gives them to no part. At SHA-512 each holds at every decision of `nextR`, from what the outer reader checks of the
-inner statement (`parse_innerOk`: it sets up, its scope check passes, it carries a draw) and what the reading fixes:
+inner statement (`parse_innerOk`: it sets up, its scope check passes, it carries a sample) and what the reading fixes:
 
 * **`.setup`** (`holdsR_setup`): the setup at `hOf sha512` is the statement's (`setupWith_sha512_of`).
 * **`.names`** (`holdsR_names`): the scope check leaves no public inputs, so the rep streams' names are distinct
   (`namesDistinct_of_setup`).
 * **`.shaped`** (`holdsR_shaped`): where the decided proofs are shaped for their files (`DecShaped`).
-* **`.after`** (`holdsR_after`): the last message's statement is the statement (`DecStmt`), the reader's record's draw
+* **`.after`** (`holdsR_after`): the last message's statement is the statement (`DecStmt`), the reader's record's sample
   is the statement's (`DrawTied`), custody passes at the reader's record (`CustodyRecJ`), the scope check passes, and
   the draw-less refusal is not reached.
 
@@ -28,8 +59,8 @@ every coin sequence and every messages, the base check holds (`restBase_holds`).
 **What the reading must fix.** `DecStmt` and `DecShaped` are facts about `decR`: the last message's statement and the
 opened proofs' lengths are the prover's (`rd` reads them from the last message, which `final` assembles from the parts'
 pieces), so no statement fact gives them. `decR` fixes both where it takes the statement for the last message's and
-refuses proofs that are not shaped. `DrawTied` is a statement fact: the session's `unitDraw` is the statement's draw.
-At several tables the setup sets it to the draw; at one table it is read back from the public file's parsed header,
+refuses proofs that are not shaped. `DrawTied` is a statement fact: the session's `unitDraw` is the statement's sample.
+At several tables the setup sets it to the sample; at one table it is read back from the public file's parsed header,
 which the parser makes a well-formed tree (`FlockComplete.JsonRT.parse_wf`).
 -/
 
@@ -59,8 +90,8 @@ def DecShaped (rd : Msg → Option FinalP) : Prop :=
     ∀ (k : ℕ) (hk : k < d.f.ps.size),
       FlockVBridge.Family.ProofShaped (shapeAt (tabsOf d.sts) (pointsOf d.spec d.c₁) k) d.f.ps[k]
 
-/-- **The session's draw is the statement's**: at every statement that sets up and passes its scope check, the draw a
-record carrying the session's `unitDraw` has is the statement's draw up to `JsonEquiv`. -/
+/-- **The session's sample is the statement's**: at every statement that sets up and passes its scope check, the sample a
+record carrying the session's `unitDraw` has is the statement's sample up to `JsonEquiv`. -/
 def DrawTied : Prop :=
   ∀ (x : Msg) (s : FlockDeploy.Ins) (spec : SessionSpec) (sts : Array Stmt), setupOf false x = some (s, spec, sts) →
     s.read.check = .ok () → drawEq (drawOfU spec.unitDraw) s.read.draw = true
@@ -129,8 +160,8 @@ theorem holdsR_shaped (rd : Msg → Option FinalP) (x : Msg) (as : List Msg) (cs
     exact hsh _ hd
   · trivial
 
-/-- **The checks after the verdict pass** where each does: the statement, the draw, custody, the scope check, and a
-drawn session. -/
+/-- **The checks after the verdict pass** where each does: the statement, the sample, custody, the scope check, and a
+sampled session. -/
 theorem checksAtJ_ok_of {s : FlockDeploy.Ins} {spec : SessionSpec} {x : Msg} {link : List ByteArray × List ByteArray}
     {c₁ : Coin} {mids : List (Msg × Coin)} {f : FlockDeploy.FinalJ} {j' : Json} {lv : FlockDeploy.Live}
     (hS : f.stmt = x) (hD : drawEq (drawOfJ f.j) s.read.draw = true) (hL : liveOfJ spec j' = .ok lv)
@@ -145,7 +176,7 @@ theorem checksAtJ_ok_of {s : FlockDeploy.Ins} {spec : SessionSpec} {x : Msg} {li
     Bool.false_eq_true, ↓reduceIte]
   try rfl
 
-/-- **The honest record's draw is its session's `unitDraw`, rebuilt**, as `drawOfJ` reads it. -/
+/-- **The honest record's sample is its session's `unitDraw`, rebuilt**, as `drawOfJ` reads it. -/
 theorem drawOfJ_recordObj (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array ByteArray)
     (points : Array (Array F128)) (streams : Array (Array Flock.Round)) (proofs : Array ByteArray) :
     drawOfJ (FlockComplete.JsonRT.recordObj spec h rootB points streams proofs) =
@@ -157,7 +188,7 @@ theorem drawOfJ_recordObj (spec : SessionSpec) (h : ByteArray → ByteArray) (ro
   | none => rfl
   | some d => cases d <;> first | rfl | exact congrArg some (FlockDeploy.norm_norm _).symm
 
-/-- **Rebuilding one side keeps the draw check** where the other side's draw is already rebuilt. -/
+/-- **Rebuilding one side keeps the sample check** where the other side's sample is already rebuilt. -/
 theorem drawEq_map_norm {a b : Option Json} (hb : ∀ e, b = some e → Flock.norm e = e) (h : drawEq a b = true) :
     drawEq (a.map Flock.norm) b = true := by
   rw [FlockDeploy.drawEq_iff] at h ⊢
@@ -170,7 +201,7 @@ theorem drawEq_map_norm {a b : Option Json} (hb : ∀ e, b = some e → Flock.no
     exact FlockDeploy.JsonEquiv.refl _
 
 /-- **`.after` holds at every decision at SHA-512** on as many coins as messages, of a statement whose scope check
-passes and which carries a draw, where the reading fixes the last message's statement, the session's draw is the
+passes and which carries a sample, where the reading fixes the last message's statement, the session's sample is the
 statement's and custody passes at the reader's record. -/
 theorem holdsR_after (rd : Msg → Option FinalP) (x : Msg) (as : List Msg) (cs : List Coin)
     (hlen : as.length = cs.length)
@@ -206,7 +237,7 @@ def BasesHold (rd : Msg → Option FinalP) : Prop :=
     (cs : List Coin), as.length = cs.length → holdsR FlockDeploy.sha512 rd b (xIOf x) as cs
 
 /-- **The base checks hold** where the reading fixes the last message's statement and refuses unshaped proofs, the
-session's draw is the statement's and custody passes at the reader's record. -/
+session's sample is the statement's and custody passes at the reader's record. -/
 theorem basesHold (rd : Msg → Option FinalP) (hstmt : DecStmt rd) (hsh : DecShaped rd) (hud : DrawTied)
     (hcu : CustodyRecJ rd) : BasesHold rd := by
   intro x st hx b hb as cs hlen

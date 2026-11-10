@@ -6,7 +6,7 @@ public import Proofs.Flock.Claims.Complete.ZkTables.MaskFree
 /-!
 # The deployed masked session's mask tape
 
-`flock-circuit --zk` draws each table's mask-slot words from its tape (`TapeZk.mask`, `STREAM_MASK`: word `k` of table
+`flock-circuit --zk` samples each table's mask-slot words from its tape (`TapeZk.mask`, `STREAM_MASK`: word `k` of table
 `i`'s slot, in `maskWordsOf` order, is `mask i k`), and `ZkTables.honestPR` runs the masked session on the witness with
 those words in the slots (`maskWOf`). The tables' randomness carries each table's slot as bits (`ZkView.Base`'s first
 component, `Fin nMask → Fin 128 → ZMod 2`), which the tables read through `Composed.zWith`.

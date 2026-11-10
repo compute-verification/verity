@@ -6,8 +6,14 @@ public import Proofs.Pouw.H1Zy.CombineBits
 public import Proofs.Pouw.H1Zy.DequantVectors
 public import Proofs.Pouw.H1Zy.Lane
 public import Proofs.Pouw.H1Zy.LaneBits
+public import Definitions.Pouw.H1Zy.Stream
 public import Proofs.Pouw.H1Zy.Tile
 public import Proofs.Pouw.H1Zy.LaneChunk
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.NormNum.Pow
 
 /-!
 # H1's drawn-leaf statements: their Definitions on words mean what `LeafChecks` reads
@@ -37,8 +43,8 @@ lane field.
 `LaneBits`: the lane's body on bits computes it on words (`Pouw.H1Zy.laneBits_bv`), each restated piece's lowering its
 word view (the multiply's, `Pouw.H1Zy.immaS8Bits_bv`, from Baugh–Wooley and the clamp).
 
-`Stream`: at the same `K`, a lane's `ok` over `PouwH1Tile_v3` is its `ok` over `PouwH1Tile_v1` at every seed
-(`Pouw.H1Zy.laneOkZ_eq_laneOk`, `Pouw.H1Zy.laneZ3_eq`).
+`Stream` (`Definitions.Pouw.H1Zy.Stream`): a lane's `ok` over `PouwH1Tile_v3` (`Pouw.H1Zy.laneOkZ` at `laneZ3`). No
+theorem relates it to its `ok` over `PouwH1Tile_v1`.
 
 `LaneChunk`: a lane's `n` chunk statements, each `ok = true`, chunk `c + 1`'s carry in chunk `c`'s carry out, give the
 whole lane's `ok = true` at the chain machine's words on the rows they read joined (`Pouw.H1Zy.laneOk_of_chunks`), and so

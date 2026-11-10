@@ -6,7 +6,7 @@ public import Properties.Pouw.PeriodJ10R
 /-!
 # The served PoUW protocol's work: priced work on the prover's machines from an accepted period
 
-`Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod` says what an accepted period of served H1 (`PouwCheck.Period`,
+`Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod` says what an accepted period of served H1 (`PouwCheck.Credit.periodCredit`,
 the verdict `PouwCheck.Credit.window` on each window, J10-R's noise) fixes: except with probability
 `δ_s + n·(δ_bind + δ_ks)`, its fixed words are at least `(1 − ε(j))₊` of the live words of its windows before the first
 refusal. `ServedWork` turns those words into work: the prover's machines, wherever they ran, spent at least `p` a
@@ -38,9 +38,9 @@ through it. `κ_deg(B)` is `SAKServed`'s degenerate salts at `B` bits of advice,
 advice and program are fixed before its salt (`FixedBeforeSalt`), so its salt is uniform given them and falls in their
 degenerate set with probability at most `κ_deg(B)` (the union over `n` windows).
 
-**What is left out.** The commitment's hashing is not credited, so SHA-512's premise (the SHA analogue of SAK, `SAKSha`;
-`Pouw.Assumptions.ShaSpeed` in Lean) doesn't enter. The proof system's soundness (`ProofSystemSound` in prose) enters as
-the words guarantee's `TileServiceSound`.
+**What is left out.** The commitment's hashing is not credited, so SHA-512's premise (the SHA analogue of SAK,
+`Pouw.Assumptions.SAKSha`) doesn't enter. The proof system's soundness enters as the words guarantee's
+`TileServiceSound`.
 
 **Non-vacuity is open.** 𝓜 as written prices register reductions (a register word that an atomic or a reduction
 writes costs an `alu` lane, and L2 writes are priced), so the four Russians' method pays at least an `alu` lane a MAC.
@@ -112,7 +112,7 @@ def ServedWork : Prop :=
       (j10rAtCoin hr enc place tile)) Pl.game →
     (∀ w, prob (fun x => (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
       (j10rAtCoin hr enc place tile)).MovedIn x w) ≤ δbind) →
-    RegisteredBeforeDraw ws → TileDrawIsCoin σ k hk sT unitOf ws →
+    RegisteredBeforeDraw ws → TileSampleIsCoin σ k hk sT unitOf ws →
     TileServiceSound σ sT unitOf ws opened (pinnedAt (saltOf ws) place tile) δks →
     Properties.Pouw.Period.SaltIsLiveCoin hr (saltOf ws) enc → SharedNoiseLucks Sc Cd Wp →
     UnitFixed Pl (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)

@@ -1,5 +1,6 @@
 module
 
+public import Definitions.Core.TC.Pipeline
 public import Proofs.Core.TC.Proofs.Fold
 
 /-!

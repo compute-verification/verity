@@ -1,15 +1,113 @@
 # verity.ml.circuits
 
-A circuit is gates and the wires between them: each gate produces one value (`Value<w>`, a word of `w` bits) from the
-values on its operand wires. This package writes circuits down compactly and computes on them. A **Program** is one
-circuit, written as calls of **Definitions**: a primitive Definition is one gate with a total evaluator on bit patterns,
-and a composite Definition is a body of calls of other Definitions, possibly batched or scanned. A Program's descriptor
-grows with the number of distinct Definitions it uses, not with its gate count, and every gate still has a fixed index
-in the canonical layout, so any gate can be located, evaluated and selected without expanding the circuit.
+This package writes Verity's circuits down and computes on them, and this README is the way in to all the code that builds,
+evaluates or checks a circuit: this package and its subpackages, the served workloads' Definitions
+(`verity.ml.definitions`), the private circuits (`verity.ml.private_circuits`) and `circuit-check`. It says what the
+words mean, names the one front door for each job, and links each part's README.
 
-Everything here is on the soundness path (`SOUNDNESS_PATH` in `tests/test_boundaries.py`): the verifiers in
+Everything in this package is on the soundness path (`SOUNDNESS_PATH` in `tests/test_boundaries.py`): the verifiers in
 `verity.core` read Programs, their digests and these semantics. The descriptor format, its canonical bytes and its
 digests are specified in [`PROTOCOL.md`](PROTOCOL.md), and `tests/format_vectors.json` pins them.
+
+## Terms
+
+The terms are the [Glossary](../../../ARCHITECTURE.md#glossary)'s; [`GLOSSARY.md`](../../../GLOSSARY.md) holds the rest.
+
+- A **circuit** is gates and the wires between them. A **gate** outputs one bit: the AND or XOR of two or more bits, a NOT,
+  an input gate, or the constant 0 or 1 as one of an operation's own bits. A wire carries its source gate's value and none
+  of its own.
+- A **value** is the bit a gate takes in one run, and the trace is all of them (`evaluation.reference.Trace`). Gates and
+  wires are structure; values are data, and everything a program or a request brings is a value, never a gate. A
+  *registered input* (`RegisteredInput<w>_v1`: weights, a norm's epsilon, a table) is bound when the Program is
+  registered, and a *run input* (`Input<w>_v1`: a request's tokens and parameters) per run, so a Program holds no input's
+  value. A value is always hidden: committed under a hiding leaf and touched only inside a zero-knowledge proof.
+- A **Definition** is a named, versioned piece of circuit, registered in `defs.REGISTRY` under `Name_vN`. A *primitive*
+  Definition is one gate with a total evaluator on bit patterns; a *composite* Definition is a body of calls of other
+  Definitions, batched or scanned, with *statics*, the parameters (a shape, a tensor-core step) its body is written over.
+  A *Boolean Definition* reaches only the Boolean gates, so its meaning is its gates. A *word Definition*'s gates output
+  w-bit words (`Value<w>`) whose meaning is its evaluators' code, and the word library migrates to Boolean Definitions,
+  each a new version of the same name that computes the same function under the word view.
+- A **binding** gives a composite's statics their values: `bind(F, N=64, EPS=1e-05)` is a *specialization*, named by its
+  id (`RMSNormTriton_v1{N=64,EPS=1e-05}`), and only a specialization is a circuit. A **Program** (`Program(spec)`) is one
+  circuit stored compressed as Definitions called from a root body: its descriptor grows with the number of distinct
+  Definitions it uses, not with its gate count, and every gate keeps a fixed index in the canonical layout, so any gate can
+  be located, evaluated and selected without expanding the circuit. Each Definition module's *binding file*,
+  `<module>.circuit-check.py` beside it, lists the bindings circuit-check checks its Definitions at, and its
+  `<module>.circuit-check.json` pins what their lowerings measure; one unit of a binding file is a *binding unit*.
+
+## Front doors
+
+### Building a circuit: the Definition catalog
+
+[`catalog.load()`](../definitions/registry/catalog.py) (`verity.ml.definitions.registry.catalog`) returns `(REGISTRY,
+errors)` with every module of the registry imported, and `catalog.load(("registry", "ops"))` the primitive circuits'
+modules too (`SCOPES`). A module that fails to import is named in `errors`, never read as "not registered". Everything that
+resolves a Definition by id goes through it, so a new module's Definitions resolve everywhere, not only where someone
+imported the module:
+
+```python
+from verity.ml.circuits import Program, bind
+from verity.ml.definitions.registry import catalog
+
+REGISTRY, errors = catalog.load()                         # errors == []
+rms = bind(REGISTRY["RMSNormTriton_v1"], N=64, EPS=1e-05)
+program = Program(rms)                                    # the specialization's root circuit
+```
+
+A new Definition is written with `defs.primitive` or `defs.composite` in a module of `verity.ml.circuits.ops` (a primitive
+circuit) or of `verity.ml.definitions.registry` (a served kernel), with a binding in its module's binding file:
+circuit-check's suite fails a registered Definition family no binding reaches.
+
+### Evaluating: `verity.ml.circuits.evaluation`
+
+`evaluate(target, *args)` is the reference and the default: it runs a Definition gate by gate on plain integers, and it
+defines what is correct. `evaluate_batch(target, *arrays)` evaluates a batch over numpy arrays through the kernel
+registered for the Definition when there is one (`kernel="auto"`), and computes every input the kernel declines, or all of
+them when none is registered, with the reference (bit-sliced, for a Boolean Definition); `kernel="reference"` forces the
+reference. A kernel is speed only: `register_kernel` registers it beside what it computes, and `self_check` holds it to the
+reference bit for bit. `evaluate_bits` evaluates a Boolean Definition bit-sliced, 64 inputs per machine word. The served
+Definitions' fast evaluators are `verity.ml.definitions.numerics`'s, registered the same way.
+
+### Checking: `circuit-check`
+
+[`circuit-check`](../../../tools/verity/circuit_check/README.md) holds every circuit to the property checks: correspondence
+with the reference on every realization, the declared port intervals, redundant and dead gates, and the partition. A
+change that adds or modifies a circuit passes `uv run circuit-check <definition|template|row>`, with its report in the PR.
+
+- `check` runs it as its `circuit-check` step (`tools/verity/check/check.py`): `circuit-check --all`, every registered
+  Definition and template, each target's pass kept in check's cache (`--cache`, `--catalog-units`) and reused while
+  everything it read is unchanged. A shard of the check runs only its shards of the targets (`--shard K/N`), and
+  `circuit-check --combine` joins them. Drive's sharded after-landing run first builds every catalog binding's record once,
+  in check's records step (`--cc-records`: `circuit-check --all --records-only`), and gives each shard those records
+  (`--cc-records-from`). The step is off the merge gate (`off_gate` in `tools/verity/check/policy.toml`), so it runs after
+  landing.
+- The fine-grained check ([`verity graph`](../../../tools/verity/graph/README.md)) has circuit-check as one
+  `circuit-catalog` task, which builds those records, one `circuit-binding` task per catalog binding, which checks only that
+  binding's targets from them (`circuit-check --all --catalog-units --binding NAME`), and a `circuit-coverage` task, which
+  holds the bindings circuit-check makes to the ones the tasks list
+  (`tools/verity/graph/verity_graph/families/circuit_binding.py`).
+
+### Regenerating pins and fixtures: `tools/verity/check/pins.py`
+
+`python tools/verity/check/pins.py` lists every tracked file a command regenerates from the tree, with its command, and
+`--stale` and `--regen` find and rewrite the stale pins. This package's test vectors (`tests/format_vectors.json`,
+`tests/boolean_vectors.json` and the others its `WRITERS` lists) are each rewritten only by
+`uv run python tools/verity/check/pins.py --write PATH`, the command a failing test names. A lowering pin in a
+`.circuit-check.json` is circuit-check's own: `uv run circuit-check TARGET --update-pins` writes what the target measures
+now, and the diff is reviewed.
+
+## The parts
+
+| Part | What it holds |
+| --- | --- |
+| this package (below) | Definitions and Programs, their encoding, queries, evaluation, partitions and accounting views |
+| [`ops`](ops/README.md) | the primitive circuits' Definitions, and their Boolean versions (`ops.boolean`) |
+| [`silicon`](silicon/README.md) | the GPUs' exact semantics: tensor-core steps, the FP32 pipe, casts |
+| [`targets`](targets/README.md) | the subcircuits a proof system is asked to prove |
+| [`boolean`](boolean/README.md) | the Boolean core: the three gates, the word view, the GF(2) helpers that write gates |
+| [`verity.ml.definitions`](../definitions/README.md) | the served workloads' Definitions, their Boolean versions and fast evaluators |
+| [`verity.ml.private_circuits`](../private_circuits/README.md) | the universal unit, one public Definition that runs any private circuit of a size class |
+| [`circuit-check`](../../../tools/verity/circuit_check/README.md) | the property checks every circuit passes |
 
 ## Example
 
@@ -49,26 +147,24 @@ calls.count(), calls.by_index(2)        # (4, GateSet(2 gates; [12:14]))
 
 ## Definitions and Programs
 
-- `types` (`Value`, `Array`, `Tuple`, `Record`): a value is the only leaf; arrays, tuples and records are static
-  collections of references to values, not structured values. `refs` builds collections of references (`tuple_of`,
-  `array_of`, `record_of`).
+- `types` (`Value`, `Array`, `Tuple`, `Record`): `Value(w)` is the only leaf, a w-bit word; arrays, tuples and records are
+  static collections of references to leaves, not structured values. `refs` builds collections of references
+  (`tuple_of`, `array_of`, `record_of`).
 - `defs`: `primitive(name, version, params, ret)` registers a primitive with its evaluator; `composite(name, version,
-  statics, signature)` registers a composite whose body a builder function writes with `B.call`, `B.batch` (one call per
+  statics, signature)` registers a composite whose body function writes it with `B.call`, `B.batch` (one call per
   member, along the given axes) and `B.scan` (a carried state over iterations). `bind(F, **statics)` fixes a composite's
-  statics; the result is a specialization, named by an id such as `RMSNormTriton_v1{N=64,EPS=1e-05}`. Every Definition is
-  registered in `defs.REGISTRY` under `Name_vN`.
+  statics.
 - `program`: `Program(fn)` lowers a fully bound composite to its root circuit: one input gate per leaf of each parameter,
-  then the body. A parameter is bound per run (a run input, `Input<w>_v1`: tokens, temperature) unless
-  `Program(fn, registered=names)` names it as bound at registration (a registered input, `RegisteredInput<w>_v1`: weights,
-  a norm's epsilon). Either way the Program holds no input's value. `theta=names` marks the model's weights.
+  then the body. A parameter is a run input unless `Program(fn, registered=names)` names it as a registered input.
+  `theta=names` marks the model's weights.
 - `layout`: the canonical layout (`Circuit`): body order, one interval per call, batch members and scan iterations
   consecutive, gate counts cached per specialization, so gate `i` is found by division.
 - `constants` and `operations`: what may be a gate and what must be a value. An operation's own definition is gates (a
-  format's constants, SHA-512's round constants, the measured GPU tables); everything a program or a request brings is a
-  value, and `operations.program_data` lists any data a Program's gates still hold (empty exactly when they hold
-  none).
+  format's constants, SHA-512's round constants, the measured GPU tables); `operations.program_data` lists any data a
+  Program's gates still hold (empty exactly when they hold none).
 - `ports`: what a Definition declares about its values beyond their widths (intervals, sinks, input kinds; `PROTOCOL.md`
-  §12), held at `Program` construction and when a descriptor is decoded.
+  §12), held at `Program` construction and when a descriptor is decoded. `metadata`: names, descriptions and formats of a
+  Program's parts, outside every digest.
 - `library`: the hardware and protocol objects core owns, each labelled `library`.
 
 ## Encoding
@@ -85,25 +181,6 @@ set of gate intervals. Results may overlap or leave gates out; whether a family 
 `//HalfAdder_v1`), `members`, `nodes`, `each`, `concat`, `union`, `minus`, `inter`, `where`, `root`; the module's
 docstring states each. `parse(text)` reads a query from its text form, and `to_json`, `from_json` and `query_id` (in
 `query_codec`) give a query a canonical encoding and a SHA-512 id.
-
-## Evaluation
-
-`evaluation` computes values. `evaluate(target, *args)` runs a Definition on one input of plain integers, gate by gate
-(the reference every fast path is checked against). `evaluate_batch` runs it over numpy arrays through a registered
-kernel (`register_kernel`) where one covers the specialization, and falls back to the reference where none does or the
-kernel declines; `self_check` holds a kernel to the reference. `evaluate_bits` runs a Boolean Definition bit-sliced, 64
-instances per machine word.
-
-## The Boolean profile
-
-`boolean` is the profile every proof works over (`PROTOCOL.md` §9): three gates on 1-bit wires, `And<n>_v1`, `Xor<n>_v1`
-and `Not_v1`, and the two constant bits. A Boolean Definition uses only those, through every call (`is_boolean`). A
-Boolean Definition names the word Definition it computes, and its **word view** reads its bit arrays as that Definition's
-words (`elements`). `boolean.forms` is a GF(2) circuit builder that counts ANDs, `boolean.trace` turns a builder's run
-into a Boolean Definition, and `boolean.gather` and `boolean.table` select a word, or a table entry, by an index.
-
-Word Definitions (a primitive on 32-bit words with a Python evaluator, say) are the older form: what such a gate computes
-is its evaluator's code. Each is being replaced by its Boolean version (`ops.boolean`), whose meaning is its gates.
 
 ## Partitions and proof blocks
 
@@ -126,23 +203,10 @@ Pure functions of a Program, read by the resource audits:
 
 - `census`: `verity/census/v1`, what a Program computes, counted by class, and the values its root's calls pass.
 - `liveness`: dead gates (`dead_gates(program)`), those no output depends on.
-- `requirement` and `requirement_units`: a declared circuit's memory requirement from its wiring and schedule, and its
+- `requirement` and `requirement_units`: a registered circuit's memory requirement from its wiring and schedule, and its
   two proof blocks (the plan, and the memory map).
 - `stacking`: the stacking property over a Program and its census.
 - `population`: the population Programs a window registers under a template query.
-
-## Subpackages
-
-- `ops`: the hardware-faithful semantics of ML primitives (FP32 and BF16 arithmetic, MUFU tables, GEMM steps, softmax,
-  norms, quantization, MoE routing), registered as Definitions; `ops.boolean` holds their Boolean versions. Each module's
-  docstring says what it registers, and each Definition module has a circuit-check sidecar beside it
-  (`tools/verity/circuit_check/`).
-- `silicon`: the exact semantics of one tensor-core accumulator step per instruction class (`models`: `GroupSum`,
-  `BlockScaledAlignAdd`), operand formats (`term`), and `instructions.INSTRUCTIONS`, which says for each instruction which
-  model it uses and whether that model is pinned by captures or not yet probed. `benchmarks/tc_probe/` and
-  `benchmarks/tc_probe_fp4/` capture the hardware these models are held to.
-- `targets`: `target.Target`, a subcircuit with every parameter bound, the exact function a proof system is asked to
-  prove; `target.TARGETS` lists them, frozen or draft.
 
 ## Tests
 

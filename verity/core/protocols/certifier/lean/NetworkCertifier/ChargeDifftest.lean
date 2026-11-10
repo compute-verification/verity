@@ -1,7 +1,8 @@
 module
 
 public import NetworkCertifier.AdviceV1
-public import Lean.Data.Json
+public import Lean.Data.Json.FromToJson.Basic
+public import Lean.Data.Json.Parser
 
 /-!
 # The charge's difftest: advice v1's charge against `arith_encode.reference_charge`, on random instances

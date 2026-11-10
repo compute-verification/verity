@@ -1,11 +1,24 @@
 module
 
 public import Proofs.Flock.VBridge.Family.Rep
-public import Proofs.Flock.VBridge.Family.Openings
 public import Proofs.Flock.VBridge.Family.Files
-public import Proofs.Flock.VBridge.Family.Commits
 public import Proofs.Flock.VBridge.Family.Tape
 public import Proofs.Flock.VBridge.Algebra.Schedule
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Defs
+import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
 # The family's joins
@@ -221,8 +234,8 @@ def FoldsOk (st : Setup) (sh : Shape) : Prop :=
     ∃ c, st.fold.folded info.lc.fold.alpha info.lc.fold.beta info.lc.fold.lw info.lc.fold.rhoIn info.lc.fold.ts =
       .ok c ∧ c.size = 64
 
-/-- **`verifierRows`' rounds are the ones `verifyRep` draws** (Verify.lean:43-48, RecAlgebra.lean:824-829): the sizes
-`verifierRows` takes at `sh`, none of them 0, have the counts `run_of_frames` draws (`CoinsShaped`), for `n` extra
+/-- **`verifierRows`' rounds are the ones `verifyRep` samples** (Verify.lean:43-48, RecAlgebra.lean:824-829): the sizes
+`verifierRows` takes at `sh`, none of them 0, have the counts `run_of_frames` samples (`CoinsShaped`), for `n` extra
 claims and at least as many Ligerito rounds as any proof's frames (`ligFrames`) chunk into. A fact of the two programs
 at the shape, as `ShapeIs` is. -/
 def CoinsAgree (st : Setup) (sh : Shape) (sch : Flock.Schedule) (n : ℕ) : Prop :=

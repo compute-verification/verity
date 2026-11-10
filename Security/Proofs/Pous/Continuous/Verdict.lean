@@ -2,11 +2,51 @@ module
 
 public import Proofs.Flock.Claims.Sampling.Universal
 public import Definitions.Pous.Model.Continuous
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.Int.Star
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Data.Nat.Size
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.BitVec
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The PoUS verdict unit decides the continuous audit's verdict
 
-`PousVerdict_v1{K, M, LIMIT}` (`verity/core/protocols/pous/verdict_circuit.py`) is one proof unit in the Boolean
+`PousVerdict_v1{K, M, LIMIT}` (`verity/ml/protocols/pous/verdict_circuit.py`) is one proof block in the Boolean
 profile. Its inputs are committed values: the `K` rounds' records as the memory challenger writes them
 (`u32 j ‖ u64 index ‖ u64 send_ns ‖ u64 receipt_ns ‖ H(block)`), then the expected digests of the blocks they
 challenged. Its one public output is the verdict. `verdictProg` restates its gates (`verdict_circuit.gates`) builder for
@@ -27,7 +67,7 @@ Composing this with sampling's knowledge soundness into the proof layer's soundn
    Definition's compiled circuit to that code at the statics it runs; no Lean reads the deployed descriptor into gates.
 2. The openings are what the audit committed. The records must sit under a hiding commitment that the memory
    challenger's signature binds (its records tree's leaves are not hiding hm96 rows yet). Each expected digest must be
-   read from the setup-committed digest table at the round's drawn index; a registered port reads one position per
+   read from the setup-committed digest table at the round's sampled index; a registered port reads one position per
    unit, so the unit's `K` reads need a port that reads several.
 3. The deployed records are the model's: `verdicts LIMIT os` are `contRecords`' verdicts. That takes the device
    writing `j` and its clocks as specified, `LIMIT` standing for the model's `(D, Q)` deadline, and SHA-512's collision

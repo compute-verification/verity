@@ -1,4 +1,4 @@
-"""The Lean verifier of record of a served window's live@<s> statements (`PouwCheck.LiveVerified`,
+"""The Lean verifier of a served window's live@<s> statements (`PouwCheck.LiveVerified`,
 `pouw-check-difftest`'s ``credit-live-verified``) held to its Python reference, `credit._live_asks` and
 `credit._live_verified`, on `pouw_live_verified_cases`: with `runs` null, the verifier runs the Lean names (or the
 verdict, when it names none); with the answers, the verdict, each round's outcome or the refusal, string for string.

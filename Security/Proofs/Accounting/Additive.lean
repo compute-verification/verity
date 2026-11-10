@@ -2,9 +2,8 @@ module
 
 public import Definitions.Accounting.Guarantees.Additive
 public import Proofs.Core.Accel.Model
-public import Mathlib.Algebra.BigOperators.Intervals
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Algebra.Order.Ring.NNRat
+import Mathlib.Data.Nat.SuccPred
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Compute additivity's capacity from the machine model 𝓜: proofs

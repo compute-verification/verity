@@ -1,7 +1,8 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Exec.SessionSoundL
-public import Proofs.Flock.Soundness.SessionAcc
+public import Proofs.Flock.Soundness.ExtractAcc
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # Knowledge soundness of a salted table in the session, from accepted reruns

@@ -51,8 +51,9 @@ sys.path[:0] = [str(HERE), str(REPO / "benchmarks/network_traces")]
 import leak_scan as LS  # noqa: E402
 import served_tie_window as STW  # noqa: E402
 import served_tie_zk as STZ  # noqa: E402
-from verity.core.protocols.certifier import served_rows as SR, served_statics as SS, served_tie as ST  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registered as REG  # noqa: E402
+from verity.core.protocols.certifier import served_rows as SR  # noqa: E402
+from verity.ml.protocols.certifier import served_statics as SS, served_tie as ST  # noqa: E402
+from verity.core.protocols.spot.one_stage import registered as REG  # noqa: E402
 
 CLASSES = {k: {s: c[s] for s in ("R", "P", "IW", "L", "T")} for k, c in STZ.CLASSES.items()}
 OPENED = ("o0", "pub")
@@ -236,7 +237,7 @@ def audit(M, N2, a, sg, m: dict, units: list, d: SimpleNamespace, out: Path, por
         want[f"{name}/{p_}"] = wd
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": wd["leaves"], "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
-    law = M.D.parse_law(f"stratified:{n}")
+    law = M.D.parse_design(f"stratified:{n}")
     win = {"kind": "stand-in", "of": f"the served rows held to their Programs' statics on a sealed served window "
                                       f"({a.serve_run.name} w{a.window})",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},

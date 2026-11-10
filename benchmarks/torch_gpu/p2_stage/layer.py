@@ -1,4 +1,4 @@
-"""One layer of the frozen shape through the staging decode on one GPU, and the exact W8A8 GEMMs on what it staged.
+"""One layer of the frozen shape through the store's load on one GPU, and the exact W8A8 GEMMs on what it loaded.
 
     python layer.py --layout LAYOUT --weights M [--w W] (--encoded ENC --source HEX --commitment HEX | --store DIR
                     --salt HEX) --lib LIB --out OUT [--layer 0] [--steps toy,encode,stage,gemm] [--toy TOY]
@@ -6,7 +6,7 @@
 
 - `LAYOUT` is the store's layout, p2_v1's fixture (`p2_v1/store.py layout`'s JSON), read by
   `layout.store_layout`. `M` is the weights stream's manifest (`e2e_h200.served_weights manifest`; with `--digests`,
-  each tensor's SHA-256, which every staged tensor is held to) and `W` a file holding the stream's bytes at their stream
+  each tensor's SHA-256, which every loaded tensor is held to) and `W` a file holding the stream's bytes at their stream
   offsets (`weights write`), at least the layer's; without `W`, the few stream bytes a run reads (the scales, a
   matrix's last label) come from the seeded generator (`--generator`, `--shape`, `--weights-seed`).
 - `ENC` is an encoded store (`p2_v1/store.py encode`'s directory, memory-accounting's, read only): the layer's rows from
@@ -14,7 +14,7 @@
   commitment its `setup.json` is held to (`layout.store_salt`). `DIR` is a development store instead: `c.bin`, the
   encoded rows of the layer's blocks, and `c.json` (the first block, the count, how many are encoded so far, and the
   digests of the prefix, the layout and the weights manifest), encoded here under the public test salt `HEX`.
-- **toy**: the fixture's toy store (`TOY`, `store-toy/`) through the same decode: each layer's staging buffer against
+- **toy**: the fixture's toy store (`TOY`, `store-toy/`) through the same decode: each layer's load buffer against
   `toy.json`'s digest, each negative block refused with its flag (and the other layer not), another salt refused, and
   the spot vectors (blocks at the real store's indices, `spot.json`) decoded to their payloads' digests.
 - **encode** extends the store in block order by the library's `p2v1_encode` for `S` seconds (or `N` blocks), each chunk
@@ -22,18 +22,18 @@
   (1,307,915 blocks, two roots a block) can span several leases. QKV and O are its first 262,401 blocks, up the next
   522,757, down the last 522,757.
 - **stage**, for each matrix whose blocks are all encoded: its rows onto the GPU, a buffer poisoned with 0xA5,
-  `stage.decode_matrix`, the staged bytes against the stream's (mismatching bytes and blocks) and each of its tensors
+  `stage.decode_matrix`, the loaded bytes against the stream's (mismatching bytes and blocks) and each of its tensors
   against the manifest's SHA-256, and `reps` timed decodes;
-  once all four are encoded, `stage.decode_layer` into one poisoned staging buffer, timed and held to the four matrices
-  at their staging offsets and zero between them; and controls on the last 64 blocks of a matrix: other keys, one
+  once all four are encoded, `stage.decode_layer` into one poisoned load buffer, timed and held to the four matrices
+  at their load offsets and zero between them; and controls on the last 64 blocks of a matrix: other keys, one
   corrupted row, one row at p and a last block nonzero past the matrix's end, each refused with its flag, and the honest
   blocks passed.
-- **gemm**, for each batch M and each staged matrix: x [M, K] s8 and sx [M] f32 seeded on the device (rows 0, 1 and 2
+- **gemm**, for each batch M and each loaded matrix: x [M, K] s8 and sx [M] f32 seeded on the device (rows 0, 1 and 2
   all -128, all 127 and all 0), the stream's f32 scales sw (held to the manifest's SHA-256), `int_mm.linear` (s8_linear's int_mm backend, eager epilogue) timed,
   every output word against `gemm.twin`, and samples for `check.py`. With all four, the implied step at each M: 52 layers
   x (the layer's `decode_layer` + its four GEMMs).
 
-Writes `OUT/layer.json` (one record per step and matrix) and `OUT/samples-<matrix>-m<M>.npz`; exits 1 if a staged byte
+Writes `OUT/layer.json` (one record per step and matrix) and `OUT/samples-<matrix>-m<M>.npz`; exits 1 if a loaded byte
 or digest, a GEMM word, the toy or a control isn't as it should be.
 """
 from __future__ import annotations
@@ -51,10 +51,14 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "s8_linear"))
-import gemm as G
 import int_mm as IM
+
+import gemm as G
 import layout as L
 import stage as S
+
+# isort: split
+# p2_v1 is importable once layout has put benchmarks/pous on sys.path
 from p2_v1 import gpu
 
 LAYERS = 52
@@ -160,7 +164,7 @@ class EncodedStore:
         return out
 
 
-def encode(args, lay: L.StoreLayout, src: L.Weights, read: L.Read, dev: DevStore, out: Out) -> None:
+def encode(args: argparse.Namespace, lay: L.StoreLayout, src: L.Weights, read: L.Read, dev: DevStore, out: Out) -> None:
     kern = gpu.Kernels(str(args.lib), "", lay.spec, lay.prefix)
     kern.raised()
     t0, n0 = time.monotonic(), dev.meta["done"]
@@ -191,8 +195,9 @@ def ready(lay: L.StoreLayout, dev: DevStore, layer: int) -> list[str]:
             if e.start <= lay.tensor(layer, n).first_block and lay.tensor(layer, n).block_range.stop <= e.stop]
 
 
-def against_stream(lay, src: L.Weights, read: L.Read, layer: int, name: str, buf) -> dict:
-    """Mismatching bytes and blocks of the staged matrix `buf` against the stream's bytes of it."""
+def against_stream(lay: L.StoreLayout, src: L.Weights, read: L.Read, layer: int, name: str,
+                   buf: torch.Tensor) -> dict:
+    """Mismatching bytes and blocks of the loaded matrix `buf` against the stream's bytes of it."""
     t = lay.tensor(layer, name)
     ne = S.flat(buf) != to_device(src.read(src.parts(layer, name), 0, t.size, read))
     k = int(ne.sum())
@@ -223,7 +228,8 @@ def scales(src: L.Weights, read: L.Read, layer: int, name: str, n: int) -> torch
     return to_device(data).view(torch.float32)
 
 
-def stage(args, lay, src, read: L.Read, dev, out: Out, layer: int) -> tuple[dict, float | None, bool]:
+def stage(args: argparse.Namespace, lay: L.StoreLayout, src: L.Weights, read: L.Read, dev: DevStore | EncodedStore,
+          out: Out, layer: int) -> tuple[dict, float | None, bool]:
     staged, whole_s, ok = {}, None, True
     names = ready(lay, dev, layer)
     out.record(step="stage", ready=names, encoded=[dev.encoded.start, dev.encoded.stop])
@@ -241,7 +247,7 @@ def stage(args, lay, src, read: L.Read, dev, out: Out, layer: int) -> tuple[dict
         cw = against_stream(lay, src, read, layer, name, w) if args.w else None
         dw = against_manifest(src, layer, name, host)
         if cw is None and dw is None:
-            raise SystemExit("nothing to hold the staged bytes to: give --w or a weights manifest with digests")
+            raise SystemExit("nothing to hold the loaded bytes to: give --w or a weights manifest with digests")
         ok &= (cw is None or cw["mismatched_bytes"] == 0) and (dw is None or all(dw.values()))
         ts = S.timed(lambda: S.decode_matrix(store, layer, name, w), args.reps, DEVICE, warmup=1)
         out.record(step="stage", matrix=name, tensor=t.name, shape=[t.n, t.k], first_block=t.first_block, blocks=blocks,
@@ -281,7 +287,8 @@ def run_window(st: S.EncodedRows, offset: int, size: int) -> tuple[int, str | No
     return 0, None
 
 
-def controls(args, lay, src, read: L.Read, store: S.EncodedRows, out: Out, layer: int, name: str) -> bool:
+def controls(args: argparse.Namespace, lay: L.StoreLayout, src: L.Weights, read: L.Read, store: S.EncodedRows,
+             out: Out, layer: int, name: str) -> bool:
     """Other keys, a corrupted row, a row at p and a last block nonzero past the matrix's end, each among the last 64
     blocks of `name`: each refused with its flag bit among those it raises (other keys' garbage is nonzero past the end
     too), and the honest blocks passed."""
@@ -323,7 +330,7 @@ def negative_row(neg: dict, c_star: bytes) -> bytes:
     return S.P_BYTES if neg["c"] == "p" else bytes.fromhex(neg["c"])
 
 
-def toy(args, out: Out) -> bool:
+def toy(args: argparse.Namespace, out: Out) -> bool:
     doc = json.loads((args.toy / "toy.json").read_text())
     spot = json.loads((args.toy / "spot.json").read_text())
     c_star, spot_c = (args.toy / "c-star.bin").read_bytes(), (args.toy / "spot-c.bin").read_bytes()
@@ -378,8 +385,8 @@ def activations(M: int, K: int, gen: torch.Generator) -> tuple[torch.Tensor, tor
     return x, sx
 
 
-def gemm(args, staged: dict, out: Out) -> tuple[dict[int, float], bool]:
-    """Each staged matrix at each batch M: the layer's GEMM seconds per M (all four matrices), and whether every output
+def gemm(args: argparse.Namespace, staged: dict, out: Out) -> tuple[dict[int, float], bool]:
+    """Each loaded matrix at each batch M: the layer's GEMM seconds per M (all four matrices), and whether every output
     word equals the twin's."""
     gen = torch.Generator(device=DEVICE).manual_seed(args.seed)
     cpu = torch.Generator().manual_seed(args.seed)
@@ -408,7 +415,7 @@ def gemm(args, staged: dict, out: Out) -> tuple[dict[int, float], bool]:
     return totals, ok
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     global DEVICE
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--layout", type=Path, required=True, help="the store's layout JSON (p2_v1/store.py layout)")

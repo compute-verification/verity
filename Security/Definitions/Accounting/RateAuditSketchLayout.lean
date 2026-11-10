@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.RateAuditSketch
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The sketch rate audit for a prover whose memory holds any function of the store (trusted)

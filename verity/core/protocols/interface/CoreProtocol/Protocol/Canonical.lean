@@ -369,7 +369,7 @@ private def HEX : List String := ["", "00", "0", "0g", "ab", "AB", "é0", "éé"
 private def JSONS : List Json := [Json.null, .bool true, .bool false, .num 0, .num (-7), .num ⟨15, 1⟩, .str "",
   .str "a\"b\\c\nd\re\tf\x08g\x0ch\x01i\x1fé😀", .str "\x7f", .str "Δ ≥ 1", .str "\uffff\ue000\ud7ff",
   .str (String.singleton (Char.ofNat 0x10ffff)), .str "é", .str "e", .arr #[], .arr #[.num 1, .str "x", .arr #[.null]],
-  Json.mkObj [], Json.mkObj [("b", .num 1), ("a", .arr #[.bool false]), ("é", .str "\x00")],
+  Json.mkObj [], Json.mkObj [("b", .num 1), ("a", .arr #[.bool false]), ("é", .str (String.singleton (Char.ofNat 0)))],
   Json.mkObj [("k", .num ⟨1, 2⟩)]]
 
 #guard JSONS.all fun j => JSONS.all fun i =>

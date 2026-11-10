@@ -42,7 +42,7 @@ def window():
 
 def _slots(circuit, rs) -> dict[str, np.ndarray]:
     """Each template's units' blocks, by descriptor id, from the table alone: each entry's units' slot digits."""
-    tid = {PV2.definition_digest(circuit.template(t)): t for t in circuit.ids}
+    tid = {PV2.id_digest(circuit.template(t)): t for t in circuit.ids}
     out = {t: np.full(n, -1, dtype=np.int64) for t, n in circuit.units.items()}
     for digest, at, radix, d in IB.decode(rs)[2]:
         i = np.arange(math.prod(radix), dtype=np.int64)
@@ -78,7 +78,7 @@ def test_the_table_is_the_windows_entries_one_block_a_slot(window):
     assert IB.decode(rs)[:2] == (program, 2)
     entries = IB.decode(rs)[2]
     assert len(rs) == 1 + len(entries)
-    assert entries == [(PV2.definition_digest(circuit.template(e.template)), e.at, e.radix, e.axes.index("slot"))
+    assert entries == [(PV2.id_digest(circuit.template(e.template)), e.at, e.radix, e.axes.index("slot"))
                        for e in circuit.blocks.inference]
     assert all(len(r) == IB.ROW_BYTES for r in rs)
     labels, slots = _labels(circuit), _slots(circuit, rs)

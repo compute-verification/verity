@@ -1,6 +1,14 @@
 module
 
-public import Proofs.Pouw.Prob
+public import Definitions.Pouw.Basic.Prob
+import Mathlib.Data.Finset.Max
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.NormNum.Pow
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Prob
 
 /-!
 # Truncation: a sure-cost guarantee over a class closed under budget-abort is per-run

@@ -4,6 +4,45 @@ public import Proofs.Flock.Claims.Recursion.KSLin2R
 public import Proofs.Flock.Claims.Recursion.DeployedR
 public import Proofs.Flock.Claims.Recursion.LamDeployed
 public import Proofs.Flock.Claims.Recursion.PartAcceptsPin
+public import Proofs.Flock.Claims.Recursion.SlotsCommit
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.ZkOuter
+import Proofs.Flock.Claims.Recursion.CapPorts
+import Proofs.Flock.Claims.Recursion.RowsCover
+import Proofs.Flock.Claims.Recursion.SchedDense
+import Proofs.Flock.Claims.Recursion.SlotsCheck
+import Proofs.Flock.Claims.Recursion.TopsOpens
+import Proofs.Flock.Claims.Recursion.TopsStaged
 
 /-!
 # `KSLin2` and `BitsLin2` at the layout of record (`DeployedR.layR`)
@@ -25,7 +64,7 @@ own witness `ws[s]`), through `ksLin2_route_stagedP`; `DecompB` at `PartAccepts`
 
 **`λ₂` does not read the layout's calls.** `lamLin2`'s `c_S = c_Be + |S(x_I)| + 2(n + v)` reads the parts' numbers,
 the inner setup, the inner verifier's calls `n` and the compiled verifier's own `v`; the recorded calls are found, not
-evaluated, by the finders. `lamLin2_layR_ge` charges the extra calls anyway, `e` more per draw beside `v`: `λ₂ ≥ 100`
+evaluated, by the finders. `lamLin2_layR_ge` charges the extra calls anyway, `e` more per sample beside `v`: `λ₂ ≥ 100`
 holds at `layR` for every `v, e ≤ 2^54` (`lamLin2_deployed_ge_dep`, whose six terms are each at least `103` up to
 `c_S ≤ 2^59`).
 -/
@@ -124,7 +163,7 @@ theorem heldB_dense_layR (nextE : Msg → List Msg → List Coin → Claims.OC O
   heldB_layR elem (heldB_layoutBTops _ _ _ _ (fun _ => rfl) (finOpen (DeployedR.restR elem)) _ schedMatches_dense
     (capPorts _) (rowsCover _) (finPieces_finOpen (DeployedR.restR elem) _))
 
-/-- **`PartOpensB` at `layR`, at the dense form and the coin server's reader.** -/
+/-- **`PartOpensB` at `layR`, at the dense form and the challenger's live-coin part's reader.** -/
 theorem partOpensB_dense_layR (bR : Brings) (IV : Claims.Verifier Coin) (s : ℕ) :
     Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512
       (recBound _root_.Flock.Readable.relation bR (DeployedR.layR elem) IV)
@@ -136,7 +175,7 @@ end Transfer
 
 /-! ## `KSLin2` at any layout meeting the route's layout premises -/
 
-/-- **`KSLin2` at the deployment's dense statements, the coin server's record and any steps and columns meeting
+/-- **`KSLin2` at the deployment's dense statements, the challenger's live-coin part's record and any steps and columns meeting
 `StepsBaseC`, at any layout `L` whose rows, holdings, part openings and readers meet the route's premises, from
 `DecompB` at `PartAccepts`**: `ksLin2_route_staged`, with `StagedB` from `stagedB_deployRec_part` at `recRead`
 (`readsBack_recTr`) and the inner check from `exists_chk_iff`. The layout stays a variable here, so no step unfolds
@@ -217,7 +256,7 @@ theorem ksLin2_stepsC_atP (nextE : Msg → List Msg → List Coin → Claims.OC 
 
 /-! ## `KSLin2` and `BitsLin2` at `layR` -/
 
-/-- **`KSLin2` at the deployment's dense statements, at the layout of record `DeployedR.layR elem`, the coin server's
+/-- **`KSLin2` at the deployment's dense statements, at the layout of record `DeployedR.layR elem`, the challenger's live-coin part's
 record (`recTr`), and any steps and columns meeting `StepsBaseC`, from `DecompB`**: `ksLin2_stepsC_at` at
 `layR`, with `ReadersTrue` from `readersTrue_layR` (`HmSlotsCommit` and `MoreSlotsTrue`) and `PartOpensB` from
 `partOpensB_layR`. -/
@@ -270,7 +309,7 @@ theorem bitsLin2_stepsC_layR (nextE : Msg → List Msg → List Coin → Claims.
       { bR with rd := L.readers })
     (ksLin2_stepsC_layR nextE colsE b aux nOf hd recRest elem wE join final w hB hM hD)
 
-/-- **`KSLin2` at the deployment's dense statements, at the layout of record, the coin server's record and the
+/-- **`KSLin2` at the deployment's dense statements, at the layout of record, the challenger's live-coin part's record and the
 deployed reader's steps and trimmed columns**: `ksLin2_stepsC_layR` at `stepsBase_R`. Its premises are `DecompB` at
 `PartAccepts`, `PlainRdInR` and `MoreSlotsTrue`; `Flock.SecurityProofs.RecursiveKS` proves `KSLin2` at the deployed
 reader with none. -/
@@ -371,7 +410,7 @@ theorem ksLin2_deployedR_layRP (rd : Msg → Option FinalP) (b : Brings)
 
 /-! ## `λ₂` at `layR`, charged the extra calls -/
 
-/-- **`λ₂ ≥ 100` at the layout of record, with `c_S` charged `e` extra calls per draw** beside the compiled verifier's
+/-- **`λ₂ ≥ 100` at the layout of record, with `c_S` charged `e` extra calls per sample** beside the compiled verifier's
 own `v` (`c_S = c_Be + |S(x_I)| + 2(n + v + e)`): `lamLin2_deployed_ge_dep` at `layR` and `v + e ≤ 2^55`. -/
 theorem lamLin2_layR_ge (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))

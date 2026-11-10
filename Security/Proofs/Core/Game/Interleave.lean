@@ -1,13 +1,18 @@
 module
 
+public import Definitions.Core.Game
 public import Proofs.Core.Game.Basic
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Inv
 
 /-!
 # Two interactions run concurrently
 
 `interleave g₁ g₂` runs two interactions side by side, with the prover choosing at every step
-which one advances next, adaptively. This is how the two reps of a C-Flock table run on the live
-coin server: each rep is its own stream, the server draws a stream's coins when that stream's
+which one advances next, adaptively. This is how the two reps of a Flock table run on the live-coin
+part: each rep is its own stream, the server flips a stream's coins when that stream's
 round arrives, and the prover may interleave the streams in any order.
 The verifier accepts only if both interactions accept.
 

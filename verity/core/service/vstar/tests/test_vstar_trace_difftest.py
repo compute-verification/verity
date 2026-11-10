@@ -4,7 +4,7 @@ V*'s staged parts: each block's SHA-512 and each block's ranges' (the ``sha512x3
 units, the mask) must be equal, and every port's row whole 16-bit words (`VStar.Trace.fullRows`, which
 `RecDeploy.VStarTrace.TraceOk` reads for the row width).
 
-The drawn cases stage a level, a part of the algebra and a cap with the stager's own code on small consistent sessions
+The sampled cases stage a level, a part of the algebra and a cap with the stager's own code on small consistent sessions
 (`test_vstar_in_difftest`'s, whose ``inst.bin`` `VStar.In.partIn` is held to). With ``VERITY_VSTAR_IN_DEPLOYED=1``,
 `rec-coins`' recorded (16,16,8) session is staged with `rec_vstage.stage` and every staged statement is compared. Skips
 unless ``FLOCK_TRACE`` names a build of ``flock-trace`` (or ``FLOCK_CIRCUIT`` one of ``flock-circuit`` beside it)."""
@@ -56,7 +56,7 @@ def agree(lean: Path, d: Path) -> dict:
 
 
 def stage(seed: int, kind: str, levels: list, d: Path) -> Path:
-    """One statement of a drawn session staged with the stager's own code (`test_vstar_in_difftest.staged`'s), kept in ``d``."""
+    """One statement of a sampled session staged with the stager's own code (`test_vstar_in_difftest.staged`'s), kept in ``d``."""
     lv = [(H, c, max(1, min(q, 2 ** c // (2 if i == 0 else 1)))) for i, (H, c, q) in enumerate(levels)]
     s = IN.session(random.Random(seed), lv, [1, 2], 3)
     level = seed % len(lv)
@@ -78,7 +78,7 @@ def unclaim(d: Path) -> Path:
     """``d``'s circuit with its unit renamed to one no verifier check claims: ``ALG_S`` is not the part at the shape its
     name gives, so the parse refuses it as the verifier does (`test_a_part_the_verifier_refuses_has_no_trace`); renamed, it
     is the same gates and ports, which neither assigner reads the name of. The instance file is restaged for the renamed
-    circuit: its header's ``circuit_sha512`` and unit classes, as `inner_registered`'s restaging writes them."""
+    circuit: its header's ``circuit_sha512`` and size classes, as `inner_registered`'s restaging writes them."""
     f = d / "circuit.txt"
     text = f.read_text()
     assert CLAIMED in text
@@ -96,7 +96,7 @@ def unclaim(d: Path) -> Path:
 
 @pytest.mark.parametrize("kind", ["level", "inner", "cap"])
 def test_the_trace_is_the_deployed_provers(lean, tmp_path, kind):
-    """Each kind of part on drawn sessions: Lean's trace is the deployed prover's witness, block for block and range for range."""
+    """Each kind of part on sampled sessions: Lean's trace is the deployed prover's witness, block for block and range for range."""
     g = random.Random(IN.SEED)
     for i in range(3):
         levels = [(g.randint(0, 2), g.randint(1, 2), g.randint(1, 2)) for _ in range(g.randint(1, 2))]

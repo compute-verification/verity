@@ -3,7 +3,7 @@ module
 public import PouwWindow.Lanes
 
 /-!
-# A drawn H1 leaf's known rows
+# A sampled H1 leaf's known rows
 
 The rows the verifier registers itself at their known content (`Source.known`): lane `l`'s `pub` and `admit`, and every
 statement's `o0`, each one row of 16-bit words (`hm96-sha512/row/v2`) at the port that holds it (`lanePorts`,

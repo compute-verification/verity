@@ -21,7 +21,7 @@ namespace Nci.SecurityProofs
 
 open Verity Finset
 
-theorem threadMults_subset {c : Declaration} (T : Threading c) (R : Finset (Fin c.D.N)) (t : Fin T.m) :
+theorem threadMults_subset {c : RegisteredCircuit} (T : Threading c) (R : Finset (Fin c.D.N)) (t : Fin T.m) :
     T.threadMults R t ⊆ T.M := by
   intro g hg
   rw [Threading.threadMults, mem_filter, Threading.mults, mem_inter] at hg
@@ -29,7 +29,7 @@ theorem threadMults_subset {c : Declaration} (T : Threading c) (R : Finset (Fin 
 
 section Layered
 
-variable {c : Declaration} {T : Threading c} {d e eLk b : ℕ}
+variable {c : RegisteredCircuit} {T : Threading c} {d e eLk b : ℕ}
 
 /-- The lookups of thread `t` in `R`. -/
 def lookupsIn (L : Layered T d e eLk b) (R : Finset (Fin c.D.N)) (t : Fin T.m) : Finset (Fin c.D.N) :=
@@ -257,8 +257,8 @@ theorem ThreadedOfLayered : Guarantees.ThreadedOfLayered := by
 
 /-- **Training is slowed, for keyed circuits.** -/
 theorem LayeredTraining : Guarantees.LayeredTraining := by
-  intro Γ α b_w b_a κ c dcl T d e eLk b E M L hα hbw hba hE hd hB hS hW hκ
-  exact ThreadedTraining Γ α b_w b_a κ c dcl T (d - E) (e + E * eLk) M hα hbw hba (Nat.sub_pos_of_lt hE) hd hB
+  intro Γ α b_w b_a κ r dcl T d e eLk b E M L hα hbw hba hE hd hB hS hW hκ
+  exact ThreadedTraining Γ α b_w b_a κ r dcl T (d - E) (e + E * eLk) M hα hbw hba (Nat.sub_pos_of_lt hE) hd hB
     (threaded_of_layered L Γ (α * Γ) E hS) hW hκ
 
 /-- **The reference circuit is threaded, at Kimi K2's shapes.** -/

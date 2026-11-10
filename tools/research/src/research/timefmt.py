@@ -17,7 +17,8 @@ UTC = dt.timezone.utc
 _PROTECTED = re.compile(r"```.*?```|`[^`\n]*`|<[^<>\n]*>|\bhttps?://\S+", re.S)
 _MONTHS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
 _MON = r"(?i:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?"
-_DATE = (rf"(?:(?P<d1>\d{{1,2}})\s+(?P<m1>{_MON})|(?P<m2>{_MON})\s+(?P<d2>\d{{1,2}})(?:st|nd|rd|th)?)"
+_WEEKDAY = r"(?i:mon(?:day)?|tue(?:s|sday)?|wed(?:nesday)?|thu(?:r|rs|rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\.?"
+_DATE = (rf"(?:(?P<wd>{_WEEKDAY}),?\s+)?(?:(?P<d1>\d{{1,2}})\s+(?P<m1>{_MON})|(?P<m2>{_MON})\s+(?P<d2>\d{{1,2}})(?:st|nd|rd|th)?)"
          rf"(?:,?\s+(?P<y>\d{{4}}))?,?\s+(?:at\s+)?")
 _PAC = r"(?P<ph>\d{1,2}):(?P<pm>\d{2})\s*(?P<ap>[AP]M)\s+P[DS]T\s+\("
 _UTC_TIME = re.compile(rf"(?<![\w:.-])(?:(?P<iso>(?P<Y>\d{{4}})-(?P<M>\d{{2}})-(?P<D>\d{{2}})T(?P<H>\d{{2}}):(?P<N>\d{{2}})(?::(?P<S>\d{{2}}))?Z)"
@@ -43,16 +44,18 @@ def both(t: dt.datetime | str | float) -> str:
     return f"{p:%I:%M %p}".lstrip("0") + f" {p.tzname()} ({u:%H:%M}Z)"
 
 
-def _day(u: dt.datetime) -> str:
+def _day(u: dt.datetime, weekday: bool = False) -> str:
     d = u.astimezone(PACIFIC) if PACIFIC else u
-    return f"{d.day} {d:%b}"
+    return (f"{d:%a} " if weekday else "") + f"{d.day} {d:%b}"
 
 
 def slack_dates(text: str, now: dt.datetime | None = None) -> str:
     """Each dated UTC time outside code, links and URLs, as `<!date^UNIX^{date_short_pretty} {time}|FALLBACK>`:
-    `YYYY-MM-DDTHH:MM[:SS]Z`, or `HH:MMZ` (or `both`'s `7:55 AM PDT (14:55Z)`) right after a date such as `14 Oct`,
-    `Oct 14` or `Oct 14, 2026` (a date without a year is the one nearest `now`; before `both`'s form it is the Pacific date).
-    A time with no date stays as written: guessing its day put a 14 Oct deadline on today."""
+    `YYYY-MM-DDTHH:MM[:SS]Z`, or `HH:MMZ` (or `both`'s `7:55 AM PDT (14:55Z)`) right after a date such as `DD Mon`,
+    `Mon DD` or `Mon DD, YYYY` (a date without a year is the one nearest `now`; before `both`'s form it is the Pacific date).
+    A weekday written before the date goes into the token, and the fallback names the Pacific one: the writer's was the UTC
+    day's, which a time across Pacific midnight contradicts.
+    A time with no date stays as written: guessing its day can put another day's deadline on today."""
     t0 = _utc(now or dt.datetime.now(UTC))
 
     def token(m: re.Match) -> str:
@@ -77,7 +80,7 @@ def slack_dates(text: str, now: dt.datetime | None = None) -> str:
                     return m[0]
         except ValueError:
             return m[0]
-        return f"<!date^{int(u.timestamp())}^{{date_short_pretty}} {{time}}|{'' if g['iso'] else _day(u) + ' '}{both(u)}>"
+        return f"<!date^{int(u.timestamp())}^{{date_short_pretty}} {{time}}|{'' if g['iso'] else _day(u, bool(g['wd'])) + ' '}{both(u)}>"
 
     out, i = [], 0
     for m in _PROTECTED.finditer(text):

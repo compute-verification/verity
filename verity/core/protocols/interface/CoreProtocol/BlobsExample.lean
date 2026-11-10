@@ -11,8 +11,6 @@ meta import CoreProtocol.Blobs
 meta import CoreProtocol.Example
 
 @[expose] public section
-set_option backward.privateInPublic true
-set_option backward.privateInPublic.warn false
 
 namespace Core.BlobsExample
 

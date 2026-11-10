@@ -1,6 +1,10 @@
 module
 
-public import Proofs.Pous.Chain.FamilyRounds
+public import Definitions.Pous.Accounting.PubMeets
+public import Definitions.Pous.Model.BandChain
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pous.Chain.FamilyRounds
 
 /-!
 # The band store with a public encoder at `D = 2` and `D = 1` rounds

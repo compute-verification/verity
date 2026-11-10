@@ -1,12 +1,12 @@
 """`line.py`'s memory line held to its Lean (`RemoteAudit.Line`, served by `remote-audit-difftest`'s `line`), refusals
 as outputs so that both sides' reasons are compared word for word: sessions of zero, one and many groups at every
-stretch length, with bursts, the host tier, filler, wrong receipts (the pooled bound of drawn windows, `pooled`) that
+stretch length, with bursts, the host tier, filler, wrong receipts (the pooled bound of sampled windows, `pooled`) that
 fill one group or spill into the next, ties between stretches, and each refusal (the windows', the node's inputs, a
 group's, a stretch's empty span), with malformed inputs rejected by both. The same line read off an accepted session's
 record (`line_record`, `line.line_of_record`: its groups' passes, its windows and its registered chunks the record's,
-what the auditor saw of each window beside it; drawn g > 1 windows a coin, its samples in place of its windows), with
+what the auditor saw of each window beside it; sampled g > 1 windows a coin, its samples in place of its windows), with
 the record's own refusals (a record not of the registration given with it, the auditor saw another count of windows,
-a window or a sample drew other than min(s, U), a record drawn g > 1 a coin at one window in flight) and malformed
+a window or a sample drew other than min(s, U), a record sampled g > 1 a coin at one window in flight) and malformed
 records and registrations. The line of record is the Lean's
 (`auditor_line.py` runs the verifier process's `line_record` and holds it exactly to the Python's), so the Lean is of
 record here."""
@@ -58,7 +58,7 @@ DELTAS = ("1/1099511627776", line.text(Fraction(1e-9)), "1/3", "999/1000")
 @st.composite
 def windows(draw, top: int) -> list[list[int]]:
     """A record's windows, each [U, s] with 1 ≤ s ≤ U ≤ `top`: s small enough that some receipts may be wrong, or
-    every receipt drawn (none can be)."""
+    every receipt sampled (none can be)."""
     out = []
     for _ in range(draw(st.integers(1, 3))):
         u = draw(st.integers(1, top))
@@ -234,7 +234,7 @@ def registration(blocks: int, root: bytes = bytes(64)) -> audit.Registration:
 
 def recorded(v: dict, samples: int = 1) -> dict:
     """`session`'s inputs read off a record of `registration(N)` (`line_record`'s form): window t is group t, each of
-    its passes reading the N registered chunks, drawn `min(samples, U_t)`, the rest of the record well formed; what the
+    its passes reading the N registered chunks, sampled `min(samples, U_t)`, the rest of the record well formed; what the
     auditor saw of it each group's times and reads."""
     ws = []
     for t, g in enumerate(v["groups"]):
@@ -262,7 +262,7 @@ INVALID = (("rows", 3), ("layout", "x"), ("bind", True), ("node", ""), ("node", 
 def records(draw) -> dict:
     """An accepted session's record of a registration given with it and what the auditor saw of each window, as they
     are or with one fault: the record not of the registration given (another registration, or the record's chunks
-    another count), the auditor seeing another count of windows, a window drawn other than min(s, U_t), one of the
+    another count), the auditor seeing another count of windows, a window sampled other than min(s, U_t), one of the
     node's inputs `line` refuses, or a malformed record, registration, seen or input (most often none: Hypothesis leans
     to each choice's first)."""
     per = draw(st.sampled_from([2, 3, 1]))
@@ -389,7 +389,7 @@ def test_the_records_line_is_the_line_of_its_groups_and_windows(server, samples)
 
 
 def test_a_record_drawn_four_windows_a_coin_reads_its_draws(server) -> None:
-    """Drawn four windows a coin (`groups_per_coin`), the record's line is `line`'s at the same groups and its three
+    """Sampled four windows a coin (`groups_per_coin`), the record's line is `line`'s at the same groups and its three
     draws, each four windows' receipts and draws summed (`line.draws_of`, the pooled bound's `audit.pooled_windows`),
     the Lean's and line.py's alike; a sample that sampled other than min(s, U) is refused, word for word, and at one window
     in flight the record has no line (`line.SHARED`)."""
@@ -415,7 +415,7 @@ def test_a_record_drawn_four_windows_a_coin_reads_its_draws(server) -> None:
 
 
 def test_a_draw_of_two_to_the_64_receipts_is_refused(server) -> None:
-    """Drawn four windows a coin, a sample whose windows' receipts, each below 2^64 as `receive` holds a window's, sum to
+    """Sampled four windows a coin, a sample whose windows' receipts, each below 2^64 as `receive` holds a window's, sum to
     2^64 or more is refused, the Lean's and line.py's word for word: the memory model's sample reads at most 2^64 − 1
     (`Properties.RemoteAudit.Line.receiptMax`). One receipt fewer, the sample is read."""
     v = session(9, windows=[(5000, 10)], rates=line.Rates(3 * 10 ** 6, 3, 4.4e9, 5e10, B, 4.4e9, 6291456))

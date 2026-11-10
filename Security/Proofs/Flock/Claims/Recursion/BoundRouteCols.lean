@@ -1,7 +1,47 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.BoundRoute
-public import Proofs.Flock.Claims.Recursion.LastBindsEC
+public import Proofs.Flock.Claims.Recursion.BoundDeploy
+public import Proofs.Flock.Claims.Recursion.BoundForks
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Bridge.Hm96Tree
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Recursion.BoundAccepts
+import Proofs.Flock.Claims.Recursion.BoundRoute
+import Proofs.Flock.Claims.Recursion.DeployFacts
+import Proofs.Flock.Claims.Recursion.DeployMargin
+import Proofs.Flock.Claims.Recursion.DeploySessions
+import Proofs.Flock.Claims.Recursion.FlockKSRecord
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # `KSBoundDeployed`'s ∀-form from the bridge, the last message bound modulo what `E*` reads (R1′)
@@ -204,7 +244,7 @@ theorem Bound.seen_viewAt (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (m
         ((List.range (Bd.DE.V.k x)).map (coinSeq r)) := by
   rw [Bd.run_ivstar H x ms r hk]
   obtain ⟨n, hn⟩ : ∃ n, Bd.DE.V.k x = n + 1 := ⟨_, (Nat.succ_pred_eq_of_pos hk).symm⟩
-  unfold Bound.viewAt Bound.decAt Trace.seen
+  unfold Bound.viewAt Bound.decAt Transcript.seen
   generalize (Bd.IVStar.next x ((List.range (Bd.DE.V.k x)).map fun i => ms.getD i [])
     ((List.range (Bd.DE.V.k x)).map (coinSeq r))).eval H = d
   rw [hn, Nat.add_sub_cancel, range_map_getD_succ, List.range_succ, List.map_append, List.map_singleton,
@@ -282,7 +322,7 @@ theorem innerViewRun_C {Col' T' : Type} (H : Msg → Msg) (Bd : Bound Coin Col T
     (ivScope : Msg → Bool) (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T') :
     Claims.Recursion.InnerViewRun H (deployRecC Bd ivScope b) (Inner.ofFlock Bd.deploy decI) DO := by
   intro decO x Ω P ω r c ws _
-  exact (congrArg Claims.Trace.seen (innerRun_C H Bd decI ivScope b x r ws)).symm
+  exact (congrArg Claims.Transcript.seen (innerRun_C H Bd decI ivScope b x r ws)).symm
 
 theorem innerView_C [DecidableEq Col] (H : Msg → Msg) (Bd : Bound Coin Col T) (ivScope : Msg → Bool) (b : Brings)
     (hCF : Bd.LastCoinFree H) (x : Msg) (r : Fin ((deployRec Bd.IVStar ivScope b).V.k x) → Coin)

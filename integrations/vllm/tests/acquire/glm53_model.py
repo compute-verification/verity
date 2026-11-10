@@ -139,7 +139,7 @@ class Attention(torch.nn.Module):
         index_q = draw(m, IH, ID) if self.has_indexer else None
         index_q_fp8, index_weights_out, mqa_q = fused_q(positions, q_pe, None, index_q, None, ql_nope, None, index_weights, 0.5, 0.25,
                                                         has_indexer=self.has_indexer)
-        self.seen = {"q_c": q_c, "kv_c": kv_c_out, "k_pe": k_pe_out, "ql_nope": ql_nope, "mqa_q": mqa_q, "index_q_fp8": index_q_fp8,
+        self.seen = {"positions": positions, "q_c": q_c, "kv_c": kv_c_out, "k_pe": k_pe_out, "ql_nope": ql_nope, "mqa_q": mqa_q, "index_q_fp8": index_q_fp8,
                      "index_weights_out": index_weights_out, "index_k": index_k, "output": output, "mqa_rows": 0}
         self._sparse_indexer_and_attn(positions, q_c, q_nope, q_pe, index_q_fp8, None, index_weights_out, kv_c_out, k_pe_out, ql_nope,
                                       mqa_q, output)
@@ -148,11 +148,11 @@ class Attention(torch.nn.Module):
     def _sparse_indexer_and_attn(self, positions, q_c, q_nope, q_pe, index_q_fp8, index_k, index_weights_out, kv_c, k_pe, ql_nope,
                                  mqa_q, output) -> None:
         md = self.md
+        n = md.num_actual_tokens
         if self.has_indexer and not (md.prefill is not None and md.prefill.use_dense_mha and md.num_decode_tokens == 0):
             m = q_c.shape[0]
-            self.topk_indices_buffer[:m, :TOPK] = (torch.arange(TOPK, dtype=torch.int32) + self.layer) % (int(positions[-1]) + 1)
+            self.topk_indices_buffer[:n, :TOPK] = (torch.arange(TOPK)[None, :] + self.layer) % (positions[:n, None] + 1)
             self.seen["topk"] = self.topk_indices_buffer[:m, :TOPK].clone()
-        n = md.num_actual_tokens
         if self._use_sparse_mha(md):
             self.forward_impl(torch.cat((q_nope, mqa_q), dim=-1), kv_c, k_pe.unsqueeze(1), self.kv_cache, md, output)
             return

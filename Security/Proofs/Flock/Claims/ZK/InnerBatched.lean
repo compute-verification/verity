@@ -1,10 +1,58 @@
 module
 
 public import Proofs.Flock.Claims.ZK.SplitInner
-public import Proofs.Flock.Claims.ZK.SimSession
-public import Proofs.Flock.Claims.Complete.ZkTables.RunsGo
-public import Proofs.Flock.Claims.Complete.ZkTables.MaskFree
-public import Proofs.Flock.Claims.Complete.Zk.Level0Premises
+public import Proofs.Flock.Claims.Complete.ZkTables.RepSplit
+public import Proofs.Flock.Claims.Complete.ZkTables.Table
+import Flock.With.SimWalk
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Replay.LigeritoSum
+import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
+import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
+import Proofs.Flock.Claims.Complete.Zk.ConsCoins
+import Proofs.Flock.Claims.Complete.Zk.Json.Session
+import Proofs.Flock.Claims.Complete.Zk.Level0Premises
+import Proofs.Flock.Claims.Complete.Zk.RingSwitch
+import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
+import Proofs.Flock.Claims.Complete.ZkTables.MaskFree
+import Proofs.Flock.Claims.Complete.ZkTables.RepRuns
+import Proofs.Flock.Claims.Complete.ZkTables.RunsGo
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
+import Proofs.Flock.Claims.Complete.ZkTables.Stmt
+import Proofs.Flock.Claims.Complete.ZkTables.Trace
+import Proofs.Flock.Claims.Complete.ZkTables.View
+import Proofs.Flock.Claims.Scope.InScope
+import Proofs.Flock.Claims.ZK.SimSession
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 
 /-!
 # `InnerBatched`: the batched constraint at the honest pads

@@ -1,11 +1,25 @@
 """No composite composes a protocol that publishes private data in the clear (`IN_THE_CLEAR`) unless `KNOWN` lists it
 with its reason. The inference-only policy's public form, `verity/inference-only/v0` (`NciCheck.Protocol.protocol`),
 publishes the division, and each inference block's gates and fresh-input bits, so it isn't zero-knowledge; both
+<<<<<<< 99c8914848ef788e008018a5dc84bd535d48d62c
 composites compose it as a stated exception until v1's private form replaces it. The
 composites' components are read wherever they are listed: their Lean (`Core.Onsite.components` and `Core.Remote.components`,
 with the ids each one's `#guard` pins), the reference's mirror of them (`reference.ONSITE`, `REMOTE`), and the ids a configuration may name as components (`parties.IDS`, which step0's
 `MANIFESTS` lists), read from its source: importing `parties` would read the deploy runtime, which this suite doesn't
 declare."""
+||||||| merged common ancestors
+composites compose it for one run of record only, a stated exception, and v1's private form replaces it. The
+composites' components are read wherever they are listed: their Lean (`Core.Onsite.components` and `Core.Remote.components`,
+with the ids each one's `#guard` pins), the reference's mirror of them (`reference.ONSITE`, `REMOTE`), and the ids a configuration may name as components (`parties.IDS`, which step0's
+`MANIFESTS` lists), read from its source: importing `parties` would read the deploy runtime, which this suite doesn't
+declare."""
+=======
+composites compose it for one run of record only, a stated exception, and v1's private form replaces it. The
+composites' subprotocols are read wherever they are listed: their Lean (`Core.Onsite.components` and
+`Core.Remote.components`, with the ids each one's `#guard` pins), the reference's mirror of them (`reference.ONSITE`,
+`REMOTE`), and the ids a configuration may name as subprotocols (`parties.IDS`), read from its source: importing
+`parties` would read the deploy runtime, which this suite doesn't declare."""
+>>>>>>> fa1fc89f64f1a57fa1d2d62892c18eb3a29f7627
 
 from __future__ import annotations
 
@@ -18,21 +32,29 @@ import pytest
 
 import reference as R
 
-PROTOCOLS = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[5]
 V0 = "verity/inference-only/v0"
 PRIVATE_ONLY = ("only the private form (v1: division committed under hiding leaves, compliance proved, padded profile) "
                 "may be composed")
-COMPOSITES = {"Core.Onsite": PROTOCOLS / "onsite/CoreOnsite.lean", "Core.Remote": PROTOCOLS / "remote/CoreRemote.lean"}
+COMPOSITES = {"Core.Onsite": ROOT / "verity/core/protocols/onsite/CoreOnsite.lean",
+              "Core.Remote": ROOT / "verity/core/protocols/remote/CoreRemote.lean"}
 #: The protocols that publish private data in the clear, each with what it publishes.
 IN_THE_CLEAR = {V0: "the division, and each inference block's gates and fresh-input bits"}
 #: The protocols of `IN_THE_CLEAR` a composite may compose, each with its reason. KNOWN only shrinks: an entry no
 #: composite composes any more fails `test_known_only_shrinks`.
+<<<<<<< 99c8914848ef788e008018a5dc84bd535d48d62c
 KNOWN = {"verity/inference-only/v0": "stated exception for the demos' runs until v1's private form replaces it"}
+||||||| merged common ancestors
+KNOWN = {"verity/inference-only/v0": "stated exception for tonight's run of record (Daniel's ruling); v1's private form "
+                                     "replaces it"}
+=======
+KNOWN = {"verity/inference-only/v0": "a stated exception for one run of record; v1's private form replaces it"}
+>>>>>>> fa1fc89f64f1a57fa1d2d62892c18eb3a29f7627
 
 
 def v0_names() -> set[str]:
     """v0's Lean names: `NciCheck.Protocol.protocol` while its `protocolId` is v0."""
-    text = (PROTOCOLS / "network/nci/lean/NciCheck/Protocol.lean").read_text()
+    text = (ROOT / "verity/core/protocols/network/nci/lean/NciCheck/Protocol.lean").read_text()
     m = re.search(r'^def protocolId : String := "([^"]*)"', text, re.M)
     assert m, "NciCheck/Protocol.lean no longer defines `protocolId` as a string literal: read v0's id where it now is"
     return {"NciCheck.Protocol.protocol"} if m[1] == V0 else set()
@@ -51,7 +73,7 @@ def lean_components(path: Path) -> tuple[list[str], list[str]]:
 
 def configuration_ids() -> list[str]:
     """The ids `parties.IDS` gives as string literals."""
-    for node in ast.parse((PROTOCOLS / "sampled_proofs/parties.py").read_text()).body:
+    for node in ast.parse((ROOT / "verity/core/protocols/spot/parties.py").read_text()).body:
         if isinstance(node, ast.Assign) and [getattr(t, "id", None) for t in node.targets] == ["IDS"]:
             assert isinstance(node.value, ast.Dict), "parties.IDS is no longer a dict literal: read its ids as it is now"
             return [v.value for v in node.value.values if isinstance(v, ast.Constant)]

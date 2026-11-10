@@ -1,8 +1,20 @@
 module
 
+public import Definitions.Core.Game
+public import Definitions.Flock.Defs
+public import Mathlib.Algebra.Order.Ring.Star
+public import Mathlib.LinearAlgebra.Lagrange
+public import Mathlib.RingTheory.Henselian
+public import Mathlib.RingTheory.RegularLocalRing.Defs
+public import Mathlib.RingTheory.SimpleRing.Principal
 public import Proofs.Flock.Soundness.LincheckPhase
-public import Proofs.Flock.Soundness.ListSize
 public import Proofs.Flock.Soundness.OpeningPhase
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Defs
+import Proofs.Flock.Soundness.Game
+import Proofs.Core.Game.Poly
+import Proofs.Flock.Soundness.Rounds
 
 /-!
 # The zerocheck phase (`Flock.Piop`)
@@ -78,7 +90,7 @@ theorem prCoin_coord_le {n : ℕ} (j : Fin n) (c : F) :
   calc prCoin (fun v : Fin n → F => v j = c)
       = prCoin (fun v : Fin n → F => MvPolynomial.eval v Q = 0) := by
         congr 1; funext v; simp [Q, sub_eq_zero]
-    _ ≤ (Q.totalDegree : ℝ≥0∞) / Fintype.card F := prCoin_mvEval_eq_zero_le _ hQ
+    _ ≤ (Q.totalDegree : ℝ≥0∞) / Fintype.card F := Verity.Game.prCoin_mvEval_eq_zero_le _ hQ
     _ ≤ 1 / Fintype.card F := by gcongr; exact_mod_cast hdeg
 
 /-! ## Folding the lowest bit, and the equality weights -/
@@ -562,12 +574,12 @@ theorem prCoin_zc5_le (A : Arith F K) (hA : A.Correct) (S : Statement) (h6 : 6 �
       (natDegree_add_le _ _).trans (max_le ((PabT_natDegree A hA S h6 w r).trans (by norm_num))
         ((PcT_natDegree A hA h6 w r).trans (by norm_num)))
     refine (prCoin_mono fun z hz => ?_).trans
-      ((prCoin_eval_eq_eval_le _ _ hne 127 (by omega) hdeg2).trans (by norm_num))
+      ((Verity.Game.prCoin_eval_eq_eval_le _ _ hne 127 (by omega) hdeg2).trans (by norm_num))
     obtain ⟨_, h2⟩ := hz
     rw [claim0, hcomb, hpc, hP] at h2
     rw [eval_add, ← h2, add_assoc, Rounds.add_self, add_zero]
   · refine (prCoin_mono fun z hz => ?_).trans
-      ((prCoin_eval_eq_eval_le _ _ (Ne.symm hP) 63 (PcT_natDegree A hA h6 w r)
+      ((Verity.Game.prCoin_eval_eq_eval_le _ _ (Ne.symm hP) 63 (PcT_natDegree A hA h6 w r)
         (by have := polyΛ_natDegree A hA msg.2; omega)).trans ?_)
     · rw [hpc] at hz; exact hz.1
     · gcongr; norm_num
@@ -615,7 +627,7 @@ theorem prCoin_pin_le (A : Arith F K) (hA : A.Correct) (S : Statement) (w : Witn
   calc prCoin (fun ρ : Fin (S.m - 6) → F => pinMLE S w (ρOutOf S ρ) = 1)
       = prCoin (fun ρ : Fin (S.m - 6) → F => MvPolynomial.eval ρ R = 0) := by
         congr 1; funext ρ; exact propext (hev ρ)
-    _ ≤ (R.totalDegree : ℝ≥0∞) / Fintype.card F := prCoin_mvEval_eq_zero_le R hR
+    _ ≤ (R.totalDegree : ℝ≥0∞) / Fintype.card F := Verity.Game.prCoin_mvEval_eq_zero_le R hR
     _ ≤ ((S.nbl : ℕ) : ℝ≥0∞) / Fintype.card F := by gcongr
 
 /-! ## The game -/

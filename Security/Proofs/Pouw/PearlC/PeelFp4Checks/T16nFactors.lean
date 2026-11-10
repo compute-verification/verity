@@ -1,6 +1,9 @@
 module
 
 public import Proofs.Pouw.PearlC.PeelFp4Checks.Defs
+public import Proofs.Pouw.PearlC.PeelFp4Proofs
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
 
 /-! # `test-16-nvfp4`: selected rows of `A′·F_B` and `B̃·F_A` (`PeelFp4Checks`, which joins them) -/
 

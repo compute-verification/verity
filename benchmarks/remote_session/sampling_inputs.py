@@ -7,13 +7,13 @@ the line; and the serving cost of passes and of proved openings, at three served
 `VERIFIER_JSON` is a run's `verifier.json` with accepted paced sessions (`ledger.paced`). The script recomputes
 every recorded stretch from the session's groups and refuses to go on unless the ledger's figures come back, then checks
 the closed form below against the same arithmetic on uniform sessions, and only then tabulates the closed form.
-`COST_MODEL_JSON` is a `sampled_proofs.costfit` record whose observations include `BlockOpeningCheck_v1`'s sessions.
+`COST_MODEL_JSON` is a `spot.costfit` record whose observations include `BlockOpeningCheck_v1`'s sessions.
 
 With o openings proved a second, d of them a group of k passes at r passes a second, and β = B/d, where
 B = −S·expm1(ln δ/S) ≈ ln(1/δ) is `audit.pooled`'s budget over S draws, the line loses this many blocks over a span
 Θ, as a fraction of the store's N blocks:
 
-    sampling, snapshot        B / S_Θ                                     S_Θ the openings drawn over Θ
+    sampling, snapshot        B / S_Θ                                     S_Θ the openings sampled over Θ
     sampling, held over time  (B/o + min(1, β)·(L_max − k/r)) / Θ
     rebuilds, held over time  2·L_max·(X_r + I)·(Θ + 2·L_max) / (Θ·N)
 
@@ -31,7 +31,7 @@ so every stretch but the last ends at the next coin: L_max = k/r, the coin's per
 below, k/r ≥ k·t_pass + c (k passes, then the root's and the next coin's round trips). c there is each point's own,
 `--one-flight-c POINT=S` (measured), else modeled as the recorded f = 2 c.
 
-One openings coin over g groups is the code's (`audit.Params.groups_per_coin`): d = s/g at s draws a coin. The script
+One openings coin over g groups is the code's (`audit.Params.groups_per_coin`): d = s/g at s flips a coin. The script
 solves each point's plan at g = 1, 2, 4, 8 and holds each to the code's reading (`coin_check`: `audit.pooled` on a
 record naming g), refusing to go on unless the closed form agrees.
 """
@@ -49,9 +49,9 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
 from verity.core.protocols.remote_bandwidth import audit, timing  # noqa: E402
-from verity.core.protocols.sampled_proofs import costfit  # noqa: E402
+from verity.core.protocols.spot import costfit  # noqa: E402
 
-import wire  # noqa: E402
+from verity.core.protocols.remote_bandwidth.session import wire  # noqa: E402
 
 LN = -math.log(audit.DELTA)
 BLOCK = 4096
@@ -308,7 +308,7 @@ def solve(p: dict, prices: dict, eps: float, *, theta: float, line_rule: bool, f
     A group is a window of `audit.pooled`'s, and a window it samples nothing from may be wrong throughout, so d ≥ 1.
     `shared` lets one openings coin select over m groups' receipts after all their roots (d = 1/m, m ≤ 512): no session
     has run it, so it is modeled, with the same closed form. `per_coin` is the code's (`audit.Params.groups_per_coin`,
-    g): one openings coin over g groups, the pooled bound's window a sample of g groups, so d is s/g at s ≥ 1 draws a
+    g): one openings coin over g groups, the pooled bound's window a sample of g groups, so d is s/g at s ≥ 1 flips a
     coin."""
     tau = eps * p["blocks"] / (2 * p["xi"]) if line_rule else math.inf
     t_s, c = pass_s(p), c_at(p, flight)
@@ -341,7 +341,7 @@ def solve(p: dict, prices: dict, eps: float, *, theta: float, line_rule: bool, f
 
 
 def coin_check(p: dict, s: dict) -> dict:
-    """A plan `s` drawn g = `s["per_coin"]` groups a coin, read by the code: its closed form's held-over-time sampling
+    """A plan `s` sampled g = `s["per_coin"]` groups a coin, read by the code: its closed form's held-over-time sampling
     term against `span_line`'s arithmetic on the uniform session it describes (whole coins over Θ, then one more),
     whose wrong receipts are `audit.pooled`'s on a record of each group's receipts and draws naming `groups_per_coin`
     (all of a coin's draws on its last group, as `AuditRun.close` may share them: the code pools them over the coin's

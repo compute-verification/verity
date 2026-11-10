@@ -38,8 +38,8 @@ from test_network_certifier_warden import EOF, Server, drive
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.core.protocols.certifier import egress as EG
-from verity.core.protocols.certifier import ingress_scan as IS
+from verity.ml.protocols.certifier import egress as EG
+from verity.ml.protocols.certifier import ingress_scan as IS
 from verity.core.protocols.certifier import io_tie as IT
 from verity.core.protocols.certifier import warden_rows as WR
 from verity.core.protocols.certifier.active import HEADER, id_request
@@ -238,7 +238,8 @@ def test_the_state_is_the_layout_neg_sized():
     assert (served.program_slots, served.window_programs) == (w63.SLOTS, 8)
     for bad, fix in (({"delay": 28}, "= D = 27"), ({"ingress_buckets": 13}, "<= WITHIN = 12"),
                      ({"ingress_cells": 48}, "<= C = 47"), ({"lanes": 5}, "= lanes = 4"),
-                     ({"egress_cells": 66}, "<= KO + 1 = 65"), ({"every": 8}, "= EVERY = 16")):
+                     ({"egress_cells": 66}, "<= KO + 1 = 65"), ({"every": 8}, "= EVERY = 16"),
+                     ({"egress": "bytes"}, "egress = id, the egress record's form (it is bytes)")):
         with pytest.raises(ValueError, match=re.escape(fix)):
             w63.serves(replace(served, **bad))
 

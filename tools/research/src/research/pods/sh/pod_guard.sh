@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pod-side guard (integrator, 2026-09-13, D55) — sourced ON THE POD by every job launcher.  Nothing here depends on the laptop or on
+# Pod-side guard — sourced ON THE POD by every job launcher.  Nothing here depends on the laptop or on
 # the agent that launched the job being alive.  Needs the RUNPOD_POD_ID and RUNPOD_API_KEY RunPod injects into every pod's first process;
 # only pods an old launcher prepared still carry /root/.runpod/config.toml + /root/dm/runpod.py (the account key), used as a fallback.
 #
@@ -15,7 +15,7 @@
 #   * heartbeat      — /workspace/<who>/guard/<pod>.hb is touched every minute so the state can be read from the volume by anyone;
 #   * durability     — (F7) termination is refused while any attempt registered with `guard_require_preserved` is not PRESERVED on the
 #                      remote (`research data preserved`); one `research data push` repair is tried first; GUARD_FORCE_TERMINATE=1 overrides.
-#   * credential     — (2026-09-24) the pod terminates itself with its OWN key: RUNPOD_API_KEY, which RunPod injects into the container's
+#   * credential     — the pod terminates itself with its OWN key: RUNPOD_API_KEY, which RunPod injects into the container's
 #                      first process (/proc/1/environ; not the account key).  Measured on a cpu3c pod: it can read nothing (REST GET
 #                      /pods and /pods/{self} 403, GraphQL myself Unauthorized) and REST DELETE /pods/{self} is 403, but GraphQL
 #                      podTerminate of its own pod succeeds (guard_terminate_pod tries REST, then GraphQL, then runpodctl).  The account

@@ -1,4 +1,4 @@
-# The machine model
+# machine_model: the ACCEL model of each measured card
 
 `machine-model` prices PoUW's designs on the ACCEL model 𝓜 of each measured card. For a card it holds, as data, the rows
 (the measured ceilings: a pipe, a port, or a joint frontier of several classes), the census that places every warp
@@ -17,12 +17,33 @@ What it computes:
   the Lean headline guarantees are exported from ("The headline is per node").
 - **The card table** (`theta`, `sheet`): each card's rates, capacities and clocks with their sources, and its data-sheet
   lines.
-- **The opcode table** (`cover`): the evidence for the card premise ("The opcode table").
+- **The opcode table** (`cover`): the evidence for the card assumption ("The opcode table").
 
 This file holds no table of the data. `machine-model render` prints every one as Markdown from a data directory alone:
 the vectors, the epochs and their census, the rows, the floors, the designs, the honest kernels, the proof blocks, the
 MMA forms, the table route, the headline's designs, the attack families, the devices and the card table.
 `tests/test_render.py` fails on a table here, so a new vector, design or census row touches only its own data file.
+
+## Interface
+
+What code outside this directory uses, and may. The rest is the model's own and changes with it.
+
+- **The command** `machine-model` ("Commands").
+- **`verity_machine_model.model`**, the data as objects: `DATA` (this `data/`), `device(name)` and `devices()`,
+  `model(data)`, `vectors(data)` and `vector(name, data)`, `census(m, epoch, data)`, `entries(m, data)`,
+  `holds(m, since, until, epoch)`, `attacks(m, epoch, data)`, `all_attacks(data)` and `u_of`.
+- **`verity_machine_model.eps`**, a design's ε: `design(name, data)` and `designs(data)`, `honest(name, data)`,
+  `forms(data)`, `machine(name, data)`, `table(data)`, `setup(d, pi, data)` and `eps(d, pi, q, data)`, with `Design`,
+  `Honest`, `Form`, `PRODUCTS`, `LANES`, `UNI` and `MMA`. `commands.eps` is the same computation as the command
+  prints it.
+- **`verity_machine_model.headline`**, what the Lean headline files are exported from: `spec(data)` and
+  `row(family, reading, data)`, with `READINGS`, `OPERANDS` and `CREDIT`.
+- **`verity_machine_model.capacity`**, certified capacity: `Work`, `Cell` and `cell(pi, groups)`, `tensor_filler`,
+  `lane_filler`, `served` and `TENSOR_CYCLES`.
+- **`verity_machine_model.sheet`**, a device's data sheet: `Sheet`, `sheet(data)`, `row(name)`, `omega(s)` and
+  `lines(s, peaks)`.
+- **`data/` by path**, for a probe or a calculator that reads one file without the package: `census/`, `rows.csv`,
+  `floors.csv`, `table.toml`, `citations.toml`, `designs.toml`, `cover/` and `devices/sm_NN/` ("Layout").
 
 ## Commands
 
@@ -292,7 +313,7 @@ record, never to compare designs. `solve` prints τ, the price vectors' real-tim
 - **ε_mand**: the fold or the filler done in fewer instructions than honest's. The design's `[mand.PART]`: 0 for duo.
 - **ε_machine = ε_cert + ε_route**: the cheater's best mix over Π at q*, from the LP below. ε_cert = 1 − π*·n(H)/B(H) is
   honest's own free compute at the certificate π*; ε_route is what the cheater's routes add.
-- **ε_luck**: the sampling bound inside the same LP. Every check is one draw, so an accepted cheater leaves d̄ =
+- **ε_luck**: the sampling bound inside the same LP. Every check is one sample, so an accepted cheater leaves d̄ =
   ln(1/δ)/((1 − p)·S) of the words wrong over S spot checks, still folded, each filler's blocks at their own p. The
   design's `[luck]`.
 - **ε_sched**: honest's measured time above its model time; 0 unmeasured. `[measured]` in `data/honest/NAME.toml`.
@@ -305,7 +326,7 @@ record, never to compare designs. `solve` prints τ, the price vectors' real-tim
 - **γ**: honest's time a useful MMA over the plain GEMM's model time: measured when the design runs the profile's
   kernel, else the measured kernel's time plus the model's difference between the design and that kernel, else the
   model's alone.
-- **q***: the fewest lane instructions, past the fold, of a right fresh committed word whose production reads no
+- **q***: the fewest lane instructions, past the fold, of a right fresh committed word whose computation reads no
   data-dependent address. Assumed, never measured (`ScalarRoute`, `Accounting.Assumptions.TS`). `--q`, default 8.
 - **q*_T, b_T**: a table word's lane instructions, and the bytes it reads from its memory level. `data/table.toml`,
   `--lookup-q`, `--lookup-bytes`.
@@ -414,7 +435,7 @@ tcgen05.ld.32x32b.x32 that brings each committed word to registers, 1024/L a MMA
 
 ## The opcode table
 
-The card premise (`CardWithinAccel`) is that every instruction a card executes is dominated by an ACCEL op (`Accel.Op`)
+The card assumption (`CardWithinAccel`) is that every instruction a card executes is dominated by an ACCEL op (`Accel.Op`)
 at no fewer units of the same resource. `data/cover/` is its evidence on the H200 (sm_90) and the RTX PRO 6000 (sm_120):
 evidence, not trusted base, since no verifier and no Lean reads it. `machine-model cover` prints it as Markdown, a table
 a card, with the counts by mark and every hole.
@@ -426,13 +447,13 @@ a card, with the counts by mark and every hole.
 - **The pipes**: an opcode goes on the pipe a run or the CUDA Programming Guide places it on, else on `fma`, which
   charges only the issue slot every instruction takes (coarse, and sound on any pipe).
 - **What must be covered**: every opcode of NVIDIA's family tables (CUDA Binary Utilities 12.9 §4.3 and §4.4 in
-  `../sass_census/data/bu_12_9.json`, CUDA 13's in `sass_isa_tables.json` beside it), every dotted form of the CUDA 13
+  `bu_12_9.json`, CUDA 13's in `sass_isa_tables.json`), every dotted form of the CUDA 13
   libraries' SASS corpus (`corpus.json`, with instruction counts), every census kind, and every unit the card table
-  lists (`theta.UNITS`). The three JSON tables are generated, so they are fetched fixtures (`fixtures/artifacts.json`,
-  gitignored): `suites.py` fetches them before the tests, and `uv run research data fetch-fixtures
-  benchmarks/pouw/machine_model/data/cover benchmarks/pouw/sass_census/data` brings them into a checkout. `rows.toml`,
+  lists (`theta.UNITS`). The three JSON tables, all in `data/cover/`, are generated, so they are fetched fixtures
+  (`fixtures/artifacts.json`, gitignored): `suites.py` fetches them before the tests, and `uv run research data
+  fetch-fixtures benchmarks/pouw/machine_model/data/cover` brings them into a checkout. `rows.toml`,
   the reviewed table, stays in Git.
-- **A row** (`rows.toml`) names its opcodes, devices, census kinds, mark, envelope op with its pipe, stores or formats,
+- **A row** (`rows.toml`) names its opcodes, devices, census kinds, mark, ACCEL op (`envelope`) with its pipe, stores or formats,
   units a warp instruction, register words, rate (card-table keys, or `rate_value` with its unit), argument and source.
   A row with `forms` (regexes over the dotted form) covers those forms; the opcode's plain row covers the rest. A unit
   outside the SM pipes is a `[[unit]]` with the same marks.

@@ -1,6 +1,10 @@
 module
 
-public import Proofs.Flock.Recursive.Target
+public import Proofs.Flock.Soundness.Discharge.Exec.CompiledL
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Recursive.Target
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.Soundness.Soundness
 
 /-!
 # Recursion: the compiled table on a clash-free set of outcomes

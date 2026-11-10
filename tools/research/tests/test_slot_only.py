@@ -1,5 +1,5 @@
 """pods/nebius/slot_only.py: on a machine that takes runs only through its check slots, which commands count, and which live runs it
-stops (cpu-1, 8 Oct: three runs outside slot.py beside the merge check, two from trees older than the launcher's refusal)."""
+stops (a run outside slot.py beside the merge check, such as one from a tree older than the launcher's refusal)."""
 from __future__ import annotations
 
 import json
@@ -27,7 +27,7 @@ def test_a_run_may_name_a_pool_of_its_own_under_the_locks_directory_and_nothing_
 
 
 def test_the_refusal_names_the_pools_this_machine_has(tmp_path):
-    """27 Oct: `verity lean try --on vy-nebius-1` without `--pool` was refused, and the refusal named only slot.py by hand."""
+    """A `verity lean try --on vy-nebius-1` without `--pool` is refused naming the pools to add, not only slot.py by hand."""
     (tmp_path / "proofs").write_text("p0 0-15\n")
     why = S.refusal(tmp_path / "marker", {"proofs": str(tmp_path / "proofs"), "soundness": str(tmp_path / "soundness")})
     assert "add `--pool proofs` to `research run` or `verity lean try`" in why
@@ -35,7 +35,7 @@ def test_the_refusal_names_the_pools_this_machine_has(tmp_path):
 
 
 def test_research_run_pool_wraps_the_command_in_a_named_pool_that_the_launcher_accepts(capsys):
-    """INF-27/28: a lane's run on cpu-1 takes the `research` pool with one flag, not a five-layer command line."""
+    """A lane's run on cpu-1 takes the `research` pool with one flag, not a five-layer command line."""
     c = S.in_pool("research", "compute-accounting", ["python3", "search.py", "--n", "4"])
     assert c == ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots", "python3", "tools/verity/check/slot.py", "--by",
                  "compute-accounting", "--", "nice", "-n", "19", "python3", "search.py", "--n", "4"]
@@ -61,9 +61,9 @@ def test_research_run_pool_wraps_the_command_in_a_named_pool_that_the_launcher_a
 
 
 def test_a_pool_run_takes_no_launch_time_memory_reservation_beside_its_slots(tmp_path, monkeypatch, capsys):
-    """INF-61 (cpu-3, 18 Oct): a `--pool` run's --mem-gb reserved at launch and held that through its wait in the slot line, beside
-    the slot's own reservation once it ran; two waiting runs held 128 GB and admission sat at -89 GB. The slot admits it, with the
-    run's --mem-gb when that is more than its mem= (24 Oct: a 450 GB run in proofs' 193 GB slot p5 reserved 193)."""
+    """A `--pool` run's --mem-gb reserved at launch would be held through its wait in the slot line, beside the slot's own
+    reservation once it ran, so a few waiting runs drive admission below zero. The slot admits it, with the run's --mem-gb when
+    that is more than its mem= (a 450 GB run in a 193 GB slot reserves 450, not 193)."""
     from research import remote
     from research.cli import main
 
@@ -81,7 +81,7 @@ def test_a_pool_run_takes_no_launch_time_memory_reservation_beside_its_slots(tmp
 
 
 def test_a_pool_runs_timeout_counts_from_taking_its_slot_not_from_its_wait(monkeypatch, tmp_path, capsys):
-    """INF-106: a `--pool` run's --timeout counted its wait in the pool's line too, so a run that waited 50 of its 60 min ran 10."""
+    """A `--pool` run's --timeout must not count its wait in the pool's line too, or a run that waited 50 of its 60 min runs 10."""
     from research import remote
     from research.cli import main
 
@@ -151,7 +151,7 @@ def test_it_stops_every_process_of_a_live_run_outside_the_slots_but_its_runner(t
 
 
 def test_renice_moves_a_direct_runs_processes_to_nice_19_once_and_leaves_slot_runs_alone(tmp_path, monkeypatch, capsys):
-    """Node 1 (top, 18 Oct): lanes' direct runs took the cores the train checks need. `--renice 19` stops nothing: it renices every
+    """On node 1 lanes' direct runs must not take the cores the train checks need. `--renice 19` stops nothing: it renices every
     process of a live run outside the slots, its runner too, and logs a run only while it moved a process."""
     runs, proc, marker, log = tmp_path / "runs", tmp_path / "proc", tmp_path / "direct-runs-nice", tmp_path / "direct-nice.jsonl"
     gate = _run(runs, "r-gate", "running", ["python3", "tools/verity/check/slot.py", "--", "true"], pgid=10, runner=9)
@@ -173,7 +173,7 @@ def test_renice_moves_a_direct_runs_processes_to_nice_19_once_and_leaves_slot_ru
 
 
 def test_an_auditor_host_stops_every_live_run_but_the_commands_its_marker_lists(tmp_path, monkeypatch):
-    """vy-challenger-1 (INF-154): a run launched from a tree older than the launcher's auditor refusal is stopped, unless its command
+    """On vy-challenger-1 a run launched from a tree older than the launcher's auditor refusal is stopped, unless its command
     is exactly a line of /etc/vy/auditor; slot.py's runs get no pass there."""
     runs, proc, marker, log = tmp_path / "runs", tmp_path / "proc", tmp_path / "auditor", tmp_path / "auditor-only.jsonl"
     ok = _run(runs, "r-ok", "running", ["bash", "benchmarks/live_challenger/run.sh"], pgid=10, runner=9)
@@ -198,8 +198,9 @@ def test_an_auditor_host_stops_every_live_run_but_the_commands_its_marker_lists(
 
 def test_deploy_makes_the_challenger_and_verifier_hosts_auditor_hosts_that_take_no_research_run():
     """The deployed marker lists no command (the challenger runs only through vy-challenger-gate, the verifier through
-    vy-verifier-gate) and goes, with the timer that enforces it, to the auditor hosts only, each host's gate and units to it
-    alone; the nodes' shared peers file and the cluster's description name no auditor host."""
+    vy-verifier-gate) and goes, with the timer that enforces it, to the auditor hosts only, each host's gate to it alone (the
+    challenger's and certifier's units also go to vy-auditor-2, which runs a certifier); the nodes' shared peers file and the
+    cluster's description name no auditor host."""
     import tomllib
     from pathlib import Path
 
@@ -216,9 +217,10 @@ def test_deploy_makes_the_challenger_and_verifier_hosts_auditor_hosts_that_take_
     assert "--auditor --marker /etc/vy/auditor" in (nebius / "vy-auditor-only.service").read_text()
     gate = {e["path"]: e["nodes"] for e in rows if "/pods/nebius/challenger/" in e.get("src", "")
             and not e["src"].endswith("/11-vy-admin.conf")}
-    assert gate == {p: ["vy-challenger-1"] for p in ("/usr/local/sbin/vy-challenger-gate", "/usr/local/sbin/vy-challenger-setup",
-                                                     "/usr/local/sbin/vy-challenger-pin", "/etc/systemd/system/vy-challenger@.service",
-                                                     "/etc/systemd/system/vy-certifier@.service")}
+    assert gate == {**{p: ["vy-challenger-1"] for p in ("/usr/local/sbin/vy-challenger-gate", "/usr/local/sbin/vy-challenger-setup",
+                                                        "/usr/local/sbin/vy-challenger-pin")},
+                    **{p: ["vy-challenger-1", "vy-auditor-2"] for p in ("/etc/systemd/system/vy-challenger@.service",
+                                                                        "/etc/systemd/system/vy-certifier@.service")}}
     verifier = {e["path"]: e["nodes"] for e in rows if "/pods/nebius/verifier/" in e.get("src", "")}
     assert verifier == {p: ["vy-auditor-1", "vy-auditor-2"] for p in (
         "/usr/local/sbin/vy-verifier-gate", "/usr/local/sbin/vy-verifier-setup", "/usr/local/sbin/vy-verifier-pin",

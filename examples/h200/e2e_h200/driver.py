@@ -27,7 +27,7 @@ rest +0), ``pv``, ``o_amax``, ``o_quant``, ``wo``, ``attn_residual``, ``mlp_sums
 under its ``pv`` fusion no ``softmax``. The map's units
 (`plan.Units`) are slices of these rows. RMSNorm sums in chunks and groups (`shape.Forms`), which changes its words from one
 sequential sum wherever a row is more than one chunk. With ``keep=False`` a group's tables are dropped once committed (a
-run of record keeps no step's tables: a drawn slot is opened by replaying its request, `opening`).
+run of record keeps no step's tables: a sampled slot is opened by replaying its request, `opening`).
 """
 from __future__ import annotations
 

@@ -65,6 +65,7 @@ from verity.ml.randomness import Key
 from verity_vllm import settings
 from verity_vllm.check.replay import cached_prefix as CP
 from verity_vllm.check.replay import fork as FK
+from verity_vllm.check.replay.checks import checks_of, fold as fold_checks
 from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.replay.fork import WorkerDied
 from verity_vllm.check.replay.replay_codes import NOT_YET, WHY_CLASSES_BY_NAME, WHY_CLASSES_FAULT, why_class
@@ -562,7 +563,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                    ring_slots: int | None = None, retention: str | None = None, seed_challenge: str | None = None,
                    manifest: dict[str, Any] | None = None, executed_prefix: dict[str, dict] | None = None,
                    program_dirs: dict[str, str] | None = None, challenge_key: Key | None = None, replay_k: int | None = None, replay_draw: str = "family", plan: bool = False, memo: dict | None = None,
-                   cached_prefixes: dict[str, dict] | None = None) -> dict[str, Any]:
+                   cached_prefixes: dict[str, dict] | None = None, certified: dict[str, dict] | None = None) -> dict[str, Any]:
     """C2 of record.  `challenge_key` (off legacy, `challenge.replay_key`) keys the sample in place of `seed`.  `cached_prefixes`: each warm
     request's cached rows and their producers (`populate`): its attention reads its cached prefix from what they committed.  `executed_prefix`: request -> `executed_prefix_of_record(...)` from the Commit's own committed tokens;
     rows at request-relative steps >= n_exec leave the sampling pool into the named class `population.not_executed_by_rule` (never a
@@ -575,8 +576,10 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     `targets` (`<op_path>[@<step>]`) add every VU of a module to the sample (targeted negatives; not subject to the cap); `replay_k` (the config run): that many units, sampled by `replay_draw` (`family_strata`).
     Addresses: the v2 query's population; a request's Build dir (`program_dirs`: request label -> dir) supplies the correspondence the
     manifest was built with (recorded as `addresses`).
-    Result: True = every sampled VU replays bit-exactly and every non-empty stratum was evaluated; False = a mismatch (named);
-    None = nothing evaluable / a stratum could not be evaluated (partial, never PASS).  `plan`: the same sample, read only (`planned`).
+    Result: True = every sampled VU replays bit-exactly, every non-empty stratum was evaluated and every check of the Programs is 1
+    (`checks`, all of them, recorded as `checks`); False = a mismatch or a refused check (named); None = nothing evaluable / a
+    stratum or a check could not be evaluated (partial, never PASS).  `certified`: request label -> its seed rule's certified
+    inputs (`checks.checks_of`).  `plan`: the same sample, read only (`planned`).
     `worker_peak` (bytes): the forked pool is fitted after the prewarm to the cgroup's memory (`fit_pool`, recorded as
     `evaluator.memory`), and a pick too large for it is refused (PoolDoesNotFit); None forks the workers asked for."""
     t_start = time.perf_counter()
@@ -686,6 +689,8 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                f"(req {first.get('request_id')}, step {first.get('step')}): {str(first.get('why'))[:160]}")
     else:
         result, grade, why = True, "complete", None
+    chk = checks_of({rid: indices[rid] for rid in programs}, store, weights, arrivals, executed_prefix, certified)
+    result, grade, why = fold_checks(result, grade, why, chk)
     steps_seen = sorted({v["step"] for v in picked})
     catch = _catch_probability(strata)
     # the population of record is Q(P) (the required manifest), never the replay's own enumeration: reconcile the reach
@@ -731,6 +736,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                           # inherited C2 heap (otherwise a 72 GB-per-child COW); {} when no pool was forked
                           "fork": dict(_FORK_STATS) if int(workers) > 1 else {}, **({"memory": memory} if memory else {})},
             "strata": strata, "strata_unevaluated": strata_unevaluated, **({"value_reads_in_children": child_reads} if child_reads else {}),
+            **({"checks": chk} if chk is not None else {}),
             # EVERY unevaluated stratum with its reason and class, uncapped (the verdict's named-gap rule decides per stratum)
             "unevaluated_strata": [unev_by_stratum[k] for k in strata_unevaluated if k in unev_by_stratum],
             "why_classes": {"by_name": list(WHY_CLASSES_BY_NAME), "fault": list(WHY_CLASSES_FAULT),

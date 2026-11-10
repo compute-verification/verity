@@ -26,6 +26,10 @@ from __future__ import annotations
 
 import ctypes as C
 import os
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import torch
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PAD_K = 32
@@ -37,8 +41,8 @@ GROUP = {"s16": 16, "h16": 16, "h8": 8}
 #: the s16 kernels' most keys a query sees, and PV's largest K
 S16_KEYS = 32
 #: each op's launch: (tiling, warps a CTA, head groups a warp), falling back to h16, h8 and then q8 where the tiling can't
-#: serve; run.py's timing sweeps the alternatives (on the H200 at the frozen shape, QK^T and PV are each fastest with every
-#: group of a sequence in one warp, at M = 4,096, 16,384 and 20,480 within 3%)
+#: serve; run.py's timing sweeps the alternatives, and LAUNCH is the fastest it found at the frozen shape (every group of
+#: a sequence in one warp)
 LAUNCH = {"qk": ("s16", 1, 16), "pv": ("s16", 1, 16)}
 #: qk's and pv's ``path``: attn.LAUNCH's tiling, or the reference kernels
 PATHS = ("fast", "ref")
@@ -87,7 +91,7 @@ _MODULES: dict[int, tuple] = {}
 _CONSTS: dict[tuple, tuple] = {}
 
 
-def _consts(dev, B: int, T: int) -> tuple:
+def _consts(dev: torch.device, B: int, T: int) -> tuple:
     """(lens of T each, nq of 1 each) for B sequences on ``dev``, made once outside a CUDA graph's capture (inside one, a
     tensor first filled there would hold its words only once the graph replays)."""
     import torch
@@ -103,14 +107,14 @@ def _consts(dev, B: int, T: int) -> tuple:
     return got
 
 
-def _lib():
+def _lib() -> C.CDLL:
     lib = C.CDLL(os.environ.get("ATTN_LIBCUDA", "libcuda.so.1"))
     for f, a in _DRIVER.items():
         getattr(lib, f).argtypes, getattr(lib, f).restype = a, C.c_int
     return lib
 
 
-def _ok(lib, f: str, *args) -> None:
+def _ok(lib: C.CDLL, f: str, *args: object) -> None:
     r = getattr(lib, f)(*args)
     if r:
         s = C.c_char_p()
@@ -148,7 +152,7 @@ def _module(index: int) -> tuple:
     return _MODULES[index]
 
 
-def _words(t, name: str, pairs: bool):
+def _words(t: torch.Tensor, name: str, pairs: bool) -> torch.Tensor:
     """``t`` as bf16 with its last dimension contiguous (and, where the kernel loads word pairs, even strides and a 4-byte
     aligned base), copied only when it isn't."""
     import torch
@@ -162,11 +166,12 @@ def _words(t, name: str, pairs: bool):
     return t
 
 
-def _kv4(t):
+def _kv4(t: torch.Tensor) -> torch.Tensor:
     return t.unsqueeze(1) if t.dim() == 3 else t
 
 
-def _lens(lens, B: int, T: int, dev, check: bool, name: str):
+def _lens(lens: torch.Tensor | None, B: int, T: int, dev: torch.device, check: bool,
+          name: str) -> tuple[torch.Tensor | None, bool | None]:
     """(lens as int32 on ``dev``, or None, and whether some sequence has no keys: None when unchecked)."""
     import torch
 
@@ -183,7 +188,7 @@ def _lens(lens, B: int, T: int, dev, check: bool, name: str):
     return lens, lo == 0
 
 
-def _out(out, shape: tuple, like, name: str):
+def _out(out: torch.Tensor | None, shape: tuple, like: torch.Tensor, name: str) -> torch.Tensor:
     import torch
 
     if out is None:
@@ -196,7 +201,8 @@ def _out(out, shape: tuple, like, name: str):
     return out
 
 
-def _launch(op: str, x, kv, out, lens, kpv: int, warps: int | None, path: str) -> None:
+def _launch(op: str, x: torch.Tensor, kv: torch.Tensor, out: torch.Tensor, lens: torch.Tensor | None, kpv: int,
+            warps: int | None, path: str) -> None:
     import torch
 
     if path not in PATHS:
@@ -239,8 +245,8 @@ def _launch(op: str, x, kv, out, lens, kpv: int, warps: int | None, path: str) -
             32 * w, 1, 1, 0, stream, params, None)
 
 
-def qk(q, k, lens=None, *, out=None, fill: int = NEG_INF, warps: int | None = None, check_lens: bool = True,
-       path: str = "fast"):
+def qk(q: torch.Tensor, k: torch.Tensor, lens: torch.Tensor | None = None, *, out: torch.Tensor | None = None,
+       fill: int = NEG_INF, warps: int | None = None, check_lens: bool = True, path: str = "fast") -> torch.Tensor:
     """S (B, H, T) = q (B, H, D) against k (B, T, D) or (B, Hkv, T, D), the word ``fill`` past lens; see the module."""
     import torch
 
@@ -258,8 +264,8 @@ def qk(q, k, lens=None, *, out=None, fill: int = NEG_INF, warps: int | None = No
     return s
 
 
-def pv(p, v, lens=None, *, out=None, kpv: int = PAD_K, warps: int | None = None, check_lens: bool = True,
-       path: str = "fast"):
+def pv(p: torch.Tensor, v: torch.Tensor, lens: torch.Tensor | None = None, *, out: torch.Tensor | None = None,
+       kpv: int = PAD_K, warps: int | None = None, check_lens: bool = True, path: str = "fast") -> torch.Tensor:
     """O (B, H, D) = p (B, H, T) times v (B, T, D) or (B, Hkv, T, D), PV's K = max(kpv, pad16(lens)); see the module."""
 
     p, v = _words(p, "p", False), _kv4(_words(v, "v", False))

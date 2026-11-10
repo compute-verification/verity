@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Core.Game
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # How sound games compose

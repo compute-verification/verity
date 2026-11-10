@@ -1,0 +1,15 @@
+{
+ "schema": "spot-card/v1",
+ "slot": "replay",
+ "model": "DeepSeek-V4-Pro",
+ "status": "modeled",
+ "provisional": true,
+ "source": "a replay re-runs its request at serving's MFU on the scope's GPUs; whether DeepSeek-V4-Pro reproduces its served tokens alone or only in the served batch layout is not measured yet",
+ "runs": [],
+ "owner": "@proofs",
+ "value": {
+  "factor": 1.0,
+  "batch_layout": "served",
+  "deterministic": null
+ }
+}

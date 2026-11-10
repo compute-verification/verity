@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pouw.PearlC.Tile4Circuit
+public import Definitions.Pouw.PearlC.Instance
 
 /-!
 # PoUW's own primitives in the row units, as word functions (definitions only)
@@ -17,8 +18,8 @@ words as naturals with the Python's arithmetic:
   statistic over `sq300` (`2^300·x²` of an FP32 word) and `up48` (rounded up to 48 significant bits).
 
 `RowPrimVectors` holds them to the Python by vectors the kernel checks (`SecurityProofs.PearlC.RowPrimChecks`;
-`PouwETilde_v1` on its whole domain), written by `verity/protocols/accounting/work/pouw/lean/scripts/row_prims_vectors.py` from each primitive's `evaluate`;
-`tests/test_row_prims_lean.py` checks that the script still writes them.
+`PouwETilde_v1` on its whole domain), written by `verity/core/protocols/pouw/lean/scripts/row_prims_vectors.py` from each primitive's `evaluate`;
+`verity/core/protocols/pouw/tests/test_row_prims_lean.py` checks that the script still writes them.
 -/
 
 @[expose] public section

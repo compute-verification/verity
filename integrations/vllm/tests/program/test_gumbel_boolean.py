@@ -207,7 +207,7 @@ RandNoise = TR.definition("RandNoise", 1, lambda C, w: GB.gumbel_noise(C, GB.tl_
 
 @pytest.mark.slow
 def test_uniform_and_noise_of_a_philox_word() -> None:
-    """The words a random lane almost never draws: 0 and all ones (``tl.rand``'s zero, floored at 2^-31'), the words beside
+    """The words a random lane almost never samples: 0 and all ones (``tl.rand``'s zero, floored at 2^-31'), the words beside
     every power of two of both signs (the f32 rounding of the 31-bit integer, the uniform's top), and random words; the
     restatement is `noise_lane`'s on random lanes."""
     rng = _rng("rand-noise")

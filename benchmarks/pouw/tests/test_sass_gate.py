@@ -286,7 +286,7 @@ merge_k:
 
 def test_a_read_the_gate_cant_tell_from_a_merge_passes_and_is_listed():
     """The seed reaches the store only when P0 holds; another write reaches it otherwise. The gate can't show that path
-    infeasible (hash_leaf's 22 such reads are: its tail reads R10 only when a count it skipped the loop for is 1-3), so it
+    infeasible (hash_leaf's 22 such reads are: its tail reads the merged register only when a count it skipped the loop for is 1-3), so it
     passes the read and lists it; without the other write the read is direct, and refused."""
     v = SG.cubin_verdict(SG.parse_nvdisasm(MERGE), NOTES["plain"], pins())
     assert v["offending_n"] == 0 and v["covered"] == {"int-seed": 2}

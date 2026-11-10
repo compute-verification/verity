@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pouw.Assumptions.Dimension.H100Assumptions
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
 # `MH100`'s loop-free price table (Round 8; draft semantics)

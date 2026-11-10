@@ -166,7 +166,8 @@ def seal_of(opts: Any) -> dict[str, Any]:
     from verity_vllm.check.replay.driver import engine_facts_of_record
     from verity_vllm.pipeline import source_identity as SI
 
-    return {"label": f"serve-openai:{opts.run_id}", "code": SI.code_identity(SI.TREE)["sha256"], "engine_of_record": engine_facts_of_record()}
+    return {"label": f"serve-openai:{opts.run_id}", "code": SI.code_identity_of("the seal", SI.TREE)["sha256"],
+            "engine_of_record": engine_facts_of_record()}
 
 
 def committer(opts: Any, llm: Any, label: str = "serve-openai") -> Any:
@@ -558,7 +559,7 @@ class _Null:
 # ---------------------------------------------------------------------------------------------------------------- off the loop
 
 #: what a committer's `reset` rebinds for its next window: the closed window's per-step state, as its seal reads it
-WINDOW_STATE = ("_layouts", "_gpu_blocks", "_gpu_levels", "_streams", "_levels", "_padding", "_salts", "_done", "row_keys")
+WINDOW_STATE = ("_layouts", "_gpu_blocks", "_gpu_levels", "_done", "row_keys")
 GB = 10 ** 9
 
 

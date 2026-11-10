@@ -3,6 +3,38 @@ module
 public import Definitions.Claims
 public import Flock.ProvedScope
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
+public import Batteries.Data.ByteArray
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The verifier's statement, read as `Claims.Flock.Stmt`
@@ -13,7 +45,7 @@ them), and that statement in readable form (`toReadable`): `m` and `kLog` of the
 relation's fields, and the `Form` the scope check reads, each field the value `ProvedScope.check` tests.
 
 * `Read`: the flags' values (`Exec.Inputs`, under `--zk` before `zkTags` and `zkCoins` replace `--statement`'s tags and
-  `--coins`), whether the verifier is the masked one, the record's draw, the verifier's own public input words
+  `--coins`), whether the verifier is the masked one, the record's sample, the verifier's own public input words
   (`--public-inputs`) and whether it holds its own registered reads (`--registered`).
 * `Read.check`: `ProvedScope.check` as `verifyCmd` calls it; `Parsed.scope`: it, then `ProvedScope.sizesOk` on the
   parsed tables' `m`, as `verifyCmd`'s verdict runs them.
@@ -31,8 +63,8 @@ namespace Flock.Readable
 open FlockSoundness.Discharge
 
 /-- What `flock-verify verify` reads of a statement besides the session directory: its flags' values (`I`, as
-`Exec.Inputs` holds them: `--statement`'s tags after `withCoins` and `--coins`, which `verify --zk` replaces by
-`zkTags I` and `zkCoins I`), whether it is the masked verifier (`--zk`), the record's draw (`Main.recordDraw`, none
+`Exec.Inputs` holds them: `--statement`'s tags and `--coins`, which `verify --zk` replaces by
+`zkTags I` and `zkCoins I`), whether it is the masked verifier (`--zk`), the record's sample (`Main.recordDraw`, none
 without one), its own public input words (`--public-inputs`) and whether it holds its own registered reads
 (`--registered`). -/
 structure Read where
@@ -128,7 +160,7 @@ def Parsed.only (p : Parsed) (j : ℕ) : Parsed := { p with sts := #[p.sts[j]!] 
 /-- The readable relation's fields: the block circuit, each block's inputs and outputs at the circuit's gates, and the
 public values. -/
 structure Relation where
-  C : FlockSoundness.Audit.Circuit
+  C : Verity.Boolean.Circuit
   inp : ℕ → ℕ → Claims.Flock.Src
   out : ℕ → ℕ → Claims.Flock.Src
   pub : List Bool

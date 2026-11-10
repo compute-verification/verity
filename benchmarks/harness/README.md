@@ -2,10 +2,10 @@
 
 `verity-bench` measures what an arm (a protocol option or an experimental install) adds to served inference, against
 stock vLLM, through the vLLM integration (`integrations/vllm`). It owns specs, runs, sweeps, results and tables. The
-integration owns the engine pin, the hooks and the add-on interface (its README's "Hook interface"), and the harness uses
-those like any other caller. This file is the harness's contract: how a point is timed and what a result says. In order:
-the commands, specs, arms, how a point is timed, metrics, results, dispatch and resume, settings, and the two tables
-`served-table` and `breakdown` render.
+integration owns the engine pin (`config.VLLM`), the hooks (`integrations/vllm/verity_vllm/engine/hooks.py`) and the add-on
+interface (`integrations/vllm/verity_vllm/protocols/interface.py`), and the harness uses those like any other caller. This
+file is the harness's contract: how a point is timed and what a result says. In order: the commands, specs, arms, how a
+point is timed, metrics, results, dispatch and resume, settings, and the two tables `served-table` and `breakdown` render.
 `benchmarks/harness/tests/test_bench.py::test_the_readme_states_the_contract_the_code_keeps` fails when the code drifts from it.
 
 ## Commands
@@ -20,6 +20,8 @@ verity-bench table R1 R2...  # one table from one spec's per-point results, only
 verity-bench served-table    # every protocol's served overhead from the store: runs of record, else newest passing (--json)
 verity-bench breakdown [RESULT...]  # where the bandwidth audit's time goes, by span: the store's newest passing runs, or these files
 verity-bench vllm --preset SPEC --arms A,B --out DIR   # the same measurement in this process, unrecorded
+verity-bench overhead points|run|table  # the front door for γ at a card's operating points (`verity bench overhead`,
+                                        # benchmarks/overhead/README.md): the PoUW harness's kernels, not served vLLM
 ~~~
 
 ## Specs
@@ -32,9 +34,7 @@ included), a wrong type or an unknown GPU id is an error before anything runs. A
 `model_digest` (`presets.local_checkpoint`'s hash of its files but a Hub snapshot's dot-files and Markdown, which no loader
 reads), which a dispatched point recomputes and refuses to run on when it differs.
 
-A sweep is the product of its batches, prompt lengths, traffic shapes and samplings: `greedy`, or `stochastic`
-(temperature 0.8, top-p 0.95). Every request carries its own seed, so a stochastic point's tokens are a function of the
-engine's numerics like a greedy one's.
+A sweep is the product of its batches, prompt lengths and traffic shapes, and every request is sampled greedily.
 
 The engine settings `serving_defaults = true` build every engine as vLLM serves (torch.compile, its CUDA-graph mode and
 capture sizes, no batch invariance: the execution label `compiled` of `verity_vllm.engine.served`), with one Inductor
@@ -89,7 +89,7 @@ export their paths, say), are part of the resolved spec and so of every point's 
 
 ## How a point is timed
 
-1. **Gates before timing.** Every arm runs every point, with the point's sampling, before anything is timed:
+1. **Gates before timing.** Every arm runs every point before anything is timed:
    - `tokens`: an arm with a control must produce the control's tokens exactly. A failure records the first divergent
      request, position and tokens.
    - `kv-pool`: an arm and its control must get the same KV-cache pool, in tokens. vLLM schedules by free KV pages, and

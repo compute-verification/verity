@@ -26,8 +26,8 @@ path = "../composition"
 # The ported subprotocols: sampled proofs' one-stage audit (integrity) and PoUW's period credit (work,
 # `PouwCheck.Period`).
 [[require]]
-name = "core_sampled_proofs"
-path = "../../service/sampled_proofs"
+name = "core_spot"
+path = "../../service/spot"
 
 [[require]]
 name = "pouw_check"
@@ -54,12 +54,19 @@ path = "../pous/check"
 name = "remote_audit"
 path = "../remote_bandwidth/lean"
 
+# Integrity: sampled proofs in the form its params name, one-stage v2's audit or the recursive audit, V*'s compiled
+# check (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`).
+[[require]]
+name = "core_vstar_recursive"
+path = "../../service/vstar/recursive"
+
 # The wipe: the memory challenger's streamed-label wipe verdict (`MemoryChallenger.WipeProtocol`, `verity/wipe/v0`).
 [[require]]
 name = "core_memory_challenger"
 path = "../../devices/memory_challenger/lean"
 
-# Remote, the other composite `product` names.
+# Remote, the other composite `product` names, whose tie of PoUW's windows to the run's record onsite reads
+# (`Core.Remote.windows`).
 [[require]]
 name = "core_remote"
 path = "../remote"

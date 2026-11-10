@@ -160,15 +160,14 @@ def test_a_block_of_three_vus_is_refused(store, tmp_path):
     the Rust side is `circuit.rs`'s `a_block_of_three_vus_is_refused`): the Digest region's VU bits, `Nat.log2 3 = 1` here
     and `trailing_zeros(3) = 0` in Rust, would pin VUs 0 and 1 here, VU 0 there, and VU 2 in neither. The statement is flat
     GEMM's composed for three VUs a block, with its public file of three instances."""
-    pytest.importorskip("verity_numerical")
-    from verity_numerical.bench import templates as TM
-    from verity_numerical.bench.generate import generate
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock import subcircuit_templates as TM
+    from verity_flock.input_sets import InputSet
+    from synthetic_sets import synthetic_set
 
     from verity_flock import circuit as FC
     from verity_flock import ir_lower as IL
 
-    s = InputSet.open(generate(TM.parse_subcircuit_id("gemm-coordinate/k64/sm80-mma-bf16"), 3, 20260926, tmp_path)["path"])
+    s = InputSet.open(synthetic_set(TM.parse_subcircuit_id("gemm-coordinate/k64/sm80-mma-bf16"), 3, 20260926, tmp_path)["path"])
     low = FC.lowering_for_set(s)
     text = FC.compose(low, s.subcircuit, vus_per_block=3, statics=FC.set_statics(s))
     meta = json.loads(text.split("\n", 2)[1][5:])

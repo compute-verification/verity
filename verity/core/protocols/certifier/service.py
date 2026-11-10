@@ -1,5 +1,5 @@
-"""One execution phase's network certificates through the proof system (N2): the network `Spec`, the firewall's salted
-commitment to the execution phase's certified records, and the check's verifier of record.
+"""One execution phase's network certificates through the proof system (N2): the network `Spec`, the ZK server's salted
+commitment to the execution phase's certified records, and the check's verifier.
 
 **What is committed.** One `Value`, `certificates`: four leaves under one salted root, the execution phase's two
 certified records (`CertifiedRecord`), egress leaf 0 and ingress leaf 1, and their heads, egress leaf 2 and ingress leaf
@@ -20,17 +20,17 @@ credit: it accepts only when every window of the egress profile (a served link's
 its outcome of record accepted, so a rejected or late window, one with no outcome, and a gap in the registrations each
 reject the link. A run's is the AND over its links'.
 
-**The period draw** (`LinkWindows.period_draw`) samples the link-windows instead. The prover first commits the
+**The period sample** (`LinkWindows.period_draw`) samples the link-windows instead. The prover first commits the
 period: every window's salted root (`root`), which the challenger records before it reads a coin (a coin source with
-a `commit` is first committed to the period's digest, as a remote challenger's is). It then draws `subset:K` of the n
+a `commit` is first committed to the period's digest, as a remote challenger's is). It then samples `subset:K` of the n
 windows, and only the drawn windows are registered, in window order, each held to its committed root
 (`register(drawn=…)`), selected and proved. `network_verdict(drawn=…)` accepts when exactly the drawn windows are
-registered, in order, each under its committed root, with an accepted outcome of record, and it states what the draw
+registered, in order, each under its committed root, with an accepted outcome of record, and it states what the sample
 established: except with probability δ, at most `wrong_units["bound"]` of the n committed windows are wrong (the
-uniform K-subset's exact bound, one-stage's `wrong_units` over windows), so ε = bound / n at δ. The challenger's draw
+uniform K-subset's exact bound, one-stage's `wrong_units` over windows), so ε = bound / n at δ. The challenger's sample
 is Python's
-(`service.select_draw`), which records the coin bytes it read (`read`); the draw of record is the Lean verifier of
-record's on those bytes (`lean_draw`: Flock's `flock-verify draw --population n --k K --stream-file`, the Lean
+(`service.select_draw`), which records the coin bytes it read (`read`); the sample of record is the Lean
+verifier's on those bytes (`lean_draw`: Flock's `flock-verify draw --population n --k K --stream-file`, the Lean
 `draw` the one-stage drivers run, `Flock.Draw.drawOn`), which the network verdict runs itself, as a registration's own
 sample is the Lean's `Select.select` on the bytes it read. The verdict accepts only when the windows registered and
 proved are exactly that sample's, and otherwise refuses by name (`PERIOD_DRAWN`), whatever proof blocks the sample
@@ -70,7 +70,7 @@ encode to about 140 MB and the proof system encodes the Program on every registr
 `program_digest` of the Definition's Program (`head_check.circuit_digest`), the one a Flock statement names a template
 by, pinned in `head_check.circuit-check.json` and held to the Definition by circuit-check. So the Program's digest binds
 the head check's circuit, and the spec, the stream and each registration bind to it: a proof of another circuit with the
-same interface names another Program, which the verifier of record refuses (`LinkWindows.proved`), and a proof's circuit
+same interface names another Program, which the verifier refuses (`LinkWindows.proved`), and a proof's circuit
 puts the Definition where its gate stands only once the digest is the gate's (`head_check.expand`). The digest is read
 from the pin, never computed, since tracing the gadgets takes minutes: a size class no sidecar pins has a gate that
 names none (`@unpinned`), and no proof of its proof block is accepted, while its verdict of record in the clear is
@@ -88,11 +88,11 @@ proves in zero knowledge, outside this protocol.
 block's public parameters) and ``wit`` (each end's head, its leaf's salt, its two siblings and the certifier's salt),
 each the little-endian concatenation of its parameters' bits in whole u16 words (`LinkWindows.layout`,
 `LinkWindows.row`), and the output row ``o0``, one u16 word holding the two output bits (`OUT_BITS`); each row committed
-under a hiding salt. Its circuit is `LinkWindows.proof_unit`, the registered proof block with each gate the Definition
+under a hiding salt. Its circuit is `LinkWindows.proof_block`, the registered proof block with each gate the Definition
 its pinned digest names, bound to the registered partition and Program (`benchmarks/network_traces/n2_zk.py` proves it
-behind the firewall).
+behind the ZK server).
 
-Its verifier of record is `LinkWindows.verify`, which decides on the delivered proof (`Delivered`) and public inputs
+Its verifier is `LinkWindows.verify`, which decides on the delivered proof (`Delivered`) and public inputs
 alone. It accepts when
 - the verifier's own run of Flock's Lean verifier (`proofs.verify`, `verify --zk`) accepts every session on the circuit
   file the auditor committed, the sessions prove this link's registered proof block (`LinkWindows.proved`: every gate
@@ -176,12 +176,12 @@ Lean takes as an input rather than checks:
 The Lean reads an `LmsKey` only, and refuses (so `verify` rejects) any other key. `tie_service.IngressTie.verify`, the
 ingress tie's verifier, is not ported and stays Python. Every proving run of N2 recorded before the switch replayed
 through both to the verdict it recorded, and the properties of the Lean's verdict are
-`Security/Properties/NetworkCertifier/LinkWindow.lean`.
+`Security/Properties/NetworkCertifier/Check/LinkWindow.lean`.
 
 What that establishes, and what it doesn't: the outcome is accept exactly when the Lean verifier accepts a proof of the
 registered proof block whose public row is the verifier's own and whose output word is 0b11, the certificates verify and the
-sync is declared; the outcome record binds the registered root, the draw and the delivered sessions. The verifier of
-record reads no witness. The proof opens the head leaves (2, 3) only, so the
+sync is declared; the outcome record binds the registered root, the sample and the delivered sessions. The
+verifier reads no witness. The proof opens the head leaves (2, 3) only, so the
 record leaves (0, 1), which hold each certified record whole, are committed but read by nothing in the verdict, and
 the certificates' signatures are checked
 on the host from their public fields, not in the proof. One clock per spatial unit across links (`Audit.syncs`) is
@@ -218,10 +218,10 @@ from verity.core.protocols.certifier.certificate import Certificate, CertifiedRe
     parameters_digest
 from verity.core.protocols.certifier.grid import GridParams
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet
-from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.one_stage import audit as OA, partition as P, proofs as PF, registration as R
-from verity.core.protocols.sampled_proofs.one_stage.proofs import Finding
-from verity.core.protocols.sampled_proofs.one_stage.verdict import Verdict
+from verity.core.protocols.spot import service as S
+from verity.core.protocols.spot.one_stage import audit as OA, partition as P, proofs as PF, registration as R
+from verity.core.protocols.spot.one_stage.proofs import Finding
+from verity.core.protocols.spot.one_stage.verdict import Verdict
 
 #: Whose verdict on an execution phase's proof is the record's, by kind of link (`LinkWindows.kind`): the Lean's
 #: (``"lean"``, `NetworkCheck.LinkWindow`) or this module's (``"python"``). Both run on every proof either way. Setting a
@@ -234,7 +234,7 @@ STATEMENT = "verity-network-certifier/statement/v0"
 VERDICT = "verity-network-certifier/verdict/v0"
 NETWORK_VERDICT = "verity-network-certifier/network-verdict/v0"
 PERIOD_DRAW = "verity-network-certifier/period-draw/v1"
-#: the sampled network verdict's refusal by name: the windows registered and proved are not the period's draw of record
+#: the sampled network verdict's refusal by name: the windows registered and proved are not the period's sample of record
 #: (`lean_draw` on the coins the period sample read), or that sample can't be made
 PERIOD_DRAWN = "period-draw"
 VALUE = "certificates"
@@ -419,7 +419,7 @@ def _root_of(record: Any) -> Any:
 
 
 def lean_draw(k: int, n: int, read: bytes) -> dict[str, Any]:
-    """The period's sample of record: Flock's Lean verifier of record (`proofs.executable`, which verifies the
+    """The period's sample of record: Flock's Lean verifier (`proofs.executable`, which verifies the
     windows' proofs) sampling `subset:k` of n on `read`, the coin bytes the period sample read, in order
     (``flock-verify draw --population n --k k --stream-file``, `Flock.Draw.drawOn`, which `select_draw`'s sampler is
     byte for byte: `test_lean_verifier.test_unit_draw_samplers_are_the_exact_reduction` and `test_coins`); its ``DRAW``
@@ -537,7 +537,7 @@ def _opened(delivered: Delivered, unit: int, public: bytes | None, bits: int) ->
 
 @dataclass(frozen=True)
 class Hidden:
-    """The firewall's side of one link-window's commitment, all witness: the egress and the ingress certified records,
+    """The ZK server's side of one link-window's commitment, all witness: the egress and the ingress certified records,
     in leaf order, and one salt per leaf (`rows`'s order: the two records', then the two heads')."""
 
     window: int
@@ -661,7 +661,7 @@ class LinkWindows:
         return unit(self.head_key(0), self.head_key(1), self.served_key())
 
     @cached_property
-    def proof_unit(self):
+    def proof_block(self):
         """The proof block a proof's circuit lowers: `unit` with each gate the Definition it names (`unit(proof=True)`),
         the template of the registered query under the same id. The prover's and the auditor's lowering, never the
         registered Program, which holds the gates."""
@@ -722,7 +722,7 @@ class LinkWindows:
     def provenance(window: int) -> dict[str, Any]:
         return {"kind": "served", "window": window}
 
-    # the firewall
+    # the ZK server
 
     def commit(self, window: int, egress: CertifiedRecord, ingress: CertifiedRecord,
                salts: Sequence[bytes] | None = None) -> Hidden:
@@ -754,7 +754,7 @@ class LinkWindows:
                         previous=previous)
 
     def session(self, opening: Hidden, draw: S.Draw) -> str:
-        """The delivered session's SHA-512: the registration, the draw and the salted leaves the opening reproduces."""
+        """The delivered session's SHA-512: the registration, the sample and the salted leaves the opening reproduces."""
         return _sha512({"format": SESSION, "registration": draw.registration.digest, "draw": _sha512(dict(draw.draw)),
                         "leaves": [x.hex() for x in self.leaves(opening)]})
 
@@ -919,7 +919,7 @@ class LinkWindows:
         return out
 
     def proved(self, findings: Sequence[Finding]) -> bool:
-        """Whether `findings`, the verifier of record's run over a delivered proof of the proof block (`proofs.verify`),
+        """Whether `findings`, the verifier's run over a delivered proof of the proof block (`proofs.verify`),
         prove this link's proof block: every gate of it names its Definition's pinned circuit digest
         (`head_check.pinned`), and one or more sessions each accepted and named the link's registered Program (the
         partition object's `program`), which binds those digests. A proof of another circuit with the same interface
@@ -1046,7 +1046,7 @@ class LinkWindows:
         when
         - the verifier's own run of Flock's Lean verifier (`proofs.verify`, on the circuit file the auditor built,
           `circuit_sha512`) accepts every session, and they prove this link's registered proof block (`proved`) and the
-          sampled unit;
+          sampled proof block;
         - the proof's public row opens, under the salt delivered, to the verifier's own copy (`public_arguments`: the
           registered root, the public fields and both certificates' signed digests), and its output row to the word
           delivered (`_opened`), whose verdict bit and deadline bit are both 1;
@@ -1136,7 +1136,7 @@ class LinkWindows:
 
     def outcome(self, stream: S.Stream, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
                 delivered: Delivered, *, circuit_sha512: str, opening: Hidden | None = None) -> S.Outcome:
-        """`stream.outcome` on the verifier of record's verdict (`verify`), with the registered root as the session's:
+        """`stream.outcome` on the verifier's verdict (`verify`), with the registered root as the session's:
         the root the proof's public row names, which it opens only to the verifier's own copy."""
         verdict = self.verify(draw, certificates, syncs, delivered, circuit_sha512=circuit_sha512, opening=opening)
         return stream.outcome(draw, {VERIFIER: verdict}, self.statement(draw),
@@ -1170,15 +1170,15 @@ class LinkWindows:
         return _sha512({"format": PERIOD_DRAW, "stream": stream.digest, "roots": list(roots)})
 
     def period_draw(self, stream: S.Stream, roots: Sequence[str], k: int | None, coins: Any) -> dict[str, Any]:
-        """The period's draw over its link-windows 0 … n − 1, after the prover committed them: `roots`, window w's
+        """The period's sample over its link-windows 0 … n − 1, after the prover committed them: `roots`, window w's
         salted root (`root`, hex) at w, n of them (by default the link's windows, which `network_verdict` takes). Every
-        window for `k` None (`All`, reading no coins), else `subset:k`, 1 <= k <= n, on `coins` (a callable of a byte
-        count, as a stream's); a coin source with a `commit` method is first committed to the period's digest
-        (`commitment`), so the coins come after every commitment of the period. Call it before the stream's first
-        registration. The object is `{format, stream, law, k, population, units, roots, commitment, read}`,
-        `read` the coin bytes the draw read, in order (hex), from which the network verdict's Lean draws its own
-        (`lean_draw`); `register` and `network_verdict` take it as `drawn`. Raises `ValueError` for a stream that isn't
-        this link's or holds a registration, roots that aren't n SHA-512 hex digests, and k outside [1, n]."""
+        window for `k` None (`All`, reading no coins), else `subset:k`, 1 <= k <= n (the rule `rate:k/n`), on `coins`
+        (a callable of a byte count, as a stream's); a coin source with a `commit` method is first committed to the
+        period's digest (`commitment`), so the coins come after every commitment of the period. Call it before the
+        stream's first registration. The object is `{format, stream, law, k, population, units, roots, commitment,
+        read}`, `read` the coin bytes the sample read, in order (hex), from which the network verdict's Lean samples its
+        own (`lean_draw`); `register` and `network_verdict` take it as `drawn`. Raises `ValueError` for a stream that
+        isn't this link's or holds a registration, roots that aren't n SHA-512 hex digests, and k outside [1, n]."""
         n = self._period(stream, len(roots) if isinstance(roots, Sequence) and not isinstance(roots, str) else None)
         if stream.log:
             raise ValueError("the period is committed and drawn before the stream's first registration")
@@ -1188,7 +1188,7 @@ class LinkWindows:
         if k is not None and not (type(k) is int and 1 <= k <= n):
             raise ValueError(f"a period draw takes 1 <= K <= {n} of the link-windows, not {k!r}")
         commitment = self._committed(stream, roots)
-        rule = S.All() if k is None else S.Law(f"subset:{k}")
+        rule = S.All() if k is None else S.Law(f"rate:{k}/{n}")
         if k is not None and callable(getattr(coins, "commit", None)):
             coins.commit(bytes.fromhex(commitment))
         read = bytearray()
@@ -1245,7 +1245,7 @@ class LinkWindows:
 
         With `drawn`, the period sample (`period_draw`) over this stream's n windows, the stream's registrations must be
         exactly the drawn windows, in order, each under the root the period committed for it, and each needs an
-        accepted outcome. An undrawn window has no registration and
+        accepted outcome. An unsampled window has no registration and
         its record is None; a registration past the drawn windows is listed in `refused` as n, n + 1, … The verdict
         then carries `selection` (the sample) and `wrong_units`, what it established at the stream's δ: except with
         probability δ, an accepted link has at most `bound` wrong windows of the `of` committed, and `epsilon` is
@@ -1259,8 +1259,8 @@ class LinkWindows:
         registered window isn't one the Lean sampled; a sampled window not registered is in `refused`. `selection` is
         the sample of record, ``by`` ``lean``
         (or ``all`` at K = n), and its units are the Lean's. Raises `ValueError` on a link with no egress occupancy,
-        served or warden profile, as `verify` does, on a stream that isn't this link's, and on a draw that isn't this
-        stream's period draw."""
+        served or warden profile, as `verify` does, on a stream that isn't this link's, and on a sample that isn't this
+        stream's period sample."""
         n = self._period(stream, windows)
         why: dict[str, Any] = {}
         if drawn is None:

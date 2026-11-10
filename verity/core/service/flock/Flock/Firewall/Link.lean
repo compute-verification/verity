@@ -1,10 +1,10 @@
 /-
-# The firewall's level-0 recheck (live PROTOCOL.md §10): a table's level-0 root from its witness and level 0's hiding
+# The ZK server's level-0 recheck (live PROTOCOL.md §10): a table's level-0 root from its witness and level 0's hiding
 
-Before anything of a firewalled table leaves, the firewall commits the table's level 0 again from the host's witness, the
+Before anything of a firewalled table leaves, the ZK server commits the table's level 0 again from the host's witness, the
 table's level-0 hiding and its level-0 salts, and the root that leaves in the session's `Commit` is that recheck's
 (`flock-circuit`'s `Firewall::new` and `Firewall::root`). This is the recheck of record: the masked prover's level-0
-commitment (`FlockComplete.commitPZk` in the analysis), here as the code the firewall runs.
+commitment (`FlockComplete.commitPZk` in the analysis), here as the code the ZK server runs.
 
 * `rows`: level 0's padded codeword. Row `q` holds the table's `2^lanes` witness lanes, lane `l` the words
   `g[c·2^lanes + l]`, then the four extra lanes `extra e`; each entry is the lane's encoding at `ω_q`,
@@ -18,10 +18,10 @@ commitment (`FlockComplete.commitPZk` in the analysis), here as the code the fir
 * `cap`: the Merkle nodes `SHA-512(l ‖ r)` `d − cap` levels up from the leaves (`layer`), and `root` their concatenation,
   at level 0 of the table's `--zk` schedule (`Zk.schedule m`, which also fixes `t_pad`).
 
-The firewall's code reaches it through the session loop's `Flock.Firewall.Level0`, which commits the level 0 it draws,
+The ZK server's code reaches it through the session loop's `Flock.Firewall.Level0`, which commits the level 0 it samples,
 and `flock-firewall finish`'s `table` request (`Flock.Firewall.Finish.commit0`, on `parse`'s bytes). The root that
 leaves is one of these, and the finish keeps the table's tree for its reps' openings (`Finish.openLive`): Rust commits
-nothing of level 0 under the firewall.
+nothing of level 0 under the ZK server.
 -/
 module
 
@@ -167,6 +167,25 @@ theorem parRange_eq {α : Type} (f : Nat → α) (a b : Nat) : parRange f a b = 
     simp only [Task.spawn, List.map_toArray, List.map_cons, List.map_nil, List.size_toArray, List.length_cons,
       List.length_nil, Nat.zero_add, List.foldl_toArray', List.foldl_cons, List.foldl_nil, Array.map_append,
       Array.map_map, Function.comp_def]
+
+/-- `(Array.range n).map f` in tasks of `2^10` entries, the rest inline (`parMapRange_eq`). -/
+def parMapRange {α : Type} (f : Nat → α) (n : Nat) : Array α :=
+  let a := n / 1024
+  parRange f a 1024 ++ (Array.range (n - a * 1024)).map fun j => f (a * 1024 + j)
+
+theorem parMapRange_eq {α : Type} (f : Nat → α) (n : Nat) : parMapRange f n = (Array.range n).map f := by
+  conv => rhs; rw [← Nat.add_sub_cancel' (Nat.div_mul_le_self n 1024)]
+  rw [Array.range_add, Array.map_append, Array.map_map, parMapRange, parRange_eq]
+  rfl
+
+/-- A Merkle layer's nodes `SHA-512(l ‖ r)` over the pairs of `below`, in tasks (`parMapRange`): `Level0.up`'s and
+`Finish.treeOf`'s step as compiled code runs it. -/
+def nodesPar (below : Array ByteArray) : Array ByteArray :=
+  parMapRange (fun i => Sha512.hash (below[2 * i]! ++ below[2 * i + 1]!)) (below.size / 2)
+
+theorem nodesPar_eq (below : Array ByteArray) :
+    nodesPar below = (Array.range (below.size / 2)).map fun i => Sha512.hash (below[2 * i]! ++ below[2 * i + 1]!) :=
+  parMapRange_eq _ _
 
 /-- **Layer `h` of a Merkle tree** over the leaves `lf q` (`q < 2^d`): layer `h + 1` holds the nodes `SHA-512(l ‖ r)`
 of layer `h`'s pairs. -/

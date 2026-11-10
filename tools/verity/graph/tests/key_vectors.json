@@ -1,0 +1,350 @@
+{
+ "files": [
+  {
+   "path": "a.py",
+   "bytes_hex": "7072696e7428276127290a",
+   "digest": "sha512:6399ba5c7e6b60e010dfc05c362ab9214d3290a5680afbcc49e84ebee798750cc74fb0ad22418ae27e9216103c1cdd6bb99cbd25dadb26c439afb782c3dd27ec"
+  },
+  {
+   "path": "b/c.lean",
+   "bytes_hex": "7468656f72656d2074203a2054727565203a3d207472697669616c0a",
+   "digest": "sha512:ccdf02b1167ee31f4c3de76075f6c56e16a35ce788bdcc8c31105f929c43a6037a10798b171be19f19c13112e3e383e861690c8f92bb8482bd810a1c48635f55"
+  },
+  {
+   "path": "empty",
+   "bytes_hex": "",
+   "digest": "sha512:cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"
+  },
+  {
+   "path": "tests/ü.py",
+   "bytes_hex": "c3bc0a",
+   "digest": "sha512:07cf96fef78d8f3d96b8bcb8944019aba60f3d50dd6d6a1daefc206b3a36cea1e50ccbdc2b4d6b57bb7689bf85466f69759fc303ab274de2649079c6d1c838c1"
+  },
+  {
+   "path": "tests/Ａ.py",
+   "bytes_hex": "efbca10a",
+   "digest": "sha512:dd3cc7d762bff94f1495e05020c4806e160c68e997573308638247f0b1c788fc1e347bbd5dae506d90cf5dcec4aa8ea6a5f1fad7beff42151d3eb120d4d7c85d"
+  },
+  {
+   "path": "tests/😀.py",
+   "bytes_hex": "f09f98800a",
+   "digest": "sha512:3dc1ec12dd904dc3721a2159fdea849641d2e51ed7d749815a4b831e03c589ce2ae0be2cb558b9469ed076af321c77bdc815b3d334822d7d57f7deca5694fc43"
+  },
+  {
+   "path": "uv.lock",
+   "bytes_hex": "76657273696f6e203d20310a",
+   "digest": "sha512:5a27dc4a76b2a44f6fb526a5327246202247163efc607957061a2353859500e02fef7f8456be923bdf10303587ed84cdfb659d241fa9edf96f604414199ed0b9"
+  },
+  {
+   "path": "pyproject.toml",
+   "bytes_hex": "5b70726f6a6563745d0a6e616d65203d202278220a",
+   "digest": "sha512:bb8ca69d02f21069adb33c0b6aa806fd7606308fd2d6c3ed96d4e8375d31fec2f6bcd2148661f07851f9f3df39841fdfe2023d31d1134ee424535d9097d249e4"
+  }
+ ],
+ "envs": [
+  {
+   "name": "py",
+   "spec": [
+    "uv.lock",
+    "pyproject.toml"
+   ],
+   "digest": "sha512:fd7c401afee02bd6d98bf95edaf358d0aac84c529f3f5f9b8b1aa7499bc0811c115c7d8b2120109b484815defc0427d063a47171d20615742c869c6069f82892"
+  },
+  {
+   "name": "none",
+   "spec": [],
+   "digest": "sha512:affa711dc43ea5e09993195f1487ff1cccb451cb11a4bc9d6628056e049462cc6c9e5f2185178eecf08fda689dff819109bc5115347874f44128347d5adfd3a9"
+  }
+ ],
+ "keys": [
+  {
+   "name": "inputs only",
+   "task": {
+    "id": "test-file:a.py",
+    "kind": "test-file",
+    "argv": [
+     "verity",
+     "graph",
+     "run",
+     "test-file:a.py"
+    ],
+    "vars": {},
+    "inputs": [
+     "a.py"
+    ],
+    "reads": [],
+    "outputs": []
+   },
+   "env_digest": "sha512:fd7c401afee02bd6d98bf95edaf358d0aac84c529f3f5f9b8b1aa7499bc0811c115c7d8b2120109b484815defc0427d063a47171d20615742c869c6069f82892",
+   "read_digests": {},
+   "canonical": "{\"argv\":[\"verity\",\"graph\",\"run\",\"test-file:a.py\"],\"env\":\"sha512:fd7c401afee02bd6d98bf95edaf358d0aac84c529f3f5f9b8b1aa7499bc0811c115c7d8b2120109b484815defc0427d063a47171d20615742c869c6069f82892\",\"inputs\":[[\"a.py\",\"sha512:6399ba5c7e6b60e010dfc05c362ab9214d3290a5680afbcc49e84ebee798750cc74fb0ad22418ae27e9216103c1cdd6bb99cbd25dadb26c439afb782c3dd27ec\"]],\"kind\":\"test-file\",\"outputs\":[],\"reads\":[],\"vars\":{}}",
+   "key": "sha512:e5a95be2b45dae1a8ea64c9dc3762877b1790703294da73bfb8bbd5059cfbd5648763f0fcd0b1c96f4b3fdeee80787bc82851ee4f4c8e5a0213f0233325839cb"
+  },
+  {
+   "name": "inputs and outputs, unsorted",
+   "task": {
+    "id": "lean-module:b/c.lean",
+    "kind": "lean-module",
+    "argv": [
+     "verity",
+     "graph",
+     "run",
+     "lean-module:b/c.lean"
+    ],
+    "vars": {},
+    "inputs": [
+     "b/c.lean",
+     "a.py"
+    ],
+    "reads": [],
+    "outputs": [
+     {
+      "name": "olean",
+      "path": "out/c.olean"
+     },
+     {
+      "name": "ilean",
+      "path": "out/c.ilean"
+     }
+    ]
+   },
+   "env_digest": "sha512:fd7c401afee02bd6d98bf95edaf358d0aac84c529f3f5f9b8b1aa7499bc0811c115c7d8b2120109b484815defc0427d063a47171d20615742c869c6069f82892",
+   "read_digests": {},
+   "canonical": "{\"argv\":[\"verity\",\"graph\",\"run\",\"lean-module:b/c.lean\"],\"env\":\"sha512:fd7c401afee02bd6d98bf95edaf358d0aac84c529f3f5f9b8b1aa7499bc0811c115c7d8b2120109b484815defc0427d063a47171d20615742c869c6069f82892\",\"inputs\":[[\"a.py\",\"sha512:6399ba5c7e6b60e010dfc05c362ab9214d3290a5680afbcc49e84ebee798750cc74fb0ad22418ae27e9216103c1cdd6bb99cbd25dadb26c439afb782c3dd27ec\"],[\"b/c.lean\",\"sha512:ccdf02b1167ee31f4c3de76075f6c56e16a35ce788bdcc8c31105f929c43a6037a10798b171be19f19c13112e3e383e861690c8f92bb8482bd810a1c48635f55\"]],\"kind\":\"lean-module\",\"outputs\":[[\"ilean\",\"out/c.ilean\"],[\"olean\",\"out/c.olean\"]],\"reads\":[],\"vars\":{}}",
+   "key": "sha512:9c181304a685a4c2bd235c163b9df5288cd04f7cce49f0c9cec695ba78da7e35dbc6f54ee0a635c8abe794c6c9e1aba34ab991c5ba80b2d4ab659d7a24c25c67"
+  },
+  {
+   "name": "no inputs, outputs or vars",
+   "task": {
+    "id": "build:nothing",
+    "kind": "build",
+    "argv": [
+     "true"
+    ],
+    "vars": {},
+    "inputs": [],
+    "reads": [],
+    "outputs": []
+   },
+   "env_digest": "sha512:affa711dc43ea5e09993195f1487ff1cccb451cb11a4bc9d6628056e049462cc6c9e5f2185178eecf08fda689dff819109bc5115347874f44128347d5adfd3a9",
+   "read_digests": {},
+   "canonical": "{\"argv\":[\"true\"],\"env\":\"sha512:affa711dc43ea5e09993195f1487ff1cccb451cb11a4bc9d6628056e049462cc6c9e5f2185178eecf08fda689dff819109bc5115347874f44128347d5adfd3a9\",\"inputs\":[],\"kind\":\"build\",\"outputs\":[],\"reads\":[],\"vars\":{}}",
+   "key": "sha512:4d77f69883696b6a6a877373b5022208ff070f5ac89b725d28750c60069f57723e0cb7a039e40de2043b037e1d5f0d2daffb0c547e4683b230c58552fd9f4d3e"
+  },
+  {
+   "name": "one read, of one of two outputs",
+   "task": {
+    "id": "lean-module:d.lean",
+    "kind": "lean-module",
+    "argv": [
+     "verity",
+     "graph",
+     "run",
+     "lean-module:d.lean"
+    ],
+    "vars": {},
+    "inputs": [
+     "empty"
+    ],
+    "reads": [
+     {
+      "task": "lean-module:b/c.lean",
+      "output": "olean"
+     }
+    ],
+    "outputs": []
+   },
+   "env_digest": "sha512:fd7c401afee02bd6d98bf95edaf358d0aac84c529f3f5f9b8b1aa7499bc0811c115c7d8b2120109b484815defc0427d063a47171d20615742c869c6069f82892",
+   "read_digests": {
+    "lean-module:b/c.lean": {
+     "olean": "sha512:e5965a7a45e90af54ac15618b82fc6c0c83b6b4acc50c7f03c8d58fe3f50857f5e4780939d6cb96922aa16d29b764a67a33cc6567cb35f57c4eeb5d51b52d2fc",
+     "ilean": "sha512:5c979900d6b785568e7f35b2088c2d894757afcb85686b97961f907e2c87c15e28628fe25d07a70cbfd0dba67b6a4c99e9216590c0c374f9db1e1cfc8bc9daa7"
+    }
+   },
+   "canonical": "{\"argv\":[\"verity\",\"graph\",\"run\",\"lean-module:d.lean\"],\"env\":\"sha512:fd7c401afee02bd6d98bf95edaf358d0aac84c529f3f5f9b8b1aa7499bc0811c115c7d8b2120109b484815defc0427d063a47171d20615742c869c6069f82892\",\"inputs\":[[\"empty\",\"sha512:cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e\"]],\"kind\":\"lean-module\",\"outputs\":[],\"reads\":[[\"lean-module:b/c.lean\",\"olean\",\"sha512:e5965a7a45e90af54ac15618b82fc6c0c83b6b4acc50c7f03c8d58fe3f50857f5e4780939d6cb96922aa16d29b764a67a33cc6567cb35f57c4eeb5d51b52d2fc\"]],\"vars\":{}}",
+   "key": "sha512:d39fc080937c883773ce59d6d5a9f6216ee3af547012cfe90b1ff0dbe09357c9b7e7f8f64a9ecdb5c4a92b196acde0a90a7470966016dab4aa98d06102837509"
+  },
+  {
+   "name": "reads of two tasks, unsorted",
+   "task": {
+    "id": "test-file:a.py",
+    "kind": "test-file",
+    "argv": [
+     "verity",
+     "graph",
+     "run",
+     "test-file:a.py"
+    ],
+    "vars": {},
+    "inputs": [
+     "a.py"
+    ],
+    "reads": [
+     {
+      "task": "z:t",
+      "output": "x"
+     },
+     {
+      "task": "a:t",
+      "output": "y"
+     },
+     {
+      "task": "a:t",
+      "output": "b"
+     }
+    ],
+    "outputs": []
+   },
+   "env_digest": "sha512:fd7c401afee02bd6d98bf95edaf358d0aac84c529f3f5f9b8b1aa7499bc0811c115c7d8b2120109b484815defc0427d063a47171d20615742c869c6069f82892",
+   "read_digests": {
+    "z:t": {
+     "x": "sha512:a4abd4448c49562d828115d13a1fccea927f52b4d5459297f8b43e42da89238bc13626e43dcb38ddb082488927ec904fb42057443983e88585179d50551afe62"
+    },
+    "a:t": {
+     "y": "sha512:121b4774a759924a2929c4a412fb6e31b9aaa746466840efcc4a76d69a94149e2364e3983d646feafaa1b511785e5c9e90aedc30da6a6bead5520ecc99c6626a",
+     "b": "sha512:5267768822ee624d48fce15ec5ca79cbd602cb7f4c2157a516556991f22ef8c7b5ef7b18d1ff41c59370efb0858651d44a936c11b7b144c48fe04df3c6a3e8da"
+    }
+   },
+   "canonical": "{\"argv\":[\"verity\",\"graph\",\"run\",\"test-file:a.py\"],\"env\":\"sha512:fd7c401afee02bd6d98bf95edaf358d0aac84c529f3f5f9b8b1aa7499bc0811c115c7d8b2120109b484815defc0427d063a47171d20615742c869c6069f82892\",\"inputs\":[[\"a.py\",\"sha512:6399ba5c7e6b60e010dfc05c362ab9214d3290a5680afbcc49e84ebee798750cc74fb0ad22418ae27e9216103c1cdd6bb99cbd25dadb26c439afb782c3dd27ec\"]],\"kind\":\"test-file\",\"outputs\":[],\"reads\":[[\"a:t\",\"b\",\"sha512:5267768822ee624d48fce15ec5ca79cbd602cb7f4c2157a516556991f22ef8c7b5ef7b18d1ff41c59370efb0858651d44a936c11b7b144c48fe04df3c6a3e8da\"],[\"a:t\",\"y\",\"sha512:121b4774a759924a2929c4a412fb6e31b9aaa746466840efcc4a76d69a94149e2364e3983d646feafaa1b511785e5c9e90aedc30da6a6bead5520ecc99c6626a\"],[\"z:t\",\"x\",\"sha512:a4abd4448c49562d828115d13a1fccea927f52b4d5459297f8b43e42da89238bc13626e43dcb38ddb082488927ec904fb42057443983e88585179d50551afe62\"]],\"vars\":{}}",
+   "key": "sha512:05180911af3013625f3203fe235325bb50169f6c263fd2216df34d9d4613900ea3d1cba0699f4421e0f73e35a6eb3561682ea6ad70eaca42abe1a6209a73b6e7"
+  },
+  {
+   "name": "unicode paths, sorted by code point",
+   "task": {
+    "id": "test-file:tests/😀.py",
+    "kind": "test-file",
+    "argv": [
+     "verity",
+     "graph",
+     "run",
+     "test-file:tests/😀.py"
+    ],
+    "vars": {},
+    "inputs": [
+     "tests/😀.py",
+     "tests/Ａ.py",
+     "tests/ü.py"
+    ],
+    "reads": [],
+    "outputs": [
+     {
+      "name": "résumé",
+      "path": "out/ü😀.txt"
+     }
+    ]
+   },
+   "env_digest": "sha512:fd7c401afee02bd6d98bf95edaf358d0aac84c529f3f5f9b8b1aa7499bc0811c115c7d8b2120109b484815defc0427d063a47171d20615742c869c6069f82892",
+   "read_digests": {},
+   "canonical": "{\"argv\":[\"verity\",\"graph\",\"run\",\"test-file:tests/😀.py\"],\"env\":\"sha512:fd7c401afee02bd6d98bf95edaf358d0aac84c529f3f5f9b8b1aa7499bc0811c115c7d8b2120109b484815defc0427d063a47171d20615742c869c6069f82892\",\"inputs\":[[\"tests/ü.py\",\"sha512:07cf96fef78d8f3d96b8bcb8944019aba60f3d50dd6d6a1daefc206b3a36cea1e50ccbdc2b4d6b57bb7689bf85466f69759fc303ab274de2649079c6d1c838c1\"],[\"tests/Ａ.py\",\"sha512:dd3cc7d762bff94f1495e05020c4806e160c68e997573308638247f0b1c788fc1e347bbd5dae506d90cf5dcec4aa8ea6a5f1fad7beff42151d3eb120d4d7c85d\"],[\"tests/😀.py\",\"sha512:3dc1ec12dd904dc3721a2159fdea849641d2e51ed7d749815a4b831e03c589ce2ae0be2cb558b9469ed076af321c77bdc815b3d334822d7d57f7deca5694fc43\"]],\"kind\":\"test-file\",\"outputs\":[[\"résumé\",\"out/ü😀.txt\"]],\"reads\":[],\"vars\":{}}",
+   "key": "sha512:f0bc1f0e5067b34090adc872c7d9f7bc400b7c1c870b3f25d63cbe3609e4c15131ab2f7f31359b6b98281180fbf9e6453e663046230dba4da2e26eda8d878027"
+  },
+  {
+   "name": "vars with escapes and unicode keys",
+   "task": {
+    "id": "test-file:a.py",
+    "kind": "test-file",
+    "argv": [
+     "verity",
+     "graph",
+     "run",
+     "test-file:a.py"
+    ],
+    "vars": {
+     "Ａ": "1",
+     "😀": "2",
+     "": "",
+     "a": "x\"y\\z\n\t\u0001<>& "
+    },
+    "inputs": [
+     "a.py"
+    ],
+    "reads": [],
+    "outputs": []
+   },
+   "env_digest": "sha512:fd7c401afee02bd6d98bf95edaf358d0aac84c529f3f5f9b8b1aa7499bc0811c115c7d8b2120109b484815defc0427d063a47171d20615742c869c6069f82892",
+   "read_digests": {},
+   "canonical": "{\"argv\":[\"verity\",\"graph\",\"run\",\"test-file:a.py\"],\"env\":\"sha512:fd7c401afee02bd6d98bf95edaf358d0aac84c529f3f5f9b8b1aa7499bc0811c115c7d8b2120109b484815defc0427d063a47171d20615742c869c6069f82892\",\"inputs\":[[\"a.py\",\"sha512:6399ba5c7e6b60e010dfc05c362ab9214d3290a5680afbcc49e84ebee798750cc74fb0ad22418ae27e9216103c1cdd6bb99cbd25dadb26c439afb782c3dd27ec\"]],\"kind\":\"test-file\",\"outputs\":[],\"reads\":[],\"vars\":{\"\":\"\",\"a\":\"x\\\"y\\\\z\\n\\t\\u0001<>& \",\"Ａ\":\"1\",\"😀\":\"2\"}}",
+   "key": "sha512:374fbac1d468047a4d2b2ddd6b7c58c5c2de6489e227b148ab4b69516fb9a1fb89bd6e68dfaaecf039158db288537479e77f43549a9241070a506004ff89deb4"
+  },
+  {
+   "name": "argv with escapes, not normalized",
+   "task": {
+    "id": "test-file:a.py",
+    "kind": "test-file",
+    "argv": [
+     "sh",
+     "-c",
+     "echo \"$X\" > out/a\\b",
+     "é",
+     "é"
+    ],
+    "vars": {},
+    "inputs": [
+     "a.py"
+    ],
+    "reads": [],
+    "outputs": []
+   },
+   "env_digest": "sha512:fd7c401afee02bd6d98bf95edaf358d0aac84c529f3f5f9b8b1aa7499bc0811c115c7d8b2120109b484815defc0427d063a47171d20615742c869c6069f82892",
+   "read_digests": {},
+   "canonical": "{\"argv\":[\"sh\",\"-c\",\"echo \\\"$X\\\" > out/a\\\\b\",\"é\",\"é\"],\"env\":\"sha512:fd7c401afee02bd6d98bf95edaf358d0aac84c529f3f5f9b8b1aa7499bc0811c115c7d8b2120109b484815defc0427d063a47171d20615742c869c6069f82892\",\"inputs\":[[\"a.py\",\"sha512:6399ba5c7e6b60e010dfc05c362ab9214d3290a5680afbcc49e84ebee798750cc74fb0ad22418ae27e9216103c1cdd6bb99cbd25dadb26c439afb782c3dd27ec\"]],\"kind\":\"test-file\",\"outputs\":[],\"reads\":[],\"vars\":{}}",
+   "key": "sha512:4ec02c92ad39715373cfcf3827e45c049fa2f2de2e377b751a3593f024f7c00ea5bc83fc493e5e6056204f332b914da1ac8253e6a412ca0fde85e2f1b7c9a82f"
+  },
+  {
+   "name": "inputs only, another env",
+   "task": {
+    "id": "test-file:a.py",
+    "kind": "test-file",
+    "argv": [
+     "verity",
+     "graph",
+     "run",
+     "test-file:a.py"
+    ],
+    "vars": {},
+    "inputs": [
+     "a.py"
+    ],
+    "reads": [],
+    "outputs": []
+   },
+   "env_digest": "sha512:affa711dc43ea5e09993195f1487ff1cccb451cb11a4bc9d6628056e049462cc6c9e5f2185178eecf08fda689dff819109bc5115347874f44128347d5adfd3a9",
+   "read_digests": {},
+   "canonical": "{\"argv\":[\"verity\",\"graph\",\"run\",\"test-file:a.py\"],\"env\":\"sha512:affa711dc43ea5e09993195f1487ff1cccb451cb11a4bc9d6628056e049462cc6c9e5f2185178eecf08fda689dff819109bc5115347874f44128347d5adfd3a9\",\"inputs\":[[\"a.py\",\"sha512:6399ba5c7e6b60e010dfc05c362ab9214d3290a5680afbcc49e84ebee798750cc74fb0ad22418ae27e9216103c1cdd6bb99cbd25dadb26c439afb782c3dd27ec\"]],\"kind\":\"test-file\",\"outputs\":[],\"reads\":[],\"vars\":{}}",
+   "key": "sha512:eeddef0beee5b27b5c60a6ce3da83e19e186843a8fce19db99faea9f23a5bfa55e33f2f13b64eca30a7d3e627cf8a13bc264557d7f6b6007b920b9a88d5976ce"
+  },
+  {
+   "name": "inputs only, with the fields the key leaves out",
+   "task": {
+    "id": "test-file:elsewhere",
+    "kind": "test-file",
+    "argv": [
+     "verity",
+     "graph",
+     "run",
+     "test-file:a.py"
+    ],
+    "vars": {},
+    "inputs": [
+     "a.py"
+    ],
+    "reads": [],
+    "outputs": [],
+    "about": "run a.py",
+    "env": "py",
+    "resources": {
+     "cores": 2,
+     "mem_gb": 3,
+     "disk_gb": 4
+    },
+    "timeout_s": 60,
+    "priority": 3,
+    "key": null
+   },
+   "env_digest": "sha512:fd7c401afee02bd6d98bf95edaf358d0aac84c529f3f5f9b8b1aa7499bc0811c115c7d8b2120109b484815defc0427d063a47171d20615742c869c6069f82892",
+   "read_digests": {},
+   "canonical": "{\"argv\":[\"verity\",\"graph\",\"run\",\"test-file:a.py\"],\"env\":\"sha512:fd7c401afee02bd6d98bf95edaf358d0aac84c529f3f5f9b8b1aa7499bc0811c115c7d8b2120109b484815defc0427d063a47171d20615742c869c6069f82892\",\"inputs\":[[\"a.py\",\"sha512:6399ba5c7e6b60e010dfc05c362ab9214d3290a5680afbcc49e84ebee798750cc74fb0ad22418ae27e9216103c1cdd6bb99cbd25dadb26c439afb782c3dd27ec\"]],\"kind\":\"test-file\",\"outputs\":[],\"reads\":[],\"vars\":{}}",
+   "key": "sha512:e5a95be2b45dae1a8ea64c9dc3762877b1790703294da73bfb8bbd5059cfbd5648763f0fcd0b1c96f4b3fdeee80787bc82851ee4f4c8e5a0213f0233325839cb"
+  }
+ ]
+}

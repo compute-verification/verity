@@ -1,4 +1,4 @@
-"""The guard never fails open (2026-09-28 18:10 PT: the control pod's disk filled and every guard died on its state write): it
+"""The guard never fails open (a full disk on the control pod must not end every guard on its state write): it
 keeps enforcing through failed writes, keeps the last good budgets when budgets.toml goes, survives a corrupt state file and restarts
 after a crash.  Every clock and sleep is injected."""
 from __future__ import annotations

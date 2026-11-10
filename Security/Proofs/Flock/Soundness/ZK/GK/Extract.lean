@@ -1,6 +1,11 @@
 module
 
 public import Proofs.Flock.Soundness.ZK.CoinBinding
+public import Mathlib.Tactic.Basic
+import Mathlib.Tactic.Push
+import Mathlib.Tactic.Set
+import Mathlib.Tactic.SplitIfs
+import Proofs.Flock.Soundness.Merkle
 
 /-!
 # Zero knowledge: T6's extraction as an algorithm

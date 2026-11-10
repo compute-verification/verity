@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.Bandwidth.Game
 public import Definitions.Accounting.Confidence
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The bandwidth audit on a strategy's runs: the chip's ports (trusted)

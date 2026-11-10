@@ -1,23 +1,14 @@
 module
 
-public import Mathlib.Algebra.BigOperators.Ring.Finset
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Data.Fintype.BigOperators
-public import Mathlib.Data.Fintype.Option
-public import Mathlib.Data.Fintype.Powerset
-public import Mathlib.Data.Fintype.Sum
-public import Mathlib.Tactic.FieldSimp
-public import Mathlib.Tactic.GCongr
-public import Mathlib.Tactic.Linarith
-public import Definitions.Pous
-public import Definitions.Pous.Assumptions
-public import Proofs.Pous.Statements
-public import Proofs.Pous.Sanity
-public import Proofs.Pous.Accounting.Numbers
+public import Definitions.Pous.Accounting.Params
+public import Definitions.Pous.Model.Dense
+public import Definitions.Pous.Model.Inc
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 public import Proofs.Pous.Audit.SampledAudit
 public import Proofs.Pous.B5.ExPostFacto
 public import Proofs.Pous.Thm1.Theorem1iTimed
-public import Proofs.Pous.Thm1.Theorem1iiSeq
+import Proofs.Pous.Sanity
+import Proofs.Pous.Thm1.Theorem1iiSeq
 
 /-!
 # The dense single-layer scheme meets the requirement: `PousDense.dense_meets`

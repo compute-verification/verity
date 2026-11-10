@@ -5,7 +5,7 @@ public import Definitions.Pouw.PearlC.W1
 /-!
 # W1 doesn't truncate
 
-`BudgetAbortPearlC` is `Accounting.BudgetAbort`'s statement over Pearl-C's `CostModel` (ra-per-run's hypothesis for the
+`BudgetAbortPearlC` is `Accounting.BudgetAbort`'s statement over Pearl-C's `CostModel` (the hypothesis of the
 per-run bound). W1 (`Pouw.PearlC.W1.w1`) fails it whenever its prices are positive (`Positive`), because a correct
 unit's operand fetches are free and whether a unit is correct is decided on the final transcript under the oracle,
 which no W1 program reads.
@@ -108,7 +108,7 @@ theorem exec_mono (dv : W1Device) (h : Positive dv) :
 /-- Every word outside the pre-salt regions is below 256: the salt's bytes and zeros. -/
 def Small (M : Mem) : Prop := ∀ a : Addr, preSalt a = false → M a < 256
 
-theorem small_init (salt : List ℕ) (pr : CodeImage) (U : Workload) (act : ℕ → Codes) (σ : State) :
+theorem small_init (salt : List ℕ) (pr : Prog) (U : Workload) (act : ℕ → Codes) (σ : State) :
     Small (init salt pr U act σ) := by
   intro a ha
   have h2 : a.1 ≠ 2 := fun e => by simp [preSalt, e] at ha
@@ -199,7 +199,7 @@ theorem small_exec_code (dv : W1Device) (h : Positive dv) :
 /-! ## The counterexample -/
 
 /-- Unit 0's activation word `(0, 0)` moved into its ticket word `(0, 0)`: two nodes of text, within W1's bound. -/
-def copyAct : CodeImage := ⟨fun _ => [], fun _ => .op (.mov (ticketAt 0 0 0) (actAt 0 0 0)) .done,
+def copyAct : Prog := ⟨fun _ => [], fun _ => .op (.mov (ticketAt 0 0 0) (actAt 0 0 0)) .done,
   fun _ => by norm_num [W1.Code.size]⟩
 
 /-- What `copyAct` commits, on every oracle. -/
@@ -300,7 +300,7 @@ def toyP : Protocol Unit Bool Unit where
   ticket := fun _ _ _ _ a i j => wordQ (if i = 0 ∧ j = 0 then a 0 0 else 0)
   useful := fun _ _ _ _ _ _ _ => wordQ 0
   actOK := fun _ _ => True
-  weightOK := fun _ _ _ => True
+  fixedOK := fun _ _ _ => True
   credit := fun _ _ _ _ _ => 0
   capOK := fun H _ _ _ _ => H () = true
   Wref := fun _ _ => 0

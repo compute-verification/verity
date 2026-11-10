@@ -4,7 +4,7 @@ terminates by.
 -/
 module
 
-public import Lean.Data.Json
+public import Lean.Data.Json.Basic
 
 @[expose] public section
 

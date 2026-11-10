@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.Guarantees.TS
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # The tensor slots and the output count

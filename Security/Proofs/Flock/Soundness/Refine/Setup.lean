@@ -1,8 +1,9 @@
 module
 
+public import Flock.HmRow
 public import Proofs.Flock.Soundness.Refine.Regions
 public import Proofs.Flock.Soundness.Refine.Walk
-public import Flock.HmRow
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The statement decoding, part 3: the setup's statements are well formed (`Flock.Statement`)

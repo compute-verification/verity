@@ -4,7 +4,7 @@
 # verifier's tree at pinned commits, and one captured input set. Builds M0's `flock-circuit` (CPU, M0's own
 # 60-circuit.sh MODE=build) and Lean's `flock-verify` (lake build, no dependencies) once per pod, then runs a0.py.
 # env: K=16 DELTA=0.01 BIND=1 (run A1's M0 half: the statement binds the partition, program and unit indices)
-#      RUN=a3 (one audit over every template set in set.tar, layer LAYER=0, K=128; DRAW_FILE=1 serves the verifier's Lean draw)
+#      RUN=a3 (one audit over every template set in set.tar, layer LAYER=0, K=128; DRAW_FILE=1 serves the verifier's Lean sample)
 #      RUN=a2 (served.tar from vllm-serving-commit: registration.json, pub-N.bin, inst-N.bin, index.json; K=256;
 #              UNBIND=1: run the session on re-headered copies for M0's unbound statement, m0.tar then eb90718f,
 #              m0b.tar the bound tree e51e2b86 for the verifier's checks of serving's files)
@@ -36,7 +36,7 @@ if [ "$(cat $W/bin/m0.sha 2>/dev/null)" != "$M0SHA" ]; then
 fi
 wait $LP || { tail -40 $O/build-lean.log; exit 1; }
 [ -x $W/bin/flock-verify ] || { tail -40 $O/build-lean.log; exit 1; }
-# the drivers' verifier of record (one_stage.verifier) builds the sampled-proofs Lean in this tree on its first check
+# the drivers' verifier (one_stage.verifier) builds the sampled-proofs Lean in this tree on its first check
 export PATH=$HOME/.elan/bin:$PATH
 sha256sum $W/bin/flock-circuit $W/bin/flock-verify | tee $O/binaries.sha256
 

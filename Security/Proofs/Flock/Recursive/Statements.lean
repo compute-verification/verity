@@ -2,19 +2,31 @@ module
 
 public import Proofs.Flock.Soundness.Assumptions.Recursive
 public import Proofs.Flock.Soundness.Assumptions.Zk
-public import Proofs.Flock.Soundness.Discharge.ZkView.Defs
 public import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Defs
 public import Proofs.Flock.Soundness.ZK.HidingAdaptive
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The recursive audit's guarantees (trusted)
 
 The recursive audit (`Proofs.Flock.Recursive.Defs`: `recGame`): the developer registers `R` (the hidden circuit's
-commitment among it); the auditor draws `ω`, the hidden circuit's units to prove; in each of the inner protocol's `I.r`
-rounds the developer's firewall sends the auditor a salted SHA-512 commitment to the round's inner message (C-Flock run
+commitment among it); the auditor samples `ω`, the hidden circuit's units to prove; in each of the inner protocol's `I.r`
+rounds the developer's firewall sends the auditor a salted SHA-512 commitment to the round's inner message (Flock run
 with `--zk` off on the workers), and the auditor answers with a live coin; then the developer registers `R₂`, the
-values V*'s sessions read that the rounds do not fix (V*'s running sums `rec-acc`, and with `link_rows` its opened rows),
-and C-Flock `--zk --registered` sessions of the public verifier circuits V* (`zs R ω t R₂ j`, `ZkOuter`, one per circuit
+values V*'s sessions read that the rounds do not fix (V*'s running sums `rec-acc`, and its opened rows and their siblings),
+and Flock `--zk --registered` sessions of the public verifier circuits V* (`zs R ω t R₂ j`, `ZkOuter`, one per circuit
 `(Vs j).c`, in a row: `outerV`) prove that openings of those commitments exist on which the inner verifier accepts. Each guarantee is a `def G : Prop` in the
 form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarantees.G`
 (`Proofs.Flock.Recursive.Guarantees`).
@@ -24,13 +36,14 @@ form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarante
   (between two of V*'s sessions' registrant records, at a round's commitment, or in one of V*'s sessions), or the auditor accepts every one of V*'s sessions on a false
   hidden statement with probability at most V*'s sessions' statistical errors, plus each round's transfer slack, plus
   the inner protocol's soundness error. It assumes no hash. Its one new assumption is `Flock.Assumptions.VBridge`.
-* `RecursiveZK`, for the developer: the auditor's whole view, the firewall's commitments (`firewallLeaf`) to every inner
+* `RecursiveZK`, for the developer: the auditor's whole view, the ZK server's commitments (`firewallLeaf`) to every inner
   message and tree top and then its view of the outer session, has a simulator that reads public inputs only, within
-  the commitments' hiding gap at hm96-sha512's pinned key plus the outer session's zero-knowledge gap. It assumes nothing
-  of the key or of SHA-512.
+  the commitments' hiding gap at hm96-sha512's pinned key plus the outer session's zero-knowledge gap. A view released
+  cut at a stop of a public family `St` is within `|St|` times the simulator's view cut at a uniform stop, plus the same
+  gaps: the stop leaks at most `log₂ |St|` bits. It assumes nothing of the key or of SHA-512.
 * `RecursiveCircuitPrivate`, for the developer of a hidden circuit: the private circuit is a witness value of the class's
   universal unit `UniversalUnit_v1{G, N_IN, N_OUT}`, and the auditor's whole view, the private circuit's registration, the
-  firewall's commitments and V*'s sessions, has a simulator that reads only the class and the owed outputs, within the
+  ZK server's commitments and V*'s sessions, has a simulator that reads only the class and the owed outputs, within the
   registration's hiding gap plus `RecursiveZK`'s. `RecursiveCircuitIndist` is its two-circuit form, and
   `RecursiveCircuitPrivateLeaves` the registration as hm96 leaves of the private circuit's rows, its hiding gap hm96's at
   the pinned key. They assume nothing of the key or of SHA-512.
@@ -40,8 +53,8 @@ form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarante
   accepts every session while the registered private circuit's hidden statement fails with probability at most
   `RecursiveSound`'s bound. `RanRegisteredRun` is the one-session form, `PrivateCircuit.RanRegistered` with its
   `cr/sha-512` hypothesis replaced by the same kind of break.
-* `commitBytes`, `firewallPairs`, `firewallCommits`: the firewall's commit strings and commitments when the inner coins
-  are live, message `i` reading the commit strings before it, which (ii) of `RecursiveAudit` at the firewall reads
+* `commitBytes`, `firewallPairs`, `firewallCommits`: the ZK server's commit strings and commitments when the inner coins
+  are live, message `i` reading the commit strings before it, which (ii) of `RecursiveAudit` at the ZK server reads
   (`Proofs.Flock.Recursive.Firewall`). `RecursiveZK` and the circuit-privacy forms above are the committed-coin case,
   each message fixed by the auditor's tape before any commitment.
 * `OuterViewZK`, `OuterSessionsZK`: the outer session's zero knowledge that `RecursiveZK` and the circuit-privacy forms
@@ -49,8 +62,8 @@ form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarante
   honest prover's code, `OuterSessionsZK` follows from V*'s staging (`OuterZK.recursiveZK_of_sessionZK`,
   `Proofs.Flock.Recursive.OuterSessionZK`).
 
-C-Flock's definitions and the recursion's model are still in the proofs package, so `Models.lean` does not import this
-module: `Proofs.Flock.Recursive` does.
+Flock's definitions and the recursion's model are still in the proofs package, so `Definitions.lean` does not import
+this module: `Proofs.Flock.Recursive` does.
 -/
 
 @[expose] public section
@@ -63,7 +76,7 @@ open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
 
 /-- **The recursive audit is sound.** V*'s sessions are of the circuits `(Vs j).c`, with hidden outputs and `(Vs j).J`
-tables, under their laws `(Vs j).law`, each the full draw (`--draw subset:<units>`) on the operating system's bytes (A3,
+tables, under their laws `(Vs j).law`, each the full sample (`--draw subset:<units>`) on the operating system's bytes (A3,
 `uniform/io-getrandombytes`); at each history `(R, ω, t)` and registration `R₂` of the outer proof, session `j` is
 `zs R ω t R₂ j`, whose fields carry `flock-verify verify --zk --registered`'s setup, the `live-verifier` record custody
 (`ZkOuter.hRec`) and the registrant's record of the registered reads (`ZkOuter.rd`: the hidden circuit's rows, `R₂`'s
@@ -74,20 +87,20 @@ full, which a protocol whose last round isn't committed (candidate 3 today) does
 * A registrant fork (`regFinder`): one run of `σ` reaches an outcome at whose history and registration two of V*'s
   sessions' registrant records clash (`RegColl`: two registered reads whose openings or hm96 leaves are a SHA-512
   collision), and outputs that collision. V*'s bridge reads off such outcomes (`VBridgeOff`).
-* A round fork (`RoundFork`): for some round `i < r`, draw `ω` and commit string `pos`, round `i`'s fork finder
+* A round fork (`RoundFork`): for some round `i < r`, sample `ω` and commit string `pos`, round `i`'s fork finder
   (`forkAt`: two continuations of `σ` after its round-`i` commitment, each running the trial for `pos`) outputs a
   SHA-512 collision at an outcome it reaches.
 * A session fork (`SessionFork`): at some leaf `σ` reaches, some outcome of V*'s sessions its strategy reaches and some
   session `j`, a finder of that session run from the strategy `σ` names there (its tables' knowledge finders, its
-  registered-value finders, the run that opens a drawn row's registered leaf, or its link finder: `ZkOuter.Fork`)
+  registered-value finders, the run that opens a sampled row's registered leaf, or its link finder: `ZkOuter.Fork`)
   outputs a SHA-512 collision at an outcome it reaches.
 * $$\Pr[\text{every session of V* accepts} \wedge \neg\,\text{the hidden statement holds}] \le
     \mathbb E\Big[\sum_j \text{outer bound}_j\Big] + r\cdot\mathbb E\Big[\sum_j \text{stage slack}_j\Big] +
     \varepsilon_{in},$$
-  the expectations over the draw, the rounds' coins at the prover's leaves (`expAt`) and the sessions (`sumV`), each
+  the expectations over the sample, the rounds' coins at the prover's leaves (`expAt`) and the sessions (`sumV`), each
   term at the registration `R₂` the prover sends and the strategy it names for its session. A session's outer bound
-  (`ZkOuter.boundCR`) is its law's miss at one bad unit plus the drawn units' statistical errors: the tables'
-  (`tableErrZ`: each drawn table's `bound` over `1 − N₀/(ek)`), the link's (`linkErrZC`: `Q_s/(1 − ρ)·(1/(eM) +
+  (`ZkOuter.boundCR`) is its sampling design's miss at one bad unit plus the sampled proof blocks' statistical errors: the tables'
+  (`tableErrZ`: each sampled table's `bound` over `1 − N₀/(ek)`), the link's (`linkErrZC`: `Q_s/(1 − ρ)·(1/(eM) +
   k/(eR_w))`) and the waits' (`waitErrZC`: `Q_s/(1 − ρ)·k/(eR_w)`); its stage slack (`ZkOuter.slackCR`) is the same
   without the miss.
 
@@ -122,7 +135,7 @@ def RecursiveSound : Prop :=
       rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
     -- the recursive prover
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
-    -- the hidden circuit's statement, the messages V*'s layers hold, the rounds' commit strings, the firewall's
+    -- the hidden circuit's statement, the messages V*'s layers hold, the rounds' commit strings, the ZK server's
     -- commitments and the messages they open to, and V*'s bridge
     (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
     (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
@@ -140,7 +153,7 @@ def RecursiveSound : Prop :=
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin
 
 /-- **`RecursiveSound` with no A3**: `RecursiveSound` without its A3 premise, at the same bound. V*'s laws are the full
-draw (`--draw subset:<units>`), which draws every unit at every value of the operating system's bytes
+sample (`--draw subset:<units>`), which samples every unit at every value of the operating system's bytes
 (`execOS_subset_full_mem`), so no session's miss reads those bytes. -/
 def RecursiveSoundNoA3 : Prop :=
   ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
@@ -153,7 +166,7 @@ def RecursiveSoundNoA3 : Prop :=
       rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
     -- the recursive prover
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
-    -- the hidden circuit's statement, the messages V*'s layers hold, the rounds' commit strings, the firewall's
+    -- the hidden circuit's statement, the messages V*'s layers hold, the rounds' commit strings, the ZK server's
     -- commitments and the messages they open to, and V*'s bridge
     (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
     (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
@@ -170,10 +183,10 @@ def RecursiveSoundNoA3 : Prop :=
           (I.r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin
 
-/-- **The firewall's commitment** to one message `msg` (an inner round message or a Merkle tree top) under the salt `y`:
+/-- **The ZK server's commitment** to one message `msg` (an inner round message or a Merkle tree top) under the salt `y`:
 the hm96-sha512 leaf of the message's SHA-512 digest, `H(SHA-512(msg) ⊕ M·y, c(y))` (`ZkView.leafH`, `ZkView.My`,
 `ZkView.saltHash` at the pinned key; `ZkView.leafSplit` states that this is the executable's `Hm96.Default512.leaf`). An
-honest firewall sends the auditor this, under a fresh uniform salt, for every message, and nothing else of them. The salt
+honest ZK server sends the auditor this, under a fresh uniform salt, for every message, and nothing else of them. The salt
 is 192 bytes from the operating system, uniform under A3 (`uniform/io-getrandombytes`); at those bytes `b` the
 executable's leaf is `firewallLeaf msg (ZkView.saltOfBytes b)` (`Flock.SecurityProofs.firewallLeaf_os`). -/
 def firewallLeaf (msg : ByteArray) (y : ZkView.Salt) : ByteArray :=
@@ -184,14 +197,14 @@ reads no message. -/
 def idealLeaf (u : ZkView.Bits × ZkView.Salt) : ByteArray :=
   ZkView.leafH (u.1, ZkView.saltHash u.2)
 
-/-- **An hm96-sha512 commit string from its two halves**, `b ‖ c`: the 128 bytes a firewall leaf hashes
+/-- **An hm96-sha512 commit string from its two halves**, `b ‖ c`: the 128 bytes a ZK server leaf hashes
 (`ZkView.leafH` is `Default512.treeLeaf` of them). -/
 def commitBytes (u : ZkView.Bits × ByteArray) : ByteArray := ZkView.bytesOf (k := 64) u.1 ++ u.2
 
-/-- **The firewall's commit strings under live inner coins**, as their two halves: string `i` is
+/-- **The ZK server's commit strings under live inner coins**, as their two halves: string `i` is
 `(SHA-512(m_i) ⊕ M·y_i, c(y_i))`, a `firewallLeaf`'s before its leaf hash, where the message `m_i = msgs i l` reads the
-commit strings `l` before it (`commitBytes` of their halves). The auditor has seen those strings when it draws the coins
-message `i` answers, so the message may read them: each inner coin is live, drawn after the commitment before it. They
+commit strings `l` before it (`commitBytes` of their halves). The auditor has seen those strings when it flips the coins
+message `i` answers, so the message may read them: each inner coin is live, sampled after the commitment before it. They
 are `ZK.adaptiveLeaves` at the identity encoding: pair `i` is message `i`'s digest at the pairs before it, plus
 `(M·y_i, c(y_i))`. -/
 def firewallPairs {nh : ℕ} (msgs : (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (y : Fin nh → ZkView.Salt) :
@@ -200,7 +213,7 @@ def firewallPairs {nh : ℕ} (msgs : (i : Fin nh) → (Fin i → ByteArray) → 
     (fun i l => ZkView.bitsOf (Flock.Sha512.hash (msgs i fun j => commitBytes (l j))))
     (fun i => (ZkView.My (y i), ZkView.saltHash (y i)))
 
-/-- **The firewall's commitments under live inner coins**: commitment `i` is the hm96-sha512 leaf of message `i`'s
+/-- **The ZK server's commitments under live inner coins**: commitment `i` is the hm96-sha512 leaf of message `i`'s
 SHA-512 under its own fresh salt `y i`, `firewallLeaf (msgs i l) (y i)`, where message `i` reads the commit strings `l`
 before it (`firewallPairs`). A message that reads none of them is the committed-coin case,
 `firewallLeaf (msgs i) (y i)`. -/
@@ -209,8 +222,8 @@ def firewallCommits {nh : ℕ} (msgs : (i : Fin nh) → (Fin i → ByteArray) �
   ZkView.leafH (firewallPairs msgs y i)
 
 /-- Obligation (the outer session is zero knowledge, `RecursiveZK`'s `_hOuter`): at every auditor's tape `a`,
-developer's randomness `p` and firewall salts `y`, the auditor's view of the outer session, `view a h p y` at the
-firewall's commitments `h` to the messages `msgs a p` (`firewallLeaf`), and the simulator `sim a h`, which reads the
+developer's randomness `p` and ZK server salts `y`, the auditor's view of the outer session, `view a h p y` at the
+ZK server's commitments `h` to the messages `msgs a p` (`firewallLeaf`), and the simulator `sim a h`, which reads the
 auditor's tape and the commitments only, give every event probabilities within `ε_o`, over the session's randomness and
 the simulator's. -/
 def OuterViewZK {Ωa Ωp Ωo Ωs V : Type} [Fintype Ωo] [Fintype Ωs] (nh : ℕ) (msgs : Ωa → Ωp → Fin nh → ByteArray)
@@ -233,42 +246,65 @@ def OuterSessionsZK {Out Prog Wit Rr Rv Ωa Ωp Ωo Ωs V : Type} [Fintype Ωo] 
     (sim : Out → Rv → Ωa → (Fin nh → ByteArray) → Ωs → V) (εo : ℝ≥0∞) : Prop :=
   ∀ o P w, honest o P w → ∀ r, OuterViewZK nh (msgs P w r) (view P w r) (sim o (reg P r)) εo
 
+/-- **The auditor's whole view of the recursive audit** at `u = (((a, p), y), r)`: its tape `a`, the ZK server's
+commitments to `msgs a p` under the salts `y` (`firewallLeaf`), and the outer session's view at them on the
+developer's randomness `r`. -/
+def recView {Ωa Ωp Ωo V : Type} (nh : ℕ) (msgs : Ωa → Ωp → Fin nh → ByteArray)
+    (view : Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
+    (u : ((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωo) : Ωa × (Fin nh → ByteArray) × V :=
+  (u.1.1.1, (fun i => firewallLeaf (msgs u.1.1.1 u.1.1.2 i) (u.1.2 i)),
+    view u.1.1.1 (fun i => firewallLeaf (msgs u.1.1.1 u.1.1.2 i) (u.1.2 i)) u.1.1.2 u.1.2 u.2)
+
+/-- **The simulated view** at `u = ((a, l), s)`: the tape `a`, `nh` ideal commitments (`idealLeaf`) of `l`, and `sim`
+on them with its coins `s`. -/
+def recIdeal {Ωa Ωs V : Type} (nh : ℕ) (sim : Ωa → (Fin nh → ByteArray) → Ωs → V)
+    (u : (Ωa × (Fin nh → ZkView.Bits × ZkView.Salt)) × Ωs) : Ωa × (Fin nh → ByteArray) × V :=
+  (u.1.1, (fun i => idealLeaf (u.1.2 i)), sim u.1.1 (fun i => idealLeaf (u.1.2 i)) u.2)
+
 /-- **The recursive audit is zero knowledge.** The auditor's tape is `Ωa` and the developer's randomness `Ωp`. The
-firewall sends the `nh` commitments `firewallLeaf (msgs a p i) (y i)`, to the inner messages and tree tops `msgs a p`, each
+ZK server sends the `nh` commitments `firewallLeaf (msgs a p i) (y i)`, to the inner messages and tree tops `msgs a p`, each
 under its own fresh uniform salt `y i`; the inner coins the messages answer are the auditor's, fixed by its tape before
 the first commitment (Goldreich–Kahan's committed coins, or a beacon's). Then the outer session runs at the public input
 `h` (the commitments), with the inner proof and the salts as its witness: `view a h p y r` is the auditor's view of it on
 the developer's randomness `r`, against the auditor of tape `a`, which may read `h`. When the outer session has a
 simulator `sim a h` (reading the auditor and the public input only) within `ε_o` of `view` at every tape, witness and
-event (`OuterViewZK`), the auditor's whole view (its tape, the commitments, the outer view) is within
+event (`OuterViewZK`), the auditor's whole view (its tape, the commitments, the outer view: `recView`) is within
 $$\varepsilon_o + n_h \cdot \delta_{K^*}$$
-of the simulator that draws `nh` ideal commitments (`idealLeaf`) and runs `sim` on them: it reads the auditor and public
-inputs only, nothing of the inner proof. One-sided at every event, so both ways (an event's complement).
+of the simulator that samples `nh` ideal commitments (`idealLeaf`) and runs `sim` on them (`recIdeal`): it reads the
+auditor and public inputs only, nothing of the inner proof. One-sided at every event, so both ways (an event's
+complement).
+
+**Where the audit stops.** What the auditor is released is the whole view cut at a stop: `cut s`, for a stop `s` of a
+public family `St`, reads only the stop and the whole view. The audit stops at `stop u`, which may depend on anything:
+the coins, any further coins `Ωk`, and the witness. Every event of the released view
+`cut (stop u) (recView nh msgs view u.1)` is at most `|St|` times as likely as at the simulator's view cut at a uniform
+stop, plus the same `ε_o + n_h·δ_{K*}`, added once: the stop leaks at most `log₂ |St|` bits. At `St = Ωk = Unit` and
+`cut` the identity, this is the whole view's bound above (`Flock.SecurityProofs.recursiveZK_whole`).
 
 `δ_{K*}` is `hidingGap My saltHash`, the commitments' hiding gap at hm96-sha512's pinned key `K*` (`ZkView.My`,
 `ZkView.saltHash`): the statistical distance of `(M(K*)·y, H(sp ‖ y))` from `(U, H(sp ‖ y))` for a uniform salt `y`.
 Nothing here proves it small for `K*`: it is below `2^-193` for all but `2^-64` of keys (`CROnly.hm96_sha512_tail`), and
 that `K*` is not one of the others is unproved. No premise is taken on the key or on SHA-512.
 
-The salts are drawn uniformly here; the firewall reads them from the operating system, and under A3 per test
+The salts are sampled uniformly here; the ZK server reads them from the operating system, and under A3 per test
 (`UniformRandomBytesTest`, `uniform/io-getrandombytes`) the same bound plus the source's slack `η` on the event's test
 holds at those bytes (`Flock.SecurityProofs.recursiveZK_os_gap`), so no premise on a stream generator enters. -/
 def RecursiveZK : Prop :=
-  ∀ {Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp] [Fintype Ωo] [Nonempty Ωo]
-    [Fintype Ωs] [Nonempty Ωs] (nh : ℕ) (msgs : Ωa → Ωp → Fin nh → ByteArray)
+  ∀ {Ωa Ωp Ωo Ωs V St Ωk W : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp] [Fintype Ωo]
+    [Nonempty Ωo] [Fintype Ωs] [Nonempty Ωs] [Fintype St] [Nonempty St] [Fintype Ωk] [Nonempty Ωk]
+    (nh : ℕ) (msgs : Ωa → Ωp → Fin nh → ByteArray)
     (view : Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
     (sim : Ωa → (Fin nh → ByteArray) → Ωs → V) {εo : ℝ≥0∞},
     OuterViewZK nh msgs view sim εo →
-    ∀ E : Ωa × (Fin nh → ByteArray) × V → Prop,
-      prCoin (fun w : ((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωo =>
-          E (w.1.1.1, (fun i => firewallLeaf (msgs w.1.1.1 w.1.1.2 i) (w.1.2 i)),
-            view w.1.1.1 (fun i => firewallLeaf (msgs w.1.1.1 w.1.1.2 i) (w.1.2 i)) w.1.1.2 w.1.2 w.2))
-        ≤ prCoin (fun w : (Ωa × (Fin nh → ZkView.Bits × ZkView.Salt)) × Ωs =>
-            E (w.1.1, (fun i => idealLeaf (w.1.2 i)), sim w.1.1 (fun i => idealLeaf (w.1.2 i)) w.2))
-          + εo + nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)
+    ∀ (cut : St → Ωa × (Fin nh → ByteArray) × V → W)
+      (stop : (((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωo) × Ωk → St) (E : W → Prop),
+      prCoin (fun u => E (cut (stop u) (recView nh msgs view u.1))) ≤
+        (Fintype.card St : ℝ≥0∞) * prCoin (fun u : St × ((Ωa × (Fin nh → ZkView.Bits × ZkView.Salt)) × Ωs) =>
+            E (cut u.1 (recIdeal nh sim u.2))) +
+          εo + nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)
 
 /-- **The recursive audit's real view of a private circuit**, the probability of the event `E`. The developer registers
-the private circuit `P` under the registration's randomness `r`, and the auditor sees `reg P r`; the firewall sends the `nh`
+the private circuit `P` under the registration's randomness `r`, and the auditor sees `reg P r`; the ZK server sends the `nh`
 commitments `firewallLeaf (msgs P w r a p i) (y i)` to the inner messages and tree tops, each under its own fresh
 uniform salt `y i`; and V*'s sessions give the auditor `view P w r a h p y q` at those commitments `h`. The average is over
 `r`, the auditor's tape `a`, the developer's randomness `p`, the salts `y` and V*'s sessions' randomness `q`, uniform and
@@ -282,7 +318,7 @@ noncomputable def recRealPr {Prog Wit Rr Rv Ωa Ωp Ωo V : Type} [Fintype Rr] [
       view P w r z.1.1.1 (fun i => firewallLeaf (msgs P w r z.1.1.1 z.1.1.2 i) (z.1.2 i)) z.1.1.2 z.1.2 z.2)
 
 /-- **The simulated recursive view**, the probability of the event `E`: the simulator registers the fixed private circuit `p₀`
-of the class (`reg p₀ r` at a fresh `r`), draws `nh` ideal commitments (`idealLeaf`, which read no message), and runs
+of the class (`reg p₀ r` at a fresh `r`), samples `nh` ideal commitments (`idealLeaf`, which read no message), and runs
 V*'s sessions' simulator `sim o v a h` at the owed outputs `o`, the registration's view `v`, the auditor's tape `a` and
 those commitments `h`. It reads no private circuit but `p₀`, no witness, and none of the developer's randomness or salts. -/
 noncomputable def recSimPr {Out Prog Rr Rv Ωa Ωs V : Type} [Fintype Rr] [Fintype Ωa] [Fintype Ωs]
@@ -294,13 +330,13 @@ noncomputable def recSimPr {Out Prog Rr Rv Ωa Ωs V : Type} [Fintype Rr] [Finty
 /-- **The recursive audit is circuit private.** Everything here is at one size class of the universal unit
 `UniversalUnit_v1{G, N_IN, N_OUT}`, the circuit V* and the inner verifier run, public: `Prog` is the class's private circuits,
 each a witness value of it; `reg` is the class's registration of a private circuit (`Rr` its randomness, `Rv` what the auditor
-sees of it); `nh` is the number of the firewall's commitments; and `msgs` and `view` are the inner prover's messages and
+sees of it); `nh` is the number of the ZK server's commitments; and `msgs` and `view` are the inner prover's messages and
 the auditor's view of V*'s `--zk` sessions (`recRealPr`), functions of the private circuit `P`, the developer's witness `w` (its
 data), the registration's randomness, the auditor's tape (the inner coins are on it, fixed before the first
 commitment, as in `RecursiveZK`) and the developer's randomness. `honest o P w` says that `w` is an honest witness on
 which `P` computes the owed outputs `o`.
 
-The view is the auditor's whole view: the registration's, the firewall's commitments to every inner message and tree
+The view is the auditor's whole view: the registration's, the ZK server's commitments to every inner message and tree
 top (`firewallLeaf`), and V*'s sessions'. Assumed:
 * the registration hides the private circuit up to `ε` (`PrivateCircuit.Hides reg ε`), for every pair of the class's private circuits
   and every event (`RecursiveCircuitPrivateLeaves` discharges it for a registration by hm96 leaves);
@@ -331,7 +367,7 @@ def RecursiveCircuitPrivate : Prop :=
     (reg : Prog → Rr → Rv) {ε : ℝ≥0∞} (_hreg : PrivateCircuit.Hides reg ε)
     -- the honest witnesses: `P` computes the owed outputs `o` on `w`
     (honest : Out → Prog → Wit → Prop)
-    -- the firewall's messages, the auditor's view of V*'s sessions, and its simulator within `ε_o`
+    -- the ZK server's messages, the auditor's view of V*'s sessions, and its simulator within `ε_o`
     (nh : ℕ) (msgs : Prog → Wit → Rr → Ωa → Ωp → Fin nh → ByteArray)
     (view : Prog → Wit → Rr → Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
     (sim : Out → Rv → Ωa → (Fin nh → ByteArray) → Ωs → V) {εo : ℝ≥0∞}
@@ -367,7 +403,7 @@ def RecursiveCircuitIndist : Prop :=
       recRealPr reg nh msgs view P w E ≤ recRealPr reg nh msgs view P' w' E +
         2 * (ε + εo + nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash))
 
-/-- **A registration by hm96 leaves**: row `i` of the private circuit `P` (`rows P i`) committed as the firewall commits a
+/-- **A registration by hm96 leaves**: row `i` of the private circuit `P` (`rows P i`) committed as the ZK server commits a
 message, `firewallLeaf (rows P i) (r i)` under its own fresh uniform salt `r i`; the auditor sees `pub` of the leaves
 (their Merkle root, and whatever else the registration record publishes of them) and nothing else of the rows or salts.
 The registrant's opening of a `--zk --registered` session's registered read is such a row and salt (`ZkReg.regOpenZ`). -/
@@ -413,7 +449,7 @@ the registrant's opening `op₀`, and the commitment binds (`PrivateCircuit.Comm
 two different programs give the extractor's pair `com.ext`, two different strings SHA-512 maps to one digest). Take a
 session, a game `G` against any prover `σ`, whose acceptance `acc` shows that the program of its committed values
 (`prog b`) opens `rt` (through `op b`), and suppose protocol 1's soundness bounds accepting with its bad event `Q` (at
-least `K` wrong units of the committed values, say) by `B`. Then either some outcome `σ` reaches accepts a program other
+least `K` incorrect proof blocks of the committed values, say) by `B`. Then either some outcome `σ` reaches accepts a program other
 than `p`, and its opening and the registrant's collide (`Binding.Collides (com.ext (op b) op₀)`), or accepting with `Q`,
 or with a program other than `p`, has probability at most `B`. `RanRegistered`'s finder plays the session once and
 outputs the extractor's pair, so the first is a run of that finder finding a collision; nothing is assumed of SHA-512,
@@ -436,7 +472,7 @@ two different strings SHA-512 maps to one digest), and the developer's opening o
 read some of the rows, never necessarily all of them: on a run `o` whose sessions all accept, `reads o i` says the run
 read row `i`, and `row o i` and `op o i` are the row and the opening of `rt` at `i` the run carries (`_hop`; the run's
 output holds the strategy the prover names for each session, and with it the registered reads), and the hidden
-statement the inner verifier ran on is the statement at the draw of every private circuit that has the rows the run read
+statement the inner verifier ran on is the statement at the sample of every private circuit that has the rows the run read
 (`_hx`: `x R ω = stmt q ω` for every such `q`). Then one of five holds. It needs `VBridge` in full, which a protocol
 whose last round isn't committed (candidate 3 today) doesn't give.
 
@@ -479,7 +515,7 @@ def RecursiveRanRegistered : Prop :=
     -- the registration's commitment at each row position, the registered private circuit, and the developer's openings
     {Root Pos Row Op : Type} (com : Pos → PrivateCircuit.Commit Root Row Op) (_hbind : ∀ i, (com i).Binding)
     (rt : Root) (p : Pos → Row) (op₀ : Pos → Op) (_hreg : ∀ i, (com i).Opens rt (p i) (op₀ i))
-    -- a private circuit's statement at a draw; the rows an accepted run read, and the rows and openings of `rt` it carries
+    -- a private circuit's statement at a sample; the rows an accepted run read, and the rows and openings of `rt` it carries
     (stmt : (Pos → Row) → L.Ω → I.Stmt)
     (reads : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) → Pos → Prop)
     (row : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) → Pos → Row)
@@ -499,7 +535,7 @@ def RecursiveRanRegistered : Prop :=
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin
 
 /-- **`RecursiveRanRegistered` with no A3**: `RecursiveRanRegistered` without its A3 premise, at the same bound. V*'s
-laws are the full draw (`--draw subset:<units>`), which draws every unit at every value of the operating system's bytes
+laws are the full sample (`--draw subset:<units>`), which samples every unit at every value of the operating system's bytes
 (`execOS_subset_full_mem`), so no session's miss reads those bytes. -/
 def RecursiveRanRegisteredNoA3 : Prop :=
   ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
@@ -518,7 +554,7 @@ def RecursiveRanRegisteredNoA3 : Prop :=
     -- the registration's commitment at each row position, the registered private circuit, and the developer's openings
     {Root Pos Row Op : Type} (com : Pos → PrivateCircuit.Commit Root Row Op) (_hbind : ∀ i, (com i).Binding)
     (rt : Root) (p : Pos → Row) (op₀ : Pos → Op) (_hreg : ∀ i, (com i).Opens rt (p i) (op₀ i))
-    -- a private circuit's statement at a draw; the rows an accepted run read, and the rows and openings of `rt` it carries
+    -- a private circuit's statement at a sample; the rows an accepted run read, and the rows and openings of `rt` it carries
     (stmt : (Pos → Row) → L.Ω → I.Stmt)
     (reads : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) → Pos → Prop)
     (row : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) → Pos → Row)

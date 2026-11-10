@@ -1,4 +1,4 @@
-"""PoUW's tile-check rows (`verity.core.protocols.pouw.circuit.leaves`) are Flock's rows byte for byte: every row's vector of
+"""PoUW's tile-check rows (`verity.ml.protocols.pouw.circuit.leaves`) are Flock's rows byte for byte: every row's vector of
 ``verity/core/protocols/pouw/tests/vectors/pouw_rows.json``, recomputed from its case's words and salt through the port Flock stages
 for the row (`circuit._port`: ``n_words`` u16 leaves, a bit row of ``16 n_words`` bits under ``hm96-sha512/row/v2`` or
 ``hm96-sha512/row-seg/v1``), gives the pinned row bytes, digest, commit string (`circuit._commit_strings`) and tree leaf;
@@ -26,8 +26,8 @@ from verity.ml.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_RO
                                         sha512_row_v2_digest)
 from verity.ml.circuits.types import Tuple
 from verity_flock import circuit as FC
-from verity.core.protocols.pouw.circuit import leaves as L
-from verity.core.protocols.pouw.circuit import pc4, pc8
+from verity.ml.protocols.pouw.circuit import leaves as L
+from verity.ml.protocols.pouw.circuit import pc4, pc8
 
 POUW_TESTS = Path(__file__).resolve().parents[3] / "core" / "protocols" / "pouw" / "tests"
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
@@ -138,7 +138,7 @@ def test_a_row_unit_writes_its_row_seg_row_as_its_reader_commits_it(vid, tmp_pat
 
 #: each check's hiding unit templates (`PORTS` are theirs) and a small depth
 UNITS = {"pc4": (lambda k: pc4.templates(k, pc4.TILE, True), 64),
-         "pc8": (lambda k: pc8.templates(k, pc8.TILE, "sm120", True), 128)}
+         "pc8": (lambda k: pc8.templates(k, pc8.TILE, "sm120", True, "h0"), 128)}
 MODS = {"pc4": pc4, "pc8": pc8}
 OUT_ROWS = [(m, role, j, out[0], out[1]) for m, mod in MODS.items() for role, ports in mod.PORTS.items()
             for j, out in enumerate(r for r in ports["rows"] if isinstance(r[2][0], int))]
@@ -364,16 +364,14 @@ def test_the_lean_verifiers_row_constants_give_the_pinned_leaves(tmp_path):
 
 
 #: each check's plain tile unit at a 1 × 1 tile and its small depth, staged by `class_statement.stage_unit`: its rows, the
-#: circuit's SHA-512 and its statement digests (`flock-circuit statement`'s, seeded and under `FC_COINS=os`)
+#: circuit's SHA-512 and its statement digest (`flock-circuit statement`'s, seeded, which is also the coin tree's)
 STAGED_TILES = {
     "pc4": (lambda: pc4.templates(64, (1, 1))["tile"], 64, "nvfp4-p", {
         "circuit_sha512": "762dc5c13559c9a6eabf0b1c2ca62e5d02a4559c47758418f02e5e4882a51402c325023e2fd6b5a2cc44a6930916e6ee94cfc533e3edffd8b8896cd3f02483da",
-        "seed": "3d782563afb123c3b5a10eac7462acf39321f2f1551a3859d8e9c122571916f3c713250d61b95018f9a7fe11a71ea9cdcc8588763a41ab565ca036ae70a92eeb",
-        "os": "dd43d1c3c4d76e2061408cc97a70f9536ccfa9a3fd8f92fd9f440fb2aab0272f700dcc2d918ae8ee5897addac3cff8252c950a31b5af3e00b81b24c0e95bfc54"}),
+        "seed": "3d782563afb123c3b5a10eac7462acf39321f2f1551a3859d8e9c122571916f3c713250d61b95018f9a7fe11a71ea9cdcc8588763a41ab565ca036ae70a92eeb"}),
     "pc8": (lambda: pc8.templates(128, (1, 1), "sm120")["tile"], 128, "fp8-p", {
         "circuit_sha512": "2088cfe0fa1cafaea65559e1c35359eda1e4190c79a29b8dc7b9d3c4d586e765643bf21c4adec07d7d597fcadaf11f27e43a8f3c631a81721957e784243b875c",
-        "seed": "cf4bd5448d5b5edc4456eaf52df42280c6a9f98733159fb0e5246151c6c2a1d02c240d5d02ac9963cc9da39a71506895eb8fa344f772cfe946364d96ea7b5620",
-        "os": "fd4b4fb30f7e46b81cb93964834d235d4fd4ea5962b1333ca318c38caa8eb95826aba0818df2b2dcfbdf83d851d7b1ccf3499c36861d048827c179958eb0c7a7"}),
+        "seed": "cf4bd5448d5b5edc4456eaf52df42280c6a9f98733159fb0e5246151c6c2a1d02c240d5d02ac9963cc9da39a71506895eb8fa344f772cfe946364d96ea7b5620"}),
 }
 
 
@@ -387,7 +385,7 @@ def test_a_real_pouw_unit_is_staged_and_composed_on_its_rows(m, tmp_path):
     one exact v2 run (META ``out_row_ports``), its outputs the IR reference's on every instance, its salts
     `circuit.stage_salts`'.  Every input row's ``b || c`` in the public file is PoUW's commit string of its words
     (`leaves.commit`), the output run's is the v2 row's of its words, and the Lean verifier's statement digest is the pinned
-    one of `flock-circuit statement`, seeded and under `FC_COINS=os`.  The row units and the hiding tile wait on pieces Flock
+    one of `flock-circuit statement`, seeded and on the coin tree (`--coins tree`).  The row units and the hiding tile wait on pieces Flock
     lacks (PoUW's FP32 square root, E4M3 and E2M1 casts and exact sums of squares) and on the tile digest's Keccak lowering."""
     from verity_flock import class_statement as CS
 
@@ -413,11 +411,11 @@ def test_a_real_pouw_unit_is_staged_and_composed_on_its_rows(m, tmp_path):
         out = [int(v) for v in np.concatenate([got["outs"]["o0"][i], got["outs"]["o1"][i]])]
         x = sha512_row_v2_digest(row_bytes(out, 16), 64)
         assert bcs[i][2] == L.INST.commit_string(L.KEY, x, got["salts"]["o0"][i]), (m, i)
-    for coins in ("seed", "os"):
+    for coins in ((), ("--coins", "tree")):
         p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", "verity/flock-circuit", "--circuit",
-                            str(tmp_path / "circuit.txt"), "--public", str(tmp_path / "pub.bin"), "--coins", coins], capture_output=True, text=True)
+                            str(tmp_path / "circuit.txt"), "--public", str(tmp_path / "pub.bin"), *coins], capture_output=True, text=True)
         assert p.returncode == 0, p.stdout + p.stderr
-        assert json.loads(p.stdout.strip().splitlines()[-1])["statement_digest"] == want[coins], (m, coins)
+        assert json.loads(p.stdout.strip().splitlines()[-1])["statement_digest"] == want["seed"], (m, coins)
 
 
 @pytest.mark.slow
@@ -432,7 +430,7 @@ def test_pouw_anchors_are_public_input_ports_held_to_the_verifiers_recomputation
     from verity.ml.circuits.defs import CompositeDefinition, bind
     from verity.ml.circuits.types import Array, Value
     from verity_flock import class_statement as CS
-    from verity.core.protocols.pouw.circuit.anchors import public_ports
+    from verity.ml.protocols.pouw.circuit.anchors import public_ports
 
     spec = importlib.util.spec_from_file_location("pouw_regions_vectors", POUW_TESTS / "pouw_regions_vectors.py")
     RV = importlib.util.module_from_spec(spec)

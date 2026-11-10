@@ -6,8 +6,7 @@ At each B of TIME_B, each unit and torch's nearest op, interleaved rep by rep, u
 - median_ms: the GPU's time.  A torch.cuda._sleep ahead of the start event keeps the stream busy while the host queues
   the launch, so the events bracket the kernels and nothing of the host; ``covered`` says the start event was still
   queued when the host had queued the end event (if not, the host's time leaked in);
-- host_ms: the start event on an idle stream, then the launch (the ruler of the first H200 run, which counts the
-  host's ~0.05 ms of a launch).
+- host_ms: the start event on an idle stream, then the launch, which counts the host's time of a launch.
 Then a step row twice: ``summed_ms``, the units' medians times their counts at a decode step (STEP), and ``measured_ms``,
 that step's launches queued in a decode step's order (per layer: RMSNorm, quantizer of 16384, softmax at n = 32,
 quantizer, residual add, RMSNorm, quantizer, quantizer of 65536 with ReLU, residual add; then the final RMSNorm,
@@ -21,6 +20,7 @@ import json
 import os
 import statistics
 import sys
+from typing import TYPE_CHECKING
 
 from verity_config.settings import of
 
@@ -37,16 +37,19 @@ import relu as RL
 import rmsnorm as RN
 import softmax as SM
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 HEADS = 256
 LAYERS = 52
 settings = of(__file__)
 STEP = {"rmsnorm 16384 (units)": 2 * LAYERS + 1, "quant 16384 (units)": 3 * LAYERS + 1, "quant 65536 relu (units)": LAYERS,
         "softmax n=32 (units)": LAYERS, "add 16384": 2 * LAYERS, "argmax 256 (units)": 1}
-#: the prelude's cycles: an arm's host time is well under a millisecond, a step's ~500 launches well under 100 ms
+#: the prelude's cycles: each sleep outlasts the host's queuing of what follows it, an arm's launch or a step's launches
 ARM_SLEEP, STEP_SLEEP = 2_000_000, 200_000_000
 
 
-def gpu_ms(f, cycles: int) -> tuple[float, bool]:
+def gpu_ms(f: Callable[[], object], cycles: int) -> tuple[float, bool]:
     e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
     torch.cuda._sleep(cycles)
     e0.record()
@@ -57,7 +60,7 @@ def gpu_ms(f, cycles: int) -> tuple[float, bool]:
     return e0.elapsed_time(e1), covered
 
 
-def host_ms(f) -> float:
+def host_ms(f: Callable[[], object]) -> float:
     e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
     torch.cuda.synchronize()
     e0.record()
@@ -67,7 +70,7 @@ def host_ms(f) -> float:
     return e0.elapsed_time(e1)
 
 
-def timing(dev, B: int, reps: int, step_reps: int) -> list[dict]:
+def timing(dev: torch.device, B: int, reps: int, step_reps: int) -> list[dict]:
     g = torch.Generator(device=dev).manual_seed(7)
     rnd = lambda *s: torch.randn(*s, generator=g, device=dev).to(torch.bfloat16)  # noqa: E731
     x16, w16, x64 = rnd(B, 16384), rnd(16384), torch.relu(rnd(B, 65536))

@@ -1,9 +1,10 @@
 module
 
-public import Mathlib.Data.Fintype.Card
 public import Definitions.Pouw.Fp8Atom.Vectors
 public import Definitions.Pouw.Fp8Atom.Vectors.Ada
 public import Definitions.Pouw.Fp8Atom.Vectors.Add
+public import Mathlib.Data.Finset.Card
+public import Mathlib.Data.Fintype.Basic
 
 /-!
 # `Pouw.Fp8Atom`'s pinned statements (trusted)
@@ -13,14 +14,14 @@ The bit-exact `HOPPER_E4M3_K32` step and its basic facts.
 * **`Conformance`**: on each of 631 vectors, `hopperStep` writes the word
   `verity.ml.tc.total_fp8.tc_dot_total_e4m3(HOPPER_E4M3_K32, …)` computes. They are the 49 chained steps of the
   repository's `fp8-hopper-wgmma-k32`/`-k1536` model replays, and the union of two greedy branch covers of the
-  10,549 steps of `verity/protocols/accounting/work/pouw/lean/scripts/fp8atom_vectors.py` (`fp8atom_cover.json` beside it), 582 vectors with 15 in common:
+  10,549 steps of `verity/core/protocols/pouw/lean/scripts/fp8atom_vectors.py` (`fp8atom_cover.json` beside it), 582 vectors with 15 in common:
   * 450 adversarial vectors, which hit each of its 24 branch outcomes at least 50 times;
   * 147 more, which reach every branch feature the 10,549 reach (739).
   The 10,549 and R1's 166,000 differential steps run in the Lean audit as a compiled test (`Proofs.Pouw.Bulk`, under `runs`), which is
   not a proof. `verity.ml.tc`'s `HOPPER_E4M3_K32` agrees with H100 silicon on two campaigns, with 0 mismatches, but
   their raw words are in neither the repository nor the store, so no H100 capture is included (R1 F2).
 * **`AdaCaptures`**: the same adder with two groups of 16 (`adaStep`) reproduces the 360 RTX 4090 captures of
-  `mma.sync.m16n8k32.e4m3` in `packages/verity/tests/ml/fixtures/golden/ada_e4m3_m16n8k32.json`: real silicon words
+  `mma.sync.m16n8k32.e4m3` in `verity/ml/circuits/ops/tests/fixtures/golden/ada_e4m3_m16n8k32.json`: real silicon words
   through the same `groupStepTotal`, `groupSum` and `packValue`.
 * **`CodeClasses`**: exactly `0x7F` and `0xFF` are NaN, exactly `0x00` and `0x80` decode to zero, and 254 codes are
   finite.
@@ -33,7 +34,7 @@ The FP32 add of the running words, `rnAdd` (`Pouw.Fp8Atom.Fp32`):
 
 * **`AddConformance`**: on each of 1,090 add vectors, the three words are finite and `rnAdd` maps the values of the
   operand words to the value of the word IEEE binary32 addition writes (numpy on the CPU, cross-checked against an
-  exact rounding in the generator). They are a greedy cover of the 5,000 of `verity/protocols/accounting/work/pouw/lean/scripts/fp8atom_vectors.py` (random,
+  exact rounding in the generator). They are a greedy cover of the 5,000 of `verity/core/protocols/pouw/lean/scripts/fp8atom_vectors.py` (random,
   close exponents, cancellation, ties, absorption, `±0 + x`, subnormal operands, near the top of the range, binade
   boundaries). It hits each of 42 branch features of `rnAdd` at least 75 times, or every time it occurs if fewer. Every
   vector's exact sum is zero or normal. The 5,000 run in that compiled test.

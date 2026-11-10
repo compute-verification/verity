@@ -4,6 +4,36 @@ public import Definitions.Pouw.Dither
 public import Definitions.Core.Accel.Machine
 public import Definitions.Core.Accel.H200
 public import Definitions.Core.Accel.Sm120
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The headline's model on the cards: the H200 and the RTX PRO 6000 (trusted)
@@ -184,8 +214,7 @@ def shaUnits (a m i : ℚ≥0) : Verity.Accel.Res → ℚ≥0
   | _ => 0
 
 /-- **The public-best menu's named matmul programs on the H200**
-(`art:4eb6719838c94485978f03fe075cb004e7693a318c6c5b980590f4b3d2f01263`, computed by
-`benchmarks/pouw/theory/d5_v2.py` at `34866fd9f8`): protocol v3's round at A = B = 0, the frozen qkv shape
+(computed by `benchmarks/pouw/theory/d5_v2.py` at `34866fd9f8`): protocol v3's round at A = B = 0, the frozen qkv shape
 (K 16384, n 16512) at the served caps (t 2, L' 512), the hull of every route in the menu (the tile route, the
 O-route, the zero-high-digit peel, Strassen's orbit, the integral catalogue, every route beside the MMA) priced at
 the honest period's duals μ° without the hashing. Served (μ° on `alu` and `joint0`): the dense product with O by the

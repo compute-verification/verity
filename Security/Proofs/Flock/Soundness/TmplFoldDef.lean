@@ -1,6 +1,11 @@
 module
 
+public import Proofs.Flock.Level3.Fold
 public import Proofs.Flock.Soundness.TmplFoldRef
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Level3.FoldedBase
+import Proofs.Flock.Level3.Nodes
 
 /-!
 # The template fold's arithmetic

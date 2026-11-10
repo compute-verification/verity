@@ -28,6 +28,40 @@ EOF
 # and at the default 10:30:100 ssh from runs and agents was refused at random. So both go first in the main file.
 sed -i -E '/^[[:space:]]*#?[[:space:]]*(MaxStartups|MaxSessions)[[:space:]]/d' /etc/ssh/sshd_config
 sed -i '1i MaxStartups 200:30:400\nMaxSessions 64' /etc/ssh/sshd_config
+# Inbound IPv4 TCP packets that carry IP options are dropped before anything sees them (normal traffic never carries them),
+# and MPTCP stays off; deploy.toml installs the same three files on running nodes.
+mkdir -p /etc/vy
+cat > /etc/vy/drop-ipv4-options.nft <<'EOF'
+add table ip vy_drop_ipv4_options
+delete table ip vy_drop_ipv4_options
+table ip vy_drop_ipv4_options {
+  chain prerouting {
+    type filter hook prerouting priority -300; policy accept;
+    meta l4proto tcp ip hdrlength > 5 counter drop
+  }
+}
+EOF
+cat > /etc/systemd/system/vy-drop-ipv4-options.service <<'EOF'
+[Unit]
+Description=Drop inbound IPv4 TCP packets that carry IP options
+DefaultDependencies=no
+Before=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/vy/drop-ipv4-options.nft
+
+[Install]
+WantedBy=multi-user.target
+EOF
+echo 'net.mptcp.enabled = 0' > /etc/sysctl.d/90-vy-mptcp-off.conf
+command -v nft > /dev/null || { apt-get update -q && apt-get install -y -q nftables; }
+systemctl daemon-reload
+systemctl enable vy-drop-ipv4-options.service
+systemctl restart vy-drop-ipv4-options.service
+sysctl -q -p /etc/sysctl.d/90-vy-mptcp-off.conf
 sshd -t && { systemctl reload ssh || systemctl reload sshd || true; }
 
 for _ in $(seq 60); do [ -e "$DEV" ] && break; sleep 2; done
@@ -43,7 +77,7 @@ mountpoint -q /workspace || mount /workspace
 install -d -o "$U" -g "$U" /workspace/hf /workspace/hf/hub /workspace/hf/prefetch /workspace/research /workspace/ramlock \
   /workspace/cache /workspace/cache/uv /workspace/cp
 
-# TMPDIR: the root disk is 247 GB, and one Lean audit's scratch tree is ~22 GB; four at once filled it on vy-nebius-1 (6 Oct)
+# TMPDIR: the root disk is 247 GB, and one Lean audit's scratch tree is ~22 GB, so a few at once would fill it
 install -d -m 1777 -o root -g root /workspace/tmp
 # the check cache (~/.cache/verity-check, a busy node's Lean build trees: 150 GB and more) lives on /workspace as well; on the
 # root disk a Security build filled it mid-run. A real directory there is the node's live cache: it is moved with its slots
@@ -72,7 +106,7 @@ done
 
 echo 'd /run/gpu-lease 1777 root root -' > /etc/tmpfiles.d/gpu-lease.conf
 systemd-tmpfiles --create /etc/tmpfiles.d/gpu-lease.conf
-# gpu-lease hands out this VM's GPUs: a `research run --on` here sees none unless it asks with --gpus N (research.remote, INF-55).
+# gpu-lease hands out this VM's GPUs: a `research run --on` here sees none unless it asks with --gpus N (research.remote).
 # The cluster's nodes say otherwise in /etc/vy/direct-gpus (cluster_up.sh), which the runner reads first.
 # vy-gpu-adopt holds the lease of a GPU some process uses without one, until it exits, and logs it (gpu_adopt.py).
 install -d -m 755 /etc/vy
@@ -98,8 +132,7 @@ fi
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
 # python3-numpy: `python3 tools/verity/lean/check.py --update` runs PoUW's vector generators, which import numpy, under that
-# python3 (node 2 and cpu-1 lacked it, 11 Oct). python3.12-dev and build-essential: Triton compiles cuda_utils.c against
-# Python.h at a vLLM engine's first start (vy-glm53-eu 16 Oct and vy-glm53-eu2 17 Oct lacked it; circuits)
+# python3. python3.12-dev and build-essential: Triton compiles cuda_utils.c against Python.h at a vLLM engine's first start
 apt-get install -y -q git rsync fio jq python3-venv python3-numpy python3.12-dev build-essential util-linux ripgrep
 # The trust store: the Nebius images ship with apt's daily timers off, so ca-certificates stayed at the image's and
 # kept roots Ubuntu had removed. Upgrade it now, and let unattended-upgrades keep it, and only it, current: no driver or kernel

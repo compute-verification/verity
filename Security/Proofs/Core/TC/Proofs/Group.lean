@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Core.TC.Proofs.Fold
 public import Proofs.Core.TC.Proofs.Norm
 
 /-!

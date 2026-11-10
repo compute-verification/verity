@@ -1,11 +1,8 @@
 module
 
 public import NetworkCheck.Check
-public import Lms.Verify
 public import Flock.Hm96
-public import Flock.Canon
 public import Flock.FV3
-public import Identity.Tagged
 
 /-!
 # N2's execution phase verdict of record
@@ -13,7 +10,7 @@ public import Identity.Tagged
 `verdict` decides one execution phase of N2 (`verity/core/protocols/certifier/service.py`, `LinkWindows.verify`) from
 the proof as the verifier receives it and the link's public fields, and nothing else: it is accepted exactly when
 
-* the verifier's own run of C-Flock's Lean verifier (`proofs.verify`, whose findings `Case.findings` carries) refused
+* the verifier's own run of Flock's Lean verifier (`proofs.verify`, whose findings `Case.findings` carries) refused
   nothing, every gate of the link's proof block names a pinned circuit digest (`pinned`), one or more sessions each
   accepted and named the registered Program, and each proved exactly the sampled proof blocks;
 * the statement's public file holds, for the sampled proof block, a ``pub`` row commitment that opens under the
@@ -39,7 +36,7 @@ kind ``advised`` is refused by name (`caseOf`): no advised link has a verdict of
 through `lean_audit.SERVER`. `certificatesFn` is its `certificates` function, the client's check of one window's
 certificates as a reveal endpoint served them (`refusals`), which `lean_audit.certificate_refusals` calls with
 `audit.certificate_refusals` as its reference. Both read a certificate as v4's check does (`Check.Certificate`) and
-verify it with its one LMS check (`Check.Certificate.signs`). Code: it imports only Lean, C-Flock's verifier
+verify it with its one LMS check (`Check.Certificate.signs`). Code: it imports only Lean, Flock's verifier
 (`Flock.Hash`, `Flock.Bytes`, `Flock.Canon`, `Flock.Hm96`, `Flock.FV3`), the identity hash, the LMS port and v4's
 certificate and its encodings (`NetworkCheck.Check`).
 -/

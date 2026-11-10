@@ -7,9 +7,9 @@ public import Proofs.Flock.Soundness.Discharge.Layout.Readers
 # A layout and its rows from three pinning facts
 
 `Prog.flock_headline` takes the layout's facts as `lay : Binding.Layout` and `rs : Binding.HmRows lay`. This file builds
-both from fixed readers (`Readers`: each commit string's row, salt and `b ‖ c` addresses in a drawn unit's table, which
+both from fixed readers (`Readers`: each commit string's row, salt and `b ‖ c` addresses in a sampled proof block's table, which
 commit strings are `hm96-sha512/row/v1` rows, and what the registration holds at each: the public `b ‖ c` of a row, the
-value of any other commit string) and three facts about every satisfying witness of a drawn unit's table:
+value of any other commit string) and three facts about every satisfying witness of a sampled proof block's table:
 
 * `Readers.Copies`: each column of the unit on a committed wire holds the bit the witness has at the wire's row address
   (Δ's copy into the row's message bit for an input; the column itself for an output);
@@ -31,14 +31,14 @@ namespace FlockSoundness.Discharge.Layout
 
 open Game Model Audit Binding
 
-variable {C : Circuit} {n : ℕ} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {Reg : Type} {mPts : ℕ}
 
 /-- **Fixed readers and the registration's values.** The commit strings (`Pos`), the commit string holding each wire
-(`pos`) and its bit there (`idx`); where a drawn unit's table's witness holds bit `k < rowBits q` of each commit string
+(`pos`) and its bit there (`idx`); where a sampled proof block's table's witness holds bit `k < rowBits q` of each commit string
 `q` (`rowAt`), its salt (`saltAt`) and, at a row (`isRow`), its `hm96` slot's 128 output bytes (`bcAt`); and what the
-registration holds: a row's `b ‖ c` (`regBc`), another commit string's value (`regVal`). All are fixed by the draw, the
+registration holds: a row's `b ‖ c` (`regBc`), another commit string's value (`regVal`). All are fixed by the sample, the
 registration, the unit and the commit string, before any witness. -/
-structure Readers (C : Circuit) {n : ℕ} {Reg : Type} {mPts : ℕ} (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
+structure Readers (C : Verity.Boolean.Circuit) {n : ℕ} {Reg : Type} {mPts : ℕ} (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
     (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length) where
   Pos : Type
   [finPos : Fintype Pos]
@@ -73,7 +73,7 @@ noncomputable def valAt (S : Finset (Fin n)) (R : Reg) (u : Fin n) (M : Binding.
     Fin rd.W → Bool :=
   padBits (bitsAt (Binding.wit plan tab S R u M) fun k : Fin (rd.rowBits q) => rd.rowAt S R u q k.val)
 
-/-- **Δ's copies**: in a satisfying witness, each column of a drawn unit on a committed wire holds the witness's bit at
+/-- **Δ's copies**: in a satisfying witness, each column of a sampled proof block on a committed wire holds the witness's bit at
 the wire's row address. -/
 def Copies : Prop :=
   ∀ S R u (hu : u ∈ S) M, Binding.Sat plan tab S R u M → ∀ c, (place S R u hu).inst.wire c ∈ P.io u →
@@ -81,13 +81,13 @@ def Copies : Prop :=
       Binding.wit plan tab S R u M (rd.rowAt S R u (rd.pos ((place S R u hu).inst.wire c))
         (rd.idx ((place S R u hu).inst.wire c)).val)
 
-/-- **The rows' `b ‖ c` is pinned**: in a satisfying witness, at each of a drawn unit's committed wires held by a row,
+/-- **The rows' `b ‖ c` is pinned**: in a satisfying witness, at each of a sampled proof block's committed wires held by a row,
 the bytes at `bcAt` are the registration's `b ‖ c`. -/
 def BcPinned : Prop :=
   ∀ S R u, u ∈ S → ∀ M, Binding.Sat plan tab S R u M → ∀ g ∈ P.io u, rd.isRow (rd.pos g) →
     bytesAt (Binding.wit plan tab S R u M) (rd.bcAt S R u (rd.pos g)) = rd.regBc R (rd.pos g)
 
-/-- **The other values are pinned**: in a satisfying witness, at each of a drawn unit's committed wires held by another
+/-- **The other values are pinned**: in a satisfying witness, at each of a sampled proof block's committed wires held by another
 commit string, the value at `rowAt` is the registration's. -/
 def ValPinned : Prop :=
   ∀ S R u, u ∈ S → ∀ M, Binding.Sat plan tab S R u M → ∀ g ∈ P.io u, ¬ rd.isRow (rd.pos g) →
@@ -99,7 +99,7 @@ def regLeaf (encO : BitVal rd.W → List UInt8) (R : Reg) (q : rd.Pos) : Refine.
   if rd.isRow q then Refine.H512 (Refine.K512.leafPrefix ++ rd.regBc R q)
   else Refine.H512 (encO (widthOf rd.W (rd.rowBits q), rd.regVal R q))
 
-/-- **The layout** of the readers' bit-string values, for the decoder that reads each drawn unit from its place, from
+/-- **The layout** of the readers' bit-string values, for the decoder that reads each sampled proof block from its place, from
 Δ's copies. -/
 noncomputable def layout (encO : BitVal rd.W → List UInt8) (hcopy : rd.Copies place) :
     Binding.Layout P plan tab (P.placeDecoder plan tab place) :=

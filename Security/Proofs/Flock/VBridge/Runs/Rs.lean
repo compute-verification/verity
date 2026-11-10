@@ -3,6 +3,23 @@ module
 public import Proofs.Flock.VBridge.Compiled
 public import Proofs.Flock.VBridge.Algebra.RingSwitch
 public import Proofs.Flock.Soundness.Refine.RepConverse
+public import Proofs.Flock.VBridge.Algebra.Ligerito
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Refine.Arith
+import Proofs.Flock.VBridge.Algebra.Lincheck
 
 /-!
 # Ring switching's checks at a rep, from E
@@ -44,7 +61,7 @@ theorem ofRounds_round {rs : Array Round} {k n : ℕ} {c : Array F128} (hne : No
     simp only [CoinSource.ofRounds, filter_noEmpty hne, e] at h
     cases h
 
-theorem getD_zero_of_size {c : Array F128} (h : c.size = 1) : c.getD 0 0 = c[0]! := by
+theorem getD_zero_of_size {c : Array F128} (h : c.size = 1) : c.getD 0 0 = (c)[0]! := by
   rw [getElem!_pos c 0 (by omega)]
   simp [Array.getD, h]
 

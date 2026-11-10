@@ -6,9 +6,9 @@ per-token latency (p50 and p99), per model and batch, under continuous batching 
 stochastic. It renders no tables: `benchmarks/g2/` does, from the evidence store (`curve.py` the overhead curve over every
 labeled run, `served.py` the served arm's runs).
 
-- `arm.py`: the arms' base, `ServedCommitArm`, whose `install` refuses its default scheme, `vllm-v1` (SHA-256), so an
-  arm that runs names `rows-sha512`. `prof_arm.py`'s rows arms and the harness's `commit` arms measure the Commit. Its
-  docstring has what a run does, and which runs its gate accepts without a root (declared warm-ups, named in the verdict).
+- `arm.py`: the arms' base, `ServedCommitArm`, which commits under `rows-sha512`. `prof_arm.py`'s rows arms and the
+  harness's `commit` arms measure the Commit. Its docstring has what a run does, and which runs its gate accepts without a
+  root (declared warm-ups, named in the verdict).
 - `served_arm.py` and `served_arm.sh`: the served arm, the Commit at 4 KiB rows against compiled and eager stock in one run
   (the specs `*-rtx-served-arm`). With `PIN_BUILD` (a Build of record's `build.json`) every arm compiles the Build's
   kernels and `out/pin_check.txt` says so, which a counted compiled ratio needs.

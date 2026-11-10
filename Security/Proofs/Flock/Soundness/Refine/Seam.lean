@@ -1,6 +1,10 @@
 module
 
 public import Proofs.Flock.Soundness.Refine.Schedule
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Seams: the executable's constants are the model's
@@ -13,8 +17,8 @@ quantities derived from it. These theorems say the two agree, for every `m`:
   consistency-coin count and the codeword length are the model's (`LevelSeam`);
 * `fast100_dims`: the dimensions the executable's Ligerito loop tracks are the ones the model's rounds use (`DimSeam`,
   `Flock.Ligerito`);
-* `fast100_alpha`: at every level the number of consistency coins, `ceilLog2 q`, is not one, so the model's draw of
-  them is a vector draw.
+* `fast100_alpha`: at every level the number of consistency coins, `ceilLog2 q`, is not one, so the model's sample of
+  them is a vector sample.
 
 The kernel checks each for `m < 40`, and both schedules are `none` above 35.
 -/
@@ -56,7 +60,7 @@ theorem fast100_level (m : ℕ) (s : Flock.Schedule) (hs : Flock.fast100 m = som
   · rw [exec_fast100_none m (by omega)] at hs; cases hs
 
 /-- **Not one consistency coin.** At each level of an executable `fast100` schedule, `ceilLog2 q ≠ 1`, so the
-level's consistency coins are a vector draw of `Fin (ceilLog2 q) → 𝔽`, not a scalar one. -/
+level's consistency coins are a vector sample of `Fin (ceilLog2 q) → 𝔽`, not a scalar one. -/
 theorem fast100_alpha (m : ℕ) (s : Flock.Schedule) (hs : Flock.fast100 m = some s) :
     ∀ lv ∈ s.levels, ceilLog2 lv.q ≠ 1 := by
   by_cases hm : m < 40

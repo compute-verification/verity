@@ -363,13 +363,25 @@ def ssh_runner(project: str = PROJECT) -> Runner:
         try:
             t = remote.ssh_host_target(remote.resolve_machine(node, project))
         except remote.Refused as e:
-            raise RuntimeError(f"{node}: {e}") from None
+            raise (Unreachable if released(node) else RuntimeError)(f"{node}: {e}") from None
         return remote.ssh_run(remote.ssh_argv(t["host"], t["port"] or 22, user=t["user"]), argv, stdin=stdin, timeout=300)
     return run
 
 
 class Unreachable(RuntimeError):
     """ssh couldn't connect to the node at all (a stopped VM): its files can't be read, which is no drift of theirs."""
+
+
+def released(node: str) -> bool:
+    """Whether the machine registry marks ``node`` released (`released_host` in its entry, no host): it has no files to read."""
+    from research import remote
+    from research.pods import registry
+
+    d = registry.registry_dir(remote.machines_path())
+    try:
+        return bool(d and tomllib.loads((d / f"{node}.toml").read_text()).get("released_host"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return False
 
 
 def probe(node: Node, paths: list[str], run: Runner) -> dict:

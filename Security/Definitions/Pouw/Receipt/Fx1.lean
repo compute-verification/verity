@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Pouw.Receipt.Duo
+import Mathlib.Data.Finset.Attr
+import Mathlib.Tactic.SetLike
 
 /-!
 # fx1, sm_120's receipt fold (trusted)

@@ -4,6 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Fit
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegRowBc
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegTgt
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegV2
+import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegPort
 
 /-!
 # Output rows unsegmented or `sha512/row-seg/v1`, beside input rows of any kind

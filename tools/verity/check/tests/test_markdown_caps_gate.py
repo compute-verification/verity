@@ -1,4 +1,4 @@
-"""`gates/markdown_caps.py`, drive's landing gate for the Markdown caps: it applies `tests/test_repository.py`'s caps and fixes,
+"""`gates/markdown_caps.py`, drive's warn gate for the Markdown caps: it applies `tests/test_repository.py`'s caps and fixes,
 read at BASE, to each `.md` file that changed, at its size in TOP."""
 from __future__ import annotations
 
@@ -79,7 +79,7 @@ def _merge(repo: Path, tip: str, head: str, n: int) -> str:
 
 
 def test_a_queue_merge_is_judged_against_the_tip_it_merged_onto(tmp_path):
-    """A file over its cap in a member below refuses only the merge that grows it; one that leaves it alone or shrinks it
+    """A file over its cap in a member below fails only the merge that grows it; one that leaves it alone or shrinks it
     passes, the shrink with a note."""
     rep = _repository()
     cap, lines = rep.MD_SIZE_CAP, [f"line {i}\n" for i in range(10)]
@@ -105,7 +105,7 @@ def test_a_queue_merge_is_judged_against_the_tip_it_merged_onto(tmp_path):
         f"doc.md is {big - 5} bytes, over its {cap}-byte cap, but was {big} bytes at {member[:12]} below: not this change's"]
 
 
-def test_a_head_is_judged_against_its_merge_base_so_a_file_over_on_base_refuses_only_growth(tmp_path):
+def test_a_head_is_judged_against_its_merge_base_so_a_file_over_on_base_fails_only_growth(tmp_path):
     rep = _repository()
     cap = rep.MD_SIZE_CAP
     _git(tmp_path, "init", "-q", "-b", "main")

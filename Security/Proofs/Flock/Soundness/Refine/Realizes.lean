@@ -1,6 +1,11 @@
 module
 
 public import Proofs.Flock.Soundness.Refine.Tapes
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import VCVio.Prelude.Core
 
 /-!
 # How the executable's statement denotes a model statement

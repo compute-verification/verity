@@ -36,7 +36,7 @@
       "source": "verity.ml.circuits.ops.gemm GemmCoordinate: K/16 tensor-core steps of 16 multiply-adds",
       "bytes_per_input": "K*BITS//8",
       "bytes_basis": "reads the coordinate's weight row w[K] at the operand datatype's width (BITS, benchmarks/census/datatypes.json); x[K] is shared by every coordinate of its row and y is one word, so neither is counted per coordinate (the batch-1 decode reading: GEMM streams its weights)",
-      "bytes_source": "bench-spine's port definitions (verity_numerical.bench.templates): gemm-coordinate x[K], w[K] -> y"
+      "bytes_source": "bench-spine's port definitions (verity_flock.subcircuit_templates): gemm-coordinate x[K], w[K] -> y"
     },
     "subcircuits": [
       {
@@ -269,7 +269,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #60 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+            "label": "served in row #60 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -284,7 +284,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #57 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+            "label": "served in row #57 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -299,7 +299,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in rows #73, #74 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+            "label": "served in rows #73, #74 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -314,7 +314,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #60 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+            "label": "served in row #60 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -329,7 +329,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #73 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+            "label": "served in row #73 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -344,7 +344,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #39 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+            "label": "served in row #39 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -359,7 +359,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #57 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+            "label": "served in row #57 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -374,7 +374,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #73 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+            "label": "served in row #73 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       }
@@ -433,7 +433,7 @@
       "source": "verity.ml.definitions.registry.b1.AttentionHead_v3 (FA2: DotBf16{K=D}, MufuEx2Ftz, F32FmaSubFtz, Fa2InvSum) and AttentionHead_v2 (FA3)",
       "bytes_per_input": "4*D + 4*T*D",
       "bytes_basis": "reads q[D] and the T key and value rows k[T*D], v[T*D], writes out[D]: 2D + 2TD bf16 words; every row counted once per input, none assumed cached (the conservative, memory-bound reading)",
-      "bytes_source": "bench-spine's port definitions (verity_numerical.bench.templates): attention-head q[D], k[T*D], v[T*D] -> out[D]",
+      "bytes_source": "bench-spine's port definitions (verity_flock.subcircuit_templates): attention-head q[D], k[T*D], v[T*D] -> out[D]",
       "variable_bounds": {
         "T": {
           "by": "last",
@@ -470,7 +470,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "row #101 (Llama-3.2-1B, benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates.attention_head)"
+            "label": "row #101 (Llama-3.2-1B, benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates.attention_head)"
           }
         ]
       },
@@ -514,7 +514,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in rows #39, #60, #67, #68 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+            "label": "served in rows #39, #60, #67, #68 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       }
@@ -549,7 +549,7 @@
       "source": "verity.ml.definitions.registry.b1.RoPE_v1 / RoPEHead_v1",
       "bytes_per_input": "6*D",
       "bytes_basis": "reads x[D] and the cos/sin row cs[D], writes out[D]: 3 rows of D bf16 words; every row counted once per input, none assumed cached (the conservative, memory-bound reading)",
-      "bytes_source": "bench-spine's port definitions (verity_numerical.bench.templates): rope-head x, cs -> out",
+      "bytes_source": "bench-spine's port definitions (verity_flock.subcircuit_templates): rope-head x, cs -> out",
       "bytes_per_input_cached": "4*D",
       "bytes_cached_basis": "x and out only (2 rows of D bf16 words): the cos/sin row is a per-position table served from cache (a PREVIEW basis, cached vs uncached not yet decided; the published N uses bytes_per_input)"
     },
@@ -563,7 +563,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "row #101 (Llama-3.2-1B, benchmarks/census/workloads.json); bench-spine's subcircuit id (verity_numerical.bench.templates); C-Flock's frame-v3 cells on it (flock-backend's)"
+            "label": "row #101 (Llama-3.2-1B, benchmarks/census/workloads.json); bench-spine's subcircuit id (verity_flock.subcircuit_templates); C-Flock's frame-v3 cells on it (flock-backend's)"
           }
         ]
       },
@@ -576,7 +576,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in rows #39, #60, #67, #68, #73, #74 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+            "label": "served in rows #39, #60, #67, #68, #73, #74 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -589,7 +589,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #57 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+            "label": "served in row #57 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       }
@@ -641,7 +641,7 @@
       "source": "verity.ml.definitions.registry.b1.RMSNormFusedCuda_v2 (vLLM fused_add_rms_norm)",
       "bytes_per_input": "10*N",
       "bytes_basis": "reads x, res and w (3 rows of N bf16 words), writes out.0 and out.1 (2 rows): 5N bf16 words; every row counted once per input, none assumed cached (the conservative, memory-bound reading)",
-      "bytes_source": "bench-spine's port definitions (verity_numerical.bench.templates): rmsnorm-fused-cuda in0, in1, in2 -> out.0, out.1",
+      "bytes_source": "bench-spine's port definitions (verity_flock.subcircuit_templates): rmsnorm-fused-cuda in0, in1, in2 -> out.0, out.1",
       "bytes_per_input_cached": "8*N",
       "bytes_cached_basis": "x, res, out.0 and out.1 only (4 rows of N bf16 words): the weight row w is served from cache (a PREVIEW basis, cached vs uncached not yet decided; the published N uses bytes_per_input)"
     },
@@ -656,7 +656,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "row #101 (Llama-3.2-1B, benchmarks/census/workloads.json); bench-spine's subcircuit id (verity_numerical.bench.templates); C-Flock's frame-v3 cells on it (flock-backend's)"
+            "label": "row #101 (Llama-3.2-1B, benchmarks/census/workloads.json); bench-spine's subcircuit id (verity_flock.subcircuit_templates); C-Flock's frame-v3 cells on it (flock-backend's)"
           }
         ]
       },
@@ -670,7 +670,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #60 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+            "label": "served in row #60 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -684,7 +684,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #39 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+            "label": "served in row #39 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -698,7 +698,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in rows #73, #74 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+            "label": "served in rows #73, #74 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       }
@@ -750,7 +750,7 @@
       "source": "verity.ml.definitions.registry.b1.RMSNormTriton_v1",
       "bytes_per_input": "6*N",
       "bytes_basis": "reads x and w (2 rows of N bf16 words), writes out (1 row): 3N bf16 words; every row counted once per input, none assumed cached (the conservative, memory-bound reading)",
-      "bytes_source": "bench-spine's port definitions (verity_numerical.bench.templates): rmsnorm-triton in0, in1 -> out.out",
+      "bytes_source": "bench-spine's port definitions (verity_flock.subcircuit_templates): rmsnorm-triton in0, in1 -> out.out",
       "bytes_per_input_cached": "4*N",
       "bytes_cached_basis": "x and out only (2 rows of N bf16 words): the weight row w is served from cache (a PREVIEW basis, cached vs uncached not yet decided; the published N uses bytes_per_input)"
     },
@@ -765,7 +765,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "row #101 (Llama-3.2-1B, benchmarks/census/workloads.json); bench-spine's subcircuit id (verity_numerical.bench.templates); C-Flock's frame-v3 cells on it (flock-backend's)"
+            "label": "row #101 (Llama-3.2-1B, benchmarks/census/workloads.json); bench-spine's subcircuit id (verity_flock.subcircuit_templates); C-Flock's frame-v3 cells on it (flock-backend's)"
           }
         ]
       },
@@ -779,7 +779,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #60 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+            "label": "served in row #60 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -793,7 +793,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in rows #73, #74 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+            "label": "served in rows #73, #74 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -807,7 +807,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #39 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+            "label": "served in row #39 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -821,7 +821,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in rows #73, #74 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+            "label": "served in rows #73, #74 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       }
@@ -858,7 +858,7 @@
       "source": "verity.ml.definitions.registry.b1.SiluMul_v1",
       "bytes_per_input": "6*I",
       "bytes_basis": "reads the gate|up row in0[2I], writes out[I]: 3I bf16 words; every row counted once per input, none assumed cached (the conservative, memory-bound reading)",
-      "bytes_source": "bench-spine's port definitions (verity_numerical.bench.templates): silu-mul in0 -> out.out",
+      "bytes_source": "bench-spine's port definitions (verity_flock.subcircuit_templates): silu-mul in0 -> out.out",
       "bytes_per_input_cached": "6*I",
       "bytes_cached_basis": "unchanged: silu-mul has no weight row, every byte is an activation (a PREVIEW basis, cached vs uncached not yet decided; the published N uses bytes_per_input)"
     },
@@ -872,7 +872,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "row #101 (Llama-3.2-1B, benchmarks/census/workloads.json); bench-spine's subcircuit id (verity_numerical.bench.templates); C-Flock's frame-v3 cells on it (flock-backend's)"
+            "label": "row #101 (Llama-3.2-1B, benchmarks/census/workloads.json); bench-spine's subcircuit id (verity_flock.subcircuit_templates); C-Flock's frame-v3 cells on it (flock-backend's)"
           }
         ]
       },
@@ -885,7 +885,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in rows #67, #68 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+            "label": "served in rows #67, #68 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -898,7 +898,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #60 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+            "label": "served in row #60 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -911,7 +911,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in row #39 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+            "label": "served in row #39 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       },
@@ -924,7 +924,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "served in rows #73, #74 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates)"
+            "label": "served in rows #73, #74 (benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates)"
           }
         ]
       }
@@ -972,7 +972,7 @@
       "source": "verity.ml.definitions.registry.sampling.GumbelTopPTokenSelect_v1",
       "bytes_per_input": "2*V + 36",
       "bytes_basis": "reads the bf16 logits row in0[V] (2V bytes) and the scalars top_p (u32), seed (u64), pos (u64), temp (u32), splits (u32), writes the sampled token id (u64): 2V + 36 bytes; every row counted once per input, none assumed cached (the conservative, memory-bound reading)",
-      "bytes_source": "bench-spine's port definitions (verity_numerical.bench.templates): gumbel-top-p-token-select in0..in5 -> out.sampled_token_ids"
+      "bytes_source": "bench-spine's port definitions (verity_flock.subcircuit_templates): gumbel-top-p-token-select in0..in5 -> out.sampled_token_ids"
     },
     "subcircuits": [
       {
@@ -984,7 +984,7 @@
         "fidelity_notes": [],
         "sources": [
           {
-            "label": "row #101 (Llama-3.2-1B, benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_numerical.bench.templates, the gumbel-top-p-token-select row)"
+            "label": "row #101 (Llama-3.2-1B, benchmarks/census/workloads.json); bench-spine's subcircuit id and display (verity_flock.subcircuit_templates, the gumbel-top-p-token-select row)"
           }
         ]
       }

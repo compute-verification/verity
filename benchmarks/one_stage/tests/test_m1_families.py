@@ -1,7 +1,8 @@
 """`m1_families.py --estimate`: each family's split units (its unit templates past the row itself) sized once however many
 families share them, each listed with its count per row; the ``--also`` Definitions (and ``--also-file``'s non-blank lines)
-sized as ``candidates``; and `sized`'s verdict on a Definition from its estimate and block, or the reason it has none.
-Nothing is lowered: `sized`, `estimate`, `block` and the serving rows' `_bind` are stand-ins."""
+sized as ``candidates``; `sized`'s verdict on a Definition from its estimate and block, or the reason it has none; an
+estimate's served MACs, the census's count of its tensor-core steps' products; and a block's bits per port.
+Nothing is lowered: `sized`, `estimate`, `block`, the serving rows' `_bind` and each leaf's cost are stand-ins."""
 
 from __future__ import annotations
 
@@ -137,3 +138,24 @@ def test_sized_verdicts(bound, ands, log2, under, est_log, fits, rows_log, refus
     assert {k: e[k] for k in ("ands", "log2_ands", "under_2^26", "block", "fits_block", "refused_block")} == {
         "ands": ands, "log2_ands": log2, "under_2^26": under,
         "block": {"ands": ands, "est_log": est_log, "rows_log": rows_log}, "fits_block": fits, "refused_block": refused}
+
+
+@pytest.mark.parametrize("K, N", [(256, 1), (256, 4), (512, 2)])
+def test_an_estimate_counts_the_served_macs_of_its_tensor_core_steps(monkeypatch, K, N):
+    """FlashInfer's FP8 linear on one token row serves K N MACs (`census.PRODUCTS` over its QGMMA steps), each leaf's cost
+    a stand-in."""
+    from verity_vllm.pipeline import serving_rows as SRW
+
+    monkeypatch.setattr(M, "_leaf_cost", lambda fn, IL: {"ands": 1, "reads": 0, "asserts": 0})
+    e = M.estimate(SRW._bind(f"FlashInferFp8Linear_v1{{K={K},N={N}}}"), {}, {})
+    assert e["macs"] == K * N and e["ands"] > 0 and e["unpieced"] == []
+
+
+def test_a_block_gives_each_parameters_and_returned_fields_bits():
+    """A unit's rows are its parameters' bits and its returned fields' rounded up to whole 16-bit words."""
+    ty = lambda *w: types.SimpleNamespace(leaf_widths=lambda: list(w))  # noqa: E731
+    fn = types.SimpleNamespace(signature=lambda: ([("x", ty(8, 8, 8)), ("w", ty(16, 16))],
+                                                  types.SimpleNamespace(fields=[("a", ty(8)), ("b", ty(16, 16))])))
+    b = M.block(fn, 1000)
+    assert (b["in_bits"], b["out_bits"], b["row_bits"]) == ([24, 32], [8, 32], 24 + 32 + 16 + 32)
+    assert b["rows_log"] <= b["est_log"] <= M.K_MAX

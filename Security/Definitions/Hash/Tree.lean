@@ -1,7 +1,40 @@
 module
 
-public import Mathlib
-public import Definitions.Hash.Basic
+public import Aesop.BuiltinRules
+public import Definitions.Core.Hash
+public import Mathlib.Tactic.Attr.Core
+public import Mathlib.Tactic.ToAdditive
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # frame-v3 trees over a hash (trusted)
@@ -17,6 +50,7 @@ An opening at `rank` is the leaf digest and the path's siblings from the leaf le
 `rank < count`, the path has `merkle_depth count` siblings, and the climb reaches the committed root (`Tree.accepts`).
 Leaf, node and root are 64-byte digests, which the verifier's size checks (`root.size`, each sibling's) refuse otherwise;
 `Digest` carries that in its type. `Tree.hashed` lists the node messages the climb hashed, bottom first.
+<<<<<<< ours
 
 A whole tree, the committer's, is `Tree.root` with every message it hashes `Tree.msgs`: leaves, `pad` frames up to a
 power of two and nodes, or the `empty` frame at count 0.
@@ -25,6 +59,13 @@ A range-indexed domain (`Domain.range`) is `CommitmentDomain(binding, owner, Ran
 its id is `H(frame "domain" [binding, uint (owner + 2), positions, uint count])`, `positions` the range's SHA-512
 identity `tagged_sha512("veritor/indexed-domain/range/v1", {"start":0,"step":1,"stop":count})`, and rank `r`'s position
 is `r`.
+||||||| base
+=======
+
+A tree whose every leaf someone can compute is `nodeAt` over its leaf digests: `rootOf` its root at the domain's depth,
+and `sibsAt` the path the honest opening at a rank carries. At a count that is a power of two it is the served tree over
+those leaves, which pads nothing.
+>>>>>>> theirs
 -/
 
 @[expose] public section
@@ -72,6 +113,7 @@ def accepts (H : Msg → Digest) (D : Domain) (root : Digest) (rank : ℕ) (leaf
 def hashed (H : Msg → Digest) (D : Domain) (rank : ℕ) (leaf : Digest) (sibs : List Digest) : List Msg :=
   (climb H D 0 rank leaf sibs).1
 
+<<<<<<< ours
 /-! ## A whole tree
 
 The committer's tree over a domain's `count` values (`tree_levels` and `MerkleTree.commitment`): level 0 is the leaves
@@ -136,4 +178,22 @@ def Domain.range (H : Msg → Digest) (binding : Digest) (owner : ℤ) (count : 
   count := count
   position r := r
 
+||||||| base
+=======
+/-- The index beside `c` at its level: `c + 1` for an even `c`, `c - 1` for an odd one. -/
+def sib (c : ℕ) : ℕ := if c % 2 = 0 then c + 1 else c - 1
+
+/-- **The tree over the leaf digests `leaf`**: its node at level `lv` and index `i`, level 0 the leaves. -/
+def nodeAt (H : Msg → Digest) (D : Domain) (leaf : ℕ → Digest) : ℕ → ℕ → Digest
+  | 0, i => leaf i
+  | lv + 1, i => H (nodeMsg D lv i (nodeAt H D leaf lv (2 * i)) (nodeAt H D leaf lv (2 * i + 1)))
+
+/-- The root of the tree over `leaf` at the domain's depth. -/
+def rootOf (H : Msg → Digest) (D : Domain) (leaf : ℕ → Digest) : Digest := nodeAt H D leaf (depth D.count) 0
+
+/-- The siblings of the path at `rank` in the tree over `leaf`, from the leaf level up. -/
+def sibsAt (H : Msg → Digest) (D : Domain) (leaf : ℕ → Digest) (rank : ℕ) : List Digest :=
+  List.ofFn fun j : Fin (depth D.count) => nodeAt H D leaf j (sib (rank / 2 ^ j.val))
+
+>>>>>>> theirs
 end Hash.Tree

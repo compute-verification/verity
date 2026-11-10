@@ -1,12 +1,11 @@
 module
 
 public import PouwCheck.CreditDifftest
-public import PouwCheck.Verified
 public import PouwCheck.LiveVerified
 public import PouwCheck.CommittedFiles
 
 /-!
-# The difftest's functions for a served window's statements (`PouwCheck.Verified`, `PouwCheck.LiveVerified`,
+# The difftest's functions for a served execution phase's statements (`PouwCheck.Verified`, `PouwCheck.LiveVerified`,
 `PouwCheck.CommittedFiles`)
 
 Beside `PouwCheck.CreditDifftest`'s, behind the same `pouw-check-difftest` (`PouwCheck.DifftestMain` reads `all`):
@@ -16,9 +15,9 @@ Beside `PouwCheck.CreditDifftest`'s, behind the same `pouw-check-difftest` (`Pou
   `{"refused": [code, why]}`. The served path (`credit._lean_verified`, `verifier.lean`) reads the same answers.
 * `credit-live-verified` (`files`, `statements`, `descriptor` in hex, `entries`, `ms`, `program`, `window`, `session`
   and `runs`, as `credit._lean_live_verified` sends them): `LiveVerified.liveVerified`'s `{"run": [...]}` or
-  `{"outcomes": [...]}`, or `{"refused": [code, why]}`, the window's live@<s> statements' verdict.
+  `{"outcomes": [...]}`, or `{"refused": [code, why]}`, the execution phase's live@<s> statements' verdict.
 * `credit-committed-files` (`ledger`, `name`, as `credit._lean_committed_files` sends them):
-  `CommittedFiles.filesOf`'s `{"files": …}`, or `{"refused": [code, why]}`, the circuit files a period's open committed.
+  `CommittedFiles.filesOf`'s `{"files": …}`, or `{"refused": [code, why]}`, the circuit files a credit period's open committed.
 -/
 
 @[expose] public section

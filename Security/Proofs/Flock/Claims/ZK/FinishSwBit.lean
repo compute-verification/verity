@@ -1,14 +1,50 @@
 module
 
+public import Flock.Firewall.Finish
+public import Mathlib.Algebra.Group.Nat.Defs
+public import Mathlib.Tactic.ToDual
+public import Proofs.Flock.Claims.Complete.Prover.Piop
 public import Proofs.Flock.Claims.ZK.FinishSwFw
-public import Proofs.Flock.VBridge.Algebra.ToVStar
-public import Proofs.Flock.VBridge.Residuals
-public import Proofs.Flock.Soundness.Refine.Final
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Level3.Assembly
+import Proofs.Flock.Soundness.Refine.Final
+import Proofs.Flock.VBridge.Algebra.ToVStar
+import VCVio.Prelude.Core
 
 /-!
-# The firewall's switched vectors at the packed table
+# The ZK server's switched vectors at the packed table
 
-`FinishSrc`'s `repCut_fw` asks its source's switched vectors to be the firewall's (`Finish.switchVec`), read off the
+`FinishSrc`'s `repCut_fw` asks its source's switched vectors to be the ZK server's (`Finish.switchVec`), read off the
 packed F-table `g` by the bits of its elements; the sources give the prover's (`FlockComplete.switchVec`), read off the
 trace's bits. At the packed table they agree, wherever the claim's point has the `m − 6` coordinates the PIOP's claims
 have (`switchVec_packed`): `eqTable` of its tail has `2^(m−7)` entries, each a word of `packed`, whose bit `v` is the
@@ -45,7 +81,7 @@ theorem packed_bit (tr : Trace) (m : ℕ) {y v : ℕ} (hy : y < 2 ^ (m - 7)) (hv
     exact foldl_ite_add (fun v => tr.z[128 * y + v]!) F128.monomial (List.range 128) 0
   rw [e, Flock.RecAlgebra.bit_eq_bitOf _ hv, FlockVBridge.bitOf_ofBits _ hv]
 
-/-- **The firewall's switched vector at the packed table is the prover's**, at a claim with `m − 6` coordinates. -/
+/-- **The ZK server's switched vector at the packed table is the prover's**, at a claim with `m − 6` coordinates. -/
 theorem switchVec_packed {m : ℕ} (hm : 7 ≤ m) (tr : Trace) (c : Claim) (hx : c.x.size = m - 6) :
     Flock.Firewall.Finish.switchVec (packed tr m) c = FlockComplete.switchVec tr c := by
   have hsz : (eqTable (c.x.extract 1 c.x.size)).size = 2 ^ (m - 7) := by

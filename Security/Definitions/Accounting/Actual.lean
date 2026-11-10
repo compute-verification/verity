@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Core.Circuit
-public import Definitions.Core.Declaration
+public import Definitions.Core.RegisteredCircuit
 public import Mathlib.Order.Interval.Set.Defs
 
 /-!
@@ -35,7 +35,7 @@ causality at latency 0, inside `X`, for computed sources, which is all the split
 
 `cut S` is a set `S` of gates as a circuit whose inputs are what it reads: `A` with every gate outside `S` an input gate,
 and the gates of `S` its outputs. `declaration X t θ` is `A[X, [0, t))` so cut, with the baseline `θ_A`, the input gates
-committed before the run, as NCI's `Declaration`. The runtime `t_A(P)` reads the strategy, not one run
+committed before the run, as NCI's `RegisteredCircuit`. The runtime `t_A(P)` reads the strategy, not one run
 (`Accounting.Actual.runtime`).
 -/
 
@@ -99,7 +99,7 @@ def Forward (X : Finset L) : Prop :=
 /-- **Faithfulness**: each computed gate's value is its operation on the values `val` holds. A run's field
 (`Actual.Run.faithful`), named so a property over runs takes it as what it is, the physical fact that a gate computes
 its operation. -/
-def Faithful (val : A.Transcript) : Prop :=
+def Faithful (val : A.Trace) : Prop :=
   ∀ g, A.isInput g = false → val g = A.op g val
 
 /-- **Holding**: `held y t` is the gates the leaf `y` holds at the start of tick `t`. A held gate is `y`'s own
@@ -140,10 +140,8 @@ noncomputable def cut (S : Finset (Fin A.N)) : Circuit where
 baseline `θ`, input gates of `A` (the model's `θ_A`, those committed before the run). Every input gate of `A` is an
 input gate of the cut, so `θ` needs no restricting. -/
 noncomputable def declaration (X : Finset L) (t : ℕ) (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) :
-    Declaration where
-  D := A.cut (A.region X (Set.Iio t))
-  θ := θ
-  θ_input a ha := by simp [cut, hθ a ha]
+    RegisteredCircuit :=
+  .ofCircuit (A.cut (A.region X (Set.Iio t))) θ fun a ha => by simp [cut, hθ a ha]
 
 end Placed
 

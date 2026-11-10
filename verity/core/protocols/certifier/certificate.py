@@ -35,7 +35,7 @@ fresh for each record (`Issuer`'s `coins`), never the prover's:
 The certifier hands `salt_c` to the prover with the head, as witness only (`CertifiedRecord`). N2's head check
 (`head_check`) links the two: R is the digest of the head it opened, and the salted digest of R is the one the
 certificate signs. So the signature check reads only the certificate's public fields and its signed digest
-(`Certificate.verify`), never a hash of witness. Until N2's proof block is proved, its verifier of record checks that
+(`Certificate.verify`), never a hash of witness. Until N2's proof block is proved, its verifier checks that
 link on the host too, over the opening (`CertifiedRecord.verify`).
 
 **The certificate** signs a 64-byte message that binds the signed digest to the key, the certifier session and the

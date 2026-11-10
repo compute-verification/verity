@@ -10,13 +10,10 @@ inputs are one) without a table of inputs.
 -/
 module
 
-public import Std.Data.HashMap
 public import Flock.Program
 public import Flock.Qword
 
 @[expose] public section
-set_option backward.privateInPublic true
-set_option backward.privateInPublic.warn false
 
 namespace Flock.Extract
 

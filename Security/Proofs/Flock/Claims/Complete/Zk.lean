@@ -60,8 +60,7 @@ public import Proofs.Flock.Claims.Complete.Zk.Level0Model
 public import Proofs.Flock.Claims.Complete.Zk.Level0Honest
 public import Proofs.Flock.Claims.Complete.Zk.Level0HonestRun
 public import Proofs.Flock.Claims.Complete.Zk.Level0Opens
-public import Proofs.Flock.Claims.Complete.Zk.Level0Verifier
-public import Proofs.Flock.Claims.Complete.Zk.Level0Complete
+public import Proofs.Flock.Claims.Complete.ZkTables.ShapeGo
 
 /-! Flock's completeness at the deployed masked (`--zk`) verifier at one table (`ZkTables` lifts it to any number, at
 the masked record's prover `ZkTables.honestPR`): the honest masked prover (`Honest`: `honestPZk`, on
@@ -76,7 +75,7 @@ from the scope and the session's shape (`tablesZk_goal`, `schedulesZk_goal`, `pr
 send (`linkFirstZk_goal`). `Json.Record` is the masked record's JSON (`recordJson_eqZk`) and the masked decoder's hello
 and coin-tree checks passing on it (`checkHello_ok`, `checkRecord_ok`, with `Json.QSort`'s `qsort_coinTree`), after
 which it decodes as the plain record of `specZ` (`decodeWith_specZ`); `Json.Decode` reads it back: decoded, live, and
-its draw (`decode_recordObjZk`, `live_recordObjZk`, `recordDraw_recordObjZk`); `Json.Session` is what the one-table
+its sample (`decode_recordObjZk`, `live_recordObjZk`, `recordDraw_recordObjZk`); `Json.Session` is what the one-table
 masked session returns and sends (`sessionPZk_facts`), its reps' rounds their sends (`repPZk_rec`); `Json.Goals` proves
 the record's goals from `StmtOkZk` and `ProverOkZk` (`RunZk.json`, `decodesZk_goal`, …, `repExtrasZk_goal`), and
 `Json.Stmt` `StmtOkZk` from the case's setup (`stmtOkZk`, with `Same.good` and `good_subset`);
@@ -128,9 +127,9 @@ proof's lengths (`ligeritoPZk_shape`); `Level0Premises` the premises of `ZkTable
 model, given its openings and final identity at the model's values (`ligeritoWithZ_of`); `Level0Honest` the honest
 masked prover's Ligerito against that model (`mid_lv0Z`), and `Level0HonestRun` its whole walk: it ends at the model's
 transcript and meets the model's final identity (`honestZ`); `Level0Opens` its openings passing the masked Merkle
-checks, level 0's over rows `EXTRA_LANES` wider (`ligeritoPZk_opens`, `merkleOkZ_of_opens`); `Level0Verifier` the last
-premise, the verifier returning the prover's record at its transcript (`verifier`); `Level0Complete` the four in
-`complete_jsonT_of_level0`, leaving the JSON specification and `MaskRankBound` (`complete_jsonT_closed`), and with
-`maskRankBound` the JSON specification alone (`complete_jsonT_of_spec`). -/
+checks, level 0's over rows `EXTRA_LANES` wider (`ligeritoPZk_opens`, `merkleOkZ_of_opens`). Level 0's last premise,
+the verifier returning the prover's record at its transcript (`ZkTables.Level0.Verifier`), is not proved: with the
+other three (`Level0Premises`) and `MaskRank.maskRankBound`, `ZkTables.complete_jsonT_of_level0` leaves it and the
+JSON specification. -/
 
 @[expose] public section

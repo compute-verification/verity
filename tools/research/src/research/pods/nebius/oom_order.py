@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """`python3 oom_order.py [--runs DIR ...] [--ramlock DIR] [--log FILE] [--dry-run]`: order the kernel OOM killer's picks on a
-shared node by each live run's memory use against its research.mem reservation, until reservations are caps (CI-98).
+shared node by each live run's memory use against its research.mem reservation, until reservations are caps.
 
 A reservation (`research run --mem-gb`, a check slot's mem=; research.mem's files in RAMLOCK) only gates admission: the kernel
-picks its victim by size alone. T1R's replay r20261019-110314-3fd7 stayed inside its 200 GiB reservation and was OOM-killed as
-the node's largest process, beside a run holding about 150 GB on a 64 GB reservation and one that had reserved nothing (INF-135).
+picks its victim by size alone, so a run inside its reservation is OOM-killed as the node's largest process beside runs far over
+theirs or with none.
 
 Each pass, for every live run under the runs roots (status.json `running`), its processes are every pid whose environment names
 the run dir as RESEARCH_RUN_DIR (what the runner exports to its workload, so its workers that leave the group count) and the
 members of the run's process group (status.json's pgid, once a member with the variable is in it) that name no run dir, and every
 process that names no run dir in a `.scope` cgroup holding the run's processes and no other run's: a run's workers that scrub its
-environment and leave its group still sit in its session scope (24 Oct, cpu-3: suites.py's verity-circuit-check run e48b held 383 GB
-in its scope with no reservation, read here at 0.1 GB, so the kernel took small runs and a reserved 80 GB verify first). Its use is their RssAnon + RssShmem (what reclaim can't free), its reservation the largest file in RAMLOCK naming its run
+environment and leave its group still sit in its session scope (read without it, a run holding hundreds of GB there with no
+reservation reads as almost nothing, and the kernel takes small runs and reserved ones first). Its use is their RssAnon + RssShmem (what reclaim can't free), its reservation the largest file in RAMLOCK naming its run
 id (or a pid of its), else none. A run of several processes that reads over its reservation that way is read again from their
 Pss_Anon + Pss_Shmem (smaps_rollup), which splits a page among the processes that share it: summed Rss counts a forked worker's
-copy-on-write pages once per worker, and read each PRF-131 share (one ~278 GB parent, up to 9 forked workers) at 2,505 GB against
-its 345 GB, so the share became the node's first pick (24 Oct, n2 00:09Z and 03:44Z, cpu-2 03:36Z). Pss only for those runs, and
+copy-on-write pages once per worker, so one large parent and its forked workers would read at several times their reservation
+and be the node's first pick. Pss only for those runs, and
 only ones with a reservation: reading it walks the process's page tables (12 s a pass on n2 with every unreserved vLLM server read). Every process of the run gets one oom_score_adj:
 
   over (use > reservation, or no reservation)   OVER + round(SPAN * (use - reservation) / MemTotal), at most 1000
@@ -45,8 +45,8 @@ LOG = Path("/workspace/monitoring/oom-order.jsonl")
 PROC = Path("/proc")
 GB = 1e9                          # research.mem's GB
 OVER, SPAN, WITHIN, MAX = 500, 500, 0, 1000
-#: a run under a reservation marked "priority": true (a train check's slot, #3486) ranks this much lower, so a research job
-#: growing back into its reservation is killed before a train (ci 24 Oct 05:47Z, Daniel's landing mandate)
+#: a run under a reservation marked "priority": true (a train check's slot) ranks this much lower, so a research job
+#: growing back into its reservation is killed before a train: landing comes first
 PRIORITY = 500
 DISABLED = -1000
 #: a run's runner (`python3 -m research run`), in its run's scope but never one of its processes (nor its session's sshd)

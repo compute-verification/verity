@@ -4,8 +4,8 @@
 # ?a?a?a?a?a?a?a, a 7-byte candidate, and for -m 1710 the self-test salt's 12 bytes, so one SHA-512 block a candidate) runs
 # -m 1700 and -m 1710 each with its optimized kernel (-O, what `hashcat -b` runs by default) and its pure one, at -w 3
 # (the benchmark's default), and -m 1700 -O at -w 4. Ours: commit_gpu's raw rate (`commit_gpu sha`, sha_rate: each thread
-# chains full compressions of a variable block) for commit_gpu's default build (a0r0l) and sx0000, sx's default under
-# -DSHA_SX (ruler.sh's builds), each checked bit for bit against reference.py in the lease before it is timed; and
+# chains full compressions of a variable block) for commit_gpu's default build (a0r0l) and sx0000, sx's default built
+# with -DSHA_SX, each checked bit for bit against reference.py in the lease before it is timed; and
 # hashcat_forms.cu, our compression in hashcat's shapes (its header), its first digests checked against hashlib, and the
 # honest chain and -O's shape at each CTA size in SHAPES, in whole waves of the CTAs an SM holds (commit_gpu's sha launches
 # 8 CTAs of 256 an SM, 3 resident, a partial last wave).

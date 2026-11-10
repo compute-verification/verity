@@ -1,8 +1,47 @@
 module
 
 public import Proofs.Flock.Claims.KS.PlainDrawRColsE
-public import Proofs.Flock.Claims.KS.PlainKSLin
-public import Proofs.Flock.Claims.Recursion.FlockKSDeployE
+public import Proofs.Flock.Claims.Recursion.FlockKSLin
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.KS.Deploy
+import Proofs.Flock.Claims.KS.PlainKSLin
+import Proofs.Flock.Claims.KS.Range
+import Proofs.Flock.Claims.KS.Width
+import Proofs.Flock.Claims.Recursion.FlockKSDeploy
+import Proofs.Flock.Claims.Scope.InScope
+import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
 
 /-!
 # The plain record at the deployed reader `VR rd`, and its code facts
@@ -22,7 +61,7 @@ Its code facts, each from `VR rd`'s decision at SHA-512 (`decideR_sha512`), by `
 * it accepts only at its last round (`accLast_VR`): custody's count of the record's rounds (`streams_size_plainJ`)
   is the round messages', one per opened round (`readPs_length`);
 * `plainR_KSFlockLin`: `KSFlockLin` at the trimmed record and `CpDep`, from conflicts tied to collisions and the table
-  bound at the untrimmed record (`plainE_KSFlockLin`'s assembly).
+  bound at the untrimmed record.
 -/
 
 @[expose] public section
@@ -415,7 +454,7 @@ theorem decideFree_VR (rd : Claims.Msg → Option FinalP) : DecideFree sha512 (V
 /-- **`KSFlockLin` at the plain record at `VR rd`**, at SHA-512, at the trimmed record and the deployed caps `CpDep`:
 `KSFlockLin_of_tableBoundAbortLin` from conflicts tied to collisions and the table bound at the untrimmed record,
 carried to the trimmed columns (`tableBoundAbortLin_mapCols`), with the record's numbers, one table wherever some run
-accepts (`plainR_hone`) and `ColsOk` (`plainR_colsOk`), as `plainE_KSFlockLin`. -/
+accepts (`plainR_hone`) and `ColsOk` (`plainR_colsOk`). -/
 theorem plainR_KSFlockLin (rel : Readable.Parsed → Readable.Relation) (rd : Claims.Msg → Option FinalP)
     (hconf : Claims.Flock.ConflictTied sha512 (deployPlainR rel rd) (wordLen false))
     (htab : Claims.Recursion.TableBoundAbortLin sha512 (deployPlainR rel rd) (wordLen false) (wide false) CpDep) :

@@ -1,9 +1,9 @@
-"""`PouwWindow.KnownRows`, a drawn H1 leaf's known rows (lane l's ``pub`` and ``admit``, every statement's ``o0``), held
+"""`PouwWindow.KnownRows`, a sampled H1 leaf's known rows (lane l's ``pub`` and ``admit``, every statement's ``o0``), held
 to the Python that writes them on the shared harness (`verity_difftest`): `benchmarks/pouw/h1_lanes/run.py`'s
 `known_rows` (`pub_words`, `bits_words` and `h1unit.OK`), the served path's stand-in, until the served path's producer
 of known content is on the tree.
 
-The drawn inputs are a 64-byte salt and roots, positions in and out of a u64, admit rows of 32 bits and of other
+The sampled inputs are a 64-byte salt and roots, positions in and out of a u64, admit rows of 32 bits and of other
 lengths, and every lane and the combine. The salts the Python derives (`h1unit.pub_salt`, `ok_salt`) are no part of a
 row's content, which is what the known-content check binds, so the port compares the rows' words.
 """

@@ -2,7 +2,7 @@
 `SiluMulBf16_v2` (`verity.ml.definitions.registry.act.SiluMulBf16`).
 
 PROMOTED: the Definition now lives in the accepted registry (`verity.ml.definitions.registry.act.SiluMul`, bound by the
-`b1-eager-v3` vocabulary; the X-08 pattern) — this module re-exports the same object so the quarantine's difftest adapter,
+`b1-eager-v3` vocabulary) — this module re-exports the same object so the quarantine's difftest adapter,
 `ALL_DEFINITIONS` and `SEMANTIC_ID` are unchanged (no registry clash).
 """
 from __future__ import annotations

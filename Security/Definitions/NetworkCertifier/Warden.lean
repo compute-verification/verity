@@ -39,14 +39,14 @@ inductive CellView (Cell : Type) where
 /-- **The network certifier's schedule**, public: `r` cells per bucket and a latency of `D` buckets for every
 connection, the admission bucket `adm c` of each connection `c` (the network certifier's own decision), and the number
 of egress cells `cells c` its lane has in the run. -/
-structure WardenSchedule (κ : Type) where
+structure CertifierSchedule (κ : Type) where
   r : ℕ
   D : ℕ
   adm : κ → ℕ
   cells : κ → ℕ
 
 /-- The bucket in which connection `c` sends its egress cell `j`: `adm c + D + ⌊j/r⌋`. -/
-def WardenSchedule.bucket {κ : Type} (s : WardenSchedule κ) (c : κ) (j : ℕ) : ℕ :=
+def CertifierSchedule.bucket {κ : Type} (s : CertifierSchedule κ) (c : κ) (j : ℕ) : ℕ :=
   s.adm c + s.D + j / s.r
 
 /-- **What reaches the network certifier** from the server on one connection: its egress data in cells (`stream`), and
@@ -64,21 +64,21 @@ def streamCell {Cell : Type} (stream : List Cell) (j : ℕ) : CellView Cell :=
 /-- **The network certifier's code on one lane**, from the lane's cell `j` with `k` cells left, each sent in its bucket
 `t j`. Past the end of the data, padding. A cell, or the end of the stream, late for its bucket: the fail cell, then
 padding to the lane's end. Otherwise the cell's data. -/
-def wardenLane {Cell : Type} (a : Arrivals Cell) (t : ℕ → ℕ) : ℕ → ℕ → List (ℕ × CellView Cell)
+def certifierLane {Cell : Type} (a : Arrivals Cell) (t : ℕ → ℕ) : ℕ → ℕ → List (ℕ × CellView Cell)
   | _, 0 => []
   | j, k + 1 =>
-    if a.stream.length < j then (t j, .pad) :: wardenLane a t (j + 1) k
+    if a.stream.length < j then (t j, .pad) :: certifierLane a t (j + 1) k
     else if t j < a.ready j then (t j, .fail) :: (List.range' (j + 1) k).map fun i => (t i, .pad)
-    else (t j, streamCell a.stream j) :: wardenLane a t (j + 1) k
+    else (t j, streamCell a.stream j) :: certifierLane a t (j + 1) k
 
 /-- **The network certifier's code**: on schedule `s` and the arrivals `arr c` of every connection `c`, the cells the
 client receives on each connection, each with its bucket. -/
-def wardenCode {κ Cell : Type} (s : WardenSchedule κ) (arr : κ → Arrivals Cell) : κ → List (ℕ × CellView Cell) :=
-  fun c => wardenLane (arr c) (s.bucket c) 0 (s.cells c)
+def certifierCode {κ Cell : Type} (s : CertifierSchedule κ) (arr : κ → Arrivals Cell) : κ → List (ℕ × CellView Cell) :=
+  fun c => certifierLane (arr c) (s.bucket c) 0 (s.cells c)
 
 /-- **The fail cell** of connection `c`: the first cell of its lane, among the data's cells and the end of the stream,
 that reached the network certifier after its bucket, or none. -/
-def failCell {κ Cell : Type} (s : WardenSchedule κ) (arr : κ → Arrivals Cell) (c : κ) : Option ℕ :=
+def failCell {κ Cell : Type} (s : CertifierSchedule κ) (arr : κ → Arrivals Cell) (c : κ) : Option ℕ :=
   (List.range (s.cells c)).find? fun j => decide (j ≤ (arr c).stream.length ∧ s.bucket c j < (arr c).ready j)
 
 /-- Cell `j` the client receives on a connection whose data is `stream` and whose fail cell is `fail`. -/
@@ -88,7 +88,7 @@ def cellView {Cell : Type} (stream : List Cell) : Option ℕ → ℕ → CellVie
 
 /-- **The client's view** of the server side, connection by connection, from the schedule `s`, each connection's data
 and its fail cell or none: every cell of its lane, in its bucket. -/
-def clientView {κ Cell : Type} (s : WardenSchedule κ) (data : κ → List Cell) (fail : κ → Option ℕ) :
+def clientView {κ Cell : Type} (s : CertifierSchedule κ) (data : κ → List Cell) (fail : κ → Option ℕ) :
     κ → List (ℕ × CellView Cell) :=
   fun c => (List.range (s.cells c)).map fun j => (s.bucket c j, cellView (data c) (fail c) j)
 

@@ -1,5 +1,5 @@
 """The harness against its example port (`lean/DifftestExample.lean`, served by `Difftest.serve`): the right references agree
-on every drawn input, a wrong one is caught and shrunk to a minimal input, and a reject on one side only is caught."""
+on every sampled input, a wrong one is caught and shrunk to a minimal input, and a reject on one side only is caught."""
 
 from __future__ import annotations
 

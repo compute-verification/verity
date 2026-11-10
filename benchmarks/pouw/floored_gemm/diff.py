@@ -158,7 +158,7 @@ def sim(kind, T):
 
 
 def tile_trajectory(rng, n, S):
-    """n warp-tile trajectories [n, S, 32, 32]: each checkpoint adds 32 products of uniform codes on [−127, 127], drawn as
+    """n warp-tile trajectories [n, S, 32, 32]: each checkpoint adds 32 products of uniform codes on [−127, 127], sampled as
     the rounded normal of the same variance."""
     sd = (127 * 128 / 3) * np.sqrt(32)
     return np.cumsum(np.rint(rng.normal(0, sd, size=(n, S, 32, 32))).astype(np.int64), axis=1)
@@ -281,7 +281,7 @@ def main() -> int:
             for dn, d in deltas.items():
                 p, _, _ = unchanged(kind, keys, w1, states[s][:, :1], [d])
                 row[dn] = p
-            # one skipped product with nonzero codes a and b drawn per state
+            # one skipped product with nonzero codes a and b sampled per state
             a = rng.integers(1, 128, size=N) * rng.choice([-1, 1], size=N)
             b = rng.integers(1, 128, size=N) * rng.choice([-1, 1], size=N)
             T = states[s][:, :1]

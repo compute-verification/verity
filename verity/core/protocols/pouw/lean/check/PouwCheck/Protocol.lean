@@ -1,15 +1,13 @@
 module
 
-public import CoreProtocol.Cli
 public import PouwCheck.Check
-public import Identity.Domains
 
 /-!
-# PoUW's window check as a `Core.Protocol`
+# PoUW's execution phase check as a `Core.Protocol`
 
-Its parameters are `Params`, its commitment the window's `Registration` with one-stage's digest, its evidence the proof
-system's answer, its check `PouwCheck.check`, its public outputs `window.PUBLIC` and its profile the service's
-`Core.Integrity`. `pouw-check` runs it through `Core.Protocol.main`.
+Its parameters are `Params`, its commitment the execution phase's window commitment record (`WindowCommitmentRecord`)
+with one-stage's digest, its evidence the proof system's answer, its check `PouwCheck.check`, its public outputs
+`window.PUBLIC` and its profile the service's `Core.Integrity`. `pouw-check` runs it through `Core.Protocol.main`.
 -/
 
 @[expose] public section
@@ -19,14 +17,14 @@ namespace PouwCheck
 def protocol : Core.Protocol where
   id := "verity/pouw/v1"
   Params := Params
-  Commitment := Registration
+  Commitment := WindowCommitmentRecord
   Evidence := Evidence
   Public := Public
   Profile := Core.Integrity
   params := paramsOf
-  commitment := registrationOf
+  commitment := recordOf
   evidence := evidenceOf
-  digest := Registration.digest
+  digest := WindowCommitmentRecord.digest
   check := check
   publicJson := Public.toJson
   profileJson := Core.Integrity.toJson

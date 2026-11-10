@@ -33,6 +33,8 @@ from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.program import prefix_plan as PP
 
 CLI = ("-m", "verity_vllm.pipeline.cli")
+#: A row's stages as research Attempts (`row stage|chain|shed`), loaded by name (`config.run_store`): it runs the run store.
+RESEARCH = "verity_vllm.pipeline.research"
 SIGNUM = {"TERM": 15, "INT": 2, "HUP": 1}
 SHARED_JIT = ("TRITON_CACHE_DIR", "VLLM_CACHE_ROOT")
 _NUM = re.compile(r"^-?[0-9]+(\.[0-9]+)?$")

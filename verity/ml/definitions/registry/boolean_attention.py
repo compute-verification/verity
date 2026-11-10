@@ -206,8 +206,8 @@ def _block(B, name: str, D: int, NVIS: int, FIRST: bool, BN: int, DOT, q, k, v, 
     return tuple_of(m_new, array_of(lanes), o)
 
 
-def _head(B, T: int, D: int, BN: int, block_of, INV, q, k, v, *extra):
-    """Causal attention of one query at position T-1 over keys 0..T-1: ceil(T / BN) blocks (``block_of(b, nvis, first)``) visited
+def _head(B, T: int, D: int, BN: int, tile_of, INV, q, k, v, *extra):
+    """Causal attention of one query at position T-1 over keys 0..T-1: ceil(T / BN) blocks (``tile_of(b, nvis, first)``) visited
     last -> first, then `bf16(o * INV((l0 + l2) + (l1 + l3)))` (`AttentionHead_v2` / `_v3` / `_v5`'s body); every block also reads
     ``extra`` (the scale word, when it is an input)."""
     c = _Bits(B)
@@ -222,7 +222,7 @@ def _head(B, T: int, D: int, BN: int, block_of, INV, q, k, v, *extra):
             kb = Coll(Array(BN, Array(D, BF16)), concat([kb.refs, pad]))
             vb = Coll(Array(BN, Array(D, BF16)), concat([vb.refs, pad]))
         first = b == nb - 1
-        blk = block_of(b, nvis, first)
+        blk = tile_of(b, nvis, first)
         if first:
             st = B.call(blk, q, kb, vb, c.zeros(F32), c.zeros(Array(4, F32)), c.zeros(Array(D, F32)), *extra)
         else:

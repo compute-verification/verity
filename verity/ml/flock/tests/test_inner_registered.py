@@ -1,8 +1,9 @@
 """A recursive session's inner statement whose private circuit's description is registered (`verity_flock.inner_registered`,
 `Tags.withPlainLeaves`), on a plain-leaves hidden-output RoPE d64 statement shaped as a private circuit's: its ``cs`` port one
 table row every instance reads (the description, which the developer registers), ``x`` a row per instance. `register`
-takes the table's rows and salts as the registration, so the statement's ``b || c`` and frame-v3 roots are unchanged, and
-writes the header's ``registered`` and the verifier's own reads file; `claim` writes another description's statement with
+takes the table's rows and salts as the registration (and ``x``'s and ``out``'s as the prover's own), so the statement's
+``b || c`` and frame-v3 roots are unchanged, and writes the header's ``registered`` and the verifier's own reads file,
+naming every port; `claim` writes another description's statement with
 the registration's paths. Composing the 56 MB circuit takes about 30 s, so the module is slow; it catches what no cheaper
 test can: the staged files as the verifier reads them."""
 from __future__ import annotations
@@ -19,7 +20,7 @@ import pytest
 from verity.ml.commitments import hm96
 from verity_flock import circuit as FC
 from verity_flock import inner_registered as IR
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import registered as G
 
 pytestmark = pytest.mark.slow
 N = 8
@@ -31,13 +32,12 @@ STATEMENT = "verity/flock-circuit+plain-leaves"
 @pytest.fixture(scope="module")
 def staged(tmp_path_factory):
     """The plain-leaves circuit, the instances' x rows, the description row and another of the class's width."""
-    pytest.importorskip("verity_numerical")
-    from verity_numerical.bench import templates as TM
-    from verity_numerical.bench.generate import generate
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock import subcircuit_templates as TM
+    from synthetic_sets import synthetic_set
+    from verity_flock.input_sets import InputSet
 
     d = tmp_path_factory.mktemp("inner-registered")
-    s = InputSet.open(generate(TM.rope_head(64), N, 20261009, d / "set")["path"])
+    s = InputSet.open(synthetic_set(TM.rope_head(64), N, 20261009, d / "set")["path"])
     text = FC.compose(FC.lowering_for_set(s), s.subcircuit, statics=FC.set_statics(s), leaf_scheme=FC.LEAF_SCHEME_PLAIN)
     (d / "circuit.txt").write_text(text)
     rng = np.random.default_rng(20261009)
@@ -69,7 +69,7 @@ def head(d: Path, f: str = "pub") -> dict:
 def partitioned(s):
     """The circuit with META naming the statement's program (`population_program` of the template at N) and its
     ``verity/partition/v1`` object, as `rec_inner.stage` binds it; the program and the object."""
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
 
     program = P.population_program(s.template, N)
     part = P.partition(program, P.template_instance_query(s.template))
@@ -82,11 +82,14 @@ def test_register_commits_the_description_table_as_its_registration(staged):
     d = stage(staged, "honest")
     before = head(d)
     got = IR.register(d)
-    assert set(got) == {"cs"} and got["cs"]["leaves"] == 1 and got["cs"]["positions"] == [0]
+    assert set(got) == {"cs", "x", "out"} and got["cs"]["leaves"] == 1 and got["cs"]["positions"] == [0]
+    assert (got["x"]["leaves"], got["x"]["positions"]) == (got["out"]["leaves"], got["out"]["positions"]) == (N, list(range(N)))
     h, hp = head(d), head(d, "inst")
     assert h == dict(hp, rows=False) and h["frame_v3"] == before["frame_v3"], "the rows, salts and roots are the staged ones"
-    assert h["registered"] == {"cs": {"value": IR.VALUE, "positions": [0], "paths": [""]}}
+    assert h["registered"]["cs"] == {"value": IR.VALUE, "positions": [0], "paths": [""]}
+    assert {k: e["value"] for k, e in h["registered"].items()} == {"cs": IR.VALUE, "x": "x", "out": "out"}
     own = json.loads((d / IR.OWN).read_text())
+    assert own["ports"].keys() == {"cs", "x", "out"} and own["ports"]["x"]["reads"] == list(range(N))
     e = own["ports"]["cs"]
     dom = G.domain(staged.meta["program_sha512"], IR.VALUE, 64, 1)
     assert own["format"] == G.READS and e["reads"] == [0] * N and (e["leaves"], e["words"], e["word_bits"]) == (1, 64, 16)
@@ -119,7 +122,7 @@ def test_register_with_the_statements_partition_binds_the_circuit_registration(s
     beside the circuit, its digest META's ``registration`` and both files' headers the rewritten circuit's (its SHA-512 and
     class); the rows, salts and roots are the staged ones. A partition object META doesn't name, or a program without its
     partition object, is refused."""
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
+    from verity.core.protocols.spot.one_stage import partition as P, registration as R
 
     text, program, part = partitioned(staged)
     d = stage(staged, "bound", text=text)
@@ -175,7 +178,8 @@ def test_an_honest_inner_statement_reads_its_description_from_the_registration(s
     code, out = statement(d, d / IR.OWN)
     assert code == 0, out
     line = json.loads(out.splitlines()[0])
-    assert line["registered"] == {"cs": {"value": IR.VALUE, "root": got["cs"]["root"]}}
+    assert line["registered"] == {"cs": {"value": IR.VALUE, "root": got["cs"]["root"]},
+                                  **{p: {"value": p, "root": got[p]["root"]} for p in ("x", "out")}}
     assert json.loads(line["identity"])["leaf_scheme"] == FC.LEAF_SCHEME_PLAIN
     code, out = statement(d, None)
     assert code == 1 and "the verifier holds no registered roots" in out, out
@@ -228,7 +232,7 @@ def test_a_description_table_out_of_order_is_refused(staged, verifier):
     IR.register(d, {"cs": IR.VALUE})
     assert statement(d, d / IR.OWN)[0] == 0, "a two-row description read by the instances in turn is the registration"
     e = head(d)["registered"]["cs"]
-    IR._write_header(d, {"cs": {**e, "positions": [1, 0], "paths": e["paths"][::-1]}})
+    IR._write_header(d, {**head(d)["registered"], "cs": {**e, "positions": [1, 0], "paths": e["paths"][::-1]}})
     code, out = statement(d, d / IR.OWN)
     assert code == 1 and "port cs: table row 0 states position 1" in out, out
 

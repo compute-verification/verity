@@ -1,16 +1,36 @@
 module
 
 public import Proofs.Flock.EndToEnd.Joint.MT.Statement
-public import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
 public import Proofs.Flock.Soundness.Audit.HarmBound
+public import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.EndToEnd.Joint.MT.Draw
+import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
+import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
+import Proofs.Flock.Soundness.Discharge.ZkReg.Guarded
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.Soundness.Game.LockChoose
+import Proofs.Core.Game.Poly
 
 /-!
-# A sampling block of `J` tables stratified by subcircuit: its drawn units, its draw's miss, and its one budget
+# A sampling block of `J` tables stratified by subcircuit: its sampled proof blocks, its sample's miss, and its one budget
 
-* `StratifiedBlockMT.accepted_drawnWrong_le`: flock-verify accepts the sampling block with a drawn unit wrong with
+* `StratifiedBlockMT.accepted_drawnWrong_le`: flock-verify accepts the sampling block with a sampled proof block wrong with
   probability at most `ε_ks + ε_bind`: `zk_flock_drawnC_reg` at `planZHJ`, carried to flock-verify's acceptance at `J`
-  tables by `execRefinesZK_tables_drawn`, as `ZkHidden.zk_session_soundHJ_custody_drawn_reg` is at a subset draw.
-* `StratifiedBlockMT.drawMiss_le`: the live draw misses a set `B` with probability at most `Law.stratified`'s escape of
+  tables by `execRefinesZK_tables_drawn`, as `ZkHidden.zk_session_soundHJ_custody_drawn_reg` is at a subset sample.
+* `StratifiedBlockMT.drawMiss_le`: the live sample misses a set `B` with probability at most `Law.stratified`'s escape of
   `B`, under A3 (`Law.execOS_escape_le`).
 * `StratifiedBlockMT.within_of_le`: a set in the confidence set, `δ ≤` its escape, is within the one budget.
 -/
@@ -28,7 +48,7 @@ open scoped ENNReal
 variable (w : StratifiedBlockMT)
 
 open Classical in
-/-- **A sampling block of `J` tables accepted with a drawn unit wrong**, at the strategy `τ` that plays it: at most
+/-- **A sampling block of `J` tables accepted with a sampled proof block wrong**, at the strategy `τ` that plays it: at most
 `ε_ks + ε_bind`. -/
 theorem accepted_drawnWrong_le (τ : Strategy w.game)
     (hCR : ∀ ω j, TableCRZ execArith hs512 (planZHJ w.dj w.y₀ (w.L.draw ω) (reg (w.sim τ))) j
@@ -66,7 +86,7 @@ private theorem prob_const {α : Type} (Q : Prop) [Decidable Q] (g : Game α) (s
     exact prob_false g s
 
 open Classical in
-/-- **A sampling block's draw misses a set `B`** with the escape probability of its live draw. -/
+/-- **A sampling block's sample misses a set `B`** with the acceptance probability of its live sample. -/
 theorem prob_drawMiss (B : Finset (Fin w.n)) (τ : Strategy w.game) :
     prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ = w.L.escape B := by
   show avg (fun ω => prob _ ((liveOfZJ w.dg (planZHJ w.dj w.y₀) w.N w.wr (w.L.draw ω) τ.1).map
@@ -81,7 +101,7 @@ theorem prob_drawMiss (B : Finset (Fin w.n)) (τ : Strategy w.game) :
   · rw [if_neg (mt hiff.1 hd), if_neg hd]
 
 open Classical in
-/-- **A sampling block's draw misses a set `B`** with probability at most `Law.stratified`'s escape of `B`, under A3. -/
+/-- **A sampling block's sample misses a set `B`** with probability at most `Law.stratified`'s escape of `B`, under A3. -/
 theorem drawMiss_le (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (B : Finset (Fin w.n)) (τ : Strategy w.game) :
     prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ ≤ w.ideal.escape B := by
   rw [prob_drawMiss]

@@ -1,8 +1,8 @@
 module
 
 public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-public import Mathlib.Algebra.Order.Ring.Int
-public import Mathlib.Data.Int.Basic
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+import Mathlib.Tactic.Bound.Init
 
 /-!
 # Integer matrices, ranges and int32 arithmetic (trusted)

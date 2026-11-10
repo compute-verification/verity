@@ -1,8 +1,10 @@
-"""`Value<w>` and tensors: a dtype's width, the `Type` of a tensor or pytree, its maximal tensor chunks, and a collection of
-references split into and joined from those chunks. Width only; numerical interpretation belongs to functions."""
+"""`Value<w>` and tensors: a dtype's width, the `Type` of a tensor or pytree, its maximal tensor chunks, a collection of
+references split into and joined from those chunks, and `Alloc`, a typed allocation no rule has written yet. Width only;
+numerical interpretation belongs to functions."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Sequence
 
 import torch
@@ -18,6 +20,14 @@ WIDTH_OF_DTYPE = {torch.bool: 1, torch.uint8: 8, torch.int8: 8, torch.int16: 16,
                   # VALUES, carried as uint8 (`CARRIER[8]`); their arithmetic is the registered Definitions' (registry.fp8, .marlin_moe)
                   torch.float8_e4m3fn: 8, torch.float8_e5m2: 8, torch.float8_e8m0fnu: 8}
 CARRIER = {1: torch.bool, 8: torch.uint8, 16: torch.bfloat16, 32: torch.float32, 64: torch.int64}
+
+
+@dataclass(eq=False)
+class Alloc:
+    """An uninitialised allocation (`empty`, `empty_like`, `new_empty`): the write target of an in-place rule.
+    Reading it before a rule writes it is refused."""
+    type: Type
+    node: Any
 
 
 def width_of(dtype: torch.dtype, where: str | None = None) -> int:

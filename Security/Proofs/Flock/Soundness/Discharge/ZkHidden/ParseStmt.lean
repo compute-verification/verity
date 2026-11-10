@@ -1,9 +1,31 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Hidden.Commit
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
-public import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
+import Proofs.Flock.Soundness.Discharge.Hidden.Commit
+import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.ParseStmt
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # The hidden-output `--zk` chain's statement circuit
@@ -96,8 +118,8 @@ theorem g_pos_of_setupHidden (ht : tags.typed = false)
 
 variable {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {d : Lean.Json}
 
-/-- **A `DrawSetupH` from setupHidden's acceptance at a draw**, from the session alone (`drawSetupH_of_setupHiddenI`
-without its circuit hypothesis): a `fast100` schedule of its `m`, the draw proving `S`, and its link points `mPts`. -/
+/-- **A `DrawSetupH` from setupHidden's acceptance at a sample**, from the session alone (`drawSetupH_of_setupHiddenI`
+without its circuit hypothesis): a `fast100` schedule of its `m`, the sample proving `S`, and its link points `mPts`. -/
 theorem drawSetupH_of_setupHiddenU (ht : I.tags.typed = false) {st : Flock.Stmt}
     (h : Stmt.setupHidden I.tags I.circuitFile I.publicFile I.coins I.tables (some d) I.partition I.program = .ok st)
     {sch : Flock.Schedule} (hf : Flock.fast100 st.m = some sch) {D : Draw.UnitDraw}

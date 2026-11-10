@@ -6,7 +6,8 @@ run.sh's own variables (S8_MAX_MIN, S8_KEEP_GOING, VERITY_BENCH_VENV, CUDA) are 
 """
 from __future__ import annotations
 
-from verity_config.settings import VALUE, WHERE, Registry, Setting as S
+from verity_config.settings import VALUE, WHERE, Registry
+from verity_config.settings import Setting as S
 
 REGISTRY = Registry(
     __file__, ("S8_WGMMA_",),

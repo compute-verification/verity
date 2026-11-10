@@ -216,7 +216,7 @@ def mufu_ex2_ftz(x: np.ndarray, table: np.ndarray | None = None) -> np.ndarray:
     unb = e - 127
     sh_l = np.clip(unb, 0, 63)
     # K = floor(|x| 2^23): mant < 2^24, so every right shift of 24 or more is 0 and |x| < 2^-23 reads T[0] = 1.0
-    # at n = 0 for either sign.  The exhaustive sm_89 verification (attention-model.md §3.1, all 2^32 inputs,
+    # at n = 0 for either sign.  The exhaustive sm_89 verification (all 2^32 inputs,
     # 0 mismatches) ran the model on the device, where the shift clamps; a host C shift by >= 64 wraps mod 64
     sh_r = np.clip(-unb, 0, 24)
     K = np.where(unb >= 0, mant << sh_l, mant >> sh_r)

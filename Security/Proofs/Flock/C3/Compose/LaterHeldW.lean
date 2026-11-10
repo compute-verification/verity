@@ -1,6 +1,22 @@
 module
 
 public import Proofs.Flock.C3.Compose.HoloSparseWords
+public import Proofs.Flock.C3.Compose.HoloStageCoins
+public import Proofs.Flock.C3.Compose.LaterHeld
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 
 /-!
 # `LaterCoins` from the inner session's records, word by word
@@ -56,9 +72,9 @@ theorem map_eq_range {α : Type _} {β : Type _} (h : α → β) (d : α) (F : L
 
 variable {r : ℕ} {CT : Fin r → Type}
 
-/-- **Hypothesis: a stage's coins are one stream's words, drawn in order from the history's round `j` on**: its coin
+/-- **Hypothesis: a stage's coins are one stream's words, sampled in order from the history's round `j` on**: its coin
 steps are, one a word, the words of the coins `g q` the verifier holds of a stream `s` at round `ix q`, `q` over `ks`;
-the `p`-th's words take the history's rounds from `j` past the words before it, the last of them drawing round `ix q`
+the `p`-th's words take the history's rounds from `j` past the words before it, the last of them sampling round `ix q`
 of `s` (`selC`), and all of them are below `r`. -/
 def StageHeldW {Cm : Type} (t : List (Cm × ((k : Fin r) → CT k)))
     (wr : List (Cm × ((k : Fin r) → CT k)) → Lean.Json × String)
@@ -73,7 +89,7 @@ def StageHeldW {Cm : Type} (t : List (Cm × ((k : Fin r) → CT k)))
         selC (j + ((ks.take p).map fun q => (g q).size).sum + (g q).size - 1) s (ix q)
 
 /-- **A word-level stage's coins are the history's from round `j` on**: its `n`-th coin step is word `w` of the
-`p`-th coins it takes (`flatten_map_idx`), held at the round `i` that draws them, so custody's coins half reads it off
+`p`-th coins it takes (`flatten_map_idx`), held at the round `i` that samples them, so custody's coins half reads it off
 the coins up to `i`, where it is the coin of round `i + 1 - (g q).size + w = j + n` (`CoinWordsEncoded`). -/
 theorem coinsAt_stageHeldW {Cm : Type} {t : List (Cm × ((k : Fin r) → CT k))} {ts : List Step}
     {wr : List (Cm × ((k : Fin r) → CT k)) → Lean.Json × String}
@@ -121,7 +137,7 @@ open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL Floc
 open FlockC3.Reps (nCoins CoinsEncoded CoinWordsEncoded StageHeld StageHeldW PointsEncoded)
 
 /-- **`LaterCoins` from the inner session's records**: the link points are the session record's (`hdec`, `hu`, at
-`PointsEncoded`), each sparse phase is one stream's words, drawn in order from the round after the stage before it
+`PointsEncoded`), each sparse phase is one stream's words, sampled in order from the round after the stage before it
 (`StageHeldW`, at the map's word-level selector `selW`), and R's opening and R's Ligerito are each one stream's rounds
 (`StageHeld`), R's opening after the sparse phases and R's Ligerito after the opening. -/
 theorem laterCoins_of_held {r : ℕ} {CT : Fin r → Type} {e : ExecHolo} {Cm : Type}

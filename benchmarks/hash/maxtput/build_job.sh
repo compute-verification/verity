@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# A Build of record for a model that has none (Llama-3.1-8B on the RTX PRO 6000): the served match alone, as a Build
-# job's served_job.sh (MODE=match+commit) runs it, without the commit stage. Run from the source tree's root
-# on one GPU, with the match workload in inputs/match.json (a llama_match.json). Writes out/build.json (a pin
-# names it as this run's art, path out/build.json), match.json and the compile records.
+# A Build of record for a model that has none (Llama-3.1-8B on the RTX PRO 6000): the served match alone
+# (`verity-vllm served-match`), with no Commit stage after it. Run from the source tree's root on one GPU, with the match
+# workload in inputs/match.json. Writes out/build.json, match.json and the compile records (README.md).
 #
 #   RESEARCH_RUN_DIR=DIR VERITY_BENCH_VENV=VENV CASE=LLAMA31_8B CKPT_REPO=unsloth--Llama-3.1-8B CKPT_REV=REV \
 #     bash benchmarks/hash/maxtput/build_job.sh      (on one RTX PRO 6000)

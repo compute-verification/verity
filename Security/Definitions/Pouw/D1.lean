@@ -38,7 +38,7 @@ structure Params (Q R S : Type) where
   Wref : Layout → ℕ → ℕ
 
 /-- The number of checked blocks, `⌈k/d⌉` (`0` when `d = 0`). -/
-def nBlocks (d k : ℕ) : ℕ := (k + d - 1) / d
+def nSegments (d k : ℕ) : ℕ := (k + d - 1) / d
 
 /-- Block `t` ends at inner index `min ((t + 1)·d, k)`. -/
 def blockEnd (d k t : ℕ) : ℕ := min ((t + 1) * d) k
@@ -49,11 +49,11 @@ variable {Q R S : Type} (P : Params Q R S)
 
 /-- Unit `u`'s activation factors `(E_L, E_R)`. -/
 def actF (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) : Mat × Mat :=
-  P.expAct (U.layout.shape u) ((P.qAct s u A (U.layout.wid u)).map H) ((P.qWt s u (U.layout.wid u)).map H)
+  P.expAct (U.layout.shape u) ((P.qAct s u A (U.layout.fixedId u)).map H) ((P.qWt s u (U.layout.fixedId u)).map H)
 
 /-- Unit `u`'s weight factors `(F_L, F_R)`. -/
 def wtF (H : Q → R) (s : S) (U : Workload) (u : ℕ) : Mat × Mat :=
-  P.expWt (U.layout.shape u) ((P.qWt s u (U.layout.wid u)).map H)
+  P.expWt (U.layout.shape u) ((P.qWt s u (U.layout.fixedId u)).map H)
 
 /-- `A' = A + E_L·E_R`. -/
 def noisedAct (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) : Mat :=
@@ -61,7 +61,7 @@ def noisedAct (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) : Mat :=
 
 /-- `B' = B_{w(u)} + F_L·F_R`. -/
 def noisedWt (H : Q → R) (s : S) (U : Workload) (u : ℕ) : Mat :=
-  U.weight (U.layout.wid u) + mm P.r (P.wtF H s U u).1 (P.wtF H s U u).2
+  U.fixed (U.layout.fixedId u) + mm P.r (P.wtF H s U u).1 (P.wtF H s U u).2
 
 /-- The checked values: block `t` is the running partial sum of `A'·B'` up to `blockEnd d k t`, in exact integers. -/
 def Y (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) : Checked :=
@@ -69,7 +69,7 @@ def Y (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) : Checked :=
 
 /-- The compared entries: blocks `t < ⌈k/d⌉`, rows `i < m`, columns `j < n`. -/
 def checkIdx (sh : Shape) : Finset (ℕ × ℕ × ℕ) :=
-  range (nBlocks P.d sh.k) ×ˢ range sh.m ×ˢ range sh.n
+  range (nSegments P.d sh.k) ×ˢ range sh.m ×ˢ range sh.n
 
 /-- `H_ref`'s noised activations in int32: `wrap32 (A + E_L·E_R)`. -/
 def refAct (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) : Mat :=
@@ -77,7 +77,7 @@ def refAct (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) : Mat :=
 
 /-- `H_ref`'s noised weights in int32: `wrap32 (B + F_L·F_R)`. -/
 def refWt (H : Q → R) (s : S) (U : Workload) (u : ℕ) : Mat :=
-  fun l j => wrap32 (U.weight (U.layout.wid u) l j + mmW P.r (P.wtF H s U u).1 (P.wtF H s U u).2 l j)
+  fun l j => wrap32 (U.fixed (U.layout.fixedId u) l j + mmW P.r (P.wtF H s U u).1 (P.wtF H s U u).2 l j)
 
 /-- `H_ref`'s checked values: the int32 accumulator of `A'·B'` read at each block end. -/
 def refChecked (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) : Checked :=

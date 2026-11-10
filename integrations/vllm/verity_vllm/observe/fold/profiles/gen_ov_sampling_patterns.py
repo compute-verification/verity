@@ -6,7 +6,7 @@ registered `TokenSelect_v1{V}`.  Same three-stage shape as `patterns.TokenSelect
 the block maxima -> aten.gather), which stays first in line for greedy headers (this pattern returns None for them).
 
 What is deliberately Unsupported here (each is a contract finding):
-  * a sampled row whose request record has no seed (`seed: null`): the kernel consumed a host draw (`np.random` in
+  * a sampled row whose request record has no seed (`seed: null`): the kernel consumed a host sample (`np.random` in
     vLLM's `SamplingStates`) that no trusted fact explains -> "unseeded sampled row";
   * float32 logits (the `_temperature_kernel` quotient / a top-k or top-p masked row): those need TemperatureDiv / TopKMask /
     TopPMask definitions that are not in the registry -> "float32 logits";

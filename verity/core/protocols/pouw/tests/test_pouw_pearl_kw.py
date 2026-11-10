@@ -14,8 +14,8 @@ import pytest
 import pearl_vectors as PV
 from verity.ml.crypto.blake3 import blake3
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, PoUWScheme, Shape, Tile
-from verity.core.protocols.pouw.schemes import get
-from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes import get
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
 
 # the clear audit is a reference tool (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "clear"))
@@ -123,7 +123,7 @@ def test_tile_matches_pearl(t, dev, key):
 
 def test_interface_and_domain():
     s = get("pearl-fp8-v4")
-    assert isinstance(s, PoUWScheme) and s.name == "pearl-fp8-v4" and s.device is P.ADA and s.certificate.gamma is None
+    assert isinstance(s, PoUWScheme) and s.name == "pearl-fp8-v4" and s.device is P.ADA and s.certificate.gap is None
     for shape in ((16, 1000, 16), (16, 1056 - 16, 16), (16, 1 << 17, 16), (8, 1024, 16)):
         with pytest.raises(DomainError):
             s.check(Matmul(0, Shape(*shape), 0))

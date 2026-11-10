@@ -13,7 +13,7 @@ read off `Hidden.SpecP` (`Hidden.setupHidden_specP`) and the walk of `setupTable
 * `Hidden.regionsIn_wf`: every region `HmIn.regions` builds is `mkRegion`'s, so well formed;
 * `Hidden.setupHidden_tagsP`, `setupHidden_hm96P`, `setupHidden_wfP`, `setupHidden_parseCP`, `setupHidden_nP`,
   `setupHidden_drawnP`: `setupHidden_tags`, `setupHidden_hm96`, `setupHidden_wf`, `setupHidden_parseC`,
-  `setupHidden_n` and `setupHidden_drawn` (the draw over the public input ports, `HmIn.drawn`);
+  `setupHidden_n` and `setupHidden_drawn` (the sample over the public input ports, `HmIn.drawn`);
 * `setupTables_retainHP`, `setupTables_pointsHP`: `setupTables_retainH` and `setupTables_pointsAny` under hidden
   outputs;
 * `drawSetupHP_of_setupHiddenI`: `drawSetupH_of_setupHiddenI`.
@@ -86,7 +86,7 @@ theorem setupHidden_nP (h : Stmt.setupHidden tags cf pf coins tables draw partit
   have s := (setupHidden_specP h).choose_spec
   exact ⟨s.n, by rw [s.nbl, s.blocksReal]⟩
 
-/-- `SpecP.pub` at a draw: the statement's public file is the population's drawn over the public input ports. -/
+/-- `SpecP.pub` at a sample: the statement's public file is the population's sampled over the public input ports. -/
 theorem setupHidden_drawnP {d : Json}
     (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program own = .ok st) :
     ∃ pi pop, HmIn.parse st.c = .ok pi ∧ HmIn.loadPublic tags st.c pi pf = .ok pop ∧
@@ -163,8 +163,8 @@ variable {I : Inputs} {own : Option ByteArray} {mPts n : ℕ} {S : Finset (Fin n
   (ht : I.tags.typed = false)
 include ht
 
-/-- **A `DrawSetupHP` from setupHidden's acceptance at `own` at a draw** (`drawSetupH_of_setupHiddenI`), a `fast100`
-schedule of its `m`, the draw proving `S`, and its link points `mPts`. -/
+/-- **A `DrawSetupHP` from setupHidden's acceptance at `own` at a sample** (`drawSetupH_of_setupHiddenI`), a `fast100`
+schedule of its `m`, the sample proving `S`, and its link points `mPts`. -/
 theorem drawSetupHP_of_setupHiddenI {st : Flock.Stmt}
     (h : Stmt.setupHidden I.tags I.circuitFile I.publicFile I.coins I.tables (some d) I.partition I.program own =
       .ok st)

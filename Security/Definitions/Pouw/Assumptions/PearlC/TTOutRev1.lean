@@ -20,19 +20,19 @@ namespace Pouw.PearlC.Assumptions
 variable {Q R S : Type}
 
 /-- **TT_OUT(1/400) for Pearl-C at a device record `d`, rev1**: `TTOut` at `pearlCProtocolDevRev1 d sem ρ`,
-`pearlCDomainDev d`, `γ₀ = 1/400` and `εPearlC`. It is `TTOutPearlCDev` with every promotion into a +0 total,
+`pearlCDomainDev d`, `g₀ = 1/400` and `δPearlC`. It is `TTOutPearlCDev` with every promotion into a +0 total,
 `RNE(+0 + S_g) = S_g`, left out of the credit: the first of every word out of the credit and `W_ref` (`k/(32·G) − 1` adds
 per word, not `k/(32·G)`), and any later one debited (`laterZeroPromos`). The game, error and falsifiers are
 `TTOutPearlCDev`'s. Without promotion (`G = 0`) it is `TTOutPearlCDev`.
 
 - **Why they go.** Every program outputs the same ticket words with them skipped (the first: 3,360 of 3,360 words across
   30 in-domain cells), and neither the flags nor the cap remove them. Crediting the first
-  falsifies the granted row wherever `add·m·n − qa·m·k > γ₀·creditDev`: at `m = n = 8,192`, for every in-domain
+  falsifies the granted row wherever `add·m·n − qa·m·k > g₀·creditDev`: at `m = n = 8,192`, for every in-domain
   `k ≤ 8,192` at H100 prices and `k ≤ 2,048` at sm_120's measured FADD. A later +0 total is rare (≤ 3.9·10⁻⁶ of later
-  promotions on the H100 atom, none measured on sm_120) and moves no γ.
+  promotions on the H100 atom, none measured on sm_120) and moves no gap.
 - **The other promotion adds stay credited.** Folding add `g ≥ 2` into the tensor-core chain (window `g` started from
   `T_{g−1}` instead of `+0`) changes the word on 1.6–85% of words at sm_120 and 40–100% at H100 (six families, one
-  64 × 64 tile each at `k = 256` and `1,024`, `pearlc_promotion_fusion.py`), so no tile stays correct. Telling which
+  64 × 64 tile each at `k = 256` and `1,024`), so no tile stays correct. Telling which
   words it leaves right costs a per-word FP32 or INT32 operation, no cheaper than the add. `TT_OUT` asserts that nothing
   else skips them.
 - **The cost model prices a tensor-core instruction by its whole fragment** (`w1-complete/<device>`; working decision
@@ -50,13 +50,13 @@ per word, not `k/(32·G)`), and any later one debited (`laterZeroPromos`). The g
   `add.rn.f32x2` compiles to two scalar FADDs, so it does not halve the add. -/
 def TTOutPearlCDevRev1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : PearlCDevice)
     (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
-  TTOut CM (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDev d) (1 / 400) εPearlC
+  TTOut CM (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDev d) (1 / 400) δPearlC
 
 /-- **TT_OUT(1/400) per audit tile at a device record `d`, rev1**: `TTOutTile` at `pearlCProtocolDevRev1 d sem ρ` and
 `pearlCTilesDevRev1 d sem ρ`. It is `TTOutTilePearlCDev` with rev1's credit, cap and `W_ref`. -/
 def TTOutTilePearlCDevRev1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
-  TTOutTile CM (pearlCProtocolDevRev1 d sem ρ) (pearlCTilesDevRev1 d sem ρ) (pearlCDomainDev d) (1 / 400) εPearlC
+  TTOutTile CM (pearlCProtocolDevRev1 d sem ρ) (pearlCTilesDevRev1 d sem ρ) (pearlCDomainDev d) (1 / 400) δPearlC
 
 /-- **`tt-out/pearl-c-h100-rev1`**: rev1 at the H100 record, the repair of `TTOutPearlC · Costs.adopted`, with `CM` the
 H100's W1 accounting, a `wgmma` priced by its whole shape. -/

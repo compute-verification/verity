@@ -1,7 +1,38 @@
 module
 
-public import Proofs.Flock.Claims.ZK.SessionLean
 public import Proofs.Flock.Claims.ZK.FrameOwn
+public import Proofs.Flock.Claims.ZK.SessionLean
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The release at the session loop's own frames
@@ -9,9 +40,9 @@ public import Proofs.Flock.Claims.ZK.FrameOwn
 `LeanRelease.ProgReads` and `LeanRelease.ProgChecks` take the transport's frame state (`prog`) as given: the state Rust's
 requests leave the compiled frame in. The session loop drives each rep's frame itself, on one schedule of requests
 (`Flock.Firewall.Drive.reqs`), so its state is a Lean function. This file defines it from the decoded coins alone, at
-placeholder draws, and the release whose transport state it is:
+placeholder samples, and the release whose transport state it is:
 
-* `Loop.placeholder`: a rep stream's frame at zero draws, its table at a zero level 0 of the statement's shape, and zero
+* `Loop.placeholder`: a rep stream's frame at zero samples, its table at a zero level 0 of the statement's shape, and zero
   salts for levels ≥ 1, none of them the tape's.
 * `Loop.schedSoFar`, `Loop.ownRounds`: the rep's scheduled rounds so far (the algebraic phase's, then the opening's fed
   the coins in) and the inner proof's own rounds (`ownRound`).
@@ -42,9 +73,9 @@ namespace Loop
 /-- `n` zero bytes. -/
 def zeros (n : ℕ) : ByteArray := ⟨Array.replicate n 0⟩
 
-/-- **Rep stream `k`'s frame at placeholder draws**, at the setup's statements `sts` and the `Commit`'s coins `link`: the
-frame's configuration at zero draws (`Drive.start`'s layout and mask slot), the table at a zero level 0 of the statement's
-shape (`Level0.ofDraws` of a zero witness and zero draws), the stream's domain, the extra claims at the link points and
+/-- **Rep stream `k`'s frame at placeholder samples**, at the setup's statements `sts` and the `Commit`'s coins `link`: the
+frame's configuration at zero samples (`Drive.start`'s layout and mask slot), the table at a zero level 0 of the statement's
+shape (`Level0.ofDraws` of a zero witness and zero samples), the stream's domain, the extra claims at the link points and
 zero salts for levels ≥ 1 (`hiSaltsOf`'s sizes). -/
 def placeholder (spec : SessionSpec) (sts : Array Stmt) (k : ℕ) (link : Array F128) :
     V (Cfg × Tab × ByteArray × Array (Array F128) × Array ByteArray) := do
@@ -73,7 +104,7 @@ def schedSoFar (t : Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Array F128))
   | (.done _, rs) => return alg ++ rs
   | (.fail e, _) => throw e
 
-/-- **The inner proof's rounds**, the firewall's own (`ownRound`), at the configuration `c`: `ε` and `β` the first
+/-- **The inner proof's rounds**, the ZK server's own (`ownRound`), at the configuration `c`: `ε` and `β` the first
 words of the coins `ci` of its first and third, `final_c'` and `τ`'s commitment zero, round `j` squeezing `ns j`. -/
 def ownRounds (c : Cfg) (ci : Array (Array F128)) (ns : ℕ → ℕ) : Array (ByteArray × ℕ) :=
   let s : Masker := { eps := (ci.getD 0 #[]).getD 0 0, beta := (ci.getD 2 #[]).getD 0 0 }
@@ -109,7 +140,7 @@ def wordsAt (x : Msg) (cs : List FlockDeploy.Coin) (q : ℕ) : Array F128 :=
 
 /-- **The loop's frame state after the decoded coins `cs`** at `x`: the state of the rep that released the last of the
 rounds they answer, rep round `p` the `p + 2` coins answer (`CoinLayer.locate` places it at rep stream `k`'s round `i`,
-as `CoinLayer.slot` places them), after its `i + 1` rounds, owing the last's coins, at placeholder draws (`repState`),
+as `CoinLayer.slot` places them), after its `i + 1` rounds, owing the last's coins, at placeholder samples (`repState`),
 its rounds' coins and rep 0's the openings', the `Commit`'s the first. `{}` before the first rep round, or where `x`
 sets up no session. -/
 noncomputable def progOf (x : Msg) (cs : List FlockDeploy.Coin) : Masker :=
@@ -162,8 +193,8 @@ noncomputable def freshOf (x : Msg) (cs : List FlockDeploy.Coin) : Except String
 for levels ≥ 1 (`real k` for rep stream `k`, as `Frames.placeOf` computes them from the session's level 0 and its finish's
 salts): rep stream `k`'s scheduled round `i` (`schedSoFar`), `k` and `i` as `progOf` locates them. The empty round where
 the rep's table or its schedule is refused: the loop has no round there (`Frames.placeOf` refuses it, and the session
-stops), and the frame's check refuses the empty round. None past the rep's schedule (the inner proof's rounds, whose round
-the firewall sends itself), or where `x` sets up no session. -/
+stops), and the frame's check refuses the empty round. None past the rep's schedule (the inner proof's rounds, the frame's
+own: `Loop.innerOf`), or where `x` sets up no session. -/
 noncomputable def schedOf (real : ℕ → V (Tab × Array ByteArray)) (x : Msg) (cs : List FlockDeploy.Coin) :
     Option ByteArray :=
   match FlockDeploy.setupOf true x, cs.length with
@@ -199,7 +230,7 @@ namespace LeanRelease
 /-- `L₀` with the loop's own frames: its transport's states are `Loop.progOf` and `Loop.freshOf` of the decoded coins, each round's rep is
 its rep stream, started as the loop starts it, and the round in a scheduled round's place is the loop's own
 (`Loop.schedOf`), on each rep's table and salts for levels ≥ 1 at `x`, the witness and the tape (`real`); at the inner
-proof's rounds, `L₀`'s. At the `Hello`'s round, which the release never schedules (`kindAt`: the server's own), the
+proof's rounds, `L₀`'s (the loop's own at `LeanRelease.withInner`). At the `Hello`'s round, which the release never schedules (`kindAt`: the server's own), the
 empty round, which the frame's check refuses. Each round's coin count is the one the loop hands `Frames.round`, its
 request's (`Loop.loopNr`): the round after `h` takes opening `h.length - 1`'s coins. -/
 noncomputable def withFrames (T : ZKMal.CoinLayer.TableData)

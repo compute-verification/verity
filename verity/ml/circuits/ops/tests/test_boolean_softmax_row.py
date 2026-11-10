@@ -31,50 +31,7 @@ from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.boolean import softmax_row as SR
 from verity.ml.circuits.program import Program
 
-#: signed zeros, the smallest and largest subnormals, the smallest normal, 1.0 and its neighbours, 2, the largest finite,
-#: infinities, a signalling and two quiet NaNs, each of either sign
-BF16_SPECIALS = np.array([m | s for m in (0x0000, 0x0001, 0x007F, 0x0080, 0x3F7F, 0x3F80, 0x3F81, 0x4000, 0x7F7F, 0x7F80,
-                                          0x7F81, 0x7FC0, 0x7FFF) for s in (0, 0x8000)], np.uint16)
-
-
-def _scores(rng, shape) -> np.ndarray:
-    """bf16 words of either sign with magnitudes in [2^-7, 64): attention scores."""
-    s = rng.integers(0, 2, shape) << 15
-    return (s | rng.integers(120, 133, shape) << 7 | rng.integers(0, 128, shape)).astype(np.uint16)
-
-
-def _rows(rng, n: int, N: int) -> np.ndarray:
-    """``n`` rows of N bf16 words, each a score, a uniform word or a special word."""
-    pick = rng.integers(0, 3, (n, N))
-    words = [_scores(rng, (n, N)), rng.integers(0, 1 << 16, (n, N)), rng.choice(BF16_SPECIALS, (n, N))]
-    return np.choose(pick, words).astype(np.uint16)
-
-
-def _ties(rng, n: int, N: int) -> np.ndarray:
-    """Rows sampled from a few words, so equal values recur and +0 meets -0."""
-    return rng.choice(np.array([0x0000, 0x8000, 0x3F80, 0xBF80, 0x4000, 0x0001], np.uint16), (n, N))
-
-
-def _f32(h: np.ndarray) -> np.ndarray:
-    return h.astype(np.uint32) << np.uint32(16)
-
-
-def _ev(defn, *args) -> np.ndarray:
-    return np.asarray(E.evaluate_batch(defn, *args)).astype(np.uint32).reshape(-1)
-
-
-def _const(w: int, n: int) -> np.ndarray:
-    return np.full(n, w, np.uint32)
-
-
-def _first_greatest(rows: np.ndarray) -> np.ndarray:
-    v = _f32(rows).view(np.float32)
-    out, best = rows[:, 0].copy(), v[:, 0].copy()
-    with np.errstate(invalid="ignore"):
-        for j in range(1, rows.shape[1]):
-            take = v[:, j] > best
-            out, best = np.where(take, rows[:, j], out), np.where(take, v[:, j], best)
-    return np.where(np.isnan(v).any(axis=1), 0x7FFF, out).astype(np.uint16)
+from test_boolean_rowwise import BF16_SPECIALS, _const, _ev, _f32, _first_greatest, _rows, _scores, _ties
 
 
 def _softmax_words(rows: np.ndarray) -> np.ndarray:

@@ -1,6 +1,17 @@
 module
 
+public import Definitions.Core.Game
+public import Mathlib.Data.Fintype.Pi
 public import Proofs.Flock.Soundness.ZK.Hiding
+import Mathlib.Algebra.Order.Chebyshev
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.Enumerative.DoubleCounting
+import Mathlib.Data.Nat.Bitwise
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Assumptions
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.Soundness.Rewinding
+import Std.Data.TreeMap.Raw.Lemmas
 
 /-!
 # Zero knowledge: T1 over adaptive leaves

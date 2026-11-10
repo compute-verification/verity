@@ -1,6 +1,5 @@
 module
 
-public import Mathlib.Algebra.Order.BigOperators.Ring.Finset
 public import Mathlib.Analysis.Real.Sqrt
 
 /-!

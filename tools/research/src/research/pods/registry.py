@@ -16,11 +16,11 @@ agents registering two pods write two files, so nothing is ever hand-merged; in 
 them to every machine.  `<dir>/_families.toml` carries the `[families.<fam>]` VRAM references `pods check-part` reads.
 
 Where it is read and written (`registry_dir`, the one directory `register`, `unregister`, `registry import` and `research run --on`
-use): `$RESEARCH_MACHINES_D` when set, else `<notes>/machines.d`, whether or not machines.toml exists (with RESEARCH_NOTES_TOKEN
-set, a missing notes clone is cloned first: `notes_sync.ensure_clone`).  `RESEARCH_MACHINES_D=none` turns the registry off: run
-reads machines.toml alone, and the commands that write refuse, since nothing would read what they wrote.  With
-`$RESEARCH_MACHINES_D` pointing elsewhere, `research run --on` still takes a machine only the notes clone's machines.d lists:
-a hand-copied override never hides a machine registered since it was copied (vy-nebius-cpu-1 from the lander's VM, 8 Oct 03:43Z).
+use): `$RESEARCH_MACHINES_D` when set, else `<notes>/machines.d`, whether or not machines.toml exists (with a notes
+token, `notes_sync.notes_token`, a missing notes clone is cloned first: `notes_sync.ensure_clone`).  `RESEARCH_MACHINES_D=none`
+turns the registry off: run reads machines.toml alone, and the commands that write refuse, since nothing would read what they
+wrote.  With `$RESEARCH_MACHINES_D` pointing elsewhere, `research run --on` still takes a machine only the notes clone's
+machines.d lists: a hand-copied override never hides a machine registered since it was copied.
 Both sources merge (`merged`); a name both define with different pod ids is dropped from the result, so it is refused
 as unlisted and the refusal says why, never silently resolved to either pod.  A file that does not parse, names an invalid
 machine, or lacks provider / pod_id (host for an ssh machine) / project is dropped the same way.
@@ -30,7 +30,7 @@ machine, or lacks provider / pod_id (host for an ssh machine) / project is dropp
 the convention); machines.toml or the registry already binds NAME to another pod (`--replace` for the registry file only).  The
 `register --host` (an ssh machine, such as a cloud VM with a static address) refuses unless `hostname` answers over ssh with the
 research key.  The file is written atomically and synced to the notes remote at once, so other agents' `research run --on` sees the machine
-(vy-nebius-cpu-1 was invisible to lanes for hours, 7 Oct); `RESEARCH_NOTES_SYNC=0` leaves the commit to the next `notes sync`.
+without waiting for a later sync; `RESEARCH_NOTES_SYNC=0` leaves the commit to the next `notes sync`.
 """
 from __future__ import annotations
 

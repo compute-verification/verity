@@ -25,9 +25,9 @@ from torch import nn
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.sampled_proofs import remote as R
-from verity.core.protocols.sampled_proofs.one_stage import registered as G, registration as REG
+from verity.ml.protocols.pouw.circuit import h1window as HW
+from verity.core.protocols.spot import remote as R
+from verity.core.protocols.spot.one_stage import registered as G, registration as REG
 from verity.ml.circuits.codec import canonical_json
 from verity_vllm import protocols as PO
 from verity_vllm.engine import int8_exact as E
@@ -605,16 +605,37 @@ def test_a_window_whose_named_record_does_not_reuse_its_tables_binds_none_and_op
     assert PHC.manifest_reason(record) is None and CR.commit_of(c["commit"]) == (None, ("commit", CR.COMMIT_FORM))
 
 
-def _kept_tables(monkeypatch) -> dict[str, np.ndarray]:
-    """Each step's A table H1 commits, whole, by its name, as the window's served trees register it (`Served._a_rows`)."""
-    kept, a_rows = {}, SV.Served._a_rows
+class _Unforeseen(Exception):
+    pass
 
-    def spy(self, call, value, mine, codes, scales):
-        whole = a_rows(self, call, value, mine, codes, scales)
-        if whole is not None:
-            kept[value] = whole.copy()
-        return whole
-    monkeypatch.setattr(SV.Served, "_a_rows", spy)
+
+@pytest.mark.parametrize("raised,returned", [(ValueError, True), (_Unforeseen, False), (KeyboardInterrupt, False)],
+                         ids=["named-type", "other-type", "base-exception"])
+def test_a_failing_hook_is_the_windows_refusal_and_any_other_failure_is_recorded_then_raised(raised, returned):
+    """A ``commit_record`` that fails with a type `named` names is the window's refusal, which `bind` records and returns
+    for the release to raise (above). One that fails with any other type, a BaseException included, is recorded as the
+    same refusal and raised as it is."""
+    def hook(run):
+        raise raised("window-commit failed")
+    run = SimpleNamespace(entry=ENTRY, commit_record=hook, commits={}, details={})
+    if returned:
+        assert CT.bind(run) == f"{ENTRY}: the window names no Commit record: ValueError: window-commit failed"
+    else:
+        with pytest.raises(raised, match="window-commit failed"):
+            CT.bind(run)
+    assert run.commits["commit"] is None
+    assert run.details["commit_record"] == {"named": False, "reason": f"{raised.__name__}: window-commit failed"}
+
+
+def _kept_tables(monkeypatch) -> dict[str, np.ndarray]:
+    """Each step's A table H1 commits, whole, by its name, as the window's served trees register it (`Served._register`)."""
+    kept, register = {}, SV.Served._register
+
+    def spy(self, run, value, words, *args, **kwargs):
+        if value.startswith(f"{SV.PREFIX}a/"):
+            kept[value] = words.copy()
+        return register(self, run, value, words, *args, **kwargs)
+    monkeypatch.setattr(SV.Served, "_register", spy)
     return kept
 
 
@@ -865,24 +886,23 @@ def test_attach_builds_a_rows_sha512_commit_whose_port_is_the_steps_one_copy_of_
 
 
 def test_h1s_commit_refuses_a_sha256_run_root(monkeypatch):
-    """vllm-v1's committer (SHA-256 rows, 32-byte roots) is no Commit of H1's. `h1_commit.attach` refuses one built under
-    it, closed before anything is put on the engine; and `pouw_h1_commit.committed`, what a run records of the Commit
-    (the GPU harness's ``committer`` and each rank's release), refuses vllm-v1's real 32-byte run root, and a
+    """A committer of another scheme (an old record's vllm-v1: SHA-256 rows, 32-byte roots) is no Commit of H1's.
+    `h1_commit.attach` refuses one, closed before anything is put on the engine; and `pouw_h1_commit.committed`, what a run
+    records of the Commit (the GPU harness's ``committer`` and each rank's release), refuses its 32-byte run root, and a
     rows-sha512 committer's root of any length but 64. The offline core's rows-sha512 run root passes."""
     from tests.check import opened as O
-    steps = {0: [("step.input/ids", bytes(range(64)))]}
-    sha512 = O.commit_steps(steps, commit_scheme=CT.SCHEME, run_id="h1-rows")
-    sha256 = O.commit_steps(steps, run_id="h1-v1")
+    sha512 = O.commit_steps({0: [("step.input/ids", bytes(range(64)))]}, run_id="h1-rows")
+    old = O.committer(run_id="h1-v1")
+    old.commit_scheme = "vllm-v1"
     assert (sha512[0].commit_scheme, len(sha512[1].run_root)) == (CT.SCHEME, CT.ROOT_BYTES)
-    assert (sha256[0].commit_scheme, len(sha256[1].run_root)) == ("vllm-v1", 32)
     assert CT.committed(*sha512) == {"run_root": sha512[1].run_root.hex(), "commit_scheme": CT.SCHEME,
                                      "name": sha512[0].name}
-    with pytest.raises(ValueError, match=f"committed under vllm-v1 to a 32-byte run root, not under {CT.SCHEME} to a 64-byte"):
-        CT.committed(*sha256)
     short = SimpleNamespace(run_root=bytes(32), extra={})
+    with pytest.raises(ValueError, match=f"committed under vllm-v1 to a 32-byte run root, not under {CT.SCHEME} to a 64-byte"):
+        CT.committed(old, short)
     with pytest.raises(ValueError, match=f"committed under {CT.SCHEME} to a 32-byte run root"):
         CT.committed(Committer(), short)
-    old, model = sha256[0], Model()
+    model = Model()
     closed = []
     monkeypatch.setattr(old, "close", lambda: closed.append(True))
     monkeypatch.setattr(HC, "committer", lambda engine, run_id: old)
@@ -938,8 +958,8 @@ def test_a_forward_out_of_module_order_ties_and_its_a_zero_is_refused_at_arow(tm
 class _Gate:
     """The challenger gate for a run of several windows (`pouw_h1_gpu.window_sessions`): each ``reserve`` is a challenge phase of its own
     on a challenger host of its own (`challenger_host.Host`, gated), all under one auditor key and one ledger, which
-    reserves, opens and ends them in turn; a reserve of no `steps` is a window's draw's challenge phase, whose host, over
-    the draw's coins (`window.draw_challenger`) and withheld, starts (and the ledger reserves it) at its open, since the
+    reserves, opens and ends them in turn; a reserve of no `steps` is a window's sample's challenge phase, whose host, over
+    the sample's coins (`window.draw_challenger`) and withheld, starts (and the ledger reserves it) at its open, since the
     window's open is signed at a leaf held from its reserve. Calling it is the gate's open (`pouw_h1_window.Gate`), the
     serving side reaches the challenge phase opened last, and ``ended`` is the challenge phase's ``status`` once its end
     is in the ledger."""
@@ -981,7 +1001,7 @@ class _Gate:
 
 def _live(gate, sessions, name):
     """``coins`` for `_window`: window `name`'s settings as the GPU harness makes them with ``--challenger --gate --peer``,
-    its challenge phase and its draw's the ones `sessions` (`pouw_h1_gpu.window_sessions`) reserves for it."""
+    its challenge phase and its sample's the ones `sessions` (`pouw_h1_gpu.window_sessions`) reserves for it."""
     from tests.protocols import pouw_h1_gpu as G
 
     def settings(eng, kw):
@@ -998,7 +1018,7 @@ def _in_process(eng, kw):
 
 def _summary_row(gate, sessions, name, record, run):
     """Window `name` as the GPU harness's record keeps it for `pouw_h1_gpu.coins_summary`, its challenge phase and its
-    draw's ended."""
+    sample's ended."""
     from tests.protocols import pouw_h1_gpu as G
     ends = {}
     if name in getattr(sessions, "held", {}):

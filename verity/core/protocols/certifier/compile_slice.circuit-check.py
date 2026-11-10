@@ -10,7 +10,7 @@ def _network_compile_slice_roots() -> list[Any]:
     blocks, three arrivals, five decisions charged by ChargeLink_v1{5}, a 6-entry prefix cache of 4-bit tokens and 4
     units a request; and at its asynchronous one (`compile_slice.demo_async`): six units at (R 2, W 1, A 2) under async
     scheduling, no prefix cache, the served rows held by request through ``wit``'s map. Each also with its served rows
-    in blocks of G = 2 steps (`CompileSliceBlocks_v1`: two ``srv`` rows on the demo, three on the async one). The corpus
+    in blocks of G = 2 steps (`CompileSliceRowGroups_v1`: two ``srv`` rows on the demo, three on the async one). The corpus
     slice's class (`tests/fixtures/compile_slice_smallkv.json`) is about 7.6M ANDs, past what circuit-check traces."""
     from verity.core.protocols.certifier.compile_slice import demo, demo_async, unit, with_block
 

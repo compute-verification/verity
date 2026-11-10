@@ -35,7 +35,7 @@ members' return, each argument's leaves in any order and repeated, now and then 
 four members, with a mapped argument or none; the reader (a primitive, a composite's primitive, or either reading a
 composite that makes the batch) and what it reads (every member, a run of whole members, or a run cut inside them), now
 and then a second primitive reading another run. Each comes with up to `ASSIGNMENTS` IU assignments of its root nodes
-that hold gates (all of them when there are no more, else drawn without repeats), θ the registered inputs, `Γ` all the
+that hold gates (all of them when there are no more, else sampled without repeats), θ the registered inputs, `Γ` all the
 gates and `α` 1.
 """
 from __future__ import annotations
@@ -859,7 +859,7 @@ def _partitions(c: int):
 
 def instances(rng: random.Random, text: str) -> list[dict]:
     """Up to `ASSIGNMENTS` IU assignments of the root nodes that hold gates (all of them when there are no more, else
-    drawn without repeats), θ the registered inputs, `Γ` all the gates and `α` 1."""
+    sampled without repeats), θ the registered inputs, `Γ` all the gates and `α` 1."""
     inp, reg, spans = reference.root_nodes(text)
     held = [k for k in range(len(inp)) if not inp[k] and spans[k][1] > spans[k][0]]
     every = list(_partitions(len(held)))

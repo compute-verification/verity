@@ -1,16 +1,17 @@
 module
 
 public import Proofs.Nci.Throttling
-public import Definitions.Nci.Guarantees.Reads
+public import Proofs.Nci.Lemmas.Reads
+public import Proofs.Nci.Lemmas
 
 /-!
 # Updated matrix multiplications are throttled, in reads form
 
-The proof of `UpdatedMatMul` (`Throttling.lean`) before it divides by `α`: the same per-IU counts (`card_products_le`,
-`iu_reads`), the same charge for split entries (`sum_card_outputsOther_le`) and the same total (`sum_card_products`),
-with the IUs' total reads in place of `α size(D)`. A compliant division at `(Γ, α)` reads at most `α size(D)` in total
-and each of its IUs at most `K = αΓ`, which gives back `F · 2G ≤ size(D)` through `F = f(K) / (2α)` (`F_eq_readFactor`,
-`updatedMatMul_of_reads`).
+The per-block counts (`card_products_le`, `iu_reads`), the charge for split entries (`sum_card_outputsOther_le`) and
+the total (`sum_card_products`), with the inference blocks' total fresh input as the bound. A division that complies at
+`c` gates per inference block and the rate `α` reads at most `α size(D)` in total and each of its inference blocks at
+most `k = α c`, which gives `F · 2G ≤ size(D)` through `F = f(k) / (2α)` (`F_eq_readFactor`, used by
+`containedMatMul_of_reads`).
 -/
 
 @[expose] public section
@@ -19,7 +20,7 @@ namespace Nci.SecurityProofs
 
 open Verity Finset
 
-/-- **NCI's factor is the read factor over `2α`**: `F = f(K) / (2α)`. -/
+/-- **The policy's factor is the read factor over `2α`**: `F = f(K) / (2α)`. -/
 theorem F_eq_readFactor (α K b_w b_a d : ℝ) : F α K b_w b_a d = readFactor K b_w b_a d / (2 * α) := by
   unfold F readFactor
   rw [one_div_mul_eq_div]
@@ -103,25 +104,5 @@ theorem UpdatedMatMulReads : Guarantees.UpdatedMatMulReads := by
     exact key μ μ.2
   rw [le_div_iff₀ hGr] at hsup
   linarith
-
-/-- The reads form gives back `UpdatedMatMul`: a division that witnesses compliance at `(Γ, α)` has IUs of at most `Γ`
-gates, each reading at most `K = αΓ`, and reads at most `α size(D)` in total. -/
-theorem updatedMatMul_of_reads (h : Guarantees.UpdatedMatMulReads) : Guarantees.UpdatedMatMul := by
-  intro Γ α b_w b_a D c d hα hw ha hd ⟨n, P, hP⟩ hA hPS
-  have hcap : ∀ u, D.D.size (P.gates u) ≤ Γ ∧ (novelReads D (P.gates u) : ℝ) ≤ α * Γ := fun u =>
-    ⟨(hP u).1, (hP u).2.trans (mul_le_mul_of_nonneg_left (by exact_mod_cast (hP u).1) hα.le)⟩
-  have htotal : ∑ u, (novelReads D (P.gates u) : ℝ) ≤ α * D.D.size D.D.computed := by
-    calc ∑ u, (novelReads D (P.gates u) : ℝ) ≤ ∑ u, α * (D.D.size (P.gates u) : ℝ) :=
-          sum_le_sum fun u _ => (hP u).2
-      _ = α * D.D.size D.D.computed := by
-          rw [← mul_sum]
-          congr 1
-          exact_mod_cast P.sum_card_gates
-  have hr := (h Γ (α * Γ) b_w b_a D c d n P hw ha hd hcap hA hPS).trans htotal
-  rw [F_eq_readFactor]
-  calc readFactor (α * Γ) b_w b_a d / (2 * α) * (2 * c.G) = c.G * readFactor (α * Γ) b_w b_a d / α := by
-        field_simp
-    _ ≤ α * D.D.size D.D.computed / α := div_le_div_of_nonneg_right hr hα.le
-    _ = D.D.size D.D.computed := by field_simp
 
 end Nci.SecurityProofs

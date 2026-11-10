@@ -1,7 +1,43 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.BoundAccepts
-public import Proofs.Flock.Claims.Recursion.BoundForks
+public import Proofs.Flock.Claims.Recursion.BoundDeploy
+public import Proofs.Flock.Claims.Recursion.BoundRun
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Recursion.Cost
+import Proofs.Flock.Claims.Recursion.DeployFacts
 
 /-!
 # The normalized record and the readers' played rounds (option (d))
@@ -26,11 +62,11 @@ open Claims
 
 /-! ## `E*` reads an inner view only through its decision and its openings -/
 
-theorem rp_eval_bind_fst {R α β : Type} (H : Msg → Msg) (run : R → Trace) (p : RP R α) (f : α → RP R β) :
+theorem rp_eval_bind_fst {R α β : Type} (H : Msg → Msg) (run : R → Transcript) (p : RP R α) (f : α → RP R β) :
     ((p.bind f).eval H run).1 = ((f (p.eval H run).1).eval H run).1 :=
   (RP.eval_bind H run p f).1
 
-theorem waitAcc_rel {R Op : Type} (H : Msg → Msg) (run₁ run₂ : R → Trace) (opens : Seen → List Op) (k : ℕ)
+theorem waitAcc_rel {R Op : Type} (H : Msg → Msg) (run₁ run₂ : R → Transcript) (opens : Seen → List Op) (k : ℕ)
     (h : ∀ r, (run₁ r).seen.out = (run₂ r).seen.out ∧ opens (run₁ r).seen = opens (run₂ r).seen) :
     ∀ (rs : List R) (acc₁ acc₂ : List Seen), acc₁.length = acc₂.length → acc₁.flatMap opens = acc₂.flatMap opens →
       ((waitAcc k rs acc₁).eval H run₁).1.length = ((waitAcc k rs acc₂).eval H run₂).1.length ∧
@@ -52,7 +88,7 @@ theorem waitAcc_rel {R Op : Type} (H : Msg → Msg) (run₁ run₂ : R → Trace
         simp only [hv, hv', ↓reduceIte]
         exact waitAcc_rel H run₁ run₂ opens k h rs _ _ hl hf
 
-theorem firstWait_rel {R W Op : Type} (H : Msg → Msg) (run₁ run₂ : R → Trace) (opens : Seen → List Op) (k : ℕ)
+theorem firstWait_rel {R W Op : Type} (H : Msg → Msg) (run₁ run₂ : R → Transcript) (opens : Seen → List Op) (k : ℕ)
     (assemble : List Op → Option W) (check : W → Bool)
     (h : ∀ r, (run₁ r).seen.out = (run₂ r).seen.out ∧ opens (run₁ r).seen = opens (run₂ r).seen) :
     ∀ rss : List (List R), ((firstWait k opens assemble check rss).eval H run₁).1 =
@@ -67,7 +103,7 @@ theorem firstWait_rel {R W Op : Type} (H : Msg → Msg) (run₁ run₂ : R → T
       · exact firstWait_rel H run₁ run₂ opens k assemble check h rss
     · exact firstWait_rel H run₁ run₂ opens k assemble check h rss
 
-theorem erep_rel {D W Op : Type} (H : Msg → Msg) (run₁ run₂ : D → Trace) (m k K : ℕ) (opens : Seen → List Op)
+theorem erep_rel {D W Op : Type} (H : Msg → Msg) (run₁ run₂ : D → Transcript) (m k K : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) (d₀ : D) (ρ : Fin m → Fin K → D)
     (h : ∀ r, (run₁ r).seen.out = (run₂ r).seen.out ∧ opens (run₁ r).seen = opens (run₂ r).seen) :
     ((erep m k K opens assemble check d₀ ρ).eval H run₁).1 =
@@ -153,7 +189,7 @@ theorem Bound.run_nf (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (ms : L
     List.map_congr_left fun i hi => by
       rw [List.mem_range] at hi
       rw [Bd.nfMsgs_getD_lt x ms (by omega)]
-  simp only [Trace.seen, hpre, Bd.nfMsgs_getD_last x ms hk]
+  simp only [Transcript.seen, hpre, Bd.nfMsgs_getD_last x ms hk]
   rcases hf : Bd.final (ms.getD (Bd.DE.V.k x - 1) []) with _ | p
   · rw [Bd.rep_of_none hf]
   · exact Bd.openView_congr_final _ _ _ _ _ p ((Bd.final_rep _).trans hf) hf

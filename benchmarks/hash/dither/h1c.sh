@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # h1c.cu built for sm_120a on the CPU, then h1cgate.py (or H1C_GATE, e.g. h1agate.py: the served calls' A tables) on one
-# leased GPU for at most 25 minutes: the served window's tables on a full step against commit.py, then their timing.  Extra
+# leased GPU for at most 25 minutes: the served execution phase's tables on a full step against commit.py, then their timing.  Extra
 # arguments go to the gate.
 # On an RTX PRO 6000 under a GPU lease:
 #   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/hash/dither/h1c.sh
@@ -16,7 +16,6 @@ CUDA=${CUDA:-/usr/local/cuda-13.0}
   || { echo "h1c: NVCC_FAIL"; grep -v "^ptxas info" "$OUT/build-h1c.log" | tail -30; exit 11; }
 grep -A2 "h1c_" "$OUT/build-h1c.log" | grep -i "registers\|spill" | head
 [ -n "${BUILD_ONLY:-}" ] && { echo "h1c: built (BUILD_ONLY)"; exit 0; }
-[ -x /workspace/jobs/venv312/bin/python3 ] && PY=${PY:-/workspace/jobs/venv312/bin/python3}
 PY=${PY:-$(. benchmarks/harness/env.sh && echo "$VENV/bin/python3")} || exit 2
 export PYTHONPATH=$ROOT:$ROOT/tools/config:$ROOT/benchmarks/pouw/served_h1:$ROOT/benchmarks/hash/dither
 echo "h1c: asking for one GPU at $(date -u +%H:%M:%SZ)"

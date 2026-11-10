@@ -1,9 +1,13 @@
 module
 
 public import Definitions.Pouw.Fp8Atom.H1TCrossLate
-public import Proofs.Pouw.Fp8Atom.H1TGapStaging
-public import Proofs.Pouw.Fp8Atom.H1TSliceProofs
-public import Proofs.Pouw.Fp8Atom.H1TFlipProofs
+import Mathlib.Algebra.BigOperators.Fin
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Fp8Atom.Fp32Proofs
+import Proofs.Pouw.Fp8Atom.H1TAtomProofs
+import Proofs.Pouw.Fp8Atom.H1TFlipProofs
+import Proofs.Pouw.Fp8Atom.H1TSliceProofs
 
 /-!
 # H-1T: `H1TCrossLate` in the exact-512 regime (proofs)

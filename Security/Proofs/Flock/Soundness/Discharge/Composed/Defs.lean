@@ -9,9 +9,9 @@ public import Proofs.Flock.Soundness.Discharge.ZkView.Prefinal
 /-!
 # One `--zk` sampled session: the pieces the soundness half reads
 
-* `Gz`, `outz`, `accz`: the compiled `--zk` table at each draw (one table) as `modelTable`'s pieces, so that
+* `Gz`, `outz`, `accz`: the compiled `--zk` table at each sample (one table) as `modelTable`'s pieces, so that
   `ZkExec.sessionZC` at them is `ZkLink.batchedSessionZC` at the one-table plan (`sessionZC_planOf`).
-* `DecodesOnZK`, `simZ`, `execRefinesZK_on`: `DecodesZK`, `simAuditZK` and `execRefinesZK_one` at the law's draws only
+* `DecodesOnZK`, `simZ`, `execRefinesZK_on`: `DecodesZK`, `simAuditZK` and `execRefinesZK_one` at the sampling design's samples only
   (as `Tables.DecodesOnJ` is on the public path), the simulated strategy carried into the compiled batched session.
 -/
 
@@ -26,16 +26,16 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] {mPts n : ℕ} {Reg : Type}
 
-/-- The one-table plan at the draw's tables. -/
+/-- The one-table plan at the sample's tables. -/
 abbrev planOf (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts) : Finset (Fin n) → Reg → List (TabZK 𝔽 mPts) :=
   fun S R => [T S R]
 
-/-- The compiled reps at each draw. -/
+/-- The compiled reps at each sample. -/
 noncomputable def Gz (A : Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts) :
     ∀ (_ : Finset (Fin n)) (_ : Reg), (Fin 2 → Fin mPts → 𝔽) → Fin 2 → Game (PendZ 𝔽 D Sl) :=
   fun S R => repZCAt A Hs (T S R)
 
-/-- The compiled table's output at each draw. -/
+/-- The compiled table's output at each sample. -/
 noncomputable def outz (Hs : Hashes 𝔽 D Sl) (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts) :
     ∀ (_ : Finset (Fin n)) (_ : Reg), (Fin 1 → Cap D) → PendZ 𝔽 D Sl × PendZ 𝔽 D Sl → OpensZ 𝔽 D Sl →
       List (OutZC 𝔽 D Sl) :=
@@ -44,7 +44,7 @@ noncomputable def outz (Hs : Hashes 𝔽 D Sl) (T : Finset (Fin n) → Reg → T
 variable [Inhabited D] [Inhabited Sl]
 
 open Classical in
-/-- The compiled table's verdict at each draw. -/
+/-- The compiled table's verdict at each sample. -/
 noncomputable def accz (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts) :
     ∀ (_ : Finset (Fin n)) (_ : Reg), List (OutZC 𝔽 D Sl) → Bool :=
   fun S R outs => decide (acceptedZC [T S R] outs)
@@ -63,8 +63,8 @@ variable (A : Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : Finset (Fin n) → Reg 
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
   (capOf : ∀ (_ : Finset (Fin n)) (_ : Reg), ByteArray → Fin 1 → Cap D) (N : ℕ) (L : Law n)
 
-/-- **The decoder is right at the law's draws** (`DecodesZK` at `L.draw ω` only): on every live outcome flock-verify
-`--zk` accepts at a draw the law makes, each rep's game runs on the tape decoded from its stream and proof file, and
+/-- **The decoder is right at the sampling design's samples** (`DecodesZK` at `L.draw ω` only): on every live outcome flock-verify
+`--zk` accepts at a sample the sampling design makes, each rep's game runs on the tape decoded from its stream and proof file, and
 the compiled table's verdict on those runs holds. -/
 def DecodesOnZK : Prop :=
   ∀ ω R, Decodes (outz Hs T (L.draw ω) R) (fun o => AcceptsZK I (wr (L.draw ω) R o))
@@ -73,7 +73,7 @@ def DecodesOnZK : Prop :=
 
 variable {L}
 
-/-- `simAuditZK` from the decoder at the law's draws. -/
+/-- `simAuditZK` from the decoder at the sampling design's samples. -/
 noncomputable def simAuditZKOn (hdec : DecodesOnZK A Hs T I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr))) :
     Strategy (audit L Reg (ZkExec.sessionZC (Gz A Hs T) (outz Hs T) (accz T))) :=
@@ -92,7 +92,8 @@ noncomputable def simZ (hdec : DecodesOnZK A Hs T I wr opn dec one fin capOf L)
   cast (congrArg (fun g => Strategy (audit L Reg g)) (sessionZC_planOf A Hs T))
     (simAuditZKOn A Hs T I wr opn dg dec one fin capOf N hdec τ)
 
-/-- **R11 at `--zk` from the decoder at the law's draws** (`execRefinesZK_one`'s proof, reading `hdec` only there). -/
+/-- **The refinement at `--zk` from the decoder at the sampling design's samples** (`execRefinesZK_one`'s proof, reading `hdec` only
+there). -/
 theorem execRefinesZK_on (hdec : DecodesOnZK A Hs T I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr))) :
     ExecRefines (auditLive L Reg (liveOf dg mPts N wr)) τ (LiveAcceptsZK I) (fun _ => False)
@@ -117,7 +118,7 @@ theorem execRefinesZK_on (hdec : DecodesOnZK A Hs T I wr opn dec one fin capOf L
     (dec (L.draw ω) τ.1) (one (L.draw ω) τ.1) (fin (L.draw ω) τ.1) (capOf (L.draw ω) τ.1) N (Gz A Hs T (L.draw ω) τ.1)
     (fun pts r => allInh_repZCAt A Hs (T (L.draw ω) τ.1) pts r) (hdec ω τ.1) _
 
-/-- **The `--zk` headline at flock-verify's acceptance, from the decoder at the law's draws**: a bound on the compiled
+/-- **The `--zk` headline at flock-verify's acceptance, from the decoder at the sampling design's samples**: a bound on the compiled
 batched audit's acceptance with any event `Q` at `simZ … τ` bounds flock-verify `--zk`'s acceptance with `Q`. -/
 theorem zk_headline_exec_on (hdec : DecodesOnZK A Hs T I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr))) (Q : Prop) (B : ℝ≥0∞)
@@ -139,7 +140,7 @@ theorem zk_headline_exec_on (hdec : DecodesOnZK A Hs T I wr opn dec one fin capO
   rwa [prob_eq_zero_of_out (fun _ _ h => h) τ, add_zero] at h
 
 omit [Fintype K] in
-/-- **The decoder at the law's draws from `RunsOnZC`** (`ZkExec.decodes_of_runsOnZC`, the coin step `true`). -/
+/-- **The decoder at the sampling design's samples from `RunsOnZC`** (`ZkExec.decodes_of_runsOnZC`, the coin step `true`). -/
 theorem decodesOnZK_of_runsOnZC (h : RunsOnZC A Hs T I wr opn dec fin capOf L) :
     DecodesOnZK A Hs T I wr opn dec (fun _ _ _ => true) fin capOf L :=
   fun ω R => decodes_of_runsOnZC A Hs T I wr opn dec fin capOf h ω R

@@ -1,9 +1,12 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Exec.Retained
-public import Proofs.Flock.Soundness.Refine.Regions
 public import Flock.With.Deployed
+public import Flock.With.Eq
 public import Flock.With.VerifyE
+public import Proofs.Flock.Soundness.Discharge.Exec.Event
+public import Proofs.Flock.Soundness.Refine.Frames
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Exec.Tables
 
 /-!
 # flock-verify's acceptance with its digest comparisons read through `keep`

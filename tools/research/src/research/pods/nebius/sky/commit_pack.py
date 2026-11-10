@@ -10,13 +10,12 @@ finishes, and stops claiming at PACK_CLAIM_UNTIL_S, from 12:10Z to the quiet hou
 queues at 12:10Z), or after an MPS fault; it exits once nothing runs and the queue has been empty (or held) for PACK_IDLE_S, or at
 PACK_MAX_WALL_S, when whatever still runs is stopped. At 12:28Z it drains: every Commit still running is stopped and reported
 `drained` (not a fault), the dispatcher requeues each unpacked, and the pod exits, so none runs into the 12:30Z quiet hour.
-Storage (infra and circuits, 3:25-3:36 PM PDT Sep 30): it claims nothing while /workspace is PACK_DISK_PAUSE (80%) full or more,
+Storage: it claims nothing while /workspace is PACK_DISK_PAUSE (80%) full or more,
 and no Commit of batch 8 or more that would take the replay bundles on the node past PACK_BUNDLE_CAP_GB (400): the bundles waiting,
 plus an estimate for each Commit running here and for the candidate: the pacer's own (sky/release.py's learned rate per model,
 which it mirrors to $VY_BUNDLE_SIZES, x1.25), else its model's in BUNDLE_EST_GB, else PACK_BUNDLE_EST_GB, 60, for
 B8 with 1,024 + 128 tokens, scaled by batch and tokens (phi3-mini's was 113 GB, the grid's B8 1k ones of smaller models 25-57 GB,
-SmolLM2's B16 256-token one 3 GB). At 150 GB and 120 GB for every model it held small Commits for 70-110 min with 6 of node 1's 8
-GPUs empty (circuits, 12:50 PM PDT Oct 1).
+SmolLM2's B16 256-token one 3 GB): one flat estimate for every model holds small Commits back with most of node 1's GPUs empty.
 
 **MPS.** `nvidia-cuda-mps-control -d` with its pipe and log directories under the pod's scratch ($TMPDIR/commit-pack-<pod>, removed at
 exit). Each client gets CUDA_MPS_PINNED_DEVICE_MEM_LIMIT (0=28G) and CUDA_MPS_ACTIVE_THREAD_PERCENTAGE (100), and the Commit

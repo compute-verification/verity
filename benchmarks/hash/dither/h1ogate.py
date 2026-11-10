@@ -1,4 +1,4 @@
-"""`h1o.cu`'s forms of a served call's units at kernel level, on a synthetic Llama-3.1-8B window: `h1o_unitss` (a unit
+"""`h1o.cu`'s forms of a served call's units at kernel level, on a synthetic Llama-3.1-8B execution phase: `h1o_unitss` (a unit
 a block of six warps, `h1s_unit`), `h1o_unitsb` (a unit a block of five, `h1b_unit`) and `h1o_units` (a unit a warp,
 `h1r_unit<2>`), the first two with the credited peel (`split-cpeel`, `block-cpeel`: z = A B^T from the noised
 stream's O, DITHER_PEEL=1), and those two again as the kernels `h1o_init` gives the maximum shared-memory carveout
@@ -14,7 +14,7 @@ through `dither_one.check`, then timed against each other.
           (this source's h1tile unless DITHER_H1V3_TREE names a tree); the control refused and every fault conforming (`gate_verdict`; the
           perturbed noised word must move z and y in its cell, peeled too); wb's density and the xa entries (A = 127
           and b = 1) as the run reads them; the occupancy calculator's blocks an SM for each units kernel
-    time  per form, at m = 32: the window's 4 NL calls in model order (A table and units) as one CUDA graph, their units
+    time  per form, at m = 32: the execution phase's 4 NL calls in model order (A table and units) as one CUDA graph, their units
           launches alone as another, and each site's units alone, replayed between CUDA events with the forms interleaved;
           each over block's (else the first form's) as time_over_base
 
@@ -30,15 +30,20 @@ import statistics
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import torch
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+from verity_config.settings import of  # noqa: E402
+
 import dither_fused as DF  # noqa: E402
 import dither_one as DO  # noqa: E402
-from verity_config.settings import of  # noqa: E402
 
 settings = of(__file__)
 SHAPES = {"self_attn.qkv_proj": (6144, 4096), "self_attn.o_proj": (4096, 4096), "mlp.gate_up_proj": (28672, 4096),
@@ -49,7 +54,7 @@ FORMS = ("split", "block", "warp", "split-cpeel", "block-cpeel", "split2", "bloc
 OCCUPANCY = ("block", "block-cpeel", "split", "split-cpeel", "block2", "block2-cpeel", "split2", "split2-cpeel")  # h1o_occupancy's
 
 
-def model(nl: int, dev) -> None:
+def model(nl: int, dev: torch.device) -> None:
     g = torch.Generator(device=dev).manual_seed(1)
     DF.REG.clear()
     for i in range(nl):
@@ -86,7 +91,7 @@ def step(win: DO.DitherState, xs: list, outs: list) -> None:
     win.after()
 
 
-def gate(form: str, dev) -> tuple:
+def gate(form: str, dev: torch.device) -> tuple:
     os.environ[DO.UNITS_ENV] = form.split("-")[0]
     os.environ[DO.PEEL_ENV] = "1" if form.endswith("-cpeel") else "0"
     win = DO.DitherState(T, os.urandom(64), settings.need("DITHER_H1C"), settings.need(DO.LIB_ENV), True, dev)
@@ -106,7 +111,7 @@ def graphs(win: DO.DitherState, outs: list) -> dict:
     torch.cuda.synchronize()
     out = {}
 
-    def cap(name, fn):
+    def cap(name: str, fn: Callable[[int, int], int]) -> None:
         g = torch.cuda.CUDAGraph()
         with torch.cuda.graph(g):
             st = torch.cuda.current_stream().cuda_stream

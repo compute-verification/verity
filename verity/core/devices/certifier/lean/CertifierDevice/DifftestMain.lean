@@ -1,6 +1,7 @@
 module
 
 public import CertifierDevice.Difftest
+meta import CertifierDevice.Difftest
 
 /-! The difftest's run (`runs` in `lean-audit.json`): `CertifierDevice.Difftest.main`, audited under `CertifierDevice`. It
 holds `active.Proxy` to `step` action for action on the generated traces. -/

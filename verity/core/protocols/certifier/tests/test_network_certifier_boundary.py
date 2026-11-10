@@ -9,7 +9,8 @@ from dataclasses import dataclass
 
 import pytest
 
-from verity.core.protocols.certifier import boundary as BD, egress as EG, ingress_scan as IS
+from verity.core.protocols.certifier import boundary as BD
+from verity.ml.protocols.certifier import egress as EG, ingress_scan as IS
 from verity.ml.circuits.defs import bind
 
 

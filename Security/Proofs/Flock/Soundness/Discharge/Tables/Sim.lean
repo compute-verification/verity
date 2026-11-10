@@ -1,13 +1,18 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Tables.Steps
+public import Proofs.Flock.Soundness.Refine.LiveSim
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import VCVio.Prelude.Core
 
 /-!
 # The simulation of a session of `J` tables (the transfer, R11c, at `--session-tables J`)
 
 flock-circuit's `--session-tables J` (`session_tables`, `config_with`) and flock-verify's `Stmt.setupTables` run one
 session of `J` tables: one `Commit` with every table's root, one link exchange whose two points every table reads (the
-tables share `m_pts`), the `2J` rep streams `(table j, rep r)` in any order the prover picks, each round's coins drawn
+tables share `m_pts`), the `2J` rep streams `(table j, rep r)` in any order the prover picks, each round's coins flipped
 after its bytes, and every proof file after the last coin of every stream (the barrier).
 
 * `liveSession dg J mPts N`: that live session, on the challenger with retained round bytes. `liveSession` at `J = 1`
@@ -65,7 +70,7 @@ theorem addRoundJ_ne {J : ℕ} (rs : Fin J → Fin 2 → List Round) {j j' : Fin
   upd_ne _ _ h
 
 /-- **The challenger's rounds over `2J` streams** (`Tags.coinScheme`): the prover submits a round on any table's either
-rep, or stops, at most `N` times; the server draws the round's `n` coins uniformly once its bytes are fixed and appends
+rep, or stops, at most `N` times; the server samples the round's `n` coins uniformly once its bytes are fixed and appends
 the round to that stream. -/
 def liveRoundsJ (dg : ByteArray → ByteArray) (J : ℕ) :
     ℕ → (Fin J → Fin 2 → List Round) → Game (Fin J → Fin 2 → List Round)
@@ -87,7 +92,7 @@ def KLJ {J mPts : ℕ} (rootB : Array ByteArray) (pts : Fin 2 → Fin mPts → �
   .send (Array ByteArray) fun proofs => .ret ⟨rootB, pts, rs, proofs⟩
 
 /-- **A live session of `J` tables** (`Flock.Record`, `Flock.Draw`, `Stmt.setupTables`): `Commit` sends every table's root, the server
-draws the two link points every table reads, the prover runs its rounds on the `2J` rep streams, then sends the proof
+samples the two link points every table reads, the prover runs its rounds on the `2J` rep streams, then sends the proof
 files, after the last coin. -/
 def liveSession (dg : ByteArray → ByteArray) (J mPts N : ℕ) : Game (LiveOutJ J mPts) :=
   .send (Array ByteArray) fun rootB =>
@@ -111,7 +116,7 @@ def tabG (caps : Fin J → Cp) (gs : Fin J → Fin 2 → Game P) (j : Fin J) : G
 def posOf (caps : Fin J → Cp) (gs : Fin J → Fin 2 → Game P) : Game (List OutT) :=
   batch (List.ofFn (tabG out caps gs))
 
-/-- **The model's session of `J` tables**: `Commit`'s caps, one link-point draw, then every table's two reps
+/-- **The model's session of `J` tables**: `Commit`'s caps, one link-point sample, then every table's two reps
 concurrently and its openings, the tables concurrently. -/
 def modelSession (G : Fin J → (Fin 2 → Fin mPts → 𝔽) → Fin 2 → Game P) : Game (List OutT) :=
   .send (Fin J → Cp) fun caps => .coin (Fin 2 → Fin mPts → 𝔽) fun pts => posOf out caps fun j => G j pts
@@ -574,7 +579,7 @@ noncomputable def coinJ (caps : Fin J → Cp) (rootB : Array ByteArray) (pts : F
       (Classical.choice (allInh_posOf out caps (allInh_upd h j r hg)).strategy)
 
 /-- **A round on stream `(j, r)`**: the model's rep `r` of table `j` takes the messages decoded from the round's
-bytes, then draws its coins with the live round's. -/
+bytes, then flips its coins with the live round's. -/
 noncomputable def roundJ (caps : Fin J → Cp) (rootB : Array ByteArray) (pts : Fin 2 → Fin mPts → 𝔽) (n : ℕ)
     (rs : Fin J → Fin 2 → List Round) (j : Fin J) (r : Fin 2) (b : ByteArray) (k : ℕ) (gs : Fin J → Fin 2 → Game P)
     (h : ∀ j r, AllInh (gs j r))

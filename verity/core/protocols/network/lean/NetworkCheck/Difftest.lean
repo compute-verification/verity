@@ -1,7 +1,7 @@
 module
 
 public import NetworkCheck.Certificate
-public import Lean.Data.Json
+public import Lean.Data.Json.Parser
 
 /-!
 # The difftest: the network certificate's encodings against `certificate.py`, on generated instances

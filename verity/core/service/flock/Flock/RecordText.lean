@@ -11,7 +11,6 @@ holds it to `Json.compress` on the writers' shared vectors.
 -/
 module
 
-public import Lean.Data.Json
 public import Flock.Bytes
 public import Flock.JsonParse
 

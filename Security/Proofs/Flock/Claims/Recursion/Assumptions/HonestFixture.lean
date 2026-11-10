@@ -1,6 +1,37 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.HonestHalf
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 public import Proofs.Flock.Claims.Recursion.IrDep
 
 /-!
@@ -41,15 +72,29 @@ rounds before the last (`hist.take (kI x - 1)`) the reps' tops differ (`TopsAt`)
 `IrDep x`: the rows `rec_live` commits and the openings, salts, κ, eq(α) and v `rec_vstage`, `rec_vstar` and
 `verifier_rows` build, at C-Flock's proofs.
 
-The run is `benchmarks/recursion_e2e --e2e --cpu` (the toy deployment, K = 64, N = 16, under the firewall, at
+The run is `benchmarks/recursion_e2e --e2e --cpu` (the toy deployment, K = 64, N = 16, under the ZK server, at
 16a44e3b86). Its outer tree holds each part's `inst.bin`, `fold.json`, `points.json` and `acc-salts.bin`. Each conjunct
 on it:
 * `HonestRunAccepted`: the compiled `flock-verify` printed `VERDICT {"accepted":true}` (why `""`) on each of the 10 V\*
   parts (L0–L3, alg-p0, alg-p1, cap, cap-L1–L3) and on the inner session, and the parts that read a flipped challenge
   or query coin refused it.
+<<<<<<< ours
 * `TopsAt`: holds on the run's tree (the reps' tops differ at levels 1–3).
 * `HonestWitSatisfies`: passed on the same tree (`test_the_deployed_runs_parts_satisfy`, `vstar-trace --sat
   --session`): all 10 parts, each at the table `verify --zk` sets up at the draw its session records, under the zero
+||||||| base
+* `IrShaped`: passed (`vstar-difftest ir_shaped` on the stager's inputs from the run's tree:
+  both reps open, 448 openings each; one opening fewer, or one past the tops, is refused).
+* `TopsAt`: holds in the same check (the reps' tops differ at levels 1–3).
+* `HonestWitSatisfies`: passed in the same check (`test_the_deployed_runs_parts_satisfy`, `vstar-trace --sat
+  --session`): all 10 parts, each at the table `verify --zk` sets up at the draw its session records, under the zero
+=======
+* `IrShaped`: passed (`vstar-difftest ir_shaped` on the stager's inputs from the run's tree:
+  both reps open, 448 openings each; one opening fewer, or one past the tops, is refused).
+* `TopsAt`: holds in the same check (the reps' tops differ at levels 1–3).
+* `HonestWitSatisfies`: passed in the same check (`test_the_deployed_runs_parts_satisfy`, `vstar-trace --sat
+  --session`): all 10 parts, each at the table `verify --zk` sets up at the sample its session records, under the zero
+>>>>>>> theirs
   mask and a random one, 20 of 20 lines with no bad rows, pin or region bits.
 * `NoCollAt`: passed (`test_the_deployed_runs_calls_have_no_collision`, `vstar-trace
   --nocoll`): per part and over all 10 together, no SHA-512 output has two inputs (`findColl = none` on full input
@@ -57,24 +102,24 @@ on it:
   input one byte longer) is caught. The calls are a superset of `NoCollAt`'s: every hm96 salt and row call the part's
   trace computes at every port and instance slot (padding included, each row digest held to the trace's own last
   compression), not only `layR`'s recorded ones; and for `vcallsAt`, every input the verifier's setup hashes at the
-  part's statement and draw, logged by the logging oracle's setup (`setupLogged`), which is proved equal to the fast
+  part's statement and sample, logged by the logging oracle's setup (`setupLogged`), which is proved equal to the fast
   one.
 
 16a44e3b86's verifier has `checkRoundWords`, `VStar/In` and `VStar/Trace`, and beside `DAt`'s it only refuses more
 (`checkEndReads`, and `--ks-form`'s port roots, which the run doesn't pass). What the run witnesses is weaker than the
 Prop in two ways: only Python joins the 10 per-part verdicts (no single compiled verdict exists), and its prover is
-Python's builder with C-Flock's CPU prover, not `refP`.
+Python's builder with Flock's CPU prover, not `refP`.
 
 What ties the two provers is `verity/core/service/vstar/tests/test_vstar_trace_difftest.py`. `refP`'s V\* parts are
 `bringsAt`'s `refPartsFin (A0 mask)`: each part's `VStar.Trace.assign` at its fitted port inputs (`VStar.In.partIn`,
 whose level, algebra and cap builders `test_vstar_in_difftest` holds to Python's stager). The trace difftest holds `VStar.Trace.assign` (`vstar-trace`) to
-C-Flock's CPU prover's witness (`flock-trace`: `Stmt::row_inputs`, `unit_inputs`, `converge`, `witness`), block for
+Flock's CPU prover's witness (`flock-trace`: `Stmt::row_inputs`, `unit_inputs`, `converge`, `witness`), block for
 block and range for range, on parts Python's `rec_vstage.stage` staged:
 * `test_the_recorded_plain_leaf_sessions_traces` (at 547915a62c)
   passed on all 10 staged statements of `rec-coins`' recorded (16,16,8) session at 64 instances (L0–L3, alg/p0, alg/p1,
   cap, cap/L1–L3);
 * `vstar-trace --sat` (at 93dac12374) checks the trace against the table `verify --zk` sets up:
-  its drawn level and cap passed (`test_the_trace_satisfies_the_verifiers_tables`), and so did L0 of the recorded
+  its sampled level and cap passed (`test_the_trace_satisfies_the_verifiers_tables`), and so did L0 of the recorded
   session (`test_the_recorded_plain_leaf_sessions_satisfy`).
 
 The checks of `TopsAt`, `HonestWitSatisfies` and `NoCollAt` run on the run's own tree. Neither difftest compares

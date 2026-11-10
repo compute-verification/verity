@@ -3,7 +3,8 @@ module
 public import Definitions.Pouw.Barrier.Pinned
 public import Proofs.Pouw.NCP.Proofs
 public import Proofs.Pouw.Prob
-public import Definitions.Pouw.Guarantees.Barrier
+public import Proofs.Pouw.Lemmas.Barrier
+public import Proofs.Pouw.Break
 
 /-!
 # The degenerate-input barrier: proofs
@@ -23,34 +24,36 @@ variable {Q R S : Type}
 
 /-! ## The generic barrier -/
 
-theorem wins_of_all_correct (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) {γ c₀ : ℝ}
-    (hc : 0 ≤ c₀) (hW : 0 < totalWref P U.layout) (hγ : γ < 1 - c₀ / totalWref P U.layout)
-    (hK : correctSet P U H s τ = range U.layout.N) : Wins P U γ c₀ τ H s := by
+theorem wins_of_all_correct (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) {g c₀ : ℝ}
+    (hc : 0 ≤ c₀) (hW : 0 < totalWref P U.layout) (hg : g < 1 - c₀ / totalWref P U.layout)
+    (hK : correctSet P U H s τ = range U.layout.N) : Wins P U g c₀ τ H s := by
   unfold Wins
   rw [hK]
-  change c₀ / (1 - γ) < totalWref P U.layout
-  have h1 : c₀ / totalWref P U.layout < 1 - γ := by linarith
-  have hpos : 0 < 1 - γ := lt_of_le_of_lt (div_nonneg hc hW.le) h1
+  change c₀ / (1 - g) < totalWref P U.layout
+  have h1 : c₀ / totalWref P U.layout < 1 - g := by linarith
+  have hpos : 0 < 1 - g := lt_of_le_of_lt (div_nonneg hc hW.le) h1
   rw [div_lt_iff₀ hpos]
   rw [div_lt_iff₀ hW] at h1
-  linarith [mul_comm (1 - γ) (totalWref P U.layout)]
+  linarith [mul_comm (1 - g) (totalWref P U.layout)]
 
 /-- **The generic barrier, in probability.** -/
 theorem genericPr : Pinned.GenericPr := by
-  intro Q R S _ _ _ _ CM P D U A c₀ q hU hc hq hA hW γ hγ η hG
-  exact le_trans (pr_mono fun x hx => wins_of_all_correct P U x.1 x.2 _ hc hW hγ hx) (hG U hU c₀ hc q hq A hA)
+  intro Q R S _ _ _ _ CM P D U A c₀ q hU hc hq hA hW g hg δ hG
+  exact le_trans (pr_mono fun x hx => ⟨wins_of_all_correct P U x.1 x.2 _ hc hW hg hx.1, hx.2⟩)
+    (hG U hU c₀ hc q hq A hA)
 
 /-- **The generic barrier.** -/
 theorem generic : Pouw.Guarantees.Barrier.Generic := by
-  intro Q R S _ _ _ _ _ _ CM P D U A c₀ q hpt hW γ hγ η hG
+  intro Q R S _ _ _ _ _ _ CM P D U A c₀ q hpt hW g hg δ hG
   obtain ⟨hU, hc, hq, hA, hall⟩ := hpt
-  have h := genericPr Q R S CM P D U A c₀ q hU hc hq hA hW γ hγ η hG
-  have h1 : pr (fun x : (Q → R) × S => correctSet P U x.1 x.2 (A.transcript U x.1 x.2) = range U.layout.N) = 1 :=
+  have h := genericPr Q R S CM P D U A c₀ q hU hc hq hA hW g hg δ hG
+  have h1 : pr (fun x : (Q → R) × S =>
+      correctSet P U x.1 x.2 (A.transcript U x.1 x.2) = range U.layout.N ∧ ¬ A.Breaks U x.1 x.2) = 1 :=
     pr_eq_one fun x => hall x.1 x.2
   rwa [h1] at h
 
-theorem gamma_ratio {γ c₀ W T a b : ℝ} (hT : 0 < T) (hb : 0 < b) (ha : 0 ≤ a) (hc : c₀ = a * T) (hW : b * T ≤ W)
-    (hγ : γ < 1 - a / b) : γ < 1 - c₀ / W := by
+theorem gap_ratio {g c₀ W T a b : ℝ} (hT : 0 < T) (hb : 0 < b) (ha : 0 ≤ a) (hc : c₀ = a * T) (hW : b * T ≤ W)
+    (hg : g < 1 - a / b) : g < 1 - c₀ / W := by
   have hW0 : 0 < W := lt_of_lt_of_le (mul_pos hb hT) hW
   have : c₀ / W ≤ a / b := by
     rw [div_le_div_iff₀ hW0 hb, hc]
@@ -85,6 +88,16 @@ theorem planAdv_correct (N : NoiseSrc Q R S) (f : Shape → Plan) (P : Protocol 
   intro hu
   exact ⟨_, by simp [Adversary.transcript, gemmModel, planAdv, hu], hc H s u hu⟩
 
+theorem gemmModel_hashless (N : NoiseSrc Q R S) : (gemmModel N).Hashless := fun _ _ _ _ _ _ => rfl
+
+/-- `planAdv_correct`, with no break: the abstract model hashes nothing. -/
+theorem planAdv_cheap (N : NoiseSrc Q R S) (f : Shape → Plan) (P : Protocol Q R S) (U : Workload)
+    (hc : ∀ (H : Q → R) (s : S), ∀ u < U.layout.N,
+      Correct P U H s u ((f (U.layout.shape u)).commit N H s U (fun _ => 0) u)) :
+    ∀ (H : Q → R) (s : S),
+      correctSet P U H s ((planAdv N f).transcript U H s) = range U.layout.N ∧ ¬ (planAdv N f).Breaks U H s :=
+  fun H s => ⟨planAdv_correct N f P U hc H s, not_breaks_of_hashless (gemmModel_hashless N) _ _ _ _⟩
+
 theorem zero_actOK (sh : Shape) : ActOK sh (0 : Mat) := fun _ _ _ _ => by unfold InInt7; norm_num
 
 theorem sum_Ico_zero (k : ℕ) (f : ℕ → ℤ) : ∑ l ∈ Ico 0 (0 + k), f l = ∑ l ∈ range k, f l := by
@@ -111,18 +124,18 @@ theorem addPlan_correct (N : NoiseSrc Q R S) (W : Layout → ℕ → ℕ) (U : W
 
 /-- **Class (a).** -/
 theorem additive : Pinned.Additive := by
-  intro Q R S _ _ _ _ _ _ N W p D U hp hU hS hW γ hγ η hG
+  intro Q R S _ _ _ _ _ _ N W p D U hp hU hS hW g hg δ hG
   have hB := planAdv_bounded N addPlan U
   simp only [addPlan_cost] at hB
   have hpt : CheapPoint (gemmModel N) (addProto N W) D U (planAdv N addPlan)
       (∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ)) 0 :=
     ⟨hU, by positivity, by norm_num, hB,
-      planAdv_correct N addPlan _ U fun H s u _ => addPlan_correct N W U H s u⟩
+      planAdv_cheap N addPlan _ U fun H s u _ => addPlan_correct N W U H s u⟩
   have hWt : p * ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ) ≤ totalWref (addProto N W) U.layout := by
     rw [Finset.mul_sum]
     exact Finset.sum_le_sum fun u hu => hW u (Finset.mem_range.1 hu)
-  exact generic Q R S _ _ D U _ _ 0 hpt (lt_of_lt_of_le (by positivity) hWt) γ
-    (gamma_ratio hS (by linarith) zero_le_one (one_mul _).symm hWt hγ) η hG
+  exact generic Q R S _ _ D U _ _ 0 hpt (lt_of_lt_of_le (by positivity) hWt) g
+    (gap_ratio hS (by linarith) zero_le_one (one_mul _).symm hWt hg) δ hG
 
 /-! ## Class (a): `H_ref` plans -/
 
@@ -301,7 +314,7 @@ theorem relPlan_correct {t : ℕ} {c : ℕ → ℤ} {N : NoiseSrc Q R S} (W : La
       rw [hx1, regs_eq, relPlan_nReg, ite_eq_left (by omega), relPlan_reg, ite_eq_right (by omega)]
       simp only [MExpr.eval, eval_sumE]
       have hs : ∑ y ∈ range (t - 1), c y * (if y < t - 1 then (relPlan t c (U.layout.shape u)).regs 0
-            (U.weight (U.layout.wid u)) (N H s U u 0) y else 0) x.2.1 x.2.2
+            (U.fixed (U.layout.fixedId u)) (N H s U u 0) y else 0) x.2.1 x.2.2
           = ∑ y ∈ range (t - 1), c y * relProd N H s U u 0 y x.2.1 x.2.2 :=
         Finset.sum_congr rfl fun y hy => by
           rw [ite_eq_left (Finset.mem_range.1 hy), relPlan_regs_base c N H s U u (by have := Finset.mem_range.1 hy; omega)
@@ -317,7 +330,7 @@ theorem relPlan_correct {t : ℕ} {c : ℕ → ℤ} {N : NoiseSrc Q R S} (W : La
 
 /-- **Class (b).** -/
 theorem relation : Pinned.Relation := by
-  intro Q R S _ _ _ _ _ _ t c N W D U ht hc hN hU hS hW γ hγ η hG
+  intro Q R S _ _ _ _ _ _ t c N W D U ht hc hN hU hS hW g hg δ hG
   have hB := planAdv_bounded N (relPlan t c) U
   simp only [relPlan_cost t c _ ht] at hB
   push_cast [Nat.cast_sub ht] at hB
@@ -325,16 +338,16 @@ theorem relation : Pinned.Relation := by
   have hpt : CheapPoint (gemmModel N) (relProto t c N W) D U (planAdv N (relPlan t c))
       (((t : ℝ) - 1) * ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ)) 0 :=
     ⟨hU, mul_nonneg (by have : (1 : ℝ) ≤ t := (by exact_mod_cast ht); linarith) hS.le, by norm_num, hB,
-      planAdv_correct N _ _ U fun H s u _ => relPlan_correct W ht hc hN U H s u⟩
+      planAdv_cheap N _ _ U fun H s u _ => relPlan_correct W ht hc hN U H s u⟩
   have hWt : (t : ℝ) * ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ)
       ≤ totalWref (relProto t c N W) U.layout := by
     rw [Finset.mul_sum]
     exact Finset.sum_le_sum fun u hu => hW u (Finset.mem_range.1 hu)
   have ht' : (1 : ℝ) ≤ t := by exact_mod_cast ht
-  refine generic Q R S _ _ D U _ _ 0 hpt (lt_of_lt_of_le (by positivity) hWt) γ
-    (gamma_ratio hS (by linarith) (by linarith) rfl hWt ?_) η hG
+  refine generic Q R S _ _ D U _ _ 0 hpt (lt_of_lt_of_le (by positivity) hWt) g
+    (gap_ratio hS (by linarith) (by linarith) rfl hWt ?_) δ hG
   rw [show 1 - ((t : ℝ) - 1) / t = 1 / t by field_simp; ring]
-  exact hγ
+  exact hg
 
 /-- **The lead's noise with output-only checks is class (b).** -/
 theorem relationWitness : Pinned.RelationWitness := by
@@ -533,7 +546,7 @@ theorem segPlan_correct {L d : ℕ} {α β : Mat → Mat} {N : NoiseSrc Q R S} (
 
 /-- **Class (c).** -/
 theorem segment : Pinned.Segment := by
-  intro Q R S _ _ _ _ _ _ L d α β N W D Lay hL hα hβ hcan hU hS hW γ hγ η hG
+  intro Q R S _ _ _ _ _ _ L d α β N W D Lay hL hα hβ hcan hU hS hW g hg δ hG
   have hB := planAdv_bounded N (segPlan L d) ⟨Lay, fun _ => 0⟩
   simp only [segPlan_cost L d _ hL] at hB
   push_cast [Nat.cast_sub hL] at hB
@@ -544,17 +557,17 @@ theorem segment : Pinned.Segment := by
   have hpt : CheapPoint (gemmModel N) (segProto L d α β N W) D ⟨Lay, fun _ => 0⟩ (planAdv N (segPlan L d))
       (((L : ℝ) - 1) * ∑ u ∈ range Lay.N, (((Lay.shape u).m : ℝ) * d * (Lay.shape u).n)) 0 :=
     ⟨hU, mul_nonneg (by linarith) hS'.le, by norm_num, hB,
-      planAdv_correct N _ _ _ fun H s u _ => segPlan_correct W hL hα hβ hcan Lay H s u⟩
+      planAdv_cheap N _ _ _ fun H s u _ => segPlan_correct W hL hα hβ hcan Lay H s u⟩
   have hWt : (L : ℝ) * ∑ u ∈ range Lay.N, (((Lay.shape u).m : ℝ) * d * (Lay.shape u).n)
       ≤ totalWref (segProto L d α β N W) Lay := by
     rw [Finset.mul_sum]
     refine Finset.sum_le_sum fun u hu => le_trans (le_of_eq ?_) (hW u (Finset.mem_range.1 hu))
     push_cast
     ring
-  refine generic Q R S _ _ D _ _ _ 0 hpt (lt_of_lt_of_le (by positivity) hWt) γ
-    (gamma_ratio hS' (by linarith) (by linarith) rfl hWt ?_) η hG
+  refine generic Q R S _ _ D _ _ _ 0 hpt (lt_of_lt_of_le (by positivity) hWt) g
+    (gap_ratio hS' (by linarith) (by linarith) rfl hWt ?_) δ hG
   rw [show 1 - ((L : ℝ) - 1) / L = 1 / L by field_simp; ring]
-  exact hγ
+  exact hg
 
 /-! ## The generic barrier's hypotheses are satisfiable -/
 
@@ -565,7 +578,7 @@ def oneUnit : Workload := ⟨⟨1, fun _ => ⟨1, 1, 1⟩, fun _ => 0⟩, fun _ 
 theorem genericWitness : Pinned.GenericWitness := by
   refine ⟨fun _ _ _ _ _ _ => 0, addProto (fun _ _ _ _ _ _ => 0) fun L u => 2 * (L.shape u).Wmm, fun _ => True,
     oneUnit, planAdv _ addPlan, 1, addProto_complete _ _ _, (additiveWitness Unit Unit Unit _ _).2.1, ⟨?_, by norm_num,
-    by norm_num, ?_, planAdv_correct _ addPlan _ _ fun H s u _ => addPlan_correct _ _ oneUnit H s u⟩, ?_, ?_⟩
+    by norm_num, ?_, planAdv_cheap _ addPlan _ _ fun H s u _ => addPlan_correct _ _ oneUnit H s u⟩, ?_, ?_⟩
   · refine ⟨by norm_num [oneUnit], trivial, fun u hu l _ j _ => ?_⟩
     unfold InInt7; norm_num [oneUnit]
   · have hB := planAdv_bounded (Q := Unit) (R := Unit) (S := Unit) (fun _ _ _ _ _ _ => 0) addPlan oneUnit

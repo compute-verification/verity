@@ -1,11 +1,8 @@
 module
 
-public import VStar.Compose
 public import VStar.Holo
 public import VStar.Json
 public import VStar.Menu.Pinned
-public import VStar.Stage
-public import Flock.JsonParse
 
 /-!
 # The `vstar` command: write V*'s circuit files

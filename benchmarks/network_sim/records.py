@@ -62,11 +62,11 @@ def cadence(setup: ar.Setup) -> Cadence:
 
 def uplink(dc: Datacenter, block: str) -> tuple[str, str]:
     """The block's one boundary link, as its end in the block and the certifier at its other end."""
-    ours = [e for e in dc.boundary if any((b := dc.block_of(x)) is not None and b.name == block for x in (e.a, e.b))]
+    ours = [e for e in dc.boundary if any((b := dc.zone_of(x)) is not None and b.name == block for x in (e.a, e.b))]
     if len(ours) != 1:
         raise ValueError(f"block {block} has {len(ours)} boundary links: the lab runs one certifier on one uplink")
     (e,) = ours
-    inside, other = (e.a, e.b) if dc.block_of(e.a) is not None else (e.b, e.a)
+    inside, other = (e.a, e.b) if dc.zone_of(e.a) is not None else (e.b, e.a)
     if dc.port(inside, other) is None:
         raise ValueError(f"block {block}'s uplink {e.a}-{e.b} doesn't end at a certifier")
     return inside, other

@@ -1,6 +1,43 @@
 module
 
 public import Definitions.Claims
+public import Definitions.Core.Interaction
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # Uniform averages over finite coin spaces
@@ -14,11 +51,11 @@ independent events, and the uniform round guess.
 namespace Claims
 
 theorem Pr_nonneg {α : Type} [Fintype α] (p : α → Prop) : 0 ≤ Pr p := by
-  unfold Pr; positivity
+  unfold Pr Claims.prUniform; positivity
 
 theorem Pr_le_one {α : Type} [Fintype α] [Nonempty α] (p : α → Prop) : Pr p ≤ 1 := by
   classical
-  unfold Pr
+  unfold Pr Claims.prUniform
   rw [div_le_one (by exact_mod_cast Fintype.card_pos)]
   exact_mod_cast Finset.card_filter_le _ _
 
@@ -28,16 +65,16 @@ theorem Pr_congr {α : Type} [Fintype α] {p q : α → Prop} (h : ∀ a, p a �
 
 theorem Pr_mono {α : Type} [Fintype α] {p q : α → Prop} (h : ∀ a, p a → q a) : Pr p ≤ Pr q := by
   classical
-  unfold Pr
+  unfold Pr Claims.prUniform
   refine div_le_div_of_nonneg_right ?_ (by positivity)
   exact_mod_cast Finset.card_le_card fun a ha => by simp only [Finset.mem_filter] at ha ⊢; exact ⟨ha.1, h a ha.2⟩
 
-theorem Pr_false {α : Type} [Fintype α] : Pr (fun _ : α => False) = 0 := by simp [Pr]
+theorem Pr_false {α : Type} [Fintype α] : Pr (fun _ : α => False) = 0 := by simp [Pr, Claims.prUniform]
 
 /-- `Pr` as an average of indicators. -/
 theorem Pr_eq_sum {α : Type} [Fintype α] (p : α → Prop) [DecidablePred p] :
     Pr p = (∑ a, if p a then (1 : ℝ) else 0) / Fintype.card α := by
-  unfold Pr
+  unfold Pr Claims.prUniform
   congr 1
   rw [Finset.sum_boole]
   congr 2

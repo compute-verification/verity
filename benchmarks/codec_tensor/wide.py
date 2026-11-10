@@ -26,7 +26,7 @@ The field, the key derivation (under this module's `DOMAIN`), ρ and the rounds 
 (`verity.core.protocols.remote_bandwidth.codec`: `Field`, `derive` over a `Sloth`, `encode_word` and `decode_word`),
 with the payload check around them; this module keeps the tasks' layout and the tensor-core squaring.
 
-The seed is drawn after the weights are registered. Decoding a word costs k squarings; encoding it k roots, each
+The seed is sampled after the weights are registered. Decoding a word costs k squarings; encoding it k roots, each
 (p+1)/4's addition chain (n − 2 squarings for a Mersenne prime) and the square test.
 
 The fused GEMM's layout (`encode_tasks`): an FP8 weight matrix W (N × K) in `codec.plain_fragments` order, one task (16

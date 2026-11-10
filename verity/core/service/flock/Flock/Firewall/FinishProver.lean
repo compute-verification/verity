@@ -1,8 +1,8 @@
 /-
-# The firewall's own prover: what `flock-firewall finish` computes a rep's proof file with
+# The ZK server's own prover: what `flock-firewall finish` computes a rep's proof file with
 
 The masked prover's phases of the analysis (`FlockComplete.squeezeP` to `FlockComplete.innerP`, live PROTOCOL.md §1–§7),
-here as code the firewall runs: definition by definition the analysis's, so that each is that one by unfolding. Two
+here as code the ZK server runs: definition by definition the analysis's, so that each is that one by unfolding. Two
 differ, each by a parameter or a line:
 
 * `ligeritoPZk` takes the commitment of levels ≥ 1 as an argument (`commit`): the analysis's is `commitP`, which
@@ -17,10 +17,7 @@ The proof file's bytes are the analysis's `encZk` (`FlockSoundness.Discharge.ZkV
 -/
 module
 
-public import Flock.With.Verify
 public import Flock.With.Zk
-public import Flock.Zk
-public import Flock.ZkProof
 
 @[expose] public section
 
@@ -259,6 +256,26 @@ def xhats (sv : Array F128) (q cols : Nat) : Array F128 :=
   let wh := whats sv q cols
   (List.range cols).foldl (fun t i => t ++ t.map (· * wh[i]!)) #[1]
 
+/-- `xhats` with each step of `2^12` or more products read from its factor's table (`F128.mulBy_mulTable`), built
+once a step. -/
+def Fast.xhatsFast (sv : Array F128) (q cols : Nat) : Array F128 :=
+  let wh := whats sv q cols
+  (List.range cols).foldl (fun t i =>
+    if 4096 ≤ t.size then
+      let tb := F128.mulTable wh[i]!
+      t ++ t.map (F128.mulBy tb)
+    else t ++ t.map (· * wh[i]!)) #[1]
+
+/-- Compiled code runs `xhatsFast`; proofs see `xhats`. Above `encodeRows` and `consW`, so they compile to it. -/
+@[csimp] theorem xhats_eq_xhatsFast : @xhats = @Fast.xhatsFast := by
+  funext sv q cols
+  simp only [xhats, Fast.xhatsFast]
+  congr 1
+  funext t i
+  split
+  · exact congrArg (t ++ ·) (Array.map_congr_left fun v _ => (F128.mulBy_mulTable _ v).symm)
+  · rfl
+
 /-- **The codeword** of an F-table at a level: `C[q][ℓ] = Σ_c g[c·2^lanes + ℓ]·X̂_c(ω_q)`. -/
 def encodeRows (lv : Level) (g : Array F128) : Array (Array F128) :=
   let lanes := 2 ^ lv.lanes
@@ -435,12 +452,61 @@ def addScaledFast (w v : Array F256) (b : F128) : Array F256 :=
 /-- `embedF` in tasks of `2^12` entries. -/
 def embedFFast (g : Array F128) : Array F256 := parTab 4096 (fun i => F256.ofF g[i]!) g.size
 
-/-- `consW` with a task to each query's `X̂` and its entries in tasks of `2^8`. -/
+/-- `ch 0 ++ ch 1 ++ … ++ ch (a − 1)`, a task to each (`parCat_eq`). -/
+@[specialize] def parCat {α : Type} (ch : Nat → Array α) (a : Nat) : Array α :=
+  ((Array.range a).map fun i => Task.spawn fun _ => ch i).foldl (fun acc t => acc ++ t.get) #[]
+
+theorem parCat_eq {α : Type} (ch : Nat → Array α) (f : Nat → α) (b : Nat) :
+    ∀ a, (∀ i, i < a → ch i = (Array.range b).map fun j => f (i * b + j)) →
+      parCat ch a = (Array.range (a * b)).map f
+  | 0, _ => by
+    simp only [parCat, Nat.zero_mul, Array.range_eq_empty_iff.mpr rfl, Array.map_empty, Array.foldl_empty]
+  | a + 1, h => by
+    have ih := parCat_eq ch f b a fun i hi => h i (by omega)
+    unfold parCat at ih ⊢
+    rw [Array.range_succ, Array.map_append, Array.foldl_append, ih, Nat.succ_mul, Array.range_add]
+    simp only [Task.spawn, List.map_toArray, List.map_cons, List.map_nil, List.foldl_toArray', List.foldl_cons,
+      List.foldl_nil, Array.map_append, Array.map_map, Function.comp_def]
+    rw [h a (by omega)]
+
+theorem expandNib_nibTableL (r : F128) : F128.expandNib (F128.nibTableL r) = F128.mulTableL r := by
+  rw [F128.mulTableL_eq_fast]
+  apply Array.ext (by simp [F128.expandNib, F128.mulTableLFast])
+  intro k h1 _
+  simp only [F128.expandNib, F128.mulTableLFast, Array.getElem_map, Array.getElem_range, Array.getElem_ofFn]
+
+/-- `consW`'s entries `lo, …, lo + n − 1`, a query at a time: query `j`'s products by its weight read from its table,
+expanded here from its nibble table `nbs[j]` (`F128.mulBy_mulTableL`), each added to its entry in `sumF`'s order
+(`consChunk_get`). The table is the task's own, so reading it counts no reference other tasks count. -/
+def consChunk (nbs xs : Array (Array F128)) (np lo n : Nat) : Array F128 :=
+  foldRange (fun acc j =>
+    let tb := F128.expandNib nbs[j]!
+    let x := xs[j]!
+    (Array.range n).map fun k => acc[k]! + F128.mulBy tb x[lo + k]!) 0 np (Array.replicate n 0)
+
+theorem consChunk_get (nbs xs : Array (Array F128)) (lo n : Nat) {k : Nat} (hk : k < n) (np : Nat) :
+    (consChunk nbs xs np lo n)[k]! =
+      sumF np fun j => F128.mulBy (F128.expandNib nbs[j]!) (xs[j]!)[lo + k]! := by
+  unfold consChunk
+  dsimp only
+  induction np with
+  | zero => rw [foldRange, sumF_zero, getElem!_eq _ (by simpa using hk), Array.getElem_replicate]
+  | succ np ih =>
+    rw [foldRange_succ]
+    try dsimp only
+    rw [getElem!_range_map _ hk, ih, sumF_succ]
+
+/-- `consW` with a task to each query's `X̂`; past `2^12` columns, its entries in tasks of `2^12` (`consChunk`), else
+in tasks of `2^8`. -/
 def consWFast (cols : Nat) (pos : Array Nat) (alpha : Array F128) : Array F128 :=
   let ea := eqTable alpha
   let sv := svTable (cols + 1)
   let xs := parTab 1 (fun j => xhats sv pos[j]! cols) pos.size
-  parTab 256 (fun c => sumF pos.size fun j => ea[j]! * (xs[j]!)[c]!) (2 ^ cols)
+  if 12 ≤ cols then
+    let nbs := parTab 1 (fun j => F128.nibTableL ea[j]!) pos.size
+    parCat (fun i => let ch := consChunk nbs xs pos.size (i * 4096) 4096; (Array.range 4096).map fun k => ch[k]!)
+      (2 ^ (cols - 12))
+  else parTab 256 (fun c => sumF pos.size fun j => ea[j]! * (xs[j]!)[c]!) (2 ^ cols)
 
 end Fast
 
@@ -465,6 +531,20 @@ open Fast in
   funext fun cols => funext fun pos => funext fun alpha => by
     simp only [consW, consWFast, parTab_eq]
     rw [range_map_get! (fun p => xhats (svTable (cols + 1)) p cols) pos]
+    split
+    · rename_i hc
+      symm
+      conv => rhs; rw [show 2 ^ cols = 2 ^ (cols - 12) * 4096 by
+        rw [show (4096 : Nat) = 2 ^ 12 from rfl, ← Nat.pow_add, Nat.sub_add_cancel hc]]
+      apply parCat_eq
+      intro i _
+      try dsimp only
+      apply Array.map_congr_left
+      intro k hk
+      rw [consChunk_get _ _ _ _ (Array.mem_range.1 hk)]
+      refine sumF_congr fun j hj => ?_
+      rw [getElem!_range_map _ hj, expandNib_nibTableL, F128.mulBy_mulTableL]
+    · rfl
 
 /-- `mleF` with its sum in tasks of `2^12` terms. -/
 def Fast.mleFFast (g : Array F128) (z : Array F128) : F128 :=

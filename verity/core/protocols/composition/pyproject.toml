@@ -14,12 +14,26 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# Test-only: `lake` builds the registration log's check (`core-registration`, the core interface's, whose hardware
-# entries the Site's Python, `verity.core.site`, mirrors) and the onsite and
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = ["tests/test_composition_difftest.py", "tests/test_registration_difftest.py"]
+# its whole run, slow tests included, takes about two hours on a loaded node, past check's default bound per suite
+# (`suites.py`'s SUITE_TIMEOUT_S, one hour), which killed it mid-run
+timeout_s = 10800
+# check runs it as three parts by test id (`lean-suites:verity-core-composition:K/3`, `suites.py`'s `id_part_of`), each
+# collecting every file and running the tests whose node id hashes to K, so that ci.toml's plans spread it over three shards
+parts = 3
+# Test-only: `lake` builds the registration log's check (`core-registration`, the core interface's) and the onsite and
 # remote packages beside this one (each product's executable, whose `serve` the
 # harness drives) and, through their path requires, the core interface, C-Flock's verifier, and the ported components'
+<<<<<<< ours
 # Lean: remote's sampled proofs (`core_vstar_recursive`: its form's dispatch and the recursive audit) over the one-stage
 # audit, onsite's (with the LMS verifier and the difftest harness's Lean), PoUW's check (with
+||||||| base
+# Lean: sampled proofs' one-stage audit (with the LMS verifier and the difftest harness's Lean), PoUW's check (with
+=======
+# Lean: sampled proofs (`core_vstar_recursive`: its form's dispatch and the recursive audit) over its one-stage audit
+# (with the LMS verifier and the difftest harness's Lean), PoUW's check (with
+>>>>>>> theirs
 # its window, commitments, and core's identity and randomness), the network certifier's period check (with the
 # certifier program and the LMS verifier), the inference-only policy's check (`nci_check`), PoUS's run check (with the
 # memory challenger's Lean), the PoUB session's and the memory challenger's wipe. The reference runs the
@@ -37,11 +51,11 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/settings.py", "verit
           "verity/core/difftest", "verity/core/protocols/__init__.py", "verity/core/protocols/profile.py",
           "verity/core/protocols/registration.py", "verity/core/site", "verity/core/wire",
           "verity/core/protocols/onsite", "verity/core/protocols/remote", "verity/core/protocols/interface",
-          "verity/core/protocols/pouw", "verity/core/protocols/sampled_proofs",
+          "verity/core/protocols/pouw", "verity/core/protocols/spot",
           "verity/core/protocols/network", "verity/core/protocols/certifier",
           "verity/core/protocols/pous", "verity/core/protocols/remote_bandwidth",
           "verity/core/devices/memory_challenger/lean", "verity/core/attest/lean",
-          "verity/core/service/sampled_proofs", "verity/core/service/vstar/recursive", "verity/core/service/flock",
+          "verity/core/service/spot", "verity/core/service/vstar/recursive", "verity/core/service/flock",
           "verity/core/primitives/lms/lean",
           "verity/core/primitives/identity", "verity/core/primitives/randomness",
           # the deployment layer and its wire, which space's and bandwidth's challenger-host sides are started through

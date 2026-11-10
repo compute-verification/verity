@@ -1,10 +1,14 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Exec.FramesRep
-public import Proofs.Flock.Soundness.Discharge.Exec.Retained
+public import Proofs.Flock.Soundness.Discharge.Exec.Event
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Exec.Retained
+import Proofs.Flock.Soundness.Discharge.Exec.Tables
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
-# flock-verify's acceptance, round by round (R11b, the executable side)
+# flock-verify's acceptance, round by round (the decoder premise, the executable side)
 
 `rep_rounds` (`FramesRep.lean`) says which bytes each round of a verified rep's stream retained, on a stream whose
 rounds all retained their bytes, and `decode_allRetained` says every stream of an accepted record is such a stream

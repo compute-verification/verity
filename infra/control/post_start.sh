@@ -1,5 +1,5 @@
 #!/bin/sh
-# vy-control-verity's services, from the network volume (infra, 1 Oct). Every piece of state lives under /data; the container disk
+# vy-control-verity's services, from the network volume. Every piece of state lives under /data; the container disk
 # holds only these links, which a RunPod reset (any pod edit, even a rename) wipes along with /post_start.sh itself: after a reset,
 # run `sh /data/boot/post_start.sh` once. The guard is started here too, so a restart never leaves the budgets unguarded; this is
 # the only pod that may run it (budgets.GUARD_HOST).
@@ -43,6 +43,7 @@ setsid -f /data/infra/store_index.sh > /dev/null 2>&1 < /dev/null
 setsid -f /data/infra/store_gc.sh > /dev/null 2>&1 < /dev/null
 setsid -f /data/infra/fixtures_export.sh > /dev/null 2>&1 < /dev/null
 setsid -f /data/infra/agent_watch.sh > /dev/null 2>&1 < /dev/null
+setsid -f /data/infra/promote-loop.sh > /dev/null 2>&1 < /dev/null
 setsid -f /data/infra/cloud_watch.sh > /dev/null 2>&1 < /dev/null
 setsid -f /data/infra/control-disk/run.sh > /dev/null 2>&1 < /dev/null
 setsid -f /data/watchers/run.sh > /dev/null 2>&1 < /dev/null

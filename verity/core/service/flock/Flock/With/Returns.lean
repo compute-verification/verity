@@ -6,8 +6,8 @@ on the verifier's setups.
 -/
 module
 
-public import Flock.Verify
 public import Flock.With.Hashes
+public import Flock.Statement
 
 @[expose] public section
 

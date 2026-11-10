@@ -25,23 +25,39 @@ exceeds 32 runs another instantiation (kLogMaxSplits 6 and up), which `check_com
 
 A sequence whose dynamic count is 1 is written unsplit (`is_split = num_splits > 1` in the varlen epilogue): `Attention_v4`.
 
-Registered functions (both `_v1`):
+With the lse.  FA3 writes every row's lse beside its output, and vLLM reads it when a dense prefill chunk has context (the
+context's and the suffix's, which `MergeAttnStates_v1` merges).  The unsplit kernel's `finalize` is the split one's
+(hopper/softmax.h:137-152): in the SASS of the head-256 bf16 instances (128x80x256, varlen, causal or not, split or not), its
+plain path computes `lse = sum != 0 ? FFMA.FTZ(scale_log2 * LN2, row_max, FMUL.FTZ(MUFU.LG2(sum), LN2)) : -inf` from the
+unguarded running max.  Their other path reads attention sinks, which these Definitions don't take.  So
+`AttentionHeadLse_v1` is `AttentionHead_v4`'s blocks ended by `SparseMlaSplitEnd_v1` with its partial in bf16, which is
+`AttentionHead_v4`'s output word.  `AttentionHeadSplitLse_v1` is `AttentionHeadSplit_v1` with `SparseMlaCombineLse_v1`, the
+lse the combine kernel stores.
+
+Registered functions (all `_v1`):
   AttentionHeadSplit{T,D,BN,DOT,INV,MASKED_FROM,PER}   (q: D bf16, k: T x D bf16, v: T x D bf16) -> D bf16
   AttentionSplit{T,NH,KVH,D,BN,DOT,INV,MASKED_FROM,PER} (q: NH x D, kc: T x KVH x D, vc: T x KVH x D) -> NH x D bf16
+  AttentionHeadLse{T,D,BN,DOT,INV,MASKED_FROM}         (q: D bf16, k: T x D bf16, v: T x D bf16) -> (D bf16, lse)
+  AttentionHeadSplitLse{T,D,BN,DOT,INV,MASKED_FROM,PER} (q: D bf16, k: T x D bf16, v: T x D bf16) -> (D bf16, lse)
 """
 from __future__ import annotations
 
 from verity.ml.circuits.defs import bind, composite
 from verity.ml.circuits.ops.prims import ZERO32
-from verity.ml.circuits.refs import Coll, array_of, concat, strided_view
-from verity.ml.circuits.types import Array
+from verity.ml.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
+from verity.ml.circuits.types import Array, Tuple
+from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry import sparse_mla_split as W
 from verity.ml.definitions.registry.b1 import ZERO16
 from verity.ml.definitions.registry.fa3_check_inf import AttnBlockV4
-from verity.ml.definitions.registry.prims import BF16
+from verity.ml.definitions.registry.prims import BF16, F32
 
 _CONF = ("model-untested: read from vllm-flash-attn 506341a1's split mainloop, epilogue and combine (the module docstring's "
          "files); tests/properties/glm53_fa3_prefill_capture_gpu.py's served-split class is its hardware check")
+_LSE_CONF = ("model-untested: the output as AttentionHead_v4 and AttentionHeadSplit_v1 state it, the lse read from "
+             "vllm-flash-attn 506341a1's finalize and combine and their cc 9.0 SASS (the module docstring); no capture records "
+             "that lse yet, and the check that would establish it is tests/properties/glm53_fa3_prefill_capture_gpu.py with "
+             "return_softmax_lse on the context and suffix launches")
 
 
 def split_per(T_seq: int, row: int, BM: int, BN: int, NS: int) -> int:
@@ -68,16 +84,19 @@ def check_combine_bound(static: int) -> None:
                          f"{W.LANES} lanes), which SparseMlaCombine does not state")
 
 
-def head_split(B, S, block_of, end, combine_of, zero, q, k, v):
-    """`AttentionHeadSplit`'s body: per split of `row_splits(T, BN, PER)` its blocks last to first (``block_of(nvis, first,
-    check)``), ``end`` and then ``combine_of(nsplit)`` over the splits; ``zero(width)`` a zero word."""
-    T, D, BN, MF, PER = S.T, S.D, S.BN, S.MASKED_FROM, S.PER
+def head_split(B, S, tile_of, end, combine_of, zero, q, k, v, *, per: int | None = None, finish=None,
+               name: str = "AttentionHeadSplit"):
+    """`AttentionHeadSplit`'s body: per split of `row_splits(T, BN, PER)` its blocks last to first (``tile_of(nvis, first,
+    check)``), ``end`` and then ``combine_of(nsplit)`` over the splits; ``zero(width)`` a zero word.  ``per`` replaces S.PER,
+    ``finish(lses, parts)``, given, replaces the combine, and ``name`` heads a refusal."""
+    T, D, BN, MF = S.T, S.D, S.BN, S.MASKED_FROM
+    PER = S.PER if per is None else per
     nb = -(-T // BN)
     if not 0 <= MF <= nb - 1:
-        raise ValueError(f"AttentionHeadSplit: MASKED_FROM {MF} outside blocks 0..{nb - 1}")
+        raise ValueError(f"{name}: MASKED_FROM {MF} outside blocks 0..{nb - 1}")
     splits = row_splits(T, BN, PER)
     if len(splits) > W.LANES:
-        raise ValueError(f"AttentionHeadSplit: {len(splits)} splits, the combine's warp holds {W.LANES}")
+        raise ValueError(f"{name}: {len(splits)} splits, the combine's warp holds {W.LANES}")
     zero_row = None
     lses, parts = [], []
     for b0, b1 in splits:
@@ -93,7 +112,7 @@ def head_split(B, S, block_of, end, combine_of, zero, q, k, v):
                 kb = Coll(Array(BN, kb.type.elem), concat([kb.refs] + pad))
                 vb = Coll(Array(BN, vb.type.elem), concat([vb.refs] + pad))
             first = b == b1 - 1
-            blk = block_of(hi - lo, first, first or b >= MF)
+            blk = tile_of(hi - lo, first, first or b >= MF)
             if first:
                 z = zero(32)
                 st = B.call(blk, q, kb, vb, z, Coll(Array(4, z.type), concat([z.refs] * 4)), Coll(Array(D, z.type), concat([z.refs] * D)))
@@ -103,6 +122,8 @@ def head_split(B, S, block_of, end, combine_of, zero, q, k, v):
         e = B.call(end, m, l, o)
         parts.append(e[0])
         lses.append(e[1])
+    if finish is not None:
+        return finish(lses, parts)
     return B.call(combine_of(len(parts)), array_of(lses), array_of(parts))
 
 
@@ -127,17 +148,47 @@ def _attention_type(S, bf16=BF16):
              ("vc", Array(S.T, Array(S.KVH, Array(S.D, bf16))))), Array(S.NH, Array(S.D, bf16)))
 
 
+def _lse_head_type(S, bf16=BF16, f32=F32):
+    return _head_type(S, bf16)[0], Tuple(Array(S.D, bf16), f32)
+
+
+def _word_steps(B, S):
+    """The word heads' `head_split` steps: (``tile_of``, the split end, ``zero``)."""
+    def tile_of(nvis, first, check):
+        return bind(AttnBlockV4, D=S.D, NVIS=nvis, FIRST=first, BN=S.BN, DOT=S.DOT, CHECK=check)
+    end = bind(W.SparseMlaSplitEnd, DV=S.D, INV=S.INV, SCALE=S.D ** -0.5)
+    zeros = {16: lambda: B.call(ZERO16), 32: lambda: B.call(ZERO32)}
+    return tile_of, end, lambda w: zeros[w]()
+
+
 @composite("AttentionHeadSplit", 1, ["T", "D", "BN", "DOT", "INV", "MASKED_FROM", "PER"], _head_type, conformance=_CONF)
 def AttentionHeadSplit(B, S, q, k, v):
     """One query row at position T-1 of FA3's split causal prefill over keys 0..T-1: per split of `row_splits(T, BN, PER)` its
     `AttnBlock_v4`s last to first (the split's first visited one FIRST, block b with `CHECK = FIRST or b >= MASKED_FROM`),
     `SparseMlaSplitEnd_v1{DV=D, INV, SCALE=D^-0.5}`, then `SparseMlaCombine_v1{NSPLIT, DV=D, INV}` over the row's splits."""
-    def block_of(nvis, first, check):
-        return bind(AttnBlockV4, D=S.D, NVIS=nvis, FIRST=first, BN=S.BN, DOT=S.DOT, CHECK=check)
-    end = bind(W.SparseMlaSplitEnd, DV=S.D, INV=S.INV, SCALE=S.D ** -0.5)
-    zeros = {16: lambda: B.call(ZERO16), 32: lambda: B.call(ZERO32)}
-    return head_split(B, S, block_of, end, lambda n: bind(W.SparseMlaCombine, NSPLIT=n, DV=S.D, INV=S.INV),
-                      lambda w: zeros[w](), q, k, v)
+    tile_of, end, zero = _word_steps(B, S)
+    return head_split(B, S, tile_of, end, lambda n: bind(W.SparseMlaCombine, NSPLIT=n, DV=S.D, INV=S.INV), zero, q, k, v)
+
+
+@composite("AttentionHeadLse", 1, ["T", "D", "BN", "DOT", "INV", "MASKED_FROM"], _lse_head_type, conformance=_LSE_CONF)
+def AttentionHeadLse(B, S, q, k, v):
+    """`AttentionHead_v4{T, D, BN, DOT, INV, MASKED_FROM}` with its lse, the pair FA3's unsplit kernel writes: the row's
+    `AttnBlock_v4`s last to first (block b with `CHECK = b >= MASKED_FROM`), `SparseMlaSplitEnd_v1{DV=D, INV, SCALE=D^-0.5}`,
+    then (bf16 of the partial, the lse)."""
+    tile_of, end, zero = _word_steps(B, S)
+
+    def finish(lses, parts):
+        return tuple_of(B.batch(P.F2fpBf16, parts[0], axes=(0,)), lses[0])
+    return head_split(B, S, tile_of, end, None, zero, q, k, v, per=-(-S.T // S.BN), finish=finish, name="AttentionHeadLse")
+
+
+@composite("AttentionHeadSplitLse", 1, ["T", "D", "BN", "DOT", "INV", "MASKED_FROM", "PER"], _lse_head_type, conformance=_LSE_CONF)
+def AttentionHeadSplitLse(B, S, q, k, v):
+    """`AttentionHeadSplit_v1{T, D, BN, DOT, INV, MASKED_FROM, PER}` with its lse: the same splits, combined by
+    `SparseMlaCombineLse_v1{NSPLIT, DV=D, INV}`."""
+    tile_of, end, zero = _word_steps(B, S)
+    return head_split(B, S, tile_of, end, lambda n: bind(W.SparseMlaCombineLse, NSPLIT=n, DV=S.D, INV=S.INV), zero, q, k, v,
+                      name="AttentionHeadSplitLse")
 
 
 @composite("AttentionSplit", 1, ["T", "NH", "KVH", "D", "BN", "DOT", "INV", "MASKED_FROM", "PER"], _attention_type, conformance=_CONF)
@@ -148,6 +199,7 @@ def AttentionSplit(B, S, q, kc, vc):
     return attention(B, S, head, q, kc, vc, 1)
 
 
-FA3_SPLIT_COMPOSITES = [AttentionHeadSplit, AttentionSplit]
+FA3_SPLIT_COMPOSITES = [AttentionHeadSplit, AttentionSplit, AttentionHeadLse, AttentionHeadSplitLse]
 
-__all__ = ["AttentionHeadSplit", "AttentionSplit", "FA3_SPLIT_COMPOSITES", "check_combine_bound", "row_splits", "split_per"]
+__all__ = ["AttentionHeadLse", "AttentionHeadSplit", "AttentionHeadSplitLse", "AttentionSplit", "FA3_SPLIT_COMPOSITES",
+           "check_combine_bound", "row_splits", "split_per"]

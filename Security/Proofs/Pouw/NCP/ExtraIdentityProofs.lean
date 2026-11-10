@@ -2,6 +2,8 @@ module
 
 public import Definitions.Pouw.NCP.ExtraIdentity
 public import Proofs.Pouw.NCP.GameProofs
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # The admissible R with an extra checkpoint identity

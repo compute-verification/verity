@@ -1,7 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Refine.Run
-public import Proofs.Flock.Soundness.Game.Interleave
+public import Definitions.Flock.Game
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Runs compose

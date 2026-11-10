@@ -80,23 +80,23 @@ def CapAtZ (r ℓ : ℕ) (out : OutZC 𝔽 D Sl) (d : Model.Cap D) : Prop :=
 
 /-- **The fork event at rep `r`'s level `ℓ + 1` of table `j`**: table `j`'s outputs in both runs record one cap `d` for
 it and open a position of it to different rows. -/
-def ForkEvZ (Hs : Hashes 𝔽 D Sl) (sch : Accounting.Schedule) (j r ℓ : ℕ) (a a' : List (OutZC 𝔽 D Sl)) : Prop :=
+def ForkEvZ (Hs : Hashes 𝔽 D Sl) (sch : FlockSoundness.Accounting.Schedule) (j r ℓ : ℕ) (a a' : List (OutZC 𝔽 D Sl)) : Prop :=
   ∃ d, CapAtZ r ℓ (a.getD j dfltOutZC) d ∧ CapAtZ r ℓ (a'.getD j dfltOutZC) d ∧
     ∃ p, Rewinding.ConflictAt (fun outs : List (OutZC 𝔽 D Sl) =>
       opRZ Hs.H Hs.E Hs.Lf sch r (ℓ + 1) d (outs.getD j dfltOutZC)) (a, a') p
 
 /-- Table `j`'s output opens some position at rep `r`'s level `ℓ + 1`. -/
-def OpensAtZ (Hs : Hashes 𝔽 D Sl) (sch : Accounting.Schedule) (j r ℓ : ℕ) (a : List (OutZC 𝔽 D Sl)) : Prop :=
+def OpensAtZ (Hs : Hashes 𝔽 D Sl) (sch : FlockSoundness.Accounting.Schedule) (j r ℓ : ℕ) (a : List (OutZC 𝔽 D Sl)) : Prop :=
   ∃ d p, (opRZ Hs.H Hs.E Hs.Lf sch r (ℓ + 1) d (a.getD j dfltOutZC) p).isSome
 
-theorem forkEvZ_opens {Hs : Hashes 𝔽 D Sl} {sch : Accounting.Schedule} {j r ℓ : ℕ} {a a' : List (OutZC 𝔽 D Sl)}
+theorem forkEvZ_opens {Hs : Hashes 𝔽 D Sl} {sch : FlockSoundness.Accounting.Schedule} {j r ℓ : ℕ} {a a' : List (OutZC 𝔽 D Sl)}
     (h : ForkEvZ Hs sch j r ℓ a a') : OpensAtZ Hs sch j r ℓ a ∧ OpensAtZ Hs sch j r ℓ a' :=
   let ⟨d, _, _, p, h₁, h₂, _⟩ := h
   ⟨⟨d, p, h₁⟩, ⟨d, p, h₂⟩⟩
 
 /-- **The dead branches' empty rows open nothing.** -/
 theorem opRZ_nul (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H)
-    (sch : Accounting.Schedule) (r ℓ : ℕ) (d : Model.Cap D) {out : OutZC 𝔽 D Sl} (h : out.opens = nulOpZ)
+    (sch : FlockSoundness.Accounting.Schedule) (r ℓ : ℕ) (d : Model.Cap D) {out : OutZC 𝔽 D Sl} (h : out.opens = nulOpZ)
     (p : Fin (2 ^ (lvOf sch ℓ).logLen)) : opRZ H E Lf sch r ℓ d out p = none := by
   unfold opRZ Exec.opOfL
   rw [List.filter_eq_nil_iff.2 fun x hx => ?_]
@@ -104,7 +104,7 @@ theorem opRZ_nul (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Mer
   · simp only [decide_eq_true_eq, not_and]
     exact fun _ => not_verifiedL_nil H E Lf d _ _ (slotOpensZ_row_nil h hx)
 
-theorem not_opensAtZ_nul {mPts : ℕ} (Hs : Hashes 𝔽 D Sl) (ts : List (TabZK 𝔽 mPts)) (sch : Accounting.Schedule)
+theorem not_opensAtZ_nul {mPts : ℕ} (Hs : Hashes 𝔽 D Sl) (ts : List (TabZK 𝔽 mPts)) (sch : FlockSoundness.Accounting.Schedule)
     {j : ℕ} (hj : j < ts.length) (r ℓ : ℕ) (caps : Fin ts.length → Model.Cap D) (outs : List (OutZC 𝔽 D Sl))
     (h : ∀ i : Fin ts.length, ∃ pend, outs.getD i dfltOutZC = outJ Hs ts i (caps i) pend nulOpZ) :
     ¬ OpensAtZ Hs sch j r ℓ outs := by
@@ -331,7 +331,7 @@ def ZkLiveFork {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readabl
 end Gen
 
 /-- **The simulated fork is aligned with the masked fork rounds at the caps**: at every masked statement in scope that
-sets up at a draw, every prover and tape, every table `j` and table of columns, at each tape the fork at rep `r`'s
+sets up at a sample, every prover and tape, every table `j` and table of columns, at each tape the fork at rep `r`'s
 level-`ℓ + 1` table node against the simulated strategy after `Commit` is at most the fork after `zkRd j i` coins of
 `ForkEvZ` (`ZkAlignQ`). -/
 def ZkForkAlign (x : Claims.Msg) : Prop :=
@@ -351,7 +351,7 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **The simulated fork is aligned with the masked fork rounds at the caps**: at every masked statement in scope that
-sets up at a draw, every prover and tape, every table `j` and table of columns, at each tape the fork at rep `r`'s
+sets up at a sample, every prover and tape, every table `j` and table of columns, at each tape the fork at rep `r`'s
 level-`ℓ + 1` table node against the simulated strategy after `Commit` is at most the fork after `zkRd j i` coins of
 `ForkEvZ` (`ZkAlignQ`). -/
 def ZkForkAlign (x : Claims.Msg) : Prop :=
@@ -368,7 +368,7 @@ def ZkForkAlign (x : Claims.Msg) : Prop :=
 
 end Gen
 
-/-- **The live fork event's collision at the caps**: at every masked statement in scope that sets up at a draw, every
+/-- **The live fork event's collision at the caps**: at every masked statement in scope that sets up at a sample, every
 prover and tape, every table `j` and table of full-width columns, two accepting runs of `P` at the masked simulator's
 coins whose decoded live outcomes have `ForkEvZ` collide among the verifier's calls in the two. -/
 def ZkForkClash (x : Claims.Msg) : Prop :=
@@ -392,7 +392,7 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The live fork event's collision at the caps**: at every masked statement in scope that sets up at a draw, every
+/-- **The live fork event's collision at the caps**: at every masked statement in scope that sets up at a sample, every
 prover and tape, every table `j` and table of full-width columns, two accepting runs of `P` at the masked simulator's
 coins whose decoded live outcomes have `ForkEvZ` collide among the verifier's calls in the two. -/
 def ZkForkClash (x : Claims.Msg) : Prop :=

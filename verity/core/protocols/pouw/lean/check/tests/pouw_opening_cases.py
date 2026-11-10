@@ -1,20 +1,20 @@
 """The opening difftest's cases: generated openings of one unit, each ``{"params", "commitment": hex, "units", "unit",
 "pub": hex, "opening", "salt": hex or null}``, the arguments of `core_check.opening` (`params` and the registration's
-bytes as `answer` reads them, `units` null for a unit opened undrawn, `salt` a certified window's).
+bytes as `answer` reads them, `units` null for a unit opened unsampled, `salt` a certified execution phase's).
 
-A case is an honest opening (a window of P entries, a call's and the filler's each with small side trees, the unit one
+A case is an honest opening (an execution phase of P entries, a call's and the filler's each with small side trees, the unit one
 of their tiles, its proof's public file a header (over the template's pinned circuit, `core_check.TILES`) and the two
 rows' b ‖ c, the registration's entries root over the
 entries' leaves), then one mutation (`MUTATIONS`) aimed at one refusal of `core_check.opening`, or at a reading both
 sides must share (hex as `bytes.fromhex` reads it, the header's schemas by port name, in any written order).  A header
 whose keys sort otherwise than its circuit's ports (`schemas-between`, `schemas-shadowed`, `salted-header-order`) is
 refused, the rows never read in key order.  A salted case (`SALTED`) is
-the same over a certified window (`CERTIFIED`) and a salted template (`core_check.Salted`): each entry's side trees hold R
+the same over a certified execution phase (`CERTIFIED`) and a salted template (`core_check.Salted`): each entry's side trees hold R
 A rows per tile row and C B rows per tile column, the opening lists the unit's R and C rows, and the proof's body holds
-their b ‖ c and then its public row's, `core_check.public_bc` of the window's context, its salt, the unit and the entry's
-roots.  The windows come from a few
+their b ‖ c and then its public row's, `core_check.public_bc` of the execution phase's context, its salt, the unit and the entry's
+roots.  The execution phases come from a few
 fixed contexts, so the side trees' pad nodes, which only the generator computes, are computed once per side domain.
-`tests/test_difftest.py` draws them for the harness, and `verity/core/protocols/pouw/tests/test_pouw_core_check.py`
+`tests/test_difftest.py` samples them for the harness, and `verity/core/protocols/pouw/tests/test_pouw_core_check.py`
 holds each mutation to the refusal it aims at.
 """
 from __future__ import annotations
@@ -29,10 +29,10 @@ from verity.core.protocols.pouw import window as Wd
 from verity.ml.commitments.merkle import tree_levels
 from verity.ml.commitments.rowleaf import row_leaf
 
-#: (context, program, partition, entries): the windows the generator opens
+#: (context, program, partition, entries): the execution phases the generator opens
 WINDOWS = [(f"served-zk/opening-{i}/{random.Random(i).randbytes(8).hex()}", random.Random(10 + i).randbytes(64).hex(),
             random.Random(20 + i).randbytes(64).hex(), n) for i, n in enumerate((4, 5))]
-#: certified windows: each context names its PoUW window (`salt.context`)
+#: certified execution phases: each context names its PoUW execution phase (`salt.context`)
 CERTIFIED = [(PS.context(f"served-zk/opening-c{i}", i, random.Random(30 + i).randbytes(64).hex()),
               random.Random(40 + i).randbytes(64).hex(), random.Random(50 + i).randbytes(64).hex(), n)
              for i, n in enumerate((4, 5))]
@@ -53,9 +53,9 @@ def _header(schemas: dict, circuit: str) -> dict:
 
 
 def honest(rng: random.Random, salted: bool = False, context: str | None = None, salt: bytes | None = None) -> dict:
-    """A window from `WINDOWS`, its entries' tree and side trees, and one unit's opening and proof's public file; with
-    `salted`, a certified window from `CERTIFIED` of a salted template, and the window's salt (`context` and `salt`, when
-    given, in place of the window's and a random one)."""
+    """An execution phase from `WINDOWS`, its entries' tree and side trees, and one unit's opening and proof's public file; with
+    `salted`, a certified execution phase from `CERTIFIED` of a salted template, and the execution phase's salt (`context` and `salt`, when
+    given, in place of the execution phase's and a random one)."""
     ctx, program, partition, n = rng.choice(CERTIFIED if salted else WINDOWS)
     context = ctx if context is None else context
     base = cases.honest(rng)
@@ -282,7 +282,7 @@ def instance(rng: random.Random, name: str = "honest") -> dict:
 
 
 def _salted(case: dict, rng: random.Random, name: str) -> None:
-    """A salted case's mutation `name`: the verifier's salt, the window's context, the public row the proof's body holds,
+    """A salted case's mutation `name`: the verifier's salt, the execution phase's context, the public row the proof's body holds,
     the header's rows, or the opened rows."""
     op, head, lay, entry = case["opening"], case["header"], case["layout"], case["entry"]
     at = (lay.r + lay.c) * CC.BC_BYTES
@@ -338,7 +338,7 @@ def _salted(case: dict, rng: random.Random, name: str) -> None:
 def _reopen(case: dict, rng: random.Random, name: str) -> None:
     """Point the opening at a unit its entry doesn't hold (`out-of-range`, or any unit of an empty entry, `kind-none`), or
     at a row past the side tree (`past-side`: an entry whose range claims more tiles than its sides hold), the entry and
-    its window path re-committed so only that rule refuses."""
+    its execution phase path re-committed so only that rule refuses."""
     entry = case["entry"]
     if name == "past-side":
         entry = Wd.Entry(entry.kind, entry.lo, entry.lo + (1 << 13) * entry.n_b + 1, entry.n_a, entry.n_b, entry.root_a,

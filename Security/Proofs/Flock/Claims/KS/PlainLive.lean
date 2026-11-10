@@ -38,7 +38,7 @@ theorem heq_send {M : Type} {k k' : M → Game β} (e : Game.send M k = Game.sen
   obtain rfl := eq_of_heq h
   exact ⟨rfl, HEq.rfl⟩
 
-/-- Equal strategies of equal games drawing a coin agree at each coin. -/
+/-- Equal strategies of equal games sampling a coin agree at each coin. -/
 theorem heq_coin {C : Type} {iF iF' : Fintype C} {iN : Nonempty C} {k k' : C → Game β} (hk : k = k')
     {s : Strategy (@Game.coin β C iF iN k)} {s' : Strategy (@Game.coin β C iF' iN k')} (h : HEq s s') (c : C) :
     HEq (s c) (s' c) := by
@@ -239,7 +239,7 @@ theorem plainRepNs_length {spec : SessionSpec} {st : Stmt} {s : Flock.Schedule} 
 table whose schedule has at least two levels. -/
 theorem plainLive_schedLK (keep : Bool → Bool) {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) (ht : tables false x = [(spec, st)])
-    {sch : Accounting.Schedule} (hsch : Accounting.fast100 st.m = some sch) (h2 : 2 ≤ sch.levels.length)
+    {sch : FlockSoundness.Accounting.Schedule} (hsch : Accounting.fast100 st.m = some sch) (h2 : 2 ≤ sch.levels.length)
     (hw : 2 * spec.mPts ≤ 65536) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (u : plainTape x)
     (pts : Fin 2 → Fin spec.mPts → 𝔽) :
     SchedL (plainDg spec) (plainLiveK keep x spec st hw P ω u).1 pts (plainN x) (fun _ _ => []) (repRounds false spec st)
@@ -260,7 +260,7 @@ theorem plainLive_schedLK (keep : Bool → Bool) {x : Claims.Msg} {ins : Ins} {s
 /-- `plainLive_schedLK` at the deployed plain verifier (`keep := id`). -/
 theorem plainLive_schedL {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) (ht : tables false x = [(spec, st)])
-    {sch : Accounting.Schedule} (hsch : Accounting.fast100 st.m = some sch) (h2 : 2 ≤ sch.levels.length)
+    {sch : FlockSoundness.Accounting.Schedule} (hsch : Accounting.fast100 st.m = some sch) (h2 : 2 ≤ sch.levels.length)
     (hw : 2 * spec.mPts ≤ 65536) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (u : plainTape x)
     (pts : Fin 2 → Fin spec.mPts → 𝔽) :
     SchedL (plainDg spec) (plainLive x spec st hw P ω u).1 pts (plainN x) (fun _ _ => []) (repRounds false spec st)

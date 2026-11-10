@@ -197,11 +197,11 @@ SparseMlaCombineV2 = flat("SparseMlaCombine", 2, ["NSPLIT", "DV", "INV"], lambda
 def _head_split(B, S, q_nope, q_rope, kv):
     """`SparseMlaHeadSplit_v1`'s body on bits over `SparseMlaBlock_v2`, `SparseMlaHead_v2` (NS = 1), `SparseMlaSplitEnd_v2` and
     `SparseMlaCombine_v2`."""
-    def block_of(nvis, first):
+    def tile_of(nvis, first):
         return bind(BSM.SparseMlaBlockV2, DR=S.DR, DV=S.DV, NVIS=nvis, FIRST=first, BN=S.BN, DOT=S.DOT, SCALE=S.SCALE)
     unsplit = bind(BSM.SparseMlaHeadV2, T=S.T, DR=S.DR, DV=S.DV, BN=S.BN, DOT=S.DOT, INV=S.INV, SCALE=S.SCALE)
     end = bind(SparseMlaSplitEndV2, DV=S.DV, INV=S.INV, SCALE=S.SCALE)
-    return W.head_split(bit_steps(B), S, block_of, unsplit, end,
+    return W.head_split(bit_steps(B), S, tile_of, unsplit, end,
                         lambda n: bind(SparseMlaCombineV2, NSPLIT=n, DV=S.DV, INV=S.INV), q_nope, q_rope, kv)
 
 

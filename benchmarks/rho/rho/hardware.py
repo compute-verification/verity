@@ -84,7 +84,7 @@ class Fleet:
     #: monitored locations
     count: float
     #: `ε_dark`: the dark leaves' share of the inventory's capacity, `Φ(L_dark) / Φ_total`
-    eps_dark: float
+    eps_unreg: float
     #: the share of a monitored location's gates a construction trains with, and the one its served work runs at
     mfu_train: float
     mfu_serve: float

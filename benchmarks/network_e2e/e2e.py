@@ -1,4 +1,4 @@
-"""network-e2e: network accounting end to end on a served model, as one report. A certifier-serve rehearsal's runs (the
+"""network-e2e: network certification end to end on a served model, as one report. A certifier-serve rehearsal's runs (the
 network certifier in front of a served endpoint, `certifier_serve.py`), N2's verdict of record on every link-window and
 the link's network verdict (`LinkWindows.verify` through the proof system's stream, `network_verdict`), every
 link-window's head checks proved by Flock ``prove --zk`` behind the Lean ZK server and held by Lean (`n2_zk.prove`), and
@@ -22,7 +22,7 @@ then runs this. The README says what the report establishes and what it doesn't.
   ``--upstream``, ``--vllm`` or ``--endpoint-peer`` the rehearsal is run first (`certifier_serve.py rehearse`, honest,
   late and extra, every option this file doesn't take passed on) into ``DIR/rehearsal``; ``--endpoint-peer NAME:PORT``
   reaches another node's endpoint on its loopback through an ssh forward (`forward`), so the certifier runs off the
-  prover's node, though not on the auditor host. The negatives' drop, when the rehearsal ran it, is a negative (refused
+  developer's node, though not on the auditor host. The negatives' drop, when the rehearsal ran it, is a negative (refused
   by N2's counts, and on the advice profile by the rehearsal's own check), and its token is refused only by the I/O tie
   (``PENDING``): on the advice profile, where the tie is required (`chain.tie`, `chain.tie_gate`), token is a negative
   it must refuse at the link-windows its changed ids fall in; on the others, where the tie doesn't run, a row pending
@@ -135,7 +135,7 @@ CLAIM = {
         "The rehearsal is a rehearsal: the client's link is loopback, its check plays the firewall and the challenger "
         "in one process, and it publishes the records, certificates and certifier's salts (witness) so that its check "
         "can be replayed (certifier_serve.py's docstring). Off the gate the certifier is a process on the host that "
-        "ran the rehearsal, which against an endpoint on its own loopback is the prover's node, not an auditor host "
+        "ran the rehearsal, which against an endpoint on its own loopback is the developer's node, not an auditor host "
         "(the report's 'where' says which). n2_zk runs the prover, the firewall and the verifier, whose live coins "
         "the proofs take, on one node. The model is the one the plan names: whether it was cut or full, and the "
         "response length, are the run's (the report's 'tokens').",
@@ -275,13 +275,13 @@ def where(runs: dict[str, dict], peer: str | None = None) -> dict:
                          + (f"; {', '.join(off)} off the gate" if off else "")}
     if peer is not None:
         return {"upstream": f"{peer} (its 127.0.0.1, forwarded to {upstream})",
-                "where": f"off the prover's node: better than the loopback, though not yet the auditor host (the "
+                "where": f"off the developer's node: better than the loopback, though not yet the auditor host (the "
                          f"certifier on {socket.gethostname()}, the endpoint on {peer.rsplit(':', 1)[0]} through an "
                          f"ssh forward)"}
     host = urllib.parse.urlsplit(upstream or "").hostname or ""
     local = host == "localhost" or host.startswith("127.") or host == "::1"
     return {"upstream": upstream, "where": "off the gate: the certifier on the host that ran the rehearsal" +
-            (", the endpoint's own (loopback), so the prover's node, not an auditor host" if local else "")}
+            (", the endpoint's own (loopback), so the developer's node, not an auditor host" if local else "")}
 
 
 def _ssh_to(peer: str, peers: Path) -> list[str]:
@@ -659,7 +659,7 @@ def markdown(r: dict) -> str:
                f"tokens, EOS {_cell(v.get('eos_token_ids'))}" if v else
                f"{_cell(r.get('tokens'))} tokens a response, {_cell(r.get('requests'))} requests")
     on = r.get("ran") or []
-    lines = [f"# Network accounting end to end: {'OK' if r['ok'] else 'NOT OK'} on "
+    lines = [f"# Network certification end to end: {'OK' if r['ok'] else 'NOT OK'} on "
              f"{', '.join(on[:-1]) + ' and ' + on[-1] if len(on) > 1 else on[0] if on else 'nothing that ran'}"
              + (f" (not run: {', '.join(r['not_run'])})" if r.get("not_run") else ""), "",
              *([f"Not OK: {'; '.join(r['why_not'])}.", ""] if r.get("why_not") else []),

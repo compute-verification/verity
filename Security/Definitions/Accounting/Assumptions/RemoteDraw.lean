@@ -2,11 +2,42 @@ module
 
 public import Definitions.Accounting.Remote.Draw
 public import Definitions.Accounting.Remote.Held
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # What the remote audit's opening draw assumes (trusted)
 
-The premises of `Accounting.Guarantees.Remote.PooledDraw`, which derives the memory line's `LiveCoins` from the
+The premises of `Accounting.Guarantees.Remote.PooledSample`, which derives the memory line's `LiveCoins` from the
 verifier's opening draw (`Accounting.Remote.Draw`), each a named `Prop` on a session and the trace over its coins:
 
 * `Live`: window `t`'s size and correct receipts are fixed before its openings coin is released, by the other coins and
@@ -57,7 +88,15 @@ def Refused [Fintype X] (D : Session n m s κ X) (prf : Fin n → Pous.Bits κ �
 
 /-- **Counted**: on every accepting outcome, the credited passes' wrong receipts of registered blocks are at most the
 windows' wrong receipts. -/
+<<<<<<< ours
 def Counted (D : Session n m s κ X) (T : Trace (DrawCoins n κ X)) : Prop :=
   ∀ ω, T.accepts ω → T.wrong ω ≤ D.wrong ω
+||||||| base
+def Counted (D : Session n m s κ X) (T : Trace (Coins n κ X)) : Prop :=
+  ∀ ω, T.accepts ω → T.wrong ω ≤ D.wrong ω
+=======
+def Counted (D : Session n m s κ X) (T : Trace (Coins n κ X)) : Prop :=
+  ∀ ω, T.accepts ω → T.incorrect ω ≤ D.incorrect ω
+>>>>>>> theirs
 
 end Accounting.Remote.Draw.Assumptions

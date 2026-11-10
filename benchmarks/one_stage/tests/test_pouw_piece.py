@@ -1,7 +1,7 @@
-"""pouw_piece.py: PoUW's pieces for `composite.py`, remote's ``verity/pouw/v1`` and onsite's ``verity/pouw/period/v1``,
-each a case in its protocol's formats and its answer on it. An honest window (`pouw_check_cases`) and an honest period
-(`pouw_period_cases`) written from their inputs accept, with the digest the product binds; a served H1 window
-(``fixtures/served-h1-window``, window 0's line of a served H200 run's windows.jsonl, a development window in no
+"""pouw_piece.py: PoUW's pieces for `composite.py`, ``verity/pouw/v1`` and ``verity/pouw/period/v1`` (onsite's and
+remote's), each a case in its protocol's formats and its answer on it. An honest window (`pouw_check_cases`) and an
+honest period (`pouw_period_cases`) written from their inputs accept, with the digest the product binds; a served H1
+window (``fixtures/served-h1-window``, window 0's line of a served H200 run's windows.jsonl, a development window in no
 period) is MISSING from both, with why, and writes no case, so `composite.py` leaves it out and names it missing; the
 directory is private as `composite.py` reads it; and ``--exe`` is the answer of record."""
 
@@ -26,7 +26,7 @@ from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import period_check as PC
 from verity.core.protocols.pouw import verifier as V
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+from verity.core.protocols.spot.one_stage import proofs as PF
 
 SERVED = Path(__file__).resolve().parent / "fixtures" / "served-h1-window"
 STATEMENTS = Path(__file__).resolve().parents[3] / "verity/core/protocols/pouw/tests/test_pouw_credit_statements.py"
@@ -154,7 +154,7 @@ def test_a_served_h1_window_is_missing_from_both_with_why(tmp_path, capsys):
         assert [f.name for f in d.iterdir()] == ["missing.json"]
         assert json.loads((d / "missing.json").read_text())["protocol"] == protocol
         assert C.case_dirs([d]) == []
-    assert C.main(["remote", "--cases", str(tmp_path / "v1"), "--private-out", str(tmp_path / "priv"),
+    assert C.main(["remote", "--cases", str(tmp_path / "period"), "--private-out", str(tmp_path / "priv"),
                    "--public-out", str(tmp_path / "pub")]) == 0
     assert f"NOT_ESTABLISHED missing verity/inference-only/v0, {P.PERIOD}, verity/sampled-proofs/v1\n" in \
         (tmp_path / "pub" / "verdicts.txt").read_text()

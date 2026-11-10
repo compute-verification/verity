@@ -1,9 +1,39 @@
 module
 
 public import Proofs.Flock.Claims.ZK.Reference
-public import Flock.Hm96
-public import Flock.Canon
 public import Flock.Firewall.SessionPlan
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The deployed coin layer of `flock-circuit --zk`
@@ -162,14 +192,14 @@ def locate : List ℕ → ℕ → ℕ → ℕ × ℕ
   | [], k, r => (k, r)
   | c :: cs, k, r => if r < c then (k, r) else locate cs (k + 1) (r - c)
 
-/-- **Coin `j`'s place in the committed schedule** at statement `x`: the session's spec, the coin tree's, the stream's
-index in the tree's leaf order and the round. Coin `0` is the `session` stream's round `0`; coin `j + 1` is rep round
-`j`, the rep streams' rounds in `spec.repStreams` order (`FlockDeploy.V`'s rounds). None where the tree's streams are not
-the session's (`Flock.Firewall.Session.streamsOk`). -/
+/-- **Coin `j`'s place in the committed schedule** at statement `x`: the spec of the masked session `x` sets up
+(`sessOf`), the coin tree's, the stream's index in the tree's leaf order and the round. Coin `0` is the `session`
+stream's round `0`; coin `j + 1` is rep round `j`, the rep streams' rounds in `spec.repStreams` order (`FlockDeploy.V`'s
+rounds). None where the tree's streams are not the session's (`Flock.Firewall.Session.streamsOk`). -/
 def slot (x : Msg) (j : ℕ) : Option (Flock.SessionSpec × Flock.CoinTree.Spec × ℕ × ℕ) :=
-  match FlockDeploy.setupOf true x with
+  match sessOf x with
   | none => none
-  | some (_, spec, sts) =>
+  | some (spec, sts) =>
     match spec.coinTree with
     | none => none
     | some ct =>
@@ -253,10 +283,10 @@ def helloJson (spec : Flock.SessionSpec) (nonce : String) : Flock.V String :=
     Flock.canon (own.setObjVal! "coins" (coins.setObjVal! "nonce" (Json.str nonce)))
 
 /-- **The prover's `Hello`** at statement `x` and nonce `ν`: `Req::Hello`'s frame (tag `1`, `u32le` length, the bytes)
-of the statement's `Hello` with the nonce's hex. -/
+of the `Hello` of the masked session `x` sets up (`sessOf`) with the nonce's hex. -/
 def helloD (x : Msg) (ν : Nonce) : Msg :=
-  match FlockDeploy.setupOf true x with
-  | some (_, spec, _) =>
+  match sessOf x with
+  | some (spec, _) =>
     match helloJson spec (Flock.hexOf ⟨(nb ν).toArray⟩) with
     | .ok h => 1 :: (u32le h.utf8ByteSize ++ h.toUTF8.data.toList)
     | .error _ => []

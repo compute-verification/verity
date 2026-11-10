@@ -1,14 +1,9 @@
 module
 
-public import Mathlib.Tactic.LinearCombination
-public import Mathlib.Tactic.Linarith
-public import Mathlib.Tactic.Positivity
-public import Mathlib.Tactic.NormNum
-public import Mathlib.Tactic.Ring
-public import Mathlib.Tactic.Abel
-public import Mathlib.Tactic.GCongr
 public import Definitions.Pouw.PearlC.Defs
-public import Proofs.Pouw.Fp8Atom.Fp32Proofs
+import Mathlib.Tactic.LinearCombination
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Fp8Atom.Fp32Proofs
 
 /-!
 # P2: Pearl-C's clean-up chain (staging, nothing pinned)

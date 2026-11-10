@@ -1,5 +1,5 @@
 """The workload Program's declared stop rule and LAG (`stop_rule`, `lag`), as the global match's chronology check (G6) reads them from its
-global Program and the padded conversion (`commit.padding_steps`) from a pulled record's `workload_program.json`.
+global Program.
 
 `pipeline.global_program` writes both blocks into `workload_program.json`, and the global match's global Program carries them
 (`check.match.declaration.from_gprog`); the global match's mock Program (`declaration.mock_global_program`) writes the same blocks.  A

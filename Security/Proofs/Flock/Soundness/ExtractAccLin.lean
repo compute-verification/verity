@@ -275,7 +275,7 @@ theorem ind_conflictSucc (acc : β → Prop) (op : β → P → Option V) (a : �
   | some bs =>
       by_cases ha : acc a <;> by_cases hc : PairConflict op (a :: bs) <;> simp [ConflictSucc, ind, h, ha, hc]
 
-/-- **The conflict finder's success** is the law of `k + 1` runs, weighted by their acceptance, having a conflicting
+/-- **The conflict finder's success** is the sampling design of `k + 1` runs, weighted by their acceptance, having a conflicting
 pair, times the waits' `geom ε R ^ k`. -/
 theorem expect_conflictSucc (g : Game β) (s : Strategy g) (acc : β → Prop) (op : β → P → Option V) (R k : ℕ) :
     expect (ind (ConflictSucc acc op)) (conflictG g R k) (conflictStrat g s R k) =

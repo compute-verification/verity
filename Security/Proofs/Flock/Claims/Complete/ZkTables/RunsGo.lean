@@ -1,15 +1,63 @@
 module
 
-public import Proofs.Flock.Claims.Complete.ZkTables.ReplayGo
-public import Proofs.Flock.Claims.Complete.ZkTables.RepRuns
-public import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
-public import Proofs.Flock.Claims.Complete.ZkTables.Parts
-public import Proofs.Flock.Claims.Complete.ZkTables.Trace
 public import Proofs.Flock.Claims.Complete.Zk.ConsCoins
 public import Proofs.Flock.Claims.Complete.Zk.ConsRingSwitch
-public import Proofs.Flock.Claims.Complete.Zk.InnerGo
-public import Proofs.Flock.Claims.Complete.Zk.Lanes
-public import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
+public import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
+public import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
+public import Proofs.Flock.Claims.Complete.ZkTables.Parts
+public import Proofs.Flock.Claims.Complete.ZkTables.RepRuns
+public import Proofs.Flock.Claims.Complete.ZkTables.RepSplit
+public import Proofs.Flock.Claims.Complete.ZkTables.ReplayGo
+import Flock.With.ZkEq
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Json.Goals
+import Proofs.Flock.Claims.Complete.Replay.LigeritoBasis
+import Proofs.Flock.Claims.Complete.Replay.LigeritoSum
+import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
+import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
+import Proofs.Flock.Claims.Complete.Replay.Trace
+import Proofs.Flock.Claims.Complete.Zk.Count
+import Proofs.Flock.Claims.Complete.Zk.Json.Session
+import Proofs.Flock.Claims.Complete.Zk.Lanes
+import Proofs.Flock.Claims.Complete.Zk.LigeritoPos
+import Proofs.Flock.Claims.Complete.Zk.RingSwitch
+import Proofs.Flock.Claims.Complete.ZkTables.Trace
+import Proofs.Flock.Claims.Complete.ZkTables.View
+import Proofs.Flock.Soundness.Refine.Arith
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The masked prover's rep returns

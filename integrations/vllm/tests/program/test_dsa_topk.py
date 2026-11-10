@@ -1,7 +1,7 @@
-"""`registry.dsa_topk` (the selection relation of a DSA row past TOPK keys, and the Waksman network that reads the rows it
-selects) and its Boolean versions `boolean_dsa_topk`: the key is the logits' order; the top-TOPK set is the first TOPK under the
-tie rule; the relation accepts exactly the permutations of that set; the Boolean versions agree with their word views on accepted
-and refused orders (ties, signed zeros, NaNs and infinities, slots past N, negative, aliasing or repeated); every order has
+"""`registry.dsa_topk` (the canonical row of a DSA row past TOPK keys, and the Waksman network that reads the rows it selects)
+and its Boolean versions `boolean_dsa_topk`: the key is the logits' order; the top-TOPK set is the first TOPK under the tie rule;
+`order_ok` accepts exactly the permutations of that set and the long row exactly its ascending one; the Boolean versions agree
+with their word views on accepted and refused orders (ties, signed zeros, NaNs and infinities, slots past N, negative, aliasing or repeated); every order has
 settings, at which the network reads the rows in that order and routes the indices to that order."""
 from __future__ import annotations
 
@@ -88,22 +88,30 @@ def test_the_relation_accepts_exactly_the_permutations_of_the_top_set() -> None:
 SHAPES = [(6, 4), (6, 6), (5, 1), (8, 5), (9, 8), (17, 16), (2, 1), (1, 1)]
 
 
+def test_the_long_row_accepts_exactly_the_top_set_in_ascending_order() -> None:
+    """Of every order of 3 slots over [0, 7) and two words past N, on the tied row above, only (0, 1, 2)."""
+    sc = [_f32(1.0), _f32(2.0), _f32(1.0), _f32(-0.0), _f32(1.0)]
+    for o in itertools.product([*range(7), 0xFFFFFFFF, 1 << 31], repeat=3):
+        assert T.canonical_ok(sc, o, 3) == (o == (0, 1, 2)), o
+
+
 @pytest.mark.parametrize("N,TOPK", SHAPES)
-def test_the_boolean_relation_agrees_with_its_word_view(N, TOPK) -> None:
-    target = bind(BT.DsaTopKOrderV2, N=N, TOPK=TOPK)
+def test_the_boolean_long_row_agrees_with_its_word_view(N, TOPK) -> None:
+    """On `_orders`' orders, each of them sorted, and each row's top set in ascending order, so both verdicts are exercised (where
+    TOPK > 1 an order passes only ascending) and the selection half (`boolean_dsa_topk._selection`) decides the ascending orders
+    off the top set."""
+    target = bind(BT.DsaTopKLongRowV2, N=N, TOPK=TOPK)
     word = TR.word_of(target)
-    rng = random.Random(N * 100 + TOPK)
-    rows = [_scores(rng, N) for _ in range(24)]
-    rows += [[POOL[0]] * N, [POOL[1]] * N, [POOL[4]] * N, [POOL[0], POOL[1]] * (N // 2) + [POOL[0]] * (N % 2)]
+    rng = random.Random(N * 100 + TOPK + 7)
     scores, orders = [], []
-    for sc in rows:
-        for o in _orders(rng, sc, TOPK, 8):
+    for sc in [_scores(rng, N) for _ in range(16)] + [[POOL[0]] * N, [POOL[4]] * N]:
+        off = _orders(rng, sc, TOPK, 6)
+        for o in [sorted(T.topk_set(sc, TOPK)), sorted(T.topk_set(sc, TOPK), reverse=True), *off, *(sorted(o) for o in off)]:
             scores.append(sc)
             orders.append(o)
     ref = np.asarray(E.evaluate_batch(word, scores, orders)).reshape(-1)
     got = np.asarray(BS.evaluate_words(target, scores, orders)).reshape(-1)
-    assert ref.sum() and (len(ref) - ref.sum()), "both verdicts are exercised"
-    assert ref.tolist() == [T.order_ok(s, o, TOPK) for s, o in zip(scores, orders)]
+    assert ref.tolist() == [T.canonical_ok(s, o, TOPK) for s, o in zip(scores, orders)] and ref.sum() and len(ref) - ref.sum()
     bad = np.flatnonzero(got != ref)
     assert not bad.size, f"{target.id}: {bad.size} of {len(ref)} differ, first {[(scores[i], orders[i]) for i in bad[:3]]}"
 
@@ -179,8 +187,8 @@ def test_the_network_reads_the_ordered_rows_and_its_boolean_version_agrees(N, K,
 
 @pytest.mark.parametrize("N,TOPK", [(5, 4), (9, 8), (17, 16), (3, 1), (6, 6)])
 def test_the_routed_indices_are_the_order_and_the_relation_reads_them(N, TOPK) -> None:
-    """`DsaWaksmanOrder` at an order's settings is that order, which `DsaTopKOrder` accepts when it is the top set; its Boolean
-    version agrees, at random settings too."""
+    """`DsaWaksmanOrder` at an order's settings is that order, which `DsaTopKLongRow` accepts when it is the top set ascending;
+    its Boolean version agrees, at random settings too."""
     target = bind(BT.DsaWaksmanOrderV2, N=N, TOPK=TOPK)
     word = TR.word_of(target)
     rng = random.Random(N + TOPK)
@@ -191,11 +199,12 @@ def test_the_routed_indices_are_the_order_and_the_relation_reads_them(N, TOPK) -
     assert ref[:20].tolist() == orders
     assert np.array_equal(np.asarray(BS.evaluate_words(target, [[_pack(s)] for s in sws])).reshape(len(sws), -1), ref)
     sc = _scores(rng, N)
-    top = rng.sample(sorted(T.topk_set(sc, TOPK)), TOPK)
-    assert list(evaluate(bind(T.DsaTopKOrder, N=N, TOPK=TOPK), sc, evaluate(word, T.waksman_settings(top, N)))) == [1]
+    top = sorted(T.topk_set(sc, TOPK))
+    assert list(evaluate(bind(T.DsaTopKLongRow, N=N, TOPK=TOPK), sc, evaluate(word, T.waksman_settings(top, N)))) == [1]
 
 
-@pytest.mark.parametrize("target", [bind(BT.DsaTopKOrderV2, N=20, TOPK=16), bind(BT.DsaWaksmanRowsV2, N=9, K=8, W=3, E=16),
+@pytest.mark.parametrize("target", [bind(BT.DsaTopKLongRowV2, N=20, TOPK=16),
+                                    bind(BT.DsaWaksmanRowsV2, N=9, K=8, W=3, E=16),
                                     bind(BT.DsaWaksmanOrderV2, N=9, TOPK=8), bind(BT.DsaWaksmanSwapV2, W=3, E=32),
                                     bind(BT.DsaWaksmanPickV2, W=3, E=16), bind(BT.Xor3x16), bind(BT.Xor3x32)], ids=lambda t: t.id)
 def test_the_boolean_version_is_boolean_and_its_word_view_is_v1(target) -> None:
@@ -205,8 +214,8 @@ def test_the_boolean_version_is_boolean_and_its_word_view_is_v1(target) -> None:
     assert SW.boolean_version(word).id == target.id
 
 
-def test_the_order_check_resolves_by_id_in_a_cold_decode() -> None:
-    """A Program past TOPK names `DsaTopKOrderCheck{N}x{TOPK}_v1`, made while deriving; a cold decode resolves it by id."""
-    assert lookup_primitive(REGISTRY, "DsaTopKOrderCheck2049x2048_v1") is T.order_check(2049, 2048)
+def test_the_long_row_check_resolves_by_id_in_a_cold_decode() -> None:
+    """A Program past TOPK names `DsaTopKLongRowCheck{N}x{TOPK}_v1`, made while deriving; a cold decode resolves it by id."""
+    assert lookup_primitive(REGISTRY, "DsaTopKLongRowCheck2049x2048_v1") is T.long_row_check(2049, 2048)
     with pytest.raises(ValueError, match="1 <= TOPK <= N"):
-        T.order_check(4, 5)
+        T.long_row_check(4, 5)

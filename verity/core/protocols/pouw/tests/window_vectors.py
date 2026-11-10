@@ -1,9 +1,9 @@
-"""Pinned vectors for the audit window's layout for gates (`verity.core.protocols.pouw.window`): ``uv run python
+"""Pinned vectors for the audit execution phase's layout for gates (`verity.core.protocols.pouw.window`): ``uv run python
 verity/core/protocols/pouw/tests/window_vectors.py`` rewrites ``tests/vectors/window.json``.  A change to that file
-is a change to what the window's tile and entry circuits read (an entry row's bits, a side tree, the window root or the
+is a change to what the execution phase's tile and entry circuits read (an entry row's bits, a side tree, the execution phase root or the
 public inputs file Flock's verifier writes), and needs a reason in the PR.
 
-The toy window: P = 4 entries over a toy window domain, the identity ``verity/pouw/window-vectors/v1`` of {"window":
+The toy execution phase: P = 4 entries over a toy execution phase domain, the identity ``verity/pouw/window-vectors/v1`` of {"window":
 "toy"}.  Call 0 is an 80 x 32 x 128 call whose tiles start at tile 3 of the pass; it keeps A rows 0, 1 and 70 (so a
 tile of its short last tile row, 16 rows high) and B rows 5 and 64.  Call 1 is 16 x 32 x 64 from pass tile 9 and keeps
 A row 3 and B rows 0 and 1.  So 8 real tiles, level 7, N = 9, and the filler's one zero row on each side covers tile 8.
@@ -22,7 +22,7 @@ from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
 from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X, row_leaf
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.circuit import leaves as L
+from verity.ml.protocols.pouw.circuit import leaves as L
 
 OUT = Path(__file__).with_name("vectors") / "window.json"
 TAG = "verity/pouw/window-vectors/v1"
@@ -63,7 +63,7 @@ def _side(dom: CommitmentDomain, side: str, rows: list[list[int]], label: str) -
 
 
 def window() -> dict:
-    """The toy window's entries, sides and root, as `vectors` pins them."""
+    """The toy execution phase's entries, sides and root, as `vectors` pins them."""
     dom = window_domain()
     sdom = {s: Wd.side_domain(dom.domain_id, s) for s in "ab"}
     root_h3, _ = pass_h3()

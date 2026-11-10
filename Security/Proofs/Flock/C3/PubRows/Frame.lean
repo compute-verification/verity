@@ -1,7 +1,21 @@
 module
 
-public import Proofs.Flock.C3.PubRows.Prefix
 public import Proofs.Flock.C3.Compose.Honest
+public import Proofs.Flock.C3.Compose.Tape
+public import Proofs.Flock.C3.PubRows.Prefix
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # n1: the tape `decodeRun` reads, and its frame

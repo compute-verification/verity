@@ -1,13 +1,30 @@
 module
 
+public import Proofs.Flock.VBridge.Algebra.LigeritoConverse
 public import Proofs.Flock.VBridge.Family
 public import Proofs.Flock.VBridge.Runs.Rep
+import all Init.Data.Repr
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Defs
 
 /-!
 # The family's table files: `HSch`, `HFiles`, `HRuns`
 
 `files` is a proof device: `vbridge_of_family` reads it only through `TableFiles.accepts`, which routes the inner
-transcript through the verifier of record (`verifyRep`, then `table_refines_plain`). So the files are made from what the
+transcript through the verifier (`verifyRep`, then `table_refines_plain`). So the files are made from what the
 family already reads, at each history and registration:
 
 * the proof file of rep `r` (`proofOf`) holds the messages w holds (`decoded`, at `F.rep`), the verifier's `final_c`
@@ -353,8 +370,8 @@ theorem setupRealizes_scheme_of_tags (t : Tags) :
 def ShapeIs (sh : Shape) (st : Setup) (sch : Flock.Schedule) : Prop :=
   sh.m = st.m ∧ sh.kLog = st.kLog ∧ sh.sched = sch
 
-/-- **A rep's coin counts** (`run_of_frames`' counts, of the rounds `verifyRep`'s program draws, Verify.lean:43-48):
-the zerocheck's rounds draw 6,
+/-- **A rep's coin counts** (`run_of_frames`' counts, of the rounds `verifyRep`'s program samples, Verify.lean:43-48):
+the zerocheck's rounds sample 6,
 `m - 13`, 1 and then one coin each; the lincheck's, one each; each of the `2 + n` ring switches 7, the batching
 `2 + n`; and the `L` Ligerito rounds follow. -/
 def CoinsShaped (m kLog n L : ℕ) (coins : Array (Array F128)) : Prop :=

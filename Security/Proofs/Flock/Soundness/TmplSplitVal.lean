@@ -1,6 +1,11 @@
 module
 
 public import Proofs.Flock.Soundness.TmplSplitTab
+public import Proofs.Flock.Soundness.TmplFoldClass
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Level3.Nodes
+import Proofs.Flock.Soundness.TmplFoldClassOk
 
 /-!
 # A class's table, valued at a chunk origin

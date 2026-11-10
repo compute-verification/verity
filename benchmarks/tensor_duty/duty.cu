@@ -13,7 +13,7 @@
 //          sync_s8  mma.sync m16n8k32 s8.s8 -> s32, SW warps with SA accumulators each, operands in registers (KS sets).
 // Classes: zero; const (every byte 0x7F, e4m3 0x38 = 1.0); uniform (bytes uniform: s8 on [-128, 127], or every finite
 //          e4m3 encoding); s2, u2, u4 (Verity.OperandClass: uniform on [-2, 1], [0, 3], [0, 15], as s8). Each byte is
-//          drawn from a hash of its position, so consecutive operations read different operands.
+//          sampled from a hash of its position, so consecutive operations read different operands.
 // Fills:   idle (__nanosleep until the period ends) or alu (four FFMA chains a thread until it ends).
 // Readings, per point: MACs over the host's wall clock (host_t0 and host_t1, system_clock before the launch and after
 // its end event's synchronize, printed to the millisecond), the one summarize.py judges by. The GPU's own timers are

@@ -1,7 +1,7 @@
 """A datacenter as Verity accounts for it.
 
 The logical layer (`logical`, `claims`) is where the cryptography happens: a `verity.ml.circuits` Program, the commitments
-to its registered inputs and its values, and `audit`, the claims a proof establishes about the prover system. The
+to its registered inputs and its values, and `audit`, the claims a proof establishes about the developer's hardware. The
 physical layer (`physical`, `memory`, `account`) interprets those claims in light of the declared hardware, named
 assumptions and trusted devices. The bridge (`binding`) places the Program on the hardware and publishes the placement's
 properties (`Profile`); the verifier's `Plan` says what it will check; `observe.run` is the world, executing a placement
@@ -16,7 +16,7 @@ from .account import (DEDICATED_RACKS, FLEET_CLOSED, SALT_CUSTODY, SERVED_PARTIT
                       Credit, Custody, account, capacity, double_credit)
 from .binding import Crossing, Placed, Profile, crossings, occupancy, place, route, traffic
 from .claims import Carried, Computed, Entered, Held, On, Read, Refused, Scheduled, audit, check_records
-from .logical import Registration, Value, ands, commit, evaluate, names, read, register, values, work
+from .logical import RegisteredInputs, Value, ands, commit, evaluate, names, read, register, values, work
 from .memory import (BLOCK_BITS, Append, Challenge, ReadWindow, Rekey, Release, StoreEntry, Wipe, answer_time,
                      read_rate, regen_time, serve_time)
 from .observe import Deviation, PortRecord, Response, Trace, run
@@ -29,7 +29,7 @@ __all__ = [
     "Append", "Assumption", "BlockAccount", "Cadence", "Carried", "Challenge", "Computed", "Credit", "Crossing",
     "Custody", "Datacenter", "Deviation", "DeviceEntry", "Entered",
     "Fleet", "Held", "Interval", "LinkEntry", "Maintenance", "On", "Placed", "Plan", "Port", "PortRecord", "Profile",
-    "Read", "ReadWindow", "Refused", "Registration", "Rekey", "Release", "Response", "Scheduled", "StoreEntry",
+    "Read", "ReadWindow", "Refused", "RegisteredInputs", "Rekey", "Release", "Response", "Scheduled", "StoreEntry",
     "Trace", "Value", "Wipe", "Zone",
     "account", "ands", "answer_time", "audit", "capacity", "check_records", "commit", "crossings", "double_credit", "evaluate",
     "names", "occupancy", "place", "read", "read_rate", "regen_time", "register", "route", "run", "serve_time", "traffic",

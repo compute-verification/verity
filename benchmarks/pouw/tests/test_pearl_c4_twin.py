@@ -1,4 +1,4 @@
-"""Pearl-C4's numpy twin (benchmarks/pouw/pearl_c4/twin.py) against the scalar reference `verity.core.protocols.pouw.schemes.pearl_c4`: the
+"""Pearl-C4's numpy twin (benchmarks/pouw/pearl_c4/twin.py) against the scalar reference `verity.ml.protocols.pouw.schemes.pearl_c4`: the
 vectorized casts on grids through every rounding case, and whole tiles (forming, C̃, U, the peel factors, the leaf and the
 tickets) for both formats."""
 
@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, Tile
-from verity.core.protocols.pouw.schemes import pearl_c4 as F
+from verity.ml.protocols.pouw.schemes import pearl_c4 as F
 
 # Loaded under its own name: pearl_c's twin.py is `twin` to the tests beside this one.
 _spec = importlib.util.spec_from_file_location("pearl_c4_twin", Path(__file__).resolve().parents[1] / "pearl_c4" / "twin.py")
@@ -53,7 +53,7 @@ def bf16_rows(rng: np.random.Generator, n: int, k: int, scale: float) -> np.ndar
 @pytest.mark.parametrize("fmt", ["nvfp4", "mxfp4"])
 def test_tile_equals_the_scalar_reference(fmt):
     k, n = 128, 16
-    s = F.PearlC4(fmt, k_min=128, tile=(n, n))
+    s = F.PearlC4(fmt, k_min=128, tile=(n, n), hashing="h0")
     rng = np.random.default_rng(3 if fmt == "nvfp4" else 4)
     a, b = bf16_rows(rng, n, k, 1.0), bf16_rows(rng, n, k, 0.02)
     ctx = Context(b"s" * 32, Matmul(1, Shape(n, k, n), 2), b"a" * 32, b"b" * 32)

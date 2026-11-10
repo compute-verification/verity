@@ -17,6 +17,10 @@ public import Proofs.Flock.C3.VStarList.Shape
 public import Proofs.Flock.Claims.DeployK
 public import Proofs.Flock.Claims.Recursion.SchedCount
 public import VStar.Stage
+import all Init.Data.String.TakeDrop
+import all Init.Data.String.Slice
+import all Init.Data.String.Pattern.String
+import all Init.Data.String.Pattern.Basic
 
 /-!
 # `OpenedSized` at the deployed last message `elemR`

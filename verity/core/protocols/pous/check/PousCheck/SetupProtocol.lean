@@ -1,6 +1,7 @@
 module
 
 public import CoreProtocol.Cli
+public import CoreProtocol.Protocol
 public import PousCheck.Setup
 meta import CoreProtocol.Cli
 meta import PousCheck.Setup

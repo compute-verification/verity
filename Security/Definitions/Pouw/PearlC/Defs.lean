@@ -1,7 +1,6 @@
 module
 
 public import Mathlib.Data.Matrix.ColumnRowPartitioned
-public import Batteries.Data.List.Basic
 public import Definitions.Pouw.Fp8Atom.Fp32
 
 /-!
@@ -10,8 +9,8 @@ public import Definitions.Pouw.Fp8Atom.Fp32
 Pearl-C is Pearl's product and clean-up (the "peel"), repaired after review, as the cheap-binding doc's §1
 specifies it. This file holds the parts of Π that other files state things about:
 
-* **Parameters** (`Params`, `Params.pi`, `Shape`): the noise scale `δ`, the promotion depth `G` and the noise rank `r`;
-  Π pins `δ = 1`, `G = 4`, `r = 32`.
+* **Parameters** (`Params`, `Params.pi`, `Shape`): the noise scale `σ` (Pearl's spec calls it `δ`), the promotion depth
+  `G` and the noise rank `r`; Π pins `σ = 1`, `G = 4`, `r = 32`.
 * **The E4M3 encoder** (`e4m3Mag`, `e4m3`, `e4m3Word`): `cvt.rn.satfinite.e4m3x2.f32`, round to nearest even with
   saturation to `±448`, as `verity.ml.tc.cast.f32_to_e4m3_sat_word`; pinned by the vectors of `EncVectors`, checked in
   `EncChecks`. The BF16 conversion `bf16Rn` (`cvt.rn.bf16.f32` on values) and the FP32 encoder `f32Word` (IEEE binary32
@@ -42,13 +41,14 @@ open Pouw.Fp8Atom Matrix
 
 /-! ## Parameters -/
 
-/-- Pearl-C's parameters: the noise scale `δ` relative to the row RMS, the promotion depth `G` in atoms, the noise rank `r`. -/
+/-- Pearl-C's parameters: the noise scale `σ` relative to the row RMS (Pearl's spec calls it `δ`), the promotion depth
+`G` in atoms, the noise rank `r`. -/
 structure Params where
-  δ : ℚ
+  σ : ℚ
   G : Nat
   r : Nat
 
-/-- The values Π pins: `δ = 1`, promotion every `G = 4` atoms, rank `r = 32`. -/
+/-- The values Π pins: `σ = 1`, promotion every `G = 4` atoms, rank `r = 32`. -/
 def Params.pi : Params := ⟨1, 4, 32⟩
 
 /-- A GEMM shape: `A` is `m × k`, `B` is `n × k`, and `C̃ = A′·B̃ᵀ` is `m × n`. -/
@@ -198,14 +198,14 @@ def Stat.every8 : Stat := fun k x =>
   (∑ l ∈ Finset.univ.filter (fun l : Fin k => l.val % 8 = 0), x l ^ 2) / (((k + 7) / 8 : Nat) : ℚ)
 
 /-- Domain D's liveness rule for a row under the statistic `st`: at most `k/64` entries, over every position, have
-`|x| ≥ 8δ·ρ`, stated on squares (`x² ≥ 64δ²·ρ²`). The statistic defaults to `Stat.rms`; §5 checks the rule with
+`|x| ≥ 8σ·ρ`, stated on squares (`x² ≥ 64σ²·ρ²`). The statistic defaults to `Stat.rms`; §5 checks the rule with
 `Stat.every8`'s `ρ`. -/
-def LiveRow (δ : ℚ) (x : Fin k → ℚ) (st : Stat := Stat.rms) : Prop :=
-  64 * (Finset.univ.filter fun l => 64 * δ ^ 2 * st k x ≤ x l ^ 2).card ≤ k
+def LiveRow (σ : ℚ) (x : Fin k → ℚ) (st : Stat := Stat.rms) : Prop :=
+  64 * (Finset.univ.filter fun l => 64 * σ ^ 2 * st k x ≤ x l ^ 2).card ≤ k
 
-/-- The noise scale of a row, `β = α·δ·ρ`, for noise of unit RMS, where `ρ = root (st k x)` and `root` is the square
+/-- The noise scale of a row, `β = α·σ·ρ`, for noise of unit RMS, where `ρ = root (st k x)` and `root` is the square
 root in use (the FP32 square root, once pinned). §5 folds the noise lines' norm into `β` as well. -/
-def betaOf (st : Stat) (root : ℚ → ℚ) (δ α : ℚ) (x : Fin k → ℚ) : ℚ := α * δ * root (st k x)
+def betaOf (st : Stat) (root : ℚ → ℚ) (σ α : ℚ) (x : Fin k → ℚ) : ℚ := α * σ * root (st k x)
 
 /-! ## The forming chains -/
 

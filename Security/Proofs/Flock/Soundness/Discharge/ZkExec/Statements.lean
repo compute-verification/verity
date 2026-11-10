@@ -22,15 +22,15 @@ Each statement is a `Prop` here; its theorem (`theorem … : G`) is in the file 
 **Acceptance and the statement** (under tags without hidden outputs, `hh`, as `Exec`'s; with them `setupTables` calls
 `setupHidden`, `Discharge/HiddenExec`'s):
 * `AcceptsZKSetupH`: every table is `setupH`'s statement under the `--zk` tags (`tagsAt (zkTags I) J j`) and the coin
-  tree, at some draw (the record's, for one table), and passes `Zk.shapeOk`.
+  tree, at some sample (the record's, for one table), and passes `Zk.shapeOk`.
 * `AcceptsZKOne`: a one-table acceptance is one `setupH` statement's, with `Zk.verify` on `#[Setup.ofCircuit st]`.
 * `AcceptsZKRetained`: under tags that retain rounds, every stream of the accepted record retained every round's bytes.
 
 **Refinement** (one table, against the compiled `--zk` table `G, out, acc` named in `Live.lean`):
-* `ExecRefinesZKOne`: R11 at `--zk`: against any live prover, flock-verify `--zk`'s acceptance is no likelier than the
-  compiled table's acceptance against the simulated prover `simAuditZK … τ`, with `bad = ⊥`, given `DecodesZK`.
+* `ExecRefinesZKOne`: the refinement at `--zk`: against any live prover, flock-verify `--zk`'s acceptance is no likelier
+  than the compiled table's acceptance against the simulated prover `simAuditZK … τ`, with `bad = ⊥`, given `DecodesZK`.
 * `ZkHeadlineExecOne`: the `--zk` headline at flock-verify's acceptance, carried from any bound `B` on the compiled
-  audit's `Pr[accept ∧ Q]` at the simulated prover, for any event `Q` of that prover (at least `K` wrong units of its
+  audit's `Pr[accept ∧ Q]` at the simulated prover, for any event `Q` of that prover (at least `K` incorrect proof blocks of its
   committed values): `Pr[flock-verify --zk accepts ∧ Q] ≤ B`.
 -/
 
@@ -132,7 +132,7 @@ def ZkInnerOk : Prop :=
 /-! ## Acceptance and the statement -/
 
 /-- **Each table of a `--zk` acceptance is `setupH`'s statement** under the `--zk` tags and the coin tree, at some
-draw (the record's, for one table), and passes the `--zk` shape check. -/
+sample (the record's, for one table), and passes the `--zk` shape check. -/
 def AcceptsZKSetupH : Prop :=
   ∀ (I : Inputs) (t : Exec.Transcript), I.tags.hiddenOutputs = false → AcceptsZK I t →
     ∃ spec sts, setupOf (zkInputs I) t.record = .ok (spec, sts) ∧
@@ -142,7 +142,7 @@ def AcceptsZKSetupH : Prop :=
           I.program = .ok sts[j] ∧ (I.count ≤ 1 → d = recordDraw t.record)
 
 /-- **A one-table `--zk` acceptance is one `setupH` statement's**: under the `--zk` tags and the coin tree at the
-record's draw, it passes the shape check, and `Zk.verify` ran on `#[Setup.ofCircuit st]` with the statement's spec. -/
+record's sample, it passes the shape check, and `Zk.verify` ran on `#[Setup.ofCircuit st]` with the statement's spec. -/
 def AcceptsZKOne : Prop :=
   ∀ (I : Inputs) (t : Exec.Transcript), I.tags.hiddenOutputs = false → I.count ≤ 1 → AcceptsZK I t →
     ∃ st, Stmt.setupH (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (recordDraw t.record) I.partition
@@ -169,8 +169,8 @@ variable {n : ℕ} {Reg : Type} {mPts : ℕ} {P Cp Op Out : Finset (Fin n) → R
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
   (capOf : ∀ S R, ByteArray → Cp S R) (N : ℕ) (L : Law n)
 
-/-- **R11 at `--zk`, one table**: against any live prover `τ` of the live audit (`liveTable` written out by `wr`),
-flock-verify `--zk`'s acceptance is no likelier than the compiled `--zk` table's acceptance against the simulated
+/-- **The refinement at `--zk`, one table**: against any live prover `τ` of the live audit (`liveTable` written out by
+`wr`), flock-verify `--zk`'s acceptance is no likelier than the compiled `--zk` table's acceptance against the simulated
 prover `simAuditZK … τ`, with no live event added, whenever every rep's game has a strategy (`hinh`) and the decoder is
 right on accepted sessions (`DecodesZK`). -/
 def ExecRefinesZKOne : Prop :=
@@ -180,7 +180,7 @@ def ExecRefinesZKOne : Prop :=
       (audit L Reg (sessionZC G out acc)) (simAuditZK G out acc I wr opn dg dec one fin capOf N hinh hdec τ)
 
 /-- **The `--zk` headline at flock-verify's acceptance, one table**, from a bound on the compiled audit: for any event
-`Q` of the simulated prover (at least `K` wrong units of its committed values, say), if the compiled `--zk` audit
+`Q` of the simulated prover (at least `K` incorrect proof blocks of its committed values, say), if the compiled `--zk` audit
 accepts with `Q` with probability at most `B` against `simAuditZK … τ`, then flock-verify `--zk` accepts the live
 audit's transcript with `Q` with probability at most `B`. -/
 def ZkHeadlineExecOne : Prop :=

@@ -80,7 +80,7 @@ def test_each_fingerprint_rule(conforming: dict, field: str, value, fragment: st
 
 
 def test_authentication_included_hash_is_a_recognised_column(conforming: dict) -> None:
-    """``authentication = included-hash`` (the operands hashed inside the proof, lane hash-relation) validates and is a
+    """``authentication = included-hash`` (the operands hashed inside the proof) validates and is a
     different identity from ``excluded`` (the judge never compares the two columns as one)."""
     fp = conforming["workload_fingerprint"]
     hashed = {**conforming, "workload_fingerprint": {**fp, "authentication": "included-hash"}}
@@ -514,9 +514,9 @@ def test_instances_is_required_but_nullable(conforming: dict) -> None:
     assert built["instances"] is None, "always written: null = not measured on the shared input set"
 
 
-def test_instances_ref_and_its_validation(conforming: dict) -> None:
+def test_input_set_ref_and_its_validation(conforming: dict) -> None:
     fp = {**conforming["workload_fingerprint"], "B": 64}
-    ref = contract.instances_ref("vu-k1536", 0, 64, SHA)
+    ref = contract.input_set_ref("vu-k1536", 0, 64, SHA)
     assert ref == {"dataset": "bench-instances/v1", "tier": "vu-k1536", "range": [0, 64], "manifest_sha256": SHA}
     assert contract.validate_fingerprint({**fp, "instances": ref}) == []
     assert contract.validate_fingerprint({**fp, "B": 4096, "B_real": 64, "instances": ref}) == []
@@ -531,12 +531,12 @@ def test_instances_ref_and_its_validation(conforming: dict) -> None:
     assert contract.validate_fingerprint({**fp, "instances": {"dataset": "x"}}) == ["instances.tier missing", "instances.range missing", "instances.manifest_sha256 missing"]
     assert contract.validate_fingerprint({**fp, "instances": "vu-k1536"}) == ["instances must be an object {dataset, tier, range, manifest_sha256} or null, got 'vu-k1536'"]
     with pytest.raises(ValueError, match="instances does not conform"):
-        contract.instances_ref("vu-k1536", 5, 5, SHA)
+        contract.input_set_ref("vu-k1536", 5, 5, SHA)
 
 
 def test_compare_instances_conflicts_and_warnings(conforming: dict) -> None:
     fp = conforming["workload_fingerprint"]
-    same = contract.instances_ref("vu-k1536", 0, 64, SHA)
+    same = contract.input_set_ref("vu-k1536", 0, 64, SHA)
     a, b = {**fp, "B": 64, "instances": same}, {**fp, "B": 64, "instances": dict(same)}
     assert contract.compare_instances(a, b) == (None, [])
     # a different manifest, tier or dataset: conflict
@@ -545,9 +545,9 @@ def test_compare_instances_conflicts_and_warnings(conforming: dict) -> None:
     assert conflict == (same, other) and warnings == []
     assert contract.compare_instances(a, {**b, "instances": {**same, "tier": "tu-k16"}})[0] is not None
     # different ids for the same batch size: conflict; different ids because B differs: a scaling point, no conflict
-    shifted = contract.instances_ref("vu-k1536", 64, 128, SHA)
+    shifted = contract.input_set_ref("vu-k1536", 64, 128, SHA)
     assert contract.compare_instances(a, {**b, "instances": shifted})[0] == (same, shifted)
-    bigger = contract.instances_ref("vu-k1536", 0, 4096, SHA)
+    bigger = contract.input_set_ref("vu-k1536", 0, 4096, SHA)
     assert contract.compare_instances(a, {**b, "B": 4096, "instances": bigger}) == (None, [])
     # null or absent on either side: no conflict, a warning naming the side
     conflict, warnings = contract.compare_instances(a, {**b, "instances": None})

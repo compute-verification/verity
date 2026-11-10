@@ -99,7 +99,7 @@ theorem SpecP.parseF {own : Option ByteArray} {pi : HmIn.Ports} (s : SpecP tags 
   rwa [HmOut.parseCommit, if_neg (by simp [hi])] at h
 
 /-- **Without the verifier's public inputs, `SpecP` is `Spec`**: `HmIn.checkOwn` at `none` leaves no public input port,
-and with none `HmIn`'s public file, draw, Δ and regions are `HmOut`'s. -/
+and with none `HmIn`'s public file, sample, Δ and regions are `HmOut`'s. -/
 theorem SpecP.spec {pi : HmIn.Ports} (h : SpecP tags cf pf coins tables draw none pi st) :
     Spec tags cf pf coins tables draw st := by
   obtain ⟨pop, hl, hown, hnone, hsome⟩ := h.pub

@@ -22,10 +22,10 @@ def _head(B, S, q, k, v):
     """`AttentionHeadSplit_v1`'s body on bits over `AttnBlock_v9`, `SparseMlaSplitEnd_v2` and `SparseMlaCombine_v2`."""
     c = BAt._Bits(B)
 
-    def block_of(nvis, first, check):
+    def tile_of(nvis, first, check):
         return bind(BAt.AttnBlockV9, D=S.D, NVIS=nvis, FIRST=first, BN=S.BN, DOT=S.DOT, CHECK=check)
     end = bind(BX.SparseMlaSplitEndV2, DV=S.D, INV=S.INV, SCALE=S.D ** -0.5)
-    return F.head_split(B, S, block_of, end, lambda n: bind(BX.SparseMlaCombineV2, NSPLIT=n, DV=S.D, INV=S.INV),
+    return F.head_split(B, S, tile_of, end, lambda n: bind(BX.SparseMlaCombineV2, NSPLIT=n, DV=S.D, INV=S.INV),
                         lambda w: c.word(0, w), q, k, v)
 
 

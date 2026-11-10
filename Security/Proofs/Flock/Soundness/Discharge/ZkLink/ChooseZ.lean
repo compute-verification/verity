@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkLink.LockRep
 public import Proofs.Flock.Soundness.Game.LockChoose
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The masked session's fork probabilities do not read the chooser

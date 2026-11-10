@@ -493,7 +493,7 @@ def test_attempt_build_from_fixture_run_dir(tmp_path):
 
 
 def test_a_result_too_big_for_a_manifest_publishes_its_largest_fields_as_the_payload(tmp_path):
-    """INF-43: r20261010-162750-3ea6's 593 KB result.json made a 358 KB meta, over META_MAX_BYTES, so its attempt never published."""
+    """A 593 KB result.json makes a 358 KB meta, over META_MAX_BYTES, so without this its attempt would never publish."""
     d = _run_copy(tmp_path)
     doc = json.loads((d / "result.json").read_text())
     doc["findings"] = ["x" * 1000] * 400

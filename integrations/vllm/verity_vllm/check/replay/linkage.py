@@ -113,10 +113,10 @@ def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, i
             e["sampled_id"] = None if w is None else int(np.asarray(w).astype(np.int64)[0])
             if lag is None:
                 unlinked.append({"request_id": rid, "engine_step": last, "kind": "eos",
-                                 "why": f"{over} and the record does not attest its scheduler's EOS lag (RunHeader.profile.engine_kwargs.async_scheduling unattested, "
-                                        f"RULING 21): the EOS step cannot be named, refuse by name"})
+                                 "why": f"{over} and the record does not attest its scheduler's EOS lag (RunHeader.profile.engine_kwargs.async_scheduling "
+                                        f"unattested): the EOS step cannot be named, refuse by name"})
             elif lag not in (0, 1):
-                unlinked.append({"request_id": rid, "engine_step": last, "kind": "eos", "why": f"{over} but the attested EOS lag {lag} is not in {{0, 1}} (RULING 21): refuse by name"})
+                unlinked.append({"request_id": rid, "engine_step": last, "kind": "eos", "why": f"{over} but the attested EOS lag {lag} is not in {{0, 1}}: refuse by name"})
             elif len(steps) < lag + 1:
                 unlinked.append({"request_id": rid, "engine_step": last, "kind": "eos", "why": f"{over}: fewer steps than the attested EOS lag {lag} + 1, no EOS step exists"})
             else:

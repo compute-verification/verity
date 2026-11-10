@@ -190,35 +190,3 @@ def test_the_engine_refuses_layers_that_did_not_run_the_declared_scope(monkeypat
     assert mismatches("all", _Layer(Int8()), _Layer(impl=FlashAttn())) == ["int8_exact declared 'all', layers report 'linears'"]
     assert mismatches("linears", _Layer(Int8()), _Layer(Unquantized())) == ["int8_exact declared 'linears', layers report '<mixed>'"]
     assert mismatches("attention") == ["int8_exact declared 'attention', layers report None"]
-
-
-def test_the_engine_registers_each_part_and_refuses_a_compiled_int8_engine(monkeypatch, tmp_path):
-    pytest.importorskip("torch")
-    import json
-    import sys
-
-    from verity_vllm import engine as engine_pkg
-    from verity_vllm.engine import build as B
-    from verity_vllm.engine import engine_profile as prof
-    registered = []
-    for mod in ("int8_vllm", "int8_attention_vllm"):
-        fake = types.SimpleNamespace(register=lambda mod=mod: registered.append(mod))
-        monkeypatch.setitem(sys.modules, f"verity_vllm.engine.{mod}", fake)
-        monkeypatch.setattr(engine_pkg, mod, fake, raising=False)
-    monkeypatch.setattr(prof, "apply_env", lambda: {})
-    monkeypatch.setattr(B.engine_env, "apply_target", lambda env: {})
-    cps = tmp_path / "checkpoints.json"
-    cps.write_text(json.dumps({"checkpoints": [{"repo": "r/int8", "role": "INT8", "downloaded": True, "local_path": str(tmp_path)}]}))
-    for scope, parts in (("linears", ["int8_vllm"]), ("attention", ["int8_attention_vllm"]), ("all", ["int8_vllm", "int8_attention_vllm"])):
-        registered.clear()
-        t = SM120.with_overrides(int8_exact=scope)
-        kw, _, _ = B.engine_kwargs_for(cps, case="INT8", target=t)
-        assert {k: kw[k] for k in ("quantization", "attention_backend") if k in kw} == APPLIES[scope]
-        assert kw["enforce_eager"] is True and registered == parts
-        with pytest.raises(RuntimeError, match="runs eagerly only"):
-            B.engine_kwargs_for(cps, case="INT8", target=t, engine_args={"enforce_eager": False})
-        with pytest.raises(RuntimeError, match="runs eagerly only"):
-            B.engine_kwargs_for(cps, case="INT8", target=t.with_overrides(compilation="piecewise"))
-    registered.clear()
-    kw, _, _ = B.engine_kwargs_for(cps, case="INT8", target=SM120)
-    assert "quantization" not in kw and "attention_backend" not in kw and registered == []

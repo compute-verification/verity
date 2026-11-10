@@ -1,8 +1,25 @@
 module
 
 public import Proofs.Flock.Recursive.Guarantees
+public import Proofs.Flock.Recursive.Statements
 public import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Hides
-public import Proofs.Flock.Verifier.Registered
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.CROnly.Hiding
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.Soundness.ZK.Hiding
 
 /-!
 # Proofs of the recursive audit's circuit privacy, and that it ran the registered private circuit
@@ -10,14 +27,14 @@ public import Proofs.Flock.Verifier.Registered
 * `recursiveCircuitPrivate_le`, with `RecursiveZK` as the step: at each
   registration salt `r`, `RecursiveZK` at an hm96 hiding bound `δ` (`recursiveZK_le`; and, for the other way, the same
   on the event's complement) moves
-  the firewall's commitments and V*'s sessions to the ideal leaves and V*'s simulator, which read `r` only through the
+  the ZK server's commitments and V*'s sessions to the ideal leaves and V*'s simulator, which read `r` only through the
   registration's view `reg P r`; then the registration's hiding, as a test with values in `[0, 1]` (`Hides.avg_le`),
   moves `reg P r` to `reg p₀ r`. `Flock.SecurityProofs.RecursiveCircuitPrivate` is it at the pinned key's hiding gap
   (`CROnly.hm96Hiding_gap`).
 * `RecursiveCircuitIndist` is the two ways of `recursiveCircuitPrivate_le` through the simulator at `p₀ = P`, at the gap.
 * `regLeaves_hides`: a registration by hm96 leaves hides at `2·n_r·δ`, `ideal_leaves_swap` from each private circuit to the
   ideal leaves and back (on the complement); `recursiveCircuitPrivateLeaves_le` is `recursiveCircuitPrivate_le` with it,
-  `RecursiveCircuitPrivateLeaves` that at the gap, and `RecursiveAudit`'s (ii) the same at the firewall, at the gap
+  `RecursiveCircuitPrivateLeaves` that at the gap, and `RecursiveAudit`'s (ii) the same at the ZK server, at the gap
   (`Proofs.Flock.Recursive.FirewallZK`).
 * `RanRegisteredRun`: an accepted outcome off the registered program is, by the binding, one whose opening and the
   registrant's collide; with no such outcome reached (`prob_mono_outcome`), accepting off `p` adds nothing to `B`.

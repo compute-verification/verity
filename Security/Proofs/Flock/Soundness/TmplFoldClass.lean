@@ -1,6 +1,14 @@
 module
 
-public import Proofs.Flock.Soundness.TmplFoldTree
+public import Flock.TmplFold
+public import Proofs.Flock.Level3.GF128Field
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Level3.FoldedBase
+import Proofs.Flock.Level3.Nodes
+import Proofs.Flock.Soundness.SparseRows
+import Proofs.Flock.Soundness.TmplFoldDef
+import Proofs.Flock.Soundness.TmplFoldRef
 
 /-!
 # A class's fold, valued

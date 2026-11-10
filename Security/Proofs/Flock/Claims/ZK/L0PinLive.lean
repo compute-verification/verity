@@ -1,14 +1,48 @@
 module
 
-public import Proofs.Flock.Claims.ZK.L0PinBind
+public import Proofs.Flock.Claims.ZK.FrameLoop
 public import Proofs.Flock.Claims.ZK.FrameOpenLive
-public import Proofs.Flock.Claims.ZK.FrameTaken
+public import Proofs.Flock.Claims.ZK.FramePhase
+public import Proofs.Flock.Claims.ZK.L0PinBind
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.FrameProg
+import Proofs.Flock.Claims.ZK.FrameTaken
 
 /-!
 # A live history's level-0 rounds
 
 On a live history whose messages are the deferred release's own, each frame round's message is the frame's release of
-the worker's round, which the frame's check passed against the firewall's scheduled round. Where the scheduled round
+the worker's round, which the frame's check passed against the ZK server's scheduled round. Where the scheduled round
 carries no free value, as past the algebraic phase, passing is equality byte for byte (`passes_eq`), so:
 
 * **`LeanRelease.msg_sched`**: the message is the frame's release of the scheduled round itself.
@@ -67,7 +101,7 @@ theorem msg_sched {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : 
   rw [L.frameD_toSrv L.fillOf wk x w ρ κ _ hk' hu, e]
 
 /-- **A live sent level-0 round is its body at the pads**: where the frame takes the coins before round `j` at level 0's
-masked phase and the round's position, and the firewall schedules round `j` as a sent level-0 round's zero-pad body,
+masked phase and the round's position, and the ZK server schedules round `j` as a sent level-0 round's zero-pad body,
 round `j`'s message is its body at the pads, tagged `0`. -/
 theorem msg_l0 {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hl : L.toSrv.live wk x w ρ κ h = true)
@@ -93,7 +127,7 @@ theorem msg_l0 {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg
     (by rw [hlj]; exact hk2) (by rw [hlj]; exact h0) (by rw [hlj]; exact hn) hb
 
 /-- **A live binding round is the binding**: where the frame takes the coins before round `j` outside a masked phase,
-after the algebraic phase's opening and before level 0 closes, at a Ligerito rep, and the firewall schedules round `j` as
+after the algebraic phase's opening and before level 0 closes, at a Ligerito rep, and the ZK server schedules round `j` as
 the opening's binding with `z`'s squeeze, round `j`'s message is that round, tagged `0`. -/
 theorem msg_openBind {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hl : L.toSrv.live wk x w ρ κ h = true)

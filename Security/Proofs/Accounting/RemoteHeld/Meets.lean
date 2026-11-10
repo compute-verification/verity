@@ -1,7 +1,9 @@
 module
 
-public import Proofs.Accounting.RemoteHeld
-public import Mathlib.Tactic.NormNum.OfScientific
+public import Definitions.Accounting.Assumptions.RemoteHeld
+import Mathlib.Algebra.BigOperators.Group.Finset.Piecewise
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Prob
 
 /-!
 # The premises of `Held` meet on a node that uses every route

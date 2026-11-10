@@ -3,6 +3,18 @@ module
 public import Proofs.Flock.Soundness.Refine.ArithK
 public import Proofs.Flock.Soundness.Refine.ExecLM
 public import Proofs.Flock.Soundness.Refine.Schedule
+public import Mathlib.CategoryTheory.Category.Basic
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.List.GetD
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Level3.LookupRows
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.Soundness.LigeritoQueries
+import Proofs.Flock.Soundness.Refine.Arith
+import Proofs.Flock.Soundness.Refine.Plays
+import VCVio.Prelude.Core
 
 /-!
 # Ligerito's rounds refine the model's (`Flock.Ligerito`)

@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Types.Dag
+import Proofs.Flock.Soundness.Audit.Circuit
 
 /-!
 # A type DAG's Boolean circuit (phase 1 S4a: `flatten`, `flatten_eval`)
@@ -181,8 +182,8 @@ theorem xorChain_spec (inp : Nat → Bool) :
     ∀ (rest : List Nat) (gs : Array Gate) (acc : Nat), acc < gs.size → (∀ g ∈ rest, g < gs.size) →
       Ext gs (xorChain gs acc rest).1 ∧ (xorChain gs acc rest).2 < (xorChain gs acc rest).1.size ∧
         gval inp (xorChain gs acc rest).1 (xorChain gs acc rest).2 =
-          Bool.xor (gval inp gs acc) (xorSum rest (gval inp gs))
-  | [], gs, acc, hacc, _ => ⟨Ext.refl gs, hacc, by simp [xorChain, xorSum]⟩
+          Bool.xor (gval inp gs acc) (Verity.Boolean.xorSum rest (gval inp gs))
+  | [], gs, acc, hacc, _ => ⟨Ext.refl gs, hacc, by simp [xorChain, Verity.Boolean.xorSum]⟩
   | g :: rest, gs, acc, hacc, hrest => by
     have hg : g < gs.size := hrest g (List.mem_cons_self ..)
     obtain ⟨h1, h2, h3⟩ := xorChain_spec inp rest (gs.push (.xor acc g)) gs.size (by simp)
@@ -193,7 +194,7 @@ theorem xorChain_spec (inp : Nat → Bool) :
     simp only [Gate.step]
     have e1 : (evalG inp gs).getD acc false = gval inp gs acc := rfl
     have e2 : (evalG inp gs).getD g false = gval inp gs g := rfl
-    rw [e1, e2, xorSum_congr (fun g' hg' => gval_push_lt inp gs _ (hrest g' (List.mem_cons_of_mem _ hg'))),
+    rw [e1, e2, Verity.Boolean.xorSum_congr (fun g' hg' => gval_push_lt inp gs _ (hrest g' (List.mem_cons_of_mem _ hg'))),
       Bool.xor_assoc]
 
 /-- The wires' gates carry the wire values: wire `w`'s gate (`zero` past the wires) is a gate whose value is wire `w`'s,
@@ -224,9 +225,9 @@ theorem formGate_spec (inp : Nat → Bool) {one zero : Nat} {wg : Array Nat} {gs
     (hI : WInv inp one zero gs wg vals) (f : Form) :
     Ext gs (formGate one zero wg gs f).1 ∧ (formGate one zero wg gs f).2 < (formGate one zero wg gs f).1.size ∧
       gval inp (formGate one zero wg gs f).1 (formGate one zero wg gs f).2 = formVal (vals.getD · false) f := by
-  have hsum : xorSum (f.ws.toList.map (wg.getD · zero)) (gval inp gs) = xorSum f.ws.toList (vals.getD · false) := by
+  have hsum : Verity.Boolean.xorSum (f.ws.toList.map (wg.getD · zero)) (gval inp gs) = Verity.Boolean.xorSum f.ws.toList (vals.getD · false) := by
     rw [xorSum_map]
-    exact xorSum_congr fun w _ => hI.val w
+    exact Verity.Boolean.xorSum_congr fun w _ => hI.val w
   have hlt : ∀ g ∈ f.ws.toList.map (wg.getD · zero), g < gs.size := by
     intro g hg
     obtain ⟨w, -, rfl⟩ := List.mem_map.mp hg
@@ -236,7 +237,7 @@ theorem formGate_spec (inp : Nat → Bool) {one zero : Nat} {wg : Array Nat} {gs
   cases L with
   | nil =>
     have hv : formVal (vals.getD · false) f = decide (f.c = 1) := by
-      unfold formVal; rw [← hsum]; simp [xorSum]
+      unfold formVal; rw [← hsum]; simp [Verity.Boolean.xorSum]
     rw [hv]
     by_cases hc : f.c = 1
     · simp only [hc, ↓reduceIte, decide_true]
@@ -246,7 +247,7 @@ theorem formGate_spec (inp : Nat → Bool) {one zero : Nat} {wg : Array Nat} {gs
   | cons g rest =>
     obtain ⟨e1, e2, e3⟩ := xorChain_spec inp rest gs g (hlt g (List.mem_cons_self ..))
       (fun g' hg' => hlt g' (List.mem_cons_of_mem _ hg'))
-    have hv : Bool.xor (gval inp gs g) (xorSum rest (gval inp gs)) = xorSum f.ws.toList (vals.getD · false) := by
+    have hv : Bool.xor (gval inp gs g) (Verity.Boolean.xorSum rest (gval inp gs)) = Verity.Boolean.xorSum f.ws.toList (vals.getD · false) := by
       rw [← hsum, xorSum_cons]
     by_cases hc : f.c = 1
     · simp only [hc, ↓reduceIte]
@@ -513,9 +514,9 @@ def bitsGates (zero : Nat) (ws : Array Nat) (lo : Nat) (loM hiM : Array Nat) :
 theorem xorGates_spec (inp : Nat → Bool) (zero : Nat) (gs : Array Gate) (xs : List Nat) (hz : zero < gs.size)
     (hzv : gval inp gs zero = false) (hxs : ∀ x ∈ xs, x < gs.size) :
     Ext gs (xorGates zero gs xs).1 ∧ (xorGates zero gs xs).2 < (xorGates zero gs xs).1.size ∧
-      gval inp (xorGates zero gs xs).1 (xorGates zero gs xs).2 = xorSum xs (gval inp gs) := by
+      gval inp (xorGates zero gs xs).1 (xorGates zero gs xs).2 = Verity.Boolean.xorSum xs (gval inp gs) := by
   cases xs with
-  | nil => exact ⟨Ext.refl gs, hz, by simpa [xorGates, xorSum] using hzv⟩
+  | nil => exact ⟨Ext.refl gs, hz, by simpa [xorGates, Verity.Boolean.xorSum] using hzv⟩
   | cons g rest =>
     obtain ⟨h1, h2, h3⟩ := xorChain_spec inp rest gs g (hxs g (List.mem_cons_self ..))
       (fun x hx => hxs x (List.mem_cons_of_mem _ hx))
@@ -526,10 +527,10 @@ theorem prodGates_spec (inp : Nat → Bool) (zero : Nat) (ws : Array Nat) (lo : 
       (∀ a ∈ acc, a < gs.size) →
       Ext gs (prodGates zero ws lo loM hiM j gs cnt h acc).1 ∧
         (∀ a ∈ (prodGates zero ws lo loM hiM j gs cnt h acc).2, a < (prodGates zero ws lo loM hiM j gs cnt h acc).1.size) ∧
-        xorSum (prodGates zero ws lo loM hiM j gs cnt h acc).2 (gval inp (prodGates zero ws lo loM hiM j gs cnt h acc).1) =
-          Bool.xor (xorSum acc (gval inp gs)) (xorSum (List.range' h cnt) fun h' =>
-            gval inp gs (hiM.getD h' 0) && xorSum (sel ws lo loM.size h' j) fun l => gval inp gs (loM.getD l 0))
-  | 0, gs, h, acc, _, _, hacc => ⟨Ext.refl gs, hacc, by simp [prodGates, xorSum]⟩
+        Verity.Boolean.xorSum (prodGates zero ws lo loM hiM j gs cnt h acc).2 (gval inp (prodGates zero ws lo loM hiM j gs cnt h acc).1) =
+          Bool.xor (Verity.Boolean.xorSum acc (gval inp gs)) (Verity.Boolean.xorSum (List.range' h cnt) fun h' =>
+            gval inp gs (hiM.getD h' 0) && Verity.Boolean.xorSum (sel ws lo loM.size h' j) fun l => gval inp gs (loM.getD l 0))
+  | 0, gs, h, acc, _, _, hacc => ⟨Ext.refl gs, hacc, by simp [prodGates, Verity.Boolean.xorSum]⟩
   | cnt + 1, gs, h, acc, hlo, hhi, hacc => by
     simp only [prodGates]
     split
@@ -557,23 +558,23 @@ theorem prodGates_spec (inp : Nat → Bool) (zero : Nat) (ws : Array Nat) (lo : 
       refine ⟨e0.trans h1, h2, ?_⟩
       rw [h3]
       have hnew : gval inp (R.1.push (.and (hiM.getD h 0) R.2)) R.1.size =
-          (gval inp gs (hiM.getD h 0) && xorSum (sel ws lo loM.size h j) fun l => gval inp gs (loM.getD l 0)) := by
+          (gval inp gs (hiM.getD h 0) && Verity.Boolean.xorSum (sel ws lo loM.size h j) fun l => gval inp gs (loM.getD l 0)) := by
         rw [gval_push_new]
         show (gval inp R.1 (hiM.getD h 0) && gval inp R.1 R.2) = _
         rw [c1.gval inp (hhi h), c3, hs, xorSum_cons, xorSum_map]
         rfl
-      have hacc' : xorSum (acc ++ [R.1.size]) (gval inp (R.1.push (.and (hiM.getD h 0) R.2))) =
-          Bool.xor (xorSum acc (gval inp gs)) (gval inp gs (hiM.getD h 0) &&
-            xorSum (sel ws lo loM.size h j) fun l => gval inp gs (loM.getD l 0)) := by
+      have hacc' : Verity.Boolean.xorSum (acc ++ [R.1.size]) (gval inp (R.1.push (.and (hiM.getD h 0) R.2))) =
+          Bool.xor (Verity.Boolean.xorSum acc (gval inp gs)) (gval inp gs (hiM.getD h 0) &&
+            Verity.Boolean.xorSum (sel ws lo loM.size h j) fun l => gval inp gs (loM.getD l 0)) := by
         rw [xorSum_append, xorSum_cons, xorSum_nil, Bool.xor_false, hnew,
-          xorSum_congr (fun a ha => e0.gval inp (hacc a ha))]
+          Verity.Boolean.xorSum_congr (fun a ha => e0.gval inp (hacc a ha))]
       rw [hacc', List.range'_succ, xorSum_cons, Bool.xor_assoc]
       congr 2
-      apply xorSum_congr
+      apply Verity.Boolean.xorSum_congr
       intro h' hh'
       have hsel' : ∀ l ∈ sel ws lo loM.size h' j, gval inp (R.1.push (.and (hiM.getD h 0) R.2)) (loM.getD l 0) =
           gval inp gs (loM.getD l 0) := fun l _ => e0.gval inp (hlo l)
-      rw [e0.gval inp (hhi h'), xorSum_congr hsel']
+      rw [e0.gval inp (hhi h'), Verity.Boolean.xorSum_congr hsel']
 
 /-- **A read's value bits**: with the decoders' minterms one-hot at `loIdx` and `hiIdx`, bit `j + m`'s gate carries bit
 `j + m` of word `hiIdx · 2^lo + loIdx`. -/
@@ -602,19 +603,19 @@ theorem bitsGates_spec (inp : Nat → Bool) (zero : Nat) (ws : Array Nat) (lo : 
     have hbit : gval inp X.1 X.2 = (ws.getD (hiIdx * 2 ^ lo + loIdx) 0).testBit j := by
       rw [x3, p3, xorSum_nil, Bool.false_xor, List.range'_eq_map_range, xorSum_map]
       simp only [Nat.zero_add]
-      have hsel : ∀ h, xorSum (sel ws lo loM.size h j) (fun l => gval inp gs (loM.getD l 0)) =
+      have hsel : ∀ h, Verity.Boolean.xorSum (sel ws lo loM.size h j) (fun l => gval inp gs (loM.getD l 0)) =
           decide (loIdx ∈ sel ws lo loM.size h j) := by
         intro h
         have hnd : (sel ws lo loM.size h j).Nodup := List.nodup_range.filter _
         have hlt : ∀ l ∈ sel ws lo loM.size h j, l < loM.size := fun l hl =>
           List.mem_range.mp (List.mem_filter.mp hl).1
-        rw [xorSum_congr (w := fun l => decide (loIdx = l)) (fun l hl => hlov l (hlt l hl))]
+        rw [Verity.Boolean.xorSum_congr (w := fun l => decide (loIdx = l)) (fun l hl => hlov l (hlt l hl))]
         exact xorSum_onehot (fun _ => rfl) _ hnd
-      have hfun : ((fun h' => gval inp gs (hiM.getD h' 0) && xorSum (sel ws lo loM.size h' j)
+      have hfun : ((fun h' => gval inp gs (hiM.getD h' 0) && Verity.Boolean.xorSum (sel ws lo loM.size h' j)
           fun l => gval inp gs (loM.getD l 0)) ∘ fun x => x) = fun h' =>
           gval inp gs (hiM.getD h' 0) && decide (loIdx ∈ sel ws lo loM.size h' j) := by
         funext h'; simp only [Function.comp, hsel]
-      rw [hfun, xorSum_congr (w := fun h => decide (hiIdx = h) && decide (loIdx ∈ sel ws lo loM.size h j))
+      rw [hfun, Verity.Boolean.xorSum_congr (w := fun h => decide (hiIdx = h) && decide (loIdx ∈ sel ws lo loM.size h j))
         (fun h hh => by rw [hhiv h (List.mem_range.mp hh)]), xorSum_select hhiI]
       simp [sel, hloI]
     obtain ⟨h1, h2, h3, h4, h5⟩ := bitsGates_spec inp zero ws lo loM hiM hloI hhiI cnt X.1 (j + 1) (acc.push X.2)
@@ -1102,11 +1103,11 @@ theorem flatten_topo (types : String → Option CircuitType) (words : String →
       (c1.trans f1).size_le
     simpa [Array.getD, ho] using this
 
-/-! ## As an `Audit.Circuit` -/
+/-! ## As a `Verity.Boolean.Circuit` -/
 
-/-- Gate `g` as an `Audit.Op`: its arguments as gates of the array (below it, when `Topo` holds; an argument past the
+/-- Gate `g` as a `Verity.Boolean.Op`: its arguments as gates of the array (below it, when `Topo` holds; an argument past the
 array reads `g` itself, which `Topo` rules out). -/
-def toOp (gs : Array Gate) (g : Fin gs.size) : Op gs.size :=
+def toOp (gs : Array Gate) (g : Fin gs.size) : Verity.Boolean.Op gs.size :=
   let fin := fun a : ℕ => if ha : a < gs.size then (⟨a, ha⟩ : Fin gs.size) else g
   match gs[g.val]'g.isLt with
   | .input => .input
@@ -1135,12 +1136,12 @@ theorem toOp_args {gs : Array Gate} (h : Topo gs) (g : Fin gs.size) : ∀ a ∈ 
   intro a ha
   have hlt : ∀ x ∈ gs[n].args, x < n := h n hn
   cases hg : gs[n] with
-  | input => rw [toOp_input hn hg] at ha; simp [Op.args] at ha
+  | input => rw [toOp_input hn hg] at ha; simp [Verity.Boolean.Op.args] at ha
   | and x y =>
     have hx := hlt x (by rw [hg]; simp [Gate.args])
     have hy := hlt y (by rw [hg]; simp [Gate.args])
     rw [toOp_and hn hg (by omega) (by omega)] at ha
-    simp only [Op.args, List.mem_cons, List.not_mem_nil, or_false] at ha
+    simp only [Verity.Boolean.Op.args, List.mem_cons, List.not_mem_nil, or_false] at ha
     rcases ha with rfl | rfl
     · exact hx
     · exact hy
@@ -1148,25 +1149,25 @@ theorem toOp_args {gs : Array Gate} (h : Topo gs) (g : Fin gs.size) : ∀ a ∈ 
     have hx := hlt x (by rw [hg]; simp [Gate.args])
     have hy := hlt y (by rw [hg]; simp [Gate.args])
     rw [toOp_xor hn hg (by omega) (by omega)] at ha
-    simp only [Op.args, List.mem_cons, List.not_mem_nil, or_false] at ha
+    simp only [Verity.Boolean.Op.args, List.mem_cons, List.not_mem_nil, or_false] at ha
     rcases ha with rfl | rfl
     · exact hx
     · exact hy
   | not x =>
     have hx := hlt x (by rw [hg]; simp [Gate.args])
     rw [toOp_not hn hg (by omega)] at ha
-    simp only [Op.args, List.mem_cons, List.not_mem_nil, or_false] at ha
+    simp only [Verity.Boolean.Op.args, List.mem_cons, List.not_mem_nil, or_false] at ha
     subst ha
     exact hx
 
-/-- **A gate array as an `Audit.Circuit`**: the same gates, each over gates below it (`Topo`). -/
-def toCircuit (gs : Array Gate) (h : Topo gs) (outs : Finset (Fin gs.size)) : Circuit where
+/-- **A gate array as a `Verity.Boolean.Circuit`**: the same gates, each over gates below it (`Topo`). -/
+def toCircuit (gs : Array Gate) (h : Topo gs) (outs : Finset (Fin gs.size)) : Verity.Boolean.Circuit where
   N := gs.size
   op := toOp gs
   topo := toOp_args h
   outputs := outs
 
-/-- **The circuit computes the gate array**: on inputs `inp`, gate `g`'s value in `Audit.Circuit.eval` is `gval`'s. -/
+/-- **The circuit computes the gate array**: on inputs `inp`, gate `g`'s value in `Verity.Boolean.Circuit.eval` is `gval`'s. -/
 theorem toCircuit_eval (gs : Array Gate) (h : Topo gs) (outs : Finset (Fin gs.size)) (inp : ℕ → Bool)
     (g : Fin gs.size) : (toCircuit gs h outs).eval (fun g => inp g.val) g = gval inp gs g.val := by
   suffices ∀ n (hn : n < gs.size), (toCircuit gs h outs).eval (fun g => inp g.val) ⟨n, hn⟩ = gval inp gs n from
@@ -1181,15 +1182,15 @@ theorem toCircuit_eval (gs : Array Gate) (h : Topo gs) (outs : Finset (Fin gs.si
   cases hg : gs[n] with
   | input =>
     have hop : (toCircuit gs h outs).op ⟨n, hn⟩ = .input := toOp_input hn hg
-    rw [Circuit.eval_input _ _ (by rw [hop]; rfl)]
+    rw [Verity.Boolean.Circuit.eval_input _ _ (by rw [hop]; rfl)]
     simp only [Gate.step, hsz]
   | and x y =>
     have hx := hlt x (by rw [hg]; simp [Gate.args])
     have hy := hlt y (by rw [hg]; simp [Gate.args])
     have hop : (toCircuit gs h outs).op ⟨n, hn⟩ = .and ⟨x, show x < gs.size by omega⟩ ⟨y, show y < gs.size by omega⟩ :=
       toOp_and hn hg _ _
-    rw [Circuit.eval_op _ _ (by rw [hop]; rfl), hop]
-    simp only [Op.apply, Gate.step]
+    rw [Verity.Boolean.Circuit.eval_op _ _ (by rw [hop]; rfl), hop]
+    simp only [Verity.Boolean.Op.apply, Gate.step]
     rw [ih x hx (by omega), ih y hy (by omega), gval_prefix h inp (Nat.le_of_lt hn) hx,
       gval_prefix h inp (Nat.le_of_lt hn) hy]
   | xor x y =>
@@ -1197,25 +1198,25 @@ theorem toCircuit_eval (gs : Array Gate) (h : Topo gs) (outs : Finset (Fin gs.si
     have hy := hlt y (by rw [hg]; simp [Gate.args])
     have hop : (toCircuit gs h outs).op ⟨n, hn⟩ = .xor ⟨x, show x < gs.size by omega⟩ ⟨y, show y < gs.size by omega⟩ :=
       toOp_xor hn hg _ _
-    rw [Circuit.eval_op _ _ (by rw [hop]; rfl), hop]
-    simp only [Op.apply, Gate.step]
+    rw [Verity.Boolean.Circuit.eval_op _ _ (by rw [hop]; rfl), hop]
+    simp only [Verity.Boolean.Op.apply, Gate.step]
     rw [ih x hx (by omega), ih y hy (by omega), gval_prefix h inp (Nat.le_of_lt hn) hx,
       gval_prefix h inp (Nat.le_of_lt hn) hy]
   | not x =>
     have hx := hlt x (by rw [hg]; simp [Gate.args])
     have hop : (toCircuit gs h outs).op ⟨n, hn⟩ = .not ⟨x, show x < gs.size by omega⟩ := toOp_not hn hg _
-    rw [Circuit.eval_op _ _ (by rw [hop]; rfl), hop]
-    simp only [Op.apply, Gate.step]
+    rw [Verity.Boolean.Circuit.eval_op _ _ (by rw [hop]; rfl), hop]
+    simp only [Verity.Boolean.Op.apply, Gate.step]
     rw [ih x hx (by omega), gval_prefix h inp (Nat.le_of_lt hn) hx]
 
-/-- **Type `t`'s Boolean circuit**, as an `Audit.Circuit`: `flatten`'s gates, its outputs' gates as outputs. -/
+/-- **Type `t`'s Boolean circuit**, as a `Verity.Boolean.Circuit`: `flatten`'s gates, its outputs' gates as outputs. -/
 def flatCircuit (types : String → Option CircuitType) (words : String → Option (Array ℕ)) (loOf : ℕ → ℕ) (F : ℕ)
-    (t : CircuitType) : Circuit :=
+    (t : CircuitType) : Verity.Boolean.Circuit :=
   toCircuit (flatten types words loOf F t).1 (flatten_topo types words loOf F t).1
     (Finset.univ.filter fun g => g.val ∈ (flatten types words loOf F t).2)
 
 /-- **`flatCircuit_eval`**: on inputs `x` (and `one` fed 1), the gate of type `t`'s output `o` carries `evalT`'s
-output `o`, in `Audit.Circuit.eval`. -/
+output `o`, in `Verity.Boolean.Circuit.eval`. -/
 theorem flatCircuit_eval (types : String → Option CircuitType) (words : String → Option (Array ℕ)) (loOf : ℕ → ℕ)
     (F : ℕ) (t : CircuitType) (x : ℕ → Bool) (o : ℕ) (ho : o < t.outputs.size) :
     (flatCircuit types words loOf F t).eval (fun g => if g.val < t.inBits then x g.val else true)

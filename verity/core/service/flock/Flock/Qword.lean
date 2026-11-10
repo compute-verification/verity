@@ -11,6 +11,7 @@ module
 
 public import Flock.Partition
 public import Flock.Steps
+public import Lean.Data.Json.FromToJson.Basic
 
 @[expose] public section
 set_option backward.privateInPublic true
