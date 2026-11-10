@@ -7,7 +7,7 @@ import os
 import subprocess
 import sys
 
-from research import cli, guard_notice
+from research import at_main, guard_notice
 
 A = "bc-12345678-1234-4234-8234-123456789abc"
 LINE = f"no shell hook has run for {A} on this VM, so the guard and the inbox are not running here. Why. The fix"
@@ -57,13 +57,15 @@ def test_a_vm_whose_shell_hook_runs_is_asked_once_and_told_nothing(tmp_path):
     assert (guard.marks / A).exists()
 
 
-def test_only_an_agent_is_asked(tmp_path):
-    """A person, a pod and a node have no conversation id, and an id the hook would never deliver to has no answer."""
+def test_only_an_agent_is_asked_and_never_under_a_test(tmp_path):
+    """A person, a pod and a node have no conversation id; an id the hook would never deliver to has no answer; and a test's
+    `research`, with each process it starts, reads only what its suite declares and nothing of the VM it happens to run on."""
     guard = Guard(tmp_path)
     assert guard.notice() is None
     assert guard.notice(CURSOR_CONVERSATION_ID="") is None
     assert guard.notice(CURSOR_CONVERSATION_ID="../../etc/passwd") is None
     assert guard.notice(CURSOR_CONVERSATION_ID=A[:11]) is None
+    assert guard.notice(CURSOR_CONVERSATION_ID=A, PYTEST_CURRENT_TEST="a test (call)") is None
     guard.tool.unlink()
     assert guard.notice(CURSOR_CONVERSATION_ID=A) is None, "a tree without the guard's tool"
     assert guard.calls == [] and guard.out.getvalue() == "" and not guard.marks.exists()
@@ -83,16 +85,13 @@ def test_an_answer_that_could_not_be_had_is_said_and_the_next_command_asks_again
     assert guard.notice(CURSOR_CONVERSATION_ID=A) is None and len(guard.calls) == 6
 
 
-def test_research_asks_before_a_command_but_not_for_its_version_and_never_under_a_test(monkeypatch, capsys):
-    """A test's `research`, and each `python -m research` it starts, reads only what its suite declares and says nothing of
-    the VM the test happens to run on; outside a test every command asks first, with the process's whole environment."""
-    events = []
-    monkeypatch.setattr(guard_notice, "notice", lambda env: events.append(("asked", env is os.environ)))
-    monkeypatch.setattr(cli, "cmd_status", lambda rest: events.append(("ran", rest)) or 0)
-    assert cli.main(["status"]) == 0 and events == [("ran", [])]
-    monkeypatch.delenv("PYTEST_CURRENT_TEST")
-    monkeypatch.delenv("CLOUD_AGENT_INJECTED_SECRET_NAMES", raising=False)      # no secret to take from a tmux server
-    assert cli.main(["--version"]) == 0 and events == [("ran", [])]
-    assert cli.main(["status", "--json"]) == 0
-    assert events[1:] == [("asked", True), ("ran", ["--json"])], "asked first, with the process's own environment"
-    capsys.readouterr()
+def test_a_command_line_research_asks_first_whichever_copy_then_runs(tmp_path, monkeypatch):
+    """`at_main.reexec` is the first thing a command-line `research` does, in the checkout's copy and again in origin/main's
+    once that runs (the opt-out marks it): a checkout from before this module has only the second, and the mark keeps a
+    newer one from being told twice. It asks with the process's own environment, before deciding which copy runs."""
+    asked = []
+    monkeypatch.setattr(guard_notice, "notice", asked.append)
+    at_main.reexec(["status"], tmp_path, tmp_path / "cache", lambda *a: asked.append("ran another copy"))      # no checkout
+    monkeypatch.setenv(at_main.OPT_OUT, "1")
+    at_main.reexec(["status"], tmp_path, tmp_path / "cache", lambda *a: asked.append("ran another copy"))
+    assert len(asked) == 2 and all(env is os.environ for env in asked)

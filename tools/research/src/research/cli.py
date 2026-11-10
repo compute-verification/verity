@@ -1837,8 +1837,7 @@ def hand_to_ops(cmd: str, rest: list[str]) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     # A test's `python -m research` runs its tree's code, and doesn't read at_main.py, which suites don't declare.
-    under_test = os.environ.get("PYTEST_CURRENT_TEST")
-    if argv is None and not under_test:
+    if argv is None and not os.environ.get("PYTEST_CURRENT_TEST"):
         from .at_main import reexec
 
         reexec(sys.argv[1:])
@@ -1854,10 +1853,6 @@ def main(argv: list[str] | None = None) -> int:
     from .secret_hint import recover
 
     recover()
-    if not under_test:      # nor does a test's read guard_notice.py, or ask about the VM it happens to run on
-        from .guard_notice import notice
-
-        notice(os.environ)
     cmd, rest = argv[0], argv[1:]
     if cmd in OPS_COMMANDS:
         return hand_to_ops(cmd, rest)

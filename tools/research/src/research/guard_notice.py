@@ -3,9 +3,9 @@
 A cloud agent's session runs the hooks of the branch its VM booted on. Where Cursor could load no shell hook from that
 branch's `.cursor/hooks.json`, nothing refuses a command that would print a secret and no inbox message arrives, and nothing
 else says so: every command just works. `tools/agent-guard/inbox.py guard` decides whether a shell hook has run for the
-agent here and writes the line (what is off, why, the fix); `research` asks it before an agent's first command on a VM
-and keeps a mark, so its later commands ask nothing. Only an agent is asked: a person, a pod and a node have no
-`CURSOR_CONVERSATION_ID`.
+agent here and writes the line (what is off, why, the fix); `research` asks it as an agent's first command on a VM starts
+(`at_main.reexec`, the first thing a command-line `research` does) and keeps a mark, so its later commands ask nothing.
+Only an agent is asked: a person, a pod and a node have no `CURSOR_CONVERSATION_ID`.
 """
 from __future__ import annotations
 
@@ -27,11 +27,12 @@ def notice(env: Mapping[str, str], tool: Path = TOOL, marks: Path | None = None,
     """Print the guard's line for this agent, if it has one and this session hasn't been told; what was printed, or None.
 
     `env` is the process's environment: the agent is its `CURSOR_CONVERSATION_ID`, and its checkout `RESEARCH_CHECKOUT`
-    (the agent VM's `research` sets it) or the working directory. The mark is per agent, under the temporary directory,
-    which a new VM starts without; an answer that couldn't be had is said and not marked, so the next command asks again.
-    `research` under a test never calls this: a test's `research` reads only what its suite declares."""
+    (the agent VM's `research` sets it) or the working directory. A process under a test (`PYTEST_CURRENT_TEST`, which a
+    test's subprocesses inherit) asks nothing: a test reads only what its suite declares, and nothing of the VM it happens
+    to run on. The mark is per agent, under the temporary directory, which a new VM starts without; an answer that couldn't
+    be had is said and not marked, so the next command asks again."""
     agent = env.get("CURSOR_CONVERSATION_ID", "").strip()
-    if not AGENT_ID.fullmatch(agent) or not tool.is_file():
+    if env.get("PYTEST_CURRENT_TEST") or not AGENT_ID.fullmatch(agent) or not tool.is_file():
         return None
     mark = (marks or Path(tempfile.gettempdir()) / "research-guard-notice") / agent
     if mark.exists():
