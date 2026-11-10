@@ -510,14 +510,8 @@ def input_file(path: Path, what: str) -> Path:
 
 
 def coin_args(a: argparse.Namespace, fetch: Path) -> list[str]:
-<<<<<<< 99c8914848
-    """The scan's sample arguments: none (every proof block), ``--draw K`` on the verifier's coins, or K on the gate's, drawn on
-||||||| merged common ancestors
-    """The scan's sample arguments: none (every unit), ``--draw K`` on the verifier's coins, or K on the gate's, drawn on
-=======
-    """The scan's sample arguments: none (every unit), ``--draw K`` on the verifier's coins, or K on the gate's, sampled on
->>>>>>> 7af4d24fca3e
-    the auditor's side (`--coin-peer`)."""
+    """The scan's sample arguments: none (every proof block), ``--draw K`` on the verifier's coins, or K on the gate's,
+    sampled on the auditor's side (`--coin-peer`)."""
     if a.coins == "verifier":
         return [] if a.draw is None else ["--draw", str(a.draw)]
     if a.draw is None:

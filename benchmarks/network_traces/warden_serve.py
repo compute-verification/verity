@@ -140,18 +140,10 @@ import stall_probe
 from verity.core.protocols.certifier import io_tie as IT, warden_rows as WR
 from verity.core.protocols.certifier.active import DATA, PAD, id_request
 from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer, LmsKey, record_head
-<<<<<<< 99c8914848
 from verity.core.protocols.certifier.grid import GridParams, BlockGrid, Status, row_count
-from verity.core.protocols.certifier.warden import END, FAIL, REFUSED, Shim, Warden, WardenParams, audit, cells
-||||||| merged common ancestors
-from verity.core.protocols.certifier.grid import GridParams, Record, Status, row_count
-from verity.core.protocols.certifier.warden import END, FAIL, REFUSED, Shim, Warden, WardenParams, audit, cells
-=======
-from verity.core.protocols.certifier.grid import GridParams, Record, Status, row_count
 from verity.core.protocols.certifier.release import WATERMARK_PATH
 from verity.core.protocols.certifier.warden import (EGRESS_FORMS, END, FAIL, INTEGER_FIELDS, REFUSED, Shim, Warden,
                                                     WardenParams, audit, cells)
->>>>>>> 7af4d24fca3e
 
 HERE = Path(__file__).resolve().parent
 INGRESS, EGRESS, FAILS, LINK = "requests", "responses", "fails", "warden"
@@ -771,17 +763,9 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
     """One run of the network certifier on the host's clock (the module docstring's `serve`), its records published by a
     `PublisherProcess` that holds the key in `key` and first signs the load's heads `load_heads` when given, its
     threads sampled by `stall_probe` when `probe`, each bucket released by its pacer `paced_ms` after its boundary
-<<<<<<< 99c8914848
-    (`Warden(paced=…)`, which a warden on the host's clock must have). Returns what `warden.json` holds, with
-    `process`, what `prepare_process` did. The loop's errors are kept, not logged: the ticker writes no file."""
-||||||| merged common ancestors
-    (`Warden(paced=…)`; 0: written on its loop). Returns what `warden.json` holds, with `process`, what
-    `prepare_process` did. The loop's errors are kept, not logged: the ticker writes no file."""
-=======
-    (`Warden(paced=…)`; 0: written on its loop), and the watermark stream sent to `upstream` when `watermark`
-    (`Warden(watermark=…)`). Returns what `warden.json` holds, with `process`, what `prepare_process` did. The loop's
-    errors are kept, not logged: the ticker writes no file."""
->>>>>>> 7af4d24fca3e
+    (`Warden(paced=…)`, which a warden on the host's clock must have), and the watermark stream sent to `upstream` when
+    `watermark` (`Warden(watermark=…)`). Returns what `warden.json` holds, with `process`, what `prepare_process` did.
+    The loop's errors are kept, not logged: the ticker writes no file."""
     out.mkdir(parents=True, exist_ok=True)
     loop = asyncio.get_running_loop()
     errors: list[str] = []
@@ -791,14 +775,8 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
     origin = time.monotonic() + start_in
     warden = Warden(params, lambda: asyncio.open_connection(*upstream), origin=origin, windows=windows,
                     publish=publish, withhold=publish.withhold, release=publish.release, slack=slack,
-<<<<<<< 99c8914848
-                    paced=paced_ms / 1000)
-||||||| merged common ancestors
-                    paced=paced_ms / 1000 if paced_ms else None)
-=======
-                    paced=paced_ms / 1000 if paced_ms else None,
+                    paced=paced_ms / 1000,
                     watermark=(lambda: asyncio.open_connection(*upstream)) if watermark else None)
->>>>>>> 7af4d24fca3e
     server = await asyncio.start_server(warden.handle, *listen)
     sampler = stall_probe.start(out / "stalls.json", origin, {"warden": os.getpid(), "publisher": publish.process.pid},
                                 {threading.get_native_id(): "ticker", publish.feeder: "feeder"}) if probe else None
@@ -819,27 +797,13 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
            "lateness_ms": _quantiles(lateness) | {"over_slack": sum(x > slack * 1000 for x in lateness)},
            "issuer_refused": [[link, d.value, w] for link, d, w in refused], "usage": ar._usage(),
            "publisher_usage": publish.usage, "process": process, "stalls": stalls, "loop_errors": errors,
-<<<<<<< 99c8914848
            "ticks_ms": [round(x, 3) for x in lateness],
            "paced": {"ms": paced_ms, "columns": ["bucket", "arrived_ms", "start_ms", "end_ms", "written"],
                      "releases": [[r.t, round(r.arrived * 1000, 3), round(r.start * 1000, 3),
                                    round(r.end * 1000, 3), r.written] for r in warden.releases]}}
-||||||| merged common ancestors
-           "ticks_ms": [round(x, 3) for x in lateness]}
-    if warden.paced is not None:
-        log["paced"] = {"ms": paced_ms, "columns": ["bucket", "arrived_ms", "start_ms", "end_ms", "written"],
-                        "releases": [[r.t, round(r.arrived * 1000, 3), round(r.start * 1000, 3),
-                                      round(r.end * 1000, 3), r.written] for r in warden.releases]}
-=======
-           "ticks_ms": [round(x, 3) for x in lateness]}
     if watermark:
         log["watermark"] = {"last": warden.watermarked and list(warden.watermarked), "lost": warden.watermark_lost,
                             "error": warden.watermark_error}
-    if warden.paced is not None:
-        log["paced"] = {"ms": paced_ms, "columns": ["bucket", "arrived_ms", "start_ms", "end_ms", "written"],
-                        "releases": [[r.t, round(r.arrived * 1000, 3), round(r.start * 1000, 3),
-                                      round(r.end * 1000, 3), r.written] for r in warden.releases]}
->>>>>>> 7af4d24fca3e
     (out / "warden.json").write_text(json.dumps(log, indent=1))
     announce({"served": True, "out": str(out)})
     return log
@@ -1267,23 +1231,13 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--slack", type=float, default=0.025, help="seconds a tick may run late before it faults")
         q.add_argument("--paced-ms", type=float, default=cs.PACED_MS,
                        help="when the warden's pacer releases each bucket, ms after its boundary (past the slack, "
-<<<<<<< 99c8914848
                             "before the next boundary): the warden always paces")
-        for field in dataclasses.fields(WardenParams):
-            q.add_argument(f"--{field.name.replace('_', '-')}", type=int, default=SCHEDULE[field.name])
-||||||| merged common ancestors
-                            "before the next boundary); 0: the warden writes each bucket on its loop")
-        for field in dataclasses.fields(WardenParams):
-            q.add_argument(f"--{field.name.replace('_', '-')}", type=int, default=SCHEDULE[field.name])
-=======
-                            "before the next boundary); 0: the warden writes each bucket on its loop")
         q.add_argument("--watermark", action="store_true",
                        help="also send the server the watermark stream, a chunked POST /verity/watermark on its own "
                             "connection, one line 't n l...' a tick: bucket t has closed, its releases are N < n, and "
                             "each l is one of its releases that the release's server connection lost")
     schedule_flags(s, "id")
     schedule_flags(r, None)
->>>>>>> 7af4d24fca3e
     s.add_argument("--upstream", required=True, type=cs._address, help="the server's HOST:PORT")
     s.add_argument("--key", required=True, type=Path, help="the network certifier's key directory (keys)")
     s.add_argument("--session", required=True, help="the certifier session, 32 bytes in hex")

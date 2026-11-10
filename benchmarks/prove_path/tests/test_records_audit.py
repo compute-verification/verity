@@ -629,7 +629,6 @@ def test_a_tie_pins_the_circuits_values_at_the_earlier_registrations_tables():
     """`tie_of`: a circuit whose program takes values (a served window's H1 tables, by their Commit names) is tied to the
     earlier registration W that registered them first: one-stage's ``log`` is W, each value's ``registered`` words are W's
     entry's, its ``outputs`` W's table of it under the prefix (`credit.window_table`) and its schema v2, and the audit pins
-<<<<<<< 99c8914848
     each at W's     entry under the value's own name. With neither values nor W there's no tie; values without W, W without values, a
     value W registers other than once (with no prefix, by its own name: told to give H1's) and a value that is no Commit
     table are refused."""
@@ -729,7 +728,7 @@ def _tied(d: Path, n: int = 8, cap: int = 4) -> SimpleNamespace:
                     domain_id=theirs.domain.domain_id)
     read = IF.Read(TID, "wrow", name, 0, (n // 4, 4), 0, (0, K // 2))
     circuit = IF.Circuit("test", ((COORD, n),), registered=IF.Registered({name: 4 * K // 2}, reads=(read,), values=(name,)))
-    win = IF.Window(circuit, RUN, D.parse_law(LAW), cap, registered={name: value})
+    win = IF.Window(circuit, RUN, D.parse_design(LAW), cap, registered={name: value})
     x = rng.integers(-128, 128, (n, K)).astype(np.int8)
     sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
     ins = [x.view(np.uint8), sx.view(np.uint32), rows[np.arange(n) % 4].view(np.uint8), sw.view(np.uint32)]
@@ -803,10 +802,10 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
         (tmp_path / "unnamed" / "summary.json").read_text())["refused"]["records"] and not seen
     assert RA.main([*base, "--out", str(tmp_path / "day"), "--tie", str(named), "--tie-prefix", "h1/", "--day", "0",
                     "--day-log", str(tmp_path / "log.json")]) == 1
-    assert seen["declared"] == {"day": 0, "declarations": [day[0].declared()]}
+    assert seen["declared"] == {"day": 0, "declarations": [day[0].body()]}
     assert json.loads((tmp_path / "day" / "summary.json").read_text())["day"] == {
         "day": 0, "declared": [got.rec["program"]], "source": RA.DAY_SOURCES["development"]}
-    root = RA.verifier_window(got.dir, D.parse_law(LAW), None)[0].run
+    root = RA.verifier_window(got.dir, D.parse_design(LAW), None)[0].run
     lines, _key, record = _device_ledger(tmp_path / "device", [_declared(got.rec["program"], blocks=[]),
                                                                *_window(S1, 1, root)])
     (ledger := tmp_path / "windows.jsonl").write_text("".join(x + "\n" for x in lines))
@@ -828,16 +827,16 @@ def test_a_declared_day_holds_the_registrations_program_to_the_days_one_declarat
     ``duplicate-declaration``, and day options without ``--day`` are refused, each before any session."""
     from verity.core.protocols import registration as G
 
-    mine, _doc, _sets = RA.verifier_window(written.dir, D.parse_law(LAW), None)
+    mine, _doc, _sets = RA.verifier_window(written.dir, D.parse_design(LAW), None)
     program, log = written.rec["program"], tmp_path / "log.json"
     entries = G.chain("remote", [G.Declaration(3, program, (TID,)), G.Declaration(4, "0" * 128)])
     log.write_bytes(G.committed("remote", entries))
     assert RA.declared_day(None, None, None) == {}
     day = RA.declared_day(3, str(log), None)
-    assert day == {"day": 3, "declarations": [e.declared() for e in entries]}
+    assert day == {"day": 3, "declarations": [e.body() for e in entries]}
 
     def r2(d: dict) -> list[str]:
-        v = R.check(written.rec, mine.program, mine.query, D.parse_law(LAW), CS.SCHEME, {}, **d)
+        v = R.check(written.rec, mine.program, mine.query, D.parse_design(LAW), CS.SCHEME, {}, **d)
         return sorted(c for c in v.codes if c.startswith("R2"))
     assert r2(day) == []
     assert r2({**day, "day": 4}) == ["R2-declared"] and r2({**day, "day": 5}) == ["R2-undeclared"]
@@ -887,7 +886,7 @@ def _auditor():
 def _device_ledger(tmp_path: Path, events: list[tuple[str, str | None, dict]]) -> tuple[list[str], object, Path]:
     """The challenger device's own ledger of ``events`` (kind, session, body), chained and signed by the live challenger's
     code (`benchmarks/live_challenger/auditor.py`): its lines, its key and the key record ``--challenger-key`` reads."""
-    from verity.core.protocols.sampled_proofs import challenger as Ch
+    from verity.core.protocols.spot import challenger as Ch
     from verity.ml.crypto import lms
     A = _auditor()
     (tmp_path / "var" / "sessions").mkdir(parents=True)
@@ -934,12 +933,12 @@ def test_the_device_day_is_the_challengers_declared_day_over_its_own_ledger_and_
     ``--day``. W's naming is held to the Declaration rebuilt from the device's entry (no ``previous``): the prover log's
     chained digest, or another day's, is refused."""
     from verity.core.protocols import registration as G
-    mine, _doc, _sets = RA.verifier_window(written.dir, D.parse_law(LAW), None)
+    mine, _doc, _sets = RA.verifier_window(written.dir, D.parse_design(LAW), None)
     program, root = written.rec["program"], "01" * 64
     lines, key, _record = _device_ledger(tmp_path, [_declared(program), *_window(S1, 1, root)])
     day = RA.device_day(lines, root, key, _verify(key))
     assert day == {"day": DAY0, "declarations": [{"blocks": ["t"], "day": DAY0, "program": program}]}
-    assert not [c for c in R.check(written.rec, mine.program, mine.query, D.parse_law(LAW), CS.SCHEME, {}, **day).codes
+    assert not [c for c in R.check(written.rec, mine.program, mine.query, D.parse_design(LAW), CS.SCHEME, {}, **day).codes
                 if c.startswith("R2")]
     rebuilt = G.Declaration(DAY0, program, ("t",)).digest()
     assert RA.device_day(lines, root, key, _verify(key), {"window": {"day": DAY0, "declaration": rebuilt}}) == day
@@ -956,11 +955,11 @@ def test_a_window_opened_before_its_days_declaration_or_of_a_lane_that_never_dec
     that never declares isn't gated at the challenger, so its windows open, but under ``--day-ledger`` they read no
     declaration (another lane's binds them not) and R2 refuses them too; with the switch off R2 reads no day."""
     from verity.core.protocols import registration as G
-    mine, _doc, _sets = RA.verifier_window(written.dir, D.parse_law(LAW), None)
+    mine, _doc, _sets = RA.verifier_window(written.dir, D.parse_design(LAW), None)
     program = written.rec["program"]
 
     def r2(d: dict) -> list[str]:
-        v = R.check(written.rec, mine.program, mine.query, D.parse_law(LAW), CS.SCHEME, {}, **d)
+        v = R.check(written.rec, mine.program, mine.query, D.parse_design(LAW), CS.SCHEME, {}, **d)
         return sorted(c for c in v.codes if c.startswith("R2"))
     late, key, _ = _device_ledger(tmp_path / "late",
                                   [*_window(S1, 0, "01" * 64), _declared(program), *_window(S2, 3, "02" * 64)])
@@ -997,11 +996,11 @@ def test_a_window_that_crosses_utc_midnight_belongs_to_its_opens_day(written, tm
     only for D+1, after midnight, it reads no declaration and R2 refuses it (``R2-undeclared``). Declared only for D+1
     ahead of the open, the device would have refused the open, and a ledger holding it is refused."""
     from verity.core.protocols import registration as G
-    mine, _doc, _sets = RA.verifier_window(written.dir, D.parse_law(LAW), None)
+    mine, _doc, _sets = RA.verifier_window(written.dir, D.parse_design(LAW), None)
     program, root = written.rec["program"], "01" * 64
 
     def r2(d: dict) -> list[str]:
-        v = R.check(written.rec, mine.program, mine.query, D.parse_law(LAW), CS.SCHEME, {}, **d)
+        v = R.check(written.rec, mine.program, mine.query, D.parse_design(LAW), CS.SCHEME, {}, **d)
         return sorted(c for c in v.codes if c.startswith("R2"))
     def late(reserve_seq: int) -> list[tuple[str, str, dict]]:
         return _window(S1, reserve_seq, root, reserved_at="2026-10-20T23:55:00Z", expires="2026-10-21T00:05:00Z",
@@ -1028,122 +1027,6 @@ def test_a_window_that_crosses_utc_midnight_belongs_to_its_opens_day(written, tm
     lines, key, _ = _device_ledger(tmp_path / "ahead", [ahead, *late(1), end])
     with pytest.raises(ValueError, match=f"opens on day {DAY0}, which its lane hash hasn't declared"):
         RA.device_day(lines, root, key, _verify(key))
-||||||| merged common ancestors
-=======
-    each at W's entry under the value's own name. With neither values nor W there's no tie; values without W or a prefix,
-    W without values, a value W registers other than once and a value that is no Commit table are refused."""
-    rows = np.arange(4 * K // 2, dtype=np.uint16).reshape(4, K // 2)
-    a, other, ids = (REG.Registered.commit("h1/program", v, r.tolist(), schema=REG.SCHEMA_V2).entry()
-                     for v, r in ((f"h1/a/{K}@0", rows), (f"h1/a/{K}@1", rows), ("h1/ids@0", rows[:, :4])))
-    w = {"format": R.FORMAT_V2, "registered": [a, other, ids], "previous": None}
-    values = [f"row-table/0/k{K}", "input-ids/0"]
-    reg = {"params": {values[0]: 4 * K // 2, values[1]: 16}, "tables": [], "reads": [], "roots": [], "openings": []}
-    doc = {"registered": {**reg, "values": values}}
-    tied, pins = RA.tie_of(doc, w, "h1/")
-    d = R.digest(w)
-    assert tied == {"log": [w], "registered": {values[0]: K // 2, values[1]: 4},
-                    "outputs": {values[0]: {"record": d, "value": f"h1/a/{K}@0"}, values[1]: {"record": d, "value": "h1/ids@0"}},
-                    "schemas": {v: REG.SCHEMA_V2 for v in values}}
-    assert pins == {values[0]: {**a, "value": values[0]}, values[1]: {**ids, "value": values[1]}}
-    assert RA.tie_of({}, None, None) == RA.tie_of({"registered": reg}, None, "h1/") == ({}, {})
-    named = {"registered": {**reg, "params": {"w": 16}, "values": ["w"]}}
-    for circuit, earlier, prefix, why in (
-            (doc, None, "h1/", "tie the audit to it"), ({"registered": reg}, w, "h1/", "takes no values"),
-            (doc, w, None, "give --tie-prefix"), (doc, {**w, "registered": [a, other]}, "h1/", "as 'h1/ids@0' 0 times"),
-            (doc, {**w, "registered": [a, a, ids]}, "h1/", f"as 'h1/a/{K}@0' 2 times"), (doc, w, "g/", "0 times"),
-            (named, w, "h1/", "is no Commit name")):
-        with pytest.raises(ValueError, match=why):
-            RA.tie_of(circuit, earlier, prefix)
-
-
-@dataclass(frozen=True)
-class _Reused(REG.Registered):
-    """W's table as the circuit's value (`pouw_h1_commit.Reused`): W's rows, salts and tree, by the circuit's name of it, so
-    its entry is W's but in name; there's no binding to recompute W's domain from."""
-
-    domain_id: bytes = b""
-
-    @property
-    def domain(self):
-        raise ValueError(f"{self.value}: a reused table has W's domain id alone")
-
-    def entry(self) -> dict:
-        return {"value": self.value, "root": self.root.hex(), "leaves": self.leaves, "words": self.words,
-                "domain": self.domain_id.hex()}
-
-
-def _tied(d: Path, n: int = 8, cap: int = 4) -> SimpleNamespace:
-    """A window of ``n`` coordinates each reading its ``wrow`` from round 0's A table of K (4 rows, coordinate u row u % 4),
-    a value its circuit's program takes (`IF.Registered.values`) and an earlier registration W registered first as
-    ``h1/a/<K>@0``: the window's registration is chained right after W and registers the table by W's entry, as
-    ``prove_path.py window-commit --window-registration W`` does. W is written beside the window as ``w.json``."""
-    rng = np.random.default_rng(2)
-    rows = rng.integers(0, 1 << 16, (4, K // 2), dtype=np.uint16)
-    theirs = REG.Registered.commit("h1/program", f"h1/a/{K}@0", rows.tolist(), schema=REG.SCHEMA_V2)
-    w = {"format": R.FORMAT_V2, "registered": [theirs.entry()], "previous": None}
-    name = f"row-table/0/k{K}"
-    value = _Reused(**{**{f.name: getattr(theirs, f.name) for f in fields(theirs)}, "value": name},
-                    domain_id=theirs.domain.domain_id)
-    read = IF.Read(TID, "wrow", name, 0, (n // 4, 4), 0, (0, K // 2))
-    circuit = IF.Circuit("test", ((COORD, n),), registered=IF.Registered({name: 4 * K // 2}, reads=(read,), values=(name,)))
-    win = IF.Window(circuit, RUN, D.parse_design(LAW), cap, registered={name: value})
-    x = rng.integers(-128, 128, (n, K)).astype(np.int8)
-    sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
-    ins = [x.view(np.uint8), sx.view(np.uint32), rows[np.arange(n) % 4].view(np.uint8), sw.view(np.uint32)]
-    win.record(COORD, ins, [np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16)])
-    win.write(win.close(), d, {"label": "test"}, registrar=R, previous=R.digest(w))
-    (d.parent / "w.json").write_text(json.dumps(w))
-    return SimpleNamespace(dir=d, w=w, w_file=d.parent / "w.json", name=name, entry=theirs.entry(),
-                           rec=json.loads((d / "registration.json").read_text()))
-
-
-def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_registration(tmp_path, monkeypatch):
-    """A window whose circuit takes values (`_tied`) is audited tied to the earlier registration W that registered them
-    first (``--tie W --tie-prefix P``), and refused before any session without the tie: the tie hands a5 one-stage's
-    ``log``, ``registered``, ``outputs`` and ``schemas`` (`tie_of`), the value's readers read W's table at W's root and
-    count registered (the root the window's registration records for the value), the value is the window's own to the
-    output class (its readers sampled like any other unit), and the summary names W's digest and the values. The sessions
-    (`a5.audit`) are stubbed and sample nothing, so the audit doesn't pass."""
-    import a5 as A5
-    import a5_coins as AC
-
-    got = _tied(tmp_path / "w")
-    assert got.rec["previous"] == R.digest(got.w) and got.rec["registered"] == [{**got.entry, "value": got.name}]
-    seen, owned = {}, []
-
-    def audit(a, sets, out, mine, served, source, port, summary, more, **kw):
-        seen.update(tie=a.tie, outputs=a.outputs, registered=kw["registered"])
-        return {"audit": {"accepted": True}}, True
-
-    def output_class(circuit, given=(), own=frozenset()):
-        owned.append(set(own))
-        return []
-
-    session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
-    monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
-    monkeypatch.setattr(A5, "audit", audit)
-    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
-    monkeypatch.setattr(RA, "output_class", output_class)
-    base = ["audit", "--window", str(got.dir), "--law", LAW, "--circuit", got.rec["window"]["circuit"], "--run", RUN,
-            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--skip-negatives", "--challenger",
-            "local", "--main", "m.txt"]
-    for extra, why in (([], "tie the audit to it"), (["--tie", str(got.w_file)], "give --tie-prefix"),
-                       (["--tie", str(got.w_file), "--tie-prefix", "g/"], "0 times")):
-        assert RA.main([*base, "--out", str(tmp_path / "refused"), *extra]) == 1
-        assert why in json.loads((tmp_path / "refused" / "summary.json").read_text())["refused"]["records"]
-        assert not seen and not owned
-    assert RA.main([*base, "--out", str(tmp_path / "out"), "--tie", str(got.w_file), "--tie-prefix", "h1/"]) == 1
-    tied, pins = RA.tie_of(json.loads((got.dir / "circuit.json").read_text()), got.w, "h1/")
-    assert seen["tie"] == tied and tied["log"] == [got.w] and pins == {got.name: {**got.entry, "value": got.name}}
-    assert tied["outputs"] == {got.name: {"record": R.digest(got.w), "value": f"h1/a/{K}@0"}} and owned == [{got.name}]
-    assert len(seen["registered"]) == 2 and all(f["ports"]["wrow"]["root"] == got.entry["root"]
-                                                 and f["ports"]["wrow"]["domain"] == got.entry["domain"]
-                                                 for f in seen["registered"].values())
-    summary = json.loads((tmp_path / "out" / "summary.json").read_text())
-    assert summary["tie"] == {"record": R.digest(got.w), "values": [got.name]}
-    assert summary["registered"]["roots"] == summary["registered"]["pins"] == {got.name: got.entry["root"]}
-    assert summary["leak"]["registered"] == 8 * 8 * K and "unpinned" not in summary["leak"]
->>>>>>> 7af4d24fca3e
 
 
 def _history(d: Path, n: int = 4) -> SimpleNamespace:

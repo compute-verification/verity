@@ -537,21 +537,11 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     (``subset:1``, ``subset:2``, the demo's sample: the consistency check holds at any sample), and refuses the
     forged case (a certificate's signature changed) at the certificates, the tampered case (another Program's
     registration) at the registration, the chain case (the round's registration of the Program) at its refusal, a block
-<<<<<<< 99c8914848
     whose entries are at other roots by name, and at the wiring (`period_case.UNWIRED`) one whose lanes' chunks are
     swapped, one lane's chunk at another root or missing, or whose roots are at its o1, no `SlotEntry_v1` template's
     entries, and a block whose ``scan/state`` is a state tree that skips a transition, or
-    that names none, at the state tie (`period_case.UNSTATED`); a group of two link-windows is refused by name. Slow
-||||||| merged common ancestors
-    whose entries are at another root by name, and one whose root is at its o1, no `SlotEntry_v1` template's entries, at
-    the wiring (`period_case.UNWIRED`), and a block whose ``scan/state`` is a state tree that skips a transition, or
-    that names none, at the state tie (`period_case.UNSTATED`); a group of two link-windows is refused by name. Slow
-=======
-    whose entries are at another root by name, and one whose root is at its o1, no `SlotEntry_v1` template's entries, at
-    the wiring (`period_case.UNWIRED`), and a block whose ``scan/state`` is a state tree that skips a transition, or
     that names none, at the state tie (`period_case.UNSTATED`); a group of two link-windows, and a run in the bytes
     egress form, are refused by name. Slow
->>>>>>> 7af4d24fca3e
     (the test class's Program, about 30 s): the period check reads the scan's templates' signatures, which no stand-in
     can stand for."""
     import scan_period as SP
@@ -574,16 +564,8 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
              for tr in trs]
     state = {"root": st.root.hex(), "leaves": T, "domain": sz.ADV.domain(st.binding, T).domain_id.hex()}
     roots = sz.warden_roots([{"warden": m.warden} for m in h.rounds["honest"]]) + [
-<<<<<<< 99c8914848
         *({"port": PC.prog_name(j), **o} for j, o in enumerate(progs)), {"port": "scan/state", **state}]
-    law = sz.DR.parse_law(f"stratified:{2 * T}")
-||||||| merged common ancestors
-        {"port": "scan/prog", **prog}, {"port": "scan/state", **state}]
-    law = sz.DR.parse_law(f"stratified:{2 * T}")
-=======
-        {"port": "scan/prog", **prog}, {"port": "scan/state", **state}]
     law = sz.DR.parse_design(f"stratified:{2 * T}")
->>>>>>> 7af4d24fca3e
     reg, chain = (R.record(program, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer=x * 64)
                   for x in ("ee", "ff"))
     other = {**reg, "program": "ab" * 64}
@@ -594,25 +576,15 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     record = {"accepted": True, "registration": reg, "draw": draw, "proved_units": list(range(2 * T))}
     answer = sz.window_answer(reg, record, sz.Fraction(1, 100), "unused")
     block = sz.PA.mixed_population_program([(defs["block"], E)])
-<<<<<<< 99c8914848
-    bquery, blaw = sz.PA.template_instances_query([defs["block"]]), sz.DR.parse_law(f"stratified:{E}")
+    bquery, blaw = sz.PA.template_instances_query([defs["block"]]), sz.DR.parse_design(f"stratified:{E}")
     entries = [PC.entries_port(sz.PA.template_id(defs["block"]), j) for j in range(cls.NR)]
     assert entries == [f"{sz.port_prefix(defs['block'], SimpleNamespace(template='block', lane=j))}/o0"
                        for j in range(cls.NR)]
-||||||| merged common ancestors
-    bquery, blaw = sz.PA.template_instances_query([defs["block"]]), sz.DR.parse_law(f"stratified:{E}")
-    entries = PC.entries_port(sz.PA.template_id(defs["block"]))
-    assert entries == f"{sz.port_prefix(defs['block'], SimpleNamespace(template='block'))}/o0"
-=======
-    bquery, blaw = sz.PA.template_instances_query([defs["block"]]), sz.DR.parse_design(f"stratified:{E}")
-    entries = PC.entries_port(sz.PA.template_id(defs["block"]))
-    assert entries == f"{sz.port_prefix(defs['block'], SimpleNamespace(template='block'))}/o0"
->>>>>>> 7af4d24fca3e
 
     def block_audit(o0: list[dict], ports: list[str] = entries, scan_state: dict | None = state,
                     sampled: int | None = None) -> dict:
         stated = [{"port": "scan/state", **scan_state}] if scan_state else []
-        law = sz.DR.parse_law(f"subset:{sampled}") if sampled else blaw
+        law = sz.DR.parse_design(f"subset:{sampled}") if sampled else blaw
         breg = R.record(block, bquery, law, sz.S.SCHEME,
                         [*({"port": q, **o} for q, o in zip(ports, o0, strict=True)), *stated], {"kind": "stand-in"},
                         leaf_layer="cc" * 64)

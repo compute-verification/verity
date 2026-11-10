@@ -83,7 +83,7 @@ What each one checks, and the Lean or the test that reads it.
 - `narrow_u.py`: that check with U on ±N for N = 8, 16, 32 (`edited_gemm`'s `co32c-u*`).
 - `zero_routes_check.py`: `checked_strip.py`'s priced zero-instance routes.
 - `attn_noise.py`: attention's committed words at every operand value, and its noise's h. Core's
-  `verity/core/protocols/pouw/circuit/compile.py` cites its `h_table` for the attention forms H1 is to carry.
+  `verity/ml/protocols/pouw/circuit/compile.py` cites its `h_table` for the attention forms H1 is to carry.
 
 ### The sm_120 unit's checkpoint and issue
 

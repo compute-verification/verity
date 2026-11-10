@@ -23,8 +23,8 @@ from typing import ClassVar
 
 import numpy as np
 import pytest
-from verity.core.protocols.pouw.schemes import pearl_c_u as PCU
-from verity.core.protocols.sampled_proofs.one_stage import registration as REG
+from verity.ml.protocols.pouw.schemes import pearl_c_u as PCU
+from verity.core.protocols.spot.one_stage import registration as REG
 from verity_vllm.protocols.pouw.pearl_c import host as PH
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 from verity_vllm.protocols.pouw.pearl_c import window as PWR
@@ -1049,20 +1049,11 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     """Two matmuls of a test instance (k = 128, 16 x 16 tiles), one with 12 filler rows and one liveness-failing row, proved by
     the scheme's reference prover and written in the device run's layout, for each promoted device scheme (hm96 trees, their
     salts under the prover's key, which the manifest retains; the unpromoted record's debit isn't stated, so clear_work can't
-<<<<<<< 99c8914848
     audit it).  The key is fixed per scheme unless `key` names one: -h3's row seeds follow A's salted roots, and under some
-    keys (about 2 in 15) a credited row of a drawn tile is over its own cap, which the law and verify_run both reject.  On the
-||||||| merged common ancestors
-    audit it).  The key is fixed per scheme: -h3's row seeds follow A's salted roots, and under some keys
-    (about 2 in 15) a credited row of a drawn tile is over its own cap, which the law and verify_run both reject.  On the
-=======
-    audit it).  The key is fixed per scheme: -h3's row seeds follow A's salted roots, and under some keys
-    (about 2 in 15) a credited row of a sampled tile is over its own cap, which the sampling design and verify_run both reject.  On the
->>>>>>> 7af4d24fca3e
+    keys (about 2 in 15) a credited row of a sampled tile is over its own cap, which the sampling design and verify_run both reject.  On the
     h100 record (Hopper's 14-bit atom) 2 of the first 8 keys are, the zero key among them: at k = 128 a row's cap admits
     one flagged atom-word (at k = 2,048 and 6,144 the worst of 96 Gaussian rows each is at 0.27 and 0.11 of its cap).
-<<<<<<< 99c8914848
-    The calls have the epoch's indices `indices`, and every pass built here is of the one epoch (the same weights, key and
+    The calls have the execution phase's indices `indices`, and every pass built here is of the one execution phase (the same weights, key and
     salt coin), as passes of one install are.  With `live` the salt coin is a live session's, opened after salt epoch
     `live`'s root over the weights' root (`live_coin`), and the manifest names that epoch (``pass_index``).  `seed` draws
     the rows: under another, the weights are others, and so is the salt the one coin gives them.  With `spike`, credited
@@ -1076,21 +1067,6 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     rng, k = np.random.default_rng(seed), 128
     n0, n1 = max(16, tile[1]), max(32, tile[1])
     wrows = {0: bf16_words(rng, n0, k), 1: bf16_words(rng, n1, k)}
-||||||| merged common ancestors
-    The calls have the epoch's indices `indices`, and every pass built here is of the one epoch (the same weights, key and
-    salt coin), as passes of one install are."""
-    key = bytes([1]) * 32 if SchemeId.parse(scheme).device == "h100" else bytes(32)
-    s = PPD.scheme_of(scheme, k_min=32, tile=(16, 16))
-    rng, k = np.random.default_rng(11), 128
-    wrows = {0: bf16_words(rng, 16, k), 1: bf16_words(rng, 32, k)}
-=======
-    The calls have the execution phase's indices `indices`, and every pass built here is of the one execution phase (the same weights, key and
-    salt coin), as passes of one install are."""
-    key = bytes([1]) * 32 if SchemeId.parse(scheme).device == "h100" else bytes(32)
-    s = PPD.scheme_of(scheme, k_min=32, tile=(16, 16))
-    rng, k = np.random.default_rng(11), 128
-    wrows = {0: bf16_words(rng, 16, k), 1: bf16_words(rng, 32, k)}
->>>>>>> 7af4d24fca3e
     a0 = bf16_words(rng, 32, k)
     a0[20:] = 0
     a0[5, [1, 2, 3]] = np.float32(1e4).view(np.uint32) & 0xFFFF0000
@@ -1140,16 +1116,8 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     count = tr.commitment.count
     leaves = [prover.digest(t) for t in range(count)]
     dt = transcript_domain(epoch, count, s.commitment_hash)
-<<<<<<< 99c8914848
-    head = {"schema": PPD.MANIFEST_SCHEMA, "run": RUN, "entry": f"pouw:{scheme}", "scheme": scheme,
-            "instance": {"k_min": 32, "tile": list(tile)},
-||||||| merged common ancestors
-    head = {"schema": PPD.MANIFEST_SCHEMA, "run": RUN, "entry": f"pouw:{scheme}", "scheme": scheme,
-            "instance": {"k_min": 32, "tile": [16, 16]},
-=======
     head = {"schema": CC.MANIFEST_SCHEMA, "run": RUN, "entry": f"pouw:{scheme}", "scheme": scheme,
-            "instance": {"k_min": 32, "tile": [16, 16]},
->>>>>>> 7af4d24fca3e
+            "instance": {"k_min": 32, "tile": list(tile)},
             "coins": coins[0].to_json(), "salt_opening": coins[1].to_json(), "salt": epoch.salt.hex(),
             **({} if live is None else {"pass_index": live}),
             "records_root": PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex(),
@@ -1289,19 +1257,9 @@ def _serve_dir(tmp_path: Path, passes: list[Path]) -> Path:
 
 
 def test_served_passes_verify_refuses_two_passes_of_one_salt_sharing_a_call_index(tmp_path):
-<<<<<<< 99c8914848
-    """Two honest passes of one epoch whose calls are 0, 1 and 1, 2: call 1's seeds, noise and tickets are the same in
+    """Two honest passes of one execution phase whose calls are 0, 1 and 1, 2: call 1's seeds, noise and tickets are the same in
     both, so the run is refused (``repeated-call``) before any pass is replayed, whether served.json or ``--manifest``
     names them."""
-||||||| merged common ancestors
-    """Two honest passes of one epoch whose calls are 0, 1 and 1, 2: call 1's seeds, noise and tickets are the same in
-    both, so the run is refused (``repeated-call``) before any pass is replayed."""
-    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
-=======
-    """Two honest passes of one execution phase whose calls are 0, 1 and 1, 2: call 1's seeds, noise and tickets are the same in
-    both, so the run is refused (``repeated-call``) before any pass is replayed."""
-    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
->>>>>>> 7af4d24fca3e
     a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (1, 2))))
     assert json.loads(a.read_text())["salt"] == json.loads(b.read_text())["salt"]
     for d, more in ((_serve_dir(tmp_path, [a, b]), ()), (a.parent, ("--manifest", str(a), "--manifest", str(b)))):
@@ -1313,8 +1271,7 @@ def test_served_passes_verify_refuses_two_passes_of_one_salt_sharing_a_call_inde
 
 @pytest.mark.slow
 def test_served_passes_verify_accepts_an_epochs_passes_numbered_on(tmp_path):
-<<<<<<< 99c8914848
-    """Two honest passes of one epoch numbered on, 0, 1 then 2, 3, as the device numbers a serve's passes: one draw over
+    """Two honest passes of one execution phase numbered on, 0, 1 then 2, 3, as the device numbers a serve's passes: one draw over
     both, each pass's exclusion tile opened, accepted, its MACs over both (a test instance's, credited nothing)."""
     a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
     rc, doc, answer = served_verify(_serve_dir(tmp_path, [a, b]), tmp_path / "verify.json")
@@ -1373,13 +1330,6 @@ def test_served_passes_verify_credits_the_timed_call_its_passes_less_the_runs_wh
     """Where served.json says which passes the timed call made, an accepted verdict also carries the credit over those
     alone (`served_passes.timed_credit`): the run's credited MACs less the warm-up pass's credited cells' MACs at (1 − ρ),
     rounded up, so the run's deduction for ε falls wholly on the timed pass."""
-||||||| merged common ancestors
-    """Two honest passes of one epoch numbered on, 0, 1 then 2, 3, as the device numbers a serve's passes: both replayed and
-    accepted."""
-=======
-    """Two honest passes of one execution phase numbered on, 0, 1 then 2, 3, as the device numbers a serve's passes: both replayed and
-    accepted."""
->>>>>>> 7af4d24fca3e
     SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
     a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
     served = {"run": RUN, "passes": [{"pass": 0, "timed": False, "units": 2, "tiles": 4, "manifest": str(a)},

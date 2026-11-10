@@ -18,23 +18,11 @@ import pytest
 from verity.core.protocols.certifier import active, io_tie as IT
 from verity.core.protocols.certifier.active import DATA, HEADER, PAD, VirtualClock, encode_frame
 from verity.core.protocols.certifier.grid import Reason
-<<<<<<< 99c8914848
 from verity.core.protocols.certifier.pacer import Report
-from verity.core.protocols.certifier.release import release_of, with_release
-from verity.core.protocols.certifier.warden import (END, FAIL, KIND_NAMES, REASONS, REFUSED, Shim, Warden,
-                                                    WardenParams, audit, cell, cells, read_cell, read_reason,
-                                                    reason_frame)
-||||||| merged common ancestors
-from verity.core.protocols.certifier.release import release_of, with_release
-from verity.core.protocols.certifier.warden import (END, FAIL, KIND_NAMES, REASONS, REFUSED, Shim, Warden,
-                                                    WardenParams, audit, cell, cells, read_cell, read_reason,
-                                                    reason_frame)
-=======
 from verity.core.protocols.certifier.release import read_watermark, release_of, watermark_head, with_release
 from verity.core.protocols.certifier.warden import (END, FAIL, INTEGER_FIELDS, KIND_NAMES, REASONS, REFUSED,
                                                     WRITE_BACKLOG, Shim, Warden, WardenParams, audit, cell, cells,
                                                     read_cell, read_reason, reason_frame)
->>>>>>> 7af4d24fca3e
 
 PARAMS = WardenParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=2, window=24, ingress_cells=8,
                       ingress_buckets=6, egress_cells=12, egress="bytes")

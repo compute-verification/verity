@@ -134,7 +134,6 @@ Two kinds of committed run:
   **weights-registration** committed them under it before the first window's coins (``--registration``, which the
   verifier pins: ``records_audit.py audit --registered``), so a weight served as registered has its registered root and
   any other's reads are free; the scan's state rows (`window_rows.state_value`), or without a kept run a stand-in's
-<<<<<<< 99c8914848
   (`window_rows.standin_state`), a per-window value under the run root, whose rows and salts it also writes whole, prover
   only, for the network certifier's scan to read as its state tree (`scan_state_opening`, ``scan_zk.py --v3c``). Where
   the certifier front kept the network certifier's run under the serve dir, slot k is instead the request whose Program
@@ -152,22 +151,6 @@ Two kinds of committed run:
   taken as served, and the registration is chained right after W and registers W's values (`pearl_c.window.reuse`),
   refused unless its proof blocks make each row as Pearl+ committed it. ``window-circuit --pearl-tables SCHEME`` is the
   verifier's own record of that cut circuit.
-||||||| merged common ancestors
-  (`window_rows.standin_state`), a per-window value under the run root. Where the certifier front kept the network
-  certifier's run under the serve dir, slot k is instead the request whose Program the network certifier's scan of that
-  run starts there (`kept_scan`), its row the scan's. ``--out`` is the window's records for
-  ``records_audit.py audit --circuit``: the circuit is the class's, a function of the class alone, so the verifier's own
-  ``window-circuit`` record is the circuit it holds it to.
-=======
-  (`window_rows.standin_state`), a per-window value under the run root. Where the certifier front kept the network
-  certifier's run under the serve dir, slot k is instead the request whose Program the network certifier's scan of that
-  run starts there (`kept_scan`), its row the scan's. ``--out`` is the window's records for
-  ``records_audit.py audit --circuit``: the circuit is the class's, a function of the class alone, so the verifier's own
-  ``window-circuit`` record is the circuit it holds it to. With ``--window-registration W`` (H1's registration of
-  the window) and ``--h1-key``, the circuit reads H1's tables where the model makes them (its rounds H1's steps, the
-  class's outputs), and the window's registration ``--out``/registration.json is chained right after W and registers
-  them as W's tables (`pouw_h1_commit.reuse`), refused unless the model made each as H1 committed it.
->>>>>>> 7af4d24fca3e
 
 `Capped` adds the public cap ℓ on the advice's length to the compiler's registered digest, and `compile_advice` is total on
 every byte string: the requests, or a `ValueError` naming why, the same one on every run.
@@ -221,13 +204,9 @@ from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity.ml.windows import interface as IF, rows as RW  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
 from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
-<<<<<<< 99c8914848
-from verity_vllm.pipeline.advice_windows import CAP_BITS, CAPPED, Capped  # noqa: E402
-||||||| merged common ancestors
-=======
 from verity_vllm.pipeline import edge as E  # noqa: E402
 from verity_vllm.pipeline import window_advice as WA  # noqa: E402
->>>>>>> 7af4d24fca3e
+from verity_vllm.pipeline.advice_windows import CAP_BITS, CAPPED, Capped  # noqa: E402
 from verity_vllm.pipeline.tp import serving_rows as SRT  # noqa: E402
 
 I2 = "verity/prove-path/i2-compile-steps/v0"
@@ -263,7 +242,7 @@ class I2Compiler:
     verifier's `interface.compiler_digest` over the integration's import closure as git lists it), everything
     ``registered`` holds that I2 reads (φ: the model, its revision and config, the target and the execution; the default
     seed; ℓ; the served model name, where it names one) and that list. So a served window's ``serve.json`` is bound before
-    the draw with the code: one that differs from the one its advice was registered under names another compiler."""
+    the sample with the code: one that differs from the one its advice was registered under names another compiler."""
 
     registered: Any
     ingress: Mapping[str, Mapping[str, Any]]
@@ -1766,12 +1745,7 @@ def window_commit_of_builds(a: argparse.Namespace) -> dict[str, Any]:
     prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window)},
             "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: values[SS.SCAN_STATE].entry()}}}
     win.write(c, a.out, prov, registrar=R, index_salt=WRS.index_salt(key, int(a.window)), previous=previous)
-<<<<<<< 99c8914848
     scan_state_opening(values[SS.SCAN_STATE], Path(a.out))
-||||||| merged common ancestors
-    win.write(c, a.out, prov, registrar=R, index_salt=WRS.index_salt(key, int(a.window)))
-=======
->>>>>>> 7af4d24fca3e
     lap("write")
     sources = {s: int(sum((x == i).sum() for x in filled.source.values())) for i, s in enumerate(WRS.SOURCES)}
     return {"run": run, "circuit": hashlib.sha512((Path(a.out) / "circuit.json").read_bytes()).hexdigest(),
