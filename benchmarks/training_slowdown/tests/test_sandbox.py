@@ -37,6 +37,8 @@ def test_refusals_name_each_interface_that_is_up_and_each_final_set_with_an_entr
     assert sandbox.refusals([empty, absent], {"lo": True, "eth0": True, "docker0": False}, 0) == [
         "the network is reachable (interface eth0 is up)", "the network is reachable (interface lo is up)"]
     assert sandbox.refusals([empty, final], down, 0) == [f"the final set at {final} is readable (tiny.bin)"]
+    with pytest.raises(NotADirectoryError):
+        sandbox.refusals([final / "tiny.bin"], down, 0)
     assert sandbox.final_sets({"data": {"b": {"final": "/x/b"}, "a": {"final": "/x/a"}, "c": {"final": "/x/a"}}}) == [
         Path("/x/a"), Path("/x/b")]
 
