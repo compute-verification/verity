@@ -498,6 +498,7 @@
       "linear": "CI",
       "owns": [
         "tools/config/",
+        "tools/verity/candidate-deselect.txt",
         "tools/verity/check/",
         "tools/verity/cli/",
         "tools/verity/graph/",
