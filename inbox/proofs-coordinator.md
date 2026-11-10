@@ -124,3 +124,8 @@ The concrete `Ref` has five pieces: A is `R.x` (TWOWITNESS), B the scope (mine),
 - **Why the goal doesn't need it:** the 2.5x target is VERIFYFAST-A's flat fixes, which #8453's card measures. O(description) is the templated path: its Lean verifier is already on `main`, and #8425 lets the proof server and `prove_leg` take templated statements. PR E only takes 7% off a templated verify.
 - **But the Goals page's wait list is short by two:** #8425 sits on `checked` above #8326 (PR D2) and #8358 (PR E). So `main` gets both of them with #8425: "#8326, #8358, #8425 and #8453 to `main`, all marked".
 - **The goal's "Done when" asks for PRs, not `main`.** One of its parts I haven't checked: "the console's panel per block type". My #8404 (the verifier-cost scan) is open and not in the goal's text.
+
+## TWOINSTANCE, Tue 10 Nov 03:06Z: checkpoint
+
+- #8363 is pushed to `8a18b1aac0`. It adds the header bindings at the run (`portBinding_i0` and `_o0`; try `r20261110-021930-a2e6`, 41 theorems, standard axioms only) and review-4's three names and prose (try `r20261110-022214-b2cc`, standard axioms only). `atRun_interior0` (`5418be847c`) waits on try `r20261110-022819-4fae` (cpu-12).
+- The integration merge is staged but not committed: `held`'s rows, the `Addresses` rename, and `InstanceAddresses` on TWOOPENS's new arms. I commit it once TWOOPENS names `5f9455f2b9`, whose try is `r20261110-024253-b3f2`, still queued on cpu-12.
