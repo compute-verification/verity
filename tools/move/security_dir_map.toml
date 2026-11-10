@@ -41,6 +41,8 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
            "verity/ml/flock/tests/fixtures/randomness_lean.json"]
 # The directory's name alone, between quotes or backticks, is the directory wherever it is written, Python included.
 words = ["Security"]
+# The caps' room is keyed `"CAP package"` (`"INLINE Security"`): there the name is ours as a string's last word too.
+word_ends = {"tests/test_lean_packages.py" = ["Security"]}
 # The node sweep lists where a tree of each age keeps its Lake packages: the old names stay beside the new.
 keep_in = {"tools/research/src/research/pods/nebius/node_sweep.sh" = ["Security", "Security/*"]}
 

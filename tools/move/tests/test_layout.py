@@ -285,13 +285,13 @@ WORDS_PY = ('"""The packages of `Analysis` and `Analysis/Proofs`; Analysis in pr
 WORDS_MAP = ('[roots]\nold = {}\nnew = {}\n\n[paths]\n"Analysis/" = "analysis/"\n\n[modules]\n"Analysis" = "analysis"\n')
 
 
-def _words_tree(tmp_path: Path, rewrite: str) -> Path:
+def _words_tree(tmp_path: Path, rewrite: str, more: dict[str, str] | None = None) -> Path:
     r = tmp_path / "repo"
     files = {"Analysis/Core.lean": "-- stated in `Analysis`\ndef dir : String := \"Analysis\"\n", "caps.py": WORDS_PY,
              "kinds.toml": 'inputs = ["Analysis", "tools"]  # `Analysis`, and Analysis alone\n',
              "README.md": "The spec is `Analysis`; Analysis's lock is `Analysis/lean-audit.json`.\n",
              "tag.rs": 'const DIR: &str = "Analysis";\n',
-             "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
+             "tools/research/src/research/store/moves.json": '{"moves": []}\n', **(more or {})}
     for p, t in files.items():
         (r / p).parent.mkdir(parents=True, exist_ok=True)
         (r / p).write_text(t)
@@ -322,6 +322,17 @@ def test_a_moved_directorys_name_alone_is_a_name_in_python_unless_the_map_lists_
     assert (r / "README.md").read_text() == "The spec is `analysis`; Analysis's lock is `analysis/lean-audit.json`.\n"
     assert (r / "tag.rs").read_text() == 'const DIR: &str = "Analysis";\n', "a Rust literal is protocol text"
     assert (r / "analysis/Core.lean").read_text() == "-- stated in `Analysis`\ndef dir : String := \"Analysis\"\n"
+
+
+def test_a_key_made_of_a_word_and_a_moved_directory_follows_where_the_map_lists_its_file(tmp_path):
+    """The caps' room is keyed `"CAP package"`: `"INLINE Security"` beside `"INLINE Security/Properties"`. The path with a
+    slash follows the move, and the name alone as a string's last word only in a file [rewrite] word_ends lists: a
+    reason that ends "nothing of Security" elsewhere is prose."""
+    text = 'ROOM = {"INLINE Analysis": 3, "INLINE Analysis/Props": 2}\nWHY = "nothing of Analysis"\n'
+    r = _words_tree(tmp_path, '\n[rewrite]\nwords = ["Analysis"]\nword_ends = {"room.py" = ["Analysis"]}\n',
+                    {"room.py": text, "why.py": text})
+    assert (r / "room.py").read_text() == text.replace("Analysis", "analysis")
+    assert (r / "why.py").read_text() == text.replace("Analysis/Props", "analysis/Props")
 
 
 def test_rust_literals_spans_strings_and_skips_comments_chars_and_lifetimes():
