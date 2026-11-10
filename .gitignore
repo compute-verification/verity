@@ -54,6 +54,7 @@ runs/
 verity/ml/commitments/tests/fixtures/layouts
 benchmarks/nci/sources
 benchmarks/one_stage/tests/fixtures/bundle-window
+benchmarks/two_stage/tests/fixtures/guard.tar.xz
 verity/ml/flock/tests/fixtures/f1-gate
 verity/ml/flock/tests/fixtures/forged-proofs
 verity/ml/flock/tests/fixtures/hidden-outputs
@@ -61,8 +62,8 @@ verity/ml/flock/tests/fixtures/honest-session
 verity/ml/flock/tests/fixtures/honest-plain
 verity/ml/flock/tests/fixtures/plain-tree
 benchmarks/pouw/machine_model/data/cover/corpus.json
-benchmarks/pouw/sass_census/data/bu_12_9.json
-benchmarks/pouw/sass_census/data/sass_isa_tables.json
+benchmarks/pouw/machine_model/data/cover/bu_12_9.json
+benchmarks/pouw/machine_model/data/cover/sass_isa_tables.json
 benchmarks/training_slowdown/data/v3-selection.json
 benchmarks/torch_gpu/commit_slots/fixtures/families-shared.layout.json
 verity/ml/flock/tests/fixtures/public-inputs
