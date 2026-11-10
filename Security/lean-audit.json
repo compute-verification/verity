@@ -4395,6 +4395,9 @@
    "honest": ["Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest"],
    "nontrivial": "Flock.SecurityProofs.SampledAuditAnyDeployed_nontrivial"
   },
+  "Flock.SecurityProofs.SampledKSLiveV5": {
+   "honest": ["Flock.SecurityProofs.SampledKSLiveV5Honest"]
+  },
   "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary": {
    "honest": ["Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest"],
    "nontrivial": "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial",
@@ -5130,6 +5133,8 @@
   },
   "Flock.SecurityProofs.SampledKSLiveV5": {
    "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
+   "missing": "nontrivial",
+   "why": "nontrivial instance needs a circuit file the kernel parses (Desc.parseStmt) with its public file and draw setup (DrawSetupZHJP), which no witness builds yet: ServedFilesParseV5's files are a 56 MB circuit the kernel can't run (PRF-501)",
    "unfolded_hash": "c883ae1d57bec13573fe9576451fc13958ae4c8ec6603d37df683eee2be123f9"
   },
   "Flock.SecurityProofs.ServedRowsLinked": "2cde2f3d97c487723b8f8899ebf241205f576cceca38ba6d92a6a1872108aba6",
