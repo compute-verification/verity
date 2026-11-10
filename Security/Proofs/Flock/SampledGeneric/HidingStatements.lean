@@ -19,7 +19,7 @@ alone, at `ε_hide` plus `ε_b` a session.
   prover's commitment coins.
 * `SpotFlockZK`: that at Flock's deployed masked session (`Flock.Guarantees.MaskedZK`'s record) and the executable's
   hm96 commit strings.
-* `GenericSessionsZK`: sessions in turn against one verifier that carries its state are zero knowledge at the sum of
+* `GenericSessionsZKAt`: sessions in turn against one verifier that carries its state are zero knowledge at the sum of
   the sessions' errors, each averaged over the honest views before it (`Zk.seq`, `Zk.seqErr`).
 * `GenericSampledSessionsZK`, `SpotFlockSessionsZK`: the audit with a session per sampled statement, generic and at
   Flock. `GenericSampledSessionsZKSum`: the generic one at a session error that reads no verifier, where the sessions'
@@ -126,8 +126,10 @@ def SpotFlockZK : Prop :=
 /-- **Sessions in turn are zero knowledge at the sum of their errors.** For a proof system that is zero knowledge at
 `ε` (`Zk.ZKAt`): its sessions in turn at a list of statements, each with a witness in the relation, against one
 verifier that carries what it saw from session to session (`Zk.seq`), are zero knowledge at the sum over the sessions
-of session `j`'s error, averaged over the honest views of the sessions before it (`Zk.seqErr`). -/
-def GenericSessionsZK : Prop :=
+of session `j`'s error, averaged over the honest views of the sessions before it (`Zk.seqErr`). The claims core's
+form, per public outcome at a counted simulator, is `Flock.Guarantees.GenericSessionsZK`
+(`Claims.RecGeneric.Sessions`). -/
+def GenericSessionsZKAt : Prop :=
   ∀ (Stmt Wit VS View : Type) (Zs : Zk Stmt Wit VS View) (Rel : Stmt → Wit → Prop) (ε : Stmt → Wit → VS → ℝ≥0∞),
     Zs.ZKAt Rel ε → Zs.seq.ZKAt (List.Forall₂ Rel) fun xs ws v => Zs.seqErr ε (xs.zip ws) (v xs)
 

@@ -21,7 +21,7 @@ between the two is the statistical-distance argument on the outcomes either expe
 * `Close.andThen_right`, `Close.map`, `Close.refl`: closeness under a shared first experiment, at the continuations'
   errors averaged over it; under a relabelling; of an experiment to itself;
 * `Zk.seq_close`: the hybrid. `Zk.seqErr_le_sum`: its error is at most the sum of the sessions' bounds.
-  `Flock.SecurityProofs.GenericSessionsZK`, `GenericSampledSessionsZK`, `GenericSampledSessionsZKSum`,
+  `Flock.SecurityProofs.GenericSessionsZKAt`, `GenericSampledSessionsZK`, `GenericSampledSessionsZKSum`,
   `SpotFlockSessionsZK`.
 -/
 
@@ -221,23 +221,23 @@ theorem Zk.seqErr_le_sum {Stmt Wit VS View : Type} (Zs : Zk Stmt Wit VS View) {�
 end FlockSoundness.SampledGeneric
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.SampledGeneric in
-/-- **Sessions in turn are zero knowledge at the sum of their errors** (`Flock.Guarantees.GenericSessionsZK`):
+/-- **Sessions in turn are zero knowledge at the sum of their errors** (`Flock.Guarantees.GenericSessionsZKAt`):
 `Zk.seq_close`. -/
-theorem Flock.SecurityProofs.GenericSessionsZK : Flock.Guarantees.GenericSessionsZK := by
+theorem Flock.SecurityProofs.GenericSessionsZKAt : Flock.Guarantees.GenericSessionsZKAt := by
   intro Stmt Wit VS View Zs Rel ε hZ xs ws hR v
   exact Zk.seq_close hZ hR (v xs)
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.SampledGeneric in
 /-- **The sampled audit's zero knowledge with a session per sampled statement**
 (`Flock.Guarantees.GenericSampledSessionsZK`): `GenericSampledZKAt` at the sessions in turn as one proof system
-(`GenericSessionsZK`), on the sample's list of statements. -/
+(`GenericSessionsZKAt`), on the sample's list of statements. -/
 theorem Flock.SecurityProofs.GenericSampledSessionsZK : Flock.Guarantees.GenericSampledSessionsZK := by
   intro n Tr Rnd Com Stmt Wit VS View _ _ H Zs Rel ε εh stmts samp wits hZ hH Xt hX X₀ v
   exact Flock.SecurityProofs.GenericSampledZKAt n Tr Rnd Com (List Wit)
     (Com × Finset (Fin n) → List Stmt → List View → VS) (List View) H
     (Zs.seq.after stmts) (fun s ws => List.Forall₂ Rel (stmts s) ws)
     (fun s ws v => Zs.seqErr ε ((stmts s).zip ws) (v s (stmts s))) εh samp wits
-    ((Flock.SecurityProofs.GenericSessionsZK Stmt Wit VS View Zs Rel ε hZ).after stmts) hH Xt hX X₀ v
+    ((Flock.SecurityProofs.GenericSessionsZKAt Stmt Wit VS View Zs Rel ε hZ).after stmts) hH Xt hX X₀ v
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.SampledGeneric in
 /-- **The sampled audit's zero knowledge with a session per sampled statement, at the sum of the sessions' errors**

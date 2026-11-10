@@ -20,7 +20,7 @@ Nontrivial: each statement is false with a premise dropped or its bound halved.
   publishes the trace (`openHider`) under a proof system that says nothing (`muteZk`).
 * `genericSampledZKAt_needs_zk`: `GenericSampledZKAt` without its zero-knowledge premise is false, at a commitment that
   publishes nothing (`constHider`) under a proof system whose honest view its simulator never outputs (`leakZk`).
-* `genericSessionsZK_needs_each`: `GenericSessionsZK` with its sum stopped after the first session is false, at a
+* `genericSessionsZKAt_needs_each`: `GenericSessionsZKAt` with its sum stopped after the first session is false, at a
   proof system that leaks at one statement only (`tellZk`), proved second.
 -/
 
@@ -183,10 +183,10 @@ theorem tellZk_zkAt (Rel : Bool → Unit → Prop) : tellZk.ZKAt Rel fun x _ _ =
   · exact Close.refl _
   · exact Close.one _ _
 
-/-- **`GenericSessionsZK` needs every session's error**: with the sum stopped after the first session it is false.
+/-- **`GenericSessionsZKAt` needs every session's error**: with the sum stopped after the first session it is false.
 `tellZk` is zero knowledge at its error (`tellZk_zkAt`), which is `0` at the first of the statements `false`, `true`;
 over the two sessions the honest view is `[false, true]` and the simulator's is `[false, false]`. -/
-theorem genericSessionsZK_needs_each :
+theorem genericSessionsZKAt_needs_each :
     ¬ ∀ (Stmt Wit VS View : Type) (Zs : Zk Stmt Wit VS View) (Rel : Stmt → Wit → Prop) (ε : Stmt → Wit → VS → ℝ≥0∞),
       Zs.ZKAt Rel ε →
       Zs.seq.ZKAt (List.Forall₂ Rel) fun xs ws v => Zs.seqErr ε ((xs.zip ws).take 1) (v xs) := by
