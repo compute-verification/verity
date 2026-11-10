@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# proofs' Goals page fix for CON-12: one `research goals set` line a goal, 25 lines: proofs' 24 open goals and one
+# proofs' Goals page fix for CON-12: one `research goals set` line a goal, 24 lines: proofs' 24 open goals and one
 # new goal. Written by HOUSEKEEP and NOT RUN. Read proofs-goals-table.md first.
 #   ASK_128K=<card id> bash proofs-goals-fix.sh    run every line; a refused line is reported and the rest still run
 #   DRY=1 bash proofs-goals-fix.sh                 print the commands and send nothing
@@ -33,7 +33,7 @@ g proofs/slice-clean --status off-track --due 2026-11-13T18:00-08:00 --tag clean
 g proofs/spot-bind-term --status on-track --due 2026-11-13T18:00-08:00 --wait goal:ci/fine-grained-check \
   --no-blockers --description @desc/spot-bind-term.md
 
-g proofs/spot-checks-closed --title "Guarantee checks closed or scoped" --status on-track --no-wait --no-blockers \
+g proofs/spot-checks-closed --title "Guarantee checks closed or scoped" --status on-track --no-blockers \
   --description @desc/spot-checks-closed.md
 
 g proofs/spot-numbers-lean-checked --status on-track --wait goal:ci/fine-grained-check --no-blockers \
@@ -44,50 +44,39 @@ g proofs/spot-fused-cut-served --status off-track --no-wait --blockers @blockers
   --description @desc/spot-fused-cut-served.md
 
 # ASK 4, a gap you fill: see the table.
-g proofs/spot-128k-attention-proved --status off-track --wait goal:circuits/glm-sparse-attention-zk \
-  --wait goal:circuits/glm-long-dsa-row --wait goal:vllm/served-128k-window-committed ${ask128[@]+"${ask128[@]}"} \
+g proofs/spot-128k-attention-proved --status off-track --wait goal:vllm/served-128k-window-committed \
+  --wait goal:circuits/glm-long-dsa-row --wait goal:circuits/glm-served-calls-fit-block \
+  --wait goal:circuits/glm-sparse-attention-zk --wait goal:circuits/glm-top-p-zk ${ask128[@]+"${ask128[@]}"} \
   --no-blockers --description @desc/spot-128k-attention-proved.md
 
-g proofs/spot-advice-certified --status off-track --no-wait --blockers @blockers/spot-advice-certified.md \
+g proofs/spot-advice-certified --status off-track --blockers @blockers/spot-advice-certified.md \
   --description @desc/spot-advice-certified.md
 
 # ASK 6, open, yours: see the table.
-g proofs/spot-moe-binding --status off-track --no-wait --blockers @blockers/spot-moe-binding.md \
+g proofs/spot-moe-binding --status off-track --blockers @blockers/spot-moe-binding.md \
   --description @desc/spot-moe-binding.md
 
 g proofs/spot-one-stage-premises --status on-track --wait goal:ci/fine-grained-check --no-blockers \
   --description @desc/spot-one-stage-premises.md
 
-g proofs/spot-overhead-measured --title "Proof overhead measured on GLM-5.3's served blocks" --status off-track \
-  --tag proofs --wait goal:circuits/glm-served-calls-fit-block --no-blockers \
-  --description @desc/spot-overhead-measured.md
-
-# ASK 7, half answered: see the table.
-g proofs/spot-proof-server-steady-state --status off-track --wait goal:proofs/spot-fused-cut-served --no-blockers \
-  --description @desc/spot-proof-server-steady-state.md
+g proofs/spot-overhead-measured --status off-track --tag proofs --wait goal:circuits/glm-served-calls-fit-block \
+  --no-blockers --description @desc/spot-overhead-measured.md
 
 g proofs/spot-ten-percent --status off-track --no-blockers --description @desc/spot-ten-percent.md
 
-# ASK 8, answered, one part open: see the table.
-g proofs/spot-two-stage-e2e --status off-track --blockers @blockers/spot-two-stage-e2e.md \
-  --description @desc/spot-two-stage-e2e.md
+g proofs/spot-two-stage-e2e --status off-track --no-blockers --description @desc/spot-two-stage-e2e.md
 
-g proofs/spot-verifier-cost --title "Verifier cost tracked and driven down" --status on-track \
-  --wait goal:circuits/verifier-templates-not-unrolled --wait goal:ci/fine-grained-check --no-blockers \
-  --description @desc/spot-verifier-cost.md
+g proofs/spot-verifier-cost --status on-track --wait goal:circuits/verifier-templates-not-unrolled \
+  --wait goal:ci/fine-grained-check --no-blockers --description @desc/spot-verifier-cost.md
 
-g proofs/terminology-clean --title "Retired terms gone, and new uses refused" --status off-track \
-  --due 2026-11-20T18:00-08:00 --no-wait --blockers @blockers/terminology-clean.md \
-  --description @desc/terminology-clean.md
+g proofs/terminology-clean --status off-track --due 2026-11-20T18:00-08:00 --no-wait \
+  --blockers @blockers/terminology-clean.md --description @desc/terminology-clean.md
 
-g proofs/spot-figures --status off-track --tag proofs --wait goal:proofs/spot-ten-percent --no-blockers \
-  --description @desc/spot-figures.md
+g proofs/spot-figures --status off-track --tag proofs --no-blockers --description @desc/spot-figures.md
 
-g proofs/spot-claims-checked --title "Every claim in the post traced to evidence" --status on-track --tag proofs \
-  --no-blockers --description @desc/spot-claims-checked.md
+g proofs/spot-claims-checked --status on-track --tag proofs --no-blockers --description @desc/spot-claims-checked.md
 
-g proofs/spot-output-accounting --status off-track --wait goal:network/cap-certified --no-blockers \
-  --description @desc/spot-output-accounting.md
+g proofs/spot-output-accounting --status off-track --no-blockers --description @desc/spot-output-accounting.md
 
 g proofs/spot-post-ready --status off-track --wait goal:proofs/spot-ten-percent \
   --wait goal:proofs/spot-128k-attention-proved --wait goal:proofs/spot-two-stage-e2e \
@@ -108,11 +97,9 @@ g proofs/zero-knowledge --status off-track --due 2026-11-30T18:00-08:00 --blocke
 g proofs/zk-leaks-closed --status off-track --due 2026-11-30T18:00-08:00 --blockers @blockers/zk-leaks-closed.md \
   --description @desc/zk-leaks-closed.md
 
-g proofs/sampling-generic --status on-track --wait goal:proofs/spot-one-stage-premises \
-  --wait goal:proofs/spot-moe-binding --wait goal:proofs/spot-two-stage-sound --no-blockers \
-  --description @desc/sampling-generic.md
+g proofs/sampling-generic --status on-track --no-blockers --description @desc/sampling-generic.md
 
 g proofs/spot-two-stage-sound --status on-track --no-blockers --description @desc/spot-two-stage-sound.md
 
 if [ "${#failed[@]}" -gt 0 ]; then echo "REFUSED or failed: ${failed[*]}" >&2; exit 1; fi
-[ -n "${DRY:-}" ] || echo "all 25 written; check with: research goals show"
+[ -n "${DRY:-}" ] || echo "all 24 written; check with: research goals show"

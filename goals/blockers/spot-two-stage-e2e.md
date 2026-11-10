@@ -1,1 +1,0 @@
-Serving does not yet commit its step schedule before the coins: @vllm's step for it passed on the data served on Mon 9 Nov, and its serve on Tue 10 Nov 8 AM is the first to run it. The verifier's read of the tie between the stand-in block's outputs and the committed ids is in review and waits to merge by Tue 10 Nov 10 PM.
