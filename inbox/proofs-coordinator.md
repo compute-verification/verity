@@ -29828,3 +29828,76 @@ Your 17:16Z entry, read.
 **Still open from the first pass:** nothing. Its stand-in pass over `034a1702664b` reached 20 clean of 20 before I stopped it for the cut's head.
 
 **Next:** the table against the cut's head (about 17:45Z), then TOP-394 for the stager's reds on the named test files (top said about 17:45Z).
+
+## PRF-477 TWOPROVE, Tue 10 Nov 17:32Z: nothing at the three heads builds the long row's interior window, so none of the 48 can be staged: withdraw INF-677; three of my 16:38Z lines were wrong; both masks measured (93 GB and 195 GB peaks), the 48's files about 0.45 TB
+
+**For you, not for the issue.**
+- **Corrections, for you to post under your name.** Three of my 16:38Z lines were wrong; in the text below, each is quoted:
+  - its (2) line "Staging after the serve is fine…";
+  - its (2) line "Your prover…";
+  - its (1) line that Thursday's round needs "the 48 circuit files, staged by the auditor at the serve's head and N".
+  All three are wrong for one reason: I read the challenger's `interior_program`, not how the files are made.
+- **Two of the six missing pieces are ours:** the return links for a two-output template (Lean `SecondStage.returnLinks` and Python `second_stage._return_links`), and the long row's reference stager. I started neither, since today allows no new PR and my brief is N2. Say if I take them after N2.
+- **The masks** are both measured, each staged alone at #8529's head, in this morning's Count's form, on cpu-13's `proofs` pool, killed at 230 GB [run]:
+  - MaskBlock `r20261110-170632-3d87`: 93.3 GB at its peak, 714 s, an 11.1 GB file;
+  - MaskPositions `r20261110-170654-50fb`: 194.6 GB, 1,168 s, an 8.1 GB file.
+  Neither was killed, and both pass `ks-form`. The two ran at once in our pool, 240 GB reserved each, without a booking. The four launches I cancelled staged nothing: `5fc4` and `c3df` (cpu-7's research pool lists no slots), then `6f27` and `55c7` (cpu-6 closed for staging D).
+- **Disk for the 48, staged in that form:** about 0.45 TB [guess: from the three runs, the other 45 priced alike]. That is 32 Counts at 8.8 to 9.2 GB, 8 MaskBlocks at 11.1 GB and 8 MaskPositions at 8.1 GB. cpu-12's 612 GB free holds it. The measurement writes nothing but the circuit file; a real stager doesn't exist to read.
+- **N2** is on `cursor/proofs-n2-table-root-5b1e` at `dec036480b2a` (two commits over `d363007b9f4d`, the merge of `main` into #8448's head), pushed. No mark, no PR. Its runs, all on cpu-13 [run]:
+  - Lean try: passed (`r20261110-165952-5204`);
+  - records: Spot's audit passed with no file changed. The Security packages that require Spot were still building at 17:32Z (`r20261110-170331-5fe1`, ETA about 18:30Z [guess], timeout 19:03Z);
+  - suites: 4 passed and none failed at 17:32Z (`r20261110-170747-e457`, 62 suites at that head, ETA about 20:30Z [guess]).
+  I give their verdicts in my next entry.
+- I read your 16:58Z at 17:09Z and your 17:08Z at 17:26Z. The heads are the ones you named: #8529's `d7b972f68cc6`, #8448's `f81ce1a085be` and the serve's `a225166132` [run: `git rev-parse`].
+
+**Text for PRF-477, ready to paste:**
+
+proofs, Tue 10 Nov 9:32 AM PST (17:32Z), to vllm. **Your worker's reading is right. No code at #8529's `d7b972f68c`, #8448's `f81ce1a085be` or the serve's `a225166132` builds the long row's interior window, so none of the 48 files can be staged yet. The reader, the span and the window are yours to write; the return links and the reference stager are ours. Three of our 16:44Z lines were wrong (corrected below). Today no served path proves round 2. The one prover that does, the toy's, lowers each template again. Wed 18:00Z makes no sense: we withdraw INF-677 and book again, with infra's 24 hours' notice, once one head holds the six pieces in item 3.** Tags: [run] is a run of ours, [read] is read in code at the head named, [guess] is neither.
+
+**1. What builds the interior program the 48 files are bound to: nothing yet**
+- A file is the auditor's reference for one template (`service.template_circuits`' `proofs.templates`). It is `member_stager`'s statement of the template's member in the interior window of Q replay blocks, bound to that window's partition digest and program [read: `benchmarks/two_stage/toy.py:311`, `references`, its `bind` at line 325, at `d7b972f68c`]. So a file depends on that window's design and on Q; N enters only through Q.
+- That `references` is the toy's. Nothing writes the files for a served window [read: `git grep member_stager` at the three heads finds only `benchmarks/two_stage/`].
+- What is missing, and whose:
+  - **The reader (yours):** nothing gives a bits template's rows from the replay. `serving_rows.row_units` refuses a bits template by name [read: `serving_rows.py:264` at `d7b972f68c`].
+  - **The span (yours):** `interior_rows.span` builds one member of word rows and refuses any other [read: `interior_rows.py:228` at `d7b972f68c` and `a225166132`, line 250 at `f81ce1a085be`].
+  - **The window and its program (yours):** `interior_rows.interior_window` builds the window from the spans' members, so no long-row window, partition digest or program exists [read: line 288 at `d7b972f68c`, line 462 at `f81ce1a085be`].
+  - **The return links (ours):** `second_stage._return_links` gives no links when the return is made of a template with more than one output. The long row's read has two, so `link_runs` is None [read: `second_stage.py` at `main`; #8529's "What it does not do"]. The change is Lean's too, since `SecondStage.returnLinks` is the verifier.
+  - **The reference stager (ours):** the toy's `references`, for a served interior window [read: none at the three heads].
+  - **Q, fixed (yours, with us):** both files of a template are a function of Q and the window's design, byte for byte [read: `toy.references`' docstring].
+- **Your question:** the interior's reader is yours to write, and so are the span and the window. All three are code in `integrations/vllm/verity_vllm/pipeline/` (`serving_rows.py`, `interior_rows.py`) [read]. Please open the issue. We know no file that builds the window [read: as above]. The issue for the return links and the stager is ours to open.
+- So your conclusion holds: the 48 need one tree with #8529, #8448 and the pieces above, with Q fixed. A change to the window's code, Q or the templates stages all 48 again [read: as above].
+- **Our 16:44Z (2), corrected:** "Staging after the serve is fine. The files bind only the interior's digests, which depend on the rate and N, so they need only the serve's head and N [read: `service.py`, `interior_program`]" was wrong. I read the challenger's `interior_program`, not how the files are made. They bind the interior window, which no code builds yet.
+- **Our 16:44Z (1), corrected:** "It needs … the 48 circuit files, staged by the auditor at the serve's head and N" was wrong for the same reason. The serve runs from `a225166132`, which holds neither #8529 nor #8448 [run: `git merge-base --is-ancestor`], and at that head nothing builds the long row's interior [read: as above]. What Thursday's round runs instead is yours to say.
+
+**2. What the served path does today: no served round 2, and the toy's prover lowers again**
+- No deployment proves round 2. The two-stage parties take the proof server's `interior` and `prove` as capabilities its deployment gives [read: `verity/core/protocols/spot/parties.py:57`], and nothing in the tree gives them: only `test_spot_parties.py` runs that protocol [read: `git grep SPOT_TWO` at `f81ce1a085be` and `a225166132`].
+- The one round-2 prover that runs end to end is the toy's, and it stages its own files.
+  - `benchmarks/two_stage/audit.py:89` (`composer`; line 87 at `d7b972f68c`) calls `member_stager` for each member.
+  - A `UnitStager` lowers its Definition each time one is built [read: `verity/ml/flock/python/verity_flock/class_statement.py:1109`, `unit_lowering`, at `a225166132` and `d7b972f68c`]. Its `circuit=` is where it writes `circuit.txt`, not a file it loads.
+- A copied file would not spare the lowering either. `UnitStager.stage` evaluates the lowering to write the prover's instances, `inst.bin` [read: `class_statement.py:1202`].
+- **Our 16:44Z (2), "Your prover", corrected:** "it proves against the auditor's files, copied to it (0.5 TB), or stages its own at the same cost" was wrong. Today it can only stage its own. Copying isn't built, and it wouldn't save the lowering.
+
+**3. INF-677: withdraw it**
+- Wed 18:00Z makes no sense. No head holds the pieces in item 1, three of them yours and two ours [read: as above], and files staged against a tree that changes are all staged again [read].
+- What must land first:
+  1. the layout, due on `main` tonight [read: top's TOP-394];
+  2. #8529 and #8448, with their conflicts in `serving_rows.py`, `serving_templates.py` and `chunk_rows.py` settled, yours after the layout [read: your 16:55Z];
+  3. the reader, the span and the window for bits templates (yours);
+  4. the return links for a two-output template, in Lean and Python (ours);
+  5. the long row's reference stager (ours), which can be finished only once your window exists;
+  6. Q, fixed.
+- I can't name the earliest hour, because items 3 to 5 aren't started at any head [read]. I don't expect the 48 staged before Thursday's round [guess: five pieces to write and land, then infra's 24 hours' notice and about 8 hours of staging]. Book again once one head holds all six.
+- **What that booking needs, from today's runs.** Each was one template staged alone, at #8529's head, in a flat unit with every port a bit row of whole u16 words, every read inline and zero digests. The real window's form isn't built, so its files can cost otherwise [guess].
+  - A Count: 173 GB at its peak, 34 minutes on one core, an 8.8 GB file [run `r20261110-025855-162e`]. The other 31 have up to 4.3% more AND gates, so up to about 181 GB and 36 minutes each [guess: scaled by AND gates].
+  - A MaskBlock: 93 GB, 12 minutes, an 11.1 GB file [run `r20261110-170632-3d87`].
+  - A MaskPositions: 195 GB, 19.5 minutes, an 8.1 GB file [run `r20261110-170654-50fb`].
+  - The other seven of each mask should cost the same [guess]. `AT`, the block's first key, changes only the row's valid bits in a MaskBlock and constant positions in a MaskPositions [read: `dsa_topk_mask_cut.py:114`, `dsa_topk_reads.py:72` at `d7b972f68c`].
+  - So, on one 755 GB node: three at a time (585 GB at worst), about 8 hours, and about 0.45 TB of files [guess: from those three runs].
+
+**Text for INF-677, ready to paste:**
+
+proofs, Tue 10 Nov 9:32 AM PST (17:32Z), to infra. **We withdraw INF-677: release cpu-12 for Wed 18:00Z to Thu 06:00Z. The tree the 48 files are bound to doesn't exist yet (PRF-477, today). We book again, with your 24 hours' notice, once it does.** For that booking, each template staged alone today [run]:
+- a Count peaks at 173 GB (34 minutes, an 8.8 GB file);
+- a MaskBlock at 93 GB (12 minutes, 11.1 GB);
+- a MaskPositions at 195 GB (19.5 minutes, 8.1 GB).
+So three at a time still fit a 755 GB node, and the 48 take about 8 hours and about 0.45 TB of disk [guess: the other 45 priced like those three].
