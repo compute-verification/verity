@@ -29521,3 +29521,21 @@ Text for PRF-456, a paste under the 16:39Z item 3:
 > - **Size:** about 10 Lean lines, 5 Python lines and 40 lines of tests, plus one records run.
 
 **Not changed:** network's 4 and 5 as at 16:15Z, and #8539's body. Daniel's "this is fine" line and the fix's runs go in together when `cd03` passes.
+
+## OUTERSTEP, Tue 10 Nov 17:03Z: PRF-499: my 16:36Z guess was wrong. L0 was ready in about 690 s (2bb7: 937 s) at a 95.5 GiB peak, so I now expect yes on both; final at about 22:15Z (r20261110-163252-0788)
+
+This corrects my 16:36Z guess of "no on time": it was wrong, and I now expect yes on both. Nothing is final until the run ends, about 22:15Z. Run `r20261110-163252-0788`, my id `bc-34bf5c3c-0c3d-534f-b8b7-2bf400129790`, still no inbox file for me at 17:03Z.
+
+**What the run has shown so far.**
+
+- **L0, the largest part, was ready about 690 s after it started** (start 16:43:06Z by the prover's first sample, ready 16:54:35Z by the Lean loop's `FIREWALL-TIMES` line). 2bb7's L0 took 937 s. The exact start is in `release-wall.tsv` once the part is released, at 18:58Z. [run]
+- **The peak of the job tree's summed RSS while L0 proved was 95.5 GiB** (at 16:45:42Z; 69.0 GiB of it the ZK server's `core-firewall session`). L0 took 4,714 CPU-s in the ZK server and 294 in the prover. [run: the guard's 1 s samples]
+- **The staged V\* is the cap's:** 16 statements, `rec-open/l64-h16` (436 openings) down to `l16-h6`, `rec-residuals/m35-k27-c6-p0` and `-p1`, 7 caps, 14,216 recorded calls. [run: the inner step's `rec-statements.txt`]
+- **Why my guess was wrong:** L1 and L2 have more rows than 2bb7's but stay in its size class (`k_log` 23, m 31), as ZKSIZE's projection said. Only two levels, L5 and L6, are new. [run: `summary-vstage.json`]
+- **The inner step is not part of the answer, but its memory is close to the line:** the M0 proof of the 256-block statement at m 35 took 61 s on 16 vCPUs, 625 CPU-s, and peaked at 102.3 GiB. [run: its `time-prove.txt`] That is this silu-mul statement, not PoUB's opening unit.
+
+**What I expect now.** [guess] 2,000 to 2,500 s for the 16 parts and a peak near 95.5 GiB, so yes against 3,000 s and yes against 110 GiB. That scales 2bb7's other parts by L0's 690/937 and adds L5, L6 and two caps.
+
+**One caution on comparing with 2bb7.** Both nodes are the same EPYC-Genoa with the prover on 16 vCPUs that are 8 cores' two threads. cpu-9's load average was 64 when 2bb7 ran and cpu-4's is 5 to 6 now, and the tree is today's `main`, not `b9ea4245b3`. So today's times are faster than 2bb7's for one or both of those reasons; I can't separate them from this run. [run for the loads, guess for the cause]
+
+**Schedule.** The session began at 16:38:13Z and its last window ends at 22:05:43Z; Lean then verifies the 16 releases. The lead I set (5,400 s) was far longer than needed: the inner proof, staging and caps took 5 minutes. I left the run alone, since restarting with a shorter lead would save about 80 minutes and cost the slot's one large place twice.
