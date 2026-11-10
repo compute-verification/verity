@@ -123,7 +123,7 @@ def test_tile_matches_pearl(t, dev, key):
 
 def test_interface_and_domain():
     s = get("pearl-fp8-v4")
-    assert isinstance(s, PoUWScheme) and s.name == "pearl-fp8-v4" and s.device is P.ADA and s.certificate.gamma is None
+    assert isinstance(s, PoUWScheme) and s.name == "pearl-fp8-v4" and s.device is P.ADA and s.certificate.gap is None
     for shape in ((16, 1000, 16), (16, 1056 - 16, 16), (16, 1 << 17, 16), (8, 1024, 16)):
         with pytest.raises(DomainError):
             s.check(Matmul(0, Shape(*shape), 0))

@@ -60,7 +60,7 @@ coins its view shows are the run's own, but for the last one, which no decision 
 
 namespace Verity.Recursive.Schedule
 
-open Claims (Msg Out Prover Trace stepWith run coinSeq)
+open Claims (Msg Out Prover Transcript stepWith run coinSeq)
 open FlockDeploy (Coin)
 open RecDeploy
 

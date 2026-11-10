@@ -18,7 +18,7 @@ sys.modules["pouw_period_cost"] = PC
 spec.loader.exec_module(PC)
 
 LINE = PC.configurations()[0]
-#: the ε_♭ INT-PERIOD's figures (and ComposePeriod's, which quote them) are stated at
+#: the ε_♭ INT-PERIOD's figures (and ComposeMonitoringPeriod's, which quote them) are stated at
 INT_PERIOD_EPS_FLAT = 0.00571
 
 

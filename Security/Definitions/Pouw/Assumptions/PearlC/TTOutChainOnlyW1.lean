@@ -23,12 +23,12 @@ variable {Q R S : Type}
 `W1.w1Priced dv salt`. -/
 def TTOutPearlCDevChainOnlyW1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device)
     (salt : S → List ℕ) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
-  TTOutW1 dv salt (pearlCProtocolDevKChainOnly d sem ρ 0) (pearlCDomainDev d) (1 / 400) εPearlC
+  TTOutW1 dv salt (pearlCProtocolDevKChainOnly d sem ρ 0) (pearlCDomainDev d) (1 / 400) δPearlC
 
 /-- **TT_OUT(1/400) rev1 at a device record, chain-only, at W1 on `dv`**: `TTOutPearlCDevRev1ChainOnly` at
 `W1.w1Priced dv salt`. -/
 def TTOutPearlCDevRev1ChainOnlyW1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device)
     (salt : S → List ℕ) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
-  TTOutW1 dv salt (pearlCProtocolDevRev1KChainOnly d sem ρ 0) (pearlCDomainDev d) (1 / 400) εPearlC
+  TTOutW1 dv salt (pearlCProtocolDevRev1KChainOnly d sem ρ 0) (pearlCDomainDev d) (1 / 400) δPearlC
 
 end Pouw.PearlC.Assumptions

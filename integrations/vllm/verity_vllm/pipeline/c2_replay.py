@@ -272,7 +272,7 @@ def program_steps(loaded: dict, progs: dict) -> dict[str, int | None]:
     """Each request Program's steps of record: its Build result's T + 1, else its rows' segment steps."""
     from verity_vllm.query.manifest import format as MF
 
-    return {k: (int(v["result"]["T"]) + 1) if (v.get("result") or {}).get("T") is not None else (len(MF.segment_steps(progs[k]["rows"])) if k in progs else None)
+    return {k: (int(v["result"]["T"]) + 1) if (v.get("result") or {}).get("T") is not None else (len(MF.segment_steps(progs[k]["rows"], progs[k].get("checks"))) if k in progs else None)
             for k, v in loaded.items()}
 
 
@@ -393,9 +393,10 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
     if not plan and getattr(args, "memory_map", None):
         from verity_vllm.acquire.sources.kv_slots_source import caches_of
         from verity_vllm.check.oracle_compare import OpenedReader
-        from verity_vllm.pipeline import memory_map as MMP
-        MMP.after_commit(args.memory_map, loaded=_loaded, bmap=_bm, committed=OpenedReader(s.com, rc), manifest=s.manifest, arrivals=_arr,
-                         caches=caches_of(s.com), session=s.out / MMP.SESSION, cached_prefixes=cached_prefixes(reqs, _rl))
+        from verity_vllm import protocols
+        CM = protocols.driver("remote-bandwidth", "commit_map")
+        CM.after_commit(args.memory_map, loaded=_loaded, bmap=_bm, committed=OpenedReader(s.com, rc), manifest=s.manifest, arrivals=_arr,
+                        caches=caches_of(s.com), session=s.out / CM.SESSION, cached_prefixes=cached_prefixes(reqs, _rl))
     _rd = held["rd"]
     _wc = None if plan else s.weights_check()
     _seed, _seed_src, _seed_form, _seed_chal = seed_of(args, rc)
@@ -426,7 +427,8 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
                # Q(P) of record: the replay's reach is reconciled against it identity by identity
                manifest=(s.manifest if isinstance(s.manifest, dict) else None),
                worker_peak=getattr(args, "replay_worker_peak", None),
-               program_dirs={_k: _v["dir"] for _k, _v in _loaded.items() if _v.get("dir")}, cached_prefixes=cached_prefixes(reqs, _rl), **_sr_kw)
+               program_dirs={_k: _v["dir"] for _k, _v in _loaded.items() if _v.get("dir")}, cached_prefixes=cached_prefixes(reqs, _rl),
+               certified={w["request_id"]: {"request_id": str(r.get("request_id")), "seed": w["seed"]} for r, w in zip(s.reqs, _wreq)}, **_sr_kw)
     if planner is not None:
         t0 = time.perf_counter()
         got = planner.plan({"binding_map": str(s.out / f"binding_map_p{pair}.json"), "arrivals": _arr, "seed": _seed, "seed_source": _seed_src,

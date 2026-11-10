@@ -19,7 +19,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 
 /-!
-# The zerocheck's and lincheck's rounds carry their messages (R11b)
+# The zerocheck's and lincheck's rounds carry their messages (`DecodesOn`'s message half)
 
 `zl_carries`: from the domain frame through `z_partial`'s round, the rounds of `zcFrames ++ lcFrames`, read by `wZL`,
 are `zcMsgs ++ lcMsgs`, cut at `zcShape ++ lcShape`'s coins. The frames split into rounds that each close at their last

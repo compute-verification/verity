@@ -8,27 +8,27 @@ public import Proofs.Properties.Accounting.Remote.Order
 
 `Shared.close`'s three outcomes (`sclose_spec`): a refusal that leaves the state, a `few` or `coin` rejection after
 the group's windows are made final (`finalize`), or the draw, which gives each window of the group its share
-(`drawStep`). `drawIsSubset` reads the draw off it and `Properties.RemoteAudit.drawIsSubset`, on the same `draws`.
+(`sampleStep`). `sampleIsSubset` reads the draw off it and `Properties.RemoteAudit.sampleIsSubset`, on the same `draws`.
 
 At `g ≤ 1`, `Shared.step g` is `Session.step` (`step_le_one`), and the session properties are today's. At `g ≥ 2`,
 each event keeps the invariant, the coins and every draw, and `DP`: a sampled window is below `W`, and so is sampled
 each window below `W` of its draw or an earlier one (`sstep`). With draw `c`'s first window unsampled, no window of
 draw `c` or later is sampled, so no close has read `coins[W + c]` or above, and the run is the same on coins that
-agree below it (`sclose_coins`, `sfold_coins`, `openingsUnreadUntilDrawn`). And `Frozen`'s argument goes through
+agree below it (`sclose_coins`, `sfold_coins`, `openingsUnreadUntilSampled`). And `Frozen`'s argument goes through
 with `Shared.close` (`frz_sclose`): under `DP` the windows a draw draws are unsampled before it, and it makes them final;
-it draws windows in order (`sclose_prefix`), so a sampled window's record is kept (`recordKeptAfterDraw`). `liveUnder`
+it draws windows in order (`sclose_prefix`), so a sampled window's record is kept (`recordKeptAfterSample`). `liveUnder`
 is `Order`'s argument over `Shared.run g` (`srunL`): the event that draws window `t` is its draw's close, which keeps
 its record (`sdraw_keeps`), and with `t` unsampled so is its draw's first window (`undrawn_first`), which is what
-`OpeningsUnreadUntilDrawn` and `ReleaseOrder` read. It needs `1 ≤ g`: at `g = 0` every window is draw 0, and coins that
+`OpeningsUnreadUntilSampled` and `ReleaseOrder` read. It needs `1 ≤ g`: at `g = 0` every window is draw 0, and coins that
 agree below `W` leave every window's openings coin free.
 
-`acceptDrawsOpenable` is `Properties.RemoteAudit.acceptDrawsOpenable`'s argument across a draw's windows: each sampled
+`acceptSamplesOpenable` is `Properties.RemoteAudit.acceptSamplesOpenable`'s argument across a draw's windows: each sampled
 `(i, p)` falls in the passes of one window `k` (`locatePass`), its share holds `(i − passCount, p)` (`shareOf_mem`),
 whose opening `checkWindow` passed (`checkWindow_accept`), and its number in the draw is the receipts before window `k`
 plus its number there (`flatMap_split`, `sum_take_mid`).
 
 `*_one`: at `g = 1` the session statements are today's (`Shared.run 1` is `Session.run`, `RemoteAudit.Shared.run_one`),
-and a draw of one window is `verifyWindow`'s (`acceptDrawsOpenable_one`).
+and a draw of one window is `verifyWindow`'s (`acceptSamplesOpenable_one`).
 -/
 
 @[expose] public section
@@ -45,12 +45,12 @@ def finalize (l : List Nat) (ws : Array Win) : Array Win :=
   l.foldl (fun ws u => ws.modify u ({· with final := true})) ws
 
 /-- A window's draw, as `Shared.close` sets it. -/
-def drawW (now : Nat) (mine : Array (Nat × Nat)) (w : Win) : Win :=
+def sampleW (now : Nat) (mine : Array (Nat × Nat)) (w : Win) : Win :=
   { w with drawn := some mine, openedNs := some now, verdict := if mine.isEmpty then some .accept else w.verdict }
 
 /-- One step of `Shared.close`'s second fold. -/
-def drawStep (drawn : Array (Nat × Nat)) (now : Nat) (acc : Array Win × Nat) (u : Nat) : Array Win × Nat :=
-  (acc.1.modify u (drawW now (shareOf drawn acc.2 acc.1[u]!.plans.size)), acc.2 + acc.1[u]!.plans.size)
+def sampleStep (drawn : Array (Nat × Nat)) (now : Nat) (acc : Array Win × Nat) (u : Nat) : Array Win × Nat :=
+  (acc.1.modify u (sampleW now (shareOf drawn acc.2 acc.1[u]!.plans.size)), acc.2 + acc.1[u]!.plans.size)
 
 theorem size_finalize_range (first m : Nat) (ws : Array Win) :
     (finalize ((List.range m).map (first + ·)) ws).size = ws.size := by
@@ -82,12 +82,12 @@ theorem passesIn_succ (ws : Array Win) (first m : Nat) :
     passesIn ws first (m + 1) = passesIn ws first m + ws[first + m]!.plans.size := by
   simp [passesIn, List.range_succ, List.sum_append]
 
-theorem drawFold_range (drawn : Array (Nat × Nat)) (now first b : Nat) (ws : Array Win) (m : Nat) :
-    (((List.range m).map (first + ·)).foldl (drawStep drawn now) (ws, b)).1.size = ws.size ∧
-    (((List.range m).map (first + ·)).foldl (drawStep drawn now) (ws, b)).2 = b + passesIn ws first m ∧
-    ∀ v, (((List.range m).map (first + ·)).foldl (drawStep drawn now) (ws, b)).1[v]! =
+theorem sampleFold_range (drawn : Array (Nat × Nat)) (now first b : Nat) (ws : Array Win) (m : Nat) :
+    (((List.range m).map (first + ·)).foldl (sampleStep drawn now) (ws, b)).1.size = ws.size ∧
+    (((List.range m).map (first + ·)).foldl (sampleStep drawn now) (ws, b)).2 = b + passesIn ws first m ∧
+    ∀ v, (((List.range m).map (first + ·)).foldl (sampleStep drawn now) (ws, b)).1[v]! =
       if first ≤ v ∧ v < first + m ∧ v < ws.size then
-        drawW now (shareOf drawn (b + passesIn ws first (v - first)) ws[v]!.plans.size) ws[v]!
+        sampleW now (shareOf drawn (b + passesIn ws first (v - first)) ws[v]!.plans.size) ws[v]!
       else ws[v]! := by
   induction m with
   | zero => refine ⟨rfl, by simp [passesIn], fun v => ?_⟩; simp; omega
@@ -95,11 +95,11 @@ theorem drawFold_range (drawn : Array (Nat × Nat)) (now first b : Nat) (ws : Ar
     obtain ⟨ih1, ih2, ih3⟩ := ih
     rw [List.range_succ, List.map_append, List.foldl_append]
     simp only [List.map_cons, List.map_nil, List.foldl_cons, List.foldl_nil]
-    generalize ((List.range m).map (first + ·)).foldl (drawStep drawn now) (ws, b) = out at ih1 ih2 ih3
+    generalize ((List.range m).map (first + ·)).foldl (sampleStep drawn now) (ws, b) = out at ih1 ih2 ih3
     have hx : out.1[first + m]! = ws[first + m]! := by rw [ih3]; rw [ite_eq_right (by omega)]
-    refine ⟨by simp [drawStep, ih1], ?_, fun v => ?_⟩
-    · simp only [drawStep]; rw [ih2, hx, passesIn_succ, Nat.add_assoc]
-    · simp only [drawStep]
+    refine ⟨by simp [sampleStep, ih1], ?_, fun v => ?_⟩
+    · simp only [sampleStep]; rw [ih2, hx, passesIn_succ, Nat.add_assoc]
+    · simp only [sampleStep]
       rw [getElem!_modify', ih1, hx, ih2, ih3]
       by_cases hv : first + m = v
       · subst hv
@@ -120,8 +120,8 @@ theorem finalize_roots (first m : Nat) (ws : Array Win) (v : Nat) :
     (finalize ((List.range m).map (first + ·)) ws)[v]!.roots = ws[v]!.roots := by
   rw [finalize_range]; split <;> rfl
 
-theorem grp_eq {g t W : Nat} (h : t + 1 = min (t / g * g + g) W) : grp g t = drawWindows g W (t / g) := by
-  unfold grp drawWindows
+theorem grp_eq {g t W : Nat} (h : t + 1 = min (t / g * g + g) W) : grp g t = sampleWindows g W (t / g) := by
+  unfold grp sampleWindows
   rw [← h]
 
 theorem find_none {p : Nat → Bool} {l : List Nat} (h : ∀ u, l.find? p = some u → False) : ∀ u ∈ l, p u = false := by
@@ -139,9 +139,9 @@ theorem sclose_spec {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {s'
       t.toNat + 1 = min (t.toNat / g * g + g) s.params.windows ∧
       (∀ j, j < t.toNat / g * g → (dr s.windows j).isSome) ∧
       (∀ u ∈ grp g t.toNat, s.params.minPasses ≤ s.windows[u]!.roots.size) ∧
-      draws s.digest (t.toNat / g) s.coins[s.params.windows + t.toNat / g]! s.params.samples
-        (drawLengths g s (t.toNat / g)) = some drawn ∧
-      s' = { s with windows := ((grp g t.toNat).foldl (drawStep drawn now)
+      receiptSample s.digest (t.toNat / g) s.coins[s.params.windows + t.toNat / g]! s.params.samples
+        (sampleLengths g s (t.toNat / g)) = some drawn ∧
+      s' = { s with windows := ((grp g t.toNat).foldl (sampleStep drawn now)
         (finalize (grp g t.toNat) s.windows, 0)).1 }) := by
   unfold Shared.close at h
   dsimp only at h
@@ -159,12 +159,12 @@ theorem sclose_spec {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {s'
     have hm := ‹¬t.toNat + 1 ≠ min (t.toNat / g * g + g) s.params.windows›
     have hord := ‹¬((s.windows.extract 0 (t.toNat / g * g)).any fun x => x.drawn.isNone) = true›
     have hfew := ‹∀ (u : Nat), List.find? _ _ = some u → False›
-    have hdraws := ‹draws _ _ _ _ _ = some _›
+    have hdraws := ‹receiptSample _ _ _ _ _ = some _›
     simp only [Bool.or_eq_true, decide_eq_true_eq, not_or] at hb
     have hm' : t.toNat + 1 = min (t.toNat / g * g + g) s.params.windows := by simpa using hm
     have hlen : (List.foldl (fun acc u => acc ++ Array.map (fun x => x.length)
-        (finalize (grp g t.toNat) s.windows)[u]!.plans) #[] (grp g t.toNat)) = drawLengths g s (t.toNat / g) := by
-      unfold drawLengths
+        (finalize (grp g t.toNat) s.windows)[u]!.plans) #[] (grp g t.toNat)) = sampleLengths g s (t.toNat / g) := by
+      unfold sampleLengths
       rw [← grp_eq hm']
       congr 1
       funext acc u
@@ -192,26 +192,26 @@ theorem sclose_spec {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {s'
       rw [← hlen]
       exact hdraws
 
-theorem drawIsSubset : DrawIsSubset := by
+theorem sampleIsSubset : SampleIsSubset := by
   intro g s t now drawn s' h
   rcases sclose_spec h with ⟨⟨_, hr⟩, -⟩ | ⟨_, _, hr, -⟩ | ⟨d, hr, ht0, hts, hund, hm, hpre, hfew, hdraws, rfl⟩
   · cases hr
   · cases hr
   cases hr
-  obtain ⟨L, us, hs, h1, h2, h3, h4⟩ := Properties.RemoteAudit.drawIsSubset _ _ _ _ _ _ hdraws
+  obtain ⟨L, us, hs, h1, h2, h3, h4⟩ := Properties.RemoteAudit.sampleIsSubset _ _ _ _ _ _ hdraws
   refine ⟨L, us, hs, h1, h2, h3, h4, fun u hu => ?_⟩
   obtain ⟨j, hj, rfl⟩ := List.mem_map.1 hu
   rw [List.mem_range] at hj
   have hle : t.toNat / g * g ≤ t.toNat := Nat.div_mul_le_self _ _
   show dr _ _ = _
   rw [dr_eq]
-  obtain ⟨-, -, h3⟩ := drawFold_range drawn now (t.toNat / g * g) 0 (finalize (grp g t.toNat) s.windows)
+  obtain ⟨-, -, h3⟩ := sampleFold_range drawn now (t.toNat / g * g) 0 (finalize (grp g t.toNat) s.windows)
     (t.toNat + 1 - t.toNat / g * g)
   have h3' := h3 (t.toNat / g * g + j)
   unfold grp at h3' ⊢
   dsimp only
   rw [h3', ite_eq_left (by rw [size_finalize_range]; omega)]
-  simp only [drawW, Nat.zero_add]
+  simp only [sampleW, Nat.zero_add]
   rw [finalize_plans]
   have hp : passesIn (finalize ((List.range (t.toNat + 1 - t.toNat / g * g)).map (t.toNat / g * g + ·)) s.windows)
       (t.toNat / g * g) (t.toNat / g * g + j - t.toNat / g * g) =
@@ -283,9 +283,9 @@ theorem shareOf_mem (drawn : Array (Nat × Nat)) (base n k : Nat) (hk : k < draw
   simp only at h1 h2 ⊢
   rw [ite_eq_left (by simp; omega)]
 
-theorem acceptDrawsOpenable : AcceptDrawsOpenable := by
+theorem acceptSamplesOpenable : AcceptSamplesOpenable := by
   intro reg appends c coin samples ws drawn hd
-  obtain ⟨L, us, hs, hsz, -, hrange, -⟩ := Properties.RemoteAudit.drawIsSubset _ _ _ _ _ _ hd
+  obtain ⟨L, us, hs, hsz, -, hrange, -⟩ := Properties.RemoteAudit.sampleIsSubset _ _ _ _ _ _ hd
   refine ⟨L, us, hs, fun openings hacc v hv => ?_⟩
   obtain ⟨j, hj, rfl⟩ := Array.mem_iff_getElem.1 hv
   have hjd : j < drawn.size := by omega
@@ -417,14 +417,14 @@ theorem dr_fail (s : State) (u : Nat) (f : Failure) (v : Nat) : dr (s.fail u f).
   · rfl
 
 /-- In the draw, window `v`'s draw is new exactly when `v` is in the group. -/
-theorem dr_drawn {g : Nat} {s : State} {t : Int} {drawn : Array (Nat × Nat)} {now : Nat} (v : Nat) :
-    dr ((grp g t.toNat).foldl (drawStep drawn now) (finalize (grp g t.toNat) s.windows, 0)).1 v =
+theorem dr_sampled {g : Nat} {s : State} {t : Int} {drawn : Array (Nat × Nat)} {now : Nat} (v : Nat) :
+    dr ((grp g t.toNat).foldl (sampleStep drawn now) (finalize (grp g t.toNat) s.windows, 0)).1 v =
       if t.toNat / g * g ≤ v ∧ v < t.toNat + 1 ∧ v < s.windows.size then
         some (shareOf drawn (passesIn (finalize (grp g t.toNat) s.windows) (t.toNat / g * g) (v - t.toNat / g * g))
           s.windows[v]!.plans.size)
       else dr s.windows v := by
   have hle : t.toNat / g * g ≤ t.toNat := Nat.div_mul_le_self _ _
-  obtain ⟨-, -, h3⟩ := drawFold_range drawn now (t.toNat / g * g) 0 (finalize (grp g t.toNat) s.windows)
+  obtain ⟨-, -, h3⟩ := sampleFold_range drawn now (t.toNat / g * g) 0 (finalize (grp g t.toNat) s.windows)
     (t.toNat + 1 - t.toNat / g * g)
   rw [dr_eq]
   unfold grp at h3 ⊢
@@ -432,7 +432,7 @@ theorem dr_drawn {g : Nat} {s : State} {t : Int} {drawn : Array (Nat × Nat)} {n
   split
   · rename_i h
     rw [ite_eq_left (by omega)]
-    simp only [drawW, Nat.zero_add]
+    simp only [sampleW, Nat.zero_add]
     rw [finalize_plans]
   · rename_i h
     rw [ite_eq_right (by omega), ← dr_eq, dr_finalize]
@@ -474,18 +474,18 @@ theorem sclose_dr {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {s₁
   · have hle : t.toNat / g * g ≤ t.toNat := Nat.div_mul_le_self _ _
     have hmin := hm
     refine ⟨fun v hv => ?_, fun d' _ => ?_, fun hg hD => ?_, rfl, rfl⟩
-    · dsimp only; rw [dr_drawn]; split
+    · dsimp only; rw [dr_sampled]; split
       · rfl
       · exact hv
-    · dsimp only; rw [dr_drawn, ite_eq_left ⟨hle, by omega, hts⟩]; rfl
+    · dsimp only; rw [dr_sampled, ite_eq_left ⟨hle, by omega, hts⟩]; rfl
     · have htW : t.toNat + 1 ≤ s.params.windows := by omega
       have htg : t.toNat < t.toNat / g * g + g := by omega
-      have hnew : ∀ v, (dr ({ s with windows := ((grp g t.toNat).foldl (drawStep d now)
+      have hnew : ∀ v, (dr ({ s with windows := ((grp g t.toNat).foldl (sampleStep d now)
           (finalize (grp g t.toNat) s.windows, 0)).1 } : State).windows v).isSome ↔
           ((t.toNat / g * g ≤ v ∧ v < t.toNat + 1 ∧ v < s.windows.size) ∨ (dr s.windows v).isSome) := by
         intro v
         dsimp only
-        rw [dr_drawn]
+        rw [dr_sampled]
         split
         · simp_all
         · rename_i hc; simp only [hc, false_or]
@@ -533,7 +533,7 @@ theorem sclose_inv {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {s�
   · exact ⟨inv_fail (hF _ _) _ _ _, rfl, rfl, rfl⟩
   · refine ⟨?_, rfl, rfl, rfl⟩
     have hle : t.toNat / g * g ≤ t.toNat := Nat.div_mul_le_self _ _
-    obtain ⟨h1, -, h3⟩ := drawFold_range d now (t.toNat / g * g) 0 (finalize (grp g t.toNat) s.windows)
+    obtain ⟨h1, -, h3⟩ := sampleFold_range d now (t.toNat / g * g) 0 (finalize (grp g t.toNat) s.windows)
       (t.toNat + 1 - t.toNat / g * g)
     have hF' := hF (t.toNat + 1 - t.toNat / g * g) (t.toNat / g * g)
     unfold grp at h1 h3 hfew ⊢
@@ -658,7 +658,7 @@ theorem sfold_coins {g : Nat} (hg : 2 ≤ g) (T : Nat) (c : Array ByteArray) :
     ∀ (l : List Event) (acc out : Array Result × State), l.foldlM (sAcc g) acc = .ok out →
     Inv acc.2 → 0 < acc.2.params.windows →
     (∀ k, k < acc.2.params.windows + T → c[k]! = acc.2.coins[k]!) →
-    (∀ t₀, (drawnOf out.2 t₀).isSome → t₀ / g < T) →
+    (∀ t₀, (sampledOf out.2 t₀).isSome → t₀ / g < T) →
     l.foldlM (sAcc g) (acc.1, C c acc.2) = .ok (out.1, C c out.2) := by
   intro l
   induction l with
@@ -688,14 +688,14 @@ theorem sfold_coins {g : Nat} (hg : 2 ≤ g) (T : Nat) (c : Array ByteArray) :
       simp only [sAcc, hstep]
       exact ih (acc.1.push r, s') out h hinv' (by rw [hp]; exact h0) (by rw [hp, hc]; exact hag) hT
 
-theorem openingsUnreadUntilDrawn : OpeningsUnreadUntilDrawn := by
+theorem openingsUnreadUntilSampled : OpeningsUnreadUntilSampled := by
   intro g params reg coins appendCoins notBeforeNs events rs s hrun c coins' hW hnd hag
   rcases Nat.lt_or_ge g 2 with hg | hg
   · rw [run_le_one (by omega)] at hrun ⊢
     rcases (show g = 0 ∨ g = 1 by omega) with rfl | rfl
-    · exact Properties.RemoteAudit.openingsUnreadUntilDrawn params reg coins appendCoins notBeforeNs events rs s
+    · exact Properties.RemoteAudit.openingsUnreadUntilSampled params reg coins appendCoins notBeforeNs events rs s
         hrun 0 coins' hW (by simpa using hnd) (fun j hj => hag j (by omega))
-    · exact Properties.RemoteAudit.openingsUnreadUntilDrawn params reg coins appendCoins notBeforeNs events rs s
+    · exact Properties.RemoteAudit.openingsUnreadUntilSampled params reg coins appendCoins notBeforeNs events rs s
         hrun c coins' hW (by simpa using hnd) hag
   · have hP := srun_inv g (fun x => Inv x ∧ x.params = params ∧ DP g params.windows x.windows)
       (fun _ _ _ _ hx₀ he' => by
@@ -706,7 +706,7 @@ theorem openingsUnreadUntilDrawn : OpeningsUnreadUntilDrawn := by
       _ events rs s ⟨inv_init .., rfl, fun u h => by simp [dr, State.init] at h, fun u j h => by
         simp [dr, State.init] at h⟩ hrun
     obtain ⟨-, -, hD⟩ := hP
-    have hlt : ∀ t₀, (drawnOf s t₀).isSome → t₀ / g < c := by
+    have hlt : ∀ t₀, (sampledOf s t₀).isSome → t₀ / g < c := by
       intro t₀ ht₀
       have hW₀ := hD.1 t₀ ht₀
       rcases Nat.lt_or_ge (t₀ / g) c with hl | hl
@@ -714,7 +714,7 @@ theorem openingsUnreadUntilDrawn : OpeningsUnreadUntilDrawn := by
       · exfalso
         rcases Nat.lt_or_ge (c * g) params.windows with hcW | hcW
         · have := hD.2 t₀ (c * g) ht₀ (by rw [Nat.mul_div_cancel _ (by omega)]; exact hl) hcW
-          change (drawnOf s (c * g)).isSome = true at this
+          change (sampledOf s (c * g)).isSome = true at this
           rw [hnd] at this; cases this
         · have := (Nat.le_div_iff_mul_le (by omega : 0 < g)).1 hl
           omega
@@ -742,11 +742,11 @@ theorem frz_sclose {g : Nat} (hg : 0 < g) {s : State} {t : Int} {now : Nat} {r :
       frz_of (by unfold grp; exact keepsF_finalize _ _ _) rfl rfl
     exact frz_trans h1 (frz_fail { s with windows := finalize (grp g t.toNat) s.windows } u f none)
   · refine frz_of ?_ rfl rfl
-    show KeepsF s.windows ((grp g t.toNat).foldl (drawStep d now) (finalize (grp g t.toNat) s.windows, 0)).1
+    show KeepsF s.windows ((grp g t.toNat).foldl (sampleStep d now) (finalize (grp g t.toNat) s.windows, 0)).1
     unfold grp
     refine keepsF_trans (keepsF_finalize (t.toNat / g * g) (t.toNat + 1 - t.toNat / g * g) _) ?_
     intro v
-    obtain ⟨-, -, h3⟩ := drawFold_range d now (t.toNat / g * g) 0
+    obtain ⟨-, -, h3⟩ := sampleFold_range d now (t.toNat / g * g) 0
       (finalize ((List.range (t.toNat + 1 - t.toNat / g * g)).map (t.toNat / g * g + ·)) s.windows)
       (t.toNat + 1 - t.toNat / g * g)
     rw [h3 v]
@@ -757,7 +757,7 @@ theorem frz_sclose {g : Nat} (hg : 0 < g) {s : State} {t : Int} {now : Nat} {r :
       have hfin := finalize_range (t.toNat / g * g) (t.toNat + 1 - t.toNat / g * g) s.windows v
       rw [ite_eq_left ⟨hv.1, by omega, hv.2.2⟩] at hfin
       rw [hfin]
-      refine keepW_draw ?_ rfl
+      refine keepW_sample ?_ rfl
       show s.windows[v]!.drawn = none
       cases e : s.windows[v]!.drawn with
       | none => rfl
@@ -803,9 +803,9 @@ theorem sclose_prefix {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {
     rw [dr_finalize] at ha ⊢
     exact hp a j hj ha
   · intro a j hj ha
-    change (dr ((grp g t.toNat).foldl (drawStep d now) (finalize (grp g t.toNat) s.windows, 0)).1 a).isSome at ha
-    show (dr ((grp g t.toNat).foldl (drawStep d now) (finalize (grp g t.toNat) s.windows, 0)).1 j).isSome
-    rw [dr_drawn] at ha ⊢
+    change (dr ((grp g t.toNat).foldl (sampleStep d now) (finalize (grp g t.toNat) s.windows, 0)).1 a).isSome at ha
+    show (dr ((grp g t.toNat).foldl (sampleStep d now) (finalize (grp g t.toNat) s.windows, 0)).1 j).isSome
+    rw [dr_sampled] at ha ⊢
     split at ha
     · split
       · rfl
@@ -820,11 +820,11 @@ theorem sstep_prefix {g : Nat} (hg : 2 ≤ g) {s : State} {e : Event} {r : Resul
   · exact sclose_prefix hp hc
   · exact prefix_step hp (adv_step hs)
 
-theorem recordKeptAfterDraw : RecordKeptAfterDraw := by
+theorem recordKeptAfterSample : RecordKeptAfterSample := by
   intro g params reg coins appendCoins notBeforeNs events events' rs rs' s s' h₁ h₂ t d hm hd
   rcases Nat.lt_or_ge g 2 with hg | hg
   · rw [run_le_one (by omega)] at h₁ h₂
-    exact Properties.RemoteAudit.recordKeptAfterDraw params reg coins appendCoins notBeforeNs events events' rs rs'
+    exact Properties.RemoteAudit.recordKeptAfterSample params reg coins appendCoins notBeforeNs events events' rs rs'
       s s' h₁ h₂ t d hm hd
   have hSF0 : SF g (State.init params reg coins appendCoins notBeforeNs) :=
     ⟨finv_init params reg coins appendCoins notBeforeNs hm, fun u h => by simp [dr, State.init] at h,
@@ -852,14 +852,14 @@ theorem recordKeptAfterDraw : RecordKeptAfterDraw := by
         (if t > 0 then s.windows[t - 1]!.roots.back?.getD ByteArray.empty else s.digest) := by
       by_cases htp : t > 0
       · have hs : (dr s.windows (t - 1)).isSome :=
-          hpre t (t - 1) (by omega) (by show (drawnOf s t).isSome; rw [hd]; rfl)
+          hpre t (t - 1) (by omega) (by show (sampledOf s t).isSome; rw [hd]; rfl)
         rw [dr_eq] at hs
         rw [ite_eq_left htp, ite_eq_left htp, ((hk (t - 1)).1 hs).2.2.1]
       · rw [ite_eq_right htp, ite_eq_right htp, hdig]
     unfold State.record
     simp only [e2, e3, e4, e5]
     rw [hprev]
-  refine ⟨by rw [show drawnOf s' t = s'.windows[t]!.drawn from dr_eq _ _, e1, hd'], hrec, fun u => ?_⟩
+  refine ⟨by rw [show sampledOf s' t = s'.windows[t]!.drawn from dr_eq _ _, e1, hd'], hrec, fun u => ?_⟩
   rw [hrec, happ]
   have key : ∀ i p o, i < (s.record t).passes.size → p < (s.record t).passes[i]!.plan.length →
       checkOpening reg reg.digest (s.appends ++ more) (s.record t) (receipterOf reg (s.record t) i) i p o =
@@ -878,16 +878,16 @@ theorem recordKeptAfterDraw : RecordKeptAfterDraw := by
 
 /-! ## At `g = 1`: today's statements -/
 
-theorem drawWindows_one {W c : Nat} (h : c < W) : drawWindows 1 W c = [c] := by
-  unfold drawWindows
+theorem sampleWindows_one {W c : Nat} (h : c < W) : sampleWindows 1 W c = [c] := by
+  unfold sampleWindows
   rw [show min (c * 1 + 1) W - c * 1 = 1 by omega]
   simp
 
 /-- At `g = 1` draw `c`'s receipts are window `c`'s, as `Session.close` numbers them. -/
-theorem drawLengths_one {s : State} {c : Nat} (h : c < s.params.windows) :
-    drawLengths 1 s c = s.windows[c]!.plans.map (·.length) := by
-  unfold drawLengths
-  rw [drawWindows_one h]
+theorem sampleLengths_one {s : State} {c : Nat} (h : c < s.params.windows) :
+    sampleLengths 1 s c = s.windows[c]!.plans.map (·.length) := by
+  unfold sampleLengths
+  rw [sampleWindows_one h]
   simp
 
 theorem releaseOrder_one (params : Params) (reg : Registration) (appendCoins : Array ByteArray) (notBeforeNs : Nat)
@@ -914,11 +914,11 @@ theorem liveUnder_one (params : Params) (reg : Registration) (appendCoins : Arra
     exact h coins coins' t k k' rs rs' s s' hag h₁ h₂ hd hd'
 
 /-- A draw of one window is `verifyWindow`'s: its share is the whole draw, and its receipts are numbered from 0. -/
-theorem acceptDrawsOpenable_one (h : AcceptDrawsOpenable) : Properties.RemoteAudit.AcceptDrawsOpenable := by
+theorem acceptSamplesOpenable_one (h : AcceptSamplesOpenable) : Properties.RemoteAudit.AcceptSamplesOpenable := by
   intro reg appends w coin samples openings hv
   obtain ⟨drawn, hd, hc⟩ := verifyWindow_accept hv
   have hl : lengthsOf [w] = w.passes.map (·.plan.length) := by apply Array.ext'; simp [lengthsOf]
-  obtain ⟨_, _, _, _, _, hrange, _⟩ := Properties.RemoteAudit.drawIsSubset _ _ _ _ _ _ hd
+  obtain ⟨_, _, _, _, _, hrange, _⟩ := Properties.RemoteAudit.sampleIsSubset _ _ _ _ _ _ hd
   have hsh : shareOf drawn 0 w.passes.size = drawn :=
     shareOf_all drawn _ fun k hk => by simpa using (hrange k hk).1
   obtain ⟨L, us, hs, hus⟩ := h reg appends w.index coin samples [w] drawn (by rw [hl]; exact hd)
@@ -1006,8 +1006,8 @@ theorem srunL_prefix {g : Nat} {s s' : State} {l : List Event} {rs : Array Resul
   obtain ⟨rs₁, s₁, -, h₁, -⟩ := srunL_append h
   exact ⟨rs₁, s₁, h₁⟩
 
-theorem srunL_drawn {g : Nat} (hg : 2 ≤ g) {s s' : State} {l : List Event} {rs : Array Result} (hi : Inv s)
-    (h : srunL g s l = .ok (rs, s')) {t : Nat} (hd : (drawnOf s t).isSome) : (drawnOf s' t).isSome :=
+theorem srunL_sampled {g : Nat} (hg : 2 ≤ g) {s s' : State} {l : List Event} {rs : Array Result} (hi : Inv s)
+    (h : srunL g s l = .ok (rs, s')) {t : Nat} (hd : (sampledOf s t).isSome) : (sampledOf s' t).isSome :=
   (sfold_inv g (fun x => Inv x ∧ (dr x.windows t).isSome)
     (fun _ _ _ _ hx he => ⟨(sstep hg hx.1 he).1, (sstep hg hx.1 he).2.2.2.1 _ hx.2⟩) l (#[], s) (rs, s')
     ⟨hi, hd⟩ h).2
@@ -1061,10 +1061,10 @@ theorem sclose_keeps {g : Nat} {s : State} {t' : Int} {now : Nat} {r : Result} {
     apply record_of
     · rfl
     intro v
-    show SameW s.windows[v]! ((grp g t'.toNat).foldl (drawStep d now) (finalize (grp g t'.toNat) s.windows, 0)).1[v]!
+    show SameW s.windows[v]! ((grp g t'.toNat).foldl (sampleStep d now) (finalize (grp g t'.toNat) s.windows, 0)).1[v]!
     unfold grp
     refine sameW_trans (sameW_finalize (t'.toNat / g * g) (t'.toNat + 1 - t'.toNat / g * g) s.windows v) ?_
-    obtain ⟨-, -, h3⟩ := drawFold_range d now (t'.toNat / g * g) 0
+    obtain ⟨-, -, h3⟩ := sampleFold_range d now (t'.toNat / g * g) 0
       (finalize ((List.range (t'.toNat + 1 - t'.toNat / g * g)).map (t'.toNat / g * g + ·)) s.windows)
       (t'.toNat + 1 - t'.toNat / g * g)
     rw [h3 v]
@@ -1072,11 +1072,11 @@ theorem sclose_keeps {g : Nat} {s : State} {t' : Int} {now : Nat} {r : Result} {
 
 /-- The event that draws window `t` is the close of its draw, so it keeps the window's record and the appends. -/
 theorem sdraw_keeps {g : Nat} (hg : 2 ≤ g) {s : State} {e : Event} {r : Result} {s₁ : State}
-    (he : Shared.step g s e = .ok (r, s₁)) {t : Nat} (h0 : drawnOf s t = none) (h1 : (drawnOf s₁ t).isSome) :
+    (he : Shared.step g s e = .ok (r, s₁)) {t : Nat} (h0 : sampledOf s t = none) (h1 : (sampledOf s₁ t).isSome) :
     s₁.record t = s.record t ∧ s₁.appends = s.appends := by
   rcases sstep_of hg he with ⟨t', now, rfl, hc⟩ | ⟨hn, hs⟩
   · exact sclose_keeps hc h0 h1
-  · exact (no_draw (keep_nonclose hn hs) h0 h1).elim
+  · exact (no_sample (keep_nonclose hn hs) h0 h1).elim
 
 /-- Up to the draw of window `t` on `coins`, the events on `coins'` are the same. -/
 theorem stake_agree {g : Nat} (hg : 2 ≤ g) (params : Params) (reg : Registration) (appendCoins : Array ByteArray)
@@ -1085,7 +1085,7 @@ theorem stake_agree {g : Nat} (hg : 2 ≤ g) (params : Params) (reg : Registrati
     (hag : ∀ j, j < params.windows + t / g → coins'[j]! = coins[j]!) :
     ∀ (k : Nat) (rs : Array Result) (s : State),
       srunL g (State.init params reg coins appendCoins notBeforeNs) ((D coins).toList.take k) = .ok (rs, s) →
-      drawnOf s t = none → (D coins').toList.take k = (D coins).toList.take k := by
+      sampledOf s t = none → (D coins').toList.take k = (D coins).toList.take k := by
   intro k
   induction k with
   | zero => intros; simp
@@ -1094,18 +1094,18 @@ theorem stake_agree {g : Nat} (hg : 2 ≤ g) (params : Params) (reg : Registrati
     rw [List.take_add_one] at h
     obtain ⟨rs₁, s₁, rs₂, h₁, h₂⟩ := srunL_append h
     have hR := sreach hg h₁
-    have hnd₁ : drawnOf s₁ t = none := by
-      cases hx : drawnOf s₁ t with
+    have hnd₁ : sampledOf s₁ t = none := by
+      cases hx : sampledOf s₁ t with
       | none => rfl
       | some d =>
-        have := srunL_drawn hg hR.1 h₂ (t := t) (by rw [hx]; rfl)
+        have := srunL_sampled hg hR.1 h₂ (t := t) (by rw [hx]; rfl)
         rw [hnd] at this; cases this
     have e₂ := hD coins coins' (t / g) k rs₁ s₁ hag (by rw [srun_extract]; exact h₁)
       (undrawn_first (by omega) hR.2.2 ht hnd₁)
     rw [List.take_add_one, List.take_add_one, ih rs₁ s₁ h₁ hnd₁, Array.getElem?_toList, Array.getElem?_toList,
       e₂]
 
-/-- `Live` at `g ≥ 1` windows a draw, from `OpeningsUnreadUntilDrawn`, `RecordKeptAfterDraw` and the release order. -/
+/-- `Live` at `g ≥ 1` windows a draw, from `OpeningsUnreadUntilSampled`, `RecordKeptAfterSample` and the release order. -/
 theorem liveUnder (g : Nat) (params : Params) (reg : Registration) (appendCoins : Array ByteArray)
     (notBeforeNs : Nat) (D : Array ByteArray → Array Event) (hg : 1 ≤ g) (hW : 1 ≤ params.windows)
     (hm : 1 ≤ params.minPasses) (hD : ReleaseOrder g params reg appendCoins notBeforeNs D) :
@@ -1120,24 +1120,24 @@ theorem liveUnder (g : Nat) (params : Params) (reg : Registration) (appendCoins 
   rw [srun_extract] at h₁ h₂
   have hag' : ∀ j, j < params.windows + t / g → coins[j]! = coins'[j]! := fun j hj => (hag j hj).symm
   have ht : t < params.windows := (sreach hg2 h₁).2.2.1 t hd₁
-  have T2 := openingsUnreadUntilDrawn
-  have T3 := recordKeptAfterDraw
+  have T2 := openingsUnreadUntilSampled
+  have T3 := recordKeptAfterSample
   obtain ⟨m, hk₁, ⟨rsA, sA, hA, hdA⟩, hmin'⟩ := exists_first (Q := fun k => ∃ rs s,
       srunL g (State.init params reg coins appendCoins notBeforeNs) ((D coins).toList.take k) = .ok (rs, s) ∧
-        (drawnOf s t).isSome)
+        (sampledOf s t).isSome)
     (by
       rintro ⟨rs0, s0, h0, hd0⟩
       rw [List.take_zero] at h0
       have e := srunL_det h0 rfl
       injection e with _ e
       subst e
-      simp [drawnOf, State.init] at hd0)
+      simp [sampledOf, State.init] at hd0)
     k₁ ⟨k₁, Nat.le_refl _, rs₁, s₁, h₁, hd₁⟩
   have hmin : ∀ k, k ≤ m → ∀ rs s,
       srunL g (State.init params reg coins appendCoins notBeforeNs) ((D coins).toList.take k) = .ok (rs, s) →
-      drawnOf s t = none := by
+      sampledOf s t = none := by
     intro k hk rs s h
-    cases hx : drawnOf s t with
+    cases hx : sampledOf s t with
     | none => rfl
     | some d => exact (hmin' k hk ⟨rs, s, h, by rw [hx]; rfl⟩).elim
   have hmL : m < (D coins).toList.length := by
@@ -1153,7 +1153,7 @@ theorem liveUnder (g : Nat) (params : Params) (reg : Registration) (appendCoins 
     rw [List.take_add_one, he]; rfl
   rw [htake] at hA
   obtain ⟨rsm, sm, r, hsm, hstep⟩ := srunL_snoc hA
-  have hndm : drawnOf sm t = none := hmin m (Nat.le_refl _) _ _ hsm
+  have hndm : sampledOf sm t = none := hmin m (Nat.le_refl _) _ _ hsm
   have hRm := sreach hg2 hsm
   have hL'm := stake_agree hg2 params reg appendCoins notBeforeNs D hD ht hag m rsm sm hsm hndm
   have hL'e : (D coins').toList[m]? = (D coins).toList[m]? := by
@@ -1181,7 +1181,7 @@ theorem liveUnder (g : Nat) (params : Params) (reg : Registration) (appendCoins 
     have e := srunL_det h₂ (hT2 k₂ hle rsk sk hsk)
     injection e with _ e
     rw [e] at hd₂
-    rw [show drawnOf { sk with coins := coins' } t = drawnOf sk t from rfl, hndk] at hd₂
+    rw [show sampledOf { sk with coins := coins' } t = sampledOf sk t from rfl, hndk] at hd₂
     cases hd₂
   rw [take_split _ hk₂, htake'] at h₂
   obtain ⟨rsB, sB, rsB₂, hB, hB₂⟩ := srunL_append h₂
@@ -1189,8 +1189,8 @@ theorem liveUnder (g : Nat) (params : Params) (reg : Registration) (appendCoins 
   have hy' := srunL_det hy (hT2 m (Nat.le_refl _) rsm sm hsm)
   injection hy' with _ hy'
   subst hy'
-  have hdB : (drawnOf sB t).isSome := by
-    cases hx : drawnOf sB t with
+  have hdB : (sampledOf sB t).isSome := by
+    cases hx : sampledOf sB t with
     | some d => rfl
     | none =>
       exfalso
@@ -1199,7 +1199,7 @@ theorem liveUnder (g : Nat) (params : Params) (reg : Registration) (appendCoins 
       rw [srun_toArray] at this
       have e := srunL_det hA this
       injection e with _ e
-      rw [e, show drawnOf { sB with coins := coins } t = drawnOf sB t from rfl, hx] at hdA
+      rw [e, show sampledOf { sB with coins := coins } t = sampledOf sB t from rfl, hx] at hdA
       cases hdA
   obtain ⟨hrA, haA⟩ := sdraw_keeps hg2 hstep hndm hdA
   obtain ⟨hrB, haB⟩ := sdraw_keeps hg2 hstep' (s := { sm with coins := coins' }) hndm hdB

@@ -7,6 +7,7 @@ split across two (layer 0 | layer 1 and the head)."""
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import replace
 
 import pytest
@@ -176,7 +177,8 @@ def cmp92(servers: int) -> I.Circuit:
     layer 1 an output-row read on the writer and a read on the reader (``x1``), and the token back into the embedding a read
     of the response's leaves on the reader, the head's output row being read once, as the response; each server loads its
     own weights. That split puts every inference block (slot, step) on both servers, the form network certification forbids: it is the
-    negative of network certification's check (`test_cmp92s_split_across_two_servers_is_refused`)."""
+    negative of network certification's check (`test_cmp92s_split_across_two_servers_is_refused`). Its templates read one
+    another, so it states an order, a range each inference entry's step (`ordered`)."""
     two = servers == 2
     w0, w1 = ("weights0", "weights1") if two else ("weights", "weights")
     pos, layer = T * H, 8 * H * H
@@ -226,10 +228,15 @@ def cmp92(servers: int) -> I.Circuit:
                       transfer("s1", "out", "wire", "response", "tok"), transfer("s0", "in", "wire", "response", "tok")]
     network = {"server": [{"name": s, "uplink": f"link-{s}", "units": SPLIT[s] if two else "all"} for s in names],
                "server_time": [{"server": s, "steps": [0, T]} for s in names], "transfers": transfers}
-    return I.Circuit(f"cmp92-{servers}", ((EMB, H * T * S), (QKV, LAYERS * 6 * T * S), (QK, LAYERS * QK_LAYER),
-                                          (OUT, LAYERS * H * T * S), (HEAD, O * S)),
-                     external=(f"{EID}/a", f"{HID}/o0"), wires=tuple(wires), cuts={QID: {"x": H}, OID: {"x": 2}, HID: {"x": H}},
-                     registered=I.Registered(params, (), tuple(reads)), blocks=I.Blocks(S, T, inference, network))
+    templates = ((EMB, H * T * S), (QKV, LAYERS * 6 * T * S), (QK, LAYERS * QK_LAYER), (OUT, LAYERS * H * T * S), (HEAD, O * S))
+    starts: dict[str, list[int]] = {}
+    for e in inference:
+        run = math.prod(e.radix[e.axes.index("step") + 1:]) if "step" in e.axes else e.units
+        starts.setdefault(e.template, []).extend(range(e.at, e.at + e.units, run))
+    return I.Circuit(f"cmp92-{servers}", templates, external=(f"{EID}/a", f"{HID}/o0"), wires=tuple(wires),
+                     cuts={QID: {"x": H}, OID: {"x": 2}, HID: {"x": H}}, registered=I.Registered(params, (), tuple(reads)),
+                     blocks=I.Blocks(S, T, inference, network),
+                     order=I.ordered({descriptor_id(fn): n for fn, n in templates}, wires, starts))
 
 
 @pytest.fixture(scope="module")

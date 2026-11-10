@@ -254,7 +254,7 @@ theorem exists_coinArr (n : ℕ) (y : coinTy n) :
     rw [coinArr, if_pos hs, h1]
     exact Sigma.ext e (cast_heq e y).symm
   · have e : coinTy n = (Fin n → 𝔽) := if_neg hn
-    obtain ⟨c, hc, hv⟩ : ∃ c : Array F128, c.size = n ∧ ∀ i (h : i < n), fOf c[i]! = cast e y ⟨i, h⟩ :=
+    obtain ⟨c, hc, hv⟩ : ∃ c : Array F128, c.size = n ∧ ∀ i (h : i < n), fOf (c)[i]! = cast e y ⟨i, h⟩ :=
       have e' : coinTy n = (Fin n → F128) := e
       ⟨Array.ofFn (n := n) fun i => cast e' y i, Array.size_ofFn, fun i h => by
         have hi : i < (Array.ofFn (n := n) fun i => cast e' y i).size := by
@@ -263,7 +263,7 @@ theorem exists_coinArr (n : ℕ) (y : coinTy n) :
     subst hc
     refine ⟨c, rfl, ?_⟩
     rw [coinArr, if_neg hn]
-    have hf : (fun i : Fin c.size => fOf c[i.val]!) = cast e y := funext fun i => hv i.val i.isLt
+    have hf : (fun i : Fin c.size => fOf (c)[i.val]!) = cast e y := funext fun i => hv i.val i.isLt
     exact Sigma.ext e (by rw [hf]; exact (cast_heq e y).symm)
 
 theorem coinArr_arrOf {n : ℕ} {m : Msg} (h : ∃ c : Array F128, c.size = n ∧ m = coinArr fOf c) :

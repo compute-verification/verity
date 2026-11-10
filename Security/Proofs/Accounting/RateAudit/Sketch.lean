@@ -4,6 +4,7 @@ public import Mathlib
 public import Definitions.Accounting.Guarantees.RateAuditSketch
 public import Proofs.Accounting.Bandwidth.AuditRO
 public import Proofs.Accounting.RateAudit.Chip
+import Proofs.Pous.Prob
 
 /-!
 # The rate audit with a sketch-then-hash tag: the proof
@@ -471,7 +472,7 @@ theorem RateAuditSketch : Accounting.Guarantees.RateAuditSketch := by
           Fintype.card (Oracle N ρ h X Dg × (Fin s → Fin N))) (fun D => ?_)).trans
         (le_of_eq (by simp only [Fintype.card_prod, Fintype.card_fun, Fintype.card_fin]; ring))
       exact card_filter_prod_le' _ _ _ (fun y => le_rfl)
-    · unfold pr
+    · simp only [Pous.pr_eq_card]
       convert rfl
   · -- a correct query for a tile not obtained whole
     refine (pr_exists_le _).trans ?_

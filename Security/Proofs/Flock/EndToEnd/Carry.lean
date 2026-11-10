@@ -19,11 +19,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.EndToEnd.Period
 import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Prob
-import Proofs.Flock.Soundness.Game.Seq
-import Proofs.Flock.Soundness.Game.Union
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Proof of the integrity audit over a monitoring period of blocks, with carried state

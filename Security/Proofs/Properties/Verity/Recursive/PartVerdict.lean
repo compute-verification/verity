@@ -190,7 +190,7 @@ theorem partVerdict_ok {h : InnerHeld} {j : Nat} {p : PartOwn} {s : PartProof} {
       p.registered.bind (fun r => (registeredOf r).toOption.map (·.1)) = registered ∧
       bs.get s.record s!"part {j}'s record" = .ok rB ∧ String.fromUTF8? rB = some record ∧
       (Flock.Witness.recordDraw record).isSome = true ∧
-      SampledProofs.OneStageZk.buildSessionOf
+      Spot.OneStageZk.buildSessionOf
           (Flock.ProvedScope.circuitOf
             (Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1) circuitB [])
           (Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1)
@@ -316,7 +316,7 @@ theorem decide_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : PartP
     (hinner : innerOfO xO = some h.shape) (hdn : VStar.Recursive.dense h.shape = true)
     (hsrc : (srcOfO xO).map (·.record) = some h.src.record)
     (hdraw : s.read.draw = Flock.Witness.recordDraw f.record)
-    (hD : SampledProofs.OneStageZk.buildSessionOf
+    (hD : Spot.OneStageZk.buildSessionOf
         (Flock.ProvedScope.circuitOf s.read.tags s.read.I.circuitFile []) s.read.tags s.read.I.circuitFile
         s.read.I.publicFile (Flock.Coins.tree (Flock.Zk.coinSpec (s.stmtTags.tableNames 1))) [] 1 s.read.draw
         (some p.partition) (some p.program) s.registered = .ok (spec, sts))
@@ -401,7 +401,7 @@ theorem nextO_acc_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : Pa
     (hinner : innerOfO xO = some h.shape) (hdn : VStar.Recursive.dense h.shape = true)
     (hsrc : (srcOfO xO).map (·.record) = some h.src.record)
     (hdraw : s.read.draw = Flock.Witness.recordDraw f.record)
-    (hD : SampledProofs.OneStageZk.buildSessionOf
+    (hD : Spot.OneStageZk.buildSessionOf
         (Flock.ProvedScope.circuitOf s.read.tags s.read.I.circuitFile []) s.read.tags s.read.I.circuitFile
         s.read.I.publicFile (Flock.Coins.tree (Flock.Zk.coinSpec (s.stmtTags.tableNames 1))) [] 1 s.read.draw
         (some p.partition) (some p.program) s.registered = .ok (spec, sts))
@@ -435,7 +435,7 @@ theorem decisionAt_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : P
     (hinner : innerOfO xO = some h.shape) (hdn : VStar.Recursive.dense h.shape = true)
     (hsrc : (srcOfO xO).map (·.record) = some h.src.record)
     (hdraw : s.read.draw = Flock.Witness.recordDraw f.record)
-    (hD : SampledProofs.OneStageZk.buildSessionOf
+    (hD : Spot.OneStageZk.buildSessionOf
         (Flock.ProvedScope.circuitOf s.read.tags s.read.I.circuitFile []) s.read.tags s.read.I.circuitFile
         s.read.I.publicFile (Flock.Coins.tree (Flock.Zk.coinSpec (s.stmtTags.tableNames 1))) [] 1 s.read.draw
         (some p.partition) (some p.program) s.registered = .ok (spec, sts))
@@ -474,7 +474,7 @@ theorem next_of_partVerdict {IV : Claims.Verifier Coin} {st : RecDeploy.Stage} {
     (hinner : innerOfO xO = some h.shape) (hdn : VStar.Recursive.dense h.shape = true)
     (hsrc : (srcOfO xO).map (·.record) = some h.src.record)
     (hdraw : s.read.draw = Flock.Witness.recordDraw f.record)
-    (hD : SampledProofs.OneStageZk.buildSessionOf
+    (hD : Spot.OneStageZk.buildSessionOf
         (Flock.ProvedScope.circuitOf s.read.tags s.read.I.circuitFile []) s.read.tags s.read.I.circuitFile
         s.read.I.publicFile (Flock.Coins.tree (Flock.Zk.coinSpec (s.stmtTags.tableNames 1))) [] 1 s.read.draw
         (some p.partition) (some p.program) s.registered = .ok (spec, sts))

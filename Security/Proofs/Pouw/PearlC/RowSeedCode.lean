@@ -3,10 +3,10 @@ module
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
 public import Mathlib.Tactic.Continuity
-public import Proofs.Pouw.PearlC.RowSeedGamma
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
+public import Proofs.Pouw.PearlC.RowSeedGap
 
 /-!
 # The code-form seed (`-h3`): a relabelling of the one-row-unit form (staging, nothing pinned)
@@ -21,9 +21,9 @@ A fixed permutation of the oracle's inputs, one per layout, carries one to the o
   `calls_relabelTree`), and C5 (`CostModel.RelabelClosed`) relabels its online program, so it runs against `H` as the
   original runs against `H ∘ π⁻¹`, within the same budget (`exists_relabel_adversary`).
 * **The bridge:** `ttOutRowSeed_code` and `ttOutTileRowSeed_code` carry the row-seeded TT_OUT from `sem'` to the
-  code's `semC`, at the same error `εPearlC q R`, so `(q + R)/2^128`.
+  code's `semC`, at the same error `δPearlC q R`, so `(q + R)/2^128`.
 * **From rev1's TT_OUT:** `ttOutRowSeedCode_of_ttOut` and `ttOutTileRowSeedCode_of_ttOutTile` (C1, C1-h3, C3, C5). The
-  γ theorems `pearlCGammaDevRev1RowSeedAt` and `pearlCSampledDevRev1RowSeedAt` apply at `semC` unchanged.
+  g theorems `pearlCGapDevRev1RowSeedAt` and `pearlCSampledDevRev1RowSeedAt` apply at `semC` unchanged.
 -/
 
 @[expose] public section
@@ -75,7 +75,7 @@ theorem pr_comp_equiv [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (π : 
       invFun := fun x => (x.1 ∘ π.symm, x.2)
       left_inv := fun x => by ext q <;> simp
       right_inv := fun x => by ext q <;> simp }
-  unfold pr
+  unfold pr Claims.Pr Claims.prUniform
   congr 2
   exact Finset.card_equiv e fun x => by simp [e]
 
@@ -110,12 +110,12 @@ section Bridge
 variable [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
 
 /-- **The code-form seed bridge** (`-h3`, §14): under C1-h3 and C5, the row-seeded TT_OUT at the one-row-unit form
-`sem'` gives it at the code's form `semC`, at the same error `εPearlC q R`. A bounded adversary against `semC` is,
+`sem'` gives it at the code's form `semC`, at the same error `δPearlC q R`. A bounded adversary against `semC` is,
 relabelled by `π⁻¹`, one against `sem'` that wins on `H ∘ π` exactly when it wins on `H`, and `H ∘ π` is uniform. -/
 theorem ttOutRowSeed_code {CM : CostModel Q R S} {d : PearlCDevice} {sem' semC : PearlCSem Q R S}
-    {π : Layout → Q ≃ Q} {ρ : ℚ} {D : Layout → Prop} {γ₀ : ℝ}
-    (h : TTOutRowSeed CM (pearlCProtocolDevRev1RowCap d sem' ρ) D γ₀) (hC : CodeSeedNoise sem' semC π)
-    (hCM : CM.RelabelClosed) : TTOutRowSeed CM (pearlCProtocolDevRev1RowCap d semC ρ) D γ₀ := by
+    {π : Layout → Q ≃ Q} {ρ : ℚ} {D : Layout → Prop} {g₀ : ℝ}
+    (h : TTOutRowSeed CM (pearlCProtocolDevRev1RowCap d sem' ρ) D g₀) (hC : CodeSeedNoise sem' semC π)
+    (hCM : CM.RelabelClosed) : TTOutRowSeed CM (pearlCProtocolDevRev1RowCap d semC ρ) D g₀ := by
   obtain rfl := eq_relabel hC
   refine ⟨h.1, fun U hU hR T hT q hq A hA => ?_⟩
   obtain ⟨A', hA', htr⟩ := exists_relabel_adversary hCM (π U.layout) A U hA
@@ -129,10 +129,10 @@ theorem ttOutRowSeed_code {CM : CostModel Q R S} {d : PearlCDevice} {sem' semC :
 
 /-- **The code-form seed bridge per audit tile**, as `ttOutRowSeed_code`. -/
 theorem ttOutTileRowSeed_code {CM : CostModel Q R S} {d : PearlCDevice} {sem' semC : PearlCSem Q R S}
-    {π : Layout → Q ≃ Q} {ρ : ℚ} {D : Layout → Prop} {γ₀ : ℝ}
-    (h : TTOutTileRowSeed CM (pearlCProtocolDevRev1RowCap d sem' ρ) (pearlCTilesDevRev1RowCap d sem' ρ) D γ₀)
+    {π : Layout → Q ≃ Q} {ρ : ℚ} {D : Layout → Prop} {g₀ : ℝ}
+    (h : TTOutTileRowSeed CM (pearlCProtocolDevRev1RowCap d sem' ρ) (pearlCTilesDevRev1RowCap d sem' ρ) D g₀)
     (hC : CodeSeedNoise sem' semC π) (hCM : CM.RelabelClosed) :
-    TTOutTileRowSeed CM (pearlCProtocolDevRev1RowCap d semC ρ) (pearlCTilesDevRev1RowCap d semC ρ) D γ₀ := by
+    TTOutTileRowSeed CM (pearlCProtocolDevRev1RowCap d semC ρ) (pearlCTilesDevRev1RowCap d semC ρ) D g₀ := by
   obtain rfl := eq_relabel hC
   refine ⟨h.1, fun U hU hR T hT q hq A hA => ?_⟩
   obtain ⟨A', hA', htr⟩ := exists_relabel_adversary hCM (π U.layout) A U hA

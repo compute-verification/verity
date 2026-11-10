@@ -14,6 +14,15 @@ def test_the_rules_parse_and_name_the_hold_label():
     assert rules.hold_label == "hold"
 
 
+def test_the_ready_mark_cutoff_is_set_once_in_the_rules():
+    """Drive's tick takes `marked_after` from the rules when drive.toml sets none, so drive and every VM's queue admit the same
+    marks only while the cutoff is set in the rules alone."""
+    rules = Rules.parse((ROOT / "tools" / "verity" / "check" / "queue.toml").read_text(), "tools/verity/check/queue.toml")
+    assert rules.marked_after
+    assert DriveFlags.parse((ROOT / DRIVE_FLAGS).read_text(), DRIVE_FLAGS).marked_after is None, \
+        f"{DRIVE_FLAGS} sets marked_after: set the cutoff in tools/verity/check/queue.toml alone"
+
+
 def test_drives_flags_parse_and_name_the_machines_its_checks_run_on():
     flags = DriveFlags.parse((ROOT / DRIVE_FLAGS).read_text(), DRIVE_FLAGS)
     assert flags.on

@@ -20,7 +20,9 @@ sort_keys=True)` writes it, each with its `seq`. Python's `verity_flock.firewall
    every registration its value commitments read that is not yet admitted (`admitReads`, `admit`), and skips every older
    one none of them reads (`skip`), each skip a failure on the session's stream. A statement that reads a registration
    once skipped, or whose value commitments no registration holds (`Flock.Firewall.Salts.readsOf`), is the recursive
-   session's stop; one that reads only registrations already admitted admits nothing. The number is public.
+   session's stop; one that reads only registrations already admitted admits nothing. The number is public. An
+   interior session's registration carries the session's own key and that key's tag (`key`, `key_tag`), which are
+   witness: they stay on the record, the ZK server's own.
 
 The functions here are pure: each takes the events read so far and returns its result and the events after it, which only
 ever extend them. `Record.read` reads the record whole and fails closed: every line must be exactly a line the ZK server
@@ -75,8 +77,10 @@ inductive Event where
   | refused (session part : String)
   | slot (session part : String)
   | wait (session part : String)
-  /-- the value service's registration `n`, its record whole (`Flock.Firewall.Salts.recordOf`) -/
-  | register (n : Nat) (record : ByteArray)
+  /-- the value service's registration `n`, its record whole (`Flock.Firewall.Salts.recordOf`), and an interior
+  session's own key with that key's tag under the salt key (`Flock.Firewall.Salts.keyTagOf`): witness, which the record
+  holds and nothing releases -/
+  | register (n : Nat) (record : ByteArray) (own : Option (ByteArray × ByteArray))
   /-- registration `n` admitted by the outer session of `session` at `part` -/
   | admitted (session part : String) (n : Nat)
   /-- registration `n` skipped by the outer session of `session` at `part`: never admitted, a failure of its stream -/
@@ -107,8 +111,10 @@ def Event.line (seq : Nat) : Event → String
   | .refused s p => tail "refused" s p []
   | .slot s p => tail "slot" s p []
   | .wait s p => tail "wait" s p []
-  | .register n r => obj [kv "event" (pyStr "register"), kv "n" (toString n), kv "record" (pyStr (Flock.hexOf r)),
-      kv "seq" (toString seq)]
+  | .register n r own => obj <|
+      [kv "event" (pyStr "register")] ++
+      (own.toList.flatMap fun (ks, kt) => [kv "key" (pyStr (Flock.hexOf ks)), kv "key_tag" (pyStr (Flock.hexOf kt))]) ++
+      [kv "n" (toString n), kv "record" (pyStr (Flock.hexOf r)), kv "seq" (toString seq)]
   | .admitted s p n => numbered "admit" s p n
   | .skipped s p n => numbered "skip" s p n
 where
@@ -161,7 +167,10 @@ private def eventOf (j : Json) : V (Event × Nat) := do
   let kind ← Flock.J.str j "event" ctx
   let seq ← Flock.J.nat j "seq" ctx
   if kind == "register" then
-    return (.register (← Flock.J.nat j "n" ctx) (← Flock.unhex (← Flock.J.str j "record" ctx)), seq)
+    let own ← if Flock.J.has j "key" || Flock.J.has j "key_tag" then
+        pure (some (← Flock.unhex (← Flock.J.str j "key" ctx), ← Flock.unhex (← Flock.J.str j "key_tag" ctx)))
+      else pure none
+    return (.register (← Flock.J.nat j "n" ctx) (← Flock.unhex (← Flock.J.str j "record" ctx)) own, seq)
   let session ← Flock.J.str j "session" ctx
   let part := Flock.J.str j "part" ctx
   let ev ← match kind with
@@ -187,9 +196,10 @@ private def eventOf (j : Json) : V (Event × Nat) := do
 def recordNumber (r : ByteArray) : Option Nat :=
   if r.size < 8 then none else some ((List.range 8).foldl (fun acc i => 256 * acc + (r.get! i).toNat) 0)
 
-/-- The registrations on the record, in order: registration `n`'s record at `n`. -/
-def registrations (evs : Events) : Array ByteArray :=
-  evs.filterMap fun | .register _ r => some r | _ => none
+/-- The registrations on the record, in order: registration `n`'s record at `n`, with its interior session's own key and
+that key's tag where the record holds them. -/
+def registrations (evs : Events) : Array (ByteArray × Option (ByteArray × ByteArray)) :=
+  evs.filterMap fun | .register _ r own => some (r, own) | _ => none
 
 /-- How many registrations were admitted or skipped: the number of the next one to be. -/
 def frontier (evs : Events) : Nat :=
@@ -219,7 +229,7 @@ def Record.read (text : String) : V Record := do
     if ev.line k != line then
       throw s!"the record's line {k + 1} is not the firewall's own (event {k} as the firewall writes it is {ev.line k})"
     match ev with
-    | .register n r =>
+    | .register n r _ =>
       if n != regs || recordNumber r != some n then
         throw s!"the record's line {k + 1} is not the firewall's own (registration {n} where the next is {regs}, its record numbered {recordNumber r})"
       regs := regs + 1
@@ -409,12 +419,12 @@ where
           (evs.push (.stop s nxt s!"never opened: {part} was asked in its place"))
       else (.ok { stream := o.stream, index := j, releaseMs := releaseMs o.release j }, evs)
 
-/-- **The value service's next registration** (rule 5), its record at each number `rec`: the number it takes, the next
-after the record's last, and its record, appended. -/
-def register (evs : Events) (rec : Nat → ByteArray) : (Nat × ByteArray) × Events :=
+/-- **The value service's next registration** (rule 5), its record at each number `rec`, with an interior session's own
+key and that key's tag: the number it takes, the next after the record's last, and its record, appended with the key. -/
+def register (evs : Events) (rec : Nat → ByteArray × Option (ByteArray × ByteArray)) : (Nat × ByteArray) × Events :=
   let n := (registrations evs).size
-  let r := rec n
-  ((n, r), evs.push (.register n r))
+  let (r, own) := rec n
+  ((n, r), evs.push (.register n r own))
 
 /-- Whether registration `n` was skipped. -/
 def skippedAt (evs : Events) (n : Nat) : Bool :=

@@ -78,7 +78,7 @@ noncomputable def opnAtH (T : Finset (Fin n) → Reg → TabSpec mPts) (I : Inpu
     | none => default
   | .error _ => default
 
-/-- **The decoder is right at the hidden-output headline's samples** (R11b): given the tags, `wr` the challenger's
+/-- **The decoder is right at the hidden-output headline's samples** (the decoder premise): given the tags, `wr` the challenger's
 record and the challenger's samples proving their units at `mPts` link points under setupHidden, `DecodesOn` holds at the
 hidden tables, at the model's leaf of the tags' leaf scheme (`leafOfId`), with the decoder `decAt` at DecodeZL's wires,
 single coins as field elements, no final messages and `capOfRoot`. -/

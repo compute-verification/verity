@@ -128,7 +128,7 @@ theorem leadIndWitness : LeadIndWitness := by
   have hadmit := (ttncpWitness Unit Unit leadParams 0 0 le_rfl one_pos hq hW).2
   simp only [mul_zero] at hadmit
   exact ⟨leadParams, leadLayout, ⟨⟨rfl, hN, hadm⟩, hind⟩, hS, hq, fun _ _ => rfl, leadComplete Unit Unit Salt leadParams,
-    hadmit, fun γ₀ h0 h1 => (ttncpWitness Unit Unit leadParams 0 γ₀ h0 h1 hq hW).1, leadLayout_inDomain, one_pos,
+    hadmit, fun g₀ h0 h1 => (ttncpWitness Unit Unit leadParams 0 g₀ h0 h1 hq hW).1, leadLayout_inDomain, one_pos,
     fun _ _ => ⟨64, rfl⟩⟩
 
 end Pouw.NCP.ChainProofs

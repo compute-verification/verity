@@ -40,7 +40,7 @@ def free_bytes(path: Path) -> int:
 
 def disk_floor_refusal(path: Path, environ: dict[str, str] | None = None) -> str | None:
     """Why a run or a fetch into `path` must not start: the free space on its filesystem is under the floor (`$RESEARCH_DISK_FLOOR_GB`,
-    default DISK_FLOOR_GB).  A full disk on the control pod ended every spending guard there (2026-09-28); new run files must not be
+    default DISK_FLOOR_GB).  A full disk on the control pod ends every spending guard there; new run files must not be
     what fills it.  None when there is room, or the floor is 0."""
     env = os.environ if environ is None else environ
     try:

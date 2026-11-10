@@ -24,36 +24,36 @@ variable {Q R S : Type}
 
 /-! ## The generic barrier -/
 
-theorem wins_of_all_correct (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) {γ c₀ : ℝ}
-    (hc : 0 ≤ c₀) (hW : 0 < totalWref P U.layout) (hγ : γ < 1 - c₀ / totalWref P U.layout)
-    (hK : correctSet P U H s τ = range U.layout.N) : Wins P U γ c₀ τ H s := by
+theorem wins_of_all_correct (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) {g c₀ : ℝ}
+    (hc : 0 ≤ c₀) (hW : 0 < totalWref P U.layout) (hg : g < 1 - c₀ / totalWref P U.layout)
+    (hK : correctSet P U H s τ = range U.layout.N) : Wins P U g c₀ τ H s := by
   unfold Wins
   rw [hK]
-  change c₀ / (1 - γ) < totalWref P U.layout
-  have h1 : c₀ / totalWref P U.layout < 1 - γ := by linarith
-  have hpos : 0 < 1 - γ := lt_of_le_of_lt (div_nonneg hc hW.le) h1
+  change c₀ / (1 - g) < totalWref P U.layout
+  have h1 : c₀ / totalWref P U.layout < 1 - g := by linarith
+  have hpos : 0 < 1 - g := lt_of_le_of_lt (div_nonneg hc hW.le) h1
   rw [div_lt_iff₀ hpos]
   rw [div_lt_iff₀ hW] at h1
-  linarith [mul_comm (1 - γ) (totalWref P U.layout)]
+  linarith [mul_comm (1 - g) (totalWref P U.layout)]
 
 /-- **The generic barrier, in probability.** -/
 theorem genericPr : Pinned.GenericPr := by
-  intro Q R S _ _ _ _ CM P D U A c₀ q hU hc hq hA hW γ hγ η hG
-  exact le_trans (pr_mono fun x hx => ⟨wins_of_all_correct P U x.1 x.2 _ hc hW hγ hx.1, hx.2⟩)
+  intro Q R S _ _ _ _ CM P D U A c₀ q hU hc hq hA hW g hg δ hG
+  exact le_trans (pr_mono fun x hx => ⟨wins_of_all_correct P U x.1 x.2 _ hc hW hg hx.1, hx.2⟩)
     (hG U hU c₀ hc q hq A hA)
 
 /-- **The generic barrier.** -/
 theorem generic : Pouw.Guarantees.Barrier.Generic := by
-  intro Q R S _ _ _ _ _ _ CM P D U A c₀ q hpt hW γ hγ η hG
+  intro Q R S _ _ _ _ _ _ CM P D U A c₀ q hpt hW g hg δ hG
   obtain ⟨hU, hc, hq, hA, hall⟩ := hpt
-  have h := genericPr Q R S CM P D U A c₀ q hU hc hq hA hW γ hγ η hG
+  have h := genericPr Q R S CM P D U A c₀ q hU hc hq hA hW g hg δ hG
   have h1 : pr (fun x : (Q → R) × S =>
       correctSet P U x.1 x.2 (A.transcript U x.1 x.2) = range U.layout.N ∧ ¬ A.Breaks U x.1 x.2) = 1 :=
     pr_eq_one fun x => hall x.1 x.2
   rwa [h1] at h
 
-theorem gamma_ratio {γ c₀ W T a b : ℝ} (hT : 0 < T) (hb : 0 < b) (ha : 0 ≤ a) (hc : c₀ = a * T) (hW : b * T ≤ W)
-    (hγ : γ < 1 - a / b) : γ < 1 - c₀ / W := by
+theorem gap_ratio {g c₀ W T a b : ℝ} (hT : 0 < T) (hb : 0 < b) (ha : 0 ≤ a) (hc : c₀ = a * T) (hW : b * T ≤ W)
+    (hg : g < 1 - a / b) : g < 1 - c₀ / W := by
   have hW0 : 0 < W := lt_of_lt_of_le (mul_pos hb hT) hW
   have : c₀ / W ≤ a / b := by
     rw [div_le_div_iff₀ hW0 hb, hc]
@@ -124,7 +124,7 @@ theorem addPlan_correct (N : NoiseSrc Q R S) (W : Layout → ℕ → ℕ) (U : W
 
 /-- **Class (a).** -/
 theorem additive : Pinned.Additive := by
-  intro Q R S _ _ _ _ _ _ N W p D U hp hU hS hW γ hγ η hG
+  intro Q R S _ _ _ _ _ _ N W p D U hp hU hS hW g hg δ hG
   have hB := planAdv_bounded N addPlan U
   simp only [addPlan_cost] at hB
   have hpt : CheapPoint (gemmModel N) (addProto N W) D U (planAdv N addPlan)
@@ -134,8 +134,8 @@ theorem additive : Pinned.Additive := by
   have hWt : p * ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ) ≤ totalWref (addProto N W) U.layout := by
     rw [Finset.mul_sum]
     exact Finset.sum_le_sum fun u hu => hW u (Finset.mem_range.1 hu)
-  exact generic Q R S _ _ D U _ _ 0 hpt (lt_of_lt_of_le (by positivity) hWt) γ
-    (gamma_ratio hS (by linarith) zero_le_one (one_mul _).symm hWt hγ) η hG
+  exact generic Q R S _ _ D U _ _ 0 hpt (lt_of_lt_of_le (by positivity) hWt) g
+    (gap_ratio hS (by linarith) zero_le_one (one_mul _).symm hWt hg) δ hG
 
 /-! ## Class (a): `H_ref` plans -/
 
@@ -314,7 +314,7 @@ theorem relPlan_correct {t : ℕ} {c : ℕ → ℤ} {N : NoiseSrc Q R S} (W : La
       rw [hx1, regs_eq, relPlan_nReg, ite_eq_left (by omega), relPlan_reg, ite_eq_right (by omega)]
       simp only [MExpr.eval, eval_sumE]
       have hs : ∑ y ∈ range (t - 1), c y * (if y < t - 1 then (relPlan t c (U.layout.shape u)).regs 0
-            (U.weight (U.layout.wid u)) (N H s U u 0) y else 0) x.2.1 x.2.2
+            (U.fixed (U.layout.fixedId u)) (N H s U u 0) y else 0) x.2.1 x.2.2
           = ∑ y ∈ range (t - 1), c y * relProd N H s U u 0 y x.2.1 x.2.2 :=
         Finset.sum_congr rfl fun y hy => by
           rw [ite_eq_left (Finset.mem_range.1 hy), relPlan_regs_base c N H s U u (by have := Finset.mem_range.1 hy; omega)
@@ -330,7 +330,7 @@ theorem relPlan_correct {t : ℕ} {c : ℕ → ℤ} {N : NoiseSrc Q R S} (W : La
 
 /-- **Class (b).** -/
 theorem relation : Pinned.Relation := by
-  intro Q R S _ _ _ _ _ _ t c N W D U ht hc hN hU hS hW γ hγ η hG
+  intro Q R S _ _ _ _ _ _ t c N W D U ht hc hN hU hS hW g hg δ hG
   have hB := planAdv_bounded N (relPlan t c) U
   simp only [relPlan_cost t c _ ht] at hB
   push_cast [Nat.cast_sub ht] at hB
@@ -344,10 +344,10 @@ theorem relation : Pinned.Relation := by
     rw [Finset.mul_sum]
     exact Finset.sum_le_sum fun u hu => hW u (Finset.mem_range.1 hu)
   have ht' : (1 : ℝ) ≤ t := by exact_mod_cast ht
-  refine generic Q R S _ _ D U _ _ 0 hpt (lt_of_lt_of_le (by positivity) hWt) γ
-    (gamma_ratio hS (by linarith) (by linarith) rfl hWt ?_) η hG
+  refine generic Q R S _ _ D U _ _ 0 hpt (lt_of_lt_of_le (by positivity) hWt) g
+    (gap_ratio hS (by linarith) (by linarith) rfl hWt ?_) δ hG
   rw [show 1 - ((t : ℝ) - 1) / t = 1 / t by field_simp; ring]
-  exact hγ
+  exact hg
 
 /-- **The lead's noise with output-only checks is class (b).** -/
 theorem relationWitness : Pinned.RelationWitness := by
@@ -546,7 +546,7 @@ theorem segPlan_correct {L d : ℕ} {α β : Mat → Mat} {N : NoiseSrc Q R S} (
 
 /-- **Class (c).** -/
 theorem segment : Pinned.Segment := by
-  intro Q R S _ _ _ _ _ _ L d α β N W D Lay hL hα hβ hcan hU hS hW γ hγ η hG
+  intro Q R S _ _ _ _ _ _ L d α β N W D Lay hL hα hβ hcan hU hS hW g hg δ hG
   have hB := planAdv_bounded N (segPlan L d) ⟨Lay, fun _ => 0⟩
   simp only [segPlan_cost L d _ hL] at hB
   push_cast [Nat.cast_sub hL] at hB
@@ -564,10 +564,10 @@ theorem segment : Pinned.Segment := by
     refine Finset.sum_le_sum fun u hu => le_trans (le_of_eq ?_) (hW u (Finset.mem_range.1 hu))
     push_cast
     ring
-  refine generic Q R S _ _ D _ _ _ 0 hpt (lt_of_lt_of_le (by positivity) hWt) γ
-    (gamma_ratio hS' (by linarith) (by linarith) rfl hWt ?_) η hG
+  refine generic Q R S _ _ D _ _ _ 0 hpt (lt_of_lt_of_le (by positivity) hWt) g
+    (gap_ratio hS' (by linarith) (by linarith) rfl hWt ?_) δ hG
   rw [show 1 - ((L : ℝ) - 1) / L = 1 / L by field_simp; ring]
-  exact hγ
+  exact hg
 
 /-! ## The generic barrier's hypotheses are satisfiable -/
 

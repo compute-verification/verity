@@ -6,13 +6,13 @@ public import Proofs.Core.Game.Prob
 /-!
 # PoUW's reading of the window: its bound plus the tie to what's served, and its collision term at counted queries
 
-`WindowEps` bounds the window accepting while its committed transcript's incorrect proof blocks are in the family `𝓑`.
+`WindowDelta` bounds the window accepting while its committed transcript's incorrect proof blocks are in the family `𝓑`.
 PoUW credits the served computation, so it reads one more term, the window accepting while its committed transcript
 isn't the served one (`ServedTie`, `δ_in`). `window_served_le` adds the two: the window accepts while its committed
-transcript is not anchored, served and with its incorrect proof blocks outside `𝓑` with probability at most `WindowEps`'s bound
+transcript is not anchored, served and with its incorrect proof blocks outside `𝓑` with probability at most `WindowDelta`'s bound
 plus `δ_in`.
 
-`WindowEps`'s bound holds at each oracle with the collision term `coll` at that oracle's play. `avg_counted_le` reads it
+`WindowDelta`'s bound holds at each oracle with the collision term `coll` at that oracle's play. `avg_counted_le` reads it
 on average over the oracle: at plays whose sessions make at most `q` counted queries, the collision term becomes the
 counted bound `f q` (`CollCounted`).
 -/
@@ -24,7 +24,7 @@ namespace Pouw.Window
 open scoped ENNReal
 
 /-- **PoUW's reading of the window**: if the window accepts with its committed transcript's incorrect proof blocks in `𝓑` with
-probability at most `b` (`WindowEps`'s bound) and the tie to what's served holds (`ServedTie`, against the served pass
+probability at most `b` (`WindowDelta`'s bound) and the tie to what's served holds (`ServedTie`, against the served pass
 `P`), then it accepts while its committed transcript is not anchored, served and with its incorrect proof blocks outside `𝓑` with
 probability at most `b + δin(R, τ)`. -/
 theorem window_served_le {Reg Tr : Type} {C : ℕ} {n : Fin C → ℕ} {Lw : Reg → Law (WUnit n)}
@@ -45,7 +45,7 @@ theorem window_served_le {Reg Tr : Type} {C : ℕ} {n : Fin C → ℕ} {Lw : Reg
   · exact Or.inr ⟨h.1, fun hAS => h.2 ⟨hAS.1, hAS.2, hB⟩⟩
 
 /-- **A per-oracle bound with the collision term, on average over the oracle**: if at each oracle `H` a probability
-`p H` is at most `b H` plus the collision term at the play `σ H` (`WindowEps`'s bound, with `b` its other terms), and
+`p H` is at most `b H` plus the collision term at the play `σ H` (`WindowDelta`'s bound, with `b` its other terms), and
 the plays' sessions make at most `q` counted queries, then `avg p ≤ avg b + f q` under `CollCounted`. -/
 theorem avg_counted_le {O Reg : Type} [Fintype O] {C : ℕ} {n : Fin C → ℕ} {Lw : O → Reg → Law (WUnit n)}
     {sess : O → (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool}

@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS replica_checks(id TEXT, location TEXT, verified TEXT,
 """
 # Schema rule: the catalog is shared by every worktree on this machine, including ones running older `research` code, and older
 # code inserts into the original tables positionally (`INSERT ... VALUES (?,?,?,?)`).  Never add a column to a shipped table --
-# it breaks every older writer at once (2026-09-22: `replicas.verified` did exactly that to six running lanes).  Add a side
+# it breaks every older writer at once, every running lane's included.  Add a side
 # table keyed like the original instead; `replica_checks` is the first.
 #
 # Every row a write reads, replaces or deletes is found through an index.  A write holds the catalog's lock until it commits,

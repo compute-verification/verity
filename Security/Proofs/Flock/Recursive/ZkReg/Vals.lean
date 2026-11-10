@@ -18,7 +18,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The committed values of a `--zk --registered` session at its registered reads

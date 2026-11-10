@@ -17,10 +17,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Lock
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # a1l, step 7: the compiled holographic table on a clash-free set, against one prover

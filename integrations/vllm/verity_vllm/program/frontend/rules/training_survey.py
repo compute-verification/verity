@@ -61,7 +61,7 @@ class Hole(Rule):
 
         def hole(i, m):
             fields.append(f"hole{k}.{i}:{node.name}")
-            return ctx.run_value(fields[-1], type_of_tensor(m), node)
+            return ctx.run_value(fields[-1], type_of_tensor(m), "survey_hole", node)
 
         ctx.define(node, [hole(i, m) for i, m in enumerate(meta)] if isinstance(meta, (tuple, list)) else hole(0, meta))
         holes.append({"node": node.name, "op": str(node.target), "reason": reason, "hint": str(hint), "fields": fields})

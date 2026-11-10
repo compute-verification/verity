@@ -1,4 +1,4 @@
-"""`research agents quiet` (INF-55 h): a worker whose worktree has had no commit, no change and no live process for hours is QUIET."""
+"""`research agents quiet`: a worker whose worktree has had no commit, no change and no live process for hours is QUIET."""
 import os
 import subprocess
 import sys

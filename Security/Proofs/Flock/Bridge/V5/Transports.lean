@@ -12,7 +12,8 @@ public import Proofs.Flock.Bridge.TransportsRefs
   are the public input words (`Hidden.loadPublic_inRows`), with the same row ports;
 * `Bridge.vbP` and its `pos`, `bit`, `cs` and `com` at a row (`vbS`'s at `keyReadersHP`, whose rows' `b ‖ c` is the
   population's, `fun _ => pub`);
-* `Bridge.rowsOfLP`, `Bridge.transports_shapedP`: `transports_shapedS` at these;
+* `Bridge.rowsOfLP`, `Bridge.transports_shapedP`: `transports_shapedS` at these; `Bridge.transports_shapedP_at` names
+  the datum that opens, `opens_commitDepL`'s `Bridge.dataAt` (the salt, the row's registration path and its bits);
 * `Bridge.transportsLiveV5 : Bridge.TransportsLiveV5`.
 -/
 
@@ -50,6 +51,12 @@ theorem ref_lt_cntP {tags : Flock.Tags} {c : Flock.Circuit} {pi : Flock.HmIn.Por
       have hqc : q < t.counts.size := by rw [hcs']; exact hq
       rw [getElem!_pos t.counts q hqc]
       exact hpos _ (Array.getElem_mem hqc)
+
+/-- **The datum that opens a row's bit under the deployed commitment** at a leaf map `L` (`opens_commitDepL`'s): the
+opening's salt `y`, row `r`'s registration path at `L` padded to `L.d` levels, and the row's bits `v`. -/
+def dataAt (c : Flock.Circuit) (L : LeafMap) (r : RowAt) {W : ℕ} (v : BitVal W) (y : List UInt8) : Claims.Msg :=
+  dataOfL y (FlockC3.RegLevels.sibsV (domOf c r.port) (leavesL c L r.port) r.leaf) (L.d - Flock.log2ceil (L.cnt r.port))
+    (List.ofFn fun k : Fin r.width => v.get k.val)
 
 section Game
 
@@ -155,8 +162,39 @@ noncomputable def rowsOfLP (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) (pi
   (HiddenExec.rowOfHP c hU n pi (Discharge.Layout.outsOfP c hU n pi) g).map fun r =>
     ⟨r.2.1.val, L.ref r.2.1.val r.1.val, Discharge.Layout.portRowW c r.2.1, r.2.2.val⟩
 
+/-- **A shaped registered opening opens the deployed commitment at the public file's leaf map, at its row's datum**, at
+public inputs (`transports_shapedS` at `keyProgP`, with `opens_commitDepL`'s datum `dataAt`). -/
+theorem transports_shapedP_at (R : Reg) (hrows : RowsOk c)
+    (hfirst : ∀ q q' : ℕ, q' < q → q < c.ports.size →
+      (rootsOfL c (LeafMap.ofPublic c pub n)).getD q' [] ≠ (rootsOfL c (LeafMap.ofPublic c pub n)).getD q [])
+    (hrefs : ∀ (u : Fin n) (q : Fin c.ports.size),
+      (LeafMap.ofPublic c pub n).ref q.val u.val < (LeafMap.ofPublic c pub n).cnt q.val)
+    {r : RowAt} (hr : rowsOfLP c hU n pi (LeafMap.ofPublic c pub n) g = some r)
+    (p : PosHP c hU n pi) (v : ValH c) (y : List UInt8) (hv : RowShaped v) (hvw : v.1.val = r.width)
+    (hy : y.length = saltLen)
+    (he : (vbP dj y₀ ht hc hscope hU hpi hpub (Reg := Reg)).com (p, v, y) =
+      (vbP dj y₀ ht hc hscope hU hpi hpub (Reg := Reg)).cs R ((vbP dj y₀ ht hc hscope hU hpi hpub).pos g)) :
+    (commitDepL ((keyProgP c pi hU n).circuit (Discharge.Layout.outsOfP c hU n pi))
+        (rowsOfLP c hU n pi (LeafMap.ofPublic c pub n)) c (LeafMap.ofPublic c pub n)
+        (rootsOfL c (LeafMap.ofPublic c pub n))).Opens sha512Msg (rootsOfL c (LeafMap.ofPublic c pub n))
+      ⟨posOf ((keyProgP c pi hU n).circuit (Discharge.Layout.outsOfP c hU n pi)) g,
+        (vbP dj y₀ ht hc hscope hU hpi hpub (Reg := Reg)).bit
+          ((vbP dj y₀ ht hc hscope hU hpi hpub (Reg := Reg)).val (p, v, y)) g,
+        dataAt c (LeafMap.ofPublic c pub n) r v y⟩ = true := by
+  obtain ⟨⟨u, q, k⟩, hx, rfl⟩ := Option.map_eq_some_iff.mp hr
+  have hle : Discharge.Layout.portRowW c q ≤ Finset.univ.sup (Discharge.Layout.portRowW c) + 1 :=
+    (Finset.le_sup (Finset.mem_univ q)).trans (Nat.le_succ _)
+  have hl := vbP_leaf_row hx R p v y he
+  rw [← LeafMap.dig_ref c pub n q.val u.val] at hl
+  rw [vbP_val, vbP_bit_row hx v]
+  exact opens_commitDepL _ (rowsOfLP c hU n pi (LeafMap.ofPublic c pub n)) c (LeafMap.ofPublic c pub n)
+    (r := ⟨q.val, (LeafMap.ofPublic c pub n).ref q.val u.val, Discharge.Layout.portRowW c q, k.val⟩)
+    (by rw [rowOfPos_posOf]; simp [rowsOfLP, hx]) q.isLt (hrefs u q) (LeafMap.le_d c pub n q.isLt)
+    (rowsOk_bits hrows q) (by simp [Discharge.Layout.portRowW]) k.isLt (fun q' h => hfirst q.val q' h q.isLt) hle hv hvw
+    hy hl
+
 /-- **A shaped registered opening opens the deployed commitment at the public file's leaf map** at public inputs
-(`transports_shapedS` at `keyProgP`). -/
+(`transports_shapedP_at`). -/
 theorem transports_shapedP (R : Reg) (hrows : RowsOk c)
     (hfirst : ∀ q q' : ℕ, q' < q → q < c.ports.size →
       (rootsOfL c (LeafMap.ofPublic c pub n)).getD q' [] ≠ (rootsOfL c (LeafMap.ofPublic c pub n)).getD q [])
@@ -172,18 +210,8 @@ theorem transports_shapedP (R : Reg) (hrows : RowsOk c)
         (rootsOfL c (LeafMap.ofPublic c pub n))).Opens sha512Msg (rootsOfL c (LeafMap.ofPublic c pub n))
       ⟨posOf ((keyProgP c pi hU n).circuit (Discharge.Layout.outsOfP c hU n pi)) g,
         (vbP dj y₀ ht hc hscope hU hpi hpub (Reg := Reg)).bit
-          ((vbP dj y₀ ht hc hscope hU hpi hpub (Reg := Reg)).val (p, v, y)) g, d⟩ = true := by
-  obtain ⟨⟨u, q, k⟩, hx, rfl⟩ := Option.map_eq_some_iff.mp hr
-  have hle : Discharge.Layout.portRowW c q ≤ Finset.univ.sup (Discharge.Layout.portRowW c) + 1 :=
-    (Finset.le_sup (Finset.mem_univ q)).trans (Nat.le_succ _)
-  have hl := vbP_leaf_row hx R p v y he
-  rw [← LeafMap.dig_ref c pub n q.val u.val] at hl
-  rw [vbP_val, vbP_bit_row hx v]
-  exact ⟨_, opens_commitDepL _ (rowsOfLP c hU n pi (LeafMap.ofPublic c pub n)) c (LeafMap.ofPublic c pub n)
-    (r := ⟨q.val, (LeafMap.ofPublic c pub n).ref q.val u.val, Discharge.Layout.portRowW c q, k.val⟩)
-    (by rw [rowOfPos_posOf]; simp [rowsOfLP, hx]) q.isLt (hrefs u q) (LeafMap.le_d c pub n q.isLt)
-    (rowsOk_bits hrows q) (by simp [Discharge.Layout.portRowW]) k.isLt (fun q' h => hfirst q.val q' h q.isLt) hle hv hvw
-    hy hl⟩
+          ((vbP dj y₀ ht hc hscope hU hpi hpub (Reg := Reg)).val (p, v, y)) g, d⟩ = true :=
+  ⟨_, transports_shapedP_at R hrows hfirst hrefs hr p v y hv hvw hy he⟩
 
 end Game
 

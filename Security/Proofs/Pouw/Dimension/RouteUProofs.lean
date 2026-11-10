@@ -127,10 +127,10 @@ theorem algBoundU : AlgBoundU := by
   have := h16_cost hH
   omega
 
-/-- TT_NCP's event fails for every cost at Theorem D's bound, for `γ₀ ≥ 16/(3k)` (`ttNCPAlg`'s arithmetic). -/
-theorem not_event_of_bound {k m n : ℕ} {U : Finset ℕ} {C γ₀ : ℝ} (h16 : 16 ∣ k) (hk : 0 < k)
-    (hb : ((16 * (U.card * (m * n) * (3 * k / 16 - 1)) : ℕ) : ℝ) ≤ C) (hγ : 16 / (3 * k : ℝ) ≤ γ₀) (hγ1 : γ₀ < 1) :
-    ¬ (C / (1 - γ₀) < ∑ _u ∈ U, 3 * ((m * k * n : ℕ) : ℝ)) := by
+/-- TT_NCP's event fails for every cost at Theorem D's bound, for `g₀ ≥ 16/(3k)` (`ttNCPAlg`'s arithmetic). -/
+theorem not_event_of_bound {k m n : ℕ} {U : Finset ℕ} {C g₀ : ℝ} (h16 : 16 ∣ k) (hk : 0 < k)
+    (hb : ((16 * (U.card * (m * n) * (3 * k / 16 - 1)) : ℕ) : ℝ) ≤ C) (hg : 16 / (3 * k : ℝ) ≤ g₀) (hg1 : g₀ < 1) :
+    ¬ (C / (1 - g₀) < ∑ _u ∈ U, 3 * ((m * k * n : ℕ) : ℝ)) := by
   intro hev
   obtain ⟨k', rfl⟩ := h16
   have hk' : 1 ≤ k' := by omega
@@ -140,17 +140,17 @@ theorem not_event_of_bound {k m n : ℕ} {U : Finset ℕ} {C γ₀ : ℝ} (h16 :
     push_cast [Nat.cast_sub (by omega : 1 ≤ 3 * k')] at hb
     linarith
   rw [sum_const, nsmul_eq_mul] at hev
-  have hpos : 0 < 1 - γ₀ := by linarith
+  have hpos : 0 < 1 - g₀ := by linarith
   rw [div_lt_iff₀ hpos] at hev
-  push_cast at hev hγ
-  have h48 : 16 ≤ γ₀ * (3 * (16 * (k' : ℝ))) := (div_le_iff₀ (by positivity)).1 hγ
+  push_cast at hev hg
+  have h48 : 16 ≤ g₀ * (3 * (16 * (k' : ℝ))) := (div_le_iff₀ (by positivity)).1 hg
   have hX : (0 : ℝ) ≤ U.card * (m * n) := by positivity
   nlinarith [mul_le_mul_of_nonneg_left h48 hX]
 
 /-- **TT_NCP in AlgM_16 on route U.** -/
 theorem ttNCPAlgU : TTNCPAlgU := by
-  intro β k m n N R A B U L P γ₀ h16 hk hind hU hL hH hout hγ hγ1
-  exact not_event_of_bound h16 hk (by exact_mod_cast algBoundU β k m n N R A B U L P hind hU hL hH hout) hγ hγ1
+  intro β k m n N R A B U L P g₀ h16 hk hind hU hL hH hout hg hg1
+  exact not_event_of_bound h16 hk (by exact_mod_cast algBoundU β k m n N R A B U L P hind hU hL hH hout) hg hg1
 
 /-- **Theorem D with causal inputs on route U.** -/
 theorem algBoundCausalU : AlgBoundCausalU := by
@@ -354,7 +354,7 @@ theorem honestU_h16 (β : ℤ) (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n �
 
 /-- **Theorem D on route U is sharp.** -/
 theorem algSharpU : AlgSharpU := by
-  intro β k m n N R A B U γ₀ h16 hk _ hne hmn hγ
+  intro β k m n N R A B U g₀ h16 hk _ hne hmn hg
   refine ⟨honestU β k m n N R A B U 16, honestU_h16 β k m n N R A B U,
     fun u hu p hp => mem_slots_of_priced (mem_honestU.2 ⟨u, hu, p, hp, rfl⟩) _, ?_⟩
   rw [honestU_cost]
@@ -366,16 +366,16 @@ theorem algSharpU : AlgSharpU := by
     have := Nat.cast_pos (α := ℝ).2 (Nat.mul_pos (card_pos.2 hne) hmn)
     push_cast at this
     exact this
-  push_cast [Nat.cast_sub (by omega : 1 ≤ 3 * k')] at hγ ⊢
+  push_cast [Nat.cast_sub (by omega : 1 ≤ 3 * k')] at hg ⊢
   have hk'R : (1 : ℝ) ≤ k' := by exact_mod_cast hk'
-  have hγ' : γ₀ * (3 * (16 * (k' : ℝ))) < 16 := (lt_div_iff₀ (by positivity)).1 hγ
-  have hpos : 0 < 1 - γ₀ := by
+  have hg' : g₀ * (3 * (16 * (k' : ℝ))) < 16 := (lt_div_iff₀ (by positivity)).1 hg
+  have hpos : 0 < 1 - g₀ := by
     have : (16 : ℝ) / (3 * (16 * k')) ≤ 1 / 3 := by
       rw [div_le_iff₀ (by positivity)]
       nlinarith
     linarith
   rw [div_lt_iff₀ hpos]
-  nlinarith [mul_lt_mul_of_pos_left hγ' hX]
+  nlinarith [mul_lt_mul_of_pos_left hg' hX]
 
 /-- **AlgM_4090's hypotheses on route U hold jointly.** -/
 theorem alg4090WitnessU : Alg4090WitnessU := by

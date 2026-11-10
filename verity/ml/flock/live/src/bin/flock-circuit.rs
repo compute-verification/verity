@@ -3,8 +3,10 @@
 //!
 //!   flock-circuit serve    --listen ADDR --out DIR --instances PUB --circuit FILE --pin SHA256 [--sessions N] [--operator LANE] [--session-tables J]
 //!                          [--rec-run FILE --rec-part J]   (--zk: each Hello answered logged in a recursive run's record, `run_record`)
+//!   flock-circuit serve    --queue FILE|- --listen ADDR --out DIR --circuit FILE --pin SHA256 [--tree-from HOST:PORT]   (a long-lived verifier, `serve_queue`)
 //!   flock-circuit prove    --verifier ADDR --instances INST --circuit FILE [--gpu] [--runs N] [--warm W] [--dump DIR] [--session-tables J]
 //!                          [--salt-refs REFS]   (--zk: the ZK server's salts in place of INST's, `value_salts`)
+//!   flock-circuit prove    --stream FILE|- [--gpu] [--warm W]   (a long-lived prover over a stream of statements, `prove_stream`)
 //!   flock-circuit selftest --instances INST --circuit FILE [--gpu] [--only CASE]
 //!   flock-circuit statement --instances PUB --circuit FILE    (the statement the verifier builds, its digest; nothing proved)
 //!   flock-circuit stacked  --table R.bin (--root-out ROOT.json | --points P.json --statement-digest HEX --verifier ADDR [--dump F])   (`stacked`)
@@ -17,8 +19,8 @@
 //! `--session-tables J` (both sides, CPU prover): the session's units in J equal tables (`session_tables`), each with its own
 //! randomness, all J roots in one `Commit`, and every proof after the session's last coin (the barrier).
 //!
-//! `serve --tree-from HOST:PORT [--tree-secret-file F]` (`--zk` or `FC_COINS=tree`, with `--sessions N`): each session's
-//! coin tree sampled and opened by the challenger (`flock_live::tree_from`), not sampled here.
+//! `serve --tree-from HOST:PORT [--tree-secret-file F]` (`--zk` or `FC_COINS=tree`, with `--sessions N` or `--queue`): each
+//! session's coin tree sampled and opened by the challenger (`flock_live::tree_from`), not sampled here.
 
 use std::{
     collections::BTreeMap,
@@ -36,7 +38,7 @@ use flock_core::{
 use flock_field::F128;
 use flock_live::{
     circuit::*,
-    firewall::{Framer, Gate},
+    firewall::{Framer, Gate, cpu_seconds},
     run_record::RunLog,
     session_verify as sverify,
     zk_hooks::{Hooks, NoMask, ProverSeed},
@@ -226,7 +228,7 @@ fn level0_zk(st: &Stmt, rng: &mut flock_live::zk_hooks::ProverRng, zero: bool, t
         if zero { vec![vec![F128::ZERO; n]; lanes] } else { rng.f128s_lanes(stream, lanes, n) }
     };
     let z = Level0Zk { queries0: zk_queries0(st.m).expect("checked when the statement is built"), t_pad: t, rep: 0,
-                       extra: draw(6, EXTRA_LANES, l).try_into().expect("EXTRA_LANES lanes"), pads: draw(7, lanes, t), tamper };
+                       extra: draw(6, EXTRA_LANES, l).into(), pads: draw(7, lanes, t), tamper };
     eprintln!("ZKL0\t{}", json!({"lanes": lanes, "t_pad": t, "extra_words": l, "s": tr.elapsed().as_secs_f64()}));
     z
 }
@@ -324,7 +326,10 @@ fn lean_level0(plan: &Plan, st: &Stmt, j: usize, w: &mut Witness, l0: &mut flock
         }
     }
     *zl = flock_core::lincheck::pack_z_lincheck_from_packed(&z[..], st.m, st.c.k_log);
-    l0.extra = got.extra.try_into().map_err(|_| "the Lean loop's level 0: not four extra lanes".to_string())?;
+    if got.extra.len() != flock_core::pcs::ligerito::zk::EXTRA_LANES {
+        return Err("the Lean loop's level 0: not four extra lanes".to_string());
+    }
+    l0.extra = got.extra.into();
     l0.pads = got.pads;
     salts.lock().unwrap_or_else(PoisonError::into_inner).set_level0(got.salts)?;
     Ok(Some(got.root))
@@ -489,18 +494,36 @@ fn session_tables(st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, c
 }
 
 /// Whose drawn statements a session's tables reuse ([`StmtCache`]; none under `FC_STMT_CACHE=0`): the verifier's Register and
-/// the prover's tables after it each keep their own, never the other's; every other caller builds afresh.
+/// the prover's tables after it each keep their own, never the other's; every other caller builds its own ([`Stmt::drawn`]).
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Side { Fresh, Verifier, Prover }
 
+static VERIFIER_STMTS: StmtCache = StmtCache::new();
+static PROVER_STMTS: StmtCache = StmtCache::new();
+/// `side_stmt`'s lookups in each side's cache so far
+static STMT_LOOKUPS: [std::sync::atomic::AtomicUsize; 2] = [std::sync::atomic::AtomicUsize::new(0), std::sync::atomic::AtomicUsize::new(0)];
+
 fn side_stmt(side: Side, st: &Stmt, n: usize, id: Value) -> Result<Arc<Stmt>, String> {
-    static VERIFIER: StmtCache = StmtCache::new();
-    static PROVER: StmtCache = StmtCache::new();
-    match side {
-        Side::Verifier if stmt_cache_on() => VERIFIER.drawn(st, n, id),
-        Side::Prover if stmt_cache_on() => PROVER.drawn(st, n, id),
-        _ => Stmt::new(st.c.clone(), n, id).map(Arc::new),
-    }
+    let cache = match side {
+        Side::Verifier if stmt_cache_on() => &VERIFIER_STMTS,
+        Side::Prover if stmt_cache_on() => &PROVER_STMTS,
+        _ => return st.drawn(n, id).map(Arc::new),
+    };
+    STMT_LOOKUPS[(side == Side::Prover) as usize].fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    cache.drawn(st, n, id)
+}
+
+/// One side's statement cache as its sessions have used it so far (null under `FC_STMT_CACHE=0`): its lookups and the drawn
+/// statements it holds, each built once, so `1 - held / lookups` is its hit rate.
+fn stmt_cache_seen(side: Side) -> Value {
+    let cache = match side {
+        _ if !stmt_cache_on() => return Value::Null,
+        Side::Verifier => &VERIFIER_STMTS,
+        Side::Prover => &PROVER_STMTS,
+        Side::Fresh => return Value::Null,
+    };
+    let lookups = STMT_LOOKUPS[(side == Side::Prover) as usize].load(std::sync::atomic::Ordering::Relaxed);
+    json!({"lookups": lookups, "held": cache.len()})
 }
 
 fn side_tables(side: Side, st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, count: usize) -> Result<Tables, String> {
@@ -561,7 +584,8 @@ struct CircuitVerifier {
     lincheck: sverify::Lincheck,
     /// the last `verify` call's phase timers
     phases: Mutex<Option<Value>>,
-    /// `proved_scope::check` of the statement: the refusal of a form the soundness proof does not cover
+    /// `proved_scope::check` of the statement, kept per statement (`proved_scope::VERDICTS`): the refusal of a form the
+    /// soundness proof does not cover
     scope: Result<(), String>,
 }
 
@@ -573,7 +597,7 @@ impl StatementVerifier for CircuitVerifier {
     fn verify(&self, t: &str, rep: usize, proof: &[u8], ch: &mut ReplayChallenger, link: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
         let tb = self.tabs.list.iter().find(|x| x.name == t).ok_or(format!("no table {t} in the statement"))?;
         if is_zk(&tb.st) {
-            return Self::verify_zk(tb, rep, proof, ch, link);
+            return Self::verify_zk(tb, rep, proof, self.lincheck, ch, link);
         }
         let t0 = Instant::now();
         let mut ph = sverify::Phases::default();
@@ -595,7 +619,7 @@ impl StatementVerifier for CircuitVerifier {
 impl CircuitVerifier {
     fn new(tabs: Tables) -> Self {
         let t0 = &tabs.list[0];
-        let scope = proved_scope::check(&t0.st.c, &t0.inst, is_zk(&t0.st), tabs.list.len());
+        let scope = proved_scope::VERDICTS.check(&t0.st.c, &t0.inst, is_zk(&t0.st), tabs.list.len());
         CircuitVerifier { tabs, lincheck: sverify::Lincheck::from_env().unwrap_or_else(|e| refuse(e)), phases: Mutex::new(None), scope }
     }
 
@@ -628,12 +652,13 @@ impl CircuitVerifier {
 
     /// M1: the zerocheck and lincheck replayed on masked values as constraints on the committed pads (`zk_veil::replay`),
     /// upstream's opening with the two masked claims' ring-switch checks turned into constraints, then the inner proof.
-    fn verify_zk(tb: &Table, rep: usize, proof: &[u8], ch: &mut ReplayChallenger, link: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
+    fn verify_zk(tb: &Table, rep: usize, proof: &[u8], lincheck: sverify::Lincheck, ch: &mut ReplayChallenger, link: &LinkCtx<'_>)
+                 -> Result<Vec<u8>, String> {
         if link.points.len() != 2 || link.y.iter().any(|y| *y != F128::ZERO) {
             return Err("session: two points and y = 0 expected (nothing is prover-supplied)".into());
         }
         let (commitment, proof, inner): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(proof).map_err(|e| format!("decode: {e}"))?;
-        verify_zk_with(&tb.st, &tb.inst, &commitment, &proof, &inner, link.points, rep, ch)?;
+        verify_zk_with(&tb.st, &tb.inst, &commitment, &proof, &inner, link.points, rep, lincheck, ch)?;
         Ok(merkle_digest_bytes(&commitment.cap).to_vec())
     }
 }
@@ -641,10 +666,12 @@ impl CircuitVerifier {
 /// Everything M1's verifier checks before the inner proof, on any challenger (the session's replay, or a simulator's coin
 /// tape): the replayed zerocheck and lincheck, upstream's opening with the masked claims' ring-switch checks and level 0's lane
 /// phase turned into constraints, level 0's rows checked against rep `rep`'s pair of extra lanes. Returns the constraints the
-/// inner proof must prove, and level 0's record.
+/// inner proof must prove, and level 0's record. `lincheck`: how the replay computes the lincheck's comb (the same verdict in
+/// every mode).
 #[allow(clippy::too_many_arguments)]
 fn zk_constraints<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst: &Instances, commitment: &Commitment, proof: &R1csProofLigerito,
-                                                                 root: &[u8; 64], points: &[Vec<F128>], rep: usize, ch: &mut Ch)
+                                                                 root: &[u8; 64], points: &[Vec<F128>], rep: usize, lincheck: sverify::Lincheck,
+                                                                 ch: &mut Ch)
     -> Result<(Vec<(&'static str, zkv::Lin)>, flock_core::pcs::ligerito::zk::Level0ZkRecord), String> {
     let pcs = pcs_of(st, LigeritoProfile::Fast100);
     if commitment.params != pcs {
@@ -652,7 +679,7 @@ fn zk_constraints<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst:
     }
     let lay = zk_layout(st);
     bind_statement(ch, &st.r1cs, commitment);
-    let rp = zkv::replay(&st.r1cs, &st.c0_identity, &proof.zerocheck, &proof.lincheck, &st.circuit, &lay, root, None, ch)?;
+    let rp = zkv::replay(&st.r1cs, &st.c0_identity, &proof.zerocheck, &proof.lincheck, &st.circuit, &lay, root, None, lincheck, ch)?;
     let extra = st.extra_claims(points, inst);
     let rs = &proof.pcs_open.ring_switches;
     if rs.len() != 2 + extra.len() {
@@ -689,10 +716,11 @@ fn zk_constraints<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst:
 /// M1's verifier on any challenger: [`zk_constraints`], then the inner proof.
 #[allow(clippy::too_many_arguments)]
 fn verify_zk_with<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst: &Instances, commitment: &Commitment, proof: &R1csProofLigerito,
-                                                                  inner: &InnerProof, points: &[Vec<F128>], rep: usize, ch: &mut Ch) -> Result<(), String> {
+                                                                  inner: &InnerProof, points: &[Vec<F128>], rep: usize, lincheck: sverify::Lincheck,
+                                                                  ch: &mut Ch) -> Result<(), String> {
     let root: [u8; 64] = inner.root.clone().try_into().map_err(|_| "zk: the pads' root is not 64 bytes".to_string())?;
     catch_unwind(AssertUnwindSafe(|| -> Result<(), String> {
-        let (cons, _) = zk_constraints(st, inst, commitment, proof, &root, points, rep, ch)?;
+        let (cons, _) = zk_constraints(st, inst, commitment, proof, &root, points, rep, lincheck, ch)?;
         zkv::verify_inner(inner, &zk_layout(st), proof.zerocheck.final_c_eval, cons, ch)
     }))
     .map_err(|_| "verifier panicked".to_string())?
@@ -855,12 +883,12 @@ struct Serving {
     law: Option<flock_live::unit_draw::Law>,
     tabs: Tables,
     /// `serve --tree-from`: the challenger every session's coin tree is sampled by
-    tree_from: Option<TreeFrom>,
+    tree_from: Option<Arc<TreeFrom>>,
 }
 
 /// The challenger's session (`serve --tree-from`), one connection the server's sessions share. It closes when the server is
-/// done with it: once its last session's record is written, `serve_loop` returns and drops the [`Serving`] its sessions were
-/// made from. A close the challenger doesn't confirm is the server's refusal.
+/// done with it: once its last session's record is written, `serve_loop` returns and the last [`Serving`] holding it is
+/// dropped (`serve --queue`: once its queue ends). A close the challenger doesn't confirm is the server's refusal.
 struct TreeFrom(flock_live::tree_from::Shared);
 
 impl Drop for TreeFrom {
@@ -873,8 +901,9 @@ impl Drop for TreeFrom {
 
 /// `serve --tree-from HOST:PORT [--tree-secret-file F]`: the challenger that samples and opens every session's coin tree
 /// ([`flock_live::tree_from`]). Only sessions on the keyed coin tree (`--zk`, or plain ones under `FC_COINS=tree`)
-/// commit their coins to a tree, and the challenger's session closes after the server's last, so a bounded `--sessions N`.
-fn tree_from_arg(tabs: &Tables) -> Option<TreeFrom> {
+/// commit their coins to a tree, and the challenger's session closes after the server's last: a bounded `--sessions N`, or
+/// the end of a `--queue` (``queue``).
+fn tree_from_arg(tabs: &Tables, queue: bool) -> Option<Arc<TreeFrom>> {
     let (address, secret_file) = (arg("--tree-from", ""), arg("--tree-secret-file", ""));
     if address.is_empty() {
         if !secret_file.is_empty() {
@@ -886,8 +915,8 @@ fn tree_from_arg(tabs: &Tables) -> Option<TreeFrom> {
         refuse("--tree-from is serve's, for sessions on the keyed coin tree (--zk, or FC_COINS=tree): only theirs commit \
                 their coins to a tree".into());
     }
-    if arg("--sessions", "").parse::<usize>().is_err() {
-        refuse("--tree-from: the challenger's session closes after the server's last, so --sessions N".into());
+    if !queue && arg("--sessions", "").parse::<usize>().is_err() {
+        refuse("--tree-from: the challenger's session closes after the server's last, so --sessions N or --queue".into());
     }
     let secret = (!secret_file.is_empty()).then(|| {
         let s = std::fs::read_to_string(&secret_file).unwrap_or_else(|e| refuse(format!("--tree-secret-file: {e}")));
@@ -895,7 +924,7 @@ fn tree_from_arg(tabs: &Tables) -> Option<TreeFrom> {
             .unwrap_or_else(|| refuse("--tree-secret-file: the challenger session's secret, in hex".into()))
     });
     let c = flock_live::tree_from::Challenger::connect(&address, secret.as_deref()).unwrap_or_else(|e| refuse(format!("--tree-from: {e}")));
-    Some(TreeFrom(Arc::new(Mutex::new(c))))
+    Some(Arc::new(TreeFrom(Arc::new(Mutex::new(c)))))
 }
 
 fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
@@ -946,7 +975,9 @@ fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
     } else {
         Tables::one(st, inst)
     };
-    let tree_from = tree_from_arg(&tabs);
+    // each session's server is built after its accept (`server_of`): a configuration it would refuse is refused here instead
+    config_of(&tabs).check().unwrap_or_else(|e| refuse(e));
+    let tree_from = tree_from_arg(&tabs, false);
     Serving { given, law, tabs, tree_from }
 }
 
@@ -954,7 +985,7 @@ fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
 fn server_of(sv: &Serving, st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Server {
     let s = Server::new(config_of(&sv.tabs), Box::new(CircuitVerifier::new(sv.tabs.clone())));
     let s = match &sv.tree_from {
-        Some(TreeFrom(c)) => s.with_tree_from(c.clone()),
+        Some(t) => s.with_tree_from(t.0.clone()),
         None => s,
     };
     if let Some(draw) = &sv.given {
@@ -1020,9 +1051,9 @@ enum WitData {
 }
 
 /// A rep's witness: for an honest prover on the GPU (`device`), the device witness's inputs (the compression slots' and the
-/// units' input words, the hm96 slots computed here, and M1's mask slot; with `mapped`, the host slots in mapped host memory);
-/// otherwise the packed host witness.
-fn witness(st: &Stmt, w: &Wit, device: bool, host_units: bool, mapped: bool) -> (WitData, f64) {
+/// units' input words, the hm96 slots computed here or with `hm96` their input words, and M1's mask slot; with `mapped`, the
+/// host slots in mapped host memory); otherwise the packed host witness.
+fn witness(st: &Stmt, w: &Wit, device: bool, host_units: bool, mapped: bool, hm96: bool) -> (WitData, f64) {
     let t = Instant::now();
     #[cfg(feature = "gpu")]
     let pack = |h: &[flock_live::gpu_circuit::HostSlot]| if mapped { HostSlots::pack(h) } else { HostSlots::pack_pageable(h) };
@@ -1051,38 +1082,53 @@ fn witness(st: &Stmt, w: &Wit, device: bool, host_units: bool, mapped: bool) -> 
         };
         let (mut tl, mut parts) = (Instant::now(), serde_json::Map::new());
         let ri: Vec<_> = (0..st.blocks()).into_par_iter().map(|b| (w.rowin)(b)).collect();
-        let rows: Vec<F128> = ri.iter().flat_map(|x| x.0.iter().flatten().copied()).collect();
-        let hm: Vec<Vec<F128>> = ri.into_iter().flat_map(|x| x.1).collect();
+        lap("rowin", &mut tl, &mut parts);
+        let rows = flock_live::concat(&ri.iter().flat_map(|x| &x.0).collect::<Vec<_>>());
+        let mut hm: Vec<Vec<F128>> = ri.into_iter().flat_map(|x| x.1).collect();
         lap("rows", &mut tl, &mut parts);
-        let mut host = flock_live::gpu_circuit::host_slots(st, st.c.hm_net, &hm);
+        let mut host = if hm96 { Vec::new() } else { flock_live::gpu_circuit::host_slots(st, st.c.hm_net, &hm) };
         host.extend(mask_slots());
+        let hm96_rows: Vec<F128> = if hm96 { std::mem::take(&mut hm).into_iter().flatten().collect() } else { Vec::new() };
         lap("hm96", &mut tl, &mut parts);
+        let with_hm96 = |mut h: HostSlots, rows: Vec<F128>| {
+            h.hm96_rows = rows;
+            h
+        };
         let unit_inputs = || (0..st.blocks() * ur.count).into_par_iter().map(|x| (w.inputs)(x / ur.count, x % ur.count));
         if st.c.wires.iter().any(|x| x.dst.0 != st.c.sha_net && x.dst.0 != st.c.hm_net) {
             let inputs: Vec<F128> = unit_inputs().flatten_iter().collect();
-            return (WitData::DevCut(rows, pack(&host), inputs, w.inputs.clone()), t.elapsed().as_secs_f64());
+            return (WitData::DevCut(rows, with_hm96(pack(&host), hm96_rows), inputs, w.inputs.clone()), t.elapsed().as_secs_f64());
         }
         if host_units {
             let ins: Vec<Vec<F128>> = unit_inputs().collect();
             lap("unit_inputs", &mut tl, &mut parts);
             if mapped {
-                let packed = HostSlots::pack_units(st, &host, st.c.unit_net, &ins);
+                let packed = with_hm96(HostSlots::pack_units(st, &host, st.c.unit_net, &ins), hm96_rows);
                 lap("units_pack", &mut tl, &mut parts);
                 if times {
                     eprintln!("WITNESS\t{}", Value::Object(parts));
                 }
-                return (WitData::Dev(rows, packed, Vec::new()), t.elapsed().as_secs_f64());
+                let s = t.elapsed().as_secs_f64();
+                // the slots and inputs the pack copied are freed beside the session, off its critical path (WITNESSFREE: how long)
+                flock_live::spawn(move || {
+                    let t = Instant::now();
+                    drop((host, hm, ins));
+                    if times {
+                        eprintln!("WITNESSFREE\t{}", json!({"s": t.elapsed().as_secs_f64()}));
+                    }
+                });
+                return (WitData::Dev(rows, packed, Vec::new()), s);
             }
             host.extend(flock_live::gpu_circuit::host_slots(st, st.c.unit_net, &ins));
             lap("units", &mut tl, &mut parts);
-            let packed = pack(&host);
+            let packed = with_hm96(pack(&host), hm96_rows);
             lap("pack", &mut tl, &mut parts);
             if times {
                 eprintln!("WITNESS\t{}", Value::Object(parts));
             }
             return (WitData::Dev(rows, packed, Vec::new()), t.elapsed().as_secs_f64());
         }
-        return (WitData::Dev(rows, pack(&host), unit_inputs().flatten_iter().collect()), t.elapsed().as_secs_f64());
+        return (WitData::Dev(rows, with_hm96(pack(&host), hm96_rows), unit_inputs().flatten_iter().collect()), t.elapsed().as_secs_f64());
     }
     #[cfg(feature = "gpu")]
     // a tail that returns the outputs (a chain of units, the tail's stages): the host converges every slot's inputs and computes
@@ -1091,18 +1137,22 @@ fn witness(st: &Stmt, w: &Wit, device: bool, host_units: bool, mapped: bool) -> 
         use rayon::prelude::*;
         let c = &st.c;
         let ri: Vec<_> = (0..st.blocks()).into_par_iter().map(|b| (w.rowin)(b)).collect();
-        let rows: Vec<F128> = ri.iter().flat_map(|x| x.0.iter().flatten().copied()).collect();
+        let rows = flock_live::concat(&ri.iter().flat_map(|x| &x.0).collect::<Vec<_>>());
         let hm: Vec<Vec<F128>> = ri.into_iter().flat_map(|x| x.1).collect();
         let ins = st.converge_with(&*w.inputs, None, &w.nets, None);
-        let mut host = flock_live::gpu_circuit::host_slots(st, c.hm_net, &hm);
+        let mut host = if hm96 { Vec::new() } else { flock_live::gpu_circuit::host_slots(st, c.hm_net, &hm) };
         for ni in (0..c.nets.len()).filter(|&n| n != c.sha_net && n != c.hm_net && n != c.unit_net) {
             host.extend(flock_live::gpu_circuit::host_slots(st, ni, &ins[ni]));
         }
         host.extend(mask_slots());
         let inputs: Vec<F128> = ins[c.unit_net].iter().flatten().copied().collect();
-        return (WitData::Dev(rows, pack(&host), inputs), t.elapsed().as_secs_f64());
+        let mut packed = pack(&host);
+        if hm96 {
+            packed.hm96_rows = hm.into_iter().flatten().collect();
+        }
+        return (WitData::Dev(rows, packed, inputs), t.elapsed().as_secs_f64());
     }
-    let _ = (device, host_units, mapped);
+    let _ = (device, host_units, mapped, hm96);
     let mut ins = st.converge(&*w.inputs, &*w.rowin, &w.nets);
     if let Some((n, x, col)) = w.cut_flip {
         let word = &mut ins[n][x][col / 128];
@@ -1199,7 +1249,7 @@ fn lean_frame(frames: Option<(&str, &str, usize, usize)>) -> Result<(flock_live:
 /// Under the ZK server the rep's frame in the Lean session loop samples them instead, from the OS, and keeps them: of the
 /// session the loop names and the table (`frame`); the rep holds only their root.
 #[allow(clippy::too_many_arguments)]
-fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng, level0: &flock_core::pcs::ligerito::zk::Level0Zk,
+fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng, level0: &Arc<flock_core::pcs::ligerito::zk::Level0Zk>,
               points: &Arc<Mutex<Vec<Vec<F128>>>>, rep: usize, id: u64, salts: &Mutex<flock_live::zk_hooks::LeafSalts>,
               frame: Option<(&str, usize)>) -> ZkRep {
     let tz0 = Instant::now();
@@ -1225,33 +1275,41 @@ fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng
     let root = frame_root.unwrap_or_else(|| own.as_ref().expect("a rep's own pads").1.root());
     let self_check = if plan.zero_witness { zkv::SelfCheck::Skip } else { plan.zk_self_check };
     let t_commit = tz0.elapsed().as_secs_f64();
-    // each rep's copy of the extra lanes (4 · 2^22 words at m = 35) written on rayon's threads, not one
-    let level0 = flock_core::pcs::ligerito::zk::Level0Zk {
-        queries0: level0.queries0, t_pad: level0.t_pad, rep: if plan.zk_shared_pair { 0 } else { rep }, tamper: level0.tamper,
-        extra: std::array::from_fn(|i| { use rayon::prelude::*; level0.extra[i].par_iter().copied().collect() }), pads: level0.pads.clone(),
+    // the rep's level 0 is the session's where it takes the session's pair (rep 0's), else the session's lanes with its own pair
+    let pair = if plan.zk_shared_pair { 0 } else { rep };
+    let level0 = if pair == level0.rep { level0.clone() } else {
+        Arc::new(flock_core::pcs::ligerito::zk::Level0Zk { rep: pair, ..(**level0).clone() })
     };
     ZkRep { lay, own, root, points: points.clone(), pad_mismatch: plan.zk_pad_mismatch, final_c_solved: plan.zk_final_c_solved, self_check,
-            t_commit, level0: Arc::new(level0), lean: Mutex::new(lean) }
+            t_commit, level0, lean: Mutex::new(lean) }
 }
 
 /// M1 on the device: level 0's hiding and both reps' pads with their commitments, sampled beside the witness build (they depend on
-/// the seed alone). The salt ids are the sequential prover's: rep 0's pads tree takes the next id, rep 1's the one after rep 0's
-/// proof's trees (levels 1 to R), which `session` consumes when rep 1 starts. Returns the level-0 sample's seconds, and each rep's
-/// pads with their tree's salt id.
+/// the seed alone), level 0's hiding taken from `ahead` where [`Level0Ahead`] read it. The salt ids are the sequential prover's:
+/// rep 0's pads tree takes the next id, rep 1's the one after rep 0's proof's trees (levels 1 to R), which `session` consumes
+/// when rep 1 starts. Rep 0's pads, with their tree's salt id, go on
+/// `rep0` as soon as they are made, so rep 0 waits on level 0 and its own pads alone; rep 1's are made next and returned, for
+/// rep 1 to join when it starts.
+#[allow(clippy::too_many_arguments)]
 fn zk_prepare(st: &Stmt, plan: &Plan, seed: ProverSeed, lig: LigeritoProfile, salts: &Mutex<flock_live::zk_hooks::LeafSalts>,
-              points: &Arc<Mutex<Vec<Vec<F128>>>>) -> (f64, [(ZkRep, u64); 2]) {
+              points: &Arc<Mutex<Vec<Vec<F128>>>>, ahead: Option<std::thread::JoinHandle<flock_core::pcs::ligerito::zk::Level0Zk>>,
+              rep0: std::sync::mpsc::Sender<(ZkRep, u64)>) -> (ZkRep, u64) {
     let mut prng = flock_live::zk_hooks::ProverRng::from_seed(seed);
     let tl0 = Instant::now();
-    let level0 = level0_zk(st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper);
+    let level0 = Arc::new(match ahead {
+        Some(h) => h.join().unwrap_or_else(|e| panic!("level 0's hiding read ahead: {}", panic_msg(e))),
+        None => level0_zk(st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper),
+    });
     let t_level0 = tl0.elapsed().as_secs_f64();
     let trees = pcs_of(st, lig).ligerito_prover_config().expect("Ligerito config").recursive_steps as u64;
     let id0 = salts.lock().unwrap_or_else(PoisonError::into_inner).next_id();
-    let reps = [0usize, 1].map(|rep| {
-        let id = id0 + rep as u64 * (1 + trees);
-        (make_zkrep(st, plan, &mut prng, &level0, points, rep, id, salts, None), id)
-    });
-    eprintln!("ZKPRE\t{}", json!({"level0_s": t_level0, "s": tl0.elapsed().as_secs_f64()}));
-    (t_level0, reps)
+    // a session that stopped before its reps dropped the receiver
+    let _ = rep0.send((make_zkrep(st, plan, &mut prng, &level0, points, 0, id0, salts, None), id0));
+    let t_rep0 = tl0.elapsed().as_secs_f64();
+    let id1 = id0 + 1 + trees;
+    let rep1 = (make_zkrep(st, plan, &mut prng, &level0, points, 1, id1, salts, None), id1);
+    eprintln!("ZKPRE\t{}", json!({"level0_s": t_level0, "rep0_s": t_rep0, "s": tl0.elapsed().as_secs_f64()}));
+    rep1
 }
 
 /// The salt trees a device session's table samples, in order, as (tree id, leaves): level 0, then each rep's Ligerito levels 1
@@ -1269,13 +1327,175 @@ fn salt_trees(st: &Stmt, lig: LigeritoProfile, level0: u64) -> Vec<(u64, usize)>
 }
 
 #[cfg(feature = "gpu")]
-fn pin_salts(b: &Arc<Vec<u8>>) -> Option<flock_live::gpu_circuit::Pinned> {
-    flock_live::gpu_circuit::Pinned::new(b)
+type SaltBuf = flock_live::gpu_circuit::Pinned;
+#[cfg(not(feature = "gpu"))]
+type SaltBuf = ();
+
+/// The read-ahead's salt buffers of the process's last session, page-locked once: a later session refills those of its trees'
+/// sizes in place (every byte, from the source a sample reads), so it locks, unlocks and faults in no page of them
+/// (FC_SALTS_REUSE=0: each session locks its own and unlocks them after it, the reference for the reuse's gain).
+static SALT_BUFS: Mutex<Vec<SaltBuf>> = Mutex::new(Vec::new());
+
+/// A tree's `n`-byte buffer for the read-ahead, written whole by `fill`: one of `free` (an earlier session's) of that size, else a
+/// fresh one, page-locked; `held` keeps it locked for the session.
+#[cfg(feature = "gpu")]
+fn salt_buffer(free: &mut Vec<SaltBuf>, held: &mut Vec<SaltBuf>, n: usize, fill: &mut dyn FnMut(&mut [u8])) -> Arc<Vec<u8>> {
+    for i in 0..free.len() {
+        if let Some(b) = free[i].refill(n, fill) {
+            held.push(free.swap_remove(i));
+            return b;
+        }
+    }
+    let mut b = vec![0u8; n];
+    fill(&mut b);
+    let b = Arc::new(b);
+    held.extend(flock_live::gpu_circuit::Pinned::new(&b));
+    b
+}
+
+#[cfg(feature = "gpu")]
+fn salt_buf_bytes(b: &SaltBuf) -> usize {
+    b.bytes()
 }
 
 #[cfg(not(feature = "gpu"))]
-fn pin_salts(_: &Arc<Vec<u8>>) -> Option<()> {
-    None
+fn salt_buf_bytes(_: &SaltBuf) -> usize {
+    0
+}
+
+#[cfg(not(feature = "gpu"))]
+fn salt_buffer(_: &mut Vec<SaltBuf>, _: &mut Vec<SaltBuf>, n: usize, fill: &mut dyn FnMut(&mut [u8])) -> Arc<Vec<u8>> {
+    let mut b = vec![0u8; n];
+    fill(&mut b);
+    Arc::new(b)
+}
+
+/// The read-ahead's own pool: FC_SALTS_THREADS threads (default: one a core; 0: rayon's global pool, the witness build's) at
+/// nice FC_SALTS_NICE (default 19), so its draws take the cores the witness build leaves idle, not a share of its cores. A
+/// sample that finds its tree not yet read reads its own on the caller's pool, so no draw waits on the read-ahead's priority.
+fn salts_pool() -> Option<&'static rayon::ThreadPool> {
+    static POOL: std::sync::OnceLock<Option<rayon::ThreadPool>> = std::sync::OnceLock::new();
+    POOL.get_or_init(|| {
+        let var = |k: &str| std::env::var(k).ok().and_then(|v| v.parse::<i32>().ok());
+        let n = var("FC_SALTS_THREADS").map_or_else(|| std::thread::available_parallelism().map_or(1, |n| n.get()), |n| n.max(0) as usize);
+        let nice = var("FC_SALTS_NICE").unwrap_or(19).clamp(0, 19);
+        (n > 0).then(|| {
+            rayon::ThreadPoolBuilder::new().num_threads(n).stack_size(flock_live::THREAD_STACK).thread_name(|i| format!("flock-salts-{i}"))
+                .start_handler(move |_| nice_thread(nice)).build().expect("the salts' pool")
+        })
+    })
+    .as_ref()
+}
+
+/// This thread's nice value raised to `nice` (Linux keeps one per thread); left as it is where refused.
+fn nice_thread(nice: i32) {
+    if nice > 0 {
+        unsafe { libc::setpriority(libc::PRIO_PROCESS, libc::syscall(libc::SYS_gettid) as libc::id_t, nice) };
+    }
+}
+
+/// A session's level 0 read beside the previous session's reps, where the host waits on the device, not beside its own witness
+/// build, whose cores it would take: level 0's salts and, under Flock ZK, level 0's hiding, each from the source the session's own
+/// read takes (the OS, or an injected seed's expansion), for the session of `seed` alone, on the read-ahead's pool
+/// ([`salts_pool`]). The session takes each where its statement's level 0 has the sizes it was read at, and reads its own
+/// otherwise; FC_LEVEL0_AHEAD=0: every session reads its own.
+struct Level0Ahead {
+    seed: ProverSeed,
+    /// level 0's leaves, and its salts with their buffer's page lock
+    salts: Option<(usize, std::thread::JoinHandle<(Arc<Vec<u8>>, Vec<SaltBuf>)>)>,
+    hiding: Option<(Level0Shape, std::thread::JoinHandle<flock_core::pcs::ligerito::zk::Level0Zk>)>,
+}
+
+static LEVEL0_AHEAD: Mutex<Option<Level0Ahead>> = Mutex::new(None);
+
+/// Sessions that took their level 0's salts, and their hiding, from a [`Level0Ahead`] read.
+static LEVEL0_TAKEN: [std::sync::atomic::AtomicUsize; 2] = [const { std::sync::atomic::AtomicUsize::new(0) }; 2];
+
+/// Level 0's salt buffers, page-locked once: a session gives its own back, and [`Level0Ahead`]'s next read refills one in place.
+static LEVEL0_BUFS: Mutex<Vec<SaltBuf>> = Mutex::new(Vec::new());
+
+/// `level0_zk`'s sizes and flags for a statement: m, its lanes, an extra lane's words, the padding, zero, tamper.
+type Level0Shape = (usize, usize, usize, usize, bool, u8);
+
+fn level0_shape(st: &Stmt, plan: &Plan) -> Level0Shape {
+    let lc = pcs_of(st, LigeritoProfile::Fast100).ligerito_prover_config().expect("Ligerito config");
+    (st.m, (1usize << lc.initial_k) + flock_core::pcs::ligerito::zk::EXTRA_LANES, 1usize << lc.initial_log_msg_cols, zk_t_pad(st.m),
+     plan.zk_zero_pads, plan.zk_l0_tamper)
+}
+
+fn level0_ahead_on(plan: &Plan) -> bool {
+    plan.level0_ahead.unwrap_or_else(|| std::env::var("FC_LEVEL0_AHEAD").as_deref() != Ok("0"))
+}
+
+/// Level-0 salt buffers given back, two at most (the session's and the next one's): the rest unlocked.
+fn give_level0_bufs(bufs: impl IntoIterator<Item = SaltBuf>) {
+    let mut kept = LEVEL0_BUFS.lock().unwrap_or_else(PoisonError::into_inner);
+    kept.extend(bufs);
+    let extra = kept.len().saturating_sub(2);
+    kept.drain(..extra).for_each(drop);
+}
+
+impl Level0Ahead {
+    /// Starts the read of the session of `seed`'s level 0 at `st`'s sizes: its salts (`salts`) and its hiding (`hiding`).
+    fn start(st: &Arc<Stmt>, plan: &Plan, seed: ProverSeed, lig: LigeritoProfile, salts: bool, hiding: bool) {
+        let salts = salts.then(|| {
+            let n = pcs_of(st, lig).n_leaves();
+            (n, flock_live::spawn(move || {
+                let s = flock_live::zk_hooks::LeafSalts::for_seed(&seed);
+                let mut free = std::mem::take(&mut *LEVEL0_BUFS.lock().unwrap_or_else(PoisonError::into_inner));
+                let mut held = Vec::new();
+                let mut read = || salt_buffer(&mut free, &mut held, n * flock_live::zk_hooks::SALT_BYTES, &mut |b| s.fill(s.level0_id(), b));
+                let b = match salts_pool() {
+                    Some(p) => p.install(read),
+                    None => read(),
+                };
+                give_level0_bufs(free);
+                (b, held)
+            }))
+        });
+        let hiding = hiding.then(|| {
+            let (st, zero, tamper) = (st.clone(), plan.zk_zero_pads, plan.zk_l0_tamper);
+            (level0_shape(&st, plan), flock_live::spawn(move || {
+                let mut prng = flock_live::zk_hooks::ProverRng::from_seed(seed);
+                let mut read = || level0_zk(&st, &mut prng, zero, tamper);
+                match salts_pool() {
+                    Some(p) => p.install(read),
+                    None => read(),
+                }
+            }))
+        });
+        let old = LEVEL0_AHEAD.lock().unwrap_or_else(PoisonError::into_inner).replace(Level0Ahead { seed, salts, hiding });
+        if let Some(old) = old {
+            old.give_back();
+        }
+    }
+
+    /// The read for the session of `seed`, if one was started: its salts at `leaves` leaves and its hiding at `shape`, each
+    /// where it was read at those sizes; what it does not take goes back.
+    fn take(seed: ProverSeed, leaves: Option<usize>, shape: Option<Level0Shape>) -> (Option<std::thread::JoinHandle<(Arc<Vec<u8>>, Vec<SaltBuf>)>>,
+                                                                                     Option<std::thread::JoinHandle<flock_core::pcs::ligerito::zk::Level0Zk>>) {
+        let Some(mut a) = LEVEL0_AHEAD.lock().unwrap_or_else(PoisonError::into_inner).take() else { return (None, None) };
+        if a.seed != seed {
+            a.give_back();
+            return (None, None);
+        }
+        let salts = a.salts.take_if(|(n, _)| Some(*n) == leaves).map(|(_, h)| h);
+        let hiding = a.hiding.take_if(|(s, _)| Some(*s) == shape).map(|(_, h)| h);
+        a.give_back();
+        (salts, hiding)
+    }
+
+    /// Its salts' buffer back once read, for the next read to refill.
+    fn give_back(self) {
+        if let Some((_, h)) = self.salts {
+            flock_live::spawn(move || {
+                if let Ok((b, held)) = h.join() {
+                    drop(b);
+                    give_level0_bufs(held);
+                }
+            });
+        }
+    }
 }
 
 /// A table's level-0 root before any stream opens, in a session of several tables (whose one `Commit` carries every table's
@@ -1963,7 +2183,8 @@ impl Firewall {
         }
         let (zc0, lc0) = zkv::from_exposed(&vals, &lay);
         let rp = catch_unwind(AssertUnwindSafe(|| {
-            zkv::replay(&st.r1cs, &st.c0_identity, &zc0, &lc0, &st.circuit, &lay, &[0; 64], Some(&[F128::ZERO; zkv::SKIP]), &mut zkv::Tape::new(&r.coins))
+            zkv::replay(&st.r1cs, &st.c0_identity, &zc0, &lc0, &st.circuit, &lay, &[0; 64], Some(&[F128::ZERO; zkv::SKIP]), sverify::Lincheck::default(),
+                        &mut zkv::Tape::new(&r.coins))
         })).map_err(|e| refused(format!("the replay of the passed values: {}", panic_msg(e))))?.map_err(refused)?;
         vals[lay.fc()] = rp.cons.iter().find(|c| c.0 == "zerocheck c_eval").ok_or_else(|| refused("no c_eval row"))?.1.c;
         let relations: Vec<&'static str> = rp.cons.iter().map(|c| c.0).collect();
@@ -2152,7 +2373,7 @@ fn zk_finish<C: flock_transcript::challenger::Challenger + Send>(st: &Stmt, zk: 
     let tz = Instant::now();
     let (mut zc, lc) = zkv::mask_proof(&proof.zerocheck, &proof.lincheck, &zk.lay, &sent.h);
     let own_comb = (!proof.lincheck.comb_partial.is_empty()).then_some(proof.lincheck.comb_partial.as_slice());
-    let rp = zkv::replay(&st.r1cs, &st.c0_identity, &zc, &lc, &st.circuit, &zk.lay, &zk.root, own_comb, &mut zkv::Tape::new(&coins))
+    let rp = zkv::replay(&st.r1cs, &st.c0_identity, &zc, &lc, &st.circuit, &zk.lay, &zk.root, own_comb, sverify::Lincheck::default(), &mut zkv::Tape::new(&coins))
         .unwrap_or_else(|e| panic!("{e}"));
     let t_replay = tz.elapsed().as_secs_f64();
     let wp = claim_word_points(st, &zk.lay, &coins).unwrap_or_else(|e| panic!("{e}"));
@@ -2388,7 +2609,7 @@ fn simulate_full(st: &Stmt, inst: &Instances, coins: &[F128], points: &[Vec<F128
     let proof = R1csProofLigerito { zerocheck: zc, lincheck: lc, pcs_open: flock_core::pcs::BatchOpeningProofLigerito {
         ring_switches, batching_nonces: dpr.pcs_open.batching_nonces.clone(), ligerito: lg } };
     let mut tape = zkv::Tape::new(coins);
-    let (cons, _) = zk_constraints(st, inst, &commitment, &proof, &[0; 64], points, rep, &mut tape)?;
+    let (cons, _) = zk_constraints(st, inst, &commitment, &proof, &[0; 64], points, rep, sverify::Lincheck::default(), &mut tape)?;
     let n = zkv::Code::new(lay.len() + zkv::K_PAD).n;
     let salts = flock_live::zk_hooks::LeafSalts::for_seed(&ProverSeed::from_os()).expand(1, n);
     let inner = zkv::simulate_inner(&lay, rng, index, cons, salts, &mut tape)?;
@@ -2462,7 +2683,7 @@ fn session_relations_q(st: &Stmt, inst: &Instances, proofs: &[Vec<u8>], coins: &
     for (rep, p) in proofs.iter().enumerate() {
         let (c, pr, inner): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(p).map_err(|e| format!("decode: {e}"))?;
         let root: [u8; 64] = inner.root.clone().try_into().map_err(|_| "pads root")?;
-        let (_, rec) = zk_constraints(st, inst, &c, &pr, &root, points, pairs[rep], &mut zkv::Tape::new(&coins[rep]))?;
+        let (_, rec) = zk_constraints(st, inst, &c, &pr, &root, points, pairs[rep], sverify::Lincheck::default(), &mut zkv::Tape::new(&coins[rep]))?;
         reps.push((rec, pr.pcs_open.ligerito));
     }
     let n = mul(wmat(reps[1].0.rho), inv(wmat(reps[0].0.rho)));
@@ -2569,10 +2790,11 @@ fn zkstat(st: &Arc<Stmt>, inst: &Arc<Instances>) {
                 let (c, pr, inner): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(p).unwrap();
                 if run == 0 {
                     let (coins, points) = tape.as_ref().unwrap();
-                    let ok = verify_zk_with(st, inst, &c, &pr, &inner, points, rep, &mut zkv::Tape::new(&coins[rep]));
+                    let ok = verify_zk_with(st, inst, &c, &pr, &inner, points, rep, sverify::Lincheck::default(), &mut zkv::Tape::new(&coins[rep]));
                     assert!(ok.is_ok(), "a {kind} proof is rejected on its own coin tape: {ok:?}");
                     let root: [u8; 64] = inner.root.clone().try_into().unwrap();
-                    let (_, rec) = zk_constraints(st, inst, &c, &pr, &root, points, rep, &mut zkv::Tape::new(&coins[rep])).unwrap_or_else(|e| refuse(e));
+                    let (_, rec) = zk_constraints(st, inst, &c, &pr, &root, points, rep, sverify::Lincheck::default(), &mut zkv::Tape::new(&coins[rep]))
+                        .unwrap_or_else(|e| refuse(e));
                     q0[rep] = rec.queries0[..4].to_vec();
                 }
                 let mut row = fields(kind, run, rep, &pr, &inner);
@@ -2592,7 +2814,7 @@ fn zkstat(st: &Arc<Stmt>, inst: &Arc<Instances>) {
         for rep in 0..2 {
             let (c, pr, inner) = simulate_full(st, inst, &coins[rep], &points, &dummy[rep], &mut rng, rep, (2 * run + rep) as u64).unwrap_or_else(|e| refuse(e));
             // the simulated proof must be accepted by the verifier on the same coins
-            let ok = verify_zk_with(st, inst, &c, &pr, &inner, &points, rep, &mut zkv::Tape::new(&coins[rep]));
+            let ok = verify_zk_with(st, inst, &c, &pr, &inner, &points, rep, sverify::Lincheck::default(), &mut zkv::Tape::new(&coins[rep]));
             assert!(ok.is_ok(), "the verifier rejects a simulated proof: {ok:?}");
             accepted += 1;
             let mut row = fields("sim", run, rep, &pr, &inner);
@@ -3050,7 +3272,7 @@ fn rewind(tabs: &Tables, v: impl Transport + 'static, hello: &str, points: &[Vec
         let (st, inst) = (&*tb.st, &*tb.inst);
         let (c, pr, inner) = simulate_full(st, inst, &coins[s].concat(), points, &dummy[s], rng, rep, streams.len() as u64 * index + s as u64)?;
         let mut rec = flock_live::RecordingChallenger::new(&domain_of(&st.c, count, &tb.name, rep), coins[s].clone());
-        verify_zk_with(st, inst, &c, &pr, &inner, points, rep, &mut rec).map_err(|e| format!("{stream}'s simulation is rejected on the extracted coins: {e}"))?;
+        verify_zk_with(st, inst, &c, &pr, &inner, points, rep, sverify::Lincheck::default(), &mut rec).map_err(|e| format!("{stream}'s simulation is rejected on the extracted coins: {e}"))?;
         if let Some(e) = rec.mismatch.or_else(|| (rec.rounds.len() != coins[s].len()).then(|| format!("{} rounds, extracted {}", rec.rounds.len(), coins[s].len()))) {
             return Err(format!("{stream}'s simulation does not follow the extracted schedule: {e}"));
         }
@@ -3275,7 +3497,7 @@ fn zkrewind(st: &Arc<Stmt>, inst: &Arc<Instances>) {
                 row["table"] = json!(j);
                 // the level-0 positions of the sampled rows, from the verifier's record on the view's coins
                 if let (Some((points, flat)), Ok(root)) = (&ext, <[u8; 64]>::try_from(inner.root.clone())) {
-                    if let Ok((_, rec)) = zk_constraints(&tb.st, &tb.inst, &c, &pr, &root, points, rep, &mut zkv::Tape::new(&flat[s])) {
+                    if let Ok((_, rec)) = zk_constraints(&tb.st, &tb.inst, &c, &pr, &root, points, rep, sverify::Lincheck::default(), &mut zkv::Tape::new(&flat[s])) {
                         row["lig_rows0_q"] = json!(rec.queries0[..4]);
                     }
                     let n = zkv::Code::new(lay.len() + zkv::K_PAD).n;
@@ -3410,10 +3632,11 @@ fn gpu_buckets(wt: &WitData, ph: [f64; 8], wph: [f64; 3], hph: [f64; 3], reused:
            "t.arithmetic": ph[3] + ph[4] + ph[5] + ph[6], "h.setup": hph[0], "h.stage": hph[1], "h.decode": hph[2],
            "device_witness": !matches!(wt, WitData::Host(..)), "host_units": matches!(wt, WitData::Dev(_, _, i) if i.is_empty()),
            "rep_reused": reused, "native_sha": native_sha,
-           "host_slots": match wt { WitData::Dev(_, h, _) | WitData::DevCut(_, h, _, _) => h.layout(), WitData::Host(..) => "none" }})
+           "host_slots": match wt { WitData::Dev(_, h, _) | WitData::DevCut(_, h, _, _) => h.layout(), WitData::Host(..) => "none" },
+           "hm96_native": matches!(wt, WitData::Dev(_, h, _) | WitData::DevCut(_, h, _, _) if !h.hm96_rows.is_empty())})
 }
 
-/// One rep on the GPU; with `reuse_tag`, rep 0 keeps its witness and level-0 commitment on the device and rep 1 takes them.
+/// One rep on the GPU; with `reuse_tag`, rep 0 keeps its level-0 commitment on the device and rep 1 takes it.
 #[cfg(feature = "gpu")]
 #[allow(clippy::too_many_arguments)]
 fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, ch: &mut LiveChallenger,
@@ -3431,8 +3654,8 @@ fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Ho
     Ok((bytes, bk))
 }
 
-/// Rep 0 keeps its witness and level-0 commitment for the session's `reuse_tag` and rep 1 takes them; whether the device
-/// holds them for this rep.
+/// Rep 0 keeps its level-0 commitment for the session's `reuse_tag` and rep 1 takes it; whether the device holds it for this
+/// rep.
 #[cfg(feature = "gpu")]
 fn reuse_of(reuse_tag: Option<u64>, rep: usize) -> (flock_live::gpu_circuit::Reuse, bool) {
     use flock_live::gpu_circuit::{Reuse, kept};
@@ -3539,7 +3762,7 @@ struct Plan {
     coin_nonce: Option<[u8; 32]>,
     /// the device witness's units from the host (`Some(true)`), the device (`Some(false)`), or by depth (`deep_unit`)
     host_units: Option<bool>,
-    /// rep 1 from rep 0's device witness and level-0 commitment (default: unless `FC_REP_REUSE=0`; never under `--zk`)
+    /// rep 1 from rep 0's device level-0 commitment (default: unless `FC_REP_REUSE=0`)
     rep_reuse: Option<bool>,
     /// the compression slots' witness natively (`Some(true)`) or level by level (`Some(false)`); default native unless
     /// `FC_NATIVE_SHA=0`
@@ -3549,6 +3772,14 @@ struct Plan {
     host_mapped: Option<bool>,
     /// this session's witness, built beside the previous session (`prebuild`); taken when it is the one the session would build
     prebuilt: Option<Arc<Mutex<Option<std::thread::JoinHandle<Prebuilt>>>>>,
+    /// each session's front beside the previous session's reps ([`prove_sessions`]; `None`: unless `FC_FRONT_AHEAD=0`)
+    front_ahead: Option<bool>,
+    /// the session's turn on the device, after the previous session's reps ([`Turn`])
+    turn: Option<Arc<Turn>>,
+    /// the prove loop's next session's seed, whose level 0 this session reads beside its reps ([`Level0Ahead`])
+    next_seed: Option<ProverSeed>,
+    /// that read (`None`: unless `FC_LEVEL0_AHEAD=0`)
+    level0_ahead: Option<bool>,
     /// the session's tables ([`session_tables`]; 0 or 1: one table)
     tables: usize,
     /// those tables over the population, built once for a harness's repeated sessions without a sample
@@ -3667,24 +3898,73 @@ fn forged_stages(st: &Stmt) -> BTreeMap<usize, &'static flock_live::ir_block::Ir
 }
 
 /// How a session builds its witness: on the device (inputs and host slots) or on the host, with the units' slots on the host,
-/// and the host slots in mapped memory.
-fn witness_mode(st: &Arc<Stmt>, plan: &Plan) -> (bool, bool, bool) {
+/// the host slots in mapped memory, and the hm96 slots built on the device natively (beside the compressions' native witness).
+fn witness_mode(st: &Arc<Stmt>, plan: &Plan) -> (bool, bool, bool, bool) {
     let device = plan.gpu && !plan.mask_random && std::env::var("FC_HOST_WITNESS").is_err();
     #[cfg(feature = "gpu")]
-    let host_units = device && plan.host_units.unwrap_or_else(|| flock_live::gpu_circuit::deep_unit(st));
+    let (host_units, hm96) = (device && plan.host_units.unwrap_or_else(|| flock_live::gpu_circuit::deep_unit(st)),
+                              device && native_sha(plan) && flock_live::gpu_circuit::hm96_native(st));
     #[cfg(not(feature = "gpu"))]
-    let host_units = { let _ = st; false };
-    (device, host_units, plan.host_mapped.unwrap_or(true))
+    let (host_units, hm96) = { let _ = st; (false, false) };
+    (device, host_units, plan.host_mapped.unwrap_or(true), hm96)
+}
+
+/// Whether the device builds the compression slots' witness natively (`Plan::native_sha`)
+fn native_sha(plan: &Plan) -> bool {
+    plan.native_sha.unwrap_or_else(|| std::env::var("FC_NATIVE_SHA").as_deref() != Ok("0"))
 }
 
 /// A one-table session's witness, built ahead of it: for this statement, seed and witness mode only.
 struct Prebuilt {
     st: Arc<Stmt>,
     seed: ProverSeed,
-    mode: (bool, bool, bool),
+    mode: (bool, bool, bool, bool),
     w0: Wit,
     wt0: WitData,
     built_s: f64,
+}
+
+/// A session's turn on the device when each session's front runs beside the previous session's reps ([`prove_sessions`]): its
+/// reps wait for the previous session's to end (`after`), and it says when its own start (`started`, which starts the next
+/// session's front) and end (`done`). A sender dropped unsent ends the wait on it as well, so a session that stops before its
+/// reps, or panics, never holds the next one.
+struct Turn {
+    after: Mutex<Option<std::sync::mpsc::Receiver<()>>>,
+    started: Mutex<Option<std::sync::mpsc::Sender<()>>>,
+    done: Mutex<Option<std::sync::mpsc::Sender<()>>>,
+}
+
+impl Turn {
+    /// The previous session's reps ended: this session's start. Returns the seconds waited.
+    fn take(&self) -> f64 {
+        let t = Instant::now();
+        if let Some(r) = self.after.lock().unwrap_or_else(PoisonError::into_inner).take() {
+            let _ = r.recv();
+        }
+        if let Some(s) = self.started.lock().unwrap_or_else(PoisonError::into_inner).take() {
+            let _ = s.send(());
+        }
+        t.elapsed().as_secs_f64()
+    }
+
+    /// This session's reps ended, or it ended without them.
+    fn end(&self) {
+        drop(self.started.lock().unwrap_or_else(PoisonError::into_inner).take());
+        if let Some(s) = self.done.lock().unwrap_or_else(PoisonError::into_inner).take() {
+            let _ = s.send(());
+        }
+    }
+}
+
+/// Ends a session's [`Turn`] when its thread ends, however it ends.
+struct TurnEnd(Option<Arc<Turn>>);
+
+impl Drop for TurnEnd {
+    fn drop(&mut self) {
+        if let Some(t) = &self.0 {
+            t.end();
+        }
+    }
 }
 
 /// Build the witness a one-table session of `st` with `seed` will take, on a thread of its own (the prover's host work beside the
@@ -3703,9 +3983,9 @@ fn prebuild(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, seed: ProverSeed
 /// (`HostSlots::upload`), which the session's device then reads; otherwise its compression rows copied to page-locked memory
 /// (`HostSlots::pin_rows`). Built ahead (`prebuild`), the copies run beside the previous session's device work; either way their
 /// time counts as the build's.
-fn witness_uploaded(st: &Stmt, w: &Wit, mode: (bool, bool, bool)) -> (WitData, f64) {
+fn witness_uploaded(st: &Stmt, w: &Wit, mode: (bool, bool, bool, bool)) -> (WitData, f64) {
     #[allow(unused_mut)]
-    let (mut wt, mut s) = witness(st, w, mode.0, mode.1, mode.2);
+    let (mut wt, mut s) = witness(st, w, mode.0, mode.1, mode.2, mode.3);
     #[cfg(feature = "gpu")]
     if let WitData::Dev(rows, h, _) = &mut wt {
         let t = Instant::now();
@@ -3746,6 +4026,8 @@ struct Proved {
     prove_s: Vec<f64>,
     buckets: Vec<Value>,
     tp0: Instant,
+    /// how long the reps waited for the previous session's ([`Turn`]); inside `e2e_s`
+    device_wait_s: f64,
 }
 
 /// [`session`] up to its proofs; `Err` is a session the prover stopped before proving (its record).
@@ -3808,11 +4090,11 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     };
     let tree = is_zk(st) || plain_tree(st);
     let mut commit: Vec<F128> = Vec::new();
-    let (device, host_units, mapped) = witness_mode(st, plan);
-    // on the device, rep 1 proves from rep 0's witness and level-0 commitment (the session's tag keys what rep 0 keeps), under
-    // M1 too: both reps commit one level-0 codeword
+    let (device, host_units, mapped, hm96) = witness_mode(st, plan);
+    // on the device, rep 1 proves from rep 0's level-0 commitment (the session's tag keys what rep 0 keeps) and builds its
+    // witness again, under M1 too: both reps commit one level-0 codeword
     static SESSIONS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-    let native_sha = plan.native_sha.unwrap_or_else(|| std::env::var("FC_NATIVE_SHA").as_deref() != Ok("0"));
+    let native_sha = native_sha(plan);
     let reuse_tag = (plan.gpu && !plan.rep1_other_witness
         && plan.rep_reuse.unwrap_or_else(|| std::env::var("FC_REP_REUSE").as_deref() != Ok("0")))
         .then(|| SESSIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
@@ -3823,32 +4105,65 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         let s = flock_live::zk_hooks::LeafSalts::for_seed(&seed);
         (0..tabs.list.len()).map(|j| Arc::new(Mutex::new(s.table(j as u64)))).collect()
     };
-    // the device's trees' salts read beside the witness build and page-locked for its copies, not inside its timed phases
-    // (FC_SALTS_AHEAD=0: each tree's where the device builds it); not under the ZK server, whose Lean draws them
-    let salts_ahead = (plan.gpu && salted(st) && plan.lean_frames.is_none() && !firewall_on(st)
-        && std::env::var("FC_SALTS_AHEAD").as_deref() != Ok("0"))
-    .then(|| {
+    // the device's trees' salts read beside the witness build, on the read-ahead's own pool (`salts_pool`), into page-locked
+    // buffers for its copies (`SALT_BUFS`), not inside its timed phases (FC_SALTS_AHEAD=0: each tree's where the device builds
+    // it; FC_SALTS_AFTER=1: from when every table's witness is built, beside the device's phases only); not under the ZK
+    // server, whose Lean draws them
+    let after = std::env::var("FC_SALTS_AFTER").as_deref() == Ok("1");
+    let ahead_salts = plan.gpu && salted(st) && plan.lean_frames.is_none() && !firewall_on(st)
+        && std::env::var("FC_SALTS_AHEAD").as_deref() != Ok("0");
+    let overlap = std::env::var_os("FC_ZK_SEQUENTIAL").is_none();
+    let ahead_hiding = plan.gpu && is_zk(st) && overlap && plan.lean_frames.is_none();
+    // this session's level 0 read beside the previous session's reps, where read at this statement's sizes ([`Level0Ahead`])
+    let l0_on = level0_ahead_on(plan) && tabs.list.len() == 1 && !flock_live::zk_hooks::os_source_set();
+    let (l0_salts, l0_hiding) = if l0_on {
+        Level0Ahead::take(seed, ahead_salts.then(|| pcs_of(st, lig).n_leaves()), ahead_hiding.then(|| level0_shape(st, plan)))
+    } else {
+        (None, None)
+    };
+    let (l0_read, l0_hiding_read) = (l0_salts.is_some(), l0_hiding.is_some());
+    let start_ahead = || ahead_salts.then(|| {
         let tables: Vec<_> = salts_t.iter().map(|s| {
             let s = s.lock().unwrap_or_else(PoisonError::into_inner);
-            (s.ahead(), salt_trees(st, lig, s.level0_id()))
+            let mut trees = salt_trees(st, lig, s.level0_id());
+            trees.retain(|t| !(l0_read && t.0 == s.level0_id()));
+            (s.ahead(), trees)
         }).collect();
         flock_live::spawn(move || {
             let t0 = Instant::now();
-            let mut pinned = Vec::new();
-            for (a, trees) in &tables {
-                a.draw(trees, &mut |b| pinned.extend(pin_salts(b)));
+            let reuse = std::env::var("FC_SALTS_REUSE").as_deref() != Ok("0");
+            let mut free = if reuse { std::mem::take(&mut *SALT_BUFS.lock().unwrap_or_else(PoisonError::into_inner)) } else { Vec::new() };
+            let (had, mut held) = (free.len(), Vec::new());
+            let mut draw = || for (a, trees) in &tables {
+                a.draw(trees, &mut |n, fill| salt_buffer(&mut free, &mut held, n, fill));
+            };
+            let pool = salts_pool();
+            match pool {
+                Some(p) => p.install(draw),
+                None => draw(),
             }
-            (tables, pinned, t0.elapsed().as_secs_f64())
+            let reused = had - free.len();
+            drop(free);
+            let threads = pool.map_or(0, |p| p.current_num_threads());
+            (tables, held, reuse, reused, threads, t0.elapsed().as_secs_f64())
         })
     });
+    let mut salts_ahead = if after { None } else { start_ahead() };
     // the rank check's claim points: per table (each has its own mask slot)
     let points_t: Vec<Arc<Mutex<Vec<Vec<F128>>>>> = tabs.list.iter().map(|_| Arc::new(Mutex::new(Vec::new()))).collect();
-    // M1 on the device: level 0's hiding and both reps' pads commitments beside the witness build, and rep 0's replay and inner
-    // proof beside rep 1's device run (FC_ZK_SEQUENTIAL: neither, the reference for the overlap's gain)
-    let overlap = std::env::var_os("FC_ZK_SEQUENTIAL").is_none();
-    let zk_pre = (plan.gpu && is_zk(st) && overlap && plan.lean_frames.is_none()).then(|| {
+    // M1 on the device: level 0's hiding (unless read beside the previous session's reps) and both reps' pads commitments beside
+    // the witness build (rep 1's beside rep 0 too), and rep 0's replay and inner proof beside rep 1's device run
+    // (FC_ZK_SEQUENTIAL: neither, the reference for the overlap's gain)
+    let zk_pre = ahead_hiding.then(|| {
         let (st, plan, salts, points) = (st.clone(), plan.clone(), salts_t[0].clone(), points_t[0].clone());
-        flock_live::spawn(move || zk_prepare(&st, &plan, seed, lig, &salts, &points))
+        let (tx, rx) = std::sync::mpsc::channel();
+        (rx, flock_live::spawn(move || zk_prepare(&st, &plan, seed, lig, &salts, &points, l0_hiding, tx)))
+    });
+    // Hello's round trip beside the witness build (FC_HELLO_AHEAD=0: after it): Hello reads no witness, and nothing else reaches
+    // the transport before it. Not through the ZK server's Lean session loop
+    let hello_ahead = (!plan.lean_session && plan.lean_frames.is_none() && std::env::var("FC_HELLO_AHEAD").as_deref() != Ok("0")).then(|| {
+        let (t, h) = (t.clone(), hello.clone());
+        flock_live::spawn(move || call(&t, Req::Hello(h)))
     });
     // every table's witness. Rep 1 proves from rep 0's unless it has its own: the CPU prover consumes a witness, so rep 0 takes a
     // copy and rep 1 the original (two copies at most, never one per rep plus the original)
@@ -3862,7 +4177,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             .then(|| plan.prebuilt.as_ref().and_then(|m| m.lock().unwrap_or_else(PoisonError::into_inner).take()))
             .flatten()
             .map(|h| h.join().unwrap_or_else(|e| panic!("the prebuilt witness: {}", panic_msg(e))))
-            .filter(|p| Arc::ptr_eq(&p.st, &tb.st) && p.seed == seed && p.mode == (device, host_units, mapped));
+            .filter(|p| Arc::ptr_eq(&p.st, &tb.st) && p.seed == seed && p.mode == (device, host_units, mapped, hm96));
         let (w0, wt0, tw0) = match pre {
             Some(p) => {
                 witness_prebuilt_s = Some(p.built_s);
@@ -3870,12 +4185,12 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             }
             None => {
                 let w0 = wit(&tb.st, &tb.inst, plan, plan.zero_witness, seed, j);
-                let (wt0, tw0) = witness_uploaded(&tb.st, &w0, (device, host_units, mapped));
+                let (wt0, tw0) = witness_uploaded(&tb.st, &w0, (device, host_units, mapped, hm96));
                 (w0, wt0, tw0)
             }
         };
         let (wt1, tw1) = if plan.rep1_other_witness {
-            let (w, t) = witness(&tb.st, &wit(&tb.st, &tb.inst, plan, true, seed, j), device, host_units, mapped);
+            let (w, t) = witness(&tb.st, &wit(&tb.st, &tb.inst, plan, true, seed, j), device, host_units, mapped, hm96);
             (Some(w), t)
         } else {
             (None, 0.0)
@@ -3883,14 +4198,43 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         witness_s += tw0 + tw1;
         wits.push((w0, Some(wt0), wt1));
     }
+    if after {
+        salts_ahead = start_ahead();
+    }
     let tj = Instant::now();
-    let mut zk_pre = match zk_pre.map(|h| h.join()) {
-        Some(Ok((_, reps))) => Some(reps.map(Some)),
-        Some(Err(e)) => panic!("M1's randomness: {}", panic_msg(e)),
-        None => None,
+    // level 0's salts read beside the previous session's reps, for the device's level-0 tree
+    let l0_held = match l0_salts.map(|h| h.join()) {
+        Some(Ok((b, held))) => {
+            salts_t[0].lock().unwrap_or_else(PoisonError::into_inner).set_level0(b).expect("level 0's salts are sampled only from here on");
+            held
+        }
+        Some(Err(e)) => panic!("level 0's salts read ahead: {}", panic_msg(e)),
+        None => Vec::new(),
+    };
+    let t_l0_wait = tj.elapsed().as_secs_f64();
+    if l0_on {
+        let hiding = zk_pre.is_some() && l0_hiding_read;
+        for (n, took) in LEVEL0_TAKEN.iter().zip([l0_read, hiding]) {
+            n.fetch_add(took as usize, std::sync::atomic::Ordering::Relaxed);
+        }
+        eprintln!("LEVEL0AHEAD\t{}", json!({"salts": l0_read, "hiding": hiding, "wait_s": t_l0_wait}));
+    }
+    // rep 0's pads now; rep 1's when rep 1 starts
+    let (mut zk_pre, mut zk_pre1) = match zk_pre {
+        Some((rx, h)) => match rx.recv() {
+            Ok(rep0) => (Some([Some(rep0), None]), Some(h)),
+            Err(_) => panic!("M1's randomness: {}", h.join().err().map(panic_msg).unwrap_or_default()),
+        },
+        None => (None, None),
     };
     // the preparation's time past the witness build (what it adds to the session)
     let t_zk_pre_wait = tj.elapsed().as_secs_f64();
+    // the next session's level 0 beside this session's reps
+    if let Some(next) = plan.next_seed.filter(|_| l0_on && (ahead_salts || ahead_hiding)) {
+        Level0Ahead::start(st, plan, next, lig, ahead_salts, ahead_hiding);
+    }
+    // everything above is host work and the session's own; the device's reps wait for the previous session's
+    let device_wait_s = plan.turn.as_ref().map_or(0.0, |t| t.take());
     let mut prove_s = Vec::new();
     let mut buckets = Vec::new();
     let mut proofs: Vec<Vec<u8>> = Vec::new();
@@ -3901,7 +4245,11 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let mut early = 0;
     let tp0 = Instant::now();
     let res: Result<(), String> = (|| {
-        match call(&t, Req::Hello(hello.clone()))? {
+        let hello_got = match hello_ahead {
+            Some(h) => h.join().unwrap_or_else(|e| Err(format!("hello: {}", panic_msg(e)))),
+            None => call(&t, Req::Hello(hello.clone())),
+        };
+        match hello_got? {
             // M0's seed commitment (4 words), the keyed coin tree's root and session key (20; `coin_tree::Checked` checked them,
             // or the ZK server did), or under the Lean session loop, which checked them, the loop's id for the session in their
             // place (4, `Session.idFrame`)
@@ -3967,8 +4315,9 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                 (0, true, Some(l0), Some(WitData::Host(w))) => lean_level0(plan, st, 0, w, l0, salts, lean_got[0].take())?,
                 _ => None,
             };
+            let zk_level0 = zk_level0.map(Arc::new);
             let t_level0 = if zk_pre.is_some() { t_zk_pre_wait } else {
-                tl0.elapsed().as_secs_f64() + t_table + if j == 0 { t_lean_level0 } else { 0.0 }
+                tl0.elapsed().as_secs_f64() + t_table + if j == 0 { t_lean_level0 + t_l0_wait } else { 0.0 }
             };
             // the ZK server's level-0 recheck, before anything of the table is sent (counted in rep 0's prove time)
             let tg = Instant::now();
@@ -3980,7 +4329,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                     };
                     let l0 = match zk_pre.as_ref() {
                         Some(z) => z[0].as_ref().expect("rep 0's pads").0.level0.clone(),
-                        None => Arc::new(zk_level0.clone().expect("level 0's hiding")),
+                        None => zk_level0.clone().expect("level 0's hiding"),
                     };
                     let fin = lean_fin.as_ref().ok_or_else(|| flock_live::firewall::refused("a firewalled table without the session's Lean finish"))?;
                     let lean_root = if j == 0 { lean_root0.clone() } else { root0.clone() };
@@ -4018,10 +4367,15 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             let mut rep0_done: Option<(Vec<u8>, Value)> = None;
             for rep in 0..2 {
                 // M1: this rep's pads and their commitment (a fresh salt tree id), sampled before anything of the rep is sent (on the
-                // device path, beside the witness build: rep 1's tree id is consumed here, where the sequential prover takes it)
+                // device path, rep 0's beside the witness build and rep 1's after them, joined here and any wait counted in rep 1's
+                // prove time: rep 1's tree id is consumed here, where the sequential prover takes it)
                 let tz0 = Instant::now();
                 let (zkrep, pre_id) = match zk_pre.as_mut() {
-                    Some(z) => { let (r, id) = z[rep].take().expect("a rep's pads"); (Some(r), Some(id)) }
+                    Some(z) => {
+                        let joined = |h: std::thread::JoinHandle<(ZkRep, u64)>| h.join().unwrap_or_else(|e| panic!("M1's randomness: {}", panic_msg(e)));
+                        let (r, id) = z[rep].take().or_else(|| zk_pre1.take().map(joined)).expect("a rep's pads");
+                        (Some(r), Some(id))
+                    }
                     None => (is_zk(st).then(|| {
                         let id = salts.lock().unwrap_or_else(PoisonError::into_inner).next_id();
                         let name = flock_live::firewall::level0_session(&commit);
@@ -4041,8 +4395,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                 if let (Some(g), Some(z)) = (&firewall, &zkrep) {
                     g.lock().unwrap_or_else(PoisonError::into_inner).begin_rep(rep, z)?;
                 }
-                let t_zk_commit = if pre_id.is_some() { if rep == 0 { t_level0 } else { 0.0 } }
-                                  else { tz0.elapsed().as_secs_f64() + if rep == 0 { t_level0 } else { 0.0 } };
+                let t_zk_commit = tz0.elapsed().as_secs_f64() + if rep == 0 { t_level0 } else { 0.0 };
                 // rep 1's stream on the device path opens at its first round, after rep 0's last one (the order on the wire)
                 let mut lch = if rep0_finish.is_some() { None } else { Some(LiveChallenger::new(t.clone(), &tb.name, rep, &dom(rep))?) };
                 let tt = t.clone();
@@ -4107,7 +4460,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                         (0, true) => wt0.take(),
                         (0, false) if per_rep => wt0.take(),
                         (0, false) => wt0.clone(),
-                        _ => wt1.take().or_else(|| wt0.take()).or_else(|| Some(witness(st, &w0, device, host_units, mapped).0)),
+                        _ => wt1.take().or_else(|| wt0.take()).or_else(|| Some(witness(st, &w0, device, host_units, mapped, hm96).0)),
                     }.expect("a rep's witness")
                 };
                 #[cfg(feature = "sha512")]
@@ -4257,22 +4610,38 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             None => Ok(()),
         }
     })();
+    if let Some(t) = &plan.turn {
+        t.end();
+    }
     let e2e_s = t0.elapsed().as_secs_f64();
     let wait_e2e_s = t.lock().unwrap_or_else(PoisonError::into_inner).wait_s();
-    if let Some(h) = salts_ahead {
-        let (tables, pinned, s) = h.join().unwrap_or_else(|e| panic!("the salts read ahead: {}", panic_msg(e)));
-        let untaken: usize = tables.iter().map(|(a, _)| a.untaken()).sum();
-        eprintln!("SALTSAHEAD\t{}", json!({"s": s, "trees": tables.iter().map(|(_, t)| t.len()).sum::<usize>(), "pinned": pinned.len(),
-                                            "untaken": untaken}));
-        flock_live::spawn(move || drop(pinned));
+    // a session that stopped before rep 1 still ends rep 1's pads before it returns
+    if let Some(h) = zk_pre1 {
+        let _ = h.join();
     }
+    if let Some(h) = salts_ahead {
+        let (tables, held, reuse, reused, threads, s) = h.join().unwrap_or_else(|e| panic!("the salts read ahead: {}", panic_msg(e)));
+        let untaken: usize = tables.iter().map(|(a, _)| a.untaken()).sum();
+        eprintln!("SALTSAHEAD\t{}", json!({"s": s, "trees": tables.iter().map(|(_, t)| t.len()).sum::<usize>(), "pinned": held.len(),
+                                            "reused": reused, "threads": threads, "untaken": untaken}));
+        // a level-0 buffer of its own goes to the next session's read of its level 0 ([`Level0Ahead`])
+        let l0_bytes = pcs_of(st, lig).n_leaves() * flock_live::zk_hooks::SALT_BYTES;
+        let (l0, held): (Vec<_>, Vec<_>) = held.into_iter().partition(|b| l0_on && salt_buf_bytes(b) == l0_bytes);
+        give_level0_bufs(l0);
+        if reuse {
+            SALT_BUFS.lock().unwrap_or_else(PoisonError::into_inner).extend(held);
+        } else {
+            flock_live::spawn(move || drop(held));
+        }
+    }
+    give_level0_bufs(l0_held);
     Ok(Proved { t, log, tabs, plan: plan.clone(), hello, commit, sig, res, proofs, early, e2e_s, wait_e2e_s, witness_s, witness_prebuilt_s,
-                prove_s, buckets, tp0 })
+                prove_s, buckets, tp0, device_wait_s })
 }
 
 fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
     let Proved { t, log, tabs, plan, hello, commit, sig, res, proofs, early, e2e_s, wait_e2e_s, witness_s, witness_prebuilt_s, prove_s,
-                 buckets, tp0 } = p;
+                 buckets, tp0, device_wait_s } = p;
     let (st, inst) = (&tabs.list[0].st, &tabs.list[0].inst);
     if let Err(e) = res {
         let v = match call(&t, Req::Finish) {
@@ -4316,6 +4685,7 @@ fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
                "step0_checked": step0.is_ok() && verified(&v)});
     // past json!'s recursion limit in the literal above
     live["public_file_sha512"] = json!(hex(&inst.public_file_sha512));
+    live["device_wait_s"] = json!(device_wait_s);
     (live, proofs)
 }
 
@@ -4367,8 +4737,11 @@ const CASES: &[(&str, bool, bool)] = &[
     ("gpu_proofs_match_cpu", true, false),
     ("gpu_paths_agree", true, false),
     ("verify_ahead_matches_serial", true, false),
+    ("front_ahead_matches_serial", true, false),
+    ("level0_ahead_matches_own", true, false),
     ("host_units_match_witness", true, false),
     ("native_sha_matches_eval64", true, false),
+    ("device_hm96_matches_host", true, false),
     ("region_word_shared_refused", false, false),
     ("zk_pads_not_the_committed_ones", false, true),
     ("zk_final_c_solved_after_the_batching_coins", false, true),
@@ -4464,6 +4837,47 @@ fn plan_of(name: &str, gpu: bool) -> Plan {
         "zk_level0_ybar_forged" => Plan { zk_l0_tamper: 3, ..f },
         "zk_level0_extra_lane_sum_forged" => Plan { zk_l0_tamper: 4, ..f },
         _ => h,
+    }
+}
+
+/// `unit-walk`: circuit `--net` (default the statement's unit) over `--slots` slots of seeded input words, as the device
+/// witness builds its host units (`unit_ab_into`), at each `--wide` lane groups a pass (default 1,2,4,8) on each `--threads`
+/// pool size (default the global pool's) in turn, `--reps` rounds: a `WALK` line each with its wall and CPU seconds and
+/// whether its packed words are the first run's. The walk reads no input value, so seeded words time it as a served
+/// statement's do.
+fn unit_walk(c: &Composite) {
+    let ni: usize = arg("--net", &c.unit_net.to_string()).parse().expect("--net");
+    let net = &c.nets[ni].1;
+    let slots: usize = arg("--slots", "2048").parse().expect("--slots");
+    let reps: usize = arg("--reps", "2").parse().expect("--reps");
+    let list = |name: &str, default: &str| -> Vec<usize> { arg(name, default).split(',').map(|w| w.parse().expect(name)).collect() };
+    let widths = list("--wide", "1,2,4,8");
+    let pools: Vec<rayon::ThreadPool> = list("--threads", &rayon::current_num_threads().to_string()).into_iter()
+        .map(|t| rayon::ThreadPoolBuilder::new().num_threads(t).stack_size(flock_live::THREAD_STACK).build().expect("a thread pool"))
+        .collect();
+    let uw = 1usize << (net.unit_log - 7);
+    let mut s = 0x9e37_79b9_7f4a_7c15u64 ^ arg("--seed", "1").parse::<u64>().expect("--seed");
+    let mut r = || { s ^= s << 13; s ^= s >> 7; s ^= s << 17; s };
+    let ins: Vec<Vec<F128>> = (0..slots).map(|_| (0..net.in_words).map(|_| F128::new(r(), r())).collect()).collect();
+    let t = Instant::now();
+    let one_pass = net.one_pass();
+    let flat_s = t.elapsed().as_secs_f64();
+    let nnz = net.a.nnz() + net.b.nnz();
+    let (mut out, mut first) = (vec![0u64; 4 * uw * slots], None::<(bool, Vec<u64>)>);
+    for rep in 0..reps {
+        for pool in &pools {
+            for &n in &widths {
+                out.fill(0);
+                let (t, cpu) = (Instant::now(), cpu_seconds());
+                let ok = pool.install(|| flock_live::circuit::unit_ab_into_wide(net, ni, uw, &ins, &mut out, n));
+                let (wall_s, cpu_s) = (t.elapsed().as_secs_f64(), cpu_seconds() - cpu);
+                let want = first.get_or_insert_with(|| (ok, out.clone()));
+                println!("WALK\t{}", json!({"net": ni, "rows": net.useful, "nnz": nnz, "slots": slots,
+                    "groups": slots.div_ceil(64), "wide": n, "rep": rep, "threads": pool.current_num_threads(),
+                    "one_pass": one_pass, "flat_s": flat_s, "wall_s": wall_s, "cpu_s": cpu_s, "ok": ok,
+                    "same": want.0 == ok && want.1 == out}));
+            }
+        }
     }
 }
 
@@ -4643,6 +5057,12 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     if name == "verify_ahead_matches_serial" {
         return verify_ahead_case(st, inst, gpu);
     }
+    if name == "front_ahead_matches_serial" {
+        return front_ahead_case(st, inst, gpu);
+    }
+    if name == "level0_ahead_matches_own" {
+        return level0_ahead_case(st, inst, gpu);
+    }
     if name == "host_units_match_witness" {
         // the device witness's host units (a deep unit's slots, Stmt::slot_zab from their inputs) are the CPU witness's unit
         // slots word for word
@@ -4696,17 +5116,17 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         let Some(&(_, q)) = region_shared_columns(&st.regions).first() else {
             return json!({"case": name, "pass": true, "skipped": "no partial region: every region covers whole words"});
         };
-        let mut c = st.c.clone();
+        let mut c = (*st.c).clone();
         let r = c.ranges.iter().find(|r| q >= r.start() && q < r.start() + (r.count << r.slot_log)).cloned().expect("a slot holds the column");
         let Kind::Net(i) = r.kind else {
             return json!({"case": name, "pass": false, "why": format!("column {q} is in the mask slot")});
         };
         let row = q & ((1usize << r.slot_log) - 1);
-        let a = &mut c.nets[i].1.a;
-        if a.len() <= row {
-            a.resize(row + 1, Vec::new());
-        }
-        a[row].push(row);
+        use flock_live::ir_block::{RowRead, RowWrite};
+        let net = &mut c.nets[i].1;
+        let mut cols: Vec<usize> = net.a.cols_or_empty(row).collect();
+        cols.push(row);
+        net.a = net.a.with_row(row, &cols);
         let entry = Stmt::new(c, st.n, st.identity.clone()).err();
         let (q32, pin) = (q as u32, st.pin as u32);
         let with = |extra: &[(u32, u32)]| {
@@ -4995,6 +5415,32 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         };
         return json!({"case": name, "gpu": gpu, "accepted": acc, "pass": pass, "unit_draw": draw, "why": v["why"], "replay": replay});
     }
+    if name == "device_hm96_matches_host" {
+        // the hm96 slots as the device builds them natively (fc_hm96_tape, then the rows from the plan's runs) are
+        // Stmt::slot_zab's word for word, on every slot of every block, padding instances included
+        #[cfg(all(feature = "gpu", feature = "sha512"))]
+        if gpu {
+            use rayon::prelude::*;
+            let w = wit(st, inst, &Plan::default(), false, ProverSeed::from_os(), 0);
+            let hm: Vec<Vec<F128>> = (0..st.blocks()).into_par_iter().flat_map_iter(|b| (w.rowin)(b).1).collect();
+            let net = &st.c.nets[st.c.hm_net].1;
+            let mut checked = 0;
+            for chunk in hm.chunks(1024) {
+                let dev = match flock_live::gpu_circuit::device_hm96_slots(st, chunk) {
+                    Ok(d) => d,
+                    Err(e) => return json!({"case": name, "gpu": true, "pass": false, "why": e}),
+                };
+                let host = st.slot_zab(st.c.hm_net, net, chunk);
+                if host.len() != chunk.len() || !host.par_iter().all(|(x, z, a, b)| dev[*x].0 == *z && dev[*x].1 == *a && dev[*x].2 == *b) {
+                    return json!({"case": name, "gpu": true, "pass": false, "slots_checked": checked, "why": "an hm96 slot's words differ"});
+                }
+                checked += chunk.len();
+            }
+            return json!({"case": name, "gpu": true, "expect": "the device's native hm96 slots equal the host's", "slots": checked,
+                          "pass": checked > 0 && checked == hm.len()});
+        }
+        return json!({"case": name, "pass": true, "skipped": "a check of the GPU build"});
+    }
     if name == "device_salts_match_host" {
         #[cfg(all(feature = "gpu", feature = "sha512"))]
         if gpu {
@@ -5169,9 +5615,8 @@ fn with_tail(text: &str) -> (String, String) {
 /// altered (re-encoded: the replay reports the changed messages and keeps issuing the recorded coins, so the lincheck's own
 /// final check decides). Every mode accepts the honest proofs and rejects each alteration with the same reason. The honest proofs
 /// are verified three times, the modes interleaved, and each verification's `verify_s` and per-rep phases are kept. Under
-/// `--zk` the lincheck is the zk replay's (`zk_veil::replay` folds its own comb; `FC_LINCHECK` is not read), so there is one
-/// mode: the proofs are re-encoded with their `InnerProof`, and each alteration must be refused by the inner proof's batched
-/// constraint.
+/// `--zk` the modes are the zk replay's (`zk_veil::replay`), the proofs are re-encoded with their `InnerProof`, and each
+/// alteration must be refused by the inner proof's batched constraint.
 fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
     let s0 = Arc::new(Mutex::new(server(st, inst)));
     let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
@@ -5207,9 +5652,8 @@ fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Valu
         }
         r
     };
-    let modes: &[sverify::Lincheck] =
-        if zk { &[sverify::Lincheck::Partial] } else { &[sverify::Lincheck::Flat, sverify::Lincheck::Partial, sverify::Lincheck::Both] };
-    let name = |m: sverify::Lincheck| if zk { "zk replay".to_string() } else { format!("{m:?}") };
+    let modes = [sverify::Lincheck::Flat, sverify::Lincheck::Partial, sverify::Lincheck::Both];
+    let name = |m: sverify::Lincheck| if zk { format!("zk {m:?}") } else { format!("{m:?}") };
     let runs: Vec<(&str, Vec<Value>)> = sets.iter().map(|(what, ps)| (*what, modes.iter().map(|&m| {
         let map = ps.iter().enumerate().map(|(r, b)| ((TABLE.to_string(), r), b.clone())).collect::<BTreeMap<_, _>>();
         let ver = CircuitVerifier { lincheck: m, ..CircuitVerifier::one(st, inst) };
@@ -5230,7 +5674,7 @@ fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Valu
     let pass = reencoded && same_why && all("honest", &verified) && all("z_partial", &lincheck_rejects)
         && all("round", &lincheck_rejects);
     let expect = if zk {
-        "the zk replay: honest proofs accepted, altered lincheck proofs refused by the inner proof's batched constraint"
+        "the zk replay flat, partial and both: honest proofs accepted, altered lincheck proofs refused by the inner proof's batched constraint"
     } else {
         "flat, partial and both: the same verdict on honest and altered lincheck proofs"
     };
@@ -6055,7 +6499,7 @@ fn gpu_cpu_case(_: &Arc<Stmt>, _: &Arc<Instances>) -> Value {
 }
 
 /// The device prover's paths against each other: the device's units, a rebuilt rep 1 and the compressions level by level, against
-/// the host's units, rep 1 from rep 0's witness and level-0 commitment, and the compressions natively (host units only where the
+/// the host's units, rep 1 from rep 0's level-0 commitment, and the compressions natively (host units only where the
 /// device witness takes them, a statement whose units return its outputs), its witness built ahead of the
 /// session as the prove loop's next session's is. Equal seeds and verifier coins give byte-identical proofs and transcripts.
 #[cfg(feature = "seed-injection")]
@@ -6077,7 +6521,7 @@ fn gpu_paths_case(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
     let (pe, te) = (a.1 == b.1, a.2 == b.2);
     json!({"case": "gpu_paths_agree", "expect": "byte-identical proofs and transcripts", "gpu": true, "zk": is_zk(st), "accepted": accepted,
            "proofs_equal": pe, "transcripts_equal": te, "transcript_first_difference": first_diff(&a.2, &b.2, String::new()),
-           "host_units": used("host_units"), "rep_reused": used("rep_reused"), "native_sha": used("native_sha"), "host_slots": [used_a("host_slots"), used("host_slots")], "prebuilt": b.0["witness_prebuilt_s"].is_number(), "prove_s": [a.0["prove_s"].clone(), b.0["prove_s"].clone()],
+           "host_units": used("host_units"), "rep_reused": used("rep_reused"), "native_sha": used("native_sha"), "host_slots": [used_a("host_slots"), used("host_slots")], "hm96_native": [used_a("hm96_native"), used("hm96_native")], "prebuilt": b.0["witness_prebuilt_s"].is_number(), "prove_s": [a.0["prove_s"].clone(), b.0["prove_s"].clone()],
            "pass": accepted && pe && te})
 }
 
@@ -6107,9 +6551,11 @@ fn verify_ahead_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value 
         std::thread::scope(|sc| {
             for (j, (l, (d, a))) in ls.iter().zip(dirs.iter().zip(&addrs)).enumerate() {
                 flock_live::spawn_scoped(sc, move || serve_on(l, d, Some((SESSIONS - j).div_ceil(servers)), (ahead + 1).div_ceil(servers), a, None, || {
-                    let mut s = server(st, inst);
-                    fix_verifier_coins(&mut s, [9; 32]);
-                    s
+                    Some((move || {
+                        let mut s = server(st, inst);
+                        fix_verifier_coins(&mut s, [9; 32]);
+                        s
+                    }, Value::Null))
                 }));
             }
             prove_sessions(st, inst, &base, &seeds, 0, &addrs.join(","), ahead, None, &mut |_, v, proofs| got.push((v, proofs)));
@@ -6141,6 +6587,110 @@ fn verify_ahead_case(_: &Arc<Stmt>, _: &Arc<Instances>, _: bool) -> Value {
     json!({"case": "verify_ahead_matches_serial", "pass": true, "skipped": "built without the test harness's seed-injection feature"})
 }
 
+/// The prove loop with each session's front beside the previous session's reps (`FC_FRONT_AHEAD`), against it one session
+/// after another, over loopback TCP to one server taking three sessions at once, at the selftest's sample (`--draw-file`,
+/// `--draw`): with each session's prover seed and the verifier's coins injected, every session's proofs and transcript are
+/// byte-identical, and each session's reps waited for the previous one's.
+#[cfg(feature = "seed-injection")]
+fn front_ahead_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
+    const SESSIONS: usize = 3;
+    let seeds: Vec<ProverSeed> = (0..SESSIONS).map(|k| ProverSeed::injected([1 + k as u8; 32])).collect();
+    let run = |front: bool| {
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let a = l.local_addr().unwrap().to_string();
+        let d = std::env::temp_dir().join(format!("fc-front-ahead-{}-{front}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let base = Plan { gpu, front_ahead: Some(front), ..Plan::default() };
+        let mut got: Vec<(Value, Vec<Vec<u8>>)> = Vec::new();
+        let ts = Instant::now();
+        std::thread::scope(|sc| {
+            let (l, d, a) = (&l, &d, &a);
+            flock_live::spawn_scoped(sc, move || serve_on(l, d, Some(SESSIONS), 3, a, None, || {
+                Some((move || {
+                    let mut s = server(st, inst);
+                    fix_verifier_coins(&mut s, [9; 32]);
+                    s
+                }, Value::Null))
+            }));
+            prove_sessions(st, inst, &base, &seeds, 0, a, 0, None, &mut |_, v, proofs| got.push((v, proofs)));
+        });
+        let wall_s = ts.elapsed().as_secs_f64();
+        let recs: Vec<Value> = (0..SESSIONS).map(|k| {
+            let p = d.join(format!("l{k:04}-{}", std::process::id())).join("session.json");
+            let rec: Value = serde_json::from_str(&std::fs::read_to_string(p).unwrap_or_default()).unwrap_or(Value::Null);
+            json!({"streams": rec["streams"], "link": rec["link"], "proofs": rec["proof_sha512"]})
+        }).collect();
+        let _ = std::fs::remove_dir_all(&d);
+        (got, recs, wall_s)
+    };
+    let (a, b) = (run(false), run(true));
+    let accepted = a.0.len() == SESSIONS && b.0.len() == SESSIONS && a.0.iter().chain(&b.0).all(|(v, _)| verified(v) && v["step0_checked"] == true);
+    let modes = a.0.iter().all(|(v, _)| v["front_ahead"] == false) && b.0.iter().all(|(v, _)| v["front_ahead"] == true);
+    let pe = a.0.iter().zip(&b.0).all(|(x, y)| x.1 == y.1) && a.0.iter().all(|(_, p)| !p.is_empty());
+    let te = a.1 == b.1 && a.1.iter().all(|r| !r["streams"].is_null());
+    let seeds_differ = a.0.windows(2).all(|w| w[0].1 != w[1].1);
+    let waited: Vec<Value> = b.0.iter().map(|(v, _)| v["device_wait_s"].clone()).collect();
+    // the first session's seeds and coins are `prover_is_deterministic`'s, so its digest is that case's at the same sample:
+    // `--expect-transcript HEX` pins the session front ahead to another build's
+    let digest = hex(&Sha512::digest(b.1[0].to_string().as_bytes()));
+    let pin = arg("--expect-transcript", "");
+    let pinned = pin.is_empty() || pin == digest;
+    json!({"case": "front_ahead_matches_serial", "expect": "each session's proofs and transcript are its serial twin's, byte for byte", "gpu": gpu,
+           "zk": is_zk(st), "sessions": SESSIONS, "accepted": accepted, "front_ahead": modes, "proofs_equal": pe, "transcripts_equal": te,
+           "sessions_differ": seeds_differ, "transcript_first_difference": first_diff(&json!(a.1), &json!(b.1), String::new()),
+           "transcript_sha256": digest, "transcript_pinned": (!pin.is_empty()).then_some(pinned),
+           "device_wait_s": waited, "wall_s": [a.2, b.2], "pass": accepted && modes && pe && te && seeds_differ && pinned})
+}
+
+#[cfg(not(feature = "seed-injection"))]
+fn front_ahead_case(_: &Arc<Stmt>, _: &Arc<Instances>, _: bool) -> Value {
+    json!({"case": "front_ahead_matches_serial", "pass": true, "skipped": "built without the test harness's seed-injection feature"})
+}
+
+/// Sessions run as the prove loop runs them, each reading the next session's level 0 beside its reps ([`Level0Ahead`]), against
+/// the same sessions each reading its own, each session against its own in-process server at the selftest's sample: with each
+/// session's prover seed and the verifier's coins injected, every session's proofs and transcript are byte-identical, and
+/// every session after the first took the salts, and under Flock ZK the hiding, read for it.
+#[cfg(feature = "seed-injection")]
+fn level0_ahead_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
+    const SESSIONS: usize = 3;
+    let seeds: Vec<ProverSeed> = (0..SESSIONS).map(|k| ProverSeed::injected([1 + k as u8; 32])).collect();
+    let run = |ahead: bool| {
+        let taken0 = LEVEL0_TAKEN.each_ref().map(|n| n.load(std::sync::atomic::Ordering::Relaxed));
+        let got: Vec<(bool, Vec<Vec<u8>>, Value)> = (0..SESSIONS).map(|k| {
+            let s0 = Arc::new(Mutex::new(server(st, inst)));
+            fix_verifier_coins(&mut s0.lock().unwrap_or_else(PoisonError::into_inner), [9; 32]);
+            let plan = Plan { gpu, level0_ahead: Some(ahead), next_seed: seeds.get(k + 1).copied(), ..Plan::default() };
+            let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &plan, seeds[k]);
+            let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
+            (verified(&v), proofs, json!({"streams": rec["streams"], "link": rec["link"], "proofs": rec["proof_sha512"]}))
+        }).collect();
+        let taken: [usize; 2] = std::array::from_fn(|i| LEVEL0_TAKEN[i].load(std::sync::atomic::Ordering::Relaxed) - taken0[i]);
+        (got, taken)
+    };
+    let (a, b) = (run(false), run(true));
+    let accepted = a.0.iter().chain(&b.0).all(|x| x.0);
+    let want = [if salted(st) { SESSIONS - 1 } else { 0 }, if is_zk(st) && std::env::var_os("FC_ZK_SEQUENTIAL").is_none() { SESSIONS - 1 } else { 0 }];
+    let took = a.1 == [0, 0] && b.1 == want && want.iter().any(|&n| n > 0);
+    let pe = a.0.iter().zip(&b.0).all(|(x, y)| x.1 == y.1) && a.0.iter().all(|x| !x.1.is_empty());
+    let te = a.0.iter().zip(&b.0).all(|(x, y)| x.2 == y.2) && a.0.iter().all(|x| !x.2["streams"].is_null());
+    let seeds_differ = a.0.windows(2).all(|w| w[0].1 != w[1].1);
+    let transcripts = |r: &[(bool, Vec<Vec<u8>>, Value)]| json!(r.iter().map(|x| &x.2).collect::<Vec<_>>());
+    let digest = hex(&Sha512::digest(b.0[0].2.to_string().as_bytes()));
+    let pin = arg("--expect-transcript", "");
+    let pinned = pin.is_empty() || pin == digest;
+    json!({"case": "level0_ahead_matches_own", "expect": "each session's proofs and transcript are its twin's that read its own level 0, byte for byte",
+           "gpu": gpu, "zk": is_zk(st), "sessions": SESSIONS, "accepted": accepted, "taken": [a.1, b.1], "taken_expected": want,
+           "proofs_equal": pe, "transcripts_equal": te, "sessions_differ": seeds_differ,
+           "transcript_first_difference": first_diff(&transcripts(&a.0), &transcripts(&b.0), String::new()), "transcript_sha256": digest,
+           "transcript_pinned": (!pin.is_empty()).then_some(pinned), "pass": accepted && took && pe && te && seeds_differ && pinned})
+}
+
+#[cfg(not(feature = "seed-injection"))]
+fn level0_ahead_case(_: &Arc<Stmt>, _: &Arc<Instances>, _: bool) -> Value {
+    json!({"case": "level0_ahead_matches_own", "pass": true, "skipped": "built without the test harness's seed-injection feature"})
+}
+
 /// The same circuit with unit 0's first two leaf inputs swapped in its META: the rows are unchanged, the meaning is not.
 fn relabel(text: &str) -> String {
     let mut lines: Vec<String> = text.split('\n').map(|s| s.to_string()).collect();
@@ -6168,7 +6718,8 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
     let mut all = true;
     for &(name, want_accept, _) in CASES {
         if skipped(st, name) || (name == "row_ref_claim_false" && !inst.tables.as_ref().is_some_and(|t| t.counts[..st.c.n_in].iter().any(|&r| r > 1)))
-            || (["gpu_proofs_match_cpu", "gpu_paths_agree", "verify_ahead_matches_serial"].contains(&name) && !gpu) {
+            || (["gpu_proofs_match_cpu", "gpu_paths_agree", "verify_ahead_matches_serial", "front_ahead_matches_serial", "level0_ahead_matches_own"]
+                .contains(&name) && !gpu) {
             println!("SKIP\t{}", json!({"case": name}));
             continue;
         }
@@ -6208,7 +6759,9 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
 
 /// The prove loop: one session per seed, each on its own connection to the verifier at `addr`, the first `warm` of them warm
 /// (`addr` a comma-separated list: session k's verifier is the (k mod n)th, so n verifier processes take turns).
-/// The next sessions' witnesses are built beside this one, FC_PIPELINE_DEPTH (default 1) of them at a time: a deep unit's host
+/// A one-table device prover outside the ZK server runs each session's front beside the previous session's reps and awaits
+/// each verdict on the session's own thread, warm sessions included ([`prove_jobs`]; FC_FRONT_AHEAD=0: what follows). Otherwise
+/// the next sessions' witnesses are built beside this one, FC_PIPELINE_DEPTH (default 1) of them at a time: a deep unit's host
 /// witness is a few lane groups, so several share the cores (FC_PIPELINE=0: each session builds its own when it starts). Up to
 /// `verify_ahead` proved sessions send their proofs and wait for their verdicts on their own threads while the next session
 /// proves (0: each verdict before the next session starts); every warm verdict comes before the first timed session starts.
@@ -6221,8 +6774,71 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
 #[allow(clippy::too_many_arguments)]
 fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[ProverSeed], warm: usize, addr: &str, verify_ahead: usize,
                   fw: Option<&ReleaseArgs>, emit: &mut dyn FnMut(usize, Value, Vec<Vec<u8>>)) {
-    let n = seeds.len();
-    let pipeline = base.tables <= 1 && std::env::var("FC_PIPELINE").as_deref() != Ok("0");
+    let addrs: Vec<&str> = addr.split(',').collect();
+    let jobs = seeds.iter().enumerate().map(|(run, &seed)| Job {
+        st: st.clone(), inst: inst.clone(), addr: addrs[run % addrs.len()].to_string(), seed, label: None, self_check: None,
+    });
+    prove_jobs(Jobs::of(jobs.collect()), base, warm, verify_ahead, fw, emit)
+}
+
+/// A session of the prove loop: its statement, its population, its verifier's address and its seed, and what a stream gives
+/// it: its name and a negative control's `FC_ZK_SELF_CHECK`.
+struct Job {
+    st: Arc<Stmt>,
+    inst: Arc<Instances>,
+    addr: String,
+    seed: ProverSeed,
+    label: Option<String>,
+    self_check: Option<zkv::SelfCheck>,
+}
+
+/// The prove loop's sessions in order: a list, or a stream's, each taken as it arrives (`prove --stream`).
+struct Jobs {
+    queued: std::collections::VecDeque<Job>,
+    /// the session `queued`'s front is
+    first: usize,
+    rx: Option<std::sync::mpsc::Receiver<Job>>,
+}
+
+impl Jobs {
+    fn of(jobs: Vec<Job>) -> Self {
+        Jobs { queued: jobs.into(), first: 0, rx: None }
+    }
+
+    /// Session `run`'s job, waiting for it to arrive if `wait`: `None` past the last, or, not waiting, before it arrives.
+    fn get(&mut self, run: usize, wait: bool) -> Option<&Job> {
+        while self.first + self.queued.len() <= run {
+            let rx = self.rx.as_ref()?;
+            let job = if wait { rx.recv().ok()? } else { rx.try_recv().ok()? };
+            self.queued.push_back(job);
+        }
+        self.queued.get(run - self.first)
+    }
+
+    /// Drops the jobs of the sessions before `run`.
+    fn drop_before(&mut self, run: usize) {
+        while self.first < run && self.queued.pop_front().is_some() {
+            self.first += 1;
+        }
+    }
+}
+
+/// [`prove_sessions`]'s loop over its [`Jobs`]: session `run` proves its job's statement against its verifier, so the witness
+/// pipeline and verify-ahead run across statements of different circuits (`prove --stream`). The pipeline builds ahead only
+/// jobs that have arrived, and before waiting for the next job the loop emits every session awaiting its verdict. Each record
+/// carries the job's label and the prover's statement cache so far ([`stmt_cache_seen`]).
+fn prove_jobs(mut jobs: Jobs, base: &Plan, warm: usize, verify_ahead: usize, fw: Option<&ReleaseArgs>,
+              emit: &mut dyn FnMut(usize, Value, Vec<Vec<u8>>)) {
+    let t_start = Instant::now();
+    // a one-table device prover outside the ZK server runs each session's front (Register, its drawn statement, its witness,
+    // Hello) on a thread and connection of its own, beside the previous session's reps. Its reps wait for those ([`Turn`]), so the
+    // device proves one session at a time, in order, and each session's verdict is awaited on its thread. A verifier that takes
+    // one session at a time holds the next session at its Register (`serve --concurrency 3` takes the session awaiting its
+    // verdict, the one proving and the next one's front). FC_FRONT_AHEAD=0: one session after another
+    let front_ahead = base.gpu && base.tables <= 1 && fw.is_none()
+        && base.front_ahead.unwrap_or_else(|| std::env::var("FC_FRONT_AHEAD").as_deref() != Ok("0"));
+    // the prebuild is for the registered statement, which a drawn session doesn't prove; a front ahead builds the session's own
+    let pipeline = !front_ahead && base.tables <= 1 && std::env::var("FC_PIPELINE").as_deref() != Ok("0");
     let depth = std::env::var("FC_PIPELINE_DEPTH").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(1).max(1);
     // FC_HOST_PREPIN=1: the first session's witness is built before any other's and pins `depth` more buffers of its mapped
     // host slots' size, so the next sessions' builds meet a warm buffer pool and a deep unit's flat forms built, as they do
@@ -6230,8 +6846,9 @@ fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[P
     let prepin = pipeline && std::env::var("FC_HOST_PREPIN").as_deref() == Ok("1");
     let mut ahead: std::collections::VecDeque<(usize, std::thread::JoinHandle<Prebuilt>)> = std::collections::VecDeque::new();
     type Verdict = std::thread::JoinHandle<(Value, Vec<Vec<u8>>)>;
-    let mut verdicts: std::collections::VecDeque<(usize, (f64, f64, usize), Verdict)> = std::collections::VecDeque::new();
-    let mut emit_one = |run: usize, (mut v, proofs): (Value, Vec<Vec<u8>>), (rtt, rtt_min, rtt_n): (f64, f64, usize)| {
+    type Rtt = (f64, f64, usize);
+    let mut verdicts: std::collections::VecDeque<(usize, Option<String>, Rtt, Verdict)> = std::collections::VecDeque::new();
+    let mut emit_one = |run: usize, label: Option<String>, (mut v, proofs): (Value, Vec<Vec<u8>>), (rtt, rtt_min, rtt_n): Rtt| {
         v["run"] = json!(run);
         v["warm"] = json!(run < warm);
         v["pipeline_depth"] = json!(if pipeline { depth } else { 0 });
@@ -6239,15 +6856,99 @@ fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[P
         v["open_rtt_ms"] = json!(rtt);
         v["open_rtt_min_ms"] = json!(rtt_min);
         v["open_rtt_n"] = json!(rtt_n);
+        v["front_ahead"] = json!(front_ahead);
+        // seconds from the loop's start to the session's verdict
+        if v["t_done_s"].is_null() {
+            v["t_done_s"] = json!(t_start.elapsed().as_secs_f64());
+        }
+        if let Some(label) = label {
+            v["label"] = json!(label);
+        }
+        v["stmt_cache"] = stmt_cache_seen(Side::Prover);
         emit(run, v, proofs);
     };
     let join = |h: Verdict| h.join().unwrap_or_else(|e| std::panic::resume_unwind(e));
-    let addrs: Vec<&str> = addr.split(',').collect();
-    for run in 0..n {
+    // a session's verdict joined past verify-ahead's queue: the loop's wait for it, which the next session doesn't overlap
+    let waited = |h: Verdict| {
+        let t = Instant::now();
+        let (mut v, proofs) = join(h);
+        v["verdict_wait_s"] = json!(t.elapsed().as_secs_f64());
+        (v, proofs)
+    };
+    if front_ahead {
+        type Ran = std::thread::JoinHandle<((Value, Vec<Vec<u8>>), Rtt)>;
+        let mut running: std::collections::VecDeque<(usize, Option<String>, Ran)> = std::collections::VecDeque::new();
+        let ran = |h: Ran| h.join().unwrap_or_else(|e| std::panic::resume_unwind(e));
+        let mut after: Option<std::sync::mpsc::Receiver<()>> = None;
+        for run in 0.. {
+            if jobs.get(run, false).is_none() {
+                while let Some((r, label, h)) = running.pop_front() {
+                    let (out, rtt) = ran(h);
+                    emit_one(r, label, out, rtt);
+                }
+                if jobs.get(run, true).is_none() {
+                    break;
+                }
+            }
+            jobs.drop_before(run);
+            let next_seed = jobs.get(run + 1, false).map(|j| j.seed);
+            let job = jobs.get(run, false).expect("this session's job");
+            let (st, inst, seed, label) = (job.st.clone(), job.inst.clone(), job.seed, job.label.clone());
+            let ((started, start), (done, end)) = (std::sync::mpsc::channel(), std::sync::mpsc::channel());
+            let turn = Arc::new(Turn { after: Mutex::new(after.take()), started: Mutex::new(Some(started)), done: Mutex::new(Some(done)) });
+            let mut plan = base.clone();
+            plan.next_seed = next_seed;
+            if let Some(c) = job.self_check {
+                plan.zk_self_check = c;
+            }
+            plan.turn = Some(turn.clone());
+            let (addr, frames) = session_addr(&st, &inst, table_names(plan.tables).len(), &job.addr, None).unwrap_or_else(|e| refuse(e));
+            plan.lean_session = frames.is_some();
+            plan.lean_frames = frames;
+            running.push_back((run, label, flock_live::spawn(move || {
+                let _end = TurnEnd(Some(turn));
+                let mut tcp = TcpTransport::connect(&addr).unwrap_or_else(|e| refuse(format!("the verifier at {addr}: {e}")));
+                let rtt = tcp.ping_rtt(30);
+                let (mut v, proofs) = match session_proved(&st, &inst, shared(tcp), &plan, seed) {
+                    Ok(p) => session_finish(p),
+                    Err(stopped) => stopped,
+                };
+                v["t_done_s"] = json!(t_start.elapsed().as_secs_f64());
+                ((v, proofs), rtt)
+            })));
+            // the next session's front starts once this one's reps do, or once it ended without them
+            let _ = start.recv();
+            after = Some(end);
+            while running.front().is_some_and(|(_, _, h)| h.is_finished()) {
+                let (r, label, h) = running.pop_front().expect("a finished session");
+                let (out, rtt) = ran(h);
+                emit_one(r, label, out, rtt);
+            }
+        }
+        return;
+    }
+    for run in 0.. {
+        if jobs.get(run, false).is_none() {
+            while let Some((r, label, rtt, h)) = verdicts.pop_front() {
+                emit_one(r, label, waited(h), rtt);
+            }
+            if jobs.get(run, true).is_none() {
+                break;
+            }
+        }
+        jobs.drop_before(run);
+        let next_seed = jobs.get(run + 1, false).map(|j| j.seed);
+        let job = jobs.get(run, false).expect("this session's job");
+        let (st, inst, seed, label) = (job.st.clone(), job.inst.clone(), job.seed, job.label.clone());
         let mut plan = base.clone();
+        plan.next_seed = next_seed;
+        if let Some(c) = job.self_check {
+            plan.zk_self_check = c;
+        }
+        let job_addr = job.addr.clone();
         if pipeline {
             if run == 0 && prepin {
-                let p = prebuild(st, inst, base, seeds[0]).join().expect("the first session's witness");
+                let p = prebuild(&st, &inst, base, seed).join().expect("the first session's witness");
                 #[cfg(feature = "gpu")]
                 if let WitData::Dev(_, h, _) | WitData::DevCut(_, h, _, _) = &p.wt0 {
                     if h.zab.is_mapped() {
@@ -6261,16 +6962,18 @@ fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[P
                 plan.prebuilt = Some(Arc::new(Mutex::new(Some(h))));
             }
             let from = ahead.back().map_or(run + 1, |(r, _)| r + 1);
-            for r in from..(run + 1 + depth).min(n) {
-                ahead.push_back((r, prebuild(st, inst, base, seeds[r])));
+            for r in from..run + 1 + depth {
+                let Some(next) = jobs.get(r, false) else { break };
+                ahead.push_back((r, prebuild(&next.st, &next.inst, base, next.seed)));
             }
         }
         if run == warm {
-            while let Some((r, rtt, h)) = verdicts.pop_front() {
-                emit_one(r, join(h), rtt);
+            while let Some((r, label, rtt, h)) = verdicts.pop_front() {
+                emit_one(r, label, join(h), rtt);
             }
         }
-        let (addr, frames) = session_addr(st, inst, table_names(plan.tables).len(), addrs[run % addrs.len()], fw).unwrap_or_else(|e| refuse(e));
+        let (st, inst) = (&st, &inst);
+        let (addr, frames) = session_addr(st, inst, table_names(plan.tables).len(), &job_addr, fw).unwrap_or_else(|e| refuse(e));
         plan.lean_session = frames.is_some();
         plan.lean_frames = frames;
         let addr = addr.as_str();
@@ -6278,33 +6981,30 @@ fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[P
         if let (Some(fw), Some(seen)) = (fw, seen) {
             let mut tcp = TcpTransport::connect(addr).unwrap_or_else(|e| refuse(format!("the firewall's session loop at {addr}: {e}")));
             let rtt = tcp.ping_rtt(30);
-            let (mut v, proofs) = match session_proved(st, inst, shared(tcp), &plan, seeds[run]) {
+            let (mut v, proofs) = match session_proved(st, inst, shared(tcp), &plan, seed) {
                 Ok(p) => session_finish(p),
                 Err(stopped) => stopped,
             };
             v["firewall"] = firewall_outcome(fw, seen, &v);
-            emit_one(run, (v, proofs), rtt);
+            emit_one(run, label, (v, proofs), rtt);
             continue;
         }
-        let mut tcp = TcpTransport::connect(addr).unwrap();
+        let mut tcp = TcpTransport::connect(addr).unwrap_or_else(|e| refuse(format!("the verifier at {addr}: {e}")));
         let rtt = tcp.ping_rtt(30);
-        let proved = session_proved(st, inst, shared(tcp), &plan, seeds[run]);
+        let proved = session_proved(st, inst, shared(tcp), &plan, seed);
         let finish = move || match proved {
             Ok(p) => session_finish(p),
             Err(stopped) => stopped,
         };
         if verify_ahead == 0 {
-            emit_one(run, finish(), rtt);
+            emit_one(run, label, finish(), rtt);
             continue;
         }
-        verdicts.push_back((run, rtt, flock_live::spawn(finish)));
+        verdicts.push_back((run, label, rtt, flock_live::spawn(finish)));
         while verdicts.len() > verify_ahead {
-            let (r, rtt, h) = verdicts.pop_front().expect("a session awaiting its verdict");
-            emit_one(r, join(h), rtt);
+            let (r, label, rtt, h) = verdicts.pop_front().expect("a session awaiting its verdict");
+            emit_one(r, label, waited(h), rtt);
         }
-    }
-    while let Some((r, rtt, h)) = verdicts.pop_front() {
-        emit_one(r, join(h), rtt);
     }
 }
 
@@ -6381,7 +7081,7 @@ fn run_log(st: &Stmt) -> Option<RunLog> {
     Some(RunLog::new(file, part).unwrap_or_else(|e| refuse(e)))
 }
 
-fn serve_loop(log: Option<&RunLog>, make: impl Fn() -> Server) {
+fn serve_loop<B: FnOnce() -> Server + Send>(log: Option<&RunLog>, make: impl Fn() -> Option<(B, Value)>) {
     let listen = arg("--listen", "127.0.0.1:7500");
     let out = std::path::PathBuf::from(arg("--out", "sessions"));
     let l = std::net::TcpListener::bind(&listen).unwrap();
@@ -6395,16 +7095,17 @@ fn serve_loop(log: Option<&RunLog>, make: impl Fn() -> Server) {
     serve_on(&l, &out, max, concurrency, &bound, log, make);
 }
 
-/// Serves `l`'s connections, one session each, up to `concurrency` at once, and `max` of them (unbounded: `None`); each
-/// session's record, proofs and verifier file under `out/<session>`, its line in `out/index.jsonl` and on stdout. With a
-/// run's record (`log`), each session's Hello answered with coins is logged there first.
-fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>, concurrency: usize, listen: &str,
-            log: Option<&RunLog>, make: impl Fn() -> Server) {
+/// Serves `l`'s connections, one session each, up to `concurrency` at once, and `max` of them (unbounded: `None`), until
+/// `make` gives none (`flock_live::serve_sessions`): each on the server `make`'s build gives, built on the session's own
+/// thread once it is accepted; each session's record, proofs and verifier file under `out/<session>`, its line, with the
+/// fields `make` gave beside its build, in `out/index.jsonl` and on stdout (`out`: the directory those fields name as
+/// `out`, else the server's). With a run's record (`log`), each session's Hello answered with coins is logged there first.
+fn serve_on<B: FnOnce() -> Server + Send>(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>, concurrency: usize,
+                                          listen: &str, log: Option<&RunLog>, make: impl Fn() -> Option<(B, Value)>) {
     use std::io::{BufReader, BufWriter, Write};
     std::fs::create_dir_all(out).unwrap();
-    let free = (Mutex::new(concurrency), std::sync::Condvar::new());
     let index = Mutex::new(());
-    let one = |i: usize, conn: std::net::TcpStream, mut s: Server| {
+    let one = |i: usize, conn: std::net::TcpStream, mut s: Server, tag: Value| {
         conn.set_nodelay(true).unwrap();
         let mut r = BufReader::new(conn.try_clone().unwrap());
         let mut w = BufWriter::new(conn);
@@ -6422,6 +7123,7 @@ fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>
             }
         }
         let rec = s.record_json();
+        let out = tag.get("out").and_then(Value::as_str).map_or_else(|| out.to_path_buf(), std::path::PathBuf::from);
         let d = out.join(&id);
         std::fs::create_dir_all(&d).unwrap();
         std::fs::write(d.join("session.json"), flock_live::record_text::canonical_json(&rec)).unwrap();
@@ -6432,40 +7134,21 @@ fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>
         std::fs::write(d.join("verifier.json"), json!({"operator": arg("--operator", ""), "host": host.trim(),
             "runpod_pod_id": std::env::var("RUNPOD_POD_ID").ok(), "research_run": std::env::var("RESEARCH_RUN_ID").ok(),
             "listen": listen}).to_string()).unwrap();
-        let line = json!({"session": id, "accepted": rec["verdict"]["accepted"], "why": rec["verdict"]["why"], "aborted": rec["aborted"],
+        let mut line = json!({"session": id, "accepted": rec["verdict"]["accepted"], "why": rec["verdict"]["why"], "aborted": rec["aborted"],
                           "link_mode": rec["link_mode"], "link_sha256": rec["link_sha256"], "require_link": rec["config"]["require_link"],
-                          "verify_s": rec["verdict"]["verify_s"], "handle_s": rec["verdict"]["handle_s"], "rounds": rec["verdict"]["rounds"]});
+                          "verify_s": rec["verdict"]["verify_s"], "handle_s": rec["verdict"]["handle_s"], "rounds": rec["verdict"]["rounds"],
+                          "stmt_cache": stmt_cache_seen(Side::Verifier), "scope_cache": proved_scope::VERDICTS.seen()});
+        if let (Value::Object(line), Value::Object(tag)) = (&mut line, tag) {
+            line.extend(tag);
+        }
         let _whole_lines = index.lock().unwrap_or_else(PoisonError::into_inner);
         let mut idx = std::fs::OpenOptions::new().create(true).append(true).open(out.join("index.jsonl")).unwrap();
         // one write per line: servers sharing `out` append to the same index
         idx.write_all(format!("{line}\n").as_bytes()).unwrap();
         println!("SESSION\t{line}");
     };
-    std::thread::scope(|sc| {
-        for i in 0.. {
-            if Some(i) == max {
-                break;
-            }
-            {
-                let mut n = free.0.lock().unwrap_or_else(PoisonError::into_inner);
-                while *n == 0 {
-                    n = free.1.wait(n).unwrap_or_else(PoisonError::into_inner);
-                }
-                *n -= 1;
-            }
-            let (conn, _) = l.accept().unwrap();
-            let s = make();
-            let (one, free) = (&one, &free);
-            flock_live::spawn_scoped(sc, move || {
-                // a session's panic stops the server
-                if catch_unwind(AssertUnwindSafe(|| one(i, conn, s))).is_err() {
-                    std::process::exit(101);
-                }
-                *free.0.lock().unwrap_or_else(PoisonError::into_inner) += 1;
-                free.1.notify_one();
-            });
-        }
-    });
+    flock_live::serve_sessions(l, max, concurrency, || make().map(|(build, tag)| move || (build(), tag)),
+                               |i, conn, (s, tag): (Server, Value)| one(i, conn, s, tag));
 }
 
 /// `replay [--zk] [--session-tables J] --sessions DIR...`: the verifier's offline verdict on each recorded session
@@ -6599,6 +7282,218 @@ fn stacked() {
     println!("STACKED\t{out}");
 }
 
+/// The prover's refusals of a statement it can't prove: on the device (`--gpu`) at most 12 slot types, the device's nnz
+/// bound and no table-direct reads; under `--zk` the ZK shape.
+fn statement_checks(st: &Stmt) {
+    // the device prover holds at most 12 slot types (`gpu_circuit::FC_MAX_TYPES`)
+    if flag("--gpu") && st.circuit.types.len() > 12 {
+        refuse(format!("{} slot types: the GPU prover holds at most 12", st.circuit.types.len()));
+    }
+    if flag("--gpu") {
+        st.c.gpu_nnz_ok().unwrap_or_else(|e| refuse(e));
+    }
+    // the device's fold holds each slot type's own rows only, never a generated read's table-direct side
+    if flag("--gpu") && st.circuit.tables.iter().any(Option::is_some) {
+        refuse("a typed template's table reads: the GPU prover folds no table-direct side".into());
+    }
+    if zk_mode() {
+        zk_shape_ok(st).unwrap_or_else(|e| refuse(e));
+    }
+}
+
+/// The `statement ...` line of a statement built since `tb`.
+fn statement_built(st: &Stmt, tb: Instant) {
+    eprintln!("statement {} instances={} vus_per_block={} blocks={} k_log={} nbl={} m={} regions={} delta={} built in {:.2}s",
+              st.c.name, st.n, st.c.g, st.blocks_real, st.c.k_log, st.nbl, st.m, st.regions.len(), st.circuit.da.len() / 2, tb.elapsed().as_secs_f64());
+}
+
+/// FC_ZK_SELF_CHECK=skip: a negative control's prover, which sends its inner proofs when the witness fails
+fn zk_self_check() -> zkv::SelfCheck {
+    match std::env::var("FC_ZK_SELF_CHECK").as_deref() {
+        Err(_) | Ok("stop") => zkv::SelfCheck::Stop,
+        Ok("skip") => zkv::SelfCheck::Skip,
+        Ok(v) => refuse(format!("FC_ZK_SELF_CHECK={v}: stop or skip")),
+    }
+}
+
+/// `serve --queue FILE`: a long-lived verifier of one pinned circuit, whose sessions each take their statement and sample
+/// from FILE's next line (`-`: stdin, until it closes) before their connection is accepted: `{"instances": PUB, "draw":
+/// SAMPLE, "label": NAME}`, with `"links": F` for a circuit that declares links and `"out": DIR` for a session filed
+/// under DIR rather than `--out`. A population's public file is checked
+/// as `serve` checks it (no rows, its public words, Linking) once for its consecutive sessions, each population size's
+/// statement is built once, the sample is served at Register as `--draw-file`'s is, and the session's line carries its
+/// label. With `--tree-from`, every session's coin tree comes from one challenger session, opened at the first line and
+/// closed when the queue ends. No `--instances`, `--draw*`, `--links`, `--rec-run` or session tables.
+fn serve_queue(c: Composite, path: &str) {
+    use std::io::BufRead;
+    let given = ["--instances", "--draw", "--draw-law", "--draw-file", "--links", "--rec-run", "--tmpl-unit"]
+        .into_iter().filter(|f| !arg(f, "").is_empty()).collect::<Vec<_>>();
+    if !given.is_empty() || tables_arg() > 1 {
+        refuse(format!("--queue: each session's population and sample come from its line, so no {given:?} or --session-tables"));
+    }
+    if zk_mode() && c.plain_leaves() {
+        refuse("--zk: the statement's trees have plain SHA-512 leaves (flock-leaf/sha512-unsalted), a ZK-off statement".into());
+    }
+    sverify::Lincheck::from_env().unwrap_or_else(|e| refuse(e));
+    let id = identity(&c);
+    let lines: Mutex<Box<dyn BufRead + Send>> = Mutex::new(if path == "-" {
+        Box::new(std::io::BufReader::new(std::io::stdin()))
+    } else {
+        Box::new(std::io::BufReader::new(std::fs::File::open(path).unwrap_or_else(|e| refuse(format!("--queue {path}: {e}")))))
+    });
+    // the circuit until its first statement holds it, its statements (one a population size), its last public file, and
+    // the challenger's session once the first line has opened it
+    type State = (Option<Composite>, Vec<Arc<Stmt>>, Option<(String, Arc<Instances>)>, Option<Option<Arc<TreeFrom>>>);
+    let state: Mutex<State> = Mutex::new((Some(c), Vec::new(), None, None));
+    serve_loop(None, || {
+        let mut line = String::new();
+        while line.trim().is_empty() {
+            line.clear();
+            if lines.lock().unwrap_or_else(PoisonError::into_inner).read_line(&mut line).unwrap_or_else(|e| refuse(format!("--queue {path}: {e}"))) == 0 {
+                return None;
+            }
+        }
+        let j: Value = serde_json::from_str(&line).unwrap_or_else(|e| refuse(format!("--queue {path}: {e}")));
+        let instances = j["instances"].as_str().unwrap_or_else(|| refuse(format!("--queue {path}: a line with no instances"))).to_string();
+        let draw = j.get("draw").filter(|d| d.is_object()).cloned().unwrap_or_else(|| refuse(format!("--queue {path}: a line with no draw")));
+        flock_live::unit_draw::check(&draw).unwrap_or_else(|e| refuse(e));
+        let tb = Instant::now();
+        let mut g = state.lock().unwrap_or_else(PoisonError::into_inner);
+        let (c0, stmts, last, tree_from) = &mut *g;
+        if last.as_ref().is_none_or(|(f, _)| *f != instances) {
+            let c: &Composite = c0.as_ref().unwrap_or_else(|| &stmts[0].c);
+            let inst = Instances::load(&instances, c).unwrap_or_else(|e| refuse(format!("{instances}: {e}")));
+            if inst.has_rows() {
+                refuse(format!("{instances} holds rows: stage the verifier's own public file (public_only)"));
+            }
+            check_public(c, &inst).unwrap_or_else(|e| refuse(e));
+            let links: Option<Value> = j["links"].as_str().map(|f| {
+                serde_json::from_str(&std::fs::read_to_string(f).unwrap_or_else(|e| refuse(format!("links {f}: {e}"))))
+                    .unwrap_or_else(|e| refuse(format!("links {f}: {e}")))
+            });
+            flock_live::circuit::check_links(c, &inst, links.as_ref()).unwrap_or_else(|e| refuse(e));
+            *last = Some((instances, Arc::new(inst)));
+        }
+        let inst = last.as_ref().expect("the session's population").1.clone();
+        let st = match stmts.iter().find(|st| st.n == inst.n) {
+            Some(st) => st.clone(),
+            None => {
+                let st = match c0.take() {
+                    Some(c) => Stmt::new(c, inst.n, id.clone()),
+                    None => stmts[0].drawn(inst.n, id.clone()),
+                };
+                let st = Arc::new(st.unwrap_or_else(|e| refuse(e)));
+                statement_checks(&st);
+                statement_built(&st, tb);
+                stmts.push(st.clone());
+                st
+            }
+        };
+        let tabs = Tables::one(&st, &inst);
+        config_of(&tabs).check().unwrap_or_else(|e| refuse(e));
+        let tree_from = tree_from.get_or_insert_with(|| tree_from_arg(&tabs, true)).clone();
+        let sv = Serving { given: Some(draw), law: None, tabs, tree_from };
+        let mut tag = json!({"label": j["label"]});
+        if let Some(out) = j["out"].as_str() {
+            tag["out"] = json!(out);
+        }
+        Some((move || server_of(&sv, &st, &inst, 1), tag))
+    })
+}
+
+/// `prove --stream FILE [--gpu] [--warm W]`: a long-lived proof server's prove loop over sessions of statements of any
+/// circuits, read a line at a time as they arrive (FILE `-`: stdin, until it closes). A line is `{"circuit": FILE, "tables":
+/// DIR, "instances": INST, "verifier": ADDR, "label": NAME}`, optionally with `"pin"`, the circuit's SHA-512, by which it is
+/// loaded once (else by its path), and `"self_check": "skip"` (a negative control's session, as `FC_ZK_SELF_CHECK=skip`). A
+/// reader thread loads each circuit and builds its population's statement once, and a population's instance file once
+/// for its consecutive sessions, while earlier sessions prove. The sessions run in order through one prove loop
+/// ([`prove_jobs`]), so the witness pipeline and `FC_VERIFY_AHEAD` span statements, and `FC_STMT_CACHE` keeps each drawn
+/// statement for the process. The first W sessions are warm. Each session's `LIVE` record carries its label. No ZK server
+/// (`FC_FIREWALL=1`), salt refs, session tables or templated units.
+fn prove_stream(path: &str) {
+    if tables_arg() > 1 || !arg("--salt-refs", "").is_empty() || !arg("--firewall-state", "").is_empty() || !arg("--tmpl-unit", "").is_empty() {
+        refuse("--stream: one table a session, and no --salt-refs, --firewall-state or --tmpl-unit".into());
+    }
+    sverify::Lincheck::from_env().unwrap_or_else(|e| refuse(e));
+    let (tx, rx) = std::sync::mpsc::channel();
+    let path = path.to_string();
+    flock_live::spawn(move || {
+        use std::io::BufRead;
+        let lines: Box<dyn BufRead> = if path == "-" {
+            Box::new(std::io::stdin().lock())
+        } else {
+            Box::new(std::io::BufReader::new(std::fs::File::open(&path).unwrap_or_else(|e| refuse(format!("--stream {path}: {e}")))))
+        };
+        // each circuit's statements, one a population size, and its last instance file
+        let mut stmts: BTreeMap<String, Vec<Arc<Stmt>>> = BTreeMap::new();
+        let mut last: BTreeMap<String, (String, Arc<Instances>)> = BTreeMap::new();
+        for (i, line) in lines.lines().enumerate() {
+            let line = line.unwrap_or_else(|e| refuse(format!("--stream {path}: {e}")));
+            if line.trim().is_empty() {
+                continue;
+            }
+            let j: Value = serde_json::from_str(&line).unwrap_or_else(|e| refuse(format!("--stream {path}, line {i}: {e}")));
+            let field = |k: &str| j[k].as_str().map(str::to_string).unwrap_or_else(|| refuse(format!("--stream {path}, line {i}: no {k:?}")));
+            let (circuit, instances) = (field("circuit"), field("instances"));
+            let key = j["pin"].as_str().map_or_else(|| circuit.clone(), str::to_string);
+            let tb = Instant::now();
+            let loaded = (!stmts.contains_key(&key)).then(|| {
+                let c = Composite::parse_with(&std::fs::read_to_string(&circuit).unwrap_or_else(|e| refuse(format!("{circuit}: {e}"))),
+                                              Some(&field("tables")), None).unwrap_or_else(|e| refuse(e));
+                if j["pin"].is_string() && hex(&c.sha512) != key {
+                    refuse(format!("{circuit}: its SHA-512 {} is not the pinned circuit {key}", hex(&c.sha512)));
+                }
+                if zk_mode() && c.plain_leaves() {
+                    refuse(format!("--zk: {circuit}'s trees have plain SHA-512 leaves, a ZK-off statement"));
+                }
+                c
+            });
+            if loaded.is_some() || last.get(&key).is_none_or(|(f, _)| *f != instances) {
+                let c: &Composite = loaded.as_ref().unwrap_or_else(|| &stmts[&key][0].c);
+                let inst = Instances::load(&instances, c).unwrap_or_else(|e| refuse(format!("{instances}: {e}")));
+                check_public(c, &inst).unwrap_or_else(|e| refuse(e));
+                last.insert(key.clone(), (instances.clone(), Arc::new(inst)));
+            }
+            let inst = last[&key].1.clone();
+            let have = stmts.entry(key.clone()).or_default();
+            let st = match have.iter().find(|st| st.n == inst.n) {
+                Some(st) => st.clone(),
+                None => {
+                    let st = match loaded {
+                        Some(c) => {
+                            let id = identity(&c);
+                            Stmt::new(c, inst.n, id)
+                        }
+                        None => have[0].drawn(inst.n, have[0].identity.clone()),
+                    };
+                    let st = Arc::new(st.unwrap_or_else(|e| refuse(e)));
+                    statement_checks(&st);
+                    if firewall_on(&st) {
+                        refuse("--stream: no ZK server path (FC_FIREWALL=1)".into());
+                    }
+                    statement_built(&st, tb);
+                    have.push(st.clone());
+                    st
+                }
+            };
+            let self_check = match j["self_check"].as_str() {
+                None | Some("stop") => None,
+                Some("skip") => Some(zkv::SelfCheck::Skip),
+                Some(v) => refuse(format!("--stream {path}, line {i}: self_check {v:?}: stop or skip")),
+            };
+            let job = Job { st, inst, addr: field("verifier"), seed: ProverSeed::from_os(), label: j["label"].as_str().map(str::to_string), self_check };
+            if tx.send(job).is_err() {
+                break;
+            }
+        }
+    });
+    let warm: usize = arg("--warm", "0").parse().unwrap_or_else(|_| refuse("--warm W".into()));
+    let base = Plan { gpu: flag("--gpu"), tables: 1, zk_self_check: zk_self_check(), ..Plan::default() };
+    let verify_ahead = std::env::var("FC_VERIFY_AHEAD").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
+    let jobs = Jobs { queued: Default::default(), first: 0, rx: Some(rx) };
+    prove_jobs(jobs, &base, warm, verify_ahead, None, &mut |_, v, _| println!("LIVE\t{v}"));
+}
+
 fn main() {
     flock_live::huge_pages::set(!flag("--gpu"));
     flock_live::init_threads();
@@ -6614,6 +7509,9 @@ fn main() {
     if cmd == "stacked" {
         return stacked();
     }
+    if cmd == "prove" && !arg("--stream", "").is_empty() {
+        return prove_stream(&arg("--stream", ""));
+    }
     let tb = Instant::now();
     let c = load_composite(&arg("--circuit", "circuit.txt"));
     if cmd == "rows" {
@@ -6625,12 +7523,18 @@ fn main() {
         }
         return;
     }
+    if cmd == "unit-walk" {
+        return unit_walk(&c);
+    }
     let pin = arg("--pin", "");
     if cmd == "serve" && pin.is_empty() {
         refuse("serve needs --pin (the pinned circuit's SHA-512)".into());
     }
     if !pin.is_empty() && hex(&c.sha512) != pin {
         refuse(format!("the circuit's SHA-512 {} is not the pinned circuit {pin}", hex(&c.sha512)));
+    }
+    if cmd == "serve" && !arg("--queue", "").is_empty() {
+        return serve_queue(c, &arg("--queue", ""));
     }
     let mut inst = Instances::load(&arg("--instances", "inst.bin"), &c).unwrap_or_else(|e| refuse(e));
     let salt_refs = arg("--salt-refs", "");
@@ -6662,27 +7566,13 @@ fn main() {
     }
     let id = identity(&c);
     let st = Arc::new(Stmt::new(c, inst.n, id).unwrap_or_else(|e| refuse(e)));
-    // the device prover holds at most 12 slot types (`gpu_circuit::FC_MAX_TYPES`)
-    if flag("--gpu") && st.circuit.types.len() > 12 {
-        refuse(format!("{} slot types: the GPU prover holds at most 12", st.circuit.types.len()));
-    }
-    if flag("--gpu") {
-        st.c.gpu_nnz_ok().unwrap_or_else(|e| refuse(e));
-    }
-    // the device's fold holds each slot type's own rows only, never a generated read's table-direct side
-    if flag("--gpu") && st.circuit.tables.iter().any(Option::is_some) {
-        refuse("a typed template's table reads: the GPU prover folds no table-direct side".into());
-    }
-    if zk_mode() {
-        zk_shape_ok(&st).unwrap_or_else(|e| refuse(e));
-    }
+    statement_checks(&st);
     let tables = tables_arg();
     if tables > 1 && flag("--gpu") {
         refuse("--session-tables above 1: the CPU prover (the device prover proves one table per session)".into());
     }
     sverify::Lincheck::from_env().unwrap_or_else(|e| refuse(e));
-    eprintln!("statement {} instances={} vus_per_block={} blocks={} k_log={} nbl={} m={} regions={} delta={} built in {:.2}s",
-              st.c.name, st.n, st.c.g, st.blocks_real, st.c.k_log, st.nbl, st.m, st.regions.len(), st.circuit.da.len() / 2, tb.elapsed().as_secs_f64());
+    statement_built(&st, tb);
     match cmd.as_str() {
         "selftest" => selftest(&st, &inst, flag("--gpu")),
         "statement" => println!("STATEMENT\t{}", json!({"statement": st.c.statement(), "unit": st.c.name, "instances": st.n,
@@ -6697,7 +7587,8 @@ fn main() {
         "serve" => {
             let log = run_log(&st);
             let sv = serving(&st, &inst, tables);
-            serve_loop(log.as_ref(), move || server_of(&sv, &st, &inst, tables))
+            let (sv, st, inst) = (&sv, &st, &inst);
+            serve_loop(log.as_ref(), || Some((move || server_of(sv, st, inst, tables), Value::Null)))
         }
         "prove" => {
             if firewall_on(&st) {
@@ -6707,13 +7598,7 @@ fn main() {
             let warm: usize = arg("--warm", "0").parse().unwrap();
             let dump = arg("--dump", "");
             let split = (tables > 1).then(|| session_tables(&st, &inst, None, tables).ok()).flatten();
-            // FC_ZK_SELF_CHECK=skip: a negative control's prover, which sends its inner proofs when the witness fails
-            let zk_self_check = match std::env::var("FC_ZK_SELF_CHECK").as_deref() {
-                Err(_) | Ok("stop") => zkv::SelfCheck::Stop,
-                Ok("skip") => zkv::SelfCheck::Skip,
-                Ok(v) => refuse(format!("FC_ZK_SELF_CHECK={v}: stop or skip")),
-            };
-            let base = Plan { gpu: flag("--gpu"), tables, split, zk_self_check, ..Plan::default() };
+            let base = Plan { gpu: flag("--gpu"), tables, split, zk_self_check: zk_self_check(), ..Plan::default() };
             let seeds: Vec<ProverSeed> = (0..warm + runs).map(|_| ProverSeed::from_os()).collect();
             let verify_ahead = std::env::var("FC_VERIFY_AHEAD").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
             let fw = release_args(&st, warm + runs);
@@ -6727,6 +7612,6 @@ fn main() {
                 println!("LIVE\t{v}");
             });
         }
-        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ... | stacked --table R.bin ..."),
+        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ... | stacked --table R.bin ... | unit-walk --circuit FILE [--slots N] [--wide 1,2,4,8]"),
     }
 }

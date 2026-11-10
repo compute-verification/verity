@@ -778,13 +778,13 @@ theorem egressTail_spec {c : Config} {st0 st : State} (hg : Good c st0) (hq : Qu
 
 /-! ## Steps -/
 
-theorem done_false {c : Config} {st : State} (hg : Good c st) (ht : st.shaper.t < horizon c) : st.done = false := by
+theorem done_false {c : Config} {st : State} (hg : Good c st) (ht : st.shaper.t < gridTicks c) : st.done = false := by
   unfold State.done State.ticks
   rw [hg.config]
-  unfold horizon at ht
+  unfold gridTicks at ht
   simp [ht]
 
-theorem step_live {c : Config} {st : State} (hg : Good c st) {now backlog : Nat} (ht : st.shaper.t < horizon c)
+theorem step_live {c : Config} {st : State} (hg : Good c st) {now backlog : Nat} (ht : st.shaper.t < gridTicks c)
     (x : State × Array Action) (hx : st.egressTick now backlog = x) :
     step st (.tick .egress now backlog) = (x.1, x.2.toList) := by
   have ht' : st.shaper.t < st.ticks st.config.egress := by unfold State.ticks; rw [hg.config]; exact ht
@@ -792,11 +792,11 @@ theorem step_live {c : Config} {st : State} (hg : Good c st) {now backlog : Nat}
   rw [done_false hg ht]
   simp only [Bool.false_eq_true, ↓reduceIte, ht', hx]
 
-theorem step_live_fst {c : Config} {st : State} (hg : Good c st) {now backlog : Nat} (ht : st.shaper.t < horizon c)
+theorem step_live_fst {c : Config} {st : State} (hg : Good c st) {now backlog : Nat} (ht : st.shaper.t < gridTicks c)
     (x : State × Array Action) (hx : st.egressTick now backlog = x) : (step st (.tick .egress now backlog)).1 = x.1 := by
   rw [step_live hg ht x hx]
 
-theorem step_live_snd {c : Config} {st : State} (hg : Good c st) {now backlog : Nat} (ht : st.shaper.t < horizon c)
+theorem step_live_snd {c : Config} {st : State} (hg : Good c st) {now backlog : Nat} (ht : st.shaper.t < gridTicks c)
     (x : State × Array Action) (hx : st.egressTick now backlog = x) :
     (step st (.tick .egress now backlog)).2 = x.2.toList := by
   rw [step_live hg ht x hx]
@@ -804,11 +804,11 @@ theorem step_live_snd {c : Config} {st : State} (hg : Good c st) {now backlog : 
 /-- **A live egress tick** is `egressTick`: its state, and its actions. Stated by component: the kernel would unfold
 `egressTick` to compare a pair of its projections with it. -/
 theorem step_egress_fst {c : Config} {st : State} (hg : Good c st) {now backlog : Nat}
-    (ht : st.shaper.t < horizon c) : (step st (.tick .egress now backlog)).1 = (st.egressTick now backlog).1 :=
+    (ht : st.shaper.t < gridTicks c) : (step st (.tick .egress now backlog)).1 = (st.egressTick now backlog).1 :=
   step_live_fst hg ht _ rfl
 
 theorem step_egress_snd {c : Config} {st : State} (hg : Good c st) {now backlog : Nat}
-    (ht : st.shaper.t < horizon c) :
+    (ht : st.shaper.t < gridTicks c) :
     (step st (.tick .egress now backlog)).2 = (st.egressTick now backlog).2.toList :=
   step_live_snd hg ht _ rfl
 
@@ -823,7 +823,7 @@ theorem egress_spec {c : Config} {st : State} (hg : Good c st) (now backlog : Na
 
 /-- **A step other than a live egress tick** is quiet, and its actions are the ingress grid's or the servers'. -/
 theorem step_quiet {c : Config} {st : State} (hg : Good c st) (ev : Event)
-    (hl : ¬ ∃ now backlog, ev = .tick .egress now backlog ∧ st.shaper.t < horizon c) :
+    (hl : ¬ ∃ now backlog, ev = .tick .egress now backlog ∧ st.shaper.t < gridTicks c) :
     Quiet st (step st ev).1 ∧ ∀ a ∈ (step st ev).2, IngressAct c.ingressLink c.ingress a := by
   have hlink : st.bucketer.certifier.link = c.ingressLink := hg.link
   have hin : st.config.ingress = c.ingress := by rw [hg.config]

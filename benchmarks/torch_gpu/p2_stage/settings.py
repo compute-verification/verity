@@ -6,7 +6,8 @@ shell's, and sha512_rows' engine reads its own through sha512_rows' registry.
 """
 from __future__ import annotations
 
-from verity_config.settings import WHERE, Registry, Setting as S
+from verity_config.settings import WHERE, Registry
+from verity_config.settings import Setting as S
 
 REGISTRY = Registry(
     __file__, ("P2_RECEIPTS_",),

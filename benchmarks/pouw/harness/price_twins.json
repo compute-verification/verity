@@ -3998,14 +3998,14 @@
 "gamma": "5273/1466810",
 "kind": "unit",
 "path": "cast-8.72",
-"pin": "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_16384",
+"pin": "Pouw.SecurityProofs.PearlC.GapSm120v1Cast8p72Rev1Cap1000_16384",
 "reading": "forming-credited",
 "shape": 16384,
 "sizing": null,
 "source": "Security/lean-audit.json",
 "statement": "pearl-c-sm120/v1",
 "status": "pinned",
-"type_hash": "b2b1e455ab2dd0e4f891b92cbc0e2be6467e6c3e5a8503dc704a65db43f2929b"
+"type_hash": "a28a309ecce998c877c93ef1b124125d04bf49cf4893b55d671bcbf12a84c6c3"
 },
 {
 "cap": "1/1000",
@@ -4013,14 +4013,14 @@
 "gamma": "205211/55610750",
 "kind": "unit",
 "path": "cast-8.72",
-"pin": "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_8192",
+"pin": "Pouw.SecurityProofs.PearlC.GapSm120v1Cast8p72Rev1Cap1000_8192",
 "reading": "forming-credited",
 "shape": 8192,
 "sizing": null,
 "source": "Security/lean-audit.json",
 "statement": "pearl-c-sm120/v1",
 "status": "pinned",
-"type_hash": "40f4869bd0926f30b0554264e13bf7864cf298ba62fb8a4fec20937a50551b1b"
+"type_hash": "810f473c37879852810191281bf44af2939d933e46c017fffa6f0991c189858e"
 },
 {
 "cap": "1/1000",
@@ -4029,14 +4029,14 @@
 "kind": "unit",
 "layout": "llama31_8b",
 "path": "cast-8.72",
-"pin": "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_llama31_8b",
+"pin": "Pouw.SecurityProofs.PearlC.GapSm120v1Cast8p72Rev1Cap1000_llama31_8b",
 "reading": "forming-credited",
 "shape": null,
 "sizing": null,
 "source": "Security/lean-audit.json",
 "statement": "pearl-c-sm120/v1",
 "status": "pinned",
-"type_hash": "8d81db0f0ffebfe0060d0227d4465640d7725daa49251fd311d9895ede23fefb"
+"type_hash": "1e52422d666bac732a172ccd8171f3ae6e7d9d06e5d8f7934f7addfbc314c513"
 },
 {
 "cap": "1/1000",
@@ -4046,14 +4046,14 @@
 "kind": "unit",
 "n": 28672,
 "path": "cast-8.72",
-"pin": "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n28672k4096",
+"pin": "Pouw.SecurityProofs.PearlC.GapSm120v1Cast8p72Rev1Cap1000_n28672k4096",
 "reading": "forming-credited",
 "shape": null,
 "sizing": null,
 "source": "Security/lean-audit.json",
 "statement": "pearl-c-sm120/v1",
 "status": "pinned",
-"type_hash": "5fdc8142267cec052df4d0c325b509187204a33bab151fbf7b5b5465a969a1fa"
+"type_hash": "55270d93ea1c3b54d49268063802edd693aa174bcd6a15d96315029bef3fdecc"
 },
 {
 "cap": "1/1000",
@@ -4063,14 +4063,14 @@
 "kind": "unit",
 "n": 4096,
 "path": "cast-8.72",
-"pin": "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k14336",
+"pin": "Pouw.SecurityProofs.PearlC.GapSm120v1Cast8p72Rev1Cap1000_n4096k14336",
 "reading": "forming-credited",
 "shape": null,
 "sizing": null,
 "source": "Security/lean-audit.json",
 "statement": "pearl-c-sm120/v1",
 "status": "pinned",
-"type_hash": "822a369c013e0ddc3c8452dc58cdfcd3b06f418aca92d624e0895b6737734434"
+"type_hash": "42509a08544b6dadcaabccb4f7ddd13636f8dd09bda59fa42c66ec7c74ef745c"
 },
 {
 "cap": "1/1000",
@@ -4080,14 +4080,14 @@
 "kind": "unit",
 "n": 4096,
 "path": "cast-8.72",
-"pin": "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n4096k4096",
+"pin": "Pouw.SecurityProofs.PearlC.GapSm120v1Cast8p72Rev1Cap1000_n4096k4096",
 "reading": "forming-credited",
 "shape": null,
 "sizing": null,
 "source": "Security/lean-audit.json",
 "statement": "pearl-c-sm120/v1",
 "status": "pinned",
-"type_hash": "7f170ba21619e2e58830ce59a36760c350337a19aef292a3ba2739179d2b68ae"
+"type_hash": "de7930c867a4af37cfd848d567365b0ce0398dc3be40592360167413a83529b3"
 },
 {
 "cap": "1/1000",
@@ -4097,14 +4097,14 @@
 "kind": "unit",
 "n": 6144,
 "path": "cast-8.72",
-"pin": "Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1Cap1000_n6144k4096",
+"pin": "Pouw.SecurityProofs.PearlC.GapSm120v1Cast8p72Rev1Cap1000_n6144k4096",
 "reading": "forming-credited",
 "shape": null,
 "sizing": null,
 "source": "Security/lean-audit.json",
 "statement": "pearl-c-sm120/v1",
 "status": "pinned",
-"type_hash": "2b14a8e0f8e30bc5ad65b551f62301fcac4e1ca8e641c8c6025132392b1ce93f"
+"type_hash": "1ae0cd36e15869e944bd3f3d12fb60daa98431a27eeb66a99a5d193abcabb2c0"
 },
 {
 "cap": "1/1000",
@@ -4112,14 +4112,14 @@
 "gamma": "1058166877/294158650000",
 "kind": "unit",
 "path": "cast-8.72",
-"pin": "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_16384",
+"pin": "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_16384",
 "reading": "forming-credited",
 "shape": 16384,
 "sizing": null,
 "source": "Security/lean-audit.json",
 "statement": "pearl-c-sm120/v1",
 "status": "pinned",
-"type_hash": "7e72110f6198d2a9f7fffae7b77e8927fb4a8d3ab3a77b9677a6b306b2aae321"
+"type_hash": "c445db421a8ce12c8cd68c88aa96fe2f01df8e42d22a1f87f1d79f0abfb8dd02"
 },
 {
 "cap": "1/1000",
@@ -4127,14 +4127,14 @@
 "gamma": "1648180439/446072750000",
 "kind": "unit",
 "path": "cast-8.72",
-"pin": "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192",
+"pin": "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_8192",
 "reading": "forming-credited",
 "shape": 8192,
 "sizing": null,
 "source": "Security/lean-audit.json",
 "statement": "pearl-c-sm120/v1",
 "status": "pinned",
-"type_hash": "aadbaa10cfa180cdbb5fba09578a3b59990714ffbd9c3f499e12c75fa621f016"
+"type_hash": "b712736eba8aabdcce2e5205aab6635e828f9ffd8f5bcd6bcad8c1d9747bcc26"
 },
 {
 "cap": "1/1000",
@@ -4143,14 +4143,14 @@
 "kind": "unit",
 "layout": "llama31_8b",
 "path": "cast-8.72",
-"pin": "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
+"pin": "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_llama31_8b",
 "reading": "forming-credited",
 "shape": null,
 "sizing": null,
 "source": "Security/lean-audit.json",
 "statement": "pearl-c-sm120/v1",
 "status": "pinned",
-"type_hash": "861bd79cb959ffc3b6e70ef38568165e00d650cc59554d8bcaa509beedfe13d2"
+"type_hash": "0d8987eaa57aa4a499bf0e9db68508ea6ba73221b2a07ba4cb94836856372b5a"
 },
 {
 "cap": "1/1000",
@@ -4160,14 +4160,14 @@
 "kind": "unit",
 "n": 28672,
 "path": "cast-8.72",
-"pin": "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
+"pin": "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_n28672k4096",
 "reading": "forming-credited",
 "shape": null,
 "sizing": null,
 "source": "Security/lean-audit.json",
 "statement": "pearl-c-sm120/v1",
 "status": "pinned",
-"type_hash": "f096948f4b903d5c4660e1f491350cb9e2db42edf7fda3500d47b3963fbb9b09"
+"type_hash": "56897c845d069d5f8d74035e0d3e2ffaaf1dafb61dd4c823eedf688a54e471bc"
 },
 {
 "cap": "1/1000",
@@ -4177,14 +4177,14 @@
 "kind": "unit",
 "n": 4096,
 "path": "cast-8.72",
-"pin": "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
+"pin": "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_n4096k14336",
 "reading": "forming-credited",
 "shape": null,
 "sizing": null,
 "source": "Security/lean-audit.json",
 "statement": "pearl-c-sm120/v1",
 "status": "pinned",
-"type_hash": "6937bdf0a9bf9449e343b9bcd3785f3b07db9696c3628408c334fc5b39498030"
+"type_hash": "dfcf4c800ef84fcc25d5f51bc889a6c79102a57f0ab0926da250e52a0a71f770"
 },
 {
 "cap": "1/1000",
@@ -4194,14 +4194,14 @@
 "kind": "unit",
 "n": 4096,
 "path": "cast-8.72",
-"pin": "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
+"pin": "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_n4096k4096",
 "reading": "forming-credited",
 "shape": null,
 "sizing": null,
 "source": "Security/lean-audit.json",
 "statement": "pearl-c-sm120/v1",
 "status": "pinned",
-"type_hash": "93a262f74183e5520f3429860e137fe6d1a2b49be7f7ca1487b56072a9789b21"
+"type_hash": "105fd5f860322776b66f84619a37038129729c92b311d4522969cfc20b638900"
 },
 {
 "cap": "1/1000",
@@ -4211,14 +4211,14 @@
 "kind": "unit",
 "n": 6144,
 "path": "cast-8.72",
-"pin": "Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
+"pin": "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_n6144k4096",
 "reading": "forming-credited",
 "shape": null,
 "sizing": null,
 "source": "Security/lean-audit.json",
 "statement": "pearl-c-sm120/v1",
 "status": "pinned",
-"type_hash": "3f64e4672e6cd8fdf0cf0eba23e61d191cb5b7f594a7e020221b494727ab49b7"
+"type_hash": "fcb9ef337de66262cc49484ce11b28fb1e2a630df8e77c168b8c68f1cbb94be2"
 },
 {
 "cap": "1/1000",

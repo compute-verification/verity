@@ -20,7 +20,7 @@ versions, the consistency gate. It uses the CUDA primary context through ctypes,
 | `ieee_pin.py`, `ieee_pin.cu` | the gate's numeric pin, and where its pins come from: builds `ieee_pin.cu` with each pinned toolkit and flag set and three negative controls, checks each toolkit's `sass_pins.json` entry is what its builds pin, gates them, runs them under `gpu-lease 1` (rcp and sqrt on all 2^32 inputs, div on 2^32 pairs weighted to subnormals, integer division exhaustively or weighted, every subnormal input against the host too) and writes `ieee-pin.json`; its run is each toolkit's `numeric` |
 | `verify.py` | the verify step, after the lease in the same run: each arm's reference verifier, a replay, on the transcripts its timed code emitted; writes the verifier's commit, its accept line and the transcript (`<run id>:<path> sha256:<hex>`) beside each panel row, and prints `panel.py append`'s arguments. An accepted row is replay-verified (development shortcut; the protocol's check is a ZK proof, PouwCheck) |
 | `ledger.py` | the attempt ledger: `verify.py` writes one `kernel-attempt/v1` record per arm and shape under the run's `ledger/` (the variant, parent, tier, gate version, metrics, step times, γ, the verifier's lines, the hypothesis) and publishes it with `--publish`; `ledger.py publish RUN_DIR` later, `ledger.py outcome ART OUTCOME --reason ...`, and `ledger.py rows`, what `panel.py` reads beside `attempts.jsonl` |
-| `price_twins.py`, `price_twins.json` | γ's Lean-pinned price twins, read from the POUS Project store's pins (`python price_twins.py STORE_ROOT`, or `--repository-only` when only `Security/lean-audit.json` changed): the ledger looks an attempt's γ up at both FP32 prices on the priced path its variant declares, at its cube or its linear (n, k) (`lookup(..., layout=)` for a served layout's), and never takes one typed in |
+| `price_twins.py`, `price_twins.json` | the gap's Lean-pinned price twins, read from the POUS Project store's pins (`python price_twins.py STORE_ROOT`, or `--repository-only` when only `Security/lean-audit.json` changed): the ledger looks an attempt's γ up at both FP32 prices on the priced path its variant declares, at its cube or its linear (n, k) (`lookup(..., layout=)` for a served layout's), and never takes one typed in |
 | `schedule.py`, `report.py`, `shapes.py`, `identity.py`, `fill.py` | the rules as pure functions (tested on CPU in `../tests/test_harness.py`) |
 | `native/` | `libpouw_harness.so`: fills, flushes, events, graphs, cuBLASLt (`lt.cu`), the CUTLASS kernels (`build.sh`, CUTLASS pinned at v4.8.0) and `../nvfp4_sm120/nvf4_plain.cu`'s in the same registry (`cutlass_api.h`; `PH_NO_CUTLASS=1` builds only these); optionally `libpouw_lt2.so`, `lt.cu` alone against a second cuBLASLt |
 
@@ -169,8 +169,8 @@ without `dump` still writes its own transcripts, and its record says the harness
 `--publish` to put the records into the evidence store. The arm's build record names its `variant`
 (`ledger.variant_record`: the sources' digest, the binary's, the priced path) and its `lineage` (parent, approach,
 mechanism tags, hypothesis, panel line and version). A knob that picks code at run time (`PEARLC_A_FORMS`) is part of the
-variant: pass it as `variant_record(..., config={...})`. γ is looked up from `price_twins.json` on the variant's priced path, at
-both FP32 prices, the larger published; a lineage that types γ in gets no record. The records are also declared in the run's
+variant: pass it as `variant_record(..., config={...})`. The gap is looked up from `price_twins.json` on the variant's priced path, at
+both FP32 prices, the larger published; a lineage that types the gap in gets no record. The records are also declared in the run's
 `outputs.json`, so under `research run --on`, whose workload holds no store key, the runner publishes them with the Attempt;
 `ledger.py publish RUN_DIR --by LANE` afterwards only asserts their outcome labels.
 

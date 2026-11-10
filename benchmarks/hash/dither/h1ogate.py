@@ -30,15 +30,20 @@ import statistics
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import torch
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+from verity_config.settings import of  # noqa: E402
+
 import dither_fused as DF  # noqa: E402
 import dither_one as DO  # noqa: E402
-from verity_config.settings import of  # noqa: E402
 
 settings = of(__file__)
 SHAPES = {"self_attn.qkv_proj": (6144, 4096), "self_attn.o_proj": (4096, 4096), "mlp.gate_up_proj": (28672, 4096),
@@ -49,7 +54,7 @@ FORMS = ("split", "block", "warp", "split-cpeel", "block-cpeel", "split2", "bloc
 OCCUPANCY = ("block", "block-cpeel", "split", "split-cpeel", "block2", "block2-cpeel", "split2", "split2-cpeel")  # h1o_occupancy's
 
 
-def model(nl: int, dev) -> None:
+def model(nl: int, dev: torch.device) -> None:
     g = torch.Generator(device=dev).manual_seed(1)
     DF.REG.clear()
     for i in range(nl):
@@ -86,7 +91,7 @@ def step(win: DO.DitherState, xs: list, outs: list) -> None:
     win.after()
 
 
-def gate(form: str, dev) -> tuple:
+def gate(form: str, dev: torch.device) -> tuple:
     os.environ[DO.UNITS_ENV] = form.split("-")[0]
     os.environ[DO.PEEL_ENV] = "1" if form.endswith("-cpeel") else "0"
     win = DO.DitherState(T, os.urandom(64), settings.need("DITHER_H1C"), settings.need(DO.LIB_ENV), True, dev)
@@ -106,7 +111,7 @@ def graphs(win: DO.DitherState, outs: list) -> dict:
     torch.cuda.synchronize()
     out = {}
 
-    def cap(name, fn):
+    def cap(name: str, fn: Callable[[int, int], int]) -> None:
         g = torch.cuda.CUDAGraph()
         with torch.cuda.graph(g):
             st = torch.cuda.current_stream().cuda_stream

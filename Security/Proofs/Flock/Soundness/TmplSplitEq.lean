@@ -30,7 +30,7 @@ namespace FlockSoundness.TmplFold
 
 theorem getD_modify_ne (xs : Array F128) (f : F128 → F128) {i j : ℕ} (h : i ≠ j) :
     (xs.modify i f).getD j 0 = xs.getD j 0 := by
-  simp only [Array.getD_eq_getD_getElem?, Array.getElem?_modify, if_neg h]
+  simp only [Array.getD_eq_getD_getElem?, Array.getElem?_modify, ite_eq_right h]
 
 /-- `fold_val` under an invariant every step keeps. -/
 theorem fold_val_inv {κ δ : Type} [BEq κ] [Hashable κ] (I : δ → Prop) (V : δ → GF128) (step : δ → κ → F128 → δ)
@@ -67,10 +67,10 @@ theorem split_val {pt : FoldPt} {L s : ℕ} (hs : s < 64) (o : Tab) (iv : ℕ �
       obtain ⟨cx, cy, s'⟩ := k
       simp only [hsP]
       by_cases h : s' = s
-      · rw [h, getD_modify d _ (show s < d.size by rw [hd]; exact hs), if_pos rfl, if_pos rfl]
+      · rw [h, getD_modify d _ (show s < d.size by rw [hd]; exact hs), ite_eq_left rfl, ite_eq_left rfl]
         simp only [hiE, hiG, Nat.zero_add, of_add, of_mul]
         ring
-      · rw [getD_modify_ne _ _ h, if_neg h, mul_zero, add_zero])
+      · rw [getD_modify_ne _ _ h, ite_eq_right h, mul_zero, add_zero])
     o.P (Array.replicate 64 0) (by simp)
   obtain ⟨hz2, hv2⟩ := fold_val_inv (fun p : Array F128 => p.size = 64) (fun p => of (p.getD s 0)) stepC
     (fun k v => of v * if k.2 = s then hiE pt L 0 k.1 else 0)
@@ -81,9 +81,9 @@ theorem split_val {pt : FoldPt} {L s : ℕ} (hs : s < 64) (o : Tab) (iv : ℕ �
       obtain ⟨cx, s'⟩ := k
       simp only [hsC]
       by_cases h : s' = s
-      · rw [h, getD_modify d _ (show s < d.size by rw [hd]; exact hs), if_pos rfl, if_pos rfl]
+      · rw [h, getD_modify d _ (show s < d.size by rw [hd]; exact hs), ite_eq_left rfl, ite_eq_left rfl]
         simp only [hiE, Nat.zero_add, of_add, of_mul]
-      · rw [getD_modify_ne _ _ h, if_neg h, mul_zero, add_zero])
+      · rw [getD_modify_ne _ _ h, ite_eq_right h, mul_zero, add_zero])
     o.PC _ hz1
   rw [getElem!_getD _ (by rw [addAt_size, hz2]; exact hs), addAt_get _ _ _ (by rw [hz2]; exact hs), hv2, hv1]
   unfold tabExp
@@ -150,7 +150,8 @@ theorem foldSplit_eq_foldRef_wf {t : Tmpl} {mode : Mode} {lays : Array Lay} {alp
     (hr2 : log2ceil (lays.getD t.root default).size - 6 ≤ r.size) {s : ℕ} (hs : s < 64) :
     of P[s]! = of P''[s]! := by
   have hlay : LayOk t lays :=
-    ⟨fun d i j hi => wf_bound hwf d i j hi, layouts_lanes (layoutM_layouts hL) fun d hd i hi => (wf_call hwf d hd i hi).2⟩
+    ⟨fun d i j hi => wf_bound hwf d i j hi, layouts_lanes (layoutM_layouts hL) fun d hd i hi => (wf_call hwf d hd i hi).2,
+      layouts_defPos (layoutM_layouts hL) (wf_call hwf) (wf_small hwf)⟩
   have hcall : ∀ d i, i < (t.defs.getD d default).calls.size →
       ((t.defs.getD d default).calls.getD i default).def_ < d := fun d i hi => by
     by_cases hd : d < t.defs.size

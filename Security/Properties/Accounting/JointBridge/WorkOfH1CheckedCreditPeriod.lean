@@ -111,7 +111,7 @@ def WorkOfH1CheckedCreditPeriodAt (p : Accounting.Price) (macs : Accounting.Comp
     (∀ ξ w, prob (fun x =>
       (checkedLayer Cd hr hK prm (ws ξ) (opened ξ) (stagedAt (salt ξ) staged) (flatAtCoin hr enc flat)).MovedIn x w) ≤
         δbind) →
-    (∀ ξ, RegisteredBeforeDraw (ws ξ)) → (∀ ξ, DrawIsCoin hK prm (ws ξ)) →
+    (∀ ξ, RegisteredBeforeDraw (ws ξ)) → (∀ ξ, SampleIsCoin hK prm (ws ξ)) →
     (∀ ξ, ServiceSound prm (ws ξ) (opened ξ) (stagedAt (salt ξ) staged) δks) →
     (∀ ξ, SaltIsLiveCoin hr (salt ξ) enc) → StagedPins staged flat →
     (∀ ξ, (Wp ξ).EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G))) →

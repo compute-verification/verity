@@ -26,7 +26,8 @@ from verity_vllm.program.frontend.rules.base import RuleSet
 @dataclass(frozen=True)
 class GraphExport:
     """The fields of a `torch.export.ExportedProgram` that `derive` reads, for a graph no export produced: every placeholder a user
-    input, every output a user output, no constants. A read of any other field fails."""
+    input, every output a user output, and as constants the tensors the graph's `get_attr` nodes read (`make_fx` keeps a tensor the
+    traced function makes from Python data, a table, as an attribute). A read of any other field fails."""
     graph: torch.fx.Graph
     graph_module: torch.fx.GraphModule
     graph_signature: Any
@@ -75,7 +76,9 @@ def graph_export(graph: torch.fx.GraphModule, input_names: Sequence[str] | None 
         return gm(*inputs)
 
     source.__name__ = source.__qualname__ = name or "Graph"
-    return GraphExport(graph=gm.graph, graph_module=gm, graph_signature=sig, constants={}), source
+    constants = {n.target: t for n in gm.graph.nodes if n.op == "get_attr"
+                 if isinstance(t := getattr(gm, n.target, None), torch.Tensor)}
+    return GraphExport(graph=gm.graph, graph_module=gm, graph_signature=sig, constants=constants), source
 
 
 def derive_graph(graph: torch.fx.GraphModule, example_inputs: Sequence[Any], *, mode: str, profile: str | None = None,

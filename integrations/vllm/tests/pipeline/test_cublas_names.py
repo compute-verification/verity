@@ -2,7 +2,8 @@
 stage on a node with a system CUDA maps one cuBLAS, the one the route pin (`driver.cublas_versions`) reads.
 
 Two copies of the C library's zlib stand in for the venv's ``libcublas.so.12`` and a system CUDA's ``libcublas.so``: the loader only
-needs an ELF to map, and ``/proc/self/maps`` names each copy by its path."""
+needs an ELF to map, and ``/proc/self/maps`` names each copy by its path. A row's setup giving its stages the names is
+`test_row_setup`'s."""
 from __future__ import annotations
 
 import ctypes
@@ -11,13 +12,12 @@ import os
 import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 import pytest
 
 from verity_vllm.check.replay.driver import _mapped_library
-from verity_vllm.pipeline.row_driver import Stop, cublas_names
+from verity_vllm.pipeline.row_driver import cublas_names
 
 # a stage process: torch maps the venv's versioned cuBLAS by its path, then flashinfer's autotune loads the unversioned names
 STAGE = """import ctypes, sys
@@ -96,18 +96,3 @@ def test_two_libraries_of_one_name_or_a_foreign_directory_are_refused(tmp_path):
     os.symlink(f"{tmp_path}/cuda-13.1/lib64/libcublas.so", os.path.join(d, "libcublas.so"))
     with pytest.raises(ValueError, match="holds other than"):
         cublas_names(dict(env), py, str(tmp_path))
-
-
-def test_a_rows_stages_get_the_names(tmp_path, monkeypatch, capsys):
-    from tests.pipeline.test_row import _row
-    py, _, lib = _node(tmp_path)
-    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
-    monkeypatch.delenv("TRITON_CACHE_DIR", raising=False)
-    r = _row(tmp_path, "--py", py)
-    r.setup({})
-    d = r.child_env["LD_LIBRARY_PATH"].split(":")[0]
-    assert os.path.dirname(d) == str(tmp_path) and os.path.realpath(os.path.join(d, "libcublas.so")) == os.path.realpath(lib / "libcublas.so.12")
-    shutil.copy(lib / "libcublasLt.so.12", lib / "libcublasLt.so.13")
-    with pytest.raises(Stop) as e:
-        _row(tmp_path, "--py", py).setup({})
-    assert e.value.rc == 3 and "PRECHECK_FAIL_CUBLAS_NAMES" in capsys.readouterr().err

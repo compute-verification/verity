@@ -177,7 +177,7 @@ def create(args: argparse.Namespace) -> None:
         "computeType": "GPU",
         "containerDiskInGb": args.disk,
         "volumeInGb": 0,
-        # 22/tcp always; --expose-port adds raw TCP ports (a live verifier's listen port: lane live-verifier).  RunPod maps
+        # 22/tcp always; --expose-port adds raw TCP ports (a live verifier's listen port).  RunPod maps
         # each to a random public port (`portMappings`, `research pods list`); the pod-side process listens on the inner one.
         "ports": ["22/tcp", *(f"{p}/tcp" for p in (getattr(args, "expose_port", None) or []))],
         "supportPublicIp": True,
@@ -188,7 +188,7 @@ def create(args: argparse.Namespace) -> None:
     if args.min_ram:
         body["minRAMPerGPU"] = args.min_ram
     if args.network_volume:
-        # [E10 NIGHT 2026-09-12] durable storage: the REST field `networkVolumeId` mounts the volume at /workspace (pod disk stays the
+        # durable storage: the REST field `networkVolumeId` mounts the volume at /workspace (pod disk stays the
         # container disk); the pod is then pinned to the volume's data center (create fails by name if no such GPU/CPU is there).
         body["networkVolumeId"] = args.network_volume
         body["volumeMountPath"] = args.volume_mount

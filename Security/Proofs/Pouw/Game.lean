@@ -23,4 +23,4 @@ theorem EndToEnd : Pouw.Guarantees.EndToEnd := Pouw.Proofs.endToEnd
 
 end Pouw.SecurityProofs
 
-theorem Pouw.SecurityProofs.GammaFromTT : Pouw.Guarantees.GammaFromTT := @Pouw.Proofs.gammaFromTT
+theorem Pouw.SecurityProofs.GapFromTT : Pouw.Guarantees.GapFromTT := @Pouw.Proofs.gapFromTT

@@ -40,6 +40,7 @@ untraced = [
 # `benchmarks/pous/p2_v1` and p2_stage's modules: served_bandwidth's session over the toy's P2 store (`bandwidth.py`, which
 # serves it through kernels' staging decode, and the toy), run through bash, which no tracer sees; its party's Lean
 # verifier, `remote-audit-verifier`, which `p2_party` has `lake` build in remote_bandwidth/lean, is under `verity`.
+# `benchmarks/pous/onsite_pieces.sh`: onsite's pieces and cases, which served_verdicts.sh and served_composite.sh source.
 # `integrations/vllm/verity_vllm`, `benchmarks/network_traces`: a5_warden's window, committed as serving commits it, over the
 # cells of a network certifier run its tests drive tick by tick (`test_warden_serve._run`).
 # `examples/h200/interfaces/verity_e2e_demo`: served_verdicts' block record (`block_record`, its schema) and prove_bundle's
@@ -49,7 +50,7 @@ untraced = [
 # serve-openai's endpoint (`integrations/vllm/verity_vllm`) over a stand-in engine; `examples/vllm/serve.sh`: the
 # demo's endpoint (`test_vllm_example`). `benchmarks/spot_proved/stage.py`: its allreduce and cuBLAS GEMM staging on fake captures,
 # and the match gate's a11, which imports a6's `benchmarks/served_units/stage.py` and its circuit-check targets.
-inputs = ["verity", "verity/core/service/sampled_proofs/lakefile.toml", "benchmarks/live_challenger",
+inputs = ["verity", "verity/core/service/spot/lakefile.toml", "benchmarks/live_challenger",
           "benchmarks/spot_proved/stage.py", "benchmarks/served_units/stage.py",
           "tools/verity/circuit_check/src/circuit_check/__init__.py", "tools/verity/circuit_check/src/circuit_check/cache.py",
           "tools/verity/circuit_check/src/circuit_check/entries.py", "tools/verity/circuit_check/src/circuit_check/targets.py",
@@ -63,7 +64,8 @@ inputs = ["verity", "verity/core/service/sampled_proofs/lakefile.toml", "benchma
           "verity/ml/flock/python/verity_flock/input_sets.py",
           "verity/ml/flock/python/verity_flock/subcircuit_templates.py",
           "integrations/vllm/verity_vllm", "benchmarks/network_traces",
-          "benchmarks/pous/p2_v1", "benchmarks/torch_gpu/p2_stage/layout.py", "benchmarks/torch_gpu/p2_stage/stage.py",
+          "benchmarks/pous/p2_v1", "benchmarks/pous/onsite_pieces.sh",
+          "benchmarks/torch_gpu/p2_stage/layout.py", "benchmarks/torch_gpu/p2_stage/stage.py",
           "benchmarks/torch_gpu/p2_stage/full.py", "benchmarks/torch_gpu/p2_stage/gemm.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,

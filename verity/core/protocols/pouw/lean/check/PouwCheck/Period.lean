@@ -17,7 +17,7 @@ windows is credited (`Credit.window`), and a refused window refuses the period. 
 
     {"key": challenger key, "main": [commit, …], "name": period}
 
-the challenger key the verifier pins (`SampledProofs.Challenger.ChallengerKey`), its own copy of main's first-parent
+the challenger key the verifier pins (`Spot.Challenger.ChallengerKey`), its own copy of main's first-parent
 history (newest first) and the name of the period it credits, a string.
 
 **Commitment**, canonical JSON: the auditor's ledger, the list of the lines the challenger signed (`ledgerEntry?`). Its
@@ -126,7 +126,7 @@ def notV5 (nm : String) (i k : Nat) : String :=
 
 def manyStrata (nm : String) (i : Nat) (ks : List Nat) : String :=
   s!"window {i} of period {nm} has units at {ks.length} K's ({Credit.listStr ks}), so its draw is over that many " ++
-  s!"strata, and {GUARANTEE} draws from one tile stratum (TileDrawIsCoin): serve a window's linears at one K"
+  s!"strata, and {GUARANTEE} draws from one tile stratum (TileSampleIsCoin): serve a window's linears at one K"
 
 /-- Why window `i` of period `nm` is a form `GUARANTEE` doesn't cover, read from its evidence alone: a Pearl-C pass,
 a circuit that is not an H1 window, a template over per-unit noise, a J10-R unit over a tile other than

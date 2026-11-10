@@ -163,14 +163,14 @@ theorem foldRoundsC_len (p : LigeritoProof) :
   | k + 1, a, sM, qM, c :: cs, hl, hs => by
       rw [Model.foldRoundsC, show kMsgs p a (k + 1) = kMsg p.messages[a]! :: kMsgs p (a + 1) k by
         simp [kMsgs, List.range'_succ]]
-      have hk : Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!)) := by
+      have hk : Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!)) := by
         unfold Model.drawK
         exact Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawVec c (hs c (by simp)) (by omega)) (Plays.pure _)
           (by simp) (by simp)
       obtain ⟨⟨rs, s'', q'⟩, hrest, hlen⟩ := foldRoundsC_len p k (a + 1)
-        (fun o => (qM o).eval (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!)))
+        (fun o => (qM o).eval (execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!)))
         (fun o => Model.fromMsg (gOf p.messages[a]!.1, gOf p.messages[a]!.2)
-          ((qM o).eval (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!)))) cs (by simpa using hl)
+          ((qM o).eval (execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!)))) cs (by simpa using hl)
         fun c' h => hs c' (by simp [h])
       refine ⟨_, Plays.bind' hk (Plays.bind' (Plays.recv _ (gOf p.messages[a]!.1, gOf p.messages[a]!.2))
         (Plays.bind' hrest (Plays.pure _) (List.append_nil _).symm (List.append_nil _).symm) rfl rfl) (by simp [kMsg])

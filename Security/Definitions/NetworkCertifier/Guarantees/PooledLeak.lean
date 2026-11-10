@@ -52,7 +52,7 @@ statement takes two inputs per window:
   certifier's record are not accepted with the incorrect set `W_i` (`LeakAt`) with probability at most `e'_i`.
 
 From them, every audit accepts while the incorrect sets hold `Fmax ≥ ln(1/δ)/q` units or more, or some window's leak
-relation fails, with probability at most `δ + Σ_i e_i + Σ_i e'_i` (the escapes multiply, `PooledWrongUnitsLe`'s
+relation fails, with probability at most `δ + Σ_i e_i + Σ_i e'_i` (the escapes multiply, `PooledIncorrectBlocksLe`'s
 argument with the escape as the input); and the secrets whose every window meets its relation, with the incorrect sets
 under `Fmax` (`PooledGood`), number at most
 `#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i`, `N = Σ_i n_i` the
@@ -84,7 +84,7 @@ set_option linter.unusedVariables false
 two per-window inputs). Over `m` windows on independent live coins, window `i` registered as `sw i` (partition `Pw i`,
 values `ρ i` at the registered inputs, operator `op i`), with `n i` proof blocks, each committing at most `b` bits; with
 the network certifier running its code by `trusted-host` on schedules in `Ss`, each held by its record format `f`
-(`TapRecord.fits`) and giving connection `c` at most `cap c` cells, its one run giving the cells the client receives
+(`RecordFormat.fits`) and giving connection `c` at most `cap c` cells, its one run giving the cells the client receives
 and its record of them in the format `f`,
 the windows' observations; and a covert sender in the server whose secrets `z ∈ Zs` a decoder recovers from the
 client's cells at the period's coins. For each secret, `acc z i ω x` is window `i`'s audit accepting at its coins `x`
@@ -108,12 +108,12 @@ def PooledLeakAccepted : Prop :=
     (sw : Fin m → AuditStatement) (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool) (op : Fin m → ℕ → List (Obs L K S) → List Bool)
     (n : Fin m → ℕ) (b : ℕ) (hb : ∀ i, ∀ v < n i, faultyBits (sw i).prog (Pw i) {v} ≤ b)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
-    (f : TapRecord Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
-    (run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L K S)))
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p => tapCode f p.1 (arr p.2))
-    (cap : Conn → ℕ) (Ss : Set (WardenSchedule Conn)) (hcap : ∀ s ∈ Ss, ∀ c, s.cells c ≤ cap c)
+    (f : RecordFormat Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
+    (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L K S)))
+    (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
+    (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (hcap : ∀ s ∈ Ss, ∀ c, s.cells c ≤ cap c)
     (hfit : ∀ s ∈ Ss, f.fits s)
-    (Zs : Set Z) (schedOf : Z → (Fin m → Ω) → WardenSchedule Conn) (srvOf : Z → (Fin m → Ω) → Srv)
+    (Zs : Set Z) (schedOf : Z → (Fin m → Ω) → CertifierSchedule Conn) (srvOf : Z → (Fin m → Ω) → Srv)
     (hs : ∀ z ∈ Zs, ∀ ω, schedOf z ω ∈ Ss) (dec : (Fin m → Ω) → (Conn → List (ℕ × CellView Cell)) → Z)
     (hdz : ∀ z ∈ Zs, ∀ ω, dec ω (run tap (schedOf z ω, srvOf z ω)).1 = z)
     (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop)

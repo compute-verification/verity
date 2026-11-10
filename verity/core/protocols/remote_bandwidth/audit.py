@@ -149,7 +149,7 @@ window it joined (the window of the first root received after its append), L = `
 of T in D, so it leaves the credited store within L windows unless the prover appends it again, which gives it a fresh
 index and a fresh coin, and so a fresh bound key.  A carrier of a declared circuit's may work on a block from its coin
 until it leaves, so what the carriers may hold grows with the passes in L windows
-(`Accounting.Guarantees.DeclaredCircuitRequirement`'s `C`): over 30 s of 61 ms passes it is under 8% of the store at
+(`Accounting.Guarantees.RegisteredCircuitRequirement`'s `C`): over 30 s of 61 ms passes it is under 8% of the store at
 both served models' caps (`PROTOCOL.md` §4, "The lifetime cap"), where 60 windows was an hour at the stated window."""
 
 
@@ -1725,17 +1725,17 @@ def pooled(record: Record) -> tuple[float, float]:
 
     Window t draws s_t distinct receipts of its U_t from its own openings coin, released after its roots, so they all
     land on correct ones with probability at most g_t^(s_t), g_t its correct share, however the prover adapted to the
-    windows before.  Over the session (`Accounting.Guarantees.HorizonSampling`, `RateSessionDraw`), every draw lands
+    windows before.  Over the session (`Accounting.Guarantees.PooledSampling`, `RateSessionSample`), every draw lands
     on a correct receipt while Σ_t s_t·g_t ≤ (1 − d̄)·S, S = Σ_t s_t, with probability at most (1 − d̄)^S = δ.  So
     except with δ the wrong shares f_t = 1 − g_t have Σ_t s_t·f_t < d̄·S, and each f_t ≤ 1 − s_t/U_t (its s_t draws
     found s_t correct receipts).  `wrong` is the most Σ_t f_t·U_t those allow, and `floor` the most any f_t is:
     min(1 − s_t/U_t, d̄·S/s_t), about ln(1/δ)/s_t.  The Lean states `wrong` at each window's own U_t, on the deployed
     draw, at δ + Σ_t s_t/2^64 + the PRF advantage of each window's distinguisher, one a window that the session fixes,
-    + the receipts' binding term (`Accounting.Guarantees.Remote.PooledDraw`, `ledger.draw`).
+    + the receipts' binding term (`Accounting.Guarantees.Remote.PooledSample`, `ledger.draw`).
 
     Both are `pooled_bound`'s exact values rounded up: d̄·S from above by a certified rational (`pooled.budget`), and
     `wrong` the greedy over the windows by U_t/s_t falling, which `Properties.RemoteAudit.PooledCovers` proves at least
-    the bound `PooledDraw` reads."""
+    the bound `PooledSample` reads."""
     b = pooled_bound(record)
     return _up(b.wrong), _up(b.floor)
 

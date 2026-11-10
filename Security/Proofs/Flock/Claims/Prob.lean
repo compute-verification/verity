@@ -51,11 +51,11 @@ independent events, and the uniform round guess.
 namespace Claims
 
 theorem Pr_nonneg {α : Type} [Fintype α] (p : α → Prop) : 0 ≤ Pr p := by
-  unfold Pr; positivity
+  unfold Pr Claims.prUniform; positivity
 
 theorem Pr_le_one {α : Type} [Fintype α] [Nonempty α] (p : α → Prop) : Pr p ≤ 1 := by
   classical
-  unfold Pr
+  unfold Pr Claims.prUniform
   rw [div_le_one (by exact_mod_cast Fintype.card_pos)]
   exact_mod_cast Finset.card_filter_le _ _
 
@@ -65,16 +65,16 @@ theorem Pr_congr {α : Type} [Fintype α] {p q : α → Prop} (h : ∀ a, p a �
 
 theorem Pr_mono {α : Type} [Fintype α] {p q : α → Prop} (h : ∀ a, p a → q a) : Pr p ≤ Pr q := by
   classical
-  unfold Pr
+  unfold Pr Claims.prUniform
   refine div_le_div_of_nonneg_right ?_ (by positivity)
   exact_mod_cast Finset.card_le_card fun a ha => by simp only [Finset.mem_filter] at ha ⊢; exact ⟨ha.1, h a ha.2⟩
 
-theorem Pr_false {α : Type} [Fintype α] : Pr (fun _ : α => False) = 0 := by simp [Pr]
+theorem Pr_false {α : Type} [Fintype α] : Pr (fun _ : α => False) = 0 := by simp [Pr, Claims.prUniform]
 
 /-- `Pr` as an average of indicators. -/
 theorem Pr_eq_sum {α : Type} [Fintype α] (p : α → Prop) [DecidablePred p] :
     Pr p = (∑ a, if p a then (1 : ℝ) else 0) / Fintype.card α := by
-  unfold Pr
+  unfold Pr Claims.prUniform
   congr 1
   rw [Finset.sum_boole]
   congr 2

@@ -249,7 +249,9 @@ What is changed:
    ~~~
 
    It is folded into the induced basis's enforced sum (`zk::enforced_extra`). The induced basis itself is unchanged. The
-   identity holds at every position, as an identity of codewords.
+   identity holds at every position, as an identity of codewords. `Enc(c·ybar^r ‖ ybar^r)` is evaluated at the queries alone
+   (`zk::pad_codeword_at`): its message is nonzero on `2 t_pad` entries, so a query's value needs only the transform's last
+   `⌈log₂ t_pad⌉` layers within its block, never the whole length-`2L` codeword (`zk::pad_codeword`, the test's reference).
 5. **Exposed** (padded, §2): the level-0 OOD value, the six lane-round messages and `e^r`. The prover's lane chain becomes
    the two lane-phase rows (§4).
 6. **Level 0's query count and padding.** The padded code is `RS[2L, L + t_pad]`, of rate `ρ' = (L + t_pad)/2L`, and the
@@ -295,7 +297,7 @@ is the minimum.
 
 **Checked:**
 - `zk_veil` test `exact::a_pair_per_rep_hides_the_witness_and_a_shared_pair_does_not`: at toy size (4 witness lanes of 16
-  words, 3 queries per rep, 5 distinct positions), with the protocol's own `lane_codeword`, `pad_codeword`, `ybar` and
+  words, 3 queries per rep, 5 distinct positions), with the protocol's own `lane_codeword`, `pad_codeword_at`, `ybar` and
   `enforced_extra`. For fixed coins the view is F128-linear in the witness and the randomness, and it hides the witness
   exactly when the witness's images lie in the span of the randomness's. Even with all of both `y_1'^r` revealed, the
   per-rep pairs hide it; a shared pair does not, nor does `t_pad` below the distinct opened positions. The verifier's row
@@ -706,18 +708,34 @@ nothing of it answered. The stack chooses neither `m` nor a session, every recor
 
 **Interior commits.** A two-stage audit's interior registration holds values that may follow the auditor's first-stage
 sample, so the service commits it apart (`interior J D₀ N₀ S₀ …`, the commit request's form and body;
-`Salts.interiorAnswer`). Once the request is whole it samples `s` and each leaf's 192-byte salt from the OS, and holds
-the salts by session while it runs, answering them to `salts`; a service started again holds none. The tables' tags and
-the registration's record tag are under the session's own key `SHA-512(k ‖ L' ‖ s)` (`Salts.interiorKey`, `L'` the
-SHA-512 of `verity/zk-server/interior-key/v1\0`), which the release side derives from `k` and the record's session. So
-nothing made under `k` reads a value or a root that may follow the sample: `k` meets the interior only at `s`, sampled
-once the request is whole. The registration is numbered, appended and admitted as any other.
+`Salts.interiorAnswer`), and nothing it answers of it depends on `k`. Once the request is whole it samples from the OS
+`s`, each leaf's 192-byte salt and the session's own 64-byte key `ks`, and holds the salts and `ks` by session while it
+runs, answering the salts to `salts` with an interior table's tag checked under its session's `ks`; a service started
+again holds none. The tables' tags and the registration's record tag are under `ks`. At `register S` the service writes
+`ks` on the registration's `register` event in the ZK server's record (`key`), with `ks`'s tag: SHA-512 under `k` of
+`ks` and the record (`key_tag`, `Salts.keyTagOf`, its label the SHA-512 of
+`verity/zk-server/interior-key-tag/v1\0`). The release side checks the record tag under `ks` only where `ks` is 64 bytes,
+so the tagged message splits into key and record one way, and that tag is the server's
+(`Salts.RegistrationRecord.valid`). So a writer of the record without `k` adds no interior registration the
+loop admits, and a `register` event without a key is checked under `k`, which no interior record's tags are under. The
+registration is numbered, appended and admitted as any other.
+
+**Who reads an interior session's key.** `ks` and its tag are witness, never public. The tag is a MAC under `k`:
+released, it would put bytes that depend on `k` in the auditor's view, which drawing `ks` from the OS keeps out of it.
+`ks` is the key of the session's tags: whoever holds it can forge table refs the service takes as that session's. So
+both live only on the ZK server's record, `record.jsonl` in its state directory. Only the ZK server's own OS user reads
+that record: the value service and the session loop, and the tools the ZK server runs as that user
+(`verity_flock.firewall`). `core-firewall values` makes the state directory that user's alone (mode 0700) before it
+serves, and serves nothing where it can't. No process sends the record to the auditor (§10.5). Of an interior
+registration the auditor may hold the registration's record, its roots and its tags under `ks`, and never `ks` or its
+tag.
 
 The release side admits each registration once, oldest first (the record's rule 5, `Core.Firewall.admitReads`, §10.5). Given the
 key (`core-firewall session --salt-key FILE`; `FC_FIREWALL_SALT_KEY` for `flock-circuit --firewall-state`), every hm96
 tree of a statement's public file must be a table of a registration on the record, at its domain, leaf count, schema and
-root, whose record tag is the server's for its number, session count and table refs (`Salts.readsOf`); a statement that
-isn't is its recursive session's stop, before anything of it reaches the auditor. At its admission a statement admits
+root, whose record tag is the server's for its number, session count and table refs, under `k` or, for an interior
+registration, under its `ks` once `ks`'s tag is the server's (`Salts.readsOf`); a statement that isn't is its recursive
+session's stop, before anything of it reaches the auditor. At its admission a statement admits
 each registration it reads that is not yet admitted, and passes over (`skip`) each older one it doesn't read: a
 registration passed over is never admitted, a statement that reads one is a stop, and each skip is a failure on the
 stream's budget (§10.5). A statement that reads only registrations already admitted admits none. `flock-firewall
@@ -737,10 +755,10 @@ service started again opens a new epoch, in which the session of the one it cut 
 of the service mid-epoch, the ZK server's own act (`zk-server-own-user`), gives a stack one more session for that
 registration.
 
-The tags, the record tags and the count mean what they say only while nothing the stack runs reads the key or the
-epoch: the key file is created its owner's alone, and the service and the loop run under the ZK server's own OS user,
-which no worker and no serving stack shares (`zk-server-own-user`, `Verity.Assumptions.ZkServerOwnUser`; the selftest
-runs them all under one).
+The tags, the record tags and the count mean what they say only while nothing the stack runs reads the key, the epoch or
+the record: the key file is created its owner's alone, the state directory is made so, and the service and the loop run
+under the ZK server's own OS user, which no worker and no serving stack shares (`zk-server-own-user`,
+`Verity.Assumptions.ZkServerOwnUser`; the selftest runs them all under one).
 
 ### 10.3 The rule, inner phase (`rec_live`)
 
@@ -933,9 +951,9 @@ proof files (`FinishIs`, `Loop.finishIs`). The frames refusing every coin fault 
 (`frameUnrefused_ofLoop`), and from it, `FinishIs` and the tables admitting unrefused coins, proved at the deployed
 tables, `FinalRoundEq` follows (`finalRoundEq_ofLoop`). The other bytes it releases the theorem still reads only through
 named hypotheses: the worker's passed rounds and the stand-in rounds are the session's (`LiveRoundEq`, `FillRoundEq`) and
-the inner proof's round 0 is the ZK server's own (`LoopInnerRound0`), and of the tables' side one premise is left: the
-switched round encoding causal at the coins the loop computes at (`SwCausalOn` at `Loop.SwOk`: no zerocheck outer coin
-`1`, which the frames refuse). The rest of it (`Tables`, `Complete`, `DummyReg`, `Causal`, `TapeOK`) is proved at the
+the inner proof's round 0 is the ZK server's own (`LoopInnerRound0`), and of the tables' side the switched round
+encoding causal at the coins the loop computes at (`SwCausalOn` at `Loop.SwOk`: no zerocheck outer coin `1`, which the
+frames refuse) is a premise; the rest of it (`Tables`, `Complete`, `DummyReg`, `Causal`, `TapeOK`) is proved at the
 deployed tables (`Loop.tables_dataE` and its siblings). Until those are proved, the ZK server is not yet proved
 zero-knowledge.
 
@@ -1178,7 +1196,8 @@ connection). The auditor sees every stop:
   `Finish` (below), so the record shows where the session stopped and not how; a rejecting verdict is serve's own;
 - not the ZK server's own record. `record.jsonl` (`verity_flock.firewall`, `firewall/v0`, in the ZK server's state directory)
   stays with the developer, beside the ZK server: it holds more than the auditor's records do (each stop's `why`, every
-  `refused` attempt with its part, every `wait` for the slot). The auditor sees serve's and `rec_live`'s records only.
+  `refused` attempt with its part, every `wait` for the slot, each interior registration's own key, §10.2). The auditor
+  sees serve's and `rec_live`'s records only.
   `firewall.json`, which `rec_live` writes beside each inner session's record, names the recursive session and nothing
   else.
 
@@ -1283,7 +1302,7 @@ outer session of the stream and every open, and `rec_live` closes the next conne
 recursive session the worker abandons, asking for no statement after some release, ends where it stands for the
 challenger (its next proof never comes, `late`), but the ZK server records no stop until a request comes, so its own count
 misses it; the challenger's stream counts it. b is the challenger's stream's `budget` (`Stream(budget=...)`,
-`verity/core/protocols/sampled_proofs/service.py`, bound into the stream's digest), and the two must agree in three
+`verity/core/protocols/spot/service.py`, bound into the stream's digest), and the two must agree in three
 places: the same b, the same stream (one ZK server stream a challenger stream), and one recursive session a proof session
 of the challenger's: one registration's, or the consecutive registrations one `Stream.session` covers (at most the stream's
 `rounds`, at most 4). So each ZK server failure but a skip is a `reject` or `late` there for each round the session

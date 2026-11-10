@@ -117,7 +117,7 @@ theorem fewestBlocks_le {𝓡 : Set Resources} {r : Resources} {k : ℕ} (h : r 
   iInf₂_le_of_le r h (iInf_le _ hk)
 
 /-- Each evaluation is at most its method's worst case. -/
-theorem le_worst (q : Evaluation → ℕ∞) (M : Method) (x ω : M.d.D.Transcript) : q ⟨M, x, ω⟩ ≤ worst q M :=
-  le_iSup₂ (f := fun (x ω : M.d.D.Transcript) => q ⟨M, x, ω⟩) x ω
+theorem le_worst (q : Evaluation → ℕ∞) (M : Method) (x ω : M.d.D.Trace) : q ⟨M, x, ω⟩ ≤ worst q M :=
+  le_iSup₂ (f := fun (x ω : M.d.D.Trace) => q ⟨M, x, ω⟩) x ω
 
 end Verity.Structure

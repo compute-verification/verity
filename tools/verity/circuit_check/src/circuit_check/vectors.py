@@ -8,7 +8,8 @@ ones, all ones but the sign).
 
 Vector ``j < E`` sets every leaf to the ``j``-th edge of its width (all-NaN, all-inf, ...), so a specials rule is hit on every
 operand at once; the random vectors then sample each leaf as an edge word (1 in 4), a word near 1.0 in magnitude (1 in 4,
-floats only: arithmetic in the range serving sees) or a uniform word.
+floats only: arithmetic in the range serving sees) or a uniform word.  ``E`` is as many edges as fit, or fewer when the caller
+keeps room for random vectors (`circuit_check.checks.Options.random_floor`).
 
 A registered table a target reads (`TableProbe`: `tanh_rn` is 2^27 entries) is in no vector: every vector reads the program's
 own table as one `verity.ml.circuits.evaluation.RegisteredTable`, and the probes add vectors that read its first and last entries and the
@@ -74,11 +75,11 @@ def edge_count(params: Sequence[Type]) -> int:
     return max((len(edges(w)) for pt in params for w in set(pt.leaf_widths())), default=0)
 
 
-def vectors(params: Sequence[Type], n: int, seed: int) -> list[np.ndarray]:
+def vectors(params: Sequence[Type], n: int, seed: int, edge: int | None = None) -> list[np.ndarray]:
     """``n`` vectors of the parameters ``params`` in ``evaluate_batch`` layout (one array per parameter, leading batch axis):
-    the all-edge vectors first (as many as fit in ``n``), then random ones."""
+    the all-edge vectors first (``edge`` of them, default as many as fit in ``n``), then random ones."""
     rng = np.random.default_rng(seed)
-    E = min(n, edge_count(params))
+    E = min(n, edge_count(params) if edge is None else edge)
     out = []
     for pt in params:
         widths = np.asarray(pt.leaf_widths())

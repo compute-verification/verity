@@ -31,7 +31,7 @@ from hypothesis import strategies as st
 
 from verity.core.protocols.pouw import verifier as V
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.spot import challenger as Ch
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 

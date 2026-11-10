@@ -27,9 +27,8 @@ INST = hm96.SHA512
 SCHEMAS = ["hm96-sha512/row/v1", "hm96-sha512/row/v2", "hm96-sha512/row-seg/v1"]
 SALT_LABEL = hashlib.sha512(b"verity/zk-server/value-salt/v1\0").digest()
 TAG_LABEL = hashlib.sha512(b"verity/zk-server/value-commitment/v1\0").digest()
-INTERIOR_LABEL = hashlib.sha512(b"verity/zk-server/interior-key/v1\0").digest()
-NOT_THE_SERVERS = "its tag is not the ZK server's for its session, table, domain, leaf count, schema and root"
-NOT_HELD = "an interior session's, whose salts the service holds only while it runs"
+NOT_THE_SERVERS = ("its tag is not the ZK server's for its session, table, domain, leaf count, schema and root "
+                   "(under its key, or an interior session's own while the service that drew it runs)")
 
 
 def _u(i: int) -> bytes:
@@ -39,10 +38,6 @@ def _u(i: int) -> bytes:
 def salt(k: bytes, s: bytes, j: int, i: int) -> bytes:
     pre = k + SALT_LABEL + s + struct.pack(">IQ", j, i)
     return b"".join(hashlib.sha512(pre + bytes([c])).digest() for c in range(3))
-
-
-def interior_key(k: bytes, s: bytes) -> bytes:
-    return hashlib.sha512(k + INTERIOR_LABEL + s).digest()
 
 
 def table_with(ys: list[bytes], tk: bytes, s: bytes, j: int, dom: bytes, schema: str,
@@ -232,10 +227,11 @@ def test_salts_only_for_the_servers_tables(values, tmp_path):
 
 def test_an_interior_commit_holds_its_own_salts(tmp_path):
     """An interior commit's leaves take salts the service drew from the operating system, not ones derived from its key:
-    the salts `salts` answers for its rows make each leaf's `b ‖ c` and the table's root, and its tags are under the
-    session's own key `SHA-512(k ‖ L ‖ s)`, not under `k`. The same digests committed again take other salts, a refs file
-    may name tables of both kinds, and a tag forged in any byte is refused. A service started again on the key holds no
-    earlier interior session's salts, and still answers a commit's."""
+    the salts `salts` answers for its rows make each leaf's `b ‖ c` and the table's root, and its tags are not under `k`
+    (they are under a key the service drew for the session, which the ZK server's record holds:
+    `test_firewall_registrations.py`). The same digests committed again take other salts, a refs file may name tables of
+    both kinds, and a tag forged in any byte is refused. A service started again on the key holds no earlier interior
+    session's key or salts, so it refuses that session's tables, and still answers a commit's."""
     key = tmp_path / "salt.key"
     v = Values(key)
     k = key.read_bytes()
@@ -245,8 +241,9 @@ def test_an_interior_commit_holds_its_own_salts(tmp_path):
     ys = [v.salts(refs(trefs, [(j, i) for i in range(len(xs))])) for j, (_, _, xs) in enumerate(ts)]
     for j, ((dom, sc, xs), g, y) in enumerate(zip(ts, got, ys)):
         per = [y[192 * i:192 * (i + 1)] for i in range(len(xs))]
-        assert len(y) == 192 * len(xs) and g == table_with(per, interior_key(k, s), s, j, dom, sc, xs), j
-        assert g[1] != table_with(per, k, s, j, dom, sc, xs)[1] and all(p != salt(k, s, j, i) for i, p in enumerate(per)), j
+        root, tag, bcs = table_with(per, k, s, j, dom, sc, xs)
+        assert len(y) == 192 * len(xs) and (g[0], g[2]) == (root, bcs), j
+        assert g[1] != tag and all(p != salt(k, s, j, i) for i, p in enumerate(per)), j
     s2, got2 = v.commit(ts, "interior")
     again2 = refs([table_ref(s2, 0, ts[0][0], ts[0][1], 3, got2[0][0], got2[0][1])], [(0, 0), (0, 1), (0, 2)])
     assert s2 != s and v.salts(again2) != ys[0]
@@ -259,7 +256,7 @@ def test_an_interior_commit_holds_its_own_salts(tmp_path):
         assert v.salts(refs([bytes(forged)], [(0, 0)])) == f"table ref 0: {NOT_THE_SERVERS}", at
     v.close()
     again = Values(key)
-    assert again.salts(refs([bref, trefs[0]], [(0, 0)])) == f"table ref 1: {NOT_HELD}"
+    assert again.salts(refs([bref, trefs[0]], [(0, 0)])) == f"table ref 1: {NOT_THE_SERVERS}"
     assert again.salts(refs([bref], [(0, 1)])) == salt(k, b, 0, 1)
     again.close()
 

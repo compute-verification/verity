@@ -60,7 +60,7 @@ structure Gates where
   /-- computing gates before each local gate: `pre[g]` for `g ≤ n` -/
   pre : Array Nat
   /-- every local gate's last reader, whatever its kind (`n` when returned, -1 unread): what a unit commits beyond its
-  computing gates (`SampledProofs.Partition.committedBits`) -/
+  computing gates (`Spot.Partition.committedBits`) -/
   readTo : Array Int := #[]
   deriving Inhabited
 

@@ -35,7 +35,7 @@ class FakeSide:
         return {"lo": self.served, "hi": self.served + 1}
 
 
-def test_registered_serves_until_ready():
+def test_registered_serves_until_ready() -> None:
     side = FakeSide(after=3)
     ready, blocks = dbw.registered(side, side.serve)
     assert ready == {"event": "ready", "t_ns": 5}
@@ -43,7 +43,7 @@ def test_registered_serves_until_ready():
     assert blocks[0] == {"lo": 1, "hi": 2}
 
 
-def test_registered_raises_the_sides_error():
+def test_registered_raises_the_sides_error() -> None:
     side = FakeSide(error="the side exited (3)")
     with pytest.raises(dbw.SideError, match="exited"):
         dbw.registered(side, side.serve)
@@ -74,7 +74,7 @@ def side_doc(i: int, t: int, rows: list[dict]) -> dict:
                       "calibration": {"pass_ns": {"p50": 40 * MS, "max": 90 * MS}}}}
 
 
-def test_report_calibration_rows_are_neither_timed_nor_uncovered():
+def test_report_calibration_rows_are_neither_timed_nor_uncovered() -> None:
     rows: list[dict] = []
     side = side_doc(0, 10 ** 12, rows)
     plain = dbw.report(rows, [side], ["exact", "dither-x"])

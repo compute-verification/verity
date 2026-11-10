@@ -4,7 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkL
 public import Proofs.Flock.Soundness.Discharge.Exec.FlockPublicL
 public import Proofs.Flock.Soundness.E2E
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The end-to-end theorem: a skeleton, every gap a named hypothesis
@@ -33,9 +33,9 @@ the `_hm96` forms state (`Binding/E2E.lean`).
   units' rows are the program's (`Prog.rows`), and `ProgPlaces.placed` says the table's statement holds them.
 
 **The composition.** It composes `flock_batched_count_publicL` and `flock_batched_drawn_publicL`, which are the compiled
-audit, the link theorem and knowledge soundness, all on `main`. Each piece not yet proved is a named hypothesis. The
-checklist `assumption-notes/e2e-checklist.md` gives each one's owner and how it is discharged:
-* `hExec`: the executable verifier's acceptance implies the Lean protocol's. This is the refinement lane's theorem;
+audit, the link theorem and knowledge soundness, all on `main`. Each piece not yet proved is a named hypothesis
+(`ASSUMPTIONS.md`, The headline):
+* `hExec`: the executable verifier's acceptance implies the Lean protocol's. This is the refinement's theorem (`Refine/`);
 * `dp : DerivedPlaces`: each sampled proof block's place in its table, for the rows the verifier derives. For the program's
   circuit it is `ProgPlaces`: `placed`, the table's statement holds the unit's rows (`placement_of_setupH` for the rows
   `Rows.ofNet` reads off setupH's net, and W6, that those are the program's), and `aliased` (`Layout.Aliased`);
@@ -61,7 +61,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 section
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D Sl : Type} [Inhabited D] [Inhabited Sl]
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D Sl : Type} [Inhabited D] [Inhabited Sl]
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
@@ -70,7 +70,7 @@ variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D Sl : Type} 
 /-- **The end-to-end count curve (skeleton).** If `execAccept` holds (an event that implies the Lean protocol's
 acceptance), the probability that at least `K` units of the committed circuit are wrong at the committed values is at
 most `miss_L(K) + ε_ks(σ) + δ_link`. The committed values are 1 on `ones`, 0 on `zeros` and the plurality elsewhere
-(`Xpub`). The gaps are named hypotheses: `hExec`, `dp`, `hConst`, `hZero` and `vb` (`assumption-notes/e2e-checklist.md`);
+(`Xpub`). The gaps are named hypotheses: `hExec`, `dp`, `hConst`, `hZero` and `vb` (`ASSUMPTIONS.md`, The headline);
 `SHA512CRExpected` for `σ`'s link finders (`hCR`) is the assumption of record. -/
 theorem flock_e2e_countL
     {execAccept : Bool × Finset (Fin n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)

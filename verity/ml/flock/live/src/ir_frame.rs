@@ -785,12 +785,8 @@ impl FrameStmt {
             csc_cache: OnceLock::new(),
         };
         let us = 1usize << lay.unit_log;
-        let pad = |rows: &Vec<Vec<usize>>| {
-            let mut r = rows.clone();
-            r.resize(us, Vec::new());
-            SparseBinaryMatrix { num_rows: us, num_cols: us, rows: r.into() }
-        };
-        let (ua, ub): (&'static SparseBinaryMatrix, &'static SparseBinaryMatrix) = (Box::leak(Box::new(pad(&net.a))), Box::leak(Box::new(pad(&net.b))));
+        let (pa, pb) = net.padded(us);
+        let (ua, ub): (&'static SparseBinaryMatrix, &'static SparseBinaryMatrix) = (Box::leak(Box::new(pa)), Box::leak(Box::new(pb)));
         let circuit = FrameCircuit { k_log: kl, comp_slots: lay.comp_slots, unit_log: lay.unit_log, unit_pos0: lay.unit_pos0, units: lay.units,
                                      unit: SparseMatrixCircuit::new(ua, ub), da, db };
         Ok(FrameStmt { lay, net, cm, blocks_real, nbl, m, m_pts: PT_LOCAL + nbl, regions, circuit, r1cs, digest, key, single, run_at, dummy_cv,

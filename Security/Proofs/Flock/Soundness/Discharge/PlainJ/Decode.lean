@@ -99,7 +99,7 @@ variable {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.
 
 -- one proof down the opened statement's decode (`opnPJ`), a bind step per value it reads and `rw` on each
 set_option maxHeartbeats 4000000 in
-/-- **The decoder is right at a plain session of `J` tables** (R11b at `--plain-tables --session-tables J`): given the
+/-- **The decoder is right at a plain session of `J` tables** (the decoder premise at `--plain-tables --session-tables J`): given the
 tags, `wr` the challenger's record and the challenger's samples setting each table up at `mPts` link points, `DecodesOnJ`
 holds at `planPJ` with the decoder `decJ` on each table's two streams, single coins as field elements, no final
 messages, table `j`'s cap from its root `root_B[j]` (`capOfRoot`) and its openings `opnPJ`. -/

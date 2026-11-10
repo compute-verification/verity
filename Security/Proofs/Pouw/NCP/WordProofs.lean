@@ -64,59 +64,59 @@ theorem unit_le [Fintype Ω] (hV : Valid n A) (hNz : NzNCP n X) (u : ℕ) :
 
 /-- **R_word-NCP's bound.** -/
 theorem wordBound : WordBound := by
-  intro Ω _ n X N A γ₀ hγ0 hγ1 hV hNz
+  intro Ω _ n X N A g₀ hg0 hg1 hV hNz
   classical
-  have h1γ : 0 < 1 - γ₀ := by linarith
-  let few := (range N).filter (fun u => (unitCost n A u : ℝ) < (1 - γ₀) * (16 * n u))
-  have hsub : ∀ ω, (cost n N A : ℝ) / (1 - γ₀) < 16 * ∑ u ∈ Word.correctSet n X N A ω, (n u : ℝ) →
+  have h1g : 0 < 1 - g₀ := by linarith
+  let few := (range N).filter (fun u => (unitCost n A u : ℝ) < (1 - g₀) * (16 * n u))
+  have hsub : ∀ ω, (cost n N A : ℝ) / (1 - g₀) < 16 * ∑ u ∈ Word.correctSet n X N A ω, (n u : ℝ) →
       ∃ u ∈ few, Word.Correct n X A ω u := by
     intro ω h
     by_contra hne
     push Not at hne
     refine absurd h (not_lt.2 ?_)
-    have hK : ∀ u ∈ Word.correctSet n X N A ω, 16 * (n u : ℝ) ≤ (unitCost n A u : ℝ) / (1 - γ₀) := by
+    have hK : ∀ u ∈ Word.correctSet n X N A ω, 16 * (n u : ℝ) ≤ (unitCost n A u : ℝ) / (1 - g₀) := by
       intro u hu
       have hu' := mem_filter.1 hu
       have : u ∉ few := fun hf => hne u hf hu'.2
-      have hle : (1 - γ₀) * (16 * n u) ≤ unitCost n A u := by
+      have hle : (1 - g₀) * (16 * n u) ≤ unitCost n A u := by
         by_contra hlt
         exact this (mem_filter.2 ⟨hu'.1, not_le.1 hlt⟩)
-      rw [le_div_iff₀ h1γ]
+      rw [le_div_iff₀ h1g]
       linarith
     calc 16 * ∑ u ∈ Word.correctSet n X N A ω, (n u : ℝ)
         = ∑ u ∈ Word.correctSet n X N A ω, 16 * (n u : ℝ) := by rw [mul_sum]
-      _ ≤ ∑ u ∈ Word.correctSet n X N A ω, (unitCost n A u : ℝ) / (1 - γ₀) := sum_le_sum hK
-      _ ≤ ∑ u ∈ range N, (unitCost n A u : ℝ) / (1 - γ₀) :=
+      _ ≤ ∑ u ∈ Word.correctSet n X N A ω, (unitCost n A u : ℝ) / (1 - g₀) := sum_le_sum hK
+      _ ≤ ∑ u ∈ range N, (unitCost n A u : ℝ) / (1 - g₀) :=
           sum_le_sum_of_subset_of_nonneg (filter_subset _ _) fun _ _ _ => by positivity
-      _ = (cost n N A : ℝ) / (1 - γ₀) := by
+      _ = (cost n N A : ℝ) / (1 - g₀) := by
           unfold cost
           push_cast
           simp only [div_eq_mul_inv]
           rw [← sum_mul]
   calc _ ≤ pr (fun ω => ∃ u ∈ few, Word.Correct n X A ω u) := pr_mono hsub
     _ ≤ ∑ u ∈ few, pr (fun ω => Word.Correct n X A ω u) := pr_exists_le_sum _ _
-    _ ≤ ∑ u ∈ few, (2 : ℝ) ^ (-(γ₀ * n u - identCount n X A u)) := by
+    _ ≤ ∑ u ∈ few, (2 : ℝ) ^ (-(g₀ * n u - identCount n X A u)) := by
         refine sum_le_sum fun u hu => (unit_le n X A hV hNz u).trans (RCopy.half_pow_le_rpow _ _ ?_)
         have hlt := (mem_filter.1 hu).2
         have hc : ((freshSet n A u).card : ℝ) + identCount n X A u + (openSet n X A u).card = n u := by
           exact_mod_cast count n X A u
         have hf : 16 * ((freshSet n A u).card : ℝ) ≤ unitCost n A u := by exact_mod_cast fresh_le n A u
         linarith
-    _ ≤ ∑ u ∈ range N, (2 : ℝ) ^ (-(γ₀ * n u - identCount n X A u)) :=
+    _ ≤ ∑ u ∈ range N, (2 : ℝ) ^ (-(g₀ * n u - identCount n X A u)) :=
         sum_le_sum_of_subset_of_nonneg (filter_subset _ _) fun _ _ _ => by positivity
 
 /-- **The floor.** -/
 theorem wordFloor : WordFloor := by
-  intro Ω _ n X N A γ₀ w c hγ0 hγ1 hV hNz hn hF
-  refine (wordBound Ω n X N A γ₀ hγ0 hγ1 hV hNz).trans ?_
-  calc ∑ u ∈ range N, (2 : ℝ) ^ (-(γ₀ * n u - identCount n X A u))
-      ≤ ∑ _u ∈ range N, (2 : ℝ) ^ (-(c * (γ₀ * w - 1))) := sum_le_sum fun u _ => by
+  intro Ω _ n X N A g₀ w c hg0 hg1 hV hNz hn hF
+  refine (wordBound Ω n X N A g₀ hg0 hg1 hV hNz).trans ?_
+  calc ∑ u ∈ range N, (2 : ℝ) ^ (-(g₀ * n u - identCount n X A u))
+      ≤ ∑ _u ∈ range N, (2 : ℝ) ^ (-(c * (g₀ * w - 1))) := sum_le_sum fun u _ => by
         apply Real.rpow_le_rpow_of_exponent_le (by norm_num)
         have h1 : (identCount n X A u : ℝ) ≤ c := by exact_mod_cast hF u
         rw [hn u]
         push_cast
         linarith
-    _ = N * (2 : ℝ) ^ (-(c * (γ₀ * w - 1))) := by rw [sum_const, card_range, nsmul_eq_mul]
+    _ = N * (2 : ℝ) ^ (-(c * (g₀ * w - 1))) := by rw [sum_const, card_range, nsmul_eq_mul]
 
 theorem target_congr (r : Word.Rule) (p : ℕ) (h : r.Reads p) (x y : ℕ → ℤ) (hxy : ∀ q < p, x q = y q) :
     r.target x = r.target y := by

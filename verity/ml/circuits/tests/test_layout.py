@@ -2,7 +2,7 @@
 walks it (`verity/core/service/flock/Flock/Program.lean`): a gate reading the scan's output is refused by name, and a
 program that holds such a scan without reading it resolves every gate. `Circuit.gates` over any range is `Circuit.gate` of
 each index in it: the same gates, operands and scopes, and the same exception where the range leaves the circuit or a gate
-reads a scan of no iterations."""
+reads a scan of no iterations; its lazy walk (``lazy=True``) is the same again, a lazy reader's operands resolved on demand."""
 from __future__ import annotations
 
 import pytest
@@ -70,6 +70,9 @@ Add = PrimitiveDefinition("TGatesAdd8", 1, (("a", V8), ("b", V8)), V8, lambda a,
 Neg = PrimitiveDefinition("TGatesNeg8", 1, (("a", V8),), V8, lambda a: (-a) & 255, register=False)
 Sum3 = PrimitiveDefinition("TGatesSum3", 1, (("v", Array(3, V8)),), V8, lambda a, b, c: (a + b + c) & 255, register=False)
 Wide = PrimitiveDefinition("TGatesWide", 1, (("i", V8), ("t", Array(N_WIDE, V8))), V8, lambda i, *t: t[i % N_WIDE], register=False)
+#: a narrow gather that reads its operands through `evaluate_lazy`, as an expert GEMM's `GatherE4m3x{E}_v1` does
+Pick = PrimitiveDefinition("TGatesPick", 1, (("i", V8), ("t", Array(5, V8))), V8, lambda i, *t: t[i % 5], register=False)
+Pick.evaluate_lazy = lambda get: get(1 + get(0) % 5)  # type: ignore[attr-defined]
 
 
 def _composite(name: str, params: tuple, ret, body):
@@ -98,10 +101,10 @@ def _every_construct(B, S, x, y, m, z, w):
     return _flat([b0, c1, B.batch(Sum3, m, axes=(1,)), B.batch(Inner3, m, axes=(1,)), B.batch(Inner, x[0:3], x[3:6], axes=(0, 0)),
                   B.batch(Crossed, z, axes=(1,)), B.scan(Step3, c1, xs=[x], shared=[b0[2]])[0],
                   B.scan(Step3, y, shared=[x[2], x[3]], n=2)[1], B.call(Wide, y, w), B.batch(Wide, x[0:2], w, axes=(0, None)),
-                  B.call(Add, sw[0], sw[1])])
+                  B.call(Add, sw[0], sw[1]), B.call(Pick, y, x[1:6]), B.batch(Pick, x[0:2], x[1:6], axes=(0, None))])
 
 
-EVERY = _composite("Every", PARAMS, Array(21, V8), _every_construct)
+EVERY = _composite("Every", PARAMS, Array(24, V8), _every_construct)
 
 
 def _key(g: layout.Gate) -> tuple:
@@ -132,6 +135,50 @@ def test_the_gates_of_any_range_are_the_gates_found_one_by_one():
     for lo, hi in ranges:
         assert _walked(C.gates(lo, hi)) == _walked(C.gate(i) for i in range(lo, hi)), (lo, hi)
     assert _walked(C[0:n]) == _walked(C.gates()) and _walked(C.gates())[1] is None
+
+
+def test_a_lazy_walk_is_the_same_gates_with_a_lazy_readers_operands_resolved_on_demand():
+    """`Circuit.gates(lazy=True)` over any range is the plain walk's gates, operand for operand; a gate whose primitive reads
+    through `evaluate_lazy` holds its operands as `LazyOperands`, which index (from either end, raising past either end what
+    the tuple raises) and iterate as the tuple does, and every other gate holds what the plain walk gives it (a wide gate's
+    `LazyOperands`, a tuple)."""
+    C = Program(EVERY).circuit
+    n = C.size
+
+    def untyped(gates) -> tuple:
+        keys, err = _walked(gates)
+        return [k[:2] + k[3:] for k in keys], err
+
+    plain, lazy = list(C.gates()), list(C.gates(lazy=True))
+    assert untyped(lazy) == untyped(plain)
+    assert {g.prim.id for g in plain if isinstance(g.operands, layout.LazyOperands)} == {Wide.id}
+    assert {g.prim.id for g in lazy if isinstance(g.operands, layout.LazyOperands)} == {Wide.id, Pick.id}
+    assert sum(g.prim is Pick for g in lazy) == 3
+    for g, p in zip(lazy, plain):
+        if g.prim is Pick:
+            ops = g.operands
+            assert len(ops) == 6 and [ops[j] for j in range(-6, 6)] == list(p.operands) * 2 and ops[1:4] == p.operands[1:4]
+            for j in (6, -7):
+                with pytest.raises(IndexError) as lazy_err:
+                    ops[j]
+                with pytest.raises(IndexError) as plain_err:
+                    p.operands[j]
+                assert str(lazy_err.value) == str(plain_err.value)
+    for lo, hi in [(0, n), (n - 12, n), (n - 3, n - 1), (n - 1, n + 1), (-1, 3)]:
+        assert untyped(C.gates(lo, hi, lazy=True)) == untyped(C.gates(lo, hi)), (lo, hi)
+
+
+def test_a_regions_lazy_evaluation_is_its_eager_evaluation():
+    """`evaluate_region` over a `Region` (the lazy walk) writes the trace it writes over the same gates walked eagerly, on
+    inputs that send `Pick`'s readers to every slot."""
+    from verity.ml.circuits.evaluation import evaluate_region
+
+    C = Program(EVERY).circuit
+    inputs = [g.index for g in C.gates() if getattr(g.prim, "family", None) == "Input"]
+    for seed in range(5):
+        t = {g: (37 * g + 11 * seed + 3) & 255 for g in inputs}
+        eager = evaluate_region(C, list(C.gates()), dict(t))
+        assert evaluate_region(C, C[0:C.size], dict(t)) == eager and len(eager) == C.size
 
 
 @pytest.mark.parametrize("kind", ["read", "unread", "passed"])

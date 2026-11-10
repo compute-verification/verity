@@ -40,7 +40,9 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-SLOTS = Path(os.environ.get("LEAN_SLOTS", "/workspace/research/locks/lean-slots"))
+#: where every machine keeps its SLOTS, which LEAN_SLOTS overrides for one process
+SLOTS_PATH = "/workspace/research/locks/lean-slots"
+SLOTS = Path(os.environ.get("LEAN_SLOTS", SLOTS_PATH))
 POLL_S = 20
 #: polls between two listings of the same holders: 3 min
 REPORT_EVERY = 9

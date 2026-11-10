@@ -3,8 +3,9 @@ import Flock
 /-!
 `flock-served CIRCUIT PUBLIC STATEMENT PARTITION PROGRAM`: `flock-verify verify --zk --partition --program`'s work on the
 statement before any session, a step at a time, as `verifyCmd` runs it at one table, one `PHASE {json}` line per step on
-stdout: the circuit file's read, its SHA-512 (what `--archive`'s `archiveGet` holds it to), `Zk.maskLogOf`, the parse
-(`ProvedScope.circuitOf`: `HmOut.parseCommit`, a templated statement's template or a flat statement's netlist), the scope
+stdout: the circuit file's read, its SHA-512 (what `--archive`'s `archiveGetSha` holds it to), `Zk.maskLogOf`, the parse
+(`ProvedScope.circuitOf` at that SHA-512, as `circuitOfKnowing` reads it: `HmOut.parseCommitWith`, a templated
+statement's template or a flat statement's netlist), the scope
 check (`ProvedScope.checkOf`), the port roots (`PortRoots.checkOf`), the knowledge-soundness form (`KsScope.checkOf`, without a
 sample), and the population's setup (`Stmt.setupTablesOf` without a draw, the tables a sampled session's setup derives its
 own from). Each check's verdict is on its line. `flock_served.sh` builds it against the checkout's verifier and runs it on a
@@ -53,7 +54,8 @@ def main (args : List String) : IO UInt32 := do
   report "maskLogOf" t0 [("mask_log", toJson ml)]
   let tags := Zk.tags tags0 ml count
   let t0 ← IO.monoNanosNow
-  let parsed := ProvedScope.circuitOf tags bytes []
+  let hs : Hashes V := Hashes.ofSha512 fun b => if b == bytes then pin else Sha512.hash b
+  let parsed := if tags.hiddenOutputs then HmOut.parseCommitWith hs tags bytes [] else HmRow.parseWith hs tags bytes []
   match parsed with
   | .error e => report "circuitOf" t0 [("error", Json.str e)]; return 1
   | .ok c => report "circuitOf" t0 [("templated", toJson c.tmpl.isSome), ("k_log", toJson c.kLog),

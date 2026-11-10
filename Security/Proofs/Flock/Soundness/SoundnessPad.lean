@@ -4,11 +4,10 @@ public import Proofs.Flock.Soundness.Accounting.PaddedNumbers
 public import Proofs.Flock.Soundness.LigeritoPadLevel0
 public import Proofs.Flock.Soundness.LigeritoPadSound
 public import Proofs.Flock.Soundness.LigeritoPhase
-public import Proofs.Flock.Soundness.LinkSound
+public import Proofs.Flock.Soundness.BindSound
 import Proofs.Flock.Soundness.Accounting.Fast100
 import Proofs.Flock.Soundness.Defs
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.LincheckPhase
 import Proofs.Flock.Soundness.OpeningPhase
 import Proofs.Flock.Soundness.RepSound

@@ -6,12 +6,16 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING, Never
 
 import pytest
 
 DITHER = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(DITHER))
 import numabind  # noqa: E402
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
 
 LEASE = {"GPU_LEASE_UUID": "GPU-4,GPU-5", "CUDA_VISIBLE_DEVICES": "4,5"}
 RUN_CPUS = set(range(120))
@@ -28,18 +32,19 @@ def fake_sys(root: Path, numa_node: str = "1") -> Path:
     return root
 
 
-def plan(root: Path, env=LEASE, affinity=RUN_CPUS, numactl="/usr/bin/numactl", check=lambda prefix: None, bus_id=None,
-         numa_node="1"):
+def plan(root: Path, env: Mapping[str, str] = LEASE, affinity: set[int] = RUN_CPUS,
+         numactl: str | None = "/usr/bin/numactl", check: Callable[[list[str]], str | None] = lambda prefix: None,
+         bus_id: Callable[[str], str] | None = None, numa_node: str = "1") -> tuple[list[str], dict, list[str]]:
     asked = []
 
-    def smi(gpu):
+    def smi(gpu: str) -> str:
         asked.append(gpu)
         return bus_id(gpu) if bus_id else "00000000:EF:00.0"
     prefix, rec = numabind.plan(env, affinity, bus_id=smi, sys_root=fake_sys(root, numa_node), numactl=numactl, check=check)
     return prefix, rec, asked
 
 
-def test_a_run_binds_to_its_gpus_node_on_the_cpus_it_was_given_there(tmp_path):
+def test_a_run_binds_to_its_gpus_node_on_the_cpus_it_was_given_there(tmp_path: Path) -> None:
     prefix, rec, asked = plan(tmp_path)
     assert asked == ["GPU-4"]
     assert prefix == ["/usr/bin/numactl", "--physcpubind=96-119", "--membind=1"]
@@ -49,11 +54,11 @@ def test_a_run_binds_to_its_gpus_node_on_the_cpus_it_was_given_there(tmp_path):
                                   "memory node 1")
 
 
-def test_without_a_lease_uuid_the_gpu_is_cuda_visible_devices_first(tmp_path):
+def test_without_a_lease_uuid_the_gpu_is_cuda_visible_devices_first(tmp_path: Path) -> None:
     assert plan(tmp_path, env={"CUDA_VISIBLE_DEVICES": "4,5"})[2] == ["4"]
 
 
-def gone(gpu):
+def gone(gpu: str) -> Never:
     raise FileNotFoundError("nvidia-smi")
 
 
@@ -66,25 +71,26 @@ def gone(gpu):
     ({"numactl": None}, "no numactl on PATH", 1),
     ({"check": lambda prefix: "set_mempolicy: Invalid argument"}, "numactl refused --physcpubind=96-119 --membind=1", 1),
 ])
-def test_a_run_that_cannot_bind_runs_unbound_and_says_why(tmp_path, case, reason, node):
+def test_a_run_that_cannot_bind_runs_unbound_and_says_why(tmp_path: Path, case: dict, reason: str,
+                                                          node: int | None) -> None:
     prefix, rec, _ = plan(tmp_path, **case)
     assert prefix == [] and rec["bound"] is False and rec["node"] == node
     assert rec["reason"].startswith(reason)
     assert numabind.line(rec).startswith(f"numa: unbound ({reason}")
 
 
-def test_an_unbound_line_names_the_node_it_would_have_bound_to(tmp_path):
+def test_an_unbound_line_names_the_node_it_would_have_bound_to(tmp_path: Path) -> None:
     assert numabind.line(plan(tmp_path, numactl=None)[1]) == ("numa: unbound (no numactl on PATH; GPU GPU-4 at 0000:ef:00.0, "
                                                               "which is on node 1)")
 
 
-def test_cpu_lists_and_bus_ids_read_as_the_kernel_writes_them():
+def test_cpu_lists_and_bus_ids_read_as_the_kernel_writes_them() -> None:
     assert numabind.cpus_of("0-3,8,10-11\n") == {0, 1, 2, 3, 8, 10, 11}
     assert numabind.cpu_list({11, 0, 1, 2, 3, 8, 10}) == "0-3,8,10-11"
     assert numabind.sysfs_bdf("00000000:E5:00.0") == "0000:e5:00.0"
 
 
-def test_the_command_runs_with_the_record_in_its_environment_and_its_exit_code(tmp_path):
+def test_the_command_runs_with_the_record_in_its_environment_and_its_exit_code(tmp_path: Path) -> None:
     rec = tmp_path / "out/numa.json"
     show = "import json, os; print(json.loads(os.environ['DITHER_NUMA_RECORD'])['reason']); raise SystemExit(7)"
     r = subprocess.run([sys.executable, str(DITHER / "numabind.py"), str(rec), sys.executable, "-c", show],

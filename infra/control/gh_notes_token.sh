@@ -1,11 +1,11 @@
 #!/bin/sh
-# Print a GitHub App installation token (INF-133): a JWT signed RS256 with the App's private key (openssl, no Python crypto on the
-# pod), exchanged at GitHub for a 1-hour token scoped to compute-verification/research-notes with contents write (INF-425: the steward reaches the notes without a personal token).
-# Its only output on stdout is the token, for `GH_TOKEN=$(gh_app_token.sh)`. Exit 1, with GitHub's message on stderr, when the
+# Print a GitHub App installation token: a JWT signed RS256 with the App's private key (openssl, no Python crypto on the
+# pod), exchanged at GitHub for a 1-hour token scoped to compute-verification/research-notes with contents write, so the steward reaches the notes without a personal token.
+# Its only output on stdout is the token, for `GH_TOKEN=$(gh_notes_token.sh)`. Exit 1, with GitHub's message on stderr, when the
 # exchange fails.
-#   gh_app_token.sh --cached   the token minted within the last 45 min, else a new one: kept in $GH_APP_CACHE (default
+#   gh_notes_token.sh --cached   the token minted within the last 45 min, else a new one: kept in $GH_APP_CACHE (default
 #                              /dev/shm/verity-drive-notes-token, memory only, root 0600), so a 90-min drive tick never holds one expired
-#   gh_app_token.sh git get    a git credential helper (`credential.helper=!/data/infra/gh_app_token.sh git`): username and the
+#   gh_notes_token.sh git get    a git credential helper (`credential.helper=!/data/infra/gh_notes_token.sh git`): username and the
 #                              --cached token, read when git needs it rather than once a tick; store and erase do nothing
 #   GH_APP_ID (default verity-drive's 5385601), GH_APP_INSTALLATION (173153984), GH_APP_KEY (/data/state/secrets/verity-drive.pem)
 app=${GH_APP_ID:-5385601} inst=${GH_APP_INSTALLATION:-173153984} key=${GH_APP_KEY:-/data/state/secrets/verity-drive.pem}
@@ -36,5 +36,5 @@ curl -sS --max-time 30 -X POST -H "Authorization: Bearer $head.$body.$sig" -H "A
 import json, sys
 d = json.load(sys.stdin)
 if "token" not in d:
-    sys.exit("gh_app_token: GitHub refused: %s" % d.get("message", d))
+    sys.exit("gh_notes_token: GitHub refused: %s" % d.get("message", d))
 print(d["token"])'

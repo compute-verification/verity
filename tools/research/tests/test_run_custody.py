@@ -130,6 +130,28 @@ def test_a_machine_runs_workload_writes_to_out_and_its_record_holds_all_of_it(tm
     assert "out/deep/kept.bin" in {f.path for f in m.payload.files} and not m.meta.get("trimmed")
 
 
+def test_a_run_whose_cwd_is_removed_while_it_runs_still_publishes_its_attempt_and_run_record(tmp_path, monkeypatch):
+    """A `--cwd source` run's shipped tree can be removed under it; the runner then has no working directory at its end, and every
+    step of custody must work without one."""
+    vault = tmp_path / "vault"
+    work = tmp_path / "root" / "src" / ("5" * 40)
+    work.mkdir(parents=True)
+    req, runs = _request(tmp_path, RID, ["sh", "-c", f"rm -rf {work}"], vault)
+    doc = json.loads(req.read_text())
+    doc["cwd"] = str(work)
+    req.write_text(json.dumps(doc))
+    monkeypatch.delenv("RESEARCH_REPO", raising=False)
+    assert remote.launch_request(req)["started"]
+    d = runs / RID
+    marker = _wait_marker(d)
+    assert not work.exists() and not (d / "store_publish_error.json").exists(), (d / "store_publish_error.json").read_text()
+    assert marker["preserved"] is True, marker
+    st2 = _other_machine(tmp_path, vault, monkeypatch)
+    att = st2.get_attempt(RID)
+    assert att["status"]["rc"] == 0 and att["outputs"]["run_record"]
+    assert "stdout.log" in {f.path for f in st2.get_manifest(att["outputs"]["run_record"]).payload.files}
+
+
 def test_a_repair_publish_deletes_a_sent_credential_too(tmp_path, monkeypatch, capsys):
     """A runner killed before it published leaves the run dir as the workload left it; `research data custody --publish` takes its
     record later."""
@@ -149,7 +171,7 @@ def test_a_repair_publish_deletes_a_sent_credential_too(tmp_path, monkeypatch, c
 @pytest.mark.parametrize("shape", ["inputs-is-a-file", "credential-is-a-dir", "inputs-is-a-symlink"])
 def test_a_run_dir_of_any_shape_still_gets_its_record(tmp_path, shape):
     """What a workload leaves at a credential's path is its own: custody deletes only a file there, never through a symlinked inputs/
-    (which `run_files` doesn't follow either), and an odd shape never costs the run its record (red team, #1055 F4)."""
+    (which `run_files` doesn't follow either), and an odd shape never costs the run its record."""
     run = tmp_path / "runs" / "r1"
     run.mkdir(parents=True)
     (run / "stdout.log").write_text("ok\n")
@@ -263,6 +285,35 @@ def test_an_attempt_published_without_a_run_record_is_not_run_custody(tmp_path, 
     assert not rep["preserved"] and "names no run record" in rep["error"] and not (d / CU.MARKER).exists()
 
 
+@pytest.mark.parametrize("signal", ["marker", "launcher-record", "request"])
+def test_attempt_publish_refuses_a_custody_run_and_names_custody_publish_which_then_works(tmp_path, monkeypatch, capsys, signal):
+    """`attempt publish` on a run with run custody would publish its write-once attempt without the run record, after which `custody
+    --publish` refuses it for good; so it refuses, naming the command that publishes both."""
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    runs = tmp_path / "runs"
+    d = _fixture_run(runs)
+    if signal == "marker":
+        (d / CU.MARKER).write_text(json.dumps({"schema": CU.SCHEMA, "preserved": False, "error": "FileNotFoundError"}))
+    elif signal == "launcher-record":
+        (d / CU.LAUNCHER_RECORD).write_text(json.dumps({"machine": "m", "phase": "running", "custody": {"schema": CU.SCHEMA}}))
+    else:
+        req = tmp_path / "root" / "requests" / FIXTURE_RID / "request.json"
+        req.parent.mkdir(parents=True)
+        req.write_text(json.dumps({"run_id": FIXTURE_RID, "custody": {"schema": CU.SCHEMA}}))
+        job = json.loads((d / "job.json").read_text())
+        job["run"]["remote"] = {"machine": "m", "request": str(req)}
+        (d / "job.json").write_text(json.dumps(job))
+    assert data_main(["attempt", "publish", FIXTURE_RID, "--runs-dir", str(runs)]) == 1
+    out = capsys.readouterr().out
+    assert "NOT published" in out and f"research data custody {d} --publish" in out
+    assert LocalStore().get_attempt(FIXTURE_RID) is None
+    assert data_main(["custody", FIXTURE_RID, "--runs-dir", str(runs), "--publish", "--keep-local"]) == 0
+    assert LocalStore().get_attempt(FIXTURE_RID)["outputs"]["run_record"]
+    assert data_main(["attempt", "publish", "--all", "--runs-dir", str(runs / "none")]) == 0, "--all over no custody run is unchanged"
+
+
 def test_a_local_run_with_run_record_preserves_the_files_its_workload_left_in_the_run_dir(tmp_path, monkeypatch):
     """A pod's `research run` (sky/jobs/port-capture.yaml): without --run-record a capture's out/ stayed on the host's disk."""
     vault = tmp_path / "vault"
@@ -361,7 +412,7 @@ def test_custody_is_the_default_with_on_and_opting_out_is_explicit(tmp_path, mon
 
 
 def test_the_store_read_key_reads_only(tmp_path):
-    """INF-70: --store-read gives the workload a key that can fetch from the store and write nothing."""
+    """`--store-read` gives the workload a key that can fetch from the store and write nothing."""
     public, files = CU.mint_reader("2h", environ=dict(PARENT))
     assert set(public["actions"]) == set(CU.READ_ACTIONS) and not {a for a in public["actions"] if "Put" in a or "Upload" in a}
     names = dict(files)
@@ -576,8 +627,8 @@ def _on_host(d: Path, host: tuple[str, str], state: str | None, t: float, **tran
 def test_triage_on_the_machine_tells_a_live_runner_from_a_dead_one_and_a_pods_run_from_a_stale_one(tmp_path):
     """Node 2 runs `research run` as host processes, node 1 in Kubernetes pods. A run still marked running has ended when its runner's
     pid (same start time) is gone from the host that ran it or that host rebooted since, or, when that runner is in another pid
-    namespace, when none of its records changed for 24 h: node 1 had 326 such runs on 3 Oct, preempted before they recorded an end,
-    that nothing published."""
+    namespace, when none of its records changed for 24 h: pods preempted before they record an end leave hundreds of such runs on a
+    node, which nothing would otherwise publish."""
     runs, st = tmp_path / "runs", LocalStore(tmp_path / "s", config_path=tmp_path / "absent.toml")
     me = int(Path("/proc/self/stat").read_text().rsplit(")", 1)[1].split()[19])
     live, dead, pod, stale, starting = (_fixture_run(runs, f"r20260925-01000{i}-aaaa") for i in range(5))
@@ -655,8 +706,8 @@ def test_the_custody_temp_file_a_killed_publish_leaves_is_no_file_of_the_run(tmp
 
 
 def test_a_remote_holding_another_attempt_document_is_a_conflict_that_triage_reports_with_its_repair(tmp_path, monkeypatch, capsys):
-    """3 Oct: r20261003-174723-7ea5's attempt was already on R2 with other bytes, and an attempt key is write-once, so a node's custody
-    Job failed on it every round. A failed `custody --publish` leaves its verdict in .custody (never over a marker that still vouches
+    """An attempt already on R2 with other bytes, under a write-once attempt key, would fail a node's custody Job every round.
+    A failed `custody --publish` leaves its verdict in .custody (never over a marker that still vouches
     for the dir), triage reports the run as `conflict` with the repair, and the repair (reconcile, then --publish) makes it r2."""
     from research.store import attempt as A
     from research.store.local import attempt_key
@@ -742,7 +793,7 @@ def test_publish_force_takes_home_a_run_whose_runner_died_and_another_hosts_only
     """n2_custody.sh publishes a dead run (an OOM-killed scope, a preempted pod) through `research data custody --publish`, which needs
     --force for a status that never became terminal; without it the run is refused, as `attempt publish` refuses it. This host sees
     whether a runner that ran here is gone; a pod's or another machine's it can't, and a pod whose records are quiet for 24 h may
-    still run (#1004's red-team F2), so --force publishes such a run only with --runner-gone, which the caller passes once the run's
+    still run, so --force publishes such a run only with --runner-gone, which the caller passes once the run's
     own host says so, and never one whose runner runs here."""
     cfg = tmp_path / "store.toml"
     cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
@@ -768,8 +819,8 @@ def test_publish_force_takes_home_a_run_whose_runner_died_and_another_hosts_only
 
 
 def test_a_run_published_force_while_it_ran_is_not_r2_once_it_writes_its_end(tmp_path, monkeypatch):
-    """#1004's red-team F2: a pod forced as dead while it still ran ends later; its runner's own publish then returns `already` (an
-    attempt is write-once), and triage called the run r2 though its end, its result and its last logs were only on node 1. An
+    """A pod forced as dead while it still runs ends later; its runner's own publish then returns `already` (an attempt is
+    write-once), and triage must not call the run r2 while its end, its result and its last logs are only on node 1. An
     attempt published --force is r2 only while .custody shows nothing in the run dir changed after its run record was taken."""
     from research.store import attempt as A
 
@@ -824,6 +875,31 @@ def test_a_launch_longer_than_the_default_custody_key_needs_an_explicit_ttl_capp
     assert "over the 24 h cap" in cli._custody_ttl_problem("25h", [])
     assert cli.main(["run", "--on", "vy-nowhere", "--timeout", "30000", "--", "true"]) == 2
     assert "pass --custody-ttl" in capsys.readouterr().err
+
+
+def test_a_run_longer_than_the_custody_cap_takes_a_key_at_the_cap_and_is_told_the_repair(capsys):
+    """network-accounting's 30 h run of record: the refusal told it to pass a ttl past the cap (`--custody-ttl 31h`), which the cap
+    refuses too. A key at the cap is accepted with the repair named, and every refusal names it."""
+    assert cli._custody_ttl_problem("24h", ["--timeout", "108000"]) is None
+    assert "research data custody RUN --publish" in cli._custody_ttl_warning("24h", ["--timeout", "108000"])
+    assert cli._custody_ttl_warning("24h", ["--timeout", "3600"]) is None
+    for ttl in (None, "12h", "34h"):
+        why = cli._custody_ttl_problem(ttl, ["--timeout", "108000"])
+        assert "--custody-ttl 24h" in why and "research data custody RUN --publish" in why and "31h" not in why, why
+    assert "--custody-ttl 24h" in cli._custody_ttl_problem(None, ["--timeout", "84600"]), "never a suggestion past the cap"
+    assert cli.main(["run", "--on", "vy-nowhere", "--timeout", "108000", "--", "true"]) == 2
+    assert "--custody-ttl 24h" in capsys.readouterr().err
+
+
+def test_an_explicit_custody_key_the_run_outlives_is_refused(capsys):
+    """A bare ``--custody-ttl`` is seconds, so ``600`` beside a ``--max-min 180`` launch minted a 10-minute key whose upload
+    would fail hours later; the launch is refused, naming a lifetime that outlasts the run."""
+    why = cli._custody_ttl_problem("600", ["--timeout", "25200"])
+    assert "outlives --custody-ttl 600 (600 s; a bare number is seconds)" in why and "--custody-ttl 8h" in why
+    assert cli._custody_ttl_problem("8h", ["--timeout", "25200"]) is None
+    assert cli._custody_ttl_problem("600", []) is None
+    assert cli.main(["run", "--on", "vy-nowhere", "--custody-ttl", "600", "--timeout", "3600", "--", "true"]) == 2
+    assert "outlives --custody-ttl 600" in capsys.readouterr().err
 
 
 def test_custody_warns_before_pushing_a_run_bigger_than_the_warn_size(tmp_path, monkeypatch):

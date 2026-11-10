@@ -3,6 +3,7 @@ module
 public import Mathlib
 public import Definitions.Accounting.Guarantees.RemoteSketch
 public import Proofs.Accounting.RateAudit.DeployedSketchSum
+import Proofs.Pous.Prob
 
 /-!
 # The receipts' sketch bound, derived: the proof
@@ -260,7 +261,7 @@ theorem pr_pass_le {C : ℕ}
 theorem pr_eq_sum_div_fst {X Y : Type} [Fintype X] [Fintype Y] (Q : X × Y → Prop) :
     pr Q = (∑ x, pr fun y => Q (x, y)) / Fintype.card X := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   have e : (Finset.univ.filter Q).card = ∑ x, (Finset.univ.filter fun y => Q (x, y)).card := by
     rw [Finset.card_filter, Fintype.sum_prod_type]
     simp only [Finset.card_filter]
@@ -366,7 +367,7 @@ open Bandwidth (pr_exists_le pr_mono)
 private theorem pouw_pr_mono {α : Type} [Fintype α] {E F : α → Prop} (h : ∀ x, E x → F x) :
     Pouw.pr E ≤ Pouw.pr F := by
   classical
-  unfold Pouw.pr
+  unfold Pouw.pr Claims.Pr Claims.prUniform
   refine div_le_div_of_nonneg_right ?_ (Nat.cast_nonneg _)
   have hsub : (Finset.univ.filter E) ⊆ Finset.univ.filter F := fun x hx => by
     simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hx ⊢
@@ -424,7 +425,7 @@ theorem SketchBoundSession : Accounting.Guarantees.Remote.SketchBoundSession := 
         ∃ j : Fin P, ∃ c, Miss (A.devAt (A.coins ω) j c) ((A.coins ω).2.2 j c) (A.coins ω).2.1) =
       (pr (fun ω : Outcome β Hs N m =>
         ∃ j : Fin P, ∃ c, Miss (A.devAt (A.coins ω) j c) ((A.coins ω).2.2 j c) (A.coins ω).2.1)).toReal := by
-    unfold Pouw.pr Pous.pr
+    unfold Pouw.pr Claims.Pr Claims.prUniform; simp only [Pous.pr_eq_card]
     rw [ENNReal.toReal_div]
     simp
   unfold SketchBound Trace.Holds

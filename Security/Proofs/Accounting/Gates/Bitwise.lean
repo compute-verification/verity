@@ -849,14 +849,14 @@ def slotOf (F : Field) (k j : ℕ) : Slot :=
   else .tweak 1 (j - (k + 1) * F.bytes)
 
 /-- The coin inputs on sample `d`: each slot's byte. -/
-def xd (F : Field) (k : ℕ) (d : Draw k) (s : Slot) : ℤ := s.value F d (fun _ => 0)
+def xd (F : Field) (k : ℕ) (d : Sample k) (s : Slot) : ℤ := s.value F d (fun _ => 0)
 
 lemma byte_le (N l : ℕ) : byte N l ≤ 255 := by
   have := Nat.mod_lt (N / 256 ^ l) (show 256 > 0 by norm_num)
   unfold byte
   omega
 
-lemma xd_range (F : Field) (k : ℕ) (d : Draw k) (s : Slot) : 0 ≤ xd F k d s ∧ xd F k d s ≤ 255 := by
+lemma xd_range (F : Field) (k : ℕ) (d : Sample k) (s : Slot) : 0 ≤ xd F k d s ∧ xd F k d s ≤ 255 := by
   have hb : ∀ N l, ((byte N l : ℕ) : ℤ) ≤ 255 := fun N l => by exact_mod_cast byte_le N l
   cases s with
   | payload i l => dsimp only [xd, Slot.value]; exact ⟨by positivity, hb _ _⟩
@@ -916,7 +916,7 @@ lemma sum_bytes (N : ℕ) : ∀ m, ∑ l ∈ Finset.range m, 256 ^ l * byte N l 
     unfold byte
     ring
 
-lemma decN_eq (F : Field) (k : ℕ) (d : Draw k) (base : ℕ) (hb : base + F.bytes ≤ NN F k) :
+lemma decN_eq (F : Field) (k : ℕ) (d : Sample k) (base : ℕ) (hb : base + F.bytes ≤ NN F k) :
     decN F (asg (C0 (NN F k) (slotOf F k)) (wire (NN F k)) (xd F k d)) base =
       ∑ l ∈ Finset.range F.bytes, 256 ^ l * (xd F k d (slotOf F k (base + l))).toNat := by
   unfold decN
@@ -948,10 +948,10 @@ lemma slotOf_tweak (F : Field) (k l : ℕ) (hl : l < F.bytes) :
     ite_eq_right (show ¬ (k + 1) * F.bytes + l < (k + 1) * F.bytes by omega),
     show (k + 1) * F.bytes + l - (k + 1) * F.bytes = l by omega]
 
-lemma key_decode (F : Field) (k : ℕ) (d : Draw k) (hd : d ∈ draws F k) (hn : F.n = 8 * F.bytes) :
+lemma key_decode (F : Field) (k : ℕ) (d : Sample k) (hd : d ∈ samples F k) (hn : F.n = 8 * F.bytes) :
     keyOf F k (asg (C0 (NN F k) (slotOf F k)) (wire (NN F k)) (xd F k d)) = d.key ∧
       tauOf F k (asg (C0 (NN F k) (slotOf F k)) (wire (NN F k)) (xd F k d)) = d.2.2 := by
-  unfold draws at hd
+  unfold samples at hd
   rw [Finset.mem_product, Fintype.mem_piFinset, Finset.mem_product, Finset.mem_range, Finset.mem_Ico] at hd
   obtain ⟨hc, hK, hτ1, hτ⟩ := hd
   have hpn : F.p ≤ 2 ^ F.n := Nat.sub_le _ _
@@ -960,7 +960,7 @@ lemma key_decode (F : Field) (k : ℕ) (d : Draw k) (hd : d ∈ draws F k) (hn :
   have hsum : ∀ N, N < 256 ^ F.bytes → ∑ l ∈ Finset.range F.bytes, 256 ^ l * byte N l = N := fun N hN => by
     rw [sum_bytes, Nat.mod_eq_of_lt hN]
   refine ⟨?_, ?_⟩
-  · unfold keyOf Draw.key
+  · unfold keyOf Sample.key
     congr 1
     · congr 1
       funext r
@@ -986,7 +986,7 @@ lemma key_decode (F : Field) (k : ℕ) (d : Draw k) (hd : d ∈ draws F k) (hn :
     refine Finset.sum_congr rfl fun l hl => ?_
     rw [Finset.mem_range] at hl
     rw [slotOf_tweak F k l hl]
-    dsimp only [xd, Slot.value, Draw.tweak]
+    dsimp only [xd, Slot.value, Sample.tweak]
     rw [mul_one, Nat.mod_eq_of_lt hτ]
     simp
 
@@ -1052,21 +1052,21 @@ theorem EncodeChainRefuted : Accounting.Guarantees.Gates.EncodeChainRefuted := b
     unfold GoodG at this
     rw [hop] at this
     exact this.elim
-  have hci : CodecInputs F (C0 (NN F k) (slotOf F k) ++ Et) (draws F k) (fun _ => 0) (xd F k) := by
+  have hci : CodecInputs F (C0 (NN F k) (slotOf F k) ++ Et) (samples F k) (fun _ => 0) (xd F k) := by
     refine ⟨fun i ⟨g, hg, hop⟩ => ?_, fun i _ => Or.inl ⟨i, fun d _ => rfl⟩⟩
     have := hgood g hg
     unfold GoodG at this
     rw [hop] at this
     exact absurd this.1 (by decide)
-  have hd0 : ((fun _ => 0, 0, 1) : Draw k) ∈ draws F k := by
-    unfold draws
+  have hd0 : ((fun _ => 0, 0, 1) : Sample k) ∈ samples F k := by
+    unfold samples
     rw [Finset.mem_product, Fintype.mem_piFinset, Finset.mem_product]
     exact ⟨fun _ => Finset.mem_range.2 (show 0 < F.p by omega), Finset.mem_range.2 (Nat.two_pow_pos _),
       Finset.mem_Ico.2 ⟨le_rfl, show 1 < F.p by omega⟩⟩
-  have hcard : 0 < (draws F k).card := Finset.card_pos.mpr ⟨_, hd0⟩
+  have hcard : 0 < (samples F k).card := Finset.card_pos.mpr ⟨_, hd0⟩
   have hcw : ComputesWords F k (C0 (NN F k) (slotOf F k) ++ Et) (xd F k) (fun _ => 0)
       (List.range (72 * NN F k + 1)) (fun i l => rs.getD (i * F.bytes + l) 0) εnum εden := by
-    refine ⟨draws F k, Finset.Subset.refl _, Nat.mul_lt_mul_of_pos_right hεlt hcard, fun d hd => ⟨?_, ?_⟩⟩
+    refine ⟨samples F k, Finset.Subset.refl _, Nat.mul_lt_mul_of_pos_right hεlt hcard, fun d hd => ⟨?_, ?_⟩⟩
     · exact declared_of_good _ _ hgood (xd_range F k d)
     · intro i hi l hl
       rw [List.mem_range] at hi

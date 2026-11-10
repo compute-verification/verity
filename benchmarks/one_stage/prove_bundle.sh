@@ -3,10 +3,11 @@
 # window PB_WINDOW; without PB_WINDOW, the registered fixture tests/fixtures/bundle-window (BUNDLE_WINDOW: a W8A8 MLP's window
 # under a test key, its tampered twin and the H200 interfaces' bundle of four sampled proof blocks under the window's registered
 # subset:4, a fixture's sample), fetched by `research data fetch-fixtures`.
-# Each sampled member is proved by Flock `prove --zk` (CPU) behind the Lean ZK server, one outer proof at a time, and
-# decided by Lean `verify --zk`. The negatives are the first session's one-bit proof edits, refused by Lean, and the
-# member of PB_TAMPERED (with the fixture, its tampered twin unless PB_TAMPERED= is given empty), stopped by the ZK server
-# and refused by Lean without it. PB_LIVE=1 requires the bundle's sample to be live, with its receipt.
+# Each sampled member is proved by Flock `prove --zk` (CPU), as SPOT[Flock]'s proof server proves it, one outer proof at a
+# time, and decided by Lean `verify --zk`. The negatives are the first session's one-bit proof edits, refused by Lean, and
+# the member of PB_TAMPERED (with the fixture, its tampered twin unless PB_TAMPERED= is given empty), refused by Lean.
+# ZK_SERVER=1 runs every prover behind the Lean ZK server instead (prove_bundle.py --firewall, the core protocols' path),
+# which must also stop the tampered member. PB_LIVE=1 requires the bundle's sample to be live, with its receipt.
 #   bash benchmarks/one_stage/prove_bundle.sh [PB_BUNDLE=F PB_WINDOW=DIR [PB_TAMPERED=DIR]] [PB_MEMBERS=N] [PB_FLIPS=1] [PB_BINARIES=DIR] [PB_BUILD_ONLY=1]
 #   (a job run from a clone of the tree)
 # PB_BUILD_ONLY=1 builds the three binaries, keeps them in $OUT/bin with the stamp of the trees they're built from
@@ -51,6 +52,7 @@ else
   FWL=${LEAN%/*}/flock-firewall
 fi
 sha256sum "$BIN" "$LEAN" "$FWL" | tee "$O/binaries.sha256" | tee -a "$O/job.log"
+ZKS=(); if [ "${ZK_SERVER:-0}" = 1 ]; then ZKS=(--firewall "$FWL"); fi
 if [ "${PB_BUILD_ONLY:-0}" = 1 ]; then
   mkdir -p "$O/bin" && cp "$BIN" "$LEAN" "$FWL" "$O/bin/" && echo "$STAMP" > "$O/bin/stamp" || exit 9
   log "build only: $O/bin, stamp $STAMP"
@@ -71,7 +73,7 @@ fi
 
 log "prove: the bundle's drawn members, then the negatives"
 "$PY" benchmarks/one_stage/prove_bundle.py --bundle "$BUNDLE" --window "$WINDOW" ${TAMPERED:+--tampered "$TAMPERED"} \
-  --bin "$BIN" --lean "$LEAN" --firewall "$FWL" --out "$W/pb" ${PB_MEMBERS:+--members $PB_MEMBERS} ${PB_LIVE:+--live} ${PB_FLIPS:+--flips $PB_FLIPS} \
+  --bin "$BIN" --lean "$LEAN" "${ZKS[@]}" --out "$W/pb" ${PB_MEMBERS:+--members $PB_MEMBERS} ${PB_LIVE:+--live} ${PB_FLIPS:+--flips $PB_FLIPS} \
   > "$O/prove_bundle.log" 2> "$O/prove_bundle.err"
 rc=$?
 grep '^PROVEBUNDLE' "$O/prove_bundle.log" | tee -a "$O/job.log"

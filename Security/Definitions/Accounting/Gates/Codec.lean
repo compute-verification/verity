@@ -16,7 +16,7 @@ circuit of the model (`Model.lean`) computing its words is:
   `x ← σ_K(x)` when `r ≥ 1` and `x ← ρ((x + c_r + t) mod p)`. Word `i`'s tweak is `t_i = τ·i mod p` (an unbound block,
   `b = 0`; word `i` of block `j` is `i = 32j + w` at p1024).
 * **Samples.** A key is sampled after the circuit is declared: its round constants `c_r ∈ [0, p)`, its mask `K ∈ [0, 2^n)`
-  and its tweak multiplier `τ ∈ [1, p)`, uniform (`draws`): the codec's seed expanded by an ideal XOF.
+  and its tweak multiplier `τ ∈ [1, p)`, uniform (`samples`): the codec's seed expanded by an ideal XOF.
 * **Inputs** (`CodecInputs`), by their binding. A registered input is bound before the sample, so it is one value on
   every sample: a byte of the payload `m`, or anything else fixed then. A coin input is a byte of the sample (a round
   constant's, the mask's, a word's tweak) or one value on every sample: a live verifier coin of another audit (a noise
@@ -81,17 +81,17 @@ def encodeWord (p : ℕ) (K : Key) (t m : ℕ) : ℕ :=
 def lessParity (y : ℕ) : ℕ := y / 2 * 2
 
 /-- A sample of a `k`-round key: its round constants, its mask and its tweak multiplier. -/
-abbrev Draw (k : ℕ) := (Fin k → ℕ) × ℕ × ℕ
+abbrev Sample (k : ℕ) := (Fin k → ℕ) × ℕ × ℕ
 
 /-- The samples, uniform: `c_r ∈ [0, p)`, `K ∈ [0, 2^n)`, `τ ∈ [1, p)`. -/
-def draws (F : Field) (k : ℕ) : Finset (Draw k) :=
+def samples (F : Field) (k : ℕ) : Finset (Sample k) :=
   Fintype.piFinset (fun _ => Finset.range F.p) ×ˢ (Finset.range (2 ^ F.n) ×ˢ Finset.Ico 1 F.p)
 
 /-- A sample's key. -/
-def Draw.key {k : ℕ} (d : Draw k) : Key := ⟨List.ofFn d.1, d.2.1⟩
+def Sample.key {k : ℕ} (d : Sample k) : Key := ⟨List.ofFn d.1, d.2.1⟩
 
 /-- Word `i`'s tweak under a sample, `τ·i mod p`. -/
-def Draw.tweak {k : ℕ} (F : Field) (d : Draw k) (i : ℕ) : ℕ := d.2.2 * i % F.p
+def Sample.tweak {k : ℕ} (F : Field) (d : Sample k) (i : ℕ) : ℕ := d.2.2 * i % F.p
 
 /-- A registered input's canonical slot: a byte of a payload word, of a round constant, of the mask, or of a word's
 tweak. -/
@@ -102,7 +102,7 @@ inductive Slot
   | tweak (i l : ℕ)
 
 /-- A slot's value under a sample, for payload `m`. -/
-def Slot.value {k : ℕ} (F : Field) (d : Draw k) (m : ℕ → ℕ) : Slot → ℤ
+def Slot.value {k : ℕ} (F : Field) (d : Sample k) (m : ℕ → ℕ) : Slot → ℤ
   | .payload i l => byte (m i) l
   | .const r l => if h : r < k then byte (d.1 ⟨r, h⟩) l else 0
   | .mask l => byte d.2.1 l
@@ -113,23 +113,23 @@ variable {ι : Type} {k : ℕ}
 /-- The codec's inputs over samples `D`, by binding: a registered input is one value on every sample (a payload byte, or
 anything fixed before the sample); a coin input is a canonical slot's byte on every sample, or one value on every sample (a
 coin independent of the sample). -/
-def CodecInputs (F : Field) (C : IntDag ι) (D : Finset (Draw k)) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) : Prop :=
+def CodecInputs (F : Field) (C : IntDag ι) (D : Finset (Sample k)) (m : ℕ → ℕ) (x : Sample k → ι → ℤ) : Prop :=
   (∀ i, (∃ g ∈ C, g.op = .input .registered i) → ∀ d ∈ D, ∀ d' ∈ D, x d i = x d' i) ∧
     ∀ i, (∃ g ∈ C, g.op = .input .coin i) →
       (∃ s : Slot, ∀ d ∈ D, x d i = s.value F d m) ∨ ∀ d ∈ D, ∀ d' ∈ D, x d i = x d' i
 
 /-- On sample `d`, `C`'s inputs and budgeted gates but gathers hold their declared intervals and its outputs `out i l`
 hold the bytes of words `words`' encodings, less their parity. -/
-def Encodes (F : Field) (C : IntDag ι) (x : Draw k → ι → ℤ) (m : ℕ → ℕ) (words : List ℕ) (out : ℕ → ℕ → ℕ)
-    (d : Draw k) : Prop :=
+def Encodes (F : Field) (C : IntDag ι) (x : Sample k → ι → ℤ) (m : ℕ → ℕ) (words : List ℕ) (out : ℕ → ℕ → ℕ)
+    (d : Sample k) : Prop :=
   DeclaredHold C (x d) ∧
     ∀ i ∈ words, ∀ l < F.bytes,
       val C (x d) (out i l) = byte (lessParity (encodeWord F.p d.key (d.tweak F i) (m i))) l
 
 /-- `C` computes words `words` on more than `ε = εnum/εden` of the samples: on a set `good` of samples that large. -/
-def ComputesWords (F : Field) (k : ℕ) (C : IntDag ι) (x : Draw k → ι → ℤ) (m : ℕ → ℕ) (words : List ℕ)
+def ComputesWords (F : Field) (k : ℕ) (C : IntDag ι) (x : Sample k → ι → ℤ) (m : ℕ → ℕ) (words : List ℕ)
     (out : ℕ → ℕ → ℕ) (εnum εden : ℕ) : Prop :=
-  ∃ good ⊆ draws F k, MoreThan (draws F k) good εnum εden ∧ ∀ d ∈ good, Encodes F C x m words out d
+  ∃ good ⊆ samples F k, MoreThan (samples F k) good εnum εden ∧ ∀ d ∈ good, Encodes F C x m words out d
 
 /-- A circuit of the chain's restricted class: its window proven, and at most `B` operand bits a budgeted gate. -/
 def Restricted (B : ℕ) (C : IntDag ι) : Prop := Proven C ∧ OperandBits B C
@@ -138,9 +138,9 @@ def Restricted (B : ℕ) (C : IntDag ι) : Prop := Proven C ∧ OperandBits B C
 bits that compute `q` distinct words (each below `p`) of the codec's encoding, less parity, on more than `ε` of the
 samples, from the payload and whatever they registered before the sample. -/
 def encodeCosts (F : Field) (k B εnum εden q : ℕ) : Set ℕ :=
-  {c | ∃ (ι : Type) (C : IntDag ι) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
+  {c | ∃ (ι : Type) (C : IntDag ι) (m : ℕ → ℕ) (x : Sample k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
     words.length = q ∧ words.Nodup ∧ (∀ i ∈ words, i < F.p) ∧ Restricted B C ∧ runBits C = 0 ∧
-      CodecInputs F C (draws F k) m x ∧ ComputesWords F k C x m words out εnum εden ∧ nonlinear C = c}
+      CodecInputs F C (samples F k) m x ∧ ComputesWords F k C x m words out εnum εden ∧ nonlinear C = c}
 
 /-- **The encode cost**: the fewest nonlinear units of any circuit of `encodeCosts`, and `⊤` when there is none (6a's
 `encodeBitsCost` at the words its bits fill). -/
@@ -160,8 +160,8 @@ less their parity, on more than `ε = εnum/εden` of the samples (`ComputesWord
 that is `q ≤ nonlinear C / E + runBits C / (n − 1)`: each word costs `E` nonlinear units, or `n − 1` bits of run
 input (the word itself, sent after the sample). What the encode budget reads; `Assumptions.ChainSum` concludes it. -/
 def EncodeBound (F : Field) (k B E εnum εden : ℕ) : Prop :=
-  ∀ {ι : Type} (C : IntDag ι) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
-    Restricted B C → CodecInputs F C (draws F k) m x → words.Nodup → (∀ i ∈ words, i < F.p) →
+  ∀ {ι : Type} (C : IntDag ι) (m : ℕ → ℕ) (x : Sample k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
+    Restricted B C → CodecInputs F C (samples F k) m x → words.Nodup → (∀ i ∈ words, i < F.p) →
     ComputesWords F k C x m words out εnum εden →
     words.length * E * (F.n - 1) ≤ nonlinear C * (F.n - 1) + runBits C * E
 

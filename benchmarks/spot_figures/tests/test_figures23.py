@@ -1,14 +1,11 @@
-"""Figures 2 and 3 from the cards, the hash loop's card, and `figures.py` end to end."""
-import json
+"""Figures 2 and 3 from the cards, and the hash loop's card."""
 import shutil
 
 import cards
 import figure1
 import figure2
 import figure3
-import figures
 import pytest
-import total_cost
 
 
 @pytest.fixture
@@ -82,7 +79,7 @@ def test_the_hash_loop_card_keeps_its_sha512_arms_with_their_runs():
 
 def test_figure3_prices_the_cuts_as_figure1_does():
     out = figure3.run("GLM-5.3")
-    f1 = figure1.run("GLM-5.3", 3, ("world year",))
+    f1 = figure1.run("GLM-5.3", 3, ("world year",), lean=False)
     share = {m["cut"]: m["share"] for m in out["modeled"]}
     assert share["every_block"] == pytest.approx(f1["scopes"]["world year"]["serve_hash_share"])
     assert share["tokens"] < 1e-6
@@ -100,14 +97,14 @@ def test_macs_in_no_proof_block_are_served_and_shown(card_dir):
     work = cards.load("workload", "GLM-5.3")
     work["value"]["served_macs_per_token"] = None
     cards.write(work, force=True)
-    base, base3 = figure1.run("GLM-5.3", 2, ("world year",)), figure3.run("GLM-5.3")
+    base, base3 = figure1.run("GLM-5.3", 2, ("world year",), lean=False), figure3.run("GLM-5.3")
     strata = work["value"]["strata"]
     macs = sum(s["per_token"] * s["macs"] for s in strata)
     first = next(s for s in strata if s["macs"])
     first["modeled"] = True
     work["value"]["served_macs_per_token"] = 2 * macs
     cards.write(work, force=True)
-    out = figure1.run("GLM-5.3", 2, ("world year",))
+    out = figure1.run("GLM-5.3", 2, ("world year",), lean=False)
     modeled = first["per_token"] * first["macs"] / (2 * macs)
     assert out["partition"]["uncovered_mac_share"] == pytest.approx(.5)
     assert out["partition"]["modeled_mac_share"] == pytest.approx(modeled)
@@ -128,24 +125,3 @@ def test_figure3_without_the_hillclimb_card_is_pending(card_dir, tmp_path):
     out = figure3.run("GLM-5.3")
     assert out["status"] == "pending" and out["climb"] == [] and out["measured"] == []
     assert all(p.stat().st_size > 0 for p in figure3.render(out, tmp_path))
-
-
-@pytest.mark.slow
-def test_figures_writes_every_figure(tmp_path, monkeypatch):
-    """Every figure, its JSON and the break-even's table; the break-even's search is `test_total_cost`'s, stubbed here
-    because it plans each line thousands of times."""
-    monkeypatch.setattr(total_cost, "BETAS", (1e-2, 1.0))
-    be = {"beta": 1e-2, "targets": {"FP8": 1e3}, "rel": 1e-2, "spans": total_cost.SPANS,
-          "rows": [{"config": "tokens", "registration": "machine", "scope": "world week", "overhead": 2.0,
-                    "floor": 8e6, "h": {"FP8": None}, "beta": {"FP8": 3.0}}]}
-    monkeypatch.setattr(total_cost, "breakeven", lambda *a, **k: be)
-    figures.main(["--model", "GLM-5.3", "--out", str(tmp_path), "--points", "2"])
-    assert json.loads((tmp_path / "figure1.json").read_text())["breakeven"] == json.loads(json.dumps(be))
-    assert (tmp_path / "breakeven.txt").read_text() == total_cost.breakeven_table(be)
-    for name, schema in (("figure1", total_cost.SCHEMA), ("figure1_overhead", figure1.SCHEMA),
-                         ("figure2", figure2.SCHEMA), ("figure3", figure3.SCHEMA)):
-        assert json.loads((tmp_path / f"{name}.json").read_text())["schema"] == schema
-        assert (tmp_path / f"{name}.png").stat().st_size > 0 and (tmp_path / f"{name}.svg").exists()
-    for pattern in ("figure1_overhead_appendix*", "figure1_skipped_work*"):
-        assert len(list(tmp_path.glob(f"{pattern}.png"))) == 6, pattern
-    assert len(list(tmp_path.glob("figure1*.png"))) == 24

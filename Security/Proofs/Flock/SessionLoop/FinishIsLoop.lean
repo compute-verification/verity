@@ -71,7 +71,7 @@ switched values causal at `Loop.SwOk`'s coins, the `Finish` the loop runs is the
 theorem finishIsOn (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
     (hL0 : _root_.Flock.Guarantees.LoopInnerRound0 Masked.dataE L₀ (realOf src) x w) (hSrc : Loop.Src L₀ src x w)
-    (hE : LeanRelease.LiveRoundEq finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
+    (hE : LeanRelease.LiveRoundEqOwn finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
     (hc : finS.SwCausalOn (Loop.SwOk Masked.dataE) vs) :
     LeanRelease.FinishIs finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w :=
   finishIs_of_ret vs L₀ src wk x w hsc hR hServe hL0 hSrc hE hc
@@ -86,7 +86,7 @@ theorem finishIs (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Re
     (hE : LeanRelease.LiveRoundEq finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
     (hc : finS.SwCausal vs) :
     LeanRelease.FinishIs finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w :=
-  finishIsOn vs L₀ src wk x w hsc hR hServe hL0 hSrc hE (finS.swCausalOn_of_swCausal vs _ hc)
+  finishIsOn vs L₀ src wk x w hsc hR hServe hL0 hSrc hE.own (finS.swCausalOn_of_swCausal vs _ hc)
 
 end Loop
 

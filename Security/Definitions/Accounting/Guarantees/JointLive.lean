@@ -23,8 +23,8 @@ the probability that some subprotocol accepts while its claim fails is at most t
   certifier);
 * `JointPeriodLiveECR`: the same in the one adversary form (`PeriodLive.error`) with `ecr/sha-512` asked of each finder, so the
   bound is numbers;
-* `JointHorizonLive`: `m` periods read off one game's run, each over its own circuit;
-* `JointHorizonBlocksLive`: `B` server-time blocks read off one game's run, with the wipe that opens each block
+* `JointPooledLive`: `m` periods read off one game's run, each over its own circuit;
+* `JointPooledBlocksLive`: `B` server-time blocks read off one game's run, with the wipe that opens each block
   (`Verity.Wipe`), read on the run through a map of the run into the wipe's game at its boundary (`Verity.Wipe.OfRun`),
   and each block's memory term on the run.
 
@@ -82,7 +82,7 @@ after the coins of the periods before it, so a period may adapt to them), whose 
 guarantees over `G`, period `j`'s at certificates `c j` and errors `err j`, each a function of the strategy: at every
 strategy `s`, the probability that some subprotocol of some period accepts while its claim fails is at most
 `∑_j ∑_a err_{j,a}(s)`. -/
-def JointHorizonLive : Prop :=
+def JointPooledLive : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (m : ℕ) (C : Fin m → Verity.Circuit) (O : Type) (G : Verity.Game O)
     (r : (j : Fin m) → PeriodLive d α (C j) G) (c : Fin m → Certificates)
     (err : Fin m → Audit → Verity.Game.Strategy G → ℝ≥0∞),
@@ -123,7 +123,7 @@ $$\sum_b \sum_a \mathrm{err}_{b,a}(s) + \sum_b \varepsilon_{\mathrm{Wipe},b}(s) 
 the wipe's coins meets it at every strategy (`Verity.Wipe.OfRun.drawn_preserves`); a run whose foreign content is the
 prover's, a function of what came before the boundary, does not. The state a block carries across a wipe (the KV cache,
 committed before the wipe and re-read after it) is outside the integrity bound. -/
-def JointHorizonBlocksLive : Prop :=
+def JointPooledBlocksLive : Prop :=
   ∀ (ι α : Type) [Fintype ι] [Fintype α] (d : Device ι) (B : ℕ) (C : Fin B → Verity.Circuit) (O : Type)
     (G : Verity.Game O) (S : BlocksLive d α B C G) (c : Fin B → Certificates) (σ : Fin B → ℝ)
     (err : Fin B → Audit → Verity.Game.Strategy G → ℝ≥0∞) (δPous : Fin B → Verity.Game.Strategy G → ℝ≥0∞)

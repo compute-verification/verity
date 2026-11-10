@@ -1,5 +1,5 @@
 """`research cpu-hold`: a queued CPU run on node 2 gets whole cores of its share of its own, claimed under a lock its run holds, and
-waits in a line while none are free. Node 2's queued runs all had all of 48-95, 34 at once at load 1000 (19 Oct). The topology
+waits in a line while none are free, rather than every queued run having all of 48-95, dozens at once. The topology
 is files under tmp_path, laid out as node 2's (adjacent SMT pairs); waits run on an injected sleep."""
 from __future__ import annotations
 
@@ -113,7 +113,7 @@ def test_the_oldest_live_waiter_goes_first_and_a_dead_ones_ticket_is_dropped(nod
 
 
 def test_a_higher_class_goes_ahead_of_older_waiters_and_an_unranked_waiter_agrees_on_who_is_first(node):
-    """Drive's gates waited behind 25 lane jobs queued before them on node 2 (INF-147). The line is by class, then oldest; a
+    """Drive's gates must not wait behind the lane jobs queued before them on node 2. The line is by class, then oldest; a
     default-class ticket keeps the unranked name, so a waiter whose cpu-hold predates ranks (line[0] by name) sees the same line."""
     d, root = node
     names = [cores.ticket_name(r, ns, w) for r, ns, w in [(0, 5, "old"), (150, 9, "gate"), (100, 7, "capture"), (100, 8, "capture2"),

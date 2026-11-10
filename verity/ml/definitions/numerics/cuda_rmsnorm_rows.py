@@ -90,7 +90,7 @@ def rms_norm_rows(x, w, eps: float, block: int) -> dict[str, np.ndarray]:
 
 
 def fused_add_rms_norm_rows(x, res, w, eps: float, block: int) -> dict[str, np.ndarray]:
-    """Every word of ``RMSNormFusedCudaVector8_v1{N, EPS, BLOCK}`` over rows."""
+    """Every word of ``RMSNormFusedCudaVector8_v1{N, EPS, BLOCK}`` (and of v3, the same words) over rows."""
     x, res, w = _bf16(x), _bf16(res), _bf16(w)
     if x.ndim != 2 or res.shape != x.shape or w.shape != (x.shape[1],):
         raise ValueError(f"x {x.shape}, res {res.shape}, w {w.shape}")
@@ -173,15 +173,24 @@ class _RMSNormFusedCudaVector8Twin(_RMSNormCudaVector8Twin):
                 cls._rand_bf16(rng, N, wk).astype(np.uint64)]
 
 
+class _RMSNormFusedCudaVector8BatchedTwin(_RMSNormFusedCudaVector8Twin):
+    twin_id = "rmsnorm.fused_cuda.vector8.v3"
+    base_id = "RMSNormFusedCudaVector8_v3"
+    covers = ("RMSNormFusedCudaVector8_v3{N,EPS,BLOCK}: RMSNormFusedCudaVector8_v1's words, its sum of squares as batches in "
+              "v1's f32 order.")
+
+
 def twin_families(twin_base, rand_bf16, random_kinds: tuple[str, ...]) -> dict:
     """Twin classes for these rows, completed with the shared twin harness."""
     attrs = {"_rand_bf16": staticmethod(rand_bf16), "_random_kinds": random_kinds}
     pure = type("RMSNormCudaVector8Twin", (_RMSNormCudaVector8Twin, twin_base), attrs)
     fused = type("RMSNormFusedCudaVector8Twin", (_RMSNormFusedCudaVector8Twin, twin_base), attrs)
-    return {pure.base_id: pure, fused.base_id: fused}
+    batched = type("RMSNormFusedCudaVector8BatchedTwin", (_RMSNormFusedCudaVector8BatchedTwin, twin_base), attrs)
+    return {pure.base_id: pure, fused.base_id: fused, batched.base_id: batched}
 
 
 TWIN_DEFINITIONS = {
     "RMSNormCudaVector8_v1": C.RMSNormCudaVector8,
-    "RMSNormFusedCudaVector8_v1": C.RMSNormFusedCudaVector8,
+    "RMSNormFusedCudaVector8_v1": C.RMSNormFusedCudaVector8V1,
+    "RMSNormFusedCudaVector8_v3": C.RMSNormFusedCudaVector8,
 }

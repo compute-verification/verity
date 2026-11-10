@@ -60,11 +60,11 @@ def round? (s : Json) : Option Nat :=
   | _, _, _, _, _ => none
 
 /-- A known value's port of a `--registered` file (`live_reads.reads_file`'s `known`): the value `v`'s rows `rows` (each
-with its salt), a row/v2 value of 16-bit leaves of `words` words under `SampledProofs.Registered.domainAt` of `program`
+with its salt), a row/v2 value of 16-bit leaves of `words` words under `Spot.Registered.domainAt` of `program`
 binding the window's open root `window`, read at each row of `rowsRead` by unit `s` alone, one port a row. -/
 def knownPorts (program window v : String) (rows : Array (Array Nat × ByteArray)) (words s : Nat)
     (rowsRead : List Nat) : R (List Json) := do
-  let d ← (SampledProofs.Registered.domainAt program v words rows.size 16 (some window)).mapError fun why =>
+  let d ← (Spot.Registered.domainAt program v words rows.size 16 (some window)).mapError fun why =>
     (LIVE, why)
   let root ← knownRoot program window v rows words
   pure (rowsRead.map fun row => Json.mkObj [("value", Json.str v), ("root", Json.str root),
@@ -93,9 +93,9 @@ def readsFile (program pre window session : String) (t steps s m : Nat) (roots :
     (maxTokens : List Nat) : R Json := do
   let (sv, rv) := (s!"{pre}{SLOTS}@{s}", s!"{pre}{REQUESTS}@0")
   let reads := fun (row : Nat) => Json.arr ((List.replicate s Json.null ++ [toJson row]).toArray)
-  let sd ← (SampledProofs.Registered.domainAt program sv SLOT_WORDS t 16 (some window)).mapError fun why =>
+  let sd ← (Spot.Registered.domainAt program sv SLOT_WORDS t 16 (some window)).mapError fun why =>
     (LIVE, why)
-  let rd ← (SampledProofs.Registered.domainBound program rv HEADER_WORDS t 16 "session" session).mapError fun why =>
+  let rd ← (Spot.Registered.domainBound program rv HEADER_WORDS t 16 "session" session).mapError fun why =>
     (LIVE, why)
   let port := fun (v : String) (words : Nat) (d : ByteArray) (schema : String) (row : Nat) =>
     Json.mkObj [("value", Json.str v), ("root", Json.str ((roots.lookup v).getD "")), ("leaves", toJson t),

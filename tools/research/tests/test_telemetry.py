@@ -390,7 +390,7 @@ def test_shared_scope_attribution_tolerates_the_round_offset_between_cgroup_and_
     assert att["tree_gone"] == [100] and att["outsiders_gone"] == [] and att["largest_before"]["pid"] == 100
 
 
-# ---- rev M-1748 d1-d8 ---------------------------------------------------------------------------------------------------------------------
+# ---- the classifier's rules d1-d8 ---------------------------------------------------------------------------------------------------------
 
 def test_d1_checker_fail_with_rc_0_is_workload_check_failed_not_success(tmp_path):
     d = _attempt(tmp_path, rc=0, sig=None, samples=[])
@@ -518,11 +518,11 @@ def test_d6_deferred_hash_records_identity_at_launch_and_completes_at_preserve(t
     assert job.hash_inputs(tmp_path)[0]["stat_changed_since_launch"] is True
 
 
-# ---- R18 infra regressions (ported from veritor r18-int-3) -------------------------------------------------------------------------------------
+# ---- tele run: the event CLI, the sampler's import root, timeouts, leftovers and memory caps ---------------------------------------------------
 
 def test_event_accepts_kv_positionals_after_options_on_every_python(tmp_path):
-    """[r18-int-2, arch M-0025] run_row.sh writes `tele event ... submitted --stage S row=.. role=..`; 3.11 parse_args rejected the k=v
-    tail ('unrecognized arguments') and the event was silently lost to telemetry_errors.log; parse_intermixed_args takes it everywhere."""
+    """run_row.sh writes `tele event ... submitted --stage S row=.. role=..`; 3.11 parse_args rejects the k=v tail ('unrecognized
+    arguments'), which would lose the event silently to telemetry_errors.log; parse_intermixed_args takes it everywhere."""
     env = dict(os.environ, PYTHONPATH=str(PKG_ROOT))
     r = subprocess.run([sys.executable, "-m", "research.telemetry", "event", "--attempt-dir", str(tmp_path), "--proc", "run_row", "submitted",
                         "--stage", "build,match", "row=r1", "role=B0"], capture_output=True, text=True, env=env, cwd=str(tmp_path))
@@ -534,8 +534,8 @@ def test_event_accepts_kv_positionals_after_options_on_every_python(tmp_path):
 
 
 def test_tele_run_launched_through_the_script_starts_a_sampler_that_finds_the_package(tmp_path):
-    """[r18-int-2, F-r18-infra-1] r18-int-1 canary: `zk/campaign/tele run ...` -> sampler.log '/usr/bin/python3: No module named telemetry',
-    no resources.jsonl.  The launcher below is that script's shape: the import root goes on sys.path IN-PROCESS only, the environment
+    """A `tele run ...` launched through a script must not leave sampler.log reading '/usr/bin/python3: No module named telemetry'
+    and no resources.jsonl.  The launcher below is that script's shape: the import root goes on sys.path IN-PROCESS only, the environment
     carries no PYTHONPATH and the cwd is elsewhere.  The sidecar (`python -m research.telemetry sample`, a new process) must still
     resolve the same package -- run._tele_env() puts `src/` (parents[2] of research/telemetry/run.py) on the child's PYTHONPATH.
 
@@ -583,8 +583,8 @@ SETS_TIMEOUT = ("import sys; from research.telemetry.run import set_timeout; set
 
 
 def test_tele_run_reads_a_timeout_change_from_the_control_file_and_records_it(tmp_path, monkeypatch):
-    """[r19-int-8, F-r19-int-8] Seven R19 rows were launched with --timeout sized on Build alone; tele run held the value in memory and
-    would have SIGTERMed healthy Match/Commit stages.  `tele set-timeout` writes control/timeout_s; the run loop re-reads it (mtime/size
+    """A row launched with --timeout sized on Build alone would have its healthy Match/Commit stages SIGTERMed if tele run held the
+    value in memory.  `tele set-timeout` writes control/timeout_s; the run loop re-reads it (mtime/size
     change), emits a `timeout_changed` mark carrying old/new/actor/reason and updates status.json.  The stage clock stands at 0 until
     status.json carries the new value, then reads 30 s: past a 1 s launch timeout raised to 60 s (the workload is released and finishes
     with rc 0, no timeout marker), and past a 60 s launch timeout lowered to 0.5 s (the ordinary timeout cancel-intent names the NEW
@@ -666,8 +666,8 @@ def test_tele_run_kills_what_is_left_of_the_workloads_group_once_its_leader_exit
 
 
 def test_a_run_on_a_machine_that_caps_sessions_needs_a_cap_of_its_own(tmp_path):
-    """On node 1 (8 Oct 01:59Z) and cpu-1 (06:00Z) user-1001.slice sat at its MemoryMax, logind failed to create 266 login session
-    scopes, and those logins' runs went on in ssh.service, which has no per-run cap. The machine's session-.scope.d MemoryMax is the
+    """When user-1001.slice sits at its MemoryMax, logind fails to create login session scopes, and those logins' runs go on in
+    ssh.service, which has no per-run cap. The machine's session-.scope.d MemoryMax is the
     cap a run expects; a run with no finite memory.max, or in a service's cgroup, has none of its own. A machine without the drop-in
     asks nothing."""
     from research.telemetry.cgroup import session_cap, uncapped
@@ -908,7 +908,7 @@ def test_v1_kill_counter_that_did_not_move_vetoes_the_failcnt_fallback(tmp_path,
     assert "log.killed" in [e["kind"] for e in doc["evidence"]]
 
 
-# ---- the sampler's PSS rounds (network accounting's friction note, 3 Oct: a 100 GB process's smaps_rollup read slowed its engine) ------------
+# ---- the sampler's PSS rounds (reading a 100 GB process's smaps_rollup slows its engine) ------------------------------------------------------
 
 GB = 10 ** 9
 
@@ -1111,8 +1111,8 @@ def test_a_namespace_with_a_portion_from_another_tree_is_a_mismatch(tmp_path):
 
 
 def test_a_cancel_also_signals_the_runs_workers_that_left_its_group_but_never_the_runner(tmp_path, monkeypatch):
-    """INF-48/INF-53: circuit_check's pool (17 Oct 11:21Z, cpu-2) and vLLM's TP workers (vy-glm53-eu2) setsid out of the workload's
-    group and outlived `research cancel`; they still carry the run's RESEARCH_RUN_DIR."""
+    """circuit_check's pool and vLLM's TP workers setsid out of the workload's group, so the group's signal alone would leave them
+    running past `research cancel`; they still carry the run's RESEARCH_RUN_DIR."""
     from research.telemetry import cancel
     d = _attempt(tmp_path, rc=None, sig=None, samples=[], pid=100)
     want = str(d.resolve())
@@ -1137,7 +1137,7 @@ def test_a_cancel_also_signals_the_runs_workers_that_left_its_group_but_never_th
     assert result["strays_total"] == 1 and result["strays"][0]["pid"] == 300 and result["strays_signalled"] == 1
 
 
-# ---- the run's cgroup scope: what research cancel and a stage timeout end (INF-93) -------------------------------------------------------
+# ---- the run's cgroup scope: what research cancel and a stage timeout end -----------------------------------------------------------------
 
 B = 5_000_000                       # past any pid_max, so no fake pid is this test's own
 RID = "r20261019-002224-7f15"
@@ -1223,8 +1223,8 @@ def _running(d: Path, *, runner: int, pgid: int, start: int = 7) -> None:
 
 
 def _vllm_world(tmp_path, **kw):
-    """vy-glm53-eu, 19 Oct 01:20Z: a queued run's runner and sampler in its queue scope, its workload under gpu-lease (the leader) whose
-    scope holds vLLM's engine and eight TP rank workers that setsid and were reparented to systemd --user, their environment unreadable;
+    """A queued run's runner and sampler in its queue scope, its workload under gpu-lease (the leader) whose scope holds vLLM's
+    engine and eight TP rank workers that setsid and are reparented to systemd --user, their environment unreadable;
     beside it another run's process and a system daemon."""
     rd = str(tmp_path / RID)
     py = ["python3", "-c", "..."]
@@ -1392,8 +1392,8 @@ def test_the_runner_ends_what_a_cancel_left_once_its_grace_is_over_and_records_i
 
 # ---- who ends a cancelled run: control/cancel, claimed once by the cancel (its request) or by the runner (closed) -----------------------
 
-#: The workload: a child that calls setsid itself and ignores SIGTERM, as the vllm.build stages under GNU `timeout` did (each in a
-#: process group of its own; vy-glm53-cpu-2, 20 Oct 06:12Z), writes its pid to the gate argv[1]; the workload waits on it.
+#: The workload: a child that calls setsid itself and ignores SIGTERM, as the vllm.build stages under GNU `timeout` do (each in a
+#: process group of its own), writes its pid to the gate argv[1]; the workload waits on it.
 SETSID_CHILD = """
 import subprocess, sys
 subprocess.Popen([sys.executable, "-c", "import os, signal, sys; os.setsid(); signal.signal(signal.SIGTERM, signal.SIG_IGN); "

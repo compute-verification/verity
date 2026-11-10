@@ -61,9 +61,9 @@ theorem dot_correct (H : Unit → Unit) (s : Unit) (u : Fin 1) :
 theorem dot_totalWref : totalWref acceptAll dot.layout = 1 := by
   simp [totalWref, acceptAll, dot]
 
-theorem dot_certified : (0 : ℝ) < (1 - reductionGamma 0 1) * (1 - 1 / 2) * totalWref acceptAll dot.layout := by
+theorem dot_certified : (0 : ℝ) < (1 - reductionGap 0 1) * (1 - 1 / 2) * totalWref acceptAll dot.layout := by
   rw [dot_totalWref]
-  norm_num [reductionGamma]
+  norm_num [reductionGap]
 
 end DeadlineWitness
 
@@ -94,7 +94,7 @@ theorem WorkBetweenSaltAndDeadline_nontrivial :
     ¬ pr (fun x : (Unit → Unit) × Unit × (Fin 1 → Ticket (acceptAll.Wref dot.layout) dot.layout.N) =>
         AcceptsBy idleRun 0 x.1 x.2.1 (correctSet acceptAll dot x.1 x.2.1 (commitAll.transcript dot x.1 x.2.1))
             x.2.2 ∧
-          (0 : ℝ) < (1 - reductionGamma 0 1) * (1 - 1 / 2) * totalWref acceptAll dot.layout ∧
+          (0 : ℝ) < (1 - reductionGap 0 1) * (1 - 1 / 2) * totalWref acceptAll dot.layout ∧
           ¬ commitAll.Breaks dot x.1 x.2.1)
       ≤ (1 - 1 / 2) ^ 1 + 0 := by
   rw [pr_eq_one, not_le]
@@ -109,7 +109,7 @@ theorem SpareCapacityAtDeadline_nontrivial :
     ¬ pr (fun x : (Unit → Unit) × Unit × (Fin 1 → Ticket (acceptAll.Wref dot.layout) dot.layout.N) =>
         AcceptsBy idleRun 0 x.1 x.2.1 (correctSet acceptAll dot x.1 x.2.1 (commitAll.transcript dot x.1 x.2.1))
             x.2.2 ∧
-          0 * (0 - idleRun.ts) - (1 - reductionGamma 0 1) * (1 - 1 / 2) * totalWref acceptAll dot.layout < 0 ∧
+          0 * (0 - idleRun.ts) - (1 - reductionGap 0 1) * (1 - 1 / 2) * totalWref acceptAll dot.layout < 0 ∧
           ¬ commitAll.Breaks dot x.1 x.2.1)
       ≤ (1 - 1 / 2) ^ 1 + 0 := by
   rw [pr_eq_one, not_le]

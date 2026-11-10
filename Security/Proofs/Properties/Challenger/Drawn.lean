@@ -20,7 +20,7 @@ break; so that run released the coins, its log the session's (`drawn_log`), and 
 namespace Properties.Challenger.Drawn
 
 open Lean (Json)
-open SampledProofs SampledProofs.Challenger
+open Spot Spot.Challenger
 
 variable {dev : History} {key : ChallengerKey} {label : String} {coins : Json}
 

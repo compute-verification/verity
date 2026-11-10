@@ -9,16 +9,16 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Accounting.PerRunPriced
 
 /-!
-# Proof of the per-run guarantees from the γ-gap property per coin
+# Proof of the per-run guarantees from the gap property per coin
 
 The machine that stops a run at its budget (`Pouw.PearlC.CostModel.withStop`) is a proof device, not a deployment
 requirement. On it every cost model with nonnegative costs truncates (`Pouw.PearlC.W1Stop.withStop_budgetAbort`), and
-its γ-gap property is the γ-gap property per coin (`Pouw.PearlC.W1Stop.gγ_withStop_iff`), so the priced per-run
-guarantees hold there from `GγPerCoin` alone. Its adversary may choose no budget, so a run that realizes Pearl-C's audit
+its gap property is the gap property per coin (`Pouw.PearlC.W1Stop.gGap_withStop_iff`), so the priced per-run
+guarantees hold there from `GGapPerCoin` alone. Its adversary may choose no budget, so a run that realizes Pearl-C's audit
 at `CM` realizes it there (`RealizesPearlCPriced.withStop`): the guarantees cover a device that never stops a run.
 
 At W1 priced at positive prices, the costs are nonnegative (`Pouw.PearlC.W1Stop.w1Priced_nonneg`), so
-`w1Stop_computeSoundPerRunPriced` is the compute audit's guarantee from `GγPerCoin (w1Priced dv salt)`, for a run that
+`w1Stop_computeSoundPerRunPriced` is the compute audit's guarantee from `GGapPerCoin (w1Priced dv salt)`, for a run that
 realizes `W1.w1Stop`, or `w1Priced` through the lift. A run of `w1Priced` has its cost on the priced sum by the cost's
 split (`Pouw.PearlC.W1Priced.w1Priced_cost`: its arithmetic within the compute charge, its first fetches within the
 bandwidth charge); `w1Stop_cost_le` is the same split for a device that does stop a run, whose budget must then be
@@ -74,34 +74,34 @@ namespace SecurityProofs
 
 theorem PearlCStopEndToEndPerRun : Accounting.Guarantees.PearlCStopEndToEndPerRun := by
   intro Q R S _ _ _ _ CM hnn P D γ η hγ hG U hU w κ hκ hw q hq A hA t εs hεs
-  exact PearlCEndToEndPerRun Q R S CM.withStop P D γ η hγ ((PearlC.W1Stop.gγ_withStop_iff CM P D hγ.le η).2 hG)
+  exact PearlCEndToEndPerRun Q R S CM.withStop P D γ η hγ ((PearlC.W1Stop.gGap_withStop_iff CM P D hγ.le η).2 hG)
     ((budgetAbortPearlC_iff _).2 (PearlC.W1Stop.withStop_budgetAbort CM hnn)) U hU w κ hκ hw q hq A hA t εs hεs
 
 theorem ComputeOfPearlCStopPerRunPriced : Accounting.Guarantees.ComputeOfPearlCStopPerRunPriced := by
   intro Q R S _ _ _ _ CM hnn P D γ η hγ hG U hU w κ hκ hw t εs hεs hne ι α ΩQ ΩS _ _ _ d r p pRead hq real
   exact ComputeOfPearlCPerRunPriced Q R S CM.withStop P D γ η hγ
-    ((PearlC.W1Stop.gγ_withStop_iff CM P D hγ.le η).2 hG)
+    ((PearlC.W1Stop.gGap_withStop_iff CM P D hγ.le η).2 hG)
     ((budgetAbortPearlC_iff _).2 (PearlC.W1Stop.withStop_budgetAbort CM hnn)) U hU w κ hκ hw t εs hεs hne
     ι α ΩQ ΩS d r p pRead hq real
 
 end SecurityProofs
 
-/-- **At W1 priced**, at positive prices: the compute audit's per-run guarantee on the priced sum from the γ-gap
+/-- **At W1 priced**, at positive prices: the compute audit's per-run guarantee on the priced sum from the gap
 property per coin over `w1Priced`, for a run that realizes `W1.w1Stop` (one that realizes `w1Priced`, through
 `RealizesPearlCPriced.withStop`). -/
 theorem w1Stop_computeSoundPerRunPriced [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : PearlC.W1.W1Device)
     (hdv : PearlC.W1BudgetAbort.Positive dv) (salt : S → List ℕ) {P : PearlC.Protocol Q R S}
-    {D : PearlC.Layout → Prop} {γ : ℝ} {η : ℕ → ℕ → ℝ} (hγ : γ < 1)
-    (hG : PearlC.GγPerCoin (PearlC.W1.w1Priced dv salt) P D γ η) {U : PearlC.Workload} (hU : U.InDomain P D)
+    {D : PearlC.Layout → Prop} {g : ℝ} {δ : ℕ → ℕ → ℝ} (hg : g < 1)
+    (hG : PearlC.GGapPerCoin (PearlC.W1.w1Priced dv salt) P D g δ) {U : PearlC.Workload} (hU : U.InDomain P D)
     {w : ℕ → ℕ} {κ : ℝ} (hκ : 0 ≤ κ) (hw : ∀ u < U.layout.N, P.Wref U.layout u = κ * w u) {t : ℕ} {εs : ℝ}
     (hεs : εs ≤ 1) [Nonempty (PearlCCoins Q R S U w t)] {ι α ΩQ ΩS : Type} [Fintype α] [Fintype ΩQ] [Fintype ΩS]
     {d : Device ι} (r : Run d α (PearlCCoins Q R S U w t) ΩQ ΩS) {p : Price} {pRead : ℝ}
     (hq : d.rate .oracle * (r.win .compute).len ≤ 2 ^ 64)
     (real : RealizesPearlCPriced (PearlC.W1.w1Stop dv salt) P U w r p pRead) :
-    r.ComputeSoundPerRunPriced p pRead ((1 - γ) * (1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u)
-      ((1 - εs) ^ t + η (d.rate .oracle * (r.win .compute).len) U.layout.N) :=
+    r.ComputeSoundPerRunPriced p pRead ((1 - g) * (1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u)
+      ((1 - εs) ^ t + δ (d.rate .oracle * (r.win .compute).len) U.layout.N) :=
   SecurityProofs.ComputeOfPearlCStopPerRunPriced Q R S (PearlC.W1.w1Priced dv salt)
-    (PearlC.W1Stop.w1Priced_nonneg dv hdv salt) P D γ η hγ hG U hU w κ hκ hw t εs hεs inferInstance ι α ΩQ ΩS d r p
+    (PearlC.W1Stop.w1Priced_nonneg dv hdv salt) P D g δ hg hG U hU w κ hκ hw t εs hεs inferInstance ι α ΩQ ΩS d r p
     pRead hq real
 
 end Accounting

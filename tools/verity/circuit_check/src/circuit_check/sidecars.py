@@ -7,7 +7,8 @@
                               a family registered over a range of statics, ``RANGES``: each rule and its spots (`ranges`)
     fp8.circuit-check.json    its pins (`checks`' lowering counts and circuit digest, ``type``, by kind: ``definitions``,
                               ``pieces``, ``units``; and the circuit digest of a gated Definition or of one bound at
-                              served statics over `targets.MAX_GATES`, ``digests``, which keeps it in ``--all``)
+                              served statics over `targets.MAX_GATES`, ``digests``, which keeps it in ``--all``; and a
+                              family's struct budget, ``struct_max_gates``: {family: gates}, `checks.struct_budget`)
 
 A module's bindings bind the Definitions it defines (a template module's, its templates), and its pins are the lowerings of its
 Definitions (`owner`; a template's subcircuits for the template module), each the one its pin's key names alone (`pin_owner`),
@@ -23,6 +24,7 @@ from __future__ import annotations
 import ast
 import importlib.util
 import json
+import re
 import sys
 from functools import cache
 from pathlib import Path
@@ -219,11 +221,27 @@ def pin_owner(kind: str, key: str) -> str | None:
 _NAMED: dict[str, Any] = {}
 
 
+def composite_lift(fid: str) -> Any | None:
+    """`lifted.lift_composite` of the registered composite a ``Lifted[<composite>]_v<k>`` id wraps (the lift a body calling it
+    makes, or its hand lift), whatever version the id writes; None when the id wraps no registered composite.  The on-demand
+    ``Lifted[...]`` families lift primitives only."""
+    from verity.ml.circuits.defs import REGISTRY, CompositeDefinition
+
+    m = re.fullmatch(r"Lifted\[(.+)\]_v\d+", fid)
+    inner = REGISTRY.defs.get(m[1]) if m else None
+    if not isinstance(inner, CompositeDefinition):
+        return None
+    from verity.ml.definitions.registry import lifted as L
+
+    return L.lift_composite(inner)
+
+
 def named(fid: str) -> Any | None:
-    """The Definition ``fid`` names, made from the id alone: one a loaded module binds at its top level (`_index`), else one an
-    on-demand family makes from it (`verity.ml.circuits.codec.lookup_primitive` with nothing registered, so the family's own factory
-    whoever asked for it first).  None for one made only inside another Definition's body (`boolean_gather`'s tree levels) or by
-    nothing, built in this process or not."""
+    """The Definition ``fid`` names, made from the id alone: one a loaded module binds at its top level (`_index`), else a
+    registered composite's lift (`composite_lift`, when its id is ``fid``), else one an on-demand family makes from it
+    (`verity.ml.circuits.codec.lookup_primitive` with nothing registered, so the family's own factory whoever asked for it first).
+    None for one made only inside another Definition's body (`boolean_gather`'s tree levels) or by nothing, built in this process
+    or not."""
     from verity.ml.circuits.codec import lookup_primitive
     from verity.ml.circuits.defs import Registry
 
@@ -232,6 +250,8 @@ def named(fid: str) -> Any | None:
     if (d := _NAMED.get(fid)) is not None:
         return d
     with CC.internal():
+        if (d := composite_lift(fid)) is not None:
+            return d if d.id == fid else None
         try:
             return lookup_primitive(Registry(), fid)
         except (KeyError, ValueError):

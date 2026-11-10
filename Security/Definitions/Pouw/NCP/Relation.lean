@@ -98,15 +98,15 @@ def NCPFinalOnly : Prop :=
     Word.Valid (fun _ => positions k m n) adv →
     ∀ u < N, Word.identCount (fun _ => positions k m n) (checked k m n N R A B) adv u ≤ m * n
 
-/-- **The floor for NCP** (`wordFloor` without `FinalOnly`): `N·2^−(m n·(γ₀·3k/16 − 1))`. -/
+/-- **The floor for NCP** (`wordFloor` without `FinalOnly`): `N·2^−(m n·(g₀·3k/16 − 1))`. -/
 def NCPWordFloor : Prop :=
-  ∀ (k m n N : ℕ) (R : Mat) (A B : ℕ → Mat) (adv : Word.Adversary) (γ₀ : ℝ), 16 ∣ k → RelationFree k 16 R →
-    0 ≤ γ₀ → γ₀ < 1 → Word.Valid (fun _ => positions k m n) adv →
+  ∀ (k m n N : ℕ) (R : Mat) (A B : ℕ → Mat) (adv : Word.Adversary) (g₀ : ℝ), 16 ∣ k → RelationFree k 16 R →
+    0 ≤ g₀ → g₀ < 1 → Word.Valid (fun _ => positions k m n) adv →
     Word.NzNCP (fun _ => positions k m n) (checked k m n N R A B) →
-    pr (fun ω => (Word.cost (fun _ => positions k m n) N adv : ℝ) / (1 - γ₀) <
+    pr (fun ω => (Word.cost (fun _ => positions k m n) N adv : ℝ) / (1 - g₀) <
         16 * ∑ _u ∈ Word.correctSet (fun _ => positions k m n) (checked k m n N R A B) N adv ω,
           (positions k m n : ℝ)) ≤
-      N * (2 : ℝ) ^ (-((m * n : ℕ) * (γ₀ * (3 * k / 16 : ℕ) - 1)))
+      N * (2 : ℝ) ^ (-((m * n : ℕ) * (g₀ * (3 * k / 16 : ℕ) - 1)))
 
 /-- **A relation-free admissible `R` exists** (the witness for the clause): for every `k ≥ 1024` with `16 ∣ k`, some
 `R` passes the three clauses of `Admissible` and is relation-free. -/
@@ -129,12 +129,12 @@ def NCPFinalOnlyInd : Prop :=
 
 /-- **The floor for NCP under independence** (`wordFloor` without `FinalOnly`). -/
 def NCPWordFloorInd : Prop :=
-  ∀ (k m n N : ℕ) (R : Mat) (A B : ℕ → Mat) (adv : Word.Adversary) (γ₀ : ℝ), 16 ∣ k → CheckpointIndependent k 16 R →
-    0 ≤ γ₀ → γ₀ < 1 → Word.Valid (fun _ => positions k m n) adv →
+  ∀ (k m n N : ℕ) (R : Mat) (A B : ℕ → Mat) (adv : Word.Adversary) (g₀ : ℝ), 16 ∣ k → CheckpointIndependent k 16 R →
+    0 ≤ g₀ → g₀ < 1 → Word.Valid (fun _ => positions k m n) adv →
     Word.NzNCP (fun _ => positions k m n) (checked k m n N R A B) →
-    pr (fun ω => (Word.cost (fun _ => positions k m n) N adv : ℝ) / (1 - γ₀) <
+    pr (fun ω => (Word.cost (fun _ => positions k m n) N adv : ℝ) / (1 - g₀) <
         16 * ∑ _u ∈ Word.correctSet (fun _ => positions k m n) (checked k m n N R A B) N adv ω,
           (positions k m n : ℝ)) ≤
-      N * (2 : ℝ) ^ (-((m * n : ℕ) * (γ₀ * (3 * k / 16 : ℕ) - 1)))
+      N * (2 : ℝ) ^ (-((m * n : ℕ) * (g₀ * (3 * k / 16 : ℕ) - 1)))
 
 end Pouw.NCP.Relation

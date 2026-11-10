@@ -1,5 +1,5 @@
-"""Node 1's dispatcher counts a task's Job that another path already created as submitted. On Oct 1 a Commit Job created
-before its Build's end was routed made every tick fail on `create` for 2 h 20 min, so no Job after it was handled."""
+"""Node 1's dispatcher counts a task's Job that another path already created as submitted, so a Commit Job created before its
+Build's end was routed doesn't make every tick fail on `create`, leaving every Job after it unhandled."""
 from __future__ import annotations
 
 import importlib.util

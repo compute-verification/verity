@@ -1,7 +1,8 @@
 """A ZK server session's `Hello` in Lean (`Flock/Firewall/Hello.lean`, `flock-firewall hello`), the one the ZK server's Lean
 session loop sends in the prover's place (`Session.helloOf`): held byte for byte to the `Hello`s Rust's `SessionConfig::hello_with_nonce`
 sent in the recorded `--zk` sessions of `test_lean_zk.py`'s fixture (one table, two tables, m = 26 and a sampled session), at
-each record's nonce and sample; at a nonce of its own, a fresh one each session; and its protocol's refusals. A request is
+each record's nonce and sample; at a nonce of its own, a fresh one each session; at a templated statement
+(`verity/flock-circuit/tmpl`), set up from its template as `verify` sets it up; and its protocol's refusals. A request is
 `draw LEN [NONCE]` and `LEN` bytes of the verifier's sample; a statement the setup refuses is answered `refused WHY` and the
 session goes on, a malformed request `err WHY`, which ends it with exit 1."""
 from __future__ import annotations
@@ -20,6 +21,9 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-firewall"
 #: fetched fixture (`fixtures/artifacts.json`), which `suites.py` fetches before the suite runs
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "zk-sessions"
 STATEMENT = "verity/flock-circuit+seed-injection"
+#: the templated statement (`Tags.templated`), and `test_tmpl_statement`'s layout mode for it
+TMPL = "verity/flock-circuit/tmpl"
+TMPL_LAYOUT = "iv/hybrid/4"
 NONCE = re.compile(r'"nonce":"([0-9a-f]{64})"')
 
 
@@ -133,6 +137,53 @@ def test_usage():
 def test_unknown_statement(junk):
     p = subprocess.run([str(BIN), "hello", "--statement", "no-such", *junk], input=b"", capture_output=True)
     assert p.returncode == 2 and p.stderr.decode().startswith("unknown statement")
+
+
+@pytest.mark.parametrize("statement, why", [(TMPL, "setup: "), ("no-such", "unknown statement")])
+def test_finish_takes_the_statements_verify_takes(junk, statement, why):
+    """`flock-firewall finish` names its statement as `verify` does (`Tags.byName?`): a templated one gets to its setup, which
+    refuses junk files; an unknown name is refused by name."""
+    p = subprocess.run([str(BIN), "finish", "--statement", statement, *junk], input=b"", capture_output=True)
+    assert p.returncode == 1 and p.stdout.decode().startswith(f"err {why}"), p.stdout
+
+
+def test_a_templated_statement_is_one_the_loop_sets_up(junk):
+    """`--statement` names a templated statement as `verify` reads it (`Tags.byName?`): its setup, not its name, refuses
+    junk files."""
+    answers, rc = _hello(["--statement", TMPL, *junk], _request("null"))
+    assert rc == 0 and len(answers) == 1 and answers[0].startswith("refused setup: "), answers
+
+
+def _staged(out: Path, layout: str | None) -> list[str]:
+    """`test_tmpl_statement`'s Boolean toy, staged flat or templated at ``layout``: the statement flags of its files."""
+    from test_class_statement_unit_stager import _toy
+    from verity_flock import class_statement as CS
+
+    args, rows, _kw = _toy(0)
+    CS.UnitStager(*args, **({"layout": layout} if layout else {})).stage(rows, out, b"k" * 32)
+    return ["--statement", TMPL if layout else "verity/flock-circuit", "--circuit", str(out / "circuit.txt"), "--public",
+            str(out / "pub.bin")]
+
+
+@pytest.mark.slow
+def test_a_templated_statements_hello_is_set_up_from_its_template(tmp_path):
+    """The toy staged flat and templated: at one nonce the templated statement's `Hello` is the flat one's but for the link's
+    Σ, which its own Σ tag makes; its setup reads the unit from META's template, so a layout mode the verifier doesn't
+    read is refused there."""
+    nonce = "ab" * 32
+    flat, rc0 = _hello(_staged(tmp_path / "flat", None), _request("null", nonce))
+    tmpl_args = _staged(tmp_path / "tmpl", TMPL_LAYOUT)
+    tmpl, rc1 = _hello(tmpl_args, _request("null", nonce))
+    assert rc0 == rc1 == 0 and flat[0].startswith("ok ") and tmpl[0].startswith("ok "), (flat, tmpl)
+    f, t = json.loads(flat[0][3:]), json.loads(tmpl[0][3:])
+    assert t["link"]["sigma"] != f["link"]["sigma"]
+    assert {**t, "link": {**t["link"], "sigma": None}} == {**f, "link": {**f["link"], "sigma": None}}
+    circuit = tmp_path / "tmpl" / "circuit.txt"
+    head, meta, rest = circuit.read_text().split("\n", 2)
+    meta = json.dumps({**json.loads(meta[5:]), "layout": "no-such-mode"}, sort_keys=True, separators=(",", ":"))
+    circuit.write_text("\n".join([head, f"META {meta}", rest]))
+    answers, rc = _hello(tmpl_args, _request("null", nonce))
+    assert rc == 0 and answers[0].startswith("refused setup: ") and "layout is not a layout mode" in answers[0], answers
 
 
 def test_plain_leaves_have_no_zk_session(junk):

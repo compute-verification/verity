@@ -2,16 +2,16 @@
 # tools/move/retired_ids_map.toml` renames. Lean declarations keep their place in the locks' records: `rename.py --moves`
 # prints the renames that `check.py --update --moved` takes. GLOSSARY.md is not rewritten, since its table names the old
 # identifiers; a sentence there that names one as current is edited by hand in the same change.
+# The monitoring period's `ComposePeriod` and `CircuitWorkPeriod`, `Claims.Sampling.unitClasses` and
+# `Nci.Dampener.unmonitoredShare` name guarantees and premises the locks record, so a Lean change renames them with their
+# records (`check.py --update --moved`), and this map leaves them.
 #
 # - The binding error: the premise `LinkSound`, with `LinkSoundIn` and `zk_rowsLinkSoundC`, is ε_bind's, `BindSound`,
 #   and its module moves with it.
 # - The acceptance probability: `effEscape` is P̄_a, `effAcceptProb`, and its lemmas follow.
 # - The trace: `ExecutionTranscript`, one run's value for every gate, is `Trace`, as `terms_map.toml` has it.
-# - The monitoring period: `ComposePeriod`, its namespace and its modules, and `CircuitWorkPeriod`.
-# - Unregistered hardware: `Nci.Dampener.unmonitoredShare` is ε_unreg's, `unregisteredShare`, and `benchmarks/rho`'s
-#   `eps_dark` is `eps_unreg`.
+# - Unregistered hardware: `benchmarks/rho`'s `eps_dark` is ε_unreg's, `eps_unreg`.
 # - Chunks of a counter-mode stream: `noiseBlock` is `noiseChunk`.
-# - Size classes: `Claims.Sampling.unitClasses` is `sizeClasses`.
 # - The proof block: `LinkWindows.proof_unit` and `IngressTie.proof_unit` are `proof_block`.
 # - The sampling design: `parse_law`, `same_law` and `law_object`, and the Lean's `parseLaw`, which the Python mirrors,
 #   are `parse_design`, `same_design`, `design_object` and `parseDesign`.
@@ -24,19 +24,13 @@
 # - `block_of`, one name in seven senses, each renamed only in the files that use it: a zone of the device graph
 #   (`zone_of`), a kernel's KV tile (`tile_of`), a SASS basic block (`basic_block_of`), a 128-byte SHA-512 message chunk
 #   (`chunk_of`), Marlin's MoE block size (`moe_block_size_of`), a sampled index's slot and layout unit (`position_of`)
-#   and a model's layer (`layer_of`). A file under `examples/` is listed under `demos/` too, and the `CertifierNetwork`
-#   module under `NetworkCertifier/DeviceOutput`, their names after the moves that rename them.
+#   and a model's layer (`layer_of`).
 [words]
 "LinkSound" = "BindSound"
 "effEscape" = "effAcceptProb"
 "ExecutionTranscript" = "Trace"
-"ComposePeriod" = "ComposeMonitoringPeriod"
-"CircuitWorkPeriod" = "CircuitWorkMonitoringPeriod"
-"circuitWorkPeriod" = "circuitWorkMonitoringPeriod"
-"unmonitoredShare" = "unregisteredShare"
 "eps_dark" = "eps_unreg"
 "noiseBlock" = "noiseChunk"
-"unitClasses" = "sizeClasses"
 "proof_unit" = "proof_block"
 "parse_law" = "parse_design"
 "same_law" = "same_design"
@@ -79,7 +73,6 @@ words = { "block_of" = "basic_block_of" }
 [[words_in]]
 files = [
     "benchmarks/pouw/np_kernel/l1.h",
-    "Security/Proofs/Properties/CertifierNetwork/Encode.lean",
     "Security/Proofs/Properties/NetworkCertifier/DeviceOutput/Encode.lean",
 ]
 words = { "block_of" = "chunk_of" }
@@ -92,8 +85,6 @@ words = { "block_of" = "moe_block_size_of" }
 files = [
     "examples/h200/m3bundle.py",
     "examples/h200/interfaces/verity_e2e_demo/replay_bundle.py",
-    "demos/h200/m3bundle.py",
-    "demos/h200/interfaces/verity_e2e_demo/replay_bundle.py",
 ]
 words = { "block_of" = "position_of" }
 

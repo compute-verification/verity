@@ -1,5 +1,6 @@
 """Versions of `RMSNormTriton_v1`, `TokenSelect_v1`, the top-p selects and FA2's attention without dead gates: the forms the registered
-compiler emits, where no gate may be one no output depends on.  Rows of record keep the v1s their pins were made from.
+compiler emits, where no gate may be one no output depends on.  A Program lifted to bits keeps the v1s: no Boolean Definition names
+one of these as its word.
 
 * `RMSNormTriton_v5`: `RMSNormTriton_v1` with each warp reduced by the adds lane 0's sum depends on (`lane0_butterfly`).  On the GPU
   every lane adds in every round of the xor butterfly, but only lane 0's sum is read: v1 has 129 dead adds a warp.

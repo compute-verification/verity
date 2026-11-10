@@ -16,7 +16,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Exec.Headline
 import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The `--zk` session of `J` tables at any acceptance

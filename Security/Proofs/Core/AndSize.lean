@@ -95,7 +95,7 @@ end SecurityProofs
 
 end Verity
 
-namespace FlockSoundness.Audit.Circuit
+namespace Verity.Boolean.Circuit
 
 open Verity Verity.Circuit Finset
 
@@ -181,11 +181,11 @@ theorem apply_row_andProbe {N : ℕ} {a b : List (Fin N)} {x y : Fin N} (hxy : x
     xorSum_andProbe b hxy p q false true (count_even b x hxb) (count_odd b y hyb)]
   cases p <;> cases q <;> rfl
 
-end FlockSoundness.Audit.Circuit
+end Verity.Boolean.Circuit
 
 namespace Verity.SecurityProofs
 
-open FlockSoundness.Audit FlockSoundness.Audit.Circuit Finset
+open Verity.Boolean.Circuit Finset
 
 theorem ToCircuitAnd : Guarantees.ToCircuitAnd := by
   intro B g
@@ -198,7 +198,7 @@ theorem ToCircuitAnd : Guarantees.ToCircuitAnd := by
     | input =>
       have : (B.op g).isInput = false := hi
       rw [ho] at this
-      exact absurd this (by simp [Op.isInput])
+      exact absurd this (by simp [Verity.Boolean.Op.isInput])
     | and a b => exact Or.inl ⟨a, b, rfl⟩
     | row a b => exact Or.inr ⟨a, b, rfl⟩
     | xor a b =>
@@ -207,13 +207,13 @@ theorem ToCircuitAnd : Guarantees.ToCircuitAnd := by
       · subst hab
         refine ⟨∅, 0, empty_subset _, fun v => ?_⟩
         rw [bitZ_toCircuit_op, ho]
-        simp [Op.apply]
+        simp [Verity.Boolean.Op.apply]
       · refine ⟨{a, b}, 0, ?_, fun v => ?_⟩
         · show ({a, b} : Finset (Fin B.N)) ⊆ (B.op g).args.toFinset
           rw [ho]
           intro z hz
           simp only [mem_insert, mem_singleton] at hz
-          rcases hz with rfl | rfl <;> simp [Op.args]
+          rcases hz with rfl | rfl <;> simp [Verity.Boolean.Op.args]
         · rw [bitZ_toCircuit_op, ho, zero_add]
           exact (bit_xor _ _).trans (sum_pair (f := fun z => Verity.Circuit.bitZ (v z)) hab).symm
     | not a =>
@@ -221,7 +221,7 @@ theorem ToCircuitAnd : Guarantees.ToCircuitAnd := by
       refine ⟨{a}, 1, ?_, fun v => ?_⟩
       · show ({a} : Finset (Fin B.N)) ⊆ (B.op g).args.toFinset
         rw [ho]
-        simp [Op.args]
+        simp [Verity.Boolean.Op.args]
       · rw [bitZ_toCircuit_op, ho]
         exact (bit_not _).trans (congrArg (1 + ·) (sum_singleton (fun z => Verity.Circuit.bitZ (v z)) a).symm)
   · exact not_affine B g hab fun p q => by rw [h]; exact apply_and_andProbe B hab p q

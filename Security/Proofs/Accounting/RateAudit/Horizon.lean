@@ -40,6 +40,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.Bandwidth.AuditRO
 import Proofs.Accounting.RateAudit.Windows
 import Std.Tactic.BVDecide.Normalize.Prop
+import Proofs.Pous.Prob
 
 /-!
 # The causal bound over the monitoring period: the proof
@@ -54,7 +55,7 @@ left (`pr_and_le_mul`), and weighted AM–GM joins the two (`step_le`).
 
 A chain's passes (`Rate.Chain`) are such rounds, with `M = N`: pass `j` is accepted exactly when its sample lands in its
 correct receipts, which the store, the earlier passes' coins and its own stream and oracle family fix
-(`Chain.pr_horizon_le`). With `RateChainPaidRO`'s conservation at every count, the window's reads pay for the correct
+(`Chain.pr_pooled_le`). With `RateChainPaidRO`'s conservation at every count, the window's reads pay for the correct
 receipts the sample certifies (`RateChainSampledRO`).
 -/
 
@@ -141,18 +142,18 @@ theorem step_le (M g K' a c : ℕ) (hM : 0 < M) :
 
 theorem pr_le_one {Ω : Type} [Fintype Ω] (P : Ω → Prop) : pr P ≤ 1 := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   exact ENNReal.div_le_of_le_mul (by rw [one_mul]; exact_mod_cast Finset.card_le_univ _)
 
 theorem pr_false {Ω : Type} [Fintype Ω] : pr (fun _ : Ω => False) = 0 := by
   classical
-  simp [pr]
+  simp [Pous.pr_eq_card]
 
 /-- `s` uniform items all land in a set of `g` of the `M`: `(g/M)^s`. -/
 theorem pr_sample {M : ℕ} (G : Finset (Fin M)) (s : ℕ) :
     pr (fun I : Fin s → Fin M => ∀ t, I t ∈ G) = ((G.card : ℝ≥0∞) / M) ^ s := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   rw [Finset.filter_congr_decidable, Bandwidth.AuditRO.card_sample G s]
   simp [div_eq_mul_inv, mul_pow, ENNReal.inv_pow]
 
@@ -161,7 +162,7 @@ holds: at most the first's probability times `ε`. -/
 theorem pr_and_le_mul {X Y : Type} [Fintype X] [Fintype Y] (A : X → Prop) (B : X × Y → Prop) (ε : ℝ≥0∞)
     (h : ∀ x, A x → pr (fun y => B (x, y)) ≤ ε) : pr (fun p : X × Y => A p.1 ∧ B p) ≤ pr A * ε := by
   classical
-  unfold pr at h ⊢
+  simp only [Pous.pr_eq_card] at h ⊢
   rw [Finset.filter_congr_decidable, Finset.filter_congr_decidable]
   rcases Nat.eq_zero_or_pos (Fintype.card Y) with hY | hY
   · have h0 : (Finset.univ.filter (fun p : X × Y => A p.1 ∧ B p)).card = 0 :=
@@ -284,7 +285,7 @@ variable {P N b h ρ S L q r s : ℕ}
 
 /-- A chain's passes are sampled as a whole: every pass accepted with at most `K` correct receipts in all is at most
 `(K/(P·N))^(s·P)`. -/
-theorem pr_horizon_le (A : Chain P N b h ρ S L q r s) (K : ℕ) :
+theorem pr_pooled_le (A : Chain P N b h ρ S L q r s) (K : ℕ) :
     pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
         (∀ j, (A.dev j x.2).Accepts x.1 (x.2 j).1 (A.oracle j x.1 x.2) (x.2 j).2.2) ∧
           ∑ j, ((A.dev j x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card ≤ K)
@@ -332,20 +333,20 @@ open Accounting.Rate
 open Pous (pr)
 open scoped ENNReal
 
-/-- **The causal bound over the monitoring period** (`Accounting.Guarantees.HorizonSampling`). -/
-theorem HorizonSampling : Accounting.Guarantees.HorizonSampling := by
+/-- **The causal bound over the monitoring period** (`Accounting.Guarantees.PooledSampling`). -/
+theorem PooledSampling : Accounting.Guarantees.PooledSampling := by
   intro n M K X _ s G hG
   exact Horizon.pr_causal_le' n M K X s G hG
 
-/-- **A chain's passes are sampled as a whole** (`Accounting.Guarantees.RateHorizon`). -/
-theorem RateHorizon : Accounting.Guarantees.RateHorizon := by
+/-- **A chain's passes are sampled as a whole** (`Accounting.Guarantees.RatePooled`). -/
+theorem RatePooled : Accounting.Guarantees.RatePooled := by
   intro P N b h ρ S L q r s K A
-  exact Chain.pr_horizon_le A K
+  exact Chain.pr_pooled_le A K
 
 /-- **The route `Sampled`, with side sources that ignore the oracle** (`Accounting.Guarantees.RateChainSampledRO`). -/
 theorem RateChainSampledRO : Accounting.Guarantees.RateChainSampledRO := by
   intro P N b h ρ S L q r s K lam τ tier A hA
-  have h₁ := Chain.pr_horizon_le A K
+  have h₁ := Chain.pr_pooled_le A K
   have h₂ := RateChainPaidRO P N b h ρ S L q r s lam τ tier A hA
   refine (Bandwidth.pr_mono (fun x hx => ?_)).trans ((Bandwidth.pr_or_le _ _).trans (add_le_add h₁ h₂))
   by_cases hK : ∑ j, ((A.dev j x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card ≤ K
@@ -357,7 +358,7 @@ theorem RateChainSampledRO : Accounting.Guarantees.RateChainSampledRO := by
 /-- **The route `Sampled`, with any side sources** (`Accounting.Guarantees.RateChainSampled`). -/
 theorem RateChainSampled : Accounting.Guarantees.RateChainSampled := by
   intro P N b h ρ S L q r s K m lam τ tier A
-  have h₁ := Chain.pr_horizon_le A K
+  have h₁ := Chain.pr_pooled_le A K
   have h₂ := RateChainPaid P N b h ρ S L q r s m lam τ tier A
   refine (Bandwidth.pr_mono (fun x hx => ?_)).trans ((Bandwidth.pr_or_le _ _).trans (add_le_add h₁ h₂))
   by_cases hK : ∑ j, ((A.dev j x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card ≤ K

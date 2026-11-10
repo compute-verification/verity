@@ -79,7 +79,7 @@ capacity; the term `G` is the grinding the Fiat–Shamir seed allows (`fiat-sham
 device of `RatePaidNamedRO`'s class whose side sources also answer the completed bits, so its link carries
 `L + b·F/(rounds·c_root)` (`WorkHardness` and `SquaringCeiling`), with the same tier reads, receipts and oracle-free
 side sources and nothing rebuilt; `RatePaidNamedRO` bounds each pass at each candidate root (a union over the `G`
-candidates, `GrindChain`), the pooled samples are `RateSessionDraw`'s causal horizon, and the two readings are its
+candidates, `GrindChain`), the pooled samples are `RateSessionSample`'s causal horizon, and the two readings are its
 `K = ⌊(1 − d̄)·n·P·N⌋` and `K_w = ⌊(1 − d_w)·P·N⌋`.
 
 Frozen (no-function, hash): a bound in the random-oracle model over a session of abstract chip programs, which no Lean

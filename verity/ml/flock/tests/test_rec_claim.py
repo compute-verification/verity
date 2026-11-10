@@ -423,7 +423,7 @@ def test_the_opening_statement_reads_rec_claim_at_rows_0_and_1(sess, tmp_path):
     bit off in the prover's ``rec-claim`` (the verifier's reads file naming the honest root), residual 1 alone fails. When
     Lean is built, its `statement` accepts the honest files and refuses the forged claim row. About 3 minutes, most of it
     building the statement (1,839,105 unit rows) twice."""
-    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
+    from verity.core.protocols.spot.one_stage import registered as RG
     from verity.ml.commitments import hm96
     from verity_flock.rec_outer import CLAIM_VALUE
 

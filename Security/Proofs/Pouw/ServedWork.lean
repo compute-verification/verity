@@ -27,11 +27,11 @@ open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assum
 /-! ## A window's salt is uniform given what is fixed before it -/
 
 theorem prob_of_isEmpty {Ω : Type*} [Fintype Ω] [IsEmpty Ω] (p : Ω → Prop) : prob p = 0 := by
-  unfold prob
+  unfold prob Claims.prUniform
   simp
 
 theorem prob_false_eq {Ω : Type*} [Fintype Ω] : prob (fun _ : Ω => False) = 0 := by
-  unfold prob
+  unfold prob Claims.prUniform
   simp
 
 /-- An event whose every slice at the first coordinate has probability at most `κ ≥ 0` has probability at most `κ`. -/

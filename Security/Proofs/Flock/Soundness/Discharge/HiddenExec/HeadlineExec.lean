@@ -138,7 +138,7 @@ probability at most `miss(K) + ε_ks + δ_link`.
 Its hypotheses, past the session's inputs, are `flock_headline_exec`'s at the hidden tables:
 * the circuit is in `rs`'s scope, `hscope : Layout.scopeOkH c = true`: the plain headline's, or its rows each a
   `sha512/row/v2` row that fits or a `sha512/row-seg/v1` row, of any mix, the output rows fit;
-* `hdec` (`DecodesOn`, R11b, at the sampling design's samples only), open, at the hidden tables `tablesAtH`: at a sample flock-verify
+* `hdec` (`DecodesOn`, at the sampling design's samples only), open, at the hidden tables `tablesAtH`: at a sample flock-verify
   accepts under hidden outputs whose record carries the challenger's sample `dj S`, proving `S`, with link points
   `mPts`, the table is `stmtOf` of the `Stmt.setupHidden` statement it accepted (`tableAtH_of_accepts`);
 * the assumptions of record: A3 (`hA3`, `uniform/io-getrandombytes`), `cr/sha-512` for the knowledge finders (`hKS`),

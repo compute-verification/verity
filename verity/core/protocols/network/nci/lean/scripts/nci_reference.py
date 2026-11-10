@@ -501,7 +501,7 @@ def record_digest(rec: dict) -> str:
 
 
 def lower(t) -> list[tuple[int, int]]:
-    """§5.1: the input nodes a parameter of type `t` lowers to, (width, n) each (`SampledProofs.Registered.lower`)."""
+    """§5.1: the input nodes a parameter of type `t` lowers to, (width, n) each (`Spot.Registered.lower`)."""
     from verity.ml.circuits.types import Array, RecordType, Tuple
     ws = t.width_set()
     if len(ws) == 1:

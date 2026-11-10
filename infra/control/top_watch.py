@@ -162,7 +162,7 @@ def page_body(notion, pid: str) -> tuple[list[tuple[str, str]], dict[str, str]]:
 
 def lane_lead(lane: str) -> re.Pattern:
     """How a lane's answer starts: an @handle, or the page's lane or top named with a colon or a time, as lanes sign
-    (`proofs:`, `proofs 03:20Z:`, `proofs, 26 Oct 03:20Z:`). `proofs, please …` is still Daniel's."""
+    (`proofs:`, `proofs 03:20Z:`, `proofs, <day> <month> 03:20Z:`). `proofs, please …` is still Daniel's."""
     return re.compile(rf"{HANDLE_LEAD.pattern}|^\s*(?:{re.escape(lane)}|top)\s*(?::|,?\s+(?:\d{{1,2}}\s+[A-Z][a-z]{{2}}\s+)?\d{{1,2}}:\d{{2}})")
 
 

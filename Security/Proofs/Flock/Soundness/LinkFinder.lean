@@ -4,8 +4,7 @@ public import Proofs.Flock.Soundness.ExtractWait
 public import Proofs.Flock.Soundness.Assumptions
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Soundness.Extract
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Seq
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The link finder: a trial, then further trials until one reads the same string

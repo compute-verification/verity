@@ -15,7 +15,7 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.Game
 import Proofs.Pouw.Prob
 
 /-!
@@ -45,7 +45,7 @@ theorem IntegrityOfIntegrityBlock : Accounting.Guarantees.Bridge.IntegrityOfInte
           (((R.record (Function.update ξ (r.own .sampled) x)).map Flock.Guarantees.WindowRec.wrong).sum : ℝ) := by
     rintro x ⟨hacc, hfail⟩
     refine ⟨(R.accepts_iff _).1 hacc, ?_⟩
-    have hfail' : ¬ (((r.parts.wrong (r.transcript (Function.update ξ (r.own .sampled) x))).card : ℝ) ≤
+    have hfail' : ¬ (((r.parts.wrong (r.trace (Function.update ξ (r.own .sampled) x))).card : ℝ) ≤
         c.ε * r.units) := hfail
     have hlt := not_le.mp hfail'
     rw [R.wrong_eq] at hlt

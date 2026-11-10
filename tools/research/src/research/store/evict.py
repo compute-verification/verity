@@ -19,8 +19,8 @@ Two kinds of local copy can go, and only these:
   `.custody` lists at the size it recorded and unchanged since (`evict_custody`'s rule), as root.
 
 * **source trees** (`<root>/src/<sha>`, `evict_src`): the trees `research run --on` ships per commit (remote.py `ship_source`;
-  up to 24 GB and 480k inodes with Lean builds), whose bytes are a commit's.  Oldest first, every one that meets root's three
-  conditions (Slack, 4 Oct 03:48Z; condition 1 read as recoverability, root 4 Oct 17:27Z), each established afresh: (1) it is
+  up to 24 GB and 480k inodes with Lean builds), whose bytes are a commit's.  Oldest first, every one that meets three
+  conditions, each established afresh: (1) it is
   recoverable on the node: its commit is reachable from a ref of the node's `<root>/git/verity.git`, which holds
   `refs/research/src/<sha>` for every tree shipped and from which `research run` re-ships it (`git ls-remote`, or of
   `--src-origin`, `--no-replace-objects`), and the tree is exactly that commit: its `.git` is a ship's (no config key, exclude,
@@ -34,7 +34,7 @@ Two kinds of local copy can go, and only these:
   one (refused.json, no status.json: its workload never ran), names that commit as its source, clean, or dirty with the dirty bytes in the run's preserved record (the runner's capture, env.DIRTY_CAPTURE, at the
   size and sha256 job.json names, listed by the run's `.custody`; `_dirty_preserved`).  A tree with a `research keep` record is left
   to `research retention`.  This pass is the only thing that deletes a whole source tree (`node_sweep.sh` no longer does).  Not on a free-space target: an
-  unused tree costs inodes as much as bytes (node 1 at 74% inodes, 4 Oct), and `research run` re-ships one from
+  unused tree costs inodes as much as bytes, and `research run` re-ships one from
   `refs/research/src/<sha>`.  Before a deletion the tree is checked again, renamed to `.evicting-<sha>-<nonce>` (never executable
   by name), checked once more (renamed back when something uses it, or on any error) and removed READY.json first, one pass at a
   time (`<src>/.evict.lock`).  It fails closed: a condition
@@ -396,7 +396,7 @@ def evict_runs(store: LocalStore, runs_root: Path, *, target_free_bytes: int, dr
 def evict_custody(run_dir: Path, custody: dict[str, Any], *, min_bytes: int = MIN_BYTES) -> dict[str, Any]:
     """The run dir's files that `custody.verify` has just found in the run record on the remote (`custody`, its report with
     `preserved`), at least `min_bytes` each: `research data custody --publish` removes them, so a published run stops holding the
-    disk (the control pod's filled six times on 2026-09-27/28).  A file is removed only while it is still the size it had and
+    disk.  A file is removed only while it is still the size it had and
     unchanged since `verified_from`; the small records (job.json, status.json, result.json, the logs under `min_bytes`) stay, so
     `status` and `inspect` still read the run.  `run-files.evicted.json` lists what went and the fetch that brings it back."""
     rd = Path(run_dir)
@@ -441,7 +441,7 @@ def parse_gb(text: str) -> int:
 # ---- source trees --------------------------------------------------------------------------------------------------------------------
 
 SRC_KEEP_S = 3600            # a tree changed, or named by a run recorded, this recently may be being shipped or about to run;
-#   a live run's tree is kept by its process anyway, and at 2 h cpu-5 kept 100 trees and reached 98% inodes (26 Oct, INF-248)
+#   a live run's tree is kept by its process anyway, and at 2 h a busy node keeps about 100 trees and runs out of inodes
 SRC_BUDGET_S = 30 * 60       # no deletion starts after this long, so the unit's `timeout 3000` never cuts a pass off mid-tree
 GIT_TIMEOUT_S = 300
 ASIDE = ".evicting-"         # <src>/.evicting-<sha>-<nonce>: a tree on its way out, never executable by name
@@ -780,7 +780,7 @@ def _own_reasons(src_root: Path, sha: str, now: float, keep_s: float) -> tuple[s
 
 SHIP_CONFIG = re.compile(r"core\.(?:repositoryformatversion|filemode|bare|logallrefupdates)|remote\.origin\.(?:url|fetch)"
                          r"|branch\.[^\n]+\.(?:remote|merge)")
-"""The keys a ship's clone has in .git/config (every tree on vy-nebius-1, 4 Oct).  Any other key may change what `git status`
+"""The keys a ship's clone has in .git/config (every shipped tree has these).  Any other key may change what `git status`
 reports (excludes, fsmonitor, filters, sparse checkout, an include) or run a command, so the tree is kept rather than trusted."""
 SHIP_EXCLUDE = frozenset({f"/{READY_FILE}"})
 REGENERABLE = re.compile(r"(?:^|/)(?:\.lake|\.venv|__pycache__|\.pytest_cache|\.ruff_cache|\.mypy_cache|\.hypothesis|node_modules"

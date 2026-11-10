@@ -103,7 +103,7 @@ abbrev NoiseSrc (Q R S : Type) : Type := (Q → R) → S → Workload → ℕ �
 def Plan.commit (p : Plan) (N : NoiseSrc Q R S) (H : Q → R) (s : S) (U : Workload) (act : ℕ → Mat) (u : ℕ) :
     Commit :=
   let A := p.act.getD (act u)
-  let B := U.weight (U.layout.wid u)
+  let B := U.fixed (U.layout.fixedId u)
   let nz := N H s U u A
   ⟨A, p.regs A B nz, p.out.eval A B nz (p.regs A B nz)⟩
 
@@ -119,7 +119,7 @@ def gemmModel (N : NoiseSrc Q R S) : CostModel Q R S where
 /-! ## Protocol classes -/
 
 /-- The unit's weight. -/
-abbrev wtOf (U : Workload) (u : ℕ) : Mat := U.weight (U.layout.wid u)
+abbrev wtOf (U : Workload) (u : ℕ) : Mat := U.fixed (U.layout.fixedId u)
 
 /-- `M` on the `m × n` corner, `0` elsewhere: what a plan's products produce. `H_ref`'s outputs are stated on the
 corner, so that a plan can reproduce them exactly (`AdmitsRef`); correctness reads only the corner. -/

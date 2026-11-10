@@ -157,14 +157,14 @@ theorem ncpFinalOnlyIndU : NCPFinalOnlyIndU := by
     rw [← Nat.div_add_mod p (m * n), ← Nat.div_add_mod p' (m * n), e1, e2, h]
 
 /-- `wordBound`'s sum at `identCount ≤ m·n` per unit. -/
-theorem floor_sum {Ω : Type} {k m n N : ℕ} (X : Ω → ℕ → ℕ → ℤ) (adv : Word.Adversary) (γ₀ : ℝ)
+theorem floor_sum {Ω : Type} {k m n N : ℕ} (X : Ω → ℕ → ℕ → ℤ) (adv : Word.Adversary) (g₀ : ℝ)
     (hF : ∀ u < N, Word.identCount (fun _ => positions k m n) X adv u ≤ m * n) :
-    ∑ u ∈ range N, (2 : ℝ) ^ (-(γ₀ * ((fun _ => positions k m n) u : ℕ) -
+    ∑ u ∈ range N, (2 : ℝ) ^ (-(g₀ * ((fun _ => positions k m n) u : ℕ) -
         Word.identCount (fun _ => positions k m n) X adv u)) ≤
-      N * (2 : ℝ) ^ (-((m * n : ℕ) * (γ₀ * (3 * k / 16 : ℕ) - 1))) := by
-  calc ∑ u ∈ range N, (2 : ℝ) ^ (-(γ₀ * ((fun _ => positions k m n) u : ℕ) -
+      N * (2 : ℝ) ^ (-((m * n : ℕ) * (g₀ * (3 * k / 16 : ℕ) - 1))) := by
+  calc ∑ u ∈ range N, (2 : ℝ) ^ (-(g₀ * ((fun _ => positions k m n) u : ℕ) -
         Word.identCount (fun _ => positions k m n) X adv u))
-      ≤ ∑ _u ∈ range N, (2 : ℝ) ^ (-((m * n : ℕ) * (γ₀ * (3 * k / 16 : ℕ) - 1))) := sum_le_sum fun u hu => by
+      ≤ ∑ _u ∈ range N, (2 : ℝ) ^ (-((m * n : ℕ) * (g₀ * (3 * k / 16 : ℕ) - 1))) := sum_le_sum fun u hu => by
         apply Real.rpow_le_rpow_of_exponent_le (by norm_num)
         have h1 : (Word.identCount (fun _ => positions k m n) X adv u : ℝ) ≤ (m * n : ℕ) := by
           exact_mod_cast hF u (mem_range.1 hu)
@@ -172,15 +172,15 @@ theorem floor_sum {Ω : Type} {k m n N : ℕ} (X : Ω → ℕ → ℕ → ℤ) (
         simp only [positions]
         push_cast at h1 ⊢
         nlinarith
-    _ = N * (2 : ℝ) ^ (-((m * n : ℕ) * (γ₀ * (3 * k / 16 : ℕ) - 1))) := by
+    _ = N * (2 : ℝ) ^ (-((m * n : ℕ) * (g₀ * (3 * k / 16 : ℕ) - 1))) := by
         rw [sum_const, card_range, nsmul_eq_mul]
 
 /-- **The floor for route U under independence.** -/
 theorem ncpWordFloorIndU : Pouw.Guarantees.NCP.NCPWordFloorIndU := by
-  intro β k m n N R A B adv γ₀ h16 hI hγ0 hγ1 hV hNz
-  exact (WordProofs.wordBound (Noise N m n k) (fun _ => positions k m n) (checkedUPos β k m n N R A B) N adv γ₀
-    hγ0 hγ1 hV hNz).trans
-    (floor_sum _ adv γ₀ fun u hu => ncpFinalOnlyIndU β k m n N R A B adv h16 hI hV u hu)
+  intro β k m n N R A B adv g₀ h16 hI hg0 hg1 hV hNz
+  exact (WordProofs.wordBound (Noise N m n k) (fun _ => positions k m n) (checkedUPos β k m n N R A B) N adv g₀
+    hg0 hg1 hV hNz).trans
+    (floor_sum _ adv g₀ fun u hu => ncpFinalOnlyIndU β k m n N R A B adv h16 hI hV u hu)
 
 /-- **The int32 range of route U's checked values.** -/
 theorem int7Int32UPos : Pouw.Guarantees.NCP.Int7Int32UPos := by
@@ -223,9 +223,9 @@ theorem wrapFinalOnlyIndU : Pouw.Guarantees.NCP.WrapFinalOnlyIndU := by
 
 /-- **The floor for route U's protocol checked values.** -/
 theorem wrapWordFloorIndU : Pouw.Guarantees.NCP.WrapWordFloorIndU := by
-  intro β k m n N R A B adv γ₀ h16 hI hγ0 hγ1 hV hr hNz
-  exact (WordProofs.wordBound (Noise N m n k) (fun _ => positions k m n) (wrappedU β k m n N R A B) N adv γ₀
-    hγ0 hγ1 hV hNz).trans
-    (floor_sum _ adv γ₀ fun u hu => wrapFinalOnlyIndU β k m n N R A B adv h16 hI hV hr u hu)
+  intro β k m n N R A B adv g₀ h16 hI hg0 hg1 hV hr hNz
+  exact (WordProofs.wordBound (Noise N m n k) (fun _ => positions k m n) (wrappedU β k m n N R A B) N adv g₀
+    hg0 hg1 hV hNz).trans
+    (floor_sum _ adv g₀ fun u hu => wrapFinalOnlyIndU β k m n N R A B adv h16 hI hV hr u hu)
 
 end Pouw.NCP.RouteUWordProofs

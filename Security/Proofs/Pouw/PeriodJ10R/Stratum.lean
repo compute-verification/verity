@@ -2,7 +2,7 @@ module
 
 public import Properties.Pouw.PeriodJ10R
 public import Proofs.Accounting.Served
-public import Proofs.Accounting.ComposePeriod.Honest
+public import Proofs.Accounting.ComposeMonitoringPeriod.Honest
 public import Proofs.Flock.Soundness.Audit.StratifiedProj
 
 /-!
@@ -57,7 +57,7 @@ theorem miss_eq : ∀ (K N : ℕ) (B : Finset (Fin N)), K ≤ N →
       intro p
       by_cases hp : p ∈ B
       · rw [if_pos hp, mul_zero]
-        refine Accounting.SecurityProofs.ComposePeriod.Honest.prob_none fun e he => ?_
+        refine Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest.prob_none fun e he => ?_
         have h0 := (forall_mem_subsetDraw _ _).mp he 0 (Nat.succ_pos K)
         rw [Equiv.Perm.decomposeFin_symm_apply_zero] at h0
         exact h0 hp

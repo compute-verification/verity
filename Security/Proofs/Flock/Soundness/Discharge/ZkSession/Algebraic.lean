@@ -8,9 +8,7 @@ public import Mathlib.RingTheory.SimpleRing.Principal
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Interleave
-import Proofs.Flock.Soundness.Game.Union
+import Proofs.Flock.Soundness.Game
 import VCVio.Prelude.Core
 
 /-!

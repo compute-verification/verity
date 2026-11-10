@@ -43,8 +43,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.Served
 import Proofs.Flock.Claims.Sampling.Draws
 import Proofs.Flock.Soundness.Audit.Law
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.VBridge.Full
 import Std.Tactic.BVDecide.Normalize.Bool
 
@@ -90,12 +89,12 @@ theorem miss_le_prod (S : Array Flock.Draw.Stratum) (hk : ∀ s : Fin S.size, S[
             ∃ D, Flock.Draw.subset S[s].k S[s].size (Law.streamOf f) = some D ∧
             ∀ j ∈ localOf S B s, j.val ∉ D) s (g s)) := by
         refine prCoin_mono fun g ⟨D, hD, hmiss⟩ s _ => ?_
-        have hD' : Flock.Draw.stratified S (Array.ofFn fun i => Properties.SampledProofs.bytesOf (g i)) = some D := hD
+        have hD' : Flock.Draw.stratified S (Array.ofFn fun i => Properties.Spot.bytesOf (g i)) = some D := hD
         obtain ⟨li, hli, hmem⟩ := Law.stratified_units _ _ D hD' s.val s.isLt
         have hSs : S[s.val]! = S[s] := getElem!_pos S s.val s.isLt
-        have hfs : (Array.ofFn fun i => Properties.SampledProofs.bytesOf (g i)).getD s.val ByteArray.empty =
+        have hfs : (Array.ofFn fun i => Properties.Spot.bytesOf (g i)).getD s.val ByteArray.empty =
             Law.streamOf (g s) := by
-          simp [Array.getD_eq_getD_getElem?, Properties.SampledProofs.bytesOf, Law.streamOf]
+          simp [Array.getD_eq_getD_getElem?, Properties.Spot.bytesOf, Law.streamOf]
         rw [hSs, hfs] at hli
         rw [hSs] at hmem
         exact ⟨li, hli, fun j hj hjli => hmiss _ (Finset.mem_filter.1 hj).2 (hmem _ hjli)⟩
@@ -270,7 +269,7 @@ theorem unitWork_le (ss : Array Flock.Draw.WorkStratum) (S : Array Flock.Draw.St
 /-- The strata's work, read stratum by stratum over the sampling design's strata `S` (as many as `ss`). -/
 theorem sum_work (ss : Array Flock.Draw.WorkStratum) (S : Array Flock.Draw.Stratum) (hsz : S.size = ss.size) :
     ∑ s : Fin S.size, ss[s.val]!.work * ss[s.val]!.size = Flock.Draw.totalWork ss := by
-  rw [Properties.SampledProofs.SecurityProofs.totalWork_eq, ← Fin.sum_univ_fun_getElem]
+  rw [Properties.Spot.SecurityProofs.totalWork_eq, ← Fin.sum_univ_fun_getElem]
   refine Fintype.sum_equiv (finCongr (hsz.trans Array.length_toList.symm)) _ _ fun s => ?_
   have hs : s.val < ss.size := by omega
   simp only [finCongr_apply_coe, Array.getElem_toList, getElem!_pos ss s.val hs]
@@ -401,7 +400,7 @@ theorem establishedSound : EstablishedSound := establishedSound_of Properties.Po
 
 section Withheld
 
-open SampledProofs.Challenger (ChallengerKey trustedSessionOf withheldOn)
+open Spot.Challenger (ChallengerKey trustedSessionOf withheldOn)
 
 theorem bind_eq_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {v : β} (h : (x >>= f) = .ok v) :
     ∃ a, x = .ok a ∧ f a = .ok v := by
@@ -553,7 +552,7 @@ theorem groupedDrawMisses_nontrivial :
     rfl
   have h1 : Pouw.RelativeSecurity.prob
       (fun g => ∃ d, drawnOn idleLaw g = some d ∧ ∀ b ∈ lanesBlocks, lanesLeaf b ∉ d) = 1 := by
-    unfold Pouw.RelativeSecurity.prob
+    unfold Pouw.RelativeSecurity.prob Claims.prUniform
     have hf : ∀ inst : DecidablePred (fun g : (i : Fin idleLaw.size) → Fin idleLaw[i].need → Fin 256 =>
         ∃ d, drawnOn idleLaw g = some d ∧ ∀ b ∈ lanesBlocks, lanesLeaf b ∉ d),
         @Finset.filter _ _ inst Finset.univ = Finset.univ := fun _ => Finset.filter_true_of_mem fun g _ => hall g

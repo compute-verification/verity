@@ -33,7 +33,7 @@ from typing import Any
 
 from verity_vllm.engine.hooks import Hooks
 
-__all__ = ["SCHEMA", "StepTrace", "load", "steps"]
+__all__ = ["SCHEMA", "StepTrace", "load", "step_geometry", "steps"]
 
 SCHEMA = "verity-vllm/step-trace/v1"
 #: the trace's file in a `verity-vllm serve-openai` run, beside the committer's step_trace.jsonl

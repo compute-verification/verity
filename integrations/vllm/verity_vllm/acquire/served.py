@@ -63,6 +63,7 @@ from verity_vllm.acquire import served_moe as SM
 from verity_vllm.acquire.inductor_templates import Unmodelled, bound
 from verity_vllm.acquire.sources.inductor_hooks import FLUSH
 from verity_vllm.config import UsageError, option, workload_arg
+from verity_vllm.program.frontend import targets as TG
 from verity.ml.definitions.registry import b1, cublas_bf16, cublas_gemv
 from verity.ml.definitions.registry import inductor as IR
 from verity_vllm.query.manifest.bind import split_name
@@ -522,13 +523,8 @@ def gemm_definition(route: dict[str, Any], K: int, N: int, dot: Any) -> dict[str
 
 
 def dispatch(n: int, uniform_decode: bool, capture_sizes: list[int], max_num_seqs: int) -> tuple[str, int]:
-    """vLLM's CUDA-graph dispatch of a step of n tokens: (FULL | PIECEWISE | NONE, the padded token count)."""
-    full = [s for s in capture_sizes if s <= max_num_seqs]
-    if uniform_decode and full and n <= max(full):
-        return "FULL", min(s for s in full if s >= n)
-    if capture_sizes and n <= max(capture_sizes):
-        return "PIECEWISE", min(s for s in capture_sizes if s >= n)
-    return "NONE", n
+    """vLLM's CUDA-graph dispatch of a step of n tokens: (FULL | PIECEWISE | NONE, the padded token count) (`targets.graph_launch`)."""
+    return TG.graph_launch(n, uniform_decode, capture_sizes, max_num_seqs)
 
 
 def step_plans(schedule: list[dict[str, Any]], steps: int, gemms: list[tuple[int, int]], logits_kn: tuple[int, int], heads: tuple[int, int, int],

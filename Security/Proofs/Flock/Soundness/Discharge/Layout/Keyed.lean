@@ -16,10 +16,10 @@ set_option Elab.async false
 /-!
 # `lay` and `rs` at the production program's places
 
-At [e2e-placed]'s places of the circuit's program on Δ's source keys (`Sites.progPlaces_keyProg hU hparse outs`), with
+At `Discharge/Placed`'s places of the circuit's program on Δ's source keys (`Sites.progPlaces_keyProg hU hparse outs`), with
 row widths `16 · words` (`portRowW`), `lay` is `keyLayout` with the registration's bit `outBitOf` (the population's
 returned outputs) and `bitCode` for the single gates' commit strings, and `rs` is `keyRowsEnc` with `enc := rowEnc` (the
-bytes `sha512/row/v1` hashes, `keyRow_enc`) and [e2e-const]'s `Const.constCols_keyProg` and [e2e-zero]'s
+bytes `sha512/row/v1` hashes, `keyRow_enc`) and `Const.constCols_keyProg` and
 `Zero.zeroCols_keyProg` for the constant's and the zero's gates (`keyedRows`). With `KeysRow` from the parse
 (`keysRow_of_parse`), `keyedRowsOfParse`; with the returned outputs' bits for the program's outputs (`outsOf`,
 `outsOut_outsOf`), `keyedRowsOuts`.
@@ -50,7 +50,7 @@ noncomputable abbrev keyedLayout :
 
 variable {outs popOf} in
 /-- **`rs` at the production program's places**: `keyRowsEnc` at row widths `16 · words`, with the constant's and the
-zero's gates from [e2e-const] and [e2e-zero]. -/
+zero's gates from `Discharge/Const` and `Discharge/Zero`. -/
 noncomputable def keyedRows (ho : c.outNet = c.unitNet)
     (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
       BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)

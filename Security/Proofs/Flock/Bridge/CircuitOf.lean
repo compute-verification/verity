@@ -51,7 +51,7 @@ game circuit and partition as core's), `circuitOf D hU n` and `partsOf D hU n` (
 `partsOfFile` (the same at the committed circuit and public files, through `parsedOf`). Here are their lemmas:
 
 * `Verity.Circuit.ofAudit_eq_toCircuit`: `Circuit.ofAudit C` is the Boolean profile's circuit of `C`
-  (`FlockSoundness.Audit.Circuit.toCircuit`). `Verity.Circuit.ofBits xs` is a transcript of bits, and
+  (`Verity.Boolean.Circuit.toCircuit`). `Verity.Circuit.ofBits xs` is a transcript of bits, and
   `Verity.Partition.wrong_ofAudit` says the incorrect proof blocks are the game's, so every statement about the game's incorrect proof blocks
   is one about core's.
 * `circuitOf_eq` and `partsOf_eq` restate the key program's circuit and partition as the ones `circuitOf` and `partsOf`
@@ -75,12 +75,12 @@ open Claims.Sampling
 
 /-! ## A game circuit as core's -/
 
-theorem apply_coreOp {N : ℕ} (o : FlockSoundness.Audit.Op N) (v : Fin N → Bool) :
+theorem apply_coreOp {N : ℕ} (o : Verity.Boolean.Op N) (v : Fin N → Bool) :
     (coreOp o).apply v = o.apply v := by
   cases o <;> rfl
 
 /-- A game circuit as a Boolean circuit: the same gates and outputs. -/
-def coreBool (C : FlockSoundness.Audit.Circuit) : FlockSoundness.Audit.Circuit where
+def coreBool (C : Verity.Boolean.Circuit) : Verity.Boolean.Circuit where
   N := C.N
   op g := coreOp (C.op g)
   topo g a ha := C.topo g a (by rwa [args_coreOp] at ha)
@@ -94,7 +94,7 @@ open Flock.Bridge (coreOp coreBool args_coreOp isInput_coreOp apply_coreOp)
 
 section OfAudit
 
-variable {C : FlockSoundness.Audit.Circuit}
+variable {C : Verity.Boolean.Circuit}
 
 /-- `Circuit.ofAudit` is the Boolean profile's circuit of the game circuit. -/
 theorem Circuit.ofAudit_eq_toCircuit : Circuit.ofAudit C = (coreBool C).toCircuit := rfl
@@ -102,12 +102,12 @@ theorem Circuit.ofAudit_eq_toCircuit : Circuit.ofAudit C = (coreBool C).toCircui
 theorem Circuit.ofAudit_reads (g : Fin C.N) : (Circuit.ofAudit C).reads g = (C.op g).args.toFinset :=
   congrArg List.toFinset (args_coreOp _)
 
-theorem Circuit.ofAudit_op (g : Fin C.N) (v : (Circuit.ofAudit C).Transcript) :
+theorem Circuit.ofAudit_op (g : Fin C.N) (v : (Circuit.ofAudit C).Trace) :
     (Circuit.ofAudit C).op g v = BitVec.ofBool ((C.op g).apply fun a => (v a).getLsbD 0) :=
   congrArg BitVec.ofBool (apply_coreOp _ _)
 
 /-- A transcript of bits as core's. -/
-def Circuit.ofBits (xs : Fin C.N → Bool) : (Circuit.ofAudit C).Transcript := fun g => BitVec.ofBool (xs g)
+def Circuit.ofBits (xs : Fin C.N → Bool) : (Circuit.ofAudit C).Trace := fun g => BitVec.ofBool (xs g)
 
 variable {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
 
@@ -127,10 +127,30 @@ theorem Partition.localEval_ofAudit (xs : Fin C.N → Bool) (u : Fin n) (g : Fin
   · rw [(Partition.ofAudit P).localEval_of_mem (Circuit.ofBits xs)
       (show (Partition.ofAudit P).unit g = some u from hu), Circuit.ofAudit_op, P.localEval_of_mem xs hu]
     congr 1
-    exact FlockSoundness.Audit.Op.apply_congr _ fun a ha => by simp [ih a (C.topo g a ha)]
+    exact Verity.Boolean.Op.apply_congr _ fun a ha => by simp [ih a (C.topo g a ha)]
   · rw [(Partition.ofAudit P).localEval_of_not_mem (Circuit.ofBits xs)
       (show (Partition.ofAudit P).unit g ≠ some u from hu), P.localEval_of_not_mem xs hu]
     rfl
+
+/-- Every transcript of core's circuit of a game circuit is a transcript of bits. -/
+theorem Circuit.ofBits_getLsbD (tr : (Circuit.ofAudit C).Trace) :
+    Circuit.ofBits (fun g => (tr g).getLsbD 0) = tr := by
+  funext g
+  apply BitVec.eq_of_getLsbD_eq
+  intro i hi
+  have hi0 : i = 0 := by
+    have : i < 1 := hi
+    omega
+  subst hi0
+  simp [Circuit.ofBits]
+
+/-- A unit's local evaluation in core's view of a game partition is the game's, at the transcript's bits. -/
+theorem Partition.localEval_ofAudit_bit (tr : (Circuit.ofAudit C).Trace) (u : Fin n) (g : Fin C.N) :
+    ((Partition.ofAudit P).localEval tr u g).getLsbD 0 = P.localEval (fun g => (tr g).getLsbD 0) u g := by
+  have e := Partition.localEval_ofAudit P (fun g => (tr g).getLsbD 0) u g
+  rw [Circuit.ofBits_getLsbD] at e
+  rw [e]
+  simp
 
 /-- **The incorrect proof blocks are the game's**: core's partition of a game circuit has the game partition's incorrect proof blocks, on
 the same bits. -/
@@ -138,7 +158,7 @@ theorem Partition.wrong_ofAudit (xs : Fin C.N → Bool) :
     (Partition.ofAudit P).wrong (Circuit.ofBits xs) = P.wrong xs := by
   classical
   ext u
-  rw [Partition.mem_wrong, FlockSoundness.Audit.Partition.mem_wrong]
+  rw [Partition.mem_incorrect, FlockSoundness.Audit.Partition.mem_wrong]
   refine not_congr ⟨fun h g hg hu => ?_, fun h g hg hu => ?_⟩
   · have e := h g ((Partition.mem_committed_ofAudit P g).2 hg) hu
     rw [Partition.localEval_ofAudit] at e
@@ -159,13 +179,13 @@ open Claims.Sampling
 
 /-- **The wire values a witness opens**: an input the constants `κ` fix, its constant; every other wire, the value
 opened at its position (`posOf`), `false` where none is. -/
-def openedOf (C : FlockSoundness.Audit.Circuit) (κ : Fin C.N → Option Bool) (val : ℕ → Option Bool) (g : Fin C.N) :
+def openedOf (C : Verity.Boolean.Circuit) (κ : Fin C.N → Option Bool) (val : ℕ → Option Bool) (g : Fin C.N) :
     Bool :=
   if (C.op g).isInput then (κ g).getD ((val (posOf C g)).getD false) else (val (posOf C g)).getD false
 
 section Opened
 
-variable {C : FlockSoundness.Audit.Circuit}
+variable {C : Verity.Boolean.Circuit}
 
 theorem openedOf_of_not_const {κ : Fin C.N → Option Bool} (val : ℕ → Option Bool) {a : Fin C.N}
     (hc : ∀ b, (progOf C κ).gates[posOf C a]? ≠ some (.const b)) :
@@ -180,33 +200,33 @@ theorem openedOf_of_not_const {κ : Fin C.N → Option Bool} (val : ℕ → Opti
 theorem openedOf_const {κ : Fin C.N → Option Bool} (val : ℕ → Option Bool) {a : Fin C.N} {b : Bool}
     (hin : C.op a = .input) (hk : κ a = some b) :
     openedOf C κ val a = b := by
-  simp [openedOf, hin, hk, FlockSoundness.Audit.Op.isInput]
+  simp [openedOf, hin, hk, Verity.Boolean.Op.isInput]
 
 /-- A gate's lowered gates read the positions of its arguments: some lowered gate reads each. -/
 theorem exists_lower_reads {κ : Fin C.N → Option Bool} {g h : Fin C.N} (hg : g ∈ (C.op h).args) :
     ∃ j < gateSize (C.op h), ∃ x, (lower C κ h)[j]? = some x ∧ posOf C g ∈ x.reads := by
   unfold lower
   cases hop : C.op h with
-  | input => rw [hop] at hg; simp [FlockSoundness.Audit.Op.args] at hg
+  | input => rw [hop] at hg; simp [Verity.Boolean.Op.args] at hg
   | and a b =>
     rw [hop] at hg
     refine ⟨0, by simp [gateSize], .and [posOf C a, posOf C b], by simp, ?_⟩
-    simp only [FlockSoundness.Audit.Op.args, List.mem_cons, List.not_mem_nil, or_false] at hg
+    simp only [Verity.Boolean.Op.args, List.mem_cons, List.not_mem_nil, or_false] at hg
     rcases hg with rfl | rfl <;> simp [BGate.reads]
   | xor a b =>
     rw [hop] at hg
     refine ⟨0, by simp [gateSize], .xor [posOf C a, posOf C b], by simp, ?_⟩
-    simp only [FlockSoundness.Audit.Op.args, List.mem_cons, List.not_mem_nil, or_false] at hg
+    simp only [Verity.Boolean.Op.args, List.mem_cons, List.not_mem_nil, or_false] at hg
     rcases hg with rfl | rfl <;> simp [BGate.reads]
   | not a =>
     rw [hop] at hg
     refine ⟨0, by simp [gateSize], .not (posOf C a), by simp, ?_⟩
-    simp only [FlockSoundness.Audit.Op.args, List.mem_cons, List.not_mem_nil, or_false] at hg
+    simp only [Verity.Boolean.Op.args, List.mem_cons, List.not_mem_nil, or_false] at hg
     subst hg
     simp [BGate.reads]
   | row a b =>
     rw [hop] at hg
-    simp only [FlockSoundness.Audit.Op.args, List.mem_append] at hg
+    simp only [Verity.Boolean.Op.args, List.mem_append] at hg
     rcases hg with hg | hg
     · exact ⟨0, by simp [gateSize], .xor (a.map (posOf C)), by simp, List.mem_map.2 ⟨g, hg, rfl⟩⟩
     · exact ⟨1, by simp [gateSize], .xor (b.map (posOf C)), by simp, List.mem_map.2 ⟨g, hg, rfl⟩⟩
@@ -331,7 +351,7 @@ end Opened
 
 /-- **The transcript the witness opens**, at `circuitOf`'s wires: `openedOf`'s bits. -/
 noncomputable def transcriptOf (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ)
-    (κ : Fin (keyCircuit D hU n).N → Option Bool) (val : ℕ → Option Bool) : (circuitOf D hU n).Transcript :=
+    (κ : Fin (keyCircuit D hU n).N → Option Bool) (val : ℕ → Option Bool) : (circuitOf D hU n).Trace :=
   Verity.Circuit.ofBits (openedOf (keyCircuit D hU n) κ val)
 
 section Parsed

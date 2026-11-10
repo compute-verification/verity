@@ -9,8 +9,7 @@ public import Proofs.Flock.Soundness.PlanDraw
 import all Init.Data.String.Defs
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Audit.Law
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 import Std.Data.HashMap.Lemmas
 
 /-!

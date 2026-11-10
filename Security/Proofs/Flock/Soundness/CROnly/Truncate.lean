@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.CROnly.Defs
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Expected time from strict time: a finder stopped at `q`
