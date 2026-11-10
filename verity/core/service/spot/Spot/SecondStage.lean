@@ -1053,6 +1053,11 @@ def check (allow : Bool) (own : Own) (stmts : Option (Array Json)) : Check :=
       else interiorFailures own ++ designFailures ps own
   found.foldl (fun c x => c.fail x.1 x.2) {}
 
+-- `check`'s equation lemmas are made here, on the command thread: Lean names a binder of theirs in the hygiene context
+-- of the declaration that first asks for them, and the theorems below that unfold `check` elaborate in parallel, so
+-- without this, whichever of them asks first decides the module's `.olean`.
+example := @check.eq_1
+
 /-- The interior registration's audit record `rec` with round 2's check `c` as `checks.statements`, and the reads
 `reads` that rest on the interior's own values (`interiorReads`) as `interior_reads` where there are any. It fails where
 `c` does, as a failed check of its own fails it (`Record.record`): not accepted, and no profile, integrity profile or
