@@ -61,18 +61,9 @@ theorem verifier_mem (k : Verity.Registration.Composite) :
   · exact List.mem_cons.2 (Or.inl rfl)
   · exact List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inl rfl)))
 
-<<<<<<< ours
-/-- **What a composite's verifier of record accepts, it accepted as a `same` composition**: an accepted composition of
-its components whose record subprotocols committed to one record, at onsite PoUS and PoUB-P2 on one store. -/
-||||||| base
-/-- **What a composite's verifier of record accepts, it accepted as a `same` composition**: an accepted composition of
-its components whose record subprotocols committed to one record, at onsite PoUS and PoUB-P2 on one store, and at
-remote every window of PoUW's period on the policy's record. -/
-=======
 /-- **What a composite's verifier accepts, it accepted as a `same` composition**: an accepted composition of
-its components whose record subprotocols committed to one record, every window of PoUW's period on the policy's record,
-and at onsite PoUS and PoUB-P2 on one store. -/
->>>>>>> theirs
+its components whose record subprotocols committed to one record, at onsite every window of PoUW's period on the
+policy's record and PoUS and PoUB-P2 on one store, and at remote Pearl+'s run on the policy's record. -/
 theorem accepts_same {k : Verity.Registration.Composite} {s : Sent} (h : Accepts k s) : SameAccepts k s := by
   cases k
   · obtain ⟨ps, c, ev, hp, hc, he, pub, prof, hch⟩ :=
@@ -201,19 +192,13 @@ strategy on whose every play the claim of one of composite `k`'s subprotocols fa
 theorem soundness_nontrivial_of {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)
     (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c))
     (hreg : V.Registered θ F) (a : Subprotocol) (ha : a ∈ subprotocols k)
-    (hfail : ∀ log (e : ByteArray × Array ByteArray), ¬ V.Holds k θ F c σ a ⟨θ, F, c, log, e.1, e.2⟩)
+    (hfail : ∀ o : Exchange, o.params = θ ∧ o.files = F ∧ o.commitment = c → ¬ V.Holds k θ F c σ a o)
     (hlt : ∑ a ∈ subprotocols k, V.error a θ F c σ < 1) :
     ¬ V.SoundnessFor k fun _ => True := by
   intro h
   have h1 := prob_play_eq_one (V.families θ) θ F c
     (fun o => (fun _ => True) o.sent ∧ V.Registered o.params o.files ∧ ∃ a ∈ subprotocols k, ¬ V.Holds k θ F c σ a o)
-<<<<<<< ours
-    (fun log e => ⟨trivial, hreg, a, ha, hfail log e⟩) σ
-||||||| base
-    (fun _ _ => ⟨trivial, hreg, a, ha, hfail _⟩) σ
-=======
-    (fun o h3 => ⟨trivial, h3.1 ▸ h3.2.1 ▸ hreg, a, ha, hfail o⟩) σ
->>>>>>> theirs
+    (fun o h3 => ⟨trivial, h3.1 ▸ h3.2.1 ▸ hreg, a, ha, hfail o h3⟩) σ
   exact lt_irrefl (1 : ℝ≥0∞) ((h1.symm.trans_le (h θ F c σ)).trans_lt hlt)
 
 /-- An event no play after `θ`, `F` and `c` meets has probability zero. -/
@@ -451,8 +436,8 @@ theorem error_exact (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c 
 which no play computes, and at remote no credit is published, since the empty commitment is no binding of the
 components' digests. -/
 theorem pouw_fails (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray)
-    (σ : Game.Strategy (exact.game θ F .empty)) (log : List Release) (e : ByteArray × Array ByteArray) :
-    ¬ exact.Holds k θ F .empty σ .pouw ⟨θ, F, .empty, log, e.1, e.2⟩ := by
+    (σ : Game.Strategy (exact.game θ F .empty)) (o : Exchange)
+    (ho : o.params = θ ∧ o.files = F ∧ o.commitment = .empty) : ¬ exact.Holds k θ F .empty σ .pouw o := by
   intro h
   cases k
   · change (1 : ℝ) ≤ ((Finset.card (∅ : Finset (Fin (exact.circuitOf θ F).N)) : ℕ) : ℝ) at h
@@ -460,8 +445,8 @@ theorem pouw_fails (k : Verity.Registration.Composite) (θ : ByteArray) (F : Arr
     norm_num at h
   · obtain ⟨_, ⟨_, c', _, ⟨_, hc, _⟩, _⟩, _⟩ := h
     have h64 : ¬ ByteArray.empty.size = 64 := by decide
-    change Composition.decodeCommitment ByteArray.empty = .ok c' at hc
-    rw [Composition.decodeCommitment, if_neg h64] at hc
+    change Composition.decodeCommitment o.commitment = .ok c' at hc
+    rw [ho.2.2, Composition.decodeCommitment, if_neg h64] at hc
     cases hc
 
 /-- At `exact`, the conclusion at composite `k` fails for a verifier that accepts everything, at the files that are the
@@ -471,13 +456,7 @@ theorem nontrivial_at (k : Verity.Registration.Composite) (hk : Subprotocol.pouw
   have h0 : ∑ a ∈ subprotocols k, exact.error a .empty #[.empty] .empty (exact.honest .empty #[.empty] .empty) = 0 :=
     Finset.sum_eq_zero fun a _ => error_exact a _ _ _ _
   exact soundness_nontrivial_of exact k .empty #[.empty] .empty (exact.honest .empty #[.empty] .empty)
-<<<<<<< ours
-    ⟨.empty, by simp, rfl⟩ .pouw hk (pouw_fails k _ _ _) (lt_of_eq_of_lt h0 zero_lt_one)
-||||||| base
-    ⟨.empty, by simp, rfl⟩ .pouw hk (pouw_fails k _ _ _ _) (lt_of_eq_of_lt h0 zero_lt_one)
-=======
-    ⟨⟨.empty, by simp, rfl⟩, ⟨.empty, by simp, rfl⟩⟩ .pouw hk (pouw_fails k _ _ _ _) (lt_of_eq_of_lt h0 zero_lt_one)
->>>>>>> theirs
+    ⟨⟨.empty, by simp, rfl⟩, ⟨.empty, by simp, rfl⟩⟩ .pouw hk (pouw_fails k _ _ _) (lt_of_eq_of_lt h0 zero_lt_one)
 
 end Idle
 
