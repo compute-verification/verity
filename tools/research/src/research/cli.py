@@ -321,12 +321,15 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         except waitcap.OverCap as e:
             print(f"research run: {e}", file=sys.stderr)
             return 2
+    if (ns.on or ns.queue) and not ns.claimed and (why := _short_bare_timeout(harness_opts)):
+        print(f"research run: refused: {why}", file=sys.stderr)
+        return 2
     if ns.on == "auto" and (why := _auto_placement(ns, harness_opts)):
         print(f"research run --on auto: {why}", file=sys.stderr)
         return 2
     if getattr(ns, "auto", False):
         _auto_size(ns, harness_opts, command)
-        if (harness_opts := _auto_spill(ns, harness_opts)) is None:
+        if (harness_opts := _auto_spill(ns, harness_opts, command)) is None:
             return 2
     if ns.claimed:
         _survive_stray_signals()
@@ -417,6 +420,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         if why:
             print(f"research run: {why}", file=sys.stderr)
             return 2
+        if note := _custody_ttl_warning(ns.custody_ttl, harness_opts):
+            print(f"research run: warning: {note}", file=sys.stderr)
     if ns.project:
         harness_opts = ["--project", ns.project, *harness_opts]
     root = R.runs_root(ns.runs_dir)
@@ -594,6 +599,24 @@ def _harness_timeout(harness_opts: list[str]) -> float | None:
     return None if v is None else float(v)
 
 
+SHORT_TIMEOUT_S = 300
+
+
+def _short_bare_timeout(harness_opts: list[str]) -> str | None:
+    """Why a run sent to a machine is refused for its ``--timeout``: a bare number under :data:`SHORT_TIMEOUT_S` reads as seconds,
+    and on a shared machine it is nearly always minutes meant (`--timeout 60` once killed each of a PR's runs 60 s after it took
+    its slot). A value with a unit (`90s`, `60m`) passes as written."""
+    v = remote.flag_value(harness_opts, "--timeout")
+    if v is None or not v.replace(".", "", 1).isdigit():
+        return None
+    n = float(v)
+    if n >= SHORT_TIMEOUT_S:
+        return None
+    return (f"--timeout {v} is {n:g} seconds (a bare number reads as seconds). For minutes write --timeout {v}m, or --max-min {v} "
+            f"with --on auto or --queue; a run that should really stop within {SHORT_TIMEOUT_S // 60} minutes says so with a unit, "
+            f"--timeout {v}s")
+
+
 def _normalize_timeout(harness_opts: list[str]) -> list[str]:
     """``--timeout 40m`` -> ``--timeout 2400``: the harness, the custody-key guard and the lease extension all read seconds.
     ValueError on a malformed value, so it is refused here and not by the machine after launch."""
@@ -609,9 +632,23 @@ def _normalize_timeout(harness_opts: list[str]) -> list[str]:
     return out
 
 
+#: what a run that outlives its custody key needs, since no key lives past `CUSTODY_TTL_CAP_S`
+CUSTODY_REPAIR = ("if the run outlives the key, publish its custody with a fresh one after it ends: "
+                  "`research data custody RUN --publish` (store README, custody)")
+
+
+def _custody_ttl_warning(custody_ttl: str | None, harness_opts: list[str]) -> str | None:
+    """A launch whose ``--timeout`` is past :data:`CUSTODY_TTL_CAP_S`, with a key at the cap: allowed, and told the repair."""
+    timeout = _harness_timeout(harness_opts)
+    if timeout is not None and timeout > CUSTODY_TTL_CAP_S and custody_ttl:
+        return f"--timeout {timeout:g} s is past the custody key's {custody_ttl}: {CUSTODY_REPAIR}"
+    return None
+
+
 def _custody_ttl_problem(custody_ttl: str | None, harness_opts: list[str]) -> str | None:
     """Why a custody launch is refused: an explicit ``--custody-ttl`` over :data:`CUSTODY_TTL_CAP_S`, or a ``--timeout`` longer than
-    the key's lifetime, the explicit ``--custody-ttl``'s or the default's (the key would expire before the run's upload)."""
+    the key's lifetime, the explicit ``--custody-ttl``'s or the default's (the key would expire before the run's upload). A
+    ``--timeout`` past the cap takes a key at the cap, and the run that outlives it is repaired after (`_custody_ttl_warning`)."""
     from research.store import credentials as C  # noqa: PLC0415
     from research.store.custody import DEFAULT_TTL  # noqa: PLC0415
 
@@ -620,10 +657,14 @@ def _custody_ttl_problem(custody_ttl: str | None, harness_opts: list[str]) -> st
     except C.MintError as e:
         return str(e)
     if custody_ttl and ttl > CUSTODY_TTL_CAP_S:
-        return f"--custody-ttl {custody_ttl} is over the {CUSTODY_TTL_CAP_S // 3600} h cap"
+        return (f"--custody-ttl {custody_ttl} is over the {CUSTODY_TTL_CAP_S // 3600} h cap: pass at most "
+                f"--custody-ttl {CUSTODY_TTL_CAP_S // 3600}h, and {CUSTODY_REPAIR}")
     timeout = _harness_timeout(harness_opts)
-    if timeout is not None and timeout > ttl:
-        hours = -(-int(timeout) // 3600) + 1
+    if timeout is not None and timeout > CUSTODY_TTL_CAP_S and ttl < CUSTODY_TTL_CAP_S:
+        return (f"--timeout {timeout:g} s is past the {CUSTODY_TTL_CAP_S // 3600} h a custody key lives at most: pass "
+                f"--custody-ttl {CUSTODY_TTL_CAP_S // 3600}h, and {CUSTODY_REPAIR}")
+    if timeout is not None and CUSTODY_TTL_CAP_S >= timeout > ttl:
+        hours = min(-(-int(timeout) // 3600) + 1, CUSTODY_TTL_CAP_S // 3600)
         if custody_ttl:
             return (f"--timeout {timeout:g} s outlives --custody-ttl {custody_ttl} ({ttl} s; a bare number is seconds): the upload "
                     f"would fail; pass a longer one, at most {CUSTODY_TTL_CAP_S // 3600}h, such as --custody-ttl {hours}h")
@@ -989,7 +1030,8 @@ def _publish_attempt(run_dir: Path, prep: dict, *, run_record: bool = False) -> 
             pres = f"  local only ({out.get('preserve_skipped', 'no remote')}; `research data push {run_dir.name}` with credentials preserves it)"
         print(f"research: attempt published: {out['n_outputs']} outputs drv={out['derivation']} reuse={out['reuse_key'] or '-'}{pres}", file=sys.stderr)
     else:
-        print(f"research: attempt not published: {out.get('error')}  (store_publish_error.json in the run dir; `research data attempt publish` retries)",
+        retry = f"research data custody {run_dir} --publish" if run_record else "research data attempt publish"
+        print(f"research: attempt not published: {out.get('error')}  (store_publish_error.json in the run dir; `{retry}` retries)",
               file=sys.stderr)
 
 
@@ -1034,7 +1076,7 @@ def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | No
     return None
 
 
-def _auto_spill(ns: argparse.Namespace, harness_opts: list[str]) -> list[str] | None:
+def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[str] = ()) -> list[str] | None:
     """`--on auto` once sized: queued onto AUTO_NODE as `_auto_placement` set it, or, where research.auto finds it starts sooner,
     a CPU-phase run of AUTO_KIND sent to a pool instead (`--on MACHINE --pool POOL`, under `--as`, else `auto`), with the
     kind's time as its --timeout. The harness options it runs with, or None when it is refused (`auto.Unplaceable`, or a GPU or
@@ -1050,7 +1092,7 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str]) -> list[str] | 
         return None
     if why is None:
         try:
-            target, why = auto.choose(auto.read(Path(ns.source), cpus), cpus, mem)
+            target, why = auto.choose(auto.read(Path(ns.source), cpus), cpus, mem, lean_pool=auto.lean_pool(command))
         except auto.Unplaceable as e:
             print(f"research run --on auto: refused: {e}", file=sys.stderr)
             return None

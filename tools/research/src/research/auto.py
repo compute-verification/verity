@@ -12,7 +12,8 @@ then takes, in order:
     run, with no cgroup cap) is free and unblocked for every waiter ahead and this job;
   - else node 2's share when it can start the job now, with no one waiting there (a run once queued 100 min behind cpu-6's 8
     held slots and 9 waiters while node 2's 48 CPUs sat free);
-  - else the pool with the shortest wait, as waiters ahead per fitting slot;
+  - else the pool with the shortest wait, as waiters ahead per fitting slot, leaving out a pool whose line is stalled on
+    memory (`STALL_MIN`): a job placed there waits with it, however short the line;
   - node 2 only when no pool fits the job or none can be read, and node 2 itself can be. Node 2 is the only GPU node,
     and CPU work there has held its GPUs at 0% under a load of 235 on 120 cores while cpu-5 ran at 8 of 192. A node 2
     that carries remote.RUNS_VIA_SLOT_FILE counts as unread: its launcher refuses a run that doesn't come through a check
@@ -63,6 +64,22 @@ HOLD_FILE = "/etc/vy/auto-hold"
 #: its bytes free fails every job placed there, shipping its source or mid-build, with ENOSPC. One run of
 #: a large suite (tools/research's) holds some 250k pytest temp files at once, so a floor below a few of those still fails jobs
 DISK_PATH, MIN_FREE_INODES, MIN_FREE_GB = "/workspace", 1_000_000, 50
+#: a pool whose line has waited this long beside a free slot is stalled on memory and takes no job (`_pool`), nor does one whose
+#: every fitting slot is idle and blocked with slot.py's memory reason, which contains MEMORY_BLOCK
+STALL_MIN, MEMORY_BLOCK = 5, " GB of memory free"
+#: a machine's Lean pools (tools/verity/check/lean_slot.py's file): a run that takes a Lean slot of a pool goes only where that pool
+#: has one, since lean_changed.py refuses it at once elsewhere (drive's cpu-6, 7 and 9 close `build` to lanes)
+LEAN_SLOTS = "/workspace/research/locks/lean-slots"
+
+
+def lean_pool(command: list[str]) -> str | None:
+    """The Lean pool ``command`` takes a slot of: `build` for `lean_changed.py --build` and `verity lean try`, else None."""
+    words = [str(w) for w in command]
+    if any(w.endswith("lean_changed.py") for w in words) and ("--build" in words or "--try" in words):
+        return "build"
+    if any(words[i:i + 3] == ["verity", "lean", "try"] for i in range(len(words))):
+        return "build"
+    return None
 
 
 class Unplaceable(Exception):
@@ -127,6 +144,17 @@ def doc(f):
         return {"error": f"{type(e).__name__}: {e}"}
 
 
+def lean_pools():
+    if not os.path.exists(LEAN_SLOTS):
+        return None
+    pools = {}
+    for line in open(LEAN_SLOTS).read().splitlines():
+        words = line.split("#", 1)[0].split()
+        if len(words) >= 2 and words[1].isdigit():
+            pools[words[0]] = int(words[1])
+    return pools
+
+
 def disk_short():
     if not os.path.isdir(DISK):
         return None
@@ -143,6 +171,7 @@ out = {}
 if SHARE is not None:
     out["share"] = doc(lambda: share(SHARE, CLAIMS, CPU_ROOT))
 short = disk_short()
+out["lean"] = doc(lean_pools)
 for pool, slots in POOLS.items():
     out[pool] = {"error": f"disk: {short}"} if short else \
         doc(lambda: load("auto_slot_" + pool, SLOT_SRC, {"CHECK_SLOTS": slots}).status_doc(datetime.now(timezone.utc)))
@@ -177,7 +206,7 @@ def payload(source: Path, cpus: int, share: str | None, pools: list[str], now: f
             "JOB_CPUS": max(cpus, 1), "SHARE": share, "CLAIMS": str(cores.CLAIMS), "CPU_ROOT": str(cores.CPU_ROOT),
             "HOLD": HOLD_FILE, "NOW": now,
             "POOLS": {p: slot_only.POOLS[p] for p in pools}, "DISK": DISK_PATH, "MIN_INODES": MIN_FREE_INODES, "MIN_GB": MIN_FREE_GB,
-            "VIA_SLOT": remote.RUNS_VIA_SLOT_FILE}
+            "VIA_SLOT": remote.RUNS_VIA_SLOT_FILE, "LEAN_SLOTS": LEAN_SLOTS}
     return ("".join(f"{k} = {v!r}\n" for k, v in head.items()) + PROBE).encode()
 
 
@@ -256,6 +285,14 @@ def read(source: Path, cpus: int, *, reach: Callable[[str], list[str]] | None = 
         return dict(zip(asks, ex.map(one, asks.items())))
 
 
+class Stalled(ValueError):
+    """A pool whose line is stalled on memory (`_pool`): skipped while anything else can take the job, its last resort else."""
+
+    def __init__(self, why: str, waiting: int):
+        super().__init__(why)
+        self.waiting = waiting
+
+
 def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
     """A pool's fitting slots, free ones among them and waiters; ValueError when no slot of it fits the job."""
     if not isinstance(doc, dict) or "error" in doc:
@@ -269,18 +306,27 @@ def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
     if not open_:
         raise ValueError(f"every slot of {doc.get('file')} that fits is closed by a window ({fit[0]['blocked']})")
     free = [s for s in open_ if s.get("holder") is None and not s.get("blocked")]
-    waiting = len(doc.get("waiters") or [])
+    waiters = doc.get("waiters") or []
+    waiting = len(waiters)
+    # a waiter retries every 20 s (slot.py's POLL_S), so one still waiting beside a free slot waits on what that slot's document
+    # doesn't show: the memory its own --mem-gb asks (cpu-3's head asked 256 GB for hours while its other slots sat free)
+    if free and waiters and (head := max(w.get("minutes") or 0 for w in waiters)) >= STALL_MIN:
+        raise Stalled(f"its line is stalled: a run has waited {head} min while slot {free[0]['name']} is free, for memory "
+                      f"it asks beyond what that slot shows", waiting)
+    if all(s.get("holder") is None and MEMORY_BLOCK in str(s.get("blocked")) for s in open_):
+        raise Stalled(f"its line is stalled: every slot of it that fits waits on memory and none runs ({open_[0]['blocked']})",
+                      waiting)
     why = (f"slots {', '.join(s['name'] + (' free' if s in free else ' held' if s.get('holder') else ' blocked') for s in fit)}; "
            f"{waiting} waiting")
-    # the line drains through the slots that run: a slot blocked on memory or disk adds no throughput until it clears, and a
-    # pool whose idle slots all wait on memory reservations would otherwise rank as a short line
+    # the line drains through the slots that run: a slot blocked on memory or disk adds no throughput until it clears
     running = [s for s in open_ if s.get("holder") is not None or not s.get("blocked")]
     return max(len(running), 1), len(free), waiting, why
 
 
-def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float) -> tuple[tuple[str, str] | None, str]:
+def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean_pool: str | None = None
+           ) -> tuple[tuple[str, str] | None, str]:
     """The pool to spill to ((machine, pool)), or None for node 2's queue, and why (module doc); `Unplaceable` when neither can
-    take it."""
+    take it. With ``lean_pool``, a machine whose Lean slots grant that pool none is skipped (`lean_pool`)."""
     cpus = max(cpus, 1)
     n2 = docs.get(AUTO_NODE)
     share = n2.get("share") if isinstance(n2, dict) else None
@@ -289,11 +335,19 @@ def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float) -> tuple[tuple
     else:
         said = (f"{AUTO_NODE}'s share: {share['free']} of {share['share']} CPUs free, {share['claims']} claim(s), "
                 f"{share['waiters']} waiting")
-    ranked, notes = [], [said]
+    ranked, stalled, notes = [], [], [said]
     for i, (machine, pool) in enumerate(SPILL):
         doc = docs.get(machine)
+        lean = doc.get("lean") if isinstance(doc, dict) else None
+        if lean_pool and isinstance(lean, dict) and "error" not in lean and not lean.get(lean_pool):
+            notes.append(f"{machine}'s {pool} pool skipped: its Lean slots give `{lean_pool}` none")
+            continue
         try:
             fit, free, waiting, why = _pool(doc.get(pool) if isinstance(doc, dict) else doc, cpus, mem_gb)
+        except Stalled as e:
+            notes.append(f"{machine}'s {pool} pool skipped: {e}")
+            stalled.append((e.waiting, i, (machine, pool)))
+            continue
         except (ValueError, KeyError, TypeError) as e:
             notes.append(f"{machine}'s {pool} pool skipped: {e}")
             continue
@@ -306,6 +360,10 @@ def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float) -> tuple[tuple
     if ranked:
         (_, _, target) = min(ranked)
         return target, "; ".join(notes) + f": the shortest line per run that fits is {target[0]}'s {target[1]} pool"
+    if stalled and share is None:
+        (_, _, target) = min(stalled)
+        return target, "; ".join(notes) + (f": every pool that fits is stalled and {AUTO_NODE} can't be reached, so the shortest "
+                                           f"stalled line, {target[0]}'s {target[1]} pool, where it waits until memory frees")
     if share is None:
         raise Unplaceable("; ".join(notes) + f": no pool fits and {AUTO_NODE} takes no job, so nothing would run it. "
                           f"Give it a node yourself: `research run --on MACHINE --mem-gb N`, a CPU node whose free memory fits "
