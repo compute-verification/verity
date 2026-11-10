@@ -74,7 +74,8 @@ def split(glob: str, old: list[str], words: list[str], spells, moved: dict, live
 
     Only a file that spells one of the table's words matters to it. The glob stays if such a file stays under it, and
     each such file a move takes out adds its directory row's destination, or the directory it lands in where a row moves
-    it alone. None unless the new globs reach every such file and no file from outside the old glob that spells a word.
+    it alone; a glob another of them covers is left out. None unless the new globs reach every such file and no file from
+    outside the old glob that spells a word.
     `old` and `live` hold only the files the map rewrites once they have moved, at their old and new paths.
     """
     dirs = sorted(((o, n) for o, n in rows if o.endswith("/")), key=lambda r: -len(r[0]))
@@ -85,6 +86,7 @@ def split(glob: str, old: list[str], words: list[str], spells, moved: dict, live
             (n + "**" for o, n in dirs if p.startswith(o) and moved[p].startswith(n)), moved[p].rsplit("/", 1)[0] + "/**")
         if g not in new:
             new.append(g)
+    new = [g for g in new if not any(h != g and h.endswith("/**") and g.startswith(h[:-2]) for h in new)]
     old_of = {v: k for k, v in moved.items()}
     got = {old_of[p] for p in live if any(fnmatch.fnmatchcase(p, g) for g in new)}
     if not new or (said & set(old)) - got or (got - set(old)) & said:
