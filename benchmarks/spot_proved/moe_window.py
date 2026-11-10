@@ -57,9 +57,9 @@ _spec = importlib.util.spec_from_file_location("spot_stage", HERE / "stage.py")
 ST = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ST)
 
-from verity.core.protocols.sampled_proofs.one_stage import draw as D  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registered as REG  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registration as R  # noqa: E402
+from verity.core.protocols.spot.one_stage import draw as D  # noqa: E402
+from verity.core.protocols.spot.one_stage import registered as REG  # noqa: E402
+from verity.core.protocols.spot.one_stage import registration as R  # noqa: E402
 from verity.ml.circuits.codec import descriptor_id  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.evaluation import evaluate  # noqa: E402
@@ -463,7 +463,7 @@ def main(argv: list[str] | None = None) -> int:
     run = (hashlib.sha512(f"verity/spot/moe-window/bench\0{a.bench}".encode()).hexdigest() if a.bench is not None else cap.root)
     name = f"spot-moe-per-expert/L{a.layer}/T{a.tokens}"
     circuit, plan = cut(v, fns, lab, blocks, name, a.fused)
-    law = D.parse_law(a.law)
+    law = D.parse_design(a.law)
     report = {"capture": a.capture, "step": a.step, "layer": a.layer, "rank": a.rank, "tokens": v["tokens"], "run": run,
               "bench": a.bench, "forge": a.forge, "law": a.law, "cap": a.cap, "blocks": blocks, "fused": a.fused,
               "statics": {p: {k: (x.id if k == "dot" else x) for k, x in v[p].items()} for p in ("up", "down")},

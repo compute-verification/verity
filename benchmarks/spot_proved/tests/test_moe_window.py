@@ -223,8 +223,8 @@ def test_a_staged_layer_is_a_window_its_verifier_takes_from_the_records(MW, capt
     """The whole staging on the synthetic capture, its forged arm and ``--circuit-only``, and the verifier's side of the window
     (`interface.of_records`, `registered_reads` under the registration's pins), which no cheaper test reaches: slow for the
     population Programs of the cut's seven templates the window and the verifier each build."""
-    from verity.core.protocols.sampled_proofs.one_stage import draw as D
-    from verity.core.protocols.sampled_proofs.one_stage import registered as REG
+    from verity.core.protocols.spot.one_stage import draw as D
+    from verity.core.protocols.spot.one_stage import registered as REG
     from verity_vllm.pipeline import expert_tables as XT
 
     d, _v = captured
@@ -238,7 +238,7 @@ def test_a_staged_layer_is_a_window_its_verifier_takes_from_the_records(MW, capt
     for value, e in doc["values"].items():
         want = REG.domain(doc["program"], value, e["words"], e["leaves"], e.get(REG.WIDTH_KEY, REG.WORD_BITS))
         assert e["value"] == value and e["domain"] == want.domain_id.hex()
-    mine, rec = MW.WI.of_records(tmp_path / "w" / "window", D.parse_law("stratified:1"), MW.WI.resolve)
+    mine, rec = MW.WI.of_records(tmp_path / "w" / "window", D.parse_design("stratified:1"), MW.WI.resolve)
     files = MW.WI.registered_reads(rec, mine, doc["values"], registered=REG)
     reads = [m for m in mine.members if m.template.startswith("EmbeddingRead_v1")]
     assert sorted(files) == sorted(m.key for m in reads) and reads
@@ -260,8 +260,8 @@ def test_a_fused_layer_stages_and_its_verifier_pins_the_gemms_reads(MW, captured
     `registered_reads` on the fused members), which the cut's test doesn't reach: slow for the fused templates' population
     Programs. Not under ``--full-gate``, whose evaluation of each template traces the reads' SHA-512 for minutes; the fused
     unit's evaluation is `test_fp8_moe_per_expert`'s."""
-    from verity.core.protocols.sampled_proofs.one_stage import draw as D
-    from verity.core.protocols.sampled_proofs.one_stage import registered as REG
+    from verity.core.protocols.spot.one_stage import draw as D
+    from verity.core.protocols.spot.one_stage import registered as REG
 
     d, _v = captured
     base = ["--capture", str(d), "--step", str(STEP), "--layer", str(LAYER), "--tokens", "2", "--cap", "4", *BLOCKS,
@@ -272,7 +272,7 @@ def test_a_fused_layer_stages_and_its_verifier_pins_the_gemms_reads(MW, captured
     assert st["units"] == {"router": 2, "up.ws": 2 * TOPK * 2, "up.fused": 8 * TOPK * 2, "down.ws": 2 * TOPK * 2,
                            "down.fused": 8 * TOPK * 2}
     doc = json.loads((tmp_path / "w" / "tables.json").read_text())
-    mine, rec = MW.WI.of_records(tmp_path / "w" / "window", D.parse_law("stratified:1"), MW.WI.resolve)
+    mine, rec = MW.WI.of_records(tmp_path / "w" / "window", D.parse_design("stratified:1"), MW.WI.resolve)
     files = MW.WI.registered_reads(rec, mine, doc["values"], registered=REG)
     reads = [m for m in mine.members if m.template.split("{")[0] in
              ("EmbeddingRead_v1", "MoeExpertFp8ReadGemm_v1", "MoeExpertFp8ReadGemmW_v1")]
