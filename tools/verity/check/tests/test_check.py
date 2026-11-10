@@ -274,7 +274,8 @@ def test_the_rule_the_gate_reads(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "verity" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
-    assert tool.CHECK.merge_requires["lean-agreement"] == ["verity/ml/flock/", "verity/core/service/flock/", "!README.md",
+    assert tool.CHECK.merge_requires["lean-agreement"] == ["verity/ml/flock/", "verity/ml/flock/pod/", "verity/ml/flock/verifier/",
+                                                           "verity/ml/flock/tool.py", "verity/core/service/flock/", "!README.md",
                                                            "!PROTOCOL.md"]
     assert set(tool.CHECK.merge_requires) == {"lean-agreement", "lean-suites"}
     assert {"verity/core/service/flock/VStar/In.lean", "verity/core/service/vstar/"} <= set(tool.CHECK.merge_requires["lean-suites"])
@@ -860,8 +861,8 @@ def test_the_agreement_is_not_required_for_docs_alone():
     rule = tool.CHECK.merge_requires["lean-agreement"]
     docs = ["verity/ml/flock/live/PROTOCOL.md", "verity/ml/flock/verifier/README.md", "verity/ml/flock/README.md", "AGENTS.md"]
     assert rule_touches(rule, docs) == []
-    assert rule_touches(rule, [*docs, "verity/ml/flock/verifier/ci.py"]) == ["verity/ml/flock/"]
-    assert rule_touches(rule, ["verity/ml/flock/verifier/DESIGN.md"]) == ["verity/ml/flock/"]      # only the two names are left out
+    assert rule_touches(rule, [*docs, "verity/ml/flock/verifier/ci.py"]) == ["verity/ml/flock/", "verity/ml/flock/verifier/"]
+    assert rule_touches(rule, ["verity/ml/flock/verifier/DESIGN.md"]) == ["verity/ml/flock/", "verity/ml/flock/verifier/"]  # only the two names are left out
     for f in ("ci.py", "agree.py", "fuzz.py", "redigest.py", "transcript_check.py", "selftest_records.py"):   # cited, never read
         reads = [line for line in (ROOT / "verity" / "ml" / "flock" / "verifier" / f).read_text().splitlines()
                  if any(r in line for r in ("open(", "read_text", "read_bytes")) and any(d in line for d in ("README", "PROTOCOL"))]
@@ -1587,7 +1588,8 @@ def test_record_sends_the_agreement_for_a_flock_file_whose_name_git_quotes(tmp_p
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.setattr(subprocess, "run", run)
     assert CHECK.record(["--base", "main"]) == 0
-    assert "check: changes under verity/ml/flock/, verity/core/service/flock/ against main: sending the pinned upstream build and inputs" in capsys.readouterr().out
+    assert ("check: changes under verity/ml/flock/, verity/ml/flock/pod/, verity/ml/flock/verifier/, verity/ml/flock/tool.py, "
+            "verity/core/service/flock/ against main: sending the pinned upstream build and inputs") in capsys.readouterr().out
     [cmd] = launched
     assert any(x.startswith("flock_upstream=art:") for x in cmd)
 
