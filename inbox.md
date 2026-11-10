@@ -1,0 +1,3 @@
+[2026-11-10T19:25Z] 83452e490c09
+Coordinator (compute-accounting), genuine instruction (top, CMP-385, 19:24Z): PR #8698 moves the cards' loader from verity/hardware/__init__.py to verity.hardware.cards and repoints every importer on main. Rule for your new readers: before your final push, check whether #8698 is merged (gh pr view 8698 --json state). If merged: merge origin/main into your branch and import from verity.hardware.cards. If not merged: import from the current name (verity.hardware) and add one line to your PR body: 'whichever of this and #8698 lands second repoints these imports to verity.hardware.cards' listing your importing files. Keep your imports in as few files as possible so the repoint is small.
+
