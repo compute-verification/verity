@@ -4,7 +4,9 @@
 #
 # The tokens, by kind:
 # - constants and environment variables (`WARDEN`, `WARDEN_REQUESTS`, `CR_WARDEN_RUN`, `A5_WARDEN_UNITS`): `WARDEN` as
-#   one part of the name becomes `NETWORK_CERTIFIER`;
+#   one part of the name becomes `NETWORK_CERTIFIER`. Each name has its own row, and the name `WARDEN` one row for each
+#   form it is written in (`corpus.WARDEN`, `WARDEN =`, a script's `$WARDEN`), since the word alone is
+#   `warden_map.toml`'s and no row here is keyed on it;
 # - flags and what argparse makes of them (`--warden-run` and `a.warden_run`, `--warden` and `a.warden`);
 # - hyphenated names of tools, threads and scratch directories (`warden-serve`, `warden-zk`, `warden-publisher`);
 # - plurals in identifiers (`wardens`, a test's `..._the_wardens_...`);
@@ -95,7 +97,55 @@ files = ["*"]
 "wardens" = "network_certifiers"
 "warden_run" = "network_certifier_run"
 "a.warden" = "a.network_certifier"
-"WARDEN" = "NETWORK_CERTIFIER"
+# --- the constants and environment variables, each whole
+"A5_WARDEN_RUN" = "A5_NETWORK_CERTIFIER_RUN"
+"A5_WARDEN_UNITS" = "A5_NETWORK_CERTIFIER_UNITS"
+"CR_WARDEN_RUN" = "CR_NETWORK_CERTIFIER_RUN"
+"N2_WARDEN_RUN" = "N2_NETWORK_CERTIFIER_RUN"
+"PUBLIC_WARDEN" = "PUBLIC_NETWORK_CERTIFIER"
+"SC_WARDEN_RUN" = "SC_NETWORK_CERTIFIER_RUN"
+"WARDEN_COUNTS" = "NETWORK_CERTIFIER_COUNTS"
+"WARDEN_DIGEST" = "NETWORK_CERTIFIER_DIGEST"
+"WARDEN_END_S" = "NETWORK_CERTIFIER_END_S"
+"WARDEN_FILES" = "NETWORK_CERTIFIER_FILES"
+"WARDEN_PROMPTS_BYTES" = "NETWORK_CERTIFIER_PROMPTS_BYTES"
+"WARDEN_PROMPTS" = "NETWORK_CERTIFIER_PROMPTS"
+"WARDEN_PROMPT_IDS" = "NETWORK_CERTIFIER_PROMPT_IDS"
+"WARDEN_PROMPT_ID_BITS" = "NETWORK_CERTIFIER_PROMPT_ID_BITS"
+"WARDEN_PROMPT_REQUESTS" = "NETWORK_CERTIFIER_PROMPT_REQUESTS"
+"WARDEN_PROMPT_TOKENS" = "NETWORK_CERTIFIER_PROMPT_TOKENS"
+"WARDEN_PUBLIC" = "NETWORK_CERTIFIER_PUBLIC"
+"WARDEN_RATE" = "NETWORK_CERTIFIER_RATE"
+"WARDEN_READ" = "NETWORK_CERTIFIER_READ"
+"WARDEN_REQUESTS" = "NETWORK_CERTIFIER_REQUESTS"
+"WARDEN_ROWS_MODULE" = "NETWORK_CERTIFIER_ROWS_MODULE"
+"WARDEN_RUN" = "NETWORK_CERTIFIER_RUN"
+"WARDEN_SCHEDULE" = "NETWORK_CERTIFIER_SCHEDULE"
+"WARDEN_SEED" = "NETWORK_CERTIFIER_SEED"
+"WARDEN_SERVED_STUBBED" = "NETWORK_CERTIFIER_SERVED_STUBBED"
+"WARDEN_SERVE_C_ALLOCATOR" = "NETWORK_CERTIFIER_SERVE_C_ALLOCATOR"
+"WARDEN_STUBBED" = "NETWORK_CERTIFIER_STUBBED"
+"WARDEN_TAIL_S" = "NETWORK_CERTIFIER_TAIL_S"
+"WARDEN_TOKENS" = "NETWORK_CERTIFIER_TOKENS"
+"WARDEN_WHERE" = "NETWORK_CERTIFIER_WHERE"
+"WARDEN_WINDOW_LEAVES" = "NETWORK_CERTIFIER_WINDOW_LEAVES"
+"WARDEN_WINDOW_MS" = "NETWORK_CERTIFIER_WINDOW_MS"
+# --- the constant `WARDEN` and a script's variable of that name, in each form they are written
+"corpus.WARDEN" = "corpus.NETWORK_CERTIFIER"
+"chain_record.WARDEN" = "chain_record.NETWORK_CERTIFIER"
+"CR.WARDEN" = "CR.NETWORK_CERTIFIER"
+"cr.WARDEN" = "cr.NETWORK_CERTIFIER"
+"`WARDEN`" = "`NETWORK_CERTIFIER`"
+"WARDEN =" = "NETWORK_CERTIFIER ="
+"WARDEN.items" = "NETWORK_CERTIFIER.items"
+"WARDEN.get" = "NETWORK_CERTIFIER.get"
+"in WARDEN" = "in NETWORK_CERTIFIER"
+"== WARDEN" = "== NETWORK_CERTIFIER"
+"WARDEN=" = "NETWORK_CERTIFIER="
+"$WARDEN" = "$NETWORK_CERTIFIER"
+"${WARDEN" = "${NETWORK_CERTIFIER"
+"export WARDEN" = "export NETWORK_CERTIFIER"
+"A5-WARDEN" = "A5-NETWORK_CERTIFIER"
 
 [keep]
 patterns = [
