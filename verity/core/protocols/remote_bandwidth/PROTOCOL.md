@@ -213,7 +213,7 @@ carry `window_ns`.
    \(E_j = \text{encode}(\text{payload}_j)\).
 4. `Registration.digest = SHA512("verity/remote-bandwidth/registration/v0\0" ‖ frame(node) ‖ u64be N ‖ payload root ‖
    codec seed ‖ frame(codec name) ‖ frame(receipt kind) ‖ u8 bind ‖ frame(block layout) ‖ u32be rows)`, `frame` being
-   `verity.ml.randomness.frame` ("s" ‖ u64be length ‖ the name in UTF-8), bind 1 if the receipts bind \(z\), else 0,
+   `verity.commitments.randomness.frame` ("s" ‖ u64be length ‖ the name in UTF-8), bind 1 if the receipts bind \(z\), else 0,
    and rows sketch-sha512's \(k_s\) (0 under block-sha512). A record cites this digest, each session's coin commitment
    binds it, and each session's chain starts from it, so a session's coins and seeds are bound to its kind, to whether
    it binds \(z\), to the block cut its kernels' sketch vectors follow and to the sketch's rows.
@@ -1573,7 +1573,7 @@ Per pass \(i\), after root \(i-1\):
 seed_i     the audit's (receipts.seed): SHA512(SEED_DOMAIN ‖ chal_t ‖ u32be i ‖ root_(t,i−1)), 64 bytes
 S_i        k_s rows (16) of 1,028 bytes, from seed_i on the host: K = derive(seed_i,
            "verity/remote-bandwidth/sketch-signs/v0", {"tag": "sketch-sha512", "k": k_s, "n": 8224}), row c =
-           K.stream(("row", c), 1028) (verity.ml.randomness); bit x of a row (byte x // 8, bit x % 8, LSB first) is
+           K.stream(("row", c), 1028) (verity.commitments.randomness); bit x of a row (byte x // 8, bit x % 8, LSB first) is
            the sign of the unit's byte x: 1 → −1, 0 → +1
 ~~~
 

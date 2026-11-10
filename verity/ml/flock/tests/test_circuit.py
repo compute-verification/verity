@@ -32,9 +32,9 @@ def assert_public_only(text: str, prover: bytes, verifier: bytes) -> None:
     header is the layout's (names, the range, the unit indices, the circuit's pin, the frame's domains bound to those alone),
     its body exactly the ``b || c`` (then a shared-row file's refs), each the hm96 commit of one of the prover's rows (an output
     row too) under a nonzero salt. An output word, a digest of the set's values or any other value fails it."""
-    from verity.ml.commitments import hm96
-    from verity.ml.commitments.identity import identity_digest_sha512
-    from verity.ml.commitments.rowleaf import ROLE_X, sha512_row_digest
+    from verity.commitments import hm96
+    from verity.commitments.identity import identity_digest_sha512
+    from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
 
     meta = json.loads(text.split("\n", 2)[1][5:])
     (hp, bp), (hv, bv) = (b.split(b"\n", 1) for b in (prover, verifier))
@@ -104,8 +104,8 @@ def test_rope_composes_private_by_default(tmp_path):
     assert hp["units"]["indices"] == [0, 1, 2, 3] and hp["units"]["blocks"] == [[0, 1, 2, 3][b:b + G] for b in range(0, 4, G)]
     assert len(meta["partition"]["digest"]) == 128, "a 64-byte SHA-512 partition digest"
     # a row's public b || c is hm96-sha512 of its private row and salt
-    from verity.ml.commitments import hm96
-    from verity.ml.commitments.rowleaf import ROLE_X, sha512_row_digest
+    from verity.commitments import hm96
+    from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
 
     ports = meta["ports"]
     rb, np_ = sum(2 * w for _, w, _ in ports), len(ports)
@@ -340,7 +340,7 @@ def test_the_class_digest_hashes_the_body_a_chunk_at_a_time(chunk, monkeypatch):
 def test_leaf_scheme_reserves_what_hm96_needs():
     import hashlib
 
-    from verity.ml.commitments import hm96
+    from verity.commitments import hm96
 
     t = FC.LEAF_SCHEME
     assert (t["id"], t["salt_bytes"]) == (hm96.SHA512.name, hm96.SHA512.salt_bytes)

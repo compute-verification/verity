@@ -12,8 +12,8 @@ import json
 import pytest
 
 import signers
-from verity.ml.commitments import hm96
-from verity.ml.crypto import lms
+from verity.commitments import hm96
+from verity.commitments.crypto import lms
 from verity.core.protocols.certifier import warden_rows as W
 from verity.core.protocols.certifier.active import DATA
 from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsKey

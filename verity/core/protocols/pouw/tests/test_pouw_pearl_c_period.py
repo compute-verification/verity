@@ -19,8 +19,8 @@ from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN
 from verity.core.protocols.spot import challenger as Ch
-from verity.ml.crypto import lms
-from verity.ml.randomness import derive
+from verity.commitments.crypto import lms
+from verity.commitments.randomness import derive
 
 PKG = Path(__file__).resolve().parents[1] / "lean/check/tests"
 for _name in ("pouw_rounds_cases", "pouw_pass_cases"):

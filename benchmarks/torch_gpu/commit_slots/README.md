@@ -5,7 +5,7 @@ under hiding leaves in `frame-v3-sha512` trees, with one subtree per sequence sl
 replaying its own request. `slots.py` is the CPU reference, and its docstring states the format: a row's leaf, the three
 trees (proof block, slot and step) and their domains. `slots_gpu.py` runs the same call on the GPU (or on its host twin)
 on the SHA-512 engine (`benchmarks/torch_gpu/sha512_rows/`).
-`verity/ml/commitments/tests/fixtures/commit-slots-v1.json` is the interface's fixture.
+`verity/commitments/tests/fixtures/commit-slots-v1.json` is the interface's fixture.
 
 ## The call
 
@@ -36,7 +36,7 @@ plan = G.Plan(context, G.regroup(layout, 4))
 - `layout`: the step's public structure (`S.CommitShape`): groups (what one `add` commits) of proof blocks of rows, each
   row the concatenation of byte ranges (`S.Part(source, offset, nbytes)`) of a slot's row of the group's tensors. Every
   slot has the same layout, and a proof block holds at most 262,144 bits (its size class). Parts, rows and groups, with
-  their checks, are `verity.ml.commitments.layout`'s; `S.load(path)` reads a layout file in the form `S._layout_json`
+  their checks, are `verity.commitments.layout`'s; `S.load(path)` reads a layout file in the form `S._layout_json`
   writes.
 - `step`: the step's index; `slots`: how many sequence slots it has.
 - `salt_key`: 32 bytes, `S.fresh_salt_key()` (the operating system's generator), fresh each step and the prover's alone,

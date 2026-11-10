@@ -427,7 +427,7 @@ def test_subscriptions_name_the_leads_linear_team_and_the_registry_refuses_a_sha
     ("<!subteam^SINFRA|@infra> <@U0DANIEL> @ci,\ntraining 21:00Z:\n\na hand-launched Security check", "A hand-launched Security check"),
     ("Two tools/research gaps from tonight's resubmits (fyi, not blocking): (1) `rese\u2026",
      "Two tools/research gaps from tonight's resubmits (fyi, not blocking): (1) `rese\u2026"),
-    ("A Layout JSON loader in verity.ml.commitments", "A Layout JSON loader in verity.ml.commitments"),
+    ("A Layout JSON loader in verity.commitments", "A Layout JSON loader in verity.commitments"),
     ("vLLM on the H200", "vLLM on the H200"),                     # a lower-case first letter of a name stays
     ("hm96 rows for the store", "hm96 rows for the store"),
     ("@infra top 06:55Z:", "@infra top 06:55Z:"),                 # nothing left: the first line as it was

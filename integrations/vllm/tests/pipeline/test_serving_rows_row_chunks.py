@@ -22,7 +22,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.ops import mufu as MU
 from verity.ml.circuits.ops import prims as OP
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.ml.windows import interface as IF
 
 #: one plain row template, one ``COLS`` row's at its own width, and one packed with two return fields (a whole ``PARTS`` part,

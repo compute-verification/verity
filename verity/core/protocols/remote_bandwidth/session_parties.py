@@ -38,7 +38,7 @@ from verity.core.deploy.manifest import Channel, Manifest, Role
 from verity.core.deploy.party import Finish, Identity, Received, LogEntry, Send, Timer
 from verity.core.deploy.runtime import ProtocolDef
 from verity.core.wire import Body, Int, Json, Message, Phase, Refused, Schema
-from verity.ml.commitments.identity import canonical_json_bytes
+from verity.commitments.identity import canonical_json_bytes
 
 from . import audit, receipts
 from . import coins as C

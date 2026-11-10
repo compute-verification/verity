@@ -26,8 +26,8 @@ import hashlib
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
-from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
-from verity.ml.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
+from verity.commitments.rowleaf import sha512_row_v2_prefix
+from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 
 from .codec import Geometry
 from .labels import salt_value, tag

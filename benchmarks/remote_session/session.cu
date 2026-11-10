@@ -235,7 +235,7 @@ __device__ __forceinline__ void sk16_prologue(u32 *sg, const u32 *__restrict__ p
 }
 
 // A pass's signs from its key on the device, packed as pack16_kernel packs them: row c of S is the first 512 bytes of
-// the key's counter-mode stream at index ("row", c) (`verity.ml.randomness`'s Key.stream: block k is
+// the key's counter-mode stream at index ("row", c) (`verity.commitments.randomness`'s Key.stream: block k is
 // SHA512(head ‖ u64be k), head = stream tag ‖ key ‖ frames(("row", c)), whose last byte is c for c < 256), bit u of
 // the row (byte u / 8, LSB first) 1 where S[c][u] = −1. head is row 0's (at most 103 bytes, so a block is one
 // compression). A thread a (row, block) of the stream, then the 2048 words from shared memory.
@@ -902,7 +902,7 @@ int rs_signs16(const uint8_t *head, int head_len, uint32_t *pk, cudaStream_t s) 
 }
 
 // The fixed messages for `chain_prepare_kernel`, at one window's challenge.  The framing is
-// `verity.ml.randomness` v2, exactly as `benchmarks/codec_tensor/wt.cu::wt_set_pass` constructs it for
+// `verity.commitments.randomness` v2, exactly as `benchmarks/codec_tensor/wt.cu::wt_set_pass` constructs it for
 // WT_RECEIPT=1.
 int rs_chain_set(const uint8_t *challenge, cudaStream_t s) {
   if (!challenge) return 1;

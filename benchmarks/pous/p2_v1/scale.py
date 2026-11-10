@@ -221,7 +221,7 @@ def setup_check_cmd(a: argparse.Namespace) -> int:
 
     from verity.core.protocols.pous import setup
     from verity.core.protocols.pous.schemes import p2 as S
-    from verity.ml.commitments.identity import canonical_json_bytes
+    from verity.commitments.identity import canonical_json_bytes
 
     out = Path(a.out)
     scratch = Path(a.scratch)

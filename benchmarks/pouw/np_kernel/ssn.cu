@@ -718,7 +718,7 @@ static u64 small_rows_max() {
 }
 #endif
 
-// frame-v3-sha512's message heads (verity.ml.commitments.merkle): a leaf's before its 64-byte value (169 to 173 bytes by the
+// frame-v3-sha512's message heads (verity.commitments.merkle): a leaf's before its 64-byte value (169 to 173 bytes by the
 // leaf's index) and a node's before its left child; with what follows them, 2 and 3 compressions
 constexpr int LEAF_HEAD = 171, NODE_HEAD = 139;
 // n bytes of stand-in constants; slot > 0: each slot's first u32 is len, a message head's length (hm96_rows.cu's SLOT)

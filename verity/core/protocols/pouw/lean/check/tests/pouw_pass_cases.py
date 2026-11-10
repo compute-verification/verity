@@ -25,7 +25,7 @@ import json
 import random
 
 import pouw_rounds_cases as RC
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import salt as PS
@@ -33,8 +33,8 @@ from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
 from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.spot import challenger as Ch
-from verity.ml.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
-from verity.ml.randomness import derive
+from verity.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
+from verity.commitments.randomness import derive
 
 #: a certified execution phase's verifier's inputs, in `pass_epoch`'s order
 CERTIFIED = ("reveal", "committed", "stream", "prover")

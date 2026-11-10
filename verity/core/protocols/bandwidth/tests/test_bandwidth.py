@@ -18,8 +18,8 @@ from verity.core.protocols.bandwidth import audit, tags
 from verity.core.protocols.pous import protocol, schemes
 from verity.core.protocols.pous.schemes.p2 import ROOT_CALL_NS, P2Params
 from verity.core.protocols.pous.verifier import VerifierKey
-from verity.ml.crypto import blake3
-from verity.ml.randomness import frame
+from verity.commitments.crypto import blake3
+from verity.commitments.randomness import frame
 
 TAGS = sorted(tags.TAGS)
 P = tags.MERSENNE31

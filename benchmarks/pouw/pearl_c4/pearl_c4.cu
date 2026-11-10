@@ -163,7 +163,7 @@ extern "C" __global__ void __launch_bounds__(256) transpose(const Args a) {
 }
 
 // ---------------------------------------------------------------- the rows' commitments and the seeds
-// audit.commit_rows as the verifier checks it: verity.ml.commitments.merkle's SHA-256 tree over a RangeIndexedDomain, with
+// audit.commit_rows as the verifier checks it: verity.commitments.merkle's SHA-256 tree over a RangeIndexedDomain, with
 // H(tag, parts) = SHA-256(FRAME ‖ |tag| u32 BE ‖ tag ‖ (|part| u64 BE ‖ part) ...), FRAME = "veritor/protocol/merkle/frame/v3\0",
 // uint(v) = v big-endian in its fewest bytes (at least one), dom = the domain id (32 B, from the host: public before A exists),
 //   leaf(i) = H("leaf", dom, uint(i), uint(i), "verity/pouw/row/v1", row i)      pad(r) = H("pad", dom, uint(r))

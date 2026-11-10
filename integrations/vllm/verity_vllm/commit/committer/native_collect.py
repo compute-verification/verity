@@ -51,7 +51,7 @@ from typing import Any
 
 import torch
 
-from verity.ml.commitments.merkle import merkle_depth
+from verity.commitments.merkle import merkle_depth
 from verity_vllm import settings
 from verity_vllm.commit import step_rows
 from verity_vllm.commit.committer.device_pool import DevicePool, pool_key, release

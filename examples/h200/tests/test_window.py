@@ -31,7 +31,7 @@ from e2e_h200.units import Replayer
 from e2e_h200.weights import Weights
 from e2e_h200 import served_weights as SW
 from verity.errors import InvalidArtifact
-from verity.ml.commitments import layout as L
+from verity.commitments import layout as L
 
 #: circuits' writers artifact for the frozen shape, `window.writers_digest`
 FROZEN_WRITERS = ("5f20869283c3b4c078193c42259d1f2aada1a82138e203a438216d4449c1fc6f"

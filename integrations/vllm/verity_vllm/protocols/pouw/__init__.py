@@ -53,7 +53,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from verity.ml.commitments import MerkleTree
+from verity.commitments import MerkleTree
 from verity.ml.protocols.pouw import circuit as pouw_circuit
 from verity.ml.protocols.pouw import schemes as pouw_schemes
 from verity.core.protocols.pouw.audit import (

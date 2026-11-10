@@ -15,7 +15,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from verity.ml.commitments.rowleaf import ROLE_X, sha512_row_digest
+from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
 from verity_flock import firewall_transcript as FT
 from verity_flock import rec_live as RL
 

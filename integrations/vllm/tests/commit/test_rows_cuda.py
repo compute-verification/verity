@@ -18,9 +18,9 @@ torch = pytest.importorskip("torch")
 if not torch.cuda.is_available():
     pytest.skip("the rows-sha512 kernels need a GPU", allow_module_level=True)
 
-from verity.ml.commitments import merkle  # noqa: E402
-from verity.ml.commitments.indexed import RangeIndexedDomain  # noqa: E402
-from verity.ml.commitments.merkle import CommitmentDomain  # noqa: E402
+from verity.commitments import merkle  # noqa: E402
+from verity.commitments.indexed import RangeIndexedDomain  # noqa: E402
+from verity.commitments.merkle import CommitmentDomain  # noqa: E402
 from verity_vllm.commit import step_rows as R  # noqa: E402
 from verity_vllm.commit.committer import native_collect as NC  # noqa: E402
 

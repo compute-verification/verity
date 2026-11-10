@@ -60,7 +60,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-from verity.ml.randomness import Key
+from verity.commitments.randomness import Key
 
 from verity_vllm import settings
 from verity_vllm.check.replay import cached_prefix as CP

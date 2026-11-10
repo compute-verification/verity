@@ -4,7 +4,7 @@
 
 Writes `DIR/difftest/instances.jsonl`, one instance per line as `NetworkCheck.Difftest.evaluate` reads it, and
 `DIR/difftest/python.jsonl`, the same line's results from the checkout's `verity.core.protocols.certifier.certificate`
-(and `verity.ml.commitments.identity`, `verity.ml.crypto.lms` through it), with `null` where Python raises `ValueError`.
+(and `verity.commitments.identity`, `verity.commitments.crypto.lms` through it), with `null` where Python raises `ValueError`.
 The Lean audit runs `NetworkCheck/DifftestMain.lean` on both files (`runs` in `lean-audit.json`, which pins their SHA-256),
 and `verity/core/protocols/certifier/tests/test_network_check_lean_difftest.py` checks that this script still writes
 them.
@@ -33,7 +33,7 @@ from verity.core.protocols.certifier import certificate as cert
 from verity.core.protocols.certifier.certificate import Direction, RecordHead
 from verity.core.protocols.certifier.grid import GridParams, Reason, Status
 from verity.core.protocols.certifier.schedule import SyncSet
-from verity.ml.commitments.identity import canonical_json_bytes
+from verity.commitments.identity import canonical_json_bytes
 
 COUNT = 2_000
 REASONS = [None] + [r.value for r in Reason]

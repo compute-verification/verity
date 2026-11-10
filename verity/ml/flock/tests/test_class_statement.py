@@ -187,7 +187,7 @@ def test_core_rows_are_core_bit_rows_and_decode_as_the_default_layout(dtype):
     same values re-laid, from either layout to the other; on circuit-check's vectors it equals the IR evaluator."""
     from circuit_check import checks as CK
     from circuit_check import vectors as V
-    from verity.ml.commitments.rowleaf import bit_row
+    from verity.commitments.rowleaf import bit_row
     from verity.circuits.evaluation.reference import signature_of
 
     units, _s, cl, act, uc, groups = _fp_class(dtype, 128)
@@ -293,12 +293,12 @@ def test_core_rows_stage_and_each_row_recomputes_from_the_prover_file_with_core_
     """E4M3 K=128, the smallest whole-block FP row, staged under FLOCK_CORE_ROWS: META names each row's schema and length in bits
     (the output row's, `HmOut`, its 64 words') and no single ``row_schema``, its row constants are core's prefixes, and its circuit
     is neither other frame's. From the prover's file, every committed row's elements give core's bit-row digest, ``b || c`` with its salt, the frame leaf under the
-    hiding schema, and the header's root under the domain its binding names, using ``verity.ml.commitments`` only."""
-    from verity.ml.commitments import hm96
-    from verity.ml.commitments.frame_v3 import BitRowLeaf, FrameV3, Port
-    from verity.ml.commitments.indexed import RangeIndexedDomain
-    from verity.ml.commitments.merkle import CommitmentDomain
-    from verity.ml.commitments.rowleaf import bit_row, row_leaf, sha512_row_v2_digest, sha512_row_v2_prefix
+    hiding schema, and the header's root under the domain its binding names, using ``verity.commitments`` only."""
+    from verity.commitments import hm96
+    from verity.commitments.frame_v3 import BitRowLeaf, FrameV3, Port
+    from verity.commitments.indexed import RangeIndexedDomain
+    from verity.commitments.merkle import CommitmentDomain
+    from verity.commitments.rowleaf import bit_row, row_leaf, sha512_row_v2_digest, sha512_row_v2_prefix
 
     units, s, cl, _act, _uc, _groups = _fp_class("e4m3", 128)
     lanes, key = _lanes(units, cl), hashlib.sha256(b"test").digest()
@@ -415,7 +415,7 @@ def test_core_row_prefixes_name_the_row_length_only_and_no_old_frames_prefix():
     Every shape stages, MXF4 K=2048's partial last block among them: rows that fit SHA-512's padding block (at most 111 bytes)
     have no compression before it, and the output row's (`HmOut`) is the statement's. The derivation agrees with the stager's
     own lowering and `element_rows` at K=128."""
-    from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
+    from verity.commitments.rowleaf import sha512_row_v2_prefix
 
     shapes = [(d, k) for d in ROW_BITS for k in (64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384)]
     new: dict[bytes, tuple] = {}

@@ -50,7 +50,7 @@ from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
-from verity.ml.commitments.merkle import merkle_depth
+from verity.commitments.merkle import merkle_depth
 
 from . import audit, codec, receipts
 

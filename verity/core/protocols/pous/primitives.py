@@ -46,7 +46,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Protocol
 
-from verity.ml.randomness import Key, derive
+from verity.commitments.randomness import Key, derive
 
 from .labels import mask
 from .oracle import HQuery, KeyQuery, PiInvQuery, PiQuery, Query, Tweak
@@ -657,7 +657,7 @@ IDEAL_DOMAIN = "verity/pous/ideal-model/v1"
 @dataclass(slots=True)
 class IdealPermutation:
     """A lazily sampled uniform permutation of `width` bits, consistent in both directions, sampled from
-    `verity.ml.randomness` under `seed`."""
+    `verity.commitments.randomness` under `seed`."""
 
     width: int
     seed: bytes

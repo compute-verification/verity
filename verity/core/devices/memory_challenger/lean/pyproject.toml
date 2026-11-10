@@ -28,6 +28,6 @@ untraced = [
 # tests' test signer, read by path.
 inputs = ["verity/flock/verifier/Flock", "verity/flock/verifier/lakefile.toml",
           "verity/flock/verifier/lake-manifest.json", "verity/flock/verifier/lean-toolchain",
-          "verity/core/primitives/randomness", "verity/core/primitives/lms/lean", "verity/core/attest/lean",
+          "verity/commitments/randomness", "verity/commitments/lms/lean", "verity/commitments/attest/lean",
           "verity/flock/verifier/interface",
           "verity/difftest/lean", "verity/core/protocols/pous/tests/pous_test_signer.py"]

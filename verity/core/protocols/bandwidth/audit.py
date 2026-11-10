@@ -47,7 +47,7 @@ from verity.core.protocols.pous.codec import Geometry
 from verity.core.protocols.pous.params import SALT_BITS
 from verity.core.protocols.pous.schemes.p2 import ROOT_CALL_NS
 from verity.core.protocols.pous.verifier import MerkleTree, VerifierKey, leaf_hash, verify_path
-from verity.ml.randomness import Key, derive
+from verity.commitments.randomness import Key, derive
 
 from . import tags
 from .tags import SEED_BYTES

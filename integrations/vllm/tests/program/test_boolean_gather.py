@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 from verity_flock import class_statement as CS
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.circuits import evaluation as E
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import standalone_call

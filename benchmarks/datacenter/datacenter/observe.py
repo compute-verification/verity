@@ -16,7 +16,7 @@ import math
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-from verity.ml.commitments import advice
+from verity.commitments import advice
 
 from .binding import Placed, frames, traffic
 from .logical import RegisteredInputs, commit, evaluate

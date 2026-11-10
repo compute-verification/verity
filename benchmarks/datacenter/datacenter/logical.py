@@ -33,7 +33,7 @@ one is registered, a Boolean Definition's word Definition's among them; bit-slic
 registered inputs before any run, bound to the occupancy profiles the developer may choose from (`profile_digest`), and
 `commit` gives the hiding commitment a run's values sit under: the census values,
 which are what can cross between devices (a Call's own wires are witness of its proof blocks). Both are hm96-sha512 rows,
-one per element, in one frame-v3-sha512 tree (`verity.ml.commitments.advice`), bound to the Program's digest.
+one per element, in one frame-v3-sha512 tree (`verity.commitments.advice`), bound to the Program's digest.
 """
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.evaluation.batch import type_dtype
 from verity.circuits.layout import FunctionCall, resolve
 from verity.circuits.program import REGISTRATION, RUN, Program, input_id, is_input
-from verity.ml.commitments import advice
+from verity.commitments import advice
 
 
 @dataclass(frozen=True)

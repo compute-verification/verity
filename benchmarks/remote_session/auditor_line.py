@@ -159,7 +159,7 @@ from verity.core.protocols.remote_bandwidth import audit, coins, ledger, line, p
 from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
 from verity.core.protocols.spot import challenger as Ch  # noqa: E402
 from verity.core.protocols.spot import remote  # noqa: E402
-from verity.ml.crypto import lms  # noqa: E402
+from verity.commitments.crypto import lms  # noqa: E402
 
 RATES = {"disk_bytes_per_s": 4.4e9, "link_bytes_per_s": 5e10}
 """The node's ceilings a gate run's line is read at, bytes a second (`line.Rates`): the node's NICs into its memory,

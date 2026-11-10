@@ -39,8 +39,8 @@ import verity_difftest as D
 
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import window as Wd
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain
 
 REPO = Path(__file__).resolve().parents[3]
 LEAN = REPO / "verity/core/protocols/pouw/lean/window"

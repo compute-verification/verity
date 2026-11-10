@@ -10,7 +10,7 @@ and its served C2 replay challenge after each run's root of record.
   The Commit then reaches the challenger on its own 127.0.0.1 (this machine's certifier coin link), refuses one whose coin
   commitment isn't the gate's answer before its first coin (`pouw_h1_window.connect`), and for run i opens coin i of
   each family in `FAMILIES` after run i's root (`ChallengePhase.draw`); it closes the challenge phase after its last run. The samples
-  derive from the coins (`verity.ml.randomness.derive`): opening positions (`positions`) and population identities
+  derive from the coins (`verity.commitments.randomness.derive`): opening positions (`positions`) and population identities
   (`identities`) from `POSITIONS` and `IDENTITIES`, and the served C2 replay's challenge (`replay_challenge`) is the
   `REPLAY` coin.
 * **Without a gate** each run's coins are this process's own bytes (``source`` ``in-process``): the run is a measurement,

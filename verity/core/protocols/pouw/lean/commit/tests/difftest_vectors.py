@@ -44,8 +44,8 @@ def _outcome(f) -> dict:
 def generate(seed: int = 0) -> list[dict]:
     from verity.core.protocols.pouw import audit, coins
     from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape, tagged
-    from verity.ml.randomness import derive
-    from verity.ml.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
+    from verity.commitments.randomness import derive
+    from verity.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
                                        VerificationLimits, verify_opening)
 
     # the clear audit's samples are a reference tool's (benchmarks/pouw/clear, not a package) in the checkout `audit` is from

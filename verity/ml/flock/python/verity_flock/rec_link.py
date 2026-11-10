@@ -58,11 +58,11 @@ from verity.circuits.boolean.forms import ONE, ZERO
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import Coll, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.ml.commitments import hm96
-from verity.ml.commitments.gates.hm96 import DIGEST as HM_DIGEST
-from verity.ml.commitments.gates.hm96 import SALT as HM_SALT
-from verity.ml.commitments.gates.hm96 import Hm96Sha512Leaf, leaf_gadget
-from verity.ml.commitments.gates.sha512 import IV
+from verity.commitments import hm96
+from verity.commitments.gates.hm96 import DIGEST as HM_DIGEST
+from verity.commitments.gates.hm96 import SALT as HM_SALT
+from verity.commitments.gates.hm96 import Hm96Sha512Leaf, leaf_gadget
+from verity.commitments.gates.sha512 import IV
 
 from . import ir_lower as IL
 from . import rec_links as RL
@@ -310,7 +310,7 @@ class _Forms:
         return ONE if b else ZERO
 
     def compress(self, cv: list, msg: list) -> list:
-        from verity.ml.commitments.gates.sha512 import compress_gadget
+        from verity.commitments.gates.sha512 import compress_gadget
 
         out = compress_gadget(self.C, [cv[64 * i:64 * i + 64] for i in range(8)], [msg[64 * i:64 * i + 64] for i in range(16)])
         return [x for w in out for x in w]

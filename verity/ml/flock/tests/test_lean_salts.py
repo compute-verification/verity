@@ -20,8 +20,8 @@ from pathlib import Path
 import pytest
 from test_lean_hello import BIN, built  # noqa: F401
 
-from verity.ml.commitments import hm96
-from verity.ml.commitments.merkle import frame_hash, root_from_subtrees
+from verity.commitments import hm96
+from verity.commitments.merkle import frame_hash, root_from_subtrees
 
 INST = hm96.SHA512
 SCHEMAS = ["hm96-sha512/row/v1", "hm96-sha512/row/v2", "hm96-sha512/row-seg/v1"]

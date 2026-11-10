@@ -9,7 +9,7 @@ import random
 import pytest
 
 from pous_fakes import Clock
-from verity.ml.commitments.rowleaf import sha512_row_v2_digest, sha512_row_v2_prefix
+from verity.commitments.rowleaf import sha512_row_v2_digest, sha512_row_v2_prefix
 from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.audit import (DEADLINE_NS, HonestResponder, UnsignedRounds, challenge_key, deadline_rounds, run_timed,
                                simulate)

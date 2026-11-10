@@ -104,7 +104,7 @@ from datacenter.examples import leaf_spine, two_sites  # noqa: E402
 from verity.core.protocols.certifier import active, calibration  # noqa: E402
 from verity.core.protocols.certifier.audit import Audit  # noqa: E402
 from verity.core.protocols.certifier.grid import GridParams  # noqa: E402
-from verity.ml.crypto import aead  # noqa: E402
+from verity.commitments.crypto import aead  # noqa: E402
 
 T = 60
 SERVER_PORT, LINK_PORT = 8000, 9000

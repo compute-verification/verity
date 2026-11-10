@@ -22,7 +22,7 @@ import pytest
 from verity.core.protocols.spot import challenger as LC
 from verity.core.protocols.spot import remote as R
 from verity.core.protocols.spot.challenger import CoinError
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 from verity_vllm.commit.challenge import challenge_positions
 from verity_vllm.pipeline import commit_coins as CC
 

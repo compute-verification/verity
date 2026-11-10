@@ -1,6 +1,6 @@
 # sha512_rows: the serve-time commit's SHA-512 engine
 
-A device engine for the commitment's hashes, bit for bit the CPU reference's (`verity.ml.commitments`):
+A device engine for the commitment's hashes, bit for bit the CPU reference's (`verity.commitments`):
 
 - the sha512/row/v2 digest of each row: x = SHA-512(P(8 nbytes) ‖ row), `rowleaf.sha512_row_v2_digest`;
 - its hm96-sha512 hiding leaf: b = x ⊕ M·y, c = SHA-512(salt prefix ‖ y), h = SHA-512(leaf prefix(key) ‖ b ‖ c), `hm96.SHA512`;

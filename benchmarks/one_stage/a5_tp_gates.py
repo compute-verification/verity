@@ -83,7 +83,7 @@ from warden_zk import WardenRowIdentity  # noqa: E402
 from verity.circuits import evaluation as E  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.ops import fp32 as W  # noqa: E402
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
 from verity.core.protocols.spot import service as S  # noqa: E402
 from verity.core.protocols.spot.one_stage import partition as P, produced, registration as R  # noqa: E402

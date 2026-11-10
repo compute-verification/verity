@@ -30,7 +30,7 @@ with the same toolkit at the same path and the same host compiler (a `research r
 - `commit_slots/`: the serve-time commit call, a step's proof-block outputs as hm96-sha512 rows under hiding leaves in
   frame-v3-sha512 trees, one subtree per sequence slot. `gpu.sh` holds the GPU's roots to the CPU reference's.
 - `sha512_rows/`: the SHA-512 compression engine that `commit_slots` runs on: row digests, hm96-sha512 leaves and
-  frame-v3-sha512 levels. `gpu.sh` holds every variant to `verity.ml.commitments`' reference, bit for bit.
+  frame-v3-sha512 levels. `gpu.sh` holds every variant to `verity.commitments`' reference, bit for bit.
 - `p2_stage/`: the store's load: P2's decode of the encoded weights store into GPU memory, with PoUB's
   receipts beside it. `full.sh` holds every loaded tensor to the weights manifest's SHA-256 on an H200, and
   `bw.sh` the receipts to their fixture.

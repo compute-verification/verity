@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
-from verity.ml.commitments.merkle import merkle_depth
+from verity.commitments.merkle import merkle_depth
 from verity_vllm.commit import step_rows as R
 from verity_vllm.commit.committer.native_collect import ROWS_FOLD_BYTES, ROWS_HOLD_BYTES, ext
 

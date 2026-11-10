@@ -39,7 +39,7 @@ sys.path.insert(0, str(ROOT / "verity" / "core" / "protocols" / "pouw" / "tests"
 
 
 import pearl_c_vectors as CV  # noqa: E402
-from verity.ml.commitments.merkle import tree_levels  # noqa: E402
+from verity.commitments.merkle import tree_levels  # noqa: E402
 from verity.ml.circuits.silicon import fp32  # noqa: E402
 from verity.ml.kernels.tc import group_sum_total_batch  # noqa: E402
 from verity.core.protocols.pouw.audit import (HM96, HM96_TRANSCRIPT, HM96_WEIGHTS, ROW_SCHEMA, TILE_SCHEMA,  # noqa: E402

@@ -172,27 +172,27 @@
    "groups": "0-46,48-63,67,97-103,106-107,113-114,124-126,155-170,194,201-206,219-237,325-355,359,371-372,432-433",
    "registry": true
   },
-  "verity.ml.commitments.gates.embedding.circuit-check#_embedding_roots": {
+  "verity.commitments.gates.embedding.circuit-check#_embedding_roots": {
    "groups": "0-44,47-63,67,97-103,106-107,113-114,124-126,155-170,194,201-206,219-237,325-355,359,368,373,434",
    "registry": true
   },
-  "verity.ml.commitments.gates.frame_v3.circuit-check#_merkle_read_at_roots": {
+  "verity.commitments.gates.frame_v3.circuit-check#_merkle_read_at_roots": {
    "groups": "0-63,67,97-103,106-107,113-114,124-126,155-170,172-173,194,201-206,219-237,325-355,359,371-372,432",
    "registry": true
   },
-  "verity.ml.commitments.gates.frame_v3.circuit-check#_merkle_roots": {
+  "verity.commitments.gates.frame_v3.circuit-check#_merkle_roots": {
    "groups": "0-49,52-63,67,97-103,106-107,113-114,124-127,155-170,172-173,194,201-206,219-237,325-356,368,371,429",
    "registry": true
   },
-  "verity.ml.commitments.gates.lms.circuit-check#_lms_roots": {
+  "verity.commitments.gates.lms.circuit-check#_lms_roots": {
    "groups": "",
    "registry": false
   },
-  "verity.ml.commitments.gates.merkle.circuit-check#_merkle_roots": {
+  "verity.commitments.gates.merkle.circuit-check#_merkle_roots": {
    "groups": "0-43,45-49,52-63,67-69,97-103,106-107,113-114,124-127,155-170,172-173,194,201-206,219-237,325-353,355-356,429,435",
    "registry": true
   },
-  "verity.ml.commitments.gates.rowleaf.circuit-check#_merkle_roots": {
+  "verity.commitments.gates.rowleaf.circuit-check#_merkle_roots": {
    "groups": "0-45,47-63,67-69,97-103,106-107,113-114,124-126,155-170,172,194,201-206,219-237,325-353,355,359,436-437",
    "registry": true
   },
@@ -914,8 +914,8 @@
     "verity/circuits",
     "verity/circuits/boolean",
     "verity/ml/circuits/ops",
-    "verity/ml/commitments",
-    "verity/ml/commitments/gates",
+    "verity/commitments",
+    "verity/commitments/gates",
     "verity/ml/definitions",
     "verity/ml/definitions/word/__init__.py",
     "verity/ml/flock",
@@ -1083,7 +1083,7 @@
   },
   {
    "probes": [
-    "verity/ml/commitments/frame_v3/__init__.py"
+    "verity/commitments/frame_v3/__init__.py"
    ]
   },
   {
@@ -1153,17 +1153,17 @@
   },
   {
    "probes": [
-    "verity/ml/commitments/gates/merkle.py"
+    "verity/commitments/gates/merkle.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/commitments/gates/embedding.py"
+    "verity/commitments/gates/embedding.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/commitments/gates/rowleaf.py"
+    "verity/commitments/gates/rowleaf.py"
    ]
   },
   {
@@ -1285,12 +1285,12 @@
   },
   {
    "probes": [
-    "verity/ml/commitments/gates/frame_v3.py"
+    "verity/commitments/gates/frame_v3.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/commitments/gates/lms.py"
+    "verity/commitments/gates/lms.py"
    ]
   },
   {
@@ -1962,12 +1962,12 @@
     "verity/circuits/evaluation",
     "verity/ml/circuits/silicon",
     "verity/circuits/units.py",
-    "verity/ml/commitments/frame_v3",
-    "verity/ml/commitments/gates/hm96.py",
-    "verity/ml/commitments/hm96",
-    "verity/ml/crypto",
-    "verity/ml/crypto/aead.py",
-    "verity/ml/crypto/lms.py",
+    "verity/commitments/frame_v3",
+    "verity/commitments/gates/hm96.py",
+    "verity/commitments/hm96",
+    "verity/commitments/crypto",
+    "verity/commitments/crypto/aead.py",
+    "verity/commitments/crypto/lms.py",
     "verity/ml/definitions/numerics/fa3_model/__init__.py",
     "verity/ml/definitions/registry/sampling_twins.py",
     "verity/ml/definitions/registry/tp_allreduce_check.py",
@@ -2014,7 +2014,7 @@
     "verity/ml/protocols/pous/__init__.py",
     "verity/ml/protocols/pouw/circuit/h1device.py",
     "verity/ml/protocols/pouw/schemes",
-    "verity/ml/randomness",
+    "verity/commitments/randomness",
     "verity/ml/windows"
    ]
   },
@@ -2042,8 +2042,8 @@
     "verity/core/protocols/spot/one_stage/verifier.py",
     "verity/core/protocols/spot/remote.py",
     "verity/core/protocols/spot/service.py",
-    "verity/ml/commitments/coin_tree.py",
-    "verity/ml/crypto/turboshake.py",
+    "verity/commitments/coin_tree.py",
+    "verity/commitments/crypto/turboshake.py",
     "verity/ml/protocols/pouw/schemes/pearl_c4.py",
     "verity/ml/protocols/pouw/schemes/pearl_c4_c_L.py",
     "verity/ml/protocols/pouw/schemes/pearl_kw.py"
@@ -2087,13 +2087,13 @@
     "_classes.py",
     "_ops.py",
     "verity/core/protocols/pous/__init__.py",
-    "verity/ml/commitments/advice.py",
+    "verity/commitments/advice.py",
     "verity/ml/commitments/vllm_v1"
    ]
   },
   {
    "probes": [
-    "verity/ml/commitments/window.py"
+    "verity/commitments/window.py"
    ]
   },
   {
@@ -2556,20 +2556,20 @@
   },
   {
    "probes": [
-    "verity/ml/commitments/hm96/__init__.py"
+    "verity/commitments/hm96/__init__.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/commitments/rowleaf.py"
+    "verity/commitments/rowleaf.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/commitments/__init__.py",
-    "verity/ml/commitments/identity.py",
-    "verity/ml/commitments/indexed.py",
-    "verity/ml/commitments/merkle.py"
+    "verity/commitments/__init__.py",
+    "verity/commitments/identity.py",
+    "verity/commitments/indexed.py",
+    "verity/commitments/merkle.py"
    ]
   },
   {
@@ -2621,13 +2621,13 @@
   {
    "probes": [
     "verity/circuits/partition_v2.py",
-    "verity/ml/commitments/gates/__init__.py",
-    "verity/ml/commitments/gates/sha512.py"
+    "verity/commitments/gates/__init__.py",
+    "verity/commitments/gates/sha512.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/commitments/domains.py",
+    "verity/commitments/domains.py",
     "verity/ml/protocols/pouw/circuit/boolean.py"
    ]
   },
@@ -2644,8 +2644,8 @@
   },
   {
    "probes": [
-    "verity/ml/commitments/hm96/batch.py",
-    "verity/ml/crypto/chacha20.py"
+    "verity/commitments/hm96/batch.py",
+    "verity/commitments/crypto/chacha20.py"
    ]
   },
   {
@@ -2662,10 +2662,10 @@
   },
   {
    "probes": [
-    "verity/ml/commitments/limits.py",
-    "verity/ml/commitments/scheme.py",
-    "verity/ml/crypto/__init__.py",
-    "verity/ml/crypto/blake3.py"
+    "verity/commitments/limits.py",
+    "verity/commitments/scheme.py",
+    "verity/commitments/crypto/__init__.py",
+    "verity/commitments/crypto/blake3.py"
    ]
   },
   {
@@ -3181,7 +3181,7 @@
   },
   {
    "probes": [
-    "verity/ml/randomness/__init__.py"
+    "verity/commitments/randomness/__init__.py"
    ]
   },
   {
@@ -3698,32 +3698,32 @@
   },
   {
    "files": [
-    "verity/ml/commitments/gates/lms.circuit-check.py"
+    "verity/commitments/gates/lms.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/commitments/gates/attest.circuit-check.py"
+    "verity/commitments/gates/attest.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/commitments/gates/lms.circuit-check.json"
+    "verity/commitments/gates/lms.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/ml/commitments/gates/frame_v3.circuit-check.py"
+    "verity/commitments/gates/frame_v3.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/commitments/gates/block_check.circuit-check.py"
+    "verity/commitments/gates/block_check.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/commitments/gates/embedding.circuit-check.py"
+    "verity/commitments/gates/embedding.circuit-check.py"
    ]
   },
   {
@@ -4110,32 +4110,32 @@
   },
   {
    "files": [
-    "verity/ml/commitments/gates/frame_v3.circuit-check.json"
+    "verity/commitments/gates/frame_v3.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/ml/commitments/gates/block_check.circuit-check.json"
+    "verity/commitments/gates/block_check.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/ml/commitments/gates/embedding.circuit-check.json"
+    "verity/commitments/gates/embedding.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/ml/commitments/gates/merkle.circuit-check.py"
+    "verity/commitments/gates/merkle.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/commitments/gates/rowleaf.circuit-check.py"
+    "verity/commitments/gates/rowleaf.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/commitments/gates/rowleaf.circuit-check.json"
+    "verity/commitments/gates/rowleaf.circuit-check.json"
    ]
   },
   {
@@ -5483,9 +5483,9 @@
     "verity/difftest/python/blake3",
     "verity/difftest/python/blake3.py",
     "verity/difftest/python/blake3/__init__.py",
-    "verity/ml/commitments/frame_v3/WordLeaf",
-    "verity/ml/commitments/frame_v3/WordLeaf.py",
-    "verity/ml/commitments/frame_v3/WordLeaf/__init__.py",
+    "verity/commitments/frame_v3/WordLeaf",
+    "verity/commitments/frame_v3/WordLeaf.py",
+    "verity/commitments/frame_v3/WordLeaf/__init__.py",
     "verity/ml/flock/python/blake3",
     "verity/ml/flock/python/blake3.py",
     "verity/ml/flock/python/blake3/__init__.py",

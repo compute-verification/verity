@@ -12,7 +12,7 @@ import pytest
 from verity_flock import rec_link as R
 from verity_flock import rec_links as RL
 
-from verity.ml.commitments import hm96
+from verity.commitments import hm96
 
 KEY = hm96.SHA512.default_key
 UB, PB = 2, 1

@@ -10,7 +10,7 @@ from fractions import Fraction
 
 import pytest
 
-from verity.ml.commitments.identity import tagged_sha512
+from verity.commitments.identity import tagged_sha512
 from verity.core.protocols.certifier.certificate import CLOCK_TAG, SALT_BYTES, CertifiedClock, Direction, Issuer, \
     SignedClocks, SignerRefused, clock_commitment, clock_digest, parameters_digest
 from verity.core.protocols.certifier.grid import Certifier, GridParams

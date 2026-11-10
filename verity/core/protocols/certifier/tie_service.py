@@ -72,8 +72,8 @@ from typing import Any, Mapping, Sequence
 from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
-from verity.ml.commitments.merkle import CommitmentDomain
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
+from verity.commitments.merkle import CommitmentDomain
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
 from verity.core.protocols.certifier import advice as ADV, head_check as HC, io_request as Q
 from verity.core.protocols.certifier import service as SVC, warden_rows as WR
 from verity.core.protocols.certifier.certificate import Direction

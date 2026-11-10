@@ -36,7 +36,7 @@ from verity.circuits.codec import program_digest
 from verity.circuits.cut import CallGraph, check_cut
 from verity.circuits.program import input_id
 from verity.circuits.units import Activation, PartitionUnits, ProofBlockCircuit
-from verity.ml.randomness import derive
+from verity.commitments.randomness import derive
 
 from . import gf2
 from . import ir_lower as IL

@@ -27,12 +27,12 @@ path = "../../certifier/lean"
 
 [[require]]
 name = "lms"
-path = "../../../primitives/lms/lean"
+path = "../../../../commitments/lms/lean"
 
 # `tagged_sha512` is core's identity hash.
 [[require]]
 name = "core_identity"
-path = "../../../primitives/identity"
+path = "../../../../commitments/identity"
 
 [[lean_lib]]
 name = "NetworkCheck"

@@ -100,9 +100,9 @@ from verity.core.protocols.spot import challenger as Ch
 from verity.core.protocols.spot.challenger import (ChallengerClose, ChallengerKey, CoinError, LiveChallenger,
                                                              LiveCommitment, LiveOpening, LiveRecord, Verify, live_reason,
                                                              write_record)
-from verity.ml.commitments import coin_tree as CT
-from verity.ml.commitments.identity import canonical_json_text
-from verity.ml.commitments.scheme import DIGEST_BYTES
+from verity.commitments import coin_tree as CT
+from verity.commitments.identity import canonical_json_text
+from verity.commitments.scheme import DIGEST_BYTES
 
 RECORD, KEY, RELEASES, CLOSE, HELLOS = Ch.RECORD_FILE, "key.json", Ch.LOG_FILE, Ch.CLOSE_FILE, Ch.HELLOS_FILE
 ROOT_BYTES = DIGEST_BYTES["sha512"]

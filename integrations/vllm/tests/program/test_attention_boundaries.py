@@ -55,7 +55,7 @@ def _core(name: str) -> bool:
     protocols and claims, which are under `verity.core` now."""
     def under(prefix: str) -> bool:
         return name == prefix or name.startswith(prefix + ".")
-    moved_in = ("verity.core", "verity.ml.commitments.multiproof", "verity.ml.private_circuits", "verity.ml.circuits.ops",
+    moved_in = ("verity.core", "verity.commitments.multiproof", "verity.ml.private_circuits", "verity.ml.circuits.ops",
                 "verity.ml.circuits.silicon", "verity.ml.circuits.targets", "verity.ml.kernels", "verity.ml.flock",
                 "verity.ml.definitions")
     return under("verity") and (not any(map(under, moved_in))

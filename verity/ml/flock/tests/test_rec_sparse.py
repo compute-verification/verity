@@ -396,7 +396,7 @@ def test_a_sessions_statement_reads_tau_at_row_0_and_every_other_port_at_row_r(t
     rows. Both instances hold and the unit agrees with the reference; with rep 1's first H3 round forged (the prover's
     registration of another row), rep 1 alone fails at H3. When Lean is built, its `statement` accepts the honest files, and
     refuses the forged prover's row against the verifier's own entry of the row the ZK server committed (one salt each)."""
-    from verity.ml.commitments import hm96
+    from verity.commitments import hm96
 
     sh = RS.Shape(2, 6, 1, 1)
     g = random.Random(3)

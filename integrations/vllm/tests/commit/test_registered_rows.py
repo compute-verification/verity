@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from verity.core.protocols.spot.one_stage import registered as G
-from verity.ml.commitments import hm96
+from verity.commitments import hm96
 from verity_vllm.commit import registered_rows as RR
 
 PROGRAM = "ab" * 64

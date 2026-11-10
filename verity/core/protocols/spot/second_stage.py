@@ -64,7 +64,7 @@ from verity.circuits.codec import canonical_json, definitions, descriptor_id
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.refs import Affine, Concat, Explicit
 from verity.circuits.types import RecordType, Tuple
-from verity.ml.commitments.window import window_binding
+from verity.commitments.window import window_binding
 
 from .one_stage.verdict import Verdict, _Collect
 

@@ -166,7 +166,7 @@ def sources(act: Activation, uc: ProofBlockCircuit, owner_of: dict[int, str]) ->
 
 def element_rows(act: Activation, uc: ProofBlockCircuit, groups: list[list[int]]) -> tuple[list[list[int]], list[tuple[int, ...]], list[int]]:
     """FLOCK_CORE_ROWS's rows of an FP GEMM coordinate (`ELEMENT_ROWS`): x with its scales one row and the W column with its
-    scales another, each core's bit row (``verity.ml.commitments.rowleaf.bit_row``: each element's bits low first, the codes, then
+    scales another, each core's bit row (``verity.commitments.rowleaf.bit_row``: each element's bits low first, the codes, then
     the scales, nothing after). Returns the merged source groups, the `sources` groups each one joins, and each row's length in
     bits. Refuses a Definition that is not such a coordinate and a source that is not one whole parameter in element order. A
     row of any length is staged: the verifiers derive its fill bits and SHA-512 padding from the length."""
@@ -761,7 +761,7 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
 def _check_bit_rows(uc: ProofBlockCircuit, ins: Sequence[Sequence[int]], groups: list[list[int]], bits: list[int], per_port: dict,
                     name: str, lanes: int = 8) -> None:
     """The first ``lanes`` staged rows of each port are core's bit row of the lane's elements (``rowleaf.bit_row``), then zero."""
-    from verity.ml.commitments.rowleaf import bit_row
+    from verity.commitments.rowleaf import bit_row
 
     for i, (g, n_bits) in enumerate(zip(groups, bits)):
         rows = per_port[f"p{i}"]
@@ -1093,7 +1093,7 @@ class UnitStager:
                  out_rows: Sequence[tuple[str, Sequence[int]]], public_inputs: dict | None = None, circuit: Path | None = None,
                  bind: dict | None = None, layout: str | None = None, structural: bool = False, reads: str = "inline",
                  stage_ands: int | str | None = "auto", packed: bool = False):
-        from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
+        from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
 
         if bind is not None and set(bind) != {"partition", "program"}:
             raise ValueError(f"{name}: bind is exactly partition and program")

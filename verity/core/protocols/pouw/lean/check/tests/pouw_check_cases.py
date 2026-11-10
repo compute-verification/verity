@@ -21,7 +21,7 @@ from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.spot import challenger as Ch
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 
 EPS = ["1", "1/2", "1/3", "2/3", "1/10", "1/20", "3/4"]
 DELTA = ["1/2", "1/10", "1/100", "1/1000", "1/65536", "1/1048576", "3/7"]

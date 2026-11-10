@@ -56,7 +56,7 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 from functools import lru_cache
 
-from verity.ml.crypto.blake3 import blake3, keyed
+from verity.commitments.crypto.blake3 import blake3, keyed
 from verity.ml.circuits.silicon import models as tc_models
 
 from verity.core.protocols.pouw.protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles

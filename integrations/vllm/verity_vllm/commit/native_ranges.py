@@ -15,8 +15,8 @@ import sys
 from dataclasses import dataclass
 from typing import Any
 
-from verity.ml.commitments import Commitment, Opening as FrameOpening, VerificationLimits, verify_opening
-from verity.ml.commitments.multiproof import multiproof_root
+from verity.commitments import Commitment, Opening as FrameOpening, VerificationLimits, verify_opening
+from verity.commitments.multiproof import multiproof_root
 from verity_vllm.commit import step_rows
 
 # A leaf a `--retain device` window's draw-gated release did not keep (`committer.device_pool`): refused, never replayed.

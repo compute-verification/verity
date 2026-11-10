@@ -45,7 +45,7 @@ from verity.core.protocols.certifier import certificate as cert  # noqa: E402
 from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Record, fill  # noqa: E402
 from verity.core.protocols.remote_bandwidth import coins  # noqa: E402
 from verity.core.protocols.spot.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
-from verity.ml.crypto import lms  # noqa: E402
+from verity.commitments.crypto import lms  # noqa: E402
 
 P = lms.Params(64, 4, 4)
 T0 = datetime(2026, 10, 21, 1, 0, 0, tzinfo=timezone.utc)

@@ -39,8 +39,8 @@ from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 from verity.circuits import ports as _ports
-from verity.ml.commitments import domains
-from verity.ml.commitments.scheme import DIGEST_BYTES
+from verity.commitments import domains
+from verity.commitments.scheme import DIGEST_BYTES
 
 from .protocol import U64, DomainError
 

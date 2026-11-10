@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from verity.circuits.program import Program
-from verity.ml.commitments import row_table as RT
+from verity.commitments import row_table as RT
 from verity.core.protocols.spot import service as S
 from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R
 from verity.ml.windows import rows as CS, tables as TB

@@ -12,8 +12,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from verity.ml.commitments import domains
-from verity.ml.randomness import derive
+from verity.commitments import domains
+from verity.commitments.randomness import derive
 
 from .audit import Epoch, salt_of
 from .coins import CoinOpening, coin_reason

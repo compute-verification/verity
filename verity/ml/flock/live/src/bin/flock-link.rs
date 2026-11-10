@@ -67,7 +67,7 @@ const CHUNK_END: u32 = 2;
 const PARENT: u32 = 4;
 const ROOT: u32 = 8;
 const KEYED_HASH: u32 = 16;
-/// The core row leaf `blake3-keyed/row/v2` (`verity.ml.commitments.rowleaf`): `BLAKE3(row bytes, key = "verity/blake3-leaf/v1/"
+/// The core row leaf `blake3-keyed/row/v2` (`verity.commitments.rowleaf`): `BLAKE3(row bytes, key = "verity/blake3-leaf/v1/"
 /// + "x" | "w", zero padded to 32 bytes)`.
 const SCHEME: &str = "blake3-keyed/row/v2";
 const KEY_PREFIX: &[u8] = b"verity/blake3-leaf/v1/";

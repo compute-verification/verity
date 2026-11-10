@@ -67,9 +67,9 @@ from verity.circuits.partition_v2 import UNIT_CLASS_MAX, unit_class
 
 
 def pinned_ands(definition: str, sidecar: str = "lms") -> int:
-    """`definition`'s ANDs as its circuit-check pin records them (`verity.ml.commitments.gates`' `SIDECAR.circuit-check.json`):
+    """`definition`'s ANDs as its circuit-check pin records them (`verity.commitments.gates`' `SIDECAR.circuit-check.json`):
     the AND rows Flock proves, the copies that keep a form short (`forms.commit`) among them."""
-    from verity.ml.commitments import gates
+    from verity.commitments import gates
 
     pins = json.loads(Path(gates.__file__).with_name(f"{sidecar}.circuit-check.json").read_text())
     return pins["definitions"][definition]["and"]

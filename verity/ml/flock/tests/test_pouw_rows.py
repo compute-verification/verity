@@ -21,8 +21,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 from test_lean_verifier import ROW_SEG_PAIRS, ROW_V2_PAIRS, _bit_row_toy, _public_bcs, _seg_writer_toy
-from verity.ml.commitments import hm96
-from verity.ml.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2, row_bytes,
+from verity.commitments import hm96
+from verity.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2, row_bytes,
                                         sha512_row_v2_digest)
 from verity.circuits.types import Tuple
 from verity_flock import circuit as FC

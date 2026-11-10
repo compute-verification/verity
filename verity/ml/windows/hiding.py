@@ -1,4 +1,4 @@
-"""Vectorized ``hm96`` hiding leaves (``verity.ml.commitments.hm96``, spec ``PROTOCOL.md`` beside it): one instance's tree leaves
+"""Vectorized ``hm96`` hiding leaves (``verity.commitments.hm96``, spec ``PROTOCOL.md`` beside it): one instance's tree leaves
 over many unsalted leaf digests at once.  ``tests/test_hiding.py`` pins it to the reference and its vectors.
 
 Each leaf gets fresh salt bytes from the OS generator (one call per ``leaves`` call), which the caller retains: a leaf opens
@@ -13,7 +13,7 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from verity.ml.commitments import hm96
+from verity.commitments import hm96
 
 NAME = hm96.NAME
 SALT_BYTES = hm96.SALT_BYTES

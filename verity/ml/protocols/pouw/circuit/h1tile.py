@@ -78,7 +78,7 @@ from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind, primitive
 from verity.circuits.refs import Coll, array_of, concat
 from verity.circuits.types import Array, RecordType, Value
-from verity.ml.commitments.scheme import DIGEST_BYTES
+from verity.commitments.scheme import DIGEST_BYTES
 
 from . import compile as C
 from . import seeds as SD

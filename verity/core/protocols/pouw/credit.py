@@ -220,7 +220,7 @@ from verity.circuits.codec import _checked_refs
 from verity.circuits.defs import _Widths
 from verity.circuits.refs import Coll, Concat, refs_from_json
 from verity.circuits.types import type_from_json
-from verity.ml.commitments import domains
+from verity.commitments import domains
 
 #: the verifier over a statement's proof files (`proofs.verify`)
 Run = Callable[..., tuple[list | None, tuple[str, str] | None]]
@@ -3181,7 +3181,7 @@ def _uint(n: int) -> bytes:
 
 
 def _frame(tag: bytes, *parts: bytes) -> bytes:
-    """frame-v3's SHA-512 hash (`verity.ml.commitments.merkle.frame_hash`)."""
+    """frame-v3's SHA-512 hash (`verity.commitments.merkle.frame_hash`)."""
     return hashlib.sha512(_FRAME + len(tag).to_bytes(4, "big") + tag
                           + b"".join(len(p).to_bytes(8, "big") + p for p in parts)).digest()
 

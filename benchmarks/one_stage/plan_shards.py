@@ -88,7 +88,7 @@ def circuit_oks(defn, batch: list[dict]) -> list[int]:
 def stage(defn, S, a: dict, scratch: Path) -> dict:
     """One instance staged: the statement's META (its block ``k_log``, at most 2^27, and a row compressing before its last
     block, both `compose`'s refusals) and its ok."""
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
     from verity_flock import class_statement as CS
 
     t0 = time.time()

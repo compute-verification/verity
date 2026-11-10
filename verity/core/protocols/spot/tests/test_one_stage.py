@@ -275,9 +275,9 @@ def test_the_window_runs_its_days_declared_circuit():
 
 
 def test_window_domains_bind_program_partition_port_schema_leaves_and_run():
-    from verity.ml.commitments.identity import identity_digest_sha512
-    from verity.ml.commitments.indexed import RangeIndexedDomain
-    from verity.ml.commitments.merkle import CommitmentDomain
+    from verity.commitments.identity import identity_digest_sha512
+    from verity.commitments.indexed import RangeIndexedDomain
+    from verity.commitments.merkle import CommitmentDomain
 
     base = ("a" * 128, "b" * 128, "x", "hm96-sha512/row/v1", 6, "r1")
     d = R.window_domain(*base)

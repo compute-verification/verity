@@ -9,7 +9,7 @@ from dataclasses import replace
 
 import pytest
 
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 from verity.core.protocols.certifier import transfer_rows as TR
 from verity.core.protocols.certifier import warden_rows as WR
 from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsKey

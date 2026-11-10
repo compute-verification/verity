@@ -67,7 +67,7 @@ HEAD_DIM = 128
 KV_ELEMENT_BYTES = 2
 TOKEN_LAYER_BYTES = 2 * KV_HEADS * HEAD_DIM * KV_ELEMENT_BYTES
 TOKEN_BYTES = LAYERS * TOKEN_LAYER_BYTES
-# sha512/row/v2's first block for a row of TOKEN_LAYER_BYTES (`verity.ml.commitments.rowleaf`, held to it by the tests).
+# sha512/row/v2's first block for a row of TOKEN_LAYER_BYTES (`verity.commitments.rowleaf`, held to it by the tests).
 ROW_PREFIX = (b"verity/sha512-row/v2\0" + (8 * TOKEN_LAYER_BYTES).to_bytes(8, "big")).ljust(128, b"\0")
 
 FIELDS = {f.name: f for f in (P512, Field("p768", 768, 825), P1024, Field("p1280", 1280, 1665),

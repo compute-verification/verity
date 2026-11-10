@@ -41,7 +41,7 @@ import multiprocessing
 from pathlib import Path
 
 import numpy as np
-from verity.ml.commitments import Commitment, Opening
+from verity.commitments import Commitment, Opening
 from verity.core.protocols.pouw.audit import (
     HM96,
     HM96_TRANSCRIPT,

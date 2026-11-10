@@ -30,7 +30,7 @@ from verity.core.deploy.manifest import Channel, Manifest, Role
 from verity.core.deploy.party import Finish, Identity, Received, Send
 from verity.core.wire import Message
 from verity.circuits import codec
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 
 ID = "lifecycle-onsite"
 UPLINK, CERT, CHAL = "uplink0", "cert0", "chal0"

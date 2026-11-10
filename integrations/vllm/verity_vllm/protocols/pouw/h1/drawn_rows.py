@@ -13,7 +13,7 @@ from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import leaf_lanes as LL
 from verity.core.protocols.spot.one_stage import produced as PR
 from verity.core.protocols.spot.one_stage import registered as G
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_vllm.errors import Refused
 
 M32 = (1 << 32) - 1

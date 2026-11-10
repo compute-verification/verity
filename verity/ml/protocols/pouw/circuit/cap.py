@@ -119,7 +119,7 @@ from fractions import Fraction
 from functools import lru_cache
 from math import gcd
 
-from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X
+from verity.commitments.rowleaf import ROLE_W, ROLE_X
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple, Value

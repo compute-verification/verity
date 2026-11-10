@@ -204,7 +204,7 @@ def b_tables(lib: H1C, key: bytes, dev: torch.device) -> dict:
 
 
 def no_poison(st: Step) -> bool:
-    from verity.ml.commitments.merkle import merkle_depth
+    from verity.commitments.merkle import merkle_depth
     for x in (st.calls, st.mid, st.round) + ((st.rset,) if st.rset else ()):
         for i, t in enumerate(x.tabs):
             n = 8 * (2 * (1 << merkle_depth(t.count)) - 1)

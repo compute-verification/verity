@@ -17,8 +17,8 @@ import hashlib
 from typing import Any
 
 from verity.circuits.codec import canonical_json, jcs_domain_error
-from verity.ml.commitments import domains
-from verity.ml.commitments.scheme import DIGEST_BYTES
+from verity.commitments import domains
+from verity.commitments.scheme import DIGEST_BYTES
 
 from .audit import Epoch
 from .protocol import DomainError, PoUWScheme

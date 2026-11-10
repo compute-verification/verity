@@ -152,9 +152,9 @@ def test_the_tree_and_the_audit_derivation_are_the_specs():
     import hashlib
 
     from verity.core.protocols.pous.verifier import MerkleTree
-    from verity.ml.commitments.identity import tagged_sha512
-    from verity.ml.commitments.rowleaf import sha512_row_v2_digest
-    from verity.ml.randomness import frame
+    from verity.commitments.identity import tagged_sha512
+    from verity.commitments.rowleaf import sha512_row_v2_digest
+    from verity.commitments.randomness import frame
 
     R, _, _ = _p2()
     leaves = [bytes([i]) * 64 for i in range(3)]
@@ -783,7 +783,7 @@ def test_the_memory_challengers_lms_key_is_made_once_and_its_leaves_never_reused
     """`--lms-key DIR`: the first use makes the key there (seed, public key, tree, leaf state), a later one loads it without a
     keygen and signs at the next leaf, and a tree that is not the public key's is refused.  At a small height, so under a
     `test/` id."""
-    from verity.ml.crypto import lms
+    from verity.commitments.crypto import lms
 
     live, small = _live(), lms.Params(64, 1, 2)
     first = live.lms_signer(tmp_path / "key", params=small)
@@ -805,7 +805,7 @@ class _SparseTree:
     signed at `lms.DEPLOYED` without its 2^20-leaf keygen."""
 
     def __init__(self, I: bytes, seed: bytes) -> None:
-        from verity.ml.crypto import lms
+        from verity.commitments.crypto import lms
 
         self.root = b""
         probe = lms.sign_at(lms.PrivateKey(lms.DEPLOYED, I, seed, self), 0, b"probe")
@@ -817,7 +817,7 @@ class _SparseTree:
 
 def _deployed_signer(tmp_path):
     """An S1 signer at `lms.DEPLOYED` over `_SparseTree`, its leaf state in `tmp_path`, for one session."""
-    from verity.ml.crypto import lms
+    from verity.commitments.crypto import lms
     from verity.core.protocols.pous import memory_challenger as mc
 
     I, seed = hashlib.sha512(b"I").digest()[:16], hashlib.sha512(b"seed").digest()[:lms.DEPLOYED.N]

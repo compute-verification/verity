@@ -418,7 +418,7 @@ def retained(tmp_path_factory):
     from verity.core.protocols.pouw.coins import Challenger
     from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, Tile
     from verity.ml.protocols.pouw.schemes import pearl_c_work as PW
-    from verity.ml.commitments.merkle import tree_levels
+    from verity.commitments.merkle import tree_levels
 
     scheme = "pearl-c-h100-v1-h3"
     s = PPD.scheme_of(scheme, k_min=32, tile=(16, 16))

@@ -319,7 +319,7 @@ def committed_line(record: CommittedRecord) -> str:
 
 
 def read_committed(path: Path) -> list[CommittedRecord]:
-    from verity.ml.commitments.identity import Digest
+    from verity.commitments.identity import Digest
 
     out = []
     for line in path.read_text().splitlines() if path.exists() else []:

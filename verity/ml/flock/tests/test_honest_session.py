@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 import verity_difftest as D
-from verity.ml.commitments.rowleaf import ROLE_X, row_bytes, sha512_row_digest, sha512_row_prefix
+from verity.commitments.rowleaf import ROLE_X, row_bytes, sha512_row_digest, sha512_row_prefix
 from verity_flock import rec_live as RL
 
 from test_firewall_agreement import built, lean_run  # noqa: F401 - `built` is a fixture

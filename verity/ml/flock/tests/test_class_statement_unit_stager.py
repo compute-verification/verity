@@ -24,7 +24,7 @@ from verity.circuits.boolean.forms import add
 from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.types import Array, Value
-from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 from verity_flock import ir_lower as IL

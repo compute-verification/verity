@@ -33,7 +33,7 @@ import torch
 
 from .plan import Entry, Map, Table
 from .shape import Shape
-from verity.ml.commitments import layout as L
+from verity.commitments import layout as L
 
 COMMIT_SLOTS = Path(__file__).resolve().parents[3] / "benchmarks" / "torch_gpu" / "commit_slots"
 BACKENDS = ("slots", "reference", "host", "device")
@@ -67,7 +67,7 @@ def fusion_tag(fused: frozenset[str]) -> str:
 
 
 def _group(entries: list[Entry]) -> tuple[L.Group, list[tuple[str, int]]]:
-    """A group of the map as a `verity.ml.commitments.layout` group, and each family's (name, first unit in the group)."""
+    """A group of the map as a `verity.commitments.layout` group, and each family's (name, first unit in the group)."""
     sources: list[int] = []
     units: list[tuple[L.Row, ...]] = []
     firsts = []

@@ -19,8 +19,8 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Iterable, Sequence
 
-from verity.ml.commitments.identity import canonical_json_bytes
-from verity.ml.randomness import derive
+from verity.commitments.identity import canonical_json_bytes
+from verity.commitments.randomness import derive
 
 from .codec import Codec, Geometry, encode_segments, split
 from .params import SALT_BITS
@@ -43,7 +43,7 @@ def _commitment_hash(params: Geometry):
 
 
 def commit(params: Geometry, w: bytes | Iterable[bytes]) -> bytes:
-    """The server's commitment to `W` under `params`: `verity.ml.commitments.identity.tagged_sha512(COMMIT_TAG, u64(len
+    """The server's commitment to `W` under `params`: `verity.commitments.identity.tagged_sha512(COMMIT_TAG, u64(len
     manifest) || manifest || W)`, streamed over `W`'s segments."""
     h = _commitment_hash(params)
     for seg in split(params, w):

@@ -188,7 +188,7 @@ def test_token_layer_layout(name):
 
 
 def test_the_digest_is_sha512_row_v2():
-    from verity.ml.commitments.rowleaf import sha512_row_v2_digest
+    from verity.commitments.rowleaf import sha512_row_v2_digest
 
     data = _bound_data()
     assert K.digest(data) == sha512_row_v2_digest(data, 8 * K.TOKEN_LAYER_BYTES)

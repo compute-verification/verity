@@ -1,4 +1,4 @@
-"""The one challenge module: every sample derives through `verity.ml.randomness.derive` from the run's live coin and is
+"""The one challenge module: every sample derives through `verity.commitments.randomness.derive` from the run's live coin and is
 refused without one, and the legacy replay seeds stay byte-identical to the outputs recorded before they moved onto it."""
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.randomness import derive
+from verity.commitments.randomness import derive
 from verity_vllm.acquire.committer_api import RunCommitment, StepCommitment
 from verity_vllm.check.replay import sample as SR
 from verity_vllm.commit import binding as B

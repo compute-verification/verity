@@ -9,8 +9,8 @@ import struct
 
 import pytest
 
-from verity.ml.commitments.identity import tagged_sha512
-from verity.ml.crypto import lms
+from verity.commitments.identity import tagged_sha512
+from verity.commitments.crypto import lms
 from verity.core.protocols.certifier.audit import Audit
 from verity.core.protocols.certifier.certificate import (
     STATUS_CODES, Certificate, CertifiedRecord, Direction, Issuer, LmsSigner, RecordHead, certificate_digest,

@@ -25,8 +25,8 @@ inputs = ["verity/circuits", "verity/ml/kernels/__init__.py", "verity/ml/kernels
           "verity/core/protocols/spot/remote.py", "verity/core/protocols/spot/one_stage",
           "verity/core/protocols/spot/service.py", "verity/core/protocols/spot/coins.py",
           "verity/core/protocols/spot/second_stage.py",
-          "verity/ml/windows", "verity/ml/commitments",
-          "verity/ml/crypto", "verity/ml/randomness",
+          "verity/ml/windows", "verity/commitments",
+          "verity/commitments/crypto", "verity/commitments/randomness",
           "verity/flock/verifier/lakefile.toml", "verity/flock/verifier/lake-manifest.json",
           "verity/flock/verifier/lean-toolchain", "verity/flock/verifier/Flock/Field.lean",
           "verity/flock/verifier/Flock/Bytes.lean", "verity/flock/verifier/Flock/Canon.lean"]

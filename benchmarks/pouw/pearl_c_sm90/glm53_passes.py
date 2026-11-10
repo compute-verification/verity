@@ -185,7 +185,7 @@ def full_pass(d: Path, coins, jobs: int, every: int, without_y: bool = False) ->
     import fast_tile as FT
     import numpy as np
     from clear_audit import Transcript, Verifier
-    from verity.ml.commitments import Commitment
+    from verity.commitments import Commitment
     from verity_vllm.protocols.pouw import pearl_c as PD
 
     class Seen(CW._TileRuleView):

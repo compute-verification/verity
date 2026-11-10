@@ -16,7 +16,7 @@ from typing import Any
 
 from . import tmpl as TM
 
-#: the read's Definition, `verity.ml.commitments.gates.embedding.EmbeddingRead_v1{V, H}`, by its base id
+#: the read's Definition, `verity.commitments.gates.embedding.EmbeddingRead_v1{V, H}`, by its base id
 READ = "EmbeddingRead_v1"
 #: the executable a caller names (a test's stand-in, a job's own build); None: `BUILT`, else the path's
 EXE: str | None = None

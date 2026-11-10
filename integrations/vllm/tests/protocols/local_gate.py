@@ -62,7 +62,7 @@ def _host(A, d: Path, cfg: dict):
 
 
 def _params(cfg: dict):
-    from verity.ml.crypto import lms
+    from verity.commitments.crypto import lms
     return lms.Params(64, *cfg["params"])
 
 
@@ -138,7 +138,7 @@ def init(d: Path, argv: list[str]) -> int:
             cfg["coins"], cfg["coins_why"] = "stub", f"lake build sampled-proofs-verifier exited {b.returncode}"
     (d / CONFIG).write_text(json.dumps(cfg, indent=1) + "\n")
     A = _auditor(d, cfg)
-    from verity.ml.crypto import lms
+    from verity.commitments.crypto import lms
     host = _host(A, d, cfg)
     A.record_pin(host.pins, a.commit, a.commit, _now(), seal=lambda p: None)
     key, state = A.load_key(host, _params(cfg), 4)

@@ -137,7 +137,7 @@ def _tile(tid: int) -> tuple[int, bool, str | None]:
 def _tiles(d: Path, jobs: int) -> dict:
     """Every tile of a pass under `Verifier.check_tile`: its openings, then its leaf recomputed by the reference."""
     import verify_run as VR
-    from verity.ml.commitments import Commitment
+    from verity.commitments import Commitment
     from clear_audit import Transcript, Verifier
     from verity.core.protocols.pouw.coins import CoinCommitment
     import clear_work as CW

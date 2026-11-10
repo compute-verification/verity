@@ -22,7 +22,7 @@ import pytest
 from test_class_statement_unit_stager import _toy
 from test_struct_lower import TOY_READS, toy_reads  # noqa: F401
 from verity.circuits.defs import bind
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_config.settings import of
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
@@ -265,7 +265,7 @@ from verity.circuits.boolean.forms import add
 from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import bind
 from verity.circuits.types import Array
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock import class_statement as CS
 d = bind(definition("TmplNoTorch", 1, lambda C, a, b, w: add(C, a, b, width=16, carry_out=True) + [C.AND(w[0], w[2047])],
                     (("a", Array(16, BIT)), ("b", Array(16, BIT)), ("w", Array(2048, BIT))), Array(18, BIT), register=False))

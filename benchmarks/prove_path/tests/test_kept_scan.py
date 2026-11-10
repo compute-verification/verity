@@ -33,7 +33,7 @@ from verity.ml.protocols.certifier import ingress_scan as IS
 from verity.core.protocols.certifier import warden as W
 from verity.core.protocols.certifier.active import id_request
 from verity.core.protocols.certifier.certificate import Issuer, LmsSigner
-from verity.ml.crypto import lms
+from verity.commitments.crypto import lms
 from verity_vllm.program.predict.window_circuit import WindowClass
 
 HERE = Path(__file__).resolve().parent

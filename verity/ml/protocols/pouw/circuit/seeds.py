@@ -50,9 +50,9 @@ from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import Coll, Explicit, array_of, concat
 from verity.circuits.types import Array
-from verity.ml.commitments import domains
-from verity.ml.commitments.gates.sha512 import IV, compress_gadget, pad_tail, words_be
-from verity.ml.commitments.scheme import DIGEST_BYTES
+from verity.commitments import domains
+from verity.commitments.gates.sha512 import IV, compress_gadget, pad_tail, words_be
+from verity.commitments.scheme import DIGEST_BYTES
 
 from . import hashes as H
 from . import words as W

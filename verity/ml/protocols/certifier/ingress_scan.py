@@ -139,7 +139,7 @@ from typing import Sequence
 
 from verity.circuits.boolean.forms import ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
 from verity.circuits.types import Array, Tuple
-from verity.ml.commitments.gates.frame_v3 import _part
+from verity.commitments.gates.frame_v3 import _part
 from verity.ml.protocols.certifier import egress as EG
 from verity.core.protocols.certifier import head_check as HC
 from verity.ml.protocols.certifier import io_ids as II

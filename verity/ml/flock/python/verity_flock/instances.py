@@ -187,10 +187,10 @@ def draw(name: str, total: int, procs: int = 1, cache: str | Path | None = None,
 def statement(name: str, x, w, accs, total: int | None = None, lo: int = 0, leaf: str = "blake3") -> dict:
     """The three frame-v3 roots (and their domains) over the set's VUs ``[lo, lo + len(x))`` of a ``total``-VU batch (one
     sub-batch's trees, bound to that range)."""
-    from verity.ml.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
-    from verity.ml.commitments.indexed import RangeIndexedDomain
-    from verity.ml.commitments.merkle import CommitmentDomain
-    from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X, blake3_row_digest, sha256_row_digest
+    from verity.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
+    from verity.commitments.indexed import RangeIndexedDomain
+    from verity.commitments.merkle import CommitmentDomain
+    from verity.commitments.rowleaf import ROLE_W, ROLE_X, blake3_row_digest, sha256_row_digest
 
     rel = _relation(name)
     n = len(x)
@@ -213,7 +213,7 @@ def statement(name: str, x, w, accs, total: int | None = None, lo: int = 0, leaf
         import blake3
 
         def digest(row, role):
-            from verity.ml.commitments.rowleaf import blake3_row_key, row_bytes
+            from verity.commitments.rowleaf import blake3_row_key, row_bytes
             return blake3.blake3(row_bytes(row, word_bits), key=blake3_row_key(role)).digest()
       except ImportError:
         def digest(row, role):
@@ -261,7 +261,7 @@ def write_synth(path: str | Path, relation: str, K_: int, lo: int, hi: int, leaf
     :func:`_draw`) for an 8-bit relation with no spine input set, chained with its unit model. The manifest names the
     recipe, not a count, so every sub-batch of a batch binds the same one."""
     from concurrent.futures import ProcessPoolExecutor
-    from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_BLAKE3_ROW
+    from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_BLAKE3_ROW
 
     if leaf != "blake3":
         raise ValueError("the chunked 8-bit layouts commit keyed-BLAKE3 rows")

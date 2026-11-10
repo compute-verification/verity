@@ -32,7 +32,7 @@ root_(t,i)    frame-v3-sha512 over the leaves: CommitmentDomain(binding = SHA512
               owner 0, positions 0 … ⌈L_i/16⌉ − 1), schema "hm96-sha512/row/v2",  TREE_DOMAIN = "…/receipt-tree/v0\0"
 ~~~
 
-`frame` is `verity.ml.randomness.frame`.  A receipt is seed-first: the seed fills the first SHA-512 block, so no state
+`frame` is `verity.commitments.randomness.frame`.  A receipt is seed-first: the seed fills the first SHA-512 block, so no state
 over a block's bytes exists before the seed, and the seed exists only after the previous pass's root.  A receipt is of
 the block alone unless the registration binds z, PoUW's opt-in join: a receipter takes `z` = None, or `z_(i,j)`,
 PoUW's noised output of the tile before block j's read in pass i, which then enters elementwise, before any
@@ -74,11 +74,11 @@ import sys
 from array import array
 from collections.abc import Iterator, Sequence
 
-from verity.ml.commitments import Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain, VerificationLimits
-from verity.ml.commitments import hm96, verify_opening
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, sha512_row_v2_digest
-from verity.ml.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
-from verity.ml.randomness import derive, frame
+from verity.commitments import Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain, VerificationLimits
+from verity.commitments import hm96, verify_opening
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, sha512_row_v2_digest
+from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
+from verity.commitments.randomness import derive, frame
 
 from .codec import BLOCK_BYTES
 

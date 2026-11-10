@@ -50,7 +50,7 @@ from functools import partial
 from multiprocessing import get_context
 from pathlib import Path
 
-from verity.ml.commitments import Commitment, MerkleTree, Opening
+from verity.commitments import Commitment, MerkleTree, Opening
 
 from verity.core.protocols.pouw import audit as au
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, tagged

@@ -9,7 +9,7 @@ import hashlib
 import pytest
 
 from verity.ml.commitments import vllm_v1 as ref
-from verity.ml.commitments.scheme import CommitmentScheme
+from verity.commitments.scheme import CommitmentScheme
 from verity.ml.commitments.vllm_v1 import vectors as V
 from verity.errors import InvalidArtifact
 
