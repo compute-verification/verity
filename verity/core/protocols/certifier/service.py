@@ -176,7 +176,7 @@ Lean takes as an input rather than checks:
 The Lean reads an `LmsKey` only, and refuses (so `verify` rejects) any other key. `tie_service.IngressTie.verify`, the
 ingress tie's verifier, is not ported and stays Python. Every proving run of N2 recorded before the switch replayed
 through both to the verdict it recorded, and the properties of the Lean's verdict are
-`Security/Properties/NetworkCertifier/Check/LinkWindow.lean`.
+`security/Properties/NetworkCertifier/Check/LinkWindow.lean`.
 
 What that establishes, and what it doesn't: the outcome is accept exactly when the Lean verifier accepts a proof of the
 registered proof block whose public row is the verifier's own and whose output word is 0b11, the certificates verify and the

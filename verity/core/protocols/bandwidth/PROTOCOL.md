@@ -30,8 +30,8 @@ term charges. The three terms are the three ways a sampled label passes without 
 samples miss the labels the device never queried; a tag is guessed; or the device queried `k` labels with less
 information than they hold, which would describe the store in fewer bits than it has.
 
-This is `Bandwidth.Guarantees.AuditRO` (`Security/Definitions/Accounting/Guarantees/Bandwidth.lean`, over the game in
-`Security/Definitions/Accounting/Bandwidth/Game.lean`), proved as `Bandwidth.SecurityProofs.AuditRO` with no named
+This is `Bandwidth.Guarantees.AuditRO` (`security/Definitions/Accounting/Guarantees/Bandwidth.lean`, over the game in
+`security/Definitions/Accounting/Bandwidth/Game.lean`), proved as `Bandwidth.SecurityProofs.AuditRO` with no named
 assumption: the device's bounds `S`, `c`, `G` and `q` define the class of devices it quantifies over. Its completeness
 is `HonestPasses`: an honest device is accepted on every store, oracle and sample, with ingress exactly `N·b`.
 `AuditRelay` covers side sources that relay tags (below). `audit.bound` computes `I` and the error for a certified tag

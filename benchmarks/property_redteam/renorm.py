@@ -14,7 +14,7 @@ set is a circuit with r = L − k budgeted gates (`build`), and every circuit of
 (§R3.3 step 1). The search measures the largest fiber N_k it finds for each k, so ε = N_k/p and the measured d is k; the
 formula then needs d₀ ≥ k − log_B(p/N_k) (`implied_d0`).
 
-**The model.** The circuits are built in `gates.py`, `Security/Definitions/Accounting/Gates/Model.lean` on the canonical
+**The model.** The circuits are built in `gates.py`, `security/Definitions/Accounting/Gates/Model.lean` on the canonical
 circuit, whose evaluator runs them and whose `Ok`, `InWindow`, `derive`, `Proven` and `DeclaredHold` they are held to;
 this module adds `FanIn`, `Width`, `budgeted` (the budgeted gates) and `Restricted` (`Codec.lean`). One generalization: an
 `mma` operand format has b bits, not 8, so that at a toy base B = 2^b a digit fills its format as a byte does at B = 256

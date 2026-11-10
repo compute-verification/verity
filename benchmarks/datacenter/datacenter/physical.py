@@ -1,6 +1,6 @@
 """The physical layer's declaration: devices, blocks, links and datacenters, with every number a named assumption.
 
-This mirrors Lean's physical model (`Security/Definitions/Accounting/Physical.lean`, `Hardware`): a datacenter is a
+This mirrors Lean's physical model (`security/Definitions/Accounting/Physical.lean`, `Hardware`): a datacenter is a
 tree of locations whose leaves are devices; a block is a set of devices behind one boundary (`Hardware.SpatialUnit`);
 a link joins two devices, and a link that crosses a block boundary must pass a network certifier (coverage,
 `Accounting.Covered`). Certifiers and challengers are the trusted devices: the auditor's hardware. Nothing here is

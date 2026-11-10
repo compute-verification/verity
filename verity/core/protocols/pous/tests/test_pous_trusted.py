@@ -17,7 +17,7 @@ import pytest
 
 LEAN = Path(__file__).parents[1] / "lean"
 #: the trusted layer's directory as TRUSTED.sha256 names it, relative to `lean/` (the grader and its driver are here)
-SECURITY = "../../../../../Security/"
+SECURITY = "../../../../../security/"
 COMMAND = re.compile(r"^(sha256sum ([^$\n]*)\$\(find ([^)\n]*) -name '\*\.lean' \| LC_ALL=C sort -u\) > TRUSTED\.sha256)$", re.M)
 LINE = re.compile(r"([0-9a-f]{64})  (\S.*)")
 
@@ -163,5 +163,5 @@ def test_a_trusted_file_outside_the_inputs_is_named(tmp_path):
     pkg, inputs = copy(tmp_path), declared_inputs()
     added(pkg)
     assert undeclared(pkg, inputs) == []
-    game = "Security/Definitions/Core/Game.lean"
+    game = "security/Definitions/Core/Game.lean"
     assert undeclared(pkg, [i for i in inputs if game != i and not game.startswith(i.rstrip("/") + "/")]) == [game]

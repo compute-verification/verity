@@ -1,6 +1,6 @@
 # A registered circuit's requirement in Lean
 
-`Accounting.Requirement` (`Security/Definitions/Accounting/Requirement.lean`) as executable Lean: the Lake package
+`Accounting.Requirement` (`security/Definitions/Accounting/Requirement.lean`) as executable Lean: the Lake package
 `core_requirement` (lib `CircuitRequirement`, exe `requirement-difftest`). On one instance (a registered circuit's wiring, one
 scheduled execution of it and a layout of its values) and the audit's store, it computes each step's live and read values,
 their bits by value and by block, those in complete blocks (every value produced, and the step at or after the block's
@@ -10,7 +10,7 @@ first encoded read, `Store.Placement.encoded`: memory-map/v1's deferred residenc
 among them, may be too, earning W nothing); and, the execution placed on devices (each value's device and the tick at
 which each device begins each engine step), PoUW's regions, ingress and credits over it when the node runs it as placed
 (`RequirementCredits`, `RequirementHelpBound`, and `RequirementHelp` when the wiring is `topological`), a run input an
-input gate wherever it is placed. A step is always an engine step. It is code, so it requires nothing of `Security/`: the Lean check's
+input gate wherever it is placed. A step is always an engine step. It is code, so it requires nothing of `security/`: the Lean check's
 `security_properties` package states that each function is the definition it computes (`Properties.Accounting.Requirement`)
 and proves it (`Proofs.Properties.Accounting.Requirement`).
 
