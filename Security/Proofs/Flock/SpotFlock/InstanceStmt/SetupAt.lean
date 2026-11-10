@@ -53,10 +53,11 @@ abbrev AF' : Sparse := sparseOf (HmNets.hmLaid ()).ra
 abbrev BF' : Sparse := sparseOf (HmNets.hmLaid ()).rb
 
 /-- The statement's circuit at the fixed nets. -/
-abbrev cF : Circuit := cO (HmNets.shaLaid ()) (HmNets.hmLaid ()) circuitHash classHash AF BF AF' BF' s1X
+noncomputable abbrev cF : Circuit :=
+  cO (HmNets.shaLaid ()) (HmNets.hmLaid ()) circuitHash classHash AF BF AF' BF' s1X
 
 /-- The statement's session and its one table at the fixed nets, each text and the hello named. -/
-abbrev tabAt (r : Run) : SessionSpec × Array Stmt :=
+noncomputable abbrev tabAt (r : Run) : SessionSpec × Array Stmt :=
   tabX r (HmNets.shaLaid ()) (HmNets.hmLaid ()) circuitHash classHash AF BF AF' BF' s1X (s3X (hexOf classHash))
     (s4X r (hexOf circuitHash) (hexOf classHash)) (s5X r cF (hexOf circuitHash) (hexOf classHash)) s6X helloX
 
