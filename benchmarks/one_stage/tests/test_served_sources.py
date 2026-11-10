@@ -9,6 +9,7 @@ leave only under the switch, a reason leaves as its kind, Pearl+'s accept beside
 bare accept, and who controls the host is one of two words, required."""
 from __future__ import annotations
 
+import gzip
 import hashlib
 import io
 import json
@@ -51,7 +52,8 @@ def _jsonl(entries: list[dict]) -> bytes:
 
 def _tree(sid: str, files: dict[str, bytes]) -> bytes:
     buf = io.BytesIO()
-    with tarfile.open(fileobj=buf, mode="w:gz") as t:
+    # mtime=0: gzip's header otherwise holds the second it was written in, and a row holds these bytes' digest
+    with gzip.GzipFile(fileobj=buf, mode="wb", mtime=0) as z, tarfile.open(fileobj=z, mode="w") as t:
         for name, body in files.items():
             info = tarfile.TarInfo(f"{sid}/{name}")
             info.size = len(body)
