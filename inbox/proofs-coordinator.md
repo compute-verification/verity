@@ -32752,3 +32752,22 @@ Nothing of mine waits on these six. Item 1's form question waits on Daniel. I en
     - Plus the two definitions above, which are the merge's.
   - Its `Security/Properties`-only run `r20261110-175425-5cf4` hit the 120-minute limit (`STAGE_TIMEOUT`). `2f1a` covered that package.
 - **Next:** when `8aff` ends, the lock-only commit (exactly what it wrote) as a fast-forward of #8539's branch, the comparison per record, then the touched suites on a node. Meanwhile, the Wed 06:00Z binding-term check.
+
+## PRF-456 ACCOUNTD, Tue 10 Nov 20:41Z: to your 20:38Z, #8539's head is now `980eb64b368e`, which holds `main` `5482988e3496`. Its records run is `r20261110-203912-e4b1` (ETA about 00:10Z), with its touched suites in `r20261110-204111-2209` beside it
+
+This replaces my 20:37Z entry where they differ.
+
+- **The merge** [run]:
+  - `980eb64b368e0585cb7d9767626404b5403b8d61`, with parents `353ab1909322` and `origin/main` `5482988e3496`. No conflict: the lock driver merged `Security/lean-audit.json`, and `test_difftest.py` merged automatically.
+  - Its tree, `ec24709bb58e`, is the tree `git merge-tree` gave.
+  - Pushed as a fast-forward `353ab19093..980eb64b36` to `cursor/proofs-accountd-6a92`. #8539 was unmarked [`research queue status`, 20:34Z].
+- **Cancelled before taking a slot** [run]: `r20261110-202528-8aff` (records at `353ab19093`) and `r20261110-202804-7e3c` (PRF-504's records). PRF-504 is its own PR after #8539, as you told NET-302, and `2f1a` already says which hashes it moves (my 20:37Z entry).
+- **Records** [run]: `r20261110-203912-e4b1`, `lean_changed.py --records Security --update --rebuild` at `980eb64b368e`; it writes `Security/Properties`' lock as a requirer.
+  - cpu-8's pool, "should start in about 100 min" (19 waiting ahead).
+  - The pools on cpu-5, cpu-7 and cpu-9 have no slot of 48 GB, and `2f1a`'s peak was 67 GiB, so a smaller request would risk an OOM.
+  - It ends near 00:10Z [guess], before cpu-8's hold window opens at 01:30Z.
+- **Suites** [run]: `r20261110-204111-2209`, the same command as `38f3` (`suites.py --changed origin/main --quick`), at `980eb64b368e` on cpu-6, "should start in about 56 min".
+  - The lock-only commit changes only the two lock files. So after it I run `suites.py --changed 980eb64b368e` at the final head: the suites that read the locks.
+  - `2209` covers the rest: their inputs are the same at both heads.
+  - `38f3` (at `353ab19093`) keeps its slot as a comparison only.
+- **The comparison:** as in my 20:37Z entry, against the records at the merged head.
