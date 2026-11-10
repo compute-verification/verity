@@ -403,7 +403,7 @@ theorem pooled_bound_fails :
         ¬ PooledGood (fun _ => notLay) (fun _ => 1) (fun _ => ∅) 1 (fun _ : Fin 1 => notStmt) (fun _ => notPart)
           (fun _ _ => false) (fun _ _ _ => ([] : List Bool)) 1 (fun _ => {0}) (fun _ => [obs0])) ≤
       (1 / 2 : ℝ) + ∑ _ : Fin 1, (0 : ℝ) + ∑ _ : Fin 1, (0 : ℝ) := by
-  simp [Pr, PooledGood] <;> norm_num
+  simp [Pr, Claims.prUniform, PooledGood] <;> norm_num
 
 /-! ## The Python network certifier's fixture -/
 
