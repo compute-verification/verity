@@ -40,6 +40,24 @@ def _core_roots(): ...
 def _registered(): ...
 TEMPLATE_PARAMS = {"rope-head": {}}
 '''
+X, FLOCK = "verity/ml/x.circuit-check.py", "verity/ml/flock/python/verity_flock/rec.circuit-check.py"
+BINDINGS = {"<registered>": (F.TARGETS, "_registered"), "TEMPLATE_PARAMS": (F.TARGETS, "TEMPLATE_PARAMS"),
+            "_core_roots": (F.TARGETS, "_core_roots"), "_kernel_roots": (F.TARGETS, "_kernel_roots"),
+            **{f"verity.ml.x.circuit-check#{e}": (X, e) for e in (
+                "_a_roots", "_b_roots", "_c_roots", "_shared_roots", "_model_roots", "TEMPLATE_PARAMS:t-two",
+                "TEMPLATE_PARAMS:t-one")},
+            "verity.ml.pkg.circuit-check#_p_roots": ("verity/ml/pkg/__init__.circuit-check.py", "_p_roots"),
+            "verity_flock.rec.circuit-check#_rec_roots": (FLOCK, "_rec_roots")}
+#: the toy's bindings ``reads/`` holds no read set of, as a change that adds them leaves it
+UNLISTED = ("verity.ml.pkg.circuit-check#_p_roots", "verity_flock.rec.circuit-check#_rec_roots")
+
+
+def _read_sets(*names: str) -> str:
+    """The toy's ``reads/bindings.json``, holding a read set of each binding of ``names``."""
+    return json.dumps({"schema": F.READS_SCHEMA, "bindings": {n: {"groups": "0"} for n in sorted(names)},
+                       "groups": [{"probes": ["verity/ml/y.py"]}]})
+
+
 TOY = {f"{F.CHECKER}/pyproject.toml": '[tool.verity.tests]\ninputs = ["verity", "uv.lock"]\n',
        f"{F.CHECKER}/README.md": "prose\n", f"{F.CHECKER}/tests/test_x.py": "", f"{F.SOURCE}/__init__.py": "",
        F.SIDECARS: NEVER_RUN + 'PACKAGES = ("verity", "verity_flock.sub")\n', F.TARGETS: TARGETS,
@@ -54,22 +72,18 @@ TOY = {f"{F.CHECKER}/pyproject.toml": '[tool.verity.tests]\ninputs = ["verity", 
        **{f"{F.READS}/{part}": json.dumps({"schema": F.READS_SCHEMA, **doc}) for part, doc in (
            ("registries.json", {"registries": {"files": ["verity/ml/x.py"], "listed": ["other"], "probes": [
                "tools/config/verity_vllm", "tools/config/verity_vllm.py", "tools/config/verity_vllm/__init__.py"]}}),
-           ("loaded.json", {"loaded": ["integrations/vllm/numpy.py"]}),
-           ("bindings.json", {"bindings": {}, "groups": [{"probes": ["verity/ml/y.py"]}]}))},
+           ("loaded.json", {"loaded": ["integrations/vllm/numpy.py"]}))},
+       f"{F.READS}/bindings.json": _read_sets(*(n for n in BINDINGS if n not in UNLISTED)),
        **{f"{graph.RUNNERS}/{m}.py": "" for m in ("circuit_binding", "circuit_catalog", "circuit_coverage")}}
-X, FLOCK = "verity/ml/x.circuit-check.py", "verity/ml/flock/python/verity_flock/rec.circuit-check.py"
-BINDINGS = {"<registered>": (F.TARGETS, "_registered"), "TEMPLATE_PARAMS": (F.TARGETS, "TEMPLATE_PARAMS"),
-            "_core_roots": (F.TARGETS, "_core_roots"), "_kernel_roots": (F.TARGETS, "_kernel_roots"),
-            **{f"verity.ml.x.circuit-check#{e}": (X, e) for e in (
-                "_a_roots", "_b_roots", "_c_roots", "_shared_roots", "_model_roots", "TEMPLATE_PARAMS:t-two",
-                "TEMPLATE_PARAMS:t-one")},
-            "verity.ml.pkg.circuit-check#_p_roots": ("verity/ml/pkg/__init__.circuit-check.py", "_p_roots"),
-            "verity_flock.rec.circuit-check#_rec_roots": (FLOCK, "_rec_roots")}
 LISTERS = {"circuit-binding": F.tasks}
 
 
 def _toy(root: Path, **files: str) -> Path:
     return toy_tree(root, (ROOT / graph.SPEC).read_text(), {**TOY, **files})
+
+
+def _id(name: str) -> str:
+    return "circuit-binding:{}:{}".format(*BINDINGS[name])
 
 
 def test_each_binding_is_a_task_named_as_circuit_check_names_it_from_the_files_syntax_alone(tmp_path):
@@ -83,13 +97,14 @@ def test_each_binding_is_a_task_named_as_circuit_check_names_it_from_the_files_s
                                  *(f"circuit-binding:{f}:{e}" for f, e in BINDINGS.values())])
     base = sorted(f for f in files if f.startswith(("verity/", f"{F.CHECKER}/")) and not f.startswith(f"{F.CHECKER}/tests/")
                   and not f.endswith(".md") or f == "uv.lock")
-    seen = F.lookups(root, files)
+    seen = F.lookups(files, F.read_sets(root, files))
     for name, (f, e) in BINDINGS.items():
-        t = by[f"circuit-binding:{f}:{e}"]
+        t, unlisted = by[f"circuit-binding:{f}:{e}"], name in UNLISTED
         assert t["vars"] == {"binding": name, "slice": F.slice_of(name)["path"], "shared": F.SHARED["path"],
-                             "lookups": seen}, name
+                             "lookups": seen, **(F.NO_READ_SET if unlisted else {})}, name
         assert t["reads"] == [{"task": F.CATALOG, "output": "shared"}, {"task": F.CATALOG, "output": f"slice {name}"}]
-        assert t["inputs"] == sorted({*base, *graph.runner_sources("circuit-binding")}) and t["key"] is None, name
+        assert t["inputs"] == (files if unlisted else sorted({*base, *graph.runner_sources("circuit-binding")})), name
+        assert t["key"] is None, name
         assert t["about"] == f"circuit-check --binding {name}" and t["outputs"] == [F.failures(name)]
     cat, cov = by[F.CATALOG], by["circuit-coverage:catalog"]
     assert cat["outputs"] == [F.RECORDS, F.SHARED, *sorted((F.slice_of(n) for n in BINDINGS), key=lambda o: o["name"])]
@@ -136,15 +151,39 @@ def _keys(root: Path) -> dict[str, str]:
 def test_a_module_file_added_where_a_run_looks_moves_every_task_s_key_and_an_edit_moves_none(tmp_path, change, moves):
     """A run looks for modules outside the files that key it: where circuit-check's read sets say its runs probed or listed,
     and at the root, which a run from there searches first.  A file appearing there moves every task's key; an edit to a file
-    no run reads, or a file where no run looks, moves none."""
+    no run reads, or a file where no run looks, moves none but those of the bindings ``reads/`` lacks, keyed on every file."""
     root = _toy(tmp_path / "tree")
     before = _keys(root)
     for p, text in change.items():
         (root / p).parent.mkdir(parents=True, exist_ok=True)
         (root / p).write_text(text)
     after = _keys(root)
-    assert sorted(after) == sorted(before)
-    assert [i for i in before if after[i] == before[i]] == ([] if moves else list(before))
+    whole = {_id(n) for n in UNLISTED}
+    assert sorted(after) == sorted(before) and whole < set(before)
+    assert [i for i in before if i not in whole and after[i] == before[i]] == ([] if moves else
+                                                                             [i for i in before if i not in whole])
+    assert [i for i in whole if after[i] == before[i]] == []
+
+
+@pytest.mark.parametrize(("edit", "moves"), [(f"{F.CHECKER}/README.md", False), ("tools/config/pyproject.toml", False),
+                                             ("verity/ml/x.py", True)])
+def test_an_unlisted_binding_s_key_moves_with_any_file_and_once_reads_lists_it_it_is_keyed_like_the_others(tmp_path, edit,
+                                                                                                           moves):
+    """A binding ``reads/`` holds no read set of, as a change that adds one leaves it, has no lookups of its own to key: its
+    task's inputs are every file of the tree, so an edit to any, a README's too, moves its key, whether or not a listed
+    binding's moves.  Once ``reads/`` lists it, it is keyed as the others are, and a README's edit moves it no more."""
+    root = _toy(tmp_path / "tree")
+    new, old = _id(UNLISTED[0]), _id(B_ROOTS)
+    before = _keys(root)
+    (root / edit).write_text((root / edit).read_text() + "\n")
+    after = _keys(root)
+    assert (after[new] != before[new], after[old] != before[old]) == (True, moves)
+    (root / F.READS / "bindings.json").write_text(_read_sets(*BINDINGS))
+    by = {t["id"]: t for t in graph.listing(root, {"circuit-binding"}, LISTERS)["tasks"]}
+    assert by[new]["inputs"] == by[old]["inputs"] and sorted(by[new]["vars"]) == sorted(by[old]["vars"])
+    before = _keys(root)
+    (root / f"{F.CHECKER}/README.md").write_text("more prose\n")
+    assert _keys(root)[new] == before[new]
 
 
 @pytest.mark.parametrize(("files", "error"), [
@@ -186,6 +225,7 @@ def test_the_runners_say_what_circuit_check_and_check_say():
     assert f'READS_SCHEMA = "{F.READS_SCHEMA}"' in cli
     assert f"for part in ({', '.join(json.dumps(p) for p in F.READS_PARTS)}):" in cli
     assert set(CC.DECLARED) <= set(CB.PATHS) and 'out["untracked"] = ' in (ROOT / F.SOURCE / "cache.py").read_text()
+    assert CB.NO_READ_SET == F.NO_READ_SET
     assert 'u["loaded"] = beyond' in cli and 'u["registries"] = drift' in cli and 'u["unrecorded"] = missing[name]' in cli
     check = (ROOT / "tools" / "verity" / "check" / "check.py").read_text()
     assert f'CC_RECORDS = "{F.RECORDS["path"]}"' in check and f't.add(d / "cache", "{CB.TOP}")' in check
@@ -292,8 +332,10 @@ def _machine(tmp_path, monkeypatch) -> str:
     return str(tmp_path / "home" / ".cache" / "verity-check" / "circuit-check")
 
 
-def _binding_run(tmp_path, monkeypatch, rc, report, say="", piece: dict | None = None) -> tuple[dict, list]:
-    """``B_ROOTS``' task on the stand-in, its slice ``piece`` (a slice's stand-in by default) and the shared part in place."""
+def _binding_run(tmp_path, monkeypatch, rc, report, say="", piece: dict | None = None,
+                 more: dict | None = None) -> tuple[dict, list]:
+    """``B_ROOTS``' task on the stand-in, its slice ``piece`` (a slice's stand-in by default) and the shared part in place, with
+    the vars ``more`` too."""
     work = tmp_path / "work"
     _records(work, {F.slice_of(B_ROOTS)["path"]: json.dumps(piece or {"binding": B_ROOTS, "entries": []}),
                     F.SHARED["path"]: '{"schema": "s"}'})
@@ -301,7 +343,7 @@ def _binding_run(tmp_path, monkeypatch, rc, report, say="", piece: dict | None =
     task = {"id": "circuit-binding:verity/ml/x.circuit-check.py:_b_roots", "kind": "circuit-binding",
             "reads": [{"task": F.CATALOG, "output": "shared"}, {"task": F.CATALOG, "output": F.slice_of(B_ROOTS)["name"]}],
             "outputs": [F.failures(B_ROOTS)],
-            "vars": {"binding": B_ROOTS, "slice": F.slice_of(B_ROOTS)["path"], "shared": F.SHARED["path"]}}
+            "vars": {"binding": B_ROOTS, "slice": F.slice_of(B_ROOTS)["path"], "shared": F.SHARED["path"], **(more or {})}}
     doc = _graph(CATALOG, task)
     res = runners.execute(doc["tasks"][-1], doc, work, CB.run)
     assert contract.result_errors(res, doc["tasks"][-1]) == [], res
@@ -439,6 +481,36 @@ def test_the_registries_and_the_loaded_modules_reads_beyond_reads_count_another_
     assert (res["status"], res["undeclared_reads"]) == ("pass", []), "another binding's reads are its own task's"
 
 
+#: what a binding ``reads/`` holds no read set of read, as circuit-check reports it: every path, its own and the registries'
+EVERY = {**CC.undeclared({"files": ["verity/ml/x.py", "verity/ml/z.py"], "listed": ["other"], "probes": ["queue.py"]}, None),
+         "loaded": ["integrations/vllm/numpy.py"],
+         "registries": CC.undeclared({"files": ["verity/ml/reg.py"], "listed": [], "probes": ["infra/ops/verity_vllm"]}, None)}
+
+
+@pytest.mark.parametrize(("rc", "targets", "status"), [(0, (("A", []),), "pass"), (1, (("A", ["eval/mismatch A"]),), "fail")])
+def test_an_unlisted_binding_s_run_naming_every_path_it_read_is_circuit_check_s_verdict(tmp_path, monkeypatch, rc, targets,
+                                                                                        status):
+    """A binding ``reads/`` holds no read set of reads every path beyond ``reads/``, as its report says.  Its task is keyed on
+    every file of the tree (``read_set = none``), so none of them is an undeclared read: it passes on circuit-check's exit 0
+    and fails on its exit 1, its detail saying what it is keyed on.  The same report of a listed binding is an error."""
+    _machine(tmp_path, monkeypatch)
+    rep = _report(*targets, undeclared={B_ROOTS: EVERY})
+    res, _ = _binding_run(tmp_path, monkeypatch, rc, rep, more=CB.NO_READ_SET)
+    assert (res["status"], res["undeclared_reads"]) == (status, []), res
+    assert "error" not in res["detail"] and "keyed on every file of the tree" in res["detail"]["read_set"]
+    res, _ = _binding_run(tmp_path, monkeypatch, rc, rep)
+    assert res["status"] == "error" and "read_set" not in res["detail"] and len(res["undeclared_reads"]) == 7, res
+
+
+def test_an_unlisted_binding_s_run_that_read_a_library_git_doesn_t_have_is_still_an_error(tmp_path, monkeypatch):
+    """A library git doesn't have (``untracked``) is in no task's key, every file of the tree included."""
+    _machine(tmp_path, monkeypatch)
+    rep = _report(("A", []), undeclared={B_ROOTS: {**EVERY, "untracked": ["verity/ml/_built.so"]}})
+    res, _ = _binding_run(tmp_path, monkeypatch, 0, rep, more=CB.NO_READ_SET)
+    assert (res["status"], res["undeclared_reads"]) == ("error", ["verity/ml/_built.so"]), res
+    assert "git doesn't have" in res["detail"]["error"] and "keyed on every file of the tree" in res["detail"]["read_set"]
+
+
 def test_a_binding_s_report_with_no_read_set_is_an_error(tmp_path, monkeypatch):
     _machine(tmp_path, monkeypatch)
     rep = {k: v for k, v in _report(("A", [])).items() if k not in ("reads", "undeclared")}
@@ -446,10 +518,16 @@ def test_a_binding_s_report_with_no_read_set_is_an_error(tmp_path, monkeypatch):
     assert res["status"] == "error" and "no read set" in res["detail"]["error"] and res["outputs"] == {}
 
 
-def test_on_the_tree_every_binding_the_family_lists_has_a_read_set_in_reads():
-    names = {t["vars"]["binding"] for t in F.tasks(ROOT, graph.tracked(ROOT)) if "binding" in t.get("vars", {})}
+def test_on_the_tree_each_binding_has_a_read_set_in_reads_or_a_task_keyed_on_every_file_of_the_tree():
+    """What a change that adds a binding keeps: each binding the family lists has a read set in ``reads/`` and a task with no
+    ``read_set`` var, or its task carries ``read_set = none`` and its inputs are every file of the tree."""
+    files = graph.tracked(ROOT)
     have = json.loads((ROOT / F.READS / "bindings.json").read_text())["bindings"]
-    assert sorted(names - set(have)) == [], f"bindings with no read set in {F.READS}, whose tasks would fault: {CB.DECLARE}"
+    tasks = [t for t in F.tasks(ROOT, files) if "binding" in t.get("vars", {})]
+    odd = [t["vars"]["binding"] for t in tasks
+           if not (t["vars"]["binding"] in have and "read_set" not in t["vars"]
+                   or t["vars"].get("read_set") == F.NO_READ_SET["read_set"] and t["inputs"] == files)]
+    assert tasks and odd == [], f"bindings neither in {F.READS} nor keyed on every file of the tree: {odd[:5]}"
 
 
 #: what the stand-in's ``--slices`` writes: B_ROOTS' slice and the shared part, none of GONE's

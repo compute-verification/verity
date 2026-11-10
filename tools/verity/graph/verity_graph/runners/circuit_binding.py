@@ -10,7 +10,9 @@ A pass is circuit-check's exit 0; a fail its exit 1 (a target's failure), its re
 (`NO_BINDING`) or the catalog task's marker that it made no slice of that name (`absent`); anything else is an error: another
 refusal (a slice not of this tree), a kill, no report, a report with no read set.  What the run read beyond what
 circuit-check's ``reads/`` declares of its binding, the paths its report's ``undeclared`` names (`undeclared`), are its
-undeclared reads, so the task is an error: the task's ``lookups`` holds only what ``reads/`` declares.  `detail`: the
+undeclared reads, so the task is an error: the task's ``lookups`` holds only what ``reads/`` declares.  A binding ``reads/``
+holds no read set of (the var ``read_set`` is ``none``: `NO_READ_SET`) has a task keyed on every file of the tree, so of what
+its run read only a library git doesn't have (``untracked``) is undeclared, and its `detail` says so.  `detail`: the
 binding's targets, how many passed, failed and were reused, the failures' names, as the report's summary names them
 (``failure_names``, `circuit_check.checks.summarize`'s), and its targets with no entry to take their reads from
 (``unrecorded``).
@@ -44,6 +46,8 @@ FIELDS = ("check", "code", "definition")
 #: (`circuit_check.cache.DECLARED`), a library git doesn't have and a module whose source was looked for beyond ``loaded``, its
 #: own and, under ``registries``, the registries'
 PATHS = ("files", "listed", "probes", "untracked", "loaded")
+#: the var of a binding's task that ``reads/`` holds no read set of (`families.circuit_binding.NO_READ_SET`)
+NO_READ_SET = {"read_set": "none"}
 #: how a read beyond ``reads/`` is declared, as the binding runs circuit-check
 DECLARE = ("python -m circuit_check --all --catalog-units --cache DIR --update-reads from the root, and commit "
            "tools/verity/circuit_check/reads")
@@ -118,13 +122,13 @@ def absent(name: str) -> dict:
 REFUSED = "circuit-check: refused: "
 
 
-def undeclared(rep: dict, name: str) -> list[str] | None:
-    """The paths binding ``name``'s run read beyond what ``reads/`` declares of it, as its report ``rep`` says (`PATHS` of its
+def undeclared(rep: dict, name: str, kinds: tuple[str, ...] = PATHS) -> list[str] | None:
+    """The paths binding ``name``'s run read beyond what ``reads/`` declares of it, as its report ``rep`` says (``kinds`` of its
     ``undeclared``), or None when the report holds no read set (``reads``)."""
     if "reads" not in rep:
         return None
     u = rep.get("undeclared", {}).get(name, {})
-    return sorted({p for d in (u, u.get("registries") or {}) for k in PATHS for p in d.get(k, ())})
+    return sorted({p for d in (u, u.get("registries") or {}) for k in kinds for p in d.get(k, ())})
 
 
 def run(task: dict, work: Path) -> dict:
@@ -142,7 +146,8 @@ def run(task: dict, work: Path) -> dict:
         return {"status": "error", "detail": {"error": f"circuit-check --binding exited {rc}"
                                               + ("" if rep is not None else " and wrote no report")
                                               + (f": {why[:500]}" if why else "")}}
-    if (beyond := undeclared(rep, name)) is None:
+    whole = NO_READ_SET.items() <= task["vars"].items()
+    if (beyond := undeclared(rep, name, ("untracked",) if whole else PATHS)) is None:
         return {"status": "error", "detail": {"error": "circuit-check --binding wrote a report with no read set (reads), so what "
                                                        "it read beyond reads/ is unknown"}}
     facts = sorted({tuple(f[k] for k in FIELDS) for t in rep["targets"] if t["kind"] == "definition"
@@ -158,6 +163,9 @@ def run(task: dict, work: Path) -> dict:
         detail["failures"] = sorted(named)[:NAMED]
     if unrecorded := rep.get("undeclared", {}).get(name, {}).get("unrecorded"):
         detail["unrecorded"] = sorted(unrecorded)[:NAMED]
+    if whole:
+        detail["read_set"] = f"none: reads/ declares nothing of {name}, so its task is keyed on every file of the tree"
     if beyond:
-        detail["error"] = f"read {len(beyond)} path(s) beyond what reads/ declares of {name}: {DECLARE}"
+        detail["error"] = (f"read {len(beyond)} path(s) git doesn't have, which no task's key holds" if whole else
+                           f"read {len(beyond)} path(s) beyond what reads/ declares of {name}: {DECLARE}")
     return {"status": "fail" if rc else "pass", "detail": detail, "undeclared_reads": beyond}

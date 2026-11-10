@@ -13,7 +13,9 @@ functions, the templates checked at their example (``TEMPLATE_PARAMS``) and the 
 inputs are what any run of the catalog reads (`base`): every run loads every registry and binding file, so a binding's own
 share of them narrows inside circuit-check, by its read-set cache, not here.  Its var ``lookups`` is what the tree answers the
 lookups those runs make beyond those files' bytes (`lookups`), so a module file added where a run looks for one reruns them,
-and an edit to a file none reads reruns none."""
+and an edit to a file none reads reruns none.  A binding `READS` has no read set of (``bindings.json`` doesn't list it: one a
+change adds) has no lookups to key: its task's inputs are every file of the tree and its var ``read_set`` is ``none``
+(`NO_READ_SET`), so any file added, removed or edited reruns it, until `READS` lists it."""
 from __future__ import annotations
 
 import ast
@@ -48,6 +50,8 @@ EXAMPLES = "TEMPLATE_PARAMS"
 READS = f"{CHECKER}/reads"
 READS_PARTS = ("registries.json", "loaded.json", "bindings.json")
 READS_SCHEMA = "circuit-check-reads/v1"
+#: the var of a binding's task that `READS` holds no read set of, whose inputs are every file of the tree
+NO_READ_SET = {"read_set": "none"}
 #: how a module file's name ends, on any platform (each of `importlib.machinery.all_suffixes()` ends so)
 MODULE_SUFFIXES = (".py", ".pyw", ".pyc", ".pyd", ".so")
 
@@ -85,12 +89,9 @@ def _at_root(files: list[str]) -> list[str]:
     return sorted(out)
 
 
-def lookups(root: Path, files: list[str]) -> str:
-    """The digest of what the tree answers each lookup a run of the catalog makes beyond its inputs' bytes: the kind of each path
-    `READS` declares its runs probed and the names in each directory they listed (`circuit_check.cache.declared`'s ``probes``
-    and ``listed``), and the module files and packages at the root, the first entry of the import path of a run from there
-    (`runners.circuit_binding.checker`'s ``-m``), which `READS` needn't hold.  A file added or removed where a run looks
-    changes it; an edit to a file doesn't."""
+def read_sets(root: Path, files: list[str]) -> dict:
+    """`READS` on the tree: its parts' fields, each part held to `READS_SCHEMA`, in one dict (``registries``, ``loaded``,
+    ``bindings`` and ``groups``)."""
     have, got = set(files), {}
     for part in READS_PARTS:
         if (p := f"{READS}/{part}") in have:
@@ -101,6 +102,16 @@ def lookups(root: Path, files: list[str]) -> str:
             if not isinstance(doc, dict) or doc.get("schema") != READS_SCHEMA:
                 raise GraphError(f"{p} isn't {READS_SCHEMA}, the read sets this family keys its tasks' lookups on")
             got.update(doc)
+    return got
+
+
+def lookups(files: list[str], got: dict) -> str:
+    """The digest of what the tree answers each lookup a run of the catalog makes beyond its inputs' bytes: the kind of each path
+    ``got`` (`read_sets`) declares its runs probed and the names in each directory they listed (`circuit_check.cache.declared`'s
+    ``probes`` and ``listed``), and the module files and packages at the root, the first entry of the import path of a run from
+    there (`runners.circuit_binding.checker`'s ``-m``), which `READS` needn't hold.  A file added or removed where a run looks
+    changes it; an edit to a file doesn't."""
+    have = set(files)
     sets = [got.get("registries", {}), *got.get("groups", [])]
     dirs = {""}
     for f in files:
@@ -196,7 +207,9 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
                          f"them to {CHECKER}/pyproject.toml's [tool.verity.tests] inputs)")
     reads = [{"task": CATALOG, "output": RECORDS["name"]}]
     shared = [*ins, f"{RUNNERS}/circuit_binding.py"]          # the catalog's and coverage's runners import the binding runner
-    seen = {"lookups": lookups(root, files)}
+    got = read_sets(root, files)
+    listed = got.get("bindings", {})
+    seen = {"lookups": lookups(files, got)}
     return [{"id": CATALOG, "kind": "circuit-catalog", "about": "build every circuit-check catalog binding's record and slice",
              "inputs": shared, "outputs": [RECORDS, SHARED, *(slice_of(name) for name in found)],
              "resources": CATALOG_SLOT, "vars": seen},
@@ -204,7 +217,8 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
              "resources": {"cores": 1, "mem_gb": 16, "disk_gb": 2},
              "about": "the circuit-check catalog's bindings are the circuit-binding tasks'",
              "vars": {"bindings": json.dumps(sorted(found), separators=(",", ":")), "records": RECORDS["path"], **seen}},
-            *({"id": f"circuit-binding:{f}:{e}", "inputs": ins, "outputs": [failures(name)],
+            *({"id": f"circuit-binding:{f}:{e}", "inputs": ins if name in listed else files, "outputs": [failures(name)],
                "reads": [{"task": CATALOG, "output": SHARED["name"]}, {"task": CATALOG, "output": slice_of(name)["name"]}],
-               "vars": {"binding": name, "slice": slice_of(name)["path"], "shared": SHARED["path"], **seen}}
+               "vars": {"binding": name, "slice": slice_of(name)["path"], "shared": SHARED["path"], **seen,
+                        **({} if name in listed else NO_READ_SET)}}
               for name, (f, e) in found.items())]
