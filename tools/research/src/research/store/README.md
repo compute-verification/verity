@@ -396,8 +396,8 @@ An artifact that holds values which must never be shared leaves by `research dat
 tombstone. Its manifest stays, so a citation still resolves and `fetch` reports the payload absent. A blob another artifact
 also holds is kept and named (it holds the same bytes, so withdraw that one too or decide otherwise). Read-only without
 `--apply`; it runs where the store's write keys are, the control pod. `--path P` withdraws only the files under P. `preserved`
-reports a missing blob a `withdrawn` label covers as withdrawn, not absent (WITHDRAWN, exit 4: delete its local copies, never put
-them again), and `put --tree` refuses a run's withdrawn files.
+reports a missing blob a `withdrawn` label covers as withdrawn, not absent (WITHDRAWN, exit 4: delete its local copies, never
+put them back), and `put --tree` refuses them.
 
 ## 8. Labels
 
