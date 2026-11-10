@@ -6,7 +6,6 @@ public import Proofs.Flock.SessionLoop.Concrete.Inputs
 public import Proofs.Flock.Recursive.FirewallJson
 public import Proofs.Flock.Claims.Complete.Json.Record
 public import Spot.SecondStage
-import Proofs.Pouw.Period.Sort
 import Flock.Comp
 import Flock.JsonParse
 import Flock.Firewall
@@ -28,18 +27,14 @@ import all Init.Data.String.Basic
 /-! # The two-instance reference statement's JSON, read back
 
 Round 2 reads a session statement as JSON (`SpotFlock`'s `stmtJsonOf`): its public file's first line (`headerOf`), its
-sample and its registered reads (`FlockDeploy.jsonOf`), and hashes the header and the reads in their canonical form
-(`Spot.SecondStage.Stmt.checked`). For a run `r` whose strings are plain JSON strings (`Run.Plain`), at any circuit and
-class digests `circ`, `cls` that are:
+sample and its registered reads (`FlockDeploy.jsonOf`). For a run `r` whose strings are plain JSON strings
+(`Run.Plain`), at any circuit and class digests `circ`, `cls` that are:
 
 * `headerLine`: the public file's first line is the header's text (`findByte_pub`), which parses back to
   `hdrJ r circ cls` (`parse_hdr`);
-* `jsonOf_draw`, `jsonOf_reg`: the sample and the registered reads parse back to `drawJ` and `regJ`;
-* `stmt_ofJson`: the four make round 2's statement `⟨t, hdrJ r circ cls, drawJ, regJ⟩`, which `Stmt.checked` names by
-  the two canonical digests (`checked_stmt`);
-* `good_drawJ`: the sample is a printable value.
+* `jsonOf_draw`, `jsonOf_reg`: the sample and the registered reads parse back to `drawJ` and `regJ`.
 
-Each object's members are its list in key order (`*_model`, by `kernel_rfl`, the run's strings left as variables), so
+`InstanceStmt.Round2` makes round 2's statement of them. Each object's members are its list in key order (`*_model`, by `kernel_rfl`, the run's strings left as variables), so
 `plain` reads it member by member (`Concrete.plain_obj_of`).
 -/
 
@@ -48,8 +43,7 @@ Each object's members are its list in key order (`*_model`, by `kernel_rfl`, the
 namespace SpotFlock.InstanceStmt
 
 open Flock Flock.Firewall
-open FlockDeploy.Concrete (objT plain_obj_of noNl utf8_noTen findByte_eq plainStr_hexOf fromUTF8?_toByteArray IntJ
-  canon_eq)
+open FlockDeploy.Concrete (objT plain_obj_of noNl utf8_noTen findByte_eq plainStr_hexOf fromUTF8?_toByteArray)
 open FlockSoundness.Discharge.Recursion.FirewallJson (parse_printJson)
 open FlockSoundness.Refine
 open Lean (Json)
@@ -298,62 +292,5 @@ theorem jsonOf_draw (what : String) : FlockDeploy.jsonOf what (printJson drawJ).
 /-- **The registered-reads file reads back** to `regJ`. -/
 theorem jsonOf_reg (what : String) : FlockDeploy.jsonOf what (printJson regJ).toUTF8 = .ok regJ :=
   jsonOf_print reg_plain fjnorm_reg what
-
-/-! ## Round 2's statement -/
-
-/-- An object whose keys are listed in order sorts to them. -/
-theorem keys?_of {kvs : Std.TreeMap.Raw String Json compare} {l : List String} (hs : l.Pairwise (· < ·))
-    (h : kvs.toArray.map (·.1) = l.toArray) : Spot.keys? (.obj kvs) = some l.toArray := by
-  show some (Spot.sortStrings (kvs.toArray.map (·.1))) = _
-  rw [h, Spot.sortStrings]
-  exact congrArg some (Array.ext' (Properties.Pouw.Period.SecurityProofs.Sort.qsort_of_sorted (as := l.toArray) hs))
-
-/-- **The four parts make round 2's statement** of template `t`. -/
-theorem stmt_ofJson (r : Run) (circ cls t : String) :
-    Spot.SecondStage.Stmt.ofJson? (Json.mkObj [("draw", drawJ), ("header", hdrJ r circ cls), ("registered", regJ),
-      ("template", .str t)]) = some ⟨t, hdrJ r circ cls, drawJ, regJ⟩ := by
-  have hk : Spot.keys? (Json.mkObj [("draw", drawJ), ("header", hdrJ r circ cls), ("registered", regJ),
-      ("template", .str t)]) = some Spot.SecondStage.STMT_KEYS :=
-    keys?_of (l := ["draw", "header", "registered", "template"]) (by decide) (by kernel_rfl)
-  unfold Spot.SecondStage.Stmt.ofJson?
-  rw [hk, bne_self_eq_false]
-  simp only [Bool.false_eq_true, ↓reduceIte]
-  kernel_rfl
-
-/-- A value's canonical text, which `canon` writes of an integer-numbered one (`canon_eq`). -/
-def canonText (j : Json) : String := (canon j).toOption.getD ""
-
-/-- A value's canonical digest, as `Spot.canonSha512` names it. -/
-def shaOf (j : Json) : String := Spot.sha512Hex (canonText j).toUTF8
-
-theorem canonSha512_eq {j : Json} (h : IntJ j = true) : Spot.canonSha512 j = .ok (shaOf j) := by
-  unfold Spot.canonSha512 shaOf canonText
-  rw [canon_eq h]
-  rfl
-
-theorem intJ_hdr (r : Run) (circ cls : String) : IntJ (hdrJ r circ cls) = true := by kernel_rfl
-theorem intJ_reg : IntJ regJ = true := by kernel_rfl
-
-/-- **What a verdict of record names of the statement**: the canonical digests of its header and its registered reads,
-its sample and one table. -/
-theorem checked_stmt (r : Run) (circ cls t : String) :
-    (⟨t, hdrJ r circ cls, drawJ, regJ⟩ : Spot.SecondStage.Stmt).checked =
-      some ⟨shaOf (hdrJ r circ cls), .str (shaOf regJ), drawJ, Spot.SecondStage.ONE_TABLE⟩ := by
-  unfold Spot.SecondStage.Stmt.checked
-  simp only [canonSha512_eq (intJ_hdr r circ cls)]
-  split
-  · next h => exact absurd h (by rw [reg_obj]; exact fun h => Json.noConfusion h)
-  · simp only [canonSha512_eq intJ_reg]
-    rfl
-
-/-- **The sample is a printable value.** -/
-theorem good_drawJ : Claims.Json.Good drawJ := by
-  unfold drawJ
-  refine FlockComplete.JsonRT.good_mkObj (by simp) ?_
-  simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq]
-  refine ⟨.num _, .str _, .num _, .arr fun x hx => ?_⟩
-  simp at hx
-  subst hx
-  exact .num _
 
 end SpotFlock.InstanceStmt
