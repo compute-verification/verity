@@ -60,36 +60,16 @@ import verity_difftest as D
 from verity_difftest import protocol as PR
 from verity.core.protocols.pouw import audit as PA
 from verity.core.protocols.pouw.protocol import tagged
-<<<<<<< 99c8914848:verity/core/service/sampled_proofs/tests/test_difftest.py
 from verity.core.protocols.profile import Bernoulli, Stratified, Stratum, work_k
-from verity.core.protocols.sampled_proofs import service
-from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
-                                                            link_points as LP, partition as P, produced as PD,
-                                                            proofs as PF, registered as G, registration as R)
-from verity.core.protocols.sampled_proofs.challenger import (COIN_BYTES, NO_TREE, SAMPLE_LINK_FIRST, SHARED_TREE,
-                                                             UNUSED_TREE, ChallengerKey, CoinError, sample_link_first)
-from verity.core.protocols.sampled_proofs.coins import OwnRandomness, coins_reason, draw_coins, draw_first, law_problem
-from verity.core.protocols.sampled_proofs.coins import ran_out as draw_ran_out
-||||||| merged common ancestors:verity/core/service/sampled_proofs/tests/test_difftest.py
-from verity.core.protocols.profile import Bernoulli, Stratified, Stratum
-from verity.core.protocols.sampled_proofs import service
-from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
-                                                            partition as P, produced as PD, registered as G,
-                                                            registration as R)
-from verity.core.protocols.sampled_proofs.challenger import (COIN_BYTES, NO_TREE, SHARED_TREE, UNUSED_TREE,
-                                                             ChallengerKey, CoinError)
-from verity.core.protocols.sampled_proofs.coins import OwnRandomness, coins_reason, draw_coins, draw_first
-=======
-from verity.core.protocols.profile import Bernoulli, Stratified, Stratum
 from verity.core.protocols.spot import challenger as CH, second_stage as SS, service
 from verity.core.protocols.spot.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
-                                                            partition as P, produced as PD, proofs as PF,
-                                                            registered as G, registration as R)
+                                                  link_points as LP, partition as P, produced as PD, proofs as PF,
+                                                  registered as G, registration as R)
 from verity.core.protocols.spot.challenger import COIN_BYTES, NO_CLOSE, NO_TREE, ChallengerKey, CoinError
 from verity.core.protocols.spot.coins import (LIMITS, MAX_PATH, OwnRandomness, coins_reason, coins_within,
-                                                        draw_coins, draw_first)
+                                              draw_coins, draw_first, law_problem)
+from verity.core.protocols.spot.coins import ran_out as draw_ran_out
 from verity.core.protocols.spot.one_stage.proofs import order_why
->>>>>>> 7af4d24fca3e:verity/core/service/spot/tests/test_difftest.py
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program, input_id, is_input
@@ -97,13 +77,7 @@ from verity.ml.circuits.refs import array_of, record_of, tuple_of
 from verity.ml.circuits.types import Array, RecordType, Tuple, Value
 from verity.ml.commitments.window import window_binding
 
-<<<<<<< 99c8914848:verity/core/service/sampled_proofs/tests/test_difftest.py
-from test_challenger_difftest import DRAW_MUTATIONS, ORDERS, Drawn, _flip, _mutated, lms_verify
-||||||| merged common ancestors:verity/core/service/sampled_proofs/tests/test_difftest.py
-from test_challenger_difftest import DRAW_MUTATIONS, Drawn, _flip, _mutated, lms_verify
-=======
 from test_challenger_difftest import DEPLOYED, DRAW_MUTATIONS, ORDERS, Ch, Drawn, _flip, _mutated, lms_verify
->>>>>>> 7af4d24fca3e:verity/core/service/spot/tests/test_difftest.py
 
 PACKAGE = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -682,13 +656,7 @@ def _registration(p: dict, rec) -> tuple[str, ...]:
     return R.check(rec, p["program"], p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
                    p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned"),
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
-<<<<<<< 99c8914848:verity/core/service/sampled_proofs/tests/test_difftest.py
-                   p.get("link_members", ())).codes
-||||||| merged common ancestors:verity/core/service/sampled_proofs/tests/test_difftest.py
-                   p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held")).codes
-=======
-                   seed_salt=p.get("seed_salt"), pool=p.get("pool")).codes
->>>>>>> 7af4d24fca3e:verity/core/service/spot/tests/test_difftest.py
+                   p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool")).codes
 
 
 def _coins_of(p: dict, c: tuple[dict, bytes], e: dict) -> bytes | None:
@@ -759,7 +727,6 @@ def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
     return "accept", public, {**profile, "delta": str(profile["delta"])}
 
 
-<<<<<<< 99c8914848:verity/core/service/sampled_proofs/tests/test_difftest.py
 def _ran_out(p: dict, rec: dict, src: bytes) -> bool:
     """`OneStage.ranOut`: whether the coins `src` run out before the draw under the verifier's law as derived ends
     (`coins.ran_out`); false when the law doesn't derive, the record names no population or the draw refuses otherwise."""
@@ -772,19 +739,6 @@ def _ran_out(p: dict, rec: dict, src: bytes) -> bool:
 
 
 def covered_params(j) -> dict:
-    """`OneStage.paramsOfJson`: `decode_params` (`paramsParsed`), and a bernoulli law at 0 < p < 1 refused (`service.count_varies`)."""
-    p = decode_params(j)
-    if service.count_varies(p["law"]):
-        raise D.Reject("the law is bernoulli at 0 < p < 1, which the sampled audit's soundness statement doesn't cover "
-                       "(its drawn count varies)")
-    return p
-
-
-def covered_evidence(b: bytes) -> dict:
-    """`OneStage.evidenceOf`: `decode_evidence` (`evidenceParsed`), and a draw that carries a closure refused."""
-||||||| merged common ancestors:verity/core/service/sampled_proofs/tests/test_difftest.py
-=======
-def covered_params(j) -> dict:
     """`OneStage.paramsOfJson`: `decode_params` (`paramsParsed`), and every bernoulli law refused, at any p
     (`service.bernoulli`)."""
     p = decode_params(j)
@@ -795,7 +749,6 @@ def covered_params(j) -> dict:
 
 def covered_evidence(b: bytes) -> dict:
     """`OneStage.evidenceOf`: `decode_evidence` (`evidenceParsed`), and a sample that carries a closure refused."""
->>>>>>> 7af4d24fca3e:verity/core/service/spot/tests/test_difftest.py
     e = decode_evidence(b)
     if isinstance(e["draw"], dict) and "closure" in e["draw"]:
         raise D.Reject("the draw carries a closure, which the sampled audit's soundness statement doesn't cover")
@@ -1042,13 +995,12 @@ def select(j):
     return {"draw": obj, "read": at}
 
 
-<<<<<<< 99c8914848:verity/core/service/sampled_proofs/tests/test_difftest.py
 def design(j):
     """`Pieces.design`: the sampling design of `select`'s draw (`audit.design`, Lean `Core.SamplingDesign.ofFlock`), C-Flock's law
     held to core's `Core.SamplingDesign`, the work sampling design's among them."""
     return {"design": _json(audit.design(select(j)["draw"]).to_json())}
-||||||| merged common ancestors:verity/core/service/sampled_proofs/tests/test_difftest.py
-=======
+
+
 def select_second(j):
     """A two-stage design's second stage (`service.select_second`) over the replay sample `sample`, each template's
     `ns[t]` proof blocks in each replay block (a cell) and `ks[t]` sampled in each, on the source's bytes read in order;
@@ -1084,7 +1036,6 @@ def template_circuits(j):
     except ValueError as e:
         raise D.Reject(str(e)) from None
     return {"circuits": [[t, c, h, r] for t, c, h, r in named]}
->>>>>>> 7af4d24fca3e:verity/core/service/spot/tests/test_difftest.py
 
 
 def slots(j):
@@ -1108,7 +1059,6 @@ def slots(j):
     return {"checked": [[v, 0] for v, b in enumerate(blocks) if b["unit"] is None or b["unit"] in proved], "classes": classes}
 
 
-<<<<<<< 99c8914848:verity/core/service/sampled_proofs/tests/test_difftest.py
 def pop_order(j):
     """`Slots.popOk` as it runs (`Slots.popOkRanges`: the strata's segments chain `0, ..., n - 1` and every unit has its
     gates) and as it is stated (the layout's population is units `0, ..., n - 1` in slot order): both `partition.in_order`."""
@@ -1166,8 +1116,8 @@ def link_points(j):
                 "refused": LP.refused(law, n, members)}
     except ValueError as e:
         raise D.Reject(str(e)) from None
-||||||| merged common ancestors:verity/core/service/sampled_proofs/tests/test_difftest.py
-=======
+
+
 _LOWER_HEX = re.compile(r"(?:[0-9a-f]{2})*")
 
 
@@ -1234,7 +1184,6 @@ def file_population(j):
     except (P.QueryRefused, ValueError) as e:
         raise D.Reject(str(e)) from None
     return {"why": PF.population_why(indices, strata)}
->>>>>>> 7af4d24fca3e:verity/core/service/spot/tests/test_difftest.py
 
 
 def bound(j):
@@ -2444,14 +2393,6 @@ INDICES_WHY = ("public file: its units.indices are not the registration's popula
 #: `OneStageZk.NO_CHALLENGER`
 NO_CHALLENGER = ("the parameters name no challenger: the draw's coins are the auditor's challenger's signed release "
                  "(challenger, with window_root), never the prover's record")
-<<<<<<< 99c8914848:verity/core/service/sampled_proofs/tests/test_difftest.py
-#: `OneStageZk.MULTI_REFUSED`
-MULTI_REFUSED = ("the per-member form (proofs.members) is refused until the guarantee for a sample over several members' "
-                 "statements under one draw is in the lock: verify one statement (proofs {circuit, registered})")
-#: `OneStageZk.RAN_OUT`
-WINDOW_RAN_OUT = "the draw ran out of the challenger's coins: the window fails, with no retry and no redraw"
-||||||| merged common ancestors:verity/core/service/sampled_proofs/tests/test_difftest.py
-=======
 #: `OneStageZk.POPULATION_ORDER`
 POPULATION_ORDER = ("population-order: the program's proof blocks under the query are not the registration's "
                     "population units in order")
@@ -2462,7 +2403,6 @@ V2_TABLES = ["circuit"]
 #: `OneStageZk.KEY_PARAMS`
 KEY_PARAMS = (f"the challenger's key is not at the deployed LMS parameters (W = {DEPLOYED[0]}, H = {DEPLOYED[1]}): v2 "
               "reads the challenger's signatures only under those")
->>>>>>> 7af4d24fca3e:verity/core/service/spot/tests/test_difftest.py
 
 
 def decode_params_v2(j) -> dict:
@@ -2508,25 +2448,6 @@ def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: 
     return d, draw_first(OwnRandomness(source), mine, s.population), coins
 
 
-def _challenger_audit(server, rng: random.Random, s: Setup, law: dict, rec: dict, trees: int,
-                      order: str = "honest") -> tuple[Drawn, dict, dict, dict]:
-    """An audit v1 accepts on the verdict its evidence hands in and the coins of a challenger sampling `trees` coin
-    trees, its log in `order` (`_challenger_draw`): the challenger's session, v1's evidence, that evidence without its
-    verdicts, and v1's parameters naming the challenger, v2's without its `proofs`."""
-    ch, d, coins = _challenger_draw(rng, s, law, rec, trees, order)
-    proved = DR.proved(d)
-    evidence = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
-                "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
-                "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
-    params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
-              "law": law, "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query),
-              "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
-              "window_root": ch.ledger.window["root"], "work_table": None}
-    v1 = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
-    assert D.replay(ONE_STAGE, v1, server)[0] == "accept"
-    return ch, evidence, {k: v for k, v in evidence.items() if k != "verdicts"}, params
-
-
 def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     """v2 (`Spot.OneStageZk`, `one_stage.proofs.check_v2`) is v1 with the verdicts its own run of the verifier
     on the proofs. An audit v1 accepts on the verdict its evidence hands in and its challenger's coins is, in v2: refused
@@ -2548,26 +2469,6 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     rng = random.Random("v2-verdicts")
     circuit, public = b"not a circuit file", _public_of(rec)
 
-<<<<<<< 99c8914848:verity/core/service/sampled_proofs/tests/test_difftest.py
-    def audit(trees: int) -> tuple[Drawn, dict, dict, dict]:
-        ch, evidence, base, params = _challenger_audit(server, rng, s, law, rec, trees)
-        return ch, evidence, base, params | {"proofs": {"circuit": _sha(circuit), "registered": None}}
-||||||| merged common ancestors:verity/core/service/sampled_proofs/tests/test_difftest.py
-    def audit(trees: int) -> tuple[Drawn, dict, dict, dict]:
-        ch, d, coins = _challenger_draw(rng, s, law, rec, trees)
-        proved = DR.proved(d)
-        evidence = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
-                    "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
-                    "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
-        params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
-                  "law": law, "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query),
-                  "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
-                  "window_root": ch.ledger.window["root"], "work_table": None}
-        v1 = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
-        assert D.replay(ONE_STAGE, v1, server)[0] == "accept"
-        base = {k: v for k, v in evidence.items() if k != "verdicts"}
-        return ch, evidence, base, params | {"proofs": {"circuit": _sha(circuit), "registered": None}}
-=======
     def audit(trees: int, keys: list[str] | None = None) -> tuple[Drawn, dict, dict, dict]:
         ch, d, coins = _challenger_draw(rng, s, law, rec, trees, keys)
         proved = DR.proved(d)
@@ -2583,7 +2484,6 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
         base = {k: v for k, v in evidence.items() if k != "verdicts"}
         return ch, evidence, base, params | {"proofs": {"circuit": _sha(circuit), "public": _sha(public),
                                                         "registered": None}}
->>>>>>> 7af4d24fca3e:verity/core/service/spot/tests/test_difftest.py
 
     ch, evidence, base, p2 = audit(1)
     record, stand_in = D.canonical(ch.trees[0].record).encode(), b"{}"
@@ -2719,215 +2619,6 @@ def test_v2_refuses_a_release_log_out_of_order(server, server_v2):
             "reject", "verdict flock-verify/s did not accept" if want is None else f"proofs: {want}"), order
 
 
-def test_v2_refuses_a_release_log_out_of_order(server, server_v2):
-    """v2 holds its challenger session's release log to the sample, then the link, then the other rounds
-    (`OneStageZk.orderHeld`, `Challenger.sampleLinkFirst`) before any session's record is read. Of three audits v1
-    accepts, their coin trees all as the challenger logged them: the honest log goes on to its session's verdict; one
-    releasing a coin of the sample after a tree's link is opened (`sample-late`), and one whose first round opened is
-    of another stream than the link's (`link-late`), are refused (`SAMPLE_LINK_FIRST`). The Python twin
-    (`challenger.sample_link_first`) agrees; `test_challenger_difftest.py` holds it to Lean's piece."""
-    s = SETUPS[3]
-    law = {"k": 2, "law": "subset"}
-    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
-                   WINDOW, leaf_layer=LEAF)
-    circuit, public = b"not a circuit file", b"not a public file"
-    for order in ORDERS:
-        ch, _, base, p = _challenger_audit(server, random.Random(f"v2-order-{order}"), s, law, rec, 1, order)
-        record = D.canonical(ch.trees[0].record).encode()
-        proofs = {"public": _sha(public), "sessions": [{"name": "s", "record": _sha(record), "reps": {}}]}
-        case = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec),
-                "evidence": _hex(base | {"proofs": proofs, "sessions": ["s"]}),
-                "params": p | {"proofs": {"circuit": _sha(circuit), "registered": None}}}
-        out = server_v2.exchange(_json(case))
-        want = ("verdict flock-verify/s did not accept" if order == "honest"
-                else f"proofs: coins: {SAMPLE_LINK_FIRST}")
-        assert (out["verdict"], out["reason"]) == ("reject", want), order
-        assert sample_link_first("draw", bytes.fromhex(R.digest(rec)), ch.s.lines[1:]) == (order == "honest"), order
-
-
-#: `OneStageZk.membersHeld`'s reason for a statement of other than exactly one session.
-ONE_SESSION = "a statement is exactly one session on live coins, never retried, and an undrawn member has no statement"
-#: `OneStageZk.runFrom`'s reason for a member's statement whose public file's units are not exactly its member's.
-NOT_EXACTLY = ("units: the public file's units.indices are not exactly the member's units, ascending: slot i of its "
-               "table is the member's i-th unit")
-
-
-def _public_file(*units: int) -> bytes:
-    """A public file's header line naming ``units``, all `OneStageZk.runFrom` reads before a session runs."""
-    return D.canonical({"units": {"indices": list(units)}}).encode() + b"\n"
-
-
-def test_v2_per_member_runs_each_statement_on_its_members_inputs(server, server_v2):
-    """v2's per-member form (`OneStageZk.runMembers`): parameters naming each member's units, circuit and registered
-    file, evidence naming one statement per drawn member, its sessions the evidence's in statement order. Parameters
-    whose members' units meet, that name no member, or a member with empty units, an empty name, other keys or units
-    a proof block not positive are refused, and so is evidence whose statement names no member or has other keys. The
-    audit v1 accepts is, with its proofs per member: rejected by the coin trees' check across statements (a tree no
-    statement's session used, or one serving two members' statements), by the session's own verdict on its member's
-    circuit (another member's circuit no blob holds is not read), and for a statement naming a member the parameters
-    don't, a statement of no session (an undrawn member has no statement), a circuit no blob holds, a public file whose
-    units are not exactly its member's in ascending order (shifted, reordered, short, another member's, or no units
-    header: `PublicUnits.exactly`, the `public_units` piece), proofs in the other form than the parameters', or proved
-    units the statements didn't prove.
-    The refusal of what would accept (`MULTI_REFUSED`) needs an accepted session: `stage_zk_one_statement` proves it."""
-    s, law = SETUPS[3], {"k": 2, "law": "subset"}
-    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
-                   WINDOW, leaf_layer=LEAF)
-    rng = random.Random("v2-members")
-    circuits = {"m0": b"not a circuit file", "m1": b"not another circuit file"}
-    publics = {"m0": _public_file(0, 1), "m1": _public_file(2, 3, 4)}
-    members = {"m0": {"circuit": _sha(circuits["m0"]), "registered": None, "units": [[0, 2]], "vus_per_block": 1},
-               "m1": {"circuit": _sha(circuits["m1"]), "registered": None, "units": [[2, 5]], "vus_per_block": 1}}
-    ch, _, base, p1 = _challenger_audit(server, rng, s, law, rec, 1)
-    _, _, base0, p0 = _challenger_audit(server, rng, s, law, rec, 0)
-    p1, p0 = (p | {"proofs": {"members": members}} for p in (p1, p0))
-    record = D.canonical(ch.trees[0].record).encode()
-    blobs = [circuits["m0"].hex(), circuits["m1"].hex(), publics["m0"].hex(), publics["m1"].hex(), record.hex()]
-
-    def run(e, p=p1, blobs_=blobs):
-        case = {"blobs": list(blobs_), "commitment": _hex(rec), "evidence": _hex(e), "params": p}
-        out = server_v2.exchange(_json(case))
-        return out["verdict"], out["reason"]
-
-    def sessions(names):
-        return [{"name": n, "record": _sha(record), "reps": {}} for n in names]
-
-    def statements(*sts, pubs=publics):
-        return {"statements": [{"member": m, "public": _sha(pubs.get(m, b"")), "sessions": sessions(ns)}
-                               for m, ns in sts]}
-
-    def per_member(*sts, b=base, pubs=publics):
-        return b | {"proofs": statements(*sts, pubs=pubs), "sessions": [n for _, ns in sts for n in ns]}
-
-    assert run(per_member()) == (
-        "reject", f"proofs: the challenger's release log shows 1 coin trees and the sessions use 0: {UNUSED_TREE}")
-    assert run(per_member(("m0", ["s"]))) == ("reject", "verdict flock-verify/s did not accept")
-    assert run(per_member(("m0", ["s"])), blobs_=blobs[:1] + blobs[2:]) == (
-        "reject", "verdict flock-verify/s did not accept")
-    got = run(per_member(("m1", ["s"])), blobs_=blobs[:1] + blobs[2:])
-    assert got[0] == "reject" and got[1].startswith("proofs: member m1: circuit: no blob has the SHA-512"), got
-    for pub, why in ((_public_file(1, 2), NOT_EXACTLY), (_public_file(1, 0), NOT_EXACTLY),
-                     (_public_file(0), NOT_EXACTLY), (_public_file(0, 1, 2), NOT_EXACTLY), (publics["m1"], NOT_EXACTLY),
-                     (b"not a public file", "the public file's header is not JSON"),
-                     (b'{"units":{}}\n', "the public file's header names no units.indices")):
-        assert run(per_member(("m0", ["s"]), pubs={"m0": pub}), blobs_=[*blobs, pub.hex()]) == (
-            "reject", f"proofs: member m0: {why}"), pub
-    assert run(per_member(("m0", ["s"]), ("m1", ["t"]))) == (
-        "reject", f"proofs: session t's coins are not the challenger's: {SHARED_TREE}")
-    assert run(per_member(("m2", ["s"]))) == ("reject", "proofs: member m2: the parameters name no such member")
-    assert run(per_member(("m0", []), b=base0), p=p0) == (
-        "reject", f"proofs: member m0: its statement has 0 sessions: {ONE_SESSION}")
-    assert run(per_member(b=base0), p=p0) == (
-        "reject", "proofs: the units the sessions proved are not the evidence's proved_units")
-    assert run(base | {"proofs": {"public": _sha(publics["m0"]), "sessions": sessions(["s"])}, "sessions": ["s"]}) == (
-        "reject", "proofs: the evidence's proofs are one statement's (public, sessions) and the parameters' per member "
-                  "(members)")
-    assert run(per_member(("m0", ["s"])), p=p1 | {"proofs": {"circuit": members["m0"]["circuit"], "registered": None}}) == (
-        "reject", "proofs: the evidence's proofs are per member (statements) and the parameters' one statement's "
-                  "(circuit, registered)")
-    assert run(per_member(("m0", ["s"]), ("m1", ["t"])) | {"sessions": ["t", "s"]}) == (
-        "reject", "evidence: proofs: the sessions are not the evidence's sessions, in order")
-    one = {"public": _sha(publics["m0"]), "sessions": []}
-    for proofs_, why in (({"statements": [one | {"member": ""}]}, "proofs: a statement's member is not a member's name"),
-                         ({"statements": [one]}, "the keys of a statement of the proofs are not member, public, sessions"),
-                         ({"statements": {}}, "proofs: statements is not a list")):
-        assert run(base0 | {"proofs": proofs_}, p=p0) == ("reject", f"evidence: {why}"), proofs_
-    m0 = members["m0"]
-    for proofs_, why in (({"members": {**members, "m1": m0 | {"units": [[1, 5]]}}},
-                          "proofs: unit 1 is in two members' units: a unit is one member's"),
-                         ({"members": {"m0": m0 | {"units": [[0, 2], [1, 2]]}}},
-                          "proofs: unit 1 is in two members' units: a unit is one member's"),
-                         ({"members": {}}, "proofs: members names no member"),
-                         ({"members": {"m0": m0 | {"units": []}}},
-                          "proofs: member m0's units are not a nonempty list of [lo, hi] with 0 <= lo < hi"),
-                         ({"members": {"m0": m0 | {"units": [[2, 2]]}}},
-                          "proofs: member m0's units are not a nonempty list of [lo, hi] with 0 <= lo < hi"),
-                         ({"members": {"": m0}}, "proofs: a member's name is empty"),
-                         ({"members": {"m0": m0 | {"pin": None}}},
-                          "the keys of member m0 are not circuit, registered, units, vus_per_block"),
-                         ({"members": {"m0": m0 | {"vus_per_block": 0}}},
-                          "proofs: member m0's vus_per_block is not a positive natural number"),
-                         ({"members": {"m0": m0 | {"vus_per_block": True}}},
-                          "proofs: member m0's vus_per_block is not a positive natural number"),
-                         ({"members": members, "circuit": m0["circuit"]}, "the keys of proofs are not circuit, registered")):
-        assert run(per_member(), p=p1 | {"proofs": proofs_}) == ("reject", f"params: {why}"), proofs_
-
-
-def test_v2_per_member_holds_its_statements_to_the_members_order_and_one_session_each(server, server_v2):
-    """v2's per-member statements are public structure (`OneStageZk.membersHeld`), held before any session runs, on
-    sessions whose coins are the challenger's two trees: statements out of the members' order (by first unit, so `m10`
-    after `m2`, not by name) are refused, and so are a member's second statement and a statement of two sessions; in the
-    members' order, exactly one session each, each session runs and its own verdict rejects (no blob holds a circuit
-    file)."""
-    s, law = SETUPS[3], {"k": 2, "law": "subset"}
-    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
-                   WINDOW, leaf_layer=LEAF)
-    circuits = {"m2": b"not a circuit file", "m10": b"not another circuit file"}
-    publics = {"m2": _public_file(0, 1), "m10": _public_file(2, 3, 4)}
-    members = {"m2": {"circuit": _sha(circuits["m2"]), "registered": None, "units": [[0, 2]], "vus_per_block": 1},
-               "m10": {"circuit": _sha(circuits["m10"]), "registered": None, "units": [[2, 5]], "vus_per_block": 1}}
-    ch, _, base, p = _challenger_audit(server, random.Random("v2-members-order"), s, law, rec, 2)
-    p = p | {"proofs": {"members": members}}
-    records = [D.canonical(t.record).encode() for t in ch.trees]
-    blobs = [circuits["m2"].hex(), circuits["m10"].hex(), *(b.hex() for b in publics.values()),
-             *(r.hex() for r in records)]
-
-    def run(*sts):
-        statements = [{"member": m, "public": _sha(publics[m]),
-                       "sessions": [{"name": n, "record": _sha(records[t]), "reps": {}} for n, t in ss]} for m, ss in sts]
-        e = base | {"proofs": {"statements": statements}, "sessions": [n for _, ss in sts for n, _ in ss]}
-        case = {"blobs": list(blobs), "commitment": _hex(rec), "evidence": _hex(e), "params": p}
-        out = server_v2.exchange(_json(case))
-        return out["verdict"], out["reason"]
-
-    assert run(("m10", [("s", 0)]), ("m2", [("t", 1)])) == (
-        "reject", "proofs: member m2: its statement follows member m10's, whose units start after its own: the statements "
-                  "are in the members' order (by first unit, the registration's), one order for one statement")
-    assert run(("m2", [("s", 0)]), ("m2", [("t", 1)])) == (
-        "reject", "proofs: member m2: a second statement: a member's units are one statement's")
-    assert run(("m2", [("s", 0), ("t", 1)])) == ("reject", f"proofs: member m2: its statement has 2 sessions: {ONE_SESSION}")
-    assert run(("m2", [("s", 0)]), ("m10", [("t", 1)])) == ("reject", "verdict flock-verify/s did not accept")
-
-
-def test_v2_per_member_registration_refuses_a_member_whose_link_points_vary(server, server_v2):
-    """The per-member form's registration (`Registration.check`'s `link-points`, `link_points.refused`), run before any
-    session's verdict is read; only the first member has a statement. Over 10 units under `subset:9`, a draw that ends
-    holds 8 or 9 of a member of units 0-8 (and 0 or 1 of the member of unit 9), whose link points differ at one unit a
-    proof block (3 and 4), so it is refused; at two both give 3 and the audit goes on to its session's verdict, which
-    rejects (no blob holds a circuit file). Under `subset:2` every draw that ends holds 2 of a member of all 10, so at
-    one unit a proof block it is not refused; a draw that runs out of coins fails the window
-    (`test_v2_per_member_fails_a_window_whose_draw_ran_out`). A member with a unit outside the population is refused.
-    The Python registration's codes are Lean's."""
-    s = Setup(P.population_program(PAIR, 10), P.template_instance_query(PAIR.id))
-    PROGRAMS[s.sha512] = s.program
-    circuit = b"not a circuit file"
-
-    def run(law: dict, members: dict[str, tuple[list, int]]) -> tuple:
-        rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
-                       WINDOW, leaf_layer=LEAF)
-        ch, _, base, p = _challenger_audit(server, random.Random("v2-link-points"), s, law, rec, 1)
-        record = D.canonical(ch.trees[0].record).encode()
-        first, (units, _) = next(iter(members.items()))
-        public = _public_file(*(u for lo, hi in units for u in range(lo, hi)))
-        ms = {m: {"circuit": _sha(circuit), "registered": None, "units": us, "vus_per_block": g}
-              for m, (us, g) in members.items()}
-        e = base | {"proofs": {"statements": [{"member": first, "public": _sha(public), "sessions": [
-            {"name": "s", "record": _sha(record), "reps": {}}]}]}, "sessions": ["s"]}
-        case = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec), "evidence": _hex(e),
-                "params": p | {"proofs": {"members": ms}}}
-        out = server_v2.exchange(_json(case))
-        return (out["verdict"], out["reason"]), _registration(
-            decode_params_v2(p) | {"link_members": list(members.values())}, rec)
-
-    nine, two = {"k": 9, "law": "subset"}, {"k": 2, "law": "subset"}
-    assert run(nine, {"m0": ([[0, 9]], 1), "m1": ([[9, 10]], 1)}) == (
-        ("reject", "registration: link-points"), ("link-points",))
-    assert run(nine, {"m0": ([[0, 9]], 2), "m1": ([[9, 10]], 1)}) == (
-        ("reject", "verdict flock-verify/s did not accept"), ())
-    assert run(two, {"m0": ([[0, 10]], 1)}) == (("reject", "verdict flock-verify/s did not accept"), ())
-    assert run(two, {"m0": ([[0, 11]], 2)}) == (("reject", "registration: link-points"), ("link-points",))
-
-
 def test_link_points_refuses_a_law_none_of_whose_draws_ends():
     """`link_points.refused` refuses a law no draw of which ends (`NEVER_ENDS`, `ends`): `subset:11` over 10 units, a
     Bernoulli law of denominator 0, a stratum drawing more units than it has; `subset:10` and `bernoulli 0/0` end. These
@@ -2939,46 +2630,6 @@ def test_link_points_refuses_a_law_none_of_whose_draws_ends():
         assert not LP.ends(law, 10)
         with pytest.raises(ValueError, match=f"^{LP.NEVER_ENDS}$"):
             LP.refused(law, 10, [([[0, 10]], 1)])
-
-
-def test_v2_per_member_fails_a_window_whose_draw_ran_out(server, server_v2):
-    """A per-member window whose draw runs out of the challenger's coins fails before its coin trees or any session is
-    read (`OneStageZk.RAN_OUT`, `OneStage.ranOut`): its challenger opened one coin after the registration, 64 bytes, and
-    `subset:9` over 10 units reads at least 226. Nothing redraws it and no fallback draws every unit. On coins that last
-    the same window goes on to its session's verdict, and the one-statement form on the coins that run out is rejected
-    by v1's coins check after its session. The Python twin (`_ran_out` on `_coins_of`'s coins) agrees."""
-    s = Setup(P.population_program(PAIR, 10), P.template_instance_query(PAIR.id))
-    PROGRAMS[s.sha512] = s.program
-    law = {"k": 9, "law": "subset"}
-    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
-                   WINDOW, leaf_layer=LEAF)
-    rng = random.Random("v2-ran-out")
-    ch, _, base, p = _challenger_audit(server, rng, s, law, rec, 1)
-    short = Drawn(rng, before=True, after=bytes.fromhex(R.digest(rec)), reads=lambda coins: coins(64), trees=1)
-    short_base = base | {"coins": {k: v for k, v in short.evidence(short.segment.to_json()).items() if k != "key"}}
-    short_p = p | {"challenger": {"key": short.s.key.to_json(), "label": "draw"}, "window_root": short.ledger.window["root"]}
-    circuit, public = b"not a circuit file", _public_file(*range(10))
-    members = {"m0": {"circuit": _sha(circuit), "registered": None, "units": [[0, 10]], "vus_per_block": 1}}
-
-    def run(d: Drawn, b: dict, p: dict, per_member: bool) -> tuple:
-        record = D.canonical(d.trees[0].record).encode()
-        sessions = [{"name": "s", "record": _sha(record), "reps": {}}]
-        proofs = ({"statements": [{"member": "m0", "public": _sha(public), "sessions": sessions}]} if per_member
-                  else {"public": _sha(public), "sessions": sessions})
-        own = {"members": members} if per_member else {"circuit": _sha(circuit), "registered": None}
-        case = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec),
-                "evidence": _hex(b | {"proofs": proofs, "sessions": ["s"]}), "params": p | {"proofs": own}}
-        out = server_v2.exchange(_json(case))
-        return out["verdict"], out["reason"]
-
-    def twin(b: dict, p: dict) -> bool:
-        p = decode_params_v2(p)
-        return _ran_out(p, rec, _coins_of(p, (rec, bytes.fromhex(R.digest(rec))), b))
-
-    assert run(short, short_base, short_p, True) == ("reject", f"draw: {WINDOW_RAN_OUT}")
-    assert run(short, short_base, short_p, False) == ("reject", "draw: coins: the randomness source ran out")
-    assert run(ch, base, p, True) == ("reject", "verdict flock-verify/s did not accept")
-    assert twin(short_base, short_p) and not twin(base, p)
 
 
 def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
@@ -3440,18 +3091,10 @@ DRAW_INPUTS = st.one_of(
     st.builds(lambda law, n, src: {"law": law, "population": n, "source": src}, SIMPLE_LAWS | laws(6),
               st.integers(0, 40), SHORT_SOURCE),
     st.builds(lambda law, n, src: {"law": law, "population": n, "source": src}, JSON, st.integers(0, 6) | JSON,
-<<<<<<< 99c8914848:verity/core/service/sampled_proofs/tests/test_difftest.py
               SHORT_SOURCE | st.sampled_from(["", "0", "zz", "AB", "ab cd"]) | JSON))
 DRAW = D.Port(PIECES, "draw", draw, DRAW_INPUTS, package=PACKAGE)
 RAN_OUT = D.Port(PIECES, "ran_out", ran_out, DRAW_INPUTS, package=PACKAGE)
-#: Law texts `draw.parse_law` or `draw.parse_rate` refuses or reads oddly: digits of other scripts, signs, spaces, a
-||||||| merged common ancestors:verity/core/service/sampled_proofs/tests/test_difftest.py
-              SHORT_SOURCE | st.sampled_from(["", "0", "zz", "AB", "ab cd"]) | JSON)), package=PACKAGE)
-#: Law texts `draw.parse_law` or `draw.parse_rate` refuses or reads oddly: digits of other scripts, signs, spaces, a
-=======
-              SHORT_SOURCE | st.sampled_from(["", "0", "zz", "AB", "ab cd"]) | JSON)), package=PACKAGE)
 #: Law texts `draw.parse_design` or `draw.parse_rate` refuses or reads oddly: digits of other scripts, signs, spaces, a
->>>>>>> 7af4d24fca3e:verity/core/service/spot/tests/test_difftest.py
 #: second separator, leading zeros, a missing or zero argument.
 ODD_LAW_TEXTS = ["subset:", "subset", "", "subset:\u0663", "work:\u00b2", "stratified:\uff11", "bernoulli:1/\u0662",
                  "bernoulli:\u00b9/2", "bernoulli:01/04", "bernoulli:0/0", "bernoulli:3/2", "bernoulli:1", "bernoulli:1/2/3",
@@ -3676,7 +3319,6 @@ SELECT = D.Port(PIECES, "select", select, st.one_of(selections(), selections(), 
 DESIGN = D.Port(PIECES, "design", design, st.one_of(selections(), selections(), changed_selections(1), JSON),
                 package=PACKAGE)
 SLOTS = D.Port(PIECES, "slots", slots, st.one_of(selections(), selections(), changed_selections(1), JSON), package=PACKAGE)
-<<<<<<< 99c8914848:verity/core/service/sampled_proofs/tests/test_difftest.py
 POP_ORDER = D.Port(PIECES, "pop_order", pop_order, st.one_of(*[st.builds(
     lambda part, dn: {"population": max(0, part[2] + dn), "program": part[0], "query": part[1]}, partitions(),
     st.sampled_from([0, 0, 0, -1, 1]))] * 3, JSON), package=PACKAGE)
@@ -3696,6 +3338,8 @@ PUBLIC_UNITS = D.Port(PIECES, "public_units", public_units, st.one_of(
     st.builds(lambda u, i: {"indices": i, "units": u}, st.lists(st.lists(st.integers(-1, 6), max_size=3), max_size=3),
               st.lists(st.integers(-1, 6), max_size=6)),
     JSON), package=PACKAGE)
+
+
 def _cut(population: int, cuts: list[int], owners: list[int]) -> list[list[list[int]]]:
     """`[0, population)` cut at `cuts` (each modulo `population + 1`), its `i`-th range `owners[i % len(owners)]`'s: each
     owner's ranges, ascending, the owners in the order of their first range."""
@@ -3741,8 +3385,8 @@ LINK_POINTS = D.Port(PIECES, "link_points", link_points, st.one_of(
                 st.lists(st.integers(1, 5), min_size=1, max_size=3), st.integers(0, 9))] * 3,
     st.builds(lambda law, n, ms: {"law": law, "members": ms, "population": n}, JSON, st.integers(-1, 9), JSON),
     JSON), package=PACKAGE)
-||||||| merged common ancestors:verity/core/service/sampled_proofs/tests/test_difftest.py
-=======
+
+
 _FITS_HEX = st.binary(max_size=6).map(bytes.hex)
 _FITS_JSON = st.recursive(st.none() | st.booleans() | st.integers(-300, 300) | TEXT | st.sampled_from(["\n\r\t\\", "\x1f\x7f"]),
                           lambda inner: st.lists(inner, max_size=3) | st.dictionaries(TEXT, inner, max_size=3),
@@ -3804,7 +3448,6 @@ FILE_POPULATION = D.Port(PIECES, "file_population", file_population,
                          st.one_of(file_populations(), file_populations(), file_population_publics(),
                                    file_population_publics(), JSON), package=PACKAGE)
 
->>>>>>> 7af4d24fca3e:verity/core/service/spot/tests/test_difftest.py
 STRATA = st.lists(st.builds(lambda name, size, dk: {"k": max(0, size - dk), "name": name, "size": size},
                             st.sampled_from(["a", "b", "c", "unit"]), st.integers(0, 14), st.integers(0, 14)),
                   min_size=1, max_size=3, unique_by=lambda s: s["name"])
@@ -5341,25 +4984,13 @@ pieces = D.server_fixture(DECODE)
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATES, 300),
               (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
-<<<<<<< 99c8914848:verity/core/service/sampled_proofs/tests/test_difftest.py
-              (CHECK_DRAW, 500), (DRAW, 500), (RAN_OUT, 300), (SELECT, 600), (DESIGN, 300), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
-||||||| merged common ancestors:verity/core/service/sampled_proofs/tests/test_difftest.py
-              (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
-=======
-              (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (FILE_POPULATION, 400),
-              (CHECK_PROVED, 300), (BOUND, 500),
->>>>>>> 7af4d24fca3e:verity/core/service/spot/tests/test_difftest.py
+              (CHECK_DRAW, 500), (DRAW, 500), (RAN_OUT, 300), (SELECT, 600), (DESIGN, 300), (SLOTS, 400),
+              (FILE_POPULATION, 400), (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
-<<<<<<< 99c8914848:verity/core/service/sampled_proofs/tests/test_difftest.py
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (POP_ORDER, 300), (PUBLIC_UNITS, 300),
-              (LINK_POINTS, 500)]
-||||||| merged common ancestors:verity/core/service/sampled_proofs/tests/test_difftest.py
-              (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400)]
-=======
-              (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (SELECT_SECOND, 300), (SECOND_STATEMENTS, 400),
-              (REPLAY_LINKS, 300), (REPLAY_WIRES, 300), (FITS, 400), (TEMPLATE_CIRCUITS, 300)]
->>>>>>> 7af4d24fca3e:verity/core/service/spot/tests/test_difftest.py
+              (LINK_POINTS, 500), (SELECT_SECOND, 300), (SECOND_STATEMENTS, 400), (REPLAY_LINKS, 300),
+              (REPLAY_WIRES, 300), (FITS, 400), (TEMPLATE_CIRCUITS, 300)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])
@@ -5480,12 +5111,11 @@ def test_the_slots_follow_the_strata(pieces):
     assert out["checked"] == [[v, 0] for v in sorted(drawn + [v for v, u in enumerate(units) if u is None])]
 
 
-<<<<<<< 99c8914848:verity/core/service/sampled_proofs/tests/test_difftest.py
 #: Templates of templates: `NEST` calls `PAIR` twice and `DEEP` calls `NEST` and `PAIR`, so a unit's gates and every
 #: offset before it are walks of nested Definitions.
-NEST = bind(CompositeDefinition("CoreSampledProofsNest", 0, (), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
+NEST = bind(CompositeDefinition("CoreSpotNest", 0, (), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
                                 lambda B, S, x: B.call(XOR8, B.call(PAIR, x), B.call(PAIR, x)), register=False))
-DEEP = bind(CompositeDefinition("CoreSampledProofsDeep", 0, (), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
+DEEP = bind(CompositeDefinition("CoreSpotDeep", 0, (), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
                                 lambda B, S, x: B.call(XOR8, B.call(NEST, x), B.call(PAIR, x)), register=False))
 
 
@@ -5527,8 +5157,8 @@ def test_the_population_order_from_the_ranges_is_the_layouts(pieces):
             case = {"population": m, "program": _json(codec.encode_program(program)), "query": query}
             assert pop_order(copy.deepcopy(case)) == {"layout": want, "ranges": want}, (m, want)
             assert D.replay(POP_ORDER, case, pieces) == ("output", D.canonical({"layout": want, "ranges": want})), (m, want)
-||||||| merged common ancestors:verity/core/service/sampled_proofs/tests/test_difftest.py
-=======
+
+
 #: Units of the toy and the real-template populations `unit_gates` is held to its walk at: L5's population on one
 #: GPU, and past it.
 UNIT_GATES_AT = [147, 1001]
@@ -5584,7 +5214,6 @@ def test_the_unit_gates_by_range_are_the_walks_on_real_templates(pieces, n):
     assert kind == "output", out
     gates, walk = json.loads(out)
     assert len(gates) == n and gates == walk
->>>>>>> 7af4d24fca3e:verity/core/service/spot/tests/test_difftest.py
 
 
 def test_the_call_queries_cut_call_by_call(pieces):
@@ -6914,71 +6543,6 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
         two = {**v2, "params": {**v2["params"], "law": params["law"], "work_table": params["work_table"]}}
         out = server_v2.exchange(_json(two))
         assert not (out["reason"] or "").startswith("params: "), (kind, out)
-
-
-def test_the_run_refuses_a_closure_map(pieces):
-    """A work registration's run given a closure map, empty or not, is refused at its select step before any coin is read
-    (`closure`), Lean's the Python's whole: a work draw it widens proves a set whose size varies with the draw, which the
-    soundness statement doesn't cover. Without one it is accepted."""
-    source = hashlib.shake_256(b"run").hexdigest(600)
-    for s in (SETUPS[3], SETUPS[2]):
-        case = _run_case(_v1_audit("work", s), source, 2, ["credited"])
-        n = case["record"]["population"]
-        for closure in ([], [[0, [1]]], [[u, [(u + 1) % n]] for u in range(n)]):
-            assert _ran(pieces, {**case, "closure": closure}) == {"codes": ["closure"], "step": "select"}, closure
-        assert _ran(pieces, _from_challenger(case, random.Random(n))[1])["symbol"] == "accept"
-
-
-def _covered_case(kind: str) -> tuple[dict, dict, dict]:
-    """An accepted v1 audit of `SETUPS[3]` under `kind` (`bernoulli` at 1/2, or `work`), as params, record and evidence,
-    its draw a work draw's with a closure when `kind` is `closure`."""
-    s = SETUPS[3]
-    law = {"law": "bernoulli", "p": "1/2"} if kind == "bernoulli" else {"k": 3, "law": "work"}
-    table = None if kind == "bernoulli" else {PAIR.id: 2, TRIPLE.id: {"floor": 1, "work": 1}}
-    mine = DR.derive(s.program, s.query, law, table)
-    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
-                   WINDOW, leaf_layer=LEAF, work_table=table)
-    units = [1, 2, 4] if kind == "bernoulli" else sorted(
-        u for st_ in mine["strata"] for u in [u for lo, hi in st_["units"] for u in range(lo, hi)][:st_["k"]])
-    d = {**mine, "population": s.population, "units": units}
-    if kind == "closure":
-        d["closure"] = [u for u in range(s.population) if u not in units][:1]
-    proved = DR.proved(d)
-    evidence = {"draw": d, "instances": len(proved), "proved_units": proved,
-                "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
-                "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
-    params = {"anchors": [], "delta": "1/20", "law": law, "leaf_layer": LEAF, "log": [],
-              "partition": P.partition(s.program, s.query), "ports": s.ports, "program": s.desc, "query": s.query,
-              "registered": None, "scheme": SCHEME, "work_table": table}
-    return params, rec, evidence
-
-
-def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
-    """The one-stage audit, v1 (`OneStage.protocol`) and v2 (`OneStageZk`), Lean's the Python's: parameters under a
-    Bernoulli law at 0 < p < 1 are refused (`paramsOfJson`), and evidence whose draw carries a closure
-    (`evidenceOf`), after its commitment's digest, v2's parameters naming a challenger so that its refusal of
-    parameters naming none (`NO_CHALLENGER`) isn't what refuses them; the same work audit without the closure is
-    accepted by v1."""
-    for kind, stage in (("bernoulli", "params: "), ("closure", "evidence: ")):
-        params, rec, evidence = _covered_case(kind)
-        case = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
-        out = server.exchange(case)
-        assert out == answer(case) | {"reason": out["reason"]} and out["verdict"] == "reject", (kind, out)
-        assert out["reason"].startswith(stage) and "soundness statement doesn't cover" in out["reason"], (kind, out)
-        circuit, public, record = b"not a circuit file", b"not a public file", b"{}"
-        base = {k: v for k, v in evidence.items() if k != "verdicts"}
-        d = Drawn(random.Random(kind))
-        v2 = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec),
-              "evidence": _hex(base | {"proofs": {"public": _sha(public), "sessions": []}}),
-              "params": params | {"challenger": {"key": d.s.key.to_json(), "label": "draw"},
-                                  "proofs": {"circuit": _sha(circuit), "registered": None},
-                                  "window_root": d.ledger.window["root"]}}
-        out = server_v2.exchange(_json(v2))
-        assert out["verdict"] == "reject" and out["reason"].startswith(stage), (kind, out)
-        assert "soundness statement doesn't cover" in out["reason"], (kind, out)
-    params, rec, evidence = _covered_case("work")
-    case = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
-    assert D.replay(ONE_STAGE, case, server)[0] == "accept"
 
 
 def test_the_run_refuses_a_population_out_of_order(pieces):
