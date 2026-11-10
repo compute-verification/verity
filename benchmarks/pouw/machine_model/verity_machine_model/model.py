@@ -139,6 +139,19 @@ def device(name: str = DEVICE) -> Path:
     return p
 
 
+def card(data: Path = DATA) -> dict:
+    """The device's card file (`verity.hardware.load`), the one source of its ceilings: the SKU `model.toml` names."""
+    from verity.hardware import load   # here: only a reader of the card needs verity
+
+    sku = tomllib.loads((data / "model.toml").read_text()).get("card")
+    if sku is None:
+        raise SystemExit(f"{data / 'model.toml'} names no card; add card = \"SKU\", a file of verity/hardware/cards/")
+    try:
+        return load(sku)
+    except KeyError as e:
+        raise SystemExit(f"{data / 'model.toml'}: {e.args[0]}") from None
+
+
 def devices() -> list[str]:
     """The devices a command can price: sm_120 and each device directory with a `model.toml`."""
     return [DEVICE, *sorted((p.name for p in DEVICES.glob("sm_*") if (p / "model.toml").is_file()),
