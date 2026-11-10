@@ -821,6 +821,34 @@ def test_a_supplied_value_is_the_records_roots_as_its_leaves():
                                                                                          "rows": list(GROUPS)}
 
 
+@pytest.mark.parametrize("schema", [G.SCHEMA_V2, G.SCHEMA_SEG])
+@pytest.mark.parametrize("bits", [32, 1])
+def test_a_supplied_value_is_committed_in_the_row_format_of_the_port_that_reads_it(bits, schema):
+    """A supplied value a bit-row port reads is committed in that port's row format, as any registered value is: its rows
+    are its `word_bits` leaves, whose bit row is its parameter leaves' (least significant first), and R7 recomputes its
+    root in that format, so a row opens in that format alone and R7 refuses the `row/v1` commitment under it and the
+    bit-row one without it."""
+    rec, check, _, v1 = _seeded_case(bits)
+    prog, sup = check["program"], G.sources(SUPPLIED)["pouw.roots"]
+    words = check["registered"]["pouw.roots"] * bits // v1.word_bits
+    rows = G.supplied_rows(prog, "pouw.roots", sup, rec, ["pouw.roots"], schema=schema)
+    assert [G.bit_row((G.row_words(r, v1.word_bits, schema), 16)) for r in rows] == [G.bit_row((r, bits)) for r in v1.rows]
+    value = G.supplied_value(prog, "pouw.roots", sup, rec, ["pouw.roots"], schema=schema)
+    assert (value.schema, value.word_bits, value.entry()["words"]) == (schema, v1.word_bits, words)
+    case = {**check, "registered": {**check["registered"], "pouw.roots": words}, "schemas": {"pouw.roots": schema}}
+    want = G.registered_entries(prog, case["registered"], case["schemas"])["pouw.roots"]
+    assert want["domain"] == value.entry()["domain"]
+    assert G.supplied_root(prog, "pouw.roots", sup, rec, want, ["pouw.roots"], schema=schema) == value.root.hex()
+    assert value.root != v1.root
+    for r in range(value.leaves):
+        assert G.verify_read(value.domain, value.root, r, value.bcs[r], value.path(r), schema)
+        assert not G.verify_read(value.domain, value.root, r, value.bcs[r], value.path(r))
+    bit = {**rec, "registered": [value.entry() if e["value"] == "pouw.roots" else e for e in rec["registered"]]}
+    assert R.check(bit, **case).ok
+    assert "R7-supplied" in R.check(rec, **case).codes
+    assert "R7-supplied" in R.check(bit, **check).codes
+
+
 def test_r7_refuses_a_supplied_value_the_prover_chose():
     """A record whose `pouw.roots` is any other root than the one the verifier fills from the record is refused,
     whether its rows are other roots (all zero, as the witness fixes them), the right rows under fresh salts, or the right

@@ -52,8 +52,9 @@ verifier's binding, `{"stream", "prover"}`, and the window's canonical JSON: a s
 takes one record a window and the window names the binding, so a tile seeded in one stream is no other's). A row's bytes
 are read as the parameter's leaves of `w` bits
 (`bytes_leaves`: each big-endian 32-bit half, its `32 / w` leaves least significant first, so a digest is 16 leaves of 32
-bits or 512 of one). Its rows are
-committed as any registered value's, under public salts (`supplied_salts`, row i's from the program's digest, the value's
+bits or 512 of one; in a bit row, as its `word_bits` leaves, which hold the same leaves in the same order). Its rows are
+committed as any registered value's, in the row format the verifier names for it (`schemas`, the format of the port that
+reads it), under public salts (`supplied_salts`, row i's from the program's digest, the value's
 name and i alone), so its root is a function of the record and the verifier's bytes: R7 recomputes it
 (`supplied_root`) and refuses a record whose entry names another (`R7-supplied`). PoUW's seed inputs are such values: a
 proof block's seed then reads the roots its operands are committed under, which the prover can't choose.
@@ -536,42 +537,47 @@ def _source_bytes(rec: Any, value: str, kind: str, name: str, supplied: Sequence
 
 def supplied_rows(program: Program, value: str, rows: Sequence[Sequence[tuple[str, str]]], rec: Any,
                   supplied: Sequence[str] = (), log: Sequence[Any] = (),
-                  binding: Mapping[str, str] | None = None) -> list[list[int]]:
+                  binding: Mapping[str, str] | None = None, schema: str = SCHEMA) -> list[list[int]]:
     """The rows the verifier fills a supplied value with, from `rec`, the log of this prover's earlier records, its
     binding (`window_salt`) and its own bytes: each row its sources' bytes, read as the parameter's leaves (`bytes_leaves`
-    at its leaf width). `supplied`: every supplied value's name, whose roots no row reads. ValueError where a source names
-    nothing the record or the verifier holds, or the leaves are not one width dividing 32."""
+    at its leaf width), or in a bit row (`schema` not `SCHEMA`) as its `word_bits` leaves, which hold the parameter's
+    leaves least significant first, as the bit row does. `supplied`: every supplied value's name, whose roots no row
+    reads. ValueError where a source names nothing the record or the verifier holds, or the leaves are not one width
+    dividing 32."""
     t = dict(program.fn.signature()[0]).get(value)
     w = None if t is None else t.homogeneous_width()
     if w is None:
         raise ValueError(f"{value!r} is not a parameter of the program whose leaves are one width")
-    return [bytes_leaves(b"".join(_source_bytes(rec, value, k, n, supplied, log, binding) for k, n in row), w)
+    b = w if _schema(schema) == SCHEMA else width(program, value)
+    return [bytes_leaves(b"".join(_source_bytes(rec, value, k, n, supplied, log, binding) for k, n in row), b)
             for row in rows]
 
 
 def supplied_root(program: Program, value: str, rows: Sequence[Sequence[tuple[str, str]]], rec: Any,
                   want: Mapping[str, Any], supplied: Sequence[str] = (), log: Sequence[Any] = (),
-                  prog: str | None = None, binding: Mapping[str, str] | None = None) -> str:
+                  prog: str | None = None, binding: Mapping[str, str] | None = None, schema: str = SCHEMA) -> str:
     """The root R7 holds a supplied value's entry to: its rows (`supplied_rows`), as many as the verifier's own entry's
-    `leaves` (`registered_entries`), each of its `words` leaves, committed under `supplied_salts` at its `word_bits`.
-    `prog`: `program`'s digest (`P.program_digest`), when the caller holds it."""
-    got = supplied_rows(program, value, rows, rec, supplied, log, binding)
+    `leaves` (`registered_entries`), each of its `words` leaves, committed under `supplied_salts` at its `word_bits` in
+    `schema`'s rows, the format of the port that reads it (`row_schema`). `prog`: `program`'s digest
+    (`P.program_digest`), when the caller holds it."""
+    got = supplied_rows(program, value, rows, rec, supplied, log, binding, schema)
     if len(got) != want["leaves"] or any(len(r) != want["words"] for r in got):
         raise ValueError(f"supplied value {value!r}: rows of {[len(r) for r in got]} leaves, not {want['leaves']} of "
                          f"{want['words']}")
     prog = prog or P.program_digest(program)
-    return Registered.commit(prog, value, got, supplied_salts(prog, value, len(got)), want["word_bits"]).root.hex()
+    return Registered.commit(prog, value, got, supplied_salts(prog, value, len(got)), want["word_bits"],
+                             schema).root.hex()
 
 
 def supplied_value(program: Program, value: str, rows: Sequence[Sequence[tuple[str, str]]], rec: Any,
                    supplied: Sequence[str] = (), log: Sequence[Any] = (), prog: str | None = None,
-                   binding: Mapping[str, str] | None = None) -> Registered:
+                   binding: Mapping[str, str] | None = None, schema: str = SCHEMA) -> Registered:
     """The prover's side of a supplied value: the rows the verifier fills from `rec` (a record without this value's own
-    entry will do: no row reads it), the log and the binding under the public salts, whose `entry()` the record
-    registers and whose `statement` opens a proof block's reads like any registered value's."""
-    got = supplied_rows(program, value, rows, rec, supplied, log, binding)
+    entry will do: no row reads it), the log and the binding under the public salts, in `schema`'s rows, whose `entry()`
+    the record registers and whose `statement` opens a proof block's reads like any registered value's."""
+    got = supplied_rows(program, value, rows, rec, supplied, log, binding, schema)
     prog = prog or P.program_digest(program)
-    return Registered.commit(prog, value, got, supplied_salts(prog, value, len(got)), width(program, value))
+    return Registered.commit(prog, value, got, supplied_salts(prog, value, len(got)), width(program, value), schema)
 
 
 def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, int], roots: Mapping[str, str],

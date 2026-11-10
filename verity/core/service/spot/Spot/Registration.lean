@@ -24,8 +24,8 @@ root, and a root registered in another window opens under no domain R7 takes. On
 record is read when a value it doesn't hold across windows was registered by an earlier record under the domain it takes
 now (`unwindowed`, `OneStage.paramsOfJson`). A value it fills itself (`supplied`,
 `Supplied.root`: rows of the record's roots, positions after the log's, its coin bound to its binding and the record's
-window and its own bytes, under public salts) is held to the root it recomputes from this record and the log instead
-(`R7-supplied`), never to the log's.
+window and its own bytes, under public salts, in the row format it holds for the value) is held to the root it recomputes
+from this record and the log instead (`R7-supplied`), never to the log's.
 
 A verifier bound to a stream and a prover (`binding`: its stream's digest and the identity it registered the prover under)
 holds the record's window to name both (`R6-stream`, `R6-prover`), and a window salt is bound to them, so a tile seeded
@@ -172,8 +172,9 @@ structure Verifier where
   outputs : Array (String × String × Earlier) := #[]
   /-- the stream and prover it registers the record for, `(stream, prover)`, each lowercase hex -/
   binding : Option (String × String) := none
-  /-- of `registered`, values it doesn't fill whose rows are not `row/v1` rows, `(value, schema)` each
-  (`Registered.SCHEMAS`): a bit row's leaves are counted in its format (`Registered.entries`) -/
+  /-- of `registered`, values whose rows are not `row/v1` rows, `(value, schema)` each (`Registered.SCHEMAS`): a bit
+  row's leaves are counted in its format (`Registered.entries`), and a supplied value's root is committed in it
+  (`Supplied.root`) -/
   schemas : Array (String × String) := #[]
   /-- the window's open root, lowercase hex of 64 bytes, from the challenger's signed open of the window -/
   windowRoot : Option String := none
@@ -410,7 +411,7 @@ def poolOpen (rec : Json) (v : Verifier) (p : Pool) : Option (String × String) 
     | .ok mine => match mine.find? (·.value == p.pin) with
       | some want =>
         match Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1))
-            p.pin #[#[("bytes", p.genesis)]] want with
+            v.schemas p.pin #[#[("bytes", p.genesis)]] want with
         | .ok r => some (want.domain, r)
         | .error _ => none
       | none => none
@@ -537,7 +538,8 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
   -- R7
   if v2 then
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
-      (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
+      (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1))
+        v.schemas)
       v.outputs v.log
     c := kept (poolChained rec v) c "R7-pool-chain"
   return c
@@ -608,7 +610,8 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
   -- R7
   if v2 then
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
-      (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
+      (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1))
+        v.schemas)
       v.outputs v.log
     c := kept (poolChained rec v) c "R7-pool-chain"
   return c

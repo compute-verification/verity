@@ -371,7 +371,8 @@ A program's weights, constants and tables are values: committed once, under hidi
   values). So a run's values are held to no earlier run's roots. A verifier that names no R refuses its own inputs
   when a value it doesn't hold across runs would be held to an earlier run's root (`unwindowed`).
 - **Supplied values.** These are values the verifier fills itself, from the record's roots, positions after the log's,
-  its run's seed salt (bound to its stream and prover) and its own bytes. They are committed under public salts, and R7
+  its run's seed salt (bound to its stream and prover) and its own bytes. They are committed under public salts, in the
+  row format the verifier names for the port that reads them (`row_schema`, as for any registered value), and R7
   recomputes their root (`R7-supplied`). PoUW's seed inputs are such values
   (`verity/core/protocols/pouw/tests/test_pouw_supplied_inputs.py`).
 - **Reads.** The verifier derives every proof block's reads from its own program (`reads`). Flock's Lean verifier

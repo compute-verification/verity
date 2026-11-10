@@ -21,8 +21,8 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   a string; or `{value: {"port"}}`, a window's history: that port of the previous record, the log's last, whose digest
   the verifier takes from the log, `Registration.lastDigest`), each refused with any other form or when it expects
   none registered; and `row_schemas`, the ones whose rows are not `row/v1` rows (`{value: schema}`, each of a value it
-  expects registered and doesn't fill, one of `Registered.SCHEMAS`), which R7 counts a row's leaves in, refused in any
-  other form; and it may add `binding`, `{"stream", "prover"}`: its stream's digest (lowercase hex of 64 bytes) and the
+  expects registered, one of `Registered.SCHEMAS`), which R7 counts a row's leaves in and commits a supplied value's rows
+  in, refused in any other form; and it may add `binding`, `{"stream", "prover"}`: its stream's digest (lowercase hex of 64 bytes) and the
   identity it registered the prover under (lowercase hex of whole bytes), refused in any other form; and it may add
   `challenger`, `{"key", "label"}`: the auditor's challenger the sample's coins come from (its LMS key,
   `ChallengerKey.ofJson`) and the family they are sampled from, which needs `window_root`, refused in any other form; and
@@ -308,8 +308,8 @@ def paramsParsed (j : Json) : V Params := do
     | some (.obj kvs) => do
       if registered.isEmpty then throw "row formats are registered values' formats: the verifier expects none registered"
       kvs.toArray.mapM fun (v, s) => match s with
-        | .str s => if registered.any (·.1 == v) && !supplied.any (·.1 == v) && Registered.SCHEMAS.contains s then
-            pure (v, s) else throw s!"row format of {v}: not a registered value it doesn't fill, in one of {Registered.SCHEMAS}"
+        | .str s => if registered.any (·.1 == v) && Registered.SCHEMAS.contains s then
+            pure (v, s) else throw s!"row format of {v}: not a registered value, in one of {Registered.SCHEMAS}"
         | _ => throw s!"row format of {v}: not a string"
     | some _ => throw "row formats are not an object"
   let binding ← match field? j "binding" with

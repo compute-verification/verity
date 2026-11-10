@@ -577,7 +577,7 @@ def decode_params(j) -> dict:
         if not isinstance(j["row_schemas"], dict):
             raise D.Reject("row formats are not an object")
         try:
-            R._schemas(j["row_schemas"], j["registered"] or {}, G.sources(j.get("supplied", {})))
+            R._schemas(j["row_schemas"], j["registered"] or {})
         except ValueError as e:
             raise D.Reject(str(e)) from None
     if "binding" in j:
@@ -5123,6 +5123,32 @@ def test_a_bit_row_values_rows_are_counted_in_its_format(pieces):
             b = copy.deepcopy(a)
             drop(b)
             assert codes(b) == (["R7-leaves", "R7-domain"] if "A" in values else []), values
+
+
+def test_a_supplied_value_is_committed_in_its_row_format(pieces):
+    """R7 recomputes a supplied value's root in the row format the verifier names for it: `S`'s 32-bit leaves, and its
+    one-bit leaves sixteen to a u16 word, filled from the record and committed as `row/v2` or `row-seg/v1` rows, are
+    accepted under that format, and its `row/v1` commitment under it, or its bit-row one without it, is `R7-supplied`,
+    Lean and Python agreeing."""
+
+    def codes(b):
+        kind, out = D.replay(REGISTRATION, _json(_REGISTRATION_OF(b)), pieces)
+        return json.loads(out)["codes"] if kind == "output" else kind
+
+    for s in SUPPLIED_SETUPS[:2]:
+        values = s.values[0]
+        a = _v2_audit(s, values)
+        assert codes(a) == [], s.program
+        words = values["S"] * dict(s.program.fn.signature()[0])["S"].homogeneous_width() // G.width(s.program, "S")
+        for f in (G.SCHEMA_V2, G.SCHEMA_SEG):
+            bit = G.supplied_value(s.program, "S", G.sources(s.sup)["S"], a["record"], sorted(s.supplied(values)),
+                                   a["params"]["log"], binding=BINDING, schema=f).entry()
+            committed = copy.deepcopy(a)
+            committed["record"]["registered"] = [bit if e["value"] == "S" else e for e in a["record"]["registered"]]
+            formatted = {"row_schemas": {"S": f}, "registered": {**values, "S": words}}
+            assert codes({**committed, "params": {**a["params"], **formatted}}) == [], (s.program, f)
+            assert "R7-supplied" in codes({**a, "params": {**a["params"], **formatted}}), (s.program, f)
+            assert "R7-supplied" in codes(committed), (s.program, f)
 
 
 #: Pearl+'s y trees' binding tag: PoUW's rows domain over a call's served y, at salt nonce 2^61 + the call's index
