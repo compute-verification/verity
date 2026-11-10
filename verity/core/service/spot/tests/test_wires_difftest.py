@@ -187,24 +187,33 @@ def expand(j):
 
 
 def kahn(templates, wires):
-    """With no order: the templates placed one by one, the first by id that reads none not yet placed; where every one
-    left reads one, the cycle's refusal, naming the first wire from one left of the template that walking back from the
-    first one left, as many steps as there are left, ends on."""
-    rest = sorted(templates)
+    """With no order: the templates placed one by one, the first by id that reads none not yet placed by a wire from
+    another; where every one left reads one, the cycle's refusal, naming the first wire from one left of the template
+    that walking back from the first one left, as many steps as there are left, ends on. Else the order of the
+    placements, each template's units cut at the first and the end reader unit of each wire it reads itself by, held to
+    as a stated order is (`ordered`)."""
+    rest, placed = sorted(templates), []
 
     def into(t):
-        return [i for i, w in enumerate(wires) if w["reader"] == t and w["writer"] in rest]
+        return [i for i, w in enumerate(wires) if w["reader"] == t and w["writer"] in rest and w["writer"] != t]
 
     while rest:
         free = [t for t in rest if not into(t)]
         if free:
             rest.remove(free[0])
+            placed.append(free[0])
             continue
         t = rest[0]
         for _ in range(len(rest)):
             t = wires[into(t)[0]]["writer"]
         return refusal("cycle", into(t)[0])
-    return None
+    order = []
+    for t in placed:
+        n = templates[t][0]
+        cs = sorted({0, n, *(min(x, n) for w in wires if w["reader"] == t == w["writer"]
+                             for x in (w["at"], w["at"] + units(w) // w["c"]))})
+        order += [(t, a, b - a) for a, b in zip(cs, cs[1:])] or [(t, 0, n)]
+    return ordered(templates, wires, order)
 
 
 def box(w, lo, hi):
@@ -492,18 +501,21 @@ def _back(order=None, split: bool = False) -> dict:
     return j | ({"order": order} if order is not None else {})
 
 
-def _self(order=None) -> dict:
-    """The gather with `G`'s unit 1 reading `G`'s unit 0 (its `o4`): a template that reads itself."""
+def _self(order=None, base: int = 0) -> dict:
+    """The gather with `G`'s unit 1 reading `G`'s unit ``base`` (its `o4`): a template that reads itself, an earlier
+    instance at ``base`` 0, the same at 1 and a later one at 2."""
     j = _gather()
     j["templates"]["G"]["outs"]["o4"] = 4
-    j["wires"].append({"reader": "G", "port": "x", "writer": "G", "out": "o4", "at": 1, "radix": [1], "base": 0,
+    j["wires"].append({"reader": "G", "port": "x", "writer": "G", "out": "o4", "at": 1, "radix": [1], "base": base,
                        "step": [0]})
     return j | ({"order": order} if order is not None else {})
 
 
 @pytest.mark.parametrize("name, j, want", [
     ("templates that read each other", _back(), refusal("cycle", 0)),
-    ("a template that reads itself", _self(), refusal("cycle", 1)),
+    ("a template that reads an earlier instance of itself", _self(), True),
+    ("a template that reads the same instance of itself", _self(base=1), refusal("order", 1)),
+    ("a template that reads a later instance of itself", _self(base=2), refusal("order", 1)),
     ("an order a wire a reader unit follows", _back([["G", 0, 4], ["A", 0, 1], ["G", 4, 2], ["A", 1, 1]], split=True), True),
     ("an order a template that reads itself follows", _self([["G", 0, 1], ["G", 1, 5], ["A", 0, 2]]), True),
     ("an order ranking a template's later units first", _gather(order=[["G", 3, 3], ["G", 0, 3], ["A", 0, 2]]), True),

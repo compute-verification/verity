@@ -96,7 +96,9 @@ Its result is of kind `FAST_KIND`, never a Lean verdict: no kernel replay and no
 `audit.json` and each package's `report.json` it leaves (`--out`, else the run's `lean-audit/`, else a temporary directory) and,
 in a recorded run, into its `result.json`, the Attempt's result. `check` fails its lean-audit step on a report of that kind or
 one without the replay (`check.lean_fast`), and `research merge` refuses an attempt whose result is of that kind
-(`research.merge.REFUSED_KINDS`), whatever `--tool` recorded it.
+(`research.merge.REFUSED_KINDS`), whatever `--tool` recorded it. The compiled modules it leaves are not a verdict either: in a
+run they go into its `lean-audit/` as a bundle (`lean_audit.LakeArtifacts.bundle_into`), and a node that restores one still
+replays every declaration through the kernel.
 
 The step tree holds the tracked files of each package whose audit misses, and those of the packages it requires by path or
 names under `proved_in`, at their paths in this repository, with each package's own `.lake`: Lake rebuilds only the modules that changed since its last build there and
@@ -329,6 +331,46 @@ def write_links(tree: Path, links: dict[str, str]) -> None:
     os.replace(tmp, tree / LINKS)
 
 
+_MOVED = None
+
+
+def _moved():
+    """`moved.py`, loaded by what carries a build and not with this file: `--inputs-key` reads no tree and no recorded
+    move, and whoever runs it from a commit's key code alone (research's records gate) needs no file for it."""
+    global _MOVED
+    if _MOVED is None:
+        _MOVED = _module(Path(__file__).resolve().parent / "moved.py", "lean_moved_for_lean_changed")
+    return _MOVED
+
+
+def carry_builds(tree: Path, log=print) -> None:
+    """Under ``tree``'s lock, before anything reads `LINKS` or syncs a package: a build directory that a layout move left
+    in ``tree`` at its package's former path moves to where this checkout has the package (`moved.carry`), with its entry
+    of `LINKS`. A tree is keyed by package paths and `.lake` is no tracked file: without this the first run after a move
+    would sync the package to its new path, find no build there and compile every module of it, the old build left beside
+    it. It reads the tree, the checkout and the recorded moves, and starts no program. A tree that is the checkout itself
+    keeps what else its former directory holds."""
+    moved = _moved()
+    moves = moved.recorded(ROOT)
+    if not moves or not tree.is_dir():
+        return
+    built = []
+    for d, dirs, _ in os.walk(tree):
+        if ".lake" in dirs and Path(d) != tree:
+            built.append(Path(d).relative_to(tree).as_posix())
+        dirs[:] = [x for x in dirs if not x.startswith(".")]
+    pkgs = sorted({q for f in built if (q := moved.now(f, moves)) != f
+                   and any((ROOT / q / n).is_file() for n in moved.LAKEFILES)})
+    got = moved.carry(tree, pkgs, moves, log, prune=tree.resolve() != ROOT.resolve()) if pkgs else {}
+    if not got:
+        return
+    links = read_links(tree)
+    for old, new in got.items():
+        if old in links:
+            links[new] = links.pop(old)
+    write_links(tree, links)
+
+
 def in_sandbox(pkg: str, tree: Path, argv: list[str]) -> list[str]:
     """``argv`` in the sandbox, writable in the `.lake` of ``tree/pkg`` and the packages it requires by path but not in their
     fetched dependencies. The paths are resolved, as mountinfo names them: a slot tree is a link into the node's cache root."""
@@ -434,7 +476,8 @@ _sleep, _clock = time.sleep, time.monotonic
 
 def hold_tree(held, tree: Path, log=print) -> bool:
     """Take ``held``'s lock (the tree's `.lock`), waiting up to `TREE_WAIT_S` for the run that holds it, whose id `.who`
-    beside it names; False when it is still held then."""
+    beside it names; False when it is still held then. With the lock, the builds a layout move left behind in the tree
+    are brought to their packages (`carry_builds`), before the caller reads the tree."""
     who, start, told = tree / ".who", _clock(), None
     while True:
         try:
@@ -450,6 +493,7 @@ def hold_tree(held, tree: Path, log=print) -> bool:
                 told = holder
             _sleep(TREE_POLL_S)
     who.write_text(f"{os.environ.get('RESEARCH_RUN_ID') or 'a run'} (pid {os.getpid()})\n")
+    carry_builds(tree, log)
     return True
 
 
@@ -460,12 +504,48 @@ DIRTY = "dirty.json"
 
 
 def mark(tree: Path, **what) -> None:
-    """`DIRTY`, replaced whole: this run and ``what`` (`package`, `phase`)."""
+    """`DIRTY`, replaced whole: this run and ``what`` (`package`, `phase`, and for a phase that builds what `put_left`
+    reads)."""
     doc = {"run": os.environ.get("RESEARCH_RUN_ID") or "a run", "pid": os.getpid(),
            "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **what}
     tmp = tree / f"{DIRTY}.tmp"
     tmp.write_text(json.dumps(doc, sort_keys=True) + "\n")
     os.replace(tmp, tree / DIRTY)
+
+
+def put_built(artifacts, reps: dict[Path, dict], since: float, log=print, who: str = "lean-records") -> None:
+    """Put what the builds of ``reps`` ({package: what says its build ran in the sandbox}) compiled since ``since`` into the
+    node's artifact cache (`LakeArtifacts.put`), whatever became of the run: a module is stored for what its compile read,
+    which a failure elsewhere in the package, or a kill, doesn't change, unless a source of the build runs code while it
+    compiles (`LA.runs_code`). Before anything writes the tree again: a key is computed from the sources the tree
+    holds, and those are the sources `put` reads for such code."""
+    try:
+        log(f"{who}: {artifacts.put(reps, since, log)} module version(s) new in the artifact cache")
+    except (OSError, ValueError) as e:
+        log(f"{who}: the artifact cache was not written: {e}")
+
+
+def put_left(tree: Path, left: dict | None, artifacts, log=print) -> None:
+    """`put_built` what the run that left ``tree`` mid-way (``left``, its `DIRTY`) had compiled when it stopped, which it never
+    stored itself: its mark names when its build began (`since`) and what says the build ran in the sandbox, check.py's
+    reports (`out`, `LA.built`) for `--records` and the run's own word (`sandbox`) for `--try` and `--build`. A run does
+    this before it syncs the tree. Without it a build that is killed each time (a timeout shorter than a cold build)
+    would start from nothing each time, since `stage` leaves no trace of a module the cache doesn't hold."""
+    if not left or not isinstance(since := left.get("since"), (int, float)) or not isinstance(pkg := left.get("package"), str):
+        return
+    if left.get("phase") == "check":
+        reps = LA.built(Path(str(left.get("out"))))
+    else:
+        reps = {tree / pkg: {"sandbox": True}} if left.get("sandbox") is True else {}
+    if reps := {at: rep for at, rep in reps.items() if tree.resolve() in at.resolve().parents}:
+        put_built(artifacts, reps, since, log, f"lean-records: {tree}: of what {left.get('run', 'a run')} left")
+
+
+def storable(sandbox: bool) -> bool:
+    """Whether what a `--try` or `--build` build compiles may go into the artifact cache: it ran in the sandbox
+    (``sandbox``), and that sandbox leaves everything outside the build read-only (check.py's `sandboxed`, the probe its
+    own builds' stores rest on)."""
+    return sandbox and AUDIT.sandboxed()
 
 
 def left_by(tree: Path) -> dict | None:
@@ -633,7 +713,7 @@ def made(tree: Path) -> Path:
 PASSES, PASSES_KEPT = "passes", 4000
 PASS_SCHEMA = "lean-records-pass/v2"
 #: `--records`' facts cache, beside its trees and shared by every slot's: each audited package's sealed facts document
-#: (`check.py --facts-cache`), named by its build's content address (`facts_key`), for drive's lock run to reuse
+#: (`check.py --facts-cache`), named by its build's content address (`facts_key`), outside every slot tree's build roots
 FACTS_CACHE = "facts"
 SELF = "tools/verity/lean/lean_changed.py"
 LOCK = "lean-audit.json"
@@ -1090,7 +1170,11 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     exits 0 on `PASS` and on `REGENERATED`, check.py's first failing status on `FAILED`, and 2 on `REFUSED`, when ``tree`` is
     not under `RECORDS`, ``name`` matches no single package, the memory refusal stops it or another run holds the tree past
     `TREE_WAIT_S`. A package whose records need no run (`reused`) is skipped, and with none left nothing runs and no slot is
-    taken; ``rebuild`` and ``moved`` run them all. Each package whose records passed or were regenerated is kept (`passed`)."""
+    taken; ``rebuild`` and ``moved`` run them all. Each package whose records passed or were regenerated is kept (`passed`).
+    What each check.py's builds compiled goes into the node's artifact cache when it ends, whatever its exit (`put_built`: the
+    package's, and those of the provers it audits), and what a run that was killed left goes in when the next run takes
+    the tree (`put_left`). In a run, the module versions it added go into ``out``
+    as one bundle for other nodes (`LakeArtifacts.bundle_into`), as a recorded check's do."""
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
     out = (out or (Path(run_dir) / "lean-audit" if run_dir else Path(tempfile.mkdtemp(prefix="lean-records-")))).resolve()
 
@@ -1140,6 +1224,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
             new: dict[str, bytes] = {}
             outcomes: dict[str, str] = {}
             left, killed, ok = left_by(tree), {}, []
+            put_left(tree, left, artifacts, log)
             env, fds = {**os.environ, "LEAN_NUM_THREADS": str(LA.COMMON.cores())}, () if slot is None else (slot,)
             for p in todo:
                 t0 = time.monotonic()
@@ -1163,14 +1248,15 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                     links[p] = k
                     log(f"lean-records: {p}: its dependencies are fetched cold, once for this tree")
                 write_links(tree, links)
-                mark(tree, package=p, phase="check")
                 mine_out, up, since = reports(out, pkg, p), first_update(p, pkg, update, moved, log), time.time()
+                mark(tree, package=p, phase="check", since=since, out=str(mine_out))
                 got = subprocess.run(check_argv(tree / p, mine_out, up, moved, p == pkg, artifacts=artifacts.store,
                                                 facts_cache=facts_dir()), cwd=tree, env=env, pass_fds=fds).returncode
                 if again := not up and regenerates(p, pkg, got, update, mine_out, tree / p, log):
                     up, got = True, subprocess.run(check_argv(tree / p, mine_out, True, moved, p == pkg,
                                                               artifacts=artifacts.store, facts_cache=facts_dir()),
                                                    cwd=tree, env=env, pass_fds=fds).returncode
+                put_built(artifacts, LA.built(mine_out), since, log, f"lean-records: {p}")
                 if AUDIT.killed(got):
                     killed[p] = got
                 label(mine_out)
@@ -1185,12 +1271,6 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 outcomes[p] = settled(p, pkg, got, mine_out, tree, out, new, b is not None, log)
                 if b is not None and outcomes[p] != FAILED:
                     write_back(p, tree / p / LOCK, log)
-                if got == 0:
-                    try:
-                        log(f"lean-records: {p}: {artifacts.put({tree / p: report(mine_out, tree / p)}, since, log)} "
-                            "module version(s) new in the artifact cache")
-                    except (OSError, ValueError) as e:
-                        log(f"lean-records: {p}: the artifact cache was not written: {e}")
                 if outcomes[p] == FAILED:
                     rc = rc or got
                 else:
@@ -1203,6 +1283,12 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                     "it before it is built")
             else:
                 (tree / DIRTY).unlink(missing_ok=True)
+            if run_dir and artifacts.added and out.is_relative_to(Path(run_dir).resolve()):
+                try:
+                    dest, n = artifacts.bundle_into(out)
+                    log(f"lean-records: {n} module version(s) it added bundled for other nodes ({dest.name})")
+                except OSError as e:
+                    log(f"lean-records: nothing bundled for other nodes: {e}")
             records = verdicts(outcomes, new, out, tree, files, skip, log, committed)
             outcome = overall(records)
             return finish(pkg, outcome, (rc or 1) if outcome == FAILED else 0, out, update, "slot", records, log, passes)
@@ -1322,7 +1408,8 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
     Lake rebuilds only what changed) then `lake env lean` with the package's Lean options (`SIBLINGS.options`) on FILE's
     probed copy in that package's directory (`PROBE.probe`, whose line is the last), and with ``siblings`` the sibling check (`siblings.py`) on that copy's build; lean's exit
     status on FILE's own lines (the check's when it runs), or 2 when ``file`` is in no package, no `build` slot is granted,
-    or the tree's dependencies can't be had. Never check.py."""
+    or the tree's dependencies can't be had. Never check.py. What the build compiled in the sandbox goes into the node's
+    artifact cache (`put_built`); nothing is restored from it here, which only check.py does, with its sampled recompile."""
     file = file.removeprefix("./")
     base = (LA.COMMON.cache_dir() / RECORDS).resolve()
     if tree is not None and base not in tree.resolve().parents:
@@ -1354,6 +1441,8 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
             if not hold_tree(held, tree, log):
                 return 2
             t0, links, left = time.monotonic(), read_links(tree), left_by(tree)
+            artifacts = LA.LakeArtifacts((deps.parent / "lean-artifacts").resolve())
+            put_left(tree, left, artifacts, log)
             mark(tree, package=pkg, phase="sync")
             n = sync(closure(pkg), files, tree)
             there = [q for q in [*closure(pkg), (left or {}).get("package")] if isinstance(q, str) and (tree / q).is_dir()]
@@ -1373,13 +1462,16 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
                 links[pkg] = LA.deps_key(tree / pkg)
                 log(f"lean-try: {pkg}: its dependencies are fetched cold, once for this tree")
             write_links(tree, links)
-            mark(tree, package=pkg, phase="try")
+            since, storing = time.time(), storable(sandbox)
+            mark(tree, package=pkg, phase="try", since=since, sandbox=storing)
             opts = SIBLINGS.options(tree / pkg)
             log(f"lean-try: {file} on {tree} ({n} files changed there, {time.monotonic() - t0:.0f} s; "
                 f"{'' if sandbox else 'no sandbox here, '}lake build +{mod}:deps, then lake env lean "
                 f"{''.join(o + ' ' for o in opts)}on {PROBE.COPIES / rel}, {rel} with the axiom probe after its last line"
                 f"{', then the sibling check' if siblings else ''})")
             step, (rc, text) = f"lake build +{mod}:deps", build(pkg, tree, lake, [f"+{mod}:deps"], sandbox)
+            if storing:                                 # before `lean` reads the file itself, whose code then runs
+                put_built(artifacts, {tree / pkg: {"sandbox": True}}, since, log, f"lean-try: {pkg}")
             plan = SIBLINGS.plan(tree / pkg, rel) if siblings and rc == 0 else None
             if isinstance(plan, str):
                 log(f"lean-try: {file}: no sibling check: {plan}")
@@ -1441,7 +1533,7 @@ def build_files(files: list[str], deps: Path, tree: Path | None = None, log=prin
     healed as `--try` heals it and not counted) and `skipped` ({package, file or `*`: why it wasn't built}). Exit 0 when
     every build passed, 1 when one failed, 2 when none ran. Without Lean slots here (not a node) it builds nothing. Without
     ``wait`` (`--no-wait`) it builds nothing when every `build` slot is taken, rather than wait in line: the preflight then
-    builds on its next node."""
+    builds on its next node. What each build compiled in the sandbox goes into the node's artifact cache, as `--try`'s."""
     doc: dict[str, dict] = {"built": {}, "failed": {}, "skipped": {}}
 
     def done(rc: int) -> int:
@@ -1479,6 +1571,8 @@ def build_files(files: list[str], deps: Path, tree: Path | None = None, log=prin
                 doc["skipped"]["*"] = f"another run held {tree}"
                 return done(2)
             links, left, sandbox, have = read_links(tree), left_by(tree), sandboxed(), set(tracked)
+            artifacts, storing = LA.LakeArtifacts((deps.parent / "lean-artifacts").resolve()), storable(sandbox)
+            put_left(tree, left, artifacts, log)
             for pkg, fs in sorted(by_pkg.items(), key=lambda kv: (rank(kv[0]), kv[0])):
                 t0 = time.monotonic()
                 mark(tree, package=pkg, phase="sync")
@@ -1493,10 +1587,13 @@ def build_files(files: list[str], deps: Path, tree: Path | None = None, log=prin
                     doc["skipped"][pkg] = "this node keeps no dependencies (Mathlib) for its manifest, and they aren't fetched cold"
                     continue
                 write_links(tree, links)
-                mark(tree, package=pkg, phase="build")
+                since = time.time()
+                mark(tree, package=pkg, phase="build", since=since, sandbox=storing)
                 mods = [f"+{module_of(pkg, f)}" for f in fs]
                 log(f"lean-build: {pkg} on {tree} ({n} files changed there): lake build {' '.join(mods)}")
                 rc, text = build(pkg, tree, lake, mods, sandbox)
+                if storing:
+                    put_built(artifacts, {tree / pkg: {"sandbox": True}}, since, log, f"lean-build: {pkg}")
                 errs = first_errors(text, pkg, have)
                 if rc and (healed := clashed(tree, closure(pkg), text)):
                     errs = {f: e for f, e in errs.items() if not CLASH.search(e)}
@@ -1530,8 +1627,8 @@ def check_argv(at: Path, out: Path, update: bool, moved: Path | None, own: bool,
     """check.py on ``at`` (a package's directory), without the kernel replay or the tests, its builds reading the node's
     ``artifacts`` cache where given; with ``update``, `--update` and `--moved`. Only PKG's run (``own``) keeps a facts
     document, its own (`--facts named`, which `trusted_size.py --run` reads); a requirer's keeps none. With ``facts_cache``
-    every run also stores its sealed stage-A facts document there (`--facts-cache`, keyed by its build), so drive's lock
-    run reuses the facts this records run read; the run is still a records audit, never the kernel replay."""
+    every run also stores its sealed stage-A facts document there (`--facts-cache`, keyed by its build, read back only by
+    the key a tree computes: `read_cached_facts`); the run is still a records audit, never the kernel replay."""
     return [sys.executable, str(AUDIT_PY), *(["--dev-cache"] if dev else []), "--build", "--no-replay", "--no-runs",
             "--facts", "named" if own else "none", *(["--artifacts", str(artifacts)] if artifacts else []),
             *(["--facts-cache", str(facts_cache)] if facts_cache else []),
@@ -1620,6 +1717,7 @@ def run(cache: Path, deps: Path, tree: Path, log=print) -> int:
         except BlockingIOError:
             log("lean-changed: skipped: another check on this machine holds the tree")
             return 0
+        carry_builds(tree, log)
         links = read_links(tree)
         failed: list[str] = []
         built: list[str] = []

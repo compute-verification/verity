@@ -263,7 +263,6 @@ def ext_of(key: int, j: int) -> int:
     return (key & M32) << 32 | (M32 - (j & M32))
 
 
-@functools.lru_cache(maxsize=8)
 def _theta(scores: tuple, TOPK: int) -> int:
     return heapq.nlargest(TOPK, (ext(x, j) for j, x in enumerate(scores)))[-1]
 
@@ -336,18 +335,21 @@ def DsaTopKMaskCounted(B, S, scores, n):
     return B.batch(DsaTopKAtLeastBelow, scores, idx, n, key, at, axes=(0, 0, None, None, None))
 
 
-@functools.lru_cache(maxsize=8)
-def _members(scores: tuple, TOPK: int) -> tuple[int, ...]:
-    return tuple(sorted(topk_set(scores, TOPK)))
-
-
 def slot(N: int, TOPK: int) -> PrimitiveDefinition:
     """`DsaTopKSlot{N}x{TOPK}_v1`: slot s of `sorted(topk_set(scores, TOPK))` (0 when s is TOPK or more)."""
     check_statics(N, TOPK)
     p = _SLOTS.get((N, TOPK))
     if p is None:
+        # The last row's members: a Call of DsaTopKRow_v1 reads one row TOPK times.  Not an lru_cache, which
+        # test_declared_tables reads as a table loader.
+        last: list = [((), ())]
+
         def ev(*w: int, _N=N, _K=TOPK) -> int:
-            got, s = _members(tuple(x & M32 for x in w[:_N]), _K), w[_N] & M32
+            scores, s = tuple(x & M32 for x in w[:_N]), w[_N] & M32
+            seen, got = last[0]
+            if seen != scores:
+                got = tuple(sorted(topk_set(scores, _K)))
+                last[0] = (scores, got)
             return got[s] if s < _K else 0
 
         p = PrimitiveDefinition(f"DsaTopKSlot{N}x{TOPK}", 1, (("scores", Array(N, F32)), ("s", I32)), I32, ev,
@@ -455,3 +457,9 @@ def DsaButterflyRowsPad(B, S, sw, rows_, pad):
 
 DSA_TOPK_MASK_COMPOSITES = [DsaTopKMask, DsaTopKMaskCounted, DsaTopKRow, DsaMaskTagStep, DsaButterflyRoute, DsaButterflySettings,
                             DsaButterflyRows, DsaButterflyRowsPad]
+
+#: the Calls serving stages as their cut, by family: the counted mask past `dsa_topk_mask_cut.WHOLE_MAX` keys, its threshold in
+#: digit rounds over blocks of keys and its mask a block a unit (`dsa_topk_mask_cut.cut`), which circuit-check holds to the block
+#: in the Call's place (`checks.cut_of`).  It names the module rather than importing it: that module's units are this one's
+#: Boolean versions' parts
+CUTS = {"DsaTopKMaskCounted_v1": "verity.ml.definitions.registry.dsa_topk_mask_cut"}

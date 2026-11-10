@@ -326,7 +326,8 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
     o.mkdir(parents=True, exist_ok=True)
     port = free_port()
     if "unit" in pt:
-        inst, pub, tables = pt["inst"], pt["pub"], []
+        inst, pub = pt["inst"], pt["pub"]
+        tables = ["--tables", str(d / "tables")] if (d / "tables").is_dir() else []
         fw_files = {"partition_file": pt["partition"]}
     else:
         inst, pub, tables = str(d / f"inst-{c}.bin"), str(d / f"pub-{c}.bin"), ["--tables", str(d / "tables")]

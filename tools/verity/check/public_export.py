@@ -16,9 +16,15 @@ script are the edges the check counts closed by the export (`EXPORT_CUTS`), and 
 every other edge it copies as it stands, so a build of DEST fails where a file imports, runs or reads one the export doesn't
 copy.
 
+A fetched fixture (an entry of `fixtures/artifacts.json` git doesn't track) that `public_boundary.toml`'s `fixtures` names
+ships as tracked files: the export fetches it into the checkout (`research data fetch-fixtures`) and copies its bytes, so the
+public tree's tests read it with no store. Each of its files must fit a tracked file (`tests/test_repository.py`'s
+`BLOB_LIMIT`), or the export refuses it by name. The report lists the other public fetched fixtures, which a public test
+can't read in DEST.
+
 The report gives:
 
-* what the export copied, rewrote, and cut;
+* what the export copied, rewrote, and cut, and the fetched fixtures it shipped and couldn't;
 * per area of the tree, the leftovers a reader of the public tree shouldn't meet, by kind, over whole files: the lane-text
   lint's kinds (`tests/lint/test_repo_lane_text.py`: Linear, Slack, Notion and PR ids and links, agent ids, run and `art:`
   ids, lane handles, dates, names) and agents' branches;
@@ -53,12 +59,17 @@ HERE = Path(__file__).resolve().parent
 def _load(name: str, path: Path):
     spec = importlib.util.spec_from_file_location(name, path)
     m = importlib.util.module_from_spec(spec)
+    sys.modules[name] = m
     spec.loader.exec_module(m)
     return m
 
 
 PB = _load("public_export_boundary", HERE / "public_boundary.py")
 LANE_TEXT = _load("public_export_lane_text", PB.ROOT / "tests" / "lint" / "test_repo_lane_text.py")
+#: the most a tracked file holds (`BLOB_LIMIT`) and the fixture registry
+REPOSITORY = _load("public_export_repository", PB.ROOT / "tests" / "test_repository.py")
+#: check's fixture fetch environment (`fetch_env`: a `research run`'s custody key)
+SUITES = _load("public_export_suites", HERE / "suites.py")
 #: what the lane-text lint doesn't look for: agents' branches
 EXTRA = (("branch", re.compile(r"(?<![\w/-])cursor/[a-z0-9]+(?:-[a-z0-9]+)*-[0-9a-f]{4}\b")),)
 SCRUB_MAX_BYTES = 4 << 20
@@ -429,11 +440,56 @@ def rewrite_path_list(text: str, f: str, tracked: set[str], copied: set[str]) ->
     return new, dropped
 
 
-def export(tree, boundary, judgment, dest: Path) -> dict:
-    """Copy ``judgment``'s public set into ``dest``, rewrite its manifests and its lists of the tree's paths, and commit it
-    as a new repository's one commit."""
+def fetch(root: Path, paths: list[str], log: Path) -> str:
+    """Fetch the registry entries at ``paths`` into ``root`` (`research data fetch-fixtures`, in check's environment for it,
+    which reaches the store through a `research run`'s custody key), its output in ``log``; the paths still missing or stale,
+    "" when none is."""
+    SUITES.store_custody()
+    r = subprocess.run([sys.executable, "-m", "research", "data", "fetch-fixtures", "--repo", str(root), "--json",
+                        *(str(root / p) for p in paths)], cwd=root, capture_output=True, text=True, env=SUITES.fetch_env())
+    log.write_text(r.stdout + r.stderr, encoding="utf-8")
+    try:
+        return ", ".join(e["path"] for e in json.loads(r.stdout)["entries"] if e["status"] in ("missing", "stale"))
+    except (ValueError, KeyError):
+        return ", ".join(paths)
+
+
+def fixtures(tree, boundary, logs: Path) -> tuple[dict[str, list[str]], list[str]]:
+    """The public fetched fixtures (entries of the fixture registry git doesn't track, which a public glob covers and no private
+    glob does): ({path: its files} of those the boundary's `fixtures` names, fetched into ``tree``, which the export ships;
+    the rest, which it doesn't)."""
+    reg = json.loads(tree.text(REPOSITORY.REGISTRY))
+    public = sorted(p for a, p in reg.items() if a.startswith("art:") and isinstance(p, str) and p not in tree.files
+                    and p not in tree.dirs and boundary.group(p) is not None and not boundary.is_private(p))
+    ship = [p for p in public if boundary.fixtures.fullmatch(p)]
+    if not ship:
+        return {}, public
+    logs.mkdir(parents=True, exist_ok=True)
+    if bad := fetch(tree.root, ship, logs / "fetch-fixtures.log"):
+        raise RuntimeError(f"public_export: {bad}: fixtures the export ships, missing or stale after `research data "
+                           f"fetch-fixtures` (its log: {logs / 'fetch-fixtures.log'}); export where the evidence store is "
+                           "reachable")
+    shipped = {}
+    for p in ship:
+        top = tree.root / p
+        shipped[p] = [p] if top.is_file() else sorted(f"{p}/{q.relative_to(top).as_posix()}" for q in top.rglob("*") if q.is_file())
+    if large := sorted(f for fs in shipped.values() for f in fs if (tree.root / f).stat().st_size > REPOSITORY.BLOB_LIMIT):
+        raise ValueError(f"public_export: {', '.join(large)}: over {REPOSITORY.BLOB_LIMIT // 1024} KiB, the most a tracked file "
+                         "holds (tests/test_repository.py), so the export can't ship them: take them out of "
+                         "public_boundary.toml's `fixtures` and make the tests that read them private, or make them smaller")
+    return shipped, [p for p in public if p not in shipped]
+
+
+def written(judgment, shipped: dict[str, list[str]]) -> list[str]:
+    """The files the export writes: ``judgment``'s public set and the ``shipped`` fixtures' files."""
+    return sorted(set(judgment.public).union(*shipped.values()))
+
+
+def export(tree, boundary, judgment, dest: Path, shipped: dict[str, list[str]]) -> dict:
+    """Copy ``judgment``'s public set and the ``shipped`` fixtures' files into ``dest``, rewrite its manifests and its lists
+    of the tree's paths, and commit it as a new repository's one commit."""
     copied = set(judgment.public)
-    for f in sorted(copied):
+    for f in written(judgment, shipped):
         (dest / f).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(tree.root / f, dest / f)
     _, dists, _, _ = tree.python
@@ -692,15 +748,18 @@ def main(argv: list[str] | None = None) -> int:
     boundary = PB.Boundary.load()
     tree = PB.Tree(root)
     judgment = PB.judge(tree, boundary)
-    files = sorted(judgment.public)
+    logs = (ns.report.parent if ns.report else dest.parent) / "export-logs"
+    shipped, unshipped = fixtures(tree, boundary, logs)
+    files = written(judgment, shipped)
     source = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True, check=True).stdout.strip()
     report = {"source": {"root": str(root), "commit": source}, "dest": str(dest), "edges": len(judgment.edges)}
-    report |= export(tree, boundary, judgment, dest)
+    report |= export(tree, boundary, judgment, dest, shipped)
+    report["fixtures"] = {"shipped": sorted(shipped), "not_shipped": unshipped}
     report["scrub"] = scrub(dest, files)
     report["residue"] = residue(dest, files, boundary)
     report["third_party"] = licenses_static(dest, files)
     if ns.build:
-        report["build"] = build(dest, (ns.report.parent if ns.report else dest.parent) / "export-logs", report["lean_targets"])
+        report["build"] = build(dest, logs, report["lean_targets"])
         with tempfile.TemporaryDirectory() as scratch:
             report["third_party"]["upstream_licenses"] = upstream_licenses(report["third_party"]["upstream"], Path(scratch))
     if ns.report:
@@ -710,6 +769,10 @@ def main(argv: list[str] | None = None) -> int:
           f"{report['edges']} open edges, {len(report['edges_cut'])} more cut by the rewrites")
     for f, dropped in report["rewrites"].items():
         print(f"  {f}: dropped {len(dropped)} ({', '.join(dropped[:6])}{', ...' if len(dropped) > 6 else ''})")
+    print(f"public fetched fixtures: {len(shipped)} shipped (public_boundary.toml's `fixtures`); {len(unshipped)} not, so a "
+          "public test reading one fails in DEST:")
+    for p in unshipped:
+        print(f"  {p}")
     lt = report["lean_targets"]
     print(f"Lake packages: {len(lt)}, {sum(len(t['modules']) for t in lt.values())} modules to build; root files the export "
           f"lacks: {[f'{p}: {r}' for p, t in lt.items() for r in t['missing_roots']]}")

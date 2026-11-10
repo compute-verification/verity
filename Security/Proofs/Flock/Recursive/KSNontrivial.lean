@@ -142,14 +142,14 @@ theorem prBad_acc {W Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (V 
   rw [hE]
   exact id
 
-theorem eval_bind_fst {R α β : Type} (H : Msg → Msg) (run : R → Trace) (p : RP R α) (f : α → RP R β) :
+theorem eval_bind_fst {R α β : Type} (H : Msg → Msg) (run : R → Transcript) (p : RP R α) (f : α → RP R β) :
     ((p.bind f).eval H run).1 = ((f (p.eval H run).1).eval H run).1 :=
   (Claims.RP.eval_bind H run p f).1
 
 /-- Waits whose assemble step never assembles return nothing, however their reruns are served. -/
 theorem eval_serve_firstWait_none {R₁ R₂ W' Op : Type} (q : R₁ → RP R₂ Seen) (k : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W') (check : W' → Bool) (h : ∀ os, assemble os = none) (H : Msg → Msg)
-    (run : R₂ → Trace) : ∀ rss : List (List R₁),
+    (run : R₂ → Transcript) : ∀ rss : List (List R₁),
     ((serve q (firstWait k opens assemble check rss)).eval H run).1 = none
   | [] => rfl
   | rs :: rss => by
@@ -160,7 +160,7 @@ theorem eval_serve_firstWait_none {R₁ R₂ W' Op : Type} (q : R₁ → RP R₂
     exact eval_serve_firstWait_none q k opens assemble check h H run rss
 
 /-- `collect` gives up where its first program does. -/
-theorem eval_collect_none {R α : Type} (H : Msg → Msg) (run : R → Trace) (p : RP R (Option α))
+theorem eval_collect_none {R α : Type} (H : Msg → Msg) (run : R → Transcript) (p : RP R (Option α))
     (ps : List (RP R (Option α))) (hp : (p.eval H run).1 = none) : ((collect (p :: ps)).eval H run).1 = none := by
   rw [collect, eval_bind_fst, hp]
   rfl
@@ -170,7 +170,7 @@ which the outer Flock's parser refuses, so its first session's waits assemble no
 theorem EO_none_of_vstar_nil {W : Type} (H : Msg → Msg) (A : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') (x : Msg)
     (hs : ∀ ps, A.vstar x ps = []) (hS : 0 < A.nS x) (hP : DO.parse [] = none)
-    (run : (Fin (A.V.k x) → Coin) → Trace) (d : Fin (A.V.k x) → Coin) (c : (EO A I DO decO).C x) :
+    (run : (Fin (A.V.k x) → Coin) → Transcript) (d : Fin (A.V.k x) → Coin) (c : (EO A I DO decO).C x) :
     (((EO A I DO decO).ext x d c).eval H run).1 = none := by
   have hA : ∀ (xs : List Msg) (s : ℕ) os, xs = [] →
       Flock.assemble DO.parse DO.table decO DO.read (xs.getD s []) os = none := by

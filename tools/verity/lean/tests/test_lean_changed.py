@@ -168,14 +168,23 @@ def test_a_build_slot_takes_the_slot_path(fast, tmp_path, monkeypatch):
     assert any("taking the slot path" in s for s in said)
 
 
-def test_the_slot_path_reads_the_node_s_artifact_cache_and_fills_it_only_from_a_package_that_passed(fast, tmp_path,
-                                                                                                   monkeypatch):
+def test_the_slot_path_reads_the_node_s_artifact_cache_and_fills_it_from_every_build_whatever_its_check_came_to(
+        fast, tmp_path, monkeypatch):
+    """A module is stored for what its compile read, which a failure elsewhere in its package doesn't change: the package
+    that passed, the requirer that failed and the one whose check.py was killed each put what they built, on check.py's
+    word that the build ran in the sandbox (its report; for the killed one, what it wrote as the build began)."""
     _, tree, calls = fast
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    monkeypatch.setattr(LC, "requirers", lambda *_: ["pkg/Req", "pkg/Killed"])
     put = []
 
     def run(argv, **kw):
         calls.append((argv, kw.get("cwd")))
+        if argv[-1].endswith("Killed"):
+            work = Path(argv[argv.index("--out") + 1]) / "audit-pkg_Killed"
+            work.mkdir(parents=True)
+            (work / LC.LA.BUILDING).write_text(json.dumps({"package": argv[-1], "sandbox": True}))
+            return type("P", (), {"returncode": -9})()
         _reported(argv, True)
         return type("P", (), {"returncode": 1 if argv[-1].endswith("Req") else 0})()
 
@@ -188,10 +197,45 @@ def test_the_slot_path_reads_the_node_s_artifact_cache_and_fills_it_only_from_a_
     said = []
     assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == 1
     store = (tmp_path / "lean-artifacts").resolve()
-    assert [a[a.index("--artifacts") + 1] for a, _ in calls] == [str(store)] * 2
-    assert [(s, p) for s, p, _ in put] == [(store, {tree / "pkg": {"package": str(tree / "pkg"), "sandbox": True}})], \
-        "the package that passed, with check.py's report on it; a requirer that failed puts nothing"
-    assert isinstance(put[0][2], float) and any("3 module version(s) new in the artifact cache" in s for s in said)
+    assert [a[a.index("--artifacts") + 1] for a, _ in calls] == [str(store)] * 3
+    assert [(s, p) for s, p, _ in put] == [(store, {tree / q: {"package": str(tree / q), "sandbox": True}})
+                                           for q in ("pkg", "pkg/Req", "pkg/Killed")]
+    assert all(isinstance(since, float) for _, _, since in put)
+    assert [s for s in said if "new in the artifact cache" in s] == [
+        f"lean-records: {q}: 3 module version(s) new in the artifact cache" for q in ("pkg", "pkg/Req", "pkg/Killed")]
+    assert "since" not in json.loads((tree / LC.DIRTY).read_text()), "the killed check's build is stored: nothing is left to"
+
+
+def test_a_run_stores_what_the_run_before_it_compiled_and_never_stored_before_it_syncs_the_tree(fast, tmp_path,
+                                                                                                 monkeypatch):
+    """A run killed whole (a timeout, the node's memory) never reaches its own `put`. Its mark says when its build began
+    and where check.py's word on it is, and the next run on the tree stores from those first: a key is computed from the
+    tree's sources, which its `sync` is about to change. Otherwise a build longer than its timeout would start from
+    nothing every time, since a module the cache lacks keeps no trace (`module_keys.stage`)."""
+    _, tree, _ = fast
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    old = tmp_path / "old-run" / "lean-audit"
+    for n, (q, sandbox) in enumerate((("pkg", True), ("pkg/Proofs", False))):
+        (old / f"audit-{n}").mkdir(parents=True)
+        (old / f"audit-{n}" / LC.LA.BUILDING).write_text(json.dumps({"package": str(tree / q), "sandbox": sandbox}))
+    (old / "audit-9").mkdir()
+    (old / "audit-9" / LC.LA.BUILDING).write_text(json.dumps({"package": str(tmp_path / "elsewhere"), "sandbox": True}))
+    events = []
+    sync = LC.sync
+    monkeypatch.setattr(LC, "sync", lambda *a: events.append("sync") or sync(*a))
+    monkeypatch.setattr(LC.LA.LakeArtifacts, "put",
+                        lambda self, reports, since=None, log=print: events.append(("put", reports, since)) or 2)
+    said = []
+    for left in ({"phase": "check", "since": 1234.5, "out": str(old)}, {"phase": "try", "since": 99.0, "sandbox": True},
+                 {"phase": "build", "since": 99.0, "sandbox": False}, {"phase": "deps"}, {"phase": "check", "killed": -9}):
+        events.clear()
+        (tree / LC.DIRTY).write_text(json.dumps({"run": "r-old", "pid": 7, "package": "pkg", "at": "T"} | left))
+        assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == 0
+        want = {"check": [("put", {tree / "pkg": {"package": str(tree / "pkg"), "sandbox": True},
+                                   tree / "pkg/Proofs": {"package": str(tree / "pkg/Proofs"), "sandbox": False}}, 1234.5)],
+                "try": [("put", {tree / "pkg": {"sandbox": True}}, 99.0)]}.get(left["phase"] if "since" in left else "", [])
+        assert events[:len(want) + 1] == [*(want if left.get("sandbox", True) else []), "sync"], left
+    assert f"lean-records: {tree}: of what r-old left: 2 module version(s) new in the artifact cache" in said
 
 
 def _reported(argv: list[str], sandbox: bool) -> None:
@@ -859,6 +903,39 @@ def test_try_builds_the_files_imports_then_runs_lean_on_it_in_its_owning_package
         LC.main(["--try", "Sec/Proofs/Flock/X.lean", "--records", "Sec"])
 
 
+def test_try_and_build_store_what_they_compiled_only_from_a_build_in_the_sandbox(trying, tmp_path, monkeypatch, capsys):
+    """`--try` and `--build` compile most of what lanes change, and each module they compile in the sandbox goes into the
+    node's artifact cache, so the records run after them restores it. Outside the sandbox (this run's, or check.py's
+    stricter probe of it) compile-time code could leave any output in the build, and nothing is stored. `--try` stores
+    what `lake build` compiled before `lean` reads the file itself, whose code no build has read."""
+    tree, calls = trying
+    (slots := tmp_path / "lean-slots").write_text("build 1\n")
+    monkeypatch.setattr(LC.LEAN_SLOT, "SLOTS", slots)
+    put, marks, ran = [], [], []
+    monkeypatch.setattr(LC.LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print: (
+        ran.append(len(calls["build"])), put.append((self.store, reports, since))) and 4)
+    mark = LC.mark
+    monkeypatch.setattr(LC, "mark", lambda t, **what: marks.append(what) or mark(t, **what))
+    store = (tmp_path / "lean-artifacts").resolve()
+    for mine, checks, stored in ((False, True, False), (True, False, False), (True, True, True)):
+        monkeypatch.setattr(LC, "sandboxed", lambda: mine)
+        monkeypatch.setattr(LC.AUDIT, "sandboxed", lambda: checks)
+        for phase in ("try", "build"):
+            put.clear(), marks.clear(), ran.clear()
+            said, before = [], len(calls["build"])
+            if phase == "try":
+                assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 0
+            else:
+                assert LC.build_files(["Sec/Proofs/Flock/X.lean"], tmp_path / "deps", log=said.append) == 0
+            last = marks[-1]
+            assert (last["phase"], last["sandbox"]) == (phase, stored) and isinstance(last["since"], float)
+            assert put == ([(store, {tree / "Sec/Proofs": {"sandbox": True}}, last["since"])] if stored else [])
+            assert (f"lean-{phase}: Sec/Proofs: 4 module version(s) new in the artifact cache" in said) == stored
+            assert ran == ([before + 1] if stored else []) and len(calls["build"]) == before + (2 if phase == "try" else 1), \
+                "stored after `lake build`, and for a try before `lake env lean`"
+    capsys.readouterr()
+
+
 def test_try_gives_lean_the_packages_lean_options_as_its_build_does(trying, tmp_path):
     """`lake env lean` passes no `[leanOptions]`: without them a try under `autoImplicit = false` takes an unknown name for
     an auto-bound variable and passes what the package's build refuses. They're read from the slot tree's package."""
@@ -965,6 +1042,48 @@ def test_try_keeps_dependencies_no_records_run_took_and_leaves_them_out_of_links
     (tree / LC.LINKS).write_text(json.dumps({"Sec": "k"}))
     assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=lambda _: None) == 0
     assert calls["link"] == [] and LC.read_links(tree) == {"Sec": "k"}, "a later --records run never drops them"
+
+
+def test_a_tree_s_builds_and_links_follow_a_layout_move_before_the_packages_are_synced(tmp_path, monkeypatch):
+    """A slot's tree is keyed by package paths, and a move renames tracked files only: the build of `Old/Proofs` would stay
+    there while `new/Proofs` compiled every module again and took its dependencies again. Under the tree's lock the build
+    directories and their `LINKS` entries move with their packages, and the former directory's stale copies go: where the
+    step takes the lock itself, and in `hold_tree` for every other run, before its caller reads the tree."""
+    def a_tree(name: str) -> Path:
+        tree = tmp_path / name
+        for pkg, built in (("Old", "spec"), ("Old/Proofs", "proofs"), ("code", "code")):
+            (tree / pkg / ".lake" / "build").mkdir(parents=True)
+            (tree / pkg / ".lake" / "build" / "olean").write_text(built)
+            (tree / pkg / "A.lean").write_text("-- a copy the last run synced\n")
+        LC.write_links(tree, {"Old": "k0", "Old/Proofs": "k1", "code": "k2"})
+        return tree
+
+    def carried(tree: Path) -> bool:
+        return (LC.read_links(tree) == {"new": "k0", "new/Proofs": "k1", "code": "k2"} and not (tree / "Old").exists()
+                and [(tree / p / ".lake" / "build" / "olean").read_text() for p in ("new", "new/Proofs", "code")]
+                == ["spec", "proofs", "code"])
+
+    monkeypatch.setattr(LC._moved(), "recorded", lambda root: [{"Older/": "Old/"}, {"Old/": "new/"}])
+    checkout = tmp_path / "checkout"
+    for f in ("new/lakefile.toml", "new/A.lean", "new/Proofs/lakefile.toml", "code/lakefile.lean", "README.md"):
+        (checkout / f).parent.mkdir(parents=True, exist_ok=True)
+        (checkout / f).write_text("")
+    monkeypatch.setattr(LC, "ROOT", checkout)
+    tree, said = a_tree("step"), []
+    LC.carry_builds(tree, said.append)
+    assert carried(tree) and len(said) == 2 and "new/Proofs: its build directory moved with it from Old/Proofs" in said[1]
+    LC.carry_builds(tree, said.append)
+    assert carried(tree) and len(said) == 2, "nothing to carry the next time"
+
+    tree, said = a_tree("records"), []
+    with open(tree / ".lock", "w") as held:
+        assert LC.hold_tree(held, tree, said.append) and carried(tree) and len(said) == 2
+    (checkout / "new" / "Proofs" / "lakefile.toml").unlink()
+    tree = a_tree("no-package")
+    with open(tree / ".lock", "w") as held:
+        assert LC.hold_tree(held, tree, said.append)
+    assert (tree / "Old" / "Proofs" / ".lake").is_dir() and (tree / "new" / ".lake").is_dir(), \
+        "a build whose path the checkout has no package at stays, and its directory with it"
 
 
 def test_try_refuses_without_a_build_slot_naming_the_machines_whose_slots_have_one(trying, tmp_path, monkeypatch):
@@ -1109,6 +1228,29 @@ def test_the_sandbox_is_handed_the_resolved_lake_paths_of_a_linked_slot_tree(tmp
     box = argv.index(str(LC.SANDBOX))
     assert argv[box + 1:argv.index("--", box)] == [str(real / "Sec" / ".lake"), str(real / "Dep" / ".lake")]
     assert argv[argv.index("ro") + 1:argv.index("--", argv.index("ro"))] == [str(real / "Sec" / ".lake" / "packages")]
+
+
+def test_the_records_facts_cache_is_outside_every_slot_tree_s_build_roots(tmp_path, monkeypatch):
+    """The records step keeps its facts cache (`facts_dir`) beside its slot trees, so no sandboxed build in any slot's tree
+    can write it: neither `check.py`'s (`writable`, path dependencies included) nor this module's (`in_sandbox`, the
+    closure's `.lake`s). check.py refuses an overlapping `--facts-cache` (`build_roots_over`); this keeps that from firing."""
+    monkeypatch.setattr(LC.LA.COMMON, "cache_dir", lambda: tmp_path / "cache")
+    monkeypatch.setattr(LC, "closure", lambda p: [p, "Security"])
+    for slot in ("build/1", "build/2", None):
+        if slot:
+            monkeypatch.setenv(LC.LEAN_SLOT.HELD, slot)
+        else:
+            monkeypatch.delenv(LC.LEAN_SLOT.HELD, raising=False)
+        tree = LC.records_tree()
+        pkgs = [tree / "Security", tree / "Security" / "Proofs"]
+        for p in pkgs:
+            p.mkdir(parents=True, exist_ok=True)
+        (pkgs[1] / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": "s", "type": "path", "dir": ".."}]}))
+        assert LC.AUDIT.build_roots_over(LC.facts_dir(), pkgs) == []
+        box = LC.in_sandbox("Security/Proofs", tree, ["lake", "build"])
+        rw = box[box.index(str(LC.SANDBOX)) + 1:box.index("--", box.index(str(LC.SANDBOX)))]
+        assert rw and not any(LC.facts_dir().resolve().is_relative_to(d) or Path(d).is_relative_to(LC.facts_dir().resolve())
+                              for d in rw)
 
 
 def test_records_takes_a_packages_lake_name_as_well_as_its_path(tmp_path):

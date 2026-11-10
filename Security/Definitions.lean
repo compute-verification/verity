@@ -36,6 +36,7 @@ public import Definitions.NetworkCertifier.Warden
 public import Definitions.NetworkCertifier.Tap
 public import Definitions.NetworkCertifier.RecordRows
 public import Definitions.NetworkCertifier.Period
+public import Definitions.NetworkCertifier.Witness
 public import Definitions.Accounting.Sheets
 public import Definitions.Accounting
 public import Definitions.Spot
@@ -100,15 +101,17 @@ public import Definitions.Hash.Guarantees
 public import Definitions.NetworkCertifier.Guarantees.Period
 public import Definitions.NetworkCertifier.Guarantees.PooledLeak
 public import Definitions.NetworkCertifier.Guarantees.Checked
-public import Definitions.NetworkCertifier.Witness
+public import Definitions.NetworkCertifier.Guarantees.Carried
 public import Definitions.WeightSecurity.Assumptions
 public import Definitions.WeightSecurity.Guarantees
 public import Definitions.WeightSecurity
 public import Definitions.WeightSecurity.Faulted
 public import Definitions.WeightSecurity.Served
+public import Definitions.WeightSecurity.Tied
 public import Definitions.WeightSecurity.Toy
 public import Definitions.WeightSecurity.ToyFaulted
 public import Definitions.WeightSecurity.ToyServed
+public import Definitions.WeightSecurity.ToyTied
 public import Definitions.Assumptions
 
 /-! The spec: each component's vocabulary, named assumptions and guarantee statements. -/

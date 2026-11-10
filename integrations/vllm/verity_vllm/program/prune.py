@@ -21,15 +21,15 @@ every member reads alike is shared (axis None); any other is mapped on axis 0, i
 they are consecutive runs of one node or Input, one `Strided` where they are evenly spaced, else their `concat`. A reference to a
 member's output becomes one to the batch's output at the member's leaves, in its form (a cut of a `PartLog` stays a cut; a plain
 `Concat` is put back in `concat`'s normal form). The form reads the body as written and nothing else, so equal bodies give equal
-forms. Two kinds of Call stay nodes of their own, for the root readers that take only Calls: an attention's, which holds the KV
-`commit.memory_map` reads (`holds_kv`), and a collective, which reads peer Inputs (`tp_binding.rank_sites`).
+forms. A collective stays a node of its own, for the root reader that takes only Calls: it reads peer Inputs in one operand of one
+Call (`tp_binding.rank_sites`). An attention's Calls batch like any other (`commit.memory_map` reads each member's KV).
 """
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from dataclasses import replace
 from functools import cache
-from itertools import accumulate, chain, islice
+from itertools import accumulate, chain
 from typing import Any
 
 from verity.ml.circuits.defs import Body, Node, bind
@@ -40,7 +40,8 @@ from verity.ml.circuits.types import Array
 def _parts(r: Concat, done: dict[int, list]) -> Iterable[Refs]:
     """The parts of `r` a walk that accumulates (a union, idempotent) has yet to visit: for a `Concat` cut from a `PartLog`, the
     log's parts past the longest cut of it the walk has visited (`done`, by log), then its own. An attention's key sequence is the
-    one before it plus a row, so a walk over a layer's cuts visits each of its parts once, not once per row."""
+    one before it plus a row, so a walk over a layer's cuts visits each of its parts once, not once per row, in either order
+    (liveness reads the longest cut first): a slice of the log, since `islice(parts, lo, j)` steps over the first `lo` parts."""
     if r.prefix is None:
         return r.parts
     log, j = r.prefix
@@ -48,7 +49,7 @@ def _parts(r: Concat, done: dict[int, list]) -> Iterable[Refs]:
     if d is None or d[0] is not log:
         d = done[id(log)] = [log, 0]
     lo, d[1] = d[1], max(d[1], j)
-    return chain(islice(log.parts, lo, j), r.parts[j:])
+    return chain(log.parts[lo:j], r.parts[j:])
 
 
 def _mapped(r: Concat, f: Callable[[Refs], Refs], logs: dict[int, list]) -> Refs:
@@ -268,16 +269,8 @@ def narrowed(body: Body) -> tuple[Body, dict[int, tuple[int, int]]]:
 BITS = "bits"
 #: `kept_records`' form for class G's request Programs: the registered compiler's form, `batched`
 BATCHED = "batched"
-#: an attention's KV parameters, which `commit.memory_map` reads from one Call (its `KV` and `LATENT`)
-KV = ("kc", "vc")
-LATENT = {"SparseMla": ("kv",), "SparseMlaSplit": ("kv",)}
 #: the root parameters a collective reads (`tp_binding.PEERS`)
 PEERS = "peers_"
-
-
-def holds_kv(fn: Any) -> bool:
-    """Whether a Call of `fn` holds an attention's KV (`KV`, `LATENT`)."""
-    return set(LATENT.get(getattr(fn, "name", None), KV)) <= {p for p, _ in fn.signature()[0]}
 
 
 def _top(r: Refs, peers: frozenset[int], done: dict[int, list]) -> tuple[int, bool]:
@@ -383,12 +376,10 @@ def batched_form(body: Body) -> tuple[Body, list[int]]:
     memo: dict[int, Refs] = {}
     logs: dict[int, list] = {}
     done: dict[int, list] = {}
-    kv: dict[str, bool] = {}
     k = 0
     while k < len(nodes):
         n, hi = nodes[k], k + 1
-        if n.form == "call" and not (kv[n.fn.id] if n.fn.id in kv else kv.setdefault(n.fn.id, holds_kv(n.fn))) and not (
-                peers and any(_top(a.refs, peers, done)[1] for a in n.args)):
+        if n.form == "call" and not (peers and any(_top(a.refs, peers, done)[1] for a in n.args)):
             while hi < len(nodes) and nodes[hi].form == "call" and nodes[hi].fn.id == n.fn.id and all(
                     (t := _top(a.refs, peers, done))[0] < k and not t[1] for a in nodes[hi].args):
                 hi += 1
@@ -425,10 +416,17 @@ def _dead_free(body: Body, *, swap: bool = True) -> tuple[Body, list[int], dict[
     return form, kept, cols
 
 
-def dead_free(body: Body, *, swap: bool = True, batched: bool = False) -> tuple[Body, list[int]]:
+def dead_free(body: Body, *, swap: bool = True, batched: bool = False, consume: bool = False) -> tuple[Body, list[int]]:
     """`body` in the registered compiler's form: without its dead units, the rest `swapped` (unless not `swap`) and `narrowed`, then
-    `batched_form` where `batched`; and the index in `body` of each node kept, in order (before `batched_form`)."""
+    `batched_form` where `batched`; and the index in `body` of each node kept, in order (before `batched_form`). `consume`: the
+    caller hands `body` over, and its node and offset lists (a `Builder`'s, which `finish` shares) are emptied once the form
+    without dead units is built, before `batched_form`, so the flat body is never alive beside the batched one."""
     form, kept, _ = _dead_free(body, swap=swap)
+    if consume:
+        if form.nodes is not body.nodes:
+            body.nodes.clear()
+        if form.offsets is not body.offsets:
+            body.offsets.clear()
     return (batched_form(form)[0] if batched else form), kept
 
 

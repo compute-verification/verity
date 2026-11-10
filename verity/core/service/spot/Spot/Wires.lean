@@ -225,8 +225,8 @@ ranges of units: each entry `(tid, at, n)` is template `tid`'s units `[at, at + 
 each template's ranges tile its units (`orderOk`), in any order of ranks. A wire is in order when, for every range meeting
 its reader units, every range meeting the bounds on the writers it reads there (`Wire.box` of the range's reader indices)
 ranks below it (`orderedWire`): every unit a reader unit reads then ranks below it (`check_acyclic`). The order is the
-circuit's own when it states one, else each template one range, in a topological order of the templates by their wires
-(`kahn`). -/
+circuit's own when it states one, else the templates in a topological order by their wires between templates, each cut at
+the reader units of the wires it reads itself by (`kahn`). -/
 
 /-- A range of an order: template `tid`'s units `[at, at + n)`. -/
 abbrev UnitRange := String × Nat × Nat
@@ -257,33 +257,45 @@ def kahnWalk (ins : Array (List (Nat × Nat))) (done : Array Bool) : Nat → Nat
     | some (_, wr) => kahnWalk ins done n wr
     | none => t
 
-/-- `kahn`'s loop, `fuel` the templates not `done` (`ids` in id order, `outs` each template's readers wire by wire,
-`indeg` each template's wires from templates not done). -/
-def kahnLoop (ids : Array String) (units : String → Nat) (outs : Array (List Nat)) (ins : Array (List (Nat × Nat))) :
-    Nat → Array Bool → Array Nat → List UnitRange → Except Refusal (List UnitRange)
+/-- Template `t`'s `n` units cut at the first and the end reader unit of each wire it reads itself by (within `[0, n]`), in
+unit order; one range `(t, 0, n)` where that leaves none. -/
+def selfRanges (ws : List Wire) (t : String) (n : Nat) : List UnitRange :=
+  let cs := ((0 :: n :: ws.flatMap fun w =>
+    if w.reader == t && w.writer == t then [min w.start n, min (w.start + w.readerUnits) n] else []).mergeSort
+      (· ≤ ·)).eraseDups
+  match (cs.zip cs.tail).map fun (a, b) => (t, a, b - a) with
+  | [] => [(t, 0, n)]
+  | rs => rs
+
+/-- `kahn`'s loop, `fuel` the templates not `done` (`ids` in id order, `ranges` each template's ranges in unit order,
+`outs` each template's readers wire by wire, `indeg` each template's wires from templates not done). -/
+def kahnLoop (ids : Array String) (ranges : String → List UnitRange) (outs : Array (List Nat))
+    (ins : Array (List (Nat × Nat))) : Nat → Array Bool → Array Nat → List UnitRange → Except Refusal (List UnitRange)
   | 0, _, _, acc => .ok acc.reverse
   | fuel + 1, done, indeg, acc =>
     match (List.range ids.size).find? (fun i => !done[i]! && indeg[i]! == 0) with
-    | some i => kahnLoop ids units outs ins fuel (done.set! i true) ((outs[i]!).foldl (fun a r => a.modify r (· - 1)) indeg)
-        ((ids[i]!, 0, units ids[i]!) :: acc)
+    | some i => kahnLoop ids ranges outs ins fuel (done.set! i true) ((outs[i]!).foldl (fun a r => a.modify r (· - 1)) indeg)
+        ((ranges ids[i]!).reverse ++ acc)
     | none =>
       let rest := (List.range ids.size).filter (!done[·]!)
       let t := kahnWalk ins done rest.length (rest.headD 0)
       .error ⟨.cycle, ((ins[t]!).find? (fun (_, wr) => !done[wr]!)).map (·.1)⟩
 
-/-- **The default order**: each template one range of its units, in a topological order of the templates by their wires,
-the next at each step the first template by id that reads none not yet placed (a template that reads itself never
-does). Where every template not placed reads one, they hold a cycle: walking back from the first of them along each one's
-first wire from one not placed, as many steps as there are of them, ends on the cycle, and the refusal names the first
-such wire of the template it ends on. In work `O(templates² + wires)`. -/
+/-- **The default order**: the templates in a topological order by their wires between templates, the next at each step
+the first template by id that reads none not yet placed, each one's units cut at the reader units of the wires it reads
+itself by (`selfRanges`), so that such a wire is in order where each of its reader ranges reads only earlier ranges.
+Where every template not placed reads one, they hold a cycle: walking back from the first of them along each one's first
+wire from one not placed, as many steps as there are of them, ends on the cycle, and the refusal names the first such
+wire of the template it ends on. In work `O(templates² + wires)` beside the cuts. -/
 def kahn (c : Wiring) : Except Refusal (List UnitRange) :=
   let ids := ((c.templates.map (·.1)).mergeSort (· ≤ ·)).toArray
   let idx : Std.HashMap String Nat := ids.zipIdx.foldl (fun m (t, i) => m.insert t i) {}
-  let es := c.wires.zipIdx.filterMap fun (w, j) => do pure (j, ← idx[w.writer]?, ← idx[w.reader]?)
+  let es := c.wires.zipIdx.filterMap fun (w, j) =>
+    if w.writer == w.reader then none else do pure (j, ← idx[w.writer]?, ← idx[w.reader]?)
   let indeg := es.foldl (fun a (_, _, r) => a.modify r (· + 1)) (Array.replicate ids.size 0)
   let outs := es.foldr (fun (_, wr, r) a => a.modify wr (r :: ·)) (Array.replicate ids.size [])
   let ins := es.foldr (fun (j, wr, r) a => a.modify r ((j, wr) :: ·)) (Array.replicate ids.size [])
-  kahnLoop ids (fun t => ((c.templates.lookup t).map (·.units)).getD 0) outs ins ids.size
+  kahnLoop ids (fun t => selfRanges c.wires t (((c.templates.lookup t).map (·.units)).getD 0)) outs ins ids.size
     (Array.replicate ids.size false) indeg []
 
 /-- The order the circuit states, else `kahn`'s. -/
