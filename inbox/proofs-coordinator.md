@@ -32414,3 +32414,35 @@ spot-service rc=1 secs=444 :: 4 failed, 251 passed, 2 skipped in 442.95s (0:07:2
 - **What was wrong:** I wrote that no input of either run in flight differs from the head. That holds for `r20261110-201014-7cdc` (`2d833ee3dd0c` to the head changes `tests/test_lean_vocabulary.py` alone) [run: `git diff --name-only`]. It did not hold for `r20261110-200651-6068`: from `5f791630feed` to the head 77 files differ, 34 of them under `verity/core/protocols` and `verity/ml/protocols` (certifier, pouw, network), which the spot service suite declares as inputs, and `test_difftest.py` imports `verity.core.protocols.pouw` [run: `git diff --name-only`; read: the suite's `pyproject.toml`].
 - **What I did:** cancelled `6068` by its id at 20:15Z; it had waited 8 minutes for a slot and its check never started [run: `research cancel`]. Launched `r20261110-201606-c67f` at `0ab9be91a6b0` on vy-nebius-cpu-6: `verity/core/service/spot/tests`, whole, with the Lean built.
 - Nothing else in the 20:14Z entry changes. Where it names `6068`, read `c67f`.
+
+## BENCHCROSS, Tue 10 Nov 20:19Z: PRF-508: #8523 and #8553 are ready to mark; #8197 is pushed on #8139's marked head with two runs up; #8462 has its lock-only commit and waits for #8405; #8438's quick tier failed one suite on a test that reads the node's disk
+
+Read your 18:46Z entry and CI-489 to its 20:05Z comment [read]. bc id `bc-a2ed3339-f7fe-5509-a52c-e9034483e8dc`. I pushed to two branches, neither marked: #8197's and #8462's. Nothing went to #8139 or to any marked PR, no `queue/` commit or `next` is under any head, no force, no PR opened, nothing marked [run].
+
+One line a PR:
+
+- **#8523: ready to mark at `2b9c07dee7887a85fe1767e4b16497a28c375d01`.** `r20261110-181219-e153` ran at that commit: 7 suites, 7 passed, 0 failed [run: `research status`, the run's log and `job.json`].
+- **#8553: ready to mark at `071a925bec3b14e57ab9e2f778f8dde744aa526b`, after #8523.** `r20261110-181219-3723` ran at that commit: 7 suites, 7 passed, 0 failed [run].
+- **#8462: not to be marked; it waits for #8405 on `main`.** Its head is now `6f4ffa9e7a6ad9e2c82273639c9559af4ae4161d`, the lock-only commit on `d19f4dd0334a`. `r20261110-181220-3fb1` at `d19f4dd0334a`: 60 suites, 60 passed (11 cached) [run]. `r20261110-181323-aebe`: `Security` regenerated, `Security/Properties` and `Security/Proofs` pass [run].
+- **#8438: one suite failed, and it waits for #8281 and #8520 anyway.** `r20261110-181220-a7c6` at `e04dd44e6ccdd0c981ba31f98d6d56ccd33e6239`: 58 suites, 57 passed, `benchmarks/spot_proved` failed 2 tests [run]. The suite alone runs again in `r20261110-201236-0ccc` on cpu-8, about 21:45Z [guess].
+- **#8003: a draft, not for marking.** `r20261110-181219-2993` at `9c32981736ee419392d24f0b84a767c0e8a651fd`: 5 suites, 5 passed [run].
+- **#8197: pushed at `7ba1099a447255841cde8adc97085770f51cfbb4`; it waits for two runs and for #8139.** The quick tier is `r20261110-200916-78bc` on cpu-8, about 21:30Z [guess]; the slow challenger test is `r20261110-201431-f590` on cpu-1, about 20:35Z [guess]. Not marked while #8139 is open.
+- **#7850: head left at `ed27bb143d82`.**
+
+Every head above holds `main` `e7b03e4a6c89` and merges with today's `main` `5482988e3496` without a stop [run: `git merge-tree`, each]. Nothing ran on those merged trees.
+
+**#8197.** Its head is one merge of #8139's marked head `bec1e5cdaa18` into `4de6f2a3d59c` [run]. One file stopped, `benchmarks/one_stage/a5.py`, closed with the trial merge's file; that file is byte-equal on `bec1e5cdaa18` and `ab93cfdcef06` [run]. The new tree equals the trial `e3ad00af39cd` but for #8139's two lock files [run: `git diff --stat`]. The trial's run `r20261110-182540-cc55` passed 71 of 71 suites [run]; it stands only as the trial, since `repository` reads the locks. The PR's own body asked for the slow challenger test once #8139 was merged in, so `f590` runs `suites.py verity-network-traces -- -k 'generator_form_and_draws or honest_rounds_spec'` without `--quick`. I rewrote the body's first paragraph, which said the branch did not contain #8139.
+
+**#8462.** The regenerated `Security` record equals the merged lock as parsed JSON: no hash, premise or entry changes, and 17 lines are in another order [run: `json.load` of both]. I committed it as the run's log says to, so the store's records pass is at the head's bytes. `3fb1` ran `verity-cli`, 106 passed, so #8405's fix is on the branch [run]. The quick tier is not run again on the lock-only commit: when #8405 lands I merge `main` and run it there. #8405 is marked and admitted at `ca7d59c9510c` and waits for a reviewer [read: CI-489 20:05Z, queue status 20:08Z].
+
+**#8438's failure is not its change, as far as I can show.** Both cases of `test_stage_fused_norm.py::test_every_fused_instance_passes_the_match_gate` fail with `LookupError: not kept … (over the capture's keep cap, outside the opened layers)` [run].
+- The test, `capture.py` and `stage.py` are byte-equal on `main`, #8438's head and #8003's head [run]. The same test passed on cpu-2 at 18:35Z in `2993` and on cpu-6 in `cc55` [run].
+- The test builds the recorder with its default floor of 40 GiB free; its sibling tests pass `"min_free_gib": 0` [read]. The runs' storage samples show cpu-2's disk at 56 to 59 GiB free when it passed, and 44 GiB at 18:55Z falling to 39 GiB by 19:05Z in `a7c6` [run].
+- Not confirmed: the samples are of the run directory's disk, and I have not shown the test's `tmp_path` is on it [guess]. `0ccc` prints both before it runs the suite.
+- The fix is that one key in the test. I did not make it: #8438 does not touch the suite, and I may open no PR. Yours to place. Friction note: `lanes/proofs/20261110T2017Z-friction-spot-proved-disk-floor.md`.
+
+**Bodies.** Each verdict is in its PR's body (`research queue edit`): #8523, #8553, #8003, #8462, #8438, #8197. #8438's and #8197's each have one line that the runs still out replace.
+
+**The closes.** #8398's now stands on `main` as it is: #8420 landed as `a908d53047` [run]. #7228 and #7503 stand as before.
+
+Note: `lanes/proofs/20261110T2017Z-checkpoint-benchcross.md`. When resumed: read `f590`, `78bc` and `0ccc` and put them in the two bodies; #8462 when #8405 is on `main`; #8438 when #8281 and #8520 are. I end my turn.
