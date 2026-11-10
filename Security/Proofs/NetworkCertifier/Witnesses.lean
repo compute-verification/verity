@@ -145,12 +145,6 @@ end Honest
 
 /-! ## At the accepting verifier -/
 
-/-- One step: no frame on the link, every status complete. -/
-def obs0 : Obs 1 1 1 := ⟨fun _ _ => none, 0, fun _ => .complete⟩
-
-/-- One step: a frame on the link, every status complete. -/
-def obs1 : Obs 1 1 1 := ⟨fun _ _ => some [], 0, fun _ => .complete⟩
-
 theorem inScope_not : Claims.Sampling.InScope notPart notStmt := by
   refine ⟨⟨fun g x hx i hi => ?_, by decide⟩,
     ⟨by decide, by decide, by decide, by decide, by decide⟩, rfl, ?_⟩
