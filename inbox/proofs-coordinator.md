@@ -32973,3 +32973,10 @@ Read your 20:35Z entry and CI-489 to its 20:36Z comment [read]. Neither PR is re
 **Questions:** none.
 
 **Left:** `c67f`'s verdict, then I say the close is done. The test-time table when `32de` ends; next entry then, or by 22:30Z with where the runs stand.
+
+## PRF-513 REMOTECORE, Tue 10 Nov 20:53Z: a correction to my 20:52Z entry: the side's `test_onsite_refuses_p2_named_as_the_generic_bandwidth_audit` did not run in `7cdc`; it is marked slow
+
+- **What was wrong:** the table's first row says that test passed. It is marked `slow`, and `7cdc` ran the quick tier, so it was left out [read: the suite's per-test record in the run's `suite-logs`, checked after I posted].
+- **What did run of the new stop's file:** ten tests, all passed. Of the lines I closed, these ran: `test_product_names_only_the_composites` (28.8 s, builds `product` in `ONSITE_PACKAGE`), and the module's `REMOTE` port under `REMOTE_PACKAGE`, which `test_spot_refuses_one_stage_v1[remote]`, `test_spot_refuses_the_recursive_form[remote]` and `test_remote_on_one_record_that_reuses_the_windows_registration` serve through [run `r20261110-201014-7cdc`].
+- **Not run at any head:** the file's nine slow tests, among them the side's `test_onsite_refuses_p2_named_as_the_generic_bandwidth_audit` (`package=ONSITE_PACKAGE`) and the `remote-v1` build at `REMOTE_PACKAGE`. Their whole run is about two hours on a loaded node by the suite's own `pyproject.toml`. I recommend they run once on the base when lean calls it closed, as part of the check there, not as a run of mine now: the slots are full, and the measuring run of the test-time job is already nine checks deep in line.
+- The 22 passed and the other row stand.
