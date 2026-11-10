@@ -31,10 +31,12 @@ anything in a secrets directory (`.ssh/`, `.config/verity/`, a `secrets/`), name
 (`< FILE`), a `for` loop's variable or, behind `xargs`, by the commands piped into it, wherever the command sits: over ssh,
 after `research pods ssh POD --`, in a quoted string handed to a wrapper script. Every word that names such a command is
 judged, so a host, an image or a directory of that name hides no reader after it. So are `tr` and `tee` with such a file as
-their input, `dd if=FILE` with no `of=`, the shell's own reads (`while read ...; done < FILE`, `read KEY < FILE`, `$(<FILE)`),
-the code of `python -c`, `perl -e` or `ruby -e` that names such a file and opens, reads or prints, `openssl enc -in FILE` with
-no `-out`, and `openssl pkey|rsa|ec|dsa|pkcs8 -in KEY` with neither `-pubout` nor `-noout`, or with `-text`, which writes the
-private key out. An archiver or a compressor that writes to its output is such a command too: `tar -c` with `-f -` or no `-f`
+their input, `dd if=FILE` with no `of=`, a file a `sed` or `awk` program itself names (sed's `r FILE`, `R FILE` and `e
+COMMAND`; awk's string literals and `-v` values when it reads with `getline`, `system`, a pipe or `ARGV`), the shell's own
+reads (`while read ...; done < FILE`, `read KEY < FILE`, `$(<FILE)`), the code of `python -c`, `perl -e` or `ruby -e` that
+names such a file and opens, reads or prints, `openssl enc -in FILE` with no `-out`, and `openssl pkey|rsa|ec|dsa|pkcs8 -in
+KEY` with neither `-pubout` nor `-noout`, or with `-text`, which writes the private key out. An archiver or a compressor
+that writes to its output is such a command too: `tar -c` with `-f -` or no `-f`
 (only a terminal stops it, and an agent's shell has none), `tar -x` with `-O`, `zip - FILE`, `unzip -p`, `cpio -o` and `gzip
 -c`, `bzip2 -c`, `xz -c`, `zstd -c` and their kin. One pipe passes, the copy between machines: `tar -cf - FILE... | ssh HOST tar
 -xf - -C DIR`, where the archive goes straight into a `tar` that extracts from its input to disk, each end run here or by
@@ -408,6 +410,13 @@ WRAPS = re.compile(r"^(g?z|bz|xz|lz4?|zstd)(?=(cat|less|more|grep|egrep|fgrep|di
 #: readers whose first argument is a pattern or a script, not a file, unless an option of SCRIPT_GIVEN gave it
 SCRIPTED = {"sed", "awk"} | FILTERS
 SCRIPT_GIVEN = {"e", "f", "regexp", "file", "expression", "source"}
+#: the options of sed and awk whose value is the program itself, not a file that holds it
+PROGRAM_GIVEN = ("e", "expression", "source")
+#: sed's commands that put a file they name, or the output of a command they run, on sed's own output, with the rest of the
+#: line, which names it: `r FILE`, `R FILE` and GNU's `e COMMAND`, after an address or a `;`, never inside a word or as `\r`
+SED_READS = re.compile(r"(?<![A-Za-z\\])[rRe][ \t]*([^\n]*)")
+#: what in an awk program reads a file or runs a command it names; without one, a name in it is text or a file it writes
+AWK_READS = re.compile(r"getline|system|ARGV|\||@include")
 #: each reader's options that take a value, the short ones as letters and the long ones by name: the word after one is
 #: neither its pattern nor a file (`rg -t py PATTERN DIR`)
 GREP_VALUED = ("efABCmdD", {"regexp", "file", "after-context", "before-context", "context", "max-count", "include", "exclude",
@@ -538,10 +547,28 @@ def operands(reader: str, args: list[str]) -> tuple[dict[str, list[str]], list[s
     return given, rest
 
 
+def literals(code: str) -> list[str]:
+    """The path-like words of the string literals of `code`."""
+    return [w for quoted in re.findall(r"""['"]([^'"]+)['"]""", code) for w in quoted.split() if re.search(r"[/.]", w)]
+
+
+def program_files(reader: str, programs: list[str], given: dict[str, list[str]]) -> list[str]:
+    """The files the sed or awk `programs` themselves name and write to the output: sed's after an `r`, `R` or `e` (SED_READS),
+    each word to the end of the line, since `e` runs a command that may name several; awk's, when the program reads at all
+    (AWK_READS), the path-like words of its string literals and the values `-v` assigns. A grep's pattern names none."""
+    if reader == "sed":
+        return [word.strip(";{}") for program in programs for read in SED_READS.finditer(program) for word in read[1].split()]
+    if reader == "awk" and any(map(AWK_READS.search, programs)):
+        return [word for program in programs for word in literals(program)] + [
+            assignment.partition("=")[2] for assignment in given.get("v", []) + given.get("assign", [])]
+    return []
+
+
 def files_printed(reader: str, args: list[str], inputs: list[str]) -> list[str] | None:
     """The files `reader ARGS` writes to its output, `inputs` being what it reads as its own input (`< FILE`), or None when
     it shows no line of them (SILENT, `cmp` without CMP_BYTES, `dd` with an `of=`). A grep's, sed's or awk's first argument
-    is its pattern or script, unless an option gave that (SCRIPT_GIVEN)."""
+    is its pattern or script, unless an option gave that (SCRIPT_GIVEN), and a sed or awk script is read for the files it
+    names itself (`program_files`)."""
     if reader in INPUT_PRINTERS:
         return inputs
     if reader == "dd":
@@ -549,7 +576,9 @@ def files_printed(reader: str, args: list[str], inputs: list[str]) -> list[str] 
     given, rest = operands(reader, args)
     if given.keys() & SILENT.get(reader, set()) or (reader == "cmp" and not given.keys() & CMP_BYTES):
         return None
-    return (rest[1:] if reader in SCRIPTED and not given.keys() & SCRIPT_GIVEN else rest) + inputs
+    first = 1 if reader in SCRIPTED and not given.keys() & SCRIPT_GIVEN else 0
+    programs = rest[:first] + [program for option in PROGRAM_GIVEN for program in given.get(option, [])]
+    return rest[first:] + inputs + program_files(reader, programs, given)
 
 
 def tar_options(args: list[str]) -> tuple[dict[str, list[str]], list[str]]:
@@ -644,8 +673,7 @@ def code_printed(interpreter: str, args: list[str], inputs: list[str]) -> list[s
         return None
     if not interpreter.startswith("python") and any(IN_PLACE.fullmatch(a) for a in args[:at]):
         return None
-    literals = [w for quoted in re.findall(r"""['"]([^'"]+)['"]""", args[at + 1]) for w in quoted.split() if re.search(r"[/.]", w)]
-    return literals + args[at + 2:] + inputs
+    return literals(args[at + 1]) + args[at + 2:] + inputs
 
 
 def piped_names(run: list[str]) -> list[str]:

@@ -211,6 +211,37 @@ REFUSED = PLAIN_READS + [
     "perl -Mstrict -ne 'print' x.env",                    # a module whose name holds an `i`, not perl's -i
     "python3 -i -c \"print(open('x.env').read())\"",    # python's -i is interactive, not in place
     "ruby -e 'puts File.read(\"credentials.json\")'",
+    # a file a sed or awk program itself names: sed's `r` and `R` insert it and `e` runs a command on it; awk reads it with
+    # `getline`, as ARGV, or through a command it runs
+    "sed 'r key.pem' /dev/null",
+    "sed '$r /root/.config/verity/r2.env' notes.txt",
+    "sed -n '1r x.env' notes.txt",                        # -n holds back the lines sed reads, not the file it inserts
+    "sed '/BEGIN/R key.pem' notes.txt",
+    "sed -e 's/a/b/' -e 'r key.pem' notes.txt",
+    "sed --expression='1r x.env' notes.txt",
+    "sed rkey.pem notes.txt",
+    "sed rid_rsa /dev/null",
+    "sed 's/a/b/;r key.pem' notes.txt",
+    "sed '1{r key.pem\n}' notes.txt",
+    "echo | sed 'r ~/.ssh/id_rsa'",
+    "sed '1e cat key.pem' notes.txt",
+    "sed -n 'e head -1 x.env' /dev/null",
+    "sudo sed -n '$r /etc/vy/env/root.env' /dev/null",
+    "bash -c \"sed 'r key.pem' /dev/null\"",
+    "for f in /root/.config/verity/*; do sed \"r $f\" /dev/null; done",
+    "ls *.pem | xargs -I{} sed 'r {}' /dev/null",
+    "ssh n1 \"sed 'r /etc/vy/env/root.env' /dev/null\"",
+    "research pods ssh vy-nebius-1 -- \"sed 'r /etc/verity/lean-cache.env' /dev/null\"",
+    "awk 'BEGIN { while ((getline line < \"x.env\") > 0) print line }'",
+    "awk '{ getline k < \"/root/.ssh/id_rsa\"; print k }' notes.txt",
+    "awk 'BEGIN{while((\"cat key.pem\" | getline l) > 0) print l}'",
+    "awk 'BEGIN { system(\"cat /root/.config/verity/r2.env\") }'",
+    "awk 'BEGIN { ARGV[1] = \"x.env\"; ARGC = 2 } { print }'",
+    "awk -v f=x.env 'BEGIN { while ((getline l < f) > 0) print l }'",
+    "awk --assign f=key.pem 'BEGIN { getline l < f; print l }'",
+    "awk -e 'BEGIN { getline l < \"x.env\"; print l }'",
+    "awk 'BEGIN { d = \"/root/.config/verity/\"; while ((getline l < (d \"r2\" \".env\")) > 0) print l }'",
+    "ssh n1 'awk \"BEGIN { getline l < \\\"/etc/vy/env/root.env\\\"; print l }\"'",
     # a copy between machines by way of the transcript
     "research pods ssh vy-nebius-2 -- 'cat ~/.ssh/vy-cluster' | research pods ssh vy-nebius-3 -- 'umask 077; cat > ~/.ssh/vy-cluster'",
     "research pods ssh vy-nebius-1 -- 'sudo cat /etc/verity/lean-cache.env' | research pods ssh vy-nebius-3 -- 'sudo install -D -m 600 "
@@ -497,6 +528,19 @@ ALLOWED = [
     "research pods ssh vy-nebius-1 -- grep -c head /etc/verity/lean-cache.env",
     "awk 'BEGIN { print \"cat x.env\" }'",
     "find . -name '*.py' | xargs grep -l sort",
+    # a sed or awk program that names such a file and reads none: text it matches, substitutes or prints, a file it writes
+    "sed 's/key.pem/cert.pem/' README.md",
+    "sed -n '/id_rsa/p' docs/setup.md",
+    "sed 's#/etc/vy/env/root.env#/etc/vy/env/research.env#' unit.service",
+    "sed 's/\\r$//' notes.txt",
+    "sed 'w out.env' names.txt",
+    "sed 'r notes.txt' README.md",
+    "sed -i '$r extra.env' /etc/vy/env/root.env",
+    "awk '{ print > \"out.env\" }' names.txt",
+    "awk -v out=prod.env '{ print $1 > out }' names.txt",
+    "awk 'BEGIN { print \"cp x.env.example .env\" }'",
+    "awk 'BEGIN { while ((getline l < \"names.txt\") > 0) print l }'",
+    "awk '{ print $1 | \"sort\" }' names.txt",
     # a word that shares a printer's name ahead of a command that shows no contents
     "ssh tee ls -la ~/.ssh",
     "docker run alpine/openssl sha256sum /k.pem",
