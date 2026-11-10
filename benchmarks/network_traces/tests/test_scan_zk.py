@@ -327,17 +327,17 @@ def test_a_scan_registered_with_a_second_tied_input_is_refused_by_the_period_che
         "ScanZkTestSharedStateRoot", 0, (), lambda S_: ((("state", state), ("prog", Array(nb, entry))), Array(N, ret)),
         lambda B, S_, s, entries: B.batch(unit, s, sz.array_of([entries[m // cls.EVERY] for m in range(N)]),
                                           axes=(None, 0)), register=False)))
-    query, law = sz.PA.template_instances_query([unit]), sz.DR.parse_design(f"stratified:{N}")
+    query, design = sz.PA.template_instances_query([unit]), sz.DR.parse_design(f"stratified:{N}")
     roots = [{"port": "scan/prog", "root": "aa" * 64, "leaves": nb, "domain": "bb" * 64}]
     want = {r["port"]: {"leaves": r["leaves"], "domain": r["domain"]} for r in roots}
-    reg = R.record(root, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64)
+    reg = R.record(root, query, design, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64)
     for alone in ((), ("prog",), ("state",)):
-        v = R.check(reg, root, query, law, sz.S.SCHEME, want, leaf_layer="ee" * 64, tied=alone)
+        v = R.check(reg, root, query, design, sz.S.SCHEME, want, leaf_layer="ee" * 64, tied=alone)
         assert v.codes == ("R8-shared-input",) and v.rests_on_period_check == alone, (alone, v)
-    draw = {**sz.DR.derive(root, query, law), "population": N, "units": list(range(N))}
-    record = {"accepted": True, "registration": reg, "draw": draw, "proved_units": list(range(N))}
+    sample = {**sz.DR.derive(root, query, design), "population": N, "units": list(range(N))}
+    record = {"accepted": True, "registration": reg, "draw": sample, "proved_units": list(range(N))}
     for both in (("prog", "state"), ("state", "prog")):
-        v = R.check(reg, root, query, law, sz.S.SCHEME, want, leaf_layer="ee" * 64, tied=both)
+        v = R.check(reg, root, query, design, sz.S.SCHEME, want, leaf_layer="ee" * 64, tied=both)
         assert v.ok and v.rests_on_period_check == both, (both, v)
         a = sz.window_answer(reg, record, sz.Fraction(1, 100), "unused", v.rests_on_period_check)
         assert a["verdict"] == "accept" and a["public"][PC.TIED_KEY] == list(both)
