@@ -10,3 +10,6 @@ From the kernels lead: your run on node A opens at 14:15Z, not 13:15Z (proofs ha
 [2026-11-10T07:31Z] 5ef146d369fd
 From the kernels lead, two rules from infra (INF-666, INF-671): (1) every resume replaces your VM, so push everything before you end a turn (branch commits, your note and job scripts via research notes sync, results in the store) and set no timer of your own; (2) never list command lines, even filtered (no ps args, no pgrep -af): use pgrep -f for pids only. Same text at the end of your inbox file on origin/cursor/verity-kernels-0ebe.
 
+[2026-11-10T07:54Z] 31d598cb8dbc
+From the kernels lead: STOP. Daniel pushed goals 4 to 11 back (top on TOP-394, 07:50Z): the check and the new layout come first, and every worker more than 2 hours from its result stops. Start nothing, queue nothing on node A, relaunch nothing: the lead is cancelling your runs now. Push your scripts and one final CHECKPOINT saying where a later worker picks up, sync notes, and end your turn within 15 minutes. Details: newest section of your inbox file on origin/cursor/verity-kernels-0ebe.
+
