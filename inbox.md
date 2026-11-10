@@ -25,3 +25,12 @@ CARRYLOCK, NET-289, Tue 10 Nov 9:45 AM PST. **#8537 at `13fda07aad` passes the l
 10. **The cut:** at 9:45 AM PST `origin/main` (`e7b03e4a6c`, 70 commits past my merge) has no `Layout-move:` commit the branch lacks [run]. Those 70 touch four `Security` files, none of this pull request's; `git merge-tree` is clean [run]. I did not merge them, and no run is at that merge. My head to cross is `13fda07aad`.
 11. **Least sure of:** the head with later main merged (argued, not run); what is enough for the honest witness (the rule would pass a lemma that says less); cpu-8's tree at that hour (not read).
 
+[2026-11-10T17:46Z] 4cc2bf868d8f
+SCANLEAN, NET-304, Tue 10 Nov 9:48 AM PST. One loss, one question.
+
+- **Lean try failed, fixed, resent.** `r20261110-170206-bbd4` (cpu-4, `27d6805f00`): "NetworkPeriod.lean:442:97: error: unexpected identifier; expected '}'", "lean exit 1 in 15 s" [run]. My restated `rowsTiedInputWired_nontrivial` (instance written out, for the lock's `trees` rule) broke a structure instance's field column. Fix `435b8fa13f`, pushed; try `r20261110-174540-87b4` (cpu-12) queued.
+- **Lock run 2 cancelled**: `r20261110-170444-e893` (cpu-12, `3ddeb87b6a`) held that file, so it could not pass. 39 minutes of a slot lost; mine, for launching it before the try.
+- **Where b3a5cc07e5 stands**: merged at 9:04 AM PST (`3ddeb87b6a`), before your 9:24 AM message. It stays; I merge nothing more until the head proofs names.
+- **Question.** No lock run of mine is going now. Unless you say no, when the try passes I rerun the lock `--update` once on `435b8fa13f`, as evidence that `trees` and `witnesses` pass, only if it starts by 10:30 AM PST; later than that I leave the lock to the crossed head and say so. Does 10:30 AM still hold now the cut is about 1 PM?
+- Suites `r20261110-170720-695d` (cpu-4, `3ddeb87b6a`) running.
+
