@@ -3,10 +3,10 @@
 
 - `lean-build:verity/flock/verifier`: `lake build` of the Lean verifier; its outputs are the executables its lakefile's
   `defaultTargets` name, each at its path in a built tree (`.lake/build/bin/<exe>`, where the suites that run them look).
-- `lean-unit-cut:verity/ml/flock/verifier/unit_cut_agree.py`: the script on the flock-verify it reads, the Lean partition
+- `lean-unit-cut:verity/flock/agreement/unit_cut_agree.py`: the script on the flock-verify it reads, the Lean partition
   check's conformance with `verity.circuits.partition`; its inputs are the script's import closure (`test_file.Imports`: it
   reads no data), its output the script's result.json.
-- `lean-agreement:verity/ml/flock/verifier`: `check.py --lean-agreement` on the flock-verify it reads, against upstream's Rust
+- `lean-agreement:verity/flock/agreement`: `check.py --lean-agreement` on the flock-verify it reads, against upstream's Rust
   verifier on the upstream build and inputs `upstream.json` pins; its output is ci.py's per-set verdicts.
 - `lean-suites:SUITE`: `suites.py` on one of the suites check runs after lean-build (`suites.AFTER_LEAN`, read from its source:
   `lean_suites`, whose test files the test-file family leaves out), on every executable lean-build outputs, and
@@ -31,7 +31,7 @@ from pathlib import Path
 from .test_file import Imports, Layout, Tree, discover
 
 LEAN = "verity/flock/verifier"
-VERIFIER = "verity/ml/flock/verifier"
+VERIFIER = "verity/flock/agreement"
 FLOCK = "verity/flock/prover"
 UNIT_CUT = f"{VERIFIER}/unit_cut_agree.py"
 SUITES = "tools/verity/check/suites.py"

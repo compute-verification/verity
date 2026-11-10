@@ -28,7 +28,7 @@ import pytest
 from verity.core.protocols.spot.one_stage import proofs as PF
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "form-refusals"
-VERIFIER = Path(__file__).resolve().parents[4] / "ml" / "flock" / "verifier"
+VERIFIER = Path(__file__).resolve().parents[4] / "flock" / "agreement"
 N = 4
 WRONG_TAGS = ("verity/flock-circuit/types", "verity/flock-circuit@eb90718f", "verity/flock-circuit+plain-leaves",
               "verity/flock-circuit/tmpl")

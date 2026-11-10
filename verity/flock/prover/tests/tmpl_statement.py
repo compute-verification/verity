@@ -1,4 +1,4 @@
-"""A templated statement (`verity/flock-circuit/tmpl`) staged from a flat one: the fixture `../../ml/flock/pod/90-tmpl-unit.sh`
+"""A templated statement (`verity/flock-circuit/tmpl`) staged from a flat one: the fixture `../pod/90-tmpl-unit.sh`
 proves and hands to the Lean verifier.
 
 ``template`` composes the flat hidden-output statement of ``N`` RoPE d64 instances (``flat.txt``), bound to the
@@ -8,7 +8,7 @@ unit i), which the verifier holds (``partition.json``, with its program, ``progr
 (``circuit.txt``): head ``flock-circuit/tmpl NAME``, META's ``format`` and ``statement`` the templated statement's and its
 ``layout`` the layout mode, the template's section (:func:`verity_flock.circuit.template_section`), and every section but
 ``CIRCUIT unit``, which the verifier reads from the template. The unit's range stays where the flat statement put it, so ``stage`` refuses a layout
-whose committed unit (``flock-tmpl-unit``'s (``../../ml/flock/tests/lean/TmplUnit.lean``) ``TMPL`` line, ``--tmpl``) needs a larger slot. It then writes the
+whose committed unit (``flock-tmpl-unit``'s (``../tests/lean/TmplUnit.lean``) ``TMPL`` line, ``--tmpl``) needs a larger slot. It then writes the
 prover's ``inst-N.bin`` and the verifier's ``pub-N.bin`` against that text (:func:`verity_flock.circuit.write`).
 
     python verity/flock/prover/tests/tmpl_statement.py template --out DIR

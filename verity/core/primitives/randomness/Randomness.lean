@@ -9,7 +9,7 @@ public import Flock.Draw
 The byte formats and samplers of `verity/ml/randomness/__init__.py`, executable, on the verifier's
 FIPS 180-4 SHA-512 (`Flock.Sha512.hash`). The Python is tied to them by vectors: the spec reproduces the pinned
 `verity/ml/randomness/tests/vectors.json`, and Python must match the spec's own vectors
-(`verity/ml/flock/tests/lean/RandomnessVectors.lean`).
+(`verity/flock/tests/lean/RandomnessVectors.lean`).
 
 * `frame`, `frames`: a part framed as `tag || len(body) as 8 bytes big-endian || body`; an index frames each part,
   concatenates them, and frames the result as bytes.

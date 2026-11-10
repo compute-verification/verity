@@ -243,12 +243,12 @@ BENCHMARKS_IMPORTERS = {
     "integrations/vllm/verity_vllm/engine/int8_credited_env.py": "circuits (vllm): `benchmarks/vllm_encoded/paged.py`",
     # Flock's measurement campaign, its tests, and the frozen instance sets `instances` reads
     **dict.fromkeys((
-        "verity/ml/flock/pod/gemm_hill.py", "verity/ml/flock/pod/read_gadget.py",
+        "verity/flock/pod/gemm_hill.py", "verity/flock/pod/read_gadget.py",
         "verity/flock/prover/python/verity_flock/bench.py", "verity/flock/prover/python/verity_flock/circuit_bench.py",
         "verity/flock/prover/python/verity_flock/instances.py", "verity/flock/prover/python/verity_flock/ir_bench.py",
         "verity/flock/prover/python/verity_flock/register.py",
-        "verity/ml/flock/tests/test_backend_bench.py", "verity/flock/prover/tests/test_class_statement.py",
-        "verity/ml/flock/tests/test_gemm_hill.py", "verity/ml/flock/tests/test_ir_lowering_bench.py",
+        "verity/flock/tests/test_backend_bench.py", "verity/flock/prover/tests/test_class_statement.py",
+        "verity/flock/tests/test_gemm_hill.py", "verity/flock/tests/test_ir_lowering_bench.py",
     ), "proofs: `verity_numerical.bench` (`benchmarks/numerical`)'s contract, cell, generator suites and frozen instances"),
     # research's registry of measuring tools
     **dict.fromkeys(("tools/research/src/research/store/tools_registry.py", "tools/research/tests/test_store_prov.py"),

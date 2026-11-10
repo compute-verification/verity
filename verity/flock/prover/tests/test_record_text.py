@@ -1,6 +1,6 @@
 """A session record's canonical text (`verity_flock.record_text.session_text`): Lean's `Json.compress` on the shared vectors
 (`live/src/record_text_vectors.json`, whose expected texts Lean printed; `live/src/record_text.rs` runs the same cases), a
-fixed point of itself, and the agreement harness's stdlib copy (`../../ml/flock/verifier/record_text.py`) the same file."""
+fixed point of itself, and the agreement harness's stdlib copy (`../agreement/record_text.py`) the same file."""
 import json
 from pathlib import Path
 

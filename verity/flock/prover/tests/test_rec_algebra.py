@@ -1,7 +1,7 @@
 """`verity_flock.rec_algebra`: the inner verifier's algebraic checks as residuals over F, on the flat GEMM selftest's honest
 session (the fetched fixture `hidden-outputs/flat/gemm-coordinate`: m = 25, k_log = 22, 8 claims). The reference's residuals
 are zero on both reps and its intermediates are the Lean verifier's (`fixtures/inner_claims.json`, which
-`../../ml/flock/tests/lean/InnerClaims.lean` dumps); the circuit's structure, verifier rows and witness give the reference's residuals,
+`../tests/lean/InnerClaims.lean` dumps); the circuit's structure, verifier rows and witness give the reference's residuals,
 honest and with a message changed, through `GfResiduals`'s reference and through the IR evaluator; and a changed message
 moves a residual off zero exactly when the Lean verifier rejects the session, for the check that rejects it. And
 `Gf128Mul_v1` lowers to the rows rec-lean's Karatsuba lemma is about (`Recursion/Karatsuba.lean`).
@@ -161,7 +161,7 @@ def test_gf128mul_lowers_to_the_rows_of_the_karatsuba_lemma():
 
 def test_the_dump_is_current():
     stale = [f for f, h in INNER["inputs"].items() if hashlib.sha256((REPO / f).read_bytes()).hexdigest() != h]
-    assert not stale, f"changed since the dump was generated, rerun verity/ml/flock/tests/lean/generate_inner_claims.sh: {stale}"
+    assert not stale, f"changed since the dump was generated, rerun verity/flock/tests/lean/generate_inner_claims.sh: {stale}"
 
 
 def test_the_honest_reps_pass_every_check_at_the_lean_verifiers_values(session):
@@ -179,7 +179,7 @@ def test_the_honest_reps_pass_every_check_at_the_lean_verifiers_values(session):
 
 
 def test_a_nonzero_nonce_is_refused(session, monkeypatch):
-    """R4 (`Flock.Proof`, D21 in `verity/ml/flock/verifier/README.md`): the decoder refuses each Ligerito nonce list's first nonce set to 1, as the Lean
+    """R4 (`Flock.Proof`, D21 in `verity/flock/agreement/README.md`): the decoder refuses each Ligerito nonce list's first nonce set to 1, as the Lean
     verifier's `Reader.nonce0` does, with its reason."""
     rep = session[1][0]
     at, vec = {}, A._Reader.vec

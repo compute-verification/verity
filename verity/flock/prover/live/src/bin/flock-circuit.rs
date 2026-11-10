@@ -4881,7 +4881,7 @@ fn unit_walk(c: &Composite) {
     }
 }
 
-/// `--tmpl-unit F`: a templated statement's unit rows at their positions (`flock-tmpl-unit`, `../../ml/flock/tests/lean/TmplUnit.lean`).
+/// `--tmpl-unit F`: a templated statement's unit rows at their positions (`flock-tmpl-unit`, `../tests/lean/TmplUnit.lean`).
 fn load_composite(path: &str) -> Composite {
     let unit = Some(arg("--tmpl-unit", "")).filter(|p| !p.is_empty()).map(|p| std::fs::read_to_string(p).expect("--tmpl-unit"));
     Composite::parse_with(&std::fs::read_to_string(path).expect("circuit"), Some(&arg("--tables", "tables")), unit.as_deref())
@@ -7154,7 +7154,7 @@ fn serve_on<B: FnOnce() -> Server + Send>(l: &std::net::TcpListener, out: &std::
 /// `replay [--zk] [--session-tables J] --sessions DIR...`: the verifier's offline verdict on each recorded session
 /// (`DIR/session.json` and `DIR/<table>.rep<r>.bin`), `Server::from_record` then `finish` over the session's tables (its sample
 /// split into `J`), one `UPSTREAM` line per session: the reference the Lean verifier's agreement check
-/// (`verity/ml/flock/verifier/agree.py`) reads. The record's coin tree is not re-checked (the live server flips the coins).
+/// (`verity/flock/agreement/agree.py`) reads. The record's coin tree is not re-checked (the live server flips the coins).
 fn replay(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) {
     let a: Vec<String> = std::env::args().collect();
     let dirs = &a[a.iter().position(|x| x == "--sessions").map_or(a.len(), |i| i + 1)..];

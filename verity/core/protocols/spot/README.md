@@ -231,7 +231,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `stratified_miss_eq_greedy` evaluated by Lean, and `exfiltration_two_lean.json` `card_influenceTwo_le_uniform`'s
   count on two-stage designs (`tests/lean/`, by `generate.sh`); `tests/test_consumers.py` holds the consumers to them.
   `tests/test_coins.py` holds the samplers and `draw_first` to the Lean verifier's `drawOn` on raw bytes,
-  `tests/test_one_stage.py` the work sizes to Flock's tests' pins, and `verity/ml/flock/tests/stratified_agree.py`
+  `tests/test_one_stage.py` the work sizes to Flock's tests' pins, and `verity/flock/tests/stratified_agree.py`
   the Lean verifier's sample to `one_stage.draw`.
 - **The parties.** `parties` holds both deployments (Core API) as parties of `verity.core.deploy`, each machine's work a
   capability it is given, with SPOT[Flock]'s challenger on the verifier's side; `verity.core.deploy.runtime.run` runs them.
@@ -383,7 +383,7 @@ A program's weights, constants and tables are values: committed once, under hidi
 - **The audit record** holds the roots the verifier opened the reads against (`audit.session_registered`, Lean
   `Record.sessionRegistered`) to the registration's own (`Record.ownRegistered`).
 
-Pinned by `tests/test_registered.py`, `tests/test_served.py` and `verity/ml/flock/tests/test_lean_registered_reads.py`.
+Pinned by `tests/test_registered.py`, `tests/test_served.py` and `verity/flock/tests/test_lean_registered_reads.py`.
 
 ## Not yet in Lean
 

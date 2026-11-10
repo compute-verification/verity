@@ -365,7 +365,7 @@ def test_the_key_and_record_forms_round_trip_and_refuse_what_they_dont_read(tmp_
 
 # A recursive run's interactive-run record (`RunRecord`), which `flock-verify rec-compose --rec-run` reads: the staging
 # first, every session opened for the run's parts, the close last.  Its reading is the Lean's (`Flock.RecCompose.checkRun`,
-# whose #guards are `Flock/Test/RecCompose.lean`), held to this writer by `verity/ml/flock/tests/test_lean_rec_compose.py`.
+# whose #guards are `Flock/Test/RecCompose.lean`), held to this writer by `verity/flock/tests/test_lean_rec_compose.py`.
 ROWS = "ab" * 64
 SHARED = {"rec_inner": "11" * 64, "inner_draw": None}
 

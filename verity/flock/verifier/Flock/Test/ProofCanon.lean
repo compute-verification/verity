@@ -1,5 +1,5 @@
 /-
-A proof file is the one encoding of what it decodes to (`Flock.Proof`, D17 and D18 of `verity/ml/flock/verifier/README.md`): `decodeProof` and `Zk.decode` accept a
+A proof file is the one encoding of what it decodes to (`Flock.Proof`, D17 and D18 of `verity/flock/agreement/README.md`): `decodeProof` and `Zk.decode` accept a
 file written field by field at a small shape (two levels, one query each, one-byte digests, no salts). `decodeProof`
 accepts the plain file in the deployed form, with the zk patch's `zk_level0 = None` after the pair; a file is read
 through its statement's pin (`plainBytes`), so upstream's form, without the tag, decodes under `--upstream-plain` alone,
