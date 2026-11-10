@@ -769,6 +769,35 @@ def test_a_tree_compiles_no_module_version_another_tree_of_its_node_compiled(tmp
         "the trees and the cache hold one file by hard links, and no build moved its time past the `.hash` beside it"
 
 
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+def test_a_module_file_above_a_private_import_is_stored_and_another_tree_restores_it(tmp_path, monkeypatch):
+    """Through Lake, on `module` files: `Modular` imports `Modular.Uses`, which imports `Modular.Hidden` and
+    `Modular.Secret` privately, so Lake hands `Modular`'s compile neither and its key reads neither. Every module of the
+    build is stored all the same, and a second tree of the node compiles none. Held to the whole closure, `Modular`
+    was never stored, nor any module above one like it: 649 of Security/Proofs' modules on cpu-1, and 1,942 above."""
+    LC, LA = (_load(f"module_files_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
+    MK = LA.MK
+    store = tmp_path / "artifacts"
+    monkeypatch.setattr(LC, "ARTIFACTS", store)
+    trees = [tmp_path / n / "modules" for n in ("build-0", "build-1")]
+    builds = []
+    for i, pkg in enumerate(trees):
+        shutil.copytree(HERE / "fixtures" / "modules", pkg, ignore=shutil.ignore_patterns(".lake"))
+        cache = store / MK.STAGE / f"test-{i}"
+        got, _ = LC.stage_build(MK, pkg, ["Modular"], cache)
+        r = subprocess.run(LC.in_sandbox(pkg, ["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build"]),
+                           cwd=pkg, check=True, capture_output=True, text=True, env=LC.lake_env())
+        assert MK.misrestored(got, pkg) == []
+        builds.append(({m for m, *_ in LC.BUILT.findall(r.stdout + r.stderr)}, len(got),
+                       LA.LakeArtifacts(store).put({pkg: {"sandbox": True}})))
+    mods = {"Modular", "Modular.Defs", "Modular.Hidden", "Modular.Secret", "Modular.Uses"}
+    keyed = MK.keys(trees[0], ["Modular"])
+    assert keyed["Modular"].closure == mods - {"Modular"}
+    assert set(MK.loads("Modular", keyed)) == {"Modular.Uses", "Modular.Defs"}
+    assert builds == [(mods, 0, 5), (set(), 5, 0)]
+    assert not (store / MK.UNSTORED).exists()
+
+
 @pytest.mark.slow
 @pytest.mark.skipif(LAKE is None, reason="no lake")
 def test_lake_restores_a_build_published_from_another_path(s3, tmp_path):

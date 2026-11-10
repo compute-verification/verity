@@ -478,6 +478,30 @@ def test_a_build_is_indexed_only_where_lake_read_its_header_as_the_parser_did(tm
     assert "setup.json names 'R' of 'd'" == MK.indexable("R", keyed, pkgs, owners)
 
 
+def test_a_module_file_is_indexed_where_lake_handed_its_compile_the_modules_lean_loads(tmp_path):
+    """Lake hands a `module` file's compile the modules Lean loads of its imports, which are the ones its key reads:
+    not what one of its imports imports privately. `R.A` imports `R.Q` privately, so of `R.A`'s importers only one that
+    needs its code reaches `R.Q`. A build is indexed where the `setup.json` lists exactly those; one that listed the
+    whole closure, or left a loaded module out, read its header another way than the key did."""
+    root = _workspace(tmp_path, LEVELS | {"r/R/U.lean": "module\n\npublic import R.A\n"})
+    pkgs = MK.workspace(root)[0]
+    keyed = MK.keys(root, ["R.U", "R.L"])
+    lib = root / ".lake" / "build" / "lib" / "lean"
+    assert keyed["R.U"].closure == {"R.A", "R.P", "R.Q"} and set(MK.loads("R.U", keyed)) == {"R.A", "R.P"}
+    _setup(root, "R.U", "r", {m: lib / MK.path_of(m, ".olean") for m in ("R.A", "R.P")})
+    assert MK.indexable("R.U", keyed, pkgs) is None
+    _setup(root, "R.U", "r", {m: lib / MK.path_of(m, ".olean") for m in ("R.A", "R.P", "R.Q")})
+    assert "Lake imports ['R.Q'] and not []" in MK.indexable("R.U", keyed, pkgs)
+    _setup(root, "R.U", "r", {"R.A": lib / "R" / "A.olean"})
+    assert "Lake imports [] and not ['R.P']" in MK.indexable("R.U", keyed, pkgs)
+    loaded = set(MK.loads("R", keyed))
+    assert loaded == {"R.A", "R.P", "R.M", "R.Q", "R.B"}, "`R` needs `R.M`'s code, so `R.M`'s private import too"
+    _setup(root, "R", "r", {m: lib / MK.path_of(m, ".olean") for m in loaded})
+    assert MK.indexable("R", keyed, pkgs) is None
+    _setup(root, "R.L", "r", {m: lib / MK.path_of(m, ".olean") for m in ("R.A", "R.P")})
+    assert "and not ['R.Q']" in MK.indexable("R.L", keyed, pkgs), "a legacy file loads everything it imports, transitively"
+
+
 def _entry(store: Path, key: str, scope: str, mod: str, h: str, files: dict[str, bytes], inputs: dict | None = None) -> dict:
     """``mod``'s index entry under ``key``, with its artifacts, as `LakeArtifacts.put` writes it: with what its key read
     (``inputs``), it is also the entry the module was last indexed under."""

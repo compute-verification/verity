@@ -48,8 +48,8 @@ passed, failed or was killed, from sources none of which runs code while it comp
 (`lean_audit.runs_code`), and only when its compile ended (its trace whole, each output under the hash the trace
 names and no newer than the `.hash` beside it), under the key the outputs its
 build holds give it (`read_digests`), and only where Lake read its header as `headers.py` does (`indexable`): the
-workspace modules its `ir/<module>.setup.json` lists (`importArts`, every module it imports, transitively) are the closure
-of those read here, each built in the package `keys` found it in, and its own package is the one `keys` names. Every
+workspace modules its `ir/<module>.setup.json` lists (`importArts`, the modules Lake hands its compile) are the ones
+its key reads (`loads`), each built in the package `keys` found it in, and its own package is the one `keys` names. Every
 module it reads is indexed before it. An indexed key is thus computed from a parse Lake agreed with, and the same sources
 and the same outputs of what they read give the same key wherever they are checked out. Each entry records what its key
 read (`record`), and the index keeps which entry each module was last indexed under (`LAST`), so a build says which
@@ -587,9 +587,13 @@ def _strings(j) -> list[str]:
 def indexable(mod: str, keyed: dict[str, Key], pkgs: list[Package], owners: dict[str, str | None] | None = None) -> str | None:
     """Why ``mod``'s build may not be indexed under its key, or None: Lake read its header as `keys` did. Its
     `<module>.setup.json` names it and the package `keys` found it in, and the workspace modules there (`importArts`, an
-    `.olean` under the build of one of ``pkgs``, the workspace's packages) are its closure, each built in the package
-    `keys` found it in. ``owners`` holds, for one build's calls, the package whose build holds each directory an `.olean`
-    is in: a module lists every module it imports transitively, Mathlib's included, thousands of paths in a few hundred
+    `.olean` under the build of one of ``pkgs``, the workspace's packages) are the modules its key reads (`loads`), each
+    built in the package `keys` found it in. Lake hands a compile the modules Lean will load (`fetchTransImportArts`,
+    `Lake/Build/Module.lean`): every module a legacy file imports, transitively, and of a `module` file's imports
+    those its own imports and their `public import`s reach, with all that a `meta import` or an `import all` needs
+    below them. What an import of a `module` file imports privately is not among them, and the key doesn't read it.
+    ``owners`` holds, for one build's calls, the package whose build holds each directory an `.olean` is in: a module
+    lists up to every module it imports transitively, Mathlib's included, thousands of paths in a few hundred
     directories."""
     k = keyed[mod]
     try:
@@ -616,7 +620,7 @@ def indexable(mod: str, keyed: dict[str, Key], pkgs: list[Package], owners: dict
             owners[d] = next((n for n, lib in libs.items() if here.is_relative_to(lib)), None)
         if (owner := owners[d]) is not None:
             built[name(i)] = owner
-    want = k.closure
+    want = set(loads(mod, keyed))
     if set(built) != want:
         return f"Lake imports {sorted(set(built) - want)[:3]} and not {sorted(want - set(built))[:3]} of the workspace"
     if bad := sorted(i for i in want if built[i] != keyed[i].package.name):
