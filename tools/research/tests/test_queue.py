@@ -2765,6 +2765,20 @@ def test_the_preflight_refuses_a_head_that_conflicts_with_next_naming_the_paths_
     assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=None) == 0         # --no-preflight: the lander's
 
 
+def test_under_land_into_main_the_preflight_judges_a_head_on_main_and_reads_no_next(world, capsys):
+    """Under `land_into = "main"` written in drive.toml the verified queue merges each candidate onto `main` and drive's `next`
+    is frozen: a head that conflicts only with what `next` holds is judged on `main`, as the loop merges it, and marked."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    _preflight_main(world)
+    main = _move_main(world, {DRIVE_FLAGS: 'land_into = "main"\n'})
+    world.gh.put(2, h2 := world.change({"pkg/rows.json": '{"r9": 1}\n'}), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    said = next(s for s in world.logs if "preflight" in s)
+    assert f"merged onto `main` at {main[:12]}:" in said, said
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
+
+
 def test_the_preflight_finds_a_prs_merge_on_next_past_a_lock_commit_on_checked_when_it_walks_from_main(world, capsys):
     """When `checked` can't be fetched the preflight walks `next` from `main`, across the commit drive puts on `checked`
     without the queue's trailers (`Lock records regenerated for #N`).  A PR already on `next` still merges onto the commit

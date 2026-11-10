@@ -1150,18 +1150,24 @@ def gates_at(repo: Path, ref: str, key: str = "landing_gates") -> tuple[str, ...
     return getattr(DriveFlags.parse(f"{key} = {json.dumps(gates)}\n", source), key)
 
 
-def into_at(repo: Path, ref: str) -> str:
-    """drive.toml's `land_into` at ``ref``, "main" when it has none.  Only that key is read, as `gates_at` reads its own: drive's
-    config read names a bad key, and every `Queue` reads this one."""
+def land_into_key(repo: Path, ref: str) -> str | None:
+    """drive.toml's `land_into` at ``ref`` as written, None when it has none.  `land_into = "main"` written out is the verified
+    queue's: it lands on `main` itself and nothing builds `next`, so what reads `next` for drive reads nothing then."""
     r = _git(repo, "show", f"{ref}:{DRIVE_FLAGS}", check=False)
     if r.returncode:
-        return "main"
+        return None
     source = f"{DRIVE_FLAGS} at {ref}"
     try:
         into = tomllib.loads(r.stdout).get("land_into")
     except tomllib.TOMLDecodeError as e:
         raise QueueError(f"{source}: not TOML: {e}") from None
-    return "main" if into is None else DriveFlags.parse(f"land_into = {json.dumps(into)}\n", source).land_into
+    return None if into is None else DriveFlags.parse(f"land_into = {json.dumps(into)}\n", source).land_into
+
+
+def into_at(repo: Path, ref: str) -> str:
+    """drive.toml's `land_into` at ``ref``, "main" when it has none.  Only that key is read, as `gates_at` reads its own: drive's
+    config read names a bad key, and every `Queue` reads this one."""
+    return land_into_key(repo, ref) or "main"
 
 
 def signed_at(repo: Path, ref: str) -> bool:
@@ -4486,7 +4492,8 @@ class Preflight:
 
     `next` is fetched fresh; a PR already on it is merged onto the commit below its merge there, as drive's next sync would
     rebuild it, found by its trailers among the commits of `next` the landing branch doesn't hold, past those without them
-    (`_fetch`).
+    (`_fetch`).  Under `land_into = "main"` written in drive.toml, the verified queue's, each `next` above reads `main`: the head
+    is judged on its merge onto `main`'s tip, as the loop merges it, and drive's frozen `next` is never fetched.
 
     The checks of (b) and (e) run in a temporary worktree of the caller's repository at the merge (`merged_worktree`), (e)
     first, within `lean_s`, while the tree is clean (a `research run` ships it), then (b) with its own environment (`sync`;
@@ -4611,7 +4618,8 @@ class Preflight:
         """The commit to merge the head onto, how to name it, and `next`'s members up to it.  The members are the merges of `next`
         that the landing branch's tip (`main`'s when that can't be fetched) doesn't contain, by their trailers, past the commits
         without them (`queue_merges`); the commit is the one below the PR's newest merge among them, else `next`'s tip, or with no
-        `next` that landing tip."""
+        `next` that landing tip.  Under `land_into = "main"` written in drive.toml (`land_into_key`) it is `main`'s tip with no
+        members: the verified queue merges each candidate onto `main`, and `next` is drive's, frozen."""
         _git(self.repo, *STALL, "fetch", "-q", self.remote, "+refs/heads/main:refs/queue/preflight/main",
              f"+refs/pull/{pr.number}/head:refs/queue/preflight/pr")
         missing = lambda: _git(self.repo, "cat-file", "-e", f"{pr.head}^{{commit}}", check=False).returncode   # noqa: E731
@@ -4620,7 +4628,9 @@ class Preflight:
         if missing():
             raise QueueError(f"{pr.head[:12]} isn't on {self.remote} (pushed again since?)")
         main, into = _out(self.repo, "rev-parse", "refs/queue/preflight/main"), "main"
-        if (land := into_at(self.repo, "refs/queue/preflight/main")) != "main" and not _git(
+        if (written := land_into_key(self.repo, "refs/queue/preflight/main")) == "main":
+            return main, f"`main` at {main[:12]}", []
+        if (land := written or "main") != "main" and not _git(
                 self.repo, *STALL, "fetch", "-q", self.remote, f"+refs/heads/{land}:refs/queue/preflight/{land}", check=False).returncode:
             main, into = _out(self.repo, "rev-parse", f"refs/queue/preflight/{land}"), land
         r = _git(self.repo, *STALL, "ls-remote", "--exit-code", self.remote, f"refs/heads/{BRANCH}", check=False)
@@ -5415,7 +5425,8 @@ def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | 
     """`research queue review`: without ``pr``, list the open PRs onto `main` marked ready at their head and not on `main` that no
     land verdict at their head lands (`unreviewed`), oldest mark first: those the verified queue waits on a reviewer for (a
     low-risk one lands on its mark alone, so its row says it); with it, write ``verdict`` (`land` or `hold`, ``ref`` its note or
-    reason) by ``by`` on the PR's head on `next` (or ``sha``, or its open head when it isn't on `next`), refusing its owner.  Without
+    reason) by ``by`` on the PR's head on `next` (or ``sha``, or its open head when it isn't on `next`), refusing its owner.  Under
+    `land_into = "main"` written in drive.toml no `next` is read (`land_into_key`): the head is its open one, or ``sha``.  Without
     ``sha`` it refuses when GitHub has a head other than `next`'s, as the reviewer may have read either; a short ``sha`` is the
     known head or clone commit it starts.  The list names each land verdict ``labels`` doesn't authenticate
     (`StoreLabels.refusals`); ``store``, a `labelauth.Signer` (`label_signer`), refuses a verdict it can't sign."""
@@ -5455,7 +5466,7 @@ def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | 
             print(f"research queue review: {len(rows)} marked PR(s) not on `main` lack a land verdict")
         return 0
     q.fetch()
-    chain = q.chain()
+    chain = [] if land_into_key(q.workdir, "refs/remotes/origin/main") == "main" else q.chain()
     m = next((m for m in chain if m.pr == pr), None)
     live = (p := opened.get(pr)) and ((p.branch and getattr(q.github, "branch_tip", lambda _b: None)(p.branch)) or p.head)
     if sha:
