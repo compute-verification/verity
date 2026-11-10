@@ -36,6 +36,9 @@ from pathlib import Path
 import pytest
 
 from verity.core.protocols.certifier.active import DATA, PAD, VirtualClock
+from verity.core.protocols.certifier.warden import (
+    END, FAIL, Warden as Certifier, WardenParams as Parameters, cells, read_cell,
+)
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
@@ -44,8 +47,6 @@ import channel  # noqa: E402
 import parties  # noqa: E402
 import run as bench  # noqa: E402
 
-DEVICE, Certifier, Parameters = parties.device()
-END, FAIL, cells, read_cell = DEVICE.END, DEVICE.FAIL, DEVICE.cells, DEVICE.read_cell
 TAU = 0.1
 SEED = bytes(range(32))
 

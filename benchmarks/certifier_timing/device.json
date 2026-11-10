@@ -1,5 +1,0 @@
-{
-  "module": "verity.core.protocols.certifier.warden",
-  "certifier": "Warden",
-  "parameters": "WardenParams"
-}

@@ -7,9 +7,9 @@ clock; the observer is on that host too, over loopback, or on another, where it 
   seed and t (`coin`). It acts only through when and how it writes its own bytes: `Plan.writes` is every time it
   writes at, a function of the bit, the lead and the public schedule. The bytes it writes are the same whatever the
   bit, `unit` bytes an interval.
-- **The certifier** is the device under test: the network certifier (`device`: the class device.json names, of
-  whatever tree is first on the import path), on its loop (`paced_ms` 0) or with its pacer, or `relay`, a stand-in that paces nothing and passes
-  each side's bytes on as they come, which is where a planted channel is put.
+- **The certifier** is the device under test: the network certifier (`network`, which imports it from whatever
+  tree is first on the import path), on its loop (`paced_ms` 0) or with its pacer, or `relay`, a stand-in that paces
+  nothing and passes each side's bytes on as they come, which is where a planted channel is put.
 - **The observer** is the client side. It reads the certifier's bytes a `chunk` at most a read and timestamps the
   first byte of each interval's `chunk` twice: on its own clock once the read returns, waiting in the kernel for it
   (`plain`) or polling without waiting (`spin`), and with the stamp the kernel gave the bytes as they came off the
@@ -45,7 +45,6 @@ import asyncio
 import dataclasses
 import gc
 import hashlib
-import importlib
 import json
 import math
 import os
@@ -60,8 +59,6 @@ from pathlib import Path
 
 ATTACKS = ("delay", "write", "burst")
 CERTIFIERS = ("relay", "network")
-#: the device under test by name: its module, its certifier's class and its parameters' class (`device`)
-DEVICE = json.loads(Path(__file__).with_name("device.json").read_text())
 LOOPBACK = "127.0.0.1"
 OBSERVERS = ("plain", "spin")
 #: how long before a time the server stops sleeping and spins on the clock
@@ -145,13 +142,6 @@ def first_interval(cfg: dict, arrived: int) -> int:
     network certifier's releases the request `admit_lag` boundaries after admission and the first of the server's
     bytes `delay` after it; the relay's two intervals on."""
     return arrived - cfg["admit_lag"] + cfg["delay"] if cfg["certifier"] == "network" else arrived + 2
-
-
-def device() -> tuple:
-    """The device under test, of whatever tree is first on the import path: the module `DEVICE` names, whose `cells`
-    frames a client's bytes, its certifier's class and its parameters' class."""
-    module = importlib.import_module(DEVICE["module"])
-    return module, getattr(module, DEVICE["certifier"]), getattr(module, DEVICE["parameters"])
 
 
 def plan_of(cfg: dict) -> Plan:
@@ -298,9 +288,10 @@ def observer(cfg: dict) -> dict:
     chunk's bytes at most, so the kernel's stamp on it (`kernel_stamp`) is of that chunk's bytes: `kernel` holds it
     for each chunk, moved from the wall clock to the monotonic one by their difference as the observer started
     (`wall_less_monotonic_ns`: then, and at its end), 0 for a read that carried none; None where the kernel stamps
-    nothing, with why in `unstamped` (`stamping`). On the certifier's host the observer starts at the run's origin and ends at its stop. On
-    another host (`connect`, and no `origin`) it has its own clocks alone: it tries the certifier for `wait_s`, past
-    any connection that gave it nothing, and ends once a connection's intervals have had their time."""
+    nothing, with why in `unstamped` (`stamping`). On the certifier's host the observer starts at the run's origin
+    and ends at its stop. On another host (`connect`, and no `origin`) it has its own clocks alone: it tries the
+    certifier for `wait_s`, past any connection that gave it nothing, and ends once a connection's intervals have had
+    their time."""
     cpus = _pin(cfg, 3)
     spin, chunk, tau = cfg["observer"] == "spin", int(cfg["chunk"]), cfg["interval_ms"] / 1000
     address, remote = (cfg.get("connect", LOOPBACK), int(cfg["port"])), cfg.get("origin") is None
@@ -462,9 +453,7 @@ async def network(cfg: dict) -> dict:
     kernel. Returns each tick's lateness, and from a paced one each bucket's release start and write end after its
     time."""
     from verity.core.protocols.certifier.active import HEADER
-
-    module, Certifier, Parameters = device()
-    cells = module.cells
+    from verity.core.protocols.certifier.warden import Warden as Certifier, WardenParams as Parameters, cells
 
     plan = plan_of(cfg)
     if HEADER.size != HEADER_BYTES:

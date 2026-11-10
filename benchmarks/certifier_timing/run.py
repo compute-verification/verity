@@ -54,9 +54,9 @@ holds the gate (`LAUNCH_MODES`): `gate`, the kernel's timer on the host's monoto
 whole schedule offloaded (its clock, which the host keeps to TAI); `txtime`, the kernel stamps each packet with its
 gate's opening and an ETF queue holds it till `ETF_DELTA_NS` before then, in software; `txtime-nic`, the same with
 the NIC launching each packet at its stamp. A socket's own `SO_TXTIME` plays no part: TCP sets no packet's time from
-it. `--launch` takes the right to administer the host's network, `tc`, `sch_taprio` (and `sch_etf`) and a device with two transmit queues; it
-keeps the device's queue counts in launch.json, and a case whose gated queue carried fewer packets than it has
-intervals is no measurement.
+it. `--launch` takes the right to administer the host's network, `tc`, `sch_taprio` (and `sch_etf`) and a device
+with two transmit queues; it keeps the device's queue counts in launch.json, and a case whose gated queue carried
+fewer packets than it has intervals is no measurement.
 
 `score` measures recorded runs again, each DIR a case's directory as `run` or `serve` left it (config.json,
 server.json, observer.json, certifier.json), with `run`'s exit codes, and `table` prints results' rows. `target` prints the budget's bits an
@@ -186,8 +186,9 @@ def _launch(cfg: dict) -> list[str]:
         done = subprocess.run(command, capture_output=True, text=True)
         if done.returncode:
             subprocess.run(remove, capture_output=True)
-            raise RuntimeError(f"--launch: `{' '.join(command)}` failed ({done.stderr.strip()}): it takes "
-                               f"the right to administer the network, sch_taprio (and sch_etf) and a device with two transmit queues")
+            raise RuntimeError(f"--launch: `{' '.join(command)}` failed ({done.stderr.strip()}): it takes the "
+                               f"right to administer the network, sch_taprio (and sch_etf) and a device with two "
+                               f"transmit queues")
     return remove
 
 
@@ -493,10 +494,9 @@ def _hello(certifier: str, tree: Path) -> tuple[str, int]:
     is, the network certifier in its cells."""
     if certifier == "relay":
         return parties.HELLO.hex(), SCHEDULE["slots"] * (SCHEDULE["cell_bytes"] - HEADER_BYTES)
-    code = ("import importlib, sys; cells = importlib.import_module(sys.argv[3]).cells; "
+    code = ("import sys; from verity.core.protocols.certifier.warden import cells; "
             "print(cells(bytes.fromhex(sys.argv[1]), int(sys.argv[2])).hex())")
-    done = subprocess.run([sys.executable, "-c", code, parties.HELLO.hex(), str(SCHEDULE["cell_bytes"]),
-                           parties.DEVICE["module"]],
+    done = subprocess.run([sys.executable, "-c", code, parties.HELLO.hex(), str(SCHEDULE["cell_bytes"])],
                           env=os.environ | {"PYTHONPATH": str(tree)}, capture_output=True, text=True, check=True)
     return done.stdout.strip(), SCHEDULE["cell_bytes"] * SCHEDULE["slots"]
 
