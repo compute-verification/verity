@@ -25,10 +25,14 @@ refuses M <= 16).  Non-finite activations are outside the statement and not gate
 from __future__ import annotations
 
 import functools
+from typing import TYPE_CHECKING
 
 import torch
 import triton
 import triton.language as tl
+
+if TYPE_CHECKING:
+    from triton.compiler import CompiledKernel
 
 OPTS = {"enable_fp_fusion": False, "enable_reflect_ftz": False}
 
@@ -176,7 +180,7 @@ class Cfg(tuple):
     """(BLOCK_M, BLOCK_N, BLOCK_K, num_warps, num_stages, SPLIT_K, TMA); `Cfg.parse("32x64x256:w4:s3:k2")`.  TMA 1 is
     `exactlin_scaled_mm_tma` (host tensor descriptors, SPLIT_K 1), 2 the same warp-specialized, 0 the pointer kernel."""
 
-    def __new__(cls, bm, bn, bk, warps=4, stages=3, split=1, tma=0):
+    def __new__(cls, bm: int, bn: int, bk: int, warps: int = 4, stages: int = 3, split: int = 1, tma: int = 0) -> Cfg:
         return super().__new__(cls, (bm, bn, bk, warps, stages, split, tma))
 
     @classmethod
@@ -280,12 +284,13 @@ class Workspace:
     """The int32 partial sums and per-tile counters a split-K launch needs, zero between calls; one per device, sized
     once, so a call allocates nothing."""
 
-    def __init__(self, device, words: int = 64 * 32768, tiles: int = 1 << 16):
+    def __init__(self, device: torch.device | str, words: int = 64 * 32768, tiles: int = 1 << 16) -> None:
         self.ws = torch.zeros(words, dtype=torch.int32, device=device)
         self.cnt = torch.zeros(tiles, dtype=torch.int32, device=device)
 
 
-def quant_rows(x: torch.Tensor, xq: torch.Tensor, s: torch.Tensor, num_warps: int | None = None, rows: int | None = None):
+def quant_rows(x: torch.Tensor, xq: torch.Tensor, s: torch.Tensor, num_warps: int | None = None,
+               rows: int | None = None) -> CompiledKernel:
     """x [M, K] bf16 (unit stride along K) -> xq [M, K] int8 and s [M] (or [M, 1]) float32, in place."""
     m, k = x.shape
     assert x.dtype == torch.bfloat16 and x.stride(1) == 1, (x.dtype, x.stride())
@@ -298,7 +303,7 @@ def quant_rows(x: torch.Tensor, xq: torch.Tensor, s: torch.Tensor, num_warps: in
 
 
 def scaled_mm(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor,
-              cfg: Cfg | None = None, work: Workspace | None = None):
+              cfg: Cfg | None = None, work: Workspace | None = None) -> CompiledKernel:
     """xq [M, K] int8, s_a [M] f32, w [N, K] int8 (row-major), s_w [N] or [N, 1] f32 -> y [M, N] bf16, in place.  A
     split-K `cfg` needs `work`."""
     m, k = xq.shape
@@ -327,13 +332,14 @@ def scaled_mm(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.T
                                           num_stages=stages, **OPTS)
 
 
-def linear(x: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, xq: torch.Tensor, s_a: torch.Tensor, y: torch.Tensor):
+def linear(x: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, xq: torch.Tensor, s_a: torch.Tensor,
+           y: torch.Tensor) -> None:
     """The exact linear into caller-owned (xq, s_a, y)."""
     quant_rows(x, xq, s_a)
     scaled_mm(xq, s_a, w, s_w, y)
 
 
-def ptx_check(compiled) -> dict:
+def ptx_check(compiled: CompiledKernel) -> dict:
     """What the PTX of a compiled kernel (a launch's return value) says about its float semantics."""
     ptx = compiled.asm["ptx"]
     name = compiled.metadata.name
