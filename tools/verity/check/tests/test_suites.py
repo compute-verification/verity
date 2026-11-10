@@ -964,16 +964,16 @@ def test_the_tests_get_neither_the_runners_research_variables_nor_its_pycache_pr
 
 def test_inside_a_research_run_the_tests_get_its_custody_key_and_require_the_store(tmp_path):
     """The tests lose RESEARCH_*, the machine's store among them, so a fixture fetch would skip as "the evidence store is not
-    reachable" here and pass under a bare pytest. With the run's custody key staged they get it as check's steps do, and the
-    store is required; with none, neither."""
+    reachable" here and pass under a bare pytest. With the run's custody key staged they get it as check's steps do, the
+    store is required and the vLLM reference regression runs; with none, none of the three."""
     root = tmp_path / "tree"
     run = tmp_path / "research" / "runs" / "r1"
     custody = tmp_path / "research" / "requests" / "r1" / "custody"
     run.mkdir(parents=True)
     custody.mkdir(parents=True)
     test = ("import os\n\ndef test_env():\n"
-            "    assert (os.environ.get('CHECK_STORE_CUSTODY'), os.environ.get('VERITY_STORE_REQUIRED')) == (os.environ['WANT_C'] or None, "
-            "os.environ['WANT_R'] or None)\n")
+            "    assert (os.environ.get('CHECK_STORE_CUSTODY'), os.environ.get('VERITY_STORE_REQUIRED'), os.environ.get('VERITY_REGRESSION'))"
+            " == (os.environ['WANT_C'] or None, os.environ['WANT_R'] or None, os.environ['WANT_R'] or None)\n")
     _env_workspace(root, {"pkg": test})
     extra = {"RESEARCH_RUN_ID": "r1", "RESEARCH_RUN_DIR": str(run), "WANT_C": "", "WANT_R": ""}
     p = _run_suite(root, tmp_path, "--fresh", extra=extra)

@@ -4045,7 +4045,7 @@ Path(os.environ["FAKE_SEEN"]).write_text(json.dumps({"argv": a, "files": sorted(
                                                      "lake": shutil.which("lake"),
                                                      "env": {k: os.environ.get(k) for k in ("VERITY_STORE_REQUIRED",
                                                              "CHECK_STORE_CUSTODY", "RESEARCH_RUN_ID", "GIT_AUTHOR_EMAIL",
-                                                             "PYTHONPYCACHEPREFIX")}}))
+                                                             "PYTHONPYCACHEPREFIX", "VERITY_REGRESSION")}}))
 fail = os.environ.get("FAKE_FAIL")
 Path(a[a.index("--json") + 1]).write_text(json.dumps([{"name": "pkg", "suite": "pkg", "status": "failed" if fail else "passed",
                                                        "failed_tests": [fail] if fail else None}]))
@@ -4651,7 +4651,9 @@ def test_a_remote_quick_tier_gives_its_suites_the_store_as_a_recorded_check_does
     """On the machine the workload's environment holds no store credential, so `check.py` hands its steps the run's custody key
     (CHECK_STORE_CUSTODY) and VERITY_STORE_REQUIRED=1.  A tier that handed neither would skip Flock's store-backed tests as "the
     evidence store is not reachable", and the skip would pass.  It hands both as check.py does, never the caller's,
-    and nothing of the recording run's own; with no key staged, the store is still required.  The machine's PYTHONPYCACHEPREFIX
+    and nothing of the recording run's own; with no key staged, the store is still required.  It runs the vLLM reference
+    regression as check's steps do (VERITY_REGRESSION=1), so a PR that breaks a row fails before its mark, not first in the
+    full check after landing.  The machine's PYTHONPYCACHEPREFIX
     doesn't reach the suites, or test_remote_cwd.py's runs would write their bytecode there instead of under their own root and
     fail every tier that runs tools/research on that machine."""
     from research import queue as Q
@@ -4664,6 +4666,7 @@ def test_a_remote_quick_tier_gives_its_suites_the_store_as_a_recorded_check_does
     monkeypatch.setenv("PYTHONPYCACHEPREFIX", str(world.tmp / "the-machines-pycache"))
     monkeypatch.setenv("CHECK_STORE_CUSTODY", str(world.tmp / "the-callers-custody"))
     monkeypatch.delenv("VERITY_STORE_REQUIRED", raising=False)
+    monkeypatch.setenv("VERITY_REGRESSION", "0")
     monkeypatch.delenv("FAKE_FAIL", raising=False)
     machine = Machine(world.tmp, custody_r2=True)
     tier, _ = _remote_tier(world, monkeypatch, machine)
@@ -4671,12 +4674,12 @@ def test_a_remote_quick_tier_gives_its_suites_the_store_as_a_recorded_check_does
     flags = machine.launched[-1]
     key = machine.root / "requests" / flags[flags.index("--id") + 1] / "custody"
     env = json.loads(seen.read_text())["env"]
-    assert env["VERITY_STORE_REQUIRED"] == "1" and env["CHECK_STORE_CUSTODY"] == str(key.resolve())
+    assert env["VERITY_STORE_REQUIRED"] == "1" and env["CHECK_STORE_CUSTODY"] == str(key.resolve()) and env["VERITY_REGRESSION"] == "1"
     assert env["RESEARCH_RUN_ID"] is None and env["PYTHONPYCACHEPREFIX"] is None and env["GIT_AUTHOR_EMAIL"]
     machine.custody_r2 = False
     assert tier(world.gh.prs[1]) is None
     env = json.loads(seen.read_text())["env"]
-    assert env["VERITY_STORE_REQUIRED"] == "1" and env["CHECK_STORE_CUSTODY"] is None
+    assert env["VERITY_STORE_REQUIRED"] == "1" and env["CHECK_STORE_CUSTODY"] is None and env["VERITY_REGRESSION"] == "1"
 
 
 def test_a_quick_tier_with_no_lake_on_the_path_builds_with_elans_and_with_none_refuses(world, monkeypatch):

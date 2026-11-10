@@ -6,7 +6,7 @@ as the refusal `research queue ready` prints, or None for a pass, the same way w
     python3 quick_tier.py --head SHA --base SHA [--lean DIR ...] -- CMD...
 
 runs it in the working directory inside a `research run`, in the environment check.py gives its steps there (`run_env`: the store
-required, through the run's custody key), and writes the facts to `$RESEARCH_RUN_DIR/result.json` (kind `quick-tier/v1`, under
+required, through the run's custody key, and the vLLM reference regression run), and writes the facts to `$RESEARCH_RUN_DIR/result.json` (kind `quick-tier/v1`, under
 `tier`), with the suites' report and logs under `$RESEARCH_RUN_DIR/out/`.  `research queue ready --on MACHINE` sends this file with
 the run, so the machine runs the caller's version whatever the PR's tree holds.  Stdlib only and no import from `research`: it runs
 from the run's inputs under the machine's `python3`.
@@ -25,8 +25,8 @@ SUITES = "tools/verity/check/suites.py"
 #: variables that would point the tier's Python at the caller's tree or environment instead of the checkout's own
 CALLER_ENV = ("PYTHONPATH", "VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT")
 ROW_KEYS = ("name", "suite", "status", "failed_tests", "beyond_tests", "log")
-#: what check.py sets for its steps inside a recorded run (its CUSTODY_ENV and STORE_REQUIRED_ENV), never inherited
-CUSTODY_ENV, STORE_REQUIRED_ENV = "CHECK_STORE_CUSTODY", "VERITY_STORE_REQUIRED"
+#: what check.py sets for its steps inside a recorded run (its CUSTODY_ENV, STORE_REQUIRED_ENV and REGRESSION_ENV), never inherited
+CUSTODY_ENV, STORE_REQUIRED_ENV, REGRESSION_ENV = "CHECK_STORE_CUSTODY", "VERITY_STORE_REQUIRED", "VERITY_REGRESSION"
 #: what a machine's runner gives every run besides `RESEARCH_*` (remote.py), which check.py's steps don't get either
 RUNNER_ENV = ("PYTHONPYCACHEPREFIX",)
 
@@ -41,9 +41,11 @@ def run_env(environ, run_dir: str, run_id: str) -> dict:
     run's bytecode would not go to its own root's cache); the evidence store required (a
     store-backed test that can't reach it fails instead of skipping) and reached through the run's custody dir, `<root>/requests/<run
     id>/custody/` beside `<root>/runs/<run id>/`, when it holds the key (on a machine the workload's environment holds no store
-    credential); and a git identity for the tests that commit in throwaway repositories."""
-    out = {k: v for k, v in environ.items() if not k.startswith("RESEARCH_") and k not in (CUSTODY_ENV, STORE_REQUIRED_ENV, *RUNNER_ENV)}
-    out[STORE_REQUIRED_ENV] = "1"
+    credential); the vLLM reference regression run (VERITY_REGRESSION=1, without which it skips); and a git identity for the tests
+    that commit in throwaway repositories."""
+    owned = (CUSTODY_ENV, STORE_REQUIRED_ENV, REGRESSION_ENV, *RUNNER_ENV)
+    out = {k: v for k, v in environ.items() if not k.startswith("RESEARCH_") and k not in owned}
+    out[STORE_REQUIRED_ENV] = out[REGRESSION_ENV] = "1"
     custody = Path(run_dir).resolve().parent.parent / "requests" / run_id / "custody"
     if (custody / "store.toml").is_file() and (custody / "cred.json").is_file():
         out[CUSTODY_ENV] = str(custody)

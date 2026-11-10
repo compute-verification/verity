@@ -196,7 +196,7 @@ ENV_PREFIXES = ("VERITY_", "FLOCK_")
 #: run` would reach another verdict than inside check (test_remote_cwd's)
 RUNNER_PREFIX, RUNNER_ENV = "RESEARCH_", ("PYTHONPYCACHEPREFIX",)
 #: check.py's: what its steps get inside a recorded run in place of the RESEARCH_* that named the machine's store (`store_custody`)
-CUSTODY_ENV, STORE_REQUIRED_ENV = "CHECK_STORE_CUSTODY", "VERITY_STORE_REQUIRED"
+CUSTODY_ENV, STORE_REQUIRED_ENV, REGRESSION_ENV = "CHECK_STORE_CUSTODY", "VERITY_STORE_REQUIRED", "VERITY_REGRESSION"
 #: the suites whose tests run `lake` or what `lake build` builds in the Lean verifier: check runs them after its `lean-build`
 #: step (its `lean-suites`), and on its own this runs that build before them, so they run or skip alike in both. Lake builds a
 #: package's path requirements in their own `.lake`, so most packages' builds write the verifier's beside lean-build (main
@@ -1953,17 +1953,18 @@ def sweep_basetemps(tmp: Path | None = None, proc: Path = Path("/proc"), now: fl
 
 
 def store_custody() -> None:
-    """Inside a `research run` whose custody key is staged, the tests reach the evidence store through it and require it, as check's
-    steps do (check.py's `env()`, "The evidence store"). `run` drops RESEARCH_*, the machine's store among them, so without this a
+    """Inside a `research run` whose custody key is staged, the tests reach the evidence store through it and require it, and the
+    vLLM reference regression runs against the store's references, as check's steps do (check.py's `env()`, "The evidence store"
+    and "The vLLM reference regression"). `run` drops RESEARCH_*, the machine's store among them, so without this a
     test that fetches a fixture skipped as "the evidence store is not reachable" under this runner and passed under a bare pytest
-    (test_lean_session.py's ZK server wire-tamper negatives among them). Set here, before
-    `environment()`, so the requirement keys the pass and a pass earned with those skips is never reused for one without."""
+    (test_lean_session.py's ZK server wire-tamper negatives among them), and the regression skipped where check runs it. Set
+    here, before `environment()`, so both key the pass and a pass earned with those skips is never reused for one without."""
     run_dir, run_id = SETTINGS.RESEARCH_RUN_DIR, SETTINGS.RESEARCH_RUN_ID
     if SETTINGS.is_set(CUSTODY_ENV) or not run_dir or not run_id:
         return
     d = Path(run_dir).resolve().parent.parent / "requests" / run_id / "custody"
     if (d / "store.toml").is_file() and (d / "cred.json").is_file():
-        os.environ[CUSTODY_ENV], os.environ[STORE_REQUIRED_ENV] = str(d), "1"
+        os.environ[CUSTODY_ENV], os.environ[STORE_REQUIRED_ENV], os.environ[REGRESSION_ENV] = str(d), "1", "1"
 
 
 def read_report(report: Path) -> dict | None:
