@@ -89,11 +89,11 @@ theorem Zk.ZKAt.of_ZK {Stmt Wit VS View : Type} {Zs : Zk Stmt Wit VS View} {Rel 
     {εzk : Stmt → ℝ≥0∞} (h : Zs.ZK Rel εzk) : Zs.ZKAt Rel fun x _ _ => εzk x :=
   h
 
-/-- `Zk.ZKAt` on other statements (`zkComap`). -/
-theorem Zk.ZKAt.comap {Stmt Stmt' Wit VS View : Type} {Zs : Zk Stmt Wit VS View} {Rel : Stmt → Wit → Prop}
+/-- `Zk.ZKAt` at the statement `g x`, against a verifier that read `x` (`Zk.after`). -/
+theorem Zk.ZKAt.after {Stmt Stmt' Wit VS View : Type} {Zs : Zk Stmt Wit VS View} {Rel : Stmt → Wit → Prop}
     {ε : Stmt → Wit → VS → ℝ≥0∞} (h : Zs.ZKAt Rel ε) (g : Stmt' → Stmt) :
-    (zkComap Zs g).ZKAt (fun x w => Rel (g x) w) fun x => ε (g x) :=
-  fun x w hR v => h (g x) w hR v
+    (Zs.after g).ZKAt (fun x w => Rel (g x) w) fun x w v => ε (g x) w (v x) :=
+  fun x w hR v => h (g x) w hR (v x)
 
 /-! ## Commitments -/
 
@@ -227,8 +227,8 @@ theorem Flock.SecurityProofs.GenericSampledZKAt : Flock.Guarantees.GenericSample
   have h1 : Close (auditView H Zs samp wit Xt v) (auditSim H Zs samp Xt v)
       (avg fun r => ε (H.commit Xt r, samp v (H.commit Xt r)) (wit Xt r (samp v (H.commit Xt r))) v) :=
     Close.coinAvg (fun r => Zs.real (H.commit Xt r, samp v (H.commit Xt r)) (wit Xt r (samp v (H.commit Xt r))) v)
-      (fun r => Zs.sim (H.commit Xt r, samp v (H.commit Xt r)) v) (fun r w => (H.commit Xt r, samp v (H.commit Xt r), w))
-      _ fun r => hZ _ _ (hX r _) v
+      (fun r => Zs.sim (H.commit Xt r, samp v (H.commit Xt r)) v)
+      (fun r w => (H.commit Xt r, samp v (H.commit Xt r), w)) _ fun r => hZ _ _ (hX r _) v
   have h2 : Close (auditSim H Zs samp Xt v) (auditSim H Zs samp X₀ v) εh := by
     rw [auditSim_eq_andThen, auditSim_eq_andThen]
     exact hH _ Xt X₀ (auditSimAfter Zs samp v)
@@ -240,6 +240,6 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.SampledGeneric in
 (`hm96Exe_hiding`). -/
 theorem Flock.SecurityProofs.SpotFlockZK : Flock.Guarantees.SpotFlockZK := by
   intro nr t ht ι _ _ n Θ stmt samp wit Xt hX X₀ v
-  exact Flock.SecurityProofs.GenericSampledZKAt n _ _ _ _ _ _ (hm96Exe ι) (zkComap (flockSession nr t Θ) stmt)
-    (fun s w => Claims.Flock.R (flockZk nr t).parse (stmt s) w) (fun s w v => flockErr nr t (stmt s) w v) _ samp wit
-    ((flockSession_zkAt nr t ht Θ).comap stmt) (hm96Exe_hiding ι) Xt hX X₀ v
+  exact Flock.SecurityProofs.GenericSampledZKAt n _ _ _ _ _ _ (hm96Exe ι) ((flockSession nr t Θ).after stmt)
+    (fun s w => Claims.Flock.R (flockZk nr t).parse (stmt s) w) (fun s w v => flockErr nr t (stmt s) w (v s)) _ samp wit
+    ((flockSession_zkAt nr t ht Θ).after stmt) (hm96Exe_hiding ι) Xt hX X₀ v

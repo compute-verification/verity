@@ -14,6 +14,8 @@ that hides, as a hypothesis. This file defines what the statements of `HidingSta
 
 * `Zk.ZKAt`: zero knowledge, both ways, at an error that may read the statement, the witness and the verifier, as the
   claims core's `ZKmalR` has it (its `Fork` term is the real game's collision finder, built from both).
+* `Zk.after`: the proof system at a statement built from what the verifier read, against a verifier that chooses how
+  it plays from all of it: in the audit, from the whole commitment and its sample.
 * `Hider.map`, `Hider.comap`: a commitment read through a function (leaf digests, the trees over them, their roots),
   and a commitment to a function of the trace (a row's inner digest).
 * `hm96Hider`: hm96's commitment to a trace of `N` leaves as a `Hider`: the prover's coins are one salt per leaf, and
@@ -41,6 +43,13 @@ def Zk.ZKAt {Stmt Wit VS View : Type} (Zs : Zk Stmt Wit VS View) (Rel : Stmt →
     (ε : Stmt → Wit → VS → ℝ≥0∞) : Prop :=
   ∀ x w, Rel x w → ∀ v, Close (Zs.real x w v) (Zs.sim x v) (ε x w v)
 
+/-- **The proof system at the statement `g x`, against a verifier that read `x`**: for the audit, `x` is the
+commitment and the sample and `g` builds the session's statement from them, and the verifier chooses how it plays the
+session from all of `x`, the whole commitment included, whatever of it the session's statement keeps. -/
+def Zk.after {Stmt Stmt' Wit VS View : Type} (Zs : Zk Stmt Wit VS View) (g : Stmt' → Stmt) :
+    Zk Stmt' Wit (Stmt' → VS) View :=
+  ⟨fun x w v => Zs.real (g x) w (v x), fun x v => Zs.sim (g x) (v x)⟩
+
 /-! ## Commitments read through a function -/
 
 namespace Hider
@@ -59,9 +68,9 @@ end Hider
 /-! ## hm96's trace commitment -/
 
 /-- **hm96's commitment to a trace of `N = |ι|` leaves.** The trace is a digest `Xt i` at each leaf, the prover's coins
-are one salt `y i` per leaf, and leaf `i` of the commitment is `Hf (Xt i + My (y i), c (y i))`: with `My` the salt's mask
-under the key, `c` the salt's hash and `+` XOR, the pair is hm96's commit string `(b, c)`, and `Hf` is what is published
-of it (the pair itself, or the tree leaf's digest). -/
+are one salt `y i` per leaf, and leaf `i` of the commitment is `Hf (Xt i + My (y i), c (y i))`: with `My` the salt's
+mask under the key, `c` the salt's hash and `+` XOR, the pair is hm96's commit string `(b, c)`, and `Hf` is what is
+published of it (the pair itself, or the tree leaf's digest). -/
 def hm96Hider (ι : Type) {Sa Bs C D : Type} [AddCommGroup Bs] (My : Sa → Bs) (c : Sa → C) (Hf : Bs × C → D) :
     Hider (ι → Bs) (ι → Sa) (ι → D) :=
   ⟨fun Xt y i => Hf (Xt i + My (y i), c (y i))⟩

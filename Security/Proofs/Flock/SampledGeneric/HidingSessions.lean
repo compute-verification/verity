@@ -233,10 +233,11 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.SampledGeneric in
 (`GenericSessionsZK`), on the sample's list of statements. -/
 theorem Flock.SecurityProofs.GenericSampledSessionsZK : Flock.Guarantees.GenericSampledSessionsZK := by
   intro n Tr Rnd Com Stmt Wit VS View _ _ H Zs Rel ε εh stmts samp wits hZ hH Xt hX X₀ v
-  exact Flock.SecurityProofs.GenericSampledZKAt n Tr Rnd Com (List Wit) (List Stmt → List View → VS) (List View) H
-    (zkComap Zs.seq stmts) (fun s ws => List.Forall₂ Rel (stmts s) ws)
-    (fun s ws v => Zs.seqErr ε ((stmts s).zip ws) (v (stmts s))) εh samp wits
-    ((Flock.SecurityProofs.GenericSessionsZK Stmt Wit VS View Zs Rel ε hZ).comap stmts) hH Xt hX X₀ v
+  exact Flock.SecurityProofs.GenericSampledZKAt n Tr Rnd Com (List Wit)
+    (Com × Finset (Fin n) → List Stmt → List View → VS) (List View) H
+    (Zs.seq.after stmts) (fun s ws => List.Forall₂ Rel (stmts s) ws)
+    (fun s ws v => Zs.seqErr ε ((stmts s).zip ws) (v s (stmts s))) εh samp wits
+    ((Flock.SecurityProofs.GenericSessionsZK Stmt Wit VS View Zs Rel ε hZ).after stmts) hH Xt hX X₀ v
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.SampledGeneric in
 /-- **The sampled audit's zero knowledge with a session per sampled statement, at the sum of the sessions' errors**
