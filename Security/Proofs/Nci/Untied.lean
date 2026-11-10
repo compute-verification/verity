@@ -62,9 +62,10 @@ dropped block is lost whole, and (E) is taken at it, whichever blocks are droppe
 The count itself needs no such circuit. `counts_on` takes a cap on each block of a set `G` and
 the entries of all the blocks as a total. So on the untied circuit with every block kept, for any `G`, each block of
 `G` is counted under its own cap (`k` and the gates of `T` it held, or `k` and `b` for each word it reads) against the
-outputs with a wire in a block of `G`, all the blocks together read `m k + |T|` (or `m k + b |E|`), and the MACs a
-block outside `G` holds are counted apart, at most its gates (`counts_asInputs`, `counts_untie`). Under (H) at `d`,
-at each block of `G`'s own cap, and (E), the squared caps are summed over `G`: `bound_asInputs_he`, `bound_untie_he`.
+pairs of a block of `G` and an output with a wire in it, all the blocks together read `m k + |T|` (or `m k + b |E|`),
+and the MACs a block outside `G` holds are counted apart, at most its gates (`counts_asInputs`, `counts_untie`). Under
+(H) at `d`, at each block of `G`'s own cap, and (E), the squared caps are summed over `G`: `bound_asInputs_he`,
+`bound_untie_he`.
 -/
 
 @[expose] public section
@@ -620,8 +621,8 @@ theorem counts_untie {ι : Type} [Fintype ι] [DecidableEq ι] {m : ℕ} (d : Re
 
 /-- **The bound with untied words, under (H) and (E), each block at its own cap.** `HE`'s premises on the values, with
 (H) at `d` itself, at each block of `G`'s own cap, `k` and `b` for each word the block reads, and (E) at `e > 0`. For
-any set `G` of blocks, with `T = m k + b |𝒲|`, `Q` the sum of the squared caps over `G`, and `O_G` the outputs with a
-wire in a block of `G`: `N` is at most the MACs the other blocks hold, plus
+any set `G` of blocks, with `T = m k + b |𝒲|`, `Q` the sum of the squared caps over `G`, and `O_G` the pairs of a
+block of `G` and an output with a wire in it: `N` is at most the MACs the other blocks hold, plus
 `T + ½ √(Q O_G / (β_w β_x)) + ½ √(Q T / (β_w β_x e))` (`Nci.Cut.SecurityProofs.bound_on_caps_he`). -/
 theorem bound_untie_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] {m : ℕ} (d : RegisteredCircuit)
     (P : Partition d.D m) (W : Work d.D ι) (val : Finset (Fin d.D.N) → V) {k b : ℕ} {βw βx e : ℝ}
@@ -800,7 +801,8 @@ theorem counts_asInputs {ι : Type} [Fintype ι] [DecidableEq ι] {m : ℕ} (d :
 /-- **The bound with computed gates as inputs, under (H) and (E), each block at its own cap.** `HE`'s premises on the
 values, with (H) at `d` itself, at each block of `G`'s own cap, `k` and the gates of `T` the block held, and (E) at the
 circuit with `T` as inputs, at `e > 0`. For any set `G` of blocks, with `T' = m k + |T|`, `Q` the sum of the squared
-caps over `G`, and `O_G` the outputs with a wire in a block of `G`: `N` is at most the MACs the other blocks hold, plus
+caps over `G`, and `O_G` the pairs of a block of `G` and an output with a wire in it: `N` is at most the MACs the other
+blocks hold, plus
 `T' + ½ √(Q O_G / (β_w β_x)) + ½ √(Q T' / (β_w β_x e))` (`Nci.Cut.SecurityProofs.bound_on_caps_he`). -/
 theorem bound_asInputs_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] {m : ℕ} (d : RegisteredCircuit)
     (P : Partition d.D m) {k : ℕ} {βw βx e : ℝ} (T : Finset (Fin d.D.N)) (hT : ∀ g ∈ T, d.D.isInput g = false)
