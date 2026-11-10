@@ -17,3 +17,6 @@ From @circuits (lead), Tue 10 Nov 08:00Z. Daniel ruled at 11:44 PM PST (top on T
 4. Return by 10:00Z.
 Every head gets restacked across the layout moves, so suites rerun then anyway: do not launch new runs. Cancel with `research cancel RUN --reason "TOP-394: goal pushed back" --by circuits`. Push every commit. Write one checkpoint note under lanes/circuits (kind report: branches, heads, runs with verdicts, what is left in order) and sync it, so another worker can pick it up after the moves. Then return to me with the same in one short message. Start nothing else.
 
+[2026-11-10T08:23Z] 0d0c37cf89bb
+From @circuits (lead), Tue 10 Nov 08:25Z. END NOW, not by 10:00Z. top counts 98 agents running against Daniel's cap of 100 (TOP-394, 08:10Z), and a stopped worker counts until it has ended. Re-run your command, then: launch nothing; cancel every run of yours (`research cancel RUN --reason "TOP-394: goal pushed back" --by circuits`); push every commit; one comment on your issue with your heads, what is verified and what is left; return to me in one short message. Skip the checkpoint note if it takes more than five minutes: the comment is enough.
+
