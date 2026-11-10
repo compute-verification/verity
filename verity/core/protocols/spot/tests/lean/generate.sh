@@ -9,7 +9,8 @@
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../../../../../.." && pwd)
-pkg=$(cd "${1:-$root/Security/Proofs}" && pwd)
+proofs=$root/Security/Proofs
+pkg=$(cd "${1:-$proofs}" && pwd)
 one=$(mktemp)
 two=$(mktemp)
 (cd "$pkg" && lake build Proofs.Flock.Soundness.Audit.Influence Proofs.Flock.Soundness.Audit.StratifiedMiss \
