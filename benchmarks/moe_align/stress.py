@@ -311,7 +311,9 @@ def timed(fn: Callable[[], object], iters: int) -> dict:
 
 
 def time_(args: argparse.Namespace) -> None:
-    from vllm.model_executor.layers.fused_moe.moe_align_block_size import moe_align_block_size as wrapper
+    from vllm.model_executor.layers.fused_moe.moe_align_block_size import (
+        moe_align_block_size as wrapper,
+    )
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
