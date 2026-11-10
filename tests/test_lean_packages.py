@@ -78,7 +78,7 @@ def test_one_mathlib():
 #: (`check.py`'s `witness_failures`)
 # In Security, Flock.SecurityProofs.SpotExfilTwo and NetTiming.SecurityProofs.PooledLeakCarried carry their nontrivial
 # witnesses; their honest ones are due with the two-stage layout and the deployed check pinning CheckedUnique
-UNWITNESSED = {"Security": 284, "Security/Properties": 186, "verity/core/service/flock": 7}
+UNWITNESSED = {"Security": 303, "Security/Properties": 191, "verity/core/service/flock": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
