@@ -29041,3 +29041,35 @@ proofs, Tue 10 Nov 8:38 AM PST (16:38Z), to vllm. **(1) Thursday's second round 
 - **Cores and disk:** four cores, and 0.5 TB for the files, which we keep because the run of record verifies the sessions against them on Thursday [run: 32 files of 8.8 GB, with the masks priced as Counts; read: `service.py`].
 - **Your prover:** it proves against the auditor's files, copied to it (0.5 TB), or stages its own at the same cost [read: my 04:39Z].
 - If a mask measures above 200 GB, I say here by 18:30Z how the plan changes: two at a time, or a bigger node [guess].
+
+## HOUSEKEEP, Tue 10 Nov 16:39Z: the stager's dry run over `034a1702664b`'s tree has 0 stops and all 48 of our rows apply; the fixtures' digests hold there through both moves; the rehearsal is running (1 of 25 done, clean), table by about 17:10Z
+
+**No staging over `queue/034a1702664b` is pushed** as of 16:33Z (`git ls-remote`: `cursor/top-layout-staged-` 48da, 82b0, af72, b373, eb0b; newest `eb0b` at `d833bd4b05c3`, which is not over `034a`). [run] So the check on the cut's head waits; what I ran instead is its base, moved here.
+
+**1. The stager's dry run you promised top (your 16:30Z): no row stops.** [run]
+- Scratch tree `/tmp/lay-034a` on my VM: `034a1702664bff0ac1f8b416b4715f00f84b15d0` with its own `tools/move/layout.py --map tools/move/layout_one_map.toml --no-lock --report-splits` (rc 0, 75 s).
+- The stager's tool `lanes/top/tools/movestage/hand_lines.py TREE --only lines --dry-run`, with every lane's file as the notes held them at 16:23Z (`ff3af490d7`): "11 files (benchmarks, ci, circuits, compute-accounting, infra, kernels, memory-accounting, network-accounting, proofs, top, vllm): 244 lines applied, 10 already as wanted, 0 regenerated, 0 stops". Then without `--dry-run`: the same line. Ours: 47 `line` and 1 `insert` applied, none skipped, none stopped.
+- My builder on that tree writes the notes' `lanes/proofs/layout/hand-lines.toml` byte for byte (the same 8 new digests), so no row of ours changes for the cut's base.
+- infra's stops #40, #41, #45, #47 do not show here: they are stops only on a tree past the second move, as the 15:09Z entry says, and the stager applies rows before it.
+
+**2. The three `*_lean.json` fixtures on `034a`'s tree, after the rows and the second move** (top's `adapt_map.py` from `41d5514d7680`, then `layout.py --map tools/move/security_dir_map.toml`, rc 0, 55 s; scratch commit `7293cbe5bb15`). [run]
+- `verity/flock/prover/tests/fixtures/randomness_lean.json`: 8 recorded inputs, 0 with another digest, 0 absent.
+- `verity/spot/verifier/tests/fixtures/exfiltration_lean.json`: 7, 0, 0.
+- `verity/spot/verifier/tests/fixtures/exfiltration_two_lean.json`: 6, 0, 0.
+- The same three lines on top's pushed `eb0b` tip `d833bd4b05c3`. [run]
+- Between `c3ae3eaaf0b7` and `034a1702664b` (151 commits; #8486, #8515, #7983, #8420, #8378, #8392 and #8388 are among them) the three fixtures and their 21 recorded input files are byte-identical at the old paths. [run] So what the seven PRs add changes no digest of ours.
+- The check is `lanes/proofs/layout/tools/fixture_digests.py REPO REV` (synced, notes `4a0210fc8f`); I run it on the cut's head when it is pushed.
+
+**3. The rehearsal: one thing the crossing needs to know, and where it is.**
+- A plain `restack.py BRANCH --main STAGE` on #8552's head stops: `based-after`. [run] `main` holds two commits whose message has the line `Move: tools/move/core_incorrect_map.toml`: `c6a38b702d28` (the queue's #8347) and `9776ae330bca` ("Move by tools/move/core_incorrect_map.toml", parent `45dca4188585`); both are ancestors of `origin/main`, `034a`, `af72`'s base and `eb0b`'s. [run] A head that lacks them crosses the first and is refused at the second ("has c6a38b702d28, which came after the move's base 45dca4188585"). 18 of our 25 heads lack them: #7952, #8120, #8177, #8411, #8414, #8423, #8453, #8454, #8458, #8517, #8536, #8540, #8552, #8565, #8568, #8576, #8578, #8583. [run: `git merge-base --is-ancestor`]
+- Top's two commands in their order cure it: after `git merge BASE` the head holds both, and only the two layout moves are left to cross. [run, on #8552] So the merge of BASE is not optional for those 18, and the move README's one-line usage (`restack.py BRANCH --push-to NEWBRANCH --kept`) alone would stop on them. The same must hold for the 20 conflicting PRs' workers (PRF-506, PRF-507, PRF-508) [guess: I did not run theirs].
+- The rehearsal therefore does what top's commands will: a scratch merge of BASE (the parent of the staging's one-map move) as a commit object, then `restack.py MERGED --main STAGE --kept --dry-run --json`, in a scratch clone `/tmp/rs` at `034a1702664b` (its `restack.py`). No ref moves, nothing is pushed. The tool is `lanes/proofs/layout/tools/rehearse.py CLONE STAGE PR`.
+- **#8552 against `af72`'s tip `41d5514d7680`: clean**, both moves crossed (`af72fb276335`, `20b38a9e5fdf`), pins step included, 275 s with both moves' checks made (kept for the rest). An ordinary `git merge` of that tip into its head conflicts in `verity/spot/verifier/README.md`; the restack does not. [run]
+- All 25 heads are based at or before `af72`'s base and `eb0b`'s (no `based-after` from the base). [run]
+- The other 24 were launched at 16:38Z, three at a time, #8354 and #8368 first. It runs in tmux on my VM (the mover holds about 0.2 GB and one core each), so I stay until the table is pushed, about 17:10Z, rather than end the turn on it: a restart would lose it.
+
+**For TOP-394, only if you want it there** (ready to paste):
+
+> proofs: the dry run of the stager's tool on `034a1702664b` moved by the one map, with every lane's rows at notes `ff3af490d7`: 244 lines applied, 10 already as wanted, 0 stops. For the crossing: `main` holds two commits with the line `Move: tools/move/core_incorrect_map.toml` (`c6a38b702d28` and `9776ae330bca`), so `restack.py BRANCH` alone stops as `based-after` on any branch that lacks #8347; `git merge BASE` first, as your two commands have it, cures it (run on #8552's head against `41d5514d7680`: clean).
+
+**Next:** TOP-394 and my mailbox at about 16:55Z; the table; then the same 25 against the cut's head when it is pushed, with the fixtures' check on it.
