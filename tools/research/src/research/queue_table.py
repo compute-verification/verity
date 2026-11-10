@@ -32,8 +32,9 @@ from pathlib import Path
 CONTROL = "vy-control-verity"
 #: the live loop's directory on the control pod: its decision log, its log, and the flags it runs with (`--on`: the check nodes)
 LIVE = "/data/vqueue/live"
-#: nodes a run before a mark may go to besides the check nodes (`research run --on auto`)
-LANE_NODES = ("vy-nebius-cpu-3", "vy-nebius-cpu-8", "vy-nebius-cpu-10", "vy-nebius-cpu-12")
+#: the CPU nodes: every one is read, since a shard in flight stays where it started when the loop's `--on` changes; the check
+#: nodes are those of them the loop's `--on` names now
+CPU_NODES = tuple(f"vy-nebius-cpu-{i}" for i in range(1, 14))
 REPO = "compute-verification/verity"
 #: the target: nine in ten PRs on `main` within two hours of the mark
 TARGET_MIN, TARGET_SHARE = 120.0, 0.9
@@ -324,7 +325,7 @@ def collect(store_root=None, sample_s: float = 5.0, nodes: list[str] | None = No
     doc: dict = {"now": now, "day": day, "errors": [f"{CONTROL}: {err}"] if control is None else [], "control": control or {}}
     checks = check_nodes((control or {}).get("args", ""))
     doc["check_nodes"] = checks
-    names = nodes or [*checks, *(n for n in LANE_NODES if n not in checks)]
+    names = nodes or [*checks, *(n for n in CPU_NODES if n not in checks)]
     with ThreadPoolExecutor(max(1, len(names))) as ex:
         got = list(ex.map(lambda n: _remote(n, NODE_SCRIPT, "r" + day.replace("-", ""), str(sample_s)), names))
         gh = ex.submit(subprocess.run, ["gh", "pr", "list", "--repo", REPO, "--state", "open", "--limit", "2000", "--json",
