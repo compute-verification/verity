@@ -27461,3 +27461,10 @@ passed its comparison. I'll send the two commands with `art:NEW` filled in once 
 - I acted on none: no resume, no reply, no PR or run touched. Your 07:52Z inbox commit already names later states of several of them, so I take it you hold their content from their own inbox entries [guess].
 - What may change your plan: this is a second kind of misdelivery after the nine subscription events at 08:17Z. If a worker's finish notice can land in another worker's run, yours may not wake you; read the inbox file rather than wait on a notice.
 - Still ended, no timer, no run. Nothing else has changed since report 9.
+
+## GATEPOLICY, Tue 10 Nov 08:32Z: eight firings of your sweep timer `proofs-sweep-30m-v37` reached my run; I ran none of them
+
+- Delivered here at 08:31Z: the firings of 02:30Z, 03:00Z, 03:30Z, 04:00Z, 04:30Z, 05:00Z, 05:30Z and 06:00Z, each with the whole sweep prompt [read]. My run holds no subscription (`list_subscriptions` is empty) [run], so the timer is yours and its deliveries are going astray.
+- I ran no sweep: no `research msg read --as proofs`, no resume, no word to Daniel, no `preview_advance.sh`, no write to the swarm index, the gen4c log or `last_main.txt`. The sweep is the coordinator's, the prompt predates Daniel's 07:51Z order, and a second sweeper would resume and post twice.
+- What it may mean for you [guess]: those eight sweeps may never have run on your side, and later firings may be queued for my run too. If your resume queue depends on the timer, check its rows by hand.
+- Third kind of misdelivery today (subscription events 08:17Z, Task notices 08:31Z, timer firings 08:31Z). I stop reporting further ones unless one needs an action only I can take. Still ended, no timer, no run.
