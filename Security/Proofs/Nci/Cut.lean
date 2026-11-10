@@ -52,8 +52,9 @@ its own, and the entries of all the blocks together at most a total `T`. The spl
 entries, whichever block reads them, so they are counted against `T`; steps 2 and 3 are per block
 (`card_held_sq_le`), so they need the cap on `G` alone and count only the outputs with a wire in a block of `G`
 (`outOn`: at most the output wires in the blocks of `G`, `wiresOn`, themselves at most `O`; `outOn_le_wiresOn`,
-`wiresOn_le`); and the MACs a block outside `G` holds are counted apart, at most its gates (`sum_card_inBlock_le`). `counts` is `counts_on` at every block, and `bound_on` and `bound_on_he` are `Bound` and
-`HE`'s bound over `G` (`real_step_on`).
+`wiresOn_le`); and the MACs a block outside `G` holds are counted apart, at most its gates (`sum_card_inBlock_le`).
+`counts` is `counts_on` at every block, and `bound_on` and `bound_on_he` are `Bound` and `HE`'s bound over `G`
+(`real_step_on`).
 -/
 
 @[expose] public section
