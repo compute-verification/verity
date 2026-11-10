@@ -2005,9 +2005,11 @@ def test_a_train_launch_given_a_deselect_list_passes_it_to_train_sh(tmp_path, mo
 
     got = []
     monkeypatch.setattr(subprocess, "run", lambda argv, **kw: got.append(argv) or subprocess.CompletedProcess(argv, 0, "", ""))
-    train_launch(tmp_path, "c0ffee", "m1", False, deferred="pytest", shard="1/3", deselect="/data/vqueue/live/deselect.sent")
+    train_launch(tmp_path, "c0ffee", "m1", False, deferred="pytest", shard="1/3", deselect="/data/vqueue/live/deselect.sent",
+                 candidate=True)
     train_launch(tmp_path, "c0ffee", "m1", False, deferred="pytest")
     assert got[0][got[0].index("--deselect") + 1] == "/data/vqueue/live/deselect.sent" and "--deselect" not in got[1]
+    assert got[0].count("--candidate") == 1 and "--candidate" not in got[1]
 
 
 def test_an_eject_off_drive_leaves_next_as_it_is_and_records_the_ejection(world, monkeypatch, capsys):

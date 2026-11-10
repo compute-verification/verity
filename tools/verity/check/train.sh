@@ -36,7 +36,8 @@
 #
 # `--deselect FILE` (with --deferred; an absolute path): the run's pytest and lean-suites steps leave out the tests FILE names, one
 # node id a line (`check.py --record --deselect`: the vqueue loop's list); on a COMMIT whose check.py predates it, the run goes
-# without it.
+# without it. `--candidate` (with --deferred): a candidate's check, the vqueue loop's, whose suites also leave out the tests the
+# COMMIT's own candidate list names (`check.py --record --candidate`); on a COMMIT whose check.py predates it, it goes without.
 #
 # `--cc-records`: circuit-check's records step alone (`check.py --record --cc-records`), which drive's sharded after-landing run
 # runs first; `--cc-records-from ART@SHA256` (with `--shard`) gives a shard that step's artifact, so its circuit-check builds
@@ -47,9 +48,9 @@
 # --of-record`: one that skips the store-backed tests), and a COMMIT that is empty (its tree is its base's: where it leaves
 # origin/main, or its parent for a commit on main) or that origin doesn't hold.
 set -euo pipefail
-[ $# -ge 2 ] || { sed -n '2,48p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+[ $# -ge 2 ] || { sed -n '2,49p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 commit=$1 machine=$2; shift 2
-pass=() deferred= nocache= ccache= noregen= shard= below= rbelow= records= recfrom= plan= bookkeep= deselect=
+pass=() deferred= nocache= ccache= noregen= shard= below= rbelow= records= recfrom= plan= bookkeep= deselect= candidate=
 while [ $# -gt 0 ]; do
   case $1 in
     --agreement) pass+=(--agreement) ;;
@@ -72,7 +73,8 @@ while [ $# -gt 0 ]; do
       recfrom=$2; shift ;;
     --deselect) [[ $# -ge 2 && $2 == /* && -f $2 ]] || { echo "train: --deselect needs a list's absolute path" >&2; exit 2; }
       deselect=$2; shift ;;
-    *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement, --deferred STEPS, --base REF, --ratchet-base REF, --shard K/N, --shard auto:K/N --shard-plan-file PLAN, --bookkeeping-warn, --deselect FILE and --cc-records[-from] alone" >&2; exit 2 ;;
+    --candidate) candidate=1 ;;
+    *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement, --deferred STEPS, --base REF, --ratchet-base REF, --shard K/N, --shard auto:K/N --shard-plan-file PLAN, --bookkeeping-warn, --deselect FILE, --candidate and --cc-records[-from] alone" >&2; exit 2 ;;
   esac
   shift
 done
@@ -90,7 +92,9 @@ done
   || { echo "train: --ratchet-base refused without --deferred: a train's check judges its merges above origin/main" >&2; exit 2; }
 [ -z "$deselect" ] || [ -n "$deferred" ] \
   || { echo "train: --deselect refused without --deferred: a check that leaves tests out is no check a gate takes" >&2; exit 2; }
-[ -z "$records" ] || [ -z "$deferred$nocache$ccache$noregen$shard$below$rbelow$recfrom$deselect${pass[*]+x}" ] \
+[ -z "$candidate" ] || [ -n "$deferred" ] \
+  || { echo "train: --candidate refused without --deferred: a check that leaves tests out is no check a gate takes" >&2; exit 2; }
+[ -z "$records" ] || [ -z "$deferred$nocache$ccache$noregen$shard$below$rbelow$recfrom$deselect$candidate${pass[*]+x}" ] \
   || { echo "train: --cc-records refused with another flag: it builds circuit-check's records alone" >&2; exit 2; }
 [ -z "$recfrom" ] || [ -n "$shard" ] \
   || { echo "train: --cc-records-from refused without --shard: only a shard's circuit-check takes the records" >&2; exit 2; }
@@ -175,6 +179,10 @@ fi
 if [ -n "$deselect" ]; then
   if grep -q DESELECT_FILE tools/verity/check/check.py; then pass+=(--deselect "$deselect")
   else echo "train: ${sha:0:12}'s check.py predates --deselect: its run leaves no test out"; fi
+fi
+if [ -n "$candidate" ]; then
+  if grep -q CANDIDATE_DESELECT tools/verity/check/check.py; then pass+=(--candidate)
+  else echo "train: ${sha:0:12}'s check.py predates --candidate: its run reads no candidate list of its tree"; fi
 fi
 echo "train: ${sha:0:12} on $machine${shard:+ shard $shard}; log $log"
 # `research run` stays attached to the run until it ends; the run doesn't need it (custody publishes from the machine). The

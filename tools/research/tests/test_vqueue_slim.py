@@ -148,16 +148,16 @@ def test_start_launches_what_drive_launches_beside_the_executors_check_with_main
     rec = start(h.d, sha, base)
     steps = ["lean-agreement", "ratchet-gate"] if agreement else ["ratchet-gate"]
     assert h.posted == [(sha, ",".join(steps), {"base": base, "agreement": agreement, "no_cache": False, "circuit_cache": False,
-                                                "no_regenerate": True, "train_from": OWN_TRAIN})]
+                                                "no_regenerate": True, "candidate": True, "train_from": OWN_TRAIN})]
     assert rec == {"ids": ["r-post-0"], "tip": sha, "base": base, "at": h.clock, "steps": steps,
                    **({} if agreement else {"skip": ["lean-agreement"]})}
     assert asked == [(base, sha, "check")]
     assert any(x == f"research queue vqueue: train.sh {sha[:12]} m1 --deferred {','.join(steps)} --base {base[:12]}"
-               + (" --agreement" if agreement else "") + f" --no-regenerate beside candidate {sha[:12]}'s check: r-post-0"
+               + (" --agreement" if agreement else "") + f" --no-regenerate --candidate beside candidate {sha[:12]}'s check: r-post-0"
                for x in world.logs), world.logs
     pl = {"verified": base}
     h.d._start_slim({}, pl, sha, False)
-    assert h.posted[1] == (sha, ",".join(steps), {k: v for k, v in h.posted[0][2].items() if k != "train_from"}), \
+    assert h.posted[1] == (sha, ",".join(steps), {k: v for k, v in h.posted[0][2].items() if k not in ("train_from", "candidate")}), \
         "drive's own launch of the same run, from the clone's train.sh"
     assert pl["slim"]["ratchet_base"] == base
     assert {k: v for k, v in pl["slim"].items() if k not in ("ids", "ratchet_base")} == \
@@ -421,21 +421,24 @@ def test_start_with_shards_launches_drives_after_landing_run_of_every_step_a_sha
     rec = start(h.d, sha, base, shards=3)
     kw = h.d._postland_args({"verified": base}, sha, False)[0]
     assert kw == {"base": base, "agreement": agreement, "no_cache": False, "circuit_cache": False, "no_regenerate": True}
-    assert h.posted == [(sha, ",".join(AFTER_LANDING), {**kw, "shard": f"{k}/3", "train_from": OWN_TRAIN}) for k in (1, 2, 3)]
+    assert h.posted == [(sha, ",".join(AFTER_LANDING), {**kw, "candidate": True, "shard": f"{k}/3", "train_from": OWN_TRAIN})
+                        for k in (1, 2, 3)]
     assert machines == shard_machines("m1,m2,m3,m4", 3) == ["m1,m4", "m2", "m3"]
     assert rec == {"ids": ["r-post-0", "r-post-1", "r-post-2"], "groups": [["r-post-0"], ["r-post-1"], ["r-post-2"]],
                    "tip": sha, "base": base, "at": h.clock, "gate": CHECK,
                    "steps": [s for s in AFTER_LANDING if agreement or s != "lean-agreement"],
                    **({} if agreement else {"skip": ["lean-agreement"]})}
     whole = start(h.d, sha, base, shards=1)
-    assert h.posted[3] == (sha, ",".join(AFTER_LANDING), {**kw, "train_from": OWN_TRAIN}) and machines[3] == "m1,m2,m3,m4"
+    assert h.posted[3] == (sha, ",".join(AFTER_LANDING), {**kw, "candidate": True, "train_from": OWN_TRAIN})
+    assert machines[3] == "m1,m2,m3,m4"
     assert whole == {**{k: v for k, v in rec.items() if k != "groups"}, "ids": ["r-post-3"]}
 
 
 def test_every_shard_of_a_candidates_check_leaves_out_the_tests_the_loops_list_names(world, monkeypatch, tmp_path):
     """The loop's deselect list, read at each launch: every shard is sent the node ids it names (`train.sh --deselect`), written
     beside it; a line that is no node id is logged and left out, so a typo drops no test and reds no candidate; no list, or one
-    naming none, sends none."""
+    naming none, sends none.  Every shard, list or none, is a candidate's check (`train.sh --candidate`), whose suites also leave
+    out what the candidate's own tree lists."""
     h, base, sha, _ = _harness(world, monkeypatch)
     h.d.on, listed = "m1,m2,m3", tmp_path / "deselect"
     ids = ["tools/verity/circuit_check/tests/test_circuit_check.py::test_every_call_the_suite_checks_is_partitioned",
@@ -444,6 +447,7 @@ def test_every_shard_of_a_candidates_check_leaves_out_the_tests_the_loops_list_n
     start(h.d, sha, base, shards=3, deselect=listed)
     sent = tmp_path / "deselect.sent"
     assert [kw.get("deselect") for _commit, _steps, kw in h.posted] == [str(sent)] * 3
+    assert [kw.get("candidate") for _commit, _steps, kw in h.posted] == [True] * 3
     assert sent.read_text().splitlines() == ids
     assert any("2 line(s) not a test's node id" in x and "not a node id; /abs/test_x.py::t" in x for x in world.logs), world.logs
     assert any(f"--deselect {sent} (2 tests) as 3 shards" in x for x in world.logs), world.logs
@@ -454,6 +458,7 @@ def test_every_shard_of_a_candidates_check_leaves_out_the_tests_the_loops_list_n
         h.posted.clear()
         start(h.d, sha, base, shards=3, deselect=listed)
         assert len(h.posted) == 3 and not any("deselect" in kw for _commit, _steps, kw in h.posted)
+        assert all(kw.get("candidate") is True for _commit, _steps, kw in h.posted)
 
 
 @pytest.mark.parametrize("second", [["r-2"], []])
@@ -522,7 +527,7 @@ def test_start_with_auto_shards_has_the_candidates_plan_made_and_the_judge_that_
 
     h.d.launch_postland, h.d.launched = launch, lambda got: (printed.get(got["dir"]), "")
     rec = start(h.d, sha, base, shards="auto:6")
-    kw, out = h.d._postland_args({"verified": base}, sha, False)[0], tmp_path / "plan-1"
+    kw, out = {**h.d._postland_args({"verified": base}, sha, False)[0], "candidate": True}, tmp_path / "plan-1"
     assert plans.asked == [(sha, ",".join(AFTER_LANDING), None, 6)] and h.posted == []
     assert rec == {"ids": [], "plan": {"dir": str(tmp_path / "job-1"), "pid": 7001, "out": str(out), "n": 6,
                                        "deferred": ",".join(AFTER_LANDING), "kw": kw},

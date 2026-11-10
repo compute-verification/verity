@@ -1879,6 +1879,29 @@ def test_train_sh_hands_the_loops_deselect_list_to_a_check_that_takes_it(tmp_pat
         assert p.returncode == 2 and f"train: {why}" in p.stderr and not argv.exists(), (flags, p.stderr)
 
 
+def test_train_sh_tells_a_check_that_takes_it_that_it_is_a_candidates(tmp_path):
+    """`--deferred ... --candidate`, the vqueue loop's: it reaches check.py --record when the commit's check.py takes it, and on
+    a commit whose check.py predates it the run launches without it, saying so; without --deferred it is refused."""
+    git, train, argv = _train_repo(tmp_path)
+    check = tmp_path / "repo" / "tools" / "verity" / "check" / "check.py"
+    check.parent.mkdir(parents=True)
+    check.write_text("SUITES.CANDIDATE_DESELECT\n")
+    git("add", "tools")
+    git("commit", "-q", "-m", "landing")
+    git("push", "-q", "origin", "HEAD:main")
+    p = train("HEAD", "vy-x", "--deferred", "pytest", "--shard", "1/3", "--candidate")
+    assert p.returncode == 0 and argv.read_text().split().count("--candidate") == 1, (p.stderr, argv.read_text())
+    check.write_text("\n")
+    git("commit", "-q", "-am", "older")
+    git("push", "-q", "origin", "HEAD:main")
+    p = train("HEAD", "vy-x", "--deferred", "pytest", "--candidate")
+    assert p.returncode == 0 and "--candidate" not in argv.read_text().split() and "predates --candidate" in p.stdout, p.stdout
+    argv.unlink()
+    for flags in (["--candidate"], ["--cc-records", "--candidate"]):
+        p = train("HEAD", "vy-x", *flags)
+        assert p.returncode == 2 and "train: --candidate refused without --deferred" in p.stderr and not argv.exists(), p.stderr
+
+
 def test_train_sh_replaces_a_tree_git_no_longer_lists_as_a_worktree(tmp_path):
     """On the control pod's NFS TMPDIR a train's tree can be left half removed and no longer a worktree, which `worktree remove`
     skips and `worktree add` refuses: every relaunch of that commit registered no run."""
