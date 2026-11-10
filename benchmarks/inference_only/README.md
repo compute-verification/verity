@@ -26,8 +26,8 @@ the executable on the class's instance). That is heavy work, so it goes through 
    SLOTS,PROMPT,OUTPUTS` and `--division` choose the built class and which of its blocks the built number is of.
 3. **Both over monitoring periods**: for one week, one month and one year, on one datacenter and on the world's compute
    (the slowdown calculator's fleets and periods), the policy's blocks the fleet holds at capacity, the training MACs
-   they hold at most, and that as a share of the compute they cover; with one line each on what is proved, what is a
-   premise and what is scaled.
+   they hold at most, and that as a share of the compute they cover (100% says the bound leaves all of it to
+   training); with one line each on what is proved, what is a premise and what is scaled.
 4. **One JSON object**, the last line, also written to `--out DIR` (default `$OUT`) as `inference_only.json`: `value`,
    `unit`, `check`, `rests_on`, `policies` (each with its `c`, `k`, `n` and their `units`), `divisions`, `periods`,
    `commit`, and `run` where the environment names one. `check` is the Lean count's verdict on the policy the value is
