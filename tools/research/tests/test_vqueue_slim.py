@@ -433,19 +433,22 @@ def test_start_with_shards_launches_drives_after_landing_run_of_every_step_a_sha
 
 
 def test_every_shard_of_a_candidates_check_leaves_out_the_tests_the_loops_list_names(world, monkeypatch, tmp_path):
-    """The loop's deselect list, read at each launch: every shard is sent the node ids it names (`train.sh --deselect`), written
-    beside it; a line that is no node id is logged and left out, so a typo drops no test and reds no candidate; no list, or one
+    """The loop's deselect list, read at each launch: every shard is sent the node ids it names whose file the candidate's tree
+    holds (`train.sh --deselect`), written beside it as that launch's own; a line that is no node id, or names a file the tree
+    doesn't hold (one a move renamed), is logged and left out, so a typo drops no test and reds no candidate; no list, or one
     naming none, sends none."""
-    h, base, sha, _ = _harness(world, monkeypatch)
-    h.d.on, listed = "m1,m2,m3", tmp_path / "deselect"
     ids = ["tools/verity/circuit_check/tests/test_circuit_check.py::test_every_call_the_suite_checks_is_partitioned",
            "verity/core/protocols/composition/tests/test_composition_difftest.py::test_remote_agrees"]
-    listed.write_text(f"# over 5 minutes\n\n{ids[0]}\nnot a node id\n/abs/test_x.py::t\n{ids[1]}\n{ids[0]}\n")
+    moved = "verity/protocols/composition/tests/test_composition_difftest.py::test_remote_agrees"
+    h, base, sha, _ = _harness(world, monkeypatch, change={i.split("::")[0]: "def test_x():\n    pass\n" for i in ids})
+    h.d.on, listed = "m1,m2,m3", tmp_path / "deselect"
+    listed.write_text(f"# over 5 minutes\n\n{ids[0]}\nnot a node id\n/abs/test_x.py::t\n{ids[1]}\n{moved}\n{ids[0]}\n")
     start(h.d, sha, base, shards=3, deselect=listed)
-    sent = tmp_path / "deselect.sent"
+    sent = tmp_path / f"deselect.{sha[:12]}.sent"
     assert [kw.get("deselect") for _commit, _steps, kw in h.posted] == [str(sent)] * 3
     assert sent.read_text().splitlines() == ids
     assert any("2 line(s) not a test's node id" in x and "not a node id; /abs/test_x.py::t" in x for x in world.logs), world.logs
+    assert any(f"1 test(s) in a file {sha[:12]}'s tree doesn't hold" in x and moved in x for x in world.logs), world.logs
     assert any(f"--deselect {sent} (2 tests) as 3 shards" in x for x in world.logs), world.logs
     for text in (None, "# none yet\n"):
         listed.unlink(missing_ok=True)
