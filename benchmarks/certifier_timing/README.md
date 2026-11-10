@@ -1,0 +1,126 @@
+# certifier_timing
+
+How many bits an interval a server can move through **when** the network certifier releases its bytes. The certifier
+fixes which interval a cell leaves in, so what is left to a server is the release's time inside the interval: the
+jitter term, which the accounting charges as log₂ D_j a release interval and which is 0 only at D_j = 1. This
+benchmark puts one number on it, checks that the number sees a channel, and states the number a budget asks for.
+
+## The number
+
+A run has three parties, each a process (`parties.py`):
+
+- **The server** is the adversary. It picks a uniform bit for each interval and acts only through when and how it
+  writes its own bytes for this interval and the next. The bytes are the same whatever the bit.
+- **The certifier** is the device under test: `verity.core.protocols.certifier.warden.Warden` of this checkout or of
+  another (`--tree`), writing each interval on its loop (`--paced-ms 0`) or through its pacer.
+- **The observer** is the client side. It timestamps the first byte of each interval as it arrives, waiting in the
+  kernel for it (`plain`) or polling without waiting (`spin`), and never has the server's bits.
+
+The attacks (`parties.Plan`), over interval t's release time R_t:
+
+| Attack | Bit 1 | Bit 0 |
+| --- | --- | --- |
+| `write` | the next interval's bytes in one write, at most `--lead-ms` before R_t | the same bytes midway between R_t and the next boundary |
+| `burst` | the next interval's bytes in `--burst` writes, from `--lead-ms` before R_t to an eighth of that after it | as `write` |
+| `delay` | the interval's own bytes half an interval late | the bytes at the boundary |
+
+The network certifier fails a delayed interval closed, so `delay` runs only against the guard's stand-in.
+
+`channel.measure` fits a decoder on the even intervals, one threshold on the arrival's offset after R_t or on its
+`step` (the offset less its neighbours' trimmed mean, which drops a drift), and scores it on the odd ones. A decoder
+wrong at rate e on uniform bits shows at least 1 − H(e) bits an interval: `bits`, with the ends of e's 95% Wilson
+interval as `lower` and `upper`. `run` prints one JSON line and writes it to `--out`/result.json:
+
+| Key | What it is |
+| --- | --- |
+| `value`, `unit` | the most bits an interval any attack showed, over that attack's pooled runs |
+| `lower`, `upper`, `n` | its 95% bounds and scored intervals |
+| `ceiling` | the largest upper bound of any attack: what the run shows every attack built here under |
+| `commit`, `run` | the commit measured from and the run's id |
+| `certifier`, `host` | the certifier's commit and settings; the host, its cores and its clock |
+| `guard`, `target` | the guard's two readings; the budget's bits an interval, and whether `ceiling` is under each end |
+| `rows`, `cases` | each attack with each observer, pooled; each run, with the certifier's own release times scored the same way (`sender`) |
+
+## Run it
+
+On a team machine, never an agent's VM: the number is of the host it ran on.
+
+~~~sh
+verity bench certifier_timing run                     # this checkout's certifier, paced 50 ms into a 100 ms interval
+verity bench certifier_timing run --paced-ms 0        # the same certifier writing each interval on its loop
+verity bench certifier_timing run --tree /path/to/checkout --tree-commit SHA   # another checkout's certifier
+verity bench certifier_timing guard                   # the guard alone
+verity bench certifier_timing target --interval-ms 100
+verity bench certifier_timing score DIR               # a recorded case again
+verity bench certifier_timing table RESULT.json       # results as a table's rows
+~~~
+
+The certifier imports only the standard library and `verity`, so a bare `python3` of 3.12 or later runs
+`benchmarks/certifier_timing/run.py` with the checkout's root on `PYTHONPATH`. Under `research run` the result and
+every case's timestamps go to `$OUT`. `run` exits 1 when the guard fails and 2 when a case is no measurement: the
+certifier failed a connection, a tick ran past its slack, or the parties disagree on which interval is which.
+
+## The guard
+
+Every `run` first measures a channel it planted and one it didn't, against `relay`, a stand-in that paces nothing
+and passes bytes on as they come. A server that delays an interval by half an interval on bit 1 must show at least
+0.9 bits an interval, and the same server ignoring its bits at most 0.05 (`PLANTED_MIN`, `IGNORED_MAX`). A run whose
+guard fails reports no number.
+
+## The target
+
+One node's whole timing channel may carry a bit every 240 to 600 seconds (`channel.SECONDS_A_BIT`), so at an
+interval of τ seconds the certifier's share is at most τ/240 to τ/600 bits an interval. `target` prints both ends and
+the scored intervals it takes to show a number that small (`channel.samples_to_show`): `least`, at which a decoder
+truly at chance has its upper bound at the target half the time, and `nine_in_ten`. A run scores half its intervals.
+The time a run takes to show the target is about the same at every τ, since the target grows with τ as the intervals
+a second fall.
+
+## What it establishes
+
+- **A lower bound, of the attacks built here.** `value` is what these servers move to these observers under a
+  one-threshold decoder. Nothing here bounds the channel from above: a reading of 0 says these attacks carry nothing
+  the run could see, at its `ceiling`.
+- **On one host.** `run`'s three parties share a host, its cores and its monotonic clock, over loopback. A certifier
+  is the auditor's hardware on a machine the developer doesn't control, so what the server does to the certifier's
+  host through shared cores is more than a deployed server can do, and a loopback path is quieter than a network.
+- **`serve` and `observe`** put the observer on another host (below). The server still shares the certifier's host
+  and clock.
+
+## The candidates
+
+Each is a flag beside the certifier, which this benchmark never changes:
+
+| Flag | What it does |
+| --- | --- |
+| `--pin` | the certifier's loop, its pacer, the server and the observer each on a core of the run's own |
+| `--gate-ms BEFORE,AFTER` | the certifier reads no server bytes from BEFORE ms ahead of each release to AFTER ms past it |
+| `--waker-ms MS` | a writer wakes a reader over loopback every MS ms, so the host's network path is in use at every release |
+| `serve --launch DEV,AFTER,OPEN[,offload]` | the kernel, or with `offload` the NIC, releases: a `taprio` gate on the device the certifier's bytes leave by, open OPEN ms from AFTER ms past each release time |
+
+The certifier's egress is TCP, whose segments the stack times itself, so a socket's own launch time (`SO_TXTIME`
+with the ETF qdisc) doesn't apply to it; the gate is the same release at a time the sender's process doesn't set.
+With `--launch` the server aims at the gate's opening. It takes CAP_NET_ADMIN, `tc`, `sch_taprio` and a device with
+more than one transmit queue, and with `offload` a NIC that runs the schedule and a host clock kept to TAI.
+
+## Two hosts
+
+~~~sh
+verity bench certifier_timing serve --listen 0.0.0.0 --port 47812 --attack write --wait-s 600 --out DIR   # the certifier's host
+verity bench certifier_timing observe HOST:47812 --observer spin --wait-s 600 --out DIR                   # the other host
+verity bench certifier_timing score DIR --observer OBSERVER.json
+~~~
+
+Nothing joins the two clocks. Which interval a chunk is comes from its bytes (interval t's are all the byte t mod
+256) and from the certifier's record of the connection, and `step` reads through the clocks' drift. `serve
+--certifier relay --attack delay`, with and without `--ignore`, is the guard across the two hosts.
+
+`netns.sh OUT [serve's flags]` runs one such case on one host without root: a user namespace holds two network
+namespaces joined by a veth pair, the certifier's device `cert0`, which `--launch cert0,AFTER,OPEN` can gate.
+
+## Why a directory of its own
+
+`network_traces/tick_load.py --secret-bit` asks the same question of a whole rehearsal: a served endpoint, the
+certifier's records and their check, at a served workload's traffic. Here the certifier runs alone and every
+interval carries a bit, so the number moves only with the certifier's release path, comes with its guard, and is
+measured the same way on any checkout's certifier.

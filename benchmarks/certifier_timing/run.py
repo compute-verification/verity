@@ -415,7 +415,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.observer and len(args.dirs) != 1:
             ap.error("--observer is one DIR's")
         cases = [score(d, args.observer) for d in args.dirs]
-        print(json.dumps({"schema": SCHEMA, "benchmark": "certifier_timing"} | summarize(cases) | {"cases": cases}))
+        print(json.dumps({"schema": SCHEMA, "benchmark": "certifier_timing"} | summarize(cases) | {
+            "commit": os.environ.get("RESEARCH_SOURCE_SHA") or _git(HERE), "run": os.environ.get("RESEARCH_RUN_ID"),
+            "cases": cases}))
         return 0
     if args.command == "table":
         print(_table([json.loads(p.read_text()) for p in args.results]))
