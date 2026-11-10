@@ -18,14 +18,16 @@ W=$P/advice-runs/$(basename "$D")
 [ -d /workspace/cp/venv312 ] && v=/workspace/cp/venv312 || v=/workspace/venv312
 v=${VENV:-$v}
 export CUDA_VISIBLE_DEVICES= OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 MKL_NUM_THREADS=4
-export PYTHONPATH=$PWD/integrations/vllm:$PWD:$D/inputs
+# tools/research/src: the compiler's digest is over the tree's code identity, which the run store's closure gives
+export PYTHONPATH=$PWD/integrations/vllm:$PWD:$PWD/tools/research/src:$D/inputs
 ulimit -v $(( ${MEM_GB:-8} * 1024 * 1024 ))
-# the imports first, before anything private is read, so a missing module says so here
-nice -n 10 "$v/bin/python" -c 'import advice_c' || { echo "advice: advice_c.py does not import under $v"; exit 2; }
+# the imports and the compiler's digest first, before anything private is read, so a missing module says so here
+nice -n 10 "$v/bin/python" -c 'import advice_c; advice_c.ADV.registered_compiler()' \
+  || { echo "advice: advice_c.py does not import, or the tree gives no compiler digest, under $v"; exit 2; }
 echo "advice: from $(date -u +%T), tree $(git rev-parse --short HEAD 2>/dev/null || echo shipped), no GPU, ${MEM_GB:-8} GB cap"
 (umask 077; nice -n 10 "$v/bin/python" "$D/inputs/advice_c.py" "$A" "$W" "$OUT" --controls > "$W/advice.log" 2>&1); a=$?
 grep "^advice-c:" "$W/advice.log"
-if [ $a != 0 ] && ! grep -q "^advice-c: \(the cut does not\|no Commit record\|control\)" "$W/advice.log"; then
+if [ $a != 0 ] && ! grep -q "^advice-c: \(the cut does not\|no Commit record\|.* NOT REFUSED\|.* does not round-trip\)" "$W/advice.log"; then
   echo "advice: failed in $(grep -oE '^[A-Za-z_.]+(Error|Exception|Exit|Interrupt)\b' "$W/advice.log" | tail -n 1), through:"
   grep -E '^  File "' "$W/advice.log" | tail -n 4 | sed -E 's/^  File "([^"]*)", line ([0-9]+), in (.*)$/  \1:\2 \3/'
 fi

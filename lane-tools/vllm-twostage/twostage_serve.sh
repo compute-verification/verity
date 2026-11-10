@@ -119,9 +119,13 @@ python3 -c 'import json,sys; print("BOUNDARY-COMMITS complete:", (json.load(open
 # output stay in PRIV/advice/w<k>/, and OUT/advice/w<k>/registration.json carries only the binding the first stage's
 # --advice reads. The cut refuses a request outside its boundary window's steps; stdout gets only advice_c.py's own lines.
 if [ $rc = 0 ] && [ -f "$D/inputs/advice_c.py" ]; then
-  (umask 077; CUDA_VISIBLE_DEVICES= PYTHONPATH=$PWD/integrations/vllm:$PWD "$PY" "$D/inputs/advice_c.py" \
-    "$PRIV/out/boundary-rows" "$PRIV/advice" "$OUT" --controls > "$PRIV/advice.log" 2>&1); arc=$?
+  (umask 077; CUDA_VISIBLE_DEVICES= PYTHONPATH=$PWD/integrations/vllm:$PWD:$PWD/tools/research/src "$PY" \
+    "$D/inputs/advice_c.py" "$PRIV/out/boundary-rows" "$PRIV/advice" "$OUT" --controls > "$PRIV/advice.log" 2>&1); arc=$?
   grep "^advice-c:" "$PRIV/advice.log" || true
+  if [ $arc != 0 ] && ! grep -q "^advice-c: \(the cut does not\|no Commit record\|.* NOT REFUSED\|.* does not round-trip\)" "$PRIV/advice.log"; then
+    echo "twostage-serve: advice failed in $(grep -oE '^[A-Za-z_.]+(Error|Exception|Exit|Interrupt)\b' "$PRIV/advice.log" | tail -n 1), through:"
+    grep -E '^  File "' "$PRIV/advice.log" | tail -n 4 | sed -E 's/^  File "([^"]*)", line ([0-9]+), in (.*)$/  \1:\2 \3/'
+  fi
   echo "twostage-serve: advice exit $arc (its log: the private dir's advice.log)"
 fi
 keep=(! -path ./private.txt ! -path "./boundary/*/commit.json" ! -path "./advice/*/registration.json")
