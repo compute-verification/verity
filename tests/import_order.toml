@@ -75,7 +75,6 @@ ties = [
 loader = "verity/protocols/certifier"
 loaded = "benchmarks"
 ties = [
-    ["verity/protocols/certifier/device/network_traces/certifier_piece.py", "benchmarks/network_traces/served_session.py"],
     ["verity/protocols/certifier/device/network_traces/certifier_serve.py", "benchmarks/network_traces/active_replay.py"],
     ["verity/protocols/certifier/device/network_traces/warden_serve.py", "benchmarks/network_traces/active_replay.py"],
     ["verity/protocols/certifier/device/network_traces/warden_serve.py", "benchmarks/network_traces/stall_probe.py"],
