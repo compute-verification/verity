@@ -1,15 +1,15 @@
 """An inference-only policy's number: the least slowdown of training run inside the policy's inference blocks.
 
 A policy is `(c, k, n)`: blocks of at most `c` Boolean gates, each reading at most `k` bits from outside itself and
-outside θ, at most `n` of them (`Nci.CompliesAtMost c k n`; `UNITS`). Its number is the slowdown `min_cut.bound` gives it
-(`benchmarks/rho/rho/min_cut.py`, the arithmetic of `Nci.Cut.Guarantees.HE`) on one block's work: `N` the block's work
+outside θ, at most `n` of them (the Lean's `CompliesAtMost c k n`; `UNITS`). Its number is the slowdown `min_cut.bound` gives it
+(`benchmarks/rho/rho/min_cut.py`, the arithmetic of the Lean statement its `HE` names) on one block's work: `N` the block's work
 in the policy's own MACs, `O = N o b` its output wires (`o` the output values a MAC of the model's forward matmuls,
-`Shape.outputs / Shape.macs`, and `b` a bf16 value's wires) and the circuit's size `c`. That is `max(1, N / cap)`, `cap`
+`Shape.outputs / Shape.macs`, and `b` a bf16 value's wires) and the circuit's size `c`. That is `max(1, N / limit)`, `limit`
 the most of such work one block of the policy finishes (`Bound.macs_a_block`): the number is 1 where the count lets a
 block hold all of its own work as training.
 
 `stated` reads a policy's public numbers from a file (`served.toml`, whose keys README.md lists) and says what its `k`
-is made of; `built.py` builds a class's policy from this tree. `periods` sets a block's cap beside the blocks a fleet
+is made of; `built.py` builds a class's policy from this tree. `periods` sets a block's limit beside the blocks a fleet
 holds over a monitoring period, on the slowdown calculator's fleets and periods (`benchmarks/rho`).
 """
 from __future__ import annotations
@@ -35,7 +35,7 @@ SERVED = HERE / "served.toml"
 #: the rest at its BF16 rate, half of it, so a linear's MAC counts one and a BF16 MAC two
 WORK = ("linears", "attention", "lm_head")
 TOTAL = "total"
-#: a policy's units. `c` is in two-input Boolean gates, as `NciCheck.Count` counts a block Definition's by the gate
+#: a policy's units. `c` is in two-input Boolean gates, as the Lean count counts a block Definition's by the gate
 #: table (`definitions.boolean.gate_table`): not the block's gates at their widths (`Definition.gates`), which
 #: `inference_blocks.budgets` sums into a number also called c
 UNITS = {"c": "Boolean gates a block", "k": "fresh input bits a block", "n": "blocks"}
@@ -166,9 +166,9 @@ def bound(p: Policy, sh: Shape, blocks: float = 1.0) -> min_cut.Bound:
     return min_cut.bound(p.c, p.k, p.n, N=N, O=N * sh.outputs * min_cut.BF16 / sh.macs, size=p.c)
 
 
-def periods(work: float, cap: float) -> list[dict[str, Any]]:
+def periods(work: float, limit: float) -> list[dict[str, Any]]:
     """For each of the slowdown calculator's fleets and monitoring periods (rho's `periods.FLEETS` and `PERIODS`): the
-    policy's blocks the fleet holds at capacity, each of ``work`` MACs, the training MACs they hold at most at ``cap``
+    policy's blocks the fleet holds at capacity, each of ``work`` MACs, the training MACs they hold at most at ``limit``
     a block, and that as a share of the fleet's compute. A fleet's rate is its locations' data-sheet dense rate
     (`location.<name>.flops`, two FLOPs a MAC)."""
     import periods as rho_periods
@@ -180,5 +180,5 @@ def periods(work: float, cap: float) -> list[dict[str, Any]]:
         for name in rho_periods.PERIODS:
             blocks = rate * hardware.monitoring_period(reg, name).seconds / work
             rows.append({"where": label, "fleet": fleet, "location": f.location, "locations": f.count, "period": name,
-                         "blocks": blocks, "training_macs": blocks * min(cap, work), "share": min(1.0, cap / work)})
+                         "blocks": blocks, "training_macs": blocks * min(limit, work), "share": min(1.0, limit / work)})
     return rows

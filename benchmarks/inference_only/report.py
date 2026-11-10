@@ -12,7 +12,6 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
-import os
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
@@ -22,9 +21,10 @@ from typing import Any
 import built as B
 import policy as P
 from rho import lean, min_cut
+from verity_config.settings import SHARED
 
-UNIT = ("the least slowdown of training run inside one inference block of the policy, max(1, N / cap): N the block's "
-        "work and cap the most training work one block finishes (the bound's macs_a_block), in the policy's own MACs")
+UNIT = ("the least slowdown of training run inside one inference block of the policy, max(1, N / limit): N the block's "
+        "work and limit the most training work one block finishes (the bound's macs_a_block), in the policy's own MACs")
 #: rho's command for a deployment's slowdown per monitoring period
 CALCULATOR = "uv run python benchmarks/rho/periods.py"
 
@@ -48,7 +48,7 @@ def _g(x: float) -> str:
 
 
 def _commit() -> str | None:
-    if sha := os.environ.get("RESEARCH_SOURCE_SHA"):
+    if sha := SHARED.RESEARCH_SOURCE_SHA:
         return sha
     got = subprocess.run(["git", "rev-parse", "HEAD"], cwd=P.ROOT, capture_output=True, text=True)
     return got.stdout.strip() if got.returncode == 0 else None
@@ -88,8 +88,8 @@ def priced(p: P.Policy, sh: P.Shape, blocks: float = 1.0) -> dict[str, Any]:
 
 def headline(row: dict[str, Any], p: P.Policy) -> list[str]:
     """The number and why, in the words a reader needs first."""
-    N, cap, value = row["work"]["N"], row["bound"]["macs_a_block"], row["value"]
-    holds = (f"the bound lets one block hold {_n(cap / N)} times its own work as training, so it shows no slowdown"
+    N, limit, value = row["work"]["N"], row["bound"]["macs_a_block"], row["value"]
+    holds = (f"the bound lets one block hold {_n(limit / N)} times its own work as training, so it shows no slowdown"
              if value == 1 else f"one block finishes at most 1/{_n(value)} of its own work as training")
     lines = [f"{p.model}, class {','.join(map(str, p.cls))}, {p.label}."]
     if p.outside:
@@ -103,7 +103,7 @@ def detail(row: dict[str, Any], p: P.Policy, sh: P.Shape) -> list[str]:
     """One policy's lines: what it is, what k is made of, a block's work, the check's verdict, the bound and the
     number with what it rests on."""
     w, bd, check = row["work"], row["bound"], row["check"]
-    cap = bd["macs_a_block"]
+    limit = bd["macs_a_block"]
     positions = P.class_of(p.cls).positions
     width = max(len(f"{bits:,}") for bits in (*(b for _, b, _ in p.parts), p.unexplained, 0))
     out = [
@@ -127,9 +127,9 @@ def detail(row: dict[str, Any], p: P.Policy, sh: P.Shape) -> list[str]:
                    + (f", {check['failed']} failed" if not check["complies"] else ""))
         if not check["complies"]:
             f = check["failed"]
-            same = f != "c" and check["counted"]["c"] == check["declared"]["c"]
+            same = f != "c" and check["counted"]["c"] == check["policy"]["c"]
             out.append("            the Lean counts " + (f"c's {P.UNITS['c']} exactly, and " if same else "")
-                       + f"{check['counted'][f]:,} {P.UNITS[f]} against {f} = {check['declared'][f]:,}: {check['why']}")
+                       + f"{check['counted'][f]:,} {P.UNITS[f]} against {f} = {check['policy'][f]:,}: {check['why']}")
         if cost:
             out.append(f"            the count's cost: {cost['wall_s']:.1f} s wall, {cost['cpu_s']:.1f} s CPU, "
                        f"{cost['peak_mib']:,.0f} MiB peak, on an instance of {cost['instance_bytes']:,} bytes")
@@ -139,12 +139,12 @@ def detail(row: dict[str, Any], p: P.Policy, sh: P.Shape) -> list[str]:
         f"            o = {sh.outputs:,} output values over {sh.macs:,} MACs of the model's own forward matmuls, b = "
         f"{bd['b']:g} bits a value",
         f"            {bd['statement']}, β_w = {bd['beta_w']:g}, β_x = " + (_g(bd["beta_x"]) if bd["beta_x"] else "none")
-        + f", F = {bd['F']:g}: cap {_n(cap)} MACs of training a block, N / cap = {_g(w['N'] / cap)}",
+        + f", F = {bd['F']:g}: limit {_n(limit)} MACs of training a block, N / limit = {_g(w['N'] / limit)}",
         "            the work is taken as training of the model's own matmul shapes, its weights outside θ, at most two "
         "of its three kinds of product charged (F = 1)",
         "            size = c, so c cancels, and the count reads no n: the number is the blocks the count needs for one "
         "block's work",
-        f"  number    {_n(row['value'])} = max(1, N / cap)",
+        f"  number    {_n(row['value'])} = max(1, N / limit)",
         f"  rests on  {row['rests_on']}",
     ]
     return out
@@ -177,7 +177,7 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
     ap.add_argument("--division", choices=B.DIVISIONS, default="session",
                     help="which of the built class's blocks its number is of")
     ap.add_argument("--stated-only", action="store_true", help="price the stated policy and build nothing")
-    ap.add_argument("--out", type=Path, default=os.environ.get("OUT"), metavar="DIR",
+    ap.add_argument("--out", type=Path, default=SHARED.OUT, metavar="DIR",
                     help="write inference_only.json here (default: $OUT; unset: only printed)")
     args = ap.parse_args(argv)
 
@@ -213,7 +213,7 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
         print("\n".join(detail(built, chosen, sh)))
         print("\n  The record's divisions (c and k the largest block's, a block's work the session's shared evenly; the "
               "check ran on the session's Program)")
-        head = ("division", "blocks a session", "c", "k", "N a block", "cap", "number")
+        head = ("division", "blocks a session", "c", "k", "N a block", "limit", "number")
         table = [head] + [(d["division"], _n(d["blocks_a_session"]), f"{d['c']:,}", f"{d['k']:,}", _n(d["work"]["N"]),
                            _n(d["bound"]["macs_a_block"]), _n(d["value"])) for d in divisions]
         widths = [max(len(r[i]) for r in table) for i in range(len(head))]
@@ -236,7 +236,7 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
     for r in table:
         print("  " + "  ".join(x.ljust(w) if i < 3 else x.rjust(w) for i, (x, w) in enumerate(zip(r, widths))))
     hard, exports = (lean.status(x) for x in (min_cut.HARDNESS, min_cut.EXPORTS))
-    print(f"  proved    {min_cut.HE} ({lean.status(min_cut.HE)} in the lock), the count a block's cap is solved from: "
+    print(f"  proved    {min_cut.HE} ({lean.status(min_cut.HE)} in the lock), the count a block's limit is solved from: "
           "at k fresh bits a block, m blocks finish at most m (k + α) + (k/2) √(m O / q) of a work's MACs")
     print(f"  premise   (H) {min_cut.HARDNESS} ({hard}) at the β above and (E) {min_cut.EXPORTS} ({exports}) at b, "
           "conjectures; the work's structure (its values one word each, no two matmuls sharing both operands), taken of "
@@ -244,7 +244,7 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
           "class today")
     print("  scaled    one block's ratio, multiplied through the blocks a fleet holds at its data sheet's rate: the "
           "fleets' sizes are the census's, and no fleet was measured")
-    print("\nUnits: the number is the policy's block's work over the cap, both in the policy's own MACs. Not applied:")
+    print("\nUnits: the number is the policy's block's work over the limit, both in the policy's own MACs. Not applied:")
     print("  the two thirds: at F = 1 the charged work is at most two of a training step's three kinds of product "
           "(forward, input-gradient, weight-gradient), so where the weight-gradient products are not charged a whole "
           "step slows by at least two thirds of the number; the number takes N as charged whole")
@@ -255,7 +255,7 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
     doc = {"benchmark": "inference_only", "value": served["value"], "unit": UNIT, "check": served["check"],
            "rests_on": served["rests_on"], "policies": policies, "divisions": divisions, "periods": periods,
            "commit": commit()}
-    if run := os.environ.get("RESEARCH_RUN_ID"):
+    if run := SHARED.RESEARCH_RUN_ID:
         doc["run"] = run
     text = json.dumps(doc, sort_keys=True)
     if args.out:

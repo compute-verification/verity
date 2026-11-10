@@ -1,17 +1,18 @@
 """The class this tree builds, for `run.py`: its circuit record and its inference-only policy by the integration's code
 (`verity_vllm`), the record's three divisions, and the Lean count on it.
 
-* **The class** is a pinned checkpoint's window class on the H200 with its int8 linears inside the circuit
+* **The class** is a pinned checkpoint's class on the H200 with its int8 linears inside the circuit
   (`registered`): the class circuit `window_circuit.class_circuit` lowers, as its record (`record`), θ its registered
   weights.
 * **The policy** (`policy`): a block is one slot's session (`block_counts.session`), `c` its Boolean gates by the gate
-  table (`block_counts.gates`, as `NciCheck.Count` counts them) and `k` its fresh bits by the record's description
+  table (`block_counts.gates`, as the Lean count counts them) and `k` its fresh bits by the record's description
   (`block_counts.fresh`). One block's work is the class's fixed load priced as a served step is (`block_work`).
 * **The divisions** (`divisions`) are the three the record carries: the session (a slot), the position (a slot at a
   step, the record's inference block) and the proof block (a unit). A block's gates are its units' templates'; its fresh
   bits are the rows it reads of registered parameters outside θ, once a row, and the output rows it reads of units in
   another block, once a row. A division's policy is its largest block's `c` and `k`.
-* **The check** (`lean_count`) is `nci-check --count --detail` (`NciCheck.Count`, built with `lake`) on the session
+* **The check** (`lean_count`) is the Lean count, the package's check executable with `--count --detail` (`EXECUTABLE`,
+  built with `lake`), on the session
   Program the integration gives it: the session Definition activated once a slot, with no θ named and no wire between
   units, since the record's wires are declarations the Definition doesn't carry.
 """
@@ -25,6 +26,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 from collections import defaultdict
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -42,11 +44,21 @@ MODEL = "verity-int8/Llama-3.2-1B-INT8"
 #: the card the class is registered for, serving an exact-int8 checkpoint's linears int8
 H200 = {"compute_capability": (9, 0), "num_sms": 132, "int8_exact": "linears"}
 DIVISIONS = ("session", "position", "proof block")
-#: the inference-only policy's check, a Lake package, and the executable `lean_count` runs
-NCI = P.ROOT / "verity/core/protocols/network/nci/lean"
-EXECUTABLE = ("nci-check", "--count", "--detail")
-RULE = "NciCheck.Count: Nci.CompliesAtMost c k n"
-#: what `NciCheck.Count`'s `failure` names, as the policy's parameter
+#: the inference-only policy's check, a Lake package
+PACKAGE = P.ROOT / "verity/core/protocols/network/nci/lean"
+
+
+def _declared() -> tuple[tuple[str, ...], str]:
+    """The count as its package declares it (`lakefile.toml`): the command `lean_count` runs, the package's check
+    executable with `--count --detail`, and the rule, its library's `Count` module deciding `CompliesAtMost c k n`."""
+    lake = tomllib.loads((PACKAGE / "lakefile.toml").read_text())
+    (lib,) = (x["name"] for x in lake["lean_lib"])
+    (exe,) = (x["name"] for x in lake["lean_exe"] if x["root"] == f"{lib}.CheckMain")
+    return (exe, "--count", "--detail"), f"{lib}.Count: CompliesAtMost c k n"
+
+
+EXECUTABLE, RULE = _declared()
+#: what the count's `failure` names, as the policy's parameter
 FAILED = {"gates": "c", "fresh": "k", "count": "n"}
 
 
@@ -86,8 +98,8 @@ def block_work(cls: tuple[int, int, int], model: str) -> dict[str, int]:
     from verity_vllm.program.predict.window_class import Tables
 
     if model not in SS.MODELS or model not in SV.DECLARED:
-        raise ValueError(f"no declared shapes for {model!r}, so a block's work isn't priced: add them to "
-                         f"served_shares.MODELS and served_verdicts.DECLARED ({sorted(SS.MODELS)})")
+        raise ValueError(f"served_shares.MODELS and served_verdicts.DECLARED hold no shapes for {model!r}, so a block's "
+                         f"work isn't priced: add them there (they hold {sorted(SS.MODELS)})")
     macs = dict.fromkeys(P.WORK, 0)
     for rows in Tables.schedule(P.class_of(cls)):
         mine = [r for r in rows if r[0] == 0]
@@ -202,7 +214,7 @@ def divisions(doc: Mapping[str, Any], pins: Mapping[str, str], gates: Mapping[st
 
 
 def instance(pol: Mapping[str, Any], c: int, k: int, n: int) -> dict[str, Any]:
-    """`NciCheck.Count`'s instance for the session policy: the session Definition activated once a slot, the gate table
+    """The count's instance for the session policy: the session Definition activated once a slot, the gate table
     and the policy; no θ, and each block Definition one block."""
     from verity.ml.circuits import codec
     from verity.ml.circuits.population import population_program
@@ -213,22 +225,22 @@ def instance(pol: Mapping[str, Any], c: int, k: int, n: int) -> dict[str, Any]:
 
 
 def lean_count(inst: Mapping[str, Any], clock: Callable[[], float] = time.perf_counter) -> dict[str, Any]:
-    """`nci-check --count --detail` on ``inst``, built first (`lake build nci-check`): its verdict as it printed it, and
+    """The count (`EXECUTABLE`) on ``inst``, built first with `lake`: its verdict as it printed it, and
     what the run cost (wall and CPU seconds, peak memory, the instance's bytes)."""
     try:
-        build = subprocess.run(["lake", "build", EXECUTABLE[0]], cwd=NCI, capture_output=True, text=True)
+        build = subprocess.run(["lake", "build", EXECUTABLE[0]], cwd=PACKAGE, capture_output=True, text=True)
     except FileNotFoundError:
         raise RuntimeError("`lake` isn't on PATH, so the Lean check can't be built: install the toolchain "
-                           f"{(NCI / 'lean-toolchain').read_text().strip()} (elan) and run again") from None
+                           f"{(PACKAGE / 'lean-toolchain').read_text().strip()} (elan) and run again") from None
     if build.returncode:
-        raise RuntimeError(f"`lake build {EXECUTABLE[0]}` in {NCI.relative_to(P.ROOT)} failed:\n"
+        raise RuntimeError(f"`lake build {EXECUTABLE[0]}` in {PACKAGE.relative_to(P.ROOT)} failed:\n"
                            + (build.stdout + build.stderr)[-2000:])
     with tempfile.TemporaryDirectory() as d:
         path, out = Path(d) / "instance.json", Path(d) / "verdict.json"
         path.write_text(json.dumps(inst))
         with out.open("wb") as fh:
             start = clock()
-            child = subprocess.Popen([str(NCI / ".lake/build/bin" / EXECUTABLE[0]), *EXECUTABLE[1:], str(path)],
+            child = subprocess.Popen([str(PACKAGE / ".lake/build/bin" / EXECUTABLE[0]), *EXECUTABLE[1:], str(path)],
                                      stdout=fh, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL)
             with child.stderr:
                 err = child.stderr.read()
@@ -249,7 +261,7 @@ def judged(got: Mapping[str, Any], c: int, k: int, n: int) -> dict[str, Any]:
     v, row = got["verdict"], got["verdict"]["blocks"][0]
     counted = {"c": row[1], "k": row[2], "n": v["total"]}
     check = {"verdict": "accepted" if v["complies"] else "refused", "executable": " ".join(EXECUTABLE), "rule": RULE,
-             "complies": v["complies"], "counted": counted, "declared": {"c": c, "k": k, "n": n}, "cost": got["cost"]}
+             "complies": v["complies"], "counted": counted, "policy": {"c": c, "k": k, "n": n}, "cost": got["cost"]}
     if not v["complies"]:
         check["failed"] = FAILED[v["failure"][1]]
         check["why"] = {"k": "the registered Program has no θ and no dataflow, so every row a unit reads counts as "

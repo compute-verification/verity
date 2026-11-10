@@ -47,8 +47,8 @@ def no_out(monkeypatch) -> None:
 
 
 def reference(inst: dict) -> dict:
-    """`NciCheck.Count`'s Python reference, which the count's difftest holds the Lean to, as `built.lean_count`."""
-    spec = importlib.util.spec_from_file_location("nci_reference", B.NCI / "scripts" / "nci_reference.py")
+    """The count's Python reference, which the count's difftest holds the Lean to, as `built.lean_count`."""
+    spec = importlib.util.spec_from_file_location("nci_reference", B.PACKAGE / "scripts" / "nci_reference.py")
     ref = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ref)
     return {"verdict": ref.check_count_detail(inst), "cost": {}}
@@ -144,7 +144,8 @@ def test_the_report_puts_the_served_number_first_and_labels_a_refused_policy(cap
     assert json.loads(lines[-1]) == doc == json.loads((tmp_path / "inference_only.json").read_text())
     assert lines[2] == "AS SERVED: 1" and "outside the circuit" in lines[4] and "Not checked here" in lines[6]
     assert out.index("AS SERVED: 1") < out.index("The class this tree builds: NOT SERVED")
-    assert "nci-check --count --detail (NciCheck.Count: Nci.CompliesAtMost c k n): complies: false, k failed" in out
+    assert B.EXECUTABLE[1:] == ("--count", "--detail") and B.RULE.endswith(".Count: CompliesAtMost c k n")
+    assert f"{' '.join(B.EXECUTABLE)} ({B.RULE}): complies: false, k failed" in out
     assert "the registered Program has no θ and no dataflow" in out
     assert "the Lean counts c's Boolean gates a block exactly, and " in out
     served, built = doc["policies"]
@@ -158,7 +159,7 @@ def test_the_report_puts_the_served_number_first_and_labels_a_refused_policy(cap
     sh = P.shape(B.MODEL)
     N = B.block_work(CLASS, B.MODEL)[P.TOTAL]
     want = min_cut.bound(built["c"], built["k"], built["n"], N=N, O=N * sh.outputs * 16 / sh.macs, size=built["c"])
-    assert built["value"] == want.slowdown > 1 and f"number    {report._n(want.slowdown)} = max(1, N / cap)" in out
+    assert built["value"] == want.slowdown > 1 and f"number    {report._n(want.slowdown)} = max(1, N / limit)" in out
     assert [d["division"] for d in doc["divisions"]] == list(B.DIVISIONS) and doc["divisions"][0] == built
     assert [d["check"]["verdict"] for d in doc["divisions"]] == ["refused", "not run", "not run"]
     # each policy over each fleet and monitoring period: a share of the compute, and the blocks' training at most
