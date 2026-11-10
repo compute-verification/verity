@@ -98,7 +98,7 @@ NODE_FLOPS = 8 * GPU_FLOPS
 #: the deployed proof-of-space audit (k = 111 rounds at delta = 1/100; the slack counts the floor once) and the memory
 #: the fill doesn't reach (3.05 GB on-chip, 18.4 GB GPU reserve, 29.5 GB host gap, about 7 GB of DPU, BMC and flash); disks
 #: unplugged; today's uncharged export; the declared computation's novel intake at alpha F (once the network's count check is in
-#: the ZK flow; line rate until then); sampled proofs at 1% on top of serve-time commitments, at today's sparse-draw cost
+#: the ZK flow; line rate until then); SPOT at 1% on top of serve-time commitments, at today's sparse-sample cost
 #: (about 35 GPU-s a sample), delta = 2^-40 and luck A = 8, an incorrect proof block injecting the widest public size
 #: class of output bits (``partition_v2.UNIT_CLASS_MAX``); the structural d = 1, what Lean certifies for a run that trains
 #: its embedding, with ReferenceThreaded's e for a reference circuit written in Dot16 steps, as the declarations are, in

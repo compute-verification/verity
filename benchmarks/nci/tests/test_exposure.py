@@ -21,7 +21,7 @@ def test_every_parameter_has_a_range_around_its_default_inside_its_slider():
 
 
 def test_the_defaults_give_the_statements_numbers():
-    """At today's sparse draws the closed-form chi is above 1: the pool of injecting proof blocks, each the widest
+    """At today's sparse samples the closed-form chi is above 1: the pool of injecting proof blocks, each the widest
     public size class of output bits, is worth more than the fleet's capacity, and ``evaluate`` stops its share at 1."""
     t = X.terms(T.DEFAULTS)
     assert t["R_wipe_gb"] == pytest.approx(166, rel=0.01)

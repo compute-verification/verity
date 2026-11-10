@@ -158,7 +158,7 @@ def test_the_ladders_fit_bound_is_fit_row_at_the_memory_rungs():
 
 
 def test_the_fit_edges_are_where_the_fit_bound_crosses_each_level():
-    """T5 reaches no level: chi alone holds it to max(1, MFU_0 / chi), which is 1 at today's sparse draws."""
+    """T5 reaches no level: chi alone holds it to max(1, MFU_0 / chi), which is 1 at today's sparse samples."""
     edges = S.fit_edges()
     assert set(edges["T5"].values()) == {None} and max(1.0, P["mfu"] / S.cheat(P)) == S.capped(P, "T5", 0.0) == 1
     assert edges["T3"][2.0] == math.inf and S.capped(P, "T3", math.inf) > 2
@@ -212,7 +212,7 @@ def test_the_thresholds_are_on_d_not_on_one_over_eta():
 
 def test_chi_is_the_chord_times_the_pool():
     """chi = 2 m chord bits / (kappa C), at most 1, and the injected bits scale with (overhead + replay) / share +
-    floor_steps. At today's sparse draws it is 1; at 512 draws per statement it is below."""
+    floor_steps. At today's sparse samples it is 1; at 512 samples per statement it is below."""
     def pool(overhead: float) -> float:
         return (overhead + P["replay"]) / P["share"] + P["floor_steps"]
     today, many = S.holes()["cases"]
@@ -221,6 +221,21 @@ def test_chi_is_the_chord_times_the_pool():
                                          rel=1e-12)
     assert today["chi"] == 1 > many["chi"]
     assert today["bits"] / many["bits"] == pytest.approx(pool(today["overhead"]) / pool(many["overhead"]), rel=1e-12)
+
+
+def test_chis_linear_cost_is_from_the_closed_form_where_the_share_is_stopped():
+    """Section 6 sets the proving cost at which chi reaches 1% beside what a chi linear in the cost gives. At the defaults
+    the fleet's capacity stops the share at 1, and 0.01 over the stopped share is far above the search: the line divides
+    by the closed form's chi, which doesn't stop, and agrees with the search. At batched proving, where the share isn't
+    stopped, the closed form is the share."""
+    th = {"defaults": {"T3": [{"key": "K", "below": {100.0: "never"}, "intervals": {100.0: []}}]}}
+    q = quantities(S.exposures(th))
+    found = q["multiple of today's proving cost at which χ reaches 1%"]
+    (linear,) = (v for name, v in q.items() if name.startswith("the same if χ were linear in it"))
+    assert S.cheat(P) == 1 < X.chi(P) and 0.01 / S.cheat(P) > 10 * found
+    assert linear == 0.01 / X.chi(P) == pytest.approx(found, rel=1e-3)
+    batched = P | X.BATCHED
+    assert 1 > S.cheat(batched) == pytest.approx(X.chi(batched), rel=1e-3)
 
 
 def test_bisect():

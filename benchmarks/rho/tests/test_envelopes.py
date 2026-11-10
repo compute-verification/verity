@@ -68,7 +68,7 @@ def test_the_remote_uncertified_share_is_tiers_residual_term():
 
 
 def test_with_spot_it_adds_tiers_escape_and_cheating_shares():
-    """At today's sparse draws the bits the accepted incorrect blocks inject, each the widest public size class of a
+    """At today's sparse samples the bits the accepted incorrect blocks inject, each the widest public size class of a
     block's outputs, are worth more than tiers' fleet, and both stop the cheating share at 1; at the proving cost's low
     end, batched throughput, it is below 1."""
     ctx = tiers_context()

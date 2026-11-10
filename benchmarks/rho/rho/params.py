@@ -194,7 +194,7 @@ def _deltas() -> list[Param]:
     credit = "CircuitCredit's per-window failure p = delta_s + delta_bind + delta_ks, three of it (eps_agg's source)"
     return [
         Param("regime.remote.window_delta_coin", window, status="derived",
-              source=f"{core}: {credit}: delta_s, the coins' draw"),
+              source=f"{core}: {credit}: delta_s, the coins' sample"),
         Param("regime.remote.window_delta_crypto", 2 * window, status="derived",
               source=f"{core}: {credit}: delta_bind + delta_ks, commitment binding (SHA-512) and the proof system's "
                      "knowledge soundness"),

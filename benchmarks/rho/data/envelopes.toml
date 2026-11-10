@@ -12,7 +12,7 @@ kind = "unmonitored"
 
 # Nci.Guarantees.DampenerRemote's terms, each at benchmarks/nci/tiers.py's DEFAULTS (tests/test_envelopes.py holds them).
 # PoUW: residual, clock_share, host, eps_w, eps_agg, window_delta_*; detection: identities, lag_s (and, sampled, the rest).
-# window_delta_coin and window_delta_crypto, one and two of the per-window delta, and the sampled proofs' p_evade are
+# window_delta_coin and window_delta_crypto, one and two of the per-window delta, and SPOT's p_evade are
 # not set here: the registry reads the per-window delta from core (rho/params.py).
 [regime.remote]
 kind = "remote"
@@ -24,7 +24,7 @@ eps_agg = { value = 1e-4, low = 1e-6, high = 1e-3, source = "benchmarks/nci/tier
 identities = { value = 1, unit = "identity", low = 1, high = 1000, source = "benchmarks/nci/tiers.py DEFAULTS identities: detection is terminal (J = 1); high: identities a detection doesn't end", status = "assumed" }
 lag_s = { value = 3600, unit = "s", low = 60, high = 86400, source = "benchmarks/nci/tiers.py DEFAULTS lag_s: a window plus the verdict delay", status = "assumed" }
 
-# tiers T5: sampled proofs at 1% on top of serve-time commitments, today's sparse-draw cost. step_bits, the output bits
+# tiers T5: SPOT at 1% on top of serve-time commitments, today's sparse-sample cost. step_bits, the output bits
 # an accepted incorrect proof block injects, is not set here: a block's outputs fit its Definition's public size class,
 # a power of two from 16 to 262,144 bits, and the registry reads the widest from verity (rho/params.py).
 [regime.remote-sampled]
