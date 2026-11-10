@@ -54,8 +54,8 @@ entries, whichever block reads them, so they are counted against `T`; steps 2 an
 (`outOn`: at most the output wires in the blocks of `G`, `wiresOn`, themselves at most `O`; `outOn_le_wiresOn`,
 `wiresOn_le`); and the MACs a block outside `G` holds are counted apart, at most its gates (`sum_card_inBlock_le`).
 `counts` is `counts_on` at every block. `bound_on_caps` is step 5 on those counts, with `S = ∑ Π(κ u)` over `G` for
-`m Π(k)` (`real_step_on`), and under (H) at a cap no `κ u` exceeds and (E), `bound_on_caps_he` puts `κ u² / (4 β_w β_x)`
-for each `Π(κ u)`. `bound_on` and `bound_on_he` are `Bound` and `HE`'s bound over `G` at one cap.
+`m Π(k)` (`real_step_on`), and under (H) at each block's own cap and (E), `bound_on_caps_he` puts
+`κ u² / (4 β_w β_x)` for each `Π(κ u)`. `bound_on` and `bound_on_he` are `Bound` and `HE`'s bound over `G` at one cap.
 -/
 
 @[expose] public section
@@ -973,24 +973,18 @@ theorem bound_on_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] 
       _ = (k / 2) ^ 2 * (G.card * T / (βw * βx * b)) := by ring
   linarith [bound_on W P G hk hT]
 
-/-- (H) at a cap holds at every smaller cap. -/
-theorem hardness_mono {ρ V : Type} [Fintype ρ] [DecidableEq V] {d : RegisteredCircuit}
-    {A : ρ → Finset (Finset (Fin d.D.N))} {val : Finset (Fin d.D.N) → V} {β : ρ → ℝ} {K K' : ℕ} (hK : K' ≤ K)
-    (h : Assumptions.Hardness d A val β K) : Assumptions.Hardness d A val β K' := by
-  intro S hS
-  exact h S (hS.trans hK)
-
 /-- **The bound over a set of blocks, each under its own cap, under (H) and (E).** `HE`'s premises on the values, with
-(H) at a cap `K` that no cap `κ u` of a block of `G` exceeds, and (E) at `b > 0`; all the blocks together read at most
-`T` gates outside `θ`. With `Q = ∑_{u ∈ G} (κ u)²`: `N` is at most the MACs the blocks outside `G` hold, plus
+(H) at each block of `G`'s own cap `κ u` and (E) at `b > 0`; all the blocks together read at most `T` gates outside
+`θ`. With `Q = ∑_{u ∈ G} (κ u)²`: `N` is at most the MACs the blocks outside `G` hold, plus
 `T + ½ √(Q O_G / (β_w β_x)) + ½ √(Q T / (β_w β_x b))`, with `O_G` the outputs with a wire in a block of `G` (`outOn`),
-at most `O`. At one cap `k` on `G`, `Q = |G| k²` and it is `bound_on_he`. -/
+at most `O`. (H) at a cap gives it at every smaller one, so (H) at the largest `κ u` is enough; at one cap `k` on `G`,
+`Q = |G| k²` and it is `bound_on_he`. -/
 theorem bound_on_caps_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] {d : RegisteredCircuit}
-    {W : Work d.D ι} {val : Finset (Fin d.D.N) → V} {K T : ℕ} {βw βx b : ℝ} (P : Partition d.D m)
+    {W : Work d.D ι} {val : Finset (Fin d.D.N) → V} {T : ℕ} {βw βx b : ℝ} (P : Partition d.D m)
     (G : Finset (Fin m)) (κ : Fin m → ℕ) (hw : 0 < βw) (hx : 0 < βx) (hb : 0 < b) (hval : ValuesInjective W val)
-    (hshare : NoSharedPair W val) (hH : Assumptions.Hardness d ![W.allW, W.allX] val ![βw, βx] K)
-    (hE : Assumptions.Exports W b) (hK : ∀ u ∈ G, κ u ≤ K)
-    (hκ : ∀ u ∈ G, (d.unregistered (P.gates u)).card ≤ κ u) (hT : ∑ u, (d.unregistered (P.gates u)).card ≤ T) :
+    (hshare : NoSharedPair W val) (hH : ∀ u ∈ G, Assumptions.Hardness d ![W.allW, W.allX] val ![βw, βx] (κ u))
+    (hE : Assumptions.Exports W b) (hκ : ∀ u ∈ G, (d.unregistered (P.gates u)).card ≤ κ u)
+    (hT : ∑ u, (d.unregistered (P.gates u)).card ≤ T) :
     (W.N : ℝ) ≤ (∑ u ∈ Gᶜ, ∑ a, (inBlock P W u a).card : ℕ) + T +
       1 / 2 * √((∑ u ∈ G, κ u ^ 2 : ℕ) * outOn P W G / (βw * βx)) +
       1 / 2 * √((∑ u ∈ G, κ u ^ 2 : ℕ) * T / (βw * βx * b)) := by
@@ -998,7 +992,7 @@ theorem bound_on_caps_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableE
     rw [Nat.cast_sum, Nat.cast_sum, sum_div]
     refine sum_le_sum fun u hu => ?_
     rw [Nat.cast_pow]
-    exact (onePremise hw hx hval hshare (hardness_mono (hK u hu) hH)).1
+    exact (onePremise hw hx hval hshare (hH u hu)).1
   have hQ : (0 : ℝ) ≤ (∑ u ∈ G, κ u ^ 2 : ℕ) / (4 * βw * βx) :=
     div_nonneg (Nat.cast_nonneg _) (mul_pos (mul_pos four_pos hw) hx).le
   have hT0 : (0 : ℝ) ≤ T := Nat.cast_nonneg _

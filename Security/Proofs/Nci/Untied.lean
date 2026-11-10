@@ -64,7 +64,7 @@ the entries of all the blocks as a total. So on the untied circuit with every bl
 `G` is counted under its own cap (`k` and the gates of `T` it held, or `k` and `b` for each word it reads) against the
 outputs with a wire in a block of `G`, all the blocks together read `m k + |T|` (or `m k + b |E|`), and the MACs a
 block outside `G` holds are counted apart, at most its gates (`counts_asInputs`, `counts_untie`). Under (H) at `d`,
-at a cap no block of `G` exceeds, and (E), the squared caps are summed over `G`: `bound_asInputs_he`, `bound_untie_he`.
+at each block of `G`'s own cap, and (E), the squared caps are summed over `G`: `bound_asInputs_he`, `bound_untie_he`.
 -/
 
 @[expose] public section
@@ -620,23 +620,25 @@ theorem counts_untie {ι : Type} [Fintype ι] [DecidableEq ι] {m : ℕ} (d : Re
     hV.trans (Nat.mul_le_mul_right F (sum_le_sum fun u _ => piMax_untie_le d (𝒲.biUnion id) W _)), hF, hbE, hb⟩
 
 /-- **The bound with untied words, under (H) and (E), each block at its own cap.** `HE`'s premises on the values, with
-(H) at `d` itself, at a cap `K`, and (E) at `e > 0`. For any set `G` of blocks whose caps, `k` and `b` for each word
-the block reads, are at most `K`, with `T = m k + b |𝒲|`, `Q` the sum of the squared caps over `G`, and `O_G` the
-outputs with a wire in a block of `G`: `N` is at most the MACs the other blocks hold, plus
+(H) at `d` itself, at each block of `G`'s own cap, `k` and `b` for each word the block reads, and (E) at `e > 0`. For
+any set `G` of blocks, with `T = m k + b |𝒲|`, `Q` the sum of the squared caps over `G`, and `O_G` the outputs with a
+wire in a block of `G`: `N` is at most the MACs the other blocks hold, plus
 `T + ½ √(Q O_G / (β_w β_x)) + ½ √(Q T / (β_w β_x e))` (`Nci.Cut.SecurityProofs.bound_on_caps_he`). -/
 theorem bound_untie_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] {m : ℕ} (d : RegisteredCircuit)
-    (P : Partition d.D m) (W : Work d.D ι) (val : Finset (Fin d.D.N) → V) {k b K : ℕ} {βw βx e : ℝ}
+    (P : Partition d.D m) (W : Work d.D ι) (val : Finset (Fin d.D.N) → V) {k b : ℕ} {βw βx e : ℝ}
     (𝒲 : Finset (Finset (Fin d.D.N))) (h𝒲 : ∀ S ∈ 𝒲, S.card ≤ b) (hk : ReadsAtMost d P k) (hone : OneReader P 𝒲)
-    (G : Finset (Fin m)) (hG : ∀ u ∈ G, k + b * (wordsRead d.D 𝒲 (P.gates u)).card ≤ K) (hw : 0 < βw) (hx : 0 < βx)
-    (he : 0 < e) (hval : ValuesInjective W val) (hshare : NoSharedPair W val)
-    (hH : Assumptions.Hardness d ![W.allW, W.allX] val ![βw, βx] K) (hE : Assumptions.Exports W e) :
+    (G : Finset (Fin m)) (hw : 0 < βw) (hx : 0 < βx) (he : 0 < e) (hval : ValuesInjective W val)
+    (hshare : NoSharedPair W val)
+    (hH : ∀ u ∈ G, Assumptions.Hardness d ![W.allW, W.allX] val ![βw, βx]
+      (k + b * (wordsRead d.D 𝒲 (P.gates u)).card))
+    (hE : Assumptions.Exports W e) :
     (W.N : ℝ) ≤ (∑ u ∈ Gᶜ, ∑ a, (inBlock P W u a).card : ℕ) + (m * k + b * 𝒲.card : ℕ) +
       1 / 2 * √((∑ u ∈ G, (k + b * (wordsRead d.D 𝒲 (P.gates u)).card) ^ 2 : ℕ) * outOn P W G / (βw * βx)) +
       1 / 2 * √((∑ u ∈ G, (k + b * (wordsRead d.D 𝒲 (P.gates u)).card) ^ 2 : ℕ) * (m * k + b * 𝒲.card : ℕ) /
         (βw * βx * e)) :=
   bound_on_caps_he (d := d.untie (𝒲.biUnion id)) (W := W) P G
     (fun u => k + b * (wordsRead d.D 𝒲 (P.gates u)).card) hw hx he hval hshare
-    (hardness_untie d (𝒲.biUnion id) _ val _ _ hH) hE hG
+    (fun u hu => hardness_untie d (𝒲.biUnion id) _ val _ _ (hH u hu)) hE
     (fun u _ => (card_unregistered_untie_words_le d 𝒲 h𝒲 (P.gates u)).trans (Nat.add_le_add_right (hk u) _))
     (sum_card_unregistered_untie_le d P 𝒲 h𝒲 hk hone)
 
@@ -797,21 +799,21 @@ theorem counts_asInputs {ι : Type} [Fintype ι] [DecidableEq ι] {m : ℕ} (d :
     (sum_card_unregistered_asInputs_held_le d P T hT hk)
 
 /-- **The bound with computed gates as inputs, under (H) and (E), each block at its own cap.** `HE`'s premises on the
-values, with (H) at `d` itself, at a cap `K`, and (E) at the circuit with `T` as inputs, at `e > 0`. For any set `G` of
-blocks whose caps, `k` and the gates of `T` the block held, are at most `K`, with `T' = m k + |T|`, `Q` the sum of the
-squared caps over `G`, and `O_G` the outputs with a wire in a block of `G`: `N` is at most the MACs the other blocks
-hold, plus `T' + ½ √(Q O_G / (β_w β_x)) + ½ √(Q T' / (β_w β_x e))` (`Nci.Cut.SecurityProofs.bound_on_caps_he`). -/
+values, with (H) at `d` itself, at each block of `G`'s own cap, `k` and the gates of `T` the block held, and (E) at the
+circuit with `T` as inputs, at `e > 0`. For any set `G` of blocks, with `T' = m k + |T|`, `Q` the sum of the squared
+caps over `G`, and `O_G` the outputs with a wire in a block of `G`: `N` is at most the MACs the other blocks hold, plus
+`T' + ½ √(Q O_G / (β_w β_x)) + ½ √(Q T' / (β_w β_x e))` (`Nci.Cut.SecurityProofs.bound_on_caps_he`). -/
 theorem bound_asInputs_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] {m : ℕ} (d : RegisteredCircuit)
-    (P : Partition d.D m) {k K : ℕ} {βw βx e : ℝ} (T : Finset (Fin d.D.N)) (hT : ∀ g ∈ T, d.D.isInput g = false)
+    (P : Partition d.D m) {k : ℕ} {βw βx e : ℝ} (T : Finset (Fin d.D.N)) (hT : ∀ g ∈ T, d.D.isInput g = false)
     (W : Work (d.D.asInputs T) ι) (val : Finset (Fin d.D.N) → V) (hk : ReadsAtMost d P k) (G : Finset (Fin m))
-    (hG : ∀ u ∈ G, k + (T ∩ P.gates u).card ≤ K) (hw : 0 < βw) (hx : 0 < βx) (he : 0 < e)
-    (hval : ValuesInjective W val) (hshare : NoSharedPair W val)
-    (hH : Assumptions.Hardness d ![W.allW, W.allX] val ![βw, βx] K) (hE : Assumptions.Exports W e) :
+    (hw : 0 < βw) (hx : 0 < βx) (he : 0 < e) (hval : ValuesInjective W val) (hshare : NoSharedPair W val)
+    (hH : ∀ u ∈ G, Assumptions.Hardness d ![W.allW, W.allX] val ![βw, βx] (k + (T ∩ P.gates u).card))
+    (hE : Assumptions.Exports W e) :
     (W.N : ℝ) ≤ (∑ u ∈ Gᶜ, ∑ a, (inBlock (P.asInputs T) W u a).card : ℕ) + (m * k + T.card : ℕ) +
       1 / 2 * √((∑ u ∈ G, (k + (T ∩ P.gates u).card) ^ 2 : ℕ) * outOn (P.asInputs T) W G / (βw * βx)) +
       1 / 2 * √((∑ u ∈ G, (k + (T ∩ P.gates u).card) ^ 2 : ℕ) * (m * k + T.card : ℕ) / (βw * βx * e)) :=
   bound_on_caps_he (d := d.asInputs T) (W := W) (P.asInputs T) G (fun u => k + (T ∩ P.gates u).card) hw hx he hval
-    hshare (hardness_asInputs d T _ val _ _ hH) hE hG
+    hshare (fun u hu => hardness_asInputs d T _ val _ _ (hH u hu)) hE
     (fun u _ => (card_unregistered_asInputs_held_le d P T hT u).trans (Nat.add_le_add_right (hk u) _))
     (sum_card_unregistered_asInputs_held_le d P T hT hk)
 
