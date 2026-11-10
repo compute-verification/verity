@@ -1709,11 +1709,12 @@ def test_under_land_into_main_review_reads_no_next_and_records_on_the_open_head(
     verified queue lands on `main` and nothing reads `next`, so a verdict without --sha goes on the open head."""
     world.with_store_remote()
     h = Review(world, monkeypatch)
+    _move_main(world, {Q.DRIVE_FLAGS: 'land_into = "main"\n'})
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     h.d.review = False
     h.q.sync()
     old = world.gh.prs[1].head
-    _move_main(world, {Q.DRIVE_FLAGS: 'land_into = "main"\n'})
+    assert [m.head for m in h.q.chain() if m.pr == 1] == [old]
     world.gh.put(1, new := world.change({"a.txt": "2\n"}))
     labels = StoreLabels(world.store, log=lambda s: None)
     assert Q.review(h.q, world.store, labels, 1, "land", None, "lane-9") == 0
