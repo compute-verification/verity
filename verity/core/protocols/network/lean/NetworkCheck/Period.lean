@@ -483,6 +483,12 @@ def inputArg (P : Flock.Program.Prog) (a : Flock.Program.Arg) : Option Nat :=
     | none => none
   | _ => none
 
+/-- Whether the arguments `own` (the templates' row, state and egress arguments) read input nodes of their own: their
+input nodes (`inputArg`) are pairwise distinct, and none is `pk`, the slot entries'. At the cost of the arguments. -/
+def argsApart (P : Flock.Program.Prog) (own : List Flock.Program.Arg) (pk : Nat) : Bool :=
+  let ks := own.map (inputArg P)
+  decide ks.Nodup && !ks.contains (some pk)
+
 /-- Whether two types have as many leaves, each of one width, the same in both (`Flock.Program.Widths.homo`): what a
 tie of two rows of gates, leaf by leaf, needs of their types. From the types' structure, no walk over their leaves. -/
 def sameLeaves (a b : Flock.Program.Ty) : Bool :=
@@ -688,7 +694,11 @@ the slot entries (`lanes · T / every` rows, counted once among the input gates)
 The scan's two ties equate rows of one length: a later bucket's `sin` with the state the bucket before returned, and an
 egress bucket's `state` with the view its ingress bucket returned. So the ingress templates return exactly a u16, a
 state of `sin`'s leaves and a view of the egress template's `state`'s leaves (`ingressReturn`); a return of another
-shape is refused. -/
+shape is refused.
+
+An input gate is read as one thing: the row, state and egress arguments read input nodes of their own, none the slot
+entries' (`argsApart`). Two of them on one node would leave the sum above room for an input node nothing reads, and a
+state argument on the slot entries' node would make a slot entry a state gate. -/
 def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   let prog ← (Flock.Program.decode (← Flock.canon j).toUTF8).mapError fun e => s!"scan: {e}"
   need (Flock.hexOf prog.sha512 == program) "scan: its SHA-512 is not the registered Program's (program)"
@@ -760,6 +770,10 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
       later.all fun (x, _) => readsEntries x 2 1 s.lanes nb s.every ety.leaves pk)
     s!"scan: bucket t's prog<j> is not row j · {nb} + ⌊t / {s.every}⌋ of the slot entries' input node, lane j's \
       slot of the boundary bucket t reads (NetworkCheck.Period.readsEntries)"
+  let own := (xf.args.extract 0 1 ++ (later.map fun (x, _) => x.args.extract 0 2).getD #[] ++ xe.args).toList
+  need (argsApart prog own pk) "scan: two of the templates' row, state and egress arguments read one input node, or \
+    one reads the slot entries': an input node would be left that nothing reads, or a slot entry would be a state gate \
+    (NetworkCheck.Period.argsApart)"
   need prog.orderViolation.isNone "scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program \
     is not topological, so a gate's operands could be gates after it"
   pure { steps := T, free := 0, ingress := bitsOf df.ret, egress := bitsOf de.ret }

@@ -177,6 +177,7 @@ theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : 
   obtain ⟨_, -, h⟩ := bind_ok h
   obtain ⟨_, -, h⟩ := bind_ok h
   obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
   obtain ⟨_, h15, -⟩ := bind_ok h
   replace h15 := Option.isNone_iff_eq_none.1 (need_ok h15)
   replace h3 := need_ok h3

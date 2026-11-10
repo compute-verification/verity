@@ -28,9 +28,9 @@ pinned Definition, with one member a slot) in its own audit's registration and P
 state (`STATE`) at the root and domain of that audit's `SCAN_STATE` (`_state_tied`), answered by one-stage with a
 stratified or subset sample at the period's δ; the scan's Program is its generator form, stand-ins of its three templates
 at small widths in the Boolean profile's types, as the scan's Definitions have them (`scan_descriptor`), and a Program in
-the checker form is a bad scan (`bad_scans`), as is each negative of a check of the rows the scan's ties equate or of
-what `NetTiming.Layout.Fits` asks (`scan_negatives`). Beside them, the compute audits (in the rows form at least one,
-whose registrations' `roots` hold the
+the checker form is a bad scan (`bad_scans`), as is each negative of a check of the rows the scan's ties equate, of
+what `NetTiming.Layout.Fits` asks or of the input nodes its arguments read (`scan_negatives`). Beside them, the compute
+audits (in the rows form at least one, whose registrations' `roots` hold the
 scans' `prog`), each registered over its Program, a population of one or two stand-in templates whose units commit from
 8 to 320 bits, with its slot entries' in the rows form (`audit_descriptor`), and answered with a subset or stratified
 sample (a work sampling design's) and its bound on incorrect proof blocks, every unit sampled for an audit a scan's `prog` is tied to
@@ -500,7 +500,8 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     walk within `FUEL` (`_walkable`), the root returning every egress leaf, the egress template returning only gates it
     computes (`_own_returns`), each ingress row and every template's row, state and egress argument one input node's
     leaves (`_input_arg`), no egress argument an ingress row's, bucket t's `prog<j>` row `j · T / every + ⌊t / every⌋`
-    of one input node of the slot entries (`_reads_entries`), and the Program topological (`_topological`). It reads
+    of one input node of the slot entries (`_reads_entries`), the row, state and egress arguments' input nodes
+    pairwise distinct and none the slot entries' (`argsApart`), and the Program topological (`_topological`). It reads
     the descriptor's nodes, signatures and returns; Flock's decoder, which Lean runs on it, refuses no descriptor
     this module writes."""
     if not isinstance(j, dict) or j.get("schema") != SCHEMA:
@@ -576,6 +577,11 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
             and all(_reads_entries(x, 2, 1, L, nb, s.every, E, r0[1], j) for x, _ in later)):
         raise D.Reject(f"scan: bucket t's prog<j> is not row j · {nb} + ⌊t / {s.every}⌋ of the slot entries' input "
                        "node, lane j's slot of the boundary bucket t reads (NetworkCheck.Period.readsEntries)")
+    own = [_input_arg(a, nodes, j) for a in own_args]
+    if len(set(own)) != len(own) or r0[1] in own:
+        raise D.Reject("scan: two of the templates' row, state and egress arguments read one input node, or one reads "
+                       "the slot entries': an input node would be left that nothing reads, or a slot entry would be a "
+                       "state gate (NetworkCheck.Period.argsApart)")
     if not _topological(j):
         raise D.Reject("scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program is not "
                        "topological, so a gate's operands could be gates after it")
@@ -1799,8 +1805,8 @@ def bad_scans(p: dict) -> list[dict]:
     """Rows-form parameters whose scan `scanOf` refuses, each one change to `p`: not a descriptor, another Program's
     (its SHA-512 not `program`), and, each under its own SHA-512, the checker form (its egress row an input), templates
     with other parameters, another number of instances, rows not the schedule's, an input gate no template's, and each
-    negative of a check of the rows the scan's ties equate or of what `NetTiming.Layout.Fits` asks
-    (`scan_negatives`)."""
+    negative of a check of the rows the scan's ties equate, of what `NetTiming.Layout.Fits` asks or of the input nodes
+    its arguments read (`scan_negatives`)."""
     s, desc = p["schedule"], p["scan"]
     T, row, widths = s["window"], s["lanes"] * s["slots"] * s["cell_bytes"], _scan_widths(desc)
     L, every = s["lanes"], s["every"]
@@ -1841,18 +1847,21 @@ DEEP = 2 ** 30
 
 
 def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
-    """Rows-form parameters each refused by one of `scanOf`'s checks of the rows its ties equate or of what
-    `NetTiming.Layout.Fits` asks, and by none before it, each one change to `p`'s generator-form scan under its own
-    SHA-512, with a fragment of both refusals: `view`, the ingress templates' view one bit more than the egress
-    template's `state`; `state` (when `T > 1`), the later ingress template's `sin` one bit more than the state the
-    templates return (its input node and the template's argument grown with it);
+    """Rows-form parameters each refused by one of `scanOf`'s checks of the rows its ties equate, of what
+    `NetTiming.Layout.Fits` asks or of the input nodes its arguments read, and by none before it, each one change to
+    `p`'s generator-form scan under its own SHA-512, with a fragment of both refusals: `view`, the ingress templates'
+    view one bit more than the egress template's `state`; `state` (when `T > 1`), the later ingress template's `sin`
+    one bit more than the state the templates return (its input node and the template's argument grown with it);
     `walk`, the egress template calling a composite of `2^90` gates in three nested batches, unread, so the walk to an
     operand is past `FUEL`; `returns`, the root returning an input leaf for the last egress leaf; `computes`, the egress
     template returning its `state`'s first 16 leaves as its u16; `row`, bucket 0's row bound to a constant primitive's
     gates (an input node like it appended, keeping the input count); `argument`, egress member 0's first state leaf the
     last ingress template's first output leaf (a later step's ingress when `T > 1`); `ingress`, the egress state the
-    last ingress template's row input node (resized, the state's node resized to keep the count); and `topological`,
-    the last ingress template's row input node moved after the templates, so the template names a later node."""
+    last ingress template's row input node (resized, the state's node resized to keep the count); `shared` (when
+    `T > 1`), the later ingress template's `sin` its row's input node from its first leaf, the `sin` input node left
+    unread; `entries`, the egress state the slot entries' input node (resized, the state's node resized to keep the
+    count); and `topological`, the last ingress template's row input node moved after the templates, so the template
+    names a later node."""
     desc, sched = p["scan"], p["schedule"]
 
     def parts() -> tuple[dict, list, list[int]]:
@@ -1934,6 +1943,20 @@ def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
     nodes[ks] = nodes[ks] | {"n": min(R, S), "out": typed(d, ["Array", min(R, S), ["Value", 1]])}
     nodes[ts[-1]]["args"][0]["refs"] = {"affine": ["n", kr, 0, S]}
     out["ingress"] = own(d), "an egress template's argument is an ingress row's input node"
+
+    d, nodes, ts = parts()
+    if len(ts) == 3:
+        row, sin = nodes[ts[1]]["args"][:2]
+        sin["refs"] = {"affine": ["n", row["refs"]["affine"][1], 0, sin["refs"]["affine"][3]]}
+        out["shared"] = own(d), "(NetworkCheck.Period.argsApart)"
+
+    d, nodes, ts = parts()
+    ks, kp = nodes[ts[-1]]["args"][0]["refs"]["affine"][1], _member_ref(nodes[ts[0]], 1, 0, 0, d)[1]
+    S, E = nodes[ks]["n"], nodes[kp]["n"]
+    nodes[kp] = nodes[kp] | {"n": max(S, E), "out": typed(d, ["Array", max(S, E), ["Value", 1]])}
+    nodes[ks] = nodes[ks] | {"n": min(S, E), "out": typed(d, ["Array", min(S, E), ["Value", 1]])}
+    nodes[ts[-1]]["args"][0]["refs"] = {"affine": ["n", kp, 0, S]}
+    out["entries"] = own(d), "(NetworkCheck.Period.argsApart)"
 
     d, nodes, ts = parts()
     kr = nodes[ts[-2]]["args"][0]["refs"]["affine"][1]
