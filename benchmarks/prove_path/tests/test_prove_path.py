@@ -1224,6 +1224,52 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
     assert "the checkpoint is not of record" in capsys.readouterr().err and not out.exists()
 
 
+def test_the_weights_registration_is_also_the_first_record_of_the_serves_registration_log(tmp_path, capsys, monkeypatch):
+    """``weights-registration --deployment-record FILE`` writes the committer's registration also as the first record of the
+    serve's registration log (`window_weights.deployment_record`): a `verity/registration/v2` record chained after nothing
+    that registers each rooted weight parameter's entry as the registration states it, by name, and names the unrooted
+    ones in its header, with nothing of the key; the command says its digest (`registration.digest`), which the serve's
+    next record names as its ``previous``. So each weight's root is in the log's first record under its value's name,
+    which is what the inference-only policy's check cites a registered read by. Without the flag no such record is
+    written; a registration with a value that is no weight parameter gives none."""
+    import functools
+
+    from verity_vllm.program.predict import window_weights as WW
+    from verity_vllm.program.predict.window_weights import Grain
+
+    grain = Grain(gemm_words=512, rows=9, select=64)
+    monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=grain))
+    run, hf, ck = tmp_path / "serve", tmp_path / "tiny.json", tmp_path / "ck" / "snap"
+    run.mkdir()
+    serve = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "default_seed": DEFAULT_SEED,
+             "execution": "bi-eager", "target": {"compute_capability": [12, 0], "num_sms": 188}}
+    (run / "serve.json").write_text(json.dumps(serve))
+    hf.write_text(json.dumps(TINY))
+    man = _tiny_checkpoint(ck, serve["model"], serve["revision"])
+    out, key, first = tmp_path / "weights_registration.json", tmp_path / "private" / "weights.key", tmp_path / "first.json"
+    argv = ["weights-registration", "--serve-run", str(run), "--checkpoint-dir", str(ck), "--checkpoints", str(man),
+            "--hf-config", str(hf), "--key", str(key), "--out", str(out)]
+    capsys.readouterr()
+    assert PP.main(argv) == 0 and "deployment" not in json.loads(capsys.readouterr().out) and not first.exists()
+    assert PP.main([*argv, "--deployment-record", str(first)]) == 0
+    reg, rec, said = json.loads(out.read_text()), json.loads(first.read_text()), json.loads(capsys.readouterr().out)
+    assert rec == WW.deployment_record(reg) and said["deployment"] == R.digest(rec) and said["roots"] == 16
+    assert (rec["format"], rec["protocol"], rec["previous"]) == (R.FORMAT_V2, R.PROTOCOL, None)
+    assert [e["value"] for e in rec["registered"]] == sorted(reg["values"])
+    assert {e["value"]: e for e in rec["registered"]} == reg["values"]
+    assert all(set(e) == {"value", "root", "leaves", "words", "domain"} for e in rec["registered"])
+    assert rec["deployment"] == {"kind": WW.DEPLOYMENT, "program": reg["program"], "grain": reg["grain"],
+                                 "model": {"repo": serve["model"], "revision": serve["revision"]},
+                                 "unrooted": sorted(reg["unrooted"])}
+    assert rec["deployment"]["unrooted"] and not {e["value"] for e in rec["registered"]} & set(reg["unrooted"])
+    assert key.read_bytes().hex() not in first.read_text()
+    odd = {**reg, "values": {**reg["values"], "x": {**next(iter(reg["values"].values())), "value": "x"}}}
+    with pytest.raises(ValueError, match="'x' is no weight parameter"):
+        WW.deployment_record(odd)
+    with pytest.raises(ValueError, match="never a weights record"):
+        WW.deployment_record({"schema": "other"})
+
+
 def test_an_int8_served_runs_weights_registration_roots_its_scales_fused_linears_and_tied_embedding(tmp_path, capsys, monkeypatch):
     """The int8 Llama-3.2-1B is an exact-int8 checkpoint (`engine.int8_checkpoint`'s v1: each decoder linear an s8 weight and an f32
     row scale, the embedding bf16 and tied to the LM head), served under a target whose ``int8_exact`` is ``linears``, and
