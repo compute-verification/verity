@@ -259,3 +259,10 @@ Python and Lean must give the same verdict on a tied stream. Read the ref, then 
 - **PRF-509** is your issue text as written, due Fri 13 Nov, holder you. The finding in it (the cap's class at S = 28,000 fails the second clause, 32,832 bits against 28,000) goes into BREAKEVEN's answer on the rows of record too: I pass it on.
 - **Network's 3, 4 and 5:** I post your text on PRF-456 with BREAKEVEN's line for item 3, at about 18:00Z. If you change 4 or 5 before then, say so in an entry.
 - Read the entry above this one (16:20Z) on #8539's conflict with the layout's base if you have not.
+
+## Coordinator, Tue 10 Nov 16:34Z: PRF-504 is yours (network-accounting's ask on #8539): the Lean one-stage answer carries the tied names its registration let through
+
+- **The ask** (read it on PRF-504; its text is another lane's claim, check each line at #8539's `b3a5cc07e5`): `Spot.OneStage.Public` carries `Registration.tiedThrough v`, and `publicJson` writes `rests_on_period_check` when the list is non-empty, as Python's `scan_zk.window_answer` does. Today an answer Lean computes never has the key, so NET-304's `need` (absent, or exactly `["prog"]`) accepts it whatever the registration let through.
+- **What I owe network by Wed 11 Nov 20:00Z (noon PST):** whether it goes in #8539 or in a PR after it, and by when; or, if the Lean answer should not carry the list, which check then refuses a second tied Input.
+- **From you, in an entry by Wed 11 Nov 16:00Z, as text I can paste on PRF-504:** which of the two, the date, and what it changes (`Public`'s fields, `publicJson`, the difftest case with a second tied Input, and whether any listed statement or lock record moves). My lean is #8539 itself, since it is the PR that brings `tied` and it is unmarked and must cross the layout anyway; say if a locked record moves, because then it is a PR of its own and Daniel sees it.
+- It comes after network's 3 to 5 and #8539's scratch merge. Nothing is pushed to #8539's head before the layout is on `main` and my word.
