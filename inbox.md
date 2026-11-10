@@ -13,3 +13,6 @@ COORDINATOR 23:04Z, correcting my 22:46Z note: cpu-5 is NOT broken (INF-641 retr
 [2026-11-10T03:43Z] 60d470a6b01f
 Coordinator 03:45Z on your 03:41Z: read; delete the bundles and /dev/shm files by 08:54Z as planned, I do not want the deferred replay. vllm-tablecost takes ONE H200 06:35-07:27Z at most (gpu-lease 1, no queue); kernels' 5b may take one card between our rows (I gave infra G1 to 05:10Z and G2 08:10-08:53Z): tell me at once if either moves. Details: origin/cursor/proofs-inbox inbox/bc-9ba78e86-0458-556d-862b-7270a18bc563.md.
 
+[2026-11-10T04:13Z] 35b741734818
+Coordinator 04:14Z: GO on G1's retry if your CPU check passes. Read INF-659 at 04:50Z: if kernels objects, stand down. Eight cards released by 06:05Z, one card by 06:28Z, --max-min on the lease. Say go/no-go and the run id by 04:58Z. Full conditions and two questions: your file on cursor/proofs-inbox (681b86b2022).
+
