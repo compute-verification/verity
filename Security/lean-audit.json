@@ -4440,6 +4440,10 @@
    "honest": ["NetTiming.Witness.SampledAuditAccepted_honest"],
    "nontrivial": "NetTiming.Witness.SampledLeakChecked_nontrivial"
   },
+  "Hash.SecurityProofs.HistoryReadBinding": {
+   "honest": ["Hash.SecurityProofs.HistoryReadBinding_honest"],
+   "nontrivial": "Hash.SecurityProofs.HistoryReadBinding_nontrivial"
+  },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "honest": ["NetTiming.Witness.SampledAuditAccepted_honest"],
    "nontrivial": "NetTiming.Witness.SampledAuditAccepted_nontrivial"
@@ -4523,10 +4527,6 @@
   "WeightSecurity.SecurityProofs.TheftServedMinEntropy": {
    "honest": ["WeightSecurity.SecurityProofs.TheftServedMinEntropyHonest"],
    "nontrivial": "WeightSecurity.SecurityProofs.TheftServedMinEntropyNontrivial"
-  },
-  "Hash.SecurityProofs.HistoryReadBinding": {
-   "honest": ["Hash.SecurityProofs.HistoryReadBinding_honest"],
-   "nontrivial": "Hash.SecurityProofs.HistoryReadBinding_nontrivial"
   },
   "NetTiming.SecurityProofs.PooledLeakCarried": {
    "nontrivial": "NetTiming.Witness.PooledLeakCarried_nontrivial"
@@ -26303,6 +26303,10 @@
     "function": "Hash.EmbeddingRead.ok",
     "outcome": "accept"
    },
+   "Hash.SecurityProofs.HistoryReadBinding": {
+    "function": "Hash.EmbeddingRead.ok",
+    "outcome": "accept"
+   },
    "Pouw.Salt.keyed_leaf_hides": {
     "function": "Hash.Keyed.digest",
     "outcome": "none"
@@ -26313,10 +26317,6 @@
    },
    "Verity.SecurityProofs.CapacityWithinEstimate": {
     "function": "Verity.DeviceFigures.Accepted",
-    "outcome": "accept"
-   },
-   "Hash.SecurityProofs.HistoryReadBinding": {
-    "function": "Hash.EmbeddingRead.ok",
     "outcome": "accept"
    }
   },
