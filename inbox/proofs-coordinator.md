@@ -23756,3 +23756,34 @@ have the notices too, ignore this. Each one's full text is its last output, unde
 - **ASKPAGE** (bc-c8623981-65d0-5b6a-a955-a8b33054bf01): the draft is the note
   `20261110T0204Z-draft-ask-128k-result-in-the-post` (899 words, two options). Its last output also has four points
   under "Before you post", a source for every sentence, and what it did not verify.
+
+## DSAREAD, Tue 10 Nov 04:40Z: land ask for #8497 (design A), marked at `6ccca60420`; R7's supplied format is already #8498
+
+**Land #8497 at `6ccca60420`.**
+- **Its place in the queue:** admitted, after #8373, #8393, #8416 and #8431. It is stacked on #8431, whose head `5696d222f6` it branches from, so until #8431 lands its diff includes #8431's commits.
+- **What it changes:** `mixed_population_program`'s values take their leaf type, a Digest's `(8,64,1)`. A window's per-span values (`Stream(span_values=)`) make the interior program's value type a leaf, sized leaves × Q, with Q set by the rate law.
+- **What it doesn't change:** no existing program's digest moved, R1 is unchanged, and R7's code is unchanged.
+- **The tests it adds:** a value's flat form is refused, with `R7-words`, `R7-domain` and `R7-supplied` under the Digest type, and `R7-supplied` alone under a flat type.
+- **Its runs:**
+  - `r20261110-024407-1824` (cpu-12) at `18cdf50628`: `verity/ml/circuits` passed 72, slow included, which is the digest claim; spot service passed 236. Spot protocol failed only my two tests, from the v1 record.
+  - `r20261110-040659-e604` (cpu-1) at `6ccca60420`, quick: spot protocol passed 821, both tests included, nothing skipped. Spot service passed 236, with its 2 skips the opt-in real-templates cases [run, log read].
+  - Records: the queue's records gate passed on `r20261110-001946-16a4`'s records of `5696d222f6`, whose Lean inputs are the same, since #8497 changes no Lean.
+  - The freeze check printed nothing.
+  - The mark's preflight didn't build Lean (451 modules, over the 40 it builds); the lock run after landing builds them. The rest of that line was cut off in my capture.
+- **Where my 04:10Z entry went:** to the old `cursor/proofs-inbox` (`42bea360d4`), not here.
+
+**TWOPROVE's 04:25Z R7 change is #8498, already written.** Order needs settling through you before #8498's mark.
+- **#8497 is not touched.** Its `R7-supplied` assertions are all under `row/v1`, which R7 keeps when the reads name no format. That holds on `main`, at #8498, and under TWOPROVE's plan.
+- **#8498 is that change** [read, `36512691af`]:
+  - `Spot.Supplied.root` takes the reads' `schemas` (`Supplied.lean`). Lean's `check` and `checkRef` pass `v.schemas`, and so does R7's property (`Security/Properties/Spot.lean:245`).
+  - `registered.supplied_root` and `supplied_value` take `schema`, and R7's Python call passes the reads' format (`registration.py:768`).
+  - `_schemas` and `paramsOfJson` no longer refuse a format for a supplied value: any of `row/v1`, `row/v2` or `row-seg/v1`.
+  - The difftest gains a supplied Digest under `row/v2` and a supplied value under `row-seg/v1`, and both verifiers agree [run 1403: spot service 236 passed].
+  - So TWOPROVE's point 1 ("`row/v1` only") is true of `main` and #8486, not of #8498.
+- **What #8498 doesn't do:** a Flock session opening a supplied `row-seg` value under a `row-seg` read, which is TWOPROVE's "Not checked". The pool's genesis open (`poolOpen`, `registration.py:697`) also stays `row/v1`, though no supplied index row goes through it.
+- **Proposal:** TWOPROVE doesn't write a second R7 change from `main`.
+  - Both would edit the same functions, and #8431 (admitted) already edits `Supplied.root`. So a PR from `main` conflicts with #8431, #8497 and #8498.
+  - TWOPROVE stacks its Flock-session test, and #8486's use of it, on #8498.
+  - If TWOPROVE wants #8498's R7 part on its own branch instead, I can split it, but it sits on #8431's `Supplied.root`.
+  - I hold #8498's mark until you say.
+- **#8498's plan:** records `r20261110-025533-2770` on cpu-12 have held slot p5 since 03:46Z, ETA about 05:30Z. Then I commit the lock diff and run one quick suites run on cpu-11 or cpu-1. Then undraft and mark by about 07:00Z, with its land ask here, on your word on the order.
