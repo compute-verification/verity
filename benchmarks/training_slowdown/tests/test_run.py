@@ -294,18 +294,33 @@ def test_the_job_traces_its_routes_step(ran):
 
 def test_a_retrace_writes_the_same_record_and_refuses_another_digest(ran, tmp_path):
     """`--retrace` takes a record's trace again and changes nothing else, and refuses a record whose config this tree
-    reads as another digest."""
+    reads as another digest. Here `retrace` runs in the test's process; the job's own path to it is the slow test."""
+    rec, _, reg, _ = ran
+    stale = tmp_path / "stale.json"
+
+    def retrace(out):
+        return run.retrace(run.parse(["--retrace", str(stale), "--out", str(tmp_path / out), "--starts", str(reg),
+                                      "--device", "cpu", "--inside", str(tmp_path)]))
+
+    stale.write_text(json.dumps(rec | {"trace": {"capture": "0"}}))
+    assert retrace("again") == 0 and [p.name for p in (tmp_path / "again").iterdir()] == ["run.json"]
+    assert json.loads((tmp_path / "again" / "run.json").read_text()) == rec
+    stale.write_text(json.dumps(rec | {"config": rec["config"] | {"digest": "0" * 64}}))
+    with pytest.raises(SystemExit, match="retrace in a clone at the record's commit"):
+        retrace("other")
+    assert not (tmp_path / "other" / "run.json").exists()
+
+
+@pytest.mark.slow
+def test_the_job_retraces_where_its_route_runs(ran, tmp_path):
+    """Through the job's command a retrace runs in the process a route runs in, started through the sandbox's entry,
+    and writes the record alone. It is a process of its own, so slow."""
     rec, _, reg, _ = ran
     stale = tmp_path / "stale.json"
     stale.write_text(json.dumps(rec | {"trace": {"capture": "0"}}))
     assert run.main(["--retrace", stale, "--out", tmp_path / "again", "--starts", reg, "--device", "cpu"]) == 0
     assert [p.name for p in (tmp_path / "again").iterdir()] == ["run.json"]
     assert json.loads((tmp_path / "again" / "run.json").read_text()) == rec
-    stale.write_text(json.dumps(rec | {"config": rec["config"] | {"digest": "0" * 64}}))
-    with pytest.raises(SystemExit, match="retrace in a clone at the record's commit"):
-        run.retrace(run.parse(["--retrace", str(stale), "--out", str(tmp_path / "other"), "--starts", str(reg),
-                               "--inside", str(tmp_path)]))
-    assert not (tmp_path / "other" / "run.json").exists()
 
 
 def test_a_step_the_capture_refuses_is_recorded_as_refused(tmp_path):
