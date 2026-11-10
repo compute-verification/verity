@@ -188,10 +188,10 @@ theorem ex_forIn_range1 {ε β : Type} (r : Std.Legacy.Range) (b : β) (f : Nat 
   rw [this, List.forIn_cons]; congr 1; funext x; cases x <;> rfl
 theorem prod_fst {α β : Type} (a : α) (b : β) : (a, b).1 = a := rfl
 theorem prod_snd {α β : Type} (a : α) (b : β) : (a, b).2 = b := rfl
-theorem ds_defs (d i b w) : (DecState.mk d i b w).defs = d := rfl
-theorem ds_index (d i b w) : (DecState.mk d i b w).index = i := rfl
-theorem ds_busy (d i b w) : (DecState.mk d i b w).busy = b := rfl
-theorem ds_walked (d i b w) : (DecState.mk d i b w).walked = w := rfl
+theorem ds_defs (d i b w) : Flock.Program.DecState.defs (Flock.Program.DecState.mk d i b w) = d := rfl
+theorem ds_index (d i b w) : Flock.Program.DecState.index (Flock.Program.DecState.mk d i b w) = i := rfl
+theorem ds_busy (d i b w) : Flock.Program.DecState.busy (Flock.Program.DecState.mk d i b w) = b := rfl
+theorem ds_walked (d i b w) : Flock.Program.DecState.walked (Flock.Program.DecState.mk d i b w) = w := rfl
 
 /-! ## The program's types and names -/
 
