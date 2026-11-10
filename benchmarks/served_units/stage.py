@@ -1,8 +1,12 @@
 """stage.py UNIT N OUT [--public-weights [--packed]]: N inputs of one served proof-block type's Q_word proof block, from synthetic
-values at the model's served statics, staged for Flock as a ``verity/flock-circuit`` statement with hidden outputs.
+values at the model's served statics, staged for Flock as a ``verity/flock-circuit`` statement with hidden outputs. For a
+`CENSUS` type N may be ``full``, the most instances a statement of `MAX_STATEMENT_BITS` holds at the built block's k_log
+(a power of two, as `class_statement` cuts a PARTS type's N), or ``full/D``, that over D.
 
     UNIT  TYPE[:S=V,...]   a type of `UNITS`, `PARTS` or `CENSUS` at its statics (each type's defaults are its model's: GLM-5.3's
                            at TP8, s8-coord's Llama-3.2-1B's), e.g. fp8-coord:K=2048, router:C=1, s8-coord:K=8192, gq:K=384
+          census:NAME      any block type of the serving rows by its census name verbatim, staged as a `CENSUS` type, e.g.
+                           census:MoeSum_v1{TOPK=8,H=3072}
     --public-weights       a `UNITS` type's weight row ``w`` as public input ports (`UnitStager`'s ``public_inputs``, each leaf in
                            its own u16 words) instead of a row hashed in the circuit, on the same values: the price of the block
                            with its weight row's in-circuit opening removed, the in-circuit share a registered weight encoding
@@ -34,7 +38,8 @@ overhead card prices it under), one whole Definition a proof block, laid out as 
 slots, its unit cut into stage nets under the automatic caps, which keep it within the GPU prover's slot types; RMSNorm's
 and the FP8 linears' inline) under its unit name, so the statement is the served one but for its binding: its
 ``class_sha512`` is the served composer's. The circuit is streamed to circuit.txt once, every input's outputs checked against
-the Program's reference (``twin`` null).
+the Program's reference (``twin`` null). ``census:NAME`` stages any other block type of the serving rows the same way, its
+values seeded by the same rule and its seeds keyed by the name.
 
 Writes circuit.txt, inst.bin, pub.bin, pin.txt and stage.json under OUT, a PARTS type's partition.json, and beside a statement
 reading in slots the MUFU tables the prover reads (``tables/``, ``flock-circuit --tables``), as the served composer does.
@@ -70,6 +75,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import resource
 import sys
 import time
@@ -82,6 +88,7 @@ import numpy as np
 from circuit_check import targets as TG
 from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.codec import program_digest
+from verity.ml.circuits.types import Array
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import gemm as OG
 from verity.ml.circuits.ops.boolean import gemm as BG
@@ -214,7 +221,8 @@ class Census:
     fixed: str = ""
 
     def name(self, S: dict) -> str:
-        return f"{self.family}{{{','.join([*(f'{k}={v}' for k, v in S.items()), *filter(None, [self.fixed])])}}}"
+        inner = ",".join([*(f"{k}={v}" for k, v in S.items()), *filter(None, [self.fixed])])
+        return f"{self.family}{{{inner}}}" if inner else self.family
 
 
 _EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
@@ -250,6 +258,11 @@ def _static(default, v: str):
 
 def parse(spec: str) -> tuple[str, Unit | Part | Census, dict]:
     name, _, rest = spec.partition(":")
+    if name == "census":
+        family, brace, inner = rest.partition("{")
+        if not family or (brace and not inner.endswith("}")):
+            raise SystemExit(f"stage.py: census:NAME takes a census name, FAMILY or FAMILY{{STATICS}}, not {rest!r}")
+        return name, Census(family, {}, inner[:-1]), {}
     if name not in UNITS and name not in PARTS and name not in CENSUS:
         raise SystemExit(f"stage.py: unit type {name!r} is not one of {sorted(UNITS) + sorted(PARTS) + sorted(CENSUS)}")
     u = UNITS.get(name) or PARTS.get(name) or CENSUS[name]
@@ -305,27 +318,47 @@ def nets(low) -> list[dict]:
     return [{"net": nm, **{k: int(lay.counts[k]) for k in ("ands", "rows", "nnz_a", "nnz_b")}} for nm, lay in lays]
 
 
-def stage_census(name: str, cen: Census, S: dict, tag: str, n: int, out: Path, t0: float) -> dict:
+def stage_census(name: str, cen: Census, S: dict, tag: str, n: int | str, out: Path, t0: float) -> dict:
     """``n`` inputs of the census type's Definition, a proof block each, on its served rows and statement, as stage.json's
-    record."""
+    record; ``n`` ``full`` or ``full/D`` is the most instances a statement holds at the built block's k_log (as
+    `class_statement` cuts a PARTS type's), over D."""
     from verity_vllm.pipeline import chunk_rows as CR
     from verity_vllm.pipeline.serving_rows import template
 
-    tp = template(cen.name(S))
+    try:
+        tp = template(cen.name(S))
+    except KeyError as e:
+        raise SystemExit(f"stage.py: {cen.name(S)} lacks the static {e}: census:NAME takes the census name with every static, "
+                         "as the serving rows name it") from None
     d = tp.fn
     params, _ret = d.signature()
     rng = np.random.default_rng(int.from_bytes(hashlib.sha256(f"verity/served-units/v1\0{tag}".encode()).digest()[:8], "little"))
-    vals = {p: census_leaves(rng, ty, n) for p, ty in params}
+    vals: dict[str, np.ndarray] = {}
+    types = dict(params)
+
+    def part(p: str) -> np.ndarray:
+        """Parameter ``p``'s words, or for a cut row's ``q[i]`` the words of q's element i, q drawn whole."""
+        if p in vals:
+            return vals[p]
+        m = re.fullmatch(r"(\w+)\[(\d+)\]", p)
+        if not (m and m[1] in vals and isinstance(types[m[1]], Array) and vals[m[1]].shape[1] % types[m[1]].n == 0):
+            raise SystemExit(f"stage.py: {tp.id}'s served row part {p!r} is neither a parameter nor an element of one")
+        w = vals[m[1]].shape[1] // types[m[1]].n
+        return vals[m[1]][:, int(m[2]) * w:(int(m[2]) + 1) * w]
+
     in_rows, out_rows = CR.unit_rows(tp)
-    if any(p not in vals for *_r, ps in in_rows for p in ps):
-        raise SystemExit(f"stage.py: {tp.id}'s served rows {in_rows} cut a parameter, which a census type draws whole")
-    rows = {r: np.concatenate([vals[p] for p in ps], axis=1) for r, _s, _b, ps in in_rows}
-    if any(rows[r].shape != (n, b // 16) for r, _s, b, _ps in in_rows):
-        raise SystemExit(f"stage.py: {tp.id}'s drawn rows {[rows[r].shape for r, *_x in in_rows]} are not its rows' words")
     stmt = CR.statement(tp)
-    t_draw = time.time() - t0
     st = CS.UnitStager(d, "unit/serving-rows", in_rows, out_rows, circuit=out / "circuit.txt", **stmt)
     t_built = time.time() - t0
+    if isinstance(n, str):
+        g = st.meta.get("vus_per_block") or 1
+        full = 1 << ((MAX_STATEMENT_BITS // ((1 << st.meta["k_log"]) // g)).bit_length() - 1)
+        n = max(g, full // int(n.partition("/")[2] or 1))
+    vals.update({p: census_leaves(rng, ty, n) for p, ty in params})
+    rows = {r: np.concatenate([part(p) for p in ps], axis=1) for r, _s, _b, ps in in_rows}
+    if any(rows[r].shape != (n, b // 16) for r, _s, b, _ps in in_rows):
+        raise SystemExit(f"stage.py: {tp.id}'s drawn rows {[rows[r].shape for r, *_x in in_rows]} are not its rows' words")
+    t_draw = time.time() - t0 - t_built
     salt_key = hashlib.sha256(f"verity/served-units/salts\0{tag}".encode()).digest()
     got = st.stage(rows, out, salt_key)
     if stmt.get("reads") == "slots":
@@ -339,8 +372,8 @@ def stage_census(name: str, cen: Census, S: dict, tag: str, n: int, out: Path, t
             "vus_per_block": meta.get("vus_per_block"), "row_schemas": meta.get("row_schemas"),
             "circuit_bytes": (out / "circuit.txt").stat().st_size, "circuit_sha512": st.pin, "class_sha512": st.class_sha512,
             "inst_bytes": (out / "inst.bin").stat().st_size, "pub_bytes": (out / "pub.bin").stat().st_size, "macs": 0,
-            "twin": None, "seconds": {"draw": round(t_draw, 1), "built": round(t_built - t_draw, 1),
-                                      "round": round(time.time() - t0 - t_built, 1), "total": round(time.time() - t0, 1)},
+            "twin": None, "seconds": {"draw": round(t_draw, 1), "built": round(t_built, 1),
+                                      "round": round(time.time() - t0 - t_built - t_draw, 1), "total": round(time.time() - t0, 1)},
             "maxrss_gb": gb()}
 
 
@@ -378,10 +411,15 @@ def main() -> None:
         raise SystemExit(f"stage.py: usage: stage.py UNIT N OUT [--public-weights [--packed]], not {sys.argv[1:]}")
     if packed and not public:
         raise SystemExit("stage.py: --packed lays out --public-weights' ports")
-    spec, n, out = args[0], int(args[1]), Path(args[2])
+    spec, out = args[0], Path(args[2])
+    n: int | str = args[1] if re.fullmatch(r"full(/[1-9]\d*)?", args[1]) else int(args[1])
     t0 = time.time()
     name, u, S = parse(spec)
+    if isinstance(n, str) and not isinstance(u, Census):
+        raise SystemExit(f"stage.py: N {n} is for a CENSUS type, whose block's k_log sets it; {spec} takes a count")
     tag = f"{name}-" + "-".join(f"{k.lower()}{v}" for k, v in sorted(S.items()))
+    if name == "census":
+        tag += hashlib.sha256(u.name(S).encode()).hexdigest()[:16]
     if isinstance(u, (Part, Census)):
         if public:
             raise SystemExit(f"stage.py: --public-weights is for a type of UNITS, not {name}")
