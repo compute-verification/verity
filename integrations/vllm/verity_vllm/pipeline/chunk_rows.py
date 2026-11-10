@@ -42,10 +42,14 @@ def reads(tp: Any) -> str:
     five-split combine were proved, and the RMSNorm rows (``RMSNormTriton_v5``, ``RMSNormFusedCuda_v2``, 41 to 56 nonzeros
     an AND inline) at their served shapes. A ``CHAINS`` block reads as a split part of its NVIS keys does (slots for a whole
     block), its end inline as the combine. A ``STAGES`` stage reads in slots: a stats part or a probabilities block reads EX2 a
-    lane, thousands of them. A ``_v2`` body reads no table (its EX2 is gates), so it lowers flat either way."""
+    lane, thousands of them. A Boolean template's reads are inline whatever its layout: a body whose MUFU is gates has no table
+    to read, and one that still read a table would keep it in its own rows, so its unit returns its own outputs, the one form
+    ``verify --zk`` takes (`zk_refusal`)."""
     from verity_vllm.pipeline import chain_rows as CH, split_rows as SP
     from verity_vllm.query.program_view import spec_base, spec_statics
 
+    if tp.id != tp.word:
+        return "inline"
     if tp.layout == "row":
         return "slots" if spec_base(tp.id) in SLOT_ROWS else "inline"
     if tp.layout == "stage":
@@ -117,19 +121,18 @@ def zk_refusal(tp: Any) -> str | None:
     """Why `verify --zk` refuses chunked template ``tp``'s `statement` for its form, known before anything is staged; None
     for a form it takes.  A flat statement whose unit reads a table a lookup slot holds (`slot_tables`), laid out in slots
     (`reads`), returns its outputs from its last tail stage, and the unit's form the sampled audit's knowledge soundness
-    covers has the unit return them (`one_stage.proofs.ks_form_why`, `Flock.ProvedScope.scopeOkH`).  The reason names the
-    template, the tables and, for a word Definition with one registered, the Boolean version to name in its place."""
+    covers has the unit return them (`one_stage.proofs.ks_form_why`, `Flock.ProvedScope.scopeOkH`).  Only a word template's
+    reads are in slots (`reads`), and the reason names it, the tables and, where one is registered, the Boolean version to
+    name in its place."""
     if statement(tp).get("reads") != "slots" or not (tables := slot_tables(tp.fn)):
         return None
     from verity.ml.circuits.codec import descriptor_id
     from verity.ml.definitions import boolean as BB
 
-    fix = "it is a Boolean Definition whose body still reads them"
-    if tp.id == tp.word:
-        try:
-            fix = f"name its Boolean version {descriptor_id(BB.boolean_version(tp.fn))}"
-        except BB.NoBooleanVersion:
-            fix = "no Boolean version of it is registered"
+    try:
+        fix = f"name its Boolean version {descriptor_id(BB.boolean_version(tp.fn))}"
+    except BB.NoBooleanVersion:
+        fix = "no Boolean version of it is registered"
     return (f"{tp.id}: its statement reads {', '.join(tables)} in lookup slots and returns its outputs from a tail stage, a "
             f"form `verify --zk` refuses (`ProvedScope.scopeOkH`); {fix}")
 
