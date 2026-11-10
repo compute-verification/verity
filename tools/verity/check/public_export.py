@@ -277,12 +277,43 @@ def _parents(path: str) -> list[str]:
     return ["/".join(parts[:i]) for i in range(1, len(parts) + 1)]
 
 
+#: the one line a file of imports may hold besides them: it opens a section over the rest of the file
+SECTION = re.compile(r"(?:@\[expose\][ \r\n]+)?(?:public[ \r\n]+)?section(?=[ \r\n]|$)")
+
+
+def imports_alone(text: str) -> bool:
+    """Whether a Lean file declares nothing: it is its header (`module`, its imports), comments and module docs, and at
+    most one line that opens a section with nothing in it (`@[expose] public section`). Only such a file may the export
+    write another text for under the same name (`generated_roots`)."""
+    if (h := PB.HEADERS.header(text)) is None:
+        return False
+    i, n, opened = h.end, len(text), False
+    while True:
+        if (i := PB.HEADERS.skip(text, i)) < 0:
+            return False
+        if i >= n:
+            return True
+        if text.startswith("/-!", i):
+            depth, i = 1, i + 3
+            while i < n and depth:
+                step = 1 if text.startswith("/-", i) else -1 if text.startswith("-/", i) else 0
+                depth, i = depth + step, i + (2 if step else 1)
+            if depth:
+                return False
+        elif not opened and (m := SECTION.match(text, i)):
+            opened, i = True, m.end()
+        else:
+            return False
+
+
 def _roots(tree, copied: set[str]) -> tuple[dict[str, str], dict[str, dict[str, list[str]]]]:
     """(`generated_roots`, `spare_roots`): what the export does about each module a copied lakefile's library or its
-    package's lock names as a root, or the lock names as its assumptions' module, whose file the export doesn't copy
-    while it copies modules below it. Deepest first, so a root imports the ones written below it."""
+    package's lock names as a root whose file the export doesn't copy while it copies modules below it. Deepest first,
+    so a root imports the ones written below it. It refuses a root it can neither write nor drop: a library's, whose
+    tracked file declares something."""
     files: dict[str, str] = {}
     spare: dict[str, dict[str, list[str]]] = {}
+    tracked = set(tree.files)
     for lakefile in sorted(f for f in copied if f.rpartition("/")[2] == "lakefile.toml"):
         here = os.path.dirname(lakefile)
         doc = tomllib.loads(tree.text(lakefile))
@@ -291,11 +322,9 @@ def _roots(tree, copied: set[str]) -> tuple[dict[str, str], dict[str, dict[str, 
         lock = _norm(here, LOCK)
         policy = json.loads(tree.text(lock)) if lock in copied else {}
         exempt = tuple(policy.get("exempt", {}))
-        named = [*(r for lib in doc.get("lean_lib", []) for r in lib.get("roots", [lib.get("name")])),
-                 *policy.get("roots", [])]
-        home = policy.get("assumptions_module")
-        for root in sorted(dict.fromkeys([*named, *([home] if isinstance(home, str) else [])]),
-                           key=lambda r: (-r.count("."), r)):
+        libs = [r for lib in doc.get("lean_lib", []) for r in lib.get("roots", [lib.get("name")])]
+        named = [*libs, *policy.get("roots", [])]
+        for root in sorted(dict.fromkeys(named), key=lambda r: (-r.count("."), r)):
             at = _module_path(src, root)
             if f"{at}.lean" in copied or f"{at}.lean" in files:
                 continue
@@ -304,9 +333,16 @@ def _roots(tree, copied: set[str]) -> tuple[dict[str, str], dict[str, dict[str, 
             mods = sorted(m for m in below if not any(m == e or m.startswith(f"{e}.") for e in exempt))
             if not mods:
                 continue
-            if root in named and all(m in named for m in mods):
+            own = f"{at}.lean" in tracked and not imports_alone(tree.text(f"{at}.lean"))
+            if all(m in named for m in mods) or own and root not in libs:
                 spare.setdefault(here, {})[root] = mods
                 continue
+            if own:
+                raise ValueError(f"public_export: {at}.lean: {lakefile} names it as a library's root, the export copies "
+                                 f"modules below it and not the file, and the file is more than imports and comments, so "
+                                 f"the export can't write a file of imports under its name: make it public "
+                                 f"(public_boundary.toml), move what it declares into a module below it, or name the "
+                                 f"library's roots without it")
             modular = all((h := PB.HEADERS.header(files[below[m]] if below[m] in files else tree.text(below[m])))
                           is not None and h.module for m in mods)
             word = "public import" if modular else "import"
@@ -317,20 +353,21 @@ def _roots(tree, copied: set[str]) -> tuple[dict[str, str], dict[str, dict[str, 
 
 def generated_roots(tree, copied: set[str]) -> dict[str, str]:
     """{file: its text} of each root file the export writes: a root of a copied lakefile's library, or of its package's
-    lock (which the Lean check builds by name), or the module the lock names as its assumptions' (which the check
-    requires the build to hold), whose file the export doesn't copy while it copies modules below it. The text is the
-    imports of those modules and of the roots written below it, less the ones the package's lock exempts (a test or a
-    probe, which no root imports); no copied file imports the root, so nothing reads it but the build. It is a `module`
-    when every module it imports is one, since a `module` imports only modules. A root whose modules are each a root of
-    their own gets no file (`spare_roots`)."""
+    lock (which the Lean check builds by name), whose file the export doesn't copy while it copies modules below it. The
+    text is the imports of those modules and of the roots written below it, less the ones the package's lock exempts (a
+    test or a probe, which no root imports); no copied file imports the root, so nothing reads it but the build. It is a
+    `module` when every module it imports is one, since a `module` imports only modules. The export writes one under
+    the name of a tracked file only when that file is imports alone too (`imports_alone`): the public tree never holds
+    a file under a real module's name with other content. A root it doesn't write gets no file (`spare_roots`)."""
     return _roots(tree, copied)[0]
 
 
 def spare_roots(tree, copied: set[str]) -> dict[str, dict[str, list[str]]]:
     """{a copied lakefile's directory: {root: the copied modules below it}} of each root the export drops instead of
-    writing: one of the library or of the lock, with no copied file, whose copied modules are each named as a root too.
-    Each is built by its own name, so a file written for the root would import nothing the build lacks, and would stand
-    under the name of a module the export leaves out. The lakefile and the lock the export writes lose the root
+    writing, one with no copied file. Either its copied modules are each named as a root too: each is built by its own
+    name, so a file written for the root would import nothing the build lacks. Or it is a root of the lock alone whose
+    tracked file declares something (`imports_alone`), which a file of imports must not stand in for. The lakefile and
+    the lock the export writes lose the root, and the lock gains each of its modules no root left covers
     (`rewrite_lakefile`, `rewrite_lock`)."""
     return _roots(tree, copied)[1]
 
