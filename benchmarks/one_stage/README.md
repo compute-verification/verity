@@ -297,8 +297,9 @@ negatives.
   with its overcount, the seconds it covers, the
   connections it counts and δ_net term by term with each term's source (the check's `eps`, only its δ part, and each
   phase's knowledge, binding and collision errors, which no check computes), `eps` split into the scans' δ and the
-  charged tied audits' with what sets each and what a smaller one costs, k_{skip,j}'s slot entries (every one of a tied
-  audit sampled in part; sampled whole, it adds none and proves each of its proof blocks), the composite of record's
+  charged tied audits' with what sets each and what a smaller one costs, k_{skip,j}'s slot entries (every one of a
+  scan sampled in part to which a tied audit sampled in part is tied; a scan with every proof block drawn is charged
+  its slot entries once in ℓ_{a,j} instead, whatever its tied audits' draws), the composite of record's
   error as the sum of its subprotocols' errors (four, or three without PoUW's), each δ with where the
   run states it and the terms no check computes named. While the period's check reads its answers as given the record
   makes no period's figure from K (`periods` is missing, with why: nothing scaled, pooled or summed, no cell called
@@ -307,25 +308,30 @@ negatives.
   `answers`, and any other, one written before the label included, is read as given whatever the reading code's
   switch, so `--beside` prints its K and its cells under "answers read as given". Once the check
   verifies them, a record states that K over the
-  run's own certification period (proved) and each monitoring period for the node (proved where the run's period
-  covers it, else scaled), the census's reference datacenter and the world (scaled), each scaled cell naming its rule,
-  whose sources the record states, beside its figure over one execution phase, and its share of one copy of the
+  run's own certification period and each monitoring period for the node (scaled where the run's period doesn't
+  cover it), the census's reference datacenter and the world (scaled), each scaled cell naming its rule, whose sources
+  the record states, and each other cell reading proved only where nothing is open under the figure of record, and
+  otherwise open, naming each premise, check or condition that is; beside its figure over one execution phase, and
+  its share of one copy of the
   weights a deployment protects (the census adversary model's as published, a stated parameter with its census line),
   beside it of the demo's served model's (Llama-3.2-1B), and of the schedule's egress capacity (the served egress is in no published file, and the record says so). The cells are
-  the figure of record's: K as the period's check states it only where its Lean verdict held both checks the tight
-  ℓ_{a,j} rests on (each tied audit's free inputs computed from its descriptor, and its circuit held fixed whatever its
-  advice) and none of its premises is open: each is discharged by theorems `Security/lean-audit.json` or
+  the figure of record's: K as the period's check states it, with nothing added to it. It is proved only where none of
+  its premises is open: each is discharged by theorems `Security/lean-audit.json` or
   `Security/Properties/lean-audit.json` lists, taking no named assumption but a standing one (trusted-host and
-  certifier-coverage), and no premise about our own Python stands; and each guarantee the tight K rests on is in the lock
+  certifier-coverage), and no premise about our own Python stands; each guarantee the figure rests on is in the lock
   at the statement whose hypotheses and antecedents the record names by hand, each by the premise that covers it, since
-  the lock records a guarantee's named assumptions and never its antecedents; and the run's COINS line names the live
-  challenger (PP_CHALLENGER gate:USER@HOST at a named peer). While one of those is open, it is K plus ℓ_a + 1 bits for
-  each tied audit of each phase, added to its ℓ_{a,j}, what is open named, and no tighter figure goes beside it. It
-  tightens in place: to ℓ_a + 1 in place of each tied audit's ℓ_{a,j} once a general cut lemma bounding a tied audit's
-  leak by ℓ_a + 1 is in the lock and a check verifying that cut has run on the period's case (the record written again
-  from the same OUT, with no re-serving), and to K alone once `padding-out-of-free` (the period check refusing a tied
-  audit's padding reads, and the lemma that a column no unit reads adds no free input) is in the lock and nothing else
-  is open. The figure says which charge K applied each tied audit (`state_charge`): its free inputs with its reads of
+  the lock records a guarantee's named assumptions and never its antecedents; the run's COINS line names the live
+  challenger (PP_CHALLENGER gate:USER@HOST at a named peer); and, where the check charged a phase its tied audits (its
+  scan sampled in part), its Lean verdict held both checks that charge rests on (each tied audit's free inputs computed
+  from its descriptor, and its circuit held fixed whatever its advice). The record names a theorem as a guarantee or a
+  discharge only where one of those locks lists it (`onsite_record.unlisted`, which a test holds empty), so a premise
+  whose discharge isn't there is open. While anything is open the figure is the same K, open, each by name, and so is
+  each cell that would read proved: no bits are added for what is open, the advice's cap included, since the link
+  figure charges the advice through the entries, a scan's slot entries, which the check charges once where every proof
+  block of the scan is drawn. A phase charged so rests on that cut (`entries-cut`, open till its statement is in the
+  lock) and on none of the tied charge's premises or checks. The record says how the figure tightens, in its place and
+  never beside it. For a phase charged its tied audits, the figure says which charge K applied each (`state_charge`):
+  its free inputs with its reads of
   the scan's state held (`stateFree`) only where the lock holds RowsStateHeld at its pinned statement reading
   `stateHeldIn` and `auditStateEntries` at their pinned digests, so that its proof stands over the entry a window's
   activations commit, else `free`; where it is `free` and a tied audit's parameters state its circuit record, whose
@@ -335,8 +341,9 @@ negatives.
   on every figure that rests on the draw (the sampled-proofs verdict where its draw is the one open, the figure of
   record and its cells), never as a live draw's.
   The realized advice charge is private: the record states ℓ_{a,j} with its source,
-  the tied compute audits' free inputs (no advice length and no cap is in them), beside it ℓ_a, the cap of the advice
-  the run registered (its published `registration.json`'s compiler `cap_bits`), as a cap, in no term of K, and
+  the scan's slot entries or the tied compute audits' free inputs (no advice length and no cap is in them), beside it
+  ℓ_a, the cap of the advice the run registered (its published `registration.json`'s compiler `cap_bits`), as a cap,
+  in no term of K and in no figure, and
   `--advice-charge` states a test
   run's measurement beside K as that run's. It lists the re-proof inputs, what a later re-proof of the sampled
   units with each wire read inside its session needs (the committed values and openings of every sampled unit and of

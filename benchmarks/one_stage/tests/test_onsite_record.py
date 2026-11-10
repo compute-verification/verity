@@ -7,17 +7,21 @@ each monitoring period's node proved where the run's period covers it and else s
 datacenter's and the world's scaled from the node's, each scaled cell naming its rule, whose sources (the census lines
 by SHA-512) the record states, beside its figure over one execution phase. A public whose terms don't sum to K, or in
 the clock form, is the bound's error. The served run's advice charge stays out of the record, ℓ_{a,j} is stated with
-its source (the tied audits' free inputs, no advice length and no cap), and a test run's measurement is stated beside
-the bound as that run's. The figure of record, every period's cells included, is that K only where the verdict held
-both checks the tight ℓ_{a,j} rests on and the lock (a toy one in Security's lock's place) lists every premise's
-discharge, taking no assumption but a standing one, and otherwise charges ℓ_a + 1 bits for each tied audit of each
-phase, ℓ_a the cap of the run's published advice registration (no figure where it published none, and an error where an
-audit's own registration binds an advice), with what is open named and no tighter figure beside it. A tied audit
-drawn in part charges its slot entries in k_{skip,j}; each cell states its share of the schedule's egress capacity,
+its source (a scan's slot entries, charged once where every proof block of it is drawn, else its tied audits' free
+inputs; no advice length and no cap), and a test run's measurement is stated beside the bound as that run's. The
+figure of record, every period's cells included, is that K, the check's, and nothing added to it. It is proved only
+where the lock (a toy one in Security's lock's place) lists every premise's discharge, taking no assumption but a
+standing one, the coins are live and, where a phase is charged its tied audits, the verdict held both checks that
+charge rests on; otherwise it is the same K, open, with what is open named in the figure and in each cell, none of
+which then reads proved. A phase charged its scan's slot entries once rests on none of the tied charge's premises or
+checks. ℓ_a, the cap of the run's published advice registration, is stated beside the bound and charged nowhere
+(missing where the run published none; an audit's own registration binding an advice is the figure's error). The
+record names no guarantee or discharge the tree's locks don't list. A scan's slot entries are charged in k_{skip,j}
+only by a period check that charges none once; each cell states its share of the schedule's egress capacity,
 and the served egress is missing. Sampled proofs' coins are live only where
 every COINS line names the live challenger at a named peer, and the network certifier's chain draws only where each
 takes everything; otherwise, or with none, live-coins is open by name (each chain draw by its own), the figure of
-record charges ℓ_a + 1 for each tied audit whatever else holds, and it and its cells are conditional on the coins, and
+record is open on it whatever else holds, and it and its cells are conditional on the coins, and
 so is the sampled-proofs verdict where its draw is the one open. While certifier-key is open an accepted network
 verdict is not established and its bound conditional on it. It closes only where the lock holds PeriodLeakRegistered
 at its pinned statement taking hA, hr and hkey as auditor-record and the run's check of the auditor's inputs holds:
@@ -93,8 +97,9 @@ NO_ADVICE = {"format": "verity/registration/v2", "window": {"circuit": "cd" * 64
 PUBLISHED = SV.public_registration({"row_bits": 256, "rows": 2 ** 23 // 256,
                                     "binding": {"advice": {"root": "ab" * 64, "bits": 2 ** 23}},
                                     "compiler": {"name": "c", "digest": "d", "cap_bits": 2 ** 23}})
-#: K of record with both checks open and the one audit's ℓ_a + 1 bits for the one phase
-KR = K + 2 ** 23 + 1
+#: the public of a period check that charges a scan with every proof block drawn its slot entries once: the one
+#: phase's 9088 bits as its scan's entries, no tied audit charged
+ONCE = dict(PUBLIC, scans=[dict(SCAN, free=0, entries=9088, tied=[0])])
 #: T = 63 buckets of 20 ms: an execution phase of 63/50 s
 SCHEDULE = {"bucket_ms": 20, "cell_bytes": 512, "delay": 4, "egress_cells": 4, "every": 63, "ingress_buckets": 63,
             "ingress_cells": 4, "lanes": 4, "queue": 16, "slots": 8, "window": 63}
@@ -225,18 +230,18 @@ UNNAMED = {n: OR.PREMISES[n] for n in TOY}
 RESTS_ON = {g: dict(r) for g, r in OR.RESTS_ON.items()}
 UNPINNED = [g for g, r in OR.RESTS_ON.items() if r["statement"] is None]
 ACCEPTED = "NetTiming.SecurityProofs.PeriodLeakAccepted"
-#: the theorem that discharges the free-input count's premise
-(COUNTED,) = OR.PREMISES["free-count"]["discharged_by"]
-#: the Property of the Lean audit over the network certifier's signed records that discharges schedules-covered
-(COVERED,) = OR.PREMISES["schedules-covered"]["discharged_by"]
+#: the stand-ins that discharge the free-input count's premise, schedules-covered, held-performed and wires-fit
+COUNTED, COVERED, HELD, WIRED = (TOY[n] for n in ("free-count", "schedules-covered", "held-performed", "wires-fit"))
 
 
-def discharged() -> dict:
-    """``premises`` of a lock listing every discharge and each guarantee the tight K rests on at the statement it
-    names, none with an assumption."""
+def discharged(drop: tuple[str, ...] = OR.ENTRIES) -> dict:
+    """``premises`` of a lock listing every discharge and each guarantee the figure rests on at the statement it
+    names, none with an assumption, less the premises ``drop`` of a charge the public applies to no phase (the slot
+    entries' unless given: `PUBLIC` charges its phase its tied audits)."""
     found = {n: {"is": p["is"], "discharged_by": list(p["discharged_by"]), "missing": [], "unpinned": {}, "assumes": [],
-                 "takes": []} | ({"stated_by": p["stated_by"], "checked": p["checked"]} if "stated_by" in p else {})
-             for n, p in OR.PREMISES.items()}
+                 "takes": []} | ({"charge": p["charge"]} if "charge" in p else {})
+             | ({"stated_by": p["stated_by"], "checked": p["checked"]} if "stated_by" in p else {})
+             for n, p in OR.PREMISES.items() if n not in drop}
     return {"is": OR.DISCHARGE,
             "from": "Security/lean-audit.json and Security/Properties/lean-audit.json guarantees and reads",
             "premises": found, "standing": OR.STANDING, "counts": OR.COUNTS, "open": [], "unread": [],
@@ -257,7 +262,7 @@ def lock_doc(listed: dict[str, list[str]], stated: dict[str, str | None] | None 
 
 def write_lock(f: Path, given: dict[str, list[str] | None] | None = None,
                stated: dict[str, str | None] | None = None) -> None:
-    """A lock at ``f`` listing every discharge of `PREMISES` and each guarantee the tight K rests on with no named
+    """A lock at ``f`` listing every discharge of `PREMISES` and each guarantee the figure rests on with no named
     assumption, each guarantee of ``given`` instead with the assumptions given, or unlisted where None, and each of
     `RESTS_ON` at the statement it names unless ``stated`` gives another."""
     names = [t for p in OR.PREMISES.values() for t in p["discharged_by"]] + list(OR.RESTS_ON)
@@ -282,8 +287,7 @@ def lock(tmp_path_factory, monkeypatch) -> Path:
     for t in (t for p in OR.PREMISES.values() for t in p["discharged_by"]):
         monkeypatch.setitem(OR.DISCHARGES, t, {"statement": f"toy-{t}", "takes": {}})
     for g in UNPINNED:
-        monkeypatch.setitem(OR.RESTS_ON, g, {k: v for k, v in OR.RESTS_ON[g].items() if k != "restate"}
-                            | {"statement": f"toy-{g}"})
+        monkeypatch.setitem(OR.RESTS_ON, g, dict(OR.RESTS_ON[g], statement=f"toy-{g}"))
     f = tmp_path_factory.mktemp("lock") / "lean-audit.json"
     write_lock(f)
     monkeypatch.setattr(OR, "LOCKS", (f,))
@@ -555,13 +559,13 @@ def test_wherever_K_is_stated_the_answers_it_is_on_stand_beside_it_and_nothing_i
     assert OR.ANSWERS_VERIFIED is False and OR.ANSWERS == "answers read as given" and OR.given() == {"answers": OR.ANSWERS}
     assert OR.GIVEN.startswith("K, on one-stage answers the driver verified; the check read them as given")
     assert (b["K"], b["answers"], b["is"]) == (K, OR.ANSWERS, OR.GIVEN)
-    assert (b["of_record"]["K"], b["of_record"]["answers"]) == (KR, OR.ANSWERS)
+    assert (b["of_record"]["K"], b["of_record"]["answers"]) == (K, OR.ANSWERS)
     assert rec["periods"] == {"missing": OR.NOT_SCALED} and OR.cells(rec["periods"]) == rec["periods"]
     assert "answers" not in rec and OR.read_as(rec) == OR.ANSWERS
     assert "read as given" in OR.NOT_SCALED and "labelled number" in OR.NOT_SCALED
     assert '"how"' not in json.dumps({k: rec[k] for k in ("bound", "periods")}) and '"how": "proved"' not in text
     assert not {"share", "share_served", "share_of_capacity"} & set(re.findall(r'"(\w+)":', json.dumps(rec["periods"])))
-    assert (line["K"], line["answers"]) == (KR, OR.ANSWERS)
+    assert (line["K"], line["answers"]) == (K, OR.ANSWERS)
     assert (line["year_datacenter"], line["eps_pooled"]) == (None, None)
     assert "no bound" in OR.GIVEN and "The bound" not in OR.__doc__
     assert "certifier's bound" not in OR.__doc__.split("\n\n")[0]
@@ -577,12 +581,12 @@ def test_once_the_check_verifies_its_answers_the_record_says_so_itself_and_write
     rec, line = json.loads(text), json.loads(capsys.readouterr().out.strip()[7:])
     assert OR.given() == {} and OR.ANSWERS not in text and OR.GIVEN not in text and OR.NOT_SCALED not in text
     assert rec["answers"] == OR.VERIFIED == OR.read_as(rec) and text.count('"answers"') == 1
-    assert (rec["bound"]["K"], rec["bound"]["of_record"]["K"], line["K"], line["answers"]) == (K, KR, KR, OR.VERIFIED)
+    assert (rec["bound"]["K"], rec["bound"]["of_record"]["K"], line["K"], line["answers"]) == (K, K, K, OR.VERIFIED)
     p = rec["periods"]
-    assert p["run"]["bits"] == KR and p["run"]["how"] == "proved" and set(LB.PERIODS) <= set(p)
+    assert p["run"]["bits"] == K and p["run"]["how"] == "open" and set(LB.PERIODS) <= set(p)
     assert all(p[n][w]["how"] == "scaled" for n in LB.PERIODS for w in ("datacenter", "world"))
     assert line["year_datacenter"]["bits"] == p["year"]["datacenter"]["bits"] and line["eps_pooled"] is not None
-    assert OR.cells(p, OR.read_as(rec))["answers"] == OR.VERIFIED and OR.cells(p)["run"]["bits"] == KR
+    assert OR.cells(p, OR.read_as(rec))["answers"] == OR.VERIFIED and OR.cells(p)["run"]["bits"] == K
 
 
 @pytest.mark.parametrize("reading", [False, True])
@@ -605,17 +609,17 @@ def test_a_record_that_doesnt_say_its_answers_were_verified_is_read_as_given_wha
                              ("said", said, OR.VERIFIED)):
         assert OR.read_as(rec) == label
         line = OR.summary(rec)
-        assert (line["K"], line["answers"]) == (KR, label) and line["year_datacenter"] is not None
+        assert (line["K"], line["answers"]) == (K, label) and line["year_datacenter"] is not None
         f, to = tmp_path / f"{name}.json", tmp_path / f"{name}-beside.json"
         f.write_text(json.dumps(rec))
         assert main(["--beside", str(f), "--to", str(to)]) == 0
         (run,) = json.loads(to.read_text())["runs"]
-        assert (run["K"], run["answers"], run["periods"]["answers"]) == (KR, label, label)
-        assert run["periods"]["run"]["bits"] == rec["periods"]["run"]["bits"] == KR
+        assert (run["K"], run["answers"], run["periods"]["answers"]) == (K, label, label)
+        assert run["periods"]["run"]["bits"] == rec["periods"]["run"]["bits"] == K
         assert all(run["periods"][n][w] == {k: rec["periods"][n][w][k] for k in ("bits", "share", "how")}
                    for n in LB.PERIODS for w in ("node", "datacenter", "world"))
         (printed,) = json.loads(capsys.readouterr().out.strip()[14:])
-        assert (printed["K"], printed["answers"]) == (KR, label)
+        assert (printed["K"], printed["answers"]) == (K, label)
 
 
 @pytest.mark.usefixtures("verified")
@@ -639,51 +643,60 @@ def test_an_accepted_rows_form_answer_is_K_term_by_term_with_its_overcount_and_c
     assert "answers" not in b and "is" not in b and "proved" not in OR.OVERCOUNT
     assert b["connections"] == {"count": 4 * 63, "from": OR.CONNECTIONS}
     assert rec["placement"] == {"trusted-host": "the certifier on the gate's host"}
-    assert rec["advice_charge"]["charged"] == {"is": OR.CHARGED, "bits_per_phase": [9088], "share": 9088 / K,
-                                               "lean": "scans[j].free"}
+    assert rec["advice_charge"]["charged"] == {
+        "is": OR.CHARGED, "bits_per_phase": [9088], "entries_per_phase": [0], "share": 9088 / K,
+        "lean": "scans[j].free + scans[j].entries", "link": OR.ADVICE_LINK}
     assert "no cap and no advice length" in OR.CHARGED and "audits[].free" in OR.CHARGED
-    assert b["of_record"] == {"K": KR, "held": [], "open": ["free", "circuit"], "is": OR.OPEN, "premises": discharged(),
-                              "advice": {"bits_per_phase": [2 ** 23 + 1], "tied": OR.TIED_ALL}, "tight": OR.TIGHT,
+    assert b["of_record"] == {"K": K, "tie_charged": [0], "held": [], "open": ["free", "circuit"], "is": OR.OPEN,
+                              "premises": discharged(), "advice": {"is": OR.ADVICE_LINK}, "tight": OR.TIGHT,
                               "state_charge": FREE_CHARGE}
     assert b["skip"] == {"is": OR.SKIP, "bits_per_phase": [0], "entries_per_phase": [0]}
     assert rec["advice_charge"]["cap"] == {"ell_a": [2 ** 23], "is": OR.CAP}
     assert "A cap, in no term" in OR.CAP and "`CAP`" in OR.OPEN and "`DISCHARGE`" in OR.OPEN
-    assert rec["periods"]["run"]["bits"] == KR and "periods_tight" not in rec and K not in numbers(rec["periods"])
+    run = rec["periods"]["run"]
+    assert (run["bits"], run["how"], run["open"]) == (K, "open", ["free", "circuit"]) and "periods_tight" not in rec
     assert rec["periods"]["egress"] == {"capacity_bits_per_phase": CAPACITY, "is": OR.EGRESS,
                                         "served": {"missing": OR.SERVED_EGRESS}}
 
 
-def test_the_served_audits_cap_is_charged_while_a_check_is_open_and_no_tight_K_is_beside_it(tmp_path, capsys):
+@pytest.mark.usefixtures("verified")
+def test_the_served_audits_cap_is_stated_and_charged_nowhere_whatever_is_open(tmp_path, capsys):
     """The served shape: one V3c audit, its class window binding no advice, tied to the one phase's scan, and the run's
     advice registration published padded to its compiler's cap ℓ_a = 2^23. With neither check held, the figure of
-    record charges ℓ_a + 1 beside ℓ_{a,j}, and every cell is that figure's; no tighter figure is beside it, in the
-    record or its line, only the line saying how it tightens in its place (`TIGHT`): ℓ_a + 1 in place of ℓ_{a,j} under
-    the cut lemma and its check, and K alone once padding-out-of-free is in the lock."""
+    record is still the check's K, open on both by name, and every cell is that figure's: no ℓ_a + 1 is added for the
+    tied audit, in the record or its line, the cap is stated beside the bound, and the record says the link figure
+    charges the advice through the entries and how the figure tightens in its place (`TIGHT`)."""
     out = accepted(tmp_path)
     assert main([str(out)]) == 0
     rec = json.loads((out / "record" / "onsite.json").read_text())
     of = rec["bound"]["of_record"]
-    assert (of["K"], of["open"], rec["advice_charge"]["cap"]["ell_a"], of["advice"]["bits_per_phase"]) == (
-        K + 2 ** 23 + 1, ["free", "circuit"], [2 ** 23], [2 ** 23 + 1])
+    assert (of["K"], of["open"], rec["advice_charge"]["cap"]["ell_a"], of["advice"]) == (
+        K, ["free", "circuit"], [2 ** 23], {"is": OR.ADVICE_LINK})
     assert rec["advice_charge"]["charged"]["bits_per_phase"] == [9088]
     assert rec["bound"]["K"] == K and of["tight"] == OR.TIGHT and "periods_tight" not in rec
-    assert all(x in OR.TIGHT for x in ("cut lemma", "verifying that cut", "in place of each tied audit's ℓ_{a,j}",
-                                       "without re-serving", "padding-out-of-free", "padding reads",
-                                       "unread-column lemma"))
+    assert not {2 ** 23 + 1, K + 2 ** 23 + 1} & set(numbers(rec)) and rec["periods"]["run"]["bits"] == K
+    assert all(x in OR.ADVICE_LINK for x in ("charges the advice through the entries", "scanOf refuses any other",
+                                             "no ℓ_a, no ℓ_a + 1 and no |a_j|"))
+    assert all(x in OR.TIGHT for x in ("in place of the figure of record and never beside it",
+                                       "proving every proof block of its scan", "`OVERCOUNT`", "`tied-count`",
+                                       "states no figure of any"))
+    assert "No bits are added for what is open" in OR.OPEN and "open premise or not" in OR.CAP
     line = json.loads(capsys.readouterr().out.strip()[7:])
-    assert (line["K"], line["open"], "K_tight" in line) == (K + 2 ** 23 + 1, ["free", "circuit"], False)
-    assert K not in numbers(line)
+    assert (line["K"], line["open"], "K_tight" in line) == (K, ["free", "circuit"], False)
+    assert K + 2 ** 23 + 1 not in numbers(line)
 
 
 @pytest.mark.usefixtures("verified")
 @pytest.mark.parametrize("held, open_", [(["free", "circuit"], []), (["circuit", "free"], []), (["free"], ["circuit"]),
                                          (["circuit", "x"], ["free"])])
-def test_the_figure_of_record_is_the_tight_K_only_where_the_verdict_held_both_checks(tmp_path, held, open_):
+def test_a_tied_charge_is_proved_only_where_the_verdict_held_both_checks_and_else_the_same_K_open(tmp_path, held, open_):
+    """A phase charged its tied audits rests on both checks of `CHECKS`: with one the verdict didn't hold, the figure of
+    record is the same K, open on it by name, and so is its run's cell, which reads proved only with both held."""
     rec = record(accepted(tmp_path, dict(PUBLIC, held=held)))
-    of = rec["bound"]["of_record"]
-    assert (of["held"], of["open"]) == ([c for c in OR.CHECKS if c not in open_], open_)
-    assert of["K"] == (K if not open_ else K + 2 ** 23 + 1)
-    assert ("tight" in of) == bool(open_) and rec["periods"]["run"]["bits"] == of["K"] and "periods_tight" not in rec
+    of, run = rec["bound"]["of_record"], rec["periods"]["run"]
+    assert (of["held"], of["open"], of["K"]) == ([c for c in OR.CHECKS if c not in open_], open_, K)
+    assert (run["bits"], run["how"], run.get("open")) == (K, "open" if open_ else "proved", open_ or None)
+    assert of["tight"] == OR.TIGHT and "periods_tight" not in rec
 
 
 def held_both(out: Path) -> dict:
@@ -691,38 +704,38 @@ def held_both(out: Path) -> dict:
     return record(accepted(out, dict(PUBLIC, held=["free", "circuit"])))
 
 
+@pytest.mark.usefixtures("verified")
 def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both_checks_are_held(
         tmp_path, lock, monkeypatch):
-    """A lock listing the pinned guarantees the tight K rests on and none of the theorems that discharge its premises,
-    with PeriodTiedCount, not yet stated, unlisted, and the premises with no discharge named: every premise is open, by
-    name, and so is PeriodTiedCount, so the figure of record charges ℓ_a + 1 for the tied audit, with no tight K beside
-    it. certifier-key alone closes, by PeriodLeakRegistered's pin taking the auditor's record and the run's check of
-    it, though PeriodLeakRegistered's other premises stay open: the network certifier's verdict is accepted, and the
-    figure and its cells are conditional on nothing."""
+    """A lock listing the guarantees the figure rests on and none of the theorems that discharge its premises, and
+    the premises with no discharge named, as the tree's are: every premise of a tied charge is open, by name, so the
+    figure of record is the check's K, open, with nothing added, and no cell of it reads proved: the run's and its
+    figure over one phase are open, naming each, and a scaled one names them beside its rule. certifier-key alone
+    closes, by PeriodLeakRegistered's pin taking the auditor's record and the run's check of it, though
+    PeriodLeakRegistered's other premises stay open: the network certifier's verdict is accepted, and the figure and
+    its cells are conditional on nothing."""
     for name, premise in UNNAMED.items():
         monkeypatch.setitem(OR.PREMISES, name, premise)
-    for g in UNPINNED:
-        monkeypatch.setitem(OR.RESTS_ON, g, RESTS_ON[g])
-    lock.write_text(json.dumps(lock_doc({g: [] for g in OR.RESTS_ON if g not in UNPINNED})))
+    lock.write_text(json.dumps(lock_doc({g: [] for g in OR.RESTS_ON})))
     rec = held_both(tmp_path)
     of = rec["bound"]["of_record"]
-    assert UNPINNED == ["NetTiming.SecurityProofs.PeriodTiedCount"] and OR.CERTIFIER_KEY not in UNNAMED
-    assert (of["held"], of["open"], of["K"]) == (
-        ["free", "circuit"], [*(n for n in OR.PREMISES if n != OR.CERTIFIER_KEY), *UNPINNED], K + 2 ** 23 + 1)
-    assert {"sampled-leg-bridge", "reg-opens-at"} <= set(of["open"])
-    assert [p["missing"] for p in of["premises"]["premises"].values()] == [
-        list(p["discharged_by"]) for p in OR.PREMISES.values()]
-    assert [of["premises"]["premises"][n]["discharged_by"] for n in UNNAMED] == [[]] * len(UNNAMED)
-    assert of["premises"]["rests_on"][UNPINNED[0]] == {"missing": "not in the lock",
-                                                       "takes": RESTS_ON[UNPINNED[0]]["takes"],
-                                                       "restate": OR.RESTATE_TIED}
+    want = [n for n in OR.PREMISES if n != OR.CERTIFIER_KEY and n not in OR.ENTRIES]
+    assert UNPINNED == [] and OR.CERTIFIER_KEY not in UNNAMED and set(OR.PREMISES) == {*UNNAMED, OR.CERTIFIER_KEY}
+    assert (of["held"], of["open"], of["K"]) == (["free", "circuit"], want, K)
+    assert {"sampled-leg-bridge", "reg-opens-at", "tied-count", "commitment-binds", "list-within"} <= set(of["open"])
+    assert all(p["missing"] == [] and p["discharged_by"] == [] for n, p in of["premises"]["premises"].items()
+               if n in UNNAMED)
+    run, week = rec["periods"]["run"], rec["periods"]["week"]["node"]
+    assert (run["bits"], run["how"], run["open"]) == (K, "open", want)
+    assert (run["per_phase"]["how"], run["per_phase"]["open"]) == ("open", want)
+    assert (week["how"], week["rule"], week["open"]) == ("scaled", "run-to-period", want)
     assert "conditional_on" not in of and "conditional_on" not in rec["periods"] and of["tight"] == OR.TIGHT
     assert rec["verdicts"]["the network certifier"]["verdict"] == "accept"
     assert rec["checked"][OR.AUDITOR_RECORD]["holds"] is True
     assert of["premises"]["counts"] == OR.COUNTS and not set(OR.COUNTS) & set(of["open"])
     assert "periods_tight" not in rec
     assert all(f in OR.PREMISES["sampled-leg-bridge"]["is"]
-               for f in ("SampledCodeRuns", "SessionKS,", "SessionRuns", "ListWithin", "Binds"))
+               for f in ("SampledCodeRuns", "SessionKS,", "SessionRuns", "`list-within`", "`commitment-binds`"))
     assert "Python" in OR.DISCHARGE
     assert "no opening reaches the verifier" in OR.PREMISES["session-wires"]["is"]
     tags = OR.PREMISES["session-tags"]["is"]
@@ -732,7 +745,7 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
                                       "every padding column", "never a difftest", "CircuitCountsAt"))
     assert "tied-padding-reads" not in json.dumps(OR.STANDING)
     assert all(x in OR.PREMISES["padding-out-of-free"]["is"] for x in ("refuses a tied audit whose units read into",
-                                                                       "a column no unit reads", "`TIGHT`"))
+                                                                       "a column no unit reads"))
     wrong = OR.PREMISES["wrong-bounds"]["is"]
     assert all(x in wrong for x in ("RegMatches", "`sampled-leg-bridge`", "v.law is g.rule.lawOver n",
                                     "Draw.sameLaw", "jeq a (toJson n) → nat? a = some n"))
@@ -740,12 +753,21 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
                                                                  "`NOT_ESTABLISHED`", "`UNCHARGED`", "hA, hr and hkey"))
     assert all(x in OR.CHECKED[OR.AUDITOR_RECORD] for x in ("never the prover's node or its deployment.json",
                                                             "an obligation on the auditor's configuration"))
+    cut_ = OR.PREMISES["entries-cut"]["is"]
+    assert all(x in cut_ for x in ("proved and none sampled", "scanOf's refusal", "the state chain",
+                                   "RowsKBoundsCount, in the lock, is its arithmetic alone", "Not yet stated"))
+    assert all(x in OR.PREMISES["certifiers-open"]["is"] for x in ("to leave the statement rather than be discharged",
+                                                                   "refused by the period check"))
+    binds = OR.PREMISES["commitment-binds"]["is"]
+    assert "Not what the guarantee says, and nothing it assumes of the prover" in binds and "binds_deployOf" in binds
+    assert "What the guarantee says" in OR.COUNTS["client-decodes"] and "no prover's code" in OR.COUNTS["client-decodes"]
 
 
+@pytest.mark.usefixtures("verified")
 @pytest.mark.parametrize("given, open_", [
     ({}, []),
-    ({"Properties.NetworkPeriod.rowsHeld": ["NetTiming.Assumptions.SampledCodeRuns"]}, ["held-performed"]),
-    ({"Properties.NetworkPeriod.rowsHeld": ["Verity.Assumptions.TrustedHost"]}, []),
+    ({HELD: ["NetTiming.Assumptions.SampledCodeRuns"]}, ["held-performed"]),
+    ({HELD: ["Verity.Assumptions.TrustedHost"]}, []),
     ({COUNTED: None}, ["free-count"]),
     ({COVERED: None}, ["schedules-covered"]),
     ({COVERED: ["Verity.Assumptions.TrustedHost"]}, []),
@@ -754,18 +776,19 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
     ({ACCEPTED: ["Accounting.Covered"]}, []),
     ({ACCEPTED: ["NetTiming.TapOpens"]}, []),
     ({ACCEPTED: None}, [ACCEPTED])])
-def test_the_tight_K_is_of_record_only_where_every_premise_is_discharged_and_none_but_a_standing_assumption_taken(
+def test_the_figure_is_proved_only_where_every_premise_is_discharged_and_none_but_a_standing_assumption_taken(
         tmp_path, lock, given, open_):
     """Both checks held: a premise whose discharge the lock doesn't list, or lists taking an assumption that doesn't
-    stand (SampledCodeRuns, a premise about our own Python), is open, and so is an assumption of a guarantee the tight
-    K rests on that is neither standing nor named in what it takes, by its name, and that guarantee where the lock
+    stand (SampledCodeRuns, a premise about our own Python), is open, and so is an assumption of a guarantee the
+    figure rests on that is neither standing nor named in what it takes, by its name, and that guarantee where the lock
     doesn't list it. trusted-host and certifier-coverage stand, and a premise its takes names is that premise's: so
     schedules-covered is open by its name until the Lean audit's Property is in the lock, and discharged once it is,
-    resting on trusted-host alone. With one check open too, both are open under the figure of record."""
+    resting on trusted-host alone. The figure is the check's K either way, and its run's cell proved only with none
+    open. With one check open too, both are open under the figure of record."""
     write_lock(lock, given)
     rec = held_both(tmp_path / "held")
     of = rec["bound"]["of_record"]
-    assert (of["open"], of["K"], "tight" in of) == (open_, K + 2 ** 23 + 1 if open_ else K, bool(open_))
+    assert (of["open"], of["K"], rec["periods"]["run"]["how"]) == (open_, K, "open" if open_ else "proved")
     assert of["premises"]["open"] == open_
     p = of["premises"]["premises"]
     assert p["held-performed"]["assumes"] == (["NetTiming.Assumptions.SampledCodeRuns"] if "held-performed" in open_
@@ -811,8 +834,8 @@ def test_coins_no_line_names_live_leave_the_figure_of_record_and_each_cell_condi
     """A run whose COINS lines name a local development challenger session (the served node's, a deferral's or its
     follow-on's), a gate at no named peer, another challenger or no sampled proofs' coins, or that published none, has
     its coins open, live-coins by name: the sampled-proofs verdict, the run's being of record, the figure of record and
-    each of its cells are conditional on them, and the figure of record charges ℓ_a + 1 for the tied audit though both
-    checks are held and every premise discharged, with no tight K beside it."""
+    each of its cells are conditional on them, and the figure of record is the check's K, open on them, its run's cell
+    never proved, though both checks are held and every premise discharged."""
     rec, cond = with_coins(tmp_path, said), [OR.COINS_OPEN]
     parts = [x.partition("sampled proofs: ")[2].partition(";")[0] or None for x in said]
     assert rec["coins"] == {"open": True, "sampled_proofs": parts, "from": "verdicts.txt COINS", "is": OR.COINS,
@@ -821,26 +844,28 @@ def test_coins_no_line_names_live_leave_the_figure_of_record_and_each_cell_condi
     of = rec["bound"]["of_record"]
     assert rec["verdicts"]["sampled proofs"]["conditional_on"] == rec["of_record"]["conditional_on"] == cond
     assert rec["composite_error"]["conditional_on"] == cond
-    assert (of["held"], of["open"], of["conditional_on"], of["K"]) == (["free", "circuit"], cond, cond, KR)
-    assert rec["periods"]["conditional_on"] == cond and rec["periods"]["run"]["bits"] == KR
+    assert (of["held"], of["open"], of["conditional_on"], of["K"]) == (["free", "circuit"], cond, cond, K)
+    run = rec["periods"]["run"]
+    assert rec["periods"]["conditional_on"] == cond and (run["bits"], run["how"], run["open"]) == (K, "open", cond)
     assert of["tight"] == OR.TIGHT and "periods_tight" not in rec
     line = json.loads(capsys.readouterr().out.strip()[7:])
-    assert (line["conditional_on"], line["K"], line["open"]) == (cond, KR, cond)
+    assert (line["conditional_on"], line["K"], line["open"]) == (cond, K, cond)
     assert all(x in OR.COINS for x in ("sampled-proofs verdict", "E_w", "never as a live draw's", "`CHAIN_DRAWS`"))
 
 
+@pytest.mark.usefixtures("verified")
 @pytest.mark.parametrize("lead", ["", "Pearl+'s epoch coins are in-process and the record claims no Pearl+ verdict; "])
-def test_coins_a_line_names_live_add_no_condition_and_the_tight_K_is_of_record(tmp_path, capsys, lead):
+def test_coins_a_line_names_live_add_no_condition_and_the_figure_of_record_is_proved(tmp_path, capsys, lead):
     """A COINS line naming the live challenger (PP_CHALLENGER gate:USER@HOST at a named peer), whatever leads it, leaves
-    the coins closed: nothing is conditional on them, and with both checks held and every premise discharged the tight
-    K is of record. A record written before the record read the coins is conditional on them in its line."""
+    the coins closed: nothing is conditional on them, and with both checks held and every premise discharged the
+    figure of record is proved. A record written before the record read the coins is conditional on them in its line."""
     rec = with_coins(tmp_path, [coins_line(GATE, lead)])
     assert rec["coins"] == {"open": False, "sampled_proofs": [GATE], "from": "verdicts.txt COINS", "is": OR.COINS,
                             "open_draws": [], "draws": ALL_DRAWN}
     of = rec["bound"]["of_record"]
     assert not any("conditional_on" in x for x in (rec["verdicts"]["sampled proofs"], rec["of_record"], of,
                                                    rec["periods"], rec["composite_error"]))
-    assert (of["K"], of["open"], "tight" in of) == (K, [], False)
+    assert (of["K"], of["open"], rec["periods"]["run"]["how"]) == (K, [], "proved")
     line = json.loads(capsys.readouterr().out.strip()[7:])
     assert (line["conditional_on"], line["K"], line["open"]) == ([], K, [])
     assert OR.summary({k: v for k, v in rec.items() if k != "coins"})["conditional_on"] == [OR.COINS_OPEN]
@@ -861,7 +886,7 @@ def test_one_program_a_day_is_never_claimed_but_open_by_name_beside_the_day_each
     published none (missing), the record doesn't claim one program a day: it is open by name in the record and its
     line, on both counts (R2's day isn't the challenger's signed time, and the audit reads the node's copy of the
     registration log, not the challenger's signed one), saying the day's registration and its refusals still run. The
-    figures don't read it: with the coins live and every premise discharged the tight K is of record."""
+    figures don't read it: with the coins live and every premise discharged the figure of record is proved."""
     rec = with_coins(tmp_path, [coins_line(GATE), *(NO_B if d is None else DECLARED.format(d) for d in days)])
     assert rec["one_program_a_day"] == {"open": True, "advice_line_day": days, "from": "verdicts.txt ADVICE-LINE",
                                         "is": OR.DAY} | ({} if days else {"missing": OR.NO_ADVICE_LINE})
@@ -875,7 +900,7 @@ def test_one_program_a_day_is_never_claimed_but_open_by_name_beside_the_day_each
 
 def test_a_discharge_the_properties_lock_lists_counts_as_one_the_guarantees_lock_does(tmp_path, lock, monkeypatch):
     """The Properties' lock holds the theorems that discharge premises at the deployed code and PeriodLeakRegistered,
-    which states certifier-key, the guarantees' lock the other guarantees the tight K rests on: the record reads both,
+    which states certifier-key, the guarantees' lock the other guarantees the figure rests on: the record reads both,
     and with the Properties' lock left out each premise is open, and so is PeriodLeakRegistered."""
     props_lists = [t for p in OR.PREMISES.values() for t in p["discharged_by"]] + [OR.PERIOD_REGISTERED]
     write_lock(lock, dict.fromkeys(props_lists))
@@ -884,7 +909,8 @@ def test_a_discharge_the_properties_lock_lists_counts_as_one_the_guarantees_lock
     monkeypatch.setattr(OR, "LOCKS", (lock, props))
     assert held_both(tmp_path / "both")["bound"]["of_record"]["open"] == []
     monkeypatch.setattr(OR, "LOCKS", (lock,))
-    assert held_both(tmp_path / "one")["bound"]["of_record"]["open"] == [*OR.PREMISES, OR.PERIOD_REGISTERED]
+    assert held_both(tmp_path / "one")["bound"]["of_record"]["open"] == [
+        *(n for n in OR.PREMISES if n not in OR.ENTRIES), OR.PERIOD_REGISTERED]
 
 
 @pytest.mark.parametrize("text, error", [(None, "FileNotFoundError"), ("{", "JSONDecodeError"), ("{}", "KeyError")])
@@ -892,7 +918,7 @@ def test_a_lock_that_cant_be_read_lists_nothing_and_is_named_so_every_premise_it
         tmp_path, lock, monkeypatch, text, error):
     """The Properties' lock missing, not JSON, or with no guarantees: the record states it under ``unread``, by its path
     in the tree and with why, and reads the other lock, so only the premise whose discharge that lock alone would list
-    is open and the figure of record charges the cap, never a crash."""
+    is open under the figure of record, never a crash."""
     write_lock(lock, {COUNTED: None})
     props = tmp_path / "tree" / "Security" / "Properties" / "lean-audit.json"
     props.parent.mkdir(parents=True)
@@ -900,7 +926,7 @@ def test_a_lock_that_cant_be_read_lists_nothing_and_is_named_so_every_premise_it
         props.write_text(text)
     monkeypatch.setattr(OR, "LOCKS", (lock, props))
     of = held_both(tmp_path / "out")["bound"]["of_record"]
-    assert (of["open"], of["K"]) == (["free-count"], KR)
+    assert (of["open"], of["K"]) == (["free-count"], K)
     (why,) = of["premises"]["unread"]
     assert why.startswith(f"{props}: {error}: ")
     assert of["state_charge"]["unread"] == [f"{props}: {error}"]
@@ -909,14 +935,14 @@ def test_a_lock_that_cant_be_read_lists_nothing_and_is_named_so_every_premise_it
 
 
 def test_an_assumption_a_premise_stands_for_is_open_only_while_that_premise_is(tmp_path, lock, monkeypatch):
-    """A guarantee the tight K rests on takes the wires premise as a named hypothesis, which the lock lists: named in
+    """A guarantee the figure rests on takes the wires premise as a named hypothesis, which the lock lists: named in
     what it takes, by the wires premise, nothing is open while that is discharged; with one of its discharges missing,
     the premise is open, by its own name alone; not named there, the assumption is open by its own name."""
     takes = dict(OR.RESTS_ON[ACCEPTED]["takes"], **{"NetTiming.WiresFit": "wires-fit"})
     monkeypatch.setitem(OR.RESTS_ON, ACCEPTED, dict(OR.RESTS_ON[ACCEPTED], takes=takes))
     write_lock(lock, {ACCEPTED: ["NetTiming.WiresFit"]})
     assert held_both(tmp_path / "a")["bound"]["of_record"]["open"] == []
-    write_lock(lock, {ACCEPTED: ["NetTiming.WiresFit"], "Properties.NetworkCertifier.circuitWiresFit": None})
+    write_lock(lock, {ACCEPTED: ["NetTiming.WiresFit"], WIRED: None})
     assert held_both(tmp_path / "b")["bound"]["of_record"]["open"] == ["wires-fit"]
     monkeypatch.setitem(OR.RESTS_ON, ACCEPTED, RESTS_ON[ACCEPTED])
     write_lock(lock, {ACCEPTED: ["NetTiming.WiresFit"]})
@@ -932,7 +958,7 @@ def test_a_discharge_counts_only_at_the_statement_its_pin_names(tmp_path, lock, 
     write_lock(lock, stated={COUNTED: stated})
     of = held_both(tmp_path / "unpinned")["bound"]["of_record"]
     assert (of["open"], of["K"], of["premises"]["premises"]["free-count"]["unpinned"]) == (
-        ["free-count"], KR, {COUNTED: stated})
+        ["free-count"], K, {COUNTED: stated})
     monkeypatch.setitem(OR.DISCHARGES, COUNTED, {"statement": "ff" * 32, "takes": {}})
     assert held_both(tmp_path / "restated")["bound"]["of_record"]["open"] == ["free-count"]
     monkeypatch.setitem(OR.DISCHARGES, COUNTED, {"statement": stated, "takes": {}})
@@ -944,7 +970,7 @@ def test_a_discharge_that_takes_a_premise_discharges_only_once_that_premise_is_a
     """The wires premise's discharge takes the deployment's scope check, a named assumption of its, by the sampled
     leg's bridge: nothing is open while that premise is discharged, both are while it isn't, and two premises whose
     discharges take each other stay open, each discharging nothing."""
-    wired, bridge = OR.PREMISES["wires-fit"]["discharged_by"][0], TOY["sampled-leg-bridge"]
+    wired, bridge = WIRED, TOY["sampled-leg-bridge"]
     scope = "Properties.NetworkScan.ScopeMatches"
     monkeypatch.setitem(OR.DISCHARGES, wired, dict(OR.DISCHARGES[wired], takes={scope: "sampled-leg-bridge"}))
     write_lock(lock, {wired: [scope]})
@@ -955,54 +981,82 @@ def test_a_discharge_that_takes_a_premise_discharges_only_once_that_premise_is_a
     monkeypatch.setitem(OR.DISCHARGES, bridge, dict(OR.DISCHARGES[bridge], takes={"hw": "wires-fit"}))
     write_lock(lock, {wired: [scope]})
     of = held_both(tmp_path / "c")["bound"]["of_record"]
-    assert (of["open"], of["K"]) == (["wires-fit", "sampled-leg-bridge"], KR)
+    assert (of["open"], of["K"]) == (["wires-fit", "sampled-leg-bridge"], K)
     assert of["premises"]["premises"]["sampled-leg-bridge"]["assumes"] == []
 
 
 @pytest.mark.parametrize("stated", ["ff" * 32, None])
-def test_a_guarantee_the_tight_K_rests_on_is_open_by_name_where_the_lock_states_it_otherwise(tmp_path, lock, stated):
+def test_a_guarantee_the_figure_rests_on_is_open_by_name_where_the_lock_states_it_otherwise(tmp_path, lock, stated):
     """The lock records a guarantee's named assumptions, never its antecedents, so a statement other than the one whose
     hypotheses and antecedents `RESTS_ON` names (another digest among the lock's reads, or none) may take one the
     record doesn't name: that guarantee is open, by its name, with why, until it is read again and pinned."""
     write_lock(lock, stated={ACCEPTED: stated})
     rec = held_both(tmp_path)
     of = rec["bound"]["of_record"]
-    assert (of["open"], of["K"]) == ([ACCEPTED], KR)
+    assert (of["open"], of["K"]) == ([ACCEPTED], K)
     assert of["premises"]["rests_on"][ACCEPTED] == {"assumptions": [], "statement": stated, "restated": OR.RESTATED,
                                                     "takes": OR.RESTS_ON[ACCEPTED]["takes"]}
     assert of["tight"] == OR.TIGHT and "conditional_on" not in of
 
 
-def test_a_guarantee_the_tight_K_rests_on_with_no_statement_pinned_is_open_even_where_the_lock_lists_it(
+def test_a_guarantee_the_figure_rests_on_with_no_statement_pinned_is_open_even_where_the_lock_lists_it(
         tmp_path, lock, monkeypatch):
-    """PeriodTiedCount, listed before what it takes was read at its statement: open by its name, whatever the lock
-    states it as."""
-    (g,) = UNPINNED
-    monkeypatch.setitem(OR.RESTS_ON, g, RESTS_ON[g])
-    write_lock(lock, stated={g: "toy"})
+    """A guarantee named before what it takes was read at its statement: open by its name, whatever the lock states it
+    as."""
+    monkeypatch.setitem(OR.RESTS_ON, ACCEPTED, dict(OR.RESTS_ON[ACCEPTED], statement=None))
+    write_lock(lock, stated={ACCEPTED: "toy"})
     of = held_both(tmp_path)["bound"]["of_record"]
-    assert of["open"] == [g] and of["premises"]["rests_on"][g]["restated"] == OR.RESTATED
+    assert of["open"] == [ACCEPTED] and of["premises"]["rests_on"][ACCEPTED]["restated"] == OR.RESTATED
 
 
-def test_period_tied_count_is_open_to_be_restated_at_any_statement_and_the_figure_of_record_does_not_read_it(
-        tmp_path, lock, monkeypatch):
-    """PeriodTiedCount as stated (its tie half with no scope premise, its count half over the stripped view) discharges
-    nothing: pinned at the very statement the lock lists, it stays open with why it is to be restated, and the figure
-    of record is the conservative one, ℓ_a + 1 charged for the tied audit, as with it unlisted."""
-    (g,) = UNPINNED
-    assert RESTS_ON[g]["restate"] == OR.RESTATE_TIED and "scope premise" in OR.RESTATE_TIED
-    assert g not in {t for p in OR.PREMISES.values() for t in p["discharged_by"]}
-    monkeypatch.setitem(OR.RESTS_ON, g, dict(RESTS_ON[g], statement="toy"))
-    write_lock(lock, stated={g: "toy"})
-    of = held_both(tmp_path)["bound"]["of_record"]
-    assert (of["open"], of["K"]) == ([g], KR)
-    assert of["premises"]["rests_on"][g] == {"assumptions": [], "statement": "toy", "takes": RESTS_ON[g]["takes"],
-                                             "restate": OR.RESTATE_TIED}
-    write_lock(lock, given={g: None})
-    assert held_both(tmp_path / "unlisted")["bound"]["of_record"]["K"] == KR
+@pytest.mark.usefixtures("verified")
+def test_no_guarantee_counts_a_phases_tied_audits_so_that_count_is_a_premise_of_a_tied_charge_alone(
+        tmp_path, monkeypatch):
+    """The record rests on no guarantee that counts a phase's tied audits with its scan: none is in `RESTS_ON`, and
+    what one would give is the premise tied-count, with no discharge named. A phase charged its tied audits is open
+    on it, by name, with every check held and every other premise discharged. A phase charged its scan's slot entries
+    once doesn't rest on it, or on any premise or check of the tied charge: it rests on entries-cut, open by name till
+    its statement is in the lock, and on the premises of both charges."""
+    for name in ("tied-count", "entries-cut"):
+        monkeypatch.setitem(OR.PREMISES, name, UNNAMED[name])
+    assert not any("TiedCount" in g for g in (*OR.RESTS_ON, *OR.DISCHARGES))
+    assert UNNAMED["tied-count"]["discharged_by"] == UNNAMED["entries-cut"]["discharged_by"] == ()
+    assert ("tied-count" in OR.TIE, "entries-cut" in OR.ENTRIES) == (True, True)
+    of = held_both(tmp_path / "tied")["bound"]["of_record"]
+    assert (of["tie_charged"], of["open"], of["K"]) == ([0], ["tied-count"], K)
+    assert "entries-cut" not in of["premises"]["premises"] and set(OR.TIE) <= set(of["premises"]["premises"])
+    rec = record(accepted(tmp_path / "once", ONCE))
+    of = rec["bound"]["of_record"]
+    assert (of["tie_charged"], of["held"], of["open"], of["K"]) == ([], [], ["entries-cut"], K)
+    assert not set(OR.TIE) & set(of["premises"]["premises"]) and "entries-cut" in of["premises"]["premises"]
+    assert set(of["premises"]["premises"]) == set(OR.PREMISES) - set(OR.TIE)
+    assert (rec["periods"]["run"]["how"], rec["periods"]["run"]["open"]) == ("open", ["entries-cut"])
 
 
-def test_each_guarantee_the_tight_K_rests_on_is_named_by_what_it_takes_at_its_statement_in_security_lock(monkeypatch):
+def test_the_record_names_no_guarantee_or_discharge_the_trees_locks_dont_list(monkeypatch, tmp_path):
+    """Each guarantee the figure rests on (`RESTS_ON`), each theorem a premise names as its discharge or as stating it
+    (`PREMISES`), each pinned discharge (`DISCHARGES`) and RowsStateHeld (`STATE_HELD`) is a guarantee one of the
+    tree's locks lists, so the Lean check replays it: a name of a theorem in no Lean file, or of one stated and not
+    yet a guarantee, fails here with what to do about it. A premise whose discharge isn't in the lock names none and
+    is open."""
+    monkeypatch.undo()
+    got = OR.unlisted(OR.LOCKS)
+    assert not got, "\n".join(f"onsite_record.{where} names {g}: {OR.UNLISTED}" for g, where in got.items())
+    assert all(x in OR.UNLISTED for x in ("take the name out", "leaving its premise open", "check.py --update"))
+    absent = "Properties.NetworkPeriod.phaseStateHeld"
+    monkeypatch.setitem(OR.PREMISES, "rows-state-held", dict(OR.PREMISES["rows-state-held"], discharged_by=(absent,)))
+    monkeypatch.setitem(OR.RESTS_ON, "NetTiming.SecurityProofs.PeriodTiedCount", {"statement": None, "takes": {}})
+    monkeypatch.setitem(OR.DISCHARGES, "Properties.NetworkCertifier.circuitCounts", {"statement": None, "takes": {}})
+    assert OR.unlisted(OR.LOCKS) == {"NetTiming.SecurityProofs.PeriodTiedCount": "RESTS_ON",
+                                     "Properties.NetworkCertifier.circuitCounts": "DISCHARGES",
+                                     absent: "PREMISES['rows-state-held']'s discharged_by"}
+    empty = tmp_path / "lean-audit.json"
+    empty.write_text(json.dumps({"guarantees": {}}))
+    assert {OR.PERIOD_REGISTERED, ACCEPTED, OR.STATE_HELD} <= set(OR.unlisted((empty,)))
+    assert OR.unlisted((empty,))[OR.PERIOD_REGISTERED] == f"PREMISES[{OR.CERTIFIER_KEY!r}]'s stated_by"
+
+
+def test_each_guarantee_the_figure_rests_on_is_named_by_what_it_takes_at_its_statement_in_security_lock(monkeypatch):
     """Security's lock records no guarantee's antecedents, so `RESTS_ON` names each hypothesis and antecedent of each
     statement by hand, read at the statement's digest among the lock's reads: each guarantee of `RESTS_ON` the tree's
     lock lists is there at that digest, with no named assumption it doesn't name or that doesn't stand, and each Prop it
@@ -1038,7 +1092,7 @@ def test_at_the_trees_lock_certifier_key_closes_where_the_runs_check_of_the_audi
     assert {k for k, v in r["takes"].items() if v == OR.AUDITOR_RECORD} == {"hA", "hr", "hkey"}
     ok = OR.premises(OR.LOCKS, checked={OR.AUDITOR_RECORD: {"holds": True}})
     assert ok["unread"] == [] and ok["rests_on"][OR.PERIOD_REGISTERED]["statement"] == r["statement"]
-    assert not {"missing", "restated", "restate"} & set(ok["rests_on"][OR.PERIOD_REGISTERED])
+    assert not {"missing", "restated"} & set(ok["rests_on"][OR.PERIOD_REGISTERED])
     assert OR.CERTIFIER_KEY not in ok["open"] and {"sampled-leg-bridge", "reg-opens-at"} <= set(ok["open"])
     assert "unchecked" not in ok["premises"][OR.CERTIFIER_KEY]
     for checked, why in (({OR.AUDITOR_RECORD: {"holds": False, "why": "toy"}}, "toy"), (None, OR.NOT_CHECKED)):
@@ -1046,17 +1100,19 @@ def test_at_the_trees_lock_certifier_key_closes_where_the_runs_check_of_the_audi
         assert OR.CERTIFIER_KEY in got["open"] and got["premises"][OR.CERTIFIER_KEY]["unchecked"] == why
 
 
-def test_a_scans_tied_audits_are_the_ones_it_charges_and_else_every_audit_is(tmp_path):
-    """Two audits, each charged the run's cap: with the public naming none, each phase charges both; with
-    scans[j].tied, each phase only those it names."""
+def test_each_audit_is_stated_the_runs_cap_and_no_phase_is_charged_it_whichever_audits_its_scan_names(tmp_path):
+    """Two audits, each stated the run's cap: whether the public names no scan's tied audits or each phase names its
+    own, the figure of record is the check's K, no phase charged a cap, and the tied charge's audits are the ones the
+    scans name, every audit where they name none."""
     two = dict(PUBLIC, K=PUBLIC["K"] + 9088 + 63, eps="1/524288", windows=2, scans=[SCAN, SCAN])
     rec = record(accepted(tmp_path / "all", two, windows=2, audits=(NO_ADVICE, NO_ADVICE)))
-    assert rec["bound"]["of_record"]["advice"] == {"bits_per_phase": [2 * (2 ** 23 + 1)] * 2, "tied": OR.TIED_ALL}
-    assert rec["advice_charge"]["cap"]["ell_a"] == [2 ** 23, 2 ** 23]
-    tied = dict(two, scans=[dict(SCAN, tied=[0, 1]), dict(SCAN, tied=[1])])
+    of = rec["bound"]["of_record"]
+    assert rec["advice_charge"]["cap"] == {"ell_a": [2 ** 23, 2 ** 23], "is": OR.CAP}
+    assert (of["K"], of["advice"], of["tie_charged"], of["state_charge"]["tied"]) == (
+        two["K"], {"is": OR.ADVICE_LINK}, [0, 1], [0, 1])
+    tied = dict(two, scans=[dict(SCAN, tied=[1]), dict(SCAN, tied=[1])])
     of = record(accepted(tmp_path / "tied", tied, windows=2, audits=(NO_ADVICE, NO_ADVICE)))["bound"]["of_record"]
-    assert (of["advice"]["bits_per_phase"], of["advice"]["tied"], of["K"]) == (
-        [2 * (2 ** 23 + 1), 2 ** 23 + 1], "scans[j].tied", two["K"] + 3 * (2 ** 23 + 1))
+    assert (of["K"], of["tie_charged"], of["state_charge"]["tied"]) == (two["K"], [0, 1], [1])
 
 
 @pytest.mark.parametrize("binds", [{"advice": {"bits": 2 ** 23, "root": "ef" * 64}},
@@ -1112,7 +1168,7 @@ def test_the_figure_says_its_charge_was_state_free_only_where_rows_state_held_st
     of = record(accepted(tmp_path))["bound"]["of_record"]
     assert of["state_charge"] == {"charge": "free" if unpinned else "stateFree", "is": OR.STATE_CHARGE, "tied": [0],
                                   "with_record": []} | ({"unpinned": unpinned} if unpinned else {})
-    assert of["K"] == KR
+    assert of["K"] == K
 
 
 #: the period's one audit with its circuit record, the form whose stateFree may be less than its free
@@ -1125,7 +1181,8 @@ def test_a_tied_audit_with_a_circuit_record_has_a_figure_of_record_only_where_it
         tmp_path, lock, monkeypatch, stands):
     """A tied audit whose parameters state its circuit record may be charged its stateFree, less than its free. Where
     RowsStateHeld stands over the activations entry, that charge is the figure's; where it doesn't, the public doesn't
-    separate the two, so there is no figure of record and no period cells, the bound's K still stated."""
+    separate the two, so there is no figure of record and no period cells, the bound's K still stated. A phase charged
+    its scan's slot entries once charges no tied audit either way, and has its figure."""
     monkeypatch.setattr(OR, "STATE_PINS", STATE_TOY)
     if stands:
         with_state_held(lock, STATE_TOY)
@@ -1135,10 +1192,13 @@ def test_a_tied_audit_with_a_circuit_record_has_a_figure_of_record_only_where_it
         {} if stands else {"unpinned": {g: None for g in STATE_TOY}, "missing": OR.STATE_UNCOVERED})
     assert of["state_charge"] == charge and rec["bound"]["K"] == K
     if stands:
-        assert of["K"] == KR and "missing" not in rec["periods"]
+        assert of["K"] == K and "missing" not in rec["periods"]
         return
     assert of == {"missing": OR.STATE_UNCOVERED, "state_charge": charge}
     assert rec["periods"] == {"missing": f"no figure of record: {OR.STATE_UNCOVERED}"}
+    once = record(accepted(tmp_path / "once", ONCE, params=RECORDED))["bound"]["of_record"]
+    assert (once["K"], once["state_charge"]) == (K, {"charge": "entries", "is": OR.STATE_CHARGE, "tied": [],
+                                                     "with_record": []})
 
 
 def test_at_the_trees_locks_the_charge_is_state_free(monkeypatch):
@@ -1146,8 +1206,9 @@ def test_at_the_trees_locks_the_charge_is_state_free(monkeypatch):
     auditStateEntries and stateEntries it reads: a change to any of them fails here, rather than every figure's charge
     turning free unremarked."""
     monkeypatch.undo()
-    got = OR.state_charge({"params": {}}, {"scans": []}, 0, OR.LOCKS)
+    got = OR.state_charge({"params": {}}, {"scans": [{"tied": []}]}, 0, OR.LOCKS)
     assert got["charge"] == "stateFree", f"the tree's locks give {got.get('unpinned')}, {got.get('unread')}"
+    assert OR.state_charge({"params": {}}, {"scans": []}, 0, OR.LOCKS)["charge"] == "entries"
 
 
 def test_the_tied_audits_the_charge_reads_are_the_ones_each_scan_names(tmp_path):
@@ -1160,40 +1221,41 @@ def test_the_tied_audits_the_charge_reads_are_the_ones_each_scan_names(tmp_path)
     assert (of["state_charge"]["tied"], of["state_charge"]["with_record"], "missing" in of) == ([1], [], False)
 
 
-def test_a_run_that_published_no_advice_registration_or_one_unpadded_has_no_figure_of_record(tmp_path):
+@pytest.mark.usefixtures("verified")
+def test_a_run_that_published_no_advice_registration_or_one_unpadded_states_no_cap_and_keeps_its_figure(tmp_path):
     """ℓ_a is the cap of the run's published advice registration (`REGISTRATION`), never 0 for want of one: with none
-    the figure of record is missing, and one whose advice isn't padded to its compiler's cap is its error. The tight K
-    stays the bound's."""
+    the cap is missing, and one whose advice isn't padded to its compiler's cap is its error. No figure charges the
+    cap, so the figure of record and its periods stand either way."""
     rec = record(accepted(tmp_path / "none", registration=None))
-    assert rec["bound"]["of_record"] == rec["advice_charge"]["cap"] == {"missing": OR.NO_REGISTRATION}
-    assert rec["periods"] == {"missing": f"no figure of record: {OR.NO_REGISTRATION}"} and rec["bound"]["K"] == K
+    assert rec["advice_charge"]["cap"] == {"missing": OR.NO_REGISTRATION}
+    assert rec["bound"]["of_record"]["K"] == rec["periods"]["run"]["bits"] == rec["bound"]["K"] == K
     unpadded = {**PUBLISHED, "binding": {"advice": {"root": "ab" * 64, "bits": 392}}}
     rec = record(accepted(tmp_path / "unpadded", registration=unpadded))
-    assert rec["bound"]["of_record"] == {
+    assert rec["advice_charge"]["cap"] == {
         "error": f"{OR.REGISTRATION}: ValueError: its advice's length 392 isn't padded to its compiler's cap {2 ** 23}"}
+    assert rec["bound"]["of_record"]["K"] == rec["periods"]["run"]["bits"] == K
 
 
+@pytest.mark.usefixtures("verified")
 @pytest.mark.parametrize("registration, cap", [
     ({k: v for k, v in PUBLISHED.items() if k != "compiler"}, None), ({**PUBLISHED, "compiler": {"name": "c"}}, None),
     ({**PUBLISHED, "compiler": {"cap_bits": 0}}, 0), ({**PUBLISHED, "compiler": {"cap_bits": -8}}, -8),
     ({**PUBLISHED, "compiler": {"cap_bits": True}}, True), ({**PUBLISHED, "compiler": {"cap_bits": "8388608"}}, "8388608"),
     ({**PUBLISHED, "compiler": {"cap_bits": 8.0}}, 8.0), ([PUBLISHED], None)])
-def test_a_published_advice_registration_stating_no_cap_of_at_least_1_bit_refuses_the_figure_of_record_by_name(
+def test_a_published_advice_registration_stating_no_cap_of_at_least_1_bit_is_the_caps_error_by_name(
         tmp_path, registration, cap):
-    """No compiler, or a compiler whose cap_bits is missing, 0, negative, or not a whole number, would charge each tied
-    audit's advice 0 bits while a check or a premise is open: the record refuses the figure of record by name, never
-    charging 0, whatever the order its pieces land in. The tight K stays the bound's."""
+    """No compiler, or a compiler whose cap_bits is missing, 0, negative, or not a whole number, states no ℓ_a: the
+    record gives the cap's error by name, never an ℓ_a of 0. No figure charges it, so the figure of record stands."""
     rec = record(accepted(tmp_path, registration=registration))
     why = (f"{OR.REGISTRATION}: ValueError: its compiler states no cap_bits of at least 1 bit ({cap!r}), the ℓ_a the "
-           "figure of record charges each tied audit while a check or a premise is open, so it charges none rather "
-           "than 0")
-    assert rec["bound"]["of_record"] == rec["advice_charge"]["cap"] == {"error": why}
-    assert rec["periods"] == {"missing": f"no figure of record: {why}"} and rec["bound"]["K"] == K
+           "record states beside the bound, so it states none rather than 0")
+    assert rec["advice_charge"]["cap"] == {"error": why}
+    assert rec["bound"]["of_record"]["K"] == rec["periods"]["run"]["bits"] == rec["bound"]["K"] == K
 
 
 def test_a_commitment_the_record_cant_read_leaves_no_figure_of_record_and_no_bound(tmp_path):
     """The case's commitment holds the period's audits. Where the record can't read it, the figure of record is its
-    error (the audits' caps), and scan-state-pinned can't say whether an audit's window commits the scan's state, so it
+    error (the audits it would charge), and scan-state-pinned can't say whether an audit's window commits the scan's state, so it
     doesn't hold: the network certifier's verdict is not established and there is no bound."""
     out = accepted(tmp_path)
     case = dict(json.loads((out / OR.CASE).read_text()), commitment="00")
@@ -1234,38 +1296,50 @@ def test_w63k4_at_a_4_s_tick_charges_800_bits_a_phase_beside_its_advice_whatever
 
 
 @pytest.mark.usefixtures("verified")
-@pytest.mark.parametrize("drawn, entries", [(1, 896), (16, 0)])
-def test_w63k4s_tied_audit_drawn_in_part_charges_its_slot_entries_and_drawn_whole_doesnt(tmp_path, drawn, entries):
-    """w63k4's schedule with a toy tied audit: w63k4 at a 4 s tick over three execution phases, each phase's tied audit
-    one of 16 proof blocks (V3c's registration has millions) drawn subset:1 (charged), its draw read at δ_i = 2^-64
-    with a bound of 15 beside its answer's 8 at 1/2, so k_{skip,j} is its E_w = 896 slot-entry bits beside the
-    schedule's and the jitter's 800: with ℓ_{a,j} = 0, both checks held and no open premise, 1,696 bits a phase of
-    record, of the schedule's egress capacity of 4 lanes · 4 slots · 32 buckets of 512-byte cells a phase. eps is each
-    phase's scan's 2^-64 and its charged audit's δ_i, never the answer's 1/2. Drawn whole, every one of its proof
-    blocks proved, the entries and its δ_i leave the bound. With a check open, each phase's figure of record adds the
-    run's advice cap ℓ_a + 1 = 2^23 + 1, 8,390,305 bits a phase drawn in part."""
+@pytest.mark.parametrize("once", [True, False])
+def test_w63k4s_slot_entries_are_charged_once_under_its_scan_proved_whole_and_else_in_k_skip(tmp_path, once):
+    """w63k4's schedule with a toy tied audit: w63k4 at a 4 s tick over three execution phases, each phase's scan with
+    every proof block drawn, its tied audit one of 16 proof blocks (V3c's registration has millions) drawn subset:1.
+    The period check charges each phase its scan's E_w = 896 slot-entry bits once, as ℓ_{a,j}'s ``entries``, with
+    k_{skip,j} 0 and no audit read at δ_i: 1,696 bits a phase with the schedule's and the jitter's 800, the figure of
+    record, of the schedule's egress capacity of 4 lanes · 4 slots · 32 buckets of 512-byte cells a phase; eps is each
+    phase's scan's 2^-64. It rests on no check of the tied charge, so it is proved with every premise discharged
+    whatever the public holds. A period check that charges none once states the same 896 bits in k_{skip,j}, the tied
+    audit charged, its draw read at δ_i = 2^-64 with a bound of 15 beside its answer's 8 at 1/2: the same 1,696 a
+    phase, on the tied charge's checks and premises, open on a check the verdict didn't hold. Neither adds the run's
+    advice cap."""
     sys.path.insert(0, str(HERE.parent.parent / "network_traces"))
     import scan_zk as SZ
     schedule = dataclasses.asdict(SZ.W63K4.params) | {"bucket_ms": 4000}
-    scan = dict(SCAN, delta=f"1/{2 ** 64}", free=0, faulty_entries=entries, jitter=32)
-    audit = {"delta": "1/2", "drawn": drawn, "units": 16, "wrong_units": 8 if drawn < 16 else 0}
-    charged = [dict(audit, delta=f"1/{2 ** 64}", wrong_units=15)] * 3 if drawn < 16 else []
-    public = dict(PUBLIC, K=3 * (800 + entries), cells=3 * 384, schedules=3 * 384, windows=3, scans=[scan] * 3,
-                  audits=[audit] * 3, charged=charged, eps=str(Fraction(3 + len(charged), 2 ** 64)),
-                  held=["free", "circuit"])
-    rec = record(accepted(tmp_path, public, windows=3, schedule=schedule))
+    scan = dict(SCAN, delta=f"1/{2 ** 64}", free=0, jitter=32) | ({"entries": 896} if once else {"faulty_entries": 896})
+    audit = {"delta": "1/2", "drawn": 1, "units": 16, "wrong_units": 8}
+    charged = [] if once else [dict(audit, delta=f"1/{2 ** 64}", wrong_units=15)] * 3
+    public = dict(PUBLIC, K=3 * 1696, cells=3 * 384, schedules=3 * 384, windows=3,
+                  scans=[dict(scan, tied=[j]) for j in range(3)], audits=[audit] * 3, charged=charged,
+                  eps=str(Fraction(3 + len(charged), 2 ** 64)), held=["free", "circuit"])
+    rec = record(accepted(tmp_path, public, windows=3, schedule=schedule, audits=(NO_ADVICE,) * 3))
     b, run = rec["bound"], rec["periods"]["run"]
-    assert b["skip"] == {"is": OR.SKIP, "bits_per_phase": [entries] * 3, "entries_per_phase": [entries] * 3}
+    in_skip = 0 if once else 896
+    assert b["skip"] == {"is": OR.SKIP, "bits_per_phase": [in_skip] * 3, "entries_per_phase": [in_skip] * 3}
+    assert rec["advice_charge"]["charged"]["bits_per_phase"] == b["entries_per_phase"] == [896 - in_skip] * 3
+    assert [t["lean"] for t in b["terms"] if t["symbol"] == "\\ell_{a,j}"] == [
+        [f"scans[{j}].free"] + [f"scans[{j}].entries"] * once for j in range(3)]
     assert b["delta"]["charged"] == str(Fraction(len(charged), 2 ** 64)) and b["delta"]["charged_audits"] == charged
-    assert (b["of_record"]["K"], b["of_record"]["open"], "tight" in b["of_record"]) == (3 * (800 + entries), [], False)
+    of = b["of_record"]
+    assert (of["K"], of["open"], of["tie_charged"]) == (3 * 1696, [], [] if once else [0, 1, 2])
+    assert (of["state_charge"]["charge"], of["state_charge"]["tied"]) == (
+        ("entries", []) if once else ("free", [0, 1, 2]))
+    assert ("entries-cut" in of["premises"]["premises"], "tied-count" in of["premises"]["premises"]) == (once, not once)
     capacity = 4 * 4 * 32 * 512 * 8
-    assert run["per_phase"]["bits"] == 800 + entries and run["share_of_capacity"] == (800 + entries) / capacity
-    assert rec["periods"]["year"]["datacenter"]["share_of_capacity"] == (800 + entries) / capacity
+    assert (run["per_phase"]["bits"], run["how"]) == (1696, "proved") and run["share_of_capacity"] == 1696 / capacity
+    assert rec["periods"]["year"]["datacenter"]["share_of_capacity"] == 1696 / capacity
     assert rec["periods"]["egress"]["capacity_bits_per_phase"] == capacity == 2 ** 21
-    opened = record(accepted(tmp_path / "open", dict(public, held=["free"]), windows=3, schedule=schedule))
-    assert opened["bound"]["of_record"]["open"] == ["circuit"]
-    assert opened["periods"]["run"]["per_phase"]["bits"] == 800 + entries + 2 ** 23 + 1 == (
-        8_390_305 if drawn < 16 else 8_389_409)
+    opened = record(accepted(tmp_path / "open", dict(public, held=["free"]), windows=3, schedule=schedule,
+                             audits=(NO_ADVICE,) * 3))
+    assert opened["bound"]["of_record"]["open"] == ([] if once else ["circuit"])
+    assert (opened["periods"]["run"]["per_phase"]["bits"], opened["periods"]["run"]["how"]) == (
+        1696, "proved" if once else "open")
+    assert not {2 ** 23 + 1, 1696 + 2 ** 23 + 1} & set(numbers(opened["bound"]) + numbers(opened["periods"]))
 
 
 @pytest.mark.usefixtures("verified")
@@ -1330,10 +1404,12 @@ def census_line(name: str, *fields: str) -> dict:
 
 @pytest.mark.usefixtures("verified")
 def test_the_runs_period_is_proved_and_every_monitoring_period_scaled_beside_one_phase(tmp_path):
-    p = record(accepted(tmp_path))["periods"]
+    """Both checks held, every premise discharged and the coins live, so nothing is open under the figure of record:
+    its run's cell reads proved, and each scaled one names its rule alone."""
+    p = held_both(tmp_path)["periods"]
     phase = Fraction(63 * 20, 1000)
-    one = {"bits": KR, "share": KR / LB.WEIGHTS.bits, "share_served": KR / LB.SERVED.bits,
-           "share_of_capacity": KR / CAPACITY, "vacuous": False, "how": "proved",
+    one = {"bits": K, "share": K / LB.WEIGHTS.bits, "share_served": K / LB.SERVED.bits,
+           "share_of_capacity": K / CAPACITY, "vacuous": False, "how": "proved",
            "delta_net": [{"symbol": "eps", "value": "1/1048576"}, {"symbol": "ε_ks", "times": 1},
                          {"symbol": "ε_bind", "times": 1}, {"symbol": "ε_tap", "times": 1}],
            "eps_per_phase_below": "1", "statement": LB.STATEMENTS["per_period"]}
@@ -1347,15 +1423,15 @@ def test_the_runs_period_is_proved_and_every_monitoring_period_scaled_beside_one
         for where, n in links.items():
             c = p[name][where]
             assert (c["bits"], c["delta_net"], c["how"], c["rule"]) == (
-                KR * w * n, OR.delta_net(Fraction(1, 2 ** 20) * w * n, w * n), "scaled", rules[where])
+                K * w * n, OR.delta_net(Fraction(1, 2 ** 20) * w * n, w * n), "scaled", rules[where])
             assert c["delta_net"][0]["value"] == str(Fraction(w * n, 2 ** 20))
-            assert c["vacuous"] == (w * n >= 2 ** 20) and c["share"] == KR * w * n / LB.WEIGHTS.bits
-            assert c["share_served"] == KR * w * n / LB.SERVED.bits and c["share_of_capacity"] == KR / CAPACITY
+            assert c["vacuous"] == (w * n >= 2 ** 20) and c["share"] == K * w * n / LB.WEIGHTS.bits
+            assert c["share_served"] == K * w * n / LB.SERVED.bits and c["share_of_capacity"] == K / CAPACITY
             assert c["eps_per_phase_below"] == str(Fraction(1, w * n))
             assert c["parameters"] == {"phases": w, "phase_s": str(phase), "connections": str(252 * w * n), "links": n}
             assert c["per_phase"] == (one if where == "node" else {
-                "bits": KR * n, "share": KR * n / LB.WEIGHTS.bits, "share_served": KR * n / LB.SERVED.bits,
-                "share_of_capacity": KR / CAPACITY,
+                "bits": K * n, "share": K * n / LB.WEIGHTS.bits, "share_served": K * n / LB.SERVED.bits,
+                "share_of_capacity": K / CAPACITY,
                 "delta_net": OR.delta_net(Fraction(n, 2 ** 20), n),
                 "vacuous": n >= 2 ** 20, "eps_per_phase_below": str(Fraction(1, n)), "how": "scaled", "rule": where,
                 "statement": OR.STATEMENTS[where]})
@@ -1454,17 +1530,29 @@ def test_a_composite_term_stated_as_a_float_is_the_ratio_it_was_given_as(tmp_pat
 
 
 @pytest.mark.usefixtures("verified")
-def test_a_node_cell_is_proved_where_the_runs_period_covers_its_monitoring_period(tmp_path):
+def test_a_node_cell_is_proved_where_the_runs_period_covers_its_monitoring_period_and_nothing_is_open(tmp_path):
     """An execution phase of 63 buckets of 10,000 s covers a week but not a month: the node's week is the run's K,
-    proved, and its datacenter scaled from that by its machines; its month is scaled from the run."""
-    p = record(accepted(tmp_path, schedule=dict(SCHEDULE, bucket_ms=10_000_000)))["periods"]
+    proved where nothing is open under the figure of record, and its datacenter scaled from that by its machines; its
+    month is scaled from the run. With a check of the tied charge open, the node's week is the same K, open, naming
+    it, never proved, and each scaled cell names it beside its rule."""
+    slow = dict(SCHEDULE, bucket_ms=10_000_000)
+    p = record(accepted(tmp_path, dict(PUBLIC, held=["free", "circuit"]), schedule=slow))["periods"]
     week, month = p["week"], p["month"]
-    assert (week["node"]["bits"], week["node"]["how"], "rule" not in week["node"]) == (KR, "proved", True)
+    assert (week["node"]["bits"], week["node"]["how"], "rule" not in week["node"]) == (K, "proved", True)
     assert week["node"]["parameters"] == {"phases": 1, "phase_s": "630000", "links": 1, "connections": "252"}
     n = LB.datacenter_links()
-    assert (week["datacenter"]["bits"], week["datacenter"]["rule"]) == (KR * n, "datacenter")
+    assert (week["datacenter"]["bits"], week["datacenter"]["rule"]) == (K * n, "datacenter")
+    assert "open" not in week["node"] and "open" not in week["datacenter"]
     w = math.ceil(Fraction(LB.PERIODS["month"], 630000))
-    assert (month["node"]["bits"], month["node"]["rule"], month["phases"]) == (KR * w, "run-to-period", w)
+    assert (month["node"]["bits"], month["node"]["rule"], month["phases"]) == (K * w, "run-to-period", w)
+    p = record(accepted(tmp_path / "open", dict(PUBLIC, held=["free"]), schedule=slow))["periods"]
+    week = p["week"]
+    assert (week["node"]["bits"], week["node"]["how"], week["node"]["open"]) == (K, "open", ["circuit"])
+    assert (week["datacenter"]["how"], week["datacenter"]["rule"], week["datacenter"]["open"]) == (
+        "scaled", "datacenter", ["circuit"])
+    assert not [c for c in (p["run"], p["run"]["per_phase"], *(p[name][where] for name in LB.PERIODS
+                                                                for where in ("node", "datacenter", "world")))
+                if c["how"] == "proved" or c["open"] != ["circuit"]]
 
 
 @pytest.mark.usefixtures("verified")
@@ -1472,7 +1560,7 @@ def test_a_scaled_cell_over_several_phases_rounds_up(tmp_path):
     two = dict(PUBLIC, K=PUBLIC["K"] + 9088 + 63 + 1, eps="1/524288", windows=2,
                scans=[SCAN, dict(SCAN, faulty_sets=1)])
     p = record(accepted(tmp_path, two, windows=2))["periods"]
-    kr = two["K"] + 2 * (2 ** 23 + 1)
+    kr = two["K"]
     w = math.ceil(Fraction(LB.PERIODS["month"]) / Fraction(63, 50))
     assert w % 2 and p["run"]["bits"] == kr and p["run"]["per_phase"]["rule"] == "per-phase"
     assert p["month"]["node"]["bits"] == math.ceil(Fraction(kr, 2) * w) != Fraction(kr, 2) * w
@@ -1821,7 +1909,7 @@ def test_while_certifier_key_is_open_an_accepted_network_verdict_is_not_establis
                                 "not_claimed": ["PoUW"], "conditional_on": cond, **ONSITE_OF_RECORD}
     of = rec["bound"]["of_record"]
     assert (rec["bound"]["K"], of["open"], of["conditional_on"], of["K"]) == (
-        K, cond + [OR.PERIOD_REGISTERED] * by_lock, cond, KR)
+        K, cond + [OR.PERIOD_REGISTERED] * by_lock, cond, K)
     assert rec["periods"]["conditional_on"] == rec["composite_error"]["conditional_on"] == cond
     assert "conditional_on" not in rec["verdicts"]["sampled proofs"] and rec["coins"]["open"] is False
     line = json.loads(capsys.readouterr().out.strip()[7:])
@@ -3015,8 +3103,8 @@ def test_a_chain_draw_that_doesnt_take_everything_is_open_under_live_coins_by_it
                                                                                          named):
     """The network certifier's period draw or its scan's draw taking K of what it draws from (subset:K, stratified:k),
     or a run that published no chain report: each such draw is open under live-coins by its name, though sampled
-    proofs' COINS line names the live challenger, so the network certifier's figure of record charges ℓ_a + 1 for the
-    tied audit though both checks are held and every premise discharged, and it, its cells, the composite's error and
+    proofs' COINS line names the live challenger, so the network certifier's figure of record is open on them though
+    both checks are held and every premise discharged, and it, its cells, the composite's error and
     the run's being of record are conditional on the coins; sampled proofs' verdict, on live coins, isn't."""
     out = accepted(tmp_path, dict(PUBLIC, held=["free", "circuit"]), draws=None if n2 is None else chain_report(n2, scan))
     assert main([str(out)]) == 0
@@ -3024,27 +3112,28 @@ def test_a_chain_draw_that_doesnt_take_everything_is_open_under_live_coins_by_it
     assert (rec["coins"]["open"], rec["coins"]["open_draws"], rec["coins"]["sampled_proofs"]) == (True, named, [GATE])
     assert rec["coins"]["draws"].get("missing") == (None if n2 else OR.NO_CHAIN_REPORT)
     of = rec["bound"]["of_record"]
-    assert (of["open"], of["conditional_on"], of["K"]) == (cond, cond, KR)
+    assert (of["open"], of["conditional_on"], of["K"]) == (cond, cond, K)
     assert rec["periods"]["conditional_on"] == rec["composite_error"]["conditional_on"] == cond
     assert rec["of_record"]["conditional_on"] == cond and "conditional_on" not in rec["verdicts"]["sampled proofs"]
     assert json.loads(capsys.readouterr().out.strip()[7:])["conditional_on"] == cond
 
 
 @pytest.mark.usefixtures("verified")
-def test_padding_out_of_free_open_leaves_the_conservative_figure_of_record_and_no_tight_figure(
+def test_one_premise_open_leaves_the_checks_K_of_record_open_on_it_by_name_with_nothing_added(
         tmp_path, monkeypatch, capsys):
-    """Both checks held, the coins live and every premise discharged but padding-out-of-free: the figure of record is K
-    plus ℓ_a + 1 for the tied audit, open by that name alone and conditional on nothing, a charge covering it, and
-    neither the record nor its line states a figure of the tight K, only when it returns (`TIGHT`)."""
+    """Both checks held, the coins live and every premise discharged but padding-out-of-free: the figure of record is
+    the check's K, open by that name alone and conditional on nothing, with no ℓ_a + 1 added for the tied audit, and
+    its run's cell reads open, naming it, in the record and its line."""
     monkeypatch.setitem(OR.PREMISES, "padding-out-of-free", UNNAMED["padding-out-of-free"])
     out = accepted(tmp_path, dict(PUBLIC, held=["free", "circuit"]))
     assert main([str(out)]) == 0
     rec = json.loads((out / "record" / "onsite.json").read_text())
-    of = rec["bound"]["of_record"]
-    assert (of["open"], of["K"], of["tight"], "conditional_on" in of) == (["padding-out-of-free"], KR, OR.TIGHT, False)
-    assert rec["periods"]["run"]["bits"] == KR and "periods_tight" not in rec and "conditional_on" not in rec["periods"]
+    of, run = rec["bound"]["of_record"], rec["periods"]["run"]
+    assert (of["open"], of["K"], of["tight"], "conditional_on" in of) == (["padding-out-of-free"], K, OR.TIGHT, False)
+    assert (run["bits"], run["how"], run["open"]) == (K, "open", ["padding-out-of-free"])
+    assert "periods_tight" not in rec and "conditional_on" not in rec["periods"]
     line = json.loads(capsys.readouterr().out.strip()[7:])
-    assert (line["K"], line["open"], "K_tight" in line) == (KR, ["padding-out-of-free"], False)
+    assert (line["K"], line["open"], "K_tight" in line) == (K, ["padding-out-of-free"], False)
 
 
 def test_a_remote_run_whose_report_drops_the_certifier_takes_its_period_checks_answer_and_else_the_drop(tmp_path):
@@ -3300,8 +3389,8 @@ def test_runs_at_two_serving_settings_go_beside_each_other_each_figure_labelled_
     assert [(r["record"], r["run"], r["tree"], r["serving"], r["ell_a"]) for r in runs] == [
         (str(p), "toy-run", TREE, {"window_steps": s, "max_tokens": m}, [cap]) for p, (s, m, cap) in zip(paths, SETTINGS)]
     assert [(r["of_record"], r["conditional_on"], r["not_claimed"], r["not_credited"], r["K"], r["answers"], r["open"])
-            for r in runs] == [(True, [], [OR.DAY_OPEN, OR.POUW_OPEN], [], K + cap + 1, OR.VERIFIED, ["free", "circuit"])
-                               for _, _, cap in SETTINGS]
+            for r in runs] == [(True, [], [OR.DAY_OPEN, OR.POUW_OPEN], [], K, OR.VERIFIED, ["free", "circuit"])
+                               ] * len(SETTINGS)
     for p, r in zip(paths, runs):
         rec = json.loads(p.read_text())
         run = rec["periods"]["run"]
@@ -3312,7 +3401,8 @@ def test_runs_at_two_serving_settings_go_beside_each_other_each_figure_labelled_
         assert r["sampled_proofs"] == OR.guarantee(rec["sampled_proofs"]) and "year" in r["sampled_proofs"]["pooled"]
         assert "conditional_on" not in r["periods"] and not {"K_tight", "periods_tight"} & set(r)
         assert r["periods"]["answers"] == OR.VERIFIED
-    assert runs[1]["periods"]["run"]["bits"] - runs[0]["periods"]["run"]["bits"] == 7432 - 1328
+    assert runs[1]["periods"]["run"]["bits"] == runs[0]["periods"]["run"]["bits"] == K
+    assert runs[0]["ell_a"] != runs[1]["ell_a"] and {r["periods"]["year"]["node"]["how"] for r in runs} == {"scaled"}
     said = (OR.ONSITE, "none", f"no verified compute is credited: {OR.ONSITE}'s verdict is no compute claim")
     assert [(r["composite"], r["verified_compute"], r["compute"]) for r in runs] == [said] * len(SETTINGS)
     line = capsys.readouterr().out.strip()
@@ -3339,13 +3429,13 @@ def test_beside_states_the_answers_beside_each_runs_K_and_prints_a_records_perio
     with_cells, without = json.loads(f.read_text())["runs"]
     wrote = json.loads(paths[0].read_text())["periods"]
     assert "answers" not in wrote and with_cells["periods"]["answers"] == OR.VERIFIED
-    assert with_cells["periods"]["run"]["bits"] == wrote["run"]["bits"] == K + SETTINGS[0][2] + 1
+    assert with_cells["periods"]["run"]["bits"] == wrote["run"]["bits"] == K
     assert all(with_cells["periods"][n][w] == {k: wrote[n][w][k] for k in ("bits", "share", "how")}
                for n in LB.PERIODS for w in ("node", "datacenter", "world"))
     assert without["periods"] == {"missing": OR.NOT_SCALED}
     labels = (OR.VERIFIED, OR.ANSWERS)
     assert [(r["K"], r["answers"]) for r in (with_cells, without)] == [
-        (K + cap + 1, label) for (_, _, cap), label in zip(SETTINGS, labels)]
+        (K, label) for label in labels]
     line = capsys.readouterr().out.strip()
     assert [(x["K"], x["answers"]) for x in json.loads(line[14:])] == [
         (r["K"], label) for r, label in zip((with_cells, without), labels)]
