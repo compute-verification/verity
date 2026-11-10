@@ -33,14 +33,8 @@ from pathlib import Path
 from typing import Any
 
 # The count bound is the wipe's too, held in pous: remote_bandwidth may import pous, and pous not it.
-<<<<<<< 99c8914848
-from verity.core.protocols.pous.wipe_monitoring import DELTAS, PERIODS, block_count, short_sessions
-||||||| merged common ancestors
-from verity.core.protocols.pous.wipe_monitoring import DELTAS, PERIODS, short_sessions
-=======
-from verity.core.protocols.pous.wipe_monitoring import short_sessions
+from verity.core.protocols.pous.wipe_monitoring import block_count, short_sessions
 from verity.core.protocols.reporting import DELTAS, PERIODS
->>>>>>> 7af4d24fca3e
 
 from . import codec, pooled
 
