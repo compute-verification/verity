@@ -9,7 +9,7 @@ public import Properties.Accounting.Remote.Subprotocol
 that ended accepted with a record, publishing `certify` of it at the session's parameters and g (`acceptIsVerified`).
 `plays_verified` reads `Plays` as `Verified`: the session `sessionOf` decodes is the one it decodes, so it is the
 record's at the node, at the node's windows a draw. `publishedEps` reads `certify`'s `eps` at the node's parameters
-and g: `ratio` of a nonnegative rational is that rational (`ratio_val`), and `openingsCoins` is `Node.draws`.
+and g: `ratio` of a nonnegative rational is that rational (`ratio_val`), and `openingsCoins` is `Node.samples`.
 -/
 
 @[expose] public section
@@ -69,7 +69,6 @@ theorem plays_verified {node : Node} {rec : Record} {a b e : ByteArray} (h : Pla
   obtain ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩ := hs'
   exact ⟨rs, s, hrun, hout⟩
 
-<<<<<<< ours
 /-- The ratio the component publishes of a nonnegative rational is that rational. -/
 theorem ratio_val {q : ℚ} (hq : 0 ≤ q) :
     ((RemoteAudit.Protocol.ratio q).num : ℚ) / (RemoteAudit.Protocol.ratio q).den = q := by
@@ -93,7 +92,7 @@ theorem publishedEps : PublishedEps := by
     intro node hp hg hδ
     subst hp hg
     dsimp only
-    have hd : RemoteAudit.Protocol.openingsCoins node.params node.groupsPerCoin = node.draws := rfl
+    have hd : RemoteAudit.Protocol.openingsCoins node.params node.groupsPerCoin = node.samples := rfl
     rw [ratio_val (eps_nonneg _ _), Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul, hδ]
     unfold RemoteAudit.Protocol.eps
     rw [hd]
@@ -101,9 +100,4 @@ theorem publishedEps : PublishedEps := by
     try ring
   · exact .inl ⟨rfl, rfl⟩
 
-end Properties.RemoteAudit.Component
-||||||| base
-end Properties.RemoteAudit.Component
-=======
 end Properties.RemoteAudit.Subprotocol
->>>>>>> theirs

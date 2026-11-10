@@ -78,13 +78,7 @@ open Accounting.Compose Accounting.Served
 non-input gates `i` (its gates are `[start c, start (c + 1))`) lies in the gate span of a proof block of `l`, read as
 the Program's root gate `i − start c`, and its declared unit is `base (stepOf c) (linearOf c)` plus that proof block's
 number; each input slot's gate is an input of the call; and every proof block's number is below the call's units. -/
-<<<<<<< ours
-def CallUnits {ι : Type} (L : Shape) (Cd : Declared ι) (start : ℕ → ℕ) (c : ℕ) (l : SampledProofs.Slots.SlotOrder) :
-||||||| base
-def CallUnits {ι : Type} (L : Shape) (Cd : Declared ι) (start : ℕ → ℕ) (c : ℕ) (l : SampledProofs.Slots.Layout) :
-=======
-def CallUnits {ι : Type} (L : Shape) (Cd : Declared ι) (start : ℕ → ℕ) (c : ℕ) (l : Spot.Slots.Layout) :
->>>>>>> theirs
+def CallUnits {ι : Type} (L : Shape) (Cd : Declared ι) (start : ℕ → ℕ) (c : ℕ) (l : Spot.Slots.SlotOrder) :
     Prop :=
   (∀ i, start c ≤ i → i < start (c + 1) → i < Cd.dag.length → Cd.binding i = none →
     ∃ b ∈ l.blocks.toList, ∃ u, b.unit = some u ∧ Cd.unit i = L.base (L.stepOf c) (L.linearOf c) + u ∧
@@ -120,19 +114,9 @@ a run input that some gate reads: `UnitsOfLayout` commits the run input at the s
 its first reader's round, which is a round of the window. So no circuit with an activation meets both, and the live
 statements can't take `UnitsOfLayout` as written. -/
 def SeededScheduleNotLive : Prop :=
-<<<<<<< ours
-  ∀ (ι : Type) (Cd : Declared ι) (Np Kd : ℕ) (p : SampledProofs.Program) (query : Json)
-    (l : SampledProofs.Slots.SlotOrder),
-    SampledProofs.Slots.layout p query = .ok l → Properties.Compose.UnitsOfLayout Cd Np Kd p query → Cd.Wf →
-||||||| base
-  ∀ (ι : Type) (Cd : Declared ι) (Np Kd : ℕ) (p : SampledProofs.Program) (query : Json)
-    (l : SampledProofs.Slots.Layout),
-    SampledProofs.Slots.layout p query = .ok l → Properties.Compose.UnitsOfLayout Cd Np Kd p query → Cd.Wf →
-=======
   ∀ (ι : Type) (Cd : Declared ι) (Np Kd : ℕ) (p : Spot.Program) (query : Json)
-    (l : Spot.Slots.Layout),
+    (l : Spot.Slots.SlotOrder),
     Spot.Slots.layout p query = .ok l → Properties.Compose.UnitsOfLayout Cd Np Kd p query → Cd.Wf →
->>>>>>> theirs
       (∃ ℓ j, Cd.binding ℓ = some .run ∧ j < Cd.dag.length ∧ Cd.Reads j ℓ) → ¬ LayerCommitted Cd
 
 /-- **The served hypothesis**: declared circuit `Cd`, classed by `cls`, is served window `L` in form `F` (`Tie`), its
