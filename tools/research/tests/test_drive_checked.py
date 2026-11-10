@@ -607,7 +607,6 @@ def test_a_checked_below_a_moved_main_fast_forwards_to_it(world, monkeypatch):
     assert _checked(world) == _main(world)
 
 
-<<<<<<< 99c8914848
 def test_the_branch_sweep_deletes_what_is_on_checked(world, monkeypatch):
     """`main` lags `checked` by hours, so a sweep measured against `main` leaves landed branches to pile up."""
     from research import merge
@@ -617,8 +616,8 @@ def test_the_branch_sweep_deletes_what_is_on_checked(world, monkeypatch):
     monkeypatch.setattr(merge, "sweep_branches", lambda *a, **k: calls.append(k["into"]) or (2, 0))
     h.tick()
     assert calls == ["checked"] and any("branch sweep: 2 deleted (on checked)" in x for x in world.logs), world.logs
-||||||| merged common ancestors
-=======
+
+
 def _push_outside(world: World, files: dict[str, str], name: str) -> str:
     """A commit onto `checked` by ``name``, pushed to it by someone other than drive; its sha."""
     import os
@@ -703,7 +702,6 @@ def test_drives_own_landings_and_merges_of_main_are_tips_it_takes_and_a_refused_
     h.tick()
     assert h.q.load_state()["drive"]["checked_tips"] == [merged]
     assert not any("didn't write" in x for x in world.logs), world.logs
->>>>>>> 7af4d24fca3e
 
 
 def test_land_into_takes_checked_or_main_and_only_drive_pushes_checked(world, monkeypatch):
