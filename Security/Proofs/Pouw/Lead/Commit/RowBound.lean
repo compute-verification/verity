@@ -3,6 +3,8 @@ module
 public import Properties.Pouw.Lead.Commit
 public import Proofs.Properties.Pouw.Commit
 public import Proofs.Flock.Soundness.KeyedDraw
+import all Init.Data.Range.Basic
+import all Init.Data.String.Defs
 
 /-!
 # row-bound: a SHA-512 frame-v3 leaf's first block binds its domain and position
