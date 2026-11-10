@@ -132,15 +132,18 @@ def test_of_two_candidates_on_one_base_the_one_whose_members_come_first_in_rank_
                          Drop("a2", "its base was dropped"), Build((3, 5), "b", 1)]
 
 
-@pytest.mark.parametrize(("ready", "why"), [
-    ([pr(1, "h1b"), pr(2), pr(3)], "#1's head moved from h1 to h1b"),
-    ([pr(2), pr(3)], "#1's ready mark was withdrawn"),
+@pytest.mark.parametrize(("ready", "left", "why"), [
+    ([pr(1, "h1b"), pr(2), pr(3)], (), "#1's head moved from h1 to h1b"),
+    ([pr(2), pr(3)], (), "#1 isn't open and ready now"),
+    ([pr(2), pr(3)], ((1, "held by r (reads a stale fixture)"), (2, "no land verdict")),
+     "#1 isn't taken now: held by r (reads a stale fixture)"),
+    ([pr(2), pr(3)], ((1, ""),), "#1 isn't open and ready now"),           # a why the queue left empty says nothing
 ])
-def test_a_chain_candidate_whose_member_moved_or_was_unmarked_is_dropped_with_everything_above(ready, why):
-    s = snap(cand("c1", MAIN, 1, 2, state=PASS), cand("c2", "c1", 3), ready=ready)
+def test_a_chain_candidate_whose_member_moved_or_isnt_taken_is_dropped_with_everything_above_and_says_why(ready, left, why):
+    s = snap(cand("c1", MAIN, 1, 2, state=PASS), cand("c2", "c1", 3), ready=ready, left=left)
     rebuilt = tuple(r.number for r in ready)
     assert decide(s) == [Drop("c1", why), Drop("c2", "its base was dropped"), Build(rebuilt, MAIN, 2)]
-    s = snap(cand("c1", MAIN, 3), cand("c2", "c1", 1, 2), ready=ready)
+    s = snap(cand("c1", MAIN, 3), cand("c2", "c1", 1, 2), ready=ready, left=left)
     assert decide(s) == [Drop("c2", why), Build(tuple(n for n in rebuilt if n != 3), "c1", 1)]
 
 

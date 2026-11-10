@@ -120,6 +120,7 @@ class Snapshot:
                                    # error that ran out of attempts on two or more nodes, as an outage's do
     launch_tries: int = 3          # readings of launch-only infra (`Failed.launch`) on one candidate before it is handled
                                    # as any other infra: a tree that keeps its own launch from registering is found then
+    left: tuple[tuple[int, str], ...] = ()  # (number, why) of each open PR into `main` the queue doesn't take now
 
 
 @dataclass(frozen=True)
@@ -332,13 +333,13 @@ def _chain(s: Snapshot, ready: dict[int, Ready], acts: list[Action]) -> tuple[li
 
     chain: list[Candidate] = []
     below: set[int] = set()
-    top = s.main
+    top, untaken = s.main, dict(s.left)
     while on := [c for c in above.get(top, ()) if c.sha not in done]:
         keep = min(on, key=lambda c: (_ranks(c, ready), c.sha))
         for c in on:
             if c is not keep:
                 drop(c, f"a second candidate on {top[:12]}: {keep.sha[:12]}'s members come first in rank")
-        if why := _stale(keep, ready, below):
+        if why := _stale(keep, ready, below, untaken):
             drop(keep, why)
             break
         done.add(keep.sha)
@@ -360,11 +361,13 @@ def _ranks(c: Candidate, ready: dict[int, Ready]) -> list[tuple[int, int, int]]:
     return sorted((0, ready[m].rank, m) if m in ready else (1, 0, m) for m in c.members)
 
 
-def _stale(c: Candidate, ready: dict[int, Ready], below: set[int]) -> str | None:
+def _stale(c: Candidate, ready: dict[int, Ready], below: set[int], untaken: dict[int, str]) -> str | None:
+    """Why ``c`` is stale: a member not ready now (with why the queue doesn't take it, `Snapshot.left`: its mark withdrawn,
+    no land verdict, held...), at another head, or in a candidate below it too; None while it isn't."""
     for m, h in zip(c.members, c.heads):
         r = ready.get(m)
         if r is None:
-            return f"#{m}'s ready mark was withdrawn"
+            return f"#{m} isn't taken now: {untaken[m]}" if untaken.get(m) else f"#{m} isn't open and ready now"
         if r.head != h:
             return f"#{m}'s head moved from {h[:12]} to {r.head[:12]}"
         if m in below:

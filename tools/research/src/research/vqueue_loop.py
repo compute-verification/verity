@@ -15,7 +15,10 @@ rule (drive.toml's `lowrisk_lane` and `lowrisk_excludes` at `main`; never a move
 its merge), not on `main` yet, ranked by drive's priority file then mark time, each after the ready PRs it contains; `files`
 is its change against its merge base with `main`, `lean` drive's Lean-change test (`queue.lean_change`), and `conflict`
 whether `Queue._merge` merges it onto `main`, kept by (head, `main`).  The owner of one that doesn't is told once a head the
-files it conflicts in, to rebase it onto `main` and mark the new head (`Loop._conflicts`); its mark stays.
+files it conflicts in, to rebase it onto `main` and mark the new head (`Loop._conflicts`); its mark stays.  One whose head
+a candidate on `main`'s chain holds though it is no member of it lands with that candidate: it is no ready PR, and its owner
+is told so once a head and candidate (`Loop._carried`).  `left` is why each other open PR into `main` isn't taken
+(`World.ready`), which a candidate holding it is stale by.
 `candidates` are the loop's own builds: each of origin's `queue/<sha12>` branches at the sha a build line of the log names
 (the window's, else the whole log's, which its other lines are then read from too), with that line's base and members, lowest
 first; any other `queue/*` branch is no candidate, and is logged once (`ignore`).  `now` is the clock, `lean` and `pending_s`
@@ -69,7 +72,7 @@ once it and the check have both ended they are compared in one logged line, `agr
 failed or erred on and the steps the check failed (`Loop._compare`).
 
 The actions.  Build merges its members in order onto its base (`Queue._merge`), leaving out one that doesn't merge (`skip`, its
-owner told once per head and base), pushes `queue/<sha12>` (or takes as its own one no line names that is the same build made
+owner told once per head and base, or only logged when what it merges onto holds its head), pushes `queue/<sha12>` (or takes as its own one no line names that is the same build made
 before, as a tick cut off after its push leaves: `adopted`), logs it, enqueues `ready:<sha>` as graph/v2 at its priority and
 starts the run beside its check.
 Advance pushes `main` to the candidate with a lease on its base and logs it; then what drive does when `main` moves
@@ -91,8 +94,8 @@ on because graph2's verdict and the loop's reading disagree on it, there or at i
 both readings, and a listing the loop read that isn't graph2's with both, once each (`Loop._disputes`).  Red tells
 `CI` and the owners of what the base fails (as drive names them: a test file's suite's, else its job's) that it is red on
 them, once a base and task.  A test graph2's verdict says flaked (`flaky`: a fail a rerun replaced) is told to its file's
-owner in drive's registry and `CI`, once a key: a test that flakes is deleted.  A skip's, conflict's, ring's, red's or
-flake's message is logged as about to be posted (`posting`) before it is, and its record says whether it was (`posted`): one
+owner in drive's registry and `CI`, once a key: a test that flakes is deleted.  A skip's, conflict's, carried PR's, ring's,
+red's or flake's message is logged as about to be posted (`posting`) before it is, and its record says whether it was (`posted`): one
 whose tick stopped in between is told, so no one is told twice, and one whose post failed is told again.  Each action and its
 result is one JSON line in the log, whose directory also holds the loop's caches.
 
@@ -343,6 +346,14 @@ class Past:
         return {h for r in self.of("conflict") if r.get("done") or r.get("shadow") for h in heads(r)} | self._posting(
             "conflict", heads)
 
+    def carried(self) -> set[str]:
+        """Each `head@candidate` whose owner was told it lands with that candidate (`Loop._carried`)."""
+        def keys(r: dict) -> set[str]:
+            return {f"{h}@{r.get('sha')}" for h in r.get("heads") or ()}
+
+        return {k for r in self.of("carried") if r.get("done") or r.get("shadow") for k in keys(r)} | self._posting(
+            "carried", keys)
+
     def reds(self, base: str) -> set[str]:
         """The tasks ``base`` was told red on."""
         def tasks(r: dict) -> set[str]:
@@ -562,8 +573,9 @@ class World:
         #: and the graph graph2 listed of each check read (`_listing`)
         self._theirs: dict[str, dict | None] | None = None
         self._listed: dict[str, tuple[str, dict] | None] | None = None
-        #: what the last `ready` read: {number: the PR at its ready head}
+        #: what the last `ready` read: {number: the PR at its ready head}, and {number: why it isn't taken} of the rest
         self.prs: dict[int, PR] = {}
+        self.left: dict[int, str] = {}
 
     def log(self, text: str) -> None:
         self.q.log(text)
@@ -618,7 +630,8 @@ class World:
 
     def ready(self, main: str) -> list[Ready]:
         """The open PRs drive would land from `next` now, as `vqueue.Ready`: a move PR as any other, built by its merge, but
-        only with a land verdict, never under the low-risk rule."""
+        only with a land verdict, never under the low-risk rule.  Why each other open PR into `main` above it isn't taken
+        goes to `left`: the queue's word on one it doesn't admit (`Entry.why`), else what keeps it out here."""
         q, labels = self.q, self.labels
         prs = [p for p in self.open().values() if p.base == "main"]
         if missing := [p for p in prs if p.head in self._missing(p.head for p in prs)]:
@@ -635,34 +648,43 @@ class World:
         self._files = {k: v for k, v in self._files.items() if k[1] == main}
         self._judged = {k: v for k, v in self._judged.items() if k[1] == main}
         admitted = [n for n, e in entries.items() if e.state == "ready"]
+        left = {n: e.why for n, e in entries.items() if e.state != "ready"}
         with concurrent.futures.ThreadPoolExecutor(JOBS) as pool:
             files = dict(zip(admitted, pool.map(lambda n: self._changed(main, entries[n].pr.head), admitted)))
             took = []
             for n in admitted:
                 p, reviews = entries[n].pr, labels.reviews(n, entries[n].pr.head)
-                landing = unreviewed(reviews, review_owners(q, labels, n, p.head, p.owner, self.open())) is None
+                why = unreviewed(reviews, review_owners(q, labels, n, p.head, p.owner, self.open()))
                 held = (unreviewed(reviews, ()) or "").startswith("held")
-                if landing or not p.move and not held and lowrisk(files[n], excludes):
+                if why is None or not p.move and not held and lowrisk(files[n], excludes):
                     took.append(n)
+                else:
+                    left[n] = why if held else f"{why}, and it isn't low-risk"
             specs, clears = self._frozen()
             if specs:                                       # a PR's own change: above `checked` while `main` doesn't hold it
                 below = old if old and not self._ancestor(old, main) else main
-                took = [n for n in took if self._cleared(n, entries[n].pr.head, clears)
-                        or not self._frozen_out(below, entries[n].pr, specs)]
+                frozen = {n for n in took if not self._cleared(n, entries[n].pr.head, clears)
+                          and self._frozen_out(below, entries[n].pr, specs)}
+                left.update((n, f"it waits for the freeze to end ({self.frozen_file}): it renames or deletes a file under its "
+                                "paths") for n in frozen)
+                took = [n for n in took if n not in frozen]
             new = any((entries[n].pr.head, main) not in self._judged for n in took)
             with base_drivers(self.repo, main) if new else contextlib.nullcontext(None) as cfg:   # once a tick, not a PR
                 chosen = {n: (files[n], *j)
                           for n, j in zip(took, pool.map(lambda n: self._judge(main, entries[n].pr.head, cfg), took))}
         # a land verdict covers its PR's own change: a PR holding the head of an admitted PR that isn't taken (no land verdict
         # there, or held) would carry that change unreviewed, unless the head landed on `checked` under drive's rules
-        while out := {n for n in chosen for a in entries[n].after if a in entries and entries[a].state == "ready"
+        while out := {n: a for n in chosen for a in entries[n].after if a in entries and entries[a].state == "ready"
                       and a not in chosen and not (old and self._ancestor(entries[n].held[a], old))}:
+            left.update((n, f"it holds {entries[n].holds(a)}, and #{a} isn't taken") for n, a in out.items())
             chosen = {n: v for n, v in chosen.items() if n not in out}
         first = {n: i for i, n in enumerate(priority_list(self.priority_file) if self.priority_file else ())}
         # a PR the priority file names ahead of PRs whose heads its own holds (an aggregate, such as a commit of `checked`'s
         # chain) lands them with it, so they don't build first; a stack the file doesn't rank still lands its bases first
-        held = {a for n in chosen if n in first for a in entries[n].after
+        held = {a: n for n in chosen if n in first for a in entries[n].after
                 if a in chosen and first.get(a, len(first)) > first[n]}
+        left.update((a, f"it lands with #{n}, which the priority file ranks ahead of it and which holds "
+                        f"{entries[n].holds(a)}") for a, n in held.items())
         chosen = {n: v for n, v in chosen.items() if n not in held}
         order = sorted(chosen, key=lambda n: (first.get(n, len(first)), labels.marked_at(n, entries[n].pr.head) or "", n))
         placed: list[int] = []
@@ -677,7 +699,7 @@ class World:
 
         for n in order:
             place(n)
-        self.prs = {n: entries[n].pr for n in chosen}
+        self.prs, self.left = {n: entries[n].pr for n in chosen}, left
         return [Ready(n, entries[n].pr.head, *chosen[n][:2], rank=i, conflict=chosen[n][2]) for i, n in enumerate(placed)]
 
     def _frozen(self) -> tuple[list[str], list[tuple[str, str]]]:
@@ -1071,13 +1093,14 @@ class World:
 
     # -- effects
 
-    def build(self, prs: list[PR], base: str) -> tuple[str, list[Member], list[tuple[PR, str]]]:
-        """``prs`` merged in order onto ``base`` (`Queue._merge`): (the tip, the members merged, (PR, why) of each left out)."""
+    def build(self, prs: list[PR], base: str) -> tuple[str, list[Member], list[tuple[PR, str, bool]]]:
+        """``prs`` merged in order onto ``base`` (`Queue._merge`): (the tip, the members merged, (PR, why, whether what it
+        merges onto holds its head) of each left out)."""
         tip, merged, left = base, [], []
         for p in prs:
             commit, why = self.q._merge(tip, p, merged)
             if commit is None or commit == tip:
-                left.append((p, why or f"its head {p.head[:12]} is already in what it merges onto"))
+                left.append((p, why or f"its head {p.head[:12]} is already in what it merges onto", commit is not None))
                 continue
             merged.append(Member(p.number, p.head, p.owner or "", commit))
             tip = commit
@@ -1444,6 +1467,9 @@ class Tick:
     wrote: list[dict] = field(default_factory=list)
     #: the record of the run beside `main`'s own check (`Loop._below`), None while none is kept
     below: dict | None = None
+    #: each ready PR a candidate on `main`'s chain holds without it as a member, so it lands with that candidate and is no
+    #: ready PR of the snapshot's: {number: (its head, the lowest such candidate)}
+    carried: dict[int, tuple[str, str]] = field(default_factory=dict)
 
 
 class Loop:
@@ -1475,10 +1501,11 @@ class Loop:
         origin = w.fetch()
         main = self._shadow_main(past, origin) if self.shadow else origin
         ejected = {(r.get("number"), (r.get("heads") or [None])[0]): r.get("at") for r in past.of("eject") if r.get("shadow")}
-        ready = []
+        ready, shadowed = [], {}
         for x in w.ready(main):
             at = ejected.get((x.number, x.head))
             if at is not None and not (w.labels.marked_at(x.number, x.head) or "") > at:
+                shadowed[x.number] = f"ejected at {x.head[:12]} with --shadow, and not marked ready since"
                 continue
             ready.append(x)
         refs, builds, whole = w.refs(), past.builds(), past
@@ -1519,10 +1546,18 @@ class Loop:
             return 1 + height(on[sha], (*seen, sha)) if on.get(sha) in on and sha not in seen else 0
 
         cands.sort(key=lambda c: (height(c.sha), c.sha))       # each after the candidate it is built on
+        chain = [c for c in cands if chained(c.sha)]
+        members = {m for c in chain for m in c.members}
+        carried = {}
+        for x in ready:                 # merged onto a candidate that holds its head, it would merge nothing
+            if x.number not in members and (c := next((c for c in chain if w._ancestor(x.head, c.sha)), None)):
+                carried[x.number] = (x.head, c.sha)
+        ready = [x for x in ready if x.number not in carried]
         history = past.history((lambda sha: bool(sha) and w._ancestor(sha, main)) if self.shadow else None)
         snap = Snapshot(main, tuple(sorted(ready, key=lambda x: x.rank)), tuple(cands), history, self.batch, self.depth,
-                        lean=self.lean, now=self.now(), pending_s=self.pending_s, tree_ejects=self.tree_ejects)
-        return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0])
+                        lean=self.lean, now=self.now(), pending_s=self.pending_s, tree_ejects=self.tree_ejects,
+                        left=tuple(sorted({**w.left, **shadowed}.items())))
+        return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0], carried)
 
     def _shadow_main(self, past: Past, origin: str) -> str:
         """The shadow's `main`: the newest candidate it advanced (`SHADOW`, else its log's newest advance) while origin's `main`
@@ -1636,7 +1671,7 @@ class Loop:
             return []
         new = [self.record(t, "ignore", sha=sha, ref=name, why=f"origin's queue/{name} is no build of the loop's: no candidate")
                for name, sha in t.foreign.items() if (name, sha) not in past.ignored()] + self._flaky(t) + self._bases(t) \
-            + (self._disputes(t) if self.gate == GRAPH2_GATE else self._compare(t)) + self._conflicts(t)
+            + (self._disputes(t) if self.gate == GRAPH2_GATE else self._compare(t)) + self._conflicts(t) + self._carried(t)
         new += self._launched(t)
         new += [self._on_main(t, adv, told) for adv, told in t.past.moved()]
         for rec in new:
@@ -1766,7 +1801,11 @@ class Loop:
             w.slim_driver()                                 # before anything is pushed
         tip, merged, left = w.build([w.prs[n] for n in a.members], a.base)
         recs = []
-        for p, why in left:
+        for p, why, held in left:
+            if held:                # it lands with what it merges onto: the next tick tells its owner so (`Loop._carried`)
+                recs.append(self.record(t, "skip", base=a.base, members=[p.number], heads=[p.head], number=p.number, why=why,
+                                        held=True, done=False))
+                continue
             text = None if (key := f"{p.head}@{a.base}") in t.told else (
                 f"#{p.number} at {p.head[:12]} doesn't merge onto the verified queue's candidate on {a.base[:12]}: {why}. "
                 f"It is left out until it merges: merge `main` into it")
@@ -2109,6 +2148,30 @@ class Loop:
                                               "tick tells again"))
             else:
                 recs.append(self.record(t, "conflict", **line, done=True, posted=True))
+        return recs
+
+    def _carried(self, t: Tick) -> list[dict]:
+        """Tell the owner of each ready PR a candidate on `main`'s chain holds without it as a member (`Tick.carried`) that it
+        lands when that candidate does, naming the member whose head holds its own: once a head and candidate
+        (`Past.carried`).  A post that fails is told again by the next tick; with --shadow it is only logged."""
+        recs, told, on = [], t.past.carried(), {c.sha: c for c in t.snap.candidates}
+        for n, (head, sha) in sorted(t.carried.items()):
+            if f"{head}@{sha}" in told:
+                continue
+            c = on[sha]
+            by = next((m for m, h in zip(c.members, c.heads) if self.world._ancestor(head, h)), None)
+            text = (f"#{n} at {head[:12]} is in the verified queue's candidate {sha[:12]}"
+                    + (f", whose member #{by} holds its head" if by is not None else "")
+                    + ": it lands when that candidate does, so no build of its own takes it")
+            to = self.owner(n)
+            line = dict(sha=sha, base=c.base, members=[n], heads=[head], number=n, text=text, to=list(to))
+            if self.shadow:
+                recs.append(self.record(t, "carried", **line, done=False))
+            elif not self._say(t, "carried", text, to, sha=sha, heads=[head], number=n):
+                recs.append(self.record(t, "carried", **line, done=False, posted=False,
+                                        error=f"telling #{n}'s owner it lands with {sha[:12]} failed: the next tick tells again"))
+            else:
+                recs.append(self.record(t, "carried", **line, done=True, posted=True))
         return recs
 
     def _ring(self, a: Ring, c: Candidate, t: Tick) -> list[dict]:
