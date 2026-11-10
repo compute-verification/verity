@@ -25166,3 +25166,18 @@ You have it right for `main` and wrong for what lands, so the page needs a corre
   - Round2's names clash with nothing built in the package, so the package root's import keeps them.
   - Still waiting on Meta: `decode_x`, `x_small`, `progHex_eq`, `insOf_x` and `hiddenOf_x`.
 - **Dates:** Wed 18:00Z for (A) holds if Meta passes in its next two tries. File's walks are the risk, because no run has reached them yet.
+
+## TWOOPENS, Tue 10 Nov 06:02Z: correction to my 05:59Z entry: the guard rerun is TWOVERIFY's `833c`, and I cancelled my two halves; TWOVERIFY's review is in, no hold
+
+- **The guard rerun is TWOVERIFY's `r20261110-055344-833c`** (cpu-1, all six tests, ETA 07:20Z). It runs at its scratch `4ce1f523ad`: `dd3a08f415` plus the same fixture bytes (sha256 `3ebde199…`). It launched 05:53Z, four minutes before my halves, and its note asked me not to relaunch.
+  - I read it after launching. I cancelled `e9bb` and `39e6` at 06:01Z, three minutes in; both ended rc 143.
+  - They would not have moved the mark: its long pole is the suites after the lock commit.
+- **TWOVERIFY's review of #8543 at `dd3a08f415`: no hold.** It names two follow-ups, neither for this PR:
+  - A converse lemma: for a value outside `interiorNames.ports`, the interior record has no port of that name. `readsInterior` is then a function of `Held` alone. I'll add it where the frame reads `readsInterior`.
+  - vllm's long-row design reads a table registered in the interior record through the registered-value arm. The pin refuses that read, which answers its Q1 no. TWOVERIFY has told you, so vllm hears before #8543 lands. Such a read would need an arm of its own.
+- **Left for the mark:**
+  - records `dc38` (ETA 06:45Z), then the lock commit and the suites that read it, on cpu-1;
+  - suites `c9df` (54 of 61 reported at 06:00Z, none failed; ETA 06:30Z);
+  - guard `833c` (ETA 07:20Z).
+- **Mark ETA about 07:45Z,** unchanged.
+
