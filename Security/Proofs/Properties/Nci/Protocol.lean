@@ -1,11 +1,11 @@
 import Properties.Nci.Protocol
-import Proofs.Properties.Nci.BaselineSteps
+import Proofs.Properties.Nci.ThetaSteps
 
 /-!
 # NCI's core protocol's property, proved
 
 `ProtocolAccepts` (`Properties.Nci.Protocol`) by unfolding `NciCheck.Protocol.check` past its `names` check, with the policy check's verdict
-from `BaselineSteps.evaluate_ok`: `NciCheck.Baseline.evaluate` returns the verdict `NciCheck.Desc.evaluate` gives.
+from `ThetaSteps.evaluate_ok`: `NciCheck.Theta.evaluate` returns the verdict `NciCheck.Desc.evaluate` gives.
 -/
 
 namespace NciCheck.Properties.SecurityProofs
@@ -23,11 +23,11 @@ theorem ProtocolAccepts : Properties.ProtocolAccepts := by
     split at h
     · rename_i hc
       cases h
-      exact ⟨out, hb, (BaselineSteps.evaluate_ok _ _ _ hb).1, hc, rfl⟩
+      exact ⟨out, hb, (ThetaSteps.evaluate_ok _ _ _ hb).1, hc, rfl⟩
     · cases h
 
 theorem unparsed_refused :
-    (NciCheck.Baseline.evaluate
+    (NciCheck.Theta.evaluate
       (NciCheck.Protocol.instanceOf ⟨.null, 1, #[], Json.arr #[], ""⟩ ⟨Json.arr #[], Json.arr #[], Json.arr #[]⟩)
       (NciCheck.Protocol.trustedOf ⟨.null, 1, #[], Json.arr #[], ""⟩ ⟨.null, "", .empty⟩)).toBool = false := by
   decide +kernel
@@ -35,7 +35,7 @@ theorem unparsed_refused :
 /-- **`ProtocolAccepts` fails without `NciCheck.Protocol.check`.** At a case whose α is no fraction, which a verifier that
 accepted every case would accept, the check of record gives no verdict at all: its conclusion's first part fails. -/
 theorem ProtocolAccepts_nontrivial :
-    ∀ out, ¬ NciCheck.Baseline.evaluate
+    ∀ out, ¬ NciCheck.Theta.evaluate
       (NciCheck.Protocol.instanceOf ⟨.null, 1, #[], Json.arr #[], ""⟩ ⟨Json.arr #[], Json.arr #[], Json.arr #[]⟩)
       (NciCheck.Protocol.trustedOf ⟨.null, 1, #[], Json.arr #[], ""⟩ ⟨.null, "", .empty⟩) = .ok out := by
   intro out h

@@ -10,7 +10,7 @@ the way down (`ir="boolean"` can't derive Serve_v1; `lift.py`'s docstring says w
 
 * `measure`, the inference-only check: `nci-check --policy` (`NciCheck.Desc`, one summary per Definition) on an instance whose θ is
   the registered inputs and whose isolation blocks are the root's Calls, one each. `--policy` leaves out θ's provenance
-  (`NciCheck.Baseline`), which reads the registration log and adds work in θ's length and the log's. Where the unrolled
+  (`NciCheck.Theta`), which reads the registration log and adds work in θ's length and the log's. Where the unrolled
   circuit is small enough (`--unrolled-max`), the instance expanded gate by gate also goes through
   `nci-check --policy --unrolled` (`NciCheck.check`, the gate-by-gate reference), and the two verdicts must agree.
 * `partition`, the one-stage verifier's partition: `sampled-proofs-difftest`'s `partition` (`Partition.units`, `strata`,
@@ -74,7 +74,7 @@ research run --project verity --on vy-nebius-cpu-2 --pool network --source . --c
 - **The isolation block.** One isolation block holds every root node that isn't an input, which is the whole node's session (the demo's
   division).
 - **The checks**, in the order they start (`NODE_POINTS`):
-  - given the registration, the check of record (`nci-check INSTANCE TRUSTED`, `NciCheck.Baseline`), at A: the
+  - given the registration, the check of record (`nci-check INSTANCE TRUSTED`, `NciCheck.Theta`), at A: the
     policy check, then θ's provenance against the registration log;
   - `--policy` at A (Γ = 2^44, α = 2^-25);
   - at C (α = 2^-28) with Γ = 2^44 and with Γ = 2^52;

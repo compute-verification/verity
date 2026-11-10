@@ -4,8 +4,8 @@ import NciCheck.Desc
 import NciCheck.DescDifftest
 import NciCheck.DescLiveness
 import NciCheck.DescFuzz
-import NciCheck.Baseline
-import NciCheck.BaselineDifftest
+import NciCheck.Theta
+import NciCheck.ThetaDifftest
 import NciCheck.Count
 import NciCheck.CountDifftest
 import NciCheck.Protocol
@@ -13,12 +13,12 @@ import NciCheck.Protocol
 /-!
 # The NCI policy's check
 
-`NciCheck.Baseline.check` (the `nci-check` exe) is the verifier's check that a declared division of a declaration into
+`NciCheck.Theta.check` (the `nci-check` exe) is the verifier's check that a declared division of a declaration into
 isolation units meets `Nci.Complies Γ α` (`Security/Definitions/Nci.lean`), for IUs aligned to the root's Calls, at the
 cost of the descriptor: `NciCheck.Desc.check`, one summary per Definition, never a walk over the unrolled circuit
 (AGENTS.md "Design rules"), then each θ entry's provenance, registered public data that the first record of the
 deployment's registration log registers and never an earlier run's output, against the service's log
-(`NciCheck.Baseline`; `NciCheck.BaselineDifftest` holds it to the Python reference).
+(`NciCheck.Theta`; `NciCheck.ThetaDifftest` holds it to the Python reference).
 `NciCheck.check` is the same check gate by gate, with the input format and its mapping to the definition's circuit in
 `NciCheck.Check`'s docstring, kept as the reference: `NciCheck.Difftest` holds it to the Python reference, and
 `NciCheck.DescDifftest` holds `NciCheck.Desc` to it and to the Python reference, `NciCheck.DescLiveness` to it on

@@ -1,5 +1,5 @@
 import Definitions.Nci.Support
-import Definitions.Nci.Assumptions.Baseline
+import Definitions.Nci.Assumptions.Theta
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
@@ -31,7 +31,7 @@ honest training: an IU that runs a transformer's first attention layer and first
 embeddings and attention weights once, and then computes the MLP's inputs at every position itself.
 
 Every bound through a containment, total or partial (`PartialContainment`), also rests on `ThetaRegistered`
-(`Definitions/Nci/Assumptions/Baseline.lean`), a premise about what the protocol lets the baseline `θ` hold rather than about
+(`Definitions/Nci/Assumptions/Theta.lean`), a premise about what the protocol lets the baseline `θ` hold rather than about
 any circuit.
 -/
 

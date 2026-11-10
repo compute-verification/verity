@@ -1,6 +1,6 @@
 import Definitions.Nci.Dampener
 import Definitions.Nci.Assumptions.Threads
-import Definitions.Nci.Assumptions.Baseline
+import Definitions.Nci.Assumptions.Theta
 
 /-!
 # The compute dampener: the guarantees

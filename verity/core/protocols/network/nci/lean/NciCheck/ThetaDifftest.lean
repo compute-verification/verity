@@ -1,41 +1,41 @@
-import NciCheck.Baseline
+import NciCheck.Theta
 import NciCheck.DescDifftest
 
 /-!
 # The difftest of θ's provenance: against the Python reference, and against the unrolled check
 
-`scripts/baseline_difftest_vectors.py` writes cases, each `{"instance", "trusted"}` (an instance of `NciCheck.Desc` with
+`scripts/theta_difftest_vectors.py` writes cases, each `{"instance", "trusted"}` (an instance of `NciCheck.Desc` with
 θ's `provenance`, and the trusted input beside it), each expanded gate by gate where the policy check gives it a verdict
 and its provenance is one entry per θ entry, and `scripts/nci_reference.py`'s `check_baseline` on each.
-`NciCheck/BaselineDifftestMain.lean` fails unless `NciCheck.Baseline.check` gives Python's result on every case and
-`NciCheck.Baseline.checkUnrolled`'s on every expansion: per IU its size and novel reads, the verdict and the first failing
+`NciCheck/ThetaDifftestMain.lean` fails unless `NciCheck.Theta.check` gives Python's result on every case and
+`NciCheck.Theta.checkUnrolled`'s on every expansion: per IU its size and novel reads, the verdict and the first failing
 IU, or the first refusal's code. The Lean audit runs it (`runs` in `lean-audit.json`): compiled evaluation, a test and not
 a proof.
 -/
 
-namespace NciCheck.BaselineDifftest
+namespace NciCheck.ThetaDifftest
 
 open Lean (Json)
 
-/-- How case line `i` differs: `NciCheck.Baseline.check` against Python's result and, on an expansion, against
-`NciCheck.Baseline.checkUnrolled` on it. -/
+/-- How case line `i` differs: `NciCheck.Theta.check` against Python's result and, on an expansion, against
+`NciCheck.Theta.checkUnrolled` on it. -/
 def differences (i : Nat) (case exp python : String) : List String :=
   match Json.parse case, Json.parse exp, Json.parse python with
   | .error e, _, _ => [s!"case {i}: not JSON: {e}"]
   | _, .error e, _ => [s!"case {i}: the expansion doesn't parse: {e}"]
   | _, _, .error e => [s!"case {i}: Python's results don't parse: {e}"]
   | .ok c, .ok x, .ok py =>
-    let out := Baseline.check (c.getObjValD "instance") (c.getObjValD "trusted")
+    let out := Theta.check (c.getObjValD "instance") (c.getObjValD "trusted")
     DescDifftest.compare i "Python" out py ++
       (if x.isNull then []
-       else DescDifftest.compare i "Baseline.checkUnrolled" out
-        (Baseline.checkUnrolled (x.getObjValD "instance") (x.getObjValD "trusted")))
+       else DescDifftest.compare i "Theta.checkUnrolled" out
+        (Theta.checkUnrolled (x.getObjValD "instance") (x.getObjValD "trusted")))
 
-/-- `lake env lean --run NciCheck/BaselineDifftestMain.lean CASES EXPANDED PYTHON N`: fails unless the three files have
+/-- `lake env lean --run NciCheck/ThetaDifftestMain.lean CASES EXPANDED PYTHON N`: fails unless the three files have
 `N` lines each and no line differs. -/
 def main (args : List String) : IO UInt32 := do
   let [cases, exp, py, n] := args
-    | IO.eprintln "usage: NciCheck/BaselineDifftestMain.lean CASES EXPANDED PYTHON N"; return 2
+    | IO.eprintln "usage: NciCheck/ThetaDifftestMain.lean CASES EXPANDED PYTHON N"; return 2
   let lines (p : String) : IO (Array String) := do
     return ((← IO.FS.readFile p).splitOn "\n").filter (! ·.isEmpty) |>.toArray
   let a ← lines cases
@@ -50,4 +50,4 @@ def main (args : List String) : IO UInt32 := do
   IO.println s!"baseline difftest: {a.size} cases compared, {found.length} differences"
   return if found.isEmpty then 0 else 1
 
-end NciCheck.BaselineDifftest
+end NciCheck.ThetaDifftest

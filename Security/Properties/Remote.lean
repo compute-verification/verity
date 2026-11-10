@@ -2,7 +2,7 @@ import CoreRemote
 import Definitions.Core
 import Properties.Composition
 import Properties.NciDesc
-import Properties.Nci.Baseline
+import Properties.Nci.Theta
 import Properties.SampledProofs
 
 /-!
@@ -19,7 +19,7 @@ the period's commitment is the auditor's ledger, and remote's tie (`Core.Remote.
 record its windows name (`Core.Remote.windowRecords`) has that digest too. The policy's check
 (`NciCheck.Protocol.check`) refuses a record whose `program` is not the
 registered circuit's SHA-512 (`names`), then runs
-the check of record, `NciCheck.Baseline.evaluate`: the policy check at the size of the description
+the check of record, `NciCheck.Theta.evaluate`: the policy check at the size of the description
 (`NciCheck.Desc.evaluate`), then θ's provenance against the registration log through the run's record.
 
 * `AcceptInferenceOnly`: on every input remote's check accepts, the policy's and sampled proofs' records have
@@ -87,7 +87,7 @@ carries the policy's parameters and every such declaration and division meet the
 def PolicyHeld (p : NciCheck.Protocol.Params) (c : NciCheck.Protocol.Commitment) (e : NciCheck.Protocol.Evidence) :
     Prop :=
   ∃ P : Prog, Flock.Program.decode p.program.toUTF8 = .ok P ∧
-    NciCheck.Baseline.strAt c.record "program" = some (Flock.hexOf P.sha512) ∧
+    NciCheck.Theta.strAt c.record "program" = some (Flock.hexOf P.sha512) ∧
     ProvenanceHeld (instanceOf p e) (trustedOf p c) ∧
     (∃ (j' : Json) (i : NciCheck.Instance) (d : Declaration) (n : ℕ) (U : Partition d.D n),
       Expands (instanceOf p e) j' ∧ Parses j' i ∧ LaysOut P d.D ∧ Names i.theta d.θ ∧ Divides i.owner U ∧
@@ -152,7 +152,7 @@ def CompliesHeld (ev : List Case) : Prop :=
     (canonicalJson kI.params.toUTF8 >>= NciCheck.Protocol.paramsOf) = .ok p ∧
     NciCheck.Protocol.commitmentOf kI.commitment = .ok cr ∧ NciCheck.Protocol.evidenceOf kI.evidence = .ok e ∧
     Flock.Program.decode p.program.toUTF8 = .ok P ∧
-    NciCheck.Baseline.strAt cr.record "program" = some (Flock.hexOf P.sha512) ∧
+    NciCheck.Theta.strAt cr.record "program" = some (Flock.hexOf P.sha512) ∧
     (∃ (j' : Json) (i : NciCheck.Instance) (d : Declaration),
       Expands (instanceOf p e) j' ∧ Parses j' i ∧ LaysOut P d.D ∧ Names i.theta d.θ ∧ VerifierOwn p i ∧
         Nci.Complies i.gamma ((i.num : ℝ) / i.den) d) ∧

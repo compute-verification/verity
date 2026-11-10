@@ -1,7 +1,7 @@
 import Definitions.Nci.BitView
-import Definitions.Nci.Assumptions.Baseline
+import Definitions.Nci.Assumptions.Theta
 import Definitions.Nci.Assumptions.Cover
-import NciCheck.Baseline
+import NciCheck.Theta
 import Properties.NciDesc.Verdict
 
 /-!
@@ -12,7 +12,7 @@ the shape of `Properties.Nci.Threads`'s statements: its premises on the referenc
 (`UpdateHardness`, the upstream certificate `MulBlocks.Upstream`) and θ's (`ThetaRegistered`) are named
 assumptions, which the check does not see.
 
-The check of record is `NciCheck.Baseline.evaluate`: `Desc.evaluate`, θ and the owners by root node, then θ's
+The check of record is `NciCheck.Theta.evaluate`: `Desc.evaluate`, θ and the owners by root node, then θ's
 provenance, its verdict `Desc.evaluate`'s. `CheckedCoverTraining` states the cover theorem's factor of every verdict of
 the check of record, on every expansion of the instance gate by gate (`OnExpansions`), of which there is one.
 
@@ -46,8 +46,8 @@ def CoverTrained (j out : Json) : Prop :=
 
 /-- **A verdict of compliance of the check of record carries the cover theorem's factor**, for every reference training
 circuit the declaration contains, under the cover theorem's premises on its bit view and its θ registered. On every
-verdict of `NciCheck.Baseline.evaluate`, the verdict is `CoverTrained` on every expansion. -/
+verdict of `NciCheck.Theta.evaluate`, the verdict is `CoverTrained` on every expansion. -/
 def CheckedCoverTraining : Prop :=
-  ∀ (j tr out : Json), Baseline.evaluate j tr = .ok out → OnExpansions CoverTrained j out
+  ∀ (j tr out : Json), Theta.evaluate j tr = .ok out → OnExpansions CoverTrained j out
 
 end NciCheck.Properties

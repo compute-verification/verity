@@ -1,6 +1,6 @@
 import Definitions.Nci.BitDecl
 import Definitions.Nci.Dark
-import Definitions.Nci.Assumptions.Baseline
+import Definitions.Nci.Assumptions.Theta
 import Definitions.Nci.Assumptions.CoveringTwoCosts
 
 /-!

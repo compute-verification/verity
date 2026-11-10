@@ -1,4 +1,4 @@
-import NciCheck.Baseline
+import NciCheck.Theta
 import CoreProtocol.Protocol
 
 /-!
@@ -6,7 +6,7 @@ import CoreProtocol.Protocol
 
 The inference-only policy (`Nci.Complies Γ α`, `Security/Definitions/Nci.lean`) asks that the declared circuit divide
 into inference blocks of at most `Γ` gates, each reading at most `α` bits of fresh input per gate: input from outside
-the block that is not registered information. `NciCheck.Baseline.evaluate` is the policy's check: the division's check
+the block that is not registered information. `NciCheck.Theta.evaluate` is the policy's check: the division's check
 at the size of the description (`NciCheck.Desc.evaluate`), then the provenance of the registered information against
 the deployment's registration log. This module makes that check a `Core.Protocol`, which both composites list among
 their subprotocols (`Core.Remote.components`, `Core.Onsite.components`). v0 publishes the division and isn't
@@ -23,15 +23,15 @@ Its case splits the check's instance and trusted input as sampled proofs' one-st
   `verity-ir/descriptor/v1` Program, as text);
 * **commitment**: the run's own registration record, canonical JSON, an object, fixed before the run: the record whose
   digest sampled proofs' one-stage audit commits to. Its digest is `SHA-512(format || 0 || canon(record))`
-  (`NciCheck.Baseline.digest`, as one-stage's). Its `program` must be the declared circuit's SHA-512 (`names`), and
+  (`NciCheck.Theta.digest`, as one-stage's). Its `program` must be the declared circuit's SHA-512 (`names`), and
   θ's provenance reads the roots its `registered` entries give the program function's parameters;
 * **evidence**: canonical JSON with exactly the keys `owner` (the declared division: per root node of the declared
   circuit, its inference block or `"input"`), `provenance` (per `theta` entry, the registration record, value and root
   it was registered under) and `theta` (the root input nodes that hold registered information), as `NciCheck.Desc` and
-  `NciCheck.Baseline` read them;
+  `NciCheck.Theta` read them;
 * **check**: first that the record names the declared circuit, its `program` the circuit's SHA-512 (`names`), so that
   the commitment binds the circuit whether or not the case has registered information; then
-  `NciCheck.Baseline.evaluate` on the instance `{alpha, gamma, owner, program, provenance, theta}` (`instanceOf`) and
+  `NciCheck.Theta.evaluate` on the instance `{alpha, gamma, owner, program, provenance, theta}` (`instanceOf`) and
   the trusted input `{log: log ++ [record], params: parameters, run: the record's digest}` (`trustedOf`). It rejects
   when the record names another circuit, with the check's refusal code (and its fix, where the check has one) when the
   instance or the trusted input is refused, and naming the first inference block over its budget when the division
@@ -55,7 +55,7 @@ structure Params where
   parameters : Json
   program : String
 
-/-- The run's own registration record, with its digest as `NciCheck.Baseline.digest` writes it and as bytes. -/
+/-- The run's own registration record, with its digest as `NciCheck.Theta.digest` writes it and as bytes. -/
 structure Commitment where
   record : Json
   hex : String
@@ -67,7 +67,7 @@ structure Evidence where
   theta : Json
 
 private def exactly (j : Json) (ks : Array String) (what : String) : V Unit :=
-  if Baseline.keys? j != some ks then throw s!"the keys of {what} are not {", ".intercalate ks.toList}"
+  if Theta.keys? j != some ks then throw s!"the keys of {what} are not {", ".intercalate ks.toList}"
   else pure ()
 
 def PARAMS_KEYS : Array String := #["alpha", "gamma", "log", "parameters", "program"]
@@ -75,22 +75,22 @@ def EVIDENCE_KEYS : Array String := #["owner", "provenance", "theta"]
 
 def paramsOf (j : Json) : V Params := do
   exactly j PARAMS_KEYS "the params"
-  let .str program := Baseline.getD j "program" | throw "the params' program is not a string (the descriptor's text)"
-  let .arr log := Baseline.getD j "log" | throw "the params' log is not a list of registration records"
-  pure { alpha := Baseline.getD j "alpha", gamma := Baseline.getD j "gamma", log,
-         parameters := Baseline.getD j "parameters", program }
+  let .str program := Theta.getD j "program" | throw "the params' program is not a string (the descriptor's text)"
+  let .arr log := Theta.getD j "log" | throw "the params' log is not a list of registration records"
+  pure { alpha := Theta.getD j "alpha", gamma := Theta.getD j "gamma", log,
+         parameters := Theta.getD j "parameters", program }
 
 def commitmentOf (b : ByteArray) : V Commitment := do
   let record ← Core.canonicalJson b
   unless record matches .obj _ do throw "the registration record is not an object"
-  let hex ← Baseline.digest record
+  let hex ← Theta.digest record
   pure { record, hex, digest := ← Flock.unhex hex }
 
 def evidenceOf (b : ByteArray) : V Evidence := do
   let j ← Core.canonicalJson b
   exactly j EVIDENCE_KEYS "the evidence"
-  pure { owner := Baseline.getD j "owner", provenance := Baseline.getD j "provenance",
-         theta := Baseline.getD j "theta" }
+  pure { owner := Theta.getD j "owner", provenance := Theta.getD j "provenance",
+         theta := Theta.getD j "theta" }
 
 /-- The instance the policy's check reads. -/
 def instanceOf (p : Params) (e : Evidence) : Json :=
@@ -103,7 +103,7 @@ def trustedOf (p : Params) (c : Commitment) : Json :=
 
 /-- A refusal's code for the instance `j`, with the fix its `message` gives where there is one. -/
 def reasonOf (j : Json) (code : String) : String :=
-  let r := Baseline.refusal j code
+  let r := Theta.refusal j code
   match r.getObjVal? "error", r.getObjVal? "message" with
   | .ok (.str e), .ok (.str m) => s!"{e}: {m}"
   | .ok (.str e), _ => e
@@ -111,7 +111,7 @@ def reasonOf (j : Json) (code : String) : String :=
 
 /-- Why a verdict that doesn't comply rejects: the first inference block over its budget, and which budget. -/
 def failureOf (out : Json) : String :=
-  match Baseline.getD out "failure" with
+  match Theta.getD out "failure" with
   | .arr #[u, .str "size"] => s!"the division does not comply: inference block {u.compress} has more than Γ gates"
   | .arr #[u, .str _] =>
     s!"the division does not comply: inference block {u.compress} reads more than α bits of fresh input per gate"
@@ -120,7 +120,7 @@ def failureOf (out : Json) : String :=
 /-- The check's report on a complying division: per inference block `[gates, fresh-input bits]`, and the declared
 circuit's gates. -/
 def reportOf (out : Json) : Json :=
-  Json.mkObj [("blocks", Baseline.getD out "ius"), ("gates", Baseline.getD out "gates")]
+  Json.mkObj [("blocks", Theta.getD out "ius"), ("gates", Theta.getD out "gates")]
 
 /-- The run's record names the declared circuit: its `program` is the circuit's SHA-512 (`Prog.sha512`), what sampled
 proofs' one-stage audit asks of its own record and program (R2-program). θ's provenance asks it only of a case with
@@ -128,7 +128,7 @@ registered information; here every case is bound to its circuit. A program that 
 which refuses it (`program`). -/
 def names (p : Params) (c : Commitment) : Bool :=
   match Flock.Program.decode p.program.toUTF8 with
-  | .ok P => Baseline.strAt c.record "program" == some (Flock.hexOf P.sha512)
+  | .ok P => Theta.strAt c.record "program" == some (Flock.hexOf P.sha512)
   | .error _ => true
 
 def UNNAMED : String :=
@@ -136,7 +136,7 @@ def UNNAMED : String :=
 
 def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Unit Json :=
   if !names p c then .reject UNNAMED else
-  match Baseline.evaluate (instanceOf p e) (trustedOf p c) with
+  match Theta.evaluate (instanceOf p e) (trustedOf p c) with
   | .error code => .reject (reasonOf (instanceOf p e) code)
   | .ok out =>
     match out.getObjVal? "complies" with

@@ -1,5 +1,5 @@
 """`registration_log.write` is a log nci-check's full check accepts: on a Program whose θ is registered, its record, provenance
-and trusted input pass `nci_reference.check_baseline` (`NciCheck.Baseline`'s reference), each entry is the one one-stage's
+and trusted input pass `nci_reference.check_baseline` (`NciCheck.Theta`'s reference), each entry is the one one-stage's
 `Registered.commit` makes of the parameter's rows, and each break is refused with the code the check names."""
 import copy
 import importlib.util

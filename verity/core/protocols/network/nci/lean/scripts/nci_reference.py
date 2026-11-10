@@ -25,10 +25,10 @@ and fresh bits are read off one activation of it on its own, gate by gate (`bloc
 its primitive gates, and the widths of the parameter leaves its gates read (each reference resolved up to the
 activation's parameters, `source`) over the parameters that are not θ at every one of its blocks.
 
-    check_baseline(instance, trusted) -> the same, then θ's provenance (`NciCheck.Baseline`)
+    check_baseline(instance, trusted) -> the same, then θ's provenance (`NciCheck.Theta`)
 
 `check_baseline` is `check_desc` followed by the check of each θ entry's `provenance` against the trusted input (the
-deployment's registration log, the run's own record and the program function's parameters), with `NciCheck.Baseline`'s
+deployment's registration log, the run's own record and the program function's parameters), with `NciCheck.Theta`'s
 codes in its order; `check_baseline_unrolled` is `check` followed by the same, on an instance expanded by
 `expand_baseline`. The run's own record names the Program checked (its `program` is the descriptor's digest), whatever θ
 is, and is refused `run-program` otherwise. θ holds registered public data only: an entry of any kind but `registered`,
@@ -475,7 +475,7 @@ def check_count(inst) -> dict:
         return {"error": e.code}
 
 
-# θ's provenance (`NciCheck.Baseline`): after the policy check, each θ entry against the trusted input
+# θ's provenance (`NciCheck.Theta`): after the policy check, each θ entry against the trusted input
 
 TRUSTED_KEYS = {"log", "run", "params"}
 REGISTERED_KEYS = {"kind", "registration", "value", "root"}
@@ -613,7 +613,7 @@ def _node_of(offs: list[int], g: int) -> int:
 
 
 def check_baseline(inst, tr) -> dict:
-    """`NciCheck.Baseline.check`: `check_desc`, then θ's provenance; the verdict is the policy check's."""
+    """`NciCheck.Theta.check`: `check_desc`, then θ's provenance; the verdict is the policy check's."""
     out = check_desc(inst)
     if "error" in out:
         return out
@@ -625,7 +625,7 @@ def check_baseline(inst, tr) -> dict:
 
 
 def check_baseline_unrolled(inst, tr) -> dict:
-    """`NciCheck.Baseline.checkUnrolled`: `check`, then θ's provenance, gate g of θ in the root node holding it."""
+    """`NciCheck.Theta.checkUnrolled`: `check`, then θ's provenance, gate g of θ in the root node holding it."""
     out = check(inst)
     if "error" in out:
         return out

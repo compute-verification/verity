@@ -1,5 +1,5 @@
 import Properties.Nci
-import Definitions.Nci.Assumptions.Baseline
+import Definitions.Nci.Assumptions.Theta
 import Definitions.Nci.Assumptions.Threads
 
 /-!

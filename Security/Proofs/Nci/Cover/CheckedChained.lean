@@ -7,7 +7,7 @@ import Proofs.Nci.Cover.Chained
 `CoverTrainedChained` is `Nci.Cover.Guarantees.CoverTrainingChained`'s conclusion on a verdict, at `Γ = gamma` and
 `α = num / den`, as `CoverTrained` (`Proofs.Nci.Cover.Checked`) is `CoverTraining`'s. `coverTrainedChained` proves it of
 every verdict of the gate-level check `NciCheck.evaluate`, from the verdict's compliance (`Witnesses`), and
-`CheckedCoverTrainingChained` states it of every verdict of the check of record, `NciCheck.Baseline.evaluate`, on every
+`CheckedCoverTrainingChained` states it of every verdict of the check of record, `NciCheck.Theta.evaluate`, on every
 expansion of the instance, and `checkedCoverTrainingChained` proves it from `SecurityProofs.DescAgrees`. It is stated
 here in `Proofs/`, so it is no guarantee.
 -/
@@ -44,16 +44,16 @@ theorem coverTrainedChained {j out : Json} (hev : evaluate j = .ok out) : CoverT
       (div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _))
       (Witnesses j out hev i P d hpar hdec hL hθ hc) hB hH hk hca hw hs
 
-/-- On every verdict `out` of the check of record, `Baseline.evaluate`, the instance `j` has an expansion gate by gate,
+/-- On every verdict `out` of the check of record, `Theta.evaluate`, the instance `j` has an expansion gate by gate,
 and on each expansion `out` is `CoverTrainedChained`. -/
 def CheckedCoverTrainingChained : Prop :=
-  ∀ (j tr out : Json), Baseline.evaluate j tr = .ok out →
+  ∀ (j tr out : Json), Theta.evaluate j tr = .ok out →
     (∃ j', Expands j j') ∧ ∀ j', Expands j j' → CoverTrainedChained j' out
 
 /-- **`CheckedCoverTrainingChained` from `DescAgrees`.** -/
 theorem checkedCoverTrainingChained_of_descAgrees (h : Properties.DescAgrees) : CheckedCoverTrainingChained :=
   fun j _ out hev =>
-    have hd := h j out (baseline_desc hev)
+    have hd := h j out (theta_desc hev)
     ⟨hd.1, fun j' hj' => coverTrainedChained (hd.2 j' hj')⟩
 
 /-- **A verdict of compliance of the check of record carries the covering bound's factor on the chained blocks.** -/

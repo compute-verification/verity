@@ -1,4 +1,4 @@
-import Definitions.Nci.Assumptions.Baseline
+import Definitions.Nci.Assumptions.Theta
 import Proofs.Core.Circuit
 
 /-!

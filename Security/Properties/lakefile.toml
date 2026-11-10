@@ -95,7 +95,7 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Pous.Component", "Properties.Attest", "Properties.NetworkCertifier",
   "Properties.NetworkCertifier.LinkWindow", "Properties.CertifierNetwork", "Properties.CertifierNetwork.Runs",
   "Properties.Identity", "Properties.Annot", "Properties.NciDesc", "Properties.NciDesc.Verdict",
-  "Properties.NciDesc.Cover", "Properties.Nci.Baseline", "Properties.Nci.Count", "Properties.SampledProofs",
+  "Properties.NciDesc.Cover", "Properties.Nci.Theta", "Properties.Nci.Count", "Properties.SampledProofs",
   "Properties.SampledProofs.Draw", "Properties.SampledProofs.Halt", "Properties.Evaluate", "Properties.NetworkRecords",
   "Properties.NetworkPeriod", "Properties.Core.Period", "Properties.NetworkScan", "Properties.Accounting.Requirement",
   "Properties.Accounting.Compose", "Properties.RemoteAudit",
