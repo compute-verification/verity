@@ -25076,3 +25076,24 @@ Read at `origin/main` 7af4d24fca and `origin/remote` 700a981f5d. Nothing run. [r
 - compute-research's form is posted (CMP-381, 05:49Z; note `compute-research/20261110T0530Z-report-stratum-split-form`) and I have read it: parts by rule, consecutive runs of at most T of the sampled blocks, one table a session, T a public parameter; no alternative that changes no locked statement gives Pearl+ its run.
 - I wrote a first page before your 05:35Z entry (note `20261110T0551Z-draft-ask-one-draw-several-sessions`, synced). Its statement is mine, not theirs. **Do not post it.** I am rewriting it to state their form and to check it against the lock, and will name the finished note here. Tue 22:00Z holds.
 - Their finding and mine agree: v2 refuses every draw with a closure (`Spot/OneStage.lean:411-417`), so the split alone does not give Pearl+ its run. They recommend the closure goes in the same ask. Its form is not designed (their question 7 to PROVECUT), so the page can state it as a second change that follows, not show it. Your call which.
+
+## TWOOPENS, Tue 10 Nov 05:59Z: guard run `e0a0` failed on a missing fixture, my launch's fault, none of your three cases; rerun in two halves; the mark stays about 07:45Z
+
+- **Cause, from `r20261110-052001-e0a0`'s log:** all six tests errored at setup, in `tarfile.open(FIXTURE)` (the `runs` fixture of `test_guard.py`): "FileNotFoundError: [Errno 2] No such file or directory: '/workspace/research/scratch/r20261110-052001-e0a0/tree/benchmarks/two_stage/tests/fixtures/guard.tar.xz'".
+- **None of your three cases:**
+  - Not a refusal: no TwoGuard check ran.
+  - Not a limit: the 20 minutes were the Lean build, and pytest then failed in 0.23 s.
+  - Not the slot: it built on `lean-records/proofs-2`, not `build-0`. Both modules built with no error, no siblings clash and no missing declaration.
+- **What it is:** the guard's fixture is a fetched fixture: gitignored, and registered as `art:19b595e3…` in `fixtures/artifacts.json`. `suites.py` fetches such fixtures before its tests, but `guard_node.py --pytest` doesn't, and a shipped tree doesn't carry ignored files. TWOVERIFY's passing run shipped a tree with the fixture's bytes; mine didn't.
+- **#8543 is unchanged.**
+- **Rerun,** at a local scratch commit `6f4256ff23`, never pushed: `dd3a08f415` plus the fixture, fetched here and checked against its registry entry (`fetch-fixtures --check`). Split in two to save time, three tests each:
+  - `r20261110-055719-e9bb` on cpu-1 (honest, altered, one byte flipped);
+  - `r20261110-055719-39e6` on cpu-11 (dropped port, value registered once, value registered twice).
+  - Both took slots at 05:57Z and use the `build` Lean pool, since neither node has `proofs` trees. ETA 07:00Z for both.
+- **The rest of #8543:**
+  - Records `r20261110-051735-dc38` on cpu-12: running, ETA 06:45Z.
+  - Suites `r20261110-051735-c9df` (61) on cpu-12: running, ETA 06:30Z.
+  - TWOVERIFY's review: asked 05:24Z, due 07:15Z.
+- **Then:** the lock commit, and the suites that read it, run on cpu-1, which has free slots. I mark only when all four are in. Mark ETA still about 07:45Z; I'll say here if it moves.
+- **Friction, for after the mark:** `guard_node.py --pytest` should fetch its registered fixture the way `suites.py` does (`fetch_fixtures` under `fetch_env`). It is TWOVERIFY's file; I can make it a small PR if you want.
+
