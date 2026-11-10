@@ -279,16 +279,16 @@ def test_each_check_catches_a_dangling_path():
     """The detectors above find what a move would leave behind, on a toy tree."""
     files = frozenset({"verity/flock/prover/live/lib.rs", "verity/flock/prover/README.md", "tools/verity/check/x.py", "tools/verity/check/data/a.json"})
     assert rule_dangling(["verity/flock/prover/", "!README.md"], files) == []
-    assert rule_dangling(["verity/flock/prover/", "verity/flock/", "!README.md"], files) == ["verity/flock/"]
+    assert rule_dangling(["verity/flock/prover/", "verity/gone/", "!README.md"], files) == ["verity/gone/"]
     assert rule_dangling(["tools/verity/check/data/a.json"], files) == []
 
     from research.store.tool import Tool
 
     tool = Tool(name="t", command=["bash", "verity/ml/flock/run.sh"], closure=["verity/flock/prover/live/**", "elsewhere/**"],
-                after_land=["python", "tools/verity/check/x.py"], merge_requires={"s": ["verity/flock/"]})
+                after_land=["python", "tools/verity/check/x.py"], merge_requires={"s": ["verity/gone/"]})
     assert tool_problems("t", tool, files) == ["closure glob 'elsewhere/**' matches no tracked file",
                                                "command names 'verity/ml/flock/run.sh', which isn't tracked",
-                                               "merge_requires['s'] prefixes ['verity/flock/'] match no tracked file"]
+                                               "merge_requires['s'] prefixes ['verity/gone/'] match no tracked file"]
     gkr = frozenset({"archive/gkr/gpu/tool.py", "archive/gkr/gpu/run.py"})
     tool = Tool(name="g", command=["python", "-m", "gpu.run"], closure=["archive/gkr/gpu/**"])
     tool.spec = "archive.gkr.gpu.tool:G"

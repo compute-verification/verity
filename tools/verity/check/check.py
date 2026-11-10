@@ -30,7 +30,7 @@ after-landing run on `checked`'s tip.  It reports each step's real verdict; what
                                                             policy.toml's `off_gate`: circuit-check, ratchet-gate), which only
                                                             `--deferred` and `--no-cache` run: an Attempt of the clean commit
                                                             checked out, the record `research merge` reads; with the pinned
-                                                            upstream build and inputs when the commit changes verity/flock/prover/
+                                                            upstream build and inputs when the commit changes verity/flock/
                                                             against --base REF (default origin/main; also ratchet-gate's base
                                                             unless --ratchet-base REF is given), and presigned URLs for
                                                             the pinned Lean dependency bundles and the newest recorded checks'
@@ -175,7 +175,7 @@ doesn't name:
     lean            `lake build` of the Lean verifier (`verity/flock/verifier`), then its partition check against
                     `verity.circuits.partition` (`unit_cut_agree.py`), then its agreement with upstream's Rust verifier (`ci.py`) on
                     the upstream build stored once and pinned by hash (`verity/flock/agreement/upstream.json`), when the run has
-                    it; skipped by name without it.  `research merge` requires it for a change under verity/flock/prover/ (`tool.py`)
+                    it; skipped by name without it.  `research merge` requires it for a change under verity/flock/ (`tool.py`)
     lean-suites     once lean-build has passed, beside the rest of the lean group: the suites that use Lean (`AFTER_LEAN`,
                     outcomes in `suites-lean.json`) on the verifier it built
     lean-audit      at once with the lean group: the audit of every Lake package with a `lean-audit.json` (`lean_audit.py`,
@@ -846,7 +846,7 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
     is skipped by name.  The audit regenerates lock records (`lean_regenerates`) unless ``regenerate`` is off (`--no-regenerate`,
     drive's after-landing run, where a record difference fails), with ``bookkeeping`` (`--bookkeeping-warn`, drive's lock run)
     repairs the bookkeeping too and warns (`lean_audit.py --bookkeeping warn`), and inside a recorded run it bundles the module versions it
-    built for other nodes (`lean_audit.py --bundle`).  `research merge` requires it for a change under `verity/flock/prover/` (`tools/verity/check/tool.py`), and
+    built for other nodes (`lean_audit.py --bundle`).  `research merge` requires it for a change under `verity/flock/` (`tools/verity/check/tool.py`), and
     `--record` sends it then.  The agreement fails, sent or not, while the verifier's package requires one from outside its
     directory (`requires_outside`)."""
     lean = FLOCK_LEAN
@@ -855,8 +855,8 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
             return [("lean", f"the verifier is on this tree but its Lean package is not at {lean}", ROOT)]
         return [("lean", "skipped: verity/flock/verifier is not on this tree", ROOT)]
     verify = lean / ".lake" / "build" / "bin" / "flock-verify"
-    agreement: list[str] | str = ("skipped: the pinned upstream build was not sent (a merge changing verity/flock/prover/ or "
-                                  "verity/flock/verifier/ requires this step: `check.py --record` sends it)")
+    agreement: list[str] | str = ("skipped: the pinned upstream build was not sent (a merge changing verity/flock/ "
+                                  "requires this step: `check.py --record` sends it)")
     if UPSTREAM_PIN.exists():
         got = agreement_files(out)
         if len(got) == 2:
