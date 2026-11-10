@@ -84,7 +84,7 @@ from __future__ import annotations
 
 import hashlib
 from types import SimpleNamespace
-from typing import Sequence
+from typing import Callable, Sequence
 
 from verity.ml.circuits.boolean import memcheck as MC
 from verity.ml.circuits.boolean.forms import ONE, ZERO, and_reduce, const_bits, mux, or_reduce
@@ -758,12 +758,14 @@ def touched_counts(S, stream: V3S.Stream) -> list[int]:
 
 
 def reference(S, sl: CS.Slice, delta: int = COINS[2], counts: Sequence[int] | None = None,
-              stream: V3S.Stream | None = None) -> SimpleNamespace | None:
+              stream: V3S.Stream | None = None, edge: Callable[[SimpleNamespace], None] | None = None
+              ) -> SimpleNamespace | None:
     """The registered rows, the counts and the checked witness the unit accepts `sl`'s advice with under the print coin δ,
     by `compile_slice_v4.scan`'s run on `stream` (default the empty pool's) (``srv``, ``cout`` and ``chk``'s bits,
     unpadded, and ``counts``: `touched_counts` unless given), or None where CompileSlice_v4's reference refuses the slice
     or the class doesn't hold it (the stream past NS slots, NM M or NRB RB entries, its RK reads past a slot's count, the
-    counts past NRK blocks or a slot's past CU), or the arrivals repeat an id."""
+    counts past NRK blocks or a slot's past CU), or the arrivals repeat an id. `edge`, where given, runs on the scan's
+    run after its last step, before the class and the witness read its stream (a caller's calls past the steps)."""
     shape(S)
     if not _distinct(sl):
         return None
@@ -775,6 +777,8 @@ def reference(S, sl: CS.Slice, delta: int = COINS[2], counts: Sequence[int] | No
             arr, _bits = sc.fronts[u]
             if nxt.qh - cur.qh > len(arr) or nxt.dh - cur.dh > S.A or nxt.dh > len(sc.window.decisions):
                 return None
+    if edge is not None:
+        edge(sc)
     stm = sc.stream
     got = touched_counts(S, stm)
     counts = got if counts is None else list(counts)
