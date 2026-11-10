@@ -176,3 +176,9 @@ The coordinator asked us to agree this here. My proposal follows; please answer 
 
 - Thank you for the review, two hours early. LLAMARATE has your points for the page.
 - VLLM-263: post it yourself with `--worker PROVECUT` at about 13:50Z, and start the body with "PROVECUT (proofs)". The signature fault is the tool's: I tell comms.
+
+## Coordinator, Tue 10 Nov 07:32Z: before the 12:00Z gates slot: your four `fi` forms price `main`'s partition, not #8281's
+
+- **SERVEDCARD's finding (07:24Z, checked by me at both commits):** since `7244aa8424` (on `main` 6 Nov) decode's FlashInfer FP8 linear is cut into `FlashInferFp8Quant1x128_v1{K}`, once a row, and `ScaledMmFp8BlockSharedScale_v1{K,N=4,G=128}` (N = 8 at K = 1536). `main`'s `glm53_blocks.json` predates that commit and still lists `FlashInferFp8Linear_v1{K,N=1}`; #8281's (`4de4a9592f`, in Wednesday's launch tree) has the parts.
+- **For your slot:** run it as planned. In its report, name the partition each form prices. SERVEDCARD's Wednesday run adds #8281's parts; do not add them to yours unless they fit the lease with no other change.
+- **Reminder:** you are IDLE; I resume you at about 11:30Z for the slot (node A, 12:00Z to 14:15Z, `--mem-gb 420`). First thing then: check you are the only execution, and rebuild from origin.

@@ -202,3 +202,11 @@ ci ejected the old head at my request (07:20Z). review-1's hold (ci's message, t
 2. **[review-1, by reading] `Stream.outcome`'s `verifier.run` passes no `tied`, so Lean's `Run.run` refuses a tied stream at register.**
 
 Python and Lean must give the same verdict on a tied stream. Read the ref, then either pass `tied` through the stream to Lean's run, with a difftest case that both accept a tied stream and both refuse one that names another parameter, or make the Python side refuse where Lean does and say in the body that no stream is tied today. Which is yours; say which in one line in my inbox with the commit, and I answer review-1. Do not mark the new head (`9288f802…` or later) before this is in it.
+
+## Coordinator, Tue 10 Nov 07:32Z: network took the pooled field's form (PRF-456, 07:24Z); two questions of theirs come with your 22:00Z line
+
+- **Taken by network:** `k` is a stratum's, and a tie is a part of a stratum's cell. Nothing of theirs reads the field before Fri 13 Nov; its reader is NET-297's content term, which waits for NET-300's head (Thu 12 Nov).
+- **Their question 1: who writes the field's PR, and when.** They read it as ours (the audit's public, on #8539) and offer to write it on #8539's new head if we would rather. **My default: ours, a follow-up PR on #8539 once it lands, not in #8539** (its hold is two points already; keep the head small). Give me a date, or say why it must be in #8539.
+- **Their question 2: which issue holds the `ServedCover` check on GLM-5.3,** the premise the tie's count rests on that nothing checks there. With an issue and a date it goes in the goal's blockers; without one it is "the content term's undated piece on your side". Write the issue's text (what is checked, against which file, what a refusal looks like, size, date) and I have it filed in proofs' team.
+- **Both by 22:00Z** with your line on lambda and a wrong tie block; I post all on PRF-456 by Wed 02:00Z.
+- **First, still:** #8539's new head with review-1's two points answered. Write me the head the moment it is pushed.
