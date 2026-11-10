@@ -89,12 +89,12 @@ def TilePassGivesTheChainCap : Prop :=
     (coins : PouwCheck.PearlPlus.EpochCoins) (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening)
     (U : Pouw.PearlC.Workload) (g : ℕ) (c : Pouw.PearlC.Commit),
     PouwCheck.PearlPlus.load coins man = .ok p → TileOf p tid U g → bytesNat p.salt = saltOf s →
-    bytesNat ((p.weightRoots.lookup (U.layout.wid ((auditTiling 64 64 U.layout).unit g))).getD ByteArray.empty) =
-      rootOf (U.layout.wid ((auditTiling 64 64 U.layout).unit g)) →
+    bytesNat ((p.weightRoots.lookup (U.layout.fixedId ((auditTiling 64 64 U.layout).unit g))).getD ByteArray.empty) =
+      rootOf (U.layout.fixedId ((auditTiling 64 64 U.layout).unit g)) →
     (∀ j ∈ (auditTiling 64 64 U.layout).cols g,
-      (protocolH3 saltOf rootOf (1 / 400) : Pouw.PearlC.Protocol Q R S).weightOK
+      (protocolH3 saltOf rootOf (1 / 400) : Pouw.PearlC.Protocol Q R S).fixedOK
         (U.layout.shape ((auditTiling 64 64 U.layout).unit g))
-        (U.weight (U.layout.wid ((auditTiling 64 64 U.layout).unit g))) j) →
+        (U.fixed (U.layout.fixedId ((auditTiling 64 64 U.layout).unit g))) j) →
     OpensCommitted p tid o U ((auditTiling 64 64 U.layout).unit g) c → CarriesATicket p tid →
     checkTile p (Properties.Pouw.PearlPlus.noiseOf p tid) tid o = .pass →
       let tl := auditTiling 64 64 U.layout
@@ -112,12 +112,12 @@ def TilePassGivesTheCap : Prop :=
     (coins : PouwCheck.PearlPlus.EpochCoins) (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening)
     (U : Pouw.PearlC.Workload) (g : ℕ) (c : Pouw.PearlC.Commit),
     PouwCheck.PearlPlus.load coins man = .ok p → TileOf p tid U g → bytesNat p.salt = saltOf s →
-    bytesNat ((p.weightRoots.lookup (U.layout.wid ((auditTiling 64 64 U.layout).unit g))).getD ByteArray.empty) =
-      rootOf (U.layout.wid ((auditTiling 64 64 U.layout).unit g)) →
+    bytesNat ((p.weightRoots.lookup (U.layout.fixedId ((auditTiling 64 64 U.layout).unit g))).getD ByteArray.empty) =
+      rootOf (U.layout.fixedId ((auditTiling 64 64 U.layout).unit g)) →
     (∀ j ∈ (auditTiling 64 64 U.layout).cols g,
-      (protocolH3 saltOf rootOf (1 / 400) : Pouw.PearlC.Protocol Q R S).weightOK
+      (protocolH3 saltOf rootOf (1 / 400) : Pouw.PearlC.Protocol Q R S).fixedOK
         (U.layout.shape ((auditTiling 64 64 U.layout).unit g))
-        (U.weight (U.layout.wid ((auditTiling 64 64 U.layout).unit g))) j) →
+        (U.fixed (U.layout.fixedId ((auditTiling 64 64 U.layout).unit g))) j) →
     OpensCommitted p tid o U ((auditTiling 64 64 U.layout).unit g) c → CarriesATicket p tid →
     checkTile p (Properties.Pouw.PearlPlus.noiseOf p tid) tid o = .pass →
       (tilesH3 saltOf rootOf (1 / 400) : Pouw.PearlC.TileRules Q R S).capOK H s U g c.act
@@ -850,14 +850,14 @@ rules are `unitChain`'s codes at `semH3`'s noise, whose lines and bases are the 
 theorem codes_eq {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (H : Q → R) (s : S)
     (U : Pouw.PearlC.Workload) (u : ℕ) (act : Codes) (salt rootB : ByteArray) (wn : Words.FixedNoise)
     (rows cols : List ℕ) (ops : Words.Ops) (hsalt : bytesNat salt = saltOf s)
-    (hroot : bytesNat rootB = rootOf (U.layout.wid u)) (hk : (U.layout.shape u).k ≤ 2 ^ 16)
+    (hroot : bytesNat rootB = rootOf (U.layout.fixedId u)) (hk : (U.layout.shape u).k ≤ 2 ^ 16)
     (hk128 : (U.layout.shape u).k % 128 = 0) (hact : ∀ i ∈ rows, ∀ l < (U.layout.shape u).k, act i l < 2 ^ 32)
-    (hwt : ∀ j ∈ cols, ∀ l < (U.layout.shape u).k, U.weight (U.layout.wid u) j l < 2 ^ 32)
+    (hwt : ∀ j ∈ cols, ∀ l < (U.layout.shape u).k, U.fixed (U.layout.fixedId u) j l < 2 ^ 32)
     (hW : ∀ j ∈ cols, (semH3 saltOf rootOf : PearlCSem Q R S).RowOK (U.layout.shape u).n (U.layout.shape u).k
-      (U.weight (U.layout.wid u)) j)
+      (U.fixed (U.layout.fixedId u)) j)
     (hwn : Words.fixedNoise salt rootB (U.layout.shape u).k = .ok wn)
     (henc : Words.encode salt rootB wn u (U.layout.shape u).k rows (rows.map (rowBytesOf act (U.layout.shape u).k))
-      cols (cols.map (rowBytesOf (U.weight (U.layout.wid u)) (U.layout.shape u).k)) = .ok ops)
+      cols (cols.map (rowBytesOf (U.fixed (U.layout.fixedId u)) (U.layout.shape u).k)) = .ok ops)
     (x z : ℕ) (i : Fin (U.layout.shape u).m) (j : Fin (U.layout.shape u).n) (hxi : rows[x]? = some i.val)
     (hyj : cols[z]? = some j.val)
     (hR : (semH3 saltOf rootOf : PearlCSem Q R S).RowOK (U.layout.shape u).m (U.layout.shape u).k act i) :
@@ -869,10 +869,10 @@ theorem codes_eq {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List
   obtain ⟨hy, hyj'⟩ := List.getElem?_eq_some_iff.1 hyj
   have hWj := hW _ (List.mem_of_getElem? hyj)
   obtain ⟨hseed, -, -, hF⟩ := fixedNoiseIsTheSpec salt rootB _ wn hwn
-  have hsd : bytesNat wn.seedB = NoiseSha512.seedB (saltOf s) (rootOf (U.layout.wid u)) := by
+  have hsd : bytesNat wn.seedB = NoiseSha512.seedB (saltOf s) (rootOf (U.layout.fixedId u)) := by
     rw [hseed, hsalt, hroot]
   obtain ⟨-, -, hAB⟩ := encode_codes (z := (semH3 saltOf rootOf : PearlCSem Q R S).noise H s U u act)
-    (wt := U.weight (U.layout.wid u)) hk hact hwt
+    (wt := U.fixed (U.layout.fixedId u)) hk hact hwt
     (fun l hl t => by rw [(hF l hl t).1, hsd]; rfl) (fun l hl t => by rw [(hF l hl t).2, hsd]; rfl)
     (fun i e he => by
       obtain ⟨h1, h2⟩ := lineIsTheSpec _ 0 0 0 Words.NORM_E 256 e (by norm_num) (by norm_num) (Or.inl ⟨rfl, rfl⟩) he
@@ -903,12 +903,12 @@ theorem tile_bound (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (hK : Proper
     (coins : PouwCheck.PearlPlus.EpochCoins) (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening)
     (U : Pouw.PearlC.Workload) (g : ℕ) (c : Pouw.PearlC.Commit)
     (hload : PouwCheck.PearlPlus.load coins man = .ok p) (hof : TileOf p tid U g) (hsalt : bytesNat p.salt = saltOf s)
-    (hroot : bytesNat ((p.weightRoots.lookup (U.layout.wid ((auditTiling 64 64 U.layout).unit g))).getD
-      ByteArray.empty) = rootOf (U.layout.wid ((auditTiling 64 64 U.layout).unit g)))
+    (hroot : bytesNat ((p.weightRoots.lookup (U.layout.fixedId ((auditTiling 64 64 U.layout).unit g))).getD
+      ByteArray.empty) = rootOf (U.layout.fixedId ((auditTiling 64 64 U.layout).unit g)))
     (hwOK : ∀ j ∈ (auditTiling 64 64 U.layout).cols g,
-      (protocolH3 saltOf rootOf (1 / 400) : Pouw.PearlC.Protocol Q R S).weightOK
+      (protocolH3 saltOf rootOf (1 / 400) : Pouw.PearlC.Protocol Q R S).fixedOK
         (U.layout.shape ((auditTiling 64 64 U.layout).unit g))
-        (U.weight (U.layout.wid ((auditTiling 64 64 U.layout).unit g))) j)
+        (U.fixed (U.layout.fixedId ((auditTiling 64 64 U.layout).unit g))) j)
     (hopen : OpensCommitted p tid o U ((auditTiling 64 64 U.layout).unit g) c) (hticket : CarriesATicket p tid)
     (hpass : checkTile p (Properties.Pouw.PearlPlus.noiseOf p tid) tid o = .pass) :
     tileChainDebit (semH3 saltOf rootOf) devH100 H s U ((auditTiling 64 64 U.layout).unit g)
@@ -1018,7 +1018,7 @@ theorem tile_bound (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (hK : Proper
   try dsimp only at hK'
   obtain ⟨words, elems, hw, he, hcap, -⟩ := hK' hcrne hccne
   have hCC := codes_eq saltOf rootOf H s U ((auditTiling 64 64 U.layout).unit g) c.act p.salt
-    ((p.weightRoots.lookup (U.layout.wid ((auditTiling 64 64 U.layout).unit g))).getD ByteArray.empty) wn' rows cols
+    ((p.weightRoots.lookup (U.layout.fixedId ((auditTiling 64 64 U.layout).unit g))).getD ByteArray.empty) wn' rows cols
     ops hsalt hroot hKmax' hk128 hact hwt (fun j hj => hwOK j (by rw [hcols]; exact List.mem_toFinset.2 hj)) hwn henc
   have hcell : ∀ i ∈ cr, ∀ j ∈ cols, ∀ v : Array Bool × ℕ,
       Rule.wordFlags ops.a.codes[rows.idxOf i]! ops.b.codes[cols.idxOf j]! = .ok v →
