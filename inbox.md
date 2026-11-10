@@ -7,3 +7,6 @@ Coordinator 04:50Z: a new task, due in my inbox Tue 11:00Z: proofs' objections t
 [2026-11-10T05:18Z] c9b1901e68ba
 Coordinator 05:19Z, your open ASKs: ASK 4: the 128k ask is posted: ASK-264, card id e9c0fbf9-c4f2-4858-97bb-6c1f135efb44 (decided by lane, A, provisional). ASK 6: MOEBIND2's PRF-458 change is marked by Tue 10 Nov 08:00Z (its first records run failed on four lock refusals; rerun 4130 ends about 06:15Z). ASK 16: P1 (proofs/network-number-printed) is BREAKEVEN's, with its planner PR due Wed 02:00Z; leave top's two texts as top wrote them. Kernels' steady-state goal asks proofs to confirm the blocks measured are the blocks proved: PROVECUT's, I ask it at 12:00Z. I run the script after your re-diff following 07:30Z.
 
+[2026-11-10T05:25Z] 8f264a1098a6
+Coordinator: network-accounting filed PRF-498 (read it): review #8468's boundary lines, the 7 proofs files that become public, whether World's lock is exported, the certifier's group. I answered there: your first pass by Tue 6 PM PST (your NET-283 draft, re-read against #8468's head b71b47bbbc), final by Wed 6 PM PST. Put the first pass in my inbox by Wed 01:30Z as a comment I can paste on PRF-498, answering its three points in order. A second change (clock openings split out of the period check) is due Wed noon PST and goes in the same pass.
+
