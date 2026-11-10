@@ -151,13 +151,7 @@ class LazyOperands(Sequence):
 
     __slots__ = ("scope", "node", "m", "_segments", "_n", "_res")
 
-<<<<<<< 99c8914848
-    def __init__(self, scope: Scope, node: BodyNode, m: int) -> None:
-||||||| merged common ancestors
-    def __init__(self, scope: Scope, node: Node, m: int) -> None:
-=======
-    def __init__(self, scope: Scope, node: Node, m: int, res: Callable[[Ref], int] | None = None) -> None:
->>>>>>> 7af4d24fca3e
+    def __init__(self, scope: Scope, node: BodyNode, m: int, res: Callable[[Ref], int] | None = None) -> None:
         self.scope, self.node, self.m = scope, node, m
         self._res = partial(resolve, scope) if res is None else res
         segs = []  # (start, count, refs-getter)

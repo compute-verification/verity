@@ -61,13 +61,8 @@ import verity_difftest as D
 from verity_difftest import protocol as PR
 from verity.core.protocols.pouw import audit as PA
 from verity.core.protocols.pouw.protocol import tagged
-<<<<<<< HEAD
 from verity.core.protocols.profile import Bernoulli, Stratified, Stratum, work_k
-from verity.core.protocols.spot import challenger as CH, second_stage as SS, service
-=======
-from verity.core.protocols.profile import Bernoulli, Stratified, Stratum
 from verity.core.protocols.spot import challenger as CH, schedule as SCH, second_stage as SS, service
->>>>>>> origin/main
 from verity.core.protocols.spot.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
                                                   link_points as LP, partition as P, produced as PD, proofs as PF,
                                                   registered as G, registration as R)
@@ -5238,23 +5233,13 @@ pieces = D.server_fixture(DECODE)
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATES, 300),
               (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
-<<<<<<< HEAD
               (CHECK_DRAW, 500), (DRAW, 500), (RAN_OUT, 300), (SELECT, 600), (DESIGN, 300), (SLOTS, 400),
-              (FILE_POPULATION, 400), (CHECK_PROVED, 300), (BOUND, 500),
+              (FILE_POPULATION, 400), (TABLES_HELD, 300), (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (POP_ORDER, 300), (PUBLIC_UNITS, 300),
-              (LINK_POINTS, 500), (SELECT_SECOND, 300), (SECOND_STATEMENTS, 400), (REPLAY_LINKS, 300),
-              (REPLAY_WIRES, 300), (FITS, 400), (TEMPLATE_CIRCUITS, 300)]
-=======
-              (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (FILE_POPULATION, 400), (TABLES_HELD, 300),
-              (CHECK_PROVED, 300), (BOUND, 500),
-              (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
-              (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
-              (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (SELECT_SECOND, 300), (SECOND_STATEMENTS, 400),
-              (SECOND_INTERIOR_READS, 200), (REPLAY_LINKS, 300), (REPLAY_WIRES, 300), (SECOND_SCHEDULE, 300),
-              (FITS, 400), (TEMPLATE_CIRCUITS, 300)]
->>>>>>> origin/main
+              (LINK_POINTS, 500), (SELECT_SECOND, 300), (SECOND_STATEMENTS, 400), (SECOND_INTERIOR_READS, 200),
+              (REPLAY_LINKS, 300), (REPLAY_WIRES, 300), (SECOND_SCHEDULE, 300), (FITS, 400), (TEMPLATE_CIRCUITS, 300)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])
