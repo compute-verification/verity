@@ -51,7 +51,8 @@ run: ``second-read`` alone lets a port no link or wire names read any value eith
 
 The interior record names the replay sample it lays out (``window.replay_sample``, which the proof server writes), and
 ``second-interior-order`` fails unless it is the verifier's own, in its order (`interior_order_ok`), checked before any
-statement is read.
+statement is read. With it, ``second-schedule`` fails where the boundary registration's record commits a schedule
+(``window.schedule``) that is no schedule of its replay blocks (`schedule.failure`); a record that commits none passes.
 
 `FORM` is `SecondStage.FORM`, which the run of record reads: off, every two-stage run is refused last
 (``two-stage-form``), and the Python flipped alone disagrees with the run of record."""
@@ -70,6 +71,7 @@ from verity.ml.circuits.types import Array, RecordType, Tuple
 from verity.ml.commitments.window import window_binding
 
 from .one_stage.verdict import Verdict, _Collect
+from .schedule import failure as schedule_failure
 
 FORM = False
 FORM_WHY = ("refused: a two-stage run, its second-stage sessions over an interior registration: a statement form the "
@@ -87,6 +89,8 @@ WIRES_WHY = ("the replay block's Definition reads a node other than as a templat
              "don't place its part's units or its writer's")
 INTERIOR_ORDER_WHY = "the interior record's replay sample (window.replay_sample) is not the verifier's own, in its order"
 STMT_KEYS = ["draw", "header", "registered", "template"]
+#: The most leaves a tree a session reads may have: its positions are 64-bit (`SecondStage.MAX_LEAVES`).
+MAX_LEAVES = 2 ** 64
 #: The run's fields of a statement's header, each a path of keys: the only ones a header may differ from its template's
 #: reference placed in the run in, which other checks hold instead: ``second-population`` the first two, the session's
 #: verifier ``units.blocks``, the indices cut into blocks of ``vus_per_block`` (its header's ``units`` must be
@@ -812,7 +816,7 @@ def _header_ok(own: Own, named: bool, k: int, t: str, h: Any) -> bool:
 
 def _population_ok(q: int, p: Part, h: Any) -> bool:
     indices, m = _get(_get(h, "units"), "indices"), _get(h, "instances")
-    return (isinstance(indices, list) and _nat(m) and m == q * p.n and len(indices) == q * p.n
+    return (isinstance(indices, list) and _nat(m) and m == q * p.n and m <= MAX_LEAVES and len(indices) == q * p.n
             and all(_nat(x) and x == p.lo + i for i, x in enumerate(indices)))
 
 
@@ -844,13 +848,16 @@ def _registered_entry(rec: Any, v: str) -> Any:
 
 
 def _same_at(e: Any, x: Any) -> bool:
-    return all(_jeq(_get(e, k), _get(x, k)) for k in ("root", "domain", "leaves"))
+    """`SecondStage.sameAt`: entries `e` and `x` name one root, domain and leaf count, at most `MAX_LEAVES`."""
+    leaves = _get(e, "leaves")
+    return (all(_jeq(_get(e, k), _get(x, k)) for k in ("root", "domain", "leaves"))
+            and _nat(leaves) and leaves <= MAX_LEAVES)
 
 
 def _rows_ok(q: int, p: Part, e: Any, units: int, unit: Callable[[int], int | None]) -> bool:
     """`SecondStage.rowsOk`: every read of registered-reads entry `e` (slot ``reads_from + k`` reads row ``reads[k]``,
-    None for none) is by one of part `p`'s slots `u`, of a row of the unit ``unit(u)`` names, in a tree of `units` units'
-    rows, ``leaves // units`` each."""
+    None for none) is by one of part `p`'s slots `u`, of the first row of the unit ``unit(u)`` names, in a tree of
+    `units` units' rows, ``leaves // units`` each."""
     first = _get(e, "reads_from")
     first = 0 if first is None else first
     leaves, rs = _get(e, "leaves"), _get(e, "reads")
@@ -862,7 +869,7 @@ def _rows_ok(q: int, p: Part, e: Any, units: int, unit: Callable[[int], int | No
         if x is None:
             return True
         b = unit(u)
-        return _nat(x) and b is not None and p.holds(q, u) and b * r <= x < (b + 1) * r
+        return _nat(x) and b is not None and p.holds(q, u) and x == b * r
     return all(read_ok(first + k, x) for k, x in enumerate(rs))
 
 
@@ -902,8 +909,8 @@ def _read_ok(own: Own, named: bool, p: Part, port: str, e: Any) -> bool:
     link names, only the boundary port it names, of its rows' `per` a replay block, each slot only its unit's row of its
     cell's replay block's (`_linked_row`); a port a wire names, only its writer's output port of the interior record, of
     the writer's units a block, each slot only its unit's writer unit's row in its cell's replay block (`_wired_row`);
-    any other, its own port of the interior record, each slot only its own rows, or a value either registration
-    registers, never a boundary port. Each at its root, domain and leaves."""
+    any other, its own port of the interior record, each slot only its own first row, or a value either registration
+    registers, never a boundary port. Each at its root, domain and leaves, at most `MAX_LEAVES` of them."""
     v, q = _get(e, "value"), len(own.sample)
     if not isinstance(v, str):
         return False
@@ -1070,8 +1077,12 @@ def interior_order_ok(own: Own) -> bool:
 
 
 def _interior_failures(own: Own) -> list[tuple[str, Any]]:
-    """`SecondStage.interiorFailures`: ``second-interior-order`` unless `interior_order_ok`."""
-    return [] if interior_order_ok(own) else [("second-interior-order", INTERIOR_ORDER_WHY)]
+    """`SecondStage.interiorFailures`: ``second-interior-order`` unless `interior_order_ok`, then ``second-schedule``
+    where the schedule the boundary registration's record commits is not one of its replay blocks
+    (`schedule_failure`)."""
+    why = schedule_failure(own.boundary)
+    return (([] if interior_order_ok(own) else [("second-interior-order", INTERIOR_ORDER_WHY)])
+            + ([] if why is None else [("second-schedule", why)]))
 
 
 def _pos_of(ps: Sequence[Part], t: str) -> int:
