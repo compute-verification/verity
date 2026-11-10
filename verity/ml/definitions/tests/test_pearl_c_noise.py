@@ -1,6 +1,10 @@
-"""-h3's noise line as registered Definitions (`verity.ml.definitions.registry.pearl_c_noise`), word and Boolean, against
-PoUW's reference (`schemes.pearl_c.sample_line`) on random and edge lines, and on the two lines the Lean specification
-proves of its own noise (`Pouw.PearlC.W1Checks`: `lineEA_vec`, `lineFB_vec`)."""
+"""-h3's noise derivation as registered Definitions (`verity.ml.definitions.registry.pearl_c_noise`), word and Boolean,
+against PoUW's reference (`schemes.pearl_c`: `seed_b`, `row_seed`, `line_key`, `sample_line`) on random and edge inputs, and
+on the vectors the Lean specification proves of its own noise (`Pouw.PearlC.W1Checks`: `seedB_vec`, `rowSeed_vec`,
+`lineEA_vec`, `lineFB_vec`).
+
+A hash's Boolean version is a SHA-512 compression traced gate by gate, seconds each, so the tests that evaluate one are
+slow, as is the one that holds a code's Boolean version to its word form's steps on every input."""
 from __future__ import annotations
 
 import math
@@ -30,9 +34,11 @@ LINE_FB = [71, 184, 67, 191, 192, 146, 201, 65, 181, 187, 72, 188, 201, 190, 194
 #: a line's norm by the BF16 word of 32 times it
 NORMS = {N.NORM_E: 256, N.NORM_F: 16}
 #: every pair of a word Definition and its Boolean version
-PAIRS = [(N.PearlCLineInt, N.PearlCLineIntV2), (N.PearlCLineNormRoot, N.PearlCLineNormRootV2),
-         (N.PearlCLineScale, N.PearlCLineScaleV2), (N.PearlCLineCode, N.PearlCLineCodeV2),
-         (N.PearlCLineCodes, N.PearlCLineCodesV2)]
+PAIRS = [(N.PearlCSeedB, N.PearlCSeedBV2), (N.PearlCRowSeed, N.PearlCRowSeedV2), (N.PearlCLineKey, N.PearlCLineKeyV2),
+         (N.PearlCLineRaw, N.PearlCLineRawV2), (N.PearlCLineInt, N.PearlCLineIntV2),
+         (N.PearlCLineNormRoot, N.PearlCLineNormRootV2), (N.PearlCLineScale, N.PearlCLineScaleV2),
+         (N.PearlCLineCode, N.PearlCLineCodeV2), (N.PearlCLineCodes, N.PearlCLineCodesV2),
+         (N.PearlCNoiseLine, N.PearlCNoiseLineV2)]
 #: a line's hash at the ends of its integers and its norm root: every integer 1, 128, −128 or −1, one of magnitude 128 among
 #: 1s, alternating signs, and bytes on both sides of the sign bit
 EDGE_RAWS = [bytes(32), bytes([0x7F] * 32), bytes([0xFF] * 32), bytes([0x80] * 32), bytes([0x7F] + [0] * 31),
@@ -67,9 +73,47 @@ def codes_of(monkeypatch, raw: bytes, norm: int) -> list[int]:
         return C.sample_line(C.S512Seed(), 0, 0, 0, norm)
 
 
-def raw_of(seed: bytes, side: int, factor: int, line: int) -> bytes:
-    """The hash `pearl_c.sample_line` makes a seed's line from."""
-    return C.s512("line", C.line_key(seed) + bytes([side, factor]) + line.to_bytes(4, "little"))
+def seeds(n: int, seed: int) -> list[tuple[bytes, bytes, bytes, int, int]]:
+    """(salt, leaf, root, unit, row): the Lean vectors', the ends of a unit's and a row's range, and random ones."""
+    rng = random.Random(seed)
+    rand = lambda k: bytes(rng.randrange(256) for _ in range(k))  # noqa: E731
+    top = (1 << 32) - 1
+    return ([(SALT, C.row_digest(ROW), ROOT, UNIT, ROW_INDEX), (bytes(32), bytes(64), bytes(64), 0, 0),
+             (bytes([255] * 32), bytes([255] * 64), bytes([255] * 64), top, top), (SALT, C.row_digest(ROW), ROOT, top, 0),
+             (SALT, C.row_digest(ROW), ROOT, 0, top)]
+            + [(rand(32), rand(64), rand(64), rng.randrange(1 << 32), rng.randrange(1 << 32)) for _ in range(n)])
+
+
+def lines(n: int, seed: int) -> list[tuple[bytes, int, int, int]]:
+    """(key, side, factor, line): the lines a call samples (side and factor 0 or 1), the ends of every field, and random ones."""
+    rng = random.Random(seed)
+    key = C.line_key(C.seed_b(SALT, ROOT))
+    return ([(key, s, f, t) for s in (0, 1) for f in (0, 1) for t in (0, 7)]
+            + [(bytes(32), 0, 0, 0), (bytes([255] * 32), 255, 255, (1 << 32) - 1)]
+            + [(bytes(rng.randrange(256) for _ in range(32)), rng.randrange(256), rng.randrange(256), rng.randrange(1 << 32))
+               for _ in range(n)])
+
+
+def raw_of(key: bytes, side: int, factor: int, line: int) -> bytes:
+    """The hash `pearl_c.sample_line` makes a key's line from."""
+    return C.s512("line", key + bytes([side, factor]) + line.to_bytes(4, "little"))
+
+
+def lean_seeds() -> tuple[bytes, bytes]:
+    """The Lean vectors' row seed and seed_B, by the reference."""
+    return C.S512Seed(C.row_seed(SALT, C.row_digest(ROW), ROOT, UNIT, ROW_INDEX)), C.seed_b(SALT, ROOT)
+
+
+def test_the_labels_and_the_labelled_hash_are_the_references():
+    """Each role's label block is `pearl_c.S512_LABELS`', and `s512` from the label's midstate is hashlib's at every padding
+    case: an empty message, each hash's length, and the lengths around a block's end."""
+    assert all(N.label(r) == C.S512_LABELS[r] for r in N.ROLES)
+    with pytest.raises(ValueError, match="not 'jackpot2'"):
+        N.label("jackpot2")
+    rng = random.Random(7)
+    for n in (0, 32, 38, 96, 111, 112, 127, 128, 168, 300):
+        m = bytes(rng.randrange(256) for _ in range(n))
+        assert all(N.s512(r, m) == C.s512(r, m) for r in N.ROLES)
 
 
 def test_each_word_definition_has_its_boolean_version():
@@ -78,13 +122,34 @@ def test_each_word_definition_has_its_boolean_version():
         assert boolean_version(bound(w)).id == bound(b).id == bound(w).id.replace("_v1", "_v2")
 
 
-def test_the_lean_lines():
-    """`lineEA_vec` and `lineFB_vec`: the codes of the two lines' hashes, word and Boolean, and `pearl_c.sample_line`'s."""
-    row_seed = C.row_seed(SALT, C.row_digest(ROW), ROOT, UNIT, ROW_INDEX)
-    seed_b = C.seed_b(SALT, ROOT)
+def test_the_hashes_match_the_reference_on_words():
+    for salt, leaf, root, unit, row in seeds(6, 1):
+        seed_b = C.seed_b(salt, root)
+        assert bytes(word(N.PearlCSeedB, salt, root)) == seed_b
+        assert bytes(word(N.PearlCRowSeed, salt, leaf, root, unit, row)) == C.row_seed(salt, leaf, root, unit, row)
+        assert bytes(word(N.PearlCLineKey, seed_b)) == C.line_key(seed_b)
+    for key, side, factor, line in lines(6, 2):
+        assert bytes(word(N.PearlCLineRaw, key, side, factor, line)) == raw_of(key, side, factor, line)
+
+
+def test_the_lean_vectors_on_words():
+    """`seedB_vec`, `rowSeed_vec` (over `rowDigest_vec`'s digest), `lineEA_vec` and `lineFB_vec`."""
+    leaf = C.row_digest(ROW)
+    assert list(leaf[:8]) == [225, 54, 37, 2, 134, 5, 77, 26]
+    seed_b = word(N.PearlCSeedB, SALT, ROOT)
+    assert seed_b[:8] == [247, 238, 5, 151, 197, 237, 99, 121]
+    row_seed = word(N.PearlCRowSeed, SALT, leaf, ROOT, UNIT, ROW_INDEX)
+    assert row_seed[:8] == [90, 99, 57, 103, 5, 175, 11, 41]
+    assert word(N.PearlCNoiseLine, word(N.PearlCLineKey, row_seed), 0, 0, 0, N.NORM_E) == LINE_EA
+    assert word(N.PearlCNoiseLine, word(N.PearlCLineKey, seed_b), 1, 1, 7, N.NORM_F) == LINE_FB
+
+
+def test_the_lean_lines_codes_on_bits():
+    """`lineEA_vec` and `lineFB_vec` from the two lines' hashes by the reference: their codes on bits, which the quick tier
+    holds without a compression's gates."""
+    row_seed, seed_b = lean_seeds()
     assert C.sample_line(row_seed, 0, 0, 0, 256) == LINE_EA and C.sample_line(seed_b, 1, 1, 7, 16) == LINE_FB
-    ea, fb = raw_of(row_seed, 0, 0, 0), raw_of(seed_b, 1, 1, 7)
-    assert word(N.PearlCLineCodes, ea, N.NORM_E) == LINE_EA and word(N.PearlCLineCodes, fb, N.NORM_F) == LINE_FB
+    ea, fb = raw_of(C.line_key(row_seed), 0, 0, 0), raw_of(C.line_key(seed_b), 1, 1, 7)
     assert on_bits(N.PearlCLineCodesV2, [list(ea), list(fb)], [N.NORM_E, N.NORM_F]) == [LINE_EA, LINE_FB]
 
 
@@ -143,3 +208,39 @@ def test_a_code_on_bits_is_the_sigma_of_its_word_form_on_every_byte_and_scale():
     for b in range(256):
         byte = np.full_like(scales, b)
         assert np.array_equal(evaluate_words(bind(N.PearlCLineCodeV2), byte, scales), evaluate_words(steps, byte, scales)), b
+
+
+@pytest.mark.slow
+def test_seed_b_and_the_line_key_on_bits():
+    cases = seeds(6, 8)
+    want = [C.seed_b(salt, root) for salt, _, root, _, _ in cases]
+    assert want[0][:8] == bytes([247, 238, 5, 151, 197, 237, 99, 121])
+    assert on_bits(N.PearlCSeedBV2, [list(c[0]) for c in cases], [list(c[2]) for c in cases]) == [list(s) for s in want]
+    assert on_bits(N.PearlCLineKeyV2, [list(s) for s in want]) == [list(C.line_key(s)) for s in want]
+
+
+@pytest.mark.slow
+def test_the_row_seed_on_bits():
+    cases = seeds(6, 9)
+    want = [C.row_seed(*c) for c in cases]
+    assert want[0][:8] == bytes([90, 99, 57, 103, 5, 175, 11, 41])
+    got = on_bits(N.PearlCRowSeedV2, [list(c[0]) for c in cases], [list(c[1]) for c in cases], [list(c[2]) for c in cases],
+                  [c[3] for c in cases], [c[4] for c in cases])
+    assert got == [list(s) for s in want]
+
+
+@pytest.mark.slow
+def test_a_noise_line_on_bits():
+    """`PearlCLineRaw_v2` is the line's hash and `PearlCNoiseLine_v2`, the σ of the word form, `pearl_c.sample_line`'s line at
+    both norms; the Lean's two lines among them."""
+    cases = lines(6, 10)
+    keys, sides, factors, ts = ([list(c[0]) for c in cases], [c[1] for c in cases], [c[2] for c in cases],
+                                [c[3] for c in cases])
+    assert on_bits(N.PearlCLineRawV2, keys, sides, factors, ts) == [list(raw_of(*c)) for c in cases]
+    row_seed, seed_b = lean_seeds()
+    sampled = [(row_seed, 0, 0, 0, N.NORM_E), (seed_b, 1, 1, 7, N.NORM_F), (seed_b, 1, 0, 3, N.NORM_E),
+               (seed_b, 0, 1, 1023, N.NORM_F), (row_seed, 0, 0, (1 << 32) - 1, N.NORM_E)]
+    got = on_bits(N.PearlCNoiseLineV2, [list(C.line_key(s)) for s, *_ in sampled], [c[1] for c in sampled],
+                  [c[2] for c in sampled], [c[3] for c in sampled], [c[4] for c in sampled])
+    assert got[:2] == [LINE_EA, LINE_FB]
+    assert got == [C.sample_line(s, side, factor, t, NORMS[n]) for s, side, factor, t, n in sampled]
