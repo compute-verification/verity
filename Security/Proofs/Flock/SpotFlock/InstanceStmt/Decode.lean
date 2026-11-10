@@ -4,6 +4,7 @@ public import Proofs.Flock.SpotFlock.InstanceStmt.Digests
 public import Proofs.Flock.SessionLoop.Concrete.Fwd
 import Proofs.Flock.Claims.Sampling.Select.SecondWitness
 import all Flock.Program
+import all Flock.TemplateQuery
 import Flock.Canon
 import Flock.JsonParse
 import all Lean.Data.Json.Basic
@@ -59,7 +60,8 @@ the inserts that built its table (`hm_get_insert`, `hs_contains_insert`, `hm_get
 state is a `StateT` stepped by its monad's equations (`st_bind` and its siblings). Each well-founded function it calls
 is a fact at the statement's own values (`Ty.ofJson`, `Ty.leaves`, `Ty.beq`, `String.splitOn`, `Widths.bodyBad`) or
 its fuelled twin (`domainError_fuel`, `canon_fuel`). The program's SHA-512 is of `bareText`, its canonical text without
-`annotations`, a literal as `progHex` is (`canon_bare`).
+`annotations`, a literal as `progHex` is (`canon_bare`). `descParse_X` is the template queries' reading of the same
+bytes (`TemplateQuery.Desc.parse`), `descX`, whose digest is `progHex` (`descX_hex`).
 -/
 
 @[expose] public section
@@ -115,7 +117,7 @@ theorem hm_contains_foldl {β : Type} (arr : Array (String × β)) (a : String) 
       arr.toList.any (·.1 == a) := by
   rw [← Array.foldl_toList, hm_contains_foldl_from, Std.HashMap.contains_empty, Bool.or_false]
 
-/-! ## The decoder's state -/
+/-! ## The decoder's state and loops -/
 
 theorem st_bind {σ ε α β : Type} (x : StateT σ (Except ε) α) (f : α → StateT σ (Except ε) β) (s : σ) :
     (x >>= f) s = (x s >>= fun p => f p.1 p.2) := rfl
@@ -156,6 +158,29 @@ theorem mapM_empty {ε α β : Type} (f : α → Except ε β) (xs : Array α) (
 theorem st_mapM_empty {σ ε α β : Type} (f : α → StateT σ (Except ε) β) (xs : Array α) (s : σ) (h : xs.size = 0) :
     (xs.mapM f) s = .ok (#[], s) := by
   rw [Array.eq_empty_of_size_eq_zero h]; simp only [Array.mapM_eq_mapM_toList, List.mapM_nil]; rfl
+theorem ex_forIn_range_empty {ε β : Type} (r : Std.Legacy.Range) (b : β) (f : Nat → β → Except ε (ForInStep β))
+    (h : r.size = 0) : forIn r b f = .ok b := by
+  rw [Std.Legacy.Range.forIn_eq_forIn_range', h]; rfl
+theorem ex_forIn_empty {ε α β : Type} (xs : Array α) (b : β) (f : α → β → Except ε (ForInStep β))
+    (h : xs.size = 0) : forIn xs b f = .ok b := by
+  rw [Array.eq_empty_of_size_eq_zero h]; rfl
+theorem ex_forIn_one {ε α β : Type} [Inhabited α] (xs : Array α) (b : β) (f : α → β → Except ε (ForInStep β))
+    (h : xs.size = 1) :
+    forIn xs b f = (f xs[0]! b >>= fun r => pure (match r with | .done b => b | .yield b => b)) := by
+  obtain ⟨l⟩ := xs
+  match l, h with
+  | [a], _ =>
+    rw [← Array.forIn_toList]
+    simp only [List.forIn_cons, List.forIn_nil]
+    show (f a b >>= _) = (f a b >>= _)
+    congr 1; funext r; cases r <;> rfl
+theorem ex_forIn_range1 {ε β : Type} (r : Std.Legacy.Range) (b : β) (f : Nat → β → Except ε (ForInStep β))
+    (h1 : r.start = 0) (h2 : r.stop = 1) (h3 : r.step = 1) :
+    forIn r b f = (f 0 b >>= fun x => pure (match x with | .done b => b | .yield b => b)) := by
+  rw [Std.Legacy.Range.forIn_eq_forIn_range']
+  have : List.range' r.start r.size r.step = [0] := by
+    simp only [Std.Legacy.Range.size, h1, h2, h3]; rfl
+  rw [this, List.forIn_cons]; congr 1; funext x; cases x <;> rfl
 theorem prod_fst {α β : Type} (a : α) (b : β) : (a, b).1 = a := rfl
 theorem prod_snd {α β : Type} (a : α) (b : β) : (a, b).2 = b := rfl
 theorem ds_defs (d i b w) : (DecState.mk d i b w).defs = d := rfl
@@ -297,5 +322,15 @@ fwd_def progX decode_prog : Program.decode progBytes by [fromUTF8?_toUTF8, parse
     ds_index, ds_busy, ds_walked, mapM_empty, st_mapM_empty, st_run, qsort_fuel, canon_bare, canon_fuel 12]
   block [Std.HashMap.insert, Std.HashSet.insert, Std.HashSet.erase, Sha512.hash]
   shallow []
+
+fwd_def descX descParse_X : TemplateQuery.Desc.parse progBytes by [fromUTF8?_toUTF8, parse_prog, canon_bare,
+    canon_fuel 12]
+  block [Sha512.hash]
+  shallow []
+
+theorem descX_hex : hexOf descX.sha512 = progHex := by
+  have h := progHex_eq
+  rw [descParse_X] at h
+  exact Option.some.inj h
 
 end SpotFlock.InstanceStmt.Decode
