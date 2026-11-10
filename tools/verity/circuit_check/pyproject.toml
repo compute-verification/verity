@@ -170,7 +170,7 @@ tests = [
     "tests/test_wide_outputs.py",
 ]
 paths = [
-    "benchmarks/numerical/python/verity_numerical/bench/templates.circuit-check.py",
+    "verity/ml/flock/python/verity_flock/subcircuit_templates.circuit-check.py",
     "verity/core/protocols/certifier",
     "verity/core/protocols/pous",
     "verity/ml",
@@ -193,7 +193,7 @@ paths = [
 [[tool.verity.tests.reads]]
 tests = ["tests/test_shard.py", "tests/test_split_prims_serve.py"]
 paths = [
-    "benchmarks/numerical/python/verity_numerical/bench/templates.circuit-check.py",
+    "verity/ml/flock/python/verity_flock/subcircuit_templates.circuit-check.py",
     "tools/verity/circuit_check/src/circuit_check",
     "verity/core/protocols/certifier",
     "verity/core/protocols/pous",

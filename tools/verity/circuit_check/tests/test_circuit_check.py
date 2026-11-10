@@ -83,7 +83,7 @@ def test_every_operation_is_checked_and_reaches_no_table_outside_the_library(cat
 
 
 def test_every_template_is_checked():
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     assert {sub.template.id for sub, _ in TEMPLATES.values()} == set(TM.TEMPLATES)
 

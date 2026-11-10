@@ -54,8 +54,8 @@ inputs = ["verity", "verity/core/service/sampled_proofs/lakefile.toml", "benchma
           "examples/h200/interfaces/tests/fixtures/drawn-unit-registration.json",
           "benchmarks/numerical/python/verity_numerical/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
-          "benchmarks/numerical/python/verity_numerical/bench/input_sets.py",
-          "benchmarks/numerical/python/verity_numerical/bench/templates.py",
+          "verity/ml/flock/python/verity_flock/input_sets.py",
+          "verity/ml/flock/python/verity_flock/subcircuit_templates.py",
           "integrations/vllm/verity_vllm", "benchmarks/network_traces",
           "benchmarks/pous/p2_v1", "benchmarks/torch_gpu/p2_stage/layout.py", "benchmarks/torch_gpu/p2_stage/stage.py",
           "benchmarks/torch_gpu/p2_stage/full.py", "benchmarks/torch_gpu/p2_stage/gemm.py"]
