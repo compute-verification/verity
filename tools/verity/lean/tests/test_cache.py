@@ -658,7 +658,7 @@ def _load(name: str, path: Path):
 @pytest.mark.skipif(LAKE is None, reason="no lake")
 def test_a_module_version_a_passing_audit_built_is_restored_on_another_tree(tmp_path, monkeypatch):
     """A kept build holds one tree's modules per package per node, so a check whose node's kept build came from an older tree
-    would rebuild over half of `Security/Proofs`' modules (most of the check's time). Lake,
+    would rebuild over half of `security/Proofs`' modules (most of the check's time). Lake,
     reading the cache in the build sandbox, restores each module version it holds instead of compiling it."""
     LC, LA = (_load(f"artifacts_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
     pkg = tmp_path / "control"
@@ -795,7 +795,7 @@ def test_a_module_file_above_a_private_import_is_stored_and_another_tree_restore
     """Through Lake, on `module` files: `Modular` imports `Modular.Uses`, which imports `Modular.Hidden` and
     `Modular.Secret` privately, so Lake hands `Modular`'s compile neither and its key reads neither. Every module of the
     build is stored all the same, and a second tree of the node compiles none. Held to the whole closure, `Modular`
-    was never stored, nor any module above one like it: 649 of Security/Proofs' modules on cpu-1, and 1,942 above."""
+    was never stored, nor any module above one like it: 649 of security/Proofs' modules on cpu-1, and 1,942 above."""
     LC, LA = (_load(f"module_files_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
     MK = LA.MK
     store = tmp_path / "artifacts"
@@ -1120,7 +1120,7 @@ def test_the_daily_run_publishes_nothing_after_a_probe_a_refusal_an_unclean_tree
 
 def test_a_dependency_whose_name_lean_escapes_counts_as_fetched(tmp_path):
     """Lake writes a name Lean must escape as `«doc-gen4»` in the manifest and `doc-gen4` on disk; reading the manifest's
-    name raw made every package depending on doc-gen4 (Security/Proofs) look unfetched, and the cache built it from source."""
+    name raw made every package depending on doc-gen4 (security/Proofs) look unfetched, and the cache built it from source."""
     (tmp_path / "lake-manifest.json").write_text(json.dumps({"packages": [
         {"name": "«doc-gen4»", "type": "git"}, {"name": "Arklib", "type": "git"}, {"name": "security", "type": "path"}]}))
     (tmp_path / ".lake" / "packages" / "Arklib").mkdir(parents=True)

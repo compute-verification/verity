@@ -603,7 +603,7 @@ def pinned_as(root: Path, here: Path) -> str | None:
     """Why a compile that read a module's `.olean` in ``here``, a directory no package of the workspace builds, did not
     read what a key of ``root`` names; or None. A key names the fetched packages by ``root``'s pins, not by their bytes,
     and a package required by path is compiled again by a build of each root that requires it, over that root's fetched
-    packages: Security's modules by Security/Proofs' build, last, so that is the compile `put` finds in Security's tree.
+    packages: Security's modules by security/Proofs' build, last, so that is the compile `put` finds in Security's tree.
     Its outputs are a compile of what ``root``'s key names when ``here`` is in the packages of a root that has
     ``root``'s toolchain and pins every package ``root`` fetches as ``root`` does, the one read among them. The
     toolchain's own modules are not listed in a `setup.json`, so a directory in no root's packages is refused. ``here``

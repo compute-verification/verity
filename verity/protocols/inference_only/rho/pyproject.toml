@@ -18,9 +18,9 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # (profile.py, which imports verity.circuits) and the inference-only policy's calibrations (rho/params.py). It reads
 # no census: data/ states the reference datacenter's machines and the world's active parameters, and
 # tests/test_params.py and tests/test_hardware.py hold them to the census's deployments and adversary.
-inputs = ["Security/lean-audit.json", "Security/Properties/lean-audit.json", "verity/protocols/inference_only/nci/tiers.py",
-          "Security/Definitions/Nci/Remote.lean", "Security/Definitions/Nci/Guarantees/Remote.lean",
-          "Security/Definitions/Nci/Cut.lean", "Security/Definitions/Nci/Guarantees/Cut.lean",
+inputs = ["security/lean-audit.json", "security/Properties/lean-audit.json", "verity/protocols/inference_only/nci/tiers.py",
+          "security/Definitions/Nci/Remote.lean", "security/Definitions/Nci/Guarantees/Remote.lean",
+          "security/Definitions/Nci/Cut.lean", "security/Definitions/Nci/Guarantees/Cut.lean",
           "benchmarks/census/hardware.json", "benchmarks/census/adversary.json", "verity/protocols/inference_only/nci/slowdown.py",
           "verity/protocols/inference_only/nci/catalog.py", "verity/protocols/inference_only/nci/algorithms.json",
           "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
