@@ -1,1 +1,1 @@
-The proof's audit records failed on Mon 9 Nov for a real fault in the change, and no branch is in review yet. The worker is fixing it.
+No branch is in review yet: the proof's audit records failed twice on Mon 9 Nov over where the change put a premise, the fix is pushed and the records are running again. The change is due ready to merge by Tue 10 Nov 12 AM, with one fact about the served read's code still an open premise.

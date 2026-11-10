@@ -1,8 +1,8 @@
-# proofs' Goals page (CON-12, TOP-394): a row for each open goal. Draft by HOUSEKEEP, Tue 10 Nov 05:04Z
+# proofs' Goals page (CON-12, TOP-394): a row for each open goal. Draft by HOUSEKEEP, Tue 10 Nov 05:26Z
 
 **Nothing here is written to the page.** `proofs-goals-fix.sh`, beside this file, holds one `research goals set` line a
-goal (24 lines) and has not been run. The page was read at Tue 10 Nov 04:58Z (`research goals show --json`), after
-top's re-cut (TOP-394) reached it: 279 goals, 25 open with owner `proofs`. After the script, counting its 24
+goal (24 lines) and has not been run. The page was read at Tue 10 Nov 05:26Z (`research goals show --json`), after
+top's re-cut (TOP-394) reached it: 282 goals, 25 open with owner `proofs`. After the script, counting its 24
 goals: 24 open, 10 on track, 14 off track (8 with a link, 6 with a blocker text).
 
 **To run it:** `ASK_128K=<the ask card's id> bash proofs-goals-fix.sh`. Without `ASK_128K` it stops before it writes
@@ -11,7 +11,7 @@ anything (ASK 4). `DRY=1 bash proofs-goals-fix.sh` prints the 24 commands. The t
 
 **Changed since the first draft (Tue 01:51Z):**
 
-- **Top's re-cut reached the page** (TOP-394; read Tue 04:58Z: 279 goals, 46 more than at 02:27Z). What it changes
+- **Top's re-cut reached the page** (TOP-394) between my reads of Tue 02:27Z and 04:58Z: 233 goals became 279. What it changes
   here: `spot-proof-server-steady-state` is kernels' goal now, so its line is gone (24 lines, from 25); top made
   two goals for proofs, rows 25 and 26, which get no line (ASK 16); you shortened four titles and fixed
   `spot-figures`' links yourself, so the script leaves those; top linked vllm's new goal under
@@ -33,7 +33,8 @@ anything (ASK 4). `DRY=1 bash proofs-goals-fix.sh` prints the 24 commands. The t
 - **Runs that reported.** Row 5: the first serve with the tables failed at Tue 04:06Z (a table declared twice,
   vllm's code on `main`); it stays off track and the retry is armed for 05:00Z (FUSEDSERVE, 04:11Z and 04:29Z).
   Row 10 states the first timed run's result (SERVEDCARD, 02:08Z). Row 12 carries vllm's step of 02:46Z.
-- **Still open:** ASK 3's retry (row 5, verdict about 06:30Z), ASK 6 (row 8: MOEBIND2's date, yours), ASK 4's
+  Row 8 carries MOEBIND2's date of 05:14Z (ready to merge by Tue 08:00Z) and the premise it leaves open.
+- **Still open:** ASK 3's retry (row 5, verdict about 06:30Z), ASK 6's question (row 8: the premise MOEBIND2's change leaves open), ASK 4's
   card id, ASK 16 (who holds P1), and one more re-diff after top's last objections (Tue 07:30Z).
 
 **Rules I held to.** A status changes only where a source from the last 24 h supports it: on track needs a named
@@ -65,7 +66,7 @@ to one a source gives. Where the sources do not say, the cell is an ASK and the 
 | 5 | `spot-fused-cut-served` | live | off-track (kept) | Thu 12 Nov 12 PM PST (unchanged) | FUSEDSERVE's retry of the first Commit with the tables. G1 (`r20261110-021137-b418`) failed Tue 04:06Z on every rank, at the last step of its windows: the record refuses a table declared twice (`expert_rows.declarations`, vllm's code on `main`). The fix is #8454's new head `dc0a6e8fe6` (its new mark after the vllm suite); the retry `r20261110-042659-14a1` is armed for 05:00Z, the Commit's limit 06:00Z, the run's 06:29Z; PRF-468's rerun goes in G2 (08:10Z) if the retry stages served statements. The done link `circuits/glm-production-compile` is dropped | FUSEDSERVE | FUSEDSERVE's entry headed Tue 04:11Z in your inbox ("Commit failed: its windows' record refuses a table declared twice; retry needs 60 min of all 8 cards"; "It is vllm's code on `main`, not #8454's change"; "Go or no-go at 04:55Z"), its entry headed 04:29Z ("GO. G1's retry r20261110-042659-14a1 is armed for 05:00Z at dc0a6e8fe6") and its checkpoint 03:48Z (G1 started 03:20:16Z); N0218 item 3; IDX:103; HH:179 "the fit Wed 11 Nov 18:00Z; goal ... Thu 12 Nov 12 PM PST"; CON12 circuits 01:07Z |
 | 6 | `spot-128k-attention-proved` | live | off-track (kept) | Thu 12 Nov 6 PM PST (fixed, N0104) | `circuits/glm-sparse-attention-zk` (CIR-210's `_v2` PR, marked Tue 20:00Z). Also linked: `circuits/glm-long-dsa-row`, `vllm/served-128k-window-committed`, and the two top added Tue 03:59Z, `circuits/glm-served-calls-fit-block` and `circuits/glm-top-p-zk` (kept, though circuits' own text says Thursday's request needs no top-p), and the ask card (the script's `ASK_128K`) | TWOPROVE, DSAREAD, ACCOUNTD, PROVECUT | N0104 (both fixed points and fact 2); N0218 item 4 ("no card exists yet. ASKPAGE drafts the page by 04:30Z and I post page and card by 07:00Z"); CON12 circuits 01:07Z and vllm 01:11Z (the three links); IDX:95, 98, 100, 101; CIR-210 circuits Tue 00:21Z; SC section 1 |
 | 7 | `spot-advice-certified` | live (vllm's) | off-track (kept) | Thu 12 Nov 6 PM PST (unchanged; N0218 item 5) | vllm's replay of a request's cache hit (VLLM-260's verdict, Tue 06:00Z). vllm has no goal on the page for it [page 02:27Z], so the blocker text says it and nothing is linked | vllm (VLLM-242) | N0218 item 5; VLLM-242 vllm Tue 00:29Z ("It waits on VLLM-260 (each sampled replay re-proves its request's hit), whose bit-identity verdict is due Tue 10 Nov 06:00Z. Next: restate this issue on that verdict, Tue 10 Nov 10 AM PST"); GA:51 |
-| 8 | `spot-moe-binding` | live | off-track (kept) | Thu 12 Nov 6 PM PST (unchanged; N0114 confirms it for PRF-458) | MOEBIND2's fix of its failed records run (963a, Tue 00:51Z); no date. Then main moving | MOEBIND2 | N0114 "PRF-458: Due 2026-11-12 ... MOEBIND2 holds it"; MOEBIND2's checkpoint Tue 01:49Z (records run `963a` "FAILED the Security audit": `TableReadBinding_nontrivial` takes a closed Prop applied; two witnesses read the proofs tree; next: move the statements onto the definitions tree); N0218 item 6; IDX:112 |
+| 8 | `spot-moe-binding` | live | off-track (kept) | Thu 12 Nov 6 PM PST (unchanged; N0114 confirms it for PRF-458) | MOEBIND2's records rerun `r20261110-051140-4130` (ETA Tue 06:15Z), then its PR opened about 06:30Z and "PRF-458's change marked by Tue 10 Nov 08:00Z". Then main moving. **`ExpertReadAccepted` stays `open`** in the lock ("PRF-458, due 30 Nov") | MOEBIND2 | MOEBIND2's entries in your inbox headed Tue 05:09Z ("f632's rc 1 is four lock-audit refusals of my tree ... The fix, no proof change") and 05:14Z ("One date to pass on: Tue 10 Nov 08:00Z"; "it stays `open` (PRF-458, due 30 Nov)"); its checkpoint Tue 01:49Z (run `963a` failed the Security audit); N0114; N0218 item 6; IDX:112 |
 | 9 | `spot-one-stage-premises` | live (proofs' part done) | on-track (kept) | Thu 12 Nov 6 PM PST (unchanged) | `ci/fine-grained-check`: #8411 (admitted, `1562e328da`) reaches `main`; lean's LEAN-235 line, marked by Tue 10 Nov 12 PM PST | TRUST6 (done); lean for LEAN-235 | LEAN-186: lean Mon 22:46Z, proofs 22:55Z, lean 23:03Z ("LEAN-235 ... marked by Tue 10 Nov 12 PM PST"; "provisional: a default, not yet a ruling"); IDX:91 (#8411 admitted); SC section 8 |
 | 10 | `spot-overhead-measured` | live | off-track (kept) | Thu 12 Nov 6 PM PST (unchanged) | `circuits/glm-served-calls-fit-block` (the link circuits asked for). Also true, not linked: `circuits/glm-sparse-attention-zk` (the refused 10%) | SERVEDCARD; HASHCUT | SERVEDCARD's note, checkpoint Tue 02:08Z ("Window 1 ... proved 65 of 74 staged statements, all 34 types they cover, with every one of the 260 `serve --zk` sessions accepted by Flock's loopback verifier. There was no Lean verdict (NO_PROGRAM)") and 01:17Z ("The form-refused share is 9.8-10.8% of the card's cost"); HH:180; CON12 circuits 01:07Z |
 | 11 | `spot-ten-percent` | live | off-track (kept) | Thu 12 Nov 6 PM PST (unchanged) | `proofs/spot-fused-cut-served` (no figure under 10% is served until it is). Links unchanged: its four open pieces and three done ones; one of the four, `proofs/spot-proof-server-steady-state`, is kernels' since Tue 04:06Z | BREAKEVEN (lead since Mon 19:15Z; idle until vllm's hashing rate, Tue 02:45Z); HASHCUT | HH:8 (BREAKEVEN "lead of proofs/spot-ten-percent from 19:15Z"), HH:41, HH:179-180; LEDGER's note line 104 (H7: 9.80%, 97.05%, 25.76%, each at 32 bits a token, modelled, world year); IDX:110; SC section 6 |
@@ -91,7 +92,7 @@ to one a source gives. Where the sources do not say, the cell is an ASK and the 
 
 - **ASK 3, answered by the run:** G1 failed at 04:06Z, so the row stays off-track and its texts say why. I change it again on the retry's verdict, about 06:30Z. (`spot-fused-cut-served`)
 - **ASK 4, a gap you fill:** the script stops, before it writes anything, until `ASK_128K` holds the card's id: `ASK_128K=<id> bash proofs-goals-fix.sh` (or `ASK_128K=none` to run without the link). The text already says "an ask to Daniel, posted Mon 11 PM", so it is true only once the card is up. (`spot-128k-attention-proved`)
-- **ASK 6, open, yours:** you write MOEBIND2's date here on its return. Until then the line keeps my text. (`spot-moe-binding`)
+- **ASK 6, a date from MOEBIND2, and a question:** its 05:14Z entry gives "marked by Tue 10 Nov 08:00Z", and the texts now say so; overwrite if you date it otherwise. The question: the change leaves `ExpertReadAccepted` an open premise, due 30 Nov, and this goal's first sentence says "nothing assumed about the read's gates", due Thu 12 Nov. If that premise is about the read's gates, the goal is not done by this change [not checked: I did not read the statement]. (`spot-moe-binding`)
 
 **Answered in your note headed 02:18Z, and applied:**
 
@@ -152,10 +153,10 @@ carry a blocker text because what they wait on is not a goal on the page.
   any write, when `ASK_128K` is empty; `ASK_128K=none` drops the link; under `DRY=1` it prints `ask:THE-ASK-CARD-ID`.
 - **The new goal goes first**, so that `spot-post-ready`'s line, which links it, finds it on the page.
 - **`--wait` only where the list changes.** `--wait` replaces a goal's whole list, so a line passes it only when
-  its list differs from the page's as read at Tue 10 Nov 04:58Z. 11 lines pass it. Links other leads added tonight
+  its list differs from the page's as read at Tue 10 Nov 05:26Z. 11 lines pass it. Links other leads added tonight
   are kept: top's two under `spot-128k-attention-proved` (`circuits/glm-served-calls-fit-block`,
   `circuits/glm-top-p-zk`), top's `vllm/two-stage-schedule-committed` under `spot-two-stage-e2e`, and your two
-  under `spot-figures`. **A link added to one of those 11 goals after Tue 10 Nov 04:58Z would be dropped**: I
+  under `spot-figures`. **A link added to one of those 11 goals after Tue 10 Nov 05:26Z would be dropped**: I
   re-diff before you run.
 - **Links other leads asked for (CON12, Tue 01:07Z and 01:11Z; N0147):** `circuits/glm-long-dsa-row`,
   `circuits/glm-sparse-attention-zk` and `vllm/served-128k-window-committed` under `spot-128k-attention-proved`
@@ -163,7 +164,7 @@ carry a blocker text because what they wait on is not a goal on the page.
   `circuits/verifier-templates-not-unrolled` under `spot-verifier-cost`; `circuits/glm-compile-cost-measured`
   under `spot-post-ready` in place of the done `circuits/glm-128k-indexer`; `spot-fused-cut-served` drops the done
   `circuits/glm-production-compile`. No goal passes 16 links: `spot-post-ready` is at 16 exactly.
-  **Every goal id the script names resolves** on the page as read at Tue 10 Nov 04:58Z, the new goal aside [run]:
+  **Every goal id the script names resolves** on the page as read at Tue 10 Nov 05:26Z, the new goal aside [run]:
 
   - `ci/fine-grained-check`: ci, on-track, Tue 10 Nov 6 PM PST, "Main moves on the verified queue's check"
   - `vllm/served-128k-window-committed`: vllm, on-track, Thu 12 Nov 8 AM PST, "A served 128k GLM-5.3 window committed for audit"

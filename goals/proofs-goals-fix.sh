@@ -52,7 +52,7 @@ g proofs/spot-128k-attention-proved --status off-track --wait goal:vllm/served-1
 g proofs/spot-advice-certified --status off-track --blockers @blockers/spot-advice-certified.md \
   --description @desc/spot-advice-certified.md
 
-# ASK 6, open, yours: see the table.
+# ASK 6, a date from MOEBIND2, and a question: see the table.
 g proofs/spot-moe-binding --status off-track --blockers @blockers/spot-moe-binding.md \
   --description @desc/spot-moe-binding.md
 
