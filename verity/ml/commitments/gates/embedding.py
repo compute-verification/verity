@@ -48,7 +48,7 @@ from verity.ml.circuits.boolean.forms import ONE, ZERO, const_bits
 from verity.ml.circuits.boolean.trace import part as _part
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import Coll
-from verity.ml.circuits.types import Array, Tuple
+from verity.ml.circuits.types import Array, Tuple, Value
 
 from ..merkle import merkle_depth
 from ..rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, bit_row
@@ -63,7 +63,7 @@ __all__ = ["EmbeddingRead", "EmbeddingReadSelect", "FILL", "SCHEMA", "arguments"
 
 BIT = BL.BIT
 BF16 = Array(16, BIT)
-TOKEN = Array(32, BIT)
+TOKEN = Value(32)
 SCHEMA = SCHEMA_HM96_SHA512_ROW_SEG
 #: the word a token outside the vocabulary gives (`Embedding_v2`'s gathers)
 FILL = 0x7FFF
@@ -103,7 +103,7 @@ def arguments(V: int, tok: int, root: bytes, domain_id: bytes, row: Sequence[int
         raise ValueError(f"a salt is {SALT_BYTES} bytes, not {len(salt)}")
     if any(not 0 <= int(w) < 1 << 16 for w in row):
         raise ValueError("a row's words are 16 bits")
-    return ([(tok >> j) & 1 for j in range(32)], digest_bits(root), digest_bits(domain_id),
+    return ([tok & 0xFFFFFFFF], digest_bits(root), digest_bits(domain_id),
             [(int(w) >> j) & 1 for w in row for j in range(16)],
             [b for k in range(0, SALT_BYTES, 64) for b in digest_bits(salt[k:k + 64])], [b for s in path for b in digest_bits(s)])
 
