@@ -18,7 +18,7 @@ from verity_flock import rec_live as RL
 import test_rec_live as T
 
 HERE = Path(__file__).resolve().parent
-LEAN = HERE.parents[3] / "verity/core/service/flock"
+LEAN = Path(__file__).resolve().parents[4] / "verity/core/service/flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 
 DRAW = {"law": "stratified", "population": 2, "k": 2, "strata": [{"template": "t", "units": [[0, 2]], "k": 2}],
@@ -86,7 +86,7 @@ def test_the_full_draw_is_the_lean_verifiers_own_at_k_the_population(tmp_path):
 
 
 def test_the_forged_records_lose_the_draw_or_a_unit(tmp_path):
-    sys.path.insert(0, str(HERE.parent / "pod"))
+    sys.path.insert(0, str((Path(__file__).resolve().parents[4] / "verity/ml/flock/pod/rec_inner.py").parent))
     import rec_inner as RI
 
     for what in ("nodraw", "partial"):
