@@ -55,7 +55,9 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/spot/one_stage/registered.py",
           # the deployment layer and its wire, which the memory challenger's and the wipe's sides are started through
           # (`deploy.stream.Side`) and the challenger's parties run on
-          "verity/core/deploy", "verity/core/wire"]
+          "verity/core/deploy", "verity/core/wire",
+          # the P2 store's default weights generator (`p2_v1/store.py`'s `GENERATOR`), which its test lays out and commits
+          "examples/h200/e2e_h200/__init__.py", "examples/h200/e2e_h200/served_weights.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
