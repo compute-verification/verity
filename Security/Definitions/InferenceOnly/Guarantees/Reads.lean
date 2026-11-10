@@ -16,8 +16,8 @@ namespace InferenceOnly.Guarantees
 open Verity
 
 /-- **Updated matrix multiplications are throttled, in reads form**: for a division `P` of a declared circuit `D` into
-inference blocks of at most `Γ` gates, each reading at most `K` bits of novel information, under compute-bounded incompressibility at
-`(Γ, K)`, the inference blocks together read at least `G · f(K)` bits of novel information, for a chain of `G` products that `D`
+inference blocks of at most `Γ` gates, each reading at most `K` fresh input bits, under compute-bounded incompressibility at
+`(Γ, K)`, the inference blocks together read at least `G · f(K)` fresh input bits, for a chain of `G` products that `D`
 runs. `b_w` and `b_a` are the widths of a weight entry and an activation entry, and `d` the smallest inner dimension. -/
 def UpdatedMatMulReads : Prop :=
   ∀ (Γ : ℕ) (K b_w b_a : ℝ) (D : Declaration) (c : Chain D.D) (d n : ℕ) (P : Partition D.D n),

@@ -25,7 +25,7 @@ The model of `Security/Definitions/Accounting/Actual.lean`:
 * `Actual/Windows.lean`: `WindowsAt`, the capacity form at any cuts and with no memory constraint: the windows divide
   the developer's region into inference blocks of at most `Φ_X (τ (j + 1) − τ j)` gates, each reading in a set `G` at
   most the state's part in `G` at its cut plus `β_X (τ (j + 1) − τ j)`; `Windows`, its instance at the cuts `kω` and
-  `G = univ`, inference blocks of at most `Φ_X ω` gates, each reading at most `M_X + β_X ω` novel bits.
+  `G = univ`, inference blocks of at most `Φ_X ω` gates, each reading at most `M_X + β_X ω` fresh input bits.
 * `Actual/Runtime.lean`: `Runtime`, the corollary `t_A(P) ≥ ω (G f(K_A) / (n K_A) − 1)`, from `Windows` and B5.
 * `Actual/Threaded.lean`: `ThreadedRuntime`, the memory cap over threads: when the developer's region over `[0, t)`
   contains a threaded reference circuit, `b_a |M| ≤ n ⌈t/ω⌉ K Λ(K)` with `K = R + r ω` the state at a window's start

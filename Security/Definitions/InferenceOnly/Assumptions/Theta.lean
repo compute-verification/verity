@@ -18,11 +18,11 @@ run, certified or not, is never in `θ`: registration happens at the start of a 
 changes. One registration log is one deployment, and `θ` is what the log's first entry registers: the first run's `θ`
 cites its own entry, which opens the log, every later run's cites that same entry, and registering new public data
 takes a new log, a new deployment the auditor sees as such. So no value computed off the books, before the run or
-during it, is ever registered in `θ`, and neither is any novel input of `c`.
+during it, is ever registered in `θ`, and neither is any fresh input of `c`.
 
 What the bounds use is the rule's consequence for a partial containment `M` of `c` in `d`: a gate that `M`'s computed
 gates `S` read from outside `S` (`c.D.into M.S`: a dark gate of `c`, or an input gate of `c`) goes into `d`'s `θ` only
-when it is in `c`'s `θ`. A dark value, or a novel input of `c`, that `d` listed in `θ` would be read for free, and an
+when it is in `c`'s `θ`. A dark value, or a fresh input of `c`, that `d` listed in `θ` would be read for free, and an
 inference block could then thread `c`'s counted multiplications on it without paying for the read.
 
 The inference-only check (`InferenceOnlyCheck.Theta`) enforces the provenance form: each `θ` entry cites the first entry of the
@@ -33,7 +33,7 @@ premise is what a check can't see, since commitments are hiding: that the data t
 public, and not computed off the books before its registration (gradients, partial sums, updated weights on unmonitored
 hardware), and that the auditor knows which log is the deployment's. So this is a premise of every guarantee through a
 containment: a partial one, or a total one `M : Containment c.D d.D` as the partial containment with no dark gates,
-`PartialContainment.ofContainment M`, for which it says that no novel input of `c` that `c` reads is in `d`'s `θ`. -/
+`PartialContainment.ofContainment M`, for which it says that no fresh input of `c` that `c` reads is in `d`'s `θ`. -/
 def ThetaRegistered (c d : Declaration) (M : PartialContainment c d) : Prop :=
   ∀ a ∈ c.D.into M.S, M.emb a ∈ d.θ → a ∈ c.θ
 

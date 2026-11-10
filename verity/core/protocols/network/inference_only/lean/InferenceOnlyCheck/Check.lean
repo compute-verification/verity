@@ -5,10 +5,10 @@ import Flock.Program
 # The inference-only policy's check of a declared division
 
 `InferenceOnly.Complies Γ α` (`Security/Definitions/InferenceOnly.lean`) holds of a declaration `(D, θ)` when `D`'s computed gates divide
-into inference blocks of at most `Γ` gates, each reading at most `α` bits of novel information per gate:
+into inference blocks of at most `Γ` gates, each reading at most `α` fresh input bits per gate:
 `freshInput R = width(into(R) \ θ) ≤ α · size R`. The verifier's side is the check of one declared division: `evaluate`
 decides that it is a partition of the computed gates into inference blocks (`Verity.Partition`) and that every inference block meets both bounds,
-and reports per inference block its size and novel reads, and the first inference block that fails, with the rule it fails.
+and reports per inference block its size and fresh input bits, and the first inference block that fails, with the rule it fails.
 
 ## The input, and how descriptor v1 is the definition's circuit
 
@@ -139,7 +139,7 @@ def ius (c : GateTable) (d : Division) : Array (Nat × Nat) :=
   (tally c d).map fun (s, into) => (s, into.fold (fun x a => if d.theta.contains a then x else x + c.w[a]!) 0)
 
 /-- The first inference block that breaks the policy, with the rule: `size` when it has more than `Γ` gates, else `inference_only` when its
-novel reads exceed `num/den` times its size. -/
+fresh input bits exceed `num/den` times its size. -/
 def failure (gamma num den : Nat) (r : Array (Nat × Nat)) : Option (Nat × String) :=
   (List.range r.size).findSome? fun u =>
     let (size, novel) := r[u]!

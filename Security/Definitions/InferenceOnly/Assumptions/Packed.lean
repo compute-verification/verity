@@ -14,7 +14,7 @@ open Verity
 
 open Classical in
 /-- **Incompressibility of weights and activations, at most `k` products to a gate** (`ActivationsIncompressible` on a
-`PackedChain`). Every inference block `R` of `D` (a set of at most `Γ` computed gates) that reads at most `K` bits of novel information
+`PackedChain`). Every inference block `R` of `D` (a set of at most `Γ` computed gates) that reads at most `K` fresh input bits
 reads at least `b_w` bits for each weight entry it uses and `b_a` bits for each input entry it uses, other than an input
 entry linked to an entry whole in `R`:
 `b_w · #(weight entries R uses) + b_a · #(input entries R uses, not linked to an entry whole in R) ≤ width(in(R) \ θ)`.

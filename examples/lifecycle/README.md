@@ -177,7 +177,7 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
   and its file says one Program is the circuit of record: d.D, one `Circuit`, is here every execution block composed
   along the state wire (block k's state input is block k − 1's state output, not an input gate), which the spec has no
   operation for; d.θ, the registered information, is theta's and the initial state's input gates. `Baseline` is d before any block,
-  and each `Declaration` record extends d.D by one block and d.θ by nothing: its requests are novel input gates.
+  and each `Declaration` record extends d.D by one block and d.θ by nothing: its requests are fresh input gates.
 - **State crosses execution blocks as a committed value.** A sampled proof block at the start of block k opens block k − 1's
   last row (or the registered initial state), so one unit's statement reads three commitments. `Core.Protocol`'s answer carries
   one commitment: the cross-block read and the chain live outside every subprotocol, in `check_declaration` and

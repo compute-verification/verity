@@ -15,7 +15,7 @@ open Verity
 
 /-- **Weights are incompressible in support form, each thread charged by the work done on it, at a format's rate**:
 every subcircuit `R` of the reference circuit `c` small by information (at most `Γ` computed gates, at most `S` bits of
-information read) has novel reads that take at least
+information read) has fresh input bits that take at least
 `2^(b_w · #(weights R uses) + (log₂ n − μ) · Σ_t min(d, m_t / e))` distinct values over the runs with the baseline at
 `θv`, where `m_t` is the number of thread `t`'s counted multiplications in `R`. `n` is the number of values of the
 activations' format (E4M3 253, BF16 65281, E2M1 15) and `μ` a margin; only `log₂ n − μ` enters, the bits charged per
@@ -29,7 +29,7 @@ values another determines, products of weights and an activation read by gates t
 Those are where `WeightsSupport` fails, at every format: under the standard threading the gates reading a 128 × 128 × 2
 tile of fprop products are charged `b_a · 32768` bits against at most 4096 bits of values at E4M3.
 
-Where `R`'s counted multiplications read its novel reads directly, a value at its format's full support pays for its
+Where `R`'s counted multiplications read its fresh input bits directly, a value at its format's full support pays for its
 work when `e` is at least the most counted multiplications one activation feeds: under `benchmarks/nci/kappa.py` that
 is a dense layer's `2 · 18432` against `e = 4·10⁴`, with the LM head's forward products, `163840` per value, left out
 of the counted multiplications. It fails where `WeightsSupport`'s width form does (weights committed in `θ`); where

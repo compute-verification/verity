@@ -11,7 +11,7 @@ gates, so it reads at most `αΓ` bits: the draft's `S*` is `αΓ` here.
 Theorem 2 also holds when the declaration contains the reference circuit only partly (`PartialContainment`): the
 counted multiplications it computes are throttled as before, and every other one is a dark gate, computed off the books
 (`ThreadedThrottledOn`, `ThreadedThrottledDark`, `ThreadedTrainingOn`). Every form through a containment, total or
-partial, takes `ThetaRegistered` for it: no dark value, and no novel input of the reference circuit, is in the
+partial, takes `ThetaRegistered` for it: no dark value, and no fresh input of the reference circuit, is in the
 declaration's θ.
 
 The `Slots` forms take `WeightsIncompressibleSlots`, weights charged per parameter slot, in place of
@@ -25,8 +25,8 @@ open Verity
 
 /-- **Theorem 1 (training's NCI floor)** (the thread draft, Appendix A): if the reference circuit `c` is
 `(d, e)`-threaded and its weights are incompressible at `b_w` bits per weight and `b_a` per activation, every small
-subcircuit `R` of `c` computes at most `Λ = max(e, c · S / (4 d b_w))` counted multiplications per `b_a` bits of novel
-information it reads. Counting 2 flops per counted multiplication, its NCI is at least
+subcircuit `R` of `c` computes at most `Λ = max(e, c · S / (4 d b_w))` counted multiplications per `b_a` fresh input
+bits it reads. Counting 2 flops per counted multiplication, its NCI is at least
 `b_a / (2Λ) = (b_a/2) · min(1/e, 4 d b_w/(cS))`, the draft's statement at `b_w = b_a = b`, written multiplied out so that
 a subcircuit that reads nothing needs no division. -/
 def ThreadedReads : Prop :=

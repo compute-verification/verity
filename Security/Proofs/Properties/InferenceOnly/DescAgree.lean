@@ -11,7 +11,7 @@ each a named `Prop` here, both proved: the first by `Walk.gatesLocated_of`, from
 * `GatesLocated`: on a Program the decoder returns and `Desc.evaluate` reads (topological by `Prog.orderViolation`, its
   root laid out, its input nodes the root's, `Desc.walkable`, and `Desc.analyze` resolving its references), every gate of
   the canonical layout is located and reads only earlier gates (`GateOk`), so `InferenceOnlyCheck.circuitOf` lays it out.
-* `FreshExact`: on such a Program, for a division whose inference blocks are unions of root nodes, the novel reads `Desc.freshWidth`
+* `FreshExact`: on such a Program, for a division whose inference blocks are unions of root nodes, the fresh input bits `Desc.freshWidth`
   counts per inference block, from what `Desc.analyze` resolves each root node to read, are `InferenceOnlyCheck.ius`'s, gate by gate.
 
 The rest is proved: `Desc.evaluate`'s refusals and folds (`descEvaluate_ok`, `nodeThetaFold_ok`, `nodeOwnerFold_ok`),
@@ -539,10 +539,10 @@ def GatesLocated : Prop :=
     Desc.rootLaidOut P = true → Desc.inputsAtRoot P = true → Desc.walkable P = true →
     (∃ reads, Desc.analyze P = .ok reads) → ∀ g < gates P, GateOk P g
 
-/-- **The novel reads by node are the gates'.** On such a Program, and a division `dv` of its layout whose inference blocks are
+/-- **The fresh input bits by node are the gates'.** On such a Program, and a division `dv` of its layout whose inference blocks are
 unions of root nodes (root node `k`'s gates all in `own[k]`, θ every gate of the nodes `mask` marks, input nodes, in no
-inference block), `Desc.freshWidth` of what `Desc.intoOf` collects per inference block from `Desc.analyze`'s reads is `InferenceOnlyCheck.ius`'s novel
-reads. -/
+inference block), `Desc.freshWidth` of what `Desc.intoOf` collects per inference block from `Desc.analyze`'s reads is `InferenceOnlyCheck.ius`'s fresh
+input bits. -/
 def FreshExact : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (reads : Array (Array Desc.Seg)) (mask : Array Bool) (own : Array (Option ℕ))
     (c : GateTable) (dv : Division),

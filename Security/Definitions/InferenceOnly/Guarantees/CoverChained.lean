@@ -12,9 +12,9 @@ the covering bound's count (`InferenceOnly.Guarantees.CoveringBoundTwoCosts`): `
 training circuit `c` that are chained at depth `D` and activation cost `c_a` (`InferenceOnly.Assumptions.chainedBlocksAt`), under
 parameter-hardness at weight cost `c_w` (`InferenceOnly.Assumptions.ParameterHardAt`). Both are read on `c` bit by bit as a
 declaration (`bitDecl c`), so a block's size, what it is handed and every cut are counted in bits, the unit of the inference-only
-policy's novel reads.
+policy's fresh input bits.
 
-Why bits and not `c`'s gates: on the gates, `|in(S) \ θ|` counts gates while an inference block's novel reads count bits, so a block
+Why bits and not `c`'s gates: on the gates, `|in(S) \ θ|` counts gates while an inference block's fresh input bits count bits, so a block
 handed `k` bits is handed up to `k / w_min` gates, and the bound would lose up to `w_max / w_min` unless every gate had
 one width; and a constant gate (computed, reading nothing) is a source outside `θ`, so every block of gates holding it
 is handed it, while an inference block holding it computes it for free. On the bits every gate is one bit wide and a constant's bits

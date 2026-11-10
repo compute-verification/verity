@@ -5,9 +5,9 @@ import Mathlib.Analysis.Real.Sqrt
 # Novel communication intensity: the policy
 
 The developer declares `(D, θ)` (`Verity.Declaration`). The input gates in `θ` hold baseline information, committed
-beforehand; every other value is novel information. A division of `D` into inference blocks is a
+beforehand; every other value is fresh input. A division of `D` into inference blocks is a
 `Verity.Partition` of its computed gates. Input gates are in no inference block, so an inference block that uses an input reads it. The gates `R`
-of an inference block read `width(in(R) \ θ)` bits of novel information (`freshInput`): baseline information is free, and so is
+of an inference block read `width(in(R) \ θ)` fresh input bits (`freshInput`): baseline information is free, and so is
 anything `R` computes itself. `R`'s novel communication intensity is `NCI(R) = freshInput R / size R`, in bits per gate.
 
 `Complies Γ α` is the inference-only policy: `D` divides into inference blocks of at most `Γ` gates, each with NCI at most `α`.
@@ -15,7 +15,7 @@ anything `R` computes itself. `R`'s novel communication intensity is `NCI(R) = f
 `(c, k)`-partition (`Verity.Partition.IsCK`). A policy is a
 condition on declarations that the verifier checks from `D` and `θ` alone (`Policy`), a protocol with no rounds of its
 own. `slowdown policy t` is the factor by which every declaration that complies with `policy` and implements `t` is
-larger than `t`. `Reads Γ c` is the least total novel information that the inference blocks of a division of `c` into inference blocks of at most
+larger than `t`. `Reads Γ c` is the least total fresh input that the inference blocks of a division of `c` into inference blocks of at most
 `Γ` gates read.
 
 The draft's necessary subcomputation of frontier training is an updated matrix multiplication chain (`Chain`): the
@@ -30,14 +30,14 @@ namespace InferenceOnly
 open Verity
 open scoped ENNReal
 
-/-- The novel information that the gates `R` of `d`'s circuit read, in bits: the width of `in(R) \ θ`. -/
+/-- The fresh input that the gates `R` of `d`'s circuit read, in bits: the width of `in(R) \ θ`. -/
 def freshInput (d : Declaration) (R : Finset (Fin d.D.N)) : ℕ := d.D.width (d.D.into R \ d.θ)
 
 /-- A policy: a condition on declarations. -/
 abbrev Policy : Type := Declaration → Prop
 
 /-- **The inference-only policy** at maximum inference block size `Γ` and NCI limit `α`: `d`'s circuit divides into inference blocks of at most `Γ` gates,
-each reading at most `α` bits of novel information per gate (`NCI(R) ≤ α`, multiplied out so that an inference block with no gates
+each reading at most `α` fresh input bits per gate (`NCI(R) ≤ α`, multiplied out so that an inference block with no gates
 needs no division). -/
 def Complies (Γ : ℕ) (α : ℝ) : Policy := fun d =>
   ∃ (n : ℕ) (P : Partition d.D n),
@@ -48,7 +48,7 @@ def Complies (Γ : ℕ) (α : ℝ) : Policy := fun d =>
 def CompliesAtMost (c k n : ℕ) : Policy := fun d =>
   ∃ B ≤ n, ∃ P : Partition d.D B, P.IsCK d c k
 
-/-- `Reads_Γ(c)`: the least total novel information that the inference blocks of a division of `c` into inference blocks of at most `Γ` gates
+/-- `Reads_Γ(c)`: the least total fresh input that the inference blocks of a division of `c` into inference blocks of at most `Γ` gates
 read. -/
 noncomputable def Reads (Γ : ℕ) (c : Declaration) : ℕ :=
   sInf {r | ∃ (n : ℕ) (P : Partition c.D n), (∀ u, c.D.size (P.gates u) ≤ Γ) ∧ r = ∑ u, freshInput c (P.gates u)}

@@ -12,9 +12,9 @@ It states them over `C` itself, not over the declared circuit, which reaches the
   non-weight value, gradients included) and a thread partition, putting each non-weight value in at most one thread,
   with each weight used at most `reuse` times per thread. A counted multiplication belongs to the thread of its
   activation. In a standard transformer a thread is one token position at one training step, and `reuse = 2`.
-* `Small c Γ S R`: the draft's small subcircuit, at most `Γ` computed gates reading at most `S` bits of novel
-  information (its `F*` and `S*`).
-* `Threading.Threaded Γ S d e`: the draft's `(d, e)`-threaded: every small subcircuit that reads fewer than `d` novel values
+* `Small c Γ S R`: the draft's small subcircuit, at most `Γ` computed gates reading at most `S` fresh input
+  bits (its `F*` and `S*`).
+* `Threading.Threaded Γ S d e`: the draft's `(d, e)`-threaded: every small subcircuit that reads fewer than `d` fresh input values
   of a thread computes at most `e` of that thread's counted multiplications per value it reads from the thread.
 -/
 
@@ -47,7 +47,7 @@ structure Threading (c : Declaration) where
   reuse_le : ∀ w t, (M.filter fun g => weight g = w ∧ thread (act g) = some t).card ≤ reuse
 
 /-- **A small subcircuit** (the draft's `F < F*`, `S < S*`, here as `≤`): at most `Γ` computed gates, reading at most
-`S` bits of novel information. -/
+`S` fresh input bits. -/
 def Small (c : Declaration) (Γ : ℕ) (S : ℝ) (R : Finset (Fin c.D.N)) : Prop :=
   R ⊆ c.D.computed ∧ c.D.size R ≤ Γ ∧ (freshInput c R : ℝ) ≤ S
 
@@ -65,11 +65,11 @@ def threadMults (R : Finset (Fin c.D.N)) (t : Fin T.m) : Finset (Fin c.D.N) :=
 /-- The weights `R` uses: those of which it holds a counted multiplication. -/
 def weightsUsed (R : Finset (Fin c.D.N)) : Finset (Fin c.D.N) := (T.mults R).image T.weight
 
-/-- The novel values of thread `t` that `R` reads: the gates of `in(R) \ θ` in thread `t`. -/
+/-- The fresh input values of thread `t` that `R` reads: the gates of `in(R) \ θ` in thread `t`. -/
 def threadReads (R : Finset (Fin c.D.N)) (t : Fin T.m) : Finset (Fin c.D.N) :=
   (c.D.into R \ c.θ).filter fun g => T.thread g = some t
 
-/-- **`(d, e)`-threaded** at `(Γ, S)`: every small subcircuit that reads fewer than `d` novel values of a thread computes
+/-- **`(d, e)`-threaded** at `(Γ, S)`: every small subcircuit that reads fewer than `d` fresh input values of a thread computes
 at most `e` of that thread's counted multiplications per value it reads from the thread. At `d = 1, e = 0`: a small
 subcircuit does none of a thread's multiplications without reading one of its values. -/
 def Threaded (Γ : ℕ) (S : ℝ) (d e : ℕ) : Prop :=

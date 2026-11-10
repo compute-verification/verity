@@ -5,7 +5,7 @@ import Mathlib.Tactic
 # The description-sized inference-only check against the unrolled one
 
 `InferenceOnlyCheck.Desc.evaluate` (`verity/core/protocols/network/inference_only/lean/InferenceOnlyCheck/Desc.lean`) computes per inference block its size and
-its novel reads from one summary per Definition, where `InferenceOnlyCheck.evaluate` walks the circuit gate by gate. What is
+its fresh input bits from one summary per Definition, where `InferenceOnlyCheck.evaluate` walks the circuit gate by gate. What is
 proved here is the summaries' arithmetic, each step stated against the function that computes it:
 
 * `sizes_eq_count`: an inference block's size as `Desc.sizes` sums it, root node by root node, is the number of gates the expanded

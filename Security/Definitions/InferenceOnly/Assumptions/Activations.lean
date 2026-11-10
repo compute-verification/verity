@@ -15,7 +15,7 @@ namespace InferenceOnly.Assumptions
 open Verity
 
 /-- **Activations are incompressible over all counted multiplications** ([ACTIVATIONS-COST], on the reference circuit
-`c`): every small subcircuit `R` of `c` (at most `Γ` computed gates, at most `K` bits of novel reads) reads at least
+`c`): every small subcircuit `R` of `c` (at most `Γ` computed gates, at most `K` fresh input bits) reads at least
 `b_w` bits for each weight its counted multiplications use and `b_a` bits for each activation they use, other than an
 activation whole in `R` (`Links.Whole`: computed from counted multiplications that all lie in `R`), which `R` can
 compute from its own products:

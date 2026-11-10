@@ -4,9 +4,9 @@ import Proofs.Core.Padding
 /-!
 # Proofs of the inference-only policy as a `(c, k)`-partition
 
-A Boolean declaration's novel reads are its unregistered input gates, so a complying inference block of `|I| ≤ Γ` gates reads at
+A Boolean declaration's fresh input bits are its unregistered input gates, so a complying inference block of `|I| ≤ Γ` gates reads at
 most `α |I| ≤ α Γ` of them, and `Padding` makes the division a `(Γ, ⌊αΓ⌋)`-partition. Through the bit-level expansion,
-an inference block's size becomes its width, at least `|I|` and at most `W |I|`, and its novel reads do not grow (`ExpandSize`).
+an inference block's size becomes its width, at least `|I|` and at most `W |I|`, and its fresh input bits do not grow (`ExpandSize`).
 -/
 
 namespace Verity

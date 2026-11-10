@@ -8,7 +8,7 @@ import Proofs.InferenceOnly.Support
 
 Support form gives the reference circuit's incompressibility in reads (`activationsIncompressible_of_support`,
 `partialSumsIncompressible_of_support`). Then pull a compliant division of the containing declaration back to `c`
-(`pull`): each piece has no more gates than its inference block and reads no more novel information (`freshInput_pull`), so the
+(`pull`): each piece has no more gates than its inference block and reads no more fresh input (`freshInput_pull`), so the
 pieces form a division of `c` into inference blocks of at most `Γ` gates reading at most `αΓ` each. The reads form of the law
 (`UpdatedMatMulReads`), applied to `c` with that division, bounds the pieces' total reads from below by `G · f(αΓ)`;
 the inference blocks read at least as much, and at most `α size(d)` in total.
@@ -83,7 +83,7 @@ theorem ContainedTraining : Guarantees.ContainedTraining := by
     _ ≤ F α (α * Γ) b_w b_a dd * (2 * ch.G) := mul_le_mul_of_nonneg_left hκ hF0
     _ ≤ d.D.size d.D.computed := hF
 
-/-- Support form bounds a set's charge by its novel reads: its values are functions of what it reads. -/
+/-- Support form bounds a set's charge by its fresh input bits: its values are functions of what it reads. -/
 theorem le_freshInput_of_support {D : Declaration} {θv : D.D.Transcript} {R : Finset (Fin D.D.N)} {x : ℝ}
     (hR : R ⊆ D.D.computed) (h : (2 : ℝ) ^ x ≤ support D θv R) : x ≤ freshInput D R := by
   have hc : (support D θv R : ℝ) ≤ (2 : ℝ) ^ (freshInput D R : ℝ) := by
@@ -182,7 +182,7 @@ theorem card_products_le_dark (M : PartialContainment c d) (ch : Chain c.D) :
 end Dark
 
 /-- A piece of a compliant division is within the reference circuit's caps: it has no more gates than its inference block and reads
-no more novel information. -/
+no more fresh input. -/
 theorem piece_caps {Γ : ℕ} {α K : ℝ} {c d : Declaration} {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n}
     (hα : 0 ≤ α) (hαK : α * Γ ≤ K)
     (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (freshInput d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))

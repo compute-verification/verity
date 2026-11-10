@@ -22,7 +22,7 @@ products to a gate, as in `Dot16` steps (`PackedChain`, `PackedTrainingIncompres
 The chain guarantees restated on it (`InferenceOnly.Guarantees.IncompressibleContainedTraining`) conclude what the support forms
 do from a weaker premise, since the support forms with `WeightsIncompressible` imply it; the thread guarantees read only
 its weights' half. With a partial containment, the restated chain guarantee
-(`InferenceOnly.Guarantees.IncompressibleContainedMatMulOn`) bounds what the dark gates absorb by their novel reads, where the
+(`InferenceOnly.Guarantees.IncompressibleContainedMatMulOn`) bounds what the dark gates absorb by their fresh input bits, where the
 support form bounds it by their width.
 -/
 
@@ -34,7 +34,7 @@ open Classical in
 /-- **Training is incompressible**: in every division `P` of the reference training circuit `c` into inference blocks, the partial
 sums passed between inference blocks can be charged to the inference blocks that receive them, `s u` to inference block `u`, with an entry of the chain `ch`
 whose products lie in `m` inference blocks charged at least `m − 1` in total, so that every small inference block (at most `Γ` computed gates, at
-most `K` bits of novel reads) reads at least
+most `K` fresh input bits) reads at least
 1. `b_w` bits for each weight entry of `ch` it uses, and `b_a` for each input entry it uses or partial sum charged to it,
    whichever count is larger, where an input entry linked to an entry whole in the inference block is not counted, since the inference block
    computes it from its own products; and

@@ -4,7 +4,7 @@ import Definitions.InferenceOnly.Assumptions.Info
 # The inference-only policy over threads, reads counted by information: the guarantees
 
 Theorem 1 of the thread draft with reads counted by information (`ThreadedReadsInfo`), carried through a containment to
-any set of gates of a declaration that contains the reference circuit (`ThreadedContainedInfo`). A set whose novel reads
+any set of gates of a declaration that contains the reference circuit (`ThreadedContainedInfo`). A set whose fresh input bits
 are a state that is a function of `k` bits and an ingress counted by width reads at most `k + width(ingress)` bits of
 information (`InfoOfState`), so it holds at most `K · Λ(K) / b_a` counted multiplications at
 `K = k + width(ingress)` (`ThreadedOfState`).
@@ -16,7 +16,7 @@ open Verity Finset
 
 /-- **Theorem 1 with reads counted by information**: if the reference circuit `c` is `(d, e)`-threaded over the
 subcircuits small by information and its weights are incompressible in support form, every such subcircuit `R`
-computes at most `Λ = max(e, c · S / (4 d b_w))` counted multiplications per `b_a` bits of information its novel reads
+computes at most `Λ = max(e, c · S / (4 d b_w))` counted multiplications per `b_a` bits of information its fresh input bits
 carry. It is `ThreadedReads` with `freshInfo`, which is at most `freshInput`, in place of `freshInput`. -/
 def ThreadedReadsInfo : Prop :=
   ∀ (c : Declaration) (θv : c.D.Transcript) (T : Threading c) (Γ : ℕ) (S b_w b_a : ℝ) (d e : ℕ),
@@ -25,7 +25,7 @@ def ThreadedReadsInfo : Prop :=
 
 /-- **Reads bounded by a state**: if a set `R` of computed gates reads, outside the baseline, only gates of a state `Sst`
 and an ingress `Sin`, and the state's values over the runs with the baseline at `θv` are a function `f` of `k` bits,
-then `R`'s gates take at most `2^(k + width(Sin))` values and its novel reads carry at most `k + width(Sin)` bits of
+then `R`'s gates take at most `2^(k + width(Sin))` values and its fresh input bits carry at most `k + width(Sin)` bits of
 information. The baseline is what is registered: after a wipe, a state that is registered data entangled with at most
 `k` bits of slack reads as `k` bits, however wide it is. -/
 def InfoOfState : Prop :=
@@ -36,8 +36,8 @@ def InfoOfState : Prop :=
 
 /-- **Theorem 1 through a containment**: a declaration `d` contains the reference circuit `c` through `M`, with `c`'s
 baseline values `θc` the ones `θv` gives their images, and `c` is as in `ThreadedReadsInfo` at cap `K`. Every set `W`
-of `d`'s computed gates, at most `Γ` of them, whose novel reads carry at most `K` bits of information, holds at most `Λ`
-of `c`'s counted multiplications per `b_a` bits of information `W`'s novel reads carry. -/
+of `d`'s computed gates, at most `Γ` of them, whose fresh input bits carry at most `K` bits of information, holds at most `Λ`
+of `c`'s counted multiplications per `b_a` bits of information `W`'s fresh input bits carry. -/
 def ThreadedContainedInfo : Prop :=
   ∀ (c d : Declaration) (M : Containment c.D d.D) (θc : c.D.Transcript) (θv : d.D.Transcript) (T : Threading c)
     (Γ : ℕ) (K b_w b_a : ℝ) (dd e : ℕ),
@@ -48,7 +48,7 @@ def ThreadedContainedInfo : Prop :=
       b_a * (T.mults (univ.filter fun g => M.emb g ∈ W)).card ≤ freshInfo d θv W * T.bound K b_w dd e
 
 /-- **The count a memory cap needs**: with `d`, `c` and `M` as in `ThreadedContainedInfo`, a set `W` of `d`'s computed
-gates, at most `Γ` of them, whose novel reads are a state that is a function of `k` bits and an ingress `Sin`, holds at
+gates, at most `Γ` of them, whose fresh input bits are a state that is a function of `k` bits and an ingress `Sin`, holds at
 most `K · Λ(K) / b_a` of `c`'s counted multiplications, at `K = k + width(Sin)`. -/
 def ThreadedOfState : Prop :=
   ∀ (c d : Declaration) (M : Containment c.D d.D) (θc : c.D.Transcript) (θv : d.D.Transcript) (T : Threading c)
