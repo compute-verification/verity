@@ -700,6 +700,8 @@ def test_a_wait_nothing_read_bounds_gets_no_estimate_and_only_a_stalled_line_is_
         "late on its CPU slot alone"
     docs = {N2: DOWN, CPU1: {**pool(slot("r0")), **lean(build=(3, 1, 0))}}
     assert auto.expect(docs, (CPU1, "research"), 4, 16, lean_pool="build") == auto.Wait(0, "", False), "both slots free: now"
+    docs = {N2: DOWN, CPU1: {**pool(slot("r0")), **lean(check=(2, 0, 0), build=(0, 0, 0))}}
+    assert auto.expect(docs, (CPU1, "research"), 4, 16, lean_pool="build") == auto.Wait(None, "its Lean slots give `build` none", False)
 
 
 def test_the_smallest_change_of_a_request_that_starts_now_keeps_the_most_of_what_it_asked(hold_25):
@@ -715,6 +717,10 @@ def test_the_smallest_change_of_a_request_that_starts_now_keeps_the_most_of_what
     assert auto.smaller(docs, 16, 150) is None, "no slot is free anywhere: no cut starts it"
     docs[CPU5] = pool(slot("r0", cpus="8-19", mem=40), slot("r1", cpus="20-23", mem=16), waiters=2)
     assert auto.smaller(docs, 16, 150) is None, "the free slots are their waiters'"
+    docs = {N2: DOWN, CPU1: {**pool(slot("r8", cpus="0-15", mem=160, held=True), waiters=7), **lean(build=(3, 0, 0))},
+            CPU5: {**pool(slot("r0", cpus="8-19", mem=40)), **lean(build=(0, 0, 0))}}
+    assert auto.smaller(docs, 16, 150) == (12, 40, (CPU5, "research"))
+    assert auto.smaller(docs, 16, 150, lean_pool="build") is None, "its free slot is on a machine whose Lean slots give `build` none"
 
 
 def test_on_auto_says_when_the_run_should_start_and_warns_or_refuses_a_late_one(tmp_path, monkeypatch, capsys, hold_25):

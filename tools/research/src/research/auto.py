@@ -505,9 +505,9 @@ def expect(docs: dict[str, dict | str], target: tuple[str, str] | None, cpus: in
 def smaller(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean_pool: str | None = None
             ) -> tuple[int, float, tuple[str, str]] | None:
     """The smallest change of a job's request that starts it now: (CPUs, GB, the pool that takes it), the request cut to a
-    slot that is free in some pool, which `choose` then sends there and `expect` gives no wait. Of several, the one that keeps
-    the most of what was asked, as its share of the CPUs plus its share of the memory. None when no smaller request starts
-    now."""
+    slot that is free in some pool, where `expect` then gives it no wait (the first such pool of SPILL, as `choose` takes
+    it). Of several, the one that keeps the most of what was asked, as its share of the CPUs plus its share of the memory.
+    None when no smaller request starts now."""
     cpus = max(cpus, 1)
     shapes = set()
     for machine, pool in SPILL:
@@ -518,10 +518,7 @@ def smaller(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean_pool: st
                 shapes.add((min(cpus, cpulist(s["cpus"])), mem_gb if s.get("mem") is None else min(mem_gb, s["mem"])))
     shapes.discard((cpus, mem_gb))
     for c, m in sorted(shapes, key=lambda cm: (-(cm[0] / cpus + (cm[1] / mem_gb if mem_gb else 1)), cm)):
-        try:
-            target, _ = choose(docs, c, m, lean_pool)
-        except Unplaceable:
-            continue
-        if target is not None and expect(docs, target, c, m, lean_pool).minutes == 0:
-            return c, m, target
+        for target in SPILL:
+            if expect(docs, target, c, m, lean_pool).minutes == 0:
+                return c, m, target
     return None

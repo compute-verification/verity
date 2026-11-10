@@ -1111,8 +1111,8 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     """`--on auto` once sized: queued onto AUTO_NODE as `_auto_placement` set it, or, where research.auto finds it starts sooner,
     a CPU-phase run of AUTO_KIND sent to a pool instead (`--on MACHINE --pool POOL`, under `--as`, else `auto`), with the
     kind's time as its --timeout. It then says when the run should start (`auto.expect`): a late one is warned in one line,
-    or under `auto.REFUSE` refused unless --accept-wait. The harness options it runs with, or None when it is refused (so,
-    `auto.Unplaceable`, or a GPU or quiet job while AUTO_NODE is down or held, `auto.closed`)."""
+    or under `auto.REFUSE` refused unless --accept-wait. The harness options it runs with, or None when it is refused (a late
+    run, `auto.Unplaceable`, or a GPU or quiet job while AUTO_NODE is down or held, `auto.closed`)."""
     from . import auto
 
     cpus = ns.cpus or AUTO_CPUS
