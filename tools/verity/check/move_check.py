@@ -36,7 +36,8 @@ Every path git sees changed must be one of:
   `reads` byte for byte (a `reads` key, a module's name, may follow the module's move), may change the structural `roots`,
   `proved_in` (each entry a Lake package at HEAD) and `dependencies` (the fetched modules the package imports, which a
   split shares out and the Lean check holds to the build), and changes any other field only by moved paths and module
-  names; a `runs` entry may move to another lock the range touches (a proofs package's new one), its runner module
+  names, a moved path there too left where it is a word (a reason that calls a conclusion `Security`, when the directory
+  of that name moves); a `runs` entry may move to another lock the range touches (a proofs package's new one), its runner module
   renamed, its package-relative paths following the move and its `why` changed only by moved paths from the root, and
   must end up in exactly one, otherwise unchanged (`runs_moved`);
 - a new `lakefile.toml`, `lakefile.lean`, `lake-manifest.json`, `lean-audit.json` or `lean-toolchain` at the root of a new
@@ -761,7 +762,7 @@ def lock_change(old: str, new: str, new_path: str, pmap: dict[str, str], lmods: 
             if copy:
                 continue
             return f"`{k}` removed", field_hunk(k, a[k], None)
-        if not same_value(module_sub(substitute(a[k], pmap), lmods), b[k]):
+        if not same_value(module_sub(substitute(a[k], pmap), lmods), b[k]) and not partly(a[k], b[k], pmap):
             return f"`{k}` changed beyond moved paths and module names", field_hunk(k, a[k], b[k])
     here = posixpath.dirname(new_path)
     for k in ("roots", "proved_in"):

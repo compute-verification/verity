@@ -5,7 +5,7 @@ changed (`check.py --build PKG...`). Lean's jobs in `check` are here too: `lean_
 packages miss, their scratch tree, warm dependencies), `lean_changed.py` (the lean-changed step, a lane's fast path to its
 records, and its edit loop, `--try`) and `lean-deps.json` (the pinned dependency bundles). The audit needs the standard library, `lake` and the
 toolchain's `lean` and `leanc` (`Facts.lean` runs compiled); nothing here imports Verity, so another repository can copy the auditor (`check.py`, `Facts.lean`,
-`Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `headers.py`, `modules.py`, `sandbox.sh`, `setup.sh`, `cache.py`, `tests/`) for its
+`Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `headers.py`, `modules.py`, `sandbox.sh`, `setup.sh`, `moved.py`, `cache.py`, `tests/`) for its
 own packages. The two jobs use `check`'s helpers (`tools/verity/check/common.py`, `lean_slot.py`), so they stay with this repository.
 `check` reuses a package's pass while the content of everything its audit reads is unchanged, not its path: each file under its
 path relative to the package, a package required by path as its own content, so a `git mv` of a package is no miss, and its
@@ -23,7 +23,11 @@ check run keeps each audit's and its provers' (`status_export.py --facts`), a re
 
 ~~~text
 bash tools/verity/lean/setup.sh PKG                      elan, PKG's lean-toolchain, its pinned dependencies, Mathlib's cache when
-                                                  Mathlib is a dependency, and main's cached build of PKG (below)
+                                                  Mathlib is a dependency, and main's cached build of PKG (below); a PKG
+                                                  of an earlier layout is taken through the recorded moves
+python3 tools/verity/lean/moved.py PATH | --carry        where a directory of an earlier layout is now (research's `moves.json`);
+                                                  --carry: after a layout move, move each package's `.lake` in this
+                                                  checkout from the package's former path to where the package is
 python tools/verity/lean/cache.py get [PKG...]           main's cached build of each package, every file sha256-checked
 python tools/verity/lean/check.py [--build] PKG...       audit these packages (--build: setup.sh and lake build first)
 python tools/verity/lean/check.py --update PKG...        write the guarantees' records from the build; commit the diff (a copy of

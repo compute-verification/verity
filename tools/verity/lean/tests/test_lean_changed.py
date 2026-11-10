@@ -967,6 +967,26 @@ def test_try_keeps_dependencies_no_records_run_took_and_leaves_them_out_of_links
     assert calls["link"] == [] and LC.read_links(tree) == {"Sec": "k"}, "a later --records run never drops them"
 
 
+def test_a_tree_s_builds_and_links_follow_a_layout_move_before_the_packages_are_synced(tmp_path, monkeypatch):
+    """A slot's tree is keyed by package paths, and a move renames tracked files only: the build of `Old/Proofs` would stay
+    there while `new/Proofs` compiled every module again and took its dependencies again. Under the tree's lock the build
+    directories and their `LINKS` entries move with their packages, and the former directory's stale copies go."""
+    tree = tmp_path / "tree"
+    for pkg, built in (("Old", "spec"), ("Old/Proofs", "proofs"), ("code", "code")):
+        (tree / pkg / ".lake" / "build").mkdir(parents=True)
+        (tree / pkg / ".lake" / "build" / "olean").write_text(built)
+        (tree / pkg / "A.lean").write_text("-- a copy the last run synced\n")
+    LC.write_links(tree, {"Old": "k0", "Old/Proofs": "k1", "code": "k2"})
+    monkeypatch.setattr(LC.MOVED, "recorded", lambda root: [{"Older/": "Old/"}, {"Old/": "new/"}])
+    files = ["new/lakefile.toml", "new/A.lean", "new/Proofs/lakefile.toml", "code/lakefile.lean", "README.md"]
+    said: list[str] = []
+    links = LC.carried(tree, files, said.append)
+    assert links == {"new": "k0", "new/Proofs": "k1", "code": "k2"} == LC.read_links(tree)
+    assert [(tree / p / ".lake" / "build" / "olean").read_text() for p in ("new", "new/Proofs", "code")] == ["spec", "proofs", "code"]
+    assert not (tree / "Old").exists() and len(said) == 2 and "new/Proofs: its build directory moved with it from Old/Proofs" in said[1]
+    assert LC.carried(tree, files, said.append) == links and len(said) == 2, "nothing to carry the next time"
+
+
 def test_try_refuses_without_a_build_slot_naming_the_machines_whose_slots_have_one(trying, tmp_path, monkeypatch):
     _, calls = trying
     monkeypatch.setattr(LC.LEAN_SLOT, "hold", refuse)
