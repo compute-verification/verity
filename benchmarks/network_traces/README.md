@@ -257,7 +257,7 @@ The terms, in the generator reading of the scan's statement (each proof block's 
   They are charged whatever the requests served, since the sender picks how many connections it opens. The
   endpoint's slot count isn't a term of the network certifier's schedule: it enters the compute audit's terms, which go
   into JointPeriodLive.
-- The free inputs (`terms.free_per_block`): as registered, the tied audit's slot entries, NR·T / EVERY entries of NE
+- The free inputs (`terms.free_per_block`): as registered, the sampling block's slot entries, NR·T / EVERY entries of NE
   bits (`ingress_scan.entry_bits`) a sampling block; or, if `prog` is an input only at its anchored entries, an entry's
   33 + KO·IDB bits for each of those slot entries, whatever the requests served, since any of them may be anchored by
   a request the sender opens.

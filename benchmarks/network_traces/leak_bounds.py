@@ -16,10 +16,10 @@ of the scan's statement:
   `capsTerm`, charged twice as `#Ss ≤ ∏_c (cap_c + 1)`). They are charged whatever the requests served: the sender
   picks how many connections it opens;
 * the sampling block's free inputs (`READINGS`). As registered, the scan's ``prog`` is its tied compute audit's
-  outputs, NR·T / EVERY slot entries of NE bits (`ingress_scan.entry_bits`), so they are that audit's free inputs,
-  which the rows form charges to the sampling block (`tiedAudits`). If ``prog`` is an input only at its anchored
-  entries, they are an entry's 33 + KO·IDB bits (`ingress_scan.entry_layout`) for each of those slot entries, any of
-  which a request the sender opens may anchor, whatever the requests served;
+  outputs, NR·T / EVERY slot entries of NE bits (`ingress_scan.entry_bits`), which the rows form charges a sampling
+  block with every proof block drawn once, as its slot entries (`Scan.terms`'s `entries`). If ``prog`` is an input
+  only at its anchored entries, they are an entry's 33 + KO·IDB bits (`ingress_scan.entry_layout`) for each of those
+  slot entries, any of which a request the sender opens may anchor, whatever the requests served;
 * no faulty proof block, every one being drawn;
 * the jitter term at D_j = `JITTER_BOUND`, ⌈log2 D_j^T⌉ = T bits a sampling block, one a bucket (`JITTER`).
 
@@ -73,9 +73,8 @@ class Weights(NamedTuple):
 #: the demo's served model, Llama-3.2-1B's parameters (128,256 × 2,048 tied embedding, 16 layers of 60,821,504, the
 #: final norm) in BF16. The served checkpoint is int8, so its share is of this BF16 copy, as its label says.
 SERVED = Weights(1_235_814_400 * 16, "the demo's served model (Llama-3.2-1B) in BF16")
-#: each reading of the sampling block's free inputs (the scan's `prog`, the tied audit's free inputs), as a report
-#: labels it
-READINGS = {"registered": "`prog` as registered, the tied audit's slot entries (the record's K)",
+#: each reading of the sampling block's free inputs (the scan's `prog`, its slot entries), as a report labels it
+READINGS = {"registered": "`prog` as registered, the sampling block's slot entries (the record's K)",
             "anchors": "`prog` only at its anchored entries, every slot entry anchored (conditional on the "
                        "generator-form lowering)"}
 STATEMENTS = {"per_period": "NetTiming.Guarantees.PeriodLeakAccepted",
