@@ -26875,3 +26875,85 @@ The report note's line is corrected in place (`note:proofs/20261110T0505Z-report
 - Anything against a ledger the deployed gate wrote. D1 and D1b are not deployed. In the two-tree run the end entries are written by hand in the gate's form, since no challenger ran.
 - That a real Pearl+ piece's `development.json` has the shape I read. I read the code that writes it (`served_verdicts.py:1540-1555`) and did not see one from a serve.
 - That vllm's tip is still `fc2d47bf11`; it was at 06:52Z.
+
+## VERIFYFAST-B, Tue 10 Nov 07:30Z (CIR-212): the step block's plan. It is staged and proving on a CPU node now, with no card. Node A needs one card for at most 30 minutes, about 15 expected [guess], after about 20 minutes of its CPUs
+
+**Running now, CPU only:** `r20261110-071034-e533` runs on vy-nebius-cpu-12's proofs pool, slot p6 (45 cores, 200 GB
+reserved), at #8538's head `c329acde06`. It started at 07:10:48Z, and its ETA is about 08:30Z [guess].
+- **Why that pool:** `--on auto` placed the job 14th in cpu-6's research line, so I moved it to my lane's pool. Its three
+  copies that never started are cancelled.
+- **Stage:** `prove_time.sh` with `PT_DEVICE=cpu` runs SERVEDCARD's
+  `stage.py census:TopPStep_v1{V=154880,S=1,N=2048,FIRST=false,COMBINE=-1} 1`.
+  - That is one instance on synthetic values, from `stage.py`'s seeded draws.
+  - All three parameters of the plain block, `pr`, `rw` and `ca`, are f32, drawn as powers of two [read].
+  - The block's outputs are checked against the Program's reference.
+- **Prove:** under `--zk`, the CPU prover against the loopback Rust verifier (`serve --zk --draw subset:1`), one cold
+  session and one warm. `prove.tsv` holds the Rust verdicts.
+- **Lean:** `flock-verify` is built in scratch from the same tree. It then runs `verify --zk` over both sessions, plus
+  `ks-form`.
+  - Without `--program`, an honest statement passes every check and is then refused with NO_PROGRAM, as on the card's leg
+    [read].
+  - I'll report that refusal, the checks before it and `ks-form`'s answer as Lean's verdict.
+- **Staged at 07:28Z [run: `e533`'s `stage.json`]:** 38,821,224 ANDs and 1,266,481,794 nonzeros, 33 an AND, at k_log 27.
+  - The circuit file is 11.29 GB, written in 934 s at a 44.4 GB peak.
+  - The prove step started right after. By 07:30Z the Rust verifier had built the statement, `k_log=27 nbl=3 m=30`, in
+    86.8 s at 24.1 GiB, and the prover was loading the circuit [run].
+
+**Why `_v1`:** it is `main`'s Definition, the one circuits says Lean accepts today.
+- circuits' 1,160.0e6 nonzeros and 35.2M ANDs are the `_v2` block lowered flat; lowering it alone took 534 s at a 23.7 GB
+  peak [run: `ca0e`].
+- The staged `_v1` block has 10% more ANDs and 9% more nonzeros than that [run]. So a proved `_v1` also answers for `_v2`.
+
+**A precedent circuits doesn't have: rmsnorm-v8's block** has 0.96e9 nonzeros for 29.5M ANDs, 33 an AND, at k_log 27
+[read: STATIONARY, Mon 9 Nov 01:11Z].
+- It is proved under `--zk` on node A's H200 at 256, 512 and 1,024 blocks a statement, proved and verified by the Rust
+  verifier [run: `r20261109-043748-1674`].
+- Lean accepted a one-block statement of it [run: `r20261109-060859-bc5b`].
+- So the largest unit proved is about 3 times circuits' 314e6 nonzeros and 3.5 times its 8.47M ANDs.
+- The staged step block is 1.3 times rmsnorm-v8's in both, at the same k_log and nonzeros an AND, so I expect it to prove
+  [guess].
+- TopPStatsHead's served unit is already under rmsnorm-v8's: 900.8e6 nonzeros and 20.4M ANDs [run: circuits' `e988`].
+- The 6.35e9 that ran out of memory at 600 GiB was a row of 622 nonzeros an AND, from inline MUFU reads [read:
+  `chunk_rows.reads`]. This block has 33 an AND.
+
+**The memory I expect** (peak RSS at each step):
+
+| step | where | expected | what it rests on |
+| --- | --- | --- | --- |
+| stage | the CPU node; then node A | 44.4 GB, 934 s | [run: `e533`] |
+| `circuit.txt` | | 11.29 GB | [run: `e533`] |
+| the prover's host | | 15 to 40 GiB, up to 90 GiB on node A | the split part's prover held 64.4 GiB after loading 7.70e9 nonzeros, 8.4 bytes a nonzero [read: STATIONARY]; rmsnorm-v8 at 256 blocks, 31.3 GiB, about 22 of it fixed [run: m37, extrapolated to no blocks]; 90.0 GiB with the pinned pipeline `prove_time.sh` sets [read: STATIONARY's rows] |
+| the Rust verifier's host | | 15 to 30 GiB | rmsnorm-v8, 21.7 to 22.4 GiB [run: m37]; the split part's, 72.1 GiB for 7.70e9 nonzeros [read] |
+| the H200's memory | node A | 6 to 15 GiB of 140 | [guess] One instance is m = k_log + 3 = 30 [run: k_log 27]. The m37 arena is 29.9 GiB at m = 35 and doubles with each m [run], so about 1 GiB at m = 30. About 5 GiB outside it follows the circuit (4.7 GiB for rmsnorm-v8 [run]) |
+| Lean `verify --zk` | CPU | 30 to 100 GiB | [guess] rmsnorm-v8's Lean peak was 31.3 GiB on a 3.17 GB templated circuit [read: STATIONARY's rows; run: `bc5b`]. This circuit is flat and 3.6 times the bytes [run] |
+
+The device prover's 32-bit offsets allow 4.29e9 nonzeros a side (`GPU_NNZ_MAX`) [read: STATIONARY]. This block has 1.27e9
+on both sides together [run].
+
+**Node A, once you give the slot:** the job is `cir212/gpu.sh` in my store, ready, launched with
+`research run --on vy-spot-glm53`.
+1. **Build** flock-circuit with its CUDA prover, SM=90: about 3 minutes, no card [run: `r20261109-040709-4fb0`, 161 s].
+2. **Stage** the same statement on the CPUs of NUMA nodes whose GPUs nobody holds. The seed is the same, so the circuit's
+   digest should match the CPU run's. About 16 minutes [run: 934 s on cpu-12], no card. It needs 300 GB of memory
+   available to start.
+3. **Prove:** one lease, `gpu_lease.sh 1 --wait --max-min 30 --mem-gb 200`. It runs the loopback verifier and the GPU
+   prover, one cold session and one warm, with the GPU sampled every 0.2 s.
+   - Expected 10 to 15 minutes [guess]: each process loads the circuit in 1 to 3 minutes, then the sessions take a few.
+   - The lease ends the session at 30 minutes, and its memory cap kills a runaway inside its own cgroup.
+4. **Lean** runs after the lease on node A's CPUs: 10 to 20 minutes, no card.
+
+So the ask is **30 card-minutes at most, about 15 expected [guess]**, after about 20 minutes of node A's CPUs and with up
+to 300 GB of its memory. The CPU run's load and session times firm that up; I'll add them here when it ends.
+
+**For CIR-212 I'll record:**
+- whether it staged, with `stage.json`'s ANDs, nonzeros, k_log, circuit bytes and seconds;
+- the peak RSS at each step: `/usr/bin/time` for staging and the prover, a 5 s sampler for every process, `os.wait4` for
+  Lean, and `nvidia-smi` for the device;
+- whether it proved, with each session's time;
+- the Rust verdicts, and Lean's verdicts with `ks-form`'s.
+
+A run that dies of memory is reported with the step and the size.
+
+**Timing:** the CPU result is due about 08:30Z, well before Wed 08:00Z. If node A has no card before then, the CPU result
+still answers whether this unit proves under `--zk`, and only the device's memory stays a guess. Nothing so far says the
+attempt can't fit; if that changes, I'll say so here by Tue 17:00Z.
