@@ -198,6 +198,59 @@ def test_the_init_of_a_package_the_move_emptied_may_be_deleted(tmp_path):
     assert r["rules"] == {"emptied": ["protocols/pous/src/verity_pous/__init__.py", "protocols/pous/src/verity_pous/sub/__init__.py"]}
 
 
+COVERED = {
+    "tools/move/layout_map.toml": '[roots]\nnew = { verity = "verity" }\n',
+    "lib/core/__init__.py": "", "lib/core/wire/__init__.py": "", "lib/core/wire/frames.py": "X = 1\n",
+    "lib/core/proto/check.py": "Y = 1\n", "lib/core/claims.py": "Z = 1\n", "lib/commit/c.py": "C = 1\n", "docs/a.md": "a\n",
+    "other/x.py": "W = 1\n",
+    "gates.toml": 'low_risk = ["docs/", "lib/core/", "lib/commit/"]\ncore = [\n    "lib/core/",  # the verifiers\n]\n',
+    "job.sh": "#!/bin/sh\ngit rev-parse HEAD:lib/core HEAD:other\ncd lib/core\n",
+}
+CORE_COVER = '    "verity/config/",\n    "verity/protocols/proto/",  # the verifiers\n'
+
+
+def _covered(tmp_path: Path, core: str = CORE_COVER, cd: str = "lib/core") -> dict:
+    """The range that sends `lib/core/` three ways and deletes its own `__init__.py`, with `gates.toml`'s `core` list
+    written as `core` and `job.sh` changing directory to `cd`."""
+    repo, base = _repo(tmp_path, COVERED)
+    for old, new in (("lib/core/wire", "verity/config/wire"), ("lib/core/proto", "verity/protocols/proto"),
+                     ("lib/core/claims.py", "verity/config/claims.py"), ("lib/commit", "verity/commit")):
+        _move(repo, old, new)
+    _git(repo, "rm", "-q", "lib/core/__init__.py")
+    job = f"#!/bin/sh\ngit rev-parse HEAD:verity/config HEAD:verity/protocols/proto HEAD:other\ncd {cd}\n"
+    _write(repo, {"verity/__init__.py": "", "verity/config/__init__.py": "", "job.sh": job,
+                  "gates.toml": f'low_risk = ["docs/", "verity/", "verity/commit/"]\ncore = [\n{core}]\n'})
+    return _check(repo, base)
+
+
+def test_a_list_of_paths_rewritten_as_an_exact_cover_of_where_its_files_went_is_certified(tmp_path):
+    """No one path stands for `lib/core/` after the range, so the mover writes a list entry that names it as the fewest
+    paths that hold its files (`tools/move/layout.py`'s `_covers`). The certificate takes any list whose paths hold, of the
+    files HEAD has that the range did not add, exactly those the old list's paths held: beside `lib/commit/` that is
+    `verity/` whole, alone the two parts, in either order. git reads the deleted `lib/core/__init__.py` as renamed to the
+    new `verity/__init__.py`, one empty file as good as another: where no file of its directory went with it, the first is
+    deleted and the second added, so the two parts still hold all `lib/core/` held."""
+    r = _covered(tmp_path / "mover")
+    assert r["certified"], r["refusals"]
+    assert {"old": "lib/core/__init__.py", "new": "verity/__init__.py"} in r["renames"]
+    assert r["rules"] == {"cover": ["gates.toml", "job.sh"]}
+    r = _covered(tmp_path / "order", '    "verity/protocols/proto/",\n    "verity/config/",  # the verifiers\n')
+    assert r["certified"], r["refusals"]
+
+
+def test_a_list_of_paths_that_holds_more_or_less_than_its_old_entries_held_is_refused(tmp_path):
+    """A cover is exact. `verity/` holds `lib/commit/`'s file too, which `core` never named; `verity/config/` alone lost the
+    protocol; a path that holds only what the range added (`verity/__init__.py`) covers nothing; a list whose comment
+    changed is another edit; and a word of a command that takes one directory (`cd`) is no list."""
+    for case, core in (("wider", '    "verity/",  # the verifiers\n'), ("narrower", '    "verity/config/",  # the verifiers\n'),
+                       ("added", CORE_COVER + '    "verity/__init__.py",\n'),
+                       ("comment", CORE_COVER.replace("the verifiers", "the trusted code"))):
+        r = _covered(tmp_path / case, core)
+        assert [f["path"] for f in r["refusals"]] == ["gates.toml"] and r["rules"]["cover"] == ["job.sh"], case
+    r = _covered(tmp_path / "cd", cd="verity/config")
+    assert [f["path"] for f in r["refusals"]] == ["job.sh"] and r["rules"]["cover"] == ["gates.toml"]
+
+
 def test_an_empty_init_above_the_packages_root_is_refused(tmp_path):
     """The mover stops at the root of the moved module's package, which the path map at BASE names. An `__init__.py`
     above it makes a package of a directory that was none (here `security/`, over the root `security/pous`), which no

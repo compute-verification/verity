@@ -61,6 +61,12 @@ Every path git sees changed must be one of:
   `tools/move/` at BASE): the package level `tools/move/layout.py` writes so the module imports by its new name. And a
   deleted `__init__.py` of a package the range's moves took away: files left its directory by a rename and HEAD has none
   at or below it (`rules`'s `emptied` in the `--json` report);
+- a list of paths rewritten as an exact cover (`rules`'s `cover`): a list `tools/move/layout.py` reads as one (its `lists`:
+  a Python list, tuple or set of string literals, a TOML or JSON array of strings, the objects of `git rev-parse` and the
+  members of `tar`) with an entry that names what went to no one place, a directory whose files the range sent apart or
+  a file it deleted. Its new paths hold, of HEAD's files that the range did not add, exactly the files its old paths
+  held at BASE, each new path at least one, in any order and at any level; nothing else of the list changes. An
+  `__init__.py` git pairs with one where no other file of its directory went is deleted and added, not moved;
 - on a line none of these explains, what the move's own path map says beyond the renames (`Rows`): the map each commit of
   the range names (`Layout-move: tools/move/NAME.toml`, `tools/move/stage.py`'s line), read as BASE has it. A reference to
   a directory the map splits may go where its `[tokens]` row sends it, or stay, when the range bears the row out (part of
@@ -107,6 +113,7 @@ from __future__ import annotations
 
 import argparse
 import bisect
+import collections
 import difflib
 import functools
 import hashlib
@@ -227,6 +234,10 @@ class Tree:
     def has_dir(self, d: str) -> bool:
         i = bisect.bisect_left(self.files, d + "/")
         return i < len(self.files) and self.files[i].startswith(d + "/")
+
+    def below(self, p: str) -> list[str]:
+        """The files path `p` names: itself, or those below it."""
+        return self.files[bisect.bisect_left(self.files, p + "/"):bisect.bisect_left(self.files, p + "0")] or [p] * (p in self.set)
 
     def is_package(self, d: str) -> bool:
         return any(posixpath.join(d, f) in self.set for f in LAKEFILES)
@@ -695,6 +706,13 @@ def list_addition(old: str, new: str, entry) -> bool:
                 stripped = stripped.replace(form, "", 1)
                 break
     return stripped == old
+
+
+def between(text: str, span: tuple[int, int], entries: list[tuple[int, int]]) -> str:
+    """A list's text (`span`) without its entries, the quotes around them, commas and white space: its brackets, its
+    comments and a command's other words."""
+    cuts = [span[0], *(i for s, t in entries for i in (s, t)), span[1]]
+    return re.sub(r"[\s,\"']+", "", "".join(text[i:j] for i, j in zip(cuts[::2], cuts[1::2])))
 
 
 def lean_import_rewrite(old: str, new: str, lmods: dict[str, str], extra: dict[str, str]) -> bool:
@@ -1606,6 +1624,45 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
         it, so the `__init__.py` that marked it has nothing to mark (the mover deletes it)."""
         return not H.has_dir(d) and any(o.startswith(d + "/") for o, _ in renamed)
 
+    went, created = dict(renamed), {e["new"] for e in entries if e["status"] == "A"}
+    sides = collections.Counter((posixpath.dirname(o), posixpath.dirname(n)) for o, n in renamed)
+    for e in entries:
+        # git pairs identical files across directories at random: an `__init__.py` that went where no other file of its
+        # directory did is one the range deleted, and the one git pairs it with is one the range added
+        if (e["status"] == "R" and e["score"] == 100 and posixpath.basename(e["old"]) == posixpath.basename(e["new"]) == "__init__.py"
+                and pmap.get(e["old"]) == e["new"] and sides[posixpath.dirname(e["old"]), posixpath.dirname(e["new"])] == 1):
+            del went[e["old"]]
+            created.add(e["new"])
+
+    def now(f: str) -> str | None:
+        """Where BASE's file `f` is at HEAD: where the range moved it, itself if it stayed, None if the range deleted it."""
+        return went.get(f, f if f in H.set and f not in created else None)
+
+    def cover(a: str, b: str, old: str, new: str) -> str:
+        """`a` with each list of paths that `b` writes as an exact cover of it put as `b` has it. The lists are those
+        `tools/move/layout.py` rewrites (its `lists`), paired in the file's order. A pair is a cover when an entry of the
+        old list names what went to no one place (a directory whose files the range sent apart, or a file it deleted) and
+        the new list's paths hold, of HEAD's files that the range did not add, exactly those the old list's paths held at
+        BASE: each new path holds one of them, with a prefix and a suffix (`HEAD:`, `/`, `/**`) an old entry had. Entries
+        that are no path, and the list's text between its entries, stay as they were."""
+        lists, entry = _rename().L.lists, _rename().L.ENTRY
+        la, lb = lists(old, a), lists(new, b)
+        for (_, (a0, a1), ea), (_, (b0, b1), eb) in reversed(list(zip(la, lb))) if len(la) == len(lb) else ():
+            xs = [m if (m := entry.fullmatch(a, s, t)) and (m["p"] in B.set or B.has_dir(m["p"])) else a[s:t] for s, t in ea]
+            ys = [m if (m := entry.fullmatch(b, s, t)) and (m["p"] in H.set or H.has_dir(m["p"])) else b[s:t] for s, t in eb]
+            px, py = [x for x in xs if not isinstance(x, str)], [y for y in ys if not isinstance(y, str)]
+            if ([x for x in xs if isinstance(x, str)] != [y for y in ys if isinstance(y, str)]
+                    or between(a, (a0, a1), ea) != between(b, (b0, b1), eb)):
+                continue
+            if all(now(f) == map_path(m["p"], pmap) + f[len(m["p"]):] for m in px for f in B.below(m["p"])):
+                continue
+            held = {n for m in px for f in B.below(m["p"]) if (n := now(f)) is not None}
+            parts = [[f for f in H.below(m["p"]) if f not in created] for m in py]
+            if (held == {f for fs in parts for f in fs} and all(parts) and {m["pre"] for m in py} <= {m["pre"] for m in px}
+                    and all((m["post"] or "") in ({x["post"] or "" for x in px} if H.has_dir(m["p"]) else {""}) for m in py)):
+                a = a[:a0] + b[b0:b1] + a[a1:]
+        return a
+
     new_projects = set()
     for e in entries:
         if e["status"] == "A" and posixpath.basename(e["new"]) == "pyproject.toml" and new_dir(posixpath.dirname(e["new"])):
@@ -1698,10 +1755,13 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             else:
                 report["edits"].append({"path": new, **({"old": old} if old != new else {}), "kind": "words"})
             continue
+        if not same and not pins and k == kind(old) and k not in ("lock", "moves", "lean") and (c := cover(a, b, old, new)) != a:
+            a = c
+            took.add("cover")
         at_base = a.splitlines()
         if not same and not pins and old != MOVES:
             a, unworded = worded(a, old, maps, lock=k == "lock"), a
-            if b in (a, merged(unworded, a)):
+            if not took and b in (a, merged(unworded, a)):
                 report["edits"].append({"path": new, **({"old": old} if old != new else {}), "kind": "words"})
                 continue
         al, bl = a.splitlines(), b.splitlines()
