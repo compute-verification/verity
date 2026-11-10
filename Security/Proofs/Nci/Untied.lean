@@ -41,8 +41,8 @@ dropped block is lost whole, and (H) and (E) are taken at it, whichever blocks a
 
 The count itself needs no such circuit. `Nci.Cut.SecurityProofs.counts_on` takes the cap on a set of blocks and the
 entries of all the blocks as a total, so on `d.untie E` with every block kept, the blocks reading at most `w` words
-are counted under `k + b w`, all the blocks together read `m k + b |E|`, and the MACs the other blocks hold are
-counted apart (`counts_untie`; under (H) and (E), `bound_untie_he`).
+are counted under `k + b w`, all the blocks together read `m k + b |E|`, and the MACs with a gate in another block
+are counted apart, at most those blocks' gates (`counts_untie`; under (H) and (E), `bound_untie_he`).
 -/
 
 @[expose] public section
@@ -279,7 +279,7 @@ end Verity
 namespace Nci.Untied
 
 open Verity Finset Nci.Cut
-open Nci.Cut.SecurityProofs (inBlock counts_on bound_on_he)
+open Nci.Cut.SecurityProofs (touching counts_on bound_on_he)
 
 /-- The words of `𝒲` that `R` reads: those with a gate in `in(R)`. -/
 def wordsRead (C : Circuit) (𝒲 : Finset (Finset (Fin C.N))) (R : Finset (Fin C.N)) : Finset (Finset (Fin C.N)) :=
@@ -461,26 +461,27 @@ theorem sum_card_unregistered_untie_le {m : ℕ} (d : RegisteredCircuit) (P : Pa
 /-- **The counts with untied words, the heavy readers charged whole.** Untied at the words `𝒲`, each of at most `b`
 gates and read by at most one block, on the circuit itself with every block kept: the blocks reading at most `w` of
 the words are under the cap `k + b w`, all the blocks together read at most `m k + b |𝒲|` gates outside `θ`, and the
-MACs a block reading more than `w` words holds are counted apart (`Nci.Cut.SecurityProofs.counts_on`). -/
+MACs with a gate in a block reading more than `w` words are counted apart (`Nci.Cut.SecurityProofs.counts_on`). -/
 theorem counts_untie {ι : Type} [Fintype ι] [DecidableEq ι] {m : ℕ} (d : RegisteredCircuit) (P : Partition d.D m)
     (W : Work d.D ι) {k b : ℕ} (𝒲 : Finset (Finset (Fin d.D.N))) (h𝒲 : ∀ S ∈ 𝒲, S.card ≤ b)
     (hk : ReadsAtMost d P k) (hone : OneReader P 𝒲) (w : ℕ) :
     ∃ V F E : ℕ,
-      W.N ≤ m * k + b * 𝒲.card + V + ∑ u ∈ readersOver P 𝒲 w, ∑ a, (inBlock P W u a).card ∧
+      W.N ≤ m * k + b * 𝒲.card + V + (touching P W (readersOver P 𝒲 w)).card ∧
       V ^ 2 ≤ (m - (readersOver P 𝒲 w).card) * piMax (d.untie (𝒲.biUnion id)) W (k + b * w) * F ∧
       F ≤ W.O + E ∧ W.bY * E ≤ (m * k + b * 𝒲.card : ℕ) ∧ (E = 0 ∨ 0 < W.bY) := by
+  have hT := sum_card_unregistered_untie_le d P 𝒲 h𝒲 hk hone
   obtain ⟨V, F, E, hN, hV, hF, hbE, hb⟩ :=
     counts_on (d := d.untie (𝒲.biUnion id)) W P (readersOver P 𝒲 w)ᶜ (fun _ => k + b * w)
-      (fun u hu => card_unregistered_untie_of_notMem_readersOver d P 𝒲 h𝒲 hk (mem_compl.1 hu))
-      (sum_card_unregistered_untie_le d P 𝒲 h𝒲 hk hone)
+      (fun u hu => card_unregistered_untie_of_notMem_readersOver d P 𝒲 h𝒲 hk (mem_compl.1 hu)) hT
   rw [compl_compl] at hN
   simp only [sum_const, card_compl, Fintype.card_fin, smul_eq_mul] at hV
-  exact ⟨V, F, E, hN, hV, hF, hbE, hb⟩
+  exact ⟨V, F, E, hN.trans (Nat.add_le_add_right (Nat.add_le_add_right
+    ((sum_le_sum_of_subset (subset_univ _)).trans hT) V) _), hV, hF, hbE, hb⟩
 
 /-- **The bound with untied words, the heavy readers charged whole, under (H) and (E).** `HE`'s premises on the
 values, with (H) at the untied circuit and at the cap `k + b w` of the blocks reading at most `w` of the words, and
-(E) at `e > 0`. With `g` the number of those blocks and `T = m k + b |𝒲|`, `N` is at most the MACs the other blocks
-hold, plus `T + ((k + b w)/2) √(g O / (β_w β_x)) + ((k + b w)/2) √(g T / (β_w β_x e))`
+(E) at `e > 0`. With `g` the number of those blocks and `T = m k + b |𝒲|`, `N` is at most the MACs with a gate in
+another block, plus `T + ((k + b w)/2) √(g O / (β_w β_x)) + ((k + b w)/2) √(g T / (β_w β_x e))`
 (`Nci.Cut.SecurityProofs.bound_on_he`). -/
 theorem bound_untie_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] {m : ℕ} (d : RegisteredCircuit)
     (P : Partition d.D m) (W : Work d.D ι) (val : Finset (Fin d.D.N) → V) {k b : ℕ} {βw βx e : ℝ}
@@ -488,7 +489,7 @@ theorem bound_untie_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq 
     (w : ℕ) (hw : 0 < βw) (hx : 0 < βx) (he : 0 < e) (hval : ValuesInjective W val) (hshare : NoSharedPair W val)
     (hH : Assumptions.Hardness (d.untie (𝒲.biUnion id)) ![W.allW, W.allX] val ![βw, βx] (k + b * w))
     (hE : Assumptions.Exports W e) :
-    (W.N : ℝ) ≤ (∑ u ∈ readersOver P 𝒲 w, ∑ a, (inBlock P W u a).card : ℕ) + (m * k + b * 𝒲.card : ℕ) +
+    (W.N : ℝ) ≤ (touching P W (readersOver P 𝒲 w)).card + (m * k + b * 𝒲.card : ℕ) +
       (k + b * w : ℕ) / 2 * √((m - (readersOver P 𝒲 w).card : ℕ) * W.O / (βw * βx)) +
       (k + b * w : ℕ) / 2 *
         √((m - (readersOver P 𝒲 w).card : ℕ) * (m * k + b * 𝒲.card : ℕ) / (βw * βx * e)) := by
