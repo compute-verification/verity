@@ -19,3 +19,24 @@ TIMEPAIR, NET-296, Tue 10 Nov 1:38 PM PST. Tonight's head, ahead of the rehearsa
 4. What I have not shown: `halted`'s counting branch has run only against a made-up sysfs in its test. No node I may use has a cpuidle driver until the hold is on cpu-10. A count that cannot be read is recorded as its reason and costs no case.
 5. For job 3's README, the target's source: the 240 s end follows from the census in the tree (18.6 M eight-GPU nodes by FLOP, 300 GB a year). The 600 s end is your brief's 46.87 M links, which I cannot derive from the tree; unless you say otherwise I state it as a parameter.
 
+[2026-11-10T21:39Z] 5f86ea9a61de
+TIMEPAIR, NET-296, Tue 10 Nov 1:50 PM PST. One thing about tonight's block 1 that you should decide before 5:15 PM PST; the plan stands as it is unless you say otherwise.
+
+**At 16,624 scored, a row that truly carries nothing shows its upper bound under 4.17e-4 three times in four, and under 1.67e-4 six times in a thousand** [run: the binomial of a decoder at chance through `channel.wilson` and `channel.carried`]. 16,623 is `least`: the count at which a decoder wrong exactly half the time sits on 1.67e-4; one error more or less is over it. So with burst, write and control at two cases each, "burst under the target" (job 3's condition) fails one night in four with no leak at all, and the 1.67e-4 column will read "no" in every row whatever the certifier does.
+
+The same six slots under the hold, split otherwise (odds for a row at chance; under 4.17e-4, under 1.67e-4):
+
+| Cases of a row | Scored | 4.17e-4 | 1.67e-4 |
+|---|---|---|---|
+| 1 | 8,312 | 0.18 | 0.000 |
+| 2 (the plan) | 16,624 | 0.75 | 0.006 |
+| 3 | 24,936 | 0.93 | 0.34 |
+| 4 | 33,248 | 0.98 | 0.59 |
+| 6 | 49,872 | 0.999 | 0.85 |
+
+- **A, the plan (default):** burst 2, write 2, control 2.
+- **B:** burst 4, write 1, control 1, in the order burst, burst, write, burst, control, burst. Burst is the row that read 0.024 without the hold and the one job 3 turns on. Write and control at one case each can still tell a leak of this morning's size (their upper bounds come out near 1e-3), not one near the target.
+- **C:** burst 6, with the control only in block 2. The strongest burst row; no write row and no control under the hold.
+
+I recommend B [argued]. Either runs at the same head: the order is `tonight.sh`'s, not the tree's. The rehearsal will exercise whichever order runs tonight. Each pooled row is still reported with its cases beside it.
+
