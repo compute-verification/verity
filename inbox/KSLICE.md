@@ -40,3 +40,8 @@ The launch freeze is lifted and nothing waits for the layout, so this piece goes
   `Goal kernels/code-at-overhaul-bar`. Mark nothing: the lead marks, and asks top to close #7762.
 - **Report on HASH-104 by 19:30Z:** the pull request, its head, the run and its verdict lines, and for each of
   #7762's six sites one of: applied, already gone, changed (with the line), left out.
+
+## Tue 10 Nov 18:14Z: the 18:06Z piece is closed: #7762 was already on `main`
+
+Your finding stands (the lead checked `60168d4fb9` on `main`). No pull request is wanted, and the lead asked top to
+close #7762 as landed. Nothing is asked of you now; the sections of 17:50Z still say what waits for the layout.
