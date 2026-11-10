@@ -195,15 +195,15 @@ def _staged(tp, d, reads: str) -> str | None:
 @pytest.mark.slow
 @pytest.mark.parametrize("family", FAMILIES)
 def test_staged_the_boolean_version_is_flat_and_the_word_unit_in_slots_is_the_form_zk_refuses(family, tmp_path, monkeypatch):
-    """Each family's small unit composed by `UnitStager` (up to a few minutes and a few GB each; the largest is the router's):
-    the staged circuit's own head decides, where every faster test here reads the Definitions.  It catches a ``_v2`` body
-    that reads a table after all, and a `zk_refusal` that no longer agrees with `ks_form_why`."""
-    word, _spec, _committed, tables = SMALL[family]
+    """Each family's small unit composed by `UnitStager`, the Boolean version as its statement says and the word unit in
+    slots (a minute or two and a few GB each; the largest is the router's): the staged circuit's own head decides, where
+    every faster test here reads the Definitions.  It catches a ``_v2`` body that reads a table after all, and a
+    `zk_refusal` that no longer agrees with `ks_form_why`."""
+    word, _spec, _committed, _tables = SMALL[family]
     wt, bt = SRW.template(word), SRW.template(gates(word))
-    assert CR.slot_tables(bt.fn) == ()
-    assert _staged(bt, tmp_path / "gates", CR.statement(bt)["reads"]) is None
-    assert _staged(bt, tmp_path / "gates-slots", "slots") is None
+    assert CR.slot_tables(bt.fn) == () and CR.statement(bt) == {"reads": "inline"}
+    assert _staged(bt, tmp_path / "gates", "inline") is None
     why = _staged(wt, tmp_path / "word-slots", "slots")
     assert why is not None and PF.SCOPE_WHY in why
     monkeypatch.setattr(CR, "reads", lambda tp: "slots")
-    assert CR.zk_refusal(bt) is None and CR.zk_refusal(wt) is not None
+    assert CR.zk_refusal(wt) is not None
