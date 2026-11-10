@@ -85,7 +85,8 @@
 # s), and goes no further unless that served.json says ok; steps 3 and 4 read and write there, `retain` writing Pearl+'s
 # window record W (`--window-record`, private/pearlplus/window-record.json, rounds dropped as above), chained after the
 # serve's first registration record where the serve wrote one (`--previous-record`: SERVE_DIR/deployment-registration.json,
-# served_verdicts.sh's weights(), which registers the weights before the first request), and then, before the coin,
+# served_verdicts.sh's weights(), which registers the weights before the first request) and naming the day the serve
+# declared where it declared one (`--day-declaration`: SERVE_DIR/declaration.json, serve-openai's --day), and then, before the coin,
 # PEARLPLUS_TIE_CMD (`served_verdicts.sh pearl-tie SERVE_DIR WINDOW W PASSES`) committing the window tied to W, its
 # registration R chained right after W, and where that commit fails, or `retain` wrote no W, the piece goes no further:
 # the commit is what holds the window to its class's fixed load, so without it there is no draw, no verdict and no
@@ -308,6 +309,7 @@ if [ -n "$GO" ] && { [ -s "$Q/volunteer.json" ] || [ -n "$TIE" ]; }; then
   [ -s "$Q/volunteer.json" ] && VA=(--volunteer "$Q/volunteer.json")
   [ -z "$TIE" ] || VA+=(--window-record "$W")
   [ -z "$TIE" ] || [ ! -s "$SD/deployment-registration.json" ] || VA+=(--previous-record "$SD/deployment-registration.json")
+  [ -z "$TIE" ] || [ ! -s "$SD/declaration.json" ] || VA+=(--day-declaration "$SD/declaration.json")
   "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py retain --passes "$Q/passes" "${VA[@]}" > "$Q/retain.log" 2>&1
   rc=$?
   say "retain: served_passes.py retain exit $rc: $(grep -m1 '^retain ' "$Q/retain.log" | cut -c1-400)"
