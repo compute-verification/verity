@@ -847,7 +847,7 @@ theorem check_work {i : Input} {pl : Plan} (opener : Nat → Nat → Except Stri
   dsimp only
   split
   · exact ⟨fun _ => rfl, fun h => by cases h⟩
-  · exact ⟨fun h => by cases h, fun _ => rfl⟩
+  · exact ⟨fun h => (by cases h), fun _ => rfl⟩
 
 theorem workIsTheCredit : WorkIsTheCredit := by
   refine ⟨fun i opener hacc => ?_, fun i opener hrej => ?_⟩
