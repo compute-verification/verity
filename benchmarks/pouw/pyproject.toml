@@ -58,15 +58,9 @@ untraced = [
 # served_h1's producer loads dither's j10r_ws.py, which sizes a J10-R call's workspace from the loaded build.
 # test_dither_j10r_form imports dither's J10-R host units (j10r_units.py, over served_h1's receipts) and forms.py.
 # pouw_h1 imports its table commits' module and pouw_h1_served its word encodings' module, each named at its path
-<<<<<<< ours
-# before and after vllm's layout move. bench_arm's live coins open their session through verity_vllm.pipeline.commit_coins.
-||||||| base
-# before and after vllm's layout move.
-=======
 # before and after vllm's layout move.
 # test_pearl_c_sm90_overhead_arm reads the overhead door's schemes and linears (verity_bench's overhead.py), which name
 # pearl_c_sm90's arm.
->>>>>>> theirs
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/claims/__init__.py",

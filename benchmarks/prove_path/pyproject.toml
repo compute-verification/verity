@@ -36,16 +36,6 @@ inputs = ["verity", "integrations/vllm", "benchmarks/one_stage", "benchmarks/net
           "benchmarks/network_traces/covert.py", "benchmarks/network_traces/replay.py",
           "benchmarks/network_traces/load_relay.py", "benchmarks/network_traces/stall_probe.py",
           "benchmarks/network_traces/site.json", "benchmarks/live_challenger/auditor.py",
-<<<<<<< ours
-          "benchmarks/live_challenger/host.json", "benchmarks/live_challenger/serve.py",
-          # Pearl+'s verdict, whose W check (`verify_run.tie`) test_pearltie runs on its toy's passes: verify_run, what it
-          # imports, and the settings registry it loads (`verity_config.settings.of`, which finds it beside pouw's pyproject)
-          "benchmarks/pouw/pearl_c_vllm/verify_run.py", "benchmarks/pouw/pearl_c_vllm/fast_tile.py",
-          "benchmarks/pouw/clear", "benchmarks/pouw/settings.py", "benchmarks/pouw/pyproject.toml",
-          "tools/config/verity_config"]
-||||||| base
-          "benchmarks/live_challenger/host.json"]
-=======
           "benchmarks/live_challenger/host.json"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
@@ -58,4 +48,3 @@ paths = ["verity/core", "verity/ml"]
 [[tool.verity.tests.reads]]
 tests = ["tests/test_records_audit.py"]
 paths = ["verity/ml/circuits/ops"]
->>>>>>> theirs
