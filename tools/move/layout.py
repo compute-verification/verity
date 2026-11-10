@@ -65,6 +65,8 @@ MOVES = "tools/research/src/research/store/moves.json"   # each layout move's [p
 FILE_SUFFIXES = {"py", "json", "toml", "md", "txt", "lean", "sh", "rs", "cu", "cuh", "yaml", "yml", "gz", "jsonl", "npy", "html"}
 #: file types whose plain relative paths (`fixtures/x.json`, with no `./`) are resolved against the file's directory
 RELATIVE_TYPES = {".py", ".toml", ".json", ".sh", ".md", ".rs", ".cu", ".cuh", ".yaml", ".yml", ".txt", ".cfg", ".lean"}
+#: what stands before a shell variable's default (`${DEFS:-verity/x.json}`): the `-` there is no part of a longer word
+SH_DEFAULT = re.compile(r"\$\{\w+:?-\Z")
 #: a shell script's own directory and the path joined to it (`$(dirname "$0")/../..`); `ref` is what `dirname` takes
 SH_ANCHOR = re.compile(r'(?P<head>\$\(dirname\s+"(?P<ref>\$(?:\{[A-Za-z_0-9]\w*(?:\[0\])?\}|[A-Za-z_0-9]\w*))"\))'
                        r'(?P<rel>(?:/[\w.\-]+)+)')
@@ -503,12 +505,12 @@ class Run:
             pre, p, rest = m.group("pre") or "", m.group("p"), m.group("rest")
             start = m.start("p") if not pre else m.start()
             before = text[start - 1] if start > 0 else ""
-            if not pre and before and (before.isalnum() or before in "_.-/"):
+            if not pre and before and (before.isalnum() or before in "_.-/") and not SH_DEFAULT.search(text, 0, start):
                 return m.group(0)
             token = p + rest
             trail = ""
-            while token and token[-1] in ".,":
-                token, trail = token[:-1], token[-1] + trail
+            while token and (token[-1] in ".," or (token[-1] == "}" and token.count("}") > token.count("{"))):
+                token, trail = token[:-1], token[-1] + trail    # a `}` no `{` of the token opens closes what holds the path
             if "/" not in token:
                 after = text[m.end("p"):m.end("p") + 1]
                 if not (before in "\"'" and after == before) or path.endswith((".py", ".rs", ".lean")):
