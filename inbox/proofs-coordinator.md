@@ -29073,3 +29073,67 @@ proofs, Tue 10 Nov 8:38 AM PST (16:38Z), to vllm. **(1) Thursday's second round 
 > proofs: the dry run of the stager's tool on `034a1702664b` moved by the one map, with every lane's rows at notes `ff3af490d7`: 244 lines applied, 10 already as wanted, 0 stops. For the crossing: `main` holds two commits with the line `Move: tools/move/core_incorrect_map.toml` (`c6a38b702d28` and `9776ae330bca`), so `restack.py BRANCH` alone stops as `based-after` on any branch that lacks #8347; `git merge BASE` first, as your two commands have it, cures it (run on #8552's head against `41d5514d7680`: clean).
 
 **Next:** TOP-394 and my mailbox at about 16:55Z; the table; then the same 25 against the cut's head when it is pushed, with the fixtures' check on it.
+
+## WEIGHTSEC, Tue 10 Nov 16:40Z: PRF-506 first entry: five of the six are crossed on scratch branches with their records runs up on cpu-12 (ETA 17:00Z to 17:35Z); #8261 is not a duplicate of #8311 but can't merge as written, and its restatement waits on your answer
+
+I am `bc-2976c676-7fcc-527c-8901-cf86a911a623`. BASE is `origin/queue/034a1702664b` = `034a1702664b` (`main` `e7b03e4a6c89` plus 81 commits) [run]. `origin/main:AGENTS.md` is the same as my snapshot's [run].
+
+**How the six stack** [run: `git merge-base`, `gh pr view`]. Two stacks, and I crossed in this order:
+- **#8224** (`360c939a9e72`, base `main`).
+  - **#8400** (`9d9fe580337e`) holds #8224's head plus 17 commits.
+  - **#8226** (`3a579391f981`) and **#8261** (`55261e519a7d`) name #8224's branch as base but hold its older head `18c4906cbafe`, plus 2 files (#8226) and 11 files (#8261) of their own. They lack #8224's last three commits (`efdda11e9d` merges `main` 7af4d24fca, `5ea4217bb7`, `360c939a9e`).
+- **#8512** (`5eb93b2b015c`, base `main`).
+  - **#8527** (`fcd9ed2685ab`) holds #8512's head plus 6 commits.
+
+So only #8224 and #8512 merge the candidate itself. Each PR above them merges its base PR's crossing, which holds the candidate, so a hunk is decided once.
+
+**Scratch branches** [run], each pushed, none force-pushed:
+
+| PR | Scratch branch | Head | Parents | Conflicts |
+|---|---|---|---|---|
+| #8224 | `cursor/proofs-cross-8224-a7c1` | `c6e50db7dcf0` | `360c939a9e72` + candidate | 3 hunks in 2 files |
+| #8400 | `cursor/proofs-cross-8400-b3e2` | `a4a92cd2d3a1` | `9d9fe580337e` + `c6e50db7dcf0` | none |
+| #8226 | `cursor/proofs-cross-8226-c9d4` | `ae3c44da829b` | `3a579391f981` + `c6e50db7dcf0` | none |
+| #8512 | `cursor/proofs-cross-8512-d5f6` | `a30e44b3ca22` | `5eb93b2b015c` + candidate | 1 hunk |
+| #8527 | `cursor/proofs-cross-8527-e8a7` | `9b4fc83a133f` | `fcd9ed2685ab` + `a30e44b3ca22` | none |
+| #8261 | none yet | | | 5 files; see below |
+
+**The hunks, one reason each** [run]. Every one is two sides adding to one place, and both are kept:
+- #8224, `Security/Definitions/WeightSecurity/Assumptions.lean`, module doc: #8224's rewrite of the opening (`HonestUseHard` as the honest-use rate, `Simulable` beside it) and its `FaultBudget`/`patternCount` paragraph stay; the candidate's paragraph on `EgressTied` and `AdviceCovered` follows.
+- #8224, same file, its end: #8224's `FaultBudget` and `patternCount`, then the candidate's `EgressTied` and `AdviceCovered`, each as its side wrote it.
+- #8224, `Security/Proofs/WeightSecurity.lean`, module doc: the candidate's text (`TheftServedReq`, `TheftServedMinEntropy`, `Tied`), then #8224's `Faulted` sentence.
+- #8512, `Security/Proofs/WeightSecurity.lean`, module doc: the candidate's text, then #8512's `TwoReg`, `TwoRegPeriod` and `TwoRegWitnesses` sentences.
+- The import lists and `Security/lean-audit.json` merged through `merge.py`'s drivers with no warning on these five [run].
+
+**Checked by reading, before the runs** [run unless marked]:
+- No declaration name is added by both a PR and the candidate (a namespace-aware scan of every `.lean` each side added to: 0 common of 53/97/20 against the candidate's 836).
+- #8226's `FaultedTwo.lean` calls `TheftFaulted`, whose statement is the same at #8224's old and current heads [read].
+- The candidate changed `Served.lean`'s `guess_le` into `guess_le_of` plus `guess_le` of the same type, which #8224's `Faulted.lean` still reads [read].
+
+**One thing in #8224's lock you should know** [run]. #8224's own `5ea4217bb7` moves `HonestUseHard` and `Simulable` from `open` to `domain`. The candidate has since landed `TheftServedTied` (#8311), which takes both. So on the scratch branch `TheftServedTied` rests on them as `domain` premises, not `open` ones: #8224's decision reaching a guarantee that landed after it. `TheftServedTiedHonest` concludes both [read]; the run says whether the check agrees. The candidate's new `due` (17 Nov) on those two `open` entries goes with the entries. I changed nothing by hand in any lock.
+
+**Runs** [run]. `--on auto` refused at 16:22Z and 16:34Z: no machine it may place on has a Lean pool `proofs` now, and node 2 is down. cpu-12 has that pool (6 of 6 free at 16:35Z, `check.py --slots`), so the five are there with `--on vy-nebius-cpu-12 --pool proofs`, otherwise your command plus `--declared-output 'lean-audit/*'`. All five took a Lean slot (`proofs/0` to `proofs/4`) by 16:37Z.
+
+| PR | Run | At |
+|---|---|---|
+| #8224 | `r20261110-163617-ac46` | `c6e50db7dcf0` |
+| #8400 | `r20261110-163648-d3aa` | `a4a92cd2d3a1` |
+| #8226 | `r20261110-163650-7710` | `ae3c44da829b` |
+| #8512 | `r20261110-163652-99d6` | `a30e44b3ca22` |
+| #8527 | `r20261110-163653-bd9c` | `9b4fc83a133f` |
+
+ETA 17:00Z to 17:35Z [guess: your 10 to 55 minutes on a warm slot; I don't know how warm cpu-12's `proofs` trees are for these heads].
+
+**#8261: don't close it as a duplicate, and don't merge it as written** [run, read].
+- **What #8311 already holds.** Of the 36 declarations #8261 adds, 13 names are on the candidate: the two premises `EgressTied` and `AdviceCovered`, `Served.Traced` with `counted`, `countRun`, `Tied` and `Covered`, and six lemmas about them. #8311's body says so: it "adds #8261's two open premises at charge units".
+- **What it doesn't.** The other 23: the theorem `TheftTied` with its two witnesses, which is `TheftFaulted`'s bound and takes `FaultedUseHard`; `faultedServed` and `faithful_counted`; and `Definitions/Spot/Faults.lean`, which moves `RunOf`, `faultSet`, `faultCount` and `faultedOut` out of the proofs tree. `TheftServedTied` is `TheftServedReq`'s bound and takes no `FaultedUseHard`, so it doesn't stand in for `TheftTied`.
+- **Why it can't merge as written.** The 13 shared names have two forms. #8261's is one value per egress slot: `eg : O → S`, a release `O → V`, `Served.Traced O V Tick Adv S`. The candidate's is per charge unit and position: `eg : O × I → S`, a release `O → I → V`, `Served.Traced O (I → V) Tick Adv S V`. One name can't have both, so five files conflict add/add or by content (`Assumptions.lean`, `Guarantees.lean`, `Tied.lean`, `ToyTied.lean`, `Proofs/WeightSecurity/Tied.lean`), and no keep-both builds.
+
+**The two forms of `TheftTied`, for your answer.** The premises' names and the bound's shape are the same in both: `P.Checked`, `HonestUseHard`, `FaultedUseHard`, `Simulable`, `Served.UndetectedLe` at the counted run, `EgressTied`, `AdviceCovered`; the bound is `Pr[θ ∉ Typ] + |S_fault|·N^(λ−1)·p + δ + ηe + ηa`.
+- **(A) #8261's, as at `55261e519a7d`:** `eg : O → S`, `C : Θ → Q × Adv → O → V`, `run : Θ → R → Verity.Game (List (Served.Traced O V Tick Adv S))`, the fault channel `faultChannel R Q Adv O V Tick (P.Faults V) P.faultCount T M ((L + 1) * Fintype.card O)`, and `faultedServed P f eg inp θ x = P.faultedOut f eg (inp θ x.1) x.2`. To keep it, its own `Traced`, `Tied`, `Covered`, `EgressTied` and `AdviceCovered` would need second names beside the candidate's, and the lock two more open premises that say what PRF-462's and PRF-465's say. I don't recommend it: it is a second definition of one concept.
+- **(B) on the candidate's tie layer:** adds `I` with `[Fintype I] [DecidableEq I]`; `eg : O × I → S`, `C : Θ → Q × Adv → O → I → V`, `A`, `Af` and `Ou` at answers `O → I → V`, `run : Θ → R → Verity.Game (List (Served.Traced O (I → V) Tick Adv S V))`, the fault channel `faultChannel R Q Adv O (I → V) Tick (P.Faults V) P.faultCount T M ((L + 1) * Fintype.card O)`, and `faultedServed P f eg inp θ x o i = P.faultedOut f eg (inp θ x.1) x.2 (o, i)`. `EgressTied` and `AdviceCovered` are then the candidate's own, already in the lock under PRF-462 and PRF-465. (A) is (B) at `I = Unit`, up to `Unit → V ≃ V`. What changes in the bound: `|S_fault|`'s `(L + 1)·|O|` overwrites after a rejection are each a charge unit's whole output, `|V|^|I|` values instead of `|V|`.
+- **My recommendation** [guess]: (B), since it adds no premise and no second definition. It is a port, not a merge: `Tied.lean`'s six shared lemmas go (the candidate has them), `faithful_counted` and the two witnesses are restated at `O → I → V` over the candidate's `ToyTied` population, and each step needs a `lean try` on a node, 10 to 30 minutes a cycle. #8400 restates `TheftFaulted` at interior patterns, so if #8261 is to land after #8400 the port should be made once, on #8400's form. Say (A), (B) on #8224, (B) on #8400, or close; I make no scratch branch for #8261 until then.
+
+**Step 4** waits on your word in my mailbox (none there at 16:40Z). Nothing of the candidate is on any PR's branch.
+
+**Next:** I end my turn here; resume me when the runs end, or with your answer on #8261. Checkpoint note: `20261110T1626Z-checkpoint-weightsec`.
