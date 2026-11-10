@@ -8,7 +8,7 @@
 # over each other's registered partials, and the proof leg's served shapes (`prove_leg.served`), and served_verdicts'
 # window pick, missing pieces and block record on toy serve dirs, prove_bundle's hold of the H200 interfaces' bundle
 # fixture to its window's public part (nothing is lowered or proved), and a5_tp.sh's store of each session's circuits and
-# tables on a dry run's toy scratch (`test_a5_tp_store`, through `integrations/vllm/verity_vllm`'s `ops/store_trees.sh`),
+# tables on a dry run's toy scratch (`test_a5_tp_store`, through `adapters/vllm/verity_vllm`'s `ops/store_trees.sh`),
 # and the vLLM example's endpoint serving under predict's row in a toy tree (`test_vllm_example`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -23,21 +23,21 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # that package's `inference-only` check, which its tests `lake build` there, beside one-stage v1's case through
 # `sampled-proofs-one-stage`, v2's through `sampled-proofs-one-stage-zk` and remote's sampled proofs case through
 # `vstar-recursive sampled` (`verity/core/service/vstar/recursive`); its slow test builds the 4,32,4 class's
-# window circuit (`integrations/vllm/verity_vllm`).
+# window circuit (`adapters/vllm/verity_vllm`).
 # `benchmarks/live_challenger`: the challenger reserve's tests open a session on its local auditor host (auditor.py), whose
 # serve.py runs under its tests' stub of the Lean verifier's coins (stub_serve.py). `verity_numerical.bench`'s input sets
 # and templates: a8's scan tests import a8, which imports a0.
 # `benchmarks/pous/p2_v1` and p2_stage's modules: served_bandwidth's session over the toy's P2 store (`bandwidth.py`, which
 # serves it through kernels' staging decode, and the toy), run through bash, which no tracer sees; its party's Lean
 # verifier, `remote-audit-verifier`, which `p2_party` has `lake` build in remote_bandwidth/lean, is under `verity`.
-# `integrations/vllm/verity_vllm`, `benchmarks/network_traces`: a5_warden's window, committed as serving commits it, over the
+# `adapters/vllm/verity_vllm`, `benchmarks/network_traces`: a5_warden's window, committed as serving commits it, over the
 # cells of a network certifier run its tests drive tick by tick (`test_warden_serve._run`).
 # `examples/h200/interfaces/verity_e2e_demo`: served_verdicts' block record (`block_record`, its schema and the census's
 # reference deployment it reads) and prove_bundle's
 # bundle check (`replay_bundle`, with kernels' commit call `commit_slots/slots.py`), and its bundle and registration
 # fixtures; `benchmarks/prove_path/records_audit.py`: prove_bundle's verifier window. `examples/vllm/serve_load.py`:
 # served_verdicts' load, whose timings file its tests read and whose fixed window `test_serve_load` runs against
-# serve-openai's endpoint (`integrations/vllm/verity_vllm`) over a stand-in engine; `examples/vllm/serve.sh`: the
+# serve-openai's endpoint (`adapters/vllm/verity_vllm`) over a stand-in engine; `examples/vllm/serve.sh`: the
 # demo's endpoint (`test_vllm_example`). `benchmarks/live_verifier/host.py`: the compose gate, which `gate-compose`'s tests
 # send a hand-off through.
 # `test_served_pearlplus_lean`: served_pearlplus.sh's Lean step (`served_passes.py lean`) on the pouw suite's toy passes
@@ -60,8 +60,8 @@ inputs = ["tools/config/verity_config", "benchmarks/pouw/clear", "benchmarks/pou
           "verity/core/protocols/network/nci/lean/lakefile.toml",
           "benchmarks/numerical/python/verity_numerical/bench/input_sets.py",
           "benchmarks/numerical/python/verity_numerical/bench/templates.py",
-          "integrations/vllm/verity_vllm", "benchmarks/network_traces",
+          "adapters/vllm/verity_vllm", "benchmarks/network_traces",
           "benchmarks/pous/p2_v1", "benchmarks/torch_gpu/p2_stage/layout.py", "benchmarks/torch_gpu/p2_stage/stage.py",
           "benchmarks/torch_gpu/p2_stage/full.py", "benchmarks/torch_gpu/p2_stage/gemm.py",
           "benchmarks/live_verifier/host.py", "benchmarks/prove_path/prove_path.py", "benchmarks/prove_path/sources.json",
-          "integrations/vllm/manifests/checkpoints.json", "integrations/vllm/manifests/checkpoints-int8.json"]
+          "adapters/vllm/manifests/checkpoints.json", "adapters/vllm/manifests/checkpoints-int8.json"]

@@ -341,7 +341,7 @@ larger share: the same fixed compressions are paid once a 2 KiB leaf instead of 
 
 ## The vLLM integration
 
-`integrations/vllm/`'s GPU committer (`verity_vllm/commit/committer`) commits this construction by default, `rows-sha512`
+`adapters/vllm/`'s GPU committer (`verity_vllm/commit/committer`) commits this construction by default, `rows-sha512`
 (`verity_vllm/commit/step_rows.py`): its `native_rows.cu` is this directory's leaf, pad and node kernels with each step's
 constants as kernel parameters. The record before it, `vllm-v1` (`verity/ml/commitments/vllm_v1`: SHA-256 position leaves and
 node / lift trees, with `hm96-sha256/v1` leaves as an option), is by name. Its opt-in serving rows

@@ -88,7 +88,7 @@ if [ "$FW" = 1 ]; then
 fi
 log "drawn: ZK server $([ "$FW" = 1 ] && echo "on ($FWL)" || echo "OFF (H1_FIREWALL=0)"), caps: verifier $SERVE_GB GB," \
   "prover $PROVE_GB GB, its ZK server's Lean $LEAN_GB GB left"
-export PYTHONPATH=$SRC:$SRC/integrations/vllm:$SRC/verity/ml/flock/python${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH=$SRC:$SRC/adapters/vllm:$SRC/verity/ml/flock/python${PYTHONPATH:+:$PYTHONPATH}
 WK=${H1_DRAWN_STAGED:-$SCR/stage} ST=$P/drawn/statements.json
 args=(--circuits "${H1_CIRCUITS:?H1_CIRCUITS: pouw_h1_circuits --out, with the drawn K file}")
 [ -n "${H1_DRAW_K:-}" ] && args+=(--k "$H1_DRAW_K")

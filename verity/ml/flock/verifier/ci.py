@@ -48,7 +48,7 @@ SLOTS = threading.Semaphore(1)
 def store_env():
     """The store CLI's environment. Inside a recorded check's steps, which carry no store credentials, it is given the run's
     custody key that `$CHECK_STORE_CUSTODY` names (`tools/verity/check/check.py`, "The evidence store"), when no store config is set
-    here, as integrations/vllm's `store_io` does: the key goes into that subprocess's environment only."""
+    here, as adapters/vllm's `store_io` does: the key goes into that subprocess's environment only."""
     env = dict(os.environ)
     custody = Path(env["CHECK_STORE_CUSTODY"]) if env.get("CHECK_STORE_CUSTODY") else None
     if (custody is None or env.get("RESEARCH_STORE_CONFIG") or (Path.home() / ".research" / "store.toml").is_file()

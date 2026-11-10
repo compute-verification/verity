@@ -21,7 +21,7 @@ mkdir -p "$B/sr" "$B/nr"
     git -C "$B/sr" checkout -q FETCH_HEAD -- benchmarks/hash/sharaw benchmarks/pouw/commit_gpu
   echo "fetch sharaw rc $?"
   git -C "$B/nr" init -q && git -C "$B/nr" fetch -q --depth=1 $URL $NR &&
-    for f in native_rows.cu sha512.cuh; do git -C "$B/nr" show $NR:integrations/vllm/verity_vllm/commit/committer/$f > "$B/nr/$f"; done
+    for f in native_rows.cu sha512.cuh; do git -C "$B/nr" show $NR:adapters/vllm/verity_vllm/commit/committer/$f > "$B/nr/$f"; done
   echo "fetch native_rows rc $?"
 } >> "$O/rc.txt" 2>&1
 sha256sum "$B/sr/benchmarks/hash/sharaw/sharaw.cu" "$B/sr/benchmarks/pouw/commit_gpu/commit_gpu.cuh" "$B/nr/native_rows.cu" > "$O/bench-sources.sha256" 2>&1

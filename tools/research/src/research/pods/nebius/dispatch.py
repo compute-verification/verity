@@ -626,7 +626,7 @@ def packable(item: dict, key: str, idx: int) -> str | None:
     if not tree.is_dir():
         return f"no {tree}"
     # an older tree declares the stage Tools here (now research.store.vllm_tools), and has the replay only if it declares it
-    tools = tree / "integrations/vllm/verity_vllm/pipeline/research_tools.py"
+    tools = tree / "adapters/vllm/verity_vllm/pipeline/research_tools.py"
     if tools.is_file() and "VLLM_REPLAY" not in tools.read_text():
         return "the tree has no deferred replay"
     return None

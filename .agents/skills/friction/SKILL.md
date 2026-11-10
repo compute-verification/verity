@@ -139,7 +139,7 @@ Keys and access:
 Landing:
 
 - Lint ratchets are no-growth, and a change to a lint is judged like source; cleanup lanes pay the exceptions down and a
-  feature PR owes none. `integrations/vllm/tools/ratchet_gate.py`'s docstring states the rules (the integration's ratchets
+  feature PR owes none. `adapters/vllm/tools/ratchet_gate.py`'s docstring states the rules (the integration's ratchets
   and `noqa` count, `tests/lint/`'s lists, each changed file's lint). Fix the code, never the list: a rename moves its
   entries (`--move OLD NEW`), an environment read goes through the area's settings registry, and a swallowing handler
   re-raises, records the outcome, or narrows.

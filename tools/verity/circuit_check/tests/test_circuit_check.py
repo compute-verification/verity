@@ -335,7 +335,7 @@ def test_template(label, results):
 def _request_program(tmp_path: Path, **kw) -> Path:
     """The vLLM tests' synthetic request Program (per token Embedding -> RMSNorm -> Gemm -> RoPE -> SiluMul -> Gemm -> RMSNorm, per
     step the LM head and TokenSelect; ``attn``: the attention and its o_proj, whose output is a leaf) as ``instances.json.gz``."""
-    path = REPO / "integrations" / "vllm" / "tests" / "check" / "test_sampled_replay.py"
+    path = REPO / "adapters" / "vllm" / "tests" / "check" / "test_sampled_replay.py"
     spec = importlib.util.spec_from_file_location("circuit_check_request_program", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

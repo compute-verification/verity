@@ -43,7 +43,7 @@ if [ "${1:-}" != leased ]; then
   trap 'rm -rf "$BUILD_DIR"' EXIT
   CUDA=${CUDA_HOME:-/usr/local/cuda-13.0}
   say "build $(git rev-parse --short=10 HEAD 2>/dev/null) into $BUILD_DIR"
-  COMMITTER=integrations/vllm/verity_vllm/commit/committer KERNELS=verity/ml/kernels
+  COMMITTER=adapters/vllm/verity_vllm/commit/committer KERNELS=verity/ml/kernels
   python3 "$HERE/plain_rows.py" "$COMMITTER/native_rows.cu" "$BUILD_DIR/native_rows_p.cu" || { say "plain_rows.py failed"; exit 3; }
   SRCS=("$HERE/ssn.cu" "$COMMITTER/native_rows.cu" "$BUILD_DIR/native_rows_p.cu" -I "$KERNELS")
   if [ -n "${SMALL_THREADS:-}" ]; then

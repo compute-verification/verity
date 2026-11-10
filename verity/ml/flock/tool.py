@@ -57,7 +57,7 @@ FLOCK_CLASS_SWEEP = Tool(
     name="flock_class_sweep", version="1",
     command=["bash", "verity/ml/flock/pod/70-class-sweep.sh"],
     closure=["verity/ml/flock/**", "verity/core/service/flock/**", "benchmarks/numerical/python/**", *CORE,
-             "integrations/vllm/verity_vllm/**", "tools/verity/circuit_check/src/**"],
+             "adapters/vllm/verity_vllm/**", "tools/verity/circuit_check/src/**"],
     key_params=list(CLASS_SWEEP_KEYS),
     param_artifacts=["GRAPH", "DEFS", "SHAPES"],
     key_conditions=["hw.family"],

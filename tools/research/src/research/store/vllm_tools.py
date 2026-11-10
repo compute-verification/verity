@@ -17,7 +17,7 @@ Rules encoded here:
 * ``key_conditions`` is ``hw.family`` plus the torch and vllm pins of the
   workload interpreter (``$PY``, default ``/workspace/venv312/bin/python``),
   probed via ``importlib.metadata`` so nothing heavy is imported.
-* ``closure`` is the integration's import closure: ``integrations/vllm/**``
+* ``closure`` is the integration's import closure: ``adapters/vllm/**``
   plus Verity core, the root package ``verity`` (``package_dirs(tree, "verity")``
   of a source tree, which ``tests/test_store_vllm_tools.py`` holds it to).  It is
   stated rather than derived because this module also loads from the runner's
@@ -41,7 +41,7 @@ COMMAND = ["verity-vllm", "row", "stage"]
 _CLI_MODULE = "verity_vllm.pipeline.cli"
 _SCRIPTS = ("run_row_v2.sh", "row_pod.sh", "tp_stage.sh")   # the shell runners of earlier records (same grammar as `row stage` / `row run`)
 
-CLOSURE = ["integrations/vllm/**", "verity/**"]
+CLOSURE = ["adapters/vllm/**", "verity/**"]
 
 # Row id grammar (see verity_vllm/ops/README):
 #   <model>__<dtype>__<hw>__tp<N>__b<N>__i<N>__o<N>__<arrivals>__<sampling>__<exec>

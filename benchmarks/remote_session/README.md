@@ -4,7 +4,7 @@ The session harness of PoUB (proof of useful bandwidth, `verity/core/protocols/r
 protocol's demo, which is `verity example vllm`. It runs PoUB end to end: a verifier's process and a prover's, over TCP,
 and the memory line a gate run publishes.
 
-**Status: active.** The vLLM integration imports it (`integrations/vllm/verity_vllm/protocols/remote_bandwidth/remote.py`
+**Status: active.** The vLLM integration imports it (`adapters/vllm/verity_vllm/protocols/remote_bandwidth/remote.py`
 and `in_place.py`, which `tests/test_boundaries.py` lists), the audit's Lean verifier names `verifier.py` as its driver and
 `auditor_line.py` as its line of record, and its suite runs in `check`. Decided by `rg remote_session` over `verity/`,
 `benchmarks/`, `examples/`, `tests/` and `integrations/`.

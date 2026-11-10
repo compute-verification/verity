@@ -73,7 +73,7 @@ CR_CACHE=${CR_CACHE:-/workspace/research/cache/pouw-hidden-zk}
 if mkdir -p "$CR_CACHE" 2>/dev/null && [ -w "$CR_CACHE" ]; then export HZ_CACHE=$CR_CACHE; fi
 source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python:$SRC/tools/research/src
+export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python:$SRC/tools/research/src
 CR=benchmarks/network_traces/chain_record.py
 
 # ---- the record's leak guard ---------------------------------------------------------------------------------------

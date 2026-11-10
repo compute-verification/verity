@@ -82,7 +82,7 @@ for load in $LOADS; do
     extra=(--no-retain); retained "$name" unretained-profiled; extra=()
   fi
   if [ -n "${SEED:-}" ] && [ -n "${OLD_SRC:-}" ]; then
-    retained "$name" old "PYTHONPATH=$OLD_SRC/integrations/vllm:$PYTHONPATH"
+    retained "$name" old "PYTHONPATH=$OLD_SRC/adapters/vllm:$PYTHONPATH"
     "$VENV/bin/python" -c 'import json, sys; a, b = (json.load(open(f)) for f in sys.argv[1:]); d = sorted(k for k in a.keys() | b.keys() if a.get(k) != b.get(k)); print(f"{sys.argv[1]} vs old: {len(a)} and {len(b)} files, {len(d)} differ", d[:8])' \
       "$OUT/$name-retained-digests.json" "$OUT/$name-old-digests.json"
   fi

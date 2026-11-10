@@ -1,5 +1,5 @@
 """Every environment variable core's difftests read, declared once (S1 of the quality rollout; the template is
-`integrations/vllm/verity_vllm/settings.py`). Each is an opt-in that says which tests run or where one writes what it
+`adapters/vllm/verity_vllm/settings.py`). Each is an opt-in that says which tests run or where one writes what it
 found, never a value a comparison depends on. `get(NAME)` is the value, or "" when unset, and refuses a name not declared
 in `SETTINGS`."""
 

@@ -15,7 +15,7 @@ key as an `hm96-sha512/v1` leaf (frame-v3's `PROTOCOL.md`, §6, "Keyed leaves").
 - **Vectors.** `vectors.json` (`hm96-sha256/v1`) and `vectors_sha512.json` (`hm96-sha512/v1`), written by
   `python -m verity.ml.commitments.hm96.vectors`. `--check` exits nonzero if either is stale.
 - **Conformance.** `verity/ml/commitments/tests/test_hm96.py` checks the reference against the vectors and a bit-level matrix
-  product; `test_hm96_batch.py` checks `batch` against the reference; `integrations/vllm/tests/commit/test_hiding.py` checks the
+  product; `test_hm96_batch.py` checks `batch` against the reference; `adapters/vllm/tests/commit/test_hiding.py` checks the
   host committer's batch path against both.
 - **Source.** Halevi and Micali, "Practical and Provably-Secure Commitment Schemes from Collision-Free Hashing", CRYPTO 1996 (HM96):
   their first scheme, with the affine universal family below, applied to a digest of the value (their O(k) variant). The hiding bound

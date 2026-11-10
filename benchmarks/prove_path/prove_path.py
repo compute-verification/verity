@@ -80,7 +80,7 @@ Two kinds of committed run:
   and ``exfiltration_bound`` (β_δ + λ_δ).
 * **compiler**: the binding's compiler for a served run (its name, digest and ℓ, the compiler it wraps, and the φ I2 compiles
   under), the one `verity-vllm advice` registers. The inner digest is a single-GPU window's I2's (`I2Compiler.digest`) over
-  the tree's code (`code_identity`: ``integrations/vllm`` and ``verity`` by content), so the audit runs on a
+  the tree's code (`code_identity`: ``adapters/vllm`` and ``verity`` by content), so the audit runs on a
   tree whose two are the server's; over what the compile reads of ``serve.json`` (its model, revision and that pin's config,
   target, execution and default seed), so the audit runs on the serve.json it was registered under; over ℓ and the transfer
   gates its model's compiler of record lists (`GATES_OF_RECORD`). It is the name and digest ``verity-vllm advice
@@ -204,7 +204,7 @@ from verity_vllm.pipeline.tp import serving_rows as SRT  # noqa: E402
 
 I2 = "verity/prove-path/i2-compile-steps/v0"
 #: the checkpoint config I2's φ reads when none is given: unsloth/Llama-3.2-1B's (I2's test fixture)
-LLAMA32_1B_CONFIG = HERE.parents[1] / "integrations/vllm/tests/program/predict/fixtures/llama32-1b.config.json"
+LLAMA32_1B_CONFIG = HERE.parents[1] / "adapters/vllm/tests/program/predict/fixtures/llama32-1b.config.json"
 ROWS1 = "prove_path.py commit: a single-GPU Commit's sealed replay bundle -> rows over the registered compiler's Programs"
 #: the sampling parameters a request's body carries to I2 (vLLM's `SamplingParams` names the record holds)
 BODY_SAMPLING = ("temperature", "top_p", "top_k", "seed", "n")
@@ -584,7 +584,7 @@ def i2_of_serve(run: str, window: int, programs_root: str, hf_config: str | None
 def served_identity() -> tuple[str, str]:
     """The code a served window's compiler runs, as `verity-vllm advice` names it (``pipeline.advice``'s
     ``registered_compiler``): compile_steps by its module path, its digest the verifier's `interface.compiler_digest` over
-    the integration's import closure (``integrations/vllm`` and ``verity``), so the audit's tree holds the server's. The
+    the integration's import closure (``adapters/vllm`` and ``verity``), so the audit's tree holds the server's. The
     window's I2 is that name, with this digest as its code (`i2_of_serve`)."""
     try:
         ADV = importlib.import_module("verity_vllm.pipeline.advice")
