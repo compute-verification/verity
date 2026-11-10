@@ -15,7 +15,7 @@ honest answer is more than the stored label.  Everything else is written once, h
    gives a `StorageProfile`: what the certificate says about the server, and what that rests on.
 
 Every coin is flipped here through `verity.ml.randomness` (`setup.SALT_DOMAIN`, `audit.CHALLENGE_DOMAIN`), and a scheme samples
-none.  The claims a certificate rests on are ids in `verity.core.claims`' format (`claim`).
+none.  The claims a certificate rests on are ids in `verity.claims`' format (`claim`).
 """
 
 from __future__ import annotations
@@ -27,8 +27,8 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 from typing import Any, ClassVar
 
-from verity.core.claims import Entry
-from verity.core.claims import get as core_claim
+from verity.claims import Entry
+from verity.claims import get as core_claim
 from verity.ml.randomness import Key
 
 from . import audit, setup
@@ -83,12 +83,12 @@ LOCAL_CLAIMS: dict[str, Entry] = {e.id: e for e in (
           "run, read over the ring game at N, the blocks the point's session challenges",
           "PoUS ring device at N"),
 )}
-"""Claims a certificate cites that `verity.core.claims` does not hold yet, in its id format.  Each moves to core when a
+"""Claims a certificate cites that `verity.claims` does not hold yet, in its id format.  Each moves to core when a
 render cites it; the tests fail once core defines an id this table still holds."""
 
 
 def claim(id: str) -> Entry:
-    """The claim with this id: `verity.core.claims`' own, else `LOCAL_CLAIMS`'; `KeyError` when neither has it."""
+    """The claim with this id: `verity.claims`' own, else `LOCAL_CLAIMS`'; `KeyError` when neither has it."""
     try:
         return core_claim(id)
     except KeyError:

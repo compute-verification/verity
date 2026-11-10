@@ -182,5 +182,5 @@ rejection need not reject the whole: such a reference disagrees with the Lean on
 composite's verdicts (`test_product_over_remotes_subprotocols_is_remote`,
 `test_product_over_onsites_subprotocols_is_onsite`).
 
-A bare `uv run` inside this directory stops its workspace search at `verity/core/protocols/pyproject.toml`; run the suite
+A bare `uv run` inside this directory stops its workspace search at `verity/protocols/pyproject.toml`; run the suite
 through `suites.py`, or `pytest` with the workspace's `.venv`.

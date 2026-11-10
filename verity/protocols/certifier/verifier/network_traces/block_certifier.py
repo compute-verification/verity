@@ -17,7 +17,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from verity.core.protocols import reporting
+from verity.protocols import reporting
 from verity.circuits.codec import canonical_json
 
 PROTOCOL = "verity/certifier/v0"

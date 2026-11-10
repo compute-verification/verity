@@ -56,7 +56,7 @@ or 2, with `proof` `none`.
 
 ## `demo.toml`
 
-`vllm/demo.toml` is one. It gives the demo's `protocol` (a package under `verity/core/protocols/`, the composite
+`vllm/demo.toml` is one. It gives the demo's `protocol` (a package under `verity/protocols/`, the composite
 `onsite` or `remote`, or a list), its `workload`, its `[placement]` (each role to a machine class), its `run` and `proof`,
 and the `[evidence]` every step up to each needs. A workload is what runs: its Program, its inputs and its placement. The
 `workload` field names the integration (a directory under `integrations/`, or `none`); once workload specs exist, it names

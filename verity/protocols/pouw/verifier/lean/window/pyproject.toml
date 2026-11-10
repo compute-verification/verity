@@ -28,7 +28,7 @@ untraced = ["tests/test_difftest.py", "tests/test_known_rows.py", "tests/test_la
 # configuration.
 inputs = ["verity/difftest", "verity/__init__.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/hardware/record.py",
-          "verity/core/claims/__init__.py",
+          "verity/claims/__init__.py",
           "verity/protocols/pouw/verifier", "verity/ml/protocols/__init__.py", "verity/protocols/pouw/prover",
           "verity/spot/verifier/profile.py", "verity/core/protocols/spot",
           "benchmarks/pouw/h1_lanes/run.py", "benchmarks/pouw/h1_prove/h1unit.py",

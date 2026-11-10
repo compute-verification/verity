@@ -35,7 +35,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/protocols/poub/verifier/pooled.py", "verity/protocols/poub/verifier/schedule.py",
           "verity/protocols/poub/verifier/period.py", "verity/flock/verifier/interface",
           "verity/protocols/pouw/verifier/lean/check/models.json",
-          "verity/core/claims/__init__.py",
+          "verity/claims/__init__.py",
           "verity/spot/verifier/__init__.py", "verity/spot/device/challenger.py",
           "verity/spot/device/remote.py", "verity/ml/__init__.py", "verity/circuits", "verity/ml/commitments", "verity/ml/crypto",
           "verity/ml/randomness", "verity/difftest/python",

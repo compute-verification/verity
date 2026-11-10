@@ -36,7 +36,7 @@ flock = [
 ml = ["verity/ml/{circuits,definitions,commitments,crypto,randomness,windows,kernels,private_circuits}"]
 # PoUW: the integrity profile, the protocol, and its part of the security analysis (the accounting it reads is `needed`)
 pouw = [
-    "verity/core/protocols/{profile.py,pouw}",
+    "verity/protocols/{profile.py,pouw}",
     "verity/protocols/pouw/prover",
     "Security/*/Pouw{,.lean}",
     "Security/Proofs/Properties/Pouw{,.lean}",
@@ -59,7 +59,7 @@ shared = [
     "verity/core/primitives/{randomness,lms}",
     "verity/difftest",
     # the reporting grid every monitoring-period report states: its periods and δs
-    "verity/core/protocols/reporting.py",
+    "verity/protocols/reporting.py",
     "verity/configuration/config",
     # the hardware cards, the data sheets' numbers, which the integration's served device reads (the Lean tables' test reads
     # Accounting's B200 sheet, so it stays private)
@@ -102,7 +102,7 @@ pouw_tests = [
     "verity/protocols/pouw/verifier/lean/window/tests/test_known_rows.py",
 ]
 protocols = [
-    "verity/core/protocols/{pous,remote_bandwidth,network}",
+    "verity/protocols/{pous,remote_bandwidth,network}",
     # the network certifier: all but the advice format (`advice.py`, public with the integration) and its package's files
     "verity/core/protocols/certifier/{lean,protocol,tests,README.md,PROTOCOL.md}",
     "verity/core/protocols/certifier/{active,arith_encode,audit,blocks,boundary,cache_step,calibration,capacity,certificate}*",
@@ -281,7 +281,7 @@ from = ["pouw"]
 what = "the auditor ledger's `lane` field: a monitoring period's prover, as the v2 ledger's period-open and period-close name it"
 pattern = '\bperiod\b[^\n]*\blane\b|\blane\b[^\n]*\bperiod\b'
 paths = [
-    "verity/core/protocols/{spot,pouw}",
+    "verity/protocols/{spot,pouw}",
     "verity/spot/verifier/lean",
     "Security/*/Pouw",
     "Security/Proofs/Properties/Pouw",

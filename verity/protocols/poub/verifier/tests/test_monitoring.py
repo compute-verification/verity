@@ -10,7 +10,7 @@ from fractions import Fraction
 
 import pytest
 
-from verity.core.protocols import reporting
+from verity.protocols import reporting
 from verity.protocols.poub.verifier import codec, monitoring, pooled
 
 EPS = Fraction(2 ** 24 + 34, 2 ** 64)

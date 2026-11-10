@@ -51,7 +51,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from inputs import CARDS, I, observations  # noqa: E402
 
-from verity.core.protocols import reporting
+from verity.protocols import reporting
 from verity.spot.verifier.profile import Stratified, Stratum  # noqa: E402
 from verity.spot.candidates import Shape, cuts, shape_of  # noqa: E402
 from verity.spot.costfit import Fitted, fit  # noqa: E402

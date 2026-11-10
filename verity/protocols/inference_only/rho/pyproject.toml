@@ -16,4 +16,4 @@ inputs = ["Security/lean-audit.json", "Security/Properties/lean-audit.json", "ve
           "benchmarks/census/hardware.json", "benchmarks/census/adversary.json", "verity/protocols/inference_only/nci/slowdown.py",
           "verity/protocols/inference_only/nci/catalog.py", "verity/protocols/inference_only/nci/algorithms.json",
           "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
-          "verity/core/protocols/reporting.py"]
+          "verity/protocols/reporting.py"]

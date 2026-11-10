@@ -935,8 +935,8 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "hypothesis", specifier = ">=6.100" },
-    { name = "verity", editable = "." },
-    { name = "verity-difftest", editable = "verity/difftest" },
+    { name = "verity" },
+    { name = "verity-difftest" },
 ]
 
 [[package]]

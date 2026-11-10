@@ -14,7 +14,7 @@ H is SHA-512, HMAC is HMAC-SHA512 (RFC 2104) and [x] is u16be len(x) ‖ x.
 - **Open** (`unseal`): the tag recomputed over N ‖ C and compared in constant time; the frame, or None.
 
 Each keystream input is 88 bytes, inside SHA-512's first block, so a keystream block is one compression with the key in
-its message input: a PRF under ``prf/sha-512`` (`verity.core.claims`), the claim `verity.ml.randomness`'s keyed streams
+its message input: a PRF under ``prf/sha-512`` (`verity.claims`), the claim `verity.ml.randomness`'s keyed streams
 rest on, and every input has one length, so length extension doesn't arise. Counter mode over a PRF is IND-CPA while no
 nonce repeats under a key (Bellare, Desai, Jokipii, Rogaway 1997); HMAC-SHA512 is a PRF under the same assumption
 (Bellare 2006), so a strongly unforgeable MAC; encrypt-then-MAC with the nonce under the tag is IND-CCA and INT-CTXT

@@ -23,7 +23,7 @@ from dataclasses import dataclass, fields, replace
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols import reporting
+from verity.protocols import reporting
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 
@@ -68,7 +68,7 @@ class Registry:
     @classmethod
     def load(cls, paths: Iterable[Path] | None = None) -> Registry:
         params = {f"horizon.{name}.seconds": Param(f"horizon.{name}.seconds", s, "s",
-                                                   source="verity.core.protocols.reporting PERIODS",
+                                                   source="verity.protocols.reporting PERIODS",
                                                    status="declared")
                   for name, s in PERIODS.items()}
         for path in sorted(paths if paths is not None else DATA.glob("*.toml")):

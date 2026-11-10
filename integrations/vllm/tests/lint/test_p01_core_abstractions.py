@@ -43,7 +43,7 @@ def _core(name: str | None) -> bool:
                 "verity.definitions.silicon", "verity.definitions.circuits.targets", "verity.definitions.kernels", "verity.ml.flock",
                 "verity.definitions")
     return bool(name) and under("verity") and (not any(map(under, moved_in))
-                                or any(map(under, ("verity.core.protocols", "verity.core.claims"))))
+                                or any(map(under, ("verity.core.protocols", "verity.claims"))))
 
 
 def _private(name: str) -> bool:

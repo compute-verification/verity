@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from verity.core.claims import ENTRIES, INSTANCES, PROPERTIES, assumption, get
+from verity.claims import ENTRIES, INSTANCES, PROPERTIES, assumption, get
 
 
 def test_a_primitive_assumption_is_property_slash_instance_with_its_label_and_standing() -> None:
