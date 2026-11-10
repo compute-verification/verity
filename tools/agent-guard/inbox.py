@@ -2,6 +2,8 @@
 """`inbox.py`: tell a running agent something, on this VM or any other. The shell hook (`shell_hook.py`) hands it over.
 
     python3 tools/agent-guard/inbox.py send AGENT_ID --text 'TEXT'   (or --file PATH; `--file -` reads stdin)
+    python3 tools/agent-guard/inbox.py send AGENT_ID --wait S ...    then say whether a VM took it within S seconds; exit 1
+                                                                     when none did: its hook is not taking its messages
     python3 tools/agent-guard/inbox.py send AGENT_ID --local ...     only this VM's inbox, no push
     python3 tools/agent-guard/inbox.py pull AGENT_ID [--repo DIR]    move AGENT_ID's pushed messages into this VM's inbox
     python3 tools/agent-guard/inbox.py list                          each agent's pending and delivered messages (a
@@ -23,7 +25,8 @@ messages sent before delivery queue up in it. The agent's next shell command is 
 and the agent re-runs the command, so a pushed message arrives within a poll interval and two of the agent's commands; one
 still waiting when its turn completes is the turn's follow-up (`stop_hook.py`). An agent whose turn has ended (FINISHED or
 IDLE) runs no command and takes nothing until it is resumed, with Task or a follow-up. `send` says when earlier messages to
-the agent are still uncollected on origin.
+the agent are still uncollected on origin, and `send --wait S` whether a VM took this one: taken is on the agent's VM, to be
+delivered at its next command, and not yet acted on.
 `--local` writes this VM's inbox directly and reaches only agents whose shell commands pass through this VM's hook.
 
 AGENT_ID is the agent's conversation id: a cloud agent's or a subagent's is the `bc-…` id its Task call returned.
@@ -116,10 +119,11 @@ def commit(repo: Path, agent: str, text: str, parent: str | None, message: str) 
     return sha
 
 
-def push(agent: str, text: str, repo: Path) -> str:
-    """Append `text` to origin's `inbox/agent`, retrying while another push moves the branch; the new tip."""
+def push(agent: str, text: str, repo: Path, ident: str | None = None) -> str:
+    """Append `text` to origin's `inbox/agent` as the message `ident`, retrying while another push moves the branch; the new
+    tip."""
     full_id(agent)
-    item, err = entry(text, secrets.token_hex(6)), None
+    item, err = entry(text, ident or secrets.token_hex(6)), None
     for _ in range(PUSH_TRIES):
         try:
             at = tip(repo, agent)
@@ -152,6 +156,32 @@ def stale_note(agent: str, n: int, oldest: str, earlier: bool = False) -> str:
     head = (f"{n} earlier message(s) uncollected since {oldest}: this agent's VM is not pulling" if earlier else
             f"{n} message(s) on origin's inbox/{agent} are still unpulled, the oldest from {oldest}: its VM's shell hook isn't "
             f"polling")
+#: seconds between `send --wait`'s looks at origin, and the longest it may wait: no tool call blocks more than 20 minutes
+WAIT_EVERY_S, WAIT_CAP_S = 5.0, 1200.0
+
+
+def taken(repo: Path, agent: str, ident: str) -> bool:
+    """Whether a VM has taken the message `ident` off origin's `inbox/agent`: `pull` empties the branch's file."""
+    at = tip(repo, agent)
+    return at is None or ident not in HEAD.findall(remote_text(repo, agent, at))
+
+
+def wait_taken(repo: Path, agent: str, ident: str, max_s: float, sleep=time.sleep, clock=time.monotonic) -> float | None:
+    """Seconds until a VM took the message `ident`, looking every WAIT_EVERY_S for `max_s`; None when none took it. A look
+    git couldn't make says so and counts as not taken."""
+    start = clock()
+    while True:
+        try:
+            if taken(repo, agent, ident):
+                return clock() - start
+        except RuntimeError as e:
+            print(f"inbox: could not read origin's inbox/{agent}: {e}", file=sys.stderr)
+        left = max_s - (clock() - start)
+        if left <= 0:
+            return None
+        sleep(min(WAIT_EVERY_S, left))
+
+
     return (head + " (its turn ended, FINISHED or IDLE, so it runs no shell command until resumed with Task; or its VM runs a "
             f"hook older than the inbox, or none). The agent reads them with `git fetch origin inbox/{agent} && git show "
             f"FETCH_HEAD:{FILE}`, and `inbox.py check {agent}` on its VM says why")
@@ -246,7 +276,8 @@ def pull(agent: str, repo: Path, inbox: Path = INBOX) -> int:
         lock.unlink(missing_ok=True)
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, sleep=time.sleep, clock=time.monotonic) -> int:
+    """`sleep` and `clock` are what `send --wait` waits by."""
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("send")
@@ -291,8 +322,10 @@ def main(argv: list[str] | None = None) -> int:
             before = unpulled(a.repo, full_id(a.agent))
         except RuntimeError:
             before = (0, None)
-        print(f"pushed for {a.agent}: origin's inbox/{full_id(a.agent)} at {push(a.agent, text, a.repo)[:12]}; its "
-              f"shell hook delivers it within a poll interval, but {UNTIL_RESUMED.format(agent=a.agent)}")
+        ident = secrets.token_hex(6)
+        print(f"pushed for {a.agent}: origin's inbox/{full_id(a.agent)} at {push(a.agent, text, a.repo, ident)[:12]}; its "
+              f"shell hook delivers it within a poll interval, but {UNTIL_RESUMED.format(agent=a.agent)}"
+              + ("" if a.wait is not None else ". `--wait S` says whether its VM took it within S seconds"), flush=True)
         n, oldest = before
         if n and oldest and age_s(oldest) > STALE_S:
             print(f"inbox: NOT DELIVERED YET: {stale_note(a.agent, n, oldest, earlier=True)}", file=sys.stderr)
@@ -324,6 +357,8 @@ def main(argv: list[str] | None = None) -> int:
                f"no poll for {a.agent} in {INBOX} within {every} s, so this VM's shell hook doesn't deliver its id")
         print(f"inbox: NOT POLLING: {why}" + (f" (last pull: {tail[0]})" if tail else "")
               + f". Read your messages with `git fetch origin inbox/{a.agent} && git show FETCH_HEAD:{FILE}`")
+    s.add_argument("--wait", type=float, metavar="S", help=f"then say whether a VM took it within S seconds (at most "
+                                                           f"{WAIT_CAP_S:g}); exit 1 when none did")
         return 1
     if a.cmd == "pull":
         print(f"inbox: {pull(a.agent, a.repo)} new message(s) for {a.agent}")
@@ -342,3 +377,17 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+        if a.wait is not None and not 0 < a.wait <= WAIT_CAP_S:
+            raise SystemExit(f"inbox: --wait {a.wait:g} is not within 0 to {WAIT_CAP_S:g} seconds (no tool call blocks more than "
+                             "20 minutes)")
+        if a.wait is None:
+            return 0
+        waited = wait_taken(a.repo, a.agent, ident, a.wait, sleep, clock)
+        if waited is None:
+            print(f"inbox: NOT TAKEN in {a.wait:g} s: no VM pulled {ident} off origin's inbox/{a.agent}, so its hook is not "
+                  f"taking its messages now: {a.agent} is inside one long command or has ended its turn, or its VM runs no "
+                  f"shell hook (`inbox.py guard {a.agent}` on its VM says). It stays on the branch for a later pull; to "
+                  "stop its work now, cancel its runs yourself", file=sys.stderr)
+            return 1
+        print(f"inbox: taken {waited:.0f} s after the push: {a.agent}'s VM pulled {ident}, and its next shell command "
+              "delivers it. Taken is not acted on: its runs and its issue show that")
