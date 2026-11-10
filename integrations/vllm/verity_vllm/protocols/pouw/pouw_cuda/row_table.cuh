@@ -1,4 +1,4 @@
-// A serving step's row tables (`verity.ml.commitments.row_table`, `commit.row_tables.step_roots`) as functions that compile for
+// A serving step's row tables (`verity.commitments.row_table`, `commit.row_tables.step_roots`) as functions that compile for
 // the host (g++, `row_table_host.cpp`, the twin the CPU tests hold to the Python reference) and the device (nvcc,
 // `row_table.cu`). One thread computes one segment digest, one row's leaf or one tree node. The hm96-sha512 leaf and the
 // frame-v3-sha512 leaf, pad and node are the GPU's one row commitment (`row_commit.cuh`, `rc`, its forms with no plan, from

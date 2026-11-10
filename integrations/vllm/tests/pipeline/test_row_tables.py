@@ -1,6 +1,6 @@
 """The row-table layout of the serving rows (`pipeline.serving_rows.with_row_tables`, `ml.windows.rows.RowTable`) and PoUW's
 interface to it (`commit.row_tables`): one hm96-sha512/row-seg/v1 table per (engine step, linear) in the canonical order, whose
-root is `verity.ml.commitments.row_table`'s under its serve-time domain, chunks whose x rows are its rows (the same strings) read by
+root is `verity.commitments.row_table`'s under its serve-time domain, chunks whose x rows are its rows (the same strings) read by
 offset, a ScaledMmS8Coordinate replay from the table that reproduces every output, the step roots serving computes at its step
 boundary equal to the window's (each the step's subtree of the window's table, which is the tree over them), the verifier's
 registration and cross-check through the step roots, step openings that verify and tampered rows that don't, and the bytes the
@@ -16,13 +16,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops import gemm as OG
-from verity.ml.commitments import row_table as RT
-from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R
+from verity.circuits import evaluation as E
+from verity.circuits.defs import bind
+from verity.definitions.ops import gemm as OG
+from verity.commitments import row_table as RT
+from verity.spot.verifier.one_stage import draw as D, registered as REG, registration as R
 from verity_vllm.commit import index as IX, row_tables as RTB
-from verity.ml.windows import rows as CS, tables as TB
+from verity.windows import rows as CS, tables as TB
 from verity_vllm.pipeline import serving_rows as SRW
 
 DOT = '{"fn":"BlackwellS8ImmaDot32_v1"}'
@@ -306,7 +306,7 @@ def test_the_audit_record_carries_each_drawn_chunks_reads_beside_the_roots_lean_
 def test_a_chunk_spanning_two_row_tables_is_refused_on_the_verifier_side(monkeypatch, tmp_path):
     """The chunker cuts at table boundaries, and a prover that builds its own chunks can't bring the old form back: the verifier's
     reads file names one root, and no row of another table opens it at any position through any of its paths (Lean's
-    `Registered.opens`, through its Python twin `registered.verify_read`; `verity/ml/flock/tests/test_lean_registered_reads.py`
+    `Registered.opens`, through its Python twin `registered.verify_read`; `verity/flock/prover/tests/test_lean_registered_reads.py`
     runs the executable verifier on such a table). `registered_reads` writes no file for a member linking two tables, whatever
     built it."""
     c, _s, got = committed(monkeypatch)

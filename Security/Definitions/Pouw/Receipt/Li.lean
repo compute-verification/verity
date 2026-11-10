@@ -8,7 +8,7 @@ import Mathlib.Tactic.SetLike
 # li, a receipt fold (trusted)
 
 li absorbs a word pair `(d₀, d₁)` into a chain's state `y`, one `n`-bit word, with an XOR key `k` and a multiplier `a`
-(`benchmarks/pouw/receipts/receipt_folds.py`, `li_step`, at `n = 32`):
+(`verity/protocols/pouw/receipts/receipt_folds.py`, `li_step`, at `n = 32`):
 
     y ← (y ⊕ d₀ ⊕ k)·a + d₁
 

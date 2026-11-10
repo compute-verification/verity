@@ -20,9 +20,9 @@ from verity_vllm.program.predict.scan_state import SCAN_STATE
 from verity_vllm.program.predict.window_builder import WEIGHTS
 from verity_vllm.program.predict.window_circuit import WindowClass, class_circuit
 
-from verity.ml.circuits import partition_v2 as PV2
-from verity.ml.commitments import advice as AC
-from verity.ml.windows import interface as IF
+from verity.circuits import partition_v2 as PV2
+from verity.commitments import advice as AC
+from verity.windows import interface as IF
 
 INT8_H200 = {**H200, "int8_exact": "linears"}
 #: the Program digest the header names, as the record gives it (`inference_blocks.program_digest`, about a minute at TINY)

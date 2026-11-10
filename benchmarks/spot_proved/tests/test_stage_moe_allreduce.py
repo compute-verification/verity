@@ -121,7 +121,7 @@ def _allreduce_cap(rows_of: list[int], multimem: bool = False, W: int = 8, Hd: i
 
 def test_a_plain_allreduce_without_multimem_is_mnnvl_within_half_a_mib_and_nccl_past_it(monkeypatch) -> None:
     stage = _stage(monkeypatch)
-    from verity.ml.definitions.registry import tp_allreduce as AR
+    from verity.definitions.registry import tp_allreduce as AR
     cap = _allreduce_cap([1, 32, 43])
     assert [stage.allreduce_route(cap, cap.events[0][i]) for i in range(3)] == ["fi_ar_comm", "fi_ar_comm", "pynccl_comm"]
     assert 42 * 6144 * 2 <= AR.FI_MAX_BYTES < 43 * 6144 * 2
@@ -140,7 +140,7 @@ def test_a_plain_allreduce_without_multimem_is_mnnvl_within_half_a_mib_and_nccl_
 
 def test_a_multimem_call_binds_the_nodes_tree_and_the_registrys_only_without_one(monkeypatch) -> None:
     stage = _stage(monkeypatch)
-    from verity.ml.definitions.registry import tp_allreduce as AR
+    from verity.definitions.registry import tp_allreduce as AR
     node = stage.parse_tree("(((((((0,2),3),1),5),6),4),7)", 8)
     assert node == AR.chain(8, (0, 2, 3, 1, 5, 6, 4, 7)) != AR.multimem_tree(AR.GLM53_H200_TREE, 8)
     cap = _allreduce_cap([1], multimem=True)
