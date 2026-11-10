@@ -2528,12 +2528,12 @@ requires-dist = [
 [[package]]
 name = "verity-pouw-check-difftest"
 version = "0.0.0"
-source = { virtual = "verity/core/protocols/pouw/lean/check" }
+source = { virtual = "verity/protocols/pouw/verifier/lean/check" }
 
 [[package]]
 name = "verity-pouw-window-difftest"
 version = "0.0.0"
-source = { virtual = "verity/core/protocols/pouw/lean/window" }
+source = { virtual = "verity/protocols/pouw/verifier/lean/window" }
 
 [[package]]
 name = "verity-proof-throughput"

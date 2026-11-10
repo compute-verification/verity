@@ -2227,6 +2227,14 @@
         "verity/core/service/vstar/tests/recursive_data.json": "verity/spot/verifier/recursive/tests/recursive_data.json",
         "verity/core/service/vstar/tests/test_vstar_recursive.py": "verity/spot/verifier/recursive/tests/test_vstar_recursive.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/clear/": "verity/protocols/pouw/clear/",
+        "benchmarks/pouw/receipts/": "verity/protocols/pouw/receipts/",
+        "verity/core/protocols/pouw/": "verity/protocols/pouw/verifier/",
+        "verity/ml/protocols/pouw/": "verity/protocols/pouw/prover/"
+      }
     }
   ]
 }

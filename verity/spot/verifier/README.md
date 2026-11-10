@@ -373,7 +373,7 @@ A program's weights, constants and tables are values: committed once, under hidi
 - **Supplied values.** These are values the verifier fills itself, from the record's roots, positions after the log's,
   its run's seed salt (bound to its stream and prover) and its own bytes. They are committed under public salts, and R7
   recomputes their root (`R7-supplied`). PoUW's seed inputs are such values
-  (`verity/core/protocols/pouw/tests/test_pouw_supplied_inputs.py`).
+  (`verity/protocols/pouw/verifier/tests/test_pouw_supplied_inputs.py`).
 - **Reads.** The verifier derives every proof block's reads from its own program (`reads`). Flock's Lean verifier
   checks each registered port's rows, paths and positions against the `--registered` file the verifier writes
   (`reads_file`; `Flock.Registered`, `Flock.TemplateQuery`).

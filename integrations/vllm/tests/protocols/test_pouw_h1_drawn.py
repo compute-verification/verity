@@ -22,11 +22,11 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw import leaf_lanes as LL
-from verity.ml.protocols.pouw.circuit import h1tile as HT
-from verity.ml.protocols.pouw.circuit import h1window as HW
-from verity.ml.protocols.pouw.circuit import h1zy as Z
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.pouw.verifier import leaf_lanes as LL
+from verity.protocols.pouw.prover.circuit import h1tile as HT
+from verity.protocols.pouw.prover.circuit import h1window as HW
+from verity.protocols.pouw.prover.circuit import h1zy as Z
 from verity.spot.verifier.one_stage import proofs as PF
 from verity_vllm.pipeline import commit_coins as CC
 from verity_vllm.pipeline import serve_h1 as SH

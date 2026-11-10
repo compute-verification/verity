@@ -126,18 +126,18 @@ from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW
 from verity.circuits.codec import canonical_json
 from verity.ml.randomness import Key, derive
 from verity.core.protocols.certifier.active import RUN_ID_BYTES
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw import verifier as PV
-from verity.core.protocols.pouw import window as Wd
-from verity.ml.protocols.pouw.circuit import leaves as L
-from verity.ml.protocols.pouw.circuit import pc8
-from verity.core.protocols.pouw.coins import Challenger as Coins
-from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening, coin_reason
-from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Shape
-from verity.ml.protocols.pouw.schemes import pearl_c as C
-from verity.ml.protocols.pouw.schemes import pearl_kw as P
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.pouw.verifier import salt as PS
+from verity.protocols.pouw.verifier import verifier as PV
+from verity.protocols.pouw.verifier import window as Wd
+from verity.protocols.pouw.prover.circuit import leaves as L
+from verity.protocols.pouw.prover.circuit import pc8
+from verity.protocols.pouw.verifier.coins import Challenger as Coins
+from verity.protocols.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
+from verity.protocols.pouw.verifier.protocol import Context, DomainError, Matmul, Shape
+from verity.protocols.pouw.prover.schemes import pearl_c as C
+from verity.protocols.pouw.prover.schemes import pearl_kw as P
 from verity.spot.device import challenger as Ch
 from verity.spot.verifier import service as S
 from verity.spot.verifier.one_stage import draw as D

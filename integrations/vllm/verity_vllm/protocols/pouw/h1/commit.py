@@ -45,8 +45,8 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Iterator, Mapping, Sequence
 
 import numpy as np
-from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw import weights as Wt
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.pouw.verifier import weights as Wt
 from verity.spot.verifier.one_stage import registered as G, registration as REG
 from verity.circuits.codec import canonical_json
 from verity_vllm.commit import step_rows

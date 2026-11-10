@@ -2883,7 +2883,7 @@ class Queue:
 #: what every target's entry reads or the registries import (an entry can read tens of files of vLLM's `program/` and these
 #: packages, so a change only to `verity_vllm/pipeline/` and `config.py` reruns hundreds of targets)
 _COLD_PREFIXES = ("verity/circuits/", "tools/verity/circuit_check/", "integrations/vllm/verity_vllm/",
-                  "verity/core/protocols/pouw/", "verity/core/protocols/pous/", "verity/flock/prover/python/",
+                  "verity/protocols/pouw/verifier/", "verity/core/protocols/pous/", "verity/flock/prover/python/",
                   "verity/ml/commitments/", "verity/definitions/private_circuits/", "benchmarks/numerical/python/")
 
 

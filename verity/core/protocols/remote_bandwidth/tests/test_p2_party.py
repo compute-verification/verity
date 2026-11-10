@@ -15,7 +15,7 @@ import pytest
 
 from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.schemes.p2 import P2Params
-from verity.core.protocols.pouw import core_check
+from verity.protocols.pouw.verifier import core_check
 from verity.core.protocols.remote_bandwidth import coins, p2, p2_party, receipts
 
 FIXTURES = Path(__file__).parent / "fixtures"

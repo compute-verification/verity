@@ -187,7 +187,7 @@ session and every tree a session's, so no statement's coins are flipped twice.  
 order: the sample, then the link, then the other rounds.  The tree's root and key leave at ``Hello``, as
 Flock's live-coin part releases them, so its unopened coins rest on the tree's hm96 hiding.
 
-The first client is PoUW's live window (`verity.core.protocols.pouw.window`, "Live windows"): its salt, its sample and
+The first client is PoUW's live window (`verity.protocols.pouw.verifier.window`, "Live windows"): its salt, its sample and
 its round coins, round r's opened after round r's root.  The module reads only the standard library,
 `verity.ml.commitments`, `verity.core.claims` and `verity.core.protocols.record`, so any client calls it as it is.
 """

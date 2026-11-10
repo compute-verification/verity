@@ -25,15 +25,15 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.core.protocols.pouw import core_check as CC  # noqa: E402
-from verity.core.protocols.pouw import credit as CR  # noqa: E402
-from verity.core.protocols.pouw import salt as PS  # noqa: E402
-from verity.core.protocols.pouw import weights as Wt  # noqa: E402
-from verity.core.protocols.pouw.audit import hm96_salt  # noqa: E402
-from verity.ml.protocols.pouw.circuit import h1tile as HT  # noqa: E402
-from verity.ml.protocols.pouw.circuit import h1window as HW  # noqa: E402
-from verity.ml.protocols.pouw.circuit import h1zy as Z  # noqa: E402
-from verity.ml.protocols.pouw.circuit import seeds as SD  # noqa: E402
+from verity.protocols.pouw.verifier import core_check as CC  # noqa: E402
+from verity.protocols.pouw.verifier import credit as CR  # noqa: E402
+from verity.protocols.pouw.verifier import salt as PS  # noqa: E402
+from verity.protocols.pouw.verifier import weights as Wt  # noqa: E402
+from verity.protocols.pouw.verifier.audit import hm96_salt  # noqa: E402
+from verity.protocols.pouw.prover.circuit import h1tile as HT  # noqa: E402
+from verity.protocols.pouw.prover.circuit import h1window as HW  # noqa: E402
+from verity.protocols.pouw.prover.circuit import h1zy as Z  # noqa: E402
+from verity.protocols.pouw.prover.circuit import seeds as SD  # noqa: E402
 from verity.spot.verifier.one_stage import partition as P, registered as G  # noqa: E402
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind  # noqa: E402
 from verity.circuits.ports import In, Out, Ports  # noqa: E402

@@ -28,7 +28,7 @@ from verity_vllm.program.predict import window_weights as WW
 from verity.ml.protocols.certifier import ingress_scan as IS
 from verity.core.protocols.certifier import warden as W
 from verity.core.protocols.certifier.active import id_request
-from verity.core.protocols.pouw.audit import hm96_salt
+from verity.protocols.pouw.verifier.audit import hm96_salt
 from verity.spot.verifier.one_stage import registered as CR
 from verity.spot.verifier.one_stage import registration as REG
 from verity.circuits.codec import descriptor_id

@@ -8,7 +8,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.core.protocols.pouw.audit import hm96_salt
+from verity.protocols.pouw.verifier.audit import hm96_salt
 from verity.spot.verifier.one_stage import registered as G
 from verity_vllm.protocols.pouw.h1 import registered as NR
 

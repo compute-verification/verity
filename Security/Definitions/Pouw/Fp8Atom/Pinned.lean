@@ -14,7 +14,7 @@ The bit-exact `HOPPER_E4M3_K32` step and its basic facts.
 * **`Conformance`**: on each of 631 vectors, `hopperStep` writes the word
   `verity.ml.tc.total_fp8.tc_dot_total_e4m3(HOPPER_E4M3_K32, …)` computes. They are the 49 chained steps of the
   repository's `fp8-hopper-wgmma-k32`/`-k1536` model replays, and the union of two greedy branch covers of the
-  10,549 steps of `verity/core/protocols/pouw/lean/scripts/fp8atom_vectors.py` (`fp8atom_cover.json` beside it), 582 vectors with 15 in common:
+  10,549 steps of `verity/protocols/pouw/verifier/lean/scripts/fp8atom_vectors.py` (`fp8atom_cover.json` beside it), 582 vectors with 15 in common:
   * 450 adversarial vectors, which hit each of its 24 branch outcomes at least 50 times;
   * 147 more, which reach every branch feature the 10,549 reach (739).
   The 10,549 and R1's 166,000 differential steps run in the Lean audit as a compiled test (`Proofs.Pouw.Bulk`, under `runs`), which is
@@ -34,7 +34,7 @@ The FP32 add of the running words, `rnAdd` (`Pouw.Fp8Atom.Fp32`):
 
 * **`AddConformance`**: on each of 1,090 add vectors, the three words are finite and `rnAdd` maps the values of the
   operand words to the value of the word IEEE binary32 addition writes (numpy on the CPU, cross-checked against an
-  exact rounding in the generator). They are a greedy cover of the 5,000 of `verity/core/protocols/pouw/lean/scripts/fp8atom_vectors.py` (random,
+  exact rounding in the generator). They are a greedy cover of the 5,000 of `verity/protocols/pouw/verifier/lean/scripts/fp8atom_vectors.py` (random,
   close exponents, cancellation, ties, absorption, `±0 + x`, subnormal operands, near the top of the range, binade
   boundaries). It hits each of 42 branch features of `rnAdd` at least 75 times, or every time it occurs if fewer. Every
   vector's exact sum is zero or normal. The 5,000 run in that compiled test.

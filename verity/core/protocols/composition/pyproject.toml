@@ -44,7 +44,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__
           "verity/core/difftest", "verity/core/protocols/__init__.py", "verity/spot/verifier/profile.py",
           "verity/core/protocols/registration.py", "verity/core/site", "verity/core/wire",
           "verity/core/protocols/onsite", "verity/core/protocols/remote", "verity/flock/verifier/interface",
-          "verity/core/protocols/pouw", "verity/core/protocols/spot",
+          "verity/protocols/pouw/verifier", "verity/core/protocols/spot",
           "verity/core/protocols/network", "verity/core/protocols/certifier",
           "verity/core/protocols/pous", "verity/core/protocols/remote_bandwidth",
           "verity/core/devices/memory_challenger/lean", "verity/core/attest/lean",

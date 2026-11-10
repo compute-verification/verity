@@ -1,5 +1,5 @@
 """HIGHUTIL: an 8B model's linear layers at full batch on one GPU, each call credited through Dither's no-fold receipt
-(v31.py's ``Fill``, under verity/core/protocols/pouw/dither/PROTOCOL.md v3.2's commit phase) on accel_v31's prover,
+(v31.py's ``Fill``, under verity/protocols/pouw/verifier/dither/PROTOCOL.md v3.2's commit phase) on accel_v31's prover,
 with live coins: the declared utilization the periods establish (the credited MACs a second over the tensor pipe's MAC
 rate at the card's ceiling, their MFU) and the prover overhead γ against plain GEMMs on the same linears.
 

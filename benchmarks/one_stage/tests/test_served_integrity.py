@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.pouw import core_check as CC
+from verity.protocols.pouw.verifier import core_check as CC
 from verity.spot.verifier.one_stage import registration as R
 
 HERE = Path(__file__).resolve().parent

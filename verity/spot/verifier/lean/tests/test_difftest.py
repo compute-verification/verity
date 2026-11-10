@@ -57,8 +57,8 @@ from hypothesis import strategies as st
 import settings
 import verity_difftest as D
 from verity_difftest import protocol as PR
-from verity.core.protocols.pouw import audit as PA
-from verity.core.protocols.pouw.protocol import tagged
+from verity.protocols.pouw.verifier import audit as PA
+from verity.protocols.pouw.verifier.protocol import tagged
 from verity.spot.verifier.profile import Bernoulli, Stratified, Stratum
 from verity.spot.device import challenger as CH
 from verity.spot.verifier import second_stage as SS, service

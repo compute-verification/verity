@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 import slots as S
-from verity.core.protocols.pouw.audit import hm96_salt
+from verity.protocols.pouw.verifier.audit import hm96_salt
 from verity.ml.commitments import hm96
 from verity.ml.commitments import layout as L
 from verity.ml.commitments.merkle import tree_levels

@@ -41,12 +41,12 @@ build() {  # DIR TARGET
 }
 build verity/core/protocols/remote remote || exit 3
 build verity/core/protocols/onsite onsite || exit 3
-build verity/core/protocols/pouw/lean/check pouw-check || exit 3
-build verity/core/protocols/pouw/lean/check pouw-period || exit 3
+build verity/protocols/pouw/verifier/lean/check pouw-check || exit 3
+build verity/protocols/pouw/verifier/lean/check pouw-period || exit 3
 build verity/spot/verifier/lean sampled-proofs-one-stage-zk || exit 3
 B=.lake/build/bin
 REMOTE=$TREE/verity/core/protocols/remote/$B/remote ONSITE=$TREE/verity/core/protocols/onsite/$B/onsite
-POUW=$TREE/verity/core/protocols/pouw/lean/check/$B/pouw-check PERIOD=$TREE/verity/core/protocols/pouw/lean/check/$B/pouw-period
+POUW=$TREE/verity/protocols/pouw/verifier/lean/check/$B/pouw-check PERIOD=$TREE/verity/protocols/pouw/verifier/lean/check/$B/pouw-period
 V2=$TREE/verity/spot/verifier/lean/$B/sampled-proofs-one-stage-zk
 P=$W/cases
 log() { "$@" 2>&1 | tee -a "$OUT/kept_composite.txt"; return "${PIPESTATUS[0]}"; }

@@ -22,7 +22,7 @@ import pytest
 
 from verity.circuits.codec import canonical_json, encode_program
 from verity_flock import circuit as FC
-from verity.core.protocols.pouw import audit as PA
+from verity.protocols.pouw.verifier import audit as PA
 from verity.spot.verifier.one_stage import partition as P, registered as G
 
 from test_lean_registered_reads import BIN, LEAN, OUT_VALUE, POSITIONS, STATEMENT, TABLE_ROWS, VALUE, _program

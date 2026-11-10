@@ -42,7 +42,7 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   default, A at most 2^25) binds the registered store to a pinned model (`verifier.py --model`,
   `remote_bandwidth.store.Binding`), which `auditor_line.py`'s `bound` check needs. The lane names the role and the store's shape, never a path: the gate
   adds `--checkpoint <models>/<ROLE>`, the host's directory of the role's checkpoint, and `--pin` core's pin in the
-  pinned tree (`verity/core/protocols/pouw/lean/check/models.json`, `MODEL_PINS`), which the gate's own `--pin` (the
+  pinned tree (`verity/protocols/pouw/verifier/lean/check/models.json`, `MODEL_PINS`), which the gate's own `--pin` (the
   challenger's key, verifier.py's `--challenger-pin`) is not. It refuses the run, before writing or starting anything,
   when the role has no directory there or the pinned tree has no `models.json`; verifier.py then holds every file the
   role's entry pins to its SHA-512 before it listens, and refuses a role the pin lacks. `<models>` is `verifier.json`'s
@@ -137,7 +137,7 @@ STORE = {"--engines": (1, 8), "--arena-blocks": (1, 1 << 25)}
 """A bound run's store: its arenas, one a GPU of the node's 8, and each arena's 4 KiB blocks, at most 128 GiB (an RTX
 PRO 6000 has 96 GB of HBM)."""
 STORE_INT = re.compile(r"[1-9][0-9]{0,7}")
-MODEL_PINS = Path("verity/core/protocols/pouw/lean/check/models.json")
+MODEL_PINS = Path("verity/protocols/pouw/verifier/lean/check/models.json")
 """Core's pin of each model role, in the pinned tree: a bound run's `verifier.py --pin`."""
 PARTIES = {"wipe_party": ("wipe", "verity.core.protocols.pous.wipe_party", 47611),
            "challenger_party": ("pous", "verity.core.devices.memory_challenger.challenger_party", 47610),

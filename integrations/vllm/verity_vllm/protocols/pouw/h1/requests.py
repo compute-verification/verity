@@ -58,11 +58,11 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 import numpy as np
-from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.audit import HM96, HM96_KEY, HM96_SALT, ROW_SCHEMA, rows_domain
-from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw.credit import CREDIT, draw_root
-from verity.core.protocols.pouw.protocol import tagged
+from verity.protocols.pouw.verifier import window as Wd
+from verity.protocols.pouw.verifier.audit import HM96, HM96_KEY, HM96_SALT, ROW_SCHEMA, rows_domain
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.pouw.verifier.credit import CREDIT, draw_root
+from verity.protocols.pouw.verifier.protocol import tagged
 from verity.spot.device.challenger import CoinError, LiveCommitment, LiveOpening, live_reason
 from verity.ml.commitments import Commitment, Opening, VerificationLimits, hm96, verify_opening
 from verity.ml.commitments.hm96 import batch
