@@ -1959,7 +1959,7 @@ class Queue:
             if self.mapped_jobs:
                 self._mapped_wanted.setdefault(at, (old, onto, moves))
                 return None
-            with tempfile.TemporaryDirectory(prefix="research-mapped-") as d:
+            with scratch() as d:
                 self._mapped_done(at, *self._mapped_one(old, onto, moves, self._restack_at(Path(d))))
         self._mapped[key] = self._kept_mapped().get(at)
         return self._mapped[key]
@@ -1972,7 +1972,7 @@ class Queue:
             return 0
         wanted, self._mapped_wanted = iter(list(self._mapped_wanted.items())), {}
         start, done, jobs = time.monotonic(), 0, max(1, self.mapped_jobs)
-        with tempfile.TemporaryDirectory(prefix="research-mapped-") as d, concurrent.futures.ThreadPoolExecutor(jobs) as pool:
+        with scratch() as d, concurrent.futures.ThreadPoolExecutor(jobs) as pool:
             restack, running = self._restack_at(Path(d)), {}
             while True:
                 while len(running) < jobs and (budget is None or time.monotonic() - start < budget) \
@@ -3930,30 +3930,41 @@ def own_change(repo: Path, base: str, head: str) -> str | None:
 MOVE_LINE_RE = re.compile(r"^(?:Move|Layout-move): tools/move/[\w.-]+\.toml(?: --no-lock)?$", re.M)
 #: `mapped_tree`'s program: with `tools/move/restack.py` from the directory argv[1], runs the move argv[3] on commit argv[2] as a
 #: restack runs one on a branch (`run_script`: its move line's script and arguments, its parent's `tools/move/`, in a scratch
-#: worktree), and prints the tree it leaves
+#: worktree), and prints the tree it leaves (`MAPPED_RE`)
 _MAPPED = ("import sys; sys.path.insert(0, sys.argv[1]); import restack as R\n"
            "R.SCRIPT, R.SCRIPT_ARGS = R.move_line(sys.argv[3], None)\n"
-           "print(R.run_script(sys.argv[2], R.move_base(sys.argv[3], None), sys.executable, None)[0])\n")
+           "print('mapped', R.run_script(sys.argv[2], R.move_base(sys.argv[3], None), sys.executable, None)[0])\n")
+MAPPED_RE = re.compile(r"^mapped ([0-9a-f]{40,64})$", re.M)
 #: how long one move's script runs at most on one head (`mapped_tree`): a layout map on the whole tree, `uv lock` with it
 MAPPED_TIMEOUT_S = 1800.0
+
+
+def scratch() -> tempfile.TemporaryDirectory:
+    """A temporary directory of this process's under `MERGED_ROOT` (else the temporary directory), named as `merged_worktree`
+    names its own (`MERGED_PREFIX`), so that one a killed process left is swept."""
+    root = Path(MERGED_ROOT or tempfile.gettempdir())
+    root.mkdir(parents=True, exist_ok=True)
+    return tempfile.TemporaryDirectory(prefix=f"{MERGED_PREFIX}{os.getpid()}-", dir=root, ignore_cleanup_errors=True)
 
 
 def mapped_tree(repo: Path, commit: str, move: str, restack: Path,
                 timeout: float = MAPPED_TIMEOUT_S) -> tuple[str | None, str]:
     """(the tree ``commit`` becomes once the move ``move`` runs on it as `tools/move/restack.py`, from the directory ``restack``,
-    runs it on a branch (`_MAPPED`), ''), or (None, why it couldn't).  The scratch worktree goes under `MERGED_ROOT` when set,
-    else the temporary directory."""
-    env = _script_env()
-    if MERGED_ROOT:
-        Path(MERGED_ROOT).mkdir(parents=True, exist_ok=True)
-        env["TMPDIR"] = str(MERGED_ROOT)
-    try:
-        r = subprocess.run([sys.executable, "-c", _MAPPED, str(restack), commit, move], cwd=repo, capture_output=True,
-                           text=True, env=env, stdin=subprocess.DEVNULL, timeout=timeout)
-    except subprocess.TimeoutExpired:
+    runs it on a branch (`_MAPPED`), ''), or (None, why it couldn't).  It runs in a process group of its own, killed whole once
+    ``timeout`` seconds pass (`run_group`), with its scratch worktree in a `scratch` directory, which goes once it has run, and
+    with it the clone's record of a worktree a killed run left, forgotten under restack.py's lock (`WORKTREES_LOCK`)."""
+    with scratch() as d:
+        rc, out = run_group([sys.executable, "-c", _MAPPED, str(restack), commit, move], repo, timeout,
+                            env={**_script_env(), "TMPDIR": d})
+        left = any(Path(d).iterdir())
+    if left:
+        with open(Path(repo, _out(repo, "rev-parse", "--git-common-dir")) / WORKTREES_LOCK, "a") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            _git(repo, "worktree", "prune", check=False)
+    if rc is None:
         return None, f"ran over {timeout:.0f} s"
-    got = r.stdout.split()
-    return (got[-1], "") if r.returncode == 0 and got else (None, f"exit {r.returncode}: {_tail(r, 3)}")
+    got = MAPPED_RE.findall(out)
+    return (got[-1], "") if rc == 0 and got else (None, f"exit {rc}: {' | '.join(out.strip().splitlines()[-3:])}")
 
 
 def _own_onto(repo: Path, onto: str, commit: str) -> str | None:
@@ -4396,11 +4407,11 @@ class LeanTimedOut(str):
 LEAN_UNBUILT_FIX = "mark again once {on} builds them in its `build` Lean slots (`research status` there says why not)"
 
 
-def run_group(argv: list[str], cwd: Path, left: float) -> tuple[int | None, str]:
+def run_group(argv: list[str], cwd: Path, left: float, env: dict[str, str] | None = None) -> tuple[int | None, str]:
     """``argv``'s exit status and output (stderr after stdout), in a process group of its own that is killed whole once ``left``
     seconds pass (a `lake build` it started included, which would otherwise go on in a slot's tree), and then None."""
     p = subprocess.Popen(argv, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, errors="replace",
-                         stdin=subprocess.DEVNULL, start_new_session=True)
+                         stdin=subprocess.DEVNULL, start_new_session=True, env=env)
     try:
         out, err = p.communicate(timeout=max(left, 0))
         return p.returncode, out + err

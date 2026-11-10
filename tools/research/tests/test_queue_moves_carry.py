@@ -217,6 +217,27 @@ def test_an_old_head_that_doesnt_merge_with_the_moves_base_or_whose_script_fails
     assert world.logs[-1].endswith(f"the move {move[:12]}'s script fails on it: exit 1: the script fails")
 
 
+def test_a_moves_script_runs_in_a_directory_of_its_own_under_merged_root_and_one_killed_there_leaves_no_worktree(world,
+                                                                                                                 monkeypatch):
+    """The script's temporary directory is one of this process's under `MERGED_ROOT` (the loop's --merged-root), as
+    `merged_worktree` names its own, so a killed loop's is swept; a run killed at its time (`run_group` gives None) leaves a
+    worktree half made there, which goes, with the clone's record of it, and the head maps to nothing, saying why."""
+    q, scratch = _queue(world), world.tmp / "scratch"
+    head = _git(q.workdir, "rev-parse", q.base)
+    monkeypatch.setattr(Q, "_MAPPED", "import os, sys; sys.exit(os.environ['TMPDIR'])")
+    tree, why = Q.mapped_tree(q.workdir, head, head, Path("unused"))
+    assert tree is None and why.startswith(f"exit 1: {scratch}/{Q.MERGED_PREFIX}{os.getpid()}-")
+
+    def killed(argv, cwd, left, env=None):
+        _git(cwd, "worktree", "add", "-q", "--detach", str(Path(env["TMPDIR"], "restack-x", "tree")), head)
+        return None, ""
+
+    monkeypatch.setattr(Q, "run_group", killed)
+    assert Q.mapped_tree(q.workdir, head, head, Path("unused")) == (None, f"ran over {Q.MAPPED_TIMEOUT_S:.0f} s")
+    assert not any(scratch.iterdir())
+    assert _git(q.workdir, "worktree", "list", "--porcelain").count("worktree ") == 1
+
+
 def test_a_head_based_after_the_moves_base_maps_to_none_as_restack_refuses_it(world):
     """A PR based on a commit `main` took after the move's base, before the move landed, is one `restack.py` refuses
     (`based-after`: its merge of the move's base would bring that commit in a second time), and its owner merges `main`
