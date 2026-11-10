@@ -32563,3 +32563,50 @@ So the figures that move with the merge are three: `h200.py --card h200`'s plan,
 **Runs I launched:** `r20261110-193050-f867` (failed, above), `r20261110-194316-a3c6` (failed, above), `r20261110-201826-e7a8` (cancelled by me at 20:21Z after 3 minutes waiting for a slot, before its check started: the base had moved), `r20261110-202210-474a` (running).
 
 Next entry when `474a` ends, by 21:25Z at the latest.
+
+## FLOCKPKG, Tue 10 Nov 20:30Z: PRF-514 stop: the cut cannot build `Security/Proofs` without nine one-line edits there (`open private … from Flock.X`), yours to rule; (C)'s run `r20261110-193544-e98d` rc 1 for that and one orphan forwarder; Flock's 11 records and the network lock's 4 are unchanged
+
+**The stop.** `r20261110-193544-e98d` (`lean_changed.py --records verity/core/primitives/base --update --moved`, at `6a9a48957f`, I ran it, vy-nebius-cpu-3, 19:36Z to 20:13Z) ended rc 1. `Security/Proofs` does not build: five modules fail, each on a line `open private NAME from Flock.MODULE` whose module moved (`'Flock.hex4' not found in the provided declarations`, its `audit-Proofs/build.log`). A private declaration's name carries its module (`_private.Base.Canon.0.Flock.hex4`), and `open private … from M` looks only in `M`; the forwarder left at the old name declares nothing. The whole tree has nine such lines, all under `Security/Proofs` (`git grep -nE 'open private .* from Flock\.(…the 18 moved names…)$'`, I ran it), so four more files fail once the five are past:
+
+| file under `Security/Proofs/` | line | names | from, today | from, after the cut |
+| --- | --- | --- | --- | --- |
+| `Flock/Claims/Complete/Json/Canon.lean` | 69 | `hex4` | `Flock.Canon` | `Base.Canon` |
+| `Flock/Claims/Complete/Json/RoundTrip.lean` | 72 | `Flock.hex4` | `Flock.Canon` | `Base.Canon` |
+| `Properties/Composition.lean` | 25 | `hex4` | `Flock.Canon` | `Base.Canon` |
+| `Properties/Pouw/LiveSalt/Canon.lean` | 26 | `hex4` | `Flock.Canon` | `Base.Canon` |
+| `Flock/Claims/Complete/Json/Stmt.lean` | 84 | `stratumOfJson` | `Flock.Draw` | `Commitments.Draw` |
+| `Flock/Claims/Complete/ZkTables/StmtOne.lean` | 82 | `stratumOfJson` | `Flock.Draw` | `Commitments.Draw` |
+| `Flock/Soundness/Discharge/ZkLink/DrawOkJson.lean` | 49 | `stratumOfJson` | `Flock.Draw` | `Commitments.Draw` |
+| `Flock/Soundness/ExecStrataOf.lean` | 304 | `stratumOfJson` | `Flock.Draw` | `Commitments.Draw` |
+| `Properties/Nci/BodiesOk/Node.lean` | 38 | `buildNode` | `Flock.Program` | `Circuits.Program` |
+
+The same nine lines are at the same places on lean's base `cursor/lean-remote-merge-fc8d` (`b5718e205aad`, the same grep on it, I ran it). No import line changes; the 244 import lines stay behind the forwarders as agreed.
+
+**No pure-move way around it that I can find.** Keeping the module names needs the root `Flock` in two packages, which Lake refuses (my 18:36Z entry). Dropping `private` from `hex4`, `stratumOfJson` and `buildNode` changes three of the verifier's definitions, which a pure move may not, and the nine lines would then fail anyway (`open private` of a public name). Keeping `Canon`, `Draw` and `Program` in Flock's package undoes the cut: the seven reach all three.
+
+**Your ruling, one of:**
+1. I make the nine edits on my branch: one token each, the module after `from`, nothing else in any `.lean` under `Security/`. They are a line of the move script's table (three module names).
+2. lean's worker makes them where it already edits; my branch then cannot build `Security/Proofs`, or record `Security`'s three locks, until they are on it.
+3. They wait for the merge of `main` with lean's merged Lean that you said precedes any mark, and I make them in that merge.
+
+Until you say, my branch has none of them.
+
+**What I ran meanwhile, pushed nowhere.** A detached worktree with exactly those nine lines on top of the branch (`b11a984a60`, local only) and the same records command: `r20261110-202142-0ca8` (vy-nebius-cpu-1, launched 20:21Z, cap 240 min). It says whether, with them, `Security`'s three packages build and every record moves. Two more beside it, by your 20:20Z entry, each the nine lines plus one lock policy, local only: (A) `r20261110-202606-0041` (`6027179bd4`: `layers` in `core_circuits` and `core_commitments` with lean's narrow lists, `Circuits` and `Commitments` out of `reads_exempt` in `Security` and `Security/Properties`, `Base` staying exempt in the four locks) and (B) `r20261110-202747-b023` (`fb99df62f5`: (A), `layers` in `core_base`, `Base` out of `reads_exempt` in the four locks, the network lock's `meaning` += `Base`). (B)'s four-record diff comes from `b023`. I checked lean's narrow lists against today's import lines (`rg` over the three packages, I ran it): they hold.
+
+**(C)'s verdict, package by package** (`e98d`'s `stdout.log` and `OUTCOME` line, read):
+
+| package | verdict | what |
+| --- | --- | --- |
+| `verity/core/primitives/base` | PASS, 24 s | record regenerated: it gains `dependencies` (the toolchain's digest). Committed, `f2cad582ff` |
+| `verity/core/service/flock` | FAIL, 198 s | one failure: `orphan: Flock/Steps.lean`, the forwarder for `Steps`, which nothing imports by its old name since its three importers moved with it. Deleted (`0e02b488b8`): 16 forwarders, 17 moved names in `MOVES.json`. The lock `--update --moved` wrote was not kept because of the failure; I compared its `guarantees` with `main`'s (Python, `==` on the parsed section): **11 of 11 records equal**. Its `reads` change by module name, and `Flock.escU`'s digest changes because its body names the private `hex4`, whose name carries the module; the tool counts that as "1 lines say the same statements, printed differently, rehashed, moved or lifted" |
+| `verity/core/protocols/network/lean` | PASS, 38 s | outcome `pass`, nothing rewritten: its **4 records unchanged** with `Base` in place of `Flock` in `reads_exempt` |
+| `Security/Proofs` | FAIL | the build, above |
+| `Security`, `Security/Properties` | FAIL, 1128 s and 455 s | only `proved_in: Proofs's build did not pass`; their own builds passed |
+
+**On the branch since 20:08Z** (`cursor/proofs-flockpkg-1539`, tip `aa2d0a0628`, pushed 20:30Z):
+- `76716fc96c`: `tools/verity/lean/closure.py` (`dirs`, `key`, `copy` of a package with the packages its manifest gives by path; 4 tests) and 24 scripts (`git show --stat`, read). 16 call it directly (17 copies, 15 keys; `git grep`, I ran it); `a11.sh`, `form_refusals.sh` and `h1_lanes/job.sh` through `hidden_zk/job.sh`'s `lean_key` and `lean_copy`, which they source; `flock_served.sh`, `flock_rows.sh` and `h1_lanes/served.sh` build from `git archive REV verity/core/service/flock` and now take the base packages where REV has them; `prove_bundle.sh`'s stamp reads the primitives' tree too; `one_stage/pod.sh` is a comment. `bash -n` passes on each (I ran it); none of the jobs themselves ran. By owner directory: `verity/ml/flock/pod/` 10, `benchmarks/one_stage/` 4, `benchmarks/pouw/` 3, `benchmarks/recursion_e2e/` 2, `benchmarks/verifier_cost/` 2, `benchmarks/flock_s8_block/`, `benchmarks/private_circuit/`, `benchmarks/proof_throughput/` 1 each. It sits under `tools/verity/lean/`, where the Lean tool's suite covers it; there is no `tools/lean/`.
+- `0e02b488b8`, `f2cad582ff`: above. `aa2d0a0628` and the commit before it: the retired-terms allowlist's five entries follow their files, and a lakefile comment.
+
+**Runs on the tip, in flight:** `r20261110-202005-cd1d` (the 32 builds with `FlockZkServer` and `FlockRec`, and three copy-and-builds through the helper: `flock-verify`, `core-firewall`, and `flock-verify` as `hidden_zk/job.sh` leaves it), `r20261110-202059-dabe` (`check.py --build --update` on `core_circuits` and `core_commitments` for their `dependencies` records, then `check.py --build` on the eleven small packages), `r20261110-202245-f334` (`suites.py --changed e7b03e4a6c89 --quick`: 90 suites touched, listed locally), `r20261110-202700-4b44` (the small checks on (A)'s tree).
+
+**`main`** is still `5482988e3496`, 59 commits past my base, none under `verity/core/service/flock`, `verity/core/primitives`, `verity/core/difftest` or `verity/core/attest` (`git diff --stat`, I ran it).
