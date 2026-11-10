@@ -305,3 +305,38 @@ time, later. So nobody crosses today, and HASH-107 goes back to the backlog unti
 HASH-105 result stands as the rehearsal: a kernel built from a moved tree computes the same values, with other
 device code where an include path moves. The same job runs again on the endpoint Daniel signs, from `kmove-jobs/`.
 Do not delete or rewrite any hand-row file in the notes. Nothing is asked of you now.
+
+## Tue 10 Nov 23:16Z: the move is on again TONIGHT. HASH-108 is yours: prepare now, the H200 run after it lands
+
+Daniel signed the architecture at 21:01Z; top moves the files in one change, due on `main` at about 03:45Z Wed
+(TOP-398; `inbox/RULES.md`, "The queue, today", changed at 23:16Z). HASH-107 is back on, after this. Read HASH-108's
+brief first.
+
+**Part 1, now, no GPU; report on HASH-108 by 01:30Z.** On `cursor/top-layout-staged-e15c` (`50f940c4f285`; if top
+posts a later staged head on TOP-398, use that and say which):
+- the static scan of HASH-102's first part again: every load of a moved file from a kernel source, a build script
+  or a pin, and whether the mover wrote it right. Tonight's tree differs from this morning's where it matters to
+  us: Flock's GPU prover is at `verity/protocols/flock/prover/` (its patch script anchors at `parents[4]`, and
+  `cuda/sha512.cuh` includes `../../../../definitions/kernels/sha512.cuh`: the lead read both, built neither); the
+  headers stay at `verity/definitions/kernels/`; the adapter is `adapters/vllm/`; the old example is
+  `archive/examples/h200/`.
+- the ship builds on a CPU node from that tree (`p2_stage`, `attn_bf16`, `s8_linear`), and each cubin against this
+  morning's;
+- `kmove-jobs/` made ready for the new paths, so the H200 job starts the minute the commit is posted.
+- **Known, do not spend time proving again:** `units/build.sh` reads the archived demo's `replay.py`.
+  `benchmarks/hash/dither/h1v3_ref.py:24`: the mover turned the fallback `verity.core.protocols.pouw.circuit` into
+  `verity.protocols.pouw.verifier.circuit`, which no tree has, so the script fails under a pinned older tree
+  (`sbench.sh`'s `H1V3_SHA`, `J10R_SHA`). The lead put no hand row in for it (told top, TOP-398 23:08Z).
+- If you find a break that stops a build the check runs, say it on HASH-108 at once with the `[[line]]` row: top
+  closes the hand-written lines at 00:15Z, and a late one moves the whole move 90 minutes.
+
+**Part 2, when the lead writes here that the move is on `main`, with its commit.** Card 4, cores 12-23, Wed 04:00Z to
+07:30Z (the calendar's row; KSTEADY has card 4 until 04:00Z, so not before). Each kernel of HASH-105's table from
+that commit, its own check, the same table, on HASH-108 by 08:00Z. Off cores 12-23 by 07:30Z: vllm has cores 0-23
+from 08:00Z.
+
+**Part 3, after part 2 (HASH-107 and one small pull request), by Thu 12 Nov:**
+- `h1v3_ref.py`: a pull request on the moved `main` that tries the tree's own name, then the two older ones, with
+  the older names written so that no mover rewrites them and no import lint reads them as live imports; its suites
+  in one named run. The lead marks.
+- kernels' open heads across the move, as HASH-107 says, each only if it has not merged.

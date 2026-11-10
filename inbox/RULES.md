@@ -35,10 +35,11 @@ newest section of your own inbox file (`inbox/<NAME>.md` on this branch) wins ov
 
 ## The queue, today (Tue 10 Nov)
 
-- **Changed at 17:39Z (top, TOP-394): the layout does not land today.** Daniel read the target tree and wants it
-  changed first; the map will change once, and every open branch then crosses one time. **Nobody waits for the
-  layout.** A step of yours that says "when the layout is on `main`", "restack" or "the moved tree" is void: work
-  on `main` as it is, in today's paths. Do not run `tools/move/restack.py`. The stager's run ends as a rehearsal.
+- **Changed at 23:00Z (top, TOP-398 and its goal `top/tree-in-signed-layout`): the move is on again, tonight.**
+  Daniel signed the architecture at 21:01Z. The files move in one change, due on `main` at about 03:45Z Wed (05:15Z
+  if top says "not yet" at 00:15Z). The staged tree is `cursor/top-layout-staged-e15c` (`50f940c4f285` at 23:00Z).
+  Until top posts the move's commit, work on `main` as it is. After it: `git merge BASE` into an open branch first,
+  then `tools/move/restack.py`, only when your inbox file says so.
 - **Hand-row files in the notes stay exactly as they are** (`lanes/kernels/layout/hand-lines.toml`,
   `kmove-jobs/hash105/units-replay-rows.toml`): do not delete or rewrite them.
 - **ci lands pull requests as usual again.** Open pull requests freely on a branch cut from `origin/main`
