@@ -59,8 +59,9 @@ def rests_on(p: P.Policy, b: min_cut.Bound) -> str:
     if p.check["verdict"] == "accepted":
         blocks = f"{p.check['executable']}, which accepts the policy"
     elif p.label == "built":
-        blocks = ("the Python count of what a block reads (verity_vllm's block_counts on the record's description), "
-                  "which the Lean check does not establish")
+        by = "verity_vllm's block_counts" if p.division == "session" else "this benchmark's built.divisions"
+        blocks = (f"the Python count of what a block reads ({by}, on the record's description), which the Lean check "
+                  "does not establish")
     else:
         blocks = "the stated c, k and work, which nothing on this tree builds or checks"
     return f"{blocks}; {b.rests_on}"
@@ -113,7 +114,8 @@ def detail(row: dict[str, Any], p: P.Policy, sh: P.Shape) -> list[str]:
         f"  k         {p.k:,} fresh input bits a block, made of",
         *(f"              {bits:>{width},}  {kind}{': ' + how if how else ''}" for kind, bits, how in p.parts),
         f"              {p.unexplained:>{width},}  unexplained",
-        f"  n         {p.n:,} blocks" + ("" if p.label != "built" else ", the stated policy's: nothing here derives n"),
+        f"  n         {p.n:,} blocks" + ("" if p.label != "built" else ", the stated policy's" + (
+            "" if p.division == "session" else " times the division's blocks a session") + ": nothing here derives n"),
         f"  work      N = {_n(w['N'])} MACs a block, in the policy's unit: {_n(w['linears'])} linears + 2 × "
         f"({_n(w['attention'])} attention + {_n(w['lm_head'])} LM head)",
     ]
@@ -129,8 +131,8 @@ def detail(row: dict[str, Any], p: P.Policy, sh: P.Shape) -> list[str]:
             out.append(f"            the Lean counts {check['counted'][f]:,} {what} against {f} = "
                        f"{check['declared'][f]:,}: {check['why']}")
         if cost:
-            out.append(f"            the count's cost: {cost['wall_s']:.1f} s wall, {cost['cpu_s']:.1f} s CPU, {cost['peak_mib']:,.0f} MiB "
-                       f"peak, on an instance of {cost['instance_bytes']:,} bytes")
+            out.append(f"            the count's cost: {cost['wall_s']:.1f} s wall, {cost['cpu_s']:.1f} s CPU, "
+                       f"{cost['peak_mib']:,.0f} MiB peak, on an instance of {cost['instance_bytes']:,} bytes")
     out += [
         f"  bound     min_cut.bound(c, k, n, N, O, size = c): N the block's work, O = N × o × b = {_g(bd['O'])} output "
         "wires,",
