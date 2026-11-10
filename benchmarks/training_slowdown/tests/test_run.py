@@ -233,10 +233,9 @@ def test_a_record_whose_checkpoints_arent_the_states_scored_is_invalid():
                                   f"outputs, one for one"]
 
 
-def test_a_job_keeps_no_weights_but_its_last_e_and_the_whole_state_only_when_asked(ran, tmp_path, theta, monkeypatch):
+def test_a_job_keeps_no_weights_but_its_last_e(ran, tmp_path, theta, monkeypatch):
     """By default a job's output is its record and its last checkpoint's E, which rebuilds that checkpoint's output
-    from θ bit for bit; an E at or over the size a job keeps stays out too; `--keep-weights` adds the last
-    checkpoint's whole state."""
+    from θ bit for bit; an E at or over the size a job keeps stays out too."""
     rec, cfg, reg, out = ran
     *before, last = rec["checkpoints"]
     assert sorted(p.name for p in out.iterdir()) == ["e", "run.json"] and [p.name for p in (out / "e").iterdir()] == [
@@ -256,6 +255,11 @@ def test_a_job_keeps_no_weights_but_its_last_e_and_the_whole_state_only_when_ask
     (cp,) = counted(tmp_path / "large", theta, one_step(full))["checkpoints"]
     assert "e_path" not in cp and [p.name for p in (tmp_path / "large" / "out").iterdir()] == ["run.json"]
 
+
+@pytest.mark.slow
+def test_a_job_keeps_its_last_checkpoints_whole_state_only_when_asked(tmp_path):
+    """`--keep-weights` adds the last checkpoint's whole state, and no other's, to what a job keeps. It is a job of
+    its own, so slow; the command's test shows the flag reaches the job, not what the job then writes."""
     rec, _, _, out = run_job(tmp_path / "kept", "--keep-weights")
     last = rec["checkpoints"][-1]
     state = torch.load(out / last["path"], weights_only=True)
