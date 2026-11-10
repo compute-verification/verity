@@ -57,7 +57,10 @@ ingress through `t`, the inputs off `chk` and the held values (`CheckedUnique`).
 `KSLinOn` moves from `RAcc δ` to `RLeakChecked δ` at `κ + εchk` (`ksLinOn_rLeakChecked`).
 
 **The monitoring period.** `PooledLeak`'s count and escape bound at any per-window relation (`encard_pooledFam_le`,
-`pr_pooled_le`) at `LeakAtChecked`, with `b` the most committed bits of one of the period's proof blocks.
+`pr_pooled_le`) at `LeakAtChecked`, with `b` the most committed bits of one of the period's proof blocks. A window's
+relation is at its operator, which the earlier windows' observations fix (`PeriodOperator`); at operators that read no
+window's observations the statement is the one with each window's operator fixed before the period
+(`pooledLeakChecked_fixed`).
 -/
 
 @[expose] public section
@@ -399,22 +402,63 @@ theorem sampledLeakChecked : Guarantees.SampledLeakChecked := by
 `Guarantees.PooledLeakChecked`, from `pr_pooled_le` at the leak relations with a valid run and `encard_pooledFam_le`
 at `LeakAtChecked`'s count, `b` the most committed bits of one of the period's proof blocks. -/
 theorem pooledLeakChecked : Guarantees.PooledLeakChecked := by
-  intro L K S lay k reg chk valid Dj m sw Pw ρ op n hchk Ω _ _ Conn Cell Srv Dev Z _ arr f tap run htrust cap Ss Zs
+  intro L K S lay k reg chk valid Dj m sw Pw ρ op hop n hchk Ω _ _ Conn Cell Srv Dev Z _ arr f tap run htrust cap Ss Zs
     schedOf srvOf dec hch acc W had e e' he q hq0 hq1 hesc hleak Fmax
   obtain ⟨-, hfit, hs, hdz⟩ := hch
   obtain ⟨hacc, hW, hWn⟩ := had
   refine ⟨fun z hz => pr_pooled_le (acc z) (hacc z) (W z) (hW z) e e' he q hq0 hq1 (hesc z hz)
-    (fun i ω => LeakAtChecked lay k reg valid Dj (sw i) (Pw i) (ρ i) (op i) (W z ω i)
-      ((run tap (schedOf z ω, srvOf z ω)).2 i)) (hleak z hz) Fmax, fun ω => ?_⟩
-  exact encard_pooledFam_le (fun i => LeakAtChecked lay k reg valid Dj (sw i) (Pw i) (ρ i) (op i)) n
+    (fun i ω => LeakAtChecked lay k reg valid Dj (sw i) (Pw i) (ρ i) (op i (run tap (schedOf z ω, srvOf z ω)).2)
+      (W z ω i) ((run tap (schedOf z ω, srvOf z ω)).2 i)) (hleak z hz) Fmax, fun ω => ?_⟩
+  exact encard_pooledFam_le (fun i o => LeakAtChecked lay k reg valid Dj (sw i) (Pw i) (ρ i) (op i o))
+    (fun i o o' h => by simp only [hop i o o' h]) n
     (univ.sup fun i => (range (n i)).sup fun v => faultyBits (sw i).prog (Pw i) {v})
     (fun i => (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ (reg (sw i) ∪ chk (sw i))).card)
     (fun i => Dj ^ k (sw i)) (fun i F => faultyBits (sw i).prog (Pw i) F)
     (fun i F hF => faultyBits_le_card_mul _ _ hF fun v hv =>
       (Finset.le_sup (f := fun v => faultyBits (sw i).prog (Pw i) {v}) (mem_range.2 hv)).trans
         (Finset.le_sup (f := fun i => (range (n i)).sup fun v => faultyBits (sw i).prog (Pw i) {v}) (mem_univ i)))
-    (fun i F _ => encard_leakAtChecked_le lay k reg chk valid Dj (sw i) (Pw i) (hchk i) (ρ i) (op i) F)
+    (fun i o F _ => encard_leakAtChecked_le lay k reg chk valid Dj (sw i) (Pw i) (hchk i) (ρ i) (op i o) F)
     arr f tap run htrust cap Ss hfit Zs (fun z => schedOf z ω) (fun z => srvOf z ω) (fun z hz => hs z hz ω) (dec ω)
     (fun z hz => hdz z hz ω) (fun z => W z ω) (fun z i => hWn z ω i) Fmax
+
+set_option linter.unusedVariables false in
+/-- **`PooledLeakChecked` at operators fixed before the period**: its statement with window `i`'s operator `op i` one
+that reads no window's observations, `PeriodLeaksChecked` and `PooledGoodChecked` written out, which is
+`PooledLeakChecked` at the operator `fun i _ => op i`: it ignores the earlier windows, so it meets `PeriodOperator`. -/
+theorem pooledLeakChecked_fixed (h : Guarantees.PooledLeakChecked) :
+    ∀ {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
+      (reg chk : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop) (Dj : ℕ) {m : ℕ}
+      (sw : Fin m → AuditStatement) (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool)
+      (op : Fin m → ℕ → List (Obs L K S) → List Bool) (n : Fin m → ℕ)
+      (hchk : ∀ i, CheckedUnique (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i)) (chk (sw i)) (valid (sw i)))
+      {Ω : Type} [Fintype Ω] [Nonempty Ω] {Conn Cell Srv Dev Z : Type} [Fintype Conn]
+      (arr : Srv → Conn → Arrivals Cell) (f : RecordFormat Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
+      (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L K S)))
+      (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
+      (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (Zs : Set Z)
+      (schedOf : Z → (Fin m → Ω) → CertifierSchedule Conn) (srvOf : Z → (Fin m → Ω) → Srv)
+      (dec : (Fin m → Ω) → (Conn → List (ℕ × CellView Cell)) → Z)
+      (hch : PeriodChannel f cap Ss Zs schedOf srvOf dec fun p => (run tap p).1)
+      (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop) (W : Z → (Fin m → Ω) → Fin m → Finset ℕ)
+      (had : PeriodAdaptive n acc W) (e e' : Fin m → ℝ) (he : ∀ i, 0 ≤ e i) (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
+      (hesc : PeriodEscapes Zs acc W q e)
+      (hleak : ∀ z ∈ Zs, ∀ i, Pr (fun ω => acc z i ω (ω i) ∧
+        ¬LeakAtChecked lay k reg valid Dj (sw i) (Pw i) (ρ i) (op i) (W z ω i)
+          ((run tap (schedOf z ω, srvOf z ω)).2 i)) ≤ e' i)
+      (Fmax : ℕ),
+      (∀ z ∈ Zs, Pr (fun ω => (∀ i, acc z i ω (ω i)) ∧
+          ¬(∑ i, (W z ω i).card < Fmax ∧ ∀ i, LeakAtChecked lay k reg valid Dj (sw i) (Pw i) (ρ i) (op i) (W z ω i)
+            ((run tap (schedOf z ω, srvOf z ω)).2 i))) ≤
+          (1 - q) ^ Fmax + ∑ i, e i + ∑ i, e' i) ∧
+        ∀ ω, {z | z ∈ Zs ∧ (∑ i, (W z ω i).card < Fmax ∧ ∀ i, LeakAtChecked lay k reg valid Dj (sw i) (Pw i) (ρ i)
+            (op i) (W z ω i) ((run tap (schedOf z ω, srvOf z ω)).2 i))}.encard ≤
+          Ss.encard * (((∏ c, (cap c + 1)) * ((∑ i, n i) + 1) ^ Fmax *
+            2 ^ ((univ.sup fun i => (range (n i)).sup fun v => faultyBits (sw i).prog (Pw i) {v}) * Fmax) *
+            ∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ (reg (sw i) ∪ chk (sw i))).card *
+              Dj ^ k (sw i)) : ℕ) : ℕ∞) := by
+  intro L K S lay k reg chk valid Dj m sw Pw ρ op n hchk Ω _ _ Conn Cell Srv Dev Z _ arr f tap run htrust cap Ss Zs
+    schedOf srvOf dec hch acc W had e e' he q hq0 hq1 hesc hleak Fmax
+  exact h lay k reg chk valid Dj sw Pw ρ (fun i _ => op i) (fun _ _ _ _ => rfl) n hchk arr f tap run htrust cap Ss Zs
+    schedOf srvOf dec hch acc W had e e' he q hq0 hq1 hesc hleak Fmax
 
 end NetTiming

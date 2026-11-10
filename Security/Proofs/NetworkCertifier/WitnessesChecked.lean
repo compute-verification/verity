@@ -91,12 +91,12 @@ error, and the window's observations empty where its horizon is one step, so its
 theorem PooledLeakChecked_nontrivial :
     ¬ Pr (fun _ : Fin 1 → Unit => (∀ _ : Fin 1, True) ∧
         ¬PooledGoodChecked (K := 1) (fun _ => notLay) (fun _ => 1) (fun _ => ∅) (fun _ _ => True) 1
-          (fun _ : Fin 1 => notStmt) (fun _ => notPart) (fun _ _ => false) (fun _ _ _ => [false]) 1 (fun _ => ∅)
+          (fun _ : Fin 1 => notStmt) (fun _ => notPart) (fun _ _ => false) (fun _ _ _ _ => [false]) 1 (fun _ => ∅)
           (fun _ => [])) ≤
       (1 - 1 : ℝ) ^ 1 + ∑ _ : Fin 1, (0 : ℝ) + ∑ _ : Fin 1, (0 : ℝ) := by
   have hp : (fun _ : Fin 1 → Unit => (∀ _ : Fin 1, True) ∧
       ¬PooledGoodChecked (K := 1) (fun _ => notLay) (fun _ => 1) (fun _ => ∅) (fun _ _ => True) 1
-        (fun _ : Fin 1 => notStmt) (fun _ => notPart) (fun _ _ => false) (fun _ _ _ => [false]) 1 (fun _ => ∅)
+        (fun _ : Fin 1 => notStmt) (fun _ => notPart) (fun _ _ => false) (fun _ _ _ _ => [false]) 1 (fun _ => ∅)
         (fun _ => [])) = fun _ => True :=
     funext fun _ => propext (iff_true_intro ⟨fun _ => trivial, fun h => absurd (h.2 0).2.2.1 (by simp)⟩)
   rw [hp]

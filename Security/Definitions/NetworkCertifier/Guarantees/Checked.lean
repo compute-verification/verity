@@ -100,10 +100,13 @@ open Claims Claims.Sampling Finset
 
 /-- **The leak through the network certifier over a monitoring period, with the checked inputs left out** (conditional on
 its named inputs). Over `m` windows on independent live coins, window `i` registered as `sw i` (partition `Pw i`, values
-`ρ i` at the registered inputs, operator `op i`), with `n i` proof blocks, each window's check pinning its checked inputs
-(`CheckedUnique`); with the network certifier running its code by `trusted-host`, its one run giving the cells the client
-receives and its record of them, the windows' observations; a covert sender's channel (`PeriodChannel`), each window's
-acceptance and incorrect set reading only the earlier windows' coins (`PeriodAdaptive`), the conditional escape
+`ρ i` at the registered inputs), with `n i` proof blocks, each window's check pinning its checked inputs
+(`CheckedUnique`); with an operator `op` fixed before the period and the covert sender's secrets, a function of the
+observations alone: window `i`'s operator is `op i o` at the period's observations `o`, which reads only the windows
+before `i`, closed by then (`PeriodOperator`), and window `i` only through the observations before each step, so no
+window still open and none after; with the network certifier running its code by `trusted-host`, its one run giving
+the cells the client receives and its record of them, the windows' observations; a covert sender's channel
+(`PeriodChannel`), each window's acceptance and incorrect set reading only the earlier windows' coins (`PeriodAdaptive`), the conditional escape
 (`PeriodEscapes`) and the leak relation with a valid run at each window's own incorrect set (`PeriodLeaksChecked`):
 
 * for every secret, every audit accepts and the good event fails (`PooledGoodChecked`) with probability at most
@@ -114,7 +117,8 @@ acceptance and incorrect set reading only the earlier windows' coins (`PeriodAda
 def PooledLeakChecked : Prop :=
   ∀ {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (reg chk : AuditStatement → Finset ℕ)
     (valid : AuditStatement → (ℕ → Bool) → Prop) (Dj : ℕ) {m : ℕ} (sw : Fin m → AuditStatement) (Pw : Fin m → Partition)
-    (ρ : Fin m → ℕ → Bool) (op : Fin m → ℕ → List (Obs L K S) → List Bool) (n : Fin m → ℕ)
+    (ρ : Fin m → ℕ → Bool) (op : Fin m → (Fin m → List (Obs L K S)) → ℕ → List (Obs L K S) → List Bool)
+    (hop : PeriodOperator op) (n : Fin m → ℕ)
     (hchk : ∀ i, CheckedUnique (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i)) (chk (sw i)) (valid (sw i)))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
     (f : RecordFormat Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
