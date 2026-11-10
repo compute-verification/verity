@@ -1710,8 +1710,10 @@ def record_audit(bits: bool = False) -> tuple[str, str, str]:
     """A record-form audit's Program, circuit record and wire order, each canonical JSON: two requests' two steps through
     two layers of one `Gemm_v2{K=16, N=16}` template (`RECORD_GEMM`), unit (layer, step, request) at 4·layer + 2·step +
     request, layer 1 reading layer 0's output and layer 0 at step 1 layer 1's at step 0, layer 0's input at step 0
-    external; the record `interface.descriptor_record`'s and the Program its population program, and the order one
-    segment ranking each unit at 2·layer + 4·step + request, so every wire's writer ranks below its reader. With
+    external; the record `interface.descriptor_record`'s, stating its units' ranges in that order (`Circuit.order`:
+    layer 0 at step 0, layer 1 at step 0, layer 0 at step 1, layer 1 at step 1), and the Program its population program,
+    and the order one segment ranking each unit at 2·layer + 4·step + request, so every wire's writer ranks below its
+    reader. With
     ``bits``, one Gemm unit whose ``x``, cut 16 ways, reads 16 `Bf16Add_v2` units' outputs (`RECORD_BITS`), a
     Boolean-profile writer's 16 one-bit leaves a row for the reader's one 16-bit leaf, ranked below it."""
     gid = codec.descriptor_id(RECORD_GEMM)
@@ -1726,7 +1728,8 @@ def record_audit(bits: bool = False) -> tuple[str, str, str]:
     else:
         c = IF.Circuit("period-record", ((RECORD_GEMM, RECORD_UNITS[False]),), external=(f"{gid}/x",), wires=(
             IF.Wire(gid, "x", gid, "o0", at=4, radix=(2, 2), base=0, step=(2, 1)),
-            IF.Wire(gid, "x", gid, "o0", at=2, radix=(1, 2), base=4, step=(2, 1))))
+            IF.Wire(gid, "x", gid, "o0", at=2, radix=(1, 2), base=4, step=(2, 1))),
+            order=((gid, 0, 2), (gid, 4, 2), (gid, 2, 2), (gid, 6, 2)))
         order = {"format": "verity/wire-order/v1", "segments": [
             {"template": gid, "at": 0, "radix": [2, 2, 2], "c": 0, "r": [2, 4, 1]}], "wires": [[0, 0], [0, 0]]}
     assert sum(n for _, n in c.templates) == RECORD_UNITS[bits]

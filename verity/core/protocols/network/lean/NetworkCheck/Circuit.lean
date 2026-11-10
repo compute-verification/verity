@@ -257,8 +257,10 @@ def registeredOf (j : Json) : Except String Registered := do
 
 /-- **The record**, read against Program `P`: a stated record (`format`, its `program` `P`'s SHA-512) whose templates
 are `P`'s root template nodes' Definitions in order (`templateNodes`), each a template of rows (`templateOf`), named
-once, with its cap, wires, cuts and registered reads. A record that lists its members (`members`, `window_ingress`) or
-declares ingress is refused: the period counts a stated record's rows, and no wired gate is an ingress gate. -/
+once, with its cap, wires, cuts and registered reads, and the order of its units' ranges where it states one (`order`,
+ranges `[template, at, units]`, which `Spot.Wires.check` holds its wires to). A record that lists its members (`members`,
+`window_ingress`) or declares ingress is refused: the period counts a stated record's rows, and no wired gate is an
+ingress gate. -/
 def recordOf (P : Prog) (j : Json) : Except String Stated := do
   let ks := (keysOf j).getD []
   if ks.contains "members" || ks.contains "window_ingress" then
@@ -296,7 +298,15 @@ def recordOf (P : Prog) (j : Json) : Except String Stated := do
   let registered ← match j.getObjVal? "registered" with
     | .ok rj => registeredOf rj
     | .error _ => pure {}
-  pure { templates := named, cap, wiring := { templates, cuts, wires }, registered }
+  let order ← match j.getObjVal? "order" with
+    | .ok oj => do
+      let bs ← (← arrOf "order" oj).mapM fun b => do
+        match ← arrOf "a range" b with
+        | [t, a, n] => pure (← strOf "a range's template" t, ← natOf "a range's first unit" a, ← natOf "a range's units" n)
+        | _ => throw "a range is [template, at, units]"
+      pure (some bs)
+    | .error _ => pure none
+  pure { templates := named, cap, wiring := { templates, cuts, wires, order }, registered }
 
 /-! ## The population -/
 
