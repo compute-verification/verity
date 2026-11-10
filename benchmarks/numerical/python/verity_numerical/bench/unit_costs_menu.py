@@ -51,7 +51,7 @@ import sys
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
-from . import templates as TM
+from verity_flock import subcircuit_templates as TM
 from . import unit_costs_padding as P
 from . import unit_costs_prover as U
 

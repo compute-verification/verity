@@ -685,7 +685,7 @@ KNOWN: dict[str, str] = {
         "homonym, the old word for a run, here a simulated read: rename (network-accounting)",
     "benchmarks/numerical/python/verity_numerical/bench/lowerings.py::Registry":
         "homonym, a table of benchmark lowerings: rename (compute-accounting)",
-    "benchmarks/numerical/python/verity_numerical/bench/templates.py::Draw":
+    "verity/ml/flock/python/verity_flock/subcircuit_templates.py::Draw":
         "homonym, one synthetic benchmark draw: rename (compute-accounting)",
     "benchmarks/one_stage/a5_coins.py::Gate": "homonym, infra's challenger gate (an SSH host): rename (proofs)",
     "benchmarks/pous/p2_v1/store.py::Store":
