@@ -25,6 +25,6 @@ def InfoOfState : Prop :=
   ∀ (D : RegisteredCircuit) (θv : D.D.Trace) (R Sst Sin : Finset (Fin D.D.N)) (k : ℕ)
     (f : BitVec k → (g : Sst) → BitVec (D.D.w g)),
     R ⊆ D.D.computed → D.D.into R \ D.θ ⊆ Sst ∪ Sin → (∀ a ∈ admissible D θv, ∃ s, values Sst a = f s) →
-      support D θv R ≤ 2 ^ (k + D.D.width Sin) ∧ novelInfo D θv R ≤ k + D.D.width Sin
+      support D θv R ≤ 2 ^ (k + D.D.width Sin) ∧ freshInfo D θv R ≤ k + D.D.width Sin
 
 end Nci.Guarantees

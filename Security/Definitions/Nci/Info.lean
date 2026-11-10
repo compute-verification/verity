@@ -7,13 +7,13 @@ public import Mathlib.Analysis.SpecialFunctions.Log.Base
 /-!
 # The inference-only policy's reads counted by information: the vocabulary
 
-`novelReads` counts what a set of gates reads by width: the bits on its wires from outside it and `θ`. A wire
+`freshInput` counts what a set of gates reads by width: the bits on its wires from outside it and `θ`. A wire
 can be wide and carry little: a copy of a value read on another wire, a value another read determines, or a state rebuilt
 from a short seed and registered data. A memory cap needs reads counted by information: the bits a set's reads carry over
 the runs the committed registered information allows, whatever their width.
 
-* `novelInfo d θv R`: `log₂` of the number of distinct values `R`'s fresh input reads (`in(R) \ θ`) take over the runs
-  with the registered information at `θv`. It is at most `novelReads d R`, and equal to it when those reads are fresh
+* `freshInfo d θv R`: `log₂` of the number of distinct values `R`'s fresh input reads (`in(R) \ θ`) take over the runs
+  with the registered information at `θv`. It is at most `freshInput d R`, and equal to it when those reads are fresh
   input gates.
 * `SmallInfo r θv c S R`: the thread draft's small subcircuit with its reads counted by information: at most `c`
   computed gates, reading at most `S` bits of information. Every `Small` subcircuit is `SmallInfo`.
@@ -29,13 +29,13 @@ open Verity Finset
 
 /-- **The information in `R`'s fresh input reads**: `log₂` of the number of distinct values the gates of `in(R) \ θ`
 take over the runs of `d` with the registered information at `θv`. -/
-noncomputable def novelInfo (d : RegisteredCircuit) (θv : d.D.Trace) (R : Finset (Fin d.D.N)) : ℝ :=
+noncomputable def freshInfo (d : RegisteredCircuit) (θv : d.D.Trace) (R : Finset (Fin d.D.N)) : ℝ :=
   Real.logb 2 (support d θv (d.D.into R \ d.θ))
 
 /-- **A small subcircuit, by information**: at most `c` computed gates, whose fresh input reads carry at most `S` bits
 over the runs with the registered information at `θv`. -/
 def SmallInfo (r : RegisteredCircuit) (θv : r.D.Trace) (c : ℕ) (S : ℝ) (R : Finset (Fin r.D.N)) : Prop :=
-  R ⊆ r.D.computed ∧ r.D.size R ≤ c ∧ novelInfo r θv R ≤ S
+  R ⊆ r.D.computed ∧ r.D.size R ≤ c ∧ freshInfo r θv R ≤ S
 
 namespace Threading
 

@@ -56,24 +56,24 @@ theorem T1_threaded {k : ℝ} : T1.Threaded 2 k 1 0 := by
   exact fun R hR t => key R hR.1 t
 
 theorem T1_weights_nat : ∀ R : Finset (Fin 4), R ⊆ C.computed →
-    (T1.weightsUsed R).card + (T1.threadReads R (0 : Fin 1)).card ≤ 2 * novelReads D R := by decide
+    (T1.weightsUsed R).card + (T1.threadReads R (0 : Fin 1)).card ≤ 2 * freshInput D R := by decide
 
 theorem T1_weights {k : ℝ} : Assumptions.WeightsIncompressible D T1 2 k (1 / 2) (1 / 2) := by
   intro R hR
   have h := T1_weights_nat R hR.1
   have hs : ∑ t, (T1.threadReads R t).card = (T1.threadReads R (0 : Fin 1)).card := Fin.sum_univ_one _
   rw [Nat.cast_sum, ← Nat.cast_sum, hs]
-  have h' : ((T1.weightsUsed R).card : ℝ) + (T1.threadReads R (0 : Fin 1)).card ≤ 2 * novelReads D R := by exact_mod_cast h
+  have h' : ((T1.weightsUsed R).card : ℝ) + (T1.threadReads R (0 : Fin 1)).card ≤ 2 * freshInput D R := by exact_mod_cast h
   linarith
 
 theorem T1_weightsSlots {k : ℝ} : Assumptions.WeightsIncompressibleSlots D T1 σ1 2 k (1 / 2) (1 / 2) := by
   have key : ∀ R : Finset (Fin 4), R ⊆ C.computed →
-      (σ1.slotsUsed R).card + (T1.threadReads R (0 : Fin 1)).card ≤ 2 * novelReads D R := by decide
+      (σ1.slotsUsed R).card + (T1.threadReads R (0 : Fin 1)).card ≤ 2 * freshInput D R := by decide
   intro R hR
   have h := key R hR.1
   have hs : ∑ t, (T1.threadReads R t).card = (T1.threadReads R (0 : Fin 1)).card := Fin.sum_univ_one _
   rw [Nat.cast_sum, ← Nat.cast_sum, hs]
-  have h' : ((σ1.slotsUsed R).card : ℝ) + (T1.threadReads R (0 : Fin 1)).card ≤ 2 * novelReads D R := by exact_mod_cast h
+  have h' : ((σ1.slotsUsed R).card : ℝ) + (T1.threadReads R (0 : Fin 1)).card ≤ 2 * freshInput D R := by exact_mod_cast h
   linarith
 
 theorem coverage_T1 : Assumptions.Coverage 1 D (2 * T1.M.card) := by
@@ -122,10 +122,10 @@ theorem drawsAtLeast_noLinks {r : RegisteredCircuit} (T : Threading r) (dd : ℕ
 
 theorem activations_T1 : Assumptions.ActivationsIncompressibleAll D T1 (noLinks T1) 2 1 (1 / 2) (1 / 2) := by
   have key : ∀ R : Finset (Fin 4), R ⊆ C.computed →
-      (T1.weightsUsed R).card + (T1.actsUsed R).card ≤ 2 * novelReads D R := by decide
+      (T1.weightsUsed R).card + (T1.actsUsed R).card ≤ 2 * freshInput D R := by decide
   intro R hR
   rw [filter_true_of_mem fun a _ h => by simp [Threading.Links.Whole, noLinks] at h]
-  have h' : ((T1.weightsUsed R).card : ℝ) + (T1.actsUsed R).card ≤ 2 * novelReads D R := by
+  have h' : ((T1.weightsUsed R).card : ℝ) + (T1.actsUsed R).card ≤ 2 * freshInput D R := by
     exact_mod_cast key R hR.1
   linarith
 
@@ -191,7 +191,7 @@ theorem ch1_notLinked (R : Finset (Fin 4)) (x : (ℓ : Fin ch1.L) × Fin ch1.N �
   | succ ℓ => exact absurd hℓ (by change ¬ (ℓ + 1 < 1); omega)
 
 theorem ch1_nat : ∀ R : Finset (Fin 4), R ⊆ C.computed →
-    (ch1.weightsUsed R).card ≤ novelReads D R ∧ (ch1.inputsUsed R).card ≤ novelReads D R := by decide
+    (ch1.weightsUsed R).card ≤ freshInput D R ∧ (ch1.inputsUsed R).card ≤ freshInput D R := by decide
 
 theorem ch1_G : ch1.G = 1 := rfl
 
@@ -233,8 +233,8 @@ theorem ch1_T1_incompressible {k : ℝ} : Assumptions.TrainingIncompressible D c
     simp
   · simp only [ch1_notLinked, not_false_eq_true, filter_const, ↓reduceIte, Nat.max_zero]
     obtain ⟨hw, hi⟩ := ch1_nat _ hu.1
-    have hw' : ((ch1.weightsUsed (P.gates u)).card : ℝ) ≤ novelReads D (P.gates u) := by exact_mod_cast hw
-    have hi' : ((ch1.inputsUsed (P.gates u)).card : ℝ) ≤ novelReads D (P.gates u) := by exact_mod_cast hi
+    have hw' : ((ch1.weightsUsed (P.gates u)).card : ℝ) ≤ freshInput D (P.gates u) := by exact_mod_cast hw
+    have hi' : ((ch1.inputsUsed (P.gates u)).card : ℝ) ≤ freshInput D (P.gates u) := by exact_mod_cast hi
     linarith
 
 theorem ch0_T0_incompressible : Assumptions.TrainingIncompressible D (ch0 C) (T0 D) 2 1 1 2 := by
@@ -253,7 +253,7 @@ theorem pch1_notLinked (R : Finset (Fin 4))
   | succ ℓ => exact absurd hℓ (by change ¬ (ℓ + 1 < 1); omega)
 
 theorem pch1_nat : ∀ R : Finset (Fin 4), R ⊆ C.computed →
-    (ch1.toPacked.weightsUsed R).card ≤ novelReads D R ∧ (ch1.toPacked.inputsUsed R).card ≤ novelReads D R := by
+    (ch1.toPacked.weightsUsed R).card ≤ freshInput D R ∧ (ch1.toPacked.inputsUsed R).card ≤ freshInput D R := by
   decide
 
 theorem pch1_spread {n : ℕ} (P : Partition C n)
@@ -276,9 +276,9 @@ theorem pch1_T1_incompressible :
     simp
   · simp only [pch1_notLinked, not_false_eq_true, filter_const, ↓reduceIte, Nat.max_zero]
     obtain ⟨hw, hi⟩ := pch1_nat _ hu.1
-    have hw' : ((ch1.toPacked.weightsUsed (P.gates u)).card : ℝ) ≤ novelReads D (P.gates u) := by
+    have hw' : ((ch1.toPacked.weightsUsed (P.gates u)).card : ℝ) ≤ freshInput D (P.gates u) := by
       exact_mod_cast hw
-    have hi' : ((ch1.toPacked.inputsUsed (P.gates u)).card : ℝ) ≤ novelReads D (P.gates u) := by
+    have hi' : ((ch1.toPacked.inputsUsed (P.gates u)).card : ℝ) ≤ freshInput D (P.gates u) := by
       exact_mod_cast hi
     linarith
 

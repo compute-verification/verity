@@ -1743,6 +1743,11 @@
         "benchmarks/nci/slowdown.py": "benchmarks/nci/bracket.py",
         "benchmarks/nci/tests/test_slowdown.py": "benchmarks/nci/tests/test_bracket.py"
       }
+    },
+    {
+      "paths": {
+        "Security/Proofs/Properties/Nci/Novel.lean": "Security/Proofs/Properties/Nci/Fresh.lean"
+      }
     }
   ]
 }

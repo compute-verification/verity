@@ -19,7 +19,7 @@ the upstream certificate) are on `r`'s circuit bit by bit (`Circuit.ofDecl r`), 
 
 The route: a compliant division of `d` pulled back through the containment divides `r` into pieces, each no larger than
 its inference block and reading no more fresh input. A piece `R`'s block, the bits of `R` and of what it reads, computes
-every bit of `R` that reads something and is handed at most `novelReads R ≤ α σ` bits outside the free bits, where
+every bit of `R` that reads something and is handed at most `freshInput R ≤ α σ` bits outside the free bits, where
 `σ ≤ Γ` is its inference block's size; it has at most `w₀ Γ + α Γ + width(θ)` bits when no gate of `r` is wider than
 `w₀`. So the blocks cover `r`'s bits, each finishes at most `(k² + b k) / b` counted products at its own `k ≤ α σ`, and
 summed over the inference blocks the counted products are at most `(α² Γ + b α) / b · size(d)`.

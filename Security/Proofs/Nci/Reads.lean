@@ -38,7 +38,7 @@ open Classical in
 /-- **Updated matrix multiplications are throttled, in reads form** (B5). -/
 theorem UpdatedMatMulReads : Guarantees.UpdatedMatMulReads := by
   intro Γ K b_w b_a D c d n P hw ha hd hP hA hPS
-  have hT : (0 : ℝ) ≤ ∑ u, (novelReads D (P.gates u) : ℝ) := sum_nonneg fun _ _ => Nat.cast_nonneg _
+  have hT : (0 : ℝ) ≤ ∑ u, (freshInput D (P.gates u) : ℝ) := sum_nonneg fun _ _ => Nat.cast_nonneg _
   rcases Nat.eq_zero_or_pos c.G with hG | hG
   · rw [hG, Nat.cast_zero, zero_mul]
     exact hT
@@ -52,7 +52,7 @@ theorem UpdatedMatMulReads : Guarantees.UpdatedMatMulReads := by
   have hreads := fun u => iu_reads D c Γ K b_w b_a d hd ha.le hA (P.gates u) (P.gates_subset_computed u)
     (hP u).1 (hP u).2
   have key : ∀ μ ∈ Set.Ioo (0 : ℝ) 1, min ((1 + √μ) ^ 2 * (b_w * b_a * d / K))
-      (√2 * (1 + √μ) * √(1 - μ) * (b_a * √(b_w / K))) * c.G ≤ ∑ u, (novelReads D (P.gates u) : ℝ) := by
+      (√2 * (1 + √μ) * √(1 - μ) * (b_a * √(b_w / K))) * c.G ≤ ∑ u, (freshInput D (P.gates u) : ℝ) := by
     intro μ hμ
     have hY : (∑ u, (#(outputsOther c (P.gates u)) : ℝ)) ≤ 2 * ∑ u, (s u : ℝ) := by
       exact_mod_cast (sum_card_outputsOther_le c P).trans (Nat.mul_le_mul_left 2 hsum)
@@ -70,10 +70,10 @@ theorem UpdatedMatMulReads : Guarantees.UpdatedMatMulReads := by
     have h₁ : ∑ u, (b_w * (#(c.weightsUsed (P.gates u)) : ℝ) +
         b_a * (d * (#(univ.filter (c.Full (P.gates u))) : ℝ) +
           #((c.inputsUsed (P.gates u)).filter fun x => ¬ c.Full (P.gates u) x.2.1))) ≤
-        ∑ u, (novelReads D (P.gates u) : ℝ) :=
+        ∑ u, (freshInput D (P.gates u) : ℝ) :=
       sum_le_sum fun u _ => hreads u
     have h₂ : ∑ u, (b_w * (#(c.weightsUsed (P.gates u)) : ℝ) + b_a / 2 * #(outputsOther c (P.gates u))) ≤
-        ∑ u, (novelReads D (P.gates u) : ℝ) :=
+        ∑ u, (freshInput D (P.gates u) : ℝ) :=
       calc ∑ u, (b_w * (#(c.weightsUsed (P.gates u)) : ℝ) + b_a / 2 * #(outputsOther c (P.gates u)))
           = ∑ u, b_w * (#(c.weightsUsed (P.gates u)) : ℝ) + b_a / 2 * ∑ u, (#(outputsOther c (P.gates u)) : ℝ) := by
             rw [sum_add_distrib, mul_sum]
@@ -85,7 +85,7 @@ theorem UpdatedMatMulReads : Guarantees.UpdatedMatMulReads := by
             linarith
         _ = ∑ u, (b_w * (#(c.weightsUsed (P.gates u)) : ℝ) + b_a * s u) := by
             rw [sum_add_distrib, mul_sum]
-        _ ≤ ∑ u, (novelReads D (P.gates u) : ℝ) := sum_le_sum fun u _ => hs u
+        _ ≤ ∑ u, (freshInput D (P.gates u) : ℝ) := sum_le_sum fun u _ => hs u
     have h := min_mul_sum_le_reads univ hw ha hdpos hK hμ.1.le hμ.2.le (fun _ _ => Nat.cast_nonneg _)
       (fun _ _ => Nat.cast_nonneg _) (fun _ _ => Nat.cast_nonneg _) (fun _ _ => Nat.cast_nonneg _) hcap' hg h₁ h₂
     refine le_trans ?_ h
@@ -93,7 +93,7 @@ theorem UpdatedMatMulReads : Guarantees.UpdatedMatMulReads := by
         c.prod g.1 g.2.1 g.2.2.1 g.2.2.2 ∈ P.gates u) : ℝ) := by
       exact_mod_cast (sum_card_products c P).symm
     rw [hprod]
-  have hsup : readFactor K b_w b_a d ≤ (∑ u, (novelReads D (P.gates u) : ℝ)) / c.G := by
+  have hsup : readFactor K b_w b_a d ≤ (∑ u, (freshInput D (P.gates u) : ℝ)) / c.G := by
     have : Nonempty (Set.Ioo (0 : ℝ) 1) := ⟨⟨1 / 2, by norm_num, by norm_num⟩⟩
     refine ciSup_le fun μ => ?_
     rw [le_div_iff₀ hGr]

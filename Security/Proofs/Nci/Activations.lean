@@ -19,7 +19,7 @@ The `ρ t` add up to at most the activations `ActivationsIncompressibleAll` char
 activations is not full, which is the threading inequality that counting takes.
 
 Through a partial containment (`ActivationsBoundOn`), each IU of a compliant division of the declaration computes a piece
-of `S` that is small and reads no more than the IU (`piece`, `novelReads_piece`), and the pieces divide `S`.
+of `S` that is small and reads no more than the IU (`piece`, `freshInput_piece`), and the pieces divide `S`.
 -/
 
 @[expose] public section
@@ -97,7 +97,7 @@ theorem activations_reads (c : RegisteredCircuit) (T : Threading c) (L : T.Links
     (hd : ∀ a, (L.src a).Nonempty →
       dd ≤ (((L.src a).filter fun g => T.thread (T.act g) = T.thread a).image T.act).card)
     (hA : Assumptions.ActivationsIncompressibleAll c T L Γ K b_w b_a) (R : Finset (Fin c.D.N)) (hR : Small c Γ K R) :
-    b_a * (T.mults R).card ≤ novelReads c R * T.bound K b_w dd e := by
+    b_a * (T.mults R).card ≤ freshInput c R * T.bound K b_w dd e := by
   refine threaded_count_of T R (fun t => ((openActs L R t).card : ℝ)) (T.weightsUsed R).card
     (card_threadMults_le T R) (fun _ => Nat.cast_nonneg _) hbw hba hdd (fun t ht => ?_) ?_ hR.2.2
   · have hlt : (openActs L R t).card < dd := by
@@ -110,7 +110,7 @@ theorem activations_reads (c : RegisteredCircuit) (T : Threading c) (L : T.Links
     have hs : (∑ t, ((openActs L R t).card : ℝ)) ≤ ((T.actsUsed R).filter fun a => ¬ L.Whole R a).card := by
       exact_mod_cast sum_card_openActs_le L R
     have h2 := mul_le_mul_of_nonneg_left hs hba.le
-    show b_w * ((T.weightsUsed R).card : ℝ) + b_a * ∑ t, ((openActs L R t).card : ℝ) ≤ novelReads c R
+    show b_w * ((T.weightsUsed R).card : ℝ) + b_a * ∑ t, ((openActs L R t).card : ℝ) ≤ freshInput c R
     linarith
 
 /-- **The activations bound for one subcircuit** ([ACTIVATIONS-BOUND], per subcircuit). -/
@@ -129,8 +129,8 @@ theorem ActivationsBoundOn_rate :
   intro Γ α K b_w b_a c d T L dd e M hα hαK hbw hba hdd ⟨n, P, hP⟩ hB he hd hA
   set Λ := T.bound K b_w dd e
   have hΛ : 0 ≤ Λ := le_max_of_le_left (Nat.cast_nonneg _)
-  have hreads : ∀ u, (novelReads c (piece M P u) : ℝ) ≤ α * d.D.size (P.gates u) := fun u =>
-    (Nat.cast_le.2 (novelReads_piece hB u)).trans (hP u).2
+  have hreads : ∀ u, (freshInput c (piece M P u) : ℝ) ≤ α * d.D.size (P.gates u) := fun u =>
+    (Nat.cast_le.2 (freshInput_piece hB u)).trans (hP u).2
   have hpiece : ∀ u, Small c Γ K (piece M P u) := fun u =>
     ⟨piece_subset_computed u, (card_piece_le u).trans (hP u).1,
       ((hreads u).trans (mul_le_mul_of_nonneg_left (by exact_mod_cast (hP u).1) hα)).trans hαK⟩
@@ -140,7 +140,7 @@ theorem ActivationsBoundOn_rate :
     exact h.symm
   calc b_a * ((T.M ∩ M.S).card : ℝ) = ∑ u, b_a * ((T.mults (piece M P u)).card : ℝ) := by
         rw [hM, Nat.cast_sum, mul_sum]
-    _ ≤ ∑ u, (novelReads c (piece M P u) : ℝ) * Λ :=
+    _ ≤ ∑ u, (freshInput c (piece M P u) : ℝ) * Λ :=
         sum_le_sum fun u _ => activations_reads c T L Γ K b_w b_a dd e hbw hba hdd he hd hA _ (hpiece u)
     _ ≤ ∑ u, α * (d.D.size (P.gates u) : ℝ) * Λ := sum_le_sum fun u _ => mul_le_mul_of_nonneg_right (hreads u) hΛ
     _ = α * Λ * d.D.size d.D.computed := by

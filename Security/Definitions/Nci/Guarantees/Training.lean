@@ -64,7 +64,7 @@ def IncompressibleContainedTraining : Prop :=
 /-- **The partial-sum rule with dark gates, under training's incompressibility** (`TrainingIncompressible`): a
 declaration `d` that complies at `(c, k)` and contains `r` partly (`PartialContainment`,
 computing the gates `S` of `r` and leaving the rest dark) computes the chain's products in `S`, `G_S` of them, with
-`max (min c₁ c₂) (μ b_a / Λ) · G_S ≤ α size(d) + (1 − μ) ∑_{v dark} novelReads(v)` for each `μ ∈ [0, 1]`,
+`max (min c₁ c₂) (μ b_a / Λ) · G_S ≤ α size(d) + (1 − μ) ∑_{v dark} freshInput(v)` for each `μ ∈ [0, 1]`,
 where `min c₁ c₂` is `F`'s minimum at read cap `K` and smallest inner dimension `dd`, and `Λ = max e_max (K / (4 b_w dd))`
 with `e_max` the largest output dimension. The assumption is on `r` at read cap `K ≥ α Γ`, beside the
 registered-information premise `ThetaRegistered`, and each dark gate reads at most `K` itself, so that it is an
@@ -80,12 +80,12 @@ def IncompressibleContainedMatMulOn : Prop :=
           (μ * b_a / max (emax : ℝ) (K / (4 * b_w * dd))) *
         (Finset.univ.filter fun p : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ) × Fin (ch.d ℓ) =>
           ch.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ M.S).card ≤
-      α * d.D.size d.D.computed + (1 - μ) * ∑ v ∈ M.dark, (novelReads r {v} : ℝ)
+      α * d.D.size d.D.computed + (1 - μ) * ∑ v ∈ M.dark, (freshInput r {v} : ℝ)
 
 /-- **Training is slowed, by the partial-sum rule, with dark gates, under training's incompressibility**
 (`TrainingIncompressible`): when the chain's products, at 2 flops each, are a fraction `κ` of
 the reference circuit's size, each product off the books is a dark gate, so
-`max (min c₁ c₂) (μ b_a / Λ) · (κ size(r) − 2 #dark) ≤ 2 (α size(d) + (1 − μ) ∑_{v dark} novelReads(v))`. -/
+`max (min c₁ c₂) (μ b_a / Λ) · (κ size(r) − 2 #dark) ≤ 2 (α size(d) + (1 − μ) ∑_{v dark} freshInput(v))`. -/
 def IncompressibleContainedTrainingOn : Prop :=
   ∀ (Γ : ℕ) (α K b_w b_a μ κ : ℝ) (r d : RegisteredCircuit) (ch : Chain r.D) (T : Threading r) (dd emax : ℕ)
     (M : PartialContainment r d),
@@ -97,6 +97,6 @@ def IncompressibleContainedTrainingOn : Prop :=
       max (min ((1 + √μ) ^ 2 * (b_w * b_a * dd / K)) (√2 * (1 + √μ) * √(1 - μ) * (b_a * √(b_w / K))))
           (μ * b_a / max (emax : ℝ) (K / (4 * b_w * dd))) *
         (κ * r.D.size r.D.computed - 2 * M.dark.card) ≤
-      2 * (α * d.D.size d.D.computed + (1 - μ) * ∑ v ∈ M.dark, (novelReads r {v} : ℝ))
+      2 * (α * d.D.size d.D.computed + (1 - μ) * ∑ v ∈ M.dark, (freshInput r {v} : ℝ))
 
 end Nci.Guarantees
