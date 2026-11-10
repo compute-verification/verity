@@ -29946,3 +29946,26 @@ So three at a time still fit a 755 GB node, and the 48 take about 8 hours and ab
 - Item 3's step 4 by "4. #8458, the return links (ours, written, open);".
 - Item 3's "I can't name the earliest hour, because items 3 to 5 aren't started at any head" by "I can't name the earliest hour, because items 3 and 5 aren't started at any head".
 - The lead's "the return links and the reference stager are ours" by "the return links (our open #8458) and the reference stager are ours".
+
+## BREAKEVEN, Tue 10 Nov 17:39Z: the rows of record at S = 32,832 are launched as r20261110-173854-ea3b (each pass at both S on one clone; queued on cpu-8, ETA about 18:25Z); 0d56 is running
+
+1. **The run** [run]: `r20261110-173854-ea3b`, on cpu-8's research pool, queued 10 checks deep at 17:39Z. That queue moved about one check every 2 to 3 minutes since 17:24Z, so it starts about 18:05Z and ends about 18:25Z [guess]. It is one run of fourteen passes: each run of record's own command (the same spec and rows files, `WORLD_SETS=honest`'s λ, δ 0.01, `two_stage_design(..., union=True)`, K6144 and FI2048 as recorded, `DEFAULT_F=0.1`), once at S = 28,000 and once at S = 32,832, back to back on one clone, into `out/<pass>/s28000` and `out/<pass>/s32832`.
+
+   | pass | mirrors |
+   |---|---|
+   | uniform | `r20261110-055410-0c58` |
+   | room | `r20261110-060137-061f` |
+   | uniform2 | `r20261110-060201-97db` |
+   | mla | `r20261110-060537-cf28` |
+   | periods, years | `r20261110-060752-cedf` |
+   | periods, weeks and months | `r20261110-061145-4a58` |
+   | default (plan (ii) at all six scopes) | `r20261110-160737-8c77` |
+
+2. **What differs** [read, from the launch]:
+   - **Within a pass**, the two halves differ only in `HR_CAP_S=32832` and its label `HR_CAP_CASE`.
+   - **Against the runs of record**, the pass differs in three ways. The source is ed8b6a13ad, which is a5e4e56a11 plus a `DEFAULT_F` switch set to the same 0.1. The tools archive is 4a58's: cedf's tools plus `HASH_ALL_SCOPES`, which only the weeks-and-months pass sets. And the pool differs.
+   - **The check:** each pass's S = 28,000 half is compared row by row with its run of record. In the 00:00Z entry I say whether every row matches exactly.
+3. **No planner change** [read]. The planner takes S from each job (`job["S"]`, which `breakeven_burst_price.py` reads into `STATE["S"]`). The rows of record get S = 28,000 from my scratch tool `headline_rows.py`, whose `CAP32` is 875 × 32. I made `CAP32` read `HR_CAP_S`, and its default is unchanged. Nothing under `benchmarks/spot_figures/breakeven` changed.
+4. **A false start** [run]. At 17:18Z to 17:33Z I launched fourteen runs with `--input`, which names a path on the node and does not send a file. One failed with rc 127 before any work. I cancelled the rest from their queues (`--by BREAKEVEN`). The run above sends every file with `--send`.
+5. **0d56** [run]: running in slot r3 on cpu-8 since about 17:38Z. Its verdict is in my next entry.
+6. **vllm's 17:24Z question** (the 2.05 points): ready to paste in my 00:00Z entry or sooner.
