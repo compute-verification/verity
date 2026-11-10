@@ -85,6 +85,7 @@
   "Properties.Verity.Subprotocols",
   "Properties.Verity.Coupling",
   "Properties.Flock.Nets",
+  "Properties.Assumptions",
   "Properties.Verity.Idle",
   "Properties.Remote",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
@@ -97,7 +98,7 @@
   "Properties.Core.Site"
  ],
  "proved_in": ["../Proofs"],
- "assumptions_module": "Definitions.Assumptions",
+ "assumptions_module": ["Definitions.Assumptions", "Properties.Assumptions"],
  "assumptions": {
   "Accounting.Assumptions.TS.ProofSoundAt": {
    "owner": "@soundness",
