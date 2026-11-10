@@ -10,6 +10,7 @@ string shows a request's length; and what round 2 opens, kept on the node, a ser
 from __future__ import annotations
 
 import json
+import re
 import stat
 from types import SimpleNamespace as NS
 
@@ -203,6 +204,18 @@ def test_two_spans_of_a_class_with_other_lengths_publish_as_many_strings_and_a_r
     for args in ((0, 4), (4, 4.0)):
         with pytest.raises(ValueError, match="cap is a positive integer"):
             BT.class_rows(*args)
+
+
+@pytest.mark.parametrize("capacity", [0, 1, 3, 12, -16, 16.0, True])
+def test_a_classs_rows_are_refused_at_a_capacity_that_is_no_power_of_two_of_at_least_2(capacity):
+    with pytest.raises(ValueError, match=f"a table's capacity is a power of two of at least 2, not {capacity!r}$"):
+        BT.class_rows(4, 4, capacity)
+
+
+@pytest.mark.parametrize("shape", [(), (3,), (2, 3, 1)])
+def test_fill_refuses_rows_that_arent_two_dimensional(shape):
+    with pytest.raises(ValueError, match=re.escape(f"its class (4, 4) holds at capacity 8, not shape {shape}")):
+        BT.fill(np.ones(shape, np.uint16), 4, 4, 8)
 
 
 @pytest.mark.parametrize("b, why", [(("b", 3, 2, "length"), "not the 4 to 4"), (("b", 3, 1, "stop"), "not the 3 to 3"),
@@ -492,6 +505,36 @@ def test_the_interior_loads_a_served_table_by_its_name_and_commits_it_again_to_r
     for absent in (BT.name(run, 8, 4, 1, 3), BT.name("b" * 128, 8, 4, 0, 3), BT.name(run, 8, 4, 0, 1)):
         with pytest.raises(ValueError, match="rank 0 kept 0 tables named"):
             BT.load(tmp_path / "node", absent)
+
+
+def keep_table(kept: BT.Kept, window: int, run: str) -> HT.HistoryTable:
+    """A table of slot 0 of class (8, 4) at layer 3, kept for ``run`` in window ``window``: two rows and the fill."""
+    t = HT.HistoryTable(PROGRAM, BT.name(run, 8, 4, 0, 3), H.WORDS, 16)
+    t.append(BT.fill(np.stack([row("a", p, 3) for p in range(2)]), 8, 4, 16))
+    kept.write(window, run, 8, 4, 0, 3, PROGRAM, t)
+    return t
+
+
+def test_load_gives_a_name_no_table_of_another_run_alike_in_its_first_16_characters(tmp_path):
+    """A class's directory names its run by 16 characters, so `load` finds two such runs' tables under one pattern: it
+    gives each name its own run's table, and none where only the other run's is kept."""
+    kept, other = BT.Kept(tmp_path / "tables"), RUN[:16] + "b" * 112
+    theirs, asked = keep_table(kept, 1, other), BT.name(RUN, 8, 4, 0, 3)
+    with pytest.raises(ValueError, match=re.escape(f"rank 0 kept 0 tables named {asked} under")):
+        kept.load(asked)
+    mine = keep_table(kept, 0, RUN)
+    assert (mine.value, theirs.value) == (asked, BT.name(other, 8, 4, 0, 3)) and mine.root != theirs.root
+    assert [kept.load(t.value).entry() for t in (mine, theirs)] == [mine.entry(), theirs.entry()]
+
+
+def test_load_refuses_a_name_kept_in_two_windows(tmp_path):
+    """A table's name binds its run and not its window's number: kept under two windows, `load` gives neither."""
+    kept = BT.Kept(tmp_path / "tables")
+    t = keep_table(kept, 0, RUN)
+    assert kept.load(t.value).entry() == t.entry()
+    keep_table(kept, 1, RUN)
+    with pytest.raises(ValueError, match=re.escape(f"rank 0 kept 2 tables named {t.value} under")):
+        kept.load(t.value)
 
 
 def test_a_class_that_registers_nothing_keeps_nothing(tmp_path):
