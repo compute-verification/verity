@@ -39,6 +39,7 @@ members = [
     "verity-exact-kit",
     "verity-flock",
     "verity-graph",
+    "verity-landq",
     "verity-lean-audit",
     "verity-machine-model",
     "verity-native-peak",
@@ -2382,6 +2383,11 @@ provides-extras = ["bench"]
 name = "verity-graph"
 version = "0.0.0"
 source = { editable = "tools/verity/graph" }
+
+[[package]]
+name = "verity-landq"
+version = "0.0.0"
+source = { editable = "tools/verity/landq" }
 
 [[package]]
 name = "verity-lean-audit"
