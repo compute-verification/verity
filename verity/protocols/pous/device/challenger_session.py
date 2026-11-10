@@ -205,7 +205,7 @@ def command(device: str | Path) -> tuple[str, ...]:
 def side_of(period: Mapping[str, Any], node: str, device: str | Path) -> Side:
     """`period.json`'s challenger host (`challenger_host`, by default `node`): this machine's process when it is the
     node, else `challenger.pous`'s `command` and `address`, which infra writes once the host serves the challenger's
-    side (the bandwidth gate's path, `benchmarks/live_verifier`)."""
+    side (the bandwidth gate's path, `verity/protocols/poub/device/live_verifier`)."""
     return Side.of(period, node, "pous", command(device))
 
 

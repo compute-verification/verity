@@ -123,7 +123,7 @@ protocols = [
     # J10-R's binding reads PoUS's model, through Accounting's remote draw and sampler
     "Security/Proofs/Pouw/PeriodJ10R/Binding.lean",
     # PoUB's opening unit's test, which holds it to PoUB's Python verifier
-    "verity/ml/commitments/tests/test_block_check.py",
+    "verity/protocols/poub/verifier/commitments/tests/test_block_check.py",
 ]
 # vLLM's tests that read a private protocol (the network certifier, NCI, the bandwidth audit, PoUS)
 protocol_tests = [

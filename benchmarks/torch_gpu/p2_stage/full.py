@@ -147,7 +147,7 @@ class Audit:
 
     def __init__(self, args: argparse.Namespace, lay: L.StoreLayout) -> None:
         import sketch as K
-        from verity.core.protocols.remote_bandwidth import receipts as R
+        from verity.protocols.poub.verifier.remote_bandwidth import receipts as R
 
         self.K, self.R = K, R
         self.store_units = lay.params.blocks_per_segment * lay.params.segments // K.PER

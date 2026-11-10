@@ -21,7 +21,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
 
 - the remote protocol, this one: `Core.Remote` (`CoreRemote.lean`, id `verity/remote/v0`);
 - PoUB, an onsite subprotocol whose code names still say "remote" until they are renamed: its package
-  `verity/core/protocols/remote_bandwidth/`, its Lean verifier `RemoteAudit`, its Lean vocabulary `Accounting.Remote`
+  `verity/protocols/poub/verifier/remote_bandwidth/`, its Lean verifier `RemoteAudit`, its Lean vocabulary `Accounting.Remote`
   (`Security/Definitions/Accounting/Remote.lean`) and `Accounting.Guarantees.Remote*`, its id `verity/remote-bandwidth/v0`,
   its whole-node benchmark `benchmarks/remote_session/`, and serve-openai's `--remote-verifier`, the address of PoUB's
   verifier;

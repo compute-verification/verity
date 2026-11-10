@@ -1,4 +1,4 @@
-"""circuit-check's bindings of `verity.ml.commitments.gates.block_check`'s Definitions, in `circuit_check.targets`' forms
+"""circuit-check's bindings of `verity.protocols.poub.verifier.commitments.gates.block_check`'s Definitions, in `circuit_check.targets`' forms
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ def _block_check_roots() -> list[Any]:
     Karatsuba squares and their folds by C, which no toy word reaches. The toy's whole lowering (about 2.5 M ANDs) is over
     the default budget: its correspondence and pin are checked with ``--lower-max-ands 3000000``."""
     from verity.circuits.defs import bind
-    from verity.ml.commitments.gates.block_check import (BlockOpeningCheck, BlockVerdict, CodecBinding, CodecLess, CodecMatch,
+    from verity.protocols.poub.verifier.commitments.gates.block_check import (BlockOpeningCheck, BlockVerdict, CodecBinding, CodecLess, CodecMatch,
                                                          CodecModAdd, CodecRound, CodecWord, LeafMatch, SketchRow)
 
     return [bind(BlockOpeningCheck, N=32, C=5, K=2, MASKED=1, BYTES=64, ROWS=2, LEAF=3, P=4, DR=1, DP=2, DV=1),

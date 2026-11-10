@@ -44,7 +44,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.remote_bandwidth import audit, codec as rcodec, receipts as rb
+from verity.protocols.poub.verifier.remote_bandwidth import audit, codec as rcodec, receipts as rb
 from verity_vllm import config
 from verity_vllm.protocols.remote_bandwidth.decode_at_use import DecodeAtUse, encoded_weights, kv_decoder
 from verity_vllm.protocols.remote_bandwidth.interface import Stale

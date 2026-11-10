@@ -34,5 +34,5 @@
  "verity.definitions.registry.boolean_flashmla.circuit-check#_model_roots:FlashMlaDecodeHead_v2": 3.83,
  "verity.definitions.registry.boolean_flashmla.circuit-check#_model_roots:FlashMlaBlock_v2": 3.35,
  "verity.definitions.registry.boolean_dsa_norm.circuit-check#_model_roots:TritonBlockRMSNorm_v2": 3.27,
- "verity.ml.commitments.gates.block_check.circuit-check#_block_check_roots": 3.21
+ "verity.protocols.poub.verifier.commitments.gates.block_check.circuit-check#_block_check_roots": 3.21
 }
