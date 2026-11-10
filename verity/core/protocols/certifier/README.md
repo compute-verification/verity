@@ -12,7 +12,7 @@
 - **Lean here**: `lean/`, the certifier program, is the Lake package `certifier_program`, whose library
   `NetworkCertifier` the packages at `../network/lean`, `../../devices/certifier/lean` and `Security/Proofs` require by
   path. Its executables (`lake exe`): `certifier-difftest`, `certifier-charge-difftest` and `certifier-window-difftest`,
-  each `INSTANCES PYTHON N`, on what `lean/scripts` writes; the Lean check runs both (`lean/lean-audit.json`, `runs`).
+  each `INSTANCES PYTHON N`. The Lean check runs each `lean/scripts` script, then its difftest (`lean/lean-audit.json`).
 - **Lean beside it**: `../network/lean` is the Lake package `network_check`, whose library `NetworkCheck` the
   packages at `../../devices/certifier/lean`, `../onsite` and `Security/Properties` require by path. Its executables:
   - `network-check`, `network-records` and `network-period`, each `id | check PARAMS COMMITMENT EVIDENCE | serve`: the
