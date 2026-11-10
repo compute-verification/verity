@@ -64,8 +64,11 @@ CENSUS_PACKAGES = PACKAGES
 #: the Definitions that moved from the package to `verity.ml.definitions` (circuits', held to the keep-list as it stood): in the
 #: graph and the census, each file keyed by its repository path
 DEFINITIONS = REPO / "verity" / "ml" / "definitions"
+#: what of `DEFINITIONS` moved from the package: the modules at its top and these packages of it; any other package there is core's
+MOVED_OUT = frozenset({"numerics", "registry", "tests"})
 _TOPS = "|".join(PACKAGES + ("tests",))
-TOP_MODULE_RE = re.compile(rf"^(?:{_TOPS}|verity\.ml\.definitions)(?:\.[A-Za-z_][A-Za-z0-9_]*)+$")
+_DEFINITIONS_MODULE = re.escape(".".join(DEFINITIONS.relative_to(REPO).parts))
+TOP_MODULE_RE = re.compile(rf"^(?:{_TOPS}|{_DEFINITIONS_MODULE})(?:\.[A-Za-z_][A-Za-z0-9_]*)+$")
 PATH_LITERAL_RE = re.compile(rf"^(?:{_TOPS}|verity/ml/definitions)(?:/[A-Za-z0-9_.-]+)+\.py$")
 
 #: Other lanes own these; the census reports them, the deletion plan never touches them (the keep-list names the non-live ones).
@@ -97,7 +100,7 @@ ARTIFACT_KEEP: dict[str, str] = {
 SHELL_MODULE_RE = re.compile(r"-m\s+([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+)")
 SHELL_PY_RE = re.compile(r"(?<![\w/.-])((?:[A-Za-z0-9_./-]+/)?[A-Za-z0-9_]+\.py)(?![\w])")
 SHELL_SH_RE = re.compile(r"(?<![\w.-])((?:[A-Za-z0-9_./$-]+/)?[A-Za-z0-9_]+\.sh)(?![\w])")
-SHELL_IMPORT_RE = re.compile(rf"\b(?:from|import)\s+((?:{'|'.join(PACKAGES)}|verity\.ml\.definitions)(?:\.[A-Za-z_][A-Za-z0-9_]*)*)")
+SHELL_IMPORT_RE = re.compile(rf"\b(?:from|import)\s+((?:{'|'.join(PACKAGES)}|{_DEFINITIONS_MODULE})(?:\.[A-Za-z_][A-Za-z0-9_]*)*)")
 
 
 # ---------------------------------------------------------------------------------------------------------------------------- files
@@ -109,6 +112,8 @@ def py_files() -> list[Path]:
                 continue                                             # this tool names modules in string literals; it is not a consumer
             if p.name.endswith(SIDECAR) or p == DEFINITIONS / "__init__.py":
                 continue                                             # verity.ml.definitions' own __init__ is verity.ml's, not a Definition's
+            if top == DEFINITIONS and len(parts := p.relative_to(top).parts) > 1 and parts[0] not in MOVED_OUT:
+                continue                                             # core's package: neither in the graph nor in the census
             out.append(p)
     return out
 
