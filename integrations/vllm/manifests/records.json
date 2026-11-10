@@ -755,7 +755,7 @@
     "run": "r20261108-091426-d7df",
     "tree": "e5c19917f0d5757193a979aa1a502576e60102cb"
    },
-   "manifest_digest": null,
+   "manifest_digest": "224eee8e45189552a291df78eee5843474d413c8543c572820b4f4d5c1d3175eac8070dcdf445ce07da4c41b2c6d2cc8016a42477d717433998a7571433c5fa5",
    "programs": {
     "0": {
      "step": "146d26cbbd1f171763354e6747e606fef42fad1c338d774c181be9b567ffcd30564700447822b019d7921966c776120dceac9b7443c477ed0905a12d27450b5c",
@@ -774,7 +774,7 @@
     "run": "r20261108-091446-fb0a",
     "tree": "e5c19917f0d5757193a979aa1a502576e60102cb"
    },
-   "manifest_digest": null,
+   "manifest_digest": "c3d4cf7792061c0a2da32e49cbb106d7538e86b20bce29eb0cbf60bc7eb337e25b9d0437d939a7a0f4a40afe997bcb9e12462f47c55b2f86f8e48189821d26fc",
    "programs": {
     "0": {
      "step": "7241b2a88dec6e47ac2855d1df207a95405ad2a86f6baeafe6feabc07af9bf9cee1af315c1fbae0f1aa1b6eb3d6d8cee1932bc421ab44566de1dbeb46d2d4149",
