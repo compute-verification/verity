@@ -97,7 +97,7 @@ inputs = [
     "benchmarks/vllm_encoded/step_spans.py",
     "benchmarks/vllm_encoded/paged.cu",
     "benchmarks/codec_tensor/wt.cu",
-    "benchmarks/codec_tensor/reader.cu",
+    "verity/protocols/poub/prover/codec_tensor/reader.cu",
     "benchmarks/kv_filler/topup.cu",
     # a direct point's command must pass a slot-only node's launcher rule (research's slot_only.through_slot), which a
     # test checks

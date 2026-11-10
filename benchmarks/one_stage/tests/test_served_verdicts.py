@@ -1678,7 +1678,7 @@ def test_preflight_only_on_a_follow_on_names_the_deferral_it_would_finish(tmp_pa
                                   [])
 
 
-ONSITE_PIECES = HERE.parents[2] / "benchmarks" / "pous" / "onsite_pieces.sh"
+ONSITE_PIECES = HERE.parents[2] / "workloads" / "onsite_served" / "onsite_pieces.sh"
 
 
 def _script(path: Path, body: str) -> None:
@@ -1776,12 +1776,12 @@ def test_a_missing_onsite_pieces_file_is_refused(tmp_path):
 @pytest.mark.parametrize("files, keys, want", [
     ((), (), ("", "", "")),
     (("benchmarks/pous/streamed_wipe/served_wipe.sh",), (), ("wipe", "", "")),
-    (("benchmarks/pous/served_piece.sh",), ("vy-auditor2-pous",), ("", "pous", "collect")),
+    (("workloads/onsite_served/served_piece.sh",), ("vy-auditor2-pous",), ("", "pous", "collect")),
     (("benchmarks/one_stage/served_bandwidth.sh", "store/setup.json"), ("vy-auditor2-bw",), ("", "", "session")),
     (("benchmarks/one_stage/served_bandwidth.sh",), ("vy-auditor2-bw",), ("", "", "")),
 ])
 def test_onsite_pieces_defaults_are_set_where_the_tree_has_each_piece_and_the_node_its_key(tmp_path, files, keys, want):
-    """`onsite_piece_commands` (benchmarks/pous/onsite_pieces.sh) sets WIPE_CMD where the tree has the wipe's piece,
+    """`onsite_piece_commands` (workloads/onsite_served/onsite_pieces.sh) sets WIPE_CMD where the tree has the wipe's piece,
     POUS_CMD where it has PoUS's and the node the memory challenger's key, and BANDWIDTH_CMD to collect PoUS's session
     then, else to the bandwidth session where the tree has it and the node the verifier's key and its registered store."""
     tree, home = tmp_path / "tree", tmp_path / "home"
@@ -1843,7 +1843,7 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     CASE line's protocol and verdict, each case not written by its protocol, each product's NOT_ESTABLISHED and
     VERDICT lines and the host it composed on, never a PIECE line, a reason, a log or a path; each product's public
     output is OUT/composite/PRODUCT;
-    and without composite.py in the tree, or onsite's cases without ONSITE_PIECES (benchmarks/pous/onsite_pieces.sh), it
+    and without composite.py in the tree, or onsite's cases without ONSITE_PIECES (workloads/onsite_served/onsite_pieces.sh), it
     says so and fails, since no Lean answered. PRODUCT=remote needs no
     served_case.sh, writes neither PoUS's case nor the wipe's, and runs remote's Lean alone. A serve dir with no V3c
     audit hands served_cases.py step 3's records audit (``--audit SERVE_DIR/sampled-proofs-served``) once it holds a

@@ -18,7 +18,7 @@ export WC=benchmarks/word_codec RS=benchmarks/rate_squaring PY
 export B; B=$(mktemp -d /tmp/encode-rate.XXXXXX); trap 'rm -rf "$B"' EXIT
 NV=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xptxas -v)
 nvcc "${NV[@]}" -Xcompiler -fPIC -shared -DKV_FIELD=1024 -DKV_MASK=1 -DKV_FOLD6=1 -DKV_QHEADS=32 -o "$B/kv.so" \
-  benchmarks/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 || { tail -30 "$O/kv.ptxas"; exit 4; }
+  verity/protocols/poub/prover/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 || { tail -30 "$O/kv.ptxas"; exit 4; }
 nvcc "${NV[@]}" -DSQ_BITS=1024 -DSQ_C=105 -o "$B/sq" $RS/sq.cu > "$O/sq.ptxas" 2>&1 || { tail -30 "$O/sq.ptxas"; exit 4; }
 cuobjdump -sass "$B/kv.so" | awk '/Function : /{p = ($0 ~ /chain_kernel/)} p' > "$O/kv-chain.sass"
 cuobjdump -sass "$B/sq" | awk '/Function : /{p = ($0 ~ /chainILi6ELi1E/)} p' > "$O/sq-fold6.sass"

@@ -5,7 +5,7 @@ with the memory challenger a party of its own on the challenger host
 
 * **W** is the weight of every ``LinearBase`` layer as the engine holds it (int8 [N, K] on the ``int8_exact`` target),
   deduplicated by storage, in module order and named by its first holder, in the store's frozen layout
-  (`benchmarks/pous/p2_v1/store.py`): each tensor from a block boundary over ⌈size / payload⌉ blocks, its last block zero
+  (`verity/protocols/pous/prover/p2_v1/store.py`): each tensor from a block boundary over ⌈size / payload⌉ blocks, its last block zero
   past its end, and ``W`` zero to whole segments of the point's ``2^16`` blocks (`Layout.of_ranges`).  Scales, embeddings
   and norms are not in ``W``.  These are the tensors the Commit registers, read through `weights_view` while released.
 * **Commit** (`commit_weights`, the composition's first phase, model untouched): ``setup.commit(params, W)`` before any
@@ -145,7 +145,7 @@ def _package(name: str, directory: Path) -> None:
 
 
 def _p2(module: str) -> Any:
-    """``store`` (`benchmarks/pous/p2_v1/store.py`, as ``p2_v1.store``) or ``stage``
+    """``store`` (`verity/protocols/pous/prover/p2_v1/store.py`, as ``p2_v1.store``) or ``stage``
     (`benchmarks/torch_gpu/p2_stage/stage.py`, as ``p2_stage.stage``)."""
     _package("p2_v1", config.P2_POUS / "p2_v1")
     if module == "store":

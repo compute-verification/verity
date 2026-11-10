@@ -22,7 +22,7 @@ RS=benchmarks/remote_session
 B=$(mktemp -d /tmp/remote-inplace.XXXXXX); trap 'rm -rf "$B"' EXIT
 { nvcc --version; echo "python: $PY"; } > "$O/build.txt"
 nvcc -O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v \
-  -o "$B/session.so" benchmarks/remote_session/session.cu > "$O/session.ptxas" 2>&1 || { tail -40 "$O/session.ptxas"; exit 4; }
+  -o "$B/session.so" verity/protocols/poub/prover/remote_session/session.cu > "$O/session.ptxas" 2>&1 || { tail -40 "$O/session.ptxas"; exit 4; }
 mkdir "$B/sass" && cuobjdump -sass "$B/session.so" | awk -v d="$B/sass" '/Function :/{f = d "/" $3} f {print > f}'
 (cd "$B/sass" && md5sum -- *) > "$O/sass.txt"
 LEASE=(gpu-lease 1 --wait --max-min "${MAXMIN:-20}" --)

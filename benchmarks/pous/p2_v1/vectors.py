@@ -22,8 +22,8 @@ from verity.protocols.pous.verifier.verifier import MerkleTree
 from verity.commitments.identity import canonical_json_bytes
 from verity.commitments.randomness import derive, frame
 
-from . import reference as R
-from . import wire as Wi
+from verity.protocols.pous.verifier.p2_v1 import reference as R
+from verity.protocols.pous.verifier.p2_v1 import wire as Wi
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
@@ -312,7 +312,7 @@ def negative_vectors(vector: dict) -> dict:
 
 def keys_fixture(maps: dict, maps_sha512: str) -> dict:
     keep = ("id", "w", "c0", "model_commitment", "setup_salt", "segment", "block", "K", "t", "t_rejection_index")
-    return {"source": "benchmarks/pous/p2_v1/vectors.json, P2 v4's p2-test-vectors/v4 (the spec's section 7)",
+    return {"source": "verity/protocols/pous/verifier/p2_v1/vectors.json, P2 v4's p2-test-vectors/v4 (the spec's section 7)",
             "source_sha512": maps_sha512, "randomness": maps["randomness"],
             "vectors": [{k: v[k] for k in keep} for v in maps["vectors"]]}
 

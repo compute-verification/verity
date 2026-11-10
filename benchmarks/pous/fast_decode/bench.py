@@ -1,4 +1,4 @@
-"""The fast-decode prototypes' decode rates on one GPU, each library gated byte-exact against `p2_v1.reference` first.
+"""The fast-decode prototypes' decode rates on one GPU, each library gated byte-exact against `verity.protocols.pous.verifier.p2_v1.reference` first.
 
 Libraries: `--lib NAME=PATH` for a prototype (`tcsq.cu`, `nttsq.cu`: `fd_config`, `fd_decode` with mode 0 = D(c) and mode 1
 = d(c), and the TC builds' `fd_keys`), `--cgbn NAME=PATH` for a `libp2v1.so` (`p2_v1/p2v1.cu`, the CUDA-core decode in use,
@@ -41,9 +41,9 @@ sys.path.insert(0, str(HERE))
 sys.path.append(str(HERE.parents[2]))
 
 import algo  # noqa: E402
-from benchmarks.word_codec import cuda_lib  # noqa: E402
+from verity.protocols.poub.prover.word_codec import cuda_lib  # noqa: E402
 from p2_v1 import gpu as G  # noqa: E402
-from p2_v1 import reference as R  # noqa: E402
+from verity.protocols.pous.verifier.p2_v1 import reference as R  # noqa: E402
 
 _v, _u = ctypes.c_void_p, ctypes.c_uint32
 FD = {   # the prototypes' functions (fd_keys is p2v1_keys' signature)

@@ -1,4 +1,4 @@
-// vLLM's paged KV cache in `benchmarks/word_codec/kv.cu`'s codec: decode attention over the pages, the append of a
+// vLLM's paged KV cache in `verity/protocols/poub/prover/word_codec/kv.cu`'s codec: decode attention over the pages, the append of a
 // step's new tokens, and the gather of whole pages for prefill (FlashAttention reads them from a scratch). Build with
 // -DKV_FIELD, -DKV_MASK, -DKV_FOLD6 and -DKV_QHEADS at the encoded stack's codec (run.sh).
 //
@@ -46,7 +46,7 @@
 //
 // pg_reduce is the stack's linear epilogue: wt.cu's chunk partial sums [nch][M][N] summed in chunk order and scaled
 // (bf16(sum * xs[row or 0] * ws)), so a plain and an encoded linear over the same weight give the same bits.
-#include "../word_codec/kv.cu"
+#include "../../verity/protocols/poub/prover/word_codec/kv.cu"
 
 #include <cuda_bf16.h>
 

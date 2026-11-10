@@ -14,7 +14,7 @@ from remote_bandwidth_fakes import Clock
 
 from verity.protocols.poub.verifier import audit, codec, coins, receipts
 
-# `benchmarks/codec_tensor/sketch_receipt.py` (at 5b8decfc5), numpy, run on these
+# `verity/protocols/poub/prover/codec_tensor/sketch_receipt.py` (at 5b8decfc5), numpy, run on these
 # inputs: seed k is SHA512(SKETCH_PINS ‖ u8 k), "counter" n bytes of SHA512(SKETCH_PINS ‖ label ‖ u32be c) for
 # c = 0, 1, …; each case (seed, block, z, j, σ_j, y) with σ_j its `sketch` and y its `SketchReceipter`'s, a receipt
 # that binds z; each unbound case (seed, block, j, σ_j, y), of the block alone, with σ_j its `sketches` of the block

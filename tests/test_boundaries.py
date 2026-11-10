@@ -237,7 +237,7 @@ BENCHMARKS_IMPORTERS = {
                                                                           "(`benchmarks/vllm_encoded`)",
     "integrations/vllm/verity_vllm/protocols/remote_bandwidth/in_place.py": "proofs: the remote session's `device` and "
                                                                             "`inplace` (`benchmarks/remote_session`)",
-    "integrations/vllm/verity_vllm/engine/int8_credited_env.py": "circuits (vllm): `benchmarks/vllm_encoded/paged.py`",
+    "integrations/vllm/verity_vllm/engine/int8_credited_env.py": "circuits (vllm): `verity/protocols/poub/prover/vllm_encoded/paged.py`",
     # Flock's measurement campaign, its tests, and the frozen instance sets `instances` reads
     **dict.fromkeys((
         "verity/flock/pod/gemm_hill.py", "verity/flock/pod/read_gadget.py",
@@ -277,7 +277,7 @@ BENCHMARKS_IMPORTERS = {
     **dict.fromkeys(("integrations/vllm/tests/engine/ppl_oracle.py", "integrations/vllm/tests/engine/fattn_oracle.py",
                      "integrations/vllm/tests/engine/int8_store_gpu.py"),
                     "circuits (vllm): the int8 step's oracles (`benchmarks/ppl/steps.py`, `benchmarks/pouw/edited_gemm`) "
-                    "and `benchmarks/vllm_encoded/paged.py`"),
+                    "and `verity/protocols/poub/prover/vllm_encoded/paged.py`"),
     "integrations/vllm/tests/engine/int8_attention_sass.py": "kernels: the PoUW kernels' SASS gate "
                                                              "(`benchmarks/pouw/harness/sass_gate.py`)",
 }

@@ -390,7 +390,7 @@ class StoreBackend:
 
 
 class KvDevice:
-    """The store's encode on the GPU by kv.cu (``benchmarks/word_codec/kv.cu``, a build at the codec's field and mask
+    """The store's encode on the GPU by kv.cu (``verity/protocols/poub/prover/word_codec/kv.cu``, a build at the codec's field and mask
     loaded as `kv_bench.Lib`): blocks under the seed's key by ``kv_encode``; an append's under their bound keys and its
     coin by ``kv_encode_bound``, each block's offset b_j(c_a) = `codec.binding`(d_j, j, key, c_a) handed to the device
     by ``paged.offsets`` (`config.VLLM_ENCODED`), so the host computes only d_j and b_j."""

@@ -2,7 +2,7 @@
 # PoUS's piece of the composed served run (served_piece.py's docstring), started as served_verdicts.sh starts a piece,
 # `bash -c "$POUS_CMD" _ SERVE_DIR WINDOW DIR` with the tree as cwd:
 #
-#   POUS_CMD='bash benchmarks/pous/served_piece.sh "$@"'
+#   POUS_CMD='bash workloads/onsite_served/served_piece.sh "$@"'
 #
 # Outside the lease: libp2v1.so built for the card (benchmarks/torch_gpu/p2_stage/build.sh at ARCH, default sm_90a) into a
 # scratch directory removed on exit, unless P2_LIB names one. Under one lease of the card (gpu-lease, at most LEASE_MIN

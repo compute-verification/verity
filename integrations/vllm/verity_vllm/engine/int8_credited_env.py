@@ -42,7 +42,7 @@ def requested(value: str | None) -> tuple[str, str] | None:
 
 
 def paged_module() -> ModuleType:
-    """``benchmarks/vllm_encoded/paged.py``, loaded once as ``paged`` (the module `store.remote.session_module` loads)."""
+    """``verity/protocols/poub/prover/vllm_encoded/paged.py``, loaded once as ``paged`` (the module `store.remote.session_module` loads)."""
     if "paged" in sys.modules:
         return sys.modules["paged"]
     spec = importlib.util.spec_from_file_location("paged", config.REMOTE_SESSION.parent / "vllm_encoded" / "paged.py")

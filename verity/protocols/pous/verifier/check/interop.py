@@ -1,5 +1,5 @@
 """Byte-for-byte interop of the two implementations of `p2-audit-wire/v4`: the Python reference
-`benchmarks/pous/p2_v1/wire.py` and the Lean `pous_check` (`PousCheck.Wire`, `PousCheck.Audit.check`).
+`verity/protocols/pous/verifier/p2_v1/wire.py` and the Lean `pous_check` (`PousCheck.Wire`, `PousCheck.Audit.check`).
 
     uv run python verity/protocols/pous/verifier/check/interop.py --all [--out FILE]
 

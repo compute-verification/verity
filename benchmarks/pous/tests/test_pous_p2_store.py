@@ -21,7 +21,7 @@ pytest.importorskip("verity")
 
 BENCH = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BENCH))
-from p2_v1 import reference  # noqa: E402
+from verity.protocols.pous.verifier.p2_v1 import reference  # noqa: E402
 from p2_v1 import store as S  # noqa: E402
 
 from verity.protocols.pous.verifier import protocol, setup, verifier  # noqa: E402
