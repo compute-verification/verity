@@ -24041,3 +24041,254 @@ skip. The preflight onto `next` refused nothing.
 **No run of mine is pending.** `r20261110-044416-3cd2` (vy-nebius-cpu-12) ended at 04:57Z with rc 0. Its scripts are in
 `/cursor/stores/self/vfb/prog/`. Next: Wed from 03:30Z, the Lean leg; by Wed 12:00Z, the `SampledKSLiveV3` and `V5`
 statements.
+
+## ZKHIDE, Tue 10 Nov 05:04Z: D1, the zero-knowledge statements for Daniel: all eight elaborate and are proved on my branch; three things the post's sentence must not claim yet
+
+Branch `cursor/proofs-zkhide-7dfe`, head `c84bfeb937`, PR #8536, unmarked
+(https://github.com/compute-verification/verity/pull/8536). Five new files under
+`Security/Proofs/Flock/SampledGeneric/` (`HidingDefs`, `HidingStatements`, `Hiding`, `HidingSessions`,
+`HidingWitnesses`; 1,033 lines, 45 theorems, 32 definitions) and five import lines in the aggregator. No existing
+statement, definition or lock entry changed; nothing is in a lock. Labels: [read] = I read it at `origin/main`
+7af4d24fca or on my branch; [run ID] = that run on vy-nebius-cpu-12 showed it; [guess] = neither.
+
+**Status in one line.** Each statement below is a `def … : Prop` under `Flock.Guarantees` and has a proof
+`Flock.SecurityProofs.G : Flock.Guarantees.G` that uses only `propext`, `Classical.choice`, `Quot.sound`
+[run r20261110-045847-5cb5, rc 0, at c84bfeb937]. So D2's items 1, 2 and 3 are proved, ahead of their date, pending
+Daniel's reading of the statements.
+
+**Your reading of `main`, checked.** [read] All of it holds: `Flock.SecurityProofs.GenericSampledZK` is one session
+at one constant `ε_zk`; `MaskedZK`'s error `ε_zk(x) + γ(x)·Pr[Fork(P w, V*)]` reads the witness and the verifier, so
+it is not an instance; `hm96_commit_two_traces` is an inequality on tests, not a `Hider`; no `Hider.Hiding` instance
+exists on `main`. Two additions: `FlockZk.audit_below` already gives the ZK server's one-sided, factor-2 form over a
+commitment whose hiding is a hypothesis; and `Claims.SamplingGeneric.CompilerZK` is one-sided, per public outcome
+(`ZKOut`), with the simulator handed the published leaf layer.
+
+### 1. The hm96 trace commitment hides
+
+```lean
+def Hm96TraceHiding : Prop :=
+  ∀ (ι Sa Bs C D : Type) [Fintype ι] [DecidableEq ι] [Fintype Sa] [Nonempty Sa] [AddCommGroup Bs] [Fintype Bs]
+    (My : Sa → Bs) (c : Sa → C) (δ₁ : ℝ≥0∞) (Hf : Bs × C → D),
+    Claims.Hm96Hiding My c δ₁ → (hm96Hider ι My c Hf).Hiding (2 * Fintype.card ι * δ₁)
+
+def Hm96ExeHiding : Prop :=
+  ∀ (ι : Type) [Fintype ι] [DecidableEq ι], (hm96Exe ι).Hiding (2 * Fintype.card ι * hm96Gap)
+```
+
+- `Hm96TraceHiding`: commit each of $N$ leaves $x_i$ as $H_f(x_i + M y_i,\ c(y_i))$ under its own uniform salt
+  $y_i$; if one leaf hides at $\delta_1$, then whatever anyone computes from all $N$ published leaves has the same
+  distribution for any two traces, up to $2N\delta_1$. Proof: `hm96_commit_two_traces` at the test "the
+  post-processing's event" [run r20261110-045847-5cb5].
+- `Hm96ExeHiding`: the same for the Lean verifier's own function, `Flock.Hm96.Default512.commitString`, on $N$ inner
+  digests under $N$ uniform 192-byte salts, with $\delta_1$ = `hm96Gap`, the statistical distance of
+  $(M(\kappa_0)y,\ \text{SHA-512}(sp\|y))$ from $(U,\ \text{SHA-512}(sp\|y))$ at the pinned key. No premise
+  [run r20261110-045847-5cb5]. It needed one new lemma about the executable, `commitSplit` (`leafSplit` before the leaf's hash).
+- Witnesses [run r20261110-045847-5cb5]: the premise holds at the pinned key (`hm96TraceHiding_honest`); the bound
+  $N\delta_1$ is false (`hm96TraceHiding_not_card`).
+
+**How far this is from the commitment the verifier reads.**
+
+- **Salts: this is the real gap.** [read `verity/ml/windows/rows.py` 25-27, 146-159, 732-736, 1235-1245;
+  `integrations/vllm/verity_vllm/pipeline/serving_rows.py` 757-760] The served window's own rows take each salt as
+  192 bytes of ChaCha20 under one 32-byte OS key per window (nonce = the port's index); its row segments the same
+  under the run's row key. The model has $N$ independent uniform salts. [argument, not Lean] With 256 bits of key
+  behind $1536N$ bits of salt the stream's support is a $2^{-1280}$ share of the salts at $N=1$, so the served
+  commitment is not statistically hiding at any useful error; it hides only against a distinguisher that cannot tell
+  ChaCha20's stream from uniform, and no theorem or named assumption on `main` says that. (`A3`,
+  `UniformRandomBytesTest`, is about OS bytes.) [read `interior_rows.py` 321-337, `boundary_rows.py` 349,
+  `hiding.py`] Interior rows, boundary rows and Flock's own leaves take every salt from the OS, so the model fits
+  them under A3.
+- **The theorem that would tie them:** a re-seeded commitment, `commit X ω := H.commit X (t ω)`, hides at
+  $\varepsilon_h + 2\eta$ when the source `t` is $\eta$-close to uniform salts on every event (A3's shape; 2 lemmas,
+  one file). With OS salts for each row that premise is A3 and the tie is done. With the ChaCha20 stream the premise
+  is false for "every event", so the model's `Close` would need a class of tests, and every lemma of `Zk.lean` and my
+  five files restated over it (about 25 lemmas), plus a new named assumption. **Daniel's choice:** rows take OS salts
+  (an integration change, 192 OS bytes a row), or the guarantee gains a stream-cipher assumption.
+- **Rows and trees add nothing.** [read `rows.py` 18-30] A row's public 128 bytes are exactly
+  `commit_string(default_key, x, y)` with `x = SHA-512(prefix ‖ row)`; the row leaf, every inner node and every root
+  are functions of those strings. `Hider.Hiding.map` (what is computed from a hiding commitment hides) and
+  `Hider.Hiding.comap` (committing to a function of the trace) cover them at the same error [run r20261110-045847-5cb5]. The
+  statement already hands the adversary all $N$ commit strings, which is more than the roots.
+- **Python against Lean.** [read, not run] The Python committer is tied to core's function by a test
+  (`tests/commit/test_serving_rows.py`), not by a theorem.
+- **$\delta_1$ has no number for the pinned key.** [read `CROnly/Hm96Sha512.lean`, `Definitions/Core/Hm96.lean`]
+  `main` proves the mean over keys is at most $2^{-257}$ and that all but $2^{-64}$ of keys are below $2^{-193}$.
+  That the pinned key is one of them is the named step `hash-derived-key`. The post can write
+  $\delta_1 \le 2^{-193}$ only with that name beside it.
+
+### 2. Daniel's sentence, with a base error that reads the witness and the verifier
+
+```lean
+def GenericSampledZKAt : Prop :=
+  ∀ (n : ℕ) (Tr Rnd Com Wit VS View : Type) [Fintype Rnd] [Nonempty Rnd] (H : Hider Tr Rnd Com)
+    (Zs : Zk (Com × Finset (Fin n)) Wit VS View) (Rel : Com × Finset (Fin n) → Wit → Prop)
+    (ε : Com × Finset (Fin n) → Wit → VS → ℝ≥0∞) (εh : ℝ≥0∞) (samp : VS → Com → Finset (Fin n))
+    (wit : Tr → Rnd → Finset (Fin n) → Wit),
+    Zs.ZKAt Rel ε → H.Hiding εh →
+    ∀ Xt : Tr, (∀ r S, Rel (H.commit Xt r, S) (wit Xt r S)) →
+    ∀ (X₀ : Tr) (v : VS), Close (auditView H Zs samp wit Xt v) (auditSim H Zs samp X₀ v)
+      (εh + avg fun r => ε (H.commit Xt r, samp v (H.commit Xt r)) (wit Xt r (samp v (H.commit Xt r))) v)
+```
+
+If the commitment hides at $\varepsilon_h$ and the proof system's honest view is within $\varepsilon(x,w,v)$ of its
+simulator's on every event (`Zk.ZKAt`, two-sided), then against every verifier, which samples after seeing the
+commitment, the whole view (commitment, sample, session) is within
+$\varepsilon_h + \mathbb E_r\,\varepsilon(x_r, w_r, v)$ of a simulator that commits to any fixed trace $X_0$ and is
+given nothing of the real one. The average is over the commitment's coins, because the session's statement and
+witness depend on them. Witnesses [run r20261110-045847-5cb5]: both premises hold at Flock (`spotFlock_premises`);
+without the hiding premise it is false (`genericSampledZKAt_needs_hiding`); without the zero-knowledge premise it is
+false (`genericSampledZKAt_needs_zk`).
+
+```lean
+def SpotFlockZK : Prop :=
+  ∀ (nr : Claims.Msg → ℕ → ℕ) (t : ℕ), 0 < t →
+  ∀ (ι : Type) [Fintype ι] [DecidableEq ι] (n : ℕ) (Θ : Type)
+    (stmt : (ι → ByteArray) × Finset (Fin n) → Claims.Msg)
+    (samp : ((ι → ByteArray) × Finset (Fin n) → MalVerifier (flockRounds nr t) Θ) →
+      (ι → ByteArray) → Finset (Fin n))
+    (wit : (ι → ByteArray) → (ι → Discharge.ZkView.Salt) → Finset (Fin n) → Claims.Flock.Wit)
+    (Xt : ι → ByteArray),
+    (∀ r S, Claims.Flock.R (flockZk nr t).parse (stmt ((hm96Exe ι).commit Xt r, S)) (wit Xt r S)) →
+    ∀ (X₀ : ι → ByteArray) (v : (ι → ByteArray) × Finset (Fin n) → MalVerifier (flockRounds nr t) Θ),
+      Close (auditView (hm96Exe ι) ((flockSession nr t Θ).after stmt) samp wit Xt v)
+        (auditSim (hm96Exe ι) ((flockSession nr t Θ).after stmt) samp X₀ v)
+        (2 * Fintype.card ι * hm96Gap +
+          avg fun r => flockErr nr t (stmt ((hm96Exe ι).commit Xt r, samp v ((hm96Exe ι).commit Xt r)))
+            (wit Xt r (samp v ((hm96Exe ι).commit Xt r)))
+            (v ((hm96Exe ι).commit Xt r, samp v ((hm96Exe ι).commit Xt r))))
+```
+
+The sentence for SPOT[Flock], one session: the error is
+$$2N\delta_1 + \mathbb E_r\bigl[\varepsilon_{zk}(x_r) + 4t\,3^t \Pr[\mathrm{Fork}(P(w_r), V^*)]\bigr].$$
+Every term, by name [read]:
+
+- $N$ = `Fintype.card ι`, every committed row, sampled or not. $\delta_1$ = `hm96Gap` (above).
+- $\varepsilon_{zk}(x)$ = `zkEps t x` $= 8 n_L(x)\delta_1 + 8 t\, n_L(x)\delta_1 + 2\cdot 3^{-t}$ for a statement in the
+  masked record's scope, and $1$ outside it; $n_L(x)$ is the session's own pre-final leaves.
+- $4t\,3^t$ = `zkγ t`; `Fork` is `MaskedZK`'s collision finder, two runs of the reference prover at $w$ against $V^*$
+  on one nonce, and $\Pr[\mathrm{Fork}]$ its success at SHA-512. $t$ is free: $2\cdot 3^{-t}$ falls as $4t\,3^t$ grows.
+- $V^*$ is any verifier with the session's round count (`MalVerifier`), and the verifier picks it after reading all
+  $N$ commit strings and its own sample (`Zk.after`), not only the session's statement. $\mathbb E_r$ is over the
+  prover's $N$ salts.
+- The premise: every sampled statement is in the masked record's relation with the trace's openings. [read
+  `Claims/Witnesses/SamplingGenericZK.lean` 64-68] The tree constructs no member of Flock's relation at a statement
+  the deployed parser accepts, so no theorem shows this premise holds at a real statement; `spotFlock_premises`
+  shows only the generic theorem's two premises, the session's zero knowledge and the commitment's hiding.
+- The simulator: commit to $X_0$ under fresh salts, let $V^*$ sample, run `MaskedZK`'s counted simulator on that
+  statement. "From the circuit alone" is `stmt`, $N$ and $n$.
+
+Proof: `GenericSampledZKAt` at `MaskedZK` and `Hm96ExeHiding` [run r20261110-045847-5cb5].
+
+### 3. Several sessions per audit
+
+```lean
+def GenericSessionsZK : Prop :=
+  ∀ (Stmt Wit VS View : Type) (Zs : Zk Stmt Wit VS View) (Rel : Stmt → Wit → Prop) (ε : Stmt → Wit → VS → ℝ≥0∞),
+    Zs.ZKAt Rel ε → Zs.seq.ZKAt (List.Forall₂ Rel) fun xs ws v => Zs.seqErr ε (xs.zip ws) (v xs)
+
+def GenericSampledSessionsZKSum : Prop :=
+  ∀ (n : ℕ) (Tr Rnd Com Stmt Wit VS View : Type) [Fintype Rnd] [Nonempty Rnd] (H : Hider Tr Rnd Com)
+    (Zs : Zk Stmt Wit VS View) (Rel : Stmt → Wit → Prop) (εb : Stmt → Wit → ℝ≥0∞) (εh : ℝ≥0∞)
+    (stmts : Com × Finset (Fin n) → List Stmt)
+    (samp : (Com × Finset (Fin n) → List Stmt → List View → VS) → Com → Finset (Fin n))
+    (wits : Tr → Rnd → Finset (Fin n) → List Wit),
+    (Zs.ZKAt Rel fun x w _ => εb x w) → H.Hiding εh →
+    ∀ Xt : Tr, (∀ r S, List.Forall₂ Rel (stmts (H.commit Xt r, S)) (wits Xt r S)) →
+    ∀ (X₀ : Tr) (v : Com × Finset (Fin n) → List Stmt → List View → VS),
+      Close (auditView H (Zs.seq.after stmts) samp wits Xt v) (auditSim H (Zs.seq.after stmts) samp X₀ v)
+        (εh + avg fun r =>
+          (((stmts (H.commit Xt r, samp v (H.commit Xt r))).zip (wits Xt r (samp v (H.commit Xt r)))).map
+            fun xw => εb xw.1 xw.2).sum)
+```
+
+- `GenericSampledSessionsZKSum` is the form you asked for: $M$ sessions, error
+  $\varepsilon_h + \mathbb E_r \sum_j \varepsilon_b(j)$, when a session's error reads no verifier.
+- `GenericSessionsZK`, `GenericSampledSessionsZK` and `SpotFlockSessionsZK` are the same with an error that does read
+  the verifier, which Flock's does: session $j$'s term is averaged over the honest views of the sessions before it,
+  because those views decide what the verifier is by session $j$ (`Zk.seqErr`). At Flock:
+  $$2N\delta_1 + \mathbb E_r \sum_j \mathbb E\bigl[\varepsilon_{zk}(x_{r,j}) + 4t\,3^t\Pr[\mathrm{Fork}(P(w_{r,j}), V^*_j)]\bigr].$$
+- **Does it compose two-sided by a plain hybrid? Yes** [run r20261110-045847-5cb5, `Zk.seq_close`]. Hybrid $j$ keeps
+  the first $j$ sessions honest and simulates the rest. `main` lacked one step: closeness on events survives any
+  post-processing by a further experiment (`Close.andThen`). `main` had it only for a uniform coin
+  (`avg_le_of_prCoin`). I proved it for any experiment through sums over outcomes (5 lemmas).
+- **What the model adds:** the verifier's state across sessions. A verifier of the audit is a function from the
+  commitment, its sample, the statements and the views so far to a session verifier,
+  `Com × Finset (Fin n) → List Stmt → List View → VS` (`Zk.seq`, `Zk.after`); the simulator of session $j$ runs
+  against the same function of the simulated views. This is the game-model twin of the claims
+  core's `residual`. It needs the session premise against every verifier, which `MaskedZK` gives.
+- **What it does not cover:** sessions whose messages interleave. The statement is sessions in turn.
+
+### 4. Where it lives: I recommend (b) for the lock, with this PR landing unlisted as its proof material
+
+**(a) List the game-model statements.** Lean: no new file. Lock: 8 `guarantees` records; 8 `shape.frozen` reasons
+(a simulation statement has no function's acceptance to be a property of, as `MaskedZK`'s entry says), which is a
+claims change; 1 new `trees.except` prefix, `Proofs.Flock.SampledGeneric`, because the statements read `Exp`,
+`Close`, `Zk`, `Hider`, `auditView`, `auditSim` in the proofs tree (or those move to `Security/Definitions`: about
+70 lines of `Defs.lean` and this PR's 161-line `HidingDefs.lean`, which is a rename under the TOP-387 freeze); and `SpotFlockZK` and `SpotFlockSessionsZK` read claims, so
+they are held to witnesses [guess: I read `witness_scope`, I did not run the check] and would enter `unwitnessed`
+beside `MaskedZK`, since their premise needs a member of Flock's relation and the tree constructs none. Three lists
+that only shrink would grow. And the audit's simulator here is a game, not a counted `Claims.Simulator`, which the
+standing ruling asks of a listed guarantee.
+
+**(b) A claims-core statement.** [read `Definitions/Claims/Sampling.lean` 80-90, 648-655, 728-739] Today the core's
+`CommitmentScheme` has only `opens` and `layer`: no commit function and no coins. The roots are part of the fixed
+statement, and the simulator is handed the leaf layer. It would need, in one new Definitions file (about 120 lines, 4
+definitions) that changes no frozen statement: a salted commitment (a trace and uniform salts to the statement's
+roots, the openings and the leaf layer); a hiding notion on that; and a claim shaped like `ZkCompiled.ZK` whose real
+experiment draws the salts and whose simulator, a counted program, commits to a fixed trace itself. Proof: one new
+file, about 12 lemmas (average `compilerZK` over the salts, 3 bridge lemmas from this PR's hm96 bound to
+`Claims.Pr`, the simulator's count, the composition). Witnesses: one new file, about 6 lemmas. Lock: one `generic`
+claim with `meets` and `fails`; no new frozen, trees or unwitnessed entry. It stays one-sided per public outcome, as
+`compilerZK` is, unless the core also gains a two-sided notion.
+
+**Why (b), and why land this PR first.** (b) is where a listed zero-knowledge claim already lives and it adds to no
+shrinking list. But it is three files against a frozen vocabulary and cannot be read by Daniel before Fri. This PR is
+the mathematics (b) reuses, is proved now, and the Lean check replays every declaration through the kernel whether
+a lock lists it or not. So: land this unlisted for the post, then (b).
+
+### 5. What the post can say
+
+**Today, every term on `main`** [read `Statements.lean` 117-128, `Zk.lean` 86-90]: "In Lean, for any commitment
+whose outputs on any two traces differ by at most $\varepsilon_h$ on every event after any post-processing, and any
+proof system whose honest view differs from a simulator's by at most $\varepsilon_b$ on every event, for every true
+statement and every verifier: in an audit of one session, against any verifier that picks its sample after seeing the
+commitment, the verifier's whole view, the commitment included, differs by at most $\varepsilon_b + \varepsilon_h$
+from a simulator's that is given no trace (`Flock.SecurityProofs.GenericSampledZK`)." It may not say this holds of
+SPOT[Flock]: on `main` no commitment is shown to hide in this sense, Flock's session error is not a constant, and an
+audit has more than one session.
+
+**Once D2 lands** [run r20261110-045847-5cb5]: "For SPOT[Flock], in Lean: the prover commits to its $N$ rows with hm96 under
+independent uniform salts; the verifier, whatever it does, picks its sample after seeing the commitment; each
+sampled statement is proved in its own masked Flock session, in turn. Then the verifier's whole view, every commit
+string, its sample and every session's transcript, differs on every event by at most
+$2N\delta_1 + \sum_j \bigl(\varepsilon_{zk}(x_j) + 4t\,3^t\Pr[\mathrm{Fork}_j]\bigr)$ from a simulator's that commits
+to a fixed trace and runs Flock's simulator, with nothing of the real trace
+(`Flock.SecurityProofs.SpotFlockSessionsZK`)." Beside it the post must say three things, or it claims more than
+the theorem: the salts are uniform and independent, which the serving stack's ChaCha20 salts are not; $\delta_1$ is
+hm96's gap at the pinned key, below $2^{-193}$ under `hash-derived-key`; and that the sampled statements are true of
+the trace is the theorem's premise.
+
+### Asks
+
+1. Daniel's reading of the eight statements, and his choice on the salts (OS salts per row, or a stream-cipher
+   assumption).
+2. Your call on 4: land unlisted now, (b) after.
+3. Nothing else blocks D2. On your word that Daniel has seen the statements I run the Lean check's records for
+   `Security/Proofs` and the quick suites, then mark.
+
+### Could not verify
+
+- That the deployed audit runs its sessions in turn and never interleaves them. I did not read the session
+  scheduler.
+- Whether a deployed committer ever puts two different rows under one salt. [read] `rows.py` shares salts for a
+  registered value's rows (`salts_of`) and for a row table's linked rows; I did not check the contents are equal.
+  If they differ, the XOR of two inner digests is public.
+- That the Python committer equals Lean's `commitString`: a test says so; I did not run it.
+- Whether the lock's check would put these statements in the witnesses rule's scope, and whether my two premise-drop
+  lemmas have the form it asks: I read `check.py`, I ran no `check.py --update` (nothing may enter a lock yet).
+- Whether `MaskedZK`'s simulator rewinds. It matters only for interleaved sessions.
+- `research notes approaches --refresh` timed out at launch, so the overlap check is the claim alone
+  (`approach:flock/spot-zk-hiding-composition`). BINDKSAT's #8512 touches nothing under `SampledGeneric/` [read your
+  note].
+- The Lean check's records run and the suites: not run yet. `--try` builds and probes each file; it is not the
+  package's check.
