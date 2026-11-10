@@ -102,10 +102,10 @@ def rng (net : String) (sl p0 n : Nat) : Json := Json.mkObj [("count", jn n), ("
   ("slot_log", jn sl), ("type", js "unit")]
 def mrng (sl p0 n : Nat) : Json := Json.mkObj [("count", jn n), ("pos0", jn p0), ("slot_log", jn sl), ("type", js "mask")]
 
-/-- The pinned leaf scheme (`Tags.leafSchemeHm96`), its members in key order. -/
+/-- The leaf scheme `Tags.circuit` pins (`Tags.leafSchemeHm96Os`), its members in key order. -/
 def lsM : Json := Json.mkObj [("id", js "hm96-sha512/v1"), ("inner", js "sha512 column digest"),
   ("key", js "default_key, a statement constant for every tree"), ("key_sha512", js keyHex), ("salt_bytes", jn 192),
-  ("salt_source", js "chacha20 expansion of a fresh 256-bit os key per proof, never reused or stored")]
+  ("salt_source", js "os bytes (getrandom), 192 per leaf, each tree's read once, never reused or stored")]
 
 /-- META. Every object in it lists its members in key order, the order `JsonParse` inserts them in, so that its line
 parses back to this tree (`parse_meta`): a tree's shape depends on the order its keys went in. Its bindings
