@@ -244,8 +244,10 @@ A spec-level reference for network accounting's timing channel:
   occupied slot whose entry of the Programs' row isn't read (its read bit 0: a request no Program served). Unless the
   Programs' row is a compute audit's `SlotEntry_v1` template's entries, that template a pinned Definition (its closure
   digest one of `slotEntryPins`), the read bit is the prover's word (an entry of read 1 and no outputs passes), so the
-  period check refuses such an execution phase (`NetworkCheck.Period`'s `wired`), and one whose scan's state isn't that
-  audit's `SCAN_STATE`, by root and domain (`stateTied`): the scan's state tree is the window state (`window_state`),
+  period check refuses such an execution phase (`NetworkCheck.Period`'s `wired`), one whose scan's answer names a tied
+  Input other than that row (`tiedInputWired`: the Inputs one-stage's registration check let several units read), and
+  one whose scan's state isn't that audit's `SCAN_STATE`, by root and domain (`stateTied`): the scan's state tree is
+  the window state (`window_state`),
   each row but the empty state's the one a unit computes (its o1) and the next reads (its sin), both registered reads,
   so a Program reads the states the scan's steps computed;
   `IngressScanFirst`, the first bucket's, starts from the empty state, constants of its circuit. Programs start at
