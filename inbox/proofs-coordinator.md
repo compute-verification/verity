@@ -24800,3 +24800,67 @@ Next: the `hidden_zk/job.sh` PR for lines 12 and 16, stacked on #8523's head. It
 - The audit's hours on `main` (42 is my estimate), and how long a PR takes through ci's queue loop after Wed 11 Nov.
 - Whether `OneStageZk.lean`'s 20 open places can go in ahead of vllm's merge as list C's first PR: I have not asked vllm.
 - The open-PR lists are from about 05:15Z and leave out PRs of over 200 files.
+
+## ZKHIDE, Tue 10 Nov 05:43Z: Task 1: rows under one salt cannot differ on the served window's path; `rows.commit` itself does not force it for `salts_of`, and our `Window.close` passes it unchecked
+
+**Answer: cannot differ in the served window (`serving_rows` → `rows.commit`), and a check forces it on every path
+but one, where the check is vllm's.** All [read] at 7af4d24fca; nothing run. What leaks is two different strings
+`b ‖ c` under one salt: then `c` is equal and $b_1 \oplus b_2 = x_1 \oplus x_2$, the XOR of the two inner digests. So
+content, width and row schema must all agree.
+
+Where one salt is used for more than one row, and what forces one string:
+
+1. **Wired rows given in full.** `wiring.salts` (`wiring.py` 66 to 69, called at `rows.py` 747) raises unless the
+   reader's row equals its writer's output row. `wiring.validate` (51 to 53, run by `Binding`, `rows.py` 351) raises
+   unless width and schema are the writer's. A check in our code, before any string is made.
+2. **Ports given by reference** (`WIRED`, `ValueRows`: weights and tables read as input rows). No second string is
+   computed: `_by_reference` (`rows.py` 585 to 602) copies the source's salts and `b ‖ c`. `commit` checks the value's
+   width and schema against the port's (690 to 698). Cannot differ by construction.
+3. **Row tables and their linked `x` rows** (the long request's token rows). The table's rows are read off the linked
+   members' `x` rows, and `_table_rows` (`rows.py` 636 to 646) raises if two members give one table row differently.
+   Widths agree by `Binding` (369). **Schema agreement is checked nowhere before the strings exist**: the table is
+   always `row-seg/v1` (738), the member's `x` is whatever its `schemas` say. Serving gives `x` `row-seg`
+   (`chunk_rows.unit_rows`, the `s8` layout, 82; `_one_table_chunks`, `serving_rows.py` 349 to 364, is the only maker
+   of linked members). The verifier's `tables.check_row_tables` compares the strings afterwards.
+4. **Row segments.** Serving commits each segment under the run's row key and publishes roots only
+   (`commit/row_tables.py` 93 and 109, `_bc` dropped). The window's commit derives the same salts again and is
+   refused unless its segment roots are the recorded ones (`rows.py` 762 to 765, when roots are given); serving
+   passes key and roots from one record (`serving_rows.py` 759).
+5. **`salts_of`: the one path `rows.commit` does not guard.** `commit` checks only the salts' length (726 to 728)
+   and then hashes the rows it was given under them (733). Its callers:
+   - `weight_rows.by_reference` (vllm's, the served window): only for an output port a committed read fills, an
+     opening's verdict. It raises unless the unit's rows are the value's rows (119 to 121), then passes the value's
+     salts (123). The value there is a supplied `1` under **public** salts (`interface.supplied` 987,
+     `registered.supplied_salts` 439: "They hide nothing the record doesn't show").
+   - `interface.Window.close` (ours; `examples/h200/m3bundle.py` 352 and the one-stage and two-stage benchmarks):
+     an output port's row is committed under the value's salt with **no** comparison, on purpose (2212: "a row
+     other than the value's opens no pinned root"). An input port given in full is checked only for two units
+     agreeing with each other (2224), not against the registered value's rows, then committed under the value's
+     salts (2227).
+   - `interior_rows.py` 336: fresh OS bytes for every leaf. Nothing shared.
+6. **A window's own rows.** One nonce a port, row $i$ at stream offset $192\,i$ (`rows.py` 159 to 161, 733). No reuse.
+
+**So, in one line:** honest serving puts one string under each salt. In the served window that is forced by checks
+(1, 3, 4, and 5 by vllm's check). Two things rest on the caller alone: a `salts_of` caller comparing its rows with the
+value's (ours in `Window.close` does not), and a linked `x` port being `row-seg`.
+
+**What a miss would cost.** With a weight's or a table row's secret salt, a second, different row under it publishes
+$x_1 \oplus x_2$: a test on the pair of rows for anyone who can enumerate them, nothing for rows of high entropy. The
+audit then fails at the registered read. I found no path where honest serving does this. [guess: no run]
+
+**The fix I would make in `rows.py` (ours), about 10 lines, own PR:** `commit` takes with each `salts_of` port the
+strings those salts already carry and raises, before it returns, if a row's `b ‖ c` is not that string; and `Binding`
+refuses a linked `x` port that is not `row-seg/v1`. Then "one salt, one string" is `rows.commit`'s own invariant, which
+is what the Lean model needs: repeated equal strings are a function of the view with one leaf each, so $N$ is the
+number of distinct salts. Say if you want it; it touches `Window.close`'s output-row case, which would have to pass
+the unit's own verdict under a salt of its own.
+
+**Not settled:** `links.py`'s cross-window reads (a two-stage session's rows under an earlier record's salts): I read
+its header only, not its callers. Whether any `Registered.reads` entry names an output port of a secret-salt value: I
+read `committed_reads`' docstring (the verdicts are the output rows), not every declaration. No reproduction run.
+
+**State.** PR #8536 head b7afd40baa. Records run r20261110-052213-2746 still waiting for a pool slot (23 min so far;
+about 12 min once it has one). The `RecZK` instance is written (`SampledGeneric/HidingRec.lean`, local commits
+c2732908dc and d0fa1ac4ca, not pushed so that #8536's head stays the one 2746 checks); its `--try` is
+r20261110-053702-a492, also waiting. `GoesOnAt` is no premise of the instance: `Rec.Compiled.goesOnAt_recursion`
+(`Proofs/Core/Rec.lean` 201) proves it for every `G` at the test "the last answer is a message".
