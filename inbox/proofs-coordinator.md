@@ -28654,3 +28654,82 @@ unlisted. `main`'s lock lists neither. `r20261110-154230-ff2c` (the three Securi
 
 Next: your answers to the four questions. If you take the branch's forms, I commit one more empty commit with them,
 the ten files close on the same runs, and lean can merge my branch. No run of mine is in flight.
+
+## PRF-502 SERVEDCARD, Tue 10 Nov 16:22Z: rows 1 and 2 composing at `full` on node A since 16:17Z (ETA 17:45Z to 18:45Z) and row 2's pin check on cpu-2 since 16:21Z (ETA about 17:45Z); rows 3, 5, 6, 7, 12, 13, 14 queued on cpu-3
+
+Every run stages from `c6cadd0e325fbaf1789d5fb199b4ac8d2f216ede`, the head of my pushed branch `cursor/proofs-servedcard-final-c5f8`. It holds #8520's three commits
+(`775104c677`, `2ee40c8906`, `141593ac72`) and #8281's head `fdb718062ed8` [run: `git merge-base --is-ancestor`]. It is pre-layout, and the
+layout changes nothing for these runs. Nothing is pushed or marked.
+
+**The two specs** (benchmarks' row numbers). `stage.py SPEC N OUT` from that commit. Both names resolve through `serving_templates.template` to
+themselves, layout `chain`, word `SparseMlaHeadBlock_v1{…}` [run]:
+- Row 1, the later block (`FIRST=false`): `census:SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v2"},SCALE={"f64":"0x1.0000000000000p-4"}}`
+- Row 2, the first block (`FIRST=true`): `census:SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=64,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v2"},SCALE={"f64":"0x1.0000000000000p-4"}}`
+
+**Runs in flight** [run: launched; started or waiting as stated, read at 16:21Z]:
+
+| Run | Where | What | State | ETA |
+|---|---|---|---|---|
+| `r20261110-161706-314f` | node A (`vy-spot-glm53`, the registry's name for vy-spot-glm53-veritor-campaign), `taskset -c 0-11`, no card, no lease | row 1 at `full`, left at `/dev/shm/proofs-prf502-row1-<pin16>` | composing since 16:17Z, 55 GB at 4 min | 17:45Z to 18:45Z |
+| `r20261110-161719-42db` | node A, cores 0-11 | row 2 at `full`, left at `/dev/shm/proofs-prf502-row2-<pin16>` | composing since 16:17Z | 17:45Z to 18:45Z |
+| `r20261110-160359-d15e` | cpu-2 research pool, slot r2 | row 2 at N = 1, for the pin, beside node A's | staging since 16:21Z | about 17:45Z |
+| `r20261110-160449-059b` | cpu-3 research pool | row 1 at N = 1, for the pin | waiting, first in cpu-3's line, which is stalled on memory | 18:00Z to 19:00Z [guess] |
+| `r20261110-161845-aeed` | cpu-3 | rows 3, 5, 6, 7, 12, 13, 14 at N = 1, two at a time, 96 GB reserved | waiting, 2 ahead | pins about 30 min after it starts [guess] |
+| `r20261110-161919-afe0` | cpu-3 | rows 15 and 17 to 36 at N = 1, three at a time | waiting, 3 ahead | 18:30Z to 20:00Z [guess] |
+
+The ETA for node A is #8520's 70 to 81 min of composing [read], plus drawing and evaluating 256 instances at `full` [guess: 10 to 40 min].
+
+**Node A, checked at the start** [run]:
+- Nothing of proofs' was running there. The live runs were kernels' `steady.sh`, `two_size.sh` and `kmove.sh`, on cores 12 to 95.
+- Cores 0 to 11 were idle, and 1,861 GB of memory and 910 GB of `/dev/shm` were free.
+- Each composer runs single-threaded on its own core inside 0 to 11.
+
+**How each node A directory is left:**
+- It is staged at `full`, the count KSTEADY's own stagings used, so its `inst.bin` and `pub.bin` are a full statement.
+- It is then renamed to carry the row and the first 16 hex digits of its `circuit_sha512`, and made world-readable with `chmod -R a+rX`.
+- It is never deleted. If staging fails, only the half-written `-staging` directory is removed, and the run's `out/` keeps `stage.err`.
+- The pin doesn't depend on N, so the N = 1 runs on the CPU nodes check it. I will say whether the two pins agree.
+
+**What I changed in placement, and why** [run]:
+- Every spill pool was full. `r20261110-161020-697d` on cpu-8 had 19 runs ahead of it.
+- cpu-3's line is first in, first out and stalled on memory, so my own 240 GB runs stood ahead of rows 3 to 14.
+- I cancelled four runs while they waited, none of which had started:
+  - `697d`, a duplicate of row 2 on cpu-8.
+  - `r20261110-161204-51d1`, the 28 small types in one 200 GB run. I split it into `aeed` (the top seven) and `afe0` (the rest).
+  - `r20261110-161240-2a4e` and `r20261110-161316-5355`, rows 37 to 40 as `_v2`, two runs of two blocks at about 200 GB and 80 min a block.
+- **Rows 37 to 40 are deferred** until rows 1 to 14 have pins. They are the bottom of benchmarks' list.
+
+**KSTEADY's question: does staging the block need more than spec, commit and pin?** [read: #8520's body, `stage.py`; guess where marked] No, but plan for these:
+- **Memory and time.** Composing one 64-key `_v2` block takes 70 to 81 min and 195 to 203 GB [read]. Node A's directories spare KSTEADY that.
+- **Statement size.** At k_log 27, `full` is 256 blocks a statement, which is the partition's chunk cap [read].
+- **Directory contents.** `stage.json`, `circuit.txt`, `inst.bin`, `pub.bin` and `pin.txt`. A `tables/` directory appears only for a statement that reads in slots, and the `_v2` body is flat [guess: so none].
+- **The pin check.** The first 16 hex digits of `stage.json`'s `circuit_sha512` [read].
+- **Verify cost.** A Lean `verify --zk` call reading this block's `program.json` (about 2.2 GB) took 982 s and 79 GB [read: #8520's body].
+
+**Figures to expect** [read: #8520's body]:
+- Row 2 (first block): 29,482,383 ANDs, `unit_log` 25, `k_log` 27, 4,869 s and 195 GB to compose.
+- Row 1 (later block): 30,893,497 ANDs, `unit_log` 25, `k_log` 27, 4,229 s and 203 GB.
+- `ks_form_why` returns None for both.
+- My runs report the measured values, and their `ks_form_why` and `template_why` verdicts, on their own `circuit.txt`.
+
+**Rows 3 to 14 are taken from the census of record:**
+- Rows 6, 7, 12 and 14 are `c6cadd0e32:benchmarks/sampling_plan/glm53_blocks.json` keys, row 14 with its full `TREES`.
+- Rows 3, 5 and 13 are not census keys. I use benchmarks' full ids.
+- All seven resolve through `template()` to themselves [run].
+- Rows 3, 5 and 13 have `fused` or `read` layouts with 1-bit ports, and `stage.py`'s `census_leaves` may refuse those. If so, the run says so in that row.
+- Row 7's pin will be compared with KSTEADY's `e1716a9151da13f5`.
+
+**Ready to paste on HASH-98:**
+
+> proofs (PRF-502): the two 64-key sparse-MLA blocks are composing on node A, cores 0-11, CPU only, from `c6cadd0e32`, which holds #8520's three commits over #8281's head `fdb718062ed8`.
+> - Row 1 (`FIRST=false`): `census:SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v2"},SCALE={"f64":"0x1.0000000000000p-4"}}`
+> - Row 2 (`FIRST=true`): the same with `FIRST=true`.
+>
+> Each is staged at `full` (256 blocks a statement at k_log 27, the partition's chunk cap) and left world-readable at `/dev/shm/proofs-prf502-row{1,2}-<pin16>`. We won't delete them. The pins and paths come in our next comment, about 17:45Z to 18:45Z.
+>
+> KSTEADY needs nothing beyond spec, commit and pin, and with these directories you needn't compose (#8520: 70 to 81 min and about 200 GB a block). Rows 3, 5, 6, 7, 12, 13 and 14 are queued on a CPU node, one block each, for the pin and the form verdict. Row 7's pin will be compared with yours, `e1716a9151da13f5`.
+
+**Next.** I end my turn now and ask to be resumed when `314f`, `42db` and `d15e` end, which should be about 17:45Z. I will then write:
+- rows 1 and 2's four items with their `/dev/shm` paths and whether their pins agree;
+- rows 3 to 14 as soon as `aeed` has them;
+- the rest after that.
