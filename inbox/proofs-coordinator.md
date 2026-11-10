@@ -27281,3 +27281,43 @@ build and the prover.
 
 **Next:** nothing runs until your slot. Two CPU-only follow-ups are ready if you want either; neither needs node A. One is
 `_v2` from circuits' branch, the other the forgeries on this statement. Each takes about an hour of a CPU node [guess].
+
+## TWOWITNESS, Tue 10 Nov 07:55Z: `b43f` failed on my own proofs, not the slot; three fixes pushed, two runs on cpu-12
+
+**No other execution of me is at work** [read]. My branch's head was `d79689f44d` (06:17Z) until this execution's commits. My last inbox entry is the 06:50Z one, and my lane note's last commit is 06:18Z.
+
+**What `r20261110-061735-b43f` found** [run]:
+
+| File | Result | Theorems on the three allowed axioms |
+|---|---|---|
+| Plain | lean exit 0, 2,263 s (mostly the dependency rebuild of `build-0`) | 5 |
+| Meta | lean exit 0, 110 s, `parse_meta` and `fjnorm_metaJ` included | 20 |
+| Digests | lean exit 0, 172 s | 5 |
+| Sizes | lean exit 1, 575 s, eight elaboration errors | not probed |
+| File | lean exit 1, 24 s, a walk stuck on a kernel reduction | not probed |
+| Inputs | `lake build +…Inputs:deps exit 1 in 498 s`, on Sizes' same errors (`✖ [10992/10993] Building Proofs.Flock.SpotFlock.InstanceStmt.Sizes`) | its proofs and `--siblings` never ran |
+
+**No stale-slot symptom** [run]. Every dependency and the three passing files built in the same slot, and each error is in a file of mine.
+
+**Sizes' errors are elaboration errors in my proofs.** The log's lines:
+- `Sizes.lean:127:2: error: omega could not prove the goal:`, with `c := ↑[].length` as an atom (also at 135).
+- `Sizes.lean:142:2: error: omega could not prove the goal:`, with `c := ↑"i0".toList.length` as an atom: the literal keys' lengths (also at 157, 168, 186).
+- `Sizes.lean:114:2: error: No goals to be solved`.
+- `Sizes.lean:260:2: error: \`simp\` failed: maximum number of steps exceeded`.
+
+**File's error is a kernel-reduction failure.** The log's line: `File.lean:157:0: error: fwd: the condition is stuck (!HmRow.isSha512Hex ((metaJ.getObjValAs? String "program_sha512").toOption.getD "")) = true`. `isSha512Hex` runs `String.all`, which the kernel doesn't evaluate. This is the first walk through the bindings branch of `HmRow.parse`, since the concrete statement's tags have none [read].
+
+**The fixes**, all pushed to `cursor/proofs-twowitness-0d28`:
+- `cf19f94ceb`, Sizes: one `decide +kernel` fact per proof for its literal keys' lengths, `List.length_nil` in two `simp only` calls, and `encBytes_length` by rewriting.
+- `794b403a8c`, File: `prog_hex` and `part_hex` as the walk's rules for META's two digests, through `sha512Hex_of`, which states `isSha512Hex` through `toList`.
+- `9683789014`, File: `qsort_io`, explained under the first run below.
+
+**Runs**, both on cpu-12 [run]:
+- **`r20261110-074023-cb9f`** (slot `p0`, build slot `build-0`, commit `794b403a8c`): File, then Sizes, then Inputs with `--siblings`.
+  - File: `parse_cX`'s walk through `HmRow.parse` now elaborates without error. `fwd_def` declares it, so the axiom probe doesn't list it.
+  - The probe puts `sha512Hex_of`, `prog_hex` and `part_hex` on the three allowed axioms.
+  - The next stop is `File.lean:192:0: error: fwd: the condition is stuck`, in `parseOut_cX`'s walk, on `HmOut.checkRows`' condition. That condition sorts the rows' names with `Array.qsort`, which is well-founded, and the kernel doesn't unfold it [guess as to the cause; Round2 met the same]. `9683789014` adds `qsort_io` for it.
+  - Sizes and Inputs are running. ETA about 08:15Z.
+- **`r20261110-075225-671b`** (slot `p1`, build slot `build-1` with 16 files changed, commit `9683789014`): File alone. ETA about 08:10Z.
+
+**Dates** [guess]: statement (A) Wed 18:00Z and witness (D) Fri 12:00Z still hold. Each cycle on a warm slot is now 10 to 30 minutes. (A)'s setup facts still need `parseOut_cX` and Inputs to pass.
