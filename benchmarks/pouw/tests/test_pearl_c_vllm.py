@@ -16,6 +16,7 @@ import shutil
 import socket
 import sys
 import threading
+import time
 import types
 from fractions import Fraction
 from pathlib import Path
@@ -2155,6 +2156,149 @@ def test_a_tie_refuses_two_passes_that_commit_one_weight_under_two_roots(tmp_pat
     assert passes[0].epoch.weight_roots[0] != passes[1].epoch.weight_roots[0]
     with pytest.raises(ValueError, match="pass 1 commits weight 0's B rows under another root or shape than an earlier"):
         VR.tie(window_record(a, b), passes)
+
+
+#: Llama-3.2-1B's cut linears as vLLM serves them: its layers, and a layer's four in its forward's order, each (n, k):
+#: qkv_proj, o_proj, gate_up_proj and down_proj (hidden 2,048, intermediate 8,192, q's 2,048 rows with k's and v's 512 each)
+LLAMA32_1B = (16, ((3072, 2048), (2048, 2048), (16384, 2048), (2048, 8192)))
+#: the window class of the run of record r20261106-165116-614b: its slots, prompt ids and outputs
+#: (`window_class.WindowClass`), so 4 rounds under its fixed load
+CLASS_614B = (4, 32, 4)
+
+
+def timed(f):
+    """``f()`` and the seconds it took, for a test that reports a time and asserts none."""
+    start = time.perf_counter()
+    out = f()
+    return out, time.perf_counter() - start
+
+
+def record_size_passes(tmp_path: Path, seed: int = 614) -> list[Path]:
+    """The manifests of a served run of the run of record 614b's size, one a round of class `CLASS_614B`'s fixed load
+    (`window_class.PearlTables`: round 0 every slot's prompt, 128 rows, and each later round a row a slot, 4 rows of the 16
+    its A commits), each calling `LLAMA32_1B`'s 64 cut linears at their real (n, k), weight 4·layer + linear and call
+    index 64·round + call: 4 passes, 256 calls, 64 weights, the served instance of 614b's scheme (`H100_SCHEME`, 64 x 64
+    tiles), one epoch under one salt coin, no row excluded.
+
+    Each root is an hm96 root over seeded fake row digests and salts, not over rows: the tree of the real number of leaves
+    (a weight's n, a call's m16 or real rows) under the real domain, each leaf `Hm96Domain`'s of a 64-byte digest no row
+    was hashed to and 192 bytes no key gave. The weights' real rows are 3.9 GB of FP32 words, and their `hm96_salt`s two
+    minutes of ChaCha20 here. The transcript root is 64 seeded bytes, and no row, tree or leaf file is written (the
+    manifests name them as a device run does), so the passes load and tie, and nothing of them opens."""
+    layers, linears = LLAMA32_1B
+    slots, prompt, outputs = CLASS_614B
+    s, rng = PPD.scheme_of(H100_SCHEME), np.random.default_rng(seed)
+    shapes = {len(linears) * layer + j: nk for layer in range(layers) for j, nk in enumerate(linears)}
+
+    def root(binding: bytes, owner: int, count: int) -> str:
+        d, blob = rows_domain(binding, owner, count, HM96, digests=True), rng.bytes(256 * count)
+        return tree_levels(d, [d.leaf(i, i, ROW_SCHEMA, blob[256 * i:256 * i + 256]) for i in range(count)])[-1][0].hex()
+
+    def named(path: str, size: int) -> dict:
+        return {"path": path, "bytes": size}
+
+    def tree(path: str, count: int) -> dict:
+        return named(path, 64 * (2 * VR.pow2(count) - 1))
+
+    roots = {w: root(weight_binding(w), -2, n) for w, (n, _) in shapes.items()}
+    weights = {str(w): {"n": n, "k": k, "root": roots[w], "excluded_b": [],
+                        "rows": named(f"weights/{w}.rows.bf16", 2 * n * k), "tree": tree(f"weights/{w}.tree", n)}
+               for w, (n, k) in shapes.items()}
+    committed = {w: bytes.fromhex(r) for w, r in roots.items()}
+    coins, paths = salt_coin(committed), []
+    for r in range(outputs):
+        real = slots * prompt if r == 0 else slots
+        m = -(-real // PPD.ROW_ALIGN) * PPD.ROW_ALIGN
+        work = Workload(tuple(Matmul(len(shapes) * r + c, Shape(m, k, n), c) for c, (n, k) in shapes.items()))
+        epoch = Epoch.start(work, committed, *coins)
+        splits = {w: PW.Split(k) for w, (_, k) in shapes.items()}
+        records = [PW.UnitRecord(u, real, u.shape.k) for u in work.matmuls]
+        matmuls = [{"index": u.index, "m": m, "k": u.shape.k, "n": u.shape.n, "weight": u.weight, "real_rows": real,
+                    "k_kept": u.shape.k, "excluded_a": [],
+                    "root_a": root(activation_binding(epoch.salt, u.index), u.index, m),
+                    "rows": named(f"calls/{u.index}.rows.bf16", 2 * m * u.shape.k), "tree": tree(f"calls/{u.index}.tree", m),
+                    "y": {"root": root(SY.y_binding(epoch.salt, u.index), u.index, real),
+                          "rows": named(f"y/{u.index}.rows.bf16", 2 * real * u.shape.n), "tree": tree(f"y/{u.index}.tree", real)}}
+                   for u in work.matmuls]
+        count = sum(len(s.tiles(u.shape)) for u in work.matmuls)
+        head = {"schema": PPD.MANIFEST_SCHEMA, "run": RUN, "entry": f"pouw:{s.name}", "scheme": s.name,
+                "coins": coins[0].to_json(), "salt_opening": coins[1].to_json(), "salt": epoch.salt.hex(),
+                "records_root": PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex(),
+                "commitment": {"root": rng.bytes(64).hex(), "count": count},
+                "leaves": named("leaves", 64 * count), "tree_t": tree("tree_t", count), "hm96_salt_key": SALT_KEY.hex()}
+        (d := tmp_path / f"pass-{r:05d}").mkdir(parents=True)
+        paths.append(PPD.write_manifest(d, head, weights, matmuls))
+        (d / "coins.json").write_text(json.dumps(coins[0].to_json()))
+    return paths
+
+
+@pytest.mark.slow
+def test_the_version_2_tie_holds_a_run_of_the_run_of_records_size_to_its_64_weights(tmp_path, capsys):
+    """At the run of record 614b's size (`record_size_passes`: class (4, 32, 4), 4 passes of Llama-3.2-1B's 64 cut linears,
+    256 calls, each weight at its real (n, k)), the producer's W at version 2 (`pearl_c.window.record`) registers 576
+    values: the 512 the run of record's version-1 W did, then each of the 64 weights' B rows once, at its n rows of K
+    words. `tie` accepts it on its 576 tables with every weight tied, each ``pearl-b/<w>`` the root its passes' epochs
+    commit it under, and the run verdict with no draw (the passes retain no file to open) accepts tied to it. Refused, each
+    by name, through the tie and the run verdict before its coin: a W whose ``pearl-b/37`` is at another root than the
+    passes' rootB of weight 37, one that registers no ``pearl-b/37``, and one that registers no weight at all
+    (`UNTIED_WEIGHTS`); and through the tie alone (the run verdict refuses passes of two salts first), a pass whose rootB
+    of weight 37 is another than the other passes'.
+
+    Prints W's size and the tie's seconds at this size, and asserts neither. Slow on its trees alone (about 400,000 hm96
+    leaves in Python): the tie's own cost is what a cheaper test can't show at the size the verdict of record reads."""
+    paths = record_size_passes(tmp_path)
+    mans, coins = [json.loads(p.read_text()) for p in paths], published(paths[0])
+    w = PWR.record(mans, version=2)
+    names = [e["value"] for e in w["registered"]]
+    assert PWR.version_of(w) == 2 and len(names) == 576 and len(set(names)) == 576
+    assert names[:512] == [f"pearl-{x}/{s}/{c}" for s in range(4) for c in range(64) for x in "ay"]
+    assert names[512:] == [f"pearl-b/{x}" for x in range(64)]
+    assert PWR.record(mans, version=1)["registered"] == w["registered"][:512]
+    layers, linears = LLAMA32_1B
+    assert [(e["leaves"], e["words"], e["word_bits"]) for e in w["registered"][512:]] == [(n, k, 32) for n, k in linears] * layers
+    assert [(e["leaves"], e["words"]) for e in w["registered"][:8]] == [x for n, k in linears for x in ((128, k), (128, n))]
+    assert [(e["leaves"], e["words"]) for e in w["registered"][128:136]] == [x for n, k in linears for x in ((16, k), (4, n))]
+
+    passes = [VR.load(p, coins) for p in paths]
+    assert sum(len(p.records) for p in passes) == 256 and all(len(p.epoch.workload.weights()) == 64 for p in passes)
+    tied, seconds = timed(lambda: VR.tie(w, passes))
+    assert tied == {"record": REG.digest(w), "tables": 576}
+    want = VR.tie_entries(passes)
+    assert list(want) == names
+    for x in range(64):
+        e = next(e for e in w["registered"] if e["value"] == f"pearl-b/{x}")
+        assert all(p.epoch.weight_roots[x].hex() == e["root"] == mans[0]["weights"][str(x)]["root"] for p in passes)
+        assert want[f"pearl-b/{x}"] == {k: e[k] for k in ("root", "leaves", "words", "word_bits", "domain")}
+    assert len({e["root"] for e in w["registered"]}) == 576
+    r = VR.verify_passes(paths, 0, 1, "test", coins, b"verifier" * 4, window=w)
+    assert r["answer"]["verdict"] == "accept" and r["answer"]["public"]["tie"] == tied, r["line"]
+    assert "256 of 256 calls, tied to W" in r["line"] and "on its 576 tables;" in r["line"]
+
+    other = next(e["root"] for e in w["registered"] if e["value"] == "pearl-b/38")
+    cases = [({**w, "registered": [{**e, "root": other} if e["value"] == "pearl-b/37" else e for e in w["registered"]]},
+              "W's pearl-b/37: its root not the weight's"),
+             ({**w, "registered": [e for e in w["registered"] if e["value"] != "pearl-b/37"]}, "W registers no pearl-b/37"),
+             ({**w, "registered": w["registered"][:512]}, f"{VR.UNTIED_WEIGHTS}, so the run's rootB is no W's (pearl-b/0 first)")]
+    for bad, why in cases:
+        with pytest.raises(ValueError) as refused:
+            VR.tie(bad, passes)
+        assert str(refused.value) == why
+        r = VR.verify_passes(paths, 0, 1, "test", coins, b"verifier" * 4, window=bad)
+        assert (r["answer"]["verdict"], r["answer"]["reason"]) == ("reject", f"ValueError: {why}") and "source" not in r
+    p = passes[2]
+    another = dataclasses.replace(p, epoch=dataclasses.replace(p.epoch, weight_roots={**p.epoch.weight_roots,
+                                                                                    37: bytes.fromhex(other)}))
+    with pytest.raises(ValueError) as refused:
+        VR.tie(w, [*passes[:2], another, passes[3]])
+    assert str(refused.value) == ("pass 2 commits weight 37's B rows under another root or shape than an earlier pass, and W "
+                                  "registers one")
+
+    written = len(json.dumps(w, indent=1)) + 1
+    with capsys.disabled():
+        print(f"\nW v2 at 614b's size: {len(names)} values (512 of 256 calls, 64 weights' B rows), {written:,} bytes as "
+              f"`window.write` writes it ({len(json.dumps(w, separators=(',', ':'))):,} compact), "
+              f"{written - len(json.dumps(PWR.record(mans, version=1), indent=1)) - 1:,} more than its v1; verify_run.tie on "
+              f"4 passes {seconds * 1e3:.1f} ms")
 
 
 def test_volunteer_words_gives_up_one_a_row_a_band_and_a_b_row_once_the_a_count_is_spent():

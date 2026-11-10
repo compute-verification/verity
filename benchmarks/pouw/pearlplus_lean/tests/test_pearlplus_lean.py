@@ -528,6 +528,38 @@ def test_a_pass_that_is_not_ws(exe, tmp_path):
     assert got["reason"] == "ValueError: W's pearl-a/1/1: its root not the call's"
 
 
+def test_the_version_2_tie_at_the_run_of_records_size(exe, tmp_path, capsys):
+    """At the run of record 614b's size (`test_pearl_c_vllm.record_size_passes`: class (4, 32, 4), 4 passes of
+    Llama-3.2-1B's 64 cut linears, 256 calls, a served instance's 64 x 64 tiles, each root an hm96 root over fake row
+    digests), the Lean's verdict with no draw, held to the producer's version-2 W (`pearl_c.window.record`), is the
+    Python's: it accepts tied to W on its 576 tables, 64 of them the weights' B rows. It refuses, in the Python's words
+    and before the coin, a W whose ``pearl-b/37`` is at another root than the passes' rootB, one that registers no
+    ``pearl-b/37`` and one that registers no weight at all (`UNTIED_WEIGHTS`). With no draw and no excluded row no tile
+    is opened, so the passes' files, which aren't written, are never read. Prints the Lean's seconds on the accepted
+    run (its load of the four manifests, the tie and its credit), and asserts none."""
+    paths = T.record_size_passes(tmp_path)
+    good = T.PWR.record([json.loads(p.read_text()) for p in paths], version=2)
+    reg = good["registered"]
+    assert len(reg) == 576 and [e["value"] for e in reg[512:]] == [f"pearl-b/{x}" for x in range(64)]
+    (w := tmp_path / "w.json").write_text(json.dumps(good, indent=1) + "\n")
+    want = answer(VR.verify_passes(paths, 0, 1, "test", VR.epoch_coins(paths[0].parent / "coins.json"), SOURCE, window=good))
+    got, seconds = T.timed(lambda: lean(exe, paths, 0, tie=w))
+    assert got == want
+    assert got["verdict"] == "accept" and got["tie"] == {"record": T.REG.digest(good), "tables": 576} and not got["verdicts"]
+    other = next(e["root"] for e in reg if e["value"] == "pearl-b/38")
+    cases = [({**good, "registered": [{**e, "root": other} if e["value"] == "pearl-b/37" else e for e in reg]},
+              "ValueError: W's pearl-b/37: its root not the weight's"),
+             ({**good, "registered": [e for e in reg if e["value"] != "pearl-b/37"]}, "ValueError: W registers no pearl-b/37"),
+             ({**good, "registered": reg[:512]},
+              f"ValueError: {VR.UNTIED_WEIGHTS}, so the run's rootB is no W's (pearl-b/0 first)")]
+    for doc, why in cases:
+        w.write_text(json.dumps(doc))
+        got = same(exe, paths, 0, tie=w, test_instance=False)
+        assert (got["verdict"], got["reason"], got["tie"], got["commitment"]) == ("reject", why, None, None), got
+    with capsys.disabled():
+        print(f"\nLean pouw-pearlplus at 614b's size, no draw, tied to W v2 (576 values): {seconds:.2f} s")
+
+
 @pytest.mark.skipif(not settings.RECORDED, reason="POUW_PEARLPLUS_RECORDED names no recorded run")
 @pytest.mark.parametrize("name, passes", [("run", ("prefill", "decode")), ("control", ("prefill", "decode", "control"))])
 def test_a_recorded_h200_run(exe, name, passes):
