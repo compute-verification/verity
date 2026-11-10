@@ -7,7 +7,7 @@ import pytest
 import torch
 from synthetic import tiny_data, tiny_start
 
-from training_slowdown.data import draw_slice, held_out, windows
+from training_slowdown.data import sample_slice, held_out, windows
 from training_slowdown.evaluate import Evaluator, window_nats
 from training_slowdown.model import LM
 
@@ -47,7 +47,7 @@ def test_a_search_score_is_the_states_bpb_on_the_slice_paired_with_thetas(setup)
     sc = ev(other, "w")
     toks, _ = held_out(data, "search")
     full, _ = windows(len(toks))
-    picked = [full[i] for i in draw_slice(len(full), "w", sc["slice"]["coin"], 3)["windows"]]
+    picked = [full[i] for i in sample_slice(len(full), "w", sc["slice"]["coin"], 3)["windows"]]
     tb = data.token_bytes()
     nbytes = int(sum(tb[toks[w + 1: w + 1025]].sum() for w in picked))
     assert sc["slice"] | {"coin": None} == {"coin": None, "weights_digest": "w", "windows": 3, "bytes": nbytes,

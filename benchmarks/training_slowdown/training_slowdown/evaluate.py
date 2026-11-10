@@ -3,8 +3,8 @@
 `Evaluator(data, split, theta, shape, device)` scores θ when it is built and then, called with a checkpoint's state and
 the digest the harness hashed it to, the state:
 
-- `search`: on a slice of the search pool drawn after the state was hashed (`data.draw_slice`, from a coin the OS gives
-  then), paired with θ on the same windows: start_bpb (θ on the whole pool) + the state's bpb on the slice − θ's on it,
+- `search`: on a slice of the search pool sampled after the state was hashed (`data.sample_slice`, from a coin the OS
+  gives then), paired with θ on the same windows: start_bpb (θ on the whole pool) + the state's bpb on the slice − θ's on it,
   which cancels most of the slice's own difficulty. The recorded coin and digest reproduce the slice.
 - `final`: on the whole final set.
 
@@ -18,7 +18,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from .data import EVAL_CTX, SLICE_TOKENS, Data, draw_slice, held_out, windows
+from .data import EVAL_CTX, SLICE_TOKENS, Data, sample_slice, held_out, windows
 from .model import LM
 
 
@@ -76,7 +76,7 @@ class Evaluator:
             return {"split": "final", "bpb": self.bpb(nats, self.bytes), "nats_per_byte": nats / self.bytes,
                     "targets": len(self.toks) - 1, "bytes": self.bytes, "documents": self.documents, "tokenizer": tok,
                     "start_bpb": self.start_bpb}
-        sl = draw_slice(len(self.full), weights_digest, coin, self.slice_windows)
+        sl = sample_slice(len(self.full), weights_digest, coin, self.slice_windows)
         pick = np.asarray(sl["windows"])
         nbytes = int(self.window_bytes[pick].sum())
         a = self.bpb(window_nats(self.net, self.toks, [self.full[i] for i in pick], self.device).sum(), nbytes)
