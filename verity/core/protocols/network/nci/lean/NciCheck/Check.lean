@@ -8,7 +8,7 @@ public import Flock.Program
 
 `Nci.CompliesRate Γ α` (`Security/Definitions/Nci.lean`) holds of a declaration `(D, θ)` when `D`'s computed gates
 divide into isolation units (IUs) of at most `Γ` gates, each reading at most `α` bits of novel information per gate:
-`novelReads R = width(into(R) \ θ) ≤ α · size R`. The verifier's side is the check of one declared division: `evaluate`
+`freshInput R = width(into(R) \ θ) ≤ α · size R`. The verifier's side is the check of one declared division: `evaluate`
 decides that it is a partition of the computed gates into IUs (`Verity.Partition`) and that every IU meets both bounds,
 and reports per IU its size and novel reads, and the first IU that fails, with the rule it fails.
 
@@ -24,7 +24,7 @@ An instance is one JSON object:
   Program with a gate reading itself or a later one is refused (`not-topological`), and its input gates read nothing
   (`input_reads`), so an input node with operands is refused (`program`; descriptor v1's input primitives take no
   parameters, so the decoder admits none, but the check does not rely on it). Nothing here reads a gate's operation or
-  the outputs, and neither does `novelReads`.
+  the outputs, and neither does `freshInput`.
 * `theta`: θ, a list of gate ids (canonical root-scoped gate indices), each an input gate bound at registration
   (`RegisteredInput<w>_v1`, binding `registration` in `Flock.Program.inputId?`), none twice. The baseline is what the
   developer committed before the run, so an input bound per run (`Input<w>_v1`) is refused (`theta-not-registered`):
@@ -34,8 +34,8 @@ An instance is one JSON object:
   with `none` written `"input"`, so a gate in two IUs has no encoding. The IUs are `0 … n - 1`, `n` one more than the
   largest `u`, and each holds a gate (`empty-iu`): an empty unit has size and reads 0 and meets both bounds, so a
   division with empty units complies exactly when the one with them dropped and the rest renumbered does.
-* `gamma`: `Γ`, a natural number; `alpha`: `α` as `[num, den]`, naturals with `den > 0`. `novelReads R ≤ α · size R`
-  is checked as `novelReads R · den ≤ num · size R` in ℕ.
+* `gamma`: `Γ`, a natural number; `alpha`: `α` as `[num, den]`, naturals with `den > 0`. `freshInput R ≤ α · size R`
+  is checked as `freshInput R · den ≤ num · size R` in ℕ.
 
 `evaluate` refuses a malformed instance with the first failing code, in the order checked: `instance` (a field missing
 or of the wrong JSON kind), `params` (`Γ` or `α`), `program` (the decoder refuses it, among them a reference that
@@ -138,7 +138,7 @@ def tally (c : GateTable) (d : Division) : Array (Nat × Std.HashSet Nat) :=
         (s + 1, c.reads[g]!.foldl (fun into a => if d.owner[a]! = some u then into else into.insert a) into)
     | none => acc) (Array.replicate d.n (0, {}))
 
-/-- Per IU `u`, with gates `R`: `(size R, novelReads R)`, `novelReads R` the width of the gates of `into(R)` not in θ. -/
+/-- Per IU `u`, with gates `R`: `(size R, freshInput R)`, `freshInput R` the width of the gates of `into(R)` not in θ. -/
 def ius (c : GateTable) (d : Division) : Array (Nat × Nat) :=
   (tally c d).map fun (s, into) => (s, into.fold (fun x a => if d.theta.contains a then x else x + c.w[a]!) 0)
 
@@ -183,7 +183,7 @@ def parse (j : Json) : Except String Instance := do
   if den = 0 then throw "params"
   return { program, theta, owner, gamma, num, den }
 
-/-- The verdict as JSON: `{gates, ius: [[size, novelReads], …], complies, failure: null | [iu, rule]}`. -/
+/-- The verdict as JSON: `{gates, ius: [[size, freshInput], …], complies, failure: null | [iu, rule]}`. -/
 def verdict (gates : Nat) (r : Array (Nat × Nat)) (f : Option (Nat × String)) : Json :=
   Json.mkObj [("gates", toJson gates),
     ("ius", Json.arr (r.map fun (s, x) => Json.arr #[toJson s, toJson x])),
