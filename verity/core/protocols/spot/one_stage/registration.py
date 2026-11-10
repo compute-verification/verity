@@ -59,22 +59,13 @@
   salt bound to it is one salt a window.
 * **Declared day** (`day`, `declarations`): the prover declares one circuit a day, before the day's first coin, in the
   registration log (`verity/registration/declaration/v1`, `verity.core.protocols.registration`). The verifier passes
-<<<<<<< 99c8914848:verity/core/protocols/sampled_proofs/one_stage/registration.py
-  the window's day and the declarations it holds when it draws (its view's `declarations`: `{"day", "program",
+  the window's day and the declarations it holds when it samples (its view's `declarations`: `{"day", "program",
   "blocks"}` each): of record, the UTC day of the window open's `started_utc` and the declarations its lane signed
   before that open, both from the challenger's ledger checked under the auditor's key (`challenger.declared_day`), so a
   window that opens before UTC midnight and closes after is a window of its open's day. R2 refuses a day with no
   declaration (`R2-undeclared`), a day declared twice (`R2-declared-twice`, which the log's own check refuses as
   `duplicate-declaration`), and a record whose program is not the day's declared one (`R2-declared`), as R2's Lean does
-  (`SampledProofs.Registration.declaredCode`), which `verifier.check` runs beside it.
-||||||| merged common ancestors:verity/core/protocols/sampled_proofs/one_stage/registration.py
-=======
-  the window's day, by its index among the monitoring period's days on its own clock, and the declarations of the log
-  it holds when it samples (its view's `declarations`: `{"day", "program", "blocks"}` each). R2 refuses a day with no
-  declaration (`R2-undeclared`), a day declared twice (`R2-declared-twice`, which the log's own check refuses as
-  `duplicate-declaration`), and a record whose program is not the day's declared one (`R2-declared`), as R2's Lean does
   (`Spot.Registration.declaredCode`), which `verifier.check` runs beside it.
->>>>>>> 7af4d24fca3e:verity/core/protocols/spot/one_stage/registration.py
 * **Binding** (`binding`: `{"stream", "prover"}`, the verifier's stream digest and the identity it registered the prover
   under): R6 also holds the record's window to name both (`R6-stream`, `R6-prover`), and a window salt is bound to them,
   so a tile seeded for one prover's stream is refused in any other's, in the same window or not.
@@ -133,6 +124,7 @@ import re
 import time
 from typing import Any, Iterable, Mapping, Sequence
 
+from verity.ml.commitments import history as HT
 from verity.ml.commitments.window import WINDOW_DOMAIN, window_domain
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.program import Program
@@ -212,6 +204,14 @@ def receipt(rec: Mapping[str, Any], verifier: str, received: str | None = None) 
             "received": received or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
 
 
+HISTORY = "R7-history"
+"""The verifier's code for a registration whose history tables both its verifiers refuse (`verifier.check`)."""
+
+
+class HistoryRefused(ValueError):
+    """History tables `check` can't read, or whose roots it can't hold to the ones the window registers."""
+
+
 def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
           ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
           log: Iterable[Mapping[str, Any]] = (), partition: Mapping[str, Any] | None = None,
@@ -220,26 +220,18 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           binding: Mapping[str, str] | None = None,
           outputs: Mapping[str, Mapping[str, str]] | None = None,
           schemas: Mapping[str, str] | None = None, window_root: str | None = None,
-<<<<<<< 99c8914848:verity/core/protocols/sampled_proofs/one_stage/registration.py
           held: Sequence[str] | None = None, members: Sequence[LP.Member] = (), day: int | None = None,
-          declarations: Sequence[Mapping[str, Any]] | None = None) -> Verdict:
-||||||| merged common ancestors:verity/core/protocols/sampled_proofs/one_stage/registration.py
-          held: Sequence[str] | None = None) -> Verdict:
-=======
-          held: Sequence[str] | None = None, day: int | None = None,
           declarations: Sequence[Mapping[str, Any]] | None = None, seed_salt: str | None = None,
-          pool: Mapping[str, Any] | None = None) -> Verdict:
->>>>>>> 7af4d24fca3e:verity/core/protocols/spot/one_stage/registration.py
+          pool: Mapping[str, Any] | None = None, history: Mapping[str, Any] | None = None) -> Verdict:
     """R1-R7 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
     fills itself (`supplied`: `{parameter: [[source, ...], ...]}`, `registered.sources`) and the roots it held before the
     record for others (`pinned`: `{parameter: root}`, the weights' root recorded before the salt, say), and of the rest the
     ones that are outputs of an earlier run or reuse an earlier record's registered value (`outputs`: `{parameter:
-    {"record", "port" | "value"}}`, or `{parameter: {"port"}}`, that port of the log's last record); and of the ones it
-    doesn't fill,
+    {"record", "port" | "value"}}`, or `{parameter: {"port"}}`, that port of the log's last record); and
     those whose rows are not `row/v1` rows (`schemas`: `{parameter: schema}`, `registered.SCHEMAS`), whose rows R7 counts in
-    that format (`registered_entries`); ValueError without `registered`, or in another form.  `binding`: the stream and prover the verifier registers this record for
+    that format (`registered_entries`), and a supplied one's it commits in it (`registered.supplied_root`); ValueError without `registered`, or in another form.  `binding`: the stream and prover the verifier registers this record for
     (`{"stream", "prover"}`, `_binding`), which R6 holds the window to name and a window salt binds.  `partition`: the
     verifier's own partition object when it isn't the canonical one (a record made before the canonical envelope); its
     program must still be `program`'s, and the population is `query`'s.  R1 holds the registered sampling design to the verifier's own
@@ -256,38 +248,44 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     another window's opens under no domain R7 takes.  Without `window_root`, a value it doesn't hold across windows that
     the log registered under the domain it takes now is a ValueError (`unwindowed`).  `day` and `declarations`: the
     window's day and the registration log's declarations (Declared day), both or neither; R2 holds the record's program
-<<<<<<< 99c8914848:verity/core/protocols/sampled_proofs/one_stage/registration.py
-    to the day's one declaration (`_declared`).  R3 reads `ports` by name, so its codes come in the ports' sorted
-    order whatever order the mapping has, as the Lean port reads them.  `members`: the per-member form's members, each
-    its units (`[lo, hi)` ranges) and its circuit's units a proof block; after R7, `link-points` refuses the record when
-    a member's fewest and most drawn units give different link points (`link_points.refused`), no draw under the sampling
-    design ends (`link_points.NEVER_ENDS`), or the members or the sampling design are not well formed over the
-    population."""
-||||||| merged common ancestors:verity/core/protocols/sampled_proofs/one_stage/registration.py
-    the log registered under the domain it takes now is a ValueError (`unwindowed`).  R3 reads `ports` by name, so its codes come in the ports' sorted
-    order whatever order the mapping has, as the Lean port reads them."""
-=======
     to the day's one declaration (`_declared`).  `seed_salt`: the window's seed salt the verifier read from its
     challenger (Seed salt), which R6 holds the window to name; ValueError in another form or without `window_root`.
     `pool`: the values a window opens and leaves its pool in, the empty pool's root, whether the verifier refused the
     window the public lag back, the window's own reset, which R6 holds it to name, and whether its week's one reset is
     spent (Pool chain, `_pool`), whose `pin` it adds to `outputs` or `supplied` (`pool_values`) and R7 holds to the
-    chain (`R7-pool-chain`).  R3
+    chain (`R7-pool-chain`).  `history`: the history tables the program reads (``{"digests", "held", "registered",
+    "tables"}``, `history.roots_of`), each table's root computed from its writers' public bodies the leaf layer binds
+    and held to the root the window registers for it, which needs `leaf_layer`; a supplied value's source
+    ``{"history": "H/root"}`` or ``{"history": "H/domain"}`` is then the bytes of the root or domain id it computed for
+    table ``H`` (`history.resolve`).  History tables it can't read or hold to their roots raise `HistoryRefused`, which
+    the verifier reports as `HISTORY` where its Lean refuses them too.  R3
     reads `ports` by name, so its codes come in the ports' sorted order whatever order the mapping has, as the Lean port
-    reads them."""
->>>>>>> 7af4d24fca3e:verity/core/protocols/spot/one_stage/registration.py
+    reads them.  `members`: the per-member form's members, each its units (`[lo, hi)` ranges) and its circuit's units a
+    proof block; after R7, `link-points` refuses the record when a member's fewest and most sampled units give different
+    link points (`link_points.refused`), no sample under the sampling design ends (`link_points.NEVER_ENDS`), or the
+    members or the sampling design are not well formed over the population."""
     c = _Collect()
     days = _declarations(day, declarations)
     v2 = bool(registered)
     log = list(log)
     pool = _pool(pool, registered or {}, supplied, pinned, outputs, schemas)
     supplied, outputs, schemas = pool_values(pool, program, supplied, outputs, schemas, log)
+    if history is not None:
+        if not isinstance(history, Mapping) or set(history) != {"digests", "held", "registered", "tables"}:
+            raise HistoryRefused("the keys of the history tables are not digests, held, registered, tables")
+        if leaf_layer is None:
+            raise HistoryRefused("history tables are read from members' public bodies the leaf layer binds: the verifier "
+                                 "names no leaf_layer")
+        try:
+            supplied = HT.resolve(HT.roots_of(leaf_layer, history), supplied)
+        except ValueError as e:
+            raise HistoryRefused(str(e)) from e
     sup = G.sources(supplied if supplied is not None else {})
     if supplied is not None and not v2:
         raise ValueError("supplied values are registered values: the verifier expects none registered")
     pins = _pins(pinned, registered or {}, sup)
     outs = _outputs(outputs, registered or {}, sup, pins, log)
-    formats = _schemas(schemas, registered or {}, sup)
+    formats = _schemas(schemas, registered or {})
     bound = _binding(binding)
     window, fixed = _window(window_root, held, registered or {}, sup, pins, outs)
     salt = _seed_salt(seed_salt, window)
@@ -384,7 +382,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     if v2:
         _check_registered(c, rec["registered"], program, registered, pins, rec, sup, earlier, bound, outs, formats, window,
                           fixed)
-<<<<<<< 99c8914848:verity/core/protocols/sampled_proofs/one_stage/registration.py
+        if pool is not None:
+            _pool_chain(c, rec, pool, pool_open(pool, rec, program, registered, formats, window, fixed, sup, earlier,
+                                                bound))
     if members:
         try:
             refused = LP.refused(*LP.law_of(program, query, law, work_table), members)
@@ -393,12 +393,6 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         else:
             if refused:
                 c.fail("link-points", {"members": refused})
-||||||| merged common ancestors:verity/core/protocols/sampled_proofs/one_stage/registration.py
-=======
-        if pool is not None:
-            _pool_chain(c, rec, pool, pool_open(pool, rec, program, registered, formats, window, fixed, sup, earlier,
-                                                bound))
->>>>>>> 7af4d24fca3e:verity/core/protocols/spot/one_stage/registration.py
     return c.verdict()
 
 
@@ -477,16 +471,17 @@ def _outputs(outputs: Mapping[str, Mapping[str, str]] | None, registered: Mappin
     return out
 
 
-def _schemas(schemas: Mapping[str, str] | None, registered: Mapping[str, int], supplied: Mapping[str, Any]) -> dict[str, str]:
-    """The verifier's row formats, each of a value it expects registered and doesn't fill, one of `registered.SCHEMAS`;
-    ValueError otherwise, which the Lean verifier refuses too (`OneStage.paramsOfJson`)."""
+def _schemas(schemas: Mapping[str, str] | None, registered: Mapping[str, int]) -> dict[str, str]:
+    """The verifier's row formats, each of a value it expects registered, one of `registered.SCHEMAS`: a supplied value's
+    is the format R7 commits its rows in (`registered.supplied_root`); ValueError otherwise, which the Lean verifier
+    refuses too (`OneStage.paramsOfJson`)."""
     if schemas is None:
         return {}
     if not isinstance(schemas, Mapping) or not registered:
         raise ValueError(f"row formats are an object of registered values' formats: {schemas!r}")
     for v, s in schemas.items():
-        if v not in registered or v in supplied or not isinstance(s, str) or s not in G.SCHEMAS:
-            raise ValueError(f"row format of {v!r}: not a registered value it doesn't fill, in one of {G.SCHEMAS}: {s!r}")
+        if v not in registered or not isinstance(s, str) or s not in G.SCHEMAS:
+            raise ValueError(f"row format of {v!r}: not a registered value's, in one of {G.SCHEMAS}: {s!r}")
     return dict(schemas)
 
 
@@ -783,7 +778,8 @@ def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[s
         if e is None:
             continue
         try:
-            root = G.supplied_root(program, v, supplied[v], rec, want, sorted(supplied), log, prog, binding)
+            root = G.supplied_root(program, v, supplied[v], rec, want, sorted(supplied), log, prog, binding,
+                                   (schemas or {}).get(v, G.SCHEMA))
         except ValueError as err:
             c.fail("R7-supplied", {"value": v, "verifier": str(err)})
             continue
