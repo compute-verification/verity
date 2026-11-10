@@ -80,7 +80,7 @@ open Claims Finset
 
 /-! ## Rerun programs, evaluated -/
 
-theorem flatMapRP_eval {R β γ : Type} (H : Msg → Msg) (run : R → Trace) (f : β → RP R (List γ)) :
+theorem flatMapRP_eval {R β γ : Type} (H : Msg → Msg) (run : R → Transcript) (f : β → RP R (List γ)) :
     ∀ l : List β, ((flatMapRP f l).eval H run).1 = l.flatMap fun b => ((f b).eval H run).1
   | [] => rfl
   | b :: bs => by
@@ -93,7 +93,7 @@ theorem mem_zip_finRange {S : Type} {k : ℕ} {l : List S} {j : Fin k} {a : S} (
   rw [List.mem_iff_getElem?]
   exact ⟨j.val, List.getElem?_zip_eq_some.2 ⟨by simp, h⟩⟩
 
-theorem mem_checkRevealed {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : CommitmentScheme Bool)
+theorem mem_checkRevealed {R : Type} (H : Msg → Msg) (run : R → Transcript) (Cm : CommitmentScheme Bool)
     {rs : List (List Msg × Opening Bool)} {p : List Msg × Opening Bool} (hp : p ∈ rs)
     (hok : Cm.Opens H p.1 p.2 = true) : p ∈ ((checkRevealed (R := R) Cm rs).eval H run).1 := by
   unfold checkRevealed
@@ -107,16 +107,16 @@ theorem mem_checkRevealed {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm :
 /-! ## Kept openings pass their checks -/
 
 /-- Everything `p` returns passes its opening check, with that check's calls among `p`'s own. -/
-def Passes {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : CommitmentScheme Bool)
+def Passes {R : Type} (H : Msg → Msg) (run : R → Transcript) (Cm : CommitmentScheme Bool)
     (p : RP R (List (List Msg × Opening Bool))) : Prop :=
   ∀ q ∈ (p.eval H run).1, Cm.Opens H q.1 q.2 = true ∧ ∀ t ∈ ((Cm.opens q.1 q.2).eval H).2, t ∈ ownLog H run p
 
-theorem Passes.ret_nil {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : CommitmentScheme Bool) :
+theorem Passes.ret_nil {R : Type} (H : Msg → Msg) (run : R → Transcript) (Cm : CommitmentScheme Bool) :
     Passes H run Cm (.ret []) := by
   intro q hq
   simp [RP.eval] at hq
 
-theorem Passes.bind {R α : Type} {H : Msg → Msg} {run : R → Trace} {Cm : CommitmentScheme Bool} (p : RP R α)
+theorem Passes.bind {R α : Type} {H : Msg → Msg} {run : R → Transcript} {Cm : CommitmentScheme Bool} (p : RP R α)
     {f : α → RP R (List (List Msg × Opening Bool))} (hf : ∀ a, Passes H run Cm (f a)) :
     Passes H run Cm (p.bind f) := by
   intro q hq
@@ -126,7 +126,7 @@ theorem Passes.bind {R α : Type} {H : Msg → Msg} {run : R → Trace} {Cm : Co
   rw [ownLog_bind]
   exact List.mem_append_right _ (h2 t ht)
 
-theorem Passes.flatMapRP {R β : Type} {H : Msg → Msg} {run : R → Trace} {Cm : CommitmentScheme Bool}
+theorem Passes.flatMapRP {R β : Type} {H : Msg → Msg} {run : R → Transcript} {Cm : CommitmentScheme Bool}
     {f : β → RP R (List (List Msg × Opening Bool))} {l : List β} (hf : ∀ b ∈ l, Passes H run Cm (f b)) :
     Passes H run Cm (Sampling.flatMapRP f l) := by
   intro q hq
@@ -134,7 +134,7 @@ theorem Passes.flatMapRP {R β : Type} {H : Msg → Msg} {run : R → Trace} {Cm
   obtain ⟨h1, h2⟩ := hf b hb q hq'
   exact ⟨h1, fun t ht => hlog t (h2 t ht)⟩
 
-theorem Passes.checkRevealed {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : CommitmentScheme Bool)
+theorem Passes.checkRevealed {R : Type} (H : Msg → Msg) (run : R → Transcript) (Cm : CommitmentScheme Bool)
     (rs : List (List Msg × Opening Bool)) : Passes H run Cm (Sampling.checkRevealed (R := R) Cm rs) := by
   intro q hq
   obtain ⟨-, h1, h2⟩ := checkRevealed_mem H run Cm rs q hq
@@ -209,7 +209,7 @@ theorem accList_length_eq {R : Type} {acc : R → Prop} [DecidablePred acc] {k :
     (h : ¬ (accList acc k l).length < k) : (accList acc k l).length = k :=
   le_antisymm (accList_length_le acc k l) (not_lt.1 h)
 
-theorem getElem?_map_pair {R : Type} (run : R → Trace) {l : List R} {j : ℕ} {r : R} (h : l[j]? = some r) :
+theorem getElem?_map_pair {R : Type} (run : R → Transcript) {l : List R} {j : ℕ} {r : R} (h : l[j]? = some r) :
     (l.map fun r => (r, (run r).seen))[j]? = some (r, (run r).seen) := by
   rw [List.getElem?_map, h]
   rfl
@@ -341,7 +341,7 @@ section Interior
 
 theorem stepWith_msgs_prefix {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω)
     (vnext : List Msg → OC Out) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       ∃ ext, (stepWith H P x ω vnext n hist as t).msgs = t.msgs ++ ext := by
   intro n
   induction n with
@@ -364,7 +364,7 @@ theorem stepWith_msgs_prefix {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : 
 `m` prover messages give runs whose first `m` messages agree. -/
 theorem stepWith_take {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext vnext' : List Msg → OC Out)
     (m : ℕ) (hv : ∀ as : List Msg, as.length ≤ m → vnext as = vnext' as) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), as.length = t.msgs.length →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), as.length = t.msgs.length →
       t.msgs.length ≤ m →
       (stepWith H P x ω vnext n hist as t).msgs.take m = (stepWith H P x ω vnext' n hist as t).msgs.take m := by
   intro n
@@ -388,7 +388,7 @@ theorem stepWith_take {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (�
 /-- **Acceptance is the verifier's answer**: rounds that end accepting had the verifier answer `acc` to some prover
 messages. -/
 theorem stepWith_acc_next {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       (stepWith H P x ω vnext n hist as t).out = .acc → ∃ as', ((vnext as').eval H).1 = .acc := by
   intro n
   induction n with

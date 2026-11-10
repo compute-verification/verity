@@ -127,7 +127,7 @@ def waitsProg {D W Op : Type} (m k K : ℕ) (opens : Seen → List Op) (assemble
 
 /-- **The waits' reruns, amortized**: against a run accepting with probability `ε`, `m` waits stopping at `k` accepted
 runs rerun at most `m·k/ε` times in expectation. -/
-theorem waits_amortized {D W Op : Type} [Fintype D] [Nonempty D] (H : Msg → Msg) (run' : D → Trace) (m k K : ℕ)
+theorem waits_amortized {D W Op : Type} [Fintype D] [Nonempty D] (H : Msg → Msg) (run' : D → Transcript) (m k K : ℕ)
     (opens : Seen → List Op) (assemble : List Op → Option W) (check : W → Bool) :
     Pr (fun d => (run' d).out = .acc) *
         Ex (fun ρ : Fin m → Fin K → D => (((waitsProg m k K opens assemble check ρ).eval H run').2.2 : ℝ)) ≤
@@ -193,7 +193,7 @@ theorem NoHash.firstWait {R W Op : Type} (k : ℕ) (opens : Seen → List Op) (a
 
 /-- **A program without SHA-512 calls of its own** calls SHA-512 at most `t` times per rerun, when every run makes at
 most `t` calls. -/
-theorem calls_le_of_noHash {R α : Type} (H : Msg → Msg) (run : R → Trace) (t : ℕ)
+theorem calls_le_of_noHash {R α : Type} (H : Msg → Msg) (run : R → Transcript) (t : ℕ)
     (ht : ∀ r, (run r).pLog.length + (run r).vLog.length ≤ t) {p : RP R α} (hp : NoHash p) :
     (p.eval H run).2.1 ≤ t * (p.eval H run).2.2 := by
   induction hp with

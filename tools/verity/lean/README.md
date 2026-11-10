@@ -123,9 +123,11 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   same way (below);
 - with `--build`, a sample of the modules the build didn't compile (restored from the node's artifact cache, or kept
   from an earlier build), taken after the build with randomness nothing the build runs sees, compiles again in the
-  sandbox with no cache to the outputs the build holds: byte for byte, and `olean.server` and `olean.private`, which
-  keep the source's absolute path, as object graphs (`sampled_recompile`, `olean_graph.py`; failure `sampled`). The
-  report's `sampled` names the modules. A sample can miss a wrong module, so the uncached nightly check stays the backstop;
+  sandbox with no cache, in an overlay that never writes the build, to the outputs the build holds: byte for byte, and
+  `olean.server` and `olean.private`, which keep the source's absolute path, as object graphs (`sampled_recompile`,
+  `olean_graph.py`; failure `sampled`). The report's `sampled` names the modules. With no sandbox none is sampled
+  (`unsampled`), so nothing is restored or kept: every build is cold (`staged`), and a module restored anyway fails. A
+  sample can miss a wrong module, so the uncached nightly check stays the backstop;
 - each test under `runs` passes on the data whose SHA-256 the record holds (below), and its `generate` and `args` name no
   path outside the package except as `{repo}/...`, which check's scratch tree would not hold;
 - nothing changes this directory, the toolchain's `lean`, `lake` and `leanchecker`, or the `.olean` files of a package
@@ -227,7 +229,9 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   test unrun, and `--update` records it. Generated data stays out of Git and out of the key of `check`'s audit step, so
   a test of the package's own (PoUW's `verity/core/protocols/pouw/tests/test_lean_package.py`) checks that the generator still writes the recorded
   data. `--no-runs` skips them.
-- `assumptions_module`: the module (or a submodule) with named assumptions. `assumptions`: the named assumptions (with
+- `assumptions_module`: the module (or a submodule) with named assumptions, or a list of such modules (`Security/Properties`
+  lists `Properties.Assumptions` beside `Definitions.Assumptions`, for an assumption stated over the code); each must be
+  a module of the build or of a package it requires. `assumptions`: the named assumptions (with
   `owner`), the premises declared there. `domain`: a premise that is part of what its guarantee says (a scope, the layer
   below's guarantee), with `owner` and a one-line `why`; `--update` adds one that is another listed guarantee's
   statement, citing it (`cites`), and an honest witness must conclude each. `open`: every other premise, with `owner`,

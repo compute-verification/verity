@@ -314,7 +314,7 @@ theorem card_first_le {L : Compiled Coin A}
 /-- **Proof block `u`'s session's extraction finds a witness** at the run `r'`, on the prover's runs `run'`: `r'` shows
 `u`'s session `(xS, vS)` at the block's shape, and `A`'s extractor at the session, as `sessWit` serves it, returns a
 witness in `A`'s relation at `xS`. -/
-def Found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
+def Found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (u : Fin (L.nPU x)) (r' : Fin (L.V.k x) → Coin) (c : A.EC (L.sh x u)) : Prop :=
   ∃ xS vS, L.session x u (run' r').seen = some (xS, vS) ∧ ∃ h : A.shape xS = L.sh x u, ∃ w,
     ((serve (fun r'' => viewing (L.view x u) (L.place x u xS r' r''))
@@ -331,7 +331,7 @@ def GoodAt (L : Compiled Coin A) (x : Msg)
 
 /-- **An outer run bad for `B`**, its second stage `g`: the inner wait comes up short, or no kept inner run has a
 proof block of `B` good. -/
-def BadOuter (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
+def BadOuter (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) (B : Finset ℕ)
     (g : (Fin (L.V.k x) → Coin) → Fin (L.V.k x) → Coin) (e : L.E1 x) : Prop :=
   (accList (fun d => (run' (g d)).out = .acc) (L.kIn x) ((List.finRange (L.capIn x)).map e.1)).length < L.kIn x ∨
@@ -340,7 +340,7 @@ def BadOuter (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) �
 
 /-- **The extraction's failure event**: the statement is in scope, and the outer wait comes up short or, for some set
 `B` of acceptance probability at most `δ`, every kept outer run is bad for `B`. -/
-def Fails (L : Compiled Coin A) (δ : ℝ) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
+def Fails (L : Compiled Coin A) (δ : ℝ) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) (c : L.ECoins x) : Prop :=
   ∃ s Pt, L.parse x = some s ∧ L.partition s = some Pt ∧ InScope Pt s ∧
     ((accList (fun r => (run' r).out = .acc) (L.kOut x) ((List.finRange (L.capOut x)).map c.1)).length < L.kOut x ∨
@@ -425,7 +425,7 @@ omit [Inhabited Coin] in
 (each below `n_PU`) with probability at most `esc`, the sample has at most `n_PU` slots, and the block at the slot any
 selection picks is not found with probability at most `κr`, the run accepts with no block of `B` good with probability
 at most `esc + κr`: the union bound at the first slot of the session of the first slot holding a block of `B`. -/
-theorem pr_notGood_le (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
+theorem pr_notGood_le (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) {B : Finset ℕ}
     (hB : ∀ v ∈ B, v < L.nPU x) (hslots : ∀ r', (L.checked x r').length ≤ L.nPU x) (r : Fin (L.V.k x) → Coin)
     {esc κr : ℝ} (hesc : Pr (fun d : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.stage2 x) r d), u ∉ B) ≤ esc)
@@ -470,7 +470,7 @@ below `n_PU`) with probability at most `esc`, the sample has at most `n_PU` slot
 selection picks is not found with probability at most `κr`, the inner wait (times its acceptance) comes up short or
 keeps only runs at which no block of `B` is good with probability at most `2k_in/K_in + e^{−k_in/8} + c·(esc + κr)`
 (`pr_notGood_le` at each inner run). -/
-theorem inner_bad_le (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
+theorem inner_bad_le (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) {B : Finset ℕ}
     (hB : ∀ v ∈ B, v < L.nPU x) (hslots : ∀ r', (L.checked x r').length ≤ L.nPU x) (r : Fin (L.V.k x) → Coin)
     {esc κr : ℝ} (hesc0 : 0 ≤ esc) (hκr0 : 0 ≤ κr)
@@ -513,7 +513,7 @@ omit [Inhabited Coin] in
 probability at most `κr(r)`, the outer wait (times its acceptance) comes up short or, for some refused `B`, keeps only
 runs bad for `B`, with probability at most `T_out + c·(T_in + c·(δ + E[κr]))`, `T = 2k/K + e^{−k/8}` at each wait's
 count. -/
-theorem outer_bad_le (L : Compiled Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
+theorem outer_bad_le (L : Compiled Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) (s : AuditStatement)
     (Pt : Partition) (hPU : L.nPU x = Pt.blocks.length) (hun : L.nPU x ≤ L.nOut x)
     (κr : (Fin (L.V.k x) → Coin) → ℝ) (hκr0 : ∀ r, 0 ≤ κr r)

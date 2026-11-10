@@ -36,6 +36,7 @@ verity_vllm.pipeline.cli
 verity_vllm.program.frontend.train_step      # a training step as a Program: a library entry point (`step_program`, `step_report`, `primitives`), called by tools/train_step_census.py and benchmarks/training_slowdown/grader
 verity_vllm.program.predict.steps      # I2, the compiler: a library entry point (`compile_steps`), called from outside the package
 verity_vllm.program.predict.window_circuit      # the window class circuit: a library entry point (`window_circuit`), called by benchmarks/prove_path (window-circuit, class-size)
+verity_vllm/pipeline/advice_code/      # advice v1, the network certifier's code: a library entry point, read by benchmarks/network_e2e and through Registered.code by predict.steps
 verity_vllm.program.predict.window_rows      # a window's rows: a library entry point (`Rows`, `weight_values`), for benchmarks/prove_path's window-commit
 verity_vllm.program.predict.window_weights      # the window circuit's weights: a library entry point (the committer's `weights_registration`, the verifier's `weights_record` and `registration_pins`), called from outside the package
 verity_vllm.program.predict.inference_blocks      # B's partition of a window circuit into inference blocks: a library entry point (`commit`, with `records.inference_blocks` its public statement), for the window commit and the network certifier's audit
@@ -53,6 +54,7 @@ verity_vllm.pipeline.boundary_rows      # a served window's boundary commitment 
 verity_vllm.pipeline.tick_plugin      # --admit tick under vLLM's own server: vLLM imports its general plugin (register) and its middleware (TickFeed) by name
 verity_vllm.pipeline.edge      # a replay block's edge values and `follows`: a library entry point, read by benchmarks/prove_path
 verity_vllm.pipeline.interior_rows      # a two-stage audit's interior registration from replay: a library entry point (`Replay`, `span`, `interior`), for the two-stage driver
+verity_vllm.pipeline.serve_h1      # a served window's PoUW H1 release: a library entry point (`config_of`), read by benchmarks/one_stage/served_verdicts.py
 # the engine's seams and stock pieces: library entry points (tests/test_vllm_public_api.py's PUBLIC), which general plugins and
 # code outside the package call
 verity_vllm.engine.core_gate      # the engine core's seam between steps: general plugins add their gates and edges to its SEAM

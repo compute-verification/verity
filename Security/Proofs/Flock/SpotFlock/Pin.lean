@@ -223,7 +223,7 @@ theorem nextHash_eq {x : Msg} {as : List Msg} {cs : List FlockDeploy.Coin}
 own first `L`. -/
 theorem stepWith_congr_at {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (v₁ v₂ : List Msg → OC Out)
     (L : ℕ) (hv : ∀ bs : List Msg, bs.length ≠ L → v₁ bs = v₂ bs) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), as = t.msgs.map Prod.fst →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), as = t.msgs.map Prod.fst →
       v₁ (((stepWith H P x ω v₂ n hist as t).msgs.map Prod.fst).take L) =
         v₂ (((stepWith H P x ω v₂ n hist as t).msgs.map Prod.fst).take L) →
       stepWith H P x ω v₁ n hist as t = stepWith H P x ω v₂ n hist as t := by

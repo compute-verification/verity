@@ -129,7 +129,7 @@ theorem qV_vLog (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω
 /-- A run opens `1` at the query position its coin 0 samples. -/
 theorem qCols_run (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (r : Fin (qV.k x) → Bool) :
     qCols (run H P qV x ω r).seen = [(if coinSeq r 0 then 1 else 0, 1)] := by
-  cases h : coinSeq r 0 <;> simp [run, stepWith, qV, OC.eval, Trace.seen, qCols, qPos]
+  cases h : coinSeq r 0 <;> simp [run, stepWith, qV, OC.eval, Transcript.seen, qCols, qPos]
   · exact h
   · exact congrArg List.length (ite_eq_left h)
 
@@ -198,7 +198,7 @@ theorem qκ_lt (x : Msg) : Flock.κ qDI x < 1 / 2 := by
 /-! ## Waits -/
 
 /-- **A wait where every rerun accepts** collects the first reruns it needs. -/
-theorem waitAcc_all {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (hacc : ∀ r, (run r).out = .acc) :
+theorem waitAcc_all {R : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (hacc : ∀ r, (run r).out = .acc) :
     ∀ (rs : List R) (acc : List Seen),
       ((waitAcc k rs acc).eval H run).1 = acc ++ (rs.take (k - acc.length)).map fun r => (run r).seen
   | [], acc => by simp [waitAcc, RP.eval]
@@ -217,7 +217,7 @@ theorem waitAcc_all {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (
 
 /-- **A wait collects only accepted reruns**: where every accepted rerun is `good`, so is everything a wait collects
 from `good` runs. -/
-theorem waitAcc_good {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (good : Seen → Prop)
+theorem waitAcc_good {R : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (good : Seen → Prop)
     (hgood : ∀ r, (run r).out = .acc → good (run r).seen) :
     ∀ (rs : List R) (acc : List Seen), (∀ v ∈ acc, good v) → ∀ v ∈ ((waitAcc k rs acc).eval H run).1, good v
   | [], acc, h => by simpa [waitAcc, RP.eval] using h
@@ -237,7 +237,7 @@ theorem waitAcc_good {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) 
 
 /-- **`E^rep`'s waits where every rerun accepts**: if the first wait's first `k` samples assemble a candidate `check`
 accepts, `firstWait` returns it. -/
-theorem firstWait_finRange_some {R W Op : Type} (H : Msg → Msg) (run : R → Trace) (k m K : ℕ)
+theorem firstWait_finRange_some {R W Op : Type} (H : Msg → Msg) (run : R → Transcript) (k m K : ℕ)
     (opens : Seen → List Op) (assemble : List Op → Option W) (check : W → Bool) (hacc : ∀ r, (run r).out = .acc)
     (hm : 0 < m) (ρ : Fin m → Fin K → R) (w : W)
     (ha : assemble ((((List.finRange K).map (ρ ⟨0, hm⟩)).take k).map (fun r => (run r).seen) |>.flatMap opens) =
@@ -254,7 +254,7 @@ theorem firstWait_finRange_some {R W Op : Type} (H : Msg → Msg) (run : R → T
   simp [hc, RP.eval]
 
 /-- **`firstWait` gives up** where nothing the waits can collect assembles. -/
-theorem firstWait_none_of {R W Op : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (opens : Seen → List Op)
+theorem firstWait_none_of {R W Op : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) (good : Seen → Prop)
     (hgood : ∀ r, (run r).out = .acc → good (run r).seen)
     (ha : ∀ vs : List Seen, (∀ v ∈ vs, good v) → assemble (vs.flatMap opens) = none) :
@@ -335,7 +335,7 @@ theorem qE_some (H : Msg → Msg) (decode : List (ℕ × ℕ) → List Unit)
     (hne : ¬ (q3 hw hK ρ 0 = q3 hw hK ρ 1 ∧ q3 hw hK ρ 1 = q3 hw hK ρ 2)) :
     ((Flock.E qDI decode).eval H P x ω r₀ ρ).1 = some ⟨[]⟩ := by
   have hacc : ∀ r, (run H P qDI.V x ω r).out = .acc := fun r => qV_out H P x ω r
-  simp only [Flock.E, ERep, Extractor.eval, RP.eval, Trace.seen, hacc, ↓reduceIte]
+  simp only [Flock.E, ERep, Extractor.eval, RP.eval, Transcript.seen, hacc, ↓reduceIte]
   refine firstWait_finRange_some H (run H P qDI.V x ω) (qDI.k x) (qDI.waits x) (qDI.cap x)
     (fun v => [qDI.cols v]) _ _ hacc hw ρ (⟨[]⟩ : Flock.Wit) ?_ (by simp [Flock.check, qDI, gRelS])
   have hall : ∀ p ∈ ((((List.finRange (qDI.cap x)).map (ρ ⟨0, hw⟩)).take (qDI.k x)).map
@@ -435,7 +435,7 @@ theorem qE_abort_none (H : Msg → Msg) (ω : Unit)
     · rename_i hkeep
       rw [ite_eq_left hkeep, qCols_run H qP [] ω t.1, show coinSeq t.1 0 = true from hkeep]
       rfl
-    · exact absurd ht (by simp [abortTrace])
+    · exact absurd ht (by simp [abortTranscript])
   · have hos : ∀ p ∈ vs.flatMap fun v => qDI.cols v 0, p = (1, 1) := fun p hp => by
       obtain ⟨v, hv, hpv⟩ := List.mem_flatMap.1 hp
       rw [show qDI.cols v 0 = qCols v from rfl, hvs v hv, List.mem_singleton] at hpv
@@ -481,7 +481,7 @@ theorem qKSAbort_fails (H : Msg → Msg) :
             simp only [abortRun, qKeep, hs, ↓reduceIte]
             exact qV_out H qP [] s.1 s.2.1.1
           · have hacc : (abortRun H qP qV [] qKeep s.1 s.2.1).seen.out = .acc := by
-              show (if qKeep s.1 s.2.1.1 s.2.1.2 then run H qP qV [] s.1 s.2.1.1 else abortTrace).out = .acc
+              show (if qKeep s.1 s.2.1.1 s.2.1.2 then run H qP qV [] s.1 s.2.1.1 else abortTranscript).out = .acc
               simp only [qKeep, hs, ↓reduceIte]
               exact qV_out H qP [] s.1 s.2.1.1
             show ¬ (Flock.R qDI.parse).ext [] ((erep (qDI.waits []) (qDI.k []) (qDI.cap [])

@@ -14,8 +14,6 @@ import pytest
 from verity_vllm import config as C
 from verity_vllm.pipeline import cli
 
-DEMO = C.REPO / "examples" / "vllm" / "workloads"
-
 
 def _stored(d: Path, docs: dict[str, dict]) -> dict[str, bytes]:
     d.mkdir(parents=True, exist_ok=True)
@@ -32,16 +30,20 @@ def _fetch_from(data: dict[str, bytes], calls: list):
     return fetch
 
 
+def registered_and_listed(d: Path) -> tuple[set[str], set[str]]:
+    """The workloads of the directory ``d`` that fixtures/artifacts.json registers, and those its SHA256SUMS lists."""
+    reg = json.loads((C.REPO / "fixtures" / "artifacts.json").read_text())
+    rel = os.path.relpath(d, C.REPO)
+    registered = {v for k, v in reg.items() if k.startswith("art:") and isinstance(v, str) and os.path.dirname(v) == rel}
+    return registered, {os.path.join(rel, n) for n in C.stored_workloads(d)}
+
+
 def test_every_workload_is_a_fixture_its_directory_lists_and_the_registry_holds():
     """The tree keeps a workload's name and digest (SHA256SUMS) and its art id (fixtures/artifacts.json), never its bytes
     (tests/test_repository.py holds the registered paths gitignored)."""
-    reg = json.loads((C.REPO / "fixtures" / "artifacts.json").read_text())
-    dirs = {os.path.relpath(d, C.REPO) for d in (C.WORKLOADS, DEMO)}
-    registered = {v for k, v in reg.items() if k.startswith("art:") and isinstance(v, str) and os.path.dirname(v) in dirs}
-    listed = {os.path.relpath(d / n, C.REPO) for d in (C.WORKLOADS, DEMO) for n in C.stored_workloads(d)}
+    registered, listed = registered_and_listed(C.WORKLOADS)
     assert registered == listed, (f"in fixtures/artifacts.json, not in a SHA256SUMS: {sorted(registered - listed)}; "
                                   f"in a SHA256SUMS, not registered: {sorted(listed - registered)}")
-    assert len(C.stored_workloads(DEMO)) == 1
     loose = sorted(p.name for p in C.WORKLOADS.glob("*.json") if p.name not in C.stored_workloads())
     assert not loose, (f"{loose}: workloads no SHA256SUMS lists. A workload is a fixture: `research data put --kind fixture/v1 --file "
                        "integrations/vllm/workloads/NAME --preserve`, its id and path in fixtures/artifacts.json, the path in .gitignore, "

@@ -31,7 +31,7 @@ record, by the manifest's lookup of record.  The ahead-of-time compiler takes it
 **Transfer gates**: the units holding transfer gates, the I/O shell's ingress parse and egress render units, are
 proved with selection All, never sampled; every other unit is sampled as before.  The compiler lists them (``transfer_gates``: the
 templates whose units hold them, which its digest covers), and a ``work:K`` window samples by the work table
-`serving_rows.work_table_of` derives from that list and the window's own counts: each transfer-gate template works 0 with its
+`window_law.work_table_of` derives from that list and the window's own counts: each transfer-gate template works 0 with its
 floor all its units, so its whole stratum is in the sample, beside the rest's strata at the stratified share of K.  Core's work sampling design
 (`draw.work_k`) is the All stratum, with no new verifier form; both sides derive the table, the registration's law is expanded
 under it (R1), and the Stream registers with it.  A partition that leaves a transfer-gate template out, or samples it by another law,

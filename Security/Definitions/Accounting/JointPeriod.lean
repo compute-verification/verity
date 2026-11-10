@@ -87,7 +87,7 @@ structure PeriodRun {ι : Type} (d : Device ι) (α : Type) [Fintype α] (C : Ve
   /-- every schedule fits the device -/
   fits : ∀ ξ, (schedule ξ).Fits d
   /-- the circuit's trace the node committed in the period, at the coins -/
-  trace : ((i : I) → Ω i) → C.Transcript
+  trace : ((i : I) → Ω i) → C.Trace
   /-- the network certifier's claim at `K`: what the network certifiers saw the node move in the period is within `K`
   bits -/
   commWithin : ℝ → ((i : I) → Ω i) → Prop

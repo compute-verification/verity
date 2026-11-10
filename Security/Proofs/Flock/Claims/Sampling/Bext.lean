@@ -73,7 +73,7 @@ open Claims
 /-! ## Own calls and `B_ext`'s coins -/
 
 /-- Every call a rerun program logs as its own is an evaluation of `H`. -/
-theorem ownLog_valid {R α : Type} (H : Msg → Msg) (run : R → Trace) (p : RP R α) :
+theorem ownLog_valid {R α : Type} (H : Msg → Msg) (run : R → Transcript) (p : RP R α) :
     ∀ q ∈ ownLog H run p, H q.1 = q.2 := by
   induction p with
   | ret a => simp [ownLog]
@@ -86,7 +86,7 @@ theorem ownLog_valid {R α : Type} (H : Msg → Msg) (run : R → Trace) (p : RP
   | rerun r k ih => exact ih _
 
 /-- A rerun program's SHA-512 calls are its own and its reruns', each rerun making at most `t`. -/
-theorem calls_le_own {R α : Type} (H : Msg → Msg) (run : R → Trace) (t : ℕ)
+theorem calls_le_own {R α : Type} (H : Msg → Msg) (run : R → Transcript) (t : ℕ)
     (ht : ∀ r, (run r).pLog.length + (run r).vLog.length ≤ t) (p : RP R α) :
     (p.eval H run).2.1 ≤ (ownLog H run p).length + t * (p.eval H run).2.2 := by
   induction p with
