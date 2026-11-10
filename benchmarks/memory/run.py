@@ -10,7 +10,7 @@ The node run is `benchmarks/remote_session/gate_run.sh PERIOD` with one honest s
 node serving ROLE (default Llama 3.2 1B as upstream holds it, the role core's pin names `LLAMA32_1B_BF16`), each
 engine's weights arena the store, the verifier on the auditor's verifier host bound to that role's pinned checkpoint,
 the coins from the challenger host. PACED is the session (default seven credited stretches of a second, each pass
-under a live coin of its own), and `gate_run.sh`'s own variables (COMMIT, ARENA_GIB, UTIL, LEASE_BY, ...) pass
+under a live coin of its own), and `gate_run.sh`'s own variables (COMMIT, ARENA_GIB, UTIL, LEASE_BY, FETCH, ...) pass
 through. It waits for the fire run to reach the evidence store and prints from it as `--from` does; `--dry-run` sends
 nothing to either gate and prints no number.
 

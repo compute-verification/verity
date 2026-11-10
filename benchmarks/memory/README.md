@@ -21,11 +21,11 @@ verity bench memory --loopback                both processes on this machine, on
   serves `ROLE` (default `LLAMA32_1B_BF16`, Llama 3.2 1B as upstream holds it, since the store's layout covers BF16
   weights) with each engine's weights arena the store, the verifier runs on the auditor's verifier host bound to that
   role's pinned checkpoint, and the coins come from the challenger host under period `PERIOD`, a name its ledger
-  hasn't used. `gate_run.sh`'s variables pass through:
-  `COMMIT` (the commit the verifier host is pinned at, on `main`'s first-parent line, whose tree must pin `ROLE`),
-  `ARENA_GIB` and `UTIL` (the arena on each card and vLLM's share of it), `LEASE_BY`. The command waits for the fire
-  run to reach the evidence store and prints from it; interrupted, `--from` the fire run prints the same.
-  `--dry-run` sends nothing to either gate and prints no number.
+  hasn't used. `gate_run.sh`'s variables pass through: `COMMIT` (the commit the verifier host is pinned at, on
+  `main`'s first-parent line, whose tree must pin `ROLE`), `ARENA_GIB` and `UTIL` (the arena on each card and vLLM's
+  share of it), `LEASE_BY`, and `FETCH=1`, which stages the role's checkpoint on the node before checking it. The
+  command waits for the fire run to reach the evidence store and prints from it; interrupted, `--from` the fire run
+  prints the same. `--dry-run` sends nothing to either gate and prints no number.
 - **`--from RUN`** reads the verifier's record of a run in the store: a gate run's fire run, or a run of
   `remote_session/run.sh` that held the verifier. A run that holds several sessions needs `--session K`. A withdrawn
   run is refused before any of it is fetched. The text says what the number rests on: whether the verifier ran on the
