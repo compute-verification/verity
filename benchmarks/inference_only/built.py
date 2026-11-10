@@ -85,7 +85,7 @@ def block_work(cls: tuple[int, int, int], model: str) -> dict[str, int]:
         raise ValueError(f"no declared shapes for {model!r}, so a block's work isn't priced: add them to "
                          f"served_shares.MODELS and served_verdicts.DECLARED ({sorted(SS.MODELS)})")
     macs = dict.fromkeys(P.WORK, 0)
-    for rows in Tables.schedule(P.window_class(cls)):
+    for rows in Tables.schedule(P.class_of(cls)):
         mine = [r for r in rows if r[0] == 0]
         for kind, v in SS.step_macs({"rows": mine, "emitted": {"0": len(mine)}}, model).items():
             macs[kind] += v
@@ -264,7 +264,7 @@ def build(model: str, cls: tuple[int, int, int], n: int, check: Callable[[Mappin
 
     work = block_work(cls, model)
     say(f"lowering class {','.join(map(str, cls))} of {model}")
-    doc, pins = record(class_circuit(registered(model), P.window_class(cls)) if circuit is None else circuit)
+    doc, pins = record(class_circuit(registered(model), P.class_of(cls)) if circuit is None else circuit)
     say("the session's Definition, its gate table, c and k")
     pol = policy(doc, pins)
     say("the record's divisions")

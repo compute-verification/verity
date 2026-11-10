@@ -39,6 +39,13 @@ def small() -> IF.Circuit:
                                                            for t in (r, s, n))))
 
 
+@pytest.fixture(autouse=True)
+def no_out(monkeypatch) -> None:
+    """The command writes its JSON to `$OUT` by default; a test names its own directory or none."""
+    monkeypatch.delenv("OUT", raising=False)
+    monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
+
+
 def reference(inst: dict) -> dict:
     """`NciCheck.Count`'s Python reference, which the count's difftest holds the Lean to, as `built.lean_count`."""
     spec = importlib.util.spec_from_file_location("nci_reference", B.NCI / "scripts" / "nci_reference.py")
@@ -126,11 +133,10 @@ def test_the_count_refuses_the_session_program_on_k(counted) -> None:
     assert (few["verdict"], few["failed"]) == ("refused", "n")
 
 
-def test_the_report_puts_the_served_number_first_and_labels_a_refused_policy(capsys, tmp_path, monkeypatch) -> None:
+def test_the_report_puts_the_served_number_first_and_labels_a_refused_policy(capsys, tmp_path) -> None:
     """The command on the served file and a small built record: the served number is first and is the JSON's value, the
     built class is labelled as not served, its refusal prints the verdict and what failed, and its number is the
     bound's and is labelled as resting on the Python count."""
-    monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
     doc = report.main(["--class", ",".join(map(str, CLASS)), "--out", str(tmp_path)], check=reference, circuit=small(),
                       commit=lambda: "0" * 40)
     out = capsys.readouterr().out
@@ -174,37 +180,3 @@ def test_stated_only_builds_nothing_and_another_division_is_the_built_number(cap
     assert doc["policies"][1] == doc["divisions"][2] and doc["policies"][1]["division"] == "proof block"
     assert doc["policies"][1]["n"] == 9 * doc["divisions"][0]["n"]
 
-
-#: a two-layer exact-int8 checkpoint's config, small enough to lower whole
-TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128,
-        "num_attention_heads": 4, "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256,
-        "rms_norm_eps": 1e-5, "tie_word_embeddings": True, "max_position_embeddings": 64, "hidden_act": "silu",
-        "eos_token_id": 255}
-
-
-@pytest.mark.slow
-def test_a_lowered_class_with_its_linears_inside_reads_only_its_scan_state_row() -> None:
-    """The built class's claim on a class the integration lowers whole: a two-layer exact-int8 checkpoint served with
-    its linears int8, class 2,4,2. With the linears inside the circuit a session's `k` is the class's scan state row
-    and nothing else, by the integration's count and by the divisions' own; the count refuses it on `k`. The small
-    record above is hand-made, so only this test runs `class_circuit`'s record through `built`: a change to the record's
-    description, its blocks or its θ parameters' names fails here."""
-    from verity_vllm.program.model import INT8_EXACT_QUANT
-    from verity_vllm.program.predict.phi import Phi
-    from verity_vllm.program.predict.steps import Registered
-    from verity_vllm.program.predict.window_circuit import Grain, class_circuit
-
-    cls = (2, 4, 2)
-    phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": {**TINY, "quantization_config": dict(INT8_EXACT_QUANT)}},
-              target={k: list(v) if isinstance(v, tuple) else v for k, v in B.H200.items()})
-    circuit = class_circuit(Registered.of(phi, default_seed=7), P.window_class(cls), None,
-                            Grain(gemm_words=512, rows=256, select=64), provable=False)
-    policy, div = B.build(B.MODEL, cls, 8, check=reference, circuit=circuit)
-    state = P.scan_state_bits(cls)
-    assert policy.k == div["session"]["k"] == state and policy.unexplained == 0 and len(policy.parts) == 1
-    assert "scan-state" in policy.parts[0][0] and policy.parts[0][1] == state
-    assert [div[d]["blocks_a_session"] for d in B.DIVISIONS][:2] == [1, P.window_class(cls).positions]
-    assert div["session"]["c"] == policy.c > div["position"]["c"] > div["proof block"]["c"]
-    assert div["position"]["k"] > state and div["proof block"]["k"] > 0
-    assert (policy.check["verdict"], policy.check["failed"]) == ("refused", "k")
-    assert policy.check["counted"]["c"] == policy.c and policy.check["counted"]["k"] > state

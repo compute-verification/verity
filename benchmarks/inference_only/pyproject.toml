@@ -7,11 +7,12 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # The benchmark prices a policy with the slowdown calculator's bound, fleets and periods (`benchmarks/rho`: `rho.min_cut`,
 # `periods.py`, its registry and what that reads of the census, the inference-only policy's calibrations and core's
 # reporting grid), and each proved or assumed name's standing from the locks (`rho.lean`). A block's work is priced as a
-# served step is (`benchmarks/one_stage`'s `served_shares` and `served_verdicts`). The built class's record, its counts
+# served step is (`benchmarks/one_stage`'s `served_shares` and `served_verdicts`, which imports `served_overhead`). The built class's record, its counts
 # and the model's shape are the integration's (`integrations/vllm`: `verity_vllm` and its manifests), over `verity`.
 # The tests check the count's refusal with its Python reference (`nci_reference.py`), which the count's difftest holds
 # the Lean to, so the suite builds no Lake package.
 inputs = ["benchmarks/rho", "benchmarks/one_stage/served_shares.py", "benchmarks/one_stage/served_verdicts.py",
+          "benchmarks/one_stage/served_overhead.py",
           "integrations/vllm/verity_vllm", "integrations/vllm/manifests", "verity",
           "verity/core/protocols/network/nci/lean/scripts/nci_reference.py",
           "Security/lean-audit.json", "Security/Properties/lean-audit.json",

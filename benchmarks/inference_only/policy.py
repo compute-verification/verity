@@ -111,7 +111,8 @@ def shape(model: str) -> Shape:
     return Shape(weights["layers"].n, linears, (head.n, head.elem.n))
 
 
-def window_class(cls: tuple[int, int, int]) -> Any:
+def class_of(cls: tuple[int, int, int]) -> Any:
+    """The integration's class of `(slots, prompt ids, outputs)`: its positions and its scan."""
     from verity_vllm.program.predict.window_class import WindowClass
 
     return WindowClass(*cls)
@@ -121,7 +122,7 @@ def scan_state_bits(cls: tuple[int, int, int]) -> int:
     """The bits of the scan state row a block of class ``cls`` reads (`scan_state.words`, u16 words)."""
     from verity_vllm.program.predict import scan_state
 
-    return 16 * scan_state.words(window_class(cls).scan)
+    return 16 * scan_state.words(class_of(cls).scan)
 
 
 def stated(path: Path = SERVED) -> Policy:
@@ -140,7 +141,7 @@ def stated(path: Path = SERVED) -> Policy:
     if work[TOTAL] != work["linears"] + 2 * (work["attention"] + work["lm_head"]):
         raise ValueError(f"{path}: [work] {TOTAL} = {work[TOTAL]:,} is not linears + 2 × (attention + lm_head): the "
                          "policy's unit counts a linear's MAC one and a BF16 MAC two")
-    sh, positions = shape(model), window_class(cls).positions
+    sh, positions = shape(model), class_of(cls).positions
     parts = []
     if bits := (doc.get("outside") or {}).get("linears"):
         parts += [(f"{name}'s outputs", sh.layers * positions * n_out * bits,

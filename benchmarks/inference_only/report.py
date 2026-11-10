@@ -103,7 +103,7 @@ def detail(row: dict[str, Any], p: P.Policy, sh: P.Shape) -> list[str]:
     number with what it rests on."""
     w, bd, check = row["work"], row["bound"], row["check"]
     cap = bd["macs_a_block"]
-    positions = P.window_class(p.cls).positions
+    positions = P.class_of(p.cls).positions
     width = max(len(f"{bits:,}") for bits in (*(b for _, b, _ in p.parts), p.unexplained, 0))
     out = [
         f"  source    {p.source}",
@@ -129,7 +129,7 @@ def detail(row: dict[str, Any], p: P.Policy, sh: P.Shape) -> list[str]:
             out.append(f"            the Lean counts {check['counted'][f]:,} {what} against {f} = "
                        f"{check['declared'][f]:,}: {check['why']}")
         if cost:
-            out.append(f"            cost: {cost['wall_s']:.1f} s wall, {cost['cpu_s']:.1f} s CPU, {cost['peak_mib']:,.0f} MiB "
+            out.append(f"            the count's cost: {cost['wall_s']:.1f} s wall, {cost['cpu_s']:.1f} s CPU, {cost['peak_mib']:,.0f} MiB "
                        f"peak, on an instance of {cost['instance_bytes']:,} bytes")
     out += [
         f"  bound     min_cut.bound(c, k, n, N, O, size = c): N the block's work, O = N × o × b = {_g(bd['O'])} output "
@@ -140,7 +140,8 @@ def detail(row: dict[str, Any], p: P.Policy, sh: P.Shape) -> list[str]:
         + f", F = {bd['F']:g}: cap {_n(cap)} MACs of training a block, N / cap = {_g(w['N'] / cap)}",
         "            the work is taken as training of the model's own matmul shapes, its weights outside θ, at most two "
         "of its three kinds of product charged (F = 1)",
-        "            size = c, so c cancels: the number is the blocks the count needs for one block's work",
+        "            size = c, so c cancels, and the count reads no n: the number is the blocks the count needs for one "
+        "block's work",
         f"  number    {_n(row['value'])} = max(1, N / cap)",
         f"  rests on  {row['rests_on']}",
     ]
@@ -202,8 +203,8 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
                                      division=args.division,
                                      parts=tuple((x["kind"], x["bits"], x["how"]) for x in built["k_by_kind"]))
         print(f"\nThe class this tree builds: NOT SERVED. Its number: {_n(built['value'])}")
-        print(f"  {args.model}, class {','.join(map(str, cls))}, the layers' linears inside the circuit: what registering "
-              "the linears inside the circuit would give.")
+        print(f"  {args.model}, class {','.join(map(str, cls))}: the exact-int8 checkpoint with its layers' linears "
+              "inside the circuit, so what registering the linears inside the circuit would give, on that checkpoint.")
         print("\n".join(detail(built, chosen, sh)))
         print("\n  The record's divisions (c and k the largest block's, a block's work the session's shared evenly; the "
               "check ran on the session's Program)")
@@ -232,8 +233,9 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
     print(f"  proved    {min_cut.HE} ({lean.status(min_cut.HE)} in the lock), the count a block's cap is solved from: "
           "at k fresh bits a block, m blocks finish at most m (k + α) + (k/2) √(m O / q) of a work's MACs")
     print(f"  premise   (H) {min_cut.HARDNESS} ({hard}) at the β above and (E) {min_cut.EXPORTS} ({exports}) at b, "
-          "conjectures; and that every block is within the policy's c and k, which the Lean check accepts for no class "
-          "today")
+          "conjectures; the work's structure (its values one word each, no two matmuls sharing both operands), taken of "
+          "a training work nobody built here; and that every block reads at most k, which the Lean check accepts for no "
+          "class today")
     print("  scaled    one block's ratio, multiplied through the blocks a fleet holds at its data sheet's rate: the "
           "fleets' sizes are the census's, and no fleet was measured")
     print("\nUnits: the number is the policy's block's work over the cap, both in the policy's own MACs. Not applied:")
