@@ -1,0 +1,15 @@
+# PUBSPLIT: rehearse the public export on the moved tree tonight, four days early.
+
+**Why.** Goal `top/repo-cleaned-up` ends with the public repository on Fri 20 Nov; its rehearsal export was planned for Sat 14 Nov (Linear TOP-239). Tonight's move changes every path the export's boundary names. Rehearsing on the moved tree now finds what breaks while the owners are still in the code.
+
+**What exists.** `tools/verity/check/public_export.py` (a dry run of the one-way export; `--build` builds the exported tree, a node's work), `tools/verity/check/public_boundary.py`, `public_boundary.toml`, `public_boundary_allowed.txt`, `tests/test_public_boundary.py`. top's boundary tools for the move are in the notes: `lanes/top/tools/boundary/` (`rows.py`, `public_equal.py`, `three_checks.sh`).
+
+**The tree.** Staging A, `origin/cursor/top-layout-staged-e15c` at `50f940c4f28531bc33f23bbb73a2970d5820caf1`. Its `public_boundary.toml` is known to be wrong in three places, which the stager's boundary step cures at the restage (TOP-398, comments of 23:29Z and 23:31Z on 10 Nov: two brace lists the mover does not rewrite; the certifier's row that makes all of `verity/protocols/` public; PoUB's live verifier, which must stay private). So: first run `rows.py` and `public_equal.py` on a scratch copy as their docstrings say, and rehearse on the result. If they fail, that is your first finding: say it at once.
+
+**What to do (on a node; the export and its build are heavy).**
+1. `main` first, as the baseline: `public_export.py DEST --report R.json`, then `--build`. Record what it reports and how long it takes.
+2. The moved tree, the same two runs.
+3. Compare: the public file set (must be `main`'s, file for file through the map: `tools/move/layout_one_map.toml` on `origin/cursor/vllm-map2-9974`); every edge from a public file to a private one (each with file and line, and whether `main` had it under the old path); whether the exported tree installs and its own tests collect and pass; what the export still names that the signed architecture retires (`integrations`, `examples`, `Security`, `fixtures`).
+4. The open questions on the public side, each with what the rehearsal shows: `benchmarks/one_stage/served_composite.sh` reaching the private composite verifier (does the script go private or the verifier public: give the cost of each in files); the universal unit and the training frontend left out of the export (two `private_circuits` edges); the certifier public without its period check (NET-283).
+
+**Deliver.** Your note with the two reports side by side; the reports as artifacts (`research data put --kind public-export-rehearsal --file F --preserve`); and in your final message, **by 02:30Z Wed (6:30 PM PST)**: does the moved tree export and build, the edges by owner, and the three things that must be decided before Friday 20 Nov with your recommendation for each. You change no file on any branch but your own scratch one, and you publish nothing: the export is a dry run into a directory.

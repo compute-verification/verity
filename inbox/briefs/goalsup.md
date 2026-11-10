@@ -1,0 +1,16 @@
+# GOALSUP: for each top-priority goal, what sets its date, and what would pull it in.
+
+**Why.** Daniel, Tue 10 Nov 3:35 PM PST: "let's look ahead and let's try to move every goal up as much as possible", "parallelizing as much as possible, using as many agents as possible". The roadmap is the Goals page (the Goals API: `python3 -m research goals show --json`; `python3 -m research goals --help`). It has eleven goals at priority 1 and about 240 open goals under them. Nine of the eleven are off track. top wants, per goal, the chain that sets its date and the cheapest way to shorten it. **You write no goal, and you ring no one.** top takes your list to each lead.
+
+**Your part is named in your launch message:**
+- **F (foundations):** `ci/landing-two-hours` (ci), `infra/platform` (infra), `top/repo-cleaned-up` (top). For the third, also: TOP-398's section 8 lists six things the signed architecture asks us to build; say for each whether a goal with an owner and a date exists, and if not, propose its title (eight words at most), owner and what "done" is.
+- **B (benchmarks and demos):** `vllm/serving-cost-benchmark` (vllm), `benchmarks/proof-system-performance` (benchmarks, with proofs), `demos/remote-demo` and `demos/onsite-demo` (vllm).
+- **R (research):** `accounting/network-glm53` (proofs), `accounting/compute-small-model` (compute-accounting), `accounting/memory-small-model` (memory-accounting), `accounting/inference-only-small-model` (training).
+
+**For each goal in your part:**
+1. Dump the goals and build its tree (what it waits on, by the goals' own links and descriptions). Read the owner's newest notes (`~/.research/notes/lanes/<lane>/`, after `python3 -m research notes sync`), its Linear team's open issues, its open pull requests and their place in the queue (`python3 -m research queue status`), and its runs of the last two days.
+2. **The critical chain:** the sequence of steps, each with its owner, its state today and what it waits for, that ends at the goal's date. Mark each wait as one of: landing on `main`; a run on a machine (which, how long); another lane's step; a decision (whose); nothing, it is just not started.
+3. **What could start now.** Tonight landing is the bottleneck and the move restacks every branch, so favour work that needs neither: runs and measurements on machines that are paid for and idle (proofs' pod of 8 H200s was idle this morning; check, do not trust), designs, proofs on branches, test data, the next step's brief written before the previous step ends. For each: who would do it, how many agents, which machine, and how many hours or days it takes off the chain. Label every such number an estimate and say what it rests on.
+4. **Dates that are wrong today:** a goal on track whose chain cannot make its date, one off track whose owner has posted no new date, a step with no owner.
+
+**Deliver.** Your note; and in your final message, **by 01:45Z Wed (5:45 PM PST)**, at most eight lines per goal: date now, the chain in one line, the longest wait, up to three things that could start tonight with what each buys, the date it could move to and on what condition, and what needs top's or Daniel's decision. Do not pad: "nothing to pull in, because …" is an answer.
