@@ -48,6 +48,10 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "verity/core/service/vstar/tests/recursive_data.json" = "verity/spot/verifier/recursive/tests/recursive_data.json"
 "verity/core/service/vstar/tests/test_vstar_recursive.py" = "verity/spot/verifier/recursive/tests/test_vstar_recursive.py"
 
+[tokens]
+# directories this move shares with other moves, as a reference to one reads after it
+"verity/core/protocols/spot/" = "verity/spot/"
+
 [retired]
 paths = []
 

@@ -457,7 +457,8 @@ def compress(mine, tracked_dirs):
 
 
 def tokens_for(move, dest, tracked_dirs, rows):
-    """The directories several maps share that this map speaks for: {old directory: new directory}."""
+    """The directories no row moves whole that this map speaks for, those several maps share and those it empties by
+    rows that part ways: {old directory: new directory}."""
     out = {}
     under = collections.defaultdict(list)              # directory -> tracked files below it
     for d, (files, _) in tracked_dirs.items():
@@ -484,6 +485,14 @@ def tokens_for(move, dest, tracked_dirs, rows):
         new = {dest[p][0][: -len(p[len(d):])] if dest[p][0].endswith(p[len(d):]) else None for p in mine}
         if len(new) == 1 and (n := new.pop()) is not None:
             out[d + "/"] = n + "/"
+        elif all(dest.get(p, (None, None, None))[2] in (move, "archive") for p in ps):
+            # The move empties the directory and its files part ways (`verifier/`, `device/`, the directory itself).
+            # `layout.py` looks only for paths that begin with a row or a `[tokens]` key, so without one a reference to
+            # the directory itself (a suite's declared input, a boundary's glob) is neither rewritten nor noted and names
+            # a directory that is gone. It reads as the one new directory that holds every file of the old one.
+            common = posixpath.commonpath([posixpath.dirname(dest[p][0]) for p in mine])
+            if common:
+                out[d + "/"] = common + "/"
     return out
 
 

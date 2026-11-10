@@ -101,6 +101,7 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 
 [tokens]
 # directories this move shares with other moves, as a reference to one reads after it
+"verity/core/protocols/pous/" = "verity/protocols/pous/"
 "verity/core/protocols/pous/tests/" = "verity/protocols/pous/verifier/tests/"
 
 [retired]

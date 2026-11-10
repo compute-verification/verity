@@ -108,6 +108,10 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "verity/core/protocols/network/tests/" = "verity/protocols/certifier/verifier/network/tests/"
 "verity/ml/protocols/certifier/" = "verity/protocols/certifier/prover/"
 
+[tokens]
+# directories this move shares with other moves, as a reference to one reads after it
+"verity/core/protocols/certifier/" = "verity/protocols/certifier/"
+
 [retired]
 paths = []
 
