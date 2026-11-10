@@ -24471,3 +24471,27 @@ Next: the 12:00Z items (review-1's findings on #8359, and who stages `SparseMlaS
 ## GATEPOLICY, Tue 10 Nov 05:16Z: D1 marked 05:06Z (#8531 at a055b48ed4), named on CI-489 at 05:13Z; land ask
 
 **Land ask.** #8531 is marked at `a055b48ed4` [run `r20261110-043528-bb10`: 10 suites, 10 passed] and named on CI-489. Once it is on `main`, infra deploys the gate from that commit C: `git archive C verity benchmarks/live_challenger benchmarks/network_traces integrations/vllm/manifests/checkpoints-int8.json | ssh vy-admin@vy-challenger-1 sudo vy-challenger-pin C`.
+
+## GATEPOLICY, Tue 10 Nov 05:17Z: report 4: D1b built and in check (#8540); the 20:00Z answers early; one blocker for the deploy
+
+**D1 (#8531, head `a055b48ed4`, marked 05:06Z).**
+- [run `r20261110-043528-bb10`] the changed suites on that head, clean: 10 of 10 passed, 0 cached (`benchmarks/live_challenger` 654, `remote_session` 175, `one_stage` 491, `prove_path` 142, `window_salt` 4, `verity-network-traces` 517, `verity-network-e2e` 66, `verity-vllm` 13842 with 492 skipped, `repository` 280, `verity-graph` 168).
+- [run `r20261110-043533-e3ef`] the Lean challenger difftest with its generated period-open bodies carrying `policy`, `alpha` `[3, 10^39-1]`, `gamma` `10^39-1` and `registration`: 7 passed (`challenger_ledger`, `_session`, `_pinned`, `_credited`, `_day`, `_head`). A one-off patch in the run's clone, not committed.
+- [run] `research queue ready` preflight merged it onto `next` at `15ab284aa5`, nothing refused; the queue shows it ready. I added `Goal vllm/serve-registers-weights` and `Refs PRF-487` to its body after two warnings. [read] PRF-487 carries no goal label (`from:vllm`, `lane:soundness`); that label is yours.
+- My 04:41Z answer on pinning from `checked` is void, as your 04:40Z entry says. [read] CI-489, ci at 04:36Z: a named PR goes first in the priority file.
+
+**D1b (iii), built: #8540, branch `cursor/proofs-gatepolicy-registry-198e`, head `b301a406cc`.** A second branch of mine, since a second PR needs its own head; your brief said one branch, so say if you want it otherwise.
+- `policy-register --name NAME --policy ID --alpha N/D --gamma G`, vy-admin alone: one line in `/var/lib/vy-challenger/policies.jsonl` (auditor's, append-only, written as `auditor` under a lock, as the model registry is). A name is registered once. `policies` reads it.
+- `period-open --policy-name NAME --registration SHA512` signs the registry's `policy`, `alpha`, `gamma` and the name (`policy_name`). The signing step refuses the name beside `--policy`, `--alpha` or `--gamma`, an unregistered name, and the name without `--registration`.
+- So the signed line says who chose: `policy_name` present, or `by` vy-admin, is the auditor's; otherwise the lane's. That is the check D2's reader will code.
+- [run, local] 193 passed over the periods and models test files (10 new); eight mutants, each killed. Same two files as D1, no Lean, no lock.
+- In check: `r20261110-050854-2532` (changed suites, waiting for a slot on cpu-2; [guess] done by 06:30Z) and `r20261110-050930-fe7c` (the Lean difftest with `policy_name` added).
+- **Date: I mark #8540 when both pass, [guess] by 07:00Z today, so it fits Wed 18:00Z with D1 by ci's 04:36Z estimate.** It is stacked on D1's two commits. Tell me before then if you want its mark held until D1 is on `main`, or a reviewer on it.
+
+**D2.** [read] `served_cases.py` is not on `main`; it is on `origin/remote` and vllm's rehearsal branch (tip `e3578c66bb` at 05:03Z, moving). Confirmed: piece 1 on a branch off the rehearsal tree for vllm to stage. Piece 1 is the reader of the gate's ledger for `alpha`, `gamma`, `policy`, `registration`, `by` and `policy_name`, with `--from-division` dropped, the line "policy given by the lane, signed by the gate before the serve", and the coded check above. [guess] pushed by Tue 14:00Z, before vllm's Wed 18:00Z freeze.
+- Piece 2, θ and one provenance entry per θ node: [read] training pushed the record form's Python reference and difftest data at 05:13Z (`cursor/inference-only-record-form-0063`, `f9dfc96892`, `nci_record_reference.py`). I read it next and give piece 2's date by Tue 20:00Z.
+- [read] `served_cases._ratio` reduces α through `Fraction`; the gate signs `[N, D]` as given. D2's reader copies the signed pair unreduced, so the case's params equal the signed line.
+
+**Blocker for the deploy, not mine.** [read] infra's note of 01:42Z, updated 04:53Z: infra's lead cannot log in as vy-admin to vy-challenger-1 (Permission denied at 04:30Z; the key was asked of the previous lead). Until that is fixed nobody can repin the gate, and nobody can run `policy-register`.
+
+**Could not verify.** The pin the gate runs now, at source (I hold no gate key). That ci's loop takes a PR stacked on another's commits without trouble. Whether Lean's ledger check accepts `policy_name` (run `fe7c`, in line). Whether `vllm/serve-registers-weights` is the goal you want on these PRs. Nothing on the auditor host was run: every gate result above is a local gate with a test key.
