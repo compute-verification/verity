@@ -86,7 +86,8 @@ def runSteps (j : Json) (whole steps : Bool) : IO Unit := do
   let some rule' := rule.over n | throw (IO.userError "the rule's rate law refuses the population")
   let law ← IO.ofExcept (rule'.lawOver n)
   let v := { v with law }
-  let _ ← timed "registration" rec_ (fun r => Registration.check r v) (·.isEmpty)
+  let salt ← IO.ofExcept (← timed "seedSalt" (getD j "seed_salt") (fun e => Run.seedSaltOf e v.windowRoot) isOk)
+  let _ ← timed "registration" rec_ (fun r => Registration.check r v salt) (·.isEmpty)
   let _ ← timed "partition.evaluate" v.program (fun pr => Partition.evaluate pr v.query) isOk
     (fun r => match r with | .ok rs => [("ranges", toJson rs.size)] | .error _ => [])
   let _ ← timed "partition.unitGates" v.program (fun pr => Partition.unitGates pr v.query) isOk

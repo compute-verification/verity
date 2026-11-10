@@ -16,8 +16,8 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness", "verity/core/wire", "verity/core/deploy",
           "verity/core/devices/__init__.py", "verity/core/devices/memory_challenger/__init__.py",
           "verity/core/devices/memory_challenger/challenger_party.py",
-          "Security/Definitions/Pous.lean", "Security/Definitions/Pous", "Security/Definitions/Pous",
-          "Security/Proofs/Pous", "Security/Definitions/Core/Game.lean", "Security/Proofs/Core/Game/Basic.lean",
+          "Security/Definitions/Pous.lean", "Security/Definitions/Pous", "Security/Proofs/Pous",
+          "Security/Definitions/Core/Game.lean", "Security/Proofs/Core/Game/Basic.lean",
           "Security/lean-audit.json", "Security/lakefile.toml", "Security/lake-manifest.json", "Security/lean-toolchain",
           "Security/Proofs/lakefile.toml", "Security/Proofs/lake-manifest.json",
           "verity/core/protocols/pous/lean/README.md"]
