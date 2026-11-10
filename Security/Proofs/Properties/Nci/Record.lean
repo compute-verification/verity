@@ -2,7 +2,6 @@ module
 
 public import Properties.Nci.Record
 import Mathlib.Algebra.Order.Field.Basic
-import Mathlib.Data.Real.Basic
 
 /-!
 # The circuit record's properties, from their parts
@@ -57,8 +56,8 @@ theorem Same.signature {P P' : Prog} {k k' : ℕ} (h : Same P P' k k') :
 
 theorem pinnedOpens_of {F : Form} (hpins : DigestPins) (hprov : Provenance F) (hlay : LayoutReads F) :
     PinnedOpens F := by
-  intro Opens text₀ j₀ P₀ k₀ d₀ key pin hof hdec₀ hparse₀ hdig₀ hk₀ hd₀ hopens
-  intro j tr c P pj r name p hread hdec hparse htid hheld
+  intro Opens text₀ j₀ P₀ k₀ d₀ key pin hof hdec₀ hparse₀ hdig₀ hk₀ hd₀ hopens j tr c P pj r name p hread hdec
+    hparse htid hheld
   obtain ⟨log, run, -, -, hgood⟩ := hprov j tr c P pj hread hdec hparse
   obtain ⟨-, -, hdig, -⟩ :
       IsTheta log run p ∧ pin ∈ (F.inst c).pins ∧ closureDigest pj r.tid = .ok pin ∧ _ := hgood r _ hheld
