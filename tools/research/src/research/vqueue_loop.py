@@ -659,11 +659,8 @@ class World:
                       and a not in chosen and not (old and self._ancestor(entries[n].held[a], old))}:
             chosen = {n: v for n, v in chosen.items() if n not in out}
         first = {n: i for i, n in enumerate(priority_list(self.priority_file) if self.priority_file else ())}
-        # a PR the priority file names ahead of PRs whose heads its own holds (an aggregate, such as a commit of `checked`'s
-        # chain) lands them with it, so they don't build first; a stack the file doesn't rank still lands its bases first
-        held = {a for n in chosen if n in first for a in entries[n].after
-                if a in chosen and first.get(a, len(first)) > first[n]}
-        chosen = {n: v for n, v in chosen.items() if n not in held}
+        # a stack lands its bases first, ranked or not: a PR the priority file names ahead of PRs whose heads its own holds
+        # goes after them, so no ranking takes a PR off the ready list and drops the candidate holding it
         order = sorted(chosen, key=lambda n: (first.get(n, len(first)), labels.marked_at(n, entries[n].pr.head) or "", n))
         placed: list[int] = []
 

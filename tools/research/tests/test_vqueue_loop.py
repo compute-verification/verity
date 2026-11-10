@@ -1015,9 +1015,10 @@ def test_what_a_run_failed_beside_its_undeclared_reads_is_inherited_only_where_m
     assert not vqueue._inherited(loop.world.verdict(sha, main).verdict.failed[0])   # killed: never main's fault
 
 
-def test_a_pr_the_priority_file_names_ahead_of_prs_its_head_holds_lands_them_with_it(env):
-    """An aggregate named first in the priority file (a commit of `checked`'s chain, holding PRs that landed there) is ready
-    alone, ahead of the PRs its head holds, which land with it; a stack the file doesn't rank still lands its base first."""
+def test_a_pr_the_priority_file_names_ahead_of_prs_its_head_holds_lands_after_them_and_drops_no_candidate(env):
+    """A stack lands its bases first, ranked or not: a PR the priority file names ahead of a PR its head holds goes after it,
+    so no ranking takes that PR off the ready list, and a candidate in flight holding it is never dropped for it (two were, 38
+    minutes into their check, when a ranked PR held a member's head)."""
     one = env.put(1, {"a.txt": "1\n"})
     env.o.gh.put(2, env.o.change({"b.txt": "2\n"}, base=one))
     env.put(3, {"c.txt": "3\n"})
@@ -1027,16 +1028,19 @@ def test_a_pr_the_priority_file_names_ahead_of_prs_its_head_holds_lands_them_wit
     assert [r.number for r in w.ready(env.main())] == [1, 2, 3]       # #1 before #2, which holds it
     (prio := env.tmp / "priority").write_text("2\n")
     w.priority_file = prio
-    assert [r.number for r in w.ready(env.main())] == [2, 3]          # #1 lands with #2
+    ready = {r.number: r for r in w.ready(env.main())}
+    assert list(ready) == [1, 2, 3]                                   # #2 ranked first still goes after #1
+    flying = vqueue.Candidate(sha="c" * 40, base=env.main(), members=(1,), heads=(one,))
+    assert vqueue._stale(flying, ready, set()) is None                # a candidate holding #1 stays
     prio.write_text("1\n2\n")
-    assert [r.number for r in w.ready(env.main())] == [1, 2, 3]       # ranked below #1, #2 holds nothing ahead of it
+    assert [r.number for r in w.ready(env.main())] == [1, 2, 3]
 
 
 def test_a_head_landed_on_the_old_paths_checked_holds_its_holders_back_from_nothing_but_still_lands_first(env):
     """`checked`, frozen since the switch, holds heads that landed under drive's rules and reach `main` only in an aggregate
     of it.  A PR holding one doesn't wait for the PR that landed it, though that PR moved on unmarked since, but still goes
-    after an open PR whose landed head it holds, and an aggregate the priority file ranks lands those with it.  Without
-    `checked` it waits; once `main` holds `checked`, those heads are on `main`."""
+    after an open PR whose landed head it holds, ranked first or not.  Without `checked` it waits; once `main` holds
+    `checked`, those heads are on `main`."""
     one, four = env.o.change({"a.txt": "1\n"}), env.o.change({"d.txt": "4\n"})
     _git(env.o.dev, "checkout", "-q", "--detach", "origin/main")
     for n, head in ((1, one), (4, four)):
@@ -1053,7 +1057,7 @@ def test_a_head_landed_on_the_old_paths_checked_holds_its_holders_back_from_noth
     assert [r.number for r in w.ready(env.main())] == [4, 2]
     (prio := env.tmp / "priority").write_text("2\n")
     w.priority_file = prio
-    assert [r.number for r in w.ready(env.main())] == [2]                      # #4 lands with #2
+    assert [r.number for r in w.ready(env.main())] == [4, 2]                   # ranked first, #2 still goes after #4
     _git(env.o.origin, "update-ref", "-d", "refs/heads/checked")
     w.fetch()
     assert [r.number for r in w.ready(env.main())] == [4]                      # #2 contains #1's commits, and #1 isn't marked
