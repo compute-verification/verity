@@ -1,0 +1,46 @@
+7952	clean	waiting	4d3d22fda080	ahead=1	draft=false	cursor/proofs-dampener-lock-7c2e	
+8120	clean	waiting	b6e0c1dc5de8	ahead=4	draft=false	cursor/proofs-verifyfast-a-inplace-3d1c	
+8177	clean	waiting	6dd74f50be00	ahead=6	draft=true	cursor/proofs-popok-ranges-2ce2	
+8354	clean	ready	a53eb5d1686d	ahead=4	draft=false	cursor/proofs-twoverify-22ae	
+8363	clean	waiting	a81a1b11ea1d	ahead=64	draft=false	cursor/proofs-twoinstance-2a66	
+8368	clean	ready	533958045e8e	ahead=9	draft=false	cursor/proofs-twoverify-3e16	
+8406	clean	ready	fe32fa055d40	ahead=14	draft=false	cursor/proofs-stmtok-records-c257	
+8411	clean	ready	1562e328dae3	ahead=1	draft=false	cursor/proofs-trust6-c7a2	
+8414	clean	ready	4975a307d3f7	ahead=5	draft=false	cursor/proofs-accountd-cba0	
+8423	clean	ready	e973bd0d968c	ahead=4	draft=false	cursor/proofs-headline-basis-9537	
+8425	clean	ready	8d4002392314	ahead=2	draft=false	cursor/proofs-verifyfast-b10-served-tmpl	
+8453	clean	ready	0054c395fe85	ahead=2	draft=false	cursor/proofs-verifyfast-b12-verifier-card	
+8454	clean	ready	0e694dd53ec6	ahead=11	draft=false	cursor/proofs-fusedserve-1ffe	
+8458	clean	ready	9c4fa7138715	ahead=1	draft=false	cursor/proofs-round2-return-field-5c21	
+8517	clean	ready	2e8a4eab4b65	ahead=2	draft=false	cursor/proofs-ledger-stamp-f1a6	
+8536	clean	ready	b7afd40baa20	ahead=8	draft=false	cursor/proofs-zkhide-7dfe	
+8540	clean	ready	b301a406cc3c	ahead=1	draft=false	cursor/proofs-gatepolicy-registry-198e	
+8543	clean	waiting	2007687fd9b8	ahead=25	draft=false	cursor/proofs-regpin-3e7a	
+8552	clean	ready	20d95f339db2	ahead=1	draft=false	cursor/proofs-spot-readme-cap-3031	
+8563	clean	waiting	80bc72a80541	ahead=3	draft=true	cursor/proofs-seg-supplied-read-7d2e	
+8565	clean	ready	38e2f7d06762	ahead=16	draft=false	cursor/proofs-moebind2-26ad	
+8568	clean	waiting	a28822661c1a	ahead=2	draft=false	cursor/proofs-planner-land-3c65	
+8576	clean	ready	1803be00c9f6	ahead=1	draft=false	cursor/proofs-zkhide-rows-65cf	
+8578	clean	waiting	0a713e7caaf6	ahead=3	draft=false	cursor/proofs-zkhide-c1b8	
+8583	clean	ready	eccc38719cd5	ahead=1	draft=false	cursor/proofs-close-prs-7c1e	
+7228	CONFLICT	refused	9252b6ae120c	ahead=6	draft=false	cursor/proofs-lessons-6d8d	.agents/skills/lean-proofs/SKILL.md .agents/skills/smell-check/SKILL.md 
+7503	CONFLICT	waiting	afe1e3dde889	ahead=3281	draft=true	cursor/proofs-recursiveform-310f	.agents/skills/coordinating/SKILL.md .agents/skills/friction/SKILL.md .agents/skills/lean-proofs/SKILL.md AGENTS.md 
+7780	CONFLICT	waiting	bcf403856656	ahead=2	draft=false	cursor/proofs-boundary-7c1e	verity/core/protocols/spot/README.md verity/core/protocols/spot/one_stage/verifier.py verity/core/protocols/spot/service.py verity/core/protocols/spot/tests/test_service_outputs.py 
+7850	CONFLICT	waiting	ed27bb143d82	ahead=1	draft=false	cursor/proofs-spot-term-4dc9	AGENTS.md ARCHITECTURE.md GLOSSARY.md Security/Definitions/Accounting/JointPeriod.lean 
+8003	CONFLICT	waiting	2b228f349fec	ahead=28	draft=true	cursor/proofs-moeserve-c-2ce2	benchmarks/spot_proved/pyproject.toml verity/ml/windows/rows.py verity/ml/windows/tests/test_interface.py 
+8139	CONFLICT	refused	20d813fc6a0d	ahead=38	draft=false	cursor/proofs-seed-salt-from-log-5ae1	verity/core/protocols/pous/lean/TRUSTED.sha256 verity/core/service/spot/tests/test_difftest.py 
+8197	CONFLICT	?	4de6f2a3d59c	ahead=15	draft=false	cursor/proofs-twoprove-salt-a341	benchmarks/one_stage/a5.py 
+8224	CONFLICT	waiting	360c939a9e72	ahead=15	draft=false	cursor/proofs-theft-faulted-f10d	Security/Definitions/WeightSecurity/Assumptions.lean Security/Proofs/WeightSecurity.lean 
+8226	CONFLICT	?	3a579391f981	ahead=23	draft=false	cursor/proofs-theft-faulted-two-f10d	Security/Definitions/WeightSecurity/Assumptions.lean Security/Definitions/WeightSecurity/Guarantees.lean Security/Proofs/WeightSecurity.lean 
+8261	CONFLICT	?	55261e519a7d	ahead=16	draft=false	cursor/proofs-theft-tied-f10d	Security/Definitions/WeightSecurity/Assumptions.lean Security/Definitions/WeightSecurity/Guarantees.lean Security/Definitions/WeightSecurity/Tied.lean Security/Definitions/WeightSecurity/ToyTied.lean 
+8339	CONFLICT	waiting	b51bd3382126	ahead=17	draft=false	cursor/proofs-twoguard-onevalue-fe97	Security/Proofs/Flock/SpotFlock/Code.lean Security/Proofs/Flock/SpotFlock/EntriesAt.lean Security/Proofs/Flock/SpotFlock/FrameIsAt.lean benchmarks/two_stage/guard.py 
+8398	CONFLICT	waiting	ffd6df00d81d	ahead=1	draft=false	cursor/proofs-provecut-flaky-volunteer-dd83	verity/core/protocols/pouw/tests/test_pouw_pearl_c4.py 
+8400	CONFLICT	refused	9d9fe580337e	ahead=32	draft=false	cursor/proofs-cutlemma-6946	Security/Definitions/WeightSecurity/Assumptions.lean Security/Proofs/WeightSecurity.lean 
+8438	CONFLICT	waiting	3f31f0eeca4f	ahead=4	draft=false	cursor/proofs-slotrows-fbf8	benchmarks/one_stage/compose_circuit.py benchmarks/served_units/README.md benchmarks/served_units/stage.py integrations/vllm/verity_vllm/pipeline/chunk_rows.py 
+8462	CONFLICT	waiting	136775b028e0	ahead=12	draft=false	cursor/proofs-accountd-5094	benchmarks/spot_figures/figure1.py benchmarks/spot_figures/figures.py benchmarks/spot_figures/tests/test_figure1.py benchmarks/spot_figures/total_cost.py 
+8512	CONFLICT	waiting	5eb93b2b015c	ahead=41	draft=false	cursor/proofs-twomiss-ac23	Security/Proofs/WeightSecurity.lean 
+8523	CONFLICT	waiting	5cf6df3a7734	ahead=2	draft=false	cursor/proofs-zkverify-field-vfb	benchmarks/served_units/README.md 
+8527	CONFLICT	waiting	fcd9ed2685ab	ahead=47	draft=false	cursor/proofs-oneperiod-5d1e	Security/Proofs/WeightSecurity.lean 
+8539	CONFLICT	waiting	b3a5cc07e5ec	ahead=22	draft=false	cursor/proofs-accountd-6a92	verity/core/protocols/spot/README.md verity/core/protocols/spot/one_stage/registered.py verity/core/protocols/spot/one_stage/registration.py verity/core/protocols/spot/one_stage/verifier.py 
+8553	CONFLICT	waiting	fad6f729cb5a	ahead=3	draft=false	cursor/proofs-hidden-zk-jobsh-vfb	benchmarks/served_units/README.md 
+8486	IN-034a	ready	075c43ac5f5c	ahead=0	draft=false	cursor/proofs-round2-link-values-9e1c	

@@ -246,3 +246,10 @@ Python and Lean must give the same verdict on a tied stream. Read the ref, then 
 6. From me: `inbox/<your bc id>.md` on branch `cursor/proofs-inbox`. Read it at the start, at each hourly checkpoint and before you end. It may narrow or stop your work, never widen it.
 7. A checkpoint note at the start and every hour under `~/.research/notes/lanes/proofs/`, synced with `research notes sync --path lanes/proofs`.
 8. First reread `git show origin/main:AGENTS.md` (after `git fetch origin main`). Mark each statement [run], [read] or [guess]. Never print a secret's value.
+
+## Coordinator, Tue 10 Nov 16:20Z: the cut is earlier, and #8539 conflicts with the layout's base
+
+- **Top, TOP-394 16:09Z:** no new candidate since 16:00:53Z; the layout may be on `main` at about 19:15Z; every open PR crosses with `git merge BASE`, then `tools/move/restack.py`.
+- **#8539 (`b3a5cc07e5ec`) conflicts with `queue/034a1702664b`**, the base the layout moves [run by me, `git merge-tree`, 16:18Z]: `verity/core/protocols/spot/README.md`, `one_stage/registered.py`, `one_stage/registration.py` and more. Resolve it on a scratch branch that holds #8539's head merged with that candidate, with the suites it touches run on a node. The candidate is not `main`: nothing that holds it goes to #8539's head before top names BASE and I give the word here.
+- Your commit for review-1's second point goes to #8539's branch as planned; the merge does not.
+- #8462 (your `cursor/proofs-accountd-5094`) conflicts too, in `benchmarks/spot_figures/`; PRF-508's worker has it. #8414 merges clean.
