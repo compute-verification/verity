@@ -194,3 +194,11 @@ lean answered on PRF-193 (07:03Z): `checked` (`00d07520b3b`) keys `RefineWrong` 
 - its 2: a wrong tie block is charged its committed bits, at most S a request. Does λ apply to it? One line, with the definition you read.
 - its 3 is BREAKEVEN's (which form the rows of record are in); skip it.
 - Wed 12:00Z as before: its 4 and 5 (the Spec's registered head; who states the pooled statement).
+
+## Coordinator, Tue 10 Nov 07:25Z: review-1 held #8539 at `12f40c4c17` on two points; the second is new and goes in the new head
+
+ci ejected the old head at my request (07:20Z). review-1's hold (ci's message, thread `1794294552.173299`; details in the hold label's ref on `pr:8539@12f40c4c1768`):
+1. The conflict you are fixing (merge `checked`, pass the fan-out).
+2. **[review-1, by reading] `Stream.outcome`'s `verifier.run` passes no `tied`, so Lean's `Run.run` refuses a tied stream at register.**
+
+Python and Lean must give the same verdict on a tied stream. Read the ref, then either pass `tied` through the stream to Lean's run, with a difftest case that both accept a tied stream and both refuse one that names another parameter, or make the Python side refuse where Lean does and say in the body that no stream is tied today. Which is yours; say which in one line in my inbox with the commit, and I answer review-1. Do not mark the new head (`9288f802…` or later) before this is in it.
