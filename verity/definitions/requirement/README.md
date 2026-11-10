@@ -14,6 +14,15 @@ input gate wherever it is placed. A step is always an engine step. It is code, s
 `security_properties` package states that each function is the definition it computes (`Properties.Accounting.Requirement`)
 and proves it (`Proofs.Properties.Accounting.Requirement`).
 
+## Interface
+
+What code outside this directory may use. Everything else here is internal.
+
+| Entry point | What it is |
+|---|---|
+| `CircuitRequirement` (the Lean module of the package `core_requirement`) | What another Lake package imports: the structures `CircuitRequirement.Instance`, `CircuitRequirement.Store` and `CircuitRequirement.Placement`, and the functions on them that each compute one definition of `Accounting.Requirement`. On an instance: `topological`, `follows`, `live`, `reads`, `liveBits`, `readBits`, `held`, `read`, `liveBlocks`, `liveIn`, `readBlocks`, `readIn`, `incomplete`, `credited`, `creditedReads`, `creditedBits`, `creditedReadBits`, `storeMatches`, `planMatches`, `region`, `stepRegion`, `ingress` and `credits`. On a store: `resident`. |
+| `requirement-difftest` (the Lean executable, `CircuitRequirement/Difftest.lean`) | The function `requirement` over the difftest harness's line protocol, one request a line on stdin and one answer a line out. Its input is one instance as JSON, in the format below, and its output is what the functions above give on it, or `{"reject": "<reason>"}`. That instance format is the package's one wire format, and `CircuitRequirement.Difftest` is the module that defines it. |
+
 - `CircuitRequirement.lean`: `Instance`, `Store`, `Placement` and the functions, on lists with membership through hash sets, so a
   registry row of tens of thousands of gates runs in seconds.
 - `CircuitRequirement/Difftest.lean`: `requirement`, which `requirement-difftest` serves through the difftest harness's line
