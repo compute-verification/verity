@@ -48,7 +48,7 @@ from verity.core.protocols.sampled_proofs import remote
 from verity.ml.commitments.scheme import DIGEST_BYTES
 from verity.ml.crypto import lms
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[5]
 SERVE = ROOT / "benchmarks" / "live_challenger" / "serve.py"
 KINDS = ("local", "serve", "gate")
 GATE_PORTS = range(7811, 7900)
