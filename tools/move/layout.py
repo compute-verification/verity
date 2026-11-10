@@ -16,10 +16,18 @@ What it rewrites, in every tracked text file the map doesn't exclude:
   ones relative to the file (`../../packages/verity/lean` in a lakefile, `include_str!`), ones relative to an old package
   root (`verity/ir/cut.py`, `verity_pouw/schemes/ncp.py`) when that file exists, Python joins (`ROOT / "census"`), the
   `Path(__file__).parents[N]` anchors of a moved file, and a shell script's paths from its own directory
-  (`$(dirname "$0")/../..`, also through `${BASH_SOURCE[0]}` or a variable the script sets to its own path);
-- modules: import statements (split when their names now live in different modules, made absolute when a relative one no
-  longer resolves), `from M import n` in strings, and every dotted name (`-m`, `import_module`, `module:attr`, docs). A
-  module whose own row keeps its name (a [paths] row with old == new) stays where it is when its package moves;
+  (`$(dirname "$0")/../..`, also through `${BASH_SOURCE[0]}` or a variable the script sets to its own path or its own
+  directory). A path below a directory the map splits that names no tracked file (a file a test makes up, a build's
+  output) follows the directory's [tokens] row;
+- lists of paths (a Python list, tuple or set of strings, a TOML or JSON array, the objects of `git rev-parse`, the
+  members of `tar`): an entry that names what has no one place after the move, a directory the map splits or empties or
+  a file it deletes, becomes the fewest directories and files that hold where the list's files went and no others; and
+  where the list named the `__init__.py` of a package the move deletes, the package levels above those;
+- modules: import statements (split when their names now live in different modules, each statement keeping the comment
+  that ended a one-line import, and one of them the lines a longer import went on over, as written; made absolute when a
+  relative one no longer resolves), `from M import n` in strings, and every dotted name (`-m`, `import_module`,
+  `module:attr`, docs). A module whose own row keeps its name (a [paths] row with old == new) stays where it is when its
+  package moves;
 - pyprojects: the distributions folded into `verity` ([distributions]), the workspace members, the suites' inputs.
 A `lean-audit.json`'s `guarantees` and `reads` never change, and neither do the digests a path-keyed pin file records. An
 old path that names something outside the tree ([rewrite] keep: the frozen evidence artifact's layout) is never rewritten,
