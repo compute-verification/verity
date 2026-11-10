@@ -218,7 +218,10 @@ def parameter_gates(program: Program, value: str) -> range:
 
 def held_gates(program: Program, values: Iterable[str]) -> list[range]:
     """The Input gates of each of `values` that is a parameter of the program whose gates are one non-empty interval
-    (`parameter_gates`, Lean's `Registered.Param.gates`), in `values`' order."""
+    (`parameter_gates`, Lean's `Registered.Param.gates`), in `values`' order. Without `values` it reads nothing of the program,
+    which may be a decoded one (`codec.DecodedProgram`, an old record's) without a signature."""
+    if not (values := list(values)):
+        return []
     names = [name for name, _ in program.fn.signature()[0]]
     return [g for v in values if v in names and (g := _gates(program, names.index(v))) is not None]
 
