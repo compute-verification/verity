@@ -11,4 +11,5 @@ testpaths = ["tests"]
 # wgmma.py reads its variables through settings.py, on verity_config.settings; the SASS gate is the harness's build gate.
 inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/ml/__init__.py", "verity/circuits",
           "verity/definitions/kernels/__init__.py", "verity/definitions/kernels/tc.py", "verity/configuration/config/verity_config",
-          "benchmarks/pouw/harness/sass_gate.py"]
+          "benchmarks/pouw/harness/sass_gate.py",
+          "verity/definitions/__init__.py", "verity/definitions/circuits", "verity/definitions/ops", "verity/definitions/silicon"]

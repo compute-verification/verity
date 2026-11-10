@@ -36,7 +36,7 @@ inputs = ["verity", "integrations/vllm", "benchmarks/one_stage", "benchmarks/net
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_prove_path.py"]
-paths = ["verity/core", "verity/ml"]
+paths = ["verity"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_records_audit.py"]
