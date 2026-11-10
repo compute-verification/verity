@@ -53,8 +53,7 @@ only the fields `reads.READS` declares, each with its account in the output acco
   schedule, never a batch-mate's value; requests of one (LP, T, C, policy, chunks, launch, edge) share one Program. Its Program
   reads every launch its rows ran in, so a recompute after preemption has no Program there. A launch the kernels' captured
   statics don't cover is the build's refusal, by name: today a step of more than 2,048 tokens (the all-reduce and cuBLAS
-  captures). A row of more than INDEX_TOPK keys computes its top-k from its logits in the Program (`dsa._Model.attention`). Its
-  Program is in the registered compiler's form batched (`prune.batched_form`, the Build's `--batched`): a launch's rows of an op one batch.
+  captures). A row of more than INDEX_TOPK keys computes its top-k from its logits in the Program (`dsa._Model.attention`).
 - At tensor-parallel world W, `registered.phi.tp` names one rank, and the Programs are that rank's over its weight shards, each
   collective's other partials its `peers_*` Inputs in call order (`vllm_meta.WithPeers`), in the registered compiler's form as at
   one rank (`build_program(..., dead_free=True)`, the Build's `--dead-free`). The advice is the node's, the same at every rank.
@@ -109,7 +108,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.certifier import advice as I1
+import verity.core.protocols.certifier.advice as I1
 from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.defs import bind
 from verity_vllm.engine.profiles.engine_classes import CLASS_G, CLASS_G_EXECUTIONS, CLASS_G_LIMITS
@@ -761,9 +760,8 @@ def trace_commands(summary: dict, registered: Registered, root: str, *, max_mode
     target = {k: v for k, v in phi.target.items() if k in TargetProfile.__dataclass_fields__}
     # the target's GPU name, which vLLM's get_device_name answers on any host (its tuned fused-MoE configs' key)
     device = ["--device-name", str(phi.target["device_name"])] if phi.target.get("device_name") else []
-    world = int(phi.tp.get("world", 1))
-    tp = (["--tp", str(world), "--rank", str(int(phi.tp.get("rank", 0))), "--dead-free"] if world > 1 else []) + (
-        [] if phi.target_profile().batch_invariant else ["--batched"])
+    world, batched = int(phi.tp.get("world", 1)), ([] if phi.target_profile().batch_invariant else ["--batched"])
+    tp = ["--tp", str(world), "--rank", str(int(phi.tp.get("rank", 0))), "--dead-free"] if world > 1 else []
     for u in summary["requests"]:
         if u is None or u.get("edge") or (d := trace_dir(u)) in seen:
             continue
@@ -776,7 +774,7 @@ def trace_commands(summary: dict, registered: Registered, root: str, *, max_mode
                      *(["--stop", json.dumps(u["stop"], sort_keys=True, separators=(",", ":"))] if u.get("stop") else []),
                      "--model", phi.model["repo"], "--revision", phi.model["revision"],
                      "--max-model-len", str(max(max_model_len, int(u["LP"]) + int(u["T"]))),
-                     "--target", json.dumps(target, sort_keys=True), *device, "--profile", phi.profile, "--sampling", sampling, *tp])
+                     "--target", json.dumps(target, sort_keys=True), *device, "--profile", phi.profile, "--sampling", sampling, *tp, *batched])
     return cmds
 
 

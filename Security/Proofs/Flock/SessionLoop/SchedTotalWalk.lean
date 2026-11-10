@@ -140,7 +140,7 @@ def totO (A : Adm) (coins : Got) : Total OpenM where
     exact ⟨h, hp⟩
 
 /-- Not stopping over the transcript. -/
-abbrev totOT (A : Adm) (coins : Got) : Total (TMW OpenM) := (totO A coins).st Transcript
+abbrev totOT (A : Adm) (coins : Got) : Total (TMW OpenM) := (totO A coins).st Flock.Transcript
 
 /-- Not stopping over Ligerito's state too. -/
 abbrev totOL (A : Adm) (coins : Got) : Total (LP OpenM) := (totOT A coins).st LigState
@@ -287,7 +287,7 @@ theorem os_det {α : Type} {P : Got → Hist → Prop} {p : TMW OpenM α}
   rw [e]
   exact hP
 
-theorem os_liftTM {α : Type} {P : Got → Hist → Prop} (x : Transcript.TM α) (hx : ∀ t, ∃ p, x t = .ok p) :
+theorem os_liftTM {α : Type} {P : Got → Hist → Prop} (x : Flock.Transcript.TM α) (hx : ∀ t, ∃ p, x t = .ok p) :
     OS A P (fun _ => P) (liftTM x : TMW OpenM α) :=
   os_det fun t got => by
     obtain ⟨p, hp⟩ := hx t
@@ -375,7 +375,7 @@ theorem os_forIn_bind {σ β : Type} {n : ℕ} (J : ℕ → σ → Got → Hist 
     (hf : ∀ r, OS A (J n r) C (f r)) : OS A P C (forIn [:n] u body >>= f) :=
   os_bind (os_mono (os_forIn n J body hb u) h0 fun _ _ _ h => h) hf
 
-theorem st_run' {α : Type} {p : TMW OpenM α} {t : Transcript} {s : Got} {R : Hist → Prop} {hs : Hist}
+theorem st_run' {α : Type} {p : TMW OpenM α} {t : Flock.Transcript} {s : Got} {R : Hist → Prop} {hs : Hist}
     (h : ST A (fun _ hs' => R hs') ((p.run t).run s) hs) : ST A (fun _ hs' => R hs') ((p.run' t).run' s) hs := by
   refine st_bind (Q := fun _ hs' => R hs') (fun _ _ h => ?_) _ _
     (st_bind (Q := fun _ hs' => R hs') (fun _ _ h => ?_) _ _ h) <;> exact h
@@ -417,7 +417,7 @@ theorem osl_det {α : Type} {P : Got → Hist → Prop} {p : LP OpenM α}
     (h : ∀ st t got, ∃ r, (((p.run st).run t).run got) = .done (r, got)) : OSL A P (fun _ => P) p :=
   fun st => os_det (h st)
 
-theorem osl_liftTM {α : Type} {P : Got → Hist → Prop} (x : Transcript.TM α) (hx : ∀ t, ∃ p, x t = .ok p) :
+theorem osl_liftTM {α : Type} {P : Got → Hist → Prop} (x : Flock.Transcript.TM α) (hx : ∀ t, ∃ p, x t = .ok p) :
     OSL A P (fun _ => P) (liftT (liftTM x : TMW OpenM α)) :=
   osl_liftT (os_liftTM x hx)
 

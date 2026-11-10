@@ -95,6 +95,10 @@ struct CircuitParams {
     zk_tamper: i32,
     zk_pads: *const u64,
     zk_extra: *const u64,
+    /// where set, `zk_pads` and `zk_extra` once the host has them, which the device asks for when level 0's commitment first
+    /// reads them (`ZkWords`)
+    zk_words: Option<ZkWordsCb>,
+    zk_words_ctx: *mut c_void,
     /// the units' slots are among the host slots: the device's unit kernel does not run
     u_host: i32,
     /// `Reuse`: 0 none, 1 keep for `reuse_tag`, 2 take `reuse_tag`'s
@@ -117,7 +121,7 @@ struct CircuitParams {
     m_mid: *const u64,
     m_tables: *const u64,
     /// [`Types::types_gen`]: the key the device holds the slot types' CSC and the unit's CSR under; the row arrays are null where it
-    /// holds them
+    /// holds a copy of them
     types_gen: u64,
 }
 
@@ -137,6 +141,29 @@ pub enum Live<'a> {
 }
 
 type Hm96TreeCb = unsafe extern "C" fn(*mut c_void, i32, i64) -> *const u8;
+
+type ZkWordsCb = unsafe extern "C" fn(*mut c_void, *mut *const u64, *mut *const u64) -> i32;
+
+/// Level 0's padding and extra lanes in page-locked memory ([`Words`]), copied on a thread of their own while the device builds
+/// the witness: [`zk_words`] waits for it.
+#[cfg(feature = "sha512")]
+struct ZkWords<'s> {
+    pending: Option<std::thread::ScopedJoinHandle<'s, (Words, Words)>>,
+    words: Option<(Words, Words)>,
+}
+
+#[cfg(feature = "sha512")]
+unsafe extern "C" fn zk_words(ctx: *mut c_void, pads: *mut *const u64, extra: *mut *const u64) -> i32 {
+    // SAFETY: `ctx` is the `ZkWords` that `prove_circuit` keeps until the prover returns
+    let w = unsafe { &mut *(ctx as *mut ZkWords<'_>) };
+    if let Some(h) = w.pending.take() {
+        w.words = h.join().ok();
+    }
+    let Some((p, e)) = &w.words else { return 1 };
+    // SAFETY: the device passes two writable pointers
+    unsafe { (*pads, *extra) = (p.as_ptr(), e.as_ptr()) };
+    0
+}
 
 /// The salts the device's trees take (`hm96_tree`): the table's, and every tree's handed to the device so far, which its
 /// openings read until the prover returns.
@@ -229,7 +256,7 @@ unsafe extern "C" {
     fn flock_cuda_dev_alloc(bytes: usize) -> *mut c_void;
     fn flock_cuda_copy(dst: *mut c_void, src: *const c_void, bytes: usize) -> i32;
     fn flock_cuda_dev_zero(p: *mut c_void, bytes: usize) -> i32;
-    fn flock_cuda_types_upload(types_gen: u64, set: i32, h: *const *const u32, len: *const usize, n: usize) -> i32;
+    fn flock_cuda_types_upload(types_gen: u64, set: i32, h: *const *const u32, len: *const usize, n: usize, host: u64, key: *const u8) -> i32;
     fn flock_cuda_types_held(types_gen: u64, set: i32) -> i32;
 }
 
@@ -254,6 +281,10 @@ impl Pinned {
     /// `b` page-locked; None where the runtime refuses (its copies then stage through pageable memory)
     pub fn new(b: &std::sync::Arc<Vec<u8>>) -> Option<Self> {
         (!b.is_empty() && unsafe { flock_cuda_host_register(b.as_ptr() as *mut c_void, b.len()) } != 0).then(|| Pinned(b.clone()))
+    }
+
+    pub fn bytes(&self) -> usize {
+        self.0.len()
     }
 
     /// Its `n` bytes rewritten in place by `fill` and shared again, still page-locked; None, and `fill` not called, while
@@ -844,11 +875,13 @@ fn schedule_of<R: RowRead + ?Sized>(net: &IrUnitNet, a: &R, b: &R) -> UnitSched 
 }
 
 /// A slot type's circuit as the device reads it, CSC over its slot's columns: A's and B's column pointers and nonzero counts,
-/// and their row indices, the bulk, which are the device's alone once it holds them ([`Types::types_gen`]'s set 0).
+/// and their row indices, the bulk ([`Types::types_gen`]'s set 0). The device holds one copy of them per GPU, which every prover
+/// there with the same slot types maps ([`arrays_key`]), and they're freed here. With `FC_CSC_HOST_MIB=M`, rows of at least M
+/// MiB stay here instead, page-locked and mapped, where the fold reads them over the bus each rep.
 struct TypeCsc {
     col_ptr: [Vec<u32>; 2],
     nnz: [u32; 2],
-    /// A's and B's row indices: `None` once the device holds them
+    /// A's and B's row indices: `None` once the device holds a copy of them
     rows: Option<[Vec<u32>; 2]>,
 }
 
@@ -869,9 +902,25 @@ struct Types {
     hcsr: [(Vec<u32>, Vec<u32>); 2],
 }
 
-/// The circuit's slot types, built once per circuit and kept for the process. Their CSC goes to the device as it is built, and
-/// its row indices are freed here once the device holds them; the unit's rows as CSR are built only for a rep whose units the
-/// device computes, until it holds them ([`prove_circuit`]).
+/// A digest of a set's arrays: the key under which every prover on a GPU shares one device copy of them (`fc_share_get`,
+/// prove_circuit.cuh's csc_share.cuh), so a copy another prover made holds exactly these arrays.
+fn arrays_key(arrays: &[&Vec<u32>]) -> [u8; 64] {
+    use sha2::{Digest, Sha512};
+    let mut h = Sha512::new();
+    h.update(b"verity flock-circuit: the slot types' CSC");
+    h.update((arrays.len() as u64).to_le_bytes());
+    for a in arrays {
+        let bytes = unsafe { std::slice::from_raw_parts(a.as_ptr().cast::<u8>(), 4 * a.len()) };
+        let pieces: Vec<[u8; 64]> = bytes.par_chunks(1 << 26).map(|p| Sha512::digest(p).into()).collect();
+        h.update((a.len() as u64).to_le_bytes());
+        pieces.iter().for_each(|p| h.update(p));
+    }
+    h.finalize().into()
+}
+
+/// The circuit's slot types, built once per circuit and kept for the process. Their CSC goes to the device as it is built, one
+/// copy per GPU ([`TypeCsc`]); the unit's rows as CSR are built only for a rep whose units the device computes, until it holds
+/// them ([`prove_circuit`]).
 fn types(st: &Stmt) -> &'static Types {
     static T: Mutex<Vec<([u8; 64], &'static Types)>> = Mutex::new(Vec::new());
     static GEN: AtomicU64 = AtomicU64::new(1);
@@ -920,9 +969,23 @@ fn types(st: &Stmt) -> &'static Types {
         let arrays: Vec<&Vec<u32>> =
             csc.iter().flat_map(|t: &TypeCsc| { let r = t.rows.as_ref().unwrap(); [&t.col_ptr[0], &r[0], &t.col_ptr[1], &r[1]] }).collect();
         let (h, len): (Vec<*const u32>, Vec<usize>) = arrays.iter().map(|v| (v.as_ptr(), v.len())).unzip();
+        // FC_CSC_HOST_MIB=M: a type's rows (its odd arrays) of at least M MiB stay here, which the leaked `Types` keeps, unmoved,
+        // for the process; unset, the device holds every type's rows
+        let min = std::env::var("FC_CSC_HOST_MIB").ok().and_then(|v| v.parse::<usize>().ok()).map(|m| m.saturating_mul(1 << 20));
+        let mapped: Vec<bool> = csc.iter().map(|t| min.is_some_and(|m| 4 * (t.nnz[0] as usize + t.nnz[1] as usize) >= m)).collect();
+        let host = mapped.iter().enumerate().filter(|(_, m)| **m).fold(0u64, |b, (t, _)| b | 0b1010 << (4 * t));
+        if mapped.contains(&true) {
+            let words: usize = csc.iter().zip(&mapped).filter(|(_, m)| **m).map(|(t, _)| t.nnz[0] as usize + t.nnz[1] as usize).sum();
+            eprintln!("the slot types' rows read from the host, mapped: {} MiB ({} of {} types)", (4 * words) >> 20,
+                      mapped.iter().filter(|m| **m).count(), csc.len());
+        }
+        // the device's copy is shared by every prover on its GPU whose slot types' CSC is this one (FC_CSC_SHARE=0: a copy of
+        // this process's own)
+        let key = (host == 0 && std::env::var("FC_CSC_SHARE").map_or(true, |v| v != "0")).then(|| arrays_key(&arrays));
+        let key_ptr = key.as_ref().map_or(null(), |k| k.as_ptr());
         // a device that can't take them now keeps them on the host, and the first rep's fold copies them under the same key
-        if unsafe { flock_cuda_types_upload(types_gen, 0, h.as_ptr(), len.as_ptr(), h.len()) } == 0 {
-            csc.iter_mut().for_each(|t| t.rows = None);
+        if unsafe { flock_cuda_types_upload(types_gen, 0, h.as_ptr(), len.as_ptr(), h.len(), host, key_ptr) } == 0 {
+            csc.iter_mut().zip(&mapped).filter(|(_, m)| !**m).for_each(|(t, _)| t.rows = None);
         }
         let sha = &c.nets[c.sha_net].1;
         Types { types_gen, logs, csc, ranges, u_range, sched: schedule(c.unit()), h_range, hsched: schedule(sha), hcsr: [csr(&sha.a), csr(&sha.b)] }
@@ -1130,6 +1193,8 @@ pub fn prove_circuit(
         zk_tamper: 0,
         zk_pads: null(),
         zk_extra: null(),
+        zk_words: None,
+        zk_words_ctx: null_mut(),
         u_host,
         rep_reuse: match reuse { Reuse::None => 0, Reuse::Keep(_) => 1, Reuse::Take(_) => 2 },
         reuse_tag: match reuse { Reuse::None => 0, Reuse::Keep(t) | Reuse::Take(t) => t },
@@ -1172,18 +1237,15 @@ pub fn prove_circuit(
         }
     }
     #[cfg(feature = "sha512")]
-    let zk_words: Option<(Words, Words)> = level0.filter(|_| !taken).map(|z| {
+    let zk_src: Option<&Level0> = level0.filter(|_| !taken).map(|z| {
         let (w, l) = (1usize << cfg.initial_k, 1usize << (m - 7 - cfg.initial_k));
         assert!(z.pads.len() == w + flock_prover::pcs::ligerito::zk::EXTRA_LANES && z.pads.iter().all(|p| p.len() == z.t_pad));
         assert!(z.extra.iter().all(|x| x.len() == l), "zk: an extra lane of L words");
-        (Words::of(&z.pads), Words::of(&z.extra))
+        z
     });
     #[cfg(feature = "sha512")]
     if let Some(z) = level0 {
         (p.zk_on, p.zk_rep, p.zk_t_pad, p.zk_tamper) = (1, z.rep as i32, z.t_pad as i32, z.tamper as i32);
-        if let Some((pads, extra)) = &zk_words {
-            (p.zk_pads, p.zk_extra) = (pads.as_ptr(), extra.as_ptr());
-        }
     }
     #[cfg(not(feature = "sha512"))]
     let _ = level0;
@@ -1218,7 +1280,18 @@ pub fn prove_circuit(
     let mut out: *mut u8 = null_mut();
     let mut out_len: usize = 0;
     let h_stage = t_stage.elapsed().as_secs_f64();
-    let rc = unsafe { flock_cuda_prove_circuit(&params, &p, &mut out, &mut out_len) };
+    let rc = std::thread::scope(|sc| {
+        #[cfg(feature = "sha512")]
+        let mut words = ZkWords { pending: zk_src.map(|z| sc.spawn(move || (Words::of(&z.pads), Words::of(&z.extra)))), words: None };
+        #[cfg(feature = "sha512")]
+        if words.pending.is_some() {
+            (p.zk_words, p.zk_words_ctx) = (Some(zk_words as ZkWordsCb), &mut words as *mut ZkWords<'_> as *mut c_void);
+        }
+        #[cfg(not(feature = "sha512"))]
+        let _ = sc;
+        // the device's copies from the words are in stream order before it returns, so they may go once it has
+        unsafe { flock_cuda_prove_circuit(&params, &p, &mut out, &mut out_len) }
+    });
     let t_decode = Instant::now();
     drop(mctx);
     #[cfg(feature = "sha512")]

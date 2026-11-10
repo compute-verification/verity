@@ -228,7 +228,7 @@ theorem Layout.msgs_getD_fixed {L : Layout} {x : Msg} {ws : List Flock.Wit} {i :
 
 /-- A round the verifier answers with a message: the rounds go on from the history and the trace it extends. -/
 theorem stepWith_msg {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vn : List Msg → OC Out) (n : ℕ)
-    (hist : List (Msg × Msg)) (as : List Msg) (t : Trace) {m : Msg}
+    (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript) {m : Msg}
     (hv : ((vn (as ++ [((P.next x hist ω).eval H).1])).eval H).1 = .msg m) :
     stepWith H P x ω vn (n + 1) hist as t =
       stepWith H P x ω vn n (hist ++ [(((P.next x hist ω).eval H).1, m)]) (as ++ [((P.next x hist ω).eval H).1])
@@ -241,7 +241,7 @@ theorem stepWith_msg {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω
 
 /-- Two replayed message lists that agree at every round the run plays give one run. -/
 theorem stepWith_replay_congr (H : Msg → Msg) (x : Msg) (vn : List Msg → OC Out) (ms : List Msg) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace) (ms' : List Msg), hist.length = t.msgs.length →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript) (ms' : List Msg), hist.length = t.msgs.length →
       (∀ j, t.msgs.length ≤ j → j < (stepWith H (replay ms) x () vn n hist as t).msgs.length →
         ms'.getD j [] = ms.getD j []) →
       stepWith H (replay ms') x () vn n hist as t = stepWith H (replay ms) x () vn n hist as t
@@ -266,7 +266,7 @@ theorem stepWith_replay_congr (H : Msg → Msg) (x : Msg) (vn : List Msg → OC 
 
 /-- A replayed run's message at each round it plays is the replayed list's there. -/
 theorem stepWith_replay_fst (H : Msg → Msg) (x : Msg) (vn : List Msg → OC Out) (ms : List Msg) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), hist.length = t.msgs.length →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), hist.length = t.msgs.length →
       ∀ j, t.msgs.length ≤ j → j < (stepWith H (replay ms) x () vn n hist as t).msgs.length →
         ((stepWith H (replay ms) x () vn n hist as t).msgs.map Prod.fst).getD j [] = ms.getD j []
   | 0, _, _, t, _, j, hj1, hj => by simp only [stepWith] at hj; omega
@@ -298,7 +298,7 @@ theorem run_replay_self {Coin : Type} [Inhabited Coin] (H : Msg → Msg) (V : Ve
 
 /-- A run plays at most its rounds. -/
 theorem stepWith_length_le {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vn : List Msg → OC Out) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       (stepWith H P x ω vn n hist as t).msgs.length ≤ t.msgs.length + n
   | 0, _, _, _ => le_refl _
   | n + 1, hist, as, t => by
@@ -312,7 +312,7 @@ theorem stepWith_length_le {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Ms
 
 /-- A run with a round left plays one. -/
 theorem stepWith_length_gt {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vn : List Msg → OC Out)
-    {n : ℕ} (hn : 0 < n) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace) :
+    {n : ℕ} (hn : 0 < n) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript) :
     t.msgs.length < (stepWith H P x ω vn n hist as t).msgs.length := by
   obtain ⟨n, rfl⟩ : ∃ k, n = k + 1 := ⟨n - 1, by omega⟩
   have := congrArg List.length (stepWith_succ_fst_take H P x ω vn n hist as t)
@@ -321,7 +321,7 @@ theorem stepWith_length_gt {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Ms
 
 /-- A round before a run's last is answered with a message. -/
 theorem stepWith_msg_of_lt {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vn : List Msg → OC Out) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace) (i : ℕ), t.msgs.length ≤ i →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript) (i : ℕ), t.msgs.length ≤ i →
       i + 1 < (stepWith H P x ω vn n hist as t).msgs.length →
         ∃ m, ((stepWith H P x ω vn n hist as t).msgs[i]?).map Prod.snd = some (.msg m)
   | 0, _, _, t, i, hi, h => by simp only [stepWith] at h; omega
@@ -342,7 +342,7 @@ theorem stepWith_msg_of_lt {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Ms
 
 /-- A run that stops before its rounds run out is decided at its last round. -/
 theorem stepWith_last_of_lt {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vn : List Msg → OC Out) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       (stepWith H P x ω vn n hist as t).msgs.length < t.msgs.length + n →
         ∀ m, ((stepWith H P x ω vn n hist as t).msgs.getLast?).map Prod.snd ≠ some (.msg m)
   | 0, _, _, t, h => by simp only [stepWith] at h; omega
@@ -356,7 +356,7 @@ theorem stepWith_last_of_lt {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : M
 /-- **Two replayed runs agree on their first `N` rounds** where their messages agree before round `N` and their
 verifiers answer alike on up to `N` messages. -/
 theorem stepWith_replay_take (H : Msg → Msg) (x : Msg) (vn vn' : List Msg → OC Out) (ms ms' : List Msg) (N : ℕ) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), hist.length = t.msgs.length →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), hist.length = t.msgs.length →
       as.length = t.msgs.length → (∀ i, t.msgs.length ≤ i → i < N → ms.getD i [] = ms'.getD i []) →
       (∀ bs : List Msg, bs.length ≤ N → vn bs = vn' bs) →
       (stepWith H (replay ms) x () vn n hist as t).msgs.take N =
@@ -478,7 +478,7 @@ theorem innerViewRun_of_readsThrough {H : Msg → Msg} {D : Deploy Coin} {I : In
   intro decO x Ω P ω r c ws _
   unfold innerRun
   rw [hR.1 x r ws]
-  exact congrArg Trace.seen (run_replay_self H I.V (xI D x) (msgs x ws) _).symm
+  exact congrArg Transcript.seen (run_replay_self H I.V (xI D x) (msgs x ws) _).symm
 
 omit [Fintype Coin] [Nonempty Coin] in
 /-- **No witnesses record no calls** (`CallsNil`) wherever `D` reads through readers. -/
@@ -908,7 +908,7 @@ theorem opensPlayed_of_parts {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin
   have hview : ((D.innerView H x r ws).msgs.map Prod.fst).getD j [] = (L.msgs x ws).getD j [] := by
     have h := hj
     rw [hR.1 x r ws] at h ⊢
-    simp only [Trace.seen] at h ⊢
+    simp only [Transcript.seen] at h ⊢
     exact run_replay_fst H I.V (xI D x) (L.msgs x ws) _ h
   have hjr : j < L.rounds x := lt_of_lt_of_le hplay (hH x st hst hf).1
   refine ⟨fun m hm => hview.trans (Layout.msgs_getD_fixed hjr hm), hPub decO x Ω P ω r c ws hg j hj,
@@ -1125,7 +1125,7 @@ theorem forkColl_of_openingPlayed {H : Msg → Msg} {D : Deploy Coin} {I : Inner
     · rfl
   have hv := congrArg Seen.msgs (hV decO x Ω P t.1 t.2.1 _ ws hg)
   have hv' := congrArg Seen.msgs (hV decO x Ω P t.1 (fork j t.2.1 t.2.2.1) _ ws' hg')
-  simp only [innerRun, Trace.seen] at hv hv'
+  simp only [innerRun, Transcript.seen] at hv hv'
   have hboth : i < (D.innerView H x t.2.1 ws).msgs.length ∧
       i < (D.innerView H x (fork j t.2.1 t.2.2.1) ws').msgs.length := by
     by_cases h1 : i < (D.innerView H x t.2.1 ws).msgs.length
@@ -1343,7 +1343,7 @@ theorem innerF_vLog_sub_coll {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin
     obtain ⟨ws, hws⟩ := Option.isSome_iff_exists.1 hk'.1
     rw [innerF_eq_innerRun hpc hws hk'.2, hws]
     exact hL decO x Ω P ω d.1 d.2 ws (eoGives_of_some hws)
-  · exact Or.inl fun e he => by simp [innerF, hk, abortTrace] at he
+  · exact Or.inl fun e he => by simp [innerF, hk, abortTranscript] at he
 
 /-- **`B` at `P_I`'s aborting runs finds only what the forks charge, from `CallsLogColl`**: `PrBAbort_le_PrBI` with
 `CallsLogColl` and `CallsTrue` for `CallsRecord`. Where a kept run's calls aren't all recorded, the finders charge a

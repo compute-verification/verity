@@ -135,6 +135,7 @@
         "benchmarks/dsa_topk/",
         "benchmarks/route_capture/",
         "benchmarks/spot_proved/",
+        "benchmarks/unit_walk/",
         "integrations/vllm/verity_vllm/protocols/spot.py",
         "Security/Definitions/Hash/",
         "Security/Proofs/Hash/",

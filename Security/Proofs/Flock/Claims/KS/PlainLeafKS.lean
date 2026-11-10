@@ -38,7 +38,7 @@ import Proofs.Flock.Claims.KS.PlainForkClash
 import Proofs.Flock.Claims.KS.PlainLive
 import Proofs.Flock.Claims.KS.PlainSlackFit
 import Proofs.Flock.Claims.KS.SessionSC
-import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Knowledge soundness at the deployed plain verifier, with no premise
