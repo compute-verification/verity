@@ -676,7 +676,7 @@ def test_a_check_recorded_on_a_machine_runs_in_a_slot(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("repo_check_slot", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
-    monkeypatch.setattr(check, "gather_verdicts", lambda d, given=None: None)
+    monkeypatch.setattr(check, "verdict_url_file", lambda d: None)
     calls = []
 
     def run(cmd, **kw):
@@ -743,6 +743,29 @@ def test_a_priority_waiter_goes_ahead_of_waiting_lane_checks_and_behind_older_pr
         os.close(fd)
 
 
+def test_a_small_check_passes_lane_waiters_ahead_that_only_memory_keeps_from_starting(tmp_path, monkeypatch):
+    """A 400-448 GB run at the head of the line waited on memory while 7 slots sat idle, and every small
+    check behind it waited too. A waiter asking at most BACKFILL_MAX_GB doesn't count a lane waiter ahead whose ask exceeds the
+    memory free now; one with no ask, one that would fit, and a priority waiter still hold the line."""
+    line = tmp_path / SLOT.LINE
+    line.mkdir()
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "448")
+    big, bfd = SLOT.join(tmp_path, who=SLOT.asker())
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "16")
+    small, sfd = SLOT.join(tmp_path, who=SLOT.asker())
+    assert SLOT.ahead(small) == 1, "without a free figure the line is first come, first served"
+    assert SLOT.ahead(small, free_gb=300) == 0, "a 448 GB head that 300 GiB free can't start doesn't hold the line"
+    assert SLOT.ahead(small, free_gb=500) == 1, "a head that would fit keeps its turn"
+    monkeypatch.delenv(SLOT.RUN_MEM_ENV)
+    plain, pfd = SLOT.join(tmp_path, who=SLOT.asker())
+    assert SLOT.ahead(plain, free_gb=300) == 1, "a waiter with no ask (the small one ahead) always counts"
+    train, tfd = SLOT.join(tmp_path, priority=True, who={"mem_gb": 900})
+    late, lfd = SLOT.join(tmp_path, who=SLOT.asker())
+    assert SLOT.ahead(late, free_gb=300) == 3, "a priority waiter is never passed"
+    for fd in (bfd, sfd, pfd, tfd, lfd):
+        os.close(fd)
+
+
 def test_ranked_priority_waiters_go_by_rank_then_arrival_and_ahead_of_unranked_ones(tmp_path):
     """The lowest train's check goes ahead of the checks of trains above it that came first, since only it can land next.
     drive ranks a train's check by its members above `main`."""
@@ -768,7 +791,7 @@ def test_drive_s_rank_reaches_slot_py_from_record(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("repo_check_rank", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
-    monkeypatch.setattr(check, "gather_verdicts", lambda d, given=None: None)
+    monkeypatch.setattr(check, "verdict_url_file", lambda d: None)
     calls = []
     monkeypatch.setattr(check.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
     monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
@@ -874,7 +897,7 @@ def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(mo
     spec2 = importlib.util.spec_from_file_location("repo_check_priority", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
-    monkeypatch.setattr(check, "gather_verdicts", lambda d, given=None: None)
+    monkeypatch.setattr(check, "verdict_url_file", lambda d: None)
     calls = []
     monkeypatch.setattr(check.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
     monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
@@ -898,7 +921,7 @@ def test_record_asks_for_a_train_slot_only_for_a_trains_tests_or_circuit_check_a
     spec2 = importlib.util.spec_from_file_location("repo_check_min_mem", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
-    monkeypatch.setattr(check, "gather_verdicts", lambda d, given=None: None)
+    monkeypatch.setattr(check, "verdict_url_file", lambda d: None)
     calls = []
     monkeypatch.setattr(check.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
     monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
