@@ -435,7 +435,7 @@ def test_a_sharded_run_moves_main_only_once_every_shard_that_holds_a_step_passed
     assert [kw["shard"] for _, _, kw in h.posted[1:]] == ["1/3", "2/3", "3/3"]
     comp = "verity-core-composition"
     shards = ({s: "passed" for s in ("lean-audit", "pytest", "lean-build", "lean-suites")},
-              {s: "passed" for s in ("lean-build", "lean-unit-cut", "lean-audit", "lean-agreement", "lean-changed")},
+              {s: "passed" for s in ("lean-build", "lean-unit-cut", "lean-audit", "lean-agreement")},
               {s: "passed" for s in ("flock-circuit-build", "circuit-check", "flock-rust-tests", "lean-build", "lean-suites",
                                      "ratchet-gate")})
     assert {s for x in shards for s in x} == set(AFTER_LANDING)
