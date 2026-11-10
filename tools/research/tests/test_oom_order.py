@@ -1,6 +1,6 @@
 """pods/nebius/oom_order.py: each live run's oom_score_adj from its memory use against its research.mem reservation, so the OOM
-killer takes a run over its reservation, or without one, before a run within it (INF-135: T1R's replay r20261019-110314-3fd7 stayed
-inside its 200 GiB and was killed as the node's largest process beside a run at ~150 GB on 64 GB and one that reserved nothing)."""
+killer takes a run over its reservation, or without one, before a run within it (by size alone, a run inside its reservation is
+killed as the node's largest process beside runs far over theirs or with none)."""
 from __future__ import annotations
 
 import ast
@@ -130,8 +130,8 @@ def test_a_check_slot_s_reservation_counts_for_its_run_and_the_largest_of_a_run_
 
 
 def test_forked_workers_copy_on_write_pages_count_once_so_a_share_within_its_reservation_stays_at_0(node):
-    """24 Oct, n2 03:44Z: a PRF-131 share (345 GB) whose ~278 GB parent forked 8 workers summed to 2,505 GB of RssAnon and was set
-    to 1000, the node's first pick; split among the processes sharing them (Pss), its pages come to 300 GB."""
+    """A share (345 GB) whose ~278 GB parent forked 8 workers sums to 2,505 GB of RssAnon, which would set it to 1000, the node's
+    first pick; split among the processes sharing them (Pss), its pages come to 300 GB."""
     share = node.run("r20261024-011205-2882", pgid=70, gb=345)
     node.process(70, pgid=70, anon_gb=278, pss_gb=278 / 9 + 10, run_dir=share)
     for i in range(1, 9):
@@ -146,9 +146,8 @@ def test_forked_workers_copy_on_write_pages_count_once_so_a_share_within_its_res
 
 
 def test_workers_that_left_a_runs_group_and_environment_count_by_its_session_scope(node):
-    """24 Oct, cpu-3: suites.py's verity-circuit-check run e48b (no reservation) held 383 GB in its session scope, read here at
-    0.1 GB, so the kernel took small runs and a reserved 80 GB verify first. Its runner stays out; a scope two runs share counts
-    for neither."""
+    """A run with no reservation whose workers hold hundreds of GB in its session scope would read here at almost nothing, so the
+    kernel would take small runs and a reserved verify first. Its runner stays out; a scope two runs share counts for neither."""
     s = "/user.slice/user-1001.slice/session-14429.scope"
     suite = node.run("r20261024-041008-e48b", pgid=10)
     node.process(9, pgid=9, anon_gb=0.1, scope=s, cmdline=b"python3\0-m\0research\0run\0--id\0x\0")    # its runner
@@ -167,7 +166,7 @@ def test_workers_that_left_a_runs_group_and_environment_count_by_its_session_sco
 
 
 def test_a_train_checks_priority_reservation_ranks_it_below_research_runs(node):
-    """ci 24 Oct 05:47Z: a train check's slot reservation carries "priority": true (#3486), so a research job within its own
+    """A train check's slot reservation carries "priority": true, so a research job within its own
     reservation is still picked before the train, and a train over its reservation ranks with a research job within one."""
     train = node.run("r-train", pgid=10)
     (node.ramlock / "check-b.json").write_text(json.dumps({"owner": "check", "gb": 300, "pid": 10, "run_id": "r-train",

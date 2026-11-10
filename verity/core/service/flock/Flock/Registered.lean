@@ -1,5 +1,5 @@
 /-
-`Flock.HmRow` (registered reads); `protocols/sampled_proofs/README.md`, "Registered values": a statement's rows of a
+`Flock.HmRow` (registered reads); `protocols/spot/README.md`, "Registered values": a statement's rows of a
 registered value (a program's weights, constants and tables, committed once at registration under `hm96-sha512/row/v1`
 leaves, or a served tree's rows under its port's `hm96-sha512/row/v2` or `hm96-sha512/row-seg/v1` leaves), opened against
 the verifier's own registered roots at the positions its own program reads.
@@ -656,7 +656,7 @@ def checkRegistered (st : Stmt) (registered : Option (Array Registered.Port)) : 
 /-- What a verdict reports of the rows its statements' registered ports opened: `{port: [[position, b ‖ c] ...]}`, each
 table row's stated position and its hiding commitment `b ‖ c` (the commit-time opening's digest), in table order across
 the statements; null without registered reads. A produced record holds every session's to its own
-(`SampledProofs.Produced.shared`). -/
+(`Spot.Produced.shared`). -/
 def registeredOpenings (sts : Array Stmt) (registered : Option (Array Registered.Port)) : Lean.Json :=
   match registered with
   | none => Lean.Json.null

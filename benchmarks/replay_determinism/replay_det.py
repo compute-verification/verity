@@ -166,15 +166,9 @@ def _pin_env(batch_invariant: bool) -> dict[str, str]:
 
 
 def _engine(model_dir: Path) -> Any:
-    from vllm import EngineArgs
-    from vllm.v1.engine.llm_engine import LLMEngine
+    from verity_vllm.engine import stock
 
-    return LLMEngine.from_engine_args(EngineArgs(model=str(model_dir), **ENGINE_ARGS))
-
-
-def _runner(engine: Any) -> Any:
-    core = engine.engine_core.engine_core
-    return core.model_executor.driver_worker.worker.model_runner
+    return stock.engine(str(model_dir), **ENGINE_ARGS)
 
 
 def _kernels(model: Any) -> dict[str, list[str]]:
@@ -205,9 +199,10 @@ class Recorder:
     fingerprint of every module output, router selection and logits row."""
 
     def __init__(self, engine: Any, capture: bool) -> None:
+        from verity_vllm.engine.handle import model_runner
         from verity_vllm.engine.hooks import Hooks
 
-        self.runner = _runner(engine)
+        self.runner = model_runner(engine)
         self.model = self.runner.model
         self.capture = capture
         self.hooks = Hooks(tag="replay-determinism")
@@ -411,9 +406,9 @@ class Recorder:
 
 
 def _params(r: dict[str, Any]) -> Any:
-    from vllm import SamplingParams
+    from verity_vllm.engine import stock
 
-    return SamplingParams(n=1, temperature=r["temperature"], top_p=r["top_p"], seed=r["seed"], max_tokens=r["max_tokens"],
+    return stock.sampling(n=1, temperature=r["temperature"], top_p=r["top_p"], seed=r["seed"], max_tokens=r["max_tokens"],
                           ignore_eos=True, detokenize=False)
 
 
@@ -477,11 +472,12 @@ def run(mode: str, model_dir: Path, wl: Path, out: Path, capture: bool, record: 
         raise SystemExit(f"{len(missing)} requests never finished: {missing[:8]}")
     (out / "tokens.json").write_text(json.dumps({k: tokens[k] for k in sorted(tokens)}))
     import torch
-    import vllm
+
+    from verity_vllm.engine import stock
 
     (out / "timing.json").write_text(json.dumps({
         "mode": mode, "capture": capture, "load_s": t_ready - t0, "serve_s": t_done - t_ready, "total_s": time.monotonic() - t0,
-        "steps": rec.executed, "tokens_out": sum(map(len, tokens.values())), "env": env, "vllm": vllm.__version__, "torch": torch.__version__,
+        "steps": rec.executed, "tokens_out": sum(map(len, tokens.values())), "env": env, "vllm": stock.version(), "torch": torch.__version__,
         "device": torch.cuda.get_device_name(), "engine_args": ENGINE_ARGS, "kernels": _kernels(rec.model),
     }, indent=1, default=str))
     print(f"{mode}: {rec.executed} steps, {sum(map(len, tokens.values()))} tokens out, load {t_ready - t0:.1f}s, run {t_done - t_ready:.1f}s")

@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Core.Draw
-public import Definitions.Flock.Game.Prob
+public import Definitions.Flock.Game
 public import Mathlib.Data.Fintype.Fin
 public import Mathlib.Data.Fintype.Powerset
 public import Mathlib.Data.Nat.Choose.Basic

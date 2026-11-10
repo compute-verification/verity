@@ -1,7 +1,7 @@
 module
 
 public import Mathlib
-public import Definitions.Accounting.Guarantees.RateAuditPartial
+public import Proofs.Accounting.Lemmas.RateAudit
 public import Proofs.Accounting.RateAudit.Audit
 public import Proofs.Accounting.RateAudit.Honest
 public import Proofs.Accounting.RateAudit.PartialChip

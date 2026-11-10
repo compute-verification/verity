@@ -18,7 +18,7 @@ forward's stream, is two launches: its A slot and table (`h1c_a_call`, the root 
 admit and z tables, the a-step,
 admit-step and z-step trees, the round over them, and the receipt trees (with `DitherState.tree_streams` set, the receipt
 trees and the admit tables on streams of their own beside the rest), then the round root recorded
-(`sampled_proofs.challenger.LiveRecord`; its coin is not read: no seed waits on it).  With `DitherState.step_salt` set the
+(`spot.challenger.LiveRecord`; its coin is not read: no seed waits on it).  With `DitherState.step_salt` set the
 salt is each step's instead: after step s's round is recorded, step s + 1's seeds read
 `h1tile.live_salt` of that round's opened coin and root, copied to the device between steps (in record_host_ms), so
 each step's noise comes from the round before it.  The rounds' coins are `dither_fused`'s switch (`coins.open_coins`):
@@ -44,15 +44,22 @@ from __future__ import annotations
 import ctypes as C
 import os
 import time
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import torch
+from verity_config.settings import of
 
 import dither_fused as DF
 import forms as F
-from dither_fused import CM, CO, CR, SV, H1C, Dom, Tab, unwords, words, H1R, Call
 import h1c as H1CM
-from verity_config.settings import of
+from dither_fused import CM, CO, CR, H1C, H1R, SV, Call, Dom, Tab, unwords, words
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable
+
+    from vllm import LLM
+    from vllm.v1.core.sched.output import SchedulerOutput
 
 settings = of(__file__)
 F_DUMP, F_NW_TILES, F_NW_UNITS, F_FAULT, F_FAULT_WB, F_FAULT_XA = 1, 2, 4, 8, 16, 32     # h1o.cu's H1OStep.flags
@@ -103,7 +110,7 @@ class DitherState:
     a_step = False          # A_STEP_ENV's tables (dither_so sets it, with group_slots)
     h2d_pinned = False      # `before`'s inputs through pinned buffers, without a host wait (`_h2d`)
 
-    def __init__(self, t: int, key: bytes, h1c_path: str, h1o_path: str, gate: bool, dev):
+    def __init__(self, t: int, key: bytes, h1c_path: str, h1o_path: str, gate: bool, dev: torch.device) -> None:
         self.t, self.key, self.dev = t, key, dev
         self.pins: dict[int, torch.Tensor] = {}
         self.L = L = len(REG)
@@ -182,7 +189,7 @@ class DitherState:
         else:
             self.call_forms = [self.units_form] * L
 
-        def units_fn(form: str):
+        def units_fn(form: str) -> Callable[..., int]:
             fn = UNITS_FORMS[form]
             f = getattr(self.o, fn.replace("_launch", "p_launch") if self.peel else fn)
             f.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.c_int, C.c_int, C.c_void_p, C.c_void_p, C.c_int,
@@ -320,7 +327,7 @@ class DitherState:
 
     # -- the step hook ---------------------------------------------------------------------------------------------------
 
-    def _poison(self, ts) -> None:
+    def _poison(self, ts: Iterable[torch.Tensor]) -> None:
         for x in ts:
             x.view(torch.uint8).fill_(DF.POISON)
 
@@ -489,7 +496,7 @@ class DitherState:
             by.setdefault(x["m"], []).append(x)
         top = sorted(by.items(), key=lambda kv: -len(kv[1]))[:4]
 
-        def per(f):
+        def per(f: Callable[[list], float]) -> dict:
             return {str(m): {"steps": len(xs), **{k: round(float(f([x[k] for x in xs if k in x])), 4)
                                                   for k in dict.fromkeys(k for x in xs for k in x) if k != "m"}}
                     for m, xs in top}
@@ -502,14 +509,14 @@ class DitherState:
                 "phases_p90_by_m": per(lambda v: np.percentile(v, 90)), "call_forms": {DF.SITES[w % 4]: self.call_forms[w] for w in range(min(4, self.L))}}
 
 
-def round_leaves(kinds) -> str:
+def round_leaves(kinds: Iterable[str]) -> str:
     """The round domain's "leaves" field: "a-step root, admit-step root, z-step root" and ROUND_EXTRA's."""
     return ", ".join(f"{k} root" for k in kinds)
 
 
 # -- the op and the patch --------------------------------------------------------------------------------------------------
 
-def _window(dev) -> DitherState:
+def _window(dev: torch.device) -> DitherState:
     global WIN
     if WIN is None:
         WIN = DitherState(CFG["t"], CFG["key"], CFG["h1c"], CFG["h1o"], CFG["gate"], dev)
@@ -522,7 +529,8 @@ _LIB = torch.library.Library(LIB, "DEF")
 _LIB.define("one_mm(Tensor xq, Tensor s_a, Tensor w, Tensor s_w, int idx) -> (Tensor, Tensor)")
 
 
-def _one_mm_cuda(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, idx: int):
+def _one_mm_cuda(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor,
+                 idx: int) -> tuple[torch.Tensor, torch.Tensor]:
     z = torch.empty((xq.shape[0], w.shape[0]), dtype=torch.int32, device=xq.device)
     y = torch.empty((xq.shape[0], w.shape[0]), dtype=torch.bfloat16, device=xq.device)
     if xq.shape[0]:
@@ -534,7 +542,8 @@ _LIB.impl("one_mm", _one_mm_cuda, "CUDA")
 
 
 @torch.library.register_fake(f"{LIB}::one_mm")
-def _one_mm_fake(xq, s_a, w, s_w, idx):
+def _one_mm_fake(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor,
+                 idx: int) -> tuple[torch.Tensor, torch.Tensor]:
     return (xq.new_empty((xq.shape[0], w.shape[0]), dtype=torch.int32),
             xq.new_empty((xq.shape[0], w.shape[0]), dtype=torch.bfloat16))
 
@@ -563,12 +572,13 @@ def patch(t: int, h1c: str, h1o: str, key: bytes | None = None, gate: bool = Fal
     IV.register()
     orig_pw = IV.Int8PlainLinearMethod.process_weights_after_loading
 
-    def process_weights_after_loading(self, layer):
+    def process_weights_after_loading(self: IV.Int8PlainLinearMethod, layer: torch.nn.Module) -> None:
         orig_pw(self, layer)
         self.dither_idx = DF.index_of(self.prefix)
         REG[self.dither_idx] = (self.prefix, layer)
 
-    def apply(self, layer, x, bias=None):
+    def apply(self: IV.Int8PlainLinearMethod, layer: torch.nn.Module, x: torch.Tensor,
+              bias: torch.Tensor | None = None) -> torch.Tensor:
         if bias is not None or x.dtype != torch.bfloat16:
             raise ValueError(f"{self.prefix}: the one-stream arm takes bf16 activations and no bias")
         lead, k = x.shape[:-1], x.shape[-1]
@@ -592,7 +602,8 @@ def patch(t: int, h1c: str, h1o: str, key: bytes | None = None, gate: bool = Fal
         CREDIT.update(calls=0, credited=0, reasons=Counter(), kernels=Counter(), sample=[])
         served = apply
 
-        def apply(self, layer, x, bias=None):
+        def apply(self: IV.Int8PlainLinearMethod, layer: torch.nn.Module, x: torch.Tensor,
+                  bias: torch.Tensor | None = None) -> torch.Tensor:
             self.dither_z = None
             with CG.Trace(self.prefix) as tr:
                 y = served(self, layer, x, bias)
@@ -611,13 +622,13 @@ def patch(t: int, h1c: str, h1o: str, key: bytes | None = None, gate: bool = Fal
     IV.Int8PlainLinearMethod.apply = apply
 
 
-def hook(llm) -> DitherState:
+def hook(llm: LLM) -> DitherState:
     from verity_vllm.engine import handle
     runner = handle.model_runner(llm)
     win = WIN if WIN is not None else _window(torch.device("cuda"))
     orig = runner.execute_model
 
-    def execute_model(so, *args, **kw):
+    def execute_model(so: SchedulerOutput, *args, **kw) -> Any:
         m = int(getattr(so, "total_num_scheduled_tokens", 0) or 0)
         if m:
             with torch.inference_mode():
@@ -643,7 +654,7 @@ def _s32(v: np.ndarray) -> np.ndarray:
     return np.where(v >> 31, v - (1 << 32), v)
 
 
-def cap_salt(win, g: dict) -> tuple[bytes, torch.Tensor]:
+def cap_salt(win: DitherState, g: dict) -> tuple[bytes, torch.Tensor]:
     """The salt capture g's step ran under (the execution phase's, or with step_salt its round's) and its words on the device."""
     b = g.get("salt", win.salt_bytes)
     return b, torch.from_numpy(words(b)).to(win.dev)
@@ -748,7 +759,8 @@ def a_step_rows(q: np.ndarray, sc: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return q.reshape(-1, q.shape[1] // n), np.repeat(np.asarray(sc).reshape(-1), n)
 
 
-def a_roots_cpu(win: DitherState, s: int, calls, q_of, sc_of) -> dict[int, bytes]:
+def a_roots_cpu(win: DitherState, s: int, calls: Iterable[int], q_of: Callable[[int], np.ndarray],
+                sc_of: Callable[[int], np.ndarray]) -> dict[int, bytes]:
     """commit.py's A root of each call in `calls` at step s from its slot rows q_of(w) ([T, k] int8) and scales sc_of(w)
     ([T] float32): its own table a/<s>/<w>, or under a_step its K's a/<K>@<s> (the K's calls' rows in call order, as
     `a_step_rows` leaves)."""

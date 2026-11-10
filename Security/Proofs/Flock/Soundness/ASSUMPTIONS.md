@@ -24,9 +24,9 @@ hypothesis carries what the statement doesn't say yet: that the acceptance is th
 
 ## Soundness's assumptions (taken without proof)
 
-Soundness rests on five. Three are `Prop`s in `Assumptions.lean`, taken as hypotheses: SHA-512's
+Soundness rests on five. Three are `Prop`s in `Definitions/Assumptions/Flock.lean`, hypotheses: SHA-512's
 collision resistance in two forms, and the randomness of the challenger's coins the unit sample reads. The fourth, A6,
-is the challenger's live-coin part's randomness for the round coins, which the model embodies (A6, below). The fifth, `live-verifier`, is
+is the challenger's live-coin part's randomness for the round coins, which the model embodies. The fifth, `live-verifier`, is
 the record's custody (nothing in the record authenticates its writer): `--zk`'s soundness (`zk_session_sound_custody`) takes it as
 `Assumptions.Zk.RecordCustodyZK`, in `Assumptions/Zk.lean`. The table's last row is zero
 knowledge's, not soundness's: a model claim about the honest prover. The development declares no
@@ -146,7 +146,7 @@ coins.
     loop), not when it was sampled or opened. On `sampled-proofs-one-stage-zk` the auditor's challenger samples each
     session's tree and opens each round after its message digest, logging both under its signed
     close, and the audit holds each session's record to those lines, one tree per session
-    (`verity/core/service/sampled_proofs/SampledProofs/ChallengerTrees.lean`). There the ordering rests on `trusted-host`.
+    (`verity/core/service/spot/Spot/ChallengerTrees.lean`). There the ordering rests on `trusted-host`.
   - *Why the model's coins are still the run's.* Given the key, each leaf has its own salt, so opening one reveals
     nothing about another. A hybrid swaps the unopened leaves for commitments to independent coins (openings resampled
     consistently); each leaf moves it by at most
@@ -366,7 +366,7 @@ malicious-verifier claim rests on beyond the theorems.
   witness at fixed addresses, as `Layout.row`, `Layout.salt` (`rowAt`, `saltAt`) and `HmRows.bcAt` are; a reader that
   chooses its values discharges nothing.
 - **Proved so far** for `sha512/row/v1` rows: `row_bc_setupH` (untyped, given `hv1` and `ho`), `keyedRowsOuts_computes`
-  (e2e-layout's sampled proof blocks) and `row_bc_setupH_typed` (typed, no hypothesis); `assumption-notes/hm-row-computes.md`.
+  (the keyed layout's sampled proof blocks) and `row_bc_setupH_typed` (typed, no hypothesis); `assumption-notes/hm-row-computes.md`.
 - **Upstream:** watch entry `hm-row-computes`.
 
 A1, Reed–Solomon mutual correlated agreement up to the Johnson bound, is proved: `mcaError_le_bchks25`, from DKT26 in
@@ -408,12 +408,11 @@ ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
 | `Analysis.KnowledgeSound` | `ε_ks` | the session accepts while extraction of a sampled proof block (picked before the session's first coin) fails | `table_knowledge_sound_joint` (`README.md` §1.3), after Jensen over the prover's states |
 | `Analysis.BindSound` | `δ_link` | extraction succeeds but differs from `X` on the unit's committed inputs and outputs | compiled layer: `flock_batched_linkSoundE` (`SHA512CRExpected`, `ValueBinding`) |
 | `Partition.AnchorsSound` | `δ_in` | the session accepts while the committed inputs differ from the anchors' values | `registered_weights` (`README.md` §1.3); at the oracle layer, `InputsSound` (`oracle_anchorsSound`) |
-| `Partition.AnchorsSound₂` | `δ_in` | two-stage audits: for every strategy, the session accepts while the committed coarse trace's inputs differ from the anchors' values | as `AnchorsSound`, for the two-stage game |
 | `Partition.InputsSound` | `δ_in` | oracle layer: the session accepts inputs other than the anchors' with probability at most `δ_in` | **proved for Flock** (`flock_inputs_sound`, `2^-205`), given `InputsLoweringSound` |
 | `Partition.InputsLoweringSound` | — | inputs other than the anchors' leave some session table (the always-proved input statement) unsatisfied | the input unit's lowering (level 3) |
 | `Partition.SessionSound` | `ε` | oracle layer only: a session with a sampled incorrect proof block accepts with probability at most `ε` | **proved for Flock** (`flock_session_sound`, `2^-205`), from `table_value_sound`, `execArith_correct` and the lowering |
 | `Partition.LoweringSound` | — | a sampled incorrect proof block lies in a session table whose statement no committed table satisfies | the lowering theorem (level 3, another lane) |
-| `IsHarmBound` | `H` | every set of incorrect proof blocks with acceptance probability at least `δ` has harm (a consumer's weight per incorrect proof block) at most `H` | the value core's `Stratified.harm_bound` returns; that implementation is not proved |
+| `IsHarmBound` | `H` | every set of incorrect proof blocks with miss probability at least `δ` has harm (a consumer's weight per incorrect proof block) at most `H` | the value core's `Stratified.harm_bound` returns; that implementation is not proved |
 
 Both per-unit hypotheses are averages over the whole audit, for every prover and every rule that picks a sampled proof block
 before the session's first coin, not bounds state by state.

@@ -30,7 +30,7 @@ from verity_flock import rec_vstar as V
 HERE = Path(__file__).resolve().parent
 SET = HERE / "fixtures" / "hidden-outputs" / "flat" / "gemm-coordinate"
 INNER = json.loads((HERE / "fixtures" / "inner_claims.json").read_text())
-LEAN = HERE.parents[3] / "verity/core/service/flock"
+LEAN = Path(__file__).resolve().parents[4] / "verity/core/service/flock"
 
 
 def test_staging_pauses_the_collector_and_restores_it():
@@ -303,7 +303,7 @@ def test_the_forged_message_changes_one_bit_of_the_provers_row_alone(tmp_path):
     salts and every ``b || c`` stay, and a word the layout does not put there is refused."""
     from test_rec_residuals import S_SMALL, _holding, _rows
     from verity.ml.commitments import hm96
-    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
+    from verity.core.protocols.spot.one_stage import registered as RG
 
     g = random.Random(13)
     (w0, v0), (w1, v1) = _holding(g), _holding(g)

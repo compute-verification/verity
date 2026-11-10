@@ -55,7 +55,7 @@ from typing import Any, Callable, Iterator
 
 import verity_difftest as DT
 from verity_difftest import protocol as PR
-from verity.core.protocols.sampled_proofs.one_stage import audit, draw as DR, partition as P, registration as R, verifier as V
+from verity.core.protocols.spot.one_stage import audit, draw as DR, partition as P, registration as R, verifier as V
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.commitments.identity import identity_digest, identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -851,7 +851,7 @@ def a0_lean(run: Run) -> Iterator[Case]:
                                    for layout in ("words", "hidden") for tag in STAND_IN_BINDINGS for content in (True, False)),
                                   rec, "verity/flock-circuit/binding/v2 hidden")
     prov["leaf_layer"] = "the record's: the run kept no copy of the public file (stage and archive were scratch)"
-    law = DR.parse_law(state["law"])
+    law = DR.parse_design(state["law"])
     served = run.json(f"{base}/served-draw.json")["units"]
     sessions = (a.get("integrity_profile") or {}).get("evidence", {}).get("sessions") or []
     p = params(program, query, law, ports, rec["leaf_layer"], delta_of(state["delta"]), partition=partition)
@@ -1489,7 +1489,7 @@ def registered_gemm(run: Run) -> Iterator[Case]:
     parameters = _json([[name, t.to_json()] for name, t in program.fn.signature()[0]])
     query = P.template_instance_query(template)
     era_tid = run.json(f"{base}/stage/partition.json")["query"]["params"]["template"]
-    law = DR.parse_law(f"subset:{summary['k']}")
+    law = DR.parse_design(f"subset:{summary['k']}")
     prov0: dict = {"commit": run.commit(), "set": f"{sd} (the run's generated set)",
                    "program": f"RegisteredGemm over the set's template, W[pos] from {base}/stage/registered.json's reads",
                    "registered": f"{values} with the program function's parameters"}
@@ -1579,7 +1579,7 @@ SERVED_ZK_ERA = r'''
 import json, sys
 sys.path.insert(0, "benchmarks/pouw/served_zk")
 import served_commit as SC
-from verity.protocols.verification.sampled_proofs.one_stage import partition as PT
+from verity.protocols.verification.spot.one_stage import partition as PT
 from verity.primitives.circuits.codec import encode_program
 params, levels = json.loads(sys.argv[1]), json.loads(sys.argv[2])
 t = SC.template(params["k"])
@@ -2015,7 +2015,7 @@ def a6(run: Run) -> Iterator[Case]:
     tids = [P.template_id(d) for d, _ in defs]
     partition, prov["partition"] = partition_form(program, query, rec, tids)
     k = int(summary["k"])
-    law = DR.parse_law(f"stratified:{k}")
+    law = DR.parse_design(f"stratified:{k}")
     def pub_of(m: dict) -> Path:
         K, j = re.fullmatch(r"s8-coord-k(\d+)(?:-c(\d+))?", m["name"]).groups()
         return run.path(f"{base}/stage-k{K}/{f'c{j}/' if j is not None else ''}pub-{m['n']}.bin")
@@ -2064,10 +2064,10 @@ def a6(run: Run) -> Iterator[Case]:
                     "partition": with_program(partition, program, drop_template=True)}),
         "registration-law-another-k (R1)": lambda v: c.but(
             "registration-law-another-k (R1)", "negative", recorded_codes(v, "registration", src),
-            params={"law": DR.parse_law(f"stratified:{k + 1}")}),
+            params={"law": DR.parse_design(f"stratified:{k + 1}")}),
         "registration-law-subset-not-stratified (R1)": lambda v: c.but(
             "registration-law-subset-not-stratified (R1)", "negative", recorded_codes(v, "registration", src),
-            params={"law": DR.parse_law(f"subset:{k}")}),
+            params={"law": DR.parse_design(f"subset:{k}")}),
         "public-file-not-the-registered-leaf-layer (R4)": lambda v: c.but(
             "public-file-not-the-registered-leaf-layer (R4)", "negative", recorded_codes(v, "registration", src),
             params={"leaf_layer": leaf_layer_of({**publics, first: "00" * 64})},
@@ -2147,7 +2147,7 @@ def a7(run: Run) -> Iterator[Case]:
     tids = [P.template_id(d) for d, _ in defs]
     partition, prov["partition"] = partition_form(program, query, rec, tids)
     k = int(summary["k"])
-    law = DR.parse_law(f"stratified:{k}")
+    law = DR.parse_design(f"stratified:{k}")
     rows = {"plan": RU.plan_rows(SimpleNamespace(**sp)), "map": RU.memory_map_rows(SimpleNamespace(**sm))}
     ports: dict = {}
     publics: dict = {}
@@ -2190,7 +2190,7 @@ def a7(run: Run) -> Iterator[Case]:
             params={"program": descriptor(fewer), "partition": with_program(partition, fewer)}),
         "registration-law-another-k (R1)": lambda v: c.but(
             "registration-law-another-k (R1)", "negative", recorded_codes(v, "registration", src),
-            params={"law": DR.parse_law(f"stratified:{k // 2 if k > 1 else k + 1}")}),
+            params={"law": DR.parse_design(f"stratified:{k // 2 if k > 1 else k + 1}")}),
         "registration-without-the-canonical-commitments (R3)": lambda v: c.but(
             "registration-without-the-canonical-commitments (R3)", "negative", recorded_codes(v, "registration", src),
             params={"ports": {q: w for q, w in ports.items() if not q.startswith("canon/")}}),

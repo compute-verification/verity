@@ -85,8 +85,8 @@ def test_a_run_in_its_own_scope_reads_the_slice_above_it_when_that_has_less_head
 
 
 def test_the_machines_reservations_count_against_the_slice_not_the_runs_own_scope(machine, monkeypatch):
-    """19 Oct, vy-nebius-2: a run's fresh 900 GiB session scope less 1,219 GB of reservations held in other scopes (two check slots'
-    601 GB) read -253 GB and refused every --mem-gb run, with 357 GB left in the 1,600 GiB user slice."""
+    """A run's fresh 900 GiB session scope less 1,219 GB of reservations held in other scopes (two check slots' 601 GB) would
+    read -253 GB and refuse every --mem-gb run, with 357 GB left in the 1,600 GiB user slice."""
     G = M.GB
     (machine["cg"] / "memory.max").write_text(f"{1718 * G:.0f}\n")
     (machine["cg"] / "memory.current").write_text(f"{142 * G:.0f}\n")
@@ -166,7 +166,7 @@ def test_launch_request_admits_reserves_refuses_by_name_and_the_runner_releases(
 
 
 def test_the_workload_reads_its_reservation_as_RESEARCH_RUN_MEM_GB(machine, tmp_path):
-    """A reservation sets no memory.max, so suites.py sizing its workers from the cgroup saw the whole node (CI-99, 19 Oct)."""
+    """A reservation sets no memory.max, so suites.py sizing its workers from the cgroup would see the whole node."""
     seen = tmp_path / "seen"
     p = _request(machine, "sized", 12.5)
     req = json.loads(p.read_text())
@@ -225,8 +225,8 @@ def test_cli_mem_gb_needs_a_machine_and_research_mem_prints_the_reading(machine,
 
 
 def test_a_runs_own_reservation_and_its_check_slots_count_once():
-    """17 Oct, cpu-3 (INF-51): r20261017-162016-cb2e held 96 GB from `research run --mem-gb` and 279 GB for the check slot it took,
-    one tree of processes; summed, they refused a 96 GB job with 390 GB free."""
+    """A run holding 96 GB from `research run --mem-gb` and 279 GB for the check slot it took is one tree of processes; summed,
+    they would refuse a 96 GB job with 390 GB free."""
     G = M.GB
     res = [{"file": "research-r1.json", "live": True, "run_id": "r1", "outstanding": 96 * G},
            {"file": "check-p0.json", "live": True, "run_id": "r1", "outstanding": 279 * G},
@@ -236,8 +236,8 @@ def test_a_runs_own_reservation_and_its_check_slots_count_once():
 
 
 def test_active_file_cache_is_reclaimable_and_not_in_use(machine):
-    """17 Oct, vy-glm53-eu (INF-54): 930 GB current of which 454 GB active_file (weights already read) and 93 GB inactive_file;
-    counting the active cache as used refused a run with all 8 GPUs idle."""
+    """930 GB current of which 454 GB active_file (weights already read) and 93 GB inactive_file: counting the active cache as
+    used would refuse a run with all 8 GPUs idle."""
     G = int(M.GB)
     (machine["cg"] / "memory.max").write_text(f"{1500 * G}\n")
     (machine["cg"] / "memory.current").write_text(f"{930 * G}\n")
@@ -260,8 +260,7 @@ def _in_line(ram: Path) -> list[str]:
 
 
 def test_a_big_head_waiter_is_admitted_when_room_frees_and_later_smaller_runs_wait_behind_it(machine, monkeypatch):
-    """INF-77, vy-glm53-cpu-2: r20261018-182135-46fd needed 550 GB in one process and waited from 10:35Z while later, smaller runs
-    took the room as it freed.  Here "big" (45 GB) waits; at t=2 there is room for 10 GB runs but not for it: a run without a wait
+    """A run needing 550 GB in one process must not wait while later, smaller runs take the room as it frees.  Here "big" (45 GB) waits; at t=2 there is room for 10 GB runs but not for it: a run without a wait
     is refused naming it, a waiting one is held until it gives up; at t=6 there is room for big, which goes first."""
     clock = FakeClock(1000.0)
     monkeypatch.setattr(M, "time", clock.module)

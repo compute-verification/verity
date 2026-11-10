@@ -191,12 +191,12 @@ inline Bytes mask(const Bytes& key, const Bytes& y) {  // (M_key y)_i = xor_j k_
   }
   return o;
 }
-inline Bytes block_of(const char* tag, size_t n) {
+inline Bytes chunk_of(const char* tag, size_t n) {
   Bytes b = str(tag, n);
   b.resize(128, 0);
   return b;
 }
-inline Bytes salt_prefix() { return block_of("verity/hm96-sha512/salt/v1", 27); }
+inline Bytes salt_prefix() { return chunk_of("verity/hm96-sha512/salt/v1", 27); }
 inline Bytes leaf_prefix(const Bytes& key) {
   Bytes b = cat({str("verity/hm96-sha512/leaf/v1", 27), sha512(key)});
   b.resize(128, 0);

@@ -1,5 +1,5 @@
-"""The PATH a machine's runner, and so its workload, gets: the run's own shipped `research` first (INF-102), and the research user's
-`~/.elan/bin` last, where vy-nebius-2 keeps `lake` (proofs' Lean job exited 127, `lake: command not found`, r20261019-072345-9757)."""
+"""The PATH a machine's runner, and so its workload, gets: the run's own shipped `research` first, and the research user's
+`~/.elan/bin` last, where vy-nebius-2 keeps `lake` (without it a Lean job exits 127, `lake: command not found`)."""
 from __future__ import annotations
 
 import os

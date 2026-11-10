@@ -8,6 +8,7 @@ public import Definitions.Claims.Sampling
 `Prog.Correct ref u` reads `ref` only at `u`'s gates and the gates they read (`Prog.correct_congr`), and more finely
 only where `Prog.Needs` says: at a gate of `u` whose value `u` commits, and at a gate outside `u`, other than a
 constant, that one of `u`'s gates reads (`Prog.correct_of_needs`), which `Prog.needsList` lists (`Prog.needs_iff`).
+It reads only opened values, so it survives filling in values `ref` leaves unopened (`Prog.correct_mono`).
 `Prog.runIn` reads the inputs and the outside reads
 at and before the gate it computes (`Prog.runIn_congr`). At a committed or outside gate `refIn` is the committed value
 (`Prog.refIn_of_boundary`, `Prog.refIn_of_not_mem`), and an input, a returned gate and a gate read from outside are on
@@ -101,6 +102,103 @@ theorem Prog.correct_congr (C : Prog) {ref₁ ref₂ : ℕ → Option Bool} {u :
     C.Correct ref₁ u ↔ C.Correct ref₂ u :=
   ⟨C.correct_of_congr hA hB,
     C.correct_of_congr (fun g hg => (hA g hg).symm) fun g hg x hx i hi hiu => (hB g hg x hx i hi hiu).symm⟩
+
+/-! ## A correct proof block stays correct when unopened values are filled in -/
+
+theorem mapM_rd_mono {rd rd' : ℕ → Option Bool} :
+    ∀ {ws : List ℕ}, (∀ i ∈ ws, ∀ b, rd i = some b → rd' i = some b) → ∀ {bs : List Bool},
+      ws.mapM rd = some bs → ws.mapM rd' = some bs
+  | [], _, bs, h => h
+  | i :: ws, hrd, bs, h => by
+    rcases hri : rd i with _ | c
+    · simp [List.mapM_cons, hri] at h
+    · rcases hws : ws.mapM rd with _ | cs
+      · simp [List.mapM_cons, hri, hws] at h
+      · have h1 := hrd i (by simp) c hri
+        have h2 := mapM_rd_mono (ws := ws) (fun j hj => hrd j (by simp [hj])) hws
+        simp only [List.mapM_cons, hri, hws, Option.bind_eq_bind, Option.bind_some, Option.pure_def,
+          Option.some.injEq] at h
+        simp [List.mapM_cons, h1, h2, ← h]
+
+theorem BGate.val_mono {rd rd' : ℕ → Option Bool} {own own' : Option Bool} (x : BGate)
+    (hrd : ∀ i ∈ x.reads, ∀ b, rd i = some b → rd' i = some b) (hown : ∀ b, own = some b → own' = some b) {b : Bool}
+    (h : x.val rd own = some b) : x.val rd' own' = some b := by
+  cases x with
+  | input => exact hown b h
+  | const c => exact h
+  | not i =>
+    simp only [BGate.val] at h ⊢
+    obtain ⟨c, hc, rfl⟩ := Option.map_eq_some_iff.1 h
+    rw [hrd i (by simp [BGate.reads]) c hc]
+    rfl
+  | and ws =>
+    simp only [BGate.val] at h ⊢
+    obtain ⟨bs, hbs, rfl⟩ := Option.map_eq_some_iff.1 h
+    rw [mapM_rd_mono (fun i hi => hrd i (by simpa [BGate.reads] using hi)) hbs]
+    rfl
+  | xor ws =>
+    simp only [BGate.val] at h ⊢
+    obtain ⟨bs, hbs, rfl⟩ := Option.map_eq_some_iff.1 h
+    rw [mapM_rd_mono (fun i hi => hrd i (by simpa [BGate.reads] using hi)) hbs]
+    rfl
+
+theorem Prog.read_mono {C : Prog} {ref ref' : ℕ → Option Bool} (hext : ∀ g b, ref g = some b → ref' g = some b) {i : ℕ}
+    {b : Bool} (h : C.read ref i = some b) : C.read ref' i = some b := by
+  by_cases hc : ∃ c, C.gates[i]? = some (.const c)
+  · obtain ⟨c, hc⟩ := hc
+    have hr : ∀ r : ℕ → Option Bool, C.read r i = some c := fun r => by simp [Prog.read, hc]
+    rw [hr ref] at h
+    rw [hr ref']
+    exact h
+  · have hc' : ∀ c, C.gates[i]? ≠ some (.const c) := fun c h' => hc ⟨c, h'⟩
+    rw [C.read_of_not_const ref hc'] at h
+    rw [C.read_of_not_const ref' hc']
+    exact hext i b h
+
+theorem Prog.runIn_mono {C : Prog} {ref ref' : ℕ → Option Bool} (hext : ∀ g b, ref g = some b → ref' g = some b)
+    (u : List ℕ) : ∀ g b, C.runIn ref u g = some b → C.runIn ref' u g = some b := by
+  intro g
+  induction g using Nat.strong_induction_on with
+  | _ g ih =>
+  intro b h
+  rw [Prog.runIn] at h ⊢
+  rcases hx : C.gates[g]? with _ | x
+  · rw [hx] at h
+    cases h
+  · rw [hx] at h
+    simp only [Option.bind_some] at h ⊢
+    refine BGate.val_mono x (fun i _ c hc => ?_) (hext g) h
+    by_cases hiu : i ∈ u
+    · simp only [hiu, ite_true] at hc ⊢
+      by_cases hig : i < g
+      · rw [dite_eq_left hig] at hc ⊢
+        exact ih i hig c hc
+      · rw [dite_eq_right hig] at hc
+        cases hc
+    · simp only [hiu, ite_false] at hc ⊢
+      exact Prog.read_mono hext hc
+
+theorem Prog.refIn_mono {C : Prog} {u : List ℕ} {ref ref' : ℕ → Option Bool} {ι : ℕ → Bool}
+    (hext : ∀ g b, ref g = some b → ref' g = some b) :
+    ∀ g b, C.refIn u ref ι g = some b → C.refIn u ref' ι g = some b := by
+  intro g b h
+  unfold Prog.refIn at h ⊢
+  split_ifs at h ⊢
+  · exact h
+  · exact hext g b h
+
+/-- **A correct proof block stays correct** at committed values that open every value `ref` opens, alike: it reads only
+opened values. -/
+theorem Prog.correct_mono {C : Prog} {ref ref' : ℕ → Option Bool} (hext : ∀ g b, ref g = some b → ref' g = some b)
+    {u : List ℕ} (hc : C.Correct ref u) : C.Correct ref' u := by
+  intro g hg
+  obtain ⟨h1, h2⟩ := hc g hg
+  refine ⟨fun x hx i hi hiu => ?_, fun hbd => ?_⟩
+  · obtain ⟨c, hc⟩ := Option.ne_none_iff_exists'.1 (h1 x hx i hi hiu)
+    rw [Prog.read_mono hext hc]
+    exact Option.some_ne_none _
+  · obtain ⟨b, hb1, hb2⟩ := h2 hbd
+    exact ⟨b, hext g b hb1, Prog.runIn_mono hext u g b hb2⟩
 
 /-! ## The boundary -/
 

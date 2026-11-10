@@ -11,9 +11,11 @@ def _boolean_roots() -> list[Any]:
     norm one-shot over one warp and its two parts (the all-reduce and residual add of two elements, the norm as the fused
     one's), mHC's post + pre layer at hidden 64 (two splits, one thread a column), the Inductor norms at
     one warp a row over one 64-column chunk, FA3's split decode at two splits of a 20-token context (the second partial) on the
-    H200's k16 step, and the MoE router, expert GEMMs and align at 2 to 4 experts.  The static-free ones (`MoeAlignBefore_v2`,
-    `ArgmaxStepF32_v2`, `InductorSiluMulElem_v2`, ...) are catalog roots already, and each binding here reaches the σ
-    Definitions its body Calls (`Fa3AttentionHeadSplit_v2`, `MoeExpertCoordinate_v3`, the align steps)."""
+    H200's k16 step, the MoE router, expert GEMMs and align at 2 to 4 experts, and the served CUDA fused norm at the smallest
+    statics that reach each of its batches (two vectors a thread and one more, a full warp and a partial one).  The static-free
+    ones (`MoeAlignBefore_v2`, `ArgmaxStepF32_v2`, `InductorSiluMulElem_v2`, ...) are catalog roots already, and each binding
+    here reaches the σ Definitions its body Calls (`Fa3AttentionHeadSplit_v2`, `MoeExpertCoordinate_v3`, the align steps, the
+    norm's pair sums and in-order sums)."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG
     from verity.ml.definitions.registry import boolean_attention as BA
@@ -41,4 +43,5 @@ def _boolean_roots() -> list[Any]:
         bind(SG.MoeExpertGemmW, E=2, K=16, N=2, DOT=D),
         bind(SG.MoeAlignRanks, E=3, P=4, BM=2),
         bind(SG.MoeAlignBlocks, P=4, BM=2),
+        bind(SG.RMSNormFusedCudaVector8, N=536, EPS=1e-5, BLOCK=33),
     ]

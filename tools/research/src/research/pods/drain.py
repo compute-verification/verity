@@ -1,4 +1,4 @@
-"""Pod teardown gated on durability (F-r19-int-23: the deadman's `pod-max-hours` killed `tp2` with unarchived evidence).
+"""Pod teardown gated on durability, so no pod is terminated while it holds evidence the store hasn't preserved.
 
     research pods unpreserved <machine|pod-id> [--mode head|readback|recorded] [--older-min N] [--json]
         every Attempt the store recorded on that machine that is NOT `preserved` (the same predicate as `research data preserved`:

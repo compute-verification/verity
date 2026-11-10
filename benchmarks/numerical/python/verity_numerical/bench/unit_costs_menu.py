@@ -17,7 +17,7 @@ row per (bucket, B) with its ``prove_s`` and ``rss_gib`` on the composed layout,
 ``workload`` field (``WORKLOAD#BUCKET@B``). Its outer hours are sessions x ``prove_s``. ``--rows VSTAR_DIR`` writes those
 rows' input instead (``proofs-rows/buckets.json`` beside proofs' ``k2.py`` and ``units.json``): proofs' candidate-3 V* row
 for each (bucket, B), its templates by proofs' ``buckets.template`` at the cap and ``inner_m`` the inner session's
-log2 D, from proofs' ``vstar_c3.py`` and ``buckets.py`` in VSTAR_DIR (art:4e9ff89a).
+log2 D, from proofs' ``vstar_c3.py`` and ``buckets.py`` in VSTAR_DIR.
 
 **The choice** (:func:`pick`): of the B whose inner session is in range (k_log ≤ 27), fits one node (peak ≤
 :data:`~unit_costs_prover.NODE_GIB`), has D within the sampling design's fitted range (≤ 2^:data:`D_FIT_LOG`) and whose outer proof
@@ -56,7 +56,7 @@ from . import unit_costs_padding as P
 from . import unit_costs_prover as U
 
 B_MENU = (1, 4, 16, 64, 256, 1024)
-#: the sampling design's largest fitted D: 2^35 (a 4096-instance session, r20261003-073948-0e7d)
+#: the sampling design's largest fitted D: 2^35 (a 4096-instance session)
 D_FIT_LOG = 35
 
 

@@ -58,6 +58,20 @@ def test_the_service_pyproject_pins_what_the_suite_tests_and_declares_no_push_su
     assert not (SERVICE / "requirements.txt").exists()
 
 
+def test_the_service_installs_from_a_lock_that_hashes_every_package_and_holds_its_pins():
+    """Vercel installs pyproject.toml from its uv.lock when one is beside it, so a build resolves nothing new.  The lock
+    must hash every package it installs and name the pins' exact versions: `uv lock` in service/ after a pin moves."""
+    lock = tomllib.loads((SERVICE / "uv.lock").read_text())
+    pins = dict(p.split("==") for p in tomllib.loads((SERVICE / "pyproject.toml").read_text())["project"]["dependencies"])
+    root = tomllib.loads((SERVICE / "pyproject.toml").read_text())["project"]["name"]
+    packages = {p["name"]: p for p in lock["package"] if p["name"] != root}
+    unhashed = [n for n, p in packages.items()
+                if not all("hash" in f for f in p.get("wheels", []) + ([p["sdist"]] if "sdist" in p else []))
+                or not (p.get("wheels") or p.get("sdist"))]
+    assert not unhashed, f"uv.lock has packages without a hash: {unhashed}"
+    assert {n: packages[n]["version"] for n in pins} == pins, "uv.lock is stale against the pins: run `uv lock` in service/"
+
+
 def test_vercel_json_wires_the_function_and_the_crons_with_the_drain_every_minute_and_no_queue_trigger():
     v = json.loads((SERVICE / "vercel.json").read_text())
     assert set(v["functions"]) == {"api/index.py"}

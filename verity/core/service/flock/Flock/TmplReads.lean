@@ -28,6 +28,50 @@ def soleIn (lo hi : Nat) (xs : Array Nat) : Option Nat :=
   | [v] => some (v - lo)
   | _ => none
 
+/-- `soleIn`'s scan of a side in place: the first reference in `[lo, hi)`, and whether another follows it. -/
+def soleStep (lo hi : Nat) (acc : Option Nat × Bool) (v : Nat) : Option Nat × Bool :=
+  if lo ≤ v ∧ v < hi then (if acc.1.isSome then (acc.1, true) else (some v, false)) else acc
+
+/-- `soleIn` without its lists (`soleIn_eq_fast`). -/
+def soleInFast (lo hi : Nat) (xs : Array Nat) : Option Nat :=
+  match xs.foldl (soleStep lo hi) (none, false) with
+  | (some v, false) => some (v - lo)
+  | _ => none
+
+theorem soleStep_filter (lo hi : Nat) : ∀ (l : List Nat) (acc : Option Nat × Bool),
+    l.foldl (soleStep lo hi) acc = (l.filter fun v => decide (lo ≤ v ∧ v < hi)).foldl (soleStep lo hi) acc
+  | [], _ => rfl
+  | a :: l, acc => by
+    by_cases h : lo ≤ a ∧ a < hi
+    · rw [List.filter_cons_of_pos (by simpa using h), List.foldl_cons, List.foldl_cons]
+      exact soleStep_filter lo hi l _
+    · rw [List.filter_cons_of_neg (by simpa using h), List.foldl_cons,
+        show soleStep lo hi acc a = acc by simp [soleStep, h]]
+      exact soleStep_filter lo hi l acc
+
+theorem soleStep_many (lo hi v : Nat) : ∀ (l : List Nat), l.foldl (soleStep lo hi) (some v, true) = (some v, true)
+  | [] => rfl
+  | a :: l => by
+    rw [List.foldl_cons, show soleStep lo hi (some v, true) a = (some v, true) by unfold soleStep; split <;> rfl]
+    exact soleStep_many lo hi v l
+
+/-- Compiled code runs `soleInFast`; the kernel and every proof see `soleIn`. `@[csimp]` rewrites only code compiled
+after it, so it stays directly below `soleIn`. -/
+@[csimp] theorem soleIn_eq_fast : @soleIn = @soleInFast := by
+  funext lo hi xs
+  unfold soleIn soleInFast
+  rw [← Array.foldl_toList, soleStep_filter]
+  have hp : ∀ v ∈ xs.toList.filter (fun v => decide (lo ≤ v ∧ v < hi)), lo ≤ v ∧ v < hi := fun v hv => by
+    simpa using (List.mem_filter.1 hv).2
+  generalize xs.toList.filter (fun v => decide (lo ≤ v ∧ v < hi)) = fl at hp ⊢
+  match fl, hp with
+  | [], _ => rfl
+  | [v], hp => simp [soleStep, hp v (List.mem_singleton_self v)]
+  | v :: w :: rest, hp =>
+    rw [List.foldl_cons, List.foldl_cons,
+      show soleStep lo hi (none, false) v = (some v, false) by simp [soleStep, hp v (by simp)],
+      show soleStep lo hi (some v, false) w = (some v, true) by simp [soleStep, hp w (by simp)], soleStep_many]
+
 /-- Mark `v - lo` in `m` where `v` is in `[lo, hi)`. -/
 def markIn (lo hi v : Nat) (m : Array Bool) : Array Bool :=
   if lo ≤ v ∧ v < hi then m.setIfInBounds (v - lo) true else m

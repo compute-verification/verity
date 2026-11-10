@@ -12,7 +12,7 @@ The kept sources ascend (`ofCircuit_srcs_sorted`), and `block_toList` is unit `u
 
 @[expose] public section
 
-namespace SampledProofs.FilePart
+namespace Spot.FilePart
 
 open Std FlockSoundness.Discharge
 
@@ -147,4 +147,4 @@ theorem block_toList (f : FilePart) (u : ℕ) :
     (f.block u).toList = (List.range (3 * f.m)).map (f.inGates + 3 * f.m * u + ·) ++ f.srcs.toList.map (2 + u * f.B + ·) := by
   simp [FilePart.block]
 
-end SampledProofs.FilePart
+end Spot.FilePart

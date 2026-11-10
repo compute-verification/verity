@@ -110,11 +110,11 @@ def test_catalog_entries_are_consistent():
 
 
 def test_depth_chains_match_the_measured_runs():
-    # A at B = 64 (r20260922-073131-bfd0): lookup chain 211 (n = 20), checker chain 167 (b = 13, s = 7), depth 214
+    # A at B = 64: lookup chain 211 (n = 20), checker chain 167 (b = 13, s = 7), depth 214
     assert L.lookup_chain(20) == 211
     assert L.checker_chain(((13, 7),) * 6) == 167
     assert 1 + max(L.lookup_chain(20), L.checker_chain(((13, 7),) * 6)) + 2 == 214
-    # B = 4096 (r20260922-074606-be7b): lookup chain 352 (n = 26), checker chain 197, depth 355
+    # B = 4096: lookup chain 352 (n = 26), checker chain 197, depth 355
     assert L.lookup_chain(L.A_R16_LEVELS_B4096) == 352
     assert L.checker_chain(L.A_CHECKER_LAYERS_B4096) == 197
     assert 1 + max(352, 197) + 2 == 355

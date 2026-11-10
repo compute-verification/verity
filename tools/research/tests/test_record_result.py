@@ -47,8 +47,8 @@ def test_v01_record_reads_with_unknown_not_defaults(tmp_path):
 
 
 def test_a_running_run_whose_check_waits_for_a_slot_is_waiting(tmp_path, capsys):
-    """af2d (10 Oct) waited 95 min in node 1's check line and was reported running since its launch, and so cancelled as a
-    check 107 min in when it had checked for 12: its slot record (slot.py's) makes it `waiting` until it holds a slot."""
+    """A run that waits 95 min in node 1's check line must not read as running since its launch, or it is cancelled as a
+    check 107 min in when it has checked for 12: its slot record (slot.py's) makes it `waiting` until it holds a slot."""
     shutil.copy(FIXTURES / "job_v0.1.json", tmp_path / "job.json")
     (tmp_path / "status.json").write_text(json.dumps({"state": "running"}))
     assert R.summarize(tmp_path)["state"] == "running" and R.summarize(tmp_path)["slot"] is None

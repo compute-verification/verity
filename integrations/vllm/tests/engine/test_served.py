@@ -19,10 +19,10 @@ from verity_vllm.pipeline import row_records
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
 GLM = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
-#: The switches GLM-5.3's Commit of record ran under (art:4b274f2088e57bbb01800948211a04c35b346b973dafa7214a090a202ed5b886,
-#: versions.json: ``env`` VLLM_BATCH_INVARIANT=0, VLLM_USE_V2_MODEL_RUNNER=1, VLLM_USE_FLASHINFER_SAMPLER=0,
-#: VLLM_DISABLE_SHARED_EXPERTS_STREAM=1, no VLLM_USE_DEEP_GEMM or NCCL_P2P_DISABLE; ``engine_kwargs`` enforce_eager, moe_backend
-#: triton, disable_custom_all_reduce false; its target's attention backend and FlashAttention version vLLM's own).
+#: The switches GLM-5.3's Commit of record ran under (its versions.json: ``env`` VLLM_BATCH_INVARIANT=0,
+#: VLLM_USE_V2_MODEL_RUNNER=1, VLLM_USE_FLASHINFER_SAMPLER=0, VLLM_DISABLE_SHARED_EXPERTS_STREAM=1, no
+#: VLLM_USE_DEEP_GEMM or NCCL_P2P_DISABLE; ``engine_kwargs`` enforce_eager, moe_backend triton,
+#: disable_custom_all_reduce false; its target's attention backend and FlashAttention version vLLM's own).
 #: Both records predate the collectives' switches, which they carry here at the values their environments held: vLLM's defaults,
 #: and under batch invariance what vLLM sets.
 _COLLECTIVES = {k: SV.DEFAULTS[k] for k in SV.COLLECTIVE_SWITCHES if k not in ("disable_custom_all_reduce", "NCCL_P2P_DISABLE")}
@@ -31,8 +31,8 @@ GLM_SERVED = {"VLLM_BATCH_INVARIANT": False, "VLLM_USE_DEEP_GEMM": True, "VLLM_D
               "disable_custom_all_reduce": False, "enforce_eager": True, "compilation_mode": "NONE", "cudagraph_mode": "NONE",
               "attention_backend": None, "flash_attn_version": None, "moe_backend": "triton", **_COLLECTIVES}
 LLAMA_BI = "llama32-1b__bf16__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager"
-#: What the one rank of LLAMA_BI's first Commit read back (art:6bdd8171952edfb0705e4328bcb2aba9880fd400b3c01fdc4042a614ed52d24a,
-#: summary.json ``served.ranks``): vLLM's batch invariance had turned the custom all-reduce off.
+#: What the one rank of LLAMA_BI's first Commit read back (its summary.json ``served.ranks``): vLLM's batch invariance
+#: had turned the custom all-reduce off.
 LLAMA_BI_SERVED = {**GLM_SERVED, "VLLM_BATCH_INVARIANT": True, "moe_backend": "auto", **SV.BATCH_INVARIANT[0]}
 
 

@@ -30,7 +30,7 @@ creates the report if the lane has none.  `superseded` marks a lane whose
 work a successor took over: it is done, never STALE.
 
 Mail is files named `*handoff*` / `*asks*` / `*reply*` in the recipient's lane dir: the machines' notices (the merge queue's
-refusals, the steward's kills and claim refusals) and older agents' handoffs.  Since 2026-10-01 agents message each other on
+refusals, the steward's kills and claim refusals) and older agents' handoffs.  Agents message each other on
 Slack, never through notes, and the inbox flags an agent's handoff as sent the wrong way.  `checkpoint` (and `inbox`) print the
 ones changed since the lane was last shown its inbox, by mtime, and mark them read; a successor (`bind --succeeds`, or the
 predecessor's `[superseded] by <lane>` checkpoint) also gets its predecessors' unread ones.  `checkpoint LANE final` then runs
@@ -1373,8 +1373,8 @@ def steward_entries(path: Path, table: str, now: dt.datetime, state: dict, fail:
 
 
 def due_period(at: re.Match, now: dt.datetime, weekday: str | None = None) -> str | None:
-    """The period a scheduled entry is due in: the UTC day (`2026-09-28`) once `now` is at or after `at` (an HH:MMZ match), or with
-    `weekday` the ISO week (`2026-W40`) once `now` is at or after `at` on that weekday; None before."""
+    """The period a scheduled entry is due in: the UTC day (`YYYY-MM-DD`) once `now` is at or after `at` (an HH:MMZ match), or with
+    `weekday` the ISO week (`YYYY-Www`) once `now` is at or after `at` on that weekday; None before."""
     start = now.replace(hour=int(at[1]) % 24, minute=int(at[2]), second=0, microsecond=0)
     if weekday is None:
         return f"{now:%Y-%m-%d}" if now >= start else None
@@ -1431,7 +1431,7 @@ def run_lines(root: Path, now: dt.datetime, state: dict, config: Path | None = N
 
 def sync_lines(root: Path, srep: dict, now: dt.datetime) -> list[str]:
     """The watcher's line for its own `notes sync`: the report when it committed, and a failure as `SYNC-FAILED ahead A behind B:
-    <report>` every pass it lasts, so a clone that stops syncing (83 commits behind on 2026-09-26) is never silent.  A lane note left
+    <report>` every pass it lasts, so a clone that stops syncing is never silent, however far behind.  A lane note left
     out for a stamp ahead of the clock or broken front matter is one `SYNC-REFUSED <path>: ...` line every pass it lasts; the other
     notes synced.  A `SYNC-WARN <path>: ...` line comes once, with the commit that took the note."""
     from . import notes_sync  # noqa: PLC0415

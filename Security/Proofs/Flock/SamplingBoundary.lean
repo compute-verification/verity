@@ -135,6 +135,18 @@ theorem core (u : List ℕ) (val : ℕ → Option Bool) (ι : ℕ → Bool) :
 
 end Claims.Sampling.Boundary
 
+namespace Claims.Sampling
+
+/-- **Sampling: the incorrect set is the boundary form's**: on a topologically ordered program, a proof block of distinct
+gates is faulty exactly when its committed boundary outputs differ from its gates applied to its committed boundary
+inputs. -/
+def FaultyBoundary : Prop :=
+  ∀ (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (P : Partition) (w : Wit) (v : ℕ) (u : List ℕ),
+    s.prog.Topological → P.blocks[v]? = some u → u.Nodup → (∀ g ∈ u, g < s.prog.gates.length) →
+    (Faulty H Cm s P w v ↔ BoundaryFaulty H Cm s P w v)
+
+end Claims.Sampling
+
 open Claims.Sampling.Boundary in
 /-- **The incorrect set is the boundary form's** (`Claims.Sampling.FaultyBoundary`). -/
 theorem Claims.Sampling.faultyBoundary : Claims.Sampling.FaultyBoundary := by

@@ -1,6 +1,5 @@
 module
 
-public import Proofs.Flock.Soundness.Assumptions.Zk
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJP
 
 /-!
@@ -9,10 +8,11 @@ public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJP
 `RecordCustodyZKJP`: `RecordCustodyZKJ` at flock-verify `--zk --public-inputs`, whose acceptance is `AcceptsZKP I own`
 and whose session sets up at `setupOfP (zkInputs I) own`. `RecordCustodyZKJ` is stated at `setupOf (zkInputs I)`, which
 refuses a circuit with public input ports (`HmIn.checkOwn` at `none`), so a session at public inputs needs this form.
-At `own = none` it is `RecordCustodyZKJ` (`recordCustodyZKJP_none`). `RecordCustodyZKJPLaw` is the same custody with
-each sample's file under the sampling design the verifier samples it by, read per sample: at one sampling design for every sample its sample half is
-`DrawFileZK` at that sampling design (`recordCustodyZKJPLaw_const`), and at the subset sampling design it is `RecordCustodyZKJP`
-(`recordCustodyZKJPLaw_subset`); a member of a window's sample samples its part `S` by `subset |S|`.
+`RecordCustodyZKJPLaw` is the same custody with each sample's file under the sampling design the verifier samples it by,
+read per sample: at one sampling design for every sample its sample half is `DrawFileZK` at that sampling design
+(`recordCustodyZKJPLaw_const`), and at the subset sampling design it is `RecordCustodyZKJP`
+(`recordCustodyZKJPLaw_subset`); a member of a window's sample samples its part `S` by `subset |S|`. `RecordCustodyZKJ`
+is its instance at no public inputs and the subset sampling design (`Proofs.Flock.Soundness.Premises`).
 -/
 
 @[expose] public section
@@ -34,13 +34,6 @@ def RecordCustodyZKJP {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (o
   Discharge.Composed.RecordsLiveZKJA (Discharge.ZkHidden.AcceptsZKP I own)
       (Discharge.Exec.setupOfP (Discharge.ZkExec.zkInputs I) own) dj Jf wr ∧
     Discharge.ZkLink.DrawFileZK dj (.subset kd) n
-
-/-- At no public inputs, `RecordCustodyZKJP` is `RecordCustodyZKJ`. -/
-theorem recordCustodyZKJP_none {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (dj : Finset (Fin n) → Lean.Json)
-    (Jf : Finset (Fin n) → Reg → ℕ)
-    (wr : (S : Finset (Fin n)) → (R : Reg) → Discharge.Tables.LiveOutJ (Jf S R) mPts → Discharge.Exec.Transcript)
-    (kd : ℕ) : RecordCustodyZKJP I none dj Jf wr kd ↔ RecordCustodyZKJ I dj Jf wr kd :=
-  Iff.rfl
 
 /-- **The record is the live session's, at `J` tables, at the verifier's public inputs, under the sampling design of its sample**
 (`live-verifier`, as `RecordCustodyZKJP`): the record `verify --zk --session-tables J --public-inputs` reads is the one

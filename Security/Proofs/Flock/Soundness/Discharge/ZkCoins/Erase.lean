@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkCoins.SessionDefs
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The session on committed coins, flipped live, is the live session

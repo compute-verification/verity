@@ -85,6 +85,8 @@ declines that input, and the reference computes it.
   torch-free.
 - `evidence`: the ids that conformance texts, provenance records and refusals cite, read from `evidence.json` and keyed by
   the capture, probe or rule they identify.
+- `tiny`: the tiny whole-model configurations (the vLLM tests' `TINY`, without bias, FP8's) that the registry's bindings and
+  tests build served workloads at.
 
 ## Tests
 

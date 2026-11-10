@@ -10,7 +10,7 @@ public import Proofs.Flock.Soundness.Discharge.Layout.Scope
 # The circuit file's partition, computed (`FilePartTarget`, proved), and `RelDeployTarget`'s partition hypothesis
 
 `filePartTarget : FilePartTarget` (`filePart_of_log`): at every descriptor whose unit net has `unitLog ≤ 32`, unit `u`'s
-block of `SampledProofs.FilePart.ofCircuit` is `blockOf` of the key program's partition at `constsOf`
+block of `Spot.FilePart.ofCircuit` is `blockOf` of the key program's partition at `constsOf`
 (`blockOf_keyProg`). That is the block at the constant wires `constWiresOf` (`blockOf_constsOf`: past the constant and
 the zero, `constsOf` fixes only inputs no unit reads): its rows' lowered gates (`FilePart.blockOf_uniform`), then the
 sources it owns
@@ -79,7 +79,7 @@ theorem constWiresOf_eq_none (c : Flock.Circuit) (hU : FlockSoundness.Built c.un
 
 /-- **A proof block reads the constants only at its unit's inputs**: constants that agree at every gate whose owner is
 `u` give unit `u` one block. -/
-theorem blockOf_congr {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
+theorem blockOf_congr {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
     {κ κ' : Fin C.N → Option Bool} (u : Fin n) (h : ∀ g, owner P g = some u → κ g = κ' g) :
     blockOf P κ u = blockOf P κ' u := by
   have hf : ((List.finRange C.N).filter fun g => (C.op g).isInput && (κ g).isNone && decide (owner P g = some u)) =
@@ -131,11 +131,11 @@ theorem blockOf_constsOf (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) 
 `blockOf` of the key program's partition at the circuit's constants. -/
 theorem blockOf_keyProg (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) (hlog : c.unit.unitLog ≤ 32) (n : ℕ)
     (outs : Finset (Fin (FlockSoundness.Discharge.Layout.keyN c hU n))) (u : Fin n) :
-    ((SampledProofs.FilePart.ofCircuit c n).block u.val).toList =
+    ((Spot.FilePart.ofCircuit c n).block u.val).toList =
       blockOf ((FlockSoundness.Discharge.Placed.keyProg c hU n).partition outs) (fun g => constsOf c hU n g) u := by
   have hSm := FilePart.mem_srcs_iff c (FlockSoundness.Rows.ofNet hU) (Flock.RecResiduals.readIns c.unit)
-    (readIns_iff hU hlog) _ (SampledProofs.FilePart.mem_ofCircuit_srcs c n)
-  rw [SampledProofs.FilePart.block_toList, blockOf_constsOf]
+    (readIns_iff hU hlog) _ (Spot.FilePart.mem_ofCircuit_srcs c n)
+  rw [Spot.FilePart.block_toList, blockOf_constsOf]
   exact (FilePart.blockOf_uniform
     (k := FlockSoundness.Discharge.Placed.inGates n (FlockSoundness.Discharge.Layout.keyB c hU))
     (R := FlockSoundness.Discharge.Placed.circuitRows c hU)
@@ -151,7 +151,7 @@ theorem blockOf_keyProg (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) (
         (FlockSoundness.Discharge.Aliased.keyIdx c (FlockSoundness.Discharge.Layout.keyB c hU) ⟨col.val, hc⟩).map
           Fin.val = some b)
     (fun g v hg2 hgk => FilePart.reads_uniform outs g v hg2 hgk) _
-    (SampledProofs.FilePart.ofCircuit_srcs_sorted c n) hSm u).symm
+    (Spot.FilePart.ofCircuit_srcs_sorted c n) hSm u).symm
 
 /-- **`FilePartTarget` at `unitLog ≤ 32`**: at every descriptor `D` whose unit net has `unitLog ≤ 32`, unit rows `hU`,
 population `n` and unit `u`, `FilePart.ofCircuit`'s block `u` is `blockOf` of the key program's partition at the
@@ -160,7 +160,7 @@ theorem filePart_of_log (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.uni
     (n : ℕ) (u : Fin n) :
     let P := (FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).partition
       (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n)
-    ((SampledProofs.FilePart.ofCircuit D.unroll n).block u.val).toList =
+    ((Spot.FilePart.ofCircuit D.unroll n).block u.val).toList =
       blockOf P (fun g => constsOf D.unroll hU n g) u :=
   blockOf_keyProg D.unroll hU hlog n (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n) u
 
@@ -179,7 +179,7 @@ theorem unitLog_le_of_scopeOkH {c : Flock.Circuit} (h : FlockSoundness.Discharge
 /-- **The code's partition of the circuit file `c` at `n` units, in strata of sizes `ns`**: `FilePart.ofCircuit c n`'s
 blocks, unit `u`'s at slot `u`, in consecutive runs of slots. -/
 def filePartOf (c : Flock.Circuit) (n : ℕ) (ns : List ℕ) : Claims.Sampling.Partition :=
-  ⟨[ns.splitLengths ((List.range n).map fun u => ((SampledProofs.FilePart.ofCircuit c n).block u).toList)]⟩
+  ⟨[ns.splitLengths ((List.range n).map fun u => ((Spot.FilePart.ofCircuit c n).block u).toList)]⟩
 
 /-- **`partOf` is the code's partition** at the key program of a circuit in scope, at the circuit's constants. -/
 theorem partOf_ofCircuit (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit)
@@ -189,7 +189,7 @@ theorem partOf_ofCircuit (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.un
       filePartOf D.unroll n ns := by
   have h : (List.finRange n).map (blockOf ((FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).partition
         (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n)) (fun g => constsOf D.unroll hU n g)) =
-      (List.range n).map fun u => ((SampledProofs.FilePart.ofCircuit D.unroll n).block u).toList := by
+      (List.range n).map fun u => ((Spot.FilePart.ofCircuit D.unroll n).block u).toList := by
     rw [← FilePart.map_val_finRange n, List.map_map]
     exact List.map_congr_left fun u _ =>
       (blockOf_keyProg D.unroll hU (unitLog_le_of_scopeOkH hscope) n
@@ -228,12 +228,12 @@ theorem relDeploy_ofCircuit (hR : RelDeployTarget) {T : Type}
 /-- **The population check's verdict**: `why` finds nothing exactly where the strata, read stratum by stratum, are the
 units in order, of sizes `ns`, and the public file's units are `0, …, N − 1`, `N` their sum. -/
 theorem why_eq_none {strata : Array (String × Array (ℕ × ℕ))} {indices : Array ℕ} :
-    SampledProofs.FilePart.why strata indices = none ↔
-      ∃ ns, SampledProofs.FilePart.sizes strata = some ns ∧ indices = Array.range (ns.foldl (· + ·) 0) := by
-  unfold SampledProofs.FilePart.why
+    Spot.FilePart.why strata indices = none ↔
+      ∃ ns, Spot.FilePart.sizes strata = some ns ∧ indices = Array.range (ns.foldl (· + ·) 0) := by
+  unfold Spot.FilePart.why
   constructor
   · intro h
-    cases hs : SampledProofs.FilePart.sizes strata with
+    cases hs : Spot.FilePart.sizes strata with
     | none => rw [hs] at h; simp at h
     | some ns =>
       rw [hs] at h
@@ -249,21 +249,21 @@ theorem why_eq_none {strata : Array (String × Array (ℕ × ℕ))} {indices : A
 /-- **A session the population check accepts**: the verifier's program parses, its strata under the query are the
 units in order, of sizes `ns`, and the public file's units are `0, …, N − 1`, `N` their sum. -/
 theorem check_ok {program : ByteArray} {query : Lean.Json} {pubB : ByteArray}
-    (h : SampledProofs.FilePart.check program query pubB = .ok ()) :
-    ∃ p strata ns, SampledProofs.Program.parse program = .ok p ∧
-      SampledProofs.Partition.strata p query = .ok strata ∧ SampledProofs.FilePart.sizes strata = some ns ∧
-      SampledProofs.FilePart.unitIndices pubB = .ok (Array.range (ns.foldl (· + ·) 0)) := by
-  unfold SampledProofs.FilePart.check at h
-  cases hp : SampledProofs.Program.parse program with
+    (h : Spot.FilePart.check program query pubB = .ok ()) :
+    ∃ p strata ns, Spot.Program.parse program = .ok p ∧
+      Spot.Partition.strata p query = .ok strata ∧ Spot.FilePart.sizes strata = some ns ∧
+      Spot.FilePart.unitIndices pubB = .ok (Array.range (ns.foldl (· + ·) 0)) := by
+  unfold Spot.FilePart.check at h
+  cases hp : Spot.Program.parse program with
   | error e => simp [hp, bind, Except.bind] at h
   | ok p =>
-    cases hs : SampledProofs.Partition.strata p query with
+    cases hs : Spot.Partition.strata p query with
     | error e => simp [hp, hs, bind, Except.bind] at h
     | ok strata =>
-      cases hi : SampledProofs.FilePart.unitIndices pubB with
+      cases hi : Spot.FilePart.unitIndices pubB with
       | error e => simp [hp, hs, hi, bind, Except.bind] at h
       | ok idx =>
-        cases hw : SampledProofs.FilePart.why strata idx with
+        cases hw : Spot.FilePart.why strata idx with
         | some w => simp [hp, hs, hi, hw, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
         | none =>
           obtain ⟨ns, hns, rfl⟩ := why_eq_none.1 hw

@@ -36,6 +36,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
+import Proofs.Pous.Prob
 
 /-!
 # The deployed uniform sampler on one word: its counts
@@ -106,7 +107,7 @@ theorem card_fiber_le {N w : ℕ} (i : Fin N) :
 open Classical in
 theorem pr_le_ofReal {α : Type} [Fintype α] (P : α → Prop) {β : ℝ} (hβ : 0 ≤ β)
     (h : ((univ.filter P).card : ℝ) ≤ β * Fintype.card α) : Pous.pr P ≤ ENNReal.ofReal β := by
-  unfold Pous.pr
+  simp only [Pous.pr_eq_card]
   apply ENNReal.div_le_of_le_mul
   rw [← ENNReal.ofReal_natCast, ← ENNReal.ofReal_natCast, ← ENNReal.ofReal_mul hβ]
   exact ENNReal.ofReal_le_ofReal h
@@ -114,7 +115,7 @@ theorem pr_le_ofReal {α : Type} [Fintype α] (P : α → Prop) {β : ℝ} (hβ 
 open Classical in
 theorem ofReal_le_pr {α : Type} [Fintype α] (P : α → Prop) :
     ENNReal.ofReal (((univ.filter P).card : ℝ) / Fintype.card α) ≤ Pous.pr P := by
-  unfold Pous.pr
+  simp only [Pous.pr_eq_card]
   rcases Nat.eq_zero_or_pos (Fintype.card α) with h | h
   · simp [h]
   · rw [ENNReal.ofReal_div_of_pos (by exact_mod_cast h), ENNReal.ofReal_natCast, ENNReal.ofReal_natCast]
@@ -123,7 +124,7 @@ open Classical in
 /-- A probability is the same over the coins in another order. -/
 theorem pr_comp_equiv {α β : Type} [Fintype α] [Fintype β] (e : α ≃ β) (P : β → Prop) :
     Pous.pr (fun x => P (e x)) = Pous.pr P := by
-  unfold Pous.pr
+  simp only [Pous.pr_eq_card]
   rw [Fintype.card_congr e, card_equiv e (t := univ.filter P) fun x => by simp]
 
 /-- **The real game is the ideal one plus the PRF's advantage** against the distinguisher, for any bound on the ideal

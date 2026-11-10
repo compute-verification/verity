@@ -11,7 +11,7 @@ import pytest
 from verity.core.protocols.pouw import core_check as CC
 from verity.ml.protocols.pouw.circuit import live as L
 from verity.core.protocols.pouw import live_reads as LR
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import registered as G
 from verity_vllm.protocols import pouw
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import live as LV

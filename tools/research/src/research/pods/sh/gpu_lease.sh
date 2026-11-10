@@ -45,8 +45,8 @@
 # job exits 143 and restarts however its launcher restarts it.  A request without --wait preempts nothing, and neither does a
 # --preemptible one: fill work waits for fill work, or a queue of it would stop its own leases in turn.  A preemptible lease is
 # taken only once its grace since its grant has passed: its own --max-min, at most $GPU_LEASE_PREEMPT_GRACE_MAX_S (2400), or
-# $GPU_LEASE_PREEMPT_GRACE_S (600) without one, so a point that started finishes (INF-194: on node 2, 24 Oct 01:11-01:41Z, 23
-# benchmark points were stopped 4-35 min in, each losing its whole engine start); the waiter waits for it meanwhile.
+# $GPU_LEASE_PREEMPT_GRACE_S (600) without one, so a point that started finishes (a benchmark point stopped minutes in loses its
+# whole engine start); the waiter waits for it meanwhile.
 #
 # --timed (or GPU_LEASE_TIMED=1) tags a timed window: the lease records timed=1, and the server's ops daemon keeps the machine quiet
 # while it is held (it pauses other CPU-heavy work; on vy-nebius-2, node_ops.py).  A lease of every GPU by one holder counts as one
@@ -77,10 +77,13 @@
 # grant comes within $GPU_LEASE_AGENT_WAIT_S seconds (default 10).  Once agent.lock is free (the agent stopped or died), the next
 # poll falls back to the rules above, keeping its place in the queue.
 # A lease's owner lines are written as soon as its locks are taken (the UUIDs and the memory scope are looked up before), so a
-# held lock never shows the previous holder's line for longer than that.
+# held lock never shows the previous holder's line for longer than that.  When CMD ends, still holding the locks, the lease
+# prefixes each of its lines with `released=TIME`, so a reader of the file sees it ended (a node's lines once named a run for
+# hours after its locks were free); the line stays, for the run that last held the GPU (gpu_adopt, the keeper's grants).
+# A lease killed outright leaves its line unmarked: `status` reports a free lock as free whatever its owner file says.
 #
-# Foreign memory (INF-86): a free lock is not a free GPU.  A run's process that outlives its lease (vLLM's TP rank workers, which
-# hold no lock, after a cancel: vy-glm53-eu, 19 Oct 01:20Z, ~94 GB per GPU) leaves the GPU's memory taken, and the next holder fails
+# Foreign memory: a free lock is not a free GPU.  A run's process that outlives its lease (vLLM's TP rank workers, which
+# hold no lock, after a cancel) leaves the GPU's memory taken, and the next holder fails
 # for lack of it.  So before a GPU is granted, `nvidia-smi --query-compute-apps` must show no process on it using more than
 # $GPU_LEASE_FOREIGN_MIB MiB (default 1024) that is foreign: neither a lease holder's (a lock owner pid among its ancestors, as
 # gpu_adopt.py judges) nor this request's own (one of gpu-lease's ancestors).  Such a GPU is not granted; the request waits (or, without
@@ -671,6 +674,11 @@ trap 'kill -TERM "$child" 2> /dev/null' TERM INT HUP
 rc=0; wait "$child" || rc=$?
 while kill -0 "$child" 2> /dev/null; do rc=0; wait "$child" || rc=$?; done
 trap - TERM INT HUP
+released=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+for i in "${TAKEN[@]}"; do
+  line=$(cat "$dir/$i.owner" 2>/dev/null) || continue
+  case "$line" in "pid=$$ "*) echo "released=$released $line" > "$dir/$i.owner" ;; esac
+done
 for fd in "${FDS[@]}"; do exec {fd}>&-; done
 rm -f "$dir/grant.$$"
 report_usage "$rc"

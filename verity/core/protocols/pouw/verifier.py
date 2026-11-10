@@ -34,7 +34,7 @@ RECORD_VERDICT = "lean"
 
 PACKAGE = Path(__file__).resolve().parent / "lean" / "check"
 EXE = "pouw-check-difftest"
-BUILD_LOCK = Path(__file__).resolve().parents[2] / "difftest" / "lean" / ".lake" / "harness-build.lock"
+BUILD_LOCK = Path(__file__).resolve().parents[4] / "verity/core/difftest/lean" / ".lake" / "harness-build.lock"
 #: The most bytes one `coins` request takes (the Lean's `COINS_MAX`).
 COINS_MAX = 1 << 24
 
@@ -134,6 +134,6 @@ def coins(n: int) -> bytes:
     return bytes.fromhex(body)
 
 
-#: the claim instance naming `coins`'s bytes, which a served challenger reads (`sampled_proofs.challenger.coin_claim`)
+#: the claim instance naming `coins`'s bytes, which a served challenger reads (`spot.challenger.coin_claim`)
 CLAIM = "uniform/io-getrandombytes"
 coins.claim = CLAIM  # type: ignore[attr-defined]

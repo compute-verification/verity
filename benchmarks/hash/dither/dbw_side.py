@@ -31,10 +31,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
+from verity.core.protocols.remote_bandwidth import audit
 from verity.core.protocols.remote_bandwidth.session import verifier as V
 from verity.core.protocols.remote_bandwidth.session import wire
-
-from verity.core.protocols.remote_bandwidth import audit
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
@@ -134,7 +133,7 @@ def main() -> int:
             session["started"] = True
             emit("started", k=session["k"])
 
-    def got():
+    def got() -> tuple[dict, bytes, int]:
         head, body, stamp = recv()
         if head.get("type") == "closed":
             emit("passes", k=head.get("k"), at_ns=stamp)

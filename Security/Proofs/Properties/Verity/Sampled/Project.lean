@@ -671,7 +671,7 @@ def FirstStopFresh (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ 
 theorem ofReal_pr_eq_prCoin {C : Type} [Fintype C] [Nonempty C] (Q : C → Prop) :
     ENNReal.ofReal (Claims.Pr Q) = prCoin Q := by
   classical
-  rw [prCoin_eq_card, Claims.Pr, ENNReal.ofReal_div_of_pos (Nat.cast_pos.2 Fintype.card_pos), ENNReal.ofReal_natCast,
+  rw [prCoin_eq_card, Claims.Pr, Claims.prUniform, ENNReal.ofReal_div_of_pos (Nat.cast_pos.2 Fintype.card_pos), ENNReal.ofReal_natCast,
     ENNReal.ofReal_natCast]
 
 /-- **The decoders' premise**, at the composite `k` and the property `P` of the play: on the joint law's support off

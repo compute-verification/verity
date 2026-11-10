@@ -122,12 +122,12 @@ theorem eq_range'_of_prefix {α : Type _} {f : ℕ → α} {l : List α} {k N : 
 from `k₂` as their coins, as many as they take, at most as many as there are. -/
 theorem lgCoins_of_weave {ts : List FlockSoundness.Game.Step} {σ ms} {c : Array (Array Flock.F128)} {k₂ : ℕ}
     (h : ts = FlockSoundness.Discharge.Exec.weave σ ms
-      (((List.range' k₂ (c.size - k₂)).map fun i => c[i]!).map (coinArr FlockSoundness.Refine.fOf))) :
+      (((List.range' k₂ (c.size - k₂)).map fun i => (c)[i]!).map (coinArr FlockSoundness.Refine.fOf))) :
     ts.filterMap Sum.getRight? =
-        ((List.range' k₂ (nCoins ts)).map fun i => c[i]!).map (coinArr FlockSoundness.Refine.fOf) ∧
+        ((List.range' k₂ (nCoins ts)).map fun i => (c)[i]!).map (coinArr FlockSoundness.Refine.fOf) ∧
       nCoins ts ≤ c.size - k₂ := by
   have hp := weave_coins_prefix σ ms
-    (((List.range' k₂ (c.size - k₂)).map fun i => c[i]!).map (coinArr FlockSoundness.Refine.fOf))
+    (((List.range' k₂ (c.size - k₂)).map fun i => (c)[i]!).map (coinArr FlockSoundness.Refine.fOf))
   rw [← h, List.map_map] at hp
   rw [List.map_map]
   exact eq_range'_of_prefix hp

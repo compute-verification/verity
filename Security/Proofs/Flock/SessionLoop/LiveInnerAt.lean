@@ -61,6 +61,8 @@ coins the openings open:
 * `coinAt_inner`: the coins the frame's own inner round reads (`ε`, `β`) are the opened coins at their slots.
 * `ownFrames_one`, `ownFrames_three`: the ZK server's own rounds 1 and 3 at a configuration on given pads.
 * `LeanRelease.ofLoop_start_at`: where the frame takes a rep's coins, the rep's frame starts.
+* `LeanRelease.liveInner_withInner_at`: `LiveInner`'s equation after one history, where the worker's `final_c'` and `τ`
+  commitment are `vs`'s there; `LiveInnerOwn` reads it at the worker's own histories.
 * **`LeanRelease.liveInner_withInner`**: `LiveInner` at `withInner`, at a `Live` statement the loop serves, on the rep's
   own tables (`Count.RealTabs`) and pads (`Loop.RepSrc`), where the worker's `final_c'` and `τ` commitment are `vs`'s
   (`Loop.TakesFinalC`, `Loop.TakesTau`) and the rows hold at `vs` (`Loop.RowsOK`). Round 0 is the worker's `final_c'`,
@@ -345,19 +347,20 @@ theorem ofLoop_start_at (T : CoinLayer.TableData)
   exact ⟨lay, mask, hst⟩
 
 set_option maxHeartbeats 2000000 in
-/-- **`LiveInner` at `withInner`**: at a `Live` statement the loop serves, on the rep's own tables where `real` answers
-the loop's (`hR`) and the rep's pads the tape's (`Loop.RepSrc`), where the worker's `final_c'` and `τ` commitment are
-`vs`'s (`Loop.TakesFinalC`, `Loop.TakesTau`) and the rows hold at `vs` (`Loop.RowsOK`), the release at the inner proof's
-rounds is the switched session's message. The release is the frame's own round (`release_innerAt`) at rep `2j + r`'s
-inner round `e` (`innerAt_slot`), and the switched session's message there `innerCutBody` at the rep's switched source
+/-- **`LiveInner`'s equation at `withInner`, after one history**: at a `Live` statement the loop serves, on the rep's
+own tables where `real` answers the loop's (`hR`) and the rep's pads the tape's (`Loop.RepSrc`), after a history
+`LiveInner` reads at which the worker's `final_c'` and `τ` commitment are `vs`'s (`hF` and `hT`: `Loop.TakesFinalC`'s and
+`Loop.TakesTau`'s conclusions there) and the rows hold at `vs` (`Loop.RowsOK`), the release at the inner proof's round
+is the switched session's message. The release is the frame's own round (`release_innerAt`) at rep `2j + r`'s inner
+round `e` (`innerAt_slot`), and the switched session's message there `innerCutBody` at the rep's switched source
 (`swMsgAt_innerAt`, the coins below it showing no refusal: `innerAt_unrefused`). Round 0: the worker's `final_c'` plus
-the pad at `final_c` is `vs`'s value there (`TakesFinalC`), the source's masked `final_c` less that pad
+the pad at `final_c` is `vs`'s value there (`hF`), the source's masked `final_c` less that pad
 (`swSrcE_masked_vsWord`). Round 1: the configuration's pads are the tape's (`cfg_tapeOfDraws`, `RepSrc.pads`), at the
 rep's layout (`lay_ofLoopLink`), and `ε` the opened coin at the rep's inner round 0 (`coinAt_inner`), so the round is
-the pair's openings (`swSrcE_inner`, `innerTripleE`). Round 2: the worker's `τ` commitment is `vs`'s (`TakesTau`), the
+the pair's openings (`swSrcE_inner`, `innerTripleE`). Round 2: the worker's `τ` commitment is `vs`'s (`hT`), the
 switched source's. Round 3: `Y` at the tape's pads and `β`, the opened coin at the rep's `β` round, the switched
 source's where the rows hold (`swSrcE_y`, `innerYE`). -/
-theorem liveInner_withInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
+theorem liveInner_withInner_at (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L₁ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
     (src : Msg → Flock.Wit →
@@ -375,11 +378,42 @@ theorem liveInner_withInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE).S
       FlockDeploy.setupOf true x = some (s0, spec, sts) → Count.RealTabs sts (real x w ρ))
     (hS : Loop.RepSrc (withInner Masked.dataE L₁ real fin) src x w)
     (wk : (ofLoopLink (withInner Masked.dataE L₁ real fin) src real).toSrv.Worker)
-    (hF : Loop.TakesFinalC vs (ofLoopLink (withInner Masked.dataE L₁ real fin) src real) wk x w)
-    (hT : Loop.TakesTau vs (ofLoopLink (withInner Masked.dataE L₁ real fin) src real) wk x w)
-    (hrows : Loop.RowsOK vs x w) :
-    LiveInner vs (withInner Masked.dataE L₁ real fin) src real wk x w := by
-  intro ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr hv hI
+    (hrows : Loop.RowsOK vs x w)
+    (ν : (CoinLayer.session Loop.loopNr Masked.dataE).Nonce) (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape)
+    (κ : (ofLoopLink (withInner Masked.dataE L₁ real fin) src real).toSrv.Chk) (m₀ ρ₀ : Msg)
+    (ops : List (Msg × Msg)) (v : Msg) (h0 : 0 < ops.length) (hlt : ops.length < refK x)
+    (hl : (ofLoopLink (withInner Masked.dataE L₁ real fin) src real).toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = true)
+    (hok : ((allOk ((CoinLayer.session Loop.loopNr Masked.dataE).refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval
+      CoinOpen.shaH).1 = true)
+    (hr : (ofLoopLink (withInner Masked.dataE L₁ real fin) src real).refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) = false)
+    (hv : wk x w (ν, t) ((m₀, ρ₀) :: ops) 0 = some (v, false))
+    (hI : Loop.InnerAt (real x w (ν, t)) x (ops.map fun p => CoinLayer.rd p.2))
+    (hF : ∀ (w' : ByteArray) (j : Fin (Masked.jOf x)) (r : Fin 2), w'.size = 16 →
+      v = (_root_.Flock.Firewall.Frame.labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++
+        _root_.Flock.Transcript.header 3 1 1 ++ w' ++ _root_.Flock.Transcript.header 4 1 1).data.toList →
+      (ofLoopLink (withInner Masked.dataE L₁ real fin) src real).rep x (ops.length + 1) = 2 * j.val + r.val →
+      ops.length = Masked.repSlot x (2 * j.val + r.val) (Masked.innerOff 0) →
+      v = (Loop.inner0 (wordBytes (words ((fin x w (ν, t) ((m₀, ρ₀) :: ops)).getD 0 .empty)
+        ((labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8).size + 16) 1))).data.toList →
+      finalCOf ⟨v.toArray⟩ +
+          ((ofLoopLink (withInner Masked.dataE L₁ real fin) src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).h.getD
+            ((ofLoopLink (withInner Masked.dataE L₁ real fin) src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).lay.fc 0 =
+        Loop.vsWord vs x w ν ((CoinLayer.session Loop.loopNr Masked.dataE).pad
+          (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) t j r
+          ((ofLoopLink (withInner Masked.dataE L₁ real fin) src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).lay.fc)
+    (hT : ∀ (m : Masker) (w' : ByteArray) (j : Fin (Masked.jOf x)) (r : Fin 2),
+      (ofLoopLink (withInner Masked.dataE L₁ real fin) src real).answered x (ν, t) ((m₀, ρ₀) :: ops) = .ok m →
+      m.inner = some 2 → w'.size = 64 →
+      v = (_root_.Flock.Transcript.header 5 0 64 ++ w' ++ _root_.Flock.Transcript.header 4 1 1).data.toList →
+      (ofLoopLink (withInner Masked.dataE L₁ real fin) src real).rep x (ops.length + 1) = 2 * j.val + r.val →
+      ops.length = Masked.repSlot x (2 * j.val + r.val) (Masked.innerOff 2) →
+      v = (Loop.inner2 (wordBytes (words ((fin x w (ν, t) ((m₀, ρ₀) :: ops)).getD 2 .empty) 16 4))).data.toList →
+      w' = Loop.vsTau vs x w ν ((CoinLayer.session Loop.loopNr Masked.dataE).pad
+        (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) t j r) :
+    (ofLoopLink (withInner Masked.dataE L₁ real fin) src real).release x (ν, t) ((m₀, ρ₀) :: ops) false v =
+      dropDom ((CoinLayer.session Loop.loopNr Masked.dataE).swMsgAt x
+        ((CoinLayer.session Loop.loopNr Masked.dataE).wt x w) (vs x w ν) t
+        (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) := by
   have hN := innerAt_unrefused L₁ src real fin x w hx hSv hR wk ν t κ m₀ ρ₀ ops v h0 hlt hl hr hv hI
   obtain ⟨rr, hin, hrel, hvr⟩ := release_innerAt L₁ src real fin x w hSv hR wk ν t κ m₀ ρ₀ ops v h0 hlt hl hv hI
   have hlast : (ofLoopLink (withInner Masked.dataE L₁ real fin) src real).last x = refK x + 1 :=
@@ -411,6 +445,7 @@ theorem liveInner_withInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE).S
       wordBytes (words ((fin x w (ν, t) ((m₀, ρ₀) :: ops)).getD 2 .empty) 16 4),
       by simp only [wordBytes_size, Loop.words_size], by simp only [wordBytes_size, Loop.words_size],
       fun _ _ _ _ => rfl⟩
+  have hvr0 := hvr
   rw [hsch] at hrel hvr
   have hcfg : (ofLoopLink (withInner Masked.dataE L₁ real fin) src real).cfg x (ν, t) ((m₀, ρ₀) :: ops) =
       (withFrames Masked.dataE L₁ real).cfg x (ν, t) ((m₀, ρ₀) :: ops) := by
@@ -451,10 +486,10 @@ theorem liveInner_withInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE).S
     (by rw [List.length_map]; omega) (by rw [List.length_map]; exact hN), dropDom_innerCutBody]
   refine congrArg (List.cons 0) ?_
   rw [ownRound_encs hW hT' he4]
-  generalize hE : j' + 1 - rsched.size = e at hslot he4 hvr ⊢
+  generalize hE : j' + 1 - rsched.size = e at hslot he4 hvr hvr0 ⊢
   obtain rfl | rfl | rfl | rfl : e = 0 ∨ e = 1 ∨ e = 2 ∨ e = 3 := by omega
   · -- round 0: `final_c'`
-    have hTF := hF ν t κ m₀ ρ₀ ops v W jf rf h0 hlt hl hok hv hW hvr hrep
+    have hTF := hF W jf rf hW hvr hrep (hq1.trans hslot) (hvr0.trans rfl)
     rw [hcfg, hLay, hH] at hTF
     have hWb : (readWord W.data.toList).toBytes = W :=
       ByteArray.ext (Array.ext' (toBytes_readWord _ (by rw [Array.length_toList]; exact hW)))
@@ -498,7 +533,7 @@ theorem liveInner_withInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE).S
       (withFiles (withLink (withInner Masked.dataE L₁ real fin) src) src) real x w hSv hR (ν, t) (m₀, ρ₀) ops ha
       hne rfl hxs hq1 hloc hreal hrs (by omega)
     rw [show j' - rsched.size + 1 = 2 by omega] at hin2
-    have hTT := hT ν t κ m₀ ρ₀ ops v m T jf rf h0 hlt hl hok hv ha hin2 hT' hvr hrep
+    have hTT := hT m T jf rf ha hin2 hT' hvr hrep (hq1.trans hslot) (hvr0.trans rfl)
     rw [hTT]
     rfl
   · -- round 3: `Y`
@@ -528,6 +563,35 @@ theorem liveInner_withInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE).S
       Masked.swSrcE_y x _ w (vs x w ν _ ((CoinLayer.session Loop.loopNr Masked.dataE).seenOf x t)) t jf rf hrowsAt,
       Masked.innerYE hxs _ w t jf rf rfl hY]
     rfl
+
+/-- **`LiveInner` at `withInner`**: `liveInner_withInner_at` at every history, where the worker's `final_c'` and `τ`
+commitment are `vs`'s at all of them (`Loop.TakesFinalC`, `Loop.TakesTau`). -/
+theorem liveInner_withInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
+    (L₁ : LeanRelease Flock.Wit
+      ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
+    (src : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (real : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Tab × Array ByteArray))
+    (fin : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      List (Msg × Msg) → Array ByteArray)
+    (x : Msg) (w : Flock.Wit) (hx : Masked.Live x) (hSv : Serves x)
+    (hR : ∀ (ρ : (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce ×
+        (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand) (s0 : _) (spec : SessionSpec) (sts : Array Stmt),
+      FlockDeploy.setupOf true x = some (s0, spec, sts) → Count.RealTabs sts (real x w ρ))
+    (hS : Loop.RepSrc (withInner Masked.dataE L₁ real fin) src x w)
+    (wk : (ofLoopLink (withInner Masked.dataE L₁ real fin) src real).toSrv.Worker)
+    (hF : Loop.TakesFinalC vs (ofLoopLink (withInner Masked.dataE L₁ real fin) src real) wk x w)
+    (hT : Loop.TakesTau vs (ofLoopLink (withInner Masked.dataE L₁ real fin) src real) wk x w)
+    (hrows : Loop.RowsOK vs x w) :
+    LiveInner vs (withInner Masked.dataE L₁ real fin) src real wk x w := by
+  intro ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr hv hI
+  exact liveInner_withInner_at vs L₁ src real fin x w hx hSv hR hS wk hrows ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr hv hI
+    (fun w' j r hw hs hrep _ _ => hF ν t κ m₀ ρ₀ ops v w' j r h0 hlt hl hok hv hw hs hrep)
+    (fun m w' j r ha hi hw hs hrep _ _ => hT ν t κ m₀ ρ₀ ops v m w' j r h0 hlt hl hok hv ha hi hw hs hrep)
 
 end LeanRelease
 

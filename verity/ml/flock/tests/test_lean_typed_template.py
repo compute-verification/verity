@@ -2,10 +2,10 @@
 Rust prover splits it: the instance type's root one slot per VU and each placed layout's slots its parts, with rows only
 through `deriveChecked`, the row wiring derived, and Δ in the prover's order (the flat entries, then per VU the inputs'
 copies, the parts' bound rows and the root's cross entries). A typed statement is a form the soundness proof does not
-cover (`Flock.ProvedScope`), so on the prover's recorded sessions the statement sets up and every case is refused: the honest ones for
-its form, once every check has passed, and every other case for the check that catches it. That build has no zk patch, so
-its plain files are upstream's form, without the `zk_level0 = None` tag the deployed prover writes, and are read under
-`--upstream-plain` (`Flock.Proof`)."""
+cover (`Flock.ProvedScope`), so on the prover's recorded sessions the statement sets up and the verifier's checks agree with
+upstream's verdict on each case: the honest ones pass every check and are refused for their form, and every other case fails the
+check that catches it. That build has no zk patch, so its plain files are upstream's form, without the `zk_level0 = None`
+tag the deployed prover writes, which `verify` refuses and `agree --upstream-plain` reads (`Flock.Proof`)."""
 from __future__ import annotations
 
 import hashlib
@@ -78,14 +78,17 @@ def test_it_refuses_the_rust_provers_sessions(gemm, tmp_path):
     subprocess.run([sys.executable, str(VERIFIER / "selftest_records.py"), str(root / "records"), str(tmp_path)], check=True,
                    capture_output=True)
     sessions = sorted(p for p in tmp_path.iterdir() if (p / "case.json").exists())
-    p = subprocess.run([str(BIN), "verify", "--statement", STATEMENT, "--circuit", str(root / "stage" / "circuit.txt"),
-                        "--public", str(root / "stage" / "pub-4.bin"), "--tables", str(root / "stage" / "tables"),
-                        "--upstream-plain", "--session", *map(str, sessions)], capture_output=True, text=True)
-    got = {Path(v["session"]).name: v for v in (json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT "))}
     want = {s.name: json.loads((s / "case.json").read_text())["expect"] == "accept" for s in sessions}
+    upstream = tmp_path / "upstream-verdicts.json"
+    upstream.write_text(json.dumps({str(s): json.loads((s / "case.json").read_text())["live"]["accepted"] for s in sessions}))
+    p = subprocess.run([str(BIN), "agree", "--statement", STATEMENT, "--circuit", str(root / "stage" / "circuit.txt"),
+                        "--public", str(root / "stage" / "pub-4.bin"), "--tables", str(root / "stage" / "tables"),
+                        "--upstream-plain", "--upstream-verdicts", str(upstream), "--session", *map(str, sessions)],
+                       capture_output=True, text=True)
+    got = {Path(v["session"]).name: v for v in (json.loads(ln[10:]) for ln in p.stdout.splitlines() if ln.startswith("AGREEMENT "))}
     refused = f"refused: {STATEMENT}, a typed statement: a statement form the soundness proof does not cover"
-    assert not any(got[n]["accepted"] for n in want)
-    assert {n: got[n]["why"] == refused for n in want} == want, {n: got[n]["why"] for n in want}
+    assert p.returncode == 0 and all(got[n]["agree"] and "accepted" not in got[n] for n in want), p.stdout
+    assert {n: got[n]["check"] == "" and got[n]["refusal"] == refused for n in want} == want, {n: got[n]["check"] for n in want}
     assert sum(want.values()) == 3 and len(want) == 20
 
 

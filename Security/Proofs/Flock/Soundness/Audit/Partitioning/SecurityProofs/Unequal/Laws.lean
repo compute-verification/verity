@@ -2,8 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Audit.Partitioning.Model
 import Proofs.Flock.Soundness.Audit.Law
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Two laws for the free-compute proofs

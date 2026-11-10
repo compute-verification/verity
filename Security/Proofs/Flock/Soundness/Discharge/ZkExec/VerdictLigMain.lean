@@ -258,7 +258,7 @@ theorem zk_ligerito_accepts (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128
     rw [← Array.length_toList, hlane1]
     simp [consumed_length]
   have hini : lane.1.toList.map gOf = (consumed t₉.rounds t₉.k (t₉.k + sch.k0)).map
-      fun c => execArith.ofLimbs (fOf c[0]!) (fOf c[1]!) := by
+      fun c => execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!) := by
     rw [hlane1]
     simp only [List.nil_append, List.map_map]
     refine List.map_congr_left fun c _ => ?_

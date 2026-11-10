@@ -14,6 +14,7 @@ public import Flock.CoinTree
 public import Flock.Hash
 public import Flock.Hm96
 public import Lms.Verify
+public import Properties.Verity.Sha512
 
 /-!
 # Soundness as a causal game at a composite's compiled verifier, and each subprotocol's target
@@ -27,7 +28,7 @@ the five that decide a period are one per `Accounting.Audit` (`Subprotocol.ofAud
 
 | subprotocol | `Audit` | onsite's compiled check | remote's compiled check |
 | --- | --- | --- | --- |
-| sampled proofs | `.sampled` | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit or the recursive audit, as its params' `form` names it; one-stage v1 refused) | the same |
+| SPOT | `.sampled` | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit; one-stage v1 and the recursive audit refused) | the same |
 | PoUW | `.pouw` | `PouwCheck.Period.protocol` (its period credit) | the same |
 | the inference-only policy | | `NciCheck.Protocol.protocol` (`verity/inference-only/v0`) | the same |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` | |
@@ -96,7 +97,7 @@ The statement's form is the causal game, the committed files, one fixed extracto
 * **PoUW counts gates** of the committed circuit the play computed after their window's coin, over the period's windows
   (`computed`), with no pricing.
 
-Each subprotocol's target (`SampledProofsSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
+Each subprotocol's target (`SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
 `NetworkCertifierSound`, `WipeSound`) is `Target k a`: at every `θ`, `F`, `c` and strategy, the probability that `a`'s
 verdict at `k` accepts while its claim fails is at most its error there. `Verity.Soundness` and `Verity.RemoteSoundness`
 (`Properties.Verity.Soundness`) compose them, onsite's seven and remote's three.
@@ -360,7 +361,7 @@ def treeCoins (spec : Flock.CoinTree.Spec) : ℕ := spec.streams.size * 2 ^ spec
 
 /-- **The specs the device samples a coin tree of**: a coin or more a round, and at most `maxTreeCoins` coins. The
 deployed device refuses every other spec: `LiveChallenger.sample_tree`
-(`verity/core/protocols/sampled_proofs/challenger.py`) refuses a spec `tree_spec_reason` refuses, a round of no coin
+(`verity/core/protocols/spot/challenger.py`) refuses a spec `tree_spec_reason` refuses, a round of no coin
 among them, and then a tree of more than `MAX_TREE_COINS` coins. So a tree the device samples holds at most
 `maxTreeCoins` leaves: a leaf is a round, of a coin or more. -/
 def TreeSpecOk (spec : Flock.CoinTree.Spec) : Prop := 1 ≤ spec.block ∧ treeCoins spec ≤ maxTreeCoins
@@ -395,7 +396,7 @@ the device refuses (a family with no coin left, a `Hello` whose spec it doesn't 
 its log holds `maxTreeLines` coin-tree lines (`treeLines`), no `i`-th tree, or `OpenTree.next`'s refusal) ends its
 releases, as a refused frame ends the challenger's session, and so does the prover's close. The output is the device's
 log. The two caps are the deployed device's own refusals (`LiveChallenger.sample_tree` and `LiveChallenger._tree_line`
-in `verity/core/protocols/sampled_proofs/challenger.py`), so a play here samples at most `maxLeaves` leaves.
+in `verity/core/protocols/spot/challenger.py`), so a play here samples at most `maxLeaves` leaves.
 
 The challenger refuses further frames this device serves (a spec past its other limits, a nonce or a root of another
 length, a tree's root or key sampled twice), so each of its sessions, a refused frame read as the prover's close, is a
@@ -519,9 +520,6 @@ def closeThen {β : Type} (f : List Release → Game β) (t : Game.Strategy (f [
 def requestThen (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c a : ByteArray)
     (t : Game.Strategy (finish D θ F c a [])) : Game.Strategy (play fs D θ F c) :=
   ⟨a, closeThen (finish D θ F c a) t (frames fs) fs []⟩
-
-/-- SHA-512, the compiled one (`Flock.Sha512.hash`), as a 64-byte digest. -/
-def sha512 (m : Hash.Msg) : Hash.Digest := fun i => (Flock.Sha512.hash ⟨m.toArray⟩).data.getD i.val 0
 
 /-- SHA-512, the compiled one, as the message-to-message hash `Claims.Finder.Pr` and `ecr/sha-512`
 (`Claims.ExpectedCR`) read. -/
@@ -656,7 +654,7 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   check reads none -/
   coinsRead : Subprotocol → Sent → Option (List Release)
   extract : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
-    Game.Strategy (play (families θ) (signer θ) θ F c) → (read θ F).circuit.Transcript
+    Game.Strategy (play (families θ) (signer θ) θ F c) → (read θ F).circuit.Trace
   finder : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
     Game.Strategy (play (families θ) (signer θ) θ F c) → Claims.Finder
   cost : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
@@ -814,7 +812,7 @@ def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteAr
 /-- **The log subprotocol `a`'s check read is the device's whole log**: every release, in order, and no other
 (`coinsRead`; a check that reads none binds nothing). The device signs its log's line count and the lines' SHA-512 chain
 at its close (`close_session`), and v2 refuses a session whose signed close is missing or doesn't match its log
-(`SampledProofs.Challenger.sessionOf`), so any other log a check read is a forgery of the device's LMS signature, on a
+(`Spot.Challenger.sessionOf`), so any other log a check read is a forgery of the device's LMS signature, on a
 message the device didn't sign in the play (`Exchange.signed`), which `a`'s error bounds where its forger meets
 `Hash.Assumptions.LmsUnforgeable` (`Vocab.Unforgeable`, `Vocab.epsForge`), or a SHA-512 collision of the chain, which
 its finder outputs. -/
@@ -894,7 +892,7 @@ def Target (k : Verity.Registration.Composite) (a : Subprotocol) : Prop :=
     Game.prob (fun o => V.Verdict k a o ∧ ¬ V.Holds k θ F c σ a o) (V.game θ F c) σ ≤ V.error a θ F c σ
 
 /-- **Sampled proofs' target**: at most an `ε` share of the units unbound in the extractor's transcript. -/
-def SampledProofsSound (k : Verity.Registration.Composite) : Prop := V.Target k .sampled
+def SpotSound (k : Verity.Registration.Composite) : Prop := V.Target k .sampled
 
 /-- **PoUW's target**: at least `W` gates of the committed circuit computed after their window's coin. -/
 def PouwSound (k : Verity.Registration.Composite) : Prop := V.Target k .pouw

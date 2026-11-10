@@ -114,6 +114,31 @@ def test_a_registered_table_evaluates_both_ways_bit_for_bit(ib):
         assert sorted(set(reads)) == sorted({2 * (x & ((1 << ib) - 1)) + k for x in xs for k in (0, 1)} | {len(words) - 1})
 
 
+def test_a_narrow_lazy_reader_resolves_only_the_operands_it_reads(monkeypatch):
+    """A composite's batch of a lazy reader under the layout's wide fan-in (an expert GEMM's gather of one word from each of E
+    experts), on a registered table, resolves per read the operands its `evaluate_lazy` reads, not every leaf of the table: the
+    walk's parameter resolutions (`layout._arg_ref`) don't grow with the table."""
+    from verity.ml.circuits import layout
+
+    n, counts = 5, {}
+    for ib in (6, 10):
+        assert 2 << ib <= WIDE_FAN_IN
+        calls = [0]
+        resolve_arg = layout._arg_ref
+
+        def counted(*a, _f=resolve_arg, _c=calls):
+            _c[0] += 1
+            return _f(*a)
+
+        monkeypatch.setattr(layout, "_arg_ref", counted)
+        xs = [(7 * k + 1) % (1 << ib) for k in range(n)]
+        got = evaluate(bind(_uses(ib, n)), xs, _lazy(ib))
+        monkeypatch.setattr(layout, "_arg_ref", resolve_arg)
+        assert got == tuple((_entry(x) + x) & 0xFFFFFFFF for x in xs) + (_words(ib)[-1],)
+        counts[ib] = calls[0]
+    assert counts[6] == counts[10] <= 8 * n + 8, counts
+
+
 def test_a_read_past_either_end_is_the_flattened_lists():
     """`evaluate_lazy` indexes the operands as the flat list does: -1 is the last leaf, and one past the end raises IndexError."""
     def lazy_at(k):

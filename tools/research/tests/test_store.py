@@ -177,7 +177,7 @@ def test_put_fetch_roundtrip_file_and_tree(store, tmp_path, capsys):
 
 def test_a_file_appended_to_between_hashing_and_storing_stores_nothing(store, tmp_path, monkeypatch):
     """Custody hard-links a run's files and hashes them before the store copies each in: a writer still appending to one (a cancelled
-    check's suite, 6 Oct) left a blob whose bytes weren't its name, and R2 then held those bytes under that key for good."""
+    check's suite) would leave a blob whose bytes aren't its name, and R2 would hold those bytes under that key for good."""
     from research.store import local
 
     tree = _tree(tmp_path / "tree")
@@ -1440,7 +1440,7 @@ def test_s3remote_refuses_oversize_and_conflicts(monkeypatch, tmp_path):
 
 def test_catalog_keeps_shipped_tables_positional_for_older_writers(tmp_path):
     """The catalog is shared by worktrees on older code that insert `replicas` positionally with four values.  A catalog that
-    already grew the 5th column (`verified`, shipped 2026-09-22) is migrated back: the column's data moves to `replica_checks`,
+    already grew the 5th column (`verified`) is migrated back: the column's data moves to `replica_checks`,
     the table returns to four columns, and both an old-style positional insert and the new `set_replica(verified=)` work."""
     import sqlite3
 
@@ -1468,7 +1468,7 @@ def test_catalog_keeps_shipped_tables_positional_for_older_writers(tmp_path):
 
 def test_index_artifact_holds_the_write_lock_before_it_reads(tmp_path):
     """Two publishes into one machine's catalog: a writer that reads first and then asks to write cannot wait for the other (SQLite
-    skips the busy timeout there, as waiting could deadlock) and failed "database is locked" at once (node 1, 2026-10-01).  Another
+    skips the busy timeout there, as waiting could deadlock) and fails "database is locked" at once.  Another
     writer that tries to take the lock while index_artifact reads must find it held; with busy_timeout 0 nothing here waits."""
     import sqlite3
 

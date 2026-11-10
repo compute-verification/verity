@@ -31,7 +31,7 @@ at it (`PeriodTailMax`).
 * `CircuitWorkMonitoringPeriod`: (L), the circuit's work on live tiles, over the period's accepted prefix. Proved
   (`Proofs.Accounting.ComposeMonitoringPeriod`) from `CircuitWork`'s lemmas, not from its conclusion (a per-window tail at `δ`
   can't be averaged into `ε/n`): `ServiceBudget` per window at the window's detected live weights, `PeriodBudget`,
-  `PeriodTailMax` once at `t = ln(1/δ_s)`, `DrawnRightOff` at `n` rounds, the period layer's `Covers` on the credited
+  `PeriodTailMax` once at `t = ln(1/δ_s)`, `SampledRightOff` at `n` rounds, the period layer's `Covers` on the credited
   windows' live tiles and `WriterReads` (`PeriodCoversStmt`, `ServiceCovers`' argument with a window index, proved as
   `periodCovers` in `Proofs.Accounting.ComposeMonitoringPeriod.Covers`) and `UnitFixed`'s sums.
 * `CircuitCreditPeriod`: (L)'s credit in live words, `(1 − ε(j))₊` of the accepted prefix's live words with `ε` at the
@@ -131,7 +131,7 @@ one period, and one period open at a time, the next committed only after the las
 windows count those windows twice, and a prover that commits `P` overlapping periods and claims whichever is accepted
 pays `P·δ_s`, not `δ_s`. A record that credits each window on its own, with nothing closing a stream at its first
 refused window, is dropping failed windows (*Liveness*, below). The challenger's `order_reason`
-(`SampledProofs.Challenger.orderReason`) checks one family of an epoch's coins: coin `i` opened once, after the
+(`Spot.Challenger.orderReason`) checks one family of an epoch's coins: coin `i` opened once, after the
 `i`-th recorded root, and every recorded root's coin opened. That is the order within a window. Run over one family
 holding every window's round coins and sample in order, with `n` and the circuit in the epoch's commitment, it is the
 period's check.

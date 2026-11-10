@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pace circuits' Commits back onto node 1 after the disk hold (circuits, Slack 1790811206.136429, 4:33 PM PDT).
+"""Pace circuits' Commits back onto node 1 after the disk hold.
 
 Every tick: circuits' Commit workloads in deployments-gpu (items vllm-epoch-run/* and n2-build/*) that this controller didn't
 release stay deactivated (spec.active=false), new arrivals included. It reactivates them in circuits' order while
@@ -10,12 +10,12 @@ release stay deactivated (spec.active=false), new arrivals included. It reactiva
     at most CAP_GB (2000), recomputed every tick; 150 GB once the disk has reached 78%. A model's estimate is learned from its
     finished bundles (the largest GB per batch x tokens seen, x1.25; bundle-sizes.json). Until then it is infra's 120 GB x batch/8 x (input + output tokens)/1152
     for Phi-3-mini, scaled by the model's hidden size x layers against Phi-3-mini's and at least 10 GB (it stays above every bundle
-    measured on Sep 30: Phi-3-mini, Mistral-7B, TinyLlama, Llama-3.2-1B, Qwen2.5-0.5B and -1.5B),
+    measured for Phi-3-mini, Mistral-7B, TinyLlama, Llama-3.2-1B, Qwen2.5-0.5B and -1.5B),
   - a model the pacer has no size for (none learned, and not in the formula's table, so the formula guesses it as Phi-3-mini:
-    on 2 Oct that guess ran 1.3-6x low for qwen25-3b, yi15-6b and gemma2-9b, and node 1's disk went from 61% to 80% in 26 min)
+    that guess runs up to 6x low, for qwen25-3b, yi15-6b and gemma2-9b, enough to fill node 1's disk in minutes)
     has at most one Commit unfinished until one has succeeded and taught its size; while that one is admitted the LocalQueue
     stays held, so a second can't be admitted the moment it arrives,
-  - node 1's /workspace is under DISK_PAUSE_PCT (80, as df reports it): at or over it nothing is released (infra, 4:46 PM PDT).
+  - node 1's /workspace is under DISK_PAUSE_PCT (80, as df reports it): at or over it nothing is released.
 Rows circuits keeps held (batch 64, batch 16+ of 7B+ or MoE models, Gemma-2 at batch 16+ with 1024 input tokens, and the named ones) are never reactivated. It evicts nothing
 that Kueue has admitted, and deletes nothing. Since Kueue admits a leased Commit before a tick can hold it, the pacer holds
 the deployments-gpu LocalQueue itself (stopPolicy Hold) unless the next Commit's projected bundle fits under the cap, and
@@ -48,7 +48,7 @@ BOOST_UNTIL, BOOST_INFLIGHT, BOOST_BIG = 1790866200, 8, 6   # circuits, 6:22 AM 
 def limits():
     return (BOOST_INFLIGHT, BOOST_BIG) if time.time() < BOOST_UNTIL else (MAX_INFLIGHT, MAX_BIG)
 CAP_GB, CAP_LOW_GB, CAP_DROP_PCT = 2000, 150, 78  # the 78% drop latch and the 80% pause stay the guard
-CAP_ROOM_PCT = 75   # root, 6:31 PM PDT Oct 1: the cap follows the disk (was a fixed 1 TB, top-level 7:24 PM PDT Sep 30); 3 points under the latch
+CAP_ROOM_PCT = 75   # the cap follows the disk, 3 points under the latch
 ROOT = Path(os.environ.get("VY_PACER_DIR", str(Path.home() / "commit-release")))
 NO_RELEASE = ROOT / "no-release"   # while it exists, nothing is released (new arrivals still wait deactivated)
 CAP_LATCH = ROOT / "cap-150"  # the drop is a latch: delete this file to go back to CAP_GB
@@ -200,10 +200,9 @@ def sized(row):
 
 
 def estimate_gb(row):
-    """A Commit's bundle, GB: none for a TP row, whose Commit replays in its own process and writes no replay bundle (none of
-    node 1's 72 TP2 rows had one on Oct 3, and cov-gm359's qwen3-14b held the queue as a model with no size); else from the
-    largest bundle of its model a succeeded Commit wrote (learn()) with LEARN_MARGIN, else infra's formula scaled from
-    Phi-3-mini, which runs 4-9x over the grid's small models (Oct 1: 51 and 107 GB against 480)."""
+    """A Commit's bundle, GB: none for a TP row, whose Commit replays in its own process and writes no replay bundle (so a TP
+    model never holds the queue as a model with no size); else from the largest bundle of its model a succeeded Commit wrote
+    (learn()) with LEARN_MARGIN, else infra's formula scaled from Phi-3-mini, which runs 4-9x over the grid's small models."""
     if tp(row) > 1:
         return 0.0
     rate = learned().get(model(row))

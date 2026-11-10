@@ -1,4 +1,4 @@
-"""H1's coins from the proof system's challenger on its auditor host (`verity.core.protocols.sampled_proofs.remote`), and the
+"""H1's coins from the proof system's challenger on its auditor host (`verity.core.protocols.spot.remote`), and the
 verifier's check that a served window's coins are that challenger's.
 
 * **Serving** (`pouw_h1_window`): a window takes its salt, round and sampling coins from one session of the auditor host's
@@ -90,9 +90,9 @@ from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import salt_of
 from verity.core.protocols.pouw.protocol import DomainError
-from verity.core.protocols.sampled_proofs import challenger as Ch
-from verity.core.protocols.sampled_proofs import remote
-from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, CoinError, LiveCommitment, LiveOpening,
+from verity.core.protocols.spot import challenger as Ch
+from verity.core.protocols.spot import remote
+from verity.core.protocols.spot.challenger import (ChallengerKey, CoinError, LiveCommitment, LiveOpening,
                                                              extends, ledger_head, live_reason, pinned_session,
                                                              session_named)
 

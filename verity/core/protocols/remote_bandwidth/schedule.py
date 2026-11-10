@@ -3,7 +3,7 @@ requires before it credits an appended chunk (`audit.AuditRun.scheduled`).  Of r
 `lean/RemoteAudit/Schedule.lean`; this is held to it by the difftest (`lean/tests/test_schedule.py`, refusals compared
 word for word).
 
-Why.  The stacked guarantee (`Accounting.Guarantees.DeclaredCircuitRequirement`) lets a pass's layout follow the codec
+Why.  The stacked guarantee (`Accounting.Guarantees.RegisteredCircuitRequirement`) lets a pass's layout follow the codec
 and the append coins through an `a`-bit summary (`Accounting.Assumptions.SteeredLayout`) and charges `2^a` for it.
 Every layout satisfies that premise at `a` = the coins' own bits, so `a` means something only once the layout is a fixed
 public function of something whose bits are bounded whatever the coins (`Accounting.ScheduleDeterministic`).  Here that

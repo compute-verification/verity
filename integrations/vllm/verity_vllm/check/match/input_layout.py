@@ -21,7 +21,7 @@ def weights_input_nodes(B: "SEQ.RootView", n_request_params: int, n_seed_params:
     Refuses by name a RootView whose Input nodes cannot hold the header's parameters or whose request-owned Inputs are not the leading ones.
     A tensor-parallel rank fold adds ONE `peers_<i>` Record per request (homogeneous bf16 -> one Input node each) after the seeds
     and before the weights: `n_peer_params` of them, request-owned.
-    A profile's witness parameters (`schedule_<i>`, one Array of 32-bit words per request and name: `compare.RootView.witness_index`) follow
+    A profile's witness parameters (`<name>_<i>`, one Array of 32-bit words per request and name: `compare.RootView.witness_index`) follow
     the peers, one Input node each: `n_witness_params` of them, request-owned.
     A `registered_values` fold's supplied Input nodes (`run_<i>`, `values`: `compare.RootView.supplied_fields`) sit between the witnesses
     and the weights and are neither: they are left out of both counts, and the weights follow them."""

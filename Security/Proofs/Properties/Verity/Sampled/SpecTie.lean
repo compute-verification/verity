@@ -14,7 +14,7 @@ import all Init.Data.Ord.String
 
 `flock-verify --zk` sets the session up on its keyed coin tree (`Live.coinSpec`, `roundsLog` 9), and `Record.decode`'s
 S2 holds the record's `coin_tree.spec` to it (`CoinTree.checkRecord`, by canonical text). v2's
-`SampledProofs.Challenger.sessionTreeReason` holds the record's `coin_tree` to the tree the release log shows sampled
+`Spot.Challenger.sessionTreeReason` holds the record's `coin_tree` to the tree the release log shows sampled
 under its root (`jeq`, by canonical text), and v2's read gives that tree's `Hello` the spec its line shows. So the
 device's log samples the record's tree with the session's spec, and the device serves no opening past a stream's
 `2^roundsLog` rounds (`LogServed`), so the session's layout has a slot for each round a stream of it opens.
@@ -40,7 +40,7 @@ device's log samples the record's tree with the session's spec, and the device s
 namespace Verity.Sampled
 
 open Lean (Json)
-open SampledProofs SampledProofs.Challenger
+open Spot Spot.Challenger
 open FlockDeploy (JsonEquiv)
 open FlockSoundness.Discharge
 open FlockSoundness.Refine (ebind_ok throw_ne_ok throw_bind')

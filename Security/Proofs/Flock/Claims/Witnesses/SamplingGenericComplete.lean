@@ -66,6 +66,8 @@ def rejL (Coin : Type) : Compiled Coin (twoA Coin) where
   iroots _ _ _ := []
   reveal _ _ _ _ := []
   openCalls _ := 0
+  nOut _ := 2
+  nIn _ := 2
   Tape := Unit
   P _ := silentP
   δc _ _ := 0

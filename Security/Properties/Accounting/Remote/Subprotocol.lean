@@ -70,17 +70,17 @@ def Plays (node : Node) (rec : Record) (a b e : ByteArray) : Prop :=
     ∃ pub prof, RemoteAudit.Protocol.check p node.reg ev = .accept pub prof
 
 /-- **The memory line of record, link-charged, at the bandwidth component.** `LineHeld`'s node, trace, records and
-premises verbatim, one coin for each of the session's draws (`Node.draws`), and the bytes the component is given at
+premises verbatim, one coin for each of the session's draws (`Node.samples`), and the bytes the component is given at
 each outcome (`a`, `b`, `e`: the parameters, the commitment and the evidence): the probability that the component
 accepts bytes that play the record of `ω` on the node (`Plays`) while a stretch of the record's link-charged line
 credits more than the trace held over its span is at most `δs + (δ + Σ_c s / 2^64 + Σ_c adv_c + Σ_c hide_c + bind)`,
 `LineHeld`'s bound. -/
 def LineHeldAtSubprotocol : Prop :=
-  ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.draws → Pous.Bits κ → Blocks receiptMax)
-    (rest : Coins node.draws κ X → Fin node.draws → ℕ → ℕ) (recs : Cm → Coins node.draws κ X → Record)
-    (correct : Cm → Fin node.draws → Coins node.draws κ X → Finset ℕ) (com : Coins node.draws κ X → Cm)
-    (T : Trace (Coins node.draws κ X)) (R : Receipts node.draws κ X) (δs : ℝ)
-    (a b e : Coins node.draws κ X → ByteArray),
+  ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
+    (rest : Coins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → Coins node.samples κ X → Record)
+    (correct : Cm → Fin node.samples → Coins node.samples κ X → Finset ℕ) (com : Coins node.samples κ X → Cm)
+    (T : Trace (Coins node.samples κ X)) (R : Receipts node.samples κ X) (δs : ℝ)
+    (a b e : Coins node.samples κ X → ByteArray),
     let r := played recs com
     let F := recordCommitted node recs correct
     ∀ O : Outside (ofRecord T node r),
@@ -91,7 +91,7 @@ def LineHeldAtSubprotocol : Prop :=
     SketchBoundAt (ofRecord T node r) O δs → NoOutsideCompute (ofRecord T node r) O → (∀ c, Live (F.view c)) →
     Refused (F.play com) prf rest (ofRecord T node r) R → Counted (F.play com) (ofRecord T node r) →
     Pouw.pr (fun ω => Plays node (r ω) (a ω) (b ω) (e ω) ∧ ¬ HeldAt (ofRecord T node r) ω node (r ω) 1) ≤
-      δs + ((node.delta : ℝ) + ((∑ _t : Fin node.draws, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
+      δs + ((node.delta : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
           ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
         (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)

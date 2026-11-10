@@ -17,9 +17,8 @@
 Without --apply every step says what it would do and changes nothing. A step with --apply stops at its first failure. Each
 step's --back undoes it; what a step moves aside goes to BACKUP (root's), never deleted.
 
-The allowlist is ALLOW below, one Rule per command form with the evidence for it (a count in the nodes' sudo journal on
-2026-10-07, over the 3 days before, or the repository file that runs it); EXCLUDED says why each other form research ran is
-not in it. The sudoers step installs it beside a fallback that grants research ALL again until its `# expires` line, which
+The allowlist is ALLOW below, one Rule per command form with the evidence for it (a count in the nodes' sudo journal, or the
+repository file that runs it); EXCLUDED says why each other form research ran is not in it. The sudoers step installs it beside a fallback that grants research ALL again until its `# expires` line, which
 vy-sudo-fallback-expire.timer (root, every 10 min and at boot) enforces: past it, or without a readable one, the file goes.
 """
 from __future__ import annotations

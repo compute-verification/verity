@@ -31,14 +31,19 @@ the wire.
 
 ``--admit tick`` serves every trace of the run under the certified tick (`verity_vllm.pipeline.serve_admit`, its
 ``tick``): the server loads `tick_plugin.register` (`verity_vllm.pipeline.tick_plugin`) as a general plugin beside the
-tracer, configured by ``VERITY_TICK``, and `tick_plugin.TickFeed` as its outermost middleware, and the client stands in
-for the network certifier, which isn't in front of the server (`StandIn`): it numbers the requests in the order it sends
-them, puts each in the bucket of its send (`TICK_BUCKET_MS` buckets from the trace's origin), sends both in the release
-headers, and streams the watermark's line for each bucket as it closes. τ_sat and τ_free are the engine class's: given
+tracer, configured by ``VERITY_TICK``, and `tick_plugin.TickFeed` as its outermost middleware, which writes the release
+headers and the watermark the server gets to its feed (``raw/tick-feed.jsonl``). In a `WARDEN` trace they come from the
+network certifier in front of the server: it numbers each request it releases, in its release order, with the bucket of
+its release, and streams the watermark to the server (`warden_serve.py serve --watermark`), its bucket τ_b
+(`tick_for`). In every other trace the client stands in for the network certifier, which isn't in front of the server
+(`StandIn`): it numbers the requests in the order it sends them, puts each in the bucket of its send (`TICK_BUCKET_MS`
+buckets from the trace's origin), sends both in the release headers, and streams the watermark's line for each bucket as
+it closes. The hostile schedulers' traces don't take the tick. τ_sat and τ_free are the engine class's: given
 (``--tick-ms``), or calibrated on a trace of the same server on the same host (``--tick-from``, `tick_from`, which `tick`
 prints): `TICK_SAT` and `TICK_FREE` times its mean busy cycle (`summary.busy_cycle`). The trace's meta.json records them
-with the origin and the run (``tick``), and requests.jsonl each request's ``release`` and ``bucket``, which
-`replay.read_corpus_trace` reads.
+with the origin, the run, the watermark's outcome and where the releases came from (``tick``), and requests.jsonl each
+request's ``release`` and ``bucket`` (a `WARDEN` trace's as the server got them, checked against the network certifier's
+log: `summary.feed_releases`), which `replay.read_corpus_trace` reads.
 
 Every model runs eager under the integration's engine switches (`verity_vllm.engine.env.ENGINE`) but the in-process engine
 core, which the OpenAI server does not have: Model Runner V2 and, but for GLM-5.3, batch invariance
@@ -134,7 +139,12 @@ TRACES |= {name: (["--enable-chunked-prefill", "--max-num-batched-tokens", "8192
 #: active warden (`verity.core.protocols.certifier.warden`, run by `benchmarks/network_traces/warden_serve.py serve`), in
 #: cells. A late egress cell fails its connection closed and vLLM aborts the request, so D, from the warden's egress base
 #: (`egress_base`), covers the slowest request's send to last token without the warden (heavy 10.7 s, small KV 55.7 s,
-#: async greedy).
+#: async greedy). Under ``--admit tick`` it is kept, so that a tick trace's network certifier has an arrival trace's
+#: schedule: the gate adds to a request at most a bucket and its clock's lag behind the engine (τ_sat below a saturated
+#: step's time) before its admission, and stretches each engine step of its life to at most τ_free (`serve_admit`),
+#: which on these traces' busy cycles is estimated, not measured, to stay inside D's headroom over those figures. A cell
+#: D doesn't cover fails its connection late, which the summary counts (`summary.warden_summary`'s ``failed``), so it
+#: can't pass unseen.
 WARDEN = {"warden-heavy": ("heavy", 300), "warden-smallkv": ("smallkv", 1200)}
 WARDEN_WHERE = "warden beside the server, not on the auditor host"
 #: a stall of the client's event loop it records (`drive_warden`), in seconds: a fifth of a bucket
@@ -142,9 +152,10 @@ LOOP_LAG_S = 0.02
 #: the descriptors the client holds beside its connections' (the server's and warden's pipes, the loop's, the logs')
 FD_MARGIN = 256
 #: the warden's schedule less D: lanes and queue hold every request of a 1000-request plan at once, so the warden never
-#: throttles the load nor refuses; one 1 KiB cell a bucket each way keeps the padding of a thousand connections' D in memory
+#: throttles the load nor refuses; one 1 KiB cell a bucket each way keeps the padding of a thousand connections' D in
+#: memory; and the bytes egress form, as vLLM streams its text completions (`warden`'s "The egress form")
 WARDEN_SCHEDULE = {"cell_bytes": 1024, "slots": 1, "bucket_ms": 100, "lanes": 1024, "queue": 1024, "window": 600,
-                   "ingress_cells": 64, "ingress_buckets": 50, "egress_cells": 4096}
+                   "ingress_cells": 64, "ingress_buckets": 50, "egress_cells": 4096, "egress": "bytes"}
 #: seconds the warden runs past the last arrival's D, for the last responses' egress cells
 WARDEN_TAIL_S = 60.0
 #: seconds the trace waits for the warden past its last window: a spawned publisher may still be committing the last
@@ -159,7 +170,8 @@ TICK_BUCKET_MS = 100
 TICK_SAT, TICK_FREE = 0.9, 1.1
 #: how long the gate waits on a released request that hasn't reached the engine, or on a silent watermark, before it goes on
 TICK_HOLD_MS = 5000
-#: `tick_plugin.TickFeed`, the server's side of the stand-in certifier
+#: `tick_plugin.TickFeed`, the server's side of the release headers and the watermark (the network certifier's or
+#: `StandIn`'s)
 TICK_MIDDLEWARE = "verity_vllm.pipeline.tick_plugin.TickFeed"
 
 
@@ -672,11 +684,12 @@ def egress_base(warden) -> str:
 
 
 def start_warden(d: Path, port: int, delay: int, span_s: float, key: Path, env: dict,
-                 cpus: list[int] | None = None) -> tuple[subprocess.Popen, dict]:
+                 cpus: list[int] | None = None, watermark: bool = False) -> tuple[subprocess.Popen, dict]:
     """`warden_serve.py serve` in front of the server at `port`, a process beside it on `cpus`, through `warden_probe.py`
     (its ticks, publishes and collections to d/warden/ticks.json), writing to d/warden/ (its log to serve.log) with a
-    fresh session and the LMS key in `key`, for enough windows to cover the last arrival's D and `WARDEN_TAIL_S`. Returns
-    the process and its deployment record."""
+    fresh session and the LMS key in `key`, for enough windows to cover the last arrival's D and `WARDEN_TAIL_S`; with
+    `watermark`, also streaming the watermark to the server (``--watermark``). Returns the process and its deployment
+    record."""
     params = WARDEN_SCHEDULE | {"delay": delay}
     tau = params["bucket_ms"] / 1000
     windows = math.ceil((span_s + delay * tau + WARDEN_TAIL_S) / (params["window"] * tau))
@@ -684,7 +697,7 @@ def start_warden(d: Path, port: int, delay: int, span_s: float, key: Path, env: 
     w.mkdir(parents=True, exist_ok=True)
     subprocess.run([sys.executable, str(ROOT / "benchmarks/network_traces/warden_serve.py"), "keys", "--dir", str(key)],
                    check=True, stdout=subprocess.DEVNULL, env=env)
-    flags = [x for k, v in params.items() for x in (f"--{k.replace('_', '-')}", str(v))]
+    flags = [x for k, v in params.items() for x in (f"--{k.replace('_', '-')}", str(v))] + ["--watermark"] * watermark
     with open(w / "serve.log", "w") as log:
         proc = subprocess.Popen([*taskset(cpus), sys.executable, str(HERE / "warden_probe.py"), "serve", "--upstream",
                                  f"127.0.0.1:{port}", "--listen", "127.0.0.1:0", "--out", str(w), "--key", str(key),
@@ -735,6 +748,20 @@ def tick_from(d: Path) -> dict:
         raise SystemExit(f"{d}: no busy cycle to calibrate the tick on (is the trace summarized?)")
     return {"bucket_us": TICK_BUCKET_MS * 1000, "sat_us": round(TICK_SAT * c["mean_us"]),
             "free_us": round(TICK_FREE * c["mean_us"]), "calibrated_from": {"trace": str(d), **c}}
+
+
+def tick_for(traces: list[str], trace: str | None, given_ms: str | None) -> dict:
+    """``--admit tick``'s constants for a run of `traces` (`tick_args`). Refused for the hostile schedulers' traces, and
+    for a `WARDEN` trace unless its network certifier's bucket is τ_b, since that certifier's release buckets and
+    watermark lines are then the tick's buckets."""
+    if bad := [n for n in traces if n in HOSTILE]:
+        raise SystemExit(f"--admit tick doesn't serve the hostile schedulers' traces {bad}")
+    tick = tick_args(trace, given_ms)
+    if (ws := [n for n in traces if n in WARDEN]) and WARDEN_SCHEDULE["bucket_ms"] * 1000 != tick["bucket_us"]:
+        raise SystemExit(f"--admit tick: the network certifier's bucket, {WARDEN_SCHEDULE['bucket_ms']} ms "
+                         f"(WARDEN_SCHEDULE), isn't τ_b, {tick['bucket_us']} µs, so {ws} would number releases in buckets "
+                         "the tick doesn't count")
+    return tick
 
 
 def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: list[dict], site: Path,
@@ -790,13 +817,16 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
                                 "where": "the client's stand-in network certifier (corpus.StandIn)"}
         else:
             wenv = dict(os.environ, PYTHONPATH=os.pathsep.join([str(ROOT), *filter(None, [os.environ.get("PYTHONPATH")])]))
-            warden, dep = start_warden(d, port, delay, arr[-1], key, wenv, cpus and cpus["warden"])
+            warden, dep = start_warden(d, port, delay, arr[-1], key, wenv, cpus and cpus["warden"], watermark=bool(tick))
             end = dep["origin_unix"] + dep["windows"] * dep["params"]["window"] * dep["params"]["bucket_ms"] / 1000
             meta["warden"] = {"where": WARDEN_WHERE, "egress_base": egress_base(warden_modules()[0]), "params": dep["params"],
                               "digest": dep["digest"], "windows": dep["windows"], "origin_unix": dep["origin_unix"],
                               "listen": dep["listen"], "slack_s": dep.get("slack"),
                               "key": "a scratch LMS key made for this trace and deleted after it (its public half is in "
                                      "warden/deployment.json)"}
+            if tick:
+                meta["tick"] = {**tick, "hold_ms": TICK_HOLD_MS, "origin_unix": dep["origin_unix"], "run": dep["run_id"],
+                                "where": f"the network certifier ({WARDEN_WHERE}; warden_serve.py serve --watermark)"}
             pid = d / "warden" / "publisher.pid"
             sampler = subprocess.Popen([*taskset(cpus and cpus["server"]), sys.executable, str(HERE / "host_sample.py"),
                                         str(d / "warden" / "host.jsonl"), ",".join(map(str, sorted(os.sched_getaffinity(0)))),
@@ -811,6 +841,10 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
             except subprocess.TimeoutExpired:
                 meta["warden"]["rc"] = f"still running {WARDEN_END_S:g} s past its last window"
             meta["warden"]["ended_past_last_window_s"] = round(time.time() - end, 3)
+            if tick:
+                log = d / "warden" / "warden.json"
+                meta["tick"]["watermark"] = (json.loads(log.read_text()).get("watermark") if log.exists() else
+                                             {"error": "the warden wrote no warden.json"})
     finally:
         if warden is not None and warden.poll() is None:
             warden.terminate()
@@ -824,7 +858,7 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
         meta["server_rc"] = server.returncode
         (d / "meta.json").write_text(json.dumps(meta, indent=1))
     print(f"[corpus] {name}: done in {round(clock() - t)} s, unfinished {meta.get('unfinished')}, rc {server.returncode}"
-          + (f", watermark {meta['tick']['watermark']}" if "tick" in meta else ""), flush=True)
+          + (f", watermark {meta['tick'].get('watermark')}" if "tick" in meta else ""), flush=True)
     return meta
 
 
@@ -860,10 +894,7 @@ def run(args: argparse.Namespace) -> int:
         raise SystemExit(f"{args.model_id} has no rate for {missing}: give --rate")
     args.tick = None
     if args.admit == "tick":
-        if bad := [n for n in traces if n in WARDEN or n in HOSTILE]:
-            raise SystemExit(f"--admit tick serves through the client's stand-in network certifier, not the warden's or "
-                             f"the hostile schedulers' traces {bad}")
-        args.tick = tick_args(args.tick_from, args.tick_ms)
+        args.tick = tick_for(traces, args.tick_from, args.tick_ms)
         print(f"[corpus] the certified tick: {json.dumps(args.tick)}", flush=True)
     elif args.tick_from or args.tick_ms:
         raise SystemExit("--tick-from and --tick-ms go with --admit tick")

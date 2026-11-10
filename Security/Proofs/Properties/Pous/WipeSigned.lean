@@ -70,7 +70,7 @@ verdict accepted make it the streamed wipe's accepted session (`accepted_run`). 
 one the collision finder outputs (`collisionIn_finds`); a forgery is the forger's output.
 
 `wipeSigned_honest` is its honest lemma: at the deployed LMS parameters a key `Lms.keygen` derives signs the honest
-session at r20261026-094403-bb5f's parameters and clock readings, and the compiled check accepts it
+session at the wipe of record's parameters and clock readings, and the compiled check accepts it
 (`measured_accepts`, by LMS's correctness). `wipeSigned_nontrivial` is its nontrivial lemma: a session with a batch no
 record encodes, signed under the empty key, is no run of the idle challengers, and both adversaries output nothing
 there, since the run hashes nothing and the signature signs nothing; so a check that accepts it, as a verifier that
@@ -570,7 +570,7 @@ private theorem measured_batch (digest : Nat → ByteArray) (pk sig : ByteArray)
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> first | trivial | omega | simp | (intro h; subst h; omega)
 
 /-- **The compiled check accepts the measured honest wipe**: for every key `Lms.key` derives at S1's deployed LMS
-parameters and every digest of the batches' answers, the session at r20261026-094403-bb5f's parameters and clock
+parameters and every digest of the batches' answers, the session at the wipe of record's parameters and clock
 readings, each read taking the slowest round trip measured, signed at leaf 0 with `Lms.signAt` on its message, is
 accepted by the wipe's compiled check of a period that trusts that key. The signature verifies by LMS's correctness
 (`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`). -/
@@ -686,7 +686,7 @@ theorem wipeSigned : WipeSigned := by
 
 /-- **`WipeSigned`'s honest lemma**: its hypothesis holds at the honest deployed instance. A key `Lms.keygen` derives at
 S1's deployed LMS parameters (`Lms.deployed`, the one scheme `SCHEMES` accepts) signs the honest session at
-r20261026-094403-bb5f's parameters (`2^24` labels, `k = 2152` reads one at a time, 20 ms each) and clock readings (the
+the wipe of record's parameters (`2^24` labels, `k = 2152` reads one at a time, 20 ms each) and clock readings (the
 fill's 2.95 s, the first read revealed 7.6 ms after it, each read taking the slowest round trip measured, 1.40 ms),
 each read answered with its label, and the wipe's compiled check of the period that trusts that key accepts it. -/
 theorem wipeSigned_honest :

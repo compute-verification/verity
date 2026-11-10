@@ -26,7 +26,7 @@ namespace Flock.Bridge
 
 open FlockSoundness.Audit Claims.Sampling
 
-variable {C : FlockSoundness.Audit.Circuit} {κ : Fin C.N → Option Bool}
+variable {C : Verity.Boolean.Circuit} {κ : Fin C.N → Option Bool}
 
 /-- **A commitment of at most `unitClassMax` values has a size class**, which holds it. -/
 theorem unitClass_of_le {Cp : Prog} {u : List ℕ} (h : committed Cp u ≤ unitClassMax) :
@@ -44,7 +44,7 @@ theorem unitClass_of_le {Cp : Prog} {u : List ℕ} (h : committed Cp u ≤ unitC
 
 theorem lower_ne_input {g : Fin C.N} (hni : (C.op g).isInput = false) : ∀ x ∈ lower C κ g, x ≠ .input := by
   unfold lower
-  cases h : C.op g <;> simp_all [Op.isInput]
+  cases h : C.op g <;> simp_all [Verity.Boolean.Op.isInput]
 
 /-- A unit's lowered gates are not inputs: only an input gate lowers to one, and no unit holds an input. -/
 theorem progOf_ne_input_of_unit {n : ℕ} {P : Partition C n} {u : Fin n} {p : ℕ} (hp : p ∈ unitGates P u) :

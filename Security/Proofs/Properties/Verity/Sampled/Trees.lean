@@ -5,7 +5,7 @@ public import Proofs.Properties.Verity.Sampled
 /-!
 # A `--zk` session's record holds the coins its tree's log shows opened
 
-`SampledProofs.Challenger.sessionTreeReason` accepts a session's record (`none`), at any tables, only where the record's
+`Spot.Challenger.sessionTreeReason` accepts a session's record (`none`), at any tables, only where the record's
 coin tree is one the release log shows sampled (`trees`, `coinTreesOf`'s) under the record's root, and each round the
 record gives coins of is one the log shows opened of that tree, with those coins' SHA-512 (`round_held`): its link's
 points as the session stream's round 0, and each stream's rounds. Its loops return at their first reason, so where a
@@ -17,7 +17,7 @@ loop returns none, each of its steps yielded (`forIn_held`).
 namespace Verity.Sampled.Trees
 
 open Lean (Json)
-open SampledProofs SampledProofs.Challenger
+open Spot Spot.Challenger
 
 theorem strIs {j : Json} {s : String} (h : jsonStrIs j s = true) : j = .str s := by
   cases j <;> simp_all [jsonStrIs]
@@ -372,15 +372,15 @@ theorem bind_ok {ε α β : Type} {x : Except ε α} {g : α → Except ε β} {
 
 /-- **v2's acceptance holds its sessions to the challenger's trees**: an audit `checkBlobs` accepts read the trees
 (`treesOf`), and its sessions' records hold to them on the verifier's own files (`treesHeld`). -/
-theorem accepted_trees {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment}
-    {e : SampledProofs.OneStageZk.Evidence} {bs : Core.Blobs} {pub : SampledProofs.OneStage.Public}
-    {prof : Core.Integrity} (h : SampledProofs.OneStageZk.checkBlobs p c e bs = .accept pub prof) :
-    ∃ ts, SampledProofs.OneStageZk.treesOf p.base e.base = .ok ts ∧
-      SampledProofs.OneStageZk.treesHeld p.own ts e bs = .ok () := by
-  unfold SampledProofs.OneStageZk.checkBlobs Core.atCoins at h
+theorem accepted_trees {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment}
+    {e : Spot.OneStageZk.Evidence} {bs : Core.Blobs} {pub : Spot.OneStage.Public}
+    {prof : Core.Integrity} (h : Spot.OneStageZk.checkBlobs p c e bs = .accept pub prof) :
+    ∃ ts, Spot.OneStageZk.treesOf p.base e.base = .ok ts ∧
+      Spot.OneStageZk.treesHeld p.own ts e bs = .ok () := by
+  unfold Spot.OneStageZk.checkBlobs Core.atCoins at h
   split at h
   case h_2 => cases h
-  unfold SampledProofs.OneStageZk.checkBlobsAt at h
+  unfold Spot.OneStageZk.checkBlobsAt at h
   dsimp only at h
   split at h
   case h_1 => cases h
@@ -409,18 +409,18 @@ theorem get_ok {bs : Core.Blobs} {d w : String} {b : ByteArray} (w' : String) (h
 /-- **Each record v2's evidence names holds to the trees where `treesHeld` accepts**: the record a session's blob
 parses to through `Flock.JsonParse.parse`, as `Verity.Sampled.recordOn` reads it (`null` where it doesn't parse),
 is one `sessionTreeReason` accepts against them, at the tables `treesHeld` reads for its session. -/
-theorem records_held {p : SampledProofs.OneStageZk.Own} {ts : Array LoggedTree} {e : SampledProofs.OneStageZk.Evidence}
-    {bs : Core.Blobs} (h : SampledProofs.OneStageZk.treesHeld p ts e bs = .ok ()) {r} (hr : r ∈ e.sessions)
+theorem records_held {p : Spot.OneStageZk.Own} {ts : Array LoggedTree} {e : Spot.OneStageZk.Evidence}
+    {bs : Core.Blobs} (h : Spot.OneStageZk.treesHeld p ts e bs = .ok ()) {r} (hr : r ∈ e.sessions)
     {w : String} {b : ByteArray} {str : String} {rec : Json} (hb : (bs.get r.record w).toOption = some b)
     (hs : String.fromUTF8? b = some str) (hp : (Flock.JsonParse.parse str).toOption.getD .null = rec) :
     ∃ tabs, sessionTreeReason ts tabs rec = none := by
-  unfold SampledProofs.OneStageZk.treesHeld at h
+  unfold Spot.OneStageZk.treesHeld at h
   dsimp only at h
   obtain ⟨named, hn, hrest⟩ := bind_ok h
   rw [← Array.forIn_toList] at hn
   have hI := forIn_inv (I := fun pre (named : Array (String × Array (String × Option Nat) × Json)) => ∀ r ∈ pre,
       ∀ w b str, (bs.get r.record w).toOption = some b → String.fromUTF8? b = some str →
-      (r.name, SampledProofs.OneStageZk.rootBTables p bs str, (Flock.JsonParse.parse str).toOption.getD .null) ∈
+      (r.name, Spot.OneStageZk.rootBTables p bs str, (Flock.JsonParse.parse str).toOption.getD .null) ∈
         named) ?_ e.sessions.toList [] #[] named (by simp) hn
   · have hsess : sessionsTreeReason ts named = none := by
       split at hrest
@@ -431,7 +431,7 @@ theorem records_held {p : SampledProofs.OneStageZk.Own} {ts : Array LoggedTree} 
       | some w => exact (hne w hw).elim
     have hmem := hI r (by simpa using hr) w b str hb hs
     rw [hp] at hmem
-    exact ⟨_, sessions_held hsess (r.name, SampledProofs.OneStageZk.rootBTables p bs str, rec) hmem⟩
+    exact ⟨_, sessions_held hsess (r.name, Spot.OneStageZk.rootBTables p bs str, rec) hmem⟩
   · intro pre x named' res hI' hres
     obtain ⟨b', hb', hres⟩ := bind_ok hres
     split at hres

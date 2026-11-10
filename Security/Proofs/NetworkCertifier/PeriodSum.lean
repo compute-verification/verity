@@ -58,7 +58,7 @@ open Claims Finset
 theorem Pr_exists_mem_le_sum {Ω ι : Type} [Fintype Ω] (T : Finset ι) (p : ι → Ω → Prop) :
     Pr (fun ω => ∃ w ∈ T, p w ω) ≤ ∑ w ∈ T, Pr (p w) := by
   classical
-  unfold Pr
+  unfold Pr Claims.prUniform
   rw [← Finset.sum_div]
   refine div_le_div_of_nonneg_right ?_ (by positivity)
   have hsub : (Finset.univ.filter fun ω => ∃ w ∈ T, p w ω) ⊆ T.biUnion fun w => Finset.univ.filter (p w) := by

@@ -14,7 +14,7 @@ Dsv4CompressorScore, Dsv4MlaCompressC4 / C128 at each position that completes a 
 FlashMlaGatherRow and FlashMlaPrefill of more over the window and compressed rows, Dsv4InvRopeQuantHead per head and the grouped o
 projection (ScaledMmFp8BlockGrouped); between sublayers the all-reduce and MhcFusedPostPre (MhcPostPreTf32 above 16 rows); the MoE
 block: the router GEMM, the shared expert (SiluMulClamp), the table route (GatherI32x, MoeRouterHash) below HASH_LAYERS and
-MoeRouterSqrtSoftplus from it on, MoeAlignRanks over the schedule's keys and MoeAlignBlocks, the Marlin expert GEMMs per pair,
+MoeRouterSqrtSoftplus from it on, MoeAlignRanks in pair-index order and MoeAlignBlocks, the Marlin expert GEMMs per pair,
 MoeSum and the shared expert's add; then MhcPost, HcHead, the final norm, the last row's logits, their all-gather and TokenSelect.
 The domain is one request's calls, the first opening every layer's history and each later one continuing it: a fact outside it
 raises `Unexpressible`, φ's when the decoder is made and a launch's (a ratio-4 position past the indexer's short path, a cuBLAS or
@@ -38,8 +38,8 @@ Shape = tuple[tuple[int, ...], int]
 
 
 class Net:
-    """One rank's decoder: the configuration, the weights record (`leaves`), the peers and schedule words a pass reads
-    (`peer_shapes`, `schedule_words`) and the target's selections the forward (`model`) reads."""
+    """One rank's decoder: the configuration, the weights record (`leaves`), the peers a pass reads (`peer_shapes`) and the target's
+    selections the forward (`model`) reads."""
 
     DOMAIN = ((8,), "eager", ("float8_e4m3fn",))
 
@@ -182,10 +182,6 @@ class Net:
         """A pass of r rows: the embedding's all-reduce, each layer's attention and MoE all-reduces, the sampled row's logits gather."""
         H = int(self.C["H"])
         return [(r, H)] * (1 + 2 * self.NL) + [(1, int(self.C["V"]))]
-
-    def schedule_words(self, r: int) -> int:
-        """A pass of r rows: each layer's MoE align reads one key per (row, slot) pair."""
-        return self.NL * r * int(self.C["TOPK"])
 
     def model(self, B: Builder, W: Coll, peers: _Peers) -> "_Model":
         return _Model(self, B, W, peers)
@@ -364,7 +360,7 @@ class _Model(dsa._Model):
 
     def moe(self, L: int, x: list[Refs], toks: list[Coll]) -> list[Refs]:
         """The MoE block over the rows x (`vllm_moe_router`, `vllm_marlin_moe`, op-major): the router logits, the shared expert, each
-        row's six experts and weights, the align over the pairs p = t * TOPK + k and their schedule keys, per pair the w13 GEMM, the
+        row's six experts and weights, the align over the pairs p = t * TOPK + k in pair-index order, per pair the w13 GEMM, the
         clamped SwiGLU and the weighted w2 GEMM; each row's sum of its TOPK rows, plus the shared expert's."""
         from verity_vllm.program.frontend.rules.vllm_marlin_moe import served_config
         from verity.ml.definitions.numerics.marlin_moe_rows import moe_block
@@ -389,7 +385,7 @@ class _Model(dsa._Model):
             wts, ids = [t[0].refs for t in top], [t[1].refs for t in top]
         ids, wts, BM = concat(ids), concat(wts), moe_block(M, TOPK, E)
         pairs = concat([self.call(self.k("const", W=32, BITS=p)).refs for p in range(P)])
-        rank = self.call(self.k("marlin_moe_rank", E=E, P=P, BM=BM), ids, self.peers.key(P), pairs)
+        rank = self.call(self.k("marlin_moe_rank", E=E, P=P, BM=BM), ids, pairs, pairs)
         sched = self.call(self.k("marlin_moe_align", P=P, BM=BM), ids, rank[0].refs, rank[1].refs)
         blk, par = sched[0].refs, sched[1].refs
 

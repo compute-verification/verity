@@ -8,9 +8,9 @@
 # - The job user (uid 1000) can write it; the synced tree is research's (uid 1001).
 # - A later sync of the same lane can't change the code under a running job.
 # - Every job of one tree compiles its native taps from the same source paths, so torch's JIT build (ninja) finds them up to date.
-#   A copy per pod changed every compile command and rebuilt every tap, ~3 min per GPU job under the bootstrap lock (Sep 30).
+#   A copy per pod would change every compile command and rebuild every tap, minutes per GPU job under the bootstrap lock.
 # The path is also written to /workspace/jobs/src/by-pod/<hostname>, which the job's run step reads back (`job_tree.sh --mine`), so
-# setup and run agree even if the lane re-syncs in between.
+# setup and run agree even if the tree is synced again in between.
 set -euo pipefail
 root=${VY_JOB_TREES:-/workspace/jobs/src}
 if [ "${1:-}" = --mine ]; then

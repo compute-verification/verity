@@ -27,6 +27,8 @@ public import Flock.SplitNL
 public import Flock.Norm
 public import Flock.LinkUnits
 public import Flock.FV3
+public import Flock.HmOutCols
+public import Flock.TmplSection
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -641,7 +643,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   let mut nets : Array (String × Net) := match tmpl with
     | some t => #[("root", t.root)] ++ t.layouts.map fun (d, n, _) => (d, n)
     | none => pre
-  let mut at_ := 2
+  let mut at_ := 2 + tmplLines tags lines
   while at_ < lines.size do
     let h := tokens lines[at_]!
     if h.size != 3 || h[0]! != tags.blockKeyword then throw s!"circuit: expected a {tags.blockKeyword} line"
@@ -798,7 +800,7 @@ the branch that reads it, which here is the last. -/
   let mut nets : Array (String × Net) := match tmpl with
     | some t => #[("root", t.root)] ++ t.layouts.map fun (d, n, _) => (d, n)
     | none => pre
-  let mut at_ := 2
+  let mut at_ := 2 + tmplLines tags lines
   while at_ < lines.size do
     let h := tokens lines[at_]!
     if h.size != 3 || h[0]! != tags.blockKeyword then throw s!"circuit: expected a {tags.blockKeyword} line"
@@ -1784,17 +1786,20 @@ def recUnit (name : String) : Bool :=
   (RecOpen.params name).isSome || (RecOpen.stackedParams name).isSome || (RecResiduals.params name).isSome ||
     (RecSparse.params name).isSome || (RecOpening.params name).isSome
 
-/-- A templated file (`Tags.templated`): META's `template`, a `flock-ir-tmpl/v2` template's lines, and `layout`,
-its mode (`Tmpl.modeOf`). The unit is read from them (`TmplUnit.read`: well-formed, laid out, passing `Tmpl.unrollOk`; its
-net `Tmpl.unitNet`, whose rows are built only when read), parsed as the file's `unit` circuit where a flat file's
-`CIRCUIT unit` section is (`HmRow.parse`'s `pre`), and carried on the circuit (`Circuit.tmpl`). META is read off its own
-line first (`metaOf`), so the file's lines are split once, by `HmRow.parse`. A file that carries a unit's or a root's rows
-itself is refused: none of the nets `HmRow.parse` read after `pre` is named `unit` or `root`. So is a template whose unit
-is a recursion unit (`recUnit`). -/
+/-- A templated file (`Tags.templated`): its template section, a `flock-ir-tmpl/v2` template's lines right after META
+(`tmplOf`), and META's `layout`, its mode (`Tmpl.modeOf`). The unit is read from them (`TmplUnit.read`: well-formed, laid
+out, passing `Tmpl.unrollOk`; its net `Tmpl.unitNet`, whose rows are built only when read), parsed as the file's `unit`
+circuit where a flat file's `CIRCUIT unit` section is (`HmRow.parse`'s `pre`, past the template section), and carried on
+the circuit (`Circuit.tmpl`). META and the template are read off the file's head first (`metaOf`, `tmplOf`), so the
+file's lines are split once, by `HmRow.parse`. A file that carries a unit's or a root's rows itself is refused: none of
+the nets `HmRow.parse` read after `pre` is named `unit` or `root`. So is a template whose unit is a recursion unit
+(`recUnit`), and a META `definition`: a unit class has no templated statement, so `queryTemplate` reads none as one.
+-/
 def parseTmpl (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit := do
   let mj ← metaOf bytes
+  if J.has mj "definition" then throw "META definition: a unit class has no templated statement"
   let ctx := "templated statement META"
-  let lines ← (← J.arr mj "template" ctx).mapM fun x => J.asStr x "template line"
+  let lines ← tmplOf bytes
   let some mode := Tmpl.modeOf (← J.str mj "layout" ctx)
     | throw "META: layout is not a layout mode (iv, iv/strict, iv/hybrid, iv/hybrid/T)"
   let tu ← TmplUnit.read (← Tmpl.parse lines) mode
@@ -1908,6 +1913,15 @@ def delta (c : Circuit) (pin : Nat) : Array (Nat × Nat) × Array (Nat × Nat) :
           let i := msgCol g (k0 + j) (2 * k + t / 8) (t % 8)
           d := d.push (i, i) |>.push (i, if k < w then col g (at_ + k) + t else forcedZero)
   return (da ++ d ++ pinPairs c, db ++ d ++ pinPairs c)
+
+/-- `delta` on `outCol`'s tables made once (`deltaWith`, `Flock/HmOutCols.lean`). -/
+def deltaFast (c : Circuit) (pin : Nat) : Array (Nat × Nat) × Array (Nat × Nat) :=
+  deltaWith c (outColTab c) (HmRow.delta c pin) (rowSlots c.ports) byteAt (nIn c) (outGroup c) (pinnedFrom c) (pinnedWords c)
+
+/-- Compiled code runs `deltaFast`; the kernel and every proof see `delta`. `@[csimp]` rewrites only code compiled after
+it, so it stays above `delta`'s first caller, `HmIn.delta`. -/
+@[csimp] theorem delta_eq_fast : @delta = @deltaFast := by
+  funext c pin; simp only [delta, deltaFast, deltaWith, pinPairs, pinPairsWith, show outCol c = outColOf c (outColTab c) from rfl]
 
 /-- The regions: each row's `b ‖ c` of every VU (its hm96 slot's output; a padding VU's the pinned dummy). -/
 def regions (c : Circuit) (pub : Public) : V (Array Region) := do

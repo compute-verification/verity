@@ -160,7 +160,17 @@ def test_start_state_refuses_a_step_that_runs_a_request_finished_the_step_before
     served = {9: {"finished": {"x": {"reason": "length"}}}, 10: {"rows": [["a", 3, 1], ["x", 3, 1]]}}
     arrived = {"a": {"sampling": {}}, "x": {"sampling": {}}}
     with pytest.raises(SystemExit, match="start elsewhere"):
-        RB.start_state(sched, None, None, None, arrived, served, 8, 10, 4)
+        RB.start_state(sched, None, None, None, arrived, served, 8, 10, 4, None)
+
+
+def test_served_seeds_read_each_held_request_s_runner_slot_and_refuse_a_v1_edge() -> None:
+    st = {"runner": {"leaves": {"req_states.req_id_to_index": ("plain", {"a": 2, "b": 0}),
+                                "sampler.sampling_states.seeds": ("UvaBackedTensor", [11, -5, 7])}}}
+    assert RB.served_seeds(st) == {"a": 7, "b": 11}
+    with pytest.raises(SystemExit, match="V2_MODEL_RUNNER"):
+        RB.served_seeds({"runner": {"leaves": {}}})
+    with pytest.raises(SystemExit, match="no generators"):
+        RB.carry_rng(None, start={"step": 3})
 
 
 def test_roots_read_each_request_s_computed_tokens_only() -> None:
@@ -256,12 +266,158 @@ def kv_cache_utils(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_hits_seed_poisons_a_dummy_s_missing_pages_and_never_lets_one_stand_in_for_the_target(kv_cache_utils: None) -> None:
     pool = Pool({(b"p0", 0): 7, (b"t1", 0): 8})
-    poisoned: list[int] = []
+    kv = Writes()
     taken = {"pages_seeded_poisoned": 0, "target_pages_unavailable": 0, "target_pages_own": 0}
-    shape = NS(dummy=lambda rid: rid != "t", poison=lambda ids: poisoned.extend(ids), taken=taken)
-    h = RB.Hits(NS(block_pool=pool), [], lambda h: None, {}, 4, lambda: 0, shape, lambda h: None)
+    shape = NS(dummy=lambda rid: rid != "t", mode="zero", taken=taken)
+    h = RB.Hits(NS(block_pool=pool), kv, lambda h: None, {}, 4, lambda: 0, shape, lambda h: None)
     h.seed(NS(request_id="d", block_hashes=[b"p0", b"p1"]), 8)
-    assert poisoned == [51] and pool.cache[(b"p1", 0)] == 51 and pool.freed == [51]
+    h.put()
+    assert kv.calls == [({51: RB.FILL_PAGE}, "zero")] and pool.cache[(b"p1", 0)] == 51 and pool.freed == [51]
     assert taken["pages_seeded_poisoned"] == 1 and h.loaded == 0
     h.seed(NS(request_id="t", block_hashes=[b"t0", b"t1"]), 8)
-    assert taken["target_pages_unavailable"] == 2 and h.loaded == 0 and (b"t0", 0) not in pool.cache
+    h.put()
+    assert taken["target_pages_unavailable"] == 2 and h.loaded == 0 and (b"t0", 0) not in pool.cache and len(kv.calls) == 1
+
+
+class Writes:
+    """A K/V that records `Hits`' writes."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[dict[int, Any], str]] = []
+
+    def write(self, ops: dict[int, Any], mode: str) -> None:
+        self.calls.append((dict(ops), mode))
+
+
+def test_hits_writes_a_step_s_pages_at_once_each_block_s_last_and_takes_the_target_s_own_page_only_if_cached(
+        kv_cache_utils: None) -> None:
+    pool = Pool({(b"t1", 0): 8})
+    kv = Writes()
+    taken = {"pages_seeded_poisoned": 0, "target_pages_unavailable": 0, "target_pages_own": 0, "target_pages_loaded": 0,
+             "target_pages_overwritten": 0}
+    shape = NS(dummy=lambda rid: rid != "t", mode="zero", taken=taken)
+    served = {b"t0": ("near", 3), b"t1": ("far", 4)}
+    h = RB.Hits(NS(block_pool=pool), kv, served.get, {"t": [(5, 16)]}, 4, lambda: 5, shape,
+                lambda x: RB.OWN_PAGE if x in (b"t2", b"t3") else None)
+    pool.cache[(b"t2", 0)] = 9
+    h.due({"t": NS(request_id="t", block_hashes=[b"t0", b"t1", b"t2", b"t3"])}, 5)
+    assert kv.calls == [({51: ("near", 3), 8: ("far", 4)}, "zero")]
+    assert taken | {"pages_seeded_poisoned": None} == {"pages_seeded_poisoned": None, "target_pages_unavailable": 1,
+                                                       "target_pages_own": 1, "target_pages_loaded": 1,
+                                                       "target_pages_overwritten": 1}
+    h.ops = {7: ("near", 1)}
+    h.ops[7] = RB.FILL_PAGE
+    h.put()
+    assert kv.calls[-1] == ({7: RB.FILL_PAGE}, "zero") and h.ops == {}
+
+
+def test_rank_kv_groups_a_step_s_loads_by_dump_fills_the_rest_and_refills_a_dummy_s_slots_by_block() -> None:
+    calls: list[tuple[str, tuple]] = []
+
+    def rpc(fn: Any, args: tuple = ()) -> list[Any]:
+        calls.append((fn.__name__, args))
+        if fn.__name__ == "block_roots":
+            return [{"rank": r, "roots": {"a": "x" if r != 2 else "y"}} for r in (1, 0, 2)]
+        return [None]
+
+    kv = RB.RankKv(rpc, 4, RB.Path("/e1"), [{"block_bytes": 10}, {"block_bytes": 6}])
+    assert kv.block_bytes == 16
+    kv.write({5: ("/e1", 50), 6: RB.FILL_PAGE, 7: ("/e2", 70), 8: ("/e1", 80)}, "nan")
+    assert calls == [("copy_blocks", ("/e1", [[50, 5], [80, 8]])), ("copy_blocks", ("/e2", [[70, 7]])),
+                     ("fill_blocks", ([6], RB.T.FILL))]
+    assert kv.loaded_from == {"/e1": 2, "/e2": 1}
+    calls.clear()
+    kv.fill_slots([9, 10, 3, 17], "zero")
+    assert calls == [("fill_blocks", ([0, 2, 4], 0))]
+    calls.clear()
+    kv.load([(11, 1), (12, 2)], [(2, 3)], "copy")
+    assert calls == [("copy_blocks", ("/e1", [[11, 1], [12, 2]]))]
+    with pytest.raises(SystemExit, match="--tail copy"):
+        kv.load([], [], "zero")
+    calls.clear()
+    assert kv.roots({"a": ([1, 2, 3], 9)}) == {"a": "x"}
+    assert calls == [("block_roots", ({"a": [1, 2]},))] and kv.ranks_disagree == [{"requests": 1, "ranks": [2]}]
+
+
+def test_served_pins_are_set_before_vllm_loads_and_refused_once_inductor_has_read_its_own(tmp_path, monkeypatch) -> None:
+    import json
+
+    pins = {"PYTHONHASHSEED": "0", "TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK": "0", "VLLM_USE_V2_MODEL_RUNNER": "1"}
+    (tmp_path / "meta.json").write_text(json.dumps({"pins": pins}))
+    env: dict[str, str] = {}
+    monkeypatch.setattr(RB, "os", NS(environ=env))
+    monkeypatch.delitem(sys.modules, "torch._inductor.config", raising=False)
+    monkeypatch.setattr(RB, "sys", NS(flags=NS(hash_randomization=0), modules=sys.modules))
+    assert RB.served_pins(tmp_path) == pins
+    assert env == {"TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK": "0", "VLLM_USE_V2_MODEL_RUNNER": "1"}
+    monkeypatch.setitem(sys.modules, "torch._inductor.config", ModuleType("torch._inductor.config"))
+    with pytest.raises(SystemExit, match="Inductor"):
+        RB.served_pins(tmp_path)
+    (tmp_path / "meta.json").write_text(json.dumps({"pins": pins | {"PYTHONHASHSEED": "1"}}))
+    with pytest.raises(SystemExit, match="PYTHONHASHSEED=0"):
+        RB.served_pins(tmp_path)
+
+
+def test_the_perturbed_row_is_sampled_as_the_block_s_first_arrival_and_never_stops_early() -> None:
+    arrivals = [{"engine_id": "a", "sampling": {"top_p": 0.95, "max_tokens": 9}}, {"engine_id": "b", "sampling": {}}]
+    row = RB.perturb_row(64, 7, arrivals)
+    assert row["before_step"] == 7 and row["prompt_ids"] == [0] * 64
+    assert row["sampling"] == {"top_p": 0.95, "max_tokens": 9, "ignore_eos": True} and arrivals[0]["sampling"] == {
+        "top_p": 0.95, "max_tokens": 9}
+    assert RB.perturb_row(8, 0, [])["sampling"] == {"ignore_eos": True}
+
+
+def test_a_dummy_served_stopped_on_a_token_gets_the_next_row_and_is_finished_where_serving_finished_it(monkeypatch) -> None:
+    steps = {5: {"finished": {"a": {"reason": "length"}, "b": {"reason": "stop", "stop_reason": 7}}},
+             6: {"finished": {"t": {"reason": "stop"}}}, 7: {}}
+    assert RB.served_stops(steps) == {"b": 5, "t": 6}
+    finished = []
+    sched = NS(requests={"a": 1, "b": 2, "t": 3}, finish_requests=lambda ids, status: finished.append((list(ids), status)))
+    d = RB.Dummies("t", "zero", sched, None, None, 4, [], {"a": 3, "b": 4, "t": 9}, RB.served_stops(steps))
+    assert d.stops == {"b": 5}
+    assert d.params("a", {"sampling": {}})["max_tokens"] == 3 and d.params("b", {"sampling": {}})["max_tokens"] == 5
+    vllm = ModuleType("vllm")
+    vllm.v1 = ModuleType("vllm.v1")
+    vllm.v1.request = ModuleType("vllm.v1.request")
+    vllm.v1.request.RequestStatus = NS(FINISHED_STOPPED="stopped")
+    for name, mod in (("vllm", vllm), ("vllm.v1", vllm.v1), ("vllm.v1.request", vllm.v1.request)):
+        monkeypatch.setitem(sys.modules, name, mod)
+    so4, so5 = object(), object()
+    trace = NS(_pending={id(so4): 4, id(so5): 5}, records=[{"kind": "step", "step": 4, "finished": {}},
+                                                           {"kind": "step", "step": 5, "finished": {"a": {"reason": "length"}}}])
+    wrapped = d.stopper(trace)(lambda so, mro: "outs")
+    assert wrapped(so4, None) == "outs" and finished == []
+    assert wrapped(so5, None) == "outs" and finished == [(["b"], "stopped")]
+    assert d.taken["stops_forced"] == 1
+    assert trace.records[0]["finished"] == {} and set(trace.records[1]["finished"]) == {"a", "b"}
+
+
+def test_the_perturbed_row_jumps_the_waiting_queue() -> None:
+    from collections import deque
+
+    class Queue(deque):
+        def remove_request(self, r):
+            self.remove(r)
+
+        def prepend_request(self, r):
+            self.appendleft(r)
+
+    sched = NS(requests={"a": "A", "b": "B", RB.PERTURB_ID: "P"}, waiting=Queue(["A", "B", "P"]))
+    RB.jump_queue(sched, RB.PERTURB_ID)
+    assert list(sched.waiting) == ["P", "A", "B"]
+
+
+def test_full_pages_are_the_blocks_a_request_s_computed_tokens_fill() -> None:
+    assert RB.full_pages({"a": ([4, 5, 6], 9), "b": ([7], 3), "c": ([1, 2], 8)}, 4) == {"a": [4, 5], "b": [], "c": [1, 2]}
+
+
+def test_a_served_preempted_request_is_resumed_and_any_other_stays_new() -> None:
+    import enum
+
+    class Status(enum.IntEnum):
+        WAITING = 1
+        PREEMPTED = 3
+
+    q, w = NS(status=Status.WAITING), NS(status=Status.WAITING)
+    RB.keep_preempted(q, "PREEMPTED"), RB.keep_preempted(w, "RUNNING")
+    assert (q.status, w.status) == (Status.PREEMPTED, Status.WAITING)

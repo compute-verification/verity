@@ -526,7 +526,7 @@ def test_neg_profile_mode_refuses_a_batch_invariant_linear_on_a_target_without_b
     "fused,expected",
     [
         (False, "RMSNormCudaVector8_v1{N=6144,EPS=1e-05,BLOCK=768}"),
-        (True, "RMSNormFusedCudaVector8_v1{N=6144,EPS=1e-05,BLOCK=1024}"),
+        (True, "RMSNormFusedCudaVector8_v3{N=6144,EPS=1e-05,BLOCK=1024}"),
     ],
 )
 def test_profile_mode_binds_the_non_batch_invariant_cuda_rmsnorm(fused, expected, monkeypatch):

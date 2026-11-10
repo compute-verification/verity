@@ -21,7 +21,7 @@ import Proofs.Flock.Soundness.CROnly.Hiding
 import Proofs.Flock.Soundness.Discharge.Hm.Commit
 import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Hides
 import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.ZK.Hiding
 
 /-!

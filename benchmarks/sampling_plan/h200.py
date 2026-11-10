@@ -42,8 +42,8 @@ import transformer as X  # noqa: E402
 from inputs import CARDS, I  # noqa: E402
 
 from verity.core.protocols.profile import Stratified, Stratum  # noqa: E402
-from verity.core.protocols.sampled_proofs.candidates import shape_of  # noqa: E402
-from verity.core.protocols.sampled_proofs.optimize import row_ands  # noqa: E402
+from verity.core.protocols.spot.candidates import shape_of  # noqa: E402
+from verity.core.protocols.spot.optimize import row_ands  # noqa: E402
 from verity.ml.circuits.codec import descriptor_id  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.ops import fp32 as F, gemm as G  # noqa: E402

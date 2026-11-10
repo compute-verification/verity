@@ -6,8 +6,7 @@
 # form exists because Cursor caps a secret at 4096 bytes: an RSA-4096 key's PEM is ~3272 bytes, whose base64 (~4364) is refused,
 # while its DER (~2348 bytes) encodes to ~3132.  The two decode unambiguously: PEM text starts `-----BEGIN`, DER starts byte 0x30.
 # The key must be one line: a multi-line secret's body lines pass through `env | cut -d= -f1` and escape
-# Cursor's redaction, which is how the old multi-line NEBIUS_SA_PRIVATE_KEY leaked six times by 2 Oct and again on 3 Oct. It is
-# refused, so that nobody keeps it as a Cursor secret.
+# Cursor's redaction, so a multi-line NEBIUS_SA_PRIVATE_KEY leaks. It is refused, so that nobody keeps it as a Cursor secret.
 # The key is written to a mode-600 file in a mode-700 directory made for this process and removed when it exits; the CLI's profile
 # lives there too (`nebius -c`), so nothing is written to ~/.nebius or the repository and no value is ever printed.  Never run these
 # with `bash -x`.

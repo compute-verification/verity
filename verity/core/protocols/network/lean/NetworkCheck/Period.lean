@@ -183,14 +183,14 @@ the network certifier's rows. A compute audit reads none, so its own terms are i
 but the free inputs of each audit a scan's `prog` is an output of are in that scan's link-window's term: the egress
 renders the audit's outputs, so the bits the prover chose of its inputs are the egress's to leak. An incorrect proof block of such
 an audit would leak through the egress too, and no term charges one: the check refuses a tied audit with any unit
-unsampled (`Properties.NetworkPeriod.RowsTiedDrawn`), and a tied audit's `faulty_bits` and the audit's δ in `eps` come
+unsampled (`Properties.NetworkPeriod.RowsTiedSampled`), and a tied audit's `faulty_bits` and the audit's δ in `eps` come
 with the change that ties a compute audit sampled in part and lifts that refusal:
 
     {"K": K, "audits": [{"delta", "drawn", "units", "wrong_units"}, …], "cells": c, "eps": m · δ,
      "scans": [terms, …], "schedules": c, "windows": m}
 
 * `schedules` is `cells`, c = Σ_c ⌈log2 (cap_c + 1)⌉, as the statement multiplies `#Ss` and `∏_c (cap_c + 1)`. A
-  schedule (`WardenSchedule`) is r and D, fixed, and each connection's admission bucket and lane length. The server
+  schedule (`CertifierSchedule`) is r and D, fixed, and each connection's admission bucket and lane length. The server
   sets a lane's length, when its stream ends, at most `cap_c` cells, and nothing else of it: the network certifier
   admits a queued connection at the first lane that frees, in the clients' arrival order, so the admissions are a
   function of the lengths, and `#Ss ≤ ∏_c (cap_c + 1)`. The second factor is the fail cell's position (`failCell`). A
@@ -248,7 +248,10 @@ def rowsFormat : String := "verity-network-warden/registration/v2"
 def rowSchema : String := "hm96-sha512/row/v2"
 /-- The cell kinds (`PAD`, `DATA`, `END`, `FAIL`, `REFUSED`) and the fail reasons the schedule's digest binds. -/
 def cellKinds : List Nat := [0, 1, 32, 33, 34]
-def failReasons : List String := ["late", "limit", "upstream", "ingress", "malformed"]
+def failReasons : List String := ["late", "limit", "upstream", "ingress", "malformed", "format"]
+/-- The egress form (`WardenParams.egress`) of every schedule the check reads: the egress record's id form. A schedule
+of another form has a digest no schedule here has. -/
+def egressForm : String := "id"
 /-- A cell's header: its kind u8, its connection's ordinal u32 and its payload's length u32. -/
 def cellHeader : Nat := 9
 
@@ -422,11 +425,13 @@ def scheduleOf (j : Json) : V Schedule := do
   unless s.window % s.every == 0 do throw "schedule: every divides the window: a window is whole timesteps"
   pure s
 
-/-- `WardenParams.digest`: the schedule's canonical JSON, with the cell kinds and the fail reasons, tagged. -/
+/-- `WardenParams.digest`: the schedule's canonical JSON, with its egress form, the cell kinds and the fail reasons,
+tagged. -/
 def Schedule.digest (s : Schedule) : V ByteArray :=
   Identity.identityDigestSha512 scheduleTag (Json.mkObj [
     ("bucket_ms", toJson s.bucketMs), ("cell_bytes", toJson s.cellBytes), ("delay", toJson s.delay),
-    ("egress_cells", toJson s.egressCells), ("every", toJson s.every), ("ingress_buckets", toJson s.ingressBuckets),
+    ("egress", toJson egressForm), ("egress_cells", toJson s.egressCells), ("every", toJson s.every),
+    ("ingress_buckets", toJson s.ingressBuckets),
     ("ingress_cells", toJson s.ingressCells), ("lanes", toJson s.lanes), ("queue", toJson s.queue),
     ("slots", toJson s.slots), ("window", toJson s.window), ("kinds", toJson cellKinds),
     ("reasons", toJson failReasons)])

@@ -138,8 +138,8 @@ def test_a_reused_pid_is_a_new_process_and_a_timed_window_pauses_the_probe(tmp_p
 
 
 def test_the_relay_keeps_its_place_through_an_unmounted_log_and_a_failed_post(tmp_path, monkeypatch):
-    """Node 2's quota cutover (2026-10-01): while /workspace was unmounted the log read as missing, the relay reset its cursor to 0,
-    and after the remount it posted hours-old rows; a Slack error after 5 posts lost the state, so every pass repeated them."""
+    """While /workspace is unmounted the log reads as missing, and a relay that reset its cursor to 0 would post hours-old rows
+    after the remount; a Slack error after 5 posts must not lose the state, or every pass repeats them."""
     import argparse
     import inspect
     import json

@@ -520,7 +520,7 @@ class PearlC:
                          f"tile's within ρ (Lean `Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256`)",)
         self.certificate = Certificate(
             conjecture="tt-out",
-            gamma0=None,
+            gap0=None,
             omega=Fraction(1),
             claims=("tt-out", "random-oracle", "cr/blake3", "device-reproducibility", "live-verifier") if hashing == "h0"
             else ("tt-out", "random-oracle", "cr/sha-512", "cr/sha-256", "device-reproducibility", "live-verifier"),

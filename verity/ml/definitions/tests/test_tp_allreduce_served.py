@@ -27,18 +27,26 @@ def _sidecar():
     return mod
 
 
+def _served() -> list:
+    mod = _sidecar()
+    return mod._glm53_served_roots() + mod._glm53_multimem_alone_roots()
+
+
 def test_the_served_bindings_are_every_mnnvl_call_and_the_multimem_rows():
     mod = _sidecar()
-    ids = [fn.id for fn in mod._glm53_served_roots()]
+    ids = [fn.id for fn in _served()]
+    assert len(set(ids)) == len(ids)
     mnnvl = [i for i in ids if i.startswith("AllReduceMnnvl_v1{")]
     assert len(mnnvl) == 10 + 42 and "AllReduceMnnvl_v1{WORLD=8,N=61440,SHOT=1}" in mnnvl
     assert "AllReduceMnnvl_v1{WORLD=8,N=67584,SHOT=1}" not in mnnvl and "AllReduceMnnvl_v1{WORLD=8,N=258048,SHOT=2}" in mnnvl
     assert len(ids) - len(mnnvl) == len(mod.GLM53_MULTIMEM_ROWS)
+    alone = mod._glm53_multimem_alone_roots()
+    assert sorted(fn.statics["SIZE"] for fn in alone) == sorted(rows * mod.GLM53_N for rows in mod.GLM53_MULTIMEM_ALONE)
 
 
 def test_every_served_binding_over_max_gates_holds_its_digest_pin():
     pins = json.loads(PINS.read_text()).get("digests", {}) if PINS.exists() else {}
-    want = {fn.id: {"sha512": program_digest(Program(fn))} for fn in _sidecar()._glm53_served_roots() if fn.gates > MAX_GATES}
+    want = {fn.id: {"sha512": program_digest(Program(fn))} for fn in _served() if fn.gates > MAX_GATES}
     wrong = {k: v for k, v in want.items() if pins.get(k) != v}
     assert not wrong, (f"set these in {PINS.name}'s \"digests\" (json indent 1, keys sorted), and review why any changed: "
                        + json.dumps(wrong, indent=1, sort_keys=True))

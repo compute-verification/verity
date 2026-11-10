@@ -255,7 +255,7 @@ theorem hlg_of_residuals {sh : Shape} {d : Compiled.RepData} {st : Setup} {sch :
 
 /-- A record fits the bytes `F` from round `k₀` to its end when its coins are `c`'s, its rounds well formed and each
 retains `F`'s bytes. -/
-theorem fits_of {F : ℕ → ByteArray} {rs : Array Round} {k₀ : ℕ} (hcoins : ∀ j < rs.size, c[j]! = (rs[j]!).coins)
+theorem fits_of {F : ℕ → ByteArray} {rs : Array Round} {k₀ : ℕ} (hcoins : ∀ j < rs.size, (c)[j]! = (rs[j]!).coins)
     (hwf : RoundsWF rs) (hb : ∀ j, k₀ ≤ j → j < rs.size → (rs[j]!).bytes = some (F j)) :
     RecAlgebra.Fits c F rs k₀ rs.size := fun j hj hj' =>
   ⟨rs[j]!, by rw [getElem!_pos rs j hj']; exact getElem?_pos rs j hj', by rw [hcoins j hj', hwf j hj'],

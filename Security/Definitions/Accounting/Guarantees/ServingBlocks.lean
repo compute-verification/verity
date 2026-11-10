@@ -35,6 +35,8 @@ Each guarantee has an honest and a nontrivial lemma
 serving-block layout, and its conclusion fails at an explicit circuit once one named premise is dropped. The boundary
 term is needed: without it the bound fails at a circuit where every premise holds
 (`ServingBlockBound_nontrivial_overlap`, in `Security/Proofs/Accounting/ServingBlocks/Witnesses.lean`).
+`UncertifiedElementary` takes no premise: its cap is attained at the layout, and a tighter cap fails at an explicit
+circuit.
 
 `ServingBlockBoundRemote` is the remote case: no wipe or certifier, so `k_S` is unbounded and only the inference cap
 applies.

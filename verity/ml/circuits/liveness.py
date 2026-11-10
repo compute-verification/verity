@@ -105,9 +105,43 @@ class Liveness:
         if hit is not None:
             return hit
         self._keep.append(sd)
-        res = self._analyse(sd.body, live_ret)
+        res = self._dead(sd.body) if self.transitive and not live_ret else self._analyse(sd.body, live_ret)
         self._cache[key] = res
         return res
+
+    def _dead(self, body: Body) -> BodyLiveness:
+        """`_analyse(body, ())` when transitive: nothing is live, so nothing is read and every gate is dead, counted without
+        marking (a batch's other owners' requests, in R1's separability, are this)."""
+        dead_c = dead_i = 0
+        approx = False
+        scan_runs: dict[int, list[tuple[Intervals, int]]] = {}
+        for k, node in enumerate(body.nodes):
+            fn = node.fn
+            if node.form == "primitive":
+                if getattr(fn, "family", None) == "Input":
+                    dead_i += 1
+                else:
+                    dead_c += 1
+            elif node.form == "call":
+                sub = self.analyse(fn, ())
+                dead_c += sub.dead_computed
+                dead_i += sub.dead_input
+                approx |= sub.approximate
+            elif node.form == "batch":
+                if not isinstance(fn, PrimitiveDefinition):
+                    dead_c += node.n * fn.gates
+                elif getattr(fn, "family", None) == "Input":
+                    dead_i += node.n
+                else:
+                    dead_c += node.n
+            else:
+                if node.n:
+                    sub = self.analyse(fn, ())
+                    dead_c += node.n * sub.dead_computed
+                    dead_i += node.n * sub.dead_input
+                    approx |= sub.approximate
+                scan_runs[k] = [((), node.n)] if node.n else []
+        return BodyLiveness(((),) * len(body.params), dead_c, dead_i, [()] * len(body.nodes), scan_runs, approx)
 
     # -- one body -----------------------------------------------------------------------------------
     def _analyse(self, body: Body, live_ret: Intervals) -> BodyLiveness:

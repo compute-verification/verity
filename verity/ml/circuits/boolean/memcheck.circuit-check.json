@@ -1,0 +1,16 @@
+{
+ "definitions": {
+  "MemAccess_v1{G=2,A=128,V=128,T=28}": {
+   "and": 11367,
+   "type": "8c4cba4bf9f1a749681ea6457b75a2df0ea09aac624eb4afcdc4aa893c662f6986e785473c02fa64586e87269b2687c9642dd165611f9f2ebbc5b59e7e66ef35"
+  },
+  "MemCheck_v1{N=3,M=3,G=2,A=4,V=4,T=3}": {
+   "and": 21227,
+   "type": "e5a365642abf4532261b701b5805b11fe9b89e9751473cf09c95b75a46480fd260303bd6855ca25936774ed7e85ab9caab784d914a1fe8c714a1f255166cdf78"
+  },
+  "MemEntry_v1{G=2,A=128,V=128,T=28}": {
+   "and": 10703,
+   "type": "cf7b09b3b2f882ce1a6064888e532c41250ea8dbd3ff473983b5e637a51a5e7b71213794c421884eed20ae6d32c09d0bcd05d14a7188d4a63388191d0ce31eae"
+  }
+ }
+}

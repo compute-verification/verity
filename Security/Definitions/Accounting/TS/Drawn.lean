@@ -38,25 +38,25 @@ import Mathlib.Topology.Sheaves.Init
 
 `ProofLayer`'s counterpart for 𝒫_samp. A round's coins are `Paths C m × B`: on `Paths C m` the `m` coins released before
 the samples, in order (the round's σ, or a window's call sites' coins, each after the values it follows are committed),
-and on `B` the live sampling coin, which names `s` units (`DrawnLayer.draw`), with the proofs' coins. Each sampled proof block is
+and on `B` the live sampling coin, which names `s` units (`SampledLayer.draw`), with the proofs' coins. Each sampled proof block is
 proved alone, with its own noise's generation; a unit is one output coordinate, or a K-chunk committing its running sum.
 
-Values are per committed position, not per unit: a unit reads its slots' positions (`DrawnLayer.pos`: its operand rows,
+Values are per committed position, not per unit: a unit reads its slots' positions (`SampledLayer.pos`: its operand rows,
 its seed's inputs, a running sum, its outputs), and a position one unit writes is the position another reads, so one
-committed value serves both. Each position is bound before the coin that follows its commitment (`DrawnLayer.cut`):
+committed value serves both. Each position is bound before the coin that follows its commitment (`SampledLayer.cut`):
 round `w`'s coin `k < m` for an operand committed before it, the sample (`k = m`) for a unit's output. Its committed value
-(`DrawnLayer.committed`) is the value its sampled readers' accepted proofs open on the most continuations from that coin,
+(`SampledLayer.committed`) is the value its sampled readers' accepted proofs open on the most continuations from that coin,
 each opening it to that value alone, so it is a function of the coins before the cut. Two sampled readers that open one
-position differently on one path move it (`DrawnLayer.Moved`): equivocation is a binding failure, counted in `δ_bind`.
+position differently on one path move it (`SampledLayer.Moved`): equivocation is a binding failure, counted in `δ_bind`.
 
-Proofs exist for sampled proof blocks only: round `w`'s proof `i` is sampled proof block `drawnAt x w i`'s (`DrawnLayer.accepted`,
-`DrawnLayer.opened`), so an accepted proof is a sampled proof block's.
+Proofs exist for sampled proof blocks only: round `w`'s proof `i` is sampled proof block `drawnAt x w i`'s (`SampledLayer.accepted`,
+`SampledLayer.opened`), so an accepted proof is a sampled proof block's.
 
 * `coinAt x w`: round `w`'s coins on `x`.
 * `spliceAt w k x z`: `x`'s coins before round `w`'s coin `k` (`k = m`: before its sample), then `z`'s.
 * `Alone`, `tally`, `plural`: a path that opens one value only; how many continuations of `x` open `v` alone; the value
   the most do.
-* `DrawnLayer`: the sample; each unit's slots' positions and noise coin, each position's cut and writer; per path, round
+* `SampledLayer`: the sample; each unit's slots' positions and noise coin, each position's cut and writer; per path, round
   and sample, whether the sampled proof block's proof was accepted and the values it opened its slots to; each unit's relation and
   rightness, on its slots' values and the public coins.
 * `Opens`, `committed`, `view`: a path's accepted openings of a position; its committed value; a unit's committed
@@ -143,7 +143,7 @@ unit reading its slots `Q`'s positions `Pos`, each position's value in `V`:
 * `rel x w j`: unit `j`'s relation in round `w` on its slots' values, the public Program its proof passes, at the
   public coins of `x` its seed reads;
 * `right x w j`: its rightness: its outputs are its own, from its operands, under the noise its seed derives. -/
-structure DrawnLayer (C B : Type) (S m s : ℕ) (J Q Pos V : Type) where
+structure SampledLayer (C B : Type) (S m s : ℕ) (J Q Pos V : Type) where
   draw : B → Fin s → J
   pos : Fin S → J → Q → Pos
   coin : Fin S → J → Fin m
@@ -154,9 +154,9 @@ structure DrawnLayer (C B : Type) (S m s : ℕ) (J Q Pos V : Type) where
   rel : Paths (Paths C m × B) S → Fin S → J → (Q → V) → Prop
   right : Paths (Paths C m × B) S → Fin S → J → (Q → V) → Prop
 
-namespace DrawnLayer
+namespace SampledLayer
 
-variable {C B : Type} {S m s : ℕ} {J Q Pos V : Type} (pf : DrawnLayer C B S m s J Q Pos V)
+variable {C B : Type} {S m s : ℕ} {J Q Pos V : Type} (pf : SampledLayer C B S m s J Q Pos V)
 
 /-- The unit round `w`'s sample `i` names on `x`. -/
 def drawnAt (x : Paths (Paths C m × B) S) (w : Fin S) (i : Fin s) : J := pf.draw (coinAt x w).2 i
@@ -253,11 +253,11 @@ open Classical in
 /-- **The share covers every unit that isn't good**: on an accepted path, the weight `wt w j` (unit `j`'s words in round
 `w`) of the units that aren't good under the run's modes is at most the ideal game's deficiency times `N_w`. A property
 of the share's definition, proved for each game, not assumed: a share that charges each unit the run didn't pay for its
-`coneWt` covers (`Accounting.SecurityProofs.TS.DrawnLayer.covers_of_cone`). -/
+`coneWt` covers (`Accounting.SecurityProofs.TS.SampledLayer.covers_of_cone`). -/
 def Covers [Fintype J] {K T L U : Type} (P : Play (Paths C m × B) S K T L U)
     (mode : Paths (Paths C m × B) S → Fin S × J → Mode) (wt : Fin S → J → ℝ) (Nw : ℝ) : Prop :=
   ∀ x, P.accepts x → (∑ w, ∑ j, if pf.Good mode x w j then 0 else wt w j) ≤ P.game.deficiency x * Nw
 
-end DrawnLayer
+end SampledLayer
 
 end Accounting.TS

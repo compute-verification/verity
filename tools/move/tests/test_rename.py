@@ -235,6 +235,50 @@ def test_a_read_definition_is_renamed_as_its_modules_file_renames_it(tmp_path):
     assert M.lock_moves(tmp_path, words, files) == {"Compose.Declared": "Compose.RegisteredCircuit"}
 
 
+def _tree(root: Path, texts: dict[str, str]) -> list[str]:
+    for path, text in texts.items():
+        (root / path).parent.mkdir(parents=True, exist_ok=True)
+        (root / path).write_text(text)
+    return sorted(texts)
+
+
+def test_a_module_is_its_path_below_its_packages_source_directory(tmp_path):
+    """`Security/Properties` and `Security/Proofs` both take `Security` as their source directory, so `Properties.X` is
+    `Security/Properties/X.lean`, and `Security/Proofs/Properties/X.lean`, whose path ends alike, is `Proofs.Properties.X`:
+    a map scoped to the Properties file renames what the Properties lock reads from it."""
+    files = _tree(tmp_path, {
+        "Security/Properties/lakefile.toml": 'name = "security_properties"\nsrcDir = ".."\n',
+        "Security/Proofs/lakefile.toml": 'name = "security_proofs"\nsrcDir = ".."\n',
+        "Security/Properties/RemoteAudit.lean": "", "Security/Proofs/Properties/RemoteAudit.lean": "",
+        "Security/Properties/lean-audit.json": json.dumps(
+            {"reads": {"Properties.RemoteAudit": {"definitions": {"Properties.RemoteAudit.drawnOf": "00"}}}})})
+    words = M.Words({"words": {}, "words_in": [{"files": ["Security/Properties/RemoteAudit.lean"],
+                                                "words": {"drawnOf": "sampledOf"}}]})
+    assert M.module_files(tmp_path, files)["Properties.RemoteAudit"] == [
+        ("Security/Properties/RemoteAudit.lean", "Security/Properties")]
+    assert M.module_files(tmp_path, files)["Proofs.Properties.RemoteAudit"] == [
+        ("Security/Proofs/Properties/RemoteAudit.lean", "Security/Proofs")]
+    assert M.lock_moves(tmp_path, words, files) == {"Properties.RemoteAudit.drawnOf": "Properties.RemoteAudit.sampledOf"}
+
+
+def test_a_module_two_packages_define_is_read_from_the_locks_own_or_renamed_alike(tmp_path):
+    """`Check.Main` is `A`'s and `B`'s: `A`'s lock reads `A`'s, so a word held in `A`'s file renames it. `C`'s lock reads it
+    from neither of its own: alike in both files it is renamed, and apart it is refused before any records run, naming the
+    lock, the definition and each file's rename."""
+    texts = {"A/lakefile.toml": 'name = "a"\n', "B/lakefile.toml": 'name = "b"\n', "C/lakefile.toml": 'name = "c"\n',
+             "A/Check/Main.lean": "", "B/Check/Main.lean": "",
+             "A/lean-audit.json": json.dumps({"reads": {"Check.Main": {"definitions": {"Check.Main.horizon": "00"}}}})}
+    files = _tree(tmp_path, texts)
+    apart = M.Words({"words": {}, "words_in": [{"files": ["A/Check/Main.lean"], "words": {"horizon": "gridTicks"}}]})
+    assert M.lock_moves(tmp_path, apart, files) == {"Check.Main.horizon": "Check.Main.gridTicks"}
+    files = _tree(tmp_path, {**texts, "C/lean-audit.json": texts["A/lean-audit.json"]})
+    with pytest.raises(SystemExit, match=r"C/lean-audit.json: Check.Main.horizon is read from a module that 2 packages "
+                                         r"define.*A/Check/Main.lean: Check.Main.gridTicks; B/Check/Main.lean: Check.Main.horizon"):
+        M.lock_moves(tmp_path, apart, files)
+    alike = M.Words({"words": {"horizon": "gridTicks"}})
+    assert M.lock_moves(tmp_path, alike, files) == {"Check.Main.horizon": "Check.Main.gridTicks"}
+
+
 def test_a_lock_under_tests_fixtures_is_a_tests_data_and_never_read(tmp_path):
     """A fixture lock holds what its test needs (`unread`'s holds `reads` of lists) and is no package's record: under a map
     that excludes no fixture, the moves are the package lock's alone."""

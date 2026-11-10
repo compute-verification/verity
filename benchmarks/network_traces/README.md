@@ -1,9 +1,9 @@
 # network_traces
 
 The network certifier (`verity/core/protocols/certifier/`) on real served traffic: per-token timing traces for its
-calibration, the certifier in front of a served endpoint (as a proxy, `active.Proxy`, or as a relay that knows bytes
-only, `warden`), the zero-knowledge proofs of their proof blocks, and the network chain's run of record end to end. Each
-driver's docstring says what it runs, what it publishes and what its verifier receives.
+calibration, the certifier in front of a served endpoint (as a proxy, `active.Proxy`, or as a relay of the egress
+record's one form, `warden`), the zero-knowledge proofs of their proof blocks, and the network chain's run of record end
+to end. Each driver's docstring says what it runs, what it publishes and what its verifier receives.
 
 ## Running it
 
@@ -27,8 +27,10 @@ driver's docstring says what it runs, what it publishes and what its verifier re
   besides vLLM: `demo_endpoint.py` and `demo_stub.py`. `compact_render.py` is the client's shim for compact egress
   framing.
 - **The certifier as a relay.** `warden_serve.py` runs `verity.core.protocols.certifier.warden`, the network certifier
-  as a relay that knows bytes only, in front of any TCP server and checks what it published offline; `warden_chain.py`
-  is the chain's reads of a relay run, and `warden_zk.py` reads the relay's bucket rows in the proof system.
+  as a relay in front of any TCP server and checks what it published offline: `serve` releases only the egress
+  record's id form by default, and `rehearse` names its traffic's (`--egress`: id with `--ids`, else bytes);
+  `warden_chain.py` is the chain's reads of a relay run, and `warden_zk.py` reads the relay's bucket rows in the proof
+  system.
 - **Proofs in zero knowledge.** Each driver proves its proof blocks with Flock `prove --zk` behind the Lean ZK server
   and holds them by the Lean `flock-verify verify --zk`: `n2_zk.py` (N2's registered proof block, N2's verdict of
   record), `n2_tie_zk.py` (the ingress tie), `egress_zk.py` (N2's egress bucket), `scan_zk.py` (the step-indexed
@@ -221,7 +223,7 @@ and the scan accepted.
 
 The terms, in the generator reading of the scan's statement (each proof block's registered rows its boundary values):
 - The schedules and the fail cells, ⌈log2(cap_c + 1)⌉ each a connection (`capsTerm`, charged twice, as
-  `#S_s ≤ ∏_c (cap_c + 1)`; the record's `terms.cap_per_request`). Here cap_c bounds `WardenSchedule.cells c`, the
+  `#S_s ≤ ∏_c (cap_c + 1)`; the record's `terms.cap_per_request`). Here cap_c bounds `CertifierSchedule.cells c`, the
   egress cells of connection c's lane, which is egress_cells. The endpoint's slot count isn't a term of the network
   certifier's schedule: it enters the compute audit's terms, which go into JointPeriodLive.
 - The free inputs (`terms.free`): as registered, the tied audit's slot entries, NR·T / EVERY entries of NE bits

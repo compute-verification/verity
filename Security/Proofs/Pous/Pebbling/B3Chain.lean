@@ -9,6 +9,7 @@ public import Definitions.Pous.Assumptions
 public import Proofs.Pous.Statements
 public import Proofs.Pous.Sanity
 public import Proofs.Pous.Accounting.Numbers
+import Proofs.Pous.Prob
 
 /-!
 # B3: hash-chain sequentiality in the parallel-query model
@@ -334,7 +335,7 @@ theorem b3_pr (m D W : ℕ) [NeZero m] (x₀ : Fin m)
         apply ENNReal.div_le_div_right
         exact_mod_cast key
     _ = ((W + 1 : ℕ) : ℝ≥0∞) / m := ENNReal.mul_div_mul_left _ _ hΩ (ENNReal.natCast_ne_top _)
-  unfold pr
+  simp only [Pous.pr_eq_card]
   convert key' using 4
   exact Finset.filter_congr_decidable _ _ _
 

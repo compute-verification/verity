@@ -51,7 +51,7 @@ decision 101's keyed sample) is retired.
 * `CallAnalysis.KnowledgeSound (κ σ) (g σ)`: each sampled proof block's compiled `--zk` session over hm96 hiding leaves
   (`analysisZC` at `ksBoundAccZ`, its joint inequality `jointZC_ksBound`), pointwise in the state, with `κ = 0` and
   `g = ⨆_j ksBoundAccZ_j/(1 − rateZ_j)` at the session's strategy, `ksBoundAccZ = ε_c⁻ + √(k·adv₀)` and
-  `rateZ = N₀/(ek)` (`Pouw.Window.flockKnowledgeSound_analysisZC`, proved, read through the bridge below).
+  `rateZ = N₀/(ek)` (`Pouw.Window.flockKnowledgeSound_analysisZC`, proved, read through Flock's analysis below).
   `ksJoint_le` (`κ = 2^logLen/(e·Kr)`) is the non-ZK plain-leaf table's, which main's window doesn't run.
 * `BindSoundIn … σ (δlink σ)`: Flock's link finder at the window's state, over the window's run.
 * `coll`: the random-oracle claim's collision bound at the sessions' counted queries (`CollCounted`, premise, open), on
@@ -87,11 +87,10 @@ three more links, each stated:
   (`Proofs/Flock/Soundness/Audit/OneStage.lean`). PoUW's event, the window accepting while its committed transcript
   isn't anchored, served and outside `𝓑`, is then at most `WindowDelta`'s bound plus `δ_in`
   (`Pouw.Window.window_served_le`, proved).
-* **The bridge to Flock** (`Proofs/Pouw/Window/FlockBridge.lean`): Flock's sessions read in core's game
-  (`Pouw.PearlC.FlockTile.toVerity`) win with the same probabilities (`prob_ofVerity`, proved), a Flock
-  `ExtractionAnalysis` of a session is a `CallAnalysis` of its call (`CallAnalysis.ofFlock`), and Flock's pointwise
-  knowledge bound
-  (`FlockKnowledgeSound`) is the call's `KnowledgeSound` (`ofFlock_knowledgeSound`, proved). The bound reads the
+* **Flock's analysis** (`Proofs/Pouw/Window/Flock.lean`): Flock's sessions are games of core's one game
+  (`Verity.Game`), so a Flock `ExtractionAnalysis` of a session is a `CallAnalysis` of its call with the same `ks`,
+  `link` and `cover` (`CallAnalysis.ofFlock`), and Flock's pointwise knowledge bound (`FlockKnowledgeSound`) is the
+  call's `KnowledgeSound` (`ofFlock_knowledgeSound`, proved). The bound reads the
   session's own coins and the extractor's `k` accepted reruns, at the state the registration, the sample and the earlier
   sessions left, never the sample's coin. At main's `--zk` sessions it is proved (`flockKnowledgeSound_analysisZC`, from
   `jointZC_ksBound`), with `κ_c = 0` and `g_c = ⨆_j ksBoundAccZ_j/(1 − rateZ_j)`; `δlink_c` is Flock's link finder at

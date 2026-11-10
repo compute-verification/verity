@@ -34,6 +34,7 @@ ROWS = {"LlBf16DotprodGemm_v1": (LL.LlBf16DotprodGemmWord, {"N": 3, "K": 64, "BS
         "Gemm_v2": (G.Gemm, {"K": 32, "N": 3, "DOT": H}),
         "CublasSplitKGemm_v1": (CB.CublasSplitKGemmWord, {"K": 128, "N": 3, "SPLIT_K": 2, "DOT": H}),
         "CublasSplitKGemmF32Out_v1": (CB.CublasSplitKGemmF32OutWord, {"K": 128, "N": 3, "SPLIT_K": 2, "DOT": H}),
+        "GemmF32Out_v1": (CB.GemmF32OutWord, {"K": 32, "N": 3, "DOT": H}),
         "BatchedGemm_v1": (CB.BatchedGemmWord, {"B": 2, "K": 32, "N": 3, "DOT": H}),
         "DsaMqaLogits_v3": (DSA.DsaMqaLogitsV3, {"N": 3, "H": 8, "D": 32}),
         "EmbeddingShard_v1": (T2.EmbeddingShard, {"VS": 5, "H": 4, "START": 2}),
@@ -132,8 +133,8 @@ def test_the_slices_cover_the_row_s_output_read_their_own_elements_and_compute_t
     assert np.asarray(ref).reshape(n, -1).tolist() == out.tolist()
 
 
-@pytest.mark.parametrize("family", ["LlBf16DotprodGemm_v1", "CublasSplitKGemmF32Out_v1", "BatchedGemm_v1", "EmbeddingShard_v1",
-                                    "DsaMqaLogits_v3"])
+@pytest.mark.parametrize("family", ["LlBf16DotprodGemm_v1", "CublasSplitKGemmF32Out_v1", "GemmF32Out_v1", "BatchedGemm_v1",
+                                    "EmbeddingShard_v1", "DsaMqaLogits_v3"])
 def test_a_window_s_slices_are_chunks_of_the_stager_s_bit_rows_read_once(row, family):
     x, ops, y, store = row(family)
     n, T = math.prod(extents(family)), descriptor_id(defn(family, unit=True))

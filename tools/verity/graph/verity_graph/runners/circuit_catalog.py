@@ -19,6 +19,10 @@ from . import circuit_binding as CB
 
 #: the prefix of a slice's output name, before its binding's (`families.circuit_binding.slice_of`)
 SLICE = "slice "
+#: circuit-check's thread pools, one thread each: it builds as many bindings at once as the task has cores (``--jobs``), each in
+#: a process of its own, and wider pools only make those contend for the cores.  circuit-check can't narrow them itself: numpy
+#: sizes its pool when it loads, before any argument is read
+THREADS = dict.fromkeys(("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS"), "1")
 
 
 def run(task: dict, work: Path) -> dict:
@@ -26,7 +30,8 @@ def run(task: dict, work: Path) -> dict:
     for d in (records, cut):
         shutil.rmtree(d, ignore_errors=True)
     try:
-        rc, rep = CB.checker(task, work, "--all", "--records-only", "--cache", str(records), "--slices", str(cut))
+        rc, rep = CB.checker(task, work, "--all", "--records-only", "--cache", str(records), "--slices", str(cut),
+                             env={**os.environ, **THREADS})
         if rc == 1 and rep is not None:
             return {"status": "fail", "detail": {"error": rep.get("why") or "circuit-check --records-only exited 1"}}
         if rc or rep is None:

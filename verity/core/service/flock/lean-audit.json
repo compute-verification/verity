@@ -1,4 +1,5 @@
 {
+ "format": 1,
  "roots": [
   "Flock",
   "FlockVerify",
@@ -6,6 +7,7 @@
   "Flock.Test.Full",
   "Flock.Test.Labels",
   "Flock.Test.PortRoots",
+  "Flock.Test.PortReads",
   "Flock.Test.KsScope",
   "Flock.Test.FullDraw",
   "Flock.Test.OneFull",
@@ -68,7 +70,9 @@
   "Flock.Test.TmplLayout",
   "Flock.Test.TmplFold",
   "Flock.Test.TmplScope",
+  "Flock.Test.TmplSection",
   "Flock.Test.NetAt",
+  "Flock.Test.ByteLines",
   "Flock.Test.MaskLog",
   "Flock.Test.CoinsTree",
   "Flock.Test.Canon",
@@ -97,7 +101,8 @@
   "FlockRecSparse": "the flock-rec-sparse executable's entry point, one line; its command is Flock.RecSparseCmd.cmd, audited under Flock",
   "FlockRecOpening": "the flock-rec-opening executable's entry point, one line; its command is Flock.RecOpeningCmd.cmd, audited under Flock",
   "FlockRecLinks": "the flock-rec-links executable's entry point, one line; its command is Flock.RecLinksCmd.cmd, audited under Flock",
-  "FlockFrameTape": "the flock-frame-tape executable's entry point, a test's: Flock.Firewall.Frame.cmdWith (audited under Flock) with the rep's draws read from a file, so verity/ml/flock/tests/test_firewall_frame.py knows the pads the frame masks with"
+  "FlockFrameTape": "the flock-frame-tape executable's entry point, a test's: Flock.Firewall.Frame.cmdWith (audited under Flock) with the rep's draws read from a file, so verity/ml/flock/tests/test_firewall_frame.py knows the pads the frame masks with",
+  "FlockReadTmpl": "the flock-read-tmpl executable's entry point, one line; its command is Flock.ReadTmplCmd.cmd, audited under Flock"
  },
  "assumptions": {},
  "open": {
@@ -119,7 +124,7 @@
   "Flock.Test.JsonParse.shw.go": "partial def: the test's printer of a parsed value (each number's mantissa and exponent), recursing through nested arrays and objects, to compare `JsonParse.parse` with `Lean.Json.parse` as text; no proof is about it, and the verifier never calls it"
  },
  "verifier": {
-  "entries": ["Flock.verifyWith", "Flock.Zk.verifyWith", "Flock.Stmt.setupTablesWith"],
+  "entries": ["Flock.verifyWith", "Flock.Zk.verifyWith", "Flock.Stmt.setupTablesWith", "Flock.Setup.ofCircuit"],
   "stop": [
    "Flock.Hm96.Default512.cols",
    "Flock.Hm96.Default512.key",
@@ -137,6 +142,8 @@
    "Flock.MerkleScheme.sha512",
    "Flock.Pinned.rowKey",
    "Flock.Pinned.tableSha",
+   "Flock.ReadNet.cvWords",
+   "Flock.ReadNet.midstate",
    "Flock.RecOpen.ivW"
   ],
   "hash": "Flock.Sha512",
@@ -293,6 +300,7 @@
    "UInt8.ofBitVec",
    "UInt8.ofNat",
    "UInt8.ofNatLT",
+   "UInt8.shiftRight",
    "UInt8.toBitVec",
    "UInt8.toNat",
    "UInt8.toUInt32",
@@ -313,7 +321,9 @@
    "WellFounded.extrinsicFix₃",
    "mixHash",
    "panicCore",
-   "repeatM"
+   "ptrAddrUnsafe",
+   "repeatM",
+   "withPtrEq"
   ]
  },
  "witnesses": {

@@ -180,7 +180,8 @@ def eps_at_delta(n: int, k: int, law: str) -> dict:
     return {"law": law, "units": n, "drawn": k,
             "incorrect_at_delta": {f"{d:.3g}": subset_bound(n, k, d) for d in DELTAS},
             "per_proof": "each proof's soundness error, ε_ks + ε_bind (KSLinOn's κ + √(γ·Pr B) + Pr[Bext]), "
-                         "symbolic: Claims.Sampling.KS is a hypothesis until Flock.Guarantees.SampledKSLive"}
+                         "symbolic: Claims.SamplingGeneric.Compiled.KS is a hypothesis until "
+                         "Flock.Guarantees.SampledKSLive"}
 
 
 # --- custody ----------------------------------------------------------------------------------------------------------
@@ -574,7 +575,7 @@ def input_terms(circuit: dict, pins: dict | None = None, roots: dict | None = No
 
     * ``inputs``: every unit's input rows;
     * ``wired``: each wire's reader rows times one row of its port, a cut port's row its words over its cuts
-      (`SampledProofs.Wires`' ``wiredBits``);
+      (`Spot.Wires`' ``wiredBits``);
     * ``registered``: each registered read of a held parameter, its reader rows, and each table read and opening of a
       table over one, its ports' rows. A parameter is held where the verifier's pin of it (``pins``, ``{param: root}``,
       the verifier's own, never the record's) is the root the window's registration records for it (``roots``, its
@@ -766,7 +767,8 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
             "lms_height": [g.get("lms_height") for g in custody_doc.get("gate_runs", [])],
             "uncovered": [
                 "the I/O tie (IoTieRequest) is checked in the clear, outside the proofs",
-                "Claims.Sampling.KS is a hypothesis until Flock.Guarantees.SampledKSLive restates it live",
+                "Claims.SamplingGeneric.Compiled.KS is a hypothesis until Flock.Guarantees.SampledKSLive restates it "
+                "live",
                 "hdata (the wardens' arrivals are the framed egress of the certifier's observations) and Carries "
                 "are run conditions, not yet named assumptions",
                 "B_reg: the trace's values at reg are the registration's",
@@ -949,7 +951,7 @@ def period_binding(answer: dict, case: dict, *, cert: dict, n2: dict[int, str], 
     audits must be this report's ``--audit`` registrations (``audits``). The case's parameters and evidence are outside
     that digest: its link, certifier session and key must be ``cert``'s, and `block_entry` re-decides the case. The
     rows form's link-windows are the scan's registrations, which no step here holds, so that form is refused."""
-    from verity.core.protocols.sampled_proofs.one_stage import registration as R
+    from verity.core.protocols.spot.one_stage import registration as R
     from verity.ml.commitments.identity import tagged_sha512
 
     try:

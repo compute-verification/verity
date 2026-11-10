@@ -9,7 +9,7 @@ public import Definitions.Nci.Dampener
 `Nci.Guarantees.DampenerWindows` takes the monitored servers' windows as one hypothesis over real numbers: `n` servers
 over a horizon of `H` ticks cut into `⌈H/L⌉` windows of `L` ticks, each starting from at most `R` bits of state and taking
 in at most `αF` bits a tick, hold `b_a (M_r + M_d) ≤ n ⌈H/L⌉ K Λ(K)` counted multiplications of the residual and the
-declared computation, `K = R + αF L`. `DampenerWindowsCap` derives that hypothesis on the actual circuit from the memory
+declared computation, `K = R + αF L`. `SlowdownWindowsCap` derives that hypothesis on the actual circuit from the memory
 cap over threads (`ThreadedRuntime`): at a whole-tick window `ω = L` over the horizon `t = H`, with each location's link
 capacity at most `αF` (`r = αF`), when one threading `T` of a reference circuit that the developer's declaration over
 `[0, t)` contains counts the residual and the declared computation together (`M_r + M_d ≤ |T.M|`), with `Λ` at `T`'s
@@ -30,7 +30,7 @@ one threading `T` of the reference circuit `c` (`M_r + M_d ≤ |T.M|`), they mee
 on the servers' windows at `H = t`, `L = ω` and `T`'s reuse: `b_a (M_r + M_d) ≤ n ⌈t/ω⌉₊ K Λ(K)`.
 
 Reads are counted by width, as in `ThreadedRuntime`. -/
-def DampenerWindowsCap : Prop :=
+def SlowdownWindowsCap : Prop :=
   ∀ {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (ℓ : L → L → ℕ) (Φ : Finset L → ℕ)
     (ends : E → L × L) (β : E → ℕ) (link : Fin A.N → Fin A.N → E) (n : ℕ) (X : Fin n → Finset L)
     (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t ω Γ : ℕ) (R F α b_w b_a : ℝ)
@@ -45,12 +45,12 @@ def DampenerWindowsCap : Prop :=
     Mr + Md ≤ T.M.card →
       b_a * ((Mr : ℝ) + Md) ≤ n * ⌈(t : ℝ) / ω⌉₊ * ((R + α * F * ω) * Lambda T.reuse e d b_w (R + α * F * ω))
 
-/-- **The compute dampener's windows from the memory cap over threads, per parameter slot.** `DampenerWindowsCap` from
+/-- **The compute dampener's windows from the memory cap over threads, per parameter slot.** `SlowdownWindowsCap` from
 `ThreadedRuntimeSlots`, with the reference circuit's weights incompressible per parameter slot of a slot map `σ`
 (`Nci.Assumptions.WeightsIncompressibleSlots`): `b_a (M_r + M_d) ≤ n ⌈t/ω⌉₊ K Λ(K)`.
 
 Reads are counted by width, as in `ThreadedRuntime`. -/
-def DampenerWindowsCapSlots : Prop :=
+def SlowdownWindowsCapSlots : Prop :=
   ∀ {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (ℓ : L → L → ℕ) (Φ : Finset L → ℕ)
     (ends : E → L × L) (β : E → ℕ) (link : Fin A.N → Fin A.N → E) (n : ℕ) (X : Fin n → Finset L)
     (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t ω Γ : ℕ) (R F α b_w b_a : ℝ)

@@ -1,13 +1,14 @@
-"""The active network certifier: the network certifier as a relay that knows bytes only and retransmits everything on a
-fixed schedule, so it rebuilds the framing of every connection it carries.
+"""The active network certifier: the network certifier as a relay that retransmits everything on a fixed schedule, so
+it rebuilds the framing of every connection it carries, and that releases a server's bytes only in the egress record's
+one form.
 
 The network certifier runs on an auditor host (`trusted-host`; co-located with the server for the demo, a named
 assumption). It terminates each client's TCP connection, opens one to the server for it, and forwards each direction's
-bytes unchanged in content: no tokenizer, API, request or stop string is the network certifier's. The one addition is
-on the server's side (`release`): each HTTP request's place in the release order and its release bucket on the server's
-copy, and, with `watermark`, a stream that tells the server each bucket's close. What the network certifier decides is
-the framing and the timing, both public functions of the schedule (`WardenParams`), and it certifies every cell it sends
-with the certifier's grid (`grid.Certifier`) and certificates (`certificate.Issuer`, in the runner).
+bytes unchanged in content or not at all: no tokenizer, API, request or stop string is the network certifier's. The one
+addition is on the server's side (`release`): each HTTP request's place in the release order and its release bucket on
+the server's copy, and, with `watermark`, a stream that tells the server each bucket's close. What the network certifier
+decides is the framing and the timing, both public functions of the schedule (`WardenParams`), and it certifies every
+cell it sends with the certifier's grid (`grid.Certifier`) and certificates (`certificate.Issuer`, in the runner).
 
 **Cells.** Every cell is B = `cell_bytes` bytes, `active.encode_frame(kind, ordinal, payload)`: the header (kind u8,
 the connection's ordinal u32, the payload's length u32), at most P = B − 9 payload bytes, zero fill. `DATA` carries
@@ -47,14 +48,24 @@ the server does moves s + D. So the egress cells on a connection, their sizes an
 the number of egress cells, the failure's cell) and the public parameters alone, s of the arrivals and the admission
 rule; the ingress cells are a function of s and the client's bytes.
 
+**The egress form** (`WardenParams.egress`). `id`, the default, is the egress record (`PROTOCOL.md`'s "The egress
+record"): the network certifier releases a `DATA` or `END` cell it cut only if `io_tie.parse_cell` reads it, so only an
+`io_tie.data_cell` or `io_tie.end_cell` on the connection's ordinal leaves, and it fails the connection (format) at any
+other cell, refusing and never rewriting. An honest id-form server writes one `io_tie.id_event` of exactly P bytes an
+output and then `io_tie.TRAILER`, so the cut gives one event a `DATA` cell and an `END` holding the trailer; any other
+bytes (an HTTP head, a response id, an event of another size, an error body) fail at their first cell. `bytes` relays
+any server's bytes in cells: a rehearsal's form, for a server that answers in another (vLLM's stock framing, say). Its
+parameters' digest is no id form's, and the period check reads only the id form's schedules.
+
 **Fail closed.** A connection fails at the first of: an egress cell whose bytes aren't there at its deadline (late),
-a server that hasn't ended by the last of `egress_cells` cells (limit), the server's connection failing (upstream),
-ingress past its bounds (ingress), a client cell of another kind than `DATA` or `END` (malformed). Its `FAIL` cell is
-in the slot of the next egress cell, and it is in the egress record. Every `FAIL` is the same bytes: the reason is a
-frame of the network certifier's `fails` record (`reason_frame`), witness the client never sees. The server's three
-reasons show only at an egress slot, so the server, which controls whether and where a connection fails, chooses one of
-at most (cells + 1) outcomes; the client's two fail at once, and are the client's own doing. A tick that runs more than
-`slack` past its boundary faults every grid's window (`monitor-unavailable`), as the active certifier's do.
+a server that hasn't ended by the last of `egress_cells` cells (limit), the server's connection failing (upstream), an
+egress cell out of the egress form (format), ingress past its bounds (ingress), a client cell of another kind than
+`DATA` or `END` (malformed). Its `FAIL` cell is in the slot of the next egress cell, and it is in the egress record.
+Every `FAIL` is the same bytes: the reason is a frame of the network certifier's `fails` record (`reason_frame`),
+witness the client never sees. The server's four reasons show only at an egress slot, so the server, which controls
+whether and where a connection fails, chooses one of at most (cells + 1) outcomes; the client's two fail at once, and
+are the client's own doing. A tick that runs more than `slack` past its boundary faults every grid's window
+(`monitor-unavailable`), as the active certifier's do.
 
 **The pacer** (`Warden(paced=…)`, off by default): a bucket written on the loop leaves when its tick runs, and the
 loop reads every server, so when a server writes within a bucket, which the prover chooses, moves when the bucket
@@ -83,7 +94,7 @@ cells the network certifier sent that way: every connection's r cells of the buc
 So the records are the wire, and each window's frames root (`certificate.frames_root`) attests every byte on it. The
 third, `fails`, has `lanes` slots a bucket and one frame a failed connection, its reason, in the bucket of its `FAIL`
 (`WardenParams.fails_grid`). `audit` is the read of the records in the clear: every connection's cells are the
-schedule's, every `FAIL` has its one reason, and no connection failed.
+schedule's and the egress form's, every `FAIL` has its one reason, and no connection failed.
 
 `PROTOCOL.md`'s "The active network certifier" has the leak bound. The module imports only the standard library and
 `verity`.
@@ -98,7 +109,7 @@ import secrets
 import time
 from collections import Counter, defaultdict, deque
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import asdict, dataclass, field, fields, replace
 from functools import cached_property
 from typing import Any
 
@@ -106,6 +117,7 @@ from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
 from verity.core.protocols.certifier.active import (DATA, HEADER, PAD, RUN_ID_BYTES, decode_frame, encode_frame,
                                                    precise_sleep)
 from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, Record, Row, Status, row_count
+from verity.core.protocols.certifier.io_tie import parse_cell
 from verity.core.protocols.certifier.pacer import Pacer, Report
 from verity.core.protocols.certifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
 
@@ -113,8 +125,11 @@ PARAMETERS_TAG = "verity-network-warden/parameters/v3"
 #: the network certifier's cell kinds, beside `active`'s PAD and DATA
 END, FAIL, REFUSED = 0x20, 0x21, 0x22
 KIND_NAMES = {PAD: "pad", DATA: "data", END: "end", FAIL: "fail", REFUSED: "refused"}
-#: why a connection failed: the server's three, then the client's two; only the `fails` record holds them
-REASONS = ("late", "limit", "upstream", "ingress", "malformed")
+#: why a connection failed: the server's three, the client's two, then the server's out-of-form cell; only the `fails`
+#: record holds them
+REASONS = ("late", "limit", "upstream", "ingress", "malformed", "format")
+#: what egress releases (the module docstring's egress form): the egress record's id-form cells, or any bytes
+EGRESS_FORMS = ("id", "bytes")
 #: the bytes the network certifier reads from a server at once
 READ_BYTES = 1 << 16
 #: the most a client connection may hold unwritten before the network certifier stops writing to it
@@ -136,11 +151,15 @@ class WardenParams:
     ingress_buckets: int = 50
     egress_cells: int = 4096
     every: int = 1  # a slot stride's buckets: the Programs' boundaries are every `every` buckets of a window
+    egress: str = "id"  # the egress form, one of `EGRESS_FORMS`
 
     def __post_init__(self) -> None:
-        for name, value in asdict(self).items():
+        for name in INTEGER_FIELDS:
+            value = getattr(self, name)
             if type(value) is not int or value < 1:
                 raise ValueError(f"{name} is a positive integer, not {value!r}")
+        if self.egress not in EGRESS_FORMS:
+            raise ValueError(f"egress is one of {', '.join(EGRESS_FORMS)}, not {self.egress!r}")
         if self.cell_bytes <= HEADER.size + 1:
             raise ValueError(f"a cell holds its {HEADER.size}-byte header and a byte")
         if self.window % self.every:
@@ -177,6 +196,11 @@ class WardenParams:
         """The 64 bytes each record head's `parameters` carries."""
         return tagged_sha512(PARAMETERS_TAG, canonical_json_bytes(asdict(self) | {"kinds": sorted(KIND_NAMES),
                                                                                   "reasons": list(REASONS)}))
+
+
+#: `WardenParams`' integer fields, every one but `egress`: the schedule the period check reads (`scheduleOf`), whose
+#: egress form is the id form
+INTEGER_FIELDS = tuple(f.name for f in fields(WardenParams) if f.name != "egress")
 
 
 def cell(kind: int, ordinal: int, payload: bytes, cell_bytes: int) -> bytes:
@@ -612,7 +636,8 @@ class Warden:
     def _egress(self, c: _Connection, t: int) -> list[bytes]:
         """Connection c's r egress cells at bucket t (the module docstring's schedule), from s + D on. A client's
         problem fails the connection at once; the server's only at an egress slot, so where it fails is one of the
-        egress cells. The reason goes to the `fails` record, never into the cell."""
+        egress cells. A `DATA` or `END` cell out of the egress form fails it in that cell's slot, and none of its bytes
+        leaves. The reason goes to the `fails` record, never into the cell."""
         B, p, r, D = self.params.cell_bytes, self.params.payload, self.params.slots, self.params.delay
         out, pad = [], _pad(c, B)
         for _ in range(r):
@@ -627,21 +652,25 @@ class Warden:
                 continue
             else:
                 whole = len(c.egress) > p or (len(c.egress) == p and not c.egress_ended)
+                kind = None
                 if c.egress_ended and not whole:
-                    out.append(cell(END, c.ordinal, bytes(c.egress), B))
-                    c.egress.clear()
-                    c.egress_cells += 1
-                    c.ended = t
-                    continue
-                if c.egress_cells + 1 >= self.params.egress_cells:
+                    kind = END
+                elif c.egress_cells + 1 >= self.params.egress_cells:
                     failed = "limit"
                 elif whole:
-                    out.append(cell(DATA, c.ordinal, bytes(c.egress[:p]), B))
-                    del c.egress[:p]
-                    c.egress_cells += 1
-                    continue
+                    kind = DATA
                 else:
                     failed = "upstream" if c.upstream else "late"
+                if kind is not None:
+                    made = cell(kind, c.ordinal, bytes(c.egress[:p]), B)
+                    if self.params.egress == "bytes" or parse_cell(made) is not None:
+                        out.append(made)
+                        del c.egress[:p]
+                        c.egress_cells += 1
+                        if kind == END:
+                            c.ended = t
+                        continue
+                    failed = "format"
             c.failed, c.failed_at, c.ended = failed, c.egress_cells, t
             out.append(cell(FAIL, c.ordinal, b"", B))
             self.fails.enqueue(reason_frame(c.ordinal, failed, B))
@@ -749,8 +778,9 @@ def audit(params: WardenParams, ingress: Sequence[Record], egress: Sequence[Reco
     egress is exactly the schedule's for (its admission s, its egress cells): padding through bucket s + D − 1 (up to
     its `FAIL`, for a client's failure before then), then `DATA` in every slot, then one `END` or `FAIL`, then padding
     to the bucket's end. Every `FAIL` has one reason in the `fails` record, in its bucket, and every reason its `FAIL`.
-    A window is accepted when its three records are complete, its cells are the schedule's and no connection failed in
-    it. Each connection's entry has its buckets, cells, outcome, its failure's reason and the SHA-256 of each
+    In the id egress form every egress `DATA` and `END` cell is one `io_tie.parse_cell` reads. A window is accepted
+    when its three records are complete, its cells are the schedule's and the egress form's and no connection failed
+    in it. Each connection's entry has its buckets, cells, outcome, its failure's reason and the SHA-256 of each
     direction's bytes."""
     T, r, D = params.window, params.slots, params.delay
     verdicts: dict[int, list[str]] = defaultdict(list)
@@ -773,11 +803,15 @@ def audit(params: WardenParams, ingress: Sequence[Record], egress: Sequence[Reco
         for record in records:
             for b, row in enumerate(record.grid):
                 t = record.window * T + b
+                frames = row[:row_count(row)]
                 try:
-                    got = [read_cell(f, params.cell_bytes) for f in row[:row_count(row)]]
+                    got = [read_cell(f, params.cell_bytes) for f in frames]
                 except ValueError as e:
                     verdicts[record.window].append(f"{name} bucket {t}: {e}")
                     continue
+                if name == "egress" and params.egress == "id" and \
+                        any(k in (DATA, END) and parse_cell(f) is None for f, (k, _, _) in zip(frames, got)):
+                    verdicts[record.window].append(f"egress bucket {t}: a cell out of the id egress form")
                 total[name] += len(got)
                 order = [o for _, o, _ in got[::r]]
                 if len(got) % r or got != sorted(got, key=lambda c: c[1]) or len(set(order)) != len(order) or \

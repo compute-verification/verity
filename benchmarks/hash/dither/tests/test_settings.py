@@ -10,14 +10,14 @@ from verity_config.settings import UnknownSetting, of
 DITHER = Path(__file__).resolve().parents[1]
 
 
-def test_loads_by_path_and_holds_the_standalone_files_to_their_declarations():
+def test_loads_by_path_and_holds_the_standalone_files_to_their_declarations() -> None:
     reg = of(DITHER / "sbench.py")
     assert reg is of(DITHER / "dither_so.py") and Path(reg.path) == DITHER / "settings.py"
     assert reg.prefixes == ("DITHER_", "SBENCH_", "HB_")
     assert reg.standalone_problems() == []
 
 
-def test_parses_as_the_readers_did(monkeypatch):
+def test_parses_as_the_readers_did(monkeypatch: pytest.MonkeyPatch) -> None:
     reg = of(DITHER / "settings.py")
     for name in ("DITHER_SO_GRAPH", "DITHER_A_LVF", "SBENCH_B", "SBENCH_SMQ_SWEEP", "DITHER_SO_TAIL"):
         monkeypatch.delenv(name, raising=False)
@@ -33,7 +33,7 @@ def test_parses_as_the_readers_did(monkeypatch):
         reg.need("DITHER_H1C", {})
 
 
-def test_refuses_an_unknown_dither_variable():
+def test_refuses_an_unknown_dither_variable() -> None:
     reg = of(DITHER / "settings.py")
     with pytest.raises(UnknownSetting, match="DITHER_SO_FUSD"):
         reg.validate_environ({"DITHER_SO_FUSD": "1", "DITHER_SO_FUSED": "1", "H1U_JRC": "1"})

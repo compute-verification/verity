@@ -36,7 +36,7 @@ from pathlib import Path
 
 from remote_bandwidth_fakes import Entropy
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
-from verity.core.protocols.sampled_proofs.challenger import live_domain, live_leaf
+from verity.core.protocols.spot.challenger import live_domain, live_leaf
 from verity.ml.commitments.rowleaf import sha512_row_v2_digest
 from verity.ml.randomness import derive
 

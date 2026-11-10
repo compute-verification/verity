@@ -20,11 +20,11 @@ and samples on (`designWellFormed`), so the scope check need check only the prog
 
 @[expose] public section
 
-open SampledProofs
+open Spot
 
 namespace Claims.Sampling
 
-open Properties.SampledProofs Properties.SampledProofs.SecurityProofs
+open Properties.Spot Properties.Spot.SecurityProofs
 
 variable {Coin Col T : Type}
 

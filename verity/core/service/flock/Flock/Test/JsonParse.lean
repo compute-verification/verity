@@ -15,6 +15,8 @@ import all Init.Data.Ord.String
 import all Init.Data.Repr
 meta import Flock.JsonParse
 meta import Lean.Data.Json
+import all Lean.Data.Json.Basic
+import all Init.Data.String.Defs
 
 @[expose] public section
 

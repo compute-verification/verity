@@ -111,7 +111,7 @@ theorem finRepLanes_ret (vs : finS.SwVals)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
     (hL0 : _root_.Flock.Guarantees.LoopInnerRound0 Masked.dataE L₀ (realOf src) x w)
     (hS : Loop.RepSrc L₀ src x w) (hS0 : Level0Src src x w)
-    (hE : LeanRelease.LiveRoundEq finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
+    (hE : LeanRelease.LiveRoundEqOwn finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
     (hc : finS.SwCausalOn (Loop.SwOk Masked.dataE) vs) : FinRepLanes vs L₀ src (realOf src) wk x w := by
   intro ν t κ m₀ ρ₀ ops s0 spec j r tb hi q f ic' l p tr l' hrun
   obtain ⟨hF, hsx, hRep, -, hl, hgo⟩ := hrun

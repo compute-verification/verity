@@ -170,8 +170,8 @@ class Guard:
 LEASE_DIR = Path(os.environ.get("GPU_LEASE_DIR", "/run/gpu-lease"))
 BUILD = {"lake", "lean", "leanc", "cargo", "rustc", "cc1", "cc1plus", "ld", "ld.lld", "make", "ninja", "nvcc", "ptxas", "cicc", "xz"}
 QUIET_MATCH = re.compile(os.environ["QUIET_MATCH"]) if os.environ.get("QUIET_MATCH") else None
-# a train check (slot.py's group, check.py under it) runs straight through a timed window (top 24 Oct 04:44Z, landing first): on
-# n2 at 05:16Z one --timed lease froze train eda3's check and c567's post-landing check for 28 min
+# a train check (slot.py's group, check.py under it) runs straight through a timed window, so landing never waits on one: a
+# --timed lease would otherwise freeze a train's check for the whole window
 QUIET_EXEMPT = re.compile(r"-m research |research launch-request|/workspace/pouw/fill/running/|timeout |tools/verity/check/(check|slot)\.py")
 # of those, the ones whose descendants in groups of their own (ninja's compiles, a check's subprocesses) are spared too; a research
 # runner's are not, since every run's workload descends from one

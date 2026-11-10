@@ -27,7 +27,7 @@ import Proofs.Flock.Soundness.Refine.Seam
 /-!
 # The decoder is right at the hidden-output headline's samples
 
-`decodesOn_execH`: DecodeZL's `decodesOn_exec` at the hidden tables, from plays-coin's `decodesOnOfRuns`. At an
+`decodesOn_execH`: DecodeZL's `decodesOn_exec` at the hidden tables, from `Discharge/PlaysCoin`'s `decodesOnOfRuns`. At an
 outcome flock-verify accepts under hidden outputs:
 
 * `accepts_repsH`: DecodeZL's `accepts_reps` under hidden outputs. The one table's statement `st` is setupHidden's at

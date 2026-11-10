@@ -3,7 +3,7 @@ module
 public import Definitions.Flock.Game.Tape
 public import Proofs.Flock.Bridge.V5.Statement
 public import Proofs.Flock.EndToEnd.Period.Run
-public import Proofs.Flock.Soundness.Assumptions.Finders
+public import Proofs.Flock.Soundness.Finders
 
 /-!
 # One window's sample over several members, each verified in its own session (trusted)
@@ -12,7 +12,7 @@ public import Proofs.Flock.Soundness.Assumptions.Finders
 its own statement at one table (`SampledKSLiveV5`'s binders: its circuit file's descriptor, public input ports and public
 file, and the verifier's own recomputation `own`), as one-stage v2 verifies them. The window's audit (`JointAuditV5`)
 registers every member, samples one sample over all their proof blocks on live coins with the deployed sample
-(`Bridge.execSel`, `SampledProofs.Draw.drawUnits` on one stream) under the registration's law (`Bridge.LawOn`: subset,
+(`Bridge.execSel`, `Spot.Draw.drawUnits` on one stream) under the registration's law (`Bridge.LawOn`: subset,
 stratified or work, a stratum free to span members), each member's proof blocks `MemberV5.emb` into the population, and
 then runs one flock-verify session per member in the registration's order, member `m` proving its part of the sample
 (`MemberV5.part`, sampled by `subset |part|`). A member's sampled count is random and may be zero. The run accepts when the
@@ -276,7 +276,7 @@ noncomputable def design (k : Fin w.ms.length) : Law (w.ms.get k).n where
 /-- The sampling design's own miss of a set `B` of the population's proof blocks, `P_a(B)` of `oneStageOf law` on the strata
 `ns`. -/
 noncomputable def pa (B : Finset (Fin w.nJ)) : ℝ :=
-  (Properties.SampledProofs.oneStageOf w.law).Pa w.ns (B.map Fin.valEmbedding)
+  (Properties.Spot.oneStageOf w.law).Pa w.ns (B.map Fin.valEmbedding)
 
 /-- The members' knowledge and binding terms, `Σ_m (ε_ks,m + ε_bind,m)`, each at its part's sampling design. -/
 noncomputable def eps : ℝ≥0∞ := ∑ k, ((w.ms.get k).epsKs (w.design k) + (w.ms.get k).link (w.design k))

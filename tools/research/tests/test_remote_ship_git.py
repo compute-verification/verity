@@ -67,7 +67,7 @@ def test_first_and_delta_ships_go_as_git_objects_and_verify_per_file(repo, tmp_p
     man = remote.archive_manifest_git(repo)
     assert doc["archive_sha256"] == man["archive_sha256"] and doc["files"] == 4 and doc["pod_archive_sha256"]
     assert _tree(Path(dest)) == man["files"], "the tree on the machine is the commit, file by file"
-    assert min(p.stat().st_mtime for p in Path(dest).rglob("*") if p.is_file()) >= 1_609_459_200, "extraction mtimes, not the 2020 commit time"   # 2021-01-01
+    assert min(p.stat().st_mtime for p in Path(dest).rglob("*") if p.is_file()) >= 1_609_459_200, "extraction mtimes, not the 2020 commit time"   # the start of 2021, UTC
     bare = root / remote.POD_GIT_REPO
     assert _git(bare, "rev-parse", f"refs/research/src/{sha}") == sha
     assert [p.name for p in (root / "src").iterdir()] == [sha] and "archive stream" not in capsys.readouterr().err
@@ -184,8 +184,8 @@ def _replica_test_in(tree: Path) -> subprocess.CompletedProcess:
 
 
 def test_a_shipped_tree_answers_git_as_the_launchers_checkout_does(tmp_path, monkeypatch):
-    """#371: the replica test skips a fetched fixture only where `git ls-files` answers.  A shipped `git archive` had no .git, so in a
-    recorded check every migrated fixture read as missing.  Shipped over git, the tree is a checkout, and the same test passes there."""
+    """The replica test skips a fetched fixture only where `git ls-files` answers.  A shipped `git archive` has no .git, so in a
+    recorded check every migrated fixture would read as missing.  Shipped over git, the tree is a checkout, and the same test passes there."""
     repo = _replica_repo(tmp_path)
     _, dest, _ = remote.ship_source(LOCAL, str(tmp_path / "git-root"), repo)
     p = _replica_test_in(Path(dest))
@@ -211,8 +211,8 @@ def test_nothing_credential_like_is_left_on_the_machine(repo, tmp_path):
 
 
 def test_a_run_that_edits_the_shared_tree_is_not_what_the_next_run_of_that_commit_gets(repo, tmp_path, capsys):
-    """INF-225: a probe ran `git checkout origin/main -- FILE` inside the node's shared tree for a commit, and every later run of that
-    commit ran main's file.  The machine refuses such a tree, and the next ship sets it aside and ships the commit afresh."""
+    """A probe that runs `git checkout origin/main -- FILE` inside the node's shared tree for a commit would make every later run of
+    that commit run main's file.  The machine refuses such a tree, and the next ship sets it aside and ships the commit afresh."""
     root = tmp_path / "root"
     sha, dest, doc = remote.ship_source(LOCAL, str(root), repo)
     (Path(dest) / ".lake").mkdir()

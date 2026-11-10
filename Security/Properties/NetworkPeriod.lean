@@ -28,12 +28,12 @@ supplies each of the statement's quantities as at most the check's number:
   (`faulty_bits`), and `Dj^k` at most `jitter ^ steps`.
 
 The rows form's terms charge a tied audit (one a scan's `prog` is an output of) its free inputs and no faulty term,
-though an incorrect proof block's outputs would reach the egress; `RowsTiedDrawn` says the check accepts no tied audit with a unit
+though an incorrect proof block's outputs would reach the egress; `RowsTiedSampled` says the check accepts no tied audit with a unit
 unsampled. `RowsProgWired` says it accepts no link-window whose scan's `prog` is not a compute audit's slot entries,
 the entries port of a `SlotEntry_v1` template of that audit's own Program. `RowsStateTied` says it accepts no
 link-window whose scan's state is not the `SCAN_STATE` of an audit its `prog` is wired to, so a state that skips or
 alters one of the scan's transitions is no Program's input. Beside them, their nontrivial lemmas' objects:
-`RowsTiedDrawnOf`, `RowsProgWiredOf` and `RowsStateTiedOf`, the properties of any period check, and `acceptAllRows`, a
+`RowsTiedSampledOf`, `RowsProgWiredOf` and `RowsStateTiedOf`, the properties of any period check, and `acceptAllRows`, a
 check that accepts every period.
 -/
 
@@ -70,25 +70,25 @@ def RowsKBoundsCount : Prop :=
 
 /-- Audit `i`'s answer drew every unit: one-stage accepted its window record with a profile of one level, sampled
 `subset:k` or stratified, whose `Σ k` is the level's size (`factsOf`'s `drawn` and `units`). -/
-def DrawnWhole (i : ℕ) (reg : Lean.Json) (x : Core.Answer) : Prop :=
+def SampledWhole (i : ℕ) (reg : Lean.Json) (x : Core.Answer) : Prop :=
   ∃ (prof : Core.Integrity) (pub : Lean.Json) (f : Facts),
     answered s!"audit {i}" reg x = .ok (prof, pub) ∧ factsOf s!"audit {i}" prof pub = .ok f ∧ f.drawn = f.units
 
 /-- **The rows form accepts no tied audit with a unit unsampled.** If the check accepts a period in the rows form, every
 audit some link-window's scan's `prog` is an output of (`tiedIn` over the commitment's window records) drew every unit
-(`DrawnWhole`): `rowsTerms` charges such an audit's free inputs to its link-window and no faulty term for it. -/
-def RowsTiedDrawn : Prop :=
+(`SampledWhole`): `rowsTerms` charges such an audit's free inputs to its link-window and no faulty term for it. -/
+def RowsTiedSampled : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
       ∀ (i : ℕ) (reg : Lean.Json) (x : Core.Answer), c.audits[i]? = some reg → e.audits[i]? = some x →
-        tiedIn c.audits c.windows i = true → DrawnWhole i reg x
+        tiedIn c.audits c.windows i = true → SampledWhole i reg x
 
-/-- `RowsTiedDrawn` of any period check. -/
-def RowsTiedDrawnOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
+/-- `RowsTiedSampled` of any period check. -/
+def RowsTiedSampledOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     chk p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
       ∀ (i : ℕ) (reg : Lean.Json) (x : Core.Answer), c.audits[i]? = some reg → e.audits[i]? = some x →
-        tiedIn c.audits c.windows i = true → DrawnWhole i reg x
+        tiedIn c.audits c.windows i = true → SampledWhole i reg x
 
 /-- **The rows form accepts no link-window whose scan's `prog` is not a compute audit's slot entries.** If the check
 accepts a period in the rows form, each link-window's scan's registration has its `scan/prog` entry at the root and
@@ -126,7 +126,7 @@ def RowsStateTiedOf (chk : Params → Commitment → Evidence → Core.Outcome P
       ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg → stateTied p.audits s c.audits reg = true
 
 /-- A period check that accepts every period, publishing the rows form's terms of no link-window: what
-`RowsTiedDrawnOf`, `RowsProgWiredOf` and `RowsStateTiedOf` must fail at for `RowsTiedDrawn`, `RowsProgWired` and
+`RowsTiedSampledOf`, `RowsProgWiredOf` and `RowsStateTiedOf` must fail at for `RowsTiedSampled`, `RowsProgWired` and
 `RowsStateTied` to say something. -/
 def acceptAllRows (p : Params) (_ : Commitment) (_ : Evidence) : Core.Outcome Public Profile :=
   .accept (rowsTerms #[] ⟨0, 0, 0, 0⟩ #[] p.cells p.jitter p.windows) { link := p.link, windows := p.windows }

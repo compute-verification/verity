@@ -1079,8 +1079,8 @@ def cmd (args : List String) : IO UInt32 := do
     return (1 : UInt32)
   let (some cf, some pf) := (Witness.argOf args "--circuit", Witness.argOf args "--public")
     | refuse "usage: flock-firewall finish --circuit F --public F [--statement ID] [--session-tables J] [--tables DIR] [--partition F] [--program F] [--draw F]"
-  let some tags := Tags.find? ((Witness.argOf args "--statement").getD Tags.circuit.name)
-    | refuse s!"unknown statement; known: {Tags.all.map (·.name)}"
+  let some tags := Tags.byName? ((Witness.argOf args "--statement").getD Tags.circuit.name)
+    | refuse s!"unknown statement; known: {(Tags.all ++ Tags.templated).map (·.name)}"
   let some count := ((Witness.argOf args "--session-tables").getD "1").toNat? | refuse "--session-tables J: J is a number"
   let (partition, program) ← match ← Witness.bindingsOf args with
     | .ok b => pure b

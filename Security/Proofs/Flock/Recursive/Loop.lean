@@ -58,8 +58,8 @@ values `vs`, one after another, each on its own tape.
 * `outerSessionsZK_of`: `OuterSessionsZK` at those statements, with `ε_o` the supremum over contexts of their errors and
   the composed prover's fork term, on V*'s staging (`LoopSessions.Public`, `LoopSessions.Honest`).
 * `loop_zkmalR`: the loop's session is `ZKmalR` at its switched prover, `Flock.zk_deployZk_sw_stops`'s bound under
-  `SessionLoopZKDeployed`'s premises on the deployed tables, which take `SessionsCoined`'s role: the switched round
-  encoding causal at `Loop.SwOk`'s coins (`SwCausalOn`), where the loop's stops compute (`LeanRelease.stopsOk_swOk`).
+  the deployed tables' side, which takes `SessionsCoined`'s role: the switched round encoding causal at `Loop.SwOk`'s
+  coins (`SwCausalOn`), where the loop's stops compute (`LeanRelease.stopsOk_swOk`).
 * `outerSessionsZK_loop`: `outerSessionsZK_of` at `loop_zkmalR`.
 * `outerViewZK_loop`: `RecursiveZK`'s `_hOuter` (`OuterViewZK`) at one worker's statements, the simulator their public
   statements'.
@@ -426,8 +426,8 @@ theorem loopEps_nonneg (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Clai
 
 /-- **The loop's session is zero knowledge at its switched prover** (`ZKmalR`): `Flock.zk_deployZk_sw_stops` at the
 loop's session (`loopRef`) and the workers' values `vs`, at the pinned key's hiding gap and `t` rewinds (`loopSim`,
-`loopEps`, `4·t·3^t`), under `SessionLoopZKDeployed`'s premises on the deployed tables: the switched round encoding
-causal at `Loop.SwOk`'s coins, where the loop's stops compute (`LeanRelease.stopsOk_swOk`). -/
+`loopEps`, `4·t·3^t`), under the deployed tables' side: the switched round encoding causal at `Loop.SwOk`'s coins,
+where the loop's stops compute (`LeanRelease.stopsOk_swOk`). -/
 theorem loop_zkmalR (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ) (ht : 0 < t)
     (hS : Claims.ZKServer.Loop.finS.Tables)
     (hV : Claims.ZKServer.Loop.finS.Complete
@@ -460,9 +460,9 @@ theorem loop_zkmalR (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ) (ht : 0 < 
 `vs` (`(loopRef L₀ src).swP vs`), the simulator and errors `Flock.zk_deployZk_sw_stops`'s at the pinned key's hiding
 gap and `t` rewinds (`loopSim`, `loopEps`, `4·t·3^t`). The view is the switched prover's; what the loop's own prover
 sends is `SessionLoopZKDeployed`'s, which bounds it by twice the simulated view plus its error.
-`SessionLoopZKDeployed`'s premises on the deployed tables (`Tables`, `Complete`, `DummyReg`, `Causal`, `TapeOK`, and
-`SwCausalOn` at `Loop.SwOk`'s coins) take `SessionsCoined`'s role, with no further obligation on the tables; V*'s
-staging is `outerSessionsZK_of`'s. -/
+The deployed tables' side (`Tables`, `Complete`, `DummyReg`, `Causal`, `TapeOK`, which `Loop.tables_dataE` and its
+siblings prove, and `SwCausalOn` at `Loop.SwOk`'s coins) takes `SessionsCoined`'s role, with no further obligation on
+the tables; V*'s staging is `outerSessionsZK_of`'s. -/
 theorem outerSessionsZK_loop {Ow Prog Wit Rv Ωa Ωp Pub Θ : Type} {nr nh : ℕ}
     (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ) (ht : 0 < t) (hS : Claims.ZKServer.Loop.finS.Tables)
     (hV : Claims.ZKServer.Loop.finS.Complete
@@ -499,8 +499,8 @@ messages `msgs` are fixed before the first commitment (the committed-coin case):
 and the ZK server's commitments (`LoopSessions.atWorker`), each run in turn by the loop's switched prover at the workers'
 values `vs`, against `V*` at its tape `θ` of the tape and the commitments; the simulator is their public statements'
 (`LoopSessions.pubStmts`), which reads no witness; and `ε_o` is the statements' error at
-`Flock.zk_deployZk_sw_stops`'s bound (`loop_zkmalR`). It takes `SessionLoopZKDeployed`'s premises on the deployed
-tables, which take `SessionsCoined`'s role, and of V*'s staging `LoopSessions.Honest` and `LoopSessions.Sized`; the
+`Flock.zk_deployZk_sw_stops`'s bound (`loop_zkmalR`). It takes the deployed tables' side, which takes
+`SessionsCoined`'s role, and of V*'s staging `LoopSessions.Honest` and `LoopSessions.Sized`; the
 public context is the tape and the commitments by construction. -/
 theorem outerViewZK_loop {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ) (ht : 0 < t)
     (hS : Claims.ZKServer.Loop.finS.Tables)

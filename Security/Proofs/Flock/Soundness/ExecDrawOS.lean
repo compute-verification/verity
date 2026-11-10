@@ -8,7 +8,7 @@ public import Init.Internal.Order.While
 # The live sample, extend-and-rerun included, escapes no more often than the model's
 
 The verifier has no randomness of its own. The live sample is `Flock.Draw.drawWith` on the challenger's coins, read in
-order (`SampledProofs.Draw.drawUnits`, as the one-stage audit runs it): each stratum's `subset` runs on a stream of
+order (`Spot.Draw.drawUnits`, as the one-stage audit runs it): each stratum's `subset` runs on a stream of
 `need` bytes, and `Flock.Draw.onWith` extends the stream by `need` more and reruns it whenever it runs out.
 `Flock.Draw.drawOS` is the same `drawWith` with every stream's bytes from `IO.getRandomBytes` (`drawOS_def`, by `rfl`).
 

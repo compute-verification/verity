@@ -22,7 +22,7 @@ takes from v2's parameters and evidence.
 namespace Properties.Challenger.Limits
 
 open Lean (Json)
-open SampledProofs SampledProofs.Challenger
+open Spot Spot.Challenger
 
 /-! ## The deployed key -/
 

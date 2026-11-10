@@ -28,7 +28,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import layout as L
-
 from verity.core.protocols.remote_bandwidth import p2
 from verity.core.protocols.remote_bandwidth import receipts as R
 
@@ -61,7 +60,7 @@ def sample_units(lay: L.StoreLayout, units: int, sample: int, seed: int) -> list
     return sorted(picks | set(rest[:sample]))
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--keep", type=Path, required=True, help="full.py --keep's directory")
     ap.add_argument("--layout", type=Path, required=True)

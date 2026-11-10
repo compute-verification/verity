@@ -212,10 +212,10 @@ from verity.core.protocols.pouw.leaf_lanes import LEAST_K
 from verity.core.protocols.pouw.protocol import CALL_RANGE, tagged
 from verity.core.protocols.pouw.weights import CHUNK_ALIGN, CHUNK_MAX, chunks, leaf_words, weights_root
 from verity.core.protocols.profile import WINDOW_DELTA
-from verity.core.protocols.sampled_proofs import challenger as Ch
-from verity.core.protocols.sampled_proofs.one_stage import produced as PR
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot import challenger as Ch
+from verity.core.protocols.spot.one_stage import produced as PR
+from verity.core.protocols.spot.one_stage import proofs as PF
+from verity.core.protocols.spot.one_stage import registered as G
 from verity.ml.circuits.codec import _checked_refs
 from verity.ml.circuits.defs import _Widths
 from verity.ml.circuits.refs import Coll, Concat, refs_from_json
@@ -1430,7 +1430,9 @@ def domain_of(program: str, window: str, e: dict, session: str | None = None) ->
                     None if is_held(v) or first else window, session=session if first else None).domain_id.hex()
 
 
-def other_registration(v: str) -> str:
+def other_record(v: str) -> str:
+    """The refusal of the registered value `v` whose entry's domain is not `domain_of`'s: an entry of another window
+    commitment record, another window's or another circuit's."""
     return (f"registered value {v}'s domain is not the one the window's registration gives it (the registered domain of "
             f"{v} under the circuit the window's proofs were verified against, the SHA-512 of its descriptor, and, for a "
             "value other than the weights' …/b/<K> and round 0's …/ids@0 and …/requests@0, the window's open root, the "
@@ -1459,7 +1461,7 @@ def _registration(window: str, program: str, prefix: str, entries: list, ss: lis
         if not _entry(e):
             return (f"registered value {v}'s entry is not one-stage's {{value, root, leaves, words, domain}} (with "
                     f"word_bits only when it is not 16), its rows at least 1 and its words from 1 to {MAX_ROWS}")
-        return None if e["domain"] == domain_of(program, window, e, session) else other_registration(v)
+        return None if e["domain"] == domain_of(program, window, e, session) else other_record(v)
 
     for e in entries:
         if is_tied(e.get("value")) or is_requests(e.get("value")):

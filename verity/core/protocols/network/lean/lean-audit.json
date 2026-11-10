@@ -1,4 +1,5 @@
 {
+ "format": 1,
  "roots": ["NetworkCheck"],
  "exempt": {
   "NetworkCheck.DifftestMain": "the difftest against certificate.py, under `runs`: compiled evaluation of NetworkCheck.Difftest.main, audited under NetworkCheck, a test and not a proof",
