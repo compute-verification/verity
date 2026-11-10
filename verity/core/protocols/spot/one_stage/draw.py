@@ -52,9 +52,10 @@ fixed and a multiple of J (`tables_problem`, Lean `Draw.tablesWhy`): a subset sa
 k_s. A stratified sample is held to the verifier's sampling design once, for the whole session, before the split.
 
 **Several sessions** (`split`, `check_split`) prove one sample in parts, one session a part, in order. Which proof
-blocks are which part is `_parts`' rule, which both call and nothing else states. With no `session_units`, or a sample
-that proves no more proof blocks than it, there is one part, the whole sample, and `check_split` accepts exactly the
-proof blocks `check_proved` does. No audit calls them: the one-stage audit proves its sample in one session.
+blocks are which part is `_parts`' rule, which both call and nothing else states. `session_units`, the most proof
+blocks one session proves, is a power of two. With none, or a sample that proves no more proof blocks than it, there
+is one part, the whole sample, and `check_split` accepts exactly the proof blocks `check_proved` does. No audit calls
+them: the one-stage audit proves its sample in one session.
 """
 from __future__ import annotations
 
@@ -434,17 +435,17 @@ def check_proved(draw: Mapping[str, Any], proved_units: Sequence[int], instances
 
 def session_units_problem(session_units: Any) -> str | None:
     """Why `session_units`, the most proof blocks one session proves, isn't that, or None: it is None (no bound, so the
-    sample is proved in one session) or an integer of at least one."""
-    if session_units is None or (_int(session_units) and session_units >= 1):
+    sample is proved in one session) or an integer that is a power of two, one included."""
+    if session_units is None or (_int(session_units) and session_units >= 1 and not session_units & (session_units - 1)):
         return None
-    return f"session_units is the most proof blocks one session proves, an integer of at least one, not {session_units!r}"
+    return f"session_units is the most proof blocks one session proves, an integer that is a power of two, not {session_units!r}"
 
 
 def _parts(sample: Mapping[str, Any], session_units: int | None) -> list[list[int]]:
     """The rule for which session proves which proof block of a sample, stated here and nowhere else: the proof blocks
     the sample proves (`proved`), ascending, cut into consecutive runs of `session_units`, the last run the rest; one
     part, all of them, when `session_units` is None or the sample proves no more than that. It reads the sample and
-    `session_units` (None or at least one, `session_units_problem`) and nothing else, so the parts' number and sizes follow
+    `session_units` (None or a power of two, `session_units_problem`) and nothing else, so the parts' number and sizes follow
     from how many proof blocks the sample proves, which a sampling design of fixed count fixes (`fixed_count`)."""
     units = proved(sample)
     if session_units is None or len(units) <= session_units:

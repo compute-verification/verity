@@ -13,14 +13,16 @@ SUBSET = {**D.parse_design("subset:8"), "population": 20, "units": [0, 2, 3, 7, 
 DESIGN = {**D.parse_design("stratified:5"), "strata": [{"template": "SplitTestA_v1", "units": [[0, 4]], "k": 2},
                                                         {"template": "SplitTestB_v1", "units": [[4, 10]], "k": 3}]}
 SAMPLE = {**DESIGN, "population": 10, "units": [1, 3, 4, 7, 9]}
-#: a work sampling design over 6 proof blocks, templates of 2 (no work) and 4 of them: k_s = 1 and 4
-WORK = {**D.parse_design("work:4"), "strata": [{"template": "SplitTestA_v1", "units": [[0, 2]], "work": 0, "floor": 1, "k": 1},
-                                                {"template": "SplitTestB_v1", "units": [[2, 6]], "work": 10, "floor": 1, "k": 4}]}
+#: a work sampling design over 6 proof blocks, templates of 2 (no work) and 4 of them: k_s = 1 and 3
+WORK = {**D.parse_design("work:3"), "strata": [{"template": "SplitTestA_v1", "units": [[0, 2]], "work": 0, "floor": 1, "k": 1},
+                                                {"template": "SplitTestB_v1", "units": [[2, 6]], "work": 10, "floor": 1, "k": 3}]}
 #: two of its samples: one proves a closure of one more proof block, the other none
-CLOSED = {**WORK, "population": 6, "units": [0, 2, 3, 4, 5], "closure": [1]}
-OPEN = {**WORK, "population": 6, "units": [1, 2, 3, 4, 5]}
+CLOSED = {**WORK, "population": 6, "units": [0, 2, 3, 4], "closure": [1]}
+OPEN = {**WORK, "population": 6, "units": [1, 2, 3, 4]}
 #: a Bernoulli sample of no proof block
 EMPTY = {**D.parse_design("bernoulli:1/2"), "population": 4, "units": []}
+#: the bounds a session takes, each a power of two
+BOUNDS = (1, 2, 4, 8, 16)
 
 
 def test_the_samples_are_samples_of_their_designs():
@@ -33,17 +35,19 @@ def test_the_samples_are_samples_of_their_designs():
 def test_a_sample_that_fits_one_session_is_one_part():
     """With no `session_units`, or one the sample doesn't pass, the one part is every proof block the sample proves, and
     `check_split` accepts a session's proof blocks exactly where `check_proved` finds them to be the sample's."""
+    assert [len(D.proved(s)) for s in (SUBSET, SAMPLE, CLOSED, OPEN, EMPTY)] == [8, 5, 5, 4, 0]
     for sample in (SUBSET, SAMPLE, CLOSED, OPEN, EMPTY):
         whole = D.proved(sample)
-        for bound in (None, max(1, len(whole)), len(whole) + 1, 1 << 40):
+        for bound in (None, 8, 16, 1 << 40):
             assert D.split(sample, bound) == [whole]
             assert D.check_split(sample, [whole], bound).ok and D.check_split(sample, (tuple(whole),), bound).ok
         assert D.split(sample) == [whole] and D.check_split(sample, [whole]).ok
+    assert D.split(OPEN, 4) == [[1, 2, 3, 4]] and D.split(EMPTY, 1) == [[]]
     for proved in ([1, 3, 4, 7, 9], [1, 3, 4, 7], [1, 3, 4, 7, 8], [1, 3, 4, 7, 9, 9], [3, 1, 4, 7, 9], [0, 1, 3, 4, 7, 9], []):
         want = proved == [1, 3, 4, 7, 9]
         assert D.check_split(SAMPLE, [proved]).ok == D.check_proved(SAMPLE, proved, len(proved)).ok == want, proved
-    for proved in ([0, 1, 2, 3, 4, 5], [0, 2, 3, 4, 5], [1, 2, 3, 4, 5]):
-        assert D.check_split(CLOSED, [proved]).ok == D.check_proved(CLOSED, proved, len(proved)).ok == (len(proved) == 6)
+    for proved in ([0, 1, 2, 3, 4], [0, 2, 3, 4], [1, 2, 3, 4]):
+        assert D.check_split(CLOSED, [proved]).ok == D.check_proved(CLOSED, proved, len(proved)).ok == (len(proved) == 5)
 
 
 def test_a_sample_past_the_bound_is_cut_into_consecutive_parts():
@@ -51,31 +55,35 @@ def test_a_sample_past_the_bound_is_cut_into_consecutive_parts():
     are as many as ceil(K / session_units), every one but the last is full, none is empty, and together they are the
     sample in order."""
     assert D.split(SUBSET, 4) == [[0, 2, 3, 7], [11, 12, 16, 19]]
-    assert D.split(SAMPLE, 3) == [[1, 3, 4], [7, 9]]
+    assert D.split(SUBSET, 2) == [[0, 2], [3, 7], [11, 12], [16, 19]]
+    assert D.split(SAMPLE, 4) == [[1, 3, 4, 7], [9]]
     assert D.split(SAMPLE, 2) == [[1, 3], [4, 7], [9]]
     assert D.split(SAMPLE, 1) == [[1], [3], [4], [7], [9]]
-    for sample, bound in ((SUBSET, 4), (SUBSET, 3), (SAMPLE, 3), (SAMPLE, 2), (SAMPLE, 1)):
+    for sample, bound in ((SUBSET, 4), (SUBSET, 2), (SAMPLE, 4), (SAMPLE, 2), (SAMPLE, 1)):
         parts = D.split(sample, bound)
         assert D.check_split(sample, parts, bound).ok and D.check_split(sample, [tuple(p) for p in parts], bound).ok
     for k in range(1, 13):
         sample = {**D.parse_design(f"subset:{k}"), "population": 24, "units": list(range(1, 2 * k, 2))}
-        for bound in range(1, 14):
+        other = {**sample, "units": list(range(0, 2 * k, 2))}
+        for bound in BOUNDS:
             parts = D.split(sample, bound)
             assert len(parts) == max(1, -(-k // bound)) and [u for p in parts for u in p] == sample["units"]
             assert all(len(p) == bound for p in parts[:-1]) and 1 <= len(parts[-1]) <= bound
+            assert [len(p) for p in D.split(other, bound)] == [len(p) for p in parts]
             assert D.check_split(sample, parts, bound).ok
 
 
-def test_a_bound_of_no_proof_block_or_that_is_no_integer_is_refused():
-    for bad in (0, -1, True, "2", 2.0, [2]):
+def test_a_bound_that_is_no_power_of_two_is_refused():
+    for bad in (0, -1, -2, 3, 5, 6, 12, (1 << 40) + 1, True, "2", 2.0, [2]):
         why = D.session_units_problem(bad)
-        assert why == ("session_units is the most proof blocks one session proves, an integer of at least one, "
+        assert why == ("session_units is the most proof blocks one session proves, an integer that is a power of two, "
                        f"not {bad!r}")
         with pytest.raises(ValueError, match="session_units is the most proof blocks one session proves"):
             D.split(SAMPLE, bad)
         v = D.check_split(SAMPLE, [[1, 3, 4, 7, 9]], bad)
         assert v.codes == ("session-units",) and v.detail == {"session-units": why}
-    assert D.session_units_problem(None) is None and D.session_units_problem(1) is None
+    for good in (None, *BOUNDS, 1 << 40):
+        assert D.session_units_problem(good) is None
 
 
 def _refusal(sessions, sample=SAMPLE, bound=2) -> dict:
@@ -139,9 +147,9 @@ def test_a_closure_is_cut_with_the_sampled_proof_blocks_and_moves_the_parts():
     work sampling design whose closures differ in size prove different numbers of proof blocks, so how many parts there
     are and how large the last one is follow the sample, where under a design of fixed count they follow the design."""
     assert D.fixed_count(WORK) is None and D.fixed_count(DESIGN) == 5
-    assert (len(D.proved(CLOSED)), len(D.proved(OPEN))) == (6, 5)
-    assert D.split(CLOSED, 3) == [[0, 1, 2], [3, 4, 5]] and D.split(OPEN, 3) == [[1, 2, 3], [4, 5]]
-    assert D.split(CLOSED, 5) == [[0, 1, 2, 3, 4], [5]] and D.split(OPEN, 5) == [[1, 2, 3, 4, 5]]
-    assert D.check_split(CLOSED, [[0, 1, 2], [3, 4, 5]], 3).ok
-    assert _refusal([[0, 2, 3], [4, 5]], CLOSED, 3) == {"dropped": [1],
-                                                        "parts": {"session": 0, "proved": [0, 2, 3], "part": [0, 1, 2]}}
+    assert (len(D.proved(CLOSED)), len(D.proved(OPEN))) == (5, 4)
+    assert D.split(CLOSED, 2) == [[0, 1], [2, 3], [4]] and D.split(OPEN, 2) == [[1, 2], [3, 4]]
+    assert D.split(CLOSED, 4) == [[0, 1, 2, 3], [4]] and D.split(OPEN, 4) == [[1, 2, 3, 4]]
+    assert D.check_split(CLOSED, [[0, 1, 2, 3], [4]], 4).ok
+    assert _refusal([[0, 2, 3], [4]], CLOSED, 4) == {"dropped": [1],
+                                                     "parts": {"session": 0, "proved": [0, 2, 3], "part": [0, 1, 2, 3]}}
