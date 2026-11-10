@@ -47,7 +47,7 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))
-sys.path.insert(0, str(HERE.parent / "recursion_e2e"))
+sys.path.insert(0, str(HERE.parents[1] / "workloads" / "recursion_e2e"))
 
 from rec_profile import SESSION_STEPS  # noqa: E402
 from verity.protocols.reporting import PERIODS  # noqa: E402
