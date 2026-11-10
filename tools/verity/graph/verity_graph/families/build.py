@@ -10,11 +10,11 @@
   verifier on the upstream build and inputs `upstream.json` pins; its output is ci.py's per-set verdicts.
 - `lean-suites:SUITE`: `suites.py` on one of the suites check runs after lean-build (`suites.AFTER_LEAN`, read from its source:
   `lean_suites`, whose test files the test-file family leaves out), on every executable lean-build outputs, and
-  `lean-suites:SUITE:K/M` on part K of `PARTS`' M of one split by test file, so no
-  task holds a suite a slot can't run inside an hour; its inputs are the whole tree, as tasks/v1 keys a job that declares none,
-  since those suites build and run Lake packages no tracer follows; its output is suites.py's report. A suite that declares
-  `parallel` takes the family's slot, and one that doesn't one process (`suites.TEST_PROCESS_GB`, or its `worker_gb`); its
-  timeout is its own `timeout_s`, else the family's.
+  `lean-suites:SUITE:K/M` on part K of M of one split by test file (`PARTS`) or by test id (the `parts` it declares), so a
+  task holds about ten minutes of a suite where its tests allow; its inputs are the whole tree, as tasks/v1 keys a job that
+  declares none, since those suites build and run Lake packages no tracer follows; its output is suites.py's report. A suite
+  that declares `parallel` takes the family's slot, and one that doesn't one process (`suites.TEST_PROCESS_GB`, or its
+  `worker_gb`); its timeout is its own `timeout_s`, else the family's.
 - `flock-circuit-build:verity/ml/flock/live`: `check_build.sh`, `cargo check` of flock-circuit in each CPU feature set a pod
   builds. It outputs nothing: `cargo check` builds nothing a reader runs.
 - `flock-rust-tests:verity/ml/flock/live`: `check_build.sh test`, the Rust tests in release on the same checkout, which it makes
@@ -37,8 +37,11 @@ UNIT_CUT = f"{VERIFIER}/unit_cut_agree.py"
 SUITES = "tools/verity/check/suites.py"
 #: the lean-suites suites listed in parts, {suite: parts}: `suites.py --files K/M` on a timing record that has none of their
 #: files (`lean_suites.run`), so each part is every M-th of the suite's test files in path order, a function of the commit alone,
-#: and the parts of one tree hold each file once whichever machines run them
-PARTS = {"verity-flock": 6}
+#: and the parts of one tree hold each file once whichever machines run them.  Each is as many as keep its parts near ten minutes
+#: at its files' recorded seconds, or near its longest file.  A suite that declares `[tool.verity.tests] parts` is in those
+#: parts by test id, as check runs it, and isn't listed here
+PARTS = {"verity-flock": 6, "verity-pouw-benchmarks": 7, "verity-vllm": 2, "pous-check": 3, "verity-pouw-check-difftest": 2,
+         "verity/core/protocols/certifier": 2}
 #: a lean-suites task's disk: the suites build Lake packages of their own beside the verifier's
 SUITES_DISK_GB = 60
 #: what `check.py --lean-agreement` reads of the tree outside the verifier's directory: check.py, the modules it loads as it
@@ -103,10 +106,11 @@ def lean_suites(root: Path, files: list[str]) -> list[str]:
 
 
 def suite_tasks(root: Path, files: list[str], build: str, bin_: str, exes: list[str]) -> list[dict]:
-    """A lean-suites task for each suite of `lean_suites`, or one for each of its `PARTS` (`suites.py NAME --files K/M`), each
-    with its suite's resources and timeout: a suite that declares `[tool.verity.tests] parallel` the family's slot, else one
-    process of its `worker_gb` (`suites.TEST_PROCESS_GB` undeclared); its `timeout_s`, else the family's.  A name no suite has
-    is listed all the same, so suites.py's refusal of it is the task's error."""
+    """A lean-suites task for each suite of `lean_suites`, or one for each of its parts (`suites.py NAME --files K/M`): by test
+    id the `[tool.verity.tests] parts` it declares, else its `PARTS`.  Each has its suite's resources and timeout: a suite that
+    declares `[tool.verity.tests] parallel` the family's slot, else one process of its `worker_gb` (`suites.TEST_PROCESS_GB`
+    undeclared); its `timeout_s`, else the family's.  A name no suite has is listed all the same, so suites.py's refusal of it
+    is the task's error."""
     names = lean_suites(root, files)
     if not names:
         return []
@@ -124,10 +128,11 @@ def suite_tasks(root: Path, files: list[str], build: str, bin_: str, exes: list[
         task = {"kind": "lean-suites", "env": "py", "inputs": list(files), "reads": [{"task": build, "output": e} for e in exes],
                 "outputs": [{"name": "report", "path": "suites-lean.json"}], "resources": resources,
                 **({"timeout_s": s.timeout_s} if s and s.timeout_s else {})}
-        if m := PARTS.get(s.name if s else name):
+        by_id = tests.get("parts") if type(tests.get("parts")) is int else None
+        if m := by_id or PARTS.get(s.name if s else name):
+            of = f"{name}'s tests by id" if by_id else f"{name}'s test files (one in {m}, by path)"
             out += [{"id": f"lean-suites:{name}:{k}/{m}", **task, "vars": {"suites": name, "files": f"{k}/{m}", "bin": bin_},
-                     "about": f"suites.py --lean-built on part {k} of {m} of {name}'s test files (every {m}th by path)"}
-                    for k in range(1, m + 1)]
+                     "about": f"suites.py --lean-built on part {k} of {m} of {of}"} for k in range(1, m + 1)]
         else:
             out.append({"id": f"lean-suites:{name}", **task, "vars": {"suites": name, "bin": bin_},
                         "about": f"suites.py --lean-built on {name}, as check's lean-suites step runs it"})
