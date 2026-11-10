@@ -633,6 +633,8 @@ def table(doc: dict, prev: dict | None = None) -> list[dict]:
         f"{pct([r.get('tasks') or 0 for r in workers], .5) or 0:.0f} tasks")
     submitted = [dict(c, at=rid_time("r" + c["at"][:8] + "-" + c["at"][9:])) for c in doc["control"].get("executor") or []]
     unfinished = [c["tasks"] for c in submitted if any(c["tasks"].get(k) for k in ("queued", "waiting", "leased"))]
+    checked = {c["sha"][:12] for c in cands if c["outcome"] == "running"}
+    stray = [c["tasks"] for c in submitted if c["sha"][:12] not in checked and any(c["tasks"].get(k) for k in ("queued", "waiting", "leased"))]
 
     def cached(since: float) -> str:
         cs = [c["tasks"] for c in submitted if c["at"] >= since and sum(c["tasks"].values())]
@@ -644,7 +646,9 @@ def table(doc: dict, prev: dict | None = None) -> list[dict]:
     if submitted:
         add("6", "Executor: share served from the cache; tasks waiting on other tasks",
             f"{sum(t.get('waiting', 0) for t in unfinished)} waiting on other tasks, {sum(t.get('queued', 0) for t in unfinished)} waiting for a slot, "
-            f"{sum(t.get('leased', 0) for t in unfinished)} given to a worker, in {len(unfinished)} checks", cached(hour), cached(day), "",
+            f"{sum(t.get('leased', 0) for t in unfinished)} given to a worker, in {len(unfinished)} checks"
+            + (f"; {len(stray)} of those checks, with {sum(t.get(k, 0) for t in stray for k in ('queued', 'waiting', 'leased'))} of the tasks, "
+               "are of no candidate being checked now" if stray else ""), cached(hour), cached(day), "",
             "the executor's own list of its checks (`graph2.py status`): a check's tasks by state; the share is tasks answered from the "
             "cache over all the tasks of the checks submitted in the window, so a task cancelled before it ran counts as not served")
     else:
@@ -728,11 +732,15 @@ def largest(doc: dict) -> str:
                 f"{names[x].split(':')[0]} {total[x] / sum(total.values()):.0%}" for x in sorted(names, key=lambda x: -total[x]) if x != k) + ").")
 
 
-def render(rows: list[dict], doc: dict) -> str:
+def render(rows: list[dict], doc: dict, short: bool = False) -> str:
+    """The table as Markdown; ``short`` leaves out the column saying how each number is measured."""
     at = datetime.fromtimestamp(doc["now"], UTC)
+    cols = {"row": "#", "name": "Number", "now": "Now", "hour": "Last hour", "today": "Today", "target": "Target", "how": "How it is measured"}
+    if short:
+        del cols["how"]
     lines = [f"The merge queue's numbers at {at:%Y-%m-%d %H:%MZ}. Windows: now; the last hour; today since 00:00Z. Times in minutes unless said.",
-             "", "| # | Number | Now | Last hour | Today | Target | How it is measured |", "|---|---|---|---|---|---|---|"]
-    lines += ["| " + " | ".join(str(r[k]).replace("|", "/") for k in ("row", "name", "now", "hour", "today", "target", "how")) + " |" for r in rows]
+             "", "| " + " | ".join(cols.values()) + " |", "|" + "---|" * len(cols)]
+    lines += ["| " + " | ".join(str(r[k]).replace("|", "/") for k in cols) + " |" for r in rows]
     lines += ["", largest(doc)]
     if doc["errors"]:
         lines += ["", "Not read: " + "; ".join(doc["errors"])]
@@ -751,7 +759,7 @@ def saved(path: Path) -> list[dict]:
         return []
 
 
-def main(store_root=None, as_json: bool = False, sample_s: float = 5.0) -> int:
+def main(store_root=None, as_json: bool = False, sample_s: float = 5.0, short: bool = False) -> int:
     doc = collect(store_root, sample_s)
     readings = saved(STATE)
     rows = table(doc, earlier(readings, doc["now"]))
@@ -763,9 +771,9 @@ def main(store_root=None, as_json: bool = False, sample_s: float = 5.0) -> int:
     except OSError as e:
         print(f"research queue stats: {STATE} not written ({e}): the next run has no reading from this one for its last-hour cores",
               file=sys.stderr)
-    print(json.dumps({"at": doc["now"], "rows": rows, "errors": doc["errors"], "data": doc}, default=str) if as_json else render(rows, doc))
+    print(json.dumps({"at": doc["now"], "rows": rows, "errors": doc["errors"], "data": doc}, default=str) if as_json else render(rows, doc, short))
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main(as_json="--json" in sys.argv[1:]))
+    sys.exit(main(as_json="--json" in sys.argv[1:], short="--short" in sys.argv[1:]))

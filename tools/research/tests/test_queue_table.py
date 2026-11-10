@@ -144,7 +144,10 @@ def doc() -> dict:
                       "slot_cores": 32, "cpu_s": 1200.0, "mem_peak_gb": 2.0, "tasks": 3, "first_own_s": 5.0,
                       "results": [qt.ts(at("02:30")) + 15, qt.ts(at("02:35")), qt.ts(at("02:40"))]}]}
     return {"now": qt.ts(at("03:00")), "day": DAY, "errors": [], "check_nodes": ["vy-nebius-cpu-1"], "off_gate": ["circuit-check"],
-            "control": {"decisions": decisions(), "ticks": [at("02:50"), at("02:54"), at("02:58")], "args": ""},
+            "control": {"decisions": decisions(), "ticks": [at("02:50"), at("02:54"), at("02:58")], "args": "",
+                        "executor": [{"at": "20261110T010000", "sha": "a" * 12, "tasks": {"hit": 30, "done": 10}},
+                                     {"at": "20261110T024000", "sha": "d" * 12, "tasks": {"hit": 10, "waiting": 6, "queued": 3, "leased": 1}},
+                                     {"at": "20261110T005000", "sha": "e" * 12, "tasks": {"queued": 2}}]},
             "nodes": {"vy-nebius-cpu-1": node}, "open": {"3": "h3", "4": "h4", "5": "h5", "6": "h6"}, "labels": labels}
 
 
@@ -171,6 +174,10 @@ def test_the_table_holds_each_number_over_its_windows():
     assert rows["Executor: tasks finished a minute"]["hour"] == "0.1"             # 3 results in 60 min
     assert rows["Executor: cores working in a slot"]["today"] == "2.0 on average, p50 2.0 (n=1 runs)"
     assert rows["Executor: overhead before a run's first task result"]["today"] == "p50 10, p90 10 s (n=1)"
+    cache = rows["Executor: share served from the cache; tasks waiting on other tasks"]
+    assert cache["now"] == ("6 waiting on other tasks, 5 waiting for a slot, 1 given to a worker, in 2 checks; 1 of those checks, with 2 of "
+                            "the tasks, are of no candidate being checked now")
+    assert cache["hour"] == "50% from the cache (10 of 20 tasks in 1 checks)" and cache["today"] == "65% from the cache (40 of 62 tasks in 3 checks)"
     assert rows["Cores busy over cores paid, the check nodes"]["now"] == "25 of 100 (25%)"
     assert rows["Cores busy over cores paid, the check nodes"]["hour"] == "30 of 100 (30%), the average over the last 60 min"
     assert rows["Slots busy over slots, the check nodes"]["now"] == ("check slots: 1 of 2 busy, 0 free but blocked, 0 runs in line; "
@@ -197,3 +204,7 @@ def test_the_rendered_table_is_markdown_and_names_what_was_not_read():
     assert "| # | Number | Now | Last hour | Today | Target | How it is measured |" in text
     assert "Not read: vy-nebius-cpu-2: no answer in 100 s" in text
     assert "not measured: needs a run of this command" in text      # no earlier reading of the CPU counters
+    short = qt.render(qt.table(d), d, short=True)
+    assert "| # | Number | Now | Last hour | Today | Target |\n|---|---|---|---|---|---|\n" in short and "How it is measured" not in short
+    d["control"]["executor"], d["control"]["executor_why"] = [], "its status printed nothing"
+    assert "| not measured: its status printed nothing |" in qt.render(qt.table(d), d)
