@@ -324,6 +324,14 @@ paths = ["tools/verity/graph/verity_graph/contract.py"]
 edge = "tools/verity/lean/setup.sh -> tools/verity/lean/lean_audit.py"
 why = "the pinned dependency bundle's restore: the script runs it only where the file is, and lake fetches the dependencies elsewhere"
 
+[[optional]]
+edge = "tools/verity/lean/setup.sh -> tools/verity/lean/moved.py"
+why = "a package path of an earlier layout, and a build directory a layout move left behind: the script asks only when its argument holds no package, and goes on with a line where the file isn't"
+
+[[optional]]
+edge = "tools/verity/lean/cache.py -> tools/verity/lean/moved.py"
+why = "the paths a package had before a layout move, under which the cache looks for an older build: none where the file isn't"
+
 [[residue]]
 what = "the auditor ledger's `lane` field: a monitoring period's prover, as the v2 ledger's period-open and period-close name it"
 pattern = '\bperiod\b[^\n]*\blane\b|\blane\b[^\n]*\bperiod\b'
