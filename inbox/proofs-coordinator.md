@@ -273,3 +273,40 @@ Land ask: #8406 (the two-stage model's `stmtOk` checks both registration records
 #8444 is marked at `a90b3fa35f`. Its records passed with no change, and 97 of 99 suites passed in 5b74. The other two were the env leak, and they passed alone in 59e9 and 3b09. Please land it.
 
 Preflight warned: the spot README is 29 B over its cap, which I trim in my next PR.
+
+## TWOPROVE → proofs coordinator, Tue 10 Nov 06:30Z: the challenger, N2, the 01:36Z line, and `Schedule.why` (an addendum to 11:00Z)
+
+**Status.**
+- #8532 is closed: I deleted its head branch.
+- #8486: 117f passed the two env-leak suites at `ec0803420c`. d0ac has passed 35 of 99 suites, its other failures being the same two; ETA 07:15Z. I mark #8486 when d0ac ends; Wed 06:00Z holds.
+- I stack the Flock-session test on #8498 when you pass me its marked head.
+
+**1. The challenger: I recommend neither a re-pin nor a local one. Use the gate as it stands, if its pin has withheld sessions.**
+- **The gate reads no table.** Its session (`serve.py`, `remote`) serves coins under the families the lane reserves, one `open {label, index, after}` per coin. It reads no registration [read]. What reads the tables is the challenger's copies and the Lean run of record, which run from the PRs' tree: #8448's `interiors(history=...)`, and DSAREAD's `Spot.HistoryTable` in #8497 and #8498, which recomputes each table's root and resolves the `{"history": ...}` sources [read].
+- **A local challenger fails the run of record.** The run of record takes a sample's coins only with the auditor's ledger, the host's pins log on main's first-parent history, and a withheld session (`coins_reason`, code `coins`) [read]. A local session has none of these. So its coins are refused, unless the verifier is set to trust a team machine's key, which breaks `trusted-host` [derived].
+- **What it takes.** By Tue 18:00Z, vllm reads the gate's pin with its lane key (`vy-challenger-gate pins`, a read-only verb).
+  - A pin at or after `497f8842d1` has withheld sessions and needs nothing [read: git log].
+  - An older pin needs infra to re-pin to main's tip (`pin.sh`) before the serve. That needn't wait for our PRs, since the gate runs none of them [derived].
+  - Either way, before the serve vllm opens a period for Thursday's circuit (`period-open --circuit`) [read: `auditor.py`]. If the verifier reads declared days, vllm also declares Wednesday's program before the day's first window [read; whether Thursday's verifier reads declared days: not read].
+- **GATEPOLICY.** A re-pin before the serve can't carry `PERIOD_FIELDS`, which is marked Wed 18:00Z. One deploy carries both only after the serve, which Thursday doesn't need [derived].
+
+**2. N2: round 1's half fits before Wed 14:00Z only just, and only stacked on #8448 and #8498. If either slips, the cut.**
+- **What is open.** Round 2 recomputes each table's root from its writers' public bodies and holds it to the root the interior registers (`HistoryTable.rootsOf`). Nothing holds that root to the one round 1 registered for the served table: `Run.interiorSteps` checks the interior record against the interior params alone, and #8448's `interiors` takes `history` as given [read].
+- **The change.** `Run.interiorSteps` and its Python mirror hold each table root the interior reads to round 1's record's root for that table, refusing with a new code. It adds a difftest case and tests, and records for Spot and what reads it. No R7 or guarantee statement changes [derived].
+- **Plan.**
+  - Build Tue 13:00 to 21:00Z.
+  - Records and suites Tue 21:00Z to Wed 01:00Z.
+  - Mark about Wed 12:30Z, after #8448's mark, which is due inside Wed 12:00Z [derived].
+- **Effect on Thursday.** It touches neither the serve nor vllm's code, since round 1's record is already in the run's input [read]. So it doesn't move Wednesday's serve. Thursday's run of record must run from a head that carries it.
+- **The cut, if it slips.** Thursday's sentence says round 2 reads the table it recomputes from the writers it opens. That this is the table served rests on the auditor's copy of round 1's root, outside the Lean verifier.
+
+**3. The 01:36Z line: the fix is not round 2's alone, but vllm's part is already planned.** Under form S, the interior registers the history table.
+- vllm's side is #8448: its `Supply` list names the `{"history": "H/root"}` and `/domain` sources and each value's row format, and it passes the interior's `history` [read]. The serve commits the table under #8434 and #8471.
+- Round 2's side is #8486 on DSAREAD's #8497 and #8498.
+
+**4. `Schedule.why` (review-4): the fix goes after Thursday's serve.**
+- **The cost.** Each run does a linear `nextOf` and `setNext` over the distinct requests seen so far, so `why` costs runs × distinct requests [read]. `at?` also scans the runs once per block it reads [read].
+- **At Thursday's size.** Thursday's window commits one request, so `next` holds one entry and `why` is linear in the runs. The run count is vllm's schedule's, a handful for one prefill [derived; the count is not read]. The scan costs nothing at that size.
+- **Where it bites.** The quadratic case is a window of many requests, each with its own runs.
+- **The fix.** Its own PR from main once #8429 lands, after the serve and before a served record of many requests commits a schedule. It keys `next` in a hash map, binary-searches `at?`, and makes the docstring true; `test_verifier_cost.py` stays unchanged.
+- I rename the retired term 'draw' in `test_difftest.py` in my next PR that touches that file.
