@@ -84,12 +84,19 @@ http.https://github.com/.extraheader
 -z scratch.pat
 --get-urlmatch http https://github.com/x
 --get-urlmatch http.extraheader https://github.com/x"
+subcommands=""      # git 2.46 on: `config list`, `get`, `set`, `unset`, `edit`
+"$REAL" config list >/dev/null 2>&1 && subcommands="
+list
+list --show-origin --name-only
+get scratch.pat
+get --all --regexp --show-names .
+get --url=https://github.com/x http.extraheader"
 while read -r -a f; do
   "$REAL" config "${f[@]}" >"$t/raw" 2>/dev/null; raw=$?
   g config "${f[@]}" >"$t/out" 2>"$t/err"; rc=$?
   check "config ${f[*]} prints no credential, in as many records" \
     'secret "$t/raw" && ! secret "$t/out" "$t/err" && [ $rc = $raw ] && [ "$(records "$t/out")" = "$(records "$t/raw")" ]'
-done <<<"$forms"
+done <<<"$forms$subcommands"
 out=$(GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="url.https://x-access-token:$tok@github.com/.insteadOf" GIT_CONFIG_VALUE_0=https://github.com/ \
   g config --show-origin --get-regexp insteadof)
 check "nor a key the environment sets" \
@@ -120,11 +127,20 @@ check "--replace-all writes, and so does a write that goes through the filter" \
 g config --unset scratch.b && g config --unset-all scratch.multi && g config --rename-section scratch moved; rc=$?
 check "--unset, --unset-all and --rename-section write" \
   '[ $rc = 0 ] && [ "$("$REAL" config --local --get-regexp "^(scratch|moved)\." | tr "\n" " ")" = "moved.port http://host:8080 moved.a 3 " ]'
+GIT_EDITOR='sed -i s/8080/8081/' g config --edit; rc=$?
+check "--edit off a terminal still edits" '[ $rc = 0 ] && [ "$("$REAL" config moved.port)" = http://host:8081 ]'
+out=$(GIT_EDITOR=cat g config --global --edit 2>&1)
+check "and an editor that prints the file shows no credential" '! secret <<<"$out" && grep -q "extraheader = AUTHORIZATION: basic \[REDACTED\]" <<<"$out"'
 g config --remove-section moved; rc=$?
 check "--remove-section writes" '[ $rc = 0 ] && ! "$REAL" config --local --get-regexp "^moved\." >/dev/null'
 g config --unset nosuch.key 2>/dev/null; rc=$?
 check "a write that fails exits as git does" '[ $rc = 5 ]'
-GIT_EDITOR='test -f /dev/stdout #' g config --edit >"$t/out" 2>"$t/err"
-check "--edit runs the editor on the caller's own stdout" '[ ! -s "$t/err" ]'
+if [ -n "$subcommands" ]; then
+  g config set scratch.n 1; rc=$?
+  check "set writes" '[ $rc = 0 ] && [ "$("$REAL" config get scratch.n)" = 1 ]'
+  g config unset scratch.n; rc=$?
+  check "unset writes" '[ $rc = 0 ] && ! "$REAL" config get scratch.n >/dev/null'
+  check "edit off a terminal shows no credential either" '! GIT_EDITOR=cat g config edit --global 2>&1 | secret'
+fi
 
 [ $fails = 0 ] && echo "git guard: all checks pass" || { echo "git guard: $fails check(s) failed"; exit 1; }
