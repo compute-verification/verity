@@ -1,190 +1,166 @@
-# The sampled leg over a window of m members: skeleton and pieces
+# The sampled leg over a window of m members
 
 Scratch notes for PRF-490, on `cursor/soundness-multileg-8fb2` only. This file never goes in the PR.
 
-Base: `cursor/soundness-remote-deployed-8fb2` (#8569). Everything is in namespace `Verity.Sampled`, package
-`security_proofs`, registered in `Security/Proofs/lakefile.toml`. LEGACC's and LEGCOIN's branches are merged here
-(`…-multileg-acc-8fb2` at `e97f23c967`, `…-multileg-coin-8fb2` at `6977821723`).
+Base: `cursor/soundness-remote-deployed-8fb2` (#8569, `remote_soundness_deployedReady`, the one-member form). Everything
+is in namespace `Verity.Sampled`, package `security_proofs`, under
+`Security/Proofs/Properties/Verity/Sampled/`, registered in `Security/Proofs/lakefile.toml` and reached from the lock's
+roots (`Window.Assembled`, `Window.Members`, `Members`). One worker (LEG) since the restart; the three earlier
+branches are merged here.
 
-## Where each part is
+## The statement
 
-| File (under `Security/Proofs/Properties/Verity/Sampled/`) | Holds | Owner | State |
-|---|---|---|---|
-| `Window.lean` | `Member`, `Window`, `Window.joint` (the `JointAuditV5`), `Window.extend`, the bound (`drawMiss`, `sessionDelta`, `delta`), `JointFinderCR`, `Window.ks`, `WindowConstructions`, `WindowCouplingTarget`, `WindowCovers`, `WindowDeployed`, **`spotSound_of_window`** | LEGLEAD | proved; `lean try` exit 0, standard axioms |
-| `Window/Walk.lean` | the projection through m sessions in order: `sessionK` (a session, then what follows it), `WindowCoinMap`, `seqP`/`seqW`/`seqOff`/`SeqReach`, `windowP`, `windowG`, `WindowReaches`, `windowOff`, `WindowCouples`, `WindowDecodes`, `windowLogged`, `windowCouplingTarget_of_logged` | LEGLEAD | no `sorry`; first try left 5 elaboration errors, fixed, second try running |
-| `Window/Reach.lean` | each member's session's trace in the window's: `RoundsEnd`, `MemberReach`, `SeqChain`, `SeqReach.chain`, `SeqChain.forall₂`, `MemberDecodes`, **`windowDecodes_of_members`** | LEGLEAD | no `sorry`; try running |
-| `Window/Leg.lean` | the composition: `windowSpotSound_of_logged`, **`windowSpotSound_of_members`** | LEGLEAD | no `sorry`; try running |
-| `Window/Accepts.lean` | v2's acceptance as m verdicts in order: `StepAt`, `SessionVerdict`, `ranOn`, `Verdicts`, `step_iff`, `steps_iff`, `verdicts_of_steps`, `Verdicts.getElem`, `Verdicts.coins_own`, `run_verdicts_at`, `run_verdicts` | LEGACC | filled by LEGACC |
-| `Window/Members.lean` | a stand-in for the per-member form over this tree's `step` (`PerMember.statementOf`, `membersHeld`, `runMembers`, `runMembers_iff`, `SliceHeld`, `Member.Fixed`, `accepts_iff`); not the verifier's, and the gate is not lifted | LEGACC | filled by LEGACC |
-| `Window/Draw.lean` | the marginals and the coin map's premise over the window: `Member.mem_part`, `Window.sum_part_card`, `Window.avg_design`, `Window.drawMiss_extend`, `Window.eps_extend`, `Window.sessionDelta_extend`, `seqErr`, `windowErr`, `windowCouples_of_close` | LEGCOIN | 6 scratch `sorry` |
-| `Members.lean`, `Members/{Draw,Widen,Landing,Session,Project}.lean`, `Flock/EndToEnd/Joint/V5/Layout.lean` | LEGCOIN's own vocabulary on `JointAuditV5`: `extend`, `eps_extend`, `pa_extend`, `sampled_extend`, the draw's layout (`Laid`, `joint_draw_eq`, `member_draw_eq`), a landing-based projection (`membersL`, `projectMembers`) | LEGCOIN | written before the skeleton |
-
-Scratch `sorry` is only in `Window/Draw.lean`.
-
-## The leg
+`Window/Assembled.lean`:
 
 ```lean
-theorem windowSpotSound_of_members (rd : WindowReadings) (K : WindowConstructions V)
-    (D : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
-      ℕ → Decoders W.rounds ByteArray)
-    (M : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
-      WindowCoinMap (V.game θ F c) σ W.Ω W.rounds)
-    {S : ByteArray → Array ByteArray → Option Window} (hD : WindowDeployed V (K.withProject V rd D M) S)
-    (hCov : WindowCovers V k S) (P : Exchange → Prop)
-    (Q : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → Exchange → Prop)
-    (BL : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → WindowLinkHold)
-    (B : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → WindowRoundHold)
+theorem windowSpotSound_assembled (e : 𝔽 ≃ (Fin 128 → Bool)) (rd : WindowReadings) (K : WindowConstructions V)
+    (dev : Exchange → Properties.Challenger.History)
+    (D : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
+      WindowDecoders V θ F c W σ)
+    (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String) (nc : ℕ)
+    {S : ByteArray → Array ByteArray → Option Window}
+    (hD : WindowDeployed V ((K.withBinding dev k).withProject V rd D
+      (windowSampleMaps e V rd label (afterAt V k) fun W => W.srcCoinsAt nc)) S)
+    (hCov : WindowCovers V k S)
     (I : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
-      (W.extend (M W θ F c σ).widening).L.Ω → ℕ → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop)
-    (ha : ∀ θ F c σ, prob (fun o => V.Verdict k .sampled o ∧ ¬ P o) (V.game θ F c) σ ≤
-        ENNReal.ofReal ((K.readFinder θ F c σ).Pr sha512Msg) + ENNReal.ofReal ((K.forger θ F c σ).Pr Verity.lmsVerify))
-    (hq : ∀ θ F W, S θ F = some W → ∀ c σ, prob (fun o => V.Verdict k .sampled o ∧ ¬ Q θ F c σ o) (V.game θ F c) σ ≤
-        ENNReal.ofReal (Real.sqrt ((K.bindFinder W θ F c σ).Pr sha512Msg)))
-    (hC : ∀ θ F W, S θ F = some W → ∀ c σ,
-      WindowCouples V θ F c W (V.cost θ F c σ) (rd W θ F c) σ (D W θ F c σ) (M W θ F c σ) (BL θ F c σ) (B θ F c σ))
-    (hm : ∀ θ F W, S θ F = some W → ∀ c σ,
-      MemberDecodes V θ F c k (fun o => P o ∧ Q θ F c σ o) W (V.cost θ F c σ) (rd W θ F c) σ (D W θ F c σ)
-        (M W θ F c σ) (BL θ F c σ) (B θ F c σ) (I W θ F c σ)) :
+      (W.extend (windowSampleMaps e V rd label (afterAt V k) (fun W => W.srcCoinsAt nc) W θ F c σ).widening).L.Ω → ℕ →
+        Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop)
+    (hP : ∀ θ F W, S θ F = some W → ∀ o : Exchange, o.params = θ → Lines.PrintsLog (dev o) o.log)
+    (hS : ∀ θ F W, S θ F = some W → ∀ c, Binding.SignsPlay V dev θ F c)
+    (hL : ∀ θ F W, S θ F = some W → W.Lb 0 = nc * 64)
+    (hR : ∀ θ F W, S θ F = some W → ∀ (c : ByteArray) j pre fr, (rd W θ F c).round j pre fr →
+      ∃ i s n, fr = .opening i s n)
+    (hm : ∀ θ F W, S θ F = some W → ∀ (c : ByteArray) (σ : Strategy (V.game θ F c)),
+      MemberSteps V θ F c k
+        (fun o => (Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent) ∧
+          SampledDigest k o.sent (afterAt V k θ F c σ))
+        W (V.cost θ F c σ) (rd W θ F c) σ (D W θ F c σ)
+        (windowSampleMaps e V rd label (afterAt V k) (fun W => W.srcCoinsAt nc) W θ F c σ)
+        (fun _ _ => linkEmptyAt e (finish (V.signer θ) θ F c σ.1))
+        (fun _ => roundEmptyAt e (finish (V.signer θ) θ F c σ.1)) (I W θ F c σ)) :
     V.SpotSound k
 ```
 
-It is `spotSound_of_window` (the bound) after `windowCouplingTarget_of_logged` (the projection) after
-`windowDecodes_of_members` (the walk a member at a time):
+`V.SpotSound k` is the same target the one-member leg meets (`Vocab.SpotSound`): at every parameters, files,
+commitment and strategy, the plays v2's sampled verdict accepts while the claim fails are at most `V.error`, which is
+conditional on the vocabulary's finder premises. So the conclusion plugs into `Verity.Soundness` where the one-member
+`spotSound` does.
 
-```lean
-theorem spotSound_of_window {K : WindowConstructions V} {S : ByteArray → Array ByteArray → Option Window}
-    (hD : WindowDeployed V K S) (hCov : WindowCovers V k S)
-    (hC : ∀ θ F W, S θ F = some W → WindowCouplingTarget V k K W θ F) : V.SpotSound k
-```
+How it is put together, each layer proved once:
 
-The bound is `JointShareV5`'s own, applied at `Window.joint`, not proved again:
+| Layer | Theorem | File |
+|---|---|---|
+| the bound: `JointShareV5`'s, applied at `Window.joint`, not proved again | `Window.ks`, `spotSound_of_window` | `Window.lean` |
+| the projection through m sessions in order, under its joint law | `prob_seqP`, `seqOff_le_prob`, `windowLogged`, `windowCouplingTarget_of_logged` | `Window/Walk.lean` |
+| the run-of-record walk a member at a time | `SeqReach.chain`, `SeqChain.forall₂`, `windowDecodes_of_members` | `Window/Reach.lean` |
+| what a member's trace keeps and logs (`StopsAt`, the play's start, the released coins) | `MemberReach.stopsAt`, `MemberReach.logged`, `MemberSteps`, `memberDecodes_of_stops` | `Window/Logged.lean` |
+| the draw to member subsets and its marginals; the coin map's premise over the window | `Member.mem_part`, `Window.sum_part_card`, `Window.avg_design`, `Window.eps_extend`, `windowCouples_of_close`, `windowSampleMap_couples` | `Window/Draw.lean` |
+| the stops' term within the hiding term at every strategy | `seqErr_le`, `windowErr_le_of_charge`, `windowErr_sampleMap_le_at`, `windowCouplingTarget_of_sample_at` | `Window/Charge.lean` |
+| the composition | `windowSpotSound_of_sample` | `Window/Leg.lean` |
+| (a), (a') and the sample's coins | `windowSpotSound_assembled` | `Window/Assembled.lean` |
+| v2's acceptance as m verdicts in order | `Verdicts`, `run_verdicts_at`, `Verdicts.getElem` | `Window/Accepts.lean` |
 
-```lean
-theorem Window.ks (W : Window) (t : ℕ) (τ : FlockSoundness.Game.Strategy (W.joint t).game)
-    (hF : JointFinderCR (W.joint t) τ) (hI : W.ε * W.nJ < (((W.joint t).wrongSet τ).card : ℝ)) :
-    Verity.Game.prob (fun o => (W.joint t).Accepts o) (W.joint t).game τ ≤ W.sessionDelta t
-```
+The bound it reaches is `spotSound_of_window`'s: `W.sessionDelta t = W.drawMiss + (W.joint t).eps` (the one sample's
+own miss, and `Σ_k (ε_ks,k + ε_bind,k)` at member `k`'s part of the one sample), one two-continuation term per round of
+every member's session (`W.rounds = Σ_m (2·2^roundsLog_m + 1)`), the record's, the bound digests', the hiding term, the
+read finder's collision and the forger's forgery.
 
-`W.sessionDelta t = W.drawMiss + (W.joint t).eps`, and `JointAuditV5.eps = Σ_k (ε_ks,k + ε_bind,k)` at member `k`'s
-part of the one sample (`JointAuditV5.design k`). `W.delta t cr` adds one two-continuation term per round of every
-member's session (`W.rounds = Σ_m (2·2^roundsLog_m + 1)`), the record's, the bound digests', the hiding term and `cr`.
+## What each premise is
 
-## Where each piece plugs in
+Discharged inside the statement, with what each rests on:
 
-### LEGCOIN: `hC`, and the marginals
+| What | By | Rests on |
+|---|---|---|
+| the sample's coins are uniform | `Window.avg_srcCoinsAt`, from `Window.hA3` | uniform randomness (A3 at the device's bytes) |
+| (a) the log v2 read is the device's and the pinned tables are the registered files | `Binding.logged_tables_le`, `Binding.binds_of_prints` | SHA512CR (the read finder), LmsUnforgeable (the forger; remote only), and `hP`, `hS` below |
+| (a') v2 samples at the strategy's `afterAt` | `prob_not_sampledDigest_le` at `windowBindFinder` | SHA512CR (a two-continuation finder) |
+| the coin map's premise at the sample-coupled map | `windowSampleMap_couples_at` | nothing further |
+| the stops' term within the hiding term | `windowErr_sampleMap_le_at` (`avg_pathCharge_game_le`: the class errors along a play of the period's game are within the potential from no tree open, however many sessions it runs) | nothing further |
+| each member's trace keeps the play's start and `StopsAt` | `MemberReach.inv`, `MemberReach.stopsAt` | `hR` below |
+| the bound | `Window.ks` (`JointShareV5`) | SHA512CR per finder (`JointFinderCR`), in `WindowDeployed.finderCR` |
 
-`hC : WindowCouples …` is `windowCouples_of_within (windowCouples_of_close …) (hε : err ≤ W.hidingTerm)`
-(`Window/Draw.lean`), at the deployed window coin map (`sampleMap`'s analog as a `WindowCoinMap`: one `start` from the
-bytes the sample reads; member `i`'s `link`/`round` written into its own openings).
+Left as hypotheses:
 
-The marginals in `Window/Draw.lean` are LEGCOIN's `Members/Widen.lean` at `W.joint t`:
-`(W.extend S).joint t` and `(W.joint t).extend S` are the same structure field by field, so
-`Window.eps_extend W S t` should be `(W.joint t).eps_extend S` after a `show`/`rfl` bridge, and `drawMiss_extend`
-is `rfl` as `pa_extend` is (neither reads `Ω` or `src`). `WindowDeployed.delta` is stated at the widened window; once
-`sessionDelta_extend` is proved it can be restated at `W.delta`.
+| Premise | What it is | Class |
+|---|---|---|
+| `hP` | the device printed each play's log (`Lines.PrintsLog`) | honest verifier server's log premise (the one-member leg takes the same) |
+| `hS` | the device's history at each play signed what the play's signatures are on (`Binding.SignsPlay`) | honest verifier server's log premise (`Device.signsPlay_dev` at the deployed device) |
+| `hL` | the window reads `nc` frames' bytes | a fact of the deployment's windows `S` (the one-member `hL`) |
+| `hR` | each round's reading picks only openings | a fact of the readings `rd`; holds at the layout's readings once they are built for a window (open item 2) |
+| `hD : WindowDeployed` | the vocabulary reads these constructions: finder, forger, no loss, `finderCR` (the per-finder SHA-512 premises follow from `V.finderCR` and `V.premises`), `delta` (the published `δ` is at least the window's), and `claim` | `finder`, `forger`, `loss`, `finderCR`, `delta` are the instance's bookkeeping (`Instance.lean` does the one-member ones); **`claim` is open item 3** |
+| `hCov : WindowCovers` | where `S` holds no window, the one-stage form is covered at the published `δ` | the instance's: the one-member leg at the windows of one member (`spotSound` of `Sampled/Leg.lean`) |
+| `hm : MemberSteps` | each member's step: **open items 1 and 2** | not a trust premise; to be proved |
 
-`Members/{Landing,Session,Project}.lean` project a second time what `Window/Walk.lean` projects (`membersL` beside
-`seqP`, `projectMembers` beside `windowP`). One should stay. `Window/Walk.lean`'s has the held-off events `BL` and
-`B` at each member's stops, which the deployed coin map needs (the one-session coupling is off `linkEmptyAt` and
-`roundEmptyAt`); the landing-based one is off no event. `Members/Draw.lean` and `Members/Widen.lean` have no
-counterpart here and stay.
+Trust base when the open items close: SHA512CR, uniform randomness, the honest verifier server's log premises;
+LmsUnforgeable remote only. Nothing else is introduced.
 
-### LEGACC: `hm`, at each member
+## What is left
 
-```lean
-structure MemberDecodes (k) (P : Exchange → Prop) (W : Window) (t : ℕ) (rd : Reading W.rounds)
-    (σ : Strategy (V.game θ F c)) (D : ℕ → Decoders W.rounds ByteArray)
-    (M : WindowCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : WindowLinkHold) (B : WindowRoundHold)
-    (I : (W.extend M.widening).L.Ω → ℕ → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop) : Prop where
-  start : ∀ ω, I ω 0 (Pos.root (roundCuts V θ F c rd) (M.start ω))
-  step : ∀ ω i m p q r out, ((W.extend M.widening).joint t).ms[i]? = some m → I ω i p →
-    MemberReach D M BL B ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D) i m p q out → q.Le r →
-    r.Inv (roundCuts V θ F c rd) →
-    V.Verdict k .sampled (run r.tape) ∧ NoMiss V θ F c rd σ r.tape ∧ P (run r.tape) →
-    I ω (i + 1) q ∧ ((m.part ((W.extend M.widening).L.draw ω)).Nonempty →
-      AcceptsZKP m.I m.own (m.wr (m.part ((W.extend M.widening).L.draw ω)) (windowReg V θ F c W rd σ D) out))
-```
+1. **A member's proof files against the next member's coins** (a ruling, asked on PRF-490 at 15:41Z, unanswered).
+   `JointAuditV5.sessions` (`seqG`) sends member `i`'s proof files before member `i+1`'s coins. The period's game sends
+   every blob with the evidence, after every coin. Decoding member `i`'s files from the play on the tape its walk ends
+   on is wrong at some strategy (two members whose files are both valid iff one coin bit of member 2's session is 0:
+   accepted with 1/2, projected with 1/4), so the earlier `MemberDecodes.step` could not be met as stated.
+   What the branch does now: a member's decoders (`PosDecoders`) give its proof files as a function of the position
+   its walk ends at (`files`), so the statement no longer fixes where they come from. `Decoders.atEnd` is the old
+   reading. `MemberSteps.step` can hold only at a `files` that the play fixes by that position, which needs one of:
+   - **(A) bind it**: v2's per-member form holds statement `i+1` (its `Hello` nonce, or its first opening) to SHA-512
+     of statement `i`'s evidence entry. Then `files` reads the cut's most likely message at the end position
+     (`q.toStop.modes`), with one more two-continuation term per member. A cut at a `Hello` that is not an opening
+     also needs a handoff step between members in `seqP`, not written.
+   - **(B) a member at a time**: couple each member's session alone, every other tree's coins in its law, then
+     `MemberV5.accepted_drawnWrong_le` and a union. No protocol change; it drops the `seqG` walk and is not
+     `JointAuditV5`'s game, so the bound would not be `JointShareV5`'s as it stands.
+2. **`hm`, each member's step** (`MemberSteps.step`): from member `i`'s trace (`MemberReach`), the invariant, and a
+   tape past its end whose play v2 accepts at the cut, conclude `AcceptsZKP m.I m.own (m.wr … out)`.
+   Already at hand for it: `MemberReach.logged` (the outcome is the root at the first stop, the link points, the
+   answered rounds in order and `files`; the play releases their bits at the stops' openings; its `hML`, `hBL`, `hM`,
+   `hB` at the sample maps are `rfl`/`id`, at the count-aware events they need the count match), and v2's side as m
+   verdicts (`run_verdicts_at`, `Verdicts.getElem`: member `i`'s `SessionVerdict`).
+   Missing: the one-session record and moves chain at tree `i` and start `p`. `MovesReach*`, `Moves`, `Record/*`,
+   `Stops.firstStop_*`, `readingAt`/`decodersAt`, `accepts_sent`, `wr_accepts_of_verdict`, `CountsReach` are stated
+   at `A : Live`, `ParamsAt`, one record, `firstStop` and one tree (`trees.size = 1`); each needs the member's tree
+   index and its start position in place of the root. `Walk.lean` (`walk_relK`, `StopOf`, `TreesOf`) and the
+   `RoundsReach.*` half of `Stops.lean` are already stated at any position and any number of trees
+   (`RoundsEnd.reach`, `RoundsReach.ends` bridge to them). This is the largest piece.
+3. **The claim's transfer** (`WindowDeployed.claim`): `JointAuditV5`'s bound concludes in `wrongSet` form (the
+   members' incorrect proof blocks at V5's own openings). The one-member leg goes on to the deployed commitment
+   (`Live.ks`: `AssemblyTargetV5`, `RootFixesDomainL`, `OpensUnder`); Flock has no joint analog, and `Vocab.read` reads
+   one circuit file and one public file.
+4. **The window instance**: `WindowDeployed`'s other fields and `WindowCovers` at the deployed vocabulary, and a
+   theorem in the shape of `remote_soundness_deployedReady` with `windowSpotSound_assembled` as its sampled leg.
+5. **The verifier's gate (done-when 2) is not liftable on this base.** `MULTI_REFUSED`, `runMembers` and
+   `membersHeld` are in the staged merge (`875cc642dc`, `sampled_proofs/SampledProofs/OneStageZk.lean`, the gate near
+   line 971) and on `origin/remote`; this base's gate is `Spot.OneStageZk.oneSession`. After the restack: lift the
+   gate for the per-member form only, once items 1 to 4 close (the verifier gains no form ahead of its proof), keep
+   every other several-member form refused, and rewrite `Window/Members.lean` (a stand-in over this tree's `step`:
+   `PerMember.statementOf`, `membersHeld`, `runMembers`, `runMembers_iff`, `accepts_iff`) against the verifier's own
+   `runMembers`. On this base the Python reference
+   (`verity/core/protocols/composition/tests/reference.py`) mirrors `oneSession`; it and its difftest change with
+   the gate.
+6. **Sequential sessions only** (the coordinator's ruling). `SeqReach` walks member `i+1`'s stops after member
+   `i`'s; the readings must miss a play that opens two members' coin trees at once.
+7. **`Window.hcls`** stays a field: `JointAuditV5.hcls_of_bounds` discharges it from bounds.
+8. **Left in the tree, unused by the statement**: the forms off the empty classes themselves
+   (`windowOpenMap_couples`, `windowSampleMap_couples`, `windowCouplingTarget_of_sample` in `Window/Draw.lean`), which
+   need a bound on the stops' term that only holds where each opening asks for its stop's count. Delete them once
+   nothing wants them.
 
-`MemberReach … i m p q out` is member `i`'s session's trace from the position `p` to the position `q` it ends at:
-link points off `BL i` at `p.toStop`, then `RoundsEnd` (the one-session `RoundsReach` with its end position:
-`RoundsEnd.reach`, `RoundsReach.ends`), so every `RoundsReach.*` lemma of `Stops.lean` applies to it as it stands.
-`r` is where the last member's session ends; `r.tape` is the tape v2's verdict is read on. `I` is what the
-per-member argument needs of the position a member's session starts at (the device's log there shows `i` `Hello`s,
-`StopsAt`, the coin-tree keys so far): it holds at the play's start and each member's trace must keep it.
+## Runs
 
-The verdict side is `Verdicts` / `PerMember.runMembers_iff`: member `i`'s `SessionVerdict` is `Verdicts.getElem` at
-`i`; with `Record.verdict_of_accepts`-style lemmas at that session it gives `AcceptsZKP` of the record and proof files
-v2 read, and `wr_accepts` (one session: `Accepts.lean`'s `wr_accepts_of_verdict`, `MovesOf`) carries it to
-`m.wr … out` once `out`'s moves are those v2's files decode to. That last step is the m-session `MovesReach`: the
-one-session proofs in `MovesReach.lean`, `Moves.lean`, `Record/*` are stated at `A : Live`, `firstStop` and one tree
-(`KeyAt.eq_zero`, `trees.size = 1`), and need the member's tree index `i` and its start `p` in place of the root.
-`Walk.lean` (`walk_relK`, `StopOf`, `TreesOf`, `stopOf_next`) and the `RoundsReach.*` half of `Stops.lean` are already
-stated at any position and any number of trees.
+`verity lean try FILE --on auto`, each `lake build +MODULE:deps` then `lake env lean FILE` with the axiom probe.
 
-### LEGLEAD: the walk (`Window/Walk.lean`, `Window/Reach.lean`, `Window/Leg.lean`)
-
-```lean
-theorem prob_sessionK … :   -- a session's projection, then what follows it, under its joint law
-    prob E (((liveSession dg J mPts N).map wr).bind K) (sessionK D M dg J wr K nextP N p) =
-      prob (fun o => E o.1) (sessionWK D M dg J wr nextW N p) w
-theorem sessionOffK_le_prob … (h : ∀ o, SessionReachK D M dg J B wr BL nextR N p o → H o → E o) :
-    sessionOffK D M J B BL e N p ≤ prob E (sessionWK D M dg J wr nextW N p) w
-theorem prob_seqP : ∀ l E i p w, prob E (seqG (fun m => m.live (m.part S) Rg) l) (seqP D M S Rg i l p) =
-    prob (fun o => E o.1) (seqW D M S Rg i l p) w
-theorem seqOff_le_prob (Q) : ∀ l E i p w, (∀ o, SeqReach D M BL B S Rg i l p o → Q o.2 → E o.1) →
-    seqOff D M BL B S Rg Q i l p ≤ prob (fun o => E o.1) (seqW D M S Rg i l p) w
-theorem prob_windowP … : FlockSoundness.Game.prob E ((W.extend M.widening).joint t).game (windowP V θ F c W t rd σ D M) =
-    prob (fun o => E o.1) (windowG V θ F c W t rd σ D M) w
-theorem windowOff_le_prob … (h : ∀ o, WindowReaches V θ F c W t rd σ D M BL B o → Q o.2 → E o.1) (w) :
-    windowOff V θ F c W t rd σ D M BL B Q ≤ prob (fun o => E o.1) (windowG V θ F c W t rd σ D M) w
-theorem windowLogged … (hC : WindowCouples …) (hD : WindowDecodes … k P …) :
-    ENNReal.ofReal (Claims.Pr fun x => V.Verdict k .sampled (run x) ∧ NoMiss V θ F c rd σ x ∧ P (run x)) ≤
-      FlockSoundness.Game.prob (fun o => ((W.extend M.widening).joint t).Accepts o)
-        ((W.extend M.widening).joint t).game (windowP V θ F c W t rd σ D M) + W.hidingTerm
-theorem windowCouplingTarget_of_logged … (ha) (hq) (hC : ∀ c σ, WindowCouples …) (hD : ∀ c σ, WindowDecodes …) :
-    WindowCouplingTarget V k (K.withProject V rd D M) W θ F
-theorem SeqReach.chain : ∀ l i p o, SeqReach D M BL B S Rg i l p o →
-    ∃ r, SeqChain D M BL B S Rg i l p o.1 r ∧ o.2 = r.tape
-theorem SeqChain.forall₂ (I : ℕ → Pos … → Prop) (hc : SeqChain D M BL B S Rg i l p ts r) : I i p →
-    (∀ j k m p' q out, j = i + k → l[k]? = some m → I j p' → MemberReach D M BL B S Rg j m p' q out → q.Le r →
-      I (j + 1) q ∧ Acc m (m.wr (m.part S) Rg out)) → List.Forall₂ Acc l ts
-theorem windowDecodes_of_members … (I) (h : MemberDecodes V θ F c k P W t rd σ D M BL B I) :
-    WindowDecodes V θ F c k P W t rd σ D M BL B
-```
-
-## Open, with no owner yet
-
-1. **A member's proof files before the next member's coins** (decides whether `MemberDecodes.step` can hold).
-   `seqG` sends member `i`'s proof files before member `i+1`'s coins. The period's game (`relK`) binds each round's
-   message by the digest its `.opening` frame answers, and sends every blob at the end; nothing binds a session's
-   final proof files before the next session's `Hello`. `seqP` sends, at member `i`'s session's end `q`, the proof
-   files decoded from the play on `q.tape`; later sessions then rewrite later coins, and v2's verdict is on the play
-   of `r.tape`. In `MemberDecodes.step` that is `out.proofs = (D i).proofs (run q.tape)` against v2's files in
-   `run r.tape`. They agree only where the play up to `q` fixes member `i`'s files. A strategy whose member-`i` files
-   depend on member `i+1`'s coins makes the two differ, and no single strategy of `seqG` has its acceptance
-   probability (two sessions each valid iff one later coin bit is 0: accepted with 1/2, projected with 1/4).
-   Two ways out, neither mine to choose:
-   - **(A) bind it**: v2 holds each member's proof files' digest to something the device logs before the next
-     member's `Hello` (one more cut and one more two-continuation term per member). Then the decoder reads the files
-     at that cut and `step` holds.
-   - **(B) a member at a time on the Flock side**: `JointSampledV5` is already a union bound over members, each
-     played alone with the earlier sessions' coins in its law (`memberLaw`); allowing the later sessions' coins there
-     too would cover delayed files, but that is a new joint theorem over a game that is not `seqG`, against "reuse
-     it" and "sequential sessions only".
-2. **The claim's transfer** (`WindowDeployed.claim`). `JointAuditV5`'s bounds conclude in `wrongSet` form (the
-   members' incorrect proof blocks at V5's own openings). The one-session leg goes on to the deployed commitment
-   (`Live.ks`: `AssemblyTargetV5`, `RootFixesDomainL`, `OpensUnder`); Flock has no joint analog of that step, and
-   `Vocab.read` reads one circuit file and one public file. `WindowDeployed.claim` states what is needed.
-3. **The per-member verifier form is not in this tree.** `MULTI_REFUSED`, `runMembers` and `membersHeld` are on
-   `origin/remote` (`verity/core/service/sampled_proofs/SampledProofs/OneStageZk.lean`) only; neither `origin/main`
-   nor #8569's branch has them. This tree's gate is `Spot.OneStageZk.oneSession`. The gate can be lifted, and the
-   `#guard` added, only once the per-member form reaches the base and the leg above is closed (1 and 2); the verifier
-   gains no form ahead of its proof. LEGACC's `Window/Members.lean` is a stand-in over this tree's `step`.
-4. **Sequential sessions only.** `SeqReach` walks member `i+1`'s stops after member `i`'s. A play that opens two
-   members' coin trees at once is not covered; the readings (`Reading W.rounds`, the rounds in the members' order)
-   must refuse or miss it.
-5. **`Window.hcls`** stays a field (the registration's refusal of a member whose fewest and most sampled proof blocks
-   give different link points): `Flock.…JointAuditV5.hcls_of_bounds` discharges it from bounds.
+| Run | File | Tree | rc | Probe |
+|---|---|---|---|---|
+| `r20261110-152439-446b` | `Window/Leg.lean` | `8078441923` | 0 | standard axioms |
+| `r20261110-153404-936b` | `Window/Logged.lean` | `8078441923` | 0 | standard axioms |
+| `r20261110-153404-ef4c` | `Window/Draw.lean` | `8078441923` | 0 | standard axioms |
+| `r20261110-154050-b5dd` | `Window/Members.lean` | `46dfb5e5d3` | 0 | 28 theorems, standard axioms |
+| `r20261110-155915-3c61` | `Window/Draw.lean` | `PosDecoders` in the working tree | 0 | see the run |
+| `r20261110-155916-d15d` | `Window/Leg.lean` | `PosDecoders` and the first `windowSpotSound_of_sample` | 0 | 3 theorems, standard axioms |
+| `r20261110-162404-7405` | `Window/Logged.lean` | `388586f624` | 0 | 6 theorems, standard axioms |
+| `r20261110-162404-e1be` | `Window/Leg.lean` | `388586f624` | 0 | 3 theorems, standard axioms |
+| `r20261110-162404-5413` | `Window/Assembled.lean` | `388586f624` (the form with the stops' term as a premise) | 0 | 3 theorems, standard axioms |
 
 ## Branch name
 
