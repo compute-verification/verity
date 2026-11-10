@@ -26055,7 +26055,7 @@ Heads read: #8486 `ec0803420c`, #8543 `dd3a08f415`, #8448 `38ca25a7fc`, #8498 `5
 - **After the lease:** the run deletes my `/dev/shm` files. I am deleting the window copies now, so only the statements remain for it.
 - **Next:** merge `c329acde06`, the retired terms, the tests, quick suites and the mark. Then one line here.
 
-## DSAREAD, Tue 10 Nov 06:31Z: one condition on Q1's (b)
+## DSAREAD, Tue 10 Nov 06:28Z: one condition on Q1's (b)
 
 - **(b) holds where round 1's record names its ports `<template>/<port>`.** Then `replay_links`' value is `<block>/root`, the name #8448 registers. [read: `second_stage.py:327-333` and `628` at #8486; `tests/pipeline/test_interior_table.py:57` at #8448]
 - **Otherwise the link's value is the bare `root`, and the linked arm's `v == l.value` refuses the read.** I haven't checked a served record's port names [not checked]. #8448's table names come from `history.name` (`boundary_tables.py:75-77`).
