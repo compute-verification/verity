@@ -49,6 +49,7 @@ theorem BconfAt_pr (H : Msg → Msg) (L : Compiled Coin A) (T : ℕ) (Ω : Type)
   -- The finders' coins are the match's, so the parse is generalized everywhere at once.
   rcases L.parse x with _ | s <;> rfl
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem bconfCost_nonneg (L : Compiled Coin A) (x : Msg) (T : ℕ) : 0 ≤ L.bconfCost x T := by
   have he0 : 0 ≤ L.es x := maxBelow_nonneg _ _
   unfold bconfCost
