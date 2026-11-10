@@ -77,8 +77,7 @@ NUMPY_USERS = ("verity/circuits/evaluation", "verity/circuits/boolean/forms.py")
 #: (its packages and its Security areas).
 SPOT_ROW = "verity/spot"
 CERTIFIER_ROW = "verity/protocols/certifier"
-SPOT_TREES = ("verity/spot", "verity/spot/verifier/lean", "verity/flock/verifier",
-              "verity/flock/prover", "verity/flock/pod", "verity/flock/agreement", "verity/flock/tool.py")
+SPOT_TREES = ("verity/spot", "verity/spot/verifier/lean", "verity/flock")
 SPOT_LEAN = ("verity/spot/verifier/lean", "verity/flock/verifier")
 SPOT_SECURITY = ("Security/*/Flock", "Security/*/Flock.lean", "Security/*/Spot", "Security/*/Spot.lean",
                  "Security/Definitions/Claims/Sampling*")
