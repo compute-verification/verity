@@ -21431,3 +21431,62 @@ in a /tmp worktree. Next entry by 01:58Z.
 
 #8425's land ask follows when 16a3 passes and I mark it.
 
+
+## FUSEDSERVE, 01:50Z (CIR-185): land ask for #8454, and the fused row's forms
+
+- **PR.** https://github.com/compute-verification/verity/pull/8454, head `cursor/proofs-fusedserve-1ffe` at
+  `283188b306e357abd9d38735762620aacbb5bdae`, marked ready. The queue has it admitted, landing on a land verdict. I opened
+  and marked it at 23:12Z (my entry of that time) and opened no second one.
+- **Land ask (53 words), for ci:**
+  > Land ask: #8454 (proofs, CIR-185), head 283188b306, marked. vllm's row driver hands each expert's tables to a
+  > Commit's serving-rows request; benchmarks/ gains the fused-cut partition and a served-statement stager and timer. No
+  > Lean, lock, Definition or core change. Suites at the head green: r20261109-223536-b95e (vllm 14471 passed). Not yet
+  > served on a Commit.
+
+**The fused row's unit types, staged form and verdict.** I composed each of the six templates of G1's partition
+(`glm53_fused_tp8.json`) at 283188b306 exactly as `stage_window.py` stages a served member (`CR.statement`,
+`CR.unit_rows`, `UnitStager`), circuits only, no values: r20261110-004507-b7e7 on cpu-4, exit 0 **[measured]**. It
+built `flock-read-tmpl` in its own clone. r20261110-004202-b730 had failed for want of it in the shared tree.
+- **`MoeExpertFp8ReadGemm_v1`, w13** (K=6144, N=1, SWAP true and false): **inline**. It is a flat statement whose reads
+  are gates, with no lookup slots and no tail stage. The unit reads one input group, and META names no `out_net`, so the
+  unit returns its outputs. Circuits of 8.7M and 9.3M rows (k_log 25), 1.5 and 1.8 GB.
+  - Mirror (`ks_form_why`): none. `template_why`: none.
+- **`MoeExpertFp8ReadGemmW_v1`, w2** (K=256, N=32, SWAP true and false): **inline**, the same shape as w13. 10.8M and
+  11.6M rows (k_log 25), 1.9 and 2.3 GB.
+  - Mirror: none. `template_why`: none.
+- **`EmbeddingRead_v1`, the scale reads** (H=96 for w13, H=4 for w2): **templated** (`iv/hybrid/4`, structural).
+  Each is a `flock-circuit/tmpl` file of k_log 23, 345 and 334 MB.
+  - Mirror: no reading, since it judges only a flat head. `template_why`: none.
+  - Lean's `scopeOkT` alone decides: at most one table, one input group, the unit returning the outputs, and at most
+    2^32 rows.
+- **Lean's `ks-form` has not run on any of them yet.** The mirror only refuses more than Lean, so "mirror: none" is
+  not Lean's acceptance. Every served member of these types has a shared-row public file (the tables, `shared_rows` in
+  its header), and whether its ports' roots collide (`sharedWhy`) is Lean's check alone. So Lean's verdict needs a
+  served public file, which G1 writes from 04:58Z.
+  - At 05:05Z I run `flock-verify ks-form --statement <one_stage STATEMENT>` on G1's staged statements on cpu-4. I
+    recompose each `circuit.txt` there from its template and binding, hold it to G1's `pin.txt`, and copy only
+    `pub.bin`, never `inst.bin`.
+  - Until then, every price I give for these rows is labelled "timed; Lean's ks-form not yet run".
+  - If Lean refuses a type, its price is "timed, refused under --zk" and stays out of any total called verified.
+- **None of them reads its tables in lookup slots.** TWOINSTANCE's refusal (a tail stage returns the outputs, or a
+  second input group) does not apply to the fused blocks on the mirror's reading.
+
+**Figures I cite but did not form-check:**
+- **`FUSED_H200`** is BREAKEVEN's constant (`reprice.FUSED_H200`). It was timed on STATIONARY's synthetic `fr-w13` and
+  `fr-w2` statements, not on served values or the served Definitions above. I have not checked those statements' staged
+  form.
+- **The "49% of the fused row's proving is `FlashInferFp8Linear_v1`" figure is not mine.** The 00:02Z smell-check post
+  tags it "[relayed, SLOTROWS]", on slot forms. I never timed `FlashInferFp8Linear_v1`, and the fused cut I stage has no
+  such unit: its six templates are the two scale reads and the four read-GEMMs above. SLOTROWS can say which form it was
+  measured in.
+
+**What I could not verify:**
+- Lean's verdict on every type, `sharedWhy` included, until G1's files exist (05:05Z).
+- That the composed circuits equal G1's served ones. They are the same code path, and the 05:05Z pin check settles it.
+- The form of `FUSED_H200`'s statements.
+
+**Dated rows, unchanged:**
+- **Tue 03:35Z:** G1 (r20261109-211109-3561) started.
+- **04:15Z:** the verdict line here by 04:20Z: release or keep 05:00-06:30Z.
+- **05:05Z:** the fit, Lean's `ks-form` on the served statements, CIR-185.
+- **G2 (r20261109-223805-6c5a):** 08:10-08:53Z.
