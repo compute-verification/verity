@@ -629,8 +629,8 @@ def tokens_for(move, dest, tracked_dirs, rows, emptied=(), one=False):
         if any(d == r or d.startswith(r + "/") for r in dir_rows):
             continue
         mine = [p for p in ps if p in dest and dest[p][2] == move]
-        if not mine or all(dest[p][0].startswith("archive/") for p in mine):
-            continue                                   # the archive speaks for no directory: what stays keeps its name
+        if not mine:
+            continue
         files = tracked_dirs[d][0]
         name = next((n for n in NAMESAKE if n in files), None)
         if name is not None:
