@@ -409,6 +409,27 @@ meta partial def evalVal (x : Expr) : M (Expr × Expr) := do
     return (w, ← mkEqTrans p q)
   throwError "fwd: no value for{indentExpr x}"
 
+/-- The constructor application `d` with each field of an `Except` type evaluated (`evalVal`), through nested
+constructor applications, and `d = d'`; none where no field is. -/
+meta partial def evalFields (d : Expr) : M (Option (Expr × Expr)) := do
+  let .const c _ := d.getAppFn | return none
+  let some (.ctorInfo ci) := (← getEnv).find? c | return none
+  let mut cur := d
+  let mut pf : Option Expr := none
+  for j in [ci.numParams:d.getAppNumArgs] do
+    let a ← instantiateMVars (cur.getArg! j)
+    let ty ← inferType a
+    let ctor ← isCtorApp a
+    let exc := (← whnfR ty).isAppOfArity ``Except 2
+    let r ← if ctor then evalFields a else if exc then some <$> evalVal a else pure none
+    let some (v, h) := r | continue
+    let args := cur.getAppArgs
+    let motive ← withLocalDeclD `y ty fun y => mkLambdaFVars #[y] (mkAppN cur.getAppFn (args.set! j y))
+    let q ← mkCongrArg motive h
+    cur := mkAppN cur.getAppFn (args.set! j v)
+    pf := some (← match pf with | some p => mkEqTrans p q | none => pure q)
+  return pf.map fun p => (cur, p)
+
 /-- Walk the goal `m = r` to its end. -/
 meta partial def walk (g0 : MVarId) : M Unit := do
   let mut g := g0
@@ -525,7 +546,20 @@ meta partial def step (g : MVarId) : M (Option MVarId) := do
         mi := { mi with discrs := mi.discrs.set! i v }
         cur := mi.toExpr
         pf := some (← match pf with | some q => mkEqTrans q c | none => pure c)
-    match ← reduceMatcher? cur with
+    let mut red ← reduceMatcher? cur
+    unless (red matches .reduced _) do
+      for i in [0:mi.discrs.size] do
+        let d ← instantiateMVars mi.discrs[i]!
+        if let some (v, hd) ← evalFields d then
+          let m0 := mi
+          let motive ← withLocalDeclD `y (← inferType d) fun y =>
+            mkLambdaFVars #[y] ({ m0 with discrs := m0.discrs.set! i y }).toExpr
+          let c ← mkCongrArg motive hd
+          mi := { mi with discrs := mi.discrs.set! i v }
+          cur := mi.toExpr
+          pf := some (← match pf with | some q => mkEqTrans q c | none => pure c)
+      red ← reduceMatcher? cur
+    match red with
     | .reduced e =>
       match pf with
       | some p => return ← next p e
