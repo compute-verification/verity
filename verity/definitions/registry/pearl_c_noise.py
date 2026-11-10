@@ -36,7 +36,7 @@ from functools import lru_cache
 from typing import Callable
 
 from verity.circuits import boolean as BL
-from verity.circuits.boolean.forms import NOT, ONE, ZERO, add, compress_columns, const_bits
+from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, compress_columns, const_bits, multiply
 from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind, composite, primitive
 from verity.circuits.refs import array_of
@@ -235,9 +235,22 @@ def _scale_bits(C, *el: list) -> list:
 
 
 def _code_bits(C, b: list, scale: list) -> list:
-    x = _bf16_bits(C, fp.s32_to_f32(C, _int_bits(C, b)))
-    y = _bf16_bits(C, fp.f32_mul(C, fp.bf16_to_f32(x), fp.bf16_to_f32(scale), nan_word=fp.F32_NAN_PTX))
+    """`PearlCLineCode_v1` on bits, its product rounded once. The integer x = ±(v + 1) is exact as a BF16 word, and its FP32
+    product with a BF16 word is exact short of overflow (16 significant bits, a multiple of FP32's least subnormal), so the
+    product's BF16 word is the one nearest (v + 1) · sig · 2^(e − 134), for the scale's significand sig and exponent e: one
+    `round_fp`, which never shifts right since x is at least 1. An infinite scale overflows there to its infinity, and a NaN
+    is `F2fpBf16_v1`'s."""
+    S = fp.unpack_fp(C, scale, 8, 7)
+    s = b[7] ^ S.s
+    product = multiply(C, add(C, b[:7], [], cin=ONE, width=8), S.sig)
+    y = fp.round_fp(C, s, add(C, S.e_eff, const_bits(8, 4), width=10), 0, product, s, 8, 7, underflow=False)
+    y = [OR(C, S.nan, f) for f in y[:7]] + y[7:15] + [C.AND(NOT(S.nan), y[15])]
     return f32_to_e4m3_sat(C, fp.bf16_to_f32(y))
+
+
+def _codes_bits(C, *el: list) -> list[list]:
+    scale = _scale_bits(C, *el)
+    return [_code_bits(C, b, scale) for b in el[:32]]
 
 
 PearlCLineScaleV2 = definition(
@@ -247,8 +260,7 @@ PearlCLineScaleV2 = definition(
 PearlCLineCodeV2 = definition(
     "PearlCLineCode", 2, _code_bits, (("b", BL.bit_type(U8)), ("scale", BL.bit_type(BF16))), BL.bit_type(U8),
     word=bind(PearlCLineCode), conformance=_LINE,
-    doc="One code of a line on bits, its steps' builders in one circuit (a BF16 word's 16 low FP32 bits are constants, so "
-        "the product is of 8-bit significands): PearlCLineCode_v1")
+    doc="One code of a line on bits, its product of 8-bit significands rounded once to BF16: PearlCLineCode_v1")
 
 
 @composite("PearlCLineCodes", 1, [], lambda S: ((("raw", BYTES32), ("norm32", BF16)), BYTES32), conformance=_LINE)
@@ -256,6 +268,13 @@ def PearlCLineCodes(B, S, raw, norm32):
     """A line's 32 E4M3 codes from its hash: `PearlCLineCode_v1` of each byte at the line's `PearlCLineScale_v1`
     (`pearl_c.sample_line` after its hash)."""
     return B.batch(PearlCLineCode, raw, B.call(PearlCLineScale, raw, norm32), axes=(0, None))
+
+
+PearlCLineCodesV2 = definition(
+    "PearlCLineCodes", 2, _codes_bits, (("raw", BL.bit_type(BYTES32)), ("norm32", BL.bit_type(BF16))), BL.bit_type(BYTES32),
+    word=bind(PearlCLineCodes), conformance=_LINE,
+    doc="A line's 32 codes on bits, in one circuit, so what a code reads of the scale alone is computed once: "
+        "PearlCLineCodes_v1")
 
 
 @composite("PearlCNoiseLine", 1, [], lambda S: ((("key", BYTES32), ("side", U8), ("factor", U8), ("line", U32),
@@ -266,5 +285,4 @@ def PearlCNoiseLine(B, S, key, side, factor, line, norm32):
     return B.call(PearlCLineCodes, B.call(PearlCLineRaw, key, side, factor, line), norm32)
 
 
-PearlCLineCodesV2 = sigma_lift(PearlCLineCodes, 2)
 PearlCNoiseLineV2 = sigma_lift(PearlCNoiseLine, 2)

@@ -4,7 +4,7 @@ vectors the Lean specification proves of its own noise (`Pouw.PearlC.W1Checks`: 
 `lineFB_vec`).
 
 A hash's Boolean version is a SHA-512 compression traced gate by gate, seconds each, so the tests that evaluate one are
-slow."""
+slow, as is the one that holds a code's Boolean version to its word form's steps on every input."""
 from __future__ import annotations
 
 import math
@@ -17,7 +17,7 @@ import pytest
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.bits import evaluate_words
-from verity.definitions.boolean import boolean_version
+from verity.definitions.boolean import boolean_version, sigma_lift
 from verity.definitions.registry import pearl_c_noise as N
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 
@@ -181,6 +181,18 @@ def test_the_boolean_scale_and_code_are_the_word_forms_on_every_kind_of_word():
     cases = [(raw, s) for s in words for raw in rs]
     want = [[word(N.PearlCLineScale, raw, s)[0]] for raw, s in cases]
     assert on_bits(N.PearlCLineScaleV2, [list(raw) for raw, _ in cases], [s for _, s in cases]) == want
+
+
+@pytest.mark.slow
+def test_a_code_on_bits_is_the_sigma_of_its_word_form_on_every_byte_and_scale():
+    """`PearlCLineCode_v2` rounds its product once, where the word form rounds it to FP32 and then to BF16. On all 2^24 pairs
+    of a byte and a BF16 word it is σ(`PearlCLineCode_v1`), the word form's steps by their own Boolean versions: no sample of
+    scales holds every tie, subnormal and overflow of that rounding."""
+    steps = bind(sigma_lift(N.PearlCLineCode, 0, register=False))
+    scales = np.arange(1 << 16, dtype=np.uint64).reshape(-1, 1)
+    for b in range(256):
+        byte = np.full_like(scales, b)
+        assert np.array_equal(evaluate_words(bind(N.PearlCLineCodeV2), byte, scales), evaluate_words(steps, byte, scales)), b
 
 
 @pytest.mark.slow
