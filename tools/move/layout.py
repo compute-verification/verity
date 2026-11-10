@@ -117,6 +117,8 @@ ARRAY = re.compile(rf"[=:]\s*(\[\s*(?:(?:#[^\n]*|(?:{_STRING})(?:\s*,)?)\s*)*\])
 SH_LIST = re.compile(r"(?<![\w.\-/])(?P<cmd>git\s+rev-parse|tar)(?=[ \t])(?P<args>[^|;&()\n]*)")
 #: where `_covers` took an entry out of a list, until the list is closed up around it
 GONE = "\ue002"
+#: a pyproject's `members`: the workspace's distributions, each the directory its `pyproject.toml` is in
+MEMBERS = re.compile(r"(^\s*members\s*=\s*\[)(?P<body>[^\]]*)(\])", re.M)
 
 
 def is_shell(path: str, text: str) -> bool:
@@ -732,15 +734,19 @@ class Run:
         of them together, and no others (`cover`). Each is written once, at the first such entry that held a file of it,
         with what the entry had around its path, and one that an entry the list keeps already holds is not written. An
         entry left with nothing to write goes, and a line left empty goes with it. A directory with another entry of the
-        list above or below it is not read so: such a list names levels. Returns the text with a mark where each rewritten
-        entry was, and what each mark stands for, so that no later rewrite reads the new paths as old ones."""
+        list above or below it is not read so: such a list names levels, and neither is a workspace's `members`, each one
+        distribution's directory, which `_members` keeps. Returns the text with a mark where each rewritten entry was, and
+        what each mark stands for, so that no later rewrite reads the new paths as old ones."""
         if not hasattr(self, "_parts_re"):
             names = [p for p in (*self.old_dirs, *self.dropped, *self.leftover) if self._parts(p)]
             self._parts_re = re.compile(alternation(names)) if names else None
         if self._parts_re is None or not self._parts_re.search(text):
             return text, {}
         edits, marks = [], {}
-        for sep, _, spans in lists(path, text):
+        members = {m.start("body") - 1 for m in MEMBERS.finditer(text)} if posixpath.basename(path) == "pyproject.toml" else ()
+        for sep, (start, _), spans in lists(path, text):
+            if start in members:
+                continue
             named = [(a, b, m) for a, b in spans if (m := ENTRY.fullmatch(text, a, b))
                      and (m["p"] in self.old_dirs or m["p"] in self.tracked_old) and not self.L.kept(m["p"], path)]
             names = {m["p"] for _, _, m in named}
@@ -1545,7 +1551,7 @@ class Run:
         return _add_inputs(out, ["verity"], first=True)
 
     def _members(self, text: str, add: list[str] = ()) -> str:
-        m = re.search(r"(^\s*members\s*=\s*\[)(?P<body>[^\]]*)(\])", text, re.M)
+        m = MEMBERS.search(text)
         if not m:
             return text
         items = re.findall(r'"([^"]+)"', m.group("body"))

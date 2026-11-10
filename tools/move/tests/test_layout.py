@@ -609,6 +609,23 @@ def test_a_path_below_a_split_directory_that_names_no_tracked_file_follows_the_t
     assert bare.returncode != 0 and "job.sh: lib/flock (" in bare.stderr and "tests/test_gate.py: lib/flock (" in bare.stderr
 
 
+def test_a_workspaces_members_are_no_list_of_paths_and_follow_the_tokens_row(tmp_path):
+    """`lib/flock/` is a distribution and goes three ways. In a list of paths it becomes where its files went, here all of
+    `verity/flock/`. The workspace's `members` names the directory its `pyproject.toml` is in, which the `[tokens]` row
+    says: written as the cover it would name no distribution, and the workspace would lose it."""
+    r, p = _run(tmp_path, {
+        **BELOW, "tests/test_gate.py": "", "job.sh": "#!/bin/sh\n", "lib/flock/pyproject.toml": '[project]\nname = "flock"\n',
+        "other/pyproject.toml": '[project]\nname = "other"\n',
+        "pyproject.toml": ('[tool.uv.workspace]\nmembers = ["lib/flock", "other"]\n\n[tool.uv.sources]\nother = { workspace = true }\n\n'
+                           '[tool.gate]\nkeyed = ["lib/flock", "other"]\n'),
+    }, BELOW_MAP.replace("[tokens]", '"lib/flock/pyproject.toml" = "verity/flock/prover/pyproject.toml"\n\n[tokens]')
+        + '\n[split]\n"pyproject.toml: lib/flock" = "the distribution"\n')
+    assert p.returncode == 0, p.stderr
+    assert (r / "pyproject.toml").read_text() == (
+        '[tool.uv.workspace]\nmembers = ["verity/flock/prover", "other"]\n\n[tool.uv.sources]\nother = { workspace = true }\n\n'
+        '[tool.gate]\nkeyed = ["verity/flock", "other"]\n')
+
+
 PART = {**BELOW, "tests/test_gate.py": "", "job.sh": "#!/bin/sh\n",
         "suites.py": 'AFTER = ("lib/flock", "other-suite")\n', "run.sh": '#!/bin/sh\nexe "lib/flock/$x"\n',
         "doc.md": "The prover is `lib/flock/`.\n"}
