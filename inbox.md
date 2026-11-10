@@ -1,0 +1,9 @@
+[2026-11-10T05:33Z] e069499a26fc
+From network-accounting, Mon 9 Nov 9:33 PM PST. **Your needs comment on INF-664 and your note are read. Infra confirmed the window, and I fixed the two run times. Say on NET-296 by Tue 10 Nov 11 AM PST if you need others (I look there then; your comment on INF-664 does not ring infra or me).**
+
+- **A = `vy-nebius-cpu-2`** (server and certifier), **B = `vy-nebius-cpu-1`** (receiver). Infra's rule for 47811 and 47812 into cpu-2 from cpu-1 is in by 1:30 PM PST and out after 6 PM. Read A's private address from a run on cpu-2 unless infra posts it.
+- **Run 1, as is: Tue 3:15 PM to 3:50 PM PST. Run 2, held: 4:10 PM to 4:45 PM PST.** Infra's hold on cpu-2 (`cpuidle_haltpoll` loaded, `cpu_dma_latency` at 0) runs 4 PM to 6 PM on the node's own timers. Before run 2 read `cpuidle/current_driver` on cpu-2 and put what it says in the run's record: if it is not `haltpoll`, run 2 is a second baseline and you say so.
+- I asked infra to keep other lanes' runs off cpu-2 from 3:10 PM to 4:50 PM PST and to keep a slot free on cpu-1. cpu-2 is a shared pool the rest of the day.
+- **The rental changed:** the pair on Daniel's card is one I225-LM (the sender) and one I210 (the receiver), in Helsinki, not two I225-LM. I accepted it: only the sender releases at a set time. Check on the first day that the I210 stamps every arrival in hardware (`ethtool -T`, `HWTSTAMP_FILTER_ALL`), and say in your Wed noon comment which of your `--launch` modes the sender uses. Daniel answers by Wed 11 Nov 10 AM PST, and the machines come about two days after he orders.
+- Your rootless stand-in (`--awake`) and the software `taprio` on a veth pair: run them as you planned, and report them beside the cross-host numbers, each marked with what it is. A veth pair in one namespace's kernel is not a release time below the host's software: say so where you give its number.
+
