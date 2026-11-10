@@ -59,7 +59,7 @@ partition of the kept blocks, renumbered (`Partition.keep`, `readsAtMost_keep`, 
 other premises are then about that circuit, not `d`: the charged work is a `Work` of it, so a matmul with one MAC in a
 dropped block is lost whole, and (E) is taken at it, whichever blocks are dropped.
 
-The count itself needs no such circuit. `Nci.Cut.SecurityProofs.counts_on` takes a cap on each block of a set `G` and
+The count itself needs no such circuit. `counts_on` takes a cap on each block of a set `G` and
 the entries of all the blocks as a total. So on the untied circuit with every block kept, for any `G`, each block of
 `G` is counted under its own cap (`k` and the gates of `T` it held, or `k` and `b` for each word it reads) against the
 outputs with a wire in a block of `G`, all the blocks together read `m k + |T|` (or `m k + b |E|`), and the MACs a
@@ -323,10 +323,9 @@ theorem RegisteredCircuit.unregistered_asInputs_of_disjoint (d : RegisteredCircu
 
 end Verity
 
-namespace Nci.Untied
+namespace Nci.Cut.SecurityProofs.Untied
 
-open Verity Finset Nci.Cut
-open Nci.Cut.SecurityProofs (inBlock outOn counts_on bound_on_caps_he)
+open Verity Finset
 
 /-- The words of `𝒲` that `R` reads: those with a gate in `in(R)`. -/
 def wordsRead (C : Circuit) (𝒲 : Finset (Finset (Fin C.N))) (R : Finset (Fin C.N)) : Finset (Finset (Fin C.N)) :=
@@ -848,4 +847,4 @@ theorem readsAtMost_untie_without {m : ℕ} (d : RegisteredCircuit) (P : Partiti
   exact ⟨ι, hι, hS, readsAtMost_keep (d.untie (𝒲.biUnion id)) P ι hι fun v =>
     card_unregistered_untie_of_notMem_readersOver d P 𝒲 h𝒲 hk (hS v)⟩
 
-end Nci.Untied
+end Nci.Cut.SecurityProofs.Untied
