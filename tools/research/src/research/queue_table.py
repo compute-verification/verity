@@ -39,6 +39,12 @@ REPO = "compute-verification/verity"
 TARGET_MIN, TARGET_SHARE = 120.0, 0.9
 #: the steps off the merge gate when the checkout's policy.toml can't be read: a candidate's verdict doesn't wait for them
 OFF_GATE = ("circuit-check", "ratchet-gate")
+#: a file whose change is a Lean change (a jq regex): a module, a lakefile, a Lake manifest, a toolchain or a lock
+LEAN_FILE = r"\\.lean$|(^|/)lakefile\\.|(^|/)lake-manifest\\.json$|(^|/)lean-toolchain$|(^|/)lean-audit\\.json$"
+#: the most files GitHub's compare lists: a candidate with this many and no Lean file among them is not known to change none
+COMPARE_FILES = 300
+#: the target for a round whose candidate changes no Lean, in minutes
+PLAIN_ROUND_MIN = 30
 #: where the last reading of each node's CPU counters is kept, so the next run gives the average over the time between
 STATE = Path.home() / ".research" / "queue-table.json"
 
@@ -153,6 +159,19 @@ def scope(rid):
             return {}
     return {}
 
+def slow(d):
+    """A shard's three slowest suites that ran, and the slowest passed test among them, from the suites' reports."""
+    rows = [r for name in ("suites.json", "suites-lean.json") for r in load(d + "/" + name) or []
+            if isinstance(r, dict) and r.get("status") != "cached" and isinstance(r.get("seconds"), (int, float))]
+    rows.sort(key=lambda r: -r["seconds"])
+    test = None
+    for r in rows[:3]:
+        passed = (load((r.get("log") or "").rsplit(".", 1)[0] + ".json") or {}).get("passed")
+        for t, sec in passed.items() if isinstance(passed, dict) else []:
+            if isinstance(sec, (int, float)) and (test is None or sec > test[2]):
+                test = [r.get("name"), t, sec]
+    return {"suites": [[r.get("name"), r["seconds"], r.get("workers")] for r in rows[:3]], "slow_test": test}
+
 s0, t0 = stat(), time.time()
 runs = []
 for d in sorted(glob.glob(ROOT + "/runs/r2*")):
@@ -177,6 +196,7 @@ for d in sorted(glob.glob(ROOT + "/runs/r2*")):
         row["shard"] = argv[argv.index("--shard") + 1] if argv.index("--shard") + 1 < len(argv) else "?"
         if row["end"] is None:
             row.update(scope(rid))
+        row.update(slow(d))
         steps = {}
         for s in (load(d + "/check-live.json") or {}).get("steps") or []:
             steps[s.get("step")] = {"state": s.get("state"), "seconds": s.get("seconds"), "start": ep(s.get("started_utc"))}
@@ -275,8 +295,23 @@ def _labels(store_root, targets: list[str]) -> dict[str, list[dict]]:
                 if lab.key in ("ready", "reviewed")] for t in targets}
 
 
-def collect(store_root=None, sample_s: float = 5.0, nodes: list[str] | None = None, now: float | None = None) -> dict:
-    """Everything the table reads, as one JSON-able document."""
+def lean_files(base: str, sha: str) -> list[int] | None:
+    """[the files a candidate changes from its base, those of them that are Lean's], from GitHub's compare of the two commits, which
+    lists at most `COMPARE_FILES`; None when it gave no answer."""
+    jq = f'[(.files | length), ([.files[].filename | select(test("{LEAN_FILE}"))] | length)]'
+    try:
+        p = subprocess.run(["gh", "api", f"repos/{REPO}/compare/{base}...{sha}", "--jq", jq], capture_output=True, text=True, timeout=90)
+        got = json.loads(p.stdout)
+    except (OSError, ValueError, subprocess.SubprocessError) as e:
+        print(f"research queue stats: no compare of {base[:12]}...{sha[:12]} ({e!r}); it counts as not known", file=sys.stderr)
+        return None
+    return got if isinstance(got, list) and len(got) == 2 and all(isinstance(n, int) for n in got) else None
+
+
+def collect(store_root=None, sample_s: float = 5.0, nodes: list[str] | None = None, now: float | None = None,
+            lean: dict[str, list[int]] | None = None) -> dict:
+    """Everything the table reads, as one JSON-able document.  ``lean`` is what earlier runs learned of `lean_files`, by a
+    candidate's first 12 hex digits, so only a candidate not in it is asked for."""
     from .queue import label_target
 
     now = now or datetime.now(UTC).timestamp()
@@ -306,6 +341,13 @@ def collect(store_root=None, sample_s: float = 5.0, nodes: list[str] | None = No
         doc["off_gate"] = list(OFF_GATE)
     built = {(str(pr), head) for r in doc["control"].get("decisions", []) if r["action"] in ("advance", "build") and not r.get("shadow")
              for pr, head in zip(r.get("members") or [], r.get("heads") or [])}
+    builds = {r["sha"]: r["base"] for r in doc["control"].get("decisions", []) if r["action"] == "build" and not r.get("shadow")
+              and r.get("sha") and r.get("base") and r["at"] >= day}
+    known = dict(lean or {})
+    ask = [sha for sha in builds if sha[:12] not in known]
+    with ThreadPoolExecutor(8) as ex:
+        known.update({sha[:12]: got for sha, got in zip(ask, ex.map(lambda sha: lean_files(builds[sha], sha), ask)) if got})
+    doc["lean"] = {sha[:12]: known[sha[:12]] for sha in builds if sha[:12] in known}
     pairs = sorted(built | set(doc["open"].items()))
     labels = _labels(store_root, [label_target(int(pr), head) for pr, head in pairs])
     doc["labels"] = {f"{pr}@{head}": labels[label_target(int(pr), head)] for pr, head in pairs}
@@ -588,6 +630,35 @@ def table(doc: dict, prev: dict | None = None) -> list[dict]:
     add("4", "Candidate: build to verdict", f"{len(flying)} being checked" + (", built " + ", ".join(f"{_m(now - c['build']):.0f}" for c in flying)
         + " min ago" if flying else ""), _dist(win(b2v, hour)), _dist(win(b2v, day)), "15", "the loop's `build` to its first `judged pass` or "
         "`judged fail`; by verdict time")
+    lean = doc.get("lean") or {}
+
+    def plain(c: dict) -> bool | None:
+        """Whether the candidate changes no Lean file from its base; None when that is not known."""
+        got = lean.get(c["sha"][:12])
+        return None if not got or (got[1] == 0 and got[0] >= COMPARE_FILES) else got[1] == 0
+
+    def plain_rounds(since: float) -> str:
+        judged = [c for c in cands if c.get("verdict") and c["verdict"] >= since]
+        rs = [c for c in judged if plain(c)]
+        if not rs:
+            return f"none of the {len(judged)} with a verdict" + (f" ({n} not known)" if (n := sum(plain(c) is None for c in judged)) else "")
+        steps = [max((st for sh in c["shards"] for st in sh.get("steps") or [] if st.get("seconds") and st["step"] not in off_gate),
+                     key=lambda st: st["seconds"], default=None) for c in rs]
+        tests = [max((sh["slow_test"] for sh in c["shards"] if sh.get("slow_test")), key=lambda t: t[2], default=None) for c in rs]
+        step = max({st["step"] for st in steps if st}, key=[st["step"] for st in steps if st].count, default=None)
+        test = max({(t[0], t[1]) for t in tests if t}, key=[(t[0], t[1]) for t in tests if t].count, default=None)
+        return (_dist([_m(c["verdict"] - c["build"]) for c in rs]) + f", of {len(judged)} with a verdict"
+                + (f" ({n} not known)" if (n := sum(plain(c) is None for c in judged)) else "")
+                + (f"; slowest step `{step}`, p50 {pct([st['seconds'] / 60 for st in steps if st and st['step'] == step], .5):.0f} min" if step else "")
+                + (f"; slowest test `{test[1]}` of suite `{test[0]}`, p50 "
+                   f"{pct([t[2] / 60 for t in tests if t and (t[0], t[1]) == test], .5):.0f} min, the slowest in "
+                   f"{sum(1 for t in tests if t and (t[0], t[1]) == test)} of {len(rs)}" if test else ""))
+
+    add("4", "Round with no Lean change: build to verdict", (f"{sum(1 for c in flying if plain(c))} of the {len(flying)} being checked change no Lean"
+        if flying else ""), plain_rounds(hour), plain_rounds(day), str(PLAIN_ROUND_MIN),
+        "the candidates whose files changed from their base hold no `.lean` file, lakefile, Lake manifest, toolchain or `lean-audit.json` "
+        "(GitHub's compare); the slowest step on the gate among a round's shards (`steps.jsonl`) and the slowest passed test among each "
+        "shard's three slowest suites (the suites' reports); by verdict time")
     add("4", "Candidate: build to `main`", "", _dist(win(b2l, hour)), _dist(win(b2l, day)), "", "green candidates: `build` to `advance`")
     add("4", "Candidates by outcome", "", outcomes(hour), outcomes(day), "", "by build time; red: dropped for a failure, a member held "
         "or ejected over one, or infrastructure")
@@ -769,27 +840,28 @@ def render(rows: list[dict], doc: dict, short: bool = False) -> str:
     return "\n".join(lines)
 
 
-def saved(path: Path) -> list[dict]:
-    """The readings of the nodes' CPU counters earlier runs saved in ``path``; none without the file, or with one that doesn't
-    parse (said on stderr)."""
+def saved(path: Path) -> tuple[list[dict], dict[str, list[int]]]:
+    """What earlier runs saved in ``path``: the readings of the nodes' CPU counters, and each candidate's `lean_files`; nothing
+    without the file, or with one that doesn't parse (said on stderr)."""
     if not path.is_file():
-        return []
+        return [], {}
     try:
-        return [r for r in json.loads(path.read_text())["readings"] if "now" in r and "nodes" in r]
+        doc = json.loads(path.read_text())
+        return [r for r in doc["readings"] if "now" in r and "nodes" in r], dict(doc.get("lean") or {})
     except (OSError, ValueError, KeyError, TypeError) as e:
         print(f"research queue stats: {path} is unreadable ({e!r}); starting it again", file=sys.stderr)
-        return []
+        return [], {}
 
 
 def main(store_root=None, as_json: bool = False, sample_s: float = 5.0, short: bool = False) -> int:
-    doc = collect(store_root, sample_s)
-    readings = saved(STATE)
+    readings, lean = saved(STATE)
+    doc = collect(store_root, sample_s, lean=lean)
     rows = table(doc, earlier(readings, doc["now"]))
     readings = [r for r in readings if doc["now"] - r["now"] < 6 * 3600]
     readings.append({"now": doc["now"], "nodes": {n: {"stat": d["stat"]} for n, d in doc["nodes"].items()}})
     try:
         STATE.parent.mkdir(parents=True, exist_ok=True)
-        STATE.write_text(json.dumps({"readings": readings}))
+        STATE.write_text(json.dumps({"readings": readings, "lean": {**lean, **doc["lean"]}}))
     except OSError as e:
         print(f"research queue stats: {STATE} not written ({e}): the next run has no reading from this one for its last-hour cores",
               file=sys.stderr)

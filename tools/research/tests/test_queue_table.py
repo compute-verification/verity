@@ -106,7 +106,8 @@ def runs() -> dict[str, dict]:
     took = qt.ts(at("01:06"))
     return {
         "r20261110-010500-aaaa": {"id": "r20261110-010500-aaaa", "kind": "shard", "shard": "1/1", "took": took, "end": took + 3600, "rc": 0,
-                                  "failed": [], "steps": [{"step": "pytest", "state": "passed", "seconds": 3000, "end": took + 3000},
+                                  "failed": [], "suites": [["tools/research", 2700.0, 8]],
+                                  "slow_test": ["tools/research", "tests/test_x.py::test_slow", 2400.0], "steps": [{"step": "pytest", "state": "passed", "seconds": 3000, "end": took + 3000},
                                                           {"step": "circuit-check", "state": "passed", "seconds": 3500, "end": took + 3600}]},
         "r20261110-012500-bbbb": {"id": "r20261110-012500-bbbb", "kind": "shard", "shard": "1/1", "took": qt.ts(at("01:26")), "end": None,
                                   "rc": None, "failed": [["tools/research", qt.ts(at("02:00"))]], "slot": "b", "slot_cores": 96,
@@ -149,7 +150,8 @@ def doc() -> dict:
                         "executor": [{"at": "20261110T010000", "sha": "a" * 12, "tasks": {"hit": 30, "done": 10}},
                                      {"at": "20261110T024000", "sha": "d" * 12, "tasks": {"hit": 10, "waiting": 6, "queued": 3, "leased": 1}},
                                      {"at": "20261110T005000", "sha": "e" * 12, "tasks": {"queued": 2}}]},
-            "nodes": {"vy-nebius-cpu-1": node}, "open": {"3": "h3", "4": "h4", "5": "h5", "6": "h6"}, "labels": labels}
+            "nodes": {"vy-nebius-cpu-1": node}, "open": {"3": "h3", "4": "h4", "5": "h5", "6": "h6"}, "labels": labels,
+            "lean": {"a" * 12: [5, 0], "b" * 12: [3, 2]}}
 
 
 def test_the_table_holds_each_number_over_its_windows():
@@ -165,6 +167,10 @@ def test_the_table_holds_each_number_over_its_windows():
     assert rows["Quick tier: waiting for a slot"]["today"] == "p50 20, p90 20 min (n=1)"
     assert rows["Quick tier: running"]["hour"] == "p50 30, p90 30 min (n=1)"
     assert rows["Candidate: build to verdict"]["today"] == "p50 60, p90 60 min (n=1)"
+    plain = rows["Round with no Lean change: build to verdict"]
+    assert plain["today"] == ("p50 60, p90 60 min (n=1), of 1 with a verdict; slowest step `pytest`, p50 50 min; slowest test "
+                              "`tests/test_x.py::test_slow` of suite `tools/research`, p50 40 min, the slowest in 1 of 1")
+    assert (plain["now"], plain["target"]) == ("0 of the 1 being checked change no Lean", "30")
     assert rows["Candidates by outcome"]["today"] == "4 built: 1 green, 1 red, 1 dropped for another reason, 1 being checked"
     shard = rows["Shard 1/1: its slot to the end of its last step on the gate"]["today"]
     assert shard.startswith("p50 50, p90 50 min (n=1); slowest step `pytest` in 1 of 1, p50 50 min; then it holds the slot p50 10, p90 10 min more")
@@ -191,6 +197,15 @@ def test_the_table_holds_each_number_over_its_windows():
     assert rows["The loop's tick: minutes between tick ends"]["hour"] == "p50 4.0, p90 4.0 min (n=2)"
     assert rows["Green candidate: verdict to `main`"]["today"] == "p50 5, p90 5 min (n=1)"
     assert all(set(r) == {"row", "name", "now", "hour", "today", "target", "how"} for r in rows.values())
+
+
+def test_a_round_is_plain_only_when_its_candidate_is_known_to_change_no_lean():
+    d = doc()
+    d["lean"] = {"a" * 12: [qt.COMPARE_FILES, 0]}       # the compare's list was full, so a Lean file may be past its end
+    row = {r["name"]: r for r in qt.table(d)}["Round with no Lean change: build to verdict"]
+    assert row["today"] == "none of the 1 with a verdict (1 not known)"
+    d["lean"] = {"a" * 12: [qt.COMPARE_FILES, 4]}
+    assert {r["name"]: r for r in qt.table(d)}["Round with no Lean change: build to verdict"]["today"] == "none of the 1 with a verdict"
 
 
 def test_where_a_landed_prs_time_went_adds_up_to_its_total():
