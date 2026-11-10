@@ -13,7 +13,7 @@
    "name": "core_world",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir": "../../../../core/primitives/world",
+   "dir": "../../../../hardware/world",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

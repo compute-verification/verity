@@ -159,7 +159,7 @@ XOR-in folds' per-row keys did, and neither fold is an ε design ("ε in the ten
 
 ## Measure a facet
 
-A facet is measured by a microbenchmark that knows nothing about any algorithm (`../opcode_probe/`, on `../gpu_kit/`).
+A facet is measured by a microbenchmark that knows nothing about any algorithm (`../../../benchmarks/pouw/opcode_probe/`, on `../../../benchmarks/pouw/gpu_kit/`).
 Its numbers enter `data/` only from a run that passes every gate below. A refused probe stays in the run as a visible
 failure.
 
@@ -228,7 +228,7 @@ that writes registers its `copy16` line (`tests/test_data.py`'s `MEMORY_ONLY` li
 
 ## Adopt a probe's census
 
-An opcode probe (`../opcode_probe/`) writes its gated rows as `census.csv` in this schema, with no epochs. After steps 3
+An opcode probe (`../../../benchmarks/pouw/opcode_probe/`) writes its gated rows as `census.csv` in this schema, with no epochs. After steps 3
 and 4 above, `uv run machine-model adopt CENSUS EPOCH` merges it at `EPOCH`, which must be the last epoch. Each (kind,
 row) keeps the faster of its line at the epoch before and the measured one: a row's u must be a lower bound on what
 every program pays on it, so a line slower than the hardware makes a price that isn't sound. A faster line closes the
@@ -267,7 +267,7 @@ Beside its names, a design file has these keys:
 - `[table]`: `bits` on the operand a table route indexes, by default the coins' width and never below it.
 - `ppl`: a spec in `benchmarks/ppl/specs/`, or `""` while the design's arm isn't on main.
 - The ε terms' accounting: `[skip.served]` and `[mand.PART]`, each with its `eps` and `source`, and `[clock]`, `[luck]`,
-  `[baseline]` and `[routes]`. `[skip.served]` is the number `../../../verity/protocols/pouw/eps_budget.py` gives the design's `[noise]` and `sums`
+  `[baseline]` and `[routes]`. `[skip.served]` is the number `../../protocols/pouw/eps_budget.py` gives the design's `[noise]` and `sums`
   (`design_skip`: the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, every served output free),
   and the pouw suite's `test_eps_budget` fails, printing the number to write, when they differ.
 
@@ -426,11 +426,11 @@ a card, with the counts by mark and every hole.
 - **The pipes**: an opcode goes on the pipe a run or the CUDA Programming Guide places it on, else on `fma`, which
   charges only the issue slot every instruction takes (coarse, and sound on any pipe).
 - **What must be covered**: every opcode of NVIDIA's family tables (CUDA Binary Utilities 12.9 §4.3 and §4.4 in
-  `../sass_census/data/bu_12_9.json`, CUDA 13's in `sass_isa_tables.json` beside it), every dotted form of the CUDA 13
+  `../../../benchmarks/pouw/sass_census/data/bu_12_9.json`, CUDA 13's in `sass_isa_tables.json` beside it), every dotted form of the CUDA 13
   libraries' SASS corpus (`corpus.json`, with instruction counts), every census kind, and every unit the card table
   lists (`theta.UNITS`). The three JSON tables are generated, so they are fetched fixtures (`fixtures/artifacts.json`,
   gitignored): `suites.py` fetches them before the tests, and `uv run research data fetch-fixtures
-  benchmarks/pouw/machine_model/data/cover benchmarks/pouw/sass_census/data` brings them into a checkout. `rows.toml`,
+  verity/hardware/machine_model/data/cover benchmarks/pouw/sass_census/data` brings them into a checkout. `rows.toml`,
   the reviewed table, stays in Git.
 - **A row** (`rows.toml`) names its opcodes, devices, census kinds, mark, ACCEL op (`envelope`) with its pipe, stores or formats,
   units a warp instruction, register words, rate (card-table keys, or `rate_value` with its unit), argument and source.
@@ -450,11 +450,11 @@ hole has no severity.
 
 The evidence a row's source cites, each a `research run` with its verdict line:
 
-- `../sass_census/lowering.sh` (`--on auto`) compiles each case of `lowering.cu` for sm_90a and sm_120a and checks the
+- `../../../benchmarks/pouw/sass_census/lowering.sh` (`--on auto`) compiles each case of `lowering.cu` for sm_90a and sm_120a and checks the
   SASS it lowers to or that ptxas refuses it (`verdict: N/N cases lower as expected`).
-- On one leased RTX PRO 6000, through `../opcode_probe/run.sh`: `../opcode_probe/probes/match.cu` (MATCH.ANY by class
+- On one leased RTX PRO 6000, through `../../../benchmarks/pouw/opcode_probe/run.sh`: `../../../benchmarks/pouw/opcode_probe/probes/match.cu` (MATCH.ANY by class
   count and .U64, beside LOP3 and FFMA) and `collective.cu` (REDUX and VOTE beside LOP3, REDUX beside MATCH.ANY), whose
-  verdict is `../opcode_probe/collective_verdict.py`; both build for sm_90a too (`../dc/emp.sh build`, then `emp.sh
+  verdict is `../../../benchmarks/pouw/opcode_probe/collective_verdict.py`; both build for sm_90a too (`../../../benchmarks/pouw/dc/emp.sh build`, then `emp.sh
   time` on the H200). `pipes.cu` times each lane opcode beside its pipe's partner (LOP3, MUFU.EX2 or DFMA), and
   `pipes_verdict.py` holds each to the pipe's ρ.
-- `../sass_census/multimem.sh` reads sm_120's multicast support and runs LDGMC and `multimem.red` on unicast memory.
+- `../../../benchmarks/pouw/sass_census/multimem.sh` reads sm_120's multicast support and runs LDGMC and `multimem.red` on unicast memory.

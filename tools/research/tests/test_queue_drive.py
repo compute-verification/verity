@@ -79,7 +79,7 @@ def _failed_run(tmp_path, test: str, trace: str, steps: str = '{"step": "lean-su
     return d
 
 
-LEAN_AUDIT_LOG = """lean-audit: verity/core/primitives/world: PASS reused (eabc707c8940): every file its audit reads is unchanged
+LEAN_AUDIT_LOG = """lean-audit: verity/hardware/world: PASS reused (eabc707c8940): every file its audit reads is unchanged
 AUDIT /workspace/research/cache/verity-check/lean-audit-scratch-2957380-6l2lanb_/Security/Proofs: FAIL; built WITHOUT a sandbox
   build: exit 1
     warning: ../Proofs/Flock/Recursive/PartTie.lean:168:47: Used `tac1 <;> tac2`

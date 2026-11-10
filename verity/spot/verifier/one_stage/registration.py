@@ -58,7 +58,7 @@
   record's own, so no earlier record holds it. The window is otherwise provenance: R6 takes one record a window, so a
   salt bound to it is one salt a window.
 * **Declared day** (`day`, `declarations`): the prover declares one circuit a day, before the day's first coin, in the
-  registration log (`verity/registration/declaration/v1`, `verity.core.protocols.registration`). The verifier passes
+  registration log (`verity/registration/declaration/v1`, `verity.hardware.registration`). The verifier passes
   the window's day, by its index among the monitoring period's days on its own clock, and the declarations of the log
   it holds when it samples (its view's `declarations`: `{"day", "program", "blocks"}` each). R2 refuses a day with no
   declaration (`R2-undeclared`), a day declared twice (`R2-declared-twice`, which the log's own check refuses as

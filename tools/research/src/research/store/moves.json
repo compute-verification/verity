@@ -2364,6 +2364,16 @@
         "verity/core/protocols/onsite/": "verity/composite/verifier/onsite/",
         "verity/core/protocols/remote/": "verity/composite/verifier/remote/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/machine_model/": "verity/hardware/machine_model/",
+        "verity/core/primitives/world/": "verity/hardware/world/",
+        "verity/core/protocols/record.py": "verity/hardware/record.py",
+        "verity/core/protocols/registration.py": "verity/hardware/registration.py",
+        "verity/core/protocols/tests/test_record.py": "verity/hardware/tests/test_record.py",
+        "verity/core/site/": "verity/hardware/site/"
+      }
     }
   ]
 }

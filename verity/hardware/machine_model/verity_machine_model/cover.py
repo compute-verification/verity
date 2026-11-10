@@ -24,9 +24,9 @@ from verity_machine_model import theta as T
 from verity_machine_model.model import DATA, device, kind_lists
 
 COVER = DATA / "cover"
-TABLES = Path(__file__).resolve().parents[2] / "sass_census" / "data"
+TABLES = Path(__file__).resolve().parents[4] / "benchmarks" / "pouw" / "sass_census" / "data"
 #: corpus.json and the ISA tables are in fixtures/artifacts.json and gitignored; this brings them into a checkout
-FETCH = "uv run research data fetch-fixtures benchmarks/pouw/machine_model/data/cover benchmarks/pouw/sass_census/data"
+FETCH = "uv run research data fetch-fixtures verity/hardware/machine_model/data/cover benchmarks/pouw/sass_census/data"
 DEVICES = ("sm_90", "sm_120")
 FAMILY = {"sm_90": "hopper", "sm_120": "blackwell"}
 MARKS = ("covered", "coarse", "hole", "absent")

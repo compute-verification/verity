@@ -33,7 +33,7 @@ untraced = [
 ]
 inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/spot/verifier/profile.py", "verity/protocols/poub/verifier/remote_bandwidth", "verity/ml/__init__.py",
-          "verity/core/protocols/record.py",
+          "verity/hardware/record.py",
           "verity/circuits", "verity/ml/crypto", "verity/ml/commitments", "verity/ml/randomness",
           # the challenger's coins name their claim instance (spot/challenger.py's `coin_claim`)
           "verity/core/claims/__init__.py",

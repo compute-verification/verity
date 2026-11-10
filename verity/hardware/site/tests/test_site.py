@@ -10,7 +10,7 @@ from fractions import Fraction
 
 import pytest
 
-from verity.core.site import (OPERAND_CLASSES, OUTSIDE, REFUSALS, Auditor, DeviceFigures, Entry, Link, Loc, Malformed,
+from verity.hardware.site import (OPERAND_CLASSES, OUTSIDE, REFUSALS, Auditor, DeviceFigures, Entry, Link, Loc, Malformed,
                               Refused, Registration, Sheet, Site, check, check_registration, genesis, refusal)
 from verity.core.wire import canonical
 
