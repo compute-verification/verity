@@ -48,12 +48,11 @@ share a pair of values) and applies AM–GM (`amgm_bound`). With shared arrays, 
 `Bound` (`bound_of_le`), and take the slowdown from the bound so obtained (`slowdown_of_bound`).
 
 **Over a set of blocks.** `counts_on` is steps 1 to 4 with the cap on a set `G` of blocks only, each block of `G` under
-its own, and the entries of all the blocks together at most a total `T`. A MAC with a gate in a block outside `G`,
-split or not, is counted apart (`touching`), at most those blocks' gates (`card_touching_le`); any other split MAC
-crosses between two blocks of `G`, so step 1 counts it among their entries. Steps 2 and 3 are per block, so they need
-the cap on `G` alone. A gate leaving a block of `G` is an entry of whichever block reads it, so step 4 is counted
-against `T`. `counts` is `counts_on` at every block, and `bound_on` and `bound_on_he` are `Bound` and `HE`'s bound over
-`G` (`real_step_on`).
+its own, and the entries of all the blocks together at most a total `T`. The split MACs and the leaving gates are
+entries, whichever block reads them, so they are counted against `T`; steps 2 and 3 are per block, so they need the cap
+on `G` alone; and the MACs a block outside `G` holds are counted apart, at most its gates (`sum_card_inBlock_le`).
+`counts` is `counts_on` at every block, and `bound_on` and `bound_on_he` are `Bound` and `HE`'s bound over `G`
+(`real_step_on`).
 -/
 
 @[expose] public section
@@ -231,41 +230,14 @@ theorem exists_cross (P : Partition C m) {A : Finset (Fin C.N)} (hA : Connected 
     exact mem_filter.trans (and_iff_right hh)
   exact false_of_iff_not _ (hfa.symm.trans (hcross.trans (not_congr hfh)))
 
-/-- The MACs with a gate in a block of `S`, split or not. -/
-def touching {ι : Type} [Fintype ι] (P : Partition C m) (W : Work C ι) (S : Finset (Fin m)) : Finset W.Mac :=
-  univ.filter fun s => ∃ u ∈ S, ¬ Disjoint (W.mac s) (P.gates u)
-
-theorem touching_empty {ι : Type} [Fintype ι] (P : Partition C m) (W : Work C ι) : touching P W ∅ = ∅ :=
-  filter_eq_empty_iff.2 fun _ _ ⟨_, hu, _⟩ => notMem_empty _ hu
-
-/-- The MACs with a gate in a block of `S` are at most the gates of those blocks: MACs are disjoint. -/
-theorem card_touching_le {ι : Type} [Fintype ι] (P : Partition C m) (W : Work C ι) (S : Finset (Fin m)) :
-    (touching P W S).card ≤ ∑ u ∈ S, (P.gates u).card := by
-  refine le_trans ?_ card_biUnion_le
-  refine card_le_card_of_forall_subsingleton (fun s g => g ∈ W.mac s) (fun s hs => ?_) fun g _ s hs t ht => ?_
-  · obtain ⟨u, hu, hd⟩ := (mem_filter.1 hs).2
-    obtain ⟨g, hg, hgu⟩ := not_disjoint_iff.1 hd
-    exact ⟨g, mem_biUnion.2 ⟨u, hu, hgu⟩, hg⟩
-  · by_contra hst
-    exact disjoint_left.1 (W.mac_disjoint s t hst) hs.2 ht.2
-
-/-- **Step 1.** The split MACs with no gate in a block outside `G` are at most the entries of the blocks of `G`: at
-most `m k` MACs are split. -/
-theorem card_split_le {d : RegisteredCircuit} {ι : Type} [Fintype ι] [DecidableEq ι] (P : Partition d.D m)
-    (W : Work d.D ι) (G : Finset (Fin m)) :
-    ((univ.filter fun s : W.Mac => ∀ u, ¬ W.mac s ⊆ P.gates u) \ touching P W Gᶜ).card ≤
-      ∑ u ∈ G, (d.unregistered (P.gates u)).card := by
-  rw [← card_sigma]
+/-- **Step 1.** At most `m k` MACs are split. -/
+theorem card_split_le {d : RegisteredCircuit} {ι : Type} [Fintype ι] (P : Partition d.D m) (W : Work d.D ι) :
+    (univ.filter fun s : W.Mac => ∀ u, ¬ W.mac s ⊆ P.gates u).card ≤ (entries P).card := by
   refine card_le_card_of_forall_subsingleton (fun s e => e.2 ∈ W.mac s) (fun s hs => ?_) fun e _ s hs t ht => ?_
-  · obtain ⟨hsplit, htouch⟩ := mem_sdiff.1 hs
-    obtain ⟨a, ha, h, hh, hah, hne⟩ :=
-      exists_cross P ((W.M s.1).mac_connected s.2) ((W.M s.1).mac_computed s.2) (mem_filter.1 hsplit).2
+  · obtain ⟨a, ha, h, hh, hah, hne⟩ :=
+      exists_cross P ((W.M s.1).mac_connected s.2) ((W.M s.1).mac_computed s.2) (mem_filter.1 hs).2
     obtain ⟨uh, huh⟩ := exists_unit P (reader_computed hah)
-    have hG : uh ∈ G := by
-      by_contra hG
-      exact htouch (mem_filter.2 ⟨mem_univ _, uh, mem_compl.2 hG, not_disjoint_iff.2 ⟨h, hh, P.mem_gates.2 huh⟩⟩)
-    have he := mem_entries P ((W.M s.1).mac_computed s.2 a ha) hah huh fun hau => hne (hau.trans huh.symm)
-    exact ⟨⟨uh, a⟩, mem_sigma.2 ⟨hG, (mem_sigma.1 he).2⟩, ha⟩
+    exact ⟨⟨uh, a⟩, mem_entries P ((W.M s.1).mac_computed s.2 a ha) hah huh fun hau => hne (hau.trans huh.symm), ha⟩
   · by_contra hst
     exact disjoint_left.1 (W.mac_disjoint s t hst) hs.2 ht.2
 
@@ -273,6 +245,16 @@ theorem card_split_le {d : RegisteredCircuit} {ι : Type} [Fintype ι] [Decidabl
 def inBlock {ι : Type} (P : Partition C m) (W : Work C ι) (u : Fin m) (a : ι) :
     Finset (Fin (W.M a).ni × Fin (W.M a).nj × Fin (W.M a).nl) :=
   univ.filter fun t => (W.M a).mac t ⊆ P.gates u
+
+/-- A block holds at most as many MACs as it has gates: its MACs are disjoint and none is empty. -/
+theorem sum_card_inBlock_le {ι : Type} [Fintype ι] (P : Partition C m) (W : Work C ι) (u : Fin m) :
+    ∑ a, (inBlock P W u a).card ≤ (P.gates u).card := by
+  rw [← card_sigma]
+  refine card_le_card_of_forall_subsingleton (fun s g => g ∈ W.mac s) (fun s hs => ?_) fun g _ s hs t ht => ?_
+  · obtain ⟨g, hg⟩ := ((W.M s.1).mac_connected s.2).1
+    exact ⟨g, (mem_filter.1 (mem_sigma.1 hs).2).2 hg, hg⟩
+  · by_contra hst
+    exact disjoint_left.1 (W.mac_disjoint s t hst) hs.2 ht.2
 
 /-- The words block `u`'s MACs read. -/
 def readWords {ι : Type} [Fintype ι] (P : Partition C m) (W : Work C ι) (u : Fin m) : Finset (Finset (Fin C.N)) :=
@@ -419,44 +401,35 @@ theorem bY_nonneg {ι : Type} [Fintype ι] [DecidableEq ι] (W : Work C ι) : 0 
 
 /-- Steps 1 to 4 over a set `G` of blocks, as counts. Each block of `G` reads at most its own `κ u` gates outside `θ`,
 and all the blocks together at most `T`. `V` counts the MACs a block of `G` holds, `F` the pairs of a block of `G` and
-an output it feeds, and `E` the pairs of a block of `G` and an output in its `E(block)`. A MAC with a gate in a block
-outside `G`, split or not, is counted apart (`touching`), with no cap on what that block reads; every other split MAC
-crosses between two blocks of `G`, so it is an entry of one. A gate leaving a block of `G` is an entry of the block
-reading it, in `G` or not, so `E` is counted against the total `T`. -/
+an output it feeds, and `E` the pairs of a block of `G` and an output in its `E(block)`. A split MAC and a gate leaving
+a block are entries of the block reading them, in `G` or not, so both are counted against `T`; the MACs a block outside
+`G` holds are counted apart, with no cap on what it reads. -/
 theorem counts_on {ι : Type} [Fintype ι] [DecidableEq ι] {d : RegisteredCircuit} {T : ℕ} (W : Work d.D ι)
     (P : Partition d.D m) (G : Finset (Fin m)) (κ : Fin m → ℕ)
     (hκ : ∀ u ∈ G, (d.unregistered (P.gates u)).card ≤ κ u)
     (hT : ∑ u, (d.unregistered (P.gates u)).card ≤ T) :
-    ∃ V F E : ℕ, W.N ≤ ∑ u ∈ G, (d.unregistered (P.gates u)).card + V + (touching P W Gᶜ).card ∧
+    ∃ V F E : ℕ, W.N ≤ T + V + ∑ u ∈ Gᶜ, ∑ a, (inBlock P W u a).card ∧
       V ^ 2 ≤ (∑ u ∈ G, piMax d W (κ u)) * F ∧ F ≤ W.O + E ∧ W.bY * E ≤ T ∧ (E = 0 ∨ 0 < W.bY) := by
+  have hent : (entries P).card ≤ T := card_entries_le P hT
   have hleave : ∑ u ∈ G, (leaving (P.gates u)).card ≤ T :=
-    ((sum_le_sum_of_subset (subset_univ G)).trans (sum_card_leaving_le P)).trans (card_entries_le P hT)
-  have hheld : (G.biUnion fun u => univ.sigma (inBlock P W u)).card ≤ ∑ u ∈ G, ∑ a, (inBlock P W u a).card :=
-    card_biUnion_le.trans (le_of_eq (sum_congr rfl fun u _ => card_sigma _ _))
+    ((sum_le_sum_of_subset (subset_univ G)).trans (sum_card_leaving_le P)).trans hent
   refine ⟨∑ u ∈ G, ∑ a, (inBlock P W u a).card, ∑ u ∈ G, (fedBy P W u).card,
     ∑ u ∈ G, (W.clear (P.gates u)).card, ?_, ?_, ?_, ?_, ?_⟩
   · calc W.N = (univ : Finset W.Mac).card := card_univ.symm
-      _ ≤ (((univ.filter fun s : W.Mac => ∀ u, ¬ W.mac s ⊆ P.gates u) \ touching P W Gᶜ) ∪
-            (G.biUnion fun u => univ.sigma (inBlock P W u)) ∪ touching P W Gᶜ).card := by
+      _ ≤ ((univ.filter fun s : W.Mac => ∀ u, ¬ W.mac s ⊆ P.gates u) ∪
+            univ.biUnion fun u => univ.sigma (inBlock P W u)).card := by
           refine card_le_card fun s _ => ?_
-          by_cases ht : s ∈ touching P W Gᶜ
-          · exact mem_union_right _ ht
-          · refine mem_union_left _ ?_
-            by_cases h : ∀ u, ¬ W.mac s ⊆ P.gates u
-            · exact mem_union_left _ (mem_sdiff.2 ⟨mem_filter.2 ⟨mem_univ _, h⟩, ht⟩)
-            · obtain ⟨u, hu⟩ := not_forall.1 h
-              have hsub : W.mac s ⊆ P.gates u := not_not.1 hu
-              have hG : u ∈ G := by
-                by_contra hG
-                obtain ⟨g, hg⟩ := ((W.M s.1).mac_connected s.2).1
-                exact ht (mem_filter.2 ⟨mem_univ _, u, mem_compl.2 hG, not_disjoint_iff.2 ⟨g, hg, hsub hg⟩⟩)
-              exact mem_union_right _ (mem_biUnion.2 ⟨u, hG,
-                mem_sigma.2 ⟨mem_univ _, mem_filter.2 ⟨mem_univ _, hsub⟩⟩⟩)
-      _ ≤ ((univ.filter fun s : W.Mac => ∀ u, ¬ W.mac s ⊆ P.gates u) \ touching P W Gᶜ).card +
-            (G.biUnion fun u => univ.sigma (inBlock P W u)).card + (touching P W Gᶜ).card :=
-          (card_union_le _ _).trans (Nat.add_le_add_right (card_union_le _ _) _)
-      _ ≤ ∑ u ∈ G, (d.unregistered (P.gates u)).card + ∑ u ∈ G, ∑ a, (inBlock P W u a).card +
-            (touching P W Gᶜ).card := Nat.add_le_add_right (Nat.add_le_add (card_split_le P W G) hheld) _
+          by_cases h : ∀ u, ¬ W.mac s ⊆ P.gates u
+          · exact mem_union_left _ (mem_filter.2 ⟨mem_univ _, h⟩)
+          · obtain ⟨u, hu⟩ := not_forall.1 h
+            exact mem_union_right _ (mem_biUnion.2 ⟨u, mem_univ _,
+              mem_sigma.2 ⟨mem_univ _, mem_filter.2 ⟨mem_univ _, not_not.1 hu⟩⟩⟩)
+      _ ≤ (entries P).card + ∑ u, (univ.sigma (inBlock P W u)).card :=
+          (card_union_le _ _).trans (add_le_add (card_split_le P W) card_biUnion_le)
+      _ ≤ T + ∑ u, ∑ a, (inBlock P W u a).card :=
+          add_le_add hent (le_of_eq (sum_congr rfl fun u _ => card_sigma _ _))
+      _ = T + ∑ u ∈ G, ∑ a, (inBlock P W u a).card + ∑ u ∈ Gᶜ, ∑ a, (inBlock P W u a).card := by
+          rw [add_assoc, sum_add_sum_compl]
   · exact sum_sq_le_sum_mul_sum_of_sq_le_mul _ (fun _ _ => Nat.zero_le _) (fun _ _ => Nat.zero_le _) fun u hu =>
       (card_inBlock_sq_le P W u).trans (Nat.mul_le_mul (pi_readWords_le P W (hκ u hu)) le_rfl)
   · calc ∑ u ∈ G, (fedBy P W u).card
@@ -487,9 +460,9 @@ theorem counts {ι : Type} [Fintype ι] [DecidableEq ι] {d : RegisteredCircuit}
     calc ∑ u, (d.unregistered (P.gates u)).card ≤ ∑ _u : Fin m, k := sum_le_sum fun u _ => hk u
       _ = m * k := by rw [sum_const, card_univ, Fintype.card_fin, smul_eq_mul]
   obtain ⟨V, F, E, hN, hV, hF, hbE, hb⟩ := counts_on W P univ (fun _ => k) (fun u _ => hk u) hT
-  rw [compl_univ, touching_empty, card_empty, add_zero] at hN
+  rw [compl_univ, sum_empty, add_zero] at hN
   simp only [sum_const, card_univ, Fintype.card_fin, smul_eq_mul] at hV
-  exact ⟨V, F, E, hN.trans (Nat.add_le_add_right hT V), hV, hF, (by exact_mod_cast hbE), hb⟩
+  exact ⟨V, F, E, hN, hV, hF, (by exact_mod_cast hbE), hb⟩
 
 /-! ### The bound and the slowdown -/
 
@@ -537,12 +510,12 @@ theorem Bound : Guarantees.Bound := by
   exact real_step (Nat.cast_nonneg m) (Nat.cast_nonneg _) (Nat.cast_nonneg _) (Nat.cast_nonneg E) hN' hV' hbE hE'
 
 /-- **The bound over a set of blocks.** Each block of `G` reads at most `k` gates outside `θ` and all the blocks
-together at most `T`: `N` is at most the MACs with a gate in a block outside `G`, plus
+together at most `T`: `N` is at most the MACs the blocks outside `G` hold, plus
 `T + √(Π(k) |G| O) + √(Π(k) |G| T / b_y)`. At every block and `T = m k` it is `Bound`. -/
 theorem bound_on {ι : Type} [Fintype ι] [DecidableEq ι] {d : RegisteredCircuit} {k T : ℕ} (W : Work d.D ι)
     (P : Partition d.D m) (G : Finset (Fin m)) (hk : ∀ u ∈ G, (d.unregistered (P.gates u)).card ≤ k)
     (hT : ∑ u, (d.unregistered (P.gates u)).card ≤ T) :
-    (W.N : ℝ) ≤ (touching P W Gᶜ).card + T + √(piMax d W k * G.card * W.O) +
+    (W.N : ℝ) ≤ (∑ u ∈ Gᶜ, ∑ a, (inBlock P W u a).card : ℕ) + T + √(piMax d W k * G.card * W.O) +
       √(piMax d W k * G.card * (T / W.bY)) := by
   obtain ⟨V, F, E, hN, hV, hF, hbE, hb⟩ := counts_on W P G (fun _ => k) hk hT
   have hV' : (V : ℝ) ^ 2 ≤ G.card * piMax d W k * (W.O + E) := by
@@ -551,10 +524,8 @@ theorem bound_on {ι : Type} [Fintype ι] [DecidableEq ι] {d : RegisteredCircui
         _ = G.card * piMax d W k * F := by rw [sum_const, smul_eq_mul]
         _ ≤ G.card * piMax d W k * (W.O + E) := Nat.mul_le_mul le_rfl hF
     exact_mod_cast h
-  have hG : ∑ u ∈ G, (d.unregistered (P.gates u)).card ≤ T := (sum_le_sum_of_subset (subset_univ G)).trans hT
-  have hN' : (W.N : ℝ) - (touching P W Gᶜ).card ≤ T + V := by
-    have h : (W.N : ℝ) ≤ ((T + V + (touching P W Gᶜ).card : ℕ) : ℝ) := by
-      exact_mod_cast hN.trans (Nat.add_le_add_right (Nat.add_le_add_right hG V) _)
+  have hN' : (W.N : ℝ) - (∑ u ∈ Gᶜ, ∑ a, (inBlock P W u a).card : ℕ) ≤ T + V := by
+    have h : (W.N : ℝ) ≤ ((T + V + ∑ u ∈ Gᶜ, ∑ a, (inBlock P W u a).card : ℕ) : ℝ) := by exact_mod_cast hN
     rw [Nat.cast_add, Nat.cast_add] at h
     linarith
   have hE' : (E : ℝ) = 0 ∨ 0 < W.bY := hb.imp_left fun h => by rw [h, Nat.cast_zero]
@@ -912,14 +883,14 @@ theorem HEShared : Guarantees.HEShared := by
 
 /-- **The bound over a set of blocks, under (H) and (E).** `HE`'s premises on the values, with (H) at the cap `k` of
 the blocks of `G` and (E) at `b > 0`; all the blocks together read at most `T` gates outside `θ`. `N` is at most the
-MACs with a gate in a block outside `G`, plus `T + (k/2) √(|G| O / (β_w β_x)) + (k/2) √(|G| T / (β_w β_x b))`. At
-every block and `T = m k` it is `HE`'s bound. -/
+MACs the blocks outside `G` hold, plus `T + (k/2) √(|G| O / (β_w β_x)) + (k/2) √(|G| T / (β_w β_x b))`. At every block
+and `T = m k` it is `HE`'s bound. -/
 theorem bound_on_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] {d : RegisteredCircuit} {W : Work d.D ι}
     {val : Finset (Fin d.D.N) → V} {k T : ℕ} {βw βx b : ℝ} (P : Partition d.D m) (G : Finset (Fin m))
     (hw : 0 < βw) (hx : 0 < βx) (hb : 0 < b) (hval : ValuesInjective W val) (hshare : NoSharedPair W val)
     (hH : Assumptions.Hardness d ![W.allW, W.allX] val ![βw, βx] k) (hE : Assumptions.Exports W b)
     (hk : ∀ u ∈ G, (d.unregistered (P.gates u)).card ≤ k) (hT : ∑ u, (d.unregistered (P.gates u)).card ≤ T) :
-    (W.N : ℝ) ≤ (touching P W Gᶜ).card + T + k / 2 * √(G.card * W.O / (βw * βx)) +
+    (W.N : ℝ) ≤ (∑ u ∈ Gᶜ, ∑ a, (inBlock P W u a).card : ℕ) + T + k / 2 * √(G.card * W.O / (βw * βx)) +
       k / 2 * √(G.card * T / (βw * βx * b)) := by
   obtain ⟨hpi, -⟩ := onePremise hw hx hval hshare hH
   have hp : (0 : ℝ) ≤ k ^ 2 / (4 * βw * βx) := div_nonneg (sq_nonneg _) (mul_pos (mul_pos four_pos hw) hx).le

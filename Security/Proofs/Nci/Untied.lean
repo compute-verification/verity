@@ -6,32 +6,41 @@ public import Mathlib.Data.Finset.Sort
 public import Mathlib.Logic.Function.Basic
 
 /-!
-# Untied words: what a block reads once gates leave `θ`
+# Untied words: what a block reads once a word is no longer tied
 
 A block's fresh input is what it reads outside `θ` (`RegisteredCircuit.unregistered`, `Nci.novelReads`). These lemmas
-bound it once a set `E` of gates no longer counts as registered, the circuit **untied at `E`**. They are stated per
-block and hold for every `E`, with no threshold in them.
+bound it once the gates of a set `E` of words are no longer tied to registered data, the circuit **untied at `E`**.
+They are stated per block and hold for every `E`, with no threshold in them.
 
-Two readings of "untied at `E`", since `θ` holds input gates only (`RegisteredCircuit.θ_input`):
+`θ` holds input gates only (`RegisteredCircuit.θ_input`), so "untied at `E`" has two readings, one for each kind of
+gate a tied word can be:
 
-* `RegisteredCircuit.untie`: `E`'s gates leave `θ`. The circuit, its blocks and any charged work on it stay as they
-  are, so `Nci.Cut.Guarantees.HE` applies to `d.untie E` with the same partition and the same `Work`.
-* `RegisteredCircuit.asInputs`: `E`'s gates become input gates outside `θ` and read nothing. This is the reading for
-  words that are computed gates, and it is also the circuit without a set of blocks, whose gates the kept blocks then
+* **A tied word is computed in the circuit**, and untied it is a free input of whatever reads it:
+  `RegisteredCircuit.asInputs`, where `E`'s gates become input gates outside `θ` and read nothing. The gates that
+  computed the word stay in their blocks, each block is what is left of it without `E` (`Partition.asInputs`), and the
+  charged work is a `Work` of the circuit with the words as inputs: no MAC is charged there for an output that lies in
+  the words (`y_not_subset_asInputs`). It is also the circuit without a set of blocks, whose gates the kept blocks then
   read as input.
+* **A tied word is a registered input**: `RegisteredCircuit.untie`, where `E`'s gates leave `θ`. The circuit, its
+  blocks and any charged work on it stay as they are. At a computed gate it changes nothing (`unregistered_untie`), so
+  it says nothing about a word the circuit computes.
 
 In either reading a set `R` of gates reads, outside `θ`, at most what it read before and the gates of `E` it reads
-(`unregistered_untie_subset`, `unregistered_asInputs_subset`; in bits, `novelReads_untie_le`). When `E` is a union of
-words of at most `b` gates, that is at most `b` for each word `R` reads, from any `U` to `U ∪ E`
-(`card_unregistered_untie_union_le`; in bits, `novelReads_untie_union_le`). So blocks that read at most `k` gates
-outside `θ` and at most `w` words of `E` read at most `k + b w` (`readsAtMost_untie`, `readsAtMost_untie_union`,
-`readsAtMost_asInputs`, and `isCK_untie` for a `(c, k)`-partition; `b = 32` for a word of 32 gates,
-`readsAtMost_untie_32`).
+(`unregistered_asInputs_subset`, `unregistered_untie_subset`; in bits, `novelReads_asInputs_le`,
+`novelReads_untie_le`). When `E` is a union of words of at most `b` gates, that is at most `b` for each word `R`
+reads (`card_unregistered_asInputs_words_le`, `card_unregistered_untie_union_le`; in bits,
+`novelReads_asInputs_words_le`, `novelReads_untie_union_le`). So blocks that read at most `k` gates outside `θ` and at
+most `w` words of `E` read at most `k + b w` (`readsAtMost_asInputs`; `readsAtMost_untie`, `readsAtMost_untie_union`,
+and `isCK_untie` for a `(c, k)`-partition; `b = 32` for a word of 32 gates, `readsAtMost_untie_32`). Each lemma holds
+on every registered circuit, so the step from words `U` already untied to `U ∪ E` is the lemma on the circuit untied at
+`U`.
 
 When each word is read by at most one block (`OneReader`), at most `|E| / (w + 1)` blocks read more than `w` words
 (`readersOver`, `card_readersOver_le`), every other block reads at most `k + b w`
-(`card_unregistered_untie_of_notMem_readersOver`), and all blocks together read at most `m k + b |E|`
-(`sum_card_unregistered_untie_le`).
+(`card_unregistered_asInputs_of_notMem_readersOver`, `card_unregistered_untie_of_notMem_readersOver`), and all blocks
+together read at most `m k + b |E|` (`sum_card_unregistered_asInputs_le`, `sum_card_unregistered_untie_le`). With the
+words as inputs, the readers are those of the circuit with the words as inputs: a word computed in the block that
+reads it has no reader before, and what is left of that block reads it after.
 
 `HE` quantifies over a `Partition` of every computed gate of the circuit, each block within the cap, so it takes no
 subset of a partition's blocks. The form it can take is the circuit with the other blocks' gates as inputs and the
@@ -40,9 +49,10 @@ other premises are then about that circuit, not `d`: the charged work is a `Work
 dropped block is lost whole, and (H) and (E) are taken at it, whichever blocks are dropped.
 
 The count itself needs no such circuit. `Nci.Cut.SecurityProofs.counts_on` takes the cap on a set of blocks and the
-entries of all the blocks as a total, so on `d.untie E` with every block kept, the blocks reading at most `w` words
-are counted under `k + b w`, all the blocks together read `m k + b |E|`, and the MACs with a gate in another block
-are counted apart, at most those blocks' gates (`counts_untie`; under (H) and (E), `bound_untie_he`).
+entries of all the blocks as a total, so on the untied circuit with every block kept, the blocks reading at most `w`
+words are counted under `k + b w`, all the blocks together read `m k + b |E|`, and the MACs another block holds are
+counted apart, at most its gates (`counts_asInputs`, `counts_untie`; under (H) and (E), `bound_asInputs_he`,
+`bound_untie_he`).
 -/
 
 @[expose] public section
@@ -279,7 +289,7 @@ end Verity
 namespace Nci.Untied
 
 open Verity Finset Nci.Cut
-open Nci.Cut.SecurityProofs (touching counts_on bound_on_he)
+open Nci.Cut.SecurityProofs (inBlock counts_on bound_on_he)
 
 /-- The words of `𝒲` that `R` reads: those with a gate in `in(R)`. -/
 def wordsRead (C : Circuit) (𝒲 : Finset (Finset (Fin C.N))) (R : Finset (Fin C.N)) : Finset (Finset (Fin C.N)) :=
@@ -461,27 +471,26 @@ theorem sum_card_unregistered_untie_le {m : ℕ} (d : RegisteredCircuit) (P : Pa
 /-- **The counts with untied words, the heavy readers charged whole.** Untied at the words `𝒲`, each of at most `b`
 gates and read by at most one block, on the circuit itself with every block kept: the blocks reading at most `w` of
 the words are under the cap `k + b w`, all the blocks together read at most `m k + b |𝒲|` gates outside `θ`, and the
-MACs with a gate in a block reading more than `w` words are counted apart (`Nci.Cut.SecurityProofs.counts_on`). -/
+MACs a block reading more than `w` words holds are counted apart (`Nci.Cut.SecurityProofs.counts_on`). -/
 theorem counts_untie {ι : Type} [Fintype ι] [DecidableEq ι] {m : ℕ} (d : RegisteredCircuit) (P : Partition d.D m)
     (W : Work d.D ι) {k b : ℕ} (𝒲 : Finset (Finset (Fin d.D.N))) (h𝒲 : ∀ S ∈ 𝒲, S.card ≤ b)
     (hk : ReadsAtMost d P k) (hone : OneReader P 𝒲) (w : ℕ) :
     ∃ V F E : ℕ,
-      W.N ≤ m * k + b * 𝒲.card + V + (touching P W (readersOver P 𝒲 w)).card ∧
+      W.N ≤ m * k + b * 𝒲.card + V + ∑ u ∈ readersOver P 𝒲 w, ∑ a, (inBlock P W u a).card ∧
       V ^ 2 ≤ (m - (readersOver P 𝒲 w).card) * piMax (d.untie (𝒲.biUnion id)) W (k + b * w) * F ∧
       F ≤ W.O + E ∧ W.bY * E ≤ (m * k + b * 𝒲.card : ℕ) ∧ (E = 0 ∨ 0 < W.bY) := by
-  have hT := sum_card_unregistered_untie_le d P 𝒲 h𝒲 hk hone
   obtain ⟨V, F, E, hN, hV, hF, hbE, hb⟩ :=
     counts_on (d := d.untie (𝒲.biUnion id)) W P (readersOver P 𝒲 w)ᶜ (fun _ => k + b * w)
-      (fun u hu => card_unregistered_untie_of_notMem_readersOver d P 𝒲 h𝒲 hk (mem_compl.1 hu)) hT
+      (fun u hu => card_unregistered_untie_of_notMem_readersOver d P 𝒲 h𝒲 hk (mem_compl.1 hu))
+      (sum_card_unregistered_untie_le d P 𝒲 h𝒲 hk hone)
   rw [compl_compl] at hN
   simp only [sum_const, card_compl, Fintype.card_fin, smul_eq_mul] at hV
-  exact ⟨V, F, E, hN.trans (Nat.add_le_add_right (Nat.add_le_add_right
-    ((sum_le_sum_of_subset (subset_univ _)).trans hT) V) _), hV, hF, hbE, hb⟩
+  exact ⟨V, F, E, hN, hV, hF, hbE, hb⟩
 
 /-- **The bound with untied words, the heavy readers charged whole, under (H) and (E).** `HE`'s premises on the
 values, with (H) at the untied circuit and at the cap `k + b w` of the blocks reading at most `w` of the words, and
-(E) at `e > 0`. With `g` the number of those blocks and `T = m k + b |𝒲|`, `N` is at most the MACs with a gate in
-another block, plus `T + ((k + b w)/2) √(g O / (β_w β_x)) + ((k + b w)/2) √(g T / (β_w β_x e))`
+(E) at `e > 0`. With `g` the number of those blocks and `T = m k + b |𝒲|`, `N` is at most the MACs the other blocks
+hold, plus `T + ((k + b w)/2) √(g O / (β_w β_x)) + ((k + b w)/2) √(g T / (β_w β_x e))`
 (`Nci.Cut.SecurityProofs.bound_on_he`). -/
 theorem bound_untie_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] {m : ℕ} (d : RegisteredCircuit)
     (P : Partition d.D m) (W : Work d.D ι) (val : Finset (Fin d.D.N) → V) {k b : ℕ} {βw βx e : ℝ}
@@ -489,7 +498,7 @@ theorem bound_untie_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq 
     (w : ℕ) (hw : 0 < βw) (hx : 0 < βx) (he : 0 < e) (hval : ValuesInjective W val) (hshare : NoSharedPair W val)
     (hH : Assumptions.Hardness (d.untie (𝒲.biUnion id)) ![W.allW, W.allX] val ![βw, βx] (k + b * w))
     (hE : Assumptions.Exports W e) :
-    (W.N : ℝ) ≤ (touching P W (readersOver P 𝒲 w)).card + (m * k + b * 𝒲.card : ℕ) +
+    (W.N : ℝ) ≤ (∑ u ∈ readersOver P 𝒲 w, ∑ a, (inBlock P W u a).card : ℕ) + (m * k + b * 𝒲.card : ℕ) +
       (k + b * w : ℕ) / 2 * √((m - (readersOver P 𝒲 w).card : ℕ) * W.O / (βw * βx)) +
       (k + b * w : ℕ) / 2 *
         √((m - (readersOver P 𝒲 w).card : ℕ) * (m * k + b * 𝒲.card : ℕ) / (βw * βx * e)) := by
@@ -612,31 +621,30 @@ theorem y_not_subset_asInputs {C : Circuit} {ι : Type} {T : Finset (Fin C.N)} (
 /-- **The counts with the words as inputs, the heavy readers charged whole.** On the circuit with the gates of the
 words `𝒲` as inputs outside `θ`, each word of at most `b` gates and then read by at most one block, with any charged
 work `W` of that circuit: the blocks reading at most `w` of the words are under the cap `k + b w`, all the blocks
-together read at most `m k + b |𝒲|` gates outside `θ`, and the MACs with a gate in a block reading more than `w` words
-are counted apart (`Nci.Cut.SecurityProofs.counts_on`). -/
+together read at most `m k + b |𝒲|` gates outside `θ`, and the MACs a block reading more than `w` words holds are
+counted apart (`Nci.Cut.SecurityProofs.counts_on`). -/
 theorem counts_asInputs {ι : Type} [Fintype ι] [DecidableEq ι] {m : ℕ} (d : RegisteredCircuit) (P : Partition d.D m)
     {k b : ℕ} (𝒲 : Finset (Finset (Fin d.D.N))) (W : Work (d.D.asInputs (𝒲.biUnion id)) ι)
     (h𝒲 : ∀ S ∈ 𝒲, S.card ≤ b) (hk : ReadsAtMost d P k) (hone : OneReader (P.asInputs (𝒲.biUnion id)) 𝒲) (w : ℕ) :
     ∃ V F E : ℕ,
       W.N ≤ m * k + b * 𝒲.card + V +
-        (touching (P.asInputs (𝒲.biUnion id)) W (readersOver (P.asInputs (𝒲.biUnion id)) 𝒲 w)).card ∧
+        ∑ u ∈ readersOver (P.asInputs (𝒲.biUnion id)) 𝒲 w, ∑ a, (inBlock (P.asInputs (𝒲.biUnion id)) W u a).card ∧
       V ^ 2 ≤ (m - (readersOver (P.asInputs (𝒲.biUnion id)) 𝒲 w).card) *
         piMax (d.asInputs (𝒲.biUnion id)) W (k + b * w) * F ∧
       F ≤ W.O + E ∧ W.bY * E ≤ (m * k + b * 𝒲.card : ℕ) ∧ (E = 0 ∨ 0 < W.bY) := by
-  have hT := sum_card_unregistered_asInputs_le d P 𝒲 h𝒲 hk hone
   obtain ⟨V, F, E, hN, hV, hF, hbE, hb⟩ :=
     counts_on (d := d.asInputs (𝒲.biUnion id)) W (P.asInputs (𝒲.biUnion id))
       (readersOver (P.asInputs (𝒲.biUnion id)) 𝒲 w)ᶜ (fun _ => k + b * w)
-      (fun u hu => card_unregistered_asInputs_of_notMem_readersOver d P 𝒲 h𝒲 hk (mem_compl.1 hu)) hT
+      (fun u hu => card_unregistered_asInputs_of_notMem_readersOver d P 𝒲 h𝒲 hk (mem_compl.1 hu))
+      (sum_card_unregistered_asInputs_le d P 𝒲 h𝒲 hk hone)
   rw [compl_compl] at hN
   simp only [sum_const, card_compl, Fintype.card_fin, smul_eq_mul] at hV
-  exact ⟨V, F, E, hN.trans (Nat.add_le_add_right (Nat.add_le_add_right
-    ((sum_le_sum_of_subset (subset_univ _)).trans hT) V) _), hV, hF, hbE, hb⟩
+  exact ⟨V, F, E, hN, hV, hF, hbE, hb⟩
 
 /-- **The bound with the words as inputs, the heavy readers charged whole, under (H) and (E).** `HE`'s premises on the
 values, with (H) at the circuit with the words as inputs and at the cap `k + b w` of the blocks reading at most `w` of
-the words, and (E) at `e > 0`. With `g` the number of those blocks and `T = m k + b |𝒲|`, `N` is at most the MACs with
-a gate in another block, plus `T + ((k + b w)/2) √(g O / (β_w β_x)) + ((k + b w)/2) √(g T / (β_w β_x e))`
+the words, and (E) at `e > 0`. With `g` the number of those blocks and `T = m k + b |𝒲|`, `N` is at most the MACs the
+other blocks hold, plus `T + ((k + b w)/2) √(g O / (β_w β_x)) + ((k + b w)/2) √(g T / (β_w β_x e))`
 (`Nci.Cut.SecurityProofs.bound_on_he`). -/
 theorem bound_asInputs_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] {m : ℕ} (d : RegisteredCircuit)
     (P : Partition d.D m) {k b : ℕ} {βw βx e : ℝ} (𝒲 : Finset (Finset (Fin d.D.N)))
@@ -646,7 +654,8 @@ theorem bound_asInputs_he {ι V : Type} [Fintype ι] [DecidableEq ι] [Decidable
     (hH : Assumptions.Hardness (d.asInputs (𝒲.biUnion id)) ![W.allW, W.allX] val ![βw, βx] (k + b * w))
     (hE : Assumptions.Exports W e) :
     (W.N : ℝ) ≤
-      (touching (P.asInputs (𝒲.biUnion id)) W (readersOver (P.asInputs (𝒲.biUnion id)) 𝒲 w)).card +
+      (∑ u ∈ readersOver (P.asInputs (𝒲.biUnion id)) 𝒲 w,
+        ∑ a, (inBlock (P.asInputs (𝒲.biUnion id)) W u a).card : ℕ) +
       (m * k + b * 𝒲.card : ℕ) +
       (k + b * w : ℕ) / 2 *
         √((m - (readersOver (P.asInputs (𝒲.biUnion id)) 𝒲 w).card : ℕ) * W.O / (βw * βx)) +
