@@ -8,7 +8,7 @@
 #              time, outside any lease, into $FLOCK_WORK/data/ (kept, keyed by the staging tree)
 #   3. prove   per statement, a loopback --zk session set: a verifier process on VCPUS cores, WARM + RUNS prover sessions on the
 #              rest, as benchmarks/flock_s8_block/run.sh runs its sessions (the ZK server's send check off, FC_COINS=os),
-#              each with every unit in its sample (`--draw subset:N`: Lean's verifier refuses a session without one);
+#              each with every unit in its sample (`subset:N`: Lean's verifier refuses a session without a sample);
 #              with PT_DEVICE=gpu every session under one `gpu-lease 1` of at most LEASE_MIN minutes, the prover with --gpu;
 #              out/DEV/NAME/start and done hold the statement's start and end (epoch seconds), and exit the prover's exit
 #              status: done is written once the session set ends, whatever that status, so a statement finished only on 0
