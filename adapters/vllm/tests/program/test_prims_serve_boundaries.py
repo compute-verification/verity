@@ -21,7 +21,7 @@ OTHER_FAMILIES = {"dense", "dsa_topk", "dsa_topk_mask", "fa2_softcap", "fa3_chec
                   "topp_word_gates"}
 THIRD_PARTY = {"numpy"}
 #: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = "verity.circuits"
+CATALOG = ("verity.circuits", "verity.definitions.circuits", "verity.definitions.ops", "verity.definitions.silicon")
 #: `evidence.json`'s ids, read with the standard library only
 EVIDENCE = "verity.definitions.evidence"
 #: (module, what it imports outside the rule) -> why it stays
@@ -65,7 +65,7 @@ def _allowed(mod: str) -> bool:
     top = mod.split(".")[0]
     if _core(mod) or top in sys.stdlib_module_names or top == "__future__" or top in THIRD_PARTY:
         return True
-    if mod in (REG, CATALOG, EVIDENCE) or mod.startswith(CATALOG + "."):
+    if mod in (REG, *CATALOG, EVIDENCE) or mod.startswith(tuple(c + "." for c in CATALOG)):
         return True
     if mod.startswith(REG + "."):
         return mod[len(REG) + 1:].split(".")[0] in set(FAMILY) | OTHER_FAMILIES
