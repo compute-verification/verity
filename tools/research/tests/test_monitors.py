@@ -661,8 +661,39 @@ def test_public_missing_heads_each_manifest(monkeypatch):
     from research.store.remote import HttpRemote
 
     a, b = "art:" + "a" * 64, "art:" + "b" * 64
-    monkeypatch.setattr(HttpRemote, "head", lambda self, key: {"bytes": 1} if key == f"manifests/{'a' * 64}.json" else None)
+    asked = []
+    monkeypatch.setattr(M, "redirected_base", lambda url, key: "https://bucket.invalid")
+    monkeypatch.setattr(HttpRemote, "head", lambda self, key: asked.append(self.base) or (
+        {"bytes": 1} if key == f"manifests/{'a' * 64}.json" else None))
     assert M.public_missing([a, b], "https://example.invalid/store") == [b]
+    assert asked == ["https://bucket.invalid"] * 2
+
+
+def test_the_export_s_redirect_is_followed_once_and_a_site_that_does_not_redirect_is_kept(monkeypatch):
+    import io
+    import urllib.error
+    import urllib.request
+    from email.message import Message
+
+    key = f"manifests/{'a' * 64}.json"
+
+    def opener(code, location):
+        class Opener:
+            def open(self, req, timeout):
+                if code == 200:
+                    return io.BytesIO(b"")
+                h = Message()
+                if location:
+                    h["Location"] = location
+                raise urllib.error.HTTPError(req.full_url, code, "", h, None)
+        return lambda *handlers: Opener()
+
+    monkeypatch.setattr(urllib.request, "build_opener", opener(307, f"https://bucket.invalid/{key}"))
+    assert M.redirected_base("https://site.invalid/store", key) == "https://bucket.invalid"
+    monkeypatch.setattr(urllib.request, "build_opener", opener(403, None))
+    assert M.redirected_base("https://site.invalid/store", key) == "https://site.invalid/store"
+    monkeypatch.setattr(urllib.request, "build_opener", opener(200, None))
+    assert M.redirected_base("https://site.invalid/store", key) == "https://site.invalid/store"
 
 
 def test_node_2s_heartbeat_is_stale_after_10_minutes_without_a_pass():
@@ -1486,3 +1517,11 @@ def test_unverified_main_rings_ci_and_top_each_hour_past_three_until_a_post_land
     lines = (alerts / "monitors.jsonl").read_text().splitlines()
     assert [(x["event"], x["key"], x["owners"]) for x in map(json.loads, lines)] == [
         ("event", "unverified-main|595cce6ddaf6:4", ["ci", "top"])]
+    decisions = tmp_path / M.VQUEUE_DECISIONS
+    decisions.parent.mkdir(parents=True)
+    decisions.write_text(json.dumps({"action": "ring", "at": M.iso(T0 - 600)}) + "\n")
+    assert M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=run)) == [], (
+        "the verified queue decides (ci, 9 Nov): drive's stale verified commit no longer rings")
+    decisions.write_text(json.dumps({"action": "advance", "at": M.iso(T0 - 4 * 3600 - 60)}) + "\n")
+    (f,) = M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=run))
+    assert f.key == "vqueue:4" and f.owners == ("ci", "top") and "decided nothing for 4 h" in f.text

@@ -5,6 +5,7 @@ public import Definitions.NetworkCertifier.Guarantees.Pooled
 public import Definitions.NetworkCertifier.Guarantees.Period
 public import Definitions.NetworkCertifier.Guarantees.PooledLeak
 public import Definitions.NetworkCertifier.Guarantees.Checked
+public import Definitions.NetworkCertifier.Guarantees.Carried
 public import Proofs.NetworkCertifier.Lemmas
 public import Proofs.NetworkCertifier.Occupancy
 public import Proofs.NetworkCertifier.Counting
@@ -31,6 +32,9 @@ public import Proofs.NetworkCertifier.RecordRows
 public import Proofs.NetworkCertifier.Witnesses
 public import Proofs.NetworkCertifier.Checked
 public import Proofs.NetworkCertifier.WitnessesChecked
+public import Proofs.NetworkCertifier.Carried
+public import Proofs.NetworkCertifier.WitnessesCarried
+public import Proofs.NetworkCertifier.PoolRoots
 public import Definitions.NetworkCertifier.Guarantees.SampledCharge
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -85,8 +89,16 @@ any compiled sampled verifier where `Claims.SamplingGeneric.Compiled.KS` holds. 
 `Compiled.KS` from the compiler at Flock (`Claims.SamplingGeneric.flockKS`), at the assembled records.
 `TapRows` bounds the leak at the network certifier's rows (`TapProof.sampledLeak_certifier`): an accepted audit's extracted
 trace carries the network certifier's registered rows outside the incorrect proof blocks, unless its openings collide with the
-network certifier's; `Period` counts with it. `Checked` proves the leak bounds with checked inputs (`SampledLeakChecked`,
-`PooledLeakChecked`): inputs a check pins cost no advice bits, and `WitnessesChecked` gives their nontrivial lemmas.
+network certifier's; `Period` counts with it. `Checked` proves the leak bound with checked inputs (`SampledLeakChecked`):
+inputs a check pins cost no advice bits, and `WitnessesChecked` gives its nontrivial lemma.
+`Carried` proves the leak bounds over a carried pool (`SampledLeakCarried`, `PooledLeakCarried`): one
+run's relation at the rows its extracted trace holds, and the period's bound, where an opened row costs no advice bits,
+since the chain fixes it unless two rows have one root, and the restarts serving picks cost `log₂` of the patterns it may
+pick where every audit accepts. At the empty pool the period's bound is the bound with checked inputs over windows that
+each hold a pool of their own (`pooledLeakChecked_of_carried`). `WitnessesCarried` gives their nontrivial lemmas and
+`SampledLeakCarried`'s honest one. `PoolRoots` proves the period bound's premise on the opened rows' roots
+(`CarriedRoots`) from each run's in-circuit check of its roots (`CheckedRoots`) and the record rule (`PoolChained`), as
+the lemma `rootsOfChecked`.
 -/
 
 @[expose] public section
@@ -161,6 +173,7 @@ theorem PeriodLeakAccepted : NetTiming.Guarantees.PeriodLeakAccepted := NetTimin
 theorem PooledIncorrectBlocksLe : NetTiming.Guarantees.PooledIncorrectBlocksLe := NetTiming.pooledIncorrectBlocks
 theorem PooledLeakAccepted : NetTiming.Guarantees.PooledLeakAccepted := NetTiming.pooledLeak
 theorem SampledLeakChecked : NetTiming.Guarantees.SampledLeakChecked := NetTiming.sampledLeakChecked
-theorem PooledLeakChecked : NetTiming.Guarantees.PooledLeakChecked := NetTiming.pooledLeakChecked
+theorem SampledLeakCarried : NetTiming.Guarantees.SampledLeakCarried := NetTiming.sampledLeakCarried
+theorem PooledLeakCarried : NetTiming.Guarantees.PooledLeakCarried := NetTiming.pooledLeakCarried
 
 end NetTiming.SecurityProofs

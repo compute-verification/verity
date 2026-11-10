@@ -73,6 +73,7 @@ PACKAGE_OF = {
     "verity_vllm.protocols.remote_bandwidth.commit_map": "pipeline",
     "verity_vllm.program.predict": "predict",
     "verity_vllm.engine.collectives": "collectives",
+    "verity_vllm.engine.served_seed": "served_seed",
     "verity_vllm.engine.spec": "pipeline",
     "verity_vllm.llm": "pipeline",
 }
