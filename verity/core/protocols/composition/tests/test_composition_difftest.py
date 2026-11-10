@@ -52,8 +52,7 @@ from verity.core.deploy import config as K
 from verity.core.protocols.spot import parties as SPP
 from verity.ml.circuits.types import Array, Value
 
-ROOT = Path(__file__).resolve().parents[5]
-PACKAGES = {"onsite": ROOT / "verity/core/protocols/onsite", "remote": ROOT / "verity/core/protocols/remote"}
+PROTOCOLS = Path(__file__).resolve().parents[2]
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 JSON = st.recursive(st.none() | st.booleans() | st.integers(-3, 3) | st.text(max_size=3),
@@ -438,7 +437,7 @@ def port(name: str, product: R.Product, seen: collections.Counter, serve: tuple[
     """`name serve` (or `name SERVE`) of the Lake package in `package` (default `name`), on the product's cases and,
     one sample in ten, any JSON line."""
     return RejectingPort(name, reference(product, seen), st.one_of(*[composite(product)] * 9, JSON),
-                         package=PACKAGES[package or name], serve=serve, need_rejects=False)
+                         package=PROTOCOLS / (package or name), serve=serve, need_rejects=False)
 
 
 def ids(product: R.Product) -> str:
@@ -709,7 +708,7 @@ def test_product_names_only_the_two_composites():
     """`product IDS id` is remote over remote's subprotocols and onsite over onsite's, in any order, exactly the
     configuration's composites (`verity.core.deploy.config.COMPOSITES`, by the ids `SUBPROTOCOLS` gives their names),
     and refuses every other set of their subprotocols and the wipe (exit 64)."""
-    exe = D.build(PACKAGES["onsite"], "product")
+    exe = D.build(PROTOCOLS / "onsite", "product")
 
     def named(xs) -> tuple[int, str]:
         p = subprocess.run([exe, ",".join(xs), "id"], capture_output=True, text=True)
@@ -799,7 +798,7 @@ def test_a_reference_without_reject_dominance_is_caught(onsite_server, recorded)
     is undecided, under a commitment that binds their digests."""
     trial = Trial(R.ONSITE.id, R.ONSITE.components, R.ONSITE.same, R.ONSITE.ties)
     with pytest.raises(D.Mismatch) as e:
-        D.run(D.ProtocolPort("onsite", trial.answer, ONSITE.inputs, package=PACKAGES["onsite"]), examples=1000,
+        D.run(D.ProtocolPort("onsite", trial.answer, ONSITE.inputs, package=PROTOCOLS / "onsite"), examples=1000,
               server=onsite_server)
     assert (e.value.lean[0], e.value.python[0]) == (R.REJECT, R.UNDECIDED), (e.value.lean, e.value.python)
     parts = R.ONSITE.verdicts(e.value.input)
