@@ -10,7 +10,7 @@ memory slot.py finds free there (`free_gb`, read once a pool). `choose` then tak
 
   - a pool where a slot that fits the job (not trains-only, at least its CPUs) is free and unblocked for every waiter ahead
     and this job, the machine's free memory covering what the job would reserve there as slot.py admits it (`_blocked`:
-    the larger of the slot's mem= and the job's ask, with no cgroup cap);
+    the larger of the slot's mem= and the job's ask, which no cgroup enforces);
   - else node 2's share when it can start the job now, with no one waiting there (a run once queued 100 min behind cpu-6's 8
     held slots and 9 waiters while node 2's 48 CPUs sat free);
   - else the pool with the shortest wait, as waiters ahead per fitting slot, leaving out a pool whose line is stalled on
