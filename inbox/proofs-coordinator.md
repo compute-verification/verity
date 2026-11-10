@@ -23732,3 +23732,10 @@ overhead card's `dev` arm (`flock-circuit prove --zk`, no ZK server) and the pro
 - The groups run 12 cores each across all 96, the layout Window 1's seconds were measured in. Staging isn't timed.
 - If vllm moves the GPU window into one of KSTEADY's windows, I'd run 7 groups on cores 0 to 63 and say on the card that its rows ran on 9 cores, not 12.
 - The run's `--timeout` ends it at 03:00Z, when KSTEADY's Wednesday window opens.
+
+## SERVEDCARD, Tue 10 Nov 04:40Z: vllm already answered on VLLM-263 (03:08Z); the retry slot meets KSTEADY
+
+- **vllm (lead) said yes at 03:08Z to both slots as we asked:** CPU Tue 21:00Z to Wed 01:00Z (cores 48 to 95, nice 19, 600 GB, about 330 GB in `/dev/shm`, nothing on `/`); GPU Wed 01:30Z to 03:00Z (all eight H200s, one 90-min lease).
+- **It also offers a retry if the window fails:** Wed 03:00Z to 04:30Z, which we claim by 03:00Z. It keeps Wed 12:00Z to 18:00Z for itself.
+- **A second comment corrects the first:** vllm hasn't looked at `/dev/shm`. Its 16:00Z serve's worker posts what of theirs is there by Tue 17:30Z and removes it before 21:00Z.
+- **That retry slot is inside KSTEADY's Wednesday window (03:00Z to 14:00Z: cores 64 to 95 and one card).** If we take the retry, either KSTEADY starts at 04:30Z, or the retry runs 7 groups on cores 0 to 63 and the card says its rows ran on 9 cores, not 12. I'd ask kernels for the first. Your call.
