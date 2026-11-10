@@ -22,7 +22,7 @@ PLANTED = hashlib.sha256(b"a certified line").hexdigest()
 STUB = r'''#!/usr/bin/env python3
 import io, json, os, signal, sys, tarfile
 cmd = sys.argv[-1]
-if cmd.startswith("warden-rehearse "):
+if cmd.startswith("certifier-rehearse "):
     sys.stdin.read()
     print(json.dumps({"run": "%(run)s", "started": True}))
 elif cmd == "status %(run)s":

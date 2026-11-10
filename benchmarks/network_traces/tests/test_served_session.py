@@ -7,7 +7,7 @@ nothing when late; io writes the kept run's certified I/O 0600 in KEEP; endpoint
 node's records in a private copy whose requests.jsonl is rebuilt from the users map and the certified I/O (moved out of
 the run dir first), publishes only its report, windows.jsonl and serve.json, and writes nothing from an endpoint that
 didn't serve the session's flags or when a published file would carry a request's values (a planted prompt length,
-seed or trace record); chain runs chain_record.sh's warden path on the kept fetch with the endpoint's art or a dry
+seed or trace record); chain runs chain_record.sh's certifier path on the kept fetch with the endpoint's art or a dry
 rehearsal's records, and is refused without the leak guard; its sample on the gate's coins names the auditor's node as
 the coin link's peer, and the served node is refused."""
 from __future__ import annotations
@@ -35,7 +35,7 @@ import scan_zk as sz  # noqa: E402
 RUN = "c20261028T120000Z-0000"
 #: a witness value (the stub's witness/certified.jsonl) its status plants with STUB_NOTE: two of the guard's text pieces
 PLANTED = hashlib.sha256(b"a certified line").hexdigest()
-#: the warden's stall probe's record of its cgroup, as the gate's unit runs it: the unit's name begins one of the guard's
+#: the certifier's stall probe's record of its cgroup, as the gate's unit runs it: the unit's name begins one of the guard's
 #: aligned text pieces (`leak_guard.TEXT` bytes), as it did on a served run
 _CGROUP = '{"cgroups": {"warden": {"path": "/sys/fs/cgroup/system.slice/system-vy\\\\x2dcertifier.slice/'
 STALLS = (" " * (-len(_CGROUP) % 32) + _CGROUP + f'vy-certifier@{RUN}.service"}}}}}}\n').encode()
@@ -44,7 +44,7 @@ STUB = r'''#!PYTHON
 import io, json, os, signal, sys, tarfile
 from pathlib import Path
 d, cmd = Path(os.environ["STUB_DIR"]), sys.argv[-1]
-if cmd.startswith("warden-rehearse "):
+if cmd.startswith("certifier-rehearse "):
     (d / "prompts.json").write_bytes(sys.stdin.buffer.read())
     (d / "request").write_text(cmd)
     print(json.dumps({"device": "warden", "run": "RUN", "unit": "vy-certifier@RUN.service"}, sort_keys=True))
@@ -76,15 +76,15 @@ else:
 def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it():
     assert (SS.KI, SS.KO) == (sz.CLASS.KI, sz.CLASS.KO) and SS.PROMPT_IDS == 256 < SS.KI
     a = SS.parser().parse_args(["plan"])
-    a.minutes = SS.A.warden_minutes(a.requests, a.height) + SS.MARGIN
+    a.minutes = SS.A.certifier_minutes(a.requests, a.height) + SS.MARGIN
     ps = SS.prompts(a.prompts, a.prompt_ids, a.vocab, b"seed")
     assert len(ps) == 64 and {len(p) for p in ps} == {SS.PROMPT_IDS} and all(0 <= t < SS.VOCAB for p in ps for t in p)
     assert SS.prompts(2, 4, 256, b"seed") != SS.prompts(2, 4, 256, b"other")
     data = json.dumps(ps, separators=(",", ":")).encode()
     doc = SS.plan(a, data)
-    assert doc["request"] == ("warden-rehearse --peer vy-dc-h200-2 --port 18782 --minutes 10 --requests 113 --height 12 "
+    assert doc["request"] == ("certifier-rehearse --peer vy-dc-h200-2 --port 18782 --minutes 10 --requests 113 --height 12 "
                               "--scan --prompts --tokens 64")
-    assert doc["prompts"] == {"count": 64, "ids": 64 * SS.PROMPT_IDS} and doc["prompts_bytes"] <= SS.A.WARDEN_PROMPTS_BYTES
+    assert doc["prompts"] == {"count": 64, "ids": 64 * SS.PROMPT_IDS} and doc["prompts_bytes"] <= SS.A.CERTIFIER_PROMPTS_BYTES
     assert doc["endpoint"].endswith("--port 18782 --protocol ids --id-payload 503 --admit release-order "
                                     "--scheme rows-sha512 --seal --retain-exclude hidden_m1")
     run = shlex.split(doc["runs"]["chain"])
@@ -194,8 +194,8 @@ def test_sigterm_mid_session_releases_nothing(tmp_path):
     assert list(hold.iterdir()) == [] and (tmp_path / "keep" / RUN / "start.json").is_file()
 
 
-def test_the_gates_start_reply_stays_in_keep_since_it_names_the_unit_the_warden_records(tmp_path, monkeypatch):
-    """The gate's start reply names the run's systemd unit, vy-certifier@RUN.service, as the warden's stall probe
+def test_the_gates_start_reply_stays_in_keep_since_it_names_the_unit_the_certifier_records(tmp_path, monkeypatch):
+    """The gate's start reply names the run's systemd unit, vy-certifier@RUN.service, as the certifier's stall probe
     records its cgroup in the witness (stalls.json), and no public file of the run holds it: published, the leak guard
     holds the reply as a piece of the witness, and an accepted session exited 4. The reply goes to KEEP/RUN alone
     (0600), so the session exits on the gate's verdict."""
@@ -288,7 +288,7 @@ def _stub_step(monkeypatch, report: dict | None = None) -> dict:
     def step(dep, io, ep, eos):
         seen.update(dep=dep, ep=ep, eos=eos, requests=[json.loads(x) for x in (ep / "requests.jsonl").read_text()
                                                        .splitlines()])
-        return report or {"warden_run": dep["run_id"], "endpoint": str(ep), "io": {k: v for k, v in io.items()
+        return report or {"certifier_run": dep["run_id"], "endpoint": str(ep), "io": {k: v for k, v in io.items()
                                                                                    if k != "records"},
                           "chain": {"bits": {"bound": True, "rebuilt": True,
                                              "commit_windows": [{"bound": True, "rebuilt": True}]}}}
@@ -328,7 +328,7 @@ def test_endpoint_runs_the_step_on_the_served_nodes_records_and_publishes_only_i
     assert keep.stat().st_mode & 0o777 == 0o700 and (keep / "records" / "requests.jsonl").stat().st_mode & 0o777 == 0o600
     assert sorted(p.name for p in out.iterdir()) == ["report.json", "serve.json", "windows.jsonl"]
     rep = json.loads((out / "report.json").read_text())
-    assert (rep["verdict"], rep["at"], rep["warden_run"]) == ("accepted", CR.SERVED_NODE, RUN)
+    assert (rep["verdict"], rep["at"], rep["certifier_run"]) == ("accepted", CR.SERVED_NODE, RUN)
     assert seen["ep"] == keep / "records" and seen["eos"] == [128001] and seen["dep"]["run_id"] == RUN
     assert [(r["engine_id"], r["user"], r["prompt_ids"], r["streamed_ids"]) for r in seen["requests"]] == [
         ("e0", "user-0", ps[0], [1, 2]), ("e1", "user-1", ps[1], [1, 2])]
@@ -369,7 +369,7 @@ def test_endpoint_publishes_nothing_that_carries_a_planted_prompt_length_or_seed
     (src / "windows.jsonl").write_text(windows)
     for plant, why in (({"prompt_len": 256}, "a request's prompt ids or a request-valued field"),
                        ({"seed": 1234}, "a record with seed")):
-        rep = {"warden_run": RUN, "io": {"accepted": True}, "chain": {"bits": {"bound": True, "rebuilt": True}}}
+        rep = {"certifier_run": RUN, "io": {"accepted": True}, "chain": {"bits": {"bound": True, "rebuilt": True}}}
         _stub_step(monkeypatch, rep | plant if "seed" in plant else rep | {"chain": {"bits": rep["chain"]["bits"] | plant}})
         assert SS.main(argv) == 2 and f"report.json: {why}" in capsys.readouterr().err and not out.exists()
     _stub_step(monkeypatch)
@@ -396,7 +396,7 @@ def test_endpoint_publishes_nothing_that_carries_a_planted_prompt_length_or_seed
         (tmp_path / f).rename(src / f)
 
 
-def test_chain_runs_chain_records_warden_path_on_the_kept_fetch_and_needs_the_leak_guard(tmp_path, monkeypatch):
+def test_chain_runs_chain_records_certifier_path_on_the_kept_fetch_and_needs_the_leak_guard(tmp_path, monkeypatch):
     here = tmp_path / "here"
     here.mkdir()
     (here / "chain_record.sh").write_text('env | grep "^CR_" | sort > "$SEEN"\n')

@@ -15,7 +15,7 @@ from typing import Any, Sequence
 from verity.ml.commitments import hm96
 from verity.ml.commitments.merkle import tree_levels
 from verity.ml.commitments.rowleaf import sha512_row_v2_digest
-from verity.core.protocols.certifier import service as SVC, tie_service as TS, warden_rows as WR
+from verity.core.protocols.certifier import service as SVC, tie_service as TS, certifier_rows as WR
 from verity.core.protocols.spot import service as S
 from verity.core.protocols.spot.one_stage import proofs as PF, registered as G
 from verity.core.protocols.spot.one_stage.proofs import Finding
@@ -62,7 +62,7 @@ def _deliver(unit: Any, rows: dict[str, bytes], draw: S.Draw, out: Path, *, prog
     return SVC.Delivered(PF.Proof(circuit, public, (session,)), delivered, output)
 
 
-#: the domains by id, as `prove_tie` commits under them (the warden's, and the known values'): the stand-in Lean's
+#: the domains by id, as `prove_tie` commits under them (the certifier's, and the known values'): the stand-in Lean's
 #: registered reads climb each port's rows under the domain its id names, which the real verifier derives from the port
 DOMAINS: dict[str, Any] = {}
 
@@ -72,13 +72,13 @@ def prove_tie(tie: Any, cells: Any, draw: S.Draw, lanes: Any, out: Path, *, prog
               salts: dict[int, dict[str, bytes]] | None = None, units: Sequence[int] | None = None,
               rows: Sequence[bytes] | None = None) -> TS.Delivered:
     """The delivered proof of the sampled ingress-tie proof blocks (`tie_service.IngressTie`) on the network certifier's
-    opening `cells` (`warden_rows.Cells`) and the prover's `lanes` (each bucket's), as `prove` delivers N2's: proof
+    opening `cells` (`certifier_rows.Cells`) and the prover's `lanes` (each bucket's), as `prove` delivers N2's: proof
     block t's ``wit`` row its
-    bucket row under the warden's salt and its header's registered read of the warden's root (`Cells.statement`), its
+    bucket row under the certifier's salt and its header's registered read of the certifier's root (`Cells.statement`), its
     ``pub`` row its lanes and its ``o0`` row its output bit by IoTieRequest's reference (`io_request.reference`),
     which the tests hold to the circuit, each read off the root of the prover's rows of the port as the verifier
     registers its own (`IngressTie.known_tree`, under their public salts). `rows` are the rows the prover proves on
-    instead, under the warden's salts and paths; where a unit takes no instance of its lanes, its public row is zero
+    instead, under the certifier's salts and paths; where a unit takes no instance of its lanes, its public row is zero
     and its output 0. `words` forges output words, `salts` the salts delivered for ``pub`` and ``o0``, and `units`
     the public file's unit indices. The public file is a shared-row file as `verity_flock.circuit.write` lays one out:
     each port's table, one row an instance, port-major, then the instances' refs."""
@@ -139,7 +139,7 @@ def _known(registered: dict) -> str | None:
 def _registered(public: Path, registered: dict) -> str | None:
     """The stand-in for Lean's registered reads: every port of the statement one of the verifier's
     (`Flock.Registered.checkComplete`), and each of the verifier's ports read by the statement's header entry
-    (`warden_rows.refusal`), its table rows (a shared-row file's, port-major) the public file's commitments; None when
+    (`certifier_rows.refusal`), its table rows (a shared-row file's, port-major) the public file's commitments; None when
     they hold."""
     data = public.read_bytes()
     head, body = data.split(b"\n", 1)

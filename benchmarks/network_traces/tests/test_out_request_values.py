@@ -114,14 +114,14 @@ def test_n2_zk_publishes_the_runs_public_files_and_none_of_their_request_values(
         "calibration.json", "honest/deployment.json", "honest/certified.jsonl", "honest/check.json"))
 
 
-def test_scan_zk_publishes_a_warden_rehearsals_public_files_and_not_its_traffic_or_responses(tmp_path):
+def test_scan_zk_publishes_a_certifier_rehearsals_public_files_and_not_its_traffic_or_responses(tmp_path):
     w, out = tmp_path / "W", tmp_path / "OUT"
     public = {"deployment.json": {"windows": 2}, "cells.jsonl": [{"registration": {"root": "ab"}}],
               "certified.jsonl": [{"window": 0, "head": "cd"}], "check.json": {"accepted": True},
-              "warden.json": {"process": {}}, "serve.log": "serving\n"}
+              "certifier.json": {"process": {}}, "serve.log": "serving\n"}
     put(w / "warden", {**public, "traffic.json": [{"at": 0, "body": {"prompt": PROMPT}}],
                        "client.json": {"connections": [{"index": 0, "response": {"ids": PROMPT}}]}})
     out.mkdir()
-    got = run(block("scan_zk.sh", '  mkdir -p "$OUT/warden"', "  done"), W=w, OUT=out)
+    got = run(block("scan_zk.sh", '  mkdir -p "$OUT/certifier"', "  done"), W=w, OUT=out)
     assert got.returncode == 0, got.stderr
-    assert published(out) == sorted(f"warden/{f}" for f in public)
+    assert published(out) == sorted(f"certifier/{f}" for f in public)

@@ -1,7 +1,7 @@
 """egress-zk: N2's egress bucket in zero knowledge, the generator form. Every bucket of one egress execution phase
 computed by its own `EgressBucket_v1` proof block, its computed row, output ``o1``, registered against the network
 certifier's signed root
-(`warden_rows.bucket_port`: unit base + t reads row t), proved by Flock `prove --zk` behind the Lean ZK server and held
+(`certifier_rows.bucket_port`: unit base + t reads row t), proved by Flock `prove --zk` behind the Lean ZK server and held
 by the Lean verifier's registered reads (`flock-verify verify --zk --registered`); each unit's one public output, its
 16-bit ``o0`` (1 when the state renders a row), opened to the verifier. Standalone: no Spec holds these units yet
 (`verity.ml.protocols.certifier.egress`).
@@ -10,14 +10,14 @@ by the Lean verifier's registered reads (`flock-verify verify --zk --registered`
 
 * **The link** (`PARAMS`, `NR`, `K`): a fake upstream's responses served through the network certifier's own egress
   (`egress_traffic.busy`, the egress tests'), each execution phase's rows committed by the network certifier and its
-  head signed by a test-size LMS key (`warden_rows.attest`). The window read is the one with the most `DATA` cells; its
-  registration is read by the verifier (`warden_rows.check_registration`) before its port is built from the head it
+  head signed by a test-size LMS key (`certifier_rows.attest`). The window read is the one with the most `DATA` cells; its
+  registration is read by the verifier (`certifier_rows.check_registration`) before its port is built from the head it
   names.
 * **The proof blocks** (`EgressBucket_v1{B=256,R=8,r=2,NR=4,K=16,IB=18,D=2}`, circuit-check's pinned shape), one a bucket, T
   of them: each reads row ``state`` (the egress view of the slot state the scan's ingress step wrote at its bucket,
   `egress_traffic.states`; a hidden row under a fresh salt here, where the scan registers it), and computes ``o0``, 1
-  when the state renders a row, and ``o1``, the row, committed under the salt of the warden's row t and registered as
-  a read of it, so the proof opens the warden's row only when the row the state renders is it.
+  when the state renders a row, and ``o1``, the row, committed under the salt of the certifier's row t and registered as
+  a read of it, so the proof opens the certifier's row only when the row the state renders is it.
 * **Members.** ``honest``: accepted, every ``o0`` 1. ``lying``: one rendered output id of one bucket's state changed:
   the proof block computes a row the network certifier didn't sign, so its ``o1`` opens no registered row: refused by
   Lean ("does not open"). ``moved``: proof blocks t and t + 1 given each other's state, their positions and salts
@@ -47,11 +47,11 @@ from types import SimpleNamespace
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import warden_zk as WZ  # noqa: E402
+import certifier_zk as WZ  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
 from verity.ml.protocols.certifier import egress as EG  # noqa: E402
-from verity.core.protocols.certifier import io_tie as IT, warden as W, warden_rows as WR  # noqa: E402
+from verity.core.protocols.certifier import io_tie as IT, certifier as W, certifier_rows as WR  # noqa: E402
 from verity.core.protocols.certifier.active import DATA  # noqa: E402
 from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
 
@@ -60,7 +60,7 @@ _spec = importlib.util.spec_from_file_location("egress_traffic", _TRAFFIC)
 traffic = sys.modules["egress_traffic"] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(traffic)
 
-PARAMS = W.WardenParams(cell_bytes=256, slots=2, delay=2, lanes=4, window=6)
+PARAMS = W.CertifierParams(cell_bytes=256, slots=2, delay=2, lanes=4, window=6)
 NR, K = 4, 16
 SHAPE = traffic.shape(PARAMS, NR, K)
 LINK, SESSION = "responses", bytes(range(32))
@@ -97,7 +97,7 @@ def link(out: Path) -> SimpleNamespace:
     head, dom = WR.check_registration(registration, signer.public_key(), SESSION, PARAMS, LINK, Direction.EGRESS, w)
     window = states[w * T:w * T + T]
     if [EG.rendered(SHAPE, s) for s in window] != list(cells.rows):
-        raise SystemExit(f"window {w}: the states don't render the warden's rows")
+        raise SystemExit(f"window {w}: the states don't render the certifier's rows")
     ordinals = sorted({s.q for st in window for s in st.slots if s.live})
     return SimpleNamespace(window=w, states=window, cells=cells, registration=registration, head=head, dom=dom,
                            ordinals=ordinals)
@@ -120,7 +120,7 @@ def _changed_state(at: SimpleNamespace) -> tuple[int, EG.State, dict]:
 
 def member_rows(name: str, at: SimpleNamespace) -> SimpleNamespace:
     """A member's proof blocks' state, in proof block order, the row each computes (`egress.outputs`, its ``o1``), the salts its
-    ``o1`` rows are committed under, the header's `registered` entry (the warden's positions and paths for the rows
+    ``o1`` rows are committed under, the header's `registered` entry (the certifier's positions and paths for the rows
     it names), and each unit's ``o0``."""
     cells, T = at.cells, PARAMS.window
     states, order, changed = list(at.states), list(range(T)), {}
@@ -138,8 +138,8 @@ def member_rows(name: str, at: SimpleNamespace) -> SimpleNamespace:
 
 
 def refused(at: SimpleNamespace, mr: SimpleNamespace, reads_from: int) -> str | None:
-    """The host's read of a member's registered ``o1`` port against the verifier's own (`warden_rows.bucket_port`),
-    as Lean's registered reads make it (`warden_rows.refusal`): None when they accept, else why not."""
+    """The host's read of a member's registered ``o1`` port against the verifier's own (`certifier_rows.bucket_port`),
+    as Lean's registered reads make it (`certifier_rows.refusal`): None when they accept, else why not."""
     port = WR.bucket_port(at.head, PARAMS, reads_from)
     return WR.refusal(port, at.dom, mr.entry, [WR.bc(r, s) for r, s in zip(mr.rows, mr.salts)])
 
@@ -191,7 +191,7 @@ def verdict_bcs(m: dict) -> list[bytes]:
 def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
     """Member `name`'s statement: its units' ``state`` rows in a shared-row file (each instance its own table row),
     ``state`` and ``o0`` under fresh salts and ``o1`` under the salts and paths of its registered entry; and the
-    verifier's own `--registered` file at the warden's root. The units' outputs are the reference's."""
+    verifier's own `--registered` file at the certifier's root. The units' outputs are the reference's."""
     t0 = time.time()
     st, n, out = sg.st, sg.n, sg.out / f"stage-{name}"
     nbl = max(3, (-(-n // st.meta["vus_per_block"]) - 1).bit_length())
@@ -227,7 +227,7 @@ def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
     return m
 
 
-# --- the audit (warden_zk's, on a bucket port) ------------------------------------------------------------------------
+# --- the audit (certifier_zk's, on a bucket port) ------------------------------------------------------------------------
 
 def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -> dict:
     """Member m registered, sampled by the verifier's Lean (every unit), proved --zk behind the ZK server and held by Lean
@@ -244,10 +244,10 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
                       "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
     law = M.D.parse_design(f"stratified:{n}")
-    win = {"kind": "stand-in", "of": f"the {n} egress bucket rows of the warden's link-window {at.window} "
+    win = {"kind": "stand-in", "of": f"the {n} egress bucket rows of the certifier's link-window {at.window} "
                                       "(egress_zk.py)",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
-           "link": f"registered: port row reads {at.head.value} at the warden's signed root, unit base + t row t"}
+           "link": f"registered: port row reads {at.head.value} at the certifier's signed root, unit base + t row t"}
     rec = R.record(sg.program, sg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, sg.program, sg.query, law, a0.SCHEME, want,
@@ -291,10 +291,10 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
     (out / "verdicts.json").write_text(json.dumps(sent, indent=1))
     vdir = out / "verifier"
     vdir.mkdir(exist_ok=True)
-    (out / "warden-registration.json").write_text(json.dumps(at.registration, indent=1, sort_keys=True))
+    (out / "certifier-registration.json").write_text(json.dumps(at.registration, indent=1, sort_keys=True))
     for f in (out / "registration.json", sg.partition_file, sg.program_file, m["dir"] / "circuit.txt",
               m["dir"] / f"pub-{n}.bin", m["registered_file"], sdir / "draw.json", out / "audit.json",
-              out / "warden-registration.json", out / "verdicts.json"):
+              out / "certifier-registration.json", out / "verdicts.json"):
         os.link(f, vdir / f.name)
     for f in sorted((sdir / "sessions").rglob("*")):
         if f.is_file():
@@ -358,7 +358,7 @@ def prove(a) -> int:
                                "end": sum(r[s * SHAPE.B] == W.END for r in rows for s in range(SHAPE.R))},
                      "ordinals": at.ordinals, "registration": at.registration}
     log(f"{at.head.value}: {T} rows of {WR.row_bytes(PARAMS)} bytes, root {at.head.root.hex()[:16]}, cells "
-        f"{summary['cells']}, ordinals {at.ordinals}; registration read under the warden's key")
+        f"{summary['cells']}, ordinals {at.ordinals}; registration read under the certifier's key")
     M = WZ._one_stage()
     sg = stager(M, n, out / "stager")
     summary["stager"] = {"unit": sg.defn.id, "lower_s": sg.lower_s, "k_log": sg.st.meta["k_log"],

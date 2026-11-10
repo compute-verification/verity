@@ -2,7 +2,7 @@
 over a monitoring period, for one link (`per_link`), summed over a datacenter's links (`datacenter`; the census's
 reference datacenter has `datacenter_links`) and over the world's (`world`, the adversary resource model's), each beside
 its share of one copy of the weights (`WEIGHTS`) and ε, the union of its scans' δ. It is the one calculator of K:
-`chain_record.py leak` reads it on a warden run, and the slowdown ρ is derived from both bounds.
+`chain_record.py leak` reads it on a certifier run, and the slowdown ρ is derived from both bounds.
 
 A link is one network certifier on one uplink (its load a `LinkLoad`, made by `link`), certifying ``rate`` requests a
 second of one scan class (`ingress_scan.Class`, or a window class's `scan`). Its sampling blocks are each 2T transfer
@@ -42,14 +42,14 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from verity.ml.protocols.certifier import ingress_scan as IS
-from verity.core.protocols.certifier import warden as W
+from verity.core.protocols.certifier import certifier as W
 from verity.core.protocols import reporting
 
 #: the monitoring periods' seconds, by name
 PERIODS: dict[str, int] = dict(reporting.PERIODS)
 DELTAS: tuple[Fraction, ...] = reporting.DELTAS
-#: a bucket's seconds when a link names none: the warden's default τ
-TAU = Fraction(W.WardenParams().bucket_ms, 1000)
+#: a bucket's seconds when a link names none: the certifier's default τ
+TAU = Fraction(W.CertifierParams().bucket_ms, 1000)
 #: a sampling block's scan's δ when a link names none: `scan_zk --delta`'s default
 SCAN_DELTA = Fraction(1, 2 ** 20)
 CENSUS = Path(__file__).resolve().parents[1] / "census"

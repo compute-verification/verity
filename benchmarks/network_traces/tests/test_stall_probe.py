@@ -48,7 +48,7 @@ class Proc:
 @pytest.fixture
 def tree(tmp_path):
     proc, cgroups = tmp_path / "proc", tmp_path / "cgroup"
-    warden = Proc(proc, 100)
+    certifier = Proc(proc, 100)
     (proc / "100" / "cgroup").write_text("0::/run/burst\n")
     cg = cgroups / "run" / "burst"
     cg.mkdir(parents=True)
@@ -57,7 +57,7 @@ def tree(tmp_path):
     (cg / "memory.events").write_text("low 0\nhigh 0\nmax 3\noom 0\noom_kill 0\n")
     (cg / "memory.pressure").write_text("some avg10=0.00 avg60=0.00 avg300=0.00 total=12\n"
                                         "full avg10=0.00 avg60=0.00 avg300=0.00 total=7\n")
-    return proc, cgroups, warden, cg
+    return proc, cgroups, certifier, cg
 
 
 def test_a_d_episode_is_kept_with_its_kernel_functions_faults_stack_and_cgroup_and_ends_when_the_thread_runs(tree):
@@ -100,9 +100,9 @@ def test_a_d_episode_is_kept_with_its_kernel_functions_faults_stack_and_cgroup_a
     assert threads[101]["states"] == {"R": 5} and threads[101]["label"] == "thread" and threads[101]["faults"] == [0, 0]
     assert doc["samples"] == 7 and doc["gaps"] == [[pytest.approx(0.004), pytest.approx(16.0)]]
     assert doc["interval_ms"]["max"] == pytest.approx(16.0) and 0.9 <= doc["interval_ms"]["p50"] <= 1.0
-    warden = doc["cgroups"]["warden"]
-    assert warden["path"] == str(cg) and warden["start"]["memory.events"]["max"] == 3
-    assert warden["end"]["memory.events"]["max"] == 4, "the end's state is read at the end"
+    certifier = doc["cgroups"]["warden"]
+    assert certifier["path"] == str(cg) and certifier["start"]["memory.events"]["max"] == 3
+    assert certifier["end"]["memory.events"]["max"] == 4, "the end's state is read at the end"
     assert doc["cgroups"]["publisher"] == {"path": None, "start": None, "end": None}, "a process that isn't there"
 
 
@@ -127,18 +127,18 @@ def test_a_thread_is_found_at_the_next_scan_and_an_episode_open_at_the_end_or_at
     assert ended[102]["wchan"] == {"rwsem_down_read_slowpath": 2} and ended[102]["stack"] is None
     assert doc["stack"] == "unreadable (root only)"
     assert doc["by_label"]["thread"]["episodes"] == 2 and doc["by_label"]["thread"]["max_ms"] == pytest.approx(10.0)
-    assert sp.summary(doc)["faults"] == {"warden thread": [0, 0]}
+    assert sp.summary(doc)["faults"] == {"certifier thread": [0, 0]}
 
 
-def test_summary_is_what_warden_json_keeps_each_labels_faults_summed():
+def test_summary_is_what_certifier_json_keeps_each_labels_faults_summed():
     doc = {"by_label": {"ticker": {"episodes": 0}}, "samples": 9, "interval_ms": {"p50": 1.0}, "gaps": [[0.1, 6.0]],
            "stack": "not read",
            "threads": [{"process": "warden", "label": "ticker", "faults": [1, 0]},
                        {"process": "warden", "label": "thread", "faults": [2, 1]},
                        {"process": "warden", "label": "thread", "faults": [3, 0]},
                        {"process": "publisher", "label": "thread", "faults": None}]}
-    assert sp.summary(doc) == {"by_label": {"ticker": {"episodes": 0}}, "faults": {"warden ticker": [1, 0],
-                                                                                 "warden thread": [5, 1]},
+    assert sp.summary(doc) == {"by_label": {"ticker": {"episodes": 0}}, "faults": {"certifier ticker": [1, 0],
+                                                                                 "certifier thread": [5, 1]},
                                "samples": 9, "interval_ms": {"p50": 1.0}, "gaps": 1, "stack": "not read"}
 
 

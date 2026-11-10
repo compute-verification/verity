@@ -2,7 +2,7 @@
 
 The network certifier (`verity/core/protocols/certifier/`) on real served traffic: per-token timing traces for its
 calibration, the certifier in front of a served endpoint (as a proxy, `active.Proxy`, or as a relay of the egress
-record's one form, `warden`), the zero-knowledge proofs of their proof blocks, and the network chain's run of record end
+record's one form, `certifier`), the zero-knowledge proofs of their proof blocks, and the network chain's run of record end
 to end. Each driver's docstring says what it runs, what it publishes and what its verifier receives.
 
 ## Running it
@@ -26,10 +26,10 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   of a served OpenAI endpoint (`rehearse`) and checks what it published offline. The endpoints it rehearses against
   besides vLLM: `demo_endpoint.py` and `demo_stub.py`. `compact_render.py` is the client's shim for compact egress
   framing.
-- **The certifier as a relay.** `warden_serve.py` runs `verity.core.protocols.certifier.warden`, the network certifier
+- **The certifier as a relay.** `certifier_tcp_serve.py` runs `verity.core.protocols.certifier.certifier`, the network certifier
   as a relay in front of any TCP server and checks what it published offline: `serve` releases only the egress
   record's id form by default, and `rehearse` names its traffic's (`--egress`: id with `--ids`, else bytes);
-  `warden_chain.py` is the chain's reads of a relay run, and `warden_zk.py` reads the relay's bucket rows in the proof
+  `certifier_chain.py` is the chain's reads of a relay run, and `certifier_zk.py` reads the relay's bucket rows in the proof
   system.
 - **Proofs in zero knowledge.** Each driver proves its proof blocks with Flock `prove --zk` behind the Lean ZK server
   and holds them by the Lean `flock-verify verify --zk`: `n2_zk.py` (N2's registered proof block, N2's verdict of
@@ -56,7 +56,7 @@ two gate verbs on the auditor's machine:
   (`/var/lib/vy-challenger/store`) once. It keeps the stream only when its tensors' SHA-256 fold to the pinned manifest
   digests (`load_relay.STORE_DIGESTS`).
 - `vy-challenger-gate load-relay --peer HOST --port PORT --sink-port PORT --program SHA512 --minutes M` (with
-  `warden-rehearse`'s flags) is `warden-rehearse` with the load first. The store goes over 4 TCP streams, an SSH
+  `certifier-rehearse`'s flags) is `certifier-rehearse` with the load first. The store goes over 4 TCP streams, an SSH
   tunnel each, to `load_relay.py sink` on the H200's loopback; each value is held to its digest and committed under the
   reading program's domain as it crosses. The certifier's one signer on that link then signs the load's heads before
   its first execution phase, so one LMS key and one attachment carry the load and the execution phases. `load.json` (the
@@ -68,7 +68,7 @@ two gate verbs on the auditor's machine:
 
 Memory accounting's streamed wipe signs its egress `UNCOUNTED` when its challenger is on another host. The count over
 its period [t0, t1) comes after, from a relay run that spans it: `wipe_gate.sh` runs that relay through the gate
-(`warden-rehearse --scan --prompts` against the toy, `demo_stub.py serve`, on the peer's loopback), at a given UTC time
+(`certifier-rehearse --scan --prompts` against the toy, `demo_stub.py serve`, on the peer's loopback), at a given UTC time
 when asked, and fetches the run's bundle: with `witness/` into a 0700 directory outside the run dir, and to the run's
 `$OUT` only the bundle less `witness/`. `wipe_egress.py BUNDLE --t0-ns T0 --t1-ns T1` then writes the `wipe-egress/v1`
 record from what the gate published. Each execution phase that, with its verification phase, meets [t0 − 1 s, t1 + 1 s) counts at the
@@ -80,7 +80,7 @@ record and keeps the wipe uncounted otherwise.
 
 `served_session.py` is the runbook of the served session of record, the network certifier in front of a served model.
 `plan` checks the request with this tree's gate and prints each run's command and the endpoint's flags. `session` runs
-the gate's scan rehearsal (`warden-rehearse --scan --prompts`) against the endpoint on the peer's loopback, by default
+the gate's scan rehearsal (`certifier-rehearse --scan --prompts`) against the endpoint on the peer's loopback, by default
 the H200 peer's `serve-openai` on :18782, inside the scan's class: prompts of 256 ids from a fresh secret seed (prompts
 of the class's 1,024 reach the relay late), each answered greedily with at most 64 ids, ending at the base model's EOS
 id 128001. It runs at a given UTC time when asked. The endpoint is started by hand (serve-openai directly with
@@ -137,7 +137,7 @@ The run of record takes the network chain end to end on the gate's machines:
 
 **How it runs.** The gate runs on the auditor's machine: `sudo vy-challenger-gate certifier-rehearse --peer HOST --port
 PORT --minutes 30 --traffic varied --requests 100 --tokens 64 --seed 1 --eos-ids 128001 --height 20` (or
-`warden-rehearse --scan`, the network certifier as a relay), then `status` and `fetch`. A prompt range shorter than the
+`certifier-rehearse --scan`, the network certifier as a relay), then `status` and `fetch`. A prompt range shorter than the
 chat turn's tail (`CHAT_TAIL`, as the toy's 8-byte prompts are) makes every chat turn one prompt, so such an endpoint
 takes its prompts on stdin and a wider margin: `demo_stub.py prompts --count 100 | sudo vy-challenger-gate
 certifier-rehearse … --traffic varied --requests 100 --rate 0.2 --tokens 24 --eos-ids 0 --prompts --margin 4`
@@ -157,8 +157,8 @@ directory, `CR_ENDPOINT`). The job runs `chain_record.py`'s steps, network-e2e's
 | Lean | every proof of both steps is the verifier's own `flock-verify verify --zk` run | per proof, ε_ks + ε_bind | nothing |
 
 The job's environment picks what it runs: N2's sample on the relay path is `CR_N2_DRAW` (`n2_zk.py prove
---warden-run --draw K`, on the verifier's coins) and any other N2 command is `CR_N2_CMD`, the scan of the gate's own
-rows is `CR_WARDEN_RUN` with `CR_SCAN_ARGS="--draw K --challenger gate:…"` (`scan_zk.py prove --warden-run`), and the
+--certifier-run --draw K`, on the verifier's coins) and any other N2 command is `CR_N2_CMD`, the scan of the gate's own
+rows is `CR_CERTIFIER_RUN` with `CR_SCAN_ARGS="--draw K --challenger gate:…"` (`scan_zk.py prove --certifier-run`), and the
 client's `certificates.jsonl` and `clocks.jsonl` are `CR_CLIENT`, by default the network certifier rehearsal's own
 `client/`. A step on a stand-in (the scan on its own synthetic run) never makes the report accepted, and a step that
 fails or doesn't run says why.
@@ -175,20 +175,20 @@ members aren't scanned) is no find, nor is a piece those files hold, as they are
 false positives are declared data, `leak_guard.json`'s `allow`, each entry written only after its find was read by
 counts and digests. Its entries excuse the stall probe's cgroup counters and cgroup path in the runner's own records,
 and, by key path in the witness file (`keys`), the certifier's own CPU list wherever an indented list of integers
-repeats it and its ticker's stalls in `out/certs.json`, which `warden_serve.check` publishes. The
+repeats it and its ticker's stalls in `out/certs.json`, which `certifier_tcp_serve.check` publishes. The
 guard's cost is linear in the bytes it reads, and past its budget (`--budget-s`) it stops. A signal (before or during
 the guard), a guard past its budget, or one that can't run releases nothing and withholds `out/`, `inputs/` and the logs
 whole; a SIGKILL leaves the hold where it is, out of the record.
 
-**The relay path** (`CR_PATH=warden`, `chain_record.WARDEN`). Every step reads the relay's own run (the gate's
-`warden-rehearse`, its witness under `witness/`; `warden_chain.py`), and a proxy rehearsal's run, whose records come
+**The relay path** (`CR_PATH=certifier`, `chain_record.CERTIFIER`). Every step reads the relay's own run (the gate's
+`certifier-rehearse`, its witness under `witness/`; `certifier_chain.py`), and a proxy rehearsal's run, whose records come
 through `active.Proxy` in front of the endpoint, is refused by name wherever it is given. The certificates step reruns
-the relay's own offline check on its witness (`warden_serve.check`) and holds the public `certificates.jsonl` to the
+the relay's own offline check on its witness (`certifier_tcp_serve.check`) and holds the public `certificates.jsonl` to the
 certified lines. The relay signs no clock certificate, so none is read. The endpoint step binds the endpoint's own
 advice to the certified I/O read off the relay's cells (`chain_record.py endpoint`, with `CR_EOS_IDS` the model's EOS
-ids). N2 is the plain proof block on the relay's link (`n2_zk.py prove --warden-run`: both heads at the relay's grid and
+ids). N2 is the plain proof block on the relay's link (`n2_zk.py prove --certifier-run`: both heads at the relay's grid and
 parameters digest, no sync declared or charged). The I/O tie is proved on the relay's ingress (`n2_tie_zk.py prove
---class warden`, the report's `tie` step), and the scan is `scan_zk.py prove --warden-run`'s. Each step is held to the
+--class certifier`, the report's `tie` step), and the scan is `scan_zk.py prove --certifier-run`'s. Each step is held to the
 one relay run the certificates step read, and every one is required.
 
 A Commit period that carries a request across its open or close (`verity_vllm.pipeline.window_advice`, schema
@@ -213,7 +213,7 @@ over links is our composition, which no Lean statement covers. It holds except w
 datacenter at δ takes each link at δ / links, and each link pays its own incorrect proof blocks (`datacenter`'s
 docstring says why pooling them by weight copy would be unsound).
 
-**K per monitoring period on a run**: `uv run benchmarks/network_traces/chain_record.py leak --warden-run RUN --scan
+**K per monitoring period on a run**: `uv run benchmarks/network_traces/chain_record.py leak --certifier-run RUN --scan
 SUMMARY --out FILE`, with RUN a fetched certifier run and SUMMARY its scan's `summary.json` (its sample). It reads
 `leak_bounds` on the run's parameters (`deployment.json`), its traffic (`end.json`'s requests and execution phases) and
 the scan's class (`scan_zk.CLASS`), and refuses a scan that left a proof block unsampled. FILE holds the widths, each
@@ -232,7 +232,7 @@ The terms, in the generator reading of the scan's statement (each proof block's 
 - No term for incorrect proof blocks with every proof block sampled, and D_j = 1, so the jitter term is 0: assumed (J), `NetTiming.JitterBounded`,
   not met at D_j = 1 until a run shows the certifier's written buckets tell a receiver no more than an idle one. The
   certifier hands each bucket to a pacer that releases it at a time fixed before the bucket is made
-  (`warden.Warden(paced=…)`, `warden_serve.py --paced-ms`).
+  (`certifier.Certifier(paced=…)`, `certifier_tcp_serve.py --paced-ms`).
 
 Each entry carries a read bit (`ingress_scan.entry_layout`: an occupied slot no Program reads is refused). Bucket t
 reads slot j's entry at row j·nb + ⌊t / EVERY⌋ of the entries (`NetworkCheck.Period`'s `readsEntries`) and ignores it
@@ -288,5 +288,5 @@ K also rests on these conditions:
 - An untied compute audit's (the loop's) free inputs don't enter K: its δ goes into JointPeriodLive's sum. The tied
   audit's (the `SlotEntry_v1` stand-in's) are the execution phase's free inputs above.
 
-The report names what it stands on beyond the theorem (`chain_record.STUBBED`, `WARDEN_STUBBED` and
+The report names what it stands on beyond the theorem (`chain_record.STUBBED`, `CERTIFIER_STUBBED` and
 `POOLED_CONDITION`) and what the theorem doesn't cover (its `uncovered`).

@@ -1,6 +1,6 @@
 """The scan (`ingress_scan.IngressScanBucket`, `IngressScanFirst`) and the egress buckets on the views it writes
 (`egress.EgressBucket`), on the network certifier's own records: the network certifier, driven tick by tick
-(`test_network_certifier_warden`'s harness), carries three network-certifier-form id requests on two lanes, the third
+(`test_network_certifier`'s harness), carries three network-certifier-form id requests on two lanes, the third
 queued until a lane frees, and their responses of id events. The reference's scan of its ingress rows from the empty
 state, the Programs' rows its responses, holds each request's prompt ids at their positions, its head's fields, its
 admission bucket and its anchor until the anchor (two requests anchored at one boundary in their own slots) and its
@@ -34,19 +34,19 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import scan_traffic as ST
-from test_network_certifier_warden import EOF, Server, drive
+from test_network_certifier import EOF, Server, drive
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.protocols.certifier import egress as EG
 from verity.ml.protocols.certifier import ingress_scan as IS
 from verity.core.protocols.certifier import io_tie as IT
-from verity.core.protocols.certifier import warden_rows as WR
+from verity.core.protocols.certifier import certifier_rows as WR
 from verity.core.protocols.certifier.active import HEADER, id_request
-from verity.core.protocols.certifier.warden import DATA, END, PAD, WardenParams, cells
+from verity.core.protocols.certifier.certifier import DATA, END, PAD, CertifierParams, cells
 
 B = 512
-PARAMS = WardenParams(cell_bytes=B, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
+PARAMS = CertifierParams(cell_bytes=B, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
                       ingress_buckets=3, egress_cells=9, every=2)
 CLS = IS.Class(B=B, r=2, lanes=2, C=4, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
 UNIT = bind(IS.IngressScanBucket, B=B, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
@@ -74,8 +74,8 @@ def run():
     arrivals = {0: [cells(reqs[0], B)], 1: [cells(reqs[1], B), cells(reqs[2], B)]}
     CLS.serves(PARAMS)
     server = Server([[(1, _response(xs)), (2, EOF)] for xs in RESPONSES])
-    warden, _ = asyncio.run(drive(server, arrivals, params=PARAMS))
-    rec = {r.link: r for r in warden.records}
+    certifier, _ = asyncio.run(drive(server, arrivals, params=PARAMS))
+    rec = {r.link: r for r in certifier.records}
     rows = [WR.window_rows(rec[link], PARAMS) for link in ("requests", "responses")]
     ch = ST.chain(CLS, *rows, {q: xs for q, xs in enumerate(RESPONSES, 1)})
     admitted = {}
@@ -83,7 +83,7 @@ def run():
         for s in st.slots:
             if s.live:
                 admitted.setdefault(s.q, s.admitted)
-    return SimpleNamespace(warden=warden, reqs=reqs, chain=ch, rows=ch.ingress, egress=ch.egress, states=ch.scan,
+    return SimpleNamespace(certifier=certifier, reqs=reqs, chain=ch, rows=ch.ingress, egress=ch.egress, states=ch.scan,
                            bits=ch.states, admitted=admitted)
 
 
@@ -179,7 +179,7 @@ def test_a_window_circuit_reads_the_scan_s_state_rows_from_t0_minus_one(run):
         IS.window_state(CLS, [x[:-16] for x in registered], 0, 2)
 
 
-def test_each_egress_bucket_computes_the_wardens_row_from_the_view_its_ingress_bucket_wrote(run):
+def test_each_egress_bucket_computes_the_certifiers_row_from_the_view_its_ingress_bucket_wrote(run):
     ch = run.chain
     assert len(ch.egress) == len(ch.ingress) == PARAMS.window
     assert sum(row[s * B] == DATA for row in ch.egress for s in range(SHAPE.R)) == sum(map(len, RESPONSES))
@@ -194,7 +194,7 @@ def test_each_egress_bucket_computes_the_wardens_row_from_the_view_its_ingress_b
     assert EG.outputs(SHAPE, ch.view(t))[1] != bytes(forged)
 
 
-def test_scan_traffic_ticks_the_warden_s_rows(run):
+def test_scan_traffic_ticks_the_certifier_s_rows(run):
     served = ST.serve(PARAMS, run.reqs, [0, 1, 1], [1 << 20] * 3, RESPONSES, 1)
     assert served.rows() == (run.rows, run.egress) and served.admitted == (0, 1, PARAMS.delay + 2)
 
@@ -232,7 +232,7 @@ def test_the_state_is_the_layout_neg_sized():
         IS.Class(B=512, r=4, lanes=4, C=47, KI=2083)
     with pytest.raises(ValueError, match=re.escape("KI <= 147")):
         IS.Class(B=512, r=2, lanes=2, C=4, EVERY=2, WITHIN=3, D=5, KO=8)
-    served = WardenParams(cell_bytes=512, slots=4, lanes=4, delay=27, ingress_cells=47, ingress_buckets=12,
+    served = CertifierParams(cell_bytes=512, slots=4, lanes=4, delay=27, ingress_cells=47, ingress_buckets=12,
                           egress_cells=65, window=32, every=16)
     w63.serves(served)
     assert (served.program_slots, served.window_programs) == (w63.SLOTS, 8)

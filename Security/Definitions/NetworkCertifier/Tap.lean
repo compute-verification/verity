@@ -1,20 +1,20 @@
 module
 
-public import Definitions.NetworkCertifier.Warden
+public import Definitions.NetworkCertifier.Certifier
 
 /-!
-# The tap: one auditor device on each server's uplink, the warden and the certifier at once
+# The tap: one auditor device on each server's uplink, the certifier and the certifier at once
 
-Definitions only. The warden (`Definitions.NetworkCertifier.Warden`) and the network certifier are one device, a tap
+Definitions only. The certifier (`Definitions.NetworkCertifier.Certifier`) and the network certifier are one device, a tap
 on each AI server's uplink. Its one code run on what reaches it from the server (the `Arrivals` of each
-connection) gives both what the client receives, the warden's cells (`certifierCode`), and the certifier's record of
+connection) gives both what the client receives, the certifier's cells (`certifierCode`), and the certifier's record of
 them, the observations the audits read (`recordingCode`). Its trust is one `trusted-host`
 (`Verity.Assumptions.TrustedHost`) over that code, with no second device and no second trust, so that what the
-certifier saw is what the warden sent is a fact of the code, not a premise.
+certifier saw is what the certifier sent is a fact of the code, not a premise.
 
-**The record is the wire.** The deployed tap (`benchmarks/network_traces/warden_serve.py`, one relay on the auditor's
+**The record is the wire.** The deployed tap (`benchmarks/network_traces/certifier_tcp_serve.py`, one relay on the auditor's
 machine) records every cell it sends, padding and fail cells included, a row a bucket, each cell a frame that names its
-connection (`verity/core/protocols/certifier/warden_rows.py`; `Definitions.NetworkCertifier.RecordRows` is that
+connection (`verity/core/protocols/certifier/certifier_rows.py`; `Definitions.NetworkCertifier.RecordRows` is that
 format). So on every schedule the format holds (`RecordFormat.fits`: a record of the monitoring period's buckets, each of
 `S` slots, holds a schedule whose cells fall in them, at most `S` a bucket), the cells read back from the record under
 the schedule (`RecordFormat.read_record`). What else the record holds, each step's jitter class and statuses, may depend on
@@ -22,7 +22,7 @@ anything the tap saw. The server's bytes after a connection's fail cell, or past
 neither the client nor the record: the record fixes what the client received, not everything the server sent.
 
 The tap is stated here, over `TrustedHost`'s shape (a device, its run and its code), so that core's device vocabulary
-can lift it as it is: `RecordFormat` and `recordingCode` read nothing of network accounting but the warden's code.
+can lift it as it is: `RecordFormat` and `recordingCode` read nothing of network accounting but the certifier's code.
 -/
 
 @[expose] public section

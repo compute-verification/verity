@@ -27,7 +27,7 @@ _spec.loader.exec_module(REPLAY)
 @pytest.fixture
 def RP(monkeypatch):
     """This suite's `replay`, which a5 imports by that name, under that name for one test only: `network_traces` has a
-    `replay` of its own, which `active_replay` (imported by this suite's warden tests) reads by the same name."""
+    `replay` of its own, which `active_replay` (imported by this suite's certifier tests) reads by the same name."""
     monkeypatch.setitem(sys.modules, "replay", REPLAY)
     return REPLAY
 

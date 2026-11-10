@@ -21,7 +21,7 @@ inputs = [
     "integrations/vllm/verity_vllm/pipeline/tick_plugin.py",
     "integrations/vllm/verity_vllm/settings.py",
     # `verity.core.protocols.certifier.release` (tests/test_tick_corpus.py): the release headers and the watermark as
-    # the network certifier makes them, which the server's feed reads in a warden trace under `--admit tick`, and its
+    # the network certifier makes them, which the server's feed reads in a certifier trace under `--admit tick`, and its
     # packages
     "verity/__init__.py",
     "verity/core/__init__.py",
@@ -42,6 +42,6 @@ tests = [
     "tests/test_tick_corpus.py",
     "tests/test_tick_job.py",
     "tests/test_traffic.py",
-    "tests/test_warden_probes.py",
+    "tests/test_certifier_probes.py",
 ]
 paths = ["benchmarks/network_e2e/traces"]

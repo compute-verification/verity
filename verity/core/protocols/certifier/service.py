@@ -134,19 +134,19 @@ derivation, its premises and the carry-over). Its public items are `PUBLIC_SERVE
 sizes, and the window's declared sync, the advice `charge` already counts, which the served counts read and the proof
 block takes as its ``sync`` parameter. The in-the-clear check runs `served_check` too.
 
-**A warden link** (`LinkWindows(warden=WardenProfile(…))`) is the active warden's (`warden.Warden`) own two records
+**A certifier link** (`LinkWindows(certifier=CertifierProfile(…))`) is the active certifier's (`certifier.Certifier`) own two records
 of each execution phase: its responses on egress and its requests on ingress, on its one grid, certified under its
-schedule's parameters digest (`warden.WardenParams.digest`, which its deployment publishes) rather than a certifier's
+schedule's parameters digest (`certifier.CertifierParams.digest`, which its deployment publishes) rather than a certifier's
 (`certificate.parameters_digest`). The network certifier is the auditor's device, and its code puts every bucket's
-cells, r for each live connection and the rest padding (`warden.audit` reads them in the clear, the scan's proof blocks
+cells, r for each live connection and the rest padding (`certifier.audit` reads them in the clear, the scan's proof blocks
 in zero knowledge), so its counts are its schedule's: no occupancy profile holds them, the period's schedule terms
 charge them (log2 #S_s and Σ_c log2(cap_c + 1)), and the active network certifier runs no shaper clock, so a window
 declares no sync and the charge is 0. Its proof block is the plain one, `NetworkLinkWindow` v5{EGRESS, INGRESS}, each
 head check holding its end's head to the network certifier's grid and digest and to the network certifier's signed
-digest. Its public items are `PUBLIC_WARDEN`. The in-the-clear check is the opening's root and the head checks: the
+digest. Its public items are `PUBLIC_CERTIFIER`. The in-the-clear check is the opening's root and the head checks: the
 records' cells are the scan's, and the certifier's host audit doesn't read a network certifier's records.
 
-A link whose egress end has no occupancy profile and is neither served nor a warden's has no verdict
+A link whose egress end has no occupancy profile and is neither served nor a certifier's has no verdict
 (`ValueError`, failing closed): nothing would hold its egress timing.
 
 `LinkWindows.stand_in` is the in-the-clear verdict, the Program's egress grid compared as it was before the head check,
@@ -164,11 +164,11 @@ reference's accept bit (`reference`), never a violation's kind.
 line `OF_RECORD`. `verify` runs it and this module's `python_verdict` on every proof, records
 whose verdict it is (`by`) and the other's accept bit (`reference`), and rejects an execution phase where they differ or
 the Lean refuses the case. On a network certifier link the Lean reads the network certifier's parameters digest
-(`lean_case`'s ``warden``) for both ends' grids and no sync, as `grid` and `python_verdict` do. The gap list, what
+(`lean_case`'s ``certifier``) for both ends' grids and no sync, as `grid` and `python_verdict` do. The gap list, what
 `python_verdict` reads that the
 Lean takes as an input rather than checks:
-- on a warden link, the warden's parameters digest (`WardenProfile.digest`, which the warden's deployment publishes
-  as its schedule's, `warden.WardenParams.digest`), which neither derives;
+- on a certifier link, the certifier's parameters digest (`CertifierProfile.digest`, which the certifier's deployment publishes
+  as its schedule's, `certifier.CertifierParams.digest`), which neither derives;
 - what both take from the proof system and the lowering: the findings of the verifier's own run of Flock's Lean
   verifier (`proofs.verify`), the delivered sessions' SHA-512s, the registration and the sample, and the registered
   Program's and partition's digests and the gate ids (`P.partition`, `head_check.gate`), which the Lean holds the
@@ -382,9 +382,9 @@ PUBLIC_SERVED = tuple(p for p in PUBLIC if p.item != "occupancy") + (
     S.Public("sync", "output", "the window's declared clock sync, one of Σ_sync (fixed before the run): the advice "
              "`charge` already counts, which the served counts read"),
 )
-#: a warden link's: no occupancy profile and no sync, the warden's schedule instead, which puts its counts
-PUBLIC_WARDEN = tuple(p for p in PUBLIC if p.item not in ("charge", "occupancy")) + (
-    S.Public("warden", "structure", "the active warden's schedule (`warden.WardenParams`, the digest both ends' heads "
+#: a certifier link's: no occupancy profile and no sync, the certifier's schedule instead, which puts its counts
+PUBLIC_CERTIFIER = tuple(p for p in PUBLIC if p.item not in ("charge", "occupancy")) + (
+    S.Public("warden", "structure", "the active certifier's schedule (`certifier.CertifierParams`, the digest both ends' heads "
              "bind) and the link's windows, fixed before the run: the device's code puts every bucket's cells (r for "
              "each live connection), so its counts are the schedule's, which the period's schedule terms charge"),
 )
@@ -442,7 +442,7 @@ def lean_draw(k: int, n: int, read: bytes) -> dict[str, Any]:
 
 _NO_PROFILE = ("N2 compares no egress grid, so a link whose egress end has no occupancy profile has no verdict: "
                "nothing would hold its egress counts (declare LinkWindows.occupancy, LinkWindows.served on a served "
-               "link, or LinkWindows.warden on a warden's)")
+               "link, or LinkWindows.certifier on a certifier's)")
 
 
 def _accepts(egress: Sequence[Any], ingress: Sequence[Any], window: int) -> bool:
@@ -546,9 +546,9 @@ class Hidden:
 
 
 @dataclass(frozen=True)
-class WardenProfile:
-    """A network certifier link's profile (`LinkWindows.warden`, the module docstring's "A network certifier link"): the
-    link's windows and the network certifier's parameters digest (`warden.WardenParams.digest`), which both ends' heads
+class CertifierProfile:
+    """A network certifier link's profile (`LinkWindows.certifier`, the module docstring's "A network certifier link"): the
+    link's windows and the network certifier's parameters digest (`certifier.CertifierParams.digest`), which both ends' heads
     bind, both fixed before the run."""
 
     windows: int
@@ -556,9 +556,9 @@ class WardenProfile:
 
     def __post_init__(self) -> None:
         if type(self.windows) is not int or self.windows < 1:
-            raise ValueError(f"a warden link has one or more windows, not {self.windows!r}")
+            raise ValueError(f"a certifier link has one or more windows, not {self.windows!r}")
         if type(self.digest) is not bytes or len(self.digest) != HC.DIGEST_BYTES:
-            raise ValueError(f"a warden's parameters digest is {HC.DIGEST_BYTES} bytes")
+            raise ValueError(f"a certifier's parameters digest is {HC.DIGEST_BYTES} bytes")
 
 
 @dataclass(frozen=True)
@@ -567,7 +567,7 @@ class LinkWindows:
     network certifier's public key, the run that names the served domains, the certifier session's id (the 32 bytes the
     challenger sampled for the certifier's session, which every certificate signs), the proof deadline in seconds, and the
     occupancy profile: for each end (egress, ingress), each window's counts, or None for an end without one. A served
-    link (`served`, FIXLEN) has no egress profile, nor has a warden's (`warden`: the active warden's records, its key
+    link (`served`, FIXLEN) has no egress profile, nor has a certifier's (`certifier`: the active certifier's records, its key
     and session the certifier's here, its counts its schedule's, and no sync, so `sync_set` is unread)."""
 
     link: str
@@ -580,16 +580,16 @@ class LinkWindows:
     proof_deadline: float | None = None
     occupancy: tuple[Sequence[Sequence[int]] | None, Sequence[Sequence[int]] | None] = (None, None)
     served: SV.ServedProfile | None = None
-    warden: WardenProfile | None = None
+    certifier: CertifierProfile | None = None
 
     def __post_init__(self) -> None:
         if len(self.occupancy) != 2:
             raise ValueError("the occupancy profile has one entry per end: (egress, ingress)")
-        if self.warden is not None:
+        if self.certifier is not None:
             if self.served is not None or tuple(self.occupancy) != (None, None):
-                raise ValueError("a warden link's counts are its schedule's: it has no occupancy or served profile")
+                raise ValueError("a certifier link's counts are its schedule's: it has no occupancy or served profile")
             if self.ingress_params != self.params:
-                raise ValueError("a warden link's two ends are on the warden's one grid")
+                raise ValueError("a certifier link's two ends are on the certifier's one grid")
         if self.served is not None:
             g, i = self.params, self.ingress_params
             if self.occupancy[0] is not None:
@@ -610,7 +610,7 @@ class LinkWindows:
     @property
     def kind(self) -> str:
         """``"served"``, ``"warden"``, or ``"plain"`` (neither: its egress counts are its occupancy profile's)."""
-        return "served" if self.served is not None else "warden" if self.warden is not None else "plain"
+        return "served" if self.served is not None else "warden" if self.certifier is not None else "plain"
 
     def declares(self, direction: int, window: int, counts: Sequence[int]) -> bool:
         """Whether `counts` are the occupancy profile's for the end (0 egress, 1 ingress) in the window: always for an
@@ -621,7 +621,7 @@ class LinkWindows:
     @property
     def charge(self) -> float:
         """log2 #Σ_sync: 7 bits per window at 16 × 8; 0 on a network certifier link, which declares no sync."""
-        return 0.0 if self.warden is not None else self.sync_set.bits
+        return 0.0 if self.certifier is not None else self.sync_set.bits
 
     def head_key(self, direction: int) -> tuple[int, int, int]:
         """The end's head check's size class (L, T, COUNTS): the link name's UTF-8 length, the end's buckets, and 1 when
@@ -632,9 +632,9 @@ class LinkWindows:
     def grid(self, direction: int) -> bytes:
         """The end's declared grid as its head encodes it (`head_check.grid_bytes`): the egress grid's parameters digest
         binds Σ_sync, the ingress grid's none; on a network certifier link both are the network certifier's
-        (`WardenProfile.digest`)."""
-        if self.warden is not None:
-            return HC.grid_bytes((self.params, self.ingress_params)[direction], self.warden.digest)
+        (`CertifierProfile.digest`)."""
+        if self.certifier is not None:
+            return HC.grid_bytes((self.params, self.ingress_params)[direction], self.certifier.digest)
         if direction == 0:
             return HC.grid_bytes(self.params, parameters_digest(self.params, self.sync_set))
         return HC.grid_bytes(self.ingress_params, parameters_digest(self.ingress_params))
@@ -648,10 +648,10 @@ class LinkWindows:
 
     @property
     def windows(self) -> int:
-        """The link's windows, which `network_verdict` takes by default: the served or warden profile's, else the
+        """The link's windows, which `network_verdict` takes by default: the served or certifier profile's, else the
         egress occupancy profile's."""
         self._profiled()
-        derived = self.served or self.warden
+        derived = self.served or self.certifier
         return derived.windows if derived is not None else len(self.occupancy[0])
 
     @cached_property
@@ -695,10 +695,10 @@ class LinkWindows:
             "occupancy": [None if p is None else _sha512([list(row) for row in p]) for p in self.occupancy],
             **({} if self.served is None else {"served": [self.served.response_frames, self.served.request_frames,
                                                           self.served.windows, self.served.own]}),
-            **({} if self.warden is None else {"warden": [self.warden.windows, self.warden.digest.hex()]})})
+            **({} if self.certifier is None else {"warden": [self.certifier.windows, self.certifier.digest.hex()]})})
         check = S.Check(P.program_sha512(Program(self.unit)), self.query, public_outputs=OUTPUTS,
                         proof_deadline=self.proof_deadline)
-        public = (PUBLIC_SERVED if self.served is not None else PUBLIC_WARDEN if self.warden is not None
+        public = (PUBLIC_SERVED if self.served is not None else PUBLIC_CERTIFIER if self.certifier is not None
                   else PUBLIC)
         return S.Spec((S.Value(VALUE, SCHEMA, "serve"),), S.All(), check, public, context)
 
@@ -943,7 +943,7 @@ class LinkWindows:
             and c.verify(self.key, self.certifier_session) for d, c in enumerate(certificates))
 
     def _profiled(self) -> None:
-        if self.occupancy[0] is None and self.served is None and self.warden is None:
+        if self.occupancy[0] is None and self.served is None and self.certifier is None:
             raise ValueError(_NO_PROFILE)
 
     @staticmethod
@@ -967,7 +967,7 @@ class LinkWindows:
                          self.bits("pub")) if proved else None
         word = opened if opened is not None else 0
         accepted = (proved and opened is not None and word == 0b11 and self.certified(w, certificates)
-                    and (self.warden is not None or (w < len(syncs) and syncs[w] in self.sync_set)))
+                    and (self.certifier is not None or (w < len(syncs) and syncs[w] in self.sync_set)))
         return self._decided(draw, sessions, accepted, {"verdict": int(accepted), "deadline": word >> 1 & 1})
 
     def lean_case(self, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
@@ -978,7 +978,7 @@ class LinkWindows:
         Lean verifier (None where `proofs.verify` refused), the delivered public file, salts, output word and session
         SHA-512s, the certificates (each null unless a `Certificate` of well-typed fields) and each one's signed digest
         as `public_arguments` reads it, the declared syncs, Σ_sync,
-        the key and session, each end's grid and profile, and on a warden link the warden's parameters digest. None for
+        the key and session, each end's grid and profile, and on a certifier link the certifier's parameters digest. None for
         a key the Lean doesn't read (not an `LmsKey`)."""
         if not isinstance(self.key, LmsKey):
             return None
@@ -1021,8 +1021,8 @@ class LinkWindows:
             "session": bytes(self.certifier_session).hex(),
             "egress": {"grid": LA._grid_json(self.params), "profile": _profile(self.occupancy[0])},
             "ingress": {"grid": LA._grid_json(self.ingress_params), "profile": _profile(self.occupancy[1])}}
-        if self.warden is not None:
-            case["warden"] = self.warden.digest.hex()
+        if self.certifier is not None:
+            case["warden"] = self.certifier.digest.hex()
         return case
 
     def lean_verdict(self, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
@@ -1050,12 +1050,12 @@ class LinkWindows:
         - the proof's public row opens, under the salt delivered, to the verifier's own copy (`public_arguments`: the
           registered root, the public fields and both certificates' signed digests), and its output row to the word
           delivered (`_opened`), whose verdict bit and deadline bit are both 1;
-        - the certificates' check accepts (`certified`), and the window's declared sync is one of Σ_sync (on a warden
+        - the certificates' check accepts (`certified`), and the window's declared sync is one of Σ_sync (on a certifier
           link, which declares none, nothing is read of `syncs`).
         The verdict reports the public outputs, the proved deadline bit among them, and never a violation's kind.
         `opening` (the witness) is for a debug comparison only, off by default: given, the verdict also carries the
         in-the-clear check's accept bit (`clear`), which decides nothing. Raises `ValueError` on a link with no egress
-        occupancy, served or warden profile.
+        occupancy, served or certifier profile.
 
         The Lean (`NetworkCheck.LinkWindow`, `lean_verdict`) decides the same on every call beside this Python, and
         `OF_RECORD` names whose verdict is the record's (`by`); the other's accept bit is `reference`'s. Where the two
@@ -1083,15 +1083,15 @@ class LinkWindows:
         tests' reference, never a verdict of record. Accepted when the opening reproduces the registered root under the
         link-window's domain, both head checks accept, and the audit accepts both records, comparing no grid (the module
         docstring). `syncs` are the declared clock syncs of windows 0 … w. On a served link it also runs the served
-        counts' check (`served_check`). On a warden link it is the root and the head checks alone (the module
-        docstring's "A warden link")."""
+        counts' check (`served_check`). On a certifier link it is the root and the head checks alone (the module
+        docstring's "A certifier link")."""
         self._profiled()
         root = self._registered(opening, draw)
         w, (egress, ingress) = opening.window, opening.records
         sealed = self.root(opening) == root
         headed = all(i is not None and HC.reference(i) for i in self.head_checks(opening, bytes.fromhex(root)))
         headed = headed and (self.served is None or self.served_check(opening, syncs))
-        if self.warden is not None:
+        if self.certifier is not None:
             public = {"verdict": int(sealed and headed), "deadline": int(egress.head.deadline and ingress.head.deadline)}
             return {"of_record": False, "accepted": sealed and headed, "public": public}
         audit = Audit()
@@ -1240,7 +1240,7 @@ class LinkWindows:
         order or not at all (a gap, or a run that stops short), a registration past the last window, a registration
         with no outcome yet, and a rejected or late outcome each reject the link; `refused` lists their windows.
         `records` is each window's outcome record SHA-512 (`S.Outcome.record`, None without one), and `digest` binds
-        the verdict to the stream and those records. On a served or warden link the windows are by default its
+        the verdict to the stream and those records. On a served or certifier link the windows are by default its
         profile's (`windows`).
 
         With `drawn`, the period sample (`period_draw`) over this stream's n windows, the stream's registrations must be
@@ -1259,7 +1259,7 @@ class LinkWindows:
         registered window isn't one the Lean sampled; a sampled window not registered is in `refused`. `selection` is
         the sample of record, ``by`` ``lean``
         (or ``all`` at K = n), and its units are the Lean's. Raises `ValueError` on a link with no egress occupancy,
-        served or warden profile, as `verify` does, on a stream that isn't this link's, and on a sample that isn't this
+        served or certifier profile, as `verify` does, on a stream that isn't this link's, and on a sample that isn't this
         stream's period sample."""
         n = self._period(stream, windows)
         why: dict[str, Any] = {}

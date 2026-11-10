@@ -1,31 +1,31 @@
-"""warden-zk: the network certifier's bucket rows read by the proof system. A toy proof block over one row's bits, its
-port registered against the network certifier's signed egress root (`warden_rows`), proved by Flock `prove --zk` behind
+"""certifier-zk: the network certifier's bucket rows read by the proof system. A toy proof block over one row's bits, its
+port registered against the network certifier's signed egress root (`certifier_rows`), proved by Flock `prove --zk` behind
 the Lean ZK server and held by the Lean verifier's registered reads (`flock-verify verify --zk --registered`), through
 the one-stage audit as `n2_zk.py` proves N2's head checks.
 
-    python benchmarks/network_traces/warden_zk.py prove --run DIR --bin flock-circuit --lean flock-verify --out DIR
+    python benchmarks/network_traces/certifier_zk.py prove --run DIR --bin flock-circuit --lean flock-verify --out DIR
       [--units 16] [--dry]
 
-* **The run.** A warden-serve run's directory (`warden_serve.py rehearse`'s): `deployment.json`, the records, and the
+* **The run.** A certifier-tcp-serve run's directory (`certifier_tcp_serve.py rehearse`'s): `deployment.json`, the records, and the
   rows the network certifier committed and signed while serving, a row a bucket: `cells.jsonl` (each execution phase's
   registration) and `cells.salts` (the rows' salts and the wiring's, witness, which the network certifier hands the
   prover alone).
 * **The registration.** An egress execution phase's: its registration read by the verifier
-  (`warden_rows.check_registration`, under the deployment's key and session and the schedule), and the network
+  (`certifier_rows.check_registration`, under the deployment's key and session and the schedule), and the network
   certifier's opening (the record's rows and wiring under the salts) held to its head.
-* **The proof block** (`WardenRowIdentity{B}`, B a row's S·B bytes): one bucket row's 8·B bits in (`row`), the same bits
+* **The proof block** (`CertifierRowIdentity{B}`, B a row's S·B bytes): one bucket row's 8·B bits in (`row`), the same bits
   out (`o0`), each through two NOTs (the partition refuses a template with no gate; no AND).
-* **The proof blocks' wiring is the Program's** (`warden_rows.Units`), fixed from public structure alone, never the
+* **The proof blocks' wiring is the Program's** (`certifier_rows.Units`), fixed from public structure alone, never the
   cells' bytes: the connection admitted in an execution phase (its first row past the window's first, or window 0) with
   the most cells, at least D·r + n, and proof block i reading its egress cell i, its cell D·r + i (the D buckets before
   are its delay's pads, the schedule's). Each is at its bucket's row, the cell at its slot's words
-  (`warden_rows.Wiring.place`, with the network certifier's wiring, opened to the verifier: the named gap). The
-  verifier's port names the proof blocks' digest in its value (`warden_rows.port`), so a statement made for any other
+  (`certifier_rows.Wiring.place`, with the network certifier's wiring, opened to the verifier: the named gap). The
+  verifier's port names the proof blocks' digest in its value (`certifier_rows.port`), so a statement made for any other
   proof blocks' wiring is refused by Lean's registered
   reads, even at the same rows.
 * **Members.** One statement of n units each, a shared-row public file whose registered ports are the verifier's own
-  (`--registered`, `warden_rows.port` at the warden's root):
-  - ``sender``: ``o0`` registered, under the warden's salts and paths: the sender's unit opens its output as the rows;
+  (`--registered`, `certifier_rows.port` at the certifier's root):
+  - ``sender``: ``o0`` registered, under the certifier's salts and paths: the sender's unit opens its output as the rows;
   - ``receiver``: ``row`` registered: the receiver's check opens the same rows as its input;
   - ``unsigned``: ``o0`` under the prover's own tree over the window's rows, proof block 0's cell one byte off: rows the
     network certifier didn't sign (and the prover's registration of its own root, under the network certifier's
@@ -63,14 +63,14 @@ ONE_STAGE = HERE.parent / "one_stage"
 sys.path.insert(0, str(HERE))
 
 import leak_scan as LS  # noqa: E402
-import warden_serve as ws  # noqa: E402
+import certifier_tcp_serve as ws  # noqa: E402
 from verity.ml.circuits import boolean as BL  # noqa: E402
 from verity.ml.circuits.defs import CompositeDefinition, bind  # noqa: E402
 from verity.ml.circuits.types import Array  # noqa: E402
-from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
+from verity.core.protocols.certifier import certifier_rows as WR  # noqa: E402
 from verity.core.protocols.certifier.active import DATA, PAD  # noqa: E402
 from verity.core.protocols.certifier.certificate import Certificate  # noqa: E402
-from verity.core.protocols.certifier.warden import END, WardenParams, cell  # noqa: E402
+from verity.core.protocols.certifier.certifier import END, CertifierParams, cell  # noqa: E402
 
 MEMBERS = {"sender": ("o0", True), "receiver": ("row", True), "unsigned": ("o0", False), "altered": ("o0", False),
            "pad": ("o0", False), "pad-named": ("o0", False), "swapped": ("o0", False)}
@@ -93,10 +93,10 @@ def _body(B, S, row):
     return B.batch(BL.NOT, B.batch(BL.NOT, row, axes=(0,)), axes=(0,))
 
 
-WardenRowIdentity = CompositeDefinition(
-    "WardenRowIdentity", 1, ("B",), _signature, _body, conformance="exact-model-tested", register=False,
-    doc="WardenRowIdentity{B}: one warden bucket row's 8·B bits, each through two NOTs: the toy unit whose port opens "
-        "a row of the warden's signed root (warden_zk.py)")
+CertifierRowIdentity = CompositeDefinition(
+    "CertifierRowIdentity", 1, ("B",), _signature, _body, conformance="exact-model-tested", register=False,
+    doc="CertifierRowIdentity{B}: one certifier bucket row's 8·B bits, each through two NOTs: the toy unit whose port opens "
+        "a row of the certifier's signed root (certifier_zk.py)")
 
 
 # --- the run ----------------------------------------------------------------------------------------------------------
@@ -107,7 +107,7 @@ def attestation(run: Path, n: int) -> SimpleNamespace:
     (connection, cell) each, the row and slot the network certifier's wiring places each at (`positions`, `slots`), and
     how many of them hold the server's bytes (`data_rows`, reported, never read to choose)."""
     dep = json.loads((run / "deployment.json").read_text())
-    params = WardenParams(**dep["params"])
+    params = CertifierParams(**dep["params"])
     key, session = ws.cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
     link, direction = ws.CERTIFIED[ws.EGRESS]
     records = {r.window: r for r in ws.read_records(run, params)[ws.EGRESS]}
@@ -127,7 +127,7 @@ def attestation(run: Path, n: int) -> SimpleNamespace:
     head, dom = WR.check_registration(doc["registration"], key, session, params, link, direction, w)
     opening = WR.Cells.of(link, direction, records[w], params, session, salts, wiring_salt)
     if opening.head != head:
-        raise SystemExit(f"window {w}: the warden's rows and wiring under its salts aren't its registered head")
+        raise SystemExit(f"window {w}: the certifier's rows and wiring under its salts aren't its registered head")
     units = WR.Units.span(q, pads, n)
     placed = opening.wiring.place(params, units.cells)
     B = params.cell_bytes
@@ -192,8 +192,8 @@ def opened(at: SimpleNamespace, mr: SimpleNamespace) -> list[bool]:
 
 
 def refused(at: SimpleNamespace, mr: SimpleNamespace, reads_from: int = 0) -> str | None:
-    """The host's read of a member's registered port against the verifier's (`warden_rows.port` of the Program's
-    proof blocks), as Lean's registered reads make it (`warden_rows.refusal`): None when they accept, else why not."""
+    """The host's read of a member's registered port against the verifier's (`certifier_rows.port` of the Program's
+    proof blocks), as Lean's registered reads make it (`certifier_rows.refusal`): None when they accept, else why not."""
     port = WR.port(at.head, at.opening.wiring, at.params, at.units, reads_from)
     return WR.refusal(port, at.dom, mr.entry, [WR.bc(r, s) for r, s in zip(mr.rows, mr.salts)])
 
@@ -217,7 +217,7 @@ def _one_stage():
 
 def stager(M, B: int, n: int, out: Path) -> SimpleNamespace:
     """The statement program and partition (one template, n proof blocks) and the proof block's stager."""
-    defn = bind(WardenRowIdentity, B=B)
+    defn = bind(CertifierRowIdentity, B=B)
     program = M.P.mixed_population_program([(defn, n)])
     query = M.P.template_instances_query([defn])
     part = M.P.partition(program, query)
@@ -226,7 +226,7 @@ def stager(M, B: int, n: int, out: Path) -> SimpleNamespace:
     (out / "program.json").write_bytes(M.canonical_json(M.encode_program(program)))
     bound = {"partition": M.P.digest(part), "program": part["program"]}
     t = time.time()
-    st = M.CS.UnitStager(defn, "unit/warden-row", [("row", M.V2, 8 * B, ["row"])], [(M.V2, (0,))],
+    st = M.CS.UnitStager(defn, "unit/certifier-row", [("row", M.V2, 8 * B, ["row"])], [(M.V2, (0,))],
                          circuit=out / "circuit.txt", bind=bound)
     st.pin
     (tid, base, cnt), = M.P.ranges(program, query)
@@ -239,7 +239,7 @@ def stager(M, B: int, n: int, out: Path) -> SimpleNamespace:
 def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
     """Member `name`'s statement: its input rows, a shared-row file (each instance its own table row), its registered
     port's rows under its salts and paths (`member_rows`), every other row under a fresh salt; and the verifier's own
-    `--registered` file at the warden's root."""
+    `--registered` file at the certifier's root."""
     t0 = time.time()
     st, n, out = sg.st, sg.n, sg.out / f"stage-{name}"
     k_log = st.meta["k_log"]
@@ -296,16 +296,16 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": w["leaves"], "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
     law = M.D.parse_design(f"stratified:{n}")
-    win = {"kind": "stand-in", "of": f"the bucket rows of {n} cells of connection {at.connection} in the warden's "
-                                      f"egress link-window {at.window} (warden_zk.py)",
+    win = {"kind": "stand-in", "of": f"the bucket rows of {n} cells of connection {at.connection} in the certifier's "
+                                      f"egress link-window {at.window} (certifier_zk.py)",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
            "units": {"cells": [list(c) for c in at.units.cells], "digest": at.units.digest().hex()},
-           "link": f"registered: port {m['port']} reads {at.units.value(at.head)} at the warden's signed root"}
+           "link": f"registered: port {m['port']} reads {at.units.value(at.head)} at the certifier's signed root"}
     rec = R.record(sg.program, sg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, sg.program, sg.query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json(),
               f"statement/{name}": a7.statement_checks(m, rec, want)}
-    receipt = R.receipt(rec, "one-stage-e2e verifier (warden_zk.py)")
+    receipt = R.receipt(rec, "one-stage-e2e verifier (certifier_zk.py)")
     res: dict = {"checks_before_draw": {c: v["ok"] for c, v in checks.items()}}
     if not all(v["ok"] for v in checks.values()):
         return {**res, "checks": checks, "accepted": False}
@@ -334,10 +334,10 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
     vdir = out / "verifier"
     vdir.mkdir(exist_ok=True)
-    (out / "warden-registration.json").write_text(json.dumps(at.registration, indent=1, sort_keys=True))
+    (out / "certifier-registration.json").write_text(json.dumps(at.registration, indent=1, sort_keys=True))
     for f in (out / "registration.json", sg.partition_file, sg.program_file, m["dir"] / "circuit.txt",
               m["dir"] / f"pub-{n}.bin", m["registered_file"], sdir / "draw.json", out / "audit.json",
-              out / "warden-registration.json"):
+              out / "certifier-registration.json"):
         os.link(f, vdir / f.name)
     for f in sorted((sdir / "sessions").rglob("*")):
         if f.is_file():
@@ -386,9 +386,9 @@ def prove(a) -> int:
     summary: dict = {"run": str(run), "link_window": at.head.value, "value": at.units.value(at.head),
                      "connection": at.connection, "rows": N, "row_bytes": B, "cell_bytes": at.params.cell_bytes,
                      "pads": at.pads, "reads": at.reads, "positions": at.positions, "slots": at.slots,
-                     "data_rows": at.data_rows, "units_bytes": len(at.units.encode()), "warden_cost": at.cost,
+                     "data_rows": at.data_rows, "units_bytes": len(at.units.encode()), "certifier_cost": at.cost,
                      "registration": at.registration}
-    summary["warden_costs"] = ws.check_cells(run, at.dep, at.params, ws.read_records(run, at.params))[0]
+    summary["certifier_costs"] = ws.check_cells(run, at.dep, at.params, ws.read_records(run, at.params))[0]
     own = member_rows("unsigned", at).own
     c = at.registration["certificate"]
     forged = WR.registration(own.head, Certificate(bytes.fromhex(c["key"]), at.link, at.direction, at.window,
@@ -401,8 +401,8 @@ def prove(a) -> int:
         summary["unsigned_registration"] = f"refused: {e}"
     log(f"{at.head.value}: {N} rows of {B} bytes, root {at.head.root.hex()[:16]}; the Program's units read connection "
         f"{at.connection}'s cells {at.pads} … {at.pads + a.units - 1} (units {at.units.digest().hex()[:16]}) at rows "
-        f"{at.positions}, slots {at.slots} ({at.data_rows} data); the warden's cost {at.cost}; the prover's own root "
-        f"under the warden's certificate: {summary['unsigned_registration']}")
+        f"{at.positions}, slots {at.slots} ({at.data_rows} data); the certifier's cost {at.cost}; the prover's own root "
+        f"under the certifier's certificate: {summary['unsigned_registration']}")
     M = _one_stage()
     sg = stager(M, B, a.units, out / "stager")
     summary["stager"] = {"lower_s": sg.lower_s, "k_log": sg.st.meta["k_log"], "vus_per_block": sg.st.meta["vus_per_block"],
@@ -415,7 +415,7 @@ def prove(a) -> int:
                                                    "units": m["units"], "predicted_opens": m["opens"],
                                                    "predicted": m["predicted"] or "accepted"}
         log(f"staged {name}: port {m['port']} registered, {m['ands']} ANDs, units {m['units'][:16]}, rows that open "
-            f"the warden's root (host) {sum(m['opens'])}/{len(m['opens'])}; the host's read: "
+            f"the certifier's root (host) {sum(m['opens'])}/{len(m['opens'])}; the host's read: "
             f"{m['predicted'] or 'accepted'}")
         if (m["predicted"] is None) != MEMBERS[name][1] or WHY.get(name, "") not in (m["predicted"] or ""):
             raise SystemExit(f"{name}: the host's read of its statement ({m['predicted'] or 'accepted'}) is not the "
@@ -447,11 +447,11 @@ def prove(a) -> int:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(prog="warden_zk.py", description=__doc__.splitlines()[0])
+    ap = argparse.ArgumentParser(prog="certifier_zk.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
     p = sub.add_parser("prove", help="the toy proof block's ports registered against the network certifier's egress root, "
                                      "proved --zk")
-    p.add_argument("--run", required=True, type=Path, help="a warden-serve run's directory")
+    p.add_argument("--run", required=True, type=Path, help="a certifier-tcp-serve run's directory")
     p.add_argument("--bin")
     p.add_argument("--lean")
     p.add_argument("--out", required=True)

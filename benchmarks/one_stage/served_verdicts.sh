@@ -21,18 +21,18 @@
 #     so the engine's idle closes them into one window. With LOAD=fixed (default varied) they are one full window of fixed
 #     length instead (`serve_load.py --fixed SLOTS --window-steps WINDOW_STEPS`): SLOTS requests of PROMPTS tokens, each
 #     with ignore_eos and max_tokens WINDOW_STEPS, all prefilled at the window's first step and run through its last. With
-#     LOAD=front there are none: CERTIFIER_FRONT's group, sent through the warden, is the run's one load and its execution
+#     LOAD=front there are none: CERTIFIER_FRONT's group, sent through the certifier, is the run's one load and its execution
 #     block the one the run audits (a period that admits a single block, say). A front that failed before a window
 #     closed stops the endpoint at once, with no window to seal; one that failed after (its leak guard holding a file,
 #     say) leaves its exit to the certifier's verdict, and the run goes on with the window it sealed.
 #     CERTIFIER_FRONT runs within CERTIFIER_FRONT_TIMEOUT (default 20m), and a flag it passes to `certifier_piece.py front`
-#     that this tree's front doesn't take, or a front whose endpoint isn't on the warden's id form (SERVE_ARGS without
+#     that this tree's front doesn't take, or a front whose endpoint isn't on the certifier's id form (SERVE_ARGS without
 #     `--protocol ids`), is refused before the lease. The
 #     lease ends once every closed window is sealed. What names a window's requests (the serve dir's windows.jsonl,
 #     seals.jsonl, requests.jsonl and serve.json, each window's PoUW calls record, the load's records, timings file and
 #     log, and the certifier front's session, bundle and log, in the serve dir's private/, of which the CERTIFIER-FRONT
 #     line says only `served_verdicts.py front-line`'s fields) stays in the serve dir on the node; what leaves it is their
-#     aggregate ($OUT/serve/overhead.json, except with LOAD=front, whose warden-paced load no stock
+#     aggregate ($OUT/serve/overhead.json, except with LOAD=front, whose certifier-paced load no stock
 #     control compares to) less the load's counts and span, and verdict lines that name no window and count none of a
 #     window's own: no window's number, no count of the windows closed, sealed or refused, no engine step, request count or
 #     user of one. Each line goes out through `served_verdicts.py public-lines`, in full to the serve dir's
@@ -539,7 +539,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   say "SERVE $(grep -m1 'SERVE-OPENAI listening' "$D/serve.log" | cut -c1-300)"
   weights
   [ "$period" = 1 ] && say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" period served "$D" 2>&1 | tail -1)"
-  if [ -n "${CERTIFIER_FRONT:-}" ]; then  # the network certifier's warden in front of the endpoint, before the requests
+  if [ -n "${CERTIFIER_FRONT:-}" ]; then  # the network certifier's certifier in front of the endpoint, before the requests
     # below: its group closes into the run's earliest window, which `served_verdicts.py window` picks on a tie in requests.
     # Its session, bundle and log hold the group's prompts, request and cells, so they stay in the serve dir's private/
     (umask 077; mkdir -p "$D/private")
@@ -643,7 +643,7 @@ front_ok() {  # preflight: LOAD=front has a front, and each flag CERTIFIER_FRONT
     || { say "PREFLIGHT: LOAD=front sends the front's group alone, and CERTIFIER_FRONT is unset"; return 3; }
   case ${CERTIFIER_FRONT:-} in *"certifier_piece.py front"*) ;; *) return 0 ;; esac
   case " ${SERVE_ARGS:-} " in *" --protocol ids "*) ;; *)
-    say "PREFLIGHT: the certifier front's warden sends id-form requests, which serve-openai answers only under" \
+    say "PREFLIGHT: the certifier front's certifier sends id-form requests, which serve-openai answers only under" \
         "SERVE_ARGS='--protocol ids --id-payload 503'"; return 3 ;; esac
   local help f script
   script=$(grep -oE "[^[:space:]\"']*certifier_piece\.py front" <<< "$CERTIFIER_FRONT" | head -1)
@@ -654,7 +654,7 @@ front_ok() {  # preflight: LOAD=front has a front, and each flag CERTIFIER_FRONT
       || { say "PREFLIGHT: CERTIFIER_FRONT passes $f, which this tree's certifier front doesn't take"; return 3; }
   done
 }
-# the certifier's chain files list and count the window's requests (its certs, its tie's prompt lengths, its N2 warden's
+# the certifier's chain files list and count the window's requests (its certs, its tie's prompt lengths, its N2 certifier's
 # counts, its report and the piece's log, or the split's two logs); once the record has read them, or
 # `served_verdicts.sh v3c` is done, they move to the serve dir's private/
 CERTIFIER_PRIVATE="chain/certs.json chain/report chain/tie/summary.json chain/n2/summary.json piece.log chain.log period.log"
@@ -943,9 +943,9 @@ cp "$D/period.json" "$OUT/serve/" 2>/dev/null
 [ -n "${H1_CIRCUITS:-}" ] && [ -f "$H1_CIRCUITS/circuit-files.json" ] && cp "$H1_CIRCUITS/circuit-files.json" "$OUT/serve/"
 # the serve dir's step trace and the load's records stay on the node; what the stock control's table reads is their aggregate,
 # in full in the serve dir's private/out/serve once `publish` holds the load's counts and span.
-# A front's load is the warden's, paced by its buckets, which no stock run's is, and one window's aggregate is its timing.
+# A front's load is the certifier's, paced by its buckets, which no stock run's is, and one window's aggregate is its timing.
 if [ "$LOAD" = front ]; then
-  say "OVERHEAD: none with LOAD=front (the warden paces its requests, so no stock control compares)"
+  say "OVERHEAD: none with LOAD=front (the certifier paces its requests, so no stock control compares)"
 else
   "$PY" "$TREE/benchmarks/one_stage/served_overhead.py" metrics "$D" > "$OUT/serve/overhead.json" 2> "$D/overhead.err" \
     || { say "OVERHEAD: no aggregate: $(cut -c1-300 "$D/overhead.err")"; rm -f "$OUT/serve/overhead.json"; }

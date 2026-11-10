@@ -239,7 +239,7 @@ class Sampler:
 
 
 def summary(doc: dict) -> dict:
-    """What `warden.json` keeps of FILE: each label's episodes and page faults from the origin, the sampler's pace and
+    """What `certifier.json` keeps of FILE: each label's episodes and page faults from the origin, the sampler's pace and
     its gaps."""
     faults: dict[str, list[int]] = {}
     for th in doc["threads"]:

@@ -2,7 +2,7 @@
 prover's ``pub`` row is the verifier's own, give the member's verdicts (`EXPECT`): honest tied; carried, IoTieRequest
 accepting bucket 4 on an added carried field count whose row isn't the verifier's; forged and split, refused. The
 verifier's registered reads name every port, and the prover's ``pub`` and ``o0`` rows have its known roots exactly
-where the reference accepts. Each witness row is whole u16 words, and the scan's blobs are the warden's held cells and the rows' salts, never an empty
+where the reference accepts. Each witness row is whole u16 words, and the scan's blobs are the certifier's held cells and the rows' salts, never an empty
 slot. ``--jobs`` is 1 unless given and 2 is refused, naming the rule (`n2_zk.ONE_SESSION`). Nothing here lowers or
 proves (`n2_tie_zk.prove` does, on a node)."""
 
@@ -52,7 +52,7 @@ def test_each_members_references_give_its_verdicts():
 
 def test_the_provers_known_rows_are_the_verifiers_exactly_where_the_reference_accepts():
     """Every port of the statement is one of the verifier's registered reads (Flock's `Registered.checkComplete`): its
-    file names ``wit`` at the warden's root and ``pub`` and ``o0`` at known content, and the prover's rows of those
+    file names ``wit`` at the certifier's root and ``pub`` and ``o0`` at known content, and the prover's rows of those
     (`n2_tie_zk.known`) have the verifier's roots exactly where its ``pub`` rows are the verifier's and every output
     word is 1, so Lean's registered reads refuse each window the reference refuses: carried's window 1 at ``pub``,
     forged's at ``o0``. The split's verifier has no lanes, so no file, and refuses without a Lean run."""
@@ -83,8 +83,8 @@ def test_the_served_class_is_one_window_of_60_buckets_of_one_4096_byte_cell_hone
     assert tz.T == 4 and tz.B == 512
 
 
-def test_a_warden_runs_release_is_its_cells_and_its_forged_row_is_the_registered_reads_to_refuse():
-    """`warden_link`'s reading of a network certifier's cells (`_released`) gives the release and prompt lengths the
+def test_a_certifier_runs_release_is_its_cells_and_its_forged_row_is_the_registered_reads_to_refuse():
+    """`certifier_link`'s reading of a network certifier's cells (`_released`) gives the release and prompt lengths the
     network certifier's own ingress served, and `forge`'s row, an id request of the same prompt length, keeps every
     output word 1 while the registered read refuses it, in its window alone."""
     tie = _tie()

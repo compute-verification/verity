@@ -516,7 +516,7 @@ def dechunked(raw: bytes) -> tuple[bytes, bytes]:
     return head, body
 
 
-def test_ids_answers_in_id_form_exactly_the_wardens_id_requests():
+def test_ids_answers_in_id_form_exactly_the_certifiers_id_requests():
     """`IdsProtocol.of`: itself for an id request in its P + 9-byte cells, with or without the network certifier's release
     headers (`release.with_release`); its base for anything else, the shim's rebuilt POST, an id request in other cells, or
     bytes that aren't a request."""
@@ -527,12 +527,12 @@ def test_ids_answers_in_id_form_exactly_the_wardens_id_requests():
     assert proto.PlainProtocol().of(id_request()).name == "plain"
 
 
-def test_under_ids_the_wardens_id_request_streams_raw_id_events_then_done(tmp_path):
+def test_under_ids_the_certifiers_id_request_streams_raw_id_events_then_done(tmp_path):
     """``--protocol ids`` on the network certifier's own id request (`active.id_request` in its P + 9-byte cells, offset 0, with the
     release headers the certifier adds) with the usage forced: the server sends no HTTP head, no chunking and no usage,
     each sampled id one event of P bytes, then ``data: [DONE]``, every byte as `TWO_IDS_AT_140` at P = 140. At the
     scan's P = 503 every P bytes are one id event, the cells the certifier makes of them, and the whole is what
-    warden_serve's id-form parser (`parse_id_response`) takes: `io_tie.id_event`s, then `io_tie.TRAILER`. A whole
+    certifier_tcp_serve's id-form parser (`parse_id_response`) takes: `io_tie.id_event`s, then `io_tie.TRAILER`. A whole
     response under ids is still the JSON one."""
     for payload in (140, proto.ID_PAYLOAD):
         ids = proto.IdsProtocol(True, payload=payload, base=proto.PlainProtocol(True))

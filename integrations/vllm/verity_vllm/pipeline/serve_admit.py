@@ -13,7 +13,7 @@ order of its run (the certifier's ``Proxy.requests_released`` before the release
 released request numbered, a request a fault drops before its release unnumbered. With ``x-verity-release-run: ID`` (the
 certifier run's id, hex) the numbering is per run: a new ID starts a new order at 0, and what the old run still held is
 forwarded at once. The network certifier copies both onto the POST it sends the endpoint (`benchmarks/network_traces/
-active_replay.LiveServer`, and `warden_serve.py serve --watermark` beside it). The network certifier also sends
+active_replay.LiveServer`, and `certifier_tcp_serve.py serve --watermark` beside it). The network certifier also sends
 ``x-verity-release-bucket: A``, the release's bucket counted from 0 at the run's origin, and the watermark: one
 ``POST /verity/watermark`` a run, naming it, whose chunked body has the line ``t n`` (`watermark_line`) once bucket t has
 closed, the releases of buckets up to t being exactly those numbered below n; its end ends the run.
