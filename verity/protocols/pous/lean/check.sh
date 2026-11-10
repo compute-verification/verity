@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Acceptance check: the grader and the security analysis (`Security`, where PoUS's trusted layer and proofs are)
+# Acceptance check: the grader and the security analysis (`security`, where PoUS's trusted layer and proofs are)
 # build and pass Verity's Lean audit (`tools/verity/lean/check.py --fresh`), and the grader passes the positive control
 # and rejects each negative control for the stated reason. Prints ALL CHECKS PASSED.
 set -uo pipefail
 cd "$(dirname "$0")"
-security=$(cd ../../../../Security && pwd)
+security=$(cd ../../../../security && pwd)
 export PATH="$HOME/.elan/bin:$PATH"
 fail() { echo "CHECK FAILED: $1" >&2; exit 1; }
 
