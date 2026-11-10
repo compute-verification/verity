@@ -24388,3 +24388,32 @@ I read `r20261110-035207-f632`'s own log.
 - **Tell me if you'd rather not use `witnesses_assumed`.** Today it holds only `Claims.ExpectedCR`, a computational assumption. `ExpertReadAccepted` is a fact about code that is to be proved; until then the honest witness takes it as it stands. The only other route is proving `check 256 3072 (readTmpl 256 3072)` in Lean. That runs every part's generator at H = 3072, which is the discharge sub-issue's work, not tonight's.
 
 Next: the rerun's id, node and ETA, in my next entry.
+
+## ACCOUNTD, Tue 10 Nov 05:13Z: #8139 re-marked at `977eadc709` with its build run; R8 refuses scan_zk's honest round, which needs your call
+
+- **First: R8 refuses `scan_zk`'s honest round.** Lean and Python agree (`r20261110-050536-b418`, cpu-1). The refusal is `R8-shared-input` on the scan root's Input `prog`, the slot entries, at F = 1. `prog` has one row a boundary, which `EVERY` consecutive scan units read, and its rows are other proof blocks' outputs (the anchored Programs' `SlotEntry_v1` units, or the block round's stand-in). That is exactly the read R8 refuses. So `test_scan_zk_challenger.py::test_the_honest_round_on_a_local…` fails on the R8 branch, and the R8 PR can't be marked while it does. There are three ways out:
+  - (a) R8 lets through a run Input that the verifier names as tied, by a later check, to the registrations that computed it (`NetworkCheck.Period`'s `progTied` and `wired`), the way `registered` names held values. The scan's F stays 1, and the period check must charge a slot entry's fan-out, `EVERY` scan units, unless it already does.
+  - (b) The scan gives each unit its own `prog` row (G·T·NR leaves, not nb·NR). That changes `slot_entries` and the period check's `progTied`: the network lane's statements.
+  - (c) F counts the proof blocks that read one run Input's leaves, instead of R8 refusing them. That is wrong here: a wrong slot entry is the block round's wrong block, not the scan's. It would also make a broadcast weight's F the batch size.
+  - I'd take (a). It is mine to build (a `tied` list beside `registered`, in Python and Lean), but the period check's side is the network lane's. Say which, and who checks the period side.
+- **#8139:** head `977eadc709` (three commits on `c18258bd69`), marked. The records gate is passed by `r20261109-235820-58ba` on its Lean inputs. The body now names `Stream.seed_salt_released` and says that `a5.py --challenger`, `scan_zk.py` and `two_stage/audit.py` refuse every window until #8197.
+  - Build run `r20261110-045746-cc31` (cpu-1): `whole_run.sh run toy 146` builds `whole-run-time` (446 jobs), and the run accepts, every step timed, `seedSalt` among them.
+  - Where I differ from the reviewer: not in substance, but the fix took three commits, not one:
+    - point 1 needs `IO.ofExcept`, because `seedSaltOf` returns `Except`;
+    - line 86 was broken too, by `main`'s stratified rate law (`Rule.over` takes `Select.strataSizes`, then `Rule.tableOver`);
+    - `whole_run.py` registered a fixed-count law that a rule no longer names. It now registers `stratified-rate:1/N`, one draw per stratum.
+    The first build, `r20261110-044925-7dca`, built and then stopped in `whole_run.py`. Point 3 is done.
+  - No other caller of `Registration.check` was missed. In Lean, `OneStage.check`, `Run.run` (twice), the `registration` piece, `whole_run` and the Security proofs all pass the salt; `SiteDifftest.lean`'s `check` is `Core.Site.Registration.check`. In Python outside the suites, `benchmarks/one_stage/replay.py` (twice) and `benchmarks/pouw/served_zk/served_commit.py` pass no window root, so no salt is the only value they can pass.
+  - It conflicts with `next` (`pous/lean/TRUSTED.sha256`, `test_difftest.py`) and merges cleanly onto `main` at `7af4d24fca`.
+- **#8462 can't be marked yet.** `aee0` passed (verity-cli at `136775b028`), but the ready mark is refused for three reasons: it contains #8405's head `ca7d59c951`, which isn't marked; it conflicts with `next` in `benchmarks/spot_figures` (#8360's files); and no Security records pass exists on its Lean inputs. #8405 has not moved since 03:24Z.
+- **R8 PR: #8539** (`cursor/proofs-accountd-6a92`, head `83b79cf191`), opened and unmarked. It is linked to PRF-477, whose goal label is `proofs/spot-128k-attention-proved`; the body says `proofs/spot-post-ready`, as you asked.
+  - `2475` failed on two R7 projections in `Security/Proofs/Properties/Spot.lean` that now end in `∧ R8 v`. They are fixed in `e452bf5fe5`.
+  - Its rerun, `r20261110-044800-6327` (cpu-12, proofs Lean slot p1), passed all three tries on the standard axioms and is in the spot records step, ETA about 06:15Z.
+  - The other `c80d` failures pass in `r20261110-050033-0f30`: the difftest's hard-coded outputs, `held_gates` on a v0 record's decoded program, and two history tests. In the second history test, R8 now refuses a v1 record whose shared `W` no verifier holds, which I took as intended.
+- **Dates:**
+  - Tue 12:00Z is met: the Python refusal and the published F are pushed.
+  - Wed 12:00Z: the Lean tries pass, and the records come with 6327.
+  - The mark waits on your scan call.
+  - The 03:44Z fields are in my 12:00Z report.
+
+Next: 6327's records, then the suites at the new head.
