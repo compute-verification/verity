@@ -1,5 +1,35 @@
 # The inference-only policy
 
+## Interface
+
+The inference-only policy's check, in Lean only. This directory is `lean/` and this file: it has no Python package
+and no console script.
+
+- **Lean**: `lean/` is the Lake package `nci_check`, whose library `NciCheck` the packages at
+  `verity/protocols/certifier/verifier/lean`, `verity/composite/verifier/onsite`, `verity/composite/verifier/remote`
+  and `security/Properties` require by path.
+- **Commands** (`lake exe`, in `lean/`):
+  - `inference-only id | check PARAMS COMMITMENT EVIDENCE | serve`: the core protocol `verity/inference-only/v0`,
+    which both composites compose;
+  - `nci-check [--unrolled] INSTANCE TRUSTED`, or with `--policy [--unrolled] INSTANCE` or
+    `--count [--detail] INSTANCE`: the verdict on one instance, as JSON on stdout. `benchmarks/verifier_cost` builds
+    and runs it;
+  - the difftests: `nci-difftest INSTANCES PYTHON N`, `nci-desc-difftest INSTANCES EXPANDED PYTHON N`,
+    `nci-baseline-difftest CASES EXPANDED PYTHON N`, `nci-count-difftest INSTANCES DETAIL PUBLIC N`,
+    `nci-desc-liveness CASES N` and `nci-desc-fuzz PROGRAMS N`.
+- **Scripts**: `lean/scripts/nci_reference.py`, the check's Python reference, loaded by path by the tests of
+  `integrations/vllm`, by `workloads/lifecycle` and by `benchmarks/verifier_cost`; and the difftests' generators,
+  `python scripts/NAME.py CHECKOUT --out DIR`, as `lean/lean-audit.json` runs them (`runs`). The tests of
+  `verity/flock/prover` load `desc_difftest_vectors.py` by path.
+- **Documents**: it reads registration records (`verity/registration/v2`), which `integrations/vllm` writes as the
+  check's trusted input. A case and its answer under `verity/inference-only/v0` are one subprotocol's in a
+  composite's case, as `benchmarks/one_stage/composite.py` reads them.
+- **Loads from**: the packages at `verity/flock/verifier` and its `interface`, and nothing of the certifier.
+- **Not here**: its tests. They are in the suite `verity/protocols/certifier/verifier/network`, with the tests of
+  the certifier's Lean check (`test_nci_*.py` and `test_inference_only_protocol.py` in its `tests/`).
+
+## Overview
+
 The inference-only policy asks that the registered circuit D have an inference-block partition 𝓘: blocks with gate
 budget c (at most c gates each) and fresh-input budget k (at most k bits of fresh input each), where fresh input is
 every value outside the registered information θ, the models, code and data fixed before the monitoring period. It is
