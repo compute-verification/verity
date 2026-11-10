@@ -121,6 +121,8 @@ class Snapshot:
                                    # error that ran out of attempts on two or more nodes, as an outage's do
     launch_tries: int = 3          # readings of launch-only infra (`Failed.launch`) on one candidate before it is handled
                                    # as any other infra: a tree that keeps its own launch from registering is found then
+    left: tuple[tuple[int, str, str], ...] = ()  # each other open PR into `main`, as (number, head, why the queue doesn't
+                                   # take it now): what a candidate's drop for a member that left `ready` says
 
 
 @dataclass(frozen=True)
@@ -333,13 +335,14 @@ def _chain(s: Snapshot, ready: dict[int, Ready], acts: list[Action]) -> tuple[li
 
     chain: list[Candidate] = []
     below: set[int] = set()
+    untaken = {n: (head, why) for n, head, why in s.left}
     top = s.main
     while on := [c for c in above.get(top, ()) if c.sha not in done]:
         keep = min(on, key=lambda c: (_ranks(c, ready), c.sha))
         for c in on:
             if c is not keep:
                 drop(c, f"a second candidate on {top[:12]}: {keep.sha[:12]}'s members come first in rank")
-        if why := _stale(keep, ready, below):
+        if why := _stale(keep, ready, below, untaken):
             drop(keep, why)
             break
         done.add(keep.sha)
@@ -361,15 +364,24 @@ def _ranks(c: Candidate, ready: dict[int, Ready]) -> list[tuple[int, int, int]]:
     return sorted((0, ready[m].rank, m) if m in ready else (1, 0, m) for m in c.members)
 
 
-def _stale(c: Candidate, ready: dict[int, Ready], below: set[int]) -> str | None:
+def _stale(c: Candidate, ready: dict[int, Ready], below: set[int], untaken: dict[int, tuple[str, str]]) -> str | None:
+    """Why ``c`` leaves the chain, naming its first member's cause: a new head (and, untaken, why: ``untaken``, by number,
+    is `Snapshot.left`), the queue no longer taking it and why, its PR no longer open into `main`, or a candidate below it
+    holding it too; None while no member has one."""
     for m, h in zip(c.members, c.heads):
-        r = ready.get(m)
-        if r is None:
-            return f"#{m}'s ready mark was withdrawn"
-        if r.head != h:
-            return f"#{m}'s head moved from {h[:12]} to {r.head[:12]}"
-        if m in below:
-            return f"#{m} is in a candidate below it too"
+        if (r := ready.get(m)) is not None:
+            if r.head != h:
+                return f"#{m}'s head moved from {h[:12]} to {r.head[:12]}" + (
+                    ", which doesn't merge onto `main`" if r.conflict else "")
+            if m in below:
+                return f"#{m} is in a candidate below it too"
+            continue
+        if m not in untaken:
+            return f"#{m} isn't an open PR into `main` now"
+        head, why = untaken[m]
+        if head != h:
+            return f"#{m}'s head moved from {h[:12]} to {head[:12]}, which isn't taken: {why}"
+        return f"#{m} isn't taken now: {why}"
     return None
 
 

@@ -19,7 +19,9 @@ its merge), not on `main` yet, ranked by drive's priority file then mark time, e
 is its change against its merge base with `main`, `lean` drive's Lean-change test (`queue.lean_change`) of a change that
 compiles (a lock's alone doesn't), and `conflict` whether `Queue._merge` merges it onto `main`, kept by (head, `main`).  The
 owner of one that doesn't is told once a head the files it conflicts in, to rebase it onto `main` and mark the new head
-(`Loop._conflicts`); its mark stays.
+(`Loop._conflicts`); its mark stays.  `left` is why each other open PR into `main` isn't ready (`World.ready`: the queue's
+word on it, a withdrawn mark's author, a hold and by whom, no land verdict, the freeze), which a candidate's drop for a member
+no longer ready names (`vqueue._stale`).
 `candidates` are the loop's own builds: each of origin's `queue/<sha12>` branches at the sha a build line of the log names
 (the window's, else the whole log's, which its other lines are then read from too), with that line's base and members, lowest
 first; any other `queue/*` branch is no candidate, and is logged once (`ignore`).  `now` is the clock, `lean` and `pending_s`
@@ -579,8 +581,10 @@ class World:
         #: and the graph graph2 listed of each check read (`_listing`)
         self._theirs: dict[str, dict | None] | None = None
         self._listed: dict[str, tuple[str, dict] | None] | None = None
-        #: what the last `ready` read: {number: the PR at its ready head}
+        #: what the last `ready` read: {number: the PR at its ready head}, and {number: (head, why it isn't ready)} of each other
+        #: open PR into `main`
         self.prs: dict[int, PR] = {}
+        self.left: dict[int, tuple[str, str]] = {}
 
     def log(self, text: str) -> None:
         self.q.log(text)
@@ -642,18 +646,23 @@ class World:
 
     def ready(self, main: str) -> list[Ready]:
         """The open PRs drive would land from `next` now, as `vqueue.Ready`: a move PR as any other, built by its merge, but
-        only with a land verdict, never under the low-risk rule."""
+        only with a land verdict, never under the low-risk rule.  Why each other open PR into `main` isn't one goes to `left`:
+        the queue's word on one it doesn't admit (`Entry.why`; a withdrawn mark's author), else a hold and by whom, no land
+        verdict, the freeze, or an untaken PR whose head it holds."""
         q, labels = self.q, self.labels
         prs = [p for p in self.open().values() if p.base == "main"]
         if missing := [p for p in prs if p.head in self._missing(p.head for p in prs)]:
             q._remote(self.repo, *QUIET, "fetch", "-q", "--no-tags", "--no-write-fetch-head", "origin",
                       *(f"+refs/pull/{p.number}/head:{NS}/pr/{p.number}" for p in missing))
         gone = self._missing(p.head for p in prs)
-        prs = [p for p in prs if p.head not in gone and not self._ancestor(p.head, main)]
+        left = {p.number: (p.head, "its head can't be fetched" if p.head in gone else "its head is on `main`")
+                for p in prs if p.head in gone or self._ancestor(p.head, main)}
+        prs = [p for p in prs if p.number not in left]
         labels.prefetch([(p.number, p.head) for p in prs])
         old = _git(self.repo, "rev-parse", "-q", "--verify", f"{CHECKED}^{{commit}}", check=False).stdout.strip()
         entries = q.entries(prs, q.load_state(), base=main, landed=main, queued=main, open_numbers=set(self.open()),
                             old_landed=old or None)
+        left.update((n, (e.pr.head, self._unadmitted(e.pr, e.why))) for n, e in entries.items() if e.state != "ready")
         flags = flags_at(self.repo, main)
         excludes = tuple(flags.lowrisk_excludes) if flags.lowrisk_lane else ()
         self._files = {k: v for k, v in self._files.items() if k[1] == main}
@@ -664,23 +673,31 @@ class World:
             took = []
             for n in admitted:
                 p, reviews = entries[n].pr, labels.reviews(n, entries[n].pr.head)
-                landing = unreviewed(reviews, review_owners(q, labels, n, p.head, p.owner, self.open())) is None
+                why = unreviewed(reviews, review_owners(q, labels, n, p.head, p.owner, self.open()))
                 held = (unreviewed(reviews, ()) or "").startswith("held")
-                if landing or not p.move and not held and lowrisk(files[n], excludes):
+                if why is None or not p.move and not held and lowrisk(files[n], excludes):
                     took.append(n)
+                elif held:
+                    left[n] = (p.head, why)
+                else:
+                    left[n] = (p.head, f"{why}, and " + ("a move lands only with one" if p.move else "it isn't low-risk"))
             specs, clears = self._frozen()
             if specs:                                       # a PR's own change: above `checked` while `main` doesn't hold it
                 below = old if old and not self._ancestor(old, main) else main
-                took = [n for n in took if self._cleared(n, entries[n].pr.head, clears)
-                        or not self._frozen_out(below, entries[n].pr, specs)]
+                frozen = [n for n in took if not self._cleared(n, entries[n].pr.head, clears)
+                          and self._frozen_out(below, entries[n].pr, specs)]
+                left.update((n, (entries[n].pr.head, f"it waits for the freeze to end ({self.frozen_file})")) for n in frozen)
+                took = [n for n in took if n not in frozen]
             new = any((entries[n].pr.head, main) not in self._judged for n in took)
             with base_drivers(self.repo, main) if new else contextlib.nullcontext(None) as cfg:   # once a tick, not a PR
                 chosen = {n: (files[n], *j)
                           for n, j in zip(took, pool.map(lambda n: self._judge(main, entries[n].pr.head, cfg), took))}
         # a land verdict covers its PR's own change: a PR holding the head of an admitted PR that isn't taken (no land verdict
         # there, or held) would carry that change unreviewed, unless the head landed on `checked` under drive's rules
-        while out := {n for n in chosen for a in entries[n].after if a in entries and entries[a].state == "ready"
+        while out := {n: a for n in chosen for a in entries[n].after if a in entries and entries[a].state == "ready"
                       and a not in chosen and not (old and self._ancestor(entries[n].held[a], old))}:
+            left.update((n, (entries[n].pr.head, f"it holds {entries[n].holds(a)}, which isn't taken"
+                                                 + (f": {left[a][1]}" if a in left else ""))) for n, a in out.items())
             chosen = {n: v for n, v in chosen.items() if n not in out}
         first = {n: i for i, n in enumerate(priority_list(self.priority_file) if self.priority_file else ())}
         # a stack lands its bases first, ranked or not: a PR the priority file names ahead of PRs whose heads its own holds
@@ -698,8 +715,16 @@ class World:
 
         for n in order:
             place(n)
-        self.prs = {n: entries[n].pr for n in chosen}
+        self.prs, self.left = {n: entries[n].pr for n in chosen}, left
         return [Ready(n, entries[n].pr.head, *chosen[n][:2], rank=i, conflict=chosen[n][2]) for i, n in enumerate(placed)]
+
+    def _unadmitted(self, p: PR, why: str) -> str:
+        """Why the queue doesn't admit ``p`` (``why``, its `Entry.why`), with a withdrawn mark's author: one at its head that
+        `ready` read and that isn't `true`."""
+        if not why.startswith("not marked ready"):
+            return why
+        by = self.q.marked_by(p.number, p.head) if self.q.marked_by is not None else None
+        return f"its ready mark was withdrawn by {by}" if by else "it isn't marked ready"
 
     def _frozen(self) -> tuple[list[str], list[tuple[str, str]]]:
         """The freeze's pathspecs and its `cleared-by` (handle, label key) pairs (`FROZEN`): none while its file is absent."""
@@ -1531,12 +1556,14 @@ class Loop:
         origin = w.fetch()
         main = self._shadow_main(past, origin) if self.shadow else origin
         ejected = {(r.get("number"), (r.get("heads") or [None])[0]): r.get("at") for r in past.of("eject") if r.get("shadow")}
-        ready = []
+        ready, out = [], {}
         for x in w.ready(main):
             at = ejected.get((x.number, x.head))
             if at is not None and not (w.labels.marked_at(x.number, x.head) or "") > at:
+                out[x.number] = (x.head, "the shadow ejected it at this head, and it isn't marked ready since")
                 continue
             ready.append(x)
+        left = {**w.left, **out}
         refs, builds, whole = w.refs(), past.builds(), past
         if older := {sha for name, sha in refs.items() if name == sha[:12] and sha not in builds
                      and (name, sha) not in past.ignored()}:                # past the window: read the whole log for them
@@ -1577,7 +1604,8 @@ class Loop:
         cands.sort(key=lambda c: (height(c.sha), c.sha))       # each after the candidate it is built on
         history = past.history((lambda sha: bool(sha) and w._ancestor(sha, main)) if self.shadow else None)
         snap = Snapshot(main, tuple(sorted(ready, key=lambda x: x.rank)), tuple(cands), history, self.batch, self.depth,
-                        lean=self.lean, now=self.now(), pending_s=self.pending_s, tree_ejects=self.tree_ejects)
+                        lean=self.lean, now=self.now(), pending_s=self.pending_s, tree_ejects=self.tree_ejects,
+                        left=tuple((n, *left[n]) for n in sorted(left)))
         return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0])
 
     def _shadow_main(self, past: Past, origin: str) -> str:

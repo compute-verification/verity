@@ -344,11 +344,13 @@ def test_a_move_pr_with_a_land_verdict_is_built_by_its_merge_and_advances_main_a
 def test_a_move_pr_without_a_land_verdict_is_not_built_even_where_the_low_risk_rule_builds_another_on_its_mark(env, lowrisk):
     if lowrisk:
         _main_to(env, {Q.DRIVE_FLAGS: 'lowrisk_excludes = ["*.lean"]\n'})
-    env.put(1, {"a.txt": "1\n"})
-    _move(env, 2, {"c.txt": None, "moved/c.txt": "c\n"})
+    one = env.put(1, {"a.txt": "1\n"})
+    two = _move(env, 2, {"c.txt": None, "moved/c.txt": "c\n"})
     env.labels.reviews = lambda n, head: []                     # both marked ready, neither reviewed
-    recs = env.loop(policy).tick()
+    recs = (loop := env.loop(policy)).tick()
     assert [r["members"] for r in recs if r["action"] == "build"] == ([[1]] if lowrisk else []), recs
+    assert loop.world.left == {**({} if lowrisk else {1: (one, "no land verdict, and it isn't low-risk")}),
+                               2: (two, "no land verdict, and a move lands only with one")}, loop.world.left
 
 
 @pytest.mark.parametrize("shadow", [False, True])
@@ -413,6 +415,51 @@ def test_shadow_logs_advance_eject_ring_and_messages_and_moves_no_main_label_or_
     assert loop.tick() == []                                    # #3 stays out until marked again
     assert env.main() == main and env.withdrawn == [] and env.posts == [] and (3, three) in env.o.gh.ready
     assert all(r["shadow"] for r in env.lines()) and _acts(env.lines()) == ["build", "advance", "drop", "build", "eject", "drop"]
+
+
+@pytest.mark.parametrize("how", ["held", "withdrawn", "unmarked head", "conflicting head"])
+def test_a_candidate_whose_member_left_the_ready_list_is_dropped_saying_why(env, how):
+    """The drop names what took the member off the ready list: a hold and by whom, its mark withdrawn and by whom, or a new
+    head and why that isn't taken, never a withdrawn mark for each."""
+    base = env.main()
+    _main_to(env, {"c.txt": "main\n"})
+    one = env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"b.txt": "2\n"})
+    by: dict[tuple[int, str], str] = {}
+    env.labels.marked_by = lambda n, h: by.get((n, h))         # the author of a `ready` label `ready` read that isn't true
+    loop = env.loop(vqueue.decide)
+    (built,) = loop.tick()
+    assert built["members"] == [1, 2], built
+    new = one
+    if how == "held":
+        env.labels.held.add(1)
+    elif how == "withdrawn":
+        env.o.gh.ready.discard((1, one))
+        by[(1, one)] = "top"
+    elif how == "unmarked head":
+        env.o.gh.put(1, new := env.o.change({"a.txt": "1b\n"}), ready=False)
+    else:
+        env.o.gh.put(1, new := env.o.change({"c.txt": "1\n"}, base=base))
+    recs = loop.tick()
+    want = {"held": "#1 isn't taken now: held by reviewer (no reason)",
+            "withdrawn": "#1 isn't taken now: its ready mark was withdrawn by top",
+            "unmarked head": f"#1's head moved from {one[:12]} to {new[:12]}, which isn't taken: it isn't marked ready",
+            "conflicting head": f"#1's head moved from {one[:12]} to {new[:12]}, which doesn't merge onto `main`"}[how]
+    assert [(r["sha"], r["why"]) for r in recs if r["action"] == "drop"] == [(built["sha"], want)], recs
+    assert [r["members"] for r in recs if r["action"] == "build"] == [[2]], recs
+
+
+def test_a_candidate_holding_a_pr_the_shadow_ejected_is_dropped_saying_so(env):
+    """A shadow's eject leaves the mark, so the PR stays out until marked again: a candidate still holding it (its drop cut
+    off) is dropped for that eject, not for a withdrawn mark."""
+    three = env.put(3, {"c.txt": "3\n"})
+    loop = env.loop(vqueue.decide, shadow=True)
+    (built,) = loop.tick()
+    with env.log.open("a") as f:
+        f.write(json.dumps({**built, "action": "eject", "sha": None, "number": 3, "heads": [three]}) + "\n")
+    (drop,) = loop.tick()
+    assert (drop["action"], drop["sha"], drop["why"]) == (
+        "drop", built["sha"], "#3 isn't taken now: the shadow ejected it at this head, and it isn't marked ready since"), drop
 
 
 def test_a_dry_run_prints_the_snapshot_and_the_actions_and_writes_nothing(env):
@@ -1034,9 +1081,9 @@ def test_a_pr_the_priority_file_names_ahead_of_prs_its_head_holds_lands_after_th
     ready = {r.number: r for r in w.ready(env.main())}
     assert list(ready) == [1, 2, 3]                                   # #2 ranked first still goes after #1
     flying = vqueue.Candidate(sha="c" * 40, base=env.main(), members=(1,), heads=(one,))
-    assert vqueue._stale(flying, ready, set()) is None                # a candidate holding #1 stays
+    assert vqueue._stale(flying, ready, set(), w.left) is None        # a candidate holding #1 stays
     prio.write_text("1\n2\n")
-    assert [r.number for r in w.ready(env.main())] == [1, 2, 3]
+    assert [r.number for r in w.ready(env.main())] == [1, 2, 3] and w.left == {}
 
 
 def test_a_head_landed_on_the_old_paths_checked_holds_its_holders_back_from_nothing_but_still_lands_first(env):
@@ -1074,14 +1121,16 @@ def test_a_pr_holding_a_marked_pr_that_isnt_taken_waits_for_it_so_it_carries_no_
     """A land verdict covers its PR's own change: a PR stacked on a marked PR that is held, or has no land verdict, isn't
     taken until that one is, else it would carry that change onto `main` under its own land."""
     one = env.put(1, {"a.txt": "1\n"})
-    env.o.gh.put(2, env.o.change({"b.txt": "2\n"}, base=one))
+    env.o.gh.put(2, two := env.o.change({"b.txt": "2\n"}, base=one))
     env.labels.held.add(1)
     loop = env.loop(lambda s: [])
     w = loop.world
     loop.tick()
     assert [r.number for r in w.ready(env.main())] == []
+    held = "held by reviewer (no reason)"
+    assert w.left == {1: (one, held), 2: (two, f"it holds #1's head {one[:12]}, which isn't taken: {held}")}, w.left
     env.labels.held.discard(1)
-    assert [r.number for r in w.ready(env.main())] == [1, 2]
+    assert [r.number for r in w.ready(env.main())] == [1, 2] and w.left == {}
 
 
 def test_a_pr_renaming_or_deleting_under_a_frozen_path_waits_while_the_freeze_lasts_and_an_edit_there_doesnt(env):
@@ -1096,6 +1145,7 @@ def test_a_pr_renaming_or_deleting_under_a_frozen_path_waits_while_the_freeze_la
     (frozen := env.tmp / "frozen").write_text("# until remote lands\na.txt\nb.txt\n:(glob)**/x.py\n")
     w.frozen_file = frozen
     assert [r.number for r in w.ready(env.main())] == [2, 3]
+    assert w.left == {1: (env.o.gh.prs[1].head, f"it waits for the freeze to end ({frozen})")}, w.left
     assert sum("#1 at" in x and "waits for the freeze to end" in x for x in env.out) == 1, env.out
     w.ready(env.main())
     assert sum("#1 at" in x and "waits for the freeze to end" in x for x in env.out) == 1, env.out    # once a head
@@ -2081,8 +2131,8 @@ def test_a_run_beside_still_launching_when_its_candidate_is_dropped_is_cancelled
     (settled,) = loop.tick()
     assert (settled["action"], settled["sha"], settled["dropped"], settled["record"]["ids"]) == ("slim", sha, True, registered)
     assert "launch" not in settled["record"]
-    assert env.cancelled == ([(registered, f"vqueue: candidate {sha[:12]} was dropped: #1's ready mark was withdrawn")]
-                             if registered else [])
+    withdrawn = f"vqueue: candidate {sha[:12]} was dropped: #1 isn't taken now: its ready mark was withdrawn by lane-1"
+    assert env.cancelled == ([(registered, withdrawn)] if registered else [])
     assert settled.get("beside_cancelled") == (registered or None) and loop.tick() == []
     again = env.loop(vqueue.decide, clone="again", slim=slim)
     again.world.slim_driver = lambda: "drive"
@@ -2098,7 +2148,8 @@ def test_a_dropped_candidate_s_run_beside_its_check_is_cancelled_while_it_runs_a
     env.o.gh.ready.discard((1, built["heads"][0]))                  # its ready mark withdrawn: dropped
     (drop,) = loop.tick()
     assert (started["action"], drop["action"], drop["beside_cancelled"]) == ("slim", "drop", ["run-1"])
-    assert env.cancelled == [(["run-1"], f"vqueue: candidate {built['sha'][:12]} was dropped: #1's ready mark was withdrawn")]
+    assert env.cancelled == [(["run-1"], f"vqueue: candidate {built['sha'][:12]} was dropped: #1 isn't taken now: its ready "
+                                         "mark was withdrawn by lane-1")]
     env.put(2, {"b.txt": "2\n"})
     two, _ = loop.tick()
     keys = env.listed(two["sha"], {"pytest:b": ["b.txt"]})
