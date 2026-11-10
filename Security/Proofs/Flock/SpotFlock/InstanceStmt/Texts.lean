@@ -30,7 +30,7 @@ import all Init.Data.Repr
 import all Init.Data.Nat.Fold
 import all Init.Data.Array.Attach
 
-/-! # The two-instance statement's coins, sample header, canonical texts and hello
+/-! # The two-instance statement's canonical texts and hello
 
 `setup_stX` takes as hypotheses the texts `canon` and `canonUtf8` write for the header's units (`hu1`, `hu2`), the
 public file's header (`hd`), the sample's header `hdrD` (`hd2`) and the identity (`hid`), and the hello (`hhello`). Each
@@ -46,15 +46,6 @@ open FlockDeploy.Concrete (IntJ canon_eq canonUtf8_eq canon_ok ok_of_isOk canon_
 open Lean (Json)
 
 namespace SpotFlock.InstanceStmt
-
-/-- The coins `Read.setup` hands the statement: the keyed coin tree of its one table. -/
-abbrev coinsX : Coins := .tree (Zk.coinSpec (t0.tableNames 1))
-
-/-- The drawn statement's header, as `HmRow.drawn` writes it at `drawJ`: the population's, with the sample, one instance
-of the two, and the drawn instance's units. -/
-def hdrD (r : Run) (c : Circuit) (circ cls : String) : Json :=
-  ((((hdrJ r circ cls).setObjVal! "unit_draw" drawJ).setObjVal! "instances" (Lean.toJson (1 : Nat))).setObjVal!
-    "population" (Lean.toJson (2 : Nat))).setObjVal! "units" (HmRow.unitsEntry { c with outPorts := #[] } #[0])
 
 theorem hCe_of (m : ByteArray) : (Sha512.hash m).isEmpty = false := by
   simp [ByteArray.isEmpty, Sha512.hash_size]

@@ -18,7 +18,7 @@ table, of
   two members of the primitive `T_v1`. The statement carries no program, so the verifier takes the partition's units
   as stated, as it does for any session without `--program`: `Program.decode`, which derives them, keys its tables by
   `String.hash`, which the kernel does not evaluate;
-* the draw (`drawJ`): unit 0 of the two;
+* the draw (`drawJ`): unit 0 of the two, and the header the verifier writes for the drawn statement (`hdrD`);
 * the registered reads (`regJ`): `i0` and `o0` at one leaf each, which both units read.
 
 Every registered root is its one leaf: the zero row's `b ‖ c` under its value's domain (`regRoot`). The circuit file's
@@ -48,6 +48,9 @@ def ja (l : List Json) : Json := .arr l.toArray
 
 def t0 : Tags := Tags.circuit
 def tz : Tags := Zk.tags t0 14 1
+
+/-- The coins `Read.setup` hands the statement: the keyed coin tree of its one table. -/
+abbrev coinsX : Coins := .tree (Zk.coinSpec (t0.tableNames 1))
 def NAME : String := "verity/flock-circuit"
 
 /-- The input row: 1,024 bits, one compression before its last block. -/
@@ -185,6 +188,12 @@ def pubOf (r : Run) (circ cls : String) : ByteArray := (printJson (hdrJ r circ c
 /-! ## The draw and the registered reads -/
 
 def drawJ : Json := Json.mkObj [("k", jn 1), ("law", js "subset"), ("population", jn 2), ("units", ja [jn 0])]
+
+/-- The drawn statement's header, as `HmRow.drawn` writes it at `drawJ`: the population's, with the sample, one instance
+of the two, and the drawn instance's units. -/
+def hdrD (r : Run) (c : Circuit) (circ cls : String) : Json :=
+  ((((hdrJ r circ cls).setObjVal! "unit_draw" drawJ).setObjVal! "instances" (Lean.toJson (1 : Nat))).setObjVal!
+    "population" (Lean.toJson (2 : Nat))).setObjVal! "units" (HmRow.unitsEntry { c with outPorts := #[] } #[0])
 
 /-- A registered value's one-leaf root: its leaf, the zero row's under its domain. -/
 def regRoot (dom bc : ByteArray) : ByteArray := fLeaf dom 0 bc

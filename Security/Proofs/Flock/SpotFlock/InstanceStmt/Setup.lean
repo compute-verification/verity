@@ -2,7 +2,6 @@ module
 
 public import Proofs.Flock.SpotFlock.InstanceStmt.Partition
 public import Proofs.Flock.SpotFlock.InstanceStmt.File
-public import Proofs.Flock.SpotFlock.InstanceStmt.Texts
 import Flock.HmRow
 import Flock.HmNets
 import Flock.Canon
