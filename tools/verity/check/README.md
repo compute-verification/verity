@@ -225,8 +225,11 @@ it loads, with its controls' fixtures), and a lock the export ships is one it re
 (`tools/verity/lean/README.md`). It
 never rewords a lock: one whose kept text holds lane text, or names a declaration, a module or a path it leaves out, refuses
 the export by file, section and entry until the lock is reworded, unless the boundary lists it as known residue
-(`[[residue]]`); with `--build` (a node's work: `research run`), each Lake package's `lake build`, the workspace's
-`uv sync` and the licenses of what they fetched. It publishes nothing.
+(`[[residue]]`); with `--records` (a node's work: `research run`), the exported tree's own Lean check writes its locks'
+records from a build of that tree, the export refuses a lock that then states a guarantee or a premise otherwise than the
+lock it comes from, and it lists as unstated a public statement whose theorem it leaves out; with `--build` (a node's work
+too), each Lake package's `lake build`, the workspace's `uv sync` and the licenses of what they fetched. It publishes
+nothing.
 
 ## Settings
 

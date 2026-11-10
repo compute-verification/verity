@@ -2,6 +2,7 @@
 
     uv run tools/verity/check/public_export.py DEST                  # the public set into DEST, as one commit of fresh history
     uv run tools/verity/check/public_export.py DEST --build          # then build it: each Lake package, and the uv workspace
+    uv run tools/verity/check/public_export.py DEST --records        # then its own Lean check writes its locks' records
     uv run tools/verity/check/public_export.py DEST --report F.json  # the report as JSON too
     uv run tools/verity/check/public_export.py DEST --root DIR       # export another checkout (a worktree of `next`)
 
@@ -34,6 +35,13 @@ owner, an issue or a due date, so the Lean check reads it as an unowned lock; th
 loses them too (`rewrite_controls`). An entry that lists witnesses goes with a witness the export doesn't copy, and a runner's
 entry with a file of the command that writes its data. The export fails, naming them, on a kept entry that cites what it doesn't copy (a guarantee's premise), and on a lock it wrote that still
 names what no copied file has.
+
+A lock's records of what its modules declare are the whole tree's, and only a build of the exported tree knows the
+exported one's. With `--records` (a node's work: it builds every package) the exported tree's own Lean check writes them
+(`records`), and the export then holds each lock to the one it comes from: a guarantee or a premise the written lock states
+otherwise than its source refuses the export, by lock, entry and field (`public_lock.restated`). A statement of the public
+spec whose theorem the export leaves out is listed in the lock as unstated (`public_lock.unstated`), and the report names
+each. The commit holds the locks as written.
 
 A fetched fixture (an entry of `fixtures/artifacts.json` git doesn't track) that `public_boundary.toml`'s `fixtures` names
 ships as tracked files: the export fetches it into the checkout (`research data fetch-fixtures`) and copies its bytes, so the
@@ -1091,12 +1099,92 @@ def upstream_licenses(upstream: list[dict], scratch: Path) -> list[dict]:
     return out
 
 
+#: a failure of the Lean check that the export's records step answers by an entry (`public_lock.unstated`), with where its
+#: text names the statement
+UNSTATED = ("shape.unstated", re.compile(r"shape: (\S+) \("))
+
+
+def update_records(dest: Path, out: Path, log: Path) -> dict:
+    """The exported tree's own copy of the Lean check writing its locks' records from a build of that tree
+    (`check.py --all --update --build` in ``dest``, its reports under ``out``): a node's work. The check is standard
+    library alone, so it runs under this interpreter, with no environment of the source tree's."""
+    env = {k: v for k, v in os.environ.items() if k not in ("PYTHONPATH", "VIRTUAL_ENV")}
+    t0 = time.monotonic()
+    with log.open("a", encoding="utf-8") as f:
+        code = subprocess.run([sys.executable, str(dest / "tools" / "verity" / "lean" / "check.py"), "--all", "--root", str(dest),
+                               "--update", "--build", "--no-controls", "--no-replay", "--no-runs", "--out", str(out)],
+                              cwd=dest, env=env, stdout=f, stderr=subprocess.STDOUT).returncode
+    return {"exit": code, "seconds": round(time.monotonic() - t0, 1), "log": log.name}
+
+
+def records(root: Path, dest: Path, logs: Path, locks: list[str],
+            update: Callable[[Path, Path, Path], dict] = update_records) -> dict:
+    """The exported locks' records, written by the exported tree's own Lean check and held to the locks they come from.
+
+    The export drops entries from a lock and leaves the records the kept ones carry of the whole tree: what each module
+    declares that a guarantee reads, which only a build of the exported tree knows. So the exported check writes them
+    (``update``, `update_records`). An update settles every difference by recording it and refuses none, so afterwards
+    each guarantee and premise a lock of ``locks`` lists must be one the source lock under ``root`` lists, with the same
+    record but for the lane's fields (`public_lock.restated`): `ValueError`, naming each, when a public lock would
+    state one otherwise than the lock it comes from. A statement of the public spec that the update finds no guarantee
+    states (`UNSTATED`: its theorem is in a file the export leaves out) is listed as one, by the one reason the public
+    tree shows (`public_lock.unstated`). The export's commit then holds the locks as written here.
+
+    The result: the update's exit and log, per lock the statements listed as unstated, and per package the codes of the
+    failures the update left besides those, which the Lean check of the exported tree will still report."""
+    logs.mkdir(parents=True, exist_ok=True)
+    out = logs / "lean-update"
+    ran = update(dest, out, logs / "lean-update.log")
+    audit = out / "audit.json"
+    if not audit.is_file():
+        raise RuntimeError(f"public_export: the exported tree's Lean check wrote no {audit} (exit {ran['exit']}; its log: "
+                           f"{logs / ran['log']})")
+    restated = [f"{f}: {line}" for f in locks
+                for line in PUBLIC_LOCK.restated(json.loads((root / f).read_text(encoding="utf-8")),
+                                                 json.loads((dest / f).read_text(encoding="utf-8")))]
+    if restated:
+        shown = "; ".join(restated[:PUBLIC_LOCK.SHOWN])
+        raise ValueError(f"public_export: {len(restated)} place(s) where a lock the exported tree's check wrote states a "
+                         f"guarantee or a premise otherwise than the lock it comes from: {shown}"
+                         + (f"; and {len(restated) - PUBLIC_LOCK.SHOWN} more" if len(restated) > PUBLIC_LOCK.SHOWN else "")
+                         + ". The public lock never restates one: find what the export leaves out that the statement reads")
+    code, named = UNSTATED
+    unstated: dict[str, list[str]] = {}
+    left: dict[str, dict[str, int]] = {}
+    for rep in json.loads(audit.read_text(encoding="utf-8")).get("packages", []):
+        f = _norm(os.path.relpath(rep["package"], dest), LOCK)
+        fails = list(zip(rep.get("failure_codes") or [], rep.get("failures") or []))
+        names = []
+        for c, text in fails:
+            if c == code:
+                if (m := named.match(text)) is None:
+                    raise ValueError(f"public_export: {f}: a `{code}` failure of the exported tree's check names no "
+                                     f"statement where `UNSTATED` reads one: {text[:200]}")
+                names.append(m.group(1))
+        if names:
+            if f not in locks:
+                raise ValueError(f"public_export: {f}: the exported tree's check reports unstated statements for a lock "
+                                 f"the export didn't write")
+            lock = PUBLIC_LOCK.unstated(json.loads((dest / f).read_text(encoding="utf-8")), names)
+            (dest / f).write_text(LEAN_CHECK.text(lock), encoding="utf-8")
+            unstated[f] = sorted(set(names))
+        if rest := Counter(str(c) for c, _ in fails if c != code):
+            left[f] = dict(sorted(rest.items()))
+    git = ["git", "-c", "user.name=verity-export", "-c", "user.email=export@invalid", "-c", "commit.gpgsign=false"]
+    subprocess.run(["git", "add", "--", *locks], cwd=dest, check=True)
+    subprocess.run([*git, "commit", "-q", "--amend", "--no-edit", "--allow-empty"], cwd=dest, check=True)
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=dest, capture_output=True, text=True, check=True).stdout.strip()
+    return {"update": ran, "unstated": unstated, "left": left, "commit": head}
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="public_export", description=__doc__.split("\n\n")[0])
     p.add_argument("dest", type=Path, help="an absent or empty directory, outside the checkout")
     p.add_argument("--root", type=Path, default=PB.ROOT, help="the checkout to export (default: this one)")
     p.add_argument("--build", action="store_true", help="build the export: a node's work (`research run`)")
-    p.add_argument("--report", type=Path, help="write the report as JSON here; with --build, the logs go beside it")
+    p.add_argument("--records", action="store_true", help="have the export's own Lean check write its locks' records, and "
+                   "hold each to the lock it comes from (`records`): a node's work (`research run`)")
+    p.add_argument("--report", type=Path, help="write the report as JSON here; with --build or --records, the logs go beside it")
     ns = p.parse_args(argv)
     dest, root = ns.dest.resolve(), ns.root.resolve()
     if dest.exists() and any(dest.iterdir()):
@@ -1122,6 +1210,9 @@ def main(argv: list[str] | None = None) -> int:
         report["build"] = build(dest, logs, report["lean_targets"])
         with tempfile.TemporaryDirectory() as scratch:
             report["third_party"]["upstream_licenses"] = upstream_licenses(report["third_party"]["upstream"], Path(scratch))
+    if ns.records:
+        report["records"] = records(root, dest, logs, sorted(report["locks"]))
+        report["commit"] = report["records"]["commit"]
     if ns.report:
         ns.report.parent.mkdir(parents=True, exist_ok=True)
         ns.report.write_text(json.dumps(report, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -1160,6 +1251,14 @@ def main(argv: list[str] | None = None) -> int:
     tp = report["third_party"]
     print(f"third party: {len(tp['lean'])} Lean packages ({', '.join(sorted({str(x['name']) for x in tp['lean']}))}); "
           f"{len(tp['python_locked'])} locked Python distributions; upstream {[(u['url'], u['rev']) for u in tp['upstream']]}")
+    if "records" in report:
+        rec = report["records"]
+        print(f"records: the export's own Lean check wrote its locks' records (exit {rec['update']['exit']}, "
+              f"{rec['update']['seconds']} s); no guarantee or premise restated; "
+              f"{sum(map(len, rec['unstated'].values()))} statements listed as unstated; left for the Lean check: "
+              f"{rec['left'] or 'nothing'}")
+        for f, names in rec["unstated"].items():
+            print(f"  {f}: unstated: {', '.join(names)}")
     if "build" in report:
         for b in report["build"]["lean"]:
             print(f"  lake {b['package']}: {'ok' if b['ok'] else 'FAILED'} ("

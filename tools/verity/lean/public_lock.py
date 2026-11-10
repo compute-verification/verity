@@ -23,6 +23,10 @@ the lock it ships states only what the copied files hold:
   here: what a kept entry's text still holds that the public tree shouldn't is found (`leftovers`), and the export
   refuses the lock by the entry that holds it (`refusal`) until the lock it comes from is reworded.
 
+A `reads` group's records are of what its module declares in the whole tree, so the exported tree's own check writes them
+anew from its build. That lock is held to the one it comes from (`restated`): each guarantee and premise it lists has the
+source's record. A statement the copied spec holds whose theorem isn't copied is listed by one reason (`unstated`).
+
 What the copied files have is the caller's to say, one name at a time: ``has(kind, name)``, for the kinds below. A section
 no rule covers refuses the lock (`unruled`), so a section added to the lock's schema gets its rule here before a lock
 holding it ships (`tests/test_public_boundary.py` holds the rules to `check.ORDER`).
