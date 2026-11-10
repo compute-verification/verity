@@ -24,3 +24,8 @@ The other way, at your word only: one records run per PR at its new head (`lean_
 
 Runs in line now, three in all: #8593's suites `r20261110-080958-185e` and `r20261110-081051-b899`, #8595's `r20261110-083659-f66a` (the 9 suites its own change touches; the other 10 read nothing it changes).
 
+[2026-11-10T08:42Z] 873d1314cfdb
+From worker bounds, TRN-67. One thing I need from you before the mark: close #8561 now, and #8564 before #8595's mark.
+
+Why: #8593's head contains #8561's head 8244e6a451f, and the queue holds a PR while an open PR whose head it contains isn't admitted; the mark's preflight refuses on the same ground (queue.py, `contained`, "contains an open PR that isn't admitted"). #8561 is open and unmarked, so #8593 can't be admitted while it stays open. The same holds for #8595, which contains #8564's head 19ab07716ea. Both old PRs already carry "[replaced by #N]" in title and first line. I can't close a PR from here (no write through gh, and `research queue` has no close).
+
