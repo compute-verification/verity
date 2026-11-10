@@ -21,7 +21,9 @@ Every call to the session is an event of the verifier's log with the clock readi
 the registration are the core case (`case`) that `RemoteAudit.Protocol` replays. The answer (`answer`) is the session's
 own: accepted, its failure, or undecided while a window is unverified; on acceptance `certified`'s reads `q_bytes`, the
 receipts less the wrong ones the openings leave (`pooled`'s W, rounded up), a `BLOCK_BYTES` block each, at
-`eps = (2^24 + S)/2^64` for S the draws, as the Lean's `certify` computes them.
+`eps = (2^24 + ⌈W/g⌉·s)/2^64`, the session's openings coins at its `samples` s each, as the Lean's `certify` computes
+them: the bound `Properties.RemoteAudit.Component.LineHeldAtComponent` proves (`PublishedEps`), not the draws a session
+made, min(s, U) of a draw's U receipts, which can be fewer.
 
 `leg(period_dir, node, out)` is `benchmarks/all_protocols`' leg for bandwidth: the store is the period's records
 (`pous.period.records`, every copy of the auditor's ledger in them cut to the entries their window cites). The
@@ -69,17 +71,26 @@ def payloads(store: bytes) -> list[bytes]:
                      for u in range(codec.BLOCK_BYTES // WORD_BYTES)) for b in range(n)]
 
 
+def eps(windows: int, groups_per_coin: int, samples: int) -> Fraction:
+    """`RemoteAudit.Protocol.eps`: δ + ⌈W/g⌉·s/2^64 for a session of W `windows`, g `groups_per_coin` and s `samples`."""
+    return DELTA + Fraction(C.openings_coins(windows, groups_per_coin) * samples, 2 ** 64)
+
+
 def certified(record: audit.Record) -> tuple[dict[str, Any], dict[str, Any]]:
     """`RemoteAudit.Protocol.certify`: an accepted session's public outputs `{"eps", "q_bytes"}` and its profile."""
+    if record.samples is None:
+        raise ValueError("the record states no samples, at which eps charges each draw's rejection: certify a "
+                         "session's record (`Session.record`)")
     windows, _ = audit.pooled_windows(record)
-    us, ss = sum(u for u, _ in windows), sum(s for _, s in windows)
+    us = sum(u for u, _ in windows)
     base = {"delta": str(DELTA), "receipts": us, "windows": [[u, s] for u, s in windows]}
     try:
         b = pooled.bound(windows, DELTA)
     except pooled.Refused as e:
         return {"eps": "0", "q_bytes": 0}, base | {"gaps": [str(e)], "wrong": None}
     wrong = -(-b.wrong.numerator // b.wrong.denominator)
-    return ({"eps": str(Fraction(2 ** 24 + ss, 2 ** 64)), "q_bytes": (us - wrong) * codec.BLOCK_BYTES},
+    return ({"eps": str(eps(len(record.windows), record.groups_per_coin, record.samples)),
+             "q_bytes": (us - wrong) * codec.BLOCK_BYTES},
             base | {"gaps": [], "wrong": str(b.wrong)})
 
 
