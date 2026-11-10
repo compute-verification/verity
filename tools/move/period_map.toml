@@ -4,13 +4,14 @@
 # tools/move/period_map.toml` renames them in one move; `period_map_2.toml` is its second stage. The draft's other entries
 # rename what other areas declare and are theirs to move. Each renamed declaration keeps the rest of its name; the word
 # becomes the Glossary's for what it denotes:
-# - "window" for an execution phase (PoUW's, PoUB's, the network certifier's link-window) -> "execution phase"
+# - "window" for an execution phase (PoUW's, the network certifier's link-window) -> "execution phase"
 #   (`ExecutionPhase`, `executionPhase`); for SPOT's served span with its audit -> "run"; for a span of ticks -> "period"
 #   (its one definition is Core's `Verity.TickSpan`); for a location's gates over a cut of ticks (the dampener's, the
-#   actual circuit's `Windows`/`WindowsAt`) -> "server block". A numeric, bit, index or concurrency window keeps the word.
+#   actual circuit's `Windows`/`WindowsAt`) -> "server block". PoUB's window, the span one challenge covers, serves
+#   nothing and keeps the word, as does a numeric, bit, index or concurrency window.
 # - "period" for the stretch a bound is about -> "monitoring period"; a certification period (`NetworkCheck.Period`,
 #   LMS's and the period records'), a joint audit's period and Dither's noise period keep it.
-# - "session" for PoUB's run over its execution phases and the memory challenger's -> "run"; for the live challenger's
+# - "session" for PoUB's run over its windows and the memory challenger's -> "run"; for the live challenger's
 #   gate session -> "challenge phase"; for a certifier's 32-byte id -> "attachment"; for Nci's prompt-sized blocks ->
 #   "inference block". Flock's session (its own and the ZK server's) waits for a Glossary ruling and is not here.
 # - "run" is already the Glossary's word wherever it means a run; its other senses (a contiguous range, a result,
@@ -28,14 +29,8 @@
 "RegisteredCircuit.Session" = "RegisteredCircuit.Run"
 "Accounting/Remote/Session" = "Accounting/Remote/Run"
 "Accounting.Remote.Session" = "Accounting.Remote.Run"
-"Accounting/Remote/Window" = "Accounting/Remote/ExecutionPhase"
-"Accounting.Remote.Window" = "Accounting.Remote.ExecutionPhase"
 "RateAudit/Session" = "RateAudit/Run"
 "RateAudit.Session" = "RateAudit.Run"
-"RateAudit/Windows" = "RateAudit/ExecutionPhases"
-"RateAudit.Windows" = "RateAudit.ExecutionPhases"
-"RemoteHeld/Window" = "RemoteHeld/ExecutionPhase"
-"RemoteHeld.Window" = "RemoteHeld.ExecutionPhase"
 "Actual/Windows" = "Actual/ServerBlocks"
 "Actual.Windows" = "Actual.ServerBlocks"
 # Declarations whose name holds the word with other parts, each renamed wherever it stands (no other declaration
@@ -51,7 +46,6 @@
 "RemoteSessionConservationDeployed" = "RemoteRunConservationDeployed"
 "RemoteSessionRunConservationRelay" = "RemoteMonitoringPeriodConservationRelay"
 "RealizesCommOfPeriodLeakAccepted" = "RealizesCommOfMonitoringPeriodLeakAccepted"
-"RemoteWindowRunConservationRelay" = "RemoteExecutionPhaseRunConservationRelay"
 "workOfH1CheckedCreditPeriodAt_of" = "workOfH1CheckedCreditMonitoringPeriodAt_of"
 "RemoteSessionConservationSketch" = "RemoteRunConservationSketch"
 "StackedSessionConservationRelay" = "StackedRunConservationRelay"
@@ -61,73 +55,45 @@
 "WorkOfH1CheckedCreditPeriodAt" = "WorkOfH1CheckedCreditMonitoringPeriodAt"
 "circuitCreditPeriod_of_covers" = "circuitCreditMonitoringPeriod_of_covers"
 "RemoteSessionRunConservation" = "RemoteMonitoringPeriodConservation"
-"instFintypeSketchWindowCoins" = "instFintypeSketchExecutionPhaseCoins"
-"RemoteWindowRunConservation" = "RemoteExecutionPhaseRunConservation"
 "WorkOfH1CheckedCreditPeriod" = "WorkOfH1CheckedCreditMonitoringPeriod"
-"ofDeployedWindow_paid_relay" = "ofDeployedExecutionPhase_paid_relay"
-"ofDeployedWindow_paid_route" = "ofDeployedExecutionPhase_paid_route"
 "IntegrityOfIntegrityPeriod" = "IntegrityOfIntegrityMonitoringPeriod"
 "RateSessionSampledNamedRO" = "RateRunSampledNamedRO"
 "RemoteSessionConservation" = "RemoteRunConservation"
 "deficiencyUpTo_periodGame" = "deficiencyUpTo_monitoringPeriodGame"
 "CommOfPeriodLeakAccepted" = "CommOfMonitoringPeriodLeakAccepted"
-"ofDeployedWindow_sampled" = "ofDeployedExecutionPhase_sampled"
 "SlowdownWindowsCapSlots" = "SlowdownServerBlocksCapSlots"
 "periodLayer_writerReads" = "monitoringPeriodLayer_writerReads"
 "session_relay_of_unpaid" = "run_relay_of_unpaid"
 "PeriodBindingPerProver" = "MonitoringPeriodBindingPerProver"
 "acceptsUpTo_periodGame" = "acceptsUpTo_monitoringPeriodGame"
-"instFintypeWindowCoins" = "instFintypeExecutionPhaseCoins"
-"ofDeployedWindow_reads" = "ofDeployedExecutionPhase_reads"
 "SessionSamplesRecords" = "RunSamplesRecords"
 "SketchDeployedSession" = "SketchDeployedRun"
-"ofDeployedWindow_paid" = "ofDeployedExecutionPhase_paid"
 "sessionSamplesRecords" = "runSamplesRecords"
-"SketchDeployedWindow" = "SketchDeployedExecutionPhase"
 "SketchSummarySession" = "SketchSummaryRun"
 "CircuitCreditPeriod" = "CircuitCreditMonitoringPeriod"
 "PooledCoversSession" = "PooledCoversRun"
 "RemoteSessionRoutes" = "RemoteRunRoutes"
 "acceptsUpTo_periodR" = "acceptsUpTo_monitoringPeriodR"
-"checkWindow_extract" = "checkExecutionPhase_extract"
 "ksLin_of_periodLeak" = "ksLin_of_monitoringPeriodLeak"
 "periodR_perLiveTile" = "monitoringPeriodR_perLiveTile"
 "pooledCoversSession" = "pooledCoversRun"
-"roErr_toReal_window" = "roErr_toReal_executionPhase"
-"verifyWindow_accept" = "verifyExecutionPhase_accept"
-"windows_of_accepted" = "executionPhases_of_accepted"
-"windows_of_verified" = "executionPhases_of_verified"
 "SketchBoundSession" = "SketchBoundRun"
 "SlowdownWindowsCap" = "SlowdownServerBlocksCap"
-"checkWindow_accept" = "checkExecutionPhase_accept"
 "comm_of_periodLeak" = "comm_of_monitoringPeriodLeak"
 "prover_cost_window" = "prover_cost_serverBlock"
 "LineCoversSession" = "LineCoversRun"
 "RateSessionSample" = "RateRunSample"
-"SketchWindowCoins" = "SketchExecutionPhaseCoins"
 "cutWindow_eq_some" = "cutServerBlock_eq_some"
-"heldOverWindow_of" = "heldOverExecutionPhase_of"
 "lineCoversSession" = "lineCoversRun"
-"sampleWindows_one" = "sampleExecutionPhases_one"
 "PeriodCoversStmt" = "MonitoringPeriodCoversStmt"
-"RateAuditWindows" = "RateAuditExecutionPhases"
-"RateWindowSample" = "RateExecutionPhaseSample"
-"checkWindow_grow" = "checkExecutionPhase_grow"
-"ofDeployedWindow" = "ofDeployedExecutionPhase"
 "periodLayer_cone" = "monitoringPeriodLayer_cone"
 "window_responder" = "period_responder"
 "LiWindowUnbound" = "LiExecutionPhaseUnbound"
 "periodLayer_src" = "monitoringPeriodLayer_src"
 "periodPositions" = "monitoringPeriodPositions"
-"summary_windows" = "summary_executionPhases"
-"window_deployed" = "executionPhase_deployed"
-"window_relay_le" = "executionPhase_relay_le"
 "B2WindowP2Ring" = "B2PeriodP2Ring"
-"DeployedWindow" = "DeployedExecutionPhase"
-"checkWindow_eq" = "checkExecutionPhase_eq"
 "credit_session" = "credit_run"
 "everyWindow_at" = "everyExecutionPhase_at"
-"window_step_le" = "executionPhase_step_le"
 "B2WindowAudit" = "B2PeriodAudit"
 "PeriodTailMax" = "MonitoringPeriodTailMax"
 "SampledWindow" = "SampledExecutionPhase"
@@ -137,7 +103,6 @@
 "credit_window" = "credit_executionPhase"
 "periodR_every" = "monitoringPeriodR_every"
 "pr_session_le" = "pr_run_le"
-"sampleWindows" = "sampleExecutionPhases"
 "windowUnbound" = "executionPhaseUnbound"
 "windows_small" = "serverBlocks_small"
 "PeriodBudget" = "MonitoringPeriodBudget"
@@ -145,7 +110,6 @@
 "periodCovers" = "monitoringPeriodCovers"
 "window_fixed" = "executionPhase_fixed"
 "StageWindow" = "StageExecutionPhase"
-"WindowCoins" = "ExecutionPhaseCoins"
 "cost_window" = "cost_serverBlock"
 "periodLayer" = "monitoringPeriodLayer"
 "windowTicks" = "executionPhaseTicks"
@@ -251,13 +215,11 @@ words = { "honestSession" = "honestRun" }
 # For the review: these words also reach code outside Lean (a Python mirror, a benchmark, a test), which this move
 # renames with them:
 # - `Accounting/Remote/Session`: tests/lint/allowlists/repo_retired_terms.json
-# - `Accounting/Remote/Window`: tests/lint/allowlists/repo_retired_terms.json
 # - `Actual.Windows`: benchmarks/rho/rho/envelopes.py, benchmarks/rho/tests/test_envelopes.py
 # - `Actual/Windows`: tests/lint/allowlists/repo_retired_terms.json
 # - `CommOfPeriodLeakAccepted`: tests/lint/allowlists/repo_retired_terms.json, tools/verity/lean/tests/fixtures/merge/accounting-retired-import-onto-next.json
 # - `IntegrityOfIntegrityPeriod`: tests/lint/allowlists/repo_retired_terms.json
 # - `RateAudit/Session`: tests/lint/allowlists/repo_retired_terms.json
-# - `RateAuditWindows`: verity/core/protocols/bandwidth/openings.py
 # - `RateSessionSample`: verity/core/protocols/remote_bandwidth/audit.py, verity/core/protocols/remote_bandwidth/tests/test_remote_bandwidth.py
 # - `RegisteredCircuit/Session`: tests/lint/allowlists/repo_retired_terms.json
 # - `SketchBoundSession`: verity/core/protocols/remote_bandwidth/p2.py

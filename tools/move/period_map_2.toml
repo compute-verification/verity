@@ -7,13 +7,14 @@
 # tools/move/period_map.toml` renames them in one move; `period_map_2.toml` is its second stage. The draft's other entries
 # rename what other areas declare and are theirs to move. Each renamed declaration keeps the rest of its name; the word
 # becomes the Glossary's for what it denotes:
-# - "window" for an execution phase (PoUW's, PoUB's, the network certifier's link-window) -> "execution phase"
+# - "window" for an execution phase (PoUW's, the network certifier's link-window) -> "execution phase"
 #   (`ExecutionPhase`, `executionPhase`); for SPOT's served span with its audit -> "run"; for a span of ticks -> "period"
 #   (its one definition is Core's `Verity.TickSpan`); for a location's gates over a cut of ticks (the dampener's, the
-#   actual circuit's `Windows`/`WindowsAt`) -> "server block". A numeric, bit, index or concurrency window keeps the word.
+#   actual circuit's `Windows`/`WindowsAt`) -> "server block". PoUB's window, the span one challenge covers, serves
+#   nothing and keeps the word, as does a numeric, bit, index or concurrency window.
 # - "period" for the stretch a bound is about -> "monitoring period"; a certification period (`NetworkCheck.Period`,
 #   LMS's and the period records'), a joint audit's period and Dither's noise period keep it.
-# - "session" for PoUB's run over its execution phases and the memory challenger's -> "run"; for the live challenger's
+# - "session" for PoUB's run over its windows and the memory challenger's -> "run"; for the live challenger's
 #   gate session -> "challenge phase"; for a certifier's 32-byte id -> "attachment"; for Nci's prompt-sized blocks ->
 #   "inference block". Flock's session (its own and the ZK server's) waits for a Glossary ruling and is not here.
 # - "run" is already the Glossary's word wherever it means a run; its other senses (a contiguous range, a result,
@@ -29,11 +30,7 @@
 # Module paths and namespaces named for the word alone, longest first.
 # Declarations whose name holds the word with other parts, each renamed wherever it stands (no other declaration
 # holds it).
-"pr_samples_window_le_map" = "pr_samples_executionPhase_le_map"
-"pr_samples_window_le" = "pr_samples_executionPhase_le"
-"pr_paid_of_window" = "pr_paid_of_executionPhase"
 "widen_session" = "widen_run"
-"pr_window_le" = "pr_executionPhase_le"
 "EveryWindow" = "EveryExecutionPhase"
 "windowAt" = "executionPhaseAt"
 
@@ -54,20 +51,6 @@ files = [
     "Security/Proofs/Accounting/Actual/Threaded.lean",
 ]
 words = { "window_le" = "serverBlock_le" }
-
-[[words_in]]
-# `window_le` names another sense in other files, so it is renamed only where it is declared and where the build's
-# `.ilean` references spell it.
-files = [
-    "Security/Proofs/Accounting/RateAudit/Deployed.lean",
-    "Security/Proofs/Accounting/RateAudit/DeployedRelay.lean",
-    "Security/Proofs/Accounting/RateAudit/DeployedRun.lean",
-    "Security/Proofs/Accounting/RateAudit/DeployedSketch.lean",
-    "Security/Proofs/Accounting/RateAudit/DeployedSketchSum.lean",
-    "Security/Proofs/Accounting/RemoteHeld/Binding.lean",
-    "Security/Proofs/Accounting/Stacking.lean",
-]
-words = { "window_le" = "executionPhase_le" }
 
 [[words_in]]
 # Pouw's proofs declare lemmas of these names too (theirs to rename), so these are renamed only in the file
