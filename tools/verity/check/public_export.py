@@ -271,10 +271,11 @@ def _parents(path: str) -> list[str]:
 
 
 def generated_roots(tree, copied: set[str]) -> dict[str, str]:
-    """{file: its text} of each root file the export writes: a root of a copied lakefile's library whose file the export
-    doesn't copy while it copies modules below it. The text is the imports of those modules, less the ones the package's
-    lock exempts (a test or a probe, which no root imports); no copied file imports the root, so nothing reads it but the
-    build. It is a `module` when every module it imports is one, since a `module` imports only modules."""
+    """{file: its text} of each root file the export writes: a root of a copied lakefile's library, or of its package's
+    lock (which the Lean check builds by name), whose file the export doesn't copy while it copies modules below it. The
+    text is the imports of those modules, less the ones the package's lock exempts (a test or a probe, which no root
+    imports); no copied file imports the root, so nothing reads it but the build. It is a `module` when every module it
+    imports is one, since a `module` imports only modules."""
     out = {}
     for lakefile in sorted(f for f in copied if f.rpartition("/")[2] == "lakefile.toml"):
         here = os.path.dirname(lakefile)
@@ -282,8 +283,10 @@ def generated_roots(tree, copied: set[str]) -> dict[str, str]:
         src = _norm(here, doc.get("srcDir", "."))
         prefix = f"{src}/" if src else ""
         lock = _norm(here, LOCK)
-        exempt = tuple(json.loads(tree.text(lock)).get("exempt", {})) if lock in copied else ()
-        for root in (r for lib in doc.get("lean_lib", []) for r in lib.get("roots", [lib.get("name")])):
+        policy = json.loads(tree.text(lock)) if lock in copied else {}
+        exempt = tuple(policy.get("exempt", {}))
+        for root in (*(r for lib in doc.get("lean_lib", []) for r in lib.get("roots", [lib.get("name")])),
+                     *policy.get("roots", [])):
             at = _module_path(src, root)
             if f"{at}.lean" in copied or f"{at}.lean" in out:
                 continue
