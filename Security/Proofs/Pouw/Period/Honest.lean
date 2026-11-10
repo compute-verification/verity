@@ -208,7 +208,7 @@ noncomputable def run (n : ℕ) : Outcomes Bool (Equiv.Perm (Fin 144) × Unit) c
   checkedRun hK24 prm (windows n) opened (stagedAt salt staged) (flatAtCoin hr1 enc flat)
 
 noncomputable def layer (n : ℕ) :
-    DrawnLayer Bool (Equiv.Perm (Fin 144) × Unit) n circuit.rounds 24 (Fin 144) ℕ (Fin n × ℕ) Unit :=
+    SampledLayer Bool (Equiv.Perm (Fin 144) × Unit) n circuit.rounds 24 (Fin 144) ℕ (Fin n × ℕ) Unit :=
   checkedLayer circuit hr1 hK24 prm (windows n) opened (stagedAt salt staged) (flatAtCoin hr1 enc flat)
 
 /-- The honest run's anatomy: the 128 words fixed. -/

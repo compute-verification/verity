@@ -78,12 +78,12 @@ def tickView : Event → Option (GridKind × Nat)
   | .tick .ingress _ _ => some (.ingress, 0)
   | _ => none
 
-/-- The egress grid's horizon, `windows · T`: how many egress ticks run. -/
-def horizon (c : Config) : Nat := c.windows * c.egress.buckets
+/-- The egress grid's length, `windows · T`: how many egress ticks run. -/
+def gridTicks (c : Config) : Nat := c.windows * c.egress.buckets
 
-/-- How many egress buckets have run after the tick views `vs`: an egress tick runs while fewer than `horizon c` have. -/
+/-- How many egress buckets have run after the tick views `vs`: an egress tick runs while fewer than `gridTicks c` have. -/
 def egressRun (c : Config) (vs : List (Option (GridKind × Nat))) : Nat :=
-  vs.foldl (fun k v => if v.map Prod.fst = some .egress ∧ k < horizon c then k + 1 else k) 0
+  vs.foldl (fun k v => if v.map Prod.fst = some .egress ∧ k < gridTicks c then k + 1 else k) 0
 
 /-- One bucket's bytes on the link, `r · B`. -/
 def bucketBytes (p : Params) : Nat := p.allocation * p.frameBytes
@@ -94,7 +94,7 @@ def bucketBytes (p : Params) : Nat := p.allocation * p.frameBytes
 bucket's bytes at an egress tick that runs, unless the link's backlog is over four buckets' bytes; nothing otherwise. -/
 def writesAt (c : Config) (k : Nat) : Option (GridKind × Nat) → List Nat
   | some (.egress, backlog) =>
-    if k < horizon c ∧ backlog ≤ 4 * bucketBytes c.egress then [bucketBytes c.egress] else []
+    if k < gridTicks c ∧ backlog ≤ 4 * bucketBytes c.egress then [bucketBytes c.egress] else []
   | _ => []
 
 /-- The link writes' lengths, event by event, of a trace with tick views `vs`. -/
@@ -131,7 +131,7 @@ def wire (p : Params) (row : Slots) : ByteArray :=
 
 /-- Event `n` of `tr` is an egress tick that runs, egress bucket `k`, read with the link's backlog `backlog`. -/
 def EgressAt (c : Config) (tr : List Event) (n k backlog : Nat) : Prop :=
-  (∃ now, tr[n]? = some (.tick .egress now backlog)) ∧ k = egressRun c ((tr.take n).map tickView) ∧ k < horizon c
+  (∃ now, tr[n]? = some (.tick .egress now backlog)) ∧ k = egressRun c ((tr.take n).map tickView) ∧ k < gridTicks c
 
 /-- What egress bucket `k` does when the buckets release rows `ρ` and windows close with statuses `σ`: it writes its
 row (unless the backlog is over four buckets' bytes) and, at its window's last bucket, publishes the window's record. -/

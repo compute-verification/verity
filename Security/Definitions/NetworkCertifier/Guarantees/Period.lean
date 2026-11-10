@@ -17,7 +17,7 @@ run of its code gives the cells the client receives and the observations the aud
 on every schedule its record format holds the client's view reads back from the observations. The network certifier
 registers its records at the transfer gates: its openings `tops s` under the statement's roots, its signed root for the
 window, so they vary with what the server did
-(`TapOpens`). `PeriodLeakAccepted` composes the sampled leak bound at the network certifier's rows (`RLeakTap`, with the
+(`CertifierRegisters`). `PeriodLeakAccepted` composes the sampled leak bound at the network certifier's rows (`RLeakCertifier`, with the
 prover's registered inputs pinned: `AsReg`) with that read-back, so the content term of the bound comes from the
 audits, not from a premise:
 
@@ -53,12 +53,12 @@ deployment `D` of the sampled verifier where `Claims.Sampling.KS` holds and the 
 windows registered as `sw i` (partition `Pw i`, registered values `ρ i`, operator `op i`, and `β i` bounding the
 committed bits of each of its possible incorrect sets), with the network certifier's openings `tops s` at each statement,
 and a network certifier that runs its code by `trusted-host` on schedules in `Ss`, each held by its record format `f`
-(`TapRecord.fits`) and giving connection `c` at most `cap c` cells, its one run giving the cells the client receives
+(`RecordFormat.fits`) and giving connection `c` at most `cap c` cells, its one run giving the cells the client receives
 and the observations of the monitoring period's windows (its record of those cells, in the format `f`):
 
-* each window's audit, at a statement in its scope, has `Pr[acc ∧ ¬RLeakTap δ] ≤ δ + ε_ks + ε_bind + Pr[B_tap]`;
+* each window's audit, at a statement in its scope, has `Pr[acc ∧ ¬RLeakCertifier δ] ≤ δ + ε_ks + ε_bind + Pr[B_tap]`;
 * where at every window's statement the network certifier registers its observations at that window's operator
-  (`TapOpens`), a covert sender in the server, whose secrets a decoder recovers from the client's view of the server
+  (`CertifierRegisters`), a covert sender in the server, whose secrets a decoder recovers from the client's view of the server
   side: its secrets whose every window meets `WindowGood`, at that window's statement `x z i` and extracted witness
   `wit z i`, number at most
   `#Ss · ∏_c (cap c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`. -/
@@ -72,21 +72,21 @@ def PeriodLeakAccepted : Prop :=
     (ρ : Fin n → ℕ → Bool) (op : Fin n → ℕ → List (Obs L K S) → List Bool) (β : Fin n → ℕ)
     (hβ : ∀ i, ∀ F ∈ faultySets (sw i).design (Pw i) δ, faultyBits (sw i).prog (Pw i) F ≤ β i)
     {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
-    (f : TapRecord Conn Cell (Fin n → List (Obs L K S))) (tap : Dev)
-    (run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S)))
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p => tapCode f p.1 (arr p.2))
-    (cap : Conn → ℕ) (Ss : Set (WardenSchedule Conn)) (hcap : ∀ s ∈ Ss, ∀ c, s.cells c ≤ cap c)
+    (f : RecordFormat Conn Cell (Fin n → List (Obs L K S))) (tap : Dev)
+    (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S)))
+    (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
+    (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (hcap : ∀ s ∈ Ss, ∀ c, s.cells c ≤ cap c)
     (hfit : ∀ s ∈ Ss, f.fits s)
-    (Zs : Set Z) (schedOf : Z → WardenSchedule Conn) (srvOf : Z → Srv) (hs : ∀ z ∈ Zs, schedOf z ∈ Ss)
+    (Zs : Set Z) (schedOf : Z → CertifierSchedule Conn) (srvOf : Z → Srv) (hs : ∀ z ∈ Zs, schedOf z ∈ Ss)
     (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : ∀ z ∈ Zs, dec (run tap (schedOf z, srvOf z)).1 = z)
     (x : Z → Fin n → Claims.Msg) (wit : Z → Fin n → Wit) (tops : AuditStatement → List (Opening Bool)) (hb : D.commit.Binds H),
     (∀ m, ScopeAcc D lay k m → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
       Claims.PrBad H D.V
-          (RLeakTap H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj tops)
+          (RLeakCertifier H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj tops)
           (E D decode) m P ≤
         κ D δ m + Real.sqrt (γ D m * Claims.PrB H D.V P m) + (Bext H D.V (E D decode) Ω P m).Pr H +
           (Btap H D.V (E D decode) D.commit D.parse tops Ω P m).Pr H) ∧
-      ((∀ z ∈ Zs, ∀ i s, D.parse (x z i) = some s → TapOpens H D.commit (lay s) (k s) (op i) s (tops s)
+      ((∀ z ∈ Zs, ∀ i s, D.parse (x z i) = some s → CertifierRegisters H D.commit (lay s) (k s) (op i) s (tops s)
           ((run tap (schedOf z, srvOf z)).2 i)) →
         {z | z ∈ Zs ∧ ∀ i, WindowGood H D L K S lay k δ reg Dj (sw i) (ρ i) tops (x z i) (wit z i)
             ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤

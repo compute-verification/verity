@@ -18,8 +18,8 @@ The recorded run is taken at `W c a s`, the process's session `s` with the coins
 * A `verify`'s verdict is `checkWindowChunked`'s, which is `checkWindow`'s (`chunkedIsWhole`), at a point of the
   recorded run where the window awaits openings (`ChecksOK`). At its `settle`, later, the window still awaits them, and
   `checkWindow` gives the same verdict there (`verdict_kept`): its draws, record, registration and digest are kept
-  (`Shared.recordKeptAfterDraw`, `srun_kept`), and the appends only grow past the blocks its draws read, which are
-  receipts of its plans (`Shared.DrawsIn`, `Shared.checkWindow_grow`). So the process's `verifyBy` on that verdict is
+  (`Shared.recordKeptAfterSample`, `srun_kept`), and the appends only grow past the blocks its draws read, which are
+  receipts of its plans (`Shared.SamplesIn`, `Shared.checkWindow_grow`). So the process's `verifyBy` on that verdict is
   the recorded `verify` (`verifyBy_congr`).
 
 `run_sim` puts them together by induction on the requests, from the end (`snoc_induction`), over `Shared.srunL g`.
@@ -117,7 +117,7 @@ theorem close_W {s : State} {c a : Array ByteArray} {t : Int} {now : Nat} {r : R
   all_goals
     simp only [Bool.false_eq_true, ↓reduceIte] at hres
     cases h₁
-    rw [hc _ rfl, ‹draws _ _ _ _ _ = some _›] at hres
+    rw [hc _ rfl, ‹receiptSample _ _ _ _ _ = some _›] at hres
     cases hres
     rfl
 
@@ -435,12 +435,12 @@ theorem awaiting_some {s : State} {t : Int} {w : WindowRecord} {d : Array (Nat �
       exact ⟨by omega, by omega, rfl, rfl⟩
 
 /-- What a run from `State.init` keeps from a point `sV` of it to a later one `s`: the invariant, each sampled window's
-draws in its plans (`Shared.DrawsIn`), `Frz`, and the registration. -/
+draws in its plans (`Shared.SamplesIn`), `Frz`, and the registration. -/
 theorem srun_kept {g : Nat} (hg : 1 ≤ g) {params : Params} {reg : Registration} {c a : Array ByteArray} {nb : Nat}
     {es₀ es₂ : List Event} {rs₀ rs₂ : Array Result} {sV s : State} (hm : 1 ≤ params.minPasses)
     (h₀ : Shared.srunL g (State.init params reg c a nb) es₀ = .ok (rs₀, sV))
     (h₂ : Shared.srunL g sV es₂ = .ok (rs₂, s)) :
-    Inv sV ∧ Shared.DrawsIn sV.windows ∧ Inv s ∧ Frz sV s ∧ s.reg = sV.reg := by
+    Inv sV ∧ Shared.SamplesIn sV.windows ∧ Inv s ∧ Frz sV s ∧ s.reg = sV.reg := by
   rw [← Shared.srun_toArray] at h₀ h₂
   rcases Nat.lt_or_ge g 2 with hg2 | hg2
   · rw [Shared.run_le_one (by omega)] at h₀ h₂
@@ -458,7 +458,7 @@ theorem srun_kept {g : Nat} (hg : 1 ≤ g) {params : Params} {reg : Registration
     have hr : s.reg = sV.reg := (Shared.srun_inv g (fun x => Inv x ∧ x.reg = sV.reg)
       (fun _ _ _ _ ⟨hx, e⟩ he => have ⟨hx', f, _⟩ := Shared.sstep hg2 hx he; ⟨hx', f.2.1.trans e⟩) _ _ _ _
         ⟨hSF.1.1, rfl⟩ h₂).2
-    exact ⟨hSF.1.1, Shared.drawsIn_of_link hg hSF.1.1 hpre hSF.2 hL, hS.1.1, hf, hr⟩
+    exact ⟨hSF.1.1, Shared.samplesIn_of_link hg hSF.1.1 hpre hSF.2 hL, hS.1.1, hf, hr⟩
 
 /-- A window's verdict on its openings is the same at any later point of the session where it still awaits them: its
 draws, its record, the registration and the digest are kept, and the appends only grow past the blocks it reads. -/
@@ -475,10 +475,10 @@ theorem verdict_kept {g : Nat} (hg : 1 ≤ g) {params : Params} {reg : Registrat
   have h₀' := h₀
   have h₂' := h₂
   rw [← Shared.srun_toArray] at h₀' h₂'
-  have hdV : drawnOf sV t.toNat = some d := by
+  have hdV : sampledOf sV t.toNat = some d := by
     show dr sV.windows t.toNat = some d
     rw [dr_eq]; exact hd
-  obtain ⟨hds, hrec, -⟩ := Shared.recordKeptAfterDraw g params reg c a nb _ _ _ _ _ _ h₀' h₂' t.toNat d hm hdV
+  obtain ⟨hds, hrec, -⟩ := Shared.recordKeptAfterSample g params reg c a nb _ _ _ _ _ _ h₀' h₂' t.toNat d hm hdV
   have e : d' = d := by
     have : dr s.windows t.toNat = some d := hds
     rw [dr_eq, hd'] at this

@@ -330,7 +330,7 @@ theorem init_hinv (c : Config) (S : Array ClockSync) : HInv c S [] (init c).shap
 /-- The syncs only grow. -/
 theorem step_syncs {c : Config} {st : State} (hg : Good c st) (ev : Event) :
     Extends (step st ev).1.shaper.syncs st.shaper.syncs := by
-  by_cases hl : ∃ now backlog, ev = .tick .egress now backlog ∧ st.shaper.t < horizon c
+  by_cases hl : ∃ now backlog, ev = .tick .egress now backlog ∧ st.shaper.t < gridTicks c
   · obtain ⟨now, backlog, rfl, ht⟩ := hl
     have hr := egressMid_rel st now backlog
     obtain ⟨l, hl⟩ := step_egress_shaper hg ht (now := now) (backlog := backlog)
@@ -358,7 +358,7 @@ theorem step_hinv {c : Config} {st : State} {hp : List (Frame × Nat)} {S : Arra
     (hS : Extends S (step st ev).1.shaper.syncs) :
     HInv c S (hp ++ (handedAt st ev).map (·, st.shaper.t)) (step st ev).1.shaper := by
   have hf' := step_fifo hg hf ev
-  by_cases hl : ∃ now backlog, ev = .tick .egress now backlog ∧ st.shaper.t < horizon c
+  by_cases hl : ∃ now backlog, ev = .tick .egress now backlog ∧ st.shaper.t < gridTicks c
   · obtain ⟨now, backlog, rfl, ht⟩ := hl
     have hr := egressMid_rel st now backlog
     have hgs : ShGood c.egressLink c.egress (egressMid st now backlog) := hg.shaper.rel hr
@@ -493,7 +493,7 @@ theorem clean_of_complete {c : Config} {tr : List Event} {n k backlog : Nat} (hE
     Clean c.egress.buckets (egressMid (pre c tr m) now' b') (egressMid (pre c tr m) now' b').tick := by
   have hgm := (prefix_good c tr m).1
   have htm := egressAt_t hEm
-  have hth : (pre c tr m).shaper.t < horizon c := htm ▸ hEm.2.2
+  have hth : (pre c tr m).shaper.t < gridTicks c := htm ▸ hEm.2.2
   have hm := egressAt_lt hEm
   obtain ⟨l, hl⟩ := step_egress_shaper hgm hth (now := now') (backlog := b')
   have hpre : (pre c tr (m + 1)).shaper = { (egressMid (pre c tr m) now' b').tick.1 with prover := l } := by
@@ -571,7 +571,7 @@ theorem window_hands {c : Config} {tr : List Event} {n k backlog : Nat} (hE : Eg
     rw [hlist, List.map_append, hfrom_append, ← hi.h, List.map_append]
     refine forall₂_append ih ?_
     have hgm := (prefix_good c tr m).1
-    by_cases hl : ∃ now b', tr[m] = .tick .egress now b' ∧ (pre c tr m).shaper.t < horizon c
+    by_cases hl : ∃ now b', tr[m] = .tick .egress now b' ∧ (pre c tr m).shaper.t < gridTicks c
     · obtain ⟨now', b', he', ht⟩ := hl
       have hr := egressMid_rel (pre c tr m) now' b'
       have hgs := hgm.shaper.rel hr

@@ -25,7 +25,7 @@ per node"). Counted per GPU without them, the host's AMX and AVX-512 (and NVLink
 some real host.
 
 Each covers full checking with live coins: `𝒫_full`, every round's units proved, against uniform coins flipped after the
-commitments. The sampled path's `ε_sample` (`DrawnLayer`) and the Fiat–Shamir premium are separate lines, in none of
+commitments. The sampled path's `ε_sample` (`SampledLayer`) and the Fiat–Shamir premium are separate lines, in none of
 these statements.
 
 The luck (I7) is split at the receipt (LEDGER §1.3) into two named luck premises, and `LuckOfReceipt` gives (I7) at

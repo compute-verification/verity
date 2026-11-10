@@ -8,10 +8,10 @@ public import Definitions.NetworkCertifier.TapRows
 
 Definitions only. A monitoring period is a list of windows, each audited by the sampled verifier at a statement that its
 registration fixes (`SameRegistration`). A window's good event (`WindowGood`) is the leak relation at the network
-certifier's rows (`RLeakTap`) at the audit's extracted witness, with the registered inputs pinned (`AsReg`), the trace
+certifier's rows (`RLeakCertifier`) at the audit's extracted witness, with the registered inputs pinned (`AsReg`), the trace
 holding the registration's values at the registered inputs, and the observations complete. Which observations the
-relation counts is picked out by the network certifier's registration of its rows (`TapOpens`), not by the trace:
-`RLeakTap` fails, on an accepted run, only where the extraction fails or the trace's openings collide with the network
+relation counts is picked out by the network certifier's registration of its rows (`CertifierRegisters`), not by the trace:
+`RLeakCertifier` fails, on an accepted run, only where the extraction fails or the trace's openings collide with the network
 certifier's (`Btap`). The registration's values at the prover's registered inputs are the one condition the event holds
 that no statement here bounds.
 -/
@@ -39,7 +39,7 @@ length, jitter below `Dj` and every status complete. -/
 def WindowGood (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
     (δ : ℝ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ) (s₀ : AuditStatement) (ρ : ℕ → Bool) (tops : AuditStatement → List (Opening Bool))
     (x : Msg) (w : Wit) (o : List (Obs L K S)) : Prop :=
-  RLeakTap H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj tops x w ∧
+  RLeakCertifier H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj tops x w ∧
     ScopeAcc D lay k x ∧
     ∃ s, D.parse x = some s ∧ SameRegistration D lay k reg s₀ s ∧
       (∀ g ∈ reg s, traceVal s.prog (w.val H D.commit s) g = ρ g) ∧ Covered (k s) o ∧ o.length = k s ∧

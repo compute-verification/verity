@@ -13,7 +13,7 @@ Each factor is at most 2 to the power of the ceiling of its `log2` (`le_two_pow_
 connections and the windows (the compute audits, or the scans) are sums over `Fin m` and `Fin n` (`Array.ofFn`), so
 `2 ^ K` is the product of the factors' bounds.
 
-`RowsTiedDrawn`, `RowsProgWired` and `RowsStateTied` read the check's refusals off its findings: on acceptance every
+`RowsTiedSampled`, `RowsProgWired` and `RowsStateTied` read the check's refusals off its findings: on acceptance every
 finding is none (`firstFinding_none`), a tied audit's among them, and each link-window's `wiredCheck` and
 `stateCheck`.
 -/
@@ -130,7 +130,7 @@ theorem auditChecks_ok {p : Params} {c : Commitment} {e : Evidence} {pub : Publi
 
 /-- The refusal: an audit the check ties that it accepts drew every unit. -/
 theorem auditCheck_tied {i : ℕ} {a : Audit} {reg : Lean.Json} {x : Core.Answer} {f : Facts}
-    (h : auditCheck i a reg x true = .ok f) : DrawnWhole i reg x := by
+    (h : auditCheck i a reg x true = .ok f) : SampledWhole i reg x := by
   unfold auditCheck at h
   cases ha : answered s!"audit {i}" reg x with
   | error r =>
@@ -183,7 +183,7 @@ theorem check_sizes {p : Params} {c : Commitment} {e : Evidence} {pub : Public} 
   by_contra hc
   exact hs hc
 
-theorem rowsTiedDrawn : RowsTiedDrawn := by
+theorem rowsTiedSampled : RowsTiedSampled := by
   intro p c e pub prof h s sd scan hform i reg x hreg hx htied
   obtain ⟨hlt, -⟩ := Array.getElem?_eq_some_iff.mp hreg
   have hi : i < p.audits.size := by rw [← check_sizes h]; exact hlt
@@ -213,9 +213,9 @@ def otherAnswer : Core.Answer :=
 theorem otherAnswer_refused : (answered s!"audit {0}" tiedAudit otherAnswer).toBool = false := by
   decide +kernel
 
-/-- **No period check that accepts every period has `RowsTiedDrawn`'s property** (its nontrivial lemma): such a check
+/-- **No period check that accepts every period has `RowsTiedSampled`'s property** (its nontrivial lemma): such a check
 accepts a rows-form period whose audit 0 is tied and answered by another protocol than one-stage's. -/
-theorem rowsTiedDrawn_nontrivial : ¬ RowsTiedDrawnOf acceptAllRows := by
+theorem rowsTiedSampled_nontrivial : ¬ RowsTiedSampledOf acceptAllRows := by
   intro h
   let s : Schedule := ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0⟩
   let p : Params := ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows s .empty ⟨0, 0, 0, 0⟩, 1⟩

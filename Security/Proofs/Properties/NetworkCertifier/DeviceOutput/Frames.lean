@@ -20,7 +20,7 @@ bytes (`handed_size`), and its bits (`bitsOf`) are `8 · B` of them, read back a
 namespace Properties.CertifierNetwork.Proofs
 
 open _root_.CertifierDevice
-open Properties.CertifierDevice (Packed horizon outputs after handed handedAt)
+open Properties.CertifierDevice (Packed gridTicks outputs after handed handedAt)
 open Properties.CertifierDevice.Proofs
 open NetworkCheck.Check (byteOfBits bytesOfBitsList bytesOfBits)
 
@@ -305,7 +305,7 @@ theorem step_sized {c : Config} {st : State} (hg : Good c st) (hs : Sized c.egre
     Sized c.egress.frameBytes (step st ev).1.shaper := by
   have hB : st.config.egress.frameBytes = c.egress.frameBytes := by rw [hg.config]
   have hs' : Sized st.config.egress.frameBytes st.shaper := hB ▸ hs
-  by_cases hl : ∃ now backlog, ev = .tick .egress now backlog ∧ st.shaper.t < horizon c
+  by_cases hl : ∃ now backlog, ev = .tick .egress now backlog ∧ st.shaper.t < gridTicks c
   · obtain ⟨now, backlog, rfl, ht⟩ := hl
     obtain ⟨l, hl⟩ := step_egress_shaper hg ht (now := now) (backlog := backlog)
     rw [hl]

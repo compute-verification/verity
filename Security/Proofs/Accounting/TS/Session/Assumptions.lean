@@ -7,7 +7,7 @@ public import Proofs.Flock.SoundAtBridge
 
 The premises `Accounting.Guarantees.TS.SessionSoundAt` takes on the served proof layer `pf`
 (`Accounting.TS.ProofLayer`), besides `Flock.SoundAtBridge`'s own: the proof system's acceptance rule (`AcceptedLive`,
-the bridge's premise of that name, as a named `Prop`), the window's sampling design (`WindowLaw`), and in place of the bridge's
+the bridge's premise of that name, as a named `Prop`), the window's sampling design (`WindowDesign`), and in place of the bridge's
 `Flock.SoundAtBridge.RelOfRows` and `Flock.SoundAtBridge.OpenedPlurAt`, the same two facts on the accepted sessions
 whose sampled proof blocks are right: there `pf`'s relation, the served Definition's check, holds at the session's value layer
 (`ServedChecksHold`), and the value layer is `pf`'s served opening, outside `δs` (`ServedRootsLinked`).
@@ -69,7 +69,7 @@ and uniform given the prover (5). served_zk's per-tile sessions are that case (o
 today they flip their coin tree from a `serve --zk --operator loopback` that the job starts beside `prove --zk` on the
 prover's node (`hidden_zk/job.sh`'s `session`), which doesn't meet 5. It stays a premise until a window is modelled as
 Flock games run on one coin tape. -/
-def WindowLaw [Fintype Ω] (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : ∀ x w i, (sess x w i).Out) :
+def WindowDesign [Fintype Ω] (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : ∀ x w i, (sess x w i).Out) :
     Prop :=
   ∀ w i, SessionLaw (Out := fun s : RowsSession => s.Out) (fun s => s.G) (fun s => s.τ) (fun x => sess x w i)
     (fun x => out x w i)

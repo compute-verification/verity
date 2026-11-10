@@ -50,12 +50,12 @@ theorem after_take_succ (st : State) (tr : List Event) (n : Nat) (h : n < tr.len
 
 /-- One tick view's effect on the egress bucket count. -/
 def run (c : Config) (k : Nat) (v : Option (GridKind × Nat)) : Nat :=
-  if v.map Prod.fst = some .egress ∧ k < horizon c then k + 1 else k
+  if v.map Prod.fst = some .egress ∧ k < gridTicks c then k + 1 else k
 
 theorem egressRun_eq (c : Config) (vs : List (Option (GridKind × Nat))) : egressRun c vs = vs.foldl (run c) 0 := rfl
 
 theorem not_live {c : Config} {st : State} {ev : Event}
-    (hl : ¬ ∃ now backlog, ev = .tick .egress now backlog ∧ st.shaper.t < horizon c) :
+    (hl : ¬ ∃ now backlog, ev = .tick .egress now backlog ∧ st.shaper.t < gridTicks c) :
     run c st.shaper.t (tickView ev) = st.shaper.t := by
   unfold run
   rw [ite_eq_right_iff]
@@ -70,7 +70,7 @@ theorem not_live {c : Config} {st : State} {ev : Event}
 
 theorem step_good {c : Config} {st : State} (hg : Good c st) (ev : Event) :
     Good c (step st ev).1 ∧ (step st ev).1.shaper.t = run c st.shaper.t (tickView ev) := by
-  by_cases hl : ∃ now backlog, ev = .tick .egress now backlog ∧ st.shaper.t < horizon c
+  by_cases hl : ∃ now backlog, ev = .tick .egress now backlog ∧ st.shaper.t < gridTicks c
   · obtain ⟨now, backlog, rfl, ht⟩ := hl
     rw [step_egress_fst hg ht]
     obtain ⟨e1, e2, -⟩ := egress_spec hg now backlog
@@ -138,7 +138,7 @@ theorem egressAt_t {c : Config} {tr : List Event} {n k backlog : Nat} (h : Egres
   exact h.2.1.symm
 
 theorem egressAt_of {c : Config} {tr : List Event} {n : Nat} (hn : n < tr.length) {now backlog : Nat}
-    (he : tr[n] = .tick .egress now backlog) (ht : (pre c tr n).shaper.t < horizon c) :
+    (he : tr[n] = .tick .egress now backlog) (ht : (pre c tr n).shaper.t < gridTicks c) :
     EgressAt c tr n (pre c tr n).shaper.t backlog :=
   ⟨⟨now, by rw [List.getElem?_eq_getElem hn, he]⟩, (prefix_good c tr n).2, ht⟩
 
@@ -149,7 +149,7 @@ theorem egressAt_unique {c : Config} {tr : List Event} {n n' k b b' : Nat} (h : 
     have h1 := t_succ c tr n (egressAt_lt h)
     obtain ⟨now, he⟩ := (egressAt_get h)
     rw [he, (egressAt_t h)] at h1
-    have hk : k < horizon c := h.2.2
+    have hk : k < gridTicks c := h.2.2
     simp only [run, tickView, Option.map_some, hk, and_true, ↓reduceIte] at h1
     have h2 := t_mono c tr (n + 1) (n' - (n + 1)) (by have := (egressAt_lt h'); omega)
     rw [show n + 1 + (n' - (n + 1)) = n' by omega, h1, (egressAt_t h')] at h2
@@ -267,7 +267,7 @@ theorem rows_inv (c : Config) (tr : List Event) (n : Nat) (hn : n ≤ tr.length)
     have ih := ih (by omega)
     have hg := (prefix_good c tr n).1
     rw [pre_succ c tr n hn']
-    by_cases hl : ∃ now backlog, tr[n] = .tick .egress now backlog ∧ (pre c tr n).shaper.t < horizon c
+    by_cases hl : ∃ now backlog, tr[n] = .tick .egress now backlog ∧ (pre c tr n).shaper.t < gridTicks c
     · obtain ⟨now, backlog, he, ht⟩ := hl
       have hE := egressAt_of hn' he ht
       rw [he, step_egress_fst hg ht]
@@ -289,7 +289,7 @@ theorem rows_inv (c : Config) (tr : List Event) (n : Nat) (hn : n ≤ tr.length)
           exact ih j hj'
         · have : j = (pre c tr n).shaper.certifier.rows.size := by omega
           rw [this, push_size, hsize, Nat.div_add_mod', hrow]
-    · have hl' : ¬ ∃ now backlog, tr[n] = .tick .egress now backlog ∧ (pre c tr n).shaper.t < horizon c := hl
+    · have hl' : ¬ ∃ now backlog, tr[n] = .tick .egress now backlog ∧ (pre c tr n).shaper.t < gridTicks c := hl
       obtain ⟨q, -⟩ := step_quiet hg tr[n] hl'
       rw [q.2.1.2.1, q.2.1.1.rows]
       exact ih
@@ -309,7 +309,7 @@ theorem linkWrites_nil {acts : List Action} (h : ∀ a ∈ acts, ∀ b, a ≠ .w
 
 theorem step_writes {c : Config} {st : State} (hg : Good c st) (ev : Event) :
     linkWrites (step st ev).2 = writesAt c st.shaper.t (tickView ev) := by
-  by_cases hl : ∃ now backlog, ev = .tick .egress now backlog ∧ st.shaper.t < horizon c
+  by_cases hl : ∃ now backlog, ev = .tick .egress now backlog ∧ st.shaper.t < gridTicks c
   · obtain ⟨now, backlog, rfl, ht⟩ := hl
     rw [step_egress_snd hg ht]
     obtain ⟨-, -, row, status, hp, -, -, hacts, -⟩ := egress_spec hg now backlog
@@ -360,7 +360,7 @@ theorem egress_acts {c : Config} {tr : List Event} {n k backlog : Nat} (hE : Egr
   obtain ⟨now, he⟩ := (egressAt_get hE)
   have hg := (prefix_good c tr n).1
   have ht := (egressAt_t hE)
-  have hk : k < horizon c := hE.2.2
+  have hk : k < gridTicks c := hE.2.2
   rw [outputs_get _ _ _ hn]
   change some (step (pre c tr n) tr[n]).2 = _
   rw [he, step_egress_snd hg (ht ▸ hk)]
@@ -406,7 +406,7 @@ theorem records_proof : Records := by
     rw [outputs_get _ _ _ hn] at hacts
     cases hacts
     have hg := (prefix_good c tr n).1
-    have hl : ¬ ∃ now backlog, tr[n] = .tick .egress now backlog ∧ (pre c tr n).shaper.t < horizon c := by
+    have hl : ¬ ∃ now backlog, tr[n] = .tick .egress now backlog ∧ (pre c tr n).shaper.t < gridTicks c := by
       rintro ⟨now, backlog, he, ht⟩
       exact hnot ⟨_, _, egressAt_of hn he ht⟩
     exact (step_quiet hg tr[n] hl).2 a ha
@@ -439,7 +439,7 @@ theorem failClosed_proof : FailClosed := by
         exact this
       rw [← Nat.add_assoc, pre_succ c tr _ hi]
       by_cases hl : ∃ now backlog, tr[n + d] = .tick .egress now backlog ∧
-          (pre c tr (n + d)).shaper.t < horizon c
+          (pre c tr (n + d)).shaper.t < gridTicks c
       · obtain ⟨now, b, he, ht⟩ := hl
         have hts := t_succ c tr (n + d) hi
         rw [he] at hts
@@ -473,7 +473,7 @@ theorem failClosed_proof : FailClosed := by
   rw [show n + (m - n) = m by omega] at i1 i3 i4
   have hg := (prefix_good c tr m).1
   have ht := (egressAt_t hE)
-  have hk : k < horizon c := hE.2.2
+  have hk : k < gridTicks c := hE.2.2
   obtain ⟨now, he⟩ := (egressAt_get hE)
   obtain ⟨-, -, row, status, -, -, -, hacts, e5, -⟩ := egress_spec hg now backlog
   obtain ⟨hrow, hstat⟩ := e5 r i1

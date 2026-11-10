@@ -5,7 +5,7 @@ public import Properties.Accounting.Remote
 /-!
 # Proofs of the window's properties
 
-`Properties.Accounting.Remote`'s `AcceptChecksOpenings`, `AcceptOpensDraws` and `ChunkedIsWhole`.
+`Properties.Accounting.Remote`'s `AcceptChecksOpenings`, `AcceptOpensSamples` and `ChunkedIsWhole`.
 
 `checkWindow` is a `for` loop with an early return, which `do` elaborates into `forIn` over the indices with state
 `(Option Verdict × HashMap Nat Receipter)`. `forIn_good` reads such a loop: when every step either continues with
@@ -113,10 +113,10 @@ theorem checkWindow_accept {reg : Registration} {digest : ByteArray} {appends : 
 
 theorem verifyWindow_accept {reg : Registration} {appends : Array Append} {w : WindowRecord} {coin : ByteArray}
     {samples : Nat} {openings : Array Opening} (h : verifyWindow reg appends w coin samples openings = some .accept) :
-    ∃ drawn, draws reg.digest w.index coin samples (w.passes.map (·.plan.length)) = some drawn ∧
+    ∃ drawn, receiptSample reg.digest w.index coin samples (w.passes.map (·.plan.length)) = some drawn ∧
       checkWindow reg reg.digest appends w drawn openings = .accept := by
   unfold verifyWindow at h
-  cases hd : draws reg.digest w.index coin samples (w.passes.map (·.plan.length)) with
+  cases hd : receiptSample reg.digest w.index coin samples (w.passes.map (·.plan.length)) with
   | none => simp [hd] at h
   | some drawn => simp [hd] at h; exact ⟨drawn, rfl, h⟩
 
@@ -195,7 +195,7 @@ theorem checkOpening_none {reg : Registration} {appends : Array Append} {w : Win
         · simp at h
     · simp at h
 
-theorem acceptOpensDraws : AcceptOpensDraws := by
+theorem acceptOpensSamples : AcceptOpensSamples := by
   intro reg appends w coin samples openings h
   obtain ⟨drawn, hd, hsize, hk⟩ := acceptChecksOpenings reg appends w coin samples openings h
   exact ⟨drawn, hd, hsize, fun k hk' => checkOpening_none (hk k hk')⟩

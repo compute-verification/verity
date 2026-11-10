@@ -130,7 +130,7 @@ It has no stage order: a cheater may choose round `r`'s operands and skips after
 round's seed (look-ahead: try several of round `r`'s skip patterns, query round `r + 1`'s seed for each, keep the
 best), or re-roll round `r`'s values after its seed. Each try is a query of its own, and GRIND's per-query union over
 the `T_q` queries is what pays for it, so the premium's number is the staged one's. The binding the seeded statements
-check is at the sample (`Declared.atDraw`), after every seed, where Fiat–Shamir has fixed the roots each seed's
+check is at the sample (`Declared.atSample`), after every seed, where Fiat–Shamir has fixed the roots each seed's
 preimage names and every round's receipts.
 
 `δ_b` is per prover, as `δ_bind` is: `ecr/sha-512` (`Claims.ExpectedCR`, the record PoUW's binding reads) on that

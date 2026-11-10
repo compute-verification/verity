@@ -9,9 +9,9 @@ public import Proofs.Accounting.Remote
 `Accounting.Remote.Run.ofDeployed` reads a deployed session as a run of the remote audit. Its routes:
 
 * `Sampled d̄`: an accepting run whose correct receipts cover less than `(1 − d̄)·n·P·N·b` bits holds at most
-  `⌊(1 − d̄)·n·P·N⌋` correct receipts, the monitoring period's sample (`DeployedSession.pr_draws_horizon_le`).
+  `⌊(1 − d̄)·n·P·N⌋` correct receipts, the monitoring period's sample (`DeployedSession.pr_samples_pooled_le`).
 * `Paid`: a run whose correct receipts' words exceed its payments and slacks has a window whose do
-  (`DeployedSession.pr_unpaid_le`), which each window's bound (`DeployedWindow.pr_unpaid_draw_le`) covers.
+  (`DeployedSession.pr_unpaid_le`), which each window's bound (`DeployedWindow.pr_unpaid_sample_le`) covers.
 
 `Accounting.SecurityProofs.Remote.Conservation` composes them; the run's payments other than its tier reads are the
 `n·P` passes' `S + (L − ρ) + X` bits, so its `(1 − d̄ − λ)·C` of payments are `(1 − (d̄ + γ))·C` of tier reads, with
@@ -80,8 +80,8 @@ theorem ofDeployed_sampled (A : DeployedSession n P N b h ρ S L q r s d G) (tie
     (Run.ofDeployed A tier X Nd a).Sampled dbar ((1 - dbar) ^ (d * n)) := by
   classical
   have hb' : (0 : ℝ) < b := by exact_mod_cast hb
-  have hK := DeployedSession.pr_draws_horizon_le A ⌊(1 - dbar) * ((n * P * N : ℕ) : ℝ)⌋₊
-  have h2 := Deployed.horizon_le dbar (n * P * N) (d * n) (by positivity)
+  have hK := DeployedSession.pr_samples_pooled_le A ⌊(1 - dbar) * ((n * P * N : ℕ) : ℝ)⌋₊
+  have h2 := Deployed.pooled_le dbar (n * P * N) (d * n) (by positivity)
   push_cast at hK h2
   have hB := hK.trans h2
   have hT : ENNReal.ofReal (1 - dbar) ^ (d * n) ≠ ⊤ := ENNReal.pow_ne_top ENNReal.ofReal_ne_top
@@ -113,7 +113,7 @@ theorem ofDeployed_paid_route (A : DeployedSession n P N b h ρ S L q r s d G) (
     fun w η j ι c E R O => PIDevice.completed_le _ hrc hW (hF w η j ι c) E R O
   have hε := fun w η j ι c => PIDevice.pr_unpaid_le ((A.window w η).device j ι c) tier X lam (hA w η j ι c)
   have h₂ := DeployedSession.pr_unpaid_le A tier (S + (L - ρ) + X + lam) _
-    (fun w η => (A.window w η).pr_unpaid_draw_le tier X _ d _ (hX w η) (hε w η))
+    (fun w η => (A.window w η).pr_unpaid_sample_le tier X _ d _ (hX w η) (hε w η))
   have hT : (n : ℝ≥0∞) * (P * (G * ((N : ℝ≥0∞) / 2 ^ h + (q.choose 2 : ℝ≥0∞) / 2 ^ h + (2 ^ N : ℝ≥0∞) / 2 ^ lam)))
       ≠ ⊤ :=
     ENNReal.mul_ne_top (ENNReal.natCast_ne_top n) (ENNReal.mul_ne_top (ENNReal.natCast_ne_top P)
@@ -163,7 +163,7 @@ theorem ofDeployedWindow_sampled (A : DeployedSession n P N b h ρ S L q r s d G
   have hb' : (0 : ℝ) < b := by exact_mod_cast hb
   have hn' : (1 : ℝ) ≤ n := by exact_mod_cast hn
   have hu : dw / n ≤ 1 := div_le_one_of_le₀ (by linarith) (by linarith)
-  have hK := DeployedSession.pr_draws_window_le A ⌊(1 - dw) * ((P * N : ℕ) : ℝ)⌋₊
+  have hK := DeployedSession.pr_samples_window_le A ⌊(1 - dw) * ((P * N : ℕ) : ℝ)⌋₊
   have h2 := Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
   rw [show ((n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞)) = n * P * N by push_cast; ring] at h2
   have hB := hK.trans h2
@@ -196,7 +196,7 @@ theorem ofDeployedWindow_paid_route (A : DeployedSession n P N b h ρ S L q r s 
   have hε := fun w η j ι c => PIDevice.pr_unpaid_le ((A.window w η).device j ι c) tier X lam (hA w η j ι c)
   have h₂ := DeployedSession.pr_window_le A w
     (fun C y => C.reads tier y.1 y.2.1 + P * (S + (L - ρ) + X + lam) < (C.correctAll y.1 y.2.1).card * b) _
-    (fun η => (A.window w η).pr_unpaid_draw_le tier X _ d _ (hX w η) (hε w η))
+    (fun η => (A.window w η).pr_unpaid_sample_le tier X _ d _ (hX w η) (hε w η))
   have hT : (P : ℝ≥0∞) * (G * ((N : ℝ≥0∞) / 2 ^ h + (q.choose 2 : ℝ≥0∞) / 2 ^ h + (2 ^ N : ℝ≥0∞) / 2 ^ lam)) ≠ ⊤ :=
     ENNReal.mul_ne_top (ENNReal.natCast_ne_top P)
       (ENNReal.mul_ne_top (ENNReal.natCast_ne_top G) (roErr_ne_top N h q lam))

@@ -47,7 +47,7 @@ nontrivial lemmas. `Code` proves the certifier's program
 check accepts is a run of the constant-rate Program under the declared advice, so the guarantees here count it.
 `SampledAuditAccepted` proves that an accepted sampled audit is `Accepted` except at `ε` at `δ` over the selection.
 `SampledAuditInstance` takes its `KS` hypothesis from `Claims.Sampling.sampling_assembled_of`, at the assembled records.
-`TapRows` bounds the leak at the network certifier's rows (`TapProof.sampledLeak_tap`): an accepted audit's extracted
+`TapRows` bounds the leak at the network certifier's rows (`TapProof.sampledLeak_certifier`): an accepted audit's extracted
 trace carries the network certifier's registered rows outside the incorrect proof blocks, unless its openings collide with the
 network certifier's; `Period` counts with it.
 -/
@@ -120,7 +120,7 @@ theorem SampledLeakRegistered : NetTiming.Guarantees.SampledLeakRegistered := by
       (NetTiming.sampledLeak_reg hSA H D hks L K S lay k δ decode hδ hdec reg β Dj hβ).2 x hx s P hs hP op _⟩
 
 theorem PeriodLeakAccepted : NetTiming.Guarantees.PeriodLeakAccepted := NetTiming.periodLeak
-theorem PooledWrongUnitsLe : NetTiming.Guarantees.PooledWrongUnitsLe := NetTiming.horizonWrongUnits
-theorem PooledLeakAccepted : NetTiming.Guarantees.PooledLeakAccepted := NetTiming.horizonLeak
+theorem PooledIncorrectBlocksLe : NetTiming.Guarantees.PooledIncorrectBlocksLe := NetTiming.pooledIncorrectBlocks
+theorem PooledLeakAccepted : NetTiming.Guarantees.PooledLeakAccepted := NetTiming.pooledLeak
 
 end NetTiming.SecurityProofs
