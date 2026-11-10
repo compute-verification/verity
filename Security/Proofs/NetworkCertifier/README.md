@@ -86,8 +86,8 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
 ../../Definitions/NetworkCertifier/Guarantees/PeriodChecked.lean  trusted: a window's good event with a valid run
                                (WindowGoodChecked), the period's leak with checked inputs left out and the record
                                read under a registered parameter (PeriodLeakChecked)
-../../Definitions/NetworkCertifier/Witness.lean  trusted: the layouts and openings the nontrivial lemmas fail at
-                               (trivLay, notLay, certOps)
+../../Definitions/NetworkCertifier/Witness.lean  trusted: the layouts, openings and record format the witnesses
+                               are stated at (trivLay, notLay, certOps, noFormat)
 Lemmas.lean     the statements that are only steps of the guarantees' proofs, Theorem 1(b) among them,
                                each a `def G : Prop` under the same namespace (`Guarantees.G`)
 ../NetworkCertifier.lean  proved: `SecurityProofs.G : Guarantees.G` for each guarantee and lemma, from the modules below
@@ -163,7 +163,7 @@ PoolRoots.lean  the opened rows' roots, a lemma: a run's check that holds its op
 PeriodCheckedChecks.lean  checks of PeriodLeakChecked: held to the trace's run its first part is false, at a toy
                           whose check passes there and misses on the run at the network certifier's rows
                           (freeL_traceRun_insufficient, periodLeakChecked_traceRun_fails, freeL_certifierRun_miss);
-                          its nontrivial lemma
+                          its nontrivial lemma, and its honest lemma at the toy code over a period of no windows
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 Witnesses.lean  each acceptance guarantee's two lemmas: `G_honest`, its hypotheses at the deployed
