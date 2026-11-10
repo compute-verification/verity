@@ -318,7 +318,7 @@ def stamped(cfg: dict, server: dict, observer: dict) -> tuple[dict | None, list[
 def score(case: Path, observed: Path | None = None) -> dict:
     """One recorded case (a directory `live` left; `observed`: its observer.json, where another host wrote it): its
     configuration, `channel.measure` of the observer's arrivals on its own clock (`client`), by the kernel's stamps
-    (`kernel`, `stamped`) and of the certifier's own times (`sender`: a paced one's write ends, else its ticks'
+    (`kernel`, `stamped`; `unstamped`: why its host's kernel gave none) and of the certifier's own times (`sender`: a paced one's write ends, else its ticks'
     lateness), and what makes it no measurement (`problems`)."""
     cfg, server, certifier = (json.loads((case / f"{n}.json").read_text()) for n in ("config", "server", "certifier"))
     observer = json.loads((observed or case / "observer.json").read_text())
@@ -356,7 +356,8 @@ def score(case: Path, observed: Path | None = None) -> dict:
     return {k: cfg.get(k) for k in KEEP} | {
         "observer": observer["observer"], "dir": case.name, "remote": observer.get("remote", False),
         "observer_host": observer.get("host", cfg.get("host")), "observer_run": observer.get("run", cfg.get("run")),
-        "client": channel.measure(pairs), "kernel": kernel, "sender": sender,
+        "client": channel.measure(pairs), "kernel": kernel, "unstamped": observer.get("unstamped") or None,
+        "sender": sender,
         "problems": problems, "late_writes": sum(late > LATE_US for _, _, late in server["rows"]),
         "late_releases": late_releases, "gated": gated,
         "cpus": {"server": server["cpus"], "observer": observer["cpus"], "certifier": certifier["cpus"],

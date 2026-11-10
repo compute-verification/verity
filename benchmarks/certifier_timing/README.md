@@ -47,7 +47,8 @@ stamp is of that interval's bytes, and it moves the stamp to its monotonic clock
 started. Two things are told rather than hidden: a scored interval whose read carried no stamp, or a wall clock that
 was set during the case, makes the case no measurement; and segments the kernel merged while they waited to be read
 carry the last one's stamp, so an interval read that late has a later interval's, and the row counts them
-(`merged`). A client can stamp as the kernel does, so the number is over both columns.
+(`merged`). A host whose kernel gives no stamp leaves the `kernel` column empty and says why (a case's `unstamped`).
+A client can stamp as the kernel does, so the number is over both columns.
 
 `run` prints one JSON line and writes it to `--out`/result.json:
 

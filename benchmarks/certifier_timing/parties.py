@@ -249,11 +249,11 @@ def kernel_stamp(ancillary: list[tuple[int, int, bytes]]) -> int:
     return 0
 
 
-def stamping(tries: int = STAMP_TRIES) -> socket.socket | None:
+def stamping(tries: int = STAMP_TRIES) -> tuple[socket.socket | None, str]:
     """A socket that keeps the kernel stamping what this host receives: the reading end of a loopback connection,
     returned once one of its reads carried a stamp. The kernel starts stamping a moment after the first socket asks
-    and stops with the last, so an observer asks here before it connects and holds this socket to its end. None
-    where no stamp came: a kernel without SO_TIMESTAMPNS, or no loopback."""
+    and stops with the last, so an observer asks here before it connects and holds this socket to its end. Where no
+    stamp came (a kernel without SO_TIMESTAMPNS, or no loopback), no socket and why."""
     try:
         with socket.create_server((LOOPBACK, 0)) as listener:
             writer = socket.create_connection(listener.getsockname())
@@ -263,10 +263,10 @@ def stamping(tries: int = STAMP_TRIES) -> socket.socket | None:
             for _ in range(tries):
                 writer.sendall(b"x")
                 if kernel_stamp(reader.recvmsg(1, ANCILLARY)[1]):
-                    return reader
-    except OSError:
-        pass
-    return None
+                    return reader, ""
+    except OSError as e:
+        return None, f"asking this host's kernel for its receive stamp failed ({type(e).__name__}: {e})"
+    return None, f"this host's kernel stamped none of {tries} loopback reads"
 
 
 def wall_less_monotonic(reads: int = 5) -> int:
@@ -288,7 +288,7 @@ def observer(cfg: dict) -> dict:
     chunk's bytes at most, so the kernel's stamp on it (`kernel_stamp`) is of that chunk's bytes: `kernel` holds it
     for each chunk, moved from the wall clock to the monotonic one by their difference as the observer started
     (`wall_less_monotonic_ns`: then, and at its end), 0 for a read that carried none; None where the kernel stamps
-    nothing (`stamping`). On the certifier's host the observer starts at the run's origin and ends at its stop. On
+    nothing, with why in `unstamped` (`stamping`). On the certifier's host the observer starts at the run's origin and ends at its stop. On
     another host (`connect`, and no `origin`) it has its own clocks alone: it tries the certifier for `wait_s`, past
     any connection that gave it nothing, and ends once a connection's intervals have had their time."""
     cpus = _pin(cfg, 3)
@@ -298,7 +298,7 @@ def observer(cfg: dict) -> dict:
     kernel: list[list[int]] = []
     labels: list[list[int]] = []
     errors: list[str] = []
-    keeper = stamping()
+    keeper, unstamped = stamping()
     wall = [wall_less_monotonic()]
     gc.disable()
     if remote:
@@ -354,8 +354,8 @@ def observer(cfg: dict) -> dict:
         labels.append(last_bytes(b"".join(blobs), chunk))
     wall.append(wall_less_monotonic())
     return {"observer": cfg["observer"], "chunk": chunk, "remote": remote, "segments": segments,
-            "kernel": kernel if keeper is not None else None, "wall_less_monotonic_ns": wall, "labels": labels,
-            "errors": errors, "cpus": cpus}
+            "kernel": kernel if keeper is not None else None, "unstamped": unstamped,
+            "wall_less_monotonic_ns": wall, "labels": labels, "errors": errors, "cpus": cpus}
 
 
 def waker(cfg: dict) -> dict:

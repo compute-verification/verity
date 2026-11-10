@@ -375,8 +375,9 @@ def test_this_hosts_kernel_stamps_a_streams_reads_a_chunk_at_a_time():
     """On this host's kernel: once a socket has asked (`stamping`), a later one's reads each carry a stamp, a read
     of one chunk's room takes no byte of the next, and the stamps never go back. Two chunks written before either
     is read may reach the reader merged, and then both reads carry the second's stamp."""
-    keeper = parties.stamping()
-    assert keeper is not None, "this kernel gave a loopback read no SO_TIMESTAMPNS stamp"
+    keeper, why = parties.stamping()
+    assert keeper is not None and not why, why
+    assert parties.stamping(tries=0) == (None, "this host's kernel stamped none of 0 loopback reads")
     with keeper, socket.create_server((parties.LOOPBACK, 0)) as listener, \
             socket.create_connection(listener.getsockname()) as writer:
         reader, _ = listener.accept()
@@ -480,6 +481,12 @@ def test_an_interval_without_a_stamp_a_moved_wall_clock_and_merged_stamps_are_to
     none = bench.score(_case(tmp_path / "none", cfg, on_time, stamp=lambda t, x: None, clock=lambda x: 5.0 + x))
     assert none["problems"] == ["the kernel stamped none of the bytes of 400 of the observer's scored intervals"]
     assert none["kernel"]["bits"] is None and none["client"]["bits"] is not None
+    refused = _case(tmp_path / "refused", cfg, on_time)
+    seen = json.loads((refused / "observer.json").read_text()) | {"kernel": None, "unstamped": "no such option"}
+    (refused / "observer.json").write_text(json.dumps(seen))
+    refused = bench.score(refused)
+    assert (refused["kernel"], refused["unstamped"], refused["problems"]) == (None, "no such option", [])
+    assert whole["unstamped"] is None and refused["client"]["bits"] is not None
     moved = bench.score(_case(tmp_path / "moved", cfg, on_time, stamp=before, moved=-250_000))
     assert moved["problems"] == ["the observer's wall clock moved 250 µs against its monotonic clock over the case, "
                                  "and the kernel's stamps are the wall clock's"]
