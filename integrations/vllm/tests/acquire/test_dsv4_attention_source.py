@@ -192,14 +192,14 @@ def test_the_source_wraps_every_attention_layer_and_its_globals():
         off.close()
 
 
-def test_every_step_binds_the_map_names_of_its_routes_once(runs, capsys):
+def test_every_step_binds_the_map_names_of_its_routes_once(runs):
     for target, r in runs.items():
         assert r.attn.empty == {NO_C128: compressed(HCA)}, target
         for k, (_md, _first, routes, phase) in enumerate(STEPS):
             want = set(CM.committer_names(CMAP, ENV, phase=phase, routes=routes, rank=3, binders=(DS.BINDER,), on_target=target))
             assert Counter(r.names(k)) == Counter(want - set(r.attn.empty.get(k, ()))), (target, k)
             if target:
-                assert set(map_names(capsys, routes, phase, binders=(DS.BINDER,))) == want
+                assert set(map_names(routes, phase, binders=(DS.BINDER,))) == want
     on, off = runs[True], runs[False]
     assert len(on.names(0)) == 19 * L + 4 * len(CSA) + 1 == 1280 and len(on.names(NO_C128)) == 1280 - 3 * len(HCA)
     assert len(on.names(PREFILL)) - len(off.names(PREFILL)) == 3 * L + 3 * len(CSA), "the einsum, the gather and the scored indexer's"
@@ -254,7 +254,7 @@ def test_split_rows_and_state_rows_read_their_layout_only():
     assert DS.state_rows(st, s, 16, 8) is None and DS.state_rows(st.double(), s, 16, 4) is None and DS.state_rows(st, s, 8, 4) is None
 
 
-def test_a_cache_in_another_layout_is_not_bound_and_the_step_fails_by_its_name(capsys):
+def test_a_cache_in_another_layout_is_not_bound_and_the_step_fails_by_its_name():
     r = AttnRun()
     try:
         r.model.model.layers[5].attn.swa_cache_layer.kv_cache = _paged(6, 16, SWAB, torch.float32)
@@ -262,7 +262,7 @@ def test_a_cache_in_another_layout_is_not_bound_and_the_step_fails_by_its_name(c
         r.step(0, md, first)
         gone = [f"model.layers.5.attn/kv_insert.{p}" for p in DS.MLA_PARTS]
         assert not set(gone) & set(r.names(0)) and r.attn.stats["layout_refused"] == 1
-        got = r.check({0: map_names(capsys, routes, phase, binders=OTHERS) + r.names(0)})
+        got = r.check({0: map_names(routes, phase, binders=OTHERS) + r.names(0)})
         assert got["ok"] is False and got["violations"][0]["routes_bad"] == dict.fromkeys(sorted(gone), (0, 1))
     finally:
         r.close()
@@ -291,12 +291,12 @@ def test_a_global_called_outside_every_layer_s_forward_fails_the_step():
         r.close()
 
 
-def committed(r: AttnRun, capsys) -> dict[int, list[str]]:
+def committed(r: AttnRun) -> dict[int, list[str]]:
     """Each step's committed names: the other binders' names on its routes, then what the attention source bound."""
-    return {k: map_names(capsys, routes, phase, binders=OTHERS) + r.names(k) for k, (_md, _f, routes, phase) in enumerate(STEPS)}
+    return {k: map_names(routes, phase, binders=OTHERS) + r.names(k) for k, (_md, _f, routes, phase) in enumerate(STEPS)}
 
 
-def test_an_hca_decode_step_with_no_compressed_row_commits_without_its_nc128_names(runs, capsys):
+def test_an_hca_decode_step_with_no_compressed_row_commits_without_its_nc128_names(runs):
     """The decode at positions 0..3 crosses no 128 boundary: the positions it committed give NC128 = 0, so the identity check holds
     it to the map's names less every HCA layer's compressed rows, which its compressors did not write, and admits it."""
     r = runs[True]
@@ -305,7 +305,7 @@ def test_an_hca_decode_step_with_no_compressed_row_commits_without_its_nc128_nam
     assert positions == (0, 1, 2, 3) and CM.row_counts(CMAP, ENV, positions) == {"NC4": 1, "NC128": 0}
     _md, _f, routes, phase = STEPS[NO_C128]
     assert r.src.empty_at(tuple(sorted(routes)), phase, positions) == hca_rows == set(r.attn.empty[NO_C128])
-    steps = committed(r, capsys)
+    steps = committed(r)
     assert not hca_rows & set(steps[NO_C128]) and hca_rows <= set(steps[0])
     got = r.check(steps)
     assert got["ok"] is True, got["violations"][:2]
@@ -314,7 +314,7 @@ def test_an_hca_decode_step_with_no_compressed_row_commits_without_its_nc128_nam
     assert [x["step"] for x in got["violations"]] == [0] and got["violations"][0]["routes_bad"] == {gone: (0, 1)}
 
 
-def test_a_step_the_source_found_empty_where_the_positions_give_rows_fails(capsys):
+def test_a_step_the_source_found_empty_where_the_positions_give_rows_fails():
     """A decode at positions 124..127 whose last token, the step's only 4 and 128 boundary, has no compressed slot (a fault): every
     compressor writes no row, so the source finds every compressed-rows name empty, while the committed positions give one row of
     each.  The identity check fails the step by the reason and by every such name."""
@@ -324,7 +324,7 @@ def test_a_step_the_source_found_empty_where_the_positions_give_rows_fails(capsy
         r.step(0, md, first, unslotted=(3,))
         rows = set(compressed(range(L))) | {f"model.layers.{i}.attn.indexer.k_cache/rows" for i in CSA}
         assert set(r.attn.empty[0]) == rows and CM.row_counts(CMAP, ENV, r.attn.positions[0]) == {"NC4": 1, "NC128": 1}
-        got = r.check({0: map_names(capsys, routes, phase, binders=OTHERS) + r.names(0)})
+        got = r.check({0: map_names(routes, phase, binders=OTHERS) + r.names(0)})
         v = got["violations"][0]
         assert got["ok"] is False and v["routes_bad_n"] == len(rows) + 1
         assert v["routes_bad"][RS.EMPTY_DIFFERS] == (len(rows), 0)
@@ -333,12 +333,12 @@ def test_a_step_the_source_found_empty_where_the_positions_give_rows_fails(capsy
         r.close()
 
 
-def test_a_step_with_rows_the_positions_give_none_for_fails(runs, capsys):
+def test_a_step_with_rows_the_positions_give_none_for_fails(runs):
     """The reverse: a name the step's positions give no row for is refused when present, whether the source bound it (its record
     then differs from the positions' too) or the commit holds it beside the source's record; and a step whose positions were not
     recorded fails by that reason."""
     r = runs[True]
-    steps = committed(r, capsys)
+    steps = committed(r)
     extra = "model.layers.3.attn/compress.0"
     got = r.check({**steps, NO_C128: steps[NO_C128] + [extra]})
     assert [v["step"] for v in got["violations"]] == [NO_C128] and got["violations"][0]["routes_bad"] == {extra: (1, 0)}
@@ -357,7 +357,7 @@ def test_a_step_with_rows_the_positions_give_none_for_fails(runs, capsys):
         r.attn.positions[0] = saved
 
 
-def test_every_compressed_rows_name_holds_its_positions_row_count_and_the_prefill_commits(runs, capsys):
+def test_every_compressed_rows_name_holds_its_positions_row_count_and_the_prefill_commits(runs):
     """Each step binds under every compressed-rows name the rows its committed positions give (`CM.row_counts`), the rows the
     pinned kernels write: the prefill at 108..127 five CSA rows and one HCA row.  The identity check reads each name's committed
     leading dimension and admits every step."""
@@ -368,11 +368,11 @@ def test_every_compressed_rows_name_holds_its_positions_row_count_and_the_prefil
             assert got == {n: counts[s] for n, s in COUNTED.items() if counts[s]}, (target, k)
     r = runs[True]
     assert CM.row_counts(CMAP, ENV, r.attn.positions[PREFILL]) == {"NC4": 5, "NC128": 1}
-    got = r.check(committed(r, capsys))
+    got = r.check(committed(r))
     assert got["ok"] is True, got["violations"][:2]
 
 
-def test_a_prefill_one_row_short_under_its_compressed_rows_names_fails_by_layer_and_name(capsys):
+def test_a_prefill_one_row_short_under_its_compressed_rows_names_fails_by_layer_and_name():
     """The prefill at 108..127 with its first CSA boundary token (111) given no compressed slot, a fault: every CSA compressor
     writes four rows where the positions give five, the source binds the four it wrote and finds nothing empty, and the identity
     check fails the step under `ROW_COUNT_DIFFERS` at every CSA layer's names (its compressed rows' parts and the indexer's rows),
@@ -383,7 +383,7 @@ def test_a_prefill_one_row_short_under_its_compressed_rows_names_fails_by_layer_
         r.step(PREFILL, md, first, unslotted=(3,))
         short = {n for n, s in COUNTED.items() if s == "NC4"}
         assert {n: int(t.shape[0]) for n, t in r.rec[PREFILL] if n in short} == dict.fromkeys(short, 4) and not r.attn.empty
-        got = r.check({PREFILL: map_names(capsys, routes, phase, binders=OTHERS) + r.names(PREFILL)})
+        got = r.check({PREFILL: map_names(routes, phase, binders=OTHERS) + r.names(PREFILL)})
         want = {RS.row_count_differs(ROLE_OF[n][1], n): (4, 5) for n in short}
         v = got["violations"][0]
         assert got["ok"] is False and [x["step"] for x in got["violations"]] == [PREFILL] and v["routes_bad_n"] == len(want) == 4 * len(CSA)
@@ -393,13 +393,13 @@ def test_a_prefill_one_row_short_under_its_compressed_rows_names_fails_by_layer_
         r.close()
 
 
-def test_a_compressed_rows_name_one_row_extra_or_with_no_leading_dimension_fails(runs, capsys):
+def test_a_compressed_rows_name_one_row_extra_or_with_no_leading_dimension_fails(runs):
     """A commit that holds one row more than the prefill's positions give under a CSA and an HCA name fails under
     `ROW_COUNT_DIFFERS`, by layer and name, (committed, count); and the commit side fails closed: `split_step_names` given no
     metas fails every row-counted name the step commits, (-1, count).  It reads the leading dimensions from `TensorMeta`s and from
     a cached plan's columns (`PlanMetas`) alike."""
     r = runs[True]
-    steps = committed(r, capsys)
+    steps = committed(r)
     csa, hca = "model.layers.2.attn/compress.0", "model.layers.3.attn/compress.0"
     got = r.check(steps, shapes={PREFILL: {csa: (6, DN), hca: (2, DN)}})
     assert [v["step"] for v in got["violations"]] == [PREFILL]
@@ -415,7 +415,7 @@ def test_a_compressed_rows_name_one_row_extra_or_with_no_leading_dimension_fails
     assert r.src.split_step_names(Counter(steps[0]), 9, True)[1] == {}, "a padding-only step is held to step 0's set of names only"
 
 
-def test_a_chunked_prefill_whose_first_chunk_ends_mid_window_holds_the_rows_the_kernels_write(capsys):
+def test_a_chunked_prefill_whose_first_chunk_ends_mid_window_holds_the_rows_the_kernels_write():
     """A 158-token prefill in chunks within the stand-in's 32-token batch, positions 0..29, then 30..61, 62..93, 94..125 and
     126..157: the first ends mid-window of both ratios, so every later chunk starts on compressor state the one before left, which
     the pinned kernels read for the window and never for the mask (`CM.row_counts`).  The first writes 7 CSA rows (3, ..., 27),
@@ -434,7 +434,7 @@ def test_a_chunked_prefill_whose_first_chunk_ends_mid_window_holds_the_rows_the_
             assert all(same(t, r.want[k][n]) for n, t in r.rec[k])
             assert {n: int(t.shape[0]) for n, t in r.rec[k] if n in COUNTED} == {n: counts[s] for n, s in COUNTED.items() if counts[s]}
             assert r.src.step_routes(k) == (("hc-split", "indexer-short", "prefill-tokens"), "prefill")
-        got = r.check({k: map_names(capsys, *r.src.step_routes(k), binders=OTHERS) + r.names(k) for k in range(len(chunks))})
+        got = r.check({k: map_names(*r.src.step_routes(k), binders=OTHERS) + r.names(k) for k in range(len(chunks))})
         assert got["ok"] is True, got["violations"][:2]
     finally:
         r.close()
