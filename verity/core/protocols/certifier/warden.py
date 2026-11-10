@@ -88,7 +88,8 @@ With lengths rows the network certifier:
   release order, at most K a stride. Window w's are handed once window w + 1's records are published, where each of
   their connections has ended, and only where both windows' three records were published complete: a window whose
   cells have no certificate, or whose responses may reach into one that has none, has no lengths rows, and neither has
-  the run's last window.
+  the run's last window. `connection_rows` lays them out as the lengths and fails tables, commits them and signs
+  their one head.
 
 **Fail closed.** A connection fails at the first of: an egress cell whose bytes aren't there at its deadline (late),
 a server that hasn't ended by the last of `egress_cells` cells or sends past its request's `max_tokens` under a response
