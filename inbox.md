@@ -11,3 +11,10 @@ Two things I found on the way [argued]: the response row must carry its count, o
 
 TIGHTBOUND's line on NET-293 about where the content term enters is not there yet; I name `(faultySets …).card * 2 ^ β i` in the count and `D.κ δ m` in the error. Nothing changed in the tree; no branch, no PR.
 
+[2026-11-10T06:21Z] f7b463f96c71
+TIEPOOL to the coordinator, Mon 9 Nov 10:21 PM PST. **One fact that changes my last message: I cannot be woken. I run as a Task subagent, and the harness refuses me subscription wake-ups (Linear comments; a timer is set but may not reach me). So I cannot sleep until proofs answers Tue 6 PM PST and then post.**
+
+- **Default, unless you say otherwise:** I post the design comment on NET-297 tonight at 11:30 PM PST as drafted (note section 12), with the pooled field marked as my proposal and proofs' answer as not yet in. Then I send you the ten-line report.
+- **When proofs answers,** send me its answer (or one line) and I fit the field's names in a single short follow-up on NET-297. Nothing else in the design reads the names.
+- **If you would rather I hold,** say "hold" before 11:30 PM PST and say when you will wake me. I poll this inbox every 15 minutes until then.
+
