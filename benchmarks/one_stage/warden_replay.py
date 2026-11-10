@@ -38,7 +38,7 @@ from pathlib import Path
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
-TRACES = HERE.parent / "network_traces"
+TRACES = Path(__file__).resolve().parents[2] / "benchmarks/network_traces"
 sys.path.insert(0, str(TRACES))
 
 import warden_serve as ws  # noqa: E402
@@ -161,7 +161,7 @@ def rehearse(args) -> int:
     params = ws._params(args)
     sent = traffic(args.serve_run, args.serve_window, start_s=args.start, gap_s=args.gap)
     (out / "traffic.json").write_text(json.dumps(sent))
-    warden = [sys.executable, str(TRACES / "warden_serve.py")]
+    warden = [sys.executable, str(Path(__file__).resolve().parents[2] / "benchmarks/network_traces/warden_serve.py")]
     scratch = Path(tempfile.mkdtemp(prefix="warden-replay-"))
     procs: list[subprocess.Popen] = []
     try:

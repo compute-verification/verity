@@ -3,7 +3,7 @@ import math
 import sys
 
 import pytest
-from rho import analysis, figures
+from rho import analysis, figures, params
 from rho.analysis import LO, crossing
 from rho.params import Param, Registry
 from rho.scenario import build
@@ -256,6 +256,7 @@ def test_periods_writes_each_fleet_and_period_as_the_scenario_with_those_choices
     rows = json.loads((tmp_path / "periods.json").read_text(), parse_constant=lambda c: pytest.fail(f"JSON has {c}"))
     rows = rows["rows"]
     assert [(x["fleet"], x["period"]) for x in rows] == [(f, p) for f, _ in periods.FLEETS for p in periods.PERIODS]
+    assert {x["proofs"] for x in rows} == {"every unit proved"} and text.count("| every unit proved |") == 2 * len(rows)
     for x in rows:
         at = REG.override(periods.choices(name, x["fleet"], x["period"]))
         assert x["slowdown"] == analysis.result(at, name).lo
@@ -266,3 +267,49 @@ def test_periods_writes_each_fleet_and_period_as_the_scenario_with_those_choices
         assert x["without_hosts"] <= x["slowdown"]
         assert [r["decades"] for r in x["ranking"]] == sorted((r["decades"] for r in x["ranking"]), reverse=True)
         assert any(r["what"] == "draft:no-straddle" for r in x["ranking"])
+
+
+def test_periods_sets_proofs_sampled_beside_every_unit_proved(monkeypatch):
+    """`periods.py` prints the remote scenario with its proofs sampled beside the one where every unit is proved, each
+    row labelled by what it assumes about proofs, one of three labels over the registry's scenarios. Every unit proved,
+    the slowdown is about 3 over either fleet and every period. Sampled at the registry's share and today's
+    sparse-sample cost, the bits the accepted incorrect proof blocks inject, the widest public size class each, are
+    worth one datacenter's whole capacity over any period and the world's over a week, where nothing is bounded (1);
+    over the world's month and year the bound is 1.48 and 2.80."""
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    import periods
+
+    proved, sampled = "reference-remote-h200", "reference-remote-h200-sampled"
+    assert periods.SCENARIOS.index(sampled) == periods.SCENARIOS.index(proved) + 1
+    share = REG["regime.remote-sampled.proof_share"]
+    want = {"reference-h200": {"week": 1, "month": 1, "year": 1}, "world-h200": {"week": 1, "month": 1.48, "year": 2.80}}
+    assert set(want) == {f for f, _ in periods.FLEETS} and all(set(w) == set(periods.PERIODS) for w in want.values())
+    for fleet, by_period in want.items():
+        for period, lo in by_period.items():
+            p, s = (analysis.result(REG.override(periods.choices(n, fleet, period)), n) for n in (proved, sampled))
+            assert periods.proofs(p) == "every unit proved"
+            assert periods.proofs(s) == f"proofs sampled at {100 * share:.3g}% of compute"
+            assert s.lo == pytest.approx(lo, abs=5e-3) and s.lo <= p.lo == pytest.approx(3.0, abs=0.06), (fleet, period)
+    labels = {periods.proofs(analysis.result(REG, n)) for n in REG.names("scenario")}
+    assert labels == {"every unit proved", f"proofs sampled at {100 * share:.3g}% of compute", "no proofs"}
+
+
+def test_periods_ranks_a_blocks_output_bits_as_the_size_classes_limit(monkeypatch):
+    """A proof block's output bits are `verity`'s widest public size class, derived, so no premise is open in them:
+    their row keeps its range, the size classes, which shows what the limit costs, labelled as the size class's limit
+    and printed plain, while a derived parameter that is a premise stays open and bold."""
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    import periods
+
+    name = "reference-remote-h200-sampled"
+    rows = periods.evaluate(REG, (name,), periods.FLEETS[-1:], periods.PERIODS[-1:])
+    (row,) = (r for r in rows[0]["ranking"] if r["what"] in params.BLOCK_OUTPUT_BITS)
+    p = REG.param(row["what"])
+    assert p.status == "derived" not in periods.FIXED and set(periods.LIMITS) == set(params.BLOCK_OUTPUT_BITS)
+    assert (row["kind"], row["open"]) == ("the size class's limit (provisional)", False)
+    assert row["range"] == [p.low, p.high] and p.low < p.high == p.value and row["decades"] > 0
+    derived = [r for r in rows[0]["ranking"] if r["kind"] == "parameter (derived)"]
+    assert derived and all(r["open"] for r in derived)
+    text = periods.markdown(REG, rows, periods.FLEETS[-1:])
+    assert f"| `{row['what']}` | the size class's limit (provisional) | " in text
+    assert f"**`{derived[0]['what']}`** | parameter (derived) | " in text
