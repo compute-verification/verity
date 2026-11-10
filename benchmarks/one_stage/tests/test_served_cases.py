@@ -52,6 +52,7 @@ from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Value as Bits
+from verity.ml.crypto import lms
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -125,8 +126,9 @@ def toy() -> tuple[object, dict]:
 
 def audit_dir(root: Path, v1: dict, *, v2: bool | str = True) -> Path:
     """A records audit's out directory holding v1's case and, with ``v2``, a5's v2 case over two blob files (a string:
-    a5's ``case-v2-error.txt`` instead). The v2 case's params name a challenger (a stand-in key of LMS's form) and its
-    window's root, without which v2's Lean refuses the params before it reads the record."""
+    a5's ``case-v2-error.txt`` instead). The v2 case's params name a challenger (a stand-in key of LMS's form at the
+    deployed parameters, the only ones v2 reads a key under) and its window's root, without which v2's Lean refuses
+    the params before it reads the record."""
     w = root / "audit" / "window"
     w.mkdir(parents=True)
     (w / "case.json").write_text(json.dumps(v1, sort_keys=True))
@@ -139,10 +141,11 @@ def audit_dir(root: Path, v1: dict, *, v2: bool | str = True) -> Path:
             b.write_bytes(b.name.encode())
         evidence = {k: x for k, x in json.loads(bytes.fromhex(v1["evidence"])).items() if k != "verdicts"}
         evidence["proofs"] = {"sessions": [{"name": "5e" * 64, "record": "bb" * 64, "reps": {}}]}
+        key = {"H": lms.DEPLOYED.H, "W": lms.DEPLOYED.W, "public": "00" * 80}
         (w / "case-v2.json").write_text(json.dumps({
             "blobs": [str(b) for b in blobs], "commitment": v1["commitment"],
             "evidence": codec.canonical_json(evidence).hex(),
-            "params": {**v1["params"], "challenger": {"key": {"H": 5, "W": 4, "public": "00" * 80}, "label": "draw"},
+            "params": {**v1["params"], "challenger": {"key": key, "label": "draw"},
                        "proofs": {"circuit": "cc" * 64, "public": "aa" * 64, "registered": None},
                        "window_root": "0f" * 64}},
             sort_keys=True))
