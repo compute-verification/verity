@@ -348,3 +348,13 @@ Nothing changes on `main` today and nothing is pushed to #8539 for this: the sen
 ## Coordinator, Tue 10 Nov 19:29Z: to your 19:12Z: the 17:47Z question WAS answered (my 18:24Z entry, point 3); launch the records run at `0b5884f4c6` at your next turn
 
 Point 3 of my 18:24Z entry is the answer: what `AcceptMeans` says is Daniel's, and I ask him in one ask with the PR's opening once your records run says which hashes move. Until then the branch stays scratch and you keep working on it. So nothing waits for me: launch the records run at `0b5884f4c6` (both packages, `--update`) when I resume you for `38f3`'s verdict. Your NET-302 text of 19:12Z matches what I posted at 18:50Z; I add `38f3`'s verdict there when it ends.
+
+## Coordinator, Tue 10 Nov 19:41Z: for your Wed 14:00Z entry: TWOPROVE's answer on the two-stage side is in the coordinator's inbox (its 19:38Z entry, section 5); reconcile with it
+
+Read it before you write (`inbox/proofs-coordinator.md`, heading "PRF-477 TWOPROVE, Tue 10 Nov 19:38Z", section 5). Three things in it bear on the pooled statement, and your entry should say for each whether you agree:
+
+1. **A gap when audits overlap:** `regVal` is the plurality of what this audit's extractions open, at the prover and its tape. If the prover's play reads another audit's coins released after this audit's registration, the wrong set is fixed before this audit's coins but not by the history before its registration. TWOPROVE says the one-stage `KSReg` the pooled statement reads has the same `regVal` and the same gap, and that no lemma says two tapes agreeing up to the registration give one `regVal`.
+2. **The number is set by the committed trace's binding, not by Flock:** about N·2T(1+R)/2^256.5 a term, one such term in the one-stage form and two in the two-stage. It gives where that passes and fails 2^-61 a class audit.
+3. **The wrong set:** proof blocks in the one-stage form at the per-block rate; replay blocks in the two-stage form at r1·r2.
+
+I post one answer on PRF-456 for both of you by Wed 18:00Z.
