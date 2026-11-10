@@ -3,6 +3,11 @@ module
 public import Definitions.Core.Fp32
 public import Proofs.Core.Fp32.Round
 public import Mathlib.Data.Int.ModEq
+public import Mathlib.Data.Rat.Floor
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.NormNum
+public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.Ring
 
 /-!
 # The epilogue's fold is exact while `|p| ≤ 2^22`
