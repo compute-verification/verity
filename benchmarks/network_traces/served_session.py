@@ -708,8 +708,7 @@ def chain(a: argparse.Namespace) -> int:
         env["CR_SCAN_ARGS"] = f"{scan} {env.get('CR_SCAN_ARGS', '')}".strip()
     if endpoint:
         env.update({"CR_ENDPOINT": endpoint, **({"CR_EOS_IDS": a.eos_ids} if a.eos_ids else {})})
-    return subprocess.run(["bash", str(TREE / "benchmarks/network_traces/chain_record.sh")], cwd=TREE,
-                          env=env).returncode
+    return subprocess.run(["bash", str(HERE / "chain_record.sh")], cwd=TREE, env=env).returncode
 
 
 def parser() -> argparse.ArgumentParser:
