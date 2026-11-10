@@ -81,6 +81,8 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
     assert DriveFlags.parse("after_landing_shards = 3\n").after_landing_shards == 3
     assert DriveFlags.parse("restack_jobs = 1\n").restack_jobs == 1
     assert DriveFlags.parse('warn_steps = ["ratchet-gate"]\n').warn_steps == ("ratchet-gate",)
+    assert DriveFlags.parse('lowrisk_excludes = ["*.lean", "verity/", "verity/__init__.py"]\n').lowrisk_excludes == (
+        "*.lean", "verity/", "verity/__init__.py")
     assert [DriveFlags.parse(f'after_landing_shards = "{v}"\n').after_landing_shards for v in ("auto", "auto:4")] == ["auto", "auto:4"]
     assert f.line() == ("on=m1,m2 marked_after=2026-10-12T06:00:00Z regenerate_locks=True land=review "
                         "land_into=None after_landing_no_cache=True landing_gates=gates/g.py warn_gates= warn_steps= verdict_first=False "
@@ -109,6 +111,7 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
                       ('lowrisk_excludes = ["/verity/core/"]', "lowrisk_excludes = ['/verity/core/']: a non-empty list"),
                       ('lowrisk_excludes = ["../x/"]', "lowrisk_excludes = ['../x/']: a non-empty list"),
                       ('lowrisk_excludes = ["verity/*/x.py"]', "lowrisk_excludes = ['verity/*/x.py']: a non-empty list"),
+                      ('lowrisk_excludes = ["x/../y.py"]', "lowrisk_excludes = ['x/../y.py']: a non-empty list"),
                       ("bottom_ring = []", "bottom_ring = []: a non-empty list of handles, each `@` and its lower-case name, "
                                            "as [\"@ci\"]"),
                       ('bottom_ring = "@ci"', "bottom_ring = '@ci': a non-empty list of handles"),

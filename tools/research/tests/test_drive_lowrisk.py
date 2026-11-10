@@ -60,6 +60,16 @@ def test_no_excludes_is_no_low_risk_change():
     assert not lowrisk(["README.md"], ())
 
 
+def test_an_entry_with_a_slash_before_its_end_keeps_that_one_file_off():
+    """A package's `__init__.py` runs on every import below it, so it is kept off by its path, without the rest of its
+    directory; such an entry names no other file of that name, and no path it only begins or ends."""
+    excludes = ("verity/protocols/__init__.py", "verity/hardware/record.py")
+    for f in excludes:
+        assert not lowrisk(["README.md", f], excludes), f
+    assert lowrisk(["verity/protocols/pouw/__init__.py", "verity/protocols/reporting.py", "integrations/vllm/record.py",
+                    "x/verity/hardware/record.py", "verity/hardware/record.pyc"], excludes)
+
+
 def test_a_tick_lands_up_to_lowrisk_per_tick_low_risk_members_in_next_order_onto_checked_never_main(world, monkeypatch):
     h = _lane(world, monkeypatch, per_tick=2)
     main = _main(world)
