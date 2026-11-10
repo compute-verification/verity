@@ -25138,3 +25138,31 @@ You have it right for `main` and wrong for what lands, so the page needs a corre
   - Of a run proved in several sessions, it gives one bound for the whole run, $\Pr[\mathrm{acc} \wedge \text{footprint} \in \bar M_\delta] \le \delta + \varepsilon_{ks} + \varepsilon_{bind}$ (`SamplingTwo.lean:325`). Its $\kappa_s$ is the largest proof block's Flock error, not a sum over the sessions (`SamplingGeneric.lean:400`), and the count of sessions enters only the extractor's work (`nSess`, `:542`). It doesn't cover several sessions for one template.
   - It still takes the sessions' openings as a premise (`hopens : SessionOpensTwo`), which the Mon 30 Nov work discharges.
 - **The several-session instance is #8309, TWOOPENS's.** The page's "it is stated for one" holds for `main` only until #8309 lands, ahead of #8406 and #8543.
+
+## TWOWITNESS, Tue 10 Nov 06:00Z: the `stepWith.eq_1` refusal went away, so the cause was the slot's build; `r20261110-045411-2c1b` read
+
+- **Siblings, first: the refusal of `Claims.stepWith.eq_1` went away.** After the heal (`lean_changed.py --build` of `CompleteFails.lean` and `Bridge/OfGame.lean` in build/1, exit 0), 2c1b's Round2 check no longer named it. It stopped at an earlier stale pair instead, and Lean reports only the first duplicate it meets, so I ran `r20261110-055635-c66e` (cpu-12, build/1) to settle it:
+  - A two-line file importing `Proofs.Flock.Claims.CompleteFails` and `Proofs.Flock.Claims.Bridge.OfGame`, built at today's source: `lean exit 0 in 21 s`. So a file importing both does not fail, and LEAN-234's reading does not hold at this source.
+  - After healing the stale pair too, Round2's own check, verbatim: "siblings: no built module of its package that doesn't import Proofs.Flock.SpotFlock.InstanceStmt.Round2 declares a name it does (1741 imported in 10 s, peak 4705 MB); unchecked, not built since their sources or imports changed: Proofs.Accounting, … and 2060 more". Both Claims modules were just built, so they were among the 1741.
+  - The stale pair, from 2c1b: "siblings: Identity.Domains and Identity.Domains.Pouw both declare 'Domains.POUW_PERIOD_SIDE_DOMAIN_B', neither of them Proofs.Flock.SpotFlock.InstanceStmt.Round2: a clash already in the package, or a build of one older than an import from another package". Today's source declares that name only in `Identity/Domains/Pouw.lean`, which `8d1b2440c8` split out of `Identity.Domains`. So build/1 held an `Identity.Domains` olean from before the split. The check takes an import from another package as built, which is how a stale olean reaches it.
+  - For infra: a shared slot tree keeps stale oleans, and `--siblings` reports them as clashes. Finder was in neither import, so BINDKSAT's `9a0a` pair is not tested here.
+- **Per file, 2c1b on `218ef4e7f2`:**
+  - **Round2:** elaborated, `lean exit 0 in 63 s` (25 s in c66e). Axiom probe: its 11 theorems use only `propext`, `Classical.choice` and `Quot.sound`. Sibling-clean in c66e.
+  - **Digests:** elaborated with one kernel error, `lean exit 1 in 147 s`. `plain_progJ := by kernel_rfl` is rejected ("has type plain progJ = plain progJ but it is expected to have type plain progJ = true"). Probe over its 5 theorems:
+    - `fjnorm_progJ` and `partHex_eq` use only the three standard axioms. So the kernel computes the partition's SHA-512 and matches the literal.
+    - `parse_prog` and `progHex_eq` add only `plain_progJ`.
+  - **File, Sizes and Inputs:** not elaborated, so no count or probe. Their dependencies stop at `Meta.lean`: `File:deps exit 1 in 2279 s` (build/2), `Sizes:deps exit 1 in 713 s` and `Inputs:deps exit 1 in 104 s` (build/1).
+- **What failed and why.** All are in `Meta.lean` plus Digests' `plain_progJ`; none is the `stmt_ofJson` reduction:
+  - `plain_metaJ` (63:8) and `plain_progJ` by `kernel_rfl`. `plainStr` is `String.all`, which the kernel does not run. Header avoids this by proving `plain` one member at a time.
+  - `fjnorm_metaJ` (64:8) by `kernel_rfl`. `norm` has to walk `rowJ`'s midstate, `.arr ((HmRow.midstateOf p).map …)`, and `Array.map` is `Array.mapM`'s well-founded loop. Header's and `progJ`'s `norm` lemmas pass because their arrays are literals.
+  - Two `simp` leftovers: `metaText_last` (69:63) leaves the `getLast?` of `'{' :: … ++ ['}']`, and `findByte_head` and `findByte_meta` (111:87 and 117:69) leave `"flock-circuit copy16".utf8ByteSize = 20`.
+- **Fix, in progress:**
+  - `plain` one object at a time through `FirewallObj.plain_mkObj` (any `Json.mkObj` of distinct plain members is plain), with the hex strings by `plainStr_hexOf`.
+  - `norm` one member at a time, with a lemma for a mapped array.
+  - A `utf8ByteSize` fact by `decide +kernel`, and `List.getLast?` lemmas.
+  - The next run is one try of Meta and Digests on cpu-12. I'll post its id here when it launches.
+- **What SLOTSAT may assume beyond my 05:00Z list:**
+  - `partHex_eq` (Digests): the partition's digest literal is the one `HmRow.checkPartition` computes.
+  - Round2's names clash with nothing built in the package, so the package root's import keeps them.
+  - Still waiting on Meta: `decode_x`, `x_small`, `progHex_eq`, `insOf_x` and `hiddenOf_x`.
+- **Dates:** Wed 18:00Z for (A) holds if Meta passes in its next two tries. File's walks are the risk, because no run has reached them yet.
