@@ -1,7 +1,7 @@
 """A two-stage interior whose replay block reads history tables (`interior_rows`, ``tables``): each span two
 `EmbeddingRead_v1{V=8,H=2}` reads of the table round 1 served for it, over a replay sample of two of three spans. Round 1
 (a stand-in boundary) registers each span's table as a port of its record, of its class's C strings (P=4, O=2: 6 of 8
-leaves, `boundary_tables.positions`), its rows past its length L filled (`boundary_tables.fill`). The interior commits no
+leaves, `boundary_tables.class_rows`), its rows past its length L zero rows (`boundary_tables.fill`). The interior commits no
 table: each read's ``root`` and ``domain`` rows are rows of the supplied values ``history/root`` and ``history/domain``,
 which the challenger resolves through its own `history`, each sampled span's table named from its own sample under round
 1's root and read from the strings the prover publishes. An interior is refused before anything is committed where a read
@@ -31,7 +31,7 @@ from verity_vllm.pipeline import boundary_tables as BT, interior_rows as IR, ser
 RD = E.read(8, 2)
 SPANS, Q, CELLS, SALT, ROW, DELTA = 3, 2, 2, bytes(range(32)), "interior-table-test", 2.0 ** -40
 RUN, PROMPT, OUTPUTS, LAYER, CAP = "b0" * 64, 4, 2, 0, 8
-C = BT.positions(PROMPT, OUTPUTS, CAP)
+C = BT.class_rows(PROMPT, OUTPUTS, CAP)
 #: each span's length L: spans 0 and 2 are drawn
 LENGTHS = (5, 4, 3)
 #: sampled span s's two keys: span 0's key 5 and span 2's key 4 are past their lengths, so each opens a fill row
@@ -57,14 +57,15 @@ NAMES = tuple(BT.name(RUN, PROMPT, OUTPUTS, s, LAYER) for s in range(SPANS))
 
 
 def _tables(lengths=LENGTHS, seed: int = 0, fill: bool = True) -> list[HT.HistoryTable]:
-    """Round 1's table for each span, of ``lengths[s]`` rows under salts of their own, filled to C."""
+    """Round 1's table for each span: its ``lengths[s]`` rows, filled to C (`boundary_tables.fill`), each under a salt of
+    its own."""
     rng = np.random.default_rng(seed)
     out = []
     for name, n in zip(NAMES, lengths, strict=True):
         t = HT.HistoryTable(PROGRAM, name, 2, CAP)
-        t.append(rng.integers(0, 1 << 16, (n, 2), dtype=np.uint16), [rng.bytes(192) for _ in range(n)])
-        if fill:
-            BT.fill(t, PROMPT, OUTPUTS)
+        rows = rng.integers(0, 1 << 16, (n, 2), dtype=np.uint16)
+        rows = BT.fill(rows, PROMPT, OUTPUTS, CAP) if fill else rows
+        t.append(rows, [rng.bytes(192) for _ in rows])
         out.append(t)
     return out
 
@@ -219,7 +220,7 @@ def test_a_table_round_1_did_not_register_is_refused():
 def test_every_table_of_a_class_publishes_its_c_strings_whatever_its_length(staged):
     """Two spans of one class, of lengths 5 and 3, each publish C = 6 strings, so the strings never show a span's length:
     a read past its length opens a fill row (the zero row under a salt of its own) and one past C the zero row under the
-    zero salt, each the zero row. A table of other than C strings is refused by name, and so is a fill past C."""
+    zero salt, each the zero row. A table of other than C strings is refused by name."""
     _stream, reg, first, rec, tables = staged
     drawn = [tables[u] for u in first.units]
     assert [len(t.rows) for t in drawn] == [C, C] and [LENGTHS[u] for u in first.units] == [5, 3]
@@ -235,9 +236,6 @@ def test_every_table_of_a_class_publishes_its_c_strings_whatever_its_length(stag
     short = _tables(fill=False)
     with pytest.raises(ValueError, match=f"holds 5 strings, not its class's {C}"):
         _interior(reg, first, rec, [short[u] for u in first.units])
-    with pytest.raises(ValueError, match="rows past its class's 6 positions"):
-        BT.fill(_tables(lengths=(7, 4, 3), fill=False)[0], PROMPT, OUTPUTS)
-    assert BT.positions(PROMPT, OUTPUTS, 4) == 4 and BT.positions(PROMPT, 0, CAP) == PROMPT
 
 
 def test_a_tables_bytes_and_its_reads_rows_are_cores_history_read_vector():
@@ -257,7 +255,7 @@ def test_a_tables_bytes_and_its_reads_rows_are_cores_history_read_vector():
     assert HT.domain(v["program"], big["name"], BT.WORDS, BT.CAPACITY).domain_id.hex() == big["domain_id"]
     assert v["supplied"]["sources"] == [[{"history": f"{t['name']}/{of}"}] for of in IR.SUPPLIED]
     sup = IR.supplied(v["program"], [h.entry()])
-    bits = [[(int(x) >> j) & 1 for x in r for j in range(16)] for value in sup for r in value.rows]
+    bits = ["".join(str((int(x) >> j) & 1) for x in r for j in range(16)) for value in sup for r in value.rows]
     assert bits == v["supplied"]["rows_bits"]
 
 

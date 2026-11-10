@@ -151,12 +151,11 @@ def test_a_class_with_history_tables_gives_the_challengers_history_from_its_own_
     root and domain from the strings the prover publishes."""
     spans = [BR.Span(f"r{i}", (i, i + 1, i + 2), GREEDY, (7, 8, 9, i), "length") for i in range(N)]
     layout = BR.Layout(PAIR, 0, 1, 4, 4, N, BR.run_root("test-serve", 0), layers=(0, 1), capacity=16)
-    c = BT.positions(layout.prompt, layout.outputs, layout.capacity)
+    c = BT.class_rows(layout.prompt, layout.outputs, layout.capacity)
     hs = {}
     for t in layout.tables:
         hs[t] = HT.HistoryTable(layout.partition["program"], t, BT.WORDS, layout.capacity)
-        hs[t].append(np.ones((3, BT.WORDS), dtype=np.uint16))
-        BT.fill(hs[t], layout.prompt, layout.outputs)
+        hs[t].append(BT.fill(np.ones((3, BT.WORDS), dtype=np.uint16), layout.prompt, layout.outputs, layout.capacity))
     pub = json.loads(json.dumps(BR.commit(spans, layout, 0, tables={t: h.root for t, h in hs.items()}).public()))
     got = TS.first(pub, PAIR, RULE, FC.Challenger("first"))
     supplied = [v for v in got.stream.spec.values if v.registered]

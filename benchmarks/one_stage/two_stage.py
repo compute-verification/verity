@@ -196,7 +196,7 @@ class First:
         bodies by member key."""
         L = self.layout
         names = [BT.name(L.run, L.prompt, L.outputs, int(u), layer) for u in self.draw.units]
-        return IR.history(self.record, names, BT.WORDS, BT.positions(L.prompt, L.outputs, L.capacity), published, bodies)
+        return IR.history(self.record, names, BT.WORDS, BT.class_rows(L.prompt, L.outputs, L.capacity), published, bodies)
 
 
 def first(pub: Mapping[str, Any], check: SpecializedDefinition, rule: Rule, coins: CC.ChallengerCoins, *,

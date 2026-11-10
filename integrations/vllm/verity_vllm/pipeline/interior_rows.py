@@ -34,7 +34,7 @@ sampled span ``sample[i]``'s units at [i·n_rho, (i+1)·n_rho), chained after th
   b || c and its salts) registers in place of committing the rows on the host (`committed`).
 * `supplied`, `sources`, `history`: a replay block whose template reads a history table (`EmbeddingRead_v1{V, H}`) opens,
   for each sampled span, the table round 1 served (`boundary_tables`: committed at serve, its root a port of the class's
-  round-1 record, its rows filled to its class's `boundary_tables.positions`), never one of its own. The interior
+  round-1 record, its rows filled to its class's C, `boundary_tables.class_rows`), never one of its own. The interior
   commits no table: each read's ``root`` and ``domain`` rows are rows of the two values `supplied` makes from the tables'
   entries at public salts, given by reference, and the tables' strings are published (`Interior.published`). The
   challenger names each sampled span's table from its own sample and copies round 1's root for it (`history`), so the
@@ -537,7 +537,7 @@ def history(boundary: Mapping[str, Any], names: Sequence[str], words: int, posit
     """The challenger's `history` for an interior registration (`Stream.register_interiors`' ``history``): sampled span
     s's table ``names[s]``, which the challenger names from the class and its own sample, as round 1's record
     ``boundary`` registered it as a port, under round 1's program, its leaves and its domain, of ``words`` words a row.
-    Its rows are one held run of the class's ``positions`` strings (`boundary_tables.positions`), the ones the prover
+    Its rows are one held run of the class's ``positions`` strings (C, `boundary_tables.class_rows`), the ones the prover
     published for it (``published``, by name: `Interior.published`), and its registered root is round 1's, so the
     verifier holds what the reads open to the table served before the coins. ``bodies``: the interior's released public
     bodies by member key, which its leaf layer binds. Raises ValueError where round 1 registered no such table, or one
@@ -694,7 +694,7 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     replay block's, as `interior_window` takes them; a wired port's replayed rows must be its writers' output rows, which
     are what the interior commits. ``tables``: ``tables[i]`` sampled span i's, one a span exactly when a template reads a
     table: the table round 1 served (`boundary_tables.Kept.table`), as round 1's record ``served`` registers it under its
-    name, holding its class's ``positions`` strings (`boundary_tables.positions`). The interior commits none of them:
+    name, holding its class's ``positions`` strings (C, `boundary_tables.class_rows`). The interior commits none of them:
     every read must open its span's (`table_reads`), each read's ``root`` and ``domain`` rows are committed as the
     `supplied` values' rows, on the host, which its program takes (`table_values`: the stream is a window's, with them),
     and the tables' strings are published (`Interior.published`)."""
