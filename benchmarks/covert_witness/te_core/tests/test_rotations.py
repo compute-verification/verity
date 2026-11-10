@@ -52,6 +52,16 @@ def shallow(cut="4:q8,5:q8,6:q8"):
                    row("other", "param", [[D, D], [D, D]], 30)], ["--set", "blocks.[45]..*,norm", "--cut", cut])
 
 
+def own_basis(cut="all:q4c"):
+    """Every block trained, two micro-batches a step, each cut's forward coded in the residual's own basis: no forward
+    rotation, and the gradient rotated across each of the six cuts."""
+    return record([row("fwd", "updated", DD, 6 * 4 * 2), row("fwd", "updated", DOWN, 6 * 2),
+                   row("fwd", "updated", UP, 6 * 2 * 2), row("fwd", "theta", [[T, D], [D, V]], 2),
+                   row("bwd", "grad", DD, 6 * 4 * 2 + 6 * 2 * 2), row("bwd", "grad", [[D, T], [T, D]], 6 * 4 * 2),
+                   row("bwd", "grad", [[T, V], [V, D]], 2)], ["--set", "blocks\\..*,norm", "--cut", cut],
+                  weights=("blocks.0.wq.weight", "blocks.5.wq.weight", "norm"))
+
+
 def keys(log):
     return {" ".join(str(x) for x in r[:4]): r[4:] for r in log}
 
@@ -72,6 +82,21 @@ def test_a_cuts_rotations_are_the_d_by_d_products_beyond_the_blocks_own():
     assert rec["structures"]["s"]["log"][0][4] == 44, "the record itself is left as it was"
     assert labelled(out)["structures"]["s"] is out["structures"]["s"], "a named structure is named once"
     assert rotations.macs(rec, through=4) == 5 * 20 * one and rotations.macs(rec) == 10 * 20 * one
+
+
+def test_a_code_in_the_residuals_own_basis_rotates_only_the_gradient():
+    rec = own_basis()
+    out, counts = named(rec)
+    assert counts == {"s": {"bwd": 24}}
+    got = keys(out["structures"]["s"]["log"])
+    one = T * D * D
+    assert got[f"bwd grad mm {json.dumps(DD)} tf32"] == [24, 24 * one] and got[f"bwd grad mm {json.dumps(DD)}"] == [48, 48 * one]
+    assert [k for k in got if k.endswith("tf32")] == [f"bwd grad mm {json.dumps(DD)} tf32"]
+    assert rotations.cuts("all:q4c", 6) == ([1, 2, 3, 4, 5, 6], 0) and rotations.cuts("5:dq2cb4,6:q4", 6) == ([5, 6], 1)
+    with pytest.raises(Unread, match="0 forward ones, which are no two a cut a pass"):
+        named(own_basis("all:q4"))                   # six rotating cuts' forward products aren't in the log
+    with pytest.raises(Unread, match="12 forward d x d products beyond the blocks' own"):
+        named(shallow("4:q8c,5:q8c,6:q8c"))          # and a log that has them is no own-basis code's
 
 
 def test_the_stored_arguments_have_to_agree_with_the_log():

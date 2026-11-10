@@ -30,7 +30,8 @@ backward, and `param` in the optimizer's phase.
   have to agree, or the record is refused (`Unread`): the forward rotations are two a cut a coded pass, and the
   backward ones two a backward pass (the head's data gradient `[[T, V], [V, d]]` counts them) for each cut that has a
   trained weight below it (a cut at boundary B is the input of block B; the lowest trained block is read from the
-  record's updated weights' names).
+  record's updated weights' names). A code `q<bits>c` hands the forward on in the residual's own basis, with bits
+  allotted per coordinate and no rotation, so its cut has no forward product; its gradient still crosses rotated.
 
 A code that keeps only some rotated coordinates (`p<keep>` in a cut's code) has products of another shape, and a
 program this module doesn't know that takes one of the three arguments is refused too, never guessed.
@@ -62,6 +63,8 @@ DEFAULT_GROUP = 128
 #: the lf block's attention matrices (model.py's wq, wk, wv, wo), each one d x d product a pass
 ATTENTION = 4
 BLOCK = re.compile(r"blocks\.(\d+)\.")
+#: a cut's code whose forward is coded in the residual's own basis (train.py's `channel_code`), unrotated
+OWN_BASIS = re.compile(r"d?q\d+c[a-z0-9]*")
 
 
 class Unread(ValueError):
@@ -108,9 +111,10 @@ def unknown(record: dict) -> str | None:
     return None
 
 
-def cuts(spec: str, layers: int) -> list[int]:
-    """The boundaries of a `--cut` argument `B:CODE,...` (B from 1 to `layers`, or `all`), one per cut."""
-    out = []
+def cuts(spec: str, layers: int) -> tuple[list[int], int]:
+    """The boundaries of a `--cut` argument `B:CODE,...` (B from 1 to `layers`, or `all`), one per cut, and how many
+    of the cuts rotate their forward code (`OWN_BASIS` codes don't)."""
+    out, forward = [], 0
     for item in spec.split(","):
         b, _, code = item.partition(":")
         if not code or not re.fullmatch(r"[a-z0-9]+", code) or "q" not in code:
@@ -119,10 +123,12 @@ def cuts(spec: str, layers: int) -> list[int]:
             raise Unread(f"--cut {spec!r}: a p<keep> code's products are [[T, d], [d, keep]], which aren't read here")
         if b != "all" and not (b.isdigit() and 1 <= int(b) <= layers):
             raise Unread(f"--cut {spec!r}: boundary {b!r} is not all or 1..{layers}")
-        out += range(1, layers + 1) if b == "all" else [int(b)]
+        at = list(range(1, layers + 1)) if b == "all" else [int(b)]
+        out += at
+        forward += 0 if OWN_BASIS.fullmatch(code) else len(at)
     if len(set(out)) != len(out):
         raise Unread(f"--cut {spec!r} names a boundary twice")
-    return out
+    return out, forward
 
 
 def lowest_trained(record: dict) -> int | None:
@@ -194,7 +200,9 @@ def _adapter(log: list, r_: int) -> tuple[list, dict]:
     return out, n
 
 
-def _cuts(log: list, shape: dict, at: list[int], low: int | None) -> tuple[list, dict]:
+def _cuts(log: list, shape: dict, at: list[int], forward: int, low: int | None) -> tuple[list, dict]:
+    """`log` with a run's cuts' rotation products named: `at` the cuts' boundaries, `forward` of them rotating their
+    forward code, `low` the lowest trained block."""
     d, h, v = shape["d_model"], shape["d_ff"], shape["vocab"]
     back = None if low is None else sum(b > low for b in at)
     n = {"fwd": 0, "bwd": 0}
@@ -203,11 +211,11 @@ def _cuts(log: list, shape: dict, at: list[int], low: int | None) -> tuple[list,
         fwd = _count(log, "fwd", dd) - ATTENTION * _count(log, "fwd", [[t, h], [h, d]])
         passes = _count(log, "bwd", [[t, v], [v, d]])
         bwd = _count(log, "bwd", dd) - _count(log, "bwd", [[d, t], [t, d]])
-        why = f"--cut with {len(at)} cuts at {t} rows"
-        if fwd < 0 or fwd % (2 * len(at)):
+        why = f"--cut with {len(at)} cuts, {forward} rotating forward, at {t} rows"
+        if fwd < 0 or (fwd % (2 * forward) if forward else fwd):
             raise Unread(f"{why}: {fwd} forward d x d products beyond the blocks' own, which are no two a cut a pass")
         if bwd < 0 or bwd % 2 or (bwd and not passes) or (passes and (bwd % (2 * passes) or bwd // (2 * passes) > len(at)
-                                                                     or fwd < 2 * len(at) * passes)):
+                                                                     or fwd < 2 * forward * passes)):
             raise Unread(f"{why}: {bwd} backward d x d products beyond the weights' own over {passes} backward passes "
                          f"and {fwd} forward ones, which are no two a cut a pass")
         if passes and back is not None and bwd != 2 * passes * back:
@@ -249,7 +257,7 @@ def named(record: dict) -> tuple[dict, dict[str, dict]]:
                 raise Unread(f"--cut on a start of {(record.get('start') or {}).get('parameters')} parameters, whose "
                              "shape te_core.policy doesn't hold")
             layers = shape["n_layer"] + int(argument(args, "--grow") or 0)
-            log, got = _cuts(log, shape, cuts(found[CUTS], layers), lowest_trained(record))
+            log, got = _cuts(log, shape, *cuts(found[CUTS], layers), lowest_trained(record))
             n |= {k: n.get(k, 0) + x for k, x in got.items()}
         structures[sid] = dict(st, log=log)
         if any(n.values()):
