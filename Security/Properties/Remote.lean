@@ -18,7 +18,7 @@ commitment and SPOT's (the one-stage registration record, `Spot.OneStage.commitm
 forms) are the run's registration record, and the composite rejects unless both decode to one digest
 (`Core.Composition.strays` over `Core.Remote.tied`);
 the period's commitment is the auditor's ledger, and remote's tie (`Core.Remote.windows`) rejects unless every Commit
-record its windows name (`Core.Remote.windowRecords`) has that digest too. The policy's check
+record its windows name (`Core.Remote.executionPhaseRecords`) has that digest too. The policy's check
 (`NciCheck.Protocol.check`) refuses a record whose `program` is not the
 registered circuit's SHA-512 (`names`), then runs
 the check of record, `NciCheck.Baseline.evaluate`: the policy check at the size of the description
@@ -137,7 +137,7 @@ against. -/
 def InferenceOnlyHeld (ev : List Case) : Prop :=
   ∃ (kI kW kS : Case) (r : ByteArray), ev = [kI, kW, kS] ∧
     Properties.Composition.digestOf NciCheck.Protocol.protocol kI.commitment = some r ∧
-    (∀ ds, Core.Remote.windowRecords kW = some ds → ∀ d ∈ ds, d = r) ∧
+    (∀ ds, Core.Remote.executionPhaseRecords kW = some ds → ∀ d ∈ ds, d = r) ∧
     Properties.Composition.digestOf Spot.OneStage.protocol kS.commitment = some r ∧
     CaseHeld kI ∧ StageHeld kS
 
