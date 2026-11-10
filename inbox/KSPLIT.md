@@ -18,3 +18,10 @@ is the place for the per-kernel table.
    wait, end your turn naming the run; the lead resumes you.
 2. **Never list command lines, even filtered:** no `ps ... args`, `ps -ef`, `ps aux`, `pgrep -af` or `pgrep -a`. The
    exec daemon's arguments hold tokens. To find a process use `pgrep -f PATTERN` (pids only), and kill by pid.
+
+## Tue 10 Nov 08:07Z: PARKED. Mark nothing, run nothing
+
+Daniel pushed goal 4 back (top on TOP-394, 07:50Z): a fast check and the repository's new layout come first, and until
+the moves land only landing fixes, the maps and cleanup are marked. #8573 stays open and unmarked at d2ffef178d. Both
+of your suites runs ended rc 0. The lead resumes you after the moves land, to restack, recheck and mark. If you are
+running before that for any reason: write one line in your note, launch nothing, and end your turn.
