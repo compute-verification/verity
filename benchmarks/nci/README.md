@@ -192,10 +192,10 @@ cheater can declare blocks of weight matmuls, so `tiers.py` takes such a block's
 (each multiply-add's multiplication counted) rather than the recipe's average. The cheating share \(\chi\) grows as
 \(\sqrt{\kappa_{\text{block}}}\): 1.27x what 0.60 gives, and 1.77x at 2, a block of multiplications alone whose
 additions are left to another block. A proof block's outputs fit its Definition's public size class, a power of two
-from 16 to 262,144 bits, and an incorrect block injects the widest (`tiers.py`'s `step_bits` reads
-`verity.ml.circuits.partition_v2.UNIT_CLASS_MAX`). At `tiers.py`'s defaults, today's sparse-draw proving cost, the
-injected bits are then worth more than the fleet's capacity and \(\chi\) stops at 1: sampled proofs (T5) bound nothing
-there, and bound something only at a lower proving cost (`statement.py`'s known holes).
+from 16 to 262,144 bits, and an incorrect block injects the widest (`tiers.py`'s `step_bits` reads it from
+`verity.ml.circuits.partition_v2`). At `tiers.py`'s defaults, today's proving cost at sparse samples, the
+injected bits are then worth more than the fleet's capacity and \(\chi\) stops at 1: SPOT (T5) bounds nothing
+there, and bounds something only at a lower proving cost (`statement.py`'s known holes).
 
 `--sweep` prints the bracket over a grid of `b_w` and `b_a`. `--efficiency` prices training recipes (BF16, FP8,
 4-bit, ternary, and extrapolated 2- and 1-bit) at the rates their matmuls read, each with its compute multiplier

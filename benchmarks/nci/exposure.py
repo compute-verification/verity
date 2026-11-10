@@ -110,7 +110,7 @@ WIPE_2GB = {"pous_rounds": 74000.0, "pous_floor": 0.0, "unfilled_gb": 1.83}
 #: the threading ReferenceThreaded gives under its conjecture, at which the closed-form memory cap binds
 KEYED = {"d": T.REFERENCE_THREADED[0]}
 #: batched proving's cost, at which the injecting blocks' pool is worth less than the fleet's capacity; at today's sparse
-#: draws it is worth more, and ``evaluate`` stops the cheating share at 1, which the closed form chi does not
+#: samples it is worth more, and ``evaluate`` stops the cheating share at 1, which the closed form chi does not
 BATCHED = {"overhead": 1.6e8}
 #: points where a closed form is checked against evaluate(): the probe, its overrides, the tier, the term (eta against
 #: the bound, mu against the monitored part when memory caps it, nu against the declared part, chi against the cheating
@@ -129,7 +129,7 @@ CHECKS = [
      "helpers refill R_wipe; sigma joins lambda_in"),
     ("defaults", {}, "T1", "nu", "Lambda(K) = K / (2 d b_w)"),
     ("K 1e6", {"K": 1e6}, "T1", "nu", "Lambda(K) = e"),
-    ("512 draws per statement", DESIGN | {"overhead": 1.7e10}, "T5", "chi",
+    ("512 samples per statement", DESIGN | {"overhead": 1.7e10}, "T5", "chi",
      "(1, 0) above thread_bits: one block is full at S_1"),
     ("batched proving", DESIGN | BATCHED, "T5", "chi", "overhead 1.6e8"),
     ("1,000 servers, batched", DESIGN | BATCHED | {"nodes": 1e3}, "T5", "chi", "the pool doesn't shrink with the fleet"),
@@ -140,7 +140,7 @@ CHECKS = [
                               "wipe_s": 1.0, "d": 65536.0}, "T3", "mu",
      "breaks: R_wipe < d b_w e, the cap floors at nu"),
     ("design", DESIGN, "T5", "chi",
-     "breaks: at sparse draws the pool is worth more than the fleet's capacity, where the share stops at 1"),
+     "breaks: at sparse samples the pool is worth more than the fleet's capacity, where the share stops at 1"),
     ("whole embedding table", KEYED | BATCHED | {"thread_bits": 2.94e9}, "T5", "chi",
      "breaks: threading certified past S_1, the chord ends at thread_bits"),
     ("proofs nearly free", {"overhead": 1.0, "replay": 1.0, "share": 0.5}, "T5", "chi",

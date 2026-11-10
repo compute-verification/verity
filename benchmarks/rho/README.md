@@ -57,7 +57,7 @@ beside it (`circuits.py`).
   never restated in a file (`params.sourced`). From `verity`: the monitoring periods; the output bits an accepted
   incorrect proof block injects (`step_bits`), the widest public size class of a block's outputs, a power of two from
   16 to 262,144 bits (`verity.ml.circuits.partition_v2`); the per-window δ (`verity.core.protocols.profile`), once
-  for a window's coins and for the sampled proofs' draw and twice for the window's cryptography; and the reporting δs
+  for a window's coins and for SPOT's sample and twice for the window's cryptography; and the reporting δs
   the incorrect-outputs row reports at. From `benchmarks/census`: the reference datacenter's machines
   (`deployments.json`), the count of each reference fleet of 8-GPU servers, and the world's active parameters
   (`adversary.json`). From `benchmarks/nci/calibrations.json`: the calibrated policy's `K`, with the least and the

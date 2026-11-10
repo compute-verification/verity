@@ -158,7 +158,7 @@ def test_the_ladders_fit_bound_is_fit_row_at_the_memory_rungs():
 
 
 def test_the_fit_edges_are_where_the_fit_bound_crosses_each_level():
-    """T5 reaches no level: chi alone holds it to max(1, MFU_0 / chi), which is 1 at today's sparse draws."""
+    """T5 reaches no level: chi alone holds it to max(1, MFU_0 / chi), which is 1 at today's sparse samples."""
     edges = S.fit_edges()
     assert set(edges["T5"].values()) == {None} and max(1.0, P["mfu"] / S.cheat(P)) == S.capped(P, "T5", 0.0) == 1
     assert edges["T3"][2.0] == math.inf and S.capped(P, "T3", math.inf) > 2
@@ -212,7 +212,7 @@ def test_the_thresholds_are_on_d_not_on_one_over_eta():
 
 def test_chi_is_the_chord_times_the_pool():
     """chi = 2 m chord bits / (kappa C), at most 1, and the injected bits scale with (overhead + replay) / share +
-    floor_steps. At today's sparse draws it is 1; at 512 draws per statement it is below."""
+    floor_steps. At today's sparse samples it is 1; at 512 samples per statement it is below."""
     def pool(overhead: float) -> float:
         return (overhead + P["replay"]) / P["share"] + P["floor_steps"]
     today, many = S.holes()["cases"]

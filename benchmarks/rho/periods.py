@@ -1,7 +1,7 @@
 """`periods.py`: the slowdown per monitoring period, over one datacenter and over the world's compute.
 
 For each scenario (by default the measured H200 ones, `reference-onsite-h200` and `reference-remote-h200`, the remote
-one with sampled proofs beside it, `reference-remote-h200-sampled`, and today's operating point,
+one with its proofs sampled beside it, `reference-remote-h200-sampled`, and today's operating point,
 `reference-onsite-h200-today`) on each fleet (`FLEETS`: one 100k-GPU datacenter, and the world's compute, the census's
 world-inference-2027) and each monitoring period (`PERIODS`, core's, through `rho.params`), with the scenario's own
 `fleet` and `horizon` choices overridden (`scenario.<name>.fleet`, `scenario.<name>.horizon`):

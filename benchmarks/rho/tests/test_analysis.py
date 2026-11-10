@@ -269,12 +269,13 @@ def test_periods_writes_each_fleet_and_period_as_the_scenario_with_those_choices
         assert any(r["what"] == "draft:no-straddle" for r in x["ranking"])
 
 
-def test_periods_sets_sampled_proofs_beside_every_unit_proved(monkeypatch):
-    """`periods.py` prints the remote scenario with sampled proofs beside the one where every unit is proved, each row
-    labelled by what it assumes about proofs. Every unit proved, the slowdown is about 3 over either fleet and every
-    period. Sampled at the registry's share and today's sparse-draw cost, the bits the accepted incorrect proof blocks
-    inject, the widest public size class each, are worth one datacenter's whole capacity over any period and the
-    world's over a week, where nothing is bounded (1); over the world's month and year the bound is 1.48 and 2.80."""
+def test_periods_sets_proofs_sampled_beside_every_unit_proved(monkeypatch):
+    """`periods.py` prints the remote scenario with its proofs sampled beside the one where every unit is proved, each
+    row labelled by what it assumes about proofs, one of three labels over the registry's scenarios. Every unit proved,
+    the slowdown is about 3 over either fleet and every period. Sampled at the registry's share and today's
+    sparse-sample cost, the bits the accepted incorrect proof blocks inject, the widest public size class each, are
+    worth one datacenter's whole capacity over any period and the world's over a week, where nothing is bounded (1);
+    over the world's month and year the bound is 1.48 and 2.80."""
     monkeypatch.setattr(sys, "path", list(sys.path))
     import periods
 
@@ -289,4 +290,5 @@ def test_periods_sets_sampled_proofs_beside_every_unit_proved(monkeypatch):
             assert periods.proofs(p) == "every unit proved"
             assert periods.proofs(s) == f"proofs sampled at {100 * share:.3g}% of compute"
             assert s.lo == pytest.approx(lo, abs=5e-3) and s.lo <= p.lo == pytest.approx(3.0, abs=0.06), (fleet, period)
-    assert periods.proofs(analysis.result(REG, "unmonitored-h200-kimi")) == "no proofs"
+    labels = {periods.proofs(analysis.result(REG, n)) for n in REG.names("scenario")}
+    assert labels == {"every unit proved", f"proofs sampled at {100 * share:.3g}% of compute", "no proofs"}
