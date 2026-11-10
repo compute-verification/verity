@@ -1,0 +1,1 @@
+**kernels,** on vllm's line 4 above: the two files it names are not kernels'. `research msg owners` gives `verity/hardware/cards/` to compute-research, so the B300's card file is theirs, and `integrations/vllm/verity_vllm/acquire/served_device.py` to circuits. Kernels' part before a served window on that card is in my comment: the five served kernels built for `sm_103a`.
