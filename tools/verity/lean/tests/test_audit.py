@@ -5142,7 +5142,7 @@ def test_another_package_reads_a_sampled_dependency_s_build_unchanged_while_the_
     """A dependent's sample takes modules of its path dependency, whose `.lake/build` other packages' audits read at the same
     time: their tests open its `.olean` files, and `main` re-hashes every package's sealed `.olean` files after each audit
     (`tampered`). Both look inside the recompile's window, as it starts and as Lake returns, and find every file of both
-    builds at its path with its bytes; afterwards no file was written. #8258 moved the sample's outputs out and back, and
+    builds at its path with its bytes; afterwards no file was written. When the sample moved its outputs out and back,
     this failed in the window: `D.olean` was missing."""
     if not A.sandboxed():
         pytest.skip("no sandbox here, so the recompile has no overlay to run in")
