@@ -153,7 +153,9 @@ def ssh_args(key: str | None = None) -> list[str]:
 
 
 def gate_call(gate: str, args: list[str], ssh: Sequence[str] = SSH, run: Callable[..., Any] = subprocess.run) -> dict:
-    """The gate's answer to `args` (``ssh GATE VERB ...``, quoted for the gate's shell words); a refusal raises."""
+    """The gate's answer to `args` (``ssh GATE VERB ...``, quoted for the gate's shell words); a refusal raises. The
+    refusal quotes the gate's reason or ssh's stderr, never the answer itself: an open's answer holds its session's
+    secret."""
     p = run([*ssh, gate, shlex.join(args)], capture_output=True, text=True)
     try:
         got = json.loads(p.stdout)
@@ -161,8 +163,8 @@ def gate_call(gate: str, args: list[str], ssh: Sequence[str] = SSH, run: Callabl
         got = None
     if p.returncode or not isinstance(got, dict) or "refused" in got:
         why = got.get("refused") if isinstance(got, dict) else None
-        raise Ch.CoinError(f"infra's gate refused {args[0]}: "
-                           f"{why or p.stderr.strip() or p.stdout.strip() or f'exit {p.returncode}'}")
+        unread = "" if why or not p.stdout.strip() else f" (its answer, {len(p.stdout)} characters, is not quoted)"
+        raise Ch.CoinError(f"infra's gate refused {args[0]}: {why or p.stderr.strip() or f'exit {p.returncode}'}{unread}")
     return got
 
 

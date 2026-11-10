@@ -67,14 +67,15 @@ class ChallengerGate:
         self.command, self._run = shlex.split(command), run
 
     def call(self, *words: str) -> dict[str, Any]:
-        """The gate's JSON answer to `words`; `CoinError` naming a refusal (exit 3, ``{"refused"}``) or a broken answer."""
+        """The gate's JSON answer to `words`; `CoinError` naming a refusal (exit 3, ``{"refused"}``) or a broken answer,
+        by its size alone: an open's answer holds its session's secret, so an answer that isn't a refusal is never quoted."""
         rc, text = self._answer(words)
         try:
             doc = json.loads(text)
         except ValueError:
             doc = None
         if rc != 0 or not isinstance(doc, dict) or "refused" in doc:
-            why = doc.get("refused") if isinstance(doc, dict) else (text or "").strip()[:300]
+            why = doc.get("refused") if isinstance(doc, dict) else f"an answer of {len(text or '')} characters that is not JSON"
             raise CoinError(f"the challenger gate refused {words[0]} (exit {rc}): {why}")
         return doc
 
