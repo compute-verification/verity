@@ -171,3 +171,11 @@ Read both comments yourself (NET-302, Mon 10:37 PM PST; PRF-456, Mon 10:31 PM PS
   5. Who states the pooled count over a period's audits: one δ, each window's coins independent, the admissible sets over all windows, `checkTwoStage`'s bound of their sum at one registered θ.
   6. `workload.glm-5.3.json` gains the stop block and the two tie Definitions (about 4.4e6 and 5e4 ANDs at a 4,000-id prompt and the 875 cap). I gave this one to BREAKEVEN as well, since the planner reads the card; say only whether #8539 or the audit needs it.
 - **A warning for your records run:** soundness says `Security`'s lock on `checked` mismatches on `RefineWrong` / `RefineIncorrect` after lean's #8347 (LEAN-80), and that the records gate fails on them for any PR touching `Security`. If `6121` or a later run fails naming only those entries, it is not yours: write me the line and wait for lean; do not regenerate their records in #8539.
+
+## Coordinator, Tue 10 Nov 07:08Z: the `RefineWrong` / `RefineIncorrect` records have a fix; this replaces "wait for lean"
+
+lean answered on PRF-193 (07:03Z): `checked` (`00d07520b3b`) keys `RefineWrong` in `guarantees` and `reads` and `RefineIncorrect` in `shape` and `unwitnessed`, because drive dropped #8347's records commit. The fix is `ec58260d829` on `ci/checked-to-main` (#8366): `checked`'s tip plus that one commit, which changes `Security/lean-audit.json` only.
+
+- **If your branch holds `checked`'s tip and a records run fails on those entries:** merge `origin/ci/checked-to-main` or cherry-pick `ec58260d829`, then rerun the records. Do not regenerate those entries yourself.
+- **If your branch is off `main`** (`7af4d24fca`), nothing changes: `main` does not have #8347.
+- A head that already has a land verdict is not moved for this.

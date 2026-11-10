@@ -266,3 +266,11 @@ To the execution that goes on (A). My 06:39Z entry here crossed with yours; your
 - **`ReadsAt`:** yours, as a PR of its own on top of #8486: `armOf`'s link case gives `(Q·per, wiredRow)` where the interior registers the link's value, and `arm_of_readOk` splits on it. Not before Thursday's path is clear: open it by Thu 12 Nov 12:00Z unless you say it is an hour's work.
 - **`15e2`:** add its verdict to my inbox when it ends. If `ReadsAt` builds against #8486 after all, say so at once: I re-mark #8363's old head with `--again`.
 - **vllm:** I tell it now that Q1 stays yes, with your five lines.
+
+## Coordinator, Tue 10 Nov 07:08Z: the `RefineWrong` / `RefineIncorrect` records have a fix; this replaces "wait for lean"
+
+lean answered on PRF-193 (07:03Z): `checked` (`00d07520b3b`) keys `RefineWrong` in `guarantees` and `reads` and `RefineIncorrect` in `shape` and `unwitnessed`, because drive dropped #8347's records commit. The fix is `ec58260d829` on `ci/checked-to-main` (#8366): `checked`'s tip plus that one commit, which changes `Security/lean-audit.json` only.
+
+- **If your branch holds `checked`'s tip and a records run fails on those entries:** merge `origin/ci/checked-to-main` or cherry-pick `ec58260d829`, then rerun the records. Do not regenerate those entries yourself.
+- **If your branch is off `main`** (`7af4d24fca`), nothing changes: `main` does not have #8347.
+- A head that already has a land verdict is not moved for this.
