@@ -49,7 +49,7 @@ theorem Design.Two.Pa_le_prod (d : Design.Two) (Pt : Partition) (fp : ℕ → �
 population's `N` replay blocks misses each set `T` of replay blocks with probability at most `(1 − Q/N)^{|T|}`. -/
 theorem Design.Two.subset_Pa_le (d : Design.Two) {Q : ℕ} (hd : SubsetDesign d.replay Q)
     {c : List (List (List ℕ))} (hP : d.part.classes = [c]) (hQ : Q ≤ c.flatten.length) :
-    ∀ T ⊆ range d.part.blocks.length, d.replay.Pa d.part T ≤ ∏ ρ ∈ T, (1 - (Q : ℝ) / c.flatten.length) := by
+    ∀ T ⊆ range d.part.blocks.length, d.replay.Pa d.part T ≤ ∏ _ρ ∈ T, (1 - (Q : ℝ) / c.flatten.length) := by
   set N := c.flatten.length
   have hlen : d.part.blocks.length = N := EndToEndDraw.blocks_length hP
   intro T hT

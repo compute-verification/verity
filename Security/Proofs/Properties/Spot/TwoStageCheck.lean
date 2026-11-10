@@ -181,7 +181,7 @@ theorem bits_of_rankin {D : Point} {b : ℚ} (hb : checkTwoStage D = some b) {n 
 
 /-- **The registered first stage meets Rankin's rates' hypothesis** at the uniform rate `q`. -/
 theorem firstStage_le {s : AuditStatement} {Pt : Partition} {d : Design.Two} (hs : InScopeTwo Pt d s) {q : ℝ}
-    (hq1 : q ≤ 1) (h : FirstStageAt d q) :
+    (h : FirstStageAt d q) :
     ∀ T ⊆ range d.part.blocks.length, d.replay.Pa d.part T ≤ ∏ _ρ ∈ T, (1 - q) := by
   intro T hT
   rcases h with ⟨num, den, hr, hle⟩ | ⟨Q, c, hr, hP, hQ, hqQ⟩
@@ -223,7 +223,7 @@ theorem twoStageCheckSound_form (D : Point) (b : ℚ) (hb : checkTwoStage D = so
     ((∑ T ∈ admissibleTwo Pt d D.δ, 2 ^ bitsOf s Pt T : ℕ) : ℝ) ≤ (2 : ℝ) ^ (b : ℝ) := by
   obtain ⟨-, hq1, hθ, hδ, -⟩ := valid_of_check hb
   have hq1' : ((D.q : ℚ) : ℝ) ≤ 1 := by exact_mod_cast hq1
-  have hR := admissibleTwo_rankin s Pt d (fun _ => (D.q : ℝ)) D.δ D.θ hs (firstStage_le hs hq1' hfirst)
+  have hR := admissibleTwo_rankin s Pt d (fun _ => (D.q : ℝ)) D.δ D.θ hs (firstStage_le hs hfirst)
     (fun _ => hq1') (by exact_mod_cast hδ) (by exact_mod_cast hθ)
   refine bits_of_rankin hb cls hR (fun ρ _ => rankinFactor_nonneg s Pt d hq1' _ ρ) (fun ρ hρ c v hc hv => ?_)
     (fun ρ hρ => (hcov.1 ρ hρ).imp fun _ h => h.1) hcov.2
@@ -244,7 +244,7 @@ theorem twoStageCheckPatternsSound_form (D : Point) (b : ℚ) (hb : checkTwoStag
   obtain ⟨-, hq1, hθ, hδ, -⟩ := valid_of_check hb
   have hq1' : ((D.q : ℚ) : ℝ) ≤ 1 := by exact_mod_cast hq1
   have hR := admissibleTwo_rankin_patterns s Pt d (fun _ => (D.q : ℝ)) D.δ D.θ R req hs
-    (firstStage_le hs hq1' hfirst) (fun _ => hq1') (by exact_mod_cast hδ) (by exact_mod_cast hθ) hreq.1
+    (firstStage_le hs hfirst) (fun _ => hq1') (by exact_mod_cast hδ) (by exact_mod_cast hθ) hreq.1
   refine bits_of_rankin hb cls hR (fun ρ _ => rankinFactorPatterns_nonneg s Pt d req hq1' _ ρ)
     (fun ρ hρ c v hc hv => ?_) (fun ρ hρ => (hcov.1 ρ hρ).imp fun _ h => h.1) hcov.2
   obtain ⟨c', hc', hcv⟩ := hcov.1 ρ hρ
@@ -284,7 +284,7 @@ theorem twoStageCheckServedSound_form (D : Point) (b : ℚ) (hb : checkTwoStage 
       exact hserve.2 ρ hρ c hc
     · simp only [hS, hρ, ↓reduceIte, le_refl]
   have hR := admissibleTwo_rankin_served s Pt d (fun _ => (D.q : ℝ)) D.δ D.θ R req S hs
-    (firstStage_le hs hq1' hfirst) (fun _ => hq1') (by exact_mod_cast hδ) (by exact_mod_cast hθ) hserve.1 hle
+    (firstStage_le hs hfirst) (fun _ => hq1') (by exact_mod_cast hδ) (by exact_mod_cast hθ) hserve.1 hle
   refine bits_of_rankin hb cls hR (fun ρ _ => rankinFactorCapped_nonneg s Pt d _ hq1' _ ρ)
     (fun ρ hρ c v hc hv => ?_) (fun ρ hρ => (hcov.1 ρ hρ).imp fun _ h => h.1) hcov.2
   obtain ⟨c', hc', hcv⟩ := hcov.1 ρ hρ
