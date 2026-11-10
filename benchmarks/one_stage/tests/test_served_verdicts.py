@@ -326,7 +326,7 @@ def test_a_published_line_holds_a_loads_tokens_and_span_and_leaves_the_inference
         assert S.public_line(line) == line and S.public_line(line + "\n") == line + "\n"
 
 
-def test_the_sampled_proofs_line_names_the_partition_and_its_draw_and_no_advice_length_population_or_steps(tmp_path, capsys):
+def test_the_spot_line_names_the_partition_and_its_draw_and_no_advice_length_population_or_steps(tmp_path, capsys):
     row = {"ok": True, "accepted": True, "draw": [0, 2], "population": 37,
            "leak": {"advice_bits": 832, "bound": "vacuous", "other_inputs": 786432, "registered": 0}}
     part = {"templates": ["SiluMul_v2{I=8192}"], "law": "subset:2",
@@ -483,7 +483,7 @@ def _rows(integrity: dict, pieces: Path) -> dict:
     return {"integrity": integrity, **{k: S.piece_row(k, pieces) for k in S.PIECES}, "wipe": S.piece_row("wipe", pieces)}
 
 
-def test_sampled_proofs_alone_composes_to_a_pending_block_record(tmp_path):
+def test_spot_alone_composes_to_a_pending_block_record(tmp_path):
     report, rec, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1")
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
     assert BR.check(rec) == {}
@@ -544,7 +544,7 @@ def test_an_accepted_certifier_answer_says_what_its_trusted_host_premise_rests_o
 
 
 def test_an_audit_that_wrote_nothing_composes_to_reject_with_no_block_record(tmp_path):
-    row = S.sampled_proofs_row(tmp_path)
+    row = S.spot_row(tmp_path)
     assert row["verdict"] == "error" and "no summary" in row["reason"]
     _report, rec, line = S.record(_rows(row, tmp_path), window=1, steps=(5, 11), node="n", run=None)
     assert rec is None and (line["composed"], line["by"]) == ("reject", ["sampled proofs"])
@@ -565,7 +565,7 @@ def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_serve
     names no server and stays missing (``unserved``), a wipe that wrote no answer (served_wipe.sh refused) stays missing
     with its issue, and one whose answer rejects makes the record reject with no block record."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
-    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     wipe = tmp_path / "pieces" / "wipe"
     wipe.mkdir(parents=True)
     if case == "refused":
@@ -624,7 +624,7 @@ def test_the_record_accepts_only_when_every_subprotocol_accepts_on_its_node_and_
     why; one that rejects, or accepts with outputs that are not its leg's certificate, makes it ``reject`` naming it, with
     no block record; one about another server leaves it ``pending``, carried and named as elsewhere."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
-    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces = tmp_path / "pieces"
     for comp in COMPONENTS:
         (d := pieces / comp).mkdir(parents=True)
@@ -679,13 +679,13 @@ def test_the_record_accepts_only_when_every_subprotocol_accepts_on_its_node_and_
         assert rec["legs"][leg]["server"] == "vy-dc-h200-2" and rec["composed"]["elsewhere"] == [leg]
 
 
-def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(tmp_path, monkeypatch, capsys):
+def test_remote_runs_no_onsite_piece_and_composes_spot_and_pouw_alone(tmp_path, monkeypatch, capsys):
     """PRODUCT=remote: `pieces` runs PoUW's piece and no onsite one, whatever its command, printing a DROPPED line for
     each; the record names PoUS, the bandwidth audit, the network certifier and the wipe dropped, neither missing nor
     composed, whatever their pieces left, and composes accept from sampled proofs' and PoUW's accepts on its node. The
     same pieces composed for onsite reject on the wipe's answer."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
-    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces, ran = tmp_path / "pieces", tmp_path / "ran"
     pouw = {"verdict": "accept", "reason": None, "commitment": "ef" * 64, **ACCEPTS["pouw"]}
     env = {"POUW_CMD": f"echo '{json.dumps(pouw)}' > \"$3/answer.json\"",
@@ -982,7 +982,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), **extra: str | None) 
     limits."""
     tree, bin_, venv, d = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin", tmp_path / "serve"
     for p in (tree / "benchmarks" / "prove_path", tree / ".venv" / "bin", tree / "verity" / "core" / "service" / "flock",
-              tree / "verity" / "core" / "service" / "sampled_proofs", tree / "verity" / "ml" / "flock" / "pod", bin_, venv,
+              tree / "verity" / "core" / "service" / "spot", tree / "verity" / "ml" / "flock" / "pod", bin_, venv,
               d / "advice" / "w7" / "private", tmp_path / "row"):
         p.mkdir(parents=True)
     (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(FAKE_V3C_PROVE_PATH)

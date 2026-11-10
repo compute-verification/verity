@@ -77,8 +77,8 @@ from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.pouw.circuit import seeds as SD
-from verity.core.protocols.sampled_proofs.one_stage import partition as P
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import partition as P
+from verity.core.protocols.spot.one_stage import registered as G
 
 HM96 = hm96.SHA512
 SALT_BYTES = 192

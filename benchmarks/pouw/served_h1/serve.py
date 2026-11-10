@@ -40,7 +40,7 @@ roots follow the step's real rows, so this window doesn't use them (the seeded m
 * **Coins** (``--coins``): seeded, the option's one salt, opened at install before serving; or live, a round a step from
   the proof system's challenger (`coins.py`), whose salt coin opens first, against the registration root over the
   weights' root and the queue's root.  Step s's round root, over its A root and its admit root, is recorded before round
-  s's coin opens (`sampled_proofs.challenger.LiveRecord`), and the step's units take the round's salt (`h1tile.live_salt`:
+  s's coin opens (`spot.challenger.LiveRecord`), and the step's units take the round's salt (`h1tile.live_salt`:
   `window.round_key(...).stream(0, 64)`), so every candidate and every selection a round's noise reads is committed before
   that noise's coin.  The gate's units come from the sampling coin, opened after the window's receipts root (`receipts_root`).
   This window has no gated session of its own: the gated served window of record is vllm's
@@ -521,7 +521,7 @@ def run(a: argparse.Namespace) -> dict:
     if live:
         from verity.core.protocols.pouw import window as Wd
         from verity.core.protocols.pouw.circuit import h1tile as HT
-        from verity.core.protocols.sampled_proofs import challenger as Ch
+        from verity.core.protocols.spot import challenger as Ch
         live_salt = cs.salt(registration)
         rounds = cs.rounds
 
@@ -750,7 +750,7 @@ def run(a: argparse.Namespace) -> dict:
                           "root] (domain identity_digest_sha512('verity/pouw/served-h1/round/v0', {window, step, leaves})); "
                           "the A root (roots.a_step) is the tree over the step's A-table roots, AROW's row tables, in "
                           "linear order ('a-step', {window, step, linears}), the admit root likewise ('admit-step'); it "
-                          "is recorded through sampled_proofs.challenger.LiveRecord before round s's pouw/round coin "
+                          "is recorded through spot.challenger.LiveRecord before round s's pouw/round coin "
                           "opens; the step's 64-byte H1 salt is h1tile.live_salt = "
                           "window.round_key(commitment, coin_s, s, root_s).stream(0, 64), the tile's coin port; each "
                           "tile derives its own noise from it, its public position and its roots, inside the tile")

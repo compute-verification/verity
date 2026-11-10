@@ -19,7 +19,7 @@ import epoch_coins_vectors as V
 from verity.core.protocols.pouw import coins as EC
 from verity.core.protocols.pouw import verifier
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.spot import challenger as Ch
 from verity.core.protocols.pouw.audit import Epoch, Workload, salt_of, weights_root
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
 from verity.core.protocols.pouw.schemes import ncp
@@ -173,7 +173,7 @@ def test_a_served_window_draws_every_coin_from_its_entropy_and_none_from_the_os(
 OS_RANDOMNESS = {
     "pouw/circuit/anchors.py": "ncp-v2's window secret (`Ledger.open`'s `_fresh_source`, `secrets`), named by A5's "
                                "uniform/python-secrets",
-    "sampled_proofs/one_stage/verifier.py": "a placeholder nonce in the JSON it writes to the Lean (`_dumps`), no coin",
+    "spot/one_stage/verifier.py": "a placeholder nonce in the JSON it writes to the Lean (`_dumps`), no coin",
 }
 
 
@@ -184,7 +184,7 @@ def test_the_served_path_takes_no_os_randomness_for_its_coins():
     import ast
     root = Path(EC.__file__).resolve().parents[1]
     found = set()
-    for path in [*(root / "pouw").rglob("*.py"), *(root / "sampled_proofs").rglob("*.py")]:
+    for path in [*(root / "pouw").rglob("*.py"), *(root / "spot").rglob("*.py")]:
         rel = path.relative_to(root).as_posix()
         if "/tests/" in f"/{rel}" or "/.lake/" in f"/{rel}":
             continue

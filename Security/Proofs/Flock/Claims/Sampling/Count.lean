@@ -1,13 +1,13 @@
 module
 
 public import Batteries.Tactic.OpenPrivate
-public import SampledProofs.Bound
+public import Spot.Bound
 public import Proofs.Flock.Claims.Sampling.Escape
 
 /-!
 # The deployed count bound, at the claims' strata samples
 
-`SampledProofs.Bound.countBound strata δ` is what the sampled verifier publishes as the most incorrect proof blocks an accepted
+`Spot.Bound.countBound strata δ` is what the sampled verifier publishes as the most incorrect proof blocks an accepted
 transcript holds except with probability `δ`: it multiplies the strata's factors `(n − j − k)/(n − j)` greedily, the
 largest available first, and stops before the product falls below `δ`. Here it is proved, as the code is, against the
 claims' `Design.miss` (`Definitions.Claims.Sampling`):
@@ -32,8 +32,8 @@ set_option backward.privateInPublic.warn false
 
 namespace Claims.Sampling.Count
 
-open Finset SampledProofs.Bound
-open private next reduce atLeast from SampledProofs.Bound
+open Finset Spot.Bound
+open private next reduce atLeast from Spot.Bound
 
 /-! ## A stratum's factors -/
 
@@ -611,6 +611,6 @@ theorem countBound_miss_design {d : Design} {P : Partition} (hw : d.WellFormed P
 /-- `Bound.strataOf` reads the uniform `k`-subset as one stratum of every unit, the strata `OneStage.strata` gives
 `subset`. -/
 theorem strataOf_subset (N k : ℕ) :
-    SampledProofs.Bound.strataOf N (.subset k) = some #[{ name := "unit", size := N, k }] := rfl
+    Spot.Bound.strataOf N (.subset k) = some #[{ name := "unit", size := N, k }] := rfl
 
 end Claims.Sampling.Count

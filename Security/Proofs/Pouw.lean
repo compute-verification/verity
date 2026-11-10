@@ -57,7 +57,7 @@ public import Proofs.Pouw.Fp8Atom.Proofs
 public import Proofs.Pouw.FpG1
 public import Proofs.Pouw.FpG1.H1
 public import Proofs.Pouw.Game
-public import SampledProofs.HiddenDraw
+public import Spot.HiddenDraw
 public import Proofs.Pouw.H1Zy
 public import Proofs.Pouw.LiveCredit
 public import Proofs.Pouw.M1

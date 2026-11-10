@@ -207,19 +207,19 @@ theorem drawSize_deployed {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (hla
 /-- **The deployed session's sample**: the device's one-stage rounds (`Properties.Challenger.oneStageRounds`),
 `MAX_COINS` coins of `8 * COIN_BYTES` raw bits each. -/
 abbrev DeployedCoins : Type :=
-  Fin _root_.SampledProofs.Challenger.MAX_COINS → Fin (8 * _root_.SampledProofs.Challenger.COIN_BYTES) → Bool
+  Fin _root_.Spot.Challenger.MAX_COINS → Fin (8 * _root_.Spot.Challenger.COIN_BYTES) → Bool
 
 /-- The length of the deployed sample's one byte stream: the coins' bytes. -/
 abbrev deployedLb : Fin 1 → ℕ :=
-  fun _ => _root_.SampledProofs.Challenger.MAX_COINS * _root_.SampledProofs.Challenger.COIN_BYTES
+  fun _ => _root_.Spot.Challenger.MAX_COINS * _root_.Spot.Challenger.COIN_BYTES
 
 /-- **The deployed sample's bytes**: the coins' bytes in order, coin `c`'s byte `q` at `c * COIN_BYTES + q`
 (`coinBytes`). -/
 noncomputable abbrev deployedSrc : DeployedCoins → (i : Fin 1) → Fin (deployedLb i) → Fin 256 :=
-  coinBytes _root_.SampledProofs.Challenger.MAX_COINS _root_.SampledProofs.Challenger.COIN_BYTES
+  coinBytes _root_.Spot.Challenger.MAX_COINS _root_.Spot.Challenger.COIN_BYTES
 
 /-- **A3 at the deployed sample's bytes** (`Live.hA3`), with no premise (`uniformRandomBytes_coinBytes`). -/
 theorem uniformRandomBytes_deployed : Assumptions.UniformRandomBytes deployedLb deployedSrc :=
-  uniformRandomBytes_coinBytes _root_.SampledProofs.Challenger.MAX_COINS _root_.SampledProofs.Challenger.COIN_BYTES
+  uniformRandomBytes_coinBytes _root_.Spot.Challenger.MAX_COINS _root_.Spot.Challenger.COIN_BYTES
 
 end Verity.Sampled

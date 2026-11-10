@@ -31,7 +31,7 @@ from verity.ml.commitments import (Commitment, CommitmentDomain, MerkleTree, Ope
                                            VerificationLimits, verify_opening)
 from verity.ml.commitments import domains, hm96
 from verity.ml.commitments.scheme import DIGEST_BYTES
-from verity.core.protocols.sampled_proofs.challenger import coin_claim
+from verity.core.protocols.spot.challenger import coin_claim
 
 from .protocol import DomainError, tagged
 

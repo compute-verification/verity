@@ -104,7 +104,7 @@ from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw.circuit import h1device as HD
 from verity.core.protocols.pouw.circuit import h1tile as HT
 from verity.core.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G
+from verity.core.protocols.spot.one_stage import partition as P, registered as G
 from verity.ml.circuits.codec import canonical_json, descriptor_chunks, encode_program
 from verity.ml.circuits.program import Program
 

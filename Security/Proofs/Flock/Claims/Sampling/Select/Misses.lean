@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.Claims.Sampling.Select.Bounds
 
 /-!
-# `Slots.select` misses a set of slots no more often than the claims' `P_a` (`Properties.SampledProofs.DrawMisses`)
+# `Slots.select` misses a set of slots no more often than the claims' `P_a` (`Properties.Spot.DrawMisses`)
 
 * `misses_layout`: a sample that checks no proof block at a slot of `B` leaves `B` no input slot, and proves no unit at a
   population slot of `B`.
@@ -13,9 +13,9 @@ public import Proofs.Flock.Claims.Sampling.Select.Bounds
 
 @[expose] public section
 
-open SampledProofs
+open Spot
 
-namespace Properties.SampledProofs.SecurityProofs
+namespace Properties.Spot.SecurityProofs
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit Finset Claims.Sampling
 
@@ -243,7 +243,7 @@ theorem law_bound (d : Program) (query : Lean.Json) (rs : Array Flock.TemplateQu
         simp only [List.flatMap_map] at h1
         simpa [popUnits, List.flatMap_map, Function.comp_def, h1] using hm v hv
 
-/-- **`Slots.select` misses `B` no more often than the claims' `P_a(B)`** (`Properties.SampledProofs.DrawMisses`). -/
+/-- **`Slots.select` misses `B` no more often than the claims' `P_a(B)`** (`Properties.Spot.DrawMisses`). -/
 theorem drawMisses : DrawMisses := by
   intro rule d query table cm L B
   set E := fun src : Fin L → Fin 256 => (Slots.select rule d query table cm (bytesOf src)).isOk = true ∧
@@ -344,4 +344,4 @@ theorem drawMisses : DrawMisses := by
       obtain rfl := Except.ok.inj hp'
       exact ⟨units, read', hu, hW0⟩
 
-end Properties.SampledProofs.SecurityProofs
+end Properties.Spot.SecurityProofs

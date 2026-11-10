@@ -525,7 +525,7 @@ build() {  # what prove_path/run.sh builds, here while the endpoint serves; run.
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
   uv sync --all-packages --extra torch-cpu || return 5
   (cd verity/core/service/flock && lake build flock-verify flock-firewall) || return 7
-  (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) || return 7
+  (cd verity/core/service/spot && lake build sampled-proofs-verifier) || return 7
   mkdir -p "$OUT/m0-build"
   # FW is the node's, every run's: two builds in it at once break each other's crates
   RESEARCH_RUN_DIR=$OUT/m0-build FLOCK_WORK=$FW MODE=build GPU=0 flock "$FW/.build.lock" bash verity/ml/flock/pod/60-circuit.sh || return 6

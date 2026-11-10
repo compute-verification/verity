@@ -26,9 +26,9 @@ from verity.core.protocols.pouw import salt as PS  # noqa: E402
 from verity.core.protocols.pouw import window as Wd  # noqa: E402
 from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
 from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
-from verity.core.protocols.sampled_proofs import challenger as LC  # noqa: E402
-from verity.core.protocols.sampled_proofs import remote as R  # noqa: E402
-from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveRecord  # noqa: E402
+from verity.core.protocols.spot import challenger as LC  # noqa: E402
+from verity.core.protocols.spot import remote as R  # noqa: E402
+from verity.core.protocols.spot.challenger import CoinError, LiveRecord  # noqa: E402
 from verity.ml.circuits.refs import runs  # noqa: E402
 from verity_vllm import protocols as PO  # noqa: E402
 from verity_vllm.engine import hooks  # noqa: E402
@@ -357,7 +357,7 @@ def _settings(**kw):
     return {"pouw": {**H1, "coins": Challenger(0, random.Random(0).randbytes), "runner": Runner(), "rounds": _rounds(), **kw}}
 
 
-def test_h1_is_admitted_beside_sampled_proofs_and_executes_nowhere():
+def test_h1_is_admitted_beside_spot_and_executes_nowhere():
     assert PH.SCHEME in pouw.schemes() and PH.SCHEME in pouw.EXECUTED and pouw.executes(PH.SCHEME) == ()
     assert pouw.executes("ncp-v2") == pouw.EXECUTES
     commit = PO.Context(stage="commit", enabled=(_entry(), "sampled-proofs:rows-sha512"), settings=_settings())

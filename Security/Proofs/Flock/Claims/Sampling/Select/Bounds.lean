@@ -20,9 +20,9 @@ bound (`seqMiss_le`) multiplies them.
 
 @[expose] public section
 
-open SampledProofs
+open Spot
 
-namespace Properties.SampledProofs.SecurityProofs
+namespace Properties.Spot.SecurityProofs
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit Finset Claims.Sampling
 open scoped ENNReal
@@ -250,4 +250,4 @@ theorem strata_bound (law : Flock.Draw.Law) (St : Array Flock.Draw.Stratum)
   simp only [List.length_nil, List.flatMap_nil, Array.length_toList] at this
   exact seqMiss_imp _ _ this _ _ hs
 
-end Properties.SampledProofs.SecurityProofs
+end Properties.Spot.SecurityProofs

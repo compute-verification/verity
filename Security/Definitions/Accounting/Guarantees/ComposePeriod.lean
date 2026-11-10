@@ -162,7 +162,7 @@ one period, and one period open at a time, the next committed only after the las
 windows count those windows twice, and a prover that commits `P` overlapping periods and claims whichever is accepted
 pays `P·δ_s`, not `δ_s`. A record that credits each window on its own, with nothing closing a stream at its first
 refused window, is dropping failed windows (*Liveness*, below). The challenger's `order_reason`
-(`SampledProofs.Challenger.orderReason`) checks one family of an epoch's coins: coin `i` opened once, after the
+(`Spot.Challenger.orderReason`) checks one family of an epoch's coins: coin `i` opened once, after the
 `i`-th recorded root, and every recorded root's coin opened. That is the order within a window. Run over one family
 holding every window's round coins and sample in order, with `n` and the circuit in the epoch's commitment, it is the
 period's check.

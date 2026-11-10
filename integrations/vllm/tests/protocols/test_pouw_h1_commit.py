@@ -26,7 +26,7 @@ from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.sampled_proofs import remote as R
+from verity.core.protocols.spot import remote as R
 from verity.ml.circuits.codec import canonical_json
 from verity_vllm import protocols as PO
 from verity_vllm.engine import int8_exact as E

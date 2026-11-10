@@ -12,8 +12,8 @@ public import Flock.PortRoots
 and the registration's population the game's `n` units in order (`Bridge.PopMatches`).
 The verifiers now refuse every file that fails the last three: `verify --zk` runs `Flock.PortRoots.check`
 last in its verdict (`Main.verifyCmd`, with or without `--ks-form`, the check's old flag), and the sampled-proofs run
-refuses the registration (`SampledProofs.Run.run`,
-`population-order`, `SampledProofs.Slots.popOk`). So the guarantee reads them off acceptance.
+refuses the registration (`Spot.Run.run`,
+`population-order`, `Spot.Slots.popOk`). So the guarantee reads them off acceptance.
 
 * `Bridge.LiveAcceptsKS I o`: `verify --zk` accepts: the live audit's transcript (`LiveAcceptsZK`), and the files pass
   `Flock.PortRoots.check`, whose roots are framed at each port's schema, as `Bridge.rootsOf`'s.
@@ -46,8 +46,8 @@ theorem rootsColl_none_of_collides_false {c : Flock.Circuit} {pub : Flock.Public
   PortRoots.rootsColl_none_iff.2 (fixes_of_collides_false h)
 
 /-- **The run's population check is `PopMatches`.** -/
-theorem popMatches_of_popOk {desc : Claims.Msg} {qr : Lean.Json} {n : ℕ} {p : SampledProofs.Program}
-    (hp : SampledProofs.Program.parse ⟨desc.toArray⟩ = .ok p) (h : SampledProofs.Slots.popOk p qr n = true) :
+theorem popMatches_of_popOk {desc : Claims.Msg} {qr : Lean.Json} {n : ℕ} {p : Spot.Program}
+    (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok p) (h : Spot.Slots.popOk p qr n = true) :
     PopMatches desc qr n := by
   show popCheck desc qr n = true
   unfold popCheck
@@ -61,10 +61,10 @@ def LiveAcceptsKS {n : ℕ} {Reg : Type} (I : FlockSoundness.Discharge.Exec.Inpu
     (o : Reg × Finset (Fin n) × FlockSoundness.Discharge.Exec.Transcript) : Prop :=
   LiveAcceptsZK I o ∧ Flock.PortRoots.check (zkTags I) I.circuitFile I.publicFile I.tables = .ok ()
 
-/-- **The sampled-proofs run passes the registration's population** (`SampledProofs.Run.run`, `population-order`):
+/-- **The sampled-proofs run passes the registration's population** (`Spot.Run.run`, `population-order`):
 the descriptor `desc` parses and its population under the query `qr` is `n` units in order (`Slots.popOk`). -/
 def RunPopOk (desc : Claims.Msg) (qr : Lean.Json) (n : ℕ) : Prop :=
-  ∃ p, SampledProofs.Program.parse ⟨desc.toArray⟩ = .ok p ∧ SampledProofs.Slots.popOk p qr n = true
+  ∃ p, Spot.Program.parse ⟨desc.toArray⟩ = .ok p ∧ Spot.Slots.popOk p qr n = true
 
 end Flock.Bridge
 

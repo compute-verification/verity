@@ -15,7 +15,7 @@ collision (`Vocab.error`).
 
 `SoundnessOf` is the one statement, at every composite: each of its subprotocols' targets gives `Vocab.SoundnessAt`,
 with the errors summed over its subprotocols. `Soundness` is it at onsite, from its seven targets
-(`Vocab.SampledProofsSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
+(`Vocab.SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
 `NetworkCertifierSound`, `WipeSound`), and `RemoteSoundness` the same statement at remote, whose subprotocols are a subset
 of onsite's, from its three (sampled proofs, PoUW and the inference-only policy). They are proved by
 `Properties.Composition` (a composite's acceptance is its components' and its record's) and the union bound over one
@@ -53,7 +53,7 @@ fewer than `Q` bits read, more than `K` bits through the network certifiers, or 
 its survivor threshold) is at most the seven errors at that strategy summed. -/
 def Soundness : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α),
-    V.SampledProofsSound .onsite → V.PouwSound .onsite → V.InferenceOnlySound .onsite → V.PousSound .onsite →
+    V.SpotSound .onsite → V.PouwSound .onsite → V.InferenceOnlySound .onsite → V.PousSound .onsite →
       V.BandwidthAuditSound .onsite → V.NetworkCertifierSound .onsite → V.WipeSound .onsite → V.SoundnessAt .onsite
 
 /-- **Soundness at remote's verifier: onsite's statement restricted to remote's subprotocols.** If sampled
@@ -62,6 +62,6 @@ compiled verifier accepts files that passed the commit phase's check while one o
 three errors at that strategy summed. -/
 def RemoteSoundness : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α),
-    V.SampledProofsSound .remote → V.PouwSound .remote → V.InferenceOnlySound .remote → V.SoundnessAt .remote
+    V.SpotSound .remote → V.PouwSound .remote → V.InferenceOnlySound .remote → V.SoundnessAt .remote
 
 end Verity

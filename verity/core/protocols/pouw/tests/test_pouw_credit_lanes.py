@@ -27,8 +27,8 @@ import pytest
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import leaf_lanes as LL
 from verity.core.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.sampled_proofs.one_stage import produced as PR
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+from verity.core.protocols.spot.one_stage import produced as PR
+from verity.core.protocols.spot.one_stage import proofs as PF
 from verity.ml.circuits import codec
 
 if "test_circuit_h1window" not in sys.modules:

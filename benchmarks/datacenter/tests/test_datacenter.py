@@ -8,7 +8,7 @@ from dataclasses import replace
 
 import pytest
 from verity.core.protocols import registration
-from verity.core.protocols.sampled_proofs.one_stage import registration as one_stage
+from verity.core.protocols.spot.one_stage import registration as one_stage
 from verity.ml.circuits import partition_object
 from verity.ml.circuits.census import census
 from verity.ml.circuits.codec import program_digest
