@@ -2243,6 +2243,17 @@
         "verity/core/protocols/pouw/": "verity/protocols/pouw/verifier/",
         "verity/ml/protocols/pouw/": "verity/protocols/pouw/prover/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/live_verifier/": "verity/protocols/poub/device/live_verifier/",
+        "benchmarks/remote_session/verifier_process.py": "verity/protocols/poub/verifier/remote_session/verifier_process.py",
+        "verity/core/protocols/remote_bandwidth/": "verity/protocols/poub/verifier/remote_bandwidth/",
+        "verity/ml/commitments/gates/block_check.circuit-check.json": "verity/protocols/poub/verifier/commitments/gates/block_check.circuit-check.json",
+        "verity/ml/commitments/gates/block_check.circuit-check.py": "verity/protocols/poub/verifier/commitments/gates/block_check.circuit-check.py",
+        "verity/ml/commitments/gates/block_check.py": "verity/protocols/poub/verifier/commitments/gates/block_check.py",
+        "verity/ml/commitments/tests/test_block_check.py": "verity/protocols/poub/verifier/commitments/tests/test_block_check.py"
+      }
     }
   ]
 }

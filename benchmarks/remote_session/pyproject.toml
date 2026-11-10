@@ -1,5 +1,5 @@
 # The remote bandwidth audit's sessions end to end: the verifier's process (`verifier_process.py`, which runs
-# `verity/core/protocols/remote_bandwidth/session/verifier.py`, their wire `wire.py` beside it) and the prover's
+# `verity/protocols/poub/verifier/remote_bandwidth/session/verifier.py`, their wire `wire.py` beside it) and the prover's
 # (`prover.py`, its GPU backend `device.py` and `session.cu`, and `inplace.py`, its pass over vLLM's tensors where they
 # are). Not a package: `run.sh` runs both on a GPU node (`inplace.sh` gates the in-place pass), and the suite
 # runs both over a loopback socket with the driver's reference as the prover's backend
@@ -14,7 +14,7 @@
 # on NoOutsideCompute, and `--boundary` (off by default) holds each session's credit to the network certifiers' records
 # of the gate node's boundary. That store, what a pinned
 # checkpoint alone fixes, and the binding the verifier decides (`verifier.py --model`) are the remote audit's own
-# (`verity/core/protocols/remote_bandwidth/store.py`); `store_layout.py` writes pins and synthetic checkpoints.
+# (`verity/protocols/poub/verifier/remote_bandwidth/store.py`); `store_layout.py` writes pins and synthetic checkpoints.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
@@ -32,7 +32,7 @@ untraced = [
     "tests/test_store_layout.py",
 ]
 inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
-          "verity/spot/verifier/profile.py", "verity/core/protocols/remote_bandwidth", "verity/ml/__init__.py",
+          "verity/spot/verifier/profile.py", "verity/protocols/poub/verifier/remote_bandwidth", "verity/ml/__init__.py",
           "verity/core/protocols/record.py",
           "verity/circuits", "verity/ml/crypto", "verity/ml/commitments", "verity/ml/randomness",
           # the challenger's coins name their claim instance (spot/challenger.py's `coin_claim`)

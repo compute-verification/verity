@@ -1,5 +1,5 @@
 """The Commit's memory map (opt-in, ``commit --memory-map REQUEST_JSON``): memory-map/v1 of the run's KV
-(`verity.core.protocols.remote_bandwidth.memory_map`), written in the in-process C2 replay once the Commit's roots are final.
+(`verity.protocols.poub.verifier.remote_bandwidth.memory_map`), written in the in-process C2 replay once the Commit's roots are final.
 Its blocks, their steps and store indices come from each request's KV rows (`commit.memory_map.rows`, the Build's,
 `pipeline.memory_map.of_build`) at the pages the engine wrote: each request's slots as the Commit committed them
 (`<layer>/slot_mapping`, `acquire.sources.kv_slots_source`, which the flag attaches), in the page layout of the engine's cache
@@ -57,8 +57,8 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.remote_bandwidth import codec
-from verity.core.protocols.remote_bandwidth.memory_map import SLOT_LIMIT, Header, Step, dumps
+from verity.protocols.poub.verifier.remote_bandwidth import codec
+from verity.protocols.poub.verifier.remote_bandwidth.memory_map import SLOT_LIMIT, Header, Step, dumps
 from verity_vllm.acquire.sources.kv_slots_source import MEMBER
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore

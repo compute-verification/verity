@@ -52,7 +52,7 @@ path = "../pous/check"
 # Bandwidth: the remote bandwidth audit's P2 session on PoUS's store (`RemoteAudit.P2Protocol`).
 [[require]]
 name = "remote_audit"
-path = "../remote_bandwidth/lean"
+path = "../../../protocols/poub/verifier/remote_bandwidth/lean"
 
 # Integrity: sampled proofs in the form its params name, one-stage v2's audit or the recursive audit, V*'s compiled
 # check (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`).

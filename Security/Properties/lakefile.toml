@@ -64,7 +64,7 @@ path = "../../verity/definitions/evaluate"
 
 [[require]]
 name = "remote_audit"
-path = "../../verity/core/protocols/remote_bandwidth/lean"
+path = "../../verity/protocols/poub/verifier/remote_bandwidth/lean"
 
 [[require]]
 name = "core_requirement"

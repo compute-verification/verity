@@ -31,19 +31,19 @@ LIVE = ROOT / "benchmarks" / "live_challenger"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(LIVE))
-sys.path.insert(0, str(ROOT / "verity" / "core" / "protocols" / "remote_bandwidth" / "tests"))
+sys.path.insert(0, str(ROOT / "verity" / "protocols" / "poub" / "verifier" / "remote_bandwidth" / "tests"))
 
 import auditor as A  # noqa: E402
 import auditor_line as al  # noqa: E402
-from verity.core.protocols.remote_bandwidth.session import challengers  # noqa: E402
-from verity.core.protocols.remote_bandwidth.session import verifier  # noqa: E402
-from benchmarks.remote_session import verifier_process as VP  # noqa: E402
-from verity.core.protocols.remote_bandwidth.session import wire  # noqa: E402
+from verity.protocols.poub.verifier.remote_bandwidth.session import challengers  # noqa: E402
+from verity.protocols.poub.verifier.remote_bandwidth.session import verifier  # noqa: E402
+from verity.protocols.poub.verifier.remote_session import verifier_process as VP  # noqa: E402
+from verity.protocols.poub.verifier.remote_bandwidth.session import wire  # noqa: E402
 from test_remote_bandwidth import SCHEDULE, drive, finish, params, store  # noqa: E402,F401
 from test_session import run as run_sessions  # noqa: E402
 from verity.core.protocols.certifier import certificate as cert  # noqa: E402
 from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Record, fill  # noqa: E402
-from verity.core.protocols.remote_bandwidth import coins  # noqa: E402
+from verity.protocols.poub.verifier.remote_bandwidth import coins  # noqa: E402
 from verity.spot.device.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
 

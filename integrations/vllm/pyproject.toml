@@ -109,11 +109,11 @@ untraced = [
 inputs_only = true
 inputs = ["verity", "verity/README.md", "tools/config/verity_config", "fixtures/artifacts.json", "examples/vllm/workloads/SHA256SUMS", ".gitignore",
           "verity/spot/verifier/lean/lakefile.toml", "verity/protocols/pouw/verifier/lean/check/lakefile.toml",
-          "verity/core/protocols/remote_bandwidth/lean/lakefile.toml",
+          "verity/protocols/poub/verifier/remote_bandwidth/lean/lakefile.toml",
           "benchmarks/ppl/steps.py", "benchmarks/ppl/matmul.py", "benchmarks/ppl/gates.py", "benchmarks/ppl/spec.py", "benchmarks/ppl/methodology.py", "benchmarks/ppl/model.py",
           "benchmarks/ppl/windows.py", "benchmarks/ppl/datasets.json", "benchmarks/pouw/edited_gemm/fattn_ref.py",
-          "benchmarks/remote_session/prover.py", "verity/core/protocols/remote_bandwidth/session/verifier.py", "verity/core/protocols/remote_bandwidth/session/wire.py",
-          "verity/core/protocols/remote_bandwidth/session/checks.py", "verity/core/protocols/remote_bandwidth/session/lean_verifier.py", "verity/core/protocols/remote_bandwidth/session/challengers.py",
+          "benchmarks/remote_session/prover.py", "verity/protocols/poub/verifier/remote_bandwidth/session/verifier.py", "verity/protocols/poub/verifier/remote_bandwidth/session/wire.py",
+          "verity/protocols/poub/verifier/remote_bandwidth/session/checks.py", "verity/protocols/poub/verifier/remote_bandwidth/session/lean_verifier.py", "verity/protocols/poub/verifier/remote_bandwidth/session/challengers.py",
           "benchmarks/remote_session/store_layout.py", "benchmarks/live_challenger/auditor.py", "benchmarks/live_challenger/host.json",
           "benchmarks/live_challenger/models.py", "benchmarks/pouw/harness/sass_gate.py",
           "benchmarks/pous/p2_v1/__init__.py", "benchmarks/pous/p2_v1/store.py", "benchmarks/pous/p2_v1/reference.py",
@@ -207,7 +207,7 @@ paths = ["integrations/vllm/verity_vllm/commit/committer/hidden_gpu_src"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/commit/test_pinned_pool_exact.py", "tests/observe/test_pouw_fold.py"]
-paths = ["integrations/vllm/verity_vllm", "verity/core/protocols/remote_bandwidth", "verity/circuits"]
+paths = ["integrations/vllm/verity_vllm", "verity/protocols/poub/verifier/remote_bandwidth", "verity/circuits"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/engine/collectives/test_tp_collective.py", "tests/properties/test_quarantine_lint.py"]
@@ -275,7 +275,7 @@ tests = [
     "tests/protocols/remote_bandwidth/test_in_place_gpu.py",
     "tests/protocols/remote_bandwidth/test_remote_session.py",
 ]
-paths = ["benchmarks/remote_session", "verity/core/protocols/remote_bandwidth"]
+paths = ["benchmarks/remote_session", "verity/protocols/poub/verifier/remote_bandwidth"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/pipeline/test_serve_row.py"]

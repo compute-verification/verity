@@ -134,13 +134,13 @@ def test_the_summary_is_per_kind_and_package_with_all_first_and_records_wait_and
 
 
 def test_the_table_names_each_task_over_the_limit_the_longest_first():
-    tasks = [_rec("r20261028-100000-aaaa", 20.0, work=5.0), _rec("r20261028-100000-bbbb", 90.0, "verity/core/protocols/remote_bandwidth/lean"),
+    tasks = [_rec("r20261028-100000-aaaa", 20.0, work=5.0), _rec("r20261028-100000-bbbb", 90.0, "verity/protocols/poub/verifier/remote_bandwidth/lean"),
              _rec("r20261028-100000-dddd", 3.0), _rec("r20261028-100000-eeee", None),
              {"kind": "lean-suites", "packages": ["verity/flock/prover"], "run": "r20261028-100000-cccc", "node": "n", "minutes": 33.0,
               "outcome": "failed"}]
     out = L.render(L.summary(tasks), tasks, T.replace(hour=0), T)
     assert out.startswith("Lean tasks that ended 2026-10-28 00:00Z to 2026-10-28 12:00Z")
-    assert "verity/core/protocols/remote_bandwidth/lean " in out, "the longest package path whole"
+    assert "verity/protocols/poub/verifier/remote_bandwidth/lean " in out, "the longest package path whole"
     assert "records runs over 15 min: 2, 1 of them over 15 min of Lean work" in out
     slow = out.split("records runs over")[1]
     assert slow.index("r20261028-100000-bbbb") < slow.index("r20261028-100000-aaaa") and "r20261028-100000-dddd" not in slow

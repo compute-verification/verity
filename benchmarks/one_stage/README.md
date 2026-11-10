@@ -143,7 +143,7 @@ input. What the guarantee rests on: `verity/spot/verifier/README.md`.
   prover's cost per opening. `a8_gpu.sh` takes its cost points on sm_120 (`flock-circuit prove --zk --gpu`), as a GPU host
   job, and `a8_cost.py` reads a run's sessions into the one cost model's observations (`benchmarks/sampling_plan`).
 - `a7.sh`: run A7's entry point, on the same builds; the remote session's checks 1-3 and 5 on each sampled receipt are
-  proved, not opened, by the opening unit (`remote_bandwidth.opening`, `verity.ml.commitments.gates.block_check`) in a
+  proved, not opened, by the opening unit (`remote_bandwidth.opening`, `verity.protocols.poub.verifier.commitments.gates.block_check`) in a
   second statement. A7 is the requirement's plan and memory-map units
   (`verity.definitions.circuits.requirement_units`), one of each per step of a stand-in decoder's requirement, under the stratified
   sampling design, their witness rows bound to canonical commitments, then wired to PoUB's ledger as its

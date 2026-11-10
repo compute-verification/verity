@@ -19,7 +19,7 @@ inputs = ["verity/circuits", "verity/definitions/kernels/__init__.py", "verity/d
           "verity/core/protocols/record.py",
           "integrations/vllm/verity_vllm",
           "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/spot/verifier/profile.py",
-          "verity/core/claims/__init__.py", "verity/protocols/pouw/verifier", "verity/core/protocols/remote_bandwidth",
+          "verity/core/claims/__init__.py", "verity/protocols/pouw/verifier", "verity/protocols/poub/verifier/remote_bandwidth",
           "verity/ml/protocols/__init__.py", "verity/protocols/pouw/prover",
           "verity/spot/verifier/__init__.py", "verity/spot/device/challenger.py",
           "verity/spot/device/remote.py", "verity/spot/verifier/one_stage",

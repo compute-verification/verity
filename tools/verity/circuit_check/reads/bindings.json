@@ -168,7 +168,7 @@
    "groups": "0-47,49-63,67-68,97-103,106-107,113-114,124-126,155-170,172-173,194,201-206,219-237,325-355,359,368-370",
    "registry": true
   },
-  "verity.ml.commitments.gates.block_check.circuit-check#_block_check_roots": {
+  "verity.protocols.poub.verifier.commitments.gates.block_check.circuit-check#_block_check_roots": {
    "groups": "0-46,48-63,67,97-103,106-107,113-114,124-126,155-170,194,201-206,219-237,325-355,359,371-372,432-433",
    "registry": true
   },
@@ -1168,7 +1168,7 @@
   },
   {
    "probes": [
-    "verity/ml/commitments/gates/block_check.py"
+    "verity/protocols/poub/verifier/commitments/gates/block_check.py"
    ]
   },
   {
@@ -3718,7 +3718,7 @@
   },
   {
    "files": [
-    "verity/ml/commitments/gates/block_check.circuit-check.py"
+    "verity/protocols/poub/verifier/commitments/gates/block_check.circuit-check.py"
    ]
   },
   {
@@ -4115,7 +4115,7 @@
   },
   {
    "files": [
-    "verity/ml/commitments/gates/block_check.circuit-check.json"
+    "verity/protocols/poub/verifier/commitments/gates/block_check.circuit-check.json"
    ]
   },
   {
