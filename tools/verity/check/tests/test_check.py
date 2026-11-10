@@ -152,10 +152,11 @@ def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
     assert CHECK.lean_steps(out)[3][1].startswith("skipped: the pinned upstream build was not sent")
 
 
-def test_the_agreement_fails_while_the_verifier_requires_a_package_from_outside_it(tmp_path, monkeypatch):
-    """The agreement's pass is kept under the verifier's directory only (`agreement_closure`), and `research merge` asks for
-    it only for changes there, so a requirement from outside it, by the manifest or the lakefile, fails the step whether or
-    not the upstream build was sent; one inside the directory doesn't, and this tree's verifier has none."""
+def test_the_agreement_fails_while_the_verifier_requires_a_package_from_outside_the_tree(tmp_path, monkeypatch):
+    """The agreement's pass is kept under the verifier's package and the packages of the tree it requires by path
+    (`agreement_closure`), and `research merge` asks for it for changes there, so a requirement from outside the tree, a
+    fetched package or a path that leaves the repository, by the manifest or the lakefile, fails the step whether or not
+    the upstream build was sent; one inside the tree doesn't, and this tree's verifier has none from outside."""
     import json
 
     out, sent = _pinned(tmp_path, monkeypatch)
@@ -163,13 +164,19 @@ def test_the_agreement_fails_while_the_verifier_requires_a_package_from_outside_
     (lean / "lakefile.toml").write_text('name = "flock_verifier"\n[[require]]\nname = "inner"\npath = "inner"\n')
     assert not isinstance(CHECK.lean_steps(out)[3][1], str)
     (lean / "lakefile.toml").write_text('name = "flock_verifier"\n[[require]]\nname = "identity"\npath = "../identity"\n')
-    assert CHECK.lean_steps(out)[3][1].startswith("the verifier's Lean package requires identity from outside its directory")
+    assert CHECK.lean_steps(out)[3][1].startswith("the verifier's Lean package requires identity from outside the tree")
+    monkeypatch.setattr(CHECK, "ROOT", tmp_path)
+    assert not isinstance(CHECK.lean_steps(out)[3][1], str), "a package of the tree, required by path, is keyed with the verifier"
+    monkeypatch.setattr(CHECK, "ROOT", ROOT)
     (lean / "lakefile.toml").write_text('name = "flock_verifier"\n')
     (lean / "lake-manifest.json").write_text(json.dumps({"packages": [{"type": "git", "name": "mathlib", "rev": "abc"}]}))
     for f in sent.iterdir():
         f.unlink()
     assert CHECK.lean_steps(out)[3][1].startswith("the verifier's Lean package requires mathlib from outside")
-    assert CHECK.requires_outside(ROOT / "verity" / "core" / "service" / "flock") == []
+    flock = ROOT / "verity" / "core" / "service" / "flock"
+    assert CHECK.requires_outside(flock) == []
+    assert CHECK.required_in_tree("verity/core/service/flock/") == tuple(
+        f"verity/core/primitives/{p}/" for p in ("base", "circuits", "commitments"))
 
 
 def test_the_lean_dependency_urls_leave_the_run_directory_before_any_step(tmp_path, monkeypatch):
@@ -275,8 +282,9 @@ def test_the_rule_the_gate_reads(monkeypatch):
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
     assert tool.CHECK.merge_requires["lean-agreement"] == ["verity/ml/flock/", "verity/ml/flock/pod/", "verity/ml/flock/verifier/",
-                                                           "verity/ml/flock/tool.py", "verity/core/service/flock/", "!README.md",
-                                                           "!PROTOCOL.md"]
+                                                           "verity/ml/flock/tool.py", "verity/core/service/flock/",
+                                                           "verity/core/primitives/base/", "verity/core/primitives/circuits/",
+                                                           "verity/core/primitives/commitments/", "!README.md", "!PROTOCOL.md"]
     assert set(tool.CHECK.merge_requires) == {"lean-agreement", "lean-suites"}
     assert {"verity/core/service/flock/VStar/In.lean", "verity/core/service/vstar/"} <= set(tool.CHECK.merge_requires["lean-suites"])
     pin = __import__("json").loads((ROOT / "verity" / "ml" / "flock" / "verifier" / "upstream.json").read_text())
@@ -1589,7 +1597,8 @@ def test_record_sends_the_agreement_for_a_flock_file_whose_name_git_quotes(tmp_p
     monkeypatch.setattr(subprocess, "run", run)
     assert CHECK.record(["--base", "main"]) == 0
     assert ("check: changes under verity/ml/flock/, verity/ml/flock/pod/, verity/ml/flock/verifier/, verity/ml/flock/tool.py, "
-            "verity/core/service/flock/ against main: sending the pinned upstream build and inputs") in capsys.readouterr().out
+            "verity/core/service/flock/, verity/core/primitives/base/, verity/core/primitives/circuits/, "
+            "verity/core/primitives/commitments/ against main: sending the pinned upstream build and inputs") in capsys.readouterr().out
     [cmd] = launched
     assert any(x.startswith("flock_upstream=art:") for x in cmd)
 

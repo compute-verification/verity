@@ -826,16 +826,32 @@ def lean_slot(cmd: list[str]) -> list[str]:
     return [*LEAN_SLOT_WRAP, *cmd] if lean_audit_misses("--fresh" not in cmd, only) else cmd
 
 
-def requires_outside(lean: Path) -> list[str]:
-    """The packages the Lean package ``lean`` requires from outside its directory, by its manifest or its lakefile: the
-    agreement's pass is kept under that directory's files only, so it would outlive a change to one of them."""
+def required_packages(lean: Path) -> dict[str, Path | None]:
+    """{name: directory} of the packages the Lean package ``lean`` requires, by its manifest (which lists those its
+    requirements require too) or its lakefile: one required by path at that path, a fetched one None."""
     import tomllib
 
     m, lf = lean / "lake-manifest.json", lean / "lakefile.toml"
     entries = [*(json.loads(m.read_text()).get("packages", []) if m.exists() else []),
                *(tomllib.loads(lf.read_text()).get("require", []) if lf.exists() else [])]
-    return sorted({e.get("name", "?") for e in entries
-                   if (p := e.get("dir") or e.get("path")) is None or not (lean / p).resolve().is_relative_to(lean.resolve())})
+    return {e.get("name", "?"): None if (p := e.get("dir") or e.get("path")) is None else (lean / p).resolve() for e in entries}
+
+
+def requires_outside(lean: Path) -> list[str]:
+    """The packages the Lean package ``lean`` requires from outside the tree, by its manifest or its lakefile: a fetched
+    one, or one at a path that leaves the repository. The agreement's pass is kept under the files of the verifier's
+    package and of the packages of the tree it requires by path (`agreement_closure`), so it would outlive a change to
+    one of these."""
+    inside = (lean.resolve(), ROOT.resolve())
+    return sorted(n for n, d in required_packages(lean).items() if d is None or not any(d.is_relative_to(r) for r in inside))
+
+
+def required_in_tree(lean: str) -> tuple[str, ...]:
+    """The packages of the tree the Lean package at ``lean`` (from the root, ending in "/") requires by path from outside
+    its directory, each as ``lean`` is written."""
+    root, own = ROOT.resolve(), (ROOT / lean).resolve()
+    return tuple(sorted(d.relative_to(root).as_posix() + "/" for d in required_packages(ROOT / lean).values()
+                        if d is not None and d.is_relative_to(root) and not d.is_relative_to(own)))
 
 
 def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
@@ -847,8 +863,8 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
     drive's after-landing run, where a record difference fails), with ``bookkeeping`` (`--bookkeeping-warn`, drive's lock run)
     repairs the bookkeeping too and warns (`lean_audit.py --bookkeeping warn`), and inside a recorded run it bundles the module versions it
     built for other nodes (`lean_audit.py --bundle`).  `research merge` requires it for a change under `verity/ml/flock/` (`tools/verity/check/tool.py`), and
-    `--record` sends it then.  The agreement fails, sent or not, while the verifier's package requires one from outside its
-    directory (`requires_outside`)."""
+    `--record` sends it then.  The agreement fails, sent or not, while the verifier's package requires one from outside the
+    tree (`requires_outside`)."""
     lean = FLOCK_LEAN
     if not (lean / "lakefile.toml").exists():
         if FLOCK_VERIFIER.is_dir():
@@ -864,7 +880,7 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
         elif got:
             agreement = f"only {', '.join(got)} of the pinned upstream build and inputs was sent"
     if outside := requires_outside(lean):
-        agreement = (f"the verifier's Lean package requires {', '.join(outside)} from outside its directory, which the "
+        agreement = (f"the verifier's Lean package requires {', '.join(outside)} from outside the tree, which the "
                      f"agreement's key (`agreement_closure`) and `research merge`'s lean-agreement rule don't cover")
     return [("lean-build", ["bash", "-c", SUITES.LAKE_BUILD], lean),
             ("lean-unit-cut", [sys.executable, str(FLOCK_VERIFIER / "unit_cut_agree.py"), "--lean", str(verify),
@@ -2234,8 +2250,9 @@ def _env_key(e: dict[str, str]) -> dict[str, str]:
 def agreement_key(e: dict[str, str]) -> str | None:
     """What the agreement job reads: the tracked files `agreement_closure` names (verity/ml/flock/verifier/: `ci.py` and the scripts
     it runs, which import only the standard library and each other, `upstream.json` pinning the upstream build,
-    the inputs and the job's settings; and the Lean package `flock-verify` is built from, verity/core/service/flock/, its sources and
-    toolchain pin), the interpreter and the platform.  None when the tree's files cannot be listed."""
+    the inputs and the job's settings; and the Lean packages `flock-verify` is built from, verity/core/service/flock/ and
+    the packages of the tree it requires by path, their sources and toolchain pins), the interpreter and the platform.  None
+    when the tree's files cannot be listed."""
     files = tracked_files()
     if files is None:
         return None
@@ -2298,17 +2315,21 @@ STEP_KEYS = {"lean-agreement": agreement_key, "flock-rust-tests": rust_tests_key
 
 
 def agreement_closure(files: list[str]) -> list[str]:
-    """The tracked files the agreement job can read: verity/ml/flock/verifier/, less any Lake package nested in its Lean package
-    (Flock's proofs are under `Security/Proofs/`), which `flock-verify` is not built from as long as the Lean package
-    requires nothing (a `require` in its lakefile keeps them all in), and less that package's `lean-audit.json`, which only
-    `tools/verity/lean/check.py` reads (a test fails if the agreement's scripts or the package's lakefile mention it)."""
+    """The tracked files the agreement job can read: verity/ml/flock/verifier/, the verifier's Lean package and the
+    packages of the tree it requires by path (`required_in_tree`), which `flock-verify` is built from; less any Lake package
+    nested in the verifier's (Flock's proofs are under `Security/Proofs/`), which it is not built from as long as the Lean
+    package requires nothing (a `require` in its lakefile keeps them all in), and less each of those packages'
+    `lean-audit.json`, which only `tools/verity/lean/check.py` reads (a test fails if the agreement's scripts or the
+    verifier's lakefile mention it)."""
     pre, lean = "verity/ml/flock/verifier/", "verity/core/service/flock/"
     lakefiles = [f for f in files if f.startswith(lean) and f.rsplit("/", 1)[-1] in ("lakefile.toml", "lakefile.lean")]
     root = [f for f in lakefiles if f.count("/") == lean.count("/")]
     nested = tuple(f.rsplit("/", 1)[0] + "/" for f in lakefiles if f not in root)
     if any("require" in (ROOT / f).read_text() for f in root if (ROOT / f).is_file()):
         nested = ()
-    return [f for f in files if f.startswith((pre, lean)) and f != lean + "lean-audit.json" and not f.startswith(nested or ("\0",))]
+    packages = (lean, *required_in_tree(lean))
+    locks = {p + "lean-audit.json" for p in packages}
+    return [f for f in files if f.startswith((pre, *packages)) and f not in locks and not f.startswith(nested or ("\0",))]
 
 
 #: the repository-wide lints the preflight runs: each fails a whole check, and together they take seconds
