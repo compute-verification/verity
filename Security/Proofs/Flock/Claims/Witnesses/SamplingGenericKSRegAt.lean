@@ -8,10 +8,11 @@ public import Proofs.Flock.SamplingGeneric.RegAt
 
 `Compiled.KSRegAt` fails at `sksL` (`Witnesses.SamplingGeneric`), whose silent prover is accepted with its committed
 trace's incorrect set outside `M_0` (`sksL_notM`). At the budget `0`, `B_conf` declared there finds nothing, as `B_conf`
-does (`bconf_pr`, `Compiled.BconfAt_pr`), so `ExpectedCR` holds there (`sksL_expectedCR`), and its expected cost bound
-is `0`, `sksL` opening nothing, so the error read at the budget `0` is `0` (`sksL_εregAt`), below the silent prover's
-probability `1` (`compiledKSRegAt_fails`). So `CompilerKSRegAt`'s conclusion fails there (`compilerKSRegAt_nontrivial`);
-its premises are `CompilerKSAt`'s, which hold together at `twoL` (`compilerKS_honest`, `compilerBits_honest`).
+does (`bconf_pr`, `Compiled.BconfAt_pr`), so `ExpectedCR` holds there (`sksL_expectedCR_bconfAt`), and its expected
+cost bound is `0`, `sksL` opening nothing, so the error read at the budget `0` is `0` (`sksL_εregAt`), below the silent
+prover's probability `1` (`compiledKSRegAt_fails`). So `CompilerKSRegAt`'s conclusion fails there
+(`compilerKSRegAt_nontrivial`); its premises are `CompilerKSAt`'s, which hold together at `twoL` (`compilerKS_honest`,
+`compilerBits_honest`).
 -/
 
 @[expose] public section
@@ -26,7 +27,8 @@ section KSRegAt
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
 /-- At `sksL`'s silent prover, `B_conf` declared at the budget `0` finds nothing, so `ExpectedCR` holds there. -/
-theorem sksL_expectedCR (H : Msg → Msg) (x : Msg) : ExpectedCR H ((sksL Coin).BconfAt H 0 Unit silentP x) := by
+theorem sksL_expectedCR_bconfAt (H : Msg → Msg) (x : Msg) :
+    ExpectedCR H ((sksL Coin).BconfAt H 0 Unit silentP x) := by
   unfold ExpectedCR
   rw [Compiled.BconfAt_pr, bconf_pr H (sksL Coin) (fun _ _ _ => rfl) Unit silentP x]
   exact div_nonneg (Ex_nonneg fun _ => Nat.cast_nonneg _) (by positivity)
@@ -45,7 +47,7 @@ theorem sksL_εregAt (H : Msg → Msg) (x : Msg) : (sksL Coin).εregAt H x silen
 committed trace's incorrect set outside `M_0`, at an error of `0`. -/
 theorem compiledKSRegAt_fails (H : Msg → Msg) : ¬ (sksL Coin).KSRegAt H := by
   intro h
-  have h1 := (h [] (sksL_scope []) Unit silentP 0 (sksL_expectedCR H [])).2 toyStmt rfl 0 le_rfl
+  have h1 := (h [] (sksL_scope []) Unit silentP 0 (sksL_expectedCR_bconfAt H [])).2 toyStmt rfl 0 le_rfl
   have hp : Pr (fun p : Unit × (Fin ((sksL Coin).V.k []) → Coin) =>
       (run H silentP (sksL Coin).V [] p.1 p.2).out = .acc ∧
         (sksL Coin).Freg H silentP [] p.1 ∉ toyStmt.design.M ((sksL Coin).part toyStmt) 0) = 1 :=
