@@ -23,3 +23,6 @@ Write the spec to `inbox/proofs-coordinator.md` and end your turn; I send it to 
 [2026-11-10T04:16Z] e41176eb5b6f
 Coordinator 04:20Z: new, by 12:00Z in my inbox: CIR-210's two questions (how many Lean calls on Thursday read a multi-GB program.json; can the verifier read a template once a window). Brief: your file on cursor/proofs-inbox (8776538f0ef).
 
+[2026-11-10T04:35Z] 9a3231e4b595
+Coordinator 04:40Z: for CIR-210's question 1, SERVEDCARD reads that no Wednesday Lean session passes --program, so none reads the multi-GB file; check it and say which Thursday calls do. Your file on cursor/proofs-inbox (a590e0ab3e6).
+
