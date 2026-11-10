@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from verity_bench import breakdown, jobs, overhead, overhead_records, served_table, settings
+from verity_bench import breakdown, jobs, kit, overhead, overhead_records, served_table, settings
 from verity_bench.vllm import cli as vllm_cli
 from verity_bench.vllm import result
 from verity_bench.vllm.arms import resolve_arms
@@ -93,7 +93,7 @@ def _point(args: Any) -> int:
     (out / "settings.json").write_text(json.dumps(settings.record(), indent=1, sort_keys=True) + "\n", encoding="utf-8")
     passed = all(g["passed"] for g in doc["gates"])
     envelope = {
-        "schema": "research/result/v0.1",
+        "schema": kit.RESULT_SCHEMA,
         "kind": "verity-vllm-benchmark/v1",
         "run_id": settings.RESEARCH_RUN_ID,
         "workload_fingerprint": {
