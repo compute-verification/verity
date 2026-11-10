@@ -189,6 +189,7 @@ def test_the_table_holds_each_number_over_its_windows():
         "slowest suite `tools/research`, p50 45 min, the slowest in 1 of 1; slowest test `tests/test_x.py::test_slow` of suite "
         "`tools/research`, p50 40 min, the slowest in 1 of 1")
     assert rows["Candidates by outcome"]["today"] == "4 built: 1 green, 1 red, 1 dropped for another reason, 1 being checked"
+    assert rows["Check that started no shard: build to its `infra` verdict"]["today"] == "none"
     shard = rows["Shard 1/1: its slot to the end of its last step on the gate"]["today"]
     assert shard.startswith("p50 50, p90 50 min (n=1); slowest step `pytest` in 1 of 1, p50 50 min; then it holds the slot p50 10, p90 10 min more")
     assert rows["Red: first failure to the candidate's drop"]["today"] == "p50 30, p90 30 min (n=1)"
@@ -283,3 +284,16 @@ def test_a_workers_memory_is_held_to_its_suites_declaration_over_the_saved_readi
     row = {r["name"]: r for r in qt.table(d)}[name]
     assert (row["now"], row["hour"]) == ("no parallel suite is running in the 1 shard running",
                                          "no parallel suite was running in a shard at any of 1 readings")
+
+
+
+def test_a_check_that_started_no_shard_is_timed_from_its_build_to_its_infra_verdict():
+    d = doc()
+    d["control"]["decisions"] += [
+        {"action": "slim", "at": at("02:49"), "sha": "d" * 40, "why": "judged infra", "verdict": "infra", "ids": []},
+        {"action": "slim", "at": at("02:55"), "sha": "d" * 40, "why": "judged infra", "verdict": "infra", "ids": ["r20261110-024500-ffff"]},
+        {"action": "slim", "at": at("02:56"), "sha": "f" * 40, "why": "judged infra", "verdict": "infra", "ids": []}]   # no such build
+    built = next(qt.ts(r["at"]) for r in decisions() if r["action"] == "build" and r["sha"].startswith("d"))
+    row = {r["name"]: r for r in qt.table(d)}["Check that started no shard: build to its `infra` verdict"]
+    minutes = (qt.ts(at("02:49")) - built) / 60
+    assert row["hour"] == row["today"] == f"p50 {minutes:.0f}, p90 {minutes:.0f} min (n=1)"

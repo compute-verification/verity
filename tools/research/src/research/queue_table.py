@@ -780,6 +780,13 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
     add("4", "Candidate: build to `main`", "", _dist(win(b2l, hour)), _dist(win(b2l, day)), "", "green candidates: `build` to `advance`")
     add("4", "Candidates by outcome", "", outcomes(hour), outcomes(day), "", "by build time; red: dropped for a failure, a member held "
         "or ejected over one, or infrastructure")
+    built = {c["sha"]: c["build"] for c in cands}
+    unstarted = [(ts(r["at"]), _m(ts(r["at"]) - built[r["sha"][:12]])) for r in decisions
+                 if r["action"] == "slim" and (r.get("why") or "").startswith("judged infra") and not r.get("ids")
+                 and r.get("sha", "")[:12] in built]
+    add("4", "Check that started no shard: build to its `infra` verdict", "", _dist(win(unstarted, hour)), _dist(win(unstarted, day)), "",
+        "the loop's `judged infra` lines that name no shard's run (a failed plan or launch), each from its candidate's build; the "
+        "loop then retries the candidate, so one candidate can count more than once")
     lately = {s["shard"].rsplit("/", 1)[-1] for c in cands for s in c["shards"] if s.get("shard") and s.get("took")
               and (not s.get("end") or s["took"] >= now - SHARD_LAYOUT_H * 3600)}
     for k in sorted({s.get("shard") for c in cands for s in c["shards"] if s.get("shard") and s["shard"].rsplit("/", 1)[-1] in lately}):
