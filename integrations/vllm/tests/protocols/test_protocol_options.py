@@ -499,7 +499,7 @@ def _cut_window(cut=None, **more):
                       settings={"pouw": PEARL_SETTINGS, "sampled-proofs": own})
 
 
-def test_beside_sampled_proofs_pearl_c_is_admitted_only_in_a_window_cut_at_its_sites():
+def test_beside_spot_pearl_c_is_admitted_only_in_a_window_cut_at_its_sites():
     """Pearl-C has no circuit (its y is noise-dependent), so SPOT takes it only where the window's circuit is cut at
     its linears and reads the tables its calls commit (`window_class.PearlTables`), which the sampled-proofs setting
     ``cut`` names. Without it, or naming another entry, or under ncp-v2 (which has a circuit and commits no tables), the
