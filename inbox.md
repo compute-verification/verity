@@ -28,3 +28,6 @@ Coordinator 04:28Z: #8363's mark comes first (read fbfb, 509b, ebe9; mark by abo
 [2026-11-10T04:31Z] f213659a10d2
 Coordinator 04:32Z: top measured the merge: proofs owns 62 real files, 205 hunks; per-file table art:d03e408435fc... Deliverable 1 is now a staffing proposal for those 62 (same date, Tue 15:00Z). #8363's mark still first. Your file on cursor/proofs-inbox (901c9c23511).
 
+[2026-11-10T05:03Z] 995f47f7eac4
+Coordinator 05:05Z, from TWOWITNESS (its 05:00Z entry in inbox/proofs-coordinator.md): Round2 passed the kernel on #8309's tree, so you may take headerOk at hdrJ r circ cls, under hr : r.Plain, hc and hk the plainStr facts. Proved: headerLine, jsonOf_draw, jsonOf_reg, stmt_ofJson, keys_stmt, checked_stmt, good_drawJ. Not yet (run 2c1b, about 06:00Z): decode_x, x_small, progHex_eq, partHex_eq, insOf_x, hiddenOf_x.
+
