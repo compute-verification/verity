@@ -14,21 +14,21 @@ else a plain file. A package's modules are its `[[lean_lib]]`s' files (the libra
 
 A sibling the stub imports is built: Lean loads its `.olean` and, through the imports that file names, the `.olean` of
 every module it was built against, whatever the sources say now. A tree keeps the products of every branch built there,
-and Lake rebuilds only what a target imports, so a product can be older than its source (names moved out of a module
-nothing imports since), or have no source at all (`lean_changed.sync` unlinks a source and leaves `.lake`, since Lake
-replays the product when a branch brings the source back). The stub must load neither: beside the module the names moved
-into, the old product declares them a second time, a clash that is in no source. So a module counts as built (`plan`)
-only when it has its `.olean` and the trace Lake takes it as built by, that `.olean` is at least as new as its own
-source and the source of every module it imports, directly or through others, in its package or in any package its
-package requires by path (`workspace`), each of those has its `.olean` and trace too, and none of them is a name that
-some package of the workspace holds a product of with no source. One that isn't is listed as unchecked, with the count.
-Modification times carry this because whatever changes a source in a tree writes it then (`sync` rewrites only the
-files whose content differs, git a checkout's), after every product the tree held: a product at least as new as every
-source it was built from was built from them as they are, and so, when it was built, was each module it loads. They err
-only towards unchecked: a source written back as it was built from, or an import whose change Lake found no reason to
-rebuild its importers for, leaves a build that is current unchecked until Lake next rebuilds it. A module of a fetched
-dependency (`.lake/packages`) is taken as built: its sources change only with the manifest, and its products with
-them.
+and Lake rebuilds only what a target imports, so a product can be of a source that has changed since (names moved out
+of a module nothing imports now), or of one that is gone (`lean_changed.sync` unlinks a source and leaves `.lake`, since
+Lake replays the product when a branch brings the source back). The stub must load neither: beside the module the names
+moved into, the old product declares them a second time, a clash that is in no source (INF-667). So a module counts as
+built (`plan`) only when every `.olean` a stub loads for it is of its source as it is: its own and that of every module
+it imports, directly or through others, in its package or in any package its package requires by path (`workspace`).
+Each of those has its `.olean` and the trace Lake wrote when it built it, that trace states the hash of the source as it
+is now (`built_from`, `lake_hash`), and none of them is a name some package of the workspace holds a product of with no
+source. One that isn't is listed as unchecked, with the count. An `.olean` built from a module's source names that
+source's imports, so the modules loaded are the ones the sources name, each built from its source, and a name two of
+them declare is declared twice in the sources. The trace says what a modification time can't: a tree that goes from one
+branch to another and back holds sources written after the products built from the same text, and a product an
+artifact cache links is touched whenever the cache is read. A trace this can't read as Lean 4.34's Lake writes it says
+nothing, so its module is unchecked, never taken as built. A module of a fetched dependency (`.lake/packages`) is taken
+as built: its sources change only with the manifest, and its products with them.
 
 It is opt-in because of what it costs: on Security/Proofs' warm tree its stub imports some 3,200 modules in under 20 s
 at a peak near 8 GB, past the 1 GB a try on an agent VM has. So it runs only with `--siblings`, on Security on a node
@@ -42,6 +42,7 @@ import json
 import os
 import re
 import shutil
+import struct
 import subprocess
 import tempfile
 import time
@@ -77,8 +78,8 @@ class Plan(NamedTuple):
     is_module: bool
     #: the built modules of the package that don't import FILE, other executables' roots aside
     siblings: list[str]
-    #: the package's other modules that don't import FILE, each not built, built before a source it imports changed (in
-    #: any package of the workspace), or importing a product with no trace or no source; other executables' roots aside
+    #: the package's other modules that don't import FILE, each without a build of its source as it is or importing, in
+    #: any package of the workspace, a module without one or a product with no source; other executables' roots aside
     unchecked: list[str]
 
 
@@ -170,13 +171,46 @@ def products(lib: Path) -> dict[str, bool]:
     return out
 
 
-#: the time of a source no build is at least as new as: what stands for a module whose build must not be loaded
-NEVER = float("inf")
+M64 = (1 << 64) - 1
+#: MurmurHash64A's multiplier, with which Lean hashes a string and mixes two hashes
+MUL = 0xc6a4a7935bd1e995
+
+
+def lake_hash(text: bytes) -> str:
+    """Lake's hash of a source file of these bytes, as a module's trace states it for the source it was built from (16 hex
+    digits): Lean's hash of the text with each CRLF an LF (MurmurHash64A, seed 11), mixed into Lake's `Hash.nil` (1723),
+    which is Lean 4.34's `computeTextFileHash`. Under a Lake that hashes otherwise no trace states what this returns, so
+    every module is unchecked, and the test that builds with Lake fails."""
+    data = text.replace(b"\r\n", b"\n")
+    n = len(data)
+    h = (11 ^ (n * MUL)) & M64
+    for (k,) in struct.iter_unpack("<Q", data[:n - n % 8]):
+        k = (k * MUL) & M64
+        k = ((k ^ (k >> 47)) * MUL) & M64
+        h = ((h ^ k) * MUL) & M64
+    if n % 8:
+        h = ((h ^ int.from_bytes(data[n - n % 8:], "little")) * MUL) & M64
+    h = ((h ^ (h >> 47)) * MUL) & M64
+    k = ((h ^ (h >> 47)) * MUL) & M64
+    return f"{((1723 ^ k ^ (k >> 47) ^ MUL) * MUL) & M64:016x}"
+
+
+def built_from(trace: Path, name: str) -> str | None:
+    """The hash ``trace`` (a module's, as Lake wrote it) states for the source it built the module from: of its `inputs`,
+    the one a path to a file called ``name`` names. None when it states none that this reads: no trace, one cut short, or
+    another schema's."""
+    try:
+        inputs = json.loads(trace.read_text()).get("inputs")
+    except (OSError, ValueError, AttributeError):
+        return None
+    got = [e[1] for e in inputs if isinstance(e, list) and len(e) == 2 and isinstance(e[0], str) and isinstance(e[1], str)
+           and e[0].replace("\\", "/").rsplit("/", 1)[-1] == name] if isinstance(inputs, list) else []
+    return got[0] if len(got) == 1 else None
 
 
 def plan(pkg: Path, rel: str) -> Plan | str:
     """What the stub imports for FILE (``rel``, from ``pkg``), or why there is no check. A sibling is built, and so
-    imported, only when no `.olean` it loads is older than its source or has none (the module's docstring); the others
+    imported, only when every `.olean` a stub loads for it is of its source as it is (the module's docstring); the others
     are unchecked."""
     mods, root = modules(pkg), pkg.resolve()
     path = (pkg / rel).resolve()
@@ -216,35 +250,35 @@ def plan(pkg: Path, rel: str) -> Plan | str:
             if m not in above:
                 above.add(m)
                 todo.append(m)
-    newest: dict[str, float] = {}
+    good: dict[str, bool] = {}
 
-    def own(m: str) -> float:
-        """When ``m``'s source was written; `NEVER` when its build must not be loaded: it has no `.olean` or no trace, or
-        some package holds a product of its name with no source, which Lean could load in its place."""
+    def current(m: str) -> bool:
+        """Whether ``m``'s build is of its source as it is, and names the imports read here: its `.olean` and trace are
+        there, the trace states this source's hash, its header is one `headers.py` reads, and no package holds a product
+        of its name with no source, which Lean could load in its place."""
         f, lib = at[m]
-        return f.stat().st_mtime if have[lib].get(m) and m not in lost else NEVER
+        return bool(have[lib].get(m)) and m not in lost and headers[m] is not None \
+            and built_from(lib.joinpath(*m.split(".")).with_suffix(".trace"), f.name) == lake_hash(f.read_bytes())
 
-    def latest(m: str) -> float:
-        """The newest of the sources a build of ``m`` loads the products of: its own (`own`) and that of each module of
-        the workspace it imports, directly or through others; `NEVER` when an import names a product with no source.
-        Each module once, on a stack of its own: an import chain is longer than Python recurses."""
-        stack, path = [] if m in newest else [(m, iter(imports(m)))], {m}
+    def loads(m: str) -> bool:
+        """Whether every build a stub that imports ``m`` loads is of its source as it is: ``m``'s own (`current`) and that
+        of each module of the workspace it imports, directly or through others, none of them naming a product with no
+        source. Each module once, on a stack of its own: an import chain is longer than Python recurses."""
+        stack, path = [] if m in good else [(m, iter(imports(m)))], {m}
         while stack:
             top, rest = stack[-1]
-            if (i := next((i for i in rest if i in at and i not in newest and i not in path), None)) is not None:
+            if (i := next((i for i in rest if i in at and i not in good and i not in path), None)) is not None:
                 stack.append((i, iter(imports(i))))
                 path.add(i)
                 continue
-            newest[top] = max([own(top), *(newest.get(i, 0.0) if i in at else NEVER if i in lost else 0.0
-                                           for i in imports(top))])
+            good[top] = all(good.get(i, True) if i in at else i not in lost for i in imports(top)) and current(top)
             path.discard(top)
             stack.pop()
-        return newest[m]
+        return good[m]
 
     built, unchecked = [], []
     for m in sorted(set(mods) - above - (executables(pkg) - {mod})):
-        olean = at[m][1].joinpath(*m.split(".")).with_suffix(".olean")
-        (built if latest(m) < NEVER and olean.stat().st_mtime >= newest[m] else unchecked).append(m)
+        (built if loads(m) else unchecked).append(m)
     return Plan(mod, all(headers[m] is not None and headers[m].module for m in [mod, *built]), built, unchecked)
 
 
@@ -305,8 +339,8 @@ def _listed(names: list[str]) -> str:
 def verdict(p: Plan, rc: int, output: str, seconds: float, peak_mb: int) -> tuple[int, str]:
     """(the try's status, the check's line) from the stub's ``rc`` and ``output``."""
     cost = f"{len(p.siblings)} imported in {seconds:.0f} s, peak {peak_mb} MB"
-    left = (f"; {len(p.unchecked)} unchecked, not built since their sources or imports changed, in their package or one "
-            f"it requires: {_listed(p.unchecked)}") if p.unchecked else ""
+    left = (f"; {len(p.unchecked)} unchecked, with no build of their source as it is or importing a module with none, in "
+            f"their package or one it requires: {_listed(p.unchecked)}") if p.unchecked else ""
     if rc == 0:
         return 0, f"siblings: no built module of its package that doesn't import {p.module} declares a name it does ({cost}){left}"
     if m := CLASH.search(output):
@@ -316,9 +350,8 @@ def verdict(p: Plan, rc: int, output: str, seconds: float, peak_mb: int) -> tupl
             return 1, (f"siblings: {p.module} and {other} both declare '{name}', which Lean refuses when it imports both, "
                        f"as the package's root does: rename one ({cost}){left}")
         return 1, (f"siblings: {refused} and {earlier} both declare '{name}', neither of them {p.module}: a clash already "
-                   f"in the sources, since every build the stub loaded is at least as new as the sources it was built "
-                   f"from, so a root that imports both refuses them too: rename one; {p.module}'s own names are "
-                   f"unchecked ({cost}){left}")
+                   f"in the sources, since every build the stub loaded is of its source as it is, so a root that imports "
+                   f"both refuses them too: rename one; {p.module}'s own names are unchecked ({cost}){left}")
     return rc or 1, f"siblings: the stub that imports {p.module} beside them failed (its output above) ({cost}){left}"
 
 

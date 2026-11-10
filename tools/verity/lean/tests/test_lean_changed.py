@@ -656,6 +656,13 @@ def module(lib: Path, name: str, olean: bytes = b"olean\x02rest", trace: str | N
     return t
 
 
+def of(source: Path) -> str:
+    """A trace as Lake writes one for a module it built from ``source`` as it is: `module`'s outputs, and among its inputs
+    the source with its hash."""
+    return json.dumps({"outputs": {"o": ["aa.olean"], "i": "bb.ilean", "c": "cc.c"},
+                       "inputs": [["options", "00000000000006bb"], [str(source), LC.SIBLINGS.lake_hash(source.read_bytes())]]})
+
+
 def test_damaged_finds_each_module_an_interrupted_build_left_half_written(tmp_path):
     lib = tmp_path / "lib"
     module(lib, "P/Good")
@@ -926,9 +933,7 @@ def test_try_with_siblings_compiles_the_file_then_imports_it_beside_its_built_si
     (tree / "Sec" / "Proofs" / "lakefile.toml").write_text('name = "p"\nsrcDir = ".."\n\n[[lean_lib]]\nname = "Proofs"\n')
     (tree / "Sec" / "Proofs" / "Flock" / "X.lean").write_text("module\n")
     (tree / "Sec" / "Proofs" / "Y.lean").write_text("module\n")
-    olean = module(tree / "Sec" / "Proofs" / LC.SIBLINGS.LIB, "Proofs/Y").with_suffix(".olean")
-    os.utime(olean, (2_000_000_000.0,) * 2)
-    os.utime(olean.with_name("Y.olean.hash"), (2_000_000_000.0,) * 2)
+    module(tree / "Sec" / "Proofs" / LC.SIBLINGS.LIB, "Proofs/Y", trace=of(tree / "Sec" / "Proofs" / "Y.lean"))
     ran = []
 
     def run(argv, cwd):
@@ -954,22 +959,21 @@ def test_try_with_siblings_compiles_the_file_then_imports_it_beside_its_built_si
 def test_try_with_siblings_on_a_tree_synced_across_a_move_leaves_out_what_was_built_before_it(trying, tmp_path, monkeypatch):
     """INF-667 on a slot tree. `Sec/Proofs` requires `Sec` by path; every module was built, then a sync brought a move of
     names in `Sec` that rewrote `Defs/Rows.lean`, and no build since has needed `Proofs.Y`, whose source didn't change.
-    Its product loads `Defs.Rows` as it was before the move, so the stub leaves it out, the try passes, and its line
-    counts what it left unchecked. A clash the stub does report still fails the try."""
+    Its product loads `Defs.Rows` as it was built before the move, so the stub leaves it out, the try passes, and its
+    line counts what it left unchecked. A clash the stub does report still fails the try."""
     tree, calls = trying
-    sec, proofs, then = tree / "Sec", tree / "Sec" / "Proofs", 1_000_000_000.0
+    sec, proofs = tree / "Sec", tree / "Sec" / "Proofs"
     (proofs / "Flock").mkdir(parents=True)
     (sec / "Defs").mkdir()
     (proofs / "lakefile.toml").write_text('name = "p"\nsrcDir = ".."\n\n[[lean_lib]]\nname = "Proofs"\n')
     (proofs / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": "s", "type": "path", "dir": ".."}]}))
     (sec / "lakefile.toml").write_text('name = "s"\n\n[[lean_lib]]\nname = "Defs"\n')
     for rel, text in {"Proofs/Flock/X.lean": "module\n", "Proofs/Y.lean": "module\npublic import Defs.Rows\n",
-                      "Proofs/Z.lean": "module\n", "Defs/Rows.lean": "module\n"}.items():
+                      "Proofs/Z.lean": "module\n", "Defs/Rows.lean": "module\n\ndef Defs.row := 1\n"}.items():
         (sec / rel).write_text(text)
-        os.utime(sec / rel, (then,) * 2)
     for lib, name in ((proofs / LC.SIBLINGS.LIB, "Proofs/Y"), (proofs / LC.SIBLINGS.LIB, "Proofs/Z"), (sec / LC.SIBLINGS.LIB, "Defs/Rows")):
-        os.utime(module(lib, name).with_suffix(".olean"), (then + 100,) * 2)
-    os.utime(sec / "Defs" / "Rows.lean", (then + 200,) * 2)
+        module(lib, name, trace=of(sec / f"{name}.lean"))
+    (sec / "Defs" / "Rows.lean").write_text("module\n")
     stubs, clash = [], []
 
     def run(argv, cwd):
@@ -980,8 +984,8 @@ def test_try_with_siblings_on_a_tree_synced_across_a_move_leaves_out_what_was_bu
     said = []
     assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append, siblings=True) == 0, said
     assert stubs == ["module\n\npublic import Proofs.Flock.X\npublic import Proofs.Z\n"], "Proofs.Y is not imported"
-    assert any("declares a name it does (1 imported in 2 s, peak 700 MB); 1 unchecked, not built since their sources or "
-               "imports changed, in their package or one it requires: Proofs.Y" in s for s in said), said
+    assert any("declares a name it does (1 imported in 2 s, peak 700 MB); 1 unchecked, with no build of their source as it "
+               "is or importing a module with none, in their package or one it requires: Proofs.Y" in s for s in said), said
     assert (proofs / LC.SIBLINGS.LIB / "Proofs" / "Y.olean").is_file(), "its product stays for Lake to rebuild or replay"
     clash.append("error: import Proofs.Z failed, environment already contains 'f' from Proofs.Flock.X\n")
     said.clear()
