@@ -73,7 +73,7 @@ theorem serviceSound_of_sessions {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m Np 
     (δs δ : ℝ)
     (hCR : ∀ x w i, (sess x w i).CR)
     (hAcc : Accounting.Assumptions.TS.AcceptedLive (checkLayer p ws opened rel sessOf) sess out)
-    (hLaw : Accounting.Assumptions.TS.WindowLaw sess out)
+    (hLaw : Accounting.Assumptions.TS.WindowDesign sess out)
     (hChk : Accounting.Assumptions.TS.ServedChecksHold (checkLayer p ws opened rel sessOf) sess out rows)
     (hLink : Accounting.Assumptions.TS.ServedRootsLinked (checkLayer p ws opened rel sessOf) sess out rows δs)
     (hδ : ∀ x w i, ((sess x w i).n : ℝ≥0∞) * (sess x w i).bound ≤ ENNReal.ofReal δ) (hδ0 : 0 ≤ δ) :
@@ -103,7 +103,7 @@ theorem CheckProofSystemSound_nontrivial : CheckProofSystemSoundNontrivial := by
       (prob_mono fun x _ => ?_))))
   obtain ⟨pub, prof, hc⟩ := accepted_all 1 x 0
   obtain ⟨-, -, hd⟩ := drawIsCoin 1 x 0 pub prof hc
-  exact ⟨pub, prof, hc, Accounting.Compose.drawOf hK24 (Accounting.TS.coinAt x 0).2 ⟨0, by decide⟩,
+  exact ⟨pub, prof, hc, Accounting.Compose.sampleOf hK24 (Accounting.TS.coinAt x 0).2 ⟨0, by decide⟩,
     (hd _).2 ⟨⟨0, by decide⟩, rfl⟩, fun h => h⟩
 
 end Accounting.SecurityProofs.Bridge

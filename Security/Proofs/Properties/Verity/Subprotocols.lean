@@ -426,7 +426,7 @@ def NetworkWindowLe {r : PeriodRun d α C Ω} {K : ℝ}
         ¬ WindowGood H D L Kₒ S lay k δ reg Dj (R.sw i) (R.ρ i) R.tops (R.stmt (Function.update ξ (r.own .network) x) i)
           (R.wit (Function.update ξ (r.own .network) x) i) (R.obs (Function.update ξ (r.own .network) x) i)) ≤
     PrBad H D.V
-      (RLeakTap H D.commit D.parse D.partition L Kₒ S lay k δ (fun m => AsReg m.prog (lay m) (k m) (reg m)) Dj R.tops)
+      (RLeakCertifier H D.commit D.parse D.partition L Kₒ S lay k δ (fun m => AsReg m.prog (lay m) (k m) (reg m)) Dj R.tops)
       (E D decode) (R.stmt ξ i) (R.prover ξ i)
 
 /-- A period's network realization at `atCode r A`: the same windows, claim, scope, provers and network certifier,

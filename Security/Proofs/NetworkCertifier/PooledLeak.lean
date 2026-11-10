@@ -21,7 +21,7 @@ The count half: a family of incorrect sets with fewer than `Fmax` proof blocks i
 each window's observations number at most `2^#(freeInputs \ reg) · 2^(faultyBits) · Dj^k` (`encard_leakAt_le`, from
 `encard_acceptedFaulty_le` at `AsReg`), and the faulty bits sum to at most `b · Fmax`. Under `trusted-host` the cells
 the client receives read back from the network certifier's record under the schedule, one its record format holds
-(`tap_cells_read`), so they
+(`certifier_cells_read`), so they
 number at most `#Ss` times those records, which bounds the secrets they decode to (`encard_pooledGood_le`);
 `∏_c (cap_c + 1)` is room, as in the period's bound.
 -/
@@ -187,11 +187,11 @@ theorem encard_pooledGood_le {L K S : ℕ} (lay : AuditStatement → BoundaryGat
     (op : Fin m → ℕ → List (Obs L K S) → List Bool) (n : Fin m → ℕ) (b : ℕ)
     (hb : ∀ i, ∀ v < n i, faultyBits (sw i).prog (Pw i) {v} ≤ b)
     {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
-    (f : TapRecord Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
-    (run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L K S)))
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p => tapCode f p.1 (arr p.2))
-    (cap : Conn → ℕ) (Ss : Set (WardenSchedule Conn)) (hfit : ∀ s ∈ Ss, f.fits s)
-    (Zs : Set Z) (sched : Z → WardenSchedule Conn) (srv : Z → Srv) (hs : ∀ z ∈ Zs, sched z ∈ Ss)
+    (f : RecordFormat Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
+    (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L K S)))
+    (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
+    (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (hfit : ∀ s ∈ Ss, f.fits s)
+    (Zs : Set Z) (sched : Z → CertifierSchedule Conn) (srv : Z → Srv) (hs : ∀ z ∈ Zs, sched z ∈ Ss)
     (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : ∀ z ∈ Zs, dec (run tap (sched z, srv z)).1 = z)
     (W : Z → Fin m → Finset ℕ) (hWn : ∀ z i, W z i ⊆ range (n i)) (Fmax : ℕ) :
     {z | z ∈ Zs ∧ PooledGood lay k reg Dj sw Pw ρ op Fmax (W z) (run tap (sched z, srv z)).2}.encard ≤
@@ -206,7 +206,7 @@ theorem encard_pooledGood_le {L K S : ℕ} (lay : AuditStatement → BoundaryGat
     Set.pi Set.univ fun i => {o | LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i) (famOf g i) o}
   let Y : Set (Fin m → List (Obs L K S)) := ⋃ g ∈ s, X g
   let V : Set (Conn → List (ℕ × CellView Cell)) :=
-    (fun p : WardenSchedule Conn × (Fin m → List (Obs L K S)) => f.read p.1 p.2) '' (Ss ×ˢ Y)
+    (fun p : CertifierSchedule Conn × (Fin m → List (Obs L K S)) => f.read p.1 p.2) '' (Ss ×ˢ Y)
   have hgood : ∀ z ∈ G, (run tap (sched z, srv z)).2 ∈ Y := by
     rintro z ⟨-, hlt, hleak⟩
     obtain ⟨g, hg⟩ := exists_famOf_eq n Fmax (W z) (hWn z) hlt.le
@@ -218,7 +218,7 @@ theorem encard_pooledGood_le {L K S : ℕ} (lay : AuditStatement → BoundaryGat
       exact hleak i
   have hsub : G ⊆ dec '' V := fun z hz =>
     ⟨(run tap (sched z, srv z)).1, ⟨(sched z, (run tap (sched z, srv z)).2), ⟨hs z hz.1, hgood z hz⟩,
-      (tap_cells_read f arr tap run htrust _ (hfit _ (hs z hz.1)) _).symm⟩, hdz z hz.1⟩
+      (certifier_cells_read f arr tap run htrust _ (hfit _ (hs z hz.1)) _).symm⟩, hdz z hz.1⟩
   have hX : ∀ g ∈ s, (X g).encard ≤ ((B : ℕ) : ℕ∞) := by
     intro g hg
     have hlt : ∑ i, (famOf g i).card < Fmax := (Finset.mem_filter.1 hg).2
@@ -272,7 +272,7 @@ theorem encard_pooledGood_le {L K S : ℕ} (lay : AuditStatement → BoundaryGat
 /-- **The leak through the network certifier over a monitoring period**: `Guarantees.PooledLeakAccepted`, from
 `pr_adaptive_add_le` at the conditional escape, a union bound over the leak relations, and `encard_pooledGood_le` at
 each sample of the coins. -/
-theorem horizonLeak : Guarantees.PooledLeakAccepted := by
+theorem pooledLeak : Guarantees.PooledLeakAccepted := by
   intro L K S lay k reg Dj m sw Pw ρ op n b hb Ω _ _ Conn Cell Srv Dev Z _ arr f tap run htrust cap Ss hcap hfit Zs
     schedOf srvOf hs dec hdz acc hacc W hW hWn e e' he q hq0 hq1 hesc hleak δ hδ Fmax hF
   refine ⟨fun z hz => ?_, fun ω => encard_pooledGood_le lay k reg Dj sw Pw ρ op n b hb arr f tap run htrust cap Ss

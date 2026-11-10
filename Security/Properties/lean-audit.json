@@ -799,8 +799,8 @@
   "Properties.NetworkPeriod.rowsProgWired_nontrivial": "4bddc27479aba4a1049243d85d661eb3081f1922e067d71e8783a5cdd77c6d1c",
   "Properties.NetworkPeriod.rowsStateTied": "9404e8c98194fe63381cfeae308acc528bb4f66d2e8536b3c02ef613431d4c4b",
   "Properties.NetworkPeriod.rowsStateTied_nontrivial": "d0d8204ffb2e772003635028c5622784d1ec1a8d0cc8a45ea37e71b1e8fe8d70",
-  "Properties.NetworkPeriod.rowsTiedDrawn": "b622058340cbc1d6926a00889f52de0c3ff4a76232c073294fa100675b759deb",
-  "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial": "aeb0e3753dce706751cb8042d5bf851959cd4ef89bd7357d993df497631c23fd",
+  "Properties.NetworkPeriod.rowsTiedSampled": "b622058340cbc1d6926a00889f52de0c3ff4a76232c073294fa100675b759deb",
+  "Properties.NetworkPeriod.rowsTiedSampled_nontrivial": "aeb0e3753dce706751cb8042d5bf851959cd4ef89bd7357d993df497631c23fd",
   "Properties.NetworkPeriod.rowsUntiedRefused": "a6422e99a7badb1dc8a3922255ccfe6783a66bdba2511039bf21dc30042d5a24",
   "Properties.NetworkPeriod.rowsUntiedRefused_nontrivial": "aa00cfe5835bf525712d992edb7d9e6ab94b7914b335d01ade734f3611ede2f5",
   "Properties.NetworkRecords.acceptMeans": "4ee7e6626901cee51276b7be734ca7c3b2daeea3810674d3e4b0983856b300cf",
@@ -886,24 +886,24 @@
   "Properties.RemoteAudit.Line.lineChecked": "92521b24e4953445a0d2e7c4dec1648b2bb5b0afc4b6894f08334057afa8cf9a",
   "Properties.RemoteAudit.Line.lineRegistered": "dc010c6f5a9aaf0fbc666592ae5a47a0f427bba6f06b16b6e290c6305ccda1ee",
   "Properties.RemoteAudit.Line.stretchBound": "00e2f065edf6e116f146ffde18cb1f3059766d17bf24b38880c6ca480be91680",
-  "Properties.RemoteAudit.Shared.acceptDrawsOpenable": "0b743610595de5577ff9f84574ecfc2bbf1e882858d572dac4296642b8419bb8",
-  "Properties.RemoteAudit.Shared.acceptedDrawsOpenable": "94daa863d90847df9a5df134d7e03726912631b5d730377f941ba6a25e0b9197",
-  "Properties.RemoteAudit.Shared.drawIsSubset": "254aaf81436f73958b6d16fb3bbe114b0eec2ae6b35b35134e46339aaa03b8aa",
-  "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn": "183d024d49347ffdd47478d21385093afa15cb34036387386fad9590e1904208",
-  "Properties.RemoteAudit.Shared.recordKeptAfterDraw": "1ae50d1ad9c55b4689ba79cce7dd527324f382a6f166e0045ca2435bda84abae",
-  "Properties.RemoteAudit.Shared.sessionDrawsRecords": "065919af943ec94c405062fd23a3454f46e6dbfaaa8ab906f3ec0b37ec0f9773",
+  "Properties.RemoteAudit.Shared.acceptSamplesOpenable": "0b743610595de5577ff9f84574ecfc2bbf1e882858d572dac4296642b8419bb8",
+  "Properties.RemoteAudit.Shared.acceptedSamplesOpenable": "94daa863d90847df9a5df134d7e03726912631b5d730377f941ba6a25e0b9197",
+  "Properties.RemoteAudit.Shared.sampleIsSubset": "254aaf81436f73958b6d16fb3bbe114b0eec2ae6b35b35134e46339aaa03b8aa",
+  "Properties.RemoteAudit.Shared.openingsUnreadUntilSampled": "183d024d49347ffdd47478d21385093afa15cb34036387386fad9590e1904208",
+  "Properties.RemoteAudit.Shared.recordKeptAfterSample": "1ae50d1ad9c55b4689ba79cce7dd527324f382a6f166e0045ca2435bda84abae",
+  "Properties.RemoteAudit.Shared.sessionSamplesRecords": "065919af943ec94c405062fd23a3454f46e6dbfaaa8ab906f3ec0b37ec0f9773",
   "Properties.RemoteAudit.acceptChecksOpenings": "d58f00149a369b5ec1020e9aea876e2297ca72f1b599e37357479afaffadf1ad",
-  "Properties.RemoteAudit.acceptDrawsOpenable": "df20335f7f7d6e988e24076b706a7e1237000b99f240aec19fdcf97cc70df7cb",
-  "Properties.RemoteAudit.acceptOpensDraws": "e1d6123278d7730f4b3dcbef749274c3828901a8a55a9acbf9964735a446cae8",
+  "Properties.RemoteAudit.acceptSamplesOpenable": "df20335f7f7d6e988e24076b706a7e1237000b99f240aec19fdcf97cc70df7cb",
+  "Properties.RemoteAudit.acceptOpensSamples": "e1d6123278d7730f4b3dcbef749274c3828901a8a55a9acbf9964735a446cae8",
   "Properties.RemoteAudit.acceptedMinPasses": "0d529f21b51d610996e67758bd106ab06354a700bbb13590c9f87df83e25cb88",
   "Properties.RemoteAudit.appendsInOrder": "f20737a675f5169f62fdfab84b3bbc63fe698266617504348fba5178463cd97a",
   "Properties.RemoteAudit.changedReadsDistinct": "3fa28ce2488ed71727f4bb8023747125b95abe20a9a494fa45e5a29c21b0aada",
   "Properties.RemoteAudit.chunkedIsWhole": "a55b21eea959675213296153cd5512118ada7de5f7ea491ee22a32c7b98c5cdb",
-  "Properties.RemoteAudit.drawIsSubset": "f8c3a7d75200e11be1cf3c4a8cc96730a7ee020faa4020075d9ef3deb7b6f7d4",
+  "Properties.RemoteAudit.sampleIsSubset": "f8c3a7d75200e11be1cf3c4a8cc96730a7ee020faa4020075d9ef3deb7b6f7d4",
   "Properties.RemoteAudit.lifetimeCapped": "81238c57be0d96899fa06e143efbd005767864b21d0ba703b1341cb980a9a0d7",
   "Properties.RemoteAudit.lineCoversSession": "a509370ffb2c6bc2f0bb6e80eabd220919f09ce302bef13de612d0e53c96a49d",
   "Properties.RemoteAudit.liveIsRun": "f590e7328b4bf6c7dbfb8362da3e8a235c1e21eed5f61a86e741e80cdda95ec5",
-  "Properties.RemoteAudit.openingsUnreadUntilDrawn": "7950b2e590d3ed22aca9bb8b36e278fe678fa759ad722024d154c78c13762310",
+  "Properties.RemoteAudit.openingsUnreadUntilSampled": "7950b2e590d3ed22aca9bb8b36e278fe678fa759ad722024d154c78c13762310",
   "Properties.RemoteAudit.passesChained": "18a77f61543a7fe37e2288837a3854e9bea3524905d25b92dca9b06d4b3bed57",
   "Properties.RemoteAudit.passesReadDistinct": "90eed93483409e786c68ecf37861604fbc03d72f97d7d1ed12f66bfe5990779e",
   "Properties.RemoteAudit.passesStepped": "39e482d66d951d973df481350e4501d76cf3467d68436f9b51cf66b7993e58ea",
@@ -911,7 +911,7 @@
   "Properties.RemoteAudit.pooledCovers": "4e42619c9a38980ce0cbfba9b6dcfeef984a6c3755f7e7dac1e64a52a7536e03",
   "Properties.RemoteAudit.pooledCoversSession": "c426dc59633ca4f41787f55f427a54e99c5c0909bd08720e02ce311bd3e2055b",
   "Properties.RemoteAudit.receiptsBelowLimit": "80b7bc07dd0a13d6afe9f84c7dbeddf1510a7f018442f3fc995a863b3c69d1d1",
-  "Properties.RemoteAudit.recordKeptAfterDraw": "4dea8a6ffab48be464b58e4001bb9086128588986c213b5fcc464b66dbca14b0",
+  "Properties.RemoteAudit.recordKeptAfterSample": "4dea8a6ffab48be464b58e4001bb9086128588986c213b5fcc464b66dbca14b0",
   "Properties.RemoteAudit.releasedStayOut": "9a969c04fe8d92c87062758f2b1063d15e60fe0db11e774427db2f8f9d45b6ce",
   "Properties.RemoteAudit.scheduleChecked": "7d24cf63d2813c8aadbbcdeb5bcb4efc9f33c59451af0dae591fd359ca0e8e1e",
   "Properties.RemoteAudit.scheduleFixesLayout": "9208ff59300d11ed98f57101b871efd1e060561660733e3b6083c1dab8da6a9e",
@@ -5922,11 +5922,11 @@
     "function": "RemoteAudit.verifyWindow",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.acceptOpensDraws": {
+   "Properties.RemoteAudit.acceptOpensSamples": {
     "function": "RemoteAudit.verifyWindow",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.drawIsSubset": {
+   "Properties.RemoteAudit.sampleIsSubset": {
     "function": "RemoteAudit.draws",
     "outcome": "accept"
    },
@@ -6146,15 +6146,15 @@
     "function": "RemoteAudit.Line.line",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.acceptDrawsOpenable": {
+   "Properties.RemoteAudit.acceptSamplesOpenable": {
     "function": "RemoteAudit.verifyWindow",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.openingsUnreadUntilDrawn": {
+   "Properties.RemoteAudit.openingsUnreadUntilSampled": {
     "function": "RemoteAudit.Session.run",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.recordKeptAfterDraw": {
+   "Properties.RemoteAudit.recordKeptAfterSample": {
     "function": "RemoteAudit.Session.run",
     "outcome": "accept"
    },
@@ -6194,19 +6194,19 @@
     "function": "RemoteAudit.Session.run",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.Shared.acceptDrawsOpenable": {
+   "Properties.RemoteAudit.Shared.acceptSamplesOpenable": {
     "function": ["RemoteAudit.draws", "RemoteAudit.checkWindow"],
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.Shared.drawIsSubset": {
+   "Properties.RemoteAudit.Shared.sampleIsSubset": {
     "function": "RemoteAudit.Shared.close",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn": {
+   "Properties.RemoteAudit.Shared.openingsUnreadUntilSampled": {
     "function": "RemoteAudit.Shared.run",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.Shared.recordKeptAfterDraw": {
+   "Properties.RemoteAudit.Shared.recordKeptAfterSample": {
     "function": "RemoteAudit.Shared.run",
     "outcome": "accept"
    },
@@ -6214,7 +6214,7 @@
     "function": "RemoteAudit.Schedule.check",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.Shared.sessionDrawsRecords": {
+   "Properties.RemoteAudit.Shared.sessionSamplesRecords": {
     "function": "RemoteAudit.Shared.run",
     "outcome": "accept"
    },
@@ -6266,7 +6266,7 @@
     "function": "NciCheck.Baseline.evaluate",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.Shared.acceptedDrawsOpenable": {
+   "Properties.RemoteAudit.Shared.acceptedSamplesOpenable": {
     "function": "RemoteAudit.Shared.run",
     "outcome": "accept"
    },
@@ -6547,7 +6547,7 @@
    "Pous.EndToEnd.SecurityProofs.honestPassesRing": "completeness: the honest full-state server passes P2's ring audit with probability 1, so P2RingAuditSecure's and EndToEndRing's events are not vacuous",
    "Pous.EndToEnd.SecurityProofs.honestPassesAccepts": "completeness: the honest full-state server passes EndToEndRing's event with probability 1 (the coin tree is always built and the draw never rejects)",
    "Pous.EndToEnd.RunCertifies": "unstated: a step of periodHeld: it joins the composed check's runCheckAccepts with the setup check's acceptsDecodes and publishesRoot, all three proved, and runCertifies proves it from them",
-   "Properties.Served.DrawMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.drawMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
+   "Properties.Served.SampleMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.sampleMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Pouw.PearlPlus.WorkIsTheCredit": "unstated: the work an accepted run publishes is `creditAtAssumption` over the plan's passes at the run's draws, the draws that landed on a tile over its inert-work bound (X_O) and δ = 1/100, crediting nothing on a test instance's input, and a refused or rejected run publishes none; a draft statement, unproved, which gets a guarantee entry once red team has read it",
@@ -6575,7 +6575,7 @@
    "Pous.Period.SecurityProofs.periodHeldDeployed": "frozen (premise): periodHeld at the deployed ring budget (RING_D, RING_Q, RING_L) = (16,446, 2^20, 2^64), the one pous-ring-speed derives from Delta + RTT = 854,000 ns and the measured round floor ROUND_NS = 361.55 / 3.490 ns: DEADLINE_ROUNDS = 8,243 <= RING_D, and RING_D + 1 rounds take 1.995 x the limit; outside both regions where P2RingAuditSecure is refuted (D >= 32,894; L >= 2^169 at k = 105). Its premises are periodHeld's at that budget (P2RingAuditSecure, Pous.Period.DeviceModel, Pous.Period.Instantiates), none under shape.premises.",
    "Pous.Period.SecurityProofs.periodHeldHonest": "completeness: the honest lemma of periodHeld and periodHeldDeployed: at an honest period on one H200 holding all of C* (honestRun, 2^30 bits on chip, one PCIe Gen 5 x16 side channel of 437,248,000 bits a round) and the honest strategy that keeps all of C and answers by lookup (honestStrategy), the device model DeviceModel holds at the deployed budget and the instantiation Instantiates holds for every audit under a 32-byte session id, the certificate HONEST_S = 63,000,000 bits is positive and fits the state bound, and the budget is the deadline's at the measured floor (DEADLINE_ROUNDS <= RING_D, the 1.995x margin)",
    "Pous.Period.SecurityProofs.periodHeldNontrivial": "completeness: the nontrivial lemma of periodHeld and periodHeldDeployed: at a period whose capacity account holds nothing, an accept-all verdict fails their conclusion wherever the period's data holds no break (a concrete audit with no break needs SHA-512 on each of the table's 2^20 strings, so that is a hypothesis), and their event is false at the honest period",
-   "Properties.Pouw.ServedValues.SecurityProofs.rightValues": "frozen (no-function,world-unlisted): H1J10RCheckedCreditPeriod's period and premises, less UnitFixed and the play's folded words, with its bound in AND gates of the registered declaration D under the lowering pinned at registration (Verity.creditSize, Definitions.Core.Formalism): except with probability delta_s + n(delta_bind + delta_ks), delta_coin plus delta_crypto, an accepted period's right blocks (DrawnLayer.Good under periodMode) have total AND count at least (1 - eps_skip)_+ S, S the credited size of the windows before the first refusal, eps_skip = sigma eps(j) N_live / S, and each block's AND count taken outside the ledger of gates another protocol credits; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. A values guarantee, not a compute claim: right values aren't work. Right is the accounting model's DrawnLayer.Good, not yet tied to the committed values Credit.window checks. No premise beyond H1's: TileDrawIsCoin, TileServiceSound, RegisteredBeforeDraw, SaltIsLiveCoin and SharedNoiseLucks, the one computational premise. Proved from H1J10RCheckedCreditPeriod at a play whose fixed words are the right blocks' (Proofs.Pouw.ServedValues), with an honest and a nontrivial witness (Proofs.Pouw.ServedValues.Honest).",
+   "Properties.Pouw.ServedValues.SecurityProofs.rightValues": "frozen (no-function,world-unlisted): H1J10RCheckedCreditPeriod's period and premises, less UnitFixed and the play's folded words, with its bound in AND gates of the registered declaration D under the lowering pinned at registration (Verity.creditSize, Definitions.Core.Formalism): except with probability delta_s + n(delta_bind + delta_ks), delta_coin plus delta_crypto, an accepted period's right blocks (SampledLayer.Good under periodMode) have total AND count at least (1 - eps_skip)_+ S, S the credited size of the windows before the first refusal, eps_skip = sigma eps(j) N_live / S, and each block's AND count taken outside the ledger of gates another protocol credits; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. A values guarantee, not a compute claim: right values aren't work. Right is the accounting model's SampledLayer.Good, not yet tied to the committed values Credit.window checks. No premise beyond H1's: TileDrawIsCoin, TileServiceSound, RegisteredBeforeDraw, SaltIsLiveCoin and SharedNoiseLucks, the one computational premise. Proved from H1J10RCheckedCreditPeriod at a play whose fixed words are the right blocks' (Proofs.Pouw.ServedValues), with an honest and a nontrivial witness (Proofs.Pouw.ServedValues.Honest).",
    "Properties.Challenger.LiveAnswer": "unstated: a live check's answer at the coins its evidence reads is its answer, proved in security_proofs by Properties.Challenger.liveAnswer; a draft statement, which gets a guarantee entry once the one theorem reads it",
    "Properties.Challenger.DrawnByDevice": "unstated: Challenger.drawCoins accepts only coins a withheld session of the key's device released for that window and label, or the fixed finder findBreak outputs a break from the run (an LMS forgery or a SHA-512 collision), proved with no premise in security_proofs by Properties.Challenger.Drawn.drawnByDevice; euf-cma/lms-sha512-n64 and ecr/sha-512 bound that finder where a guarantee reads it; a draft statement, which gets a guarantee entry once the one theorem reads it",
    "Properties.Challenger.CoinsFromLog": "unstated: an accepted answer is the live answer at the coins the challenger's device released, or a break, proved from DrawnByDevice in security_proofs by Properties.Challenger.coinsFromLog, and so with no premise by Properties.Challenger.Drawn.coinsFromLog_holds; a draft statement, which gets a guarantee entry once the one theorem reads it",

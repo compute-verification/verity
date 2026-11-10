@@ -419,7 +419,7 @@ theorem luckAt_pinned {D C τ V : Type} [Fintype C] [Fintype τ] (F : D → C �
         refine propext ⟨fun ⟨hp, hpos⟩ => ?_, False.elim⟩
         have : (fun t => R c t ≠ F (w c) c t) = fun _ => False :=
           funext fun t => propext ⟨fun hne => hne (hpass c hp t), False.elim⟩
-        rw [hd c, wrongShare, this, prob_none] at hpos
+        rw [hd c, incorrectShare, this, prob_none] at hpos
         exact lt_irrefl _ hpos
       rw [this, prob_none, zero_mul]
 
@@ -432,7 +432,7 @@ theorem budget_spot_pinned {D C τ V : Type} [Fintype C] [Fintype τ] (F : D →
       fun a => budget_spot_pinned F (next a) (hnext a)⟩
     simp only [hd, div_one]
     exact (sum_ite_mono pass _ hpass _ fun _ => (Real.exp_pos _).le).trans
-      (sum_pinned_le (fun c t => F (w c) c t) R (fun c => wrongShare F (w c) c (R c)) fun _ => rfl)
+      (sum_pinned_le (fun c t => F (w c) c t) R (fun c => incorrectShare F (w c) c (R c)) fun _ => rfl)
 
 theorem budget_blocks_pinned {D C τ V Ω₀ : Type} [Fintype C] [Fintype τ] [Fintype Ω₀] (F : D → C → τ → V)
     {p₀ : ℝ} (hp₀ : p₀ ≤ 1) :
@@ -445,14 +445,14 @@ theorem budget_blocks_pinned {D C τ V Ω₀ : Type} [Fintype C] [Fintype τ] [F
     · rw [hd a]
       have : 0 ≤ (1 - p₀) * d₀ := mul_nonneg (by linarith) hd₀
       have := prob_nonneg fun t => R a.1 a.2.1 t ≠ F (w a.1 a.2.1) a.2.1 t
-      unfold wrongShare
+      unfold incorrectShare
       linarith
     set v₀ := (1 - p₀) * d₀
     have h₀ := sum_exp_le pass₀ v₀ hpass₀
     calc (∑ a, if pass a then Real.exp (d a / 1) else 0)
         ≤ ∑ a : Ω₀ × (C × τ), (if pass₀ a.1 then Real.exp v₀ else 0) *
             (if R a.1 a.2.1 a.2.2 = F (w a.1 a.2.1) a.2.1 a.2.2 then
-              Real.exp (wrongShare F (w a.1 a.2.1) a.2.1 (R a.1 a.2.1)) else 0) := by
+              Real.exp (incorrectShare F (w a.1 a.2.1) a.2.1 (R a.1 a.2.1)) else 0) := by
           refine sum_le_sum fun a _ => ?_
           by_cases hp : pass a
           · obtain ⟨h0, h1⟩ := hpass a hp
@@ -462,13 +462,13 @@ theorem budget_blocks_pinned {D C τ V Ω₀ : Type} [Fintype C] [Fintype τ] [F
             split_ifs <;> positivity
       _ = ∑ a₀, (if pass₀ a₀ then Real.exp v₀ else 0) *
             ∑ a₁ : C × τ, if R a₀ a₁.1 a₁.2 = F (w a₀ a₁.1) a₁.1 a₁.2 then
-              Real.exp (wrongShare F (w a₀ a₁.1) a₁.1 (R a₀ a₁.1)) else 0 := by
+              Real.exp (incorrectShare F (w a₀ a₁.1) a₁.1 (R a₀ a₁.1)) else 0 := by
           rw [Fintype.sum_prod_type]
           refine sum_congr rfl fun a₀ _ => ?_
           rw [Finset.mul_sum]
       _ ≤ ∑ a₀ : Ω₀, (if pass₀ a₀ then Real.exp v₀ else 0) * (Fintype.card (C × τ) : ℝ) :=
           sum_le_sum fun a₀ _ => mul_le_mul_of_nonneg_left
-            (sum_pinned_le (fun c t => F (w a₀ c) c t) (R a₀) (fun c => wrongShare F (w a₀ c) c (R a₀ c))
+            (sum_pinned_le (fun c t => F (w a₀ c) c t) (R a₀) (fun c => incorrectShare F (w a₀ c) c (R a₀ c))
               fun _ => rfl)
             (by split_ifs <;> positivity)
       _ ≤ (Fintype.card Ω₀ : ℝ) * Fintype.card (C × τ) := by

@@ -47,7 +47,7 @@ theorem PeriodLeakAccepted_honest (h : NetTiming.Assumptions.SampledCodeRuns) :
         Claims.Flock.ListWithin (SamplingDeploy.deploy relD c).flock.len (SamplingDeploy.deploy relD c).flock.enc
           (SamplingDeploy.deploy relD c).flock.θ (SamplingDeploy.deploy relD c).flock.decode ∧
         (SamplingDeploy.deploy relD c).commit.Binds shaD) ∧
-      (RowsFormat.tapRecord fxRows fxRows_wf 4 1).fits fxQueueSched := by
+      (RowsFormat.recordFormat fxRows fxRows_wf 4 1).fits fxQueueSched := by
   obtain ⟨c, hscope, hfixed, hsessions, hin, hslots, ⟨iroots, hopens, hfix⟩, hprog, hchecks⟩ := h
   refine ⟨⟨c, hscope, ?_, Claims.Sampling.decoder_meets_zk relD _ (SamplingDeploy.deploy_flock relD c), ?_⟩,
     fxQueue_fits⟩
@@ -62,7 +62,7 @@ theorem PeriodLeakAccepted_honest (h : NetTiming.Assumptions.SampledCodeRuns) :
 `δ = 1/8` with no input registered (`tapD_bound_fails`). -/
 theorem PeriodLeakAccepted_nontrivial :
     ¬ PrBad shaD (tapD Unit).V
-        (RLeakTap shaD (tapD Unit).commit (tapD Unit).parse (tapD Unit).partition 1 1 1 (fun _ => notLay)
+        (RLeakCertifier shaD (tapD Unit).commit (tapD Unit).parse (tapD Unit).partition 1 1 1 (fun _ => notLay)
           (fun _ => 1) (1 / 8) (fun s => AsReg s.prog notLay 1 ∅) 1 (fun _ => tapOps))
         (Claims.Sampling.E (tapD Unit) fun _ => [()]) [] silentP ≤
       Claims.Sampling.κ (tapD Unit) (1 / 8) [] +
@@ -75,8 +75,8 @@ theorem PeriodLeakAccepted_nontrivial :
 /-- **`PooledLeakAccepted`'s schedule premises at the deployed instance**, its schedules the fixture `fxQueue`'s alone:
 each fits its rows format (`hfit`), and sends at most 6 cells on each connection (`hcap`). -/
 theorem PooledLeakAccepted_honest :
-    (∀ s ∈ ({fxQueueSched} : Set (WardenSchedule (Fin 3))), (RowsFormat.tapRecord fxRows fxRows_wf 4 1).fits s) ∧
-      ∀ s ∈ ({fxQueueSched} : Set (WardenSchedule (Fin 3))), ∀ c, s.cells c ≤ 6 := by
+    (∀ s ∈ ({fxQueueSched} : Set (CertifierSchedule (Fin 3))), (RowsFormat.recordFormat fxRows fxRows_wf 4 1).fits s) ∧
+      ∀ s ∈ ({fxQueueSched} : Set (CertifierSchedule (Fin 3))), ∀ c, s.cells c ≤ 6 := by
   refine ⟨fun s hs => ?_, fun s hs c => ?_⟩
   · rw [Set.mem_singleton_iff.1 hs]
     exact fxQueue_fits

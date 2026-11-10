@@ -195,7 +195,7 @@ theorem life_boundaryNs {s : State} (h : Life s) (u now : Nat) :
 theorem life_releaseCoin {s : State} (h : Life s) (t now : Nat) : Life (s.releaseCoin t now) :=
   lifeOn_push h _ rfl
 
-theorem life_draw {s : State} (h : Life s) (u : Nat) (d : Array (Nat × Nat)) (now : Nat) :
+theorem life_sample {s : State} (h : Life s) (u : Nat) (d : Array (Nat × Nat)) (now : Nat) :
     Life { s with windows := s.windows.modify u ({· with drawn := some d, openedNs := some now}) } :=
   lifeOn_same h (samePlans_modify _ _ _ fun _ => rfl)
 
@@ -331,7 +331,7 @@ theorem life_close {s : State} {t : Int} {now : Nat} {r : Result} {s' : State} (
   all_goals first
     | exact h
     | exact life_fail (life_final h _) _ _ _
-    | exact life_draw (life_final h _) _ _ _
+    | exact life_sample (life_final h _) _ _ _
 
 theorem life_verify {s : State} {t : Int} {openings : Array Opening} {r : Result} {s' : State}
     (h : Life s) (he : verify s t openings = (r, s')) : Life s' := by

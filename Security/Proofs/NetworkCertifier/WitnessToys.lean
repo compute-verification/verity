@@ -34,7 +34,7 @@ witnesses; `Witnesses` has the negation `notStmt` and its accepting verifier `le
   (`single_mem_sampFaulty`), each committing at most its three gates' bits (`sampBits`), and one input is free
   (`sampFree`). The step `obs1`, the empty frame the negation of `false` holds, is accepted (`obs1_sampAcc`).
 * `tapD`: `leakD` with every opening passing, where the network certifier's openings `tapOps` register `obs0`
-  (`tapOps_opens`), so at every `δ` no witness is in `RLeakTap` (`tapD_noRLeakTap`), and at `δ = 1/8` the per-window
+  (`tapOps_opens`), so at every `δ` no witness is in `RLeakCertifier` (`tapD_noRLeakCertifier`), and at `δ = 1/8` the per-window
   leak bound of `PeriodLeakAccepted` fails at its silent prover (`tapD_bound_fails`).
 * `pooled_bound_fails`: `PooledLeakAccepted`'s bound fails at an audit that always accepts, at one window of one step
   whose incorrect set holds the one unit `Fmax = 1` allows none of, at `δ = 1/2`.
@@ -389,7 +389,7 @@ noncomputable def tapD (Coin : Type) : Claims.Sampling.Deploy Coin Unit Unit :=
 /-- **The network certifier's openings register `obs0`**, under every opening passing: they open the input and the
 egress slot's presence gate, both `false`, so the step's row holds no frame and its ingress is `false`. -/
 theorem tapOps_opens (H : Msg → Msg) :
-    TapOpens H accCm notLay 1 (fun _ _ => [false]) notStmt tapOps [obs0] := by
+    CertifierRegisters H accCm notLay 1 (fun _ _ => [false]) notStmt tapOps [obs0] := by
   refine ⟨fun q _ => rfl, fun t ht => ?_⟩
   obtain rfl : t = 0 := by omega
   refine ⟨fun ℓ σ g hg => ?_, fun g hg => ?_, Nat.one_pos, fun ℓ => ?_, rfl⟩
@@ -403,11 +403,11 @@ theorem tapOps_opens (H : Msg → Msg) :
     rfl
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **No witness is in `RLeakTap`** at `tapD`, at one step at every `δ`, whatever the inputs `As` admits: the network
+/-- **No witness is in `RLeakCertifier`** at `tapD`, at one step at every `δ`, whatever the inputs `As` admits: the network
 certifier registers `obs0` (`tapOps_opens`), which no possible incorrect set accepts (`obs0_notAcc`). -/
-theorem tapD_noRLeakTap (H : Msg → Msg) (δ : ℝ) (As : Claims.Sampling.AuditStatement → (ℕ → Bool) → Set (ℕ → Bool))
+theorem tapD_noRLeakCertifier (H : Msg → Msg) (δ : ℝ) (As : Claims.Sampling.AuditStatement → (ℕ → Bool) → Set (ℕ → Bool))
     (x : Msg) (w : Claims.Sampling.Wit) :
-    ¬ RLeakTap H (tapD Coin).commit (tapD Coin).parse (tapD Coin).partition 1 1 1 (fun _ => notLay) (fun _ => 1) δ
+    ¬ RLeakCertifier H (tapD Coin).commit (tapD Coin).parse (tapD Coin).partition 1 1 1 (fun _ => notLay) (fun _ => 1) δ
       As 1 (fun _ => tapOps) x w := by
   rintro ⟨s, P, hs, hP, h⟩
   obtain rfl : notStmt = s := Option.some.inj hs
@@ -430,7 +430,7 @@ theorem tapD_btap (H : Msg → Msg) (decode : List (ℕ × Unit) → List Unit) 
   unfold Finder.Pr
   rw [Pr_congr fun s => iff_false_intro (by
     simp only [Btap, ownLog_noHash _ _ _ (noHash_E (tapD Coin) (fun _ _ _ => rfl) _ _ _ _)]
-    simp [tapLog, tapD, leakD, accCm, OC.eval, tapOps, findColl])]
+    simp [certifierLog, tapD, leakD, accCm, OC.eval, tapOps, findColl])]
   exact Pr_false
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
@@ -451,12 +451,12 @@ theorem tapD_κ_eighth (x : Msg) : Claims.Sampling.κ (tapD Coin) (1 / 8) x < 1 
 end Toy
 
 /-- **`PeriodLeakAccepted`'s per-window bound fails at the accepting verifier** `tapD`, at every hash, at one step at
-`δ = 1/8` with no input registered and the statement `[]` in scope (`leakD_scopeAcc`): no witness is in `RLeakTap`
-(`tapD_noRLeakTap`), so the silent prover's run fails it with probability `1`, while `κ < 1` and the finders find
+`δ = 1/8` with no input registered and the statement `[]` in scope (`leakD_scopeAcc`): no witness is in `RLeakCertifier`
+(`tapD_noRLeakCertifier`), so the silent prover's run fails it with probability `1`, while `κ < 1` and the finders find
 nothing. -/
 theorem tapD_bound_fails (H : Msg → Msg) :
     ¬ PrBad H (tapD Unit).V
-        (RLeakTap H (tapD Unit).commit (tapD Unit).parse (tapD Unit).partition 1 1 1 (fun _ => notLay) (fun _ => 1)
+        (RLeakCertifier H (tapD Unit).commit (tapD Unit).parse (tapD Unit).partition 1 1 1 (fun _ => notLay) (fun _ => 1)
           (1 / 8) (fun s => AsReg s.prog notLay 1 ∅) 1 (fun _ => tapOps))
         (Claims.Sampling.E (tapD Unit) fun _ => [()]) [] silentP ≤
       Claims.Sampling.κ (tapD Unit) (1 / 8) [] +
@@ -466,10 +466,10 @@ theorem tapD_bound_fails (H : Msg → Msg) :
           (fun _ => tapOps) Unit silentP []).Pr H := by
   intro h
   have hp : PrBad H (tapD Unit).V
-      (RLeakTap H (tapD Unit).commit (tapD Unit).parse (tapD Unit).partition 1 1 1 (fun _ => notLay) (fun _ => 1)
+      (RLeakCertifier H (tapD Unit).commit (tapD Unit).parse (tapD Unit).partition 1 1 1 (fun _ => notLay) (fun _ => 1)
         (1 / 8) (fun s => AsReg s.prog notLay 1 ∅) 1 (fun _ => tapOps))
       (Claims.Sampling.E (tapD Unit) fun _ => [()]) [] silentP = 1 :=
-    prBad_accV H _ _ [] silentP (tapD_noRLeakTap H _ _ [])
+    prBad_accV H _ _ [] silentP (tapD_noRLeakCertifier H _ _ [])
   have hb : PrB H (tapD Unit).V silentP [] = 0 := prB_accV H silentP []
   simp only [hp, hb, mul_zero, Real.sqrt_zero, add_zero, tapD_bext, tapD_btap] at h
   linarith [tapD_κ_eighth (Coin := Unit) []]
@@ -517,11 +517,11 @@ theorem fxRows_wf : fxRows.Wf := by
   rintro ⟨c, ⟨⟨⟩⟩ | _ | _⟩ <;> fin_cases c <;> rfl
 
 theorem fxQueue_bucket (c : Fin 3) (j : ℕ) (hj : j < fxQueueSched.cells c) : fxQueueSched.bucket c j < 10 := by
-  fin_cases c <;> simp [fxQueueSched, WardenSchedule.bucket] at hj ⊢ <;> omega
+  fin_cases c <;> simp [fxQueueSched, CertifierSchedule.bucket] at hj ⊢ <;> omega
 
 /-- **`fxQueue`'s schedule fits the format** over one window of four slots: its cells fall in buckets `4 … 9`, and no
 bucket holds more than four frames. -/
-theorem fxQueue_fits : (RowsFormat.tapRecord fxRows fxRows_wf 4 1).fits fxQueueSched := by
+theorem fxQueue_fits : (RowsFormat.recordFormat fxRows fxRows_wf 4 1).fits fxQueueSched := by
   refine ⟨fun c j hj => by simpa [fxRows] using fxQueue_bucket c j hj, fun b => ?_⟩
   rcases Nat.lt_or_ge b 10 with hb | hb
   · interval_cases b <;> decide

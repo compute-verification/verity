@@ -21,7 +21,7 @@ g = 1 is `Session.run`):
 
 * **LineHeld**: on any node, trace and correct receipts, with the prover's records read through the coin commitment
   (`recordCommitted`: holding commitment `c` its record at `ω` is `recs c ω`, and the session it plays that record's
-  opening draw `recordDraw`, one draw for each of the session's `⌈W/g⌉` (`Node.draws`, a window each at g = 1), draw
+  opening draw `recordSample`, one draw for each of the session's `⌈W/g⌉` (`Node.samples`, a window each at g = 1), draw
   `c` with the receipts its windows have in the state the record's session reaches, sampling `min(s, U_c)` at the
   session's `samples` s) and the record of outcome `ω` the prover's holding the deployed commitment `com ω`
   (`played`), whose trace of record (`ofRecord`, the trace over the registration's blocks with the Lean verifier's
@@ -41,18 +41,18 @@ g = 1 is `Session.run`):
   some opened receipt presented with an accepted row other than the one its root holds). The openings are the
   deployed draw's (`Accounting.Remote.Draw`: `Key.subset` on the first blocks `prf c` gives draw `c`'s coin, at most
   `receiptMax = 2^64 − 1 < 2^448` receipts a draw, the verifier's `RECEIPT_LIMIT` less one, the sampler's fallbacks
-  `rest` free), at the error `Accounting.Guarantees.Remote.PooledDraw` states.
+  `rest` free), at the error `Accounting.Guarantees.Remote.PooledSample` states.
 
 It takes no device model: bits read need none. The memory the line's stretches credit, `span · (N − lost)` registered
 blocks held over each stretch's span and `max(0, w − lost)` weights bytes a tick (`HeldAt`, `Credits`), follows from
 the bits read under the device model (the links' ceiling `Links` or `Identity`, `SquaringCeiling`, `Disks`,
 `ChipCeiling`, `Routed`, at the node's rates in the model's units, a tick a nanosecond, `Node.squarings` …
-`Node.chipBlocks`), by the model's argument for `Accounting.Guarantees.Remote.HeldOverTimeLinksDrawn`, in a lemma of
+`Node.chipBlocks`), by the model's argument for `Accounting.Guarantees.Remote.HeldOverTimeLinksSampled`, in a lemma of
 the proofs (`Properties.RemoteAudit.Line.SecurityProofs.heldAt_of_read`).
 
 The bound follows from the line's W covering the session's pooled bound (`Properties.RemoteAudit.LineCoversSession`,
 at the record's draws, whose draws the line holds to `min(s, U_c)` and whose receipts on an accepted record are
-`recordDraw`'s sizes: the reached state is the run's, a window's receipts are below `RECEIPT_LIMIT`,
+`recordSample`'s sizes: the reached state is the run's, a window's receipts are below `RECEIPT_LIMIT`,
 `Properties.RemoteAudit.ReceiptsBelowLimit`, and the line refuses a draw of `g` > 1 windows with `RECEIPT_LIMIT` or
 more, `RemoteAudit.Line.ofSummaryAt`), the line's groups being one for each of the session's windows on an accepted
 record (its parameters' `windows`, `Session.State.outcome`, which `Shared.run` keeps at every g). The held lemma also
@@ -167,7 +167,7 @@ def ReadAt {Ω : Type} (T : Trace Ω) (ω : Ω) (node : Node) (r : Record) : Pro
       (8 * node.blockBytes : ℝ) * T.reads ω (firstPass (r.groups node) (r.groups node).size)
 
 /-- **The memory line of record, in bits read.** On a trace over a session's coins, one for each of its draws
-(`Node.draws`, a window each at g = 1), the prover's records read through the coin commitment (`recordCommitted`,
+(`Node.samples`, a window each at g = 1), the prover's records read through the coin commitment (`recordCommitted`,
 each record's opening draw at its `samples` s) and the record of each outcome the one played holding the deployed
 commitment (`played`), whose trace of record (`ofRecord`: over the registration's blocks, its verdict the Lean
 verifier's on the record) meets the line's premises at the record's groups, the network certifiers' coverage of the
@@ -178,20 +178,20 @@ node over the credited passes, and the record's line credits more bits read than
 draw `c`'s distinguisher at it with leaf `c` of the coin commitment committing zeros, `hide_c` draw `c`'s hiding term
 and `bind` the receipts' binding term at `R`, over the session's draws. -/
 def LineHeld : Prop :=
-  ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.draws → Pous.Bits κ → Blocks receiptMax)
-    (rest : DrawCoins node.draws κ X → Fin node.draws → ℕ → ℕ) (recs : Cm → DrawCoins node.draws κ X → Record)
-    (correct : Cm → Fin node.draws → DrawCoins node.draws κ X → Finset ℕ) (com : DrawCoins node.draws κ X → Cm)
-    (T : Trace (DrawCoins node.draws κ X)) (R : Receipts node.draws κ X) (δs δnet : ℝ),
+  ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
+    (rest : DrawCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → DrawCoins node.samples κ X → Record)
+    (correct : Cm → Fin node.samples → DrawCoins node.samples κ X → Finset ℕ) (com : DrawCoins node.samples κ X → Cm)
+    (T : Trace (DrawCoins node.samples κ X)) (R : Receipts node.samples κ X) (δs δnet : ℝ),
     let r := played recs com
     let F := recordCommitted node recs correct
-    ∀ (O : Outside (ofRecord T node r)) (I : Ingress (DrawCoins node.draws κ X)),
+    ∀ (O : Outside (ofRecord T node r)) (I : Ingress (DrawCoins node.samples κ X)),
     Paced (ofRecord T node r) (recordPace node r) → Covers (ofRecord T node r) →
     SketchBoundAt (ofRecord T node r) O δs → Covered (ofRecord T node r) O I →
     IngressCounted (ofRecord T node r) I δnet → (∀ c, Live (F.view c)) →
     Refused (F.play com) prf rest (ofRecord T node r) R → Counted (F.play com) (ofRecord T node r) →
     Pouw.pr (fun ω => Verified node (r ω) ∧
         ¬ (Quiet (ofRecord T node r) I.counted ω → ReadAt (ofRecord T node r) ω node (r ω))) ≤
-      δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.draws, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
+      δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
           ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
         (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)

@@ -306,7 +306,7 @@ def registryFn (j : Json) : V Json := do
       r := r'
       out := out.push (match c with | some c => c.toJson | none => refusedJ)
     | .live node => out := out.push (match ← r.liveDigest node with | some d => hexJ d | none => .null)
-    | .drawn node => out := out.push (toJson (← r.drawn node))
+    | .drawn node => out := out.push (toJson (← r.sampled node))
   pure (Json.mkObj [("results", .arr out), ("registry", r.toJson)])
 
 def codecDecodeFn (j : Json) : V Json := do
@@ -362,10 +362,10 @@ def leafReceiptFn (j : Json) : V Json := do
   | some y => pure (hexJ y)
   | none => pure .null
 
-def drawsFn (j : Json) : V Json := do
+def receiptSampleFn (j : Json) : V Json := do
   let lengths ← (← J.arr j "lengths" "input").mapM (J.asNat · "lengths")
   if lengths.isEmpty || lengths.any (· = 0) then throw "a window's passes are each one or more receipts"
-  let some ds := draws (← hex j "registration") (← nat j "window") (← hex j "coin") (← nat j "samples") lengths
+  let some ds := receiptSample (← hex j "registration") (← nat j "window") (← hex j "coin") (← nat j "samples") lengths
     | throw "the draw ran past its reads"
   pure (.arr (ds.map pairJ))
 
@@ -795,7 +795,7 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("session", sessionFn), ("registration_digest", registrationDigestFn), ("register", registerFn),
   ("registry", registryFn), ("codec_decode", codecDecodeFn),
   ("plan", planFn), ("plan_changed", planChangedFn), ("receipt", receiptFn), ("verify_opening", verifyOpeningFn),
-  ("leaf_receipt", leafReceiptFn), ("draws", drawsFn), ("schedule", scheduleFn),
+  ("leaf_receipt", leafReceiptFn), ("draws", receiptSampleFn), ("schedule", scheduleFn),
   ("pin", pinFn), ("canonical_json", canonicalJsonFn), ("checkpoint_sha512", checkpointFn),
   ("store_salt", storeSaltFn), ("expected_root", expectedRootFn), ("hold", holdFn), ("binding", bindingFn),
   ("line", lineFn), ("line_record", lineRecordFn), ("pooled", pooledFn),

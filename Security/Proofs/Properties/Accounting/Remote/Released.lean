@@ -269,7 +269,7 @@ theorem rel_boundaryNs {R old} {s : State} (h : Rel R old s) (u now : Nat) :
 theorem rel_releaseCoin {R old} {s : State} (h : Rel R old s) (t now : Nat) : Rel R old (s.releaseCoin t now) :=
   relOn_push h _ rfl
 
-theorem rel_draw {R old} {s : State} (h : Rel R old s) (u : Nat) (d : Array (Nat × Nat)) (now : Nat) :
+theorem rel_sample {R old} {s : State} (h : Rel R old s) (u : Nat) (d : Array (Nat × Nat)) (now : Nat) :
     Rel R old { s with windows := s.windows.modify u ({· with drawn := some d, openedNs := some now}) } :=
   relOn_same h (samePlans_modify _ _ _ fun _ => rfl)
 
@@ -343,7 +343,7 @@ theorem rel_close {R old} {s : State} {t : Int} {now : Nat} {r : Result} {s' : S
   all_goals first
     | exact h
     | exact rel_fail (rel_final h _) _ _ _
-    | exact rel_draw (rel_final h _) _ _ _
+    | exact rel_sample (rel_final h _) _ _ _
 
 theorem rel_verify {R old} {s : State} {t : Int} {openings : Array Opening} {r : Result} {s' : State}
     (h : Rel R old s) (he : verify s t openings = (r, s')) : Rel R old s' := by

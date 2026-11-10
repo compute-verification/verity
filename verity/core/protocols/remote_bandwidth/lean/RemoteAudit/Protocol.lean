@@ -33,7 +33,7 @@ the difftest's `session` reads (`Difftest.sessionFn`):
 On acceptance it publishes the reads it certifies and the error that holds at, `{"eps", "q_bytes"}` (`certify`): the
 session's receipts U less the wrong ones its openings leave, W rounded up (`Pooled.pooled` of each draw's receipts and
 draws at `DELTA`), each a read of one `BLOCK_BYTES` block, at ε = δ + ⌈W/g⌉·s/2^64 (`eps`), the session's `⌈W/g⌉`
-openings coins at its `samples` s each (the per-draw term of `Accounting.Guarantees.Remote.PooledDraw`; its PRF
+openings coins at its `samples` s each (the per-draw term of `Accounting.Guarantees.Remote.PooledSample`; its PRF
 advantages are a named assumption, not a number, and it has no hiding term, since the prover is sent the coin
 commitment only at the session's end): the draw term of the bound `Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol`
 proves at `Node.delta = DELTA` (`PublishedEps`). It is a constant of the parameters, not the draws a session made
@@ -122,7 +122,7 @@ structure Public where
 def Public.toJson (p : Public) : Json := Json.mkObj [("eps", .str p.eps.toString), ("q_bytes", natJ p.qBytes)]
 
 /-- `⌈W/g⌉`: the openings coins of a session of `params.windows` windows sampled `g` a coin (`coins.openings_coins`), one
-a window at g ≤ 1, as `Properties.RemoteAudit.Line.Node.draws`. -/
+a window at g ≤ 1, as `Properties.RemoteAudit.Line.Node.samples`. -/
 def openingsCoins (params : Session.Params) (g : Nat) : Nat :=
   if g ≤ 1 then params.windows else (params.windows + g - 1) / g
 

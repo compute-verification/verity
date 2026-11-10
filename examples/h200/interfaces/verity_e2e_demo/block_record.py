@@ -1,7 +1,7 @@
 """The block record: what each subprotocol writes for one server-time block and what the composed verdict reads,
 one document ``verity/block-record/v1``. It extends the all-protocols runner's per-period report
 (``verity/all-protocols-period/v1``, and its per-window ``verity/all-protocols-window/v1``) with the block's server and
-steps, every leg in one shape, the composed verdict with the JointHorizonLive error sum, and the monitoring period.
+steps, every leg in one shape, the composed verdict with the JointPooledLive error sum, and the monitoring period.
 
 **The record.**
 
@@ -25,7 +25,7 @@ steps, every leg in one shape, the composed verdict with the JointHorizonLive er
   not composed, so they leave its verdict neither pending nor missing.
  * ``monitoring_period``: the census deployment (a parameter: ``{id, machines, window_s, ...}``) and, per period of
   core's `PERIODS`, its blocks over all compute (machines × blocks a machine, core's `block_count`) and
-  JointHorizonLive's union bound over them at this block's errors (``error_sum`` × blocks), and the per-block error each
+  JointPooledLive's union bound over them at this block's errors (``error_sum`` × blocks), and the per-block error each
   δ of `DELTAS` needs over the period (δ / blocks).
 
 `check` recomputes every derived field from the legs. `from_period` builds a record from a runner report and extra legs.
@@ -51,7 +51,7 @@ LEGS = ("integrity", "pouw", "pous", "bandwidth", "certifier", "wipe")
 RUNNER_KEYS = {"integrity": "integrity", "pouw": "work", "pous": "space", "bandwidth": "bandwidth", "certifier": "communication"}
 #: the legs each product composes: onsite every leg, remote those that need no hardware of the auditor's at the site
 PRODUCTS = {"onsite": LEGS, "remote": ("integrity", "pouw")}
-JOINT_HORIZON = {"name": "Accounting.Guarantees.JointHorizonLive", "proved": True,
+JOINT_HORIZON = {"name": "Accounting.Guarantees.JointPooledLive", "proved": True,
                  "file": "Security/Definitions/Accounting/Guarantees/JointLive.lean",
                  "audits": ["integrity", "pouw", "pous", "bandwidth", "certifier"]}
 
@@ -134,7 +134,7 @@ def leg(name: str, row: Mapping[str, Any], *, server: str, runs: Sequence[str], 
 
 
 def compose(server: str, legs: Mapping[str, Any], product: str = "onsite") -> dict[str, Any]:
-    """The composed verdict of ``product``'s legs and the JointHorizonLive error over the block (module docstring); a
+    """The composed verdict of ``product``'s legs and the JointPooledLive error over the block (module docstring); a
     product other than onsite's names itself and its ``dropped`` legs."""
     if product not in PRODUCTS:
         raise ValueError(f"product {product!r}: not one of {sorted(PRODUCTS)}")

@@ -10,7 +10,7 @@ Option A (`Definitions.Accounting.TS.Fixed`). Each `def G : Prop` is proved as `
 (`Proofs.Accounting.TS.Fixed`), with its non-vacuity witness in `Proofs.Accounting.TS.FixedMeets`.
 
 * `UnitFixedOfWords`: `UnitFixed` (E1(c) per unit, with its fold clause) on a word layer whose credited units are fixed
-  under option A, from `ModesRun` and `CountsFixed`. A good unit (`DrawnLayer.Good`: the run paid for its late cone) is
+  under option A, from `ModesRun` and `CountsFixed`. A good unit (`SampledLayer.Good`: the run paid for its late cone) is
   computed, and so is every unit steering it, since a unit steering it is in its late cone; so its words are fixed words
   and `CountsFixed` counts them. A unit not skipped whole folds its words (`ModesRun`).
 * `AdditiveFixed`: additive operands don't decide fixedness. A computed unit's work (its words less what its additive
@@ -38,7 +38,7 @@ def UnitFixedOfWords : Prop :=
     (P : Play (Paths C m × B) S K T L U) (pf : WordLayer C B S m s J Q Pos V N W)
     (mode : Paths (Paths C m × B) S → Fin S × J → Mode) (wt : Fin S → J → ℝ) (folded : Paths (Paths C m × B) S → ℝ),
     (∀ w j, 0 ≤ wt w j) → (∀ w j, wt w j ≠ 0 → pf.Fixed wt (w, j)) → ModesRun pf mode → CountsFixed P pf wt folded →
-      UnitFixed P pf.toDrawnLayer mode wt folded
+      UnitFixed P pf.toSampledLayer mode wt folded
 
 /-- **Additive operands don't decide fixedness.** For a unit `u` whose multiplicative operands are all bound before its
 coin, on every path where the run computed it, its work is its work on its multiplicative operands under its noise,

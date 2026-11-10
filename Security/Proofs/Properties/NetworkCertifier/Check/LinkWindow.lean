@@ -17,7 +17,7 @@ Its two lemmas:
 
 * honest: `linkWindowAcceptMeans_honest`, the converse, that a link-window proved, opened, certified and synced is
   accepted with the property's outputs and digest (each predicate is its check, `proved_of` … `synced_of`, and the
-  verdict's digest always computes, `verdictDigest_ok`); and `linkWindowAcceptMeans_honest_warden`, that on a warden
+  verdict's digest always computes, `verdictDigest_ok`); and `linkWindowAcceptMeans_honest_certifier`, that on a warden
   link a window proved and opened whose two certificates the certifier's device signed (`CertifierSigned`, under a key
   `Lms.key` derives at parameters `Lms.Params.make` admits) is accepted whatever syncs it declares, by LMS's
   completeness (`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`). What stays a hypothesis is the proof system's:
@@ -319,7 +319,7 @@ theorem linkWindowAcceptMeans_honest :
 /-- **An honest warden link-window is accepted** (the honest lemma of `LinkWindowAcceptMeans` on a warden link): one
 proved and opened whose two certificates the certifier's device signed under its key (a key `Lms.key` derives at
 parameters `Lms.Params.make` admits, the link's), whatever syncs it declares. -/
-theorem linkWindowAcceptMeans_honest_warden :
+theorem linkWindowAcceptMeans_honest_certifier :
     ∀ (c : Case) (w : ByteArray) (N W H : Nat) (toy : Bool) (I seed : ByteArray) (k : Lms.PrivateKey),
       c.kind = .warden w → Lms.Params.make N W H toy = .ok c.lms → Lms.key c.lms I seed = .ok k →
       CertifierSigned c k → WindowProved c → WindowOpened c →

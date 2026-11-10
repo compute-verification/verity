@@ -318,14 +318,14 @@ theorem egressTail_shaper (p : Params) (now backlog t : Nat) (st : State) :
 
 /-- A live egress tick leaves the shaper `egressMid`'s tick leaves, but for the online prover's choice. -/
 theorem step_egress_shaper {c : Config} {st : State} (hg : Good c st) {now backlog : Nat}
-    (ht : st.shaper.t < horizon c) :
+    (ht : st.shaper.t < gridTicks c) :
     ∃ l, (step st (.tick .egress now backlog)).1.shaper = { (egressMid st now backlog).tick.1 with prover := l } := by
   rw [step_egress_fst hg ht, egressTick_eq]
   exact egressTail_shaper _ _ _ _ _
 
 /-- The frames a live egress tick hands are `egressMid`'s `handList`. -/
 theorem handedAt_egress {c : Config} {st : State} (hg : Good c st) {now backlog : Nat}
-    (ht : st.shaper.t < horizon c) :
+    (ht : st.shaper.t < gridTicks c) :
     handedAt st (.tick .egress now backlog) =
       handList (egressMid st now backlog) (egressMid st now backlog).tick.1.next := by
   obtain ⟨l, hl⟩ := step_egress_shaper hg ht (now := now) (backlog := backlog)
@@ -478,7 +478,7 @@ theorem init_fifo (c : Config) : FifoInv c.egress.allocation [] (init c).shaper 
 theorem step_fifo {c : Config} {st : State} {hp : List (Frame × Nat)} (hg : Good c st)
     (hi : FifoInv c.egress.allocation hp st.shaper) (ev : Event) :
     FifoInv c.egress.allocation (hp ++ (handedAt st ev).map (·, st.shaper.t)) (step st ev).1.shaper := by
-  by_cases hl : ∃ now backlog, ev = .tick .egress now backlog ∧ st.shaper.t < horizon c
+  by_cases hl : ∃ now backlog, ev = .tick .egress now backlog ∧ st.shaper.t < gridTicks c
   · obtain ⟨now, backlog, rfl, ht⟩ := hl
     have hr := egressMid_rel st now backlog
     have hgs : ShGood c.egressLink c.egress (egressMid st now backlog) := hg.shaper.rel hr
@@ -544,7 +544,7 @@ theorem getElem!_eq {α : Type _} [Inhabited α] {a : Array α} {j : Nat} {v : �
 /-- **The row a clean tick releases**: slot `i` holds the frame `i` places after the oldest one queued, among those
 handed through this tick, if fewer than `min(queued, r)` precede it in the row, and is padding otherwise. -/
 theorem release {c : Config} {st : State} {hp : List (Frame × Nat)} (hg : Good c st)
-    (hi : FifoInv c.egress.allocation hp st.shaper) {now backlog : Nat} (ht : st.shaper.t < horizon c)
+    (hi : FifoInv c.egress.allocation hp st.shaper) {now backlog : Nat} (ht : st.shaper.t < gridTicks c)
     (hc : if (st.shaper.t + 1) % c.egress.buckets = 0 then
         (egressMid st now backlog).tick.2.2.map BlockGrid.status = some .complete
       else (egressMid st now backlog).tick.1.certifier.fault = none) :
@@ -667,7 +667,7 @@ theorem completeRows_honest : CompleteRowsHonest := by
   have hm := egressAt_lt hEm
   have hgm := (prefix_good c tr m).1
   have htm := egressAt_t hEm
-  have hth : (pre c tr m).shaper.t < horizon c := htm ▸ hEm.2.2
+  have hth : (pre c tr m).shaper.t < gridTicks c := htm ▸ hEm.2.2
   obtain ⟨l, hl⟩ := step_egress_shaper hgm hth (now := now') (backlog := b')
   have hpre : (pre c tr (m + 1)).shaper = { (egressMid (pre c tr m) now' b').tick.1 with prover := l } := by
     rw [pre_succ c tr m hm, he', hl]

@@ -27,12 +27,12 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                a bin and a uniform offset (binned, uniform), counted in one segment (window), the carry
                                the decisions' and the last order entry's position and rank, a run's charges (charges)
 ../../Definitions/NetworkCertifier/Warden.lean  trusted: the warden (design v3): its cells (CellView), its public schedule
-                               (WardenSchedule), what reaches it from the server (Arrivals), its code (wardenLane,
-                               wardenCode), the fail cell (failCell) and the client's view (clientView)
+                               (CertifierSchedule), what reaches it from the server (Arrivals), its code (certifierLane,
+                               certifierCode), the fail cell (failCell) and the client's view (clientView)
 ../../Definitions/NetworkCertifier/Tap.lean  trusted: the tap, the warden and the certifier as one auditor device on a
-                               server's uplink: its record format (TapRecord: on a schedule it holds, every cell its
+                               server's uplink: its record format (RecordFormat: on a schedule it holds, every cell its
                                code sends reads back from its record) and its one code run giving the cells and the
-                               record (tapCode)
+                               record (recordingCode)
 ../../Definitions/NetworkCertifier/RecordRows.lean  trusted: the network certifier's record as the Python one writes it
                                (RowsFormat): a row a bucket of frames that name their connections, in ordinal order
                                (bucketFrames), the lanes read back from them (lanesOfRows), and the schedules it holds (Fits)
@@ -43,7 +43,7 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
 ../../Definitions/NetworkCertifier/Guarantees/SampledCharge.lean  trusted: the leak bound under a sampled audit, and what
                                an accepted one establishes (SampledLeakAccepted)
 ../../Definitions/NetworkCertifier/TapRows.lean  trusted: the network certifier's rows: its registration at the
-                               transfer gates (tapVal, TapOpens), the leak relation at them (RLeakTap) and the
+                               transfer gates (certifierVal, CertifierRegisters), the leak relation at them (RLeakCertifier) and the
                                collision finder against its openings (Btap)
 ../../Definitions/NetworkCertifier/Period.lean  trusted: a monitoring period of sampled audits: a statement registered
                                as a window's (SameRegistration) and a window's good event (WindowGood)
@@ -68,7 +68,7 @@ Ingress.lean    the ingress bound (the occupancy of the ingress grid, read from 
 PerWindow.lean  the last two over the run's first `m` whole execution blocks, and the ingress bound
                                          over the first `m` periods of `T` buckets: the factor per block and per period
 Warden.lean     the warden's code is the client view: its lane is the client view of its first late
-                                         cell (wardenLane_eq), and so are its code's cells (wardenCode_eq), which
+                                         cell (certifierLane_eq), and so are its code's cells (certifierCode_eq), which
                                          Tap reads the network certifier's cells from
 SampledCharge.lean  the leak bound under a sampled audit: by the layout's causality, holding each faulty
                                          committed gate at one bit leaves every step's egress as it was
@@ -77,15 +77,15 @@ SampledLeak.lean  the leak bound under an accepted sampled audit: its relation (
                                          hypothesis (sampledLeak; sampledLeak_reg at the registered inputs pinned)
 Tap.lean        what the tap's certifier saw is what its warden sent: under trusted-host, on a schedule its
                                          record format holds, its cells read back from the record its same run writes
-                                         (tap_cells_read), and each data cell its lane sends before the fail cell is
-                                         in it (tap_data_read)
+                                         (certifier_cells_read), and each data cell its lane sends before the fail cell is
+                                         in it (certifier_data_read)
 RecordRows.lean  the rows format reads back the code's cells on every schedule that fits it (read_record), so it
-                                         is a record format (tapRecord); #guards hold it to the Python network
+                                         is a record format (recordFormat); #guards hold it to the Python network
                                          certifier's egress records
 TapRows.lean    the leak bound at the network certifier's rows: the sampling relation at a trace that agrees
-                                         with its openings gives the leak relation at them (rLeakTap_of_r, through the
+                                         with its openings gives the leak relation at them (rLeakCertifier_of_r, through the
                                          trace filled in with its values), and a disagreement is a collision
-                                         (tapColl_of_disagree); sampledLeak_tap
+                                         (certifierColl_of_disagree); sampledLeak_certifier
 Period.lean     the leak through the network certifier over a monitoring period: each good window's
                                          registered observations are among AccSeqsSampled at its registration
                                          (mem_accSeqsSampled_of_windowGood), and the secrets the network certifier's
@@ -96,13 +96,13 @@ PeriodSum.lean  the period sum: per-window leak bounds `Pr[acc w ∧ b w < moved
 Pooled.lean     the incorrect proof blocks over a monitoring period: a uniform draw misses `f` blocks with
                                          probability at most `(1 - k/n)^f` (pr_disjoint_le), the escapes multiply over
                                          windows on independent coins (pr_adaptive_le), and with each window's
-                                         soundness error added, the monitoring period's bound (horizonIncorrectBlocks)
+                                         soundness error added, the monitoring period's bound (pooledIncorrectBlocks)
 PooledLeak.lean  the leak through the network certifier over a monitoring period: the escapes multiply with
                                          each window's error added (pr_adaptive_add_le, the monitoring-period step
                                          Periods.prCoin_forall_prod_le at bounds capped at 1), the families of faulty sets
                                          under `Fmax` units (exists_famOf_eq), and the secrets the client's cells
                                          decode to at each draw, read back from the certifier's record
-                                         (encard_pooledGood_le, horizonLeak)
+                                         (encard_pooledGood_le, pooledLeak)
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 Witnesses.lean  each acceptance guarantee's two lemmas: `G_honest`, its hypotheses at the deployed
@@ -227,7 +227,7 @@ The lock (`lean-audit.json`'s `guarantees`) holds the 18 statements of `Guarante
 (`../../Definitions/NetworkCertifier/Guarantees/Pooled.lean`) and the leak over a monitoring period
 (`../../Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`), each listed as
 `NetTiming.SecurityProofs.G` and proved by the lemma of the same statement whose name it spells in UpperCamelCase (the
-last two by `horizonIncorrectBlocks` and `horizonLeak`). All 25 are under `shape.frozen` as
+last two by `pooledIncorrectBlocks` and `pooledLeak`). All 25 are under `shape.frozen` as
 `frozen (no-function)`: each is stated over the model (an arbitrary `Interaction`, an abstract `EgressPrediction`'s `AccSeqs`,
 `expectedRow`, or the grids themselves; the sampled charge over the sequences the circuit's Program accepts with a
 <<<<<<< HEAD
@@ -289,22 +289,22 @@ The other 22 are the rest of the Capacity table's bounds and the schedule's caus
   registration's commitment binds them is a separate statement, not yet proved. Both `SampledAuditAccepted` and
   `Claims.Sampling.KS` are named assumptions in the lock.
 - **The leak through the network certifier over a monitoring period** (`Period.lean`): `PeriodLeakAccepted` composes
-  the leak bound at the network certifier's rows (`TapRows.lean`'s `sampledLeak_tap`) with the read-back of its
+  the leak bound at the network certifier's rows (`TapRows.lean`'s `sampledLeak_certifier`) with the read-back of its
   record, so the bound's content term comes from the audits: over a monitoring period's windows, each registered as a
-  statement, where the network certifier registers its observations at the transfer gates (`TapOpens`, its openings
+  statement, where the network certifier registers its observations at the transfer gates (`CertifierRegisters`, its openings
   under the statement's roots), the secrets of a covert sender whose every window meets its good event (`WindowGood`)
   number at most `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`, and each
-  window's audit fails the leak relation at the network certifier's rows (`RLeakTap`) with probability at most
+  window's audit fails the leak relation at the network certifier's rows (`RLeakCertifier`) with probability at most
   `δ + ε_ks + ε_bind + Pr[B_tap]`. Every proof block outside the incorrect set is correct, so the extracted trace opens every
   transfer gate there, at the network certifier's value unless the two openings collide (`B_tap`, under
   `CommitmentScheme.Binds`); filled in with the network certifier's values, it carries its records, and the incorrect proof blocks'
   gates are the advice the count already charges, so the count is unchanged. The network certifier is one device on
   the server's uplink, and it shapes what it forwards rather than only observing it (`Definitions/NetworkCertifier/Tap.lean`):
-  one run of its code (`tapCode`, under one `trusted-host`) gives the cells the client receives and the observations
-  the audits read, its record of those cells, so on every schedule its record format holds (`TapRecord.fits`) the
-  cells read back from the observations (`tap_cells_read`, a lemma, not a premise). The format the Python network
+  one run of its code (`recordingCode`, under one `trusted-host`) gives the cells the client receives and the observations
+  the audits read, its record of those cells, so on every schedule its record format holds (`RecordFormat.fits`) the
+  cells read back from the observations (`certifier_cells_read`, a lemma, not a premise). The format the Python network
   certifier writes, a row a bucket of frames naming their connections (`RowsFormat`,
-  `Definitions/NetworkCertifier/RecordRows.lean`), is one (`RowsFormat.tapRecord`), on the schedules whose cells fall
+  `Definitions/NetworkCertifier/RecordRows.lean`), is one (`RowsFormat.recordFormat`), on the schedules whose cells fall
   in the monitoring period's buckets, at most `S` a bucket, and its `#guard`s hold it to the Python records. The record
   holds the fail cells and padding too, so the proof counts the cells through the
   observations and needs no fail-cell charge: `∏_c (cap_c + 1)` is room. Its named assumptions are
@@ -322,7 +322,7 @@ The other 22 are the rest of the Capacity table's bounds and the schedule's caus
   `(1 - q)^F + Σ_i ε_i`, whatever `m` is, and
   `(1 - q)^F ≤ δ` once `F ≥ ln(1/δ)/q`. The sample's sampling design and each window's error are hypotheses, which A3 and
 ||||||| merged common ancestors
-- **The incorrect proof blocks over a monitoring period** (`Pooled.lean`): `PooledWrongUnitsLe` is the bound over many periods,
+- **The incorrect proof blocks over a monitoring period** (`Pooled.lean`): `PooledIncorrectBlocksLe` is the bound over many periods,
   cumulative rather than per window, and a fact of probability with no named assumption. Over `m` windows on independent
   live coins (the period's coins are the product `Fin m → Ω`), window `i` sampling a uniform `k_i`-subset of its `n_i` units,
   with the units wrong at its registration fixed by the earlier windows' coins and its audit accepting while its sample
@@ -330,7 +330,7 @@ The other 22 are the rest of the Capacity table's bounds and the schedule's caus
   monitoring period holds at least `F` incorrect proof blocks with probability at most `(1 - q)^F + Σ_i ε_i`, whatever `m` is, and
   `(1 - q)^F ≤ δ` once `F ≥ ln(1/δ)/q`. The sample's sampling design and each window's error are hypotheses, which A3 and
 =======
-- **The incorrect proof blocks over a monitoring period** (`Pooled.lean`): `PooledWrongUnitsLe` is the bound over many periods,
+- **The incorrect proof blocks over a monitoring period** (`Pooled.lean`): `PooledIncorrectBlocksLe` is the bound over many periods,
   cumulative rather than per window, and a fact of probability with no named assumption. Over `m` windows on independent
   live coins (their coins are the product `Fin m → Ω`), window `i` sampling a uniform `k_i`-subset of its `n_i` units,
   with the units wrong at its registration fixed by the earlier windows' coins and its audit accepting while its sample
@@ -351,7 +351,7 @@ The other 22 are the rest of the Capacity table's bounds and the schedule's caus
   `#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i`, `N = Σ_i n_i`: the
   incorrect proof blocks cost `(ln(1/δ)/q + 1) · (b + log2 (N + 1))` bits once over the monitoring period, `b = 16` by a
   proof block's output limit. The network certifier is one device, as in the period's bound: on every schedule its
-  record format holds, the cells the client receives read back from its record (`tap_cells_read`), so its one named
+  record format holds, the cells the client receives read back from its record (`certifier_cells_read`), so its one named
   assumption is `trusted-host`. Over live audits the two inputs are `Flock.Guarantees.SampledKSLive` at each window's
   history and the live `SampledLeakAccepted` (P2), neither discharged, so it is not the deployed system's bound over a
   monitoring period until they are.

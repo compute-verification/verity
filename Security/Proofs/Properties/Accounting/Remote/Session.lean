@@ -309,7 +309,7 @@ theorem inv_append {s : State} {root : ByteArray} {count : Int} {r : Result} {s'
     | exact ⟨inv_fail h _ _ _, rfl, rfl, rfl⟩
     | exact ⟨invOn_append h _ _ _ (by assumption), rfl, rfl, rfl⟩
 
-theorem inv_draw {s : State} (h : Inv s) (u : Nat) (d : Array (Nat × Nat)) (now : Nat)
+theorem inv_sample {s : State} (h : Inv s) (u : Nat) (d : Array (Nat × Nat)) (now : Nat)
     (hm : ∀ hu : u < s.windows.size, s.params.minPasses ≤ s.windows[u].roots.size) :
     Inv { s with windows := s.windows.modify u ({· with drawn := some d, openedNs := some now}) } :=
   invOn_same h (samePasses_modify _ _ _ _ fun hu =>
@@ -324,7 +324,7 @@ theorem roots_final (ws : Array Win) (u : Nat) (hu : u < (ws.modify u ({· with 
     (ws.modify u ({· with final := true}))[u].roots.size = ws[u]!.roots.size := by
   rw [Array.getElem_modify, ite_eq_left rfl, getElem!_pos ws u (by simpa using hu)]
 
-theorem drawn_of_get! (ws : Array Win) (u : Nat) (d : Array (Nat × Nat)) (h : ws[u]!.drawn = some d) :
+theorem sampled_of_get! (ws : Array Win) (u : Nat) (d : Array (Nat × Nat)) (h : ws[u]!.drawn = some d) :
     ∀ hu : u < ws.size, ws[u].drawn.isSome := by
   intro hu
   rw [getElem!_pos ws u hu] at h
@@ -470,7 +470,7 @@ theorem inv_close {s : State} {t : Int} {now : Nat} {r : Result} {s' : State} (h
   all_goals first
     | exact ⟨h, rfl, rfl, rfl⟩
     | exact ⟨inv_fail (inv_final h _) _ _ _, rfl, rfl, rfl⟩
-    | exact ⟨inv_draw (inv_final h _) _ _ _ (fun hu => by dsimp only at hu ⊢; rw [roots_final]; omega), rfl, rfl, rfl⟩
+    | exact ⟨inv_sample (inv_final h _) _ _ _ (fun hu => by dsimp only at hu ⊢; rw [roots_final]; omega), rfl, rfl, rfl⟩
 
 theorem inv_verify {s : State} {t : Int} {openings : Array Opening} {r : Result} {s' : State} (h : Inv s)
     (he : verify s t openings = (r, s')) : Inv s' ∧ Frame s s' := by
@@ -482,7 +482,7 @@ theorem inv_verify {s : State} {t : Int} {openings : Array Opening} {r : Result}
   all_goals first
     | exact ⟨h, rfl, rfl, rfl⟩
     | exact ⟨inv_fail h _ _ _, rfl, rfl, rfl⟩
-    | exact ⟨inv_accept h _ (drawn_of_get! _ _ _ (by assumption)), rfl, rfl, rfl⟩
+    | exact ⟨inv_accept h _ (sampled_of_get! _ _ _ (by assumption)), rfl, rfl, rfl⟩
 
 theorem inv_release {s : State} {runs withdrawn : Array (Int × Int)} {r : Result} {s' : State} (h : Inv s)
     (he : release s runs withdrawn = (r, s')) : Inv s' ∧ Frame s s' := by

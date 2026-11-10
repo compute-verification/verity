@@ -16,7 +16,7 @@ has exactly one record of each window `w < W` (`filter_one`).
 namespace Properties.CertifierNetwork.Proofs
 
 open _root_.CertifierDevice
-open Properties.CertifierDevice (Packed horizon outputs after)
+open Properties.CertifierDevice (Packed gridTicks outputs after)
 open Properties.CertifierDevice.Proofs
 
 /-- A record of the egress grid on the egress link, or of the ingress grid on the ingress link: `T` packed rows. -/
@@ -43,7 +43,7 @@ horizons, and the records published so far, `P`, one per window each grid closed
 structure Inv (c : Config) (st : State) (P : List BlockGrid) : Prop where
   good : Good c st
   bu : BuGood c st.bucketer
-  sh_le : st.shaper.t ≤ horizon c
+  sh_le : st.shaper.t ≤ gridTicks c
   bu_le : st.bucketer.t ≤ c.windows * c.ingress.buckets
   eg : windowsOn c.egressLink P = List.range (st.shaper.t / c.egress.buckets)
   ig : windowsOn c.ingressLink P = List.range (st.bucketer.t / c.ingress.buckets)
@@ -67,7 +67,7 @@ theorem range_close {t T : Nat} (h : (t + 1) % T = 0) : List.range ((t + 1) / T)
 /-- **One step keeps `Inv`**, the records it publishes appended. -/
 theorem step_inv {c : Config} (hd : Distinct c) {st : State} {P : List BlockGrid} (h : Inv c st P)
     (ev : Event) : Inv c (step st ev).1 (P ++ publishes (step st ev).2) := by
-  by_cases hl : ∃ now backlog, ev = .tick .egress now backlog ∧ st.shaper.t < horizon c
+  by_cases hl : ∃ now backlog, ev = .tick .egress now backlog ∧ st.shaper.t < gridTicks c
   · obtain ⟨now, backlog, rfl, ht⟩ := hl
     have hb := step_egress_bucketer h.good ht (now := now) (backlog := backlog)
     rw [step_egress_fst h.good ht] at hb ⊢

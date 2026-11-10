@@ -14,10 +14,10 @@ public import Proofs.Properties.Accounting.Remote.Shared
 At each outcome where the Lean verifier accepts the record's session (so the trace of record accepts, `ofRecord`) and
 the certifiers observed nothing but the verifier's messages entering the node, the receipts' sketch holds and the
 trace's wrong receipts are at most the session's pooled bound at the line's `δ` (`holdsAnd` of the sketch bound, from
-`SketchBoundAt`, `Covered` and `IngressCounted` by `sketchBound_of_covered`, and `Draw.pooledDraw` at the records read
+`SketchBoundAt`, `Covered` and `IngressCounted` by `sketchBound_of_covered`, and `Draw.pooledSample` at the records read
 through the coin commitment, `recordCommitted`, so at most the W the line reads: `LineCoversSession` at the record's
-draws, whose receipts on an accepted record are `recordDraw`'s sizes, `receipts_of_line`, and the line's check of their
-draws, `wrong_le_line`), and the line read off the record credits no more bits read than its groups' passes read
+draws, whose receipts on an accepted record are `recordSample`'s sizes, `receipts_of_line`, and the line's check of their
+draws, `incorrect_le_line`), and the line read off the record credits no more bits read than its groups' passes read
 (`readAt_of`): each pass reads every registered block but its wrong receipts (`read_card`), and the groups are one for
 each of the session's windows with the node's registered blocks (`record_summary`: `Shared.run` at any windows a draw
 keeps the parameters and registration, `frame_run`, and an accepted state has its parameters' windows,
@@ -61,18 +61,18 @@ theorem ofSummary_ok {sm : RemoteAudit.Session.Summary} {samples : ℕ} {seen : 
       simp only [hd]
 
 /-- What `ofSummaryAt` reads of a record it accepts: one group a window, and each draw's receipts and draws
-(`drawReceipts`, a window's at one window a coin), its draws `min(s, U_c)`, and above one window a coin each draw's
+(`sampleReceipts`, a window's at one window a coin), its draws `min(s, U_c)`, and above one window a coin each draw's
 receipts below `RECEIPT_LIMIT`. -/
 theorem ofSummaryAt_ok {g : ℕ} {sm : RemoteAudit.Session.Summary} {samples : ℕ} {seen : Array Seen}
     {gs : Array Group} {ws : Array (ℕ × ℕ)} (h : ofSummaryAt g sm samples seen = .ok (gs, ws)) :
-    gs.size = sm.windows.size ∧ ws = (drawReceipts g sm.windows).map (fun u => (u, min samples u)) ∧
-      (1 < g → ∀ u ∈ drawReceipts g sm.windows, u < RemoteAudit.Session.RECEIPT_LIMIT) := by
+    gs.size = sm.windows.size ∧ ws = (sampleReceipts g sm.windows).map (fun u => (u, min samples u)) ∧
+      (1 < g → ∀ u ∈ sampleReceipts g sm.windows, u < RemoteAudit.Session.RECEIPT_LIMIT) := by
   unfold ofSummaryAt at h
   by_cases hg : g ≤ 1
   · rw [ite_eq_left hg] at h
     obtain ⟨h1, h2⟩ := ofSummary_ok h
     refine ⟨h1, ?_, fun _ => absurd hg (by omega)⟩
-    rw [h2, drawReceipts, ite_eq_left hg, Array.map_map]
+    rw [h2, sampleReceipts, ite_eq_left hg, Array.map_map]
     rfl
   · rw [ite_eq_right hg] at h
     split at h
@@ -86,14 +86,14 @@ theorem ofSummaryAt_ok {g : ℕ} {sm : RemoteAudit.Session.Summary} {samples : �
         · rename_i hl
           cases h
           refine ⟨by simp, ?_, fun _ u hu => ?_⟩
-          · rw [drawReceipts, ite_eq_right hg, Array.map_map]
-            conv => lhs; rw [← Array.map_id (drawsOf g sm.windows)]
+          · rw [sampleReceipts, ite_eq_right hg, Array.map_map]
+            conv => lhs; rw [← Array.map_id (samplesOf g sm.windows)]
             refine Array.map_congr_left fun p hp => ?_
             obtain ⟨u, d⟩ := p
             have hd := Array.findIdx?_eq_none_iff.1 hf (u, d) hp
             simp only [bne_eq_false_iff_eq] at hd
             simp [hd]
-          · rw [drawReceipts, ite_eq_right hg] at hu
+          · rw [sampleReceipts, ite_eq_right hg] at hu
             obtain ⟨⟨u', d⟩, hp, rfl⟩ := Array.mem_map.1 hu
             have hd := Array.findIdx?_eq_none_iff.1 hl (u', d) hp
             simpa using hd
@@ -259,7 +259,7 @@ theorem heldAt_of {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {rec : �
     (hS : ChipCeiling T node.chipBlocks) (hr : Routed T) (hp : Paced T (recordPace node rec)) (hcov : Covers T)
     (hN : T.blocks = node.blocks) {ω : Ω} (ha : T.accepts ω) (hv : Verified node (rec ω))
     (hk : ∀ p < T.passes, ∀ j ∈ T.correct ω p, ∃ t, T.tick ω p ≤ t ∧ t < T.tick ω (p + 1) ∧ j ∈ T.present ω t)
-    (hw : ∀ l, lineOf node (rec ω) = .ok l → (T.wrong ω : ℝ) ≤ l.wrong) :
+    (hw : ∀ l, lineOf node (rec ω) = .ok l → (T.incorrect ω : ℝ) ≤ l.wrong) :
     HeldAt T ω node (rec ω) i := by
   intro l hline f hf x hx
   obtain ⟨sm, gs₀, ws, hsm, hs, hgs₀, hln⟩ := lineOf_ok hline
@@ -395,14 +395,14 @@ theorem foldl_extract_congr {α β : Type} (f : α → ℕ) (g : β → ℕ) {as
 
 /-- **The record's draws are the draw's**: on an accepted record whose draws the line reads, each draw's receipts in the
 Lean verifier's record are those its windows have in the state the record's session reaches, and below
-`RECEIPT_LIMIT`, so `recordDraw`'s sizes: at one window a coin each window's is below it (`ReceiptsBelowLimit`), and
+`RECEIPT_LIMIT`, so `recordSample`'s sizes: at one window a coin each window's is below it (`ReceiptsBelowLimit`), and
 above it the line refuses a draw that isn't (`ofSummaryAt_ok`). -/
 theorem receipts_of_line {node : Node} {r : Record} {sm : RemoteAudit.Session.Summary} (hv : Verified node r)
     (hsm : r.summary node = some sm)
-    (hlim : 1 < node.groupsPerCoin → ∀ u ∈ drawReceipts node.groupsPerCoin sm.windows,
+    (hlim : 1 < node.groupsPerCoin → ∀ u ∈ sampleReceipts node.groupsPerCoin sm.windows,
       u < RemoteAudit.Session.RECEIPT_LIMIT) :
-    drawReceipts node.groupsPerCoin sm.windows =
-      Array.ofFn fun c : Fin node.draws => min (r.drawReceiptsAt node c) receiptMax := by
+    sampleReceipts node.groupsPerCoin sm.windows =
+      Array.ofFn fun c : Fin node.samples => min (r.sampleReceiptsAt node c) receiptMax := by
   obtain ⟨rs, s, hrun, hout⟩ := hv
   have hs : s.summary = some sm := by
     unfold Record.summary at hsm
@@ -416,35 +416,35 @@ theorem receipts_of_line {node : Node} {r : Record} {sm : RemoteAudit.Session.Su
   · have hrun' : RemoteAudit.Session.run (RemoteAudit.Session.State.init node.params node.reg r.coins r.appendCoins
         r.notBeforeNs) r.events = .ok (rs, s) := (Properties.RemoteAudit.Shared.run_le_one hg _ _).symm.trans hrun
     have hL := Properties.RemoteAudit.receiptsBelowLimit _ _ _ _ _ _ _ _ hrun'
-    have hD : node.draws = node.windows := by unfold Node.draws; rw [ite_eq_left hg]
-    rw [drawReceipts, ite_eq_left hg, hS]
+    have hD : node.samples = node.windows := by unfold Node.samples; rw [ite_eq_left hg]
+    rw [sampleReceipts, ite_eq_left hg, hS]
     apply Array.ext
     · simp [hD, hW]
     · intro i h1 h2
       have hi : i < s.windows.size := by simpa using h1
-      have hat : r.drawReceiptsAt node i = s.windows[i].receipts := by
-        rw [Record.drawReceiptsAt, ite_eq_left hg, Record.receiptsAt, hreach, Array.getElem?_eq_getElem hi]
+      have hat : r.sampleReceiptsAt node i = s.windows[i].receipts := by
+        rw [Record.sampleReceiptsAt, ite_eq_left hg, Record.receiptsAt, hreach, Array.getElem?_eq_getElem hi]
         all_goals rfl
-      have hle : r.drawReceiptsAt node i ≤ receiptMax := by
+      have hle : r.sampleReceiptsAt node i ≤ receiptMax := by
         have := hL i hi
         unfold receiptMax
         omega
       simp only [Array.getElem_map, Array.getElem_ofFn]
       rw [← hat]
       exact (min_eq_left hle).symm
-  · have hD : node.draws = (node.windows + node.groupsPerCoin - 1) / node.groupsPerCoin := by
-      unfold Node.draws; rw [ite_eq_right hg]
+  · have hD : node.samples = (node.windows + node.groupsPerCoin - 1) / node.groupsPerCoin := by
+      unfold Node.samples; rw [ite_eq_right hg]
     have hlim' := hlim (by omega)
-    rw [drawReceipts, ite_eq_right hg] at hlim' ⊢
+    rw [sampleReceipts, ite_eq_right hg] at hlim' ⊢
     apply Array.ext
-    · simp [drawsOf, hD, hsz, hW]
+    · simp [samplesOf, hD, hsz, hW]
     · intro i h1 h2
       have hu := hlim' _ (Array.getElem_mem h1)
-      have hat : r.drawReceiptsAt node i = ((drawsOf node.groupsPerCoin sm.windows).map (·.1))[i] := by
-        rw [Record.drawReceiptsAt, ite_eq_right hg, hreach]
-        simp only [drawsOf, Array.getElem_map, Array.getElem_range]
+      have hat : r.sampleReceiptsAt node i = ((samplesOf node.groupsPerCoin sm.windows).map (·.1))[i] := by
+        rw [Record.sampleReceiptsAt, ite_eq_right hg, hreach]
+        simp only [samplesOf, Array.getElem_map, Array.getElem_range]
         exact (foldl_extract_congr receipts RemoteAudit.Session.Win.receipts hS _ _).symm
-      have hle : r.drawReceiptsAt node i ≤ receiptMax := by
+      have hle : r.sampleReceiptsAt node i ≤ receiptMax := by
         unfold receiptMax
         omega
       simp only [Array.getElem_ofFn]
@@ -461,23 +461,23 @@ theorem receiptMax_lt : receiptMax < 2 ^ 448 := by
 below the W every line of the record reads (`LineCoversSession`): the line reads each draw's receipts and draws off
 the record and refuses any draws but `min(s, U_c)`, the draw's at the session's `samples`, and the receipts are the
 draw's sizes (`receipts_of_line`). -/
-theorem wrong_le_line {node : Node} {κ : ℕ} {X : Type} {T : Trace (DrawCoins node.draws κ X)}
-    {rec : DrawCoins node.draws κ X → Record} {correct : Fin node.draws → DrawCoins node.draws κ X → Finset ℕ}
-    {ω : DrawCoins node.draws κ X} (hv : Verified node (rec ω))
-    (hw : (T.wrong ω : ℝ) ≤ (recordDraw node rec correct).pooled node.delta ω) :
-    ∀ l, lineOf node (rec ω) = .ok l → (T.wrong ω : ℝ) ≤ l.wrong := fun l hline => by
+theorem incorrect_le_line {node : Node} {κ : ℕ} {X : Type} {T : Trace (DrawCoins node.samples κ X)}
+    {rec : DrawCoins node.samples κ X → Record} {correct : Fin node.samples → DrawCoins node.samples κ X → Finset ℕ}
+    {ω : DrawCoins node.samples κ X} (hv : Verified node (rec ω))
+    (hw : (T.incorrect ω : ℝ) ≤ (recordSample node rec correct).pooled node.delta ω) :
+    ∀ l, lineOf node (rec ω) = .ok l → (T.incorrect ω : ℝ) ≤ l.wrong := fun l hline => by
   obtain ⟨sm, gs, ws, hsm, hs, -, hl⟩ := lineOf_ok hline
   obtain ⟨-, hws, hlim⟩ := ofSummaryAt_ok hs
-  have hR : drawReceipts node.groupsPerCoin sm.windows =
-      Array.ofFn fun c => ((recordDraw node rec correct).size c ω : ℕ) :=
+  have hR : sampleReceipts node.groupsPerCoin sm.windows =
+      Array.ofFn fun c => ((recordSample node rec correct).size c ω : ℕ) :=
     receipts_of_line hv hsm hlim
-  have e2 : (Array.ofFn fun t => ((recordDraw node rec correct).size t ω : ℕ)).map
+  have e2 : (Array.ofFn fun t => ((recordSample node rec correct).size t ω : ℕ)).map
       (fun u => (u, min node.params.samples u)) =
-      Array.ofFn fun t => (((recordDraw node rec correct).size t ω : ℕ), (recordDraw node rec correct).draws t ω) :=
-    Array.map_ofFn (f := fun t => ((recordDraw node rec correct).size t ω : ℕ))
+      Array.ofFn fun t => (((recordSample node rec correct).size t ω : ℕ), (recordSample node rec correct).samples t ω) :=
+    Array.map_ofFn (f := fun t => ((recordSample node rec correct).size t ω : ℕ))
       (g := fun u => (u, min node.params.samples u))
   rw [hws, hR, e2] at hl
-  have hc := Properties.RemoteAudit.lineCoversSession node.draws receiptMax _ κ X (recordDraw node rec correct) ω
+  have hc := Properties.RemoteAudit.lineCoversSession node.samples receiptMax _ κ X (recordSample node rec correct) ω
     node.delta _ _ _ _ _ _ _ l hl
   rw [Rat.cast_nnratCast] at hc
   exact hw.trans hc
@@ -503,7 +503,7 @@ every registered block but its wrong receipts (`read_card`), and the passes are 
 theorem readAt_of {Ω : Type} {T : Trace Ω} {node : Node} {rec : Ω → Record} (hp : Paced T (recordPace node rec))
     (hcov : Covers T) (hN : T.blocks = node.blocks) {ω : Ω} (ha : T.accepts ω) (hv : Verified node (rec ω))
     (hk : ∀ p < T.passes, ∀ j ∈ T.correct ω p, ∃ t, T.tick ω p ≤ t ∧ t < T.tick ω (p + 1) ∧ j ∈ T.present ω t)
-    (hw : ∀ l, lineOf node (rec ω) = .ok l → (T.wrong ω : ℝ) ≤ l.wrong) :
+    (hw : ∀ l, lineOf node (rec ω) = .ok l → (T.incorrect ω : ℝ) ≤ l.wrong) :
     ReadAt T ω node (rec ω) := by
   intro l hline
   obtain ⟨sm, gs, ws, hsm, hs, hgs, -⟩ := lineOf_ok hline
@@ -518,15 +518,15 @@ theorem readAt_of {Ω : Type} {T : Trace Ω} {node : Node} {rec : Ω → Record}
   have h1 : ∑ p ∈ range P, ((T.read ω p).card + (T.plan ω p \ T.correct ω p).card) = P * T.blocks := by
     rw [Finset.sum_const_nat fun p hp' => read_card hcov ha (lt_of_lt_of_le (Finset.mem_range.1 hp') hPle)
       (hk p (lt_of_lt_of_le (Finset.mem_range.1 hp') hPle)), Finset.card_range]
-  have h2 : ∑ p ∈ range P, (T.plan ω p \ T.correct ω p).card ≤ T.wrong ω :=
+  have h2 : ∑ p ∈ range P, (T.plan ω p \ T.correct ω p).card ≤ T.incorrect ω :=
     Finset.sum_le_sum_of_subset (Finset.range_subset_range.2 hPle)
-  have hsum : P * T.blocks ≤ T.reads ω P + T.wrong ω := by
+  have hsum : P * T.blocks ≤ T.reads ω P + T.incorrect ω := by
     rw [Finset.sum_add_distrib] at h1
     unfold Trace.reads
     rw [← h1]
     exact Nat.add_le_add_left h2 _
   have hNr : (T.blocks : ℝ) = node.blocks := by rw [hN]
-  have hsum' : (P : ℝ) * T.blocks ≤ T.reads ω P + T.wrong ω := by exact_mod_cast hsum
+  have hsum' : (P : ℝ) * T.blocks ≤ T.reads ω P + T.incorrect ω := by exact_mod_cast hsum
   have hwl := hw l hline
   have hb : (0 : ℝ) ≤ 8 * node.blockBytes := by positivity
   refine mul_le_mul_of_nonneg_left ?_ hb
@@ -539,9 +539,9 @@ theorem lineHeld : LineHeld := by
   intro node κ X Cm _ prf rest recs correct com T R δs δnet r F O I hp hcov hk hC hI hL hR hCnt
   have hN : (ofRecord T node r).blocks = node.blocks := rfl
   have hH := holdsAnd (sketchBound_of_covered hk hC hI)
-    (Draw.pooledDraw prf rest F com (ofRecord T node r) R (delta_nonneg node) receiptMax_lt hL hR hCnt)
+    (Draw.pooledSample prf rest F com (ofRecord T node r) R (delta_nonneg node) receiptMax_lt hL hR hCnt)
   refine le_trans (Pouw.pr_mono fun ω hω => ⟨hω.1, fun h => hω.2 fun hq => ?_⟩) hH
-  exact readAt_of hp hcov hN hω.1 hω.1 (h.1 hq) (wrong_le_line (correct := fun t ω => correct (com ω) t ω) hω.1 h.2)
+  exact readAt_of hp hcov hN hω.1 hω.1 (h.1 hq) (incorrect_le_line (correct := fun t ω => correct (com ω) t ω) hω.1 h.2)
 
 /-- **Memory held from bits read, under the device model**: on an accepting outcome where the record's line credits no
 more bits read than its groups' passes read (`ReadAt`), every stretch of form `i` credits what the trace held over its
@@ -587,7 +587,7 @@ theorem heldAt_of_read {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {re
     obtain ⟨t, ht, htj⟩ := Finset.mem_biUnion.1 (Finset.mem_inter.1 hj').2
     exact ⟨t, (Finset.mem_Ico.1 ht).1, (Finset.mem_Ico.1 ht).2, htj⟩
   have hNr : (T.blocks : ℝ) = node.blocks := by rw [hN]
-  have hw' : ∀ l, lineOf node (rec ω) = .ok l → (T'.wrong ω : ℝ) ≤ l.wrong := fun l' hline' => by
+  have hw' : ∀ l, lineOf node (rec ω) = .ok l → (T'.incorrect ω : ℝ) ≤ l.wrong := fun l' hline' => by
     have h8 : (0 : ℝ) < 8 * node.blockBytes := by
       have : (1 : ℝ) ≤ node.blockBytes := by exact_mod_cast hb
       linarith
@@ -596,10 +596,10 @@ theorem heldAt_of_read {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {re
     have hp1 : ∀ p ∈ range P, (univ \ T.read ω p).card + (T.read ω p).card = T.blocks := fun p _ => by
       have := Finset.card_sdiff_add_card_inter (univ : Finset (Fin T.blocks)) (T.read ω p)
       rwa [Finset.univ_inter, Finset.card_univ, Fintype.card_fin] at this
-    have hsum : T'.wrong ω + T.reads ω P = P * T.blocks := by
+    have hsum : T'.incorrect ω + T.reads ω P = P * T.blocks := by
       show ∑ p ∈ range P, (univ \ T.read ω p).card + ∑ p ∈ range P, (T.read ω p).card = P * T.blocks
       rw [← Finset.sum_add_distrib, Finset.sum_const_nat hp1, Finset.card_range]
-    have hsumR : (T'.wrong ω : ℝ) + T.reads ω P = (P : ℝ) * node.blocks := by
+    have hsumR : (T'.incorrect ω : ℝ) + T.reads ω P = (P : ℝ) * node.blocks := by
       rw [← hNr]; exact_mod_cast hsum
     push_cast at hR
     linarith

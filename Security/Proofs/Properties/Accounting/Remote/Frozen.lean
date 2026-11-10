@@ -3,7 +3,7 @@ module
 public import Proofs.Properties.Accounting.Remote.Coins
 
 /-!
-# A sampled window's record is kept (`RecordKeptAfterDraw`)
+# A sampled window's record is kept (`RecordKeptAfterSample`)
 
 Each event keeps every window's `KeepW`: once sampled, its draws, challenge, roots, plans and heads stay as they are;
 once final, it stays final; and it is sampled only if it was, or is final. No event changes the digest, and the appends
@@ -104,7 +104,7 @@ theorem keepW_undrawn {w w' : Win} (hd : w.drawn = none) (hd' : w'.drawn = w.dra
   ⟨fun h => (by rw [hd] at h; cases h), fun h => (by rw [hf]; exact h), fun h => (by rw [hd', hd] at h; cases h)⟩
 
 /-- The draw of an unsampled window, which makes it final. -/
-theorem keepW_draw {w w' : Win} (hd : w.drawn = none) (hf : w'.final = true) : KeepW w w' :=
+theorem keepW_sample {w w' : Win} (hd : w.drawn = none) (hf : w'.final = true) : KeepW w w' :=
   ⟨fun h => (by rw [hd] at h; cases h), fun _ => hf, fun _ => Or.inr hf⟩
 
 theorem df_keepsF {ws ws' : Array Win} (h : DF ws) (k : KeepsF ws ws') : DF ws' := by
@@ -143,7 +143,7 @@ theorem frz_trans {a b c : State} (h₁ : Frz a b) (h₂ : Frz b c) : Frz a c :=
 theorem frz_fail (s : State) (t : Nat) (f : Failure) (a : Option (Nat × Nat)) : Frz s (s.fail t f a).2 :=
   frz_of (keepsF_fail s t f a) rfl rfl
 
-theorem keepsF_draw (ws : Array Win) (u : Nat) (d : Array (Nat × Nat)) (now : Nat) (hu : ¬ws[u]!.drawn.isSome = true) :
+theorem keepsF_sample (ws : Array Win) (u : Nat) (d : Array (Nat × Nat)) (now : Nat) (hu : ¬ws[u]!.drawn.isSome = true) :
     KeepsF ws ((ws.modify u ({· with final := true})).modify u ({· with drawn := some d, openedNs := some now})) := by
   refine keepsF_trans (keepsF_modify _ _ _ (keepW_of ⟨rfl, rfl, rfl, rfl, rfl⟩ (fun _ => rfl)))
     (keepsF_modify' _ _ _ fun hl => ?_)
@@ -152,7 +152,7 @@ theorem keepsF_draw (ws : Array Win) (u : Nat) (d : Array (Nat × Nat)) (now : N
     rw [getElem!_modify']; simp [hl]
   rw [e]
   have : ws[u]!.drawn = none := by cases h : ws[u]!.drawn <;> simp_all
-  exact keepW_draw this rfl
+  exact keepW_sample this rfl
 
 theorem frz_start {s : State} {now : Nat} {r : Result} {s' : State} (he : start s now = (r, s')) : Frz s s' := by
   unfold start State.releaseCoin at he
@@ -294,9 +294,9 @@ theorem frz_close {s : State} {t : Int} {now : Nat} {r : Result} {s' : State}
   all_goals refine frz_of ?_ rfl rfl
   all_goals (try exact keepsF_refl _)
   all_goals first
-    | (have _ := ‹draws _ _ _ _ _ = some _›
+    | (have _ := ‹receiptSample _ _ _ _ _ = some _›
        show KeepsF s.windows ((s.windows.modify t.toNat _).modify t.toNat _)
-       exact keepsF_draw _ _ _ _ ‹¬s.windows[t.toNat]!.drawn.isSome = true›)
+       exact keepsF_sample _ _ _ _ ‹¬s.windows[t.toNat]!.drawn.isSome = true›)
     | (refine keepsF_trans ?_ (keepsF_fail _ _ _ _)
        exact keepsF_modify _ _ _ (keepW_of ⟨rfl, rfl, rfl, rfl, rfl⟩ (fun _ => rfl)))
 
@@ -495,7 +495,7 @@ theorem firsts_big {s₁ s : State} (h₁ : Inv s₁) (h : Inv s) (more : Array 
   rw [e] at hs
   omega
 
-theorem recordKeptAfterDraw : RecordKeptAfterDraw := by
+theorem recordKeptAfterSample : RecordKeptAfterSample := by
   intro params reg coins appendCoins notBeforeNs events events' rs rs' s s' h₁ h₂ t d hm hd
   obtain ⟨-, -, hr₁, -⟩ := inv_run h₁
   obtain ⟨hF₁, -⟩ := run_frz _ _ _ _ (finv_init params reg coins appendCoins notBeforeNs hm) h₁
@@ -517,14 +517,14 @@ theorem recordKeptAfterDraw : RecordKeptAfterDraw := by
     have hprev : (if t > 0 then s'.windows[t - 1]!.roots.back?.getD ByteArray.empty else s'.digest) =
         (if t > 0 then s.windows[t - 1]!.roots.back?.getD ByteArray.empty else s.digest) := by
       by_cases htp : t > 0
-      · have hs : (dr s.windows (t - 1)).isSome := hpre t (t - 1) (by omega) (by show (drawnOf s t).isSome; rw [hd]; rfl)
+      · have hs : (dr s.windows (t - 1)).isSome := hpre t (t - 1) (by omega) (by show (sampledOf s t).isSome; rw [hd]; rfl)
         rw [dr_eq] at hs
         rw [ite_eq_left htp, ite_eq_left htp, ((hk (t - 1)).1 hs).2.2.1]
       · rw [ite_eq_right htp, ite_eq_right htp, hdig]
     unfold State.record
     simp only [e2, e3, e4, e5]
     rw [hprev]
-  refine ⟨by rw [show drawnOf s' t = s'.windows[t]!.drawn from dr_eq _ _, e1, hd'], hrec, fun u => ?_⟩
+  refine ⟨by rw [show sampledOf s' t = s'.windows[t]!.drawn from dr_eq _ _, e1, hd'], hrec, fun u => ?_⟩
   rw [hrec, happ]
   have key : ∀ i p o, i < (s.record t).passes.size → p < (s.record t).passes[i]!.plan.length →
       checkOpening reg reg.digest (s.appends ++ more) (s.record t) (receipterOf reg (s.record t) i) i p o =

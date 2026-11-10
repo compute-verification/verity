@@ -89,8 +89,8 @@ would compute any function of the sample (`(k + 2)·n` bits) for about that many
 `{x, p − x}` with that sign rule, and what the conjecture charges is the pair's root, not the sign. -/
 def EncodeChainHardness (F : Field) (k B E εnum εden : ℕ) : Prop :=
   εden ≤ 2 ^ 64 * εnum → 0 < k → 2 ^ 66 ≤ F.p → F.p % 4 = 3 →
-  ∀ {ι : Type} (C : IntDag ι) (m : ℕ → ℕ) (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
-    Restricted B C → CodecInputs F C (draws F k) m x → words.Nodup → (∀ i ∈ words, i < F.p) →
+  ∀ {ι : Type} (C : IntDag ι) (m : ℕ → ℕ) (x : Sample k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
+    Restricted B C → CodecInputs F C (samples F k) m x → words.Nodup → (∀ i ∈ words, i < F.p) →
     ComputesWords F k C x m words out εnum εden →
     words.length * E * (F.n - 1) ≤ budgeted C * (F.n - 1) + runBits C * E
 

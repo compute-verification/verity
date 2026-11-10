@@ -66,7 +66,7 @@ codec than the record's, or a bare fraction. The stated ceiling is the node's, t
 0.065% under the default codec, 0.097% at k = 2 and 0.31% under p512/k2 (`timing.SQUARINGS_PER_S`,
 `timing.READ_BYTES_PER_S`). The failure probability is \(W\delta\) for a session of \(W\) windows read per window, or
 \(\delta\) read over the horizon, plus \(2^{-\text{slack}}\) per pass, plus \(s/2^{512}\) per window for guessing a
-receipt, plus the deployed draw's terms beyond \(\delta\) (`ledger.draw`, `PooledDraw`'s): \(\sum_t s'_t/2^{64}\) for
+receipt, plus the deployed draw's terms beyond \(\delta\) (`ledger.draw`, `PooledSample`'s): \(\sum_t s'_t/2^{64}\) for
 a rejected first word (`ledger.rejection`) and the receipts' binding term, \(\sum_t \sqrt{|L_t| s_t} \cdot q_t/2^{256.5}\)
 under `cr/sha-512` for window \(t\)'s fork finder of \(q_t = 2FC + 2 \cdot 69 \, s_t\) SHA-512 calls, which runs the prover twice from the
 cut before the window's coin (`ledger.binding`). It is charged at the session's bounds, not at one record's \(U_t\)
@@ -1335,12 +1335,12 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
 - **Lean.** The statement is `Accounting.Guarantees.RemoteSessionRunConservation` (and `RemoteWindowRunConservation`,
   each with a `Relay` form): `Accounting.SecurityProofs.Remote.Conservation` at the per-pass routes proved for
   it. The openings are
-  `Accounting.Guarantees.RateWindowDraw`, a window's pooled draw over its passes' receipts, and `RateSessionDraw`,
+  `Accounting.Guarantees.RateWindowSample`, a window's pooled draw over its passes' receipts, and `RateSessionSample`,
   the monitoring period and every window at once, both from `PooledSampling`, the causal bound over the monitoring
   period. They take windows of one size, \(M = P \cdot N\), and draws with replacement. The record's windows differ
   in \(U_t\), and its draws are distinct, which only lowers the chance that they all pass. `pooled` applies the same
   argument at each window's own
-  size: `Accounting.Guarantees.Remote.PooledDraw` states it on the deployed draw (`Accounting.Remote.Draw`: `Key.subset`
+  size: `Accounting.Guarantees.Remote.PooledSample` states it on the deployed draw (`Accounting.Remote.Draw`: `Key.subset`
   on the first SHA-512 blocks a window's coin gives, released after its roots, the sampler exact on each draw's first
   word and its fallbacks free), for windows the prover sizes after the earlier windows' coins, each below
   \(2^{448}\) receipts (the verifier's `RECEIPT_LIMIT`, \(2^{64}\), keeps them there), at δ plus
@@ -1348,7 +1348,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   distinguisher a window that the session fixes (`Session.distinguisher`: it runs the session through window \(t\)
   and reads at most \(s_t\) first blocks of the stream it is given). It has no hiding term: the prover is sent each
   coin's value as it is released and the coin commitment only once the session has its outcome (§4), so the session
-  it plays is the one `PooledDraw` reads, `Live` of that session. Plus the receipts' binding term
+  it plays is the one `PooledSample` reads, `Live` of that session. Plus the receipts' binding term
   (`Receipts.binding`, `ledger.binding`): `Refused` lets an opened receipt through only correct or moved off the row
   its root holds (`Receipts.held`, the plurality of the accepted rows it shows over its window's continuations from
   the cut before its coin, the same at every continuation: `Binding.held_cont`, `tally_le_held`), and a move is two
@@ -1361,7 +1361,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   cut fixes the roots; that the deployed prover's play fixes them is the gap `binding-split` (below).
   `pooled` is computed in exact rationals in the verifier's Lean
   (`lean/RemoteAudit/Pooled.lean`, `pooled.py` held to it by a difftest), the budget \(\bar d \cdot S\) from above by a
-  certified rational root, and `Properties.RemoteAudit.PooledCovers` proves its W at least the bound `PooledDraw`
+  certified rational root, and `Properties.RemoteAudit.PooledCovers` proves its W at least the bound `PooledSample`
   reads (the greedy by \(U_t/s_t\) is the fractional knapsack's optimum); the memory line reads that W from the
   record's windows (`Properties.RemoteAudit.LineCoversSession`). What this code supplies is the schedule (each
   window's challenge released at \(b_{t-1}\), its roots due by \(D_t\)), the chain, the plan's distinctness, one tile
@@ -1377,7 +1377,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   openings coins root it alike. What is open is the Lean: a model of the prover's play over the cut and a statement
   that it fixes each window's receipts by its cut, \(\mathrm{split}_t = 0\), `Binding.binding_le_of_fixed`'s
   hypothesis. Until it lands `ledger.binding` takes \(\mathrm{split}_t = 0\), and every line says it is conditional
-  on it (`auditor_line.py`'s `CONDITIONAL_ON`). `PooledDraw` already reads the session the prover plays, with no
+  on it (`auditor_line.py`'s `CONDITIONAL_ON`). `PooledSample` already reads the session the prover plays, with no
   hiding term; `LineHeld` still reads the prover's records through the commitment (`Committed.play`), and charges
   its hiding terms.
 - **The binding's Lean.** The store binding's decision (`store.py`, §3) is ported to `lean/RemoteAudit/Store.lean`
@@ -1439,7 +1439,7 @@ registration that binds \(z\), PoUW's tile evidence comes on top unless PoUW's o
 tiles. A Fiat–Shamir draw would multiply all of this by 1.5–2.6 (§6).
 
 That is the per-window reading, each window's profile at its own δ, \(W\delta\) in all. Read over the horizon, the
-windows' draws pool (`RateSessionDraw`, §8). Each window draws its \(s_t\) after its own roots from its own openings
+windows' draws pool (`RateSessionSample`, §8). Each window draws its \(s_t\) after its own roots from its own openings
 coin, so however the prover adapts each window to the draws before it, every draw passes while
 \(\sum_t s_t g_t \le (1-\bar d) \sum_t s_t\) with probability at most \((1-\bar d)^{\sum_t s_t}\), where \(g_t\) is
 window \(t\)'s share of correct receipts. Set that to δ: except with δ, the wrong shares \(f_t = 1 - g_t\) have

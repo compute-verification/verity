@@ -35,7 +35,7 @@ The model of `Security/Definitions/Accounting/Actual.lean`:
   `ThreadedRate`, at the window `ω = R/r` in the quadratic regime, at most `reuse · n R r / (d b_w b_a)` counted
   multiplications a tick; `ThreadedRuntimeDark`, the cap through a partial containment, with every counted
   multiplication the declaration doesn't compute a dark gate.
-* `Actual/Dampener.lean`: `DampenerWindowsCap`, the compute dampener's windows hypothesis
+* `Actual/Dampener.lean`: `SlowdownWindowsCap`, the compute dampener's windows hypothesis
   (`Nci.Guarantees.DampenerWindows`) from `ThreadedRuntime` at a whole-tick window, when one threading counts the
   residual and the declared computation together.
 * `Actual/Localization.lean`: `Localization`, over strategies causal from every tick: with what the rest can tell at

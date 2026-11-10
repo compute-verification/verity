@@ -39,7 +39,7 @@ alone gives `Verified` (`verified_of_not_readBy`) and the bound holds at any acc
 accept-all's as well.
 
 The toy instance (`Toy`) is a node whose parameters have no window (`Node.windows` 0) at four windows a draw, so no
-draw (`Node.draws` 0), one block of one byte, whose recorded summary has four windows of one block each, one pass a
+draw (`Node.samples` 0), one block of one byte, whose recorded summary has four windows of one block each, one pass a
 group, and a line that reads no wrong receipt, so it credits `8 · 1 · (4 · 1 − 0) = 32` bits read.
 -/
 
@@ -102,8 +102,8 @@ theorem sketch_zero {Ω : Type} [Fintype Ω] (T : Trace Ω) (O : Outside T)
 
 theorem counted_of {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Session n m s κ X)
     (T : Trace (DrawCoins n κ X)) (h : ∀ ω p, T.plan ω p ⊆ T.correct ω p) : Counted D T := fun ω _ => by
-  have hw : T.wrong ω = 0 := by
-    unfold Trace.wrong
+  have hw : T.incorrect ω = 0 := by
+    unfold Trace.incorrect
     exact Finset.sum_eq_zero fun p _ => by rw [Finset.sdiff_eq_empty_iff_subset.2 (h ω p), card_empty]
   rw [hw]
   exact Nat.zero_le _
@@ -134,9 +134,9 @@ theorem refused_honest {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fi
   apply hc t ω
   unfold Session.opened openings at hp
   obtain ⟨q, hq, rfl⟩ := mem_image.1 hp
-  have hk : D.draws t ω ≤ D.size t ω := min_le_right _ _
+  have hk : D.samples t ω ≤ D.size t ω := min_le_right _ _
   exact mem_range.2 (Accounting.SecurityProofs.Remote.Draw.arrange_lt hk
-    (offsets_zero_lt (prf t (ω.2 t)) hk (Accounting.SecurityProofs.Remote.Draw.draws_le D t ω)) q
+    (offsets_zero_lt (prf t (ω.2 t)) hk (Accounting.SecurityProofs.Remote.Draw.samples_le D t ω)) q
     (lt_of_lt_of_le (mem_range.1 hq) hk))
 
 /-- **The premises of `LineHeld` and `LineHeldAtSubprotocol` hold at the honest node.** On any node, at any records of
@@ -148,9 +148,9 @@ every receipt a draw can have and the sampler's fallbacks 0, every premise holds
 and `Counted`; and the bound's terms the prover could raise are 0: each draw's distinguisher has no advantage on its
 coin function and each hiding term is 0. -/
 theorem lineHeldAtSubprotocol_honest (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X]
-    (prf : Fin node.draws → Pous.Bits κ → Blocks receiptMax) (recs : Cm → DrawCoins node.draws κ X → Record)
-    (com : DrawCoins node.draws κ X → Cm) (R : Receipts node.draws κ X) (passes : ℕ)
-    (tick : DrawCoins node.draws κ X → ℕ → ℕ) (hS : HonestSchedule node passes tick recs com) :
+    (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax) (recs : Cm → DrawCoins node.samples κ X → Record)
+    (com : DrawCoins node.samples κ X → Cm) (R : Receipts node.samples κ X) (passes : ℕ)
+    (tick : DrawCoins node.samples κ X → ℕ → ℕ) (hS : HonestSchedule node passes tick recs com) :
     Paced (ofRecord (honestTrace node passes tick) node (played recs com)) (recordPace node (played recs com)) ∧
     Covers (ofRecord (honestTrace node passes tick) node (played recs com)) ∧
     SketchBoundAt (ofRecord (honestTrace node passes tick) node (played recs com))
@@ -169,7 +169,7 @@ theorem lineHeldAtSubprotocol_honest (node : Node) (κ : ℕ) (X Cm : Type) [Fin
     ∀ t, (recordCommitted node recs fun _ _ _ => Finset.range (receiptMax + 1)).hide com prf (node.delta : ℝ) t = 0 := by
   obtain ⟨hW, htick, hsize, hgs⟩ := hS
   rw [ofRecord_honest]
-  have hc : ∀ D : Session node.draws receiptMax (fun _ => node.params.samples) κ X,
+  have hc : ∀ D : Session node.samples receiptMax (fun _ => node.params.samples) κ X,
       (∀ t ω, D.correct t ω = Finset.range (receiptMax + 1)) → ∀ t ω, range (D.size t ω : ℕ) ⊆ D.correct t ω :=
     fun D h t ω => by
       rw [h]
@@ -380,13 +380,13 @@ def steady : Trace Unit where
   disk _ _ := 0
   link _ _ := 0
 
-theorem draws_zero : node.draws = 0 := by decide
+theorem draws_zero : node.samples = 0 := by decide
 
-instance instIsEmptyFinDrawsNode : IsEmpty (Fin node.draws) := by
+instance instIsEmptyFinDrawsNode : IsEmpty (Fin node.samples) := by
   rw [draws_zero]
   infer_instance
 
-def receipts : Receipts node.draws 0 Unit :=
+def receipts : Receipts node.samples 0 Unit :=
   ⟨fun _ _ => 0, fun t => isEmptyElim t, fun t => isEmptyElim t, fun t => isEmptyElim t, fun t => isEmptyElim t⟩
 
 end Toy
@@ -705,7 +705,7 @@ theorem acceptIsVerified_complete {p : RemoteAudit.Protocol.Params} {reg : Remot
 
 /-- A node's draw term is positive at a positive δ. -/
 theorem drawTerm_pos (node : Node) (hδ : 0 < (node.delta : ℚ)) :
-    0 < (node.delta : ℚ) + ((∑ _c : Fin node.draws, node.params.samples : ℕ) : ℚ) / 2 ^ 64 :=
+    0 < (node.delta : ℚ) + ((∑ _c : Fin node.samples, node.params.samples : ℕ) : ℚ) / 2 ^ 64 :=
   add_pos_of_pos_of_nonneg hδ (by positivity)
 
 /-- **`PublishedEps` fails at a check that certifies reads at eps 0**: a check that accepts every log, publishing one

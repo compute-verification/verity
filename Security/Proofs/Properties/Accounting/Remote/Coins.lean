@@ -7,12 +7,12 @@ public import Proofs.Properties.Accounting.Remote.Session
 public import Proofs.Properties.Accounting.Remote.Window
 
 /-!
-# When the verifier reads a window's openings coin (`AcceptDrawsOpenable`, `OpeningsUnreadUntilDrawn`)
+# When the verifier reads a window's openings coin (`AcceptSamplesOpenable`, `OpeningsUnreadUntilSampled`)
 
-`AcceptDrawsOpenable` is `acceptChecksOpenings` read through `drawIsSubset`: each sampled receipt is the sampler's value
+`AcceptSamplesOpenable` is `acceptChecksOpenings` read through `sampleIsSubset`: each sampled receipt is the sampler's value
 at its index, and its opening passes `checkOpening`.
 
-`OpeningsUnreadUntilDrawn`: every event commutes with replacing the session's coins (`C c s`), as long as the coins it
+`OpeningsUnreadUntilSampled`: every event commutes with replacing the session's coins (`C c s`), as long as the coins it
 reads agree: `start` reads `coins[0]`, `boundary` window `t + 1`'s challenge (`t + 1 < W`), and `close t` the openings
 coin `coins[W + t]`, only when it draws window `t` (`*_coins`, `step_coins`); the rest read none. No event changes
 the coins (`step_coins_eq`). Each event keeps every window's draw, and only `close t` draws one, window `t`, with
@@ -32,10 +32,10 @@ namespace Properties.RemoteAudit
 
 /-! ## The window -/
 
-theorem acceptDrawsOpenable : AcceptDrawsOpenable := by
+theorem acceptSamplesOpenable : AcceptSamplesOpenable := by
   intro reg appends w coin samples openings h
   obtain ⟨drawn, hd, hsz, hk⟩ := acceptChecksOpenings reg appends w coin samples openings h
-  obtain ⟨L, us, hs, hsz', -, hrange, -⟩ := drawIsSubset _ _ _ _ _ _ hd
+  obtain ⟨L, us, hs, hsz', -, hrange, -⟩ := sampleIsSubset _ _ _ _ _ _ hd
   refine ⟨L, us, hs, fun u hu => ?_⟩
   obtain ⟨k, hk', rfl⟩ := Array.mem_iff_getElem.1 hu
   have hkd : k < drawn.size := by omega
@@ -157,7 +157,7 @@ theorem boundary_coins (s : State) (c : Array ByteArray) (now : Nat)
 
 theorem close_coins {s : State} {c : Array ByteArray} {t : Int} {now : Nat} {r : Result} {s₁ : State}
     (h₁ : close s t now = .ok (r, s₁))
-    (hc : ∀ t₀, (drawnOf s₁ t₀).isSome → c[s.params.windows + t₀]! = s.coins[s.params.windows + t₀]!) :
+    (hc : ∀ t₀, (sampledOf s₁ t₀).isSome → c[s.params.windows + t₀]! = s.coins[s.params.windows + t₀]!) :
     close (C c s) t now = .ok (r, C c s₁) := by
   generalize hres : close (C c s) t now = res
   unfold close at h₁ hres
@@ -173,7 +173,7 @@ theorem close_coins {s : State} {c : Array ByteArray} {t : Int} {now : Nat} {r :
     simp only [Bool.or_eq_true, decide_eq_true_eq, not_or] at hb
     have ht : t.toNat < s.windows.size := by omega
     cases h₁
-    rw [hc t.toNat (by simp [drawnOf, ht, Array.getElem_modify]), ‹draws _ _ _ _ _ = some _›] at hres
+    rw [hc t.toNat (by simp [sampledOf, ht, Array.getElem_modify]), ‹receiptSample _ _ _ _ _ = some _›] at hres
     cases hres
     rfl
 
@@ -368,7 +368,7 @@ theorem dr_mm (ws : Array Win) (u : Nat) (f g : Win → Win) (d : Array (Nat × 
     · simp [hl]
   · simp [h]
 
-theorem adv_draw (ws : Array Win) (u : Nat) (f g : Win → Win) (d : Array (Nat × Nat))
+theorem adv_sample (ws : Array Win) (u : Nat) (f g : Win → Win) (d : Array (Nat × Nat))
     (hg : ∀ w, (g w).drawn = some d)
     (hu : ¬ws[u]!.drawn.isSome = true) (hord : ¬((ws.extract 0 u).any fun x => x.drawn.isNone) = true) :
     Adv ws ((ws.modify u f).modify u g) := by
@@ -401,7 +401,7 @@ theorem adv_close {s : State} {t : Int} {now : Nat} {r : Result} {s' : State}
   all_goals (try (apply adv_of_keep; apply keep_trans _ (keep_fail _ _ _ _); refine keep_modify _ _ _ ?_; intro; rfl))
   all_goals
     show Adv s.windows ((s.windows.modify t.toNat _).modify t.toNat _)
-    exact adv_draw _ _ _ _ _ (fun _ => rfl) ‹¬s.windows[t.toNat]!.drawn.isSome = true› ‹_›
+    exact adv_sample _ _ _ _ _ (fun _ => rfl) ‹¬s.windows[t.toNat]!.drawn.isSome = true› ‹_›
 
 theorem adv_step {s : State} {e : Event} {r : Result} {s' : State} (he : step s e = .ok (r, s')) :
     Adv s.windows s'.windows := by
@@ -419,7 +419,7 @@ theorem adv_step {s : State} {e : Event} {r : Result} {s' : State} (he : step s 
 theorem step_coins {s : State} {e : Event} {r : Result} {s₁ : State} {c : Array ByteArray}
     (he : step s e = .ok (r, s₁)) (h0 : c[0]! = s.coins[0]!)
     (hW : ∀ k, k < s.params.windows → c[k]! = s.coins[k]!)
-    (hd : ∀ t₀, (drawnOf s₁ t₀).isSome → c[s.params.windows + t₀]! = s.coins[s.params.windows + t₀]!) :
+    (hd : ∀ t₀, (sampledOf s₁ t₀).isSome → c[s.params.windows + t₀]! = s.coins[s.params.windows + t₀]!) :
     step (C c s) e = .ok (r, C c s₁) := by
   cases e with
   | start now => injection he with he; show pure _ = _; rw [start_coins s c now h0, he]; rfl
@@ -482,7 +482,7 @@ theorem fold_coins (T : Nat) (c : Array ByteArray) : ∀ (l : List Event) (acc o
         pure (acc.1.push r, s')) acc l = .ok out →
     Inv acc.2 → 0 < acc.2.params.windows →
     (∀ k, k < acc.2.params.windows + T → c[k]! = acc.2.coins[k]!) →
-    (∀ t₀, (drawnOf out.2 t₀).isSome → t₀ < T) →
+    (∀ t₀, (sampledOf out.2 t₀).isSome → t₀ < T) →
     List.foldlM (fun (acc : Array Result × State) e => do
         let (r, s') ← step acc.2 e
         pure (acc.1.push r, s')) (acc.1, C c acc.2) l = .ok (out.1, C c out.2) := by
@@ -499,8 +499,8 @@ theorem fold_coins (T : Nat) (c : Array ByteArray) : ∀ (l : List Event) (acc o
       obtain ⟨r, s'⟩ := rs'
       obtain ⟨hinv', hp, -, -⟩ := step_inv hinv he
       have hc := step_coins_eq he
-      have hpers : ∀ t₀ d, drawnOf s' t₀ = some d → drawnOf out.2 t₀ = some d := fun t₀ d hd =>
-        fold_inv (fun s'' => drawnOf s'' t₀ = some d)
+      have hpers : ∀ t₀ d, sampledOf s' t₀ = some d → sampledOf out.2 t₀ = some d := fun t₀ d hd =>
+        fold_inv (fun s'' => sampledOf s'' t₀ = some d)
           (fun _ _ _ _ hs he' => (adv_step he').2.1 t₀ d hs) l _ out hd h
       have hstep : step (C c acc.2) e = .ok (r, C c s') := by
         refine step_coins he (hag 0 (by omega)) (fun k hk => hag k (by omega)) (fun t₀ ht₀ => ?_)
@@ -510,19 +510,19 @@ theorem fold_coins (T : Nat) (c : Array ByteArray) : ∀ (l : List Event) (acc o
       rw [hstep]
       exact ih (acc.1.push r, s') out h hinv' (by rw [hp]; exact h0) (by rw [hp, hc]; exact hag) hT
 
-theorem openingsUnreadUntilDrawn : OpeningsUnreadUntilDrawn := by
+theorem openingsUnreadUntilSampled : OpeningsUnreadUntilSampled := by
   intro params reg coins appendCoins notBeforeNs events rs s hrun t coins' hW hnd hag
   have hpre : Prefix s.windows :=
     run_inv (fun s => Prefix s.windows) (fun _ _ _ _ hs he => prefix_step hs (adv_step he)) _ _ _ _
       (fun t j _ ht => by simp [dr, State.init] at ht) hrun
-  have hlt : ∀ t₀, (drawnOf s t₀).isSome → t₀ < t := by
+  have hlt : ∀ t₀, (sampledOf s t₀).isSome → t₀ < t := by
     intro t₀ h
     rcases Nat.lt_or_ge t₀ t with hl | hl
     · exact hl
     · rcases Nat.eq_or_lt_of_le hl with he | he
       · subst he; rw [hnd] at h; cases h
       · have := hpre t₀ t he h
-        change (drawnOf s t).isSome = true at this
+        change (sampledOf s t).isSome = true at this
         rw [hnd] at this; cases this
   unfold run at hrun ⊢
   rw [← Array.foldlM_toList] at hrun ⊢

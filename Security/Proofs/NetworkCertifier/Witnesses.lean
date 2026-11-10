@@ -23,7 +23,7 @@ whose verifier accepts everything.
   witness is in `RelS`; the leak bounds at `leakD`, `sksD` at a statement whose program negates its input. There,
   with nothing opened, the trace holds `false` at the negation, which the circuit computes `true` from the ingress the
   trace carries; the one unit is sampled `all`, so no possible incorrect set holds it, and no witness is in `RLeak`.
-* `PooledIncorrectBlocksLe`. Its sample hypotheses hold at the uniform `k`-subset sample (`uniform_draw`), and its
+* `PooledIncorrectBlocksLe`. Its sample hypotheses hold at the uniform `k`-subset sample (`uniform_sample`), and its
   soundness hypothesis at `ε = 0` when no block is incorrect. At one window of one block, that block incorrect, an audit
   that always accepts, `ε = 0` and `q = F = 1`, its bound reads `1 ≤ 0`.
 
@@ -361,7 +361,7 @@ end Toy
 
 /-- **`PooledIncorrectBlocksLe`'s sample hypotheses at the honest instance**: the uniform `k`-subset sample samples `k`
 blocks and each `k`-subset with share `1 / C(n, k)`. -/
-theorem uniform_draw (n k : ℕ) :
+theorem uniform_sample (n k : ℕ) :
     (∀ x : {S : Finset (Fin n) // S.card = k}, x.1.card = k) ∧
       ∀ S : Finset (Fin n), S.card = k →
         (Finset.univ.filter fun x : {S : Finset (Fin n) // S.card = k} => x.1 = S).card * n.choose k =
@@ -373,7 +373,7 @@ theorem uniform_draw (n k : ℕ) :
   rw [h1, Finset.card_singleton, one_mul, Fintype.card_finset_len, Fintype.card_fin]
 
 /-- **`PooledIncorrectBlocksLe`'s soundness hypothesis at the honest instance**: at the uniform `k`-subset sample
-(`uniform_draw`) with no block incorrect, every acceptance event meets an incorrect block with probability `0`, so
+(`uniform_sample`) with no block incorrect, every acceptance event meets an incorrect block with probability `0`, so
 `ε = 0`. -/
 theorem PooledIncorrectBlocksLe_honest (n k : ℕ) :
     ∀ (m : ℕ) (acc : Fin m → (Fin m → {S : Finset (Fin n) // S.card = k}) → Prop) (i : Fin m),

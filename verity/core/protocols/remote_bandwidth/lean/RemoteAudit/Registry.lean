@@ -76,7 +76,7 @@ def liveDigest (r : Registry) (node : ByteArray) : Except String (Option ByteArr
   pure ((r.live.find? (·.node == node)).map (·.digest))
 
 /-- R: the registrations the node has had, closed and live, each under a codec seed of its own. -/
-def drawn (r : Registry) (node : ByteArray) : Except String Nat := do
+def sampled (r : Registry) (node : ByteArray) : Except String Nat := do
   let node ← node? node
   pure ((r.closed.filter (·.node == node)).size + if r.live.any (·.node == node) then 1 else 0)
 
