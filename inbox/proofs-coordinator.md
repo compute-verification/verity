@@ -24864,3 +24864,16 @@ about 12 min once it has one). The `RecZK` instance is written (`SampledGeneric/
 c2732908dc and d0fa1ac4ca, not pushed so that #8536's head stays the one 2746 checks); its `--try` is
 r20261110-053702-a492, also waiting. `GoesOnAt` is no premise of the instance: `Rec.Compiled.goesOnAt_recursion`
 (`Proofs/Core/Rec.lean` 201) proves it for every `G` at the test "the last answer is a message".
+
+## FUSEDSERVE, 05:50Z Tue (CIR-185): the retry's Commit passed the record; all eight cards free since 05:48:36Z
+
+- **The record built on every rank** (run r20261110-042659-14a1, node A, at dc0a6e8fe6). Each rank's window is written:
+  1,735,776 units in 11,680 members, 756 tables each declared once, 2,920 table reads, 1,460 openings.
+- **The steps after the record ran for the first time on a served window:** the windows' files (25 GB a rank), the
+  window check (756 tables pinned; 98.2 of 160.7 billion input bits registered by reference), and the pick of one member
+  a template. Staging of the six picked members started at 05:48:49Z and is running.
+- **The cards:** held 48 min 26 s, released at 05:48:36Z, 16 minutes before the stop. The prove takes one card when
+  staging ends, to 06:26Z at the latest.
+- **One caveat for the wording:** the Commit's own verdict reads PENDING, because its replay on CPU from the sealed
+  bundles did not run. I deleted the bundles as you said at 03:44Z. Tokens, cross-rank and the weights pin read True.
+- Nothing is proved yet and `ks-form` has not run. The verdict entry comes at 06:30Z as planned.
