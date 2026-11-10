@@ -105,17 +105,16 @@ def test_a_malformed_declaration_is_refused_with_the_reason(body, why):
         _parse(body)
 
 
-def test_drive_s_policy_takes_circuit_check_and_ratchet_gate_off_the_gate():
+def test_drive_s_policy_takes_circuit_check_lean_changed_and_ratchet_gate_off_the_gate():
     """Which jobs gate a merge is drive's policy (policy.toml's `off_gate`), not ci.toml's: circuit-check runs after landing, off
     the gate, until `circuit-check --all` fits inside the rest of the check; ratchet-gate runs there too, reporting without
-    blocking a merge, and no plan names it."""
+    blocking a merge, and no plan names it; lean-changed, which catches nothing the audit doesn't, no plan names either."""
     a, b = D.parse('schema = "ci/v0"\n[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\n[[job]]\nname = "b"\nowner = "ci"\ngroup = 2\n',
                    HANDLES, off=("a",))
     assert (a.gate, b.gate) == (False, True) and D.gated([a, b]) == [b]
-    assert D.off_gate() == ("circuit-check", "ratchet-gate")
-    assert [j.name for j in D.load() if not j.gate] == ["circuit-check", "ratchet-gate"]
-    assert CHECK.OFF_GATE == ("circuit-check", "ratchet-gate")
-    assert not any("ratchet-gate" in shard for plan in D.plans().values() for shard in plan)
+    off = ("circuit-check", "lean-changed", "ratchet-gate")
+    assert D.off_gate() == off and tuple(j.name for j in D.load() if not j.gate) == off == CHECK.OFF_GATE
+    assert not any(j in shard for j in off[1:] for plan in D.plans().values() for shard in plan)
 
 
 def test_without_a_policy_every_job_gates(tmp_path):

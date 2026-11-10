@@ -7,7 +7,7 @@ commit you ask it to. The jobs it runs are data in `ci.toml`: each has an owner,
 | --- | --- |
 | `tests` | `pytest` (every test suite, through `suites.py`), `lean-suites` (the suites that read the Lean verifier's build), `ratchet-gate` (the vLLM integration's ratchet gate on each merge above the check's base: on a train, it names the PR whose merge grows a lint allowlist) |
 | `circuits` | `flock-circuit-build`, `flock-rust-tests` (Flock's Rust), `circuit-check` (the property checks every circuit passes) |
-| `lean` | `lean-build` and `lean-unit-cut` (the Lean verifier and its partition check), `lean-audit` (the Lean check of every Lake package, `tools/verity/lean/`), `lean-changed` (the early Lean check on a merge, which halts the run), and `lean-agreement` (the cross-check against upstream's Rust verifier, when a change touches Flock) |
+| `lean` | `lean-build` and `lean-unit-cut` (the Lean verifier and its partition check), `lean-audit` (the Lean check of every Lake package, `tools/verity/lean/`), `lean-changed` (the early Lean check on a merge, which halts the run; off the gate and in no shard), and `lean-agreement` (the cross-check against upstream's Rust verifier, when a change touches Flock) |
 
 `verity check tests|circuits|lean` runs only those parts and what their jobs need. `check.py`'s docstring lists the rest: shards,
 `--deferred STEP,...`, `--plan` and `--slots`.
@@ -20,8 +20,10 @@ culprit, no revert, no hold on `main`) until it expires, and then rings its owne
 applies `main`'s allowances the same way.
 
 A job in `policy.toml`'s `off_gate` is off the merge gate: a recorded check and its shards leave it out, and `research
-merge` requires it of no check. Today those are `circuit-check` and `ratchet-gate`. Each runs after landing, in the run that
-checks `checked`'s tip, and doesn't hold `main`; under drive.toml's `executor = "on"`, `ratchet-gate` runs with
+merge` requires it of no check. Today those are `circuit-check`, `ratchet-gate` and `lean-changed`. `lean-changed` catches
+nothing the audit doesn't, so no shard runs it, of a plan or an auto one (`shards.NO_SHARD`): neither a recorded check nor a
+candidate's sharded check runs it. Each of the other two runs after landing, in the run that checks `checked`'s tip, and
+doesn't hold `main`; under drive.toml's `executor = "on"`, `ratchet-gate` runs with
 `lean-agreement` in a run of their own beside the executor's check of the tip, and `main` waits for that run's preflights and
 `lean-agreement`, not its `ratchet-gate`. A red `circuit-check` names its culprit, fixed forward or else reverted, as every
 after-landing red does, and while it is red no PR touching its inputs lands. A red `ratchet-gate` names as culprits the
@@ -132,7 +134,7 @@ timing record it is of), and each task is:
 | Field | What it is |
 | --- | --- |
 | `id` | the shard planner's part (`shards.py`): `pytest:SUITE` or `lean-suites:SUITE` (`suites.AFTER_LEAN`, which read the verifier's build), `pytest:SUITE:K/M` for part K of a split suite (by test file, or by test id where it declares `parts`), `lean-audit:PKG`, `circuit-check:K/M`, or a job's name |
-| `kind` | `suite`, `lean-package`, `circuit-check`, `build` (`lean-build`, `flock-circuit-build`) or `step` (another job, run whole: `flock-rust-tests`, `lean-unit-cut`, `lean-agreement`, `lean-changed`, `ratchet-gate`) |
+| `kind` | `suite`, `lean-package`, `circuit-check`, `build` (`lean-build`, `flock-circuit-build`) or `step` (another job, run whole: `flock-rust-tests`, `lean-unit-cut`, `lean-agreement`, `ratchet-gate`) |
 | `argv`, `cwd` | the command `check.py` builds for that part alone (`check.groups`), with `<tree>`, `<cache>`, `<out>` and `<python>` for the tree, the check's cache, the run's output directory and the interpreter; `argv` is null where check can't run it on this tree |
 | `reason` | null, or why `argv` is null: one starting `skipped:` is a skip, any other a failure |
 | `inputs` | `{"closure", "paths"}`: paths and globs from the root that cover what the task reads, and the function that lists them (`suites.inputs_of`, with the runner's files; `lean_audit.inputs`; circuit-check's workspace closure). `["."]` is the whole tree, for a job that declares none |
@@ -156,7 +158,7 @@ key reads of the machine (the kernel release, `rustc -vV`, the slot's paths) che
 lister and a worker on other slots or hosts list one key. So keys are of the machine that lists them only as a suite's are
 (Python, the platform, the base image): list on a worker. These have no key yet, and run whenever they're in the graph: the
 builds (no declared inputs, read guard or keyed outputs), circuit-check's slices (it keys each target, from a task list only a
-run builds), and the jobs that keep no verdict (`lean-unit-cut`, `lean-changed`, `ratchet-gate`). The preflight is no task: a
+run builds), and the jobs that keep no verdict (`lean-unit-cut`, `ratchet-gate`). The preflight is no task: a
 worker's `uv sync --locked` refuses a lock that isn't current, each suite fetches the fixtures it reads, and the repository's
 suite holds the lints.
 
