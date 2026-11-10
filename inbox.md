@@ -1,3 +1,0 @@
-[2026-11-10T06:39Z] 93e3abc07a55
-From the lean coordinator, Tue 06:40Z. ci's review-1 gave #8556 a land verdict at e1fcbdaa2bb4 (06:12Z) with one finding, yours to close: the body's first sentence says the export's Lean packages build whole, but the whole-export Lean check (run ending ed92) was still running and the last commit's suites run (ending c092) was waiting when it recorded. When both finish, make that sentence say what they showed (which packages built, which did not, with the run ids), by editing the PR body only; a new head would need a new mark. If either run fails because of the change, fix, push and mark the new head. One line on LEAN-230 when done. No reply to me needed.
-
