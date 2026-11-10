@@ -98,7 +98,7 @@ print(json.dumps({"decisions": rows, "ticks": ticks, "args": args, "executor": c
 '''
 
 NODE_SCRIPT = r'''
-import calendar, glob, json, os, subprocess, sys, time
+import calendar, glob, json, os, re, subprocess, sys, time
 since, sample = sys.argv[1], float(sys.argv[2])
 ROOT = "/workspace/research"
 
@@ -156,11 +156,69 @@ def scope(rid):
         try:
             cpu = dict(l.split() for l in open(d + "/cpu.stat") if len(l.split()) == 2)
             mem = dict(l.split() for l in open(d + "/memory.stat") if len(l.split()) == 2)
-            return {"scope_cpu_s": int(cpu.get("usage_usec", 0)) / 1e6, "scope_anon_gb": int(mem.get("anon", 0)) / 2 ** 30,
-                    "scope_peak_gb": int(open(d + "/memory.peak").read()) / 2 ** 30}
+            row = {"scope_cpu_s": int(cpu.get("usage_usec", 0)) / 1e6, "scope_anon_gb": int(mem.get("anon", 0)) / 2 ** 30,
+                   "scope_peak_gb": int(open(d + "/memory.peak").read()) / 2 ** 30}
         except (OSError, ValueError):
             return {}
+        try:
+            row["parallel"] = parallel(d)
+        except OSError:
+            row["parallel"] = None
+        return row
     return {}
+
+def status(pid):
+    """A process's parent, its anonymous memory in GiB and its working directory: never its command line."""
+    try:
+        f = dict(l.split(":", 1) for l in open("/proc/%s/status" % pid) if ":" in l)
+        return {"ppid": f["PPid"].strip(), "anon": int(f.get("RssAnon", "0").split()[0]) / 2 ** 20,
+                "cwd": os.readlink("/proc/%s/cwd" % pid)}
+    except (OSError, KeyError, ValueError, IndexError):
+        return None
+
+def declared(tree, suite):
+    """What a suite's pyproject.toml declares in the checkout ``tree``: whether its tests run in parallel, a worker's GB, and
+    the GB the runner takes for a worker that declares none; None where it is no suite."""
+    try:
+        text = open(tree + "/" + suite + "/pyproject.toml").read()
+        runner = open(tree + "/tools/verity/check/suites.py").read()
+    except OSError:
+        return None
+    sec = re.search(r"^\[tool\.verity\.tests\][ \t]*$(.*?)(?=^\[|\Z)", text, re.M | re.S)
+    body = sec.group(1) if sec else ""
+    gb = re.search(r"^worker_gb\s*=\s*([0-9.]+)", body, re.M)
+    default = re.search(r"^TEST_PROCESS_GB\s*=\s*([0-9.]+)", runner, re.M)
+    return {"parallel": bool(re.search(r"^parallel\s*=\s*true", body, re.M)), "worker_gb": float(gb.group(1)) if gb else None,
+            "default_gb": float(default.group(1)) if default else None}
+
+def parallel(d):
+    """The parallel suites running in the cgroup ``d``, each with its workers' anonymous memory in GiB (``own``) and the same
+    with the processes a worker started (``tree``). A suite's pytest is the process the runner started in the suite's
+    directory; its children are its workers, and with fewer than two it runs the tests itself."""
+    pids = []
+    for base, _, files in os.walk(d):
+        if "cgroup.procs" in files:
+            pids += open(base + "/cgroup.procs").read().split()
+    ps = {p: s for p in pids for s in [status(p)] if s}
+    kids = {}
+    for p, s in ps.items():
+        kids.setdefault(s["ppid"], []).append(p)
+
+    def tree(p):
+        return ps[p]["anon"] + sum(tree(k) for k in kids.get(p, []))
+
+    out = []
+    for p, s in ps.items():
+        top = ps.get(s["ppid"])
+        if not top or not s["cwd"].startswith(top["cwd"] + "/"):
+            continue
+        suite = s["cwd"][len(top["cwd"]) + 1:]
+        dec = declared(top["cwd"], suite)
+        if not dec or not dec.pop("parallel"):
+            continue
+        ws = kids.get(p, []) if len(kids.get(p, [])) > 1 else [p]
+        out.append(dict(dec, suite=suite, own=[round(ps[w]["anon"], 2) for w in ws], tree=[round(tree(w), 2) for w in ws]))
+    return out
 
 def slow(d):
     """A shard's three slowest suites that ran, and the slowest passed test among them, from the suites' reports."""
@@ -534,8 +592,35 @@ def earlier(readings: list[dict], now: float, want: float = 3600.0) -> dict | No
     return min(ok, key=lambda r: abs(now - r["now"] - want), default=None)
 
 
-def table(doc: dict, prev: dict | None = None) -> list[dict]:
-    """The rows: each `{row, name, now, hour, today, target, how}`; a cell that could not be read says what it needs."""
+def worker_memory(shards: list[dict]) -> list[dict]:
+    """The parallel suites running in ``shards``, one row for each suite and declaration (two candidates can declare
+    differently): its workers and the shards they run in, a worker's anonymous memory in GiB (``p50``, ``most``; ``tree``
+    is the most with the processes a worker started), and what a worker is declared to reach (``declared``; the runner's
+    default where ``by_default``, None where neither was read)."""
+    found: dict[tuple, dict] = {}
+    for r in shards:
+        for s in r.get("parallel") or []:
+            gb = s.get("worker_gb") or s.get("default_gb")
+            o = found.setdefault((s["suite"], gb, not s.get("worker_gb")), {"shards": 0, "own": [], "tree": []})
+            o["shards"] += 1
+            o["own"] += s["own"]
+            o["tree"] += s["tree"]
+    return [{"suite": suite, "declared": gb, "by_default": by_default, "workers": len(o["own"]), "shards": o["shards"],
+             "p50": pct(o["own"], .5), "most": max(o["own"]), "tree": max(o["tree"])}
+            for (suite, gb, by_default), o in sorted(found.items(), key=lambda kv: -max(kv[1]["own"], default=0)) if o["own"]]
+
+
+def declares(m: dict) -> str:
+    """What a suite's worker is declared to reach, and whether the most one held is more."""
+    if m["declared"] is None:
+        return "its declaration was not read"
+    says = f"declares none, so the runner counts {m['declared']:g} GiB" if m["by_default"] else f"declares {m['declared']:g} GiB"
+    return says + (f": **over, {m['most'] / m['declared']:.1f} times**" if m["most"] > m["declared"] else ": within it")
+
+
+def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()) -> list[dict]:
+    """The rows: each `{row, name, now, hour, today, target, how}`; a cell that could not be read says what it needs.
+    ``readings`` are this machine's saved ones, for the rows that only see what is running when the command reads."""
     now = doc["now"]
     hour, day = now - 3600, ts(doc["day"] + "T00:00:00Z")
     hours = max(1e-9, (now - day) / 3600)
@@ -813,6 +898,32 @@ def table(doc: dict, prev: dict | None = None) -> list[dict]:
         if going else "no shard is running", "", "not measured: a shard's cgroup is gone when it ends", "",
         "the shards running now, from each one's own cgroup (`check-SLOT-RUN.scope`): CPU seconds over its seconds in the slot so far, "
         "`anon` of `memory.stat`, and `memory.peak`, which counts the page cache")
+    read = [r for r in runs.values() if r["kind"] == "shard" and r.get("parallel") is not None]
+    held = worker_memory(read)
+    seen = [*(r for r in readings if "workers" in r), {"now": now, "workers": held}]
+
+    def workers_seen(since: float) -> str:
+        rs = [r for r in seen if r["now"] >= since]
+        most: dict[tuple, dict] = {}
+        for r in rs:
+            for m in r["workers"]:
+                o = most.setdefault((m["suite"], m["declared"], m["by_default"]), dict(m, readings=0))
+                o["readings"] += 1
+                o["most"] = max(o["most"], m["most"])
+        return "; ".join(f"`{m['suite']}`: most {m['most']:.1f} GiB a worker, running at {m['readings']} of {len(rs)} readings; {declares(m)}"
+                         for m in sorted(most.values(), key=lambda m: -m["most"])) or f"no parallel suite was running in a shard at any of {len(rs)} readings"
+
+    add("7", "Parallel suites running in a shard: a worker's memory against what it declares", "; ".join(
+        f"`{m['suite']}`: {m['workers']} workers in {m['shards']} shard{'s' * (m['shards'] != 1)}, a worker holds p50 {m['p50']:.1f}, most {m['most']:.1f} GiB"
+        + (f" ({m['tree']:.1f} GiB with the processes it started)" if m["tree"] > m["most"] + 1 else "") + f"; {declares(m)}" for m in held)
+        or (f"no parallel suite is running in the {len(read)} shard{'s' * (len(read) != 1)} running" if read else "no shard is running"),
+        workers_seen(hour), workers_seen(day), "",
+        "only the parallel suites running in a shard when this command read it: a suite that ran between two readings is not "
+        "seen. Each process of a running shard's cgroup, grouped by the working directory of the pytest the runner started for "
+        "a suite; a worker is a child of that pytest, its memory `RssAnon` of `/proc/PID/status` (no page cache, no shared "
+        "memory); the declaration is `worker_gb` of `[tool.verity.tests]` in the suite's `pyproject.toml` at the candidate's "
+        "commit, else `TEST_PROCESS_GB` of `suites.py`, which the runner divides the slot's GiB by; the hour and today: the same "
+        "over this machine's saved readings")
     for kind, name in (("tier", "a quick tier"), ("worker", "an executor run")):
         rs = [r for r in runs.values() if r["kind"] == kind and r.get("end") and r.get("took") and r.get("cpu_s") and r["end"] > r["took"]]
         res = [mem[(r["node"], r["slot"])] for r in rs if (r["node"], r.get("slot")) in mem]
@@ -881,8 +992,8 @@ def render(rows: list[dict], doc: dict, short: bool = False) -> str:
 
 
 def saved(path: Path) -> tuple[list[dict], dict[str, list[int]]]:
-    """What earlier runs saved in ``path``: the readings of the nodes' CPU counters, and each candidate's `lean_files`; nothing
-    without the file, or with one that doesn't parse (said on stderr)."""
+    """What earlier runs saved in ``path``: the readings (the nodes' CPU counters, and the parallel suites' workers seen running),
+    and each candidate's `lean_files`; nothing without the file, or with one that doesn't parse (said on stderr)."""
     if not path.is_file():
         return [], {}
     try:
@@ -896,9 +1007,11 @@ def saved(path: Path) -> tuple[list[dict], dict[str, list[int]]]:
 def main(store_root=None, as_json: bool = False, sample_s: float = 5.0, short: bool = False) -> int:
     readings, lean = saved(STATE)
     doc = collect(store_root, sample_s, lean=lean)
-    rows = table(doc, earlier(readings, doc["now"]))
-    readings = [r for r in readings if doc["now"] - r["now"] < 6 * 3600]
-    readings.append({"now": doc["now"], "nodes": {n: {"stat": d["stat"]} for n, d in doc["nodes"].items()}})
+    rows = table(doc, earlier(readings, doc["now"]), readings)
+    readings = [r for r in readings if doc["now"] - r["now"] < 26 * 3600]
+    readings.append({"now": doc["now"], "nodes": {n: {"stat": d["stat"]} for n, d in doc["nodes"].items()},
+                     "workers": worker_memory([r for d in doc["nodes"].values() for r in d["runs"]
+                                               if r["kind"] == "shard" and r.get("parallel") is not None])})
     try:
         STATE.parent.mkdir(parents=True, exist_ok=True)
         STATE.write_text(json.dumps({"readings": readings, "lean": {**lean, **doc["lean"]}}))

@@ -114,6 +114,9 @@ def runs() -> dict[str, dict]:
         "r20261110-012500-bbbb": {"id": "r20261110-012500-bbbb", "kind": "shard", "shard": "1/1", "took": qt.ts(at("01:26")), "end": None,
                                   "rc": None, "failed": [["tools/research", qt.ts(at("02:00"))]], "slot": "b", "slot_cores": 96,
                                   "scope_cpu_s": 94 * 60 * 12.0, "scope_anon_gb": 40.0, "scope_peak_gb": 120.0,
+                                  "parallel": [{"suite": "tools/wide", "worker_gb": 8.0, "default_gb": 9.0, "own": [20.0, 22.0, 21.0],
+                                                "tree": [20.0, 22.5, 21.0]},
+                                               {"suite": "tools/plain", "worker_gb": None, "default_gb": 9.0, "own": [3.0], "tree": [7.5]}],
                                   "steps": [{"step": "pytest", "state": "stopped", "seconds": 3800, "end": qt.ts(at("02:30"))}]},
     }
 
@@ -199,6 +202,13 @@ def test_the_table_holds_each_number_over_its_windows():
     assert rows["Reserved against used, a check's shard"]["now"] == ("1 running: cores p50 12, most 12, of 96 in its slot; memory without the "
                                                                     "page cache p50 40 GiB, most 40 GiB; peak with the page cache most 120 GiB, "
                                                                     "of 300 GiB reserved")
+    held = rows["Parallel suites running in a shard: a worker's memory against what it declares"]
+    assert held["now"] == ("`tools/wide`: 3 workers in 1 shard, a worker holds p50 21.0, most 22.0 GiB; declares 8 GiB: **over, 2.8 "
+                           "times**; `tools/plain`: 1 workers in 1 shard, a worker holds p50 3.0, most 3.0 GiB (7.5 GiB with the "
+                           "processes it started); declares none, so the runner counts 9 GiB: within it")
+    assert held["hour"] == held["today"] == ("`tools/wide`: most 22.0 GiB a worker, running at 1 of 1 readings; declares 8 GiB: **over, "
+                                             "2.8 times**; `tools/plain`: most 3.0 GiB a worker, running at 1 of 1 readings; declares "
+                                             "none, so the runner counts 9 GiB: within it")
     assert rows["Reserved against used, a quick tier"]["today"].startswith("cores: p50 2.0 used of 16 in its slot; memory: p50 8 GiB peak")
     assert rows["Ready to built"]["today"] == "p50 15, p90 19 min (n=2)"          # #1: verdict 00:40 to 01:00; #2: mark 00:50 to 01:00
     assert rows["The loop's tick: minutes between tick ends"]["hour"] == "p50 4.0, p90 4.0 min (n=2)"
@@ -241,3 +251,28 @@ def test_the_rendered_table_is_markdown_and_names_what_was_not_read():
     assert "| # | Number | Now | Last hour | Today | Target |\n|---|---|---|---|---|---|\n" in short and "How it is measured" not in short
     d["control"]["executor"], d["control"]["executor_why"] = [], "its status printed nothing"
     assert "| not measured: its status printed nothing |" in qt.render(qt.table(d), d)
+
+
+def test_a_workers_memory_is_held_to_its_suites_declaration_over_the_saved_readings():
+    shards = [{"parallel": [{"suite": "a", "worker_gb": 8.0, "default_gb": 9.0, "own": [10.0, 30.0], "tree": [10.0, 30.0]}]},
+              {"parallel": [{"suite": "a", "worker_gb": 8.0, "default_gb": 9.0, "own": [20.0], "tree": [20.0]},
+                            {"suite": "a", "worker_gb": 32.0, "default_gb": 9.0, "own": [25.0], "tree": [25.0]}]},   # another candidate's
+              {"parallel": []}, {}]
+    now, other = qt.worker_memory(shards)
+    assert now == {"suite": "a", "declared": 8.0, "by_default": False, "workers": 3, "shards": 2, "p50": 20.0, "most": 30.0, "tree": 30.0}
+    assert (other["declared"], other["workers"]) == (32.0, 1) and qt.declares(other) == "declares 32 GiB: within it"
+    assert qt.declares(dict(now, declared=None)) == "its declaration was not read"
+    d = doc()
+    for run in d["nodes"]["vy-nebius-cpu-1"]["runs"]:
+        run.pop("parallel", None)
+    name = "Parallel suites running in a shard: a worker's memory against what it declares"
+    earlier = [{"now": d["now"] - 1800, "workers": [dict(now, most=12.0)]}, {"now": d["now"] - 7200, "workers": [now]},
+               {"now": d["now"] - 900, "workers": []}, {"now": d["now"] - 600}]              # the last from before workers were saved
+    row = {r["name"]: r for r in qt.table(d, None, earlier)}[name]
+    assert row["now"] == "no shard is running"                                              # none whose processes were read
+    assert row["hour"] == "`a`: most 12.0 GiB a worker, running at 1 of 3 readings; declares 8 GiB: **over, 1.5 times**"
+    assert row["today"] == "`a`: most 30.0 GiB a worker, running at 2 of 4 readings; declares 8 GiB: **over, 3.8 times**"
+    d["nodes"]["vy-nebius-cpu-1"]["runs"][1]["parallel"] = []
+    row = {r["name"]: r for r in qt.table(d)}[name]
+    assert (row["now"], row["hour"]) == ("no parallel suite is running in the 1 shard running",
+                                         "no parallel suite was running in a shard at any of 1 readings")
