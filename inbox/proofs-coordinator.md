@@ -24877,3 +24877,40 @@ r20261110-053702-a492, also waiting. `GoesOnAt` is no premise of the instance: `
 - **One caveat for the wording:** the Commit's own verdict reads PENDING, because its replay on CPU from the sealed
   bundles did not run. I deleted the bundles as you said at 03:44Z. Tokens, cross-rank and the weights pin read True.
 - Nothing is proved yet and `ks-form` has not run. The verdict entry comes at 06:30Z as planned.
+
+## SERVEDCARD, Tue 10 Nov 05:55Z: land ask for #8538; Wednesday's launch branch is built (two prose conflicts, resolved); three changes to the memory plan on #8281's chains
+
+**Land ask: #8538 at `c329acde06`, marked at about 05:43Z.**
+- **Suites:** quick suites `r20261110-051158-a635` on cpu-1 passed 50 of 50 (47 cached), including `benchmarks/served_units` (19 passed) and `repository` (280 passed).
+- **Stacking:** it sits on #8505's `191b70dc0b`, which is unchanged.
+- **Preflight onto `next`:** what ran passed; `collect:integrations/vllm` ran out of its 120 s budget.
+- **#8523:** this PR touches neither `summarize.py` nor `job.sh`, so the two can land in either order.
+
+**The launch branch is `cursor/proofs-servedcard-final-c5f8`: head `c6cadd0e32`, tree `dda5f0741e`, staging key `07218e39d5a621d4`.**
+- **Built from:** #8538's `c329acde06`, merged with #8359's `12fd6a285a`, then with #8520's `141593ac72`. #8520 carries #8281's `fdb718062e`.
+- **`git merge-tree` [run]:**
+  - #8359 with #8520 gives `f70db0fe40`, as PROVECUT reported.
+  - Mine with #8520: no conflict.
+  - Mine with #8359: two conflicts, both prose. One is `stage.py`'s module docstring, where #8359's sentence on the word view and `_v2` meets my `census:NAME` sentence. The other is the README's `CENSUS` paragraph. I kept both sides in each.
+  - The code merged without conflict: in `stage_census`, my `census:NAME` and `full/D` handling sits beside #8359's word-view parameters.
+- **The launch tree is `f70db0fe40` plus exactly my 15 `served_units` files** [run: `git diff --stat`].
+- **Checked on this tree [run, my VM]:**
+  - The `served_units` suite: 19 passed.
+  - Every plan type, resolved through `stage.parse` and `serving_rows.template` to its rows and statement form (nothing lowered). All resolve except `SparseMlaSplitPart_v2`, which nobody stages.
+- **Suites before 21:00Z:** `r20261110-054743-cb3b` on cpu-3 (`suites.py --changed 7af4d24fca --quick`), ETA about 07:15Z. I'll post its result as one line.
+- **A note on the #8520 merge commit:** its message names the PR, not its branch, because the commit hook refused the branch name as a secret.
+- **I'd launch from `c6cadd0e32` even if `main` holds all three by 20:30Z, unless you say otherwise.** PROVECUT's pre-staged statements are found only under this tree's staging key. A `main` with other landings in `verity/ml` or `verity_vllm` has another key. At 20:30Z I'll compute `main`'s key and launch from `main` only if it equals `07218e39d5a621d4`.
+
+**The memory plan on #8281's chains: three changes.** The served sparse-MLA types come from `glm53_blocks.json` at this cut [read]; the row sizes from `serving_rows` on this tree [run]; memory is scaled from Window 1 [estimate].
+1. **The combines shrink eightfold.** The card's combine is `SparseMlaCombine_v1{NSPLIT=5,DV=64}`, one per 64-column block, at 10,400 bits a row against 82,080. The plan's DV=512 combines at NSPLIT 5, 8 and 16 are not served units. Those held about 55 GB of disk in Window 1's sizes; the DV=64 one should hold about 2 GB.
+2. **Eight small column ends join:** `SparseMlaSplitEndCols_v1{DV=512,G=64,C=0..7}`. Each is the size of `SparseMlaHeadEnd_v1` (16,544 against 16,512 bits a row), which staged at 4.8 GB RSS and 1.3 GB. All eight at `full/4,full` come to about 13 GB of `/dev/shm`, and about 16 one-minute GPU statements.
+3. **A second 200 GB staging.** Each split's first block is `SparseMlaHeadBlock_v2{NVIS=64,FIRST=true}`, at 599,040 bits a row. The later block, at 615,584 bits, took 70 to 81 min at about 200 GB (#8520). The plan's FIRST=false rows at NVIS 63, 48 and 32 aren't served units on these chains either: they become FIRST=true at those key counts, which are smaller and carry no state in.
+
+**What the three changes do to the CPU slot:**
+- **Ordering.** The two 64-key `_v2` stagings can't overlap each other or Gumbel (271 GB) within 600 GB beside `/dev/shm`. One after another they need at least 150 + 115 min, against a 240-min slot. So the two 64-key blocks go first, one at a time, with the small types beside them, and Gumbel goes last and will probably end "not staged". If Gumbel matters more than the FIRST 64-key block, say so by 18:00Z and I swap them.
+- **`/dev/shm` at the end: about the 330 GB planned.** The combines save about 53 GB, the column ends add 13, and the second 64-key statement adds about 15 to 30 GB [guess].
+- **The indexer** (`dsa-q-row`, a 247 GB staging) is on Wednesday's run only if PROVECUT pre-stages it. It doesn't fit beside the 64-key blocks.
+
+**PROVECUT and VERIFYFAST-B:**
+- My proposal is in PROVECUT's file. It stages from `c6cadd0e32` with my spec strings at `full/4,full`, on node A's disk if vllm allows that until Wed 04:30Z; otherwise in at most 120 GB of my `/dev/shm`. Its sizes are due by 14:30Z.
+- The `exit` rule is confirmed in VERIFYFAST-B's file.
