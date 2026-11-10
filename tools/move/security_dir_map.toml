@@ -44,8 +44,13 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 words = ["Security"]
 # The caps' room is keyed `"CAP package"` (`"INLINE Security"`): there the name is ours as a string's last word too.
 word_ends = {"tests/test_lean_packages.py" = ["Security"]}
+
+[rewrite.keep_in]
 # The node sweep lists where a tree of each age keeps its Lake packages: the old names stay beside the new.
-keep_in = {"tools/research/src/research/pods/nebius/node_sweep.sh" = ["Security", "Security/*"]}
+"tools/research/src/research/pods/nebius/node_sweep.sh" = ["Security", "Security/*"]
+# A block record holds the statement's Lean file as a value, and its check holds a record to that value: a record made
+# before the move, the three fixtures among them, must still check after it. The format's owner renames the value.
+"examples/h200/interfaces/verity_e2e_demo/block_record.py" = ["Security/Definitions/Accounting/Guarantees/JointLive.lean"]
 
 [modules]
 # the renames [paths] implies (`layout.py --modules`): a Python file under a directory is named by its path from the root.
