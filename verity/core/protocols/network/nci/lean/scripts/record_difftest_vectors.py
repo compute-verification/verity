@@ -8,15 +8,18 @@ Writes two files under `DIR/record_difftest/`, one line per case: `cases.jsonl`,
 docstring), the record's wires as SPOT's `wires` piece reads them (`spot_of`, each template's rows and outputs
 Python's own layout of it; `null` where the reference refuses the case before its wires, or that layout has no row
 for a port), some input rows of its units (`[template, port, unit, row]` each) and the count's limits
-(`{"table", "c", "k", "n"}`); and `python.jsonl`, `{"detail", "public", "kinds", "exported", "count"}`:
-`nci_record_reference`'s `check_detail`, `check`, `kinds` and `exported` of those rows, and `count`. The Lean audit
-runs `NciCheck/RecordDifftestMain.lean` on the two (`runs` in `lean-audit.json`).
+(`{"table", "c", "k", "n"}`); and `python.jsonl`, `{"detail", "public", "kinds", "exported", "count", "closed"}`:
+`nci_record_reference`'s `check_detail`, `check`, `kinds` and `exported` of those rows, `count`, and each
+template's closed rows (`closed`). The Lean audit runs `NciCheck/RecordDifftestMain.lean` on the two (`runs` in
+`lean-audit.json`).
 
 Case `seed`, for the first `COUNT`, is a random circuit (`random_circuit`): one to four templates of a few gates, each
-reading some of its parameters' leaves (directly, through a call and through a batch), their units laid out by one or
-two inference entries each with the slot digit anywhere among the digits; wires from earlier templates that keep to the
-reader's slot, cross slots or do either unit by unit, each from an output whose leaves' width divides the reader's
-(the same width, or bits under a word), written unit by unit and merged into runs
+reading some of its parameters' leaves (directly, through a call and through a batch) and now and then passing some
+of a parameter's one-bit leaves on (`PASSES`: itself, through a call, a batch member or a scan, or handed to a callee
+that returns none of them), their units laid out by one or two inference entries each with the slot digit anywhere
+among the digits; wires from earlier templates that keep to the reader's slot, cross slots or do either unit by unit,
+each from an output whose leaves' width divides the reader's (the same width, or bits under a word) or, into a
+closed row, from any output of the row's words, written unit by unit and merged into runs
 (`verity.ml.windows.interface.coalesce`, as a lowering states them); registered reads, a table with its table reads and
 opening, and ingress; a registration log in R6's chain whose first record registers some of the parameters, under the
 root the run's own record commits or another; and pins of most templates' Definitions, among other digests. Two in
@@ -31,11 +34,14 @@ record; and the negative vectors of a pinned reader's layout (the form's `layout
 among the opening's ports, another row named the key, the root or the domain id read in another row, an opened row
 left out or out of order, another output named the verdict, and a pinned reader whose rows are in no layout's order
 or that has one output, with the same records under no pin. Then a wire's leaves: the served shape with its token a
-word into a key of 32 one-bit leaves, refused, and 32 one-bit leaves into a key of one word, taken; a template that
-passes on one bit of each of sixteen 16-bit gates, read as one 16-bit leaf by a unit of another slot (`passed_on`);
-and an output whose leaves have two widths (`two_widths`). Then a root that hands a unit a row that is not input
-gates of its own: the served shape with one input run handed to two rows, with a row every unit shares, and with a
-row of computed gates.
+word into a key of 32 one-bit leaves that only gates of its reader read, a closed row, and 32 one-bit leaves into a
+key of one word, both taken; a template that passes on one bit of each of sixteen 16-bit gates, read as one 16-bit
+leaf by a unit of another slot (`passed_on`), refused however it passes them on (itself, with no gate of its own at
+all, through a call, a batch member or a scan), refused too where it hands them to a callee that returns none of
+them, and taken where its output is gates of its own over them; and an output whose leaves have two widths
+(`two_widths`), refused into a 32-bit leaf and taken into a closed row. Then a root that hands a unit a row that is
+not input gates of its own: the served shape with one input run handed to two rows, with a row every unit shares,
+and with a row of computed gates.
 
 Every wire of every case is one `NciCheck.Record.sameSlot`'s search decides within its fuel (`searched`, the search
 mirrored and held to the expansion as the cases are made), so the Lean's count of a wire is the reference's.
@@ -126,12 +132,46 @@ def leaves_of(c) -> list:
     return [c] if isinstance(c.type, Value) else [x for i in range(c.type.n) for x in leaves_of(c[i])]
 
 
+#: how a template's output passes leaves of a parameter on (`template`'s `"pass"`)
+PASSES = ("direct", "call", "batch", "scan", "beside")
+
+
+def _hand(name: str, params: list, ret, body):
+    """A composite of no gate: `body` returns leaves of its parameters."""
+    return bind(CompositeDefinition(name, 1, (), lambda S: (tuple(params), ret), body, register=False))
+
+
+def passed(B, name: str, bits: list, how: str):
+    """The one-bit leaves `bits` passed on, `how` (`PASSES`), as an array of as many one-bit leaves, with no gate but
+    for `"beside"`. `"direct"`: the leaves themselves. `"call"`: the return of a composite that returns its
+    parameter. `"batch"`: a composite that returns its one bit, mapped over them. `"scan"`: a step that returns its
+    element as the carry and its carry as the element, the first leaf its initial carry and the rest its elements:
+    the outputs then the carry are the leaves, in order. `"beside"`: no leaf is passed on; a composite that returns
+    the second half of its parameter is called on the leaves then as many gates, one over each leaf, and returns
+    the gates."""
+    bit, n = Value(1), len(bits)
+    if how == "direct":
+        return array_of(bits)
+    if how == "call":
+        return B.call(_hand(name, [("a", Array(n, bit))], Array(n, bit), lambda B, S, a: a), array_of(bits))
+    if how == "batch":
+        return B.batch(_hand(name, [("a", bit)], bit, lambda B, S, a: a), array_of(bits), axes=(0,))
+    if how == "scan":
+        step = _hand(name, [("carry", bit), ("x", bit)], Tuple(bit, bit), lambda B, S, carry, x: tuple_of(x, carry))
+        out = B.scan(step, bits[0], [array_of(bits[1:])])
+        return array_of([*leaves_of(out[1]), out[0]])
+    assert how == "beside", how
+    half = _hand(name, [("a", Array(2 * n, bit))], Array(n, bit), lambda B, S, a: array_of(leaves_of(a)[n:]))
+    return B.call(half, array_of([*bits, *(B.call(prim((1,), 1), b) for b in bits)]))
+
+
 def template(name: str, params: list, outs: list, plan: list):
     """A template: parameters `params` (`(name, type)` each), one output row per type of `outs`, and `plan`, per
-    output its gates: `("batch", i, r)`, a primitive mapped over parameter `i`'s elements; `("pass", i, leaves)`, no
-    gate, the output's leaves parameter `i`'s `leaves` themselves, passed on; else per output leaf
-    `(form, r, operands)`, a primitive returning `Value<r>` over the parameter leaves `operands` (`(parameter, leaf)`
-    each), called directly (`"op"`) or inside a composite of its own (`"sub"`)."""
+    output its gates: `("batch", i, r)`, a primitive mapped over parameter `i`'s elements; `("pass", i, leaves, how)`,
+    the output's leaves parameter `i`'s one-bit `leaves`, at least two, passed on (`passed`; `how` one of `PASSES`,
+    `"direct"` where none is given); else per output leaf `(form, r, operands)`, a primitive returning `Value<r>`
+    over the parameter leaves `operands` (`(parameter, leaf)` each), called directly (`"op"`) or inside a composite
+    of its own (`"sub"`)."""
     ret = outs[0] if len(outs) == 1 else Tuple(*outs)
 
     def body(B, S, *args):
@@ -141,7 +181,7 @@ def template(name: str, params: list, outs: list, plan: list):
                 hs.append(B.batch(prim((args[made[1]].type.elem.w,), made[2]), args[made[1]], axes=(0,)))
                 continue
             if made[0] == "pass":
-                hs.append(array_of([ls[made[1]][k] for k in made[2]]))
+                hs.append(passed(B, f"{name}Hand{j}", [ls[made[1]][k] for k in made[2]], (*made, "direct")[3]))
                 continue
             got = []
             for x, (form, r, ops) in enumerate(made):
@@ -160,7 +200,8 @@ def reading(rng, params: list, outs: list, share: float) -> list:
     """A `template` plan: each output leaf a gate over up to three of the parameter leaves a `share` of them names (a
     leaf outside it is read by no gate), now and then inside a composite; with a `share` of 1 the gates read every
     leaf between them. An output with the form of a parameter mapped element by element is, half the time, that
-    batch."""
+    batch. An output of one-bit leaves is, half the time where a parameter has as many, some of that parameter's
+    leaves passed on (`PASSES`, any of them)."""
     pool = [(i, k) for i, (_, t) in enumerate(params) for k in range(t.leaves) if rng.random() < share]
     plan: list = []
     for t in outs:
@@ -169,9 +210,15 @@ def reading(rng, params: list, outs: list, share: float) -> list:
         if maps and rng.random() < 0.5:
             plan.append(("batch", rng.choice(maps), t.elem.w))
             continue
+        hands = [i for i, (_, p) in enumerate(params) if isinstance(t, Array) and t.elem == Value(1)
+                 and set(p.leaf_widths()) == {1} and p.leaves >= t.n]
+        if hands and rng.random() < 0.5:
+            i = rng.choice(hands)
+            plan.append(("pass", i, rng.sample(range(params[i][1].leaves), t.n), rng.choice(PASSES)))
+            continue
         plan.append([["sub" if rng.random() < 0.25 else "op", w, rng.sample(pool, min(len(pool), rng.randint(0, 3)))]
                      for w in t.leaf_widths()])
-    gates = [g for made in plan if made[0] != "batch" for g in made]
+    gates = [g for made in plan if isinstance(made, list) for g in made]
     for x, g in enumerate(gates if share == 1.0 else []):
         g[2] = pool[x::len(gates)]
     for g in gates:
@@ -359,6 +406,13 @@ def _leaf(t) -> int:
     return w
 
 
+def closed(fn) -> set[str]:
+    """Template `fn`'s closed rows (the form's `Tmpl.closed`): the parameters whose leaves are of one bit each and
+    none of which it passes on."""
+    on = ref.passed_on(fn)
+    return {p for i, (p, t) in enumerate(fn.signature()[0]) if set(t.leaf_widths()) == {1} and i not in on}
+
+
 def _layout(rng, S: int) -> list[tuple[list[int], list[str], int]]:
     """One or two inference entries: the slot digit among up to three others, at most one of them the step."""
     out = []
@@ -376,7 +430,7 @@ def random_circuit(rng, seed: int) -> Circuit:
     """A random circuit (the module docstring)."""
     S = rng.choice([1, 2, 2, 3, 4])
     c = Circuit(f"record{seed}", S, 2)
-    specs = []
+    specs, shut = [], {}
     for j in range(rng.randint(1, 4)):
         if rng.random() < 0.2:
             params = [("tok", Value(16)), ("root", DIGEST), ("domain", DIGEST), ("row", Array(2, Value(16))),
@@ -393,6 +447,7 @@ def random_circuit(rng, seed: int) -> Circuit:
             params, outs = list(fn.params), [fn.ret]
         tid = c.add(fn, _layout(rng, S))
         specs.append((tid, params, outs))
+        shut[tid] = closed(fn)
         for p, t in params:
             ks = [k for k in range(2, 7) if isinstance(t, Array) and t.n % k == 0 and _words(t) % k == 0]
             if ks and rng.random() < 0.5:
@@ -406,7 +461,7 @@ def random_circuit(rng, seed: int) -> Circuit:
             k = c.cuts.get(tid, {}).get(p, 1)
             row = _words(t) // k
             writers = [(wt, f"o{x}") for wt, _, outs in specs[:j] for x, o in enumerate(outs)
-                       if _words(o) == row and _leaf(t) % _leaf(o) == 0]
+                       if _words(o) == row and (p in shut[tid] or _leaf(t) % _leaf(o) == 0)]
             if opening and p != "tok" or not writers or rng.random() < 0.3:
                 continue
             wt, out = rng.choice(writers)
@@ -563,21 +618,28 @@ def lowered(S: int, T: int, *, cross: bool = False, root_read: bool = True, forg
     return c
 
 
-def passed_on(S: int = 2) -> Circuit:
+def passed_on(S: int = 2, how: str = "direct", gate: bool = True) -> Circuit:
     """A circuit whose wires `Spot.Wires.check` takes, word for word, and that lays out no circuit: a 16-bit leaf
     that reads sixteen 16-bit gates of another slot through one 16-bit row. `Wide`, sixteen units a slot, each one
     16-bit gate over a registered weight. `On`, a unit a slot: its parameter sixteen rows of sixteen one-bit leaves,
     row `j` wired from the slot's `j`-th `Wide`; its first output sixteen one-bit leaves, leaf `j` its row `j`'s leaf
     `j` itself, passed on with no gate. `Take`, a unit a slot: one gate over one 16-bit leaf, wired from the next
     slot's `On`. Each of `On`'s one-bit leaves lies under a 16-bit leaf of its writer, so through the one row that
-    crosses slots, 16 bits, `Take`'s leaf reads sixteen gates of 16 bits."""
+    crosses slots, 16 bits, `Take`'s leaf reads sixteen gates of 16 bits.
+
+    `how` is how `On` passes those leaves on (`PASSES`): itself, or through a call, a batch member or a scan; with
+    `"beside"` it passes none, and its output is sixteen gates of its own, one over each of those leaves, returned
+    through a callee whose argument holds the leaves beside them. With `"gates"` the output is those sixteen gates,
+    called directly: `On`'s row is closed, and `Take`'s leaf reads sixteen one-bit gates of `On`. Without `gate`,
+    `On` has that one output and no other, so no gate where it passes its leaves on."""
     c = Circuit(f"passed{S}", S)
     v16, bits = Value(16), Array(16, Value(1))
-    gate = [[("op", 16, [(0, 0)])]]
-    wide = c.add(template("PassWide", [("w", v16)], [v16], gate), [([S, 16], ["slot", "-"], 0)])
-    on = c.add(template("PassOn", [("x", Array(16, bits))], [bits, v16],
-                        [("pass", 0, [17 * j for j in range(16)]), [("op", 16, [])]]), [([S], ["slot"], 0)])
-    take = c.add(template("PassTake", [("v", v16)], [v16], gate), [([S], ["slot"], 0)])
+    one, diagonal = [[("op", 16, [(0, 0)])]], [17 * j for j in range(16)]
+    wide = c.add(template("PassWide", [("w", v16)], [v16], one), [([S, 16], ["slot", "-"], 0)])
+    first = [("op", 1, [(0, k)]) for k in diagonal] if how == "gates" else ("pass", 0, diagonal, how)
+    on = c.add(template("PassOn", [("x", Array(16, bits))], [bits, v16] if gate else [bits],
+                        [first, [("op", 16, [])]] if gate else [first]), [([S], ["slot"], 0)])
+    take = c.add(template("PassTake", [("v", v16)], [v16], one), [([S], ["slot"], 0)])
     c.cuts = {on: {"x": 16}}
     c.wires = IF.coalesce([IF.Wire(on, "x", wide, "o0", s, (16,), 16 * s, (1,), (0, 16)) for s in range(S)]
                           + [IF.Wire(take, "v", on, "o0", s, (1,), (s + 1) % S, (0,), (0, 1)) for s in range(S)])
@@ -587,14 +649,16 @@ def passed_on(S: int = 2) -> Circuit:
     return c
 
 
-def two_widths(S: int = 2) -> Circuit:
+def two_widths(S: int = 2, bits: bool = False) -> Circuit:
     """A circuit with a wire from an output whose leaves have two widths: `Two`, a unit a slot, its first output a
-    leaf of 8 bits and one of 24; `Whole`, a unit a slot, one gate over one 32-bit leaf wired from its slot's `Two`."""
+    leaf of 8 bits and one of 24; `Whole`, a unit a slot, one gate over one 32-bit leaf wired from its slot's `Two`.
+    With `bits`, `Whole`'s row is 32 one-bit leaves, the first read by its gate and none passed on: a closed row."""
     c = Circuit(f"widths{S}", S)
     v16 = Value(16)
     two = c.add(template("WidthsTwo", [("a", v16)], [Tuple(Value(8), Value(24)), v16],
                          [[("op", 8, [(0, 0)]), ("op", 24, [(0, 0)])], [("op", 16, [(0, 0)])]]), [([S], ["slot"], 0)])
-    whole = c.add(template("WidthsWhole", [("v", Value(32))], [v16], [[("op", 16, [(0, 0)])]]), [([S], ["slot"], 0)])
+    whole = c.add(template("WidthsWhole", [("v", Array(32, Value(1)) if bits else Value(32))], [v16],
+                           [[("op", 16, [(0, 0)])]]), [([S], ["slot"], 0)])
     c.wires = IF.coalesce([IF.Wire(whole, "v", two, "o0", s, (1,), s, (0,), (0, 1)) for s in range(S)])
     c.order = c.ordered()
     return c
@@ -623,10 +687,12 @@ def shaped() -> list[dict]:
     fresh and the rate refuses.
 
     Then a wire's leaves, each case under the policy of exactly what its blocks hold, counted without the refusal
-    where the case is refused: the token a word into a key of bits (`leaf-widths`), bits into a key of one word
-    (accepted), `passed_on` and `two_widths` (`leaf-widths`). Then the accepted case with its Program's root edited
-    (`own-rows`): `Norm`'s weights' row handed the input gates its `x` has, `Feed`'s selection not mapped, and
-    `Select`'s row handed `Norm`'s output."""
+    where the case is refused: the token a word into a key of bits that only gates read, and bits into a key of one
+    word (both accepted); `passed_on`, its leaves passed on each way of `PASSES` and by a Definition of no gate
+    (`leaf-widths`, the one that hands them to a callee that returns none among them), and its output gates of its
+    own (accepted); `two_widths` (`leaf-widths`), and into a closed row (accepted). Then the accepted case with its
+    Program's root edited (`own-rows`): `Norm`'s weights' row handed the input gates its `x` has, `Feed`'s selection
+    not mapped, and `Select`'s row handed `Norm`'s output."""
     out = []
     first = None
     for n, (S, T) in enumerate([(2, 3), (4, 35)]):
@@ -697,14 +763,23 @@ def shaped() -> list[dict]:
         first(f"2x3 {what}, no pin", lowered(2, 3, **shape), seed + 1, pins=[])
 
     whole, units = "leaf-widths", lambda nodes: [n for n in nodes if n["args"]]
-    for seed, side, refused in ((23, "reader", whole), (24, "writer", None)):
+    for seed, side in ((23, "reader"), (24, "writer")):
         pin = [ref.closure_digest(json.loads(lowered(2, 3, bits=side).program()[0]), EMBED)]
-        first(f"2x3 the key's {side} bits, the other side a word", lowered(2, 3, bits=side), seed, pins=pin, policy={},
+        first(f"2x3 the key's {side} bits, the other side a word", lowered(2, 3, bits=side), seed, pins=pin, policy={})
+    for seed, what, shape, refused in (
+            (25, "a leaf that reads sixteen gates through one row", {}, whole),
+            (30, "sixteen gates through one row, passed on by a Definition of no gate", {"gate": False}, whole),
+            (31, "sixteen gates through one row, passed on through a call", {"how": "call"}, whole),
+            (32, "sixteen gates through one row, passed on through a batch member", {"how": "batch"}, whole),
+            (33, "sixteen gates through one row, passed on through a scan", {"how": "scan"}, whole),
+            (34, "a row a callee is handed and returns no leaf of", {"how": "beside"}, whole),
+            (35, "a closed row: sixteen gates read, none passed on", {"how": "gates"}, None)):
+        first(what, passed_on(**shape), seed, held=("weights/wide",), committed=("weights/wide",), pins=[], policy={},
               refused=refused)
-    first("a leaf that reads sixteen gates through one row", passed_on(), 25, held=("weights/wide",),
-          committed=("weights/wide",), pins=[], policy={}, refused=whole)
     first("a wire from an output of two widths", two_widths(), 26, held=(), committed=(), pins=[], policy={},
           refused=whole)
+    first("an output of two widths into a closed row", two_widths(bits=True), 36, held=(), committed=(), pins=[],
+          policy={})
 
     def twice(nodes: list, _desc: dict) -> None:
         """`Norm`'s weights' row handed the input gates its `x` has."""
@@ -1028,13 +1103,15 @@ def _break(rng, made: dict, how: str) -> bool:
         #: the rows of a table's reader: the new wire is the one thing that fills a row of another
         tabled = ({(x["reader"], x["port"]) for x in reg.get("roots", [])}
                   | {(o["reader"], p) for o in reg.get("openings", []) for p in (o["key"], *o["ports"])})
+        shut = {codec.descriptor_id(fn): closed(fn) for fn, _ in c.templates}
         found = [{"reader": t, "port": p, "writer": wt, "out": f"o{x}", "at": 0, "radix": [1], "base": 0, "step": [0]}
                  for j, t in enumerate(ids) for p, ty in sigs[t][0]
-                 if (t, p) not in tabled and p not in c.cuts.get(t, {})
+                 if (t, p) not in tabled and p not in c.cuts.get(t, {}) and p not in shut[t]
                  for wt in ids[:j] for x, o in enumerate(sigs[wt][1]) if _words(o) == _words(ty) and _leaf(ty) % _leaf(o)]
         if not found:
             return False
-        w = rng.choice(found)
+        #: a row of bits its template passes on, where the circuit has one: the row the closed-row rule turns on
+        w = rng.choice([w for w in found if _leaf(dict(sigs[w["reader"]][0])[w["port"]]) == 1] or found)
         _rewrite(made, lambda d: (_clear(d, w["reader"], w["port"]), d["wires"].append(w)))
     elif how == "overlap":
         if not wires:
@@ -1242,15 +1319,16 @@ NAMES = ("cases", "python")
 
 def total() -> int:
     """How many cases the audit's data has: the random ones and `shaped()`'s."""
-    return COUNT + 33
+    return COUNT + 40
 
 
 def results(case: dict) -> dict:
     """The reference's results on a case: the whole verdict, what is published, its rows' classes, what the form
-    exports of them (each row's slot and why it is held), and the count."""
+    exports of them (each row's slot and why it is held), the count, and each template's closed rows."""
     inst, tr = case["instance"], case["trusted"]
     return {"detail": ref.check_detail(inst, tr), "public": ref.check(inst, tr), "kinds": ref.kinds(inst, tr, case["rows"]),
-            "exported": ref.exported(inst, tr, case["rows"]), "count": ref.count(inst, tr, case["count"])}
+            "exported": ref.exported(inst, tr, case["rows"]), "count": ref.count(inst, tr, case["count"]),
+            "closed": ref.closed(inst, tr)}
 
 
 def write(out: Path, count: int | None = None) -> dict[str, Path]:

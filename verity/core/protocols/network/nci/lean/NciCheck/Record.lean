@@ -51,8 +51,8 @@ record first, and the digest of the run's own record. `params` is not read.
 8. `wires`: SPOT's reader refuses the record's wires, cuts or order (`Spot.Wires.Wiring.ofJson`), or SPOT's check
    refuses them (`Spot.Wires.check`). The wiring is the one SPOT reads: the templates' rows and outputs from the
    Program, and the record's own `cuts`, `wires` and `order` (`piece`).
-9. `leaf-widths`: a leaf of some wire's writer does not lie inside one leaf of the row that reads it (`unwhole`,
-   "Wires whole" below).
+9. `leaf-widths`: a leaf of some wire's writer does not lie inside one leaf of the row that reads it, and that row
+   is not closed (`unwhole`, "Wires whole" below).
 10. `inputs`: a registered read, table, table read, opening or ingress declaration is malformed for the templates and
     cuts, or two declarations (wires among them) fill one row (`inputsOf`). A registered read is a wire's record with
     `param` for its writer, and SPOT's reader reads it (`Spot.Wires.Wire.ofJson`).
@@ -81,13 +81,28 @@ A root of any other form is refused: the form reads no row it cannot show to be 
 `Spot.Wires.check` holds a wire's two rows to the same words. A row is its leaves' bits in leaf order, and a gate
 reads leaves, so equal words alone leave a writer's leaf free to straddle leaves of the row that reads it: a gate of
 the reader then reads part of a gate of the writer, and a template that passes a leaf on, with no gate, carries that
-part further than the one row the wire fills. `unwhole` refuses it: of each wire, the reader's row and the writer's
-output each have leaves of one width, and the writer's divides the reader's. With equal words, every leaf of the
-writer's output then lies inside one leaf of the row that reads it, whichever rows of a cut port the wire fills: a
-leaf of the writer starts at a multiple of its width, a leaf of the reader spans a multiple of that width from one,
-and a cut's rows are whole leaves. So 32 one-bit leaves under one 32-bit leaf are taken, and one 32-bit leaf over 32
-one-bit leaves is refused. The rule is the one the form checks, a little more than what it is for: a port whose
-leaves have two widths is refused whichever way they lie.
+part further than the one row the wire fills. `unwhole` takes a wire in one of two ways and refuses any other.
+
+As built on both sides: the reader's row and the writer's output each have leaves of one width, and the writer's
+divides the reader's. With equal words, every leaf of the writer's output then lies inside one leaf of the row that
+reads it, whichever rows of a cut port the wire fills: a leaf of the writer starts at a multiple of its width, a
+leaf of the reader spans a multiple of that width from one, and a cut's rows are whole leaves. So 32 one-bit leaves
+under one 32-bit leaf are taken.
+
+Into a closed row: the reader's row is one-bit leaves and its Definition passes none of them on (`passedOn`: no
+leaf of its return is a leaf of that parameter, whether the return refers to it or to the output of a call, a
+batch member or a scan iteration that hands it on). A leaf that is not passed on is read by gates of its own unit
+and by nothing else, and through it they read leaves of the one output the wire names, which hold no more bits
+than the row's words, the row's charge. The writer's leaves may then be of any width: one 32-bit leaf over 32
+one-bit leaves is taken where only gates of the reader read them, and refused where the reader's Definition passes
+one of them on. A computed copy of a leaf, an inverted one among them, is a gate of the reader's own and not the
+leaf passed on.
+
+The rule is the one the form checks, narrower than what it is for (each leaf of a writer inside one leaf of the row
+that reads it, or meeting no leaf its reader passes on): a closed row is one-bit leaves only; a row counts as
+passed on where a reference part of its Definition's return reaches its parameter, though no leaf of it be
+returned; and where the reader's row is not closed, leaves of two widths on either side are refused whichever way
+they lie.
 
 ## Blocks, rows and kinds
 
@@ -182,12 +197,13 @@ parameters and return type alone. `exported` gives the first two for the difftes
 ## Cost
 
 In proportion to the Program's description and the record: each template is read once, from its Definition, and
-multiplied through its units; the root's arguments are read as their parts, never leaf by leaf (`ownRows`); each wire
-is two lookups of a width (`unwhole`); each wire and each declaration is counted in closed form through the entries'
-digits (`inSlot`); the greatest over the slots is taken over the slots where some declaration's count changes
-(`slotsToTry`), never over every slot of a class that has more; `sameSlot` visits at most `FUEL` boxes of digits for
-a wire, past which the wire counts as crossing; and a closure digest is taken once for each template an opening or a
-table read names as its reader (`rolesOf`). No gate, unit or row is visited one by one.
+multiplied through its units; the root's arguments are read as their parts, never leaf by leaf (`ownRows`); what a
+Definition passes on is read from its body's reference parts, once for each Definition (`passedOn`); each wire is
+three lookups among the templates (`unwhole`); each wire and each declaration is counted in closed form through the
+entries' digits (`inSlot`); the greatest over the slots is taken over the slots where some declaration's count
+changes (`slotsToTry`), never over every slot of a class that has more; `sameSlot` visits at most `FUEL` boxes of
+digits for a wire, past which the wire counts as crossing; and a closure digest is taken once for each template an
+opening or a table read names as its reader (`rolesOf`). No gate, unit or row is visited one by one.
 -/
 
 @[expose] public section
@@ -268,8 +284,10 @@ def outerOf : Ty → Nat
   | _ => 1
 
 /-- A template of the record: its descriptor id, its Definition's index in the Program, its units, its rows (each
-parameter's name, 16-bit words and outer length), its outputs (`o<j>` for return field `j`, and its words), and per
-port, input row or output, its leaves' one width, none where they have more than one (`Flock.Program.Widths.homo`). -/
+parameter's name, 16-bit words and outer length), its outputs (`o<j>` for return field `j`, and its words), per
+port, input row or output, its leaves' one width, none where they have more than one (`Flock.Program.Widths.homo`),
+and its closed rows: the parameters whose leaves are of one bit each and none of which its Definition passes on
+(`passedOn`). -/
 structure Tmpl where
   tid : String
   defn : Nat
@@ -277,11 +295,35 @@ structure Tmpl where
   rows : List (String × Nat × Nat)
   outs : List (String × Nat)
   leaf : List (String × Option Nat)
+  closed : List String
   deriving Inhabited
 
-/-- The template of one root node's units, from its Definition's parameters and return type alone. Refused
-(`templates`) where a parameter is not whole 16-bit words, an output has no bit, or two ports share a name. -/
-def tmplOf (P : Prog) (r : Flock.TemplateQuery.TRange) : Except String Tmpl := do
+/-- **What each Definition passes on** (the module docstring's "Wires whole"): per Definition of the Program, the
+parameters a leaf of its return may be, with no gate between. A leaf of the return is a leaf of a parameter where
+the return refers to it, or refers to an output leaf of a node of the body that is one: a call's, a batch member's
+or a scan iteration's, whose callee passes on the argument that holds it. A primitive's output is a gate, so a
+primitive passes nothing on, an inverter included. It is read from each body's reference parts, callees first
+(a Program's Definitions are in that order), a parameter at a time and never a leaf: it may name a parameter no leaf
+of which is passed on, and it misses none. It costs each Definition's parts, once. -/
+def passedOn (P : Prog) : Array (List Nat) :=
+  P.defs.foldl (init := #[]) fun acc d =>
+    if d.prim then acc.push [] else
+      let every := List.range d.params.size
+      let of := fun (reach : Array (List Nat)) (s : Seq) => s.parts.toList.flatMap fun
+        | .affine p i _ count | .strided p i _ _ _ _ count =>
+          if count == 0 then [] else if p then [i] else reach[i]?.getD every
+        | .explicit items => items.toList.flatMap fun r => if r.p then [r.i] else reach[r.i]?.getD every
+      let reach := d.body.nodes.foldl (init := #[]) fun reach n =>
+        let handed := (acc[n.fn]?.getD (List.range n.args.size)).flatMap fun i =>
+          (n.args[i]?.map fun a => of reach a.seq).getD []
+        reach.push handed.eraseDups
+      let returned := of reach d.body.ret
+      acc.push returned.eraseDups
+
+/-- The template of one root node's units, from its Definition's parameters and return type, and for its closed
+rows from what the Program's Definitions pass on (`passed`, `passedOn`'s). Refused (`templates`) where a parameter
+is not whole 16-bit words, an output has no bit, or two ports share a name. -/
+def tmplOf (P : Prog) (passed : Array (List Nat)) (r : Flock.TemplateQuery.TRange) : Except String Tmpl := do
   let d := (((P.defs[P.root]!).body.nodes[r.node]?).map (·.fn)).getD 0
   let defn := P.defs[d]!
   let rows ← defn.params.toList.mapM fun (name, ty) =>
@@ -294,7 +336,10 @@ def tmplOf (P : Prog) (r : Flock.TemplateQuery.TRange) : Except String Tmpl := d
   if names.eraseDups.length != names.length then throw "templates"
   let leaf := defn.params.toList.map (fun (name, ty) => (name, Widths.homo ty)) ++
     (fieldsOf defn.ret).zipIdx.map fun (ty, j) => (s!"o{j}", Widths.homo ty)
-  return { tid := r.template, defn := d, units := r.count, rows, outs, leaf }
+  let on := passed[d]?.getD (List.range defn.params.size)
+  let closed := defn.params.toList.zipIdx.filterMap fun ((name, ty), i) =>
+    if Widths.homo ty == some 1 && !on.contains i then some name else none
+  return { tid := r.template, defn := d, units := r.count, rows, outs, leaf, closed }
 
 /-- **Every unit's rows are its own input gates** (the module docstring's "Rows of its own"), read from the root's
 body: every argument of a root node that is no input node is runs of leaves of the root's input nodes (affine parts
@@ -328,21 +373,29 @@ def widthName : Option Nat → String
   | none => "more than one width"
 
 /-- **Every wire lands whole** (the module docstring's "Wires whole"), or the first wire that does not, as a
-refusal's message: the wire, its two leaf widths and the fix. Of each wire, the reader's row and the writer's output
-each have leaves of one width, and the writer's divides the reader's. A wire's two rows have the same words
-(`Spot.Wires.check`), so every leaf of the writer's output then lies inside one leaf of the row that reads it. It
-costs the wires, each two lookups among the templates. -/
+refusal's message: the wire, its two leaf widths and the fix. A wire is taken in one of two ways. The reader's row
+is closed (`Tmpl.closed`): its leaves are of one bit and its Definition passes none of them on, whatever the
+writer's leaves. Or the reader's row and the writer's output each have leaves of one width, and the writer's
+divides the reader's: a wire's two rows have the same words (`Spot.Wires.check`), so every leaf of the writer's
+output then lies inside one leaf of the row that reads it. It costs the wires, each three lookups among the
+templates. -/
 def unwhole (ts : List Tmpl) (wires : List Spot.Wires.Wire) : Option String :=
-  let width := fun (tid port : String) => ((ts.find? (·.tid == tid)).bind fun t => t.leaf.lookup port).join
-  let whole := fun (w : Spot.Wires.Wire) => match width w.reader w.port, width w.writer w.out with
+  let tmpl := fun (tid : String) => ts.find? (·.tid == tid)
+  let width := fun (tid port : String) => ((tmpl tid).bind fun t => t.leaf.lookup port).join
+  let closed := fun (tid port : String) => ((tmpl tid).map fun t => t.closed.contains port).getD false
+  let whole := fun (w : Spot.Wires.Wire) => closed w.reader w.port ||
+    match width w.reader w.port, width w.writer w.out with
     | some r, some o => o != 0 && r % o == 0
     | _, _ => false
   (wires.find? fun w => !whole w).map fun w =>
     s!"wire {w.writer}.{w.out} -> {w.reader}.{w.port}: the writer's leaves are of " ++
     s!"{widthName (width w.writer w.out)} and the reader's of {widthName (width w.reader w.port)}. Every leaf of a " ++
-    "writer's output lies inside one leaf of the row that reads it: each side's leaves have one width and the " ++
-    "writer's divides the reader's. Fix the Definitions, not the record: give the reader's row leaves of the " ++
-    "writer's width or a multiple of it, or the writer's output leaves of a width that divides the reader's."
+    "writer's output lies inside one leaf of the row that reads it, each side's leaves of one width and the " ++
+    "writer's dividing the reader's; or the reader's row is one-bit leaves and its Definition passes none of them " ++
+    "on: its return refers to no part of that row, itself or through a call, a batch or a scan. Fix the " ++
+    "Definitions, not the record: give the reader's row leaves of the writer's width or a multiple of it, or the " ++
+    "writer's output leaves of a width that divides the reader's, or make the reader's row one-bit leaves and have " ++
+    "its Definition return gates of its own in their place."
 
 /-- The record's templates, held to the Program: the record names the Program, and its `templates`, `[id, units]`
 each, are the root's nodes that are no input, each a call or a batch of a template of its own, in order. -/
@@ -360,7 +413,8 @@ def templatesOf (P : Prog) (doc : Json) : Except String (List Tmpl) := do
     | .ok rs => pure rs
     | .error _ => throw "templates"
   if (rs.map fun r => (r.template, r.count)) != ts then throw "templates"
-  rs.toList.mapM (tmplOf P)
+  let passed := passedOn P
+  rs.toList.mapM (tmplOf P passed)
 
 /-! ## The record, as far as its templates -/
 
