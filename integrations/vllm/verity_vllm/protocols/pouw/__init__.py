@@ -517,8 +517,9 @@ class _CircuitRun:
 #: The live `ncp-v2` runs by entry, with their sites (the collector's path of each linear -> its ordinal), for the Commit's
 #: replay (`check.replay.pouw_circuit.around`) before the composition closes.
 _CIRCUIT_RUNS: dict[str, tuple[_CircuitRun, dict[str, int]]] = {}
-# The prover's hm96 salt key per entry: its weight trees' salts, drawn afresh by each `commit_weights` (so each install's W,
-# and its salt session, is its own) and read by `install`, never in the record (published commitments without it fail its root check).
+# The prover's hm96 salt key per entry: its weight trees' salts, read by `install`, never in the record (published commitments
+# without it fail its root check). Pearl-C's is sampled afresh by each `commit_weights` (so each install's W, and its salt
+# session, is its own); the others' once a process, one execution phase (`commit_weights`).
 _SALT_KEYS: dict[str, bytes] = {}
 
 
@@ -610,7 +611,12 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     """The composition's first phase, with the model untouched and no coin opened: every linear layer's int7 weight rows
     committed (`verity.core.protocols.pouw.audit.commit_rows`), as ``{"weight_roots": {id: hex}, "shapes": {id: [n, k]}}``.
     Under H1 and the lead, the int8_exact arm's int8 weight rows as they are served, once a process
-    (`pouw_h1_hooks.committed`)."""
+    (`pouw_h1_hooks.committed`).
+
+    Outside Pearl-C the rows' hm96 key is `_SALT_KEYS[entry]`, sampled from the OS at the entry's first commit and reused by
+    every later commit of its weights for the process's life, which is one execution phase (one `Challenger`). The salt is keyed by
+    the weights' root (`audit.salt_of`), so a salt's later execution phases and the device and host settings must commit the
+    weights to one root. The key is fixed before `install` opens the salt coin, and is never derived from public data."""
     if scheme in (PH.SCHEME, PL.SCHEME):
         ks = Settings.of(target.context.settings_of(NAME)).ks
         return PHK.committed(PHK.layers(target.model, linear_types(), ks, scheme=scheme))
@@ -621,8 +627,7 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
         roots = PPD.weight_roots(PPD.Kernel.load(settings.kernel, settings.cubin), {w: m.weight for w, m in enumerate(layers)}, scheme,
                                  salt_key=key)
         return {"weight_roots": {str(w): r.hex() for w, r in roots.items()}, "shapes": {str(w): list(v) for w, v in shapes.items()}}
-    key, roots = os.urandom(32), {}
-    _SALT_KEYS[f"{NAME}:{scheme}"] = key
+    key, roots = _SALT_KEYS.setdefault(f"{NAME}:{scheme}", os.urandom(32)), {}
     for w, layer in enumerate(layers):
         b, _ = quantize(_host(layer.weight))
         roots[str(w)] = commit_rows(weight_binding(w), -2, [b[j].tobytes() for j in range(b.shape[0])], HM96, key,
