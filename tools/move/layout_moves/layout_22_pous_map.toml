@@ -10,6 +10,9 @@
 #   directory row: the rule puts it in `device/memory_challenger/`, beside the module `memory_challenger.py`, two
 #   things under one import name. The row takes along one archived file inside the package's Lake package
 #   (`lean/scripts/replay.py`), which a row of its own would split.
+# - `verity/core/protocols/pous/wipe_stream.c` to `verity/protocols/pous/verifier/wipe_stream.c`: the streamed wipe's
+#   native fill goes beside `wipe_stream.py`, the one module that builds it, by the name of the file beside itself;
+#   the rule parts the two (`device/wipe_stream.c`).
 # The layout's maps run in the order of their names. This one runs after `layout_21_archive_map.toml`: it renames a
 # package that those maps take modules out of, and would rename their modules with it. The format is
 # `layout_map.toml`'s.
@@ -96,7 +99,7 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "verity/core/protocols/pous/wipe_party.py" = "verity/protocols/pous/verifier/wipe_party.py"
 "verity/core/protocols/pous/wipe_period.py" = "verity/protocols/pous/verifier/wipe_period.py"
 "verity/core/protocols/pous/wipe_store.py" = "verity/protocols/pous/verifier/wipe_store.py"
-"verity/core/protocols/pous/wipe_stream.c" = "verity/protocols/pous/device/wipe_stream.c"
+"verity/core/protocols/pous/wipe_stream.c" = "verity/protocols/pous/verifier/wipe_stream.c"
 "verity/core/protocols/pous/wipe_stream.py" = "verity/protocols/pous/verifier/wipe_stream.py"
 "verity/ml/protocols/pous/" = "verity/protocols/pous/prover/"
 

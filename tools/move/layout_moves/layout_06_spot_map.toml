@@ -1,5 +1,5 @@
 # The layout move of sampled proofs, to `verity/spot`: what `tools/move/layout.py --map
-# tools/move/layout_moves/layout_06_spot_map.toml` moves and rewrites. 146 files in 21 rows. Written by
+# tools/move/layout_moves/layout_06_spot_map.toml` moves and rewrites. 144 files in 19 rows. Written by
 # `tools/move/layout_maps.py`, which states the rule: edit that, not this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
@@ -43,8 +43,6 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "verity/core/protocols/spot/tests/" = "verity/spot/verifier/tests/"
 "verity/core/service/spot/" = "verity/spot/verifier/lean/"
 "verity/core/service/vstar/recursive/" = "verity/spot/verifier/recursive/"
-"verity/core/service/vstar/tests/recursive_data.json" = "verity/flock/verifier/vstar_cli/tests/recursive_data.json"
-"verity/core/service/vstar/tests/test_vstar_recursive.py" = "verity/flock/verifier/vstar_cli/tests/test_vstar_recursive.py"
 
 [tokens]
 # directories no row moves whole, as a reference to one reads after the move
@@ -89,4 +87,3 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 "verity.core.protocols.spot.tests" = "verity.spot.verifier.tests"
 "verity.core.service.spot" = "verity.spot.verifier.lean"
 "verity.core.service.vstar.recursive" = "verity.spot.verifier.recursive"
-"verity.core.service.vstar.tests.test_vstar_recursive" = "verity.flock.verifier.vstar_cli.tests.test_vstar_recursive"

@@ -1,5 +1,5 @@
 # The layout move of Flock's Lean package, to `verity/flock/verifier`: what `tools/move/layout.py --map
-# tools/move/layout_moves/layout_03_flock_verifier_map.toml` moves and rewrites. 323 files in 17 rows. Written by
+# tools/move/layout_moves/layout_03_flock_verifier_map.toml` moves and rewrites. 325 files in 13 rows. Written by
 # `tools/move/layout_maps.py`, which states the rule: edit that, not this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
@@ -29,16 +29,11 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "verity/core/service/vstar/lean-audit.json" = "verity/flock/verifier/vstar_cli/lean-audit.json"
 "verity/core/service/vstar/lean-toolchain" = "verity/flock/verifier/vstar_cli/lean-toolchain"
 "verity/core/service/vstar/pyproject.toml" = "verity/flock/verifier/vstar_cli/pyproject.toml"
-"verity/core/service/vstar/tests/settings.py" = "verity/flock/verifier/vstar_cli/tests/settings.py"
-"verity/core/service/vstar/tests/test_vstar_difftest.py" = "verity/flock/verifier/vstar_cli/tests/test_vstar_difftest.py"
-"verity/core/service/vstar/tests/test_vstar_in_difftest.py" = "verity/flock/verifier/vstar_cli/tests/test_vstar_in_difftest.py"
-"verity/core/service/vstar/tests/test_vstar_menu.py" = "verity/flock/verifier/vstar_cli/tests/test_vstar_menu.py"
-"verity/core/service/vstar/tests/test_vstar_trace_difftest.py" = "verity/flock/verifier/vstar_cli/tests/test_vstar_trace_difftest.py"
+"verity/core/service/vstar/tests/" = "verity/flock/verifier/vstar_cli/tests/"
 
 [tokens]
 # directories no row moves whole, as a reference to one reads after the move
 "verity/core/service/vstar/" = "verity/flock/verifier/vstar_cli/"
-"verity/core/service/vstar/tests/" = "verity/flock/verifier/vstar_cli/tests/"
 
 [retired]
 paths = []
@@ -65,8 +60,4 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 "verity.core.protocols.interface" = "verity.flock.verifier.interface"
 "verity.core.service.firewall" = "verity.flock.verifier.firewall"
 "verity.core.service.flock" = "verity.flock.verifier"
-"verity.core.service.vstar.tests.settings" = "verity.flock.verifier.vstar_cli.tests.settings"
-"verity.core.service.vstar.tests.test_vstar_difftest" = "verity.flock.verifier.vstar_cli.tests.test_vstar_difftest"
-"verity.core.service.vstar.tests.test_vstar_in_difftest" = "verity.flock.verifier.vstar_cli.tests.test_vstar_in_difftest"
-"verity.core.service.vstar.tests.test_vstar_menu" = "verity.flock.verifier.vstar_cli.tests.test_vstar_menu"
-"verity.core.service.vstar.tests.test_vstar_trace_difftest" = "verity.flock.verifier.vstar_cli.tests.test_vstar_trace_difftest"
+"verity.core.service.vstar.tests" = "verity.flock.verifier.vstar_cli.tests"
