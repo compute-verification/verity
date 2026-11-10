@@ -22,7 +22,11 @@ inference blocks are the slots (`Form.slot`): a block is a set of units, and a r
 several slots lies in several blocks. A record lays out a circuit only where every unit's rows are its own input
 gates (`OwnRows`) and every wire lands whole (`Aligned`: a writer's leaf lies inside one leaf of the row that reads it).
 `Spot.Wires.check` compares a wire's two rows in words alone, so a check that stops there leaves a 16-bit reader leaf
-free to read sixteen gates of 16 bits through a writer that passes one-bit leaves on.
+free to read sixteen gates of 16 bits through a writer that passes one-bit leaves on. A writer's leaf may instead
+straddle leaves of the row that reads it where the reader's unit passes on none of the leaves it meets (`PassedOn`:
+the leaf is also a leaf of an output row of that unit). A leaf that is not passed on is read by its own unit's gates
+alone, and through it they read leaves of the writer's row whole, which hold no more bits than the reader's row has
+words for: a row of 32 one-bit leaves takes one 32-bit leaf so.
 
 **The rate rule** (`Complies`): where the check accepts, the instance's fields are the ones it judged by, the record
 lays out a circuit, and every circuit it lays out meets the policy block by block at the instance's `Γ` and `α`, so
@@ -184,9 +188,16 @@ def WriterLeaf (P : Prog) (rs : Array TRange) (S : Spot.Wires.Summary) (r : Row)
   ∃ wt wu out sc', S.writerOf r.tid r.unit r.port r.row = some (wt, wu, out) ∧ 0 ≤ wu ∧
     UnitAt P rs wt wu.toNat sc' ∧ OutLeaf P sc' out l' g' lo' hi'
 
-/-- **Every wire lands whole**: each leaf of a writer's output row lies inside one leaf of the row that reads it. -/
+/-- The unit of the reader row `r` passes Program gate `g` on: `g` is a leaf of one of that unit's output rows. -/
+def PassedOn (P : Prog) (rs : Array TRange) (r : Row) (g : ℕ) : Prop :=
+  ∃ sc out l lo hi, UnitAt P rs r.tid r.unit sc ∧ OutLeaf P sc out l g lo hi
+
+/-- **Every wire lands whole**: each leaf of a writer's output row lies inside one leaf of the row that reads it, or
+the reader's unit passes on no leaf of that row whose bits meet it. -/
 def Aligned (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) : Prop :=
-  ∀ r l' g' lo' hi', WriterLeaf P rs S r l' g' lo' hi' → ∃ l g lo hi, RowLeaf P rs W r l g lo hi ∧ lo ≤ lo' ∧ hi' ≤ hi
+  ∀ r l' g' lo' hi', WriterLeaf P rs S r l' g' lo' hi' →
+    (∃ l g lo hi, RowLeaf P rs W r l g lo hi ∧ lo ≤ lo' ∧ hi' ≤ hi) ∨
+      ∀ l g lo hi, RowLeaf P rs W r l g lo hi → lo < hi' → lo' < hi → ¬ PassedOn P rs r g
 
 /-- The wired gate `g` reads `g'`: `g'` is a leaf of the output row `g`'s row is wired to, and their bits meet. A wired
 leaf past its writer's bits, the row's zero padding, reads nothing. -/
