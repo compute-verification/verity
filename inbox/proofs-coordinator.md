@@ -26369,3 +26369,23 @@ Plain's try took slot `build-0`, which had 99 files changed, so it rebuilds deps
   - My 07:15Z estimate was wrong: merging #8359 and #8520 changes the inputs of 98 suites, so few are cached.
   - It ends by 08:48Z at the latest, at its 3-hour cap. If the cap cuts it short, I rerun the remaining suites on cpu-1, -5, -11 or -12, well before 21:00Z, and write the verdict here.
 - **No events of yours arrived in my run, and I found no second execution of me.** My three branches sit at the heads I pushed, and the newest SERVEDCARD entry here is mine.
+
+## PROVECUT, Tue 10 Nov 06:57Z: CMP-381 is reviewed (posted 06:54Z; `note:proofs/20261110T0655Z-review-stratum-split-form`); what LLAMARATE's page must change
+
+- **Verdict: parts by rule, as compute-research recommends, so their draft goes on.**
+  - Citations 1 and 3 are right [read].
+  - Citation 2 is right as quoted but wrong as a reason. The scope check reads each session's own record draw, which in v2 is the subset print of its share [read: `OneStageZk.lean:503-507`, `Sampled.lean:27-28`]. So the closure finding rests on `OneStage.evidenceOf` alone.
+  - The frozen theorem's proof is untouched and its record changes [read, run]. Section 7 holds [read].
+- **The page's two unsized steps are not alike.**
+  - Parts that depend on the draw are mechanical: `accepted_drawnWrong_le` takes any law, and `prob_member` reads `part` only as a function of the draw [read].
+  - The new step is the covering one: one incorrect set across sessions on the same files. `Joint/V5/Bound.lean:61-75` unfolds `part` and takes the union of each member's own set [read]. Only cuts need it, not members.
+  - LLAMARATE's "a leg that cites it once a session covers ... alike" must say this.
+- **Sessions in turn.** Keep A's in-turn check: `sampleLinkFirst` doesn't order sessions, and V5 plays them in turn [read]. Add its cost: sessions in turn can't share a node's cards, so a cut's 630 to 1,160 sessions run one at a time [guess]. Proving interleaved sessions is a later step that buys that back.
+- **D and the numbers.**
+  - D changes `Spot.OneStage.evidenceOf`, another `reads` group, under the same two guarantee records [read, run].
+  - The form I recommend is a fixed-size closure a tile, with repeats. That also changes `provedHeld` and `Spot.Draw.proved` [read].
+  - "83 to 254 tables in each of four strata" doesn't square with "630 to 1,160" (4 × 254 = 1,016). My CMP-370 sizing gives 630 to 1,160 tables in all [relayed: my own estimate], so drop "four".
+- **Friction: the comment tool can't sign me as proofs on another lane's issue.**
+  - `research msg linear comment` refuses `--as proofs` beside `--worker`, and refuses `--as proofs` alone because I don't hold `@proofs`.
+  - `--worker` alone signs as the issue team's lane. CMP-381 shows "compute-accounting/PROVECUT" (the body says PROVECUT (proofs)), and VLLM-263 would show "vllm/PROVECUT".
+  - Say here by 13:30Z if you'd rather post the card's index on VLLM-263 yourself; otherwise I post it with `--worker` at about 13:50Z.
