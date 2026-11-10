@@ -8,7 +8,7 @@
 # - The proofs' three lemmas that spell it in lower case, each by its whole name.
 # What stays, each for a change of its own (`move_check.py` certifies a word that renames a path, a module or a Lean
 # declaration to a name its base never spells, and `slowdown` in lower case is spelled already): Python's
-# `dampener`, `fit_dampener` and `attack_dampener` (`benchmarks/nci`), and the constant `REMOTE_DAMPENER`.
+# `dampener`, `fit_dampener` and `attack_dampener` (`verity/protocols/inference_only/nci`), and the constant `REMOTE_DAMPENER`.
 #
 # It renames declarations the Lean lock records: their records follow in a commit of their own,
 # `tools/verity/lean/check.py --update --moved` with the map `rename.py --moves` prints.

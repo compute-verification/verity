@@ -12,7 +12,7 @@
 #   `nci-baseline-difftest` becomes `inference-only-theta-difftest`; and `BaselineRegistered`, an older name that three
 #   files still give `ThetaRegistered`, becomes that name.
 # What stays: a constant named `NCI` alone (three files name the check's package or the policy's protocol id so), a hand
-# edit, since one word has one map and `inference_only_map.toml` has this one's; `benchmarks/nci/`'s own names and the
+# edit, since one word has one map and `inference_only_map.toml` has this one's; `verity/protocols/inference_only/nci/`'s own names and the
 # slowdown calculator's `draft:nci-search` ([keep_in], [keep]); the ids that end in a version (`verity/nci-glm/v1`),
 # until a format version ([keep]); and the lifecycle example's own `check_baseline`, its registration's check
 # ([keep_in]).
@@ -37,7 +37,7 @@ words = { "nci-" = "inference-only-" }
 
 # The check's lock: its `runs` reasons (`rename.py` leaves a lock's records to `check.py --update --moved`).
 [[words_in]]
-files = ["verity/core/protocols/network/inference_only/lean/lean-audit.json"]
+files = ["verity/protocols/inference_only/verifier/inference_only/lean/lean-audit.json"]
 words = { "NciCheck" = "InferenceOnlyCheck", "Nci.Complies'" = "InferenceOnly.Complies'", "nci_reference" = "inference_only_reference", "Baseline" = "Theta" }
 
 [rewrite]
@@ -55,5 +55,5 @@ patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a
 strings = []
 
 [keep_in]
-"benchmarks/nci/**" = ["nci-"]
-"examples/lifecycle/**" = ["check_baseline"]
+"verity/protocols/inference_only/nci/**" = ["nci-"]
+"workloads/lifecycle/**" = ["check_baseline"]

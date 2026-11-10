@@ -1,6 +1,6 @@
 # θ in the inference-only policy's names: what `tools/move/rename.py --map tools/move/theta_map.toml` renames, the
 # names that call the registered information θ a baseline (GLOSSARY.md, Older names), in the policy's own files (the four
-# `Nci` Lean areas, `verity/core/protocols/network/nci/` and `verity/core/protocols/network/tests/`) and in the files
+# `Nci` Lean areas, `verity/protocols/inference_only/verifier/nci/` and `verity/protocols/certifier/verifier/network/tests/`) and in the files
 # that cite them. It runs before `inference_only_map.toml`, on the paths as that move finds them.
 # - `Baseline` becomes `Theta`: the check of record's module and namespace `NciCheck.Baseline`, and the modules
 #   `Definitions.Nci.Assumptions.Baseline`, `Properties.Nci.Baseline` and `Proofs.Properties.Nci.Baseline`.
@@ -34,22 +34,22 @@
 # packages' module lists, the proofs package's lock, the verifier-cost benchmark, vLLM's registration log, the lints'
 # allowlists and two READMEs.
 [[words_in]]
-files = ["Security/Definitions/Nci*", "Security/Properties/Nci*", "Security/Proofs/Nci*", "Security/Proofs/Properties/Nci*",
-         "verity/core/protocols/network/nci/**", "verity/core/protocols/network/tests/**",
-         "Security/Properties/Remote.lean", "Security/Proofs/Properties/Remote.lean",
-         "Security/Proofs/Properties/Remote/Honest.lean", "Security/Properties/lakefile.toml",
-         "Security/Proofs/lakefile.toml", "Security/Proofs/lean-audit.json", "benchmarks/verifier_cost/README.md",
+files = ["security/Definitions/Nci*", "security/Properties/Nci*", "security/Proofs/Nci*", "security/Proofs/Properties/Nci*",
+         "verity/protocols/inference_only/verifier/nci/**", "verity/protocols/certifier/verifier/network/tests/**",
+         "security/Properties/Remote.lean", "security/Proofs/Properties/Remote.lean",
+         "security/Proofs/Properties/Remote/Honest.lean", "security/Properties/lakefile.toml",
+         "security/Proofs/lakefile.toml", "security/Proofs/lean-audit.json", "benchmarks/verifier_cost/README.md",
          "benchmarks/verifier_cost/nci_glm.py", "integrations/vllm/tests/pipeline/test_registration_log.py",
          "integrations/vllm/verity_vllm/pipeline/registration_log.py", "tests/lint/allowlists/*.json",
-         "verity/core/protocols/composition/README.md", "verity/core/protocols/remote/README.md"]
+         "verity/composite/verifier/composition/README.md", "verity/composite/verifier/remote/README.md"]
 words = { "Baseline" = "Theta", "BaselineSteps" = "ThetaSteps", "BaselineProvenance" = "ThetaProvenance", "baseline_desc" = "theta_desc" }
 
 # The two locks whose records read Core's `Verity.Registration.Theta`: there the names are spelled with what they stand
 # under, since a word is certified only to a word that no file it is applied in spells. The Lean files are those that
 # declare `NciCheck.Baseline` and `BaselineProvenance`, by the directories that hold them.
 [[words_in]]
-files = ["Security/lean-audit.json", "Security/Properties/lean-audit.json", "Security/Properties/Nci/*.lean",
-         "verity/core/protocols/network/nci/lean/NciCheck/*.lean"]
+files = ["security/lean-audit.json", "security/Properties/lean-audit.json", "security/Properties/Nci/*.lean",
+         "verity/protocols/inference_only/verifier/nci/lean/NciCheck/*.lean"]
 words = { "NciCheck.Baseline" = "NciCheck.Theta", "BaselineProvenance" = "ThetaProvenance", "Nci.Baseline" = "Nci.Theta", "Assumptions.Baseline" = "Assumptions.Theta", "Assumptions/Baseline" = "Assumptions/Theta" }
 
 [rewrite]

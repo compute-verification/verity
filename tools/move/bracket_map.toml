@@ -1,11 +1,11 @@
 # The board's bracket module: what `tools/move/rename.py --map tools/move/bracket_map.toml` renames.
-# `benchmarks/nci/slowdown.py`, which computes a board row's slowdown bracket, becomes `benchmarks/nci/bracket.py`, and
+# `verity/protocols/inference_only/nci/slowdown.py`, which computes a board row's slowdown bracket, becomes `verity/protocols/inference_only/nci/bracket.py`, and
 # its test `tests/test_slowdown.py` becomes `tests/test_bracket.py`, so that the directory holds no module named
 # `slowdown` when the slowdown calculator's package takes that name (`slowdown_calculator_map.toml`, which runs after
 # this map): two of the directory's files import the calculator's package beside this module.
 # - The module, where a file of the directory names it: `import slowdown`, `from slowdown import`, and `slowdown.` at the
 #   start of a name (`slowdown.search`, in code, a docstring or a JSON string).
-# - The file, where a path or its name cites it: `benchmarks/nci/slowdown.py`, `slowdown.py` in the directory's README,
+# - The file, where a path or its name cites it: `verity/protocols/inference_only/nci/slowdown.py`, `slowdown.py` in the directory's README,
 #   the slowdown calculator's suite inputs and docstrings, its tests' `/ "nci" / "slowdown.py"`, and the lints' allowlist.
 # What stays: the word slowdown wherever it is the quantity (a sentence that ends in it too, [keep]); every other
 # `slowdown` of the tree, since the module's words are held to this directory, the calculator's and the root's tests;
@@ -16,7 +16,7 @@
 "nci/tests/test_slowdown" = "nci/tests/test_bracket"
 
 [[words_in]]
-files = ["benchmarks/nci/**", "benchmarks/rho/**", "tests/**"]
+files = ["verity/protocols/inference_only/nci/**", "verity/protocols/inference_only/rho/**", "tests/**"]
 words = { "slowdown." = "bracket.", "import slowdown" = "import bracket", "from slowdown" = "from bracket" }
 
 [rewrite]

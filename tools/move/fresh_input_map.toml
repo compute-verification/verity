@@ -4,7 +4,7 @@
 # - `novelReads` becomes `freshInput`, `novelInfo` `freshInfo` and `novelWidth` `freshWidth`, each with every name it is
 #   one part of (`novelReads_piece`, `le_novelInfo_iff`, `novelWidthExact`, `novelWidth_sum`).
 # - `Novel` becomes `Fresh`: the namespace `NciCheck.Properties.SecurityProofs.Novel` and its module
-#   `Security/Proofs/Properties/Nci/Novel.lean`, and the statements `NovelExact` and `NovelWidthExact`.
+#   `security/Proofs/Properties/Nci/Novel.lean`, and the statements `NovelExact` and `NovelWidthExact`.
 # - `novelExact_of` becomes `freshExact_of`, and the theorem `novel_eq` of the check's proofs `fresh_eq`, a whole word
 #   held to those proofs: Core's `fresh_eq_external_add_produced` spells the new word as one part of its name, and a word
 #   that renames a part is certified only to a word the tree spells nowhere.
@@ -28,7 +28,7 @@
 "Novel" = "Fresh"
 
 [[words_in]]
-files = ["Security/Proofs/Properties/Nci*"]
+files = ["security/Proofs/Properties/Nci*"]
 words = { "novel_eq" = "fresh_eq" }
 
 [rewrite]
@@ -46,4 +46,4 @@ patterns = ['Novel(?:Polynomial)?Basis', 'Novel(?= )']
 strings = ['"novel information" and `novelReads` for fresh input']
 
 [keep_paths]
-"Security/Proofs/Flock/**" = ["Novel"]
+"security/Proofs/Flock/**" = ["Novel"]

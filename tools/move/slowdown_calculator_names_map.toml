@@ -13,28 +13,16 @@
 [words]
 
 [[words_in]]
-files = ["benchmarks/slowdown/**", "verity/core/protocols/remote/README.md"]
-words = { "verity bench rho" = "verity bench slowdown", "rho.md" = "slowdown.md", "rho.json" = "slowdown.json" }
-
-[[words_in]]
-files = ["benchmarks/circuit_properties/run.py", "benchmarks/nci/statement.py"]
-words = { 'HERE.parent / "rho"' = 'HERE.parent / "slowdown"' }
-
-[[words_in]]
-files = ["benchmarks/README.md"]
-words = { "`rho/`" = "`slowdown/`" }
-
-[[words_in]]
-files = ["benchmarks/**"]
+files = ["benchmarks/**", "verity/spot/spot_figures/**", "verity/spot/sampling_plan/**", "verity/protocols/inference_only/nci/**"]
 words = { "rho's" = "the slowdown calculator's" }
 
 [rewrite]
 # Never rewritten: the earlier moves and their maps, lock files, and the cards a digest names.
-exclude = ["tools/move/**", "uv.lock", "**/*.lock", "benchmarks/spot_figures/cards/**"]
+exclude = ["tools/move/**", "uv.lock", "**/*.lock", "verity/spot/spot_figures/cards/**"]
 
 [keep]
 patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+',
-            'lanes/[\w.-]+']
+            'lanes/[\w.-]+', "(?<=/)rho's"]
 strings = []
 
 [keep_in]
