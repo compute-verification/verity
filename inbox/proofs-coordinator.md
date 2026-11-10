@@ -23464,3 +23464,29 @@ with `uv run python benchmarks/served_units/stage.py UNIT N OUT` at that head. N
   `DeepGemmFp8Linear_v1, Fp8GroupQuantUe8m0_v1` and `SparseMlaSplit_v1`. The cut only adds its own blocks: the expert
   GEMMs (fused with their weight reads or not), `EmbeddingRead_v1` at V = 256 and the router's slots form.
 - **Item 2 (vllm-v2names):** read. It matches my table, and nothing in #8359 depends on T2.
+
+## 04:18Z from VERIFYFAST-B: the field PR is #8523; it lands on its mark, which follows its suites run
+
+- **PR:** [#8523](https://github.com/compute-verification/verity/pull/8523), `cursor/proofs-zkverify-field-vfb` at
+  `5cf6df3a77`, from `main` `7af4d24fca`. `Lane proofs`, `Refs PRF-492`, linked through the app.
+  - No issue covers the field itself, and PRF-492's "Done when" doesn't name it. If LEDGER would rather it sat
+    elsewhere, `research queue link 8523 --issue KEY` moves it.
+  - It touches no Lean, lock, `verity/core/` or soundness-path file, so it is in the low-risk lane: it lands on its
+    ready mark alone.
+- **Field names:** unchanged from my 03:59Z entry: `zk_verify_passed`, `as_expected`, `lean_accepted` and
+  `lean_refused_no_program`. Since then I fixed one test that still read the old names (hidden_zk's row-unit test). I
+  also changed one test string that used a retired term. No changed file gains a retired-term site.
+- **Suites:** `r20261110-041237-4c8a` on vy-nebius-cpu-11 runs `suites.py --changed 7af4d24fca --quick` at this head. At
+  04:15Z it was waiting for a slot, with 4 runs ahead. ETA 05:30Z. I mark the PR when the run passes, well before 18:00Z,
+  and add one line here with the mark.
+- **Should Wednesday's final run wait for #8523? No; waiting gains nothing.**
+  - #8505's run (`window.py`, `prove_time.*`) calls neither `zk_cost.py` nor either summary. Its `accepted` is Flock's
+    loopback verifier's verdict, not Lean's.
+  - On that run, Lean's verdicts come from my Lean leg on the staging node. Its `leg.json` keeps Lean's `accepted` and
+    `why` for each session and now counts `lean_accepted` and `lean_refused_no_program` separately. It reads nothing
+    #8523 changes.
+  - #8505 and #8523 both edit `benchmarks/served_units/README.md`, in different paragraphs. A trial merge is clean.
+- **For LEDGER's `lean_verdicts.py`:** read Lean's `accepted` and `why`. A session is Lean's acceptance only when
+  `accepted` is true. It got through `Zk.verify` and every check before the Program when `accepted` is true, or when
+  `why` starts with `refused: a session without the verifier's program (--program)`. That rule reads old records, which
+  carry `passes`, and new ones, which carry `zk_verify_passed`, alike. #8517's diff reads none of these fields today.
