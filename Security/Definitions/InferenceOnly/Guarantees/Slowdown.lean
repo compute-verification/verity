@@ -3,7 +3,7 @@ import Definitions.InferenceOnly.Assumptions.Threads
 import Definitions.InferenceOnly.Assumptions.Theta
 
 /-!
-# The compute dampener: the guarantees
+# The slowdown: the guarantees
 
 The training-efficiency bound `η ≤ s + min(r, μ) + ν + χ` (`benchmarks/nci/tiers.py`), composed from one bound per
 source of counted multiplications. Each source's bound is a hypothesis over real numbers, the reading of a mechanism's
@@ -32,7 +32,7 @@ namespace InferenceOnly.Guarantees
 
 open Verity InferenceOnly.Slowdown
 
-/-- **The compute dampener.** A developer spends `C > 0` FLOP on monitored hardware and `U ≥ 0` on unmonitored
+/-- **The slowdown.** A developer spends `C > 0` FLOP on monitored hardware and `U ≥ 0` on unmonitored
 hardware and computes `M` counted multiplications, each by one of four sources (`M ≤ M_U + M_r + M_d + M_χ`):
 unmonitored hardware at full efficiency (`M_U ≤ κ U/2`), the monitored compute residual outside the compute certificate
 `W_cert` at full efficiency (`M_r ≤ κ (C − W_cert)/2`), the declared computation at `ρ` declared gates per counted
@@ -47,7 +47,7 @@ def Slowdown : Prop :=
     (Mr : ℝ) + Md ≤ κ * μ * C / 2 →
       efficiency κ M C U ≤ unmonitoredShare C U + min (residualShare W C) μ + declaredShare κ ρ C U + χ
 
-/-- **The compute dampener with the memory cap from windows.** As `Slowdown`, with the memory cap's hypothesis replaced
+/-- **The slowdown with the memory cap from windows.** As `Slowdown`, with the memory cap's hypothesis replaced
 by the servers' windows. `n` servers of `F` gates a tick run for `H > 0` ticks, so that `n F H ≤ C`. Cut each server's
 horizon into `⌈H/L⌉` windows of `L = R/(αF)` ticks (`α F L = R`), each starting from at most `R` bits of state (what a
 wipe leaves) and taking in at most `αF` bits a tick, so that it reads at most `K = R + αF L = 2R` bits. When each window
@@ -66,7 +66,7 @@ def SlowdownWindows : Prop :=
         unmonitoredShare C U + min (residualShare W C) (memoryCap reuse κ R α d b_w b_a * (1 + L / H)) +
           declaredShare κ ρ C U + χ
 
-/-- **The compute dampener over the inference-only policy's thread bound.** As `SlowdownWindows`, with the declared computation's bound proved:
+/-- **The slowdown over the inference-only policy's thread bound.** As `SlowdownWindows`, with the declared computation's bound proved:
 the declared circuit `d` contains the reference training circuit `c` (`Mc`), threaded by `T` and with incompressible
 weights, and complies with NCI at `(Γ, α)`, with its θ registered (`ThetaRegistered`), so its counted multiplications `|T.M|` number at most `size(d)/ρ_T`
 (`InferenceOnly.Guarantees.ThreadedThrottled`), `ρ_T = b_a/(α Λ(αΓ))`, and `size(d) ≤ C`. The windows' bound is stated with
@@ -87,7 +87,7 @@ def SlowdownThreaded : Prop :=
         unmonitoredShare C U + min (residualShare W C) (memoryCap T.reuse κ R α dd b_w b_a * (1 + L / H)) +
           declaredShare κ (rhoT α b_a (T.bound (α * Γ) b_w dd e)) C U + χ
 
-/-- **The compute dampener over the inference-only policy's thread bound, per parameter slot**: `SlowdownThreaded` with the reference
+/-- **The slowdown over the inference-only policy's thread bound, per parameter slot**: `SlowdownThreaded` with the reference
 circuit's weights incompressible per parameter slot of a slot map `σ` (`Assumptions.WeightsIncompressibleSlots`), its
 declared computation's bound from `InferenceOnly.Guarantees.ThreadedThrottledSlots`. -/
 def SlowdownThreadedSlots : Prop :=
