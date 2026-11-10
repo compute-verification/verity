@@ -48,7 +48,7 @@ $PY benchmarks/one_stage/two_stage.py first --boundary "$class" --check "$check"
   "${adv[@]}" --out "$OUT/stage1"
 echo "FIRST-DONE: $(date -u +%T)"
 s1=$OUT/stage1/$(basename "$class")/stage1.json
-rc=0; $PY "$I/check_stage1.py" "$s1" > "$OUT/check.txt" 2>&1 || rc=$?
+rc=0; $PY "$I/check_stage1.py" "$s1" "$([ "$CH" = local ] && echo LOCAL-FIRST || echo GATE-FIRST)" > "$OUT/check.txt" 2>&1 || rc=$?
 tail -n 3 "$OUT/check.txt"
 if [ -f "$I/advice.json" ]; then
   $PY - "$I/advice.json" "$s1" <<'EOF' || rc=1

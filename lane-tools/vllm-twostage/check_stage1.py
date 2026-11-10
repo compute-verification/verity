@@ -2,7 +2,7 @@
 evidence names, at the window root its commit.json names, after its registration's digest, on the bytes its sample
 read; and the same evidence held to another digest, which must be refused.
 
-    python check_stage1.py STAGE1.json      # run from the tree's root
+    python check_stage1.py STAGE1.json [LABEL]      # run from the tree's root; LABEL (default GATE-FIRST) starts its verdict line
 """
 import hashlib
 import json
@@ -29,5 +29,7 @@ if ev:
                                                        AC.lms_verify)
 print(json.dumps(out, indent=1, default=str))
 ok = ev is not None and out["coins_reason"] is None and out["coins_reason_other_digest"] and out["coins_reason_other_window"]
-print("GATE-FIRST:", "ACCEPTED, and refused at another digest and another window" if ok else "NOT ACCEPTED")
+# the label says whose session the evidence is: the gate's unless the caller names another (a local challenger's)
+print(f"{sys.argv[2] if len(sys.argv) > 2 else 'GATE-FIRST'}:",
+      "ACCEPTED, and refused at another digest and another window" if ok else "NOT ACCEPTED")
 sys.exit(0 if ok else 1)
