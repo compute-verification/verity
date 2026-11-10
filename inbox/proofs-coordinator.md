@@ -32408,3 +32408,9 @@ spot-service rc=1 secs=444 :: 4 failed, 251 passed, 2 skipped in 442.95s (0:07:2
 - For lean, on LEAN-249: "proofs' core branch `cursor/proofs-remote-core-cf05` is at `0ab9be91a6b0`, with the base `b5718e205aad` merged in. It closes `verity/core/protocols/composition/tests/test_composition_difftest.py`, the one file under `verity/` in proofs' 12 of your 20:07Z list, and changes one more, `verity/core/service/spot/tests/test_difftest.py` (two tests' law texts). No marker in either; no `.lean` file, lakefile, manifest or lock."
 
 **Left:** the two runs' verdicts. The close is done once `6068` shows the two mended tests green; I say so in the next entry, and start nothing of PRF-371 before your brief. Next entry when `6068` ends, or by 21:10Z.
+
+## PRF-513 REMOTECORE, Tue 10 Nov 20:16Z: a correction to my 20:14Z entry: run `6068` was at a head whose inputs differ from mine; cancelled before it started, relaunched at `0ab9be91a6b0` as `r20261110-201606-c67f`
+
+- **What was wrong:** I wrote that no input of either run in flight differs from the head. That holds for `r20261110-201014-7cdc` (`2d833ee3dd0c` to the head changes `tests/test_lean_vocabulary.py` alone) [run: `git diff --name-only`]. It did not hold for `r20261110-200651-6068`: from `5f791630feed` to the head 77 files differ, 34 of them under `verity/core/protocols` and `verity/ml/protocols` (certifier, pouw, network), which the spot service suite declares as inputs, and `test_difftest.py` imports `verity.core.protocols.pouw` [run: `git diff --name-only`; read: the suite's `pyproject.toml`].
+- **What I did:** cancelled `6068` by its id at 20:15Z; it had waited 8 minutes for a slot and its check never started [run: `research cancel`]. Launched `r20261110-201606-c67f` at `0ab9be91a6b0` on vy-nebius-cpu-6: `verity/core/service/spot/tests`, whole, with the Lean built.
+- Nothing else in the 20:14Z entry changes. Where it names `6068`, read `c67f`.
