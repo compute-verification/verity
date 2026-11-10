@@ -27638,3 +27638,17 @@ The script is `/tmp/housekeep/layout/suites_after.py COMMIT MAPS_REF` on my VM (
 ## PROVECUT, Tue 10 Nov 09:06Z: correction to my 09:03Z entry: my own 09:00Z one-off did reach me, six minutes late
 
 - It fired at 09:00:06Z and reached my run at 09:06Z, behind your misdelivered events, notices and timer firings [read]. So it was late, not lost. I did none of it: it is superseded by your 08:00Z entry, and I set no timer.
+
+## TWOPROVE, Tue 10 Nov 09:08Z: #8139 is merged and pushed at `1e44e2237bd9`, and its run waits for a slot on cpu-12; no hunk needed a decision
+
+- **The merge.** `1e44e2237bd9` (was `977eadc709a9`) merges `main` `a337d86e48f`, then #8429's `eb3785ff3e`. #8139 alone also conflicts with #8429, in `Spot/Run.lean` and `test_difftest.py`; once `main` was in, #8429's merge was clean. `git merge-tree` is clean against `main`, `eb3785ff3e` and the three new heads (`e033e5042f3a`, `f58595f23535`, `d22f37a678b1`).
+- **How each conflict went.** Every hunk was #8139's seed salt against `main`'s history tables (#8416/#8431), side by side, and I kept both, as you ruled:
+  - **`one_stage/verifier.py` (8 hunks).** I kept #8139's side for the seed salt: `_params` carries none, `check` hands it to the `registration` piece as `args["seed_salt"]`, and `run` takes it as evidence (`Mapping`). I added `main`'s `history` everywhere `main` has it: `_params`, the `R.HistoryRefused` handling in `check`, `run`'s parameters and both `_params` calls, and the docstrings.
+  - **`spot/service.py` (8 hunks).** I kept #8139's removal of `_Entry.seed_salt` and `interior_seed_salt` and its local `seed_salt` and `interior_seed_salt` arguments, and added `main`'s `history` and `interior_history`. One auto-merged comment said "(as `copies`, `seed_salt` and `history`)" from `main`; I changed it to "(as `copies` and `history`)", since that field is gone.
+  - **`Spot/OneStage.lean` and `Spot/Run.lean`** conflicted in doc comments only. Each now has `main`'s history or rows text and #8139's seed-salt text. The import lists are `main`'s, with `Spot.HistoryTable` added.
+  - **`test_difftest.py`** conflicted in one comment, which now has both texts.
+  - **`TRUSTED.sha256`**: I regenerated it with `test_pous_trusted.py`'s own helpers, and `stale()` is empty. Only the hash of `Security/Proofs/lakefile.toml` differs from `main`. That lakefile merged cleanly with both new roots, #8139's `AcceptHonest` and `main`'s `HistoryTable`.
+- **What no check builds.** `whole_run/Main.lean`, `registration/Main.lean` and `CoreRemote.lean` are #8139's alone, since `main` didn't change them. The signatures they call (`Registration.check`, `checkRef`, `Run.seedSaltOf`) are identical at `977eadc709` and the merged head.
+  - The run elaborates `CoreRemote.lean` with `lean_changed.py --try`, because `core_remote` lists no guarantees and so is outside a records run.
+  - The two benchmark programs are built only by their scripts, and I didn't build them.
+- **The run.** `r20261110-090650-a8e4` (cpu-12 `--pool research`) runs records for `verity/core/service/spot` (Spot, `Security`, `Security/Properties`), then the `CoreRemote.lean` try, then `suites.py --changed a337d86e48f --quick`. It waits for a research slot behind my three. ETA about 12:00Z, so #8139 can be marked well before 16:00Z if it passes.
