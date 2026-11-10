@@ -24,7 +24,9 @@ window_delta_crypto = { value = 1.82e-12, source = "CircuitCredit's per-window f
 identities = { value = 1, unit = "identity", low = 1, high = 1000, source = "benchmarks/nci/tiers.py DEFAULTS identities: detection is terminal (J = 1); high: identities a detection doesn't end", status = "assumed" }
 lag_s = { value = 3600, unit = "s", low = 60, high = 86400, source = "benchmarks/nci/tiers.py DEFAULTS lag_s: a window plus the verdict delay", status = "assumed" }
 
-# tiers T5: sampled proofs at 1% on top of serve-time commitments, today's sparse-draw cost.
+# tiers T5: sampled proofs at 1% on top of serve-time commitments, today's sparse-draw cost. step_bits, the output bits
+# an accepted incorrect proof block injects, is not set here: a block's outputs fit its Definition's public size class,
+# a power of two from 16 to 262,144 bits, and the registry reads the widest from verity (rho/params.py).
 [regime.remote-sampled]
 base = "remote"
 sampled = true
@@ -34,7 +36,6 @@ replay = { value = 1.1e5, low = 1e3, high = 1e6, source = "benchmarks/nci/tiers.
 step_flop = { value = 1.43e4, unit = "FLOP", low = 1e3, high = 1e6, source = "benchmarks/nci/tiers.py DEFAULTS step_flop", status = "declared" }
 p_evade = { value = 9.094947017729282e-13, low = 1e-15, high = 9.5367431640625e-7, source = "benchmarks/nci/tiers.py DEFAULTS p_evade: the planner's 2^-40; high: 2^-20", status = "declared" }
 luck = { value = 8, low = 1, high = 32, source = "benchmarks/nci/tiers.py DEFAULTS luck: F/(1-p), spec sheet 8", status = "declared" }
-step_bits = { value = 16, unit = "bit", low = 8, high = 32, source = "benchmarks/nci/tiers.py DEFAULTS step_bits: a proof block's outputs are at most 16 bits; high: one 32-bit gate", status = "ruled" }
 floor_steps = { value = 1, low = 1, high = 1e12, source = "benchmarks/nci/tiers.py DEFAULTS floor_steps: steps in a class drawn at a floor of one", status = "declared" }
 chord = { value = 5.7568542e7, unit = "product/bit", source = "benchmarks/nci/tiers.py chord at DEFAULTS and the injected bits: the steepest secant to S_1 = sqrt(2 b_w b_a Gamma), on the (1, 0) piece", status = "derived" }
 chord_kappa = { value = 0.6, source = "benchmarks/nci/tiers.py DEFAULTS kappa (the products-to-FLOP rate tiers values chi at)", status = "declared" }

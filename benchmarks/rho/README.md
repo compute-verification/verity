@@ -44,14 +44,19 @@ verity bench rho --out DIR    # every scenario; writes rho.md, rho.json and figu
 `verity bench rho` runs `run.py`, which prints Markdown and, with `--out DIR`, writes `rho.md`, `rho.json` and
 `figures/` there. `run.py` takes `--scenario NAME` (repeatable), `--target X` and `--set KEY=VALUE` (any registry key, for the whole run).
 `periods.py` gives the same per monitoring period, over one datacenter and over the world's compute, with each scenario's
-range, its parts by kind and its premises ranked; `periods.py --measured CIRCUIT` evaluates them with a measured training
-step's design in place of the FLOP model, after a table of the step beside it (`circuits.py`).
+range, its parts by kind and its premises ranked; each row says what it assumes about proofs, and the remote scenario
+with proofs sampled at the registry's share stands beside the one where every unit is proved. `periods.py --measured
+CIRCUIT` evaluates them with a measured training step's design in place of the FLOP model, after a table of the step
+beside it (`circuits.py`).
 
 ## Inputs
 
 - `data/*.toml`, the registry (`params.py`): every number the model reads, addressed by a dotted key, each with
   `value`, `unit`, a plausible range (`low`, `high`, which the sweeps span), `source` and `status` (`datasheet`,
-  `measured`, `declared`, `assumed`, `ruled`, `conjecture`, `derived`). `data/scenarios*.toml` and
+  `measured`, `declared`, `assumed`, `ruled`, `conjecture`, `derived`). What `verity` states is read from it, never
+  restated in a file (`params.sourced`): the monitoring periods, and the output bits an accepted incorrect proof block
+  injects (`step_bits`), the widest public size class of a block's outputs, a power of two from 16 to 262,144 bits
+  (`verity.ml.circuits.partition_v2`). `data/scenarios*.toml` and
   `data/reference.toml` name the scenarios; `data/premises.toml` says where each assumption stands and up to what
   block size; `data/circuits.toml` holds training steps measured as Boolean circuits (the census's gates, ANDs and
   counted products, and `circuit_properties`' `s_×`, `a_out` and `a_in`).
@@ -120,7 +125,7 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 | `circuits.py` | `Circuit` (a measured training step), `compare → Comparison` with the FLOP model, `in_place` |
 | `hardware.py` | `Units`, `Location`, `Fleet`, `MonitoringPeriod` |
 | `envelopes.py` | `Pouw`, `Detection`, `Wipe`, `Certifier`; `Regime.partition`, `Regime.delta`; `Policy` |
-| `params.py` | `Registry`: dotted keys over `data/*.toml` and core's monitoring periods (`PERIODS`), `override`, `fields` |
+| `params.py` | `Registry`: dotted keys over `data/*.toml` and what `verity` states (`sourced`: core's monitoring periods, `PERIODS`, and a proof block's widest output size class, `BLOCK_OUTPUT_BITS`), `override`, `fields` |
 | `scenario.py` | `build`, `evaluate → Result`, `seconds` |
 | `analysis.py` | `sweep`, `tornado`, `threshold`, `dangers`, `rescues`, `corner`, `margins`, `phase`, `frontier`, `attribution`, `upto` |
 | `operating.py` | `work`, `exfil`, `points`, `incorrect` |

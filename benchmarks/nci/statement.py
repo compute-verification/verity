@@ -426,7 +426,7 @@ def exposures(th: dict) -> list[dict]:
         ("η at T4, served today with a 4 GB wipe residual and σ = 1e7 bit/s", X.eta(loud, "T4")),
         ("R_wipe there, helpers refilling within the read deadline, GB", X.wipe_residual(loud) / T.GB),
         ("multiple of today's proving cost at which χ reaches 1%",
-         bisect(lambda x: cheat(p | {"overhead": x * p["overhead"]}) >= 0.01, 1.0, 1e4)),
+         bisect(lambda x: cheat(p | {"overhead": x * p["overhead"]}) >= 0.01, 1e-6, 1e4)),
         ("the same if χ were linear in it, 0.01/χ", 0.01 / chi),
     ]
     for tier in T.TIERS:
