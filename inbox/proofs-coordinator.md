@@ -26504,3 +26504,36 @@ Please land [#8536](https://github.com/compute-verification/verity/pull/8536) (h
   - On `main`, `total_cost`'s request-grain line is in the patterns' form.
 - **Daniel:** nothing, unless the pooled statement needs a premise beyond `InScopeTwo` and `FirstStageAt` over the period's union.
 - **Text for PRF-456**, 180 words, with the verdict as its first line: in the note's last section.
+
+## DSAREAD, Tue 10 Nov 07:06Z: #8309 does not rest on OpensReady; the bridge in Sampled still reads the name; the link's value is `<block>/root`
+
+**First, (2): no.** [read] The two-stage theorem at #8309 (`51c0eeda1a`) does not rest on `OpensReady` or any 64-byte condition on a port's name.
+- `SpotKSTwo` and `SpotExfilTwo` take only `Built h` and `Addresses h` (`Security/Proofs/Flock/SamplingGeneric/Guarantees.lean:74-87`). `SessionOpensTwo` is discharged inside the proof, by `sessionOpensTwo_of_frameIs ... (frameIs_built h hB hS)` (`:95-97`).
+- SPOT's frame takes each port's domain from the record's `domain` entry (`SpotFlock/FrameAt.lean:283`) or from the published one: `pubPort`'s `domain := Flock.PortRoots.idOf c pop q`, the `frame_v3.domain_ids` bytes (`SpotFlock/Rooted.lean:59-62`, `EntriesAt.lean:414`).
+- `OpensReady` exists neither at #8309 nor on `main`. A grep of `SpotFlock/` and `SamplingGeneric/Two*` finds no `Bridge.domOf`, `Domain.id` or `size = 64` premise.
+- [not checked] Whether `Built` and `Addresses` hold at a served run is a separate question; neither reads a domain's width.
+
+**Soundness's (1): the bridge in `Sampled` still reads the name; the instance takes nothing of its own.** [read, at `012bef143c`]
+- **`OpensReady.domain`** is `(Flock.Bridge.domOf A.D.unroll q).size = 64` (`Security/Proofs/Properties/Verity/Sampled/OpensAt.lean:111`).
+- **The bridge's `domOf c q`** is the port's name in UTF-8 (`Security/Proofs/Flock/Bridge/Deployed.lean:127-128`). `portsOf` registers it as each port's domain (`:136-139`), and so do `Bridge/LeafMap.lean:133`, `Transports.lean:145` and `TransportsRefs.lean:133`.
+- **So the theorem is vacuous at a served run.** `remote_soundness_deployedReady` takes `SessionsReady`, that every session v2 sets up is `OpensReady` (`OpensAt.lean:32-36`, `202-204`). Its honest witness is the idle instance that runs no session (`:33-34`).
+- **A served bundle's public file:** `examples/h200/interfaces/tests/fixtures/drawn-unit-bundle.json` on `main` has ports `o0`, `sw`, `sx`, `wrow`, `x`, each with a 64-byte `frame_v3.domain_ids` entry, in every member.
+- **What #7513 changed:** `domOf c pub q := Flock.PortRoots.idOf c pub q`, the published domain, threaded through the bridge's 30 files, and `OpensReady.domain` became `(Flock.Bridge.domOf A.D.unroll A.pub q).size = 64` (its `OpensAt.lean:102`).
+- **Why #8569 lacks it:** #7513 merged on 6 Nov into `cursor/soundness-assemble-5e54` (`579cda6554`), not `main`. Neither `7329028409` nor `579cda6554` is an ancestor of `main`, #7590, #8309 or #8569. #8569's `cf6d2bca4a` added `OpensAt.lean` over `main`'s bridge.
+- Flock's code keeps a name-domain `PortRoots.domOf` (`verity/core/service/flock/Flock/PortRoots.lean:34-35`) only for its `collides` refusal (`:92-93`). #7513 changed no code, and the fix needs none.
+
+**Soundness's (3): the smallest fix is #7513's bridge change on #8569's base. The files are soundness's (`Security/Proofs/Flock/Bridge/*`, `Sampled/OpensAt.lean`).**
+- Bring #7513's `Bridge` commits from `cursor/soundness-assemble-5e54` into #8569, or land them on `main` first. Then set `OpensAt.lean:111` to `domOf A.D.unroll A.pub q`, as #7513's `:102` has it.
+- [read] Flock already refuses a session whose published domain is missing or not 64 bytes (`IDS_WHY`, `PortRoots.lean:129-130`, in `loadedWhy` `:138-140`).
+- [guess] So `OpensReady.domain` could then follow from acceptance, not be assumed.
+- [guess] The cost is mostly a merge, since #7513 already repaired the proofs on its branch. When is soundness's to say.
+
+**The port names, for vllm's Q1: `<block>/root` and `<block>/domain`, but only because the table names carry a `/`.** [read]
+- **How `named` is decided:** `replay_links` sets it from `_by_template(reg.record)`, true when any `roots[*].port` contains `/` (`second_stage.py:307-333`, `623-628` at #8486; called at `service.py:2385` with the boundary registration's record).
+- **What the served round-1 record holds** (#8448 `38ca25a7fc`): `b.ingress` and `b.egress` (`boundary_rows.py:76-77`), which are not `<template>/<port>`, then each table under `history/{run}/p{P}-o{O}/s{slot}/model.layers.{layer}.self_attn.latent` (`commit/history_tables.py:52`, `pipeline/boundary_tables.py:55`; ports at `boundary_rows.py:296-297`, `375`).
+- **So:** a record with at least one table, which every record with a table read has, gives `named` true. The link's value is then `{descriptor_id(replay)}/root` and `/domain`, which is what #8448's tests register (`test_interior_table.py:57`).
+- **No production code at #8448 builds a `Supply` yet,** only tests.
+- [not checked] That `descriptor_id(self.replay)` at a served run is the block vllm names.
+- [guess] A link from a replay-block parameter to `b.ingress` or `b.egress` would be looked up as `<block>/<param>`, which the served record doesn't hold. I haven't checked whether the served replay block has such a link.
+
+**Events:** none of yours arrived in my run. No second execution of me: no commit or entry of mine I didn't make.
