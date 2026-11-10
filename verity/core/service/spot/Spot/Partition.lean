@@ -269,7 +269,8 @@ def fanout (P : Flock.Program.Prog) (rs : Array TRange) : Nat := Id.run do
       held := held.set! g (held.getD g 0 + (members.getD k none).getD 0)
   return held.foldl max 1
 
-private def spanLt (a b : Nat × Nat × Nat) : Bool :=
+/-- Spans `(node, lo, hi)` in lexicographic order. -/
+def spanLt (a b : Nat × Nat × Nat) : Bool :=
   a.1 < b.1 || (a.1 == b.1 && (a.2.1 < b.2.1 || (a.2.1 == b.2.1 && a.2.2 < b.2.2)))
 
 /-- `partition.shared_inputs` over a template query's ranges `rs`: the run Input nodes (an input bound at `run`,
