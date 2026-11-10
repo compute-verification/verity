@@ -708,7 +708,7 @@ def table(doc: dict, prev: dict | None = None) -> list[dict]:
         return (f"{sum(r['cpu_s'] for r in rs) / sum(r['end'] - r['took'] for r in rs):.1f} on average, "
                 f"p50 {pct([r['cpu_s'] / (r['end'] - r['took']) for r in rs], .5):.1f} (n={len(rs)} runs)")
 
-    add("6", "Executor: tasks finished a minute", f"{sum(m >= now - 600 for m in done) / 10:.1f} (last 10 min)",
+    add("6", "Executor (in shadow, not the gate): tasks finished a minute", f"{sum(m >= now - 600 for m in done) / 10:.1f} (last 10 min)",
         f"{sum(m >= hour for m in done) / 60:.1f}", f"{sum(m >= day for m in done) / (hours * 60):.1f} ({len(done)} tasks in {len(workers)} runs)",
         "230", "result files under `out/results` of the executor's worker runs, by file time; 230 a minute is a 15-minute check")
     add("6", "Executor: cores working in a slot", "", working(hour), working(day), f"{wslots:.0f} (the slot)" if wslots else "",

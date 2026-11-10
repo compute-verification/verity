@@ -178,7 +178,7 @@ def test_the_table_holds_each_number_over_its_windows():
     assert rows["Red: drop to the next candidate built"]["today"] == "p50 10, p90 10 min (n=1)"
     assert rows["Reds by kind"]["today"] == "1 test, 0 Lean audit, 0 preflight, 0 infrastructure"
     assert rows["PR-rounds lost, by cause"]["today"] == "3: 2 red, 1 dropped base"
-    assert rows["Executor: tasks finished a minute"]["hour"] == "0.1"             # 3 results in 60 min
+    assert rows["Executor (in shadow, not the gate): tasks finished a minute"]["hour"] == "0.1"             # 3 results in 60 min
     assert rows["Executor: cores working in a slot"]["today"] == "2.0 on average, p50 2.0 (n=1 runs)"
     assert rows["Executor: overhead before a run's first task result"]["today"] == "p50 10, p90 10 s (n=1)"
     cache = rows["Executor: share served from the cache; tasks waiting on other tasks"]
