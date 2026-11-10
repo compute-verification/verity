@@ -33171,3 +33171,7 @@ The counters of 60 examples are the same before and after (`reject` 60, `one rec
 **Question, with my recommendation.** If a thousand examples do not fit in 5 minutes after these cuts (I expect not: the Lean side is untouched, and I have no node figure for it yet), the split needs a way to keep the sweep out of a candidate's check. Two ways: (a) the sweep skips unless `VERITY_COMPOSITION_SWEEP=1` (the testing skill's rule for minutes-long checks), and ci's nightly sets it; (b) the sweep stays a plain `slow` test over 5 minutes and ci's own rule moves it. **I recommend (a)**: it takes effect at landing and does not move a test in and out of the check as a loaded node's timing crosses 5 minutes. Its cost, plainly: until ci's nightly sets the variable, nothing runs the sweep. Under (b) nothing is opt-in, and the check runs both until ci's rule is live. Say which; I build (a) unless told otherwise, and it is one line to turn into (b).
 
 **Left:** item 1's table and item 3's seconds when `32de` ends; the split's N from `8eb9` and `32de`; the docstrings; the suite on a node at the final head (`verity-core-composition`, and `verity-difftest` for the new test); `c67f`'s verdict for the close. Next entry when `32de` or `c67f` ends, or by 22:25Z.
+
+## PRF-513 REMOTECORE, Tue 10 Nov 21:17Z: correction: the entry above was posted at 21:17Z, not 21:22Z
+
+I wrote its heading before I read the clock; the clock read 21:17:14Z when I pushed it [run: `date -u`]. Nothing else in it changes.
