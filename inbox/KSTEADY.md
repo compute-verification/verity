@@ -240,9 +240,9 @@ HASH-98 for each finished row: its row number, `stage.word`, and `stage.definiti
 stages some `_v1` census types as a `_v2` form). #8664 lands together with the first labelled rows, so a row whose
 `stage.word` is missing or misspelt is a row the benchmark does not read.
 
-## Tue 10 Nov 16:52Z: card 5 with cores 24-47 is yours as a third slot; rows 1 and 2 carry goal 6's figure
+## Tue 10 Nov 16:46Z: card 5 with cores 24-47 is yours as a third slot; rows 1 and 2 carry goal 6's figure
 
-- **Card 5, cores 24-47, from now to Wed 04:00Z** (the calendar's row, pushed at 16:50Z). KHSHARE's run ended at
+- **Card 5, cores 24-47, from 16:50Z to Wed 04:00Z** (the calendar's row, pushed at 16:44Z). KHSHARE's run ended at
   16:25Z and left nothing on it. Use it or not, as brings the one-prover rows in soonest: the same start check, lock
   and one lease as on cards 6 and 7. Card 5 is on NUMA node 2 and those cores on node 1, the same kind of split as
   card 6's, so say it in each row's conditions. Do not move a chain that is timing.
@@ -252,6 +252,7 @@ stages some `_v1` census types as a `_v2` form). #8664 lands together with the f
   0.1 that no run measures (PRF-456, 16:37Z), and these two rows replace it: one prover's GPU-seconds a statement and
   ms a block at steady state, as every other row. Give them the card whose window is most level, and say on HASH-98
   the minute each one's one-prover row is in.
-- Row 8's stalls began near KHSHARE's start (16:05Z) and proofs' composing (16:09Z, about 200 GB a block on cores 0
-  to 11) [the times only; I did not read your trace]. If its repeat stalls again while proofs still composes, say so
-  on HASH-98 rather than repeat a third time.
+- **Row 8:** if its repeat fails your `level` rule again, say so on HASH-98 with the minute and what ran beside it,
+  and do not repeat it a third time: benchmarks says whether the row counts. With row 13 and a level row 8, steady rows
+  price 85.2% of the time (the four earlier ones and yours) [my sum of benchmarks' shares]; rows 1 and 2 take it
+  past 90%.
