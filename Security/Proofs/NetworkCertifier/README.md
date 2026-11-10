@@ -141,6 +141,11 @@ Carried.lean    the leak bounds over a carried pool: one run's relation at the r
                                          size (encard_pooledCarried_le); sampledLeakCarried, pooledLeakCarried; at
                                          the empty pool, the period's bound with checked inputs over windows that
                                          each hold a pool of their own (pooledLeakChecked_of_carried)
+PoolRoots.lean  the opened rows' roots, a lemma: a run's check that holds its opened and left rows to the roots it
+                                         registers (CheckedRoots) and its leak relation give them those roots
+                                         (digests_of_leakAt), and the record rule registers at a run's opening the root
+                                         of the row poolOpen names (digest_open_of_leakAt), so CarriedRoots holds
+                                         (rootsOfChecked)
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 Witnesses.lean  each acceptance guarantee's two lemmas: `G_honest`, its hypotheses at the deployed
