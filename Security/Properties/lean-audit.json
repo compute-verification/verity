@@ -765,82 +765,98 @@
   "Accounting.Assumptions.TS.ProofSoundAt": {
    "owner": "@soundness",
    "digest": "c13e208b16273cf7b13fa743820d7840c1098c93a9f9a4cf484bef0b17fffd0c",
-   "due": "2026-11-17"
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   },
   "Accounting.Remote.Held.Assumptions.Covered": {
    "owner": "@memory-accounting",
    "digest": "5c608a83fe20d77e737b97d37087e1d392d1069ca7e67dd63e44bfdae48edbb0",
-   "due": "2026-11-17"
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   },
   "Accounting.Remote.Held.Assumptions.IngressCounted": {
    "owner": "@memory-accounting",
    "digest": "7c04197d5b780f94be3bcc1dc1e3e8cc6eafc43158098fe3936eed3aa7f12c3e",
-   "due": "2026-11-17"
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   },
   "Hash.Assumptions.Sha512Prf": {
    "owner": "@memory-accounting",
    "digest": "43582b571daf50b58ab4dcf98b757124a759e6cd5dd501bad2fee9b9b4fee864",
-   "due": "2026-11-17"
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   },
   "Pous.Guarantees.RoundsBound": {
    "owner": "@memory-accounting",
    "digest": "5483c9e14f6369c3172eeb633e66b867881aabbd9c8e644c852598cc3fe7dad4",
-   "due": "2026-11-17"
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   },
   "Pous.Period.Audits.Certified": {
    "owner": "@memory-accounting",
    "digest": "4da8f2178342cde3571dbf23c427e688fce47637a942f800ee8d51f81e8e2518",
-   "due": "2026-11-17"
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   },
   "Pous.Period.Audits.OnTime": {
    "owner": "@memory-accounting",
    "digest": "a8c4bfe5e79395886a03a986a2fc77b66507e94ea807a6f1631b609341f326f7",
-   "due": "2026-11-17"
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   },
   "Pous.Period.CountMeets": {
    "owner": "@memory-accounting",
    "digest": "2dd5770d9bba758689a23a1684b8878df4b5e70ac858cdccf9da4ee3fa831597",
-   "due": "2026-11-17"
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   },
   "Pous.Period.Drawn": {
    "owner": "@memory-accounting",
    "digest": "eeb3f88b2ff2b0c0e3c656bf05320233bde92a109500a8557445ce2dee6fd161",
-   "due": "2026-11-17"
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   },
   "Pous.Period.Fits": {
    "owner": "@memory-accounting",
    "digest": "f5b69f5f262a32475519e72979fc884fea1602140d3d6b9a07f4b7282ab185b9",
-   "due": "2026-11-17"
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   },
   "Pous.Period.FixedBefore": {
    "owner": "@memory-accounting",
    "digest": "b4e82606a80cb0c46bc33a3e9b3ed881173a07dd1e60fee5fc3bb2137bb9d50c",
-   "due": "2026-11-17"
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   },
   "Pous.Period.ReadsNoPrimitive": {
    "owner": "@memory-accounting",
    "digest": "941286e788e84d808d5f58d95004d4e5cb4762a1eb9bf82b9f04d854577e552c",
-   "due": "2026-11-17"
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   },
   "Properties.NetworkScan.Flattens": {
    "owner": "@network-accounting",
    "digest": "958b48d427a4799a495e8498981cebdafaf311689c3fefb050bf30006a382055",
-   "due": "2026-11-17"
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   },
   "Properties.NetworkScan.ScopeMatches": {
    "owner": "@network-accounting",
    "digest": "53aaae828029d5c710cf801e04027478005e1eeb8b42b3d2601d1139c64954f2",
-   "due": "2026-11-17"
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   },
   "Properties.NetworkScan.StmtFlattens": {
    "owner": "@network-accounting",
    "digest": "e631d74ea293deb3e23e26932f06ec6564877bf01793f61fbe8680be3716a7b5",
-   "due": "2026-11-17"
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   },
   "Properties.RemoteAudit.Subprotocol.HonestSchedule": {
    "owner": "@memory-accounting",
    "digest": "242b5e526e6b88d7608596f795297fbcec7301ba22e708fee38e448ac73e1fc1",
-   "due": "2026-11-17"
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   }
  },
  "trust": {

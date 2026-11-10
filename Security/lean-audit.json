@@ -3352,47 +3352,56 @@
   "Pouw.Dimension.H100.Op100.WFw": {
    "owner": "@compute-research",
    "digest": "965dca08d3258691688feef45f0a3c16d067f982c5fa80d973176229d0233ea8",
-   "due": "2026-11-17"
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   },
   "Pouw.Dimension.H100.OutputsOn": {
    "owner": "@compute-research",
    "digest": "1a0f317152cb533e338886bbe680b409335537eb42219f370fd865f31302a2f9",
-   "due": "2026-11-17"
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   },
   "Pouw.Dimension.Pointwise.Apart": {
    "owner": "@compute-research",
    "digest": "60142398b6002e4294b81648d962817764c388662a808ed42f33cac09efa959c",
-   "due": "2026-11-17"
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   },
   "Pouw.Dimension.Pointwise.Far": {
    "owner": "@compute-research",
    "digest": "f5a945b56f8751ac39da824309a7b16bb0f794de1ba64d861bac36940fc5bc75",
-   "due": "2026-11-17"
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   },
   "Pouw.Dimension.Pointwise.Held": {
    "owner": "@compute-research",
    "digest": "620bd02d4073d1bac062b155cf1a374e693fd9904acc0fdf11fd1ed773af1c3a",
-   "due": "2026-11-17"
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   },
   "Pouw.Dimension.Ssn.FreeInputs": {
    "owner": "@compute-research",
    "digest": "9fcf97acac6d794c95735271aef7e3546d4a98edb1f61430980a1968a2d0fff8",
-   "due": "2026-11-17"
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   },
   "Verity.Assumptions.ChannelAuthentic": {
    "owner": "@memory-accounting",
    "digest": "db83e0089c2f0823100c23b3cd00c7a5da8492e21de536c0020fba93f4ce2145",
-   "due": "2026-11-17"
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   },
   "Verity.Assumptions.ImprintPathPrivate": {
    "owner": "@memory-accounting",
    "digest": "cd95c37eb5559f97d913a4c8db32422b94451b4558be724a35879bfe8eb00722",
-   "due": "2026-11-17"
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   },
   "Verity.Assumptions.WitnessPathPrivateOrChannelHides": {
    "owner": "@memory-accounting",
    "digest": "94e2691599abd9f3ae0894a0436659a5773bd7a143d4ad3e0659f797b0e2c895",
-   "due": "2026-11-17"
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   }
  },
  "trust": {
