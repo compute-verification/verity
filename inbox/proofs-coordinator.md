@@ -33066,3 +33066,82 @@ Follows my 21:06Z entry (the carry table). Nothing was pushed to any of the 21 m
 **How I get 23:05Z.** cpu-9 has 8 slots, all taken between 20:46Z and 20:54Z, and 16 runs wait ahead of mine [run: the slot listing in the run's log]. `78bc`, a quick tier of 71 suites, held its slot for 26 minutes [run]. Two turns of the 8 slots at about 35 minutes each put mine on a slot near 22:30Z, and 69 suites take about 35 minutes more [guess].
 
 Checkpoint with the full table and each merge's tree: `lanes/proofs/20261110T2111Z-checkpoint-benchcross.md`. I end my turn.
+
+## FLOCKPKG, Tue 10 Nov 21:14Z: PRF-514 form (A) and the nine lines are on the tip `12a5d94b7d`; under (B) no guarantee record of the network lock changes (its `reads` gain seven definitions, for two of the four); `escU` is one of the tool's 40 moved reads; the tip's records run `6190` is in a slot since 20:55Z
+
+Mailbox read through your 20:45Z entry (`360f39956f2`). Times are from `date -u`. "Ran" is a run of mine on a node; "read" is its fetched output.
+
+**1. `Flock.escU` (your condition 1).** From `r20261110-193544-e98d` (ran; Flock's audit, `--update --moved`, tree `6a9a48957f`), read in its `report.json`, `review.txt` and the lock it wrote:
+
+- The tool's whole review for Flock's lock is one line: `reads: 40 definitions read in another module or under another name: the same under their old names`. Its `statement_changes` is `false`. It prints no `definition …: changed` line.
+- `escU` is one of those 40. It is an entry of the lock's `reads` section (module record `Base.Canon`, was `Flock.Canon`), not a field of any guarantee's record. The written digest differs because the body names the private `hex4` by its new name: `Flock.escU` `f4b66e56…` → `1197f9b2…`, `_private.Flock.Canon.0.Flock.hex4` `7c4da174…` → `_private.Base.Canon.0.Flock.hex4` `26441970…`, and the module record's digest `d58021a7…` → `6063f53a…`. The tool compares each read under its old names (`--moved`) with the recorded digest and counts it as moved when they are equal; these two are. The other 161 of the lock's 163 read definitions keep their digests; 36 of the 163 stand under a new module name, these two among them (my counts, by a script over `main`'s lock and the written one).
+- Who reads it: the report lists readers by module. `Base.Canon` is read by seven guarantees, `Flock.Firewall.Contract.holds_coins`, `holds_coins_binding`, `holds_commit`, `holds_computed`, `holds_finish`, `holds_fixed`, `holds_masked`. Their records (owner, signature, assumptions, premises, type hash) hold no digest of a read, and all 11 guarantee records of Flock's lock are equal to `main`'s (Python `==` on the parsed `guarantees`).
+
+**2. Form (B)'s diff of the network lock.** `r20261110-205614-8722` (ran: `check.py --build --update verity/core/protocols/network/lean` on the (B) tree `fb99df62f5`, local, never pushed; rc 0 in 78 s, AUDIT PASS, 4 guarantees). This corrects my 20:08Z entry, which said the four records would change:
+
+- **No guarantee record changes.** All four (`NetworkCheck.RecordsBytes.evidenceOf_toEvidence`, `expectedGridsOfBytes_eq`, `unhex_eq`, `NetworkCheck.RecordsGrid.expectedGrids_eq`) are equal to the lock before and to `main`'s.
+- **The lock's `reads` section gains two module records, seven definitions**, each printed by the tool as `new`:
+
+| Guarantee | Gains |
+|---|---|
+| `NetworkCheck.RecordsBytes.evidenceOf_toEvidence` | `Flock.J.arr`, `Flock.J.asArr`, `Flock.J.asNat`, `Flock.J.asStr`, `Flock.J.get` (`Base.Canon`); `Flock.V`, `Flock.unhex` (`Base.Bytes`) |
+| `NetworkCheck.RecordsBytes.unhex_eq` | `Flock.V`, `Flock.unhex` (`Base.Bytes`) |
+| `NetworkCheck.RecordsBytes.expectedGridsOfBytes_eq` | nothing |
+| `NetworkCheck.RecordsGrid.expectedGrids_eq` | nothing |
+
+- The tool's closing line is its usual one for any such change: `audit: guarantees, the definitions they read, or listed compile-time code changed … say so in the PR`. Nothing else of the lock changes (`reads` is the only top-level key that differs). I cancelled `b023` (the whole chain on that tree) for this run of the one package; (B)'s whole chain runs on its own branch.
+
+**3. The branch.** `cursor/proofs-flockpkg-1539` at `12a5d94b7d`, pushed 20:53Z. Since my 20:30Z entry, each its own commit:
+
+- `fbfae8f0c3`: the nine `open private … from` lines, alone, one token each, written by `python3 tools/move/flock_base.py private`. The same nine lines stand at the same places on `cursor/lean-remote-merge-fc8d` (`b5718e205aad`, read with `git show`).
+- `49c53054f7`: `tools/move/flock_base.py`, the move script's part that outlives the move (`private`, `moves`, `rewrite [--dry-run]`), with four toy-tree tests. `moves` prints the `--moved` map (17 names). `rewrite` is the follow-up pull request: on this tree its dry run counts **225 import lines** (Flock's package 91, `Security/Proofs` 69, `Security/Properties` 3, thirteen other packages 62) **and 32 `layers` entries in 8 locks**, and deletes the 16 re-exports. My earlier "244" counted Flock's package at 110; 225 is right.
+- `0ea2de2b5a`: form (A). `layers` in the circuits and commitments locks with lean's narrow lists, `Circuits` and `Commitments` out of `reads_exempt` in `Security` and `Security/Properties`, `core_base` stating none. `Base` stays under `reads_exempt` in four locks; each reason says what it is and names no issue, date or person (I reworded the one that said "until proofs extracts").
+- `4ded83960f`, `12a5d94b7d`: the library `FlockZkServer` is `roots = ["Flock.Firewall"]`, `globs = ["Flock.Firewall.+"]`, with no umbrella file (an umbrella naming 19 modules cost 20 sites on the retired-terms list). `6c9f` is its first build.
+- `7f5e8dc19b`, `7369597d5f`: the 16 re-exports carry one comment each; the READMEs, AGENTS.md's map and two lakefile comments say Flock's package requires three base packages by path.
+- The retired-terms allowlist's counts sum to 110,446 at the branch's base and 110,444 on the tip (my script over the file at each).
+
+**4. `Base` under `reads_exempt`, lock by lock (your condition 1).** One entry in each lock, with its reason. Whether it exempts a read there:
+
+- Flock's lock: yes (`e98d`: eight guarantees read `Base.Hash` and `Base.Bytes`, seven `Base.Field` and `Base.Canon`; no stale-exemption failure).
+- The network lock: yes (`e98d` passed it; `8722` names the reads, the table above).
+- `Security` and `Security/Properties`: not yet shown. `6190` and `0041` reach them; a stale entry fails there by name and I drop it.
+
+**5. Runs.**
+
+| Run | What, on what | Verdict |
+|---|---|---|
+| `r20261110-202700-4b44` | `check.py --build --update` on circuits and commitments with (A)'s `layers`, then `check.py --build` on the 11 small packages, tree `6027179bd4` | rc 0 (read): both updates rc 0; base 31 s, circuits 51, commitments 31, lms 52, randomness 31, difftest 48, identity 35, evaluate 43, requirement 33, attest 32, firewall 157 |
+| `r20261110-205614-8722` | (B), the network package alone, tree `fb99df62f5` | rc 0, 78 s (read), section 2 |
+| `r20261110-205506-6190` | **(A)'s records on the tip** `12a5d94b7d`: `lean_changed.py --records verity/core/primitives/base --update --moved` | running, in a slot since 20:55Z |
+| `r20261110-205401-6c9f` | the 32 `lake build`s and the three copy-and-builds through `closure.py`, tip | running, slot since 21:08Z |
+| `r20261110-202606-0041` | (A) with the nine lines on the earlier tree `6027179bd4` (the umbrella form, the old re-export comments) | running, slot since 20:27Z; it says first whether `Security`'s three packages build |
+| `r20261110-202245-f334` | suites `--changed e7b03e4a6c89 --quick`, tree `aa2d0a0628` | running, slot since 21:08Z |
+| `cd1d`, `dabe` | builds and small checks on `aa2d0a0628` | cancelled by me at 20:51Z after 31 min without a slot: the tip had moved |
+| `0ca8` | form (C) with the nine lines | cancelled by me at 20:51Z, 30 min in: (C) is moot since your ruling |
+| `b023` | (B), whole chain | cancelled by me at 20:56Z for `8722` |
+
+**6. The merge with `main`.** A trial merge of `origin/main` `5482988e3496` into the tip is clean (local worktree, `363774428a`, not pushed). `main` brings three changed `.lean` files (two under `Security/Proofs/Flock/SpotFlock`, `verity/core/service/spot/Spot/SecondStage.lean`), none with an import or an `open private` line of a moved module, and five lines of `Security/lean-audit.json`. PoUS's `TRUSTED.sha256` line for `Security/Proofs/lake-manifest.json` still matches on the merge (`sha256sum`, run by me).
+
+**The layout's map stops on the merged tree, and on my tip.** `tools/move/layout_maps.py`'s placement (`place`, called by me on the merge's file list) dies on 38 tracked files it cannot place, "give each a row in NEW": the three packages (13, 15 and 8 files), `verity/core/service/flock/FlockRec.lean` and `verity/ml/flock/tests/test_lean_layers.py`. I found no suite that runs it on the real tree (a grep for its names outside `tools/move/` and in `tools/move/tests/`), so no check goes red; the layout's lander meets it on the next regeneration. Rows that place them, with what the rule then gives (`plan`, called by me with the rows in memory; nothing written):
+
+| Row for `NEW` | Component | Lands at |
+|---|---|---|
+| `verity/core/service/flock/FlockRec.lean` | `core:recursion-lean` | `verity/flock/verifier/FlockRec.lean` |
+| `verity/ml/flock/tests/test_lean_layers.py` | `ml:flock-lean-verifier-tests` | `verity/flock/prover/tests/test_lean_layers.py` (with its suite) |
+| `verity/core/primitives/circuits/` | `ml:circuit-format` | `verity/circuits/lakefile.toml`, `verity/circuits/Circuits/…` |
+| `verity/core/primitives/commitments/` | `core:identity-lean` | `verity/commitments/lakefile.toml`, `verity/commitments/Commitments/…` |
+| `verity/core/primitives/base/` | `core:identity-lean` | `verity/commitments/base/…` |
+
+The first two are plain. The last three are top's to choose, and I would not take them as written: the rule drops a directory's name where the new directory already ends in it, so two Lake packages land in the root of a Python package (an `EXCEPT` row gives each a `lean/`), and the base under `verity/commitments/` makes `verity/circuits` load `verity/commitments` (`core_circuits` requires `core_base`), which the order rule forbids if circuits is listed above commitments. The base then needs a directory of its own above both, which is a new component in `layout_maps.json`. The honest port's two files need no row (`verity/core/service/firewall/` is one directory row of `core:zk-server`). **Who writes the rows, you or I, and in which change?**
+
+**7. M6, the try.** Prepared, not built: local branch `cursor/proofs-flockpkg-m6-7a3e` at `d1fde509a6`, one commit on the tip, not pushed.
+
+- Fifteen declarations of `Flock.Witness` that name nothing of the recursion move to a new module `Flock.WitnessZk` (a placeholder name) that `Flock.Witness` imports: the nine I listed, `scope`, and the five readers of the command line's files (`argOf`, `readTables`, `readJson`, `registeredOf`, `bindingsOf`), which the ZK server's modules use. Names and bodies unchanged.
+- `Flock.With.Deployed` and the ZK server's `Hello`, `Values`, `Finish` import the new module. `Hello` and `Values` gain `public import Flock.Firewall`: they reached the ZK server's own root module only through `Flock.Witness` → `Flock.RecCoins`.
+- `Flock.Witness` is then a module of the recursion. `test_lean_layers.py` passes with the `Witness → RecCoins` entry deleted (4 tests, run by me): no module of Flock alone or of the ZK server imports the recursion but `HmRow`'s two (M8) and `FlockVerify` (M7).
+- **Predicted, from import closures (my script, no Lean): one file under `Security/Proofs` stops building.** `Flock/Claims/Recursion/DeployOuter.lean` names `RecVStar.Inner` and `RecCoins.Source` and reaches them only through `import Flock.With.Deployed`. It needs one import line, which is not mine. 28 modules under `Security/Proofs` reach fewer modules; my script finds no other that names a namespace it lost.
+- So the pure-move form holds up to that one line, if the build agrees. I launch the build on a local tree with that line added (as I did for the nine) when `0041` frees its slot, and report what else fails.
+
+**8. Next, in your order.** When `6190` ends: check that every record moved and none changed, in all four locks and the rest (if one changed, I stop and write it up); commit the kept records; `research data put` each lock's `--moved` output and cite the ids; merge `main`; records and suites on the merge; then (B) as `cursor/proofs-flockpkg-layers-<hex>` cut from that tip, with the table of section 2 in its body.
+
+**Yours to answer:** the rows of section 6 (who, and where the base goes); whether the M6 branch may be pushed under that name once it builds.
