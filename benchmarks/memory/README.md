@@ -51,7 +51,8 @@ reason in place of a number, and the session's number still prints.
   store and one for the processes; no session runs in the suite (`uv run tools/verity/check/suites.py
   benchmarks/memory`).
 
-**Reads and writes:** reads a run's `out/verifier.json` (a gate run's, under `out/host/`) and the references' runs from
-the evidence store; under `research run` writes the printed document to `$RESEARCH_RUN_DIR/out/memory.json`, and
-`--loopback` leaves `run.sh`'s records beside it. **Backs:** no Lean guarantee or claim; the number is the ledger's γ of
-one session, which the remote audit's own analysis bounds.
+**Reads and writes:** reads a run's `out/verifier.json` (a gate run's, under `out/host/`) and the references' runs
+from the evidence store; under `research run` writes the printed document to `$RESEARCH_RUN_DIR/out/memory.json`, and
+`--loopback` leaves `run.sh`'s records beside it. A run that ran `--loopback` keeps a loopback's document there
+whatever it prints afterwards: it is how `--from` knows that run's session for a loopback. **Backs:** no Lean
+guarantee or claim; the number is the ledger's γ of one session, which the remote audit's own analysis bounds.

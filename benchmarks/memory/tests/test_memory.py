@@ -215,7 +215,7 @@ def test_a_recorded_loopback_is_printed_as_one(store, capsys):
     """A run this command's `--loopback` left holds its document, which says so: read back with `--from`, it is still
     a loopback, in the text and in the JSON, with no node's memory beside its test store."""
     store.add(RUN, {"out/verifier.json": a_record(a_session(gamma=0.5), blocks=64),
-                    "out/memory.json": {"value": 0.5, "loopback": True}})
+                    "out/memory.json": {"value": 0.5, "run": RUN, "loopback": True}})
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
     assert text[1] == f"  {M.LOOPBACK}" and doc["loopback"] is True
@@ -230,6 +230,16 @@ def test_a_run_whose_own_document_cannot_be_read_is_not_printed(store, capsys, b
     assert bench(store, "--from", RUN) == 2
     out, err = capsys.readouterr()
     assert out == "" and "out/memory.json doesn't read as this command's document" in err
+
+
+def test_a_run_holding_another_runs_document_is_not_printed(store, capsys):
+    """The document a run holds marks that run's session only when it is about that run. One about another run leaves
+    this run's session unmarked, and it may be a loopback's, so nothing is printed as a node's number."""
+    store.add(RUN, {"out/verifier.json": a_record(a_session(gamma=0.5), blocks=64),
+                    "out/memory.json": {"value": 0.125, "run": FIRE, "loopback": False}})
+    assert bench(store, "--from", RUN) == 2
+    out, err = capsys.readouterr()
+    assert out == "" and f"{RUN}'s out/memory.json is the document of {FIRE}" in err
 
 
 def test_the_references_are_read_from_their_runs_with_date_and_card(store, capsys):
@@ -318,6 +328,37 @@ def test_a_loopback_under_a_research_run_keeps_its_records_and_its_document_in_t
     _, doc, _ = printed(capsys)
     assert doc["run"] == RUN and json.loads((tmp_path / "rundir" / "out" / "memory.json").read_text()) == doc
     assert (tmp_path / "rundir" / "out" / "verifier.json").is_file()
+
+
+def test_a_run_that_ran_the_loopback_keeps_its_mark_whatever_it_prints_afterwards(store, capsys, monkeypatch, tmp_path):
+    """A run's `out/memory.json` is how `--from` knows its session for a loopback. A second command in the same run
+    that prints another run's number must not replace it, or the loopback's number would read as a node's."""
+    out = tmp_path / "rundir" / "out"
+
+    def launch(argv, **kw):
+        out.mkdir(parents=True)
+        (out / "verifier.json").write_text(json.dumps(a_record(a_session(gamma=0.5))))
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "rundir"))
+    monkeypatch.setenv("RESEARCH_RUN_ID", RUN)
+    monkeypatch.setenv("RESEARCH_SOURCE_SHA", COMMIT)
+    assert bench(store, "--loopback", run=launch) == 0
+    _, first, _ = printed(capsys)
+    store.add(FIRE, {"out/verifier.json": a_record(a_session(gamma=0.125))})
+    assert bench(store, "--from", FIRE) == 0
+    _, second, err = printed(capsys)
+    assert (second["run"], second["loopback"], second["value"]) == (FIRE, False, 0.125)
+    assert "its out/memory.json stays the loopback's document" in err
+    assert json.loads((out / "memory.json").read_text()) == first
+    store.add(RUN, {f"out/{p.name}": p.read_text() for p in out.iterdir()})
+    assert bench(store, "--from", RUN) == 0
+    text, doc, _ = printed(capsys)
+    assert doc["loopback"] is True and text[1] == f"  {M.LOOPBACK}"
+    (out / "memory.json").write_text("not json")
+    assert bench(store, "--from", FIRE) == 2
+    printed_out, err = capsys.readouterr()
+    assert printed_out == "" and "out/memory.json doesn't read as this command's document" in err
 
 
 @pytest.mark.parametrize("rc, record, why", [

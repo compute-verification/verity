@@ -27,7 +27,8 @@ store. No node is audited, so it certifies nothing, and its output says so.
 Beside the number it prints two references, each from its run in the store with the run's date and card: the share of
 a card's memory PoUS certified held, and the share a wipe left foreign at most. `references.json` names their runs;
 a reference that can't be read prints its reason in place of a number. Under `research run` the printed document is
-also `$RESEARCH_RUN_DIR/out/memory.json`.
+also `$RESEARCH_RUN_DIR/out/memory.json`; a run that ran `--loopback` keeps a loopback's document there whatever it
+prints afterwards, since that document is how `--from` knows the run's session for a loopback.
 """
 from __future__ import annotations
 
@@ -166,14 +167,28 @@ def document(s: dict, commit: str | None, run: str | None, *, loopback: bool, ho
             **{k: v for k, v in s.items() if k != "value"}}
 
 
-def looped(tree: Path) -> bool:
-    """Whether the run whose records are under `tree` is this command's own loopback, as the document it left says."""
+def left(tree: Path) -> dict:
+    """The document this command left in the run whose records are under `tree`; empty when it left none."""
     try:
-        return json.loads((tree / "out" / "memory.json").read_text()).get("loopback") is True
+        doc = json.loads((tree / "out" / "memory.json").read_text())
     except FileNotFoundError:
-        return False
-    except (OSError, ValueError, AttributeError) as e:
+        return {}
+    except (OSError, ValueError) as e:
         raise Unreadable(f"the run's out/memory.json doesn't read as this command's document ({type(e).__name__}: {e})") from e
+    if not isinstance(doc, dict):
+        raise Unreadable("the run's out/memory.json doesn't read as this command's document (not an object)")
+    return doc
+
+
+def looped(tree: Path, run: str) -> bool:
+    """Whether `run`, whose records are under `tree`, is this command's own loopback, as the document it left says. A
+    document about another run says nothing of this run's session, and a session that may be a loopback's isn't
+    printed as a node's."""
+    doc = left(tree)
+    if doc and doc.get("run") != run:
+        raise Unreadable(f"{run}'s out/memory.json is the document of {doc.get('run')}, so whether {run}'s own session "
+                         "was a loopback isn't recorded")
+    return doc.get("loopback") is True
 
 
 def from_run(store, run: str, k: int | None) -> dict:
@@ -188,7 +203,7 @@ def from_run(store, run: str, k: int | None) -> dict:
         verifier = tree / "out" / "host" / host / "out" / "verifier.json"
     if verifier is None or not verifier.is_file():
         raise NoNumber(f"{run} left no verifier's record (it ended rc {(attempt.get('status') or {}).get('rc')})")
-    return document(session(verifier, k), commit_of(attempt), run, loopback=looped(tree), host_run=host)
+    return document(session(verifier, k), commit_of(attempt), run, loopback=looped(tree, run), host_run=host)
 
 
 def cores() -> tuple[str, str]:
@@ -356,6 +371,9 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Evid
             doc = node(store_of(), a.period, a.dry_run, a.session, run, wait)
             if isinstance(doc, int):
                 return doc
+        held = SETTINGS.RESEARCH_RUN_DIR
+        # a run that ran the loopback keeps a loopback's document, the mark `--from` that run reads
+        kept = bool(held) and not doc["loopback"] and left(Path(held)).get("loopback") is True
     except NoNumber as e:
         print(f"memory: no number: {e}", file=sys.stderr)
         return 1
@@ -366,7 +384,9 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Evid
     print(text(doc))
     line = json.dumps(doc)
     print(line)
-    if held := SETTINGS.RESEARCH_RUN_DIR:
+    if kept:
+        print("memory: this run ran the loopback, and its out/memory.json stays the loopback's document", file=sys.stderr)
+    elif held:
         (Path(held) / "out").mkdir(parents=True, exist_ok=True)
         (Path(held) / "out" / "memory.json").write_text(line + "\n")
     return 0
