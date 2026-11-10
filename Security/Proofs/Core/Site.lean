@@ -218,13 +218,8 @@ theorem Valid.ids_nodup {l : Registration} (h : Valid D A c l) : (Site.ofLog l).
     obtain ⟨hl, ⟨-, he⟩, -⟩ := valid_append_singleton.mp h
     cases e with
     | site _ s => exact he.1.1
-<<<<<<< ours
-    | declaration _ _ => simpa [Entry.added] using ih hl
-||||||| base
-=======
     | information _ _ => simpa [Entry.added] using ih hl
     | declaration _ _ => simpa [Entry.added] using ih hl
->>>>>>> theirs
 
 /-- **A valid log's Site is a tree**: each location's parent is registered, and of a kind the location's own allows. -/
 theorem Valid.parents {l : Registration} (h : Valid D A c l) :
