@@ -30900,3 +30900,54 @@ For the 22 modules of the closure without `Firewall` and `Firewall.Honest`: **33
 - **Two imports drag Flock's own code into the base**: `FV3` → `Net` (by name only for `nextPow2` and `log2ceil`: a token scan, not a build), which brings `Comp` and `Scan` (1,188 lines), and `Bytes` → `Field` (1,060 lines, for `f128` readers). A pure move takes them along; moving two helpers out of `Net` would free the first.
 
 **Next:** the table by 02:00Z; I start the base cut with forwarders now. Runs: none in flight.
+
+## SERVEDCARD, Tue 10 Nov 18:38Z: row 30 stages (pin `9ceb3c55c89d0702`); rows 3, 5 and 13 at `full` moved to cpu-5 (`r20261110-183456-13f6`, ETA about 19:15Z); LEDGER's three switches: no `zk_cost` record holds any as a key
+
+**Row 30** [run: `r20261110-182836-3720` on cpu-1, rc 0 at 18:33Z, from `d7ab9059c3`, N = 1].
+- Spec: `census:EmbeddingRead_v1{V=256,H=96}`. Its earlier failure was the missing `flock-read-tmpl`; the job builds it in the run's scratch (47 s).
+- Pin `9ceb3c55c89d0702`, 2,586,540 ANDs, k_log 23, unit_log 22, `full` 4,096, peak 4.9 GB, 196.5 s.
+- Both form checks (`ks_form_why`, `template_why`) return None (accepted).
+- With it, every row of benchmarks' list from 15 to 36 has staged. Rows 37 to 40 stay deferred until you say.
+
+**Rows 3, 5 and 13 at `full`.**
+- `r20261110-182740-a43b` sat in cpu-3's slot queue from 18:27Z: every check slot there was short of memory, and its `--wait-max` was 4 h [run: its `slot.json`]. I cancelled it before it started, at 18:35Z.
+- The same job, from the same commit `d7ab9059c3`, is now `r20261110-183456-13f6` on cpu-5 (745 GB free, load 0.2). cpu-5's slots are reserved until 18:45Z, so it starts then [run: its `slot.json`].
+- ETA about 19:15Z [guess: at N = 1 the three took 6 to 7 min, mostly building the circuit].
+- It checks that each pin is unchanged at size and that staging at size doesn't fail. The pins don't depend on N, and at N = 1 every form check accepted all three [run, `r20261110-181316-4240`].
+- Against Wed 04:00Z, rows 3, 5 and 13 are on course. If `13f6` fails at size, I'll say so here before 22:00Z, with whether 04:00Z still holds.
+
+**LEDGER (PRF-492): where Thursday's proving run records switches 18, 19 and 21.**
+- The proving run is `benchmarks/one_stage/zk_cost.sh` and `zk_cost.py`. `r20261109-144301-d7bf` is PROVECUT's `provecut_k6144s.sh` running it, with output in `out/zk/` [run: its `job.json` on node A].
+- Its records are:
+  - `out/zk/records/stage.jsonl`, `prove.jsonl` and `verify.jsonl` (d7bf has no `verify.jsonl`);
+  - `out/zk/plan.json`;
+  - each staged statement's `out/zk/<tag>-c<c>/stage/stage.json`.
+- Cited lines are at `main` `e7b03e4a6c`.
+
+18, Flock `--zk` or plain:
+- No file holds it as a key [run: d7bf's `prove.jsonl` keys; read: `zk_cost.py`].
+- `zk_cost.py` has no plain path. Every session is `serve --zk` and `prove --zk` (lines 338 and 350), and every Lean check is `verify --zk` (lines 464 and 508).
+- So the value is fixed by the script at the run's commit, not by a record. A stamp can read it only from the source commit, or from a `"zk": true` that `zk_cost.py` would have to write into each `prove.jsonl` row.
+
+19, Lean verifier templated or flat:
+- The staged form is in each `stage.json`, under `statement`:
+  - `{"layout": "iv/hybrid/4", "structural": true}` is the templated form (`form_refusals.py:79`'s "templated" case, verified as `verity/flock-circuit/tmpl`);
+  - a `statement` with no `structural` is flat [read].
+- d7bf's two are `{"reads": "slots"}`, which is flat [run].
+- `records/stage.jsonl` doesn't copy the key [run].
+- Every Lean `verify` that `zk_cost.py` runs passes `--statement verity/flock-circuit` (`a0.STATEMENT_ID`, the flat statement id). `verity/flock-circuit/tmpl` is never passed, by `zk_cost.py` or by `server_rate.py` (line 51) [read].
+- So no record names the statement the verifier checked. At `main`, a `zk_cost` run's Lean verify is of the flat statement whatever the stage says [read]. Whether that verify refuses a templated stage I haven't run [guess: it refuses].
+
+21, provers per GPU:
+- No key in `zk_cost`.
+- `zk_cost.py` proves one session at a time: one `prove` process against its own `serve`, run in turn (lines 321 to 352 and 430 to 445). So the value is 1, fixed by the script [read].
+- `prove.jsonl` names the device (`gpu_uuid`) [run].
+- The run that has it as a key is `server_rate.py`: each `rate.json` row has `provers` (K, the provers on one device) and `device` (lines 211 and 212) [read; seen in FUSEDSERVE's `9daa` `rate.json`: run]. The post's value, 4, is reachable there and not in `zk_cost`.
+
+**Text for LEDGER, if you forward it as is:**
+> For Thursday's proving run (`zk_cost.sh`/`zk_cost.py` at `main`), none of switches 18, 19 and 21 is a key in its records (`records/stage.jsonl`, `prove.jsonl`, `verify.jsonl`, `plan.json`).
+> - 18 is `--zk` by construction: the script has no plain path.
+> - 19's staged form is in `<tag>-c<c>/stage/stage.json` under `statement`: `structural: true` with a `layout` means templated, anything else flat. But every Lean verify passes the flat statement id `verity/flock-circuit`.
+> - 21 is 1 by construction: one prover process at a time.
+>
+> `server_rate.py`'s `rate.json` holds 21 as `provers`, beside `device`.
