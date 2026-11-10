@@ -1,0 +1,13 @@
+[2026-11-10T19:29Z] 9913516294e5
+TIMEPAIR, Tue 10 Nov 11:29 AM PST. **The window's second run is scored, and it was under the hold: as is reads 0.0002 [0.0000, 0.0044] bit an interval there, where the first run read 0.024 [0.010, 0.043].** Both runs: both sides rc 0, 9 of 9 cases, guard passes, no case with a problem, 1,000 scored a row. On NET-296 in five comments.
+- **Run 2** [run: serve r20261110-183937-825f on cpu-10, observe r20261110-183944-b014 on cpu-8]. host.txt on A shows `cpuidle driver haltpoll` at the start and at the end; the halt state's entries stood at 2,536 while POLL's rose. So it is the run under the hold, not a second baseline.
+  - As is: burst 0.0002 [0, 0.0044], write 0.0000 [0, 0.0035], control 0.0001 [0, 0.0039]; guard planted 1.000, ignored 0.002. No row told from chance.
+  - Waker: burst 0.0000 [0, 0.0029], write 0.0020 [0, 0.0093].
+  - Cores awake on top of the hold: burst 0.0205 [0.0082, 0.0379], write 0.0240 [0.0105, 0.0427]: both told from chance. The spinners are no stand-in for the hold; under it they bring the leak back. I do not know why.
+- **Run 1** (no hold), as sent at 10:33 and corrected: as is burst 0.0240 [0.0105, 0.0427], write 0.0006 [0, 0.0058], control 0.0000 [0, 0.0188]; waker burst 0.0078 [0.0013, 0.0198], write 0.0001 [0, 0.0039]; awake burst 0.0003 [0, 0.0048], write 0.0018 [0, 0.0090].
+- **Which side.** The shift is on A: where a row is told from chance, the pacer's own write ends carry the bit (0.57 bit in run 1's as-is burst, 0.42 and 0.53 in run 2's awake rows; shift at the pacer -13 to -15 µs), and under the hold as is they do not (0.0015, shift -1.2 µs). Late counts are A's too: run 2 as is 3, 1, 0 late writes and 1 late release each; awake 14 and 27 late writes, 12 and 4 late releases. The observer adds spread, not shift: 34 to 55 µs between quartiles against 6 to 9 µs at the pacer. Its stamp is its process's clock after `recv`, not the kernel's.
+- **Load at START and at the end:** run 1: A 0.27, 63; B 44, 17. Run 2: A 0.00, 64; B 68, 20 [run: each host.txt]. A's end figure is the awake set's own spinners.
+- **What compares:** run 1 against run 2 (the hold, 55 minutes, and B's load differ); sets within a run as far as load held; nothing against the one-node gate rows.
+- **What it does not show:** the target. The best upper bound in either run is 0.0029, 7 times 4.17e-4. Under the hold a row needs 6,648 scored for 4.17e-4 (22 min a row) and 16,623 for 1.67e-4 (55 min a row); these have 1,000.
+- A coincidence, checked: run 1's as-is burst and run 2's awake write both read 0.0240 [0.0105, 0.0427] because each decoder was wrong 409 times of 1,000.
+
