@@ -1,0 +1,25 @@
+# The inference-only policy of Llama 3.2 1B as served: its public numbers, stated. This tree does not build the served
+# class, so `run.py` prices these numbers and no check here reads them.
+source = "the policy the serve states for its class before it starts: the class's c, k and n, and one block's work at the class's fixed load"
+
+model = "unsloth/Llama-3.2-1B"
+# the class: slots, prompt ids, outputs. A block is one slot's session, prompt + outputs - 1 positions.
+class = [4, 32, 4]
+# gates a block, fresh input bits a block, blocks
+c = 13818131814643
+k = 422197408
+n = 25165824
+
+# One block's work in MACs by kind: the layers' linears, which the card runs at its dense int8 rate, and attention's
+# products and the LM head, which it runs in BF16 at half that rate. `total` is the block's work in the policy's unit,
+# an int8 MAC one and a BF16 MAC two: linears + 2 × (attention + lm_head).
+[work]
+linears = 34057748480
+attention = 41287680
+lm_head = 1050673152
+total = 36241670144
+
+# What the class leaves outside the circuit: the layers' linears. A block reads each value of their outputs as fresh
+# input, this many bits a value.
+[outside]
+linears = 32
