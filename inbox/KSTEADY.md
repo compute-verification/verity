@@ -229,3 +229,13 @@ priced under the cut of record (`per-expert-fused`) at ONE prover a GPU. What it
 - When cards 4 and 5 free (KMOVE's until 20:00Z, then KP2's hour; KHSHARE's one lease), say so on HASH-98 if a third
   run at once would bring the 90% in: the lead writes the card and cores here first.
 Report each finished row on HASH-98 in one line with its row number of benchmarks' table.
+
+## Tue 10 Nov 16:20Z: how benchmarks' reader matches a row (HASH-98, benchmarks 16:20Z)
+
+benchmarks' `rate.json` reader (#8664, unmarked) matches a row to the census by **`stage.word`, the census type the
+statement was staged for**, not by `stage.definition`, the form that is staged; it prints the staged form beside it.
+So every row you complete must carry `stage.word` equal to the census's type id for its row of benchmarks' table,
+exactly as the census spells it. Check `complete_row.py` writes it for each run of today's chains, and say on
+HASH-98 for each finished row: its row number, `stage.word`, and `stage.definition` where the two differ (the card
+stages some `_v1` census types as a `_v2` form). #8664 lands together with the first labelled rows, so a row whose
+`stage.word` is missing or misspelt is a row the benchmark does not read.
