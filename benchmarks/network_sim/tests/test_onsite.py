@@ -175,8 +175,9 @@ def test_the_record_is_each_zones_verdicts_and_K_in_the_bounds_terms_labelled_si
     assert "a phase of T_j = 32 buckets of τ = 100 ms (3.2 s)" in md and "| m (3.2 s phases) |" in md
     assert "each phase T_j = 32 buckets of τ = 100 ms (3.2 s), the lab's tick" in md
     assert "(vacuous)" in md and "known overcount" in md and "Σ_j (ℓ_a,j + k_skip,j + T_j·log2 d_jit)" in md
-    assert f"ℓ_a,j = scans[j].free = {ell_a:,} (conditional)" in md and "Every K here is conditional" in md
-    assert all(c in md for c in onsite.OPEN_CHECKS) and "ℓ_a + 1 bits" in md
+    assert f"ℓ_a,j = {ell_a:,} (the scan's slot entries, conditional)" in md and "Every K here is conditional" in md
+    assert all(c in md for c in onsite.OPEN_CHECKS) and "ℓ_a + 1" not in md
+    assert "the link figure charges the advice through the entries" in md
     for retired in ("D_j", "k_i", "link-window", "delta_net", "J is", "brief", "NET-", "advice width"):
         assert retired not in md, retired
     assert onsite.short("word " * 50).endswith(" …") and len(onsite.short("word " * 50)) <= 162

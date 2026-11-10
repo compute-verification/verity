@@ -74,8 +74,9 @@ BOUND = "k_exfil(Y) ≤ k_sched + k_fail + Σ_j (ℓ_a,j + k_skip,j + T_j·log2 
 #: (`Claims.Sampling.Bext`) and the collisions with the network certifier's openings (`NetTiming.Btap`). No check
 #: computes them, so δ_net has no number.
 ERRORS = ("ε_ks", "ε_bind", "ε_tap")
-#: the period check's two holds of a tied compute audit that K's ℓ_a,j (`scans[j].free`) waits on; until both are Lean
-#: refusals, K charged at the counted free inputs is conditional
+#: the period check's two holds of a tied compute audit that K's ℓ_a,j waits on where a phase's scan is sampled in part
+#: and the phase is charged its tied audits' counted free inputs; until both are Lean refusals, K charged so is
+#: conditional
 OPEN_CHECKS = ("free counted off the tied audit's registered descriptor",
                "each phase's window circuit held to the registered class circuit")
 #: what the lab leaves unmet of the onsite demo's placement, each a reason the record is simulated and never served
@@ -413,13 +414,16 @@ def notes() -> list[str]:
         "egress_cells for each of lanes·T_j connections a phase), whatever the requests served, since the adversary "
         "picks how many connections it opens. Both count the cell counts: PeriodLeakAccepted's terms as proved, a "
         "known overcount, and a bound charging each bit once would be tighter",
-        "ℓ_a,j is phase j's scans[j].free, the period check's free-input term for its tied compute audit, not the "
+        "ℓ_a,j is phase j's free-input term in the period check's answer (scans[j]'s free and entries), not the "
         "realized advice length |a_j|, which is private and not in this record. The lab ties no audit (no V3c), so "
-        "the record reads it as registered (leak_bounds): the audit's NR·T_j/EVERY slot entries, NE bits each",
-        "every K here is conditional: it charges ℓ_a,j as the tied audit's counted free inputs, which holds only once "
-        "two checks are Lean refusals in the period check (" + "; ".join(OPEN_CHECKS) + "). Until both are in, a tied "
-        "audit is charged its advice's cap ℓ_a + 1 bits instead, a figure this record doesn't compute: ℓ_a there is "
-        "the advice's padded length, which the record doesn't carry yet, not the registered ℓ_a,j it reads",
+        "the record reads it as registered (leak_bounds): the scan's NR·T_j/EVERY slot entries, NE bits each, which "
+        "the period check charges once a phase whose scan has every proof block drawn",
+        "every K here is conditional. Charged as the scan's slot entries once, ℓ_a,j bounds what the link carries only "
+        "on a statement not yet in the lock (the count PeriodLeakAccepted bounds at most 2^K at the check's K) and on "
+        "the scan's egress views being tied to its state, which no check reads. A phase whose scan is sampled in part "
+        "is charged its tied audits' counted free inputs instead, which holds only once two checks are Lean refusals "
+        "in the period check (" + "; ".join(OPEN_CHECKS) + "). No advice cap is charged for what is open: the link "
+        "figure charges the advice through the entries, and the advice's padded length is in no term of K",
         "k_skip,j is 0 in the per-period form, every proof block being drawn; the pooled form's k_skip at δ is "
         "F·log2(N + 1) + b·F (leak_bounds), and that form is conditional (hesc and hleak await SampledKSLive and P2)",
         f"the jitter is T_j·log2 d_jit at d_jit = {LB.JITTER_BOUND}, T_j bits a phase: JitterBounded holds only at "
@@ -485,9 +489,12 @@ def markdown(doc: dict) -> str:
               f"({LB.WEIGHTS.label}). It bounds a zone only over a period its period check accepted: K is established "
               f"for {', '.join(accepted) or 'no zone'} here. A zone's figures without that accept are the bound its "
               "run's load would have had, had its period check accepted.", "",
-              "Every K here is conditional: it charges ℓ_a,j (the period check's scans[j].free) as the tied audit's "
-              f"counted free inputs, which holds only once the period check holds {OPEN_CHECKS[0]} and "
-              f"{OPEN_CHECKS[1]} in Lean; until then a tied audit is charged its advice's cap ℓ_a + 1 bits.", "",
+              "Every K here is conditional: it charges ℓ_a,j as the scan's slot entries once, as the period check "
+              "does where every proof block of the scan is drawn, which bounds what the link carries only on a "
+              "statement not yet in the lock; a phase whose scan is sampled in part is charged its tied audits' "
+              f"counted free inputs instead, which holds only once the period check holds {OPEN_CHECKS[0]} and "
+              f"{OPEN_CHECKS[1]} in Lean. No advice cap is charged for what is open: the link figure charges the "
+              "advice through the entries.", "",
               "Each bound holds except at δ_net = eps + m·(ε_ks + ε_bind + ε_tap) over its row's m phases. The tables "
               "give eps, the period check's δ part of δ_net; no check computes ε_ks, ε_bind or ε_tap, so δ_net has "
               "no number here.", ""]
@@ -503,7 +510,7 @@ def markdown(doc: dict) -> str:
                   f"{k['run']['requests_per_link_window']:g} requests served in a phase of T_j = {w['T_j']} buckets "
                   f"of τ = {w['tau_ms']} ms ({w['phase_s']:g} s). Its terms a phase, whatever the requests served: "
                   f"k_sched = k_fail = {w['k_sched']:,} ({w['connections']} connections the schedule can carry, "
-                  f"{w['cell']} bits each), ℓ_a,j = scans[j].free = {w['ell_a']:,} (conditional), k_skip,j = 0, "
+                  f"{w['cell']} bits each), ℓ_a,j = {w['ell_a']:,} (the scan's slot entries, conditional), k_skip,j = 0, "
                   f"T_j·log2 d_jit = {w['jitter']} "
                   f"(d_jit = {w['d_jit']}); K a phase = {w['K']:,.0f}.", "",
                   f"| period | m ({w['phase_s']:g} s phases) | k_sched | k_fail | Σ_j ℓ_a,j | Σ_j T_j·log2 d_jit | "

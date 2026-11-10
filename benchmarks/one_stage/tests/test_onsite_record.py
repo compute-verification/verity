@@ -1873,7 +1873,7 @@ def test_while_certifier_key_is_open_an_accepted_network_verdict_is_not_establis
         tmp_path, lock, capsys, how):
     """certifier-key open, every other premise discharged, both checks held and the coins live: the network
     certifier's verdict is not established, its Lean answer's accept beside it, never cited as an accept with an open
-    condition, so the run isn't of record; its bound stands, the figure of record charging ℓ_a + 1 for the tied audit,
+    condition, so the run isn't of record; its bound stands, the figure of record the check's K with nothing added to it,
     and it, its cells, the composite's error and the run's being of record are conditional on certifier-key by name.
     It is open where the lock doesn't hold PeriodLeakRegistered at its pinned statement (unlisted or restated, each
     open too), and where the run's check of the auditor's record fails: a record of another key than the period's, no
