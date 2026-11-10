@@ -32,7 +32,7 @@ files and at the strategy a strategy of the period's game projects to. This modu
   it (`Live.wr`, `wrZP`), so what it writes at the outcome an accepted transcript's files decode to is accepted, and
   V5's `RecordCustodyZKJPLaw` holds at it under the sample file's law with no premise (`Live.hCust`). At the device's
   bytes as deployed, its one-stage rounds' bytes in order, A3 holds with no premise (`Live.deployed`).
-* **The sample** (`Live.L`): the sampling design the parameters' selection rule derives over the population (`law`), sampled as
+* **The sample** (`Live.L`): the sampling design the parameters' selection rule derives over the population (`design`), sampled as
   `Spot.Select.select` samples it, by `Spot.Draw.drawUnits` on the device's one byte stream (`src`); a
   sample that fails samples every unit. It is V5's sample at the session's bytes and law (`Live.L_eq`, `Flock.Bridge.execSel`).
 * **The live audit at the session** (`Live.game`), and V5's simulator and extractor at any strategy of it (`Live.sim`,
@@ -223,10 +223,10 @@ namespace Live
 variable (A : Live)
 
 /-- **The sampling design the verifier samples under**, from the registration (`Flock.Bridge.designAt`). -/
-abbrev law : Flock.Draw.Law := Flock.Bridge.designAt A.desc A.qr A.lj A.tb A.n
+abbrev design : Flock.Draw.Law := Flock.Bridge.designAt A.desc A.qr A.lj A.tb A.n
 
 /-- **The sample's size**: the proof blocks the sampling design samples (`Flock.Bridge.lawK`). -/
-abbrev kd : ℕ := Flock.Bridge.lawK A.law
+abbrev kd : ℕ := Flock.Bridge.lawK A.design
 
 /-- **The session's coin tree**: the keyed coin tree `verify --zk` sets the session up on (`ZkExec.zkCoins`), its
 session stream and each table's two rep streams, `2^roundsLog` rounds each (`Flock.Zk.coinSpec`). -/
@@ -303,15 +303,15 @@ theorem hCust : FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw (mPts := mPts
   recordCustodyZKJPLaw_deployed A.I A.own A.kd _
 
 /-- The session's law is no Bernoulli law (`Flock.Bridge.notBernoulli_designAt`). -/
-theorem hb : Flock.Bridge.NotBernoulli A.law := Flock.Bridge.notBernoulli_designAt _ _ _ _ _
+theorem hb : Flock.Bridge.NotBernoulli A.design := Flock.Bridge.notBernoulli_designAt _ _ _ _ _
 
 /-- **The sampling design is on the strata of the registration's layout and samples `kd` proof blocks**, at the
 registration's population (`Flock.Bridge.lawOn_drawsUnder`); where the registration names no law, the verifier samples
 under `subset 0`, which samples none. -/
-theorem hlaw : Flock.Bridge.LawOn A.law (Flock.Bridge.nsOf A.desc A.qr) A.kd := by
+theorem hlaw : Flock.Bridge.LawOn A.design (Flock.Bridge.nsOf A.desc A.qr) A.kd := by
   rcases Flock.Bridge.designAt_cases A.desc A.qr A.lj A.tb A.n with h | h
   · exact Flock.Bridge.lawOn_drawsUnder A.hpop h (Flock.Bridge.notBernoulli_drawsUnder h)
-  · unfold Live.kd Live.law
+  · unfold Live.kd Live.design
     rw [h]
     exact ⟨rfl, Nat.zero_le _⟩
 
@@ -342,15 +342,15 @@ noncomputable def extend (S : Widening) : Live where
 noncomputable def L : FlockSoundness.Audit.Law A.n where
   Ω := A.Ω
   draw ω :=
-    match _root_.Spot.Draw.drawUnits A.law A.n (_root_.Properties.Spot.bytesOf (A.src ω 0)) with
+    match _root_.Spot.Draw.drawUnits A.design A.n (_root_.Properties.Spot.bytesOf (A.src ω 0)) with
     | .ok (d, _) => Finset.univ.filter fun u => u.val ∈ d
     | .error _ => Finset.univ
 
 /-- The session's sample is V5's, `Flock.Bridge.execSel` at the session's bytes and law. -/
-theorem L_eq : A.L = Flock.Bridge.execSel (n := A.n) A.src A.law A.n := by
+theorem L_eq : A.L = Flock.Bridge.execSel (n := A.n) A.src A.design A.n := by
   unfold Live.L Flock.Bridge.execSel
   refine congrArg (@Verity.Law.mk (Fin A.n) A.Ω _ _) (funext fun ω => ?_)
-  rcases _root_.Spot.Draw.drawUnits A.law A.n (_root_.Properties.Spot.bytesOf (A.src ω 0)) with
+  rcases _root_.Spot.Draw.drawUnits A.design A.n (_root_.Properties.Spot.bytesOf (A.src ω 0)) with
     _ | ⟨d, x⟩ <;> rfl
 
 /-- **Flock's live audit at the session**, the game V5 bounds: the prover registers, the device's bytes sample, and
@@ -419,7 +419,7 @@ of `kd` units, `C(n − K₀, kd)/C(n, kd)` with `K₀ = ⌊εn⌋ + 1`. Those s
 claim, so no count of them enters; with none (`ε ≥ 1`) the term is `0`. -/
 noncomputable def drawMiss : ℝ≥0∞ :=
   ENNReal.ofReal (⨆ B : {B : Finset ℕ // B ⊆ Finset.range A.n ∧ A.ε * A.n < B.card},
-    (_root_.Properties.Spot.oneStageOf A.law).Pa (Flock.Bridge.nsOf A.desc A.qr) B.1)
+    (_root_.Properties.Spot.oneStageOf A.design).Pa (Flock.Bridge.nsOf A.desc A.qr) B.1)
 
 /-- **The registration's roots term**: `ecr/sha-512` at the finder that recomputes the registration's roots at the
 public file's leaf map (`Flock.Bridge.rootsFinderL`, no coins, `Flock.Bridge.rootsCostL` SHA-512 calls): two ports with
@@ -542,7 +542,7 @@ noncomputable def extract (τ : FlockSoundness.Game.Strategy A.game) : A.fileRea
   cast (congrArg Verity.Circuit.Trace A.circuit_eq.symm)
     (Flock.Bridge.transcriptOf A.D A.hU A.n A.κ
       ((Flock.Bridge.witDep A.Cc A.Cd Claims.Sampling.sha512Msg A.roots (A.Xr τ)).val Claims.Sampling.sha512Msg A.Cd
-        (Flock.Bridge.stmtOf A.P A.κ (_root_.Properties.Spot.oneStageOf A.law) A.desc ⟨"", 0, []⟩
+        (Flock.Bridge.stmtOf A.P A.κ (_root_.Properties.Spot.oneStageOf A.design) A.desc ⟨"", 0, []⟩
           A.roots)))
 
 /-- **The openings `op` of the committed files `r` hold wherever the session's deployed commitment opens**: at each
@@ -676,7 +676,7 @@ the published certificate's. The device's bytes and the bound's parameters are t
 (`Deployed`). -/
 structure SetsUp (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (A : Live) : Prop where
   params : ∃ p, ParamsAt θ p ∧ A.I.partition = some p.own.partition ∧ A.I.program = some p.own.program ∧
-    lawAt p.base.verifier A.n = .ok A.law ∧
+    lawAt p.base.verifier A.n = .ok A.design ∧
     _root_.Spot.Program.parse ⟨A.desc.toArray⟩ = .ok p.base.verifier.program ∧
     A.qr = p.base.verifier.query ∧
     ∃ key label m, p.base.challenger = some (key, label) ∧ (label, m) ∈ V.families θ ∧

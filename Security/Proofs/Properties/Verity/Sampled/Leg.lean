@@ -52,7 +52,7 @@ variable (A : Live)
 /-- **The session's sampling statement**: the key program's at the session's constants and roots, under the sampling design's
 one-stage design (the one `Live.extract` reads). -/
 noncomputable abbrev stmt :=
-  Flock.Bridge.stmtOf A.P A.κ (_root_.Properties.Spot.oneStageOf A.law) A.desc ⟨"", 0, []⟩ A.roots
+  Flock.Bridge.stmtOf A.P A.κ (_root_.Properties.Spot.oneStageOf A.design) A.desc ⟨"", 0, []⟩ A.roots
 
 /-- **The session's sampling partition**: the key program's proof blocks at the registration's strata. -/
 noncomputable abbrev part := Flock.Bridge.partOf A.P A.κ (Flock.Bridge.nsOf A.desc A.qr)
@@ -86,7 +86,7 @@ charged `t + w` per run and the tables' finders at `2t + 2v` and `t + v`, at a s
 `Flock.Bridge.execSel` at the session's bytes and law; at `L = A.L` (`Live.L_eq`) its simulator and extractor are the
 session's (`Live.sim`, `Live.Xr`). The session's `--zk` tags are in `TagsOkZHJ` (`Live.hTags`), so V5's bound is the
 one it states there, and `live-verifier` at the registration's law is the sample file's (`Live.hsub`, `Live.hCust`). -/
-theorem v5_at (L : FlockSoundness.Audit.Law A.n) (hL : Flock.Bridge.execSel (n := A.n) A.src A.law A.n = L) (t : ℕ)
+theorem v5_at (L : FlockSoundness.Audit.Law A.n) (hL : Flock.Bridge.execSel (n := A.n) A.src A.design A.n = L) (t : ℕ)
     (B : Finset ℕ) (τ : FlockSoundness.Game.Strategy (auditLive L A.Reg (liveOfZJ A.dg (planZHJP A.dj A.y₀) A.N A.wr))) :
     let σ := simZJA execArith hs512 (planZHJP A.dj A.y₀) (AcceptsZKP A.I A.own) A.wr
       (opnAtZHJP (planZHJP A.dj A.y₀) A.I A.own A.dj) A.dg (decAtZJ (planZHJP A.dj A.y₀)) (fun _ _ _ _ => true)
@@ -98,10 +98,10 @@ theorem v5_at (L : FlockSoundness.Audit.Law A.n) (hL : Flock.Bridge.execSel (n :
     LinkCRZC execArith hs512 A.P (planZHJP A.dj A.y₀) (tabZHJP A.dj A.y₀) A.vb (reg σ) (cont σ) A.k A.Rw A.M (A.tL t) →
     Verity.Game.prob (fun o => LiveAcceptsZKP A.I A.own o ∧
         ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg A.Cd
-          ((Flock.Bridge.designOf (_root_.Properties.Spot.oneStageOf A.law)).Pa A.part B) A.stmt A.part
+          ((Flock.Bridge.designOf (_root_.Properties.Spot.oneStageOf A.design)).Pa A.part B) A.stmt A.part
           (Flock.Bridge.witDep A.Cc A.Cd Claims.Sampling.sha512Msg A.roots Xr))
         (auditLive L A.Reg (liveOfZJ A.dg (planZHJP A.dj A.y₀) A.N A.wr)) τ ≤
-      ENNReal.ofReal ((Flock.Bridge.designOf (_root_.Properties.Spot.oneStageOf A.law)).Pa A.part B) +
+      ENNReal.ofReal ((Flock.Bridge.designOf (_root_.Properties.Spot.oneStageOf A.design)).Pa A.part B) +
         ksAvgStrictZ (planZHJP A.dj A.y₀) L A.k (A.qF t) (A.qS t) (reg σ) +
         ENNReal.ofReal ((∑ p : A.vb.Pos,
             (Fintype.card (ΩcZ execArith A.P (planZHJP A.dj A.y₀) (tabZHJP A.dj A.y₀) A.vb L p) : ℝ) /
@@ -111,7 +111,7 @@ theorem v5_at (L : FlockSoundness.Audit.Law A.n) (hL : Flock.Bridge.execSel (n :
         A.rootsErr := by
   subst hL
   have hCust : FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw (mPts := mPtsOf A.D.unroll.g (A.kd / nTab A.I))
-      A.I A.own A.dj (fun S R => (planZHJP (Reg := A.Reg) A.dj A.y₀ S R).length) A.wr fun _ => A.law :=
+      A.I A.own A.dj (fun S R => (planZHJP (Reg := A.Reg) A.dj A.y₀ S R).length) A.wr fun _ => A.design :=
     (congrArg (fun l => FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw
       (mPts := mPtsOf A.D.unroll.g (A.kd / nTab A.I)) A.I A.own A.dj
       (fun S R => (planZHJP (Reg := A.Reg) A.dj A.y₀ S R).length) A.wr fun _ => l) A.hsub).mpr A.hCust
@@ -159,10 +159,10 @@ theorem ks {r : Verity.FileRead} (hr : r = A.fileRead)
   have hmono : Verity.Game.prob (fun o => LiveAcceptsZKP A.I A.own o) A.game τ ≤
       Verity.Game.prob (fun o => LiveAcceptsZKP A.I A.own o ∧
         ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg A.Cd
-          ((Flock.Bridge.designOf (_root_.Properties.Spot.oneStageOf A.law)).Pa A.part Fs) A.stmt A.part w)
+          ((Flock.Bridge.designOf (_root_.Properties.Spot.oneStageOf A.design)).Pa A.part Fs) A.stmt A.part w)
         A.game τ :=
     Verity.Game.prob_mono (fun o ho => ⟨ho, fun hR =>
-      lt_irrefl ((Flock.Bridge.designOf (_root_.Properties.Spot.oneStageOf A.law)).Pa A.part Fs) hR⟩) _ τ
+      lt_irrefl ((Flock.Bridge.designOf (_root_.Properties.Spot.oneStageOf A.design)).Pa A.part Fs) hR⟩) _ τ
   refine (hmono.trans hv).trans (add_le_add (add_le_add (add_le_add ?_ ?_) le_rfl) le_rfl)
   · unfold Live.drawMiss
     rw [Flock.Bridge.pa_partOf A.P hns _ Fs hFs]
@@ -171,7 +171,7 @@ theorem ks {r : Verity.FileRead} (hr : r = A.fileRead)
       Finite.of_injective (fun B => (⟨B.1, Finset.mem_powerset.2 B.2.1⟩ : (Finset.range A.n).powerset))
         fun a b h => Subtype.ext (by simpa using congrArg Subtype.val h)
     exact le_ciSup (f := fun B : {B : Finset ℕ // B ⊆ Finset.range A.n ∧ A.ε * A.n < B.card} =>
-        (_root_.Properties.Spot.oneStageOf A.law).Pa (Flock.Bridge.nsOf A.desc A.qr) B.1)
+        (_root_.Properties.Spot.oneStageOf A.design).Pa (Flock.Bridge.nsOf A.desc A.qr) B.1)
       (Set.finite_range _).bddAbove ⟨Fs, hFs, hcard⟩
   · exact le_iSup (fun R : A.Reg => ksAvgStrictZ (planZHJP A.dj A.y₀) A.L A.k (A.qF t) (A.qS t) R) _
 
