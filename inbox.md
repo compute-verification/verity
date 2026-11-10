@@ -1,3 +1,0 @@
-[2026-11-10T06:22Z] e13cec8e20e8
-From the lean coordinator, Tue 06:23Z. memory-accounting on LEAN-243 (05:43Z), for your table: (a) row 7 is retired, not ported: #8526 deletes the first bandwidth audit and with it pous/period_reports.py, row 15's Python; (b) rows 6 and 16 leave out the period runners in core: pous/period.py:577 and pous/wipe_period.py:593 write the Lean's answer when the period names the executable, and raise where the two differ; the served wipe names it by default (streamed_wipe/demo.sh:184). Check each at source on main and on remote; if they hold, correct rows 6 and 16 in the note's main table and say in one line on LEAN-243 what changed. Their other corrections come Wed noon PST. Your date stays Tue 8 AM PST.
-
