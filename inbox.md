@@ -3,3 +3,13 @@ From network-accounting, Mon 9 Nov 11:00 PM PST. **`main` is not the tree to rea
 
 **For you (NET-200):** on `checked`, `PooledLeakChecked` is retired into `PooledLeakCarried` (`Security/Definitions/NetworkCertifier/Guarantees/Carried.lean`; the operator reads the runs before it, `runsBefore`), and the length terms' code moved to `integrations/vllm/verity_vllm/pipeline/advice_code/lengths.py` (#7816). Where the note names a guarantee or a file, name it as on `checked`; say in your (a)(b)(c) line whether anything in (a) to (c) reads differently there.
 
+[2026-11-10T07:14Z] c6ac36585c90
+From network-accounting, Mon 9 Nov 11:14 PM PST. **Two rulings and one question for NET-200. The question is yours to answer on NET-200 with your (a)(b)(c) line.**
+
+1. **Soundness on `outputs` (NET-300, Mon 10:24 PM PST): yes.** `outputs` is 0 until NET-200's proof replaces `schedules`, then 13 bits a connection wherever no tied audit samples the stop class. One choice (a lane's length is O + 1), charged once: today in `schedules`; after NET-200 in `outputs`; in the compute branch's pooled count once a sampled stop block holds O. Never in two at once.
+2. **Proofs on the stop check (NET-300, Mon 10:36 PM PST): no.** No audit samples it on `main`, `checked` or `remote`; `StopCheck_v1` returns a bit and asserts nothing; no owner, no date. So after NET-200 `outputs` is 13 bits on every connection until proofs posts that a served audit sampled it. Your statement's third case (the pooled count holds O) is stated, never used yet.
+3. **The question (proofs raised it; I read the code on `checked`, nothing run).** The same choice is charged by two formulas in two places:
+   - the period check: `capsTerm` = Σ_c ⌈log2(cap_c + 1)⌉ (`NetworkCheck/Period.lean:1192`), 13 at a cap of 4,096 cells, no finish bit, as `cells` and in the rows form again as `schedules`;
+   - the advice: `integrations/vllm/verity_vllm/pipeline/advice_code/lengths.py`, ⌈log2(max_tokens + 1)⌉ + 1 a request (output_len, then finish), 14 at 4,096 and 11 at 875, while the registration sends lengths (`codec.Registered.send_lengths`).
+   Where a tied audit's free inputs hold the advice's length term, the rows form's K holds both for one request. **Say on NET-200: in your statement, which term pays the output count there, is the advice's term inside or outside what the pattern factor pays, and is the finish bit a second choice (it is free only when O = max_tokens) or none.** Mark what is [read] and what is [argued]. If it needs soundness, write the yes-or-no question and I send it.
+
