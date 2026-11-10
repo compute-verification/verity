@@ -24633,3 +24633,37 @@ definitions; nothing models that prover). Whether there is a fourth family: I li
 holds `ZK`, `Zk` or `Hid` under `Security/` (34 files) and read the headers of the eight that are not Flock-session
 internals; `ZeroKnowledgeHidden` is one session's honest-verifier form and `EndToEndHidden` is soundness. Why LEAN-186's
 premises of `RecZK` show due 7 Nov: not read.
+
+## PROVECUT, Tue 10 Nov 05:32Z: the 12:00Z items, early. `d7bf` belongs in no card; the gates forms need their own 2-hour slot on node A; `SparseMlaSplitPart_v2` needs no staging on #8281's chains
+
+**review-1's findings** (the ref on its land verdict at `12fd6a285a73`, read): four, none holding.
+1. **`d7bf`** measured the slots forms of FlashInfer K=6144 and K=2048, which `verify --zk` refuses [read: my 9 Nov notes, #8359's body], so no card of record should name it.
+   - The card to fix is `benchmarks/spot_figures/cards/proof_overhead.glm-5.3.json`. It holds FlashInfer K=256 and K=2048 from `83ed` and `afd9`, and the router and indexer as `_v1` at k_log 22 [read].
+   - It should name the gates forms' GPU run. That goes in its own PR after #8359 lands, mine, together with `total_cost.py` labelling a block priced from another k_log as `scaled`, not `measured`.
+   - #8359's body said `proof_overhead` held `d7bf`. I corrected it at 05:28Z with `research queue edit`; the head is unchanged, so the verdict stands.
+2. The workload card's `_v1` names on `_v2` numbers wait on vllm's partition naming the `_v2` templates (PRF-477, #8516). The card renames then.
+3. A fast test for `stage.py`'s five census types goes in the same follow-up PR.
+4. 2c17's failed status: its five stagings finished, and the body says why it exits 1. The follow-up card cites the GPU run instead.
+
+**The gates forms' GPU run: its own slot, before Wednesday's window. About 2 h of node A, with one H200 for the last 20 min.**
+- **Why not Wednesday's run:**
+  - Staging the seven gates forms together peaks at about 375 GB. The indexer alone is 247 GB [run: 2c17, da59].
+  - Wednesday's window already has to sequence Gumbel (271 GB) and the 64-key `_v2` blocks (about 200 GB each) through 600 GB beside `/dev/shm` (SERVEDCARD, 04:36Z).
+  - And review-1 says not to quote the figure until these rows exist.
+- **The slot:**
+  - Stage the seven at full statements on node A's CPUs, in parallel: about 75 to 110 min [guess: the n = 1 times below, plus each statement's inputs].
+  - Then, on one H200, a warm-up and two timed `--zk --gpu` sessions for each form, as `d7bf` did: about 20 min [guess: `d7bf` took 1 to 2 min a form].
+  - The staged statements stay on node A's disk, so SERVEDCARD proves them on Wednesday without restaging.
+- **Staging at n = 1** [run]:
+  - FlashInfer K=6144: 12:32, 42.6 GB. K=2048: 4:22, 14.3 GB. K=1536: 3:17, 10.9 GB. K=256: 0:57, 2.0 GB.
+  - The quantisation part at K=6144: 12:34, 41.5 GB.
+  - The router: 9:42, 16.3 GB. The indexer: 1:12:08, 246.8 GB.
+- **If node A has no 2 hours free before 21:00Z:** the six forms other than the indexer stage in about 15 min at about 130 GB, and the indexer goes into Wednesday's window only if SERVEDCARD's memory plan has room.
+
+**`SparseMlaSplitPart_v2` at T = 64: the final card doesn't need it and nobody stages it, provided the card is on #8281's chains.**
+- #8281 retires the split layout. #8520 says "after #8281 a split part is not a served unit", and decode's 64-key split parts become `SparseMlaHeadBlock`s [read]. SERVEDCARD's 02:45Z plan already prices `SparseMlaHeadBlock_v2` at NVIS=1 FIRST and NVIS=64.
+- But #8359's head, which SERVEDCARD stages from, doesn't have #8281. It merges cleanly with #8520's head, which carries #8281: `git merge-tree` gives tree `f70db0fe40` with no conflict [run]. So SERVEDCARD should stage from that merge, or from `main` once all three land.
+- If the card stays on #8359's head alone, the split part is a served unit and the card needs it. Then I stage it on cpu-5 before Tue 21:00Z, from a branch at #8359's head plus its census row (`_v2`, with `HopperBF16WgmmaDot16_v2` and `Fa3InvSum_v2`).
+  - That takes about 70 to 81 min and 200 GB, like #8520's 64-key `_v2` block [guess]. That block is 30.9M ANDs at k_log 27 and passes `ks_form_why` [read, #8520].
+
+Next: nothing of mine is running. I wait on your call on the gates slot and on which tree the card is staged from.
