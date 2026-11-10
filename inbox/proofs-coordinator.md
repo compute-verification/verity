@@ -29808,3 +29808,23 @@ Your 17:16Z entry, read.
 - **After it, when you resume me:** `research data put --kind fixture/v1 --preserve` on that file, the registry line, one commit, and the quick tier of the suites that read the registry (`--changed` the candidate). Then the text for #8339's body, with your points 4 and 5, in my entry: I cannot edit a PR.
 - **#8139:** quick tier passed, 71 of 71 (my 17:15Z entry). Records **r20261110-164306-7f23** still running.
 - **Scratch heads:** #8139 `424189699fbf`, #7780 `42f405eb692f`, #8339 `e86642f916a1`. My turn ends here.
+
+## HOUSEKEEP, Tue 10 Nov 17:25Z: the cut's staging is pushed (`cursor/top-layout-staged-0247` at `0bda472ef80c`): our three fixtures hold their files' digests on its head, our 48 rows are applied, #8552 crosses it clean; the other 24 run now, table by about 17:45Z
+
+**The head.** `cursor/top-layout-staged-0247` = `0bda472ef80c651367b0ced3a9b786c27ca4d470`, on origin when I looked at 17:18Z; no post on TOP-394 names it yet (read 17:21Z, newest lean's 17:05Z). [run] Its commits over `034a1702664b`: the model's tables merged `3b08ef6575`, the maps `eb9d76020c`, the one-map move `02479f5e18`, three commits of inputs, levels and rows (`e1b10d3245`, `1f5e35af90`, `81df76e37e`), the second move `4904f9d675`, vllm's pick `2e0de780b8`, the generated files `54c9e1fdf8`, the old roots deleted `c395f409a9`, the boundary's rows `0bda472ef8`. [run: `git log`] That it is the cut's is from the base and the stager's 16:59Z block; the stager's block naming it I have not read. [guess]
+
+**The fixtures on its head** (`fixture_digests.py /agent/repos/verity 0bda472ef80c…`, rc 0). [run, 17:19Z]
+- `verity/flock/prover/tests/fixtures/randomness_lean.json`: 8 recorded inputs, 0 with another digest, 0 absent.
+- `verity/spot/verifier/tests/fixtures/exfiltration_lean.json`: 7, 0, 0.
+- `verity/spot/verifier/tests/fixtures/exfiltration_two_lean.json`: 6, 0, 0.
+- So #8486, #8515, #7983, #8420, #8378, #8392 and #8388 in the base change none of the 21 recorded files, and the second move and the regenerated files leave every recorded digest true.
+
+**Our rows on it** (`hand_lines_applied.py`, new in `lanes/proofs/layout/tools/`: each row's `want` is a line of its file and its `after` is not). [run]
+- At `81df76e37e`, the last commit before the second move: 48 of 48 applied.
+- At the tip: 44 read as `want`; rows 40, 41, 45 and 47 read as `want` with `Security/` as `security/`, which is the second move's rewrite of those four lines (the stops infra's dry run on `af72`'s tip named).
+
+**The rehearsal on it.** #8552: clean. BASE is `eb9d76020c46` (the one-map move's parent); both of the cut's moves pass `restack.py`'s own check that the move commit is what the script writes on its base, and both are crossed; no pins commit; 273 s. [run, 17:20Z to 17:24Z] The other 24 started at 17:25Z, three at a time.
+
+**Still open from the first pass:** nothing. Its stand-in pass over `034a1702664b` reached 20 clean of 20 before I stopped it for the cut's head.
+
+**Next:** the table against the cut's head (about 17:45Z), then TOP-394 for the stager's reds on the named test files (top said about 17:45Z).
