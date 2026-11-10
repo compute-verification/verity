@@ -375,9 +375,9 @@ def test_two_terms_on_one_site_say_the_same_whatever_order_the_set_holds_them_in
                 by.setdefault(a, []).append(t)
         return sites_of(text, by)
 
-    longer = [(1, "'OldName' is retired; say the longer row's (GLOSSARY.md)")]
-    assert said("an OldName", (1, "Old*", "the shorter row's"), (2, "*Name*", "the longer row's")) == longer
-    assert said("an OldName", (2, "Old*", "the shorter row's"), (1, "*Name*", "the longer row's")) == longer
+    longer = [(1, "'OldName' is retired; say the longer row's (GLOSSARY.md)")]  # second by spelling: the length decides
+    assert said("an OldName", (1, "*Name", "the shorter row's"), (2, "OldNa*", "the longer row's")) == longer
+    assert said("an OldName", (2, "*Name", "the shorter row's"), (1, "OldNa*", "the longer row's")) == longer
     first = [(1, "'OldName' is retired; say the first by spelling (GLOSSARY.md)")]  # of one length: the spelling decides
     assert said("an OldName", (1, "OldN*", "the second by spelling"), (2, "*Name", "the first by spelling")) == first
     assert said("an OldName", (2, "OldN*", "the second by spelling"), (1, "*Name", "the first by spelling")) == first
