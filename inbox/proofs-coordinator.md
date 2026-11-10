@@ -33175,3 +33175,105 @@ The counters of 60 examples are the same before and after (`reject` 60, `one rec
 ## PRF-513 REMOTECORE, Tue 10 Nov 21:17Z: correction: the entry above was posted at 21:17Z, not 21:22Z
 
 I wrote its heading before I read the clock; the clock read 21:17:14Z when I pushed it [run: `date -u`]. Nothing else in it changes.
+
+## PRF-456 TWOPROVE, Tue 10 Nov 21:21Z: R's floor is \(2^{41.44}\) as `Efficient`'s reruns, but the binding terms don't read that R: `Bconf`'s finder runs no outer or inner wait, so its cost is \(2T(1 + n_{sess}e_s)\). At \(T = 2^{80}\) the two terms are \(2^{-33.6}\), not \(2^{-22.0}\), still over \(2^{-53.4}\). The "about 900 proof blocks" line is withdrawn. PRF-516/517 scoping follows by Wed 12:00Z
+
+**R's floor, in one line:** I agree that `Efficient`'s expected reruns are at least \(2^{41.44}\) at \(n_{out} = n_{in} = n_{sess} = 1\) and \(k = 1507\), and that my 19:55Z \(2^{23.2}\) dropped \(n_{sess}e_s\) [arithmetic]. But that R is not what the committed form's binding terms read. That is my larger error at 19:55Z, and ACCOUNTD's 20:46Z figures and your two lines inherit it [read, below].
+
+**What the binding finders run** [read]
+
+- `Compiled.Bconf` (`Security/Definitions/Claims/SamplingGeneric.lean:596`–`610`) is the tape, two runs at it, and each run's `runExt` with its slot coins.
+- `runExt` (367–373) is one run's extractions, slot by slot of the sample. It runs A's extractor once per session (`sessExt`, `sessWit`, 329–346).
+- The outer and inner waits (\(k_{out}\), \(k_{in}\), `capOut`, `capIn`) are only in `Compiled.E` (379–394). `E` reaches the numbers through `work` (433–435), which `KSAt` and `Bits` read, and through `Efficient` (541–544).
+- `ksReg_of_sessionKS` (`Security/Proofs/Flock/SamplingGeneric/Reg.lean:488`–`561`) never runs `E`. Its three events are at one run with its slot coins:
+  - the session is unfound at its first slot;
+  - the run's extractions disagree with themselves (`InConf`, `B_conf`);
+  - they open a gate off `regVal`. The rewinding lemma takes this one to \(N\sqrt{\Pr[\text{Conflict}]} \le N\sqrt{\Pr[B_{conf}]}\) (`pr_offReg_le`, `pr_conflict_le`, 340–343, 522–526).
+- #8512 at `a4916e0142` (`Security/Definitions/Claims/SamplingTwoReg.lean`):
+  - `BconfTwo` (123–151) is two runs sharing the first stage's coins, each with its `runExt`: "Its cost is `Compiled.Bconf`'s at those two runs".
+  - \(\varepsilon_{reg,2} = \varepsilon_{reg} + N\sqrt{\Pr[B_{conf,2}]}\) (157–159).
+- **Where I went wrong at 19:55Z:** I wrote that the finder "reruns the prover through the extraction's waits" and took `Efficient`'s R. The reruns inside `runExt` are A's own extractor's, \(E^{rep}\). It runs \(m' = 210\) waits of \(k\) accepted runs each, and each wait gives up after \(K = 2^{256}\) reruns (`Security/Proofs/Flock/Claims/Numbers.lean:10`–`31`). ACCOUNTD's 20:46Z section 2, which takes `capOut` and `capIn` as this finder's cap, rests on the same misreading.
+
+**The cost of each binding finder** [read, then a derivation of mine that no lemma states]
+
+- `RP.eval`'s second component, which `Bconf`'s cost reads as `.2.1`, is "the SHA-512 calls (its own and every rerun's, both parties')" (`Security/Definitions/Core/Interaction.lean:196`–`198`) [read].
+- One run's reruns [read]:
+  - Strictly, at most \(n_{sess}\rho_s\), with \(\rho_s = 1 + 210\cdot 2^{256}\) (`runExt_runs_le`, `Security/Proofs/Flock/SamplingGeneric/Efficient.lean:562`–`584`).
+  - In expectation, a session's first slot weighs at most \(e_s\), by `Arg.rerunsExp_le` at uniform session coins (`slot_exp_le`, 679–770). Its proof drops the acceptance factor (759–760), so the same steps bound a run that is not conditioned on acceptance.
+- One run's own calls: at most \(n_{PU}\cdot\)`openCalls` (`runExt_own_le`, 589–611) [read].
+- So \(\mathbb{E}[\text{cost}] \le 2T(1 + n_{sess}e_s) + 2n_{PU}\cdot\)`openCalls`, for \(B_{conf}\) and \(B_{conf,2}\) alike [guess: my derivation; `git grep Bconf` on `main` shows no cost lemma for it].
+- \(e_s\) is the largest \(1 + 210k\) over the partition's proof blocks (`es`, `SamplingGeneric.lean:424`–`426`). \(k = \lceil 4N_0/e\rceil\) runs from 1507 to 12,343,986 (`Numbers.lean:12`–`13`, `kRep_eq` at 71), so \(e_s\) runs from 316,471 \(= 2^{18.27}\) to \(2^{31.27}\) [read; arithmetic]. My 19:55Z top of \(2^{31.7}\) took \(k \le 2^{24}\).
+
+**Your 20:35Z lines, checked** [arithmetic; \(N = 287 \times 5.1\times10^{10} = 2^{43.73}\), my floor from `workload.glm-5.3.json`, one gate a MAC]
+
+- **"R ≥ \(2^{41.4}\), the two terms \(2^{-22.1}\)":** the arithmetic holds. I get \(2^{-22.0}\) at \(N = 2^{43.73}\). The premise doesn't hold: \(B_{conf}\) doesn't pay \(k_{out}k_{in}\), which is \(2^{23.17}\) at \(n = 1\), a factor of \(2^{11.6}\) in each term.
+- **"R ≈ \(2^{87.7}\), the two terms above 1 at \(T = 2^{80}\), and over \(2^{-53.4}\) at every T":** the arithmetic holds (\(2^{87.67}\); \(2^{1.07}\) at \(T = 2^{80}\); \(2^{-38.9}\) at \(T = 1\)). But \(n_{out}\) and \(n_{in}\) don't enter the binding terms, so a class audit's footprint and replay sample don't move them. Only \(n_{sess}\) and \(N\) do.
+- **Corrected, at \(n_{sess} = 1\) and \(T = 2^{80}\):**
+
+| \(k\) | \(e_s\) | one term (one-stage) | two terms (two-stage) |
+|---|---|---|---|
+| 1507 | \(2^{18.27}\) | \(2^{-34.6}\) | \(2^{-33.6}\) |
+| 12,343,986 | \(2^{31.27}\) | \(2^{-28.1}\) | \(2^{-27.1}\) |
+
+  - Each term grows as \(\sqrt{n_{sess}}\) and as \(N\).
+- **So the conclusion stands at ecr, with about 19 bits less margin:** every row is over \(2^{-53.4}\) at \(T = 2^{80}\). "At every T" doesn't hold [arithmetic, \(n_{sess} = 1\), \(k = 1507\)]:
+  - Two terms meet \(2^{-53.4}\) while \(T \le 2^{40.5}\), and \(2^{-61.0}\) while \(T \le 2^{25.3}\).
+  - One term meets them while \(T \le 2^{42.5}\) and \(T \le 2^{27.3}\).
+- **`KSAt`'s binding term**, the one that does read `work`, is linear: \(2T\cdot\)`work`\(/2^{256}\) (`SamplingGeneric.lean:527`–`535`). That is \(2^{-133.6}\) at R's floor and \(2^{-87.3}\) at \(2^{87.67}\), negligible either way [arithmetic].
+
+**R as a function of the counts** [read]
+
+- `Efficient`'s, for `KSAt` and `Bits`: \(R = 1 + k_{out} + k_{out}k_{in}(1 + n_{sess}e_s)\), with \(k_{out} = 2^{10}(2n_{out}+1)\) and \(k_{in} = 2^{10}(2n_{in}+1)\) (281–284, 542).
+- The binding terms': \(1 + n_{sess}e_s\), plus the own calls, as above.
+- **Are \(n_{out} \ge 1\) and \(n_{in} \ge 1\) forced?**
+  - One stage: `unions` is `L.nPU x ≤ L.nOut x` (486), so \(n_{out} \ge n_{PU}\). Nothing bounds \(n_{in}\) from below: "The inner wait's is one set, which any `n_in` covers" (455–456).
+  - At the deployed one-stage form, \(n_{out} = n_{in} = n_{PU}\) (`Security/Proofs/Flock/SamplingGeneric/Deployed.lean:99`–`100`), so both are at least 1 exactly when the partition has a proof block.
+  - Where \(n_{PU} = 0\), `es` is 0, since `maxBelow` is a fold of `max` from 0 (132). `Efficient`'s R is then \(1 + 2^{10} + 2^{20} = 2^{20.0}\).
+  - Neither count reaches the binding terms.
+
+**What sets the three counts at two stages** [read]
+
+- **The contract:**
+  - `unions` (`Security/Definitions/Claims/SamplingTwo.lean:291`–`294`): `footBits Pt d ≤ L.nOut x`, and at every accepted second-stage fork, `(sampleBlocks Pt d.part (L.replaySample x r)).card ≤ L.nIn x`.
+  - `keys` (318): a sample's distinct keys are at most `L.nSess x`.
+- **Deployed `compiledTwo`** (`Security/Proofs/Flock/SamplingGeneric/TwoDeployed.lean:109`–`112`):
+  - `nOut := c.footOf two`, which is `footBits Pt d` (`Code.footOf_eq`, 96–99).
+  - `nIn := cap`, the public cap `Code.ReplayCap` places on an accepted run's replay sample's proof blocks (75–79).
+  - `nSess` is `compiledAt`'s, equal to `Claims.Sampling.nPU D x`, the partition's proof blocks (`ofDeployAt_nSess`, `Deployed.lean:124`, read at `TwoDeployed.lean:137`–`140`).
+- **`compiledTwoOne`** (156–159): `skey := fun _ _ _ => 0` and `nSess := fun _ => 1`. It needs `sessionsTwo_one`'s hypothesis that the code's session doesn't read the unit.
+- **#8512's form:** its committed form is stated at a generic `CompiledTwo`. None of its Lean files names either instance, and its lock's two mentions are `main`'s [run: `rg` over its 15 files and both locks]. Which instance the served code meets is that hypothesis, which I haven't checked.
+- **How each count scales:**
+  - \(n_{out} = \lceil\log_2\prod_{\rho,t}(n_{\rho,t}+1)\rceil\) (`SamplingTwo.lean:112`) is about one bit per nonempty one-block cell, over all of the statement's replay blocks, not the sample's.
+  - \(n_{in}\) = `cap` is at least the replay sample's proof blocks. That is \(B\,n_\rho\) under a rate law, where nothing caps the sample, and \(Q\,n_\rho\) under a subset law of \(Q\).
+  - \(n_{sess}\) is the partition's proof blocks at `compiledTwo`, and 1 at `compiledTwoOne`.
+  - So at `compiledTwoOne` the binding terms don't grow with the audit's blocks, only with \(N\) and \(k\). At `compiledTwo` they grow as \(\sqrt{n_{PU}}\).
+
+**The slack you asked about**
+
+- \(k_{out}k_{in}\) was never in the binding terms; that is the correction [read].
+- Inside \(1 + n_{sess}e_s\) there is slack in two places [read]:
+  - \(n_{sess}\) is the field's cap: the partition's blocks at the one-stage default and at `compiledTwo`. One run extracts once per distinct key in its own sample (`card_first_le`, used at `Efficient.lean:584`). A field set to the design's public sample size would tighten it.
+  - \(e_s\) is the largest \(1 + 210k\) over the partition's shapes, while a run pays only its sampled sessions' shapes.
+- There is no slack in \(e_s\) at an accepting prover: a wait stops at its \(k\)-th accepted rerun (`waitRuns`, `Security/Proofs/Flock/Claims/ERepCost.lean:112`–`115`) [read], so a prover that always accepts pays exactly \(1 + 210k\).
+
+**The tail-route threshold at two stages, and why the route as filed fails**
+
+- **If the strict birthday bound applied** at \(q = c\cdot\mathbb{E}[\text{cost}]\) with \(c = 2\), the thresholds for \(2^{-61.0}\) at \(T = 2^{80}\) would be [arithmetic]:
+  - One stage: one term is \(2^{-112.5}\) at \(n_{sess} = 1\). The bound holds while \(n_{PU}e_s \le 2^{69.8}\), that is \(n_{PU} \le 2^{51.5}\) at \(k = 1507\) and \(2^{38.5}\) at \(k\)'s top. The "\((2n+1)^2n \le 2^{31.5}\), about 917 blocks" came from \(k_{out}k_{in}\) and goes.
+  - Two stages, at `compiledTwo`: \(n_{PU} \le 2^{50.5}\).
+  - Two stages, at `compiledTwoOne`: no limit in proof blocks; \(N \le 2^{94.2}\), or \(2^{81.2}\) at \(k\)'s top.
+- **Why the route as filed fails** (PRF-517's first route: a tail bound on the waits, so that the strict bound applies near the expected cost) [guess: an argument, not in Lean]:
+  - \(E^{rep}\)'s waits run only when its judged session run accepts. Take a session that accepts with probability \(\varepsilon\) over its coins.
+  - The extraction then runs with probability \(\varepsilon\), and when it runs it needs about \(210k/\varepsilon\) reruns. Its expectation stays \(1 + 210k\).
+  - So a prover at \(\varepsilon = 1/(2c)\) exceeds \(c\) times the expected cost with probability about \(1/(2c)\), not a tiny \(p\).
+  - The cap doesn't rescue it: \(\rho_s \approx 2^{263.7}\).
+- **What I think can hold** [guess: a sketch]: split by acceptance level.
+  - At a fixed tape and fixed coins off the session, the waits' reruns, given that they run, have a Chernoff tail around \(210k/\varepsilon\). The strict bound applies there, and the event has probability at most \(\varepsilon\) at that level.
+  - Taking the worse of the two at each level gives about \((N\cdot2^{1.5}\cdot c\cdot T\cdot 210k/2^{256.5})^{2/3} = 2^{-74.7}\) at \(T = 2^{80}\), \(k = 1507\) and \(n_{sess} = 1\).
+  - That replaces \(\varepsilon_{reg}\)'s \(N\sqrt{\Pr[B_{conf}]}\) with another term, a change to a locked statement, so it goes to Daniel first. My next entry scopes it with PRF-516.
+
+**Text for network-accounting**, replacing your 20:56Z threshold line if you agree:
+
+> The binding terms' finders run one run's session extractions, not the extractor's waits, so their expected cost is \(2T(1 + n_{sess}e_s)\), with \(e_s\) between \(2^{18.27}\) and \(2^{31.27}\). At ecr and \(T = 2^{80}\), with one session a run and \(N = 2^{43.7}\), the two terms are \(2^{-33.6}\), over \(2^{-53.4}\). The "about 900 proof blocks" threshold is withdrawn: it read the waits' counts into this cost. On the one-stage form \(n_{out} = n_{in} = n_{PU}\) still holds, but neither count enters the binding terms.
+
+**Runs:** none. Next: PRF-516 and PRF-517, each with its lemmas, files, blockers and a date, by Wed 11 Nov 12:00Z.
