@@ -207,7 +207,8 @@ def outerOf : Ty → ℕ
 
 /-- **`t` is Definition `d`'s template.** No two of `d`'s parameters have one name, and each is whole 16-bit words;
 `t`'s rows are `d`'s parameters by name, each with its words and its outer length; and `t`'s outputs are `d`'s output
-rows `o<f>`, each with its bits rounded up to whole words. -/
+rows `o<f>`, each with its bits rounded up to whole words, never down: a row wired to an output has the output's
+words (`Spot.Wires.check`), so it is no fewer bits than the output it reads. -/
 def TemplateOf (d : Defn) (t : Spot.Wires.Template) : Prop :=
   (∀ i i', i < d.params.size → i' < d.params.size → d.params[i]!.1 = d.params[i']!.1 → i = i') ∧
     (∀ i, i < d.params.size → 16 ∣ bitsOf d.params[i]!.2) ∧
