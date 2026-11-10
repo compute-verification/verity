@@ -22641,3 +22641,87 @@ How to read it:
 **What I need from PROVECUT, through you, by Tue 20:00Z:**
 - #8359's head to stage from (`e262e7909b`, or the head that passes its restaging runs `2c17` and `da59`), unless #8359 has landed.
 - From its table: the slots forms the card prices as their own rows.
+
+## BREAKEVEN 03:12Z: PRF-456 item 1, the GB that can leave over the world's year at 10% (a block to paste)
+
+**Today's figure: 8.1 TB (8,053 GB) can leave over the world's year at 10% total compute cost.** That is on the cut served today, with each lever at its measured or approved value, the 875-token cap counted at 32 bits a token (S = 28,000 bits), and δ = 0.01. It is 21 times GLM-5.3's FP4 weights (376.7 GB) and 27 times the 300 GB target. It is modeled: no part of it is measured end to end on served traffic.
+
+I call this row today's figure because it is the only cut a serving path commits today, priced with no goal standing in for a measurement, at the bits a token that Lean's capped form counts.
+
+Each cell is the GB that can leave over the world's year at 10% total cost (modeled; r20261110-030541-6d13). Every cell is at design (d), 600 s execution phases, the `B128` request mix, the wait at e included, the verifier as measured, and one δ = 0.01 over the period.
+
+| cut | priced | 875-token cap, 28,000 bits | no cap: census S, 144,000 bits |
+|---|---|---:|---:|
+| **today's served cut** (the registered MoE cut, at the proof-overhead card's prices) | each lever measured or approved | **8,053 GB** | 9,200 GB |
+| | as the planner prices it | 6,163 GB | 6,715 GB |
+| **the fused per-expert cut** at `FUSED_H200` (a design: no serving path commits it) | each lever measured or approved | 1,378 GB | 1,904 GB |
+| | as the planner prices it | 364 GB | 574 GB |
+| the fused cut with SERVEDCARD's warm estimate (a design plus an estimate) | each lever measured or approved | 517 GB | 813 GB |
+| | as the planner prices it | 219 GB | 360 GB |
+
+- "As the planner prices it" takes P4's 4× prover goal, P5's templated-check goal for every type, λ = 1, and sparse MLA at the census request's keys.
+- "Each lever measured or approved" takes the measured 3.71× prover and templated check, the approved λ = 1.05, and sparse MLA at the 128k plan's keys (modeled, rough).
+- One table at m = 37, which isn't built, gives 5,538, 4,255, 824, 235, 351 and 142 GB at the cap, in the table's row order.
+- Over one datacenter's year, the same rows at the cap give 7,447, 5,579, 1,364, 350, 503 and 208 GB.
+- The census S column is not a bound on a request. It is the census's mean request, 4,500 tokens at 32 bits; without a certified cap, nothing bounds a request's output.
+
+**How I got it.** The planner answers the other way round. It solves for the audit budget β (proving, verifying and replays, as a share of compute) at which its bound equals the weights.
+- I pinned β where each row's total is 10%: β = 10% − serving − edges − pool − compiling, which is 5.50% to 5.65%. The planner gave its own bound at that β, with no change to its code (r20261110-030541-6d13: 48 rows at three budgets each, 144 evaluations, 0 errors).
+- Near the 10% point the bound is exactly inversely proportional to β: bound × β is constant to one part in a million across ±3% of β.
+- An arithmetic check on the fused cut as priced. At the weights it costs 9.80%, with β = 5.372% (r20261109-201233-0467). At 10%, β = 5.567%, so the bound is 376.7 GB × 5.372 / 5.567 = 363.5 GB, the planner's own value.
+- On today's cut the stored row is far from the 10% point: 129.00% at the weights, with β = 124.4% (r20261109-201252-08f7). The same arithmetic gives 376.7 GB × 124.4 / 5.54 = 8,460 GB. That is 5% above the planner's 8,053 GB, because bound × β drifts across a 22-fold change in β. So 8.05 TB to 8.46 TB brackets today's figure, and the point is the planner's 8.05 TB.
+
+**The world** (modeled from the census, with one assumed input):
+- **374,960,000 H200s**: 46,870,000 eight-GPU HGX H200 machines, `fleet.world-h200` in `benchmarks/rho/data/reference.toml`.
+  - It is derived from the census entry `world-inference-2027` in `benchmarks/census/adversary.json`: all inference worldwide at its September 2027 rate, 9.36e30 FLOP a year.
+  - The FLOP are divided by 8 × 1.979e15 FLOP/s (dense FP8, datasheet) × 3.1536e7 s × 0.4. The 0.4 is the serving MFU, which is assumed (range 0.2 to 0.6).
+- That is 1.18e16 H200-seconds a year. The planner serves GLM-5.3 on them at the census's 4,500 tokens a request: 1.78e16 requests a year. The census's own 2.12e16 requests are DeepSeek-V4-Pro's, at 441 TFLOP each.
+- **3,750 datacenters** (3,749.6) of the census's reference size: entry `dc-12500-machines-600s` in `benchmarks/census/deployments.json`, 12,500 eight-GPU machines (100,000 H200s) audited in 600 s windows.
+- **How a datacenter-year scales to the world-year.** The planner prices the world-year as one scope, with 3,749.6 times the datacenter-year's GPU-seconds and requests, and one adversary pooled over all of it at one δ.
+  - At a fixed share of compute, the bound depends on that share and on δ, not on the volume.
+  - So the world-year's GB at 10% is 1% to 11% above the datacenter-year's, not 3,750 times it: 8,053 GB against 7,447 GB for today's figure.
+- network-accounting's world is 148M GPUs: the same census FLOP at 2e15 FLOP/s a GPU and full utilization. Ours counts the same FLOP at 40% MFU, so it has 2.5 times the GPUs. By the point above, our GB at 10% should move only slightly between the two worlds, but I haven't run the 148M world.
+
+**What the 10% counts, in the planner as it stands.** The denominator is the period's serving compute: all 1.18e16 H200-seconds of the world's year. The numerator is the audit's added cost, in the same H200-seconds. Today's figure at the 10% point splits into five parts:
+
+| part | share | what it is | how it is known today |
+|---|---:|---|---|
+| serving | 4.34 pt | the serve tax: the wait at e (2.29 pt), the certified tick's throughput loss (1.63 pt), and hashing and the serve tax's other priced parts (0.42 pt) | the card's priced parts. The tick is simulated on Llama-3.2-1B traces, and the wait is modeled on the trace |
+| proving, verifying and replays (β) | 5.54 pt | the sampled proof blocks proved on H200s and the verifier's CPU time (5.37 pt together, at 81.8 cores a GPU), and the sampled requests replayed (0.17 pt) | prices from the proof-overhead card (today's cut) or `FUSED_H200` (the fused cut). The prover and verifier are measured; the replay form is modeled |
+| the pool | 0.07 pt | each window's pool statements, proved and verified | modeled |
+| phase edges | 0.04 pt | the carried cut recomputed at each phase edge | modeled |
+| compiling | 0.005 pt | compiling the sampled replays, CPU time at 81.8 cores a GPU | modeled |
+
+Three costs are missing from the planner's total:
+- **The certifier's machines.** The network certifiers and memory challengers are the auditor's own hardware, and they are not in the cost at all. The tick's 1.63 pt is serving's throughput loss under the certified tick, not the certifier's machines.
+- **The 128k replay form.** The planner replays whole requests, but a whole 128k request can't be a replay block: its interior is about 58 TiB (vllm, PRF-477). The form that fits, the span variant, isn't priced. Its history table hashes 13.7 GB of rows and 1.2 GiB of trees for each 128k request while serving, and each history read is its own proof block. Serving and proving go up, and the replay goes down.
+- **A measured serving cost.** The serve tax is the card's priced parts plus a modeled wait, not vLLM's own benchmark against stock. That is the shared benchmark now assigned to vllm.
+
+**Inputs**, each measured, modeled or assumed:
+- **S, 28,000 bits:** 875 tokens at the token select's 32-bit output word, which Lean's capped form counts. The cap is approved, not certified (NET-281).
+- **δ = 0.01:** the design card's `delta`, a stated parameter.
+- **Design (d):** approved, not built (VLLM-260). Its replays re-prove hit prefixes bit-exactly.
+- **Proving prices:**
+  - today's cut, at the proof-overhead card's prices: measured types plus computed rules;
+  - the fused cut, at `FUSED_H200`: measured on one H200, on synthetic statements, not served members. FUSEDSERVE's fit is due Wed 11 Nov.
+- **The prover:** 3.71×, measured (each lever measured or approved), or P4's 4× goal (as priced).
+- **The verifier:** measured, after #8287, #8315 and D2.
+- **The templated check:** measured for FlashInfer K2048 and RMSNorm N = 6144 (measured or approved), or P5's goal for every type (as priced).
+- **λ:** the approved 1.05 (measured or approved), or 1 (as priced).
+- **Sparse MLA:** modeled at the 128k plan's keys, rough (measured or approved), or at the census request's keys (as priced).
+- **The replay and the front run:** the lifetime replay with the edge read live, and the front run beside device work, both modeled and neither built.
+- **The weights,** 376.7 GB of GLM-5.3 FP4 from the workload card: only a unit here.
+- **Runs:**
+  - r20261110-030541-6d13: the bound at the 10% point;
+  - r20261109-201233-0467 and r20261109-201252-08f7: the rows at the weights, at the cap;
+  - r20261109-191629-7cc0 and r20261109-192926-0dd9: the same at census S.
+
+**What I could not verify:**
+- **This is the compute cut alone, not the end-to-end number.**
+  - The bound counts the wrong blocks' bits at δ, each wrong request's charge capped at S. It has no advice term and no timing term.
+  - A response's length stays advice until a circuit checks the stop rule, and the planner doesn't charge it. network-accounting's check charges each response's length at 10 to 13 bits, twice.
+  - Under soundness's composition, the number at a link and phase is the smaller of this cut and the network's. But as network-accounting points out, the compute cut reaches the wire only once response lengths and release times are held to the program's outputs, and today's check doesn't hold them.
+- **δ is SPOT's alone.** The planner takes it once for each scope, with the period's whole budget, so I read it as the period's δ. The collision, LMS and network ε terms aren't added.
+- **The guarantee covers no token past 2,048 keys** until CIR-195's rows are proved: that is 82.5% of the 128k plan's computed tokens. The planner prices those blocks as covered.
+- **Nothing here runs on main.** The planner is on `cursor/proofs-breakeven-be7a` (a5e4e56a11), and the wrapper that pins β (`headline_at10.py`) is in the lane's notes. benchmarks' `verity bench` is to be the one command that prints the number.
+- **The goal's 49 TB** over a datacenter's year: I haven't traced its configuration. At this configuration, a datacenter's year at 10% is 7.4 TB on today's cut and 1.4 TB on the fused cut (each lever measured or approved, at the cap). So the goal text should change.
