@@ -235,6 +235,11 @@ NEW = {
     "verity/ml/definitions/registry/dsa_topk_mask_cut.circuit-check.py": "ml:definitions-registry",
     "verity/ml/definitions/registry/dsa_topk_mask_cut.circuit-check.json": "ml:definitions-registry",
     "verity/ml/definitions/tests/test_dsa_topk_mask_cut.py": "ml:definitions-registry",
+    "verity/ml/definitions/registry/fa2_train.py": "ml:definitions-torch",          # a training step's attention
+    "verity/ml/definitions/registry/fa2_train.circuit-check.py": "ml:definitions-torch",
+    "verity/ml/definitions/registry/boolean_fa2_train.py": "ml:definitions-torch",  # its Boolean version, as `boolean_torch_words`
+    "verity/ml/definitions/registry/boolean_fa2_train.circuit-check.py": "ml:definitions-torch",
+    "verity/ml/definitions/tests/test_fa2_train.py": "ml:definitions-torch",
     "benchmarks/pouw/np_kernel/": "archived",          # its owner archives the kernel: only its test imports it,
     "benchmarks/pouw/tests/test_np_kernel.py": "archived",              # and the test goes with it
 }

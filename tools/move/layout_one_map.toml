@@ -1,5 +1,5 @@
 # The layout move of the whole layout: what `tools/move/layout.py --map tools/move/layout_one_map.toml` moves and
-# rewrites. 5294 files in 435 rows. Written by `tools/move/layout_maps.py`, which states the rule: edit that, not
+# rewrites. 5304 files in 435 rows. Written by `tools/move/layout_maps.py`, which states the rule: edit that, not
 # this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
