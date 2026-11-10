@@ -12,7 +12,7 @@ from verity_vllm.program import prefix_plan as PP
 
 
 def _label(policy: dict) -> str:
-    return "greedy" if policy["kind"] == "greedy" else f"t{policy['temperature']:g}-p{policy['top_p']:g}"
+    return "greedy" if policy["kind"] == "greedy" else f"t{policy['temperature']:g}-p{policy['top_p']:g}" + (f"-r{policy['rid']}" if "rid" in policy else "")
 
 
 NO_EDGE_TRACE = "no trace: the Build's request wrapper returns its samples alone, never a window's edge rows"
@@ -52,7 +52,7 @@ def trace_commands(summary: dict, registered: Any, root: str, *, max_model_len: 
             continue
         seen.add(d)
         pol, ctx = u["policy"], {"batch": u.get("launch"), **({"chunks": list(u["chunks"])} if u.get("chunks") else {})}
-        sampling = "greedy" if pol["kind"] == "greedy" else json.dumps({k: pol[k] for k in ("temperature", "top_p", "top_k")}, sort_keys=True)
+        sampling = "greedy" if pol["kind"] == "greedy" else json.dumps({k: pol[k] for k in ("temperature", "top_p", "top_k", "rid") if k in pol}, sort_keys=True)
         cmds.append(["verity-vllm", "build", "--out", os.path.join(root, d), "--wrapper", "request", "--LP", str(u["LP"]), "--T", str(u["T"]),
                      *(["--cached", str(u["C"])] if u.get("C") else []),
                      *(["--launch-context", json.dumps(ctx, separators=(",", ":"))] if u.get("launch") else []),
