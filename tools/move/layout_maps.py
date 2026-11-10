@@ -100,7 +100,9 @@ moves or archives has exactly one destination, and each map moves exactly its ow
 twice or is a file that stays; no two paths of the moved tree differ only by case; no new path outside `archive/`
 keeps a `core` or `ml` segment; every tracked file under `verity/core` or `verity/ml` moves, but for the emptied
 `__init__.py`s; no file of a component the auditor doesn't trust lands under a trusted directory, but for `UNTRUSTED`'s
-and a suite's tests; every test file outside `archive/` is under a suite's test directory after the moves; every moved
+and a suite's tests; no `pyproject.toml` lies between the root and a workspace member whose sources name the workspace
+(uv finds a member's workspace at the first `pyproject.toml` above it, so `uv lock` would fail on the moved tree); every
+test file outside `archive/` is under a suite's test directory after the moves; every moved
 Lake package moves whole; `[modules]` gives every moved module its new name and renames no module that stays; the
 order has no cycle.
 """
@@ -177,6 +179,11 @@ EXCEPT = [
     ("examples/h200/interfaces/", "benchmarks/one_stage/interfaces/",
      "the drawn-unit replay bundle and the block record, with their schemas, fixtures and suite, go beside the one-stage "
      "audit, their main reader, which is live; the demo's other files stay"),
+    ("verity/core/protocols/pyproject.toml", "verity/protocols/tests/pyproject.toml",
+     "the suite of the protocols' own two tests, whole, in a directory with no workspace member below it (its tests go "
+     "with it, to `verity/protocols/tests/tests/`): the rule gives `verity/protocols/pyproject.toml`, between the root "
+     "and Flock's prover, and uv finds a member's workspace at the first `pyproject.toml` above it. `verity/hardware/`, "
+     "where `record.py` goes, has a suite of its own on that path"),
     ("verity/core/protocols/pous/wipe_stream.c", "verity/protocols/pous/verifier/wipe_stream.c",
      "the streamed wipe's native fill goes beside `wipe_stream.py`, the one module that builds it, by the name of the file "
      "beside itself; the rule parts the two (`device/wipe_stream.c`)"),
@@ -886,6 +893,17 @@ def main():
         die("paths of the moved tree that differ only by case, which a checkout that ignores case merges (a row in EXCEPT):\n  "
             + "\n  ".join(" and ".join(sorted(v)) for v in by_case[:40]))
     new_of = lambda p: dest[p][0] if p in dest else p   # noqa: E731
+    members = tomllib.loads(git(repo, "show", f"{a.ref}:pyproject.toml")).get("tool", {}).get("uv", {}).get("workspace", {}).get("members", [])
+    cut = []                                           # uv finds a member's workspace at the first pyproject.toml above it
+    for m in sorted(members):
+        pp = f"{m.rstrip('/')}/pyproject.toml"
+        if pp in tracked and any(isinstance(s, dict) and s.get("workspace") for s in tomllib.loads(
+                git(repo, "show", f"{a.ref}:{pp}")).get("tool", {}).get("uv", {}).get("sources", {}).values()):
+            cut += [f"{new_of(pp)}: below {d}/pyproject.toml" for d in ancestors(posixpath.dirname(new_of(pp)))
+                    if f"{d}/pyproject.toml" in after_all]
+    if cut:
+        die("a workspace member whose sources name the workspace lands below another pyproject.toml, where `uv lock` no "
+            "longer finds the workspace (a row in EXCEPT for the pyproject.toml above it):\n  " + "\n  ".join(cut))
     testpaths = [new_of(pp)[: -len("pyproject.toml")].rstrip("/") + t[len(posixpath.dirname(pp)):] for pp, ts in suites for t in ts]
     defines = set(git(repo, "grep", "-lE", r"^(async\s+)?def\s+test|^class\s+Test", a.ref, "--", "*.py").replace(a.ref + ":", "").split())
     unsuited = sorted(new_of(p) for p in tracked if TEST_FILE.fullmatch(p) and p in defines and not p.startswith(UNSUITED)

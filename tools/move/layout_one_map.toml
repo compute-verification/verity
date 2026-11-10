@@ -60,6 +60,11 @@
 # - `examples/h200/interfaces/` to `benchmarks/one_stage/interfaces/`: the drawn-unit replay bundle and the block
 #   record, with their schemas, fixtures and suite, go beside the one-stage audit, their main reader, which is live;
 #   the demo's other files stay.
+# - `verity/core/protocols/pyproject.toml` to `verity/protocols/tests/pyproject.toml`: the suite of the protocols'
+#   own two tests, whole, in a directory with no workspace member below it (its tests go with it, to
+#   `verity/protocols/tests/tests/`): the rule gives `verity/protocols/pyproject.toml`, between the root and Flock's
+#   prover, and uv finds a member's workspace at the first `pyproject.toml` above it. `verity/hardware/`, where
+#   `record.py` goes, has a suite of its own on that path.
 # - `verity/core/protocols/pous/wipe_stream.c` to `verity/protocols/pous/verifier/wipe_stream.c`: the streamed wipe's
 #   native fill goes beside `wipe_stream.py`, the one module that builds it, by the name of the file beside itself;
 #   the rule parts the two (`device/wipe_stream.c`).
@@ -213,7 +218,7 @@ new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_diff
 "verity/core/protocols/pous/wipe_stream.py" = "verity/protocols/pous/verifier/wipe_stream.py"
 "verity/core/protocols/pouw/" = "verity/protocols/pouw/verifier/"
 "verity/core/protocols/profile.py" = "verity/protocols/spot/verifier/profile.py"
-"verity/core/protocols/pyproject.toml" = "verity/protocols/pyproject.toml"
+"verity/core/protocols/pyproject.toml" = "verity/protocols/tests/pyproject.toml"
 "verity/core/protocols/record.py" = "verity/hardware/record.py"
 "verity/core/protocols/registration.py" = "verity/hardware/registration.py"
 "verity/core/protocols/remote/" = "verity/protocols/remote/verifier/"
@@ -236,7 +241,7 @@ new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_diff
 "verity/core/protocols/spot/second_stage.py" = "verity/protocols/spot/verifier/second_stage.py"
 "verity/core/protocols/spot/service.py" = "verity/protocols/spot/verifier/service.py"
 "verity/core/protocols/spot/tests/" = "verity/protocols/spot/verifier/tests/"
-"verity/core/protocols/tests/" = "verity/protocols/tests/"
+"verity/core/protocols/tests/" = "verity/protocols/tests/tests/"
 "verity/core/service/firewall/" = "verity/protocols/recursion/verifier/firewall/"
 "verity/core/service/flock/" = "verity/protocols/flock/verifier/"
 "verity/core/service/sigma/" = "verity/protocols/flock/sigma/"
@@ -1292,7 +1297,7 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 "verity.core.protocols.spot.second_stage" = "verity.protocols.spot.verifier.second_stage"
 "verity.core.protocols.spot.service" = "verity.protocols.spot.verifier.service"
 "verity.core.protocols.spot.tests" = "verity.protocols.spot.verifier.tests"
-"verity.core.protocols.tests" = "verity.protocols.tests"
+"verity.core.protocols.tests" = "verity.protocols.tests.tests"
 "verity.core.service.firewall" = "verity.protocols.recursion.verifier.firewall"
 "verity.core.service.flock" = "verity.protocols.flock.verifier"
 "verity.core.service.sigma" = "verity.protocols.flock.sigma"
