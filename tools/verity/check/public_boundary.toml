@@ -138,7 +138,7 @@ pouw_tests = [
 protocols = [
     "verity/protocols/poub/verifier/{PROTOCOL.md,README.md,__init__.py,audit.py,codec.py,coins.py,lean,ledger.py}",
     "verity/protocols/poub/verifier/{line.py,memory_map.py,monitoring.py,opening.py,p2.py,p2_case.py,p2_lean.py}",
-    "verity/protocols/poub/verifier/{p2_party.py,period.py,pooled.py,pyproject.toml,receipts.py,schedule.py}",
+    "verity/protocols/poub/verifier/{p2_party.py,p2_v1,period.py,pooled.py,pyproject.toml,receipts.py,schedule.py}",
     "verity/protocols/poub/verifier/{session,session_parties.py,store.py,tests,timing.py,verifier_party.py,wire.py}",
     "verity/protocols/pous",
     # the inference-only policy, and its tests in the network checks' suite
@@ -152,6 +152,7 @@ protocols = [
     "verity/protocols/certifier/verifier/network/tests/test_{lean_audit,network_records_protocol}.py",
     "verity/protocols/certifier/verifier/network/tests/fixtures/slot_entry.json",
     "verity/protocols/pous/prover",
+    "verity/protocols/poub/prover",
     "security/*/{Nci,NciDesc}{,.lean}",
     "security/Proofs/Properties/Nci{,.lean}",
     # the table of domain separators' own entries: the other protocols' (its PoUW and shared parts are `needed`)
