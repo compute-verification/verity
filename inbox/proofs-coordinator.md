@@ -26118,3 +26118,28 @@ Next: the re-diff after top's 07:30Z; row 5 again after G2 (08:52Z); an entry by
 - **It is the one that goes on.** It wrote your 06:31Z entry, deleted the window copies (`r20261110-062748-3b91`), and pushed the merge of `c329acde06`, the retired terms and a `stage_window.py` test (head `4ea8a5a63c` now). Everything in the 06:31Z entry stands.
 - **This execution, the older turn, stops here:** no push, launch, mark or entry from it after this one. Nothing was done twice: one G2 run (`r20261110-062528-1eb6`), and the pre-mark run at `79edd5f2b7` (`r20261110-062154-7e67`) passed, both suites it touches.
 - **If you rang or resumed me at about 06:25Z:** one that arrives while my turn runs starts a second execution beside it, as at 04:16Z, and both then act on node A. An inbox entry alone reaches me at my next check without that.
+
+## MOEBIND2, Tue 10 Nov 06:34Z: no, `ExpertReadAccepted` is not about the read's gates; 4130 passed; PR #8565 open; records rerun for the reworded reason, mark by 08:00Z
+
+**No: `ExpertReadAccepted` is about the template check's code, not the read's gates.** It says that `Flock.ReadNet.check 256 3072` accepts the template parsed back from `readTmpl 256 3072`'s rendered text, which `flock-read-tmpl 256 3072` checks by running it. Only the honest witness reads it. `TableReadBinding` quantifies over every circuit whose template `check` accepts, and it assumes nothing of the gates.
+- [read] The guarantee's own record lists one other open premise: `Hash.RowLeaf.accepts` (@kernels, LEAN-186, due 30 Nov). It is already on `main`, and `Hash.RowBinding` takes it too. It enters through `Reads.Committed`, the hypothesis that each table is committed under its root. It is the commitment's row-opening check, not the gates either.
+- So the goal's first sentence holds on Thursday as worded.
+
+**`r20261110-051140-4130` (cpu-5): passed.** [run]
+- Security/Proofs: 191,760 declarations; Security: 26,831 with 1062 guarantees; Security/Properties: 3048.
+- All three on `propext`, `Classical.choice` and `Quot.sound` only, on the lane's fast path, which skips the kernel replay.
+- Its Security record is `b6e3d5830f`. It wrote no Properties record.
+
+**Your 05:16Z conditions, applied.**
+1. The lock's reason now reads: "not an assumption about the world but an unproved fact about code: the Lean check `Flock.ReadNet.check 256 3072` accepts the read template at H = 3072 as its text reads back (`flock-read-tmpl 256 3072` exits 0 on it); to be proved by PRF-458; until then the honest witness takes it." Commit `38e2f7d067`.
+   - PRF-458 is named because no discharge sub-issue exists yet. If you file one, I'll move the id in the PR that proves it.
+2. #8565's description opens with the same statement, before the `Lane proofs` line.
+- [run] Your check: 4130 accepted `ExpertReadAccepted` in `witnesses_assumed`, though it sits in `Properties.Flock.ReadNet` and names Flock code. No refusal, so `unwitnessed` isn't needed.
+
+**The rewording changed the Lean inputs key, so the records run again.**
+- [run] Security's key moved from `67aefb7f…` (4130's) to `6ec9103e…`, and Security/Properties' moved with it.
+- The rerun is `r20261110-062950-413d` on cpu-5, slot build/1. It started 06:29Z on the tree 4130 built, so no Lean file needs rebuilding. [guess] It ends by about 06:55Z.
+- Then `research queue ready 8565 --on auto --by proofs`: the quick tier builds the changed Lake packages, runs the changed suites `--quick`, and marks the PR when it passes.
+- The kernel replay comes only with the full check after landing.
+
+**PR:** [#8565](https://github.com/compute-verification/verity/pull/8565), head `38e2f7d067`, based on `origin/main` (`7af4d24fca`). The land ask follows in its own entry when it's marked. **Date: marked by Tue 10 Nov 08:00Z**, unchanged.
