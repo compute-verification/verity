@@ -4,7 +4,8 @@ across chunked prefill, decode, padding and a recompute after a preemption; the 
 class's names and domains, refused for a request whose rows don't match its lengths or after a step the hook couldn't
 read; a cache that doesn't hold bf16 latent rows refused; the channel between the two processes; and the window's boundary
 commitment (`boundary_rows.BoundaryWindows`) waiting for each class's tables' roots and listing them beside its values,
-registered by both verifiers from public items alone; and what round 2 opens, kept on the node."""
+registered by both verifiers from public items alone; every table of a class filled to its C rows, so that no published
+string shows a request's length; and what round 2 opens, kept on the node, a served table loaded by its name."""
 
 from __future__ import annotations
 
@@ -170,9 +171,38 @@ def test_the_builder_builds_each_spans_tables_under_the_classs_names_in_slot_ord
     for e, t in zip(out["tables"], tables, strict=True):
         assert e == t.entry() and e["leaves"] == CAP and e["words"] == H.WORDS
         assert e["domain"] == HT.domain(PROGRAM, e["value"], H.WORDS, CAP).domain_id.hex()
-    assert [len(t.rows) for t in tables] == [5, 5, 8, 8]
-    assert np.array_equal(np.stack(tables[3].rows), np.stack([row("a", p, 3) for p in range(8)]))
+    assert [len(t.rows) for t in tables] == [BT.class_rows(8, 4, CAP)] * 4 == [12] * 4
+    assert np.array_equal(np.stack(tables[3].rows[:8]), np.stack([row("a", p, 3) for p in range(8)]))
     assert hook.latents.requests() == []
+
+
+def test_two_spans_of_a_class_with_other_lengths_publish_as_many_strings_and_a_read_past_l_is_the_zero_row():
+    """b holds 5 positions and a 8, in class (8, 4): each table holds C = 12 rows, its own and then zero rows, each under a
+    fresh salt, so the two publish 12 strings each, no placeholder among them, and no entry differs but in its name and root.
+    The root covers the fill: it is not the root over L rows with placeholders past them."""
+    _runner, hook, _hooks = serve()
+    make, tables = built()
+    out = BT.Builder(hook.latents, make).build(BT.assignment(3, RUN, PROGRAM, 8, 4, [0, 3], CAP,
+                                                            [("b", 3, 3, "length"), ("a", 5, 4, "stop")]))
+    assert "error" not in out
+    b3, a3 = tables[1], tables[3]
+    placeholder = HT.placeholder(H.WORDS)
+    for t, n in ((b3, 5), (a3, 8)):
+        assert len(t.bcs) == 12 and placeholder not in t.bcs and len(set(t.salts)) == 12
+        assert not np.stack(t.rows[n:]).any() and np.stack(t.rows[:n]).any()
+        bare = HT.HistoryTable(PROGRAM, t.value, H.WORDS, CAP)
+        bare.append(np.stack(t.rows[:n]), t.salts[:n])
+        assert bare.root != t.root
+        HT.check(PROGRAM, t.value, H.WORDS, t.bcs, t.root, CAP)
+    drop = ("value", "root", "domain")
+    assert {k: v for k, v in b3.entry().items() if k not in drop} == {k: v for k, v in a3.entry().items() if k not in drop}
+    assert BT.class_rows(256, 256) == 512 and BT.class_rows(1 << 17, 16) == BT.CAPACITY == 1 << 17
+    assert np.array_equal(BT.fill(np.ones((2, 3), np.uint16), 4, 4, 8), np.concatenate([np.ones((2, 3)), np.zeros((6, 3))]))
+    with pytest.raises(ValueError, match="at most the 8 its class"):
+        BT.fill(np.ones((9, 3), np.uint16), 4, 4)
+    for args in ((0, 4), (4, 4.0)):
+        with pytest.raises(ValueError, match="cap is a positive integer"):
+            BT.class_rows(*args)
 
 
 @pytest.mark.parametrize("b, why", [(("b", 3, 2, "length"), "not the 4 to 4"), (("b", 3, 1, "stop"), "not the 3 to 3"),
@@ -341,7 +371,7 @@ def test_each_classs_commitment_waits_for_its_tables_and_lists_them_beside_its_v
         assert R.check(rec, bare.program, bare.grain, LAW, CS.SCHEME, bare.ports()).codes != ()
         assert BR.reopen(tmp_path / "w0" / f"p{p}-o{o}", PAIR).roots == {k: bytes.fromhex(v["root"])
                                                                           for k, v in pub["values"].items()}
-    assert [len(made[BT.name(BR.run_root("s", 0), *k, 0, 3)].rows) for k in ((8, 4), (4, 4))] == [8, 5]
+    assert [len(made[BT.name(BR.run_root("s", 0), *k, 0, 3)].rows) for k in ((8, 4), (4, 4))] == [12, 8]
 
 
 def test_a_class_registers_nothing_when_rank_0_built_no_tables_or_answered_other_ones(tmp_path):
@@ -392,11 +422,8 @@ def modes(root) -> set[tuple[str, int]]:
     return {("dir" if q.is_dir() else "file", stat.S_IMODE(q.stat().st_mode)) for q in [root, *root.rglob("*")]}
 
 
-def test_rank_0_keeps_each_tables_rows_and_salts_on_the_node_and_round_2_reads_a_span_at_a_range(tmp_path):
-    """Each table's rows and salts as built go to rank 0's private files, owner-only, before its entry is given; round 2
-    reads a span's rows at a range of positions with their salts and public strings, rebuilds the table to its root and
-    paths, and the class reopens with every table rebuilt from them; a changed file, or a range past what a table holds,
-    is refused."""
+def kept_window(tmp_path) -> tuple[BT.Kept, list]:
+    """`finish`'s window served with rank 0 keeping its tables under ``tmp_path``/node: the kept files and the tables."""
     _runner, hook, _hooks = serve()
     make, tables, lines = *built(), []
     kept = BT.Kept(tmp_path / "node" / "tables")
@@ -407,6 +434,15 @@ def test_rank_0_keeps_each_tables_rows_and_salts_on_the_node_and_round_2_reads_a
     finally:
         hooks.uninstall()
     assert all("error" not in x for x in lines)
+    return kept, tables
+
+
+def test_rank_0_keeps_each_tables_rows_and_salts_on_the_node_and_round_2_reads_a_span_at_a_range(tmp_path):
+    """Each table's rows and salts as built go to rank 0's private files, owner-only, before its entry is given; round 2
+    reads a span's rows at a range of positions with their salts and public strings, rebuilds the table to its root and
+    paths, and the class reopens with every table rebuilt from them; a changed file, or a range past what a table holds,
+    is refused."""
+    kept, tables = kept_window(tmp_path)
     assert modes(tmp_path / "node" / "tables") == {("dir", 0o700), ("file", 0o600)}
     assert not list((tmp_path / "out").rglob("*.rows")) and not list((tmp_path / "out").rglob("*.salts"))
     run, made = BR.run_root("s", 0), {t.value: t for t in tables}
@@ -419,14 +455,43 @@ def test_rank_0_keeps_each_tables_rows_and_salts_on_the_node_and_round_2_reads_a
     assert again.root == a3.root and again.path(7) == a3.path(7)
     c = BR.reopen(tmp_path / "out" / "w0" / "p8-o4", PAIR, kept)
     assert c.roots[a3.value] == a3.root
-    with pytest.raises(ValueError, match="aren't a range within the 8 it holds"):
-        kept.span(0, run, 8, 4, 0, 3, range(4, 9))
+    past = kept.span(0, run, 8, 4, 0, 3, range(8, 12))
+    assert not past["rows"].any() and past["strings"] == a3.bcs[8:12] and HT.placeholder(H.WORDS) not in past["strings"]
+    with pytest.raises(ValueError, match="aren't a range within the 12 it holds"):
+        kept.span(0, run, 8, 4, 0, 3, range(4, 13))
     f = tmp_path / "node" / "tables" / f"w0-{run[:16]}-p8-o4" / "s0" / "layer-0.rows"
     raw = bytearray(f.read_bytes())
     raw[0] ^= 1
     f.write_bytes(bytes(raw))
     with pytest.raises(ValueError, match="rebuild to another table than the one kept"):
         BR.reopen(tmp_path / "out" / "w0" / "p8-o4", PAIR, kept)
+
+
+def test_the_interior_loads_a_served_table_by_its_name_and_commits_it_again_to_round_1s_root(tmp_path):
+    """`load` from the serve's private directory and a table's name alone: the table's entry, its program and its C rows and
+    salts, which committed again under round 1's program, name, words and capacity give the root round 1's record lists for
+    that port; a name that isn't a served table's, or one no table kept here has, is refused."""
+    kept, tables = kept_window(tmp_path)
+    run = BR.run_root("s", 0)
+    for (p, o), slot_rows in (((8, 4), 8), ((4, 4), 5)):
+        pub = json.loads((tmp_path / "out" / "w0" / f"p{p}-o{o}" / BR.COMMIT).read_text())
+        for x in (0, 3):
+            n = BT.name(run, p, o, 0, x)
+            got = BT.load(tmp_path / "node", n)
+            made = next(t for t in tables if t.value == n)
+            assert got.entry() == made.entry() and got.root == pub["values"][n]["root"]
+            assert got.program == BR.layout_of(pub, PAIR).partition["program"]
+            assert got.rows.shape == (BT.class_rows(p, o, CAP), H.WORDS) and not got.rows[slot_rows:].any()
+            assert got.salts == b"".join(made.salts) and got.strings() == made.bcs
+            again = HT.HistoryTable(got.program, got.value, got.words, got.leaves)
+            again.append(got.rows, [got.salts[i * 192:(i + 1) * 192] for i in range(len(got.rows))])
+            assert again.root.hex() == pub["values"][n]["root"]
+    for bad in ("history/x", BT.name(run, 8, 4, 0, 3) + "x", f"history/{run}/p08-o4/s0/model.layers.3.self_attn.latent"):
+        with pytest.raises(ValueError, match="is no served table's name"):
+            BT.load(tmp_path / "node", bad)
+    for absent in (BT.name(run, 8, 4, 1, 3), BT.name("b" * 128, 8, 4, 0, 3), BT.name(run, 8, 4, 0, 1)):
+        with pytest.raises(ValueError, match="rank 0 kept 0 tables named"):
+            BT.load(tmp_path / "node", absent)
 
 
 def test_a_class_that_registers_nothing_keeps_nothing(tmp_path):

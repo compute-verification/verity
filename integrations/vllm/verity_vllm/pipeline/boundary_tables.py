@@ -17,10 +17,16 @@ their slots (`assignment`), and rank 0 builds each span's tables over its rows, 
 table's entry (`history.HistoryTable.entry`), which the class's registration lists before any coin. The two processes talk
 through `Channel` (files in a private directory on the node) or, in one process, `LocalChannel`.
 
+**Length.** A request's exact length is private beyond its class, and a table's published strings would show it: the
+verifier computes the placeholder past a held run's count, and the placeholder is public. So every table of a class holds
+`class_rows` C rows, a function of the class alone: its request's own L rows, then zero rows to C, each under a fresh salt
+like the rest (`fill`, which the interior's tables take too). A read past L returns the zero row.
+
 **What round 2 opens** (`Kept`): each table's rows and salts as built, in files on the node readable by their owner only,
-never under a run's directory or the serve's records, which leave it. `Kept.span` reads a span's rows at a range of
-positions with their salts and public strings, and `Kept.table` rebuilds a table from them, held to its root. The range
-is an argument: the committed step schedule it is to come from isn't there yet.
+never under a run's directory or the serve's records, which leave it. `load` gives a served table by its name, for the
+interior to open a drawn span's table under round 1's root; `Kept.span` reads a span's rows at a range of positions with
+their salts and public strings, and `Kept.table` rebuilds a table from them, held to its root. The range is an argument:
+the committed step schedule it is to come from isn't there yet.
 """
 from __future__ import annotations
 
@@ -31,6 +37,7 @@ import shutil
 import threading
 import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -40,8 +47,9 @@ from verity.ml.commitments import history as HT
 from verity_vllm.commit import history_tables as H
 from verity_vllm.records.boundary_tables import ASSIGN, ROOTS, TableAssignment, TableRoots
 
-__all__ = ["ASSIGN", "CAPACITY", "KEY", "ROOTS", "WORDS", "Builder", "Channel", "Kept", "Latents", "LocalChannel", "StepHook",
-           "assignment", "computed", "key", "layers_of", "mla_layers", "name", "private", "private_root"]
+__all__ = ["ASSIGN", "CAPACITY", "KEY", "ROOTS", "WORDS", "Builder", "Channel", "Kept", "Latents", "LocalChannel", "Served",
+           "StepHook", "assignment", "class_rows", "computed", "fill", "key", "layers_of", "load", "mla_layers", "name",
+           "private", "private_root"]
 
 #: a span's key in its tables' names (`history_tables.name`): the window's run, the class and the slot
 KEY = "{run}/p{prompt}-o{outputs}/s{slot}"
@@ -49,6 +57,9 @@ WORDS, CAPACITY = H.WORDS, HT.CAPACITY
 #: the KV cache dtypes under which an MLA layer's cache holds `WORDS` bf16 words a row (vLLM's ``fused_norm_rope``)
 BF16_CACHES = ("auto", "bfloat16")
 _LAYER = re.compile(r"(?:^|\.)layers\.(\d+)\.")
+_NAME = re.compile(r"history/(?P<run>[^/]+)/p(?P<prompt>\d+)-o(?P<outputs>\d+)/s(?P<slot>\d+)/"
+                   r"model\.layers\.(?P<layer>\d+)\.self_attn\.latent")
+_CLASS_DIR = re.compile(r"w(\d+)-")
 
 
 def key(run: str, prompt: int, outputs: int, slot: int) -> str:
@@ -71,6 +82,31 @@ def computed(prompt: int, served: int, finish: str | None) -> tuple[int, int]:
     position but its last id's; one aborted, errored or still running computed some prefix of its prompt and ids."""
     n = int(prompt) + int(served)
     return (n - 1, n - 1) if finish in ("stop", "length") and n else (0, n)
+
+
+def class_rows(prompt: int, outputs: int, capacity: int = CAPACITY) -> int:
+    """C, the rows every table of class (``prompt``, ``outputs``) holds: the class's cap on positions, ``prompt`` +
+    ``outputs``, since a request computes at most its prompt's and its ids' (`computed`), and at most the tables'
+    ``capacity``. A function of the class alone, so a table's published strings show nothing of its request's length."""
+    for k, v in (("prompt", prompt), ("outputs", outputs)):
+        if type(v) is not int or v < 1:
+            raise ValueError(f"a class's {k} cap is a positive integer, not {v!r}")
+    if not HT.cap_ok(capacity):
+        raise ValueError(f"a table's capacity is a power of two of at least 2, not {capacity!r}")
+    return min(prompt + outputs, capacity)
+
+
+def fill(rows: Any, prompt: int, outputs: int, capacity: int = CAPACITY) -> np.ndarray:
+    """A span's table rows at one layer as its class publishes them: its own rows ``rows`` (``(L, words)`` u16), then zero
+    rows to `class_rows` C, refused past C. Each table appends every one of them under a fresh salt, so a zero row's string
+    is a hiding commitment like a computed row's; the placeholder at L instead is public, and would show L. A read past L
+    returns the zero row."""
+    r = np.asarray(rows, dtype=np.uint16)
+    c = class_rows(prompt, outputs, capacity)
+    if r.ndim != 2 or len(r) > c:
+        raise ValueError(f"a span's rows are at most the {c} its class ({prompt}, {outputs}) holds at capacity {capacity}, "
+                         f"not shape {r.shape}")
+    return np.concatenate([r, np.zeros((c - len(r), r.shape[1]), dtype=np.uint16)])
 
 
 def assignment(window: int, run: str, program: str, prompt: int, outputs: int, layers: Sequence[int], capacity: int,
@@ -223,9 +259,10 @@ class StepHook:
 
 
 class Builder:
-    """Rank 0's tables: `build` answers a class's `assignment` with each span's tables over its rows in ``latents``, one a
-    layer in slot order, each built by ``make`` (program, name, words, capacity; by default a `history_tables_device.Table`
-    on ``device``, its salts under a row key fresh for the class), and kept in ``keep`` before its entry is given."""
+    """Rank 0's tables: `build` answers a class's `assignment` with each span's tables over its rows in ``latents`` filled
+    to the class's C (`fill`), one a layer in slot order, each built by ``make`` (program, name, words, capacity; by default
+    a `history_tables_device.Table` on ``device``, its salts under a row key fresh for the class), and kept in ``keep``
+    before its entry is given."""
 
     def __init__(self, latents: Latents, make: Callable[[str, str, int, int], Any] | None = None, device: Any = None,
                  keep: Kept | None = None) -> None:
@@ -266,7 +303,7 @@ class Builder:
                                  f"({finish}) give")
             for x in self.latents.layers:
                 t = make(a.program, name(a.run, a.prompt, a.outputs, r, x), WORDS, a.capacity)
-                t.append(rows[x])
+                t.append(fill(rows[x], a.prompt, a.outputs, a.capacity))
                 if self.keep is not None:
                     self.keep.write(a.window, a.run, a.prompt, a.outputs, r, x, a.program, t)
                 out.append(t.entry())
@@ -275,6 +312,32 @@ class Builder:
 
 def _stem(window: int, run: str, prompt: int, outputs: int) -> str:
     return f"w{int(window)}-{run[:16]}-p{int(prompt)}-o{int(outputs)}.json"
+
+
+@dataclass(frozen=True)
+class Served:
+    """A table the serve committed, as rank 0 kept it (`load`): its entry (``value``, ``root``, ``leaves``, ``words``,
+    ``domain``), the ``program`` its domain binds, its C ``rows`` (``(C, words)`` u16, its request's then the fill's) and
+    their ``salts``, one 192-byte salt a row concatenated. Committed again under ``program``, ``value``, ``words`` and
+    ``leaves`` with these salts, it has round 1's root. Private: rows and salts never leave the node."""
+
+    value: str
+    program: str
+    root: str
+    leaves: int
+    words: int
+    domain: str
+    rows: np.ndarray = field(repr=False)
+    salts: bytes = field(repr=False)
+
+    def entry(self) -> dict[str, Any]:
+        """Its registered entry, as round 1 listed it (`history.HistoryTable.entry`)."""
+        return {"value": self.value, "root": self.root, "leaves": self.leaves, "words": self.words, "domain": self.domain}
+
+    def strings(self) -> list[bytes]:
+        """Its C rows' public strings (`history.string`), position by position: what the interior publishes of it."""
+        y = len(self.salts) // max(1, len(self.rows))
+        return [HT.string(r, self.words, self.salts[i * y:(i + 1) * y]) for i, r in enumerate(self.rows)]
 
 
 class Kept:
@@ -346,9 +409,35 @@ class Kept:
             raise ValueError(f"{h['value']}: its files rebuild to another table than the one kept")
         return t
 
+    def load(self, table: str) -> Served:
+        """The served table named ``table`` (`name`), refused unless exactly one table kept here has that name."""
+        m = _NAME.fullmatch(table) if isinstance(table, str) else None
+        parts = (m["run"], int(m["prompt"]), int(m["outputs"]), int(m["slot"]), int(m["layer"])) if m else None
+        if parts is None or name(*parts) != table:
+            raise ValueError(f"{table!r} is no served table's name, {H.NAME.format(key=KEY, layer='{layer}')}")
+        run, prompt, outputs, slot, layer = parts
+        found = []
+        for d in sorted(self.dir.glob(f"w*-{run[:16]}-p{prompt}-o{outputs}")):
+            w = _CLASS_DIR.match(d.name)
+            if w and (d / f"s{slot}" / f"layer-{layer}.json").is_file() \
+                    and self.head(int(w.group(1)), run, prompt, outputs, slot, layer).get("value") == table:
+                found.append(int(w.group(1)))
+        if len(found) != 1:
+            raise ValueError(f"rank 0 kept {len(found)} tables named {table} under {self.dir}, not one")
+        h, rows, salts = self.rows(found[0], run, prompt, outputs, slot, layer)
+        return Served(h["value"], h["program"], h["root"], h["leaves"], h["words"], h["domain"], rows, b"".join(salts))
+
     def drop(self, window: int, run: str, prompt: int, outputs: int) -> None:
         """A class's files, for a class that registered nothing."""
         shutil.rmtree(self.dir / _stem(window, run, prompt, outputs).removesuffix(".json"), ignore_errors=True)
+
+
+def load(directory: str | Path, table: str) -> Served:
+    """The served table named ``table`` (`name`: its run, class, slot and layer) that rank 0 kept under a serve's private
+    directory ``directory`` (its ``tables`` configuration's ``private``, as `Kept.of` puts it): what the interior opens
+    for a drawn span, committed again under round 1's program, name, words and capacity so that its root is round 1's
+    port root. On the node only."""
+    return Kept(Path(directory).resolve() / "tables").load(table)
 
 
 def private(directory: Path) -> Path:
