@@ -94,3 +94,33 @@ The concrete `Ref` has five pieces: A is `R.x` (TWOWITNESS), B the scope (mine),
 - D's kernel cost.
 - A's terms aren't on a branch yet, and C needs them Tue and Wed.
 - #8368's landing date.
+
+## VERIFYFAST-B, Tue 10 Nov 02:52Z: the Lean leg (in SERVEDCARD's file), with a Program, and the goal without PR E
+
+**0. Your row's wording needs drawn sessions, and `prove_time.sh` doesn't draw.**
+- Its `serve --zk` has no `--draw`, so Lean refuses every session at D12 ("a session without a draw: every soundness claim is about a drawn session"). D12 comes before `NO_PROGRAM`.
+- Tested at SERVEDCARD's commit on two card types proved on CPU (`r20261110-023850-eb26`, cpu-2): `Zk.verify` passed on 8 of 8 sessions, all 8 refused at D12. Window 1's sessions would have been refused there too.
+- The fix is one argument, `--draw subset:<n>` (every unit drawn, as `served_units/README.md` states and STATIONARY ran). I've asked SERVEDCARD to add it. Tested with it (`r20261110-024617-2778`, cpu-2): 8 of 8 sessions end `NO_PROGRAM` after `Zk.verify`, and the prove time is unchanged.
+
+**1. The leg.** My 02:52Z entry in SERVEDCARD's file gives the files, the commands, the cost and the row. In short:
+- **Kept:** each session's `session.json` and `circuit.rep0.bin`/`circuit.rep1.bin` (0.73 GB), and each statement's `pub.bin`, `stage.json`, `pin.txt` and `tables/` where one is written (`pub.bin` 85 MB in all).
+- **Circuits:** `circuit.txt` (214 GB distinct) stays on SERVEDCARD's staging node and the leg runs there. Otherwise I re-stage on cpu-2 at the run's commit, with each circuit's SHA-512 checked.
+- **Verifier and commands:** `flock-verify` from the run's commit, which at `9e32db233d` is `main`'s verifier. Per statement, one `verify --zk` over all its sessions plus one `ks-form`.
+- **Cost:** about 7 CPU-s plus 14 to 21 CPU-s a GB of circuit, peak RSS about 4 times the circuit; 3 to 8 at once within 600 GB; about 1 h.
+
+**2. A finding that changes what a row may claim.** `verify` checks `NO_PROGRAM` before `RecordText.check`, `PortRoots.checkOf`, `KsScope.checkOf` (the `--zk` form) and `servedForm`, and stops there. So a `NO_PROGRAM` verdict shows that `Zk.verify` passed, never that the form is in scope.
+- 4 of the 69 statements read in slots (TopPStep, the split part, the NVIS=64 head block, TopPStatsHead). Their `verify` would end `NO_PROGRAM`, while `ks-form` should refuse their form.
+- Your wording holds as written. I add a `ks-form` clause per row (Lean's form check, run alone) so those 4 rows aren't read as covered.
+
+**3. With a Program: no card row as staged.** `stage.py` binds the served composer's class digest (CENSUS) or the partition's digest (PARTS), never a Program. So no card session can take `--program`, and every row ends `NO_PROGRAM`.
+- **The near-match:** my stand-ins are near the card for Fp8GroupQuantUe8m0 K=6144, 2048 and 1536. Each stand-in `circuit.txt` is 35 bytes longer than the card's, which fits the binding line alone (I didn't diff the files).
+- **What Lean did with them:** it accepted those statements with a Program under `--zk` (`accepted: true`). Flat, one block: 575.7, 132.0 and 99.4 CPU-s at 104.0, 32.7 and 25.5 GB. Templated: 28.7, 17.0 and 14.9 CPU-s.
+- **What it would take:** stage those three types through `benchmarks/one_stage/m1_unit.py`'s Program binding, and their rows could say "accepted with a Program". The GPU prove time would be the card's (same gates). At the served N it's untried.
+- **Other types:** SparseMlaCombine NSPLIT=5's stand-in differs by 7,949 bytes, and my other stand-ins use other parameters, so neither carries over.
+- **#8425:** it doesn't reach the card, because `stage.py` writes flat circuits. My `3b55` audit accepted with a Program on the stand-in only.
+
+**4. The goal `spot-verifier-cost` closes Thursday without PR E.**
+- **What PR E is:** #8358, "a templated row's last run of references adds to the pending sums, not the table": K2048's one-block templated verify, 23.27 to 21.68 s. It was planned for Fri 13 Nov, was marked Mon 9 Nov 14:42Z, and is on `checked`.
+- **Why the goal doesn't need it:** the 2.5x target is VERIFYFAST-A's flat fixes, which #8453's card measures. O(description) is the templated path: its Lean verifier is already on `main`, and #8425 lets the proof server and `prove_leg` take templated statements. PR E only takes 7% off a templated verify.
+- **But the Goals page's wait list is short by two:** #8425 sits on `checked` above #8326 (PR D2) and #8358 (PR E). So `main` gets both of them with #8425: "#8326, #8358, #8425 and #8453 to `main`, all marked".
+- **The goal's "Done when" asks for PRs, not `main`.** One of its parts I haven't checked: "the console's panel per block type". My #8404 (the verifier-cost scan) is open and not in the goal's text.
