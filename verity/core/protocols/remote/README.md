@@ -247,7 +247,7 @@ expansion meets it at Γ·W gates and k = ⌊α_f·Γ·W⌋. `SlowdownRemote` ta
 **How it is checked.**
 
 - *By whom.* Not by remote yet: the policy isn't one of its subprotocols (Subprotocols, above). Its check runs on its
-  own, as `nci-check` (`InferenceOnlyCheck.Theta.check`, `verity/core/protocols/network/inference_only/lean`); once composed, the
+  own, as `inference-only-check` (`InferenceOnlyCheck.Theta.check`, `verity/core/protocols/network/inference_only/lean`); once composed, the
   verifier runs it on an auditor host in each verification phase.
 - *On what.* The registered circuit's description, its inference partition and θ's provenance, against the registration
   log. No hardware at the site is involved.
