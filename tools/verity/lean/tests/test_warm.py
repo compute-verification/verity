@@ -266,18 +266,38 @@ def test_a_wide_change_says_so_in_its_facts(tree, tmp_path, monkeypatch):
         assert ("so it is wide" in said[0]) is wide
 
 
-def test_the_wide_file_holds_a_pr_exactly_when_its_change_is_wide_and_keeps_every_other_line(tmp_path):
+def test_the_wide_file_names_a_pr_exactly_when_its_change_is_wide_and_keeps_every_other_number(tmp_path):
     wide = tmp_path / "live" / "wide"
     assert W.note_wide(wide, 8510, False) is False and not wide.exists()
     assert W.note_wide(wide, 8510, True) is True and wide.read_text() == "8510\n"
-    assert W.note_wide(wide, 8510, True) is False, "listed already: the file isn't rewritten"
-    wide.write_text("# by hand\n8212\n\n8510  # until its mark\n85100\n")
-    assert W.note_wide(wide, 8466, True) is True
-    assert wide.read_text() == "# by hand\n8212\n\n8510  # until its mark\n85100\n8466\n"
+    assert W.note_wide(wide, 8510, True) is False, "named already: the file isn't rewritten"
+    by_hand = "8212, 8510 85100\n\n8466,8212\n"
+    wide.write_text(by_hand)
+    for pr, is_wide in ((8510, True), (8466, True), (851, False), (8411, False)):
+        assert W.note_wide(wide, pr, is_wide) is False and wide.read_text() == by_hand, "it names what it should: left as laid out"
+    assert W.note_wide(wide, 8411, True) is True
+    assert wide.read_text() == "8212\n8510\n85100\n8466\n8212\n8411\n"
     assert W.note_wide(wide, 8510, False) is True, "a head that is no longer wide leaves the list"
-    assert wide.read_text() == "# by hand\n8212\n\n85100\n8466\n"
-    assert W.note_wide(wide, 851, False) is False
+    assert W.note_wide(wide, 8212, False) is True, "wherever it is named, and however often"
+    assert wide.read_text() == "85100\n8466\n8411\n"
     assert sorted(f.name for f in wide.parent.iterdir()) == [".wide.lock", "wide"], "nothing half-written is left beside it"
+
+
+def test_the_queue_reads_the_wide_file_as_this_writes_it_and_refuses_by_name_a_word_this_keeps(tmp_path):
+    from research.queue import QueueError, priority_list
+
+    wide = tmp_path / "wide"
+    wide.write_text("8212, 8510 \t85100\n,\n8466,8212\n")
+    named = priority_list(wide)
+    assert named == (8212, 8510, 85100, 8466)
+    assert not any(W.note_wide(wide, pr, True) for pr in named), "what the queue reads as named is named here"
+    assert W.note_wide(wide, 8411, True) is True and priority_list(wide) == (*named, 8411)
+    assert W.note_wide(wide, 8212, False) is True and priority_list(wide) == (8510, 85100, 8466, 8411)
+    wide.write_text("8212 # until its mark\n8510\n")
+    assert W.note_wide(wide, 8510, False) is True
+    assert wide.read_text() == "8212\n#\nuntil\nits\nmark\n"
+    with pytest.raises(QueueError, match="'#', 'until', 'its', 'mark'"):
+        priority_list(wide)
 
 
 def test_counting_alone_lists_a_wide_pr_and_audits_nothing(tree, tmp_path, monkeypatch, capsys):

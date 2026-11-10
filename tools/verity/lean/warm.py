@@ -25,8 +25,9 @@ package that passed beside a failed one stays passed. The audit takes the bundle
 
 A change is wide when its build may compile `WIDE` modules or more (`moved`, read from the tree's headers with no build): a
 second change over the same modules builds them again, so the queue lets a wide change into a candidate with no other Lean
-change. The queue reads which open PRs are wide from a file of PR numbers, one a line; `--wide-file FILE --pr N` makes FILE
-hold N exactly when this checkout's change is wide (`note_wide`), wherever FILE can be written, and builds nothing.
+change. The queue reads which open PRs are wide from a file of PR numbers, read as its priority file is
+(`research.queue.priority_list`: numbers separated by spaces, commas or newlines, and nothing else); `--wide-file FILE --pr N`
+makes FILE name N exactly when this checkout's change is wide (`note_wide`), wherever FILE can be written, and builds nothing.
 
 Loaded by path, with the checkout's own `lean_audit.py` and `verdicts.py`, so it audits the tree it is in with that tree's
 auditor."""
@@ -38,6 +39,7 @@ import importlib.util
 import json
 import os
 import posixpath
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -60,6 +62,8 @@ FACTS_SCHEMA = "lean-warm/v1"
 #: the module count (`moved`) from which a change is wide: between a change to a leaf proof and one under the modules most
 #: proofs import
 WIDE = 500
+#: what separates the PR numbers of the queue's file of wide changes, as its reader splits them (`research.queue.priority_list`)
+BETWEEN = re.compile(r"[\s,]+")
 #: the most the last line says, prefix included: a caller that quotes a line's tail quotes this one whole
 LINE = 300
 PREFIX = "lean warm: "
@@ -116,18 +120,20 @@ def moved(la, tree: Path, pkgs: list[str], diff: list[str]) -> int:
 
 
 def note_wide(path: Path, pr: int, wide: bool) -> bool:
-    """Make ``path``, the queue's file of wide changes, hold PR number ``pr`` on a line of its own exactly when ``wide``, every
-    other line as it was. Whether it changed. Written whole beside itself and moved into place under a lock (`.NAME.lock`
-    beside it), so two writers lose neither's line and a reader never sees part of one."""
+    """Make ``path``, the queue's file of wide changes, name PR number ``pr`` exactly when ``wide``, every other word of it
+    kept in its place. Whether that changed what it names: a file that names ``pr`` as it should is left as it is, however
+    it is laid out; one rewritten holds a word a line. A word that is no PR number is kept too, for the file's reader to
+    refuse by name. Written whole beside itself and moved into place under a lock (`.NAME.lock` beside it), so two writers
+    lose neither's number and a reader never sees part of one."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path.with_name(f".{path.name}.lock"), "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        old = path.read_text().splitlines() if path.exists() else []
-        new = [line for line in old if line.split("#")[0].strip() != str(pr)] + ([str(pr)] if wide else [])
-        if new == old:
+        old = [w for w in BETWEEN.split(path.read_text()) if w] if path.exists() else []
+        if (str(pr) in old) == wide:
             return False
+        new = [*old, str(pr)] if wide else [w for w in old if w != str(pr)]
         tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-        tmp.write_text("".join(f"{line}\n" for line in new))
+        tmp.write_text("".join(f"{w}\n" for w in new))
         os.replace(tmp, path)
         return True
 
@@ -227,7 +233,7 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="warm.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("--base", required=True, help="the commit the checkout's change is read against: `main`'s tip")
     ap.add_argument("--out", type=Path, help="audit the change, and leave its reports, bundle, verdict pack and facts here")
-    ap.add_argument("--wide-file", type=Path, help="the queue's file of wide changes, one PR number a line: list --pr in it "
+    ap.add_argument("--wide-file", type=Path, help="the queue's file of wide changes, a list of PR numbers: name --pr in it "
                                                    f"exactly when the change may compile {WIDE} modules or more")
     ap.add_argument("--pr", type=int, help="the change's PR number, for --wide-file")
     a = ap.parse_args(argv)
