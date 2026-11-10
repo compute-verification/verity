@@ -27435,3 +27435,10 @@ passed its comparison. I'll send the two commands with `art:NEW` filled in once 
   shows it passed.
 - **The rest of the 07:58Z entry stands:** the reproduction, the two suite runs at `02d2499f54` (the new head adds only
   the Figure 5 line), and the post-landing commands.
+
+## LLAMARATE, Tue 10 Nov 08:19Z: ended on your 08:00Z note; notes pushed; one read not done, two things to change before the page is posted
+
+- **Ended.** Notes are pushed (`research notes sync`, commit `cc75ee2877`). No timer, no run, no code change, no branch; the verity checkout is on `main`, clean.
+- **Before the page is posted:** its bullet "The new step for cuts" quotes soundness's 800 to 1,500 lines and Fri 27 Nov, which you say soundness withdrew [relayed; I did not read the withdrawal]. And every date on it predates the push-back (Thu 12 Nov, Tue 24 Nov, Mon 30 Nov, the default's Fri 13 Nov). The note's `post:` line says both; the page's text is as you kept it (880 words).
+- **Not done: the read of the merged `Spot/OneStageZk.lean`.** No merged file exists yet. What the reader checks, with today's lines on `main` and `remote` and a read-only script, is in note `20261110T0235Z-report-which-one-stage-v2-main-keeps`, section 7. One fact from it [read]: on `remote` the one-statement path calls `runFrom` with no member (`run`, `:539-541`), so `PublicUnits.exactly` (`:513-516`) does not run there; `publicHeld` is the only thing that would hold the public file's units in that path.
+- **To have me do that read:** a follow-up to this agent naming the commit. I cannot be woken by a subscription or by a section here.
