@@ -58,6 +58,8 @@ def test_a_reds_kind_is_read_from_its_failed_tasks():
     assert qt.red_kind("failed: step lean-audit, step lean-suites", []) == "Lean audit"
     assert qt.red_kind("failed: step preflight-fixtures", []) == "preflight"
     assert qt.red_kind("x's check ended in infra errors", []) == "infrastructure"
+    assert qt.red_kind("#7 isn't taken now: held by top (red in candidate c, repository suite): tests/test_x.py::test_y fails: "
+                       "Security/lean-audit.json is unwitnessed", []) == "test"         # a test that names a Lean file
 
 
 def test_the_check_nodes_are_the_loops_on_flag():
@@ -129,6 +131,11 @@ def test_candidates_carry_their_outcome_their_shards_and_a_reds_times():
     assert (b["cause"], b["kind"]) == ("red", "test") and cs["c"]["cause"] == "dropped base"
     assert b["first_failure"] == qt.ts(at("02:00")) and b["dropped"] == qt.ts(at("02:30")) and b["rebuilt"] == qt.ts(at("02:40"))
     assert [s["id"] for s in cs["a"]["shards"]] == ["r20261110-010500-aaaa"]
+    rs = runs()
+    rs["r20261110-012500-bbbb"]["steps"].append({"step": "ratchet-gate", "state": "failed", "seconds": 60, "end": qt.ts(at("01:40"))})
+    first = lambda **kw: {c["sha"][0]: c for c in qt.candidates(decisions(), rs, T0, **kw)}["b"]["first_failure"]   # noqa: E731
+    assert first() == qt.ts(at("02:00"))                         # a step off the gate fails without making its candidate red
+    assert first(off_gate=()) == qt.ts(at("01:40"))
 
 
 def doc() -> dict:

@@ -275,8 +275,8 @@ for d in sorted(glob.glob(ROOT + "/runs/r2*")):
                 if not isinstance(f, dict):
                     f = {"name": str(f)}
                 base = (f.get("log") or "").rsplit(".", 1)[0]
-                at = base and (mtime(d + "/suites/" + base + ".json") or mtime(d + "/suites/" + base + ".log"))
-                failed.append([f.get("suite") or f.get("name"), at or None])
+                # the report's time; a suite killed at its time limit writes none, and its log's time is its last test's
+                failed.append([f.get("suite") or f.get("name"), (base and mtime(d + "/suites/" + base + ".json")) or None])
         row["failed"] = failed
     elif kind == "worker":
         i = argv.index("-c") if "-c" in argv else len(argv)
@@ -284,10 +284,8 @@ for d in sorted(glob.glob(ROOT + "/runs/r2*")):
         res = sorted((m, p) for p in glob.glob(d + "/out/results/*.json") if (m := mtime(p)))
         row["results"] = [round(m) for m, _ in res]
         if res:
-            doc = load(res[0][1]) or {}
-            own = (doc.get("detail") or {}).get("seconds")
-            own = sum(v for v in own.values() if isinstance(v, (int, float))) if isinstance(own, dict) else own
-            row["first_own_s"] = own if isinstance(own, (int, float)) else doc.get("cpu_s")
+            own = (load(res[0][1]) or {}).get("seconds")       # the task's wall seconds: its `cpu_s` counts every core
+            row["first_own_s"] = own if isinstance(own, (int, float)) else None
     runs.append(row)
 
 slots = []
@@ -479,9 +477,11 @@ def drop_cause(why: str) -> str:
 
 
 def red_kind(why: str, failed: list[str]) -> str:
-    """A red candidate's kind from the loop's reason and failed tasks: `infrastructure`, `preflight`, `Lean audit` (any Lean
-    step), else `test`."""
+    """A red candidate's kind from the loop's reason and failed tasks: `test` where it names the pytest step or a test,
+    whatever else its text mentions; else `infrastructure`, `preflight`, `Lean audit` (any Lean step), else `test`."""
     text = (why + " " + " ".join(failed)).lower()
+    if "pytest" in text or re.search(r"\btests/\S+\.py::", text):
+        return "test"
     if "infra" in text or "registered no run" in text:
         return "infrastructure"
     if "preflight" in text:
@@ -489,11 +489,12 @@ def red_kind(why: str, failed: list[str]) -> str:
     return "Lean audit" if "lean" in text else "test"
 
 
-def candidates(decisions: list[dict], runs: dict[str, dict], day_start: float) -> list[dict]:
+def candidates(decisions: list[dict], runs: dict[str, dict], day_start: float, off_gate: tuple[str, ...] = OFF_GATE) -> list[dict]:
     """Each candidate built since ``day_start``: its build, verdict (the loop's first `judged pass` or `judged fail`), outcome
     (`green`: `main` moved to it; `red`: dropped for a failure, a member held over one, or infrastructure, with its kind;
     `dropped`: for another cause; `running`), its shards' runs, and for a red the first failure among them, the drop, and the
-    next build after it."""
+    next build after it. A failure is a suite's failed report or a failed step on the gate: a step in ``off_gate`` fails
+    without making its candidate red."""
     out: dict[str, dict] = {}
     builds = sorted(ts(r["at"]) for r in decisions if r["action"] == "build" and not r.get("shadow"))
     for r in decisions:
@@ -522,7 +523,8 @@ def candidates(decisions: list[dict], runs: dict[str, dict], day_start: float) -
     for c in out.values():
         c["shards"] = sorted((runs[i] for i in c["ids"] if i in runs), key=lambda x: x.get("shard") or "")
         fails = [f[1] for s in c["shards"] for f in s.get("failed") or [] if f[1]]
-        fails += [st["end"] for s in c["shards"] for st in s.get("steps") or [] if st.get("state") == "failed" and st.get("end")]
+        fails += [st["end"] for s in c["shards"] for st in s.get("steps") or []
+                  if st.get("state") == "failed" and st.get("end") and st.get("step") not in off_gate]
         if c["outcome"] == "red" and fails:
             c["first_failure"] = min(fails)
     return sorted(out.values(), key=lambda c: c["build"])
@@ -645,7 +647,7 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
     waiting = {pr: mark for pr, head in open_prs.items() if (mark := mark_at(labels.get(f"{pr}@{head}") or [], now))}
     waits = sorted(_m(now - m) for m in waiting.values())
     marks = [*waiting.values(), *(at - v * 60 for at, v in m2m if v is not None)]
-    cands = candidates(decisions, runs, day)
+    cands = candidates(decisions, runs, day, off_gate)
     flying = [c for c in cands if c["outcome"] == "running"]
     in_flight = {str(pr) for c in flying for pr in c["members"]}
     has_verdict = {pr for pr in waiting if verdict_at(labels.get(f"{pr}@{open_prs[pr]}") or [])[0]}
@@ -814,7 +816,8 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
     # 6. the executor
     workers = [r for r in runs.values() if r["kind"] == "worker"]
     done = sorted(m for r in workers for m in r.get("results") or [])
-    over = [(m, r["results"][0] - rid_time(r["id"]) - (r.get("first_own_s") or 0)) for r in workers if (m := (r.get("results") or [None])[0])]
+    over = [(m, r["results"][0] - rid_time(r["id"]) - r["first_own_s"]) for r in workers
+            if (m := (r.get("results") or [None])[0]) and r.get("first_own_s") is not None]
     compares = {r["sha"]: r for r in decisions if r["action"] == "compare" and ts(r["at"]) >= day}
     cancelled = len({r["sha"] for r in decisions if r["action"] == "drop" and ts(r["at"]) >= day and r.get("cancel") == "cancelled"})
     wslots = pct([r.get("slot_cores") or 0 for r in workers if r.get("slot_cores")], .5)
@@ -832,7 +835,7 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
     add("6", "Executor: cores working in a slot", "", working(hour), working(day), f"{wslots:.0f} (the slot)" if wslots else "",
         "worker runs that ended in the window: CPU seconds (the run's cgroup's last sample) over seconds in the slot")
     add("6", "Executor: overhead before a run's first task result", "", _dist(win(over, hour), "s"), _dist(win(over, day), "s"), "",
-        "the run id's time to its first result file, less that task's own seconds; a run holds p50 "
+        "the run id's time to its first result file, less that task's own wall seconds; a run holds p50 "
         f"{pct([r.get('tasks') or 0 for r in workers], .5) or 0:.0f} tasks")
     submitted = [dict(c, at=rid_time("r" + c["at"][:8] + "-" + c["at"][9:])) for c in doc["control"].get("executor") or []]
     unfinished = [c["tasks"] for c in submitted if any(c["tasks"].get(k) for k in ("queued", "waiting", "leased"))]
