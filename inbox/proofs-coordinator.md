@@ -34495,3 +34495,52 @@ In short:
 - PRF-517's try is `r20261110-232734-0713` on vy-nebius-cpu-8, running since about 23:40Z; my ETA is 00:10Z [guess].
 - Its quick tier is `r20261110-232545-7385` on vy-nebius-cpu-6, waiting for a slot. Its records run follows the try.
 - #8730's `c92e` and `514b` are still running on vy-nebius-cpu-7. `c92e` has finished `verity/core/service/spot` and is on the next package; its slot's 7200 s cap ends about 00:35Z.
+
+## PRF-513 REMOTECORE, Tue 10 Nov 23:45Z: test-time branch at d6cf59bccf21; every test passed one commit earlier, in 2,954 s against 5,016 s at main; the suite at the head ends about 00:05Z, then the PR
+
+**State.** `cursor/proofs-composition-test-time-cf05` is at `d6cf59bccf21`, holding `main`'s tip `2b869ed35db5` [run git]. One commit since 22:51Z: product over onsite's short form is deleted (thing 3). The suite passed, every test, one commit earlier; the same run at this head ends about 00:05Z [guess], and the PR opens then.
+
+**Runs since 22:51Z.**
+
+- `r20261110-224718-f297`, done, at `b8254742ad4d`: `suites.py --fresh verity-core-composition`, every test, **32 passed in 2,954 s** [run]. The thousands ran with the cache and the new hex check for the first time, and agree.
+- `r20261110-224624-b39b`, done, at `b8254742ad4d`: the file without the long tests, 17 passed in 639 s; `verity-difftest`, 153 passed, the new unshrunk harness test among them against the Lean [run]. That suite's inputs hold nothing the later commit changed [read `verity/core/difftest/pyproject.toml`], so its verdict carries to `d6cf59bccf21`.
+- `r20261110-231258-a23b`, running since 23:13Z at `d6cf59bccf21`: the composition suite again, the verdict of record.
+- `r20261110-212105-acf7`, done, at `main` `5482988e3496`: the whole file, 16 passed in 5,017 s [run].
+
+**Thing 1: seconds a test** [run: main is `acf7` on cpu-7, head is `f297` on cpu-3]:
+
+| test | cases | main | head |
+|---|---|---|---|
+| `test_onsite_agrees` | 1000 | 1,547 | 836 |
+| `test_onsite_agrees_on_fewer_cases` | 150 | | 96 |
+| `test_remote_agrees` | 1000 | 1,147 | 672 |
+| `test_remote_agrees_on_fewer_cases` | 150 | | 120 |
+| `test_product_over_remotes_subprotocols_is_remote` | 1000 | 1,129 | 669 |
+| its short form | 100 | | 56 |
+| `test_product_over_onsites_subprotocols_is_onsite` | 200 | 299 | 165 |
+| `test_a_reference_without_reject_dominance_is_caught` | to the first mismatch | 485 | 136 |
+| `test_onsite_refuses_a_stray_tie_and_else_keeps_its_verdict` | | 205 | 53 |
+| `test_remote_refuses_two_records_and_else_keeps_the_products_verdict` | | 151 | 36 |
+| `test_onsite_refuses_p2_named_as_the_generic_bandwidth_audit` (new) | 10 | | 4 |
+| the other nine (three take no time) | | 53 | 44 |
+| **the file** | | **5,016** | **2,885** |
+
+The head's file total leaves out the 59 s of the short form I deleted after `f297` [derived].
+
+**For your line to ci** [derived from the table]. Under #8722's marks a candidate's check runs:
+
+- `main` with the marks: 708 s of this file, and no sampled agreement run of `remote serve`, `onsite serve` or product over remote. Only directed cases reach them.
+- This branch with the marks as they stand (trial test marked): 572 s, with 150 cases through each `serve` and 100 through product over remote.
+- This branch with the trial test unmarked: 708 s.
+
+The nightly, every test: 5,016 s at `main`, 2,885 s here. No thousand comes under five minutes: the Lean side alone is about 550 s a thousand and is PoUW's period check [run `acf7`, 22:02Z entry]. So the cut is the split, and the short forms are what a candidate keeps.
+
+**Thing 2: the trial test is 136 s, from 485 s at `main`** [run `f297`, `acf7`; 142 s in `b39b`]. `run(..., shrink=False)` stops at the first mismatch. It gives up nothing the test asserts [read]. At `main` the shrunk case was no smaller than the drawn one: Hypothesis warns of a 7.5 MB repr there and 5.1 MB here [run logs]. **It needs no mark.** #8722 (SIMPLE) marks it and names it in `check.py`'s `OPT_IN`; dropping both is SIMPLE's edit.
+
+**Thing 3: product over onsite's 200 cases are 299 s at `main` and 165 s here: under five minutes, so no mark.** Every check runs them, so I deleted their short form (`d6cf59bccf21`): it ran the same executable on the same generator a second time. That also ends the 50-case floor question of my last entry. `FEWER_OF_PRODUCT` stays 100 for product over remote alone (56 s; lowest counts over eight seeds 16 and 32 against a floor of 2 [run `718b`]).
+
+**Merges** [run `git merge-tree`, `git merge-file`]: the head merges clean with #8722's `c9188dd00a9d`. Against the `remote` line's copy of the test file there are the same two places as before: after `test_onsite_agrees` (keep the short form and the directed test once) and the product tests (delete `test_product_over_remotes_subprotocols_is_remote`, its short form and `FEWER_OF_PRODUCT`).
+
+**The PR's goal line.** PRF-513 carries no goal label, so `open` writes none. I will write `Goal ci/slow-tests-off-gate`, the goal this serves. Say if a proofs goal should stand there instead.
+
+**Next entry:** when `a23b` ends and the PR is open, with its number.
