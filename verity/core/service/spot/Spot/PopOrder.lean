@@ -8,11 +8,11 @@ one (`Run.run` among them), and `popOk` itself is unchanged.
 -/
 module
 
-public import SampledProofs.Slots
+public import Spot.Slots
 
 @[expose] public section
 
-namespace SampledProofs.Slots
+namespace Spot.Slots
 
 open Lean (Json)
 open Flock (V)
@@ -289,4 +289,4 @@ query's strata chain `0, …, n - 1` and every such unit has gates. -/
     | error e => unfold popOk layout; rw [h1, h2]; rfl
     | ok gs => exact popOk_of p query n rs gs h1 h2
 
-end SampledProofs.Slots
+end Spot.Slots
