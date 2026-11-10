@@ -21,13 +21,13 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.certifier import warden_rows as WR
+from verity.core.protocols.certifier import certifier_rows as WR
 from verity.core.protocols.certifier.active import DATA, VirtualClock
 from verity.core.protocols.certifier.certificate import record_head
 from verity.core.protocols.certifier.grid import Reason
-from verity.core.protocols.certifier.warden import END, Shim, Warden, cells, read_cell
+from verity.core.protocols.certifier.certifier import END, Shim, Certifier, cells, read_cell
 
-from test_warden_serve import PARAMS, SESSION, _response, _Writer, ws
+from test_certifier_tcp_serve import PARAMS, SESSION, _response, _Writer, ws
 
 REQUESTS = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 200, 30)]
 RESPONSES = [_response([" a", " b"]), _response([" word"] * 40), _response([])]
@@ -89,16 +89,16 @@ def _drive(out: Path, key: Path, *, process: bool, commit=fixed_commit, late: di
            kill_at: int | None = None, before_close=None, release_edit=None, transport=None) -> dict:
     """The network certifier for `WINDOWS` windows on a `VirtualClock` over `REQUESTS`, published by `PublisherProcess`
     (or by `ThreadPublisher`), written as `serve` and `client` write a run; `late[t]` puts tick t that late, `kill_at`
-    kills the process (by its pid) before tick t, `before_close(warden)` runs once every tick is done, before the
+    kills the process (by its pid) before tick t, `before_close(certifier)` runs once every tick is done, before the
     publisher's `close`, `release_edit(release)` stands in for the release the network certifier calls, and
     `transport(put)` for the put of every message to the process. Returns the network certifier, the records it closed,
     and what the run and `close` raised."""
     out.mkdir()
     tau, late = PARAMS.bucket_ms / 1000, late or {}
     if process:
-        import warden_serve
+        import certifier_tcp_serve
 
-        publisher = warden_serve.PublisherProcess(out, key, SESSION, PARAMS, commit)
+        publisher = certifier_tcp_serve.PublisherProcess(out, key, SESSION, PARAMS, commit)
         release = publisher.release if release_edit is None else release_edit(publisher.release)
         if transport is not None:
             publisher.rows.put = transport(publisher.rows.put)
@@ -118,29 +118,29 @@ def _drive(out: Path, key: Path, *, process: bool, commit=fixed_commit, late: di
         reader.feed_eof()
         return reader, _Writer()
 
-    def settled(w: Warden) -> bool:
+    def settled(w: Certifier) -> bool:
         return all(c.server is not None and c.ingress_ended and c.egress_ended for c in w.active)
 
     async def main():
         clock = VirtualClock(-tau / 2)
-        warden = Warden(PARAMS, connect, origin=0.0, windows=WINDOWS, clock=clock, sleep=clock.sleep,
+        certifier = Certifier(PARAMS, connect, origin=0.0, windows=WINDOWS, clock=clock, sleep=clock.sleep,
                         publish=publish, release=release)
-        running = asyncio.create_task(warden.run())
+        running = asyncio.create_task(certifier.run())
         clients, tasks = [], []
         for request in REQUESTS:
             reader = asyncio.StreamReader()
             reader.feed_data(cells(request, PARAMS.cell_bytes))
             reader.feed_eof()
-            clients.append(_Writer(warden))
-            tasks.append(asyncio.create_task(warden.handle(reader, clients[-1])))
-        await warden.until(lambda w: w.ordinals == len(REQUESTS))
+            clients.append(_Writer(certifier))
+            tasks.append(asyncio.create_task(certifier.handle(reader, clients[-1])))
+        await certifier.until(lambda w: w.ordinals == len(REQUESTS))
         for t in range(WINDOWS * PARAMS.window):
             if t == kill_at:
                 os.kill(publisher.process.pid, signal.SIGKILL)
                 publisher.process.join()
-            await warden.until(settled)
+            await certifier.until(settled)
             clock.advance(t * tau + late.get(t, 0.0))
-            ticked = asyncio.ensure_future(warden.until(lambda w, t=t: w.ticks > t))
+            ticked = asyncio.ensure_future(certifier.until(lambda w, t=t: w.ticks > t))
             await asyncio.wait({ticked, running}, return_when=asyncio.FIRST_COMPLETED)
             if not ticked.done():
                 ticked.cancel()
@@ -151,18 +151,18 @@ def _drive(out: Path, key: Path, *, process: bool, commit=fixed_commit, late: di
         except (RuntimeError, EOFError) as e:
             failed = e
         await asyncio.gather(*tasks, return_exceptions=True)
-        return clients, warden, failed
+        return clients, certifier, failed
 
-    clients, warden, failed = asyncio.run(main())
+    clients, certifier, failed = asyncio.run(main())
     if before_close is not None:
-        before_close(warden)
+        before_close(certifier)
     close_error = None
     try:
         publisher.close()
     except (RuntimeError, EOFError) as e:
         close_error = e
     deployment = ws.deployment_record(PARAMS, publisher.key, SESSION, origin_unix=0.0, windows=WINDOWS,
-                                      listen=("127.0.0.1", 1), upstream=("127.0.0.1", 2), slack=warden.slack)
+                                      listen=("127.0.0.1", 1), upstream=("127.0.0.1", 2), slack=certifier.slack)
     (out / "deployment.json").write_text(json.dumps(deployment))
     log, B = [], PARAMS.cell_bytes
     for index, (request, client) in enumerate(zip(REQUESTS, clients)):
@@ -175,7 +175,7 @@ def _drive(out: Path, key: Path, *, process: bool, commit=fixed_commit, late: di
         shim.outcome = "end" if shim.arrivals and END in [k for _, k in shim.arrivals] else "cut"
         log.append(ws.connection_log(index, 0.0, 0.0, request, shim, 0.0))
     (out / "client.json").write_text(json.dumps({"connections": log}))
-    return {"warden": warden, "closed": closed, "failed": failed, "close_error": close_error}
+    return {"warden": certifier, "closed": closed, "failed": failed, "close_error": close_error}
 
 
 def _heads(out: Path) -> dict:
@@ -184,7 +184,7 @@ def _heads(out: Path) -> dict:
 
 
 def _closed_heads(closed) -> dict:
-    """The head of each complete record the warden closed, as the check recomputes it: the issuer certifies no other."""
+    """The head of each complete record the certifier closed, as the check recomputes it: the issuer certifies no other."""
     out = {}
     for name, (link, direction) in ws.CERTIFIED.items():
         grid = PARAMS.fails_grid if name == ws.FAILS else PARAMS.grid
@@ -254,8 +254,8 @@ def test_a_process_killed_mid_window_fails_the_run_and_the_check_refuses_the_win
     process's end of the pipe reading as a message to `_receive`'s `poll` and `recv` hitting its EOF)."""
     (key,) = _key(tmp_path, "process-key")
     run = _drive(tmp_path / "run", key, process=True, kill_at=PARAMS.window + 10)
-    warden = run["warden"]
-    assert max(warden.lateness) <= warden.slack
+    certifier = run["warden"]
+    assert max(certifier.lateness) <= certifier.slack
     for error in (run["failed"], run["close_error"]):
         assert type(error) is RuntimeError
         assert str(error) == f"the publisher process exited ({-signal.SIGKILL}) before its done"
@@ -277,8 +277,8 @@ def test_a_process_a_window_behind_moves_no_tick_and_keeps_every_record_whole(tm
     (key,) = _key(tmp_path, "process-key")
     seen = {}
 
-    def behind(warden):
-        seen["lateness"] = max(warden.lateness)
+    def behind(certifier):
+        seen["lateness"] = max(certifier.lateness)
         seen["heads"] = set(_heads(tmp_path / "run"))
         with open(fifo, "wb") as fh:
             fh.write(b"\x01")
@@ -376,7 +376,7 @@ def test_a_row_lost_doubled_or_changed_between_the_processes_is_refused(tmp_path
     run = _drive(tmp_path / "run", key, process=True, transport=_egress_rows(edit()))
     first = run["failed"] or run["close_error"]
     assert type(first) is RuntimeError
-    assert f"{ws.EGRESS} window 0: the rows rebuilt aren't the grid the warden closed" in str(first)
+    assert f"{ws.EGRESS} window 0: the rows rebuilt aren't the grid the certifier closed" in str(first)
     assert type(run["close_error"]) is RuntimeError
     heads = _heads(tmp_path / "run")
     assert (ws.LINK, "egress", 0) not in heads and (ws.LINK, "ingress", 0) in heads

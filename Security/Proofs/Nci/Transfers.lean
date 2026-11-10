@@ -18,8 +18,8 @@ So NCI compliance is a ratio of two certified numbers. Machine `b`'s IU conditio
 exactly when `size R_b ≤ Γ` and `|transfersInto b| + |inputsRead b \ θ| ≤ α · size R_b` (`iu_iff_counts`), with
 `|transfersInto b|` network accounting's certified count of the bits into `b` and `size R_b` compute credit's total for
 `b`. When every novel input reaches `b` through another machine, it is `|transfersInto b| ≤ α · size R_b`
-(`iu_iff_wire`). That is the form a server needs among clients and the auditor's warden, which needn't comply as IUs: the
-warden reads every bit it relays. When each machine is one IU and every machine meets its condition, the whole
+(`iu_iff_wire`). That is the form a server needs among clients and the auditor's certifier, which needn't comply as IUs: the
+certifier reads every bit it relays. When each machine is one IU and every machine meets its condition, the whole
 declaration complies (`complies_of_counts`).
 
 In the subcircuits' terms (`machine`), the transfer gates from `a` to `b` are `(machine a).inner ∩ (machine b).ins`
@@ -187,7 +187,7 @@ theorem novelReads_eq_card_add (hw : ∀ g, d.D.w g = 1) (b : Fin n) :
 (at most `Γ` gates, at most `α` bits of novel information per gate) holds exactly when `size R_b ≤ Γ` and
 `|transfersInto b| + |inputsRead b \ θ| ≤ α · size R_b`: network accounting's certified bits into `b`, plus the novel
 input gates `b` reads itself, against compute credit's total for `b`. It is stated for one machine because the others
-need not comply as IUs: a server's session is one IU, while the clients and the auditor's warden, which reads every bit
+need not comply as IUs: a server's session is one IU, while the clients and the auditor's certifier, which reads every bit
 it relays, are not IUs of the server's workload. -/
 theorem iu_iff_counts (Γ : ℕ) (α : ℝ) (hw : ∀ g, d.D.w g = 1) (b : Fin n) :
     (d.D.size (P.gates b) ≤ Γ ∧ (novelReads d (P.gates b) : ℝ) ≤ α * d.D.size (P.gates b)) ↔

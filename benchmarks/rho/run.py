@@ -141,7 +141,7 @@ def certified_md(d: dict | None) -> list[str]:
         basis = "given directly (`ingress`)"
     elif d["declared"]:
         basis = (f"{fmt(d['declared_x'])} × each server's declared inputs, r_in = {fmt(d['r_in'])} bit/s (r_out = "
-                 f"{fmt(d['r_out'])} bit/s out) over a {fmt(d['window_buckets'])}-bucket link-window, at the warden "
+                 f"{fmt(d['r_out'])} bit/s out) over a {fmt(d['window_buckets'])}-bucket link-window, at the certifier "
                  f"form's public parameters, the honest-δ form of draft:per-server-ingress's bound (an incorrect "
                  f"ingress unit's {fmt(d['faulty_unit_bits'])} bits are excluded, and 0 when every ingress unit is "
                  f"drawn); line rate, {fmt(d['links'])} bit/s, is its upper end until Lean proves that bound")

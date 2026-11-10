@@ -1955,7 +1955,7 @@
     "verity/core/protocols/certifier/replay_step.py",
     "verity/core/protocols/certifier/schedule.py",
     "verity/core/protocols/certifier/served_rows.py",
-    "verity/core/protocols/certifier/warden.py",
+    "verity/core/protocols/certifier/certifier.py",
     "verity/core/protocols/pouw/leaf_lanes.py",
     "verity/core/protocols/pouw/live_reads.py",
     "verity/core/protocols/spot/one_stage/produced.py",

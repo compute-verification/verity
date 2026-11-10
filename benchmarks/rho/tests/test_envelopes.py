@@ -234,7 +234,7 @@ def test_the_declared_io_bound_at_w63_is_the_per_server_bounds_per_window_honest
     `user` at 406), and its prompt is K0 + (C − 1) K = 12 + 46 · 45 = 2,082 ids: 36,382 bits in. A bucket is
     4 ⌈log₂ 6⌉ = 12 bits, and a request 1,095 out (1,088 id bits and the count). A link-window holds `4 ⌈32 / 28⌉ = 8`
     requests, so a server takes at most 291,440 bits in a 3.2 s window, 91.1 kbit/s in and 2.7 kbit/s out, against the
-    warden's line rate of 655 kbit/s each way. That is never less than the rate over many windows, 52.1 kbit/s, which it
+    certifier's line rate of 655 kbit/s each way. That is never less than the rate over many windows, 52.1 kbit/s, which it
     equals only at T = D + 1. An incorrect ingress unit, which this honest-δ form excludes, would add 356,592 bits
     (8 · 512 · 16 + 2 · 4 · 36,382), 122% of a window. `regime.onsite` doesn't take it."""
     assert envelopes.REQUEST_HEAD == {"connection ordinal": 32, "content-length": 32, "max_tokens": 32, "seed": 32,
@@ -244,7 +244,7 @@ def test_the_declared_io_bound_at_w63_is_the_per_server_bounds_per_window_honest
     assert (c.request_in, c.bucket_in, c.request_out, c.hold, c.window_buckets) == (36_382, 12, 1_095, 27, 32)
     assert c.window_bits(32) == (291_440, 8_760) == (8 * 36_382 + 32 * 12, 8 * 1_095)
     assert (c.r_in, c.r_out) == (pytest.approx(91_075), pytest.approx(8_760 / 3.2))
-    assert (round(c.r_in / 1e3, 1), round(c.r_out / 1e3, 1), c.warden_rate) == (91.1, 2.7, 655_360)
+    assert (round(c.r_in / 1e3, 1), round(c.r_out / 1e3, 1), c.certifier_rate) == (91.1, 2.7, 655_360)
     assert c.faulty_unit_bits == 356_592 and round(c.faulty_unit_bits / c.window_bits(32)[0], 2) == 1.22
     # a slot is held D + 1 = 28 buckets from its admission, so the ceiling steps past 28
     assert c.window_bits(28) == (4 * 36_382 + 28 * 12, 4 * 1_095)

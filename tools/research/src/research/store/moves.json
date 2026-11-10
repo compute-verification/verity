@@ -1747,6 +1747,35 @@
       "paths": {
         "verity/ml/circuits/": "verity/circuits/"
       }
+    },
+    {
+      "paths": {
+        "Security/Definitions/NetworkCertifier/Warden.lean": "Security/Definitions/NetworkCertifier/Certifier.lean",
+        "Security/Proofs/NetworkCertifier/Warden.lean": "Security/Proofs/NetworkCertifier/Certifier.lean",
+        "benchmarks/live_challenger/tests/test_auditor_warden.py": "benchmarks/live_challenger/tests/test_auditor_certifier_tcp.py",
+        "benchmarks/network_e2e/traces/tests/test_warden_probes.py": "benchmarks/network_e2e/traces/tests/test_certifier_probes.py",
+        "benchmarks/network_e2e/traces/warden_probe.py": "benchmarks/network_e2e/traces/certifier_probe.py",
+        "benchmarks/network_traces/tests/test_warden_chain.py": "benchmarks/network_traces/tests/test_certifier_chain.py",
+        "benchmarks/network_traces/tests/test_warden_serve.py": "benchmarks/network_traces/tests/test_certifier_tcp_serve.py",
+        "benchmarks/network_traces/tests/test_warden_serve_phase10.py": "benchmarks/network_traces/tests/test_certifier_tcp_serve_phase10.py",
+        "benchmarks/network_traces/tests/test_warden_zk.py": "benchmarks/network_traces/tests/test_certifier_zk.py",
+        "benchmarks/network_traces/warden_chain.py": "benchmarks/network_traces/certifier_chain.py",
+        "benchmarks/network_traces/warden_serve.py": "benchmarks/network_traces/certifier_tcp_serve.py",
+        "benchmarks/network_traces/warden_zk.py": "benchmarks/network_traces/certifier_zk.py",
+        "benchmarks/network_traces/warden_zk.sh": "benchmarks/network_traces/certifier_zk.sh",
+        "benchmarks/one_stage/a5_warden.py": "benchmarks/one_stage/a5_certifier.py",
+        "benchmarks/one_stage/tests/test_a5_warden.py": "benchmarks/one_stage/tests/test_a5_certifier.py",
+        "benchmarks/one_stage/tests/test_warden_replay.py": "benchmarks/one_stage/tests/test_certifier_replay.py",
+        "benchmarks/one_stage/warden_replay.py": "benchmarks/one_stage/certifier_replay.py",
+        "verity/core/protocols/certifier/tests/fixtures/warden-heavy-order.json": "verity/core/protocols/certifier/tests/fixtures/certifier-heavy-order.json",
+        "verity/core/protocols/certifier/tests/test_network_certifier_warden.py": "verity/core/protocols/certifier/tests/test_network_certifier.py",
+        "verity/core/protocols/certifier/tests/test_network_certifier_warden_adversarial.py": "verity/core/protocols/certifier/tests/test_network_certifier_adversarial.py",
+        "verity/core/protocols/certifier/tests/test_network_certifier_warden_rows.py": "verity/core/protocols/certifier/tests/test_network_certifier_rows.py",
+        "verity/core/protocols/certifier/tests/test_network_certifier_warden_rows_phase11.py": "verity/core/protocols/certifier/tests/test_network_certifier_rows_phase11.py",
+        "verity/core/protocols/certifier/tests/test_network_certifier_warden_rows_replay.py": "verity/core/protocols/certifier/tests/test_network_certifier_rows_replay.py",
+        "verity/core/protocols/certifier/warden.py": "verity/core/protocols/certifier/certifier.py",
+        "verity/core/protocols/certifier/warden_rows.py": "verity/core/protocols/certifier/certifier_rows.py"
+      }
     }
   ]
 }

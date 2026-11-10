@@ -21,7 +21,7 @@ The headers and the watermark are the certifier's, sent to the server only. The 
 cells and every record hold the client's bytes, so what is certified and tied (cell counts, prompt lengths, the I/O
 tie's request frames) is the same with them or without. A lost release is the server connection's state, which the
 server sees itself. N, A and n are read back from the signed ingress records: the
-network certifier's `END` cells in record order and the bucket of each (`warden.Warden`), and on the active certifier's
+network certifier's `END` cells in record order and the bucket of each (`certifier.Certifier`), and on the active certifier's
 link request s in `active.Requests`' cut, which ends before s + 1 starts, so it is release s − 1
 (`benchmarks/network_traces/active_replay.ReleaseProxy`, which sends no bucket: it forwards a request's head before its
 last frame). A client's own release headers are dropped; bytes that aren't an HTTP/1 request with its whole head pass

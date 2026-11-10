@@ -210,17 +210,17 @@ def test_a_keyed_entry_excuses_only_the_pieces_inside_its_values(tmp_path):
     and so is the CPU list under an entry whose key path the witness file doesn't have."""
     g = _gate(tmp_path / "G" / "g1")
     rnd = random.Random(5)
-    warden = {"connections": [{"ordinal": i, "head": rnd.randbytes(32).hex()} for i in range(2)],
+    certifier = {"connections": [{"ordinal": i, "head": rnd.randbytes(32).hex()} for i in range(2)],
               "usage": {"cpu_s": 1.5, "cpus": list(range(32))}}
-    (g / "witness" / "warden.json").write_text(json.dumps(warden, indent=1))
-    entry = {"sha256": "*", "witness": "warden.json", "keys": ["usage/cpus"], "records": ["*"], "why": "its own CPUs"}
+    (g / "witness" / "certifier.json").write_text(json.dumps(certifier, indent=1))
+    entry = {"sha256": "*", "witness": "certifier.json", "keys": ["usage/cpus"], "records": ["*"], "why": "its own CPUs"}
     declared = json.loads(LG.DECLARED.read_text())
     (tmp_path / "keyed.json").write_text(json.dumps({**declared, "allow": [entry]}))
     (tmp_path / "other.json").write_text(json.dumps({**declared, "allow": [{**entry, "keys": ["usage/nice"]}]}))
     run = tmp_path / "run"
     outcome = {"audit": {"proved_units": list(range(32)), "verdict": "accept"}}
     _put(run, {"out/tie/verifier/w000-outcome.json": json.dumps(outcome, indent=1).encode(),
-               "out/heads.json": json.dumps({"h": warden["connections"][1]["head"]}).encode()})
+               "out/heads.json": json.dumps({"h": certifier["connections"][1]["head"]}).encode()})
     rc, report, _ = _guard(tmp_path, run, "--declared", str(tmp_path / "keyed.json"), "--dry")
     assert rc == 3 and [d["path"] for d in report["found"]] == ["out/heads.json"]
     assert [(e["entry"], e["records"]) for e in report["excused"]] == [(0, ["out/tie/verifier/w000-outcome.json"])]

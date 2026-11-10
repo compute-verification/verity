@@ -1,4 +1,4 @@
-"""The network certifier's bucket rows with reads tied to the layout (`warden_rows`), held as regressions: a proof block
+"""The network certifier's bucket rows with reads tied to the layout (`certifier_rows`), held as regressions: a proof block
 reads only its connection's own cells, and a PAD cell is no content channel.
 
 With the reads (the proof blocks' wiring) unconstrained, a proof block could open any of the N = T·S rows of the correct
@@ -11,7 +11,7 @@ A PAD cell carries its connection's ordinal (`cell(PAD, q, b"")`) and sits in th
 toward the connection's cells and `place` will open it. These cases show it is not a *content* channel — a pad's bytes
 are fixed by (PAD, q): header and zero fill, no prover-chosen bits — and that carrying the ordinal *narrows* the read
 space to a connection's own cells. Which of a connection's own cells each proof block reads is the Program's
-(`warden_rows.Units`), and the port's value names its digest, so a statement made for a pad where a data cell is
+(`certifier_rows.Units`), and the port's value names its digest, so a statement made for a pad where a data cell is
 intended is refused by the verifier's registered reads.
 """
 
@@ -19,12 +19,12 @@ from __future__ import annotations
 
 import pytest
 
-from verity.core.protocols.certifier import warden_rows as W
+from verity.core.protocols.certifier import certifier_rows as W
 from verity.core.protocols.certifier.active import DATA, PAD
 from verity.core.protocols.certifier.certificate import Direction
 from verity.core.protocols.certifier.grid import COMPLETE, Record
-from verity.core.protocols.certifier.warden import cell
-from verity.core.protocols.certifier.tests.test_network_certifier_warden import PARAMS
+from verity.core.protocols.certifier.certifier import cell
+from verity.core.protocols.certifier.tests.test_network_certifier import PARAMS
 
 B, R, LANES = PARAMS.cell_bytes, PARAMS.slots, PARAMS.lanes
 S, T = PARAMS.grid.allocation, PARAMS.window
@@ -71,7 +71,7 @@ def test_my_phase8_reads_are_refused_foreign_duplicate_cell_past_and_empty():
         with pytest.raises(ValueError, match=why):
             W.port(head, wiring, PARAMS, bad)
     for other in [W.Wiring(wiring.connections, bytes(64)), W.Wiring(wiring.connections[:-1], wiring.salt)]:
-        with pytest.raises(ValueError, match="isn't the one the warden signed"):
+        with pytest.raises(ValueError, match="isn't the one the certifier signed"):
             W.port(head, other, PARAMS, [(1, 0)])
 
 

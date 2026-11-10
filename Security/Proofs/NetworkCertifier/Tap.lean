@@ -4,17 +4,17 @@ public import Aesop.BuiltinRules
 public import Definitions.Core.Assumptions
 public import Definitions.NetworkCertifier.Tap
 public import Mathlib.Tactic.ToDual
-public import Proofs.NetworkCertifier.Warden
+public import Proofs.NetworkCertifier.Certifier
 import Mathlib.Data.Finset.Attr
 import Mathlib.Tactic.Finiteness.Attr
 import Mathlib.Tactic.SetLike
 
 /-!
-# What the tap's certifier saw is what its warden sent
+# What the tap's certifier saw is what its certifier sent
 
 `Definitions.NetworkCertifier.Tap`. Under `trusted-host` the tap's run is its code, so the cells the client receives
-are the warden's code's (`certifier_cells`) and, on a schedule the record format holds (`RecordFormat.fits`), read back from the
-record the same run writes (`certifier_cells_read`): what the certifier saw is what the warden sent, by the one code run. Of the data reaching the tap on a connection, each cell its
+are the certifier's code's (`certifier_cells`) and, on a schedule the record format holds (`RecordFormat.fits`), read back from the
+record the same run writes (`certifier_cells_read`): what the certifier saw is what the certifier sent, by the one code run. Of the data reaching the tap on a connection, each cell its
 lane sends before its fail cell is in the record, as that cell's data in its bucket (`certifier_data_read`). The rest of the
 server's bytes, after the fail cell or past the lane's end, reach neither the client nor the record, so the record
 does not fix the whole stream the server sent.
@@ -26,7 +26,7 @@ namespace NetTiming
 
 variable {κ Cell Ob Srv Dev : Type}
 
-/-- The cells the trusted tap sends are the warden's code's. -/
+/-- The cells the trusted tap sends are the certifier's code's. -/
 theorem certifier_cells (f : RecordFormat κ Cell Ob) (arr : Srv → κ → Arrivals Cell) (tap : Dev)
     (run : Dev → CertifierSchedule κ × Srv → (κ → List (ℕ × CellView Cell)) × Ob)
     (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2)) (s : CertifierSchedule κ)
@@ -34,7 +34,7 @@ theorem certifier_cells (f : RecordFormat κ Cell Ob) (arr : Srv → κ → Arri
   rw [htrust (s, σ)]
   rfl
 
-/-- **What the certifier saw is what the warden sent**: on a schedule the record format holds, the cells the trusted tap
+/-- **What the certifier saw is what the certifier sent**: on a schedule the record format holds, the cells the trusted tap
 sends read back from the record its same run writes. -/
 theorem certifier_cells_read (f : RecordFormat κ Cell Ob) (arr : Srv → κ → Arrivals Cell) (tap : Dev)
     (run : Dev → CertifierSchedule κ × Srv → (κ → List (ℕ × CellView Cell)) × Ob)

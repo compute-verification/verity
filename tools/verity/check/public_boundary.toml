@@ -108,7 +108,7 @@ protocols = [
     "verity/core/protocols/certifier/{active,arith_encode,audit,blocks,boundary,cache_step,calibration,capacity,certificate}*",
     "verity/core/protocols/certifier/{charge_chain,coin_link,commitment,compile_slice,grid,head_check,io_request,io_tie}*",
     "verity/core/protocols/certifier/{lean_audit,online,out_commit,pacer,release,replay_chain,replay_step,schedule}*",
-    "verity/core/protocols/certifier/{served,service,tie_service,transfer_rows,warden}*",
+    "verity/core/protocols/certifier/{served,service,tie_service,transfer_rows,certifier}*",
     "verity/ml/protocols/{pous,certifier}",
     "Security/*/{Nci,NciDesc}{,.lean}",
     "Security/Proofs/Properties/Nci{,.lean}",

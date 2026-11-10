@@ -1,33 +1,33 @@
 """scan-zk: the network certifier's step-indexed scan composed in zero knowledge, in the generator form. Ingress bucket t
-(`ingress_scan.IngressScanBucket`; bucket 0's `IngressScanFirst`, from the empty state) reads the warden's ingress row
+(`ingress_scan.IngressScanBucket`; bucket 0's `IngressScanFirst`, from the empty state) reads the certifier's ingress row
 t, the scan's state S_{t−1} and its boundary's slot entries, and computes S_t and its egress view; egress bucket t
-(`egress.EgressBucket`) reads that view and computes the warden's egress row t. A group of link-windows is one
+(`egress.EgressBucket`) reads that view and computes the certifier's egress row t. A group of link-windows is one
 registration, every row of every unit, input or output, a registered read, proved by Flock `prove --zk` behind the
 Lean ZK server and held by Lean `verify --zk --registered`. Standalone: in no Spec, except the honest round on the
 challenger's coins (``--challenger``), a `service.Stream`'s.
 
     python benchmarks/network_traces/scan_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
-        [--class w63|w63k4|test] [--group G] [--warden-run RUN] [--draw K [--challenger local|gate:USER@HOST
+        [--class w63|w63k4|test] [--group G] [--certifier-run RUN] [--draw K [--challenger local|gate:USER@HOST
         --main FILE [--peer NAME --challenger-key RECORD] [--gate-key KEY]]]
-    python benchmarks/network_traces/scan_zk.py schedule [--class w63|w63k4|test]    # as warden_serve.py's flags
+    python benchmarks/network_traces/scan_zk.py schedule [--class w63|w63k4|test]    # as certifier_tcp_serve.py's flags
 
 * **The setups** (`SETUPS`, ``--class``): ``w63`` (`W63`, whose `CLASS`, `SHAPE` and `PARAMS` these are), w63's class
   (B 512, r 4, 4 lanes, C 47, IDB 17, EVERY 16, WITHIN 12: 4 Program slots a slot stride, 8 an execution phase) with the
   network certifier's delay D 27 (WITHIN + EVERY − 1), KO 64 outputs and KI 1,024 prompt ids a request,
-  egress at `CLASS.egress` (16 cells in lanes of 4, 4 request slots of 64 17-bit ids), the warden at `PARAMS`, 32-bucket
+  egress at `CLASS.egress` (16 cells in lanes of 4, 4 request slots of 64 17-bit ids), the certifier at `PARAMS`, 32-bucket
   link-windows; ``w63k4`` (`W63K4`), w63's class at KO 4 and KI 32, a window circuit's of 8 slots, 32 prompt ids and
   4 outputs a request (egress 4 request slots of 4 ids), its certifier w63's at egress_cells 5 (KO + 1); and ``test``
   (`TEST`), the certifier tests' class (B 512, r 2, 2 lanes, C 4, EVERY 2, WITHIN 3, D 5, KO 8, KI 100) and 16-bucket
   link-windows, whose units a CPU proves in minutes.
-* **The run** (`scan_traffic.serve`: the warden's own `_ingress` and `_egress`, ticked as `Warden._tick` ticks them)
-  carries the setup's warden-form id requests and their responses: w63's five (3, 40, 64, 8 and 5 ids; the fifth waits
+* **The run** (`scan_traffic.serve`: the certifier's own `_ingress` and `_egress`, ticked as `Certifier._tick` ticks them)
+  carries the setup's certifier-form id requests and their responses: w63's five (3, 40, 64, 8 and 5 ids; the fifth waits
   in the queue until request 1's egress ends at bucket 27 and takes its slot at 28), w63k4's five at w63's arrivals
   (prompts of at most 32 ids, responses of 3, 4, 1, 4 and 2, the fifth in request 1's slot at 28 as w63's), test's
-  three (the third in the first's slot past its egress). Each link-window of each link is committed by the warden and
-  its head signed by a test-size LMS key (`warden_rows.attest`); each registration is read back by the verifier
-  (`warden_rows.check_registration`).
-* **A network certifier's run** (``--warden-run RUN``, `warden_run`) in its place: a warden_serve run's directory
-  (``serve``'s, or the gate's ``warden-rehearse --scan``'s with its witness under ``witness/``) at the setup's schedule
+  three (the third in the first's slot past its egress). Each link-window of each link is committed by the certifier and
+  its head signed by a test-size LMS key (`certifier_rows.attest`); each registration is read back by the verifier
+  (`certifier_rows.check_registration`).
+* **A network certifier's run** (``--certifier-run RUN``, `certifier_run`) in its place: a certifier_tcp_serve run's directory
+  (``serve``'s, or the gate's ``certifier-rehearse --scan``'s with its witness under ``witness/``) at the setup's schedule
   (w63's: ``scan_zk.py schedule``) carrying the scan's traffic (``rehearse --ids``). The verifier reads
   ``deployment.json`` (the network certifier's public key, the session, the schedule and its digest) and each link's
   registration of each execution phase of the group in ``cells.jsonl``, its head's signature verified under that key;
@@ -62,22 +62,22 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   parameters inputs of its own and every ingress unit's ``prog<j>`` a row of one input of the slot entries, its members
   split a link-window (`members_of`: ``first``, ``ingress-w`` and ``egress-w``, and ``last``, the group's last ingress
   unit, whose o1 has no leaf to open), every unit sampled by the verifier's Lean. `program` refuses a Program whose
-  one-stage partition or reads (`registered.reads`) aren't the members'. Ingress unit t reads ``row`` (the warden's
+  one-stage partition or reads (`registered.reads`) aren't the members'. Ingress unit t reads ``row`` (the certifier's
   ingress row t), ``sin`` (state leaf t, S_{t−1}; the first unit none) and each slot j's ``prog<j>`` (``prog`` leaf
   j·nb + ⌊t / EVERY⌋, its boundary's entry of the slot, one table row a boundary, `NetworkCheck.Period`'s
   `readsEntries`), and outputs ``o0``, its ok bit, ``o1``, S_t, committed as state leaf t + 1, and ``o2``, its view,
   committed as view leaf t. Egress unit t reads ``state`` (view leaf t) and outputs ``o0``, its render bit, and
-  ``o1``, the row it computes, committed as the warden's egress row t. Each output row but o0 is a registered read of
+  ``o1``, the row it computes, committed as the certifier's egress row t. Each output row but o0 is a registered read of
   the row it is committed as (`Registered.checkPort` holds a hidden-output statement's output rows, the verifier's
   PROTOCOL.md §16.13), so S_t is the one leaf unit t computes and unit t + 1 reads, the view the one leaf ingress t
-  computes and egress t reads, and the egress row the one the warden signed: the chains are wires through the
+  computes and egress t reads, and the egress row the one the certifier signed: the chains are wires through the
   registered roots, not the prover's word. `Registered.checkPort` holds every instance of a registered port, so the
   last unit's o1, S_{G·T−1}, is no state leaf. It, each o0 and the block's ``x`` are read at their own frame roots,
   which the round's registration holds (`own_rows`), since Lean takes registered reads only when they name every port
   of the circuit (`Flock.Registered.checkComplete`). Leaf 0 is opened by
   no unit, and the entries boundary 0's Programs write on it are read by none: bucket 0 reads the empty state, in
   which no slot is live, so none is due. Accepted: every o0 opens to 1. The registration's roots also name, as
-  ``rows/<direction>/<w>`` (`warden_roots`), the root and domain of each warden row registration a member's warden port
+  ``rows/<direction>/<w>`` (`certifier_roots`), the root and domain of each certifier row registration a member's certifier port
   reads (ingress's ``row``, egress's ``o1``), so a period check holds the answer to them.
 * **The answers** (``answers.json``, `answers`): the honest round's registration and, for each link-window W of the
   group, the network certifier's two row registrations of W and the scan's one-stage answer (`window_answer`), the same
@@ -86,17 +86,17 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   reject naming the members Lean refused. Beside them, ``audits``: the block round's, the compute audit whose o0 is the
   scan's ``prog`` (its registration and answer, its Program's descriptor, its free inputs NR·nb·NE, every bit of every
   slot entry, which the rows form's K charges to each link-window tied to it, and no steps).
-* **A void run** (a warden run whose warden failed a connection closed, its `FAIL` in the egress row it signed, its
-  reason in the ``fails`` record): the scan renders the connection's end where the warden wrote `FAIL`, and that bucket
-  alone differs from the warden's row. Its block round and its honest round are proved, the honest one expected
+* **A void run** (a certifier run whose certifier failed a connection closed, its `FAIL` in the egress row it signed, its
+  reason in the ``fails`` record): the scan renders the connection's end where the certifier wrote `FAIL`, and that bucket
+  alone differs from the certifier's row. Its block round and its honest round are proved, the honest one expected
   refused by Lean's registered reads ("does not open") at the egress members of its FAIL buckets (`rounds_of`,
   `targets`), every other member held, and its answer is that refusal, so the period check rejects the link-windows by
   name.
 * **Negatives**, chain's and tampered's refused by Lean's registered reads ("does not open"), unread's by its unit's ok
   bit. ``chain``: the same Program on a state tree with S_A and S_{A+1} swapped (leaves A + 1 and A + 2): ingress unit
   A's o1, the S_A it computes, doesn't open leaf A + 1, nor units A + 1's and A + 2's theirs. ``tampered``: an
-  egress-only Program of G·T units, one egress row's `DATA` id changed and its link-window re-signed (a warden that
-  saw a byte the scan doesn't render; a warden run's
+  egress-only Program of G·T units, one egress row's `DATA` id changed and its link-window re-signed (a certifier that
+  saw a byte the scan doesn't render; a certifier run's
   re-signed by the driver's own key, under which the verifier reads it): egress unit t's o1, the row its view renders,
   doesn't open the signed row t. ``unread`` (`_unread`): a Program of one ingress unit, at the first bucket U ≥ 1 where
   a request's Program starts (its slot's `occ` 1), its ``prog`` tree the honest one but for that slot's entry at U's
@@ -115,7 +115,7 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
 * **The challenger's coins** (``--challenger local|gate:USER@HOST --main FILE``, with ``--draw K``): the honest round
   sampled at the stratified rate of K in its N (`rule_of`: a stream's rule is a rate) as prove_path's records audit samples
   (`a5_coins`): one session of the auditor's challenger on the group's root
-  (`window_root`: the warden's session and the group's signed registrations), and the round's `service.Stream`
+  (`window_root`: the certifier's session and the group's signed registrations), and the round's `service.Stream`
   (`spec_of`, `stream_of`: its own copy of the round's Program the generator form the round registers) on its coins
   (`a5_coins.RankCoins`): the stream registers the round, the coins commit to the
   registration's digest, and its select samples once (Lean's `Select.select` on the bytes read). Once the session has
@@ -158,7 +158,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import leak_scan as LS  # noqa: E402
-import warden_zk as WZ  # noqa: E402
+import certifier_zk as WZ  # noqa: E402
 from verity.circuits import boolean as BL  # noqa: E402
 from verity.circuits.boolean import trace as TR  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
@@ -173,8 +173,8 @@ from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, bit_row, r
 from verity.ml.crypto import lms  # noqa: E402
 from verity.ml.protocols.certifier import egress as EG, ingress_scan as IS  # noqa: E402
 from verity.ml.windows.rows import own_entries  # noqa: E402
-from verity.core.protocols.certifier import io_tie as IT, warden as W  # noqa: E402
-from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
+from verity.core.protocols.certifier import io_tie as IT, certifier as W  # noqa: E402
+from verity.core.protocols.certifier import certifier_rows as WR  # noqa: E402
 from verity.core.protocols.certifier.active import DATA, id_request  # noqa: E402
 from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
 from verity.core.protocols.spot import coins as CC, service as S  # noqa: E402
@@ -197,7 +197,7 @@ class Setup(NamedTuple):
 
     name: str
     cls: IS.Class
-    params: W.WardenParams
+    params: W.CertifierParams
     prompts: tuple[tuple[int, ...], ...]
     arrivals: tuple[int, ...]
     responses: tuple[tuple[int, ...], ...]
@@ -209,7 +209,7 @@ class Setup(NamedTuple):
 
 W63 = Setup(
     "w63", IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12, D=27, KO=64, KI=1024),
-    W.WardenParams(cell_bytes=512, slots=4, bucket_ms=100, delay=27, lanes=4, queue=4, window=32, ingress_cells=47,
+    W.CertifierParams(cell_bytes=512, slots=4, bucket_ms=100, delay=27, lanes=4, queue=4, window=32, ingress_cells=47,
                    ingress_buckets=12, egress_cells=65, every=16),
     (tuple((7 * k + 11) % 128_256 for k in range(1024)), tuple(100_000 + k for k in range(600)),
      tuple(131_071 - 3 * k for k in range(40)), tuple((k * k) % 128_256 for k in range(300)),
@@ -227,12 +227,12 @@ W63K4 = Setup(
     windows=2, A=9, max_tokens=4, seed=7)
 TEST = Setup(
     "test", IS.Class(B=512, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8, KI=100),
-    W.WardenParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
+    W.CertifierParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
                    ingress_buckets=3, egress_cells=9, every=2),
     ((1000, 1007, 1014), tuple(2000 + 3 * k for k in range(60)), tuple(131071 - k for k in range(100))),
     (0, 1, 1), ((11, 22, 33), (131071, 0, 5, 6, 7, 8, 9, 10), (40, 41, 42, 43)), windows=1, A=6, max_tokens=5, seed=11)
 SETUPS = {s.name: s for s in (W63, W63K4, TEST)}
-#: w63's: the schedule ``scan_zk.py schedule`` prints and the gate's ``warden-rehearse --scan`` serves
+#: w63's: the schedule ``scan_zk.py schedule`` prints and the gate's ``certifier-rehearse --scan`` serves
 CLASS, PARAMS = W63.cls, W63.params
 SHAPE = CLASS.egress
 SESSION = bytes(range(32))
@@ -411,7 +411,7 @@ def tree_entry(kind: str, reg: ADV.Committed, positions) -> dict:
 def tree_refusal(port: dict, reg: ADV.Committed, entry: dict, bcs: list[bytes | None],
                  refs: list[int] | None = None) -> str | None:
     """The host's read of a statement's entry on a scan registration, as Lean's registered reads make it (in
-    `warden_rows.refusal`'s order): None when it holds. ``bcs`` is each instance's b‖c and ``refs`` its table row (its
+    `certifier_rows.refusal`'s order): None when it holds. ``bcs`` is each instance's b‖c and ``refs`` its table row (its
     own by default; a shared row's, `registered.table`, the one its instances read). A b‖c of None is a row the host
     can't name (an output the reference gives none of), which opens no leaf."""
     refs = list(range(len(bcs))) if refs is None else list(refs)
@@ -439,14 +439,14 @@ def tree_refusal(port: dict, reg: ADV.Committed, entry: dict, bcs: list[bytes | 
 
 def synthetic(out: Path, setup: Setup, windows: list[int]) -> SimpleNamespace:
     """The synthetic run (`scan_traffic.serve`), each execution phase of `windows` of each link committed by the network
-    certifier and its head signed by the driver's test-size LMS key (`warden_rows.attest`), each registration read back
+    certifier and its head signed by the driver's test-size LMS key (`certifier_rows.attest`), each registration read back
     by the verifier."""
     setup.cls.serves(setup.params)
     reqs = [_request(setup, i, p) for i, p in enumerate(setup.prompts)]
     served = traffic.serve(setup.params, reqs, setup.arrivals, [1 << 20] * len(reqs), setup.responses,
                            max(setup.windows, windows[-1] + 1))
     if served.fails:
-        raise SystemExit(f"the warden failed {len(served.fails)} connections")
+        raise SystemExit(f"the certifier failed {len(served.fails)} connections")
     out.mkdir(parents=True, exist_ok=True)
     height = max(6, (2 * len(windows) + 1).bit_length())
     signer = LmsSigner.create(lms.keygen(lms.Params(64, 1, height), hashlib.sha512(b"scan-zk").digest()),
@@ -463,7 +463,7 @@ def synthetic(out: Path, setup: Setup, windows: list[int]) -> SimpleNamespace:
             head, dom = WR.check_registration(registration, signer.public_key(), SESSION, setup.params,
                                               records[w].link, direction, w)
             if list(cells.rows) != WR.window_rows(records[w], setup.params):
-                raise SystemExit(f"{side}: the warden's committed rows of link-window {w} aren't its record's")
+                raise SystemExit(f"{side}: the certifier's committed rows of link-window {w} aren't its record's")
             sides[side].append(SimpleNamespace(cells=cells, registration=registration, head=head, dom=dom))
     return SimpleNamespace(source="the synthetic run (scan_traffic.serve), signed with the driver's own key",
                            params=setup.params, session=SESSION, sides=sides, outputs=served.outputs, run_id=None,
@@ -472,43 +472,43 @@ def synthetic(out: Path, setup: Setup, windows: list[int]) -> SimpleNamespace:
 
 
 def _found(run: Path, name: str) -> Path:
-    """A network certifier run's file: in the run's directory (`warden_serve.py serve --out`), else its ``witness/``
-    (the gate's `warden-rehearse --scan`)."""
+    """A network certifier run's file: in the run's directory (`certifier_tcp_serve.py serve --out`), else its ``witness/``
+    (the gate's `certifier-rehearse --scan`)."""
     for d in (run, run / "witness"):
         if (d / name).is_file():
             return d / name
-    raise SystemExit(f"--warden-run {run}: no {name} there or in its witness/ (warden_serve.py serve writes it)")
+    raise SystemExit(f"--certifier-run {run}: no {name} there or in its witness/ (certifier_tcp_serve.py serve writes it)")
 
 
-def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> SimpleNamespace:
-    """A warden_serve run's execution phases `windows` as the verifier reads them, refused by name where they don't
+def certifier_run(run: Path, setup: Setup, windows: list[int], out: Path) -> SimpleNamespace:
+    """A certifier_tcp_serve run's execution phases `windows` as the verifier reads them, refused by name where they don't
     hold: the deployment's schedule (its digest, and the class serving it) and public key; each link's registration of
-    each execution phase in ``cells.jsonl`` verified under that key and session (`warden_rows.check_registration`: the
+    each execution phase in ``cells.jsonl`` verified under that key and session (`certifier_rows.check_registration`: the
     network certifier's
-    signature over the head of the rows' root); and the records' rows under ``cells.salts`` (`warden_rows.Cells.of`)
+    signature over the head of the rows' root); and the records' rows under ``cells.salts`` (`certifier_rows.Cells.of`)
     that head. The units read those rows. The Programs' outputs (the slot entries' ids) are each connection's ids
     as its egress record carries them (`io_tie.parse_cell`), every egress cell an id-form one or a `FAIL` (a void run:
     ``failed`` the reasons its ``fails`` record has in the execution phases, ``fail_buckets`` the buckets they're in,
     and ``failed_why`` the run's ``check.json`` problems that name a connection failed closed). The tampered round's
     re-signed execution phase is signed by a key of the driver's own (``out``), under which the verifier reads it."""
-    import warden_serve as WS
+    import certifier_tcp_serve as WS
 
     dep = json.loads(_found(run, "deployment.json").read_text())
-    params = W.WardenParams(**dep["params"])
+    params = W.CertifierParams(**dep["params"])
     if params.digest.hex() != dep["digest"]:
-        raise SystemExit(f"--warden-run {run}: deployment.json's digest isn't its parameters'")
+        raise SystemExit(f"--certifier-run {run}: deployment.json's digest isn't its parameters'")
     try:
         setup.cls.serves(params)
     except ValueError as e:
-        raise SystemExit(f"--warden-run {run}: {e} (warden_serve.py rehearse at scan_zk's schedule, PARAMS, or the "
-                         "gate's warden-rehearse --scan)")
+        raise SystemExit(f"--certifier-run {run}: {e} (certifier_tcp_serve.py rehearse at scan_zk's schedule, PARAMS, or the "
+                         "gate's certifier-rehearse --scan)")
     key, session = WS.cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
     records = {name: [WS.ar.unpack_record(b, params.cell_bytes) for b in WS.ar.read_blobs(_found(run, f"{name}.records"))]
                for name in WS.CERTIFIED}
     lines = [json.loads(x) for x in _found(run, "cells.jsonl").read_text().splitlines()]
     salts = WS.ar.read_blobs(_found(run, "cells.salts"))
     if len(salts) != len(lines):
-        raise SystemExit(f"--warden-run {run}: cells.jsonl has {len(lines)} lines and cells.salts {len(salts)} blobs")
+        raise SystemExit(f"--certifier-run {run}: cells.jsonl has {len(lines)} lines and cells.salts {len(salts)} blobs")
     sides = {}
     for side, name, direction in (("ingress", WS.INGRESS, Direction.INGRESS), ("egress", WS.EGRESS, Direction.EGRESS)):
         sides[side] = []
@@ -518,19 +518,19 @@ def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> Simple
                    == (WS.LINK, direction.value, w)]
             record = next((r for r in records[name] if r.window == w), None)
             if not got or record is None:
-                raise SystemExit(f"--warden-run {run}: {side} link-window {w} has no registration or no record (the "
+                raise SystemExit(f"--certifier-run {run}: {side} link-window {w} has no registration or no record (the "
                                  "signer refused it, or the run ended before it)")
             registration, blob = got[0]
             try:
                 head, dom = WR.check_registration(registration, key, session, params, WS.LINK, direction, w)
             except ValueError as e:
-                raise SystemExit(f"--warden-run {run}: {side} link-window {w}'s registration doesn't verify under the "
+                raise SystemExit(f"--certifier-run {run}: {side} link-window {w}'s registration doesn't verify under the "
                                  f"deployment's key and session: {e}")
             row_salts, wiring_salt = WR.read_witness(blob)
             cells = WR.Cells.of(WS.LINK, direction, record, params, session, row_salts, wiring_salt)
             if cells.head != head:
-                raise SystemExit(f"--warden-run {run}: {side} link-window {w}'s record under cells.salts isn't the rows "
-                                 "whose root the warden signed")
+                raise SystemExit(f"--certifier-run {run}: {side} link-window {w}'s record under cells.salts isn't the rows "
+                                 "whose root the certifier signed")
             sides[side].append(SimpleNamespace(cells=cells, registration=registration, head=head, dom=dom))
     fails = [((r.window - windows[0]) * params.window + t, sum(f is not None for f in row))
              for r in records[WS.FAILS] if r.window in windows for t, row in enumerate(r.grid)]
@@ -546,15 +546,15 @@ def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> Simple
                     continue
                 cell = IT.parse_cell(row[s * B:(s + 1) * B])
                 if cell is None:
-                    raise SystemExit(f"--warden-run {run}: egress bucket {rec.window * params.window + t} slot {s} "
+                    raise SystemExit(f"--certifier-run {run}: egress bucket {rec.window * params.window + t} slot {s} "
                                      "isn't an id-form cell (io_tie.parse_cell): the run's responses aren't the "
-                                     "scan's (warden_serve.py rehearse --ids)")
+                                     "scan's (certifier_tcp_serve.py rehearse --ids)")
                 if cell.data:
                     outputs.setdefault(cell.stream, []).append(cell.id)
     out.mkdir(parents=True, exist_ok=True)
     signer = LmsSigner.create(lms.keygen(lms.Params(64, 1, 6), hashlib.sha512(b"scan-zk tampered").digest()),
                               out / "tamper-signer-state.json")
-    return SimpleNamespace(source=f"warden run {dep.get('run_id')} (warden_serve.py, its deployment's key)",
+    return SimpleNamespace(source=f"certifier run {dep.get('run_id')} (certifier_tcp_serve.py, its deployment's key)",
                            params=params, session=session, sides=sides,
                            outputs={q: tuple(xs) for q, xs in outputs.items()}, run_id=dep.get("run_id"),
                            issuer=Issuer(signer, session), key=signer.public_key(), key_of="the driver's own",
@@ -604,8 +604,8 @@ def _unread(cls: IS.Class, ch, heads: list, session: bytes) -> SimpleNamespace |
 
 
 def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1, start: int = 0) -> SimpleNamespace:
-    """The run (`synthetic`, or `warden_run`'s of a warden_serve run), link-windows start … start + group − 1 of each
-    link registered by the warden and read back by the verifier, the scan's chain over their rows from the empty state
+    """The run (`synthetic`, or `certifier_run`'s of a certifier_tcp_serve run), link-windows start … start + group − 1 of each
+    link registered by the certifier and read back by the verifier, the scan's chain over their rows from the empty state
     (`scan_traffic.chain`), the prover's three registrations (the state tree the group's `ingress_scan.window_state`),
     the chain round's state tree, the unread round's unit and slot entries' tree (`_unread`) and the tampered round's
     egress link-window (`_tamper`)."""
@@ -613,21 +613,21 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
     if group < 1 or start < 0:
         raise SystemExit(f"a group is 1 or more link-windows from link-window 0 on, not {group} from {start}")
     windows = list(range(start, start + group))
-    got = synthetic(out, setup, windows) if run is None else warden_run(run, setup, windows, out)
+    got = synthetic(out, setup, windows) if run is None else certifier_run(run, setup, windows, out)
     cls, T = setup.cls, got.params.window
     ingress, egress = ([x for w in got.sides[s] for x in w.cells.rows] for s in ("ingress", "egress"))
     try:
         ch = traffic.chain(cls, ingress, egress, got.outputs)
     except (ValueError, KeyError) as e:
-        raise SystemExit(f"the scan refuses link-windows {windows}' rows: {e!r} (the scan reads warden-form id "
-                         "requests at its class, answered id-form: warden_serve.py rehearse --ids)")
+        raise SystemExit(f"the scan refuses link-windows {windows}' rows: {e!r} (the scan reads certifier-form id "
+                         "requests at its class, answered id-form: certifier_tcp_serve.py rehearse --ids)")
     bad = [t for t in range(group * T) if EG.outputs(cls.egress, ch.view(t)) != (EG.ACCEPT, ch.egress[t])]
     void = [t for t, row in enumerate(ch.egress) if any(row[s * cls.B] == W.FAIL for s in range(cls.egress.R))]
     if bad != void:
-        raise SystemExit(f"egress buckets {bad} don't compute the warden's rows from the views their ingress buckets "
-                         f"wrote, and the warden failed a connection in buckets {void}")
+        raise SystemExit(f"egress buckets {bad} don't compute the certifier's rows from the views their ingress buckets "
+                         f"wrote, and the certifier failed a connection in buckets {void}")
     if void != got.fail_buckets:
-        raise SystemExit(f"egress buckets {void} hold a FAIL and the warden's fails record has a reason in buckets "
+        raise SystemExit(f"egress buckets {void} hold a FAIL and the certifier's fails record has a reason in buckets "
                          f"{got.fail_buckets}, not the same: a failed connection's reason is in its FAIL's bucket"
                          + (f" ({'; '.join(got.failed_why)})" if got.failed_why else ""))
     if not 1 <= setup.A < setup.A + 2 < group * T:
@@ -671,14 +671,14 @@ def header_refusal(ports: dict, entries: dict) -> str | None:
 
 def registered_file(mr: SimpleNamespace, own: dict | None = None) -> dict:
     """Member `mr`'s `--registered` file, the verifier's own (`stage` writes it, `a0.lean_verify` passes it, and a Lean
-    verdict's `registered` reports its roots): each network certifier port at the head `warden_rows.check_registration`
+    verdict's `registered` reports its roots): each network certifier port at the head `certifier_rows.check_registration`
     read under the deployment's key, never a root of the prover's; each scan tree port at the tree's registered root;
     and `own`, the member's other ports at their own registered roots (`own_rows`)."""
     return WR.reads_file({**mr.ports, **(own or {})})
 
 
 def own_rows(mr: SimpleNamespace, out: Path, ports: list, at: str) -> dict:
-    """Member `mr`'s ports that read neither a warden row nor a scan tree (a public o0, the block's free ``x``, the
+    """Member `mr`'s ports that read neither a certifier row nor a scan tree (a public o0, the block's free ``x``, the
     group's last unit's o1), each as rows of its own frame tree at the root the round's registration holds for it
     (``<at>/<port>``, `audit`'s roots, registered before any coin), unit ``base + i`` its row i: Lean takes registered
     reads only when they name every port of the circuit (`Flock.Registered.checkComplete`). Adds their paths to the
@@ -719,10 +719,10 @@ def own_rows(mr: SimpleNamespace, out: Path, ports: list, at: str) -> dict:
 def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespace:
     """Round `name`'s member `mb` (`members_of`): each unit's input rows (in its signature's order, as bits or bytes),
     the salts its rows, inputs and outputs but o0, are committed under, its header's `registered` entries and the
-    verifier's own ports, the host's read of them (`warden_rows.refusal`, `tree_refusal`: the ports in its signature's
+    verifier's own ports, the host's read of them (`certifier_rows.refusal`, `tree_refusal`: the ports in its signature's
     order, inputs then outputs), each unit's o0 word and its output rows as the references compute them (``made``,
-    None where the ingress reference gives none), and the warden's row registration each warden port reads
-    (``warden``). An ingress unit's ``prog<j>`` is one table row a slot entry it reads (``refs``, `registered.table`),
+    None where the ingress reference gives none), and the certifier's row registration each certifier port reads
+    (``certifier``). An ingress unit's ``prog<j>`` is one table row a slot entry it reads (``refs``, `registered.table`),
     since a timestep's units read their boundary's; its ``sin`` reads state leaf t and its o1 opens leaf t + 1, the
     group's last unit's none (its o1 a fresh salt's, `stage`). The block's unit k reads ``x``, slot entry k, its free
     input, read at its own root once staged (`own_rows`), and its o0, that entry, is a registered read of `prog`'s
@@ -736,12 +736,12 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
     nb = len(ch.progs) // cls.EVERY
     ins, outs = ports_of(cls)[tp]
     if tp == "block":
-        reads, warden = {"o0": ("prog", prog, bs)}, {}
+        reads, certifier = {"o0": ("prog", prog, bs)}, {}
         outputs, made = None, {"o0": [_bits(prog, b) for b in bs]}
     elif tp == "egress":
         side = at.tampered if name == "tampered" and at.tampered.window == w else at.sides["egress"][w]
         reads = {"state": ("view", view, bs)}
-        warden = {"o1": side}
+        certifier = {"o1": side}
         if any(_bits(view, b) != EG.state_bits(cls.egress, ch.view(b)) for b in bs):
             raise SystemExit("a view leaf isn't its bucket's egress view")
         got = [EG.outputs(cls.egress, ch.view(b)) for b in bs]
@@ -756,7 +756,7 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
         reads = {**({"sin": ("state", state, bs)} if tp == "ingress" else {}),
                  **{p: ("prog", prog, ps) for p, ps in lanes.items()},
                  **({"o1": ("state", state, o1)} if o1[-1] < len(state.rows) else {}), "o2": ("view", view, bs)}
-        warden = {"row": at.sides["ingress"][w]}
+        certifier = {"row": at.sides["ingress"][w]}
         got = [IS.reference(cls, ch.ingress[b], _bits(state, b) if tp == "ingress" else None,
                             [x for ps in lanes.values() for x in _bits(prog, ps[k])]) for k, b in enumerate(bs)]
         outputs = [o for o, _s, _v in got]
@@ -766,7 +766,7 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
     units = [tuple(ch.ingress[b] if r == "row" else made["o0"][k] if r == "x" else _bits(reads[r][1], reads[r][2][k])
                    for r, _b in ins) for k, b in enumerate(bs)]
     salts, entries, ports, bcs, refs = {}, {}, {}, {}, {}
-    for p, side in warden.items():
+    for p, side in certifier.items():
         _w, salts[p], entries[p] = side.cells.statement(rows)
         ports[p] = {**WR.bucket_port(side.head, at.params, mb.base), "reads": rows}
         bcs[p] = [WR.bc(made[p][k] if p in made else side.cells.rows[r], side.cells.salts[r]) for k, r in enumerate(rows)]
@@ -778,19 +778,19 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
                   for k, i in enumerate(ps)]
     refused = header_refusal(ports, entries)
     for p in [r for r, _b in ins if r in ports] + [o for o, _b in outs if o in ports]:
-        refused = refused or (WR.refusal(ports[p], warden[p].dom, entries[p], bcs[p]) if p in warden else
+        refused = refused or (WR.refusal(ports[p], certifier[p].dom, entries[p], bcs[p]) if p in certifier else
                               tree_refusal(ports[p], reads[p][1], entries[p], bcs[p], refs[p]))
     changed = at.tampered.bucket if name == "tampered" and tp == "egress" and at.tampered.window == w else None
     return SimpleNamespace(round=name, template=tp, window=w, name=mb.name, base=mb.base, n=len(bs), buckets=bs,
                            units=units, made=made, salts=salts, entries=entries, ports=ports, bcs=bcs, refused=refused,
                            refs={p: r for p, r in refs.items() if r != list(range(len(bs)))}, outputs=outputs,
-                           changed=changed, warden={p: s.registration for p, s in warden.items()},
+                           changed=changed, certifier={p: s.registration for p, s in certifier.items()},
                            set_name=at.block_set if tp == "block" else None)
 
 
 def rounds_of(at: SimpleNamespace) -> dict[str, tuple[tuple[str, ...], str]]:
     """The rounds a run is proved in, each with its templates and outcome: `ROUNDS`, the unread round where a request
-    is anchored in the group past bucket 0; a void run's (the warden failed a connection closed, a `FAIL` in the
+    is anchored in the group past bucket 0; a void run's (the certifier failed a connection closed, a `FAIL` in the
     egress row it signed) the block and its honest round alone, refused by Lean's registered reads ("does not open")
     at the egress members of its FAIL cells, where the scan renders the connection's end."""
     if at.void:
@@ -1023,7 +1023,7 @@ def stage(M, pg: SimpleNamespace, mr: SimpleNamespace, out: Path) -> dict:
          "n": n, "base": mr.base, "defn": sg.defn, "ands": got["ands"], "unit_nnz": got["unit_nnz"],
          "salts": got["salts"], "ports": st.ports, "outputs": o0, "units": mr.units, "ins": sg.ins, "made": made,
          "partition_file": pg.partition_file, "program_file": pg.program_file,
-         "registered_file": out / "registered.json", "k_log": st.meta["k_log"], "nbl": nbl, "warden": mr.warden,
+         "registered_file": out / "registered.json", "k_log": st.meta["k_log"], "nbl": nbl, "warden": mr.certifier,
          "stage_s": round(time.time() - t0, 1)}
     m["header"] = M.a0.public_header(out, n)
     fv = m["header"]["frame_v3"]
@@ -1064,9 +1064,9 @@ def staged_wires(members: list[dict]) -> list[str]:
 # --- the challenger's coins ---------------------------------------------------------------------------------------------
 
 def window_root(at: SimpleNamespace) -> str:
-    """The root the challenger's session opens on (128 hex digits): the SHA-512 of the warden's session and the group's
-    registrations, each link's in link-window order, whose heads the warden signed. The gate opens a root once, ever,
-    so a warden run's group is sampled once."""
+    """The root the challenger's session opens on (128 hex digits): the SHA-512 of the certifier's session and the group's
+    registrations, each link's in link-window order, whose heads the certifier signed. The gate opens a root once, ever,
+    so a certifier run's group is sampled once."""
     return hashlib.sha512(canonical_json({"format": WINDOW_ROOT, "session": at.session.hex(),
                                           "registrations": {s: [x.registration for x in ws]
                                                             for s, ws in sorted(at.sides.items())}})).hexdigest()
@@ -1119,7 +1119,7 @@ def spec_of(pg: SimpleNamespace, members: list[dict], want: dict, schemas: dict[
     strata = [s["template"] for s in DR.derive(pg.program, pg.query, named,
                                                S.selection_table(law, pg.program, pg.query, None)).get("strata") or ()]
     public = [("population", "N, the round's proof units"), *((f"population:{t}", "a template's stratum") for t in strata),
-              ("window", "the round's provenance: the group's link-windows of the warden's run"),
+              ("window", "the round's provenance: the group's link-windows of the certifier's run"),
               ("leaf_layer", "the leaf layer over the members' public files"),
               *((f"{x}:{p}", "a port's layout") for p in sorted(want) for x in ("leaves", "domain"))]
     check = S.Check(tuple(PA.program_digest(Program(u)) for u in units), pg.query,
@@ -1196,14 +1196,14 @@ def coins_outcome(a, coins: SimpleNamespace, stream_on, counts: dict, stream: S.
 
 # --- the audit ----------------------------------------------------------------------------------------------------------
 
-def warden_roots(members) -> list[dict]:
+def certifier_roots(members) -> list[dict]:
     """The registration's ``rows/<direction>/<w>`` roots: each network certifier row registration its members' network
     certifier ports read (an ingress proof block's ``row``, an egress proof block's ``o1``), its root and domain as the
-    network certifier registered them (`warden_rows.registration`, read back by the verifier), its T rows the leaves. A
+    network certifier registered them (`certifier_rows.registration`, read back by the verifier), its T rows the leaves. A
     period check (`NetworkCheck.Period`'s rows form) holds an execution phase's answer to its rows by these, by root and
     domain.
 
-    A port is never the row registration's value (``warden/<direction>/<w>``, the name Lean reports the reads under):
+    A port is never the row registration's value (``certifier/<direction>/<w>``, the name Lean reports the reads under):
     the audit takes a root port named as a value for a registered value of the record (`audit.session_registered`),
     which this registration lists none of, and refuses the round."""
     out = {}
@@ -1225,8 +1225,8 @@ def _free_port() -> int:
 def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: list[dict], trees: dict, out: Path,
           port: int, k: int | None = None, coins: SimpleNamespace | None = None) -> dict:
     """One round registered (its members' ports under their prefix, `port_prefix`, each a frame domain of a leaf an
-    instance or a shared port's table row; the scan's registrations' roots; and the warden's row registrations its
-    warden ports read, `warden_roots`, before any coin), its units sampled by the verifier's Lean (`draw --stratified k`
+    instance or a shared port's table row; the scan's registrations' roots; and the certifier's row registrations its
+    certifier ports read, `certifier_roots`, before any coin), its units sampled by the verifier's Lean (`draw --stratified k`
     on a development challenger's coins, `a0.challenger_draw`; every unit when `k` is None) or, given the challenger's
     ``coins``, by the round's `service.Stream` on them (`stream_of`; `a5_coins.RankCoins`, rank 0), each member's
     sampled proof blocks proved --zk behind the ZK server and held by Lean with the verifier's own registered reads;
@@ -1252,7 +1252,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
         want[f"scan/{kind}"] = {"leaves": len(reg.rows), "domain": d}
         schemas[f"scan/{kind}"] = BitRowLeaf.hiding_schema
         roots.append({"port": f"scan/{kind}", "root": reg.root.hex(), "leaves": len(reg.rows), "domain": d})
-    for r in warden_roots(members):
+    for r in certifier_roots(members):
         want[r["port"]] = {"leaves": r["leaves"], "domain": r["domain"]}
         schemas[r["port"]] = WR.SCHEMA
         roots.append(r)
@@ -1265,7 +1265,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
                                      f"at {at.setup.name}'s class (scan_zk.py)",
            "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]]}
                        for m in members},
-           "link": "registered: each warden row port, input or output, at the warden's signed root of its "
+           "link": "registered: each certifier row port, input or output, at the certifier's signed root of its "
                    "link-window, unit base + k row k of the member's rows; the scan's state, prog and view, inputs and "
                    "outputs, at the prover's registered roots (scan/*)"}
     rec = R.record(pg.program, pg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer, work_table=table)
@@ -1376,10 +1376,10 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     (vdir / "openings.json").write_text(json.dumps(sent, indent=1))
     for side, ws in at.sides.items():
         for w, s in zip(at.windows, ws):
-            (vdir / f"warden-registration-{side}-{w}.json").write_text(json.dumps(s.registration, indent=1,
+            (vdir / f"certifier-registration-{side}-{w}.json").write_text(json.dumps(s.registration, indent=1,
                                                                                   sort_keys=True))
     if name == "tampered":
-        (vdir / f"warden-registration-egress-{at.windows[at.tampered.window]}-tampered.json").write_text(
+        (vdir / f"certifier-registration-egress-{at.windows[at.tampered.window]}-tampered.json").write_text(
             json.dumps(at.tampered.registration, indent=1, sort_keys=True))
     streamed = (out / "receipt.json", out / "segment.json", out / "coins.json") if stream is not None else ()
     for f in (out / "registration.json", pg.partition_file, pg.program_file, out / "draw.json", out / "audit.json",
@@ -1474,10 +1474,10 @@ def _answer(out: Path, name: str, res: dict, delta: Fraction, what: str) -> tupl
 
 def answers(at: SimpleNamespace, out: Path, res: dict, delta: Fraction, block: dict | None = None) -> dict:
     """``answers.json`` (`ANSWERS`) of the honest round's audit (``res``, its files under ``out / "honest"``): its
-    registration and, for each link-window W of the group, the scan's answer for W and the warden's ingress and egress
+    registration and, for each link-window W of the group, the scan's answer for W and the certifier's ingress and egress
     row registrations of W, the rows form's evidence of W but its certificates. The answer is the group's for every W
     (`window_answer`: accepted where the round's outputs all open to 1), since its registration holds each W's rows
-    (`warden_roots`). A refused round's (a void run's) names the members Lean refused. With the block round's audit
+    (`certifier_roots`). A refused round's (a void run's) names the members Lean refused. With the block round's audit
     (``block``), the compute audit whose o0 is the scan's `prog` (``audits``): its registration and answer, and the
     terms a period's parameters give it, its Program's descriptor, its free inputs (every bit of every slot entry, the
     stand-in's ``x``: it copies its input) and no steps."""
@@ -1590,7 +1590,7 @@ def prove(a) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     setup = SETUPS[a.setup]
-    h = host(out / "warden", a.warden_run, a.draw, setup, a.group)
+    h = host(out / "warden", a.certifier_run, a.draw, setup, a.group)
     at, T, G = h.at, h.at.T, h.at.G
     ch, cls, N = at.chain, setup.cls, 2 * G * T
     if a.draw is not None and not 3 <= a.draw <= N:
@@ -1598,7 +1598,7 @@ def prove(a) -> int:
     ks = {"honest": a.draw, "chain": a.draw, "tampered": None if a.draw is None else stratum_k(a.draw, G * T, N),
           "unread": None, "block": None}
     sh = cls.egress
-    summary: dict = {"source": at.source, "warden_run": at.run_id, "draw": ks if a.draw is not None else "every unit",
+    summary: dict = {"source": at.source, "certifier_run": at.run_id, "draw": ks if a.draw is not None else "every unit",
                      "setup": setup.name, "class": asdict(cls), "params": asdict(at.params), "shape": asdict(sh),
                      "T": T, "group": G, "windows": at.windows,
                      "bits": {f"{tp}/{r}": b for tp, (ins, outs) in ports_of(cls).items() for r, b in ins + outs},
@@ -1622,7 +1622,7 @@ def prove(a) -> int:
             if at.void else "")
     log(f"run: {at.source}; {setup.name}'s class, link-windows {at.windows} of {T} buckets, admitted {at.admitted}, "
         f"responses {summary['responses']}, anchors {summary['anchors']}, cells {summary['cells']}; every egress "
-        f"bucket computes the warden's row from its ingress bucket's view{void}; host reads as expected "
+        f"bucket computes the certifier's row from its ingress bucket's view{void}; host reads as expected "
         f"({at.run_s} s); draw {summary['draw']}")
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     if a.dry:
@@ -1712,8 +1712,8 @@ def main(argv=None) -> int:
                    help="the class and the network certifier's schedule (default w63's, PARAMS; w63k4: w63's at KO 4 "
                         "and KI 32, its certifier's at egress cells 5; test: the certifier tests', a CPU window)")
     p.add_argument("--group", type=int, default=1, help="G: link-windows 0 .. G - 1 in one registration (default 1)")
-    p.add_argument("--warden-run", type=Path,
-                   help="a warden_serve run's directory (rehearse --ids at the class's schedule): its group's "
+    p.add_argument("--certifier-run", type=Path,
+                   help="a certifier_tcp_serve run's directory (rehearse --ids at the class's schedule): its group's "
                         "execution phases, verified under its deployment's key, in place of the synthetic run")
     p.add_argument("--draw", type=int,
                    help="K: Lean draw --stratified K on a development challenger's coins, only the SPOT proof "
@@ -1729,8 +1729,8 @@ def main(argv=None) -> int:
     p.add_argument("--gate-key", help="with --challenger gate:USER@HOST: the lane's own gate key (default ssh's own)")
     p.add_argument("--main", help="with --challenger: the verifier's own copy of main's first-parent history (git "
                    "rev-list --first-parent origin/main), which must hold the commit the session's host pins")
-    s = sub.add_parser("schedule", help="a setup's schedule (w63's, PARAMS, by default) as warden_serve.py's schedule "
-                                        "flags (serve, rehearse): the network certifier runs --warden-run reads, in "
+    s = sub.add_parser("schedule", help="a setup's schedule (w63's, PARAMS, by default) as certifier_tcp_serve.py's schedule "
+                                        "flags (serve, rehearse): the network certifier runs --certifier-run reads, in "
                                         "the id egress form, serve's and rehearse --ids's")
     s.add_argument("--class", dest="setup", choices=sorted(SETUPS), default=W63.name)
     a = ap.parse_args(argv)
