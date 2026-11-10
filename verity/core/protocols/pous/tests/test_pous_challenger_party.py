@@ -24,7 +24,7 @@ from verity.core.deploy import sources as S
 from verity.core.deploy.party import Send
 from verity.core.deploy.runtime import run as deploy_run
 from verity.core.deploy.stream import Side
-from verity.core.protocols.pous import challenger_party as CP
+from verity.core.devices.memory_challenger import challenger_party as CP
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import period, run
 from verity.core.protocols.pous.schemes.p2 import P2Params

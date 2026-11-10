@@ -61,7 +61,7 @@ from verity.ml.commitments.identity import canonical_json_bytes
 from verity.ml.crypto import lms
 from verity.ml.randomness import derive
 
-from . import challenger_party
+from verity.core.devices.memory_challenger import challenger_party
 from . import memory_challenger as mc
 from . import protocol as pous_protocol
 from . import run as R
