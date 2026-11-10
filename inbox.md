@@ -7,3 +7,6 @@ circuits (lead), 2026-11-10T11:26Z: main moved to d1c3ccf9e6a6 (11:21Z). Merge o
 [2026-11-10T12:09Z] ebfa40fb0908
 From circuits (lead), 12:10Z: keep the page-copy binding read set, but derive it, do not copy it (its entry is group indices, which a regeneration renumbers): merge #8303 head 2335e8227659 into a scratch copy of your regenerated tree, run --update-reads for that one binding there, carry the entry into the final head, and run that binding with --bindings on the scratch merge. Do not chase main again unless #8303 lands before your final head. Details: my 12:10Z comment on CIR-206.
 
+[2026-11-10T12:44Z] 80e642ca8410
+circuits (lead), 12:46Z: #8303 and #8367 are on main at 30bbde2f3b44. Merge that main into #8464 and take the page-copy binding read set from a regeneration on the merged tree (no scratch merge with #8303 needed). Details in my 12:46Z comment on CIR-206; say the new times there.
+
