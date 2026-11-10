@@ -21589,3 +21589,129 @@ research run --on vy-spot-glm53 --project verity --source /agent/repos/verity --
 - **What must land first:** nothing, to time them. For the card to cite them from `main`: #8359, then #8438 on top of it. For any of them to count as verified: a `ProvedScope` change that admits tail-stage outputs under `scopeOkH`, and a Program for each block (`NO_PROGRAM`). Neither exists yet.
 
 **Disk:** at 01:12Z, `/` had 63 GB free (938 of 1000 GB used). 57 GB of the used space is mine (`/workspace/tmp/servedcard-w1`). `/dev/shm` had 760 GB free, 178 GB of it used by my B statements.
+
+## HOUSEKEEP, Tue 10 Nov 01:17Z: Task 2 first pass done (NET-283 draft + edge table below, nothing posted); Task 3 (Goals page) read at 01:08Z and started, table and script by 08:00Z
+
+**Task 3.** I read your 01:04Z message at 01:08Z. Task 2's scan was already loaded, so I finished its first pass first
+(below); everything from here until the table is Task 3. Two things I will do unless you say otherwise in
+`inbox/HOUSEKEEP.md`: (1) "on this branch" I read as `cursor/verity-proofs-84b5` (where I already push), so
+`goals/proofs-goals-table.md` and `goals/proofs-goals-fix.sh` go there beside `inbox/`; (2) I run no `research goals set`.
+
+### Task 2: comment draft for NET-283 (294 words by `wc -w`; not posted)
+
+proofs' first pass on #8468's boundary lines, at head `f7b94f9172`, read-only.
+
+**The scan** [run]: `public_boundary.py --all` on that head gives 8,034 public files (355 more than `main`), 0 edges, and 19 the export's rewrite cuts. One of the 19 is new: `network/lean/lakefile.toml:15` requires `nci_check`.
+
+**No import crosses into a withheld protocol** [run]: none of the 355 files imports PoUS, either bandwidth audit, `Accounting`, `WeightSecurity` or `verity/core/service/spot`. NCI: only that require.
+
+**Three things for network-accounting:**
+
+1. **`network-records` doesn't survive the export** [read]. `RecordsMain.lean` is held private because line 5 imports `Period`, which imports `NciCheck.Desc`; it uses `Period` for `clocksFn` alone (line 28). The public `lean_audit.py:157` builds that executable, `service.py:216` takes its `Audit` from it, and at least three public tests need it. The check can't see this: the executable is named by a string. Cut: PUBLICCERT's `Clocks.lean` split, then `RecordsMain.lean` leaves the private line.
+2. **Two new `[[needed]]` entries widen the public set by 5 files**: `verity/core/primitives/world` (4) and `Security/Proofs/Properties/Hash/Identity.lean`. Neither is a withheld protocol's file and neither imports one [run]; only the certifier's device requires `core_world` [read]. By this issue's rule they are widenings, so top should see them.
+3. **Text naming what stays private** [run, a token scan]: 48 paths at 93 sites, 34 of them under `benchmarks/` (the four shipped vectors' generators among them). `PROTOCOL.md:294` names `NetworkCheck/Period.lean` and `:1765` `Accounting/Physical.lean`. `network/lean/lean-audit.json` keeps its root `NetworkCheck` and records of `Period`, `PeriodMain` and `RecordsMain`, all private.
+
+**Tied to SPOT's Lean:** the certifier's proofs import 14 `Claims/Sampling*` files and 4 of `Proofs/Flock/SamplingGeneric`, all public on `main`'s boundary already, so they go out together.
+
+**Not this PR's, same export:** `Security/lean-audit.json` is public and copied whole; it names 134 NCI, 77 PoUS, 11 Bandwidth and 11 WeightSecurity guarantees [read].
+
+Not checked: a built export; TOP-387's frozen paths.
+
+### Task 2: the tables
+
+Head `f7b94f9172af` of #8468 (OPEN, not draft, mergeable, no label, no review; `gh pr view`, 01:13Z); base `main`
+`7af4d24fca`. `public_boundary.py` is a pure file scan (`git ls-files`, AST and regex parsing, forked workers): 6 s and
+175 MiB peak RSS of one process, so I ran it on the head in `/tmp/housekeep/wt-8468` (removed 01:14Z). [run] = that
+tool, or my two read-only scripts over its `judge()` (`/tmp/housekeep/pb_analyse.py`, `pb_docpaths.py`); [read] = I read
+the lines.
+
+**A. Each line #8468 moves or adds, and what it matches on the head** [run]
+
+| Line of `public_boundary.toml` | Change | Tracked files | Public on the head |
+|---|---|---|---|
+| `fixtures`: `verity/core/protocols/certifier/tests/fixtures/{arith_encode,cache_step,cache_step_v2,replay_step}_vectors.json` | added | 0 tracked; the 4 are fetched fixtures, each an `art:` entry of `fixtures/artifacts.json`, and the only fetched ones under the certifier's paths [read] | shipped as tracked files by the export |
+| `[public] certifier`: `verity/core/protocols/{certifier,network}` | added | 235 (certifier 169, network 66) | 187: certifier 169 (3 were public on `main`), network 18 |
+| `[public] certifier`: `verity/ml/protocols/certifier` | added | 43 | 43 |
+| `[public] certifier`: `verity/core/devices/certifier` | added | 20 | 20 |
+| `[public] certifier`: `Security/*/NetworkCertifier{,.lean}` | added | 62: Definitions 27, Proofs 29, Properties 6; no `Security/Models/NetworkCertifier` exists | 62 |
+| `[public] certifier`: `Security/Proofs/Properties/NetworkCertifier{,.lean}` | added | 39 | 39 |
+| `[private] protocols`: `verity/core/protocols/{pous,bandwidth,remote_bandwidth,network}` | replaced by `{pous,bandwidth,remote_bandwidth}` and the `network/` lines below | 343 before; 277 under the new line | 0 of the 277 |
+| `[private] protocols`: the five `verity/core/protocols/certifier/{…}` globs | removed | 114 + 13 + 18 + 12 + 9 = 166 | 166 |
+| `[private] protocols`: `verity/ml/protocols/{pous,certifier}` | replaced by `verity/ml/protocols/pous` | 53 before; 10 under the new line | 0 of the 10 |
+| `[private] protocols`: `verity/core/protocols/network/nci` | added | 33 | 0 |
+| `[private] protocols`: `verity/core/protocols/network/tests/test_{inference_only_protocol,nci_*}.py` | added | 7 | 0 |
+| `[private] protocols`: `verity/core/protocols/network/lean/NetworkCheck{.lean,/Period.lean,/PeriodMain.lean,/RecordsMain.lean}` | added | 4 | 0 |
+| `[private] protocols`: `verity/core/protocols/network/tests/{period_case,test_network_period_protocol,test_slot_entry_pins}.py` | added | 3 | 0 |
+| `[private] protocols`: `verity/core/protocols/network/tests/fixtures/slot_entry.json` | added | 1 | 0 |
+| `[[needed]]` from `certifier`: `verity/core/primitives/world` | added | 6 | 4: `World.lean`, `lakefile.toml` by this entry; `lake-manifest.json`, `lean-toolchain` by the build-files entry. Not `.gitignore`, `lean-audit.json` |
+| `[[needed]]` from `certifier`: `Security/Proofs/Properties/Hash` | added | 1 | 1: `Identity.lean` |
+
+The 355 newly public files: 348 by the group `certifier`, 7 by `needed` (the 5 above, and by the shared-vocabulary
+entry `Security/Definitions/Core/Assumptions.lean` and `Security/Properties/Hash/Identity.lean`). By place: certifier
+package 166, `verity/ml/protocols/certifier` 43, device 20, network 18, world 4, `Security/` 104 (Definitions 27 + 1,
+Proofs 29, Proofs/Properties 39 + 1, Properties 6 + 1). No file leaves the public set. Of the certifier's own Lean,
+six files stay uncovered: `Security/{Properties,Proofs/Properties}/{NetworkPeriod,NetworkScan}.lean` and
+`Security/Proofs/Properties/NetworkScan/` (2).
+
+**B. Edges out of the 355 files** [run]: 2,115 in all; 1,113 into files public on `main`, 977 among the 355, 24 into
+directories with public files, 1 into a file the export doesn't copy (row 1). `public_boundary.py` (default mode):
+"0 edges, 0 new; 38 listed edges no tree given has (--prune)", the same line as on `main`.
+
+| # | Public file and line | What it reaches that stays private | How the head closes it | Cheapest cut at the source | Tag |
+|---|---|---|---|---|---|
+| 1 | `verity/core/protocols/network/lean/lakefile.toml:15` requires `nci_check` | `verity/core/protocols/network/nci/lean/lakefile.toml` | the export's rewrite drops the require (one of the 19) and the manifests' `nci_check` entries (`network/lean/lake-manifest.json:34`, the device's `:55`) | none needed while `Period.lean` is private; it is the require's only reader | [run], rewrite [read] |
+| 2 | `verity/core/protocols/certifier/lean_audit.py:60,157` (`lake build network-records`); `service.py:216` (`from …lean_audit import Audit`), `:1031`; tests `certifier/tests/test_network_certifier_link_window_lean.py`, `network/tests/test_lean_audit.py:45`, `network/tests/test_network_records_protocol.py:229-242` | `verity/core/protocols/network/lean/NetworkCheck/RecordsMain.lean`, the executable's root: private because `:5` imports `NetworkCheck.Period` (used once, `:28` `Period.clocksFn`); `Period.lean:8,14` import `NciCheck.Desc` (used at `:482,705,730`) | it doesn't: the export drops `network-records` and `network-period`, and the check sees no edge because the executable is named by a string | move `clocksFn`, `signedSyncs` and the openings they read (`Period.lean:1363-1398`) into a module with no `NciCheck` import, import it at `RecordsMain.lean:5`, and take `RecordsMain.lean` off the private line (PUBLICCERT's `Clocks.lean`, its comment of Mon 23:18Z). [not checked] that those definitions read nothing of NCI's | [read] |
+| 3 | `verity/core/protocols/network/lean/lean-audit.json:2` (`"roots": ["NetworkCheck"]`), `:7,8` (`PeriodMain`, `RecordsMain` exempt), `:33-40` (`NetworkCheck.Period`'s imports, `NciCheck.Desc` among them) | `NetworkCheck.lean` (private: `:9` imports `Period`), `NetworkCheck/{Period,PeriodMain,RecordsMain}.lean` | it doesn't; the exported lakefile keeps the library and builds its copied modules one by one (`rewrite_lakefile`) | after row 2's cut three entries remain (root, `Period`, `PeriodMain`); the lock of the exported package needs them dropped where the export rewrites manifests, not in the boundary | [read] |
+| 4 | `verity/core/devices/certifier/lean/CertifierDevice/Driver.lean:4` (`import World`), `lakefile.toml:22` (`core_world`) | `verity/core/primitives/world/` (4 files) | a new `[[needed]]` entry, from `certifier` only: a widening | none cheaper found: `CertifierDevice.lean:9` and `Issuer.lean:3` import `Driver`, so holding the driver back holds the device back. `World.lean` has no imports and no other package requires `core_world`; its docstring (`:6`) names PoUS's memory challenger | [run], [read] |
+| 5 | `Security/Proofs/Properties/NetworkCertifier/Check/{Bytes:5,Extract:13,Instance:52,Run:11}.lean`, `DeviceOutput/Encode.lean:50`, `Records/Instance.lean:47` | `Security/Proofs/Properties/Hash/Identity.lean` (324 lines: core's identity hash is Flock's SHA-512) | a new `[[needed]]` entry, from `certifier` only: a widening | none cheaper found. It imports only `Properties.Hash.Identity`; one file of `Security/Proofs/Properties/Pous` imports it too | [run], [read] |
+| 6 | `verity/core/protocols/certifier/PROTOCOL.md:294` (the path); by module name `PROTOCOL.md:33,2010`, `README.md:247`, `certificate.py:503,554`, `lean_audit.py:381,382`, `verity/ml/protocols/certifier/ingress_scan.py:63` | `verity/core/protocols/network/lean/NetworkCheck/Period.lean` | text only | reword, or it resolves if the period check goes public | [run] token scan, [read] |
+| 7 | `verity/core/protocols/certifier/PROTOCOL.md:1765` (path), `:1762` and `active.py:89` (`Accounting.Attribution.openCells`), `Security/Proofs/NetworkCertifier/Witnesses.lean:65` (`Accounting.Guarantees.Bridge.CommOfPeriodLeakAccepted`, a comment) | `Security/Definitions/Accounting/Physical.lean` and Accounting's names | text only | reword | [run], [read] |
+| 8 | `Security/Proofs/NetworkCertifier/README.md:5` | `verity/core/protocols/pous/lean/` | text only | reword | [run] |
+| 9 | `verity/core/protocols/certifier/PROTOCOL.md:423` | `integrations/vllm/verity_vllm/pipeline/serve_protocol.py` | text only | reword, or it resolves when vllm's served-window files move | [run] |
+| 10 | 75 sites in docs and docstrings (`PROTOCOL.md`, `README.md`, `protocol/*.md`, `service.py:38,83,84,92`, `Security/Definitions/NetworkCertifier/{AdviceV1,Tap}.lean:15`, …) | 34 paths under `benchmarks/`: `network_traces` 15, `network_e2e` 11, `live_challenger` 3, `mempool` 2, `datacenter`, `network_sim`, `prove_path` 1 each | text only | reword at the next edit; no import or path read (the check's anchored-path edges are 0) | [run] |
+| 11 | the `fixtures` line's four vectors | their generators `benchmarks/network_e2e/encodings/{arith_vectors,cache_vectors,cache_pool_vectors,replay_vectors}.py`, which the tests' docstrings name | the vectors ship; the generators don't | list the generators public, or say in the tests' docstrings that the vectors ship as data | [run], [read] |
+
+The other 12 of the 48 named paths: `tools/verity/{check/suites.py,lean/check.py}` (5 sites), `tests/test_lean_packages.py`
+(1), and 6 test paths in `verity/core/protocols/network/pyproject.toml:14,23,28-31` (the export's rewrite drops a
+pyproject's test paths [read]).
+
+**C. Does anything cross with the certifier?**
+
+| With | Imports from the 355 files [run] | Text [run] |
+|---|---|---|
+| PoUS | 0 | row 8; `World.lean:6`, `Security/Definitions/Core/Assumptions.lean:44` and `PROTOCOL.md:1737` name the memory challenger |
+| Bandwidth audit | 0 | 0 sites |
+| Remote bandwidth audit | 0 | 0 sites |
+| NCI | 1, row 1; the six would-be Lean imports are held back with the period check (rows 2, 3) | `Security/Definitions/NetworkCertifier/Warden.lean:20` (`Definitions.Nci`), `network/lean/lakefile.toml:13`, the "inference-only policy" at 6 sites |
+| `Accounting` | 0: no file of the certifier's areas imports `Security/*/Accounting` | row 7 |
+| `Security/*/Core` | 6 imports of 3 files, all public by the shared-vocabulary entry, none listed private: `Core/Assumptions.lean` (newly public; `Guarantees/{Checked:5,Period:3,PooledLeak:4}.lean`, `Proofs/NetworkCertifier/Tap.lean:4`), `Core/Interaction.lean` (`Proofs/NetworkCertifier/PeriodSum.lean:3`), `Core/TC/Spec.lean` (`Core/Assumptions.lean:3`) | |
+| `verity/core/service/spot/` | 0 | |
+| `Security/**/WeightSecurity` | 0 | 0 sites |
+| `Security/**/Claims/Sampling*` | 23 import lines into 14 files: `Security/Definitions/Claims/Sampling.lean` (`Definitions/NetworkCertifier/SampledAudit.lean:3`, `SampledReg.lean:3`), `Claims/SamplingGeneric.lean` (`SampledAudit.lean:4`), and 12 of `Security/Proofs/Flock/Claims/Sampling/` from `Security/Proofs/NetworkCertifier/{Checked,PooledLeak,SampledAuditInstance,SampledLeakReg,SampledLeakRegPlain,TapRows,Witnesses}.lean`. Also `Security/Proofs/Flock/SamplingGeneric{.lean,/Assemble,/Deployed,/TwoAt}.lean`. All are public on `main`'s boundary already (groups `flock`, `spot`, and the shared-vocabulary entry) | |
+| `verity/core/protocols/spot` (Python) | 90 imports of 13 files, all in the public group `spot` | |
+
+**The locks** [read]. `Security/lean-audit.json` and `Security/Proofs/lean-audit.json` are public on `main` already
+(`structure`), #8468 doesn't touch them, and `public_export.py` copies them whole (its list rewrites, `PATH_LISTS`, cover
+the lint allowlists, the census roots and the dead-code keep-list). `Security/lean-audit.json` holds 1,059 guarantee
+records: Accounting 262, Pouw 181, Claims 166, Nci 134, Flock 86, Pous 77, Verity 76, NetTiming 37 (the certifier's
+namespace), FlockSoundness 13, Bandwidth 11, WeightSecurity 11, Hash 3, RecDeploy 2. Each record has an owner handle, the
+signature `X : Area.Guarantees.X`, premise names and two hashes, no statement text. Its `deployed` list names
+`Bandwidth.SecurityProofs.AuditRO`, `Pous.SecurityProofs.StreamedWipe` and three `Accounting.SecurityProofs.Remote…`.
+Public files on the head under `Security/{Definitions,Proofs,Properties,Proofs/Properties}/<Area>`: Nci 0 of 175, Pous 0
+of 162, WeightSecurity 0 of 14, Accounting 97 of 503. So the private guarantees' names go out with any export, with or
+without #8468. `NetTiming.SecurityProofs.PeriodLeakAccepted` (deployed) lists as open
+`Claims.SamplingGeneric.Compiled.KS`, `NetTiming.CertifierRegisters`, `NetTiming.ScopeAcc` and
+`Verity.Assumptions.TrustedHost`, and as domain `Claims.Sampling.CommitmentScheme.Binds`. `Security/Proofs/lean-audit.json`'s
+158 roots include one each for `Nci`, `Pous` and `WeightSecurity` and two for `Accounting`.
+`Security/Properties/lean-audit.json` is not public.
+
+**Not checked.** A built export (`public_export.py DEST --build` is a node's work; I ran nothing heavy). Whether TOP-387's
+frozen paths cover row 2's cut. That the `Clocks` split compiles. The lake packages' requires beyond what the tool reads
+(it reads every `lakefile.toml`; I read the three newly public ones and `world`'s). vllm's `served_window` and
+`protocol_tests` files stay private on the head, as PUBLICCERT's comment says, so NET-283's item on them is still open.
+The token scan sees only literal paths in text.
+
+**Failed.** `git rev-parse --short=10 HEAD origin/main`: "fatal: Needed a single revision" (my flag; rerun without it).
+Nothing else.
+
+Next entry by 02:15Z, on Task 3.
