@@ -2207,6 +2207,61 @@ def _circuits(tmp_path: Path, classes: str, answers: dict, **extra: str) -> tupl
     return rc, (tmp_path / "out" / "verdicts.txt").read_text().splitlines(), (tmp_path / "limits").read_text().split()
 
 
+FAKE_WEIGHTS = '''import json, os, sys
+a = sys.argv[1:]
+assert a[0] == "weights-registration"
+if os.environ.get("REFUSE"):
+    print("prove_path.py weights-registration: the checkpoint is not of record", file=sys.stderr)
+    sys.exit(2)
+entry = {"value": "weights/w@64", "root": "ab" * 64, "leaves": 2, "words": 64, "domain": "cd" * 64}
+doc = {"model": {"repo": "org/m", "revision": "0123456789abcdef"}, "values": {"weights/w@64": entry}, "unrooted": {}}
+open(a[a.index("--out") + 1], "w").write(json.dumps(doc))
+said = {"out": a[a.index("--out") + 1], "roots": 1, "unrooted": []}
+if "--deployment-record" in a:
+    open(a[a.index("--deployment-record") + 1], "w").write(json.dumps({"registered": [entry], "previous": None}))
+    said["deployment"] = "9e" * 64
+print(json.dumps(said, sort_keys=True))
+'''
+
+
+def _weights(tmp_path: Path, **extra: str) -> tuple[int, list[str]]:
+    """`served_verdicts.sh weights` in a toy tree whose prove_path.py registers one weight (or, under REFUSE, refuses) and
+    writes the record ``--deployment-record`` names: the exit status and the verdict lines."""
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    for d in (tree / "benchmarks" / "prove_path", venv, tmp_path / "serve"):
+        d.mkdir(parents=True)
+    (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(FAKE_WEIGHTS)
+    (venv / "python").write_text(f'#!/bin/sh\nexec {sys.executable} "$@"\n')
+    (venv / "python").chmod(0o755)
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
+           "OUT": str(tmp_path / "out"), **extra}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "weights"], cwd=tree, env=env,
+                        check=False).returncode
+    return rc, (tmp_path / "out" / "verdicts.txt").read_text().splitlines()
+
+
+def test_the_weights_step_writes_the_serves_first_registration_record_and_says_who_wrote_it(tmp_path):
+    """The serve's weights step asks ``weights-registration`` for the serve's first registration record too
+    (deployment-registration.json in the serve dir, the one Pearl+'s W is chained after and a deferral lists among its
+    follow-on's inputs), copies it out beside the registration, and says its digest and that the developer wrote it
+    before the first request with no auditor holding the digest. A refused registration leaves neither file."""
+    rc, lines = _weights(tmp_path)
+    serve, out = tmp_path / "serve", tmp_path / "out"
+    assert rc == 0 and lines[0].startswith("WEIGHTS registered before the first request: 1 weight parameters rooted "), lines
+    assert lines[1] == ("DEPLOYMENT-REGISTRATION the serve's first registration record, which registers those roots: "
+                        "written before the first request by the developer (no auditor holds its digest), digest "
+                        + "9e" * 64)
+    first = json.loads((serve / "deployment-registration.json").read_text())
+    assert first["previous"] is None and first == json.loads((out / "deployment-registration.json").read_text())
+    assert json.loads((out / "weights_registration.json").read_text())["values"] == {"weights/w@64": first["registered"][0]}
+    script = (HERE.parent / "served_verdicts.sh").read_text()
+    assert "printf '%s\\n' weights_registration.json deployment-registration.json " in script
+    rc, lines = _weights(tmp_path / "refused", REFUSE="1")
+    assert rc == 1 and len(lines) == 1 and lines[0].startswith("NO WEIGHTS REGISTRATION: "), lines
+    assert "the checkpoint is not of record" in lines[0]
+    assert not [f.name for f in (tmp_path / "refused" / "serve").iterdir() if f.is_file()]
+
+
 def test_a_class_that_counts_passes_and_the_class_of_record_is_not_counted_unasked(tmp_path):
     """CLASSES' one class counts under WC_TIMEOUT, its published count without the advice's length; the class of record,
     which CLASSES doesn't name and which would run out of time here, is never started."""
