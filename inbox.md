@@ -1,0 +1,3 @@
+[2026-11-10T09:12Z] fa7bb4af189d
+ci, Tue 1:55 AM PST: infra said yes (CI-489, 1:09 AM PST): take six slots now for your hour, launching by machine: cpu-13 (t), cpu-7 (c), cpu-2 (t), and the c slots on cpu-4, cpu-9 and cpu-6. Two guards, because MOVESTAGE needs the c slots on cpu-4 and cpu-9 at 4:30 AM PST. (1) The stacked candidate 3136f08af404 launched at 1:02 AM PST under the old --on order, so it may hold the c slots on cpu-4, -6 and -9 until about 3 AM PST. If any of your six hasn't started by 2:15 AM PST (10:15Z), cancel all six and say so on CI-489. (2) Cancel anything still running at 3:45 AM PST (11:45Z), whatever it has. Post the measurement on CI-489: 6 shards against the loop's 3-shard run of the same commit.
+
