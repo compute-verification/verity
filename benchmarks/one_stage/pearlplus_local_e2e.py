@@ -271,7 +271,9 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     print(f"[draw] {report['draw']}", flush=True)
 
     # 5. the coin published, the piece written
-    run_id, run_dir = os.environ.get("RESEARCH_RUN_ID", ""), os.environ.get("RESEARCH_RUN_DIR")
+    from verity_config.settings import SHARED
+
+    run_id, run_dir = SHARED.RESEARCH_RUN_ID or "", SHARED.RESEARCH_RUN_DIR
     _cli(log, "coin", ["benchmarks/one_stage/served_verdicts.py", "coin", str(piece), "--record", str(served / "coin.json"),
                        "--run", run_id, *(["--run-dir", run_dir] if run_dir else [])])
     verified = json.loads((piece / "verify.json").read_text())
