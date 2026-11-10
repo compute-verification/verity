@@ -248,9 +248,9 @@ def test_a_compression_costs_its_pin_which_is_the_gadgets_rows():
     from verity.commitments import gates
     from verity.commitments.gates.sha512 import compress_gadget
 
-    pins = {name: json.loads(Path(gates.__file__).with_name(f"{name}.circuit-check.json").read_text())["definitions"]
-            for name in ("lms", "block_check")}
-    assert SHA512_ROWS == pinned_ands("Sha512Compress_v1") == pinned_ands("RowCompress_v1", "block_check")
+    pins = {name: json.loads((Path(gates.__file__).parents[3] / where / f"{name}.circuit-check.json").read_text())["definitions"]
+            for name, where in (("lms", "verity/commitments/gates"), ("block_check", "verity/protocols/poub/verifier/commitments/gates"))}
+    assert SHA512_ROWS == pinned_ands("Sha512Compress_v1") == pins["block_check"]["RowCompress_v1"]["and"]
     assert SHA512_ROWS == pins["lms"]["Sha512Compress_v1"]["and"] == pins["block_check"]["RowCompress_v1"]["and"]
     assert pins["lms"]["Sha512Compress_v1"]["type"] == pins["block_check"]["RowCompress_v1"]["type"]
     C = Circuit()
