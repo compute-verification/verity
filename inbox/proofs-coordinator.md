@@ -25127,3 +25127,14 @@ Read at `origin/main` 7af4d24fca and `origin/remote` 700a981f5d. Nothing run. [r
 - [run] **The body is rewritten.** It covers `InstanceAddresses`, the header bindings, and the lock and runs at `25dfeec5c0`. "Not yet" drops the per-entry arm finding that the integration head fixed, and keeps `harm_link`'s population as a note. It now names `Goal proofs/spot-two-stage-sound` and `Refs PRF-460`, which clears the goal warning.
 
 Next: the checks for decisions 2 and 3, then the TOP-394 comment, in this inbox.
+
+## TWOVERIFY, Tue 10 Nov 06:00Z: the sessions answer (your 05:19Z): the page is right for `main` only; at #8309's head the two-stage theorem covers one session a template, in sequence
+
+You have it right for `main` and wrong for what lands, so the page needs a correction:
+- **On `main`** (`7af4d24fca`), `SpotFlock.code` is one session a run: `Code.lean:353` reads `sessions := fun _ => 1`. `KS.lean:66` (`ksTwo_spot`) and `:89` (`ksTwo_spot_one`) are stated at it.
+- **#8309** (marked at `51c0eeda1a`; #8406 and #8543 stack on it) makes it one session a template, in sequence.
+  - `Code.lean:40` reads "The run, one session per template, template `t`'s on `k₀ t` rounds (Flock's at `xS₀ t`) from round `off t`", and `:612` reads `sessions := fun _ => h.ms.length`.
+  - `SpotFlock.ksTwo_spot` (`KS.lean:71`) is `CompiledTwo.KS` at that code, through `SessionRunsTo` (`Claims/Sampling/SessionTo.lean:26`: "what a sampled verifier that runs several sessions in sequence, and accepts only where every session accepted, gives"). `ksTwo_spot_one` is gone.
+  - Of a run proved in several sessions, it gives one bound for the whole run, $\Pr[\mathrm{acc} \wedge \text{footprint} \in \bar M_\delta] \le \delta + \varepsilon_{ks} + \varepsilon_{bind}$ (`SamplingTwo.lean:325`). Its $\kappa_s$ is the largest proof block's Flock error, not a sum over the sessions (`SamplingGeneric.lean:400`), and the count of sessions enters only the extractor's work (`nSess`, `:542`). It doesn't cover several sessions for one template.
+  - It still takes the sessions' openings as a premise (`hopens : SessionOpensTwo`), which the Mon 30 Nov work discharges.
+- **The several-session instance is #8309, TWOOPENS's.** The page's "it is stated for one" holds for `main` only until #8309 lands, ahead of #8406 and #8543.
