@@ -1298,16 +1298,8 @@ class AuditRun:
         return chained(root, self.windows[t].heads[i])
 
     def verify(self, t: int, openings: Sequence[Opening]) -> Verdict:
-<<<<<<< 99c8914848
-        """Window t's verdict on the prover's openings of its draws (`p2.Opening`s over a P2 store), in the order drawn:
-        `malformed` on a window with no draws, whatever its openings."""
-||||||| merged common ancestors
-        """Window t's verdict on the prover's openings of its draws, in the order drawn: `malformed` on a window with
-        no draws, whatever its openings."""
-=======
-        """Window t's verdict on the prover's openings of its draws, in the order sampled: `malformed` on a window with
-        no draws, whatever its openings."""
->>>>>>> 7af4d24fca3e
+        """Window t's verdict on the prover's openings of its draws (`p2.Opening`s over a P2 store), in the order
+        sampled: `malformed` on a window with no draws, whatever its openings."""
         self._live()
         w = self.windows[t] if 0 <= t < len(self.windows) else None
         if w is None or w.draws is None or w.verdict is not None:
@@ -1834,13 +1826,7 @@ def pooled(record: Record) -> tuple[float, float]:
 
     Window t draws s_t distinct receipts of its U_t from its own openings coin, released after its roots, so they all
     land on correct ones with probability at most g_t^(s_t), g_t its correct share, however the prover adapted to the
-<<<<<<< 99c8914848
-    windows before.  Over the session (`Accounting.Guarantees.PooledSampling`, `RateSessionDraw`), every draw lands
-||||||| merged common ancestors
-    windows before.  Over the session (`Accounting.Guarantees.HorizonSampling`, `RateSessionDraw`), every draw lands
-=======
     windows before.  Over the session (`Accounting.Guarantees.PooledSampling`, `RateSessionSample`), every draw lands
->>>>>>> 7af4d24fca3e
     on a correct receipt while Σ_t s_t·g_t ≤ (1 − d̄)·S, S = Σ_t s_t, with probability at most (1 − d̄)^S = δ.  So
     except with δ the wrong shares f_t = 1 − g_t have Σ_t s_t·f_t < d̄·S, and each f_t ≤ 1 − s_t/U_t (its s_t draws
     found s_t correct receipts).  `wrong` is the most Σ_t f_t·U_t those allow, and `floor` the most any f_t is:
