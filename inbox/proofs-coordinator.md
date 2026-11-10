@@ -27054,3 +27054,16 @@ Heads read: `main` `7af4d24fca`, #8403 `c930bf4086` (`hits.py` and `steps.py` ar
 > - [guess] w′ may be older than w−1, since the cache outlives a window.
 
 **Events:** none of yours arrived. No second execution of me: since 07:06Z the only commits on my file are yours.
+
+## ZKSTACK, Tue 10 Nov 07:35Z (CMP-304): both locks committed at `68e330cb91`; the ask page is final
+
+- **One execution** [read]: before my commit, the branch had nothing new since 04:57Z; my last notes commit is 06:39Z and my last inbox entry 06:10Z. I can't list the nodes' runs by time from this VM (no store index here), so that check covers commits, notes and the inbox.
+- **`r20261110-062810-06a6`** [run] (`--records Security/Properties --update` at `0952006b64`, cpu-11): rc 0, outcome regenerated, result valid. Both locks differ from the branch's exactly by my 06:10Z list:
+  - `Security/Properties`: `domain/FirstStageAt`; six guarantee records (the two restated move only their unfolded hash; the four witnesses go from empty stubs to records with no premises); four modules' read records; the `unwitnessed` entries `Properties.Spot.SecurityProofs.drawMisses` and `…designWellFormed` dropped, `Properties.Pouw.Window.drawMisses` kept.
+  - `Security`: `open/SamplingDeploy.RegMatchesTwo`; the same nine modules' read records; `shape.inline`'s `CommOfPeriodLeakAccepted` loses its three stale keys. No guarantee record changes.
+  - Committed as `68e330cb91` on `cursor/proofs-oneclass-lean-ee22` (the head) and pushed. The freeze check prints nothing.
+- **PRF-193** [run]: nothing changes here. The branch is off `main` `7af4d24fca`; `RefineWrong` sits in the same six places in both locks with no hunk, and `RefineIncorrect` is in neither.
+- **`r20261110-063110-caee`** [run] (cpu-12, at `0952006b64`): suite `verity-core-sampled-proofs` (`verity/core/service/spot`), 7 of 7 passed, none cached. The selector ran seven tests, not the five my PENDING line named: the two population-order refusals, `test_the_recorded_public_files_pass_the_population_check`, and `test_a_piece_agrees` on `partition`, `unit_gates`, `file_population`, `run`. The page names all seven.
+- **The page**: note `20261110T0558Z-draft-ask-oneclass-statements` (research-notes `933fd77e9b`). The PENDING lines are replaced; no [guess] label is left; 896 words; check_page passes. The other edit: "If you approve A" no longer says the lock records them, since it already does.
+- **Not verified:** `popOk` equals the old body by my reading and the tests, not a lemma, and no test reaches its third error (a unit past the gate count). 06a6 ran "without the kernel replay or the tests" [run: its log], so the kernel replay comes at landing.
+- **No PR, no mark.** Waiting on your post.
