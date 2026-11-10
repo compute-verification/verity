@@ -21,7 +21,7 @@ runs a subset. ``gate``: a small step's device roots and CPU twin's equal `row_t
 the reads open), as `history.HistoryTable`, the CPU twin of the device's (one thread) and on the GPU
 (`commit.history_tables_device`): a table's creation (its 2^17-leaf tree), ``--table-rows`` rows appended at once (a
 prefill's), one row at a time (a decode step's) and 2048 reads' paths, each call through to the host; each table's root is
-`history.check`'s over its strings, and the device table's is the twin's. Then, per batch: ``plan``, the host's layout of a
+`history.check`'s over its strings, and the device table's is the twin's over its rows under its salts. Then, per batch: ``plan``, the host's layout of a
 step (`row_tables_device.plan`: domains and rank order, on the launching thread, no GPU); ``alone``, the kernels' time on an
 otherwise idle GPU (CUDA events, median of ``--reps``) with ``gb_s`` the rows' bytes over it and ``launch_ms`` the host's
 time to enqueue the step; ``beside``, a decode-shaped bf16 GEMM loop (``x (B, H) @ w (H, N)``, memory-bound, sized to last
@@ -52,6 +52,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import torch
 
 from verity_config.settings import SHARED
@@ -246,15 +247,16 @@ def cpu_twin(layers: int, reads: int, ctx: bytes, key: bytes, reps: int) -> dict
     return {"layers": layers, "bytes": b, "s": statistics.median(secs), "gb_s": b / statistics.median(secs) / 1e9}
 
 
-def table(kind: str, rows: int, reps: int, key: bytes) -> dict[str, Any]:
+def table(kind: str, rows: int, reps: int) -> dict[str, Any]:
     """One history table as ``kind`` (``python``, ``twin`` or ``device``): its creation, ``rows`` rows appended at once, one
-    row at a time and 2048 reads' paths, with its root and whether `history.check` finds it over the table's strings."""
+    row at a time and 2048 reads' paths, with its root and whether `history.check` finds it over the table's strings; the
+    device table's also whether the CPU twin over its rows under its salts has its root (``twin``)."""
     from verity.ml.commitments import history as HT
     from verity_vllm.commit import history_tables as H
     from verity_vllm.commit import history_tables_device as HTD
 
-    make = {"python": HT.HistoryTable, "twin": lambda p, v, w, c: HTD.Table(p, v, w, c, key=key),
-            "device": lambda p, v, w, c: HTD.Table(p, v, w, c, key=key, device=torch.cuda.current_device())}[kind]
+    make = {"python": HT.HistoryTable, "twin": HTD.Table,
+            "device": lambda p, v, w, c: HTD.Table(p, v, w, c, device=torch.cuda.current_device())}[kind]
     hs = H.Histories("ab" * 64, make=make)
     t0 = time.perf_counter()
     t = hs.table("r0", 0)
@@ -277,8 +279,14 @@ def table(kind: str, rows: int, reps: int, key: bytes) -> dict[str, Any]:
         for e in reads:
             t.path(e)
     path = (time.perf_counter() - t0) / len(reads)
+    same = {}
+    if kind == "device":
+        twin = HTD.Table(t.program, t.value, t.words, t.leaves)
+        twin.append(np.stack(t.rows), t.salts)
+        same = {"twin": twin.root == t.root and twin.bcs == t.bcs}
     return {"rows": rows, "row_bytes": H.ROW_BYTES, "init_s": init, "append_us": bulk / rows * 1e6,
-            "append_one_us": statistics.median(one) * 1e6, "path_us": path * 1e6, "check": H.check(t, t.bcs), "root": t.root.hex()}
+            "append_one_us": statistics.median(one) * 1e6, "path_us": path * 1e6, "check": H.check(t, t.bcs), "root": t.root.hex(),
+            **same}
 
 
 def units(ns: argparse.Namespace, ctx: bytes, key: bytes) -> list[tuple[str, Callable[[dict[str, Any]], dict[str, Any]]]]:
@@ -289,18 +297,18 @@ def units(ns: argparse.Namespace, ctx: bytes, key: bytes) -> list[tuple[str, Cal
                 "alone": lambda done: alone(b, ns.reads, ns.layers, ctx, key, ns.reps),
                 "cpu": lambda done: cpu_twin(ns.cpu_layers, ns.reads, ctx, key, 2),
                 "beside": lambda done: beside(b, ns.reads, ns.layers, ctx, key, done[f"alone.{b}"], max(3, ns.reps // 2)),
-                }.get(arm) or (lambda done: table(arm.split(".")[1], ns.table_rows, ns.reps, key))
+                }.get(arm) or (lambda done: table(arm.split(".")[1], ns.table_rows, ns.reps))
 
     return [(f"{arm}.{b}" if arm in PER_BATCH else arm, unit(arm, b))
             for arm in ns.arms for b in (ns.batches if arm in PER_BATCH else [0])]
 
 
 def gates(done: dict[str, dict[str, Any]]) -> dict[str, bool]:
-    """What the arms done so far validate: the gate's roots, and each history table's check with the device's root the twin's."""
+    """What the arms done so far validate: the gate's roots, and each history table's check, the device table's with its
+    twin's root."""
     got = dict(done.get("gate", {}))
-    if tabs := {n: r for n, r in done.items() if n.startswith("tables.")}:
-        got["tables"] = all(r["check"] for r in tabs.values()) \
-            and len({tabs[n]["root"] for n in ("tables.twin", "tables.device") if n in tabs}) <= 1
+    if tabs := [r for n, r in done.items() if n.startswith("tables.")]:
+        got["tables"] = all(r["check"] and r.get("twin", True) for r in tabs)
     return got
 
 
@@ -311,8 +319,8 @@ def checker(done: dict[str, dict[str, Any]]) -> str:
         said.append(f"a small step's {' and '.join(roots)} roots equal row_tables.step_roots")
     if tabs := [a.split(".")[1] for a in ARMS if a.startswith("tables.") and a in done]:
         said.append(f"each history table's root ({', '.join(tabs)}) is history.check's over its strings")
-        if {"twin", "device"} <= set(tabs):
-            said.append("the device table's root is the twin's")
+        if "device" in tabs:
+            said.append("the device table's root is its CPU twin's over its rows under its salts")
     return "; ".join(said)
 
 

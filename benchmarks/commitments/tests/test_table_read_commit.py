@@ -78,5 +78,14 @@ def test_the_checker_names_only_the_checks_of_the_arms_done(bench) -> None:
     assert bench.checker({"gate": {"twin": True}}) == f"every arm ended done; {step.replace('device and ', '')}"
     assert bench.checker({"gate": {"twin": True, "device": False}, "tables.python": {}}) == \
         f"every arm ended done; {step}; each history table's root (python) {strings}"
+    assert bench.checker({"tables.twin": {}}) == f"every arm ended done; each history table's root (twin) {strings}"
     assert bench.checker({"tables.device": {}, "tables.twin": {}}) == \
-        f"every arm ended done; each history table's root (twin, device) {strings}; the device table's root is the twin's"
+        f"every arm ended done; each history table's root (twin, device) {strings}; " \
+        "the device table's root is its CPU twin's over its rows under its salts"
+
+
+def test_the_tables_gate_holds_each_check_and_the_device_tables_twin(bench) -> None:
+    assert bench.gates({"plan.1": {}}) == {}
+    assert bench.gates({"tables.twin": {"check": True}, "tables.device": {"check": True, "twin": True}}) == {"tables": True}
+    assert bench.gates({"tables.twin": {"check": True}, "tables.device": {"check": True, "twin": False}}) == {"tables": False}
+    assert bench.gates({"tables.python": {"check": False}}) == {"tables": False}
