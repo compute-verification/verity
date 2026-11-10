@@ -3873,6 +3873,15 @@
      "Claims.Witness.SamplingGeneric.twoSessions_meets"
     ]
    },
+   "Claims.SamplingGeneric.Compiled.KSRegAt": {
+    "fails": "Claims.SamplingGeneric.Compiled.KSRegAt_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoOpenCalls_meets",
+     "Claims.Witness.SamplingGeneric.twoSessions_meets"
+    ]
+   },
    "Claims.SamplingGeneric.CompiledTwo.KSAt": {
     "fails": "Claims.SamplingGeneric.CompiledTwo.KSAt_fails",
     "meets": [
@@ -3996,6 +4005,7 @@
    "Claims.Encodings.LinkBinds": "Claims.Encodings.linkBinds",
    "Claims.Encodings.RelinkR": "Claims.Encodings.relinkR",
    "Claims.SamplingGeneric.CompilerKSAt": "Claims.SamplingGeneric.compilerKSAt",
+   "Claims.SamplingGeneric.CompilerKSRegAt": "Claims.SamplingGeneric.compilerKSRegAt",
    "Claims.Guarantees.CapTwo": "Claims.SecurityProofs.CapTwo",
    "Claims.SamplingGeneric.CompilerKSAtTwo": "Claims.SamplingGeneric.compilerKSAtTwo",
    "Claims.SamplingGeneric.CompilerEfficientTwo": "Claims.SamplingGeneric.compilerEfficientTwo"
@@ -4394,6 +4404,10 @@
   "Claims.SamplingGeneric.compilerKSAt": {
    "honest": ["Claims.SamplingGeneric.compilerKS_honest", "Claims.SamplingGeneric.compilerBits_honest"],
    "nontrivial": "Claims.SamplingGeneric.compilerKSAt_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerKSRegAt": {
+   "honest": ["Claims.SamplingGeneric.compilerKS_honest", "Claims.SamplingGeneric.compilerBits_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerKSRegAt_nontrivial"
   },
   "Flock.SecurityProofs.SpotKSTwo": {
    "nontrivial": "Claims.SamplingGeneric.compilerKSTwo_nontrivial"
@@ -11904,6 +11918,9 @@
    },
    "type_hash": "53f421070c113209ffc605594adc7e8132cf18c8e72e973c096e7b22343e9d06"
   },
+  "Claims.SamplingGeneric.Compiled.KSRegAt_fails": {
+   "owner": "@proofs"
+  },
   "Claims.SamplingGeneric.Compiled.KSReg_fails": {
    "owner": "@proofs",
    "signature": [
@@ -12341,6 +12358,12 @@
    },
    "type_hash": "265125fe0373eb291365875e0e60970f68ee5ece8acbb1e4a275bfa60e18fe84",
    "unfolded_hash": "fe205dc2f44b0a7d088bf33478098cd7bd13b7f888661ee7e4b31369f963c2f7"
+  },
+  "Claims.SamplingGeneric.compilerKSRegAt": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.compilerKSRegAt_nontrivial": {
+   "owner": "@proofs"
   },
   "Claims.SamplingGeneric.compilerKSReg_nontrivial": {
    "owner": "@proofs",
