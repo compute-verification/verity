@@ -165,7 +165,8 @@ def test_a_block_with_an_unpriced_primitive_leaves_the_gates_undecided():
 @pytest.mark.slow
 def test_on_the_tiny_window_a_blocks_fresh_bits_are_bs_k():
     """TINY's window at its class (2 slots): two blocks a window, each of the session's gates, and fresh bits B's k with the
-    weights held (its slot's lane of the scan state)."""
+    weights held (its slot's lane of the scan state and its positions' embedding openings, whose reader the day's
+    declaration pins nowhere)."""
     from tests.program.predict.test_window_circuit import WINDOW, _circuit
     from verity_vllm.program.predict import inference_blocks as IB
     from verity_vllm.program.predict.window_builder import WEIGHTS

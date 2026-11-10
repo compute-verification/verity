@@ -20,7 +20,9 @@ published with the judgment.
 
 **Fresh bits** are B's k (`inference_blocks.budgets`): |in(I) \\ θ|, the circuit's free and ingress input bits at the
 verifier's pins (`interface.input_count`: θ the weights pinned before the run at the roots the window's registration
-records) over its m slots, since no wire crosses slots. The wires are the record's declarations, which the session
+records) over its m slots, since no wire crosses slots. A table's openings are among them: an opening counts θ's only
+under a pin of its reader's Definition (`input_count`'s ``readers``), and a day's declaration names none. The wires are the
+record's declarations, which the session
 Definition doesn't carry, so this is the record's count and not `NciCheck.Count`'s ``fresh`` on the session Definition,
 which would count every wired read.
 

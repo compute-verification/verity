@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 from tests.program.predict import test_steps as S
-from tests.program.predict.test_window_circuit import CLASS, G2, WINDOW, _label, held, state_row
+from tests.program.predict.test_window_circuit import CLASS, G2, OPENED, WINDOW, _label, held, state_row
 from tests.program.predict.test_window_circuit_int8 import GRAIN, _registered
 from tests.program.predict.test_window_rows import KEY, PROGRAM, _weights
 from verity_vllm.program.predict import scan_state as SS
@@ -96,7 +96,7 @@ def test_the_class_circuit_holds_each_quantizers_leaf_and_each_token_to_its_row_
     assert got == want and len(set(got.values())) == len(got) == 2 * 5 * 7
     doc = json.loads(json.dumps(c.description()))
     assert IF.input_count(doc, **held(c)) == {
-        "units": 1568, "inputs": 10547104, "wired": 0, "registered": 9161856, "ingress": 0, "free": 1385248}
+        "units": 1568, "inputs": 10547104, "wired": 0, "registered": 9161856 - OPENED, "ingress": 0, "free": 1385248 + OPENED}
 
 
 def test_each_tables_readers_are_templates_of_their_own():

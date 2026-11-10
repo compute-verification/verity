@@ -12,7 +12,7 @@ import os
 import numpy as np
 import pytest
 from tests.program.predict import test_steps as S
-from tests.program.predict.test_window_circuit import WINDOW, _circuit, _labels, held
+from tests.program.predict.test_window_circuit import OPENED, WINDOW, _circuit, _labels, held, opened
 from tests.program.predict.test_window_circuit_fa3 import H200, LLAMA_1B
 from verity_vllm.program.model import INT8_EXACT_QUANT
 from verity_vllm.program.predict import inference_blocks as IB
@@ -27,6 +27,8 @@ from verity.ml.windows import interface as IF
 INT8_H200 = {**H200, "int8_exact": "linears"}
 #: the Program digest the header names, as the record gives it (`inference_blocks.program_digest`, about a minute at TINY)
 PROGRAM = "ab" * 64
+#: a TINY block's fresh-input bits: its slot's lane of the scan state and its share of the window's embedding openings
+K = 4548 * 16 + OPENED // 2
 
 
 def _registered(config: dict = S.TINY):
@@ -52,8 +54,9 @@ def _slots(circuit, rs) -> dict[str, np.ndarray]:
 
 def _unrolled(circuit, slots: dict[str, np.ndarray]) -> tuple[list[int], list[int]]:
     """Each block's gates and fresh-input bits, unit by unit: a template's gates for each of its units in the block, and
-    the rows its units read from registered parameters outside θ (the scan state), every wire within one block and every
-    other input row wired or θ's."""
+    the rows its units read from registered parameters outside θ (the scan state) and open of a table (the embedding's
+    row, salt and path, θ's only under a pin of their reader, which `budgets` has none of), every wire within one block
+    and every other input row wired or θ's."""
     m = circuit.blocks.slots
     for w in circuit.wires:
         i = np.arange(w.units, dtype=np.int64)
@@ -64,8 +67,11 @@ def _unrolled(circuit, slots: dict[str, np.ndarray]) -> tuple[list[int], list[in
         if r.param.split("/", 1)[0] != WEIGHTS and r.port in dict(lays[r.reader][0].rows):
             bits = 16 * dict(lays[r.reader][0].rows)[r.port] // int(circuit.cuts.get(r.reader, {}).get(r.port, 1))
             fresh += np.bincount(slots[r.reader][r.at + np.arange(r.units) // r.cut[1]], minlength=m) * bits
+    for o in circuit.registered.openings:
+        bits = 16 * sum(dict(lays[o.reader][0].rows)[p] for p in o.ports)
+        fresh += np.bincount(slots[o.reader][o.at:o.at + o.units], minlength=m) * bits
     assert not circuit.ingress and all(t.param.split("/", 1)[0] == WEIGHTS for t in circuit.registered.tables)
-    assert IF.input_count(json.loads(json.dumps(circuit.description())), **held(circuit))["free"] == 0
+    assert IF.input_count(json.loads(json.dumps(circuit.description())), **held(circuit))["free"] == opened(circuit)
     return [int(g) for g in gates], [int(f) for f in fresh]
 
 
@@ -87,11 +93,12 @@ def test_the_table_is_the_windows_entries_one_block_a_slot(window):
 
 def test_every_block_has_c_gates_and_k_fresh_input_bits(window):
     """Every block has exactly c gates and takes k fresh-input bits, the circuit unrolled unit by unit agreeing: no wire
-    crosses blocks, and a block's fresh input is its slot's lane of the scan state (4,548 words), the weights θ."""
+    crosses blocks, and a block's fresh input is its slot's lane of the scan state (4,548 words) and its positions'
+    embedding openings (`test_window_circuit.opened`), the weights θ."""
     circuit, program = window
     c, k = IB.budgets(circuit)
     gates, fresh = _unrolled(circuit, _slots(circuit, IB.rows(circuit, program)))
-    assert gates == [c, c] and fresh == [k, k] and k == 4548 * 16
+    assert gates == [c, c] and fresh == [k, k] and k == K
     assert {r.param for r in circuit.registered.reads if r.param.split("/", 1)[0] != WEIGHTS} == {SCAN_STATE}
 
 
@@ -102,7 +109,7 @@ def test_the_statement_is_the_budgets_and_padded_counts_under_a_hiding_root(wind
     circuit, program = window
     st, reg = IB.commit(circuit, program)
     rs = IB.rows(circuit, program)
-    assert st == {"format": IB.FORMAT, "query": IB.QUERY, "c": IB.budgets(circuit)[0], "k": 4548 * 16, "blocks": 2,
+    assert st == {"format": IB.FORMAT, "query": IB.QUERY, "c": IB.budgets(circuit)[0], "k": K, "blocks": 2,
                   "rows": PV2.grid(len(rs)), "root": reg.root.hex()}
     assert list(reg.rows[:len(rs)]) == rs and set(reg.rows[len(rs):]) <= {bytes(IB.ROW_BYTES)}
     root = bytes.fromhex(st["root"])

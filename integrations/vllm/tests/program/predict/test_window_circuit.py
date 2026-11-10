@@ -1,7 +1,7 @@
 """verity_vllm.program.predict.window_circuit (at its fixed slots): a served window is its class's one Circuit of the
 catalog's units, a class Program a slot whatever the traffic, every input row wired from its writer's row or a registered read
-of the weights or the network certifier's scan state rows, and nothing free; a slot's outputs leave as its entry of the scan's
-Programs' row. Pinned on a TINY class of 2 slots, 4 prompt ids and 2 outputs (5 positions a Program), at a grain small
+of the weights or the network certifier's scan state rows, and nothing free but the embedding's openings, which count
+registered only under a pin of their reader (`opened`); a slot's outputs leave as its entry of the scan's Programs' row. Pinned on a TINY class of 2 slots, 4 prompt ids and 2 outputs (5 positions a Program), at a grain small
 enough to slice TINY's GEMMs and cut its ports; the class's circuit, its blocks included, is the same for windows that differ
 in everything, their request count included. At the class of record's slots (8, 4 at each of buckets 0 and 16) with TINY's
 caps, a 3-request and an 8-request window are one circuit. Every reader reads its writers' rows as they are, a port cut
@@ -61,6 +61,10 @@ FEED = "TokenFeed_v1{NP=4,FIRST=false}"
 #: position's, every later one's) and the last's with the slot's entry
 SCAN, ENTRY = "ScanSlots_v2{NS=4548,NP=4,IDB=17,K0=12,K=45}", "SelectEntry_v1{V=256,C=16,KO=2,FIRST=false,IDB=17,NP=4}"
 COLLECT0, COLLECT = "SelectCollect_v1{V=256,C=16,KO=2,FIRST=true}", "SelectCollect_v1{V=256,C=16,KO=2,FIRST=false}"
+#: the TINY window's embedding openings' bits (`opened`: two slots' 5 positions' row of 64 words, salt of 96 and path of 8
+#: digests), and the bits its weights' registered reads and table reads fill beside them
+OPENED = 2 * 5 * 16 * (64 + 96 + 8 * 32)
+HELD = 14586880 - OPENED
 
 
 def held(circuit) -> dict[str, dict[str, str]]:
@@ -69,9 +73,18 @@ def held(circuit) -> dict[str, dict[str, str]]:
     the root the window's registration records for it. Each pin here is the window's own root, the scan state's included,
     which is why a count under it reports zero free inputs: the verifier pins the scan state at the network certifier's
     scan rows' root (`SCAN_PIN`), and each slot's occupancy, prompt length and token ids are free unless the window reads
-    that state."""
+    that state. It pins no opening's reader, so under it a circuit's openings' rows are free (`opened`), and nothing else."""
     roots = {p: "ab" * 64 for p in circuit.registered.params}
     return {"pins": roots, "roots": roots}
+
+
+def opened(circuit) -> int:
+    """The bits of ``circuit``'s openings' ports: each position's embedding row, its salt and its path. They count
+    registered only under the verifier's pin of their reader's Definition (`interface.input_count`'s ``readers``), a digest
+    of the embedding read's whole body; a count given none finds them free, the table's root and domain reads registered
+    all the same."""
+    rows = {tid: dict(lay.rows) for tid, (lay, _n) in circuit.layouts.items()}
+    return sum(o.units * 16 * rows[o.reader][p] for o in circuit.registered.openings for p in o.ports)
 
 
 def _label(fn) -> str:
@@ -519,24 +532,26 @@ def test_inference_entries_are_the_slots_runs_side_by_side():
 
 def test_every_input_row_is_wired_or_registered_counted_from_the_description(window):
     """`interface.input_count` over the circuit's description (JSON, no Program lowered), each registered parameter pinned
-    by the verifier itself before the run at the root the window's registration records for it (`held`): each weight's (one
+    by the verifier itself before the run at     the root the window's registration records for it (`held`): each weight's (one
     a weight and row width, ``weights/<label>@<words>``) and the scan state's, which the network certifier's scan proofs
-    hold. It finds no free input row and no ingress, so a proof of the window's units leaves nothing but the advice
-    to the prover. The registered reads, table reads and openings are of the weights (the GEMM slices', norms' and RoPE
-    tables' rows; the embedding table's root, domain and rows) but for the two slots' scan state rows (4,548 words each):
-    with the weights' pins alone those are free, with no pin all of them are, a weight whose window root is another's is
-    free by its own reads, and a pin of ``weights`` holds none of them."""
-    circuit, _ = window
+    hold. It finds no ingress and no free input row but the embedding read's openings (each slot's 5 positions' row of 64
+    words, salt of 96 and path of 8 digests), whose reader these pins don't pin (`opened`), so a proof of the window's
+    units leaves the prover those rows and the advice. The registered reads, table reads and openings are of the weights
+    (the GEMM slices', norms' and RoPE tables' rows; the embedding table's root, domain and rows) but for the two slots'
+    scan state rows (4,548 words each): with the weights' pins alone those are free, with no pin all of them are, a weight
+    whose window root is another's is free by its own reads, and a pin of ``weights`` holds none of them."""
+    circuit, ids = window
     doc, reg = json.loads(json.dumps(circuit.description())), circuit.registered
     assert {r.param for r in reg.reads} | {t.param for t in reg.tables} == set(reg.params)
     assert {p.split("/", 1)[0] for p in reg.params if p != SS.SCAN_STATE} == {WC.WEIGHTS} and SS.SCAN_STATE in reg.params
     scan = 2 * 4548 * 16
-    count = {"units": 1388, "inputs": 16340384, "wired": 1607968, "registered": 14586880 + scan, "ingress": 0, "free": 0}
+    assert OPENED == opened(circuit) and {o.reader for o in reg.openings} == {ids[EMB]}
+    count = {"units": 1388, "inputs": 16340384, "wired": 1607968, "registered": HELD + scan, "ingress": 0, "free": OPENED}
     pins, roots = held(circuit).values()
     assert IF.input_count(doc, pins=pins, roots=roots) == count
     weights = {p: r for p, r in pins.items() if p != SS.SCAN_STATE}
-    assert IF.input_count(doc, pins=weights, roots=roots) == {**count, "registered": 14586880, "free": scan}
-    free = {**count, "registered": 0, "free": 14586880 + scan}
+    assert IF.input_count(doc, pins=weights, roots=roots) == {**count, "registered": HELD, "free": OPENED + scan}
+    free = {**count, "registered": 0, "free": HELD + OPENED + scan}
     assert IF.input_count(doc) == IF.input_count(doc, pins=pins) == free
     assert IF.input_count(doc, pins={WC.WEIGHTS: "ab" * 64}, roots={**roots, WC.WEIGHTS: "ab" * 64}) == free
     one = WB.weight_param("model.norm.weight", 64)
@@ -569,9 +584,10 @@ def _pins(tmp_path, key: bytes = KEY) -> dict[str, str]:
 def test_the_committers_registered_roots_hold_every_weight_read_but_the_rotary_tables(window, tmp_path):
     """The committer's registration of its weights (`weights_registration` at the window's grain under its key, of the pinned
     checkpoint), held by the verifier to its own weights record's shapes (`registration_pins`) and recorded by the window's
-    registration (`advice.registered_weights`), holds every weight read, the embedding's table's and openings included, but
-    the rotary table's, which a registration not given the engine's served table leaves unrooted: with the scan state
-    pinned at its own root, the window's free bits are the rotary table's reads alone. The verifier's record states the
+    registration (`advice.registered_weights`), holds every weight read, the embedding's table's included, but the rotary
+    table's, which a registration not given the engine's served table leaves unrooted: with the scan state pinned at its
+    own root, the window's free bits are the rotary table's reads and the embedding's openings (`opened`), which a root
+    alone doesn't hold. The verifier's record states the
     rotary table's shape all the same. Each root is core's `Registered.commit` of the weight's rows (a table's ``row-seg`` rows) salted
     `audit.hm96_salt` of the committer's key, a hiding commitment: the verifier's record names no root, another key commits
     another root for every weight, and a window that serves the checkpoint's words commits the registered roots
@@ -591,8 +607,8 @@ def test_the_committers_registered_roots_hold_every_weight_read_but_the_rotary_t
     rope, both = _alone(doc, ROPE), {**pins, **SCAN_PIN}
     assert rope == 2 * 5 * 2 * 6 * 16 * 16          # each slot's position's layer's q and k heads, a row of 16 words
     assert IF.input_count(doc, pins=both, roots=both) == {"units": 1388, "inputs": 16340384, "wired": 1607968,
-                                                         "registered": 14586880 + 2 * 4548 * 16 - rope, "ingress": 0,
-                                                         "free": rope}
+                                                         "registered": HELD + 2 * 4548 * 16 - rope, "ingress": 0,
+                                                         "free": OPENED + rope}
     ck, nonces = WR.CheckpointIndex(d, checkpoints_manifest=man, model="org/m", revision="r"), WW.weight_nonces(weights)
     emb = "model.embed_tokens.weight"
     for name, p, schema in (("model.norm.weight", WB.weight_param("model.norm.weight", 64), G.SCHEMA_V2),
@@ -617,7 +633,8 @@ def test_a_changed_weight_byte_is_never_registered_and_leaves_exactly_that_weigh
     served words aren't the pinned shards'), and only that one; a window that serves it under the registered key commits
     another root for each parameter of the weight it is served as (k_proj's byte is the fused qkv's, the tied embedding's
     is its table's, the LM head's and ``x0``'s) and the registered root for every other, so those reads alone open no
-    registered read: they go free (the scan state pinned at its own root)."""
+    registered read: they go free (the scan state pinned at its own root), beside the rotary table's and the embedding's
+    openings (`opened`)."""
     circuit, _ = window
     doc = json.loads(json.dumps(circuit.description()))
     reg, (d, man) = S._registered(), _checkpoint(tmp_path)
@@ -631,14 +648,16 @@ def test_a_changed_weight_byte_is_never_registered_and_leaves_exactly_that_weigh
     changed = [f"{WC.WEIGHTS}/{p}" for p in served_as]
     assert set(roots) == set(pins) and sorted(p for p in pins if pins[p] != roots[p]) == changed
     free = _alone(doc, ROPE) + sum(_alone(doc, p) for p in changed)
-    assert IF.input_count(doc, pins={**pins, **SCAN_PIN}, roots={**roots, **SCAN_PIN})["free"] == free > _alone(doc, ROPE)
+    got = IF.input_count(doc, pins={**pins, **SCAN_PIN}, roots={**roots, **SCAN_PIN})["free"]
+    assert got == OPENED + free and free > _alone(doc, ROPE)
 
 
 def test_the_engines_rotary_table_registers_within_its_bound_and_a_wrong_one_is_refused(window, tmp_path):
     """Given the words the engine serves of the rotary table (``tables``), the committer registers it as it registers a
     weight, once they are within the analytic table's bound of config.json (`check.weights_of_record`'s check of a served
     table, `model.check_cos_sin`), and the verifier holds its entry to the shape its own record declares: with the scan
-    state pinned at its own root no input bit is free, and a window serving those words commits the registered root. A
+    state pinned at its own root no input bit is free but the embedding's openings (`opened`), and a window serving those
+    words commits the registered root. A
     table of another rope theta, of another length or of 32-bit words is refused by name, nothing registered; the
     verifier refuses a registration whose rotary entry commits a table of another length, or that drops it without naming
     it unrooted; and a window serving another table than the registered one commits another root, so the rotary table's
@@ -656,7 +675,7 @@ def test_the_engines_rotary_table_registers_within_its_bound_and_a_wrong_one_is_
     assert {p: e for p, e in registration["values"].items() if p != ROPE} == unrooted["values"]
     both = {**pins, **SCAN_PIN}
     assert IF.input_count(doc, pins=both, roots=both) == {"units": 1388, "inputs": 16340384, "wired": 1607968,
-                                                         "registered": 14586880 + 2 * 4548 * 16, "ingress": 0, "free": 0}
+                                                         "registered": HELD + 2 * 4548 * 16, "ingress": 0, "free": OPENED}
     served = {**WW.record_words(reg, d, man), field["field"]: table}
     assert {p: v.root.hex() for p, v in WW.weight_values(reg, served, KEY, GRAIN).items()} == pins
 
@@ -674,7 +693,7 @@ def test_the_engines_rotary_table_registers_within_its_bound_and_a_wrong_one_is_
             WW.registration_pins(bad, record)
     roots = {p: v.root.hex() for p, v in WW.weight_values(reg, {**served, field["field"]: other}, KEY, GRAIN).items()}
     assert sorted(p for p in pins if roots[p] != pins[p]) == [ROPE]
-    assert IF.input_count(doc, pins=both, roots={**roots, **SCAN_PIN})["free"] == _alone(doc, ROPE) > 0
+    assert IF.input_count(doc, pins=both, roots={**roots, **SCAN_PIN})["free"] - OPENED == _alone(doc, ROPE) > 0
 
 
 def test_a_served_windows_weight_reads_register_at_their_widths_beside_the_grains(tmp_path):
@@ -949,7 +968,7 @@ def test_a_token_select_is_its_function_at_the_grains_units_of_groups():
     assert circuit.cuts[groups] == {"x": 8} and all(circuit.cuts[c] == {"best": 2, "idx": 2} for c in combines)
     assert {_source(circuit, groups, "x", u, r)[0] for u in range(20) for r in range(8)} == {ids["Gemm_v2{K=64,N=16}"]}
     assert [w for _, w in IF.layout(circuit.template(groups)).outs] == [8, 16]
-    assert IF.input_count(circuit.description(), **held(circuit))["free"] == 0
+    assert IF.input_count(circuit.description(), **held(circuit))["free"] == opened(circuit) == OPENED
     for select in (96, 8):
         with pytest.raises(Unexpressible, match=rf"256 logits aren't units of {select}, each groups of 16"):
             _circuit(WINDOW, Grain(gemm_words=1024, rows=256, select=select))
@@ -976,7 +995,7 @@ def test_a_fused_norm_read_at_another_row_count_is_cut_at_its_residual_add_in_or
     AT reading x's elements [16·AT, 16·(AT+1)) as 8 of down_proj's rows and res whole, and `RMSNormFusedCudaTail_v1{N=64}`,
     its r row j part AT = j's sum and its w a weight read. The GEMMs read the tail's normed row and the next residual add its
     r, as they read v2's. A first key block whose keys' values are two value-GEMM rows each is `AttnBlockFirst_v2{VS=8}`, its
-    v cut a row a slice. No input row is free."""
+    v cut a row a slice. No input row is free but the embedding's openings (`opened`)."""
     n = {_label(fn): k for fn, k in split.templates}
     ids = {_label(fn): IF.descriptor_id(fn) for fn, _ in split.templates}
     tail, down = ids[TAIL], ids["Gemm_v2{K=256,N=2}"]
@@ -991,7 +1010,7 @@ def test_a_fused_norm_read_at_another_row_count_is_cut_at_its_residual_add_in_or
     assert readers == {("o0", "Gemm_v2{K=64,N=8}", "x"), ("o0", "Gemm_v2{K=64,N=1}", "x"), ("o1", NORM, "res")}
     first = {lab: split.cuts[ids[lab]]["v"] for lab in n if lab.startswith("AttnBlockFirst")}
     assert first == {f"AttnBlockFirst_v2{{D=16,NVIS={t},BN=128,VS=8}}": 2 * t for t in range(1, 6)}
-    assert IF.input_count(split.description(), **held(split))["free"] == 0
+    assert IF.input_count(split.description(), **held(split))["free"] == opened(split) > 0
 
 
 def test_a_tail_wired_out_of_order_of_at_is_refused_by_the_wiring_check(split):
