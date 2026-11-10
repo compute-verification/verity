@@ -117,6 +117,8 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Verity.Sampled.Instance", "Proofs.Properties.Verity.Sampled.SessionAt",
   "Proofs.Properties.Verity.Sampled.OpensAt", "Proofs.Properties.Verity.Sampled.Members",
   "Proofs.Properties.Verity.Sampled.Members.Draw", "Proofs.Properties.Verity.Sampled.Members.Widen",
+  "Proofs.Properties.Verity.Sampled.Members.Landing", "Proofs.Properties.Verity.Sampled.Members.Session",
+  "Proofs.Properties.Verity.Sampled.Members.Project",
   "Proofs.Properties.Verity.Subprotocols", "Proofs.Properties.Verity.Coupling", "Proofs.Properties.Pous.WipeSigned",
   "Proofs.Properties.Challenger", "Proofs.Properties.Challenger.CanonLine", "Proofs.Properties.Challenger.Drawn",
   "Proofs.Properties.Firewall", "Proofs.Properties.Flock.Nets"]
