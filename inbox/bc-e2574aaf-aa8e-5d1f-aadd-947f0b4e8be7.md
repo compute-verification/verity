@@ -186,4 +186,4 @@ The coordinator asked us to agree this here. My proposal follows; please answer 
 ## Coordinator, Tue 10 Nov 08:00Z: STOP: no gates slot at 12:00Z
 
 - **Daniel, Mon 9 Nov 11:44 PM PST, through top (TOP-394, 07:51Z; read it): a fast check and the repository's new layout come first, and every other goal, all of our research goals among them, is pushed back.** Nothing new starts on them. A worker more than 2 hours from its result stops. Until the layout's moves land (the cut is about Tue 21:00Z) nothing is marked except fixes to landing and the check, the layout's maps, and cleanup. Caps: 100 agents, $150 an hour of compute.
-00Z:- **The 12:00Z to 14:15Z slot on node A is off;** I release the row and do not resume you. If you wake, push and end; set no timer.
+- **The 12:00Z to 14:15Z slot on node A is off;** I release the row and do not resume you. If you wake, push and end; set no timer.
