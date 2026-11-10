@@ -118,7 +118,6 @@ research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool
   bash benchmarks/verifier_cost/registration.sh 1024 4096 12288 49152
 ~~~
 
-<<<<<<< 99c8914848
 `population.sh N...` times the one-stage run's population-order check (`Slots.popOk`) against a template population's
 units: `population.py` writes, per N, a population of about N units over a layered call hierarchy (by default 234 root
 batches of 234 templates over six levels of at most 1,800 composites, about 8,100 Definitions; `POPULATION_ARGS`
@@ -133,8 +132,8 @@ layout's input class reads. `$OUT` gets population.jsonl, one row per N and func
 ~~~sh
 research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --cwd clone --mem-gb 90 -- \
   bash benchmarks/verifier_cost/population.sh 20 50 100000 1000000 6963296
-||||||| merged common ancestors
-=======
+~~~
+
 `whole_run.sh run|desc SHAPE N...` times `Run.run`, the stream's whole run of one registration, against the population.
 `whole_run.py` writes, per N, an accepted `run` input (`run`: a stratified v1 audit on challenger coins with N/8 more
 ports) or the program and query alone (`desc`), over a template population of about N units: `toy`, the difftest's
@@ -149,7 +148,6 @@ layout holds a proof block per input gate. `PERF_N` adds a `perf` profile at tha
 ~~~sh
 research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool proofs --cwd clone -- \
   bash benchmarks/verifier_cost/whole_run.sh run toy 146 1000 10000 50000
->>>>>>> 7af4d24fca3e
 ~~~
 
 `flock_tmpl.sh K...` is the same unit in `flock-ir-tmpl/v2` (`Flock/Tmpl.lean`): `flock_read.py --circuit-only`
