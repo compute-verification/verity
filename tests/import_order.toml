@@ -160,8 +160,6 @@ files = [
 loader = "benchmarks"
 loaded = "archive"
 files = [
-    "benchmarks/one_stage/prove_bundle.py",
-    "benchmarks/one_stage/served_verdicts.py",
     "benchmarks/pous/p2_v1/harness.py",
 ]
 
