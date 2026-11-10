@@ -14,7 +14,8 @@ tree; a package's tests live in its own `tests/`. Its tests read the whole tree,
 | indexes and conventions | `test_benchmarks_index.py`, `test_examples.py`, `test_cli_conventions.py`, `test_seed_ports.py` |
 
 A test's docstring states its rule. Where a rule has exceptions, they are named in the test, one reason each (an `ALLOWED`
-table in the boundary, wall-clock, retired-term, seed and verifier-cost tests).
+table in the wall-clock, retired-term, seed and verifier-cost tests); the import order's are the listing
+`import_order.toml`, which `test_boundaries.py` reads.
 
 ## Lint ratchets
 

@@ -1,7 +1,7 @@
 # infra
 
 Our machines: the shared CPU and GPU nodes, the control pod that watches them, and the tools that launch the coordinators.
-Nothing outside `infra/` imports it, apart from the files `INFRA_IMPORTERS` in `tests/test_boundaries.py` names. Each
+Nothing outside `infra/` imports it, apart from the ties `tests/import_order.toml` lists into its row, the last. Each
 subdirectory has its own README with the detail; this page maps each machine and loop to its code.
 
 ## The shared nodes
