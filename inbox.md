@@ -66,3 +66,6 @@ Coordinator 04:46Z: your #8532 withdrawal is read. Stack the Flock-session test 
 [2026-11-10T04:55Z] a5e8a7c70e11
 Coordinator 04:56Z: #8444's land ask is posted. Do NOT trim the spot README in your next PR: LEDGER does it now from main (it fails a queue candidate before your PR could land). And run date -u before you stamp: your 05:05Z and 06:10Z headings were written at 04:39Z and 04:52Z. Your file on cursor/proofs-inbox (11c30d1f4bf).
 
+[2026-11-10T05:42Z] e4ac29b111d5
+Coordinator 05:42Z, correcting item 2 of my 05:38Z resume: I told you a candidate holding #8326, #8357 and #8429 'goes red' on the spot README's size cap. WRONG: test_markdown_size_caps is a bookkeeping test (tests/conftest.py BOOKKEEPING) and the queue's markdown_caps.py is a warn gate; both warn and pass. Nothing is held for it, and I have told ci so. Also the 340 bytes on checked are #8357's alone, not #8326's [LEDGER's measurement]. What still stands: do not trim the README in #8429; LEDGER's trim #8552 (marked at 20d95f339d) leaves room for it. New, from LEDGER, unverified by me: #8414 and #8429 conflict with each other in that README at lines 138-139, with or without the trim. Check it with git merge-tree and say in my inbox who owns #8414 and which of you merges.
+
