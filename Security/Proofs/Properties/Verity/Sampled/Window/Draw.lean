@@ -225,6 +225,13 @@ noncomputable def sessionErrK (γL : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞)
     (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)) : ℝ≥0∞ :=
   γL p.toStop + Pos.resample (roundsErrK D J γ e N) p.toStop.consume
 
+/-- **A member's error, then what follows it**: its session's (`sessionErrK`) where the sample holds one of its proof
+blocks (`true`); else what follows, from the same position. -/
+noncomputable def memberErrK (γL : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞)
+    (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)) : Bool → ℝ≥0∞
+  | true => sessionErrK D J γ γL e N p
+  | false => e p
+
 variable (M : CoinMap g σ Ω R mPts) (B : RoundHold)
 
 /-- The rounds' share off `B`, then what follows the session, is at most 1 wherever what follows is. -/
@@ -260,6 +267,26 @@ theorem sessionErrK_toStop (γL e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) 
     sessionErrK D J γ γL e N p.toStop = sessionErrK D J γ γL e N p := by
   unfold sessionErrK
   rw [Pos.toStop_toStop]
+
+/-- A member's share off `BL` and `B`, then what follows it, is at most 1 wherever what follows is. -/
+theorem memberOffK_le_one (BL : LinkHold mPts) {e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (he : ∀ q, e q ≤ 1) (N : ℕ)
+    (p : Pos g σ Claims.Msg (Fin R)) : ∀ b : Bool, memberOffK D M J B BL e N p b ≤ 1
+  | true => sessionOffK_le_one D J M B BL he N p
+  | false => he p
+
+/-- A member's share off `BL` and `B` reads the position only at its next stop, wherever what follows does. -/
+theorem memberOffK_toStop (BL : LinkHold mPts) (e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞)
+    (he : ∀ q, e q.toStop = e q) (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)) :
+    ∀ b : Bool, memberOffK D M J B BL e N p.toStop b = memberOffK D M J B BL e N p b
+  | true => sessionOffK_toStop D J M B BL e N p
+  | false => he p
+
+/-- A member's error reads the position only at its next stop, wherever what follows does. -/
+theorem memberErrK_toStop (γL e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (he : ∀ q, e q.toStop = e q) (N : ℕ)
+    (p : Pos g σ Claims.Msg (Fin R)) :
+    ∀ b : Bool, memberErrK D J γ γL e N p.toStop b = memberErrK D J γ γL e N p b
+  | true => sessionErrK_toStop D J γ γL e N p
+  | false => he p
 
 variable {D J γ M B} in
 /-- **The rounds' share off `B`, then what follows the session, is within the rounds' error of uniform from where it
@@ -406,6 +433,24 @@ theorem avg_sessionOffK_le {γL : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (h
         rw [Pos.avg_toStop Ψ p, Pos.avg_toStop E p]
     _ = _ := rfl
 
+open Classical in
+variable {D J γ M B} in
+/-- **A member's share off `BL` and `B`, then what follows it, is within the member's error of uniform from where it
+starts**: its session's (`avg_sessionOffK_le`) where the sample holds one of its proof blocks; else what follows has
+the event's share within its own error, from the same position. -/
+theorem avg_memberOffK_le {γL : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (hL : M.LinkClose γL) (hR : M.RoundClose γ)
+    (BL : LinkHold mPts) (Q : CoinTape g σ → Prop) {eO eE : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (hO : ∀ q, eO q ≤ 1)
+    (hK : ∀ q : Pos g σ Claims.Msg (Fin R), avg (fun z : CoinTape q.g' q.s' => tapeInd Q (q.withTape z)) ≤
+      avg (fun z : CoinTape q.g' q.s' => eO (q.withTape z)) + avg fun z : CoinTape q.g' q.s' => eE (q.withTape z))
+    (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)) :
+    ∀ b : Bool, avg (fun z : CoinTape p.g' p.s' => tapeInd Q (p.withTape z)) ≤
+      avg (fun z : CoinTape p.g' p.s' => memberOffK D M J B BL eO N (p.withTape z) b) +
+      avg fun z : CoinTape p.g' p.s' =>
+        memberErrK D J (fun q j s => γ q j s + prCoin (B q.g' j s)) (fun q => γL q + prCoin (BL q.g')) eE N
+          (p.withTape z) b
+  | true => avg_sessionOffK_le hL hR BL Q hO hK N p
+  | false => hK p
+
 end SessionErr
 
 section SeqErr
@@ -415,20 +460,22 @@ variable {g : Game Exchange} {σ : Strategy g} {Reg : Type} {R nJ : ℕ} (D : �
   (γL : ℕ → (mPts : ℕ) → Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (S : Finset (Fin nJ)) (Rg : Reg)
 
 /-- **The sessions' error, in the members' order** from the position `p`: each member's session's, at its own `γ`
-and `γL`, then the rest's from the position its walk ends at. -/
+and `γL`, then the rest's from the position its walk ends at. A member with no proof block in the sample has no
+session and adds nothing (`memberErrK`). -/
 noncomputable def seqErr : (i : ℕ) → (l : List (Flock.Guarantees.MemberV5 Reg nJ)) → Pos g σ Claims.Msg (Fin R) →
     ℝ≥0∞
   | _, [], _ => 0
   | i, m :: l, p =>
-    sessionErrK (D i) (memberTabs S Rg m) (γ i) (γL i (memberPts m)) (fun q => seqErr (i + 1) l q) m.N p
+    memberErrK (D i) (memberTabs S Rg m) (γ i) (γL i (memberPts m)) (fun q => seqErr (i + 1) l q) m.N p
+      (memberDrawn S m)
 
 /-- The sessions' error reads the position only at its next stop. -/
 theorem seqErr_toStop : ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (i : ℕ) (p : Pos g σ Claims.Msg (Fin R)),
     seqErr D γ γL S Rg i l p.toStop = seqErr D γ γL S Rg i l p
   | [], _, _ => rfl
   | m :: l, i, p =>
-    sessionErrK_toStop (D i) (memberTabs S Rg m) (γ i) (γL i (memberPts m))
-      (fun q => seqErr D γ γL S Rg (i + 1) l q) m.N p
+    memberErrK_toStop (D i) (memberTabs S Rg m) (γ i) (γL i (memberPts m))
+      (fun q => seqErr D γ γL S Rg (i + 1) l q) (fun q => seqErr_toStop l (i + 1) q) m.N p (memberDrawn S m)
 
 variable {Ω : Type} (M : WindowCoinMap g σ Ω R) (BL : WindowLinkHold) (B : WindowRoundHold)
 
@@ -437,16 +484,16 @@ theorem seqOff_le_one (Q : CoinTape g σ → Prop) : ∀ (l : List (Flock.Guaran
     (p : Pos g σ Claims.Msg (Fin R)), seqOff D M BL B S Rg Q i l p ≤ 1
   | [], _, p => tapeInd_le_one Q p
   | m :: l, i, p =>
-    sessionOffK_le_one (D i) (memberTabs S Rg m) (M.member i (memberPts m)) (B i) (BL i (memberPts m))
-      (fun q => seqOff_le_one Q l (i + 1) q) m.N p
+    memberOffK_le_one (D i) (memberTabs S Rg m) (M.member i (memberPts m)) (B i) (BL i (memberPts m))
+      (fun q => seqOff_le_one Q l (i + 1) q) m.N p (memberDrawn S m)
 
 /-- The sessions' share off the held-off events reads the position only at its next stop. -/
 theorem seqOff_toStop (Q : CoinTape g σ → Prop) : ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (i : ℕ)
     (p : Pos g σ Claims.Msg (Fin R)), seqOff D M BL B S Rg Q i l p.toStop = seqOff D M BL B S Rg Q i l p
   | [], _, p => tapeInd_toStop Q p
   | m :: l, i, p =>
-    sessionOffK_toStop (D i) (memberTabs S Rg m) (M.member i (memberPts m)) (B i) (BL i (memberPts m))
-      (fun q => seqOff D M BL B S Rg Q (i + 1) l q) m.N p
+    memberOffK_toStop (D i) (memberTabs S Rg m) (M.member i (memberPts m)) (B i) (BL i (memberPts m))
+      (fun q => seqOff D M BL B S Rg Q (i + 1) l q) (fun q => seqOff_toStop Q l (i + 1) q) m.N p (memberDrawn S m)
 
 open Classical in
 variable {D γ γL M} in
@@ -464,9 +511,9 @@ theorem avg_seqOff_le (hR : ∀ i mPts, (M.member i mPts).RoundClose (γ i))
             (fun i mPts q => γL i mPts q + prCoin (BL i mPts q.g')) S Rg i l (p.withTape z)
   | [], _, _ => le_self_add
   | m :: l, i, p =>
-    avg_sessionOffK_le (D := D i) (J := memberTabs S Rg m) (B := B i) (hL i (memberPts m)) (hR i (memberPts m))
+    avg_memberOffK_le (D := D i) (J := memberTabs S Rg m) (B := B i) (hL i (memberPts m)) (hR i (memberPts m))
       (BL i (memberPts m)) Q (fun q => seqOff_le_one D S Rg M BL B Q l (i + 1) q)
-      (fun q => avg_seqOff_le hR hL Q l (i + 1) q) m.N p
+      (fun q => avg_seqOff_le hR hL Q l (i + 1) q) m.N p (memberDrawn S m)
 
 open Classical in
 variable {D γ γL M} in

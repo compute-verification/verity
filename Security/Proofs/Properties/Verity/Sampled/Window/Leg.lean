@@ -77,12 +77,13 @@ theorem windowSpotSound_of_logged (rd : WindowReadings) (K : WindowConstructions
 /-- **SPOT's leg over a window of several members, a member at a time**: `windowSpotSound_of_logged` with the
 decoders' premise at each member's session (`MemberDecodes`), at any invariant `I` of the position a member's session
 starts at. At each window of `S`, each commitment and each strategy: the coin map's premise over the window
-(`WindowCouples`), and for each member in the members' order, its session's trace from where the one before it ended
-writes a transcript flock-verify `--zk` accepts at the member's `own` when the member has a proof block in the sample,
-wherever a tape through the trace's end plays a play v2's sampled verdict accepts that misses nowhere and `P` and `Q`
-hold of. The bound is `spotSound_of_window`'s: the sample's own miss and the members' terms summed
-(`Window.sessionDelta`, `JointShareV5`'s), a two-continuation term per round of every member's session, the record's,
-the bound digests', the hiding term, the read finder's and the forger's. -/
+(`WindowCouples`), and for each member with a proof block in the sample, in the members' order, its session's trace
+from where the one before it ended writes a transcript flock-verify `--zk` accepts at the member's `own`, wherever a
+tape through the trace's end plays a play v2's sampled verdict accepts that misses nowhere and `P` and `Q` hold of; a
+member with none has no session, and the next member's starts from the same position. The bound is
+`spotSound_of_window`'s: the sample's own miss and the members' terms summed (`Window.sessionDelta`,
+`JointShareV5`'s), a two-continuation term per round of every member's session, the record's, the bound digests',
+the hiding term, the read finder's and the forger's. -/
 theorem windowSpotSound_of_members (rd : WindowReadings) (K : WindowConstructions V)
     (D : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
       WindowDecoders V θ F c W σ)
@@ -125,10 +126,12 @@ the one-stage form, meets SPOT's target at composite `k` wherever, at each windo
   finder's success (`hq`);
 * each round's reading picks only openings (`hR`);
 * the members' steps hold off the openings' empty classes at their counts (`hm`, `MemberSteps` at `linkEmptyAt` and
-  `roundEmptyAt`): each member's session's trace, in the members' order, from a position that keeps the play's start
-  and whose stop is where `StopsAt` says, writes a transcript flock-verify `--zk` accepts at the member's `own` when
-  the member has a proof block in the sample, wherever a tape through the trace's end plays a play v2's sampled
-  verdict accepts, that misses at no round and not at the record, and that `P` and `Q` hold of.
+  `roundEmptyAt`): the session's trace of each member with a proof block in the sample, in the members' order, from a
+  position that keeps the play's start and whose stop is where `StopsAt` says, writes a transcript flock-verify `--zk`
+  accepts at the member's `own`, wherever a tape through the trace's end plays a play v2's sampled verdict accepts,
+  that misses at no round and not at the record, and that `P` and `Q` hold of. A member with no proof block in the
+  sample has no statement and no session in the play: the walk consumes no stop for it, and the next member's session
+  starts from the same position.
 
 The stops' term takes no premise: over every member's stops the openings' gaps and empty classes at their counts are
 within the hiding term at every strategy (`windowErr_sampleMap_le_at`). The member's transcript carries the proof

@@ -106,6 +106,20 @@ theorem sessionErrK_le {g : Game Exchange} {σ : Strategy g} {R : ℕ} {Reg : Ty
     _ ≤ Pos.resample (fun r => pathCharge Γ r.g' r.s' r.x) p.toStop :=
         avg_mono fun _ => Pos.add_stopCharge_consume_le Γ hret _
 
+/-- **A member's error, then what follows it, within the charge**: its session's (`sessionErrK_le`) where the sample
+holds one of its proof blocks; else what follows, which is within the charge from the same position. -/
+theorem memberErrK_le {g : Game Exchange} {σ : Strategy g} {R : ℕ} {Reg : Type} (D : PosDecoders g σ R Reg)
+    (J : ℕ) (γ : Pos g σ Claims.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞) (Γ : Game Exchange → ℝ≥0∞)
+    (hret : ∀ a, Γ (.ret a) = 0) (Ks₀ : Fin R → DigestCut Claims.Msg g)
+    (hγ : ∀ q, Pos.Reached Ks₀ q → ∀ s, D.sub J q.modes = some s → γ q J s ≤ Γ q.g')
+    (γL : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (hγL : ∀ q, Pos.Reached Ks₀ q → γL q ≤ Γ q.g')
+    {e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞}
+    (he : ∀ q, Pos.Reached Ks₀ q → e q ≤ Pos.resample (fun r => pathCharge Γ r.g' r.s' r.x) q.toStop) (N : ℕ)
+    (p : Pos g σ Claims.Msg (Fin R)) (hp : Pos.Reached Ks₀ p) :
+    ∀ b : Bool, memberErrK D J γ γL e N p b ≤ Pos.resample (fun r => pathCharge Γ r.g' r.s' r.x) p.toStop
+  | true => sessionErrK_le D J γ Γ hret Ks₀ hγ γL hγL he N p hp
+  | false => he p hp
+
 /-- **The sessions' error, in the members' order, within the charge**: where each member's `γL` at each stop the
 projection reaches and its `γ` at each submission decoded there are within `Γ` at the stop's node, the members'
 errors from a position the projection reaches are within the charge from the position's next stop, averaged over the
@@ -120,9 +134,9 @@ theorem seqErr_le {g : Game Exchange} {σ : Strategy g} {Reg : Type} {R nJ : ℕ
       seqErr D γ γL S Rg i l p ≤ Pos.resample (fun r => pathCharge Γ r.g' r.s' r.x) p.toStop
   | [], _, _, _ => zero_le
   | m :: l, i, p, hp =>
-    sessionErrK_le (D i) (memberTabs S Rg m) (γ i) Γ hret Ks₀ (hγ i _) (γL i (memberPts m)) (hγL i _)
+    memberErrK_le (D i) (memberTabs S Rg m) (γ i) Γ hret Ks₀ (hγ i _) (γL i (memberPts m)) (hγL i _)
       (e := fun q => seqErr D γ γL S Rg (i + 1) l q)
-      (fun q hq => seqErr_le D γ γL S Rg Γ hret Ks₀ hγ hγL l (i + 1) q hq) m.N p hp
+      (fun q hq => seqErr_le D γ γL S Rg Γ hret Ks₀ hγ hγL l (i + 1) q hq) m.N p hp (memberDrawn S m)
 
 variable (e : 𝔽 ≃ (Fin 128 → Bool))
 

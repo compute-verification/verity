@@ -14,7 +14,9 @@ session it sends, at the session's first stop, the decoding of `Commit`'s roots,
 tape there, and at each later stop sends the round's decoded submission and writes the round's live coins in; at the
 session's end it sends the member's proof files, which its decoders give from the position the walk is at, and the
 next member's session starts from that position. A session that ends early (a stop that decodes no submission) leaves
-the walk at that stop, which the next session starts from.
+the walk at that stop, which the next session starts from. A member with no proof block in the sample has no
+statement, so the period's play holds no session of its own: the projection plays an idle session for it, which
+consumes no stop, and the next member's session starts from the same position.
 
 * **A member's decoders** (`PosDecoders`): `Decoders`, with the proof files a function of the position the member's
   session's walk ends at. The window's audit takes a member's files before the next member's coins, and the period's
@@ -25,11 +27,14 @@ the walk at that stop, which the next session starts from.
   session's walk ends at. Its joint law (`stepWK`, `roundsWK`, `sessionWK`), its share off the held-off events
   (`stopOffK`, `roundsOffK`, `sessionOffK`) and its support off them (`RoundsReachK`, `SessionReachK`) are `Project`'s
   with the same continuation.
+* **A member's session, or none** (`memberK`, `memberWK`, `memberOffK`, `MemberReachK`): the session's where the
+  sample holds one of the member's proof blocks; else an idle session (`idleOut`, `skipK`, `skipWK`), whose joint law
+  flips only its link points and whose share and support are what follows the member's, from the same position.
 * **The parameters** (`WindowCoinMap`): one widening and one start for the window, and each member's link points and
   round coins written at its own stops (`WindowCoinMap.member`). The decoders are a member's each, by its place in the
   window.
-* **The sessions in order** (`seqP`, `seqW`, `seqOff`, `SeqReach`): member `i`'s session at its decoders and coin map,
-  then the rest from where it ends.
+* **The sessions in order** (`seqP`, `seqW`, `seqOff`, `SeqReach`): member `i`'s session at its decoders and coin map
+  where the sample holds one of its proof blocks (`memberDrawn`), then the rest from where it ends.
 * **The window's projection** (`windowP`) and **the joint law** it simulates (`windowG`): the projected play's
   outcome beside the period's tape; the projected play's events have their probabilities under it (`prob_windowP`).
 * **The two premises** off the held-off events (`WindowCouples`, the coin map's; `WindowDecodes`, the decoders'), the
@@ -337,6 +342,117 @@ theorem sessionOffK_le_prob {ο : Type} (BL : LinkHold mPts) (E H : ο → Prop)
     · exact zero_le
     · exact roundsOffK_le_prob E H e nextW nextR hn _ pts N _ _ (w pts) fun o ho => h o ⟨pts, hL, ho⟩
 
+/-! ### A member's session, or none -/
+
+/-- **An idle session's outcome** at the link points `pts`: no root, no round and no proof file. It is the outcome
+the projection gives the session of a member with no proof block in the sample; such a member has no statement, so
+nothing reads it. -/
+def idleOut (pts : Fin 2 → Fin mPts → 𝔽) : LiveOutJ J mPts :=
+  ⟨#[], pts, fun _ _ => [], #[]⟩
+
+/-- **An idle session's rounds, then what follows the session**: no submission and no proof file, then `fin` at the
+session's transcript. It reads nothing of the period's play. -/
+noncomputable def idleK (fin : (a : τ) → Strategy (K a)) (rootB : Array ByteArray) (pts : Fin 2 → Fin mPts → 𝔽) :
+    (N : ℕ) → (rs : Fin J → Fin 2 → List Flock.Round) → Strategy (roundsThen dg J wr K rootB pts N rs)
+  | 0, rs => ⟨#[], fin (wr ⟨rootB, pts, rs, #[]⟩)⟩
+  | _ + 1, rs => ⟨none, ⟨#[], fin (wr ⟨rootB, pts, rs, #[]⟩)⟩⟩
+
+/-- **An idle session, then what follows it**: `Commit` with no root, no round and no proof file, then `fin` at the
+idle outcome on the session's link points. -/
+noncomputable def skipK (fin : (a : τ) → Strategy (K a)) (N : ℕ) :
+    Strategy (((liveSession dg J mPts N).map wr).bind K) :=
+  ⟨#[], fun pts => idleK dg J wr K fin #[] pts N (fun _ _ => [])⟩
+
+/-- **An idle session's joint law, then what follows it**: over the idle session's link points, `fin` at the idle
+outcome on them. -/
+noncomputable def skipWK {ο : Type} (fin : τ → Game ο) : Game ο :=
+  .coin (Fin 2 → Fin mPts → 𝔽) fun pts => fin (wr (idleOut J pts))
+
+/-- **An idle session's rounds, then what follows the session, have the events' probabilities of what follows.** -/
+theorem prob_idleK (E : γ → Prop) (fin : (a : τ) → Strategy (K a)) (rootB : Array ByteArray)
+    (pts : Fin 2 → Fin mPts → 𝔽) :
+    ∀ (N : ℕ) (rs : Fin J → Fin 2 → List Flock.Round),
+      prob E (roundsThen dg J wr K rootB pts N rs) (idleK dg J wr K fin rootB pts N rs) =
+        prob E (K (wr ⟨rootB, pts, rs, #[]⟩)) (fin (wr ⟨rootB, pts, rs, #[]⟩))
+  | 0, _ => rfl
+  | _ + 1, _ => rfl
+
+/-- **An idle session, then what follows it, has its events' probabilities under the idle session's joint law**,
+wherever what follows has. -/
+theorem prob_skipK (E : γ → Prop) (finP : (a : τ) → Strategy (K a)) (finW : τ → Game (γ × CoinTape g σ))
+    (h : ∀ a (w : Strategy (finW a)), prob E (K a) (finP a) = prob (fun o => E o.1) (finW a) w) (N : ℕ)
+    (w : Strategy (skipWK J wr finW)) :
+    prob E (((liveSession dg J mPts N).map wr).bind K) (skipK dg J wr K finP N) =
+      prob (fun o => E o.1) (skipWK J wr finW) w :=
+  Finset.sum_congr rfl fun pts _ => congrArg (HMul.hMul _)
+    ((prob_idleK dg J wr K E finP #[] pts N fun _ _ => []).trans (h (wr (idleOut J pts)) (w pts)))
+
+/-- **A member's projection, then what follows it**: its session's (`sessionK`) where the sample holds one of its
+proof blocks (`true`); else an idle session (`skipK`), which consumes no stop of the period's play, and what follows
+from the same position. A member with no proof block in the sample has no statement, so the period's play holds no
+session of its own. -/
+noncomputable def memberK (next : Pos g σ Claims.Msg (Fin R) → (a : τ) → Strategy (K a)) (N : ℕ)
+    (p : Pos g σ Claims.Msg (Fin R)) : Bool → Strategy (((liveSession dg J mPts N).map wr).bind K)
+  | true => sessionK D M dg J wr K next N p
+  | false => skipK dg J wr K (next p) N
+
+/-- **A member's joint law, then what follows it**: its session's (`sessionWK`) where the sample holds one of its
+proof blocks; else the idle session's (`skipWK`), and what follows from the same position. -/
+noncomputable def memberWK {ο : Type} (next : Pos g σ Claims.Msg (Fin R) → τ → Game ο) (N : ℕ)
+    (p : Pos g σ Claims.Msg (Fin R)) : Bool → Game ο
+  | true => sessionWK D M dg J wr next N p
+  | false => skipWK J wr (next p)
+
+/-- A member's joint law's strategy: what follows the member's, at its end. -/
+noncomputable def memberWKS {ο : Type} (next : Pos g σ Claims.Msg (Fin R) → τ → Game ο)
+    (wn : ∀ q a, Strategy (next q a)) (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)) :
+    (b : Bool) → Strategy (memberWK D M dg J wr next N p b)
+  | true => sessionWKS D M dg J wr next wn N p
+  | false => fun _ => wn p _
+
+/-- **A member's projection, then what follows it, has its events' probabilities under the member's joint law**,
+wherever what follows has. -/
+theorem prob_memberK (E : γ → Prop) (nextP : Pos g σ Claims.Msg (Fin R) → (a : τ) → Strategy (K a))
+    (nextW : Pos g σ Claims.Msg (Fin R) → τ → Game (γ × CoinTape g σ))
+    (h : ∀ q a (w : Strategy (nextW q a)), prob E (K a) (nextP q a) = prob (fun o => E o.1) (nextW q a) w)
+    (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)) :
+    ∀ (b : Bool) (w : Strategy (memberWK D M dg J wr nextW N p b)),
+      prob E (((liveSession dg J mPts N).map wr).bind K) (memberK D M dg J wr K nextP N p b) =
+        prob (fun o => E o.1) (memberWK D M dg J wr nextW N p b) w
+  | true, w => prob_sessionK D M dg J wr K E nextP nextW h N p w
+  | false, w => prob_skipK dg J wr K E (nextP p) (nextW p) (h p) N w
+
+/-- **A member's share off `BL` and `B`, then what follows it**: its session's (`sessionOffK`) where the sample holds
+one of its proof blocks; else what follows, from the same position. -/
+noncomputable def memberOffK (BL : LinkHold mPts) (e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (N : ℕ)
+    (p : Pos g σ Claims.Msg (Fin R)) : Bool → ℝ≥0∞
+  | true => sessionOffK D M J B BL e N p
+  | false => e p
+
+/-- **A member's joint law's support off `BL` and `B`, then what follows it**, from the position `p`: its session's
+(`SessionReachK`) where the sample holds one of its proof blocks; else any link points of the idle session, and
+`next`'s trace from `p` at the idle outcome on them. -/
+def MemberReachK {ο : Type} (BL : LinkHold mPts) (next : Pos g σ Claims.Msg (Fin R) → τ → ο → Prop) (N : ℕ)
+    (p : Pos g σ Claims.Msg (Fin R)) (o : ο) : Bool → Prop
+  | true => SessionReachK D M dg J B wr BL next N p o
+  | false => ∃ pts : Fin 2 → Fin mPts → 𝔽, next p (wr (idleOut J pts)) o
+
+variable {D M dg J B wr} in
+/-- **A member's share off `BL` and `B`, then what follows it, is at most the event's probability under the member's
+joint law** wherever, on the support off them (`MemberReachK`), `H` implies `E`. -/
+theorem memberOffK_le_prob {ο : Type} (BL : LinkHold mPts) (E H : ο → Prop)
+    (e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (nextW : Pos g σ Claims.Msg (Fin R) → τ → Game ο)
+    (nextR : Pos g σ Claims.Msg (Fin R) → τ → ο → Prop)
+    (hn : ∀ q a (w : Strategy (nextW q a)), (∀ o, nextR q a o → H o → E o) → e q ≤ prob E (nextW q a) w)
+    (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)) :
+    ∀ (b : Bool) (w : Strategy (memberWK D M dg J wr nextW N p b)),
+      (∀ o, MemberReachK D M dg J B wr BL nextR N p o b → H o → E o) →
+      memberOffK D M J B BL e N p b ≤ prob E (memberWK D M dg J wr nextW N p b) w
+  | true, w, h => sessionOffK_le_prob BL E H e nextW nextR hn N p w h
+  | false, w, h =>
+    (avg_const (C := Fin 2 → Fin mPts → 𝔽) (e p)).symm.le.trans
+      (avg_mono fun pts => hn p (wr (idleOut J pts)) (w pts) fun o ho => h o ⟨pts, ho⟩)
+
 end SessionK
 
 /-! ## The parameters over a window -/
@@ -395,16 +511,35 @@ abbrev memberPts (m : Flock.Guarantees.MemberV5 Reg nJ) : ℕ :=
 noncomputable abbrev memberTabs (m : Flock.Guarantees.MemberV5 Reg nJ) : ℕ :=
   (FlockSoundness.Discharge.ZkHidden.planZHJP m.dj m.y₀ (m.part S) Rg).length
 
+open Classical in
+/-- **Whether the sample `S` holds one of the member's proof blocks**: whether the member has a statement at `S`, and
+so a session in the period's play. -/
+noncomputable def memberDrawn (m : Flock.Guarantees.MemberV5 Reg nJ) : Bool :=
+  decide (m.part S).Nonempty
+
+open Classical in
+variable {S} in
+/-- A member is drawn exactly where its part of the sample is not empty. -/
+theorem memberDrawn_iff {m : Flock.Guarantees.MemberV5 Reg nJ} : memberDrawn S m = true ↔ (m.part S).Nonempty :=
+  decide_eq_true_iff
+
+variable {S} in
+/-- A member that is not drawn has an empty part of the sample. -/
+theorem not_nonempty_of_memberDrawn {m : Flock.Guarantees.MemberV5 Reg nJ} (h : memberDrawn S m = false) :
+    ¬ (m.part S).Nonempty :=
+  fun hne => Bool.false_ne_true (h.symm.trans (memberDrawn_iff.2 hne))
+
 /-- **The sessions' projection, in the members' order** from the position `p`: the member at place `i`'s session at
-its decoders and coin map on its part of the sample, then the rest from the position its walk ends at. -/
+its decoders and coin map on its part of the sample, then the rest from the position its walk ends at. A member with
+no proof block in the sample plays an idle session, and the rest starts from the same position (`memberK`). -/
 noncomputable def seqP : (i : ℕ) → (l : List (Flock.Guarantees.MemberV5 Reg nJ)) → Pos g σ Claims.Msg (Fin R) →
     Strategy (FlockSoundness.Game.seqG (fun m : Flock.Guarantees.MemberV5 Reg nJ => m.live (m.part S) Rg) l)
   | _, [], _ => PUnit.unit
   | i, m :: l, p =>
-    sessionK (D i) (M.member i (memberPts m)) m.dg (memberTabs S Rg m) (m.wr (m.part S) Rg)
+    memberK (D i) (M.member i (memberPts m)) m.dg (memberTabs S Rg m) (m.wr (m.part S) Rg)
       (fun a => (FlockSoundness.Game.seqG
         (fun m : Flock.Guarantees.MemberV5 Reg nJ => m.live (m.part S) Rg) l).map (a :: ·))
-      (fun q _ => Strategy.map _ _ (seqP (i + 1) l q)) m.N p
+      (fun q _ => Strategy.map _ _ (seqP (i + 1) l q)) m.N p (memberDrawn S m)
 
 /-- **The sessions' joint law, in the members' order** from the position `p`: the members' transcripts beside the
 period's tape, over the sessions' live coins. -/
@@ -412,8 +547,8 @@ noncomputable def seqW : (i : ℕ) → (l : List (Flock.Guarantees.MemberV5 Reg 
     Game (List Transcript × CoinTape g σ)
   | _, [], p => .ret ([], p.tape)
   | i, m :: l, p =>
-    sessionWK (D i) (M.member i (memberPts m)) m.dg (memberTabs S Rg m) (m.wr (m.part S) Rg)
-      (fun q a => (seqW (i + 1) l q).map fun o => (a :: o.1, o.2)) m.N p
+    memberWK (D i) (M.member i (memberPts m)) m.dg (memberTabs S Rg m) (m.wr (m.part S) Rg)
+      (fun q a => (seqW (i + 1) l q).map fun o => (a :: o.1, o.2)) m.N p (memberDrawn S m)
 
 /-- **An event of the period's tape under the sessions' joint law off the held-off events** from the position `p`:
 each member's session's share off its own, then the rest's from the position its walk ends at. -/
@@ -421,26 +556,28 @@ noncomputable def seqOff (Q : CoinTape g σ → Prop) :
     (i : ℕ) → (l : List (Flock.Guarantees.MemberV5 Reg nJ)) → Pos g σ Claims.Msg (Fin R) → ℝ≥0∞
   | _, [], p => tapeInd Q p
   | i, m :: l, p =>
-    sessionOffK (D i) (M.member i (memberPts m)) (memberTabs S Rg m) (B i) (BL i (memberPts m))
-      (fun q => seqOff Q (i + 1) l q) m.N p
+    memberOffK (D i) (M.member i (memberPts m)) (memberTabs S Rg m) (B i) (BL i (memberPts m))
+      (fun q => seqOff Q (i + 1) l q) m.N p (memberDrawn S m)
 
 /-- **The sessions' joint law's support off the held-off events** from the position `p`: each member's session's
-trace off its own, ending at its transcript, then the rest's from the position its walk ends at. -/
+trace off its own, ending at its transcript, then the rest's from the position its walk ends at; at a member with no
+proof block in the sample, an idle outcome's transcript and the rest's from the same position. -/
 def SeqReach : (i : ℕ) → (l : List (Flock.Guarantees.MemberV5 Reg nJ)) → Pos g σ Claims.Msg (Fin R) →
     List Transcript × CoinTape g σ → Prop
   | _, [], p, o => o = ([], p.tape)
   | i, m :: l, p, o =>
-    SessionReachK (D i) (M.member i (memberPts m)) m.dg (memberTabs S Rg m) (B i) (m.wr (m.part S) Rg)
+    MemberReachK (D i) (M.member i (memberPts m)) m.dg (memberTabs S Rg m) (B i) (m.wr (m.part S) Rg)
       (BL i (memberPts m)) (fun q a o' => ∃ ts, SeqReach (i + 1) l q (ts, o'.2) ∧ o'.1 = a :: ts) m.N p o
+      (memberDrawn S m)
 
 /-- The sessions' joint law's strategy: it has no message to send. -/
 noncomputable def seqWS : (i : ℕ) → (l : List (Flock.Guarantees.MemberV5 Reg nJ)) →
     (p : Pos g σ Claims.Msg (Fin R)) → Strategy (seqW D M S Rg i l p)
   | _, [], _ => PUnit.unit
   | i, m :: l, p =>
-    sessionWKS (D i) (M.member i (memberPts m)) m.dg (memberTabs S Rg m) (m.wr (m.part S) Rg)
+    memberWKS (D i) (M.member i (memberPts m)) m.dg (memberTabs S Rg m) (m.wr (m.part S) Rg)
       (fun q a => (seqW D M S Rg (i + 1) l q).map fun o => (a :: o.1, o.2))
-      (fun q _ => Strategy.map _ _ (seqWS (i + 1) l q)) m.N p
+      (fun q _ => Strategy.map _ _ (seqWS (i + 1) l q)) m.N p (memberDrawn S m)
 
 /-- **The sessions' projection has its events' probabilities under the sessions' joint law.** -/
 theorem prob_seqP : ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (E : List Transcript → Prop) (i : ℕ)
@@ -450,7 +587,7 @@ theorem prob_seqP : ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (E : List 
       prob (fun o => E o.1) (seqW D M S Rg i l p) w
   | [], _, _, _, _ => rfl
   | m :: l, E, i, p, w =>
-    prob_sessionK (D i) (M.member i (memberPts m)) m.dg (memberTabs S Rg m) (m.wr (m.part S) Rg)
+    prob_memberK (D i) (M.member i (memberPts m)) m.dg (memberTabs S Rg m) (m.wr (m.part S) Rg)
       (fun a => (FlockSoundness.Game.seqG
         (fun m : Flock.Guarantees.MemberV5 Reg nJ => m.live (m.part S) Rg) l).map (a :: ·)) E
       (fun q _ => Strategy.map _ _ (seqP D M S Rg (i + 1) l q))
@@ -459,7 +596,7 @@ theorem prob_seqP : ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (E : List 
         ((prob_seqP l (fun ts => E (a :: ts)) (i + 1) q (Strategy.ofMap _ _ w)).trans
           (prob_map (fun o : List Transcript × CoinTape g σ => E o.1)
             (fun o : List Transcript × CoinTape g σ => (a :: o.1, o.2)) _ w).symm))
-      m.N p w
+      m.N p (memberDrawn S m) w
 
 open Classical in
 /-- **The sessions' joint law off the held-off events gives an event of the tape at most `E`'s probability**
@@ -476,7 +613,7 @@ theorem seqOff_le_prob (Q : CoinTape g σ → Prop) : ∀ (l : List (Flock.Guara
     · rw [ite_eq_right hQ]
       exact zero_le
   | m :: l, E, i, p, w, h =>
-    sessionOffK_le_prob (D := D i) (M := M.member i (memberPts m)) (dg := m.dg) (J := memberTabs S Rg m) (B := B i)
+    memberOffK_le_prob (D := D i) (M := M.member i (memberPts m)) (dg := m.dg) (J := memberTabs S Rg m) (B := B i)
       (wr := m.wr (m.part S) Rg) (BL i (memberPts m)) (fun o => E o.1) (fun o => Q o.2)
       (fun q => seqOff D M BL B S Rg Q (i + 1) l q)
       (fun q a => (seqW D M S Rg (i + 1) l q).map fun o => (a :: o.1, o.2))
@@ -485,7 +622,7 @@ theorem seqOff_le_prob (Q : CoinTape g σ → Prop) : ∀ (l : List (Flock.Guara
           fun o ho hQ => hq (a :: o.1, o.2) ⟨o.1, ho, rfl⟩ hQ).trans_eq
         (prob_map (fun o : List Transcript × CoinTape g σ => E o.1)
             (fun o : List Transcript × CoinTape g σ => (a :: o.1, o.2)) _ w).symm)
-      m.N p w h
+      m.N p (memberDrawn S m) w h
 
 end Seq
 
