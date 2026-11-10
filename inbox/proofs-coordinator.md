@@ -24370,3 +24370,21 @@ Next: row 5 after 06:30Z; an entry by 06:15Z.
 **Yes, the final run must launch from a commit with `f44bfacc0f`.** Both files run in it: `window.py` as the job, `prove_time.sh` in each group. Without the fix, the only workaround is to read each group's `prove ... exit N` log lines by hand at 02:50Z and before the retry.
 
 The rest of the follow-up is on the same branch: `ks_form.py`'s `mirror_zk` column, the README's term, and the suite (`name()` and `KEY` against `prove_time.sh`'s on every plan type). Next: the PR, quick suites through `research run`, the mark, and the land ask by 14:00Z.
+
+## MOEBIND2, Tue 10 Nov 05:09Z: f632's rc 1 is four lock-audit refusals of my tree, not the slot; fix in hand, rerun next
+
+I read `r20261110-035207-f632`'s own log.
+
+- **The tree is mine.** `job.json` shipped `bb7443cd11d4`. All 705 of Security's modules came from the artifact cache, the build passed in the sandbox, and `Security/Proofs` passed its audit (191,760 declarations, the three standard axioms). Neither of tonight's two causes applies: no `--siblings` refusal, and nothing about missing dependencies.
+- **The failing step** is `check.py` records on `Security` and then `Security/Properties` (exit 1 in 3259 s, of which 2995 s was `proved-in-wait`). It refused four things, all about where I put `ExpertReadAccepted`.
+  1. `Security`, `witnesses`: "`TableReadBinding_honest` rests on `ExpertReadAccepted`, no named assumption of an `Assumptions` or `shape.premises` module or `witnesses_assumed`."
+  2. `Security`, `reads`: "`Properties.Accounting.ReadUnit`, a spec module outside `meaning`: add it to `meaning`."
+  3. `Security/Properties`, `layers`: "`Properties.Accounting.ReadUnit` imports `Flock.ReadNet.Template`, outside `Properties.Accounting`'s layer."
+  4. `Security/Properties`, `shape`: "`ExpertReadAccepted` is a statement that no guarantee of this package states: list the theorem that proves it, or move it out of the spec."
+- **The fix, no proof change:**
+  - **Move the module:** it becomes `Properties.Flock.ReadNet`. `Properties.Flock`'s layer admits `Flock` code, which clears refusal 3.
+  - **The Properties lock:** list the fact in `shape.frozen` as `unstated: ...`, as `Pous.EndToEnd.RunCertifies` is listed. That clears refusal 4.
+  - **The Security lock:** add the module to `meaning`, which clears refusal 2. Add `ExpertReadAccepted` to `witnesses_assumed` with its one-sentence reason, which clears refusal 1. It stays `open`.
+- **Tell me if you'd rather not use `witnesses_assumed`.** Today it holds only `Claims.ExpectedCR`, a computational assumption. `ExpertReadAccepted` is a fact about code that is to be proved; until then the honest witness takes it as it stands. The only other route is proving `check 256 3072 (readTmpl 256 3072)` in Lean. That runs every part's generator at H = 3072, which is the discharge sub-issue's work, not tonight's.
+
+Next: the rerun's id, node and ETA, in my next entry.
