@@ -673,6 +673,40 @@ def test_a_build_that_compiled_nothing_hashes_nothing(tmp_path, monkeypatch):
     assert outputs() == {"A", "B"}, "P.B, compiled, and P.A, which it loads; not P"
 
 
+def test_a_module_a_build_compiled_and_the_cache_could_not_index_is_recorded_under_its_key(tmp_path):
+    """The next build takes the trace of a module the cache lacks, so that it is compiled and indexed
+    (`module_keys.settle`). One `put` can't index would then be compiled in every build, with everything above it: `put`
+    records it under the key it compiled under, which that build reads and leaves the module to Lake. Only a module
+    the run compiled whole is recorded, and a later `put` that indexes it removes the record."""
+    pkg = _package(tmp_path)
+    lib, store = pkg / ".lake/build/lib/lean", tmp_path / "store"
+    setup = pkg / ".lake/build/ir/P/B.setup.json"
+    whole = setup.read_text()
+    setup.write_text(json.dumps(json.loads(whole) | {"importArts": {}}))        # Lake read no import where `keys` reads P.A
+    arts, keys = LA.LakeArtifacts(store), _keys(pkg)
+
+    def unstored() -> dict[str, str]:
+        return {m: json.loads(f.read_text())["why"] for m, e in keys.items()
+                if (f := store / LA.MK.UNSTORED / Path(e).name).is_file()}
+
+    assert arts.put({pkg: SANDBOXED}) == 1, "P.A"
+    got = unstored()
+    assert set(got) == {"P.B", "P"} and got["P"] == "it loads P.B, which is not indexed" and "P.A" in got["P.B"]
+    assert json.loads((store / LA.MK.UNSTORED / Path(keys["P"]).name).read_text()) == {
+        "module": "P", "scope": "p", "why": got["P"]}
+    setup.write_text(whole)
+    assert arts.put({pkg: SANDBOXED}) == 2 and unstored() == {}, "indexed now: nothing says otherwise"
+    for t in lib.rglob("*.trace"):
+        os.utime(t, (1000, 1000))
+    (lib / "P/B.olean.hash").write_text("0" * 16)
+    other = LA.LakeArtifacts(tmp_path / "store-2")
+    assert other.put({pkg: SANDBOXED}, since=1000) == 0 and not (tmp_path / "store-2" / LA.MK.UNSTORED).exists(), \
+        "nothing this run compiled"
+    os.utime(lib / "P/B.trace", (1001, 1001))
+    assert other.put({pkg: SANDBOXED}, since=1000) == 0 and not (tmp_path / "store-2" / LA.MK.UNSTORED).exists(), \
+        "P.B's compile was stopped: the next run's repair has it compiled again, and nothing is recorded of it"
+
+
 def test_a_build_outside_the_sandbox_indexes_nothing(tmp_path):
     """Where `unshare` is missing, check.py builds without the sandbox, and compile-time code runs as the user: it could
     leave in the build any outputs, traces and `setup.json` it chose, which `put` would index under a module's key for

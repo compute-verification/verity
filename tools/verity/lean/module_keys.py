@@ -37,6 +37,12 @@ staged, is built from source. Lake looks a module up by its package and input ha
 input hash are both left out, and after the build `misrestored` names any module whose input hash is another staged
 module's, which fails the build.
 
+Lake keeps a module its tree already holds, by its own input hash, over what was staged. So before the build `settle`
+takes the trace of each keyed module the tree holds in a version the index doesn't: Lake then restores the staged
+version or compiles the module, and the build's `put` indexes what it compiled. After a build every keyed module of a
+tree is thus the index's version, and a module version is compiled once a node, not once a tree. A module `put` could
+not index (`UNSTORED`), like one without a key, is left to Lake.
+
 A module enters the index (`LakeArtifacts.put`) only from a run that compiled it in the sandbox, whether the run then
 passed, failed or was killed, and only when its compile ended (its trace whole, each output under the hash the trace
 names and no newer than the `.hash` beside it), under the key the outputs its
@@ -665,6 +671,83 @@ def entry(store: Path, key: str, mod: str, scope: str) -> dict | None:
     return e if valid(e) and e["module"] == mod and e["scope"] == scope else None
 
 
+#: a store's record of each key `LakeArtifacts.put` computed for a module a build compiled and could not index
+#: (`<key>.json`: the module, its package, why): `settle` leaves such a module to Lake, as a module without a key is
+UNSTORED = "unstored"
+#: why `settle` took a module's trace: the cache holds another version under its key, which Lake then restores; or
+#: the cache holds none, so Lake compiles it and the build's `put` indexes it
+REPLACED, ABSENT = "the cache holds another version", "not in the cache"
+
+
+def unstored_path(store: Path, key: str) -> Path:
+    """Where ``store`` records that the module compiled under ``key`` could not be indexed."""
+    return store / UNSTORED / f"{key.removeprefix('sha512:')}.json"
+
+
+def _names(trace: Path) -> set[str] | None:
+    """The artifacts a module's ``trace`` names; None when there is no trace, empty when it isn't a whole one."""
+    try:
+        d = json.loads(trace.read_text())
+    except OSError:
+        return None
+    except ValueError:
+        return set()
+    return {s for s in _strings(d.get("outputs")) if ARTIFACT.fullmatch(s)} if isinstance(d, dict) else set()
+
+
+def settle(store: Path, keyed: dict[str, Key], found: dict[str, tuple[str, dict, dict[str, int]]], done: set[str],
+           named: dict[tuple[str, str], str], threads: int = 8) -> tuple[dict[str, int], int]:
+    """Take the trace of each module of ``keyed`` the build holds in a version the cache doesn't, so that the build ahead
+    ends with every keyed module either the cache's version or compiled by it, and then indexed (`LakeArtifacts.put`).
+    Lake keeps a module whose trace has its input hash, 64 bits of a hash that isn't cryptographic, over what the cache
+    staged for it, and `put` indexes only what its run compiled: a module an earlier build left in the tree and the cache
+    lacks would stay there, restored nowhere else and bound to its source by that hash alone.
+
+    In import order, as `stage` walked (``found``, ``done``, and ``named``, the digests its entries name):
+
+    - a staged module whose trace names other artifacts than its entry loses its trace (`REPLACED`): Lake restores it;
+    - any other module is keyed on what the tree holds of the modules it loads that aren't staged, which is its key if
+      their compiles give those bytes again. It keeps its trace when the cache indexes it under that key with the
+      artifacts the trace names (should a module below it change, Lake compiles it anyway), and when its key is indexed
+      but can't be handed to Lake (`stage`). Otherwise it loses its trace (`ABSENT`) and is compiled;
+    - a module `put` could not index under that key (`UNSTORED`), and every module that loads one, is left to Lake, as a
+      module without a key is: taking its trace would compile it, and everything above it, in every build.
+
+    A module without a trace has nothing to take. Returns ({reason: traces taken}, the modules left to Lake). The caller
+    holds the builds (`check.writing`)."""
+    rest = {m: k for m, k in keyed.items() if m not in done}
+    digests = read_digests(rest, named, threads)
+    took: dict[str, int] = {}
+    left: set[str] = set()
+    for m, k in keyed.items():
+        trace = k.package.build() / "lib" / "lean" / path_of(m, ".trace")
+        if (names := _names(trace)) is None:
+            continue
+        if m in done:
+            why = REPLACED if names != set(found[m][1]["digests"]) else None
+        elif m in found:
+            why = None
+        else:
+            loaded = loads(m, keyed)
+            h = key(m, keyed, digests, loaded)
+            e = entry(store, h, m, k.package.name) if h is not None else None
+            if e is not None and names == set(e["digests"]):
+                os.utime(entry_path(store, h))
+                why = None
+            elif any(g in left for g in loaded) or (h is not None and e is None and unstored_path(store, h).is_file()):
+                left.add(m)
+                why = None
+            else:
+                why = ABSENT
+        if why is not None:
+            trace.unlink(missing_ok=True)
+            took[why] = took.get(why, 0) + 1
+    for m in left:
+        if (h := key(m, keyed, digests)) is not None and (f := unstored_path(store, h)).is_file():
+            os.utime(f)
+    return took, len(left)
+
+
 def sweep(store: Path, proc: Path = Path("/proc")) -> None:
     """Remove each staged directory whose build's process is gone (`<pid>-...`)."""
     for d in (store / STAGE).glob("*") if (store / STAGE).is_dir() else []:
@@ -674,7 +757,7 @@ def sweep(store: Path, proc: Path = Path("/proc")) -> None:
 
 
 def stage(store: Path, root: Path, extra: list[str] | tuple[str, ...], dest: Path,
-          threads: int = 8, report: dict | None = None) -> tuple[dict[tuple[str, str], str], int]:
+          threads: int = 8, report: dict | None = None, settled: bool = False) -> tuple[dict[tuple[str, str], str], int]:
     """Fill ``dest``, a Lake cache directory (`artifacts/`, `outputs/<package>/<input hash>.json`), with each module of
     ``root``'s build whose key ``store``'s index holds, whose every artifact there has the digest the entry names, and whose
     every read is staged: in import order, each module is keyed once what it reads has its entry, from the digests those
@@ -684,7 +767,9 @@ def stage(store: Path, root: Path, extra: list[str] | tuple[str, ...], dest: Pat
     module} for each module staged, the number of modules with a key). ``report`` takes why each other keyed module isn't
     staged: `missed`, {reason: how many}, and `first`, {reason: the first such module}. A module whose own key has no
     entry is explained against the entry it was last indexed under (`differs`); the others read a module that isn't
-    staged (`BEHIND`), or have an entry Lake can't be handed (two under one input hash, or an artifact that differs)."""
+    staged (`BEHIND`), or have an entry Lake can't be handed (two under one input hash, or an artifact that differs).
+    With ``settled`` the build's own traces are settled against what was staged (`settle`), and ``report`` takes how
+    many it took by reason (`took`) and how many modules it left to Lake (`left`)."""
     keyed = keys(root, extra)
     store.mkdir(parents=True, exist_ok=True)
     with open(store / LOCK, "a") as lock:
@@ -729,6 +814,10 @@ def stage(store: Path, root: Path, extra: list[str] | tuple[str, ...], dest: Pat
             out.write_text(json.dumps(e["outputs"]))
             staged[(e["scope"], e["hash"])] = m
             os.utime(entry_path(store, h))
+        if settled:
+            took, left = settle(store, keyed, found, done, named, threads)
+            if report is not None:
+                report |= {"took": took, "left": left}
         if report is not None:
             missed: dict[str, int] = {}
             first: dict[str, str] = {}

@@ -591,6 +591,96 @@ def test_an_entry_records_what_its_key_read_and_a_miss_says_which_input_differs(
     assert missed()[0] == {"an artifact of its entry differs": 1, "reads a module not restored": 1}
 
 
+def _held(keyed: dict, mod: str, files: dict[str, bytes], h: str = "0" * 16) -> Path:
+    """``mod`` as its package's build holds it once Lake compiled or restored it: each artifact of ``files`` where Lake
+    leaves it, and the trace naming them; the trace."""
+    build = keyed[mod].package.build()
+    for n, b in files.items():
+        f = MK.file_of(build, mod, n.split(".", 1)[1])
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_bytes(b)
+    trace = build / "lib" / "lean" / MK.path_of(mod, ".trace")
+    trace.write_text(json.dumps({"depHash": h, "outputs": {
+        "o": [n for n in files if n.endswith(".olean")], "i": next(n for n in files if n.endswith(".ilean"))}}))
+    return trace
+
+
+B = {"1" * 16 + ".olean": b"B", "2" * 16 + ".ilean": b"b"}
+
+
+def test_a_build_takes_the_trace_of_each_module_it_holds_in_a_version_the_cache_does_not(tmp_path):
+    """Lake keeps a module whose trace has its input hash over what was staged for it, and only what a run compiles is
+    indexed. So a module an earlier build left in the tree in a version the cache lacks would be restored nowhere else,
+    and one the cache holds another version of would sit under modules restored against that other version. Each loses
+    its trace before the build: Lake then restores the one and compiles the other, which the build's `put` indexes.
+    A module with no key is left as it is, and without ``settled`` so is every module."""
+    root = _workspace(tmp_path / "ws")
+    store = tmp_path / "store"
+    keyed = MK.keys(root, ["R.B"])
+    _stock(store, keyed, {"D.X": ("1" * 16, X), "R.A": ("2" * 16, A), "R": ("3" * 16, R)})
+    traces = {"D.X": _held(keyed, "D.X", X), "R": _held(keyed, "R", R),
+              "R.A": _held(keyed, "R.A", {"9" * 16 + ".olean": b"another A", "d" * 16 + ".ilean": b"a"})}
+    other = root / ".lake" / "build" / "lib" / "lean" / "R" / "NoKey.trace"
+    other.write_text(json.dumps({"depHash": "7" * 16, "outputs": {"o": ["8" * 16 + ".olean"]}}))
+    caches = iter(range(99))
+
+    def stage(settled: bool = True) -> dict:
+        why: dict = {}
+        MK.stage(store, root, ["R.B"], tmp_path / "cache" / str(next(caches)), report=why, settled=settled)
+        return why
+
+    assert "took" not in stage(False) and all(t.exists() for t in traces.values())
+    why = stage()
+    assert (why["took"], why["left"]) == ({MK.REPLACED: 1}, 0), "R.B has no trace: nothing to take"
+    assert not traces["R.A"].exists() and traces["D.X"].exists() and traces["R"].exists() and other.exists()
+    traces["R.B"] = _held(keyed, "R.B", B)
+    assert stage()["took"] == {MK.ABSENT: 1} and not traces["R.B"].exists(), "R.B: its key is not in the index"
+    assert stage()["took"] == {} and traces["D.X"].exists() and traces["R"].exists() and other.exists()
+    traces["R"].write_text('{"depHash": "3333')
+    assert stage()["took"] == {MK.REPLACED: 1}, "a trace that isn't whole names nothing the cache holds"
+
+
+def test_a_module_above_one_that_is_compiled_keeps_its_trace_when_the_cache_holds_it_as_the_tree_does(tmp_path):
+    """A module above one that isn't staged has no key until that one is compiled. It is keyed on what the tree holds
+    of it, its key if the compile gives those bytes again: indexed under that key with the artifacts its trace names,
+    it keeps its trace (Lake compiles it anyway if the module below comes out otherwise); else it is compiled too, so a
+    cold tree is settled in one build, not one level of imports a build."""
+    root = _workspace(tmp_path / "ws", {"r/R/A.lean": "import D.X\n-- edited since the cache indexed it\n"})
+    store = tmp_path / "store"
+    keyed = MK.keys(root, ["R.B"])
+    _stock(store, keyed, {"D.X": ("1" * 16, X)})
+    traces = {m: _held(keyed, m, files) for m, files in (("D.X", X), ("R.A", A), ("R", R), ("R.B", B))}
+    held = MK.read_digests({m: keyed[m] for m in ("R.A", "R", "R.B")},
+                           {("D.X", n.split(".", 1)[1]): C.digest(b) for n, b in X.items()})
+    _entry(store, MK.key("R", keyed, held), "r", "R", "3" * 16, R)
+    why: dict = {}
+    MK.stage(store, root, ["R.B"], tmp_path / "cache", report=why, settled=True)
+    assert why["took"] == {MK.ABSENT: 2} and why["left"] == 0
+    assert {m for m, t in traces.items() if t.exists()} == {"D.X", "R"}, "R.A and R.B are compiled; R is the cache's"
+
+
+def test_a_module_the_cache_could_not_index_is_left_to_lake_with_every_module_above_it(tmp_path):
+    """`put` records each module a build compiled and it could not index, under the key it compiled under. Taking such a
+    module's trace would compile it, and every module above it, in every build, for nothing: it is left to Lake, as a
+    module without a key is."""
+    root = _workspace(tmp_path / "ws", {"r/R/C.lean": "import R.B\n"})
+    store = tmp_path / "store"
+    keyed = MK.keys(root, ["R.C"])
+    _stock(store, keyed, {"D.X": ("1" * 16, X), "R.A": ("2" * 16, A), "R": ("3" * 16, R)})
+    traces = {m: _held(keyed, m, files) for m, files in (
+        ("D.X", X), ("R.A", A), ("R", R), ("R.B", B), ("R.C", {"5" * 16 + ".olean": b"C", "6" * 16 + ".ilean": b"c"}))}
+    named = {(m, n.split(".", 1)[1]): C.digest(b) for m, files in (("D.X", X), ("R.A", A), ("R", R)) for n, b in files.items()}
+    marker = MK.unstored_path(store, MK.key("R.B", keyed, named))
+    marker.parent.mkdir()
+    marker.write_text(json.dumps({"module": "R.B", "scope": "r", "why": "setup.json names another"}))
+    why: dict = {}
+    MK.stage(store, root, ["R.C"], tmp_path / "cache-1", report=why, settled=True)
+    assert (why["took"], why["left"]) == ({}, 2) and all(t.exists() for t in traces.values()), "R.B, and R.C, which loads it"
+    marker.unlink()
+    MK.stage(store, root, ["R.C"], tmp_path / "cache-2", report=why, settled=True)
+    assert (why["took"], why["left"]) == ({MK.ABSENT: 2}, 0) and not traces["R.B"].exists() and not traces["R.C"].exists()
+
+
 def test_an_entry_of_another_schema_is_never_staged(tmp_path):
     """An entry written under an earlier schema has no `schema` of this one: were its key ever computed again, it would
     still not be read."""

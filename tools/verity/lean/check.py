@@ -4238,13 +4238,16 @@ def stage_build(mk, pkg: Path, roots: list[str], dest: Path) -> tuple[dict[tuple
     `stage`). Each build step reads it with `LAKE_CACHE_DIR` and `LAKE_ARTIFACT_CACHE` unset, under which Lake reads a
     package's cache and never writes it, and inside the sandbox, where `ARTIFACTS` is read-only. The staged directories of
     processes that are gone go first. Returns (the modules staged, as `stage` gives them, the report's `staged`: how many
-    of how many keyed, why each other one isn't, by reason (`missed`, with the `first` module of each), and the error
-    where staging failed, which leaves ``dest`` empty and everything to be built)."""
+    of how many keyed, why each other one isn't, by reason (`missed`, with the `first` module of each), the traces it took
+    from the build so that Lake restores or compiles those modules (`took`, `module_keys.settle`) and how many modules it
+    `left` to Lake, and the error where staging failed, which leaves ``dest`` empty and everything to be built). The caller
+    holds the build (`writing`), and stores what the build compiles when it ends (`lean_audit.LakeArtifacts.put`): a
+    module whose trace is taken is compiled again by every build until one stores it."""
     try:
         mk.sweep(ARTIFACTS)
         shutil.rmtree(dest, ignore_errors=True)
         why: dict = {}
-        staged, keyed = mk.stage(ARTIFACTS, pkg, roots, dest, report=why)
+        staged, keyed = mk.stage(ARTIFACTS, pkg, roots, dest, report=why, settled=True)
         return staged, {"modules": len(staged), "keyed": keyed, **why}
     except OSError as e:
         shutil.rmtree(dest, ignore_errors=True)
@@ -4257,8 +4260,11 @@ def staged_line(staged: dict) -> str:
     if "error" in staged:
         return f"nothing restored from the artifact cache: {staged['error']}"
     missed, first = staged.get("missed") or {}, staged.get("first") or {}
+    took, left = staged.get("took") or {}, staged.get("left") or 0
     return (f"{staged['modules']} of {staged['keyed']} keyed modules restored from the artifact cache"
-            + ("; missed: " + ", ".join(f"{n} {why} (first {first.get(why)})" for why, n in missed.items()) if missed else ""))
+            + ("; missed: " + ", ".join(f"{n} {why} (first {first.get(why)})" for why, n in missed.items()) if missed else "")
+            + ("; traces taken from the build: " + ", ".join(f"{n} {why}" for why, n in sorted(took.items())) if took else "")
+            + (f"; {left} left to Lake, which the cache could not index" if left else ""))
 
 
 #: the sampled recompile's randomness (`sampled_recompile`): fresh, this process's, and used only after the build, so nothing
@@ -5335,9 +5341,11 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                                ("build-roots", in_sandbox(pkg, [*jobs, "lake", "build", *(f"+{r}" for r in policy["roots"])]))):
                 if step == "stage":
                     if cache:
-                        s = time.monotonic()
-                        staged, rep["staged"] = stage_build(mk, pkg, policy["roots"], cache)
-                        rep["seconds"][step] = round(time.monotonic() - s, 1)
+                        # it takes traces from this build and from those of the packages it requires by path
+                        with writing(pkg, log):
+                            s = time.monotonic()
+                            staged, rep["staged"] = stage_build(mk, pkg, policy["roots"], cache)
+                            rep["seconds"][step] = round(time.monotonic() - s, 1)
                         log(f"stage: {pkg}: {staged_line(rep['staged'])}")
                     continue
                 if callable(argv) and not (argv := argv()):
@@ -5859,7 +5867,8 @@ def main(argv: list[str]) -> int:
                     "checked here")
     ap.add_argument("--artifacts", type=Path, metavar="DIR", help="the node's Lake artifact cache (`lean_audit.LakeArtifacts`): "
                     "each build restores the modules it indexes under their keys (`module_keys.py`), and never writes it "
-                    "(`stage_build`)")
+                    "(`stage_build`). A module the build's tree holds and the cache lacks is compiled again, so the "
+                    "caller stores what the build compiled when it ends (`LakeArtifacts.put`)")
     ap.add_argument("--closure", action="store_true", help="the replay also checks every module of the import closure, the "
                     "toolchain's, Mathlib's and ArkLib's included, that has not passed it under its key (with --replay-cache, "
                     "a warm run checks only what changed; `replay_step`)")

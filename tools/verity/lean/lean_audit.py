@@ -963,13 +963,19 @@ BUNDLE_FILE = re.compile(r"lean-audit/lean-artifacts(-\d+)?\.tar\.gz")
 SHARED_LIMIT = 12
 
 
+class Unindexable(str):
+    """Why a module a build compiled whole can't be indexed (`module_keys.indexable`): a reason its next compile gives again."""
+
+
 class LakeArtifacts:
     """The node's Lake artifact cache: Lake's artifacts (`artifacts/<hash>.<ext>`) and an index of the modules they are the
     outputs of, each under its key (`keys/<key>.json`, `module_keys`): the module, its package, Lake's input hash, the
     outputs its trace names and the digest of each, and what its key read (`module_keys.record`), against which a later
     build says why it didn't restore the module (`modules/<package>/<module>.json` names the entry a module was last
     indexed under). An entry of another schema (`module_keys.SCHEMA`) is under a key no build computes: it is never read,
-    never taken from a bundle, and goes with the least recently used (`prune`). The builds of check's audit and of a
+    never taken from a bundle, and goes with the least recently used (`prune`). `unstored/<key>.json` records a module
+    a build compiled under that key and `put` could not index, which the next build leaves to Lake
+    (`module_keys.settle`); it stays on its node. The builds of check's audit and of a
     records run read it through a Lake cache directory of their own, which `module_keys.stage` fills with the modules
     whose keys it indexes (`check.py --artifacts`), and never write it; after every build of check's audit, of a records run, of `--try` and of `--build`, whatever
     became of the run, each module the build compiled in the sandbox goes in (`put`). A module is stored for what its
@@ -1008,7 +1014,10 @@ class LakeArtifacts:
         and once every workspace module it loads is indexed, under the key the
         outputs the build holds of those give it (`module_keys.read_digests`); its artifacts before
         the entry naming them, one the cache holds already kept only with the same bytes. A newer build replaces the entry
-        under the same key, so the entries of a module and its imports stay one build's. Only what the compiled modules
+        under the same key, so the entries of a module and its imports stay one build's. A module the run compiled whole
+        and that still can't go in (not `indexable`, a module it loads not indexed, an artifact's name taken) is recorded
+        under its key (`module_keys.UNSTORED`), so the next build leaves it to Lake rather than compile it again for
+        nothing (`module_keys.settle`). Only what the compiled modules
         load is read, so a build that compiled nothing costs its traces' `stat`s."""
         with self._lock():
             n = 0
@@ -1040,11 +1049,17 @@ class LakeArtifacts:
                     if mod not in need:
                         continue
                     loaded = MK.loads(mod, keyed)
-                    if all(i in indexed for i in loaded) and (key := MK.key(mod, keyed, outs, loaded)) is not None \
-                            and (got := self._index(mod, key, k.package.name, built[mod],
-                                                    MK.record(mod, keyed, outs, loaded))) is not None:
+                    key = MK.key(mod, keyed, outs, loaded)
+                    got = self._index(mod, key, k.package.name, built[mod], MK.record(mod, keyed, outs, loaded)) \
+                        if key is not None and all(i in indexed for i in loaded) else None
+                    if got is not None:
                         indexed.add(mod)
                         n += got
+                        MK.unstored_path(self.store, key).unlink(missing_ok=True)
+                    elif key is not None and (not isinstance(b := built[mod], str) or isinstance(b, Unindexable)):
+                        self._unstored(mod, key, k.package.name, b if isinstance(b, str) else next(
+                            (f"it loads {i}, which is not indexed" for i in loaded if i not in indexed),
+                            "the cache holds an artifact of its name with other bytes"))
             self.prune()
         return n
 
@@ -1075,7 +1090,7 @@ class LakeArtifacts:
         if not isinstance(out, dict) or not isinstance(h, str) or not MK.HASH.fullmatch(h):
             return "a trace without its outputs or input hash"
         if why := MK.indexable(mod, keyed, pkgs, owners):
-            return why
+            return Unindexable(why)
         files = {}
         for name in sorted({s for s in _strings(out) if ARTIFACT.fullmatch(s)}):
             f = MK.output(build, mod, name)
@@ -1125,6 +1140,13 @@ class LakeArtifacts:
         self._last(mod, key, scope)
         self.added.append((at.relative_to(self.store).as_posix(), sorted(files)))
         return old is None
+
+    def _unstored(self, mod: str, key: str, scope: str, why: str) -> None:
+        f = MK.unstored_path(self.store, key)
+        f.parent.mkdir(exist_ok=True)
+        tmp = f.with_name(f".{f.name}.{os.getpid()}.tmp")
+        tmp.write_text(json.dumps({"module": mod, "scope": scope, "why": why}, sort_keys=True))
+        os.replace(tmp, f)
 
     def _last(self, mod: str, key: str, scope: str) -> None:
         if (f := MK.last_path(self.store, scope, mod)) is not None:
@@ -1277,7 +1299,8 @@ class LakeArtifacts:
                 break
             f.unlink(missing_ok=True)
             own, n, horizon = own - size, n + 1, mtime
-        for e in [*(self.store / MK.INDEX).glob("*.json"), *(self.store / "outputs").glob("*/*.json")]:
+        for e in [*(self.store / MK.INDEX).glob("*.json"), *(self.store / "outputs").glob("*/*.json"),
+                  *(self.store / MK.UNSTORED).glob("*.json")]:
             if e.stat().st_mtime <= horizon:
                 e.unlink(missing_ok=True)
         return n

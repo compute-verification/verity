@@ -4975,6 +4975,10 @@ def test_a_build_s_log_says_in_one_line_how_many_modules_it_restored_and_why_not
         ("1 of 6 keyed modules restored from the artifact cache; missed: 3 reads a module not restored (first P), "
          "2 its source (first P.A)")
     assert A.staged_line({"error": "no keys"}) == "nothing restored from the artifact cache: no keys"
+    assert A.staged_line({"modules": 4, "keyed": 9, "missed": {}, "first": {}, "left": 2,
+                          "took": {"not in the cache": 3, "the cache holds another version": 1}}) == \
+        ("4 of 9 keyed modules restored from the artifact cache; traces taken from the build: 3 not in the cache, "
+         "1 the cache holds another version; 2 left to Lake, which the cache could not index")
 
 
 def test_with_the_node_s_artifact_cache_each_build_step_reads_a_cache_staged_for_it(tmp_path, monkeypatch):
@@ -5016,7 +5020,8 @@ def test_with_the_node_s_artifact_cache_each_build_step_reads_a_cache_staged_for
     rep = A.audit(pkg, tmp_path / "out", build=True, runs=False)
     assert seen == [(["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build"], True),
                     (["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build", "+P"], True)]
-    assert rep["staged"] == {"modules": 1, "keyed": 1, "missed": {}, "first": {}} and "stage" in rep["seconds"]
+    assert rep["staged"] == {"modules": 1, "keyed": 1, "missed": {}, "first": {}, "took": {}, "left": 0}
+    assert "stage" in rep["seconds"]
     assert not cache.exists()
     assert rep["failures"] == ["build-roots: exit 1\nfake build"]
     lib = pkg / ".lake" / "build" / "lib" / "lean"
