@@ -54,6 +54,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--branch", required=True)
     ap.add_argument("--no-lock", action="store_true")
     ap.add_argument("--token-extras", action="store_true")
+    ap.add_argument("--lazy-dry", action="store_true", help="dry-run a map only after its first run asks for [split] rows")
     a = ap.parse_args(argv)
     repo = Path(git(Path.cwd(), "rev-parse", "--show-toplevel"))
     start = git(repo, "rev-parse", "HEAD")
@@ -95,83 +96,92 @@ def main(argv: list[str] | None = None) -> int:
             say(f"== {m} on {parent[:12]}")
             calls.clear()
             try:
-                report = out / "dry" / f"{name}.json"
-                r = run(LAYOUT, "--map", m, "--dry-run", "--no-lock", "--report-splits", "--report", str(report), "--root", str(s.wt))
-                rec["dry"] = {"seconds": calls[-1]["seconds"], "rc": r.returncode}
-                if r.returncode:
-                    rec["status"] = "refused at the dry run"
-                    rec["refusal"] = (r.stderr.strip() or r.stdout.strip())[-6000:]
-                    say("  refused at the dry run:", rec["refusal"][:1500])
-                    continue
-                doc = json.loads(report.read_text())
-                splits = sorted({x.split(" (", 1)[0] for x in doc["notes"].get(SPLIT_NOTE, [])})
-                rec["dry"].update(changes=doc["changes"], files_rewritten=len(doc["files"]), moves=len(doc["moves"]),
-                                  notes={k: len(v) for k, v in doc["notes"].items()}, split_rows=len(splits))
-                if splits:
-                    f = s.wt / m
-                    rows = "".join(f"{json.dumps(k)} = {json.dumps(REASON)}\n" for k in splits)
-                    text = f.read_text()
-                    if "\n[split]\n" in text:           # the map has the table: the rows go under its header
-                        text = text.replace("\n[split]\n", "\n[split]\n" + rows, 1)
-                    else:
-                        text = text.rstrip("\n") + "\n\n[split]\n" + rows
-                    f.write_text(text)
-                    git(s.wt, "add", "--", m)
-                    git(s.wt, "commit", "-q", "--no-verify", "-m",
-                        f"draft: {m}'s [split] rows, from its dry run\n\n{len(splits)} references to a directory the map splits, "
-                        "none of them reviewed.\n")
-                    parent = git(s.wt, "rev-parse", "HEAD")
-                    rec["split_commit"] = parent
-                first = len(calls)
-                tokens = []
-                for o, n in tomllib.loads((s.wt / m).read_text()).get("tokens", {}).items():
-                    tokens.append(f"--map={o}={n}")
-                    if o.startswith("verity/") and n.startswith("verity/"):
-                        tokens.append(f"--map={o.replace('/', '.')}={n.replace('/', '.')}")
-                s.extra = list(tokens) if a.token_extras else []
-                rec["extras"] = len(s.extra)
-                try:
-                    mv = s.move(m, parent)
-                    rec.update(status="certified", commit=mv["commit"], summary=mv["summary"])
-                    certified.append(mv)
-                except ST.Refused as e:
-                    head = git(s.wt, "rev-parse", "HEAD")
-                    rec["refusal"] = str(e)[-8000:]
-                    say("  refused:", rec["refusal"][:2500])
-                    status = git(s.wt, "status", "--porcelain").splitlines()
-                    if head != parent:
-                        after_check = len(calls) - first >= 3
-                        rec.update(commit=head, status="certified, but the second run refused" if after_check
-                                   else "committed, not certified")
-                        if status:
-                            rec["rerun_changed"] = {"paths": len(status), "first": status[:40]}
-                            (out / "rerun" / f"{name}.diff").write_text(git(s.wt, "diff", "HEAD", "--stat=200", check=False)[-20000:]
-                                                                        + "\n\n" + git(s.wt, "diff", "HEAD", check=False)[:200000])
-                    else:
-                        rec["status"] = "refused, no commit"
-                    if head != parent and not after_check and tokens and not a.token_extras:
-                        # what the map's own [tokens] rows would explain, were they given to move_check.py as --map
-                        keep = name
-                        name = f"{keep}.with-tokens"
-                        r = run(ST.MOVE_CHECK, parent, head, *tokens, "--json")
-                        name = keep
-                        try:
-                            rec["with_tokens"] = {"rc": r.returncode, "refusals": len(json.loads(r.stdout).get("refusals", []))}
-                        except ValueError:
-                            rec["with_tokens"] = {"rc": r.returncode, "tail": (r.stderr or r.stdout)[-600:]}
-                    if head != parent and not after_check:
-                        # stage.py stops at the refusal; the second run is still worth knowing
-                        git(s.wt, "reset", "-q", "--hard", check=False)
-                        git(s.wt, "clean", "-fdq", check=False)
-                        script, *args = s.command("paths", m)
-                        r = run(script, *ST.RS.BRANCH_ARGS.get(script, ()), *args, "--root", str(s.wt))
-                        again = git(s.wt, "status", "--porcelain").splitlines()
-                        rec["second_run"] = {"rc": r.returncode, "paths_changed": len(again), "first": again[:40],
-                                             "tail": (r.stderr.strip() or r.stdout.strip())[-1500:] if r.returncode else ""}
-                        if again:
-                            (out / "rerun" / f"{name}.diff").write_text(git(s.wt, "diff", "HEAD", "--stat=200", check=False)[-20000:]
-                                                                        + "\n\n" + git(s.wt, "diff", "HEAD", check=False)[:200000])
-                        say(f"  second run on the uncertified commit: rc {r.returncode}, {len(again)} paths changed")
+                for dry in ((False, True) if a.lazy_dry else (True,)):
+                    if dry:
+                        report = out / "dry" / f"{name}.json"
+                        r = run(LAYOUT, "--map", m, "--dry-run", "--no-lock", "--report-splits", "--report", str(report), "--root", str(s.wt))
+                        rec["dry"] = {"seconds": calls[-1]["seconds"], "rc": r.returncode}
+                        if r.returncode:
+                            rec["status"] = "refused at the dry run"
+                            rec["refusal"] = (r.stderr.strip() or r.stdout.strip())[-6000:]
+                            say("  refused at the dry run:", rec["refusal"][:1500])
+                            break
+                        doc = json.loads(report.read_text())
+                        splits = sorted({x.split(" (", 1)[0] for x in doc["notes"].get(SPLIT_NOTE, [])})
+                        rec["dry"].update(changes=doc["changes"], files_rewritten=len(doc["files"]), moves=len(doc["moves"]),
+                                          notes={k: len(v) for k, v in doc["notes"].items()}, split_rows=len(splits))
+                        if splits:
+                            f = s.wt / m
+                            rows = "".join(f"{json.dumps(k)} = {json.dumps(REASON)}\n" for k in splits)
+                            text = f.read_text()
+                            if "\n[split]\n" in text:           # the map has the table: the rows go under its header
+                                text = text.replace("\n[split]\n", "\n[split]\n" + rows, 1)
+                            else:
+                                text = text.rstrip("\n") + "\n\n[split]\n" + rows
+                            f.write_text(text)
+                            git(s.wt, "add", "--", m)
+                            git(s.wt, "commit", "-q", "--no-verify", "-m",
+                                f"draft: {m}'s [split] rows, from its dry run\n\n{len(splits)} references to a directory the map splits, "
+                                "none of them reviewed.\n")
+                            parent = git(s.wt, "rev-parse", "HEAD")
+                            rec["split_commit"] = parent
+                    first = len(calls)
+                    tokens = []
+                    for o, n in tomllib.loads((s.wt / m).read_text()).get("tokens", {}).items():
+                        tokens.append(f"--map={o}={n}")
+                        if o.startswith("verity/") and n.startswith("verity/"):
+                            tokens.append(f"--map={o.replace('/', '.')}={n.replace('/', '.')}")
+                    s.extra = list(tokens) if a.token_extras else []
+                    rec["extras"] = len(s.extra)
+                    try:
+                        mv = s.move(m, parent)
+                        rec.update(status="certified", commit=mv["commit"], summary=mv["summary"])
+                        certified.append(mv)
+                    except ST.Refused as e:
+                        head = git(s.wt, "rev-parse", "HEAD")
+                        rec["refusal"] = str(e)[-8000:]
+                        say("  refused:", rec["refusal"][:2500])
+                        status = git(s.wt, "status", "--porcelain").splitlines()
+                        if head != parent:
+                            after_check = len(calls) - first >= 3
+                            rec.update(commit=head, status="certified, but the second run refused" if after_check
+                                       else "committed, not certified")
+                            if status:
+                                rec["rerun_changed"] = {"paths": len(status), "first": status[:40]}
+                                (out / "rerun" / f"{name}.diff").write_text(git(s.wt, "diff", "HEAD", "--stat=200", check=False)[-20000:]
+                                                                            + "\n\n" + git(s.wt, "diff", "HEAD", check=False)[:200000])
+                        else:
+                            rec["status"] = "refused, no commit"
+                        if head != parent and not after_check and tokens and not a.token_extras:
+                            # what the map's own [tokens] rows would explain, were they given to move_check.py as --map
+                            keep = name
+                            name = f"{keep}.with-tokens"
+                            r = run(ST.MOVE_CHECK, parent, head, *tokens, "--json")
+                            name = keep
+                            try:
+                                rec["with_tokens"] = {"rc": r.returncode, "refusals": len(json.loads(r.stdout).get("refusals", []))}
+                            except ValueError:
+                                rec["with_tokens"] = {"rc": r.returncode, "tail": (r.stderr or r.stdout)[-600:]}
+                        if head != parent and not after_check:
+                            # stage.py stops at the refusal; the second run is still worth knowing
+                            git(s.wt, "reset", "-q", "--hard", check=False)
+                            git(s.wt, "clean", "-fdq", check=False)
+                            script, *args = s.command("paths", m)
+                            r = run(script, *ST.RS.BRANCH_ARGS.get(script, ()), *args, "--root", str(s.wt))
+                            again = git(s.wt, "status", "--porcelain").splitlines()
+                            rec["second_run"] = {"rc": r.returncode, "paths_changed": len(again), "first": again[:40],
+                                                 "tail": (r.stderr.strip() or r.stdout.strip())[-1500:] if r.returncode else ""}
+                            if again:
+                                (out / "rerun" / f"{name}.diff").write_text(git(s.wt, "diff", "HEAD", "--stat=200", check=False)[-20000:]
+                                                                            + "\n\n" + git(s.wt, "diff", "HEAD", check=False)[:200000])
+                            say(f"  second run on the uncertified commit: rc {r.returncode}, {len(again)} paths changed")
+                    if not (a.lazy_dry and not dry and rec.get("status") == "refused, no commit"
+                            and "[split]" in rec.get("refusal", "")):
+                        break
+                    rec["first_try"] = rec.pop("refusal")[-1500:]      # the map needs [split] rows: the dry run names them
+                    del rec["status"]
+                    git(s.wt, "reset", "-q", "--hard", check=False)
+                    git(s.wt, "clean", "-fdq", check=False)
             except Exception:  # noqa: BLE001  the chain goes on, and the record says what stopped this map
                 rec["status"] = "error"
                 rec["error"] = traceback.format_exc()[-6000:]
