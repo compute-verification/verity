@@ -1,0 +1,35 @@
+# The difftest harness to `verity/difftest`: what `tools/move/layout.py --map tools/move/difftest_layout_map.toml` moves
+# and rewrites. The harness (its Lean server and example ports, a Lake package; its Python, the distribution
+# `verity-difftest`; its tests) keeps its own subpaths under its new directory, and no new path keeps a `core` segment.
+#
+# - `verity/core/difftest/` moves whole, so `lean/`, `python/verity_difftest/` and `tests/` stay beside each other. The
+#   import name `verity_difftest` and the Lake package's name `verity_difftest` are unchanged: only [roots] says where the
+#   package directory is after the move.
+# - The Lake package requires Flock's Lean verifier by a relative path (`../../service/flock`), which this move doesn't
+#   move: the lakefile's and the manifest's paths are rewritten to reach it from the new directory.
+# Nothing is split, edited or deleted, and no file is added. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+
+[paths]
+"verity/core/difftest/" = "verity/difftest/"
+
+[retired]
+paths = ["verity/core/difftest/"]
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), and files
+# whose bytes a digest pins.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`)
+"verity.core.difftest" = "verity.difftest"
