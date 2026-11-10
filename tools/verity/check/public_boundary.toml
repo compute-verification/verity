@@ -102,7 +102,7 @@ pouw_tests = [
     "verity/core/protocols/pouw/lean/window/tests/test_known_rows.py",
 ]
 protocols = [
-    "verity/core/protocols/{pous,bandwidth,remote_bandwidth,network}",
+    "verity/core/protocols/{pous,remote_bandwidth,network}",
     # the network certifier: all but the advice format (`advice.py`, public with the integration) and its package's files
     "verity/core/protocols/certifier/{lean,protocol,tests,README.md,PROTOCOL.md}",
     "verity/core/protocols/certifier/{active,arith_encode,audit,blocks,boundary,cache_step,calibration,capacity,certificate}*",

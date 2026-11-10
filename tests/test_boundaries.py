@@ -90,13 +90,9 @@ ALLOWED = {
     "core.protocols.spot": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
                                       "ml.randomness", "core.protocols.profile", "core.protocols.record"},
     # The wipe's memory challenger and prover are parties of the
-    # deployment layer (`wipe_parties`), their messages the wire's. The
-    # memory challenger reports its sessions under its party's per-period root (`core.attest`).
-    "core.protocols.pous": {"core.claims", "core.attest", "core.wire", "core.deploy", "ml.commitments", "ml.crypto",
+    # deployment layer (`wipe_parties`), their messages the wire's.
+    "core.protocols.pous": {"core.claims", "core.wire", "core.deploy", "ml.commitments", "ml.crypto",
                             "ml.randomness", "core.protocols.reporting"},
-    # The bandwidth audit's store is PoUS's `C*`,
-    # under its setup and `vk`, reused as they are.
-    "core.protocols.bandwidth": {"ml.crypto", "ml.randomness", "core.protocols.pous"},
     # The memory challenger, an auditor-trusted device, over PoUS's protocol and verifier; its party is a party of the
     # deployment layer, its messages the wire's.
     "core.devices.memory_challenger": {"core.protocols.pous", "core.wire", "core.deploy"},
@@ -182,7 +178,6 @@ CORE_ML_EDGES = {
     "core.protocols.profile": {"ml.circuits"},
     "core.protocols.spot": {"ml.circuits", "ml.commitments", "ml.randomness"},
     "core.protocols.pous": {"ml.commitments", "ml.crypto", "ml.randomness"},
-    "core.protocols.bandwidth": {"ml.crypto", "ml.randomness"},
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness"},
     "core.protocols.pouw": {"ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"},
     "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto"},
