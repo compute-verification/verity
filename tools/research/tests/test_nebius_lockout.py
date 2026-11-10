@@ -681,10 +681,15 @@ def test_a_cpu_nodes_audit_counts_what_its_own_allowlist_would_refuse():
         "  research : PWD=/home/research ; USER=research ; COMMAND=/usr/bin/flock -n /x true",
         "  research : PWD=/home/research ; USER=ubuntu ; COMMAND=/usr/bin/id",
         "  research : PWD=/home/research ; USER=root ; COMMAND=/usr/bin/true",
+        "  research : a password is required ; PWD=/home/research ; USER=root ; COMMAND=/usr/sbin/nft list ruleset",
+        "  research : a password is required ; PWD=/home/research ; USER=root ; COMMAND=/usr/local/sbin/vy-sudo renice -n 1 -p 1",
     ])
     rows = LO.audit(journal, LO.CPU)
+    assert (1, "research->root /usr/sbin/nft list ruleset") in rows, "what sudo -n refused once the fallback is gone counts as well"
+    assert (1, "research->root /usr/local/sbin/vy-sudo renice -n N") in rows
     assert rows[:2] == [(2, "research->root /usr/bin/rm -f /workspace/tmp/tmp.*"), (2, "research->root /usr/bin/sh -c 'set -e;")]
-    assert {k.split(" ", 2)[1] for _, k in rows} == {"/usr/bin/sh", "/usr/bin/rm", "/usr/bin/systemd-run", "/usr/bin/id"}
+    assert {k.split(" ", 2)[1] for _, k in rows} == {"/usr/bin/sh", "/usr/bin/rm", "/usr/bin/systemd-run", "/usr/bin/id", "/usr/sbin/nft",
+                                                     "/usr/local/sbin/vy-sudo"}
     assert (1, "research->ubuntu /usr/bin/id") in rows and (1, "research->ubuntu /usr/bin/id") not in LO.audit(journal)
     assert "0123abcd" not in json.dumps(rows)
 

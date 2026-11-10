@@ -41,8 +41,8 @@ Apply order. Every step runs as vy-admin on the node and has its own rollback. W
    vy-admin login. `vy-sudo-fallback-expire.timer` removes the fallback at its expiry, and only vy-admin can put it back
    (`vy-lockout fallback on`). From this step on, `research deploy install` runs `sudo python3` and so needs vy-admin's login
    (`research deploy install NODE --login vy-admin`). Rollback: `vy-lockout rollback --apply`.
-9. Watch: during the 24 h, `vy-lockout audit` counts what research ran that the allowlist would refuse. It prints command
-   shapes, never arguments. Fix each such form by PR before the fallback expires. Once the fallback is gone, research's
+9. Watch: during the 24 h, `vy-lockout audit` counts what research ran that the allowlist would refuse, and after them what
+   sudo did refuse. It prints command shapes, never arguments. Fix each such form by PR before the fallback expires. Once the fallback is gone, research's
    `sudo -n true` still passes, since it is on the allowlist, and any other root command (`sudo -n id`) is refused.
 
 On a sealed run, `research retention gc` and `rm` used to fail: gc reported it as read-only, and rm refused it as

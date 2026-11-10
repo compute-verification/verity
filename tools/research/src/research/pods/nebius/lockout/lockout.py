@@ -10,8 +10,8 @@
     vy-lockout harden [--apply] [--back]      ubuntu out of lxd, py-spy without cap_sys_ptrace, research in systemd-journal
     vy-lockout sudoers --node NODE [--apply] [--skip CHECK]...       research's ALL -> the node's allowlist, with the 24 h fallback
     vy-lockout fallback on [--hours H] | off | expire                the fallback; `on` only for vy-admin
-    vy-lockout audit [--since=-24h] [--node NODE]                    what research ran under sudo that the node's allowlist would
-                                              refuse (no arguments printed); anyone may run it, before the lock-out too
+    vy-lockout audit [--since=-24h] [--node NODE]                    what research asked sudo for that the node's allowlist would
+                                              refuse, or did (no arguments printed); anyone may run it, before the lock-out too
     vy-lockout rollback [--apply]             the sudoers step undone: cloud-init's grant back, the allowlist and fallback out
     vy-lockout render [--node NODE]           the node's allowlist as sudoers: its file under sudoers/ is this, byte for byte
 
@@ -252,8 +252,8 @@ def shape(command: str, words: int = 3) -> str:
 
 
 def audit(journal: str, p: Profile = CLUSTER) -> list[tuple[int, str]]:
-    """(count, shape) of each command form research or ubuntu ran under sudo that the profile's allowlist would refuse, most
-    frequent first."""
+    """(count, shape) of each command form research or ubuntu asked sudo for that the profile's allowlist would refuse, most
+    frequent first: what ran under a wider grant, and what sudo -n refused (`a password is required`) once that grant is gone."""
     counts: dict[str, int] = {}
     for ln in journal.splitlines():
         m = SUDO_LINE.match(ln)
