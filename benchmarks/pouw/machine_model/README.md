@@ -91,7 +91,9 @@ the vector fails its check or doesn't reproduce a published number.
   or the run that would (`gap`); the exact paths (b1, INT4, FP4); the FP8 atoms' semantics; the units that write
   registers; a verdict for every unit outside the SM pipes (`[[unit]]`); the public SHA-512 figures (`[[public]]`) and
   our kernel's SASS a compression (`[sha512_mix]`); and the host the card sits in (`host.*`). The module and command
-  keep the name `theta`.
+  keep the name `theta`. A ceiling the device's card file holds (`verity/hardware/cards/<sku>.toml`, the SKU
+  `model.toml` names as `card`) is read from it: its table says `card = "rate.tensor / weight.f16"` in place of a
+  value, grade and source. What keeps a `sheet` value is what no card file holds as a ceiling.
 - `data/citations.toml`: the notes a row or census line cites by `@NAME`.
 - `data/cover/`: the opcode table ("The opcode table").
 - `data/devices/sm_NN/`: another card's data ("Devices").
@@ -419,8 +421,8 @@ at no fewer units of the same resource. `data/cover/` is its evidence on the H20
 evidence, not trusted base, since no verifier and no Lean reads it. `machine-model cover` prints it as Markdown, a table
 a card, with the counts by mark and every hole.
 
-- **The envelope** (`envelope.toml`) is `Accel.Op` with its pipes, formats and each card's numbers (ρ a SM-clock, format
-  weights): `mma`, `mmaSp`, `lane` (a lane opcode on a pipe: at most the pipe's `n_in` words in, 2 out), `move`, `atom`,
+- **The envelope** (`envelope.toml`) is `Accel.Op` with its pipes and formats, and each card's numbers (ρ a SM-clock,
+  format weights) are its card file's (`verity/hardware/cards/`, read by `cover.load`): `mma`, `mmaSp`, `lane` (a lane opcode on a pipe: at most the pipe's `n_in` words in, 2 out), `move`, `atom`,
   `red`, `branch` and none. What the table needs that `Accel` lacks is marked `proposed`: the `collective` op and
   resource, `tex`, and the formats `e3m2`, `e2m3`, `mxf8` and `mxf6`.
 - **The pipes**: an opcode goes on the pipe a run or the CUDA Programming Guide places it on, else on `fma`, which

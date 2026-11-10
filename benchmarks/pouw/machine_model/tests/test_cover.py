@@ -10,6 +10,7 @@ import tomllib
 
 import pytest
 
+from verity.hardware import load, number, rate
 from verity_machine_model import cover as C
 from verity_machine_model.cli import main
 
@@ -61,17 +62,17 @@ def test_an_opcode_without_a_row_fails(tmp_path):
     assert any(p.startswith("sm_120 FCHK ") for p in ps)
 
 
-def test_a_tensor_row_over_the_tensor_rate_fails(tmp_path):
-    d = _copy(tmp_path)
-    _edit(d, "envelope.toml", "f16 = 2, bf16 = 2, tf32 = 4", "f16 = 3, bf16 = 2, tf32 = 4")
-    ps = C.problems(C.load(d))
+def test_a_tensor_row_over_the_tensor_rate_fails():
+    c = C.load()
+    c.envelope["device"]["sm_120"]["weight"]["f16"] = 3
+    ps = C.problems(c)
     assert any("HMMA" in p and "on sm_120" in p and "over ρ tensor = 1024" in p for p in ps)
 
 
-def test_a_pipe_rate_over_its_rho_fails(tmp_path):
-    d = _copy(tmp_path)
-    _edit(d, "envelope.toml", "alu = 64, imad = 64", "alu = 32, imad = 64")
-    ps = C.problems(C.load(d))
+def test_a_pipe_rate_over_its_rho_fails():
+    c = C.load()
+    c.envelope["device"]["sm_120"]["rho"]["alu"] = 32
+    ps = C.problems(c)
     assert any("LOP3" in p and "on sm_120 θ alu.lop3 is 64" in p and "over ρ alu = 32" in p for p in ps)
 
 
@@ -130,9 +131,20 @@ def test_the_envelope_is_accel_op_and_the_proposed_entries_say_why(cover):
         assert "proposed" not in e or "MODEL-MIN" in e["proposed"] or e["key"] == "collective", e["key"]
     for dev in C.DEVICES:
         assert C.rho(cover, dev, "fma") == 128
-        assert C.rho(cover, dev, "dram") == pytest.approx(env["device"][dev]["dram"] /
-                                                          (env["device"][dev]["sms"] * env["device"][dev]["clock_mhz"]
-                                                           * 1e6))
+
+
+def test_each_devices_numbers_are_its_card_files(cover, tmp_path):
+    for dev, sku in (("sm_120", "rtx-pro-6000-server"), ("sm_90", "h200-sxm-141gb")):
+        card, d = load(sku), cover.envelope["device"][dev]
+        assert d["rho"] == {k: e["value"] for k, e in card["rate"].items()}
+        assert {k: d["weight"][k] for k in card["weight"]} == {k: e["value"] for k, e in card["weight"].items()}
+        clocks = rate(card, "issue") / number(card["rate"]["issue"])   # SM-clocks a second
+        assert d["sms"] * d["clock_mhz"] * 10**6 == clocks
+        assert C.rho(cover, dev, "dram") * clocks == pytest.approx(float(rate(card, "dram")))
+    d = _copy(tmp_path)
+    _edit(d, "envelope.toml", "proposed_weight = { e3m2 = 1", "proposed_weight = { f16 = 2, e3m2 = 1")
+    with pytest.raises(SystemExit, match="proposes f16, which rtx-pro-6000-server.toml now holds"):
+        C.load(d)
 
 
 def test_the_command_checks_and_renders(capsys):
