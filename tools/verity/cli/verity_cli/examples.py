@@ -52,7 +52,7 @@ class Demo:
 
 def demos(root: Path) -> list[Demo]:
     out = []
-    for d in sorted(p for p in (root / "examples").iterdir() if p.is_dir() and not p.name.startswith((".", "_"))):
+    for d in sorted(p for p in (root / "workloads").iterdir() if p.is_dir() and not p.name.startswith((".", "_"))):
         runner = next((r for r in ("config.toml", "run.py", "run.sh") if (d / r).is_file()), "")
         f = d / "demo.toml"
         if not f.is_file():
