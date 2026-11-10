@@ -279,7 +279,8 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   owes an owner, an `open` entry is its `digest` alone (a premise the lock doesn't list still fails), `--update` writes
   no owner, `--owner` fails on it (`owner.unowned-lock`), and `--bookkeeping warn` repairs nothing in it. Its `AUDIT`
   line ends with `unowned`, and its report holds `"unowned": true`. One lane field makes a lock owned and held to every
-  rule; every lock of this tree is owned (`tests/test_lean_packages.py`).
+  rule, so a new package's lock names one guarantee's owner by hand before `--update --owner` owns the others; every
+  lock of this tree is owned (`tests/test_lean_packages.py`).
 - `shape`: `{"premises": [module prefixes], "properties": {G: {"function": F, "outcome": O}}, "frozen": {name: why}}`,
   the shape every guarantee has (the lean-proofs skill, "One shape"). `Facts.lean` unfolds a lifted definition once,
   inlines its `let`s and splits a conjunction into its conjuncts; each takes its inputs, one hypothesis that applies `F`
