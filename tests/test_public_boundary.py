@@ -394,12 +394,13 @@ class _Texts:
 
 def test_a_root_file_the_export_lacks_is_the_imports_of_the_modules_below_it() -> None:
     """The export writes a library's root only where it copies modules below it and not the file: every such module but
-    those the package's lock exempts, as a `module` when each of them is one. The lakefile then keeps its default target."""
+    those the package's lock exempts, as a `module` when each of them is one. The lakefile then keeps its default target.
+    A root only the lock names is written the same way, since the Lean check builds each of the lock's roots by name."""
     lakefile = ('name = "p"\nsrcDir = "src"\ndefaultTargets = ["Agg", "Mixed"]\n[[lean_lib]]\nname = "Agg"\n'
                 '[[lean_lib]]\nname = "Has"\n[[lean_lib]]\nname = "Mixed"\nroots = ["Mixed.In"]\n')
     files = {
         "p/lakefile.toml": lakefile,
-        "p/lean-audit.json": json.dumps({"roots": ["Agg"], "exempt": {"Agg.Probe": "a probe"}}),
+        "p/lean-audit.json": json.dumps({"roots": ["Agg", "Has", "Has.Sub", "Has.None"], "exempt": {"Agg.Probe": "a probe"}}),
         "p/src/Agg/A.lean": "module\n\npublic import Agg.B.C\n",
         "p/src/Agg/B/C.lean": "/- a comment -/\nmodule\n",
         "p/src/Agg/Probe/Run.lean": "def main : IO Unit := pure ()\n",
@@ -407,6 +408,7 @@ def test_a_root_file_the_export_lacks_is_the_imports_of_the_modules_below_it() -
         "p/src/Has.lean": "import Has.X\n",
         "p/src/Has/X.lean": "def x := 1\n",
         "p/src/Has/Y.lean": "def y := 1\n",
+        "p/src/Has/Sub/Z.lean": "module\n",
         "p/src/Mixed/In/X.lean": "module\n",
         "p/src/Mixed/In/Y.lean": "def y := 1\n",
     }
@@ -414,6 +416,7 @@ def test_a_root_file_the_export_lacks_is_the_imports_of_the_modules_below_it() -
     assert got == {
         "p/src/Agg.lean": ("module\n\npublic import Agg.A\npublic import Agg.B.C\n\n"
                            "/-! The modules under `Agg` that this tree holds. -/\n"),
+        "p/src/Has/Sub.lean": "module\n\npublic import Has.Sub.Z\n\n/-! The modules under `Has.Sub` that this tree holds. -/\n",
         "p/src/Mixed/In.lean": ("import Mixed.In.X\nimport Mixed.In.Y\n\n"
                                 "/-! The modules under `Mixed.In` that this tree holds. -/\n")}
     for text in got.values():
@@ -423,7 +426,9 @@ def test_a_root_file_the_export_lacks_is_the_imports_of_the_modules_below_it() -
     targets = PE.lean_targets(lakefile, "p", tomllib.loads(lakefile), built)
     assert targets["default"] == ["Agg", "Mixed"] and targets["missing_roots"] == []
     assert PE.generated_roots(_Texts(files), set(files) - {"p/src/Agg/A.lean", "p/src/Agg/B/C.lean"}).keys() == {
-        "p/src/Mixed/In.lean"}, "a root with only exempt modules below it has nothing to import"
+        "p/src/Has/Sub.lean", "p/src/Mixed/In.lean"}, "a root with only exempt modules below it has nothing to import"
+    assert PE.generated_roots(_Texts(files), set(files) - {"p/lean-audit.json"}).keys() == {
+        "p/src/Agg.lean", "p/src/Mixed/In.lean"}, "without the lock, no root is the lock's"
 
 
 def test_a_manifest_loses_the_path_packages_the_export_does_not_copy() -> None:
