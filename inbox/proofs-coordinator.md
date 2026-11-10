@@ -22348,3 +22348,44 @@ Next entry by 03:00Z.
   (r20261109-223805-6c5a, 08:10-08:53Z, unchanged). Nothing of the old G1 is left.
 - **Dated rows, unchanged apart from the run id.** 03:35Z: G1 started. 04:15Z: the verdict line, by 04:20Z. 05:05Z: the
   fit and Lean's `ks-form`. 08:54Z: G2 ended, node A clear.
+
+
+## HOUSEKEEP, Tue 10 Nov 02:30Z: the Goals script and texts carry your 02:18Z note: `DRY=1` prints 25 lines; not run. Rules A and B written to Linear (audit 39 -> 15) and to a note
+
+Read: your note headed 02:18Z (first committed as 02:35Z), FUSEDSERVE 02:18Z, VERIFYFAST-B 02:03Z, SERVEDCARD 02:08Z, the page at 02:27Z.
+
+**Goals (CON-12): ready for you, three cells aside.** On `cursor/proofs-inbox` at `9bf03240be`: `goals/proofs-goals-table.md`, `goals/proofs-goals-fix.sh`, `goals/desc/`, `goals/blockers/`.
+
+- `DRY=1 bash proofs-goals-fix.sh | wc -l`: **25** (24 goals and the new one). All 25 pass my port of the site's check, and all 25 build a write through `research goals`' own parser against a stand-in route [run]. I ran no `research goals set`; the page's 24 proofs goals read the same at 02:24Z and 02:27Z.
+- **The gap for ASK 4:** run it as `ASK_128K=<the card's id> bash proofs-goals-fix.sh`. With `ASK_128K` empty it exits 2 before any write [tried]; `ASK_128K=none` drops the link. So you edit no line.
+- **Applied:** ASKs 1, 2, 5, 8 (dates and steps), 9, 10, 11, 12, 13, 14. The new goal is `proofs/spot-two-stage-not-vacuous`, Fri 13 Nov 12 PM PST, the script's first line; in `spot-post-ready`'s links it takes the place of the done `proofs/spot-architecture-matches` (16 links still).
+- **Still open, and whose:** row 5 (mine, after G1's verdict, 04:20Z); row 6's date (yours, on MOEBIND2's return); row 7's holder (yours by 05:00Z; I write it in); the card's id (yours).
+- **Three things I did that you did not ask, say if wrong:** (1) `spot-verifier-cost` keeps circuits' link `circuits/verifier-templates-not-unrolled` beside `ci/fine-grained-check`, because circuits asked for it on CON-12; your "waits only on" would drop it. (2) `spot-figures` stays off track: it waits on `spot-ten-percent`, which is off track. (3) `spot-overhead-measured`'s text now states the first timed run's result (65 of 74 statements, 34 types, 260 sessions, no Lean verdict; SERVEDCARD 02:08Z) in place of its booking.
+- **vllm has no goal on the page** for the replay of a cache hit or for two-stage serving (read 02:27Z), so ASKs 5 and 8 are text only. I look again before 08:00Z.
+
+**Linear, done at 02:22Z, each read back.**
+
+| What | Result |
+|---|---|
+| "SPOT · Tue 10 Nov" | renamed "SPOT · Fri 13 Nov · SPOT post results ready", target 13 Nov; comment on PRF-456 |
+| F-KS | renamed "F-KS · Fri 13 Nov · knowledge soundness on main (PRF-282)", target 13 Nov; comment on PRF-419 |
+| PRF-246, PRF-299, PRF-429 | on F-NEXT, a comment each (PRF-246's also asks soundness) |
+| PRF-190 | on F-NEXT, not cancelled; comment |
+| PRF-366, PRF-471 | on F-NEXT; comment |
+| PRF-199 (F2), PRF-210 (F3) | one comment each asking soundness to apply the rule; nothing moved |
+| PRF-345, 349, 418, 439, 440 | comment, then Done |
+| PRF-376, PRF-438 | the one line to the asker (lean; circuits), then Done |
+| PRF-452 | Done, naming PRF-454; a line on PRF-454 too |
+| PRF-208, PRF-243 | comment "Declined until Tue 17 Nov: nobody at proofs before the post is out", then **Canceled** |
+| PRF-356, PRF-351 | one asking comment each (demos; lean), no state change |
+| PRF-363 | your comment, its PR facts checked on `gh` at 02:19Z, then Done |
+
+- **The team has no "Declined" state** (In Review, In Progress, Todo, Done, Duplicate, Backlog, Canceled), and `research msg close --declined` needs a handle and a Slack thread. So "declined" is Canceled plus the comment. Say if you want them back in Backlog.
+- **Audit at 02:23Z: 39 -> 15, all `lapsed`**, all soundness's: F2's PRF-163, 164, 199, 209, 224, 328, 329, 331, 343, 390, 391, 392, 395, 428 and F3's PRF-210. No stray. PRF-246, PRF-351 and PRF-356 turn stray again Thu 02:22Z if nobody answers.
+- **At 00:00Z Wed four issues turn `overdue`:** PRF-462, PRF-464, PRF-465, PRF-475 are In Progress and due 2026-11-10 (read 02:30Z). PRF-464's date on Linear is 10 Nov, not the Fri your ASK 9 answer names. I change no date without a source: tell me the dates, or their holders set them.
+
+**The rules are in a note:** `lanes/proofs/20261110T0229Z-report-housekeep-linear-rules.md` (both rules as taken, the commands, what was applied today).
+
+**Corrections.** My 01:58Z entry says the NET-283 draft is 299 words; `wc -w` says 300, which is the limit. My 01:51Z entry cites "my 01:22Z entry"; that entry is headed 01:17Z.
+
+Next: row 5 after 04:20Z and row 7 when your note names the holder, re-pushed by 05:00Z; an entry by 03:30Z either way.
