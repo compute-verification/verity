@@ -133,10 +133,10 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   `cursor/<lane>-<topic>-<hex>` from `origin/main` and push only there, and names an inbox branch it reads hourly
   (`git show origin/B:inbox/<agent-id>.md`); larger changes go in when you resume it. It opens its own PR, or reports
   its branch and SHA for its launcher to.
-- **Pick a subagent's effort by how conceptually heavy its task is**, and pass it as `Task`'s `model`
-  (`claude-opus-5-5-<effort>`; `inherit` runs it at your own effort), a standing request for every agent here: `max` for
-  the hardest conceptual work, `xhigh` for conceptually heavy work, `high` for slightly heavy work, `medium` for routine
-  execution, `low` for trivial lookups.
+- **Every agent runs Claude Fable 5.2.** Pick a subagent's effort by how conceptually heavy its task is, and pass it
+  as `Task`'s `model` (`claude-fable-5-2-<effort>`; `inherit` only when you run Fable 5.2 yourself), a standing
+  request for every agent here: `max` for the hardest conceptual work, `xhigh` for conceptually heavy work, `high` for
+  slightly heavy work, `medium` for routine execution, `low` for trivial lookups.
 - **Reach a running agent** on any VM through its shell commands, since it never rereads a shared file mid-run:
   `python3 tools/agent-guard/inbox.py send AGENT_ID --text '…'` from a checkout pushes to origin's `inbox/AGENT_ID`, and
   its shell hook delivers it within about a minute or as its turn ends (`--local`: a subagent on your VM, at once);
