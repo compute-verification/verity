@@ -90,7 +90,7 @@ Two elements are optional:
 
 The ZK server proves all of Π_out on CPU, so Π_out's CPU time and peak memory per window set its size: as many
 instances side by side, each with its vCPUs and memory, as keep up with the GPU servers' windows.
-[The recursion benchmark](../../../../benchmarks/recursion_e2e/README.md) times Π_out's steps on a CPU node. Its
+[The recursion benchmark](../../../../workloads/recursion_e2e/README.md) times Π_out's steps on a CPU node. Its
 figures are upper bounds where other jobs share the node's vCPUs. A memory total over several instances assumes each
 statement's session frees its memory once its proof is released. The workers prove with zero knowledge off, so the
 figures leave out V\*'s growth under their `--zk`.

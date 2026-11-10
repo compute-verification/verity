@@ -241,8 +241,8 @@ PENDING: dict[str, str] = {
                                                             "renamed with the Lean",
     "integrations/vllm/tests/protocols/test_credit_gate.py": "its messages mirror the Lean's, which a difftest compares; "
                                                              "renamed with the Lean",
-    "benchmarks/recursion_e2e/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "examples/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
+    "workloads/recursion_e2e/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
+    "workloads/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
 }
 
 

@@ -69,7 +69,7 @@ completeness holds at it (`HonestWitSatisfies`), no part's recorded calls collid
 rounds before the last (`hist.take (kI x - 1)`) the inner prover's openings fit V\*'s levels (`IrShaped`) and the reps'
 tops differ (`TopsAt`).
 
-The run is `benchmarks/recursion_e2e --e2e --cpu` (the toy deployment, K = 64, N = 16, under the ZK server, at
+The run is `workloads/recursion_e2e --e2e --cpu` (the toy deployment, K = 64, N = 16, under the ZK server, at
 16a44e3b86). Its outer tree holds each part's `inst.bin`, `fold.json`, `points.json` and `acc-salts.bin`. Each conjunct
 on it:
 * `HonestRunAccepted`: the compiled `flock-verify` printed `VERDICT {"accepted":true}` (why `""`) on each of the 10 V\*

@@ -65,7 +65,7 @@ shared = [
     # Accounting's B200 sheet, so it stays private)
     "verity/hardware/{__init__.py,pyproject.toml,README.md,cards,tests/test_cards.py}",
     # the vLLM endpoint's load generator, which the served run's requests come from
-    "examples/vllm/serve_load.py",
+    "workloads/vllm/serve_load.py",
     "Security/Properties/Spot/{Draw,Bits}.lean",
     "Security/Proofs/Properties/Accounting/Remote/Sort.lean",
     # the second stage's law (`SecondMisses`), which the public sampling proofs import: an entry of its own, apart from
@@ -178,7 +178,7 @@ oracle_tests = [
 run_store_tests = [
     "integrations/vllm/tests/pipeline/test_{boundary_plan,commit_tree_of_record,experiment_index,hot_commit}.py",
 ]
-# vLLM's test of the vLLM demo's workload (`examples/vllm/workloads`), which the public tree doesn't hold
+# vLLM's test of the vLLM demo's workload (`workloads/vllm/workloads`), which the public tree doesn't hold
 demo_tests = ["integrations/vllm/tests/pipeline/test_demo_workload_file.py"]
 # vLLM's records a tracked file can't hold (each over `tests/test_repository.py`'s limit: the top-p split's GPU rows, the M1
 # and M6 logs, the regression's larger frozen references and its files' digests, the H1 challenger's periods), and the tests

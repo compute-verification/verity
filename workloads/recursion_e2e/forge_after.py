@@ -1,7 +1,7 @@
 """forge-after: V*'s three forgeries that the prover's ZK server stops before release (coef, dirs, message), made after an
 honest firewalled prove instead, and put to the Lean verifier.
 
-    python3 benchmarks/recursion_e2e/forge_after.py --work FLOCK_WORK --tag TAG --run-out LEAN_OUT [--bin NAME=PATH ...] [--kinds K,..]
+    python3 workloads/recursion_e2e/forge_after.py --work FLOCK_WORK --tag TAG --run-out LEAN_OUT [--bin NAME=PATH ...] [--kinds K,..]
 
 ``run.py``'s ``forge-after`` step runs it after the lean step (``--run-out``: that step's out/, whose ``lean/own-<stmt>.txt``
 it reuses) with 85's flock-verify; ``forge_after.sh`` runs it over an earlier run's data.

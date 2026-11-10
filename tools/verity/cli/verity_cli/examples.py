@@ -1,4 +1,4 @@
-"""The ladder: each demo's doneness on two independent axes, from its `examples/<name>/demo.toml` (`examples/README.md`).
+"""The ladder: each demo's doneness on two independent axes, from its `examples/<name>/demo.toml` (`workloads/README.md`).
 
 A demo names its protocol (or a composite, or a list), its workload and its placement (role -> machine class), how far it
 runs (`run`: moved, runs, placed) and how far its guarantee is proved (`proof`: none, stated, proved, measured), and the
@@ -35,7 +35,7 @@ KEYS = {"protocol", "workload", *AXES, "placement", "evidence"}
 LEVEL = {0: ("moved", "none"), 1: ("runs", "none"), 2: ("placed", "none"), 3: ("placed", "stated"), 4: ("placed", "proved"),
          5: ("placed", "measured")}
 EVIDENCE = {"runs", "tests", "guarantee", "honest", "nontrivial", "proof", "premises"}
-SCHEMA = "examples/README.md has the schema"
+SCHEMA = "workloads/README.md has the schema"
 WHERE = "tools/verity/cli/verity_cli/examples.py"
 DECL = re.compile(r"^[ \t]*(?:@\[[^\]\n]*\][ \t]*\n?[ \t]*)?(?:(?:private|protected|noncomputable|nonrec|partial|unsafe)[ \t]+)*"
                   r"(?:theorem|lemma|def|abbrev|instance|structure|inductive|class|opaque)[ \t]+([^\s:({\[]+)", re.M)

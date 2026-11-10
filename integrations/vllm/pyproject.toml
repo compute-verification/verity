@@ -90,7 +90,7 @@ untraced = [
 # package imports (`research.store.tool`, `research.telemetry.source_identity`) and the store CLI that `store_io` starts for a
 # fetch and `records.data` starts as `python -m research` (its `__main__`), and the run fixture
 # tests/regression/test_attempt_resolution.py resolves. Test-only: tests/pipeline checks the fixtures
-# this package registers and the demo's stored workload (examples/vllm/workloads/SHA256SUMS); tests/program/test_fp8_moe.py replays the Hopper e4m3 k32 step's pinned vectors (under `verity`);
+# this package registers and the demo's stored workload (workloads/vllm/workloads/SHA256SUMS); tests/program/test_fp8_moe.py replays the Hopper e4m3 k32 step's pinned vectors (under `verity`);
 # tests/engine's int8 tests run benchmarks/ppl's int8 steps as their oracle;
 # tests/store/test_remote_session.py runs the remote session's prover and verifier (`store.remote`), and the verifier
 # imports lean_verifier.py, challengers.py and store_layout.py; tests/protocol_options/test_pouw_h1_circuits.py parses a
@@ -107,7 +107,7 @@ untraced = [
 # tests/protocols/pouw_h1_circuits.py lowers K's circuit file with h1_prove's h1unit.py under hidden_zk's fast_stage.py and the
 # compact_stage.py it imports (test_pouw_h1_drawn.py builds one), and reads the live Program from h1_prove's live.py (test_pouw_h1_circuits.py).
 inputs_only = true
-inputs = ["verity", "verity/README.md", "verity/configuration/config/verity_config", "fixtures/artifacts.json", "examples/vllm/workloads/SHA256SUMS", ".gitignore",
+inputs = ["verity", "verity/README.md", "verity/configuration/config/verity_config", "fixtures/artifacts.json", "workloads/vllm/workloads/SHA256SUMS", ".gitignore",
           "verity/spot/verifier/lean/lakefile.toml", "verity/protocols/pouw/verifier/lean/check/lakefile.toml",
           "verity/protocols/poub/verifier/lean/lakefile.toml",
           "benchmarks/ppl/steps.py", "benchmarks/ppl/matmul.py", "benchmarks/ppl/gates.py", "benchmarks/ppl/spec.py", "benchmarks/ppl/methodology.py", "benchmarks/ppl/model.py",

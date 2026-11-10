@@ -1,4 +1,4 @@
-"""Every demo states its doneness on both axes and carries the evidence for each (`examples/README.md`).
+"""Every demo states its doneness on both axes and carries the evidence for each (`workloads/README.md`).
 
 Each `examples/<name>/` has a `demo.toml` that parses, with a known protocol, workload and placement, a `run` (moved, runs,
 placed) and a `proof` (none, stated, proved, measured), and the evidence every step up to each needs on its own axis, in the

@@ -3,7 +3,7 @@ its `Registry.check` (``verity/settings.py``): what ``job.sh`` reads (its own, a
 ``verity/flock/pod/85-rec-reprice.sh``'s it sets a default for), and what ``run.py`` and ``forge_after.py`` read.
 
 ``job.sh`` takes its variables as ``KEY=VALUE`` arguments (``run.py``'s ``job_env``) and passes every one on to 85.  It runs
-``python3 benchmarks/recursion_e2e/settings.py record FILE`` first, which refuses, by name, a variable under the job's own
+``python3 workloads/recursion_e2e/settings.py record FILE`` first, which refuses, by name, a variable under the job's own
 prefixes (``REPEAT_``, a step's repeats; ``OPROVE_``, oprove's) that nothing reads, a declared value that doesn't parse, and a
 debug setting on a run of record (one with ``RESEARCH_RUN_ID``); then writes the value settings in force to FILE and prints
 their digest, which ``params.txt`` (so the result's ``params``) carries as ``settings``.  ``run.py`` refuses the same before it
