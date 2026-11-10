@@ -35,8 +35,9 @@ A type of `CENSUS` is a block type of the serving rows by its census name (`serv
 overhead card prices it under), one whole Definition a proof block, laid out as the served composer lays its template
 (`compose_circuit.py --template`): its served rows (`chunk_rows.unit_rows`, each parameter's leaves seeded at their width,
 `census_leaves`) and statement (`chunk_rows.statement`: the 64-key sparse MLA split part's MUFU reads in Flock's lookup
-slots, its unit cut into stage nets under the lowering's automatic limits, which keep it within the GPU prover's slot types; RMSNorm's
-and the FP8 linears' inline) under its unit name, so the statement is the served one but for its binding: its
+slots, its unit cut into stage nets under the lowering's automatic per-net AND limits, which keep it within the GPU
+prover's slot types; RMSNorm's and the FP8 linears' inline) under its unit name, so the statement is the served one but
+for its binding: its
 ``class_sha512`` is the served composer's. The circuit is streamed to circuit.txt once, every input's outputs checked against
 the Program's reference (``twin`` null). ``census:NAME`` stages any other block type of the serving rows the same way, its
 values seeded by the same rule and its seeds keyed by the name.
@@ -366,7 +367,7 @@ def stage_census(name: str, cen: Census, S: dict, tag: str, n: int | str, out: P
     meta = got["meta"]
     return {"unit": name, "statics": S, "tag": tag, "n": n, "definition": d.id, "census": cen.name(S),
             "in_rows": [[r, s, b, ps] for r, s, b, ps in in_rows], "public_inputs": [], "packed": False, "ands": got["ands"],
-            "statement": stmt, "stage_limits": getattr(st.low, "caps", None), "nets": nets(st.low), "lookups": meta.get("lookups"),
+            "statement": stmt, "net_and_limits": getattr(st.low, "caps", None), "nets": nets(st.low), "lookups": meta.get("lookups"),
             "slot_types": len({r["net"] for r in meta.get("ranges", ())}),
             "unit_nnz": got["unit_nnz"], "k_log": meta["k_log"], "unit_log": meta.get("unit_log"),
             "vus_per_block": meta.get("vus_per_block"), "row_schemas": meta.get("row_schemas"),
