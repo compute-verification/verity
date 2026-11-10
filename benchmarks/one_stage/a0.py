@@ -255,6 +255,27 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
     return (json.loads(recs[-1].read_text()) if recs else None), live
 
 
+def templated(st, d: Path, tmpl_unit_bin: str | None) -> dict:
+    """A templated statement's reads beyond a flat one's (none for a flat one): `verify`'s statement, and the prover's unit
+    rows at their positions (``d/unit.placed``, `--tmpl-unit`), which `flock-tmpl-unit` places from the circuit's template
+    section and META's layout mode (``d/unit.tmpl``, ``d/unit.layout``)."""
+    from verity_flock import circuit as FC
+
+    if st.meta.get("statement") != FC.TMPL_STATEMENT:
+        return {}
+    if not tmpl_unit_bin:
+        raise SystemExit("a templated statement's prover reads its unit placed by flock-tmpl-unit: give --tmpl-unit-bin")
+    placed = d / "unit.placed"
+    if not placed.exists():
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "unit.tmpl").write_text(FC.template_of(st.text))
+        (d / "unit.layout").write_text(st.meta["layout"])
+        p = run([tmpl_unit_bin, str(d / "unit.tmpl"), "--layout", st.meta["layout"], "--out", str(placed)], d / "tmpl-unit.log")
+        if p.returncode:
+            raise SystemExit(f"flock-tmpl-unit: exit {p.returncode} ({d / 'tmpl-unit.log'})")
+    return {"statement": FC.TMPL_STATEMENT, "tmpl_unit": placed}
+
+
 def lean_draw_test(lean: str, cases: list[dict], out: Path, name: str) -> list[dict]:
     f = out / f"{name}.cases.json"
     f.write_text(json.dumps(cases))
