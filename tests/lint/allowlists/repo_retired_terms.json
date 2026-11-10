@@ -3243,7 +3243,6 @@
     {"file": "benchmarks/pouw/floored_gemm/fgemm.cu", "count": 3},
     {"file": "benchmarks/pouw/floored_gemm/run.sh", "count": 1},
     {"file": "benchmarks/pouw/floored_gemm/tb_run.sh", "count": 1},
-    {"file": "benchmarks/pouw/gemm_rate/torch_rate.py", "count": 1},
     {"file": "benchmarks/pouw/gpu_kit/bench.cuh", "count": 1},
     {"file": "benchmarks/pouw/grind_price.py", "count": 1},
     {"file": "benchmarks/pouw/h1_lanes/j10r.py", "count": 22},
