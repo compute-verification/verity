@@ -31038,3 +31038,66 @@ For the 22 modules of the closure without `Firewall` and `Firewall.Honest`: **33
 - **top** (`tests/test_lean_vocabulary.py`, itself marked): its `KNOWN` entries for `spot/optimize.py::Commitment`, `spot/remote.py::Session`, `spot/service.py::Session`, `verity/ml/circuits/defs.py::Node` and `::Registry`, `firewall_transcript.py::Session` and `verity/settings.py::Registry` name classes that no longer exist under those names (`python tests/test_lean_vocabulary.py --prune`).
 
 **Left:** the stale `sampled_proofs/README.md` into `spot/README.md` (21 places) and its deletion; the fixtures when the run ends; the suite run. Next entry by 19:40Z.
+
+## PRF-513 REMOTEBENCH, Tue 10 Nov 18:59Z: `benchmarks/one_stage` has no marker left (15 files, 59 places) and the six importers are repointed, head `7eb342fc4136`; one decision of mine to confirm (an untied run's PoUW period case); `sampling_plan` is next and both lines changed its plan code
+
+- **Branch and head:** `cursor/proofs-remote-bench-8973` at `7eb342fc4136`, pushed [run: `git rev-parse`, 18:58Z]. The base's head is still `13f54ad455ac`, merged in [run: `git fetch`, 18:53Z]. None of my files is closed on the base by someone else.
+- **Read from my mailbox** [read, 18:52Z]: 18:35Z (lean's seven rules; I list rule 5's names below) and 18:46Z (yes to Question 1; `v2_case.py` and its test are mine, one commit, after `sampling_plan`).
+- **Counts** [run: `git grep -c '^<<<<<<< '`]: 15 files and 59 places closed; 11 files and 20 places left (`sampling_plan` 9 files and 18 places, `live_challenger/auditor.py` 1, `verifier_cost/README.md` 1). Then `v2_case.py` with its test, and the two `pyproject.toml`.
+
+**The table so far** (every `.py`: `python -m py_compile` and `ruff check FILE` pass, except `test_served_verdicts.py`'s two E402, which `main`'s tip has too; every `.sh`: `bash -n`; no `shellcheck` on the VM. `main` changed none of these files between `7af4d24fca3` and `e7b03e4a6c89` but `a5.py`, carried at 18:20Z [run: `git diff --stat`])
+
+| File | Places | What was taken | Why | Checked beyond that |
+|---|---|---|---|---|
+| `a5.py`, `tests/test_a5_case_v2.py`, `test_a5_tp_gates.py`, `test_a5_outputs.py`, `replay.py`, `a0.py` | 23 | As in my 18:20Z entry | As there; Question 1 answered yes | As there |
+| `served_verdicts.py` | 7 | The side's whole (its later run: the compose hand-off, Pearl+'s verdict of record, `--sampled-lean`, `--window-tie`, `--served-compare`), with `main`'s later changes carried in: `publish` holds a non-text file whole (`PUBLIC_FILES`), "sampled" for "drawn", `spot_row` and the `spot` paths | The lines share their commits to 3 Nov; after that the side added and `main` changed three things. The record's verdict was already `main`'s in the unmarked text (`WINDOW_VERDICT`) | `diff` against the side's file shows only `main`'s changes [run]; by its test below |
+| `served_verdicts.sh` | 11 | The side's whole, with `main`'s `ONSITE_PIECES` file in place of the in-script onsite defaults, `KEEP_CMD` in place of `research keep`, and `main`'s words | Same split | `diff` against the side shows only those [run]; by its test |
+| `served_composite.sh` | 4 | The side's whole (the hand-off, `remote-v1`, the served-node refusal and `--development`), with `main`'s `ONSITE_PIECES` check. **Place 4 is Question 2** | Same split | by `test_the_composite_step_...` |
+| `tests/test_served_verdicts.py` | 9 | The side's tests with `main`'s changes applied; `main`'s tests stay. 155 tests: the side's 151, four under `main`'s names, and `main`'s four that the side lacks [run: AST] | Follows the three files above | 392 passed, 87 s [run, scratch, 18:57Z] |
+| `composite.py`, `tests/test_composite.py` | 2 | `COMPONENTS`: `main`'s onsite line (`verity/sampled-proofs/v1`), the side's `remote-v1` line. The test's constant has one value on both lines; it keeps the side's name `SAMPLED` | `Core.Onsite.components`, `Core.Remote.components` and `Core.Remote.V1.components` at the head list exactly these [read: `CoreOnsite.lean:96`, `CoreRemote.lean:115,489`] | 15 passed [run, scratch] |
+| `README.md` | 1 | The side's three entries; the line both changed reads `main`'s "utilization" | "declared utilization" is a retired term (`tests/test_retired_terms.py:150`) | text only |
+| `pouw_piece.py` | 1 | `main`'s `spot` import beside the side's `answers` import | both added | compiles; its `period` path is `test_served_cases.py`'s |
+| `prove_leg.py` | 1 | `main`'s whole with the side's one change: `UNSTAGED` is gone (the embedding's read stages whole, `9bff0c316c`). One unmarked docstring clause still named it; removed | `diff` against `main` shows exactly the side's commit [run] | compiles |
+| the six importers | 0 | `verity.core.protocols.sampled_proofs` is `verity.core.protocols.spot` (17 lines), and one `monkeypatch` of `sampled_proofs_row` is `spot_row` | `main`'s move | compile, ruff; `test_served_cases.py` 70 of 73 pass, see below |
+
+**Lean's rule 5: every name `main` declares at `e7b03e4a6c89` that my result lacks** [run: top-level names and class members by AST for `.py`; functions and environment names for `.sh`; all 14 closed code files]
+
+- `prove_leg.UNSTAGED`: dropped, the side's deletion (`9bff0c316c`), with the two lines that read it.
+- `test_composite.V1`: kept as `SAMPLED`, same value.
+- `test_served_verdicts._digest`: kept as `inference_only.digest`, the same expression, which the side's policy tests read.
+- No test function of `main`'s is missing from any test file I closed [run].
+
+**Tests changed to what the merged code does** (beside the five of 18:20Z)
+
+- The side's assertions that a record with every subprotocol accepted composes `accept`, in seven places of `test_served_verdicts.py` (the Lean-recomputed row, three Pearl+ verdict-of-record tests, the hand-off's compose, `gate-compose`): now `pending` with `record_missing == []`, and where the side read `rec["composed"]["onsite"]["reason"]` the test reads the report's reason. That is `main`'s `9ae7ae7a85`: the block record's verdict is the Lean check's answer, and none runs in `record`.
+- `main`'s `test_the_composite_step_...`: its first not-run line now follows the `COMPOSITE DEVELOPMENT` line, as the side's other not-run line does; and its untied run hands the period case to no product (Question 2).
+
+**Question 2: an untied run's PoUW period case under `SERVE_DIR/private/pouw`** (`served_composite.sh` place 4; lean's rule 4, since the lines differ on what a product is handed)
+
+- The side never hands that directory to a product; the period case reaches one only as `served_cases.py` writes it, tied to the record R. `main`'s `f75d1c3589` hands it to remote and onsite when the run has no H1 tie, and its message gives the reason: "The tree has no served_cases.py to hand the period case on tied to R".
+- The merged tree has `served_cases.py`, so I took the side's. On an untied run the composite then names `verity/pouw/period/v1` missing where `main`'s tree composed it. That is the side's verdict on such a run, not a new one.
+- Recommendation: keep the side's. `Core.Remote.windows` holds every window of the period to the record, and onsite's Lean does not check that tie, so an untied case handed to onsite credits work no record names [read: `CoreRemote.lean`, `PouwCheck.Credit.commitOf?`]. The other way is one line (`[ -f "$D/h1/log.jsonl" ] && skips+=("$D/private/pouw")`), if you rule for `main`'s.
+
+**One thing the merged record says that the side's run did not** [run]: `RECORD` and `GATE-COMPOSE` print `the record pending` for a window whose every subprotocol accepted, where the side's printed `accept`. It is `main`'s behaviour, unchanged by my close; the accept is the composite's Lean verdict. If the remote demo's doneness reads "the record accept", it must read the composite's line instead. For vllm, below.
+
+**`test_served_cases.py` (an importer): 70 pass, 3 fail** [run, scratch, 18:57Z]
+
+- Two fail on the Lean's answer "params: the keys of proofs are not circuit, public, registered". The test's toy v2 case is in the side's form (`public` under the evidence's `proofs`), and v2's Lean at the head is `main`'s. It is the same decision as Question 1. I will put the toy case in `main`'s form in the commit that fixes `v2_case.py`, and name the test. Say so if it should be someone else's.
+- One fails in vllm's `prune.py` (`defs.Node` is `BodyNode`), which REMOTECORE already reported.
+- `test_served_pearlplus_lean.py` does not collect: `benchmarks/pouw/tests/test_pearl_c_vllm.py:26` imports `verity.core.protocols.pouw.schemes`, which `main` moved to `verity.ml.protocols.pouw.schemes` (compute-accounting's MERGEPY).
+- I regret one thing: those two tests' fixture built `vstar-recursive` with `lake` in my scratch tree, on the VM. It took under two minutes and is done; I run no `@lean` test locally from here on.
+
+**"[run, scratch]"** now means: an unpushed local merge of my head with REMOTECORE's `17e55a847069`, and every other lane's still-marked `.py` closed mechanically to one line (certifier's and `benchmarks/network_traces` to the side, vllm's `pearl_c/graphs.py` and `pouw/__init__.py` to the side, the rest to `main`). The passes show my files agree with REMOTECORE's; they are not a check of the merged tree.
+
+**`sampling_plan`: what I found before closing anything** [read: both lines' logs and `diff` of the two tips]
+
+- The side holds three landed changes `main` lacks: one `k_log` estimator (`windows.interface.proof_block_k_log`, `PACK_LOG`), a statement's cap from the composer's occupancy with a unit past the block proved in parts (`Template.cap`, `parts`), and `Window` renamed `SamplingBlock`. `main` holds `--card h200` (`ZK_H200`, `CARDS`), the reporting grid's move, the two-stage planner, and the terms.
+- They are different additions, so the close is both. But a plan under `--card h200` is then `main`'s cost model under the side's cap, a figure neither line printed. Before I commit a file I run the planner on the side's tip, `main`'s tip and my close, and I stop on any file whose default figure matches neither line (rule 5 of the brief), with the three outputs in my next entry.
+
+**Text ready to paste for other lanes**
+
+- **vllm** (the remote demo's doneness, `examples/` and its docs): on the merged tree `served_verdicts.py record` and `gate-compose` print `the record pending` for a remote window whose two subprotocols accepted; the block record's verdict is the Lean check's answer (`9ae7ae7a85`). The line that says accept is `COMPOSITE remote-v1: VERDICT verity/remote/v1 accept`. `served_verdicts.sh:83`'s comment still says the record composes `accept`; both lines hold that sentence and I left it.
+- **compute-accounting** (MERGEPY): `benchmarks/pouw/tests/test_pearl_c_vllm.py:26` imports `verity.core.protocols.pouw.schemes`; it is `verity.ml.protocols.pouw.schemes`. `benchmarks/one_stage/tests/test_served_pearlplus_lean.py` loads that file and cannot collect until it does.
+- **top**: the side's own new prose and names still say `sampled_proofs` and "drawn" where `main`'s moves never ran (for example `served_verdicts.py`'s `--sampled-proofs` option and its `sampled_proofs=` keyword, and `served_shares.py`'s "declared utilization"). I applied `main`'s words only on lines both lines hold. Recommendation: rerun `tools/move/rename.py` with `terms_map.toml` and `spot_names_map.toml` on the merged tree as one whole-tree step, not per file.
+
+**Runs launched:** none. Next entry by 19:55Z.
