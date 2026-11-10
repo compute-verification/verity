@@ -1,5 +1,5 @@
 # The layout move of sampled proofs, to `verity/spot`: what `tools/move/layout.py --map
-# tools/move/layout_06_spot_map.toml` moves and rewrites. 147 files in 22 rows. Written by
+# tools/move/layout_moves/layout_06_spot_map.toml` moves and rewrites. 146 files in 21 rows. Written by
 # `tools/move/layout_maps.py`, which states the rule: edit that, not this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
@@ -11,12 +11,11 @@
 #   Lean is its `lean/`.
 # - `verity/core/service/vstar/recursive/` to `verity/spot/verifier/recursive/`: the recursive audit's Lake package
 #   requires SPOT's: under Flock's verifier, where the rule leaves it, it reads against the order of the layout.
-# - `verity/core/service/vstar/tests/test_vstar_recursive.py` to
-#   `verity/spot/verifier/recursive/tests/test_vstar_recursive.py`: the recursive audit's test goes with its package.
-# - `verity/core/service/vstar/tests/recursive_data.json` to
-#   `verity/spot/verifier/recursive/tests/recursive_data.json`: the recursive audit's test data goes with its test.
 # - `verity/core/protocols/profile.py` to `verity/spot/verifier/profile.py`: the integrity profile: the rule gives
 #   `verity/spot/verifier/protocols/profile.py`, a `protocols/` segment that names nothing.
+# - `verity/core/service/vstar/` to `verity/flock/verifier/vstar_cli/`: V*'s command package: the rule gives
+#   `verity/flock/verifier/vstar/`, which differs only by case from `VStar/`, the Flock verifier's own Lean sources,
+#   and a checkout that ignores case merges the two.
 # The layout's maps run in the order of their names. This one renames no package another map takes modules out of, so
 # its place among them is free. The format is `layout_map.toml`'s.
 
@@ -42,11 +41,14 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "verity/core/protocols/spot/second_stage.py" = "verity/spot/verifier/second_stage.py"
 "verity/core/protocols/spot/service.py" = "verity/spot/verifier/service.py"
 "verity/core/protocols/spot/tests/" = "verity/spot/verifier/tests/"
-"verity/core/protocols/tests/test_profile.py" = "verity/spot/verifier/tests/test_profile.py"
 "verity/core/service/spot/" = "verity/spot/verifier/lean/"
 "verity/core/service/vstar/recursive/" = "verity/spot/verifier/recursive/"
-"verity/core/service/vstar/tests/recursive_data.json" = "verity/spot/verifier/recursive/tests/recursive_data.json"
-"verity/core/service/vstar/tests/test_vstar_recursive.py" = "verity/spot/verifier/recursive/tests/test_vstar_recursive.py"
+"verity/core/service/vstar/tests/recursive_data.json" = "verity/flock/verifier/vstar_cli/tests/recursive_data.json"
+"verity/core/service/vstar/tests/test_vstar_recursive.py" = "verity/flock/verifier/vstar_cli/tests/test_vstar_recursive.py"
+
+[tokens]
+# directories no row moves whole, as a reference to one reads after the move
+"verity/core/protocols/spot/" = "verity/spot/"
 
 [retired]
 paths = []
@@ -59,13 +61,13 @@ paths = []
 # archive), and files whose bytes a digest pins.
 exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz",
            "**/CHANGELOG.md", "*.patch", "**/TRUSTED.sha256", "**/lake-manifest.json.lock",
-           "uv.lock", "tools/move/**", "archive/**", "benchmarks/numerical/reports/**",
-           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/ml/circuits/silicon/captures/**", "verity/ml/circuits/silicon/hawkeye/**",
-           "verity/definitions/silicon/captures/**", "verity/definitions/silicon/hawkeye/**", "integrations/vllm/manifests/**", "integrations/vllm/workloads/**",
-           "integrations/vllm/data/**", "integrations/vllm/verity_vllm/pins/**", "tools/verity/check/tests/test_suites.py", "tools/verity/check/tests/test_move_check.py",
-           "tools/research/src/research/store/moves.json", "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py", "benchmarks/network_e2e/tests/data/**", "benchmarks/hash/dither/j10b_ref.py",
-           "benchmarks/hash/dither/j10ca_ref.py", "benchmarks/hash/dither/j10hb.py", "benchmarks/hash/dither/j10rtx.py", "benchmarks/hash/dither/j10served.py",
-           "integrations/vllm/tools/migrate/superseded_quarantine.py", "integrations/vllm/tests/migrate/test_superseded_quarantine.py"]
+           "tools/move/**", "archive/**", "benchmarks/numerical/reports/**", "benchmarks/numerical/tests/bench/data/**",
+           "**/price_twins.json", "verity/ml/circuits/silicon/captures/**", "verity/ml/circuits/silicon/hawkeye/**", "verity/definitions/silicon/captures/**",
+           "verity/definitions/silicon/hawkeye/**", "integrations/vllm/manifests/**", "integrations/vllm/workloads/**", "integrations/vllm/data/**",
+           "integrations/vllm/verity_vllm/pins/**", "tools/verity/check/tests/test_suites.py", "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py", "benchmarks/network_e2e/tests/data/**", "benchmarks/hash/dither/j10b_ref.py", "benchmarks/hash/dither/j10ca_ref.py",
+           "benchmarks/hash/dither/j10hb.py", "benchmarks/hash/dither/j10rtx.py", "benchmarks/hash/dither/j10served.py", "integrations/vllm/tools/migrate/superseded_quarantine.py",
+           "integrations/vllm/tests/migrate/test_superseded_quarantine.py"]
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json", "integrations/vllm/manifests/definitions.json"]
 
 [modules]
@@ -85,7 +87,6 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 "verity.core.protocols.spot.second_stage" = "verity.spot.verifier.second_stage"
 "verity.core.protocols.spot.service" = "verity.spot.verifier.service"
 "verity.core.protocols.spot.tests" = "verity.spot.verifier.tests"
-"verity.core.protocols.tests.test_profile" = "verity.spot.verifier.tests.test_profile"
 "verity.core.service.spot" = "verity.spot.verifier.lean"
 "verity.core.service.vstar.recursive" = "verity.spot.verifier.recursive"
-"verity.core.service.vstar.tests.test_vstar_recursive" = "verity.spot.verifier.recursive.tests.test_vstar_recursive"
+"verity.core.service.vstar.tests.test_vstar_recursive" = "verity.flock.verifier.vstar_cli.tests.test_vstar_recursive"

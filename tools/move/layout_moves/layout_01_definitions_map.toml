@@ -1,5 +1,5 @@
 # The layout move of the Definitions and their host kernels, to `verity/definitions`: what `tools/move/layout.py
-# --map tools/move/layout_01_definitions_map.toml` moves and rewrites. 714 files in 114 rows. Written by
+# --map tools/move/layout_moves/layout_01_definitions_map.toml` moves and rewrites. 701 files in 101 rows. Written by
 # `tools/move/layout_maps.py`, which states the rule: edit that, not this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
@@ -30,24 +30,11 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "verity/ml/circuits/silicon/" = "verity/definitions/silicon/"
 "verity/ml/circuits/stacking.py" = "verity/definitions/circuits/stacking.py"
 "verity/ml/circuits/targets/" = "verity/definitions/circuits/targets/"
-"verity/ml/circuits/tests/fixtures/" = "verity/definitions/circuits/tests/fixtures/"
-"verity/ml/circuits/tests/test_census.py" = "verity/definitions/circuits/tests/test_census.py"
-"verity/ml/circuits/tests/test_constants.py" = "verity/definitions/circuits/tests/test_constants.py"
-"verity/ml/circuits/tests/test_lean_gates.py" = "verity/definitions/circuits/tests/test_lean_gates.py"
-"verity/ml/circuits/tests/test_library.py" = "verity/definitions/circuits/tests/test_library.py"
-"verity/ml/circuits/tests/test_memcheck.py" = "verity/definitions/circuits/tests/test_memcheck.py"
-"verity/ml/circuits/tests/test_operations.py" = "verity/definitions/circuits/tests/test_operations.py"
-"verity/ml/circuits/tests/test_requirement.py" = "verity/definitions/circuits/tests/test_requirement.py"
-"verity/ml/circuits/tests/test_requirement_units.py" = "verity/definitions/circuits/tests/test_requirement_units.py"
-"verity/ml/circuits/tests/test_stacking.py" = "verity/definitions/circuits/tests/test_stacking.py"
-"verity/ml/circuits/tests/test_targets_frozen_families.py" = "verity/definitions/circuits/tests/test_targets_frozen_families.py"
 "verity/ml/commitments/gates/attest.circuit-check.py" = "verity/definitions/commitments/gates/attest.circuit-check.py"
 "verity/ml/commitments/gates/attest.py" = "verity/definitions/commitments/gates/attest.py"
 "verity/ml/commitments/gates/block_key.circuit-check.json" = "verity/definitions/commitments/gates/block_key.circuit-check.json"
 "verity/ml/commitments/gates/block_key.circuit-check.py" = "verity/definitions/commitments/gates/block_key.circuit-check.py"
 "verity/ml/commitments/gates/block_key.py" = "verity/definitions/commitments/gates/block_key.py"
-"verity/ml/commitments/tests/test_block_key.py" = "verity/definitions/commitments/tests/test_block_key.py"
-"verity/ml/commitments/tests/test_boolean_attest.py" = "verity/definitions/commitments/tests/test_boolean_attest.py"
 "verity/ml/definitions/README.md" = "verity/definitions/README.md"
 "verity/ml/definitions/__init__.py" = "verity/definitions/__init__.py"
 "verity/ml/definitions/boolean.py" = "verity/definitions/boolean.py"
@@ -129,7 +116,7 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "verity/ml/private_circuits/" = "verity/definitions/private_circuits/"
 
 [tokens]
-# directories this move shares with other moves, as a reference to one reads after it
+# directories no row moves whole, as a reference to one reads after the move
 "verity/ml/definitions/" = "verity/definitions/"
 "verity/ml/definitions/numerics/" = "verity/definitions/numerics/"
 
@@ -144,13 +131,13 @@ paths = []
 # archive), and files whose bytes a digest pins.
 exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz",
            "**/CHANGELOG.md", "*.patch", "**/TRUSTED.sha256", "**/lake-manifest.json.lock",
-           "uv.lock", "tools/move/**", "archive/**", "benchmarks/numerical/reports/**",
-           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/ml/circuits/silicon/captures/**", "verity/ml/circuits/silicon/hawkeye/**",
-           "verity/definitions/silicon/captures/**", "verity/definitions/silicon/hawkeye/**", "integrations/vllm/manifests/**", "integrations/vllm/workloads/**",
-           "integrations/vllm/data/**", "integrations/vllm/verity_vllm/pins/**", "tools/verity/check/tests/test_suites.py", "tools/verity/check/tests/test_move_check.py",
-           "tools/research/src/research/store/moves.json", "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py", "benchmarks/network_e2e/tests/data/**", "benchmarks/hash/dither/j10b_ref.py",
-           "benchmarks/hash/dither/j10ca_ref.py", "benchmarks/hash/dither/j10hb.py", "benchmarks/hash/dither/j10rtx.py", "benchmarks/hash/dither/j10served.py",
-           "integrations/vllm/tools/migrate/superseded_quarantine.py", "integrations/vllm/tests/migrate/test_superseded_quarantine.py"]
+           "tools/move/**", "archive/**", "benchmarks/numerical/reports/**", "benchmarks/numerical/tests/bench/data/**",
+           "**/price_twins.json", "verity/ml/circuits/silicon/captures/**", "verity/ml/circuits/silicon/hawkeye/**", "verity/definitions/silicon/captures/**",
+           "verity/definitions/silicon/hawkeye/**", "integrations/vllm/manifests/**", "integrations/vllm/workloads/**", "integrations/vllm/data/**",
+           "integrations/vllm/verity_vllm/pins/**", "tools/verity/check/tests/test_suites.py", "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py", "benchmarks/network_e2e/tests/data/**", "benchmarks/hash/dither/j10b_ref.py", "benchmarks/hash/dither/j10ca_ref.py",
+           "benchmarks/hash/dither/j10hb.py", "benchmarks/hash/dither/j10rtx.py", "benchmarks/hash/dither/j10served.py", "integrations/vllm/tools/migrate/superseded_quarantine.py",
+           "integrations/vllm/tests/migrate/test_superseded_quarantine.py"]
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json", "integrations/vllm/manifests/definitions.json"]
 
 [modules]
@@ -168,21 +155,8 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 "verity.ml.circuits.silicon" = "verity.definitions.silicon"
 "verity.ml.circuits.stacking" = "verity.definitions.circuits.stacking"
 "verity.ml.circuits.targets" = "verity.definitions.circuits.targets"
-"verity.ml.circuits.tests.fixtures" = "verity.definitions.circuits.tests.fixtures"
-"verity.ml.circuits.tests.test_census" = "verity.definitions.circuits.tests.test_census"
-"verity.ml.circuits.tests.test_constants" = "verity.definitions.circuits.tests.test_constants"
-"verity.ml.circuits.tests.test_lean_gates" = "verity.definitions.circuits.tests.test_lean_gates"
-"verity.ml.circuits.tests.test_library" = "verity.definitions.circuits.tests.test_library"
-"verity.ml.circuits.tests.test_memcheck" = "verity.definitions.circuits.tests.test_memcheck"
-"verity.ml.circuits.tests.test_operations" = "verity.definitions.circuits.tests.test_operations"
-"verity.ml.circuits.tests.test_requirement" = "verity.definitions.circuits.tests.test_requirement"
-"verity.ml.circuits.tests.test_requirement_units" = "verity.definitions.circuits.tests.test_requirement_units"
-"verity.ml.circuits.tests.test_stacking" = "verity.definitions.circuits.tests.test_stacking"
-"verity.ml.circuits.tests.test_targets_frozen_families" = "verity.definitions.circuits.tests.test_targets_frozen_families"
 "verity.ml.commitments.gates.attest" = "verity.definitions.commitments.gates.attest"
 "verity.ml.commitments.gates.block_key" = "verity.definitions.commitments.gates.block_key"
-"verity.ml.commitments.tests.test_block_key" = "verity.definitions.commitments.tests.test_block_key"
-"verity.ml.commitments.tests.test_boolean_attest" = "verity.definitions.commitments.tests.test_boolean_attest"
 "verity.ml.definitions" = "verity.definitions"
 "verity.ml.definitions.boolean" = "verity.definitions.boolean"
 "verity.ml.definitions.call_scope" = "verity.definitions.call_scope"
