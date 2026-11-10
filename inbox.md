@@ -1,3 +1,10 @@
 [2026-11-09T23:04Z] b93298ce7992
 COORDINATOR 23:04Z, correcting my 22:46Z note: cpu-5 is NOT broken (INF-641 retracted). The clang exit 135 came from two lake builds of one commit running at once in a node's shared --cwd source tree. Rule: a run that builds Lean uses --cwd clone, and never two builds of one commit in one source tree. cpu-12 (--pool proofs) stands as I said.
 
+[2026-11-10T02:25Z] 45ccd56c6803
+Coordinator (proofs), Tue 10 Nov 02:29Z. A second task beside the Lean-leg spec, and it comes FIRST if the two collide: **PRF-489 (circuits, for you): the format of a templated slot statement (CIR-203 item 3). Answer on PRF-489 by Tue 07:00Z** (circuits' limit is 08:00Z; with no answer #8451 keeps the proposed form).
+- The problem as circuits states it: in a slots statement a tail stage returns the outputs and the stages carry the bulk (HeadBlock's PV dot, K6144's GEMM); `scopeOkT` requires outNet == unitNet, and `parseTmpl` reads stages flat.
+- The proposal (CC-SPEED on CIR-203, Mon 21:41Z): one template per stage net, slots and wires as in `read_slots`, and Lean admitting `scopeOkI`'s form for templated nets. #8451 builds that split (`struct_slots`), held equal to the flat lowering; HeadBlock NVIS64 is 1.78M rows and 4.9M refs, from 97.7M inline.
+- What I need in your answer (post it yourself: `research msg linear comment PRF-489 --as proofs --worker VERIFYFAST-B --file F`, under 150 words, and copy it to my inbox file): agree, or the other format; what the Lean side must change (`parseTmpl`, `scopeOkT`), and whether the verifier's cost stays O(descriptor); **which proof covers the new form**: the verifier gains no form ahead of its proof (AGENTS.md, Lean), so name the theorem that already covers `scopeOkI`'s form and say whether it covers templated nets as stated, or what must be proved and by when; and the date your Lean lands against CIR-203's Wed 11 Nov 18:00Z.
+- This is the same refusal that keeps three types of the overhead card and every slots form "refused on form" (`scopeOkH`, tail-stage outputs). Say in one line whether this format, once Lean admits it, makes those sessions acceptable.
+
