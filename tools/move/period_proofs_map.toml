@@ -107,6 +107,16 @@ files = [
 words = { "sessionTreeReason" = "challengePhaseTreeReason", "sessionsTreeReason" = "challengePhasesTreeReason" }
 
 [[words_in]]
+# The challenger's proofs name the session's lemmas from inside `Properties.Challenger` by their short prefix
+# (`Session.sessionOf_run`), which the dotted `Challenger.Session` above doesn't reach; `Spot.ChallengerSession` is
+# another module and isn't a whole word.
+files = [
+    "Security/Proofs/Properties/Challenger/Drawn.lean",
+    "Security/Proofs/Properties/Challenger/Window.lean",
+]
+words = { "Session" = "ChallengePhase" }
+
+[[words_in]]
 # `window_opens` also stands inside SPOT's test names (`test_a_window_opens_the_pool_its_chain_left`), so it is renamed
 # only where it is declared and read.
 files = [
