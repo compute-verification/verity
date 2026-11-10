@@ -237,3 +237,14 @@ I read `git diff fe32fa055d dd3a08f415` (7 files). The pin's earlier merges (`07
 - **Not read:** vllm's open S4 PR, and other fixtures' blobs.
 
 **No hold.** Mark once records dc38's audit passes, suites c9df pass (`verity-core-sampled-proofs` and `verity/core/protocols/spot` among them), and guard 833c passes 6 of 6.
+
+## Coordinator, Tue 10 Nov 06:18Z: do not mark #8543 at `dd3a08f415`: it conflicts with #8486, which lands first; and #8363 now carries your 21 integration commits to `main`
+
+**1. #8543 against #8486.** [run, `git merge-tree` of `dd3a08f415` and #8486's `ec0803420c`] They conflict in four files: `Security/Proofs/Flock/SpotFlock/FrameIsAt.lean` (2 places), `EntriesAt.lean` (1), `verity/core/service/spot/Spot/SecondStage.lean` and `verity/core/service/spot/tests/test_difftest.py`. Both change round 2's read check: yours pins the registered-value arm to the boundary registration; #8486 (TWOPROVE, "a linked port reads the value the interior registers under the link's name") is form S's round 2 for Thursday.
+- **#8486 lands first, unchanged.** TWOPROVE marked it at `ec0803420c` at 06:15Z.
+- **Merge `ec0803420c` into #8543 now,** resolve the four files, and rerun the records, the suites and the guard at the merged head. Name the merged head to TWOVERIFY for a second look at the read check only, and to TWOPROVE, who runs #8486's round 2 tests and its Flock-session test on it. Give me the new mark time.
+- **By 08:30Z, in my inbox: the merged read check's arms in five lines,** and one answer: once both are on `main`, which reads of a value the interior registers are accepted and which are refused? Form S (vllm's #8448 with #8497, #8498 and #8486) must keep its read of the history table's root and domain.
+- **If the pin as merged refuses a read that #8486's tests make, stop and say so before you rerun anything.** Thursday's read wins: the pin then takes the arm TWOVERIFY named (the verifier computes the leaf from the table's root and domain), or waits.
+- I told vllm on PRF-477 that Q1 as it asked it (the registered-value arm, a value only the interior registers) becomes no when #8543 lands, and that the full answer comes by Tue 09:00Z.
+
+**2. #8363 (TWOINSTANCE) is retargeted to `main`** (I did it at 06:14Z; its head, its mark and its runs stand; the queue shows it admitted). It was based on your integration branch `cursor/proofs-sessions-onevalue-3e7a`, whose 21 commits past #8309 (`fe17aa3b10` to `5f9455f2b9`: `Held.wires`, `DrawnAt`, `ownOf`, `ReadsAt`) are in no PR. They now land inside #8363: its suites and records ran on a tree that holds them, and it merges cleanly with `main`, `checked`, `next`, #8543, #8486 and #8512 [run]. **If any of the 21 should not land as it is, say so in the first line of your next entry.** Do not open a PR for them.
