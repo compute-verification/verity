@@ -32,12 +32,13 @@ import all Init.Data.Array.Attach
 
 /-! # The two-instance statement's canonical texts and hello
 
-`setup_stX` takes as hypotheses the texts `canon` and `canonUtf8` write for the header's units (`hu1`, `hu2`), the
-public file's header (`hd`), the sample's header `hdrD` (`hd2`) and the identity (`hid`), and the hello (`hhello`). Each
-exists because its value holds only integers (`FlockDeploy.Concrete.IntJ`), and each is named (`s3X`, `s4X`, `s5X`,
-`s6X`, `helloX`) so that no walk evaluates it. The circuit's units entry has the header's units' text because the two
-objects hold the same entries (`units_arr`), the classes among them because the class hash is a SHA-512 and so not
-empty (`hCe_of`).
+`setup_stX` takes as hypotheses the texts `canon` and `canonUtf8` write for META's leaf scheme and the pinned one
+(`hc1`, `hc2`), the header's units (`hu1`, `hu2`), the public file's header (`hd`), the sample's header `hdrD` (`hd2`)
+and the identity (`hid`), and the hello (`hhello`). Each exists because its value holds only integers
+(`FlockDeploy.Concrete.IntJ`), and each is named (`s1X`, `s3X`, `s4X`, `s5X`, `s6X`, `helloX`) so that no walk
+evaluates it. Two objects holding the same entries have one text: META's leaf scheme and the pinned one (`ls_arr`), and
+the circuit's units entry and the header's units (`units_arr`), the classes among them because the class hash is a
+SHA-512 and so not empty (`hCe_of`, `classOfB_isEmpty`).
 -/
 
 @[expose] public section
@@ -49,6 +50,11 @@ namespace SpotFlock.InstanceStmt
 
 theorem hCe_of (m : ByteArray) : (Sha512.hash m).isEmpty = false := by
   simp [ByteArray.isEmpty, Sha512.hash_size]
+
+theorem classOfB_isEmpty (ls lh : HmNets.Laid) : (classOfB ls lh).isEmpty = false := by
+  obtain ⟨m, hm⟩ := classOfB_hash ls lh
+  rw [hm]
+  exact hCe_of m
 
 /-! ## The units -/
 
@@ -73,6 +79,20 @@ theorem hu2_of (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 
     canon_obj_congr (units_arr ls lh H C A B A' B' s1 hCe),
     show Json.obj (objM (unitsJ (hexOf C))) = unitsJ (hexOf C) from rfl]
   exact hu1_of _
+
+/-! ## The leaf scheme: META's and the pinned one -/
+
+def s1X : String := (canon pinJ).toOption.getD ""
+
+theorem hc2_of : canon pinJ = .ok s1X := canon_eq (j := pinJ) (by decide +kernel)
+
+theorem ls_objM : lsJ = .obj (objM lsJ) := by kernel_rfl
+theorem pin_objM : pinJ = .obj (objM pinJ) := by kernel_rfl
+theorem ls_arr : (objM lsJ).toArray = (objM pinJ).toArray := by kernel_rfl
+
+theorem hc1_of : canon lsJ = .ok s1X := by
+  rw [ls_objM, canon_obj_congr ls_arr, ← pin_objM]
+  exact hc2_of
 
 /-! ## The headers and the identity -/
 
