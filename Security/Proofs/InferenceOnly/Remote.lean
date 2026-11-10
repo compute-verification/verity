@@ -5,7 +5,7 @@ public import Proofs.InferenceOnly.Slowdown
 public import Proofs.InferenceOnly.Escape
 
 /-!
-# Proofs of the compute dampener, remote protocol
+# Proofs of the slowdown, remote protocol
 
 `CertificateSlack` is Markov's inequality on a finite outcome space (`markov`), applied to the wrong windows' capacity,
 whose expectation `expected_wrong` swaps into the windows' marginals. `VerdictLag` splits off the escaped blocks
@@ -252,7 +252,7 @@ theorem multiple_le {a s x η : ℝ} (ha : 0 < a) (hη : 0 < η) (h : η ≤ a *
     rw [div_le_div_iff₀ h0 hη, one_mul, e]
     exact h
 
-/-- **The remote dampener's arithmetic core**: the sources summed with no memory cap and unmonitored compute at
+/-- **The remote slowdown's arithmetic core**: the sources summed with no memory cap and unmonitored compute at
 `MFU₀ ≤ 1` bound both the efficiency, `η ≤ s + (1 − s) r + ν + χ`, and the hardware multiple,
 `max(1, 1/(s + ((1 − s) r + ν + χ)/MFU₀)) ≤ max(1, MFU₀/η)`. -/
 theorem remote_core {κ C U W ρ χ a M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC : 0 < C) (hU : 0 ≤ U) (ha : 0 < a)
