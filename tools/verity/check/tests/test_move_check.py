@@ -1881,6 +1881,17 @@ def test_a_relative_path_is_based_again_to_where_its_file_went(tmp_path):
     assert r["rules"] == {"relative": ["benchmarks/pouw/served/legs.sh", *list(REBASED)[:3]]}
 
 
+def test_a_directory_written_with_its_slash_is_based_again_in_markdown(tmp_path):
+    """Markdown's dotted paths are read from their file's directory before any rule, which drops a directory's slash:
+    `ops/tests/` in backticks, based again to `../../definitions/ops/tests/`, reads there as the directory with none. Based
+    to its parent it is refused."""
+    old, new = "verity/ml/circuits/README.md", "verity/circuits/prover/README.md"
+    for case, to in (("based", "`../../definitions/ops/tests/`"), ("parent", "`../../definitions/ops/`")):
+        r = _rebase(tmp_path / case, {old: REBASE[old] + "Its tests are `ops/tests/`.\n", "verity/ml/circuits/ops/tests/test_x.py": ""},
+                    **{new: REBASED[new] + f"Its tests are {to}.\n"})
+        assert (r["certified"], [f["path"] for f in r["refusals"]]) == ((True, []) if case == "based" else (False, [new])), case
+
+
 def test_a_path_from_the_packages_root_may_be_based_where_the_directorys_row_points(tmp_path):
     """The package's `pyproject.toml` went to `verity/circuits/prover/`, and its directory's `[tokens]` row says
     `verity/circuits/`: the mover writes a path from the package's root from there (`pod/90-unit.sh` is still that, and

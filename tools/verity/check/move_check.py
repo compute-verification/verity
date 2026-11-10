@@ -1195,8 +1195,11 @@ class Rows:
             if t.startswith("./") and not to.startswith("."):
                 to = "./" + to
             if to != t:
-                rooted = (f"<root>/{q}",) if resolved and to.startswith(".") else ()
-                out.append((m.start(g), m.start(g) + len(t), (to, *rooted), ("relative", *(("tokens",) if sent or by_row else ())), False))
+                end, forms = m.start(g) + len(t), (to,)
+                if resolved and to.startswith("."):     # `resolve_relative` read it from the new file's directory, to no slash
+                    slash = "/" * text.startswith("/", end)
+                    end, forms = end + len(slash), (to + slash, "<root>/" + posixpath.normpath(posixpath.join(posixpath.dirname(new), to)))
+                out.append((m.start(g), end, forms, ("relative", *(("tokens",) if sent or by_row else ())), False))
         return out
 
     def reads(self, old: str, new: str, pair=None, resolved: bool = False, at: tuple[str, str] | None = None) -> set[str]:
