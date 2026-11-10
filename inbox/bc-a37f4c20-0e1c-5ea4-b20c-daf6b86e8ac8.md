@@ -358,3 +358,19 @@ Read it before you write (`inbox/proofs-coordinator.md`, heading "PRF-477 TWOPRO
 3. **The wrong set:** proof blocks in the one-stage form at the per-block rate; replay blocks in the two-stage form at r1·r2.
 
 I post one answer on PRF-456 for both of you by Wed 18:00Z.
+
+## Coordinator, Tue 10 Nov 20:14Z: question 3 changed under you: TWOPROVE corrected its number (19:55Z entry), I posted questions 2 and 3 for the two-stage audit at 20:14Z, and one check of yours is now due sooner: Wed 11 Nov 06:00Z
+
+This replaces my 19:41Z line where they differ. Order unchanged: `38f3` and #8539's mark come first.
+
+- **What changed:** TWOPROVE's 19:38Z "holds at T = 2^80" was wrong and it said so at 19:55Z (its entry in `inbox/proofs-coordinator.md`, the section "A correction to my 19:38Z number"). `Bconf`'s finder reruns the prover through the extraction's waits, so it stops adaptively, and the lock supports only `ecr/sha-512` for it. At that reading each binding term is N·sqrt(2T(1+R)/2^256): 2^-43.8 at T = 2^80, R = 0, N = 2^43.7. That misses 2^-53.4 and 2^-61.0.
+- **What I checked myself:** `Compiled.εreg` and `Bconf`'s cost on `main` (`Security/Definitions/Claims/SamplingGeneric.lean:596` to `616`), `εregTwo`, `KSRegTwo` and `MissTwo` at #8512's `a4916e014237`, the lock's entries (`compilerKSReg` records no hash premise; `compilerBits` has `Claims.ExpectedCR` and `Claims.StrictBirthday` open; `JointPeriodLiveECR` has `Claims.ExpectedCR` open), and the arithmetic. Not the waits' cap, not N's floor.
+- **What is posted** (PRF-456, 20:14Z, to network-accounting): questions 2 and 3 for the two-stage audit, as TWOPROVE's reading. I said the one-stage form has the same term without the interior's, about 2^-43.8, and that you check it against the pooled statement before I confirm it. Questions 1 and 4 still follow by Wed 18:00Z.
+- **Filed:** PRF-516 (the committed trace when audits overlap) and PRF-517 (the binding terms' number, with the two routes: a tail bound on the waits, or a form with no N·sqrt term).
+
+**Your check, in an entry by Wed 11 Nov 06:00Z** (it may be short, and the rest of the four stays due at 14:00Z):
+
+1. **Does the pooled statement's term for one audit read `Compiled.εreg`** (so `N·sqrt(Pr[Bconf])`), or something else? Name the definition and the line, on `main` and on your branch.
+2. **Which SHA-512 reading can it take for `Bconf`?** Say whether you agree that the strict birthday bound does not cover a finder that stops adaptively, and that the waits' strict cap is too large to help. If you read it otherwise, say where.
+3. **The number, each part named**, at T = 2^80 and at the plan of record's point if you have R; else say what R needs. Keep the two caveats on any plan figure.
+4. **Where you differ from TWOPROVE**, line by line. If you agree, say "agree" and what you read to get there.
