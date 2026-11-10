@@ -11,3 +11,8 @@ These replace the matching parts of your brief.
 5. **The `Security/` rename is lean's map**, due 5 AM PST. Stage it last when it exists; without it, report the other 23.
 
 Unchanged: the tool report by 2:30 AM PST, the staged branch, the check on the moved tree and the table of reds by owner by 6 AM PST.
+
+## Tue 10 Nov 08:14Z (12:14 AM PST)
+
+6. **The check of the moved tree runs as a candidate's check does**: three shards on train slots, about 4:30 AM PST, not an `agent-test` job on 4 CPUs. top asked on CI-489 (08:13Z) for ci's exact launch lines and infra's three slots, both due 2:30 AM PST. Read CI-489's newest comments at 2:30 AM PST (`python3 -m research msg linear ...` read commands) and use those lines for the staged head. Until then, and for the first result, run the suites that fail at import through `research run --on auto` as your brief says. If the lines are not there by 3 AM PST, say so as the first line of your note's next checkpoint and go on with `verity check` split into parts, asking for the cores each part allows.
+7. **Agents:** the team is at 98 of Daniel's cap of 100. Launch no subagent of your own.
