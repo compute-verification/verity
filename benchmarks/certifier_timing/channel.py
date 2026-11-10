@@ -8,14 +8,17 @@ ones, so the score is of a decoder fixed before the bits it reads.
 **The number.** A decoder wrong at rate e on uniform bits leaves H(bit | arrivals) ≤ H(e) (Fano), so the arrivals carry
 at least 1 − H(e) bits an interval, 0 at e ≥ 1/2: `bits`. It bounds from below what this server's writes move, under
 this decoder; nothing here bounds a channel from above. `lower` and `upper` are `bits` at the ends of e's 95% Wilson
-interval over the scored samples, which takes the scored intervals' errors as independent: the bits are, and noise
-that drifts over many intervals is what the `step` feature removes.
+interval over the scored samples, which takes the scored intervals' errors as independent. For a server whose bits
+move nothing they are exactly: the bits are uniform and independent of every arrival, so each scored guess is wrong
+with probability one half whatever the arrivals did.
 
 **The decoder** is one threshold on one feature, both chosen on the even samples: the offset itself, or `step`, the
-offset less the median of the `STEP_WINDOW` offsets before it, which a receiver computes as it goes and which drops a
-drift slower than the window. `information` is the read that isn't a threshold: the plug-in mutual information of the
-bit and the offset's bin (`BINS` equal-frequency bins) less its mean over `SHUFFLES` shuffles of the bits, with the
-share of the shuffles that reach it. A spread that differs by bit shows there and not in `bits`.
+offset less the mean of the `STEP_WINDOW` offsets around it without their `STEP_DROP` largest. `step` drops what moves
+slower than its window: a drift between two hosts' clocks, which an even window cancels, and a host's slow changes;
+the dropped largest keep one late interval out of its neighbours' steps. `information` is the read that isn't a
+threshold: the plug-in mutual information of the bit and the offset's bin (`BINS` equal-frequency bins) less its mean
+over `SHUFFLES` shuffles of the bits, with the share of the shuffles that reach it. A spread that differs by bit shows
+there and not in `bits`.
 
 `target` and `samples_to_show` state the budget's side: what the whole timing channel may carry an interval, and how
 many scored intervals it takes for a decoder at chance to have its upper bound under that. The module imports only
@@ -34,8 +37,9 @@ from collections import Counter
 Z95 = 1.959963984540054
 #: the one-sided normal quantile of `samples_to_show`'s power, nine runs in ten
 Z_POWER = 1.2815515655446004
-#: the offsets before a sample whose median `step` subtracts
-STEP_WINDOW = 8
+#: the offsets around a sample, half before and half after, whose mean `step` subtracts, and how many of their
+#: largest it leaves out
+STEP_WINDOW, STEP_DROP = 16, 2
 #: `information`'s bins of the offset, and its shuffles of the bits
 BINS, SHUFFLES = 8, 200
 #: the budget (a world-year's exfiltration against the compute it takes): the seconds one node's whole timing channel
@@ -63,8 +67,14 @@ def wilson(wrong: int, n: int, z: float = Z95) -> tuple[float, float]:
 
 
 def steps(offsets: list[float]) -> list[float]:
-    """Each offset less the median of the `STEP_WINDOW` before it (of those there are; the first is 0)."""
-    return [x - statistics.median(offsets[max(0, i - STEP_WINDOW):i]) if i else 0.0 for i, x in enumerate(offsets)]
+    """Each offset less the mean of the `STEP_WINDOW` offsets around it, half before and half after (those there
+    are, at an end), without their `STEP_DROP` largest; 0 for an offset alone."""
+    half, out = STEP_WINDOW // 2, []
+    for i, x in enumerate(offsets):
+        near = sorted(offsets[max(0, i - half):i] + offsets[i + 1:i + 1 + half])
+        kept = near[:max(1, len(near) - STEP_DROP)]
+        out.append(x - sum(kept) / len(kept) if kept else 0.0)
+    return out
 
 
 def fit(pairs: list[tuple[float, int]]) -> tuple[float, int, int]:
@@ -111,8 +121,9 @@ def measure(samples: list[tuple[float, int]], seed: int = 0) -> dict:
     """What `samples`, (offset in seconds, bit) in interval order, carry (the module docstring): `bits` with `lower`
     and `upper`, the scored samples `n` of `samples` in all, the decoder (its feature, threshold in µs, side, its
     errors on the even samples it was fitted on and on the odd ones it is scored on), bit 1's median offset less bit
-    0's in µs (`shift_us`), and `information`. Fewer than four samples, or one bit only, measure nothing: `bits` is
-    None."""
+    0's in µs (`shift_us`), and `information`. A decoder with no threshold, one answer for every interval, reads
+    nothing: its `bits` is 0 whatever the scored bits' balance. Fewer than four samples, or one bit only among the
+    even ones, measure nothing: `bits` is None."""
     out: dict = {"samples": len(samples), "ones": sum(b for _, b in samples), "n": 0, "bits": None, "lower": None,
                  "upper": None}
     train, test = samples[0::2], samples[1::2]
@@ -127,8 +138,10 @@ def measure(samples: list[tuple[float, int]], seed: int = 0) -> dict:
     wrong = sum(decode(xs[i], cut, side) != samples[i][1] for i in range(1, len(samples), 2))
     low, high = wilson(wrong, len(test))
     by_bit = {b: [x for x, c in samples if c == b] for b in (0, 1)}
+    read = not math.isinf(cut)
     return out | {
-        "n": len(test), "bits": bits(wrong / len(test)), "lower": bits(high), "upper": bits(low),
+        "n": len(test), "bits": bits(wrong / len(test)) if read else 0.0, "lower": bits(high) if read else 0.0,
+        "upper": bits(low),
         "decoder": {"feature": name, "threshold_us": None if math.isinf(cut) else round(cut * 1e6, 3), "side": side,
                     "train_n": len(train), "train_wrong": train_wrong, "wrong": wrong,
                     "error": wrong / len(test), "error_95": [low, high]},
