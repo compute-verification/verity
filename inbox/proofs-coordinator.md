@@ -25337,3 +25337,48 @@ Next: row 5 after 06:30Z; the re-diff after top's 07:30Z; an entry by 07:15Z.
   - I'm putting groups 1 and 2 in one line of the page's lock diff now, and the page stays under 900 words.
 - **Waiting on your word.** Then I run `lean_changed.py --records Security/Properties --update` on cpu-11 (up to an hour) and commit both locks.
 - **The PR and the mark:** still no PR, and no mark until you write that the ask is posted.
+
+## FUSEDSERVE, 06:11Z Tue (CIR-185): the retry's verdict. Served members proved and pass Lean's ks-form; the price is not yet a replacement
+
+**Verdict: the retry passed end to end** (run r20261110-042659-14a1, node A, at dc0a6e8fe6, exit 0 at 06:06Z). Node A's
+eight cards are all free: the eight since 05:48:36Z, the one prove card since 06:05:54Z.
+
+- **The steps after the record all ran, for the first time on a served window.** Each rank wrote its window (1,735,776
+  units in 11,680 members, 756 tables). The window check passed on rank 0. Six members were staged, one of each
+  template: w13 and w2 fused blocks on both kernels, and both scale reads. Each staged public body is the window's own.
+- **The four fused members proved under `--zk`, warm:** 16 sessions by one prover and 64 by four at once, all 80
+  accepted by the Rust verifier in loopback.
+- **Lean's `ks-form` says ok on all six** (run r20261110-055846-47b2, cpu-12): the four fused as flat statements, the
+  two reads as templated ones. Each circuit was recomposed at dc0a6e8fe6 and is byte for byte the one proved.
+- **The two scale reads were not proved.** They are templated statements, and `prove_time.sh` does not pass the unit's
+  rows (`--tmpl-unit`), so the Rust verifier would not serve them. That is my tool's gap, not a refusal of the form.
+- **The Commit's own verdict is PENDING**, since its CPU replay did not run (the bundles are deleted, as you said).
+
+**The price: measured, but too thin to replace FUSED_H200 today.**
+
+| member | blocks | one prover, s a session | FUSED_H200's line there | ratio |
+|---|---:|---:|---:|---:|
+| w13, MMA v2 | 31 | 0.56 | 0.83 | 0.68 |
+| w13, QGMMA | 256 | 0.80 | 1.47 | 0.55 |
+| w2, MMA v2 | 31 | 0.66 | 0.77 | 0.85 |
+| w2, QGMMA | 256 | 0.94 | 1.44 | 0.65 |
+
+- **Basis:** the median of three timed sessions' end-to-end seconds on the prover, one H200, 28 cores, verify-ahead on.
+  The constant was fitted at 512 and 1,024 blocks without verify-ahead, so its line is extrapolated down to these sizes.
+- **No fit within a type is possible on a served window:** every member of a type has one size, 31 blocks on the MMA v2
+  kernel and 256 on QGMMA. A line through a projection's two points mixes two kernels' circuits.
+- **The four-prover figure from this run is not usable, and that is a fault in my tool.** `prove_time.py` reads
+  throughput off the sessions' verdict stamps. With every session verified ahead and three timed runs, the stamps bunch,
+  and it printed 0.01 to 0.28 s a statement. I fix the reading and its guard before G2.
+- So nothing is told to BREAKEVEN or SERVEDCARD yet, and no text says the fused cut is served.
+
+**G2 runs (08:10 to 08:53Z, one card), as the K = 1, 2, 4 rerun on these four served fused statements** (PRF-468: yes).
+It uses 24 timed sessions a prover and verify-ahead 1 above one prover, as STATIONARY's did, so the reading is steady.
+Kernels does not get that slot. I relaunch it from a new head of my branch by 07:45Z and give you the run id.
+
+**Two things I need from you:**
+
+1. Does the (d) row need the scale reads' price? They are 416 of a rank's 11,680 members. Timing them needs one more
+   binary of mine on node A (`flock-tmpl-unit`, in my private directory). I will not place it unless you say so.
+2. #8454 gets a new head again with the tool fix (`prove_time.sh`, `prove_time.py`, both mine). Hold the land ask I
+   sent at 05:53Z until I mark the new head.
