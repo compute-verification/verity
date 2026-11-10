@@ -10,8 +10,8 @@ or run, or that refuses an input (a form its decoders don't read), disagrees wit
 
 * `check`: R1-R8 (`registration.check`), compared on `ok`, the codes and the fan-out and tied values a template query's
   verdict publishes (`Verdict.fanout` and `Verdict.rests_on_period_check`, the Lean's `fanout` and
-  `rests_on_period_check`); the details are Python's
-  (the Lean reports codes);
+  `rests_on_period_check`); the details are Python's (the Lean reports codes).
+  History tables both refuse are the registration's refusal, `R.HISTORY`, with both reasons; one refusing alone disagrees;
 * `matches_public`, `check_draw`, `check_proved`, and the proof system's public-items rule (`check_public`) and hold on
   an outcome's verdicts (`check_verdicts`), whose Python verdict the service passes in: compared whole, details included;
 * `select`: the challenger's sample (`service.select_draw`, which the service passes in with the bytes of its coins that
@@ -58,10 +58,10 @@ RECORD_VERDICT = "lean"
 """Whose verdict is the record's: `"lean"` (`sampled-proofs-verifier`) or `"python"` (this package's, the reference)."""
 
 DISAGREE = "disagree"
-CORE = Path(__file__).resolve().parents[3]
-PACKAGE = CORE.parents[1] / "verity/core/service/spot"
+ROOT = Path(__file__).resolve().parents[5]
+PACKAGE = ROOT / "verity/core/service/spot"
 EXE = "sampled-proofs-verifier"
-BUILD_LOCK = CORE / "difftest" / "lean" / ".lake" / "harness-build.lock"
+BUILD_LOCK = ROOT / "verity/core/difftest/lean/.lake/harness-build.lock"
 #: The δ the Lean's registration parameters carry, which R1-R8 never read.
 REGISTRATION_DELTA = "1/2"
 
@@ -238,7 +238,7 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
             held: Sequence[str] | None = None, outputs: Mapping[str, Mapping[str, str]] | None = None,
             day: int | None = None, declarations: Sequence[Mapping[str, Any]] | None = None,
             seed_salt: str | None = None, pool: Mapping[str, Any] | None = None,
-            tied: Sequence[str] | None = None) -> dict[str, Any]:
+            tied: Sequence[str] | None = None, history: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJson`), `pool` as the verifier holds it:
     the Lean adds its `pin` to the supplied or output values itself. The program function's parameters go with
     `registered` or `tied`, which name them."""
@@ -272,6 +272,8 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
         p["seed_salt"] = seed_salt
     if pool is not None:
         p["pool"] = dict(pool)
+    if history is not None:
+        p["history"] = dict(history)
     return p
 
 
@@ -284,21 +286,35 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           window_root: str | None = None, held: Sequence[str] | None = None,
           outputs: Mapping[str, Mapping[str, str]] | None = None, day: int | None = None,
           declarations: Sequence[Mapping[str, Any]] | None = None, seed_salt: str | None = None,
-          pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None) -> Verdict:
+          pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
+          history: Mapping[str, Any] | None = None) -> Verdict:
     """`registration.check` (R1-R8) by the verifier, with R2's declared day when it passes `day` and `declarations`,
     R6's seed salt when it passes `seed_salt`, R6's pool reset, week and spent mark, a reset at most once a week,
-    and R7's pool chain when it passes `pool`, and R8's tied values when it passes `tied`."""
+    and R7's pool chain when it passes `pool`, R8's tied values when it passes `tied`, and the roots of the history
+    tables it passes as `history`, which the Lean computes from the members' public bodies and puts in place of the
+    supplied values' `history` sources. History tables both verifiers refuse fail it with `R.HISTORY` alone."""
     log = list(log)
-    py = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
-                 supplied, pinned, binding, outputs=outputs, schemas=schemas, window_root=window_root, held=held,
-                 day=day, declarations=declarations, seed_salt=seed_salt, pool=pool, tied=tied)
+    try:
+        py: Verdict | None = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition,
+                                     work_table, registered, supplied, pinned, binding, outputs=outputs, schemas=schemas,
+                                     window_root=window_root, held=held, day=day, declarations=declarations,
+                                     seed_salt=seed_salt, pool=pool, tied=tied, history=history)
+        why = None
+    except R.HistoryRefused as e:
+        py, why = None, str(e)
     got = lean("registration", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, partition,
                                                   work_table, registered, supplied, pinned, binding, schemas,
-                                                  window_root, held, outputs, day, declarations, seed_salt, pool, tied),
+                                                  window_root, held, outputs, day, declarations, seed_salt, pool, tied,
+                                                  history),
                        "record": dict(rec)})
     if "codes" in got:
         got = {"ok": not got["codes"], "codes": got["codes"],
                **{k: got[k] for k in ("fanout", "rests_on_period_check") if k in got}}
+    if py is None:
+        verifiers = {"of_record": RECORD_VERDICT, "lean": _summary(got), "python": {"refused": why}}
+        if "refused" in got:
+            return Verdict(False, (R.HISTORY,), {R.HISTORY: {"lean": got["refused"], "python": why}}, verifiers)
+        return Verdict(False, (DISAGREE,), {DISAGREE: {"lean": dict(got), "python": {"refused": why}}}, verifiers)
     return _decide(got, py, whole=False)
 
 
@@ -389,12 +405,14 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         held: Sequence[str] | None = None, coins: Mapping[str, Any] | None = None,
         value_outputs: Mapping[str, Mapping[str, str]] | None = None,
         interior: Mapping[str, Any] | None = None, seed_salt: str | None = None,
-        pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None) -> Verdict:
+        pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
+        history: Mapping[str, Any] | None = None) -> Verdict:
     """The stream's run of one registration, from its public check through its verdict, by the Lean (`Run.run`), held whole to
     `python`, the stream's own (`{"receipt", "draw", "read", "symbol", "public", "audit"}`, the audit record without its
     `verifiers`): on `check`'s copies (``value_outputs`` its `outputs`, the registered values an earlier record of the
     log registered first, ``seed_salt`` its window's seed salt, ``pool`` its pool, ``tied`` the tied values its check
-    let through), `check_public`'s values and declared items, the receipt's challenger and place in
+    let through, ``history`` its history tables), `check_public`'s values and declared items, the receipt's challenger and
+    place in
     the log, `select`'s rule, the bytes of the coins the sample read and the closure map, and `audit_record`'s arguments
     with the sessions' roots whole. The verifier has no coins of its own: for a sample that read coins the Lean also checks
     `coins`, their evidence (`coins.coins_reason`'s), that the bytes the sample read are the coins the session the ledger
@@ -403,8 +421,8 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     or the Lean refuses a step, the verdict fails with `DISAGREE` alone.
 
     Under a two-stage design `interior` is the interior registration and the second stage (`Run.Interior`): its
-    `program`, `query`, `law` and `copies` (as `check` takes them, the binding `binding`, and its window's `seed_salt`
-    when it has one), one replay block's Program
+    `program`, `query`, `law` and `copies` (as `check` takes them, the binding `binding`, its window's `seed_salt`
+    when it has one, and its `history` tables when it has any), one replay block's Program
     (`replay`), its `values`, `record` and `received`, the bytes the second stage read (`read`) and their evidence
     (`coins`), its `proved_units`, `instances`, `served` and `session_roots`, the second-stage sessions' `statements`,
     and `proofs`, the auditor's params naming each template's circuit file and reference header
@@ -415,7 +433,7 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
     args = {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, None, work_table,
                               registered, supplied, pinned, binding, schemas, window_root, held, value_outputs,
-                              seed_salt=seed_salt, pool=pool, tied=tied),
+                              seed_salt=seed_salt, pool=pool, tied=tied, history=history),
             "record": dict(rec), "rule": dict(rule), "values": [{"name": n, "registered": r} for n, r in values],
             "public": list(declared), "challenger": challenger, "received": received, "source": read.hex(),
             "closure": None if closure is None else [[u, list(cs)] for u, cs in closure.items()],
@@ -431,7 +449,7 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
             it["copies"]
         i_params = _params(it["program"], it["query"], it["law"], scheme, i_ports, i_leaf, i_anchors, i_log, None, None,
                            i_registered, i_supplied, i_pinned, binding, i_schemas, i_window, i_held, i_outputs,
-                           seed_salt=it.get("seed_salt"))
+                           seed_salt=it.get("seed_salt"), history=it.get("history"))
         if it.get("proofs") is not None:
             i_params["proofs"] = it["proofs"]
         args["interior"] = {
