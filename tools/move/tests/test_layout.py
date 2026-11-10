@@ -332,6 +332,36 @@ def test_a_shell_scripts_paths_from_its_own_directory_are_recounted_from_where_i
     assert (r / "bench/pous/stay/run.sh").read_text() == stay.replace('"$0")/../wipe/demo.sh', '"$0")/../../../examples/wipe/demo.sh')
 
 
+def test_a_path_that_is_a_shell_variables_default_follows_the_move(tmp_path):
+    """`${DEFS:-flock/pod/defs.json}` names a file as any path does. The `-` before it belongs to the expansion (elsewhere a
+    `-` before a path makes the path part of a longer word, which is left alone), and the `}` after it closes the
+    expansion, so the file's own row is followed, not its directory's: `flock/pod/` is split here, and a reference to it
+    would be refused."""
+    r = tmp_path / "repo"
+    run = ('export RESOLVER=${RESOLVER:-flock/pod/catalog.py:definition}\nDEFS=$REPO/${DEFS:-flock/pod/defs.json}\n'
+           'T=${TESTS:-flock/tests/test_a.py flock/tests/test_b.py}\nU=${UNSET-flock/pod/catalog.py}\n'
+           'W=pre-flock/pod/catalog.py\n')
+    files = {"flock/pod/run.sh": run, "flock/pod/catalog.py": "", "flock/pod/defs.json": "{}\n", "flock/tests/test_a.py": "",
+             "flock/tests/test_b.py": "", "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
+    for p, t in files.items():
+        (r / p).parent.mkdir(parents=True, exist_ok=True)
+        (r / p).write_text(t)
+    (tmp_path / "map.toml").write_text(
+        '[roots]\nold = {}\nnew = {}\n\n[paths]\n"flock/pod/catalog.py" = "prover/catalog.py"\n'
+        '"flock/pod/defs.json" = "prover/data/defs.json"\n"flock/tests/" = "prover/tests/"\n\n[modules]\n'
+        '"flock.pod.catalog" = "prover.catalog"\n"flock.tests" = "prover.tests"\n')
+    git(r, "init", "-q", "-b", "main")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "old")
+    p = subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock"],
+                       capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr
+    assert (r / "flock/pod/run.sh").read_text() == (
+        'export RESOLVER=${RESOLVER:-prover/catalog.py:definition}\nDEFS=$REPO/${DEFS:-prover/data/defs.json}\n'
+        'T=${TESTS:-prover/tests/test_a.py prover/tests/test_b.py}\nU=${UNSET-prover/catalog.py}\n'
+        'W=pre-flock/pod/catalog.py\n')
+
+
 def test_rust_literals_spans_strings_and_skips_comments_chars_and_lifetimes():
     text = '''// "no" \n/* "no" /* "nested" */ */ let a = "x\\"y"; let b = br##"r"#"##; let c = '"'; fn f<'a>() { "z" }'''
     got = [text[s:e] for s, e in L.rust_literals(text)]
