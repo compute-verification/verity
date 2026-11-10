@@ -46,10 +46,9 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
     population's `r` each); for a port a wire names, its writer's output port of the interior record, each slot of
     replay block `S[i]` reading only its writer unit's row there (`i·n_w + ρ(j)`, the port's leaves the writer's
     `Q·n_w` slots'); else its own port of the interior record, each slot `u` reading only its own first row
-    (`(u - off_t)·r`, `r` the port's leaves over the part's `Q·n_t` slots), or a value the boundary registration
-    registers, never the interior registration's copy (a registered value is an input, committed at every proof
-    block's boundary under the run's roots); each at its root, domain and leaves, at most `2^64` of them
-    (`MAX_LEAVES`). Or a port a link or a wire names is not read.
+    (`(u - off_t)·r`, `r` the port's leaves over the part's `Q·n_t` slots), or a value either registration registers;
+    each at its root, domain and leaves, at most `2^64` of them (`MAX_LEAVES`). Or a port a link or a wire names is
+    not read.
   - `second-refs`: its header shares rows (`shared_rows`: tables whose rows its instances read by the refs in its public
     file's body) at a port it doesn't read registered (`refsOk`). At a port it reads registered, the session's verifier
     holds each instance's ref to the row at the position the read gives its unit (`Flock.Registered.check`), and
@@ -61,9 +60,9 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
     `second-read` holds to the run: every port's `root`, `domain` and `leaves` (`READ_RUN_FIELDS`), and the rows
     (`reads`, `reads_from`: `READ_ROW_FIELDS`) of a port a link names or one reading a port of the interior record (its
     own, or at a port a wire names its writer's), whose rows the run places (`runPlacesRows`). So the ports it reads
-    registered, the value each reads, and the rows at which it reads a value a registration registers are fixed before
-    the run: `second-read` alone lets a port no link or wire names read any value the boundary registration registers,
-    at any rows.
+    registered, the value each reads, and the rows at
+    which it reads a value a registration registers are fixed before the run: `second-read` alone lets a port no link
+    names read any value either registration registers, at any rows.
 * **The links** (`Link`) are the verifier's own, derived from the replay block's registered Definition and never
   supplied (`replayLinks`). A template is a composite every node calling which is one of the body's, its callers, its
   units in a replay block theirs in body order, a batch's members one each (`callersOf`). One whose callers each read
@@ -799,11 +798,8 @@ def wiredRow (p : Part) (r : Rows) (u : Nat) : Option Nat := do
 boundary port it names, of its rows' `per` a replay block, each slot only its unit's row of its cell's replay block's
 (`linkedRow`); a port a wire names, only its writer's output port of the interior record, of the writer's units a
 block, each slot only its unit's writer unit's row in its cell's replay block (`wiredRow`); any other, its own port of
-the interior record, each slot only its own first row, or a value the boundary registration registers, never a
-boundary port. Each at its root, domain and leaves, at most `MAX_LEAVES` of them. A registered value is an input of the
-program, which every proof block commits at its boundary, under the run's roots: it is read off the boundary
-registration alone, the one made before any coin, and never off the interior registration's copy, so the run doesn't
-choose which roots a value is read under. -/
+the interior record, each slot only its own first row, or a value either registration registers, never a boundary
+port. Each at its root, domain and leaves, at most `MAX_LEAVES` of them. -/
 def readOk (own : Own) (named : Bool) (p : Part) (port : String) (e : Json) : Bool :=
   let q := own.sample.size
   match getD e "value", linkOf own p.template port, wireOf own p.template port with
@@ -821,7 +817,7 @@ def readOk (own : Own) (named : Bool) (p : Part) (port : String) (e : Json) : Bo
     match (Record.byPort own.interior).find? (·.1 == v), (Record.byPort own.boundary).find? (·.1 == v) with
     | some (_, x), _ => v == portOf named p.template port && sameAt e x && rowsOk q p e (q * p.n) fun u => some (u - p.lo)
     | none, some _ => false
-    | none, none => match registeredEntry own.boundary v with
+    | none, none => match registeredEntry own.boundary v <|> registeredEntry own.interior v with
       | some x => sameAt e x
       | none => false
   | _, _, _ => false
@@ -1260,7 +1256,7 @@ theorem refsOk_read {s : Stmt} (h : refsOk s = true) {port : String} {c : Json}
 /-- **Every port a header shares rows at is a read round 2 holds**: in a passing check, every port the `i`-th
 statement's header shares rows at (`shared_rows`) is one of its registered reads, each `readOk` at its part: for a port
 a link names, the boundary port it names, each slot reading only its cell's replay block's rows; else its own port of
-the interior record, each slot reading only its own rows, or a value the boundary registration registers. The session's
+the interior record, each slot reading only its own rows, or a value either registration registers. The session's
 verifier holds each instance's ref at such a port to the row at the position the read gives its unit
 (`Flock.Registered.check`), so no ref there points a drawn unit at another unit's rows. -/
 theorem check_ok_refs {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow own (some ss)).codes = #[]) :

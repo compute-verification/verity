@@ -605,7 +605,7 @@ def test_an_own_read_at_another_root_fails_the_interior_audit():
 
 
 def _registered_codes(monkeypatch):
-    """Round 2's codes over what the verifier holds of a run (`second_stage.Own`) with its boundary record registering
+    """Round 2's codes over what the verifier holds of a run (`second_stage.Own`) with its interior record registering
     values `w1` and `w2`, as a function of the value the run's statement reads at a port `w` no link names (slot 0 its
     row 0), the one its template's reference statement reads there (None: no `w`) and its rows, ``(reads_from,
     reads)``, and the reference's reads of the linked ports (`READS`'s when None)."""
@@ -622,8 +622,7 @@ def _registered_codes(monkeypatch):
         stmt = {**s, "registered": {**s["registered"], "ports": ports}}
         w = {} if named is None else {"w": {"value": named, "reads_from": rows[0], "reads": rows[1]}}
         ref = {"ports": {**(READS["ports"] if linked is None else linked), **w}}
-        o = dataclasses.replace(own, boundary={**own.boundary, "registered": [
-                                    *own.boundary.get("registered", []), *entries.values()]},
+        o = dataclasses.replace(own, interior={**own.interior, "registered": list(entries.values())},
                                 reported=SS.statement_reads([stmt]), verified=SS.verified_of(_lean(checked=stmt)),
                                 ref_reads=((TEMPLATE, ref),))
         return list(SS.check(True, o, [stmt]).codes)
@@ -631,7 +630,7 @@ def _registered_codes(monkeypatch):
 
 
 def test_round_two_holds_a_port_to_the_registered_value_its_reference_reads(monkeypatch):
-    """`second-values`: at a port `w` no link names, `second-read` lets a session read either value the boundary record
+    """`second-values`: at a port `w` no link names, `second-read` lets a session read either value the interior record
     registers, `w1` or `w2`, at its own root, domain and leaves, so which one the port reads would be the run's choice,
     and no frame fixed before the run could name it. Round 2 holds it to the one its template's reference statement
     reads there: the run's statement reading `w1` passes where its reference reads `w1`, and is refused where it reads

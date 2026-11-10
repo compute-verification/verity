@@ -157,7 +157,7 @@ theorem entryOf_sameAt {k : UInt8} {nm : String} {e x : Json} {rs ds : String} {
     exact hexMsg_str hdu
 
 /-- **A read `readOk` passes has its fields at the entry `readKey` names** in the record `readsInterior` picks: the
-boundary port a link names, the interior record's port the read names, or the registered value the boundary record
+boundary port a link names, the interior record's port the read names, or the registered value either record
 registers, each of which `sameAt` holds to the read's root, domain and leaves, of at most `MAX_LEAVES`. -/
 theorem readOk_entry {own : Spot.SecondStage.Own} {p : Spot.SecondStage.Part} {port v rs ds : String} {e : Json}
     {r d : ByteArray} {n : ℕ}
@@ -241,12 +241,22 @@ theorem readOk_entry {own : Spot.SecondStage.Own} {p : Spot.SecondStage.Part} {p
         | some x =>
           simp only [hfi, hfb, hrb] at hok
           have hsx : Spot.SecondStage.sameAt e x = true := hok
-          have hRI : readsInterior own p.template port v = false := by simp [readsInterior, hlk, hfi]
+          have hRI : readsInterior own p.template port v = false := by simp [readsInterior, hlk, hfi, hfb, hrb]
           rw [hRI, hRK]
           refine ⟨entryOf (1, v, x), ?_, hs hsx⟩
           show recKeyAt own.boundary (.reg v) = _
           rw [recKeyAt_reg, hrb]; rfl
-        | none => simp only [hfi, hfb, hrb] at hok; cases hok
+        | none =>
+          cases hri : Spot.SecondStage.registeredEntry own.interior v with
+          | none => simp only [hfi, hfb, hrb, hri] at hok; cases hok
+          | some x =>
+            simp only [hfi, hfb, hrb, hri] at hok
+            have hsx : Spot.SecondStage.sameAt e x = true := hok
+            have hRI : readsInterior own p.template port v = true := by simp [readsInterior, hlk, hfi, hfb, hrb]
+            rw [hRI, hRK]
+            refine ⟨entryOf (1, v, x), ?_, hs hsx⟩
+            show recKeyAt own.interior (.reg v) = _
+            rw [recKeyAt_reg, hri]; rfl
 
 /-! ## The verifier's registered reads, as its file states them -/
 

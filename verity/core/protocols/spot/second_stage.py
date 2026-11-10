@@ -47,8 +47,7 @@ to the run: every port's ``root``, ``domain`` and ``leaves`` (`READ_RUN_FIELDS`)
 ``reads_from``: `READ_ROW_FIELDS`) of a port a link names or one reading a port of the interior record (its own, or at
 a port a wire names its writer's), whose rows the run places (`_run_places_rows`). So the ports a session reads
 registered, the value each reads, and the rows at which it reads a value a registration registers are fixed before the
-run: ``second-read`` alone lets a port no link or wire names read any value the boundary registration registers, at any
-rows.
+run: ``second-read`` alone lets a port no link or wire names read any value either registration registers, at any rows.
 
 The interior record names the replay sample it lays out (``window.replay_sample``, which the proof server writes), and
 ``second-interior-order`` fails unless it is the verifier's own, in its order (`interior_order_ok`), checked before any
@@ -908,11 +907,8 @@ def _read_ok(own: Own, named: bool, p: Part, port: str, e: Any) -> bool:
     link names, only the boundary port it names, of its rows' `per` a replay block, each slot only its unit's row of its
     cell's replay block's (`_linked_row`); a port a wire names, only its writer's output port of the interior record, of
     the writer's units a block, each slot only its unit's writer unit's row in its cell's replay block (`_wired_row`);
-    any other, its own port of the interior record, each slot only its own first row, or a value the boundary
-    registration registers, never a boundary port. Each at its root, domain and leaves, at most `MAX_LEAVES` of them. A
-    registered value is an input of the program, which every proof block commits at its boundary, under the run's
-    roots: it is read off the boundary registration alone, the one made before any coin, and never off the interior
-    registration's copy, so the run doesn't choose which roots a value is read under."""
+    any other, its own port of the interior record, each slot only its own first row, or a value either registration
+    registers, never a boundary port. Each at its root, domain and leaves, at most `MAX_LEAVES` of them."""
     v, q = _get(e, "value"), len(own.sample)
     if not isinstance(v, str):
         return False
@@ -938,6 +934,8 @@ def _read_ok(own: Own, named: bool, p: Part, port: str, e: Any) -> bool:
     if v in _by_port(own.boundary):
         return False
     x = _registered_entry(own.boundary, v)
+    if x is None:
+        x = _registered_entry(own.interior, v)
     return x is not None and _same_at(e, x)
 
 
