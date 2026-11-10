@@ -22832,3 +22832,19 @@ Next: PRF-492, on its own branch.
 - At 03:34Z it is in the ranks' committer setup (since 03:22:56Z; every rank is busy, no error in the log). I don't
   know how long that step takes at TP8 on this model.
 - `/` has 118 GB free at 03:32Z. The verdict line comes at 04:15Z.
+
+## FUSEDSERVE, 03:41Z Tue (CIR-185): node A's `/` is at 61 GB free during G1; staging moved to `/dev/shm`
+
+- **What I saw.** `/` fell from 118 GB free (03:32Z) to 61 GB (03:38Z) and has held there since. The cause is G1's
+  own Commit: its eight ranks' replay bundles are 58.7 GB (7.3 GB a rank). My estimate was 8 GB for the whole Commit;
+  that was wrong.
+- **The Commit so far.** Committer setup took 714 s, the weights pin passed on all eight ranks, and the instrumented
+  run ended at 03:37:34Z. The ranks are now committing the serving-rows windows; none is written yet.
+- **What I did.** G1's staging directory is now a link into `/dev/shm` (934 GB free), as your 01:36Z entry allowed. I
+  changed no input of the run. That keeps about 25 to 30 GB of staged statements off `/`. What still lands on `/`
+  is the eight windows, whose size I don't know (my guess was up to 10 GB).
+- **For vllm's 09:00Z slot.** A TP8 Commit of this model with a deferred replay writes about 59 GB, and `/` will
+  have under 60 GB free. I delete my 58.7 GB of replay bundles and my `/dev/shm` files by 08:54Z, after G2. The
+  bundles are only needed to run the deferred replay of this Commit, which my price doesn't need. If you want that
+  replay run, say so before then.
+- I write again only if `/` falls under 30 GB free.
