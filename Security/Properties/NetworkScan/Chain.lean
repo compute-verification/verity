@@ -33,12 +33,12 @@ return's leaves (`componentRun`). A later bucket's `sin` is parameter 1 of its u
 values of each read with the values of what it reads as lists, so a read of another length than what it reads is
 never tied: a row's commitment binds its length.
 
-**The arguments' input nodes.** `scanOf` counts the input gates' bits against the templates' parameters' and the slot
-entries' and takes each row, state and egress argument to be one input node's leaves from its first (`inputArg`). It
-refuses an egress argument that is an ingress row's input node and slot entries read from one, and no other pair: two
-arguments reading one input node leave the count room for an input node nothing reads. `argsApart` is the rest, the
-row, state and egress arguments' input nodes pairwise distinct and none the slot entries'; the statements that count
-the slot entries take it as a condition on the Program, decided from the root's nodes.
+**The input nodes.** `scanOf` refuses a scan whose input gates are not read as the count reads them. Each row, state
+and egress argument is all the leaves of an input node of its own, none the slot entries'
+(`NetworkCheck.Period.argsApart`, `inputsRead`); the slot entries' node holds the entries and no other leaf, and the
+root has no other input node; and the state and view an ingress unit returns have the leaves of the `sin` and `state`
+they are tied to (`ingressReturn`). So the statements here take no condition on the Program beside `scanOf`'s
+acceptance.
 
 * `ScanChainPinned`: an accepted scan's two ties pin its `sin` and `state` gates, at every partition and design.
 * `ScanCountsEntries`: an accepted scan's free inputs, less those gates, are its slot entry gates, at most the slot
@@ -161,46 +161,28 @@ the entry ports' type. -/
 def entryBits (P : Flock.Program.Prog) (s : Schedule) : ℕ :=
   s.lanes * (s.window / s.every) * bitsOf (((calleeAt P ((templateNodes P).headD 0)).params[1]!).2)
 
-/-- The root node bucket 0's entry port of lane `j` reads first, where `scanOf` reads the slot entries' input node. -/
-def entryNode (P : Flock.Program.Prog) (j : ℕ) : ℕ :=
-  ((((P.defs[P.root]!).body.nodes[(templateNodes P).headD 0]!).args[1 + j]!).memberRef 0 0).i
-
-/-- Whether the scan's row, state and egress arguments read input nodes of their own: the input nodes (`inputArg`) of
-bucket 0's row, the later ingress template's row and state (where the window has a later bucket) and the egress
-template's arguments are pairwise distinct, and none is a lane's slot entries' (`entryNode`). Decided from the root's
-template nodes, at the cost of their arguments. -/
-def argsApart (P : Flock.Program.Prog) (s : Schedule) : Bool :=
-  let nodes := (P.defs[P.root]!).body.nodes
-  let ts := templateNodes P
-  let later := if s.window ≤ 1 then #[] else (nodes[ts.getD 1 0]!).args.extract 0 2
-  let qs := ((nodes[ts.headD 0]!).args.extract 0 1 ++ later ++ (nodes[ts.getLast?.getD 0]!).args).toList.map
-    (inputArg P)
-  decide qs.Nodup && (List.range s.lanes).all fun j => !qs.contains (some (entryNode P j))
-
 /-- **An accepted scan's two ties pin its `sin` and `state` gates.** If `scanOf` accepts the scan `j` as the
-registered Program `program` at the schedule `s`, its canonical text is `c` and decodes to `P`, whose row, state and
-egress arguments read input nodes of their own (`argsApart`), then in every flattening `C` of `P`, at every partition
-and design, tie 1 and tie 2 together pin tie 1's and tie 2's gates over the window's `T` steps
-(`NetTiming.CheckedUnique` at `scanLayout`): two runs on which both ties hold, with one ingress through step `t`, the
-same inputs off those gates and the same held gates, have the same egress rows at step `t`. -/
+registered Program `program` at the schedule `s`, its canonical text is `c` and decodes to `P`, then in every
+flattening `C` of `P`, at every partition and design, tie 1 and tie 2 together pin tie 1's and tie 2's gates over the
+window's `T` steps (`NetTiming.CheckedUnique` at `scanLayout`): two runs on which both ties hold, with one ingress
+through step `t`, the same inputs off those gates and the same held gates, have the same egress rows at step `t`. -/
 def ScanChainPinned : Prop :=
   ∀ (j : Lean.Json) (program : String) (s : Schedule) (sc : Scan) (c : String) (P : Flock.Program.Prog)
     (C : Claims.Sampling.Prog) (Pt : Claims.Sampling.Partition) (d : Claims.Sampling.Design),
     scanOf j program s = .ok sc → Flock.canon j = .ok c → Flock.Program.decode c.toUTF8 = .ok P → Flattens P C →
-    argsApart P s = true →
       NetTiming.CheckedUnique C Pt d (scanLayout P s) s.window (sinSet P s ∪ viewSet P s)
         (fun val => StateTied P s val ∧ ViewTied P s val)
 
 /-- **An accepted scan's free inputs, less its tied gates, are its slot entries.** If `scanOf` accepts the scan `j`
 as the registered Program `program` at a schedule `s` the check reads (`scheduleOf`), its canonical text is `c` and
-decodes to `P`, whose row, state and egress arguments read input nodes of their own (`argsApart`), then in every
-flattening `C` of `P` the free inputs over the window's `T` steps that are neither tie's gates are exactly the slot
-entry gates, and those number at most the slot entries' bits `scanOf` counts (`entryBits`). -/
+decodes to `P`, then in every flattening `C` of `P` the free inputs over the window's `T` steps that are neither tie's
+gates are exactly the slot entry gates, and those number at most the slot entries' bits `scanOf` counts
+(`entryBits`). -/
 def ScanCountsEntries : Prop :=
   ∀ (sj j : Lean.Json) (program : String) (s : Schedule) (sc : Scan) (c : String) (P : Flock.Program.Prog)
     (C : Claims.Sampling.Prog),
     scheduleOf sj = .ok s → scanOf j program s = .ok sc → Flock.canon j = .ok c →
-    Flock.Program.decode c.toUTF8 = .ok P → Flattens P C → argsApart P s = true →
+    Flock.Program.decode c.toUTF8 = .ok P → Flattens P C →
       NetTiming.freeInputs C (scanLayout P s) s.window \ (sinSet P s ∪ viewSet P s) = entryGates P s ∧
         (entryGates P s).card ≤ entryBits P s
 
