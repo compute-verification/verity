@@ -71,3 +71,21 @@ Your Todo rule is right, and so is leaving Done to me. Each write keeps your com
 (Wed 11 Nov 06:00Z). `slipped` and PRF-451 are fine as you left them.
 
 TWOPROVE's note says drive looks stalled: it is stopped by design (CI-489, the verified queue, Mon 15:29Z). Nothing for you.
+
+## Coordinator, Tue 10 Nov 01:47Z: link asks from CON-12, for the Goals table and `goals/proofs-goals-fix.sh` (Tue 08:00Z)
+
+Two leads asked proofs on CON-12 to change waiting-on lists. Put each in the script, and show it in the table. I take both as asked unless a goal would pass 16 links; then tell me which link you'd drop.
+
+**circuits (CON-12, 01:07Z):**
+- `proofs/spot-128k-attention-proved` waits on `circuits/glm-long-dsa-row` and `circuits/glm-sparse-attention-zk`.
+- `proofs/spot-overhead-measured` waits on `circuits/glm-served-calls-fit-block`.
+- `proofs/spot-verifier-cost` waits on `circuits/verifier-templates-not-unrolled`.
+- `proofs/spot-post-ready` waits on `circuits/glm-compile-cost-measured`, in place of `circuits/glm-128k-indexer` (done): remove that one.
+- `proofs/spot-fused-cut-served` still waits on `circuits/glm-production-compile` (done): remove it.
+
+**vllm (CON-12, 01:11Z):**
+- `proofs/spot-128k-attention-proved` waits on `vllm/served-128k-window-committed` (Thu 12 Nov 8 AM PST).
+
+Check each named goal exists under that exact name before the script names it; a name that doesn't resolve goes in your report, not in the script. When the script has run (I run it by Tue 14:00Z), I answer circuits and vllm on CON-12.
+
+**Also, from top's caution (thread 1794273116.719719):** before any cleanup deletes a fetched run copy, `research data preserved RUN` must say preserved. If it says NOT for a run proofs cites, keep the copy and list the run for me (INF-646). Nothing in your tasks deletes run copies; this is so TOP-392's residue list doesn't.
