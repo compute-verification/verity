@@ -758,6 +758,38 @@ def test_a_build_takes_the_trace_of_each_module_it_holds_in_a_version_the_cache_
     assert stage()["took"] == {} and not traces["R"].exists(), "a trace that isn't JSON goes: Lake takes it for none"
 
 
+def test_a_build_takes_no_trace_in_the_build_of_a_package_it_requires_by_path(tmp_path):
+    """`d`'s build is `d`'s: an audit of `d` seals its files, and other packages' builds and tests read them while `r` is
+    staged and built. A trace taken there would have `r`'s Lake compile or restore `D.X` over them. So staging `r`
+    leaves that build whole: on a cache that holds nothing for these keys, where `D.X`'s trace names a version the cache
+    lacks; on one that holds another version of it, where the trace names other artifacts than its entry; and with a
+    trace that isn't JSON. `r`'s own modules are settled as before: on the cold cache each is keyed on what the tree
+    holds of `D.X` and compiled."""
+    root = _workspace(tmp_path / "ws")
+    store = tmp_path / "store"
+    keyed = MK.keys(root, ["R.B"])
+    traces = {m: _held(keyed, m, files) for m, files in (("D.X", X), ("R.A", A), ("R", R), ("R.B", B))}
+    build = keyed["D.X"].package.build()
+    caches = iter(range(99))
+
+    def held() -> dict:
+        return {f: (f.stat().st_ino, f.stat().st_mtime_ns, f.read_bytes()) for f in build.rglob("*") if f.is_file()}
+
+    def took() -> dict:
+        why: dict = {}
+        MK.stage(store, root, ["R.B"], tmp_path / "cache" / str(next(caches)), report=why, settled=True)
+        return why["took"]
+
+    was = held()
+    assert took() == {MK.ABSENT: 3} and held() == was, "R.A, R and R.B lose their traces; D.X, which the cache lacks too, keeps its"
+    assert not any(traces[m].exists() for m in ("R.A", "R", "R.B"))
+    _stock(store, keyed, {"D.X": ("5" * 16, {"9" * 16 + ".olean": b"X'", "b" * 16 + ".ilean": b"x"})})
+    assert took() == {} and held() == was, "the cache holds another version of D.X than the tree"
+    traces["D.X"].write_text('{"depHash": "1111')
+    was = held()
+    assert took() == {} and held() == was, "a trace of d's that isn't JSON is d's build's to remove"
+
+
 def test_a_module_above_one_that_is_compiled_keeps_its_trace_when_the_cache_holds_it_as_the_tree_does(tmp_path):
     """A module above one that isn't staged has no key until that one is compiled. It is keyed on what the tree holds
     of it, its key if the compile gives those bytes again: indexed under that key with the artifacts its trace names,

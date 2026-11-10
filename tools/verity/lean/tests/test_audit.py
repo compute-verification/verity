@@ -5262,6 +5262,70 @@ def test_another_package_reads_a_sampled_dependency_s_build_unchanged_while_the_
     assert [files_of(b) for b in builds] == before, "nothing wrote either build"
 
 
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_dependent_staged_on_a_cold_cache_rewrites_no_file_its_dependency_s_audit_sealed(tmp_path, monkeypatch):
+    """A node's artifact cache holds nothing under these keys. `d` is staged and built, and its `.olean` files are sealed
+    as `main` seals them once its build ends; only then is `p`, which requires `d` by path, staged and built, as `main`
+    orders them. The cache still lacks `D`: an audit stores what its builds compiled when all of them have ended. When
+    staging `p` took `D`'s trace for that, `p`'s Lake compiled `D` again inside `d`'s build, and every audit beside it
+    that hashed a sealed `.olean` or ran a test on one in that window found it changed or gone. Now staging `p` writes
+    nothing in `d`'s build, Lake finds `D` up to date and compiles `P` alone, and each sealed file is the file the seal
+    hashed: its inode, its time and its bytes. What the two builds compiled is then stored, each module once, and a
+    second tree compiles neither."""
+    spec = importlib.util.spec_from_file_location("lean_audit_for_sealed", HERE.parent / "lean_audit.py")
+    LA = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(LA)
+    mk = A.sibling("module_keys")
+    store = tmp_path / "artifacts"
+    monkeypatch.setattr(A, "ARTIFACTS", store)
+    stages = iter(range(99))
+
+    def tree(ws: Path) -> tuple[Path, Path]:
+        for name, text, requires in (("D", "def D.v : Nat := 1\n", []), ("P", "import D\n\ndef P.v : Nat := D.v + 1\n", [
+                {"type": "path", "scope": "", "name": "d", "manifestFile": "lake-manifest.json", "inherited": False,
+                 "dir": "../d", "configFile": "lakefile.toml"}])):
+            at = ws / name.lower()
+            at.mkdir(parents=True)
+            (at / "lakefile.toml").write_text(
+                f'name = "{name.lower()}"\ndefaultTargets = ["{name}"]\n'
+                + "".join(f'\n[[require]]\nname = "{r["name"]}"\npath = "{r["dir"]}"\n' for r in requires)
+                + f'\n[[lean_lib]]\nname = "{name}"\n')
+            (at / "lake-manifest.json").write_text(json.dumps({
+                "version": "1.2.0", "packagesDir": ".lake/packages", "packages": requires, "name": name.lower(),
+                "lakeDir": ".lake", "fixedToolchain": False}))
+            shutil.copy(HERE / "fixtures" / "control" / "lean-toolchain", at)
+            (at / f"{name}.lean").write_text(text)
+        return ws / "d", ws / "p"
+
+    def build(pkg: Path) -> tuple[set[str], dict]:
+        """(the modules Lake compiled, what staging took from the tree) of ``pkg``'s build as an audit runs it: staged from
+        the node's cache, then `lake build` reading what was staged."""
+        cache = tmp_path / "staged" / str(next(stages))
+        _, said = A.stage_build(mk, pkg, [pkg.name.upper()], cache)
+        r = subprocess.run(["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build"], cwd=pkg,
+                           capture_output=True, text=True, env=A.lake_env())
+        assert r.returncode == 0, r.stdout + r.stderr
+        shutil.rmtree(cache)
+        return {m for m, *_ in A.BUILT.findall(r.stdout + r.stderr)}, said["took"]
+
+    d, p = tree(tmp_path / "ws")
+    assert build(d) == ({"D"}, {})
+    lib = d / ".lake" / "build" / "lib" / "lean"
+    seals = {str(f): A.sha256(f) for f in A.olean_files(lib)}
+    sealed = {f: at for f, at in files_of(lib).items() if str(f) in seals}
+    trace = (lib / "D.trace").read_bytes()
+    assert len(sealed) == len(seals) > 0 and not list((store / mk.INDEX).glob("*")), "d is sealed, and the cache still cold"
+
+    compiled, took = build(p)
+    assert {f: at for f, at in files_of(lib).items() if str(f) in seals} == sealed, "p's build rewrote a file d's audit sealed"
+    assert A.tampered(dict(seals), []) == [] and (lib / "D.trace").read_bytes() == trace
+    assert (compiled, took) == ({"P"}, {}), "p's staging takes no trace of d's, so its Lake compiles P alone"
+
+    assert LA.LakeArtifacts(store).put({d: {"sandbox": True}, p: {"sandbox": True}}, log=lambda s: None) == 2
+    d2, p2 = tree(tmp_path / "elsewhere" / "ws")
+    assert (build(d2), build(p2)) == ((set(), {}), (set(), {})), "a second tree restores D and P and compiles neither"
+
+
 def test_without_the_sandbox_a_module_no_build_of_the_run_compiled_fails_the_audit(tmp_path, monkeypatch):
     """Where check.py's own sandbox probe fails, nothing is recompiled, so a module its build didn't compile passes only if
     a build of this run compiled it, as a dependent's path dependency's audit compiled it. One restored or kept fails,
