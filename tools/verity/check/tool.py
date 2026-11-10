@@ -11,7 +11,7 @@ or its Lean mirror (`VStar.In`, `core_vstar`) needs `lean-suites` passed, whose 
 `research run --on` refuses a machine that fails `preflight.py` (the pod setup, the Lean dependencies, a store read, AVX-512
 when needed, free disk) before the run is claimed.  Once `research merge --push`
 has pushed a landing, it starts `post_train.py` on it, detached (`after_land`): the vLLM reference regression's manifest rebuilds,
-which check leaves out, and their label on the attempt.  Nothing here imports anything but `research.store.tool`.
+which check leaves out, and the fast rows of record's neutrality, and their label on the attempt.  Nothing here imports anything but `research.store.tool`.
 """
 from __future__ import annotations
 
@@ -20,7 +20,9 @@ from research.store.tool import Tool
 CHECK = Tool(name="check", version="1", command=["uv", "run", "--locked", "--all-packages", "--extra", "torch-cpu", "python",
                                                      "tools/verity/check/check.py"],
              produces=["check/v1"],
-             merge_requires={"lean-agreement": ["verity/ml/flock/", "verity/core/service/flock/", "!README.md", "!PROTOCOL.md"],
+             merge_requires={"lean-agreement": ["verity/ml/flock/", "verity/ml/flock/pod/", "verity/ml/flock/verifier/",
+                                                 "verity/ml/flock/tool.py", "verity/core/service/flock/", "!README.md",
+                                                 "!PROTOCOL.md"],
                              "lean-suites": ["verity/ml/flock/python/verity_flock/rec_vstage.py",
                                              "verity/ml/flock/python/verity_flock/rec_outer.py",
                                              "verity/ml/flock/python/verity_flock/rec_open.py",

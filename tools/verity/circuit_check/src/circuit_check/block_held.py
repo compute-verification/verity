@@ -58,7 +58,6 @@ HELD: dict[str, str] = {
         "Dsv4QNormRopeKvInsert_v1{NH=16,NHP=64,DN=448,DR=64,QB=64,EPS=1e-06}",
         "FlashMlaPrefill_v1{NH=1,NP=1,D=512,BN=64,DOT=HopperBF16WgmmaDot16_v1,SCALE=0.04419417382415922}",
         "GatherI32x129280_v1",
-        "GumbelTopPTokenSelect_v1{V=64}",
         "MhcPostPreTf32_v1{HC=4,H=1024,NS=4,TN=64,REPEAT=20,EPS=1e-06,HC_EPS=1e-06}",
         "MhcPost_v1{HC=4,N=1024}",
         "MhcPreBroadcast_v1{HC=4,H=7168,NS=28,TN=64,REPEAT=20,EPS=1e-06,HC_EPS=1e-06}",
@@ -106,4 +105,4 @@ HELD: dict[str, str] = {
         "TopPMask_v1{V=64}",
     ], INSIDE),
 }
-MAX = 124
+MAX = 123

@@ -301,7 +301,7 @@ variable {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω)
 /-- **An accepted run accepts at a step whose calls it logs**: at some prover messages `as'` the verifier's answer is
 `.acc`, and each of that answer's oracle calls is in the run's verifier log. -/
 theorem stepWith_acc_step (vn : List Msg → Claims.OC Out) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Claims.Trace),
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Claims.Transcript),
       (Claims.stepWith H P x ω vn n hist as t).out = .acc → ∃ as', ((vn as').eval H).1 = .acc ∧
         ∀ e ∈ ((vn as').eval H).2, e ∈ (Claims.stepWith H P x ω vn n hist as t).vLog := by
   intro n
@@ -493,7 +493,7 @@ variable (H : Msg → Msg) (x : Msg) (ms : List Msg) (vn : List Msg → Claims.O
 /-- **A replayed run that accepts accepts at one step**: from `j` messages sent, the run sends the next of `ms` each
 step; some step `N` within the rounds left is answered `.acc`, every step before it a message. -/
 theorem stepWith_replay_acc :
-    ∀ (n j : ℕ) (hist : List (Msg × Msg)) (t : Claims.Trace), hist.length = j →
+    ∀ (n j : ℕ) (hist : List (Msg × Msg)) (t : Claims.Transcript), hist.length = j →
       (Claims.stepWith H (replay ms) x () vn n hist ((List.range j).map fun i => ms.getD i []) t).out = .acc →
         ∃ N, j ≤ N ∧ N < j + n ∧
           (∀ i, j ≤ i → i < N → ∃ m, ((vn ((List.range (i + 1)).map fun i => ms.getD i [])).eval H).1 = .msg m) ∧
@@ -530,7 +530,7 @@ theorem stepWith_replay_acc :
 /-- **A replayed run logs its steps' calls**: each call in its verifier log is in the log it started with, or in the
 log of the answer at some step `N` within the rounds left, every step before which is answered by a message. -/
 theorem stepWith_replay_vLog :
-    ∀ (n j : ℕ) (hist : List (Msg × Msg)) (t : Claims.Trace), hist.length = j →
+    ∀ (n j : ℕ) (hist : List (Msg × Msg)) (t : Claims.Transcript), hist.length = j →
       ∀ e ∈ (Claims.stepWith H (replay ms) x () vn n hist ((List.range j).map fun i => ms.getD i []) t).vLog,
         e ∈ t.vLog ∨ ∃ N, j ≤ N ∧ N < j + n ∧
           (∀ i, j ≤ i → i < N → ∃ m, ((vn ((List.range (i + 1)).map fun i => ms.getD i [])).eval H).1 = .msg m) ∧

@@ -55,10 +55,11 @@ deployed network certifier in `PeriodLeakAccepted`'s form, and its trust, `trust
 namespace Accounting.JointBridge
 
 open Claims Claims.Sampling NetTiming
+open Claims.SamplingGeneric (Arg Compiled)
 
 /-- **A period whose communication audit is the network certifier's period of `n` sampled audits**, at the
-deployment `D` of the sampled verifier, the public layouts `lay`, horizons `k`, registered inputs `reg` and jitter
-bound `Dj`, at `δ` and the decoder `decode`, with the claim at `K`. Every field is a property of the deployed run:
+compiled sampled verifier `D`, the public layouts `lay`, horizons `k`, registered inputs `reg` and jitter
+bound `Dj`, at `δ`, with the claim at `K`. Every field is a property of the deployed run:
 
 * the period's windows, as `PeriodLeakAccepted` takes them: each window's registration (`sw`) and its registered
   values (`ρ`), and the network certifier's openings at each statement (`tops`);
@@ -85,10 +86,10 @@ bound `Dj`, at `δ` and the decoder `decode`, with the claim at `K`. Every field
   per-window bound that the trusted network certifier's records give; deriving it from `PeriodLeakAccepted` at the
   deployed period and `trusted`, rather than reading it as a field, is the follow-up. -/
 structure RealizesCommOfPeriodLeakAccepted {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit}
-    {I : Type} {Ω : I → Type} [DecidableEq I] [∀ i, Fintype (Ω i)] {Coin Col T : Type} [Fintype Coin] [Nonempty Coin]
-    [Inhabited Coin] [DecidableEq Col] [Zero Col]
-    (r : PeriodRun d α C Ω) (K : ℝ) (H : Msg → Msg) (D : Deploy Coin Col T) (L Kₒ S : ℕ)
-    (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T) (reg : AuditStatement → Finset ℕ)
+    {I : Type} {Ω : I → Type} [DecidableEq I] [∀ i, Fintype (Ω i)] {Coin : Type} [Fintype Coin] [Nonempty Coin]
+    [Inhabited Coin] {A : Arg Coin}
+    (r : PeriodRun d α C Ω) (K : ℝ) (H : Msg → Msg) (D : Compiled Coin A) (L Kₒ S : ℕ)
+    (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (reg : AuditStatement → Finset ℕ)
     (Dj n : ℕ) where
   /-- each window's registration -/
   sw : Fin n → AuditStatement
@@ -145,7 +146,7 @@ structure RealizesCommOfPeriodLeakAccepted {ι : Type} {d : Device ι} {α : Typ
           (wit (Function.update ξ (r.own .network) x) i) (obs (Function.update ξ (r.own .network) x) i)) ≤
     PrBad H D.V
       (RLeakCertifier H D.commit D.parse D.partition L Kₒ S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj tops)
-      (E D decode) (stmt ξ i) (prover ξ i)
+      D.E (stmt ξ i) (prover ξ i)
 
 attribute [instance] RealizesCommOfPeriodLeakAccepted.tapeFintype RealizesCommOfPeriodLeakAccepted.tapeNonempty
   RealizesCommOfPeriodLeakAccepted.connFintype

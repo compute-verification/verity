@@ -38,7 +38,7 @@ RECORD_ITEMS = tuple(S.Public(i, "structure", r) for i, r in (
 VALUES = (S.Value("x", SCHEMA, "serve"), S.Value("out", SCHEMA, "serve"))
 
 
-def _spec(selection=S.Law("subset:2"), public=RECORD_ITEMS, proof_deadline=60.0, public_outputs=(), values=VALUES,
+def _spec(selection=S.Law("rate:1/3"), public=RECORD_ITEMS, proof_deadline=60.0, public_outputs=(), values=VALUES,
           registration_deadline=None) -> S.Spec:
     return S.Spec(values, selection, S.Check(P.program_digest(Program(PAIR)), QUERY, public_outputs=public_outputs,
                                              proof_deadline=proof_deadline, registration_deadline=registration_deadline),
@@ -83,6 +83,14 @@ def _record(n: int = 6, law=None, row: int = 0, previous: str | None = None, wor
     rec = R.record(P.population_program(PAIR, n), QUERY, law or {"law": "subset", "k": 2}, S.SCHEME, roots,
                    {"kind": "served", "run": RUN, "row": row}, previous=previous, work_table=work_table)
     return {**rec, **change}
+
+
+def _rated(text: str, n: int = 6, table=None, **change) -> dict:
+    """A record of `n` proof blocks under the rate `text` as a stream registers it: its law and work table the ones the
+    rate names over them (`selection_law`, `selection_table`), from the verifier's work `table`."""
+    rule, program = S.Law(text), P.population_program(PAIR, n)
+    return _record(n, law=S.selection_law(rule, n, D.strata_sizes(program, QUERY)),
+                   work_table=S.selection_table(rule, program, QUERY, table), **change)
 
 
 def _lean(accepted=True, sessions=(SESSION,), **extra) -> dict:
@@ -212,12 +220,12 @@ def test_the_rule_refuses_a_leaf_count_unless_declared():
 
 
 def test_the_rule_refuses_a_template_population_unless_declared():
-    law = {"law": "stratified", "k": 2}
-    rec = _record(law=law)
+    rec = _rated("stratified-rate:1/3")
     assert rec["law"]["strata"][0]["template"] == PAIR.id
-    v = S.check_public(_spec(S.Law("stratified:2")), rec)
+    v = S.check_public(_spec(S.Law("stratified-rate:1/3")), rec)
     assert v.codes == ("undeclared",) and v.detail["undeclared"] == [f"population:{PAIR.id}"]
-    declared = _spec(S.Law("stratified:2"), public=(*RECORD_ITEMS, S.Public(f"population:{PAIR.id}", "structure", "a stratum")))
+    declared = _spec(S.Law("stratified-rate:1/3"),
+                     public=(*RECORD_ITEMS, S.Public(f"population:{PAIR.id}", "structure", "a stratum")))
     assert S.check_public(declared, rec).ok
     stream = _stream(declared)
     draw = stream.select(stream.register(rec, _ports(6)))
@@ -285,13 +293,14 @@ def test_a_spec_states_each_public_item_once_with_its_reason():
         _spec(public_outputs=("credited",))
     with pytest.raises(ValueError, match="distinct"):
         _spec(values=(*VALUES, VALUES[0]))
-    with pytest.raises(ValueError):
-        S.Law("subset:two")
+    for fixed in ("subset:two", "subset:2", "stratified:2", "work:2"):
+        with pytest.raises(ValueError):
+            S.Law(fixed)
     with pytest.raises(ValueError, match="uniform"):
         S.Sequential("subset:4", "B")
     with pytest.raises(ValueError, match="positive"):
         _spec(proof_deadline=0)
-    assert _spec().digest() == _spec().digest() != _spec(S.Law("subset:3")).digest()
+    assert _spec().digest() == _spec().digest() != _spec(S.Law("rate:1/2")).digest()
 
 
 def test_a_stream_refuses_what_isnt_built_and_another_unit():
@@ -322,7 +331,7 @@ def test_one_stage_refusals_come_through_register():
 def test_a_bernoulli_law_is_refused_at_register():
     """A Bernoulli sampling design at any p is outside the sampled audit's soundness statement (at 0 < p < 1 its sampled
     count varies; at p = 0 it samples nothing, so a stream would accept having verified nothing): `register` refuses it
-    (`bernoulli`, with `BERNOULLI`) after R1-R7, and logs nothing. Subset, stratified, work and All register."""
+    (`bernoulli`, with `BERNOULLI`) after R1-R7, and logs nothing. A rate, a stratified or work rate and All register."""
     for p in ("0/1", "0/4", "1/1", "3/3", "1/2", "2/3", "2/4"):
         stream = _stream(_spec(S.Law(f"bernoulli:{p}")))
         with pytest.raises(S.Refused) as e:
@@ -331,18 +340,18 @@ def test_a_bernoulli_law_is_refused_at_register():
         assert e.value.verdict.detail["bernoulli"]["reason"] == S.BERNOULLI
         assert "R1-law" in _refused(lambda: stream.register(_record(), _ports(6)))
         assert stream.log == () and stream.records == ()
-    for selection, law, table in ((S.Law("subset:2"), {"law": "subset", "k": 2}, None),
-                                  (S.Law("stratified:2"), D.parse_design("stratified:2"), None),
-                                  (S.Law("work:2"), D.parse_design("work:2"), WORK), (S.All(), {"law": "subset", "k": 6}, None)):
-        stream = _stream(_spec(selection, public=(*RECORD_ITEMS, STRATUM)))
-        assert stream.register(_record(law=law, work_table=table), _ports(6), work_table=table).order == 0, law
+    for text, table in (("rate:1/3", None), ("stratified-rate:1/3", None), ("work-rate:1/3", WORK)):
+        stream = _stream(_spec(S.Law(text), public=(*RECORD_ITEMS, STRATUM)))
+        assert stream.register(_rated(text, table=table), _ports(6), work_table=table).order == 0, text
+    stream = _stream(_spec(S.All(), public=(*RECORD_ITEMS, STRATUM)))
+    assert stream.register(_record(law={"law": "subset", "k": 6}), _ports(6)).order == 0
 
 
 def test_a_rate_law_keeps_every_units_inclusion_at_its_rate_however_the_prover_pads_n():
     """`rate:1/3:2` samples `subset:K` at K = ⌈N/3⌉ rounded up to a multiple of its 2 tables over each registration's N, so
     a registration padded tenfold (N = 60 for 6) samples K = 20 and every proof block is still sampled with probability K/N ≥ 1/3,
-    where `subset:2` falls to 2/60. The sample, the Lean verifier's sample of record and the outcome's run (`verifier.run`,
-    which an accept needs) are a subset's of K."""
+    where `subset:2`, which a rule can't state, would fall to 2/60. The sample, the Lean verifier's sample of record and
+    the outcome's run (`verifier.run`, which an accept needs) are a subset's of K."""
     for n, k in ((6, 2), (60, 20)):
         stream = _stream(_spec(S.Law("rate:1/3:2")))
         assert S.selection_law(stream.spec.selection, n) == {"law": "subset", "k": k} and 3 * k >= n and k % 2 == 0
@@ -350,8 +359,51 @@ def test_a_rate_law_keeps_every_units_inclusion_at_its_rate_however_the_prover_p
         assert (draw.draw["law"], draw.draw["k"], draw.draw["population"], len(draw.units)) == ("subset", k, n, k)
         assert stream.deliver(draw, [SESSION]) is None
         assert stream.outcome(draw, _lean(), {"statement": "stub"}).accepted
-    fixed = _stream()
-    assert len(fixed.select(fixed.register(_record(60), _ports(60))).units) == 2
+    with pytest.raises(ValueError, match="fixed count"):
+        S.Law("subset:2")
+
+
+def test_a_stratified_or_work_rate_keeps_each_strata_rate_however_the_prover_pads_n():
+    """`stratified-rate:1/3` and `work-rate:1/3` size each stratum's k over the registration's own strata, at least
+    ⌈n_s/3⌉ (Lean's `Rate.stratK_ge`, `Rate.workK_ge`), so a registration padded tenfold (N = 60 for 6) samples 20 of its one stratum and
+    every proof block is still sampled with probability k/n_s ≥ 1/3, where `stratified:2` or `work:2`, which a rule can't
+    state, would fall to 2/60."""
+    for text, table in (("stratified-rate:1/3", None), ("work-rate:1/3", WORK)):
+        for n, k in ((6, 2), (60, 20)):
+            program = P.population_program(PAIR, n)
+            law, rated = S.params_law(text, program, QUERY, table)
+            assert [s["k"] for s in D.derive(program, QUERY, law, rated)["strata"]] == [k] and 3 * k >= n, (text, n)
+            stream = _stream(_spec(S.Law(text), public=(*RECORD_ITEMS, STRATUM)))
+            draw = stream.select(stream.register(_rated(text, n, table=table), _ports(n), work_table=table))
+            assert len(draw.units) == k, (text, n)
+    for text in ("stratified:2", "work:2"):
+        with pytest.raises(ValueError, match="fixed count"):
+            S.Law(text)
+
+
+def test_a_stratified_rate_is_the_stratified_law_at_the_least_k_its_strata_need():
+    """`stratified-rate:NUM/DEN` over strata of n_s proof blocks of N is `stratified:K` at `draw.strat_k`, the least K at which
+    every stratum's `stratum_k` reaches ⌈NUM·n_s/DEN⌉ (Lean's `Rate.stratK_ge`), at most N, whatever strata the prover
+    registers; with no strata it is refused (`rate`), and so is a work rate without a table. `selection_sizes` reads the
+    strata for a stratified rate alone, and refuses one (`rate`, with the query's reason) where the query doesn't apply."""
+    rng = random.Random("stratified-rate")
+    for _ in range(2000):
+        sizes = [rng.choice([1, 2, 3, rng.randrange(1, 40), rng.randrange(1, 5000)]) for _ in range(rng.randrange(1, 6))]
+        n, den = sum(sizes), rng.choice([1, 2, 3, 7, 20, 64, 1000])
+        num = rng.randrange(1, den + 1)
+        law = S.selection_law(S.Law(f"stratified-rate:{num}/{den}"), n, sizes)
+        k = law["k"]
+        assert law == {"law": "stratified", "k": k} and 1 <= k <= n, (sizes, num, den)
+        assert all(den * D.stratum_k(k, s, n) >= num * s for s in sizes), (sizes, num, den, k)
+        assert k == 1 or any(D.stratum_k(k - 1, s, n) < D.rate_count(num, den, 1, s) for s in sizes), (sizes, num, den, k)
+    assert _refused(lambda: S.selection_law(S.Law("stratified-rate:1/3"), 6, [])) == ("rate",)
+    assert _refused(lambda: S.selection_table(S.Law("work-rate:1/3"), P.population_program(PAIR, 6), QUERY, None)) == ("rate",)
+    program, word = P.population_program(PAIR, 6), {"name": "Q_word", "version": 1, "params": {"X": 8}}
+    assert S.selection_sizes(S.Law("stratified-rate:1/3"), program, QUERY) == [6]
+    assert [S.selection_sizes(S.Law(t), program, word) for t in ("rate:1/3", "work-rate:1/3")] == [[], []]
+    with pytest.raises(S.Refused) as e:
+        S.selection_sizes(S.Law("stratified-rate:1/3"), program, word)
+    assert e.value.verdict.codes == ("rate",) and "query" in e.value.verdict.detail["rate"]["reason"]
 
 
 def test_a_rate_count_its_tables_dont_divide_rounds_up_and_one_past_n_is_refused():
@@ -727,7 +779,7 @@ def _refused(call) -> tuple[str, ...]:
 
 
 WORK = {PAIR.id: 10}
-STRATUM = S.Public(f"population:{PAIR.id}", "structure", "the work law's one stratum")
+STRATUM = S.Public(f"population:{PAIR.id}", "structure", "the law's one stratum")
 #: A closure map: each proof block is proved with the next.
 NEXT = {u: [(u + 1) % 6] for u in range(6)}
 
@@ -740,27 +792,27 @@ def test_a_closure_map_is_refused_before_any_coin_is_read():
     stream = _stream()
     reg = stream.register(_record(), _ports(6))
     assert _refused(lambda: stream.select(reg, closure=NEXT)) == ("closure",)
-    work = _spec(S.Law("work:2"), public=(*RECORD_ITEMS, STRATUM))
+    work = _spec(S.Law("work-rate:1/3"), public=(*RECORD_ITEMS, STRATUM))
     stream = _stream(work)
-    reg = stream.register(_record(law={"law": "work", "k": 2}, work_table=WORK), _ports(6), work_table=WORK)
+    reg = stream.register(_rated("work-rate:1/3", table=WORK), _ports(6), work_table=WORK)
     for bad in (NEXT, {}, {u: [6] for u in range(6)}, {6: [0]}, [[1]] * 6):
         assert _refused(lambda: stream.select(reg, closure=bad)) == ("closure",)
     draw = stream.select(reg)
     fresh = _stream(work)
-    assert draw.draw == fresh.select(fresh.register(_record(law={"law": "work", "k": 2}, work_table=WORK), _ports(6),
+    assert draw.draw == fresh.select(fresh.register(_rated("work-rate:1/3", table=WORK), _ports(6),
                                                     work_table=WORK)).draw
     assert "closure" not in draw.draw and draw.proved == draw.units
     stream.deliver(draw, [SESSION])
     assert stream.outcome(draw, _lean(), {}).accepted
 
 
-@pytest.mark.parametrize("text", ["subset:2", "stratified:2", "work:2"])
+@pytest.mark.parametrize("text", ["rate:1/3", "stratified-rate:1/3", "work-rate:1/3"])
 def test_the_default_draw_is_draw_first_on_the_challengers_bytes(text):
     """The sample is Lean's `drawWith` on the coins (`coins.draw_first`), so `flock-verify draw` on the same bytes
     samples the same proof blocks."""
     table = WORK if text.startswith("work") else None
     for seed in range(8):
         stream = _stream(_spec(S.Law(text), public=(*RECORD_ITEMS, STRATUM)), coins=random.Random(seed).randbytes)
-        reg = stream.register(_record(law=D.parse_design(text), work_table=table), _ports(6), work_table=table)
+        reg = stream.register(_rated(text, table=table), _ports(6), work_table=table)
         draw = stream.select(reg)
         assert dict(draw.draw) == T.draw_first(T.OwnRandomness(random.Random(seed).randbytes), draw.law, 6)

@@ -27,9 +27,9 @@ each rule holds: every spot checked, and each passing.
 
 Exit status 1 when a check fails (each failure is named, `FAIL NAME`, and in the summary), 0 otherwise: the verdict is every
 target's real one, and whether a failure may stay red is drive's policy (`research.policy`, policy.toml's allowances), never
-this command's.  Redundant and dead gates, an
-unpinned or untyped lowering, a Definition over the partition's budget (but for a Call partitioned by its callees,
-`checks.by_callees`, whose callees fail by name), and a target no realization compared on a random
+this command's.  A Call over the partition's budget is partitioned by its callees (`checks.by_callees`, whose callees fail
+by name) or fails by its own name (``partition/unpartitioned``).  Redundant and dead gates, an
+unpinned or untyped lowering, a Definition over the partition's budget that is no Call, and a target no realization compared on a random
 vector (``vectors/edge-only``, ``vectors/none``: `checks.vector_class`) are warnings, which never fail
 (``--fail-on-warnings`` makes them fail too): a target with one is logged ``unchecked``, not ``ok``, the warnings are printed
 under ``unchecked`` by check, with counts, a line before the last counts the targets of each vector class (the summary's
@@ -1027,12 +1027,18 @@ def _joined(a: dict | None, b: dict) -> dict:
     return out
 
 
+def _probed(d: dict) -> dict:
+    """Read set ``d`` with its probes as `cache.probed` declares them now, but those its files hold."""
+    return {**d, "probes": sorted(CC.probed(REPO, d.get("probes", ())) - set(d.get("files", ())))}
+
+
 def update_reads(rep: dict, every: bool) -> list[str]:
     """`READS` with what each catalog binding ``rep`` (`run`'s, with ``reads``) has an entry of every target for read, added to
     what it declares, and ``registries`` and ``loaded`` as declared and as now, both: what a binding's run reads depends on
     how it runs (``--binding`` makes only its own binding's roots, so a target reads what making another binding's roots
     reads where it makes them), so a declaration holds every way it ran.  With ``every`` (a run of every binding) a binding
-    the catalog no longer has is dropped.  Remove `READS` to start over.  The bindings left as they were (``incomplete``)."""
+    the catalog no longer has is dropped.  Each probe is written as `cache.probed` declares it now, those `READS` held already
+    too.  Remove `READS` to start over.  The bindings left as they were (``incomplete``)."""
     new, have = rep["reads"], _reads_file()
     incomplete = sorted(new.get("incomplete", {}))
     done = {n: _joined(have["bindings"].get(n), d) for n, d in new["bindings"].items() if n not in incomplete}
@@ -1040,8 +1046,9 @@ def update_reads(rep: dict, every: bool) -> list[str]:
         bindings = {n: d for n in new["bindings"] if (d := done.get(n, have["bindings"].get(n))) is not None}
     else:
         bindings = {**have["bindings"], **done}
-    regs = {k: sorted({*have["registries"].get(k, ()), *new["registries"].get(k, ())}) for k in CC.DECLARED}
-    loaded = sorted({*have["loaded"], *new["loaded"]})
+    bindings = {n: _probed(d) for n, d in bindings.items()}
+    regs = _probed({k: sorted({*have["registries"].get(k, ()), *new["registries"].get(k, ())}) for k in CC.DECLARED})
+    loaded = sorted(CC.probed(REPO, {*have["loaded"], *new["loaded"]}))
     READS.mkdir(parents=True, exist_ok=True)
     for part, got in (("registries.json", {"registries": regs}), ("loaded.json", {"loaded": loaded}),
                       ("bindings.json", grouped(bindings))):

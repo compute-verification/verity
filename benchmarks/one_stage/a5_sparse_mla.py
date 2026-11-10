@@ -3,7 +3,7 @@ window (one ``SparseMlaSplit_v1{T=40,NS=3,NH=2,DR=16,DV=32,BN=16}`` row in its s
 8-key parts and two three-split combines, each combine slot wired to the output rows of the part unit that wrote it), its run
 ``<ROOT>/rank0``, committed as serving commits it (`pipeline.serving_rows.read_all` on the fixture's served values, each part's
 partial and lse by the twin, `ml.windows.rows.commit`) and audited by `a5.audit` as rank 0 of a one-rank step on a local
-challenger's coins under ``stratified:1``, one unit of each template: the wiring check on the public bodies before the sample
+challenger's coins under ``stratified-rate:1/64``, a 64th of each template's units and at least one: the wiring check on the public bodies before the sample
 (`commit.wiring.check`), each template's circuit (`compose_circuit.py --template`; the 16-key part's MUFU reads in lookup
 slots, the 8-key part's and the combine's inline, `chunk_rows.reads`), M0's `--zk` session of each sampled proof block (behind the ZK server under ``--firewall``), the Lean verifier, the stream's
 outcome and the negatives (`a5.wiring_negatives` among them). It stands in for step 16's 78 rows (at T = 272, per head, four
@@ -31,20 +31,20 @@ sys.path.insert(0, str(HERE.parents[1] / "integrations" / "vllm"))
 import a5  # noqa: E402
 import a5_coins as AC  # noqa: E402
 from tests.pipeline import test_serving_rows_splits as TS  # noqa: E402
-from verity.core.protocols.spot.one_stage import draw as D, registration as R  # noqa: E402
+from verity.core.protocols.spot.one_stage import registration as R  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
 from verity.ml.windows import rows as CS  # noqa: E402
 
 #: the stand-in's session root, as a TP Commit's run root is its ranks' session root
 ROOT = hashlib.sha512(b"verity/a5/sparse-mla-split-stand-in/v1").hexdigest()
-RULE = "stratified:1"
+RULE = "stratified-rate:1/64"
 OF = {"fixture": "integrations/vllm/tests/pipeline/test_serving_rows_splits.py", "row": TS.row()}
 
 
 def commit(out: Path) -> CS.Binding:
     """The fixture's window of one row under ``<ROOT>/rank0`` committed into ``out`` as serving commits it, its salts fresh."""
     s = TS.Served()
-    w = replace(TS.window(s, law=D.parse_design(RULE)), run=f"{ROOT}/rank0")
+    w = a5.rated(replace(TS.window(s), run=f"{ROOT}/rank0"), RULE)
     got = TS.read(s, w.members)
     c = CS.commit(w, [g for g, _e in got])
     CS.write(c, out, {"of": OF, "committer": {"module": "a5_sparse_mla.py"}}, IX.index_doc(w.members, [e for _g, e in got], w.run),

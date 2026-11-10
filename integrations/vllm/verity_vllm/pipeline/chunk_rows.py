@@ -40,12 +40,15 @@ def reads(tp: Any) -> str:
     k_log 25, proved in 118 s, a 272 s session at 27 GB, accepted by Lean with its three negatives refused) and for its heads' per-key-block Calls, else inline, as step 16's 16-key part and
     five-split combine were proved, and the RMSNorm rows (``RMSNormTriton_v5``, ``RMSNormFusedCuda_v2``, 41 to 56 nonzeros
     an AND inline) at their served shapes. A ``CHAINS`` block reads as a split part of its NVIS keys does (slots for a whole
-    block), its end inline as the combine. A ``_v2`` body reads no table (its EX2 is gates), so it lowers flat either way."""
+    block), its end inline as the combine. A ``STAGES`` stage reads in slots: a stats part or a probabilities block reads EX2 a
+    lane, thousands of them. A ``_v2`` body reads no table (its EX2 is gates), so it lowers flat either way."""
     from verity_vllm.pipeline import chain_rows as CH, split_rows as SP
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     if tp.layout == "row":
         return "slots" if spec_base(tp.id) in SLOT_ROWS else "inline"
+    if tp.layout == "stage":
+        return "slots"
     if tp.layout == "chain":
         S = spec_statics(tp.word)
         return "inline" if CH.kind(tp) == "end" or int(S["NVIS"]) < int(S["BN"]) else "slots"
@@ -78,7 +81,8 @@ def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tupl
     if tp.layout == "s8":
         bits = 16 * s8_words(int(spec_statics(tp.id)["K"]))
         return [("x", SEG, bits, ["x", "sx"]), ("w", V2, bits, ["wrow", "sw"])], [(V2, (0,))]
-    if tp.layout not in ("coord", "cols", "slice", "kchunk", "row", "part", "split", "chain", "slots", "read", "expert", "fused"):
+    if tp.layout not in ("coord", "cols", "slice", "kchunk", "row", "part", "split", "chain", "stage", "slots", "read", "expert",
+                         "fused"):
         raise ValueError(f"{tp.id}: its layout {tp.layout!r} is not a chunked one")
     g = {nm: k for k, (nm, _ty) in enumerate(tp.fn.signature()[0])}
 
