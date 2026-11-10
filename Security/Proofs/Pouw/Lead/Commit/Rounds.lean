@@ -17,7 +17,7 @@ it asks for, opened after what it was given (`liveReason_none`).
 namespace Pouw.SecurityProofs.Lead.Commit
 
 open Properties.Pouw.Lead.Commit
-open SampledProofs.Challenger (LiveCommitment LiveOpening liveReason orderReason liveDomain)
+open Spot.Challenger (LiveCommitment LiveOpening liveReason orderReason liveDomain)
 
 theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} :
     (x >>= f) = .ok b ↔ ∃ a, x = .ok a ∧ f a = .ok b := by

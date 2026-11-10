@@ -2086,11 +2086,11 @@
    "imports": [
     "PouwPearlPlus",
     "Definitions.Pouw.Game.Defs",
-    "Properties.SampledProofs.Draw",
+    "Properties.Spot.Draw",
     "Mathlib.Algebra.BigOperators.Fin"
    ],
    "except": [],
-   "why": "the run draw is stated against Pearl+'s own draw (`pouw_pearlplus`) as the law `MissBound` reads (`Definitions.Pouw.Game.Defs`'s `Ticket` and `pr`), tickets numbered in `finSigmaFinEquiv`'s order (`Mathlib.Algebra.BigOperators.Fin`), over streams read as sampled proofs' are (`Properties.SampledProofs.bytesOf`), never a proof"
+   "why": "the run draw is stated against Pearl+'s own draw (`pouw_pearlplus`) as the law `MissBound` reads (`Definitions.Pouw.Game.Defs`'s `Ticket` and `pr`), tickets numbered in `finSigmaFinEquiv`'s order (`Mathlib.Algebra.BigOperators.Fin`), over streams read as sampled proofs' are (`Properties.Spot.bytesOf`), never a proof"
   },
   "Properties.Pouw.Commit": {
    "imports": ["PouwCommit"],

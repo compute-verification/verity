@@ -16,7 +16,7 @@ public import Mathlib.Algebra.Order.BigOperators.Group.List
 public import Proofs.Pouw.PearlC.CoreOps
 public import Proofs.Pouw.PearlC.Peel
 public import Proofs.Pouw.PearlC.PeelExactProofs
-public import Proofs.Properties.Evaluate
+public import Proofs.Properties.Core.Evaluate
 
 /-!
 # Pearl+'s bridge, part (b), the noise: the check's -h3 noise is `NoiseSha512`'s

@@ -9,7 +9,7 @@ public import Definitions.Pouw.PearlC.TileCircuit
 `PouwCheck.PearlPlus` runs the H100's E4M3 atom as the evaluator computes it (`Evaluate.TC.hopperE4m3Dot32`, on
 `Evaluate.TC.Fp8Atom`'s grouped-sum model), in the chain, the forming and the debit replay. The game reads
 `Pouw.Fp8Atom.Pipeline.step` at `hopperE4m3K32`. Code Lean may not read `Security/`, so the two models are one text in
-two packages; the bridge is one commuting map per definition, as `Proofs.Properties.Evaluate` does for the BF16
+two packages; the bridge is one commuting map per definition, as `Proofs.Properties.Core.Evaluate` does for the BF16
 tensor-core spec.
 -/
 
