@@ -5,8 +5,8 @@ record (`tools/verity/check/tasks.py`'s REGENERATE): a lock that doesn't match t
 
 Its status is from the audit's exit and its report (`audit.json`, its output).  Exit 0 is a pass.  Exit 1 with the report naming
 what failed is a fail, each package's failures in `detail.failures` (cut to `NAMED`), unless every failure is a dependency the
-audit couldn't fetch (`lean_audit.transient`, after its own retries), the machine's.  A report missing, any other exit and a
-signal are an error."""
+audit couldn't fetch (`lean_audit.transient`, after its own retries) or the check.py it runs reported nothing, the machine's.
+A report missing, any other exit and a signal are an error."""
 from __future__ import annotations
 
 import importlib.util
@@ -21,6 +21,8 @@ from .lean_build import ELAN
 
 AUDIT = "tools/verity/lean/lean_audit.py"
 OUT = "lean-audit"
+#: how the report's `failed` names a check.py that wrote no report, or one killed with nothing failed (`check.py exit N`)
+CHECK = "check.py"
 #: the most failures `detail.failures` names: a longer list is cut, and `detail.beyond` says so
 NAMED = 50
 
@@ -50,6 +52,8 @@ def run(task: dict, work: Path) -> dict:
     if not doc.get("failed") or rc != 1:
         return {"status": "error", "detail": {**detail, "error": f"lean_audit.py exited {rc} and its report names "
                                                                  f"{'no failure' if not doc.get('failed') else 'a failure'}"}}
+    if lost := [str(f) for f in doc["failed"] if str(f).startswith(CHECK)]:
+        return {"status": "error", "detail": {**detail, "error": f"lean_audit.py's check.py reported nothing: {', '.join(lost)}"}}
     failing = [r for r in reps if r.get("failures")]
     if failing and all(_audit_module().transient(r) for r in failing):
         return {"status": "error", "detail": {**detail, "error": "a dependency couldn't be fetched: "

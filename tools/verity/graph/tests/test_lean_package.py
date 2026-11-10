@@ -97,7 +97,7 @@ if __name__ == "__main__":
     out.mkdir(parents=True, exist_ok=True)
     fails = {"lock": ["record: Pkg.claim: its statement differs from the lock's"], "fetch": ["setup: could not fetch mathlib"]}
     rep = {"package": "pkg", "failures": fails.get(how, [])}
-    failed = ["pkg"] if rep["failures"] else ["unread"] if how == "unread" else []
+    failed = ["pkg"] if rep["failures"] else ["unread"] if how == "unread" else ["check.py exit -9"] if how == "lost" else []
     (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": [rep],
                                                 "cached": {"pkg": "k"} if how == "reused" else {}}))
     sys.exit(1 if failed else 0)
@@ -105,11 +105,12 @@ if __name__ == "__main__":
 
 
 @pytest.mark.parametrize(("how", "status"), [("pass", "pass"), ("reused", "pass"), ("lock", "fail"), ("unread", "fail"),
-                                             ("fetch", "error"), ("no report", "error"), ("usage", "error"), ("kill", "error")])
+                                             ("fetch", "error"), ("lost", "error"), ("no report", "error"), ("usage", "error"),
+                                             ("kill", "error")])
 def test_the_runner_tells_the_package_s_fail_from_the_machine_s_error(tmp_path, monkeypatch, how, status):
     """`lean_audit.py --out WORK/lean-audit --package PKG`, lake on the PATH, no record regenerated: a package that failed its
     audit (its lock, the unread ratchet) is a fail naming its failures; failures that are all a fetch the audit couldn't make, a
-    missing report, a usage error and a kill are an error, no result."""
+    check.py that reported nothing, a missing report, a usage error and a kill are an error, no result."""
     root = tmp_path / "tree"
     for p, text in {runner.AUDIT: STANDIN, "bin/lake": "#!/bin/sh\n"}.items():
         (root / p).parent.mkdir(parents=True, exist_ok=True)
