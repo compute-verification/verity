@@ -8,7 +8,7 @@ public import PouwWindow.Side
 # A unit's opening (`core_check.py`, "a unit's opening")
 
 `opening`: the tile proof's public file opens the unit's rows under the registered execution phase root. The unit is sampled
-(unless it is opened unsampled, the filler's). A certified execution phase (its context names a PoUW execution phase, `executionPhaseOf`) opens only
+(unless it is opened unsampled, the filler's). A certified execution phase (its context names a PoUW execution phase, `windowOf`) opens only
 a salted template's units (`Tile.salted`), under the 64-byte certified salt the verifier holds, and any other execution phase no
 salt and no salted unit (`saltReason`). The registered entries root's domain is one-stage's served domain of the
 registered program and partition over the check's P entries (`windowDomain?`). The opening's entry, under its salt, is
@@ -79,7 +79,7 @@ def publicBc (context : String) (salt : ByteArray) (position : Nat) (roots : Byt
 salt and no salted unit. -/
 def saltReason (p : Params) (t : Option Tile) (salt : Option ByteArray) : Option String :=
   let salted := t.bind (·.salted)
-  if (executionPhaseOf p.context).isSome then
+  if (windowOf p.context).isSome then
     if salted.isNone then
       some "the window is certified, and its template's unit reads no salt: no drawn proof of it is held to the window's certified salt"
     else if (salt.filter (·.size == SALT_BYTES)).isNone then

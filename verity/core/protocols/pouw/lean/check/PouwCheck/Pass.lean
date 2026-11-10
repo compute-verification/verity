@@ -20,7 +20,7 @@ salt-only session of the auditor host's challenger opened on its salt execution 
 the auditor's ledger and the session's own files (`{key, ledger, main, pins, session}`, `livePassSalt`), never the
 pass's word; a pass recorded before the execution phase's coins (`MANIFEST_RECORDED`, read only in a replay) carries a beacon. Either
 way the manifest's salt must be the execution phase's. A certified execution phase's verifier holds the network certifier's salt for
-the PoUW execution phase its context names (`executionPhaseOf`), the execution phase's stream and prover, and what PoUW recorded with the certifier
+the PoUW execution phase its context names (`windowOf`), the execution phase's stream and prover, and what PoUW recorded with the certifier
 before its salt (`pouwRecord`, `salt.pouw_record`), and passes only a pass salted by them (`MANIFEST_CERTIFIED`, the salt
 `pouwSalt`, `salt.pouw_salt`); no other verifier passes such a pass. A refusal is `coin` (the coin rule's, Python's
 `DomainError`) or `manifest` (a manifest it can't read, or not the execution phase's pass), with Python's words.
@@ -225,7 +225,7 @@ def checkWorkload (us : List Matmul) (roots : List (Nat × ByteArray)) : R Unit 
   if held != want then coin "every weight of the workload is committed, and only those"
 
 /-- `salt.window_of`: the PoUW execution phase a context names, `<prefix>/pouw-window/<p>/<manifest SHA-512>`. -/
-def executionPhaseOf (context : String) : Option Nat :=
+def windowOf (context : String) : Option Nat :=
   let parts := context.splitOn "/"
   let n := parts.length
   let d := parts.getD (n - 2) ""
@@ -270,7 +270,7 @@ def certifiedSalt (m : Json) (reveal : ByteArray) (context : String) (committed 
     coin s!"schema {pyRepr s}, not {MANIFEST_CERTIFIED}: the window is certified"
   let (us, roots) ← workloadOf m
   if reveal.size != SALT_BYTES then coin s!"the verifier's reveal is not a {SALT_BYTES}-byte salt"
-  let some p := executionPhaseOf context | coin "the window's context names no PoUW window, whose certifier salt the pass's is"
+  let some p := windowOf context | coin "the window's context names no PoUW window, whose certifier salt the pass's is"
   checkWorkload us roots
   let (some s, some v) := (stream.filter (·.size == STREAM_BYTES), prover.filter (·.size == PROVER_BYTES))
     | coin s!"the verifier holds no {STREAM_BYTES}-byte stream digest and {PROVER_BYTES}-byte prover id for the window"
