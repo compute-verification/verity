@@ -47,7 +47,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import slots as S  # noqa: E402
-from verity.ml.commitments.identity import identity_digest_sha512  # noqa: E402
+from verity.commitments.identity import identity_digest_sha512  # noqa: E402
 
 CTX = identity_digest_sha512("verity/commit-slots/step/context/v1", {"step": 1})
 KEY = bytes(range(96, 128))

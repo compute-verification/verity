@@ -32,10 +32,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.ml.circuits import codec as C
-from verity.ml.circuits import ports as P
-from verity.ml.circuits.defs import Builder, Node, PrimitiveDefinition, SpecializedDefinition
-from verity.ml.circuits.refs import Affine, Coll
+from verity.circuits import codec as C
+from verity.circuits import ports as P
+from verity.circuits.defs import Builder, Node, PrimitiveDefinition, SpecializedDefinition
+from verity.circuits.refs import Affine, Coll
 
 from . import cache as CC
 from . import sidecars as SC

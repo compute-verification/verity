@@ -44,7 +44,7 @@ untraced = [
 # difftest harness, vLLM's integration and `research`, what the
 # tests import, in place of those trees; the Lean the served challenger's `lake build` reads is keyed by the binaries it
 # builds (`artifacts`), and the C++ the tests compile is this suite's own but for the SHA-512 pearl_c/sha512.cuh includes
-# (verity/ml/kernels/sha512.cuh). benchmarks/pouw/receipts, filler and
+# (verity/definitions/kernels/sha512.cuh). verity/protocols/pouw/receipts, filler and
 # machine_model are suites of their own, which this suite's tests read (test_receipts_adopters, test_opcode_probe),
 # so they're named here. The theory scripts (`theory/`) import the exact kit's package. test_dither_a_step_chunks
 # imports dither_one (and forms.py through dither_fused) on the CPU. test_contents reads the README,
@@ -52,7 +52,7 @@ untraced = [
 # verity_vllm.program.frontend's kernel_readback (the program files named below), and its CUDA tests import dither-a
 # (benchmarks/hash/dither's dither_a.py and the modules it imports, and exactlin.py): its files alone, not their kernels'
 # CUDA sources, and dither's registry (settings.py), which they read their variables through. test_served_h1_producer's
-# H1 window commits its hiding tables through pouw_h1_requests.hiding_rows, whose ChaCha20 is verity.ml.windows.rows'
+# H1 window commits its hiding tables through pouw_h1_requests.hiding_rows, whose ChaCha20 is verity.commitments.windows.rows'
 # (the commit files named below: serving_rows and what it imports).
 # test_served_units_summarize runs served_units' summarize.py, which scores the hidden_zk controls its job.sh sources.
 # served_h1's producer loads dither's j10r_ws.py, which sizes a J10-R call's workspace from the loaded build.
@@ -63,82 +63,82 @@ untraced = [
 # pearl_c_sm90's arm.
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
-          "verity/core/claims/__init__.py",
-          "verity/core/protocols/record.py",
-          "verity/core/protocols/profile.py", "verity/core/protocols/pouw", "verity/core/protocols/spot",
-          "verity/ml/protocols/__init__.py", "verity/ml/protocols/pouw", "verity/ml/protocols/certifier",
-          "verity/core/protocols/certifier",
-          "verity/core/difftest", "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto",
-          "verity/ml/kernels", "verity/ml/randomness", "verity/ml/flock/python", "verity/ml/windows",
+          "verity/claims/__init__.py",
+          "verity/hardware/record.py",
+          "verity/protocols/spot/verifier/profile.py", "verity/protocols/pouw/verifier", "verity/protocols/spot",
+          "verity/ml/protocols/__init__.py", "verity/protocols/pouw/prover", "verity/protocols/certifier/prover",
+          "verity/protocols/certifier",
+          "verity/difftest", "verity/ml/__init__.py", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
+          "verity/definitions/kernels", "verity/commitments/randomness", "verity/protocols/flock/prover/python", "verity/commitments/windows",
           "verity/hardware",
-          "tools/config/verity_config",
-          "integrations/vllm/verity_vllm/settings.py", "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py",
-          "integrations/vllm/verity_vllm/commit/__init__.py", "verity/ml/windows/hiding.py",
-          "verity/ml/windows/rows.py", "integrations/vllm/verity_vllm/errors.py",
-          "integrations/vllm/verity_vllm/engine", "integrations/vllm/verity_vllm/protocols/linear",
-          "integrations/vllm/verity_vllm/protocols/__init__.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/credit_gate.py",
-          "integrations/vllm/verity_vllm/protocols/interface.py",
-          "integrations/vllm/verity_vllm/protocols/pous.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/__init__.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/lead",
-          "integrations/vllm/verity_vllm/protocols/pouw/operands.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/circuit.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/device.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/h1/challenger.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/h1/commit.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/h1/draw.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/h1/handoff.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/h1/hooks.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/h1/model_key.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/h1/names.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/h1/prover.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/h1/ranks.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/h1/records.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/h1/registered.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/h1/registered_device.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/h1/requests.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/h1/served.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/h1/served_program.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/h1/public_rows.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/h1/settings.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/h1/static.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/h1/tables_device.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/h1/window.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/native.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/passes.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/__init__.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/graphs.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/grouped.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/host.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/kernel.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/lanes.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/manifest.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/ends.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
-          "integrations/vllm/verity_vllm/protocols/spot.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/pouw_cuda",
-          "integrations/vllm/verity_vllm/protocols/pouw/h1/kept.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/h1/live.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/h1/served_files.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/h1/receipts.py",
-          "integrations/vllm/verity_vllm/commit", "integrations/vllm/verity_vllm/records",
-          "integrations/vllm/verity_vllm/query/__init__.py", "integrations/vllm/verity_vllm/query/manifest",
-          "integrations/vllm/verity_vllm/program/__init__.py", "integrations/vllm/verity_vllm/program/frontend/__init__.py",
-          "integrations/vllm/verity_vllm/program/frontend/correspond.py",
-          "integrations/vllm/verity_vllm/program/frontend/kernel_readback.py",
-          "integrations/vllm/verity_vllm/program/frontend/provenance.py",
-          "integrations/vllm/verity_vllm/program/frontend/torch_frontend.py",
-          "integrations/vllm/verity_vllm/program/frontend/errors.py",
-          "integrations/vllm/verity_vllm/program/frontend/graph_translate.py",
-          "integrations/vllm/verity_vllm/program/frontend/minted_ops.py",
-          "integrations/vllm/verity_vllm/program/frontend/program_identity.py",
-          "integrations/vllm/verity_vllm/program/frontend/schemas.py",
-          "integrations/vllm/verity_vllm/program/frontend/strided_views.py",
-          "integrations/vllm/verity_vllm/program/frontend/value_types.py",
+          "verity/configuration/config/verity_config",
+          "adapters/vllm/verity_vllm/settings.py", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py",
+          "adapters/vllm/verity_vllm/commit/__init__.py", "verity/commitments/windows/hiding.py",
+          "verity/commitments/windows/rows.py", "adapters/vllm/verity_vllm/errors.py",
+          "adapters/vllm/verity_vllm/engine", "adapters/vllm/verity_vllm/protocols/linear",
+          "adapters/vllm/verity_vllm/protocols/__init__.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/credit_gate.py",
+          "adapters/vllm/verity_vllm/protocols/interface.py",
+          "adapters/vllm/verity_vllm/protocols/pous.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/__init__.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/lead",
+          "adapters/vllm/verity_vllm/protocols/pouw/operands.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/circuit.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/device.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/challenger.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/commit.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/draw.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/handoff.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/hooks.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/model_key.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/names.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/prover.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/ranks.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/records.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/registered.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/registered_device.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/requests.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/served.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/served_program.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/public_rows.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/settings.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/static.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/tables_device.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/window.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/native.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/passes.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/__init__.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/graphs.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/grouped.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/host.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/kernel.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/lanes.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/manifest.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/ends.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/screen.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
+          "adapters/vllm/verity_vllm/protocols/spot.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/kept.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/live.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/served_files.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/receipts.py",
+          "adapters/vllm/verity_vllm/commit", "adapters/vllm/verity_vllm/records",
+          "adapters/vllm/verity_vllm/query/__init__.py", "adapters/vllm/verity_vllm/query/manifest",
+          "adapters/vllm/verity_vllm/program/__init__.py", "adapters/vllm/verity_vllm/program/frontend/__init__.py",
+          "adapters/vllm/verity_vllm/program/frontend/correspond.py",
+          "adapters/vllm/verity_vllm/program/frontend/kernel_readback.py",
+          "adapters/vllm/verity_vllm/program/frontend/provenance.py",
+          "adapters/vllm/verity_vllm/program/frontend/torch_frontend.py",
+          "adapters/vllm/verity_vllm/program/frontend/errors.py",
+          "adapters/vllm/verity_vllm/program/frontend/graph_translate.py",
+          "adapters/vllm/verity_vllm/program/frontend/minted_ops.py",
+          "adapters/vllm/verity_vllm/program/frontend/program_identity.py",
+          "adapters/vllm/verity_vllm/program/frontend/schemas.py",
+          "adapters/vllm/verity_vllm/program/frontend/strided_views.py",
+          "adapters/vllm/verity_vllm/program/frontend/value_types.py",
           "tools/research/src/research/__init__.py", "tools/research/src/research/env.py", "tools/research/src/research/record.py",
           "tools/research/src/research/result.py", "tools/research/src/research/secret_hint.py",
           "tools/research/src/research/store", "tools/research/src/research/telemetry",
@@ -146,7 +146,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "Security/Definitions/Pouw/Guarantees", "Security/Definitions/Accounting/Guarantees/HeadlineDc.lean",
           "Security/Definitions/Pouw/Guarantees/PearlCFlockTile.lean", "Security/lean-audit.json",
           "Security/Proofs/Accounting/Gates/Rows.lean",
-          "benchmarks/pouw/exact_kit/exact_kit", "benchmarks/pouw/receipts", "benchmarks/pouw/filler",
+          "benchmarks/pouw/exact_kit/exact_kit", "verity/protocols/pouw/receipts", "benchmarks/pouw/filler",
           "benchmarks/pouw/machine_model", "benchmarks/pouw/README.md",
           "benchmarks/hash/dither/dither_a.py", "benchmarks/hash/dither/dither_fused.py",
           "benchmarks/hash/dither/j10r_ws.py",
@@ -156,14 +156,14 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "benchmarks/hash/dither/h1r.py", "benchmarks/hash/dither/j10r_units.py",
           "benchmarks/hash/dither/settings.py", "benchmarks/hash/exactlin/exactlin.py",
           "benchmarks/served_units/summarize.py", "benchmarks/harness/verity_bench/overhead.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/h1/tables_device.py",
-          "integrations/vllm/verity_vllm/protocols/pouw/h1/words.py"]
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/tables_device.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/words.py"]
 # one process: 2,100 s beside a loaded check, too near suites.py's SUITE_TIMEOUT_S
 timeout_s = 7200
 # Build outputs the served challenger's checks of record run or skip on (`check` runs this suite after its Lean steps).
-artifacts = ["verity/core/protocols/pouw/lean/check/.lake/build/bin/pouw-check",
-             "verity/core/protocols/pouw/lean/check/.lake/build/bin/pouw-check-difftest",
-             "verity/core/service/spot/.lake/build/bin/sampled-proofs-difftest"]
+artifacts = ["verity/protocols/pouw/verifier/lean/check/.lake/build/bin/pouw-check",
+             "verity/protocols/pouw/verifier/lean/check/.lake/build/bin/pouw-check-difftest",
+             "verity/protocols/spot/verifier/lean/.lake/build/bin/sampled-proofs-difftest"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -184,7 +184,7 @@ tests = [
     "tests/test_served_h1.py",
     "tests/test_served_h1_producer.py",
 ]
-paths = ["benchmarks/pouw", "tools/config/verity_config", "verity"]
+paths = ["benchmarks/pouw", "verity/configuration/config/verity_config", "verity"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_facet_break.py"]
@@ -192,16 +192,16 @@ paths = ["benchmarks/pouw/machine_model/verity_machine_model", "benchmarks/pouw/
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_ffill.py"]
-paths = ["verity/ml/circuits/ops"]
+paths = ["verity/definitions/ops"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_h1_prove_live.py"]
 paths = [
-    "verity/core/protocols/pouw",
-    "verity/core/protocols/spot/one_stage",
-    "verity/ml/circuits",
-    "verity/ml/commitments/frame_v3",
-    "verity/ml/flock/python/verity_flock",
+    "verity/protocols/pouw/verifier",
+    "verity/protocols/spot/verifier/one_stage",
+    "verity/circuits",
+    "verity/commitments/frame_v3",
+    "verity/protocols/flock/prover/python/verity_flock",
 ]
 
 [[tool.verity.tests.reads]]
@@ -210,11 +210,11 @@ paths = ["benchmarks/pouw/hidden_zk"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_pearl_c_sm120.py", "tests/test_pearl_c_sm90.py"]
-paths = ["verity/core/protocols/pouw/tests", "verity/ml/kernels"]
+paths = ["verity/protocols/pouw/verifier/tests", "verity/definitions/kernels"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_pearl_c_sm90_grouped.py"]
-paths = ["verity/core/protocols/pouw/tests"]
+paths = ["verity/protocols/pouw/verifier/tests"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_pearl_c_sm90_prefill.py"]
@@ -226,8 +226,8 @@ paths = ["benchmarks/pouw/filler"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_salt_bind.py"]
-paths = ["verity/core/protocols/pouw/lean/check/tests"]
+paths = ["verity/protocols/pouw/verifier/lean/check/tests"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_theory_cpw.py"]
-paths = ["verity/core/protocols/pouw", "verity/ml/circuits", "verity/ml/kernels"]
+paths = ["verity/protocols/pouw/verifier", "verity/circuits", "verity/definitions/kernels"]

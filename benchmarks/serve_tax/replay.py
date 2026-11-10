@@ -27,9 +27,9 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-sys.path.insert(0, str(ROOT / "tools" / "config"))
+sys.path.insert(0, str(ROOT / "verity" / "configuration" / "config"))
 sys.path.append(str(ROOT))
-from verity_config.settings import SHARED  # noqa: E402 (from the tree's tools/config, put on sys.path above)
+from verity_config.settings import SHARED  # noqa: E402 (from the tree's verity/configuration/config, put on sys.path above)
 import serve_tax as S  # noqa: E402 (beside this file)
 
 
@@ -96,7 +96,7 @@ def params(r: dict, logprobs: bool = False) -> Any:
 
 
 def replay(w: dict, checkpoint: Path, eager: bool, logprobs: bool = False) -> dict:
-    sys.path.insert(0, str(ROOT / "integrations/vllm"))
+    sys.path.insert(0, str(ROOT / "adapters/vllm"))
     from verity_vllm.engine.hooks import Hooks
     from verity_vllm.engine.step_trace import StepTrace
 

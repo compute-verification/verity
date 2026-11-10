@@ -62,7 +62,7 @@ CUDA_VISIBLE_DEVICES=5 CUDA_DEVICE_ORDER=PCI_BUS_ID python characterize.py --gpu
 Where there is no CUDA 12.8+ toolkit, or it isn't the build's (the RTX PRO 6000 node has 13.0), `jobs/env.sh BUILD`
 gives the run NVIDIA's cuBLASLt and runtime wheels, a library built elsewhere (a build directory, or `art:<id>` of one
 preserved with `research data put --kind pouw-harness-build/v1 --tree DIR --preserve`), and this tree's `verity` and
-`verity.core.protocols.pouw` on `PYTHONPATH`. On that node, `gpu-lease 1` picks the GPU, so the run names it
+`verity.protocols.pouw.verifier` on `PYTHONPATH`. On that node, `gpu-lease 1` picks the GPU, so the run names it
 `--gpu lease` (the one index the lease set, checked against `server.md`'s GPU table); a timed run holds the node with
 `gpu-lease 8 --wait --timed` and times on its first GPU (`--timed` pauses the fill queue: without it, fill jobs keep
 running beside the timed run). A timed run also passes `research run --no-sampler`, so `research`'s own telemetry
@@ -104,9 +104,9 @@ Decode rows count on the panel only as a dependent chain, which needs a library 
 `--decode-method independent` times the old independent graph with any library. An arm (`arm.BenchArm`, arm interface
 v0.6) gets the split when its calls expose
 `phases` named by the step groups the executor schedules, `arm.GROUPS` (`a_tree`, `forming`, `gemm`, `cleanup`,
-`tile_hash`, `screen`, as `verity.core.protocols.pouw.serving`'s): the chain times before (a_tree, forming), during (gemm, cleanup) and
+`tile_hash`, `screen`, as `verity.protocols.pouw.verifier.serving`'s): the chain times before (a_tree, forming), during (gemm, cleanup) and
 after (tile_hash, screen, the movable groups), and the report's `split_groups` names the groups each time covers. The
-side-stream variant times the served `deferred` schedule (`verity.core.protocols.pouw.serving.DEFERRED`): tile hashing (`arm.DEFERRED`)
+side-stream variant times the served `deferred` schedule (`verity.protocols.pouw.verifier.serving.DEFERRED`): tile hashing (`arm.DEFERRED`)
 off the main lane, the screen on it. v0.4's `before`, `gemm` and `after` still work, each as its part, and are deprecated;
 their one `after` can't be split that way, so they get no side-stream variant. `arm.py` has the contract.
 

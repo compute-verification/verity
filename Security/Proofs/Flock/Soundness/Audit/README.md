@@ -81,7 +81,7 @@ neither: their sampling design is the verifier's own (`liveLaw`) and their bound
 the same miss probabilities, on a byte source that A3 makes uniform (`Assumptions.UniformRandomBytes`);
 `execOS_escape_le` and `execOS_subset_escape_le` state it for the live sample as a
 sampling design (`execOS`). `subsetOn_escape_le`, `drawOn_escape_le` and `keyedWindow_escape_le` (`KeyedDraw.lean`),
-**the PoUW circuit's keyed samples**. `Key.subset`, which samples each swap from its own `verity.ml.randomness` stream, has
+**the PoUW circuit's keyed samples**. `Key.subset`, which samples each swap from its own `verity.commitments.randomness` stream, has
 no higher miss probability than the uniform $k$-subset. The window's per-call samples under one key form one
 `Law.stratified` over its (call, template) strata. So the live window sample (`keyedWindow`) misses $B$ with probability
 at most `Law.stratified`'s miss probability plus the $\eta$ of A4 (`Assumptions.KeyedStreamsUniform`), on a
@@ -96,7 +96,7 @@ game whose sampling design is fixed at its registration, which `keyedWindowReg_e
 `docs/sampling-strategies.md` §4): `Law.stratified σ k`, an independent uniform $k_s$-subset inside each stratum of
 $\sigma : \mathrm{Fin}\,n \to \mathrm{Fin}\,m$; `stratified_escape`, the product of hypergeometrics
 $\prod_s \binom{n_s - m_s}{k_s}/\binom{n_s}{k_s}$ with $m_s = |B \cap U_s|$, which is what
-`verity.core.protocols.profile.Stratified` computes; `stratified_escape_floor`, **a floor catches its whole stratum**:
+`verity.protocols.spot.verifier.profile.Stratified` computes; `stratified_escape_floor`, **a floor catches its whole stratum**:
 with $k_s \ge 1$, a set containing $U_s$ has miss probability 0; `audit_whole_stratum` and
 `extraction_audit_whole_stratum`, the one-stage profile instantiated, so an audit accepts while a whole floored stratum
 is incorrect with probability at most the per-unit terms. `stratified_miss_eq_greedy` (`Audit/StratifiedMiss.lean`), **the
@@ -224,7 +224,7 @@ circuit's other outputs, such as commitments and leaves, are not delivered. $K$ 
   at most $2^H \sum_{j \le K} \binom{n}{j} / |M| + \delta + \varepsilon_{ks} + \delta_{link} + \delta_{in}$; with
   $|M| = 2^\ell$, the first term is $2^{H + \log_2 \sum_{j \le K} \binom{n}{j} - \ell}$. `card_guess_le` is its counting
   step and `audit_exfiltration_influenceSet` its form over $|\mathrm{influenceSet}|$. Core's reading is
-  `verity.core.protocols.spot.consumers.exfiltration_bound`: `harm_bound` over output bits plus `location_bits`.
+  `verity.protocols.spot.verifier.consumers.exfiltration_bound`: `harm_bound` over output bits plus `location_bits`.
 - **Not vacuous** (`Audit/InfluenceWitness.lean`, the statement reviewer's witness): on a four-gate circuit,
   `W.lemma47` applies the influence cap to two different traces that both have an incorrect proof block, with a separator
   narrower than the unit's exits (`W.three_mem_exits`), and `W.count` bounds what they deliver by 2; `A.influence`
