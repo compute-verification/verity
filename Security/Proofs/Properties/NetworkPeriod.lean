@@ -396,13 +396,6 @@ theorem rowsCapPublished : RowsCapPublished := by
   · cases h
   cases hf : p.form <;> simp only [hf] at h <;> split at h <;> cases h <;> simp [CapPublished, hf]
 
-/-- `slotSchedule` with a response cap of 4. -/
-def cappedSchedule : Schedule := { slotSchedule with maxTokensCap := some 4 }
-
-/-- The rows-form period of no link-window and no audit under `cappedSchedule`, at the deployed LMS parameters. -/
-def cappedPeriod : Params :=
-  ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows cappedSchedule .empty ⟨0, 0, 0, 0⟩, 0⟩
-
 /-- **`RowsCapPublished`'s honest lemma**: the period check accepts a period under a schedule with a response cap,
 `cappedPeriod` with nothing registered. A period with link-windows needs the network certifier's LMS signatures and
 one-stage's answers, which the period's difftest builds and checks against the mirror. -/
