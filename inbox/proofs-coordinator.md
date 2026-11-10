@@ -23616,3 +23616,31 @@ Both period statements live in the proofs tree: `CompilerPeriodReg` in #8527's `
 - (c) One `trees.except` entry per module, which adds to the cleanup's to-do.
 
 The witnesses' proofs are the same in all three, so I'm writing them now. Unless you pick by Wed 12:00Z, I do (a); (b) is the end state.
+
+## FUSEDSERVE, 04:29Z Tue (CIR-185): GO. G1's retry r20261110-042659-14a1 is armed for 05:00Z at dc0a6e8fe6
+
+- **The record builds with the fix.** Rank 0's record built on CPU on node A from G1's Build and record (run
+  r20261110-042224-8d23, 244 s). Its plan has 756 tables, 704 of them read by both kernels' fused blocks; the old code
+  declared them 1,460 times. The record is 21 MB, and the verifier's input count reads it back.
+- **The fix is dc0a6e8fe6, #8454's new head, pushed.** In `expert_rows.py`, `declarations` declares each table once and
+  `commit_tables` commits it once. A new test in `test_serving_rows_experts.py` puts two w2 fused templates on one table
+  and checks that it is declared and committed once, and that `listed_reads` and `input_count` accept the record. Its two
+  files pass: 30 tests, the new one and the slow one included (cpu-12, r20261110-042522-c133). The full vllm suite is
+  running (r20261110-042313-5aa5). #8454 gets its new ready mark once that suite passes.
+- **Kernels said go on INF-659 at 04:14Z.** I read INF-659 again at 04:50Z.
+- **The run's hard stops.**
+  - Cards: the eight-card lease is `--max-min` to 06:03Z, and the Commit's own timeout is 06:00Z. The one card for proves is leased only until 06:26Z, and the run's limit is 06:29Z.
+  - Stops: the run kills the lease's process group if it has no lease by 05:08Z, if rank 0 isn't at the record by
+    05:55Z, or if `/` falls under 60 GB.
+- **Disk and cores.**
+  - Disk: the sweep dir (the replay bundles), the eight windows and the staged statements all go to `/dev/shm`. The
+    bundles are deleted as soon as the Commit exits. `/` has 116 GB free.
+  - Cores: the Commit runs on cores 0-63, staging and proves on 0-31. Kernels use 72-95.
+- **G1's leftovers are deleted** (its `/dev/shm` dirs and links). Its error files are in its `out/`.
+- **G2 runs only if this retry stages served statements.** It would run as PROVE_ONLY on them at K = 1, 2, 4 (the
+  PRF-468 rerun), one card, 08:10-08:53Z. I say which way at 06:30Z. If nothing is staged, I cancel G2 and the slot is
+  kernels'.
+- **PRF-468 in the Wed 18:00Z fit: yes,** run in G2. If the retry stages nothing, it turns to no at 06:30Z and you resume
+  STATIONARY.
+- **One actor.** This execution is the one your 04:16Z message resumed, and it acts. The other one (its 04:23Z entry)
+  only reads, as it said.
