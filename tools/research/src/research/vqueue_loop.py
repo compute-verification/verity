@@ -162,6 +162,9 @@ PRIORITY = Path("/data/drive/priority")
 #: file under one waits, as does one that moves a word map there; ordinary edits don't, nor does a head the freeze's owner
 #: cleared against the branch it protects (a `cleared-by HANDLE KEY` line: a `KEY = true` label by HANDLE at the head)
 FROZEN = Path("/data/vqueue/live/frozen")
+#: the tests a candidate's check leaves out, one node id a line from the repository's root (`#` lines skipped), read at each
+#: launch (`vqueue_slim.deselection`); the nightly uncached check, which reads no list, runs them
+DESELECT = Path("/data/vqueue/live/deselect")
 #: how far back the decision log is read
 WINDOW_S = 48 * 3600
 #: what gates a candidate (`--gate`): graph2's check with the run beside it, or drive's after-landing check alone, as `SHARDS`
@@ -578,10 +581,12 @@ class World:
     def __init__(self, q: Queue, labels, tasks: Executor, *, graph2: tuple[str, ...] = (), priority_file: Path | None = None,
                  post: Callable[[str, tuple[str, ...]], bool] | None = None, now: Callable[[], float] = time.time,
                  labels_at: Callable[[], StoreLabels] | None = None, cache: Path | None = None, on: str = "",
-                 frozen_file: Path | None = None):
+                 frozen_file: Path | None = None, deselect_file: Path | None = None):
         self.q, self.labels, self.tasks, self.graph2, self.on = q, labels, tasks, tuple(graph2), on
         self.priority_file, self.now, self.repo, self.labels_at = priority_file, now, q.workdir, labels_at
         self.frozen_file, self._frozen_told = frozen_file, set()
+        #: the tests each candidate's check leaves out (`DESELECT`, `vqueue_slim.deselection`)
+        self.deselect_file = deselect_file
         self.keys = cache / "issuer-keys.json" if cache is not None else None
         if cache is not None:
             cache.mkdir(parents=True, exist_ok=True)
@@ -1984,7 +1989,8 @@ class Loop:
         d = self.world.slim_driver()                       # drive.toml naming no machines stops the tick: no run is infra
         try:
             rec, error = self.slim.start(d, line["sha"], line["base"],
-                                         **({"shards": self.shards} if self.gate == CHECK_GATE else {})), None
+                                         **({"shards": self.shards} if self.gate == CHECK_GATE else {}),
+                                         **({"deselect": f} if (f := getattr(self.world, "deselect_file", None)) else {})), None
         except (QueueError, ValueError, OSError, subprocess.SubprocessError) as e:
             rec, error = None, f"{type(e).__name__}: {e}"[-600:]
         return self._line(n, main, origin, "slim", **line, why=why, record=rec, done=True,
@@ -2486,6 +2492,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--priority-file", type=Path, default=PRIORITY, help=f"drive's priority list (default {PRIORITY})")
     ap.add_argument("--frozen", type=Path, default=FROZEN, help=f"a freeze's pathspecs, one a line: while the file exists, a PR "
                                                                 f"renaming or deleting a file under one waits (default {FROZEN})")
+    ap.add_argument("--deselect", type=Path, default=DESELECT, help=f"the tests a candidate's check leaves out, one node id a line "
+                                                                    f"from the repository's root, read at each launch (default "
+                                                                    f"{DESELECT})")
     ap.add_argument("--graph2", default=shlex.join(GRAPH2), help="graph2's argv before its subcommand (default the control pod's)")
     ap.add_argument("--batch", type=int, default=BATCH, help=f"the most members a candidate holds (default {BATCH})")
     ap.add_argument("--depth", type=int, default=DEPTH, help=f"the most candidates stacked at once, each with the run beside "
@@ -2565,7 +2574,7 @@ def main(argv: list[str]) -> int:
         graph2 = tuple(shlex.split(a.graph2))
         world = World(q, labels, Executor(Transport(store, (*graph2, "enqueue"), a.repo)), graph2=graph2,
                       priority_file=a.priority_file, labels_at=labels_at, cache=a.log.parent, on=a.on,
-                      frozen_file=a.frozen)
+                      frozen_file=a.frozen, deselect_file=a.deselect)
         loop = Loop(world, a.log, shadow=a.shadow, dry_run=a.dry_run, batch=a.batch, depth=a.depth, lean=a.lean,
                     pending_s=a.pending_hours * 3600, slim=slim, state=a.state, tree_ejects=a.tree_ejects, gate=a.gate,
                     shards=a.shards)

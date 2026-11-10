@@ -2000,6 +2000,16 @@ def test_a_detached_train_launch_given_a_train_sh_runs_a_copy_of_it_in_the_clone
     assert ids == [rid] and f"train: own in {repo}" in tail, tail
 
 
+def test_a_train_launch_given_a_deselect_list_passes_it_to_train_sh(tmp_path, monkeypatch):
+    from research.drive import train_launch
+
+    got = []
+    monkeypatch.setattr(subprocess, "run", lambda argv, **kw: got.append(argv) or subprocess.CompletedProcess(argv, 0, "", ""))
+    train_launch(tmp_path, "c0ffee", "m1", False, deferred="pytest", shard="1/3", deselect="/data/vqueue/live/deselect.sent")
+    train_launch(tmp_path, "c0ffee", "m1", False, deferred="pytest")
+    assert got[0][got[0].index("--deselect") + 1] == "/data/vqueue/live/deselect.sent" and "--deselect" not in got[1]
+
+
 def test_an_eject_off_drive_leaves_next_as_it_is_and_records_the_ejection(world, monkeypatch, capsys):
     """`research queue eject N` of a PR not on `next`, run off drive, would rebuild every member of `next` ("kept 0, merged
     N") and force-push it, which only drive's tick does: it records the ejection, and drive's next tick syncs."""
