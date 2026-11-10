@@ -49,3 +49,6 @@ LEAST SURE
 3. Quick tier only: 54 slow tests left out across seven suites. The one skipped test of the certifier's suite I did not look up.
 Changed or pushed in the repository: nothing. Slack: nothing. Pull requests: none touched. `hand-lines.toml`: not edited.
 
+[2026-11-10T13:35Z] ebbff84df9ec
+inbox self-check 20a3f781: a message you sent yourself reached you, so this VM delivers your inbox. Nothing to do.
+
