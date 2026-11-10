@@ -451,6 +451,13 @@ def test_a_regenerated_lock_that_changes_what_the_build_reads_keeps_no_pass(tmp_
     rc, out2, doc2, _ = _lock_run(tmp_path, "lock-commit")
     assert rc == 0 and _lines(out2 / "ran.txt") == ["pkg/a", "pkg/b"] and sorted(doc2["cached"]) == ["pkg/c", "pkg/p", "pkg/s"]
 
+    # a lock `build_inputs` can't read (it names no roots) agrees with no lock, itself included
+    root = _lock_tree(tmp_path / "unread", monkeypatch)
+    (root / "pkg/a/lean-audit.json").write_text(json.dumps({"guarantees": {"A.t": "stale"}}))
+    rc, out, doc, logged = _lock_run(tmp_path / "unread", "lock-run", regenerate=True)
+    assert rc == 0 and list(doc["regenerated"]) == ["pkg/a"] and doc["rekeyed"] == {} and not (out / LA.LOCK_COMMIT).exists()
+    assert len([s for s in logged if "no pass kept" in s and "the regenerated lock of pkg/a" in s]) == 2, logged
+
 
 def test_only_a_whole_run_keeps_a_pass_and_only_of_a_package_it_audited_with_a_stored_document(tmp_path, monkeypatch):
     """What keeps no pass for the lock commit, each leaving that commit's audit to run in full as before: a package the
@@ -481,23 +488,32 @@ def test_only_a_whole_run_keeps_a_pass_and_only_of_a_package_it_audited_with_a_s
 def test_a_facts_document_is_judged_from_only_as_its_sidecar_names_it(tmp_path):
     """`stored_document` gives the document a lock run's audit stored under a facts key only when its sidecar names the
     schema, that key and the SHA-256 the document's bytes have: never one whose bytes changed since, one filed under
-    another key, one of another schema, or one without its sidecar (`check.py`'s `read_cached_facts`)."""
+    another key, one of another schema, or one without its sidecar (`check.py`'s `read_cached_facts`). Without the
+    document it says why, which the lock run's log carries."""
     def store(name: str, data: bytes, **meta) -> None:
         (tmp_path / f"{name}.json.gz").write_bytes(data)
         (tmp_path / f"{name}.json").write_text(json.dumps({"schema": "s/v1", "key": name,
                                                            "sha256": hashlib.sha256(data).hexdigest()} | meta))
+
+    def refused(name: str, schema: str = "s/v1") -> str:
+        doc, why = LA.stored_document(tmp_path, name, schema)
+        assert doc is None and why
+        return why
+
     store("good", b"facts")
-    assert LA.stored_document(tmp_path, "good", "s/v1") == tmp_path / "good.json.gz"
-    assert LA.stored_document(tmp_path, "good", "s/v2") is None and LA.stored_document(tmp_path, "absent", "s/v1") is None
+    assert LA.stored_document(tmp_path, "good", "s/v1") == (tmp_path / "good.json.gz", "")
+    assert "another schema" in refused("good", "s/v2") and refused("absent").startswith("FileNotFoundError")
     (tmp_path / "good.json.gz").write_bytes(b"other facts")
-    assert LA.stored_document(tmp_path, "good", "s/v1") is None, "its bytes changed"
+    assert "SHA-256" in refused("good"), "its bytes changed"
     store("misfiled", b"facts", key="another")
-    assert LA.stored_document(tmp_path, "misfiled", "s/v1") is None
+    assert "key" in refused("misfiled")
     store("bare", b"facts")
     (tmp_path / "bare.json").unlink()
-    assert LA.stored_document(tmp_path, "bare", "s/v1") is None
+    assert refused("bare").startswith("FileNotFoundError")
     (tmp_path / "bare.json").write_text("[1]")
-    assert LA.stored_document(tmp_path, "bare", "s/v1") is None and LA.stored_document(tmp_path, "None", "s/v1") is None
+    assert refused("bare").startswith("AttributeError") and refused("None").startswith("FileNotFoundError")
+    (tmp_path / "bare.json").write_text("not json")
+    assert refused("bare").startswith("JSONDecodeError")
 
 
 def test_held_caps_sets_each_broken_cap_to_its_count_and_leaves_the_rest():
