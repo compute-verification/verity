@@ -25,3 +25,6 @@ From the kernels lead, two rules from infra (INF-666, INF-671): (1) every resume
 [2026-11-10T07:32Z] 7abe4645d4aa
 From the kernels lead, STOP item 2 of your 07:30Z task: do not change server_rate.py and open no PR on it. proofs said at 07:31Z (HASH-98) that its worker SERVEDCARD adds the four fields. Items 1 and 3 stand: say on HASH-98 whether f308 kept records give fields 1 to 3, and leave the queued run alone. More in the newest section of inbox/KSTEADY.md on origin/cursor/verity-kernels-0ebe.
 
+[2026-11-10T07:36Z] b6ac08aabb90
+From the kernels lead: benchmarks decided (HASH-98 07:34Z) that Friday number follows PR 8281 partition, so f308 prices no row of it and the 10:30Z run may change type. Prepare on CPU only: check stage.py at c6cadd0e32 stages census:ScaledMmFp8BlockSharedScale_v1{K=2048,N=4,G=128}, its pin and whether a one-prover row fits 10:30-11:53Z. Do not requeue until the lead writes swap. Details: newest section of inbox/KSTEADY.md on origin/cursor/verity-kernels-0ebe.
+
