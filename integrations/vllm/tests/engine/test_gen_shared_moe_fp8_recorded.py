@@ -29,7 +29,7 @@ import pytest
 
 from tests.engine.moe_scope_cut import cut, write
 from tests.engine.test_gen_shared_moe_fp8 import _fits
-from verity.ml.circuits.defs import bind
+from verity.circuits.defs import bind
 from verity_vllm.engine.profiles import family_facts as FF
 from verity_vllm.observe.fold.profiles import generic
 from verity_vllm.observe.fold.profiles.gen_ln_patterns import ResidualAddPattern
@@ -41,7 +41,7 @@ from verity_vllm.observe.fold.resolve_log import collect_roots, make_context
 from verity_vllm.observe.fold.resolver import Compute, Gather, Group, PerRow, Shared, Transparent, resolve_step
 from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.observe.log import read_log, split_steps
-from verity.ml.definitions.registry import moe as MOE
+from verity.definitions.registry import moe as MOE
 
 FIXTURE = Path(__file__).parent / "fixtures" / "glm53_tp8_moe_l3.rank0.jsonl.gz"
 CONFIG = Path(__file__).parents[1] / "check" / "fixtures" / "glm_moe_dsa" / "config.json"

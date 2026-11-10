@@ -423,5 +423,5 @@ def build_manifest(
 
 
 def profile_id_of(manifest: dict[str, Any]) -> str:
-    from verity.ml.circuits.codec import canonical_json
+    from verity.circuits.codec import canonical_json
     return hashlib.sha256(canonical_json(manifest)).hexdigest()[:12]

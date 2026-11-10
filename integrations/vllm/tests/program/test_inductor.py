@@ -10,12 +10,12 @@ __models__ = ("unsloth/Llama-3.2-1B",)
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation.reference import evaluate
-from verity.ml.definitions.numerics import inductor_rows as TW
-from verity.ml.definitions.registry import hopper
-from verity.ml.definitions.registry import inductor as I
-from verity.ml.definitions.registry.fa3_check_inf import AttentionHeadV4
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.reference import evaluate
+from verity.definitions.numerics import inductor_rows as TW
+from verity.definitions.registry import hopper
+from verity.definitions.registry import inductor as I
+from verity.definitions.registry.fa3_check_inf import AttentionHeadV4
 
 U16 = np.uint16
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}

@@ -29,7 +29,7 @@ class WeightsRows:
         """`host_root` of a CUDA tensor's bytes, on its device."""
         import torch
 
-        from verity.ml.commitments.merkle import merkle_depth
+        from verity.commitments.merkle import merkle_depth
         from verity_vllm.commit.committer.native_ext import ext
 
         e, RB = ext(), step_rows.ROW_BYTES

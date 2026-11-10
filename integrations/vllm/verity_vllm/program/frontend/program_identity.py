@@ -5,10 +5,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
-from verity.ml.circuits.defs import bind as ir_bind
-from verity.ml.circuits.program import Program
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
+from verity.circuits.defs import bind as ir_bind
+from verity.circuits.program import Program
 from verity_vllm.program.frontend.correspond import compare_bodies
 from verity_vllm.program.frontend.errors import FrontendError
 
