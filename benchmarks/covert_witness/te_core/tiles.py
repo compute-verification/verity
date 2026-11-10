@@ -40,7 +40,8 @@ import operator
 from .gates import kind_of, per_mac, split_key
 
 #: a GEMM operand's bits a value, by the op's kind (te_core.gates)
-WIDTH = {"gemm/bf16": 16, "gemm/f16": 16, "gemm/e4m3": 8, "gemm/e5m2": 8, "gemm/fp4": 4, "gemm/f32": 32}
+WIDTH = {"gemm/bf16": 16, "gemm/f16": 16, "gemm/e4m3": 8, "gemm/e5m2": 8, "gemm/fp4": 4, "gemm/f32": 32,
+         "gemm/tf32": 32}
 #: the phases whose ops are in token blocks (te_core.formalism's `_token_log`)
 TOKEN_PHASES = ("fwd", "bwd")
 SDPA = ("_scaled_dot_product_flash_attention", "_scaled_dot_product_efficient_attention",
