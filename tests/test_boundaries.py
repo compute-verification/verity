@@ -1330,7 +1330,8 @@ def _hold_trusted(loads: Iterable[Load], listing: Listing) -> None:
                      "what the file needs to a row both load, or pass it in:\n" + "\n".join(new))
     stale = [f"{d}: {kind} {at}" for d, lists in sorted(listing.trusted.items())
              for kind, now in zip(TRUSTED, found.get(d, ({}, {}, {}))) for at in sorted(lists[kind] - set(now))]
-    stale += [f"{d}: no load and no loader" for d, lists in sorted(listing.trusted.items()) if d not in found and not any(lists.values())]
+    stale += [f"{d}: no load names it" for d, lists in sorted(listing.trusted.items()) if not any(lists.values())
+              and not any(f == d or f.startswith(d + "/") for x in loads for f in (x.loader, x.loaded))]
     assert not stale, ("entries of `trusted` (tests/import_order.toml) the tree no longer has; delete them, and an "
                        f"entry left with none: {stale}")
 
@@ -1553,7 +1554,8 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     with pytest.raises(AssertionError, match="left with none: \\['verity/spot/verifier: loaded_by verity/spot/plan.py'"):
         _hold_trusted(loads, held._replace(trusted=held.trusted | {
             "verity/spot/verifier": {"loads": set(), "reaches": set(), "loaded_by": {"verity/spot/plan.py"}}}))
-    with pytest.raises(AssertionError, match=f"left with none: \\['{device}/gone.py: no load and no loader'"):
+    _hold_trusted(loads, held._replace(trusted=held.trusted | {f"{verifier}/lean/scripts": dict.fromkeys(TRUSTED, set())}))
+    with pytest.raises(AssertionError, match=f"left with none: \\['{device}/gone.py: no load names it'"):
         _hold_trusted(loads, held._replace(trusted=held.trusted | {f"{device}/gone.py": dict.fromkeys(TRUSTED, set())}))
     parts = held._replace(trusted={d: dict(zip(TRUSTED, map(set, lists))) for d, lists in split.items()})
     _hold_trusted(loads, parts)
