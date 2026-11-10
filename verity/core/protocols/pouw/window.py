@@ -106,11 +106,7 @@ PUBLIC = (
 )
 #: the items an execution phase's window commitment record carries; the verdict and the sample come after it
 REGISTERED = ("work", "check", "sampling", "length", "root_W")
-<<<<<<< HEAD
-#: what a registration made before the fixed-length rule carries: `REGISTERED` without `length`, so not of record
-=======
 #: what a window commitment record made before the fixed-length rule carries, `REGISTERED` without `length`: not of record
->>>>>>> origin/main
 LEGACY_REGISTERED = tuple(i for i in REGISTERED if i != "length")
 KINDS = ("call", "filler", "none")
 #: the check item's coin mode (`mode`), Compose's `CoinMode`
