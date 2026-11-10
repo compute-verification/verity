@@ -1,15 +1,12 @@
 module
 
+public import Definitions.Nci
 public import Proofs.Nci.Cut
 public import Mathlib.Data.Finset.Sort
 public import Mathlib.Logic.Function.Basic
 
 /-!
 # Untied words: what a block reads once gates leave `θ`
-
-**Draft, never elaborated** (LEAN-238, stopped Tue 10 Nov 08:19Z on the coordinator's order). No `lake env lean` and no
-run has read this file, `Proofs.Nci` does not import it, and every proof below is unchecked. The statements are the
-ones posted on LEAN-238.
 
 PoUW proves a linear layer's output words, so the inference-only policy may count them as not fresh: the value tie.
 Its draw leaves a set `E` of words that may be wrong, which nobody knows, and each is fresh input of the block that
@@ -30,8 +27,9 @@ outside `θ` and at most `w` words of `E` read at most `k + b w` (`readsAtMost_u
 for a `y` word, `readsAtMost_untie_32`).
 
 When each word is read by at most one block (`OneReader`), at most `|E| / (w + 1)` blocks read more than `w` words
-(`card_over_le`), every other block reads at most `k + b w` (`card_unregistered_untie_of_not_over`), and all blocks
-together read at most `m k + b |E|` (`sum_card_unregistered_untie_le`).
+(`readersOver`, `card_readersOver_le`), every other block reads at most `k + b w`
+(`card_unregistered_untie_of_notMem_readersOver`), and all blocks together read at most `m k + b |E|`
+(`sum_card_unregistered_untie_le`).
 
 `HE` quantifies over a `Partition` of every computed gate of the circuit, each block within the cap, so it takes no
 subset of a partition's blocks. The form it can take is the circuit with the other blocks' gates as inputs and the
@@ -61,26 +59,26 @@ is `C`'s. -/
   reads_lt g a ha := by
     have ha' : a ∈ (if g ∈ T then ∅ else C.reads g) := ha
     by_cases hT : g ∈ T
-    · rw [if_pos hT] at ha'
+    · rw [ite_eq_left hT] at ha'
       exact absurd ha' (notMem_empty a)
-    · rw [if_neg hT] at ha'
+    · rw [ite_eq_right hT] at ha'
       exact C.reads_lt g a ha'
   input_reads g h := by
     have h' : (C.isInput g || decide (g ∈ T)) = true := h
     show (if g ∈ T then ∅ else C.reads g) = ∅
     by_cases hT : g ∈ T
-    · exact if_pos hT
+    · exact ite_eq_left hT
     · rw [decide_eq_false hT, Bool.or_false] at h'
-      rw [if_neg hT]
+      rw [ite_eq_right hT]
       exact C.input_reads g h'
   op g v := if g ∈ T then (0 : BitVec (C.w g)) else C.op g v
   op_congr g v v' h := by
     have h' : ∀ a ∈ (if g ∈ T then ∅ else C.reads g), v a = v' a := h
     show (if g ∈ T then (0 : BitVec (C.w g)) else C.op g v) = (if g ∈ T then (0 : BitVec (C.w g)) else C.op g v')
     by_cases hT : g ∈ T
-    · rw [if_pos hT, if_pos hT]
-    · rw [if_neg hT, if_neg hT]
-      exact C.op_congr g v v' fun a ha => h' a (by rw [if_neg hT]; exact ha)
+    · rw [ite_eq_left hT, ite_eq_left hT]
+    · rw [ite_eq_right hT, ite_eq_right hT]
+      exact C.op_congr g v v' fun a ha => h' a (by rw [ite_eq_right hT]; exact ha)
   outputs := C.outputs
 
 /-- `d` with the gates `T` as **inputs outside `θ`**: its circuit with `T`'s gates as input gates
@@ -97,9 +95,9 @@ def Partition.asInputs {C : Circuit} {n : ℕ} (P : Partition C n) (T : Finset (
   input_iff g := by
     show (if g ∈ T then none else P.unit g) = none ↔ (C.isInput g || decide (g ∈ T)) = true
     by_cases hT : g ∈ T
-    · rw [if_pos hT, decide_eq_true hT, Bool.or_true]
+    · rw [ite_eq_left hT, decide_eq_true hT, Bool.or_true]
       exact ⟨fun _ => rfl, fun _ => rfl⟩
-    · rw [if_neg hT, decide_eq_false hT, Bool.or_false]
+    · rw [ite_eq_right hT, decide_eq_false hT, Bool.or_false]
       exact P.input_iff g
 
 theorem Partition.mem_asInputs_gates {C : Circuit} {n : ℕ} (P : Partition C n) (T : Finset (Fin C.N)) {u : Fin n}
@@ -107,9 +105,9 @@ theorem Partition.mem_asInputs_gates {C : Circuit} {n : ℕ} (P : Partition C n)
   rw [Partition.mem_gates, Partition.mem_gates]
   show (if g ∈ T then none else P.unit g) = some u ↔ P.unit g = some u ∧ g ∉ T
   by_cases hT : g ∈ T
-  · rw [if_pos hT]
-    exact ⟨fun h => by cases h, fun h => absurd hT h.2⟩
-  · rw [if_neg hT]
+  · rw [ite_eq_left hT]
+    exact ⟨fun h => nomatch h, fun h => absurd hT h.2⟩
+  · rw [ite_eq_right hT]
     exact ⟨fun h => ⟨h, hT⟩, fun h => h.1⟩
 
 /-- A unit of `P` with `T` as inputs is its unit in `P` without `T`'s gates. -/
@@ -168,7 +166,7 @@ theorem Partition.keep_gates {C : Circuit} {n n' : ℕ} (P : Partition C n) (ι 
   cases hu : P.unit g with
   | none =>
     show none = some v ↔ none = some (ι v)
-    exact ⟨fun h => by cases h, fun h => by cases h⟩
+    exact ⟨fun h => nomatch h, fun h => nomatch h⟩
   | some u =>
     show Function.partialInv ι u = some v ↔ some u = some (ι v)
     rw [hι.isPartialInv v u]
@@ -243,7 +241,7 @@ theorem RegisteredCircuit.unregistered_asInputs_subset (d : RegisteredCircuit) (
   · obtain ⟨haS, g, hg, hag⟩ := (mem_filter.1 hin).2
     have hag' : a ∈ d.D.reads g := by
       have h : a ∈ (if g ∈ T then ∅ else d.D.reads g) := hag
-      rwa [if_neg (mem_sdiff.1 hg).2] at h
+      rwa [ite_eq_right (mem_sdiff.1 hg).2] at h
     refine mem_union_left _ ?_
     show a ∈ d.D.into R \ d.θ
     exact mem_sdiff.2 ⟨mem_filter.2 ⟨mem_univ a, fun haR => haS (mem_sdiff.2 ⟨haR, hT⟩), g, (mem_sdiff.1 hg).1, hag'⟩,
@@ -260,7 +258,7 @@ theorem RegisteredCircuit.unregistered_asInputs_of_disjoint (d : RegisteredCircu
   obtain ⟨haR, g, hg, hag⟩ := (mem_filter.1 hin).2
   have hag' : a ∈ d.D.reads g := by
     have h : a ∈ (if g ∈ T then ∅ else d.D.reads g) := hag
-    rwa [if_neg (hR g hg)] at h
+    rwa [ite_eq_right (hR g hg)] at h
   show a ∈ d.D.into R \ d.θ
   refine mem_sdiff.2 ⟨mem_filter.2 ⟨mem_univ a, haR, g, hg, hag'⟩, fun hθ => ?_⟩
   by_cases haT : a ∈ T
@@ -343,7 +341,7 @@ def OneReader {C : Circuit} {m : ℕ} (P : Partition C m) (𝒲 : Finset (Finset
   ∀ W ∈ 𝒲, ∀ u v, ¬ Disjoint W (C.into (P.gates u)) → ¬ Disjoint W (C.into (P.gates v)) → u = v
 
 /-- The blocks of `P` that read more than `w` words of `𝒲`: the blocks charged whole at the threshold `w`. -/
-def over {C : Circuit} {m : ℕ} (P : Partition C m) (𝒲 : Finset (Finset (Fin C.N))) (w : ℕ) : Finset (Fin m) :=
+def readersOver {C : Circuit} {m : ℕ} (P : Partition C m) (𝒲 : Finset (Finset (Fin C.N))) (w : ℕ) : Finset (Fin m) :=
   univ.filter fun u => w < (wordsRead C 𝒲 (P.gates u)).card
 
 /-- When each word is read by at most one block, any blocks read at most `|𝒲|` words between them. -/
@@ -357,24 +355,25 @@ theorem sum_card_wordsRead_le {C : Circuit} {m : ℕ} (P : Partition C m) (𝒲 
 
 /-- **The charged blocks are few.** When each word is read by at most one block, at most `|𝒲| / (w + 1)` blocks read
 more than `w` words. -/
-theorem card_over_le {C : Circuit} {m : ℕ} (P : Partition C m) (𝒲 : Finset (Finset (Fin C.N)))
-    (hone : OneReader P 𝒲) (w : ℕ) : (w + 1) * (over P 𝒲 w).card ≤ 𝒲.card :=
-  calc (w + 1) * (over P 𝒲 w).card = ∑ _u ∈ over P 𝒲 w, (w + 1) := by rw [sum_const, smul_eq_mul, mul_comm]
-    _ ≤ ∑ u ∈ over P 𝒲 w, (wordsRead C 𝒲 (P.gates u)).card :=
+theorem card_readersOver_le {C : Circuit} {m : ℕ} (P : Partition C m) (𝒲 : Finset (Finset (Fin C.N)))
+    (hone : OneReader P 𝒲) (w : ℕ) : (w + 1) * (readersOver P 𝒲 w).card ≤ 𝒲.card :=
+  calc (w + 1) * (readersOver P 𝒲 w).card = ∑ _u ∈ readersOver P 𝒲 w, (w + 1) := by
+        rw [sum_const, smul_eq_mul, mul_comm]
+    _ ≤ ∑ u ∈ readersOver P 𝒲 w, (wordsRead C 𝒲 (P.gates u)).card :=
         sum_le_sum fun u hu => Nat.succ_le_of_lt (mem_filter.1 hu).2
     _ ≤ 𝒲.card := sum_card_wordsRead_le P 𝒲 hone _
 
 /-- **The `w = 0` row.** When each word is read by at most one block, at most `|𝒲|` blocks read a word. -/
 theorem card_readers_le {C : Circuit} {m : ℕ} (P : Partition C m) (𝒲 : Finset (Finset (Fin C.N)))
-    (hone : OneReader P 𝒲) : (over P 𝒲 0).card ≤ 𝒲.card := by
-  have h := card_over_le P 𝒲 hone 0
+    (hone : OneReader P 𝒲) : (readersOver P 𝒲 0).card ≤ 𝒲.card := by
+  have h := card_readersOver_le P 𝒲 hone 0
   rwa [Nat.zero_add, Nat.one_mul] at h
 
 /-- **The other blocks.** A block that reads at most `w` words of `𝒲` reads, untied at `𝒲`, at most `k + b w` gates
 outside `θ`; at `w = 0` it keeps `k`. -/
-theorem card_unregistered_untie_of_not_over {m : ℕ} (d : RegisteredCircuit) (P : Partition d.D m) {k b w : ℕ}
+theorem card_unregistered_untie_of_notMem_readersOver {m : ℕ} (d : RegisteredCircuit) (P : Partition d.D m) {k b w : ℕ}
     (𝒲 : Finset (Finset (Fin d.D.N))) (h𝒲 : ∀ W ∈ 𝒲, W.card ≤ b) (hk : ReadsAtMost d P k) {u : Fin m}
-    (hu : u ∉ over P 𝒲 w) : ((d.untie (𝒲.biUnion id)).unregistered (P.gates u)).card ≤ k + b * w :=
+    (hu : u ∉ readersOver P 𝒲 w) : ((d.untie (𝒲.biUnion id)).unregistered (P.gates u)).card ≤ k + b * w :=
   (card_unregistered_untie_words_le d 𝒲 h𝒲 (P.gates u)).trans
     (Nat.add_le_add (hk u)
       (Nat.mul_le_mul_left b (Nat.le_of_not_lt fun h => hu (mem_filter.2 ⟨mem_univ u, h⟩))))
@@ -438,13 +437,13 @@ theorem exists_kept {m : ℕ} (S : Finset (Fin m)) :
   exact ⟨Sᶜ.orderEmbOfFin h, (Sᶜ.orderEmbOfFin h).injective, fun v => mem_compl.1 (Sᶜ.orderEmbOfFin_mem h v)⟩
 
 /-- **Two tiers, in the form `HE` takes.** Untied at the words `𝒲`, each of at most `b` gates, and without the blocks
-that read more than `w` of them, the remaining `m - |over|` blocks read at most `k + b w` gates outside `θ`. -/
+that read more than `w` of them, the remaining `m - |readersOver|` blocks read at most `k + b w` gates outside `θ`. -/
 theorem readsAtMost_untie_without {m : ℕ} (d : RegisteredCircuit) (P : Partition d.D m) {k b : ℕ}
     (𝒲 : Finset (Finset (Fin d.D.N))) (h𝒲 : ∀ W ∈ 𝒲, W.card ≤ b) (hk : ReadsAtMost d P k) (w : ℕ) :
-    ∃ (ι : Fin (m - (over P 𝒲 w).card) → Fin m) (hι : Function.Injective ι), (∀ v, ι v ∉ over P 𝒲 w) ∧
+    ∃ (ι : Fin (m - (readersOver P 𝒲 w).card) → Fin m) (hι : Function.Injective ι), (∀ v, ι v ∉ readersOver P 𝒲 w) ∧
       ReadsAtMost ((d.untie (𝒲.biUnion id)).asInputs (P.dropped ι)) (P.keep ι hι) (k + b * w) := by
-  obtain ⟨ι, hι, hS⟩ := exists_kept (over P 𝒲 w)
+  obtain ⟨ι, hι, hS⟩ := exists_kept (readersOver P 𝒲 w)
   exact ⟨ι, hι, hS, readsAtMost_keep (d.untie (𝒲.biUnion id)) P ι hι fun v =>
-    card_unregistered_untie_of_not_over d P 𝒲 h𝒲 hk (hS v)⟩
+    card_unregistered_untie_of_notMem_readersOver d P 𝒲 h𝒲 hk (hS v)⟩
 
 end Nci.Untied
