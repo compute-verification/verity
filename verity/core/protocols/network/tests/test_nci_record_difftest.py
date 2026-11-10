@@ -152,14 +152,16 @@ LAYOUT = {
 }
 
 
-def test_a_pinned_readers_layout(shaped):
+def test_a_pinned_readers_layout(shaped, monkeypatch):
     """A pin is a digest, and one layout by position says which rows of a pinned reader are its key, its table's root
     and domain id, its opened rows and its verdict (the form's `layoutOf`). The form refuses a record that names
     any other row or output of a pinned reader, one negative vector a role, and a pinned reader in no layout; it
     counts none of them. The first three cases are why: with the token of the embedding read left unwired, the 48 bits
     a block reads of it are free and the rate refuses; a record that then lists the token among the opening's ports
     would have them counted with the opened rows, registered, and it is refused; under no pin the same record is taken
-    and every port of the opening is fresh. Whatever of these the form refuses, `verity.ml.windows.interface` takes."""
+    and every port of the opening is fresh. Whatever of these the form refuses, `verity.ml.windows.interface` takes.
+    The layout's stage alone refuses them: without it the reference refuses none, and accepts the token among the
+    ports with a block's fresh bits those of the case that wires it."""
     assert {what for what, m in shaped.items() if m["broken"]} == {what for what, v in LAYOUT.items() if isinstance(v, str)}
     got = {what: vectors.results(shaped[what]["case"]) for what in LAYOUT}
     for what, want in LAYOUT.items():
@@ -188,6 +190,12 @@ def test_a_pinned_readers_layout(shaped):
         pinned, free = (shaped[f"2x3 {what}, {how}"]["case"]["instance"] for how in ("pinned", "no pin"))
         assert pinned["program"] == free["program"] and len(pinned["pins"]) == 1 and free["pins"] == []
         assert json.loads(pinned["record"])["registered"] == json.loads(free["record"])["registered"]
+    # no other stage refuses a negative vector, so each is refused for its roles
+    monkeypatch.setattr(ref, "roles", lambda *_: None)
+    off = {what: ref.check_detail(shaped[what]["case"]["instance"], shaped[what]["case"]["trusted"]) for what in LAYOUT}
+    assert not any("error" in detail for detail in off.values())
+    taken = off["2x3 the key among the ports"]
+    assert taken["complies"] and (taken["fresh"], taken["free"], taken["openings"]) == (held["fresh"], 0, 0)
 
 
 def test_no_wire_crosses_slots_at_the_served_shape(random_cases, shaped):
