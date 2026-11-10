@@ -19,8 +19,9 @@ a card: a decision waiting in a note or a thread waits forever.
 
 ## Before asking
 
-Only claims and his own clicks need him (the team skill's "Working principles"): keys and access between our own
-machines and accounts are the lanes' call. A recorded ruling that covers the case (AGENTS.md, the
+Nothing waits on him (the team skill's "Working principles"): a lane decides, claims included, and only a click only
+an account he holds can make waits, when no other way exists. Keys and access between our own machines and accounts are
+the lanes' call. A recorded ruling that covers the case (AGENTS.md, the
 skills, the friction skill's "Standing rulings") stands until he reverses it. A question the system already answers isn't
 an ask (which circuit a templated unit's theorem names: the one its template unrolls to).
 
@@ -28,7 +29,8 @@ An ask that isn't a click only he can make goes on its page decided: Status *Dec
 "Provisionally accepted (standing rule): <option>. Re-check: <why it holds>". Resolve its card with
 that option and `--provisional` (implied by a `--note` starting "Provisionally accepted"), so it says your lane decided,
 and act on it; he reviews these in the "Provisional, to review" view and can reverse any. A page that waits on him leaves
-Choose empty: a Choose reads as his pick.
+Choose empty: a Choose reads as his pick. Reopening a decided page, clear its Choose in the same edit; the relay takes only
+a letter it hasn't seen on the page as his, and Approve is his alone to tick.
 
 ## Write the page
 
@@ -55,7 +57,7 @@ The design that meets every design rule in AGENTS.md (everything zero-knowledge,
 proof), priced even when it's the expensive one, and which option below it is. Or the rule that makes it impossible.
 ## Options
 ### A. <label> (recommended)
-What changes (the exact new statement or premise in LaTeX), what it costs, what it unblocks, what risk it takes on,
+What changes (the exact new statement or assumption in LaTeX), what it costs, what it unblocks, what risk it takes on,
 how reversible it is.
 ### B. <label>
 ...
@@ -74,7 +76,7 @@ Links: notes (GitHub research-notes URLs), PRs, branches, Lean declarations, run
 Plain English first, then the math, every term and symbol defined on first use: Daniel knows the field, not this week's
 codenames (a red-team round, a row number, a worker). About 400 to 900 words, one screen of options, detail behind links.
 A correction or new data edits the page in place, with a dated line under "Updates since the card", never an addendum in
-the thread. A claim ask shows the statement or premise as it would enter the lock, in LaTeX, with its Lean name. Price the
+the thread. A claim ask shows the statement or assumption as it would enter the lock, in LaTeX, with its Lean name. Price the
 design the rules want, not just tweaks to today's.
 
 ## Post it
@@ -98,7 +100,8 @@ Slack card from its output. If the card route fails, `research msg send --as <yo
 mentions him too.
 
 The card's question is one line and its why a sentence or two. **Blocking** is for a click only he can make: nothing
-happens until he makes it. **Default** applies at the deadline unless he comments or decides.
+happens until he makes it. **Default** applies at the deadline unless he comments or decides. The default is the
+recommendation; when it can't be (say, it would change a guarantee unasked), the page says why in one line.
 
 ## Iterate and record
 
