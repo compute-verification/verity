@@ -1,1 +1,1 @@
-The timing at one, two and four provers, on Tue 10 Nov 12 AM, has to return a usable rate; the two scale reads are not proved; the serve's own verdict is pending, because its replay on CPU did not run; and the serving change's new version is not yet ready to merge.
+The timing at one, two and four provers, on Tue 10 Nov 12 AM, has to return a usable rate; the two scale reads are not proved; and the serve's own verdict is pending, because its replay on CPU did not run.

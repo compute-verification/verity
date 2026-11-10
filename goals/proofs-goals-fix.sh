@@ -52,7 +52,7 @@ g proofs/spot-128k-attention-proved --status off-track --wait goal:vllm/served-1
 g proofs/spot-advice-certified --status off-track --blockers @blockers/spot-advice-certified.md \
   --description @desc/spot-advice-certified.md
 
-g proofs/spot-moe-binding --status off-track --blockers @blockers/spot-moe-binding.md \
+g proofs/spot-moe-binding --status on-track --wait goal:ci/fine-grained-check --no-blockers \
   --description @desc/spot-moe-binding.md
 
 g proofs/spot-one-stage-premises --status on-track --wait goal:ci/fine-grained-check --no-blockers \

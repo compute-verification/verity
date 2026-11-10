@@ -1,1 +1,0 @@
-In review since Mon 9 Nov 10 PM and due ready to merge by Tue 10 Nov 12 AM; then it needs main to move. One fact about the check's code, not the read's gates, stays an open premise that only the honest witness takes.
