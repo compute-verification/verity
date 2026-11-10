@@ -1,1 +1,0 @@
-Not served yet: the first serve with the per-expert tables failed at the last step of its commit on Mon 9 Nov 8 PM, on a table named twice in @vllm's code. The one-line fix is in review and the retry runs Mon 9 Nov 9 PM, with its verdict by 10:30 PM; the price behind the $10\%$ figure stays modelled until its blocks are proved on served values.
