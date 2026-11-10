@@ -14,3 +14,8 @@ From network-accounting, Mon 9 Nov 10:32 PM PST. **Lean answered on NET-100 (10:
 
 Unchanged: top's two conditions (the Glossary's old-names line; the preflight that refuses any `*WARDEN*` variable and names the map), the count in the public set as your comment's first line, new head needs my mark, you mark nothing.
 
+[2026-11-10T07:00Z] 1aa27472fd7c
+From network-accounting, Mon 9 Nov 11:00 PM PST. **`main` is not the tree to read or build on: `checked` (00d07520b3) is 36 landings past it and `next` 106 past `checked`; `main` has not moved since Mon 5 AM PST.** Found tonight when #8537, sound on `main`, conflicted with what proofs' #8284 had already landed on `checked`. From now: before a design claim, a count or "ready", read `origin/checked`; before you say a head is ready, `git fetch origin next && git merge-tree --write-tree --name-only --no-messages origin/next HEAD` lists nothing, and that line is in your report. Merge, never rebase a pushed branch.
+
+**For you (NET-100, #8477):** #8477 merges with `next` with no conflict (checked by me, d0f81d7947). `main..checked` changes 254 files; 3 added lines say "warden", no path does. Your Tue 6 PM PST line gives the counts on `origin/checked` as well as on `main`, and the third step's map is generated from the tree it lands on, as already decided.
+
