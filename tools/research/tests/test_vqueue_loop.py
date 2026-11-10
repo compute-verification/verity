@@ -2830,9 +2830,9 @@ def test_under_gate_check_a_suite_failed_while_the_shards_run_ejects_its_lone_su
 
 def test_under_gate_check_a_red_above_a_running_candidate_drops_the_stack_above_it_once_its_base_has_said(env, monkeypatch):
     """Four candidates stacked, one PR each: the third one's check fails a suite while those below it still run.  It waits
-    while its base's check runs, which may yet fail the same; once that check passed, while the lowest's still runs, it is
-    decided: its member, meeting the failing test, is ejected, the one above it is dropped as a base failure, each one's
-    shards cancelled, and its PR is built again on its base."""
+    while its base's check runs, which may yet fail the same; in the tick that check passes, while the lowest's still runs,
+    it is decided: its member, meeting the failing test, is ejected, the one above it is dropped as a base failure, each
+    one's shards cancelled, and its PR is built again on its base."""
     main = env.main()
     env.put(1, {"a.txt": "1\n"})
     env.put(2, {"b.txt": "1\n"})
@@ -2845,10 +2845,9 @@ def test_under_gate_check_a_red_above_a_running_candidate_drops_the_stack_above_
     runs.fail(three, 1, rows=(_row(NEW),))
     assert not {"eject", "drop"} & {*_acts(loop.tick())} and not env.withdrawn and not env.cancelled
     runs.end(two)
-    assert _acts(loop.tick()) == ["slim"] and not env.withdrawn
     logged = loop.tick()
-    assert _acts(logged) == ["eject", "drop", "drop", "build", "slim"] and env.withdrawn == [(3, head)]
-    failed, above, rebuilt = logged[1:4]
+    assert _acts(logged) == ["slim", "eject", "drop", "drop", "build", "slim"] and env.withdrawn == [(3, head)]
+    failed, above, rebuilt = logged[2:5]
     assert (failed["sha"], failed["outcome"]["state"], failed["beside_cancelled"]) == (three, FAIL, ["c-10", "c-11", "c-12"])
     assert (above["sha"], above["why"], above["beside_cancelled"]) == (four, "its base failed", ["c-13", "c-14", "c-15"])
     assert (rebuilt["base"], rebuilt["members"]) == (two, [4]) and "early_red" in failed and "early_red" not in above
@@ -2873,13 +2872,15 @@ def test_under_gate_check_a_red_while_the_shards_run_with_several_suspects_is_bi
 
 def test_under_gate_check_a_step_off_the_gate_or_a_killed_shard_fails_nothing_while_the_check_runs(env, monkeypatch):
     """circuit-check is off the merge gate and lean-audit a warn step: one shard ended failing both, which fails nothing
-    while the others run; nor does a shard killed by the machine, which is infra once every shard ended, as before.  A
-    gating suite's failure in the last shard fails the candidate then, naming neither."""
+    while the others run; nor does a shard killed by the machine, which is infra once every shard ended, as before, nor a
+    suite a stop cut short (failed beyond its tests alone) in a shard that runs.  A gating suite's failure in a shard that
+    runs fails the candidate then, naming none of them."""
     loop, runs, main, sha = _off(env, monkeypatch, {"pkg/tests/test_x.py": "def test_new():\n    assert False\n"},
                                  decide=vqueue.decide)
     runs.end(main)
     runs.fail(sha, 3, step="circuit-check", log=_circuit(HEAD), rc=1)
     runs.fail(sha, 1, step="lean-audit", log="AUDIT security/Foo: FAIL\n", rc=137)
+    runs.fail(sha, 2, rows=({"name": "pkg", "suite": "pkg", "status": "failed", "failed_tests": [], "beyond_tests": True},))
     assert [(r["action"], r["sha"]) for r in loop.tick()] == [("slim", main)] and not env.withdrawn and not env.cancelled
     runs.fail(sha, 2, rows=(_row(NEW),))
     logged = loop.tick()

@@ -1673,10 +1673,13 @@ class Loop:
         def chained(sha: str, seen: tuple[str, ...] = ()) -> bool:
             return bases[sha] == main or bases[sha] in bases and sha not in seen and chained(bases[sha], (*seen, sha))
 
+        def height(sha: str, seen: tuple[str, ...] = ()) -> int:
+            return 1 + height(bases[sha], (*seen, sha)) if bases.get(sha) in bases and sha not in seen else 0
+
         below = self._below(past, whole, n, main, origin, wrote)
         w._theirs, w._listed = {}, {}
         try:
-            for sha in sorted(mine):
+            for sha in sorted(mine, key=lambda s: (height(s), s)):      # each after its base, whose record it reads as judged now
                 p, b = whole if sha in older else past, builds[sha]
                 base, prs, heads = b.get("base") or "", tuple(b.get("members") or ()), tuple(b.get("heads") or ())
                 j = w.verdict(sha, base, p.since(sha), p.since(base))
@@ -1686,18 +1689,13 @@ class Loop:
                 # where the check gates, a candidate on `main` is read by its check too: graph2's verdict decides nothing
                 if self.slim is not None and (self.gate == CHECK_GATE or not w._ancestor(sha, main)):
                     j = self._beside(p, n, main, origin, sha, base, prs, heads, j, wrote, chained(sha),
-                                     below if base == main else (p.slim(base)[1], p.slim_started(base)[1]))
+                                     below if base == main else ((judged[base].record if base in judged else None)
+                                                                 or p.slim(base)[1], p.slim_started(base)[1]))
                 judged[sha] = j
                 cands.append(Candidate(sha, base, prs, heads, j.verdict, p.tries(sha), reruns=p.reruns(sha),
                                        enqueued=p.enqueued(sha)))
         finally:
             w._theirs = w._listed = None
-        on = {c.sha: c.base for c in cands}
-
-        def height(sha: str, seen: tuple[str, ...] = ()) -> int:
-            return 1 + height(on[sha], (*seen, sha)) if on.get(sha) in on and sha not in seen else 0
-
-        cands.sort(key=lambda c: (height(c.sha), c.sha))       # each after the candidate it is built on
         chain = [c.sha for c in cands if chained(c.sha)]
         members = {m for c in cands if c.sha in chain for m in c.members}
         holds = w.holding([x.head for x in ready if x.number not in members], chain, main) if chain else {}
@@ -1755,9 +1753,10 @@ class Loop:
         logged (to ``wrote`` too) whenever it changed; with --dry-run neither started nor judged, so pending.  A check that
         failed to list stays list-failed beside a run that hasn't ended, which `combine` reads as pending: one that never
         starts would hold it so.  Each step it failed is compared with the run beside its base's check (``below``: its record
-        and start, `_below` for ``main``), which `vqueue.decide` takes as inherited when that run failed it too, a base
-        candidate's still running by what it failed so far (`vqueue_slim.based`); a fail whose every other failure is
-        inherited waits (pending) while the run beside ``main``, started at most `pending_s` ago, hasn't said.  Where the
+        and start, `_below` for ``main``, a base candidate's as judged this tick), which `vqueue.decide` takes as inherited
+        when that run failed it too, a base candidate's still running by what it failed so far (`vqueue_slim.based`); a fail
+        whose every other failure is inherited waits (pending) while the run beside ``main``, started at most `pending_s`
+        ago, hasn't said, and one on a candidate stays a fail, which `vqueue.decide` holds until its base's says.  Where the
         check gates (`CHECK_GATE`), the run's verdict alone is the candidate's, graph2's kept beside it (`Judged.shadow`, its
         note marked so), and a run started while graph2 gated counts as none started."""
         started, rec = past.slim(sha)
@@ -1786,7 +1785,7 @@ class Loop:
             if gates:
                 both = replace(both, ended=(g.state not in (PENDING, LIST_FAILED) and (g.state != FAIL or g.ended))
                                and v.state != PENDING)
-            if waits := self._waits(both, v, *below):
+            if base == main and (waits := self._waits(both, v, *below)):
                 return replace(j, verdict=Verdict(PENDING), slim=v, record=rec, note="; ".join(
                     [*filter(None, [j.note]), f"waiting for the run beside {base[:12]}'s check: {', '.join(waits)}"]))
         return replace(j, verdict=both, slim=v, record=rec)

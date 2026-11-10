@@ -337,11 +337,13 @@ def _gate(driver: Driver, rec: dict) -> list[str]:
 def _early(driver: Driver, rec: dict, states: dict) -> Verdict:
     """The verdict of the check that gates (``rec``) while a shard of it runs: pending until one of its runs says it failed
     (one running names its failures so far, `drive.failing`; one ended exited 1), then fail with each step it is judged on
-    (`_gate`) that such a run failed, or a suite of which it failed, uncovered by an allowance at its base, read as once every
-    shard ended (`failing`), from their dirs fetched afresh (`drive.evidence`: the Driver's own cache holds what the end's
-    reading reads).  Never kept, so not ``ended``: `vqueue.decide` reads a fail whose every failure is inherited as pending
-    until the check ends.  ``rec`` holds it (``early``: its failures as `_keep` keeps a verdict's, with ``at``, when the
-    first was written: a failed step's end, a failed suite's log's last write), which the check above reads (`based`)."""
+    (`_gate`) that such a run failed, not by a signal, or a suite of which it failed a named test, uncovered by an allowance
+    at its base, read as once every shard ended (`failing`), from their dirs fetched afresh (`drive.evidence`: the Driver's
+    own cache holds what the end's reading reads).  A suite failed beyond its tests alone, as a stop marks each suite it
+    cuts short, waits for the end.  Never kept, so not ``ended``: `vqueue.decide` reads a fail whose every failure is
+    inherited as pending until the check ends.  ``rec`` holds it (``early``: its failures as `_keep` keeps a verdict's, with
+    ``at``, when the first was written: a failed step's end, a failed suite's log's last write), which the check above reads
+    (`based`)."""
     said = [r for r, s in states.items() if ((len(s) > 3 and s[3]) if s[0] in ACTIVE else s[1] == 1)]
     if not said:
         return Verdict(PENDING)
@@ -356,11 +358,12 @@ def _early(driver: Driver, rec: dict, states: dict) -> Verdict:
         ended = {st.get("step"): st for st in step_records(d)}
         for s in _gate(driver, rec):
             if (st := ended.get(s)) is not None:
-                if st.get("status") != "failed" or not_run(st) or s in allowed:
+                if (st.get("status") != "failed" or not_run(st) or s in allowed
+                        or isinstance(rc := st.get("rc"), int) and (rc < 0 or rc in KILLED_RC)):
                     continue
                 at.append(_epoch(st.get("ended_utc")) or driver.now())
             elif s in SUITE_STEPS and (rows := [row for name, row in suite_rows(d).items() if row["status"] == "failed"
-                                                 and row["step"] == s
+                                                 and row["step"] == s and row.get("failed_tests")
                                                  and not driver._allowed(allow, f"suite {name}", d, row).covered]):
                 st = {"step": s}
                 at += [_written(d / "suites" / Path(row["log"]).name, driver.now()) for row in rows if row.get("log")]
