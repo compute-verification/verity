@@ -93,10 +93,11 @@ def parse(inst) -> dict:
 
 
 def closure_digest(desc: dict, key: str) -> str:
-    """The closure digest of Definition `key` of the Program whose descriptor is `desc`, which a pin names: the period
-    check's (`slotEntryDigest`), by its Python mirror, `period_case.slot_entry_digest` of the network suite."""
+    """The closure digest of Definition `key` of the Program whose descriptor is `desc`, which a pin names
+    (`NciCheck.DefinitionDigest.closureDigest`), by its one Python mirror, the network suite's
+    `period_case.slot_entry_digest`, read from the checkout `verity.ml.circuits` comes from."""
     if "period_case" not in sys.modules:
-        _load("period_case", Path(__file__).resolve().parents[3] / "tests")
+        _load("period_case", Path(codec.__file__).resolve().parents[2] / "core" / "protocols" / "network" / "tests")
     return sys.modules["period_case"].slot_entry_digest(desc, key)
 
 
