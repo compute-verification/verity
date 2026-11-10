@@ -24,16 +24,16 @@ from torch.utils._python_dispatch import TorchDispatchMode
 from tests.program.train_step_lf import ADAMW, loss_fn, meta_step, square_loss
 from verity.ml.circuits.boolean.trace import word_of
 from verity.ml.circuits.boundary import gate_width
-from verity.ml.circuits.ops import scalar as SC
+from verity.definitions.ops import scalar as SC
 from verity.ml.circuits.parts import Part, n_members
 from verity.ml.circuits.program import is_input
 from verity.ml.circuits.query_ast import GateSet, evaluate, parse
 from verity.ml.circuits.refs import runs as ref_runs
-from verity.ml.definitions.numerics.serve3_reference import materialize
-from verity.ml.definitions.registry import bf16_gemm_check as BC
-from verity.ml.definitions.registry import cublas_bf16 as CB
-from verity.ml.definitions.registry import prims as P
-from verity.ml.definitions.registry import ref_prims as R
+from verity.definitions.numerics.serve3_reference import materialize
+from verity.definitions.registry import bf16_gemm_check as BC
+from verity.definitions.registry import cublas_bf16 as CB
+from verity.definitions.registry import prims as P
+from verity.definitions.registry import ref_prims as R
 from verity_vllm.program.frontend.boolean import derived
 from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.errors import FrontendError

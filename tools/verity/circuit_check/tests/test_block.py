@@ -15,7 +15,7 @@ OPTS = CK.Options()
 def _toy():
     from verity.ml.circuits.defs import CompositeDefinition, bind
     from verity.ml.circuits.types import Array, Value
-    from verity.ml.definitions.registry import prims as P
+    from verity.definitions.registry import prims as P
 
     return bind(CompositeDefinition("CircuitCheckBlock", 1, (), lambda S: ((("x", Array(2, Value(32))),), Value(32)),
                                     lambda B, S, x: B.call(P.F32Add, x[0], x[1]), register=False))
@@ -151,7 +151,7 @@ def test_sparse_mla_is_held_to_the_block_by_its_head_chain():
     """GLM-5.3's `SparseMla_v1` at its circuit-check binding (T = 65, the served heads and widths) is past the block whole
     (2^30 bits) and cut by `sparse_mla.CUTS` into each head's blocks and end, whose largest, a full block, fits."""
     from verity.ml.circuits.defs import bind
-    from verity.ml.definitions.registry import sparse_mla as M
+    from verity.definitions.registry import sparse_mla as M
 
     F = CK.Findings()
     b = CK.block_range(bind(M.SparseMla, T=65, **M.SPARSE_MLA_GLM53), F)

@@ -17,7 +17,7 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
-from verity.ml.circuits.ops.prims import const
+from verity.definitions.ops.prims import const
 from verity.ml.circuits.refs import Affine, Coll, Concat, Strided, broadcast, concat
 from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import StaticIndex, _LiftedConstant, refuse

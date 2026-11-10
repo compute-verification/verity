@@ -4,7 +4,7 @@ the training formalism counts |C|, c and w in.
     python -m training_slowdown.gates           # the table
     python -m training_slowdown.gates --check   # recompute it from the Definitions (needs verity), exit 1 on a difference
 
-Each price is one of the circuits' own Definitions (`verity.ml.circuits.ops.boolean`), at its whole gate count:
+Each price is one of the circuits' own Definitions (`verity.definitions.ops.boolean`), at its whole gate count:
 AND + XOR + NOT as `verity.ml.circuits.evaluation.bits.compile(D).counts` gives them, the AND count being the one its
 `<module>.circuit-check.json` pins (`test_gates` holds both). A counted MAC is one multiply and one accumulate:
 
@@ -164,7 +164,7 @@ def recompute() -> dict[str, tuple[int, int, int]]:
 
     out = {}
     for name, (module, *_) in DEFINITIONS.items():
-        mod = importlib.import_module(f"verity.ml.circuits.ops.boolean.{module}")
+        mod = importlib.import_module(f"verity.definitions.ops.boolean.{module}")
         c = compile_bits(getattr(mod, PYTHON_NAMES[name])).counts
         out[name] = (c.get("and", 0), c.get("xor", 0), c.get("not", 0))
     return out

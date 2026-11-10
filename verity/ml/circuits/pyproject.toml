@@ -10,7 +10,7 @@ untraced = ["tests/test_ruff.py"]
 # against its Definition (the kernels and the silicon models they read), tests/test_stacking holds property/v1's table to
 # Lean's registry, and tests/test_lean_gates recomputes the circuit model's rows from s8, census/v1 and property/v1.
 # tests/test_ruff runs ruff, which the guard doesn't trace, under the repository's one configuration (ruff.toml).
-inputs = ["verity", "verity/ml/circuits", "verity/ml/kernels", "Security/Definitions/Accounting/Gates/Registry.lean",
+inputs = ["verity", "verity/ml/circuits", "verity/definitions/kernels", "Security/Definitions/Accounting/Gates/Registry.lean",
           "Security/Proofs/Accounting/Gates/Rows.lean", "ruff.toml"]
 parallel = true
 
@@ -23,7 +23,7 @@ paths = ["verity"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_population_recorded.py"]
-paths = ["verity/errors.py", "verity/ml/circuits", "verity/ml/kernels"]
+paths = ["verity/errors.py", "verity/ml/circuits", "verity/definitions/kernels"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_settings.py"]

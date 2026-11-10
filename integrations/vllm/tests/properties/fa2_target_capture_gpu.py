@@ -136,8 +136,8 @@ def binary() -> dict[str, Any]:
 
 # ------------------------------------------------------------------------------------------------------------------------ mufu
 def mufu(work: Path, sm: str) -> dict[str, Any]:
-    from verity.ml.circuits import library as L
-    from verity.ml.definitions.numerics import fa2_relation
+    from verity.definitions.circuits import library as L
+    from verity.definitions.numerics import fa2_relation
 
     pinned = fa2_relation.tables()
     ref = work / "pinned_tables.bin"
@@ -228,7 +228,7 @@ _TRAITS = re.compile(r"Flash_fwd_kernel_traits<(\d+), (\d+), (\d+), (\d+),")
 
 
 def launch_geometry(names: list[str], D: int) -> dict[str, Any]:
-    from verity.ml.definitions.registry import b1
+    from verity.definitions.registry import b1
 
     tiles = sorted({tuple(int(x) for x in m.groups()) for n in names for m in [_TRAITS.search(n)] if m})
     want = (D, KBLOCK_M, b1.fa2_kblock_n(D), 4)
@@ -253,8 +253,8 @@ def _fa2_check_inf_head(q: list[int], k: np.ndarray, v: np.ndarray, BN: int, gfr
     reference evaluator, with FA2's `Check_inf` placement: block b guards the rescale's running max iff b >= gfrom; `max * scale` is guarded
     in every block.  `AttnBlock_v2`'s body otherwise, line for line (gfrom 0 is `AttentionHead_v2`)."""
     from verity.ml.circuits.evaluation.reference import evaluate
-    from verity.ml.definitions.registry import b1, hopper
-    from verity.ml.definitions.registry import prims as P
+    from verity.definitions.registry import b1, hopper
+    from verity.definitions.registry import prims as P
 
     def E(prim, *a):
         return int(evaluate(prim, *a)[0])
@@ -314,11 +314,11 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
     """Every output row of one launch against the three constructions (a worker process: numpy words in, a record out)."""
     from verity.ml.circuits.evaluation.reference import evaluate
     from verity.ml.circuits.defs import bind
-    from verity.ml.definitions.numerics import derived_rows as DR
+    from verity.definitions.numerics import derived_rows as DR
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity.ml.definitions.registry import b1, hopper
-    from verity.ml.definitions.registry import fa2_check_inf as F2
-    from verity.ml.definitions.registry import prims as P
+    from verity.definitions.registry import b1, hopper
+    from verity.definitions.registry import fa2_check_inf as F2
+    from verity.definitions.registry import prims as P
     from verity_vllm.program.frontend import targets as TG
 
     c, D, q, k, v, o, bt = job["case"], job["D"], job["q"], job["k"], job["v"], job["out"], job["block_table"]

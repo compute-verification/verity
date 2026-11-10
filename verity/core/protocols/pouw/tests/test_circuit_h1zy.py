@@ -15,7 +15,7 @@ import pytest
 from verity.ml.circuits import ports as PT
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation import evaluate, evaluate_bits
-from verity.ml.circuits.ops.boolean import gemm as BG
+from verity.definitions.ops.boolean import gemm as BG
 from verity.ml.circuits.program import Program, is_input
 from verity.ml.circuits.refs import runs
 from verity.ml.circuits.types import Array

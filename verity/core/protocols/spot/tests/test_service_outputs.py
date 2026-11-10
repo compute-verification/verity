@@ -10,7 +10,7 @@ from collections.abc import Mapping
 
 import pytest
 
-import verity.ml.circuits.ops.scalar  # noqa: F401
+import verity.definitions.ops.scalar  # noqa: F401
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Value as Bits

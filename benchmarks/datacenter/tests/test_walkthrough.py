@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from verity.ml.circuits.boolean import BIT
 from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.ops.boolean.gemm import GEMM_AMPERE, Gemm
+from verity.definitions.ops.boolean.gemm import GEMM_AMPERE, Gemm
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple

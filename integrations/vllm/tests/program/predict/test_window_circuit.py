@@ -37,7 +37,7 @@ from verity.core.protocols.pouw import audit as AU
 from verity.core.protocols.spot.one_stage import partition as P
 from verity.core.protocols.spot.one_stage import registered as G
 from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.definitions.registry import io_shell as IO
+from verity.definitions.registry import io_shell as IO
 from verity.ml.windows import interface as IF
 from verity.ml.windows import wiring as WI
 

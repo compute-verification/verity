@@ -26,8 +26,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32, HOPPER_SM90_S8_K32, IntegerMma
+from verity.definitions.ops.boolean import gemm as BG
+from verity.definitions.silicon.integer import BLACKWELL_SM120_S8_M16N8K32, HOPPER_SM90_S8_K32, IntegerMma
 
 from . import h1zy as Z
 

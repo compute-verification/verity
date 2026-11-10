@@ -117,7 +117,7 @@ def check_live(a, out, bad):
     from verity.ml.circuits.program import Program
     from verity.ml.circuits.refs import tuple_of
     from verity.ml.circuits.types import Array, Tuple, Value
-    from verity.ml.circuits.ops.scalar import I32Add
+    from verity.definitions.ops.scalar import I32Add
 
     I32 = Value(32)
     by = bind(CompositeDefinition("QcScaleBy", 1, (), lambda S: ((("x", I32), ("t", I32), ("eps", I32)), I32),

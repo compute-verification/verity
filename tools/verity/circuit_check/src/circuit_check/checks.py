@@ -30,7 +30,7 @@
                      folded into its bound, returns every leaf within its interval; and a primitive's transfer, on sampled
                      operand intervals within its bounds with every operand leaf folded into its interval, returns within the
                      interval the transfer gives; recorded only for a Definition that declares either
-    redundant gates  a value computed twice inside one proof block: the gates `verity.ml.definitions.word.Graph` finds recomputed
+    redundant gates  a value computed twice inside one proof block: the gates `verity.definitions.word.Graph` finds recomputed
                      (same primitive, same operands by value) that `word.units` puts in one proof block, and the ANDs of a
                      Boolean proof block on identical operands, its commits apart (`redundant_ands`); counted, with where
                      (primitive @ activation, or the named subcircuit)
@@ -1075,7 +1075,7 @@ def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = T
     proof blocks is no failure: ``recomputed_across`` records how many gates are (the whole cut's v2 view, else
     `word.unit_rule`'s count;
     None when ``fn`` is over the partition budget and unchecked), and every other code fails as under v1."""
-    from verity.ml.definitions import word as W
+    from verity.definitions import word as W
 
     P = F if applies else Findings()
     v2 = applies and q_word == 2
@@ -1169,7 +1169,7 @@ def uncut(fn: Any, opts: Options = DEFAULTS) -> str | None:
     `word.gate_limit`) whose body `word.unit_rule` doesn't cut member by member (`cut.separable`), or cuts so down to a member
     over its own budget that it doesn't (``too-large``)."""
     from verity.ml.circuits.cut import separable
-    from verity.ml.definitions import word as W
+    from verity.definitions import word as W
 
     if isinstance(fn, ScalarReference):
         return None
@@ -1246,7 +1246,7 @@ def by_callees(fn: Any, opts: Options, F: Findings, memo: dict, why: str) -> dic
     targets."""
     from verity.ml.circuits import boolean as BL
     from verity.ml.circuits.cut import separable
-    from verity.ml.definitions import word as W
+    from verity.definitions import word as W
 
     if callee_gap(fn, opts, memo.setdefault("callee_gap", {})) is not None:
         return None
@@ -1272,7 +1272,7 @@ def by_callees(fn: Any, opts: Options, F: Findings, memo: dict, why: str) -> dic
     part: dict[str, Any] = {"applies": True, "checked": True, "reason": why, "q_word": 2 if v2 else 1,
                             "max_out_bits": max((r.get("max_out_bits") or 0 for r in out.values()), default=0), "by_callees": out}
     if separable(fn) is not None:
-        from verity.ml.definitions.cross_call import members_check
+        from verity.definitions.cross_call import members_check
 
         with spent("partition-members"):
             across = members_check(fn, word)
@@ -1638,7 +1638,7 @@ def check_row(path: str | Path, opts: Options = DEFAULTS, *, memo: dict | None =
     from types import SimpleNamespace
 
     from verity_vllm.correspondence.reader_for_query import Correspondence
-    from verity.ml.definitions import word as W
+    from verity.definitions import word as W
     from verity_vllm.query.module_body import literal_calls
     from verity_vllm.query.program_view import from_instances, iter_instance_rows
     from verity_vllm.query.required import population
@@ -1659,9 +1659,9 @@ def check_row(path: str | Path, opts: Options = DEFAULTS, *, memo: dict | None =
     out: dict[str, Any] = {"row": str(p), "query": r["query"], "calls": r["calls"], "units": r["units"], "gates": r["gates"],
                            "committed_interior_words": r["committed_interior_words"], "definitions": []}
     try:
-        from verity.ml.definitions import cross_call
+        from verity.definitions import cross_call
     except ImportError:
-        out["cross_call"] = {"checked": False, "reason": "verity.ml.definitions.cross_call is not on this tree"}
+        out["cross_call"] = {"checked": False, "reason": "verity.definitions.cross_call is not on this tree"}
     else:
         x = cross_call.check_program(lambda: iter_instance_rows(str(inst)), strict=False)
         out["cross_call"] = {"checked": True, **{k: x[k] for k in ("check", "ok", "calls", "recomputed_gates", "unrefined")}}

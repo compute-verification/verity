@@ -9,13 +9,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from verity.ml.circuits.constants import program_data
+from verity.definitions.circuits.constants import program_data
 from verity.ml.circuits.program import Program
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, vllm_ruleset
-from verity.ml.definitions.registry import dense as DN
-from verity.ml.definitions.registry import prims as P
-from verity.ml.definitions.numerics.serve3_reference import materialize
+from verity.definitions.registry import dense as DN
+from verity.definitions.registry import prims as P
+from verity.definitions.numerics.serve3_reference import materialize
 
 BF = torch.bfloat16
 

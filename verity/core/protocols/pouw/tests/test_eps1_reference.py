@@ -48,7 +48,7 @@ def test_the_shape_domain_is_32_k_and_at_least_two_segments():
 
 
 def test_the_arm_is_the_s8_family_at_its_noised_layout():
-    from verity.ml.circuits.ops import s8 as OS8
+    from verity.definitions.ops import s8 as OS8
     from verity.ml.circuits.defs import bind
     # the arm at K = 64 is exactly s8's edited-arm smoke binding (NOISE weight, LIMBS byteclamp, COMMIT prefix), which the
     # s8 sidecar already circuit-checks; so the arm needs no new circuit-check target, only the fx1 + chains spot check does.

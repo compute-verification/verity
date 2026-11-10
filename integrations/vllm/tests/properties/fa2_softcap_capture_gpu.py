@@ -41,8 +41,8 @@ import numpy as np
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity.ml.definitions.numerics import rows as RK
-from verity.ml.definitions.numerics import softcap_rows as SR
+from verity.definitions.numerics import rows as RK
+from verity.definitions.numerics import softcap_rows as SR
 from verity_vllm.properties.fa_tap_exactness import PAGE, cases as tap_cases
 from verity_vllm.properties.record import seal as seal_record
 
@@ -60,7 +60,7 @@ FINITE_SAMPLE = 2
 # ------------------------------------------------------------------------------------------------------------------------ tanh
 def tanh_table() -> tuple[np.ndarray, int, dict[str, Any]]:
     """`MufuTanh_v1`'s table words over its shard, decoded from the in-tree blocks: (words, lo, the shard's record)."""
-    from verity.ml.circuits.ops import mufu
+    from verity.definitions.ops import mufu
 
     (s,) = mufu.mufu_tanh_shards()
     words = np.concatenate([s.block(k) for k in range(len(s.header["blocks"]))]).astype("<u4")
@@ -70,7 +70,7 @@ def tanh_table() -> tuple[np.ndarray, int, dict[str, Any]]:
 
 
 def tanh_probe(work: Path, outdir: Path, ref: Path, lo: int, hi: int, sm: str) -> dict[str, Any]:
-    from verity.ml.circuits.ops import mufu
+    from verity.definitions.ops import mufu
 
     R = mufu.MUFU_TANH_RULES
     exe = work / "tanh_probe_jit_compute_80"
@@ -118,10 +118,10 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
     from verity.ml.circuits.evaluation.reference import evaluate
     from verity.ml.circuits.defs import bind
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity.ml.definitions.numerics import derived_rows as DR
-    from verity.ml.definitions.registry import b1, hopper
-    from verity.ml.definitions.registry import fa2_softcap as F2S
-    from verity.ml.definitions.registry import prims as P
+    from verity.definitions.numerics import derived_rows as DR
+    from verity.definitions.registry import b1, hopper
+    from verity.definitions.registry import fa2_softcap as F2S
+    from verity.definitions.registry import prims as P
     from verity_vllm.program.frontend import targets as TG
 
     table = np.memmap(job["tanh_table"], dtype="<u4", mode="r")

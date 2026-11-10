@@ -12,7 +12,7 @@ Contract:
 
 Root parameters (in order):
     prompt  : one `Array(LP_r, I32)` per request (in `header.workload["requests"]` order) from `Root(role="prompt_token")`;
-    weights : `verity.ml.definitions.registry.b1.weights_type(C)` RecordType, fields populated from `Root(role="weight"|"buffer")`
+    weights : `verity.definitions.registry.b1.weights_type(C)` RecordType, fields populated from `Root(role="weight"|"buffer")`
               events through `profile.weight_field(name)`; a Root whose field is None is a Note: nothing is written
               under its view, so a later read of it is Unresolved (raised under an accepted profile) — the M1 log's
               120 per-layer fp8 `_k/_v/_q/_prob_scale` fp32 scalars are such roots and nothing reads them;
@@ -93,8 +93,8 @@ from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, Refs, array_of, concat, runs, tuple_of
 from verity_vllm.program import sampling_event as SE
-from verity.ml.definitions.registry import b1
-from verity.ml.definitions.replay import replayer
+from verity.definitions.registry import b1
+from verity.definitions.replay import replayer
 from verity.ml.circuits.types import Array, RecordType, Type, Value
 from verity.ml.circuits.types import Tuple as TupleT
 

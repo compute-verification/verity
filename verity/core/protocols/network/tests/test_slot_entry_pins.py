@@ -12,7 +12,7 @@ from pathlib import Path
 
 import period_case as PC
 from verity.ml.circuits import codec, population
-from verity.ml.definitions.registry import io_shell as X
+from verity.definitions.registry import io_shell as X
 
 #: the sidecar's rows the pins are of, in `SLOT_ENTRY_PINS`' order
 ROWS = ("SlotEntry_v1:2", "SlotEntry_v1:64")

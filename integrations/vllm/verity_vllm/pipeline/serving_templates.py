@@ -149,8 +149,8 @@ def template(t: str) -> Template:
     from verity.ml.circuits.boolean.trace import word_of
     from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.definitions import boolean as BB
-    from verity.ml.definitions.call_scope import specialization
+    from verity.definitions import boolean as BB
+    from verity.definitions.call_scope import specialization
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     # registers EmbeddingRead_v1, a read's and a READ static's Definition, which BB.load does not
@@ -208,8 +208,8 @@ def cols_refused(word: str) -> str | None:
 
     if spec_base(word) != "AllReduceMultimem_v1":
         return None
-    from verity.ml.definitions.registry import tp_allreduce as TA
-    from verity.ml.definitions.registry import tp_allreduce_nodes as TN
+    from verity.definitions.registry import tp_allreduce as TA
+    from verity.definitions.registry import tp_allreduce_nodes as TN
 
     S = spec_statics(word)
     try:
@@ -340,11 +340,11 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
             if (c := _bind(spec, fams[1], NSPLIT=len(ks))) is not None:
                 hit += ((descriptor_id(c), int(S["NH"])),)
         if spec_base(spec) in CHAINS:
-            from verity.ml.definitions.registry.sparse_mla import CUTS
+            from verity.definitions.registry.sparse_mla import CUTS
 
             hit += tuple((descriptor_id(c), n) for c, n in CUTS[spec_base(spec)](sp))
         if spec_base(spec) in STAGES:
-            from verity.ml.definitions.registry.topp_stages import cut
+            from verity.definitions.registry.topp_stages import cut
 
             hit += tuple((descriptor_id(c), n) for c, n in cut(sp))
         if (fam := EXPERTS.get(spec_base(spec))) is not None:
@@ -392,7 +392,7 @@ def fused_block(spec: str, n: int) -> Any:
     from verity.ml.circuits.codec import lookup_primitive
     from verity.ml.circuits.defs import REGISTRY
     from verity.ml.commitments.gates.embedding import read
-    from verity.ml.definitions import boolean as BB
+    from verity.definitions import boolean as BB
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     S = spec_statics(spec)
@@ -411,7 +411,7 @@ def block_rows(N: int, G: int) -> list[int]:
 def split_keys(T: int, NS: int, BN: int) -> list[int]:
     """Each non-empty split's key count, in split order, of a ``SPLITS`` row of T keys in NS splits of BN-key blocks
     (`sparse_mla_split.split_blocks`: only the token's last block is partial)."""
-    from verity.ml.definitions.registry.sparse_mla_split import split_blocks
+    from verity.definitions.registry.sparse_mla_split import split_blocks
 
     return [min(T, b1 * BN) - b0 * BN for b0, b1 in split_blocks(T, NS, BN)]
 
@@ -422,7 +422,7 @@ def _bind(spec: str, family: str | None = None, **over: Any) -> Any:
     when it does not bind.  A caller holds the bound descriptor id to ``spec``."""
     from verity.ml.circuits.codec import lookup_primitive
     from verity.ml.circuits.defs import REGISTRY
-    from verity.ml.definitions.registry.catalog import load
+    from verity.definitions.registry.catalog import load
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     def static(v: Any) -> Any:

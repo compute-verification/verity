@@ -25,10 +25,10 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits import stacking as P
-from verity.ml.circuits.census import PRODUCTS, census
+from verity.definitions.circuits import stacking as P
+from verity.definitions.circuits.census import PRODUCTS, census
 from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops.boolean import gemm as BG
+from verity.definitions.ops.boolean import gemm as BG
 from verity.ml.circuits.program import Program, input_id
 from verity.ml.protocols.pouw.circuit import h1tile as H
 

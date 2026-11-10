@@ -22,7 +22,7 @@
 #include <string>
 #include <vector>
 
-#include "../../../verity/ml/kernels/sha512.cuh"
+#include "../../../verity/definitions/kernels/sha512.cuh"
 
 #define CK(x)                                                                                    \
   do {                                                                                           \

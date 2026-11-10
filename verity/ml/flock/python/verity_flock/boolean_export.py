@@ -35,8 +35,8 @@ import sys
 import time
 from pathlib import Path
 
-from verity.ml.circuits.ops.boolean import scalar as SC
-from verity.ml.circuits.ops.boolean import softmax as SM
+from verity.definitions.ops.boolean import scalar as SC
+from verity.definitions.ops.boolean import softmax as SM
 
 from . import fp, gf2, ir_lower as IL, tail_pieces as TP, topp_word as TW, unit as U
 from . import circuit_types as CT
@@ -172,7 +172,7 @@ def table_gates(table: str) -> dict:
     (they are its constant); a program table's every bit does. The table is constants in the XOR sums."""
     if table not in _TABLE_GATES:
         import numpy as np
-        from verity.ml.circuits import library
+        from verity.definitions.circuits import library
 
         n, width = TP.TABLE_BITS[table], TP.TABLE_VALUE_BITS.get(table, TP.VALUE_BITS)
         words = np.asarray(gf2.table(table), dtype=np.uint32)
@@ -240,7 +240,7 @@ class CircuitTypeTable:
     def type_of(self, build, name: str, kind: str, label: str | None = None, circuit: Circuit | None = None) -> str:
         """The type of the circuit ``build()`` makes, and every type below it: validated, the root evaluated against the flat
         circuit (``circuit``, one ``build()`` made already, else built here). Returns the root's digest."""
-        from verity.ml.circuits import library
+        from verity.definitions.circuits import library
 
         _patch()
         types, root, names = TT.trace_types(build, label or library.PROGRAM)
@@ -386,7 +386,7 @@ _PRIMS: dict | None = None
 
 
 def prims() -> dict:
-    """Every registered PrimitiveDefinition by id (verity.ml.circuits.ops and the vLLM registry modules)."""
+    """Every registered PrimitiveDefinition by id (verity.definitions.ops and the vLLM registry modules)."""
     global _PRIMS
     if _PRIMS is None:
         import importlib
@@ -394,8 +394,8 @@ def prims() -> dict:
 
         from verity.ml.circuits.defs import PrimitiveDefinition
 
-        mods = ["verity.ml.circuits.ops.prims"]
-        import verity.ml.definitions.registry as R
+        mods = ["verity.definitions.ops.prims"]
+        import verity.definitions.registry as R
         mods += [f"{R.__name__}.{m.name}" for m in pkgutil.iter_modules(R.__path__) if not m.name.startswith(("quarantine",))]
         _PRIMS = {}
         for m in mods:
@@ -413,7 +413,7 @@ def _width_prim(pid: str):
     """A primitive the registry makes per width on demand (``BitAtx{W}``, ``TopPMaskWordx{V}``), from its factory."""
     import re
 
-    from verity.ml.definitions.registry import sampling
+    from verity.definitions.registry import sampling
 
     for pat, make in ((r"BitAtx(\d+)_v1", sampling.bit_at), (r"TopPMaskWordx(\d+)_v1", sampling.topp_mask_word)):
         m = re.fullmatch(pat, pid)
@@ -485,7 +485,7 @@ class Walker:
                     acc = C.input("in32", 32)
                     C.output("out0", fp.tc_dot16(C, acc, a, b, groups=groups, W=W, F=F))
                     return C
-            from verity.ml.circuits import library
+            from verity.definitions.circuits import library
 
             self.cache[key] = self.reg.type_of(build, f"tensor-core k-step unit ({pid}, total)", "tc-step", library.definition_label(pid))
             gc.collect()
@@ -759,7 +759,7 @@ class Walker:
             rec["commitment_openings"] = opened
 
 
-# --- commitment marks: the no-recompute partition (verity.ml.definitions.word, Q_word_v1{X=16,W=32,R=no-recompute}) -------------
+# --- commitment marks: the no-recompute partition (verity.definitions.word, Q_word_v1{X=16,W=32,R=no-recompute}) -------------
 
 X_BITS, W_BITS = 16, 32
 #: constant-operand variants of one primitive lowered per record; further gates use the generic piece (an unrolled scan gives every
@@ -789,7 +789,7 @@ class Commitments:
         from verity.ml.circuits.codec import descriptor_id
         from verity.ml.circuits.cut import separable
         from verity.ml.circuits.defs import PrimitiveDefinition
-        import verity.ml.definitions.word as WQ
+        import verity.definitions.word as WQ
 
         fid = descriptor_id(fn)
         if fid in self.records:
@@ -1364,7 +1364,7 @@ class _Encoded:
         self.ix: dict[str, dict] = {}
 
     def add(self, fn) -> str:
-        from verity.ml.definitions.encoding import encode_specialization
+        from verity.definitions.encoding import encode_specialization
 
         top, defs = encode_specialization(fn)
         self.ix.update(defs)
@@ -1455,8 +1455,8 @@ def _commitment(g: dict, cm: "Commitments", checks: dict | None) -> dict:
     """The Call's cut under the no-recompute partition: its record id (``commitment``), or per T (``commitment_by_T``) for a group
     whose T varies, at the program graph's partition points (every T up to a few hundred, else the key-block boundaries), each
     checked against the program graph's own ``q_word_v1`` summary where it has one."""
-    from verity.ml.definitions.encoding import word_values
-    from verity.ml.definitions.word import specialization
+    from verity.definitions.encoding import word_values
+    from verity.definitions.word import specialization
 
     if g["template"].startswith(("Const32", "Const64")):
         return {}
@@ -1536,7 +1536,7 @@ def _roles(g: dict, into: list[dict], tpl: dict[str, str], store: DefStore) -> d
 
 
 def _library_digest() -> str:
-    from verity.ml.circuits import library
+    from verity.definitions.circuits import library
 
     return library.digest()
 
@@ -1585,9 +1585,9 @@ def main(argv=None) -> int:
                                 "definitions": walker.defs}, separators=(",", ":")))
     (out / "subcircuits.json").write_text(json.dumps({"schema": SCHEMA + "/subcircuits", "nodes": reg.nodes}, separators=(",", ":")))
     module_bytes = write_modules(reg, out / "modules.json.gz")
-    from verity.ml.definitions.word import query_id
+    from verity.definitions.word import query_id
     (out / "commitments.json").write_text(json.dumps({"schema": SCHEMA + "/commitments", "query": query_id(X_BITS, W_BITS),
-                                                      "code": f"verity.ml.definitions.word at verity {_git_head()}", "mark_kinds": MARK_KINDS,
+                                                      "code": f"verity.definitions.word at verity {_git_head()}", "mark_kinds": MARK_KINDS,
                                                       "records": cm.records}, separators=(",", ":")))
     nyl: dict[str, dict] = {}
     for t in tpl_cache.values():

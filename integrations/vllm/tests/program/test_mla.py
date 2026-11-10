@@ -17,12 +17,12 @@ from verity.ml.circuits.evaluation.reference import standalone_call
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import codec
 from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops import mufu as MU
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.definitions.numerics import derived_rows as DR
-from verity.ml.definitions.registry import mla as M
+from verity.definitions.ops import mufu as MU
+from verity.definitions.ops.boolean import gemm as BG
+from verity.definitions.numerics import derived_rows as DR
+from verity.definitions.registry import mla as M
 from verity_vllm.program import mla_capture as MC
-from verity.ml.definitions.registry import mla_check as MK
+from verity.definitions.registry import mla_check as MK
 
 U16, U32 = np.uint16, np.uint32
 HOP = BG.HopperBF16WgmmaDot16

@@ -22,7 +22,7 @@ import rmsnorm as RN
 import softmax as SM
 import sweep as SW
 import words as W
-from verity.ml.circuits.ops import fp32, mufu, prims
+from verity.definitions.ops import fp32, mufu, prims
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -268,7 +268,7 @@ def test_rows_check_counts_every_word() -> None:
 
 def test_load_rows_without_the_module_or_a_path() -> None:
     try:
-        import verity.ml.circuits.ops.rows  # noqa: F401
+        import verity.definitions.ops.rows  # noqa: F401
     except ModuleNotFoundError:
         assert F.load_rows(None) == (None, None)
     else:

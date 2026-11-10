@@ -77,8 +77,8 @@ from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import Coll
 from verity.ml.circuits.types import Array
 from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.ops.boolean import gf2k as G
-from verity.ml.circuits.ops.boolean.gf2k import mul
+from verity.definitions.ops.boolean import gf2k as G
+from verity.definitions.ops.boolean.gf2k import mul
 from verity.ml.circuits.boolean.forms import ZERO
 from verity.ml.commitments.gates.sha512 import commit
 

@@ -491,7 +491,7 @@ def _replay(units: tuple[str, ...], effects: list) -> bool:
     """Do what ``effects`` (`_noting`'s) notes, under ``units`` as making their roots ran (`cache.producing`, so what it makes
     is theirs): import each module, then make each Definition not registered yet, in order, by its id
     (`codec.lookup_primitive`: an input, a family made on demand) or as the Boolean version made on demand of its word
-    (`verity.ml.definitions.boolean.made_on_demand`).  False where a module doesn't import, the next Definition is made by
+    (`verity.definitions.boolean.made_on_demand`).  False where a module doesn't import, the next Definition is made by
     neither or making it raises: the roots are to be made then, and register the rest as they did."""
     import importlib
 
@@ -512,7 +512,7 @@ def _replay(units: tuple[str, ...], effects: list) -> bool:
                     lookup_primitive(REGISTRY, fid)
                 except KeyError:
                     if word is not None:
-                        from verity.ml.definitions.boolean import made_on_demand
+                        from verity.definitions.boolean import made_on_demand
 
                         made_on_demand(word)
                 if not dict.__contains__(REGISTRY.defs, fid):

@@ -129,10 +129,10 @@ from verity.ml.circuits import ports as _ports
 from verity.ml.circuits.boolean.forms import NOT, and_reduce
 from verity.ml.circuits.boolean.trace import definition
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind, composite
-from verity.ml.circuits.ops import fp32 as F
-from verity.ml.circuits.ops import prims as P
-from verity.ml.circuits.ops.boolean import elementwise as EW
-from verity.ml.circuits.ops.boolean import gemm as BG
+from verity.definitions.ops import fp32 as F
+from verity.definitions.ops import prims as P
+from verity.definitions.ops.boolean import elementwise as EW
+from verity.definitions.ops.boolean import gemm as BG
 from verity.ml.circuits.refs import Coll, Explicit, array_of, concat
 from verity.ml.circuits.types import Array, RecordType, Value
 

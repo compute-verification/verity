@@ -1,4 +1,4 @@
-"""`verity.ml.definitions.registry.boolean_norms`: the served RMSNorms on bits.
+"""`verity.definitions.registry.boolean_norms`: the served RMSNorms on bits.
 
 The leaf pieces are Boolean and pinned; the split output word keeps every AND, and the squares pay none for the decodes they
 return. Each piece agrees with its word primitives on special words (every bf16 word for the squares) and on random ones. Both
@@ -24,15 +24,15 @@ from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import codec
 from verity.ml.circuits.defs import PrimitiveDefinition, bind
 from verity.ml.circuits.parts import n_members
-from verity.ml.circuits.ops.boolean import elementwise as EW
-from verity.ml.circuits.silicon import fp
-from verity.ml.circuits.ops.boolean import mufu as MU
+from verity.definitions.ops.boolean import elementwise as EW
+from verity.definitions.silicon import fp
+from verity.definitions.ops.boolean import mufu as MU
 from verity.ml.circuits.boolean import trace as TR
-from verity.ml.definitions.registry import b1
-from verity.ml.definitions.registry import boolean_norms as BN
-from verity.ml.definitions.registry import prims as P
-from verity.ml.definitions import word as QW
-from verity.ml.definitions.cross_call import members_check
+from verity.definitions.registry import b1
+from verity.definitions.registry import boolean_norms as BN
+from verity.definitions.registry import prims as P
+from verity.definitions import word as QW
+from verity.definitions.cross_call import members_check
 
 FULL = os.environ.get("VERITY_VLLM_BOOLEAN_NORMS_FULL")
 
@@ -294,7 +294,7 @@ def _special_rows(rng, N: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     return tuple(np.stack([row[k] for row in rows]) for k in range(3))
 
 
-#: the MUFU statics as proofs' Boolean Definitions (`verity.ml.circuits.ops.boolean.mufu`), which the switch binds
+#: the MUFU statics as proofs' Boolean Definitions (`verity.definitions.ops.boolean.mufu`), which the switch binds
 CUDA_BITS = {"RSQRT": bind(MU.RsqrtApprox)}
 TRITON_BITS = {"SQRT": bind(MU.MufuSqrtFtz), "SCALEA": bind(MU.DivFullScaleA), "RCP": bind(MU.DivFullRcp)}
 

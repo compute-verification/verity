@@ -13,7 +13,7 @@ import pytest
 
 from verity.ml.circuits import Array, bind
 from verity.ml.circuits.defs import CompositeDefinition
-from verity.ml.circuits.ops.scalar import BIT, F32, F32Eq
+from verity.definitions.ops.scalar import BIT, F32, F32Eq
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Tuple
 

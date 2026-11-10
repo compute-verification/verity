@@ -286,7 +286,7 @@ def argmax_tree(V: int, stage: str = "TokenSelectStage") -> dict[str, Any]:
     laid out as one unit (nnz = nnz_a + nnz_b + rows, C = I over rows)."""
     from verity.ml.circuits.cut import separable
     from verity.ml.circuits.evaluation.reference import resolve
-    from verity.ml.definitions.registry import sampling_boolean as SB
+    from verity.definitions.registry import sampling_boolean as SB
 
     members: list[dict[str, Any]] = []
     memo: dict[str, dict[str, int]] = {}
@@ -346,7 +346,7 @@ CIRCUITS_F3 = {"rope-pair": 156_755, "tc-step-k2048": 254_460, "silu-element": 3
 
 def _f32mul() -> dict[str, Any]:
     from verity.ml.circuits.boolean.forms import Circuit
-    from verity.ml.circuits.ops.boolean import attention as AT
+    from verity.definitions.ops.boolean import attention as AT
     from verity_flock import ir_lower
 
     out: dict[str, Any] = {}

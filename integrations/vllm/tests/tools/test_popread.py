@@ -20,11 +20,11 @@ _spec.loader.exec_module(PR)
 def _toy(tmp_path: Path) -> Path:
     from verity.ml.circuits.codec import encode_program
     from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.circuits.ops.fp32 import Bf16Add
-    from verity.ml.circuits.ops.scalar import I32Add
+    from verity.definitions.ops.fp32 import Bf16Add
+    from verity.definitions.ops.scalar import I32Add
     from verity.ml.circuits.program import Program
     from verity.ml.circuits.types import Array, Value
-    from verity.ml.definitions.registry.prims import gather_bf16
+    from verity.definitions.registry.prims import gather_bf16
 
     def signature(S):
         return (("prompt", Value(32)), ("prefix", Value(16)), ("table", Array(4, Value(16)))), Value(16)
@@ -83,10 +83,10 @@ def test_a_selection_inside_a_composite_names_the_call_its_index_comes_from(tmp_
     """The index reaches the gather through the composite's parameter: the walk maps it to the root Call that computed it."""
     from verity.ml.circuits.codec import encode_program
     from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.circuits.ops.scalar import I32Add
+    from verity.definitions.ops.scalar import I32Add
     from verity.ml.circuits.program import Program
     from verity.ml.circuits.types import Array, Value
-    from verity.ml.definitions.registry.prims import gather_bf16
+    from verity.definitions.registry.prims import gather_bf16
 
     inner = bind(CompositeDefinition("PopreadRow", 0, (), lambda S: ((("e", Value(32)), ("w", Array(2, Array(8, Value(16))))),
                                                                       Array(2, Value(16))),
@@ -165,7 +165,7 @@ def test_the_lean_graph_is_the_reference_graph_and_cuts_to_its_units(monkeypatch
     """Expert gathers, FP8 block scales, a router's top-k and a separable body: the lean graph, resolved in forked workers over
     64-gate ranges or in one pass, is `CallGraph`'s, and its proof blocks are `evaluate_definition`'s."""
     from verity.ml.circuits.cut import CallGraph, evaluate_definition, separable
-    from verity.ml.definitions.call_scope import specialization
+    from verity.definitions.call_scope import specialization
     monkeypatch.setattr(PR, "CHUNK_GATES", 64)
     for name, statics in SMALL:
         fn = specialization(name, statics)
@@ -178,8 +178,8 @@ def test_the_lean_graph_is_the_reference_graph_and_cuts_to_its_units(monkeypatch
 def test_units_read_a_cached_rule_by_its_digest_and_log_each_cut(tmp_path):
     """A rule directory's entry is used as it stands (its count is deliberately wrong here), the rest are cut and logged, the
     log serves as a cache, and recutting a cached Definition names the disagreement."""
-    from verity.ml.definitions.call_scope import specialization
-    from verity.ml.definitions.word import closure_digest
+    from verity.definitions.call_scope import specialization
+    from verity.definitions.word import closure_digest
     lin, router = (specialization(n, s) for n, s in SMALL[1:3])
     rule = {"key": {"digest": closure_digest(lin), "query": [16, 32, 0]}, "rule": {"units_per_call": 999, "violations": []}}
     (tmp_path / "rules" / "ab").mkdir(parents=True)
@@ -281,13 +281,13 @@ def _prefix_form(producers: int, warm: int) -> dict:
     selects by the mask inside the proof block.  One more request shares only the weights."""
     from verity.ml.circuits.codec import encode_program
     from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.circuits.ops.fp32 import Bf16Add
-    from verity.ml.circuits.ops.scalar import BitAnd, I32Eq, SelectBf16
+    from verity.definitions.ops.fp32 import Bf16Add
+    from verity.definitions.ops.scalar import BitAnd, I32Eq, SelectBf16
     from verity.ml.circuits.program import Program
     from verity.ml.circuits.refs import array_of
     from verity.ml.circuits.types import Array, Value
-    from verity.ml.definitions.registry.prims import gather_bf16
-    from verity.ml.definitions.call_scope import specialization
+    from verity.definitions.registry.prims import gather_bf16
+    from verity.definitions.call_scope import specialization
 
     V, C, K = 4, 2, producers
     I32, BF16, BIT = Value(32), Value(16), Value(1)
@@ -368,7 +368,7 @@ def test_a_k_way_page_mux_is_one_unit_a_word_and_a_prefix_match_one_unit():
     K - 1 gates), and the match of C = 128 prompt ids in blocks of 16, whose 8 mask bits fit one proof block's output, is one proof block."""
     from verity.ml.circuits.cut import evaluate_definition
     from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.circuits.ops.scalar import BitAnd, I32Eq, SelectBf16
+    from verity.definitions.ops.scalar import BitAnd, I32Eq, SelectBf16
     from verity.ml.circuits.refs import array_of
     from verity.ml.circuits.types import Array, Value
 

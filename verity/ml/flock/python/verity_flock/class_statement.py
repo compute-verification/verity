@@ -458,7 +458,7 @@ def distinct_calls(graph_path: str | None, modules: str | None = None, definitio
     from verity.ml.circuits.codec import definition_digest, descriptor_id
     from verity.ml.circuits.defs import CompositeDefinition
     from verity.ml.circuits.program import Program
-    from verity.ml.definitions.encoding import encode_specialization
+    from verity.definitions.encoding import encode_specialization
 
     g = json.loads(open(graph_path).read()) if graph_path else {"groups": []}
     index = g.get("definitions_index") or {}
@@ -1519,7 +1519,7 @@ def _source_digest() -> str:
             yield from (d / f for f in files if f.endswith(".py") and "." not in f[:-3])
 
     h = hashlib.sha256()
-    for name in ("verity", "verity.ml.circuits", "verity.ml.kernels", "verity.core", "verity_flock", "circuit_check",
+    for name in ("verity", "verity.ml.circuits", "verity.definitions.kernels", "verity.core", "verity_flock", "circuit_check",
                  "verity_vllm"):
         spec = importlib.util.find_spec(name)
         roots = [Path(r) for r in (spec.submodule_search_locations or [])] if spec else []

@@ -14,8 +14,8 @@ from typing import Any
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.refs import Coll
 from verity.ml.circuits.types import Array, Value
-from verity.ml.definitions.registry import stop_check as SC
-from verity.ml.definitions.registry import stop_rule as X
+from verity.definitions.registry import stop_check as SC
+from verity.definitions.registry import stop_rule as X
 
 #: the rule's Call's name in a request Program's body
 NAME = "stop_rule"

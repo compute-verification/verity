@@ -22,7 +22,7 @@ from verity.core.protocols.spot.one_stage import partition as P, registration as
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array
-from verity.ml.definitions.numerics.rows import SAMPLED_MEMBER
+from verity.definitions.numerics.rows import SAMPLED_MEMBER
 from verity.ml.windows import rows as CS
 from verity_vllm.check.replay.index import SAMPLER_OP, index_of
 from verity_vllm.check.replay.opening import CommittedStore

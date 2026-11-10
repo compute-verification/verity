@@ -11,7 +11,7 @@ import pytest
 from verity.core.protocols.spot.one_stage import partition as P
 from verity.ml.circuits.codec import descriptor_id, encode_program, program_digest
 from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops.boolean import elementwise
+from verity.definitions.ops.boolean import elementwise
 from verity.ml.circuits.program import Program
 
 from verity_flock import rec_bindings as RB

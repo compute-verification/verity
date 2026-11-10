@@ -28,8 +28,8 @@ from verity.ml.circuits import evaluation as E
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.refs import runs
 from verity.ml.circuits.types import Array, Tuple as TupleT, Value
-from verity.ml.definitions.registry import dsa_topk_mask as M
-from verity.ml.definitions.registry.dsa_topk import topk_set, waksman_apply, waksman_switches
+from verity.definitions.registry import dsa_topk_mask as M
+from verity.definitions.registry.dsa_topk import topk_set, waksman_apply, waksman_switches
 from verity_vllm.check.batch import own
 from verity_vllm.engine.profiles.engine_classes import CLASS_G_SERVED, DSA_TOPK_ENV
 from verity_vllm.program.frontend.rules.vllm_dsa import PAD_SCORE, long_row_keys

@@ -11,8 +11,8 @@ from verity_vllm.program.predict import seed_rule as SR
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_words
-from verity.ml.definitions.registry import boolean_io_shell as BX
-from verity.ml.definitions.registry import io_shell as X
+from verity.definitions.registry import boolean_io_shell as BX
+from verity.definitions.registry import io_shell as X
 
 
 def _col(xs) -> np.ndarray:

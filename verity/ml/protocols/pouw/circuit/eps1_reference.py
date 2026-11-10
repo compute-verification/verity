@@ -63,8 +63,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops import s8 as OS8
-from verity.ml.circuits.ops import prims as P
+from verity.definitions.ops import s8 as OS8
+from verity.definitions.ops import prims as P
 from verity.ml.commitments import domains
 
 from verity.core.protocols.pouw.protocol import DomainError

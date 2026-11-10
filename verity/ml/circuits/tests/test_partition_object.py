@@ -15,8 +15,8 @@ from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
-from verity.ml.circuits.ops.prims import const
-from verity.ml.circuits.ops.scalar import F32Fabs, F32Fmaxf, I32Add
+from verity.definitions.ops.prims import const
+from verity.definitions.ops.scalar import F32Fabs, F32Fmaxf, I32Add
 
 F32 = I32 = Value(32)
 VECTORS = json.loads((Path(__file__).parent / "partition_vectors.json").read_text())

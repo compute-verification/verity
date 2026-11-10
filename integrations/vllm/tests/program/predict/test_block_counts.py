@@ -21,7 +21,7 @@ from verity_vllm.records.fields import RecordError, UnknownField
 from verity.ml.circuits import codec, partition_v2 as PV2
 from verity.ml.circuits.defs import REGISTRY
 from verity.ml.circuits.population import population_program
-from verity.ml.definitions.boolean import gate_table
+from verity.definitions.boolean import gate_table
 from verity.ml.windows import interface as IF
 
 REFERENCE = Path(__file__).resolve().parents[5] / "verity/core/protocols/network/nci/lean/scripts/nci_reference.py"

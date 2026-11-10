@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import verity.ml.circuits.ops.scalar  # noqa: F401
+import verity.definitions.ops.scalar  # noqa: F401
 from verity.core.protocols.spot.one_stage import registered as REG
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program

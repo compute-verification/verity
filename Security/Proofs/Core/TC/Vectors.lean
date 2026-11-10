@@ -6,7 +6,7 @@ public import Definitions.Core.TC.Spec
 # Vectors: `tc_dot_total` on the Hopper and Ampere/Ada pipelines
 
 Each theorem is one input of `total.tc_dot_total(pipeline, acc, a, b)` and the word the Python returns,
-checked by the kernel against `Verity.TC.Spec.tcDotTotal`. `verity/ml/circuits/ops/tests/test_lean_vectors.py` checks the same
+checked by the kernel against `Verity.TC.Spec.tcDotTotal`. `verity/definitions/ops/tests/test_lean_vectors.py` checks the same
 vectors against the Python, so a change on either side fails a build: the transcription cannot drift silently.
 -/
 

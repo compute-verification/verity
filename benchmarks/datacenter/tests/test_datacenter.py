@@ -10,10 +10,10 @@ import pytest
 from verity.core.protocols import registration
 from verity.core.protocols.spot.one_stage import registration as one_stage
 from verity.ml.circuits import partition_object
-from verity.ml.circuits.census import census
+from verity.definitions.circuits.census import census
 from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops.boolean.gemm import GEMM_SM120_E4M3, GemmCoordinateE4m3
+from verity.definitions.ops.boolean.gemm import GEMM_SM120_E4M3, GemmCoordinateE4m3
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.commitments import advice

@@ -16,7 +16,7 @@ from dataclasses import dataclass
 
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, conformance_label
 from verity_vllm.config import option
-from verity.ml.definitions.registry import b1, prims  # noqa: F401  (registration)
+from verity.definitions.registry import b1, prims  # noqa: F401  (registration)
 
 # Structured qualifications on Input gates: which committed leaves are *not* checkpoint tensors and what their
 # registered source is. Counts are the correspondence records' (`corr-*.json`, `input_gate_records.weights`).

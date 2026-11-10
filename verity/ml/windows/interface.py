@@ -189,9 +189,9 @@ def _static(v: Any) -> Any:
 
 @functools.cache
 def _load_catalog() -> None:
-    """Import every module of `verity.ml.circuits.ops`, the catalog's, and the embedding's registered read
+    """Import every module of `verity.definitions.ops`, the catalog's, and the embedding's registered read
     (`commitments.gates.embedding`): each registers its Definitions as it loads."""
-    from verity.ml.circuits import ops
+    from verity.definitions import ops
 
     for m in pkgutil.walk_packages(ops.__path__, f"{ops.__name__}."):
         if ".tests" not in m.name:

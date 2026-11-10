@@ -3,7 +3,7 @@ pearl_c_sm90.cu's kernels write, in its row-major layout (every operand in natur
 `pearl_c_device.H100` (G = 4: `pearl-c-h100-v1-h3`), hashing format -h3 (SHA-512 throughout); the unpromoted plain
 baseline (gemm_fast's y_fast) on the H100 record without promotion (`H100_UNPROMOTED`, no scheme of its own).  Forming,
 lines and hashes come from `verity.ml.protocols.pouw.schemes.pearl_c` on the device record; the products over every
-cell are batched in numpy (the chains window by window, the peel with `verity.ml.kernels.tc.group_sum_total_batch` on the
+cell are batched in numpy (the chains window by window, the peel with `verity.definitions.kernels.tc.group_sum_total_batch` on the
 record's peel step), and one whole 64 x 64 tile is recomputed by the scheme (`encode`, `checked`, `digest`) and must
 agree.  run.py compares the device's buffers with these bytes before it times anything.
 
@@ -40,8 +40,8 @@ sys.path.insert(0, str(ROOT / "verity" / "core" / "protocols" / "pouw" / "tests"
 
 import pearl_c_vectors as CV  # noqa: E402
 from verity.ml.commitments.merkle import tree_levels  # noqa: E402
-from verity.ml.circuits.silicon import fp32  # noqa: E402
-from verity.ml.kernels.tc import group_sum_total_batch  # noqa: E402
+from verity.definitions.silicon import fp32  # noqa: E402
+from verity.definitions.kernels.tc import group_sum_total_batch  # noqa: E402
 from verity.core.protocols.pouw.audit import (HM96, HM96_TRANSCRIPT, HM96_WEIGHTS, ROW_SCHEMA, TILE_SCHEMA,  # noqa: E402
                                                          Epoch, Workload, activation_binding, commit_rows, hm96_kernel_constants,
                                                          hm96_salt, rows_domain, transcript_domain, weight_binding, weights_root)

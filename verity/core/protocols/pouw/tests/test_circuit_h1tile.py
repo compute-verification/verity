@@ -11,8 +11,8 @@ import pytest
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.ops import gemm as G
-from verity.ml.circuits.ops.boolean import gemm as BG
+from verity.definitions.ops import gemm as G
+from verity.definitions.ops.boolean import gemm as BG
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, concat, runs
 from verity.ml.circuits.types import Array

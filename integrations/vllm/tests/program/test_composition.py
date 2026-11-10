@@ -27,7 +27,7 @@ for p in (REPO / "vllm-poc", REPO / "src"):
 
 from verity.ml.circuits import Program, bind  # noqa: E402
 from verity_vllm.program.frontend.correspond import correspond, correspond_rebound  # noqa: E402
-from verity.ml.definitions.registry import b1, hopper as H, prims as P  # noqa: E402
+from verity.definitions.registry import b1, hopper as H, prims as P  # noqa: E402
 from verity_vllm.program.frontend import serve_families
 
 TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,

@@ -81,7 +81,7 @@ import weakref
 from typing import Any, Callable, Iterable, Sequence
 
 from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
-from verity.ml.circuits.ops.boolean import gemm as BG
+from verity.definitions.ops.boolean import gemm as BG
 from verity.ml.circuits.ports import In, Out, Ports, forward
 from verity.ml.circuits.program import Program, is_input
 from verity.ml.circuits.refs import Affine, Coll, Strided, coll_concat, concat, runs

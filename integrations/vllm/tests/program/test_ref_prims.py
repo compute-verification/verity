@@ -1,4 +1,4 @@
-"""The reference-mode kinds of `verity/ml/definitions/registry/ref_prims.py`.
+"""The reference-mode kinds of `verity/definitions/registry/ref_prims.py`.
 
 Three layers, kept separate (semantics vs evidence):
   1. **definition consistency** — the numpy twins equal the gate-by-gate circuit evaluation of the registered bodies on
@@ -34,10 +34,10 @@ from verity.ml.circuits import codec
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind
 from verity.ml.circuits.evaluation import evaluate_call
 from verity.ml.circuits.program import Program
-from verity.ml.definitions.registry import b1
-from verity.ml.definitions.registry import prims as P
-from verity.ml.definitions.registry import ref_prims as R
-from verity.ml.definitions.numerics import ref_prims_twins
+from verity.definitions.registry import b1
+from verity.definitions.registry import prims as P
+from verity.definitions.registry import ref_prims as R
+from verity.definitions.numerics import ref_prims_twins
 
 torch = pytest.importorskip("torch")
 F = torch.nn.functional

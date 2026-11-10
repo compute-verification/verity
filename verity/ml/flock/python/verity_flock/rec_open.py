@@ -63,7 +63,7 @@ from verity.ml.circuits.types import Array, Tuple
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import ONE, ZERO
 from verity.ml.commitments.gates.sha512 import IV, compress_gadget, pad_tail
-from verity.ml.circuits.ops.boolean import gf2k as G
+from verity.definitions.ops.boolean import gf2k as G
 
 from .rec_residuals import residual_forms
 from .sha512_circuit import word_bit

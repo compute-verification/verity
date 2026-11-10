@@ -15,11 +15,11 @@ from verity_vllm.program.predict.steps import compile_steps
 from verity_vllm.program.tp_workload import TP_WORKLOAD_TAG, TpWorkload
 
 from verity.ml.circuits.defs import Builder, bind
-from verity.ml.circuits.ops import gemm as G
+from verity.definitions.ops import gemm as G
 from verity.ml.circuits.refs import Affine, Coll
 from verity.ml.circuits.types import Array
-from verity.ml.definitions.registry import b1_tp2 as TP
-from verity.ml.definitions.registry.prims import BF16
+from verity.definitions.registry import b1_tp2 as TP
+from verity.definitions.registry.prims import BF16
 
 N, ROWS = 16, 2
 GEMM = bind(G.Gemm, K=N, N=N, **G.GEMM_AMPERE)

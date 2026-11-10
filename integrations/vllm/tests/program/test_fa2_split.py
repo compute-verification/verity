@@ -14,15 +14,15 @@ from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation.reference import evaluate
-from verity.ml.definitions import boolean as SW
-from verity.ml.definitions.numerics import derived_rows as DR
-from verity.ml.definitions.numerics import fa2_split_twins as TW
-from verity.ml.definitions.numerics import sparse_mla_split_twins as SMT
-from verity.ml.definitions.registry import boolean_fa2_split as BX
-from verity.ml.definitions.registry import fa2_split as F
-from verity.ml.definitions.registry import hopper
-from verity.ml.definitions.registry import prims as P
-from verity.ml.definitions.registry.fa2_check_inf import AttentionHeadV5
+from verity.definitions import boolean as SW
+from verity.definitions.numerics import derived_rows as DR
+from verity.definitions.numerics import fa2_split_twins as TW
+from verity.definitions.numerics import sparse_mla_split_twins as SMT
+from verity.definitions.registry import boolean_fa2_split as BX
+from verity.definitions.registry import fa2_split as F
+from verity.definitions.registry import hopper
+from verity.definitions.registry import prims as P
+from verity.definitions.registry.fa2_check_inf import AttentionHeadV5
 from tests.program.test_boolean_fp8 import _flat, _inputs
 
 U16, U32 = np.uint16, np.uint32

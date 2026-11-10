@@ -35,7 +35,7 @@ from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.commitments.gates import embedding as E
-from verity.ml.definitions.registry import io_shell as IO
+from verity.definitions.registry import io_shell as IO
 from verity.ml.windows import interface as IF
 
 PROGRAM = "test/model"

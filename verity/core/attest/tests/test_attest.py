@@ -9,7 +9,7 @@ import hashlib
 import pytest
 
 from verity.core import attest as A
-from verity.ml.commitments.gates import attest as attest_gate
+from verity.definitions.commitments.gates import attest as attest_gate
 from verity.ml.commitments.indexed import RangeU64Domain
 from verity.ml.commitments.limits import VerificationLimits
 from verity.ml.commitments.merkle import (

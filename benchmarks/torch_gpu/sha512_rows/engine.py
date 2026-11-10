@@ -44,7 +44,7 @@ import numpy as np
 from verity.ml.commitments import hm96
 from verity.ml.commitments.merkle import merkle_depth
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
-from verity.ml.kernels import ROW_COMMIT, SHA512
+from verity.definitions.kernels import ROW_COMMIT, SHA512
 from verity_config.settings import of
 
 __all__ = ["DEFAULT_VARIANT", "Engine", "LeafTable", "RowTable", "SaltKey", "device_lib", "digests", "host_lib", "words"]

@@ -101,7 +101,7 @@ def check_compiled_unit_is_cp_w():
     every set); set s < KS is `PouwSegDot0` (s = 0) or `PouwSegDot` extending set s - 1's partials, reading byte segment s
     of its X row; O' extends T_(KS-1); every digit set is a fresh `PouwSegDot0`."""
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.definitions.ops.boolean import gemm as BG
     from verity.ml.circuits.refs import runs
     K, ks = 128, 4
     m = SG.n_digits(ks)

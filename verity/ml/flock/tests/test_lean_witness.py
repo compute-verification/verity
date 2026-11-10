@@ -54,7 +54,7 @@ from test_lean_rec_coins import built, restaged  # noqa: F401
 from verity.core.protocols.spot.one_stage import partition as P
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation.reference import evaluate_call
-from verity.ml.circuits.ops import gemm as G
+from verity.definitions.ops import gemm as G
 from verity.ml.circuits.program import Program
 from verity_flock import circuit as C
 from verity_flock import rec_bindings as RB
