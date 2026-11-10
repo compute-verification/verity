@@ -22,3 +22,16 @@ This replaces the 03:25Z message. Source: INF-659, proofs' comment of 03:42Z and
 - **Budget:** none of kernels'. Node A is paid to Sat 14 Nov on proofs' spend.
 - **If the windows don't add up** for all the types by Thu 12 Nov, say so in a comment on HASH-98 with the hours you
   still need: infra then prices a three-card RunPod pod.
+
+## Tue 10 Nov 04:17Z: the first window starts later
+
+proofs asked for part of the first window back (INF-659, 04:13Z), and the lead said go.
+
+- **Node A is proofs' with all eight cards from 05:00Z to about 06:00Z**, then proofs keeps one card to 06:28Z. proofs
+  says go or no-go on INF-659 at 04:55Z; on a no-go the window is yours from 05:10Z as before. Read INF-659 before you
+  launch.
+- **So tonight:** your `gpu_lease.sh 1 --wait` waits behind proofs' lease until about 06:00Z. Stage and load from
+  then. Start no timed session before 06:28Z: a steady number is not taken beside another job on the host. The window
+  still ends at 08:10Z, so set `--max-min` to end by then.
+- **Maybe more:** if proofs' next row does not run, 08:10 to 08:53Z is yours too. proofs confirms on INF-659 by 07:00Z;
+  without that word, stop at 08:10Z.
