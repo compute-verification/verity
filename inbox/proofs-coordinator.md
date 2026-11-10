@@ -30951,3 +30951,90 @@ For the 22 modules of the closure without `Firewall` and `Firewall.Honest`: **33
 > - 21 is 1 by construction: one prover process at a time.
 >
 > `server_rate.py`'s `rate.json` holds 21 as `provers`, beside `device`.
+
+## PRF-513 REMOTECORE, Tue 10 Nov 18:42Z: 24 of 26 files closed (58 of 60 places), head `17e55a847069`; the two fixtures regenerate on run `r20261110-183603-e39b`; left: the stale README's edits into the live one
+
+- **Branch and head:** `cursor/proofs-remote-core-cf05` at `17e55a847069` [run: `git rev-parse`, 18:41Z], pushed. The base's head `13f54ad455ac` is merged in (`8b3dcb53a2`, no conflict; its five commits touch none of my files) [run].
+- **Read from my mailbox** [read, 18:39Z]: 17:57Z (rule 7 void, the fixtures are mine to regenerate now) and 18:35Z (lean's seven rules; MERGEPY and REMOTEPY on the base). None of my files is closed on the base by someone else [run: the merge of `13f54ad455ac` touched none].
+- **Counts** [run: `git grep -c '^<<<<<<< '` over my 26 at `17e55a847069`]: 24 files and 58 places closed; 2 files and 2 places left, both `*_lean.json`. Tree-wide 144 files and 299 places still marked.
+
+**The table** (every `.py` row: `python -m py_compile` and `ruff check FILE` pass, ruff's findings equal to the file's at `e7b03e4a6c89` [run]; "= e7b" means `diff` against `git show e7b03e4a6c89:FILE` shows only what the row names [run])
+
+| file | places | taken at each | why | checked beyond compile and ruff |
+|---|---|---|---|---|
+| `spot/service.py` | 13 | `main`'s text, with the side's two edits carried in: `Sequential` deleted, `Session` is `ProofRun`. One unmarked line read the side's "draw"; it reads "sample" | The side's own changes to the file are those two (`c5dc2a9614`, `a1cdc7ae64`); `Spot.Select.Rule` is all, law or two-stage [read] | = e7b plus the two edits; `main`'s `b84c6cb34b`, `cf86105ea3`, `6d00b77af8`, `ed71f4da06`, #8416, #8497 carried by `git merge-file` with no conflict; imports [run] |
+| `spot/tests/test_service.py` | 1 | `main`'s docstring line; the `Sequential` assertion the side deleted stays deleted | Both lines dropped the closure clause | Not run: no local run of it yet (it goes in the suite run below) |
+| `spot/one_stage/registration.py` | 4 | Both: the side's `members` and its `link-points` step, `main`'s `seed_salt` and `pool`. The Declared-day paragraph is the side's later text (`79813d182a`) under `main`'s names | The step sits after R7's pool chain, the order of `Spot.Registration.check` (`R7-pool-chain`, then `linkRefused`) [read] | = e7b plus those; `db893ed784`, `fd149f8c06`, `329334d10b`, `5acd0b9ca7` carried with no conflict; no caller passes `members` but the difftest's `_registration` [run: AST scan] |
+| `spot/one_stage/verifier.py` | 1 | `main`'s call (`day`, `declarations`, `seed_salt`, `pool`) | Every other side edit is already in `main`'s text | Identical to e7b [run] |
+| `spot/one_stage/registered.py` | 1 | Both: the side's `bind_ports`, `BOUND`; `main`'s `DIGEST`, `bit_words`, `digest_leaves`, `digests` | Different additions | = e7b plus `bind_ports`; `tests/test_registered.py` 78 passed, 182 s [run, local; too slow to repeat here] |
+| `spot/one_stage/proofs.py` | 3 | `main`'s text; the side's `units_exactly` and `statements_v2` stay, their docstrings saying v2 refuses the per-member form at parse (`OneStageZk.proofsOf`) | Row 7 | = e7b plus the two functions and one sentence |
+| `protocols/registration.py` | 10 | `main`'s whole | Lean's rule 3: one landed change, the side's the earlier head. `Core.Registration` reads `previous` as `hex64` [read] | Identical to e7b [run] |
+| `protocols/profile.py` | 3 | `main`'s wording with the side's `Work` named; `Work`, `WorkStratum`, `work_k`, `SamplingDesign` stay | `Core.SamplingDesign` has `work` [read] | = e7b plus the work design; imports [run] |
+| `spot/coins.py` | 2 | Both: the side's public `law_problem`, `RAN_OUT`, `ran_out`; `main`'s refusal of a subset of no unit, placed before the population check | `Spot.Draw.flockLaw` refuses in that order [read] | Imports [run]. `tests/test_coins.py` not run validly (see "not checked") |
+| `spot/optimize.py` | 2 | `main`'s (`ReplayGrain`, the two-stage design) with the side's `TensorCommit` | The rename is the side's only (`cf28ba13e7`) | `tests/test_optimize.py` 50 passed [run, local] |
+| `spot/remote.py` | 2 | `main`'s release frames with the side's `ChallengePhase` | The rename is the side's only | = e7b plus the rename |
+| `verity/core/service/spot/tests/test_difftest.py` | 2 | Both lines' imports and `PIECE_RUNS` (the side's `RAN_OUT`, `DESIGN`, `POP_ORDER`, `PUBLIC_UNITS`, `LINK_POINTS`; `main`'s `TABLES_HELD`, `SECOND_INTERIOR_READS`, `SECOND_SCHEDULE`) | Each is a piece of `Spot/Pieces.lean` at the head [read] | 53 tests, `main`'s 49 all there [run: AST]. Not run: it needs the Lean build |
+| `verity/ml/circuits/census.py` | 2 | `main`'s `boolean_gates` over the side's `BooleanWork`; the side's `__all__`, which holds both | Side-only rename (`33e93b6380`) | Imports [run] |
+| `verity/ml/circuits/defs.py` | 1 | `__all__` with the side's `DefinitionTable`, `BodyNode` and `main`'s `CONFORMANCE`, `conformance_label` | Different additions | Imports [run] |
+| `verity/ml/circuits/layout.py` | 1 | The side's `BodyNode` and `main`'s `res` parameter | Different additions | Imports [run] |
+| `verity/ml/circuits/query_codec.py` | 1 | `main`'s sentence | Rule 3: the side's `dd9cc8b8c1` (27 Oct) and `main`'s `c82fbb5e57` (6 Nov) are one change; `main`'s names no integration | Identical to e7b [run] |
+| `verity/ml/circuits/requirement.py` | 1 | The side's "store packing (`Store.Packing`)" | The class is `Store.Packing` at the head | = e7b plus the side's rename |
+| `verity/ml/circuits/requirement_units.py` | 1 | `main`'s "Flock's" | `main` only renamed | Identical to e7b [run] |
+| `verity/ml/circuits/tests/test_part_log.py` | 1 | `main`'s imports with `DefinitionTable`; and `main`'s newer test built `Registry()`, now `DefinitionTable()` | The side's rename under `main`'s additions | 68 passed with `test_population_values.py` [run, local] |
+| `verity/ml/flock/python/verity_flock/firewall_transcript.py` | 1 | `main`'s "a challenger" and the side's `InnerRun.handle` | The file's class is `InnerRun` (side-only rename) | = e7b plus the rename |
+| `verity/ml/flock/verifier/README.md` | 1 | `main`'s `verify` and `agree` lines with the side's `[--registered F [--interface F]]` | `FlockVerify.lean`'s usage has `--interface`, `--coins tree` and `agree` [read] | = e7b plus `--interface` |
+| `verity/settings.py` | 1 | Both lines' settings (`VERITY_COMPOSITION_SERVED`; `VERITY_ML_DEFINITIONS_SLOW`, `VERITY_ML_FLOCK_CUDA_GHASH`). The module text's `Registry.check` reads `EnvSettings.check` | Different additions; the class is `EnvSettings` (side-only rename) | `git merge-file` with `main` to e7b changes nothing; `tests/test_settings.py` 12 passed [run, local] |
+| `verity/README.md` | 2 | `main`'s rows; the side's "its proof and inference blocks" in the windows row and its `verity.core.periods` row | The window interface states no server blocks at the head (`5171c0dfe3`) [read] | = e7b plus those two |
+| `integrations/vllm/verity_vllm/protocols/spot.py` | 1 | "SPOT runs in the Commit stage: a row's (...) or serve-openai's Commit windows" | `main`'s name, the side's wider stage | Two tests match "SPOT runs in the Commit stage" as a prefix [read] |
+| `spot/tests/fixtures/exfiltration_lean.json` | 1 of 1 left | Marked; regenerating | Rule 4 | Run below |
+| `verity/ml/flock/tests/fixtures/randomness_lean.json` | 1 of 1 left | Marked; regenerating | Rule 4 | Run below |
+
+**The rows no marker shows**
+
+- Rows 1 to 3: done, in the table (`one_stage/registration.py`, `verifier.py`, `service.py`).
+- Row 6, `spot/parties.py` (`5c9ee14225`): `SUBPROTOCOLS["verity/remote/v1"]` is inference-only, `pearl-plus` at `verity/pouw/pearl-plus/v1` and sampled proofs as `COMPOSED`; `IDS` gains `pearl-plus`; onsite stays `main`'s (`COMPOSED`), as `CoreOnsite.lean` has it [read].
+- The stale copies: `parties.py`, `tests/test_optimize.py` and `tests/test_service_window.py` are deleted (`17e55a8470`). Every test either copy defines is in the live file [run: by name; two under `main`'s names, `..._replay_blocks_met`, `..._replay_blocks`]. The stale `README.md` is left: its three-way merge into `spot/README.md` has 21 places, my next piece of work.
+- Importers: nothing of proofs' is left outside `benchmarks/` now that the two stale tests are gone [run: `git grep`].
+
+**Files outside the 26 that I changed, all proofs'** [run]: `spot/parties.py` (row 6); `spot/tests/test_optimize.py` (8 `Commitment` to `TensorCommit`); `spot/tests/test_two_stage.py:744` (the refusal's text is "a selection rule is All, Law or TwoStage"); `verity/ml/circuits/tests/test_population_values.py` (3 `Registry` to `DefinitionTable`); `verity/ml/circuits/tests/test_settings.py` (`S.Registry` to `S.EnvSettings` in `main`'s newer test, and two docstring mentions). The last three had no marker: `main`'s newer code named a class the side renamed.
+
+**Lean's rule 5: every name `main` declares at `e7b03e4a6c89` that my result lacks** [run: top-level names and class members by AST, each closed `.py`]
+
+- Kept under the side's name: `settings.Registry` as `EnvSettings`; `profile.Draw` as `SamplingDesign`; `coins._law_problem` as `law_problem`; `optimize.Commitment` as `TensorCommit`; `remote.Session` as `ChallengePhase`; `service.Session` as `ProofRun`; `census._Work` as `BooleanWork`; `defs.Registry` as `DefinitionTable`; `defs.Node` as `BodyNode`; `firewall_transcript.Session` as `InnerRun`.
+- Dropped: `service.Sequential` and `service._UNIFORM`, which only it read. The side deleted the rule (`c5dc2a9614`); on `main` a `Stream` only refuses it ("the service doesn't run a Sequential selection yet").
+- No test function of `main`'s is missing from any test file I closed or changed [run]. One assertion is gone, with `Sequential`: `test_service.py`'s check of its refusal.
+- Five side tests are absent from `test_difftest.py` at the base's head, none at a place of mine [read]: the four `test_v2_per_member_*` (row 7) and `test_the_run_refuses_a_count_that_varies` (`main` refuses `bernoulli` at any p, `service.BERNOULLI`).
+
+**Row 7: what Python still reaches of the per-member path** [read, `17e55a847069`]
+
+- `spot/one_stage/link_points.py`, the side's module, read by `registration.check(members=)`, which fails `link-points`. No caller passes `members` but the difftest's `_registration` (`link_members`).
+- `proofs.statements_v2`: one caller, `benchmarks/one_stage/a5.py:1301` (REMOTEBENCH's). Its form is refused at parse by `OneStageZk.proofsOf`.
+- `proofs.units_exactly` (`PublicUnits.exactly`): `a5.py:834` and the difftest's `public_units` piece.
+- The difftest's `link_points`, `public_units` and `ran_out` pieces; `coins.RAN_OUT` and `ran_out`.
+
+**No close makes a verifier accept or refuse what neither line did** [read]. `coins.law_problem` alone now refuses `subset:0`, as `flockLaw` does; `draw_first` refuses what `main`'s did.
+
+**Not checked, and why**
+
+- `spot/tests/test_coins.py`: my one local run imported the main checkout's `verity`, not my worktree's (I ran from the package directory), and timed out at 150 s. It proves nothing. It goes in the suite run.
+- `test_difftest.py`, `test_service.py`, `test_two_stage.py`, `test_service_window.py`: not run. Next I launch one `research run --on auto --cwd source` over `verity/core/protocols/spot/tests`, `verity/ml/circuits/tests` and the difftest; files that import another lane's marked module (`pouw/core_check.py`, `certifier/coin_link.py`) will fail to collect, and I will say which.
+
+**The fixtures** [run `r20261110-183603-e39b`, launched 18:36Z on vy-nebius-cpu-1 at `38df8377ee90`, running at 18:41Z]: `setup.sh Security/Proofs`, then both generators in the run's clone, the three written files copied to `$OUT/fixtures/`, `pins.py --stale` to `$OUT/pins-stale.txt`. `--max-min 240`. The markers are in the `inputs` tables only (sha256 of Lean sources and `lake-manifest.json`), so I expect only those hashes to move [guess].
+
+**Questions, each with my recommendation**
+
+1. The first generator also rewrites `exfiltration_two_lean.json`, which is not in my 26. If its `inputs` move I commit it with the other two. Recommendation: yes, it is one generator pass and proofs' file.
+2. The pins go stale again whenever the base merges a `main` that moves one of their Lean inputs or `Security/Proofs/lake-manifest.json`. Recommendation: whoever merges the base into `main` runs `python tools/verity/check/pins.py --regen` last; I rerun mine only if you ask.
+3. Lean's rule 4 (both lines edited one statement: the writer decides). The places where I chose between two wordings of one sentence are docstrings, none a Lean statement or a pinned value: `query_codec.py` and `requirement_units.py` (`main`'s), `requirement.py` and the Declared-day paragraph (the side's), `profile.py` (`main`'s wording, the side's `Work`). Recommendation: they stand; proofs is their writer.
+
+**Text ready to paste for other lanes**
+
+- **ci** (`tools/verity/cli/tests/test_run.py`): line 127 asserts `SP.SUBPROTOCOLS["verity/onsite/v0"]["sampled-proofs"] == "verity/sampled-proofs/one-stage/v1"`. `spot/parties.py` on `cursor/proofs-remote-core-cf05` has `"verity/sampled-proofs/v1"` there, as `CoreOnsite.lean` does. The assertion must name `"verity/sampled-proofs/v1"`; lines 122 to 126 and 128 already hold.
+- **vllm**: (a) `integrations/vllm/tests/pipeline/test_serve_day.py:95` calls `entry.declared()` and `:132` indexes `view.declared(0)["program"]`. `registration.py` is `main`'s: a `Declaration` has `.body()`, and the view returns `Declaration`s with `previous=""`, so `:95` compares with `dataclasses.replace(entry, previous="")` and `:132` reads `.program`. (b) `integrations/vllm/verity_vllm/program/prune.py:39,42` and `integrations/vllm/tests/program/test_prune.py:108` name `defs.Node`; it is `BodyNode` (line 36 of `prune.py` is the right import). (c) Ten unmarked files import `verity.core.protocols.sampled_proofs.one_stage`, which no longer exists; each import is `verity.core.protocols.spot.one_stage`: `tests/pipeline/test_serve_day.py`, `tests/program/predict/test_weights_tie.py`, `test_window_circuit_pearl.py`, `tests/protocols/test_pouw_h1_answers.py`, `test_pouw_h1_nodes.py`, `test_pouw_pearl_c_window.py`, `tests/remotetie_demo.py`, `verity_vllm/program/predict/weights_tie.py`, `verity_vllm/protocols/pouw/h1/answers.py`, `verity_vllm/protocols/pouw/pearl_c/window.py`.
+- **memory-accounting** (`verity/core/protocols/remote_bandwidth/pyproject.toml:9`): two suite inputs name the old path; they are `verity/core/protocols/spot/coins.py` and `verity/core/protocols/spot/one_stage/link_points.py`.
+- **network-accounting** (`benchmarks/prove_path/tests/test_records_audit.py:806,837`): `Declaration.declared()` is gone; `main`'s `Declaration.body()` is the JSON, and the view's declarations are the entries with `previous=""`.
+- **REMOTEBENCH**: `benchmarks/sampling_plan/int8_llama.py` and `transformer.py` import `TensorCommit` from `verity.core.protocols.spot.optimize` (`Commitment` is gone); `benchmarks/one_stage/a5.py` reads `CC.law_problem`, `REG.bind_ports`, `PF.units_exactly` and `PF.statements_v2`, all present on my branch; `remote.ChallengePhase` is the class `benchmarks/live_challenger/serve.py:226` already names.
+- **lean**: `verity/core/service/spot/Spot/Draw.lean:264` names `coins._law_problem` in a docstring; the function is `coins.law_problem`.
+- **top** (`tests/test_lean_vocabulary.py`, itself marked): its `KNOWN` entries for `spot/optimize.py::Commitment`, `spot/remote.py::Session`, `spot/service.py::Session`, `verity/ml/circuits/defs.py::Node` and `::Registry`, `firewall_transcript.py::Session` and `verity/settings.py::Registry` name classes that no longer exist under those names (`python tests/test_lean_vocabulary.py --prune`).
+
+**Left:** the stale `sampled_proofs/README.md` into `spot/README.md` (21 places) and its deletion; the fixtures when the run ends; the suite run. Next entry by 19:40Z.
