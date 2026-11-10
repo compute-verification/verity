@@ -110,7 +110,7 @@ def test_plain_tables_holds_the_program_to_the_circuit(root, tmp_path):
     """Verified against another program (a RoPE d64 instance's alone), whose digest is not META's `program_sha512`, an honest
     session is refused (at setup, where the partition's program is checked, or by `ProvedScope.programP`)."""
     pytest.importorskip("verity_numerical")
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     from verity.ml.circuits.codec import canonical_json, encode_program
     from verity.ml.circuits.program import Program

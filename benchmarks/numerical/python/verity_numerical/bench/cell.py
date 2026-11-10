@@ -42,7 +42,8 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from . import census as CN
-from . import contract, drivers, input_sets as IS, interaction, lowerings as LW, placement as PL, templates as TM
+from verity_numerical.bench import contract, drivers, interaction, lowerings as LW, placement as PL
+from verity_flock import input_sets as IS, subcircuit_templates as TM
 
 FAMILIES = {"A": "A-GKR", "B": "B-Ligero", "C": "C-Flock", "D": "D-SP1"}
 BACKENDS = ("A-interactive", "A-fs", "A-route-a", "B-interactive", "B-fs", "C-interactive", "D-fs")
