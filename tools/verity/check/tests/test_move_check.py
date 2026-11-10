@@ -1570,6 +1570,71 @@ def test_a_rule_lists_only_the_paths_whose_lines_it_rewrote(tmp_path):
     assert r["rules"]["prefixes"] == ["run.sh"] and "run.sh" not in r["rules"]["tokens"]
 
 
+#: the package `verity/ml/circuits/` moves to `verity/circuits/prover/`, but for `ops/` (to `verity/definitions/ops/`) and
+#: `pod/` (to `verity/circuits/pod/`); `benchmarks/pouw/` stays, and `tools/config/` goes to `verity/configuration/config/`
+REST = "".join(f"line {i} of the file, which the move leaves as it is\n" for i in range(8))
+REBASE = {
+    LAYOUT_MAP: '[tokens]\n"verity/ml/circuits/" = "verity/circuits/"\n',
+    "verity/ml/circuits/pyproject.toml": '[project]\nname = "circuits"\n',
+    "verity/ml/circuits/README.md": "| [`ops`](ops/README.md) | the primitive circuits |\n" + REST,
+    "verity/ml/circuits/population.py": '"""A tile\'s own check is `ops/gemm.circuit-check.py`, the unit\'s `tests/fixtures/unit.json`.\n'
+                                        + REST + '"""\n',
+    "verity/ml/circuits/ops/README.md": "# ops\n",
+    "verity/ml/circuits/ops/gemm.circuit-check.py": "X = 1\n",
+    "verity/ml/circuits/pod/90-unit.sh": "echo unit\n",
+    "verity/ml/circuits/tests/fixtures/unit.json": "{}\n",
+    "verity/ml/circuits/tests/lean/Unit.lean": "/-- Built by `pod/90-unit.sh` on `tests/fixtures/unit.json`.\n" + REST + "-/\ntheorem t : 1 = 1 := rfl\n",
+    "benchmarks/pouw/pyproject.toml": '[project]\nname = "pouw"\n',
+    "benchmarks/pouw/served/legs.sh": 'env PYTHONPATH="$PWD/../..:$PWD/../../tools/config:$PWD" python -m served\n' + REST.replace("line", "# line"),
+    "tools/config/settings.py": "Y = 1\n",
+    "tools/other.py": "Z = 1\n",
+}
+REBASED = {
+    "verity/circuits/prover/README.md": REBASE["verity/ml/circuits/README.md"].replace("(ops/", "(../../definitions/ops/"),
+    "verity/circuits/prover/population.py": REBASE["verity/ml/circuits/population.py"].replace("`ops/", "`../../definitions/ops/"),
+    "verity/circuits/prover/tests/lean/Unit.lean": REBASE["verity/ml/circuits/tests/lean/Unit.lean"].replace("`pod/", "`../pod/"),
+    "benchmarks/pouw/served/legs.sh": REBASE["benchmarks/pouw/served/legs.sh"].replace("tools/config", "verity/configuration/config"),
+}
+
+
+def _rebase(tmp_path: Path, extra: dict[str, str], **over: str) -> dict:
+    repo, base = _repo(tmp_path, {**REBASE, **extra})
+    for name in ("pyproject.toml", "README.md", "population.py", "tests"):
+        _move(repo, f"verity/ml/circuits/{name}", f"verity/circuits/prover/{name}")
+    _move(repo, "verity/ml/circuits/ops", "verity/definitions/ops")
+    _move(repo, "verity/ml/circuits/pod", "verity/circuits/pod")
+    _move(repo, "tools/config", "verity/configuration/config")
+    _write(repo, {**REBASED, **over})
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", LAYOUT_MSG)
+    return MC.certify(base, _git(repo, "rev-parse", "HEAD"), cwd=str(repo))
+
+
+def test_a_relative_path_is_based_again_to_where_its_file_went(tmp_path):
+    """A path a line names from its file's directory (a Markdown link, a docstring's), or from its package's root (the
+    directory of the nearest `pyproject.toml` above it; after a variable too), may be written again from where that
+    directory went to where the path went: `ops/README.md` from `verity/circuits/prover/` is `../../definitions/ops/README.md`,
+    and `pod/90-unit.sh` from the package now at `verity/circuits/prover/` is `../pod/90-unit.sh`."""
+    r = _rebase(tmp_path, {})
+    assert r["certified"], r["refusals"]
+    assert r["rules"] == {"relative": ["benchmarks/pouw/served/legs.sh", *list(REBASED)[:3]]}
+
+
+def test_a_relative_path_based_anywhere_else_is_refused(tmp_path):
+    """The based path is the one the move implies: one that names another place is refused; so is one written from where
+    the directory's `[tokens]` row points when the package's `pyproject.toml` went elsewhere (`tests/fixtures/unit.json` is
+    still that from `verity/circuits/prover/`); and a plain path the root also has is a path from the root."""
+    readme, lean = "verity/circuits/prover/README.md", "verity/circuits/prover/tests/lean/Unit.lean"
+    for case, extra, path, text in (
+            ("elsewhere", {}, readme, REBASED[readme].replace("definitions/ops/", "definitions/")),
+            ("the row's directory", {}, lean, REBASED[lean].replace("`tests/", "`prover/tests/")),
+            ("the root's", {"ops/README.md": "# the root's\n"}, readme, REBASED[readme])):
+        (tmp_path / case).mkdir()
+        r = _rebase(tmp_path / case, extra, **{path: text})
+        assert [f["path"] for f in r["refusals"]] == [path], case
+        assert path not in r["rules"]["relative"], case
+
+
 def test_a_file_the_maps_drop_lists_may_be_deleted(tmp_path):
     """The map the move's commit names lists the files the move deletes (`[drop] paths`); any other deleted file, and the
     same one in a range whose commit names no map, is still refused."""

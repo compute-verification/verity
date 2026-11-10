@@ -66,8 +66,11 @@ Every path git sees changed must be one of:
   follows only its own move. On such a line a moved path, or such a reference, is also read after each prefix
   `tools/move/layout.py` reads as the root (its `ROOT_PREFIX`: `<tree>/`, `{r}/`, `$T/wt-$c/`, `~/verity/`, a pod's
   `/workspace/`; and as a shell variable's default, `${TESTS:-verity/x.py}`), one pattern for both. A file the map lists
-  under `[drop] paths` may be deleted. `--json` lists under `rules` the paths each of these took (`tokens`, `prefixes`,
-  `drop`);
+  under `[drop] paths` may be deleted. And a path the line names from its file's directory, or else from its package's
+  root (the directory of the nearest `pyproject.toml` above the file), may be based again: written from where that
+  directory went (the file's new directory, the directory the `pyproject.toml` moved to) to where the path went
+  (`ops/README.md` to `../definitions/ops/README.md`); a plain path the root also has is a path from the root. `--json`
+  lists under `rules` the paths each of these took (`tokens`, `prefixes`, `drop`, `relative`);
 - any of these after the move scripts' word maps (`tools/move/*.toml` with `[words]`, read at BASE) are applied, as
   `tools/move/rename.py` applies them, with only the words that rename what the range moved: a path the map moves to
   where the range moved it, or a Lean module likewise; or a Lean declaration of a `.lean` file the range edits, to a name
@@ -171,6 +174,10 @@ LAYOUT_LINE = re.compile(r"^Layout-move: (tools/move/[\w.-]+\.toml)(?: --no-lock
 BELOW = re.compile(r"(?:/[\w.\-]+)*")
 #: the one prefix `_paths_pattern` reads as the root: a variable holding the checkout
 CHECKOUT = re.compile(r"(?<![\w.\-/$])\$\{?\w+\}?/")
+#: a path a line may name from its file's directory or its package's root, as `tools/move/layout.py` reads one: after a
+#: variable holding a directory (`$PWD/../../x`), from a dot (`../x`, `./x`) or plain (`x/y`)
+REBASED = re.compile(r"(?P<v>\$\{?\w+\}?/)(?P<p>(?:\.\./)+[\w.\-]+(?:/[\w.\-]+)*/?)"
+                     r"|(?<![\w.\-/$}])(?P<q>(?:\.\.?/)+[\w.\-]+(?:/[\w.\-]+)*/?|[\w\-][\w.\-]*(?:/[\w.\-]+)+/?)")
 MANIFEST_PATH_KEYS = {"type", "scope", "name", "manifestFile", "inherited", "dir", "configFile"}
 HUNK_LINES = 8
 
@@ -337,7 +344,7 @@ def either(old: str, new: str, refs: list[tuple]) -> list[tuple] | None:
     parts, at = [], 0
     for s, e, to, *more in refs:
         was = [] if more[1:] and more[1] else [re.escape(old[s:e])]
-        parts += [re.escape(old[at:s]), f"({'|'.join([*was, re.escape(to)])})"]
+        parts += [re.escape(old[at:s]), f"({'|'.join([*was, *map(re.escape, (to,) if isinstance(to, str) else to)])})"]
         at = e
     m = re.fullmatch("".join(parts) + re.escape(old[at:]), new) if parts else None
     return m and [r for r, got in zip(refs, m.groups()) if got != old[r[0]:r[1]]]
@@ -1033,10 +1040,15 @@ class Rows:
     directory name it nowhere. It reads the directory itself (`verity/ml/flock/`, `verity/ml/flock/*.patch`) and a path
     below it that names nothing at BASE (a file a test makes up); a path below it that BASE has follows only its own move.
 
-    `[drop] paths`: the files the move deletes."""
+    `[drop] paths`: the files the move deletes.
 
-    def __init__(self, maps: list[dict], pmap: dict[str, str], base: Tree):
-        self.pmap, self.base, self.tokens = pmap, base, {}
+    A relative path based again (`relative`): a path the line names from its file's directory, else from its package's
+    root (the nearest `pyproject.toml` above the file at BASE), written from where that directory went (the file's new
+    directory; where the package's `pyproject.toml` moved) to where the path went. A plain path the root also has is a
+    path from the root, and a directory the range splits with no row went nowhere one path names."""
+
+    def __init__(self, maps: list[dict], pmap: dict[str, str], base: Tree, head: Tree):
+        self.pmap, self.base, self.head, self.tokens, self._went = pmap, base, head, {}, {}
         self.drop = {p for data in maps if isinstance(d := data.get("drop"), dict) and isinstance(ps := d.get("paths"), list)
                      for p in ps if isinstance(p, str)}
         bad = set()
@@ -1078,22 +1090,75 @@ class Rows:
                 out.append((m.start(2), m.end(2), self.tokens[key], ("tokens", *rules), must))
         return out
 
-    def reads(self, old: str, new: str, pair=None, resolved: bool = False) -> set[str]:
+    def went(self, p: str) -> tuple[str | None, bool]:
+        """Where the BASE path ``p`` went and whether a `[tokens]` row says so; None for a directory the range splits
+        with no row, and for a place HEAD doesn't have."""
+        if p not in self._went:
+            q, row = map_path(p, self.pmap), False
+            if q == p and p not in self.base.set:
+                lo, hi = bisect.bisect_left(self.base.files, p + "/"), bisect.bisect_left(self.base.files, p + "0")
+                if p in self.tokens:
+                    q, row = self.tokens[p], True
+                elif any(map_path(f, self.pmap) != f for f in self.base.files[lo:hi]):
+                    q = None
+            self._went[p] = (q, row) if q is not None and (q in self.head.set or self.head.has_dir(q)) else (None, False)
+        return self._went[p]
+
+    def relative(self, text: str, old: str, new: str, resolved: bool = False) -> list[tuple]:
+        """Each path ``text`` (a line of the file at ``old``, now at ``new``) names from the file's directory or its
+        package's root, where based again it is written otherwise: as `references` gives one, what it becomes also as
+        `resolve_relative` reads it in ``resolved`` text."""
+        def named(p: str) -> bool:
+            return p != "." and not p.startswith("..") and (p in self.base.set or self.base.has_dir(p))
+        out, here = [], posixpath.dirname(old)
+        for m in REBASED.finditer(text):
+            g = "p" if m["v"] is not None else "q"
+            t = m[g]
+            while t.endswith(("/", ".")) and not t.endswith(".."):
+                t = t[:-1]
+            if not t or not t.startswith(".") and named(t):
+                continue
+            at = None
+            if g == "q" and named(p := posixpath.normpath(posixpath.join(here, t))):
+                at = posixpath.dirname(new)
+            else:
+                d = here
+                while d and f"{d}/pyproject.toml" not in self.base.set:
+                    d = posixpath.dirname(d)
+                if d and named(p := posixpath.normpath(posixpath.join(d, t))):
+                    at = posixpath.dirname(map_path(f"{d}/pyproject.toml", self.pmap))
+            q, row = self.went(p) if at is not None else (None, False)
+            if q is None:
+                continue
+            to = posixpath.relpath(q, at or ".")
+            if t.startswith("./") and not to.startswith("."):
+                to = "./" + to
+            if to != t:
+                rooted = (f"<root>/{q}",) if resolved and to.startswith(".") else ()
+                out.append((m.start(g), m.start(g) + len(t), (to, *rooted), ("relative", *(("tokens",) if row else ())), False))
+        return out
+
+    def reads(self, old: str, new: str, pair=None, resolved: bool = False, at: tuple[str, str] | None = None) -> set[str]:
         """The rules of the references ``new`` rewrites, when it is ``old`` with each reference rewritten or left, or
         (``pair``) what `pair` takes ``old`` with every one rewritten to; empty when a moved path alone would do, which is
-        not these rows' to say."""
+        not these rows' to say. ``at``: the line's file at BASE and at HEAD, for a relative path based again, which is
+        read only where the line is not explained without it."""
         refs = self.references(old, resolved) if self.pmap or self.tokens else []
-        took = either(old, new, refs)
-        if took is None and pair and refs and pair(rewritten(old, refs), new):
-            took = refs
-        return {r for _, _, _, rs, _ in took or () for r in rs}
+        more = [r for r in self.relative(old, *at, resolved) if not any(r[0] < e and s < r[1] for s, e, *_ in refs)] if at else []
+        for each in (refs, sorted(refs + more))[:2 if more else 1]:
+            took = either(old, new, each)
+            if took is None and pair and each and pair(rewritten(old, each), new):
+                took = each
+            if took:
+                return {r for _, _, _, rs, _ in took for r in rs}
+        return set()
 
 
 def rewritten(text: str, refs: list[tuple]) -> str:
-    """``text`` with each of ``refs`` ((start, end, what it becomes, ...), in order) rewritten."""
+    """``text`` with each of ``refs`` ((start, end, what it becomes or the forms it may take, ...), in order) rewritten."""
     out, at = [], 0
     for s, e, to, *_ in refs:
-        out += [text[at:s], to]
+        out += [text[at:s], to if isinstance(to, str) else to[0]]
         at = e
     return "".join(out) + text[at:]
 
@@ -1476,7 +1541,7 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             d.update(status="R", score=100 if d["shas"][0] == a["shas"][1] else 0, new=new,
                      modes=(d["modes"][0], a["modes"][1]), shas=(d["shas"][0], a["shas"][1]))
     short = short_forms(pmap, B)
-    rows = Rows(layout_maps(B, head, cwd), pmap, B)
+    rows = Rows(layout_maps(B, head, cwd), pmap, B, H)
     renamed = [(e["old"], e["new"]) for e in entries if e["status"] == "R"]
     modules = Modules(renamed, dotted)
     lmods, dests = {}, {}
@@ -1570,8 +1635,8 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
         name = posixpath.basename(new)
         took: set[str] = set()                              # the maps' rows this path's edit needed (`Rows`)
 
-        def by_rows(x: str, y: str, pair=None, resolved: bool = False) -> bool:
-            took.update(r := rows.reads(x, y, pair, resolved))
+        def by_rows(x: str, y: str, pair=None, resolved: bool = False, old=old, new=new) -> bool:
+            took.update(r := rows.reads(x, y, pair, resolved, (old, new)))
             return bool(r)
         if st == "A" and name in LAKE_COPIES:
             d = posixpath.dirname(new)
