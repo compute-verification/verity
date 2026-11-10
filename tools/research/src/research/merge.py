@@ -1563,19 +1563,11 @@ def sweep_branches(repo: Path, remote: str = "origin", into: str = "main", now: 
     is on ``into`` and is a day idle (its content is there), and move each branch with unmerged work three days idle to
     `refs/archive/heads/NAME` (still fetchable: `git fetch origin refs/archive/heads/NAME`). It keeps `KEEP_BRANCHES`, leads'
     run branches (`RUN_BRANCH_RE`), every branch an open PR uses as its head or base, and ``keep`` (the heads of PRs drive
-<<<<<<< 99c8914848
-    closed as stale, which stay to be reopened: `research.stale`).  At most ``limit`` of each, the longest idle first, each
-    logged by name.  Each push leases the tip it saw, so a branch pushed to meanwhile is kept.  Drive sweeps with ``into`` its
-    landing branch (`Queue.into`: `checked` under drive.toml's `land_into`), since `main` lags it by hours; a revert on `checked`
-    then leaves its PR's branch deleted, and the PR's head ref (`refs/pull/N/head`) keeps its commits.  Returns (deleted, archived)."""
-||||||| merged common ancestors
-    closed as stale, which stay to be reopened: `research.stale`).  At most ``limit`` of each, the longest idle first, each
-    logged by name.  Each push leases the tip it saw, so a branch pushed to meanwhile is kept.  Returns (deleted, archived)."""
-=======
     closed as stale or unlandable, which stay to be reopened: `research.stale`, `drive.Driver._unlandable`).  At most
-    ``limit`` of each, the longest idle first, each
-    logged by name.  Each push leases the tip it saw, so a branch pushed to meanwhile is kept.  Returns (deleted, archived)."""
->>>>>>> 7af4d24fca3e
+    ``limit`` of each, the longest idle first, each logged by name.  Each push leases the tip it saw, so a branch pushed to
+    meanwhile is kept.  Drive sweeps with ``into`` its landing branch (`Queue.into`: `checked` under drive.toml's
+    `land_into`), since `main` lags it by hours; a revert on `checked` then leaves its PR's branch deleted, and the PR's head
+    ref (`refs/pull/N/head`) keeps its commits.  Returns (deleted, archived)."""
     gh = gh or (lambda *a: _gh_cli(repo, *a))
     now = time.time() if now is None else now
     _git(repo, "fetch", "-q", "--prune", remote, f"+refs/heads/*:refs/sweep/{remote}/*")

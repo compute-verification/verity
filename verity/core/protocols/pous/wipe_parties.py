@@ -6,28 +6,13 @@ memory-challenger -> prover   Fill {first, count} + labels (private) ... FillDon
 prover -> memory-challenger   FillAck once it holds the fill; per batch Answer, 64 bytes an index (private)
 ~~~
 
-<<<<<<< 99c8914848
 The challenger drives the same `streamed_wipe.WipeMemoryChallenger` as `wipe_party.serve`, in the same order: the
 labels' secret and the session id from its coins (64 bytes, the secret first), the fill's start and end, each batch's
-send and receipt on its clock, the coin secret drawn when the first batch is revealed, the session signed once it ends
-with the egress its machine was given. On the same coins, clock readings and key it signs the same bytes as `serve`. Its
-machine gives it `signing-key` (`capabilities["signer"]`, a `memory_challenger.Signer`, with `capabilities["log"]`, its
-session log), its egress count (`capabilities["egress_bits"]`, `wipe_party.UNCOUNTED` when none) and the reads it times
-||||||| merged common ancestors
-The challenger drives the same `streamed_wipe.Challenger` as `wipe_party.serve`, in the same order: the labels' secret
-and the session id from its coins (64 bytes, the secret first), the fill's start and end, each batch's send and receipt
-on its clock, the coin secret drawn when the first batch is revealed, the session signed once it ends with the egress
-its machine was given. On the same coins, clock readings and key it signs the same bytes as `serve`. Its machine gives
-it `signing-key` (`capabilities["signer"]`, a `memory_challenger.Signer`, with `capabilities["log"]`, its session log),
-its egress count (`capabilities["egress_bits"]`, `wipe_party.UNCOUNTED` when none) and the reads it times
-=======
-The challenger drives the same `streamed_wipe.Challenger` as `wipe_party.serve`, in the same order: the labels' secret
-and the session id from its coins (64 bytes, the secret first), the fill's start and end, each batch's send and receipt
-on its clock, the coin secret sampled when the first batch is revealed, the session signed once it ends with the egress
-its machine was given. On the same coins, clock readings and key it signs the same bytes as `serve`. Its machine gives
-it `signing-key` (`capabilities["signer"]`, a `memory_challenger.Signer`, with `capabilities["log"]`, its session log),
-its egress count (`capabilities["egress_bits"]`, `wipe_party.UNCOUNTED` when none) and the reads it times
->>>>>>> 7af4d24fca3e
+send and receipt on its clock, the coin secret sampled when the first batch is revealed, the session signed once it
+ends with the egress its machine was given. On the same coins, clock readings and key it signs the same bytes as
+`serve`. Its machine gives it `signing-key` (`capabilities["signer"]`, a `memory_challenger.Signer`, with
+`capabilities["log"]`, its session log), its egress count (`capabilities["egress_bits"]`, `wipe_party.UNCOUNTED` when
+none) and the reads it times
 (`capabilities["reads"]`, `wipe_party.READS` when none, as `wipe_party`'s `--reads`); the prover's gives it `store`
 (`capabilities["store"]`, the prover a `WipeParams` makes: `streamed_wipe.Prover` unless given, `wipe_store.StoreProver`
 on a node). The run's parameters are `wipe_party.request_of`'s request, which names no reads: the challenger chooses

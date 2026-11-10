@@ -18,13 +18,7 @@ that credits, samples and checks by them, with its clear audit, is a reference t
     and the credit all read it.
   `records_root` binds the records and the splits.
 * **`pad_weight`**: a weight whose n is not whole column tiles (GLM-5.3's lm_head, 19360 rows a TP8 rank) is served with
-<<<<<<< 99c8914848:verity/core/protocols/pouw/schemes/pearl_c_work.py
-  zero rows up to the next whole tile, and the last tile's rows are voluntary, so their block is neither credited nor drawn.
-||||||| merged common ancestors:verity/core/protocols/pouw/schemes/pearl_c_work.py
-  zero rows up to the next whole tile, and the last tile's rows are voluntary, so that tile is neither credited nor drawn.
-=======
-  zero rows up to the next whole tile, and the last tile's rows are voluntary, so that tile is neither credited nor sampled.
->>>>>>> 7af4d24fca3e:verity/ml/protocols/pouw/schemes/pearl_c_work.py
+  zero rows up to the next whole tile, and the last tile's rows are voluntary, so their block is neither credited nor sampled.
 """
 
 from __future__ import annotations
