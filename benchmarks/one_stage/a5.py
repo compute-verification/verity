@@ -1243,9 +1243,9 @@ def case_with_form(case: dict, form: str = "one-stage") -> dict:
 
 
 def draw_ran_out(law: dict, population: int, read: bytes) -> bool | str:
-    """Whether the draw under the verifier's ``law`` runs out of the challenger's coins the rank read (``read``), a draw
-    that gives no counts for `link_points` to hold (`coins.ran_out`, Lean `Draw.ranOutOf`); where the law refuses
-    otherwise, why."""
+    """Whether the draw under the verifier's ``law`` runs out of the challenger's coins the rank read (``read``), which
+    fails the window, so only a draw that ends gives `link_points` its counts (`coins.ran_out`, Lean `Draw.ranOutOf`);
+    where the law refuses otherwise, why."""
     try:
         return CC.ran_out(law, population, read)
     except ValueError as e:
@@ -1255,7 +1255,7 @@ def draw_ran_out(law: dict, population: int, read: bytes) -> bool | str:
 def link_points(law: dict, population: int, members: Sequence[dict]) -> dict:
     """The registration's `link-points` (`link_points.refused`) over the window's staged members, each its units
     ``[base, base + n)`` at its circuit's units a proof block: the members it would refuse, each with its fewest and most
-    drawn units under the drawn law over the draws that end (one that runs out of coins gives no counts:
+    drawn units under the drawn law over the draws that end (one that runs out of coins fails the window:
     `draw_ran_out`), or why it refuses them all, a law no draw of which ends among them (`link_points.NEVER_ENDS`).
     Recorded here; a registration whose verifier names its members refuses (`Registration.check`)."""
     from verity.core.protocols.spot.one_stage import link_points as LP
