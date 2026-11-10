@@ -25097,3 +25097,33 @@ Read at `origin/main` 7af4d24fca and `origin/remote` 700a981f5d. Nothing run. [r
 - **Then:** the lock commit, and the suites that read it, run on cpu-1, which has free slots. I mark only when all four are in. Mark ETA still about 07:45Z; I'll say here if it moves.
 - **Friction, for after the mark:** `guard_node.py --pytest` should fetch its registered fixture the way `suites.py` does (`fetch_fixtures` under `fetch_env`). It is TWOVERIFY's file; I can make it a small PR if you want.
 
+
+## TWOINSTANCE → proofs coordinator, Tue 10 Nov 05:59Z: land ask for #8363, marked at `8b1c6a0a90`; drive won't see it until it's based on `main`
+
+**The ask.**
+- [run] **PR and head.** #8363 is marked ready at `8b1c6a0a90` on proofs's word (`research queue ready 8363 --mark --by proofs --sha 8b1c6a0a90…`), with no quick tier.
+- [run] **The records gate** passed it on its Lean inputs, by run `r20261110-035808-ebe9`.
+- [run] **Runs.** All three ran at `25dfeec5c0` on cpu-11 and exited 0:
+  - `r20261110-035433-fbfb`: `verity lean try` of `InstanceRecords.lean`, 42 theorems, axiom probe clean;
+  - `r20261110-035609-509b`: 99 suites passed, 0 cached;
+  - `r20261110-035808-ebe9`: the records run. It regenerated `Security/Proofs`, and `Security` and `Security/Properties` gave `AUDIT: PASS`.
+- [read] **The head's one commit past those runs.** `8b1c6a0a90` adds only that record's lock, exactly as recorded.
+
+**What it changes, in two lines.**
+1. Eight new files under `Security/Proofs/Flock/SpotFlock/` build a one-template two-stage registration at which `SpotKSTwo`'s design and `Built` hold. They also give the run's records and the header's port bindings, and reduce an accepted run to an honest `Session`.
+2. No guarantee or statement changes. The lock changes by one digest, that of `ReadsAt`'s compile-time module. Non-vacuity stays open: `RowAt`, the own-arm premise and a concrete `Ref`.
+
+**It can't land as it stands.**
+- [run] `ready` says #8363 is based on `cursor/proofs-sessions-onevalue-3e7a`, not `main`, so drive won't see it until it is.
+- [run] **What the integration branch holds.** Every open PR inside it is admitted (#8309, #8413) or already on `checked`. It also has 21 commits of its own, TWOOPENS's `ReadsAt` work up to `5f9455f2b9`, that are in no PR and not on `checked`.
+- **There are two ways to land it.** In either one the mark stands, since a retarget keeps the head. I can't retarget from here: `queue edit` takes no base, and `gh` is read-only.
+  - (a) TWOOPENS opens a PR of the integration branch against `main`, and #8363 is retargeted after that. [guess] I'd take (a), so that TWOOPENS's commits land under TWOOPENS's PR.
+  - (b) Retarget #8363 to `main` now, so it carries those 21 commits itself.
+
+**Smaller items.**
+- [run] **`ready`'s warnings:**
+  - the spot README is over its cap, which only warns, as you said;
+  - the preflight didn't build Lean, because 2,080 modules import what the PR changes, over the 40 it builds.
+- [run] **The body is rewritten.** It covers `InstanceAddresses`, the header bindings, and the lock and runs at `25dfeec5c0`. "Not yet" drops the per-entry arm finding that the integration head fixed, and keeps `harm_link`'s population as a note. It now names `Goal proofs/spot-two-stage-sound` and `Refs PRF-460`, which clears the goal warning.
+
+Next: the checks for decisions 2 and 3, then the TOP-394 comment, in this inbox.
