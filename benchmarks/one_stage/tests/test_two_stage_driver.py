@@ -6,6 +6,7 @@ interior registration over the sampled spans' proof blocks and the second stage 
 
 from __future__ import annotations
 
+import hashlib
 import importlib
 import json
 import sys
@@ -21,7 +22,7 @@ from verity.ml.circuits.types import Array, Value as Bits
 from verity.core.protocols.spot import challenger as Ch, service as S
 from verity.core.protocols.spot.one_stage import partition as P, registration as R
 from verity.ml.commitments import history as HT
-from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT
+from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT, interior_rows as IR
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -141,6 +142,32 @@ def test_a_class_with_history_tables_declares_and_registers_them_beside_its_valu
     assert [r["port"] for r in got.record["roots"]] == [*BR.PORTS, *layout.tables]
     assert {r["port"]: r["root"] for r in got.record["roots"]} == {k: v["root"] for k, v in pub["values"].items()}
     assert got.draw.draw["law"] == "subset" and len(got.draw.units) == Q
+
+
+def test_a_class_with_history_tables_gives_the_challengers_history_from_its_own_sample():
+    """A class whose spans' tables an interior's reads open: its Spec declares the reads' two supplied values registered
+    interior values, and `First.history` names each sampled span's table at a layer from the first stage's own sample,
+    under the class record's root for it, each holding the class's C strings, so `history.roots_of` recomputes the served
+    root and domain from the strings the prover publishes."""
+    spans = [BR.Span(f"r{i}", (i, i + 1, i + 2), GREEDY, (7, 8, 9, i), "length") for i in range(N)]
+    layout = BR.Layout(PAIR, 0, 1, 4, 4, N, BR.run_root("test-serve", 0), layers=(0, 1), capacity=16)
+    c = BT.positions(layout.prompt, layout.outputs, layout.capacity)
+    hs = {}
+    for t in layout.tables:
+        hs[t] = HT.HistoryTable(layout.partition["program"], t, BT.WORDS, layout.capacity)
+        hs[t].append(np.ones((3, BT.WORDS), dtype=np.uint16))
+        BT.fill(hs[t], layout.prompt, layout.outputs)
+    pub = json.loads(json.dumps(BR.commit(spans, layout, 0, tables={t: h.root for t, h in hs.items()}).public()))
+    got = TS.first(pub, PAIR, RULE, FC.Challenger("first"))
+    supplied = [v for v in got.stream.spec.values if v.registered]
+    assert [(v.name, v.phase) for v in supplied] == [(n, "interior") for n in IR.SUPPLIED.values()]
+    names = [BT.name(layout.run, layout.prompt, layout.outputs, u, 1) for u in got.draw.units]
+    bodies = {"m0": b"the interior's public body"}
+    hist = got.history(1, {n: [bc.hex() for bc in hs[n].bcs] for n in names}, bodies)
+    assert [t["name"] for t in hist["tables"]] == names and c == 8
+    assert all(t["runs"] == [{"start": 0, "count": c, "held": IR.HELD, "row": 0}] for t in hist["tables"])
+    leaf = HT.leaf_layer({k: hashlib.sha512(b).hexdigest() for k, b in bodies.items()})
+    assert HT.roots_of(leaf, hist) == {n: (hs[n].root, hs[n].domain.domain_id) for n in names}
 
 
 def test_a_rule_round_trips_and_its_spec_holds_the_boundary_values_then_the_interior_ones():
