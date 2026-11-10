@@ -14,14 +14,14 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.core.protocols.certifier import head_check as HC
 from verity.core.protocols.certifier import io_request as Q
-from verity.core.protocols.certifier import warden as W
-from verity.core.protocols.certifier import warden_rows as WR
+from verity.core.protocols.certifier import network_certifier as W
+from verity.core.protocols.certifier import network_certifier_rows as WR
 from verity.core.protocols.certifier.active import DATA, HEADER, PAD, id_request
 from verity.core.protocols.certifier.certificate import Direction
 
 B = 512
 #: two lanes of r = 2 slots, 8-bucket windows
-PARAMS = W.WardenParams(cell_bytes=B, slots=2, lanes=2, window=8, delay=1)
+PARAMS = W.NetworkCertifierParams(cell_bytes=B, slots=2, lanes=2, window=8, delay=1)
 SHAPE = Q.Shape(B, PARAMS.lanes, PARAMS.slots)
 #: request 1 (100 tokens, 3 cells) and request 3 (60, 3) trickle in over buckets, the others arrive whole, and
 #: request 4 arrives alone at the last bucket of window 0 and ends in window 1
@@ -59,7 +59,7 @@ def _accepted(verdicts):
 
 @pytest.mark.parametrize("B", [512, 4096])
 def test_a_request_parses_to_its_prompt_length(B):
-    """Every cell of an id request as the network certifier cuts it (`warden.cells`) parses, and its cells' fields and
+    """Every cell of an id request as the network certifier cuts it (`network_certifier.cells`) parses, and its cells' fields and
     bytes are its prompt length and its own; `carries` is that cut's carry after each cell."""
     lay = Q.layout(B)
     for n in (1, 2, 11, 12, 13, 56, 57, 58, 336, 337, 338, 339, 708, 709):
@@ -76,7 +76,7 @@ def test_a_request_parses_to_its_prompt_length(B):
 
 
 def test_every_bucket_of_the_wardens_ingress_is_accepted(link):
-    """The link served through the network certifier's own ingress (`warden.Warden._ingress`): every bucket row is
+    """The link served through the network certifier's own ingress (`network_certifier.NetworkCertifier._ingress`): every bucket row is
     accepted on the verifier's lanes, which chain each connection from (0, 0) to (0, n) over its buckets. Requests
     trickle in over three buckets, two connections share buckets, and a connection moves to lane 0 when the one before
     it ends."""
@@ -117,7 +117,7 @@ def test_redteam_phase6_split_is_refused():
     so its ends move and a floor on the frames' counts accepts an acausal release, unless each request's prompt_len is
     bound to the ingress record's content. The tie reads 400 fields from connection 1's cells, so the swap's lanes are
     refused by the release and, built anyway, by the unit."""
-    params = W.WardenParams(cell_bytes=4096, slots=1, lanes=2, window=4, delay=1)
+    params = W.NetworkCertifierParams(cell_bytes=4096, slots=1, lanes=2, window=4, delay=1)
     shape = Q.Shape(4096, 2, 1)
     LONG, SHORT = 400, 16
     link = Q.serve(params, _requests((LONG, SHORT), 4096), (0, 0), (10 ** 6, 10 ** 6), buckets=4)
@@ -284,7 +284,7 @@ def test_lanes_other_than_the_releases_are_refused(link):
 def test_a_client_that_ends_after_its_last_byte_is_refused():
     """A non-canonical client: its request's bytes fill a whole `DATA` (338 tokens at B = 4,096, exactly P bytes) and
     it sends its `END` empty after it, so the network certifier releases a `DATA` then an empty `END`. The tie reads the
-    request's last byte in the `DATA`, where only an `END` may hold it, and refuses. The client shim (`warden.cells`)
+    request's last byte in the `DATA`, where only an `END` may hold it, and refuses. The client shim (`network_certifier.cells`)
     sends those bytes as one `END`, which is accepted."""
     shape = Q.Shape(4096, 1, 2)
     raw = _requests([338], 4096)[0]
@@ -297,7 +297,7 @@ def test_a_client_that_ends_after_its_last_byte_is_refused():
 
 
 def test_each_buckets_row_is_the_wardens_registered_row(link):
-    """The proof block's row is the network certifier's registration v2 (`warden_rows`): bucket t's row is row t of the
+    """The proof block's row is the network certifier's registration v2 (`network_certifier_rows`): bucket t's row is row t of the
     ingress record the grid closed, the rows open the network certifier's root, the verifier's port (`bucket_port`) has
     proof block t read row t, and the host's registered read refuses rows out of place or edited."""
     assert len(link.records) == 2

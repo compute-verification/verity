@@ -10,7 +10,7 @@ importable, a stand-in of their fields until then): each changes exactly what it
 valid under v0's schedule rules (`_check`; the real classes refuse invalid advice on construction). The Commit's runs on
 a stand-in of I3 as drafted. The I/O tie's (`io_tie`, when importable) run on a fake upstream's cells and
 Commit port of the advice, under the map the verifier computes from it; `frame` also runs on the network certifier's own
-committed cells (`warden_rows`, when importable), by the verifier's registered read."""
+committed cells (`network_certifier_rows`, when importable), by the verifier's registered read."""
 
 from __future__ import annotations
 
@@ -775,9 +775,9 @@ def test_a_changed_byte_of_a_wardens_committed_cell_doesnt_read_under_its_root()
     WR = pytest.importorskip(NG.WARDEN_ROWS_MODULE)
     from verity.core.protocols.certifier.active import DATA, HEADER, PAD
     from verity.core.protocols.certifier.grid import COMPLETE, Record
-    from verity.core.protocols.certifier.warden import WardenParams, cell
+    from verity.core.protocols.certifier.network_certifier import NetworkCertifierParams, cell
 
-    params = WardenParams(cell_bytes=64, slots=2, lanes=2, window=2)
+    params = NetworkCertifierParams(cell_bytes=64, slots=2, lanes=2, window=2)
     B, S = params.cell_bytes, params.grid.allocation
     grid = ((cell(DATA, 1, b"abc", B), cell(PAD, 1, b"", B)) + (None,) * (S - 2), (None,) * S)
     salts = [bytes([k + 1]) * WR.SALT_BYTES for k in range(params.window)]
@@ -791,24 +791,24 @@ def test_a_changed_byte_of_a_wardens_committed_cell_doesnt_read_under_its_root()
     assert not NG.cell_reads(WR, cells, 1, row)
 
 
-def test_frame_on_a_warden_run_reads_its_data_cells_row_and_refuses_the_changed_byte(tmp_path):
-    """`warden_frame` on a warden-serve run driven tick by tick (`test_warden_serve._run`): its egress registration
+def test_frame_on_a_network_certifier_run_reads_its_data_cells_row_and_refuses_the_changed_byte(tmp_path):
+    """`network_certifier_frame` on a warden-serve run driven tick by tick (`test_network_certifier_serve._run`): its egress registration
     (v2) is read under the network certifier's key and the schedule, its bucket rows and signed wiring are committed
     under the run's salts to the registered head, and its first data cell, at its bucket's row and slot, reads honest
     and not with a payload byte changed; a run that kept no salts is not applicable."""
     pytest.importorskip(NG.WARDEN_ROWS_MODULE)
     sys.path.insert(0, str(HERE / "tests"))
-    import test_warden_serve as tws
+    import test_network_certifier_serve as tws
 
     run, key = tmp_path / "run", tmp_path / "key"
     run.mkdir()
     tws._run(run, key, [tws.ws.http_request({"prompt": "x" * 10}, "h:1")], [tws._response([" word"] * 8)])
-    got = NG.warden_frame(run)
+    got = NG.network_certifier_frame(run)
     p = tws.PARAMS
     assert got["ok"] and got["honest_reads"] and not got["tampered_reads"]
     assert got["rows"] == p.window and got["row_bytes"] == p.grid.allocation * p.cell_bytes
     assert got["cell_bytes"] == p.cell_bytes and 0 <= got["slot"] < p.grid.allocation
-    assert NG.warden_frame(run, at=-1)["ok"]
+    assert NG.network_certifier_frame(run, at=-1)["ok"]
     (run / "cells.salts").unlink()
     with pytest.raises(NG.NotApplicable, match="cells.salts"):
-        NG.warden_frame(run)
+        NG.network_certifier_frame(run)
