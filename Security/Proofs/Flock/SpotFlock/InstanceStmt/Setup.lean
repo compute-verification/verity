@@ -150,14 +150,14 @@ fwd_def cpX checkPartition_X (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' 
 open Properties.Spot.SecurityProofs (qsort_fuel) in
 fwd_def dtX deriveTemplateUnits_X (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 : String) :
     HmRow.deriveTemplateUnits (cO ls lh H C A B A' B' s1) partObj progBytes #[0] by
-  [Decode.descParse_X, Decode.descX_hex, qsort_fuel, Decode.ex_forIn_one, Decode.ex_forIn_range1]
+  [Decode.descParse_X, Decode.descX_hex, cO_meta, qsort_fuel, Decode.ex_forIn_one, Decode.ex_forIn_range1]
   block [canon, canonUtf8, TemplateQuery.Desc.parse]
   shallow [metaText]
 
 fwd_def lcX linksCheck_X (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 : String) :
     HmLinks.check (cO ls lh H C A B A' B' s1) (popX r ls lh H C A B A' B' s1 s3 s4) (HmLinks.readersOf (some drawJ))
       progBytes by
-  [Decode.decode_prog, Decode.ex_forIn_one, Decode.ex_forIn_empty, Decode.ex_forIn_range_empty]
+  [Decode.decode_prog, cO_meta, Decode.ex_forIn_one, Decode.ex_forIn_empty, Decode.ex_forIn_range_empty]
   block [canon, canonUtf8, Program.decode]
   shallow [metaText]
 
@@ -184,7 +184,7 @@ fwd_def stX setup_stX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' 
   [parseOut_cX ls lh H C A B A' B' s1 hH hcl hls hlh hps hph hc1 hc2 hck,
     load_pubX r ls lh H C A B A' B' s1 s3 s4 hr hCe hu1 hu2 hd, checkPartition_X ls lh H C A B A' B' s1, map_some_ok,
     deriveTemplateUnits_X ls lh H C A B A' B' s1, linksCheck_X r ls lh H C A B A' B' s1 s3 s4,
-    cpo_part, canon_part, bne_self, hd2, hid,
+    cpo_part, canon_part, cO_sha, cO_classSha, cO_meta, bne_self, hd2, hid,
     hhello, unit_eq, delta_in]
   block [HmNets.check, HmNets.shaLaid, HmNets.hmLaid, HmNets.sha512x3Net, HmNets.hm96Net, canon, canonUtf8, Net.parse,
     HmRow.classOf, HmRow.parse, HmOut.parse, HmIn.loadPublic, HmRow.loadPublic, HmRow.checkPartitionObject,
