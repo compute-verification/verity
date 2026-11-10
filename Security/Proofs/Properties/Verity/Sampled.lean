@@ -119,8 +119,8 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 /-- **The session v2 sets up on the parameters and the committed files**: V5's binders, each the value v2's check
-derives (the files' parse, the public file over the circuit's empty public input ports, the circuit's ports named once,
-the population, the registration's descriptor, query, law object and work table and the population's order, and the
+derives (the files' parse, the public file over the circuit's empty public input ports, the ports' published domains
+distinct, the population, the registration's descriptor, query, law object and work table and the population's order, and the
 sampling design the verifier samples under from them, a subset one), the device's byte stream the sample reads, A3 at
 those bytes and the verify command's tags as fields, and the bound's parameters. The registration, the sample file (the printed
 one), the writer and the rounds' digest are the ones the period's registration fixes (`Live.Reg`, `Live.dj`, `Live.wr`,
@@ -144,8 +144,8 @@ structure Live where
   pubO : Flock.Public
   hpubO : Flock.HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pubO
   hscope : FlockSoundness.Discharge.Layout.scopeOkH D.unroll = true
-  /-- the circuit names each of its ports once -/
-  hdup : Flock.Registered.dupName D.unroll = none
+  /-- no two of the circuit's ports have one published domain -/
+  hdup : Flock.PortRoots.dupId D.unroll pub = false
   hn : pub.n = n
   hnO : pubO.n = n
   /-- the statement's descriptor -/
