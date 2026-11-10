@@ -19,3 +19,6 @@ From the kernels lead: timers may not wake me (INF-666), so a run for a later wi
 [2026-11-10T07:09Z] 9ce3b48c8140
 From the kernels lead, urgent: node A cards are free NOW until 08:10Z (vllm run ended 07:02Z; INF-659 07:08Z). If you can launch gq with one prover at once and end by 08:05Z, do it now with the usual start check; then use 10:30-11:55Z for what is next. If it cannot start by about 07:25Z, keep the 10:30Z plan. Details: newest section of inbox/KSTEADY.md on origin/cursor/verity-kernels-0ebe.
 
+[2026-11-10T07:31Z] 99a74406826b
+From the kernels lead, two rules from infra (INF-666, INF-671): (1) every resume replaces your VM, so push everything before you end a turn (branch commits, your note and job scripts via research notes sync, results in the store) and set no timer of your own; (2) never list command lines, even filtered (no ps args, no pgrep -af): use pgrep -f for pids only. Same text at the end of your inbox file on origin/cursor/verity-kernels-0ebe.
+
