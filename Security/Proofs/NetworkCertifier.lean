@@ -38,6 +38,7 @@ public import Proofs.NetworkCertifier.Carried
 public import Proofs.NetworkCertifier.WitnessesCarried
 public import Proofs.NetworkCertifier.PoolRoots
 public import Proofs.NetworkCertifier.PeriodCheckedChecks
+public import Proofs.NetworkCertifier.PeriodCheckedExclusion
 public import Definitions.NetworkCertifier.Guarantees.SampledCharge
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -98,7 +99,8 @@ advice bits, and `WitnessesChecked` gives its nontrivial lemma.
 `PeriodChecked` proves the period's bound with the checked inputs left out (`PeriodLeakChecked`): each window's bound
 at the network certifier's rows with a valid run, and the count of the period's records through `Carried`'s at the
 empty pool. `Period` proves `PeriodLeakAccepted` as its instance at no checked input. `PeriodCheckedChecks` checks the
-checked statement: which run its check is held to, and its nontrivial lemma.
+checked statement: which run its check is held to, and its nontrivial and honest lemmas. `PeriodCheckedExclusion` shows
+the read-back is needed: at a placed window the count fails without `RecordFormat.ReadsBy`.
 `Carried` proves the leak bounds over a carried pool (`SampledLeakCarried`, `PooledLeakCarried`): one
 run's relation at the rows its extracted trace holds, and the period's bound, where an opened row costs no advice bits,
 since the chain fixes it unless two rows have one root, and the restarts serving picks cost `log₂` of the patterns it may
