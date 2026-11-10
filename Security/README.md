@@ -580,7 +580,7 @@ With the toolchain `lean-toolchain` pins:
 ~~~text
 lake build                                    # in Security/: the spec
 lake build                                    # in Security/Properties/, then Security/Proofs/ (fetches ArkLib)
-python3 tools/verity/lean/check.py Security   # from the repository root
+python3 tools/verity/lean/check.py Security/  # from the repository root
 ~~~
 
 The check audits `Proofs/` with the spec, from one build, and refuses a machine below its memory floor.
