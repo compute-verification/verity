@@ -59,6 +59,7 @@ untraced = [
     "tests/test_holds.py",
     "tests/test_jobs_dispatch.py",
     "tests/test_jobuser.py",
+    "tests/test_lean_prune.py",
     "tests/test_mem_admission.py",
     "tests/test_merge_gate.py",
     "tests/test_merge_shards.py",
@@ -248,6 +249,12 @@ tests = [
     "tests/test_nebius_release.py",
 ]
 paths = ["tools/research/src/research/pods/nebius"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_lean_prune.py", "tests/test_retention.py"]
+paths = ["tools/research/src/research/pods/nebius/deploy.toml", "tools/research/src/research/pods/nebius/vy-lean-prune.service",
+         "tools/verity/lean/lean_audit.py", "tools/verity/lean/module_keys.py", "tools/verity/lean/settings.py",
+         "tools/verity/lean/headers.py", "tools/verity/check/common.py", "tools/verity/graph/verity_graph/contract.py"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_nebius_lockout.py"]
