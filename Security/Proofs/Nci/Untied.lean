@@ -50,9 +50,9 @@ dropped block is lost whole, and (H) and (E) are taken at it, whichever blocks a
 
 The count itself needs no such circuit. `Nci.Cut.SecurityProofs.counts_on` takes the cap on a set of blocks and the
 entries of all the blocks as a total, so on the untied circuit with every block kept, the blocks reading at most `w`
-words are counted under `k + b w`, all the blocks together read `m k + b |E|`, and the MACs another block holds are
-counted apart, at most its gates (`counts_asInputs`, `counts_untie`; under (H) and (E), `bound_asInputs_he`,
-`bound_untie_he`).
+words are counted under `k + b w` against the outputs with a wire in one of them, all the blocks together read
+`m k + b |E|`, and the MACs another block holds are counted apart, at most its gates (`counts_asInputs`,
+`counts_untie`; under (H) and (E), `bound_asInputs_he`, `bound_untie_he`).
 -/
 
 @[expose] public section
@@ -289,7 +289,7 @@ end Verity
 namespace Nci.Untied
 
 open Verity Finset Nci.Cut
-open Nci.Cut.SecurityProofs (inBlock counts_on bound_on_he)
+open Nci.Cut.SecurityProofs (inBlock outOn counts_on bound_on_he)
 
 /-- The words of `𝒲` that `R` reads: those with a gate in `in(R)`. -/
 def wordsRead (C : Circuit) (𝒲 : Finset (Finset (Fin C.N))) (R : Finset (Fin C.N)) : Finset (Finset (Fin C.N)) :=
@@ -478,7 +478,7 @@ theorem counts_untie {ι : Type} [Fintype ι] [DecidableEq ι] {m : ℕ} (d : Re
     ∃ V F E : ℕ,
       W.N ≤ m * k + b * 𝒲.card + V + ∑ u ∈ readersOver P 𝒲 w, ∑ a, (inBlock P W u a).card ∧
       V ^ 2 ≤ (m - (readersOver P 𝒲 w).card) * piMax (d.untie (𝒲.biUnion id)) W (k + b * w) * F ∧
-      F ≤ W.O + E ∧ W.bY * E ≤ (m * k + b * 𝒲.card : ℕ) ∧ (E = 0 ∨ 0 < W.bY) := by
+      F ≤ outOn P W (readersOver P 𝒲 w)ᶜ + E ∧ W.bY * E ≤ (m * k + b * 𝒲.card : ℕ) ∧ (E = 0 ∨ 0 < W.bY) := by
   obtain ⟨V, F, E, hN, hV, hF, hbE, hb⟩ :=
     counts_on (d := d.untie (𝒲.biUnion id)) W P (readersOver P 𝒲 w)ᶜ (fun _ => k + b * w)
       (fun u hu => card_unregistered_untie_of_notMem_readersOver d P 𝒲 h𝒲 hk (mem_compl.1 hu))
@@ -489,8 +489,9 @@ theorem counts_untie {ι : Type} [Fintype ι] [DecidableEq ι] {m : ℕ} (d : Re
 
 /-- **The bound with untied words, the heavy readers charged whole, under (H) and (E).** `HE`'s premises on the
 values, with (H) at the untied circuit and at the cap `k + b w` of the blocks reading at most `w` of the words, and
-(E) at `e > 0`. With `g` the number of those blocks and `T = m k + b |𝒲|`, `N` is at most the MACs the other blocks
-hold, plus `T + ((k + b w)/2) √(g O / (β_w β_x)) + ((k + b w)/2) √(g T / (β_w β_x e))`
+(E) at `e > 0`. With `g` the number of those blocks, `O_g` the outputs with a wire in one of them and
+`T = m k + b |𝒲|`, `N` is at most the MACs the other blocks hold, plus
+`T + ((k + b w)/2) √(g O_g / (β_w β_x)) + ((k + b w)/2) √(g T / (β_w β_x e))`
 (`Nci.Cut.SecurityProofs.bound_on_he`). -/
 theorem bound_untie_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] {m : ℕ} (d : RegisteredCircuit)
     (P : Partition d.D m) (W : Work d.D ι) (val : Finset (Fin d.D.N) → V) {k b : ℕ} {βw βx e : ℝ}
@@ -499,7 +500,8 @@ theorem bound_untie_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq 
     (hH : Assumptions.Hardness (d.untie (𝒲.biUnion id)) ![W.allW, W.allX] val ![βw, βx] (k + b * w))
     (hE : Assumptions.Exports W e) :
     (W.N : ℝ) ≤ (∑ u ∈ readersOver P 𝒲 w, ∑ a, (inBlock P W u a).card : ℕ) + (m * k + b * 𝒲.card : ℕ) +
-      (k + b * w : ℕ) / 2 * √((m - (readersOver P 𝒲 w).card : ℕ) * W.O / (βw * βx)) +
+      (k + b * w : ℕ) / 2 *
+        √((m - (readersOver P 𝒲 w).card : ℕ) * outOn P W (readersOver P 𝒲 w)ᶜ / (βw * βx)) +
       (k + b * w : ℕ) / 2 *
         √((m - (readersOver P 𝒲 w).card : ℕ) * (m * k + b * 𝒲.card : ℕ) / (βw * βx * e)) := by
   have h := bound_on_he (d := d.untie (𝒲.biUnion id)) (W := W) P (readersOver P 𝒲 w)ᶜ hw hx he hval hshare hH hE
@@ -631,7 +633,8 @@ theorem counts_asInputs {ι : Type} [Fintype ι] [DecidableEq ι] {m : ℕ} (d :
         ∑ u ∈ readersOver (P.asInputs (𝒲.biUnion id)) 𝒲 w, ∑ a, (inBlock (P.asInputs (𝒲.biUnion id)) W u a).card ∧
       V ^ 2 ≤ (m - (readersOver (P.asInputs (𝒲.biUnion id)) 𝒲 w).card) *
         piMax (d.asInputs (𝒲.biUnion id)) W (k + b * w) * F ∧
-      F ≤ W.O + E ∧ W.bY * E ≤ (m * k + b * 𝒲.card : ℕ) ∧ (E = 0 ∨ 0 < W.bY) := by
+      F ≤ outOn (P.asInputs (𝒲.biUnion id)) W (readersOver (P.asInputs (𝒲.biUnion id)) 𝒲 w)ᶜ + E ∧
+      W.bY * E ≤ (m * k + b * 𝒲.card : ℕ) ∧ (E = 0 ∨ 0 < W.bY) := by
   obtain ⟨V, F, E, hN, hV, hF, hbE, hb⟩ :=
     counts_on (d := d.asInputs (𝒲.biUnion id)) W (P.asInputs (𝒲.biUnion id))
       (readersOver (P.asInputs (𝒲.biUnion id)) 𝒲 w)ᶜ (fun _ => k + b * w)
@@ -643,8 +646,9 @@ theorem counts_asInputs {ι : Type} [Fintype ι] [DecidableEq ι] {m : ℕ} (d :
 
 /-- **The bound with the words as inputs, the heavy readers charged whole, under (H) and (E).** `HE`'s premises on the
 values, with (H) at the circuit with the words as inputs and at the cap `k + b w` of the blocks reading at most `w` of
-the words, and (E) at `e > 0`. With `g` the number of those blocks and `T = m k + b |𝒲|`, `N` is at most the MACs the
-other blocks hold, plus `T + ((k + b w)/2) √(g O / (β_w β_x)) + ((k + b w)/2) √(g T / (β_w β_x e))`
+the words, and (E) at `e > 0`. With `g` the number of those blocks, `O_g` the outputs with a wire in one of them and
+`T = m k + b |𝒲|`, `N` is at most the MACs the other blocks hold, plus
+`T + ((k + b w)/2) √(g O_g / (β_w β_x)) + ((k + b w)/2) √(g T / (β_w β_x e))`
 (`Nci.Cut.SecurityProofs.bound_on_he`). -/
 theorem bound_asInputs_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] {m : ℕ} (d : RegisteredCircuit)
     (P : Partition d.D m) {k b : ℕ} {βw βx e : ℝ} (𝒲 : Finset (Finset (Fin d.D.N)))
@@ -658,7 +662,8 @@ theorem bound_asInputs_he {ι V : Type} [Fintype ι] [DecidableEq ι] [Decidable
         ∑ a, (inBlock (P.asInputs (𝒲.biUnion id)) W u a).card : ℕ) +
       (m * k + b * 𝒲.card : ℕ) +
       (k + b * w : ℕ) / 2 *
-        √((m - (readersOver (P.asInputs (𝒲.biUnion id)) 𝒲 w).card : ℕ) * W.O / (βw * βx)) +
+        √((m - (readersOver (P.asInputs (𝒲.biUnion id)) 𝒲 w).card : ℕ) *
+          outOn (P.asInputs (𝒲.biUnion id)) W (readersOver (P.asInputs (𝒲.biUnion id)) 𝒲 w)ᶜ / (βw * βx)) +
       (k + b * w : ℕ) / 2 *
         √((m - (readersOver (P.asInputs (𝒲.biUnion id)) 𝒲 w).card : ℕ) * (m * k + b * 𝒲.card : ℕ) /
           (βw * βx * e)) := by
