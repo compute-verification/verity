@@ -6,8 +6,10 @@ card marked measured or modeled with its source, and each figure's JSON carries 
 plotted series. Lean checks the design behind every exfiltration and skipped-work point of both forms of Figure 1
 (`plancheck`, which builds `sampled-proofs-plancheck` with `lake` on first use; `--no-lean` plans without it): a point
 plots what Lean certifies, a two-stage one the bits at the θ Lean finds, with the planner's bits beside them
-(`figure1.lean_two`, which both forms call), and a design Lean refuses is an error. Which design a budget buys is the
-planner's pricing of the cards, and the infiltration panels' write forms are the planner's.
+(`figure1.lean_two`, which both forms call), and a design Lean refuses is an error. `--workers` processes (default
+every CPU) plan and check the points, each point one job (`figure1.processes`), and the JSON is the same at any
+number of them. Which design a budget buys is the planner's pricing of the cards, and the infiltration panels' write
+forms are the planner's.
 
 ~~~sh
 uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR   # figure{1,1_overhead,2,3}.json, PNGs, SVGs
