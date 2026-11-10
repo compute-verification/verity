@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
 """`tools/move/layout_maps.py [--form moves|one|both] [--ref REF] [--targets FILE] [--created FILE]`: write the layout's maps.
 
-    python3 tools/move/layout_maps.py            # regenerates both forms of the layout on HEAD
+    python3 tools/move/layout_maps.py            # regenerates the layout's map on HEAD
 
 It reads `layout_maps.json` beside it (the layout's assignment at one commit: each moved component's new directory and
-files, the files archived and the files that stay) and the files REF tracks, and writes the layout as `layout.py` maps
-in two forms that move every file to the same place, beside itself, where `stage.py` reads a map:
+files, the files archived and the files that stay) and the files REF tracks, and writes the layout as one `layout.py`
+map beside itself, where `stage.py` reads a map:
 
-    tools/move/layout_NN_NAME_map.toml   one map a move, numbered in the order they run
-    tools/move/layout_one_map.toml       every row as one map
+    tools/move/layout_one_map.toml       every row of the layout
+
+`--form moves` writes the same rows as one map a move instead, numbered in the order they run
+(`tools/move/layout_NN_NAME_map.toml`), and `--form both` writes both: the two forms move every file to the same place.
 
 It writes nothing unless every check below passes, so it is the one rerun when `main` moves: a tracked file it cannot
 place stops it, by name. Then:
 
     python3 tools/move/layout.py --map tools/move/layout_one_map.toml --dry-run
-    for m in tools/move/layout_??_*_map.toml; do python3 tools/move/layout.py --map $m --dry-run; done
 
 THE RULE for a path inside a directory. The layout gives each component a directory, which ends in `verifier/`,
 `prover/` or `device/` where the component is that part. A moved file's new path is
@@ -68,9 +69,11 @@ KINDS, each treated one way:
 A DIRECTORY NO ROW MOVES WHOLE is named in `[tokens]`, so a reference to the directory itself (a suite's declared
 input, a boundary's glob) is rewritten and none is left naming a directory that is gone. In a map a move, the map that
 takes the directory's `pyproject.toml` (else its `__init__.py`, its `lakefile.toml`, else most of its files) speaks
-for it. Where one map empties a directory and its files part ways, a reference reads as the one new directory that
-holds all of them, where that is narrower than a top-level directory; else, in the one map, as where the directory's
-package goes, and `layout.py` then wants each such reference acknowledged in `[split]`, by file and directory. The one
+for it. Where one map empties a directory and its files part ways, a reference reads as the directory its files keep
+together in but for the archived ones and a file with a row of its own; else as the one new directory that holds all
+of them but the archived, where that is narrower than a top-level directory; else, in the one map, as where the
+directory's package goes. `layout.py` then wants each reference to a directory that splits acknowledged in `[split]`,
+by file and directory. The one
 map's `[split]` rows are what `layout.py`'s own scan of the worktree finds (minutes, and REF must be HEAD); nobody has
 read them, and each says so. `verity/core` and `verity/ml` themselves get no row: no one new directory holds them.
 
@@ -706,8 +709,8 @@ def main():
     ap.add_argument("--ref", default="HEAD", help="the commit whose files the maps move (default: HEAD)")
     ap.add_argument("--data", default=os.path.join(HERE, "layout_maps.json"))
     ap.add_argument("--out", default=HERE, help="where the two forms' directories go (default: tools/move)")
-    ap.add_argument("--form", choices=[*FORMS, "both"], default="both",
-                    help="`moves`: one map a move; `one`: every row as one map")
+    ap.add_argument("--form", choices=[*FORMS, "both"], default="one",
+                    help="`one`: every row as one map (the default); `moves`: one map a move")
     ap.add_argument("--targets", help="write the table of where each moved component goes here, tab-separated")
     ap.add_argument("--created", help="write here the `__init__.py`s `layout.py` creates over all the maps, one a line")
     a = ap.parse_args()
