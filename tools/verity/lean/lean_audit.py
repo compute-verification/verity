@@ -1435,7 +1435,7 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
     failed += [p for p in pkgs if p not in reports and p not in failed]
     regenerated = {p: reports[p]["regenerated"] for p in pkgs if reports.get(p, {}).get("settled")}
     for p, f in regenerated.items():
-        log(f"lean-audit: {p}: passed on its regenerated record ({f}), which drive commits over {p}/lean-audit.json")
+        log(f"lean-audit: {p}: passed on its regenerated record ({f}), which the queue commits over {p}/lean-audit.json")
     for rep in reports.values():                        # a pass cached before check.py reported codes has none to list
         rep.setdefault("failure_codes", [None] * len(rep.get("failures", [])))
     for p in UNREAD_FACTS:
