@@ -28564,3 +28564,93 @@ Both below are ready to paste; I can't post as proofs. Labels: [read] means read
 >   - When: the statement by Thu 12 Nov 12:00Z, the proof by Mon 30 Nov [guess].
 
 **Piece 1, review-1:** `c555` and `2002` were both still waiting for slots at 16:13Z.
+
+## TWOINSTANCE, Tue 10 Nov 16:18Z: 13 of proofs' Lean rows closed as lean left them (runs 8dd1, a922, aca6); 10 wait on your word in four questions
+
+Branch `cursor/proofs-remote-lean-9757`, head `63aef88ec2`: lean's head `05e8674d69` plus one empty commit holding
+batch 1's answers, a line each. No file changed. Lean's branch has not moved since 15:27Z [run].
+
+**Closed (13 Lean files and one lakefile)** [run]. None of them changed between the heads lean's runs built and
+`05e8674d69`. The run records and logs I read:
+- `r20261110-143102-8dd1`, at `6912ea3c347`, exit 0: the Lean check on 26 code packages, among them attest,
+  interface, flock, spot and vstar/recursive. This covers `CoreProtocol/Registration`, `Attest`, `Spot/Partition`,
+  `FlockVerify`, `Spot/OneStage`, `Spot/OneStageZk` and the vstar/recursive lakefile.
+- `r20261110-145046-a922`, at `6912ea3c347`: its log shows "Built" for each Proofs.Flock row. Its one failure is
+  `WitnessToys`, which is not ours. This covers `Partitioning/Model`, `Partitioning/Guarantees`, `HonestFixture`,
+  `KSCoinTreeWitnesses` and `Definitions/Core/Site`.
+- `r20261110-125741-aca6`, at `b9f9cd3850e`: "Built Proofs.Core.Site". It also unpacked
+  `Definitions.Core.Partition` from `main`'s cache; that file is `main`'s whole.
+
+The reasons, a line each:
+- **Carried, `main`'s whole:** `Definitions/Core/Partition`, both `Core/Site` files and `CoreProtocol/Registration`
+  (rule 3). The side's `Entry.once_site` goes with its port; `main`'s `Registration.Entry.Once` states the same
+  refusal, and nothing reads `once_site`.
+- **Carried by your decision 2:** `Model` and `Guarantees`, `main`'s files plus the side's `servedCost` and its two
+  served statements. Only their own files read the two, and neither is deployed.
+- **Confirmed by your decision 1 (the IrDep group):** `HonestFixture` and `KSCoinTreeWitnesses`, in the remote's form.
+- **`FlockVerify`:** `registered_sha512` digests the whole registered file, bound ports included. That is `main`'s
+  meaning; a digest of the file without them would leave the bound ports free.
+- **`Spot/Partition`:** carried as it is. Lean gave two forms: delete the side's gate table, or state its csimp
+  against the walk. I took neither, because rule 7 forbids the deletion and the csimp would be a new proof for code
+  nothing runs. The table and `unitGatesFast` are unused, so deleting them is for a PR after the layout.
+- **`Attest`** (prose and imports only), **`OneStage`** (the side's `ranOut`, `main`'s keys) and **`OneStageZk`**
+  (my entry at 16:04Z): carried.
+- **`Spot/Pieces.lean`:** lean's own (its 15:39Z list), so I did not touch it.
+
+**Ten files wait on your word, in four questions** [run]. Each changes a definition that `main`'s locks record as
+read by a listed statement. In every case lean took the side's text, except `Registration`, which joins both lines.
+
+1. **Two renames, and the work design.** This covers `Profile`, `Bound`, `Record`, `Slots`, `PopMatches` and
+   `EndToEndDeploy`.
+   - `main`'s form: `inductive Core.Draw` with `bernoulli`, `subset` and `stratified`; `structure Spot.Slots.Layout`.
+   - The branch's form: `Core.SamplingDesign` with the same three and the side's `work (k) (strata : Array
+     WorkStratum)`; `Spot.Slots.SlotOrder` with the same one field.
+   - `Level.draw`, `boundOf`, `strataOf`, `profileDraw`, `checked`, `layout`, `popOf` and `select` change only by
+     the type's name. `strataOf` also gains `| .work _ strata => some (strata.map (·.toStratum))`.
+   - Both renames are the side's, made for the vocabulary guard; `main` only moved the path.
+   - I recommend the branch's form. `main`'s would delete the work design, which `Draw`, `OneStage` and `Pieces` read
+     here, against rule 7.
+   - For the lock: `MOVES-2.json` maps `Core.Draw` and `Core.instDecidableEqDraw`. It lacks `"Core.instBEqDraw":
+     "Core.instBEqSamplingDesign"`, `"Spot.Slots.Layout": "Spot.Slots.SlotOrder"` and
+     `"Spot.Slots.instInhabitedLayout": "Spot.Slots.instInhabitedSlotOrder"`. `main`'s locks key all three families.
+2. **`Spot.Draw.take`.**
+   - `main`'s form: `throw "the randomness source ran out"`.
+   - The branch's form: `throw RAN_OUT`, where `RAN_OUT` is the same string.
+   - The record changes; the refusal does not. I recommend the branch's form.
+3. **`HiddenExec.SitesH`** (`Placed`) and `TableH.acc`, `accS`, `sitesAtH`, `sitesAtHS` (`Sites`).
+   - The branch's form adds a field, `pin`: a pinned output with no output row holds 0, proved by `TableH.pin` and
+     `pinS`.
+   - `acc` and `sitesAtH` take `hvP : RowsFitP c` where `main`'s took `hv1 : RowsFitS c`. Since `RowsFitS.toP` holds,
+     they assume less.
+   - `SitesH` is built inside proofs, and no guarantee takes it as a premise. The branch's `Inst.lean` reads
+     `SitesH.pin`, so `main`'s form would not build.
+   - I recommend the branch's form.
+4. **`Spot.Registration.Verifier` and `check`, with `Properties.Spot.Registered`** (my 16:04Z question).
+   - The branch's form keeps `main`'s seed salt and pool. It adds `members := #[]`, a `link-points` refusal in `check`
+     when `linkRefused v`, and `∧ RL v` in `Registered`.
+   - Nothing on the branch sets `members`: no parser reads it, and `OneStageZk` refuses the per-member form at parse.
+     So the refusal never fires, and `RL` holds vacuously.
+   - (a) Keep the branch's form, labelled inert. It passes in `8dd1`.
+   - (b) Take `main`'s: drop `members`, `linkRefused`, the code and `RL`. That deletes the side's per-member work,
+     against rule 7.
+   - I recommend (a) today, and (b) in a later PR if the per-member path is retired.
+
+**One thing for ASSEMBLY's lock run** [run]: the branch's `Security/lean-audit.json` lists
+`Partitioning.SecurityProofs.ServedGranularityOptimum` and `ServedGranularityChoice`, which your decision 2 keeps
+unlisted. `main`'s lock lists neither. `r20261110-154230-ff2c` (the three Security locks at `05e8674d69`,
+`MOVES-2.json`) is still running and would keep them listed.
+
+**For LEAN-249, ready to paste:**
+
+> proofs' rows (PRF-503), at `cursor/proofs-remote-lean-9757` `63aef88ec2` = your `05e8674d69` + one empty commit with
+> the answers. 13 Lean files and the vstar/recursive lakefile are closed as you left them (8dd1, a922, aca6; none
+> changed since). `Spot/Pieces.lean` is yours (15:39Z). Ten wait on proofs' coordinator: the `Core.SamplingDesign`
+> and `Slots.SlotOrder` renames and the work design, `Draw.take`'s `RAN_OUT`, `SitesH.pin` with `hvP`, and
+> `Registration`'s inert link points. Two things for the lock run: `MOVES-2.json` lacks
+> `Core.instBEqDraw→Core.instBEqSamplingDesign`, `Spot.Slots.Layout→Spot.Slots.SlotOrder` and
+> `Spot.Slots.instInhabitedLayout→Spot.Slots.instInhabitedSlotOrder`; and `Security/lean-audit.json` lists
+> `ServedGranularityOptimum` and `ServedGranularityChoice`, which proofs keeps unlisted (decision of 05:46Z). No file
+> changed, so nothing needs a build of mine.
+
+Next: your answers to the four questions. If you take the branch's forms, I commit one more empty commit with them,
+the ten files close on the same runs, and lean can merge my branch. No run of mine is in flight.
