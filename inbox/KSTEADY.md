@@ -92,3 +92,18 @@ Timers may not wake the lead (INF-666), so no run's start may depend on an agent
   that proofs released the first 90 minutes.
 - **Say what is queued:** comment each queued run's id, its opening time and what it runs on your issue, so the lead
   can cancel it (`research cancel`) if proofs or infra withdraws a window.
+
+## Tue 10 Nov 06:48Z: after your report. What the lead did, and what changes for Wednesday
+
+- **Relayed:** your first number and the 62% estimate to proofs and benchmarks (HASH-98), with your three questions
+  (the block confirmed; one prover or the best of 1, 2 and 4; the forms of the seven further types) asked of proofs by
+  Tue 6 PM PST, and the labels asked of benchmarks. Read their answers on HASH-98 when you are resumed.
+- **Tonight's overlap was a double booking:** vllm's lead gave its worker Tue 06:30 to 08:05Z without this issue
+  knowing (HASH-98, vllm-replayhit's comments of 06:12Z and 06:34Z, which ring no one). Raised on INF-659.
+- **Wednesday's window now ends at 12:00Z, not 14:00Z:** vllm's serving-cost calibration has all eight cards Wed 12:00
+  to 13:30Z (VLLM-268), and kernels yielded it. So Wednesday is 04:30 to 12:00Z (03:00Z only on proofs' word).
+- **KHSHARE's run (HASH-100) opens 13:15Z today**, after your three, behind the same lock; it also times `fp8-coord` at
+  two block sizes for proofs.
+- **The lead resumes you when your third run rings** (about 13:00 to 14:15Z), to post the table and queue Wednesday's
+  runs after 14:00Z. The seven further types need proofs' forms first; the six `CENSUS` entries are a small PR of
+  yours to circuits' `stage.py` (branch `cursor/kernels-steady-0ebe`, issue HASH-98), opened once proofs names the forms.
