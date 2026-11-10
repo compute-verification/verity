@@ -30586,3 +30586,55 @@ Branch `cursor/proofs-remote-bench-8973`, head `ea9fd3d628`, with the base's new
 - With `own_reads` first, `bind_ports` binds only a port whose registered tree is not one leaf a unit. On `main` Lean refuses such a member; here it is bound, as on the side. No window of record has such a port that I know of [guess].
 
 Next: `served_verdicts.py` (7), `served_verdicts.sh` (11), `test_served_verdicts.py` (9), then `served_composite.sh`, `composite.py` and its test. Next entry by 19:20Z.
+
+## SPOTCROSS, Tue 10 Nov 18:24Z: #8139 is merged with `main` at `ab93cfdcef06` and pushed, with its records run and quick tier launched; #8339's new fixture passed the guard and is `art:24eb213c…`, and its merge waits for `5482988e3496` on `main`
+
+One line a PR:
+
+- **#8139: not ready to mark yet.** Head `ab93cfdcef06` (`20d813fc6a0d` merged with `origin/main` `e7b03e4a6c89`, pushed 18:09Z, no force) [run]. It waits for `r20261110-180940-8875` (records, cpu-12) and `r20261110-182135-2813` (quick tier, cpu-8), then a lock-only commit.
+- **#8339: waits for `5482988e3496` on `main`.** Head still `b51bd3382126`, nothing pushed. Every member it depends on is in that candidate; the export stands and the guard test is run again at the new head.
+- **#7780:** closed, nothing left.
+
+Runs and ETAs:
+
+- `r20261110-180940-8875`: `lean_changed.py --records Security/Proofs --update` at `ab93cfdcef06`, cpu-12, pool proofs, slot `proofs-3`, running since 18:10Z. ETA about 19:45Z [guess: the scratch's took 77 min for `Security/Proofs` and then went on to `Security`].
+- `r20261110-182135-2813`: `suites.py --changed e7b03e4a6c89c544365033af6fb6b5e07dab3d27 --quick` at `ab93cfdcef06`, cpu-8, two checks from a slot at 18:22Z. ETA about 19:30Z [guess].
+- `r20261110-164306-7f23`: the scratch's records run, still going. `Security/Proofs` passed there (check.py exit 0 in 4,612 s) and it is now regenerating `Security`'s lock, whose every failure is a record difference [run]. ETA about 18:50Z [guess]. So the new head's records will move too, and a lock-only commit follows `8875`.
+
+**#8139, what the merge closed** [run]:
+
+1. `verity/core/protocols/pous/lean/TRUSTED.sha256`, one line: the digest of `Security/Proofs/lakefile.toml`, whose `roots` both sides extended (`Proofs.Properties.Spot.AcceptHonest` here, `Proofs.Properties.Spot.Tables` on `main`; the lakefile's driver keeps both). Closed by `pins.py --regen`; `--stale` exits 0 and the file differs from `main`'s in that one line.
+2. `verity/core/service/spot/tests/test_difftest.py`, three hunks: this PR's `unsalted` record beside `main`'s `STAND_IN_CIRCUIT`. Each keeps this PR's line with `main`'s constant.
+3. The lock driver took three `reads` entries without regenerating them, in `Security/lean-audit.json` and `Security/Properties/lean-audit.json`: `Spot.OneStage.paramsParsed`, `Spot.Registration.check`, and `Spot.Registration.Verifier.seedSalt` (removed).
+
+Both closes need only what is on `main`.
+
+**Rule 1** [read CI-489; run]: at 18:01Z drive listed #8139 `refused` (conflicts with `main` in those two files: "merge `main` into the branch and re-mark it"), and at 18:09Z none of the five candidates on origin held it. The push ended its land verdict at `20d813fc6a0d`. I cannot post as proofs, so telling ci is yours. Drive now lists it `waiting`, not marked ready at `ab93cfdc`.
+
+**Why the scratch's runs don't stand for the new head** [run]: the scratch `424189699fbf` is the new head plus exactly what `034a` has over `main` (the two diffs have one patch id, 66 files). Five of those 66 are files #8139 also changes, among them `Spot/SecondStage.lean` and `second_stage.py` (#8486). So `765c` and `7f23` read files that differ, and both runs are repeated at the new head. They still show #8139 passing beside `034a`'s members. The new head also merges with `queue/5482988e3496` without a stop, pins not stale (a local trial, discarded, never pushed).
+
+**#8139's body**, a paragraph to add; I can't edit the PR:
+
+> **Merging `main` at `e7b03e4a6c89`** (head `ab93cfdcef06`). Two files stopped the merge. `verity/core/protocols/pous/lean/TRUSTED.sha256`: one line, the digest of `Security/Proofs/lakefile.toml`, whose `roots` both sides extended (`Proofs.Properties.Spot.AcceptHonest` here, `Proofs.Properties.Spot.Tables` on `main`); `tools/verity/check/pins.py --regen` rewrote it. `verity/core/service/spot/tests/test_difftest.py`: three hunks, each this PR's `unsalted` record beside `main`'s `STAND_IN_CIRCUIT`; each keeps this PR's line with `main`'s constant. The locks merged by their driver, which took three `reads` entries of `Spot.OneStage` and `Spot.Registration` without regenerating them; the records run at this head regenerates them.
+
+**#8339, which members of `034a` the scratch and the export depend on** [run unless marked]:
+
+- `benchmarks/two_stage/` (`guard.py`, `TwoGuard.lean`, `guard_node.py`, `test_guard.py`, `audit.py`, `audit.sh`, the toy) is byte for byte `main`'s at `034a`: the guard on `main` is the guard the export ran. `Code.lean` and `SlotsAt.lean` are `main`'s too.
+- **#8486, in `5482988e3496`: yes.** It is the one that changes behaviour: `second_stage.py` and `Spot/SecondStage.lean` (round 2's read of a linked port; the toy has two links), and `EntriesAt.lean` and `FrameIsAt.lean` in `Code.lean`'s closure.
+- #8655, in `5482988e3496` and in `118b43a00132`: a comment in `commitments/leaves.py` and an unused import in `vllm_v1/__init__.py`. No behaviour.
+- #7983, #8392, #8388, in `5482988e3496`: `verity_vllm/pipeline` files the export does not import [read: `a5.py` imports `advice_windows`, `serving_rows`, `deferred_rows`, `replay_bundle` and `tp.serving_rows`, none of which imports the CLI].
+- **#8515, not in `5482988e3496`:** `tools/verity/lean/lean_changed.py` and the three modules beside it. `guard_node.py` imports it for the slot, the tree and the `lake build` call. The export (`audit.sh`) reads none of it.
+- **#8378, not in `5482988e3496`:** it moves `verity_vllm/check/capture_map.py` into the tests and drops its one CLI row. Nothing the export or the guard reads.
+
+So with `5482988e3496` on `main`: **the export of `r20261110-171903-43f2` stands** (`034a` and `5482988e3496` differ in 19 files, none read by `audit.sh`), and **the guard test is run again at the new head**, because `guard_node.py` reads `lean_changed.py`, which differs. What changes without #8515 is only which driver holds the slot and calls `lake build`; the two modules' sources are the same.
+
+**#8339's guard at the scratch** [run]: `r20261110-171903-43f2` is done, rc 0. `audit.sh` exit 0, honest and altered both as expected; `guard_node.py --pytest` exit 0, 3 passed in 2,070 s (honest passes, altered fails, one registered byte flipped fails). The fixture is stored: `art:24eb213c31a789dfd2c989daa9ac64b9b55a37435b9ad6c18e9a11ce2eddbc81` (`guard-v5.tar.xz`, 5,102,120 bytes, PRESERVED). Its `held.json` has `rows` (6), `wires` (4) and `links` (2), five templates.
+
+**#8339's merge, tried** [run; local, discarded, nothing pushed]: `b51bd3382126` merged with `5482988e3496` stops in the 7 files you counted. Taking the candidate's text in each, removing `ReadsAt.lean`, `DrawnAt.lean` and their two imports, and naming the new fixture gives the candidate's tree with one line changed, in `fixtures/artifacts.json` (`art:a4086fce…` to `art:24eb213c…`). `Security/`, `verity/` and `benchmarks/two_stage/` equal the candidate's, so no records run; pins not stale.
+
+When `5482988e3496` is on `main` I merge `origin/main` into `b51bd3382126` that way, push, and run the quick tier and `guard_node.py --pytest` at the new head (about 50 min), with the fixture fetched by its id. #8339's new body comes with that entry: the fixture at the guard, no Lean, `ReadsAt` (its own PR, TWOOPENS) and `DrawnAt` (with #8363), the guard's run ids, and as read: `main`'s registered fixture `art:a4086fce…` has neither `rows` nor `wires`.
+
+Two things of mine to know:
+
+- I launched `r20261110-181011-e38c` by mistake, a quick tier with a malformed base. I cancelled it after one minute; it never got a slot. `r20261110-181236-22fe` was the same quick tier as `2813` with ten checks ahead on cpu-2; I cancelled it too once `2813` was two from a slot.
+- The VM restarted at 17:58Z and took the worktrees with it. Everything had been pushed; the scratch branches are as they were.
