@@ -764,6 +764,9 @@ def test_a_tree_compiles_no_module_version_another_tree_of_its_node_compiled(tmp
     assert {f.relative_to(lib[0]): f.read_bytes() for f in lib[0].rglob("*.olean")} == \
         {f.relative_to(lib[1]): f.read_bytes() for f in lib[1].rglob("*.olean")}
     assert not (store / MK.UNSTORED).exists()
+    damaged = _load("two_trees_lean_changed", HERE.parent / "lean_changed.py").damaged
+    assert [damaged(d) for d in lib] == [[], []], \
+        "the trees and the cache hold one file by hard links, and no build moved its time past the `.hash` beside it"
 
 
 @pytest.mark.slow

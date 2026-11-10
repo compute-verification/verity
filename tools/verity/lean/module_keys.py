@@ -798,7 +798,6 @@ def stage(store: Path, root: Path, extra: list[str] | tuple[str, ...], dest: Pat
                 os.link(src, dst)
             except OSError:
                 shutil.copyfile(src, dst)
-            os.utime(src)
             return digest(dst)
 
         with ThreadPoolExecutor(max_workers=threads) as ex:

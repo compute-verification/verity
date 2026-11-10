@@ -744,6 +744,30 @@ def test_the_artifact_cache_drops_its_oldest_past_the_cap_counting_only_what_it_
     assert sorted(f.name for f in (store / "keys").iterdir()) == ["2.json", "3.json"] and not legacy.exists()
 
 
+def test_an_artifact_was_last_used_when_an_entry_that_names_it_was(tmp_path):
+    """A build touches the entries it stages, keeps and indexes, never an artifact: each tree that restored one holds
+    that file by a hard link, and a newer time on it would be an output newer than its `.hash`. So the oldest artifacts
+    by their entries' use go first, and one an entry used lately names stays, however long ago it was written."""
+    store = tmp_path / "store"
+    (store / "artifacts").mkdir(parents=True)
+    (store / "keys").mkdir(parents=True)
+    for i, (written, used) in enumerate([(10, 90), (20, 20), (30, 30), (40, 40)]):
+        f, e = store / "artifacts" / f"{i}.olean", store / "keys" / f"{i}.json"
+        f.write_bytes(b"x" * 10)
+        e.write_text(json.dumps({"digests": {f.name: "sha512:0"}}))
+        os.utime(f, (written, written))
+        os.utime(e, (used, used))
+    (store / "keys" / "also.json").write_text(json.dumps({"digests": {"2.olean": "sha512:0", "gone.olean": "sha512:0"}}))
+    os.utime(store / "keys" / "also.json", (80, 80))
+    (store / "keys" / "torn.json").write_text("{")
+    os.utime(store / "keys" / "torn.json", (1, 1))
+    assert LA.LakeArtifacts(store, cap=30).prune() == 2
+    assert sorted(f.name for f in (store / "artifacts").iterdir()) == ["0.olean", "2.olean"], \
+        "written first and used last, 0 stays; 2 stays for the later entry that names it too"
+    assert sorted(f.name for f in (store / "keys").iterdir()) == ["0.json", "also.json"], \
+        "2's first entry was used no later than what went, so it goes: a miss, and the module is built"
+
+
 def _bundle_of(tmp: Path, pkg: Path) -> tuple[Path, str]:
     arts = LA.LakeArtifacts(tmp / "node-a")
     arts.put({pkg: SANDBOXED})

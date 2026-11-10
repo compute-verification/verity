@@ -502,8 +502,13 @@ def test_a_build_stages_a_module_only_under_its_key_with_every_artifact_s_digest
     keyed = MK.keys(root)
     store = tmp_path / "store"
     k = _stock(store, keyed, {"D.X": ("1" * 16, X), "R.A": ("2" * 16, A), "R": ("3" * 16, R)})
+    for f in [*(store / "artifacts").iterdir(), *(store / MK.INDEX).iterdir()]:
+        os.utime(f, ns=(10**18, 10**18))
     staged, n = MK.stage(store, root, [], tmp_path / "cache")
     assert n == 3 and staged == {("d", "1" * 16): "D.X", ("r", "2" * 16): "R.A", ("r", "3" * 16): "R"}
+    assert {f.stat().st_mtime_ns for f in (store / "artifacts").iterdir()} == {10**18}, \
+        "a tree that restored an artifact holds this file: a newer time on it would be an output newer than its `.hash`"
+    assert all(MK.entry_path(store, h).stat().st_mtime_ns > 10**18 for h in k.values()), "its use is its entry's"
     x = json.loads(MK.entry_path(store, k["D.X"]).read_text())
     assert json.loads((tmp_path / "cache" / "outputs" / "d" / f"{'1' * 16}.json").read_text()) == x["outputs"]
     assert sorted(p.name for p in (tmp_path / "cache" / "outputs").rglob("*.json")) == [f"{c * 16}.json" for c in "123"]

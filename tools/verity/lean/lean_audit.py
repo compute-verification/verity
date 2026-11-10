@@ -1123,7 +1123,6 @@ class LakeArtifacts:
             if dst.exists():
                 if not os.path.samefile(dst, f) and MK.digest(dst) != sha:
                     return None if old is None else False
-                os.utime(dst)
                 continue
             tmp = arts / f".{name}.{os.getpid()}.tmp"
             try:
@@ -1287,12 +1286,25 @@ class LakeArtifacts:
 
     def prune(self) -> int:
         """Remove the least recently used artifacts while those only the cache holds exceed the cap, and the entries used no
-        later than them; the number of artifacts removed. An entry whose artifact is gone is a miss, so the module is built."""
-        arts = [(s.st_mtime, s.st_size if s.st_nlink == 1 else 0, f) for f in (self.store / "artifacts").glob("*")
-                if (s := f.stat())]
-        own = sum(size for _, size, _ in arts)
-        if own <= self.cap:
+        later than them; the number of artifacts removed. An entry whose artifact is gone is a miss, so the module is built.
+
+        An artifact was last used when an entry that names it was (a build touches each entry it stages, keeps or
+        indexes), or when it was written if that is later. Its own time is never moved: every tree that restored it holds
+        the same file by a hard link, beside a `.hash` written at the restore, and an output newer than its `.hash` is how
+        a half-written module is told (`lean_changed.damaged`, `_built`)."""
+        found = [(f, s) for f in (self.store / "artifacts").glob("*") if (s := f.stat())]
+        if sum(s.st_size for _, s in found if s.st_nlink == 1) <= self.cap:
             return 0
+        used: dict[str, float] = {}
+        for e in (self.store / MK.INDEX).glob("*.json"):
+            try:
+                at, names = e.stat().st_mtime, json.loads(e.read_text()).get("digests")
+            except (OSError, ValueError, AttributeError):
+                continue
+            for a in names if isinstance(names, dict) else ():
+                used[a] = max(used.get(a, 0.0), at)
+        arts = [(max(s.st_mtime, used.get(f.name, 0.0)), s.st_size if s.st_nlink == 1 else 0, f) for f, s in found]
+        own = sum(size for _, size, _ in arts)
         n, horizon = 0, 0.0
         for mtime, size, f in sorted(arts):
             if own <= self.cap * 3 // 4:
