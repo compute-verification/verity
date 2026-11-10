@@ -31956,3 +31956,81 @@ proofs (BREAKEVEN), Tue 10 Nov: **which share of a request's prompt tokens repea
   - [read] `mix` counts the `multiturn` turns' prompt tokens as computed. (d)'s `reproved`, taken from the served hits, re-proves those turns' hits too.
   - [run] That is about 22,016 tokens: 34 tokens a request, 1.0% of 3,320.5.
   - [guess] Its effect on the bound is small, and I haven't checked its direction. Neither `mix` nor `reproved` changes before Wednesday's card PR without your word.
+
+## PRF-513 REMOTECORE, Tue 10 Nov 19:44Z: the new stop is closed; head `c29165b8a1f0` holds the base at `ed350247e801`; run `r20261110-192813-7757` at `2c448b8986e7`: spot 849 passed, composition's two files cannot collect on compute-accounting's `pouw/core_check.py`; circuits and the difftest still running
+
+- **Branch and head:** `cursor/proofs-remote-core-cf05` at `c29165b8a1f0` [run: `git rev-parse` of the local and the remote ref, 19:38Z], pushed. It is `2c448b8986e7` (my close of the new stop, on the base at `c8398ae82671`) with the base's head `ed350247e801` merged in. Outside `Security/` that last merge changed one file, `verity/core/protocols/pous/lean/TRUSTED.sha256` [run: `git diff --stat 2c448b8986e7 c29165b8a1f0`].
+- **Read from my mailbox** [read, 19:38Z]: your 19:01Z, 19:02Z, 19:08Z, 19:22Z and 19:34Z.
+- **Counts** [run: `git grep -c '^<<<<<<< '` at `c29165b8a1f0`]: 27 files and 62 places closed (the 26 and 60, and the new stop's 2); no marker in any file of my list or under `verity/core/protocols/composition`. Tree-wide 127 files and 238 places are still marked.
+- **Pins:** `python tools/verity/check/pins.py --stale` prints nothing and returns 0 at `c29165b8a1f0` [run]; `tests/test_pins.py` 4 passed [run `7757`].
+
+**The suite run** [run `r20261110-192813-7757`, vy-nebius-cpu-11, at `2c448b8986e7`, launched 19:28Z; `research data fetch-fixtures` first: 34 entries, 25 fetched]
+
+| step | verdict |
+|---|---|
+| `verity/core/protocols/spot/tests` (every test file collects) | 849 passed, 292 s |
+| `verity/ml/flock/tests/test_firewall_contract.py`, `test_randomness_spec.py` | 19 passed |
+| `tests/test_pins.py` | 4 passed |
+| `verity/core/protocols/composition/tests`, not slow | 4 passed (`test_registration_difftest.py`), 2 files cannot collect |
+| `verity/ml/circuits/tests` | running at 19:42Z |
+| `verity/core/service/spot/tests` (builds the Lean; holds `test_difftest.py`) | after it |
+
+- **Cannot collect, by owner** [run `7757`, `composition.log`]: compute-accounting's `verity/core/protocols/pouw/core_check.py`, marked at line 86, stops `composition/tests/test_composition_difftest.py` and `test_inference_only_not_composed.py` (both import `reference.py`, which imports `verity.core.protocols.pouw.core_check`). No other file so far.
+- **The two runs before it**, both at `8ec5167aa5a4`, both cancelled by me at 19:23Z when the base moved:
+  - `r20261110-185119-7089`: circuits 1116 passed, 4 failed; spot protocols 829 passed, 12 skipped, 8 errors. All 12 were my run's fault, not the tree's: the four `evaluation/test_evaluation.py` tests and `test_form_refusals.py` read registered fixtures (`fixtures/artifacts.json`, gitignored) that `suites.py` fetches and my plain `pytest` had not. `suites.py` is marked on the base, so I run `pytest` after `research data fetch-fixtures` [run: the four reproduce here with `FileNotFoundError` on `gemm-B1-...`; read: the testing skill].
+  - `r20261110-191514-15ea`: the same with the fixtures fetched; cancelled 5 minutes in.
+
+**The table** (every `.py` row: `python -m py_compile` and `ruff check FILE` pass, ruff's findings equal to `main`'s for the file; "= e7b" means `diff` against `git show e7b03e4a6c89:FILE` shows only what the row names)
+
+| file | places | taken at each | why | checked beyond compile and ruff |
+|---|---|---|---|---|
+| `spot/service.py` | 13 | `main`'s text, with the side's two edits carried in: `Sequential` deleted, `Session` is `ProofRun`. One unmarked line read the side's "draw"; it reads "sample" | The side's own changes to the file are those two (`c5dc2a9614`, `a1cdc7ae64`); `Spot.Select.Rule` is all, law or two-stage [read] | = e7b plus the two edits; `main`'s later landings carried by `git merge-file`; imports [run] |
+| `spot/tests/test_service.py` | 1 | `main`'s docstring line; the `Sequential` assertion the side deleted stays deleted | Both lines dropped the closure clause | Passed in the suite run [run `7757`] |
+| `spot/one_stage/registration.py` | 4 | Both: the side's `members` and its `link-points` step, `main`'s `seed_salt` and `pool`. The Declared-day paragraph is the side's later text (`79813d182a`) under `main`'s names | The step sits after R7's pool chain, the order of `Spot.Registration.check` [read] | = e7b plus those; no caller passes `members` but the difftest's `_registration` [run: AST scan] |
+| `spot/one_stage/verifier.py` | 1 | `main`'s call (`day`, `declarations`, `seed_salt`, `pool`) | Every other side edit is already in `main`'s text | Identical to e7b [run] |
+| `spot/one_stage/registered.py` | 1 | Both: the side's `bind_ports`, `BOUND`; `main`'s `DIGEST`, `bit_words`, `digest_leaves`, `digests` | Different additions | = e7b plus `bind_ports`; `tests/test_registered.py` 78 passed, 182 s [run, local] |
+| `spot/one_stage/proofs.py` | 3 | `main`'s text; the side's `units_exactly` and `statements_v2` stay, their docstrings saying v2 refuses the per-member form at parse (`OneStageZk.proofsOf`) | Row 7 | = e7b plus the two functions and one sentence |
+| `protocols/registration.py` | 10 | `main`'s whole | Lean's rule 3: one landed change, the side's the earlier head. `Core.Registration` reads `previous` as `hex64` [read] | Identical to e7b [run] |
+| `protocols/profile.py` | 3 | `main`'s wording with the side's `Work` named; `Work`, `WorkStratum`, `work_k`, `SamplingDesign` stay | `Core.SamplingDesign` has `work` [read] | = e7b plus the work design; imports [run] |
+| `spot/coins.py` | 2 | Both: the side's public `law_problem`, `RAN_OUT`, `ran_out`; `main`'s refusal of a subset of no unit, placed before the population check | `Spot.Draw.flockLaw` refuses in that order [read] | `tests/test_coins.py` passed in the suite run [run `7757`] |
+| `spot/optimize.py` | 2 | `main`'s (`ReplayGrain`, the two-stage design) with the side's `TensorCommit` | The rename is the side's only (`cf28ba13e7`) | `tests/test_optimize.py` 50 passed [run, local] |
+| `spot/remote.py` | 2 | `main`'s release frames with the side's `ChallengePhase` | The rename is the side's only | = e7b plus the rename |
+| `verity/core/service/spot/tests/test_difftest.py` | 2 | Both lines' imports and `PIECE_RUNS` (the side's `RAN_OUT`, `DESIGN`, `POP_ORDER`, `PUBLIC_UNITS`, `LINK_POINTS`; `main`'s `TABLES_HELD`, `SECOND_INTERIOR_READS`, `SECOND_SCHEDULE`). The base's merge of `main` `5482988e3496` then put #8486's lines on top with no marker | Each is a piece of `Spot/Pieces.lean` at the head [read] | The lines that moved since `8ec5167aa5a4` are exactly `main`'s from `e7b03e4a6c89` to `5482988e3496` [run: `diff` of the two diffs]. Its run is the suite run's last step, still running |
+| `verity/ml/circuits/census.py` | 2 | `main`'s `boolean_gates` over the side's `BooleanWork`; the side's `__all__`, which holds both | Side-only rename (`33e93b6380`) | Imports [run] |
+| `verity/ml/circuits/defs.py` | 1 | `__all__` with the side's `DefinitionTable`, `BodyNode` and `main`'s `CONFORMANCE`, `conformance_label` | Different additions | Imports [run] |
+| `verity/ml/circuits/layout.py` | 1 | The side's `BodyNode` and `main`'s `res` parameter | Different additions | Imports [run] |
+| `verity/ml/circuits/query_codec.py` | 1 | `main`'s sentence | Rule 3: one change, `main`'s the later head | Identical to e7b [run] |
+| `verity/ml/circuits/requirement.py` | 1 | The side's "store packing (`Store.Packing`)" | The class is `Store.Packing` at the head | = e7b plus the side's rename |
+| `verity/ml/circuits/requirement_units.py` | 1 | `main`'s "Flock's" | `main` only renamed | Identical to e7b [run] |
+| `verity/ml/circuits/tests/test_part_log.py` | 1 | `main`'s imports with `DefinitionTable`; `main`'s newer test built `Registry()`, now `DefinitionTable()` | The side's rename under `main`'s additions | 68 passed with `test_population_values.py` [run, local] |
+| `verity/ml/flock/python/verity_flock/firewall_transcript.py` | 1 | `main`'s "a challenger" and the side's `InnerRun.handle` | The file's class is `InnerRun` (side-only rename) | = e7b plus the rename |
+| `verity/ml/flock/verifier/README.md` | 1 | `main`'s `verify` and `agree` lines with the side's `[--registered F [--interface F]]` | `FlockVerify.lean`'s usage has `--interface`, `--coins tree` and `agree` [read] | = e7b plus `--interface` |
+| `verity/settings.py` | 1 | Both lines' settings (`VERITY_COMPOSITION_SERVED`; `VERITY_ML_DEFINITIONS_SLOW`, `VERITY_ML_FLOCK_CUDA_GHASH`). The module text's `Registry.check` reads `EnvSettings.check` | Different additions; the class is `EnvSettings` (side-only rename) | `tests/test_settings.py` 12 passed [run, local] |
+| `verity/README.md` | 2 | `main`'s rows; the side's "its proof and inference blocks" in the windows row and its `verity.core.periods` row | The window interface states no server blocks at the head (`5171c0dfe3`) [read] | = e7b plus those two |
+| `integrations/vllm/verity_vllm/protocols/spot.py` | 1 | "SPOT runs in the Commit stage: a row's (...) or serve-openai's Commit windows" | `main`'s name, the side's wider stage | vllm's lead: the close stands [read: LEAN-249, 18:48Z] |
+| `spot/tests/fixtures/exfiltration_lean.json` | 1 | Regenerated by `bash verity/core/protocols/spot/tests/lean/generate.sh` | Rule 4. The place was in the `inputs` table only | Every vector equals `main`'s at e7b; one pin moved, `Security/Proofs/lake-manifest.json` (the merged manifest's sha256, which I recomputed) [run]; `tests/test_consumers.py` 10 passed [run, local] |
+| `verity/ml/flock/tests/fixtures/randomness_lean.json` | 1 | Regenerated by `bash verity/ml/flock/tests/lean/generate.sh` | Rule 4. As above | As above; `tests/test_randomness_spec.py` 4 passed [run, local] |
+| `spot/README.md` (the stale copy's edits; 21 places against the live file) | 21 | `main`'s text at all 21; the side's five edits carried in. **Line 262, "the selection rules `All`, `Law` and `TwoStage`", is the one sentence that is neither line's** (`main`: "`All`, `Law` and `Sequential`"; the side: "`All` and `Law`") | Lean's rule 3 at the 21. Line 262: `service.Selection` is `All | Law | TwoStage` at the head, and you said keep it (19:01Z) | Every name the five edits cite exists at the head [run: `grep`]. 50,367 bytes, 1,215 over the Markdown cap |
+| `verity/core/protocols/composition/tests/test_composition_difftest.py` (new stop, from the base's merge of `main`) | 2 | The side's text under `main`'s names: `PRODUCT` stays onsite-only with the side's comment, built with `ONSITE_PACKAGE`; the side's `test_onsite_refuses_p2_named_as_the_generic_bandwidth_audit` and `test_product_names_only_the_composites` read `ONSITE_PACKAGE`. Line 874, outside the markers, builds `remote-v1` from `REMOTE_PACKAGE` | Lean's rule 2: `main`'s `335bb1affc` only renamed (each Lake package named from the repository's root, `port()`'s `package` positional) | Against the file before the merge of `main` the diff is `335bb1affc`'s change alone [run]. Not run: it cannot collect, see below |
+
+**Lean's rule 5 for the new stop** [run: AST against `main` `5482988e3496`]: `test_product_names_only_the_two_composites` is kept as `test_product_names_only_the_composites` (the side's: remote v1 with Pearl+'s run); `test_product_over_remotes_subprotocols_is_remote` and `product_remote_server` are dropped, by the side (`PRODUCT` is onsite-only: remote v1's Pearl+ run has a reference case only on a served run). All three were so on the base before this merge; none is at its two places. For the 26, the list in my 18:59Z entry stands.
+
+**What I ask you to look at** (new since 18:59Z; that entry's seven still stand)
+
+1. `test_composition_difftest.py`'s docstring of `test_remote_v1_on_a_served_pearl_plus_run` (the side's text, not at a place) names two run ids and an `art:` id. The tree's rule keeps those out of docstrings. I left it: it is not a merge place. Recommendation: one follow-up PR after the merge moves the ids to a data file the test reads.
+2. One side test is absent from that file at the base, not at a place: `test_remote_refuses_a_period_window_on_another_record`. `main`'s `test_remote_on_one_record_that_reuses_the_windows_registration` says remote's `windows` tie decides nothing there and `CoreRemote`'s `#guard`s hold it [read].
+3. Follow-up after the merge lands, so it isn't lost: cut the two paragraphs the side added to `spot/README.md` (two modes, bound ports) to one sentence each; the file is 1,215 bytes over the Markdown cap.
+
+**PRF-371, the five lines you asked for** [read: `gh pr view 7279` and its diff; the side at `99c8914848`; the head]
+
+1. **`main`'s v2 has under another name:** `indicesHeld` in `publicHeld` is `PublicUnits.exactly #[(0, N)]`, the rule for one statement over the whole population; `oneSession` is `membersHeld`'s "exactly one session a statement", for one statement. `Challenger.sampleLinkFirst` is on both lines.
+2. **Already on the base, so on `main` with the merge, and called by nothing in v2's check:** `Spot/LinkPoints.lean` (136 lines), `Spot/PublicUnits.lean` (76), `Registration.linkRefused`, `Draw.RAN_OUT` and `ranOutOf`, `OneStage.ranOut`, the `link_points`, `public_units` and `ran_out` pieces with their difftests; `Security`'s `RL` and `linkRefused_false_iff`; Python's `link_points.py`, `registration.check(members=)`, `proofs.statements_v2`, `units_exactly`, `coins.ran_out`.
+3. **Left, Lean:** `Spot/OneStageZk.lean`, #7279's +256 −44: 17 declarations (`Member`, `Form`, `StatementFiles`, `membersOf`, `statementsOf`, `membersHeld`, `runFrom`, `runMembers`, `runAll`, `provedHeld`, `MULTI_REFUSED` and the rest) and 5 `#guard` helpers. It is a rewrite, not a patch: `main`'s file has 34 declarations the side's never had (`held`, `publicHeld`, `popHeld`, `tablesHeld`, `fitsWhy`). Then `Security/Proofs/Properties/Remote.lean`'s `stage_zk_at_one_statement` and `stage_zk_one_statement` (+33 −1). Then soundness's order rule (member i+1's coins only after member i's evidence is recorded, by the verifier server's log), which #7279 does not hold: new Lean.
+4. **Left, Python and tests:** the difftest's four `test_v2_per_member_*` and their helpers (229 lines); composition's `reference.py` twin (`_members`, `_statement`, `_statement_check`, `_members_held`, `_statements_check`, `_circuit`, `_with_interface`: 97 lines) and `test_composition_difftest.py`'s `_per_member`, `MEMBER`, `UndecidedPort`, `remote_case` (22 lines); `benchmarks/one_stage`'s staging (+408 −72 over five files in #7279), REMOTEBENCH's.
+5. **A date for the Lean half:** I give none; I do not estimate calendar time. What sets it: the merge reaching `main` (item 2 arrives with it), soundness's wording of the order rule (the only part with no text on either line), and one Lean build with the difftest on a node for each try. The size is item 3: one file's form of about 300 lines over `main`'s `held`, two theorems, one new refusal, with every acceptance still refused (`MULTI_REFUSED`) until the guarantee is in the lock.
+
+**Questions:** none new. The 18:59Z three are answered (yours of 19:01Z).
+
+**Text for other lanes:** for compute-accounting, one line: "`verity/core/protocols/composition/tests` cannot collect until `verity/core/protocols/pouw/core_check.py` has no marker (line 86): `reference.py` imports it. proofs' `test_composition_difftest.py` is closed on `cursor/proofs-remote-core-cf05` and runs once yours is."
+
+**Left:** the run's last two steps. Next entry when `r20261110-192813-7757` ends, or by 20:40Z, with the final head in its heading.
