@@ -52,7 +52,7 @@ from verity.core.deploy import config as K
 from verity.spot.verifier import parties as SPP
 from verity.circuits.types import Array, Value
 
-PROTOCOLS = Path(__file__).resolve().parents[2]
+PROTOCOLS = (Path(__file__).resolve().parents[4] / "core" / "protocols")
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 JSON = st.recursive(st.none() | st.booleans() | st.integers(-3, 3) | st.text(max_size=3),

@@ -39,13 +39,13 @@ build() {  # DIR TARGET
   say "BUILD $2 (in $1): exit $rc in $((SECONDS - t0)) s"
   return $rc
 }
-build verity/core/protocols/remote remote || exit 3
-build verity/core/protocols/onsite onsite || exit 3
+build verity/composite/verifier/remote remote || exit 3
+build verity/composite/verifier/onsite onsite || exit 3
 build verity/protocols/pouw/verifier/lean/check pouw-check || exit 3
 build verity/protocols/pouw/verifier/lean/check pouw-period || exit 3
 build verity/spot/verifier/lean sampled-proofs-one-stage-zk || exit 3
 B=.lake/build/bin
-REMOTE=$TREE/verity/core/protocols/remote/$B/remote ONSITE=$TREE/verity/core/protocols/onsite/$B/onsite
+REMOTE=$TREE/verity/composite/verifier/remote/$B/remote ONSITE=$TREE/verity/composite/verifier/onsite/$B/onsite
 POUW=$TREE/verity/protocols/pouw/verifier/lean/check/$B/pouw-check PERIOD=$TREE/verity/protocols/pouw/verifier/lean/check/$B/pouw-period
 V2=$TREE/verity/spot/verifier/lean/$B/sampled-proofs-one-stage-zk
 P=$W/cases

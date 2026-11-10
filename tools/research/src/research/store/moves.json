@@ -2389,6 +2389,15 @@
         "benchmarks/rho/": "verity/protocols/inference_only/rho/",
         "verity/core/protocols/network/nci/": "verity/protocols/inference_only/verifier/nci/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/datacenter/": "verity/composite/datacenter/",
+        "benchmarks/live_challenger/": "verity/composite/device/live_challenger/",
+        "verity/core/protocols/composition/": "verity/composite/verifier/composition/",
+        "verity/core/protocols/onsite/": "verity/composite/verifier/onsite/",
+        "verity/core/protocols/remote/": "verity/composite/verifier/remote/"
+      }
     }
   ]
 }

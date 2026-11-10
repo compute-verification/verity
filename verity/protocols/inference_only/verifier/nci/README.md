@@ -6,10 +6,10 @@ every value outside the registered information θ, the models, code and data fix
 a protocol with no rounds. Setup fixes θ and the registered compiler B. At the start of each verification phase, before
 any coin, B's output on the reported advice partitions that execution block into inference blocks, and the developer's
 ZK proof that B ran correctly and explains the committed trace can also show that each has at most c gates and reads
-at most k bits outside θ (`verity/core/protocols/remote/README.md`, "Lifecycle"). In Lean it is `Nci.Complies`; its
+at most k bits outside θ (`verity/composite/verifier/remote/README.md`, "Lifecycle"). In Lean it is `Nci.Complies`; its
 check, `NciCheck`, decides the policy at a rate, `Nci.CompliesRate` (below).
 
-The inference-only policy is a subprotocol of both composites, onsite and remote (`verity/core/protocols/composition`):
+The inference-only policy is a subprotocol of both composites, onsite and remote (`verity/composite/verifier/composition`):
 `NciCheck.Protocol.protocol` (`verity/inference-only/v0`, the executable `inference-only`) is its check behind the core
 interface. Its params are the registered circuit, the budgets and the registration log before the run; its commitment is
 the run's own registration record, which must name the registered circuit and which each composite requires to be the

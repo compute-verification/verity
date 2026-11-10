@@ -9,7 +9,7 @@ order of every frame are fixed by the declared Program.
 - **Trust.** The certifier is auditor-trusted: it runs on a host the developer doesn't control, and the auditor trusts it
   to run the grid and to sign what it ran. That trust, with the custody of its keys and of its LMS leaf state, is the
   named assumption `trusted-host`. The challenger's live coins reach it on two more premises, named in
-  `verity/spot/verifier/README.md`, with the coins' path in `benchmarks/live_challenger/auditor.py`:
+  `verity/spot/verifier/README.md`, with the coins' path in `verity/composite/device/live_challenger/auditor.py`:
   `CoinsConfidential`, stated as `Pouw.Assumptions.CoinsConfidential`
   (`Security/Definitions/Pouw/Assumptions/Dither.lean`: a replica's coins reach no machine outside the certifier's
   boundary before it has them), and `OneClock` (the challenger's release times and the certifier's ingress ticks are
@@ -187,7 +187,7 @@ One execution phase's certificates are registered through the proof system
   record accepted. A rejected or late window,
   a registered window with no outcome yet, a gap in the registrations (a window registered out of order or never, or a
   run that stops short of the profile) and a registration past the profile each reject the link, and `refused` lists
-  their windows. A run's network verdict is the AND over its links'. The datacenter model (`benchmarks/datacenter`, a
+  their windows. A run's network verdict is the AND over its links'. The datacenter model (`verity/composite/datacenter`, a
   Python model, not the verifier) builds no `LinkWindows` outcomes, so its account doesn't read this
   aggregate. Its `Account.sound` is the same AND over its own port records: false on any refused port-window, each
   charged at its link's line rate (`refused_bits`).
@@ -1849,7 +1849,7 @@ them.
     stream, fault or salt.
   - **The windows it was down for** have no record, and the audit gives each of their execution phases `no-verdict`, as
     for any missing record. The certifier's audit has no maintenance: excusing those windows is the verifier's plan's,
-    in the accounting layer (`benchmarks/datacenter`'s `Maintenance`), which charges everything the block held instead.
+    in the accounting layer (`verity/composite/datacenter`'s `Maintenance`), which charges everything the block held instead.
   - **Going down.** `windows` ends a proxy's run early: `Proxy(windows=w)` serves windows 0 … w − 1, publishes their
     records and closes the link. A run whose window w is the outage is then `Proxy(windows=w)`, nothing for window w,
     and `Proxy(start=w + 1, position=p)`. Its later windows are the full run's if nothing crosses into window w.
@@ -1965,7 +1965,7 @@ sealed under an AEAD built from SHA-512 alone.
   refused, so every later window is `malformed` too, until a new session. Nothing is retried or resampled.
 - **The account.** Once every link between two blocks' certifiers is sealed, a crossing from one block to another is
   ciphertext off the two certifiers. So the export charge (λ_out) applies at the facility boundary only. In
-  `benchmarks/datacenter` this switches at `Datacenter(sealed=True)` (off by default), which `Placement._exported`
+  `verity/composite/datacenter` this switches at `Datacenter(sealed=True)` (off by default), which `Placement._exported`
   reads to count only the crossings to a reader off every block.
 - **The analysis.** `Security/` doesn't change. The egress model's A1 (EgressMediated(s))
   restated with encryption as its premise is a claim, not a proof:
@@ -2082,7 +2082,7 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
 - `audit` reads the records in the clear and refuses a window whose cells aren't the schedule's (and, in the id form,
   the egress form's), whose `FAIL` cells and reasons don't match one for one, or in which a connection failed.
 - `verity/protocols/certifier/device/network_traces/warden_serve.py` runs the network certifier live and checks that each client got exactly its egress
-  record's cells, each in its bucket. The auditor gate's `warden-rehearse` (`benchmarks/live_challenger/auditor.py`)
+  record's cells, each in its bucket. The auditor gate's `warden-rehearse` (`verity/composite/device/live_challenger/auditor.py`)
   runs the same rehearsal on the auditor's host.
 - The server's copy of each request carries its release order (`release`), so that `serve-openai --admit
   release-order` adds requests to the engine in the order they were released: `x-verity-release: N`, N its `END`'s

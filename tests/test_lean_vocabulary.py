@@ -645,9 +645,9 @@ KNOWN: dict[str, str] = {
     # benchmarks/
     "benchmarks/circuit_properties/circuit_properties/ops.py::Site":
         "homonym, an op's site in a Definition: rename (training)",
-    "benchmarks/datacenter/datacenter/logical.py::Registration":
+    "verity/composite/datacenter/datacenter/logical.py::Registration":
         "duplicate of the registration log (`Verity.Registration`): becomes a reading of it (network-accounting)",
-    "benchmarks/datacenter/datacenter/observe.py::Trace":
+    "verity/composite/datacenter/datacenter/observe.py::Trace":
         "homonym, what a datacenter run leaves behind, all of it witness: rename (network-accounting)",
     "benchmarks/harness/verity_bench/served_table.py::Protocol":
         "homonym, a protocol's served benchmark rows: rename (benchmarks)",

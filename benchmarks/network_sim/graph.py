@@ -1,7 +1,7 @@
 """The two exports a datacenter's network needs: the plan of Linux network namespaces that `mockdc.py` stands up, and
 Shadow's network graph.
 
-They read any `datacenter.Datacenter` (`benchmarks/datacenter`, the Lean physical model's mirror: `Zone`s, fabric
+They read any `datacenter.Datacenter` (`verity/composite/datacenter`, the Lean physical model's mirror: `Zone`s, fabric
 `DeviceEntry`s and `LinkEntry`s, in bits, seconds and bit/s, every capacity a named `Assumption` with its source). The
 declarations themselves, the measured node and the leaf-spine datacenter of them among them, are
 `datacenter.examples`'s, the node's constants read from `verity.protocols.poub.verifier.timing`. Each block is
@@ -22,7 +22,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-DATACENTER = str(Path(__file__).resolve().parents[1] / "datacenter")
+DATACENTER = str(Path(__file__).resolve().parents[2] / "verity" / "composite" / "datacenter")
 if DATACENTER not in sys.path:
     sys.path.insert(0, DATACENTER)
 
