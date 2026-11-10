@@ -1,4 +1,5 @@
 {
+ "format": 1,
  "roots": ["NciCheck"],
  "exempt": {
   "NciCheck.CheckMain": "the nci-check exe: reads an instance file and the service's trusted input and prints NciCheck.Baseline.check (or, with --unrolled, NciCheck.Baseline.checkUnrolled) on them, or with --policy NciCheck.Desc.check (NciCheck.check) on the instance alone, or with --count NciCheck.Count.check on it (with --count --detail NciCheck.Count.checkDetail, the private record's); IO around the audited check, not a proof",

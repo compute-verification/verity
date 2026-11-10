@@ -1,4 +1,5 @@
 {
+ "format": 1,
  "roots": ["Difftest", "DifftestExample", "AnnotDifftest", "FlockJsonDifftest", "FirewallHonestDifftest"],
  "exempt": {
   "AnnotDifftestMain": "the annot-difftest executable's entry point, one line: Difftest.serve AnnotDifftest.table, audited under AnnotDifftest; a root of its own would put a second `main` beside DifftestExample's",
@@ -32,6 +33,7 @@
    "why": "the honest worker's requests' port reads C-Flock's Flock.Firewall.honestReqs and what the firewall's load check takes, through the harness"
   }
  },
+ "guarantees": {},
  "dependencies": {
   "toolchain": "9861e83df7e59cd690a56f1b1123a7d6cfeca7df65d05a986f3a0c9794f60079"
  }
