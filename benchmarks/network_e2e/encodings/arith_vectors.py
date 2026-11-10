@@ -7,8 +7,9 @@ integer's symbols, code.py's state after each (low, high, pending, used) and the
 context, bit) from the book's priors (`kt`) and each window's charge (`charge`). Two sources:
 - `decisions(trace, stops, T=)`: advice v1's windows (`v1.residual`: the replay's decisions, the arrival order's
   deviations and the hits sent past the pool bound) under a book fit to them at v1's registered caps (`v1.TABLE_CAPS`; a
-  skewed book: the difftest is the coder's, not the book's), with v1's charges (`v1._string`). It checks that they are
-  `v1.encode`'s string;
+  skewed book: the difftest is the coder's, not the book's), with v1's charges (`v1.string_of`). It checks that they are
+  `v1.encode`'s string under a registration that sends no length terms (`advice_code.lengths`): the charge circuits
+  count the window code's segments, and a length term's fixed-width tail isn't among them;
 - `fields(trace)`: the derived rules' still-sent fields (`derived.residual`: the hits past the pool bound, the resumes,
   the order misses and async's lag bits), each field cut into windows of 64 values, under a book fit to them.
 
@@ -104,7 +105,7 @@ def _coded() -> Iterator[tuple[list[dict[str, list]], list[list]]]:
         self._bit = None
 
     def bit(self: Any, name: str, b: bool, ctx: Any = 0) -> bool:
-        f0, f1 = self.kt.freqs(CV._key(name, ctx))
+        f0, f1 = self.kt.freqs(CV.context_key(name, ctx))
         self._open()._bit = (int(bool(b)), f0, f1)
         kt.append([name, ctx, int(bool(b))])
         return put_bit(self, name, b, ctx)
@@ -130,7 +131,7 @@ def _stream(wins: Sequence[Any], book: Any) -> dict[str, Any]:
     for lg, ln in zip(logs, enc.lens, strict=True):
         windows.append({"symbols": lg["symbols"], "states": lg["states"], "segment": _bits(bits[at:at + ln])})
         at += ln
-    priors = {name: [list(book.priors.get(CV._key(name, c), (0, 0))) for c in ctxs] for name, ctxs in CV.BITS.items()}
+    priors = {name: [list(book.priors.get(CV.context_key(name, c), (0, 0))) for c in ctxs] for name, ctxs in CV.BITS.items()}
     return {"priors": priors, "kt": kt, "charge": list(enc.lens), "windows": windows}
 
 
@@ -140,10 +141,10 @@ def decisions(trace: Any, stops: Sequence[int], *, T: int, row_order: str = "bat
     its whole windows' (`window_charges`)."""
     rec = V.record_of(trace, stops)
     adv = V.advice_of(trace, rec)
-    reg = V.Registered(trace.engine, tuple(stops), T=T, row_order=row_order)
+    reg = V.Registered(trace.engine, tuple(stops), T=T, row_order=row_order, send_lengths=False)
     wins = V.residual(adv, rec, reg)
     reg = dataclasses.replace(reg, book=CV.fit_book([wins], V.TABLE_CAPS))
-    bits, charge = V._string(wins, reg)
+    bits, charge = V.string_of(wins, reg)
     if CV.pack(bits)[0] != V.encode(adv, rec, reg, check=False):
         raise AssertionError("the windows aren't v1.encode's")
     s = _stream(wins, reg.book)
