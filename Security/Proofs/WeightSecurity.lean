@@ -19,5 +19,5 @@ deployment. `Stop`: the incorrect proof blocks a period leaves undetected, over 
 pressure `TheftServedDeployed` takes. `Two`: `TheftServed` at a two-stage audit (`TheftServedTwo`), its budget
 `T·(K − 1) + 1` from the cap `WindowCap`. `TwoReg`: a period of two-stage windows at the committed traces, the
 statement `PeriodTwoReg` in `period_undetected`'s form. `TwoRegPeriod`: `PeriodTwoReg` from each window's committed
-form and miss bound (`periodTwoReg_of`), and `CompilerPeriodTwoReg` from `CompilerKSRegTwo` (`compilerPeriodTwoReg_of`).
+form and miss bound (`periodTwoReg_of`), so **`CompilerPeriodTwoReg` is proved** (`compilerPeriodTwoReg`).
 -/

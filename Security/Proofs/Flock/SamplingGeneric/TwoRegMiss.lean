@@ -7,6 +7,7 @@ import Proofs.Flock.Claims.Sampling.Wait
 import Proofs.Flock.SamplingGeneric.Reg
 import Proofs.Flock.SamplingGeneric.Two
 import Proofs.Flock.SamplingGeneric.TwoCap
+import Proofs.Flock.SamplingGeneric.TwoReg
 
 /-!
 # The two-stage committed form: the miss, the threshold form and the headline
@@ -22,7 +23,8 @@ escapes at the committed boundary trace's footprint (`secondDraws`), each at mos
   (`wrongAtBoundaryAt_subset`).
 * **The threshold form from the event** (`CompiledTwo.ksRegTwo_of_event`): a run that accepts with no interiors putting
   the footprint in `M̄_δ` either samples a proof block of the committed incorrect set, which the event bounds, or
-  misses it, with probability at most `δ` at each tape.
+  misses it, with probability at most `δ` at each tape. At the event's bound (`CompiledTwo.eventTwo_le`),
+  **`CompilerKSRegTwo` is proved** (`compilerKSRegTwo`).
 * **`CompilerHeadlineTwo` is proved** (`compilerHeadlineTwo`): as the threshold form, at a bound on `P̄_a` at every
   interior.
 -/
@@ -220,6 +222,12 @@ theorem headlineTwo_of (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Sessio
     exact (pr_missTwo_le_Pa H L hS hs hPt hd hin P ω ι hι).trans (hpb ω ι)
 
 end CompiledTwo
+
+/-- **The two-stage compiler's committed form**: `CompiledTwo.ksRegTwo_of_event` at the event's bound
+(`CompiledTwo.eventTwo_le`). -/
+theorem compilerKSRegTwo : CompilerKSRegTwo := by
+  intro Coin _ _ _ A L H hA hbind hS
+  exact CompiledTwo.ksRegTwo_of_event H L hS (CompiledTwo.eventTwo_le hA hbind hS)
 
 /-- **The two-stage miss bound**: `CompiledTwo.missTwo`. -/
 theorem compilerMissTwo : CompilerMissTwo := by

@@ -94,8 +94,8 @@ committed form's incorrect set is the grid's incorrect proof blocks at the commi
 coin (`SamplingGeneric/TwoCap.lean`: `CompiledTwo.FregTwo_eq`, `CompiledTwo.FregTwo_forkOn`). So at rates `r₁` and
 `r₂` the run's sample misses it with probability at most `(1 − r₁·r₂)^{|W|}`, `W` the replay blocks wrong at the
 committed boundary trace, and the committed form's event gives its threshold form and the headline
-(`SamplingGeneric/TwoRegMiss.lean`: **`CompilerMissTwo`** and **`CompilerHeadlineTwo`** are proved,
-`CompiledTwo.ksRegTwo_of_event`).
+(`SamplingGeneric/TwoRegMiss.lean`: **`CompilerKSRegTwo`**, **`CompilerMissTwo`** and **`CompilerHeadlineTwo`** are
+proved, `CompiledTwo.ksRegTwo_of_event`).
 -/
 
 @[expose] public section

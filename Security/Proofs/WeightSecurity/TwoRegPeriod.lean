@@ -21,7 +21,8 @@ and prover it sends, and `hstage` is `CompiledTwo.MissTwo` at the count it fixes
   the count its strategy fixes.
 * `periodTwoReg_of`: `PeriodTwoReg` from each window's `KSRegTwo` and `MissTwo`, its refusal of what is out of scope,
   and the two stages' rates in scope.
-* `compilerPeriodTwoReg_of`: `CompilerPeriodTwoReg` from `CompilerKSRegTwo`, through `compilerMissTwo`.
+* `compilerPeriodTwoReg_of`: `CompilerPeriodTwoReg` from `CompilerKSRegTwo`, through `compilerMissTwo`. So
+  **`CompilerPeriodTwoReg` is proved** (`compilerPeriodTwoReg`), at `compilerKSRegTwo`.
 -/
 
 @[expose] public section
@@ -125,5 +126,9 @@ theorem compilerPeriodTwoReg_of (hks : CompilerKSRegTwo) : CompilerPeriodTwoReg 
   exact periodTwoReg_of H Lv hr₁ hr₁' hr₂ hr₂' (fun t => hks Coin A (Lv t) H hA (hS t).1 (hS t).2)
     (fun t => compilerMissTwo Coin A (Lv t) H (hS t).2 r₁ r₂ hr₁ hr₁' hr₂ hr₂')
     (fun t x P r h => (hS t).2.refuses x Unit P () r h) hrate
+
+/-- **The period bound at the committed traces**: `compilerPeriodTwoReg_of` at `compilerKSRegTwo`. -/
+theorem compilerPeriodTwoReg : CompilerPeriodTwoReg :=
+  compilerPeriodTwoReg_of compilerKSRegTwo
 
 end WeightSecurity.SecurityProofs
