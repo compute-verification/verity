@@ -74,7 +74,7 @@ from math import inf, log, sqrt
 from pathlib import Path
 
 import cards as spot_cards
-from verity.core.protocols.reporting import PERIODS
+from verity.protocols.reporting import PERIODS
 from verity.spot import plancheck
 from verity.spot.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
                                                            two_stage_design)

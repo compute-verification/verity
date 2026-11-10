@@ -85,7 +85,7 @@ hm96-sha256/v1: SHA-256, i = 0 … 4 (160 bytes)        hm96-sha512/v1: SHA-512,
 - **What the hiding claim assumes about the key.** The pinned-key bound of section 3 holds for all but a `2^-64` fraction of keys.
   Using a derived key assumes it isn't in that fraction: a counter-mode hash output over a public label is a typical sample of the
   family.
-  - This is the assumption `hash-derived-key` in `verity.core.claims`, a standard nothing-up-my-sleeve assumption.
+  - This is the assumption `hash-derived-key` in `verity.claims`, a standard nothing-up-my-sleeve assumption.
   - It is used in the `common-reference-string` model.
   - It is not a collision-resistance assumption, and binding doesn't use it.
 - **One key per instance, for every leaf, run and deployment.** N in section 3 counts every leaf ever committed under that key.
@@ -224,7 +224,7 @@ Hiding rests on no hash property. It is statistical given uniform salts, and its
 - the pinned key, which every configuration uses: `N · 2^-192`, except for a `2^-64` fraction of keys. That condition is the
   common-reference-string step of section 3, justified by the derivation of section 2a.
 
-`verity.core.claims` names these:
+`verity.claims` names these:
 - the guarantee `statistical-hiding`;
 - the model `common-reference-string`;
 - the setup assumption `hash-derived-key`.

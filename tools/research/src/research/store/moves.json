@@ -2613,6 +2613,12 @@
         "verity/core/protocols/onsite/": "verity/composite/verifier/onsite/",
         "verity/core/protocols/remote/": "verity/composite/verifier/remote/"
       }
+    },
+    {
+      "paths": {
+        "verity/core/claims/": "verity/claims/",
+        "verity/core/protocols/reporting.py": "verity/protocols/reporting.py"
+      }
     }
   ]
 }

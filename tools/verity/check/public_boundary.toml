@@ -59,7 +59,7 @@ shared = [
     "verity/hardware/{randomness,lms}",
     "verity/difftest",
     # the reporting grid every monitoring-period report states: its periods and δs
-    "verity/core/protocols/reporting.py",
+    "verity/protocols/reporting.py",
     "verity/configuration/config",
     # the hardware cards, the data sheets' numbers, which the integration's served device reads (the Lean tables' test reads
     # Accounting's B200 sheet, so it stays private)

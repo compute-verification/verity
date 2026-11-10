@@ -99,7 +99,7 @@ class Certificate:
     TT_NCP); ``gap = 1 − (1 − gap0)/omega`` is the gap g of the conservative reduction (Lean `gapFromTT`,
     `gapFromTTNCP`), ``eps = gap/(1 − gap)`` the adversary's advantage ε it carries (Lean `Pouw.Gε`, `EndToEndEps`),
     and ``gap0`` the conjecture's target gap.  A scheme whose conjecture names no target has ``gap0 = None``, and no gap
-    or ε.  ``claims`` are `verity.core.claims` ids, or ids in the same format that no render cites yet; ``theorems`` are
+    or ε.  ``claims`` are `verity.claims` ids, or ids in the same format that no render cites yet; ``theorems`` are
     the Lean theorems it rests on, guarantees the lock pins and the lemmas their proofs use; ``allowances`` are gaps the
     scheme admits by design; ``parameters`` are the values the theorems are instantiated at, including the domain bounds
     their gap holds on."""

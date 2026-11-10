@@ -54,7 +54,7 @@ from pathlib import Path
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict.window_circuit import WindowClass
 
-from verity.core.protocols import reporting
+from verity.protocols import reporting
 from verity.spot.optimize import SHA512_ANDS
 from verity.circuits.defs import bind
 from verity.definitions.registry import io_shell as IO
