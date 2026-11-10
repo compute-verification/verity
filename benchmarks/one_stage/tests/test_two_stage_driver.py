@@ -10,6 +10,7 @@ import hashlib
 import importlib
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -145,8 +146,8 @@ def test_a_class_with_history_tables_declares_and_registers_them_beside_its_valu
 
 
 def test_a_class_with_history_tables_gives_the_challengers_history_from_its_own_sample():
-    """A class whose spans' tables an interior's reads open: its Spec declares the reads' two supplied values registered
-    interior values, and `First.history` names each sampled span's table at a layer from the first stage's own sample,
+    """A class whose spans' tables an interior's reads open: its Spec declares the values its rule says the verifier
+    supplies registered interior values, and `First.history` names each sampled span's table at a layer from the first stage's own sample,
     under the class record's root for it, each holding the class's C strings, so `history.roots_of` recomputes the served
     root and domain from the strings the prover publishes."""
     spans = [BR.Span(f"r{i}", (i, i + 1, i + 2), GREEDY, (7, 8, 9, i), "length") for i in range(N)]
@@ -157,9 +158,12 @@ def test_a_class_with_history_tables_gives_the_challengers_history_from_its_own_
         hs[t] = HT.HistoryTable(layout.partition["program"], t, BT.WORDS, layout.capacity)
         hs[t].append(BT.fill(np.ones((3, BT.WORDS), dtype=np.uint16), layout.prompt, layout.outputs, layout.capacity))
     pub = json.loads(json.dumps(BR.commit(spans, layout, 0, tables={t: h.root for t, h in hs.items()}).public()))
-    got = TS.first(pub, PAIR, RULE, FC.Challenger("first"))
+    rule = replace(RULE, supplied=("root", "domain"))
+    assert TS.Rule.from_json(json.loads(json.dumps(rule.to_json()))) == rule
+    got = TS.first(pub, PAIR, rule, FC.Challenger("first"))
     supplied = [v for v in got.stream.spec.values if v.registered]
-    assert [(v.name, v.phase) for v in supplied] == [(n, "interior") for n in IR.SUPPLIED.values()]
+    assert [(v.name, v.phase) for v in supplied] == [(n, "interior") for n in rule.supplied]
+    assert not [v for v in TS.first(pub, PAIR, RULE, FC.Challenger("first")).stream.spec.values if v.registered]
     names = [BT.name(layout.run, layout.prompt, layout.outputs, u, 1) for u in got.draw.units]
     bodies = {"m0": b"the interior's public body"}
     hist = got.history(1, {n: [bc.hex() for bc in hs[n].bcs] for n in names}, bodies)

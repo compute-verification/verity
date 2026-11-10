@@ -32,15 +32,17 @@ sampled span ``sample[i]``'s units at [i·n_rho, (i+1)·n_rho), chained after th
   ports from what it holds (`interior_ports`). The spans must share one Program, as a size class's spans share its
   replay Definition. A commitment made on the replayed rows' device (`DeviceCommit`: a GPU commit's roots, every row's
   b || c and its salts) registers in place of committing the rows on the host (`committed`).
-* `supplied`, `sources`, `history`: a replay block whose template reads a history table (`EmbeddingRead_v1{V, H}`) opens,
-  for each sampled span, the table round 1 served (`boundary_tables`: committed at serve, its root a port of the class's
-  round-1 record, its rows filled to its class's C, `boundary_tables.class_rows`), never one of its own. The interior
-  commits no table: each read's ``root`` and ``domain`` rows are rows of the two values `supplied` makes from the tables'
-  entries at public salts, given by reference, and the tables' strings are published (`Interior.published`). The
-  challenger names each sampled span's table from its own sample and copies round 1's root for it (`history`), so the
-  verifier recomputes the served root from the published strings and resolves the reads' values to it (`sources`), and
-  no read takes a table the prover picks after the coins. Every read must open its span's table at its key
-  (`gates.embedding.reference`) before anything is committed; `table_reads` makes such reads.
+* `Supply`, `supplied`, `sources`, `history`: a replay-block parameter the verifier supplies, and the port that reads it.
+  The interior commits no rows of its own at such a port: its rows are rows of a value the interior registers under the
+  parameter's name, as round 2 names the link (`second_stage.replay_links`), which `supplied` makes at public salts and
+  the verifier fills from its own sources (`sources`), so no row there is one the prover picks after the coins. Two kinds:
+  a table read's ``root`` and ``domain`` (`EmbeddingRead_v1{V, H}`), each sampled span's the table round 1 served for it
+  (`boundary_tables`: committed at serve, its root a port of the class's round-1 record, its rows filled to its class's
+  C, `boundary_tables.class_rows`), which the challenger names from its own sample and copies round 1's root for
+  (`history`), the tables' strings published (`Interior.published`), so the verifier recomputes the served root from
+  them; and an index, row r of a sampled span the I32 the parameter holds there, which the verifier fills from its own
+  bytes. Every read must open its span's table at its key (`gates.embedding.reference`) and every unit's supplied row
+  must be the value's at its place before anything is committed; `table_reads` makes such reads.
 * `register`: the record on the two-stage stream after its first stage.
 
 A `span` reads one template's units, one member of word rows; a chunked or shared-row template's span is refused by name.
@@ -472,7 +474,7 @@ def interior_window(members: Members, n_rho: Cells, boundary: str, sample: Seque
     template in the check's order; ``n_rho``: its n_t each (the stream's ``cells``), or one template's n_rho. ``wires``:
     the replay block's (`second_stage.replay_wires`). A wired port commits no tree of its own (`rows.Member.wired_trees`):
     its table is its writer's Q·n_w output rows, whole, and unit u of span s reads its writer's unit off_w + s·n_w.
-    ``values``: the values its program takes ahead of the templates' parameters (a window stream's, `table_values`)."""
+    ``values``: the values its program takes ahead of the templates' parameters (a window stream's, `supplied_values`)."""
     ms, cells = _cells(members, n_rho)
     q = len(sample)
     sizes = [q * n for n in cells]
@@ -499,37 +501,118 @@ READ = ("tok", "root", "domain", "row", "salt", "path")
 _HM = hm96.SHA512
 
 
-#: the two values a table read's ``root`` and ``domain`` rows are, by field: one name for every run, since R7 never holds a
-#: supplied value to an earlier record's root
-SUPPLIED = {"root": "history/root", "domain": "history/domain"}
 #: the held value a published table's strings are in `history`
 HELD = "strings"
+#: a table read's parameters the verifier supplies, each a `Digest` a row
+TABLE = ("root", "domain")
 
 
-def table_values(q: int) -> tuple[tuple[str, int, int], ...]:
-    """The values of an interior of ``q`` sampled spans whose reads open tables, as a window stream takes them
-    (`mixed_population_program`'s ``(name, leaves, width)``) and its interior program its parameters, so R7 registers
-    `supplied`'s: each of `SUPPLIED`'s, ``q`` rows of a `Digest` port's 32 u16 words."""
-    return tuple((n, 32 * int(q), 16) for n in SUPPLIED.values())
+@dataclass(frozen=True)
+class Supply:
+    """A replay-block parameter the verifier supplies, and the port that reads it: template ``template``'s parameter
+    ``port`` reads the registered value ``value``, the block parameter under the name round 2 gives its link
+    (`second_stage.replay_links`). The value holds ``per`` rows a sampled span, and unit j of a span's n_t reads its row
+    ``at[j]``: row ``s·per + at[j]`` for sampled span s, where round 2 holds a linked port's read of a value the interior
+    registers. ``index``: the rows are indices, row r of a span the I32 ``index[r]`` (two u16 words, the low one first),
+    from a ``bytes`` source; None for a table read's ``root`` or ``domain`` (``port``, one of `TABLE`), every row of
+    sampled span s its table's, from a ``history`` source."""
+    template: str
+    port: str
+    value: str
+    per: int
+    at: tuple[int, ...]
+    index: tuple[int, ...] | None = None
+
+    def __post_init__(self) -> None:
+        if self.per < 1 or any(not 0 <= a < self.per for a in self.at):
+            raise ValueError(f"{self.value}: units reading rows {sorted(set(self.at))[:4]}... of its {self.per} a sampled span")
+        if self.index is None and self.port not in TABLE:
+            raise ValueError(f"{self.value}: {self.template}'s {self.port!r} is no table read's {' or '.join(TABLE)}, and "
+                             "it holds no indices")
+        if self.index is not None and (len(self.index) != self.per or any(not 0 <= x < 1 << 32 for x in self.index)):
+            raise ValueError(f"{self.value}: {len(self.index)} indices for its {self.per} rows a sampled span, each an I32")
+
+    @property
+    def words(self) -> int:
+        """A row's u16 words: a `Digest`'s 32, or an I32's two."""
+        return 32 if self.index is None else 2
 
 
-def supplied(program: str, entries: Sequence[Mapping[str, Any]]) -> tuple[Any, Any]:
-    """The values a table read's ``root`` and ``domain`` take, from the tables' entries alone (``entries[s]`` sampled span
-    s's, `history.HistoryTable.entry`): row s its table's root, and its domain id, as a `Digest` port's 32 words
-    (`interface.digest_words`), each value committed as core's `Registered` under ``program`` at its public salts
-    (`registered.supplied_salts`), as `interface.supplied` fills a served window's table reads."""
+def supplied_values(supplies: Sequence[Supply], q: int) -> tuple[tuple[str, int, int], ...]:
+    """The values of an interior of ``q`` sampled spans, as a window stream takes them (`mixed_population_program`'s
+    ``(name, leaves, width)``) and its interior program its parameters, so R7 registers `supplied`'s: each of
+    ``supplies``', ``q·per`` rows of its u16 words."""
+    return tuple((s.value, s.words * s.per * int(q), 16) for s in supplies)
+
+
+def supplied_words(supplies: Sequence[Supply]) -> dict[str, int]:
+    """The challenger's copy of what the interior registers (`Stream.register_interiors`' ``registered``): each supplied
+    value's words a row."""
+    return {s.value: s.words for s in supplies}
+
+
+def supplied(program: str, supplies: Sequence[Supply], q: int, entries: Sequence[Mapping[str, Any]] = (),
+             schemas: Mapping[str, str] | None = None) -> tuple[Any, ...]:
+    """The values ``supplies`` name for ``q`` sampled spans, each committed as core's `Registered` under ``program`` at
+    its public salts (`registered.supplied_salts`), as `interface.supplied` fills a served window's table reads: an
+    index's row ``s·per + r`` the words ``[index[r], 0]``; a table read's, its span's table's root or domain id as a
+    `Digest` port's 32 words (`interface.digest_words`), from the tables' entries alone (``entries[s]`` sampled span s's,
+    `history.HistoryTable.entry`). ``schemas``: each value's row format, its reading port's (`registered.SCHEMA_V2`
+    where none is given)."""
     out = []
-    for of, name in SUPPLIED.items():
-        rows = [digest_words(bytes.fromhex(e[of])) for e in entries]
-        out.append(RG.Registered.commit(program, name, rows, RG.supplied_salts(program, name, len(rows)),
-                                        schema=RG.SCHEMA_V2))
-    return out[0], out[1]
+    for s in supplies:
+        if s.index is None:
+            if len(entries) != q:
+                raise ValueError(f"{s.value}: {len(entries)} tables for {q} sampled spans")
+            rows = [digest_words(bytes.fromhex(e[s.port])) for e in entries for _ in range(s.per)]
+        else:
+            rows = [(x & 0xFFFF, x >> 16) for _ in range(q) for x in s.index]
+        out.append(RG.Registered.commit(program, s.value, rows, RG.supplied_salts(program, s.value, len(rows)),
+                                        schema=(schemas or {}).get(s.value, RG.SCHEMA_V2)))
+    return tuple(out)
 
 
-def sources(names: Sequence[str]) -> dict[str, list[list[dict[str, str]]]]:
-    """The challenger's copy of `supplied`'s values: row s of each one source, ``{"history": "<names[s]>/root"}`` or
-    ``/domain``, which the verifier resolves to the root or domain id it recomputed for table ``names[s]``."""
-    return {name: [[{"history": f"{n}/{of}"}] for n in names] for of, name in SUPPLIED.items()}
+def sources(supplies: Sequence[Supply], q: int, names: Sequence[str] = ()) -> dict[str, list[list[dict[str, str]]]]:
+    """The challenger's copy of `supplied`'s values for ``q`` sampled spans (`Stream.register_interiors`' ``supplied``):
+    each row one source. An index's row ``s·per + r`` is ``{"bytes": ...}``, ``index[r]`` as four big-endian bytes, which
+    the verifier reads as the row's two u16 leaves, the low one first (`registered.bytes_leaves`). A table read's is
+    ``{"history": "<names[s]>/root"}`` or ``/domain``, which the verifier resolves to the root or domain id it recomputed
+    for table ``names[s]``, the one the challenger names for sampled span s."""
+    out = {}
+    for s in supplies:
+        if s.index is None:
+            if len(names) != q:
+                raise ValueError(f"{s.value}: {len(names)} tables' names for {q} sampled spans")
+            out[s.value] = [[{"history": f"{n}/{s.port}"}] for n in names for _ in range(s.per)]
+        else:
+            out[s.value] = [[{"bytes": f"{x:08x}"}] for _ in range(q) for x in s.index]
+    return out
+
+
+def _placed(ms: Sequence[CS.Member], cells: Sequence[int], q: int,
+            supplies: Sequence[Supply]) -> list[tuple[Supply, int, tuple[int, ...]]]:
+    """Each of ``supplies`` with its member and the row of its value each of the member's Q·n_t units reads: unit j of
+    sampled span s, row ``s·per + at[j]``. Refused by name for a template the window lacks, a port that is none of its
+    rows or is wired, a port supplied twice, and a placement of other than its n_t units."""
+    at = {m.template: k for k, m in enumerate(ms)}
+    out, seen = [], set()
+    for s in supplies:
+        k = at.get(s.template)
+        if k is None:
+            raise ValueError(f"{s.value} is supplied to {s.template}, a template the window has none of: {list(at)}")
+        m = ms[k]
+        if s.port not in dict(m.rows) or s.port in {p for p, _o, _ws in m.wired}:
+            raise ValueError(f"{s.template}: {s.value} is supplied to its {s.port!r}, which is none of its rows "
+                             f"{[p for p, _w in m.rows]} or is wired: an interior member's rows are its parameters (`named`)")
+        if dict(m.rows)[s.port] != s.words:
+            raise ValueError(f"{s.template}: its {s.port!r} row is {dict(m.rows)[s.port]} words, not {s.value}'s {s.words}")
+        if len(s.at) != cells[k]:
+            raise ValueError(f"{s.template}: {s.value} places {len(s.at)} units, not its {cells[k]} a sampled span")
+        if (s.template, s.port) in seen:
+            raise ValueError(f"{s.template}: its {s.port!r} is supplied twice")
+        seen.add((s.template, s.port))
+        out.append((s, k, tuple(i * s.per + a for i in range(q) for a in s.at)))
+    return out
 
 
 def history(boundary: Mapping[str, Any], names: Sequence[str], words: int, positions: int,
@@ -694,7 +777,7 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
              replay: str | None = None, previous: str | None = None, kind: str = "served",
              salt_key: bytes | None = None, device: DeviceCommit | None = None, wires: Sequence[Any] = (),
              tables: Sequence[HT.HistoryTable] = (), served: Mapping[str, Any] | None = None,
-             positions: int | None = None) -> Interior:
+             positions: int | None = None, supplies: Sequence[Supply] = ()) -> Interior:
     """The replay sample's spans (``spans[i]`` replay block ``sample[i]``'s: one template's span, or one a template in the
     check's order, as `pieces` gives a token select's), template t's each padded to its n_t units (``n_rho``, as
     `interior_window` takes it) by whole instances (`Span.padded`), committed template-major and registered after
@@ -707,9 +790,11 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     are what the interior commits. ``tables``: ``tables[i]`` sampled span i's, one a span exactly when a template reads a
     table: the table round 1 served (`kept_table`, from `boundary_tables.load`), as round 1's record ``served`` registers it under its
     name, holding its class's ``positions`` strings (C, `boundary_tables.class_rows`). The interior commits none of them:
-    every read must open its span's (`table_reads`), each read's ``root`` and ``domain`` rows are committed as the
-    `supplied` values' rows, on the host, which its program takes (`table_values`: the stream is a window's, with them),
-    and the tables' strings are published (`Interior.published`)."""
+    every read must open its span's (`table_reads`), and the tables' strings are published (`Interior.published`).
+    ``supplies``: the replay-block parameters the verifier supplies, each with the port that reads it (`Supply`), among
+    them every table read's ``root`` and ``domain``. Such a port's rows are committed as rows of the value `supplied`
+    makes, on the host, which its program takes (`supplied_values`: the stream is a window's, with them); a replayed unit
+    whose row there is not the value's at its place is refused before anything is committed."""
     if not spans or len(spans) != len(sample):
         raise ValueError(f"{len(spans)} spans for a replay sample of {len(sample)}")
     per = [(s,) if isinstance(s, Span) else tuple(s) for s in spans]
@@ -721,16 +806,26 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
         raise ValueError("the spans' units are not the same templates' in one layout and one order")
     members = [s.member for s in per[0]]
     readers = [(k, vh) for k, m in enumerate(members) if (vh := _reader(m)) is not None]
-    window = interior_window(members, n_rho, boundary, sample, wires, table_values(len(sample)) if tables else ())
+    q = len(sample)
+    window = interior_window(members, n_rho, boundary, sample, wires, supplied_values(supplies, q))
     ports, cells = CS.expected_ports(window), _cells(window.members, n_rho)[1]
+    placed = _placed(window.members, cells, q, supplies)
     if (bool(readers) or bool(tables)) and len(tables) != len(sample) * bool(readers):
         raise ValueError(f"{len(tables)} tables for a replay sample of {len(sample)} and {len(readers)} templates of table "
                          "reads: each sampled span brings its table exactly when a template reads one")
     if tables and device is not None:
         raise ValueError("a commitment on the rows' device holds no table: a replay block of table reads commits on the host")
+    if supplies and device is not None:
+        raise ValueError("a commitment on the rows' device holds no value the verifier supplies: a replay block that "
+                         "reads one commits on the host")
     if tables and (served is None or positions is None):
         raise ValueError("a replay block of table reads opens the tables round 1 served: give round 1's record (served) "
                          "and its class's positions")
+    for k, _vh in readers:
+        t = window.members[k].template
+        if not {(t, p) for p in TABLE} <= {(x.template, x.port) for x in supplies if x.index is None}:
+            raise ValueError(f"{t}: a table read's {' and '.join(TABLE)} are the verifier's, the table round 1 served: "
+                             "give the `Supply` of each")
     tcs = tuple(tables)
     for k, (V, H) in readers:
         if any(t.leaves != V or t.words != H for t in tcs):
@@ -745,7 +840,8 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
         if [r.get(k) for k in ("root", "leaves", "domain")] != [e[k] for k in ("root", "leaves", "domain")]:
             raise ValueError(f"table {t.value} is not the one round 1 registered under its name: a drawn span's reads open "
                              "the table served before the coins")
-    given = supplied(P.program_digest(window.program), [t.entry() for t in tcs]) if tcs else ()
+    given = supplied(P.program_digest(window.program), supplies, q, [t.entry() for t in tcs],
+                     {x.value: window.members[k].schema(x.port) for x, k, _at in placed})
     if device is not None:
         c = committed(window, device)
     else:
@@ -766,8 +862,14 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
                 d["rows"][p] = CS.WIRED
         for k, (V, _H) in readers:
             _opened(window.members[k], data[k], cells[k], tcs, V)
-            at = tuple(u // cells[k] for u in range(len(sample) * cells[k]))
-            data[k]["rows"]["root"], data[k]["rows"]["domain"] = (CS.ValueRows(v, at) for v in given)
+        for (x, k, at), v in zip(placed, given, strict=True):
+            want = np.asarray(v.rows, dtype=np.uint16)[list(at)]
+            off = np.flatnonzero((np.asarray(data[k]["rows"][x.port], dtype=np.uint16) != want).any(axis=1))
+            if off.size:
+                u = int(off[0])
+                raise ValueError(f"{x.template}: unit {u} (sampled span {u // cells[k]}) takes at its {x.port!r} a row that "
+                                 f"is not row {at[u]} of {x.value}, the value the verifier supplies it")
+            data[k]["rows"][x.port] = CS.ValueRows(v, at)
         fresh = None if salt_key is not None else {p: os.urandom(v["leaves"] * CS.SALT_BYTES) for p, v in ports.items()}
         c = CS.commit(window, data, salt_key=salt_key, salts_of=fresh)
     provenance = {"row": row, "interior": True, "replay_sample": [int(u) for u in sample],
@@ -785,6 +887,7 @@ def register(stream: Any, first: Any, it: Interior, **copies: Any) -> Any:
                                      leaf_layer=copies.pop("leaf_layer", it.leaf_layer), **copies)
 
 
-__all__ = ["HELD", "MOVED", "READ", "SUPPLIED", "DeviceCommit", "Interior", "Replay", "Span", "captured", "committed",
-           "gather", "history", "interior", "interior_ports", "interior_run", "interior_window", "kept_table", "named",
-           "pieces", "port_map", "register", "sources", "span", "supplied", "table_reads", "table_values"]
+__all__ = ["HELD", "MOVED", "READ", "TABLE", "DeviceCommit", "Interior", "Replay", "Span", "Supply", "captured",
+           "committed", "gather", "history", "interior", "interior_ports", "interior_run", "interior_window", "kept_table",
+           "named", "pieces", "port_map", "register", "sources", "span", "supplied", "supplied_values", "supplied_words",
+           "table_reads"]

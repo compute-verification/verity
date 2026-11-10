@@ -2,11 +2,11 @@
 `EmbeddingRead_v1{V=8,H=2}` reads of the table round 1 served for it, over a replay sample of two of three spans. Round 1
 (a stand-in boundary) registers each span's table as a port of its record, of its class's C strings (P=4, O=2: 6 of 8
 leaves, `boundary_tables.class_rows`), its rows past its length L zero rows (`boundary_tables.fill`). The interior commits no
-table: each read's ``root`` and ``domain`` rows are rows of the supplied values ``history/root`` and ``history/domain``,
-which the challenger resolves through its own `history`, each sampled span's table named from its own sample under round
-1's root and read from the strings the prover publishes. An interior is refused before anything is committed where a read
-doesn't open its table, where a table isn't the one round 1 registered under its name, and where a table holds other
-than C strings."""
+table: each read's ``root`` and ``domain`` rows are rows of two supplied values, named as round 2 names the replay
+block's ``root`` and ``domain`` parameters, which the challenger resolves through its own `history`, each sampled span's
+table named from its own sample under round 1's root and read from the strings the prover publishes. An interior is
+refused before anything is committed where a read doesn't open its table, where a table isn't the one round 1 registered
+under its name, and where a table holds other than C strings."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ import pytest
 
 from verity.core.protocols.spot import service as S
 from verity.core.protocols.spot.one_stage import partition as P, registration as R
+from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array
@@ -41,14 +42,19 @@ VECTOR = Path(__file__).resolve().parents[4] / "verity/core/protocols/spot/tests
 
 
 def _block():
-    """Each span a batch of two `RD` reads on its own parameters."""
+    """Each span a batch of two `RD` reads on its own parameters, one root and one domain id a span."""
     params, ret = RD.signature()
     return bind(CompositeDefinition(
-        "InteriorTableTest", 0, (), lambda S_: (tuple((n, Array(CELLS, t)) for n, t in params), Array(CELLS, ret)),
-        lambda B, S_, *args: B.batch(RD, *args, axes=(0,) * len(args)), register=False))
+        "InteriorTableTest", 0, (),
+        lambda S_: (tuple((n, t if n in IR.TABLE else Array(CELLS, t)) for n, t in params), Array(CELLS, ret)),
+        lambda B, S_, *args: B.batch(RD, *args, axes=tuple(None if n in IR.TABLE else 0 for n, _t in params)),
+        register=False))
 
 
 BLOCK = _block()
+#: the reads' root and domain, the verifier's: one row a sampled span, which both of its reads take, under the names round
+#: 2 gives the block's parameters where the boundary record names its ports by template
+SUPPLIES = tuple(IR.Supply(P.template_id(RD), p, f"{descriptor_id(BLOCK)}/{p}", 1, (0,) * CELLS) for p in IR.TABLE)
 MEMBER = IR.named(SRW.unit_member(P.template_id(RD), CELLS))
 BOUNDARY = CS.Binding(P.population_program(BLOCK, SPANS), P.template_instance_query(BLOCK), {"law": "subset", "k": Q},
                       RUN, (CS.Member(P.template_id(BLOCK), (("ingress", 64),), (("egress", 64),), SPANS),))
@@ -75,9 +81,9 @@ def _spec() -> S.Spec:
     supplied values, registered."""
     names = {m.port(p): (m.schema(p), "serve") for m in BOUNDARY.members for p in CS.port_leaves(m)}
     names |= {n: (HT.SCHEMA, "serve") for n in NAMES}
-    w = IR.interior_window(MEMBER, CELLS, "00", [0], values=IR.table_values(Q))
+    w = IR.interior_window(MEMBER, CELLS, "00", [0], values=IR.supplied_values(SUPPLIES, Q))
     names |= {m.port(p): (m.schema(p), "interior") for m in w.members for p in CS.port_leaves(m)}
-    supplied = tuple(IR.SUPPLIED.values())
+    supplied = tuple(x.value for x in SUPPLIES)
     public = (S.Public("population", "structure", "N, the sample's range"),
               S.Public("window", "structure", "provenance: served, on test values"),
               S.Public("leaf_layer", "structure", "the members' public bodies' digest"),
@@ -91,10 +97,10 @@ def _spec() -> S.Spec:
 
 
 def _first(tables):
-    """A window stream over `RD` taking the reads' values (`interior_rows.table_values`), and round 1, a stand-in boundary
+    """A window stream over `RD` taking the reads' values (`interior_rows.supplied_values`), and round 1, a stand-in boundary
     whose record registers each span's table as a port, registered and its first stage drawn (spans 0 and 2)."""
     draws = iter([[0, 2]])
-    stream = S.Stream(_spec(), [RD], values=IR.table_values(Q), replay=BLOCK, budget=1, delta=DELTA,
+    stream = S.Stream(_spec(), [RD], values=IR.supplied_values(SUPPLIES, Q), replay=BLOCK, budget=1, delta=DELTA,
                       challenger="challenger-test", clock=lambda: 0.0,
                       sampler=lambda law, n: next(draws) if law["law"] == "subset" else [0] * len(law["strata"]))
     c = CS.commit(BOUNDARY, [{"rows": {"ingress": np.zeros((SPANS, 64), np.uint16)},
@@ -123,7 +129,7 @@ def _spans(tables) -> list[IR.Span]:
 
 def _interior(reg, first, rec, drawn, spans=None, **kw) -> IR.Interior:
     return IR.interior(_spans(drawn) if spans is None else spans, CELLS, reg.digest, first.units, row=ROW, salt_key=SALT,
-                       **{"tables": drawn, "served": rec, "positions": C, **kw})
+                       **{"tables": drawn, "served": rec, "positions": C, "supplies": SUPPLIES, **kw})
 
 
 def _with(span: IR.Span, kind: str, port: str, unit: int, value) -> IR.Span:
@@ -140,8 +146,8 @@ def _history(rec, first, it) -> dict:
 
 
 def test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves_its_reads_to_them():
-    """The interior registers only the two supplied values, ``history/root`` and ``history/domain``, and publishes each
-    sampled span's table's C strings. From the challenger's `history` alone (its own sample's names, round 1's record and
+    """The interior registers only the two supplied values, the block's ``root`` and ``domain`` as round 2 names them, and
+    publishes each sampled span's table's C strings. From the challenger's `history` alone (its own sample's names, round 1's record and
     the published strings) `history.roots_of`, the verifier's mirror, recomputes round 1's root and domain for each, and
     `history.resolve` turns the reads' sources into those bytes, which are `supplied`'s rows. The reads' ``root`` and
     ``domain`` rows are given by reference, rows (0, 0, 1, 1) of those values, and the commitment is the one the same rows
@@ -157,16 +163,16 @@ def test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves
     prog, names = P.program_digest(w.program), [NAMES[u] for u in first.units]
     assert P.program_digest(stream.interior_program(Q)) == prog
     got = it.record["registered"]
-    assert [e["value"] for e in got] == list(IR.SUPPLIED.values())
+    assert [e["value"] for e in got] == [x.value for x in SUPPLIES] == [f"{descriptor_id(BLOCK)}/{p}" for p in IR.TABLE]
     assert it.published == {t.value: [bc.hex() for bc in t.bcs] for t in drawn}
     assert all(len(v) == C for v in it.published.values())
     hist = _history(rec, first, it)
     roots = HT.roots_of(it.leaf_layer, hist)
     served = {r["port"]: r for r in rec["roots"]}
     assert roots == {n: (bytes.fromhex(served[n]["root"]), bytes.fromhex(served[n]["domain"])) for n in names}
-    resolved = HT.resolve(roots, IR.sources(names))
-    sup = IR.supplied(prog, [t.entry() for t in drawn])
-    for v, of in zip(sup, IR.SUPPLIED, strict=True):
+    resolved = HT.resolve(roots, IR.sources(SUPPLIES, Q, names))
+    sup = IR.supplied(prog, SUPPLIES, Q, [t.entry() for t in drawn])
+    for v, of in zip(sup, IR.TABLE, strict=True):
         assert [[s["bytes"] for s in row] for row in resolved[v.value]] == [[roots[n][of == "domain"].hex()] for n in names]
         assert [list(r) for r in v.rows] == [list(digest_words(roots[n][of == "domain"])) for n in names]
         e = next(e for e in got if e["value"] == v.value)
@@ -182,8 +188,8 @@ def test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves
                                                        for p, v in by_ref.items()})
     assert full.roots == c.roots
     with pytest.raises(S.Refused) as refused:
-        IR.register(stream, first, it, history=hist, registered={v: 32 for v in IR.SUPPLIED.values()},
-                    supplied=IR.sources(names))
+        IR.register(stream, first, it, history=hist, registered=IR.supplied_words(SUPPLIES),
+                    supplied=IR.sources(SUPPLIES, Q, names))
     assert refused.value.verdict.codes == ("R7-supplied",)
 
 
@@ -212,8 +218,8 @@ def test_a_table_round_1_did_not_register_is_refused():
     with pytest.raises(ValueError):
         HT.roots_of(it.leaf_layer, hist)
     with pytest.raises(S.Refused) as refused:
-        IR.register(stream, first, it, history=hist, registered={v: 32 for v in IR.SUPPLIED.values()},
-                    supplied=IR.sources(names))
+        IR.register(stream, first, it, history=hist, registered=IR.supplied_words(SUPPLIES),
+                    supplied=IR.sources(SUPPLIES, Q, names))
     assert refused.value.verdict.codes == (R.HISTORY,)
 
 
@@ -253,8 +259,8 @@ def test_a_tables_bytes_and_its_reads_rows_are_cores_history_read_vector():
     big = v["domain_2_17"]
     assert (big["words"], big["capacity"]) == (BT.WORDS, BT.CAPACITY)
     assert HT.domain(v["program"], big["name"], BT.WORDS, BT.CAPACITY).domain_id.hex() == big["domain_id"]
-    assert v["supplied"]["sources"] == [[{"history": f"{t['name']}/{of}"}] for of in IR.SUPPLIED]
-    sup = IR.supplied(v["program"], [h.entry()])
+    assert v["supplied"]["sources"] == [[{"history": f"{t['name']}/{of}"}] for of in IR.TABLE]
+    sup = IR.supplied(v["program"], SUPPLIES, 1, [h.entry()])
     bits = ["".join(str((int(x) >> j) & 1) for x in r for j in range(16)) for value in sup for r in value.rows]
     assert bits == v["supplied"]["rows_bits"]
 
@@ -281,8 +287,9 @@ def test_a_read_that_does_not_open_its_table_is_refused_before_anything_is_commi
 
 
 def test_a_table_read_interior_is_refused_without_its_tables_or_with_tables_it_cannot_read(staged):
-    """Each sampled span brings its table exactly when a template reads one, with round 1's record and its class's C; a
-    table of another capacity and a commitment made on the rows' device are refused by name."""
+    """Each sampled span brings its table exactly when a template reads one, with round 1's record and its class's C, and
+    the reads' root and domain are both the verifier's; a table of another capacity and a commitment made on the rows'
+    device are refused by name."""
     _stream, reg, first, rec, tables = staged
     drawn = [tables[u] for u in first.units]
     spans = _spans(drawn)
@@ -297,6 +304,8 @@ def test_a_table_read_interior_is_refused_without_its_tables_or_with_tables_it_c
         _interior(reg, first, rec, wide, spans=spans)
     with pytest.raises(ValueError, match="a replay block of table reads commits on the host"):
         _interior(reg, first, rec, drawn, spans=spans, device=IR.DeviceCommit({}, {}, {}))
+    with pytest.raises(ValueError, match="give the `Supply` of each"):
+        _interior(reg, first, rec, drawn, spans=spans, supplies=SUPPLIES[:1])
 
 
 def test_a_drawn_spans_table_is_rebuilt_from_what_rank_0_kept_and_held_to_round_1s_entry():
