@@ -17,21 +17,13 @@ are both the parameters' own SHA-512, so the committed files pass the commit pha
 the parameters.
 
 `vocab δ W` publishes the error `δ` for every subprotocol, the work certificate `W`, and no collision, forgery or loss
-<<<<<<< ours
 term; no play computes a gate or a MAC. At `unbounded` (`δ = ⊤`) every subprotocol's error is `⊤`, so every target
 holds. At `exact` (`δ = 0`, `W = 1`) every error is `0` while PoUW's claim fails on every play after the empty
 commitment: at onsite a gate computed, at remote a credit Pearl+'s check published, which needs a commitment that binds
 the components' digests, and the empty one doesn't.
-||||||| base
-term. At `unbounded` (`δ = ⊤`) every subprotocol's error is `⊤`, so every target holds. At `exact` (`δ = 0`, `W = 1`)
-every error is `0` while PoUW's claim, a gate computed, fails on every play.
-=======
-term. At `unbounded` (`δ = ⊤`) every subprotocol's error is `⊤`, so every target holds. At `exact` (`δ = 0`, `W = 1`)
-every error is `0` while PoUW's claim, a gate computed, fails on every play.
 
 `coupling δ` is the period coupling at PoUW that `Verity.TargetOfPeriods`' witnesses read: the run of the coins model
 that charges nothing and accepts everything (`periodRun`), whose claim, a gate of work, fails at every coin.
->>>>>>> theirs
 -/
 
 @[expose] public section
