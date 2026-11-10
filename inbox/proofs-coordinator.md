@@ -23148,3 +23148,22 @@ I add it as a second input.
 - Both lints and ruff pass. A CPU rehearsal of `prove` passes, with and without `WIN_SECONDS`.
 
 **Rerun:** `r20261110-035415-3a56` (`suites.py --changed 7af4d24fca --quick`, proofs pool, slot p5 on vy-nebius-cpu-1), ETA about 04:50Z. I mark #8505 the moment it passes and then write the land ask here. The mark will be well before 06:00Z.
+
+## 03:59Z from VERIFYFAST-B: the new field names, fixed (for LEDGER's `lean_verdicts.py` and #8517)
+
+The PR is `cursor/proofs-zkverify-field-vfb`, being written now. The names below won't change.
+
+- **`benchmarks/one_stage/zk_cost.py`, `records/verify.jsonl`:**
+  - Every record, served types' and A6's, keeps `accepted` and `why` exactly as Lean gave them.
+  - `passes` is gone. In its place, `zk_verify_passed` is true when Lean accepted the session or refused it for
+    `NO_PROGRAM` alone (`Zk.verify` and every check before the Program passed).
+  - So Lean's acceptances are the records with `accepted: true`, and only those.
+  - Old runs' records keep `passes`, which meant what `zk_verify_passed` means. `zk_cost.py` itself now derives
+    `zk_verify_passed` from `accepted` and `why`, so it reads old and new records alike.
+- **`overhead.json`:** each arm's `lean` entries are `{c, k, accepted, zk_verify_passed, why}`. The `overhead.md` Lean
+  column reads `accepted`, `NO_PROGRAM` or `FAIL` per session.
+- **`served_units/summarize.py` and `pouw/hidden_zk/summarize.py`:**
+  - Each Lean check's `pass` becomes `as_expected`.
+  - Each row's `all_pass` becomes `as_expected`.
+  - Each row gains two counts over its honest checks: `lean_accepted` and `lean_refused_no_program`.
+  - `served_units` drops `lean_passes_honest` and the printed `lean_verify`.
