@@ -91,7 +91,7 @@ EOF
   for n in $names; do
     echo "    research deploy install $n --by infra --ref $REF --apply"
     echo "    research pods ssh $n -- 'cd /etc/systemd/system && for t in vy-*.timer; do sudo systemctl enable --now \$t; done'   # install enables none"
-    echo "    research pods ssh vy-nebius-2 -- 'cat ~/.ssh/vy-cluster' | research pods ssh $n -- 'umask 077; cat > ~/.ssh/vy-cluster'   # peers' key, node to node; .pub too"
+    echo "    research pods ssh vy-nebius-2 -- 'tar -C ~/.ssh -cf - vy-cluster vy-cluster.pub' | research pods ssh $n -- 'umask 077; tar -C ~/.ssh -xf -'   # peers' key and its .pub, node to node: copied, never printed"
     echo "    research pods ssh $n -- 'echo from=\\\"IPS\\\" \$(cat ~/.ssh/vy-cluster.pub) >> ~/.ssh/authorized_keys'   # IPS: each node's egress (curl ifconfig.me)"
     echo "    research run --on $n --project verity --source . --cwd source -- bash tools/verity/check/pod_setup.sh"
   done
@@ -106,7 +106,7 @@ EOF
 
 L5  (infra for lean, 10 min, then the first build ~40 min in the background) lean's cache publisher on $first: its R2 key goes
     root to root, never through a terminal (it is 401 until lean's re-carded key lands; copy it after):
-    research pods ssh $N1 -- 'sudo cat /etc/verity/lean-cache.env' | research pods ssh $first -- 'sudo install -D -m 600 /dev/stdin /etc/verity/lean-cache.env'
+    research pods ssh $N1 -- 'sudo tar -C /etc/verity -cf - lean-cache.env' | research pods ssh $first -- 'sudo mkdir -p /etc/verity && sudo tar -C /etc/verity --no-same-owner -xf - && sudo chmod 600 /etc/verity/lean-cache.env'
     research pods ssh $first -- 'sudo /usr/local/sbin/vy-lean-build-setup && sudo systemctl start vy-lean-cache-daily.service'
 
 L6  (ci, 10 min) the merge mirror beside lean's sandbox: seed the bare repository on $first as n1's was seeded, then

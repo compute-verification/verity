@@ -283,10 +283,10 @@ ALLOWED = [
     "echo FOO=1 | sudo tee -a /etc/vy/env/extra.env",
     "echo \"$X\" | tr -d '\\n' > x.env",
     "ssh n1 'sudo tee /etc/verity/lean-cache.env >/dev/null' < /etc/verity/lean-cache.env",
-    "research pods ssh vy-nebius-2 -- 'tar -C ~/.ssh -c vy-cluster vy-cluster.pub' | research pods ssh vy-nebius-3 -- 'umask 077; tar -C "
-    "~/.ssh -x'",
-    "research pods ssh vy-nebius-1 -- 'sudo tar -C /etc/verity -c lean-cache.env' | research pods ssh vy-nebius-3 -- 'sudo mkdir -p "
-    "/etc/verity && sudo tar -C /etc/verity -x && sudo chmod 600 /etc/verity/lean-cache.env'",
+    "research pods ssh vy-nebius-2 -- 'tar -C ~/.ssh -cf - vy-cluster vy-cluster.pub' | research pods ssh vy-nebius-3 -- 'umask 077; tar "
+    "-C ~/.ssh -xf -'",
+    "research pods ssh vy-nebius-1 -- 'sudo tar -C /etc/verity -cf - lean-cache.env' | research pods ssh vy-nebius-3 -- 'sudo mkdir -p "
+    "/etc/verity && sudo tar -C /etc/verity --no-same-owner -xf - && sudo chmod 600 /etc/verity/lean-cache.env'",
     # openssl on a certificate, on a public key, checking a key, or writing a file
     "openssl x509 -in cert.pem -noout -text",
     "openssl x509 -in /etc/ssl/certs/ca.pem -noout -fingerprint -sha256",
