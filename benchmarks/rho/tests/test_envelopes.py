@@ -78,9 +78,9 @@ def test_with_sampled_proofs_it_adds_tiers_escape_and_cheating_shares():
 
 
 def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_slowdown_remote_at_full_capacity():
-    """Lean's `DampenerRemote` with no declared products (ν_T = 0) and χ = 0 is `max(1, 1/(s + (1 − s) u / MFU₀))`,
+    """Lean's `SlowdownRemote` with no declared products (ν_T = 0) and χ = 0 is `max(1, 1/(s + (1 − s) u / MFU₀))`,
     against an unencumbered trainer at `MFU₀`. The bound counts every gate at capacity against the reference at
-    capacity, so its padded size ratio is `DampenerRemote`'s `ρ` at `MFU₀ = 1` (where at least 1), and the slowdown is
+    capacity, so its padded size ratio is `SlowdownRemote`'s `ρ` at `MFU₀ = 1` (where at least 1), and the slowdown is
     that `ρ` at the reference's MFU."""
     reg = REG.override({"regime.remote.residual": 0.01, "regime.remote.clock_share": 0.0, "regime.remote.host": 0.0})
     ctx = tiers_context(reg)
@@ -99,14 +99,14 @@ def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_slowdown_remot
     assert pad <= 1 / (s + (1 - s) * u) and pad == pytest.approx(1 / (s + (1 - s) * u), rel=1e-4)
 
 
-#: `InferenceOnly.Dampener.remoteDampener` as Security/Definitions/InferenceOnly/Remote.lean defines it, and the conclusion of
-#: `InferenceOnly.Guarantees.DampenerRemote` (Security/Definitions/InferenceOnly/Guarantees/Remote.lean) that names it `ρ`
-REMOTE_SLOWDOWN = "noncomputable def remoteDampener (mfu s x : ℝ) : ℝ := max 1 (1 / (s + x / mfu))"
-REMOTE_CONCLUSION = "remoteDampener mfu (unmonitoredShare C U)"
+#: `InferenceOnly.Slowdown.remoteSlowdown` as Security/Definitions/InferenceOnly/Remote.lean defines it, and the conclusion of
+#: `InferenceOnly.Guarantees.SlowdownRemote` (Security/Definitions/InferenceOnly/Guarantees/Remote.lean) that names it `ρ`
+REMOTE_SLOWDOWN = "noncomputable def remoteSlowdown (mfu s x : ℝ) : ℝ := max 1 (1 / (s + x / mfu))"
+REMOTE_CONCLUSION = "remoteSlowdown mfu (unmonitoredShare C U)"
 
 
 def test_the_remote_overhead_is_lean_remote_slowdown_at_the_references_mfu():
-    """Without reference efficiency the remote slowdown is `DampenerRemote`'s `ρ`, `remoteDampener MFU₀ s x ≤
+    """Without reference efficiency the remote slowdown is `SlowdownRemote`'s `ρ`, `remoteSlowdown MFU₀ s x ≤
     hardwareMultiple MFU₀`, at the reference training algorithm's MFU (0.4): free compute counts at peak. Under it free
     compute counts at `MFU₀`, so `ρ = max(1, 1/(s + x))`, the padded size ratio. Hosts carry no compute, so tiers'
     server and the H200 give the same `x = 0.33`, and `ρ = 3.04` (1.22 without reference efficiency), as

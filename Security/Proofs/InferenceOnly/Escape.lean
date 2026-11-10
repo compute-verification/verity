@@ -13,7 +13,7 @@ other), so their expected work is at most the escaped blocks' plus `B`; and each
 
 namespace InferenceOnly.SecurityProofs
 
-open InferenceOnly.Dampener
+open InferenceOnly.Slowdown
 
 /-- The outcomes' weights sum to 1. -/
 theorem sum_toReal {Ω : Type} [Fintype Ω] (μ : PMF Ω) : ∑ ω, (μ ω).toReal = 1 := by

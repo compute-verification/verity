@@ -36,7 +36,7 @@ GPU-hours over the reference's, `T_0 / (MFU₀ Φ)`, at least 1 (Lean's `hardwar
 `multiple_bound(MFU₀, s, x)`, `max(1, 1/(s + a x))`, with the unregistered leaves `s` training like the reference and the
 monitored share `x` converted into the reference's work at `a`: 1 under reference efficiency (`GLOSSARY.md`'s task
 assumption: no run uses the hardware more efficiently than the reference, so free compute counts at `MFU₀`), and
-`1/MFU₀` without it, free compute at peak, which is Lean's `remoteDampener` (`InferenceOnly.Guarantees.DampenerRemote` states it
+`1/MFU₀` without it, free compute at peak, which is Lean's `remoteSlowdown` (`InferenceOnly.Guarantees.SlowdownRemote` states it
 for the remote composition). A construction's is its padded size ratio times `MFU₀`, since its circuit already carries
 the capacity it leaves idle (it trains at `MFU₀`, as the assumption has it).
 The time to the target, wall-clock, is then at least the overhead times `T_0 / (MFU₀ Φ_total)`
@@ -265,7 +265,7 @@ def multiple_bound(mfu: float, s: float, x: float, reference_efficiency: bool = 
     (`hardwareMultiple`), when the unmonitored share `s` trains like it and the other terms `x`, shares of capacity,
     convert into its work at `a`. Under reference efficiency (`GLOSSARY.md`: no run uses the hardware more efficiently
     than the reference) free compute runs at `MFU₀` too, so `a = 1`; without it `x` counts at peak, `a = 1/MFU₀`, Lean's
-    `InferenceOnly.Dampener.remoteDampener mfu s x` (`InferenceOnly.Guarantees.DampenerRemote`, `DampenerRemotePeriod`). Below
+    `InferenceOnly.Slowdown.remoteSlowdown mfu s x` (`InferenceOnly.Guarantees.SlowdownRemote`, `SlowdownRemotePeriod`). Below
     `x = (1 − s)/a` it is 1: those terms alone outrun the unconstrained developer."""
     rate = s + (x if reference_efficiency else x / mfu)
     return max(1.0, 1 / rate) if rate > 0 else math.inf
