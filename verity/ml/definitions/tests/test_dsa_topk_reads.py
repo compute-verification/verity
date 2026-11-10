@@ -5,6 +5,8 @@
   has at most K; `DsaPositionsMerge_v1` is `merge` on lists with words past their counts, counts past K and lists that fill K;
 * `DsaPositionsMerge_v1`, each block's list and count its own port, is gate for gate the merge over one port of the lists
   and one of the counts, at small statics and at the served one (M 8, K 2,048);
+* `DsaPositionsChunk_v1` and then `DsaPositionsSlot_v1` over its chunk give the merge's element j for every j on the merge's
+  own outputs, 0 where it is N or more and at an index out of range, at small statics and the served ones on random rows;
 * the units composed over a row's blocks (each on the outputs before it) give the rows network's order over the whole row
   (`DsaTopKRow_v2`'s construction), then 0, on masks of at most K members;
 * `DsaTopKReadRows_v1` over a table that holds a history gives today's long row's kv (`DsaButterflyRowsPad_v1` at the counted
@@ -125,43 +127,75 @@ def test_the_merge_with_ports_a_block_is_the_one_port_merge_gate_for_gate(M_, K)
     assert split == one
 
 
+def _chunk(K: int, W: int, slots: np.ndarray, cs: list[int]) -> list[list[int]]:
+    """Each row of ``slots`` (rows, K) u32 words, with its c, through `DsaPositionsChunk_v1{K,W}`."""
+    got = BS.evaluate_bits(bind(R.DsaPositionsChunk, K=K, W=W), _bits(slots, 32).reshape(len(cs), -1), _bits(cs, 32))
+    return [_words(g, 32) for g in np.asarray(got).reshape(len(cs), -1)]
+
+
 def _slot(K: int, N: int, slots: np.ndarray, js: list[int]) -> list[int]:
     """Each row of ``slots`` (rows, K) u32 words, with its j, through `DsaPositionsSlot_v1{K,N}`."""
     got = BS.evaluate_bits(bind(R.DsaPositionsSlot, K=K, N=N), _bits(slots, 32).reshape(len(js), -1), _bits(js, 32))
     return _words(np.asarray(got).reshape(len(js), -1), 32)
 
 
-@pytest.mark.parametrize("M_,K,N", [(3, 4, 20), (2, 5, 12), (1, 1, 4), (3, 8, 40)])
-def test_slot_j_is_the_merges_element_j(M_, K, N) -> None:
-    """On the merge's outputs (lists of positions below N and of any u32, counts from 0 past K): slot j is the merge's element
-    j, and 0 at j of K or more (u32's top bit and top among them) and where the element is N or more."""
-    rng = random.Random(M_ * 1000 + K * 10 + N)
+@pytest.mark.parametrize("M_,K,W,N", [(3, 4, 2, 20), (2, 5, 2, 12), (1, 1, 1, 4), (3, 8, 4, 40), (2, 6, 4, 30),
+                                      (3, 8, 16, 40)])
+def test_slot_j_of_its_chunk_is_the_merges_element_j(M_, K, W, N) -> None:
+    """On the merge's own outputs (lists of positions below N and of any u32, counts from 0 past K): chunk c is the merge's
+    slots cW .. cW+W-1 and 0 past K, and the slot unit at j mod W of chunk j // W is the merge's element j for every j < K,
+    0 where the element is N or more; every slot is below N.  Chunks of 2 of 4 and 5 slots (a last chunk of one), of 4 of 6,
+    and one chunk of 16 over 8."""
+    rng = random.Random(M_ * 1000 + K * 100 + W * 10 + N)
     lists = np.array([[[rng.randrange(N) if rng.random() < 0.7 else rng.getrandbits(32) for _ in range(K)]
                        for _ in range(M_)] for _ in range(24)], dtype=np.uint64)
     counts = np.array([[rng.randrange(K + 2) for _ in range(M_)] for _ in range(24)], dtype=np.uint64)
     merged = _merge(M_, K, lists, counts)
-    js = list(range(K)) + [K, K + 1, 1 << 31, (1 << 32) - 1, rng.getrandbits(32)]
-    cases = [(row, j) for row in merged for j in js]
-    got = _slot(K, N, np.array([r for r, _ in cases], dtype=np.uint64), [j for _, j in cases])
-    assert got == [R.slot(r, j, N) for r, j in cases]
-    assert all(g < N for g in got)
+    n = -(-K // W)
+    chunks = _chunk(K, W, np.array([r for r in merged for _ in range(n)], dtype=np.uint64), list(range(n)) * len(merged))
+    slots = _slot(W, N, np.array([chunks[i * n + j // W] for i in range(len(merged)) for j in range(K)], dtype=np.uint64),
+                  [j % W for _ in merged for j in range(K)])
+    for i, row in enumerate(merged):
+        assert chunks[i * n:(i + 1) * n] == [R.chunk(row, c, W) for c in range(n)]
+        assert slots[i * K:(i + 1) * K] == [x if x < N else 0 for x in row]
+    assert any(x >= N for row in merged for x in row) and all(s < N for s in slots)
 
 
-def test_the_served_slot_is_its_element_below_the_table() -> None:
-    """At the served binding (2,048 slots, N 2^17, the longest row's class and the table's capacity): an 11-level tree no
-    small binding reaches, and the bound at a power of two."""
-    rng = random.Random("dsa-slot-served")
-    K, N = SERVED_TOPK, SERVED_V
-    rows = [[rng.randrange(N) if rng.random() < 0.9 else rng.getrandbits(32) for _ in range(K)] for _ in range(24)]
-    js = [0, K - 1, K, 1 << 31] + [rng.randrange(K) for _ in range(20)]
-    got = _slot(K, N, np.array(rows, dtype=np.uint64), js)
-    assert got == [R.slot(r, j, N) for r, j in zip(rows, js)]
+@pytest.mark.parametrize("K,W,N", [(4, 2, 20), (5, 2, 12), (8, 16, 40), (1, 1, 4), (SERVED_TOPK, R.CHUNK, SERVED_V)])
+def test_an_index_out_of_range_gives_zeros(K, W, N) -> None:
+    """A chunk at c of ceil(K/W) or more (the first past it, u32's top bit, its top, and a random one) is all 0 on any slots,
+    and a slot at j of its K or more is 0 on slots all below N."""
+    rng = random.Random(K * 100 + W * 10 + N)
+    n = -(-K // W)
+    cs = [n, n + 1, 1 << 31, (1 << 32) - 1, rng.randrange(n, 1 << 32)]
+    rows = [[rng.getrandbits(32) for _ in range(K)] for _ in range(4)]
+    got = _chunk(K, W, np.array([r for r in rows for _ in cs], dtype=np.uint64), cs * len(rows))
+    assert got == [[0] * W] * len(got)
+    js = [W, W + 1, 1 << 31, (1 << 32) - 1, rng.randrange(W, 1 << 32)]
+    rows = [[rng.randrange(1, N) for _ in range(W)] for _ in range(4)]
+    assert _slot(W, N, np.array([r for r in rows for _ in js], dtype=np.uint64), js * len(rows)) == [0] * len(js) * len(rows)
+
+
+def test_the_served_chunk_and_slot_on_random_rows() -> None:
+    """At the served bindings (2,048 slots in chunks of 16, N 2^17, the longest row's class and the table's capacity): the
+    chunk's 7-level tree and its range at a power of two, and the slot's 4-level tree and bound at a power of two, on random
+    rows, a tenth of their slots and a fifth of the chunks' past N."""
+    rng = random.Random("dsa-chunk-served")
+    K, W, N = SERVED_TOPK, R.CHUNK, SERVED_V
+    rows = [[rng.randrange(N) if rng.random() < 0.9 else rng.getrandbits(32) for _ in range(K)] for _ in range(16)]
+    cs = [0, K // W - 1, K // W, 1 << 31] + [rng.randrange(K // W) for _ in range(12)]
+    assert _chunk(K, W, np.array(rows, dtype=np.uint64), cs) == [R.chunk(r, c, W) for r, c in zip(rows, cs)]
+    rows = [[rng.randrange(N) if rng.random() < 0.8 else rng.getrandbits(32) for _ in range(W)] for _ in range(64)]
+    js = [0, W - 1, W, 1 << 31] + [rng.randrange(W) for _ in range(60)]
+    got = _slot(W, N, np.array(rows, dtype=np.uint64), js)
+    assert got == [R.slot(r, j, N) for r, j in zip(rows, js)] and all(g < N for g in got)
 
 
 @pytest.mark.parametrize("N,K,block", [(20, 4, 8), (18, 4, 8), (24, 4, 8), (10, 1, 4), (16, 16, 16)])
 def test_the_index_units_compose_to_the_rows_networks_order(N, K, block) -> None:
     """Blocks of 8 keys over 20 (a last block of 4), 18 (its last 2 keys joined to the block before) and 24, TOPK 1, and one
-    block; each unit on its block of the masks and the outputs before it, each its twin, and slot unit j the merge's j-th."""
+    block; each unit on its block of the masks and the outputs before it, each its twin, and slot unit j, at j mod CHUNK of
+    chunk unit j // CHUNK, the merge's j-th."""
     masks = _masks(random.Random(N * 10 + K + block), N, K, 64, most=K)
     bl = X.blocks(N, K, block)
     lists, counts = [], []
@@ -170,11 +204,15 @@ def test_the_index_units_compose_to_the_rows_networks_order(N, K, block) -> None
         lists.append(p)
         counts.append(c)
     got = _merge(len(bl), K, np.array(lists, dtype=np.uint64).transpose(1, 0, 2), np.array(counts, dtype=np.uint64).T)
-    slots = _slot(K, N, np.array([g for g in got for _ in range(K)], dtype=np.uint64), list(range(K)) * len(got))
+    W, n = R.CHUNK, -(-K // R.CHUNK)
+    chunks = _chunk(K, W, np.array([g for g in got for _ in range(n)], dtype=np.uint64), list(range(n)) * len(got))
+    slots = _slot(W, N, np.array([chunks[i * n + j // W] for i in range(len(got)) for j in range(K)], dtype=np.uint64),
+                  [j % W for _ in got for j in range(K)])
     for i, (m, g) in enumerate(zip(masks, got)):
         twin = R.values(m, K, block)
         assert [(tuple(lists[b][i]), counts[b][i]) for b in range(len(bl))] == [twin[("positions", b)] for b in range(len(bl))]
         assert tuple(g) == twin[("merge",)][0]
+        assert [tuple(x) for x in chunks[i * n:(i + 1) * n]] == [twin[("chunk", c)][0] for c in range(n)]
         assert slots[i * K:(i + 1) * K] == g == [twin[("slot", j)][0] for j in range(K)]
         c = sum(m)
         whole = M.butterfly_apply(M.butterfly_settings(m, K), list(range(N)), K, 0)
@@ -273,10 +311,11 @@ def test_the_cut_counts_its_units() -> None:
         masks = len(X.plan(N, SERVED_TOPK)) if N > X.WHOLE_MAX else 1
         assert (mask in cut) == (N <= X.WHOLE_MAX)
         assert cut[READ] == SERVED_TOPK and cut[bind(R.DsaPositionsMerge, M=len(bl), K=SERVED_TOPK)] == 1
-        assert cut[bind(R.DsaPositionsSlot, K=SERVED_TOPK, N=N)] == SERVED_TOPK
+        assert cut[bind(R.DsaPositionsChunk, K=SERVED_TOPK, W=R.CHUNK)] == SERVED_TOPK // R.CHUNK == 128
+        assert cut[bind(R.DsaPositionsSlot, K=R.CHUNK, N=N)] == SERVED_TOPK
         assert {(d.bindings["N"], d.bindings["AT"]) for d in cut if d.base_id == "DsaMaskPositions_v1"} == \
                {(hi - lo, lo) for lo, hi in bl}
-        assert sum(cut.values()) == masks + len(bl) + 1 + 2 * SERVED_TOPK
+        assert sum(cut.values()) == masks + len(bl) + 1 + 128 + 2 * SERVED_TOPK
     assert R.CUTS == {"DsaTopKReadRows_v1": R.cut}
 
 
