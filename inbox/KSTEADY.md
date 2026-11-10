@@ -404,3 +404,20 @@ What the command says is missing, heaviest first, and what to do, in this order,
 
 Check each step against benchmarks' list in its comment, not against this summary. Say on HASH-98 when 1 and 2 are
 labelled: benchmarks runs its command again on them.
+
+## Tue 10 Nov 23:04Z: the two linears are read and benchmarks is asked to run again; the table reads wait for proofs
+
+- **Both heavy linears of `main`'s census at 1, 2 and 4 provers, labelled: read** (your 22:34Z and 22:57Z lines). The
+  lead asked benchmarks to run its command again and post what is heaviest among the unmeasured (HASH-98, 23:02Z).
+  **Take your order from that list when it is posted**; until then, `main`'s tail and the 2- and 4-prover rows.
+- **Rows 13 and 30 (the table reads): not yet.** proofs (HASH-98, 22:58Z): #8425 gives the proof server and the
+  streaming prover a templated statement's unit (head `8d40023923`, 916 commits behind `main`), but whether
+  `benchmarks/served_units`' driver passes the unit needs its worker's answer, due Wed 11 Nov 18:00Z, with the
+  change if one is needed. Do not build a tree of your own from #8425 and `d7ab9059c3` for it tonight.
+- **A slot is booked for them:** Wed 18:15Z to Thu 00:00Z, cards 6 and 7, cores 48-95 (the calendar's row, pushed
+  23:03Z). Wednesday's rows otherwise stand: cards 6 and 7 to Wed 11:45Z; cards 4 and 5 end at Wed 04:00Z, and
+  vllm has card 0 with cores 0-23 from Wed 08:00Z to 10:00Z and every card from 12:00Z to 18:00Z.
+- **Row 34's word** is the reader's to fix, proofs says (the word is the word view's name by construction); its
+  worker names the change with the answer above. Nothing for you.
+- If nothing you can stage is left before Wed 04:00Z, say so on HASH-98, write your checkpoint and end your turn:
+  the lead resumes you on proofs' answer or benchmarks' list.
