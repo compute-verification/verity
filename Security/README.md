@@ -472,28 +472,27 @@ None of these is assumed silently; each would restate the conclusion:
 
 ## Three trees
 
-Each tree's README has its import rule and areas: [`Definitions/`](Definitions/README.md) (package `security`), the
-spec; [`Properties/`](Properties/README.md) (`security_properties`), statements about the code's Lean functions; and
-[`Proofs/`](Proofs/README.md) (`security_proofs`), every proof.
-
-`security` requires only Mathlib, and no package outside requires one of the three (`tests/test_lean_packages.py`).
-The lock's `layers` say which spec modules each module prefix may import, and its `trees` forbid a statement from
-reading, or a definitions or properties module from importing, anything in `Proofs/` (Flock excepted, by module:
-`Proofs/README.md`).
+Each tree's README has its import rule, which the lock's `layers` and `trees` hold, and its areas:
+[`Definitions/`](Definitions/README.md) (package `security`), the spec; [`Properties/`](Properties/README.md)
+(`security_properties`), statements about the code's Lean functions; and [`Proofs/`](Proofs/README.md)
+(`security_proofs`), every proof.
 
 ## What outside code may do
 
 Outside code may run the Lean check on the packages, read a file here as data (a lock, or Lean a test holds its Python
-to) and run a test's Lean file in a package's Lake environment. A generated file is written only by the generator its
-header names. Today:
+to) and build or run Lean in a package's Lake environment. No outside package requires them
+(`tests/test_lean_packages.py`), and a generated file is written only by the generator its header names. Today:
 
 - Lean files importing `Proofs.*` (modules: `Proofs/README.md`):
   `verity/core/protocols/pous/lean/submissions/reference.lean`, `ExfiltrationVectors.lean` and
   `ExfiltrationTwoVectors.lean` in `verity/core/protocols/spot/tests/lean/`, and
   `verity/ml/flock/tests/lean/RandomnessVectors.lean`.
-- Programs writing generated Lean: `benchmarks/pouw/lean_headline.py`, `benchmarks/pouw/lean_headline_dc.py`,
-  `verity/ml/circuits/ops/tests/test_lean_fp32_vectors.py`, and `fp8atom_vectors.py`, `h1t_vectors.py` and
-  `row_prims_vectors.py` in `verity/core/protocols/pouw/lean/scripts/`. The machine model prints `Sheets/`.
+- Programs building or running Lean in those environments: `verity/core/protocols/pous/lean/grade.sh`,
+  `generate.sh` beside the other three files, `verity/ml/flock/tests/test_lean_verifier.py`, and the NCP pin's command
+  in `tools/verity/check/pins.py`.
+- Generators: `lean_headline.py`, `lean_headline_dc.py` and `machine_model/` (the ACCEL model; it prints `Sheets/`)
+  in `benchmarks/pouw/`; `verity/ml/circuits/ops/tests/test_lean_fp32_vectors.py`; `fp8atom_vectors.py`,
+  `h1t_vectors.py` and `row_prims_vectors.py` in `verity/core/protocols/pouw/lean/scripts/`.
 
 ## The lock
 
@@ -586,7 +585,7 @@ With the toolchain `lean-toolchain` pins:
 ~~~text
 lake build   # in Security/: the spec
 lake build   # in Security/Properties/, then Security/Proofs/ (fetches ArkLib)
-python3 tools/verity/lean/check.py Security   # from the repository root
+python3 tools/verity/lean/check.py Security/   # from the repository root
 ~~~
 
 The check audits `Proofs/` with the spec, from one build, and refuses a machine below its memory floor.
