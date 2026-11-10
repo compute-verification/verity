@@ -81,3 +81,22 @@ One mark dropped two candidates at 09:45Z (29 pull requests, 38 minutes of check
    new branch from `origin/main`, not from one of those.
 If either must be broken, stop and tell the lead: it is asked of ci on CI-489 first.
 `research queue status` shows #8619 as refused for the old-`next` reason only: that is CI-501's fault, as told.
+
+## Tue 10 Nov 10:33Z: piece B changes: the layout is ONE map (top, TOP-394 10:30Z), and a staged tree exists now
+
+top ruled: one map, one commit, written directly in `tools/move/`; the 22 files leave vllm's pull request. So:
+
+1. **Do not apply maps yourself for piece B.** A moved tree is staged: `origin/cursor/top-layout-draft-9ece` at
+   `9ece46b2ea0d` (the chain of 23 on `main`, for staging only). Run `kmove_joins.py` and `kmove_pins.py` on it now,
+   and write what changed against your trial (lines that now resolve, lines that newly stop resolving, by owner) in
+   your note and one comment on HASH-102. Update `joins_missed.json` and `loads.tsv`.
+2. **Kernels' own suites on the staged tree, now, so kernels' reds are known before top's list (about 14:00Z):** one
+   `research run` at that commit with the suites whose tests live under `benchmarks/hash`, `benchmarks/torch_gpu` and
+   `benchmarks/moe_align` (and Flock's, for your new test), `--mem-gb 32`, on a free pool that auto never picks
+   (`--on vy-nebius-cpu-12 --pool research`, or cpu-4, or cpu-10). top says 246 imports fail a suite's read guard
+   on the moved tree in 16 suites and are closed by entries in each suite's `inputs`, which the stager applies: a
+   red of that kind is not kernels' to fix; list the others, each with its file and line.
+3. **When top names the one-map branch** (due 11:15Z on TOP-394), rerun 1 on it and say whether anything differs
+   from `9ece`. Your row for `served_weights.py` is taken (vllm, VLLM-265 10:14Z: row 14, with `[aliases]`): check
+   that the one map has all three lines.
+4. Nothing is pushed to a marked pull request and nothing new is marked beyond #8619 without the lead's word.
