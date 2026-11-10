@@ -114,6 +114,62 @@ noncomputable def sessionWK {ο : Type} (next : Pos g σ Claims.Msg (Fin R) → 
   .coin (Fin 2 → Fin mPts → 𝔽) fun pts => roundsWK D M dg J wr next (D.root p.toStop.modes) pts N (fun _ _ => [])
     (p.toStop.rewrite (M.link p.toStop pts)).consume
 
+/-- One round's joint law's strategy: what follows the session's, at its end. -/
+def stepWKS {ο : Type} (rootB : Array ByteArray) (pts : Fin 2 → Fin mPts → 𝔽)
+    (rs : Fin J → Fin 2 → List Flock.Round) (q : Pos g σ Claims.Msg (Fin R)) (fin : τ → Game ο)
+    (next : (s : SubmitJ J) → (Fin s.n → 𝔽) → Game ο) (wf : ∀ a, Strategy (fin a))
+    (w : ∀ s c, Strategy (next s c)) : (o : Option (SubmitJ J)) → Strategy (stepWK D J wr rootB pts rs q fin next o)
+  | none => wf _
+  | some s => w s
+
+/-- The rounds' joint law's strategy: what follows the session's, at its end. -/
+noncomputable def roundsWKS {ο : Type} (next : Pos g σ Claims.Msg (Fin R) → τ → Game ο)
+    (wn : ∀ q a, Strategy (next q a)) (rootB : Array ByteArray) (pts : Fin 2 → Fin mPts → 𝔽) :
+    (N : ℕ) → (rs : Fin J → Fin 2 → List Flock.Round) → (p : Pos g σ Claims.Msg (Fin R)) →
+      Strategy (roundsWK D M dg J wr next rootB pts N rs p)
+  | 0, _, _ => wn _ _
+  | N + 1, rs, p => stepWKS D J wr rootB pts rs p.toStop (next p.toStop) _ (wn p.toStop)
+    (fun _ _ => roundsWKS next wn rootB pts N _ _) (D.sub J p.toStop.modes)
+
+/-- The session's joint law's strategy: what follows the session's, at its end. -/
+noncomputable def sessionWKS {ο : Type} (next : Pos g σ Claims.Msg (Fin R) → τ → Game ο)
+    (wn : ∀ q a, Strategy (next q a)) (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)) :
+    Strategy (sessionWK D M dg J wr next N p) :=
+  fun pts => roundsWKS D M dg J wr next wn _ pts N _ _
+
+/-- **One round's projection, then what follows the session, has its events' probabilities under one round's joint
+law** (`prob_stepP`), wherever what follows the session and `next` have. -/
+theorem prob_stepK (E : γ → Prop) (rootB : Array ByteArray) (pts : Fin 2 → Fin mPts → 𝔽) (N : ℕ)
+    (rs : Fin J → Fin 2 → List Flock.Round) (q : Pos g σ Claims.Msg (Fin R)) (finP : (a : τ) → Strategy (K a))
+    (finW : τ → Game (γ × CoinTape g σ))
+    (nextP : (s : SubmitJ J) → (c : Fin s.n → 𝔽) →
+      Strategy (roundsThen dg J wr K rootB pts N (addRoundJ rs s.tab s.rep (roundOf dg s.bytes s.n c))))
+    (nextW : (s : SubmitJ J) → (Fin s.n → 𝔽) → Game (γ × CoinTape g σ))
+    (hf : ∀ a (w : Strategy (finW a)), prob E (K a) (finP a) = prob (fun o => E o.1) (finW a) w)
+    (h : ∀ s c (w : Strategy (nextW s c)),
+      prob E (roundsThen dg J wr K rootB pts N (addRoundJ rs s.tab s.rep (roundOf dg s.bytes s.n c))) (nextP s c) =
+        prob (fun o => E o.1) (nextW s c) w) :
+    ∀ (o : Option (SubmitJ J)) (w : Strategy (stepWK D J wr rootB pts rs q finW nextW o)),
+      prob E (roundsThen dg J wr K rootB pts (N + 1) rs) (stepK D dg J wr K rootB pts N rs q finP nextP o) =
+        prob (fun o => E o.1) (stepWK D J wr rootB pts rs q finW nextW o) w
+  | none, w => hf _ w
+  | some s, w => Finset.sum_congr rfl fun c _ => congrArg (HMul.hMul _) (h s c (w c))
+
+/-- **The rounds' projection, then what follows the session, has its events' probabilities under the rounds' joint
+law** (`prob_roundsP`), wherever what follows has. -/
+theorem prob_roundsK (E : γ → Prop) (nextP : Pos g σ Claims.Msg (Fin R) → (a : τ) → Strategy (K a))
+    (nextW : Pos g σ Claims.Msg (Fin R) → τ → Game (γ × CoinTape g σ))
+    (h : ∀ q a (w : Strategy (nextW q a)), prob E (K a) (nextP q a) = prob (fun o => E o.1) (nextW q a) w)
+    (rootB : Array ByteArray) (pts : Fin 2 → Fin mPts → 𝔽) :
+    ∀ (N : ℕ) (rs : Fin J → Fin 2 → List Flock.Round) (p : Pos g σ Claims.Msg (Fin R))
+      (w : Strategy (roundsWK D M dg J wr nextW rootB pts N rs p)),
+      prob E (roundsThen dg J wr K rootB pts N rs) (roundsK D M dg J wr K nextP rootB pts N rs p) =
+        prob (fun o => E o.1) (roundsWK D M dg J wr nextW rootB pts N rs p) w
+  | 0, _, p, w => h p _ w
+  | N + 1, rs, p, w =>
+    prob_stepK D dg J wr K E rootB pts N rs p.toStop (nextP p.toStop) (nextW p.toStop) _ _ (h p.toStop)
+      (fun _ _ w => prob_roundsK E nextP nextW h rootB pts N _ _ w) (D.sub J p.toStop.modes) w
+
 /-- **The session's projection, then what follows it, has its events' probabilities under the session's joint law**
 (`prob_sessionP`), wherever what follows has. -/
 theorem prob_sessionK (E : γ → Prop) (nextP : Pos g σ Claims.Msg (Fin R) → (a : τ) → Strategy (K a))
@@ -121,8 +177,9 @@ theorem prob_sessionK (E : γ → Prop) (nextP : Pos g σ Claims.Msg (Fin R) →
     (h : ∀ q a (w : Strategy (nextW q a)), prob E (K a) (nextP q a) = prob (fun o => E o.1) (nextW q a) w)
     (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)) (w : Strategy (sessionWK D M dg J wr nextW N p)) :
     prob E (((liveSession dg J mPts N).map wr).bind K) (sessionK D M dg J wr K nextP N p) =
-      prob (fun o => E o.1) (sessionWK D M dg J wr nextW N p) w := by
-  sorry
+      prob (fun o => E o.1) (sessionWK D M dg J wr nextW N p) w :=
+  Finset.sum_congr rfl fun pts _ => congrArg (HMul.hMul _)
+    (prob_roundsK D M dg J wr K E nextP nextW h _ pts N _ _ (w pts))
 
 open Classical in
 /-- **One stop's share off `B`, then what follows the session** (`stopOff`): `fin` at the session's end there; else
@@ -173,6 +230,63 @@ def SessionReachK {ο : Type} (BL : LinkHold mPts) (next : Pos g σ Claims.Msg (
   ∃ pts : Fin 2 → Fin mPts → 𝔽, ¬ BL p.toStop.g' pts ∧
     RoundsReachK D M dg J B wr next (D.root p.toStop.modes) pts N (fun _ _ => [])
       (p.toStop.rewrite (M.link p.toStop pts)).consume o
+
+open Classical in
+variable {D M J B wr} in
+/-- **One stop's share off `B`, then what follows the session, is at most the event's probability under one round's
+joint law** (`stopOff_le_prob`), wherever the session's end's share is at most its probability under what follows, and
+after each of the round's coins `B` doesn't hold of, `e` there is at most its probability under `next`. -/
+theorem stopOffK_le_prob {ο : Type} (E : ο → Prop) (rootB : Array ByteArray) (pts : Fin 2 → Fin mPts → 𝔽)
+    (rs : Fin J → Fin 2 → List Flock.Round) (q : Pos g σ Claims.Msg (Fin R))
+    (fin e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (finW : τ → Game ο)
+    (nextW : (s : SubmitJ J) → (Fin s.n → 𝔽) → Game ο) :
+    ∀ (o : Option (SubmitJ J)) (w : Strategy (stepWK D J wr rootB pts rs q finW nextW o)),
+      (o = none → ∀ w : Strategy (finW (wr ⟨rootB, pts, rs, D.proofs (CoinTape.run g σ q.tape)⟩)),
+        fin q ≤ prob E (finW (wr ⟨rootB, pts, rs, D.proofs (CoinTape.run g σ q.tape)⟩)) w) →
+      (∀ s, o = some s → ∀ c (w : Strategy (nextW s c)), ¬ B q.g' J s c →
+        e (q.rewrite (M.round q J s c)).consume ≤ prob E (nextW s c) w) →
+      stopOffK M J B fin e q o ≤ prob E (stepWK D J wr rootB pts rs q finW nextW o) w
+  | none, w, h0, _ => h0 rfl w
+  | some s, w, _, hs => avg_mono fun c => by
+    split_ifs with hB
+    · exact zero_le
+    · exact hs s rfl c (w c) hB
+
+variable {D M dg J B wr} in
+/-- **The rounds' share off `B`, then what follows the session, is at most the event's probability under the rounds'
+joint law** (`roundsOff_le_prob`) wherever, on the support off `B` (`RoundsReachK`), `H` implies `E`: at each position
+the session ends at, with what follows the session at most `E`'s probability there wherever `H` implies `E` on its own
+support. -/
+theorem roundsOffK_le_prob {ο : Type} (E H : ο → Prop) (e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞)
+    (nextW : Pos g σ Claims.Msg (Fin R) → τ → Game ο) (nextR : Pos g σ Claims.Msg (Fin R) → τ → ο → Prop)
+    (hn : ∀ q a (w : Strategy (nextW q a)), (∀ o, nextR q a o → H o → E o) → e q ≤ prob E (nextW q a) w)
+    (rootB : Array ByteArray) (pts : Fin 2 → Fin mPts → 𝔽) :
+    ∀ (N : ℕ) (rs : Fin J → Fin 2 → List Flock.Round) (p : Pos g σ Claims.Msg (Fin R))
+      (w : Strategy (roundsWK D M dg J wr nextW rootB pts N rs p)),
+      (∀ o, RoundsReachK D M dg J B wr nextR rootB pts N rs p o → H o → E o) →
+      roundsOffK D M J B e N p ≤ prob E (roundsWK D M dg J wr nextW rootB pts N rs p) w
+  | 0, rs, p, w, h => hn p _ w fun o ho => h o (.zero rs p o ho)
+  | N + 1, rs, p, w, h =>
+    stopOffK_le_prob E rootB pts rs p.toStop e (roundsOffK D M J B e N) (nextW p.toStop) _ (D.sub J p.toStop.modes) w
+      (fun h0 w => hn p.toStop _ w fun o ho => h o (.stop N rs p o h0 ho))
+      (fun s hs c w hB => roundsOffK_le_prob E H e nextW nextR hn rootB pts N _ _ w
+        fun o ho => h o (.round N rs p s c o hs hB ho))
+
+open Classical in
+variable {D M dg J B wr} in
+/-- **The session's share off `BL` and `B`, then what follows it, is at most the event's probability under the
+session's joint law** (`sessionOff_le_prob`) wherever, on the support off them (`SessionReachK`), `H` implies `E`. -/
+theorem sessionOffK_le_prob {ο : Type} (BL : LinkHold mPts) (E H : ο → Prop)
+    (e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (nextW : Pos g σ Claims.Msg (Fin R) → τ → Game ο)
+    (nextR : Pos g σ Claims.Msg (Fin R) → τ → ο → Prop)
+    (hn : ∀ q a (w : Strategy (nextW q a)), (∀ o, nextR q a o → H o → E o) → e q ≤ prob E (nextW q a) w)
+    (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)) (w : Strategy (sessionWK D M dg J wr nextW N p))
+    (h : ∀ o, SessionReachK D M dg J B wr BL nextR N p o → H o → E o) :
+    sessionOffK D M J B BL e N p ≤ prob E (sessionWK D M dg J wr nextW N p) w :=
+  avg_mono fun pts => by
+    split_ifs with hL
+    · exact zero_le
+    · exact roundsOffK_le_prob E H e nextW nextR hn _ pts N _ _ (w pts) fun o ho => h o ⟨pts, hL, ho⟩
 
 end SessionK
 
@@ -270,23 +384,57 @@ def SeqReach : (i : ℕ) → (l : List (Flock.Guarantees.MemberV5 Reg nJ)) → P
     SessionReachK (D i) (M.member i (memberPts m)) m.dg (memberTabs S Rg m) (B i) (m.wr (m.part S) Rg)
       (BL i (memberPts m)) (fun q a o' => ∃ ts, SeqReach (i + 1) l q (ts, o'.2) ∧ o'.1 = a :: ts) m.N p o
 
-/-- **The sessions' projection has its events' probabilities under the sessions' joint law.** -/
-theorem prob_seqP (E : List Transcript → Prop) :
-    ∀ (i : ℕ) (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (p : Pos g σ Claims.Msg (Fin R))
-      (w : Strategy (seqW D M S Rg i l p)),
-      prob E (FlockSoundness.Game.seqG (fun m : Flock.Guarantees.MemberV5 Reg nJ => m.live (m.part S) Rg) l)
-          (seqP D M S Rg i l p) =
-        prob (fun o => E o.1) (seqW D M S Rg i l p) w := by
-  sorry
+/-- The sessions' joint law's strategy: it has no message to send. -/
+noncomputable def seqWS : (i : ℕ) → (l : List (Flock.Guarantees.MemberV5 Reg nJ)) →
+    (p : Pos g σ Claims.Msg (Fin R)) → Strategy (seqW D M S Rg i l p)
+  | _, [], _ => PUnit.unit
+  | i, m :: l, p =>
+    sessionWKS (D i) (M.member i (memberPts m)) m.dg (memberTabs S Rg m) (m.wr (m.part S) Rg)
+      (fun q a => (seqW D M S Rg (i + 1) l q).map fun o => (a :: o.1, o.2))
+      (fun q _ => Strategy.map _ _ (seqWS (i + 1) l q)) m.N p
 
+/-- **The sessions' projection has its events' probabilities under the sessions' joint law.** -/
+theorem prob_seqP : ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (E : List Transcript → Prop) (i : ℕ)
+    (p : Pos g σ Claims.Msg (Fin R)) (w : Strategy (seqW D M S Rg i l p)),
+    prob E (FlockSoundness.Game.seqG (fun m : Flock.Guarantees.MemberV5 Reg nJ => m.live (m.part S) Rg) l)
+        (seqP D M S Rg i l p) =
+      prob (fun o => E o.1) (seqW D M S Rg i l p) w
+  | [], _, _, _, _ => rfl
+  | m :: l, E, i, p, w =>
+    prob_sessionK (D i) (M.member i (memberPts m)) m.dg (memberTabs S Rg m) (m.wr (m.part S) Rg)
+      (fun a => (FlockSoundness.Game.seqG
+        (fun m : Flock.Guarantees.MemberV5 Reg nJ => m.live (m.part S) Rg) l).map (a :: ·)) E
+      (fun q _ => Strategy.map _ _ (seqP D M S Rg (i + 1) l q))
+      (fun q a => (seqW D M S Rg (i + 1) l q).map fun o => (a :: o.1, o.2))
+      (fun q a w => (FlockSoundness.Discharge.Exec.prob_strategy_map _ _ _ _).trans
+        ((prob_seqP l (fun ts => E (a :: ts)) (i + 1) q (Strategy.ofMap _ _ w)).trans
+          (prob_map (fun o : List Transcript × CoinTape g σ => E o.1) (fun o => (a :: o.1, o.2)) _ w).symm))
+      m.N p w
+
+open Classical in
 /-- **The sessions' joint law off the held-off events gives an event of the tape at most `E`'s probability**
 wherever, on its support off them (`SeqReach`), the event implies `E` of the members' transcripts. -/
-theorem seqOff_le_prob (Q : CoinTape g σ → Prop) (E : List Transcript → Prop) :
-    ∀ (i : ℕ) (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (p : Pos g σ Claims.Msg (Fin R))
-      (w : Strategy (seqW D M S Rg i l p)),
-      (∀ o, SeqReach D M BL B S Rg i l p o → Q o.2 → E o.1) →
-      seqOff D M BL B S Rg Q i l p ≤ prob (fun o => E o.1) (seqW D M S Rg i l p) w := by
-  sorry
+theorem seqOff_le_prob (Q : CoinTape g σ → Prop) : ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ))
+    (E : List Transcript → Prop) (i : ℕ) (p : Pos g σ Claims.Msg (Fin R)) (w : Strategy (seqW D M S Rg i l p)),
+    (∀ o, SeqReach D M BL B S Rg i l p o → Q o.2 → E o.1) →
+    seqOff D M BL B S Rg Q i l p ≤ prob (fun o => E o.1) (seqW D M S Rg i l p) w
+  | [], E, _, p, _, h => by
+    show tapeInd Q p ≤ if E [] then 1 else 0
+    unfold tapeInd
+    by_cases hQ : Q p.tape
+    · rw [if_pos hQ, if_pos (h ([], p.tape) rfl hQ)]
+    · rw [if_neg hQ]
+      exact zero_le
+  | m :: l, E, i, p, w, h =>
+    sessionOffK_le_prob (D := D i) (M := M.member i (memberPts m)) (dg := m.dg) (J := memberTabs S Rg m) (B := B i)
+      (wr := m.wr (m.part S) Rg) (BL i (memberPts m)) (fun o => E o.1) (fun o => Q o.2)
+      (fun q => seqOff D M BL B S Rg Q (i + 1) l q)
+      (fun q a => (seqW D M S Rg (i + 1) l q).map fun o => (a :: o.1, o.2))
+      (fun q a o' => ∃ ts, SeqReach D M BL B S Rg (i + 1) l q (ts, o'.2) ∧ o'.1 = a :: ts)
+      (fun q a w hq => (seqOff_le_prob Q l (fun ts => E (a :: ts)) (i + 1) q (Strategy.ofMap _ _ w)
+          fun o ho hQ => hq (a :: o.1, o.2) ⟨o.1, ho, rfl⟩ hQ).trans_eq
+        (prob_map (fun o : List Transcript × CoinTape g σ => E o.1) (fun o => (a :: o.1, o.2)) _ w).symm)
+      m.N p w h
 
 end Seq
 
@@ -330,7 +478,21 @@ theorem prob_windowP (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strate
     (w : Strategy (windowG V θ F c W t rd σ D M)) :
     FlockSoundness.Game.prob E ((W.extend M.widening).joint t).game (windowP V θ F c W t rd σ D M) =
       prob (fun o => E o.1) (windowG V θ F c W t rd σ D M) w := by
-  sorry
+  refine Finset.sum_congr rfl fun ω _ => congrArg (HMul.hMul _) ?_
+  exact (FlockSoundness.Discharge.Exec.prob_strategy_map _ _ _ _).trans
+    ((prob_seqP D M ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D)
+        ((W.extend M.widening).joint t).ms
+        (fun ts => E (windowReg V θ F c W rd σ D, (W.extend M.widening).L.draw ω, ts)) 0
+        (Pos.root (roundCuts V θ F c rd) (M.start ω)) (Strategy.ofMap _ _ (w ω))).trans
+      (prob_map (fun o : W.Out × CoinTape (V.game θ F c) σ => E o.1)
+        (fun o => ((windowReg V θ F c W rd σ D, (W.extend M.widening).L.draw ω, o.1), o.2)) _ (w ω)).symm)
+
+/-- The joint law's strategy: it has no message to send. -/
+noncomputable def windowGS (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
+    (D : ℕ → Decoders W.rounds ByteArray) (M : WindowCoinMap (V.game θ F c) σ W.Ω W.rounds) :
+    Strategy (windowG V θ F c W t rd σ D M) :=
+  fun ω => Strategy.map _ _ (seqWS D M ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D) 0
+    ((W.extend M.widening).joint t).ms (Pos.root (roundCuts V θ F c rd) (M.start ω)))
 
 /-- **The joint law's support off the held-off events**: the outcomes at the decoded registration and the sample of
 some widened coins `ω`, with the sessions' trace off them from the play's start on `M`'s tape at `ω`, ending on the
@@ -359,8 +521,16 @@ theorem windowOff_le_prob (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : S
     (B : WindowRoundHold) (Q : CoinTape (V.game θ F c) σ → Prop) (E : W.Out → Prop)
     (h : ∀ o, WindowReaches V θ F c W t rd σ D M BL B o → Q o.2 → E o.1)
     (w : Strategy (windowG V θ F c W t rd σ D M)) :
-    windowOff V θ F c W t rd σ D M BL B Q ≤ prob (fun o => E o.1) (windowG V θ F c W t rd σ D M) w := by
-  sorry
+    windowOff V θ F c W t rd σ D M BL B Q ≤ prob (fun o => E o.1) (windowG V θ F c W t rd σ D M) w :=
+  avg_mono fun ω =>
+    (seqOff_le_prob D M BL B ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D) Q
+        ((W.extend M.widening).joint t).ms
+        (fun ts => E (windowReg V θ F c W rd σ D, (W.extend M.widening).L.draw ω, ts)) 0
+        (Pos.root (roundCuts V θ F c rd) (M.start ω)) (Strategy.ofMap _ _ (w ω))
+        fun o ho hQ => h ((windowReg V θ F c W rd σ D, (W.extend M.widening).L.draw ω, o.1), o.2)
+          ⟨ω, rfl, rfl, ho⟩ hQ).trans_eq
+      (prob_map (fun o : W.Out × CoinTape (V.game θ F c) σ => E o.1)
+        (fun o => ((windowReg V θ F c W rd σ D, (W.extend M.widening).L.draw ω, o.1), o.2)) _ (w ω)).symm
 
 /-! ## The logged coupling at the window's projection -/
 
@@ -397,7 +567,12 @@ theorem windowLogged (k : Verity.Registration.Composite) (P : Exchange → Prop)
       FlockSoundness.Game.prob (fun o => ((W.extend M.widening).joint t).Accepts o)
           ((W.extend M.widening).joint t).game (windowP V θ F c W t rd σ D M) +
         W.hidingTerm := by
-  sorry
+  have h := (hC fun x => V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) ∧ NoMiss V θ F c rd σ x ∧
+      P (CoinTape.run (V.game θ F c) σ x)).trans
+    (add_le_add (windowOff_le_prob V θ F c W t rd σ D M BL B _
+      (fun o => ((W.extend M.widening).joint t).Accepts o) hD (windowGS V θ F c W t rd σ D M)) le_rfl)
+  rw [← prob_windowP V θ F c W t rd σ D M (fun o => ((W.extend M.widening).joint t).Accepts o)] at h
+  exact h
 
 /-! ## The coupling at the window -/
 
@@ -449,6 +624,95 @@ noncomputable def WindowConstructions.withProject (K : WindowConstructions V) (r
 variable (k : Verity.Registration.Composite)
 
 omit θ F c in
+/-- **The messages' bound at a window's constructions whose two-continuation finders are the cuts'**
+(`windowMsgFinder`, `windowRecordFinder`): an event of the period's game is at most as likely as the event on the
+tapes that miss at no round and not at the record, plus `WindowCouplingTarget`'s messages terms. -/
+theorem prob_le_windowMessages (rd : WindowReadings) (K : WindowConstructions V)
+    (hM : K.msgFinder = windowMsgFinder V rd) (hR : K.recordFinder = windowRecordFinder V rd) (W : Window)
+    (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Strategy (V.game θ F c)) (E : Exchange → Prop) :
+    prob E (V.game θ F c) σ ≤
+      ENNReal.ofReal (Claims.Pr fun x : CoinTape (V.game θ F c) σ =>
+          E (CoinTape.run (V.game θ F c) σ x) ∧ NoMiss V θ F c (rd W θ F c) σ x) +
+        (∑ j, ENNReal.ofReal (Real.sqrt ((K.msgFinder W θ F c σ j).Pr sha512Msg)) +
+          ENNReal.ofReal (Real.sqrt ((K.recordFinder W θ F c σ).Pr sha512Msg))) := by
+  rw [hM, hR]
+  exact prob_le_noMiss_add V θ F c (rd W θ F c) σ _ E
+
+omit θ F c in
+/-- **The coupling at the window off the messages' misses** (`couplingTarget_of_noMiss`): at constructions whose
+two-continuation finders are the cuts', `WindowCouplingTarget` holds once the sampled verdict on the tapes that miss at
+no round and not at the record is at most as likely as the window's audit's acceptance at the projected strategy, plus
+the square root of the bound digests' finder's success, the hiding term, the read finder's collision and the
+forger's forgery. -/
+theorem windowCouplingTarget_of_noMiss (rd : WindowReadings) (K : WindowConstructions V)
+    (hM : K.msgFinder = windowMsgFinder V rd) (hR : K.recordFinder = windowRecordFinder V rd) (W : Window)
+    (θ : ByteArray) (F : Array ByteArray)
+    (h : ∀ (c : ByteArray) (σ : Strategy (V.game θ F c)),
+      ENNReal.ofReal (Claims.Pr fun x : CoinTape (V.game θ F c) σ =>
+          V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) ∧ NoMiss V θ F c (rd W θ F c) σ x) ≤
+        FlockSoundness.Game.prob (fun o => ((K.live W θ F c σ).joint (V.cost θ F c σ)).Accepts o)
+            ((K.live W θ F c σ).joint (V.cost θ F c σ)).game (K.project W θ F c σ) +
+          (ENNReal.ofReal (Real.sqrt ((K.bindFinder W θ F c σ).Pr sha512Msg)) + W.hidingTerm +
+            ENNReal.ofReal ((K.readFinder θ F c σ).Pr sha512Msg) +
+            ENNReal.ofReal ((K.forger θ F c σ).Pr Verity.lmsVerify))) :
+    WindowCouplingTarget V k K W θ F := fun c σ =>
+  (prob_le_windowMessages V rd K hM hR W θ F c σ _).trans <| (add_le_add (h c σ) le_rfl).trans_eq (by ring)
+
+omit θ F c in
+/-- **The accepted plays that miss nowhere, off the binding, the digest and the logged coupling, at the window**
+(`noMiss_le_of_logged`): each is one `P` and `Q` hold of, bounded by `hb`, or one `P` doesn't hold of, bounded by
+`ha`, or one `Q` doesn't, bounded by `hq`. -/
+theorem windowNoMiss_le_of_logged (rd : WindowReadings) (K : WindowConstructions V) (W : Window)
+    (P : Exchange → Prop) (θ : ByteArray) (F : Array ByteArray)
+    (Q : (c : ByteArray) → Strategy (V.game θ F c) → Exchange → Prop)
+    (ha : ∀ (c : ByteArray) (σ : Strategy (V.game θ F c)),
+      prob (fun o => V.Verdict k .sampled o ∧ ¬ P o) (V.game θ F c) σ ≤
+        ENNReal.ofReal ((K.readFinder θ F c σ).Pr sha512Msg) +
+          ENNReal.ofReal ((K.forger θ F c σ).Pr Verity.lmsVerify))
+    (hq : ∀ (c : ByteArray) (σ : Strategy (V.game θ F c)),
+      prob (fun o => V.Verdict k .sampled o ∧ ¬ Q c σ o) (V.game θ F c) σ ≤
+        ENNReal.ofReal (Real.sqrt ((K.bindFinder W θ F c σ).Pr sha512Msg)))
+    (hb : ∀ (c : ByteArray) (σ : Strategy (V.game θ F c)),
+      ENNReal.ofReal (Claims.Pr fun x : CoinTape (V.game θ F c) σ =>
+          V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) ∧ NoMiss V θ F c (rd W θ F c) σ x ∧
+            (P (CoinTape.run (V.game θ F c) σ x) ∧ Q c σ (CoinTape.run (V.game θ F c) σ x))) ≤
+        FlockSoundness.Game.prob (fun o => ((K.live W θ F c σ).joint (V.cost θ F c σ)).Accepts o)
+            ((K.live W θ F c σ).joint (V.cost θ F c σ)).game (K.project W θ F c σ) +
+          W.hidingTerm)
+    (c : ByteArray) (σ : Strategy (V.game θ F c)) :
+    ENNReal.ofReal (Claims.Pr fun x : CoinTape (V.game θ F c) σ =>
+        V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) ∧ NoMiss V θ F c (rd W θ F c) σ x) ≤
+      FlockSoundness.Game.prob (fun o => ((K.live W θ F c σ).joint (V.cost θ F c σ)).Accepts o)
+          ((K.live W θ F c σ).joint (V.cost θ F c σ)).game (K.project W θ F c σ) +
+        (ENNReal.ofReal (Real.sqrt ((K.bindFinder W θ F c σ).Pr sha512Msg)) + W.hidingTerm +
+          ENNReal.ofReal ((K.readFinder θ F c σ).Pr sha512Msg) +
+          ENNReal.ofReal ((K.forger θ F c σ).Pr Verity.lmsVerify)) := by
+  have hsplit : Claims.Pr (fun x : CoinTape (V.game θ F c) σ =>
+        V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) ∧ NoMiss V θ F c (rd W θ F c) σ x) ≤
+      Claims.Pr (fun x : CoinTape (V.game θ F c) σ =>
+          V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) ∧ NoMiss V θ F c (rd W θ F c) σ x ∧
+            (P (CoinTape.run (V.game θ F c) σ x) ∧ Q c σ (CoinTape.run (V.game θ F c) σ x))) +
+        (Claims.Pr (fun x : CoinTape (V.game θ F c) σ =>
+            V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) ∧ ¬ P (CoinTape.run (V.game θ F c) σ x)) +
+          Claims.Pr (fun x : CoinTape (V.game θ F c) σ =>
+            V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) ∧
+              ¬ Q c σ (CoinTape.run (V.game θ F c) σ x))) := by
+    refine (Claims.Pr_mono fun x hx => ?_).trans ((pr_or_le _ _).trans (add_le_add le_rfl (pr_or_le _ _)))
+    by_cases hp : P (CoinTape.run (V.game θ F c) σ x)
+    · by_cases hQ : Q c σ (CoinTape.run (V.game θ F c) σ x)
+      · exact Or.inl ⟨hx.1, hx.2, hp, hQ⟩
+      · exact Or.inr (Or.inr ⟨hx.1, hQ⟩)
+    · exact Or.inr (Or.inl ⟨hx.1, hp⟩)
+  have hnot := ha c σ
+  rw [prob_eq_ofReal_pr] at hnot
+  have hnq := hq c σ
+  rw [prob_eq_ofReal_pr] at hnq
+  refine ((ENNReal.ofReal_le_ofReal hsplit).trans
+    (ENNReal.ofReal_add_le.trans (add_le_add le_rfl ENNReal.ofReal_add_le))).trans ?_
+  refine (add_le_add (hb c σ) (add_le_add hnot hnq)).trans_eq ?_
+  ring
+
+omit θ F c in
 /-- **The coupling at the window's projection**: at the constructions with the projection and the messages' finders
 at the readings `rd`, `WindowCouplingTarget` holds at the window `W` wherever (a) an accepted play `P` doesn't hold
 of is at most as likely as the read finder's collision plus the forger's forgery, (a') one `Q` at its commitment and
@@ -474,7 +738,10 @@ theorem windowCouplingTarget_of_logged (rd : WindowReadings) (K : WindowConstruc
       (B c σ))
     (hD : ∀ c σ, WindowDecodes V θ F c k (fun o => P o ∧ Q c σ o) W (V.cost θ F c σ) (rd W θ F c) σ (D W θ F c σ)
       (M W θ F c σ) (BL c σ) (B c σ)) :
-    WindowCouplingTarget V k (K.withProject V rd D M) W θ F := by
-  sorry
+    WindowCouplingTarget V k (K.withProject V rd D M) W θ F :=
+  windowCouplingTarget_of_noMiss V k rd (K.withProject V rd D M) rfl rfl W θ F
+    (windowNoMiss_le_of_logged V k rd (K.withProject V rd D M) W P θ F Q ha hq fun c σ =>
+      windowLogged V θ F c k (fun o => P o ∧ Q c σ o) W (V.cost θ F c σ) (rd W θ F c) σ (D W θ F c σ)
+        (M W θ F c σ) (BL c σ) (B c σ) (hC c σ) (hD c σ))
 
 end Verity.Sampled
