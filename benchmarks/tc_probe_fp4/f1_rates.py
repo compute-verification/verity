@@ -47,8 +47,12 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from numpy.typing import ArrayLike
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -139,7 +143,8 @@ class SimtMultiplier:
         return False
 
 
-def _f(name, family, ptx, mnk, a, b, acc, fa, fb, **kw) -> Form:
+def _f(name: str, family: str, ptx: str, mnk: tuple[int, int, int], a: tuple[str, int], b: tuple[str, int],
+       acc: tuple[str, int], fa: str, fb: str, **kw: str | None) -> Form:
     return Form(name, family, ptx, mnk, a, b, acc, fa, fb, **kw)
 
 
@@ -418,7 +423,7 @@ def op_words_per_chain(op: SimtMultiplier) -> int:
 def simt_kernel(op: SimtMultiplier) -> str:
     w = op_words_per_chain(op)
 
-    def load(c, idx):
+    def load(c: str, idx: str) -> str:
         if c in ("d",):
             return f"__hiloint2double((int)f[{idx} + 1], (int)f[{idx}])"
         if c == "l":
@@ -641,16 +646,16 @@ def calls_of(text: str) -> dict:
     out: dict = {}
     fn, ins = None, []
 
-    def flush():
+    def flush() -> None:
         if fn is None:
             return
         at = {a: i for i, (a, _) in enumerate(ins)}
 
-        def target(toks):
+        def target(toks: list[str]) -> int | None:
             m = re.search(r"0x([0-9a-f]+)", " ".join(toks))
             return int(m.group(1), 16) if m and int(m.group(1), 16) in at else None
 
-        def expand(t, depth) -> tuple[dict, set]:
+        def expand(t: int | None, depth: int) -> tuple[dict, set]:
             hist: dict = {}
             body: set = set()
             if t is None or depth > 4:
@@ -772,7 +777,7 @@ _NARROW = {"e3m2": (3, 2, 8), "e2m3": (2, 3, 6), "e2m1": (2, 1, 2)}
 _CONTAINER_SHIFT = {"e3m2": 0, "e2m3": 0, "e2m1": 2}
 
 
-def _small_fp8(rng, fmt: str, shape, small: bool = False) -> np.ndarray:
+def _small_fp8(rng: np.random.Generator, fmt: str, shape: int | tuple[int, ...], small: bool = False) -> np.ndarray:
     """Bytes of an FP8 value (small magnitudes) or an FP6/FP4 code (uniform, or small exponents with ``small``) in its 8-bit
     container (``_CONTAINER_SHIFT``)."""
     s = rng.integers(0, 2, size=shape, dtype=np.uint32) << 7
@@ -791,7 +796,7 @@ def _pack4(b: np.ndarray) -> np.ndarray:
     return (b[..., 0] | (b[..., 1] << 8) | (b[..., 2] << 16) | (b[..., 3] << 24)).astype(np.uint32)
 
 
-def _half_bits(rng, shape, bf16: bool, lo: int, hi: int) -> np.ndarray:
+def _half_bits(rng: np.random.Generator, shape: int | tuple[int, ...], bf16: bool, lo: int, hi: int) -> np.ndarray:
     s = rng.integers(0, 2, size=shape, dtype=np.uint32)
     if bf16:
         return (s << 15) | (rng.integers(lo, hi, size=shape, dtype=np.uint32) << 7) | rng.integers(0, 128, size=shape, dtype=np.uint32)
@@ -820,7 +825,7 @@ def _seed(name: str) -> int:
     return int(hashlib.sha256(name.encode()).hexdigest()[:8], 16)
 
 
-def _meta(rng, form: Form, shape) -> np.ndarray:
+def _meta(rng: np.random.Generator, form: Form, shape: tuple[int, ...]) -> np.ndarray:
     nibs = np.array(META_12 if form.sparse == "1:2" else META_24, np.uint32)
     if form.meta == "const":
         return np.full(shape, int(nibs[0]) * 0x11111111, np.uint32)
@@ -828,14 +833,14 @@ def _meta(rng, form: Form, shape) -> np.ndarray:
     return (n << (4 * np.arange(8, dtype=np.uint32))).sum(axis=-1, dtype=np.uint64).astype(np.uint32)
 
 
-def _scale(rng, kind: str | None, shape) -> np.ndarray:
+def _scale(rng: np.random.Generator, kind: str | None, shape: tuple[int, ...]) -> np.ndarray:
     if kind is None:
         return np.zeros(shape, np.uint32)
     lo, hi = (0x30, 0x48) if kind == "ue4m3" else (124, 132)
     return _pack4(rng.integers(lo, hi, size=shape + (4,), dtype=np.uint32))
 
 
-def _reg_words(t: tuple[str, int], fmt: str, rng, lanes: int, small: bool = False) -> np.ndarray:
+def _reg_words(t: tuple[str, int], fmt: str, rng: np.random.Generator, lanes: int, small: bool = False) -> np.ndarray:
     if t[0] == "d":
         v = operand_words("f64", rng, (lanes, NSETS, t[1]))
         return v.view(np.uint32).reshape(lanes, NSETS, 2 * t[1])
@@ -855,11 +860,11 @@ def tensor_inputs(form: Form, threads: int, seed: int) -> np.ndarray:
     return out
 
 
-def _f32w(v) -> np.ndarray:
+def _f32w(v: ArrayLike) -> np.ndarray:
     return np.asarray(v, np.float32).view(np.uint32)
 
 
-def _f64w(v) -> np.ndarray:
+def _f64w(v: ArrayLike) -> np.ndarray:
     return np.ascontiguousarray(v, np.float64).view(np.uint32)
 
 
@@ -880,7 +885,7 @@ def simt_inputs(op: SimtMultiplier, threads: int, seed: int) -> np.ndarray:
         two = lambda lo, hi: np.stack([_f32w(rng.uniform(lo, hi, sh)), _f32w(rng.uniform(lo, hi, sh))], -1)  # noqa: E731
         return np.concatenate([two(1, 2), two(0.5, 0.99), two(2**-4, 2**-3)], -1).astype(np.uint32)
     elif op.fmt in ("hfma2", "bfma2", "hmul2"):
-        def pack(lo, hi, sign=False):
+        def pack(lo: float, hi: float, sign: bool = False) -> np.ndarray:
             v = rng.uniform(lo, hi, sh + (2,)) * (rng.choice([-1.0, 1.0], sh + (2,)) if sign else 1.0)
             if op.fmt == "bfma2":
                 bits = (v.astype(np.float32).view(np.uint32) >> 16).astype(np.uint32)

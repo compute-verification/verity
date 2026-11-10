@@ -34,6 +34,8 @@ from verity.ml.circuits.silicon.term import FORMATS, FP32_MAX_EXPONENT, PRODUCT_
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
 
+    from numpy.typing import ArrayLike
+
 E2M1_VALUE = np.array([0, 0.5, 1, 1.5, 2, 3, 4, 6, -0.0, -0.5, -1, -1.5, -2, -3, -4, -6], dtype=np.float64)
 #: E2M1 code -> the E4M3 byte of the same value (every E2M1 value is an E4M3 normal or zero)
 E2M1_TO_E4M3 = [0x00, 0x30, 0x38, 0x3C, 0x40, 0x44, 0x48, 0x4C, 0x80, 0xB0, 0xB8, 0xBC, 0xC0, 0xC4, 0xC8, 0xCC]
@@ -158,7 +160,7 @@ def candidates(instr: str) -> dict:
 # --- families --------------------------------------------------------------------------------------------------------------------
 
 
-def _codes(rng, fmt: str, shape, nonzero: bool = False) -> np.ndarray:
+def _codes(rng: np.random.Generator, fmt: str, shape: int | tuple[int, ...], nonzero: bool = False) -> np.ndarray:
     if fmt == "e2m1":
         c = rng.integers(1 if nonzero else 0, 16, shape)
         if nonzero:
@@ -171,11 +173,11 @@ def _codes(rng, fmt: str, shape, nonzero: bool = False) -> np.ndarray:
     return c.astype(np.uint8)
 
 
-def _f32(x) -> np.ndarray:
+def _f32(x: ArrayLike) -> np.ndarray:
     return np.asarray(x, dtype=np.float32).view(np.uint32)
 
 
-def _acc_near(rng, p: np.ndarray, d_lo: int, d_hi: int) -> np.ndarray:
+def _acc_near(rng: np.random.Generator, p: np.ndarray, d_lo: int, d_hi: int) -> np.ndarray:
     """FP32 words +-(1.f) 2^(floor(log2|p|) + d), d uniform in [d_lo, d_hi], the mantissa exact / all-ones / random in thirds."""
     n = p.size
     lp = np.floor(np.log2(np.where(p == 0, 1.0, np.abs(p)))).astype(np.int64).ravel()
@@ -194,16 +196,16 @@ def families_k32(rng: np.random.Generator, n_random: int, instr: str,
     k = 32
     va, vb = VALUE[fa], VALUE[fb]
 
-    def scales(shape, lo=117, hi=138):
+    def scales(shape: int | tuple[int, ...], lo: int = 117, hi: int = 138) -> np.ndarray | None:
         return rng.integers(lo, hi, shape).astype(np.uint8) if scale else None
 
-    def sval(s, n, rows):
+    def sval(s: np.ndarray | None, n: int, rows: int) -> np.ndarray:
         return np.ones((n, rows)) if s is None else np.exp2(s[..., 0].astype(np.float64) - 127)
 
-    def acc_random(n, lo=-30, hi=40):
+    def acc_random(n: int, lo: int = -30, hi: int = 40) -> np.ndarray:
         return _f32((rng.standard_normal((n, 16, 8)) * np.exp2(rng.integers(lo, hi, (n, 16, 8)))).astype(np.float32))
 
-    def zeros(n):
+    def zeros(n: int) -> np.ndarray:
         return np.zeros((n, 16, 8), np.uint32)
 
     n = n_random
@@ -328,7 +330,7 @@ def families_k32(rng: np.random.Generator, n_random: int, instr: str,
     yield "specials", A, Bt, sfa, sfb, acc
 
 
-def _uniform_acc(rng, n: int, e_lo: int = 1, e_hi: int = 250) -> np.ndarray:
+def _uniform_acc(rng: np.random.Generator, n: int, e_lo: int = 1, e_hi: int = 250) -> np.ndarray:
     e = rng.integers(e_lo, e_hi + 1, (n, 16, 8)).astype(np.uint32)
     m = rng.integers(0, 1 << 23, (n, 16, 8)).astype(np.uint32)
     s = rng.integers(0, 2, (n, 16, 8)).astype(np.uint32)
