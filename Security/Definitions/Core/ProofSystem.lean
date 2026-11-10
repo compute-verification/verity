@@ -77,7 +77,7 @@ structure RunFn (Coin : Type) (k : ℕ) where
   [fin : Fintype Ω]
   [ne : Nonempty Ω]
   D : SampleSpace Coin k
-  trace : Ω → D.S → Trace
+  trace : Ω → D.S → Transcript
 
 attribute [instance] RunFn.fin RunFn.ne
 
@@ -284,7 +284,7 @@ def Wald : Prop := (S.E H).WaldLe H S.N ∧ (S.E H).RunsLe H S.M
 /-- **The extractor checks its output**: every witness it returns is in the relation, over every sample space and
 run. -/
 def SelfChecking : Prop :=
-  ∀ x (D : SampleSpace Coin (S.V.k x)) (runs : D.S → Trace) d c w,
+  ∀ x (D : SampleSpace Coin (S.V.k x)) (runs : D.S → Transcript) d c w,
     (((S.E H).ext x D d c).eval H runs).1 = some w → S.R x w
 
 /-- **Complete**, at the honest prover's completeness error. -/

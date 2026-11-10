@@ -134,7 +134,7 @@ def nsOf (desc : Claims.Msg) (q : Lean.Json) : List ℕ :=
     | .error _ => []
     | .ok l => (l.classes.toList.headD #[]).toList.map Array.size
 
-theorem nsOf_eq {desc : Claims.Msg} {q : Lean.Json} {p : Spot.Program} {l : Spot.Slots.Layout}
+theorem nsOf_eq {desc : Claims.Msg} {q : Lean.Json} {p : Spot.Program} {l : Spot.Slots.SlotOrder}
     (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : Spot.Slots.layout p q = .ok l) :
     nsOf desc q = (l.classes.toList.headD #[]).toList.map Array.size := by
   unfold nsOf
@@ -145,7 +145,7 @@ theorem nsOf_eq {desc : Claims.Msg} {q : Lean.Json} {p : Spot.Program} {l : Spot
   rw [hl]
 
 /-- A layout's strata sizes sum to its population's slots. -/
-theorem sum_strata_popOf (l : Spot.Slots.Layout) :
+theorem sum_strata_popOf (l : Spot.Slots.SlotOrder) :
     ((l.classes.toList.headD #[]).toList.map Array.size).sum = (popOf l).length := by
   simp only [popOf, List.length_flatten, List.map_map]
   congr 1

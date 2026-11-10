@@ -13,7 +13,7 @@ import Mathlib.Basic.ENNReal.Real
 
 The game is `Security/Definitions/Accounting/Bandwidth/Game.lean`; proofs are in `Security/Proofs/Accounting/Bandwidth/`.
 The game's guarantee, `AuditRO` below, is PoUB's per-pass lemma, `Accounting.Guarantees.Remote.AuditRO`
-(`RemotePass.lean`); this file holds its completeness and its forms for other devices.
+(`RemotePass.lean`); this file holds its forms for other devices.
 No named assumption: the device's bounds (on-chip state `S`, side-source bits `c`, regenerations `G`, oracle queries
 `q`) define the class of devices the guarantee quantifies over, and the claims registry names, for a deployed device,
 the measurement that falsifies each (`bandwidth-s-chip`, `bandwidth-side-cap`, `bandwidth-regen-time`) and what the
@@ -26,16 +26,6 @@ namespace Bandwidth.Guarantees
 
 open Pous (Bits pr)
 open scoped ENNReal
-
-/-- **Completeness of `AuditRO`: an honest device is accepted, and its ingress is exactly the store.** For every `N`,
-`b` and `h` there is a device with no on-chip state, no side sources and no regeneration that makes `N` oracle queries
-(a `Device N b h 0 0 0 N`) whose tags are accepted on every store, oracle and sample, and whose ingress is exactly `N·b`
-bits. The device reads every block once and queries the oracle at it. Against `AuditRO` at `S = c = G = 0` and `q = N`,
-the honest `N·b` sits above the floor `k·b − λ` by the sample's slack `(N − k)·b`, about `ε_s·N·b`, plus `λ`. Proof:
-`Bandwidth.SecurityProofs.HonestPasses`. -/
-def HonestPasses : Prop :=
-  ∀ N b h : ℕ, ∃ A : Device N b h 0 0 0 N,
-    ∀ (E : Store N b) (O : Oracle N b h) (s : ℕ) (I : Fin s → Fin N), Accepts A E O I ∧ A.ingress E O = N * b
 
 /-- **The bandwidth audit v0 with relayed tags, in the random-oracle model.** `AuditRO` for a `RelayDevice`, whose side
 sources may depend on the oracle: a peer holding a copy of the store can compute tags after the seed and relay them,
