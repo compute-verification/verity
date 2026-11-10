@@ -35,7 +35,10 @@ sampled span ``sample[i]``'s units at [i·n_rho, (i+1)·n_rho), chained after th
 * `Supply`, `supplied`, `sources`, `history`: a replay-block parameter the verifier supplies, and the port that reads it.
   The interior commits no rows of its own at such a port: its rows are rows of a value the interior registers under the
   parameter's name, as round 2 names the link (`second_stage.replay_links`), which `supplied` makes at public salts and
-  the verifier fills from its own sources (`sources`), so no row there is one the prover picks after the coins. Two kinds:
+  the verifier fills from its own sources (`sources`), so no row there is one the prover picks after the coins. The
+  stream takes each as a per-span value (`span_values`: its rows a sampled span and a row's leaf type, `DIGEST` or
+  `INDEX`), so its interior program sizes it by the replay sample and the verifier reads each source's bytes by that
+  type; its row format is its reading port's (`supplied_schemas`). Two kinds:
   a table read's ``root`` and ``domain`` (`EmbeddingRead_v1{V, H}`), each sampled span's the table round 1 served for it
   (`boundary_tables`: committed at serve, its root a port of the class's round-1 record, its rows filled to its class's
   C, `boundary_tables.class_rows`), which the challenger names from its own sample and copies round 1's root for
@@ -467,7 +470,7 @@ def _held(ms: Sequence[CS.Member], cells: Sequence[int], offs: Sequence[int], q:
 
 
 def interior_window(members: Members, n_rho: Cells, boundary: str, sample: Sequence[int],
-                    wires: Sequence[Any] = (), values: Sequence[tuple[str, int, int]] = ()) -> CS.Binding:
+                    wires: Sequence[Any] = (), values: Sequence[tuple[str, int, Any]] = ()) -> CS.Binding:
     """The window of the replay sample's interior, template-major: template t's Q·n_t units from off_t = Q·Σ_{t'<t} n_t',
     laid out as ``members[t]`` (its ports and their words), each a shared-row member of one table row a unit a port,
     under `interior_run`: what the prover commits and the challenger derives the ports of. ``members``: one, or one a
@@ -489,7 +492,7 @@ def interior_window(members: Members, n_rho: Cells, boundary: str, sample: Seque
 
 
 def interior_ports(members: Members, n_rho: Cells, boundary: str, sample: Sequence[int],
-                   wires: Sequence[Any] = (), values: Sequence[tuple[str, int, int]] = ()) -> dict[str, dict[str, Any]]:
+                   wires: Sequence[Any] = (), values: Sequence[tuple[str, int, Any]] = ()) -> dict[str, dict[str, Any]]:
     """The challenger's copy of the interior registration's ports: `interior_window`'s, from the templates' layouts, the
     size class, the boundary registration's digest, its own replay sample, the wires it derives from the replay block
     and its stream's values."""
@@ -505,6 +508,8 @@ _HM = hm96.SHA512
 HELD = "strings"
 #: a table read's parameters the verifier supplies, each a `Digest` a row
 TABLE = ("root", "domain")
+#: a supplied row's leaf type (`population.leaf_type`'s shape): a `Digest`'s, and an I32 index's two u16 words
+DIGEST, INDEX = (8, 64, 1), (2, 16)
 
 
 @dataclass(frozen=True)
@@ -537,12 +542,23 @@ class Supply:
         """A row's u16 words: a `Digest`'s 32, or an I32's two."""
         return 32 if self.index is None else 2
 
+    @property
+    def leaf(self) -> tuple[int, ...]:
+        """A row's leaf type: `DIGEST`, or `INDEX`."""
+        return DIGEST if self.index is None else INDEX
 
-def supplied_values(supplies: Sequence[Supply], q: int) -> tuple[tuple[str, int, int], ...]:
-    """The values of an interior of ``q`` sampled spans, as a window stream takes them (`mixed_population_program`'s
-    ``(name, leaves, width)``) and its interior program its parameters, so R7 registers `supplied`'s: each of
-    ``supplies``', ``q·per`` rows of its u16 words."""
-    return tuple((s.value, s.words * s.per * int(q), 16) for s in supplies)
+
+def span_values(supplies: Sequence[Supply]) -> tuple[tuple[str, int, tuple[int, ...]], ...]:
+    """``supplies`` as a two-stage window stream takes them (`Stream`'s ``span_values``): each value's name, its rows a
+    sampled span and a row's leaf type, which the stream's interior program sizes by its replay sample."""
+    return tuple((s.value, s.per, s.leaf) for s in supplies)
+
+
+def supplied_values(supplies: Sequence[Supply], q: int) -> tuple[tuple[str, int, tuple[int, ...]], ...]:
+    """The values of an interior of ``q`` sampled spans, as its program takes them (`mixed_population_program`'s
+    ``(name, leaves, width)``, `Stream.interior_program`'s of `span_values`), so R7 registers `supplied`'s: each of
+    ``supplies``', ``q·per`` rows of its leaf type."""
+    return tuple((v, per * int(q), leaf) for v, per, leaf in span_values(supplies))
 
 
 def supplied_words(supplies: Sequence[Supply]) -> dict[str, int]:
@@ -551,11 +567,18 @@ def supplied_words(supplies: Sequence[Supply]) -> dict[str, int]:
     return {s.value: s.words for s in supplies}
 
 
+def supplied_schemas(members: Members, supplies: Sequence[Supply]) -> dict[str, str]:
+    """The challenger's copy of each supplied value's row format (`Stream.register_interiors`' ``schemas``): its reading
+    port's, from the templates' layouts (``members``, one or one a template)."""
+    ms = {m.template: m for m in ([members] if isinstance(members, CS.Member) else members)}
+    return {s.value: ms[s.template].schema(s.port) for s in supplies}
+
+
 def supplied(program: str, supplies: Sequence[Supply], q: int, entries: Sequence[Mapping[str, Any]] = (),
              schemas: Mapping[str, str] | None = None) -> tuple[Any, ...]:
     """The values ``supplies`` name for ``q`` sampled spans, each committed as core's `Registered` under ``program`` at
     its public salts (`registered.supplied_salts`), as `interface.supplied` fills a served window's table reads: an
-    index's row ``s·per + r`` the words ``[index[r], 0]``; a table read's, its span's table's root or domain id as a
+    index's row ``s·per + r`` the I32 ``index[r]``'s two u16 words, the low one first; a table read's, its span's table's root or domain id as a
     `Digest` port's 32 words (`interface.digest_words`), from the tables' entries alone (``entries[s]`` sampled span s's,
     `history.HistoryTable.entry`). ``schemas``: each value's row format, its reading port's (`registered.SCHEMA_V2`
     where none is given)."""
@@ -793,8 +816,9 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     every read must open its span's (`table_reads`), and the tables' strings are published (`Interior.published`).
     ``supplies``: the replay-block parameters the verifier supplies, each with the port that reads it (`Supply`), among
     them every table read's ``root`` and ``domain``. Such a port's rows are committed as rows of the value `supplied`
-    makes, on the host, which its program takes (`supplied_values`: the stream is a window's, with them); a replayed unit
-    whose row there is not the value's at its place is refused before anything is committed."""
+    makes, on the host, which its program takes (`supplied_values`: the stream is a window's, taking them a sampled
+    span, `span_values`); a replayed unit whose row there is not the value's at its place is refused before anything is
+    committed."""
     if not spans or len(spans) != len(sample):
         raise ValueError(f"{len(spans)} spans for a replay sample of {len(sample)}")
     per = [(s,) if isinstance(s, Span) else tuple(s) for s in spans]
@@ -887,7 +911,7 @@ def register(stream: Any, first: Any, it: Interior, **copies: Any) -> Any:
                                      leaf_layer=copies.pop("leaf_layer", it.leaf_layer), **copies)
 
 
-__all__ = ["HELD", "MOVED", "READ", "TABLE", "DeviceCommit", "Interior", "Replay", "Span", "Supply", "captured",
+__all__ = ["DIGEST", "HELD", "INDEX", "MOVED", "READ", "TABLE", "DeviceCommit", "Interior", "Replay", "Span", "Supply", "captured",
            "committed", "gather", "history", "interior", "interior_ports", "interior_run", "interior_window", "kept_table",
-           "named", "pieces", "port_map", "register", "sources", "span", "supplied", "supplied_values", "supplied_words",
-           "table_reads"]
+           "named", "pieces", "port_map", "register", "sources", "span", "span_values", "supplied", "supplied_schemas",
+           "supplied_values", "supplied_words", "table_reads"]

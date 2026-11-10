@@ -79,7 +79,7 @@ def _boundary_window() -> CS.Binding:
 
 
 def _first():
-    """A window stream over `A` and `B` taking the indices' values (`interior_rows.supplied_values`), a stand-in boundary
+    """A window stream over `A` and `B` taking the indices' values a sampled span (`interior_rows.span_values`), a stand-in boundary
     registered and its first stage drawn (spans 0 and 2)."""
     names = {}
     values = IR.supplied_values(SUPPLIES, Q)
@@ -97,8 +97,8 @@ def _first():
                   S.Check(tuple(P.program_digest(Program(u)) for u in (A, B)), P.template_instances_query((A, B)),
                           proof_deadline=60.0), public, b"interior-indices-test")
     draws = iter([[0, 2]])
-    stream = S.Stream(spec, (A, B), values=values, replay=BLOCK, budget=1, delta=DELTA, challenger="challenger-test",
-                      clock=lambda: 0.0,
+    stream = S.Stream(spec, (A, B), span_values=IR.span_values(SUPPLIES), replay=BLOCK, budget=1, delta=DELTA,
+                      challenger="challenger-test", clock=lambda: 0.0,
                       sampler=lambda law, n: next(draws) if law["law"] == "subset" else [0] * len(law["strata"]))
     window = _boundary_window()
     c = CS.commit(window, [{"rows": {"ingress": np.zeros((SPANS, 64), np.uint16)},
@@ -145,6 +145,11 @@ def test_an_index_port_is_rows_of_the_value_the_verifier_fills_from_its_own_byte
         v = RG.Registered.commit(prog, x.value, mine, RG.supplied_salts(prog, x.value, len(mine)), schema=m.schema("idx"))
         assert v.entry() == {k: got[x.value][k] for k in v.entry()}
     assert IR.supplied_words(SUPPLIES) == {f"{KEY}/c": 2, f"{KEY}/i": 2}
+    assert IR.span_values(SUPPLIES) == ((f"{KEY}/c", NC, IR.INDEX), (f"{KEY}/i", W, IR.INDEX))
+    assert IR.supplied_schemas(MEMBERS, SUPPLIES) == {x.value: m.schema("idx") for x, m in zip(SUPPLIES, w.members)}
+    for q in (1, SPANS):
+        sized = IR.interior_window(MEMBERS, CELLS, "00", list(range(q)), values=IR.supplied_values(SUPPLIES, q))
+        assert P.program_digest(stream.interior_program(q)) == P.program_digest(sized.program)
     with pytest.raises(S.Refused) as refused:
         IR.register(stream, first, it, registered=IR.supplied_words(SUPPLIES), supplied=srcs)
     assert refused.value.verdict.codes == ("R7-supplied",)

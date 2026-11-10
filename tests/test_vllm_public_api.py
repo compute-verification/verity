@@ -104,8 +104,8 @@ PUBLIC = {
                                             "which benchmarks/serve_tax's plugin installs",
     "verity_vllm.pipeline.interior_rows": "I1: a two-stage window's interior at replay: the sampled spans' registration "
                                           "(interior, register), the block parameters the verifier supplies (Supply) and "
-                                          "the challenger's copies of them (supplied_values, supplied_words, sources, "
-                                          "history), which "
+                                          "the challenger's copies of them (span_values, supplied_words, "
+                                          "supplied_schemas, sources, history), which "
                                           "benchmarks/one_stage/two_stage.py registers",
     "verity_vllm.pipeline.serve_h1": "I1: serve-openai's PoUW H1 arm, its --protocols-config (config_of) and the window "
                                      "Program it declares (H1Windows), which a period's offline Program must equal",

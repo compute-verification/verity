@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 
 from verity.core.protocols.spot import service as S
-from verity.core.protocols.spot.one_stage import partition as P, registration as R
+from verity.core.protocols.spot.one_stage import partition as P, registered as RG, registration as R
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.program import Program
@@ -97,10 +97,10 @@ def _spec() -> S.Spec:
 
 
 def _first(tables):
-    """A window stream over `RD` taking the reads' values (`interior_rows.supplied_values`), and round 1, a stand-in boundary
+    """A window stream over `RD` taking the reads' values a sampled span (`interior_rows.span_values`), and round 1, a stand-in boundary
     whose record registers each span's table as a port, registered and its first stage drawn (spans 0 and 2)."""
     draws = iter([[0, 2]])
-    stream = S.Stream(_spec(), [RD], values=IR.supplied_values(SUPPLIES, Q), replay=BLOCK, budget=1, delta=DELTA,
+    stream = S.Stream(_spec(), [RD], span_values=IR.span_values(SUPPLIES), replay=BLOCK, budget=1, delta=DELTA,
                       challenger="challenger-test", clock=lambda: 0.0,
                       sampler=lambda law, n: next(draws) if law["law"] == "subset" else [0] * len(law["strata"]))
     c = CS.commit(BOUNDARY, [{"rows": {"ingress": np.zeros((SPANS, 64), np.uint16)},
@@ -152,9 +152,11 @@ def test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves
     `history.resolve` turns the reads' sources into those bytes, which are `supplied`'s rows. The reads' ``root`` and
     ``domain`` rows are given by reference, rows (0, 0, 1, 1) of those values, and the commitment is the one the same rows
     given in full under the values' salts makes. The stream takes the interior's roots, names and history (the
-    public-items rule and R7-history pass); it refuses the supplied values' rows (`R7-supplied`) alone: its verifier reads
-    a flat value's bytes as big-endian u32 halves under row/v1, where the reads hold `digest_words` (a `Digest` port's
-    order) under row/v2, which a typed value of the stream fixes."""
+    public-items rule and R7-history pass), and its interior program takes each value a `Digest` a row a sampled span, so
+    its verifier reads each resolved source in a `Digest` port's order: its 512 leaves packed into u16 words are the
+    row the interior registers. It refuses the values' rows (`R7-leaves`, `R7-domain`, `R7-supplied`): it counts and
+    commits a supplied value's rows as row/v1 rows of 32 one-bit leaves, where the reads hold a `Digest` a row under their
+    port's row/v2 (`supplied_schemas`)."""
     tables = _tables()
     stream, reg, first, rec = _first(tables)
     drawn = [tables[u] for u in first.units]
@@ -177,6 +179,11 @@ def test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves
         assert [list(r) for r in v.rows] == [list(digest_words(roots[n][of == "domain"])) for n in names]
         e = next(e for e in got if e["value"] == v.value)
         assert {k: e[k] for k in v.entry()} == v.entry()
+        bits = RG.supplied_rows(stream.interior_program(Q), v.value, RG.sources(resolved)[v.value], it.record)
+        assert [[sum(b << j for j, b in enumerate(r[16 * k:16 * k + 16])) for k in range(32)] for r in bits] == \
+            [list(r) for r in v.rows]
+    assert IR.span_values(SUPPLIES) == tuple((x.value, 1, IR.DIGEST) for x in SUPPLIES)
+    assert IR.supplied_schemas(MEMBER, SUPPLIES) == {x.value: w.members[0].schema(x.port) for x in SUPPLIES}
     m = w.members[0]
     by_ref = {p: c.given[m.port(p)] for p in ("root", "domain")}
     assert all(v.positions == (0, 0, 1, 1) for v in by_ref.values())
@@ -190,7 +197,7 @@ def test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves
     with pytest.raises(S.Refused) as refused:
         IR.register(stream, first, it, history=hist, registered=IR.supplied_words(SUPPLIES),
                     supplied=IR.sources(SUPPLIES, Q, names))
-    assert refused.value.verdict.codes == ("R7-supplied",)
+    assert refused.value.verdict.codes == ("R7-leaves", "R7-domain", "R7-supplied")
 
 
 def test_a_table_round_1_did_not_register_is_refused():
