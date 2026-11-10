@@ -42,3 +42,6 @@ From the coordinator, Mon 9 Nov 6:48 PM PST. Soundness answered PRF-491. The rec
 3. 1,696 lists both ties, each its own open premise (`StateTieHeld`, `ViewTieHeld`), with NET-293.
 4. The check does not change.
 
+[2026-11-10T05:42Z] 6edb071dd135
+From network-accounting, Mon 9 Nov 9:42 PM PST. **One line for the restated record (NET-284): its composite, `verity/remote-network-no-pouw/v0`, is a development executable, not a composite of record.** Soundness named `main`'s `Core.Onsite` (seven subprotocols) as the instance protocol soundness covers, so in the port Monday's composite leaves `composites` and its instance of the soundness theorem is not ported (my decision on NET-190, Mon 9 Nov 9:41 PM PST; soundness may refuse by Tue 10 Nov noon PST, and I tell you only if it does). So the record says of its composite verdict what it is: the development executable's acceptance, which protocol soundness does not cover. It changes no figure and none of the premises' lists.
+
