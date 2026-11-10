@@ -37,11 +37,13 @@ staged, is built from source. Lake looks a module up by its package and input ha
 input hash are both left out, and after the build `misrestored` names any module whose input hash is another staged
 module's, which fails the build.
 
-Lake keeps a module its tree already holds, by its own input hash, over what was staged. So before the build `settle`
-takes the trace of each keyed module the tree holds in a version the index doesn't: Lake then restores the staged
-version or compiles the module, and the build's `put` indexes what it compiled. After a build every keyed module of a
-tree is thus the index's version, and a module version is compiled once a node, not once a tree. A module `put` could
-not index (`UNSTORED`), like one without a key, is left to Lake.
+Lake keeps a module its tree already holds, by its own input hash, over what was staged. So before a package's build
+`settle` takes the trace of each keyed module of that package its build holds in a version the index doesn't: Lake then
+restores the staged version or compiles the module, and the build's `put` indexes what it compiled. After a build every
+keyed module of the built package is thus the index's version, and a module version is compiled once a node, not once
+a tree. A module `put` could not index (`UNSTORED`), like one without a key, is left to Lake, and so is every module of
+a package the build requires by path: its build is that package's, which an audit seals and other builds and tests read,
+so no other package's build takes a trace there, and its own build settles it.
 
 A module enters the index (`LakeArtifacts.put`) only from a run that compiled it in the sandbox, whether the run then
 passed, failed or was killed, from sources none of which runs code while it compiles outside a reviewed listing
@@ -602,8 +604,9 @@ def _fetches(root: Path) -> tuple[str, dict[str, dict]] | None:
 def pinned_as(root: Path, here: Path) -> str | None:
     """Why a compile that read a module's `.olean` in ``here``, a directory no package of the workspace builds, did not
     read what a key of ``root`` names; or None. A key names the fetched packages by ``root``'s pins, not by their bytes,
-    and a package required by path is compiled again by a build of each root that requires it, over that root's fetched
-    packages: Security's modules by Security/Proofs' build, last, so that is the compile `put` finds in Security's tree.
+    and a package required by path is compiled in its own tree by whichever build finds a module of it out of date,
+    over that build's root's fetched packages: its own build's, or that of a root requiring it, so the compile `put`
+    finds in Security's tree read Security's packages or, say, Security/Proofs'.
     Its outputs are a compile of what ``root``'s key names when ``here`` is in the packages of a root that has
     ``root``'s toolchain and pins every package ``root`` fetches as ``root`` does, the one read among them. The
     toolchain's own modules are not listed in a `setup.json`, so a directory in no root's packages is refused. ``here``
@@ -787,13 +790,19 @@ def _names(trace: Path) -> set[str] | None:
     return {s for s in _strings(d.get("outputs")) if ARTIFACT.fullmatch(s)} if isinstance(d, dict) else set()
 
 
-def settle(store: Path, keyed: dict[str, Key], found: dict[str, tuple[str, dict, dict[str, int]]], done: set[str],
-           named: dict[tuple[str, str], str], threads: int = 8) -> tuple[dict[str, int], int]:
-    """Take the trace of each module of ``keyed`` the build holds in a version the cache doesn't, so that the build ahead
-    ends with every keyed module either the cache's version or compiled by it, and then indexed (`LakeArtifacts.put`).
-    Lake keeps a module whose trace has its input hash, 64 bits of a hash that isn't cryptographic, over what the cache
-    staged for it, and `put` indexes only what its run compiled: a module an earlier build left in the tree and the cache
-    lacks would stay there, restored nowhere else and bound to its source by that hash alone.
+def settle(store: Path, root: Path, keyed: dict[str, Key], found: dict[str, tuple[str, dict, dict[str, int]]],
+           done: set[str], named: dict[tuple[str, str], str], threads: int = 8) -> tuple[dict[str, int], int]:
+    """Take the trace of each module of ``root``'s own package that its build holds in a version the cache doesn't, so
+    that the build ahead ends with every keyed module of the package either the cache's version or compiled by it, and
+    then indexed (`LakeArtifacts.put`). Lake keeps a module whose trace has its input hash, 64 bits of a hash that isn't
+    cryptographic, over what the cache staged for it, and `put` indexes only what its run compiled: a module an earlier
+    build left in the tree and the cache lacks would stay there, restored nowhere else and bound to its source by that
+    hash alone.
+
+    Nothing in the build of a package ``root`` requires by path is touched. That build is another package's: an audit of
+    it may have sealed its files, and other builds, audits and tests read them while this one runs. A trace taken there
+    would have this build's Lake compile or restore the module over them. Such a module is settled by its own package's
+    build, as a root; here it stays as the tree holds it.
 
     In import order, as `stage` walked (``found``, ``done``, and ``named``, the digests its entries name):
 
@@ -812,7 +821,10 @@ def settle(store: Path, keyed: dict[str, Key], found: dict[str, tuple[str, dict,
     digests = read_digests(rest, named, threads)
     took: dict[str, int] = {}
     left: set[str] = set()
+    own = root.resolve()
     for m, k in keyed.items():
+        if k.package.dir != own:
+            continue
         trace = k.package.build() / "lib" / "lean" / path_of(m, ".trace")
         if (names := _names(trace)) is None:
             continue
@@ -861,8 +873,8 @@ def stage(store: Path, root: Path, extra: list[str] | tuple[str, ...], dest: Pat
     staged: `missed`, {reason: how many}, and `first`, {reason: the first such module}. A module whose own key has no
     entry is explained against the entry it was last indexed under (`differs`); the others read a module that isn't
     staged (`BEHIND`), or have an entry Lake can't be handed (two under one input hash, or an artifact that differs).
-    With ``settled`` the build's own traces are settled against what was staged (`settle`), and ``report`` takes how
-    many it took by reason (`took`) and how many modules it left to Lake (`left`)."""
+    With ``settled`` the traces of ``root``'s own package are settled against what was staged (`settle`), and ``report``
+    takes how many it took by reason (`took`) and how many modules it left to Lake (`left`)."""
     keyed = keys(root, extra)
     store.mkdir(parents=True, exist_ok=True)
     with open(store / LOCK, "a") as lock:
@@ -907,7 +919,7 @@ def stage(store: Path, root: Path, extra: list[str] | tuple[str, ...], dest: Pat
             staged[(e["scope"], e["hash"])] = m
             os.utime(entry_path(store, h))
         if settled:
-            took, left = settle(store, keyed, found, done, named, threads)
+            took, left = settle(store, root, keyed, found, done, named, threads)
             if report is not None:
                 report |= {"took": took, "left": left}
         if report is not None:
