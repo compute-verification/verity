@@ -65,7 +65,9 @@ def test_a_switch_shown_only_in_part_or_by_no_reader_stays_off():
     (lambda m: m["server_argv"].remove("--tensor-parallel-size"), 5, None),
     (lambda m: m["versions"].update(vllm="0.28.1"), 6, None),
     (lambda m: m["server_argv"].append("--no-enable-prefix-caching"), 7, "off"),
+    (lambda m: m["server_argv"].extend(["--no-enable-prefix-caching", "--enable-prefix-caching"]), 7, "on"),
     (lambda m: m.pop("sampling"), 8, None),
+    (lambda m: m.update(sampling={"requests": 651}), 8, None),
     (lambda m: m.update(window_s=3600.0), 10, 3600.0),
     (lambda m: m.pop("tick"), 20, None),
 ])
@@ -106,13 +108,16 @@ def test_a_stamp_holds_no_request_count_or_time():
 
 @pytest.mark.parametrize("change", [
     lambda m: m.pop("server_argv"),
-    lambda m: m.update(server_argv=["ticksun.py", "fake", "--port", "8000"]),
+    lambda m: m.update(server_argv=["stand_in.py", "--port", "8000"]),
+    lambda m: m.update(server_argv="-m vllm.entrypoints.openai.api_server"),
 ])
 def test_it_refuses_a_record_that_is_no_serves(change):
     m = meta("tick-40960")
     change(m)
     with pytest.raises(ValueError, match="not a serve's meta.json"):
         record.stamp(m)
+    with pytest.raises(ValueError, match="not a serve's meta.json"):
+        record.stamp([m])
 
 
 @pytest.mark.parametrize("change,message", [
@@ -135,6 +140,13 @@ def test_the_command_prints_the_off_list_and_writes_the_stamp(tmp_path, capsys):
     assert "at the post's value: 1, 2, 4, 5, 7, 10\n" in out
     assert "off: 6, 8, 9, 11, 12, 13, 14, 15, 16, 17, 20\n" in out
     assert json.loads((tmp_path / "out" / "record.json").read_text()) == record.stamp(meta("context-131072"))
+    (tmp_path / "meta.json").write_text("{}")
     with pytest.raises(SystemExit, match="not a serve's meta.json"):
-        (tmp_path / "meta.json").write_text("{}")
         record.main(["stamp", str(tmp_path / "meta.json")])
+
+
+def test_the_command_never_writes_a_stamp_over_the_record():
+    before = record.RECORD.read_bytes()
+    with pytest.raises(SystemExit, match="the stamp would replace record.json"):
+        record.main(["stamp", str(FIXTURES / "meta.context-131072.json"), "--out", str(record.HERE)])
+    assert record.RECORD.read_bytes() == before

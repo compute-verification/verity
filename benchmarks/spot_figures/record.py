@@ -14,7 +14,7 @@ nothing else, so the serve does not change and a stored serve is stamped afterwa
 sets that its `meta.json` does not show at the post's value: one it shows at another value, one it shows only in part
 (the reader's value lacks a field `post` has), and one with no reader. A stamp is as good as the `meta.json` it read:
 what a run changed without recording it there, a stamp does not see. It holds configuration only, no request, count or
-time, so it is public where the serve's own record is not.
+time, so it can be published where the serve's own record is private.
 """
 from __future__ import annotations
 
@@ -73,9 +73,15 @@ def engine(meta: dict) -> dict | None:
     return {"commit": found.group(1)} if found else None
 
 
+def prefix_caching(meta: dict) -> str:
+    """vLLM's default, on, unless the last of the option's two forms turns it off."""
+    forms = [word for word in meta["server_argv"] if word in ("--enable-prefix-caching", "--no-enable-prefix-caching")]
+    return "off" if forms and forms[-1].startswith("--no-") else "on"
+
+
 def decoding(meta: dict) -> str | None:
     sampling = meta.get("sampling")
-    return "sampled" if sampling in SAMPLED else sampling
+    return "sampled" if sampling in SAMPLED else sampling if isinstance(sampling, str) else None
 
 
 def execution_phase(meta: dict) -> float | None:
@@ -98,7 +104,7 @@ READERS: dict[str, Callable[[dict], object]] = {
     "context": lambda meta: whole(meta, "--max-model-len"),
     "tensor_parallel": lambda meta: whole(meta, "--tensor-parallel-size"),
     "engine": engine,
-    "prefix_caching": lambda meta: "off" if "--no-enable-prefix-caching" in meta["server_argv"] else "on",
+    "prefix_caching": prefix_caching,
     "decoding": decoding,
     "execution_phase": execution_phase,
     "sampling_design": sampling_design,
@@ -121,7 +127,7 @@ def switches(record: bytes | None = None) -> list[dict]:
 def stamp(meta: dict) -> dict:
     """A serve's stamp, from its `meta.json`: the record's digest, the serve's value of each switch it shows, and the
     switches a serve sets that it does not show at the post's value."""
-    argv = meta.get("server_argv")
+    argv = meta.get("server_argv") if isinstance(meta, dict) else None
     if not isinstance(argv, list) or SERVER not in argv:
         raise ValueError(f"not a serve's meta.json: its `server_argv` does not run {SERVER}")
     record = RECORD.read_bytes()
@@ -148,6 +154,8 @@ def main(argv=None) -> None:
     s.add_argument("meta", type=Path, help="the serve's meta.json")
     s.add_argument("--out", type=Path, help="the directory to write record.json, the stamp, in")
     a = ap.parse_args(argv)
+    if a.out and (a.out / RECORD.name).resolve() == RECORD:
+        sys.exit(f"--out {a.out}: the stamp would replace {RECORD.name}, the configuration; give the run's directory")
     try:
         made = stamp(json.loads(a.meta.read_text()))
     except ValueError as e:
@@ -158,8 +166,8 @@ def main(argv=None) -> None:
     print(f"off: {listed(made['off'])}")
     if a.out:
         a.out.mkdir(parents=True, exist_ok=True)
-        (a.out / "record.json").write_text(json.dumps(made, indent=1, ensure_ascii=False) + "\n")
-        print(f"wrote {a.out / 'record.json'}")
+        (a.out / RECORD.name).write_text(json.dumps(made, indent=1, ensure_ascii=False) + "\n")
+        print(f"wrote {a.out / RECORD.name}")
 
 
 if __name__ == "__main__":
