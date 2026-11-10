@@ -2559,20 +2559,20 @@ def _off_said(sha: str, members: str, step: str, base: str, *lines: str) -> str:
 def test_under_gate_check_a_red_ratchet_gate_rings_the_lane_of_each_member_whose_merge_it_fails_and_its_owner_once(
         env, monkeypatch):
     """ratchet-gate is off the merge gate (policy.toml's `off_gate` at the base): the candidate passes on its check all the
-    same, and once that verdict is in, the lane of each member whose merge the gate fails and the step's owner in ci.toml at
-    the candidate (vllm) are rung, with the gate's line for each, once a candidate and step.  A merge the gate names that is
-    no member's (one below the base) rings nobody."""
-    loop, runs, main, sha = _off(env, monkeypatch, OTHER, {"b.txt": "2\n"})
+    same, and once that verdict is in, the lane of each member whose merge the gate fails (#1's and #2's, not #3's) and the
+    step's owner in ci.toml at the candidate (vllm) are rung, with the gate's line for each, once a candidate and step.  A
+    merge the gate names that is no member's (one below the base) rings nobody."""
+    loop, runs, main, sha = _off(env, monkeypatch, OTHER, {"b.txt": "2\n"}, {"c.txt": "3\n"})
     runs.end(main)
-    runs.end(sha, also={"ratchet-gate": _ratchet(2, 9)})
+    runs.end(sha, also={"ratchet-gate": _ratchet(1, 2, 9)})
     logged = loop.tick()
     assert _acts(logged) == ["slim", "slim", "ring"] and logged[1]["record"]["verdict"]["state"] == PASS
     ring = logged[2]
     assert (ring["sha"], ring["step"], ring["failures"], ring["to"], ring["done"], ring["posted"]) == (
-        sha, "ratchet-gate", ["#2"], ["@lane-2", "@vllm"], True, True)
-    assert ring["why"] == "off the gate: ratchet-gate failed" and ring["base"] == main and ring["members"] == [1, 2]
-    assert env.posts == ["@lane-2 @vllm vqueue: "
-                         + _off_said(sha, "#1 #2", "ratchet-gate", main, "#2 (000000000002): grows p01.json")]
+        sha, "ratchet-gate", ["#1", "#2"], ["@lane-1", "@lane-2", "@vllm"], True, True)
+    assert ring["why"] == "off the gate: ratchet-gate failed" and ring["base"] == main and ring["members"] == [1, 2, 3]
+    assert env.posts == ["@lane-1 @lane-2 @vllm vqueue: " + _off_said(
+        sha, "#1 #2 #3", "ratchet-gate", main, "#1 (000000000001): grows p01.json", "#2 (000000000002): grows p01.json")]
     assert loop.tick() == [] and len(env.posts) == 1
     assert [r["posting"] for r in env.lines() if r["action"] == "posting"] == ["ring"]
 

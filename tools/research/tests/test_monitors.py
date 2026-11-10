@@ -1226,6 +1226,10 @@ def test_a_ratchet_gate_row_with_no_open_pr_at_its_commit_rings_the_lane_of_each
     refs["abc123def456"] = ""                                           # one declaring no job
     got = {f.key[len("vy-nebius-2:"):]: f for f in M.failed_checks(M.Ctx(now=T0, memo={}, run=answer))}
     assert got["r1"].owners == ("infra", "circuits", M.LANDER) and got["r1"].text.endswith("#14 `cursor/y-8c79`.")
+    prs["14"] = ("MERGED", "cursor/z-0000")                             # a branch no lane in the registry holds
+    got = {f.key[len("vy-nebius-2:"):]: f for f in M.failed_checks(M.Ctx(now=T0, memo={}, run=answer))}
+    assert got["r1"].owners == ("infra", M.LANDER) and got["r1"].text.endswith(
+        "#12 `cursor/x-558b`, #14 `cursor/z-0000` (no lane in the registry).")
     refs.clear()
     prs.clear()                           # GitHub can't say whose the merges are: the job's owner and the lander hear of it
     got = {f.key[len("vy-nebius-2:"):]: f for f in M.failed_checks(M.Ctx(now=T0, memo={}, run=answer))}
