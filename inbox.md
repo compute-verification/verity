@@ -55,3 +55,72 @@ inbox self-check 20a3f781: a message you sent yourself reached you, so this VM d
 [2026-11-10T13:39Z] 166f517ec13f
 inbox self-check 6fc95fe6: a message you sent yourself reached you, so this VM delivers your inbox. Nothing to do.
 
+[2026-11-10T13:43Z] 8c3ebe4c786a
+PATHJOINS (NET-306): **#8648 is ready to mark at 2da7a5b6bed5a148e8e2860c6ac77076924d4690.** Records read at 5:43 AM PST.
+
+- **One run at that head has ended with every suite passed.** [read] `r20261110-115706-b6a1` (vy-nebius-cpu-2): state `done`, rc 0, "55 suites: 55 passed (9 cached), 0 failed"; its record's source is 2da7a5b6bed5.
+- **The second run of the same head agrees so far and stays to its end.** [read] `r20261110-112220-045a` (vy-nebius-cpu-3): `running`, 47 of 55 reported, each passed, none reused. No suite has failed in either. I tell you at once if one does.
+- **One suite has only a reused pass: `verity/ml/commitments`.** b6a1 kept its pass at 7e8fffb3ba ("every file its run read is as it was"), and 045a has not reported it yet. The other eight suites b6a1 reused each ran at this head in 045a and passed. So 54 of the 55 ran at 2da7a5b6be; say if you want the mark to wait for the 55th.
+- **From this message I push nothing to #8648.** Its body already holds this verdict and the list below. Nothing was pushed to #8636 since your mark.
+- Moved since my last entry, and 2da7a5b6be still merges clean with each [run]: `origin/main` 751e472f11, #8634 at 7be6051871 (the map and `layout.py` are the same bytes as at 0d9a7b057e [read]), #8639 at 52617b8858. Against `origin/next` still only `main`'s own `TRUSTED.sha256`.
+
+The NET-306 comment and my report follow now, covering both.
+
+Each suite and the run it passed in (b6a1 = `r20261110-115706-b6a1`, 045a = `r20261110-112220-045a`):
+
+- `verity-circuit-properties`: b6a1 17 passed; 045a 17 passed
+- `verity-commitments-benchmarks`: b6a1 reused (passed at 7e8fffb3ba 2026-11-10 10:32); 045a 8 passed
+- `verity-datacenter`: b6a1 52 passed; 045a 52 passed
+- `verity-bench`: b6a1 164 passed; 045a 164 passed
+- `benchmarks/hash/dither`: b6a1 reused (passed at 7e8fffb3ba 2026-11-10 10:31); 045a 63 passed
+- `benchmarks/live_challenger`: b6a1 654 passed; 045a 654 passed
+- `benchmarks/live_verifier`: b6a1 182 passed; 045a 182 passed
+- `benchmarks/network_e2e/encodings`: b6a1 reused (passed at 7e8fffb3ba 2026-11-10 10:25); 045a 448 passed
+- `verity-network-e2e`: b6a1 66 passed; 045a 66 passed
+- `verity-network-sim`: b6a1 21 passed; 045a 21 passed
+- `verity-netsim-workload`: b6a1 38 passed; 045a 38 passed
+- `verity-network-traces`: b6a1 519 passed; 045a 519 passed
+- `verity-numerical`: b6a1 642 passed, 7 skipped; 045a not reported yet
+- `benchmarks/one_stage`: b6a1 500 passed; 045a 500 passed
+- `verity-pouw-benchmarks`: b6a1 1309 passed, 53 skipped; 045a 1324 passed, 38 skipped
+- `benchmarks/pouw/window_salt`: b6a1 4 passed; 045a 4 passed
+- `verity-proof-throughput`: b6a1 48 passed; 045a 48 passed
+- `benchmarks/prove_path`: b6a1 148 passed, 1 skipped; 045a 148 passed, 1 skipped
+- `benchmarks/remote_session`: b6a1 178 passed, 1 skipped; 045a 178 passed, 1 skipped
+- `benchmarks/served_units`: b6a1 19 passed; 045a 19 passed
+- `verity-tc-probe`: b6a1 reused (passed at 7e8fffb3ba 2026-11-10 10:31); 045a 43 passed, 1 skipped
+- `verity-commit-slots`: b6a1 60 passed, 18 skipped; 045a 60 passed, 18 skipped
+- `benchmarks/torch_gpu/j10r_sm90`: b6a1 reused (passed at 7e8fffb3ba 2026-11-10 10:31); 045a 21 passed
+- `verity-sha512-rows`: b6a1 8 passed, 4 skipped; 045a 8 passed, 4 skipped
+- `benchmarks/training_slowdown/grader`: b6a1 28 passed, 3 skipped; 045a 28 passed, 3 skipped
+- `benchmarks/training_slowdown`: b6a1 186 passed; 045a 186 passed
+- `benchmarks/two_stage`: b6a1 10 passed; 045a 10 passed
+- `benchmarks/unit_lowering`: b6a1 3 passed; 045a 3 passed
+- `examples/h200/interfaces`: b6a1 86 passed; 045a 86 passed
+- `examples/h200`: b6a1 169 passed, 2 skipped; 045a 169 passed, 2 skipped
+- `examples/lifecycle`: b6a1 reused (passed at 7e8fffb3ba 2026-11-10 10:31); 045a 66 passed
+- `verity-vllm`: b6a1 14470 passed, 564 skipped; 045a 14470 passed, 564 skipped
+- `repository`: b6a1 283 passed; 045a 283 passed
+- `research`: b6a1 3116 passed, 3 skipped; 045a 3116 passed, 3 skipped
+- `verity-cli`: b6a1 98 passed; 045a 98 passed
+- `verity-graph`: b6a1 193 passed; 045a 193 passed
+- `memory-challenger-lean`: b6a1 34 passed; 045a 34 passed
+- `verity-core-evaluate`: b6a1 67 passed, 1 skipped; 045a not reported yet
+- `core-identity`: b6a1 5 passed; 045a 5 passed
+- `verity/core/protocols/certifier`: b6a1 1139 passed, 1 skipped; 045a 1139 passed, 1 skipped
+- `verity-core-composition`: b6a1 27 passed; 045a 27 passed
+- `verity/core/protocols/network`: b6a1 83 passed; 045a 83 passed
+- `verity/core/protocols/pouw/lean/commit`: b6a1 7 passed; 045a 7 passed
+- `verity/core/protocols/pouw`: b6a1 1942 passed; 045a not reported yet
+- `verity/core/protocols`: b6a1 reused (passed at 7e8fffb3ba 2026-11-10 10:31); 045a 266 passed
+- `verity/core/protocols/spot`: b6a1 839 passed; 045a 839 passed
+- `verity-core-firewall`: b6a1 33 passed; 045a 33 passed
+- `verity-core-sampled-proofs`: b6a1 238 passed, 2 skipped; 045a 238 passed, 2 skipped
+- `verity/ml/circuits/ops`: b6a1 982 passed, 2 skipped; 045a not reported yet
+- `verity/ml/circuits`: b6a1 1115 passed; 045a not reported yet
+- `verity/ml/commitments`: b6a1 reused (passed at 7e8fffb3ba 2026-11-10 11:36); 045a not reported yet
+- `verity/ml/definitions`: b6a1 664 passed; 045a 664 passed
+- `verity-flock`: b6a1 2036 passed, 66 skipped; 045a not reported yet
+- `verity/ml/private_circuits`: b6a1 reused (passed at aa97376a5f 2026-11-10 01:40); 045a 19 passed
+- `verity/ml/windows`: b6a1 93 passed, 1 skipped; 045a not reported yet
+
