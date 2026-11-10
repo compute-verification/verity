@@ -88,20 +88,20 @@ local notation "𝔽" => FlockLevel3.GF128
 
 section Rounds
 
-variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R mPts : ℕ} (D : Decoders R Reg)
+variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R mPts : ℕ} (D : PosDecoders g σ R Reg)
   (M : CoinMap g σ Ω R mPts) (dg : ByteArray → ByteArray) (J : ℕ) (B : RoundHold)
 
 /-- **The rounds' trace off `B` to its end** from the position `p`: the position `q` the trace ends at, after the
-last round or at a stop whose decoding submits nothing, and the live session's outcome there, with the proof files
-decoded from the play on the tape at `q`. -/
+last round or at a stop whose decoding submits nothing, and the live session's outcome there, with the member's proof
+files at `q`. -/
 inductive RoundsEnd (rootB : Array ByteArray) (pts : Fin 2 → Fin mPts → 𝔽) :
     ℕ → (Fin J → Fin 2 → List Flock.Round) → Pos g σ Claims.Msg (Fin R) → Pos g σ Claims.Msg (Fin R) →
       LiveOutJ J mPts → Prop
   | zero (rs : Fin J → Fin 2 → List Flock.Round) (p : Pos g σ Claims.Msg (Fin R)) :
-      RoundsEnd rootB pts 0 rs p p ⟨rootB, pts, rs, D.proofs (CoinTape.run g σ p.tape)⟩
+      RoundsEnd rootB pts 0 rs p p ⟨rootB, pts, rs, D.files p⟩
   | stop (N : ℕ) (rs : Fin J → Fin 2 → List Flock.Round) (p : Pos g σ Claims.Msg (Fin R))
       (h : D.sub J p.toStop.modes = none) :
-      RoundsEnd rootB pts (N + 1) rs p p.toStop ⟨rootB, pts, rs, D.proofs (CoinTape.run g σ p.toStop.tape)⟩
+      RoundsEnd rootB pts (N + 1) rs p p.toStop ⟨rootB, pts, rs, D.files p.toStop⟩
   | round (N : ℕ) (rs : Fin J → Fin 2 → List Flock.Round) (p : Pos g σ Claims.Msg (Fin R)) (s : SubmitJ J)
       (c : Fin s.n → 𝔽) (q : Pos g σ Claims.Msg (Fin R)) (out : LiveOutJ J mPts)
       (h : D.sub J p.toStop.modes = some s) (hB : ¬ B p.toStop.g' J s c)
@@ -136,20 +136,21 @@ theorem RoundsEnd.reachK {τ ο : Type} (wr : LiveOutJ J mPts → τ)
   | round N rs p s c q out h hB _ ih => exact fun hn => .round N rs p s c o h hB (ih hn)
 
 /-- **A trace to its end is the one-session trace** (`RoundsReach`) ending on the outcome there, beside the tape at
-its end. -/
-theorem RoundsEnd.reach {β : Type} (fin : LiveOutJ J mPts → β)
-    (he : RoundsEnd D M dg J B rootB pts N rs p q out) :
+its end, at one session's decoders, whose proof files are the play's on the tape there (`Decoders.atEnd`). -/
+theorem RoundsEnd.reach {D : Decoders R Reg} {β : Type} (fin : LiveOutJ J mPts → β)
+    (he : RoundsEnd D.atEnd M dg J B rootB pts N rs p q out) :
     RoundsReach D M dg J B fin rootB pts N rs p (fin out, q.tape) := by
   induction he with
   | zero rs p => exact .zero rs p
   | stop N rs p h => exact .stop N rs p h
   | round N rs p s c q out h hB _ ih => exact .round N rs p s c _ h hB ih
 
-/-- **The one-session trace is a trace to its end**, ending on the outcome there beside the tape at its end. -/
-theorem RoundsReach.ends {β : Type} {fin : LiveOutJ J mPts → β} {o : β × CoinTape g σ}
+/-- **The one-session trace is a trace to its end** at one session's decoders (`Decoders.atEnd`), ending on the
+outcome there beside the tape at its end. -/
+theorem RoundsReach.ends {D : Decoders R Reg} {β : Type} {fin : LiveOutJ J mPts → β} {o : β × CoinTape g σ}
     (hr : RoundsReach D M dg J B fin rootB pts N rs p o) :
     ∃ (q : Pos g σ Claims.Msg (Fin R)) (out : LiveOutJ J mPts),
-      RoundsEnd D M dg J B rootB pts N rs p q out ∧ o = (fin out, q.tape) := by
+      RoundsEnd D.atEnd M dg J B rootB pts N rs p q out ∧ o = (fin out, q.tape) := by
   induction hr with
   | zero rs p => exact ⟨p, _, .zero rs p, rfl⟩
   | stop N rs p h => exact ⟨p.toStop, _, .stop N rs p h, rfl⟩
@@ -203,7 +204,7 @@ theorem RoundsEnd.answers (he : RoundsEnd D M dg J B rootB pts N rs p q out)
     ∃ as : List (Pos g σ Claims.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽))),
       out = ⟨rootB, pts, as.foldl (fun rs a =>
         addRoundJ rs a.2.1.tab a.2.1.rep (roundOf dg a.2.1.bytes a.2.1.n a.2.2)) rs,
-          D.proofs (CoinTape.run g σ q.tape)⟩ ∧
+          D.files q⟩ ∧
       ∀ a ∈ as, Q a.1 ∧ D.sub J a.1.toStop.modes = some a.2.1 ∧ ¬ B a.1.toStop.g' J a.2.1 a.2.2 ∧
         (a.1.toStop.rewrite (M.round a.1.toStop J a.2.1 a.2.2)).consume.Past q := by
   induction he with
@@ -224,7 +225,7 @@ section Seq
 
 open FlockSoundness.Discharge.Exec (Transcript)
 
-variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R nJ : ℕ} (D : ℕ → Decoders R Reg)
+variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R nJ : ℕ} (D : ℕ → PosDecoders g σ R Reg)
   (M : WindowCoinMap g σ Ω R) (BL : WindowLinkHold) (B : WindowRoundHold) (S : Finset (Fin nJ)) (Rg : Reg)
 
 /-- **The trace of the session of the member at place `i`** from the position `p` to the position `q` it ends at,
@@ -354,7 +355,7 @@ variable {V θ F c} in
 coin map's tape at some widened coins, at the decoded registration and those coins' sample, beside the tape at the
 position the last ends at. -/
 theorem WindowReaches.chain {W : Window} {t : ℕ} {rd : Reading W.rounds} {σ : Strategy (V.game θ F c)}
-    {D : ℕ → Decoders W.rounds ByteArray} {M : WindowCoinMap (V.game θ F c) σ W.Ω W.rounds} {BL : WindowLinkHold}
+    {D : WindowDecoders V θ F c W σ} {M : WindowCoinMap (V.game θ F c) σ W.Ω W.rounds} {BL : WindowLinkHold}
     {B : WindowRoundHold} {o : W.Out × CoinTape (V.game θ F c) σ}
     (h : WindowReaches V θ F c W t rd σ D M BL B o) :
     ∃ (ω : (W.extend M.widening).L.Ω) (r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds)),
@@ -373,7 +374,7 @@ member's session's trace from a position `I` holds at, ending at a position `q` 
 not at the record and `P` holds of, has `I` at the next place and `q`, and, when the member has a proof block in the
 sample, writes a transcript flock-verify `--zk` accepts at the member's `own` (`step`). -/
 structure MemberDecodes (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : Window) (t : ℕ)
-    (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : ℕ → Decoders W.rounds ByteArray)
+    (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : WindowDecoders V θ F c W σ)
     (M : WindowCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : WindowLinkHold) (B : WindowRoundHold)
     (I : (W.extend M.widening).L.Ω → ℕ → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop) : Prop where
   start : ∀ ω, I ω 0 (Pos.root (roundCuts V θ F c rd) (M.start ω))
@@ -394,7 +395,7 @@ premise holds at each member's session (`MemberDecodes`), at any invariant of th
 at. The joint law's support is the members' traces in order, each from where the one before it ended, and the tape an
 accepted play is on is the one at the position the last ends at. -/
 theorem windowDecodes_of_members (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : Window) (t : ℕ)
-    (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : ℕ → Decoders W.rounds ByteArray)
+    (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : WindowDecoders V θ F c W σ)
     (M : WindowCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : WindowLinkHold) (B : WindowRoundHold)
     (I : (W.extend M.widening).L.Ω → ℕ → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop)
     (h : MemberDecodes V θ F c k P W t rd σ D M BL B I) : WindowDecodes V θ F c k P W t rd σ D M BL B := by

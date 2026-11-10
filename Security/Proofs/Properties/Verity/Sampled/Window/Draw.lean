@@ -203,7 +203,7 @@ theorem Window.sessionDelta_extend (W : Window) (S : Widening) (t : ℕ) :
 
 section SessionErr
 
-variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R mPts : ℕ} (D : Decoders R Reg) (J : ℕ)
+variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R mPts : ℕ} (D : PosDecoders g σ R Reg) (J : ℕ)
   (γ : Pos g σ Claims.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞)
 
 /-- **One stop's error, then what follows the session** (`stopErr`): `fin` at the session's end there; `γ` there and
@@ -410,7 +410,7 @@ end SessionErr
 
 section SeqErr
 
-variable {g : Game Exchange} {σ : Strategy g} {Reg : Type} {R nJ : ℕ} (D : ℕ → Decoders R Reg)
+variable {g : Game Exchange} {σ : Strategy g} {Reg : Type} {R nJ : ℕ} (D : ℕ → PosDecoders g σ R Reg)
   (γ : ℕ → Pos g σ Claims.Msg (Fin R) → (j : ℕ) → SubmitJ j → ℝ≥0∞)
   (γL : ℕ → (mPts : ℕ) → Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (S : Finset (Fin nJ)) (Rg : Reg)
 
@@ -525,14 +525,14 @@ variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 
 /-- **The window's coin map's premise within `ε`, off the held-off events** (`CouplesWithin`). -/
 def WindowCouplesWithin (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
-    (D : ℕ → Decoders W.rounds ByteArray) (M : WindowCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : WindowLinkHold)
+    (D : WindowDecoders V θ F c W σ) (M : WindowCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : WindowLinkHold)
     (B : WindowRoundHold) (ε : ℝ≥0∞) : Prop :=
   ∀ Q : CoinTape (V.game θ F c) σ → Prop, ENNReal.ofReal (Claims.Pr Q) ≤
     windowOff V θ F c W t rd σ D M BL B Q + ε
 
 /-- **The window's coin map's premise at a term within the hiding term.** -/
 theorem windowCouples_of_within {W : Window} {t : ℕ} {rd : Reading W.rounds} {σ : Strategy (V.game θ F c)}
-    {D : ℕ → Decoders W.rounds ByteArray} {M : WindowCoinMap (V.game θ F c) σ W.Ω W.rounds} {BL : WindowLinkHold}
+    {D : WindowDecoders V θ F c W σ} {M : WindowCoinMap (V.game θ F c) σ W.Ω W.rounds} {BL : WindowLinkHold}
     {B : WindowRoundHold} {ε : ℝ≥0∞} (h : WindowCouplesWithin V θ F c W t rd σ D M BL B ε)
     (hε : ε ≤ W.hidingTerm) : WindowCouples V θ F c W t rd σ D M BL B := fun Q =>
   (h Q).trans (add_le_add le_rfl hε)
@@ -564,7 +564,7 @@ def WindowFirstStopFresh (W : Window) (rd : Reading W.rounds) (σ : Strategy (V.
 /-- **The stops' term over the window**: over the widened coins, every member's session's error along the walk from
 the play's start, in the members' order (`seqErr`). -/
 noncomputable def windowErr (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
-    (D : ℕ → Decoders W.rounds ByteArray) (M : WindowCoinMap (V.game θ F c) σ W.Ω W.rounds)
+    (D : WindowDecoders V θ F c W σ) (M : WindowCoinMap (V.game θ F c) σ W.Ω W.rounds)
     (γ : ℕ → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → (j : ℕ) → SubmitJ j → ℝ≥0∞)
     (γL : ℕ → (mPts : ℕ) → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℝ≥0∞) : ℝ≥0∞ :=
   avg fun ω : (W.extend M.widening).L.Ω =>
@@ -578,7 +578,7 @@ member's coin map writes its link points in within `γL` of the tape's own and e
 leaves the tape from the first stop fresh, and the start is within `ε₀` of the uniform tape. The stops' term carries,
 beside each member's `γL` and `γ`, the probability of its held-off events at each stop. -/
 theorem windowCouples_of_close (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
-    (D : ℕ → Decoders W.rounds ByteArray) (M : WindowCoinMap (V.game θ F c) σ W.Ω W.rounds)
+    (D : WindowDecoders V θ F c W σ) (M : WindowCoinMap (V.game θ F c) σ W.Ω W.rounds)
     {γ : ℕ → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → (j : ℕ) → SubmitJ j → ℝ≥0∞}
     {γL : ℕ → (mPts : ℕ) → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℝ≥0∞} {ε₀ : ℝ≥0∞}
     (BL : WindowLinkHold) (B : WindowRoundHold) (hR : ∀ i mPts, (M.member i mPts).RoundClose (γ i))
@@ -628,7 +628,7 @@ at the plays' close `E`, its widening `T` and start `start`, the joint law's tap
 openings' gaps and empty classes of the uniform tape, wherever the start leaves the tape from the first stop fresh
 and is within `ε₀` of the uniform tape. -/
 theorem windowOpenMap_couples (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
-    (D : ℕ → Decoders W.rounds ByteArray) (E : List Release → Game Exchange) (T : Type) [Fintype T] [Nonempty T]
+    (D : WindowDecoders V θ F c W σ) (E : List Release → Game Exchange) (T : Type) [Fintype T] [Nonempty T]
     (start : W.Ω × T → CoinTape (V.game θ F c) σ) {ε₀ : ℝ≥0∞}
     (hF : WindowFirstStopFresh V θ F c W rd σ (windowOpenMap e E T start))
     (hS : WindowStartWithin V θ F c W σ (windowOpenMap e E T start) ε₀) :
@@ -715,7 +715,7 @@ theorem Window.avg_byteCoins (W : Window) {m : ℕ} (hL : W.Lb 0 = m * 64) (H : 
 (`sampleMap_couples`): the joint law's tape off the empty classes at every member's stops is within the openings'
 gaps and empty classes over the stops of the uniform tape, wherever the sample's coins are uniform. -/
 theorem windowSampleMap_couples (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
-    (D : ℕ → Decoders W.rounds ByteArray) (label : String) (after : ByteArray) {m : ℕ}
+    (D : WindowDecoders V θ F c W σ) (label : String) (after : ByteArray) {m : ℕ}
     (κ : W.Ω → Fin m → Fin 512 → Bool)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ ω)) = avg H) :
     WindowCouplesWithin V θ F c W t rd σ D (windowSampleMap e V θ F c W rd σ label after κ)
@@ -752,8 +752,8 @@ events `BL` and `B`, with the coin map's premise discharged by `windowCouples_of
 strategy, wherever the start's term and the stops' (each member's `γL` and `BL`'s probability at its first stop, `γ`
 and `B`'s at each later one) sum to at most the hiding term. -/
 theorem windowCouplingTarget_of_close (rd : WindowReadings) (K : WindowConstructions V)
-    (D : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
-      ℕ → Decoders W.rounds ByteArray)
+    (D : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
+      WindowDecoders V θ F c W σ)
     (M : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
       WindowCoinMap (V.game θ F c) σ W.Ω W.rounds)
     (W : Window) (P : Exchange → Prop) (θ : ByteArray) (F : Array ByteArray)
@@ -794,8 +794,8 @@ omit θ F c in
 the openings' gaps and empty classes over the stops wherever the window's coins are uniform
 (`windowSampleMap_couples`), at each commitment and strategy where those terms are at most the hiding term. -/
 theorem windowCouplingTarget_of_sample (rd : WindowReadings) (K : WindowConstructions V)
-    (D : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
-      ℕ → Decoders W.rounds ByteArray)
+    (D : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
+      WindowDecoders V θ F c W σ)
     (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String)
     (after : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → ByteArray) {m : ℕ}
     (κ : (W : Window) → W.Ω → Fin m → Fin 512 → Bool) (W : Window) (P : Exchange → Prop) (θ : ByteArray)

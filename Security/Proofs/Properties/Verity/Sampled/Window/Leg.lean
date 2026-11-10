@@ -1,6 +1,7 @@
 module
 
-public import Proofs.Properties.Verity.Sampled.Window.Reach
+public import Proofs.Properties.Verity.Sampled.Window.Logged
+public import Proofs.Properties.Verity.Sampled.Window.Draw
 
 /-!
 # Sampled proofs' leg over a window: the leg from the walk's premises
@@ -16,6 +17,11 @@ premise and the decoders' (`windowCouplingTarget_of_logged`), and the decoders' 
 * **The leg, a member at a time** (`windowSpotSound_of_members`): the decoders' premise at each member's session
   (`MemberDecodes`): each member's session's trace, in the members' order, writes a transcript flock-verify `--zk`
   accepts wherever the play v2 accepts is on a tape through the trace's end.
+* **The leg at the window's one sample** (`windowSpotSound_of_sample`): the walk, the sample and the members' steps
+  in one statement. The coin maps are the sample-coupled ones (`windowSampleMaps`), whose premise holds within the
+  openings' gaps and empty classes wherever the window's coins are uniform (`windowCouplingTarget_of_sample`), so what
+  is left of the coin map is that those terms are at most the hiding term; and each member's step is taken at a
+  position that keeps the play's start and stops where `StopsAt` says (`MemberSteps`, `memberDecodes_of_stops`).
 -/
 
 @[expose] public section
@@ -23,6 +29,10 @@ premise and the decoders' (`windowCouplingTarget_of_logged`), and the decoders' 
 namespace Verity.Sampled
 
 open Verity.Game
+open FlockSoundness.Discharge.Tables (SubmitJ LiveOutJ)
+open scoped ENNReal
+
+local notation "𝔽" => FlockLevel3.GF128
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
@@ -37,8 +47,8 @@ one `Q` doesn't hold of is at most as likely as the square root of the bound dig
 commitment and strategy off its held-off events, the coin map's premise (`WindowCouples`) and the decoders'
 (`WindowDecodes`) hold. -/
 theorem windowSpotSound_of_logged (rd : WindowReadings) (K : WindowConstructions V)
-    (D : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
-      ℕ → Decoders W.rounds ByteArray)
+    (D : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
+      WindowDecoders V θ F c W σ)
     (M : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
       WindowCoinMap (V.game θ F c) σ W.Ω W.rounds)
     {S : ByteArray → Array ByteArray → Option Window} (hD : WindowDeployed V (K.withProject V rd D M) S)
@@ -73,8 +83,8 @@ hold of. The bound is `spotSound_of_window`'s: the sample's own miss and the mem
 (`Window.sessionDelta`, `JointShareV5`'s), a two-continuation term per round of every member's session, the record's,
 the bound digests', the hiding term, the read finder's and the forger's. -/
 theorem windowSpotSound_of_members (rd : WindowReadings) (K : WindowConstructions V)
-    (D : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
-      ℕ → Decoders W.rounds ByteArray)
+    (D : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
+      WindowDecoders V θ F c W σ)
     (M : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
       WindowCoinMap (V.game θ F c) σ W.Ω W.rounds)
     {S : ByteArray → Array ByteArray → Option Window} (hD : WindowDeployed V (K.withProject V rd D M) S)
@@ -100,5 +110,75 @@ theorem windowSpotSound_of_members (rd : WindowReadings) (K : WindowConstruction
   windowSpotSound_of_logged V k rd K D M hD hCov P Q BL B ha hq hC fun θ F W hW c σ =>
     windowDecodes_of_members V θ F c k (fun o => P o ∧ Q θ F c σ o) W (V.cost θ F c σ) (rd W θ F c) σ (D W θ F c σ)
       (M W θ F c σ) (BL θ F c σ) (B θ F c σ) (I W θ F c σ) (hm θ F W hW c σ)
+
+/-- **SPOT's leg over a window of several members, at the window's one sample**: the walk through the members'
+sessions in order, the one sample's coins and each member's step, composed onto `JointShareV5`'s bound
+(`spotSound_of_window`). Soundness's vocabulary at `.sampled` reading, at the deployment's windows `S`, the
+constructions with the window's projection at the readings `rd`, the members' decoders `D` and the sample-coupled
+coin maps (`windowSampleMaps`, at the family `label` answering `after` and the window's coins `κ`), with `S` covering
+the one-stage form, meets SPOT's target at composite `k` wherever, at each window of `S`:
+
+* the window's coins `κ` are uniform (`hκ`; A3 at the bytes the sample reads gives it, `Window.avg_byteCoins`);
+* (a) an accepted play `P` doesn't hold of is at most as likely as the read finder's collision plus the forger's
+  forgery (`ha`), and (a') one `Q` doesn't hold of at most as likely as the square root of the bound digests'
+  finder's success (`hq`);
+* over every member's stops, the openings' gaps and empty classes are at most the hiding term (`hε`);
+* each round's reading picks only openings (`hR`);
+* the members' steps hold off the openings' empty classes (`hm`, `MemberSteps`): each member's session's trace, in
+  the members' order, from a position that keeps the play's start and whose stop is where `StopsAt` says, writes a
+  transcript flock-verify `--zk` accepts at the member's `own` when the member has a proof block in the sample,
+  wherever a tape through the trace's end plays a play v2's sampled verdict accepts, that misses at no round and not
+  at the record, and that `P` and `Q` hold of.
+
+The member's transcript carries the proof files its decoders give at the position its trace ends at
+(`PosDecoders.files`). The bound is `spotSound_of_window`'s: the sample's own miss and the members' terms summed
+(`Window.sessionDelta`), a two-continuation term per round of every member's session, the record's, the bound
+digests', the hiding term, the read finder's and the forger's. -/
+theorem windowSpotSound_of_sample (e : 𝔽 ≃ (Fin 128 → Bool)) (rd : WindowReadings) (K : WindowConstructions V)
+    (D : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
+      WindowDecoders V θ F c W σ)
+    (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String)
+    (after : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → ByteArray) {nc : ℕ}
+    (κ : (W : Window) → W.Ω → Fin nc → Fin 512 → Bool) {S : ByteArray → Array ByteArray → Option Window}
+    (hD : WindowDeployed V (K.withProject V rd D (windowSampleMaps e V rd label after κ)) S)
+    (hCov : WindowCovers V k S) (P : Exchange → Prop)
+    (Q : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → Exchange → Prop)
+    (I : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
+      (W.extend (windowSampleMaps e V rd label after κ W θ F c σ).widening).L.Ω → ℕ →
+        Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop)
+    (hκ : ∀ θ F W, S θ F = some W → ∀ H : (Fin nc → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ W ω)) = avg H)
+    (ha : ∀ θ F W, S θ F = some W → ∀ (c : ByteArray) (σ : Strategy (V.game θ F c)),
+      prob (fun o => V.Verdict k .sampled o ∧ ¬ P o) (V.game θ F c) σ ≤
+        ENNReal.ofReal ((K.readFinder θ F c σ).Pr sha512Msg) +
+          ENNReal.ofReal ((K.forger θ F c σ).Pr Verity.lmsVerify))
+    (hq : ∀ θ F W, S θ F = some W → ∀ (c : ByteArray) (σ : Strategy (V.game θ F c)),
+      prob (fun o => V.Verdict k .sampled o ∧ ¬ Q θ F c σ o) (V.game θ F c) σ ≤
+        ENNReal.ofReal (Real.sqrt ((K.bindFinder W θ F c σ).Pr sha512Msg)))
+    (hε : ∀ θ F W, S θ F = some W → ∀ (c : ByteArray) (σ : Strategy (V.game θ F c)),
+      windowErr V θ F c W (V.cost θ F c σ) (rd W θ F c) σ (D W θ F c σ)
+        (windowSampleMaps e V rd label after κ W θ F c σ)
+        (fun _ q _ s => openGap (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
+          openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
+        (fun _ mPts q =>
+          openGap (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin mPts → 𝔽) → List Bool) +
+            openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin mPts → 𝔽) → List Bool)) ≤
+        W.hidingTerm)
+    (hR : ∀ θ F W, S θ F = some W → ∀ (c : ByteArray) j pre fr, (rd W θ F c).round j pre fr →
+      ∃ i s n, fr = .opening i s n)
+    (hm : ∀ θ F W, S θ F = some W → ∀ (c : ByteArray) (σ : Strategy (V.game θ F c)),
+      MemberSteps V θ F c k (fun o => P o ∧ Q θ F c σ o) W (V.cost θ F c σ) (rd W θ F c) σ (D W θ F c σ)
+        (windowSampleMaps e V rd label after κ W θ F c σ) (fun _ _ => linkEmpty e (finish (V.signer θ) θ F c σ.1))
+        (fun _ => roundEmpty e (finish (V.signer θ) θ F c σ.1)) (I W θ F c σ)) :
+    V.SpotSound k :=
+  spotSound_of_window V k hD hCov fun θ F W hW =>
+    windowCouplingTarget_of_sample e V k rd K D label after κ W P θ F (Q θ F) (hκ θ F W hW) (ha θ F W hW)
+      (hq θ F W hW) (hε θ F W hW) fun c σ =>
+        windowDecodes_of_members V θ F c k (fun o => P o ∧ Q θ F c σ o) W (V.cost θ F c σ) (rd W θ F c) σ
+          (D W θ F c σ) (windowSampleMaps e V rd label after κ W θ F c σ) _ _ _
+          (memberDecodes_of_stops V θ F c k (fun o => P o ∧ Q θ F c σ o) W (V.cost θ F c σ) (rd W θ F c) σ
+            (D W θ F c σ) (windowSampleMaps e V rd label after κ W θ F c σ)
+            (fun _ _ => linkEmpty e (finish (V.signer θ) θ F c σ.1))
+            (fun _ => roundEmpty e (finish (V.signer θ) θ F c σ.1)) (I W θ F c σ) (hR θ F W hW c)
+            (hm θ F W hW c σ))
 
 end Verity.Sampled

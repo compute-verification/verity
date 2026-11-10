@@ -20,8 +20,9 @@ tape the window's walk ends on releases them there, whichever members' sessions 
   coins into the stops' openings as bits and off the held-off events the openings' classes at them are not empty, the
   play on the tape of any position past the trace's end releases the link points' bits and each answered round's
   coins at an opening the rounds whose cuts the stop fixes pick, and the session's outcome is those rounds in order.
-* **The decoders' premise at each member, at where the walk stops** (`memberDecodes_of_stops`): `MemberDecodes` at
-  any invariant, beside the play's start kept and `StopsAt` at the stop a member's session starts at.
+* **The members' steps, at where the walk stops** (`MemberSteps`, `memberDecodes_of_stops`): `MemberDecodes` at any
+  invariant, beside the play's start kept and `StopsAt` at the stop a member's session starts at, both handed to each
+  member's step.
 -/
 
 @[expose] public section
@@ -102,7 +103,7 @@ end Past
 
 section Member
 
-variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R nJ : ℕ} {D : ℕ → Decoders R Reg}
+variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R nJ : ℕ} {D : ℕ → PosDecoders g σ R Reg}
   {M : WindowCoinMap g σ Ω R} {BL : WindowLinkHold} {B : WindowRoundHold} {S : Finset (Fin nJ)} {Rg : Reg}
 
 /-- **The stop after a member's session's end is where `StopsAt` says**, from a log and the close after it, where the
@@ -124,7 +125,7 @@ past, where each round's reading picks only openings the device serves, the memb
 that fixes no cut, the member's coin map writes the link points and a round's coins into a stop's opening as their
 bits (`bitsL`, `bitsOf`), and off the member's held-off events the opening's class at those bits is not empty: the
 session's outcome is the root decoded at its first stop, link points `pts`, the answered submissions' rounds in order
-and the proof files decoded at its end; and the play on the tape of any position `r` past the trace's end (the
+and the member's proof files at its end; and the play on the tape of any position `r` past the trace's end (the
 position the last member's session ends at is one) releases `pts`' bits at an opening the rounds whose cuts the first
 stop fixes pick, and each answered submission's coins at an opening the rounds whose cuts its stop fixes pick
 (`firstStop_logged` and `RoundsReach.answers_logged`, at a member of a window). -/
@@ -148,7 +149,7 @@ theorem MemberReach.logged {P : Fin R → List Release → Frame → Prop} {rv :
       (as : List (Pos g σ Claims.Msg (Fin R) × ((s : SubmitJ (memberTabs S Rg m)) × (Fin s.n → 𝔽)))),
       out = ⟨(D i).root p.toStop.modes, pts, as.foldl (fun rs a =>
         addRoundJ rs a.2.1.tab a.2.1.rep (roundOf m.dg a.2.1.bytes a.2.1.n a.2.2)) (fun _ _ => []),
-          (D i).proofs (CoinTape.run g σ q.tape)⟩ ∧
+          (D i).files q⟩ ∧
       LoggedAt P p.toStop (bitsL pts) (CoinTape.run g σ r.tape).log ∧
       ∀ a ∈ as, (D i).sub (memberTabs S Rg m) a.1.toStop.modes = some a.2.1 ∧
         LoggedAt P a.1.toStop (bitsOf a.2.1 a.2.2) (CoinTape.run g σ r.tape).log := by
@@ -190,35 +191,47 @@ theorem stopsAt_rootStop {R : ℕ} (rd : Reading R) (σ : Strategy (V.game θ F 
       (Pos.root (roundCuts V θ F c rd) x).toStop := h
   exact ⟨[], _, fun _ => True, fun _ => rfl, h'⟩
 
-/-- **The decoders' premise at each member's session, at where the walk stops** (`MemberDecodes`): at an invariant
-`I` of the widened coins, the place and the position a member's session starts at, it holds beside the play's start
-kept and `StopsAt` at that position's stop, wherever each round's reading picks only openings, `I` holds at the play's
-start, and each member's session's trace from a position with all three has `I` at the next place and its end and
-writes an accepted transcript as `MemberDecodes.step` asks. The play's start and where the walk stops are kept by
-every member's trace (`MemberReach.inv`, `MemberReach.stopsAt`), so `MemberReach.logged` applies at each member. -/
+/-- **The members' steps at a window, at where the walk stops**, at an invariant `I` of the widened coins, a member's
+place and the position its session starts at: `I` holds at the play's start on the coin map's tape (`start`); and
+each member's session's trace, from a position `I` holds at that keeps the play's start and whose stop is where
+`StopsAt` says, ending at a position `q` that a position `r` is past, where `r` keeps the play's start and its tape's
+play the sampled verdict accepts, misses at no round and not at the record and `P` holds of, has `I` at the next place
+and `q`, and, when the member has a proof block in the sample, writes a transcript flock-verify `--zk` accepts at the
+member's `own` (`step`). It is `MemberDecodes` with what every member's trace keeps handed to the step. -/
+structure MemberSteps (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : Window) (t : ℕ)
+    (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : WindowDecoders V θ F c W σ)
+    (M : WindowCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : WindowLinkHold) (B : WindowRoundHold)
+    (I : (W.extend M.widening).L.Ω → ℕ → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop) : Prop where
+  start : ∀ ω, I ω 0 (Pos.root (roundCuts V θ F c rd) (M.start ω))
+  step : ∀ (ω : (W.extend M.widening).L.Ω) (i : ℕ) (m : Flock.Guarantees.MemberV5 ByteArray W.nJ)
+    (p q r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds))
+    (out : LiveOutJ (memberTabs ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D) m) (memberPts m)),
+    ((W.extend M.widening).joint t).ms[i]? = some m → I ω i p → p.Inv (roundCuts V θ F c rd) →
+    StopsAt rd.round rd.reveal (V.signer θ) θ F c σ.1 p.toStop →
+    MemberReach D M BL B ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D) i m p q out → q.Past r →
+    r.Inv (roundCuts V θ F c rd) →
+    V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ r.tape) ∧ NoMiss V θ F c rd σ r.tape ∧
+      P (CoinTape.run (V.game θ F c) σ r.tape) →
+    I ω (i + 1) q ∧ ((m.part ((W.extend M.widening).L.draw ω)).Nonempty →
+      FlockSoundness.Discharge.ZkHidden.AcceptsZKP m.I m.own
+        (m.wr (m.part ((W.extend M.widening).L.draw ω)) (windowReg V θ F c W rd σ D) out))
+
+/-- **The decoders' premise at each member's session, at where the walk stops** (`MemberDecodes`): from the members'
+steps (`MemberSteps`) at an invariant `I`, it holds at `I` beside the play's start kept and `StopsAt` at the stop a
+member's session starts at, wherever each round's reading picks only openings. The play's start and where the walk
+stops are kept by every member's trace (`MemberReach.inv`, `MemberReach.stopsAt`), so `MemberReach.logged` applies at
+each member. -/
 theorem memberDecodes_of_stops (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : Window) (t : ℕ)
-    (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : ℕ → Decoders W.rounds ByteArray)
+    (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : WindowDecoders V θ F c W σ)
     (M : WindowCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : WindowLinkHold) (B : WindowRoundHold)
     (I : (W.extend M.widening).L.Ω → ℕ → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop)
     (hP : ∀ j pre fr, rd.round j pre fr → ∃ i s n, fr = .opening i s n)
-    (hstart : ∀ ω, I ω 0 (Pos.root (roundCuts V θ F c rd) (M.start ω)))
-    (hstep : ∀ (ω : (W.extend M.widening).L.Ω) (i : ℕ) (m : Flock.Guarantees.MemberV5 ByteArray W.nJ)
-      (p q r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds))
-      (out : LiveOutJ (memberTabs ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D) m) (memberPts m)),
-      ((W.extend M.widening).joint t).ms[i]? = some m → I ω i p → p.Inv (roundCuts V θ F c rd) →
-      StopsAt rd.round rd.reveal (V.signer θ) θ F c σ.1 p.toStop →
-      MemberReach D M BL B ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D) i m p q out → q.Past r →
-      r.Inv (roundCuts V θ F c rd) →
-      V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ r.tape) ∧ NoMiss V θ F c rd σ r.tape ∧
-        P (CoinTape.run (V.game θ F c) σ r.tape) →
-      I ω (i + 1) q ∧ ((m.part ((W.extend M.widening).L.draw ω)).Nonempty →
-        FlockSoundness.Discharge.ZkHidden.AcceptsZKP m.I m.own
-          (m.wr (m.part ((W.extend M.widening).L.draw ω)) (windowReg V θ F c W rd σ D) out))) :
+    (h : MemberSteps V θ F c k P W t rd σ D M BL B I) :
     MemberDecodes V θ F c k P W t rd σ D M BL B fun ω i p =>
       I ω i p ∧ p.Inv (roundCuts V θ F c rd) ∧ StopsAt rd.round rd.reveal (V.signer θ) θ F c σ.1 p.toStop where
-  start ω := ⟨hstart ω, Pos.inv_root _ _, stopsAt_rootStop V θ F c rd σ (M.start ω) hP⟩
+  start ω := ⟨h.start ω, Pos.inv_root _ _, stopsAt_rootStop V θ F c rd σ (M.start ω) hP⟩
   step ω i m p q r out hm hI hmr hqr hri hacc := by
-    obtain ⟨hI', hacc'⟩ := hstep ω i m p q r out hm hI.1 hI.2.1 hI.2.2 hmr hqr hri hacc
+    obtain ⟨hI', hacc'⟩ := h.step ω i m p q r out hm hI.1 hI.2.1 hI.2.2 hmr hqr hri hacc
     exact ⟨⟨hI', hmr.inv hI.2.1, hmr.stopsAt hP hI.2.2⟩, hacc'⟩
 
 end Verity.Sampled
