@@ -501,7 +501,9 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     computes (`_own_returns`), each ingress row and every template's row, state and egress argument one input node's
     leaves (`_input_arg`), no egress argument an ingress row's, bucket t's `prog<j>` row `j · T / every + ⌊t / every⌋`
     of one input node of the slot entries (`_reads_entries`), the row, state and egress arguments' input nodes
-    pairwise distinct and none the slot entries' (`argsApart`), and the Program topological (`_topological`). It reads
+    pairwise distinct and none the slot entries' (`argsApart`), each of those arguments all its node's leaves, the
+    slot entries' node its entries' leaves and no other input node (`inputsRead`), and the Program topological
+    (`_topological`). It reads
     the descriptor's nodes, signatures and returns; Flock's decoder, which Lean runs on it, refuses no descriptor
     this module writes."""
     if not isinstance(j, dict) or j.get("schema") != SCHEMA:
@@ -582,6 +584,13 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
         raise D.Reject("scan: two of the templates' row, state and egress arguments read one input node, or one reads "
                        "the slot entries': an input node would be left that nothing reads, or a slot entry would be a "
                        "state gate (NetworkCheck.Period.argsApart)")
+    whole = lambda a: (q := _affine(_parts(a["refs"], nodes)[0]))[3] == _members(nodes[q[1]])  # noqa: E731
+    if not (all(whole(a) for a in own_args) and _members(nodes[r0[1]]) == L * nb * E and E <= bits_of(ety)
+            and all(k == r0[1] or k in own for k, x in enumerate(nodes) if _is_input(x, j))):
+        raise D.Reject("scan: an input node with a leaf nothing reads: a row, state or egress argument that is not all "
+                       f"its input node's leaves, a slot entries' node of other leaves than its {L * nb} entries' "
+                       "(each of at least a bit), or an input node that is neither's "
+                       "(NetworkCheck.Period.inputsRead)")
     if not _topological(j):
         raise D.Reject("scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program is not "
                        "topological, so a gate's operands could be gates after it")
@@ -1860,8 +1869,8 @@ def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
     last ingress template's row input node (resized, the state's node resized to keep the count); `shared` (when
     `T > 1`), the later ingress template's `sin` its row's input node from its first leaf, the `sin` input node left
     unread; `entries`, the egress state the slot entries' input node (resized, the state's node resized to keep the
-    count); and `topological`, the last ingress template's row input node moved after the templates, so the template
-    names a later node."""
+    count); `unread`, an input node of no members appended, which no argument reads; and `topological`, the last
+    ingress template's row input node moved after the templates, so the template names a later node."""
     desc, sched = p["scan"], p["schedule"]
 
     def parts() -> tuple[dict, list, list[int]]:
@@ -1957,6 +1966,11 @@ def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
     nodes[ks] = nodes[ks] | {"n": min(S, E), "out": typed(d, ["Array", min(S, E), ["Value", 1]])}
     nodes[ts[-1]]["args"][0]["refs"] = {"affine": ["n", kp, 0, S]}
     out["entries"] = own(d), "(NetworkCheck.Period.argsApart)"
+
+    d, nodes, ts = parts()
+    nodes.append({"args": [], "axes": [], "fn": d["callees"].index("Input1_v1"), "form": "batch", "n": 0,
+                  "out": typed(d, ["Array", 0, ["Value", 1]])})
+    out["unread"] = own(d), "(NetworkCheck.Period.inputsRead)"
 
     d, nodes, ts = parts()
     kr = nodes[ts[-2]]["args"][0]["refs"]["affine"][1]

@@ -490,6 +490,18 @@ def argsApart (P : Flock.Program.Prog) (own : List Flock.Program.Arg) (pks : Lis
   let ks := own.map (inputArg P)
   decide ks.Nodup && pks.all fun pk => !ks.contains (some pk)
 
+/-- Whether the root's input nodes hold what the scan reads and no other leaf: each argument of `own` is one run over
+all its node's leaves (as many as the node has members), each node of `pks` has `entries` leaves, and every input node
+of the root is one of `pks` or an argument's of `own`. At the cost of the root's nodes, each against the arguments. -/
+def inputsRead (P : Flock.Program.Prog) (own : List Flock.Program.Arg) (pks : List Nat) (entries : Nat) : Bool :=
+  let nodes := (P.defs[P.root]!).body.nodes
+  let ks := own.map (inputArg P)
+  own.all (fun a => match a.seq.parts.toList with
+    | [.affine false k 0 c] => nodes[k]?.map (·.members) == some c
+    | _ => false) &&
+  pks.all (fun pk => nodes[pk]?.map (·.members) == some entries) &&
+  (List.range nodes.size).all fun k => !NciCheck.Desc.isInputNode P nodes[k]! || pks.contains k || ks.contains (some k)
+
 /-- Whether two types have as many leaves, each of one width, the same in both (`Flock.Program.Widths.homo`): what a
 tie of two rows of gates, leaf by leaf, needs of their types. From the types' structure, no walk over their leaves. -/
 def sameLeaves (a b : Flock.Program.Ty) : Bool :=
@@ -698,8 +710,15 @@ state of `sin`'s leaves and a view of the egress template's `state`'s leaves (`i
 shape is refused.
 
 An input gate is read as one thing: the row, state and egress arguments read input nodes of their own, none the slot
-entries' (`argsApart`). Two of them on one node would leave the sum above room for an input node nothing reads, and a
-state argument on the slot entries' node would make a slot entry a state gate. -/
+entries' (`argsApart`). The input gates are counted as a sum of bits against the parameters' and the slot entries', so
+two arguments on one node would leave that sum room for an input node nothing reads, and a state argument on the slot
+entries' node would make a slot entry a state gate.
+
+And every input gate is read: each of those arguments is all its node's leaves, the slot entries' node holds the
+`lanes · T / every` entries and no other leaf, and the root has no other input node (`inputsRead`). That sum counts
+bits and this counts leaves, node by node, so the scan's input gates are read off the check itself, with no appeal to
+the widths the decoder holds a reference to. A slot entry's leaves are at most its bits (a leaf is at least a bit wide,
+which the decoder gives and this holds), so the entries' bits bound the entries' gates. -/
 def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   let prog ← (Flock.Program.decode (← Flock.canon j).toUTF8).mapError fun e => s!"scan: {e}"
   need (Flock.hexOf prog.sha512 == program) "scan: its SHA-512 is not the registered Program's (program)"
@@ -775,6 +794,10 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   need (argsApart prog own [pk]) "scan: two of the templates' row, state and egress arguments read one input node, or \
     one reads the slot entries': an input node would be left that nothing reads, or a slot entry would be a state gate \
     (NetworkCheck.Period.argsApart)"
+  need (inputsRead prog own [pk] (s.lanes * nb * ety.leaves) && ety.leaves ≤ bitsOf ety)
+    s!"scan: an input node with a leaf nothing reads: a row, state or egress argument that is not all its input \
+      node's leaves, a slot entries' node of other leaves than its {s.lanes * nb} entries' (each of at least a bit), \
+      or an input node that is neither's (NetworkCheck.Period.inputsRead)"
   need prog.orderViolation.isNone "scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program \
     is not topological, so a gate's operands could be gates after it"
   pure { steps := T, free := 0, ingress := bitsOf df.ret, egress := bitsOf de.ret }
