@@ -119,6 +119,9 @@ structure Public where
   proved : Array Nat
   bound : Nat
   perTemplate : Option (Array (String × Nat))
+  /-- The tied values R8 let through (`Registration.tiedThrough`): the acceptance rests on the later check that ties
+  their rows, and is no acceptance on its own when there are any. -/
+  tied : Array String := #[]
 
 private def exactly (j : Json) (ks : Array String) (what : String) : V Unit :=
   if keys? j != some (sortStrings ks) then throw s!"the keys of {what} are not {", ".intercalate (sortStrings ks).toList}"
@@ -533,7 +536,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Cor
       strata.map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none
     .accept
       { drawn := units, proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
-        bound := Bound.boundOf population draw p.delta, perTemplate }
+        bound := Bound.boundOf population draw p.delta, perTemplate, tied := Registration.tiedThrough v }
       { programs := #[str "program"], prescribed := #[], linked := false, covered := #[],
         levels := #[{ name := Record.LEVEL, query := some (str "partition"), size := population, draw := some draw }],
         delta := p.delta, drawn := #[(Record.LEVEL, units.size)] }
@@ -558,12 +561,15 @@ def checkAt (p : Params) (c : Commitment) (ξ : Option ByteArray) (e : Evidence)
 def checkLive (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Core.Integrity :=
   Core.atCoins (coinsOf p c e) (fun ξ => checkAt p c ξ e)
 
+/-- The public outputs, with the tied values as `rests_on_period_check` when there are any, the key the registration
+piece publishes them under. -/
 def publicJson (x : Public) : Json :=
-  Json.mkObj [("drawn", natsJson x.drawn), ("proved", natsJson x.proved),
+  Json.mkObj ([("drawn", natsJson x.drawn), ("proved", natsJson x.proved),
     ("bound", Lean.toJson x.bound),
     ("per_template", match x.perTemplate with
       | some ts => Json.mkObj (ts.toList.map fun (t, m) => (t, Lean.toJson m))
       | none => Json.null)]
+    ++ (if x.tied.isEmpty then [] else [("rests_on_period_check", Lean.toJson x.tied)]))
 
 def protocol : Core.Protocol where
   id := Registration.PROTOCOL

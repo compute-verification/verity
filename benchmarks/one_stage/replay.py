@@ -576,11 +576,11 @@ def python(c: Case) -> dict:
     delta = Fraction(p["delta"])
     out = lambda verdict, reason=None, public=None, profile=None: PR.outcome(  # noqa: E731
         R.PROTOCOL, verdict, reason, digest, public, profile)
-    codes = R.check(rec, program, p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
-                    p["partition"], p["work_table"], p["registered"], outputs=p.get("outputs"),
-                    schemas=p.get("schemas")).codes
-    if codes:
-        return out("reject", f"registration: {', '.join(codes)}")
+    reg = R.check(rec, program, p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
+                  p["partition"], p["work_table"], p["registered"], outputs=p.get("outputs"),
+                  schemas=p.get("schemas"), tied=p.get("tied"))
+    if reg.codes:
+        return out("reject", f"registration: {', '.join(reg.codes)}")
     try:
         mine = DR.derive(program, p["query"], p["law"], p["work_table"])
     except (P.QueryRefused, ValueError) as err:
@@ -606,7 +606,8 @@ def python(c: Case) -> dict:
     profile = audit.profile(rec, e["draw"], delta).to_json()
     wrong = a["wrong_units"]
     public = {"bound": wrong["bound"], "drawn": list(e["draw"]["units"]),
-              "per_template": wrong.get("per_template"), "proved": DR.proved(e["draw"])}
+              "per_template": wrong.get("per_template"), "proved": DR.proved(e["draw"]),
+              **({"rests_on_period_check": list(reg.rests_on_period_check)} if reg.rests_on_period_check else {})}
     return out("accept", None, public, {**profile, "delta": str(profile["delta"])})
 
 
