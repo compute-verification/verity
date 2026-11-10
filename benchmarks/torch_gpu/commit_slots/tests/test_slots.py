@@ -11,12 +11,12 @@ import numpy as np
 import pytest
 
 import slots as S
-from verity.core.protocols.pouw.audit import hm96_salt
-from verity.ml.commitments import hm96
-from verity.ml.commitments import layout as L
-from verity.ml.commitments.merkle import tree_levels
-from verity.ml.commitments.row_table import root_leaf
-from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
+from verity.protocols.pouw.verifier.audit import hm96_salt
+from verity.commitments import hm96
+from verity.commitments import layout as L
+from verity.commitments.merkle import tree_levels
+from verity.commitments.row_table import root_leaf
+from verity.commitments.rowleaf import sha512_row_v2_prefix
 
 CTX = bytes(range(64))
 KEY = bytes(range(100, 132))

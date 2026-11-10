@@ -1,6 +1,6 @@
 # The bandwidth audit's GPU tagger
 
-The honest prover's step of the bandwidth audit v0 (`verity/core/protocols/bandwidth/PROTOCOL.md`) on an RTX PRO 6000:
+The honest prover's step of the bandwidth audit v0 (`archive/verity/core/protocols/bandwidth/PROTOCOL.md`) on an RTX PRO 6000:
 every block's tag over the store `E` in device memory, the tags' leaves and their RFC 6962 root, for the three tag
 constructions: `ro-blake3/v1` and `ro-sha512/v1`, the certified ones, and `gf31-poly/v1`, the uncertified fast check.
 
@@ -86,7 +86,7 @@ control that writes nothing rejected).
   was given.
 
 `tests/` holds CPU twins of every kernel's arithmetic and message layout, with the SHA-512 constants read out of
-`verity/ml/kernels/sha512.cuh`, which `tagger.cu` includes, and the BLAKE3 constants out of `tagger.cu`. It checks them
+`verity/definitions/kernels/sha512.cuh`, which `tagger.cu` includes, and the BLAKE3 constants out of `tagger.cu`. It checks them
 against the core reference and checks that the bottom-up tree and its paths are RFC 6962's.
 `tests/test_prover.py` checks, with a fake tagger, that every window the harness runs is prepared before its seed and is
 in the store's one challenger state under a nonce of its own. Run it with

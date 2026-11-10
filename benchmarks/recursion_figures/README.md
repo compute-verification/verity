@@ -1,6 +1,6 @@
 # Recursion figures
 
-One recursive session's figures from a recursion bench result (`benchmarks/recursion_e2e`'s `recursion_e2e.json`, whose
+One recursive session's figures from a recursion bench result (`workloads/recursion_e2e`'s `recursion_e2e.json`, whose
 `session_times` hold each session step's wall and CPU seconds): its cost, its knowledge-soundness error and its stop-leak
 bound, for one window and pooled over a week, a month and a year (`reporting.PERIODS`), over the reference
 datacenter and the world's compute (`benchmarks/census`), each with its basis: measured (the run), proved (the Lean

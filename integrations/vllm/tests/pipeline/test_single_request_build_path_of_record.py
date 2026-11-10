@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from tests.pipeline.test_single_request_build_path import VLLM_DIR, _compose, _decode_cold, _run
-from verity.ml.circuits.codec import canonical_json, program_digest
+from verity.circuits.codec import canonical_json, program_digest
 
 #: workload 101's Build: `build_request/` (the derived request Program) and
 #: `build_workload/` (the workload Program GP-01 composed)
@@ -76,8 +76,8 @@ def test_101s_program_view_and_word_lookups_resolve_every_call(tmp_path):
     build = _build_101(tmp_path)
     code = ("import json, sys\n"
             "from verity_vllm.query import program_view as PV\n"
-            "from verity.ml.definitions import word as WQ\n"
-            "from verity.ml.definitions.numerics.rows import EVALUATORS\n"
+            "from verity.definitions import word as WQ\n"
+            "from verity.definitions.numerics.rows import EVALUATORS\n"
             "P = PV.from_instances(sys.argv[1] + '/build_request/instances.json.gz')\n"
             "specs = {(c.family, json.dumps(c.statics, sort_keys=True, default=str)): c for c in P.calls}\n"
             "for (fam, st), c in specs.items():\n"

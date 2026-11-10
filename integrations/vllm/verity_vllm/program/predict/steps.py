@@ -6,7 +6,7 @@ only the fields `reads.READS` declares, each with its account in the output acco
   public cap on the advice's length in bits.
 - `salt`: the window's seed salt, public, which a stochastic request's seed derives from where its body names none
   (`reads.seed_of`): the bytes of the window record's ``seed_salt``.
-- `advice`: I1 v0 (`verity.core.protocols.certifier.advice`), or a served Commit window's (`pipeline.window_advice`: I1 v0 with
+- `advice`: I1 v0 (`verity.protocols.certifier.verifier.advice`), or a served Commit window's (`pipeline.window_advice`: I1 v0 with
   the state of the requests the window carries across its open and close, and its client aborts), private: what serving decided
   that nothing registered predicts. Its canonical bytes, or an `Advice` of either, which is held to its encoding. Nothing else is advice.
 - `ingress`: each request's certified body by its id (I1's `RequestAdvice.id`, the body's `user`), the fixed ingress schema: an
@@ -108,16 +108,16 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-import verity.core.protocols.certifier.advice as I1
-from verity.ml.circuits.codec import program_digest
-from verity.ml.circuits.defs import bind
+import verity.protocols.certifier.verifier.advice as I1
+from verity.circuits.codec import program_digest
+from verity.circuits.defs import bind
 from verity_vllm.engine.profiles.engine_classes import CLASS_G, CLASS_G_EXECUTIONS, CLASS_G_LIMITS
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program.frontend import stop_rule as SR
 from verity_vllm.program.prune import dead_units
-from verity.ml.definitions.registry import io_shell as IO
-from verity.ml.definitions.registry.topp_geometry import registered_splits
+from verity.definitions.registry import io_shell as IO
+from verity.definitions.registry.topp_geometry import registered_splits
 
 from . import reads
 from .build import Unexpressible, build_program, decoder, model_shape

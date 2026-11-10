@@ -1,7 +1,7 @@
 """The authentication-path shapes and the range fold of the ``vllm-v1`` trees (contract section 5).
 
 Hash layout (also in :mod:`verity_vllm.commit.hashing`; specified as ``vllm-v1`` in
-``verity/ml/commitments/vllm_v1/PROTOCOL.md`` §1–§3)::
+``integrations/vllm/verity_vllm/commitments/vllm_v1/PROTOCOL.md`` §1–§3)::
 
     H(tag, *parts) = sha256( u32be(len(tag)) || tag || (u64be(len(part)) || part)* )
     leaf  = H("verity-vllm/leaf/v1", canonical_id, dtype, "[d0,d1,...]", raw little-endian bytes)
@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from verity.ml.commitments.leaves import fold_path, path_shape
+from verity_vllm.commitments.leaves import fold_path, path_shape
 from verity_vllm.commit import hashing
 
 __all__ = ["CommitError", "fold_path", "fold_range", "path_shape", "range_path_shape"]

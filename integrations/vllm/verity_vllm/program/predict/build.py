@@ -34,11 +34,11 @@ import time
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable
 
-from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
-from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Affine, Coll, concat
-from verity.ml.circuits.types import Array, RecordType, Type, Value
+from verity.circuits.codec import canonical_json, encode_program, program_digest
+from verity.circuits.defs import Builder, CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import Affine, Coll, concat
+from verity.circuits.types import Array, RecordType, Type, Value
 from verity_vllm.program.inputs import check_params
 from verity_vllm.program.prune import dead_free as dead_free_form
 
@@ -779,7 +779,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
                   "inputs": [list(_arr_shape(t)) for _, t in params[:-1]],
                   "config_sha256": hashlib.sha256(canonical_json({**({"chunks": list(chunks)} if chunks else {}), **edge_config(edge),
                                                                   **({"history": C} if C and not dense else {}), **({"stop": stop} if stop else {})})).hexdigest()[:16]}
-    from verity.ml.definitions.replay import replayer
+    from verity.definitions.replay import replayer
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S, _p=params, _r=out.type: (tuple(_p), _r), replayer(body),
                                doc=f"predicted ahead of time by verity_vllm.program.predict.build ({BUILDER_ID})", conformance="derived: predicted, a switched row's, checked by its trace (predict.aot)",
                                register=False)

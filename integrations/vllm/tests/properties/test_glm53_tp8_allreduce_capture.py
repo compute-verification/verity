@@ -20,10 +20,10 @@ import numpy as np
 import pytest
 
 from tests.properties import glm53_tp8_allreduce_capture_gpu as X
-from verity.ml.definitions.numerics import derived_rows as DR
-from verity.ml.definitions.registry import tp_allreduce as T
-from verity.ml.definitions.registry import tp_allreduce_check as K
-from verity.ml.definitions.registry import tp_allreduce_nodes as TN
+from verity.definitions.numerics import derived_rows as DR
+from verity.definitions.registry import tp_allreduce as T
+from verity.definitions.registry import tp_allreduce_check as K
+from verity.definitions.registry import tp_allreduce_nodes as TN
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 N = 1536
@@ -926,7 +926,7 @@ def test_the_coverage_is_what_a_go_record_shows() -> None:
 # --- what is covered --------------------------------------------------------------------------------------------------------------
 
 def _bind_captured(c: T.Captured, M: int):
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
 
     e = X.expect("fused" if c.route == "fused" else "allreduce", M, c.setting, c.N)
     size = M * c.N
@@ -1004,8 +1004,8 @@ def test_the_capture_map_claims_no_all_reduce_capture_has_not_covered() -> None:
     more than not-yet-established, only when `CAPTURED` covers every call GLM-5.3's served engine makes at the workload's setting
     (`workload_setting`) up to the 2048 tokens a step batches: the fused path to FlashInfer's budget and each all-reduce on the route
     `expected_comm` names, NCCL's never.  Every H200 `CAPTURED` Definition is one its Program lists, and both notes cite `CAPTURED`."""
-    from verity.ml.circuits.defs import REGISTRY as DEFS
-    from verity.ml.circuits.defs import conformance_label
+    from verity.circuits.defs import REGISTRY as DEFS
+    from verity.circuits.defs import conformance_label
 
     cmap = json.loads(CMAP.read_text())
     setting = X.workload_setting()["setting"]

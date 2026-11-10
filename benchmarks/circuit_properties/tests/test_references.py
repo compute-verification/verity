@@ -1,5 +1,5 @@
 """The properties of the declared reference circuits: the Boolean GEMM against the gate-by-gate definitions, and one served
-layer (SmolLM2-135M's) against the shapes its GEMMs read and benchmarks/rho's for the model."""
+layer (SmolLM2-135M's) against the shapes its GEMMs read and verity/protocols/inference_only/rho's for the model."""
 
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ def test_tiny_layer_matches_flat():
     """b1's layer at tiny shapes (3.9e6 gates), gate by gate: about 40 s of layout lookups. It is the one test holding the
     summaries and whole-in-block to the definitions through a served layer's wiring (σ's replayed references, the norm's
     and RoPE's outputs, LayerPre's tuple, the residual), which the synthetic circuits only imitate."""
-    from verity.ml.definitions.registry import b1
+    from verity.definitions.registry import b1
     C = dict(b1.B0_CONFIG, H=16, NH=1, KVH=1, D=16, I=16, QKV=48, GU=32, V=64, NL=1)
     p = R.layer(C, 1)
     ex = flat.explicit(p, R.GEMM_PRODUCTS)
@@ -74,9 +74,9 @@ def test_tiny_layer_matches_flat():
 def test_smollm2_layer():
     """The served SmolLM2-135M layer on bits (5.6e9 gates; building its Definitions takes most of the time): what only a
     real layer shows, its four GEMMs' products and the MLP input's fan-out, and that they are the `fanout`, `legs` and
-    layer products benchmarks/rho reads for the model (its `models.toml` row, and derived from the config's matrices)."""
+    layer products verity/protocols/inference_only/rho reads for the model (its `models.toml` row, and derived from the config's matrices)."""
     import run
-    from verity.ml.definitions.registry import b1
+    from verity.definitions.registry import b1
     C = b1.B0_CONFIG
     m = measure(R.layer(C, 1), R.GEMM_PRODUCTS)
     H, I = C["H"], C["I"]

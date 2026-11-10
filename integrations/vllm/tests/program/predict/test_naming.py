@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from verity.ml.circuits.types import RecordType
+from verity.circuits.types import RecordType
 from verity_vllm.check.replay import index as IX
 from verity_vllm.correspondence.reader_for_query import recorded_names
 from verity_vllm.correspondence.runtime import validate_document

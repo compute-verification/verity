@@ -8,7 +8,7 @@ public import Definitions.Core.Prob
 /-!
 # The keyed polynomial hash over `GF(2^31 − 1)` (trusted)
 
-The tag of the bandwidth audit's uncertified fast check: `benchmarks/pous/hbm_audit/digest.py`, `gf31-poly/v1`. No
+The tag of the bandwidth audit's uncertified fast check: `archive/benchmarks/pous/hbm_audit/digest.py`, `gf31-poly/v1`. No
 statement about it certifies bandwidth. A device with memory to spare can keep a structure computed from each block
 (a Kedlaya–Umans evaluation table) and answer the hash without reading the block's words, so the certified tag is a
 random oracle's (`Bandwidth.Guarantees.AuditRO`). The statements about this hash are inputs to a possible version in
