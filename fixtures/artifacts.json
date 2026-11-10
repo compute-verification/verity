@@ -161,7 +161,7 @@
   "art:78615011944ccec18b2a9e217d8ec29272e598f0066f9054fb1f944a2ac51609": "integrations/vllm/tests/engine/collectives/fixtures/tp2/fold_gap.shard.rank0.json",
   "art:158db783ce5c5a88e19ccbc34a4a7923faecc92a592b3418d3848f3b9ba266c8": "integrations/vllm/tests/engine/collectives/fixtures/tp2/fold_gap.shard.rank1.json",
   "art:939f5600f8dbd843d6f1525f5e1d6b40592176ce8894dfe6bb3876475f659401": "integrations/vllm/tests/pipeline/fixtures/advice_run_a/step_trace.jsonl.gz",
-  "art:227b98d6e3c4e20cf50e90fb3b93043753d36c5f576892bafd6ad1b5bfb10338": "integrations/vllm/tests/program/predict/fixtures/naming_traces.json",
+  "art:efaea1297125b78a9ef0e312dc0e4a4a194d58f5d0c4f1c855805a17bad918a1": "integrations/vllm/tests/program/predict/fixtures/naming_traces.json",
   "art:30385407aad29494f71640c127a59912b9839722000d856fd095b2034174e259": "integrations/vllm/tests/program/data/dsa_h200_logits.npz",
   "art:c1833dbbafe1d80f86f08e2b657b43607a506430d0b57827d8bc6d6ab4aa1bad": "integrations/vllm/tests/program/data/dsa_glm53_kslots.npz",
   "art:d794e952dec34ad637dad0526ce839b942849d4ed283a05380b3434fa96d9301": "integrations/vllm/docs/data/ref-prims",
