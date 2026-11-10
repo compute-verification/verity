@@ -13,12 +13,12 @@
 [words]
 
 [[words_in]]
-files = ["benchmarks/**", "verity/spot/spot_figures/**", "verity/spot/sampling_plan/**", "verity/protocols/inference_only/nci/**"]
+files = ["benchmarks/**", "verity/protocols/inference_only/nci/**", "verity/protocols/inference_only/rho/**"]
 words = { "rho's" = "the slowdown calculator's" }
 
 [rewrite]
 # Never rewritten: the earlier moves and their maps, lock files, and the cards a digest names.
-exclude = ["tools/move/**", "uv.lock", "**/*.lock", "verity/spot/spot_figures/cards/**"]
+exclude = ["tools/move/**", "uv.lock", "**/*.lock", "benchmarks/spot_figures/cards/**"]
 
 [keep]
 patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+',
