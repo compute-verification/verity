@@ -217,6 +217,15 @@ NEW = {
     "verity/ml/commitments/history.py": "ml:commitment-schemes",
     "verity/ml/commitments/tests/test_history.py": "ml:commitment-schemes",
     "archive/AGENTS.md": "stays",                      # what `archive/` is, there before the archive's files arrive
+    # STAGING ONLY (the stager's copy; vllm decides each at its own head): files `main` d1c3ccf9e6 and training's
+    # #8625 add in a directory several components share, each with the file it is named after or imports
+    "verity/ml/definitions/registry/dsa_topk_mask_cut.py": "ml:definitions-registry",
+    "verity/ml/definitions/registry/dsa_topk_mask_cut.circuit-check.py": "ml:definitions-registry",
+    "verity/ml/definitions/registry/dsa_topk_mask_cut.circuit-check.json": "ml:definitions-registry",
+    "verity/ml/definitions/tests/test_dsa_topk_mask_cut.py": "ml:definitions-registry",
+    "verity/core/protocols/spot/schedule.py": "core:spot-python",
+    "verity/core/service/flock/Flock/TmplLines.lean": "core:flock-lean-verifier",
+    "benchmarks/training_slowdown/tests/test_min_cut.py": "stays",
 }
 #: references to a directory a map splits that stay right as they are: (the move, "old file: old directory", why)
 SPLIT = [
