@@ -22,11 +22,11 @@ open Lean (Json)
 /-- A record's own tag (`Flock.WindowRecord.tagOf`) is the one the policy's digest takes: both read its `format` field
 as a string. -/
 theorem tagOf_eq (j : Json) : Flock.WindowRecord.tagOf j =
-    if NciCheck.Theta.strAt j "format" == some Flock.WindowRecord.FORMAT_V2 then Flock.WindowRecord.FORMAT_V2
+    if InferenceOnlyCheck.Theta.strAt j "format" == some Flock.WindowRecord.FORMAT_V2 then Flock.WindowRecord.FORMAT_V2
     else Flock.WindowRecord.FORMAT := by
-  have hv : (j.getObjValAs? String "format").toOption = NciCheck.Theta.strAt j "format" := by
+  have hv : (j.getObjValAs? String "format").toOption = InferenceOnlyCheck.Theta.strAt j "format" := by
     show (Lean.fromJson? (j.getObjValD "format") : Except String String).toOption =
-      NciCheck.Theta.strOf? (j.getObjValD "format")
+      InferenceOnlyCheck.Theta.strOf? (j.getObjValD "format")
     cases j.getObjValD "format" <;> rfl
   unfold Flock.WindowRecord.tagOf
   rw [hv]
@@ -35,22 +35,22 @@ theorem push_zero (x : ByteArray) : x.push 0 = x ++ ByteArray.mk #[0] := by
   apply ByteArray.ext
   simp [ByteArray.data_push, ByteArray.data_append]
 
-/-- The policy's digest is the window record's (`Flock.WindowRecord.digestHex`): `NciCheck.Theta.digest` is that
+/-- The policy's digest is the window record's (`Flock.WindowRecord.digestHex`): `InferenceOnlyCheck.Theta.digest` is that
 function, or else tags the record by its `format` as `Flock.WindowRecord.tagOf` does and hashes its canonical text as
 `Flock.WindowRecord.digest` does, and either form is proved here. -/
-theorem baseline_digest (rec : Json) : NciCheck.Theta.digest rec = Flock.WindowRecord.digestHex rec := by
+theorem baseline_digest (rec : Json) : InferenceOnlyCheck.Theta.digest rec = Flock.WindowRecord.digestHex rec := by
   first
     | rfl
-    | (unfold NciCheck.Theta.digest Flock.WindowRecord.digestHex Flock.WindowRecord.digest
+    | (unfold InferenceOnlyCheck.Theta.digest Flock.WindowRecord.digestHex Flock.WindowRecord.digest
        rw [tagOf_eq]
        cases Flock.canon rec with
        | error e => rfl
        | ok s => simp only [Bind.bind, Except.bind, pure, Except.pure, Flock.WindowRecord.digestOf, push_zero] <;> rfl)
 
 /-- The policy's commitment: the record its bytes are, and its digest, the window record's digest of that record. -/
-theorem policy_of {b : ByteArray} {c : NciCheck.Protocol.Commitment} (h : NciCheck.Protocol.commitmentOf b = .ok c) :
+theorem policy_of {b : ByteArray} {c : InferenceOnlyCheck.Protocol.Commitment} (h : InferenceOnlyCheck.Protocol.commitmentOf b = .ok c) :
     canonicalJson b = .ok c.record ∧ Flock.WindowRecord.digest c.record = .ok c.digest := by
-  unfold NciCheck.Protocol.commitmentOf at h
+  unfold InferenceOnlyCheck.Protocol.commitmentOf at h
   simp only [baseline_digest, Flock.WindowRecord.digestHex] at h
   rcases hj : canonicalJson b with e | j
   · simp [hj, Bind.bind, Except.bind] at h
@@ -76,8 +76,8 @@ theorem stage_of {b : ByteArray} {c : SampledProofs.OneStage.Commitment}
 
 /-- **One record, one digest**: bytes that the policy's and one-stage v1's commitment decoders both accept decode to
 one digest under each. -/
-theorem one_digest {b : ByteArray} {cI : NciCheck.Protocol.Commitment} {cS : SampledProofs.OneStage.Commitment}
-    (hI : NciCheck.Protocol.commitmentOf b = .ok cI) (hS : SampledProofs.OneStage.commitmentOf b = .ok cS) :
+theorem one_digest {b : ByteArray} {cI : InferenceOnlyCheck.Protocol.Commitment} {cS : SampledProofs.OneStage.Commitment}
+    (hI : InferenceOnlyCheck.Protocol.commitmentOf b = .ok cI) (hS : SampledProofs.OneStage.commitmentOf b = .ok cS) :
     cS.digest = cI.digest := by
   obtain ⟨hjI, hdI⟩ := policy_of hI
   obtain ⟨hjS, hdS⟩ := stage_of hS
@@ -89,22 +89,22 @@ theorem one_digest {b : ByteArray} {cI : NciCheck.Protocol.Commitment} {cS : Sam
 sampled proofs' cases committing to one record's bytes, which both commitment decoders accept, leave no stray among
 the components remote's check compares on any blobs `bs` (`remote_check_ids`), and both digests are the policy's
 record's. -/
-theorem acceptInferenceOnly_honest (bs : Blobs) {kI kW kS : Case} {cI : NciCheck.Protocol.Commitment}
+theorem acceptInferenceOnly_honest (bs : Blobs) {kI kW kS : Case} {cI : InferenceOnlyCheck.Protocol.Commitment}
     {cS : SampledProofs.OneStage.Commitment} (hS' : kS.commitment = kI.commitment)
-    (hI : NciCheck.Protocol.commitmentOf kI.commitment = .ok cI)
+    (hI : InferenceOnlyCheck.Protocol.commitmentOf kI.commitment = .ok cI)
     (hS : SampledProofs.OneStage.commitmentOf kI.commitment = .ok cS) :
-    strays [NciCheck.Protocol.protocol.id, (VStar.Recursive.Sampled.protocol.onBlobs bs).id]
-        [NciCheck.Protocol.protocol, PouwCheck.Period.protocol, VStar.Recursive.Sampled.protocol.onBlobs bs]
+    strays [InferenceOnlyCheck.Protocol.protocol.id, (VStar.Recursive.Sampled.protocol.onBlobs bs).id]
+        [InferenceOnlyCheck.Protocol.protocol, PouwCheck.Period.protocol, VStar.Recursive.Sampled.protocol.onBlobs bs]
         [kI, kW, kS] = none ∧
-      Properties.Composition.digestOf NciCheck.Protocol.protocol kI.commitment =
-        some (NciCheck.Protocol.protocol.digest cI) ∧
+      Properties.Composition.digestOf InferenceOnlyCheck.Protocol.protocol kI.commitment =
+        some (InferenceOnlyCheck.Protocol.protocol.digest cI) ∧
       Properties.Composition.digestOf SampledProofs.OneStage.protocol kS.commitment =
-        some (NciCheck.Protocol.protocol.digest cI) := by
+        some (InferenceOnlyCheck.Protocol.protocol.digest cI) := by
   have dS := one_digest hI hS
-  have hcI : NciCheck.Protocol.protocol.commitment kI.commitment = .ok cI := hI
+  have hcI : InferenceOnlyCheck.Protocol.protocol.commitment kI.commitment = .ok cI := hI
   have hcS : (VStar.Recursive.Sampled.protocol.onBlobs bs).commitment kS.commitment = .ok cS := by
     rw [hS']; exact hS
-  have dS' : (VStar.Recursive.Sampled.protocol.onBlobs bs).digest cS = NciCheck.Protocol.protocol.digest cI := dS
+  have dS' : (VStar.Recursive.Sampled.protocol.onBlobs bs).digest cS = InferenceOnlyCheck.Protocol.protocol.digest cI := dS
   exact ⟨strays_two_none (ne_policy_stage bs) (ne_period_stage bs) hcI hcS dS', digestOf_ok hcI,
     (digestOf_sampled bs _).symm.trans ((digestOf_ok hcS).trans (congrArg some dS'))⟩
 

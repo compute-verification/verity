@@ -121,7 +121,7 @@
    "statement": "A declaration divided into sessions reading only theta and their prompts complies.",
    "refs": {
     "lean": [
-     "Nci.SecurityProofs.Inference"
+     "InferenceOnly.SecurityProofs.Inference"
     ]
    }
   },
@@ -132,8 +132,8 @@
    "statement": "Under threading, weight incompressibility and containment, slowdown >= kappa b_a / (2 alpha Lambda).",
    "refs": {
     "lean": [
-     "Nci.SecurityProofs.ThreadedReads",
-     "Nci.SecurityProofs.ThreadedTraining"
+     "InferenceOnly.SecurityProofs.ThreadedReads",
+     "InferenceOnly.SecurityProofs.ThreadedTraining"
     ]
    }
   },
@@ -144,7 +144,7 @@
    "statement": "A small subcircuit of the reference circuit reads b_w bits per updated weight it uses and b_a per thread value. Stated over wiring; proofs recommends the support form. False at step 0 and for small-batch reference circuits.",
    "refs": {
     "lean": [
-     "Nci.Assumptions.WeightsIncompressible"
+     "InferenceOnly.Assumptions.WeightsIncompressible"
     ],
     "estimates": [
      "b_w.pretrained/frontier-lossy",
@@ -159,7 +159,7 @@
    "statement": "The reference circuit is (d, e)-threaded with d the entry fee and e the fan-out. Lean derives only (1, 0)-threading from structure; with a committed corpus layer 1 needs no thread reads, and the unembedding needs e >= vocabulary.",
    "refs": {
     "lean": [
-     "Nci.SecurityProofs.ThreadedReads"
+     "InferenceOnly.SecurityProofs.ThreadedReads"
     ]
    }
   },
@@ -170,7 +170,7 @@
    "statement": "The declared circuit contains the reference circuit gate for gate (Declaration.Contains).",
    "refs": {
     "lean": [
-     "Nci.SecurityProofs.ThreadedThrottled"
+     "InferenceOnly.SecurityProofs.ThreadedThrottled"
     ]
    }
   },
@@ -227,10 +227,10 @@
    "statement": "Proved as ContainedTraining: the Hong-Kung / Loomis-Whitney law on a reference circuit that the declared circuit contains, with its only assumptions the support-form incompressibility of one chain at b_w and b_a (ActivationsSupport, PartialSumsSupport). A chain charges each weight once per layer, so it covers one forward path: for Kimi K2 the dense path, 7% of training's work, giving rho >= 2.6e5 at kimi-k2-1m-raw (thread theorem 9.6e4, construction 1.4e7); the dense-100b example gives 4.2e6. Chain families (routed experts, the backward pass) with a joint charge would take kappa toward the thread theorem's 0.60. The Appendix A draft (Notion, 'A bound on updated-parameter multiplications per task') states the same law per task, at most (x/2)·sqrt(y) products for x operand entries in and y output entries out, and admits compression only as an allowance that weakens the ceiling as its 3/2 power; in bits, compressing both operands by a factor r weakens this law by about r^1.5. The draft's per-task output budget has no proof-only analogue: the proof fixes what a block computes from its declared inputs, not who else learns its values, so a block can copy a value out and have it re-enter later as a novel input, charged only to its reader. A per-block cap would hold with network taps that bind every link's content to the declared wires (what network accounting's certifier is built toward) and with every novel input bound to bytes that arrived over a tapped ingress link, so a server can't feed its own leftovers back in. Even then the simple version gains only about 1.6x at kimi-k2-1m-raw, because the law's full-position branch charges no outputs and binds; it waits for taps.",
    "refs": {
     "lean": [
-     "Nci.SecurityProofs.ContainedTraining",
-     "Nci.SecurityProofs.ContainedMatMul",
-     "Nci.Assumptions.PartialSumsSupport",
-     "Nci.Assumptions.ActivationsSupport"
+     "InferenceOnly.SecurityProofs.ContainedTraining",
+     "InferenceOnly.SecurityProofs.ContainedMatMul",
+     "InferenceOnly.Assumptions.PartialSumsSupport",
+     "InferenceOnly.Assumptions.ActivationsSupport"
     ],
     "findings": [
      "hong-1981-red-blue-pebble/1",

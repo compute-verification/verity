@@ -366,7 +366,7 @@ def _input_arg(arg: dict, nodes: list, j: dict) -> int | None:
 
 
 def _is_input(x: dict, j: dict) -> bool:
-    """`NciCheck.Desc.isInputNode`: a node calling an input primitive."""
+    """`InferenceOnlyCheck.Desc.isInputNode`: a node calling an input primitive."""
     fid = j["callees"][x["fn"]]
     return j["definitions"][fid]["form"] == "primitive" and bool(INPUT_ID.match(fid))
 
@@ -418,7 +418,7 @@ FUEL = 2 ** 62
 
 
 def _walkable(j: dict) -> bool:
-    """`NciCheck.Desc.walkable` as C-Flock's decoder gives a Program (its layout, callees first and the root without
+    """`InferenceOnlyCheck.Desc.walkable` as C-Flock's decoder gives a Program (its layout, callees first and the root without
     parameters): `(A + 1) · (H + 2)` at most half of `FUEL`, for the root's activations `A` (its own and each composite
     node member's, multiplied through batches and scans) and the depth `H` they nest to, and no scan of no iterations
     with output leaves. `rootLaidOut` and `inputsAtRoot` the decoder gives too."""

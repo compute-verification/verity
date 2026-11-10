@@ -1,14 +1,14 @@
 import Properties.NetworkScan
-import NciCheck.Desc
-import Proofs.Properties.Nci.BodiesOk
-import Proofs.Properties.Nci.OperandsResolve
-import Proofs.Properties.Nci.ReadsExact
+import InferenceOnlyCheck.Desc
+import Proofs.Properties.InferenceOnly.BodiesOk
+import Proofs.Properties.InferenceOnly.OperandsResolve
+import Proofs.Properties.InferenceOnly.ReadsExact
 
 /-!
 # The walk lemma
 
 **The walk lemma** (`MemberReads`): in a Program C-Flock decodes, topological (`Flock.Program.Prog.orderViolation`) and
-laid out (`NciCheck.Desc.bodiesLaidOut`), a gate in the activation of member `m` of a root node `k` calling a composite
+laid out (`InferenceOnlyCheck.Desc.bodiesLaidOut`), a gate in the activation of member `m` of a root node `k` calling a composite
 (by a batch or a call: a scan's iteration reads the one before) reads only gates of that activation, or a gate one of
 node `k`'s argument references resolves to from the root, what its arguments bind. It is where C-Flock's walk
 (`Flock.Program.Prog.gate`, `Flock.Program.resolve`) takes a gate's operands, and the scan's causality
@@ -31,7 +31,7 @@ namespace Properties.NetworkScan
 gates of that activation, or a gate a reference of one of node `k`'s arguments resolves to from the root. -/
 def MemberReads : Prop :=
   ∀ (bytes : ByteArray) (P : Flock.Program.Prog), Flock.Program.decode bytes = .ok P → P.orderViolation = none →
-    NciCheck.Desc.bodiesLaidOut P = true →
+    InferenceOnlyCheck.Desc.bodiesLaidOut P = true →
     ∀ k < (P.defs[P.root]!).body.nodes.size, ∀ m < ((P.defs[P.root]!).body.nodes[k]!).members,
       (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false →
       ((P.defs[P.root]!).body.nodes[k]!).form ≠ .scan →
@@ -48,7 +48,7 @@ end Properties.NetworkScan
 namespace Properties.NetworkScan.WalkProof
 
 open Flock.Program
-open NciCheck.Properties.SecurityProofs
+open InferenceOnlyCheck.Properties.SecurityProofs
 
 /-- The activations at or below `A`: `A`, and each member of a node of one. -/
 inductive Below (A : Scope) : Scope → Prop

@@ -45,7 +45,7 @@ against off. A recipe better at working under the mechanisms, m times more progr
 only the constrained terms (nu, mu and chi), not the residual or unmonitored compute. The slowdown D, the
 hardware multiple over an unconstrained developer with the same recipe on the same hardware at model-FLOP utilization
 mfu, isn't computed here: it is the overhead calculator's ``rho.theorem.multiple_bound`` in Lean's form
-(``Nci.Dampener.remoteDampener``) on these terms (``remote_terms``) with the residual at MFU_0.
+(``InferenceOnly.Dampener.remoteDampener``) on these terms (``remote_terms``) with the residual at MFU_0.
 
 The canvas "Compute efficiency under the verification stack" renders this model.
 
@@ -191,7 +191,7 @@ STATUS = [
      "weight columns."),
     ("Declared computation, partial-sum law", "Off by default (kappa_chain = 0): ContainedTraining and PS' rest on "
      "PartialSumsSupport and ActivationsSupport, which NCI-FALSIFY reproduced as false."),
-    ("Monitored compute residual", "r = r-hat + epsilon_W W_cert/C + eps', as Nci.Guarantees.DampenerRemote states it "
+    ("Monitored compute residual", "r = r-hat + epsilon_W W_cert/C + eps', as InferenceOnly.Guarantees.DampenerRemote states it "
      "(#3646). PoUW's deficit epsilon_W = 0.744% (CircuitCredit, draft #2638) is a share of credited work, evaluated "
      "with its premises granted. Under the floor credit r-hat = 0.449: GPU floor time 0.323 (honest kernels at 1.72 "
      "times the floor; run r20261017-123922-e558 has no published outputs), the clock 0 (PoUW credits the card "
@@ -312,7 +312,7 @@ def audited_residual(p: dict) -> float:
 
 
 def residual_share(p: dict) -> float:
-    """r = r-hat + eps_W W_cert/C + eps', the residual inside ``Nci.Guarantees.DampenerRemote``'s bounds,
+    """r = r-hat + eps_W W_cert/C + eps', the residual inside ``InferenceOnly.Guarantees.DampenerRemote``'s bounds,
     ``residualShare W C + εW * W / C + ε``: the audited residual r-hat = 1 - W_cert/C, PoUW's deficit on the certified
     work (a certificate that isn't wrong may credit up to eps_W of its work without its running, so what was certified
     and run is (1 - eps_W) W_cert), and the share whose certificates may be wrong."""
@@ -419,7 +419,7 @@ def evaluate(p: dict, mech: dict, residual_mfu: float = 1.0) -> dict:
 
 
 def remote_terms(p: dict, r: dict) -> tuple[float, float]:
-    """``evaluate``'s terms as the ``s`` and ``x`` of ``Nci.Dampener.remoteDampener mfu s x``: the unmonitored share,
+    """``evaluate``'s terms as the ``s`` and ``x`` of ``InferenceOnly.Dampener.remoteDampener mfu s x``: the unmonitored share,
     which trains like the unconstrained developer, and the rest in counted multiplications (so at a = 1/MFU_0,
     ``multiple_bound``'s ``reference_efficiency=False``; the assumption is in ``r``'s residual, ``evaluate`` at
     ``residual_mfu`` = MFU_0), each per the compute amplifier g (which cancels against the unconstrained developer's)."""

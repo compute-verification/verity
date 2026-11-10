@@ -19,7 +19,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # `verity`: the stream and its verifiers of record, and the Lean packages `sampled-proofs-verifier` builds from; its lakefile,
 # named on its own, is the package its tests build (`one_stage.verifier.executable`), so check runs them after lean-build.
-# `verity/core/protocols/network/nci/lean/lakefile.toml`, named on its own too: served_cases' inference-only case goes through
+# `verity/core/protocols/network/inference_only/lean/lakefile.toml`, named on its own too: served_cases' inference-only case goes through
 # that package's `inference-only` check, which its tests `lake build` there, beside one-stage v1's case through
 # `sampled-proofs-one-stage`, v2's through `sampled-proofs-one-stage-zk` and remote's sampled proofs case through
 # `vstar-recursive sampled` (`verity/core/service/vstar/recursive`); its slow test builds the 4,32,4 class's
@@ -55,7 +55,7 @@ inputs = ["tools/config/verity_config", "benchmarks/pouw/clear", "benchmarks/pou
           "benchmarks/census/deployments.json",
           "benchmarks/numerical/python/verity_numerical/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
-          "verity/core/protocols/network/nci/lean/lakefile.toml",
+          "verity/core/protocols/network/inference_only/lean/lakefile.toml",
           "benchmarks/numerical/python/verity_numerical/bench/input_sets.py",
           "benchmarks/numerical/python/verity_numerical/bench/templates.py",
           "integrations/vllm/verity_vllm", "benchmarks/network_traces",
