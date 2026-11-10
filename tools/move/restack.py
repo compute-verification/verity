@@ -25,6 +25,12 @@ same script rather than by rename detection:
 4. run the result's own `tools/verity/check/pins.py --regen` at its root, which runs each stale pin's command, and commit what it
    rewrote (`--no-pins` skips it). A result with a pin still stale, its command failed, is `pins-stale`.
 
+Before the steps, M is checked to be what the script writes on B, by running it there (`check_generated`): as long as step 2,
+and the same for every branch. A check that passed is kept as a file in the check's cache (`$CHECK_CACHE`, default
+`~/.cache/verity-check`, under `restack-generated/`), so on one machine the first restack across a move pays for it and the
+rest read it. The file's key is everything that decides the check (`generated_key`); a file that is unreadable, malformed
+or of another key is not read, and the script runs.
+
 A branch that already contains M skips to step 3. A branch that doesn't but shares a commit after B with `--onto` or `--main`
 (default origin/main) is `based-after`, and nothing runs: step 3 would bring main's commits since B in a second time and still
 report clean (duplicate imports and lock entries). Its owner merges main instead (`git merge origin/main`); the
@@ -42,6 +48,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -69,6 +76,8 @@ LOCK = "lean-audit.json"
 #: a pinned digest list, which the result's own pins step regenerates: where both sides changed it, the result takes
 #: `--onto`'s too
 PINNED = "TRUSTED.sha256"
+#: the directory, in the check's cache, of the moves `check_generated` found generated: a file a key (`kept_path`)
+KEPT = "restack-generated"
 #: the clone's worktree lock, in its git directory, under the name `research.queue.WORKTREES_LOCK` gives it: a scratch
 #: worktree is added and forgotten holding it alone, and every fetch the queue runs holds it shared
 WORKTREES_LOCK = "research-worktrees.lock"
@@ -187,23 +196,27 @@ def move_base(move: str, cwd: str | None) -> str:
     return parents[0]
 
 
-def pinned_uv_env(base: str, tmp: str, cwd: str | None) -> dict[str, str] | None:
-    """The environment the move's script runs in: this one, unless the uv on the PATH isn't the version `base`'s
-    `tools/check/pod_setup.sh` pins, which layout.py refuses to `uv lock` with. Then a `uv` in `tmp` that runs the pinned
-    version through `uv tool run` goes first on the PATH, so the restack doesn't depend on which uv the caller has."""
+def uv_pin(base: str, cwd: str | None) -> tuple[str | None, str | None, str | None]:
+    """(the uv version `base`'s `pod_setup.sh` pins, the uv on the PATH, that uv's version), each None where there is none."""
     found = git("show", f"{base}:tools/check/pod_setup.sh", cwd=cwd, ok=(0, 128)).stdout.decode() or \
         git("show", f"{base}:tools/verity/check/pod_setup.sh", cwd=cwd, ok=(0, 128)).stdout.decode()
     m = re.search(r"^UV_VERSION=\$\{UV_VERSION:-([^}]+)\}", found, re.M)
     real = shutil.which("uv")
-    if not m or not real:
-        return None
-    got = subprocess.run([real, "--version"], capture_output=True, text=True).stdout.split()[1:2]
-    if got == [m.group(1)]:
+    got = subprocess.run([real, "--version"], capture_output=True, text=True).stdout.split()[1:2] if real else []
+    return (m.group(1) if m else None), real, (got[0] if got else None)
+
+
+def pinned_uv_env(base: str, tmp: str, cwd: str | None) -> dict[str, str] | None:
+    """The environment the move's script runs in: this one, unless the uv on the PATH isn't the version `base`'s
+    `tools/check/pod_setup.sh` pins, which layout.py refuses to `uv lock` with. Then a `uv` in `tmp` that runs the pinned
+    version through `uv tool run` goes first on the PATH, so the restack doesn't depend on which uv the caller has."""
+    pin, real, got = uv_pin(base, cwd)
+    if not pin or not real or got == pin:
         return None
     shim = os.path.join(tmp, "pinned-uv")
     os.makedirs(shim, exist_ok=True)
     with open(os.path.join(shim, "uv"), "w") as f:
-        f.write(f'#!/bin/sh\nexec {shlex.quote(real)} tool run --quiet uv@{shlex.quote(m.group(1))} "$@"\n')
+        f.write(f'#!/bin/sh\nexec {shlex.quote(real)} tool run --quiet uv@{shlex.quote(pin)} "$@"\n')
     os.chmod(os.path.join(shim, "uv"), 0o755)
     return {**os.environ, "PATH": shim + os.pathsep + os.environ.get("PATH", "")}
 
@@ -275,15 +288,75 @@ def with_pins(r: dict, result: str, python: str, cwd: str | None, pins: bool) ->
 _GENERATED: dict[tuple, str] = {}
 
 
+def generated_key(move: str, base: str, python: str, cwd: str | None) -> dict:
+    """What decides the tree the move's script writes on `base`, and so whether `move` is it, as a kept check's key: the two
+    commits (the script's own file and its map are `base`'s), the script and every argument it runs with, the interpreter
+    by its path and by the version it reports, the uv the script runs under (`pinned_uv_env`), and this file, whose
+    `run_script` makes the tree."""
+    pin, real, got = uv_pin(base, cwd)
+    with open(__file__, "rb") as f:
+        me = hashlib.sha256(f.read()).hexdigest()
+    version = subprocess.run([python, "-c", "import sys; print(sys.version)"], capture_output=True, text=True, check=True)
+    return {"move": move, "base": base, "script": SCRIPT, "args": [*BRANCH_ARGS.get(SCRIPT, ()), *SCRIPT_ARGS],
+            "python": python, "interpreter": version.stdout.strip(), "uv": pin if pin and real else got, "restack": me}
+
+
+def kept_path(key: dict) -> str:
+    """The file of the check under `key`, in the check's cache (`$CHECK_CACHE`, default `~/.cache/verity-check`, as
+    `tools/verity/check/common.cache_dir`): the one directory of a node that every run on it shares. A run's clone, with its
+    `.git`, is removed when the run ends, so a file kept there would never be read."""
+    name = hashlib.sha256(json.dumps(key, sort_keys=True).encode()).hexdigest() + ".json"
+    return os.path.join(os.environ.get("CHECK_CACHE") or os.path.expanduser("~/.cache/verity-check"), KEPT, name)
+
+
+def kept_generated(key: dict) -> str | None:
+    """The tree the kept check under `key` records, or None: a file that is missing, unreadable, malformed or of another key
+    says nothing, and the script runs."""
+    try:
+        with open(kept_path(key)) as f:
+            kept = json.load(f)
+    except (OSError, ValueError):
+        return None
+    return kept["tree"] if isinstance(kept, dict) and kept.get("key") == key and isinstance(kept.get("tree"), str) else None
+
+
+def keep_generated(key: dict, tree: str) -> None:
+    """Keep a check that passed. Where the file can't be written nothing is kept, and the next restack runs the script again."""
+    path, tmp = kept_path(key), None
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".writing-")
+        with os.fdopen(fd, "w") as f:
+            json.dump({"key": key, "tree": tree}, f, indent=1)
+        os.replace(tmp, path)  # whole or absent: a restack beside this one never reads half a file
+    except OSError as e:
+        print(f"restack.py: the check of {key['move'][:12]} isn't kept in {os.path.dirname(path)}: {e}", file=sys.stderr)
+        if tmp:
+            with contextlib.suppress(OSError):
+                os.unlink(tmp)
+
+
 def check_generated(move: str, base: str, python: str, cwd: str | None) -> None:
     """Refuse a `move` whose tree isn't what `base`'s layout script writes: a later commit (the move branch's head, with its hand
-    fixups) taken as the move would make the third merge undo them, while every branch still reported clean."""
+    fixups) taken as the move would make the third merge undo them, while every branch still reported clean.
+
+    A check that passed is kept (`kept_path`) under everything that decides it (`generated_key`), so a later restack of
+    another branch across the same move, in another process, doesn't run the script on the base again. Only a pass is kept,
+    and a kept file counts only when it records this very key and the move's own tree: anything else runs the script."""
     key = (move, base, python, SCRIPT, SCRIPT_ARGS)
     if key not in _GENERATED:
-        try:
-            _GENERATED[key] = run_script(base, base, python, cwd)[0]
-        except ScriptFailed as e:
-            raise SystemExit(f"{SCRIPT} fails on the move's base {base[:12]}: {e}") from None
+        want, full = tree_of(move, cwd), generated_key(move, base, python, cwd)
+        if kept_generated(full) == want:
+            print(f"restack.py: {move[:12]} is what {SCRIPT} writes on {base[:12]}, as checked before ({kept_path(full)})",
+                  file=sys.stderr)
+            _GENERATED[key] = want
+        else:
+            try:
+                _GENERATED[key] = run_script(base, base, python, cwd)[0]
+            except ScriptFailed as e:
+                raise SystemExit(f"{SCRIPT} fails on the move's base {base[:12]}: {e}") from None
+            if _GENERATED[key] == want:
+                keep_generated(full, want)
     if _GENERATED[key] != tree_of(move, cwd):
         raise SystemExit(f"--move-commit {move[:12]} isn't what {SCRIPT} writes on {base[:12]}: pass the commit the script "
                          "generated, and a later commit on the move's branch as --onto")
