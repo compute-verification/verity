@@ -41,6 +41,7 @@
      "the wait at e: the cache's hold on the trace (modeled)",
      "the certified tick: simulated on Llama-3.2-1B traces (modeled; the card's high +2.54 pt)",
      "the deterministic top-k: kernel-modeled",
+     "replay at 1.0\u00d7 serving's busy GPU-seconds: measured at a 40,960-token context limit, unmeasured at 131,072",
      "FlashInfer K2048 and K6144 in lookup slots: a fix not landed",
      "m = 37: not built (its cells only)"
     ],
@@ -123,6 +124,7 @@
      "the wait at e: the cache's hold on the trace (modeled)",
      "the certified tick: simulated on Llama-3.2-1B traces (modeled; the card's high +2.54 pt)",
      "the deterministic top-k: kernel-modeled",
+     "replay at 1.0\u00d7 serving's busy GPU-seconds: measured at a 40,960-token context limit, unmeasured at 131,072",
      "FlashInfer K2048 and K6144 in lookup slots: a fix not landed",
      "m = 37: not built (its cells only)"
     ],
@@ -209,6 +211,7 @@
      "the wait at e: the cache's hold on the trace (modeled)",
      "the certified tick: simulated on Llama-3.2-1B traces (modeled; the card's high +2.54 pt)",
      "the deterministic top-k: kernel-modeled",
+     "replay at 1.0\u00d7 serving's busy GPU-seconds: measured at a 40,960-token context limit, unmeasured at 131,072",
      "FlashInfer K2048 and K6144 in lookup slots: a fix not landed",
      "m = 37: not built (its cells only)"
     ],
@@ -291,6 +294,7 @@
      "the wait at e: the cache's hold on the trace (modeled)",
      "the certified tick: simulated on Llama-3.2-1B traces (modeled; the card's high +2.54 pt)",
      "the deterministic top-k: kernel-modeled",
+     "replay at 1.0\u00d7 serving's busy GPU-seconds: measured at a 40,960-token context limit, unmeasured at 131,072",
      "FlashInfer K2048 and K6144 in lookup slots: a fix not landed",
      "m = 37: not built (its cells only)"
     ],
@@ -378,6 +382,7 @@
      "the wait at e: the cache's hold on the trace (modeled)",
      "the certified tick: simulated on Llama-3.2-1B traces (modeled; the card's high +2.54 pt)",
      "the deterministic top-k: kernel-modeled",
+     "replay at 1.0\u00d7 serving's busy GPU-seconds: measured at a 40,960-token context limit, unmeasured at 131,072",
      "FlashInfer K2048 and K6144 in lookup slots: a fix not landed",
      "m = 37: not built (its cells only)"
     ],
@@ -461,6 +466,7 @@
      "the wait at e: the cache's hold on the trace (modeled)",
      "the certified tick: simulated on Llama-3.2-1B traces (modeled; the card's high +2.54 pt)",
      "the deterministic top-k: kernel-modeled",
+     "replay at 1.0\u00d7 serving's busy GPU-seconds: measured at a 40,960-token context limit, unmeasured at 131,072",
      "FlashInfer K2048 and K6144 in lookup slots: a fix not landed",
      "m = 37: not built (its cells only)"
     ],
