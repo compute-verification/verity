@@ -422,10 +422,13 @@ REGISTRY = EnvSettings(
             "suite's opt-in served test reads: which tests run, never what a verdict says"),
 ||||||| merged common ancestors
 =======
+    # ---- verity.ml.definitions' suite
+    Setting("VERITY_ML_DEFINITIONS_SLOW", flag, False, WHERE, "the definitions' tests at served statics run (the DSA mask's cut "
+            "at 43,008 and 131,072 keys, minutes): which tests run, never what a circuit computes"),
     # ---- verity_flock's suite
     Setting("VERITY_ML_FLOCK_CUDA_GHASH", stripped, "", WHERE, "a Flock b684b12 checkout's cuda-ghash directory, which "
             "test_zerocheck_fused and test_ring_switch build their kernels against where a GPU is present: which tests run"),
->>>>>>> 7af4d24fca3e
+>>>>>>> e7b03e4a6c8
     schema=RECORD_SCHEMA)
 
 

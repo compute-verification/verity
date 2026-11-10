@@ -494,7 +494,7 @@ REGISTERED_KEYS = {"kind", "registration", "value", "root"}
 def record_digest(rec: dict) -> str:
     """The window record's digest, `registration.digest`: SHA-512 of the record's own format (v1 or v2), a NUL and its
     canonical JSON."""
-    from verity.core.protocols.sampled_proofs.one_stage.registration import digest
+    from verity.core.protocols.spot.one_stage.registration import digest
     return digest(rec)
 
 

@@ -28,7 +28,6 @@ public import Definitions.Nci.Formalism.Instances
 public import Definitions.Pous
 public import Definitions.Pous.Guarantees.StreamedWipeFamily
 public import Definitions.Pous.Guarantees.StreamedWipeReads
-public import Definitions.Pous.Guarantees.StreamedWipeInfo
 public import Definitions.Pous.Guarantees.StreamedWipeServer
 public import Definitions.Pous.Guarantees.StreamedWipeDisk
 public import Definitions.Pouw
@@ -106,12 +105,15 @@ public import Definitions.Hash.Guarantees
 public import Definitions.NetworkCertifier.Guarantees.Period
 public import Definitions.NetworkCertifier.Guarantees.PooledLeak
 public import Definitions.NetworkCertifier.Guarantees.Checked
+public import Definitions.NetworkCertifier.Guarantees.Carried
 public import Definitions.WeightSecurity.Assumptions
 public import Definitions.WeightSecurity.Guarantees
 public import Definitions.WeightSecurity
 public import Definitions.WeightSecurity.Served
+public import Definitions.WeightSecurity.Tied
 public import Definitions.WeightSecurity.Toy
 public import Definitions.WeightSecurity.ToyServed
+public import Definitions.WeightSecurity.ToyTied
 public import Definitions.Assumptions
 
 /-! The spec: each component's vocabulary, named assumptions and guarantee statements. -/
