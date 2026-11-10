@@ -10,13 +10,15 @@ A record is named in the store, never in code (`served_table`'s rule). Each inpu
 | `census` | one `block-census/v1` art | its `census.json` (`prove.Census.of`) |
 | `cut` | one `partition` card (`spot-card/v1`) | the block types it recuts (`prove.Census.recut`) |
 | `flock-single` | one `proof_overhead` card | each block type's single-session seconds (`prove.Session`) |
-| `flock-steady` | any number of runs, or arts naming their `runs` | every proof server report in their run files (`REPORTS`): `server.json` with the `types.json` beside it (`prove.Steady`) |
+| `flock-steady` | any number of runs, or arts naming their `runs` | the rows of each run's `RATES`, the file `benchmarks/one_stage/server_rate.py` writes: a row a staged type and prover count (`prove.Steady`, `steady_row`) |
 | `spot-sampling` | one art holding `mix.json` | the sampling plan (`prove.SamplingPlan.of`), for `--system spot` |
 
 The command refuses an input that isn't labelled, one that is superseded and a slot two unsuperseded targets claim, and
-says which and how to label it. A steady-state run that is superseded, or that holds no report, is left out and listed
-under "Refused". A report is a steady-state measurement when every session was accepted and its statement cache's hit
-rate was flat (`report_why`); one that isn't is named on its block type's row.
+says which and how to label it. A steady-state run that is superseded, or that holds no `RATES`, is left out and listed
+under "Refused", as is a row that names no staged Definition (one that failed or was skipped). A row is a steady-state
+measurement when every session it ran was accepted and none refused, it isn't void, every process exited 0 and its
+statement cache's hit rate was flat (`row_why`); one that isn't, or that lacks a field, is named with its reason on its
+block type's row. A type is priced at the stated prover count (`--provers`), from the rows at that count only.
 
 The serving rate isn't a record: it is modeled from the census's MACs a served token, the fleet's assumed serving MFU
 (`FLEETS`) and the card's data-sheet peak, and the output says so.
@@ -40,8 +42,12 @@ CENSUS_KIND = "block-census/v1"
 CENSUS_FILE = "census.json"
 CARD_SCHEMA = "spot-card/v1"
 PLAN_FILE = "mix.json"
-#: a proof server's report in a run's files, and the staged types it proved beside it
-REPORTS, TYPES = "*/server-k*/server.json", "types.json"
+#: the proof server's rate in a run's files: `benchmarks/one_stage/server_rate.py`'s rows, one a staged type and prover count
+RATES = "out/rate/rate.json"
+#: what a row holds for the command to read it, by the script's names (`stage.definition` names its block type; `void`,
+#: the reasons a row has no rate, is there only when it has none, and `verify_s` only where the verifier was timed)
+ROW_FIELDS = ("statements_per_s", "provers", "warm", "sessions", "accepted", "refused_n", "exits", "flat", "gpus",
+              "stage.k_log", "stage.blocks", "stage.full")
 #: each fleet's assumed serving MFU
 FLEETS = Path("benchmarks/rho/data/reference.toml")
 SYSTEMS = ("flock", "spot")
@@ -136,54 +142,101 @@ def census(store: Any, workload: Workload) -> tuple[P.Census, list[dict]]:
         _input(CUT, workload, [cut_art], f"`{cut['name']}`, {len(recut.blocks)} block types under it: {cut.get('label')}")]
 
 
-def report_why(report: Mapping[str, Any]) -> str | None:
-    """Why a proof server's report isn't a steady-state measurement, or None when it is one."""
+def _field(row: Mapping[str, Any], name: str) -> Any:
+    """A row's field by its dotted name, or `_ABSENT`."""
 
-    if (report.get("host_limit") or {}).get("stopped_at_s"):
-        return "stopped at the host's memory limit"
-    if report.get("timed_out"):
-        return "timed out"
-    if any(report.get("rc") or [1]):
-        return f"its provers exited {report.get('rc')}"
-    if report.get("accepted") is not True:
-        return "not every session was accepted"
-    if report.get("flat") is not True:
+    at: Any = row
+    for key in name.split("."):
+        if not isinstance(at, Mapping) or key not in at:
+            return _ABSENT
+        at = at[key]
+    return at
+
+
+_ABSENT = object()
+
+
+def _count(x: Any) -> bool:
+    return isinstance(x, int) and not isinstance(x, bool) and x > 0
+
+
+def row_why(row: Mapping[str, Any]) -> str | None:
+    """Why a `RATES` row isn't a steady-state measurement, or None when it is one: a field it lacks, by name; a session
+    it ran (its provers' warm ones and its timed ones) not accepted, or refused; a void row, with the script's reasons;
+    a process that exited nonzero; a statement cache whose hit rate wasn't flat; or no rate to price."""
+
+    if lacks := [name for name in ROW_FIELDS if _field(row, name) is _ABSENT]:
+        return "its row lacks " + ", ".join(f"`{name}`" for name in lacks)
+    stage = row["stage"]
+    if not (_count(row["provers"]) and _count(stage["blocks"]) and _count(stage["full"]) and stage["blocks"] <= stage["full"]):
+        return (f"its `provers` ({row['provers']}), `stage.blocks` ({stage['blocks']}) and `stage.full` ({stage['full']}) "
+                "aren't a prover count and a statement's blocks of a full one's")
+    if not all(isinstance(row[name], int) for name in ("warm", "sessions", "accepted", "refused_n")):
+        return "its `warm`, `sessions`, `accepted` and `refused_n` aren't counts of sessions"
+    ran = row["provers"] * row["warm"] + row["sessions"]
+    if row["accepted"] != ran:
+        return f"{row['accepted']} of its {ran} sessions accepted"
+    if row["refused_n"] != 0:
+        return f"{row['refused_n']} sessions refused"
+    if void := row.get("void"):
+        return "void: " + ("; ".join(map(str, void)) if isinstance(void, list) else str(void))
+    exits = row["exits"]
+    codes = exits if isinstance(exits, Mapping) else dict(enumerate(exits))
+    if bad := [f"{name} rc {rc}" for name, rc in codes.items() if rc != 0]:
+        return "exited nonzero: " + ", ".join(bad)
+    if row["flat"] is not True:
         return "its statement cache's hit rate wasn't flat"
+    rate, gpus = row["statements_per_s"], row["gpus"]
+    if not (isinstance(rate, (int, float)) and rate > 0 and isinstance(gpus, (int, float)) and gpus > 0):
+        return f"no rate to price: `statements_per_s` is {rate} on `gpus` {gpus}"
+    if not isinstance(row.get("verify_s"), (int, float, type(None))):
+        return "its `verify_s` isn't a statement's seconds"
     return None
 
 
-def reports(store: Any, run: str) -> tuple[list[P.Steady], str | None]:
-    """Every staged type of every proof server report in a run's files, or why the run holds none."""
+def steady_row(row: Mapping[str, Any], run: str) -> P.Steady | str:
+    """A `RATES` row as a staged type's measurement at its prover count: a statement's GPU-seconds are the GPUs its
+    provers held over its statements a second. A row that names no staged Definition can't be put on a block type's
+    row, and is its reason instead."""
+
+    name = f"`{row.get('type')}` at {row.get('provers')} provers"
+    definition = _field(row, "stage.definition")
+    if not isinstance(definition, str):
+        why = (f"failed: {row['error']}" if "error" in row else f"skipped: {row['skipped']}" if "skipped" in row else
+               "it lacks `stage.definition`")
+        return f"its row {name}: {why}"
+    why = row_why(row)
+    stage = row["stage"]
+    blocks, full, provers = (x if _count(x) else 0 for x in (stage.get("blocks"), stage.get("full"), row.get("provers")))
+    k_log = stage["k_log"] if isinstance(stage.get("k_log"), int) else 0
+    if why:
+        return P.Steady(str(row.get("type")), definition, k_log, blocks, full, run, RATES, refused=why, provers=provers)
+    return P.Steady(str(row.get("type")), definition, k_log, blocks, full, run, RATES, row["gpus"] / row["statements_per_s"],
+                    row.get("verify_s"), provers=provers)
+
+
+def rates(store: Any, run: str) -> tuple[list[P.Steady], list[str]]:
+    """Every row of a run's `RATES` that names a staged Definition, and why the rest (or the run) can't be read."""
 
     attempt = store.get_attempt(run)
     if attempt is None:
-        return [], "not in the store or on its remote"
+        return [], ["not in the store or on its remote"]
     out = attempt.get("outputs") or {}
     files = out.get("run_files") or out.get("run_record")
     if not files:
-        return [], "kept no run files"
-    held = {row["path"] for row in store.listing(files, [REPORTS, REPORTS.rsplit("/", 1)[0] + "/" + TYPES])}
-    paths = sorted(p for p in held if p.endswith("/server.json") and p.rsplit("/", 1)[0] + "/" + TYPES in held)
-    if not paths:
-        return [], f"holds no proof server report (`{REPORTS}` with its `{TYPES}`)"
-    tree = Path(store.fetch(files, paths=[*paths, *(p.rsplit("/", 1)[0] + "/" + TYPES for p in paths)]))
-    found = []
-    for path in paths:
-        where = path.rsplit("/", 1)[0]
-        report, types = json.loads((tree / path).read_text()), json.loads((tree / where / TYPES).read_text())
-        why = report_why(report)
-        for name, staged in report["types"].items():
-            gpu, verify = ((report.get(k) or {}).get(name) for k in ("gpu_s_by_type", "verify_s"))
-            found.append(P.Steady(
-                name, types[name]["definition"], staged["k_log"], staged["c"], staged["full"], run, where,
-                gpu and gpu["mean"], verify and verify["mean"],
-                why or (None if gpu else "no statement of it finished in the steady span")))
-    return found, None
+        return [], ["kept no run files"]
+    if not store.listing(files, [RATES]):
+        return [], [f"holds no proof server rate (`{RATES}`, which `benchmarks/one_stage/server_rate.py` writes)"]
+    doc = json.loads((Path(store.fetch(files, paths=[RATES])) / RATES).read_text())
+    if not isinstance(doc, list) or not all(isinstance(row, Mapping) for row in doc):
+        return [], [f"its `{RATES}` isn't a list of rows"]
+    read = [steady_row(row, run) for row in doc]
+    return [x for x in read if isinstance(x, P.Steady)], [x for x in read if isinstance(x, str)]
 
 
-def flock(store: Any, workload: Workload) -> tuple[P.Flock, list[dict], list[dict]]:
-    """Flock's prover from the workload's records: the steady-state runs', the single-session card's; the inputs, and
-    the steady-state runs left out with why."""
+def flock(store: Any, workload: Workload, provers: int = 1) -> tuple[P.Flock, list[dict], list[dict]]:
+    """Flock's prover at `provers` provers from the workload's records: the steady-state runs' rows, the single-session
+    card's; the inputs, and the steady-state runs and rows left out with why."""
 
     art = of_record(store, workload.record(SINGLE), "single-session card")
     value = card(store, art, "proof_overhead", workload)
@@ -193,17 +246,17 @@ def flock(store: Any, workload: Workload) -> tuple[P.Flock, list[dict], list[dic
     labelled = record_runs(store, records(store).get(workload.record(STEADY), []))
     for run in sorted({run for run, _ in labelled}, reverse=True):
         if superseded := _superseded(store, run):
-            found, why = [], f"superseded by {', '.join(superseded)}"
+            found, whys = [], [f"superseded by {', '.join(superseded)}"]
         else:
-            found, why = reports(store, run)
-        if why:
-            refused.append({"target": run, "record": workload.record(STEADY), "why": why})
-            continue
-        steady += found
-        runs.append(run)
-    measured = len({s.definition for s in steady if s.measured})
-    return P.Flock(tuple(steady), sessions, art), [
-        _input(STEADY, workload, runs, f"{measured} staged types measured at steady state" if runs else
+            found, whys = rates(store, run)
+        refused += [{"target": run, "record": workload.record(STEADY), "why": why} for why in whys]
+        if found:
+            steady += found
+            runs.append(run)
+    measured = len({s.definition for s in steady if s.measured and s.provers == provers})
+    count = f"{provers} prover{'' if provers == 1 else 's'}"
+    return P.Flock(tuple(steady), sessions, art, provers=provers), [
+        _input(STEADY, workload, runs, f"{measured} staged types measured at steady state at {count}" if runs else
                "none of record: no block type is measured at steady state"),
         _input(SINGLE, workload, [art], f"{len(sessions)} block types on the {value.get('device')}")], refused
 
@@ -236,20 +289,23 @@ def _input(slot: str, workload: Workload, targets: list[str], what: str) -> dict
 # ---- the table ---------------------------------------------------------------------------------------------------------------
 
 
-def build(system: str, workload: str, *, sampling: str | None = None, store: Any = None, root: Path | None = None,
-          local_only: bool = False) -> dict:
-    """A proof system's table on a workload from the store's records: `prove.report`'s rows, sources and totals, with
-    the inputs read, the runs refused, the stated serving rate and the totals a monitoring period over all compute."""
+def build(system: str, workload: str, *, sampling: str | None = None, provers: int = 1, store: Any = None,
+          root: Path | None = None, local_only: bool = False) -> dict:
+    """A proof system's table on a workload from the store's records, each type priced at `provers` provers:
+    `prove.report`'s rows, sources and totals, with the inputs read, the runs and rows refused, the stated serving rate
+    and the totals a monitoring period over all compute."""
 
     if system != "spot" and sampling:
         raise ValueError(f"--sampling is SPOT's: {system} proves every block (pass --system spot)")
+    if provers < 1:
+        raise ValueError(f"--provers {provers}: a type is priced at one prover or more")
     root = root or jobs.repository_root()
     completion = jobs.StoreCompletion(store, root=root, local_only=local_only)
     if not local_only:
         completion.pull_labels()
     store, w = completion.store, WORKLOADS[workload]
     blocks, inputs = census(store, w)
-    prover, more, refused = flock(store, w)
+    prover, more, refused = flock(store, w, provers)
     rate = serving(root, w)
     seconds = rate.gpu_seconds_per_token(blocks)
     inputs += more
@@ -259,7 +315,7 @@ def build(system: str, workload: str, *, sampling: str | None = None, store: Any
         inputs.append(its)
         prover = P.Spot(prover, sampled, rate)
     doc = P.report(prover.table(blocks), seconds)
-    return {"schema": P.SCHEMA, "workload": w.name, "model": w.model, "cut": blocks.cut,
+    return {"schema": P.SCHEMA, "workload": w.name, "model": w.model, "cut": blocks.cut, "provers": provers,
             "macs_in_blocks": blocks.macs_in_blocks, "inputs": inputs,
             "refused": refused, "serving": {"gpu_seconds_per_token": seconds, "status": "modeled", "basis": rate.basis},
             **doc, "periods": _periods(root, rate, doc["totals"]["gpus_per_serving_gpu"], sampled)}
@@ -349,6 +405,8 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
     lines = [f"# verity bench prove: {doc['system']} on {doc['workload']} ({doc['model']})", "",
              f"Inputs, each a labelled record of the store (`{RUN_OF_RECORD}`):", ""]
     lines += [f"- {i['slot']}: {', '.join(i['targets']) or 'none'} (`{i['record']}`): {i['what']}" for i in doc["inputs"]]
+    lines.append(f"- prover count (`--provers`, a stated input): {doc['provers']}; a type is measured at steady state only "
+                 "by rows at that count, and each such row names it")
     s = doc["serving"]
     lines += [f"- serving rate ({s['status']}, a stated input, not a record): {_n(s['gpu_seconds_per_token'])} GPU-seconds a "
               f"served token, {_n(1 / s['gpu_seconds_per_token'])} tokens a serving GPU-second: {s['basis']}", "",

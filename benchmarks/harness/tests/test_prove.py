@@ -4,11 +4,16 @@ a directory remote: a workload's records as `fixtures/prove/` holds them (each c
 `records.json` names what each was cut from), the hand computation they reproduce, every refusal by name, and the
 command.
 
-`fixtures/prove/` is the reader's input, not a result: the store side parses the bytes the producers wrote (a block
-census, the cards, a sampling plan, the proof servers' reports), so its fixtures are those bytes, never regenerated
-here, and synthetic ones would test a format the producers don't write. The figures pinned below hold this code's
-arithmetic to a computation done independently of it on the same records; they publish no measurement, and what the
-command says of a workload is what it prints from the store's records of record."""
+`fixtures/prove/` is the reader's input, not a result: the store side parses the bytes the producers wrote, so the
+census, the cards and the sampling plan are those bytes, never regenerated here. The steady-state rows are not: the
+three runs predate the one format the command reads (`benchmarks/one_stage/server_rate.py`'s `rate.json`), so
+`steady/RUN/rate/rate.json` holds each of their proof server reports as that script's rows, a staged type and prover
+count a row with the fields the command reads: a statement's mean GPU-seconds as its reciprocal `statements_per_s` on
+one GPU, a report that was stopped or timed out as a void row whose prover exited nonzero, and one with a session not
+accepted as a void row with a refused session. `refusals/rate/rate.json` is made up: one row that is a steady-state
+measurement and one of each way a row isn't. The figures pinned below hold this code's arithmetic to a computation done
+independently of it on the same records; they publish no measurement, and what the command says of a workload is what
+it prints from the store's records of record."""
 
 from __future__ import annotations
 
@@ -51,8 +56,8 @@ SESSIONS = (P.Session(GEMM64, 20, 0.5, 2.0, 1 << 15), P.Session("Other_v1{N=2}",
 
 
 def steady(type_: str, definition: str, run: str, blocks: int, gpu: float | None, *, full: int = 8, k_log: int = 20,
-           verify: float | None = None, refused: str | None = None) -> P.Steady:
-    return P.Steady(type_, definition, k_log, blocks, full, run, f"out/{type_}/server-k1", gpu, verify, refused)
+           verify: float | None = None, refused: str | None = None, provers: int = 1) -> P.Steady:
+    return P.Steady(type_, definition, k_log, blocks, full, run, R.RATES, gpu, verify, refused, provers)
 
 
 def test_a_census_counts_a_request_over_its_tokens_and_a_cut_replaces_its_kinds():
@@ -93,7 +98,8 @@ def test_a_block_type_takes_the_best_source_that_holds_it():
 
     gemm = by[GEMM64].cost
     assert (gemm.source, gemm.seconds, gemm.record, gemm.staged) == (P.STEADY, 1.0, "r20260102-000000-0002", "gemm64")
-    assert gemm.verifier_seconds == 0.5 and gemm.at_steady_rate is None and "full statements" in gemm.note
+    assert gemm.verifier_seconds == 0.5 and gemm.at_steady_rate is None and gemm.provers == 1
+    assert gemm.note == "`gemm64`, 1 prover, full statements (out/rate/rate.json)"
 
     # the card measures the K=64 GEMM alone: K=32 is another type, so it and the cut's block are modeled from k_log, at
     # the card's types' median seconds a witness bit and their fixed seconds' line in k_log (flat here, at 2 s)
@@ -102,7 +108,8 @@ def test_a_block_type_takes_the_best_source_that_holds_it():
     assert by[GEMM32].cost.seconds == pytest.approx(rate * 2**19 + 2.0 / 2**16)
     half = by["Half_v1{N=4}"].cost
     assert half.source == P.MODELED and half.seconds == pytest.approx(rate * 2**21 + 2.0 / 2**14)
-    assert half.staged == "half" and "tried as `half` in r20260103-000000-0003" in half.note and "memory limit" in half.note
+    assert half.staged == "half" and half.provers is None and "memory limit" in half.note
+    assert "tried as `half` at 1 prover in r20260103-000000-0003" in half.note
     assert by["Bare_v1{N=4}"].cost == P.Cost(P.MISSING)
 
     # the range's other end: every type off the steady state at the full-statement steady types' median rate
@@ -119,6 +126,41 @@ def test_a_block_type_takes_the_best_source_that_holds_it():
     assert all(c.at_steady_rate is None for c in alone.values())
     # with no card either, nothing is priced
     assert {r.cost.source for r in P.Flock().table(census).rows} == {P.MISSING}
+
+
+def test_a_type_is_priced_at_the_stated_prover_count_from_rows_at_that_count_only():
+    """Rows at N provers, then the fullest statement, then the newest run: a newer or fuller row at another count
+    prices nothing, so a type's figure doesn't depend on which counts were run, or in what order."""
+
+    census = P.Census.of(CENSUS)
+    gemm, norm = P.definition_id(GEMM64), P.definition_id(NORM)
+    rows = (
+        steady("gemm64", gemm, "r20260101-000000-0001", 8, 16.0),                              # one prover, full
+        steady("gemm64", gemm, "r20260102-000000-0002", 4, 6.0),                               # one prover, newer, half full
+        steady("gemm64", gemm, "r20260103-000000-0003", 8, 4.0, provers=2),                    # newest and full, two provers
+        steady("gemm64", gemm, "r20260103-000000-0003", 8, 2.0, provers=4, refused="void: out of device memory"),
+        steady("norm", norm, "r20260103-000000-0003", 8, 24.0, provers=2, k_log=22),           # measured at two provers only
+    )
+
+    def priced(provers: int) -> dict[str, P.Cost]:
+        return {r.block: r.cost for r in P.Flock(rows, SESSIONS, "art:card", provers=provers).table(census).rows}
+
+    one, two, four = priced(1), priced(2), priced(4)
+    assert (one[GEMM64].source, one[GEMM64].seconds, one[GEMM64].record, one[GEMM64].provers) == (
+        P.STEADY, 2.0, "r20260101-000000-0001", 1)
+    assert one[GEMM64].note.startswith("`gemm64`, 1 prover, full statements")
+    # the norm has no row at one prover: it is modeled, and its row says which counts measured it
+    assert one[NORM].source == P.MODELED and one[NORM].provers is None
+    assert one[NORM].note == "measured at steady state at 2 provers, which price no type at 1"
+    assert (two[GEMM64].seconds, two[GEMM64].provers, two[NORM].seconds, two[NORM].source) == (0.5, 2, 3.0, P.STEADY)
+    assert two[GEMM64].note.startswith("`gemm64`, 2 provers, full statements")
+    # at four provers the only row is void: the type is priced off the steady state, naming the attempt and the counts
+    assert four[GEMM64].source == P.SINGLE and four[GEMM64].provers is None
+    assert four[GEMM64].note == ("steady state tried as `gemm64` at 4 provers in r20260103-000000-0003 (out/rate/rate.json): "
+                                 "void: out of device memory; measured at steady state at 1, 2 provers, which price no "
+                                 "type at 4")
+    assert "at 2 provers priced at" in P.Flock(rows, SESSIONS, "art:card", provers=2).table(census).range_basis
+    assert [r["provers"] for r in P.report(P.Flock(rows, SESSIONS, "art:card").table(census), 1.0)["rows"]] == [1, None, None]
 
 
 def test_a_single_session_prices_its_definition_and_k_at_another_size():
@@ -202,7 +244,7 @@ def test_a_total_that_leaves_a_block_type_out_is_partial_and_names_it(monkeypatc
         P.Census.of(doc)), 1.0)["totals"]
     assert sampled["status"] == "partial" and [m["block_share"] for m in sampled["missing"]] == pytest.approx([1 / 3, 1 / 3])
 
-    page = {"workload": "toy", "model": "Toy", "inputs": [], "refused": [], "macs_in_blocks": 0.8, **out,
+    page = {"workload": "toy", "model": "Toy", "provers": 1, "inputs": [], "refused": [], "macs_in_blocks": 0.8, **out,
             "serving": {"gpu_seconds_per_token": 1.0, "status": "modeled", "basis": "stated"},
             "periods": {"gates_basis": "stated", "only": None, "rows": []}}
     text = R.render(page)
@@ -284,7 +326,7 @@ def test_a_plan_that_states_its_own_prices_gets_both_totals_and_where_they_diffe
                               "difference_share": pytest.approx(gaps[top] / sum(gaps))}
     assert {r["block"]: r["planned_seconds"] for r in out["rows"]} == got.priced
 
-    page = {"workload": "toy", "model": "Toy", "inputs": [], "refused": [], "macs_in_blocks": 0.9, **out,
+    page = {"workload": "toy", "model": "Toy", "provers": 1, "inputs": [], "refused": [], "macs_in_blocks": 0.9, **out,
             "serving": {"gpu_seconds_per_token": 1.0, "status": "modeled", "basis": "stated"},
             "periods": {"gates_basis": "stated", "only": None, "rows": []}}
     text = R.render(page)
@@ -308,18 +350,48 @@ def test_a_plan_that_states_its_own_prices_gets_both_totals_and_where_they_diffe
     assert plan([*cells, {"block": "Idle_v1{N=1}", "type": "", "taken": 0.0, "prove_s": 0.0}]).priced["Idle_v1{N=1}"] == 0.0
 
 
-@pytest.mark.parametrize(("change", "why"), [
-    ({}, None),
-    ({"host_limit": {"stopped_at_s": 310.3}, "rc": [-15], "accepted": False}, "stopped at the host's memory limit"),
-    ({"timed_out": True, "rc": [-15], "accepted": False}, "timed out"),
-    ({"rc": [0, 1]}, "its provers exited [0, 1]"),
-    ({"rc": []}, "its provers exited []"),
-    ({"accepted": False}, "not every session was accepted"),
-    ({"flat": False}, "its statement cache's hit rate wasn't flat"),
-])
-def test_a_report_is_a_steady_state_measurement_only_when_accepted_and_flat(change, why):
-    report = {"host_limit": {"stopped_at_s": None}, "timed_out": False, "rc": [0], "accepted": True, "flat": True} | change
-    assert R.report_why(report) == why
+REFUSALS = json.loads((FIXTURES / "refusals" / "rate" / "rate.json").read_text())
+#: each row of the refusals fixture that names a staged Definition, and why it isn't a steady-state measurement
+ROW_WHYS = {
+    "good": None,
+    "unaccepted": "8 of its 9 sessions accepted",
+    "refused": "1 sessions refused",
+    "void": "void: out of device memory: prover-gpu0",
+    "exited": "exited nonzero: prover-gpu0 rc -9",
+    "unflat": "its statement cache's hit rate wasn't flat",
+    "ungpued": "its row lacks `gpus`",
+    "bare": "its row lacks `flat`, `gpus`, `stage.blocks`, `stage.full`",
+}
+
+
+def test_a_row_is_a_steady_state_measurement_only_when_every_session_was_accepted_and_its_cache_flat():
+    """`fixtures/prove/refusals`: one row that is a steady-state measurement, and one of each way a row isn't, each
+    refused with its reason; a row lacking a field names the field."""
+
+    rows = {row["type"]: row for row in REFUSALS}
+    assert {name: R.row_why(rows[name]) for name in ROW_WHYS} == ROW_WHYS
+    read = {name: R.steady_row(rows[name], "r20260101-000000-0001") for name in ROW_WHYS}
+    assert all(isinstance(s, P.Steady) and s.refused == ROW_WHYS[name] and s.measured == (name == "good")
+               for name, s in read.items())
+    # a statement's GPU-seconds are the GPUs its provers held over its statements a second, and a block's are that over
+    # the statement's blocks
+    good = read["good"]
+    assert (good.type, good.definition, good.k_log, good.blocks, good.full, good.provers) == ("good", "Good_v1{N=1}", 20, 8, 8, 1)
+    assert (good.gpu_seconds, good.verifier_seconds, good.report) == (1 / 0.125, 4.0, "out/rate/rate.json")
+    assert R.steady_row(rows["good"] | {"gpus": 2, "provers": 4, "accepted": 12}, "r1").gpu_seconds == 2 / 0.125
+    cost = P.Flock((good,)).table(P.Census((P.Block("Good_v1{N=1}", "Good_v1", 1.0, 20),), 1.0, 1.0)).rows[0].cost
+    assert (cost.source, 1e3 * cost.seconds, cost.verifier_seconds, cost.provers) == (P.STEADY, 1000.0, 0.5, 1)
+    # the verifier's seconds are optional, and a row whose rate isn't one is refused
+    assert R.steady_row({k: v for k, v in rows["good"].items() if k != "verify_s"}, "r1").verifier_seconds is None
+    assert R.row_why(rows["good"] | {"verify_s": {"mean": 4.0}}) == "its `verify_s` isn't a statement's seconds"
+    assert R.row_why(rows["good"] | {"statements_per_s": None}) == "no rate to price: `statements_per_s` is None on `gpus` 1"
+    assert R.row_why(rows["good"] | {"stage": rows["good"]["stage"] | {"blocks": 16}}).startswith(
+        "its `provers` (1), `stage.blocks` (16) and `stage.full` (8) aren't")
+    assert R.row_why(rows["good"] | {"sessions": "8"}) == "its `warm`, `sessions`, `accepted` and `refused_n` aren't counts of sessions"
+    # a row that names no staged Definition goes on no block type's row: it is its reason
+    assert R.steady_row(rows["failed"], "r1") == "its row `failed` at 2 provers: failed: RuntimeError: the server didn't start"
+    assert R.steady_row(rows["late"], "r1") == "its row `late` at 4 provers: skipped: past the deadline"
+    assert R.steady_row({"type": "odd", "provers": 1, "stage": {}}, "r1") == "its row `odd` at 1 provers: it lacks `stage.definition`"
 
 
 # ---- the store side ------------------------------------------------------------------------------------------------------------
@@ -402,7 +474,7 @@ RUNS = fixture("records.json")[R.STEADY]
 
 
 def run_files(tmp: Path, run: str) -> Path:
-    """A fixture run's files as its run record holds them: its jobs' reports under `out/`."""
+    """A fixture run's files as its run record holds them: its proof server rate under `out/rate/`."""
 
     files = tmp / "run-files" / run
     if not files.exists():
@@ -471,7 +543,9 @@ def test_the_hand_computation_is_reproduced_from_the_records_it_read(tmp_path):
     top = doc["rows"][0]
     assert top["block"] == "FlashInferFp8Linear_v1{K=2048,N=1}" and top["source"] == P.SINGLE and top["record"] == arts[R.SINGLE]
     assert top["time_share"] == pytest.approx(0.4016, abs=5e-5) and 1e3 * top["seconds"] == pytest.approx(56.611, abs=5e-4)
-    assert f"steady state tried as `fi-linear-k2048` in {RUNS[1]}" in top["note"] and "host's memory limit" in top["note"]
+    assert top["note"] == (f"steady state tried as `fi-linear-k2048` at 1 prover in {RUNS[1]} (out/rate/rate.json): void: "
+                           "exited nonzero: prover-gpu0 rc -15")
+    assert {r["provers"] for r in steady_rows} == {1} and top["provers"] is None and doc["provers"] == 1
     assert "tried as `gq-k6144`" in rows["Fp8GroupQuantUe8m0_v1{K=6144,G=128}"]["note"]
     assert [i["targets"] for i in doc["inputs"]] == [[arts[R.CENSUS]], [arts[R.CUT]], RUNS[::-1], [arts[R.SINGLE]]]
 
@@ -499,8 +573,24 @@ def test_the_hand_computation_is_reproduced_from_the_records_it_read(tmp_path):
     assert "- served MACs inside a proof block: 98.8%; the rest are served rows no cut fits" in text
     assert "- prover GPU-seconds per token: 88,303 (range 27,644 to 88,303)" in text
     assert "the proof server's own verifier" in text and "Refused" not in text
-    assert f"- {R.STEADY}: {', '.join(RUNS[::-1])} (`prove-glm53-flock-steady`): 8 staged types measured" in text
+    assert (f"- {R.STEADY}: {', '.join(RUNS[::-1])} (`prove-glm53-flock-steady`): 8 staged types measured at steady state "
+            "at 1 prover\n") in text
+    assert "- prover count (`--provers`, a stated input): 1;" in text
     assert "(modeled, a stated input, not a record)" in text and "| measured at steady state | 8 |" in text
+    # at two provers only the oldest run's half statements of the six light types measure anything: its two heavy
+    # types' row at two provers is void, and every row at one prover prices nothing
+    two = R.build("flock", "glm53", provers=2, store=s.fresh("fourth"), root=REPO)
+    at_two = [r for r in two["rows"] if r["source"] == P.STEADY]
+    assert two["provers"] == 2 and len(at_two) == 6 and {(r["record"], r["provers"]) for r in at_two} == {(RUNS[0], 2)}
+    assert all(", 2 provers, statements " in r["note"] and "/" in r["note"] for r in at_two)
+    norm = {r["block"]: r for r in two["rows"]}["RMSNormFusedCudaVector8_v1{N=6144,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"},BLOCK=256}"]
+    assert norm["source"] != P.STEADY and "tried as `rmsnorm-v8` at 2 provers" in norm["note"]
+    assert norm["note"].endswith("measured at steady state at 1 provers, which price no type at 2")
+    assert two["totals"]["range_basis"] is None and "8 staged types" not in R.render(two, rows=0)
+    assert "6 staged types measured at steady state at 2 provers" in R.render(two, rows=0)
+    with pytest.raises(ValueError, match="--provers 0: a type is priced at one prover or more"):
+        R.build("flock", "glm53", provers=0, store=s.fresh("fifth"), root=REPO)
+
     text = R.render(spot)
     assert "- prover GPUs per serving GPU: 0.541 (range 0.186 to 0.541), modeled" in text
     assert "- served tokens covered per second per prover GPU: 14,273 (range 14,273 to 41,509)" in text
@@ -560,10 +650,10 @@ def test_an_unlabelled_or_superseded_input_is_refused_by_name(tmp_path):
     with pytest.raises(ValueError, match="--sampling is SPOT's"):
         build(sampling=mix)
     s.record(mix, R.SAMPLING)
-    # the plan names the two fused block types by their staged types, which only a steady-state report ties to a Definition
+    # the plan names the two fused block types by their staged types, which only a steady-state row ties to a Definition
     with pytest.raises(ValueError, match=rf"the sampling plan {mix} and the census don't cover each other: the plan has no "
                                          r"cell for 2 block type\(s\) \(MoeExpertFp8ReadGemm_v1.*no block type for 2 "
-                                         r"cell\(s\) \(Fused\[.*or no steady-state report of record names"):
+                                         r"cell\(s\) \(Fused\[.*or no steady-state row of record names"):
         build("spot")
     s.ran(RUNS[-1], run_files(tmp_path, RUNS[-1]))
     s.record(RUNS[-1], R.STEADY)
@@ -606,7 +696,8 @@ def test_a_steady_state_run_that_cant_be_read_is_left_out_and_listed(tmp_path):
     doc = R.build("flock", "glm53", store=s.fresh(), root=REPO)
     assert {x["target"]: x["why"] for x in doc["refused"]} == {
         "r20261109-000000-0003": "not in the store or on its remote", "r20261109-000000-0002": "kept no run files",
-        "r20261109-000000-0001": "holds no proof server report (`*/server-k*/server.json` with its `types.json`)",
+        "r20261109-000000-0001": "holds no proof server rate (`out/rate/rate.json`, which "
+                                 "`benchmarks/one_stage/server_rate.py` writes)",
         newest: "superseded by r20261109-000000-0001"}
     assert doc["inputs"][2]["targets"] == [older, oldest]
     # without the newest run each type takes the fullest statement the others measured: the six light types' full
@@ -616,6 +707,29 @@ def test_a_steady_state_run_that_cant_be_read_is_left_out_and_listed(tmp_path):
     text = R.render(doc, rows=0)
     assert "Refused (not read):" in text and f"- {newest} (`prove-glm53-flock-steady`): superseded by" in text
     assert "| 150 more block types |" in text
+
+    # a run whose rate.json has rows that name no staged Definition is read, and those rows are listed
+    s3 = Store(tmp_path / "third")
+    for slot, name in ((R.CUT, "partition.json"), (R.SINGLE, "proof_overhead.json")):
+        s3.record(s3.doc(R.CARD_SCHEMA, name, fixture(name)), slot)
+    s3.record(census_art(s3), R.CENSUS)
+    odd = tmp_path / "odd-run"
+    shutil.copytree(FIXTURES / "refusals", odd / "out")
+    s3.ran("r20261109-000000-0004", odd)
+    s3.record("r20261109-000000-0004", R.STEADY)
+    notlist = tmp_path / "notlist-run"
+    (notlist / "out" / "rate").mkdir(parents=True)
+    (notlist / "out" / "rate" / "rate.json").write_text(json.dumps({"rows": []}))
+    s3.ran("r20261109-000000-0005", notlist)
+    s3.record("r20261109-000000-0005", R.STEADY)
+    doc = R.build("flock", "glm53", store=s3.fresh(), root=REPO)
+    assert doc["inputs"][2]["targets"] == ["r20261109-000000-0004"]
+    assert [(x["target"], x["why"]) for x in doc["refused"]] == [
+        ("r20261109-000000-0005", "its `out/rate/rate.json` isn't a list of rows"),
+        ("r20261109-000000-0004", "its row `failed` at 2 provers: failed: RuntimeError: the server didn't start"),
+        ("r20261109-000000-0004", "its row `late` at 4 provers: skipped: past the deadline")]
+    # its rows are no block type of this census, so they price nothing
+    assert {x["source"]: x["block_types"] for x in doc["sources"]}[P.STEADY] == 0
 
     # an art that names its runs stands for them
     s2 = Store(tmp_path / "second")
@@ -648,7 +762,10 @@ def test_verity_bench_prove_is_the_commands_runner(tmp_path, monkeypatch, capsys
 
     code, out, _ = run("--system", "flock", "--workload", "glm53", "--rows", "2")
     assert code == 0 and out.startswith("# verity bench prove: flock on glm53 (GLM-5.3)\n")
+    assert "- prover count (`--provers`, a stated input): 1;" in out and "8 staged types measured at steady state at 1 prover" in out
     assert "## Every block proved" in out and "| 148 more block types |" in out
+    code, out, _ = run("--system", "flock", "--workload", "glm53", "--provers", "2", "--json")
+    assert code == 0 and json.loads(out)["provers"] == 2
     code, out, _ = run("--system", "spot", "--workload", "glm53", "--sampling", arts[R.SAMPLING], "--json")
     doc = json.loads(out)
     assert code == 0 and doc["schema"] == P.SCHEMA and doc["totals"]["gpus_per_serving_gpu"] == pytest.approx(0.5409739676190373)
