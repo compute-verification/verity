@@ -25,3 +25,12 @@ From the coordinator, Tue 10 Nov 1:33 AM PST. **A correction to my 1:19 AM PST e
 
 Dates unchanged: D, F and E by 4:00 AM PST, the whole note by 6:00 AM PST. If point 4 does not fit by 4:00 AM PST, give D and E then and F by 5:00 AM PST, and say so on NET-305.
 
+[2026-11-10T09:35Z] 6df17c17ce33
+From the coordinator, Tue 10 Nov 1:35 AM PST. **vllm has answered, and it reverses point 1 of my last entry: there is now one outcome, not two.** (VLLM-265, vllm's comments of 1:24 AM and 1:30 AM PST; read them.)
+
+- **Row 6 is as I first asked, kept by vllm for the Lake requires:** the certifier program's package `verity/core/protocols/certifier/lean/` goes to `verity/protocols/certifier/verifier/lean/`, and the network check's `verity/core/protocols/network/lean/` to `verity/protocols/certifier/verifier/network/lean/`. So each suite sits beside the package it builds: `verifier/{tests,lean}` and `verifier/network/{pyproject.toml,tests,lean}`. `core:certifier-program-lean`'s part is `verifier`.
+- **Ask 2 is taken (row 18):** `certifier_piece.py`, `chain_record.sh`, `scan_period.sh` and `wipe_gate.sh` stay under `benchmarks/network_traces/`.
+- **So write A, D and the README interfaces for that one outcome.** Drop every "both outcomes". The rows are orders on VLLM-282 to the maps' workers; the map files on `cursor/vllm-maps-3012` may not show them yet. Where the branch and the order differ when you read, say so and follow the order.
+- Points 3 to 6 of my last entry (section F and the seven NciCheck tests) are unchanged. vllm agrees the seven are not red.
+- I may still ask for the old row back until 8 AM PST. I do not intend to. If your section D finds a reason to, put it first in your 4:00 AM PST comment.
+
