@@ -141,6 +141,18 @@ def used(path):
                 "mem_peak_gb": (cg.get("memory_peak_bytes") or 0) / 2 ** 30}
     return {}
 
+def scope(rid):
+    """A running check's own cgroup: its CPU seconds, its memory now without the page cache and its peak with it."""
+    for d in glob.glob("/sys/fs/cgroup/user.slice/user-*.slice/user@*.service/app.slice/check-*-" + rid + ".scope"):
+        try:
+            cpu = dict(l.split() for l in open(d + "/cpu.stat") if len(l.split()) == 2)
+            mem = dict(l.split() for l in open(d + "/memory.stat") if len(l.split()) == 2)
+            return {"scope_cpu_s": int(cpu.get("usage_usec", 0)) / 1e6, "scope_anon_gb": int(mem.get("anon", 0)) / 2 ** 30,
+                    "scope_peak_gb": int(open(d + "/memory.peak").read()) / 2 ** 30}
+        except (OSError, ValueError):
+            return {}
+    return {}
+
 s0, t0 = stat(), time.time()
 runs = []
 for d in sorted(glob.glob(ROOT + "/runs/r2*")):
@@ -163,6 +175,8 @@ for d in sorted(glob.glob(ROOT + "/runs/r2*")):
     if kind == "shard":
         row["sha"] = (((job.get("run") or {}).get("remote") or {}).get("source_sha") or "")[:12]
         row["shard"] = argv[argv.index("--shard") + 1] if argv.index("--shard") + 1 < len(argv) else "?"
+        if row["end"] is None:
+            row.update(scope(rid))
         steps = {}
         for s in (load(d + "/check-live.json") or {}).get("steps") or []:
             steps[s.get("step")] = {"state": s.get("state"), "seconds": s.get("seconds"), "start": ep(s.get("started_utc"))}
@@ -684,11 +698,19 @@ def table(doc: dict, prev: dict | None = None) -> list[dict]:
                                                                 for k, v in sorted(pools.items())) or "not read", "", "", "",
         "`slot.py --status --json` for each slots file; the lane pools share cores with each other and with the check slots, so slots "
         "add up to more than the cores")
-    add("7", "Reserved against used, a check's shard", "not measured: the run's cgroup samples do not cover the check's own scope; "
-        "its slot reserves 96 cores and 300 GB")
+    mem = {(n, name_): gb for n, d in doc["nodes"].items() for s in d["slots"] for name_, gb in (s.get("mem") or {}).items()}
+    going = [dict(r, cores=r["scope_cpu_s"] / (doc["nodes"][r["node"]]["now"] - r["took"])) for r in runs.values()
+             if r["kind"] == "shard" and r.get("scope_cpu_s") and r.get("took") and doc["nodes"][r["node"]]["now"] > r["took"]]
+    res = [mem[(r["node"], r["slot"])] for r in going if (r["node"], r.get("slot")) in mem]
+    add("7", "Reserved against used, a check's shard", (f"{len(going)} running: cores p50 {pct([r['cores'] for r in going], .5):.0f}, most "
+        f"{max(r['cores'] for r in going):.0f}, of {pct([r.get('slot_cores') or 0 for r in going], .5):.0f} in its slot; memory without the page "
+        f"cache p50 {pct([r['scope_anon_gb'] for r in going], .5):.0f} GB, most {max(r['scope_anon_gb'] for r in going):.0f} GB; peak with the "
+        f"page cache most {max(r['scope_peak_gb'] for r in going):.0f} GB" + (f", of {pct(res, .5):.0f} GB reserved" if res else ""))
+        if going else "no shard is running", "", "not measured: a shard's cgroup is gone when it ends", "",
+        "the shards running now, from each one's own cgroup (`check-SLOT-RUN.scope`): CPU seconds over its seconds in the slot so far, "
+        "`anon` of `memory.stat`, and `memory.peak`, which counts the page cache")
     for kind, name in (("tier", "a quick tier"), ("worker", "an executor run")):
         rs = [r for r in runs.values() if r["kind"] == kind and r.get("end") and r.get("took") and r.get("cpu_s") and r["end"] > r["took"]]
-        mem = {(n, name_): gb for n, d in doc["nodes"].items() for s in d["slots"] for name_, gb in (s.get("mem") or {}).items()}
         res = [mem[(r["node"], r["slot"])] for r in rs if (r["node"], r.get("slot")) in mem]
         add("7", f"Reserved against used, {name}", "", "", (f"cores: p50 {pct([r['cpu_s'] / (r['end'] - r['took']) for r in rs], .5):.1f} used of "
             f"{pct([r.get('slot_cores') or 0 for r in rs], .5):.0f} in its slot; memory: p50 {pct([r.get('mem_peak_gb') or 0 for r in rs], .5):.0f} GB peak"

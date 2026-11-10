@@ -109,7 +109,8 @@ def runs() -> dict[str, dict]:
                                   "failed": [], "steps": [{"step": "pytest", "state": "passed", "seconds": 3000, "end": took + 3000},
                                                           {"step": "circuit-check", "state": "passed", "seconds": 3500, "end": took + 3600}]},
         "r20261110-012500-bbbb": {"id": "r20261110-012500-bbbb", "kind": "shard", "shard": "1/1", "took": qt.ts(at("01:26")), "end": None,
-                                  "rc": None, "failed": [["tools/research", qt.ts(at("02:00"))]],
+                                  "rc": None, "failed": [["tools/research", qt.ts(at("02:00"))]], "slot": "b", "slot_cores": 96,
+                                  "scope_cpu_s": 94 * 60 * 12.0, "scope_anon_gb": 40.0, "scope_peak_gb": 120.0,
                                   "steps": [{"step": "pytest", "state": "stopped", "seconds": 3800, "end": qt.ts(at("02:30"))}]},
     }
 
@@ -133,7 +134,7 @@ def doc() -> dict:
         "5@h5": [lab("ready", True, "01:30")],
         "6@h6": [lab("ready", False, "01:00")],
     }
-    node = {"cores": 100, "busy": 0.25, "stat": [5000, 20000], "hz": 100, "load": ["1", "1", "1"],
+    node = {"cores": 100, "busy": 0.25, "stat": [5000, 20000], "hz": 100, "load": ["1", "1", "1"], "now": qt.ts(at("03:00")),
             "slots": [{"pool": "check", "slots": 2, "busy": 1, "blocked": 0, "waiting": 0, "mem": {"b": 300}},
                       {"pool": "research", "slots": 4, "busy": 4, "blocked": 0, "waiting": 3, "mem": {}}],
             "runs": [*runs().values(),
@@ -182,6 +183,9 @@ def test_the_table_holds_each_number_over_its_windows():
     assert rows["Cores busy over cores paid, the check nodes"]["hour"] == "30 of 100 (30%), the average over the last 60 min"
     assert rows["Slots busy over slots, the check nodes"]["now"] == ("check slots: 1 of 2 busy, 0 free but blocked, 0 runs in line; "
                                                                     "lane slots: 4 of 4 busy, 0 free but blocked, 3 runs in line")
+    assert rows["Reserved against used, a check's shard"]["now"] == ("1 running: cores p50 12, most 12, of 96 in its slot; memory without the "
+                                                                    "page cache p50 40 GB, most 40 GB; peak with the page cache most 120 GB, "
+                                                                    "of 300 GB reserved")
     assert rows["Reserved against used, a quick tier"]["today"].startswith("cores: p50 2.0 used of 16 in its slot; memory: p50 8 GB peak")
     assert rows["Ready to built"]["today"] == "p50 15, p90 19 min (n=2)"          # #1: verdict 00:40 to 01:00; #2: mark 00:50 to 01:00
     assert rows["The loop's tick: minutes between tick ends"]["hour"] == "p50 4.0, p90 4.0 min (n=2)"
