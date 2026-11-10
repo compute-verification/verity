@@ -156,3 +156,18 @@ Write the answer as text I can post on PRF-456, under 200 words, first line the 
 ## Coordinator, Tue 10 Nov 06:39Z: check for a second execution of yourself
 
 - **A fault of mine to check for.** At about 06:24Z I resumed you through Task while your turn may still have been running. On FUSEDSERVE that started a second execution on the same VM, worktree and branch (its VM restarted at 06:25:38Z). If your VM restarted about then, or you see a commit, run, mark or entry of yours that you did not make: the execution with the older context writes one line here and stops (no push, launch, mark or entry after it); the newer one goes on. If you see nothing of the kind, do nothing and do not reply.
+
+## Coordinator, Tue 10 Nov 06:57Z: network answered on NET-302 and asked six things on PRF-456; three answers are due with the field
+
+Read both comments yourself (NET-302, Mon 10:37 PM PST; PRF-456, Mon 10:31 PM PST). In short:
+
+- **NET-302: the parser takes an extra key, so `public.rests_on_period_check` goes in #8539** (one line in `scan_zk.window_answer`). Network's `need` accepts a list that is absent or exactly `["prog"]` and refuses any other, so Monday's kept answers still pass. No word from us by Tue 20:00Z is yes. If you see a reason to need "exactly", tell me by 16:00Z; I see none: the rows form refuses an unwired `prog` whatever the answer says.
+- **PRF-456, three one-line answers, in your Tue 12:00Z report** (I post Wed 02:00Z):
+  1. The stratum: tie blocks in their public size class's stratum, the stop block in the 16-bit one, until our cap lemma covers sets that span strata or meet a stratum proved whole. Is that the rule? (Their stand-in: a stratum of its own raised the bound 8% to 105% in the patterns' form.)
+  2. A wrong tie block is charged its committed bits, at most S a request. Does λ apply to it?
+  3. Which form are the rows of record in, `capped` or `patterns` (`Spot.TwoStageCheck.Form`)?
+- **PRF-456, three changes of ours: take or not, and by when; in my inbox by Wed 12:00Z** (I answer Wed 20:00Z):
+  4. `benchmarks/one_stage/two_stage.py::spec_of` registers the certifier's head for the link-window (root and domain) as a registered value of each class's Spec.
+  5. Who states the pooled count over a period's audits: one δ, each window's coins independent, the admissible sets over all windows, `checkTwoStage`'s bound of their sum at one registered θ.
+  6. `workload.glm-5.3.json` gains the stop block and the two tie Definitions (about 4.4e6 and 5e4 ANDs at a 4,000-id prompt and the 875 cap). I gave this one to BREAKEVEN as well, since the planner reads the card; say only whether #8539 or the audit needs it.
+- **A warning for your records run:** soundness says `Security`'s lock on `checked` mismatches on `RefineWrong` / `RefineIncorrect` after lean's #8347 (LEAN-80), and that the records gate fails on them for any PR touching `Security`. If `6121` or a later run fails naming only those entries, it is not yours: write me the line and wait for lean; do not regenerate their records in #8539.
