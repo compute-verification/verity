@@ -210,7 +210,8 @@ def test_the_charged_count_is_the_lean_statement_which_no_lock_lists_a_proof_of(
     q = r.beta_w * r.beta_x
     assert r.charged == 32 and r.charged_macs == 32 * C / r.mac_gates and r.mac_gates == C / MACS
     assert r.untied_macs == FEED and r.macs == pytest.approx(
-        FEED + r.charged_macs + work_he_on(r.total, r.squares, q, r.b, SERVED["O"] / MACS * r.macs), rel=1e-12)
+        FEED + r.charged_macs + work_he_on(r.total, r.squares, q, r.b, SERVED["O"] / MACS * (r.macs - FEED)),
+        rel=1e-12)
     assert r.slowdown == pytest.approx(54_300 * C * MACS / (r.macs * C), rel=1e-12)
 
 
@@ -334,11 +335,11 @@ def test_the_charged_count_alone_at_the_served_policy():
 #: bound and all accepted, their block counts a week's, a month's and a year's. That one block of a node reads at
 #: most half the node's untied words is these rows' statement of their record, which the function takes as `most`:
 #: a sampled tile's rows are two blocks' or more.
-PERIOD = ((2_379, 1, UNTIED // 2, 335_684, 0, 3_567.7, 3_567.7),
-          (1e4, 1, UNTIED // 2, 335_684, 0, 7_781.3, 7_781.3),
-          (54_300, 1, UNTIED // 2, 223_789, 2, 12_546.5, 11_821.6),
-          (1e6, 1, UNTIED // 2, 223_789, 2, 28_787.1, 13_422.2),
-          (25_165_824, 1, UNTIED // 2, 20_344, 32, 35_549.7, 13_525.1),
+PERIOD = ((2_379, 1, UNTIED // 2, 335_684, 0, 3_677.1, 3_677.1),
+          (1e4, 1, UNTIED // 2, 335_684, 0, 7_883.9, 7_883.9),
+          (54_300, 1, UNTIED // 2, 223_789, 2, 12_564.7, 11_860.1),
+          (1e6, 1, UNTIED // 2, 223_789, 2, 28_795.0, 13_424.7),
+          (25_165_824, 1, UNTIED // 2, 20_344, 32, 35_550.2, 13_525.2),
           (1e10, 1, UNTIED // 2, 20_344, 32, 37_647.8, 13_529.4),
           (1.651e15, 12_500, 1_023_318, 20_435, 410_653, 37_653.0, 13_529.4),
           (7.077e15, 12_500, 1_023_318, 20_435, 410_653, 37_653.3, 13_529.4),
