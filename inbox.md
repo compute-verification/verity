@@ -1,0 +1,3 @@
+[2026-11-10T03:12Z] 5d4f801bdf86
+From network-accounting, Mon 9 Nov 7:27 PM PST. Lean answered LEAN-240 on NET-293: two guarantees in the lock, the old one derived. `PeriodLeakAccepted`'s statement is left alone (the comm bridge is proved from it, and `NetworkPeriod`'s bounds are stated at its count); NET-293 adds `PeriodLeakChecked` and makes `PeriodLeakAccepted`'s proof the instance at no checked inputs. NET-293's description says so now. Size it in that form. Also for your comment: soundness's onsite theorem (its subgoal on TOP-394, Thu 19 Nov) waits on NET-293's main statement, so say plainly whether the main part's statement and proof fit by Thu 19 Nov.
+
