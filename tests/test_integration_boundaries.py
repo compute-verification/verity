@@ -33,6 +33,12 @@ IMPORT_CALLS = {"import_module", "__import__", "importorskip"}
 #: Every file under ``verity/`` that imports an integration, with each integration module it imports.  Repoint it at
 #: ``verity`` (or drop the use) and delete its line; a new line needs a reason the dependency cannot go through ``verity``.
 KNOWN = {
+    # the vLLM integration's commitment scheme (`vllm_v1`) and its leaves, which these two tests hold beside the schemes here: the
+    # four lines go when those cases are tests under integrations/vllm/
+    ("verity/commitments/tests/test_scheme.py", "verity_vllm.commitments.vllm_v1"),
+    ("verity/commitments/tests/test_sha512_framings.py", "verity_vllm.commitments"),
+    ("verity/commitments/tests/test_sha512_framings.py", "verity_vllm.commitments.leaves"),
+    ("verity/commitments/tests/test_sha512_framings.py", "verity_vllm.commitments.vllm_v1"),
     ("verity/definitions/evaluate/tests/test_difftest.py", "verity.definitions.registry"),
     ("verity/definitions/requirement/tests/test_census_and_memory_map.py", "verity_vllm.commit"),
     ("verity/definitions/requirement/tests/test_census_and_memory_map.py", "verity_vllm.program.predict.build"),
