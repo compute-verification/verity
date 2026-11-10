@@ -76,3 +76,19 @@ one card, cores 64 to 95 (worker KHSHARE). Two kernels runs must never overlap o
 - The lock is first come, first served. Do not queue a run long before you can use it: a waiting run holds the other
   out of order. Your runs come first in tonight's window; KHSHARE launches only from 10:30Z.
 - If a run of yours launched before this message is still going at 10:30Z without the lock, say so on HASH-98 at once.
+
+## Tue 10 Nov 05:45Z: runs for a later window start themselves on the node
+
+Timers may not wake the lead (INF-666), so no run's start may depend on an agent being awake when a window opens.
+
+- **Launch a later window's run ahead, with a start guard.** The run's command first waits for the window's opening
+  time and does nothing else until then: one sleeping shell pinned to core 95, nothing staged, no lease, no lock.
+  Compute the wait from an absolute UTC time, never from "in N hours".
+- **Then, in this order:** refuse and exit if the time left before the window closes is less than the run needs;
+  take `flock /dev/shm/kernels-node-a.lock`; check the time left again; take `gpu_lease.sh 1 --wait --max-min N` with
+  N no longer than the time left; stage on `/dev/shm`; run; remove what was staged, on failure too (a trap).
+- **Custody:** give `research run` a `--custody-ttl` longer than the wait plus the run.
+- **Windows (UTC):** Tue 10:30 to 16:00. Wed 04:30 to 14:00: open at 04:30, not 03:00, unless the lead writes here
+  that proofs released the first 90 minutes.
+- **Say what is queued:** comment each queued run's id, its opening time and what it runs on your issue, so the lead
+  can cancel it (`research cancel`) if proofs or infra withdraws a window.
