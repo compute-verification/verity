@@ -14,7 +14,7 @@ counting theorem) into a bound on success below the floor.
 
 @[expose] public section
 
-namespace Nci.Guarantees
+namespace InferenceOnly.Guarantees
 
 open scoped ENNReal
 
@@ -53,4 +53,4 @@ def CapabilityFloorNontrivial : Prop :=
         Accounting.Slowdown.Succeeds (Accounting.Slowdown.Toy.comp x) Accounting.Slowdown.Toy.pos 𝒴 ∧
         Accounting.Slowdown.Toy.cost (Accounting.Slowdown.Toy.comp x) < min 2 10) ≤ 0
 
-end Nci.Guarantees
+end InferenceOnly.Guarantees

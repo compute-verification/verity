@@ -1,11 +1,11 @@
-"""The inference-only policy as a core protocol (`NciCheck.Protocol`, `inference-only serve`,
-`verity/inference-only/v0`) against `nci_reference`'s `check_baseline` behind the protocol's decoders, through the
+"""The inference-only policy as a core protocol (`InferenceOnlyCheck.Protocol`, `inference-only serve`,
+`verity/inference-only/v0`) against `inference_only_reference`'s `check_baseline` behind the protocol's decoders, through the
 difftest harness's `ProtocolPort`.
 
-The reference decodes the protocol's formats (`NciCheck/Protocol.lean`'s module docstring), checks that the run's
+The reference decodes the protocol's formats (`InferenceOnlyCheck/Protocol.lean`'s module docstring), checks that the run's
 record names the declared circuit (`names`), rebuilds the policy's check's instance and trusted input (the params' log
 with the run's own record, the commitment, appended, and that record's digest the run) and runs `check_baseline`, which
-`NciCheck.ThetaDifftest` holds `NciCheck.Theta.check` to. The cases are θ's provenance difftest's declarations
+`InferenceOnlyCheck.ThetaDifftest` holds `InferenceOnlyCheck.Theta.check` to. The cases are θ's provenance difftest's declarations
 (`theta_difftest_vectors.case`), split at the run's own record into the protocol's params, commitment and evidence,
 then at most one change (`MUTATIONS`): the division made to fail (`gamma` 0, so every inference block is over its gate
 budget), the run's record naming another circuit, the run's record repeated in the log, and malformed params,
@@ -28,7 +28,7 @@ import verity_difftest as D
 from verity_difftest import Reject
 from verity_difftest import protocol as P
 
-LEAN = Path(__file__).resolve().parents[1] / "nci" / "lean"
+LEAN = Path(__file__).resolve().parents[1] / "inference_only" / "lean"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 ID = "verity/inference-only/v0"
@@ -89,7 +89,7 @@ def _digest(program: str) -> str | Exception:
 
 
 def names(p: dict, record: dict) -> bool:
-    """`NciCheck.Protocol.names`: the run's record names the declared circuit, its `program` the circuit's SHA-512. A
+    """`InferenceOnlyCheck.Protocol.names`: the run's record names the declared circuit, its `program` the circuit's SHA-512. A
     program that doesn't decode is left to the check, which refuses it."""
     digest = _digest(p["program"])
     return isinstance(digest, Exception) or record.get("program") == digest
