@@ -493,28 +493,33 @@ def StepAt.ofOwn (p : _root_.Spot.OneStageZk.Own) (tags0 : Flock.Tags) (circuitB
     want := _root_.Spot.getD p.partition "program" }
 
 /-- **v2's `run` where it accepted every session is the sessions' verdicts in order, at the one statement its
-parameters fix** (`StepAt.ofOwn`): the statement's tags, the circuit and public files and the registered reads; the
-sessions' verdicts from the empty run; and the proved units held to the evidence's (`provedHeld`). -/
+parameters fix** (`StepAt.ofOwn`): what `run` checks before any session (the blobs' lookup tables, the statement's
+tags, the registered reads, the circuit and public files and their lengths); the sessions' verdicts from the empty run;
+and the proved units held to the evidence's (`provedHeld`). -/
 theorem run_verdicts_at {p : _root_.Spot.OneStageZk.Own} {sessions : Array _root_.Spot.OneStageZk.RunFiles}
     {pu : Option (Array ℕ)} {bs : _root_.Core.Blobs} {r : _root_.Spot.OneStageZk.Run}
     (h : _root_.Spot.OneStageZk.run p sessions pu bs = .ok r) (hall : r.all = true) :
     ∃ (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (rd : _root_.Spot.OneStageZk.Reads),
+      _root_.Spot.OneStageZk.tablesHeld p bs = .ok () ∧
       Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧ tags0.plainLeaves = false ∧
+      (p.registered.isNone && _root_.Spot.OneStageZk.readsRegistered p.programJ) = false ∧
       bs.get p.circuit "circuit" = .ok circuitB ∧ bs.get p.pub "public file" = .ok pubB ∧
+      _root_.Spot.OneStageZk.fitsWhy _root_.Spot.OneStageZk.WORD circuitB pubB (_root_.Spot.OneStageZk.tablesOf bs)
+        (some p.program) (some p.partition) p.registered = none ∧
       _root_.Spot.OneStageZk.readsOf p.registered = .ok rd ∧
       Verdicts bs ⟨#[], #[], #[], true⟩
         (sessions.toList.map fun s => (StepAt.ofOwn p tags0 circuitB pubB bs rd, s)) r ∧
       ∀ want, pu = some want → _root_.Spot.OneStageZk.provedHeld r.proved want = .ok () := by
   unfold _root_.Spot.OneStageZk.run at h
   dsimp only at h
-  obtain ⟨_, -, h⟩ := ebind_ok h
+  obtain ⟨⟨⟩, htab, h⟩ := ebind_ok h
   split at h
   · rename_i tags0 htags
     obtain ⟨_, hpl, h⟩ := ebind_ok h
-    obtain ⟨_, -, h⟩ := ebind_ok h
+    obtain ⟨_, hreg, h⟩ := ebind_ok h
     obtain ⟨circuitB, hc, h⟩ := ebind_ok h
     obtain ⟨pubB, hp, h⟩ := ebind_ok h
-    obtain ⟨_, -, h⟩ := ebind_ok h
+    obtain ⟨_, hfits, h⟩ := ebind_ok h
     obtain ⟨rd, hrd, h⟩ := ebind_ok h
     obtain ⟨r', hr', h⟩ := ebind_ok h
     have e : r' = r ∧ ∀ want', pu = some want' → r'.all = true →
@@ -536,7 +541,18 @@ theorem run_verdicts_at {p : _root_.Spot.OneStageZk.Own} {sessions : Array _root
       cases hb : tags0.plainLeaves with
       | false => rfl
       | true => rw [hb] at hpl; cases hpl
-    refine ⟨tags0, circuitB, pubB, rd, htags, hpl', hc, hp, hrd, ?_, fun want hpu => hw want hpu hall⟩
+    have hreg' : (p.registered.isNone && _root_.Spot.OneStageZk.readsRegistered p.programJ) = false := by
+      cases hb : (p.registered.isNone && _root_.Spot.OneStageZk.readsRegistered p.programJ) with
+      | false => rfl
+      | true => rw [hb] at hreg; cases hreg
+    have hfits' : _root_.Spot.OneStageZk.fitsWhy _root_.Spot.OneStageZk.WORD circuitB pubB
+        (_root_.Spot.OneStageZk.tablesOf bs) (some p.program) (some p.partition) p.registered = none := by
+      split at hfits
+      · cases hfits
+      · rename_i hnone
+        exact hnone
+    refine ⟨tags0, circuitB, pubB, rd, htab, htags, hpl', hreg', hc, hp, hfits', hrd, ?_,
+      fun want hpu => hw want hpu hall⟩
     refine verdicts_of_steps ?_ hall
     rw [List.foldlM_map, Array.foldlM_toList]
     exact hr'
@@ -557,7 +573,7 @@ theorem run_verdicts {p : _root_.Spot.OneStageZk.Own} {sessions : Array _root_.S
       a.population = _root_.Spot.FilePart.check p.program (_root_.Spot.getD p.partition "query") pubB ∧
       Verdicts bs ⟨#[], #[], #[], true⟩ (sessions.toList.map fun s => (a, s)) r ∧
       ∀ want, pu = some want → _root_.Spot.OneStageZk.provedHeld r.proved want = .ok () := by
-  obtain ⟨tags0, circuitB, pubB, rd, htags, hpl, hc, hp, hrd, hv, hw⟩ := run_verdicts_at h hall
+  obtain ⟨tags0, circuitB, pubB, rd, -, htags, hpl, -, hc, hp, -, hrd, hv, hw⟩ := run_verdicts_at h hall
   exact ⟨StepAt.ofOwn p tags0 circuitB pubB bs rd, tags0, circuitB, pubB, htags, hpl, hc, hp, rfl, hrd, rfl, rfl, hv,
     hw⟩
 
