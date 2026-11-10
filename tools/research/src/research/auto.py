@@ -23,8 +23,10 @@ be read is skipped; with node 2 unread and no pool fitting, the job is refused (
 run waits up to slot_only.POOL_WAIT_S (4 h) in its line and then exits 75 without running; its --timeout counts from taking
 the slot, and a wait inside it for a Lean audit slot (lean_slot.py) moves it later by as long.
 
+Node 2 takes no `--on auto` job while it is held: until the time in its HOLD_FILE, which infra writes with the reason when one
+lane has the whole node. `choose` then treats it as a node 2 that is down, and the launcher is told until when and why (`off`).
 A stopped node 2 costs a launch NODE_CONNECT_S: its probe's ssh gives up connecting after that long, beside the pools' probes,
-and the placement says once that node 2 is down (`off`).
+and the placement says once that node 2 is down.
 """
 from __future__ import annotations
 
@@ -49,6 +51,10 @@ READ_TIMEOUT_S = 30
 NODE_CONNECT_S = 5
 #: how `read` words a machine whose ssh connection fails (it is stopped, or off the network); `off` reads it back for node 2
 NO_SSH = "its ssh doesn't answer"
+#: the hold, a file on node 2 that infra writes when one lane has the whole node: its first line is `UNTIL REASON`, UNTIL a UTC
+#: time as 2030-01-31T17:00Z. Until then `--on auto` places no job there and tells the launcher UNTIL and REASON; after it the
+#: file means nothing, so it needs no removing. A first line that names no time holds until the file is removed
+HOLD_FILE = "/etc/vy/auto-hold"
 #: a machine whose DISK_PATH has fewer free inodes or GB than these takes no `--on auto` job: a machine out of inodes with half
 #: its bytes free fails every job placed there, shipping its source or mid-build, with ENOSPC. One run of
 #: a large suite (tools/research's) holds some 250k pytest temp files at once, so a floor below a few of those still fails jobs
@@ -56,8 +62,8 @@ DISK_PATH, MIN_FREE_INODES, MIN_FREE_GB = "/workspace", 1_000_000, 50
 
 
 class Unplaceable(Exception):
-    """No pool fits the job and node 2 can't be read: its queue would place it on a node that isn't up (a stopped node 2
-    refuses an `--on auto` job too big for a pool slot with a stale admission window)."""
+    """No pool fits the job and node 2 takes none (`off`): its queue would place it on a node that is held for one lane, or
+    isn't up (a stopped node 2 refuses an `--on auto` job too big for a pool slot with a stale admission window)."""
 
 PROBE = '''
 import json, os, sys, types
@@ -73,7 +79,27 @@ def load(name, src, env):
     return m
 
 
+def hold():
+    if not os.path.exists(HOLD):
+        return None
+    try:
+        line = (Path(HOLD).read_text().splitlines() or [""])[0].strip()
+    except (OSError, UnicodeDecodeError) as e:
+        return {"until": None, "why": f"it can't be read ({type(e).__name__})"}
+    until, _, why = line.partition(" ")
+    try:
+        end = datetime.fromisoformat(until.replace("Z", "+00:00"))
+    except ValueError:
+        return {"until": None, "why": line}
+    end = end if end.tzinfo else end.replace(tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc) if NOW is None else datetime.fromtimestamp(NOW, timezone.utc)
+    return {"until": f"{end.astimezone(timezone.utc):%Y-%m-%dT%H:%MZ}", "why": why.strip()} if now < end else None
+
+
 def share(cpus, d, root):
+    h = hold()
+    if h is not None:
+        return {"hold": h}
     if os.path.exists(VIA_SLOT):
         raise RuntimeError(f"{VIA_SLOT}: its launcher takes a run only through a check slot")
     c = load("auto_cores", CORES_SRC, {})
@@ -135,12 +161,14 @@ def share_cpus(source: Path) -> str | None:
                  and isinstance(s.get("cpus"), str)), None)
 
 
-def payload(source: Path, cpus: int, share: str | None, pools: list[str]) -> bytes:
+def payload(source: Path, cpus: int, share: str | None, pools: list[str], now: float | None = None) -> bytes:
+    """The probe a machine runs as `python3 -`; `now` (an epoch) stands in for the machine's clock when HOLD_FILE is read."""
     from . import cores, remote
     from .pods.nebius import slot_only
 
     head = {"CORES_SRC": Path(cores.__file__).read_text(), "SLOT_SRC": (Path(source) / SLOT_PY).read_text() if pools else "",
             "JOB_CPUS": max(cpus, 1), "SHARE": share, "CLAIMS": str(cores.CLAIMS), "CPU_ROOT": str(cores.CPU_ROOT),
+            "HOLD": HOLD_FILE, "NOW": now,
             "POOLS": {p: slot_only.POOLS[p] for p in pools}, "DISK": DISK_PATH, "MIN_INODES": MIN_FREE_INODES, "MIN_GB": MIN_FREE_GB,
             "VIA_SLOT": remote.RUNS_VIA_SLOT_FILE}
     return ("".join(f"{k} = {v!r}\n" for k, v in head.items()) + PROBE).encode()
@@ -165,18 +193,24 @@ def _ssh(argv: list[str], data: bytes) -> subprocess.CompletedProcess:
 
 
 def off(n2: Any) -> str | None:
-    """Why node 2 takes no `--on auto` job, from its answer to `read`: it is down, or its share wasn't read. None when it was."""
+    """Why node 2 takes no `--on auto` job, from its answer to `read`: it is down, HOLD_FILE holds it, or its share wasn't read.
+    None when its share was read."""
     if isinstance(n2, str) and n2.startswith(NO_SSH):
         return f"{AUTO_NODE} is down: {n2}"
     share = n2.get("share") if isinstance(n2, dict) else None
+    if isinstance(share, dict) and isinstance(hold := share.get("hold"), dict):
+        until = f"until {hold['until']}" if hold.get("until") else f"while it carries {HOLD_FILE}"
+        return f"{AUTO_NODE} takes no `--on auto` job {until}" + (f": {hold['why']}" if hold.get("why") else "")
     if not isinstance(share, dict) or "error" in share:
         why = share.get("error") if isinstance(share, dict) else n2 if isinstance(n2, str) else "not read"
         return f"{AUTO_NODE}'s share wasn't read ({why})"
     return None
 
 
-def read(source: Path, cpus: int, *, reach: Callable[[str], list[str]] | None = None, run: Callable | None = None) -> dict[str, dict | str]:
-    """Each machine's documents (node 2's under "share", a pool's under its name), read at once, or why they couldn't be."""
+def read(source: Path, cpus: int, *, reach: Callable[[str], list[str]] | None = None, run: Callable | None = None,
+         now: float | None = None) -> dict[str, dict | str]:
+    """Each machine's documents (node 2's under "share", a pool's under its name), read at once, or why they couldn't be. Node
+    2's share is `{"hold": {until, why}}` while HOLD_FILE holds it (`now`: `payload`)."""
     reach, run = reach or _reach, run or _ssh
     share = share_cpus(source)
     asks: dict[str, list[str]] = {AUTO_NODE: []}
@@ -186,7 +220,7 @@ def read(source: Path, cpus: int, *, reach: Callable[[str], list[str]] | None = 
     def one(item: tuple[str, list[str]]) -> dict | str:
         name, pools = item
         try:
-            r = run(reach(name), payload(source, cpus, share if name == AUTO_NODE else None, pools))
+            r = run(reach(name), payload(source, cpus, share if name == AUTO_NODE else None, pools, now))
         except subprocess.TimeoutExpired:
             return f"no answer in {READ_TIMEOUT_S} s"
         except Exception as e:                                       # not listed, not this project's, no source: never chosen

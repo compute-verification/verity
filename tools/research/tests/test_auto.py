@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -275,6 +276,67 @@ def test_a_stopped_node_2_costs_its_probe_a_few_seconds_and_the_placement_says_o
     assert auto.read(tmp_path, 4, reach=lambda name: denied)[N2] == "exit 255: u@h: Permission denied (publickey)."
     assert auto.off("exit 255: u@h: Permission denied (publickey).").startswith(f"{N2}'s share wasn't read (exit 255: ")
     assert auto.off(share(free=8)) is None
+
+
+def test_a_held_node_2_takes_no_job_until_its_hold_ends_and_the_placement_says_until_when_and_why(tmp_path, monkeypatch):
+    """A node 2 that one lane has whole took `--on auto` jobs unless it also carried the slot-only marker, which says neither
+    until when nor why. The probe as node 2 runs it, with the clock it is given."""
+    monkeypatch.setattr(cores, "CLAIMS", tmp_path / "claims")
+    monkeypatch.setattr(cores, "CPU_ROOT", tmp_path / "no-topology")
+    monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(tmp_path / "no-via-slot"))
+    hold = tmp_path / "auto-hold"
+    monkeypatch.setattr(auto, "HOLD_FILE", str(hold))
+    src = tmp_path / "src"
+    (src / auto.DESCRIPTION).parent.mkdir(parents=True)
+    (src / auto.DESCRIPTION).write_text(f'[[shares]]\nproject = "verity"\nnode = "{N2}"\ncpus = "48-95"\n')
+
+    def read(now: str) -> dict:
+        at = datetime.fromisoformat(now).replace(tzinfo=UTC).timestamp()
+        with monkeypatch.context() as m:
+            m.setattr(auto, "SPILL", ())                                       # node 2 alone is asked
+            return auto.read(src, 4, reach=lambda name: [sys.executable, "-"], now=at)[N2]
+
+    assert read("2030-01-31T17:00")["share"]["free"] == 48, "no file, no hold"
+    hold.write_text("2030-02-01T00:00Z one lane has the whole node\nany later line is a note\n")
+    n2 = read("2030-01-31T17:00")
+    assert n2 == {"share": {"hold": {"until": "2030-02-01T00:00Z", "why": "one lane has the whole node"}}}
+    said = f"{N2} takes no `--on auto` job until 2030-02-01T00:00Z: one lane has the whole node"
+    full = pool(*(slot(f"r{i}", held=True) for i in range(8)), waiters=9)
+    assert auto.choose({N2: share(free=48), CPU1: full}, 4, 16)[0] is None, "unheld and idle, node 2 takes it"
+    target, why = auto.choose({N2: n2, CPU1: full}, 4, 16)
+    assert target == (CPU1, "research") and why.startswith(said + "; ") and why.endswith(f"{CPU1}'s research pool")
+    with pytest.raises(auto.Unplaceable, match=f"no pool fits and {N2} takes no job") as refused:
+        auto.choose({N2: n2, CPU1: pool(slot("r0"))}, 64, 300)
+    assert str(refused.value).startswith(said + "; ")
+    assert read("2030-01-31T23:59") == n2 and read("2030-02-01T00:00")["share"]["free"] == 48, "the hold ends on its own"
+    hold.write_text("2030-02-01T02:00+02:00\n")
+    assert read("2030-01-31T23:59") == {"share": {"hold": {"until": "2030-02-01T00:00Z", "why": ""}}}
+    assert auto.off(read("2030-01-31T23:59")) == f"{N2} takes no `--on auto` job until 2030-02-01T00:00Z"
+    for text, why in (("until infra says\n", "until infra says"), ("", "")):
+        hold.write_text(text)
+        n2 = read("2040-01-01T00:00")
+        assert n2 == {"share": {"hold": {"until": None, "why": why}}}, "a first line that names no time holds until the file goes"
+        assert auto.off(n2) == f"{N2} takes no `--on auto` job while it carries {hold}" + (f": {why}" if why else "")
+    (tmp_path / "no-via-slot").write_text("")
+    hold.write_text("2030-02-01T00:00Z one lane has the whole node\n")
+    assert auto.off(read("2030-01-31T17:00")) == said, "the hold says more than the slot-only marker beside it"
+
+
+def test_on_auto_tells_the_launcher_until_when_and_why_node_2_is_held(tmp_path, monkeypatch, capsys):
+    launched, placed = [], []
+    held = {"share": {"hold": {"until": "2030-02-01T00:00Z", "why": "one lane has the whole node"}}}
+    said = f"{N2} takes no `--on auto` job until 2030-02-01T00:00Z: one lane has the whole node"
+    monkeypatch.setattr(auto, "read", lambda source, cpus: {N2: held, CPU1: pool(slot("r0", held=True), waiters=9)})
+    monkeypatch.setattr(remote, "launch", _refusing(launched))
+    monkeypatch.setattr(remote, "queue_placement", _refusing(placed))
+    monkeypatch.chdir(_auto_repo(tmp_path))
+    runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
+    assert main([*runs, "--", "pytest", "-q"]) == 3
+    assert [kw["machine_name"] for kw in launched] == [CPU1] and placed == []
+    assert f"research run --on auto: spilled to {CPU1}'s research pool, from " in (err := capsys.readouterr().err) and said in err
+    assert main([*runs, "--cpus", "64", "--mem-gb", "300", "--", "pytest"]) == 2
+    assert len(launched) == 1 and placed == []
+    assert f"research run --on auto: refused: {said}; " in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("text, n", [("8-19", 12), ("0", 1), ("48-51,56-63", 12)])
