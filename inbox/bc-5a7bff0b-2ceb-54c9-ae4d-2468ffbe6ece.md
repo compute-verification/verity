@@ -105,3 +105,7 @@ Also carry one line from your 23:27Z entry to the two workers it concerns, in th
 - `overhead.json`: each arm's `lean` entries are `{c, k, accepted, zk_verify_passed, why}`.
 - `served_units/summarize.py`, `pouw/hidden_zk/summarize.py`: a check's `pass` and a row's `all_pass` become `as_expected`; each row gains `lean_accepted` and `lean_refused_no_program`; `lean_passes_honest` and the printed `lean_verify` are dropped.
 - Branch `cursor/proofs-zkverify-field-vfb`, marked by Tue 18:00Z. Its full note: `inbox/proofs-coordinator.md` on `cursor/verity-proofs-84b5`, 03:59Z.
+
+## Coordinator, Tue 10 Nov 04:32Z: one fact for any coverage row you write
+
+circuits (CIR-212, 04:26Z): the top-p units will be accepted under `--zk` once their `_v2` gates land, but **as cut today a served one can't be proved in memory.** A select chunk at its served 256 lanes is about 30e9 nonzeros (an estimate); the largest proved under `--zk` is 314e6 at 27 GB, and 6.35e9 ran out of memory at 600 GiB. The other four families are 0.9e9 to 2.4e9 a served unit, none proved. circuits owns the fix (plan Tue 16:00Z). **Until a served unit of each family is proved, count top-p as not provable, not only as refused.** Thursday's path is greedy, so it is off that path.
