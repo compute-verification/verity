@@ -57,6 +57,11 @@ owner = "memory-accounting"
 reason = "the PoUS Lean check (`pous-check`), whose Python is run by path beside `benchmarks/pous`: its difftest generator, which its `lean-audit.json` runs, and `interop.py`, which holds it to the wire's Python reference through `verity_difftest`"
 
 [[distribution]]
+directory = "verity/hardware/machine_model"
+owner = "compute-research"
+reason = "an LP on a pinned scipy, which `verity` may not depend on (`verity_machine_model`); nothing under `verity/` imports it"
+
+[[distribution]]
 directory = "verity/configuration/config"
 owner = "ci"
 
@@ -85,60 +90,20 @@ owner = "compute-accounting"
 # loader needs down to its row or an earlier one, or pass it in), a listed file that no longer loads the later row, and
 # a pair no file needs any more, which it names to delete.
 [[against]]
-loader = "verity"
-loaded = "verity/commitments"
-files = [
-    "verity/core/protocols/bandwidth/audit.py",
-    "verity/core/protocols/bandwidth/openings.py",
-    "verity/core/protocols/bandwidth/tags.py",
-    "verity/core/protocols/pous/period_reports.py",
-]
-
-[[against]]
-loader = "verity"
-loaded = "verity/protocols/pous"
-files = [
-    "verity/core/devices/memory_challenger/lean/scripts/replay.py",
-    "verity/core/protocols/bandwidth/audit.py",
-    "verity/core/protocols/pous/period_reports.py",
-]
-
-[[against]]
 loader = "verity/flock/verifier"
 loaded = "verity/difftest"
 files = [
     "verity/flock/verifier/firewall/FirewallDifftest.lean",
     "verity/flock/verifier/firewall/lakefile.toml",
-    "verity/flock/verifier/vstar/VStarDifftest.lean",
-    "verity/flock/verifier/vstar/lakefile.toml",
-]
-
-[[against]]
-loader = "verity/flock/verifier"
-loaded = "verity/spot"
-files = [
-    "verity/flock/verifier/vstar/recursive/VStarRecursive/Protocol.lean",
-    "verity/flock/verifier/vstar/recursive/lakefile.toml",
-]
-
-[[against]]
-loader = "verity/flock/verifier"
-loaded = "tools"
-files = [
-    "verity/flock/verifier/tool.py",
-]
-
-[[against]]
-loader = "verity/spot"
-loaded = "verity/protocols/pouw"
-files = [
-    "verity/spot/sampling_plan/demo_a.py",
+    "verity/flock/verifier/vstar_cli/VStarDifftest.lean",
+    "verity/flock/verifier/vstar_cli/lakefile.toml",
 ]
 
 [[against]]
 loader = "verity/flock"
 loaded = "tools"
 files = [
+    "verity/flock/agreement/tool.py",
     "verity/flock/pod/catalog.py",
     "verity/flock/tool.py",
 ]
@@ -149,11 +114,11 @@ loaded = "benchmarks"
 files = [
     "verity/flock/pod/gemm_hill.py",
     "verity/flock/pod/read_gadget.py",
-    "verity/flock/python/verity_flock/bench.py",
-    "verity/flock/python/verity_flock/circuit_bench.py",
-    "verity/flock/python/verity_flock/instances.py",
-    "verity/flock/python/verity_flock/ir_bench.py",
-    "verity/flock/python/verity_flock/register.py",
+    "verity/flock/prover/python/verity_flock/bench.py",
+    "verity/flock/prover/python/verity_flock/circuit_bench.py",
+    "verity/flock/prover/python/verity_flock/instances.py",
+    "verity/flock/prover/python/verity_flock/ir_bench.py",
+    "verity/flock/prover/python/verity_flock/register.py",
 ]
 
 [[against]]
@@ -168,16 +133,6 @@ loader = "verity/protocols/poub"
 loaded = "tools"
 files = [
     "verity/protocols/poub/device/live_verifier/host.py",
-]
-
-[[against]]
-loader = "verity/protocols/certifier"
-loaded = "benchmarks"
-files = [
-    "verity/protocols/certifier/device/network_traces/certifier_piece.py",
-    "verity/protocols/certifier/device/network_traces/load_relay.py",
-    "verity/protocols/certifier/verifier/network_traces/chain_record.py",
-    "verity/protocols/certifier/verifier/network_traces/scan_period.py",
 ]
 
 [[against]]
@@ -203,11 +158,11 @@ files = [
 
 [[against]]
 loader = "benchmarks"
-loaded = "."
+loaded = "archive"
 files = [
     "benchmarks/one_stage/prove_bundle.py",
     "benchmarks/one_stage/served_verdicts.py",
-    "benchmarks/torch_gpu/commit_slots/overlap.py",
+    "benchmarks/pous/p2_v1/harness.py",
 ]
 
 # What each verifier's and each device's Python loads, and what loads it, by `verifier/` or `device/` directory under
@@ -217,59 +172,8 @@ files = [
 # decides its verdicts, `reaches` is the soundness path of its Python verifier.  All three only shrink: the test refuses
 # a place or a file the tree adds and one it no longer has.
 [[trusted]]
-directory = "verity/flock/verifier"
-loads = [
-    "tools/research",
-]
-reaches = [
-    "tools/research",
-]
-
-[[trusted]]
-directory = "verity/protocols/certifier/device"
-loads = [
-    "benchmarks/network_traces",
-    "verity",
-    "verity/commitments",
-    "verity/commitments/crypto",
-    "verity/commitments/hm96",
-    "verity/protocols",
-    "verity/protocols/certifier",
-    "verity/protocols/certifier/verifier",
-    "verity/protocols/pous",
-    "verity/protocols/pous/verifier",
-    "verity/spot",
-    "verity/spot/verifier",
-]
-reaches = [
-    "benchmarks/network_traces",
-    "verity",
-    "verity/circuits",
-    "verity/circuits/boolean",
-    "verity/circuits/evaluation",
-    "verity/claims",
-    "verity/commitments",
-    "verity/commitments/crypto",
-    "verity/commitments/gates",
-    "verity/commitments/hm96",
-    "verity/commitments/randomness",
-    "verity/hardware",
-    "verity/hardware/protocols",
-    "verity/protocols",
-    "verity/protocols/certifier",
-    "verity/protocols/certifier/verifier",
-    "verity/protocols/pous",
-    "verity/protocols/pous/verifier",
-    "verity/spot",
-    "verity/spot/device",
-    "verity/spot/verifier",
-]
-
-[[trusted]]
 directory = "verity/protocols/certifier/verifier"
 loads = [
-    "benchmarks/network_e2e",
-    "benchmarks/network_traces",
     "verity",
     "verity/circuits",
     "verity/circuits/boolean",
@@ -281,19 +185,11 @@ loads = [
     "verity/commitments/hm96",
     "verity/protocols",
     "verity/protocols/certifier",
-    "verity/protocols/certifier/prover",
-    "verity/protocols/pous",
-    "verity/protocols/pous/verifier",
     "verity/spot",
     "verity/spot/device",
     "verity/spot/verifier",
-    "verity/windows",
 ]
 reaches = [
-    "benchmarks/network_e2e",
-    "benchmarks/network_traces",
-    "benchmarks/one_stage",
-    "integrations/vllm",
     "verity",
     "verity/circuits",
     "verity/circuits/boolean",
@@ -305,35 +201,12 @@ reaches = [
     "verity/commitments/gates",
     "verity/commitments/hm96",
     "verity/commitments/randomness",
-    "verity/configuration",
-    "verity/configuration/config",
-    "verity/definitions",
-    "verity/definitions/circuits",
-    "verity/definitions/kernels",
-    "verity/definitions/numerics",
-    "verity/definitions/ops",
-    "verity/definitions/registry",
-    "verity/definitions/silicon",
-    "verity/flock",
-    "verity/flock/prover",
-    "verity/flock/python",
     "verity/hardware",
-    "verity/hardware/protocols",
     "verity/protocols",
     "verity/protocols/certifier",
-    "verity/protocols/certifier/prover",
-    "verity/protocols/poub",
-    "verity/protocols/poub/verifier",
-    "verity/protocols/pous",
-    "verity/protocols/pous/device",
-    "verity/protocols/pous/verifier",
-    "verity/protocols/pouw",
-    "verity/protocols/pouw/prover",
-    "verity/protocols/pouw/verifier",
     "verity/spot",
     "verity/spot/device",
     "verity/spot/verifier",
-    "verity/windows",
 ]
 loaded_by = [
     "verity/protocols/certifier/prover/advice_check.py",
@@ -389,7 +262,6 @@ reaches = [
     "verity/configuration/deploy",
     "verity/configuration/wire",
     "verity/hardware",
-    "verity/hardware/protocols",
     "verity/protocols",
     "verity/protocols/poub",
     "verity/protocols/pous",
@@ -400,7 +272,7 @@ reaches = [
     "verity/spot/verifier",
 ]
 loaded_by = [
-    "verity/commitments/gates/block_check.circuit-check.py",
+    "verity/commitments/tests/test_block_check.py",
     "verity/composite/datacenter/datacenter/examples.py",
     "verity/composite/datacenter/datacenter/memory.py",
     "verity/composite/datacenter/tests/test_examples.py",
@@ -436,11 +308,6 @@ reaches = [
     "verity/protocols/pous",
     "verity/protocols/pous/verifier",
 ]
-loaded_by = [
-    "verity/core/devices/memory_challenger/lean/scripts/replay.py",
-    "verity/core/protocols/pous/period_reports.py",
-    "verity/core/protocols/pous/tests/test_pous_period_reports.py",
-]
 
 [[trusted]]
 directory = "verity/protocols/pous/verifier"
@@ -471,11 +338,6 @@ reaches = [
     "verity/protocols/pous",
     "verity/protocols/pous/device",
 ]
-loaded_by = [
-    "verity/core/protocols/bandwidth/audit.py",
-    "verity/core/protocols/bandwidth/tests/bandwidth_vectors.py",
-    "verity/core/protocols/bandwidth/tests/test_bandwidth.py",
-]
 
 [[trusted]]
 directory = "verity/protocols/pouw/verifier"
@@ -504,7 +366,6 @@ reaches = [
     "verity/commitments/hm96",
     "verity/commitments/randomness",
     "verity/hardware",
-    "verity/hardware/protocols",
     "verity/protocols",
     "verity/protocols/pouw",
     "verity/spot",
@@ -512,10 +373,9 @@ reaches = [
     "verity/spot/verifier",
 ]
 loaded_by = [
-    "verity/flock/tests/test_lean_registered_bit_rows.py",
+    "verity/flock/prover/tests/test_lean_registered_bit_rows.py",
     "verity/protocols/pouw/clear/clear_audit.py",
     "verity/protocols/pouw/clear/clear_work.py",
-    "verity/protocols/pouw/grind_price.py",
     "verity/protocols/pouw/prover/circuit/__init__.py",
     "verity/protocols/pouw/prover/circuit/anchors.py",
     "verity/protocols/pouw/prover/circuit/cap.circuit-check.py",
@@ -537,8 +397,6 @@ loaded_by = [
     "verity/protocols/pouw/prover/schemes/pearl_c4.py",
     "verity/protocols/pouw/prover/schemes/pearl_c_work.py",
     "verity/protocols/pouw/prover/schemes/pearl_kw.py",
-    "verity/spot/sampling_plan/demo_a.py",
-    "verity/spot/sampling_plan/tests/test_demo_a.py",
 ]
 
 [[trusted]]
@@ -550,7 +408,6 @@ loads = [
     "verity/commitments/hm96",
     "verity/commitments/randomness",
     "verity/hardware",
-    "verity/hardware/protocols",
     "verity/spot",
     "verity/spot/verifier",
 ]
@@ -564,21 +421,20 @@ reaches = [
     "verity/commitments/hm96",
     "verity/commitments/randomness",
     "verity/hardware",
-    "verity/hardware/protocols",
     "verity/spot",
     "verity/spot/verifier",
 ]
 loaded_by = [
     "verity/flock/prover/pod/rec_inner.py",
     "verity/flock/prover/python/verity_flock/rec_live.py",
+    "verity/flock/prover/tests/test_challenger_audit.py",
+    "verity/flock/prover/tests/test_lean_plain_hidden_tables.py",
+    "verity/flock/prover/tests/test_lean_plain_tree.py",
+    "verity/flock/prover/tests/test_lean_rec_compose.py",
+    "verity/flock/prover/tests/test_lean_served_registered.py",
+    "verity/flock/prover/tests/test_pod_lean_verdicts.py",
     "verity/flock/prover/tests/test_rec_live.py",
-    "verity/flock/tests/test_challenger_audit.py",
-    "verity/flock/tests/test_lean_plain_hidden_tables.py",
-    "verity/flock/tests/test_lean_plain_tree.py",
-    "verity/flock/tests/test_lean_rec_compose.py",
-    "verity/flock/tests/test_lean_served_registered.py",
-    "verity/flock/tests/test_pod_lean_verdicts.py",
-    "verity/hardware/tests/test_record.py",
+    "verity/protocols/tests/test_record.py",
 ]
 
 [[trusted]]
@@ -607,7 +463,6 @@ reaches = [
     "verity/configuration/deploy",
     "verity/configuration/wire",
     "verity/hardware",
-    "verity/hardware/protocols",
     "verity/spot",
     "verity/spot/device",
 ]
@@ -628,8 +483,20 @@ loaded_by = [
     "verity/flock/prover/python/verity_flock/rec_sparse.py",
     "verity/flock/prover/python/verity_flock/rec_vstage.py",
     "verity/flock/prover/python/verity_flock/rec_vstar.py",
+    "verity/flock/prover/tests/plain_hidden.py",
+    "verity/flock/prover/tests/served_registered.py",
+    "verity/flock/prover/tests/stratified_agree.py",
+    "verity/flock/prover/tests/test_audit_profile.py",
     "verity/flock/prover/tests/test_class_statement_unit_stager.py",
     "verity/flock/prover/tests/test_inner_registered.py",
+    "verity/flock/prover/tests/test_lean_ks_form.py",
+    "verity/flock/prover/tests/test_lean_rec_coins.py",
+    "verity/flock/prover/tests/test_lean_rec_inner_streams.py",
+    "verity/flock/prover/tests/test_lean_registered_bit_rows.py",
+    "verity/flock/prover/tests/test_lean_registered_reads.py",
+    "verity/flock/prover/tests/test_lean_served_registered.py",
+    "verity/flock/prover/tests/test_lean_verifier.py",
+    "verity/flock/prover/tests/test_lean_witness.py",
     "verity/flock/prover/tests/test_rec_bindings.py",
     "verity/flock/prover/tests/test_rec_claim.py",
     "verity/flock/prover/tests/test_rec_full_draw.py",
@@ -641,30 +508,13 @@ loaded_by = [
     "verity/flock/prover/tests/test_rec_session.py",
     "verity/flock/prover/tests/test_rec_vstage.py",
     "verity/flock/prover/tests/test_rec_vstar_checks.py",
+    "verity/flock/prover/tests/test_registered_rows.py",
     "verity/flock/prover/tests/test_tmpl_statement.py",
     "verity/flock/prover/tests/tmpl_statement.py",
-    "verity/flock/tests/plain_hidden.py",
-    "verity/flock/tests/served_registered.py",
-    "verity/flock/tests/stratified_agree.py",
-    "verity/flock/tests/test_audit_profile.py",
-    "verity/flock/tests/test_lean_ks_form.py",
-    "verity/flock/tests/test_lean_rec_coins.py",
-    "verity/flock/tests/test_lean_rec_inner_streams.py",
-    "verity/flock/tests/test_lean_registered_bit_rows.py",
-    "verity/flock/tests/test_lean_registered_reads.py",
-    "verity/flock/tests/test_lean_served_registered.py",
-    "verity/flock/tests/test_lean_verifier.py",
-    "verity/flock/tests/test_lean_witness.py",
-    "verity/flock/tests/test_registered_rows.py",
     "verity/protocols/certifier/prover/window_charge.py",
     "verity/protocols/pouw/prover/circuit/h1window.py",
     "verity/protocols/pouw/prover/circuit/plan.py",
+    "verity/protocols/tests/test_profile.py",
     "verity/spot/optimize.py",
     "verity/spot/plancheck.py",
-    "verity/spot/sampling_plan/demo_a.py",
-    "verity/spot/sampling_plan/h200.py",
-    "verity/spot/sampling_plan/served_window.py",
-    "verity/spot/sampling_plan/tests/test_demo_a.py",
-    "verity/spot/sampling_plan/tests/test_transformer.py",
-    "verity/spot/sampling_plan/transformer.py",
 ]
