@@ -127,19 +127,11 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Site": (f"{CORE}Site.lean::Verity.Site", f"{SITE_LEAN}::Core.Site", f"{SITE_PY}::Site"),
     "Statement": (),
     "Stmt": (f"{FLOCK}Statement.lean::Flock.Stmt",),
-<<<<<<< 99c8914848
     "Store": (f"{CORE}Requirement.lean::Accounting.Requirement.Store", f"{REQ}::CircuitRequirement.Store",
               f"{REQ_PY}::Store"),
-    "Transcript": (f"{CORE}Circuit.lean::Verity.Circuit.Transcript", f"{FLOCK}Transcript.lean::Flock.Transcript"),
-||||||| merged common ancestors
-    "Store": (f"{REQ}::CircuitRequirement.Store", f"{REQ_PY}::Store"),
-    "Transcript": (f"{CORE}Circuit.lean::Verity.Circuit.Transcript", f"{FLOCK}Transcript.lean::Flock.Transcript"),
-=======
-    "Store": (f"{REQ}::CircuitRequirement.Store", f"{REQ_PY}::Store"),
     "Strategy": (f"{CORE}Game.lean::Verity.Game.Strategy",),
     "Trace": (),
     "Transcript": (f"{FLOCK}Transcript.lean::Flock.Transcript",),
->>>>>>> 7af4d24fca3e
     "Verdict": (f"{PROTOCOL}::Core.Verdict",),
     "Window": (),
     "Witness": (f"{CORE}TC/Relation.lean::Verity.TC.Relation.Witness",),
@@ -818,16 +810,6 @@ KNOWN: dict[str, str] = {
     "verity/core/attest/__init__.py::Period":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a party's certification period (proofs)",
     "verity/core/deploy/party.py::Record": "homonym, a party's log entry: rename (proofs)",
-<<<<<<< 99c8914848
-    "verity/core/deploy/transcript.py::Transcript": "homonym, a party's message log: rename (proofs)",
-||||||| merged common ancestors
-    "verity/core/deploy/transcript.py::Transcript": "homonym, a party's message log: rename (proofs)",
-    "verity/core/devices/certifier/lean/CertifierDevice/Certifier.lean::CertifierDevice.Record":
-        "duplicate of `NetworkCheck.Check.Certificate`: becomes `grid.Record`'s port beside `RecordHead` (moved) (network-accounting)",
-=======
-    "verity/core/devices/certifier/lean/CertifierDevice/Certifier.lean::CertifierDevice.Record":
-        "duplicate of `NetworkCheck.Check.Certificate`: becomes `grid.Record`'s port beside `RecordHead` (moved) (network-accounting)",
->>>>>>> 7af4d24fca3e
     "verity/core/devices/certifier/lean/CertifierDevice/Issuer.lean::CertifierDevice.Certificate":
         "duplicate of `NetworkCheck.Check.Certificate`: becomes it (deleted; it already requires `network_check`) (network-accounting)",
     "verity/core/devices/certifier/lean/CertifierDevice/Online.lean::CertifierDevice.Link":

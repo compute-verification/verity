@@ -1,7 +1,7 @@
 """`remote_bandwidth.opening`: check 3 by the opening unit's reference on a small p512/k2 store. An honest window is
 accepted; the same window over a store that lost its first sampled block is rejected on codec at that draw; an uncertified
 plan row fails the plan link and a public row not the verifier's own is malformed. A plan row's ``b || c`` is the proof
-system's (pinned from C-Flock's commit strings), and an appended block's payload in the witness is its block decoded."""
+system's (pinned from Flock's commit strings), and an appended block's payload in the witness is its block decoded."""
 
 from __future__ import annotations
 
@@ -39,17 +39,9 @@ def store() -> audit.Store:
     return audit.Store(audit.register(SOURCE, NODE, N, root, P512, nonce=bytes(32)), payloads, ys)
 
 
-<<<<<<< 99c8914848
 def window(store: audit.Store) -> SimpleNamespace:
-    """One window of N / L passes, pass i the stripe of L blocks from L i, closed and drawn; the same coins every call, so
-||||||| merged common ancestors
-def window(store: O.Store) -> SimpleNamespace:
-    """One window of N / L passes, pass i the stripe of L blocks from L i, closed and drawn; the same coins every call, so
-=======
-def window(store: O.Store) -> SimpleNamespace:
-    """One window of N / L passes, pass i the stripe of L blocks from L i, closed and sampled; the same coins every call, so
->>>>>>> 7af4d24fca3e
-    the same draws over any store of the same registration."""
+    """One window of N / L passes, pass i the stripe of L blocks from L i, closed and sampled; the same coins every call,
+    so the same draws over any store of the same registration."""
     reg = store.registration
     p = audit.Params(blocks=N, deadline_ns=10**6, windows=1, samples=4, delta=1e-3, window_ns=10, codec=P512)
     clock = Clock()

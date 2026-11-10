@@ -63,7 +63,6 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   endpoint's report, the report's counts or a step's summary, which are private) and the check's three input files in
   DIR/period. All of them and the answer are written to a fresh hold under SERVE_DIR/`PRIVATE`/held (0700) and reach
   DIR only through the record's leak guard (`leak_guard.py`), which reads DIR and the hold against the warden run's
-<<<<<<< 99c8914848
   witness, DIR declared to hold those files, the split's `CHAINED` and the logs alone (`PIECE_FILES`), moves what
   holds a piece of it or lies at another path to SERVE_DIR/`PRIVATE`/quarantine and only then releases the rest. The
   period files it releases become DIR/`CASE` (`write_case`), the case as `composite.py` reads a piece's:
@@ -91,41 +90,6 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   where the chain step refused (DIR/`REFUSED`) or rejected (its answer stands), and refuses where it left no
   DIR/`CHAINED` or the chain's scan read no V3c window or another. Each releases through its own hold and refuses as
   the piece does, keeping ``served_verdicts.sh``'s logs (`LOGS`).
-||||||| merged common ancestors
-  witness, DIR declared to hold those files and the piece's log alone (`PIECE_FILES`), moves what holds a piece of it
-  or lies at another path to SERVE_DIR/`PRIVATE`/quarantine and only then releases the rest. The period files
-  it releases become DIR/`CASE` (`write_case`), the case as `composite.py` reads a piece's: ``{"commitment",
-  "evidence", "params"}``, the commitment and evidence hex and the params ``params.json``'s canonical JSON, all inline,
-  since certifier/v0 reads no blob (about 83 MB on a served window, nearly all of it the params). DIR/period then
-  goes, so the case has one copy; the guard reads the files before they are hex, which it searches only for a binary
-  witness file's pieces. Only the protocol rejects: a step that can't run (no kept run, a rehearsal the gate's check
-  didn't pass, a build, a tool or the chain failing without a report, an input missing, the leak guard failing, or
-  SIGTERM from the piece's time limit) is `NotRun`, and the piece then refuses, releasing nothing from the hold: DIR
-  keeps only its log and gets DIR/`REFUSED` naming why, with no answer, which `served_verdicts.py` reads as the
-  certifier missing. Each step it runs (the build, the chain, the check and the leak guard) is a process group of its
-  own, which the piece ends however the step ends (`run_group`: SIGTERM, `GRACE_S`, SIGKILL), so nothing a step
-  started outlives it; a SIGTERM while a step runs is held until the step's group has ended, so a step never outlives
-  the refusal either. ``--draw K`` is the scan's K drawn units (every unit by default); a CR_K=V goes to the chain;
-  ``--chain-cmd`` replaces the chain (a test's, which writes the report and the scan's answers under
-  RESEARCH_RUN_DIR/out).
-=======
-  witness, DIR declared to hold those files and the piece's log alone (`PIECE_FILES`), moves what holds a piece of it
-  or lies at another path to SERVE_DIR/`PRIVATE`/quarantine and only then releases the rest. The period files
-  it releases become DIR/`CASE` (`write_case`), the case as `composite.py` reads a piece's: ``{"commitment",
-  "evidence", "params"}``, the commitment and evidence hex and the params ``params.json``'s canonical JSON, all inline,
-  since certifier/v0 reads no blob (about 83 MB on a served window, nearly all of it the params). DIR/period then
-  goes, so the case has one copy; the guard reads the files before they are hex, which it searches only for a binary
-  witness file's pieces. Only the protocol rejects: a step that can't run (no kept run, a rehearsal the gate's check
-  didn't pass, a build, a tool or the chain failing without a report, an input missing, the leak guard failing, or
-  SIGTERM from the piece's time limit) is `NotRun`, and the piece then refuses, releasing nothing from the hold: DIR
-  keeps only its log and gets DIR/`REFUSED` naming why, with no answer, which `served_verdicts.py` reads as the
-  certifier missing. Each step it runs (the build, the chain, the check and the leak guard) is a process group of its
-  own, which the piece ends however the step ends (`run_group`: SIGTERM, `GRACE_S`, SIGKILL), so nothing a step
-  started outlives it; a SIGTERM while a step runs is held until the step's group has ended, so a step never outlives
-  the refusal either. ``--draw K`` is the scan's K sampled proof blocks (every unit by default); a CR_K=V goes to the chain;
-  ``--chain-cmd`` replaces the chain (a test's, which writes the report and the scan's answers under
-  RESEARCH_RUN_DIR/out).
->>>>>>> 7af4d24fca3e
 * **relay**: a TCP relay from 127.0.0.1:``--listen`` to 127.0.0.1:``--to``, the local gate's tunnel.
 """
 from __future__ import annotations

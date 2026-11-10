@@ -13,13 +13,7 @@ from pathlib import Path
 
 import pytest
 
-<<<<<<< 99c8914848
-from verity.core.protocols.certifier.window_charge import Advice as W
-||||||| merged common ancestors
-from verity.core.protocols.certifier.window_charge import Window as W
-=======
-from verity.ml.protocols.certifier.window_charge import Window as W
->>>>>>> 7af4d24fca3e
+from verity.ml.protocols.certifier.window_charge import Advice as W
 
 HERE = Path(__file__).resolve().parent
 
