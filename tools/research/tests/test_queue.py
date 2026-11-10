@@ -2932,6 +2932,17 @@ def test_the_preflight_refuses_a_head_whose_merge_onto_next_breaks_an_invariant_
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is False and _no_worktree_left(world)
 
 
+@pytest.mark.parametrize("deadline, timeout", [(125.0, 120.0), (math.inf, None)])
+def test_a_preflight_check_waits_what_is_left_of_its_budget_and_with_none_to_run_out_waits_on_its_end(world, monkeypatch,
+                                                                                                   deadline, timeout):
+    """A check's timeout is what is left of the budget when it starts; under an unbounded budget it has none, since
+    `subprocess.run` can't wait an infinite one (OverflowError)."""
+    asked = []
+    monkeypatch.setattr(subprocess, "run", lambda argv, **kw: asked.append(kw["timeout"]) or subprocess.CompletedProcess(argv, 0))
+    got, why = _preflight(world, budget_s=deadline - 5.0, clock=lambda: 5.0)._run(["true"], world.tmp, deadline)
+    assert (got.returncode, why, asked) == (0, "", [timeout])
+
+
 def test_the_preflight_refuses_a_head_a_landing_gate_at_main_fails_with_its_fix_and_notes_one_that_cant_judge(world, capsys):
     """The sync leaves out what a landing gate refuses; the preflight says so at mark time, and a gate that can't judge there is
     a note, since the sync judges again."""
