@@ -16,8 +16,8 @@ whose incorrect output can forfeit downstream work (a noise or form proof block 
 `influence`, which its harm counts.
 
 **Cost.**  Per touched statement plus per proved proof block, as Flock does: subcircuit `s` cut into statements of `c` proof blocks costs
-`touched_s(k; c) * (a0 + a1 c) + k * (b + replay)`, a statement being touched when the draw meets it.  Everything is
-committed at serve time whatever the draw: every proof block's outputs (`commit_bits`, `commit_rows`),
+`touched_s(k; c) * (a0 + a1 c) + k * (b + replay)`, a statement being touched when the sample meets it.  Everything is
+committed at serve time whatever the sample: every proof block's outputs (`commit_bits`, `commit_rows`),
 and the fixed serve-time commitments of every scale (`TensorCommit`: the Commit's taps, PoUW's work blocks, the remote audit's
 receipts, the bits a work block pins), so a plan's cost is the whole serve-time and proving total.  One tensor committed
 at several scales is counted once per scale, and `overlaps` prices what committing it once would save.  A plan is thus a
@@ -169,7 +169,7 @@ class ReplayGrain:
 
 @dataclass(frozen=True)
 class TensorCommit:
-    """One tensor committed at serve time by one scale, whatever the draw: `nbytes` hashed over the window, at the model's
+    """One tensor committed at serve time by one scale, whatever the sample: `nbytes` hashed over the window, at the model's
     per-byte rate (`CostModel.commit_per_bit`) unless `cost` is measured.  `scale` names who commits it (the Commit's taps,
     PoUW's A rows or tile leaves, the remote audit's receipts, a work block's pin) and `tensor` what; one tensor under two
     scales is an overlap (`overlaps`).  Decode is latency-bound: a decode step hashes `decode_bytes` of it, and `chain` is
@@ -210,16 +210,8 @@ class CostModel:
     staged_per_unit: float = 0.0
     commit_per_bit: float = 0.0
     commit_per_row: float = 0.0
-<<<<<<< 99c8914848:verity/core/protocols/sampled_proofs/optimize.py
     serve: tuple[TensorCommit, ...] = ()
-    replay: Mapping[str, ReplayDomain] = field(default_factory=dict)
-||||||| merged common ancestors:verity/core/protocols/sampled_proofs/optimize.py
-    serve: tuple[Commitment, ...] = ()
-    replay: Mapping[str, ReplayDomain] = field(default_factory=dict)
-=======
-    serve: tuple[Commitment, ...] = ()
     replay: Mapping[str, ReplayGrain] = field(default_factory=dict)
->>>>>>> 7af4d24fca3e:verity/core/protocols/spot/optimize.py
     sigma: float = 0.0
     source: str = ""
     shared: bool = False
@@ -964,111 +956,6 @@ PROVING_ONLY = 0.0
 @dataclass(frozen=True)
 class Grain:
     """One uniform partition of a window, as `Partitioning.Model` states one: `units` proof blocks (n) of `work` each (s),
-<<<<<<< 99c8914848:verity/core/protocols/sampled_proofs/optimize.py
-    each `out_bits` wide (b, what a wrong one exports), committing `commit_bytes` at serve time whether drawn or not (b(s),
-    its share of every byte the window commits under this partition), and costing `prove` when drawn (c(s), its
-    statement's share included)."""
-
-    name: str
-    units: int
-    work: float
-    out_bits: float
-    commit_bytes: float
-    prove: float
-
-    def __post_init__(self) -> None:
-        if self.units < 1 or not self.work > 0 or not min(self.out_bits, self.commit_bytes, self.prove) >= 0:
-            raise ValueError(f"grain {self.name!r}: needs units >= 1, work > 0, and non-negative widths and costs")
-
-
-def loc_bits(n: int, k: int) -> float:
-    """At least Lean's `locBits n K`, log2 of sum_{j <= K} C(n, j): 0 at K = 0, n H2(K/n) up to K = n/2 and n past it
-    (`consumers.location_bits`' bound)."""
-    if k <= 0:
-        return 0.0
-    if 2 * k >= n:
-        return float(n)
-    x = k / n
-    return n * (-x * log2(x) - (1 - x) * log2(1 - x))
-
-
-def leak_count(g: Grain, ell: float) -> int:
-    """`ExfiltrationOptimum`'s K: the most wrong proof blocks a leak target of `ell` bits allows, the largest K <= n with
-    b K + locBits(n, K) <= ell, by `loc_bits`, so the K it returns is certified."""
-    if not ell >= 0:
-        raise ValueError("a leak target is at least 0 bits")
-
-    def ok(k: int) -> bool:
-        return g.out_bits * k + loc_bits(g.units, k) <= ell
-
-    lo, hi = 0, g.units
-    if ok(hi):
-        return hi
-    while hi - lo > 1:
-        mid = (lo + hi) // 2
-        lo, hi = (mid, hi) if ok(mid) else (lo, mid)
-    return lo
-
-
-def work_draws(g: Grain, target: float, delta: float) -> float:
-    """`Achievability`'s law on equal proof blocks for the free-compute target C: each drawn with probability
-    min(1, Λ s / C), so (ns/C) Λ draws, `GranularityOptimum`'s cost over c(s), while s Λ <= C, and every one past it."""
-    return g.units * min(1.0, log(1 / delta) * g.work / target)
-
-
-def leak_draws(g: Grain, ell: float, delta: float) -> float:
-    """`ExfiltrationOptimum`'s achieving law for a leak target of `ell` bits: n Λ / (K + 1) draws, at most n, and none once
-    every proof block may be wrong."""
-    k = leak_count(g, ell)
-    return 0.0 if k >= g.units else min(float(g.units), g.units * log(1 / delta) / (k + 1))
-
-
-def grain_costs(grains: Iterable[Grain], delta: float, *, h: float, weight: float = 1.0, work: float | None = None,
-                leak: float | None = None) -> list[dict]:
-    """Each partition's expected cost at one target, the free-compute target `work` (C) or the exfiltration target `leak`
-    (bits), at `delta`, in the grains' order: `prove`, c(s) times the target's draws; `commit`, n b(s) h, paid on every
-    proof block; and `total`, proving plus `weight` times the commitment (`PROVING_ONLY` prices proving alone, Lean's
-    model)."""
-    if (work is None) == (leak is None):
-        raise ValueError("one target: work (C) or leak (bits)")
-    if not 0 < delta < 1 or not weight >= 0 or not h >= 0 or (work is not None and not work > 0):
-        raise ValueError("needs 0 < delta < 1, weight >= 0, h >= 0 and a positive work target")
-    rows = []
-    for g in grains:
-        draws = work_draws(g, work, delta) if work is not None else leak_draws(g, leak, delta)
-        prove, commit = draws * g.prove, g.units * g.commit_bytes * h
-        rows.append({"grain": g.name, "work": g.work, "units": g.units, "draws": draws, "prove": prove,
-                     "commit": commit, "total": prove + weight * commit})
-    return rows
-
-
-def grain_optimum(grains: Iterable[Grain], delta: float, **kw) -> dict:
-    """`grain_costs`' cheapest partition, the first of the grains' order on a tie."""
-    rows = grain_costs(grains, delta, **kw)
-    if not rows:
-        raise ValueError("no partition to choose from")
-    return min(rows, key=lambda r: r["total"])
-
-
-def sqrt_grain(beta: float, h: float, target: float, o: float, delta: float, weight: float = 1.0) -> float:
-    """The free-compute target's optimal proof-block work when c(s) = f + o s and every proof block commits `beta` bytes:
-    the s minimizing (f + o s)(F/C) Λ + w (F/s) β h, which is s* = √(w β h C / (o Λ)), whatever F and f, while s* Λ <= C."""
-    return sqrt(weight * beta * h * target / (o * log(1 / delta)))
-
-
-__all__ = ["Candidate", "TensorCommit", "CostModel", "Grain", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
-           "Objective", "PROVING_ONLY", "Plan", "PlanBounds", "ReplayDomain", "SHA512_ANDS", "SHA512_ROWS", "TemplateCost", "acceptance_parts",
-           "certify", "density_bound", "density_exact", "fill", "for_budget", "for_target", "frontier", "grain_costs",
-           "grain_optimum", "leak_count", "leak_draws", "ln_bound", "ln_upper", "loc_bits", "max_harm",
-           "max_harm_check", "needs_benchmark", "overlaps", "perturb", "pinned_ands", "replay_cost", "row_ands", "sensitivity",
-           "sqrt_grain", "structure", "template_cost", "touched", "weigh", "work_draws", "work_law"]
-||||||| merged common ancestors:verity/core/protocols/sampled_proofs/optimize.py
-__all__ = ["Candidate", "Commitment", "CostModel", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
-           "Objective", "Plan", "PlanBounds", "ReplayDomain", "SHA512_ANDS", "TemplateCost", "acceptance_parts", "certify", "density_bound",
-           "density_exact", "fill", "for_budget", "for_target", "frontier", "ln_bound", "ln_upper", "max_harm",
-           "max_harm_check", "needs_benchmark", "overlaps", "perturb", "replay_cost", "row_ands", "sensitivity", "structure",
-           "template_cost", "touched", "weigh", "work_law"]
-=======
     each `out_bits` wide (b, what an incorrect one exports), committing `commit_bytes` at serve time whether sampled or not (b(s),
     its share of every byte the window commits under this partition), and costing `prove` when sampled (c(s), its
     statement's share included)."""
@@ -1556,9 +1443,9 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
     return best | {"bound": bound, "theta": theta}
 
 
-__all__ = ["Candidate", "Commitment", "CostModel", "Grain", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
+__all__ = ["Candidate", "CostModel", "Grain", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
            "OVERFLOW", "Objective", "PROVING_ONLY", "Plan", "PlanBounds", "ReplayGrain", "SHA512_ANDS", "SHA512_ROWS",
-           "TemplateCost",
+           "TemplateCost", "TensorCommit",
            "CHORDS", "Cell", "KAPPAS", "acceptance_parts",
            "certify", "density_bound", "density_exact", "fill", "for_budget", "for_target",
            "frontier", "grain_costs", "grain_optimum", "leak_count", "leak_draws", "ln_bound", "ln_upper", "loc_bits",
@@ -1566,4 +1453,3 @@ __all__ = ["Candidate", "Commitment", "CostModel", "Grain", "HM96_ANDS", "LN_BIT
            "registration_cap", "replay_cost", "row_ands", "sensitivity", "sqrt_grain", "structure", "template_cost",
            "touched", "two_stage_design", "two_stage_exfil", "two_stage_price", "two_stage_rankin", "two_stage_statements", "weigh",
            "work_draws", "work_law"]
->>>>>>> 7af4d24fca3e:verity/core/protocols/spot/optimize.py

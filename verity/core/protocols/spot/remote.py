@@ -230,11 +230,6 @@ def coin_json(o: LiveOpening) -> dict:
     return {"after": o.after.hex(), "coin": o.coin.hex(), "epoch": o.epoch, "index": o.index, "label": o.label}
 
 
-<<<<<<< 99c8914848:verity/core/protocols/sampled_proofs/remote.py
-def close_session(session: ChallengePhase, ended: str | None) -> ChallengerClose:
-||||||| merged common ancestors:verity/core/protocols/sampled_proofs/remote.py
-def close_session(session: Session, ended: str | None) -> ChallengerClose:
-=======
 def release_frames(commitment: LiveCommitment, openings: Sequence[LiveOpening]) -> list[dict]:
     """What a withheld session's close answers: `commitment` and `openings` in order, in frames whose heads are each at
     most `RELEASE_HEAD` bytes, every frame but the last ``releasing {first, openings}`` (`first` the index in `openings`
@@ -256,8 +251,7 @@ def release_frames(commitment: LiveCommitment, openings: Sequence[LiveOpening]) 
     return [*frames, last]
 
 
-def close_session(session: Session, ended: str | None) -> ChallengerClose:
->>>>>>> 7af4d24fca3e:verity/core/protocols/spot/remote.py
+def close_session(session: ChallengePhase, ended: str | None) -> ChallengerClose:
     """The session's close, once: sign the release log's lines as the challenger wrote them and how the session `ended`
     (None: its client closed it) at the key's next leaf, and write it to the directory (`CLOSE`)."""
     if session.close is not None:
@@ -796,17 +790,7 @@ def trusted_session(directory: str | os.PathLike, heads: Sequence[str | os.PathL
     return Ch.session_named(audited, key, session_files(d), verify)
 
 
-<<<<<<< 99c8914848:verity/core/protocols/sampled_proofs/remote.py
-__all__ = ["CLOSE", "HEADER", "HELLOS", "KEY", "MAX_BATCH", "MAX_HEAD", "RECORD", "RELEASES", "ROOT_BYTES",
-           "RemoteChallenger", "ChallengePhase", "close_session", "greet", "hello_lines", "ledger_lines", "log_lines",
-           "main_lines", "open_session", "released_roots", "serve", "session_files", "trusted_session"]
-||||||| merged common ancestors:verity/core/protocols/sampled_proofs/remote.py
-__all__ = ["CLOSE", "HEADER", "HELLOS", "KEY", "MAX_BATCH", "MAX_HEAD", "RECORD", "RELEASES", "ROOT_BYTES",
-           "RemoteChallenger", "Session", "close_session", "greet", "hello_lines", "ledger_lines", "log_lines",
-           "main_lines", "open_session", "released_roots", "serve", "session_files", "trusted_session"]
-=======
 __all__ = ["CLOSE", "HEADER", "HELLOS", "KEY", "MAX_BATCH", "MAX_HEAD", "RECORD", "RELEASES", "RELEASE_HEAD",
-           "ROOT_BYTES", "RemoteChallenger", "Session", "close_session", "greet", "hello_lines", "ledger_lines",
+           "ROOT_BYTES", "RemoteChallenger", "ChallengePhase", "close_session", "greet", "hello_lines", "ledger_lines",
            "log_hello", "log_lines", "main_lines", "open_session", "release_frames", "released_roots", "serve",
            "session_files", "trusted_session"]
->>>>>>> 7af4d24fca3e:verity/core/protocols/spot/remote.py
