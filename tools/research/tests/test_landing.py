@@ -552,6 +552,32 @@ def test_a_detached_train_launch_given_a_train_sh_runs_a_copy_of_it_in_the_clone
     assert ids == [rid] and f"train: own in {repo}" in tail, tail
 
 
+def test_a_train_launch_given_a_deselect_list_passes_it_to_train_sh(tmp_path, monkeypatch):
+    from research.landing import train_launch
+
+    got = []
+    monkeypatch.setattr(subprocess, "run", lambda argv, **kw: got.append(argv) or subprocess.CompletedProcess(argv, 0, "", ""))
+    train_launch(tmp_path, "c0ffee", "m1", False, deferred="pytest", shard="1/3", deselect="/data/vqueue/live/deselect.sent")
+    train_launch(tmp_path, "c0ffee", "m1", False, deferred="pytest")
+    assert got[0][got[0].index("--deselect") + 1] == "/data/vqueue/live/deselect.sent" and "--deselect" not in got[1]
+
+
+def test_plan_shards_asks_the_planner_for_its_own_n_at_most_max_shards_or_exactly_n(tmp_path, monkeypatch):
+    """`plan_shards` hands `PLAN_JOB` the steps, and `--max-shards M` (drive's `auto:MAX`) or `--n N` (the loop's `auto:N`)."""
+    asked = []
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    monkeypatch.setattr(landing, "detach", lambda repo, argv, env: asked.append(argv) or {"dir": "job", "pid": 1})
+    got = [landing.plan_shards(tmp_path, "t" * 40, "pytest,lean-build", **kw) for kw in ({}, {"max_shards": 4}, {"n": 6})]
+    assert [a[:6] for a in asked] == [["sh", "-c", landing.PLAN_JOB, "sh", g["out"], "t" * 40] for g in got]
+    assert [a[6:] for a in asked] == [["--deferred", "pytest,lean-build", *more] for more in ([], ["--max-shards", "4"],
+                                                                                             ["--n", "6"])]
+    assert all(Path(g["out"]).parent == tmp_path / landing.LAUNCHES and g["dir"] == "job" for g in got)
+
+
+def _plan_doc(n: int) -> dict:
+    return {"kind": "check-shard-plan/v1", "n": n, "digest": "d" * 64, "predicted_s": 3600.0}
+
+
 def test_a_check_of_a_candidate_sends_the_upstream_build_only_when_what_lean_agreement_checks_changed(world, monkeypatch):
     """`beside_args`: lean-agreement runs (`--agreement`) only when the merges above the base change what it checks, as
     check.py finds against that base, and is skipped by name else; lean-audit fails on a record difference

@@ -34,6 +34,7 @@ from typing import Callable
 
 from . import carry, policy
 from .queue import CHECK_STEPS, PR, Member, Queue, QueueError, StoreLabels, _git, _who, unreviewed
+from .reds import CIRCUIT_KILLED, RATCHET_STEP, job_owner
 
 #: who hears what the queue can't settle
 CI = "@ci"
@@ -60,15 +61,12 @@ LEAN_LAYERS_RE = re.compile(r"^\s+layers: ([A-Za-z][\w.]*) imports ")
 KILLED_RC = (129, 137, 143)
 #: what the Lean check says of a process of its own that was killed (`tools/verity/lean/check.py`: the replay, `--fresh`)
 KILLED_SAYS = "not a kernel verdict"
-#: circuit-check's report of a failure: `FAIL <check> <target>`, and `circuit-check/killed` for a target whose process died
+#: circuit-check's report of a failure: `FAIL <check> <target>`, and `reds.CIRCUIT_KILLED` for a target whose process died
 CIRCUIT_FAIL_RE = re.compile(r"^FAIL (\S+)", re.M)
-CIRCUIT_KILLED = "circuit-check/killed"
 #: states `research status` reports for a run that may still publish an attempt
 ACTIVE = ("submitted", "waiting", "running", "unknown")
 #: check.py's exit for a twin that never took a slot
 NOT_STARTED = 75
-#: the check step that runs the vLLM integration's ratchet gate on the merges above the check's base
-RATCHET_STEP = "ratchet-gate"
 #: the steps of a whole check: every ci.toml job (`--deferred` takes jobs; the preflights are none), those off the merge gate
 #: (policy.toml's `off_gate`: circuit-check, ratchet-gate) among them; what the check that gates a candidate sends (`vqueue_slim.start`)
 AFTER_LANDING = tuple(s for s in CHECK_STEPS if not s.startswith("preflight-"))
@@ -151,9 +149,11 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
                  base: str | None = None, cc_records: bool = False,
                  cc_records_from: str | None = None, shard_plan: str | None = None,
                  ratchet_base: str | None = None, rank: int | None = None,
-                 bookkeeping_warn: bool = False, script_from: Path | None = None) -> tuple[list[str], str] | dict:
+                 bookkeeping_warn: bool = False, script_from: Path | None = None,
+                 deselect: str | None = None) -> tuple[list[str], str] | dict:
     """`train.sh COMMIT MACHINE [--agreement] [--base BASE] [--ratchet-base RBASE] [--shard [auto:]K/N [--shard-plan-file PLAN]]
-    [--cc-records[-from ART@SHA256]]` from the queue's clone (``cc_records``, circuit-check's records step alone): (the run ids it printed,
+    [--deselect FILE] [--cc-records[-from ART@SHA256]]` from the queue's clone (``cc_records``, circuit-check's records step alone;
+    ``deselect``, the tests a `--deferred` run's suites leave out): (the run ids it printed,
     its output's tail); ``detached``, started in the background (`detach`) from a copy of train.sh, which reads nothing by its
     own path (``$0`` only for its usage) and finds the tree from its working directory, and returned at once as the record
     `launched` reads.  Git never prompts (the queue's clone has no credential helper, so train.sh's fetch would wait on a
@@ -169,6 +169,7 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
                  *(["--base", base] if base else []), *(["--ratchet-base", ratchet_base] if ratchet_base else []),
                  *(["--shard", shard] if shard else []),
                  *(["--shard-plan-file", shard_plan] if shard_plan else []),
+                 *(["--deselect", deselect] if deselect else []),
                  *(["--cc-records-from", cc_records_from] if cc_records_from else [])]
     env = {**os.environ, **auth_env(auth), "GIT_TERMINAL_PROMPT": "0", "TRAIN_AS": "ci",
            "CHECK_SLOT_RANK": "" if rank is None else str(rank)}
@@ -264,8 +265,9 @@ def launched(launch: dict) -> tuple[list[str] | None, str]:
     return None, tail
 
 
-#: how long a sharded check of `after_landing_shards = "auto"` waits for its plan (`plan_shards`: gathering the newest checks'
-#: verdict packs to price it takes minutes on the control pod) before it is stopped and the check launches unsharded
+#: how long an auto plan (`plan_shards`: gathering the newest checks' verdict packs to price it takes minutes on the control
+#: pod) may take before it is stopped: a candidate's `auto:N` check is then infra (`vqueue_slim._planned`), and a sharded
+#: check of `after_landing_shards = "auto"` launches unsharded
 PLAN_WAIT_S = 2400
 #: the plan's file in its directory (check.py's `AUTO_PLAN`), which each shard sends as its run's input
 AUTO_PLAN = "check-shard-plan.json"
@@ -278,14 +280,14 @@ PLAN_JOB = ('set -e; d=$1 r=$PWD; t="${TRAIN_TREES:-${1%/*}}/plan-${1##*/}"; mkd
             'uv run -q python tools/verity/check/check.py --shard-plan --out "$d/' + AUTO_PLAN + '" "$@"')
 
 
-def plan_shards(repo: Path, tip: str, steps: str, max_shards: int | None = None) -> dict:
+def plan_shards(repo: Path, tip: str, steps: str, max_shards: int | None = None, n: int | None = None) -> dict:
     """The auto plan of ``tip``'s check of ``steps`` (`PLAN_JOB`: `check.py --shard-plan --deferred STEPS`, at most
-    ``max_shards`` shards), made in the background (`detach`) into a directory of its own under `LAUNCHES`: the record
-    `planned` reads."""
+    ``max_shards`` shards, or ``n`` exactly), made in the background (`detach`) into a directory of its own under `LAUNCHES`:
+    the record `planned` reads."""
     root = Path(tempfile.gettempdir()) / LAUNCHES
     root.mkdir(parents=True, exist_ok=True)
     out = tempfile.mkdtemp(prefix="plan-", dir=root)
-    args = ["--deferred", steps, *(["--max-shards", str(max_shards)] if max_shards else [])]
+    args = ["--deferred", steps, *(["--max-shards", str(max_shards)] if max_shards else []), *(["--n", str(n)] if n else [])]
     return {**detach(repo, ["sh", "-c", PLAN_JOB, "sh", out, tip, *args], {**os.environ, "GIT_TERMINAL_PROMPT": "0"}),
             "out": out}
 
@@ -715,11 +717,11 @@ class Landing:
         self.launch_postland: Callable[..., tuple[list[str], str] | dict] = (
             (lambda repo, commit, machine, steps, agreement=False, no_cache=False, circuit_cache=False, no_regenerate=False,
                     shard=None, base=None, cc_records=False, cc_records_from=None, shard_plan=None, ratchet_base=None,
-                    train_from=None:
+                    train_from=None, deselect=None:
              train_launch(repo, commit, machine, agreement, auth=q.auth, deferred=steps, no_cache=no_cache,
                           no_regenerate=no_regenerate, detached=True, circuit_cache=circuit_cache, shard=shard, base=base,
                           cc_records=cc_records, cc_records_from=cc_records_from, shard_plan=shard_plan,
-                          ratchet_base=ratchet_base, rank=POSTLAND_SLOT_RANK, script_from=train_from))
+                          ratchet_base=ratchet_base, rank=POSTLAND_SLOT_RANK, script_from=train_from, deselect=deselect))
             if launch is train_launch else (lambda repo, commit, machine, steps, **_: self.launch(repo, commit, machine, False)))
         #: a candidate's records run (`vqueue_records.start`): `train.sh SHA MACHINES --deferred lean-audit`, detached, its check
         #: at `POSTLAND_SLOT_RANK`, repairing the locks' bookkeeping where train.sh takes `--bookkeeping-warn`
@@ -796,13 +798,14 @@ class Landing:
         named = {f"suite {r['name']}": r for r in rows or () if isinstance(r, dict) and isinstance(r.get("name"), str)}
         return named or {self._task_unit(tip, task): None}
 
-    def _task_allowed(self, tip: str, task: dict, result: dict, row: dict | None = None) -> policy.Coverage:
-        """Whether an allowance of ``tip``'s policy covers failed graph/v2 ``task`` by its ``result``, with the expired ones that
-        would have: a failed suite of a lean-suites task's by its report ``row`` (`Policy.suite`, as a run's); a test-file's as
-        its suite's (`Policy.suite`, `suite NAME` or `suite NAME::TEST` for each failed test, the latter only when pytest exited
-        1 with failed tests to name); a circuit-check task's by the new failures it names (`Policy.circuit`), fewer than
-        `CIRCUIT_NAMED`; no other kind's."""
-        pol, now, d = self._policy(tip), self.now(), result.get("detail") or {}
+    def _task_allowed(self, tip: str, task: dict, result: dict, row: dict | None = None,
+                      at: str | None = None) -> policy.Coverage:
+        """Whether an allowance of ``tip``'s policy (``at``'s, given) covers failed graph/v2 ``task`` of ``tip`` by its
+        ``result``, with the expired ones that would have: a failed suite of a lean-suites task's by its report ``row``
+        (`Policy.suite`, as a run's); a test-file's as its suite's (`Policy.suite`, `suite NAME` or `suite NAME::TEST` for each
+        failed test, the latter only when pytest exited 1 with failed tests to name); a circuit-check task's by the new
+        failures it names (`Policy.circuit`), fewer than `CIRCUIT_NAMED`; no other kind's."""
+        pol, now, d = self._policy(at or tip), self.now(), result.get("detail") or {}
         if row is not None:
             return pol.suite(str(row["name"]), row, now)
         if task["kind"] == "test-file":
@@ -896,12 +899,12 @@ class Landing:
                 (ok if covered else bad).add(step)
         return ok - bad
 
-    def _only_allowed(self, run: dict) -> bool:
-        """Whether ``run`` failed only on failures its tip's allowances cover: some step failed, and each failed step is
-        `_allowed_steps`'."""
+    def _only_allowed(self, run: dict, at: str | None = None) -> bool:
+        """Whether ``run`` failed only on failures its tip's allowances (``at``'s, given) cover: some step failed, and each
+        failed step is `_allowed_steps`'."""
         dirs = [d for ds in self._shards(run) for d in ds]
         failed = {st.get("step") for d in dirs for st in step_records(d) if st.get("status") == "failed" and not not_run(st)}
-        return bool(failed) and failed <= self._allowed_steps(run["tip"], dirs)
+        return bool(failed) and failed <= self._allowed_steps(at or run["tip"], dirs)
 
     def _lost(self, run: dict, states: dict) -> bool:
         """Whether every twin of ``run`` that hasn't ended has had no readable state (`unknown`) for `LOST_AFTER_S` since its
@@ -965,8 +968,9 @@ class Landing:
         return cache[commit]
 
     def _step_owner(self, step: str, commit: str) -> str | None:
-        """The owner ci.toml at ``commit`` gives job ``step``, None for a step it doesn't declare (a preflight)."""
-        return next((t["owner"] for t in self._jobs(commit) if t["name"] == step and isinstance(t.get("owner"), str)), None)
+        """The owner ci.toml at ``commit`` gives job ``step`` (`reds.job_owner`), None for a step it doesn't declare (a
+        preflight)."""
+        return job_owner(self._jobs(commit), step)
 
     def _handle(self, pr: int) -> str | None:
         if self._prs is None:
