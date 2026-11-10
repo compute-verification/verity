@@ -512,7 +512,7 @@ structure Facts where
   delta : Core.Ratio
   wrong : Nat
   /-- The sample's design; `subset 0`, none sampled, where none is read, at which every unit may be faulty at any δ. -/
-  draw : Core.SamplingDesign := .subset 0
+  draw : Core.Draw := .subset 0
 
 /-- The same sample's bound at `δ`, one-stage's `IntegrityProfile.bound` (`Spot.Bound.boundOf`): its incorrect proof
 blocks at `δ`, read off the sample the facts were established by, with no second sample. -/
@@ -1093,7 +1093,7 @@ def windowCheck (p : Params) (clear : List ByteArray) (earlier : Array ByteArray
   if clear.contains clock.digest then refuse s!"{what}: clock: a sync's clock digest unsalted"
   if earlier.contains clock.digest then refuse s!"{what}: clock: an earlier link-window's digest, its salt reused"
   let (prof, _) ← answered what reg x.answer
-  unless prof.levels.map (fun l => (l.name, l.size, l.draw)) == #[(unitLevel, 1, some (Core.SamplingDesign.subset 1))] &&
+  unless prof.levels.map (fun l => (l.name, l.size, l.draw)) == #[(unitLevel, 1, some (Core.Draw.subset 1))] &&
       prof.drawn == #[(unitLevel, 1)] do
     refuse s!"{what}: profile: not the link-window's one unit proved"
 
