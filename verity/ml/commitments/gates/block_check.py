@@ -106,11 +106,14 @@ why (`CAPS_V2`, `LEVELS`): a field of `FIELDS` at K 2 or 3, masked or not; a 4,0
 64); ROWS and LEAF 1 to 16; DR 1 to 28 (a u32 pos's leaf pos >> 4), DP and DV 1 to 32 (u32 ranks); and DR + DP + DV at most
 `LEVELS`. Every binding in it is one Flock block within K_MAX: its unit's useful cells are below its 2^26 slot. Each static
 only adds cells as it grows, and the other fields' decodes cost less, so the costliest bindings are p1024/k3/masked at 16
-rows and LEAF 16, and the caps are chosen there. At a whole node's depths (DR 24, DP 28, DV 1: up to 2^28 blocks, among them
-the 789 GB store's 192,626,953) that unit has 63,989,121 useful cells, 3,119,743 short of 2^26, and a tree level costs
-about 238,000 (three compressions and its sibling's 512 input bits): room for 13 levels past those 53. `LEVELS` takes 11.
-A fourth round (32 more word rounds, about 15M ANDs) has no room at any depth, and 64 sketch rows (about 2.9M more cells)
-would take the levels' room.
+rows and LEAF 16, and the caps are chosen there, from its parts' lowerings summed (an upper bound on the whole lowering's
+ANDs). At a whole node's depths (DR 24, DP 28, DV 1: up to 2^28 blocks, among them the 789 GB store's 192,626,953) that
+unit has at most 63,989,121 useful cells, 3,119,743 short of 2^26, and a tree level costs 235,000 to 239,000 (three
+compressions and its sibling's 512 input bits): room for 13 levels past those 53. `LEVELS` takes 11 and keeps two: the
+costliest binding it admits, DR 1, DP 31, DV 32, has at most 66,615,297, 493,567 short, and every binding of at most 66
+levels fits. p512's and the toy's fit at every depth the width caps admit. A fourth round (32 more word rounds, about 15.1M
+ANDs) takes the masked p1024 unit past 2^26 even at DR = DP = DV = 1, and 64 sketch rows (about 2.9M more cells) take it
+past at a whole node's depths.
 """
 from __future__ import annotations
 
@@ -674,8 +677,8 @@ BlockOpeningCheck = CompositeDefinition(
 LEVELS = 64
 #: v2's caps, each a static's largest value and the reason a binding past it is refused
 CAPS_V2 = (
-    ("K", 3, "a fourth round is 32 more word rounds at p1024, about 15M ANDs, past the 2^26 cells of a unit's slot at any depth"),
-    ("ROWS", 16, "64 sketch rows are about 2.9M more cells, the room the tree levels take"),
+    ("K", 3, "a fourth round is 32 more word rounds, about 15M ANDs at p1024, past a masked unit's 2^26 cells at every depth"),
+    ("ROWS", 16, "more sketch rows take the room the tree levels use: 64 are about 2.9M more cells"),
     ("LEAF", PER_LEAF, "a receipt leaf holds 16 receipts"),
     ("DR", 28, "a u32 position's receipt leaf, pos >> 4, is below 2^28"),
     ("DP", 32, "a payload's rank and position j are u32s"),
