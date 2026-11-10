@@ -24,6 +24,27 @@ the vectors, the epochs and their census, the rows, the floors, the designs, the
 MMA forms, the table route, the headline's designs, the attack families, the devices and the card table.
 `tests/test_render.py` fails on a table here, so a new vector, design or census row touches only its own data file.
 
+## Interface
+
+What code outside this directory uses, and may. The rest is the model's own and changes with it.
+
+- **The command** `machine-model` ("Commands").
+- **`verity_machine_model.model`**, the data as objects: `DATA` (this `data/`), `device(name)` and `devices()`,
+  `model(data)`, `vectors(data)` and `vector(name, data)`, `census(m, epoch, data)`, `entries(m, data)`,
+  `holds(m, since, until, epoch)`, `attacks(m, epoch, data)`, `all_attacks(data)` and `u_of`.
+- **`verity_machine_model.eps`**, a design's ε: `design(name, data)` and `designs(data)`, `honest(name, data)`,
+  `forms(data)`, `machine(name, data)`, `table(data)`, `setup(d, pi, data)` and `eps(d, pi, q, data)`, with `Design`,
+  `Honest`, `Form`, `PRODUCTS`, `LANES`, `UNI` and `MMA`. `commands.eps` is the same computation as the command
+  prints it.
+- **`verity_machine_model.headline`**, what the Lean headline files are exported from: `spec(data)` and
+  `row(family, reading, data)`, with `READINGS`, `OPERANDS` and `CREDIT`.
+- **`verity_machine_model.capacity`**, certified capacity: `Work`, `Cell` and `cell(pi, groups)`, `tensor_filler`,
+  `lane_filler`, `served` and `TENSOR_CYCLES`.
+- **`verity_machine_model.sheet`**, a device's data sheet: `Sheet`, `sheet(data)`, `row(name)`, `omega(s)` and
+  `lines(s, peaks)`.
+- **`data/` by path**, for a probe or a calculator that reads one file without the package: `census/`, `rows.csv`,
+  `floors.csv`, `table.toml`, `citations.toml`, `designs.toml`, `cover/` and `devices/sm_NN/` ("Layout").
+
 ## Commands
 
 `machine-model` with no command prints every command's usage, each its module's docstring.
