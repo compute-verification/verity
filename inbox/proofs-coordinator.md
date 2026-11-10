@@ -32261,3 +32261,55 @@ With `setupOf_x` (InsSetup; D's `setup` field follows from it) and `hiddenOf_x` 
 - Not yet on the branch: the docs that state the old way, the move script with `MOVES.json`, the kept lock records (from `e98d`), the full Lean check.
 
 **Dates**: both stand. **Runs in flight**: `r20261110-193544-e98d` (the records; its cap ends 23:35Z).
+
+## WEIGHTSEC, Tue 10 Nov 20:11Z: PRF-506: #8226 is pushed in form (A) at `169beb6a834e2a2f45a26a2fdce0cb92f2d91f6f` (a fast-forward; the try passes on the three axioms, the proof is still the one application); its records `r20261110-200136-61e5` and quick tier `r20261110-200227-9ef2` are running (ETA 20:30Z to 21:00Z), so it is not yet ready to mark; body and title rewritten; no witness at a cut that cuts something exists on #8400 or here
+
+**Read.**
+- [read] Your 19:39Z and 19:40Z mailbox entries (`605bbc1a24`): form (A); scratch first; push as a fast-forward if it elaborates with the three axioms; stop if the proof is more than the one application. Nothing newer in the mailbox at 20:10Z.
+
+**What I did, in order.**
+- [run] 19:30Z: #8400's head `c2b87846c9597129f33712cec2e9c139af690335` merged into #8226's head `3a579391f9813386d53ce811ab9a456dbb0a2882` on scratch `cursor/proofs-cross-8226-4b1f`, giving `5e0a916a42b0a3e09309db07a6a0f07d55f62ccd`. One stop, the module docstring of `Security/Proofs/WeightSecurity.lean`, closed by keeping both sides' sentences (`FaultedTwo`'s, then `Cut`'s).
+- [run] `r20261110-193023-9db7` at `5e0a916a42b0`: the file as written fails on #8400. Five errors, one cause: the cut's argument is missing at `faultChannel` (lines 43 and 53) and at `TheftFaulted` (line 58). It ran on vy-nebius-cpu-12, pool `proofs`, before you named `--on auto`.
+- [run] Form (A) is one commit on that merge, `169beb6a834e2a2f45a26a2fdce0cb92f2d91f6f`: `FaultedTwo.lean` only, 19 insertions and 10 deletions. `κ : Cut (Q × Adv) (O → V)` is added after `φ₀`; `Af`, `FaultedUseHard`, `Simulable`, the fault channel and the pattern count are read over `κ.Interiors Cf size φ₀`. The two-stage hypotheses, the budget, `Σ_t ε_t` and the `Faithful` term are untouched.
+- [run] The proof is still the one application, `TheftFaulted C Cf size φ₀ κ … (two_undetected …)`. No lemma that #8400 lacks is used, so your step 3 does not apply.
+- [run] `r20261110-194554-cb9a` (`--on auto`, vy-nebius-cpu-11): the try at `1f125fafc1c76417d136b914b13d5dd3d29c89ef` (scratch `-a7e3`, the same tree `59973adc0e07` as `169beb6a834e`): build 10,386 jobs, lean exit 0 in 104 s, the three axioms.
+- [run] `r20261110-195624-788f` (`--on auto`, vy-nebius-cpu-1): `lean_changed.py --try Security/Proofs/WeightSecurity/FaultedTwo.lean --siblings` at `169beb6a834e`: "Build completed successfully (10383 jobs)", lean exit 0 in 89 s, no `error` line.
+- [run] Its axiom line: `'WeightSecurity.SecurityProofs.TheftFaultedTwo' depends on axioms: [propext, Classical.choice, Quot.sound]`.
+- [run] Its siblings line: no built module of the package outside the file's importers declares a name it does. 428 modules the slot's tree had not built since their sources changed were not compared.
+- [run] Before the push, at 20:00Z: `research queue status` has no row for #8226 and GitHub shows no label on it. None of the six `queue/*` refs holds `3a579391f981` or `169beb6a834e`. No `queue/*` ref and not `next` is under `169beb6a834e`.
+- [run] 20:00:51Z: pushed `3a579391f9..169beb6a83` to `cursor/proofs-theft-faulted-two-f10d`, a fast-forward, no force. #8226's head on GitHub is `169beb6a834e2a2f45a26a2fdce0cb92f2d91f6f`.
+- [run] The diff against #8400's head is two files and no lock: `Security/Proofs/WeightSecurity/FaultedTwo.lean` (+71) and `Security/Proofs/WeightSecurity.lean` (+6 −3).
+- [run] A trial merge of `169beb6a834e` with `main` at `5482988e3496f12fe6683ccf355583a486cf4246` is clean (`git merge-tree`, rc 0).
+
+**Runs at `169beb6a834e`, both `--on auto`, detached. Not ready to mark until both pass.**
+- [run] Records: `r20261110-200136-61e5` on vy-nebius-cpu-1, `python3 tools/verity/lean/lean_changed.py --records Security/Proofs --update`. It took check slot r11 at 20:04Z and was running at 20:10Z.
+- [run] Quick tier: `r20261110-200227-9ef2` on vy-nebius-cpu-8, `uv run tools/verity/check/suites.py --changed e7b03e4a6c89c544365033af6fb6b5e07dab3d27 --quick` (the merge base with `origin/main`, taken from git). It was waiting in line at 20:10Z, 2 checks ahead.
+- [run] Each run's `job.json` records `tree_sha 169beb6a834e2a2f45a26a2fdce0cb92f2d91f6f` and the command above.
+- [guess] ETA: records 20:30Z to 20:50Z; quick tier 20:30Z to 21:00Z, depending on its line.
+- [guess] The records should come out `pass` with nothing regenerated, since #8226 lists nothing and changes no lock. If the run asks for a regenerated record I name it and why before committing anything.
+- [read] When both pass, the line is "ready to mark at `169beb6a834e2a2f45a26a2fdce0cb92f2d91f6f`", to be marked after #8400 has its land verdict.
+
+**#8226's body and title** (20:07Z, `research queue edit 8226`).
+- [run] The body is rewritten as your 19:40Z entry asks: stacked on #8400; the two sentences (a pattern `κ` cuts costs its hint in the channel's strings and nothing in the pattern count; `FaultedUseHard` is rested on at interior replay-block patterns only); decision 1 at the two-stage audit, with the statement changed from "every pattern" to "interior patterns" in this PR; no lock record; the waits-on-Daniel line is gone.
+- [run] Its "Checked" section names `788f` (passed) and the two runs above as launched and not yet read. I update it with their verdicts when I read them.
+- [run] The title's parenthetical changed from "(stacked on #8224, waits on Daniel)" to "(stacked on #8400)". You named the body only; the title carried the same stale line. Say if you want it back.
+- [read] #8226's base on GitHub is still #8224's branch, `cursor/proofs-theft-faulted-f10d`, which is why it has no queue row. `research merge`'s sweep retargets a PR onto `main` once its base branch's tip is on `main` (`merge.py`, `moved`), which #8400's landing does for #8224's tip. I changed no base.
+
+**The witness.**
+- [read] #8226 has none: `FaultedTwo.lean` holds the one theorem.
+- [run] The lock holds it to none: at `169beb6a834e`, `TheftFaultedTwo` is no key of `guarantees` or `witnesses` in `Security/lean-audit.json`, and neither is `TheftServedTwo`.
+- [read] #8400's toy does not give the new form's case. `TheftFaulted`'s witnesses in the lock are `TheftFaultedHonest` and `TheftFaultedNontrivial`, both at `ToyServed` with `Cut.none` (`FaultI := (Cut.none (Unit × Unit) (Unit → Fin 16)).Interiors Cf size none`), and `Cut.none` has `H := Empty`.
+- [read] So they show `TheftFaulted`'s premises hold together, and its bound fails at the verifier that accepts everything, only where nothing is cut: every pattern interior, no hint in the channel. That is form (B)'s case.
+- [read] "The interior set is not empty" holds always: `φ₀` is interior by `Or.inl rfl`. The case that says something past `Cut.none` is: `κ` cuts some pattern (a hint in `S`) and some pattern other than `φ₀` stays interior (so `FaultedUseHard` is taken at a real fault).
+- [read] No instance of that case is on #8400 or #8226. At cuts other than `Cut.none`, #8400 has general lemmas under hypotheses on `C` and `Cf` (`cuts_tokenGate`, `cuts_oneToken`, `cuts_release`, `not_interior_of_cuts`, `card_forcedChannel_le`, `card_releaseChannel_le`), and no closed instance. `TheftFaulted` itself is applied in one place, `FaultedTwo.lean`.
+- [read] The toy doesn't instantiate `TheftFaultedTwo` on the two-stage side either: its run is `ToyServed.honestRun` under `Served.UndetectedLe 1 0`, not windows audited by a `CompiledTwo` with `KS`, the scope and `WindowCap`. `TheftServedTwo` has no witness of its own either.
+- [read] The two-stage pieces it composes have theirs in the lock: `CapTwo` has `honest` and `nontrivial`; `SpotKSTwo` has `nontrivial` only and is in `unwitnessed`.
+- [guess] Does #8226 need one? Not by the lock. If form (A) is to be shown non-vacuous past `Cut.none`, the witness belongs to `TheftFaulted`: a second `honest` entry, a toy whose cut cuts one pattern and leaves another interior, with `FaultedUseHard` and `Simulable` holding together there. That is a new lemma and a lock line on a listed guarantee, so a PR of its own after #8400, not #8226.
+- [guess] I have not built that witness and start nothing on it without your word.
+
+**Standing.**
+- [run] Scratch branches, none deleted: `cursor/proofs-cross-8226-4b1f` at `169beb6a834e` (what #8226 now holds); `-a7e3` at `1f125fafc1c7` (the probe: same tree, but its message says "not decided", so I did not push it to the PR); `-7d2e` at `d759d47c0242`, superseded.
+- [run] Nothing pushed to #8512, #8527, #8400 or #8224. No mark, no PR opened.
+- [run] Checkpoint note `20261110T2010Z-checkpoint-weightsec` is synced.
+
+I end my turn here. Resume me to read `r20261110-200136-61e5` and `r20261110-200227-9ef2`.
