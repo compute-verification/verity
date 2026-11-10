@@ -12,13 +12,15 @@ call whose every operand is one whole parameter row or one whole output of one u
 
 * the mask's cut: per round k < 4 a `DsaTopKDigitCount_v1` a block and a `DsaTopKDigitPick_v1`, then a `DsaTopKMaskBlock_v1` a
   block, each reading its block of the scores and n, the Call's operands, and the outputs of the units before it;
-* the index: a `DsaMaskPositions_v1` a block, of that block's mask, and the merge; then a `DsaPositionsChunk_v1` a chunk of
+* the index: a `DsaMaskPositions_v1` a block, of that block's mask unit's output, and the merge of their lists and counts;
+  then a `DsaPositionsChunk_v1` a chunk of
   `dsa_topk_reads.CHUNK` slots, chunk k of the merge's slots at index row ``c[k]``, and a `DsaPositionsSlot_v1` a slot, slot j
   of chunk j // CHUNK at index row ``i[j mod CHUNK]``;
 * TOPK reads of the table, READ's, each a call: read j at slot unit j's position with the Call's opening (root, domain, row[j],
   salt[j], path[j]).
 
-The index rows are inputs so that one chunk template and one slot template serve every instance; where ``c[k]`` = k and
+It is this cut at every N: also up to `WHOLE_MAX` keys, where `dsa_topk_reads.cut` takes the mask as one unit, which no long
+row is.  The index rows are inputs so that one chunk template and one slot template serve every instance; where ``c[k]`` = k and
 ``i[k]`` = k (`index_values`, what the verifier supplies) it returns (kv, ok) as `DsaTopKReadRows_v1` does.  At the served
 statics (`SERVED`, `served`: N = 2^17 keys, TOPK 2,048, blocks of 16,384, `EmbeddingRead_v1{V=2^17, H=576}`) that is 44 + 9 + 64
 + 2,048 + 2,048 = 4,213 units of 56 templates an instance.  `layout` registers it over the window's class (`PROMPT`,
@@ -82,9 +84,9 @@ def _body(B: Any, S: Any, scores: Coll, n: Coll, root: Coll, domain: Coll, row: 
     out: dict[tuple, Coll] = {}
     for u in X.plan(S.N, S.TOPK, S.BLOCK):
         out[u.key] = B.call(u.defn, *_args(u.defn, u.keys, u.wires, out, scores, n))
-    m = len(X.blocks(S.N, S.TOPK, S.BLOCK))
-    mask = Coll(Array(S.N, BL.BIT), concat([out[("mask", b)].refs for b in range(m)]))
-    merged = R.index(B, S.N, S.TOPK, S.BLOCK, mask)
+    lists = [B.call(bind(R.DsaMaskPositions, N=hi - lo, AT=lo, K=S.TOPK), out[("mask", b)])
+             for b, (lo, hi) in enumerate(X.blocks(S.N, S.TOPK, S.BLOCK))]
+    merged = B.call(bind(R.DsaPositionsMerge, M=len(lists), K=S.TOPK), *(o[0] for o in lists), *(o[1] for o in lists))
     chunk, slot = _index_units(S.N, S.TOPK)
     chunks = [B.call(chunk, merged, c[k]) for k in range(c.type.n)]
     slots = [B.call(slot, chunks[j // R.CHUNK], i[j % R.CHUNK]) for j in range(S.TOPK)]
