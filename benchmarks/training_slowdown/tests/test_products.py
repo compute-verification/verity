@@ -2,6 +2,8 @@
 H = 256, past the K at which the GEMM rate rule changes (3^1.5·√(k/32), 235 at the console's k)."""
 from __future__ import annotations
 
+import json
+
 import pytest
 import torch
 import torch.nn.functional as tF
@@ -54,6 +56,59 @@ def test_the_capture_is_frozen_at_4_12_9_under_the_trace_jobs_torch():
         "the capture is frozen at 4.12.9 under torch 2.15.0: a later fix prices at read time, adds what it captures "
         "that is new, and fails closed only for the runs it changes; moving products.CAPTURE or products.TORCH needs "
         "a retrace of every row it moves and the grader's CAPTURE moved with it")
+
+
+RAW = {"count", "phase", "op", "dims", "token_dims", "dtypes", "affected", "widths", "self", "gathered", "rates"}
+PRICE = {"macs", "outputs", "paid", "b_c", "gates_per_mac", "cell_gates"}
+
+
+def test_a_raw_row_has_no_price_and_priced_makes_it_the_row_rows_states():
+    """What a record keeps (`raw_on_dial`) holds each row's operands' dtypes and nothing a price decides, and pricing
+    it after a round trip through JSON gives `rows_on_dial`'s rows at every k of the dial: a record's rows read where
+    the grade prices them are the rows the capture would have stated."""
+    model = Toy()
+    g = capture_step(model, torch.optim.SGD(model.parameters(), lr=1e-3),
+                     lambda m, b: tF.cross_entropy(m(b[0]).flatten(0, 1), b[1].flatten()),
+                     (torch.zeros(B, CTX, dtype=torch.long), torch.zeros(B, CTX, dtype=torch.long)))
+    raw, dial = json.loads(json.dumps(products.raw_on_dial(g))), products.rows_on_dial(g)
+    assert set(raw) == set(dial) - {"gates"} and set(raw["at"]) == set(dial["at"])
+    for a, b in [(raw, dial)] + [(raw["at"][k], dial["at"][k]) for k in raw["at"]]:
+        assert a["k"] == b["k"] and a["p_match"] == b["p_match"]
+        assert all(set(r) == RAW and r["dtypes"] == ["float32", "float32"] for r in a["rows"])
+        assert [products.priced(r) for r in a["rows"]] == b["rows"]
+    for r in raw["rows"]:
+        d, got = r["dims"], products.priced(r)
+        assert set(got) == RAW - {"dtypes"} | PRICE
+        assert (got["macs"], got["outputs"]) == (d["batch"] * d["m"] * d["k"] * d["n"], d["batch"] * d["m"] * d["n"])
+        assert got["paid"] == [formalism.is_paid(x, w) for x, w in zip(r["rates"], r["widths"])]
+        assert got["b_c"] == products.ACC_BITS
+        # an fp32 product of the forward or the backward is priced at the GEMM dtype, and at its own with none
+        assert products.priced(r, None)["gates_per_mac"] > got["gates_per_mac"] == products.priced(
+            r | {"dtypes": ["bfloat16", "bfloat16"]}, None)["gates_per_mac"]
+
+
+def test_rows_that_differ_only_in_a_dtype_their_price_doesnt_read_are_one_priced_row():
+    """Two layers read the same activations, one in fp32 and one cast to fp64: the capture's rows keep them apart by
+    dtype, and at the bf16 GEMM price, which both are wider than, they are one row of count 2, as `rows` has always
+    stated them; priced at their own dtypes they stay apart."""
+    class Wide(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.w1, self.w2, self.w3 = (nn.Parameter(torch.randn(32, 32)) for _ in range(3))
+
+        def forward(self, x):
+            h = tF.linear(x, self.w1)
+            return tF.linear(h, self.w2) + tF.linear(h.double(), self.w3.double()).float()
+
+    model = Wide()
+    g = capture_step(model, torch.optim.SGD(model.parameters(), lr=1e-3), lambda m, b: m(b).square().mean(),
+                     torch.randn(4, 32))
+    raw = products.raw_on_dial(g)["rows"]
+    assert all(r["count"] == 1 for r in raw) and {tuple(r["dtypes"]) for r in raw} == {
+        ("float32", "float32"), ("float64", "float64")}
+    at_bf16, own = products.rows(g)["rows"], products.rows(g, gemm_dtype=None)["rows"]
+    assert len(own) == len(raw) > len(at_bf16) and sorted(r["count"] for r in at_bf16) == [1, 1, 2, 2, 2]
+    assert sum(r["count"] * r["macs"] for r in at_bf16) == sum(r["count"] * r["macs"] for r in own)
 
 
 class Fan(nn.Module):
