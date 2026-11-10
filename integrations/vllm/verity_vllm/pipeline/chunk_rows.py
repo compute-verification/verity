@@ -61,12 +61,17 @@ def reads(tp: Any) -> str:
 def statement(tp: Any) -> dict[str, Any]:
     """`UnitStager`'s statement arguments for chunked template ``tp``: a table read's (``read``) the templated statement at
     `READ_LAYOUT` of the verifier's read template (``structural``: `verity_flock.read_tmpl`, the one template
-    `Flock.ReadNet.check` accepts); every other template's flat statement, its table reads laid out as `reads` says."""
+    `Flock.ReadNet.check` accepts); every other template's flat statement, its table reads laid out as `reads` says, a
+    ``bits`` template's rows zero-padded to whole u16 words (``pad``)."""
     if tp.layout == "read":
         return {"layout": READ_LAYOUT, "structural": True}
-    return {"reads": reads(tp)}
+    return {"reads": reads(tp), **({"pad": True} if tp.layout == "bits" else {})}
 
 
+#: the rows of DSA's long row's index units that the verifier supplies (a chunk's ``c``, a slot's ``j``: each an I32, its index
+#: among its template's units of an instance), by family, and the row format they are committed in, the one place that names it
+INDEX_ROWS = {"DsaPositionsChunk_v1": "c", "DsaPositionsSlot_v1": "j"}
+INDEX_SCHEMA = IF.V2
 #: the row templates whose output row is a row of a request's history table under table reads (`Registered.dsa_table_reads`):
 #: DSA's latent row, the row a long row's `DsaHistoryReads` reads open (`EmbeddingRead_v1`), committed as the table's rows are
 TABLE_ROWS = ("DsaLatentRow_v1",)
@@ -75,7 +80,9 @@ TABLE_ROWS = ("DsaLatentRow_v1",)
 def unit_rows(tp: Any, table_reads: bool = False) -> tuple[list[tuple[str, str, int, list[str]]], list[tuple[str, tuple[int, ...]]]]:
     """Chunked template ``tp``'s rows as `UnitStager` stages them, ``(in_rows, out_rows)``: its Definition's bit rows
     (`interface.unit_rows`) under its cuts (`split_rows.cuts`, a ``SPLITS`` combine's), parameter g's row ``in<g>``, or
-    ``in<g>.<s>`` for its row s when cut. The one exception is a ``ScaledMmS8Coordinate``'s A6 rows, ``x`` (the token's s8
+    ``in<g>.<s>`` for its row s when cut. A ``bits`` template's Definition has bit ports `interface.unit_rows` refuses (a mask
+    of N bits, a digit prefix of 8): each parameter's row is its bits, low first, zero-padded to whole u16 words, as its output
+    rows are, an ``INDEX_ROWS`` row in `INDEX_SCHEMA`. The one exception is a ``ScaledMmS8Coordinate``'s A6 rows, ``x`` (the token's s8
     codes then its f32 scale, row-seg) and ``w`` (``W[c, :]`` then ``sw[c]``, v2), then the v2 output row ``o0``: each operand
     packed with its scale in one row is the layout serving commits (`serving_rows`' s8 row tables), where
     `interface.unit_rows` would give ``x``, ``sx``, ``wrow`` and ``sw`` a row each.  Under ``table_reads`` (the partition
@@ -87,6 +94,11 @@ def unit_rows(tp: Any, table_reads: bool = False) -> tuple[list[tuple[str, str, 
     if tp.layout == "s8":
         bits = 16 * s8_words(int(spec_statics(tp.id)["K"]))
         return [("x", SEG, bits, ["x", "sx"]), ("w", V2, bits, ["wrow", "sw"])], [(V2, (0,))]
+    if tp.layout == "bits":
+        params, ret = tp.fn.signature()
+        index = INDEX_ROWS.get(spec_base(tp.id))
+        return ([(f"in{g}", INDEX_SCHEMA if nm == index else V2, 16 * -(-ty.leaves // 16), [nm]) for g, (nm, ty) in enumerate(params)],
+                [(V2, (j,)) for j in range(len(getattr(ret, "fields", None) or (ret,)))])
     if tp.layout not in ("coord", "cols", "slice", "kchunk", "row", "part", "split", "chain", "stage", "slots", "read", "expert",
                          "fused"):
         raise ValueError(f"{tp.id}: its layout {tp.layout!r} is not a chunked one")

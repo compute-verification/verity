@@ -122,7 +122,9 @@ class Template:
     ``SLICES`` family at every axis 1, ``"kchunk"`` for a ``KCHUNKS`` chunk family, ``"split"`` for a ``SPLITS`` part or combine
     family, ``"chain"`` for a ``CHAINS`` block or end family, ``"stage"`` for a ``STAGES`` stage family, ``"expert"``,
     ``"fused"``, ``"read"`` and ``"slots"`` for the per-expert cut's block GEMMs, fused blocks, table reads and router slots
-    (``EXPERTS``, ``FUSED``, ``READ``, ``SLOTS``); else ``"row"``).
+    (``EXPERTS``, ``FUSED``, ``READ``, ``SLOTS``); ``"bits"`` for a row template that is a Boolean Definition with no word
+    Definition (DSA's long row's units: the mask's cut and the index), whose ports are bits and no words: each port is committed
+    as a bit row, its bits low first and zero-padded to whole u16 words (`chunk_rows.unit_rows`); else ``"row"``).
     ``packed``: a row, coordinate, slice, part, K-chunk, split, chain, stage, expert or slots template with a port that is not 16-bit
     elements, each port's element bits (its parameters', then its return fields'); its ports are committed as their elements'
     bytes. A read's and a fused block's ports are bits (a key, digests, salt and path, and a fused block's operands' bytes),
@@ -141,7 +143,7 @@ def template(t: str) -> Template:
     """Template ``t`` through its word link: the registered Definition it names, bound to exactly ``t``; the word Definition it computes
     (`trace.word_of` for a Boolean Definition), whose signature is the template's word view; refused by name when ``t`` names no
     Definition or a port of its word view is not 16-bit words (a row or coordinate template's: not whole u16 words of one ``PACKED``
-    width)."""
+    width; a Boolean row template with no word Definition is laid out as its bits, ``"bits"``)."""
     hit = _TEMPLATES.get(t)
     if hit is not None:
         return hit
@@ -185,8 +187,10 @@ def template(t: str) -> Template:
               else "kchunk" if spec_base(word) in KCHUNKS.values() else "split" if spec_base(word) in SPLIT_OF
               else "chain" if spec_base(word) in CHAIN_OF else "stage" if spec_base(word) in STAGE_OF
               else LAYOUTS.get(spec_base(word), "row"))
+    if layout == "row" and w is fn and widths == {1}:
+        layout = "bits"
     packed = None
-    if widths != {16} and layout not in ("s8", "read", "fused"):
+    if widths != {16} and layout not in ("s8", "read", "fused", "bits"):
         ports = [*view[:-1], *(getattr(view[-1], "fields", None) or (view[-1],))]
         elems = [ty.width_set() for ty in ports]
         if layout not in ("row", "coord", "slice", "part", "kchunk", "split", "chain", "stage", "expert", "slots") or any(
