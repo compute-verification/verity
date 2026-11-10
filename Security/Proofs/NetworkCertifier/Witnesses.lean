@@ -457,6 +457,7 @@ windows, the second window's operator reads the first window's observations and 
 only the windows before its own (`PeriodOperator`). -/
 theorem PeriodOperator_honest : PeriodOperator readsBefore := by
   intro i o o' h
+  funext t l
   by_cases hi : i = 0
   · simp only [readsBefore, hi, ite_true]
   · simp only [readsBefore, hi, ite_false, h 0 (Fin.pos_iff_ne_zero.2 hi)]
