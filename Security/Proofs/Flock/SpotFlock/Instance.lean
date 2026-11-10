@@ -12,7 +12,7 @@ import all Init.Data.Array.Basic
 `SpotFlock.Instance.held R B desc q c₀`: the auditor's copies (`Held`) of a registration of one template whose one
 request is two units, of which the second stage proves one, over the template's reference statement `R` (`Ref`) and a
 boundary registration `B` (`Bnd`) of one request sampled `subset:1`, at the descriptor `desc` and the statement's query
-`q`, with SPOT's own frame (`frameAt` at the slot map, `revealCode` at the site map, from the code `c₀`). Its round 2
+`q`, with SPOT's own frame (`frameAt` at the slot map, `revealCode` at the address map, from the code `c₀`). Its round 2
 reads `R`'s links and reference registered reads, each present (`some`), since an absent one refuses every run, and no
 wires (`some #[]`), since there is one template. No slot is always checked. A request is two units and the count is
 one since the second stage refuses a request of one unit and a count proving a request whole, and with it every run
@@ -32,12 +32,12 @@ SPOT's own (`built_held`); SPOT's layout embeds the statement (`embeds_held`); r
 
 ## What this does not show
 
-`SpotKSTwo` reads two premises of a registration, `Built h` and `Sites h`; SPOT's layout embeds the statement at every
-registration (`embeds_layoutFor`). At `held R bnd0 …` (`bnd0`, `SpotFlock.InstanceBoundary`'s concrete boundary)
+`SpotKSTwo` reads two premises of a registration, `Built h` and `Addresses h`; SPOT's layout embeds the statement at
+every registration (`embeds_layoutFor`). At `held R bnd0 …` (`bnd0`, `SpotFlock.InstanceBoundary`'s concrete boundary)
 `Built` holds for every `R : Ref`. That does not reduce the two-stage guarantee's non-vacuity to one existence fact.
 Non-vacuity at the instance needs three things, none proved here:
-* `Sites` at the instance: of a site's three conjuncts only `Counted` is proved (`counted_held`);
-* an accepted run: without one, `Sites` holds vacuously and the guarantee says nothing there.
+* `Addresses` at the instance: of an address's three conjuncts only `Counted` is proved (`counted_held`);
+* an accepted run: without one, `Addresses` holds vacuously and the guarantee says nothing there.
   `SpotFlock.InstanceRun` gives one from an honest session of `R` (`ok_held`), but that such a session exists is not
   shown;
 * a concrete `Ref`: a reference statement with hidden outputs and `sha512/row/v2` ports, in the two-stage scope at two
@@ -101,7 +101,8 @@ def reg (B : Bnd) : RegTwo :=
   { first := B.g, ns := #[2], ks := #[1], blockOf := fun ρ _ p => ρ * 2 + p, always := fun _ => false }
 
 /-- **The auditor's copies at the frame `c₀`**: one template, `R`'s, with two VUs, the second stage's count `1`, `R`'s
-links and reference registered reads and no wires, at the descriptor `desc` and the query `q`. -/
+links, each unit of the template reading row `0` of its replay block's one row at a linked port (`rows`), its reference
+registered reads and no wires, at the descriptor `desc` and the query `q`. -/
 def held₀ (R : Ref) (B : Bnd) (desc : Msg) (q : Query) (c₀ : Code) : Held where
   desc := desc
   vus := [#[0, 1]]
@@ -111,6 +112,7 @@ def held₀ (R : Ref) (B : Bnd) (desc : Msg) (q : Query) (c₀ : Code) : Held wh
   names := [R.name]
   links := some R.links
   wires := some #[]
+  rows := R.links.map fun l => ⟨l.template, l.port, 1, #[⟨0, 2, 0, 0⟩]⟩
   xS₀ := fun _ => R.x
   xS₀_ok := fun _ => R.zk
   refReads := fun _ => R.reads
@@ -119,7 +121,7 @@ def held₀ (R : Ref) (B : Bnd) (desc : Msg) (q : Query) (c₀ : Code) : Held wh
 /-- **The auditor's copies**: `held₀`'s, with SPOT's own frame from `c₀`. -/
 noncomputable def held (R : Ref) (B : Bnd) (desc : Msg) (q : Query) (c₀ : Code) : Held :=
   let h := held₀ R B desc q c₀
-  { h with frame := frameAt (slotMap h) (revealCode h (siteMap h) c₀) }
+  { h with frame := frameAt (slotMap h) (revealCode h (addressMap h) c₀) }
 
 variable (R : Ref) (B : Bnd) (desc : Msg) (q : Query) (c₀ : Code)
 
@@ -193,8 +195,8 @@ theorem secondProblem_held {s : Array ℕ} (hne : s.isEmpty = false)
 order (`firstSlots_of`). -/
 theorem firstSlots_held : FirstSlots (held R B desc q c₀) := firstSlots_of _ B.firstK B.pop
 
-/-- **A checked unit is counted**, `SiteHolds`'s first conjunct: its session has one table (`CheckedRun.count_le_one`),
-no slot is always checked and the first stage samples unit slots (`CheckedRun.counted`). -/
+/-- **A checked unit is counted**, `AddressHolds`'s first conjunct: its session has one table
+(`CheckedRun.count_le_one`), no slot is always checked and the first stage samples unit slots (`CheckedRun.counted`). -/
 theorem counted_held {r : CheckedRun} (hr : r.Ok (held R B desc q c₀)) : r.Counted (held R B desc q c₀) :=
   CheckedRun.counted _ hr (CheckedRun.count_le_one hr) rfl (firstSlots_held R B desc q c₀)
 

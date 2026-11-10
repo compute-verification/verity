@@ -18,10 +18,10 @@ and round 2 reads no wire at any port (`wireOf_held`).
 From these, a registered read's slot opens the position the session header gives the unit's instance's row,
 `ReadsRegistered`'s last conjunct, at each arm the instance has:
 * a port a link names (`leafAt_link`): at a slot with no units, stride `0` and position `0`. Round 2 holds a linked
-  read at row `ρ · (leaves / M)`, at the population `M` the boundary record states, which nothing pins, but `ρ = 0`,
-  so the row is `0` whatever `M` is;
+  read at row `ρ · per + x` of the port's rows (`placedOk_linked`, `linkedRow_lt`), with `x < per`; the instance's
+  rows have `per = 1` (`per_held`) and `ρ = 0`, so the row is `0`;
 * the template's own port (`leafAt_own`): at a slot with no units, stride `2` and position the unit's, where each entry
-  round 2 accepts for the read takes the own arm.
+  round 2 accepts for the read takes the own arm (`CheckedRun.leafAt_own`).
 
 Each goes through the entry round 2 accepts (`ReadsAt.regEntry`) rather than an arm fact for every entry, since an
 entry's arm turns on its value, which `ReadsAt.ReadFields` doesn't state.
@@ -111,32 +111,53 @@ theorem drawnPart_ok {r : CheckedRun} (hr : r.Ok (held R B desc q c₀)) :
   rw [Nat.lt_one_iff.1 ht]
   rfl
 
-/-- **A linked read round 2 accepts reads the boundary's population**: at a port a link names, `readOk` accepts an
-entry only where the boundary record states a population `M`, and its arm is then `M` units, slot `u` the sample's
-replay block of `u`'s cell. -/
-theorem armOf_linked {own : Spot.SecondStage.Own} {named : Bool} {p : Spot.SecondStage.Part} {port : String}
+/-- **A linked read round 2 accepts is placed at the port's rows**: at a port a link names, `readOk` accepts an entry
+only where the boundary record states a population `M` and the design gives the port rows `ro`, and its arm is then
+`M · ro.per` leaves, slot `u` at the row `linkedRow` gives, which `placedOk` holds the entry's reads to. -/
+theorem placedOk_linked {own : Spot.SecondStage.Own} {named : Bool} {p : Spot.SecondStage.Part} {port : String}
     {e : Lean.Json} (h : Spot.SecondStage.readOk own named p port e = true) {l : Spot.SecondStage.Link}
     (hl : Spot.SecondStage.linkOf own p.template port = some l) :
-    ∃ M, ReadsAt.armOf own p port e = some (M, fun u => own.sample[p.span u]?) := by
+    ∃ M ro, Spot.SecondStage.rowsOf own p.template port = some ro ∧
+      ReadsAt.armOf own p port e = some (M * ro.per, Spot.SecondStage.linkedRow own p ro) ∧
+      Spot.SecondStage.placedOk own.sample.size p e (M * ro.per) (Spot.SecondStage.linkedRow own p ro) = true := by
+  have hr := h
   unfold Spot.SecondStage.readOk at h
-  unfold ReadsAt.armOf
-  rw [hl] at h ⊢
+  rw [hl] at h
   revert h
-  generalize Spot.getD e "value" = val
+  generalize hv : Spot.getD e "value" = val
   generalize Spot.SecondStage.wireOf own p.template port = wr
   intro h
   rcases val with _ | _ | _ | v | _ | _ <;> rcases wr with _ | w <;>
-    simp only [Bool.and_eq_true, reduceCtorEq] at h ⊢
+    simp only [Bool.and_eq_true, reduceCtorEq] at h
   all_goals
     obtain ⟨-, h⟩ := h
     split at h
-    · exact ⟨_, by rw [‹Spot.nat? (Spot.getD own.boundary "population") = some _›]; rfl⟩
+    · have ha := ReadsAt.armOf_link hv hl ‹_› ‹_›
+      exact ⟨_, _, ‹_›, ha, ReadsAt.placedOk_of_readOk hr (.inl (by simp [hl])) ha⟩
     · cases h
 
+/-- **A linked row is below its rows' `per`** in its replay block's: `linkedRow` gives a row only there. -/
+theorem linkedRow_lt {own : Spot.SecondStage.Own} {p : Spot.SecondStage.Part} {ro : Spot.SecondStage.Rows} {u b : ℕ}
+    (hb : Spot.SecondStage.linkedRow own p ro u = some b) :
+    ∃ a x, own.sample[p.span u]? = some a ∧ x < ro.per ∧ b = a * ro.per + x := by
+  obtain ⟨a, x, hsa, hrow, rfl⟩ := ReadsAt.linkedRow_some hb
+  refine ⟨a, x, hsa, ?_, rfl⟩
+  by_contra hx
+  unfold Spot.SecondStage.linkedRow at hb
+  simp [hsa, hrow, hx] at hb
+
+/-- **The instance's rows are one a replay block**, at every port the design gives rows. -/
+theorem per_held {st rec draw c} {t port : String} {ro : Spot.SecondStage.Rows}
+    (hro : Spot.SecondStage.rowsOf (ownOf (held R B desc q c₀) st rec draw c) t port = some ro) : ro.per = 1 := by
+  have hm : ro ∈ R.links.map (fun l => (⟨l.template, l.port, 1, #[⟨0, 2, 0, 0⟩]⟩ : Spot.SecondStage.Rows)) :=
+    Array.mem_of_find?_eq_some hro
+  obtain ⟨l, -, rfl⟩ := Array.mem_map.1 hm
+  rfl
+
 /-- **A linked read opens the header's position at the instance** at a slot with no units, stride `0` and position
-`0`: round 2 holds a linked read at its replay block's row, `ρ · (leaves / M)` at the population `M` the boundary
-record states (`ReadsAt.pos_of_rowsOk`), and the replay sample is `#[0]` (`sample_ok`), so the read's position is `0`
-whatever `M` is. -/
+`0`: round 2 holds a linked read at row `ρ · per + x` of the port's rows (`placedOk_linked`, `ReadsAt.pos_of_placedOk`),
+with `x < per` (`linkedRow_lt`), and the replay sample is `#[0]` (`sample_ok`) and `per = 1` (`per_held`), so the
+read's position is `0`. -/
 theorem leafAt_link {r : CheckedRun} (hr : r.Ok (held R B desc q c₀)) {own : Array _root_.Flock.Registered.Port}
     {reg : _root_.Flock.Registered.Port} (hown : r.ins.registered = some own) (hreg : reg ∈ own) {p : ℕ}
     (hp : (List.range r.sts[0]!.c.ports.size).find? (fun k => r.sts[0]!.c.ports[k]!.name == reg.name) = some p)
@@ -153,18 +174,21 @@ theorem leafAt_link {r : CheckedRun} (hr : r.Ok (held R B desc q c₀)) {own : A
   have ht0 : templateOf (held R B desc q c₀).ms r.u < 1 := templateOf_lt_of_checked _ hx hu
   obtain ⟨st, rec, draw, e, -, -, -, hrd, hf⟩ := ReadsAt.regEntry _ hx hok hu hset hown hreg
   rw [Nat.lt_one_iff.1 ht0] at hrd
-  obtain ⟨M, ha⟩ := armOf_linked hrd (l := l) hl
-  obtain ⟨-, b, hb, -, hpos'⟩ := ReadsAt.pos_of_rowsOk (ReadsAt.rowsOk_of_readOk hrd ha) hf hj
-  change ((held R B desc q c₀).reg.sample (src r.c₀))[_]? = some b at hb
-  rw [hsam] at hb
-  have hb0 : b = 0 := by simpa using Array.mem_of_getElem? hb
+  obtain ⟨M, ro, hro, -, hpl⟩ := placedOk_linked hrd (l := l) hl
+  obtain ⟨-, b, hb, -, hpos'⟩ := ReadsAt.pos_of_placedOk hpl hf hj
+  obtain ⟨a, x, hsa, hx, rfl⟩ := linkedRow_lt hb
+  have hper := per_held hro
+  change ((held R B desc q c₀).reg.sample (src r.c₀))[_]? = some a at hsa
+  rw [hsam] at hsa
+  have ha0 : a = 0 := by simpa using Array.mem_of_getElem? hsa
   have hleaf : leafAt roots s en = 0 := by simp [leafAt, unitsAt, hs0, hst, hpos]
-  rw [hleaf, hpos', hb0, Nat.zero_mul]
+  rw [hper] at hx
+  rw [hleaf, hpos', ha0]
+  omega
 
 /-- **An own-port read opens the header's position at the instance** at a slot with no units, stride `2` and position
-the unit's: where each entry round 2 accepts for the read takes the own arm (`ReadsAt.armOf_own`), round 2 holds the
-read at the unit's slot of the part's `1·2` units, which the slot places under replay block `0`'s roots
-(`CheckedRun.ownSlot`, `ReadsAt.leafAt_of_rowsOk`). -/
+the unit's: where each entry round 2 accepts for the read takes the own arm, `CheckedRun.leafAt_own` at the instance's
+part of two units from unit `0` (`drawnPart_ok`) and replay block `0` (`rho_ok`). -/
 theorem leafAt_own {r : CheckedRun} (hr : r.Ok (held R B desc q c₀)) {own : Array _root_.Flock.Registered.Port}
     {reg : _root_.Flock.Registered.Port} (hown : r.ins.registered = some own) (hreg : reg ∈ own) {p : ℕ}
     (hp : (List.range r.sts[0]!.c.ports.size).find? (fun k => r.sts[0]!.c.ports[k]!.name == reg.name) = some p)
@@ -172,7 +196,7 @@ theorem leafAt_own {r : CheckedRun} (hr : r.Ok (held R B desc q c₀)) {own : Ar
     (harm : ∀ st rec draw e, decode r.x = some st → jsonMsg r.m₁ = some rec →
       secondDraw (held R B desc q c₀) r.c₀ r.c₁ = some draw →
       Spot.SecondStage.readOk (ownOf (held R B desc q c₀) st rec draw r.c₀) (Spot.SecondStage.byTemplate rec)
-        (r.drawnPart (held R B desc q c₀)) reg.name e = true →
+        (r.drawnPart (held R B desc q c₀)) reg.name e = true → ReadsAt.ReadFields e reg →
       ReadsAt.armOf (ownOf (held R B desc q c₀) st rec draw r.c₀) (r.drawnPart (held R B desc q c₀)) reg.name e =
         some (((held R B desc q c₀).reg.sample (src r.c₀)).size * (r.drawnPart (held R B desc q c₀)).n,
           fun u => some (u - (r.drawnPart (held R B desc q c₀)).lo)))
@@ -184,8 +208,6 @@ theorem leafAt_own {r : CheckedRun} (hr : r.Ok (held R B desc q c₀)) {own : Ar
   have hdp := drawnPart_ok hr
   have hρ := rho_ok hr
   have hu2 := u_lt_two hr
-  have hc1 := CheckedRun.count_le_one hr
-  obtain ⟨D, hdr, hn, hlt, hj⟩ := CheckedRun.readPosAt _ hr hc1 (counted_held _ _ _ _ _ hr) hown hreg hp ht hent
   have hst' : s.stride = (r.drawnPart (held R B desc q c₀)).n := by rw [hdp]; exact hst
   have hpos' : s.pos < (r.drawnPart (held R B desc q c₀)).n := by
     rw [hdp]
@@ -194,13 +216,7 @@ theorem leafAt_own {r : CheckedRun} (hr : r.Ok (held R B desc q c₀)) {own : Ar
   have hu : (held R B desc q c₀).reg.blockOf r.ρ (templateOf (held R B desc q c₀).ms r.u) s.pos = r.u := by
     show r.ρ * 2 + s.pos = r.u
     omega
-  obtain ⟨hU, hP⟩ := CheckedRun.ownSlot _ hr hc1 (firstSlots_held R B desc q c₀) hdr hn hlt hs0 hst' hpos' hu
-  obtain ⟨_, _, _, hx, -, -, -, hok, hu', -, -, -, -, hset⟩ := hr
-  obtain ⟨st, rec, draw, e, hdec, hrec, hdraw, hrd, hf⟩ := ReadsAt.regEntry _ hx hok hu' hset hown hreg
-  have ha := harm st rec draw e hdec hrec hdraw hrd
-  refine ReadsAt.leafAt_of_rowsOk (ReadsAt.rowsOk_of_readOk hrd ha) hf hj hs hU (fun b hb => ?_) hl
-  rw [hP]
-  simp only [Nat.add_sub_cancel_left, Option.some.injEq] at hb
-  exact hb
+  exact CheckedRun.leafAt_own _ hr (CheckedRun.count_le_one hr) (counted_held _ _ _ _ _ hr)
+    (firstSlots_held R B desc q c₀) hown hreg hp hs hs0 hst' hpos' hu harm ht hent hl
 
 end SpotFlock.Instance

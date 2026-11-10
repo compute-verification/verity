@@ -5,6 +5,7 @@ public import Proofs.Flock.Claims.Sampling.SessionSlots
 public import Proofs.Flock.Claims.JsonEq
 public import Proofs.Flock.Claims.ZkDecodeFlock
 public import Definitions.Claims.SamplingTwo
+public import Proofs.Flock.SpotFlock.ScopeFast
 public import Properties.Spot.Members
 public import Proofs.Flock.SpotFlock.Reveals
 public import Flock.Desc
@@ -104,8 +105,8 @@ def zkOk (xS : Msg) : Bool :=
 
 /-- **A two-stage registration's copies, as the auditor holds them**: the descriptor (`desc`), each template's units
 (`vus`), the statement's partition query (`query`), the two-stage registration (`reg`), the second
-stage's count per stratum (`k`), the templates' names (`names`) and the design's links (`links`) and wires (`wires`)
-round 2's statement check reads, template `t`'s reference session statement
+stage's count per stratum (`k`), the templates' names (`names`) and the design's links (`links`), wires (`wires`) and
+the rows their units read (`rows`) round 2's statement check reads, template `t`'s reference session statement
 (`xS₀ t`) in Flock's masked scope (`xS₀_ok`), template `t`'s reference registered reads as round 2 reads a statement's,
 null for none (`refReads t`), and the commitment's layout and the reference prover's framing
 (`frame`). Template `t`'s circuit is its reference statement's (`Held.ms`). The reference reads are a copy of their own,
@@ -120,6 +121,7 @@ structure Held where
   names : List String
   links : Option (Array Spot.SecondStage.Link)
   wires : Option (Array Spot.SecondStage.Wire)
+  rows : Array Spot.SecondStage.Rows
   xS₀ : ℕ → Msg
   xS₀_ok : ∀ t, zkOk (xS₀ t) = true
   refReads : ℕ → Json
@@ -229,6 +231,49 @@ def scopeOk (C : Prog) (Pt : Partition) (d : Design.Two) : Bool :=
     d.replay.rules.length == d.part.classes.length &&
     (d.replay.rules.zip d.part.classes).all (fun p => oneStageOk (strataSizes p.2) p.1) &&
     d.k.length == Pt.strata.length && d.k.all (1 ≤ ·)
+
+/-! ## The scope, compiled in passes over the program
+
+`topoOk`, `partitionsOk` and `scopeOk` compile as `topoFast`, `partitionsFast` and `scopeOkFast`
+(`SpotFlock.ScopeFast`), each proved equal to the check as stated (`@[csimp]`), so the verifier decides the scope in
+passes over the program. -/
+
+theorem constAt_eq_arr (C : Prog) (g : ℕ) : constAt C g = constArr C.gates.toArray g := by
+  simp only [constArr, List.getElem?_toArray]
+  rfl
+
+@[csimp] theorem topoOk_eq_fast : @topoOk = @topoFast := by
+  funext C
+  exact (topoFast_eq C).symm
+
+@[csimp] theorem partitionsOk_eq_fast : @partitionsOk = @partitionsFast := by
+  funext P C
+  rw [partitionsFast_eq, partitionsOk]
+  simp only [constAt_eq_arr]
+
+/-- `scopeOk` with the replay partition's `Nodup` and the replay check read from marks (`nodupFast`, `replaysFast`),
+equal to it (`scopeOk_eq_fast`) and compiled in its place, as `topoOk` and `partitionsOk` compile as `topoFast` and
+`partitionsFast`; as stated, `Nodup` compares every pair and the replay check finds each proof block's replay block by
+position. -/
+def scopeOkFast (C : Prog) (Pt : Partition) (d : Design.Two) : Bool :=
+  topoOk C && partitionsOk Pt C && nodupFast d.part.gates && replaysFast Pt d.part C.gates.length &&
+    d.replay.rules.length == d.part.classes.length &&
+    (d.replay.rules.zip d.part.classes).all (fun p => oneStageOk (strataSizes p.2) p.1) &&
+    d.k.length == Pt.strata.length && d.k.all (1 ≤ ·)
+
+@[csimp] theorem scopeOk_eq_fast : @scopeOk = @scopeOkFast := by
+  funext C Pt d
+  unfold scopeOk scopeOkFast
+  rw [nodupFast_eq]
+  cases hp : partitionsOk Pt C
+  · simp only [Bool.and_false, Bool.false_and]
+  · cases hn : decide d.part.gates.Nodup
+    · simp only [Bool.and_false, Bool.false_and]
+    · have hlt : ∀ g ∈ Pt.gates, g < C.gates.length := by
+        unfold partitionsOk at hp
+        simp only [Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq] at hp
+        exact hp.1.1.1.2
+      rw [replaysFast_eq (of_decide_eq_true hn) hlt]
 
 /-- **The replay layout fits the members' files**, decided: the registration's templates are the members, each with
 the design's count `k`; each population slot `ρ` of `l` is unit `ρ`, each member `t` has room for its `n_t` units,
@@ -384,12 +429,12 @@ def partsAt (q : ℕ) : Array Spot.SecondStage.Part := ((List.range h.ms.length)
 /-- **What the verifier holds of the run** as round 2's statement check reads it (`SecondStage.Own`), at the run's
 statement `st`, round 1's record `rec`, the second stage's draw and round 0's coin: the replay sample and the parts in
 it (`partsAt`, where a wired read finds its writer's), the interior and boundary registrations' records, the second
-draw's units, the design's links and wires and the templates' reference headers and registered reads, which the
-registration fixes before the run. -/
+draw's units, the design's links and wires and the rows their units read, and the templates' reference headers and
+registered reads, which the registration fixes before the run. -/
 def ownOf (st : Roots) (rec draw : Json) (c₀ : FlockDeploy.Coin) : Spot.SecondStage.Own :=
   { sample := h.reg.sample (src c₀), parts := some (partsAt h (h.reg.sample (src c₀)).size), interior := rec,
     boundary := st.record, drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, wires := h.wires,
-    refs := refsOf h, refReads := refRegisteredOf h }
+    rows := h.rows, refs := refsOf h, refReads := refRegisteredOf h }
 
 /-- **Round 2's statement check passes template `t`'s statement `S`** against the template's part, with what the
 verifier holds of the run (`own`): no failing check (`SecondStage.stmtCodes` at `partAt`, the header placed at the

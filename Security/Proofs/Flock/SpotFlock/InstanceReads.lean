@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.SpotFlock.InstanceSites
+public import Proofs.Flock.SpotFlock.InstanceAddresses
 public import Proofs.Flock.SpotFlock.DrawnAt
 public import Proofs.Flock.SpotFlock.HeaderRoots
 public import Proofs.Flock.SpotFlock.EntriesAt
