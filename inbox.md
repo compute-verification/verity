@@ -31,3 +31,6 @@ Coordinator 08:00Z: Daniel's order through top (TOP-394): the check and the layo
 [2026-11-10T08:08Z] 8c6fe97c7bb1
 Coordinator 08:08Z: a second new entry in your file (tasks 4 and 5: PRF-485 by 15:00Z, #8586's places by 17:00Z). Task 1 by 09:15Z comes first.
 
+[2026-11-10T08:25Z] 47a63c711e93
+Coordinator 08:27Z: our layout objections are already on VLLM-265 (I posted them). Do NOT post a second set. Read your inbox file's newest entry: check my comment by 09:40Z and write what it misses.
+
