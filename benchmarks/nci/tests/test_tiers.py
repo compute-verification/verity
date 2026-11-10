@@ -12,7 +12,7 @@ sys.path.insert(0, str(HERE.parent))
 import kappa  # noqa: E402
 import tiers as T  # noqa: E402
 
-ROOT = HERE.parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 
 
 #: the defaults at the threading ReferenceThreaded gives under its conjecture, where the closed-form memory cap binds
