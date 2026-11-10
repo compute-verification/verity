@@ -4129,6 +4129,40 @@ def test_the_quick_tier_builds_the_lean_verifier_before_its_tests_and_keeps_that
     assert (lean / ".lake" / "built").read_text() == "from the last PR\n" and not (lean / "stray.olean").exists()
 
 
+def test_the_quick_tier_runs_on_the_heads_merge_onto_mains_tip_and_a_head_that_does_not_merge_there_refuses(world, monkeypatch,
+                                                                                                           capsys):
+    """What lands is a head's merge with `main`, and a head can pass the tier on its own and fail on that merge: a head behind
+    `main` is judged on its merge onto `main`'s tip, its change measured from that tip, and marked at its head."""
+    from research import queue as Q
+
+    world.with_store_remote()
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES})
+    _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
+    world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}), ready=False)
+    moved = _move_main(world, {"m.txt": "main moved\n"})
+    seen = world.tmp / "seen.json"
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
+    monkeypatch.setenv("FAKE_SEEN", str(seen))
+    monkeypatch.delenv("FAKE_FAIL", raising=False)
+    tier = Q.QuickTier(world.dev, str(world.origin), root=world.tmp / "ready")
+
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 0
+    s = json.loads(seen.read_text())
+    assert s["argv"][:3] == ["--quick", "--changed", moved] and {"a.txt", "m.txt"} <= set(s["files"])
+    [wt] = [p for p in (world.tmp / "ready").iterdir() if p.is_dir() and p.name != "logs"]
+    at = _git(wt, "rev-parse", "HEAD")
+    assert _git(wt, "rev-parse", f"{at}^1", f"{at}^2").split() == [moved, h1]
+    assert f"#1's head {h1[:12]} merged onto `main` at {moved[:12]}: the tier runs on {at[:12]}" in capsys.readouterr().out
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is True
+
+    theirs = _move_main(world, {"a.txt": "main's a\n"})
+    world.gh.put(1, h2 := world.change({"a.txt": "a2\n"}, base=h1), ready=False)
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 1
+    assert (f"the quick tier failed: it conflicts with `main` at {theirs[:12]} in a.txt: merge `main` into the branch"
+            in capsys.readouterr().err)
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h2) is False
+
+
 def _move_main(world: World, files: dict[str, str]) -> str:
     moved = world.change(files)
     _git(world.dev, "push", "-q", "origin", f"{moved}:refs/heads/main")
@@ -4436,6 +4470,43 @@ def test_judge_marks_a_pr_whose_head_moved_to_the_same_tree_and_no_other(world, 
     world.gh.put(3, h3, ready=False)
     assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch, repo=world.dev, url=str(world.origin)) == 1
     assert "the head of each of #1, #3" in capsys.readouterr().err                          # two PRs with that tree: neither
+
+
+def test_a_remote_tier_on_a_merge_onto_main_reports_the_head_it_merged_and_judge_marks_that_head(world, monkeypatch, capsys):
+    """A tier on a head's merge onto `main`'s tip runs at a commit that is no PR's head, so `judge`, marking a run whose caller
+    died, marks the head its facts say it merged (`merged`); a checkout that isn't that merge refuses."""
+    from research import queue as Q
+
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "tools/verity/check/slot.py": FAKE_SLOT})
+    _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
+    machine = Machine(world.tmp)
+    tier, _ = _remote_tier(world, monkeypatch, machine)
+    world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}), ready=False)
+    moved = _move_main(world, {"m.txt": "main moved\n"})
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
+    monkeypatch.setenv("FAKE_SEEN", str(world.tmp / "seen.json"))
+    monkeypatch.delenv("FAKE_FAIL", raising=False)
+
+    def died(d: Path) -> dict:
+        raise KeyboardInterrupt("injected: the caller is gone")
+
+    tier.fetch = died
+    with pytest.raises(KeyboardInterrupt):
+        Q.ready(world.gh, world.store, 1, "lane-1", tier)
+    flags = machine.launched[-1]
+    rid = flags[flags.index("--id") + 1]
+    facts = json.loads((machine.root / "runs" / rid / "result.json").read_text())["tier"]
+    assert (facts["merged"], facts["base"]) == (h1, moved) and facts["head"] not in (h1, moved)
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is False
+    capsys.readouterr()
+    assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch) == 0
+    assert f"#1 is ready at {h1[:12]} (pr:1@{h1})" in capsys.readouterr().out
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is True
+
+    from research import quick_tier
+    _git(world.dev, "worktree", "add", "-q", "--detach", str(wt := world.tmp / "not-a-merge"), h1)
+    facts = quick_tier.tier(wt, world.tmp / "q", h1, moved, ["true"], merged=main)
+    assert facts["error"] == f"{h1[:12]} isn't {main[:12]} merged onto {moved[:12]}" and facts["merged"] is None
 
 
 JUDGE_REFUSALS = {
