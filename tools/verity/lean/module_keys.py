@@ -472,13 +472,18 @@ def last_path(store: Path, scope: str, mod: str) -> Path | None:
 
 def last(store: Path, scope: str, mod: str) -> dict | None:
     """What the entry ``mod`` of package ``scope`` was last indexed under in ``store`` records of its key (`record`); None
-    when it never was, or that entry is gone or records nothing."""
-    try:
-        key = json.loads(f.read_text())["key"] if (f := last_path(store, scope, mod)) is not None else None
-        e = json.loads(entry_path(store, key).read_text()) if isinstance(key, str) and DIGEST.fullmatch(key) else None
-    except (OSError, ValueError, KeyError, TypeError):
+    when it never was, or that entry is gone or records nothing. The pointer is replaced whole, so one that isn't JSON
+    was damaged on disk: it is removed, and the module's next `put` writes it."""
+    if (f := last_path(store, scope, mod)) is None or not f.is_file():
         return None
-    return e.get("inputs") if isinstance(e, dict) and e.get("module") == mod and e.get("scope") == scope else None
+    try:
+        doc = json.loads(f.read_text())
+    except ValueError:
+        f.unlink(missing_ok=True)
+        return None
+    key = doc.get("key") if isinstance(doc, dict) else None
+    e = entry(store, key, mod, scope) if isinstance(key, str) and DIGEST.fullmatch(key) else None
+    return e.get("inputs") if e is not None else None
 
 
 EXTERNAL = "external"
@@ -686,13 +691,15 @@ def unstored_path(store: Path, key: str) -> Path:
 
 
 def _names(trace: Path) -> set[str] | None:
-    """The artifacts a module's ``trace`` names; None when there is no trace, empty when it isn't a whole one."""
+    """The artifacts a module's ``trace`` names, none when it is of another shape than Lake writes now; None when there
+    is no trace. One that isn't JSON, which a stopped write left and Lake takes for none, is removed."""
+    if not trace.is_file():
+        return None
     try:
         d = json.loads(trace.read_text())
-    except OSError:
-        return None
     except ValueError:
-        return set()
+        trace.unlink(missing_ok=True)
+        return None
     return {s for s in _strings(d.get("outputs")) if ARTIFACT.fullmatch(s)} if isinstance(d, dict) else set()
 
 

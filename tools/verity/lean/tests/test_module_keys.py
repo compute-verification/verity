@@ -642,7 +642,7 @@ def test_a_build_takes_the_trace_of_each_module_it_holds_in_a_version_the_cache_
     assert stage()["took"] == {MK.ABSENT: 1} and not traces["R.B"].exists(), "R.B: its key is not in the index"
     assert stage()["took"] == {} and traces["D.X"].exists() and traces["R"].exists() and other.exists()
     traces["R"].write_text('{"depHash": "3333')
-    assert stage()["took"] == {MK.REPLACED: 1}, "a trace that isn't whole names nothing the cache holds"
+    assert stage()["took"] == {} and not traces["R"].exists(), "a trace that isn't JSON goes: Lake takes it for none"
 
 
 def test_a_module_above_one_that_is_compiled_keeps_its_trace_when_the_cache_holds_it_as_the_tree_does(tmp_path):
