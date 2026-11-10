@@ -1,5 +1,5 @@
-"""`predict node-registration`: a TP2 node Program's θ registered from a toy TP Commit of record is a log nci-check's full check accepts
-(`inference_only_reference.check_baseline`), each rank's θ parameter the entry `registered_rows.commit` makes of that rank's committed tensor,
+"""`predict node-registration`: a TP2 node Program's θ registered from a toy TP Commit of record is a log inference-only-check's full check accepts
+(`inference_only_reference.check_theta`), each rank's θ parameter the entry `registered_rows.commit` makes of that rank's committed tensor,
 whether the checkpoint holds it (a shard composed at the rank) or the bundle does; and each way the Commit is not the node's is
 refused by name before a row is committed."""
 import copy
@@ -128,7 +128,7 @@ def _manifest(d, sha=None):
 
 @pytest.mark.slow
 def test_the_nodes_theta_registers_from_each_ranks_commit_and_passes_the_full_check(commit):
-    """Two spawned rank processes, on the pinned checkpoint: the log passes `check_baseline`, and each rank's θ parameter i is
+    """Two spawned rank processes, on the pinned checkpoint: the log passes `check_theta`, and each rank's θ parameter i is
     `registered_rows.commit` of the tensor that rank registered under its field i's name, under the salts written to --salts and
     nowhere under --out."""
     o = NR.Options(**{**commit["o"].__dict__, "workers": 2, "checkpoints_manifest": _manifest(commit)})
@@ -138,7 +138,7 @@ def test_the_nodes_theta_registers_from_each_ranks_commit_and_passes_the_full_ch
     assert doc["checkpoint"]["pinned_shards"] == 1 and doc["checkpoint"]["entry"]["repo"] == "test/tiny"
     provenance = json.loads((log / "provenance.json").read_text())
     inst, computed = _instance(provenance)
-    assert REF.check_baseline(inst, trusted) == {"gates": NODE.program.gates, "ius": [[computed, 4 * 32]], "complies": True, "failure": None}
+    assert REF.check_theta(inst, trusted) == {"gates": NODE.program.gates, "ius": [[computed, 4 * 32]], "complies": True, "failure": None}
     assert doc["program_digest"] == NODE.digest == rec["program"] and doc["record_digest"] == REF.record_digest(rec) == trusted["run"]
     assert [e["value"] for e in rec["registered"]] == list(NODE.theta) and len(provenance) == len(NODE.theta)
     assert [rk["opened_by_source"] for rk in doc["ranks"]] == [{"checkpoint": 2, "bundle": len(PARAMS.leaves[0]) - 2}] * WORLD
