@@ -24,7 +24,7 @@ still a subcircuit (`machine`): `R_m ∪ in(R_m)`, with inputs `in(R_m)` and the
 which a subcircuit holds as inputs (`Covering.sources`). In the subcircuits' terms, the transfer gates from `a` to `b`
 are `(machine a).inner ∩ (machine b).ins`, apart from one kind of gate. A gate of `R_a` with no predecessors (a
 constant: a computed gate that reads nothing) is an input of `machine a`, not an inner gate, but `transfers` counts it,
-since `b` reads it from `a` and `novelReads` charges `b` for it.
+since `b` reads it from `a` and `freshInput` charges `b` for it.
 -/
 
 @[expose] public section

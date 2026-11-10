@@ -10,7 +10,7 @@ reads at most `K` bits pays a product of an updated matrix multiplication chain,
 dimension `d`. NCI's slowdown factor is `F = f(K) / (2α)`.
 
 `readsIn d R G` counts what `R` reads physically, baseline included, but only in the gates `G`: the width of
-`in(R) ∩ G`. At `G = univ` it is at least `novelReads d R`, which leaves the baseline out.
+`in(R) ∩ G`. At `G = univ` it is at least `freshInput d R`, which leaves the baseline out.
 -/
 
 @[expose] public section

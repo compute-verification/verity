@@ -41,7 +41,7 @@ narrower than the weights they update, and with the read cap: without it an infe
 first layers at many positions reads their weights once and computes the next layer's inputs itself. -/
 def ActivationsIncompressibleAll (r : RegisteredCircuit) (T : Threading r) (L : T.Links) (c : ℕ) (k b_w b_a : ℝ) : Prop :=
   ∀ R, Small r c k R →
-    b_w * (T.weightsUsed R).card + b_a * ((T.actsUsed R).filter fun a => ¬ L.Whole R a).card ≤ novelReads r R
+    b_w * (T.weightsUsed R).card + b_a * ((T.actsUsed R).filter fun a => ¬ L.Whole R a).card ≤ freshInput r R
 
 /-- **Each activation enters at most `e` counted multiplications** of the threading `T`: the fan-out `e` of the
 activations bound `Λ = max(e, c_r · K / (4 dd b_w))`. -/
