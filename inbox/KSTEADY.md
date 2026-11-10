@@ -335,3 +335,8 @@ subgoal for today is marked done on them. By the lead's sum of benchmarks' share
 - **#8679:** the lead marks it when r20261110-175605-3308 passes; post its verdict lines on HASH-98.
 - proofs released cores 0-11 and keeps the two directories under `/dev/shm`: tell proofs on HASH-98 when no run of
   yours needs them any more.
+
+## Tue 10 Nov 18:48Z: #8679 is marked; push nothing to it
+
+The lead marked #8679 at 0737dd8d30 after reading r20261110-175605-3308's four verdict lines and checking the patch
+id against `0a85da0af964`. It lands on its mark. A change to the script from now on is a new pull request.

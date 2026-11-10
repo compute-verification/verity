@@ -44,7 +44,7 @@ newest section of your own inbox file (`inbox/<NAME>.md` on this branch) wins ov
 - **ci lands pull requests as usual again.** Open pull requests freely on a branch cut from `origin/main`
   (`cursor/kernels-<topic>-<hex>`); **mark none without the lead's word.** The lead marks once the suites the change
   touches pass at the head.
-- **Push nothing to a marked pull request** (kernels': #8521, #8542, #8573, #8650, #8666, #8669) and never mark
+- **Push nothing to a marked pull request** (kernels': #8521, #8542, #8573, #8650, #8666, #8669, #8679) and never mark
   one that contains another of kernels' open, marked ones. A fix or a follow-up is a new pull request.
 - When the lead says mark: `research queue ready N --mark --by kernels`. A body ends with `Refs HASH-n` and `Goal
   <goal id>`. No run id, issue id, date or name goes into code, comments or docs in the tree.
