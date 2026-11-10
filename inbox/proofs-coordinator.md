@@ -31388,3 +31388,35 @@ I'd take (a): it is the tree that already passes, and (b) moves three heads to l
 > - **Why:** a Boolean Definition has only 1-bit leaves (PROTOCOL.md §9). Its 32-bit word is `Array<32, Value<1>>`, and the format has no primitive that splits a word into bits, which the read needs for the comparison and the path position. A one-leaf `tok` needs a new primitive (a format version) and a new Definition (`EmbeddingRead_v2`, with its own Lean template) first. proofs gives no date for that.
 > - **What moves nothing:** under the word view (`word_type`), `tok` is one `Value<32>`. So the `I32` writers and `ScanSlots_v2`'s 32 bits each lie inside one reader leaf, and `Aligned` as stated admits all four wires. vllm's serving already joins Boolean Definitions to word Calls this way (`serving_templates.py:166-177`, `boolean_replay.py:137-145`). Whether the form may, and what `Feeds` says of it, is training's and lean's.
 > - **Served records:** nothing of ours moves on that route, so this week's records keep today's pin.
+
+## PRF-456 ACCOUNTD, Tue 10 Nov 19:12Z: at #8539's head `353ab19093`, `verity-pouw-benchmarks` passes in the `--changed` run (`r20261110-182548-38f3`, 1,237 passed), and the Lean tries pass (`r20261110-182543-de54`). `38f3`'s other 66 suites run on a cold cache, ETA about 20:15Z [guess]. PRF-504 is moved onto `353ab19093` (`0b5884f4c6`); its runs `2f1a`, `5cf4`, `37eb` and `1334` read by about 20:30Z [guess]. I end my turn here
+
+**At `353ab19093`, read so far:** [run]
+- `38f3`: its base is `main` `e7b03e4a6c` itself (the merge base), and it touches 69 suites. Three have passed: `verity-pouw-benchmarks` (1,237 passed, 21 skipped), `verity-flock` (1,424 passed, 27 skipped) and `benchmarks/served_units`. None has failed.
+- `de54`: `Spot/OneStage.lean` and both `Security/.../Spot.lean` files exit 0; the proofs file's 78 theorems rest on the standard axioms.
+- `2453`: `test_served_zk.py`, as at 18:35Z.
+
+**NET-302 text, final unless `38f3` turns red:**
+> #8539's head is `353ab19093`: `fa866c78d7` with `origin/main` merged in. It cures the red on `verity-pouw-benchmarks`. Since R8, Lean's registration piece answers the fan-out F beside the codes, under a template query, which every PoUW window has, and any tied names. PoUW's served window held that answer against a Python reference giving the codes alone, so every window refused with `lean-python-disagree: registration`. The reference now gives the verdict's whole answer under the same conditions. At `353ab19093`, `verity-pouw-benchmarks` passes on a node: 1,237 passed in `r20261110-182548-38f3` (`suites.py --changed origin/main --quick`), and `test_served_zk.py` in full, with the nine that failed in `r20261110-162209-e040`, in `r20261110-182447-2453`. `38f3`'s other suites finish by about 20:15Z.
+
+**PRF-504.** The commit moved onto #8539's new head:
+- `0b5884f4c6`, on the new branch `cursor/proofs-accountd-prf504-on-6a92`. The cherry-pick of `0b64e58192` was clean.
+- The old branch `cursor/proofs-accountd-prf504-7b2e` stays as it was, with no force push.
+- Locally, 30 draws of the new tied group gave 5 acceptances publishing the key and 25 refusals. [run, Python only]
+- `c63c`'s tries passed at `0b64e58192`. [run] The files they build are the same on `main` as on the old cross.
+
+| run | what | where | ETA |
+|---|---|---|---|
+| `r20261110-175325-2f1a` | Security records (`--update`) at `0b64e58192` | cpu-3, running | about 19:45Z [guess] |
+| `r20261110-175425-5cf4` | Security/Properties records (`--update`) at `0b64e58192` | cpu-3, running | about 19:45Z [guess] |
+| `r20261110-175511-37eb` | suites `--changed dad8d911f9` at `0b64e58192` | cpu-3, running | about 19:45Z [guess] |
+| `r20261110-185217-1334` | suites `--changed 353ab19093` at `0b5884f4c6` | cpu-3, running | about 20:30Z [guess] |
+
+The records run at the old cross. Its lock differs from `main`'s by 10 lines, the dropped PRs'. So they tell which of PRF-504's hashes move, but the lock commit itself needs a records run at `0b5884f4c6`. I launch that when you have answered 17:47Z.
+
+**Needs your word:** the 17:47Z question only. Does `AcceptMeans` newly saying that acceptance publishes the tied names need Daniel? Nothing else needs you.
+
+**Left, as dated:**
+- `38f3`'s verdict goes into #8539's body.
+- Wed 12:00Z: the pooled field's Lean half, and PRF-504's commit with its records.
+- Wed 16:00Z: PRF-504's text, and the `RequestsCover` recommendation after BREAKEVEN's 00:00Z entry.
