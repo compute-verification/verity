@@ -24417,3 +24417,39 @@ Next: the rerun's id, node and ETA, in my next entry.
   - The 03:44Z fields are in my 12:00Z report.
 
 Next: 6327's records, then the suites at the new head.
+
+## PROVECUT, Tue 10 Nov 05:14Z: the stratum-split block for compute-research (TOP-394), and the plan of record
+
+**The block to paste (under 300 words).** [read] means read in the code at origin/main 7af4d24fca, [run] measured, and [guess] mine, unchecked.
+
+~~~markdown
+**Where strata meet statements today** (origin/main 7af4d24fca, unchanged by #8359)
+- `verity/core/protocols/spot/one_stage/draw.py` draws k_s units from each stratum, one a template (`stratum_k`, `work_k`). [read]
+- One-stage v2 proves all sampled blocks in one session (`Spot.OneStageZk.oneSession`, `OneStageZk.lean:610`). v1's `proofs.verify`: one statement a stratum, at the period-open's circuit. [read]
+- In a session, `flock-circuit.rs` `side_tables` cuts the draw into equal consecutive tables, subset or stratified draws only. [read]
+- PoUW: `h1_prove/run.py` `prepare`, one statement a sampled call; Pearl+ `plan.py` `draw` adds each tile's closure. [read]
+
+**Limits**
+- Block: k_log ≤ 27 (`Flock.HmRow.MAX_K_LOG`); `unitLog` ≤ 32 (`Flock.ProvedScope`). [read]
+- Table: k_log + log₂(blocks) ≤ 35, so 2^35 witness bits. [read]
+- Session: one circuit file, read whole by the verifier (about 6× at peak); 64 tables (`MAX_TABLES`; Lean takes 65,536), but one for a work draw with its closure (`TABLES_LAW`). [read]
+- GPU: `GPU_NNZ_MAX` = 2^32 − 1 nonzeros a net side. [read]
+- Today's stop: each Pearl+ stratum needs about 83 to 254 tables at the smallest blocks (459 tiles: 630 to 1,160 in all). [guess, estimated]
+
+**What the split holds fixed**
+- Draw before split: enforced (coins after registration; `check_draw`). [read]
+- Units a function of Program and draw, no unit in two statements or none: enforced inside one session (Lean `Flock.HmRow`: part j is table j); across statements, nothing. [read]
+- Coverage k_s per stratum: R1 and `check_proved` hold one statement to the sample; nothing sums over several. [read]
+
+**Locked statement:** yes. Several sessions change `oneSession`, and the frozen `Verity.soundness_of_subprotocols` composes `Spot.OneStageZk` (`shape.frozen` in `Security/Properties/lean-audit.json`): Daniel first. Splitting a closure draw changes Flock's `TABLES_LAW`. [read]
+
+**Done when:** a Pearl+ stratum needing more than one session proves as several statements, and `flock-verify --zk` and `Spot.OneStageZk.check` accept them on a named run, refusing a unit dropped or doubled.
+~~~
+
+**Does my 12:00Z sizing already cover part of this?** Yes, so their worker needn't redo it:
+- My CMP-370 sizing (01:32Z, with the 03:55Z addendum) gives the limits above and the table counts per stratum.
+- It doesn't cover the split's design or the Lean change.
+
+**Plan of record, in one line:** none today. `art:f12d8f2d` is the 8 Nov proof-server steady-state evidence: 78 blobs, no labels on the store, and no `mix.json`, which #8528's `spot-sampling` slot reads [read]. P8 labels the R6x4 world-year `mix.json` that #8528's test fixture copies; if BREAKEVEN finds that art first, it is the one [guess].
+
+Next: the 12:00Z items (review-1's findings on #8359, and who stages `SparseMlaSplitPart_v2`).
