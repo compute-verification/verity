@@ -259,7 +259,7 @@ def session_row(doc: Mapping[str, Any], pins: Mapping[str, str] | None, roots: M
         k = BC.fresh(doc, m, pins, roots)
     except (KeyError, TypeError, ValueError) as e:
         raise Undecided(f"the record's fresh bits: {e}") from e
-    return {"definition": PV2.definition_digest(fn), "key": codec.descriptor_id(fn), "slots": m, "positions": positions,
+    return {"definition": PV2.id_digest(fn), "key": codec.descriptor_id(fn), "slots": m, "positions": positions,
             "gates": g, "fresh": k, "table": table, "priced": priced}
 
 

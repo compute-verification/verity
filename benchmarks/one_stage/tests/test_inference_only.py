@@ -1,6 +1,6 @@
 """`inference_only.py`: a served run's inference-only verdict, its declared circuit's blocks against the (c, k, n) it
 registered before it served, by `NciCheck.Count`'s rule. `BitAtx32_v1`'s price is an explicit circuit that computes the
-primitive, input by input; the verdict's rule is the count rule's Python reference (`nci_reference.check_count`) on its
+primitive, input by input; the verdict's rule is the count rule's reference (`nci_reference.check_count_detail`) on its
 rows, and the Lean instance it makes is one on which that reference counts the verdict's gates; n is the H200's sessions
 at the declared utilization over the lease, rounded up to the grid, from the class's fixed load alone; the policy is its
 session's gates and fresh bits with every weight held, and n, under an H200 int8 serve's φ or the one ``--serve`` states,
@@ -92,12 +92,17 @@ def test_bit_at_is_priced_by_a_circuit_that_computes_it():
 
 
 def test_a_block_reading_bit_at_is_priced_and_one_with_no_price_is_undecided(feed, monkeypatch):
-    """`FEED`'s block counts `BitAtx32_v1` at its price, which the table names; with no price for it the block's gates are
-    undecided (`gate-table`) and not guessed."""
+    """`FEED`'s block counts `BitAtx32_v1` at its price, which the table names: the gate table's own, and where the gate
+    table has none for it the explicit circuit's, the same count; with no price for it the block's gates are undecided
+    (`gate-table`) and not guessed."""
     row = IO.session_row(feed, None, None)
     table, unpriced = BC.gate_table(BC.primitives([BC.session(feed)[0]]))
-    assert unpriced == ["BitAtx32_v1"] and row["table"] == {**table, "BitAtx32_v1": 147}
-    assert row["priced"]["BitAtx32_v1"]["gates"] == 147 and row["gates"] == BC.gates(BC.session(feed)[0], row["table"])[0]
+    assert unpriced == [] and table["BitAtx32_v1"] == 147 and (row["table"], row["priced"]) == (table, {})
+    assert row["gates"] == BC.gates(BC.session(feed)[0], row["table"])[0]
+    bare = {key: gates for key, gates in table.items() if key != "BitAtx32_v1"}
+    monkeypatch.setattr(BC, "gate_table", lambda prims: (dict(bare), ["BitAtx32_v1"]))
+    own = IO.session_row(feed, None, None)
+    assert own["priced"]["BitAtx32_v1"]["gates"] == 147 and (own["table"], own["gates"]) == (table, row["gates"])
     monkeypatch.setattr(IO, "price", lambda key: None)
     with pytest.raises(IO.Undecided, match="gate-table: no gates for BitAtx32_v1"):
         IO.session_row(feed, None, None)
@@ -110,11 +115,11 @@ def test_the_verdicts_rule_is_the_count_rules_on_its_rows(small):
     ref = IO._reference()
     row = IO.session_row(small, None, None)
     big = 10 ** 15
-    got = ref.check_count(IO.count_instance(small, row["table"], big, big, big))
+    got = ref.check_count_detail(IO.count_instance(small, row["table"], big, big, big))
     (key, g, x, m), = got["blocks"]
     assert (key, g, m) == (row["key"], row["gates"], row["slots"]) and x > 0
     for c, k, n in ((g, x, m), (g - 1, x, m), (g, x - 1, m), (g, x, m - 1), (g - 1, x - 1, m - 1), (big, big, big)):
-        want = ref.check_count(IO.count_instance(small, row["table"], c, k, n))
+        want = ref.check_count_detail(IO.count_instance(small, row["table"], c, k, n))
         assert IO.judge(got["blocks"], c, k, n) == want, (c, k, n)
     assert IO.judge([["a", 5, 5, 0], ["b", 1, 1, 3]], 1, 1, 3)["complies"]
     assert IO.judge([["a", 1, 1, 2], ["b", 1, 1, 3]], 1, 1, 4)["failure"] == [None, "count"]
