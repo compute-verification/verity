@@ -503,7 +503,7 @@ def test_the_products_term_takes_the_best_of_three_ms_at_beta_k_with_the_code_si
     operand no token indexes, a backward product contracting over tokens a weight gradient, and the head's are the
     backward products over its vocabulary width (the widest forward output); the trained weights are the weights a
     step's forward reads, each matrix once a token. Activations are charged β(k), 15.9 up to 145,568, between two
-    red-team points the next one's, none past 8e8, weights their width or less the record's code bits a trained weight,
+    red-team points the next one's (from 4.13.5), none past 8e8, weights their width or less the record's code bits a trained weight,
     a weight's β the β_w a product reports beside its activation's β_x. The term is the best of all of M, M less its contractions below K_thr (here the 8-long product's wide outputs,
     whose leaving lifts the term) and the weight gradients alone at F = 1; over a run's steps it loses the ⌊k/(τT)⌋
     after the first update, and from 8e7 the head's products leave M. Model products that sum the head's gradients
