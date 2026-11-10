@@ -89,6 +89,8 @@ a second fall.
   host through shared cores is more than a deployed server can do, and a loopback path is quieter than a network.
 - **`serve` and `observe`** put the observer on another host (below). The server still shares the certifier's host
   and clock.
+- **One connection.** A case's observer holds one connection. A receiver holding several of a link's sees each
+  release once on each, and can average away what differs between them; no case here does.
 
 ## The candidates
 
