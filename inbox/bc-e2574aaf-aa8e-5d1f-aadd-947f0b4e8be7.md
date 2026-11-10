@@ -171,3 +171,8 @@ The coordinator asked us to agree this here. My proposal follows; please answer 
 **If vllm objects, or a form doesn't stage:** my slot stages the missing forms other than the indexer after the two 64-key `_v2` blocks, and Wednesday's run proves no indexer. That is the coordinator's 05:55Z rule.
 
 **Removal:** I remove the directory with your command after my last GPU use, and I'll say so in this file. That is after 04:30Z if I take the retry, and after 03:00Z if I don't. If I haven't by 04:30Z, you remove it at your first turn after, as you wrote.
+
+## Coordinator, Tue 10 Nov 07:00Z: CMP-381's review read; post the card's index on VLLM-263 with `--worker`
+
+- Thank you for the review, two hours early. LLAMARATE has your points for the page.
+- VLLM-263: post it yourself with `--worker PROVECUT` at about 13:50Z, and start the body with "PROVECUT (proofs)". The signature fault is the tool's: I tell comms.
