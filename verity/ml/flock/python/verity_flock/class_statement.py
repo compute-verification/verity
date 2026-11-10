@@ -860,11 +860,10 @@ def _leaf_bits(t) -> list[int]:
 
 def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[str]]],
                   public: Sequence[str] = (), structural: bool = False, reads: str = "inline",
-                  stage_ands: int | str | None = "auto", packed: bool = False, pad: bool = False) -> tuple[IL.Lowering, list[int]]:
+                  stage_ands: int | str | None = "auto", packed: bool = False) -> tuple[IL.Lowering, list[int]]:
     """A unit Definition on named u16 row ports: input row ``(row, params)`` is the little-endian bit concatenation of those
     parameters' leaves, in order (PoUW's rows, `leaves.words_*`; ``p[r]`` is row ``r`` of parameter ``p``, as a tile reads
-    it), of exactly its words (its bits a multiple of 16; with ``pad``, zero-padded to whole u16 words, bits no gate
-    reads: `unit_ports`); output
+    it), of exactly its words (its bits a multiple of 16); output
     port ``o{j}`` is return field ``j``'s leaves concatenated the same way, zero-padded to whole u16 words. Every
     parameter (or each of its rows) is in one row, or is one of ``public``: a public input port before the rows, each leaf in
     its own ceil(bits / 16) u16 words, low first (`verity.ml.protocols.pouw.circuit.anchors.region_words`' layout, the unit's leaves as
@@ -879,7 +878,7 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
     whose nets take the fewest cells; the flat unit's own when it reads none)."""
     if reads not in ("inline", "slots") or (structural and reads != "inline"):
         raise ValueError(f"{name}: reads is inline or slots, and a structural unit's are inline")
-    ports, out_words, row_words = unit_ports(definition, name, in_rows, public, packed, pad)
+    ports, out_words, row_words = unit_ports(definition, name, in_rows, public, packed)
     n_words, W = len(ports.ins), len(ports.outs)
     units = IL.Units(target=None, in_widths=[16] * n_words, out_widths=[16] * W, in_src=[[("leaf", p) for p in range(n_words)]],
                      out_src=[[("ret", o) for o in range(W)]], signature=(definition.id,), gates=[], arg_gates=[], ret_gates=[])
@@ -915,12 +914,10 @@ def _verifier_ports(name: str, t: TM.Tmpl, ports: SL.Ports) -> None:
 
 
 def unit_ports(definition, name: str, in_rows: Sequence[tuple[str, Sequence[str]]],
-               public: Sequence[str] = (), packed: bool = False, pad: bool = False) -> tuple[SL.Ports, list[int], list[int]]:
+               public: Sequence[str] = (), packed: bool = False) -> tuple[SL.Ports, list[int], list[int]]:
     """`unit_lowering`'s ports: the u16 input ports, each argument leaf's bits among them, and the u16 output ports' bits
     (`struct_lower.Ports`); each output port's words; and each input port's (``public``'s, then the rows'). ``packed``: each
-    public port is its parameter's leaves concatenated, as a row's (its bits a multiple of 16), not each leaf in its own words.
-    ``pad``: a row whose bits are not a multiple of 16 is not refused: it is its parameters' bits from its first word's bit 0,
-    then zeros to its last word's end, as an output port is padded, and no leaf is among the padding's bits."""
+    public port is its parameter's leaves concatenated, as a row's (its bits a multiple of 16), not each leaf in its own words."""
     params, ret = definition.signature()
     types = dict(params)
 
@@ -946,10 +943,10 @@ def unit_ports(definition, name: str, in_rows: Sequence[tuple[str, Sequence[str]
         n_words = at // 16
     for row, ps in in_rows:
         bits = sum(sum(widths(p)) for p in ps)
-        if bits % 16 and not pad:
+        if bits % 16:
             raise ValueError(f"{name}: row {row} is {bits} bits, not whole u16 words")
         at = 16 * n_words
-        n_words += -(-bits // 16)
+        n_words += bits // 16
         for p in ps:
             leaves[part(p)] = []
             for w in widths(p):
@@ -968,7 +965,7 @@ def unit_ports(definition, name: str, in_rows: Sequence[tuple[str, Sequence[str]
         out_bits += bits
     W = len(out_bits) // 16
     row_words = [sum(widths(p)) // 16 if packed else sum(-(-w // 16) for w in widths(p)) for p in public] \
-        + [-(-sum(sum(widths(p)) for p in ps) // 16) for _r, ps in in_rows]
+        + [sum(sum(widths(p)) for p in ps) // 16 for _r, ps in in_rows]
     return SL.Ports((16,) * n_words, tuple(flat_in), (16,) * W, tuple(out_bits)), out_words, row_words
 
 
@@ -1049,12 +1046,6 @@ class TmplLowering(IL.Lowering):
         return words, np.zeros((n, 0), np.uint64), (1 << n) - 1
 
 
-def _params_bits(definition, ps: Sequence[str]) -> int:
-    """The bits of a row of parameters ``ps`` of ``definition`` (``p``, or ``p[r]`` for row ``r`` of ``p``)."""
-    types = dict(definition.signature()[0])
-    return sum(sum(_leaf_bits(types[q] if "[" not in q else types[q.partition("[")[0]].elem)) for q in ps)
-
-
 def _row_bits(words) -> np.ndarray:
     """Each instance's row ``(n, words)`` u16 as its bits ``(n, 16 words)``, little-endian."""
     return np.unpackbits(np.ascontiguousarray(words, dtype="<u2").view(np.uint8), axis=1, bitorder="little")
@@ -1092,9 +1083,6 @@ class UnitStager:
     (`circuit.compose`'s ``layout``), its unit the unit's template; else the flat statement. ``structural`` (with ``layout``):
     that template `struct_lower`'s, or a table read's the verifier's own (`read_tmpl`; `unit_lowering`'s ``structural``), the
     flat unit never built, the outputs the template's (`TmplLowering.evaluate`); else `tmpl.emit`'s of the flat unit.
-    ``pad``: an input row of bits not a multiple of 16 is zero-padded to whole u16 words (`unit_ports`), its ``bits`` the
-    padded length, and `stage` refuses a row whose padding is not zero; a stager none of whose rows needs padding is the one
-    without it.
     ``reads`` (``inline`` or ``slots``, flat statements only): `unit_lowering`'s; under ``slots`` a unit reading a pinned MUFU table is the unit, tail stages and lookup slots of
     `read_slots`, the last stage returning the outputs, its nets' ANDs capped by ``stage_ands`` (`read_slots.split`'s). The
     proof's own leaves are `LEAF_SCHEME`'s (FLOCK_PLAIN_LEAVES=1: plain SHA-512, a recursive session's inner statement). A unit
@@ -1104,7 +1092,7 @@ class UnitStager:
     def __init__(self, definition, name: str, in_rows: Sequence[tuple[str, str, int, Sequence[str]]],
                  out_rows: Sequence[tuple[str, Sequence[int]]], public_inputs: dict | None = None, circuit: Path | None = None,
                  bind: dict | None = None, layout: str | None = None, structural: bool = False, reads: str = "inline",
-                 stage_ands: int | str | None = "auto", packed: bool = False, pad: bool = False):
+                 stage_ands: int | str | None = "auto", packed: bool = False):
         from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
 
         if bind is not None and set(bind) != {"partition", "program"}:
@@ -1118,12 +1106,8 @@ class UnitStager:
         if layout is not None and reads != "inline":
             raise ValueError(f"{name}: a templated statement's unit lays its reads out inline")
         FC.refuse_past_range(definition, name)
-        self.used = {r: _params_bits(definition, ps) for r, _s, _b, ps in in_rows} if pad else {}
-        for r, _s, b, _ps in in_rows:
-            if pad and b != 16 * -(-self.used[r] // 16):
-                raise ValueError(f"{name}: row {r} is {b} bits, and its parameters' {self.used[r]} pad to {16 * -(-self.used[r] // 16)}")
         self.low, self.out_words = unit_lowering(definition, name, [(r, ps) for r, _s, _b, ps in in_rows], tuple(public_inputs),
-                                                 structural, reads, stage_ands, self.packed, pad)
+                                                 structural, reads, stage_ands, self.packed)
         if sorted(p for _s, ps in out_rows for p in ps) != list(range(len(self.out_words))):
             raise ValueError(f"{name}: the output rows {[list(ps) for _s, ps in out_rows]} are not the outputs, once each")
         oname = lambda ps: tuple(f"o{p}" for p in ps)  # noqa: E731
@@ -1214,9 +1198,6 @@ class UnitStager:
             raise ValueError(f"{self.name}: a bound stager's round names its units' global indices, and only a bound one's")
         iset = self.iset if set_name is None else SimpleNamespace(**{**vars(self.iset), "name": set_name})
         n = len(rows[self.in_rows[0][0]])
-        for r, used in self.used.items():
-            if _row_bits(rows[r])[:, used:].any():
-                raise ValueError(f"{self.name}: row {r}'s bits past its parameters' {used} are not zero")
         flat = np.concatenate([np.asarray(rows[r], dtype=np.uint16) for r in self.row_ports], axis=1)
         got, _cut, ok = self.low.evaluate(flat.astype(np.uint64))
         if int(ok) != (1 << n) - 1:
@@ -1251,15 +1232,13 @@ def member_stager(definition, member, bind: dict | None, circuit: Path | None = 
     bits a word, bound to ``bind`` (``{"partition", "program"}``). Its file, and so its SHA-512 (``pin``), is a function of
     those alone, the one an auditor rebuilds from public data with every switch this module reads at import unset: so a
     process with any of them set (FLOCK_PACK_WORDS, FLOCK_CORE_ROWS, FLOCK_PLAIN_LEAVES, FLOCK_OWN_ROWS,
-    FLOCK_GEMM_TILE) is refused, naming each one set. Where an input's bits are not whole u16 words, its rows are padded
-    (`UnitStager`'s ``pad``)."""
+    FLOCK_GEMM_TILE) is refused, naming each one set."""
     switched = [v for v, on in (("FLOCK_PACK_WORDS", PACK_WORDS), ("FLOCK_CORE_ROWS", CORE_ROWS), ("FLOCK_PLAIN_LEAVES", PLAIN_LEAVES),
                                 ("FLOCK_OWN_ROWS", OWN_ROWS), ("FLOCK_GEMM_TILE", GEMM_TILE)) if on]
     if switched:
         raise ValueError(f"{definition.id}: {', '.join(switched)} set: a member's file is the one made with all five unset")
     return UnitStager(definition, f"unit/{definition.id}", [(r, member.schema(r), w * 16, [r]) for r, w in member.rows],
-                      [(member.schema(r), (j,)) for j, (r, _w) in enumerate(member.outs)], circuit=circuit, bind=bind,
-                      pad=any(_params_bits(definition, [r]) % 16 for r, _w in member.rows))
+                      [(member.schema(r), (j,)) for j, (r, _w) in enumerate(member.outs)], circuit=circuit, bind=bind)
 
 
 def stage_unit(definition, name: str, in_rows: Sequence[tuple[str, str, int, Sequence[str]]], out_rows: Sequence[tuple[str, Sequence[int]]],

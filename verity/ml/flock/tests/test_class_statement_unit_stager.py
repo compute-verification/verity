@@ -5,9 +5,8 @@ nothing) on `test_pouw_rows`' statements and a Boolean unit; a stager's rounds s
 their own rows; a lowering output that is not the reference's is refused, naming the first such instance, on both of the
 check's paths (bit-sliced for a Boolean Definition, the reference for the rest); and the stager's circuit renders the unit's
 netlist once, the slot nets not again, and is the circuit composed with every netlist rendered afresh; under
-FLOCK_PLAIN_LEAVES=1 it names the plain leaf scheme; `member_stager` is the stager of a window member's rows,
-refused while any switch `class_statement` reads at import is set; and under ``pad`` a row of bits that are not whole u16
-words is those bits then zeros, refused without it and when its padding is not zero."""
+FLOCK_PLAIN_LEAVES=1 it names the plain leaf scheme; and `member_stager` is the stager of a window member's rows,
+refused while any switch `class_statement` reads at import is set."""
 from __future__ import annotations
 
 import hashlib
@@ -19,7 +18,6 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 from test_pouw_rows import POUW_TESTS, STAGED_TILES, V
-from verity.core.protocols.spot.one_stage import proofs as PF
 from verity.ml.circuits import evaluation as EV
 from verity.ml.circuits.boolean import BIT
 from verity.ml.circuits.boolean.forms import add
@@ -206,66 +204,6 @@ def test_a_members_stager_is_the_unit_stager_of_its_rows():
     st = CS.member_stager(MEMBER_TOY, MEMBER, None)
     assert st.pin == CS.UnitStager(MEMBER_TOY, f"unit/{MEMBER_TOY.id}", [("x", V2, 2048, ["x"]), ("y", V2, 16, ["y"])],
                                    [(V2, (0,))]).pin
-
-
-#: a Boolean unit none of whose ports is whole u16 words (12, 20, 5 and 2,045 bits in, 21 out), a row a parameter; w's row
-#: spans SHA-512 blocks, as a composed circuit needs one row to
-PAD_TOY = bind(definition("PadStagerToy", 1, lambda C, a, b, c, w: [C.AND(a[i], b[i]) for i in range(12)] + [b[12 + i] ^ c[i % 5] for i in range(8)]
-                          + [C.AND(w[0], w[2044])],
-                          (("a", Array(12, BIT)), ("b", Array(20, BIT)), ("c", Array(5, BIT)), ("w", Array(2045, BIT))), Array(21, BIT),
-                          register=False))
-PAD_ROWS = [("a", V2, 16, ["a"]), ("b", V2, 32, ["b"]), ("c", V2, 16, ["c"]), ("w", V2, 2048, ["w"])]
-PAD_MEMBER = SimpleNamespace(rows=(("a", 1), ("b", 2), ("c", 1), ("w", 128)), outs=(("o", 2),), schema=lambda port: V2)
-
-
-def _pad_rows(n: int = 6) -> tuple[dict, np.ndarray]:
-    """Random rows of `PAD_TOY`, each its parameter's bits then zeros, and the unit's output words on them."""
-    rng = np.random.default_rng(7)
-    a, b, c = (rng.integers(0, 1 << w, n, dtype=np.uint32) for w in (12, 20, 5))
-    w = rng.integers(0, 2, (n, 2048), dtype=np.uint8)
-    w[:, 2045:] = 0
-    w[:3, 0] = w[:3, 2044] = 1
-    c8 = sum(((c >> (i % 5)) & 1) << i for i in range(8))
-    out = (a & b & 0xFFF) | (((b >> 12) ^ c8) << 12) | ((w[:, 0] & w[:, 2044]).astype(np.uint32) << 20)
-    words = lambda v, k: np.stack([(v >> (16 * j)) & 0xFFFF for j in range(k)], axis=1).astype(np.uint16)  # noqa: E731
-    return {"a": words(a, 1), "b": words(b, 2), "c": words(c, 1),
-            "w": np.packbits(w, axis=1, bitorder="little").view("<u2").astype(np.uint16)}, words(out, 2)
-
-
-@pytest.mark.slow
-def test_a_row_of_bits_that_are_not_whole_words_is_refused_and_under_pad_is_its_bits_then_zeros(tmp_path):
-    """Without ``pad`` a row of 12 bits is refused by name. With it the unit is staged on rows of whole u16 words, each
-    parameter's bits from bit 0 and zeros after: the outputs are the unit's (the lowering reads each parameter where its row
-    starts, past the padding before it), the circuit's rows are the padded words, its form is the proved one
-    (`ks_form_why`), and a row whose padding holds a one, or whose stated bits are not its parameters' padded, is refused.
-    A unit whose rows are whole words is the same file with ``pad`` and without."""
-    args = (PAD_TOY, "unit/pad-toy", PAD_ROWS, [(V2, (0,))])
-    with pytest.raises(ValueError, match=r"^unit/pad-toy: row a is 12 bits, not whole u16 words$"):
-        CS.UnitStager(*args)
-    rows, want = _pad_rows()
-    st = CS.UnitStager(*args, pad=True, circuit=tmp_path / "circuit.txt")
-    got = st.stage(rows, tmp_path / "out", b"k" * 32)
-    assert np.array_equal(got["outs"]["o0"], want)
-    assert {p.name: p.words for p in st.ports if p.name in rows} == {"a": 1, "b": 2, "c": 1, "w": 128}
-    assert PF.ks_form_why(tmp_path / "circuit.txt", None) is None
-    assert st.pin != CS.UnitStager(PAD_TOY, "unit/pad-toy", [("abc", V2, 48, ["a", "b", *(f"c[{r}]" for r in range(5))]), PAD_ROWS[3]],
-                                   [(V2, (0,))], pad=True).pin
-    bad = {**rows, "c": rows["c"] | np.uint16(1 << 5)}
-    with pytest.raises(ValueError, match=r"^unit/pad-toy: row c's bits past its parameters' 5 are not zero$"):
-        st.stage(bad, tmp_path / "bad", b"k" * 32)
-    assert not (tmp_path / "bad").exists()
-    whole = (TOY, "unit/stager-toy", TOY_ROWS, [(V2, (0,))])
-    assert CS.UnitStager(*whole, pad=True).pin == CS.UnitStager(*whole).pin
-    with pytest.raises(ValueError, match=r"^unit/pad-toy: row b is 48 bits, and its parameters' 20 pad to 32$"):
-        CS.UnitStager(PAD_TOY, "unit/pad-toy", [PAD_ROWS[0], ("b", V2, 48, ["b"]), *PAD_ROWS[2:]], [(V2, (0,))], pad=True)
-
-
-@pytest.mark.slow
-def test_a_members_stager_pads_an_input_whose_bits_are_not_whole_words():
-    """`member_stager` of a member whose rows are its template's inputs padded to whole words is the padded `UnitStager` over
-    them, so an auditor rebuilds its file from the member alone."""
-    st = CS.member_stager(PAD_TOY, PAD_MEMBER, None)
-    assert st.pin == CS.UnitStager(PAD_TOY, f"unit/{PAD_TOY.id}", PAD_ROWS, [(V2, (0,))], pad=True).pin
 
 
 @pytest.mark.parametrize(("switch", "value"), [("PACK_WORDS", True), ("CORE_ROWS", True), ("PLAIN_LEAVES", True),
