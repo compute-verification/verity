@@ -130,9 +130,9 @@ once it passes, so a check that one of them fails ends in seconds, not hours.
 A step that fails stops the others: each running step's processes get SIGINT (Python code runs its `finally`s, so the Lean audit
 removes its scratch tree) and whatever is left of them SIGKILL after `STOP_GRACE_S`, and no group starts another step. Such a
 step's status is `stopped`. `--keep-going` lets every group run to its end instead, keeping the verdicts its passing steps store,
-except after a failed preflight, which starts no group, or a step in `HALTS`: a Lean module that doesn't compile, or a guarantee whose
-record is stale, fails the audit too, so nothing still running is worth the slot; likewise a Rust crate that doesn't compile
-(`HALTS_ON`: flock-circuit-build's log says `could not compile`) fails flock-rust-tests.
+except after a failed preflight, which starts no group, or a step ci.toml marks `halts` (`HALTS`) or, on a text in its log,
+`halts_on` (`HALTS_ON`): a Rust crate that doesn't compile (flock-circuit-build's log says `could not compile`) fails
+flock-rust-tests too, so nothing still running is worth the slot.
 A step whose outputs (its log, the run dir's files named after it, `WATCH`'s) haven't changed for `IDLE_S`, or that is still
 running after `STEP_BUDGET_S`, is stopped the same way (SIGTERM, then SIGKILL) and fails, `hung: no output for N min` or `over
 budget`, so a hung test can't hold a check slot for a day; each suite is bounded first by its own `--timeouts`.
@@ -183,11 +183,6 @@ doesn't name:
                     files, kernel bypasses, code run while compiling, dependency .olean digests, the guarantees' records, a
                     kernel replay; its reports under `lean-audit/`).  It reads only the source tree and builds nothing in the
                     checkout, so the lean group's steps never wait on it, nor it on them
-    lean-changed    at once with the lean group: `lake build` of each Lake package whose audit misses, on a tree this machine
-                    keeps built (`lean_changed.py`), then the audit's judgment of its guarantees on that build without the
-                    kernel replay, so a module that no longer compiles or a guarantee's record a merge left stale ends the
-                    run in minutes, not when the audit's cold build reaches it; it skips what it can't build or read here and
-                    vouches for nothing: the audit decides
     ratchet-gate    `integrations/vllm/tools/ratchet_gate.py BASE HEAD`, the gate as BASE has it: no change above BASE (the
                     commit in the run's `check-ratchet-base.txt` or else `check-base.txt`, which `--record --on` sends: its
                     --ratchet-base REF's and its --base REF's; else origin/main)
@@ -216,8 +211,6 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
                     package first waits for one of the node's Lean audit slots (`lean_slot.py`). The step fails on a fast-path
                     result in its `audit.json`, cached or not (`lean_fast`): no merge check accepts an audit without the kernel
                     replay
-    lean-changed    not a verdict: its tree under `lean-changed/` keeps each package's last build there, so Lake rebuilds only
-                    what changed and what imports it, and its fetched dependencies are hard links to lean-audit's, read-only
     lean-agreement  a pass is reused when everything the job reads is the same (`agreement_key`: verity/ml/flock/verifier/'s
                     tracked files, which pin the upstream build and inputs, the interpreter, the platform, the environment)
     flock-rust-tests  likewise (`rust_tests_key`: the script, which pins the Flock commit and the Rust toolchain, the patches,
@@ -730,7 +723,8 @@ def take_verdict_urls(out: Path) -> list[dict]:
         if isinstance(doc, list) else []
 
 
-#: Lean's job code, which the lean-audit and lean-changed steps run (`lean_audit.py`, `lean_changed.py`)
+#: Lean's job code: the lean-audit step's (`lean_audit.py`), and the fast path's (`lean_changed.py`), whose kind and keys
+#: `lean_fast` and `lean_passes` read
 LEAN_JOBS = ROOT / "tools" / "verity" / "lean"
 
 
@@ -1460,8 +1454,8 @@ def verdicts_fetched(listed: list[dict], only: str | None = None) -> list[dict]:
 
 #: The suites whose tests run `lake` or what the Lean steps build under `.lake/`: a step of the Lean group once `lean-build` has
 #: built the verifier, with elan's `lake` on the PATH, so what they run or skip never depends on how far a concurrent
-#: `lake build` has got, and no test's `lake build` shares a build directory with one: lean-audit and lean-changed, which run
-#: beside them, build only in trees of their own (tests/test_no_wall_clock.py holds every other suite to not skipping on them).
+#: `lake build` has got, and no test's `lake build` shares a build directory with one: lean-audit, which runs
+#: beside them, builds only in trees of its own (tests/test_no_wall_clock.py holds every other suite to not skipping on them).
 #: `suites.py` run on its own builds the verifier before them itself; here it is told the build is done (`--lean-built`).
 AFTER_LEAN = SUITES.AFTER_LEAN
 
@@ -1708,10 +1702,6 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
              "ratchet-gate": ("ratchet-gate", ratchet_gate(out, cache), ROOT)}
     if len(lean) > 1:
         built |= {s[0]: s for s in lean}
-        changed: list[str] | str = ([py, str(LEAN_JOBS / "lean_changed.py"), "--cache", str(cache_dir() / "lean-audit"),
-                                     "--deps", str(cache_dir() / "lean-deps"), "--tree", str(cache_dir() / "lean-changed")]
-                                    if cache else "skipped: --no-cache: lean-audit builds every package cold")
-        built["lean-changed"] = ("lean-changed", changed, ROOT)
     else:
         built["lean-build"] = lean[0]                  # no verifier: one skip, named `lean`, where its group starts
     if undeclared := set(built) - {j.name for j in JOBS}:
