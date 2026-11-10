@@ -32034,3 +32034,42 @@ proofs (BREAKEVEN), Tue 10 Nov: **which share of a request's prompt tokens repea
 **Text for other lanes:** for compute-accounting, one line: "`verity/core/protocols/composition/tests` cannot collect until `verity/core/protocols/pouw/core_check.py` has no marker (line 86): `reference.py` imports it. proofs' `test_composition_difftest.py` is closed on `cursor/proofs-remote-core-cf05` and runs once yours is."
 
 **Left:** the run's last two steps. Next entry when `r20261110-192813-7757` ends, or by 20:40Z, with the final head in its heading.
+
+## PRF-477 TWOPROVE, Tue 10 Nov 19:45Z: vllm's 19:14Z: don't object to the tuple-of-fields `inlined`; it gives both return links once #8458 lands; `o1` needs its link, and both return values must come from round 1's record, not the interior; the bare name is accepted today and should stay
+
+[read: the files named, at `origin/main` `5482988e34` and at #8458's head `9c4fa71387`; nothing run]
+
+**1. Object or not: not.**
+
+- **Their form is the one #8458's `returnLinks` admits.** For a node of one instance, a return part may be one whole field `f` of its output, and it makes the template's `o<f>` the block's `o<j>` (`_return_links` in `second_stage.py`, and `SecondStage.lean:499`, at `9c4fa71387`).
+  - Under it, the long row's `(rows over instances, ok over instances)` gives two links: `o0` to `o0` and `o1` to `o1`. That matches vllm's count of 2 return links.
+- **On `main` it gives none until #8458 lands.** `_return_links` there needs a template of one output (`second_stage.py:569–596`, `SecondStage.lean:505`). vllm's interior head includes #8458, so their tests see the links.
+- **Ours, an array of tuples, would need a third `returnLinks` case** in Python and Lean, ahead of any proof. Your reason holds.
+- **#8486's read needs one thing their form doesn't give: a value for each return link.**
+  - `readOk` (`SecondStage.lean:814`, `second_stage.py:910`) takes a linked port's value from what the interior registers under the link's name, else from round 1's port of that name.
+  - Round 1's record has only `b.egress`, so both links end at `second-read` until one of those exists.
+  - Which of the two it should be is point 2.
+- **No pins:** neither N2 nor #8458 pins the long row's block digest. Over N2's own commits and over `git diff origin/main...9c4fa71387`, `rg '^\+.*(TemplateInlined|longrow|long_row|long row|[0-9a-f]{64})'` prints nothing for either.
+
+**2. `o1`: round 2 needs its return link, and our (b) was incomplete.**
+
+- **The link isn't optional.** A block's return derives a link for every part or for none: `_return_links` returns None unless its parts cover all the return's leaves (`second_stage.py:576`), and None ends the run at `second-links`.
+- **Each linked port must also be one of the statement's reads** (`linkedRead`, `SecondStage.lean:841`).
+- **Round 1 should register the value, not the interior.**
+  - If the interior registers `<block>/o0` and `<block>/o1`, `second-read` passes. But the block's return is then committed in two trees, round 1's and the interior's. That is the registration at which `SpotFlock.Addresses` fails (`Security/Proofs/Flock/SamplingGeneric/Guarantees.lean:23–25`), so no guarantee covers it. The prover would also pick those values after the first draw.
+  - The form a guarantee can cover: round 1's record commits each return field as its own port, named as the link resolves it. That is `<block id>/o0` and `<block id>/o1` in a record with tables, and `o0` and `o1` in one without. Round 2 then reads it at the replay block's rows (`_linked_row`), and the interior registers neither.
+- **What (b) should have said:** name `o0` and `o1`, both registered by round 1. It named `o0` alone and didn't say which registration.
+- **One more thing I saw** [read; not a test]:
+  - Nothing refuses an interior that registers a name round 1's record also has (`register_interiors`, `service.py:2029`).
+  - `readOk` then reads the interior's value and never round 1's.
+  - Wherever a link's value should be committed by round 1 (a return field, or `scores` if it is a parameter of the replay block), this lets the prover pick it after the first draw.
+  - I'd have round 2 refuse that overlap. The rule is ours (#8486's), and I can write the refusal on a branch of mine if you want it.
+
+**3. The bare name: our (a) doesn't refuse it, nor does the code, and it should stay.**
+
+- **How link values are spelled:** they are `portOf (byTemplate rec)` of round 1's record (`SecondStage.lean:338–341`; `replayLinks` at 538, called with the boundary record at `Run.lean:227`; in Python `second_stage.py:329–335` and `service.py:2408`). They are bare when no port name in round 1's record contains `/`. vllm's account matches this.
+- **(a) was incomplete, not stricter:** it gave only the named form.
+- **Keep the bare form for Thursday.** The long row's record has no table, so it is bare. A record spelled one way and read the other fails closed: the link's value names no port and no registered value, and the run ends at `second-read`.
+- **One caution:** whether a record is named is inferred from any `/` anywhere in it, so adding a table renames every link. The toy names every port `<member>/<port>` (`verity/ml/windows/rows.py:279`). Giving vllm's layout that one spelling too would let `byTemplate` go, but not this week.
+
+**Runs:** `r20261110-190742-45ff` (`integrations/vllm` at N2's head), vy-nebius-cpu-13, ETA about 20:20Z.
