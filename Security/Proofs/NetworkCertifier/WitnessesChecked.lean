@@ -40,9 +40,9 @@ import Proofs.NetworkCertifier.Checked
 # The nontrivial lemmas of the leak bounds with checked inputs
 
 * `SampledLeakChecked`. Its acceptance conclusion fails at the accepting compiled verifier `leakL`, as
-  `SampledLeakAccepted`'s does, at the check every run passes, where the check misses with probability `0`
-  (`checkedWitness_true`): a witness in `RLeakChecked` is in `RLeak` (`rLeak_of_rLeakChecked`), and none is
-  (`leakL_noRLeak`).
+  `SampledLeakAccepted`'s does, at the check every run passes, where the check misses with probability `0` on any runs
+  (`checkedWitness_true`), the trace's among them: a witness in `RLeakChecked` is in `RLeak` (`rLeak_of_rLeakChecked`),
+  and none is (`leakL_noRLeak`).
 * `PooledLeakChecked`. At one window whose audit always accepts, `q = 1`, `Fmax = 1` and no error, its observations empty
   where the horizon is one step, no window meets its leak relation, and the escape bound reads `1 ≤ 0`.
 
@@ -59,10 +59,12 @@ open Claims Claims.Sampling Claims.Witness Claims.Witness.Sampling
 open Claims.SamplingGeneric (Arg Compiled)
 open Claims.Witness.SamplingGeneric (notStmt notPart leakL)
 
-/-- **A check every run passes misses with probability `0`**, at every compiled sampled verifier and statement. -/
+/-- **A check every run passes misses with probability `0`**, at every compiled sampled verifier and statement, on any
+runs. -/
 theorem checkedWitness_true {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
-    (H : Msg → Msg) (D : Compiled Coin A) (x : Msg) :
-    CheckedWitness H D (fun _ _ => True) (fun _ => 0) x := by
+    (H : Msg → Msg) (D : Compiled Coin A)
+    (runs : Claims.Sampling.AuditStatement → Claims.Sampling.Partition → Claims.Sampling.Wit → Set (ℕ → Bool))
+    (x : Msg) : CheckedWitness H D runs (fun _ _ => True) (fun _ => 0) x := by
   intro Ω _ _ P
   unfold PrCheckMiss
   refine le_of_eq ((Pr_congr fun r => iff_false_intro ?_).trans Pr_false)
@@ -75,13 +77,14 @@ is in `RLeakChecked` (`rLeak_of_rLeakChecked`, `leakL_noRLeak`). -/
 theorem SampledLeakChecked_nontrivial :
     ¬ KSLinOn FlockDeploy.sha512 (leakL Bool).V
       (fun x => ScopeAcc (leakL Bool) (fun _ => notLay) (fun _ => 1) x ∧
-        CheckedWitness FlockDeploy.sha512 (leakL Bool) (fun _ _ => True) (fun _ => 0) x)
+        CheckedWitness FlockDeploy.sha512 (leakL Bool) (traceRun FlockDeploy.sha512 (leakL Bool).commit)
+          (fun _ _ => True) (fun _ => 0) x)
       (RLeakChecked FlockDeploy.sha512 (leakL Bool).commit (leakL Bool).parse (leakL Bool).partition 1 1 1
         (fun _ => notLay) (fun _ => 1) 0 (fun s => AsReg s.prog notLay 1 ∅) (fun _ _ => True) 1)
       (leakL Bool).E (fun x => (leakL Bool).κ 0 x + 0) (leakL Bool).γ (fun _ => 1)
       (Bext FlockDeploy.sha512 (leakL Bool).V (leakL Bool).E) := by
   intro h
-  have hb := h [] ⟨leakL_scopeAcc [], checkedWitness_true _ _ []⟩ Unit silentP
+  have hb := h [] ⟨leakL_scopeAcc [], checkedWitness_true _ _ _ []⟩ Unit silentP
   refine leakL_bound_fails FlockDeploy.sha512 _ ((leakL Bool).κ 0 [] + 0) [] ?_
     (by linarith [leakL_κ (Coin := Bool) []]) hb
   exact fun w hw => leakL_noRLeak FlockDeploy.sha512 _ [] w (rLeak_of_rLeakChecked hw)
