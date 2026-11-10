@@ -1,0 +1,66 @@
+# θ in the inference-only policy's names: what `tools/move/rename.py --map tools/move/theta_map.toml` renames, the
+# names that call the registered information θ a baseline (GLOSSARY.md, Older names), in the policy's own files (the four
+# `Nci` Lean areas, `verity/core/protocols/network/nci/` and `verity/core/protocols/network/tests/`) and in the files
+# that cite them. It runs before `inference_only_map.toml`, on the paths as that move finds them.
+# - `Baseline` becomes `Theta`: the check of record's module and namespace `NciCheck.Baseline`, and the modules
+#   `Definitions.Nci.Assumptions.Baseline`, `Properties.Nci.Baseline` and `Proofs.Properties.Nci.Baseline`.
+# - `BaselineSteps`, `BaselineProvenance`, `BaselineDifftest` and `BaselineDifftestMain` become `ThetaSteps`,
+#   `ThetaProvenance`, `ThetaDifftest` and `ThetaDifftestMain`, and the lemma `baseline_desc` `theta_desc`.
+# - The difftest's Python files: `scripts/baseline_difftest_vectors.py` becomes `scripts/theta_difftest_vectors.py`, and
+#   `tests/test_nci_baseline_difftest.py` `tests/test_nci_theta_difftest.py`.
+# What stays, each for a change of its own (`move_check.py` certifies a word that renames a path, a module or a Lean
+# declaration, and these rename none):
+# - The Python reference's functions (`check_baseline`, `check_baseline_unrolled`, `expand_baseline`), the executable
+#   `nci-baseline-difftest` and `BaselineRegistered`, an older name of `Nci.Assumptions.ThetaRegistered` that three files
+#   still cite: `inference_only_ids_map.toml` renames them.
+# - A lock's `runs` entry's `why`, which `move_check.py` holds to its moved paths ([keep]), and the directory
+#   `baseline_difftest/` the vectors are written to, a path of that entry that no move renames.
+# - "baseline" in a sentence, a string the check prints or a verdict's text: prose, restated by hand.
+# - `baseline_digest`, a theorem of the remote protocol's proofs, and every `Baseline` of another package (the lifecycle
+#   example's registration, a benchmark's baseline arm): the words below are held to the files listed.
+#
+# It renames declarations the Lean locks record (`NciCheck.Baseline.evaluate` is read by the policy's guarantees): their
+# records follow in a commit of their own, `tools/verity/lean/check.py --update --moved` with the map `rename.py --moves`
+# prints.
+
+# The difftest's names, which no other package spells: its modules (`BaselineDifftestMain` has no declaration of its own
+# name, so the word is certified by the path it renames) and its Python files.
+[words]
+"BaselineDifftest" = "ThetaDifftest"
+"baseline_difftest_vectors" = "theta_difftest_vectors"
+"nci_baseline_difftest" = "nci_theta_difftest"
+
+# The policy's own files, then the files that cite its names: the remote protocol's statements and proofs, the Lake
+# packages' module lists, the proofs package's lock, the verifier-cost benchmark, vLLM's registration log, the lints'
+# allowlists and two READMEs.
+[[words_in]]
+files = ["Security/Definitions/Nci*", "Security/Properties/Nci*", "Security/Proofs/Nci*", "Security/Proofs/Properties/Nci*",
+         "verity/core/protocols/network/nci/**", "verity/core/protocols/network/tests/**",
+         "Security/Properties/Remote.lean", "Security/Proofs/Properties/Remote.lean",
+         "Security/Proofs/Properties/Remote/Honest.lean", "Security/Properties/lakefile.toml",
+         "Security/Proofs/lakefile.toml", "Security/Proofs/lean-audit.json", "benchmarks/verifier_cost/README.md",
+         "benchmarks/verifier_cost/nci_glm.py", "integrations/vllm/tests/pipeline/test_registration_log.py",
+         "integrations/vllm/verity_vllm/pipeline/registration_log.py", "tests/lint/allowlists/*.json",
+         "verity/core/protocols/composition/README.md", "verity/core/protocols/remote/README.md"]
+words = { "Baseline" = "Theta", "BaselineSteps" = "ThetaSteps", "BaselineProvenance" = "ThetaProvenance", "baseline_desc" = "theta_desc" }
+
+# The two locks whose records read Core's `Verity.Registration.Theta`: there the names are spelled with what they stand
+# under, since a word is certified only to a word that no file it is applied in spells. The Lean files are those that
+# declare `NciCheck.Baseline` and `BaselineProvenance`, by the directories that hold them.
+[[words_in]]
+files = ["Security/lean-audit.json", "Security/Properties/lean-audit.json", "Security/Properties/Nci/*.lean",
+         "verity/core/protocols/network/nci/lean/NciCheck/*.lean"]
+words = { "NciCheck.Baseline" = "NciCheck.Theta", "BaselineProvenance" = "ThetaProvenance", "Nci.Baseline" = "Nci.Theta", "Assumptions.Baseline" = "Assumptions.Theta", "Assumptions/Baseline" = "Assumptions/Theta" }
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the retired-terms
+# lints' own examples, the frozen backends, files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line
+# itself), lock files, move_check's own tests, and the Lean tools' fixtures, locks as they were on a past tree, which
+# their tests read as such.
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md",
+           "tests/test_retired_terms.py", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock",
+           "tools/verity/check/tests/test_move_check.py", "tools/verity/lean/tests/fixtures/**"]
+
+[keep]
+patterns = ['"why": "[\d,]+ [^"\n]*"']
+strings = []

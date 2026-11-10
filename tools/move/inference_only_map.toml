@@ -1,0 +1,65 @@
+# The inference-only policy's names: what `tools/move/rename.py --map tools/move/inference_only_map.toml` renames, the
+# policy's older name NCI in paths, Lean and Python (GLOSSARY.md, Older names). The prose's words are
+# `inference_only_prose_map.toml`'s.
+# - `Nci` becomes `InferenceOnly`: the Lean area (`Security/{Definitions,Properties,Proofs,Proofs/Properties}/Nci`), its
+#   namespace and modules, and every name it is one part of, so `NciCheck`, the policy's check and its Lake library,
+#   becomes `InferenceOnlyCheck`.
+# - `nci` becomes `inference_only`: `verity/core/protocols/network/nci/` and each module, file and identifier that
+#   spells it (`nci_check`, the check's Lake package, `nci_reference`, `nci_glm`, `nci_cost`, `nci_phases`, `test_nci_*`).
+# What stays, each for a change of its own (`move_check.py` certifies a word that renames a path, a module or a Lean
+# declaration, and these rename none):
+# - The executables' names in kebab case (`nci-check`, `nci-phases`, the difftests') and the constants named `NCI`
+#   (`NCI_SCRIPTS`), which no rule here reaches ([keep] holds `nci-`).
+# - The check's failure rule `"nci"`, a word of its verdict that `Properties`' statements quote: a pathlib join on the
+#   directory (`/ "nci" /`) is renamed ([keep]).
+# - A lock's `runs` entry's `why`, which `move_check.py` holds to its moved paths: the check's six, each opening with its
+#   count ([keep]).
+# - `benchmarks/nci/`, where it is and under its name ([keep_paths], [keep]), with the names that follow it: its own
+#   `nci`, its row `nci/` of `benchmarks/README.md`'s table ([keep_in]), and in `benchmarks/rho/` the family kind `nci`,
+#   `nci:<id>`, the `nci.*` keys and `families.Nci`, which name that library ([keep_in], [keep]).
+# - The ids, until a format version ([keep]): the schema `verity/nci-glm/v1` and the stub ids, which end in a version,
+#   and the cited draft `draft:nci-search`.
+# - The Definitions the check's vector generators name (`"NciHandBlk"`, `f"NciDecl{seed}"`): the vectors spell them, and
+#   the check's lock pins the vectors' digests, so they change with a regenerated lock ([keep]).
+# - The period check's refusal that names `NciCheck.Desc.rootLaidOut` (`NetworkCheck.Period.scanOf`, and the test that
+#   expects it): the text is part of what `scanOf` computes, so renaming it changes a definition the locks' guarantees
+#   read, where a move leaves every record the same statement under its old names ([keep]).
+#
+# It renames declarations the Lean locks record (`Nci.Guarantees.*`, `NciCheck.*`): their records follow in a commit of
+# their own, `tools/verity/lean/check.py --update --moved` with the map `rename.py --moves` prints.
+
+[words]
+"network/nci" = "network/inference_only"
+"Nci" = "InferenceOnly"
+"nci" = "inference_only"
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the retired-terms
+# lints' own examples, the frozen backends, files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line
+# itself), lock files, move_check's own tests, and the Lean tools' fixtures, locks as they were on a past tree, which
+# their tests read as such. GLOSSARY.md is rewritten, since its symbol table names the Lean, and its rows of older names
+# stay as they are ([keep]).
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md",
+           "tests/test_retired_terms.py", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock",
+           "tools/verity/check/tests/test_move_check.py", "tools/verity/lean/tests/fixtures/**"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+',
+            'lanes/[\w.-]+', 'draft:[\w.-]+', '\bbenchmarks/nci\b', '(?<!\w)nci-', '(?<!/ )"nci"(?! /)',
+            '"why": "[\d,]+ [^"\n]*"', '(?<=")Nci(?!Check)[A-Z]\w*']
+# GLOSSARY.md's rows of older names, the slowdown calculator's family of `benchmarks/nci`'s algorithms, and the period
+# check's refusal.
+strings = ["families.Nci", "`Nci*`, `nci-*`, `ius` and the `nci` directories",
+           "the Lean's `Nci.Dampener` and `Dampener*` names",
+           "and the Lean's `Nci.Dampener.unmonitoredShare`",
+           "(NciCheck.Desc.rootLaidOut, inputsAtRoot and walkable)"]
+
+[keep_paths]
+"benchmarks/nci/**" = ["nci"]
+
+[keep_in]
+"benchmarks/nci/**" = ["nci"]
+"benchmarks/README.md" = ["nci"]
+"benchmarks/rho/**" = ["nci"]
+"benchmarks/rho/rho/families.py" = ["Nci"]
+"benchmarks/rho/tests/test_families.py" = ["Nci"]
