@@ -270,6 +270,21 @@ def has_custody(run_dir: Path) -> tuple[bool, str]:
     return (True, "on the remote (.custody)") if why is None else (False, why)
 
 
+def custody_run(run_dir: Path) -> str | None:
+    """Why the run dir is a run launched with run custody (its runner's `.custody`, the launcher's remote.json, or the request the
+    machine's job.json names), else None.  Its attempt must name its run record: `research data custody RUN --publish` publishes
+    one, and an attempt published without one is write-once and closes custody to it."""
+    d = Path(run_dir)
+    if (d / MARKER).exists():
+        return f"its runner wrote {MARKER}"
+    if (_read(d / LAUNCHER_RECORD) or {}).get("custody"):
+        return f"{LAUNCHER_RECORD} names its custody key"
+    req = (((_read(d / "job.json") or {}).get("run") or {}).get("remote") or {}).get("request")
+    if isinstance(req, str) and (_read(Path(req)) or {}).get("custody"):
+        return f"its request {req} names its custody key"
+    return None
+
+
 # ---- verify / push / mark -----------------------------------------------------------------------------------------------------------
 
 def push_run(st: Any, run_id: str) -> list[str]:
