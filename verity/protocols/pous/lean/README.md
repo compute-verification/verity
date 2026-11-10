@@ -8,6 +8,20 @@ outside help (a deployment accounts for help: `../verifier/PROTOCOL.md`, "The pr
 the same toolchain and Mathlib pin, `autoImplicit` off, no `axiom` (an assumption is a named `Prop` hypothesis), and a
 check file.
 
+## Interface
+
+What code outside this directory may use. Everything else here is internal.
+
+| Entry point | What it is |
+|---|---|
+| `bash grade.sh SUBMISSION.lean Pous.Guarantees.NAME` | Grades one submission, a file that declares `theorem solution : Pous.Guarantees.NAME`, against that frozen statement. It prints one JSON line `{"file", "target", "verdict", "reason", "axioms"}` and exits 0 on PASS, 1 on FAIL, and 2 when the trusted layer, the grader or the sandbox is broken. `POUS_GRADE_TIMEOUT` and `POUS_GRADE_MEMORY_MB` set its limits. It needs unprivileged user namespaces. |
+| `bash check.sh` | The acceptance check: the grader and the security analysis build and pass the Lean check, and the grader passes its positive control and rejects each negative one. It prints `ALL CHECKS PASSED`. |
+| `TRUSTED.sha256` | The digests of the trusted files, by their paths from this directory. `grade.sh` refuses to grade when a file differs. `tools/verity/check/pins.py --regen` rewrites it, and a test of PoUS's suite (`test_pous_trusted.py`) fails while it is stale. |
+
+`lake build` here builds the grader, the executable `pous-grader` of the Lake package `pous_grader`, which `grade.sh`
+runs and nothing else does. No other Lake package requires this one, and no Python imports from it. What it grades
+against is not here: the trusted layer and the proofs are in `security/`, listed next.
+
 ~~~text
 Definitions/Pous.lean               trusted, the definitions: imports every module under Definitions/Pous/
 Definitions/Pous/Game/{Prob,Oracle}.lean

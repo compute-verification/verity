@@ -8,8 +8,10 @@ server's memory with labels it derives itself and flips its coins once the fill 
 receipt time on its own clock and signs the run's records once, under LMS over SHA-512. The verifier checks a signed run
 against the commitment published before it and publishes the verdict, and for a wipe the survivor bound it certifies.
 
-This directory holds the device's verdicts as executable Lean, the package `lean/` (its README lists the API). The
-device's Python is in `verity/protocols/pous` (below), the reference the Lean is difftested against.
+This directory holds the timed rounds' device in Python (`memory_challenger.py`, the reference the Lean is difftested
+against), its party and the messages of a run, the timed audit's process, and the device's verdicts as executable
+Lean, the package `lean/` (its README lists the API). The streamed wipe's device is in
+`verity/protocols/pous/verifier/` (below).
 
 ## Interface
 
@@ -18,12 +20,15 @@ What code outside this directory may use. Everything else here is internal.
 | Entry point | What it is |
 |---|---|
 | `python -m verity.protocols.pous.device.challenger_party --device DIR [--listen HOST:PORT]` | The timed rounds' memory challenger as a process of its own, for the challenger host. It reads one JSON line on stdin. A salt request `{"salt": {"audit", "commitment"}}` it answers with `{"source": HEX}`, logged in its salt log. A run's request `{"binding", "block_bytes", "blocks", "k", "limit_ns", "node"}` it answers by printing `{"listening": PORT}`, serving one prover and printing its report `{"host", "public_key", "session", "session_id", "warmups"}`. A refusal prints `{"refused": REASON}` and exits 1. Its key, session log and salt log are in `DIR`, and it keeps each run it completes in `DIR/setups/`. `challenger_party.PROTOCOL` is the same two parties as a `ProtocolDef` of the deployment layer (`verity.configuration.deploy`). |
-| `python verity/protocols/pous/device/timed_audit.py --ready READY.json --leaves LEAVES.bin --out AUDIT.json [OPTIONS]` | The verifier process of the harness's timed audit: a client of a responder that runs `protocol.TimedAudit`'s audits against it (PoUS's `protocol.py`) and writes each audit's record and verdicts to `AUDIT.json`. With `--strict` it refuses a `k` or a limit the certificate doesn't cover. It exits 0 when every audit accepted and 1 otherwise. `--calibrate-only` measures the round trip and writes the limit instead. |
+| `python verity/protocols/pous/device/timed_audit.py --ready READY.json --leaves LEAVES.bin --out AUDIT.json [OPTIONS]` | The verifier process of the harness's timed audit: a client of a responder that runs `protocol.TimedAudit`'s audits against it (`verity/protocols/pous/verifier/protocol.py`) and writes each audit's record and verdicts to `AUDIT.json`. With `--strict` it refuses a `k` or a limit the certificate doesn't cover. It exits 0 when every audit accepted and 1 otherwise. `--calibrate-only` measures the round trip and writes the limit instead. |
+| `memory_challenger` (`memory_challenger.py`) | The memory challenger's timed rounds in Python, the reference its Lean verdict is held to: the device (`MemoryChallenger`, `CoinTree`, `SessionLog`, `LmsSigner`), the records it publishes and signs (`SessionCommitment`, `CoinOpening`, `Round`, `SignedSession`; the module docstring is their formats' spec), `block_digest(block: bytes) -> bytes`, and the check of a signed run, `verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequence[CoinOpening], expected: Callable[[int], bytes], *, trusted: frozenset[bytes] \| set[bytes], schemes: Mapping[str, Verify] = SCHEMES) -> Verdict`. |
+| `challenger_session.session(side: Side, request: Mapping[str, Any], respond: Callable[[int], bytes]) -> dict[str, Any]`, with `side_of`, `request_of`, `session_id` and `placement` (`challenger_session.py`) | The timed rounds from the node's side: it starts the memory challenger's side where `side_of(period: Mapping[str, Any], node: str, device: str \| Path) -> Side` puts it, sends the request, answers each index with `respond(index)` and returns the side's report. The module also holds the messages both sides speak (`MANIFEST`, `Frames`), which `challenger_party` imports. |
 | The Lean package `lean/` (`core_memory_challenger`) | The verdicts on what the device signed, as executables, Lean modules and two Python callers. `lean/README.md` states its interface. |
 
-The device's Python, which this directory imports, is PoUS's: `memory_challenger.py`, `streamed_wipe.py`, the messages of
-a run of timed rounds (`challenger_session.py`) and the wipe's process (`wipe_party.py`) are entry points of
-`verity/protocols/pous/verifier/README.md`.
+The streamed wipe's Python is not here: its device and verdict (`streamed_wipe.py`) and its process (`wipe_party.py`)
+are in `verity/protocols/pous/verifier/`, entry points of that directory's README. The two directories import each
+other: the modules here read the verifier's parameters, schemes, setup and run records, and the verifier's run and
+wipe read `memory_challenger` and `challenger_session`.
 
 ## Top statements
 
@@ -50,6 +55,7 @@ The proofs of the properties are in `security/Proofs/Properties/Pous/` (`MemoryC
 - `verity/protocols/pous/device/memory_challenger.py`: the timed rounds' device (`MemoryChallenger`, `CoinTree`,
   `SessionLog`, `LmsSigner`, `verdict`); its module docstring is the record formats' spec.
 - `verity/protocols/pous/verifier/streamed_wipe.py`: the streamed-label wipe's device (`Challenger`) and `verdict`.
-- `verity/protocols/pous/device/challenger_party.py` and `wipe_party.py`: each as a party of its own on the challenger's
-  host; `wipe_parties.py`, the wipe's parties on the party runtime (`verity/configuration/deploy`).
+- `verity/protocols/pous/device/challenger_party.py` and `verity/protocols/pous/verifier/wipe_party.py`: each as a party
+  of its own on the challenger's host; `verity/protocols/pous/verifier/wipe_parties.py`, the wipe's parties on the party
+  runtime (`verity/configuration/deploy`).
 - `lean/tests/`: the difftests of both verdicts and of the record formats against the Python.
