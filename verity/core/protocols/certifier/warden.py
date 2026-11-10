@@ -75,6 +75,11 @@ id egress form, `ingress_buckets` ≤ D, a cell that holds an id request's head 
 (`io_request.layout`), at most 2^16 egress cells, and D + ⌊(`egress_cells` − 1)/r⌋ ≤ `window`, so that a connection ends
 within a window of its admission; `WardenParams` takes no other. The form enters the parameters' digest; a schedule
 without lengths rows hashes nothing of it and keeps its digest, and its network certifier does nothing of this section.
+With lengths rows the network certifier:
+- releases no connection whose client has failed: once a client's problem is set (ingress, malformed, cap) it cuts no
+  further request cell of it, so the connection has no `END`, no place in the release order and nothing for the
+  server. Every released connection therefore ends at an egress slot, in its `END` or a server's `FAIL`, and holds its
+  lane from its release through its admission's bucket + D.
 
 **Fail closed.** A connection fails at the first of: an egress cell whose bytes aren't there at its deadline (late),
 a server that hasn't ended by the last of `egress_cells` cells or sends past its request's `max_tokens` under a response
@@ -686,7 +691,7 @@ class Warden:
                 c.max_tokens = id_request_max_tokens(bytes(c.ingress[:p]))
                 if c.max_tokens is None or c.max_tokens > self.params.max_tokens_cap:
                     c.refused, c.problem = True, c.problem or "cap"
-            if c.ingress_end is not None or c.refused:
+            if c.ingress_end is not None or c.refused or (c.problem is not None and self.params.lengths is not None):
                 out.append(pad)
             elif len(c.ingress) > p or (len(c.ingress) == p and not c.ingress_ended):
                 sent.append(bytes(c.ingress[:p]))

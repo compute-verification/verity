@@ -8,7 +8,11 @@ import dataclasses
 
 import pytest
 
-from verity.core.protocols.certifier.warden import (INTEGER_FIELDS, OPTIONAL_FIELDS, WardenParams)
+from verity.core.protocols.certifier import io_tie as IT
+from verity.core.protocols.certifier.active import HEADER, PAD, id_request
+from verity.core.protocols.certifier.tests.test_network_certifier_warden import EOF, reasons, records, run
+from verity.core.protocols.certifier.warden import (END, INTEGER_FIELDS, OPTIONAL_FIELDS, WardenParams,
+                                                    cells)
 
 #: a schedule whose cells hold an id request's head, and the same with lengths rows
 PLAIN = WardenParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
@@ -64,3 +68,46 @@ def test_a_schedule_with_lengths_rows_is_one_whose_releases_fit_them():
     for change, K in (({"every": 1}, 2), ({"every": 4}, 2), ({"every": 8}, 4), ({"every": 16}, 8),
                       ({"every": 16, "ingress_buckets": 1}, 6), ({"every": 8, "lanes": 5, "ingress_buckets": 5}, 15)):
         assert dataclasses.replace(LEN, **change).stride_releases == K, change
+
+
+# --- a client's failure ------------------------------------------------------------------------------------------
+
+
+def id_req(i: int, prompt_len: int, **fields) -> bytes:
+    kw = {"model": "m", "user": f"user-{i}", "max_tokens": 8, "seed": i, "temperature": 0.7, "top_p": 0.95} | fields
+    return id_request(prompt=[1000 * i + k for k in range(prompt_len)], frame_bytes=B, offset=0, **kw)
+
+
+def response(ids) -> bytes:
+    return b"".join(IT.id_event(x, P) for x in ids) + IT.TRAILER
+
+
+def answer(ids) -> list:
+    """A server's script: the response a bucket after the request's, then its end."""
+    return [(1, response(ids)), (2, EOF)]
+
+
+def request_cells(warden, ordinal: int) -> list[tuple[int, int, bytes]]:
+    """(bucket, kind, cell) of every ingress cell on `ordinal`, in order."""
+    return [(r.window * T + b, f[0], f) for r in records(warden)[0] for b, row in enumerate(r.grid) for f in row
+            if f is not None and HEADER.unpack_from(f)[1] == ordinal]
+
+
+def test_a_connection_whose_client_failed_is_never_released():
+    """A client whose last cell is cut short has failed (malformed) with its stream ended. Without lengths rows the
+    network certifier still cuts what it holds, releases it to the server with its place in the release order, and
+    fails the connection in the same bucket. With them it cuts nothing more: no `END`, no place in the order, nothing
+    for the server, and the connection after it takes the place."""
+    whole, short = id_req(1, 3), cells(id_req(2, 40), B)[:-10]
+    assert len(cells(id_req(2, 40), B)) == 2 * B
+    arrivals = {0: [short], 1: [cells(whole, B)]}
+    for params, released in ((PLAIN, True), (LEN, False)):
+        warden, _, server = run([[], answer((7, 8))], arrivals, params=params, windows=2)
+        log = {e["ordinal"]: e for e in warden.log}
+        assert (log[1]["failed"], log[1]["failed_at"]) == ("malformed", 0)
+        kinds = [k for _, k, _ in request_cells(warden, 1)]
+        assert kinds == [PAD, PAD, END, PAD] if released else set(kinds) == {PAD}
+        assert (log[1]["release"], log[2]["release"]) == ((0, 1) if released else (None, 0))
+        assert bool(server.conns[0].received) == released and warden.requests_released == 1 + released
+        assert (log[2]["failed"], log[2]["egress_cells"]) == (None, 3)
+        assert [(o, why) for _, o, why in reasons(warden)] == [(1, "malformed")]
