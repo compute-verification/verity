@@ -5,7 +5,7 @@ import Definitions.InferenceOnly.Assumptions.Covering
 
 A lower bound on inference blocks: a circuit that computes many chained multiplications of updated
 weights cannot be covered by few small blocks that each read little. It is a statement beside `Complies`, `Chain` and
-`F`, not a specialization of them: a covering's blocks may overlap and recompute, so it is not a division into IUs, and
+`F`, not a specialization of them: a covering's blocks may overlap and recompute, so it is not a division into inference blocks, and
 its multiplication blocks are any disjoint gate sets with an output gate, not a chain's products and sums.
 -/
 

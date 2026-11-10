@@ -1,6 +1,6 @@
 """The difftest of the description-sized inference-only check (`InferenceOnlyCheck.Desc`) against the unrolled one: the Python half.
 
-`verity/core/protocols/network/inference_only/lean/scripts/desc_difftest_vectors.py` writes 4,009 declarations divided into IUs of
+`verity/core/protocols/network/inference_only/lean/scripts/desc_difftest_vectors.py` writes 4,009 declarations divided into inference blocks of
 root nodes (six on a composite keyed with an input id, which is no input node, two on a gate reading a nested scan's
 carry, one past `InferenceOnlyCheck.Desc.walkBound`'s limit, four on a scan of no iterations, twelve on whole members of a batch
 returning leaves of two arguments they share, 335 whose references name leaves of other widths than their types give
@@ -76,7 +76,7 @@ def test_the_generator_covers_what_it_says():
 
 def test_the_decoys_are_no_input_nodes():
     """The decoys come just before the walks, and the reference refuses each one the unrolled check refuses: the decoy
-    node in θ (`theta-not-input`) or in no IU (`gate-in-no-iu`), and gives a verdict with the decoy node in an IU."""
+    node in θ (`theta-not-input`) or in no inference block (`gate-in-no-iu`), and gives a verdict with the decoy node in an inference block."""
     first = (vectors.total() - len(vectors.vectors.pinned()) - len(vectors.mistyped()) - len(vectors.shared())
              - len(vectors.empties()) - len(vectors.walks()) - len(vectors.decoys()))
     made = [vectors.instance(s)["instance"] for s in range(first, first + len(vectors.decoys()))]
@@ -122,7 +122,7 @@ def test_the_empty_scans_are_refused_where_they_carry_a_value():
 
 def test_the_shared_members_read_both_nodes():
     """The shared members come just before the mistyped instances, and on each the reference gives the unrolled check's
-    verdict: the other Call's 8 output bits are novel to the reading gate's IU, however the members order the pieces,
+    verdict: the other Call's 8 output bits are novel to the reading gate's inference block, however the members order the pieces,
     so it fails the policy at α 1 (`InferenceOnlyCheck.Desc` once counted none, and accepted)."""
     first = vectors.total() - len(vectors.vectors.pinned()) - len(vectors.mistyped()) - len(vectors.shared())
     made = [vectors.instance(s)["instance"] for s in range(first, first + len(vectors.shared()))]

@@ -6,13 +6,13 @@ import Proofs.InferenceOnly.Packed
 /-!
 # Proofs of the inference-only policy's guarantees under training's incompressibility
 
-`TrainingIncompressible` is one law over divisions of the reference circuit. A small IU `R` is a division of `c` into
+`TrainingIncompressible` is one law over divisions of the reference circuit. A small inference block `R` is a division of `c` into
 `R` and the rest (`splitOff`), so the law gives `WeightsIncompressible` and `ActivationsIncompressible` on `R`; on a
-division into small IUs it gives `PartialSumsIncompressible`. Conversely the three give the law: on a division with an IU
-that is not small, charge every partial sum to that IU (`trainingIncompressible_iff`). The guarantees then follow from the
+division into small inference blocks it gives `PartialSumsIncompressible`. Conversely the three give the law: on a division with an inference block
+that is not small, charge every partial sum to that inference block (`trainingIncompressible_iff`). The guarantees then follow from the
 thread and partial-sum proofs, which read only those three.
 
-Through a partial containment each dark gate is an IU of its own (`withDark`), so the law bounds the partial sums it
+Through a partial containment each dark gate is an inference block of its own (`withDark`), so the law bounds the partial sums it
 absorbs by its reads (`IncompressibleContainedMatMulOn`). At `μ = 1` that budget has no weight, and the activations' half
 alone bounds the products the declaration computes (`ContainedFanOutOn`, the case `k = 1` of `PackedContainedFanOutOn`).
 -/
@@ -73,7 +73,7 @@ section Training
 variable {c : Declaration} {ch : Chain c.D} {T : Threading c} {Γ : ℕ} {K b_w b_a : ℝ}
 
 open Classical in
-/-- The law on one small IU: divide `c` into it and the rest. -/
+/-- The law on one small inference block: divide `c` into it and the rest. -/
 theorem training_piece (h : Assumptions.TrainingIncompressible c ch T Γ K b_w b_a) {R : Finset (Fin c.D.N)}
     (hR : Small c Γ K R) :
     ∃ s : ℕ,
@@ -109,8 +109,8 @@ theorem partialSumsIncompressible_of_training (hba : 0 ≤ b_a)
   exact ⟨s, hsum, fun u => le_of_max_charge_right hba
     (hs u ⟨P.gates_subset_computed u, (hP u).1, (hP u).2⟩).1⟩
 
-/-- **The three give training's incompressibility**: on a division into small IUs, partial-sum incompressibility
-charges the partial sums; on one with an IU that is not small, that IU takes them all. -/
+/-- **The three give training's incompressibility**: on a division into small inference blocks, partial-sum incompressibility
+charges the partial sums; on one with an inference block that is not small, that inference block takes them all. -/
 theorem trainingIncompressible_of_reads (hba : 0 ≤ b_a) (hW : Assumptions.WeightsIncompressible c T Γ K b_w b_a)
     (hA : Assumptions.ActivationsIncompressible c ch Γ K b_w b_a)
     (hPS : Assumptions.PartialSumsIncompressible c ch Γ K b_w b_a) :
@@ -172,7 +172,7 @@ theorem IncompressibleContainedTraining : Guarantees.IncompressibleContainedTrai
     _ ≤ d.D.size d.D.computed := hF
 
 open Classical in
-/-- **The partial-sum law with dark gates, in reads**: each dark gate is a small IU of its own, whose partial sums are
+/-- **The partial-sum law with dark gates, in reads**: each dark gate is a small inference block of its own, whose partial sums are
 within its reads. -/
 theorem IncompressibleContainedMatMulOn : Guarantees.IncompressibleContainedMatMulOn := by
   intro Γ α K b_w b_a μ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he ⟨n, P, hP⟩ hB hX h

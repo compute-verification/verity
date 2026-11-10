@@ -15,8 +15,8 @@ The `ρ t` add up to at most the activations `ActivationsIncompressibleAll` char
 1's counting (`threaded_count_of`) gives `Λ = max(e, reuse · K / (4 dd b_w))`. A thread with fewer than `dd` open
 activations is not full, which is the threading inequality that counting takes.
 
-Through a partial containment (`ActivationsBoundOn`), each IU of a compliant division of the declaration computes a piece
-of `S` that is small and reads no more than the IU (`piece`, `novelReads_piece`), and the pieces divide `S`.
+Through a partial containment (`ActivationsBoundOn`), each inference block of a compliant division of the declaration computes a piece
+of `S` that is small and reads no more than the inference block (`piece`, `novelReads_piece`), and the pieces divide `S`.
 -/
 
 namespace InferenceOnly.SecurityProofs

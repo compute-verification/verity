@@ -5,7 +5,7 @@ import Definitions.InferenceOnly.Dark
 /-!
 # The inference-only policy over threads: the guarantees
 
-The thread draft's Theorems 1 and 2. Under the inference-only policy an IU reads at most `α` bits per gate and has at most `Γ`
+The thread draft's Theorems 1 and 2. Under the inference-only policy an inference block reads at most `α` bits per gate and has at most `Γ`
 gates, so it reads at most `αΓ` bits: the draft's `S*` is `αΓ` here.
 
 Theorem 2 also holds when the declaration contains the reference circuit only partly (`PartialContainment`): the
@@ -57,8 +57,8 @@ def ThreadedTraining : Prop :=
 
 /-- **Theorem 2 with dark gates**: a declaration `d` that complies at `(Γ, α)` and contains the reference circuit `c`
 partly, computing the gates `S` of `c` and leaving the rest dark (`PartialContainment`), has at least `b_a / (αΛ)` gates
-per counted multiplication of `c` in `S`, where `Λ` is Theorem 1's bound at read cap `αΓ`. Each IU of `d` computes a piece
-of `S` that reads no more than the IU, since a dark value enters `d` only as an input, and outside its θ by
+per counted multiplication of `c` in `S`, where `Λ` is Theorem 1's bound at read cap `αΓ`. Each inference block of `d` computes a piece
+of `S` that reads no more than the inference block, since a dark value enters `d` only as an input, and outside its θ by
 `ThetaRegistered`. At `S = computed` it is `ThreadedThrottled`. -/
 def ThreadedThrottledOn : Prop :=
   ∀ (Γ : ℕ) (α b_w b_a : ℝ) (c d : Declaration) (T : Threading c) (dd e : ℕ) (M : PartialContainment c d),

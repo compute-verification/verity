@@ -1,4 +1,4 @@
-"""The description-sized check's difftest data: `difftest_vectors.py`'s declarations, divided into IUs of root nodes, for
+"""The description-sized check's difftest data: `difftest_vectors.py`'s declarations, divided into inference blocks of root nodes, for
 `InferenceOnlyCheck/DescDifftestMain.lean`.
 
     python scripts/desc_difftest_vectors.py <verity checkout> --out DIR [--count N]
@@ -21,9 +21,9 @@ node's (`shared`), then `mistyped_vectors.cases()`'s (`mistyped`: references tha
 their types give them, which both sides refuse as `program`, and their well-typed neighbours), then
 `difftest_vectors.pinned()`'s two (θ every
 input, refused, and θ the registered one, accepted). θ is no input node, every one (refused, `theta-not-registered`,
-where one is bound per run), the registered ones or a random set of them. A division puts every Call in one IU, each in
-its own, runs of consecutive Calls or a random assignment, and a Call without gates in any IU or none. `Γ` and `α` are
-set as `difftest_vectors` sets them, at, below or above the division's largest IU and its fresh input per gate. About a third of the
+where one is bound per run), the registered ones or a random set of them. A division puts every Call in one inference block, each in
+its own, runs of consecutive Calls or a random assignment, and a Call without gates in any inference block or none. `Γ` and `α` are
+set as `difftest_vectors` sets them, at, below or above the division's largest inference block and its fresh input per gate. About a third of the
 instances are malformed, each in one way `InferenceOnlyCheck.Desc` refuses.
 """
 from __future__ import annotations
@@ -64,7 +64,7 @@ MALFORMED = vectors.MALFORMED
 
 
 def division(rng, calls: list[int]) -> tuple[str, list[int]]:
-    """A division of the Calls with gates: (strategy, IU of each)."""
+    """A division of the Calls with gates: (strategy, inference block of each)."""
     return vectors.division(rng, calls)
 
 
@@ -183,7 +183,7 @@ def decoy(batch: bool) -> str:
 
 
 def decoys() -> list[dict]:
-    """Instances on `decoy`'s declarations: the decoy node in θ and in no IU, in no IU, and in an IU. Their inputs are
+    """Instances on `decoy`'s declarations: the decoy node in θ and in no inference block, in no inference block, and in an inference block. Their inputs are
     bound per run, so θ holds no input node."""
     out = []
     for batch in (False, True):
@@ -217,7 +217,7 @@ WALKS = (3, 2 ** 32)
 
 
 def walks() -> list[dict]:
-    """Instances on `walk`'s declarations, θ their registered inputs (none) and the Call in IU 0: one `InferenceOnlyCheck.Desc`
+    """Instances on `walk`'s declarations, θ their registered inputs (none) and the Call in inference block 0: one `InferenceOnlyCheck.Desc`
     gives a verdict on, and one past `walkBound`'s limit, which it refuses."""
     out = []
     for n in WALKS:
@@ -257,7 +257,7 @@ EMPTIES = ("unread", "passed", "read", "bare")
 
 
 def empties() -> list[dict]:
-    """Instances on `empty`'s declarations, θ their registered inputs (none) and the Call in IU 0: three refused
+    """Instances on `empty`'s declarations, θ their registered inputs (none) and the Call in inference block 0: three refused
     (`program`) and one given a verdict."""
     out = []
     for kind in EMPTIES:
@@ -302,7 +302,7 @@ def shared_decl(reader: str, order: tuple[str, ...]) -> str:
 
 def shared() -> list[dict]:
     """Instances on `shared_decl`'s declarations, θ the registered inputs and α 1: the reading gate in `A`'s IU and `B`
-    in another, and the other way round. A read is one node's gates, so `B`'s gates are novel to the first IU however
+    in another, and the other way round. A read is one node's gates, so `B`'s gates are novel to the first inference block however
     the copy's pieces are ordered, and `A`'s not to the second."""
     out = []
     for reader in ("primitive", "composite", "wrapped"):

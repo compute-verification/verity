@@ -62,7 +62,7 @@ computing the gates `S` of `c` and leaving the rest dark) computes the chain's p
 `max (min c₁ c₂) (μ b_a / Λ) · G_S ≤ α size(d) + (1 − μ) ∑_{v dark} novelReads(v)` for each `μ ∈ [0, 1]`,
 where `min c₁ c₂` is `F`'s minimum at read cap `K` and smallest inner dimension `dd`, and `Λ = max e_max (K / (4 b_w dd))`
 with `e_max` the largest output dimension. The assumption is on `c` at read cap `K ≥ αΓ`, beside the θ premise
-`ThetaRegistered`, and each dark gate reads at most `K` itself, so that it is an IU of its own: the dark gates absorb
+`ThetaRegistered`, and each dark gate reads at most `K` itself, so that it is an inference block of its own: the dark gates absorb
 at most their reads of the partial sums. -/
 def IncompressibleContainedMatMulOn : Prop :=
   ∀ (Γ : ℕ) (α K b_w b_a μ : ℝ) (c d : Declaration) (ch : Chain c.D) (T : Threading c) (dd emax : ℕ)
@@ -97,7 +97,7 @@ def IncompressibleContainedTrainingOn : Prop :=
 /-- **Products done in the declaration are bounded by their fan-out** (`IncompressibleContainedMatMulOn` at `μ = 1`): a
 declaration `d` that complies at `(Γ, α)` and contains `c` partly computes the chain's products in `S`, `G_S` of them,
 with `b_a / Λ · G_S ≤ α size(d)`, `Λ = max e_max (K / (4 b_w dd))`, and no term for the dark gates, so it holds even when
-every partial sum is added off the books. Each IU makes at most `Λ` products per `b_a` bits it reads: `e_max` per input
+every partial sum is added off the books. Each inference block makes at most `Λ` products per `b_a` bits it reads: `e_max` per input
 entry it uses at a position it completes no entry of, one for each row of the multiplication, and, at positions it
 completes entries of, `K / (4 b_w dd)` per `b_a` bits by AM–GM on its weight and input reads. Of training's
 incompressibility it needs only the activations' half, `ActivationsIncompressible` on `c` at read cap `K ≥ αΓ`, besides
