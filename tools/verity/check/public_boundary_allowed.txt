@@ -16,6 +16,10 @@ integrations/vllm/tests/protocols/pouw_h1_circuits.py -> benchmarks/pouw/h1_prov
 integrations/vllm/tests/protocols/pouw_h1_circuits.py -> benchmarks/pouw/hidden_zk
 integrations/vllm/tests/protocols/pouw_h1_gpu.py -> benchmarks/pouw/served_h1/producer.py
 integrations/vllm/tests/protocols/test_pouw_h1_circuits.py -> benchmarks/live_challenger/auditor.py
+integrations/vllm/verity_vllm/config.py -> benchmarks/pous
+integrations/vllm/verity_vllm/config.py -> benchmarks/remote_session
+integrations/vllm/verity_vllm/config.py -> benchmarks/torch_gpu/p2_stage
+integrations/vllm/verity_vllm/config.py -> benchmarks/vllm_encoded
 integrations/vllm/verity_vllm/pipeline/advice.py -> verity/core/protocols/certifier/__init__.py
 integrations/vllm/verity_vllm/pipeline/research.py -> tools/research/pyproject.toml
 integrations/vllm/verity_vllm/pipeline/research_tools.py -> tools/research/src/research/pythonpath.py
