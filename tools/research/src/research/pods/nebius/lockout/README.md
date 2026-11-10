@@ -12,7 +12,8 @@ sessions also go under `/var/log/sudo-io`.
 A CPU node keeps what a run and the store need: a job user's unit, its stop and what it left in the run dir (`research run
 --job-user`, through `vy-sudo`), `vy-seal-runs delete` and `evict`, the start of `vy-lean-cache-daily.service`, and `sudo -n true`.
 It may run as itself and as nobody else: its image leaves `ubuntu` in sudo, adm and lxd. It has no loop to switch and no cluster,
-so steps 4 to 6 below are not in its plan. Anything else that ran as root there through `research` moves to a root unit or to
+so steps 4 to 6 below are not in its plan. Its sshd lets only `research` log in (vm_setup.sh's `AllowUsers`), so step 2 there
+also reloads ssh once deploy has staged `/etc/ssh/sshd_config.d/11-vy-admin.conf` (`sudo sshd -t && sudo systemctl reload ssh`). Anything else that ran as root there through `research` moves to a root unit or to
 vy-admin before the node's fallback expires (`EXCLUDED`); `vy-lockout audit --node NODE` lists what would be refused, before the
 lock-out too, and anyone may run it.
 

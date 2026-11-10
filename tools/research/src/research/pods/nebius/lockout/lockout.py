@@ -47,6 +47,7 @@ from pathlib import Path
 from typing import Callable
 
 LIB = Path("/usr/local/lib/vy-lockout")
+SSHD_ADMIN = "/etc/ssh/sshd_config.d/11-vy-admin.conf"     # `AllowUsers vy-admin`, beside vm_setup.sh's `AllowUsers research`
 SUDOERS_D = Path("/etc/sudoers.d")
 ALLOWLIST = "50-vy-research"
 FALLBACK = "59-vy-research-fallback"
@@ -437,7 +438,9 @@ def preflight(node: str, run: Runner = _run, root: Path = Path("/"), session: Ca
                      "an ssh login as vy-admin with the keys and sudoers file in place now" if any(t >= int(newest) for t in times)
                      else "the last ssh login as vy-admin is older than its keys or its sudoers file" if times
                      else "no ssh login as vy-admin in the last 7 days",
-                     "log in over ssh as vy-admin and run `sudo -n true`: root must work through vy-admin before research loses it"))
+                     "log in over ssh as vy-admin and run `sudo -n true`: root must work through vy-admin before research loses it "
+                     f"(a login sshd refuses: `sshd -T | grep -i allowusers` must name vy-admin, which {SSHD_ADMIN} and a reload of "
+                     "ssh give)"))
     admin, me = uid_of("vy-admin", str(at("/etc/passwd"))), session()
     out.append(Check("vy-admin-session", admin is not None and me == admin,
                      "this session logged in as vy-admin and is root: its login and its sudo both work" if admin is not None and me == admin
@@ -726,8 +729,12 @@ def plan_text(node: str) -> str:
         ("deploy", f"from an agent VM: `research deploy install {node} --by WHO --apply` (stages /usr/local/lib/vy-lockout"
                    + (", the tools and node 1's /etc/vy/env/root.env" if cluster else " and the tools") + "; installs nothing into "
                    "sudoers.d or a unit's .d, and starts nothing)", "research deploy attic"),
-        ("vy-admin", "copy the public keys to the node, then `sudo vy-admin-setup KEYS`; log in as vy-admin, `sudo -n true`; every "
-                     "step below runs as vy-admin", "userdel -r vy-admin; rm /etc/sudoers.d/10-vy-admin"),
+        ("vy-admin", "copy the public keys to the node, then `sudo vy-admin-setup KEYS`; "
+                     + ("" if cluster else f"`sudo sshd -t && sudo systemctl reload ssh` ({SSHD_ADMIN}, which deploy staged: the node's "
+                                           "sshd lets only research log in until then); ")
+                     + "log in as vy-admin, `sudo -n true`; every step below runs as vy-admin",
+         "userdel -r vy-admin; rm /etc/sudoers.d/10-vy-admin"
+         + ("" if cluster else f" {SSHD_ADMIN}; sshd -t && systemctl reload ssh")),
         ("seal", "`sudo vy-seal-runs seal --dry-run`, read it, then `sudo systemctl enable --now vy-seal-runs.timer`; "
                  "`sudo vy-lockout roots --apply`", "systemctl disable --now vy-seal-runs.timer; vy-lockout roots --back --apply "
                  "(sealed dirs stay sealed: /var/lib/vy-seal-runs/sealed.jsonl has each one's former owner and mode)"),

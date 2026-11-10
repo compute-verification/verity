@@ -1000,6 +1000,27 @@ def test_the_plan_has_every_step_with_its_rollback():
     assert steps == ["1. deploy", "2. vy-admin", "3. seal", "4. harden", "5. sudoers", "6. watch"], "no loop to switch, no cluster"
     assert cpu.count("   rollback: ") == 6 and not [w for w in ("tmux", "kubeconfig", "root.env") if w in cpu]
     assert f"vy-lockout sudoers --node {CPU13} --apply" in cpu and "--login vy-admin" in cpu and f"audit --since=-24h --node {CPU13}" in cpu
+    assert "sudo sshd -t && sudo systemctl reload ssh" in cpu and f"{LO.SSHD_ADMIN}; sshd -t && systemctl reload ssh" in cpu
+
+
+def test_a_cpu_node_that_gets_the_lock_out_gets_every_file_of_it_and_the_sshd_file_that_lets_vy_admin_in():
+    """vm_setup.sh's sshd allows only research: a node staged without the AllowUsers file can never pass preflight's login check."""
+    import tomllib
+    files = tomllib.loads((NEBIUS / "deploy.toml").read_text())["file"]
+    on = {n: {f["path"]: f["src"] for f in files if n in f.get("nodes", []) and "src" in f} for f in files for n in f.get("nodes", [])
+          if LO.CPU_NODE.fullmatch(n)}
+    staged = {n: paths for n, paths in on.items() if any(p.startswith(str(LO.LIB)) for p in paths)}
+    assert CPU13 in staged
+    lockout = "tools/research/src/research/pods/nebius/lockout/"
+    for node, paths in staged.items():
+        assert paths[str(LO.LIB / LO.ALLOWLIST)] == lockout + "sudoers/" + LO.CPU.file, (node, "its own allowlist, under the staged name")
+        assert paths[str(LO.LIB / LO.ADMIN)] == lockout + "sudoers/" + LO.ADMIN
+        assert paths[LO.SSHD_ADMIN].endswith("/11-vy-admin.conf"), node
+        assert {"/usr/local/sbin/vy-lockout", "/usr/local/sbin/vy-sudo", "/usr/local/sbin/vy-seal-runs", "/usr/local/sbin/vy-admin-setup",
+                "/etc/systemd/system/vy-seal-runs.timer", "/etc/systemd/system/vy-seal-runs.service",
+                "/etc/systemd/system/vy-sudo-fallback-expire.timer", "/etc/systemd/system/vy-sudo-fallback-expire.service"} <= set(paths), node
+    text = (NEBIUS / "challenger" / "11-vy-admin.conf").read_text()
+    assert [ln for ln in text.splitlines() if ln and not ln.startswith("#")] == ["AllowUsers vy-admin"]
 
 
 # ---- vy-admin-setup -------------------------------------------------------------------------------------------------------------

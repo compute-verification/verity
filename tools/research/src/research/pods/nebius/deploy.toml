@@ -129,7 +129,8 @@ managed = ["/etc/systemd/system/user-1001.slice.d/50-vy-headroom.conf", "/etc/sy
 [nodes.vy-nebius-cpu-13]
 record = "/workspace/research/deploy/record.jsonl"
 managed = ["/usr/local/sbin/vy-admin-setup", "/usr/local/sbin/vy-lockout", "/usr/local/sbin/vy-sudo", "/usr/local/sbin/vy-seal-runs",
-           "/usr/local/lib/vy-lockout/*", "/etc/systemd/system/vy-seal-runs.*", "/etc/systemd/system/vy-sudo-fallback-expire.*"]
+           "/usr/local/lib/vy-lockout/*", "/etc/systemd/system/vy-seal-runs.*", "/etc/systemd/system/vy-sudo-fallback-expire.*",
+           "/etc/ssh/sshd_config.d/11-vy-admin.conf"]
 
 # circuits' H200 VMs: only the GPU-lease files are infra's to manage there
 [nodes.vy-glm53-eu]
@@ -324,10 +325,12 @@ src = "tools/research/src/research/pods/nebius/challenger/vy-certifier@.service"
 nodes = ["vy-challenger-1", "vy-auditor-2"]
 owner = "infra"
 
+# also on a CPU node that carries the lock-out: vm_setup.sh's sshd lets only research log in, so vy-admin's login waits for this
+# file and a reload of ssh (vy-lockout plan's vy-admin step)
 [[file]]
 path = "/etc/ssh/sshd_config.d/11-vy-admin.conf"
 src = "tools/research/src/research/pods/nebius/challenger/11-vy-admin.conf"
-nodes = ["vy-challenger-1", "vy-auditor-1", "vy-auditor-2"]
+nodes = ["vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-13"]
 owner = "infra"
 
 [[file]]
