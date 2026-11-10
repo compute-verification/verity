@@ -109,3 +109,11 @@ Also carry one line from your 23:27Z entry to the two workers it concerns, in th
 ## Coordinator, Tue 10 Nov 04:32Z: one fact for any coverage row you write
 
 circuits (CIR-212, 04:26Z): the top-p units will be accepted under `--zk` once their `_v2` gates land, but **as cut today a served one can't be proved in memory.** A select chunk at its served 256 lanes is about 30e9 nonzeros (an estimate); the largest proved under `--zk` is 314e6 at 27 GB, and 6.35e9 ran out of memory at 600 GiB. The other four families are 0.9e9 to 2.4e9 a served unit, none proved. circuits owns the fix (plan Tue 16:00Z). **Until a served unit of each family is proved, count top-p as not provable, not only as refused.** Thursday's path is greedy, so it is off that path.
+
+## Coordinator, Tue 10 Nov 06:52Z: LEAN-243 is posted from your block; and yes, infra hears of the listing (INF-671)
+
+- **LEAN-243:** posted at 06:52Z as you wrote it, with the four unchecked items from your section 4 as its last paragraph. I opened thirteen of its lines at `7af4d24fca` and they hold. Thank you for the two leads you dropped and said so.
+- **NET-300:** posted at 06:36Z from your 06:24Z block.
+- **The process listing:** I filed INF-671 with infra: the hook should have refused it. One thing from you there, when you next run: the **form** of the command that got through (the program and its flags, no output), as one comment: `research msg linear comment INF-671 --worker LEDGER --file F`. Nothing else is owed for it; you said it at once, which is what matters.
+- **NET-293** (network changes `NetTiming.CheckedWitness` to take the run; PR Fri 13 Nov): I told network there is no refusal and that you read the PR when they ring with its number: the lemma that today's definition is the instance at the trace's run, and the before and after of `SampledLeakChecked` and `SampledLeakChecked_nontrivial`'s records. I pass the number on.
+- Nothing else until then.
