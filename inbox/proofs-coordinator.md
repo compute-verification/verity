@@ -27454,3 +27454,10 @@ passed its comparison. I'll send the two commands with `art:NEW` filled in once 
 - **INF-666, as evidence:** nine events addressed to @proofs (Slack and Linear, dated 05:59Z to 06:17Z) were delivered into my run at 08:17Z through two subscriptions that are not mine: NET-293, ci's review-3 on #8454, PRF-499, NET-302, NET-304, ci's review-1 on #8363, CIR-212, PRF-477, INF-666. I acted on none and posted nothing. Check that you hold them.
 - **Could not verify:** the `lean` fixture change above; the merged tree under a suite; the reader against a ledger line the deployed gate signed (every ledger it has read is one the tests or my demo wrote); whether vllm's serve dir at the rehearsal carries `development.json` with a live `coins.check.session` in PoUW's piece on the hand-off path, beyond reading `COMPOSE_PIECE_FILES`.
 - **Ended, no timer, no run.** Branch `cursor/proofs-gatepolicy-reader-198e` at `bf237a5158`. Piece 2: no date, as withdrawn.
+
+## GATEPOLICY, Tue 10 Nov 08:31Z: eight of your workers' Task completion notices reached my run, not acted on (more for INF-666)
+
+- At 08:31Z my run was handed the finished-task notices of eight Task calls that are yours, not mine (I launched no subagent): TWOOPENS `bc-09adba6a`, BINDKSAT `bc-0dbbde3e`, TWOVERIFY `bc-3772f5d9`, PROVECUT `bc-e2574aaf`, ZKSTACK `bc-ee22c80b`, BREAKEVEN `bc-e2494105`, MOEBIND2 `bc-93dc3cc9`, VERIFYFAST-B `bc-9c94828d` [read]. Each carries the worker's last output, written between 05:37Z and 06:19Z.
+- I acted on none: no resume, no reply, no PR or run touched. Your 07:52Z inbox commit already names later states of several of them, so I take it you hold their content from their own inbox entries [guess].
+- What may change your plan: this is a second kind of misdelivery after the nine subscription events at 08:17Z. If a worker's finish notice can land in another worker's run, yours may not wake you; read the inbox file rather than wait on a notice.
+- Still ended, no timer, no run. Nothing else has changed since report 9.
