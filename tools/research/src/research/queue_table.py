@@ -704,8 +704,8 @@ def table(doc: dict, prev: dict | None = None) -> list[dict]:
     res = [mem[(r["node"], r["slot"])] for r in going if (r["node"], r.get("slot")) in mem]
     add("7", "Reserved against used, a check's shard", (f"{len(going)} running: cores p50 {pct([r['cores'] for r in going], .5):.0f}, most "
         f"{max(r['cores'] for r in going):.0f}, of {pct([r.get('slot_cores') or 0 for r in going], .5):.0f} in its slot; memory without the page "
-        f"cache p50 {pct([r['scope_anon_gb'] for r in going], .5):.0f} GB, most {max(r['scope_anon_gb'] for r in going):.0f} GB; peak with the "
-        f"page cache most {max(r['scope_peak_gb'] for r in going):.0f} GB" + (f", of {pct(res, .5):.0f} GB reserved" if res else ""))
+        f"cache p50 {pct([r['scope_anon_gb'] for r in going], .5):.0f} GiB, most {max(r['scope_anon_gb'] for r in going):.0f} GiB; peak with the "
+        f"page cache most {max(r['scope_peak_gb'] for r in going):.0f} GiB" + (f", of {pct(res, .5):.0f} GiB reserved" if res else ""))
         if going else "no shard is running", "", "not measured: a shard's cgroup is gone when it ends", "",
         "the shards running now, from each one's own cgroup (`check-SLOT-RUN.scope`): CPU seconds over its seconds in the slot so far, "
         "`anon` of `memory.stat`, and `memory.peak`, which counts the page cache")
@@ -713,8 +713,8 @@ def table(doc: dict, prev: dict | None = None) -> list[dict]:
         rs = [r for r in runs.values() if r["kind"] == kind and r.get("end") and r.get("took") and r.get("cpu_s") and r["end"] > r["took"]]
         res = [mem[(r["node"], r["slot"])] for r in rs if (r["node"], r.get("slot")) in mem]
         add("7", f"Reserved against used, {name}", "", "", (f"cores: p50 {pct([r['cpu_s'] / (r['end'] - r['took']) for r in rs], .5):.1f} used of "
-            f"{pct([r.get('slot_cores') or 0 for r in rs], .5):.0f} in its slot; memory: p50 {pct([r.get('mem_peak_gb') or 0 for r in rs], .5):.0f} GB peak"
-            + (f" of {pct(res, .5):.0f} GB reserved" if res else ", its slot reserves none") + f" (n={len(rs)})") if rs else "none ended", "",
+            f"{pct([r.get('slot_cores') or 0 for r in rs], .5):.0f} in its slot; memory: p50 {pct([r.get('mem_peak_gb') or 0 for r in rs], .5):.0f} GiB peak"
+            + (f" of {pct(res, .5):.0f} GiB reserved" if res else ", its slot reserves none") + f" (n={len(rs)})") if rs else "none ended", "",
             "today's runs that ended: CPU seconds and peak memory from the run's cgroup's last sample; the slot's cores and `mem=`")
 
     # 8. what else explains waiting

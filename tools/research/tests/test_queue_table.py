@@ -184,9 +184,9 @@ def test_the_table_holds_each_number_over_its_windows():
     assert rows["Slots busy over slots, the check nodes"]["now"] == ("check slots: 1 of 2 busy, 0 free but blocked, 0 runs in line; "
                                                                     "lane slots: 4 of 4 busy, 0 free but blocked, 3 runs in line")
     assert rows["Reserved against used, a check's shard"]["now"] == ("1 running: cores p50 12, most 12, of 96 in its slot; memory without the "
-                                                                    "page cache p50 40 GB, most 40 GB; peak with the page cache most 120 GB, "
-                                                                    "of 300 GB reserved")
-    assert rows["Reserved against used, a quick tier"]["today"].startswith("cores: p50 2.0 used of 16 in its slot; memory: p50 8 GB peak")
+                                                                    "page cache p50 40 GiB, most 40 GiB; peak with the page cache most 120 GiB, "
+                                                                    "of 300 GiB reserved")
+    assert rows["Reserved against used, a quick tier"]["today"].startswith("cores: p50 2.0 used of 16 in its slot; memory: p50 8 GiB peak")
     assert rows["Ready to built"]["today"] == "p50 15, p90 19 min (n=2)"          # #1: verdict 00:40 to 01:00; #2: mark 00:50 to 01:00
     assert rows["The loop's tick: minutes between tick ends"]["hour"] == "p50 4.0, p90 4.0 min (n=2)"
     assert rows["Green candidate: verdict to `main`"]["today"] == "p50 5, p90 5 min (n=1)"
