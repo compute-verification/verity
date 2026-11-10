@@ -33,6 +33,7 @@ from pathlib import Path
 CLONE_NEWNS, CLONE_NEWUSER, CLONE_NEWNET = 0x00020000, 0x10000000, 0x40000000
 MS_RDONLY, MS_NOSUID, MS_NODEV, MS_REC, MS_PRIVATE = 1, 2, 4, 1 << 14, 1 << 18
 SIOCGIFFLAGS, IFF_UP = 0x8913, 1
+LINUX_CAPABILITY_VERSION_3 = 0x20080522
 
 #: what a machine that runs training jobs gives them
 REQUIRES = ("a machine that runs a training job lets an unprivileged process make a user namespace: sysctl "
@@ -86,26 +87,25 @@ def interfaces() -> dict[str, bool]:
 
 
 def capabilities() -> int:
-    """This process's effective capabilities, the kernel's bit set."""
-    with open("/proc/self/status") as f:
-        return int(next(line.split()[1] for line in f if line.startswith("CapEff:")), 16)
+    """This process's effective capabilities, the kernel's bit set (`capget`, its third version: two words of each)."""
+    header, sets = (ctypes.c_uint32 * 2)(LINUX_CAPABILITY_VERSION_3, 0), (ctypes.c_uint32 * 6)()
+    if ctypes.CDLL(None, use_errno=True).capget(header, sets) != 0:
+        raise OSError(ctypes.get_errno(), "capget")
+    return sets[0] | sets[3] << 32
 
 
-def refusals(hidden: Iterable[Path], up: Mapping[str, bool] | None = None, caps: int | None = None) -> list[str]:
+def refusals(hidden: Iterable[Path], up: Mapping[str, bool] | None = None, held: int | None = None) -> list[str]:
     """Why this process is not inside the sandbox: each interface that is up (`up`, default this process's), each of
-    `hidden` it can read an entry of, and any capability it holds (`caps`, default this process's). Empty inside it."""
+    `hidden` it can read an entry of, and any capability it holds (`held`, default this process's). Empty inside it.
+    A hidden path that exists and can't be listed raises: nothing here takes a failed read for an empty directory."""
     up = interfaces() if up is None else up
-    caps = capabilities() if caps is None else caps
+    held = capabilities() if held is None else held
     out = [f"the network is reachable (interface {name} is up)" for name in sorted(up) if up[name]]
     for d in hidden:
-        try:
-            seen = sorted(os.listdir(d))
-        except OSError:
-            continue
-        if seen:
+        if d.exists() and (seen := sorted(os.listdir(d))):
             out.append(f"the final set at {d} is readable ({', '.join(seen[:3])})")
-    if caps:
-        out.append(f"the process holds capabilities ({caps:016x}) with which it could undo the sandbox: run the job as "
+    if held:
+        out.append(f"the process holds capabilities ({held:016x}) with which it could undo the sandbox: run the job as "
                    f"a user other than root")
     return out
 

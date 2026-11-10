@@ -623,7 +623,7 @@ def outside(a: argparse.Namespace, argv: list[str]) -> int:
         hide = [x for d in sandbox.final_sets(reg) for x in ("--hide", str(d))]
         route = [sys.executable, "-m", "training_slowdown.sandbox", *hide, "--",
                  sys.executable, "-m", "training_slowdown.run", *argv, "--inside", str(scratch)]
-        env = os.environ | {"PYTHONPATH": os.pathsep.join(filter(None, [str(HERE.parent), os.environ.get("PYTHONPATH")]))}
+        env = os.environ | {"PYTHONPATH": os.pathsep.join([str(HERE.parent), *filter(None, sys.path)])}
         if a.retrace is not None:
             return subprocess.run(route, env=env).returncode
         s = config.start_of(a.config, reg)
@@ -645,6 +645,8 @@ def outside(a: argparse.Namespace, argv: list[str]) -> int:
                     try:
                         done.write(b"\n")
                     except BrokenPipeError:
+                        print(f"training_slowdown: the route's process closed its end before it was told its state "
+                              f"{len(scores) - 1} was scored; no further state is read", file=sys.stderr)
                         break
         record = scratch / "run.json"
         if child.returncode or not record.is_file():
