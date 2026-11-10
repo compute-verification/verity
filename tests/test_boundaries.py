@@ -196,9 +196,9 @@ LEAN_OF_RECORD = ("a verifier imports no verity.ml code (AGENTS.md \"Design rule
 #: Spot areas and the sampling claims); then the certifier's Python units, modules and Lean (its packages and its
 #: Security areas).
 SPOT_PYTHON = ("core.protocols.spot",)
-SPOT_TREES = ("verity/core/protocols/spot", "verity/core/service/spot", "verity/core/service/flock",
+SPOT_TREES = ("verity/core/protocols/spot", "verity/core/service/spot", "verity/flock/verifier",
               "verity/ml/flock")
-SPOT_LEAN = ("verity/core/service/spot", "verity/core/service/flock")
+SPOT_LEAN = ("verity/core/service/spot", "verity/flock/verifier")
 SPOT_SECURITY = ("Security/*/Flock", "Security/*/Flock.lean", "Security/*/Spot", "Security/*/Spot.lean",
                  "Security/Definitions/Claims/Sampling*")
 CERTIFIER_PYTHON = ("core.protocols.certifier", "ml.protocols.certifier")
@@ -305,7 +305,7 @@ def _separate(rel: Path) -> bool:
 
 def _sources(root: Path = SRC) -> list[Path]:
     """``verity``'s own Python files: every ``.py`` under ``root`` outside a ``tests/`` or ``lean/`` directory, a Lake build
-    directory (core's Lean builds in ``verity/core/service/flock/.lake``) or a ``SEPARATE`` tree, and no circuit-check
+    directory (core's Lean builds in ``verity/flock/verifier/.lake``) or a ``SEPARATE`` tree, and no circuit-check
     sidecar (``<module>.circuit-check.py``: circuit-check's bindings, which it loads by path and no module imports)."""
     return sorted(p for p in root.rglob("*.py")
                   if not {"tests", "lean", ".lake", "__pycache__"} & set(p.relative_to(SRC).parts)
@@ -630,10 +630,10 @@ def test_a_spot_import_of_the_certifier_is_found() -> None:
     assert found == ["verity/core/protocols/certifier/lean/C.lean <- s/B.lean <- s/A.lean"], found
     assert _covered("Security/Proofs/Properties/NetworkCertifier/Check/Bytes.lean", CERTIFIER_LEAN)
     assert not _covered("Security/Proofs/Flock/Bytes.lean", CERTIFIER_LEAN)
-    modules = _lean_modules(["Security/Proofs/Flock/Bytes.lean", "verity/core/service/flock/Flock/Bytes.lean"],
-                            ["Security/Proofs/lakefile.toml", "verity/core/service/flock/lakefile.toml"])
+    modules = _lean_modules(["Security/Proofs/Flock/Bytes.lean", "verity/flock/verifier/Flock/Bytes.lean"],
+                            ["Security/Proofs/lakefile.toml", "verity/flock/verifier/lakefile.toml"])
     assert modules == {"Proofs.Flock.Bytes": ["Security/Proofs/Flock/Bytes.lean"],
-                       "Flock.Bytes": ["verity/core/service/flock/Flock/Bytes.lean"]}, modules
+                       "Flock.Bytes": ["verity/flock/verifier/Flock/Bytes.lean"]}, modules
 
 
 def _infra_packages() -> set[str]:

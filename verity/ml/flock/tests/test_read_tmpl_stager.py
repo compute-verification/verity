@@ -32,7 +32,7 @@ from verity_flock import class_statement as CS
 from verity_flock import read_tmpl as RT
 from verity_flock import tmpl as T
 
-LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
+LEAN = Path(__file__).resolve().parents[3] / "flock" / "verifier"
 MODE = "iv/hybrid/4"
 #: a unit whose parameters are a row each, in order: the ports a verifier's template reads (``w`` a row past one compression)
 PAIR = bind(definition("ReadTmplStagerPair", 1, lambda C, a, b, w: add(C, a, b, width=16, carry_out=True) + [C.AND(w[0], w[2047])],

@@ -14,11 +14,11 @@ backward.proofsInPublic = true
 
 [[require]]
 name = "flock_verifier"
-path = "../../../service/flock"
+path = "../../../../flock/verifier"
 
 [[require]]
 name = "core_protocol"
-path = "../../interface"
+path = "../../../../flock/verifier/interface"
 
 [[require]]
 name = "core_identity"

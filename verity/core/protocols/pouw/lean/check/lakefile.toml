@@ -18,7 +18,7 @@ backward.proofsInPublic = true
 
 [[require]]
 name = "core_protocol"
-path = "../../../interface"
+path = "../../../../../flock/verifier/interface"
 
 [[require]]
 name = "pouw_window"

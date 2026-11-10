@@ -44,7 +44,7 @@ def _skipped(world: World) -> list[str]:
     (["integrations/vllm/verity_vllm/serve.py", "verity/ml/flock/x.py", "verity/ml/definitions/y.py"], True),
     (["Security/Proofs/Core/X.lean"], False),
     (["docs/a.md", "verity/core/protocols/pous/lean/lean-audit.json"], False),
-    (["verity/core/service/flock/lakefile.toml"], False),
+    (["verity/flock/verifier/lakefile.toml"], False),
     (["x/lean-toolchain"], False), (["x/lake-manifest.json"], False), (["x/TRUSTED.sha256"], False),
     (["verity/core/claims.py"], False),
     (["verity/definitions/ops/add.py"], False), (["verity/definitions/kernels/k.cu"], False),

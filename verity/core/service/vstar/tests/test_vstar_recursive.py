@@ -36,7 +36,7 @@ import pytest
 import settings
 import verity_difftest as D
 
-LEAN = Path(__file__).resolve().parents[1]
+LEAN = (Path(__file__).resolve().parents[4] / "flock" / "verifier" / "vstar")
 RECURSIVE = LEAN / "recursive"
 FLOCK = LEAN.parent / "flock"
 STATEMENT = "verity/flock-circuit"

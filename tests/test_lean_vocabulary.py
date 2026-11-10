@@ -71,10 +71,10 @@ CONCEPTS = ("Circuit", "Prog", "Program", "Gate", "Op", "Netlist", "Partition", 
 PROPOSITIONS = ("Collision",)
 SLOT_FIELDS = ("Params", "Commitment", "Evidence", "Public")
 
-D, CORE, FLOCK = "Security/Definitions/", "Security/Definitions/Core/", "verity/core/service/flock/Flock/"
-PROTOCOL = "verity/core/protocols/interface/CoreProtocol/Protocol.lean"
+D, CORE, FLOCK = "Security/Definitions/", "Security/Definitions/Core/", "verity/flock/verifier/Flock/"
+PROTOCOL = "verity/flock/verifier/interface/CoreProtocol/Protocol.lean"
 REQ, REQ_PY = "verity/definitions/requirement/CircuitRequirement.lean", "verity/definitions/circuits/requirement.py"
-SITE_LEAN, SITE_PY = "verity/core/protocols/interface/CoreProtocol/Site.lean", "verity/core/site/__init__.py"
+SITE_LEAN, SITE_PY = "verity/flock/verifier/interface/CoreProtocol/Site.lean", "verity/core/site/__init__.py"
 #: Each concept's canonical declarations: at most one in Core or Hash, one in code Lean and one in Python, and when a concept
 #: has both code Lean and Python, ``MIRRORS`` holds the two together. An empty entry: no canonical yet, so every hit is known.
 CANONICAL: dict[str, tuple[str, ...]] = {
@@ -133,7 +133,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Window": (),
     "Witness": (f"{CORE}TC/Relation.lean::Verity.TC.Relation.Witness",),
 }
-CANONICAL["Record"] = ("verity/core/protocols/interface/CoreProtocol/Record.lean::Core.Record",)
+CANONICAL["Record"] = ("verity/flock/verifier/interface/CoreProtocol/Record.lean::Core.Record",)
 #: The slots a knowledge-soundness or zero-knowledge statement quantifies over: the claims core's counted programs.
 CONCEPTS += ("Extractor", "Simulator")
 CANONICAL["Extractor"] = (f"{CORE}Interaction.lean::Claims.Extractor",)
@@ -817,9 +817,9 @@ KNOWN: dict[str, str] = {
         "homonym, one window's timing advice: rename (network-accounting)",
     "verity/ml/protocols/certifier/window_charge.py::Window":
         "homonym, one sampling block's charge: rename (network-accounting)",
-    "verity/core/protocols/interface/CoreProtocol/Profile.lean::Core.Draw":
+    "verity/flock/verifier/interface/CoreProtocol/Profile.lean::Core.Draw":
         "homonym, how a profile level is drawn: rename (proofs)",
-    "verity/core/protocols/interface/CoreProtocol/Record.lean::Core.Record":
+    "verity/flock/verifier/interface/CoreProtocol/Record.lean::Core.Record":
         "duplicate of the auditor's record chain (`Spot.Challenger.LedgerEntry`): becomes a reading of it (proofs)",
     "verity/core/protocols/network/lean/NetworkCheck/Check.lean::NetworkCheck.Check.Link":
         "homonym, one egress link's opening: rename (proofs)",
@@ -940,25 +940,25 @@ KNOWN: dict[str, str] = {
         "duplicate of the registration log (`Verity.Registration`): becomes a reading of it: the service's admitted log entry (proofs)",
     "verity/core/protocols/spot/service.py::Session":
         "homonym, the old word for a run, kept as one protocol's run type: rename (proofs)",
-    "verity/core/service/flock/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Transcript":
+    "verity/flock/verifier/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Transcript":
         "duplicate of `Flock.Transcript`: becomes a reading of it (proofs)",
-    "verity/core/service/flock/Flock/Annot.lean::Flock.Annot.Verdict":
+    "verity/flock/verifier/Flock/Annot.lean::Flock.Annot.Verdict":
         "homonym, the description-level annotation check's verdict: rename (proofs)",
-    "verity/core/service/flock/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Verdict":
+    "verity/flock/verifier/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Verdict":
         "homonym, the firewall's release decision: rename (proofs)",
-    "verity/core/service/flock/Flock/Firewall/Frames.lean::Flock.Firewall.Frames.Registry":
+    "verity/flock/verifier/Flock/Firewall/Frames.lean::Flock.Firewall.Frames.Registry":
         "homonym, the firewall loop's frames: rename (proofs)",
-    "verity/core/service/flock/Flock/Firewall/Level0.lean::Flock.Firewall.Level0.Registry":
+    "verity/flock/verifier/Flock/Firewall/Level0.lean::Flock.Firewall.Level0.Registry":
         "homonym, the firewall loop's tables: rename (proofs)",
-    "verity/core/service/flock/Flock/Layout.lean::Flock.Layout": "homonym, C-Flock's block-type layout: rename (proofs)",
-    "verity/core/service/flock/Flock/Program.lean::Flock.Program.Node":
+    "verity/flock/verifier/Flock/Layout.lean::Flock.Layout": "homonym, C-Flock's block-type layout: rename (proofs)",
+    "verity/flock/verifier/Flock/Program.lean::Flock.Program.Node":
         "homonym, a circuit program's node: rename (proofs)",
-    "verity/core/service/flock/Flock/RecLinks.lean::Flock.RecLinks.Link":
+    "verity/flock/verifier/Flock/RecLinks.lean::Flock.RecLinks.Link":
         "homonym, a recursion link from a reader to a port: rename (proofs)",
-    "verity/core/service/flock/Flock/RecRecord.lean::Flock.RecRecord.Record":
+    "verity/flock/verifier/Flock/RecRecord.lean::Flock.RecRecord.Record":
         "duplicate of the auditor's record chain (`Spot.Challenger.LedgerEntry`): becomes the challenger's live-coin entries (proofs)",
-    "verity/core/service/flock/VStar/In.lean::VStar.In.Opening": "homonym, a Ligerito opening: rename (proofs)",
-    "verity/core/service/flock/VStar/Stage.lean::VStar.Stmt": "homonym, one of V*'s statements: rename (proofs)",
+    "verity/flock/verifier/VStar/In.lean::VStar.In.Opening": "homonym, a Ligerito opening: rename (proofs)",
+    "verity/flock/verifier/VStar/Stage.lean::VStar.Stmt": "homonym, one of V*'s statements: rename (proofs)",
     "verity/core/service/spot/Spot/Program.lean::Spot.Program":
         "duplicate of `program.Program`, read from its descriptor's bytes: becomes its code-Lean side once a difftest holds the two (proofs)",
     "verity/core/service/spot/Spot/Slots.lean::Spot.Slots.Layout":

@@ -26,7 +26,7 @@ from test_rec_live import (CAP0, CAP1, HELLO, PROVER_NONCE, SCHEDULE, TREE, _bin
                            _label, _obs, _sq, _tree_hello)
 from verity.ml.commitments import coin_tree as CT
 
-LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
+LEAN = Path(__file__).resolve().parents[3] / "flock" / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-firewall"
 SALTS = [hashlib.shake_256(b"firewall-salt" + i.to_bytes(8, "little")).digest(192) for i in range(64)]
 

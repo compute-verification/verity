@@ -5,7 +5,7 @@ here to the Python reference: each leaf's salt `SHA-512(k ‖ L ‖ s ‖ be32 j
 `merkle.root_from_subtrees`) and the table's tag; a commit body carrying a salt, a refs file of another length, a row past
 its table and a forged tag, each refused; and the key file its owner's alone and kept. A registration is numbered on the
 ZK server's record and admitted there (`core-firewall values` and `core-firewall session --salt-key`,
-`verity/core/service/firewall/tests/test_firewall_registrations.py`), so this service, which has no record, registers
+`verity/flock/verifier/firewall/tests/test_firewall_registrations.py`), so this service, which has no record, registers
 nothing and this loop admits no registration."""
 from __future__ import annotations
 

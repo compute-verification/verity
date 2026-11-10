@@ -127,7 +127,7 @@ command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/de
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > $O/sync.log 2>&1 || { tail -20 $O/sync.log; exit 5; }
 
-(cd verity/core/service/flock && lake build flock-verify flock-firewall) > $O/build-lean.log 2>&1 &
+(cd verity/flock/verifier && lake build flock-verify flock-firewall) > $O/build-lean.log 2>&1 &
 LP=$!
 mkdir -p $O/m0-build
 FW=${A5_FLOCK_WORK:-$W}   # a kept build dir: 20-gpu-link.sh re-applies this tree's patches and cargo rebuilds what changed
@@ -135,7 +135,7 @@ RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/ml/floc
   || { tail -40 $O/m0-build/build.log; exit 6; }
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 $O/build-lean.log; exit 7; }
-LEAN=$REPO/verity/core/service/flock/.lake/build/bin/flock-verify; FWL=${LEAN%/*}/flock-firewall
+LEAN=$REPO/verity/flock/verifier/.lake/build/bin/flock-verify; FWL=${LEAN%/*}/flock-firewall
 ZKS=(); if [ "${ZK_SERVER:-0}" = 1 ]; then ZKS=(--firewall $FWL); fi
 PLAINS=(); if [ "${A5_PLAIN:-0}" = 1 ]; then PLAINS=(--plain); fi
 (cd verity/core/service/spot && lake build sampled-proofs-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }

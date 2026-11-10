@@ -1,6 +1,6 @@
 # `pouw_check`: PoUW's execution phase check as a core protocol
 
-One `Core.Protocol` (`verity/core/protocols/interface`), `PouwCheck.protocol`, id `verity/pouw/v1`, Lean core only:
+One `Core.Protocol` (`verity/flock/verifier/interface`), `PouwCheck.protocol`, id `verity/pouw/v1`, Lean core only:
 PoUW's verifier (`verity/core/protocols/pouw/verifier.py`), with `verity/core/protocols/pouw/core_check.py` the
 Python reference held to it.
 

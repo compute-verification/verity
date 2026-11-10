@@ -33,7 +33,7 @@ from verity.circuits.codec import canonical_json, encode_program
 from verity.core.protocols.spot.one_stage import registered as G
 from verity.core.protocols.spot.one_stage.served import register_served
 
-LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
+LEAN = Path(__file__).resolve().parents[3] / "flock" / "verifier"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: `pod/89-served-registered.sh`'s fixture for each row format (`SCHEMA=`): stage/ (circuit.txt, pub-32.bin, program.json,

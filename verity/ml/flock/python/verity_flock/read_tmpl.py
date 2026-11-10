@@ -4,7 +4,7 @@ one template `Flock.ReadNet.check` accepts), parsed (`tmpl.parse`). A structural
 (`class_statement.unit_lowering`).
 
 The executable is `EXE` where a caller sets it, else this tree's build (`BUILT`, where ``lake build flock-read-tmpl`` in
-``verity/core/service/flock`` puts it), else ``flock-read-tmpl`` on the path (`executable`)."""
+``verity/flock/verifier`` puts it), else ``flock-read-tmpl`` on the path (`executable`)."""
 from __future__ import annotations
 
 import functools
@@ -29,7 +29,7 @@ def executable() -> str:
     exe = EXE or (str(BUILT) if BUILT.is_file() else shutil.which("flock-read-tmpl"))
     if not exe or not Path(exe).is_file():
         raise FileNotFoundError(f"{exe or 'flock-read-tmpl'}: no such executable: build it with `lake build flock-read-tmpl` in "
-                                "verity/core/service/flock")
+                                "verity/flock/verifier")
     return exe
 
 

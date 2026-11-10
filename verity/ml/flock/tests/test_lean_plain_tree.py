@@ -26,7 +26,7 @@ import pytest
 
 from verity.circuits.codec import canonical_json, encode_program
 
-LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
+LEAN = Path(__file__).resolve().parents[3] / "flock" / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: ``stage/`` (circuit.txt, pub-32.bin, program.json, partition.json), ``session/`` (the sampled plain session's
 #: record and proofs), ``live.json`` (the prover's LIVE record) and ``challenger/`` (its record and release log)

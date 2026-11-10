@@ -77,7 +77,7 @@ def test_a_checks_lean_steps_are_tasks_lean_audit_under_each_package_it_audited_
     meta = {"kind": "check/v1", "steps": [
         _step("pytest", seconds=900.0), _step("lean-audit", seconds=1800.0), _step("lean-suites", "failed", 1200.0),
         _step("lean-build", "skipped"), _step("lean-agreement", seconds=900.0), _step("lean-changed", "stopped", None),
-        _step("lean-audit:verity/core/service/flock", seconds=120.0, cache={"hit": True}), "not a step"],
+        _step("lean-audit:verity/flock/verifier", seconds=120.0, cache={"hit": True}), "not a step"],
         "reuse": {"steps": {"lean-audit": {"reran": ["Security", "Security/Proofs"], "reused": ["X"]},
                             "lean-suites": {"reran": [{"suite": "verity/ml/flock", "seconds": 1100.0, "forced_by": []},
                                                       {"suite": "benchmarks/pouw", "seconds": None}]}}}}
@@ -87,7 +87,7 @@ def test_a_checks_lean_steps_are_tasks_lean_audit_under_each_package_it_audited_
         ("lean-suites", ["verity/ml/flock"], 1100 / 60, "failed"),
         ("lean-suites", ["benchmarks/pouw"], None, "unfinished"),
         ("lean-changed", [L.NONE], None, "unfinished"),
-        ("lean-audit", ["verity/core/service/flock"], 2.0, "passed")]
+        ("lean-audit", ["verity/flock/verifier"], 2.0, "passed")]
     assert {t["node"] for t in got} == {"vy-nebius-cpu-1"} and [t["cached"] for t in got] == [False] * 4 + [True]
 
 

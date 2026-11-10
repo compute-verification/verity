@@ -29,7 +29,7 @@ from verity.circuits.types import Array
 from verity_flock import circuit as FC
 from verity.core.protocols.spot.one_stage import partition as P, registered as G
 
-LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
+LEAN = Path(__file__).resolve().parents[3] / "flock" / "verifier"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 FIXTURE = "art:bf70d8eb"

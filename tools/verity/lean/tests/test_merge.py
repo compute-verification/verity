@@ -1374,7 +1374,7 @@ def test_an_unwitnessed_entry_neither_side_has_at_its_merged_record_is_ours_name
             in capsys.readouterr().err)
 
 
-SEC, PROPS, FLOCK, POUS = "Security", "Security/Properties", "verity/core/service/flock", "verity/core/protocols/pous"
+SEC, PROPS, FLOCK, POUS = "Security", "Security/Properties", "verity/flock/verifier", "verity/core/protocols/pous"
 
 
 def packages(unwitnessed: dict[str, int], inline: dict[str, int], doc: str = "never grows",

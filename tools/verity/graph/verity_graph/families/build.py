@@ -1,7 +1,7 @@
 """The build family: the check's steps that build the Flock verifier and run what it built, and Flock's Rust, as
 `tools/verity/check/check.py` runs them (its `lean_steps` and `groups`), each step one task.
 
-- `lean-build:verity/core/service/flock`: `lake build` of the Lean verifier; its outputs are the executables its lakefile's
+- `lean-build:verity/flock/verifier`: `lake build` of the Lean verifier; its outputs are the executables its lakefile's
   `defaultTargets` name, each at its path in a built tree (`.lake/build/bin/<exe>`, where the suites that run them look).
 - `lean-unit-cut:verity/ml/flock/verifier/unit_cut_agree.py`: the script on the flock-verify it reads, the Lean partition
   check's conformance with `verity.circuits.partition`; its inputs are the script's import closure (`test_file.Imports`: it
@@ -30,7 +30,7 @@ from pathlib import Path
 
 from .test_file import Imports, Layout, Tree, discover
 
-LEAN = "verity/core/service/flock"
+LEAN = "verity/flock/verifier"
 VERIFIER = "verity/ml/flock/verifier"
 FLOCK = "verity/ml/flock"
 UNIT_CUT = f"{VERIFIER}/unit_cut_agree.py"

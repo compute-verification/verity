@@ -170,7 +170,7 @@ doesn't name:
                     its report beside the run's result (off the gate: a recorded check skips it, and the after-landing
                     run, `--deferred` with every job, runs it); then flock-rust-tests, `check_build.sh test` on that checkout:
                     `cargo test --release` of flock-live's unit tests and of the five upstream crates the patches change
-    lean            `lake build` of the Lean verifier (`verity/core/service/flock`), then its partition check against
+    lean            `lake build` of the Lean verifier (`verity/flock/verifier`), then its partition check against
                     `verity.circuits.partition` (`unit_cut_agree.py`), then its agreement with upstream's Rust verifier (`ci.py`) on
                     the upstream build stored once and pinned by hash (`verity/ml/flock/verifier/upstream.json`), when the run has
                     it; skipped by name without it.  `research merge` requires it for a change under verity/ml/flock/ (`tool.py`)
@@ -280,7 +280,7 @@ ROOT = Path(__file__).resolve().parents[3]
 FLOCK_VERIFIER = ROOT / "verity" / "ml" / "flock" / "verifier"
 #: the Lean verifier, the Lake package `flock-verify` is built from (a join of its own, so a layout move that takes
 #: the Lean package away from the scripts rewrites it)
-FLOCK_LEAN = ROOT / "verity" / "core" / "service" / "flock"
+FLOCK_LEAN = ROOT / "verity" / "flock" / "verifier"
 #: the recording run's custody dir, for `store_io` (not VERITY_-prefixed: the suites' cache keys on those, and the path is per run)
 CUSTODY_ENV = "CHECK_STORE_CUSTODY"
 STORE_REQUIRED_ENV = "VERITY_STORE_REQUIRED"
@@ -819,10 +819,10 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
     if not (lean / "lakefile.toml").exists():
         if FLOCK_VERIFIER.is_dir():
             return [("lean", f"the verifier is on this tree but its Lean package is not at {lean}", ROOT)]
-        return [("lean", "skipped: verity/core/service/flock is not on this tree", ROOT)]
+        return [("lean", "skipped: verity/flock/verifier is not on this tree", ROOT)]
     verify = lean / ".lake" / "build" / "bin" / "flock-verify"
     agreement: list[str] | str = ("skipped: the pinned upstream build was not sent (a merge changing verity/ml/flock/ or "
-                                  "verity/core/service/flock/ requires this step: `check.py --record` sends it)")
+                                  "verity/flock/verifier/ requires this step: `check.py --record` sends it)")
     if UPSTREAM_PIN.exists():
         got = agreement_files(out)
         if len(got) == 2:
@@ -2129,7 +2129,7 @@ def _env_key(e: dict[str, str]) -> dict[str, str]:
 def agreement_key(e: dict[str, str]) -> str | None:
     """What the agreement job reads: the tracked files `agreement_closure` names (verity/ml/flock/verifier/: `ci.py` and the scripts
     it runs, which import only the standard library and each other, `upstream.json` pinning the upstream build,
-    the inputs and the job's settings; and the Lean package `flock-verify` is built from, verity/core/service/flock/, its sources and
+    the inputs and the job's settings; and the Lean package `flock-verify` is built from, verity/flock/verifier/, its sources and
     toolchain pin), the interpreter and the platform.  None when the tree's files cannot be listed."""
     files = tracked_files()
     if files is None:
@@ -2197,7 +2197,7 @@ def agreement_closure(files: list[str]) -> list[str]:
     (Flock's proofs are under `Security/Proofs/`), which `flock-verify` is not built from as long as the Lean package
     requires nothing (a `require` in its lakefile keeps them all in), and less that package's `lean-audit.json`, which only
     `tools/verity/lean/check.py` reads (a test fails if the agreement's scripts or the package's lakefile mention it)."""
-    pre, lean = "verity/ml/flock/verifier/", "verity/core/service/flock/"
+    pre, lean = "verity/ml/flock/verifier/", "verity/flock/verifier/"
     lakefiles = [f for f in files if f.startswith(lean) and f.rsplit("/", 1)[-1] in ("lakefile.toml", "lakefile.lean")]
     root = [f for f in lakefiles if f.count("/") == lean.count("/")]
     nested = tuple(f.rsplit("/", 1)[0] + "/" for f in lakefiles if f not in root)
