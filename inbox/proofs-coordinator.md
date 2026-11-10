@@ -31338,3 +31338,53 @@ I'd take (a): it is the tree that already passes, and (b) moves three heads to l
 - The two cancels are recorded as manual, `--by proofs`, with the reason.
 - The five old scratch branches stand as they were.
 - Note: `20261110T1832Z-checkpoint-weightsec`.
+
+## SERVEDCARD, Tue 10 Nov 19:11Z: rows 3, 5 and 13 stage at `full` with unchanged pins (done for Wed 04:00Z); `tok` as a word can't be built as `EmbeddingRead_v1`, and the change that moves nothing of ours is the form reading a Boolean reader by its word view
+
+**Rows 3, 5 and 13 at `full`** [run: `r20261110-184921-cd3e`, proofs pool on cpu-2, rc 0 at 18:58Z, from `d7ab9059c3` on `cursor/proofs-census-bit-leaves-8f33`]. Each row's `n` is its `full`; both form checks (`ks_form_why`, `template_why`) return None (accepted); `flock-read-tmpl` was built in the run (sha256 `a44a6b3e08e60d02…`, the same as row 30's run).
+
+| Row | Spec (census) | Pin | ANDs | k_log / unit_log | `n` = `full` | Peak GB | s | class digest |
+|---|---|---|---|---|---|---|---|---|
+| 3 | `MoeExpertFp8ReadGemm_v1{READ={"fn":"EmbeddingRead_v1{V=256,H=3072}"},K=6144,N=1,G=128,KB=128,SWAP=false,DOT={"fn":"HopperE4m3MmaV2Dot32_v2"}}` | `7e8a66f6cf13209d` | 9,144,187 | 25 / 24 | 1,024 | 10.46 | 412.3 | `7427f92dcab00d5a` |
+| 5 | `MoeExpertFp8ReadGemmW_v1{READ={"fn":"EmbeddingRead_v1{V=256,H=4096}"},K=256,N=32,G=128,KB=128,SWAP=true,DOT={"fn":"HopperE4m3QgmmaDot32_v2"}}` | `1fd651999b36433d` | 10,680,491 | 25 / 24 | 1,024 | 11.72 | 457.5 | `95457e4fd7ce86f1` |
+| 13 | `EmbeddingRead_v1{V=256,H=4}` | `8372f70f9df7f6d0` | 2,500,350 | 23 / 22 | 4,096 | 4.78 | 197.0 | `aa2e763fb47aea83` |
+
+- **State against Wed 04:00Z: done.** All three stage for a long-lived prover from commit `d7ab9059c3a5f94093759753d23b06a4872026c0`, with the pins at N = 1 (`r20261110-181316-4240`) unchanged at size. Nothing stops them. Rows 3 and 5's class digests are FUSEDSERVE's `9daa` types' (`t2`, `t1`).
+- The staged directories were scratch and are gone: kernels stage from the commit (`stage.py "census:SPEC" full OUT`, with `flock-read-tmpl` on `PATH` for row 13).
+- Why it took two moves: `a43b` (cpu-3) and `13f6` (cpu-5) queued in the research pools and never started. cpu-5's research pool is closed by `hold-staged-check.windows` from 18:45Z, then for 24 h from 19:15Z. Both are cancelled. The proofs pool had free slots on every CPU node [run: `slot.py --status`].
+
+**`tok` as a word (LEAN-238): the check** [scratch branch `cursor/proofs-read-tok-word-71e9`, pushed, no PR. `764f97e180` makes `TOKEN = Value(32)` (the 32-bit word type `TokenFeed_v1` and `SelectCollect_v1` write), which changes both `EmbeddingRead_v1`'s and `EmbeddingReadSelect_v1`'s signatures, and gives `tok` to `arguments` as one word. Its parent, `34b31a685a`, is the control: `main` `e7b03e4a6c` plus the `census_leaves` commit, so row 13's staging differs only in `tok`. One run did every step at both: `r20261110-184921-7935`, proofs pool on cpu-1.]
+
+| What | Moves? | At the word | At the control |
+|---|---|---|---|
+| The Definition's pin (`embedding.circuit-check.json`) | **No pin to move to: the Definition can't be built** | circuit-check fails both targets, `EmbeddingRead_v1{V=2,H=1}` and `EmbeddingReadSelect_v1{V=128256,H=2048}`: "TypeError: Value<32> is not a Boolean type (its leaves must be Value<1>)" [run] | 0 failures, 2 unchecked warnings [run] |
+| Gate count | no count: the body doesn't build | `is_boolean` False. The selection's Boolean tracer refuses a `Value<32>` port, and the read's body can't take `tok`'s low D bits for the path position ("reference count 1 does not match type Array<8,Value<1>>" at V = 256) [run: probe] | `is_boolean` True; the body builds (4 nodes, 33 in the selection) [run] |
+| `flock-read-tmpl V H`'s text | no | The scratch diff touches only Python. The template builds the selection over `tok`'s 32 bits itself (`Template.lean:87`), and its text for 256 4 is one build for both commits (sha256 `7580da458db960b6…`) [run; read] | same |
+| `test_read_tmpl.py` | the test, not the template | 3 failed, 12 passed, 5 skipped. The 3 are `test_the_template_computes_the_read` (V2-H1, V5-H2, V3-H513), all at `E.arguments`, which now hands the template one 32-bit integer where its ports take 32 bits [run] | 15 passed, 5 skipped (the opt-in served reads, `FLOCK_READ_SERVED`, skipped at both) [run] |
+| Row 13's staged pin | no pin: staging fails | `stage.py` fails in the read's body after 31 s, the same error as the probe [run] | `8372f70f9df7f6d0`, 2,500,350 ANDs [run] |
+| vllm's fixtures and pins naming the read | none until a pin moves | These name it: `integrations/vllm/tests/program/predict/test_window_circuit.py`, `test_window_rows.py`, `tests/pipeline/test_serving_rows_experts.py`, `tests/program/test_fp8_moe_per_expert.py`; code `pipeline/serving_templates.py`, `pipeline/expert_rows.py`, `program/predict/window_{builder,circuit,weights}.py`. Outside vllm, `spot_figures` cards, `prove_path/sources.json` and `circuit_check/reads/bindings.json` name it [read] | |
+| `lean-audit` records | no | No Lean file changes, and nothing in Lean reads the Python signature. ReadNet's and ReadUnit's records are over the Lean template [read] | |
+
+**What it means** [read unless marked]:
+- **Why a word can't be built.** In the circuit format a Boolean Definition has only `Value<1>` leaves (PROTOCOL.md §9, `is_boolean`). Its 32-bit word is `Array<32, Value<1>>`, which is `tok`'s type today and also the Boolean scalar ops' `I32` (`ops/boolean/scalar.py:64`). The Boolean profile has no primitive that turns a `Value<32>` into bits ("the three gates are fixed by this format"; a new kind is a new format version). The read needs `tok`'s bits: all 32 for the comparison with V, and the low D as the path position.
+- **So it is not a moved pin, and not a proofs PR on today's format.** A literal one-leaf `tok` needs:
+  - a word-to-bits primitive in the format first;
+  - then a new Definition, `EmbeddingRead_v2`. It would not be Boolean (a 32-bit leaf in its signature), so it would also need a Lean template under a new name: `readTmpl` names `EmbeddingRead_v1(V=…,H=…)`, and `read_tmpl.READ` is `EmbeddingRead_v1`.
+  - That is circuits' format and the Lean verifier's parser before anything of ours. I give no date for it.
+- **What moves nothing of ours: the form reads a Boolean reader's ports in their word view.**
+  - Under `word_type`, `tok` is one `Value<32>` leaf [run]. So `TokenFeed_v1.o0`'s and `SelectCollect_v1.o0`'s `I32` leaf lies inside one reader leaf, and `ScanSlots_v2`'s 32 one-bit leaves do too. `Aligned` as stated admits all four wires.
+  - The tree already joins word Programs to Boolean Definitions this way:
+    - PROTOCOL.md §9 defines a Boolean Definition's word view as "the signature of the word Definition it computes";
+    - vllm's serving checks a Boolean template's word view against its word Definition (`pipeline/serving_templates.py:166-177`);
+    - vllm's replay checks a Boolean version's boundary on words (`pipeline/boolean_replay.py:137-145`);
+    - the record's wires compare rows in words (`Spot.Wires.check`, per lean's 16:33Z on LEAN-238).
+  - Lean's concern, one bit counted for 32, doesn't arise there: the reader's element counts at its 32 bits [guess on the Lean side: `Feeds` and `LaysOut` over the record's circuit are lean's and training's to say].
+  - The other route that moves nothing of ours: the writers put out bits (vllm's 17:15Z: 32 hiding leaves a token, not measured).
+- **Row 13 (your item 4).** With `tok` a word, row 13's leaves still aren't 16- or 32-bit: `root`, `domain`, `row`, `salt` and `path` are all 1-bit leaves. So the stager change is needed with or without the word, and it is done (`d7ab9059c3`; row 13 above). Rows 3 and 5 have 1-bit ports on every port, not only through `TOKEN`: the read's six, plus `xq`, `sx`, `ws`, and `g` in row 5 (18:30Z entry).
+
+**Text for LEAN-238, if you post it as is:**
+> @vllm @training @lean proofs, Tue 10 Nov 19:11Z. **`tok` as one 32-bit leaf can't be built as `EmbeddingRead_v1`, so there is no pin to move. The change that moves nothing is the form reading a Boolean reader's ports in their word view, where `tok` already is one 32-bit leaf.** [run: `r20261110-184921-7935`, scratch branch `cursor/proofs-read-tok-word-71e9`; read at `main` `e7b03e4a6c`]
+> - **Run:** with `tok` a `Value<32>`, the read is no longer Boolean, and its body can't be built. circuit-check fails both of the read's targets ("Value<32> is not a Boolean type"), and a row 13 unit doesn't stage. At the control both pass, and row 13 stages at `8372f70f9df7f6d0`. The Lean template, its check and their proofs don't change.
+> - **Why:** a Boolean Definition has only 1-bit leaves (PROTOCOL.md §9). Its 32-bit word is `Array<32, Value<1>>`, and the format has no primitive that splits a word into bits, which the read needs for the comparison and the path position. A one-leaf `tok` needs a new primitive (a format version) and a new Definition (`EmbeddingRead_v2`, with its own Lean template) first. proofs gives no date for that.
+> - **What moves nothing:** under the word view (`word_type`), `tok` is one `Value<32>`. So the `I32` writers and `ScanSlots_v2`'s 32 bits each lie inside one reader leaf, and `Aligned` as stated admits all four wires. vllm's serving already joins Boolean Definitions to word Calls this way (`serving_templates.py:166-177`, `boolean_replay.py:137-145`). Whether the form may, and what `Feeds` says of it, is training's and lean's.
+> - **Served records:** nothing of ours moves on that route, so this week's records keep today's pin.
