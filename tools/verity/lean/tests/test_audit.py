@@ -5307,7 +5307,10 @@ def _two_dependents(tmp_path, monkeypatch, b_build_exit=0):
     monkeypatch.setattr(A, "setup", lambda pkg, toolchain, log: (0, ""))
     monkeypatch.setattr(A, "run", fake_run)
     monkeypatch.setattr(A, "sampled_recompile", sampled)
-    audit = lambda p: A.audit(tmp_path / "ws" / p, tmp_path / "out", build=True, runs=False, log=lambda s: None)
+
+    def audit(p):
+        return A.audit(tmp_path / "ws" / p, tmp_path / "out", build=True, runs=False, log=lambda s: None)
+
     return audit, ran, later, real
 
 
