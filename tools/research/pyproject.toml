@@ -18,11 +18,15 @@ packages = ["src/research"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+# a passed test's tmp_path is removed when it ends: its tests' git repositories, all kept, reach about 400,000 files at once,
+# and a check node with 8 million inodes runs out under a few of these runs
+tmp_path_retention_policy = "failed"
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
     "tests/test_agents.py",
+    "tests/test_at_main.py",
     "tests/test_auto.py",
     "tests/test_binprov.py",
     "tests/test_bucket_index.py",
@@ -44,6 +48,7 @@ untraced = [
     "tests/test_drive_config.py",
     "tests/test_drive_executor.py",
     "tests/test_drive_hold_lift.py",
+    "tests/test_drive_locks.py",
     "tests/test_drive_lowrisk.py",
     "tests/test_drive_moves.py",
     "tests/test_drive_policy.py",
@@ -55,10 +60,12 @@ untraced = [
     "tests/test_evict_src.py",
     "tests/test_evict_src_local.py",
     "tests/test_fixture_fetch.py",
+    "tests/test_fleet.py",
     "tests/test_gates.py",
     "tests/test_holds.py",
     "tests/test_jobs_dispatch.py",
     "tests/test_jobuser.py",
+    "tests/test_labelauth.py", "tests/test_lean_prune.py",
     "tests/test_mem_admission.py",
     "tests/test_merge_gate.py",
     "tests/test_merge_shards.py",
@@ -88,6 +95,7 @@ untraced = [
     "tests/test_queue_ported.py",
     "tests/test_record_driver.py",
     "tests/test_record_result.py",
+    "tests/test_records_short_head.py",
     "tests/test_remote_adopt.py",
     "tests/test_remote_cwd.py",
     "tests/test_remote_local.py",
@@ -113,6 +121,9 @@ untraced = [
     "tests/test_store_vllm_tools.py",
     "tests/test_telemetry.py",
     "tests/test_undeclared_derivation.py",
+    "tests/test_vqueue_compare.py",
+    "tests/test_vqueue_loop.py",
+    "tests/test_vqueue_slim.py",
 ]
 # Test-only, and to move: some tests exercise this repository's Tools, workspace and fixtures rather than the tool itself.
 # test_store_vllm_tools loads the vLLM stage Tools and hashes their closure (integrations/vllm, verity,
@@ -248,6 +259,12 @@ tests = [
     "tests/test_nebius_release.py",
 ]
 paths = ["tools/research/src/research/pods/nebius"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_lean_prune.py", "tests/test_retention.py"]
+paths = ["tools/research/src/research/pods/nebius/deploy.toml", "tools/research/src/research/pods/nebius/vy-lean-prune.service",
+         "tools/verity/lean/lean_audit.py", "tools/verity/lean/module_keys.py", "tools/verity/lean/settings.py",
+         "tools/verity/lean/headers.py", "tools/verity/check/common.py", "tools/verity/graph/verity_graph/contract.py"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_nebius_lockout.py"]
