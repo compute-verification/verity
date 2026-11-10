@@ -12,6 +12,7 @@ replaces an earlier one's. A mend's own result is the one labelled `mPR`.
 import glob
 import json
 import os
+import subprocess
 import sys
 
 meta = json.load(open(sys.argv[1]))
@@ -23,11 +24,16 @@ if "--norow" in rest:
     del rest[i:i + 2]
 cut = rest.index("--stand-in") if "--stand-in" in rest else len(rest)
 runs, runs2 = rest[:cut], rest[cut + 1:]
-PRIORITY = [8448, 8529, 8567, 8566, 8585]
+PRIORITY = [8378, 8448, 8529, 8567, 8566, 8585]
+#: unmarked since the loop put it out of a candidate
+EJECTED = {8378: "- (ejected 17:03Z; its mark and verdict are gone)"}
+#: the candidate the loop dropped at 17:03Z: a mend that merged it holds two pull requests that are in no candidate now
+DROPPED = "034a1702664bff0ac1f8b416b4715f00f84b15d0"
 LEFT_OUT = {8027: "left out on the lead's word (its fix crosses under VLLM-249)",
             8656: "no restack: its commit is in the staging; closed when the layout lands"}
 #: pr -> what the mend on cursor/vllm-restack-PR-7c1e resolves, or why there is none
-MENDS = {8384: "`cli.py` drops both sides' deleted commands",
+MENDS = {8378: "the fix alone, to cherry-pick after the crossing: 13 calls of `map_names` drop `capsys`",
+         8384: "`cli.py` drops both sides' deleted commands",
          8395: "`pyproject.toml`'s test list",
          8401: "one test file, both sides kept",
          8529: "on #8401's mend; `served_units`, both sides kept",
@@ -35,7 +41,7 @@ MENDS = {8384: "`cli.py` drops both sides' deleted commands",
          8567: "merges #8501's mend",
          8580: "`windows/interface.py`: code both sides changed",
          8584: "merges #8580's mend",
-         8402: "`cli.py` drops both sides' deleted commands",
+         8402: "`cli.py` drops both sides' deleted commands; needed only once #8378 is under it",
          8048: "4 files: code both sides changed",
          8060: "text only"}
 NO_MEND = {7958: "none: `main` took the other design since; the author's, or dead",
@@ -82,6 +88,8 @@ def outcome(d):
 
 
 rows = {r["pr"]: r for r in meta["rows"]}
+for m in meta["extra"].values():
+    m["holds_dropped"] = subprocess.run(["git", "merge-base", "--is-ancestor", DROPPED, m["head"]]).returncode == 0
 
 
 def klass(r):
@@ -109,7 +117,8 @@ def stack_key(n):
     return r["pr"]
 
 
-print("| PR | head | on | mark | restack on `41d5514d7680` | `git merge` of `034a1702664b` | `Move:` commits it lacks | the day's form on a stand-in over `034a` | mend, or whose move |")
+BASE = meta["base"][:12]
+print(f"| PR | head | on | mark | restack on `41d5514d7680` | `git merge` of `{BASE}` | `Move:` commits it lacks | the day's form on a stand-in over `034a1702664b` | mend, or whose move |")
 print("|---|---|---|---|---|---|---|---|---|")
 for r in sorted(rows.values(), key=lambda r: (klass(r), stack_key(r["pr"]) if klass(r) != 2 else 0, depth(r["pr"]), r["pr"])):
     n, h = r["pr"], r["head"]
@@ -117,9 +126,7 @@ for r in sorted(rows.values(), key=lambda r: (klass(r), stack_key(r["pr"]) if kl
     on = ", ".join(f"#{u}" for u in r["stacked_on"])
     if r["base"] != "main" and not r["base_pr"]:
         on = (on + "; " if on else "") + f"base `{r['base'][-11:]}`"
-    mark = ("marked, verdict" if r["verdict"] == "yes" else "marked") if r["marked"] else "-"
-    if r["candidates"]:
-        mark += f"; in `{r['candidates'][0][:6]}`"
+    mark = ("mark + land verdict" if r["verdict"] == "yes" else "mark, no verdict") if r["marked"] else EJECTED.get(n, "-")
     if d and d["head"] == h:
         dry = outcome(d)
     elif d:
@@ -132,9 +139,9 @@ for r in sorted(rows.values(), key=lambda r: (klass(r), stack_key(r["pr"]) if kl
     elif d2 and d2["head"] == h:
         two = "stops at the merge" if d2.get("step") == "merge BASE" else outcome(d2)
     elif f"#{n}" in norow:
-        two = "`script-failed` ‡ (read, not run)"
+        two = "`script-failed` ‡ (read from the map)"
     else:
-        two = "queued"
+        two = "in the pool"
     if n in LEFT_OUT:
         merge, lacks, move = "", "", LEFT_OUT[n]
     elif r["in_base"]:
@@ -146,13 +153,15 @@ for r in sorted(rows.values(), key=lambda r: (klass(r), stack_key(r["pr"]) if kl
             m = meta["extra"].get(f"m{n}", {})
             md = res2.get(f"m{n}")
             state = ("merge clean" if not m.get("merge_base") else f"merge stops: {short(m['merge_base'])}") if m else "?"
-            ran = f"; on the stand-in {outcome(md)}" if md and md["head"] == m.get("head") else "; on the stand-in queued"
-            move = f"mend `{m.get('head', '')[:10]}` ({MENDS[n]}); {state}{ran}"
+            ran = f"; crossed {outcome(md)} on the stand-in" if md and md["head"] == m.get("head") else ""
+            redo = "; **to redo on the cut's base** (it merged the dropped `034a`)" if m.get("holds_dropped") else ""
+            bad = "" if state == "merge clean" else f"; {state}"
+            move = f"mend `{m.get('head', '')[:10]}`: {MENDS[n]}{bad}{ran}{redo}"
         elif n in NO_MEND:
             move = NO_MEND[n]
         elif r["merge_base"] or (d and d["head"] == h and d.get("status") != "clean" and not stale_staging(d)):
             move = "the author's"
         if f"#{n}" in norow:
-            files = ", ".join(f"`{x['file']}`" for x in norow[f"#{n}"])
-            move = (move + "; " if move else "") + f"a row in the map for {files}: top's"
+            files = ", ".join(f"`{os.path.basename(x['file'])}`" for x in norow[f"#{n}"])
+            move = (move + "; " if move else "") + f"no mend of mine: the map needs a row for {files} ‡"
     print(f"| #{n} | `{h[:10]}` | {on} | {mark} | {dry} | {merge} | {lacks} | {two} | {move} |")
