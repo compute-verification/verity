@@ -72,8 +72,10 @@ takes the directory's `pyproject.toml` (else its `__init__.py`, its `lakefile.to
 for it. Where one map empties a directory and its files part ways, a reference reads as the directory its files keep
 together in but for the archived ones and a file with a row of its own; else as the one new directory that holds all
 of them but the archived, where that is narrower than a top-level directory; else, in the one map, as where the
-directory's package goes. `layout.py` then wants each reference to a directory that splits acknowledged in `[split]`,
-by file and directory. The one
+directory's package goes. A directory a move's map speaks for reads the same in the one map: a reference to it, and a
+bare `Path(__file__).parent` in a file under it, then follow the files of the move that holds most of it, as they do
+when the moves run one by one. `layout.py` then wants each reference to a directory that splits acknowledged in
+`[split]`, by file and directory. The one
 map's `[split]` rows are what `layout.py`'s own scan of the worktree finds (minutes, and REF must be HEAD); nobody has
 read them, and each says so. `verity/core` and `verity/ml` themselves get no row: no one new directory holds them.
 
@@ -788,8 +790,9 @@ def main():
             tracked_dirs[posixpath.dirname(d)][1].add(posixpath.basename(d))
             d = posixpath.dirname(d)
     tracked_dirs = {d: (fs, sorted(ss)) for d, (fs, ss) in tracked_dirs.items()}
-    def build(dest, moves, one):
-        """The maps of one form: {move: its map}, the order they run in and what each runs after."""
+    def build(dest, moves, one, agree=None):
+        """The maps of one form: {move: its map}, the order they run in and what each runs after. `agree` is the
+        `[tokens]` rows of the other form's maps, which this form's rows for the same directories take."""
         maps = {}
         for move, what in moves:
             mine = {p: n for p, (n, _, m) in dest.items() if m == move}
@@ -798,6 +801,10 @@ def main():
             rows = compress(mine, tracked_dirs, [p for p in mine if excepted(p)[0] == p])
             # the archive speaks for no directory
             tokens = {} if move == "archive" else tokens_for(move, dest, tracked_dirs, rows, emptied, one)
+            for k, n in (agree or {}).items():         # a directory a move's map speaks for reads the same in the one map
+                if tokens.get(k, n) != n:
+                    notes.append(f"[tokens] {k} reads {n} in the one map, as in its move's map, not {tokens[k]}")
+                    tokens[k] = n
             roots_new = {}
             for name, d in ROOTS.items():
                 if not any(p.startswith(d + "/") for p in tracked):
@@ -893,10 +900,19 @@ def main():
         return maps, order, after
 
     built = {}
+    by_move = build(dest, MOVES, False)                # always: the one map's `[tokens]` rows agree with the moves' maps'
     if a.form in ("moves", "both"):
-        built["moves"] = build(dest, MOVES, False)
+        built["moves"] = by_move
     if a.form in ("one", "both"):
-        built["one"] = build({p: (n, key, ONE[0]) for p, (n, key, _) in dest.items()}, [ONE], True)
+        agree = {}
+        for move, v in by_move[0].items():
+            for k, n in v["tokens"].items():
+                if agree.setdefault(k, n) != n:
+                    die(f"[tokens] {k}: two moves' maps speak for it, as {agree[k]} and as {n}")
+        built["one"] = build({p: (n, key, ONE[0]) for p, (n, key, _) in dest.items()}, [ONE], True, agree)
+        differ = sorted(k for k, n in built["one"][0][ONE[0]]["tokens"].items() if agree.get(k, n) != n)
+        if differ:
+            die("[tokens] rows of the one map that differ from a move's map's: " + ", ".join(differ))
 
     # ---- write: a move's map carries its place in the order in its name
     os.makedirs(a.out, exist_ok=True)
