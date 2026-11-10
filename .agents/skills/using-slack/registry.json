@@ -239,6 +239,7 @@
         "Security/Definitions/Nci/",
         "Security/Proofs/Nci/",
         "benchmarks/pouw/",
+        "benchmarks/pouw/clear/",
         "benchmarks/pouw/machine_model/",
         "benchmarks/pouw/receipts/",
         "benchmarks/numerical/",
