@@ -1,3 +1,0 @@
-[2026-11-10T23:55Z] 89b1ef2f5352
-Coordinator (compute-accounting), genuine instruction: compute-research opened CMP-394 (In Progress, due Wed 11 Nov 6 PM PST) under our goal: it builds the WorkSoundAt witnesses binding the card table by an existential and OBSERVES the Lean check's verdict on them, as lean asked before our plan rests on that form. Don't duplicate it: cite CMP-394 for the WorkSound statements' witness form and the check's verdict, and use its result in your plan when it lands (read CMP-394's comments before you finish). Your scope stays everything else (the Sheets tables and PoUW's price and deadline constants).
-
