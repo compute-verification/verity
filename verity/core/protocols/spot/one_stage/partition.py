@@ -126,6 +126,12 @@ def _template_bits(fn: Any) -> int:
     return bits
 
 
+def template_class(fn: Any) -> int | None:
+    """The public size class of an instance of template `fn`'s outputs: `unit_class` of the bits it commits
+    (`_template_bits`), None past the widest."""
+    return unit_class(_template_bits(fn))
+
+
 def _check_units(program: Program, part: PO.TemplatePartition | PO.CallPartition) -> None:
     """Refuses a template of no gate, and a template instance or `Q_call` proof block whose committed bits fit no public class
     (`unit_class`; `_template_bits`, and `_committed_bits` with constants counted, which `Q_call`'s width rule leaves
@@ -394,5 +400,5 @@ def _merged(rs: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
 
 
 __all__ = ["template_id", "FORMAT", "QueryRefused", "digest", "evaluate", "fanout", "in_order", "is_template_query", "mixed_population_program", "partition",
-           "POPULATION_VERSIONS", "population_program", "program_digest", "program_sha512", "ranges", "run_inputs", "shared_inputs", "strata", "template_instance_query",
-           "template_instances_query", "unit_gates", "units", "within", "QUERY_X"]
+           "POPULATION_VERSIONS", "population_program", "program_digest", "program_sha512", "ranges", "run_inputs", "shared_inputs", "strata", "template_class",
+           "template_instance_query", "template_instances_query", "unit_gates", "units", "within", "QUERY_X"]

@@ -22,7 +22,7 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import array_of, tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value as Bits
 from verity.core.protocols.profile import Bernoulli, Subset
-from verity.core.protocols.spot import optimize as O, second_stage as SS, service as S
+from verity.core.protocols.spot import optimize as O, plancheck as PC, second_stage as SS, service as S
 from verity.core.protocols.spot.one_stage import (draw as D, partition as P, registration as R,
                                                             verifier as V)
 from verity.ml.commitments.window import window_binding
@@ -231,6 +231,39 @@ def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
     assert p.programs == (reg.record["program"], ireg.record["program"])
     for m in range(N_RHO + 1):
         assert p.accept(m) == 1 - Fraction(Q, N) + Fraction(Q, N) * Fraction(comb(N_RHO - m, K), comb(N_RHO, K))
+
+
+def test_a_registered_point_gives_each_outcome_the_pooled_field_lean_computes():
+    """A two-stage stream's registered point (`TwoStagePoint`), which its digest binds, gives each outcome record the
+    pooled field. Its pool is the point's form, θ, S and p, with the first stage's q = Q/N and the stream's δ, exactly.
+    Its one class is the registration's N replay blocks, one cell of PAIR's n_rho instances at their outputs' 16-bit
+    size class sampling k, at the published fan-out. Its `ln_count` is what the plancheck executable gives the
+    planner's point for the same design (`plancheck.two`). A stream with no point publishes none, and a one-stage stream
+    takes none."""
+    point = S.TwoStagePoint("capped", Fraction(1, 2), S=8)
+    stream = _stream(point=point)
+    assert stream.digest != _stream().digest
+    out = _two_stage_outcome(stream, lambda s, second: [s])
+    pooled = stream.records[0]["pooled"]
+    assert pooled == out.pooled and S._sha512(stream.records[0]) == out.record
+    assert pooled["pool"] == {"form": "capped", "q": "1/2", "theta": "1/2", "delta": f"1/{2**40}", "S": "8", "p": "64"}
+    assert pooled["classes"] == [{"count": str(N), "cells": [{"k": str(K), "parts": [[str(N_RHO), "16"]]}], "reads": [],
+                                  "N": "1"}]
+    assert (pooled["replay_blocks"], pooled["units"]) == (N, N * N_RHO)
+    planner = PC.two([O.Cell(N_RHO, 16)], {0: K}, N, Fraction(Q, N), DELTA, 8, theta=.5, search=None, fanout=1)
+    assert Fraction(pooled["ln_count"]) == PC.ln_counts([planner])[0] > 0
+
+    plain = _stream()
+    _two_stage_outcome(plain, lambda s, second: [s])
+    assert "pooled" not in plain.records[0] and plain.records[0]["audit"]["checks"] == \
+        stream.records[0]["audit"]["checks"]
+    one = S.Spec(VALUES[:2], S.Law("rate:1/2"), S.Check(P.program_digest(Program(BLOCK)), GRAIN, proof_deadline=60.0),
+                 PUBLIC, b"two-stage-test")
+    with pytest.raises(ValueError, match="two-stage stream's"):
+        FC.Stream(one, BLOCK, budget=2, delta=DELTA, challenger="challenger-test", clock=Clock(), point=point)
+    for bad in ({"form": "pooled"}, {"theta": -Fraction(1)}, {"theta": .5}, {"S": 0}, {"form": "sets", "S": 8}, {"p": 0}):
+        with pytest.raises(ValueError, match="two-stage point"):
+            S.TwoStagePoint(**{"form": "capped", "theta": Fraction(1, 2), "S": 8, **bad})
 
 
 def test_a_rate_first_stage_keeps_one_wrong_proof_blocks_escape_however_the_prover_pads_the_replay_blocks():

@@ -384,6 +384,41 @@ class TwoStage:
                 "k": self.k if type(self.k) is int else dict(self.k)}
 
 
+#: `TwoStageCheck.Form`: the admissible sets' count, their patterns' over requests, or the sets' at served bits capped
+FORMS = ("sets", "patterns", "capped")
+
+
+@dataclass(frozen=True)
+class TwoStagePoint:
+    """A two-stage stream's registered point (`Stream(point=)`), `TwoStageCheck.Point` but for what each registration
+    fixes: its `form` (`FORMS`), Rankin's `theta`, the bits `S` each request serves (0 in the sets' form, which reads
+    none) and the precision `p`, bound by the stream's digest before any coin. Each registration's point adds the first
+    stage's q, Q/N over its N replay blocks, the stream's δ, and its one class (`Stream.pooled`)."""
+
+    form: str
+    theta: Fraction
+    S: int = 0
+    p: int = 64
+
+    def __post_init__(self) -> None:
+        if self.form not in FORMS:
+            raise ValueError(f"a two-stage point's form is one of {', '.join(FORMS)}, not {self.form!r}")
+        if not (isinstance(self.theta, Fraction) and self.theta >= 0):
+            raise ValueError(f"a two-stage point's theta is a Fraction at least 0, not {self.theta!r}")
+        if not (type(self.S) is int and (self.S == 0) == (self.form == "sets")):
+            raise ValueError(f"a two-stage point serves S >= 1 bits a request in the patterns' and capped forms and "
+                             f"S = 0 in the sets', not S = {self.S!r} in the {self.form} form")
+        if not (type(self.p) is int and self.p >= 1):
+            raise ValueError(f"a two-stage point's precision is a positive integer, not {self.p!r}")
+
+    def to_json(self) -> dict[str, Any]:
+        return {"form": self.form, "theta": _ratio(self.theta), "S": str(self.S), "p": str(self.p)}
+
+
+def _ratio(x: Fraction) -> str:
+    return f"{x.numerator}/{x.denominator}"
+
+
 Selection = All | Law | Sequential | TwoStage
 
 
@@ -534,7 +569,8 @@ class Outcome:
     (`reject`, `late`, or `halted`, whose detail is the halt's cause). `profile`: the integrity profile of an accepted
     sampled selection; `exhaustive`: the fact of an accepted `All`. `public`: the check's public outputs, as the
     verifier reported them. `record`: the SHA-512 of the outcome's record, which binds the registration, the sample, the
-    delivered sessions, the audit record and, for a sample a `Session` covers, the session's rounds."""
+    delivered sessions, the audit record and, for a sample a `Session` covers, the session's rounds. `pooled`: under a
+    two-stage stream's registered point, its registration's pooled field (`Stream.pooled`), which the record binds too."""
 
     accepted: bool
     verdict: Verdict
@@ -543,6 +579,7 @@ class Outcome:
     terms: Terms
     public: Mapping[str, Any]
     record: str
+    pooled: Mapping[str, Any] | None = field(default=None, compare=False)
 
 
 _O = TypeVar("_O", Outcome, tuple[Outcome, ...])
@@ -1545,14 +1582,16 @@ class Stream:
     template's (n_t, `replay_cells`) and `counts` the second stage's in each of its cells (k_t, `second_counts`). A
     registration is then the boundary commitment and its `select` the first stage; `register_interiors` takes the
     interior registration (`interior_program`), a second `select` on it is the second stage, and `deliver` and
-    `outcome` take that sample (the module docstring). A window's `values` are then the interior's.
+    `outcome` take that sample (the module docstring). A window's `values` are then the interior's. A two-stage stream's
+    `point` (`TwoStagePoint`), which its digest binds, gives each of its outcome records the pooled field (`pooled`).
     """
 
     def __init__(self, spec: Spec, unit: SpecializedDefinition | Sequence[SpecializedDefinition], *, budget: int, delta: float, challenger: str,
                  coins: ChallengerCoins | None = None, clock: Callable[[], float] = time.monotonic,
                  sampler: Sampler | None = None, rounds: int = 1, prover: str | None = None,
                  values: Sequence[tuple[str, int, int]] = (), log: Sequence[Mapping[str, Any]] = (),
-                 replay: SpecializedDefinition | None = None, program: Program | None = None) -> None:
+                 replay: SpecializedDefinition | None = None, program: Program | None = None,
+                 point: TwoStagePoint | None = None) -> None:
         if isinstance(spec.selection, Sequential):
             raise ValueError("the service doesn't run a Sequential selection yet")
         if spec.check.window is not None or spec.check.deadline is not None:
@@ -1613,6 +1652,9 @@ class Stream:
             self.n_rho = sum(self.cells)
         elif replay is not None:
             raise ValueError("only a two-stage stream has a replay block (Stream(replay=))")
+        if point is not None and not (isinstance(point, TwoStagePoint) and self.n_rho is not None):
+            raise ValueError("a registered point (Stream(point=)) is a two-stage stream's, a TwoStagePoint")
+        self.point = point
         self.spec, self.unit, self.budget, self.delta, self.challenger = spec, unit, budget, delta, challenger
         self.query = spec.selection.grain if isinstance(spec.selection, TwoStage) else spec.check.query
         self.templates = None if isinstance(unit, SpecializedDefinition) else units
@@ -1623,7 +1665,8 @@ class Stream:
                                **({"prover": prover} if prover is not None else {}),
                                **({"coins": "challenger"} if isinstance(coins, ChallengerCoins) else {}),
                                **({"values": [list(v) for v in values]} if values else {}),
-                               **({"program": P.program_digest(program)} if program is not None else {})})
+                               **({"program": P.program_digest(program)} if program is not None else {}),
+                               **({"point": point.to_json()} if point is not None else {})})
         self.binding = None if prover is None else R._binding({"stream": self.digest, "prover": prover})
         self._params = {"budget": budget, "rounds": rounds,
                         "registration_deadline": _reading(spec.check.registration_deadline),
@@ -2455,6 +2498,9 @@ class Stream:
                                            "draw": _sha512(dict(d.draw))} for d in e.session.draws]}
         if halt is not None:
             body["halt"] = dict(halt)
+        pooled = self.pooled(reg)
+        if pooled is not None:
+            body["pooled"] = pooled
         accepted = symbol == ACCEPT
         exhaustive = isinstance(self.spec.selection, All)
         profile = None
@@ -2468,7 +2514,8 @@ class Stream:
             exhaustive=Exhaustive(len(draw.draw["units"])) if accepted and exhaustive else None,
             terms=Terms(None if exhaustive else self.delta),
             public=dict(public),
-            record=_sha512(body))
+            record=_sha512(body),
+            pooled=pooled)
         self._records.append(body)
         return e.outcome
 
@@ -2494,6 +2541,32 @@ class Stream:
                                 delta=self.delta, programs=(reg["program"], ireg["program"]),
                                 drawn={REPLAY: q, A.LEVEL: len(e.second.units)})
 
+    def pooled(self, registration: WindowCommitmentRecord) -> dict[str, Any] | None:
+        """A registration's pooled field under the stream's point, None without one: `TwoStageCheck.Point` as the
+        plancheck executable reads it (`plancheck.EXE`), every number exact. `pool`: the registered point, with the first
+        stage's q, Q/N over the registration's N replay blocks, and the stream's δ. `classes`: one class, the N replay
+        blocks, one cell a template in the check's order sampling k_t of its n_t proof blocks at their outputs' public
+        size class (`partition.template_class`), each read whole by one request in the patterns' form, at N = F, the
+        fan-out the registration verdict published. `ln_count`: the executable's `classSum (classFactor D) D.classes`
+        (`plancheck.ln_counts`), None where Lean's `lnCount` is none, or where no F was published or the patterns'
+        form has F above 1, which its bound doesn't cover. The registration fixes each before any coin."""
+        if self.point is None:
+            return None
+        from . import plancheck  # plancheck imports optimize, whose consumers module imports this one
+        n, f, form = registration.record["population"], registration.fanout, self.point.form
+        q = Fraction(selection_law(self.spec.selection, n)["k"], n)
+        widths = [P.template_class(u) for u in (self.templates or (self.unit,))]
+        parts = [[[str(c), str(w)]] for c, w in zip(self.cells, widths)]
+        one = {"count": str(n), "cells": [{"k": str(k), "parts": ps} for k, ps in zip(self.counts, parts)],
+               "reads": parts if form == "patterns" else [],
+               "N": "0" if form == "sets" else None if f is None else str(f)}
+        pool = {"form": form, "q": _ratio(q), "theta": _ratio(self.point.theta), "delta": _ratio(Fraction(self.delta)),
+                "S": str(self.point.S), "p": str(self.point.p)}
+        covered = form == "sets" or f is not None and (form == "capped" or f == 1)
+        ln = plancheck.ln_counts([{"kind": "two", **pool, "classes": [one]}])[0] if covered else None
+        return {"pool": pool, "replay_blocks": n, "units": n * sum(self.cells), "classes": [one],
+                "ln_count": None if ln is None else _ratio(ln)}
+
 
 def _run_failed(rec: Mapping[str, Any], v: Verdict) -> dict[str, Any]:
     """An audit record failing `run`: the whole run is not the verifier's."""
@@ -2515,8 +2588,8 @@ def _why(symbol: str, audit: Mapping[str, Any] | None,
     return why
 
 
-__all__ = ["ACCEPT", "All", "Check", "Draw", "Exhaustive", "Fleet", "HALTED", "HIDING", "KINDS", "LATE", "Law", "Outcome",
+__all__ = ["ACCEPT", "All", "Check", "Draw", "Exhaustive", "FORMS", "Fleet", "HALTED", "HIDING", "KINDS", "LATE", "Law", "Outcome",
            "PHASES", "Pending", "Public", "REJECT", "REPLAY", "ROOTS", "ROUNDS", "Refused", "SCHEME", "SOURCES",
-           "Selection", "Sequential", "Session", "Spec", "Stream", "Terms", "TwoStage", "Value",
+           "Selection", "Sequential", "Session", "Spec", "Stream", "Terms", "TwoStage", "TwoStagePoint", "Value",
            "WindowCommitmentRecord", "boundary_values", "check_public", "check_verdicts", "interior_values",
            "replay_cells", "second_counts", "second_law", "select_draw", "select_second", "selection_law"]
