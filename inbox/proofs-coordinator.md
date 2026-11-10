@@ -32829,3 +32829,31 @@ This replaces my 20:37Z entry where they differ.
 - **One-stage against two-stage:**
   - The one-stage form has one binding term, with no \(B_{conf,2}\). So its conditions sit one bit above the two-stage's: \(2^{45.6}\) against \(2^{43.6}\), and \(2^{31.5}\) against \(2^{30.5}\) for the tail route, where TWOPROVE's \(2^{31.5}/c\) at \(c = 2\) is \(2^{30.5}\).
   - Here \(n_{out} = n_{in} = n_{PU}\), against `footBits` and the replay sample's blocks in the two-stage form.
+
+## PRF-513 REMOTEBENCH, Tue 10 Nov 20:49Z: `474a` shows no failure in a file of mine (`sampling_plan` 57 passed; `one_stage` 884 passed, 3 failed, each on vllm's file); final head `fd98758d64ce`, which holds the base's `db7c3f391a46`; your 20:44Z stop is read: no more merges, no more pushes to `cursor/proofs-remote-bench-8973`
+
+All times UTC, read from the clock. [run] I ran it, [read] I read it, [guess] neither.
+
+**The head.** `fd98758d64ce` [run]. After my 20:28Z entry the base moved twice, and I merged it twice before your stop reached me at 20:47Z: `4b486501b6e5` holds the base's `9f458752c5fe` (pushed 20:34Z) and `fd98758d64ce` holds `db7c3f391a46` (pushed 20:42Z). Both merges were automatic. Neither changed a file under my four directories, nor a declared input of either suite [run: `git diff --name-only` against each suite's `inputs`]. Against the base my head still changes the same 19 files and no other. I push nothing more there.
+
+**`r20261110-202210-474a`** (at `da7f0b5167b3`; rc 1) [run: its `out/suites.txt`, logs and outcome record]
+
+- `benchmarks/sampling_plan`: passed, 57 tests in 33 s.
+- `benchmarks/one_stage`: 884 passed, 3 failed, no error and no skip in 350 s; the `@lean` tests ran, and no test read a file outside the suite's inputs.
+- **What I mended passes with the Lean built:** `test_v2s_lean_names_the_records_digest_so_its_rejection_is_written` and `test_sampled_proofs_lean_names_the_records_digest_and_refuses_v1_by_name` (the toy key), all 28 of `test_inference_only.py`, the three `test_block_counts_publishes_...` of `test_served_verdicts.py`, and `test_served_pearlplus_lean.py`.
+
+| Failed test | Cause | Whose |
+|---|---|---|
+| `test_a10_rewritten.py::test_a_rewritten_tensor_opens_against_its_rows_sha512_tensor_root` | `integrations/vllm/verity_vllm/commit/step_rows.py:131`: "names must be a 64-byte digest". The file is marked; it fails with either line taken whole | vllm |
+| `test_a5_history.py::test_the_verifier_of_record_holds_the_registered_history_root_to_the_writers_bodies` | `verity.ml.windows.interface` has no `History`: the base's file lacks `main`'s `fff33e8dd3` | vllm's close on the base |
+| `test_served_cases.py::test_the_inference_only_case_on_the_4_32_4_class_is_accepted_at_its_budgets` | `verity_vllm/program/predict/window_circuit.py:752`: "`_Program.__init__()` takes from 8 to 9 positional arguments but 10 were given". The file is marked (5 places) and my stand-in took `main`'s line. Its unmarked text calls the side's `_Program` (with `layout`), so `main`'s line cannot be taken whole. The test stops there, before any code of mine | vllm, marked |
+
+**A correction to my 20:28Z entry.** In `a3c6` that third test failed on `prune.py:35` (`Node`), not on `block_counts.py` as I wrote [read: its log].
+
+**One more run, no push.** `r20261110-203643-b689` on `vy-nebius-cpu-8`, launched 20:36Z at `4b486501b6e5`, still waiting for a check slot at 20:47Z. It differs from `474a` in one stand-in: vllm's `window_circuit.py` gets the side's line at places 1 to 4 and both lines at place 5. It is there to show the 4,32,4 test reaching my `inference_only.py`. If that test then fails in a file of mine, I tell you in an entry before I touch the branch.
+
+**Text for vllm, added to 20:28Z's:** `program/predict/window_circuit.py` (5 places). Places 1 to 4 fit the head only with the side's line: the unmarked `lower` passes `tables, layout` to `_Program`. Place 5 needs both: the side's `formats=` argument to `IF.Registered` and `main`'s two lines `wires = ...` and `starts = ...`, which the unmarked text below reads. With that the file compiles and ruff finds no undefined name [run]; whether the class builds is `b689`'s.
+
+**Open questions:** none.
+
+Next entry when `b689` ends, by 21:45Z at the latest.
