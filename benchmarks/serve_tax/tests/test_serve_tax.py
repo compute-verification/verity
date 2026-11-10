@@ -1347,6 +1347,10 @@ def test_the_row_under_the_number_is_the_cost_on_a_repeated_prefix_with_no_targe
     arms[-1]["planned"] = {"prefix": PLANNED["prefix"] | {"sha256": "6" * 64}}
     with pytest.raises(SystemExit, match="compiled and two-stage served load prefix from different plans"):
         S.cost_report(arms)
+    arms = cost_arms()
+    del arms[3]["planned"]
+    with pytest.raises(SystemExit, match="compiled and no-prefix-cache served load prefix from different plans, or a"):
+        S.cost_report(arms)
     # a row of another plan than the four requests is not labelled scaled down, and its share is its own
     other = {"prefix": {"requests": 4, "prompt_tokens": 1000000, "repeated_tokens": 250000, "sha256": "7" * 64}}
     longer = S.cost_report([a | {"planned": other} if "planned" in a else a for a in cost_arms()])["prefix"]

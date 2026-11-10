@@ -1787,23 +1787,23 @@ def prefix_row(by: dict[str, dict], reference: str, arm: str) -> dict | None:
     served in fact, from the engine's own counters, beside the share the load plans to repeat (`planned`), and whether
     each side served every request of every rep. ``scaled_down`` says the load is the four requests of `PAIRS` and
     not the plan they are from. ``cache_off`` is the same for the reference with its prefix cache off (`CACHE_OFF`),
-    where that arm served the load. None where ``reference`` or ``arm`` has not served it; refused where the two
-    served different plans."""
+    where that arm served the load. None where ``reference`` or ``arm`` has not served it; refused where an arm of
+    the row served another plan than ``reference`` did."""
     ref = by[reference]
     first = serving_cost(ref, by[arm], PREFIX)
     if first is None:
         return None
     rung = first["rung"]
     plan = (ref.get("planned") or {}).get(PREFIX)
-    if plan is None or (by[arm].get("planned") or {}).get(PREFIX) != plan:
-        raise SystemExit(f"cost: {reference} and {arm} served load {PREFIX} from different plans, or a directory of "
-                         "theirs names none (meta.json: planned)")
 
     def over(name: str) -> dict | None:
         x = by.get(name)
         c = serving_cost(ref, x, PREFIX, rung) if x else None
         if c is None:
             return None
+        if plan is None or (x.get("planned") or {}).get(PREFIX) != plan:
+            raise SystemExit(f"cost: {reference} and {name} served load {PREFIX} from different plans, or a directory "
+                             "of theirs names none (meta.json: planned)")
         a, b = ({r["rep"]: r for r in bench_rungs(y, PREFIX)[rung]} for y in (ref, x))
         reps = sorted(set(a) & set(b))
 
