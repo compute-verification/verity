@@ -13,5 +13,5 @@
 70b-l0-3-v --codes "$CODES" --layers 2,3 --match v_proj --fast --ranks 1,2,4,6,8,10,12,16,32,48,64,96,128,192 --orders none,fold,sort --workers 2
 70b-l0-3-o --codes "$CODES" --layers 0,1,2,3 --match o_proj --fast --ranks 1,8,32,64,128,256,384 --orders none,fold,sort --workers 4
 70b-l0-3-gu --codes "$CODES" --layers 1,2,3 --match gate_proj,up_proj --fast --ranks 1,2,4,6,8,10,12,14,16,32,64,128,256 --orders none,fold,sort --workers 6
-70b-l0-3-gu-defl32 --codes "$CODES" --layers 0 --match gate_proj,up_proj --fast --ranks 1,8,16,32,64,128,256 --orders none,fold,sort --workers 2
+70b-l0-defl32-gu --codes "$CODES" --layers 0 --match gate_proj,up_proj --fast --ranks 1,8,16,32,64,128,256 --orders none,fold,sort --workers 2
 70b-l0-3-down --codes "$CODES" --layers 0,1,2,3 --match down_proj --fast --ranks 1,8,16,32,64,128,256 --orders none,fold,sort --workers 4
