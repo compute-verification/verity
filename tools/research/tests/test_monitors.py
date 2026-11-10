@@ -1094,7 +1094,8 @@ RATCHET_LINES = ["  #12 (aaaaaaaaaaaa): failed: grows p01.json 2 -> 3 entries", 
 def test_the_reader_gives_a_failed_ratchet_gates_lines_though_another_step_failed_first(tmp_path, monkeypatch):
     """Each merge a failed ratchet gate fails is a lane to ring (`failed_check`), and circuit-check, before the gate in ci.toml,
     can fail first: the gate's lines come with the row whichever step failed first, at most `RATCHET_LINES` of them.  A gate
-    that passed gives none, and one that failed with no log, or none on disk, an empty list."""
+    that passed gives none, and one that failed with no log, or none on disk, an empty list; its log is read to its first
+    8 MiB (`log_bytes`), as every log the reader opens."""
     slot = ["python3", "tools/verity/check/slot.py", "--", "uv", "run", "python", "tools/verity/check/check.py"]
     write_run(tmp_path, "r20261003-200000-aaaa", command=slot, state="failed", rc=1,
               steps=[{"step": "circuit-check", "status": "failed", "rc": 1, "log": "circuit-check.log"},
@@ -1108,6 +1109,9 @@ def test_the_reader_gives_a_failed_ratchet_gates_lines_though_another_step_faile
               steps=[{"step": "ratchet-gate", "status": "failed"}])
     write_run(tmp_path, "r20261003-200000-dddd", command=slot, state="failed", rc=1,
               steps=[{"step": "ratchet-gate", "status": "failed", "rc": 1, "log": "ratchet-gate.log"}])
+    write_run(tmp_path, "r20261003-200000-eeee", command=slot, state="failed", rc=1,
+              steps=[{"step": "ratchet-gate", "status": "failed", "rc": 1, "log": "ratchet-gate.log"}],
+              logs={"ratchet-gate.log": "." * (8 << 20) + "\n" + RATCHET_LOG})
 
     def rows():
         script = M.failed_reader(T0, runs=str(tmp_path / "runs"), requests=str(tmp_path / "requests"), line=str(tmp_path / "none"))
@@ -1117,7 +1121,7 @@ def test_the_reader_gives_a_failed_ratchet_gates_lines_though_another_step_faile
     got = rows()
     assert got["aaaa"]["step"] == "circuit-check" and got["aaaa"]["ratchet"] == RATCHET_LINES
     assert "ratchet" not in got["bbbb"] and got["cccc"]["step"] == "ratchet-gate" and got["cccc"]["ratchet"] == []
-    assert got["dddd"]["ratchet"] == []
+    assert got["dddd"]["ratchet"] == got["eeee"]["ratchet"] == []
     monkeypatch.setattr(M, "RATCHET_LINES", 1)
     assert rows()["aaaa"]["ratchet"] == RATCHET_LINES[:1]
 
