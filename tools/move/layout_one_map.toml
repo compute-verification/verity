@@ -582,7 +582,6 @@ new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_diff
 
 [tokens]
 # directories no row moves whole, as a reference to one reads after the move
-"benchmarks/bandwidth/" = "archive/benchmarks/bandwidth/"
 "benchmarks/nci/" = "verity/protocols/inference_only/nci/"
 "examples/" = "workloads/"
 "verity/core/protocols/" = "verity/protocols/"
