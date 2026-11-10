@@ -1,0 +1,80 @@
+# DRAFT, not of record: a layout map written by top's staging worker from vllm's assign.json (4456fda7569c),
+# to find out whether tools/move carries a move of this size. vllm's maps of record replace it; where they differ,
+# theirs stand. Move 11 of 21: 156 files to verity/flock/ (paths: vllm's rule 0q). It runs on the tree the drafts before it leave.
+
+[roots]
+old = { band_gpu = "benchmarks/pous/band_gpu", circuit_check = "tools/verity/circuit_check/src/circuit_check", circuit_properties = "benchmarks/circuit_properties/circuit_properties", cluster = "infra/cluster/src/cluster", datacenter = "benchmarks/datacenter/datacenter", e2e_h200 = "examples/h200/e2e_h200", exact_kit = "benchmarks/pouw/exact_kit/exact_kit", memory_challenger = "benchmarks/pous/memory_challenger", p2_v1 = "benchmarks/pous/p2_v1", research = "tools/research/src/research", rho = "benchmarks/rho/rho", slack_events = "infra/slack-events/service/slack_events", training_slowdown = "benchmarks/training_slowdown/training_slowdown", verity = "verity", verity_bench = "benchmarks/harness/verity_bench", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_difftest = "verity/difftest/python/verity_difftest", verity_e2e_demo = "examples/h200/interfaces/verity_e2e_demo", verity_flock = "verity/flock/prover/python/verity_flock", verity_graph = "tools/verity/graph/verity_graph", verity_machine_model = "verity/hardware/pouw/machine_model/verity_machine_model", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_ops = "infra/ops/verity_ops", verity_proof_throughput = "benchmarks/proof_throughput/verity_proof_throughput", verity_vllm = "integrations/vllm/verity_vllm", workload = "benchmarks/network_sim/workload" }
+new = { band_gpu = "benchmarks/pous/band_gpu", circuit_check = "tools/verity/circuit_check/src/circuit_check", circuit_properties = "benchmarks/circuit_properties/circuit_properties", cluster = "infra/cluster/src/cluster", datacenter = "benchmarks/datacenter/datacenter", e2e_h200 = "examples/h200/e2e_h200", exact_kit = "benchmarks/pouw/exact_kit/exact_kit", memory_challenger = "benchmarks/pous/memory_challenger", p2_v1 = "benchmarks/pous/p2_v1", research = "tools/research/src/research", rho = "benchmarks/rho/rho", slack_events = "infra/slack-events/service/slack_events", training_slowdown = "benchmarks/training_slowdown/training_slowdown", verity = "verity", verity_bench = "benchmarks/harness/verity_bench", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_difftest = "verity/difftest/python/verity_difftest", verity_e2e_demo = "examples/h200/interfaces/verity_e2e_demo", verity_flock = "verity/flock/prover/python/verity_flock", verity_graph = "tools/verity/graph/verity_graph", verity_machine_model = "verity/hardware/pouw/machine_model/verity_machine_model", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_ops = "infra/ops/verity_ops", verity_proof_throughput = "benchmarks/proof_throughput/verity_proof_throughput", verity_vllm = "integrations/vllm/verity_vllm", workload = "benchmarks/network_sim/workload" }
+
+[paths]
+"verity/core/service/" = "verity/flock/"
+"verity/ml/flock/pod/" = "verity/flock/pod/"
+"verity/ml/flock/python/" = "verity/flock/python/"
+"verity/ml/flock/tests/" = "verity/flock/tests/"
+"verity/ml/flock/tool.py" = "verity/flock/tool.py"
+"verity/ml/flock/verifier/README.md" = "verity/flock/upstream_agreement/verifier/README.md"
+"verity/ml/flock/verifier/agree.py" = "verity/flock/upstream_agreement/verifier/agree.py"
+"verity/ml/flock/verifier/ci-bundle.sh" = "verity/flock/upstream_agreement/verifier/ci-bundle.sh"
+"verity/ml/flock/verifier/ci-pod.sh" = "verity/flock/upstream_agreement/verifier/ci-pod.sh"
+"verity/ml/flock/verifier/ci.py" = "verity/flock/upstream_agreement/verifier/ci.py"
+"verity/ml/flock/verifier/circuit-vectors-25519ba1.patch" = "verity/flock/upstream_agreement/verifier/circuit-vectors-25519ba1.patch"
+"verity/ml/flock/verifier/circuit-vectors-967b8d06.patch" = "verity/flock/upstream_agreement/verifier/circuit-vectors-967b8d06.patch"
+"verity/ml/flock/verifier/circuit-vectors-eb90718f.patch" = "verity/flock/upstream_agreement/verifier/circuit-vectors-eb90718f.patch"
+"verity/ml/flock/verifier/circuit-vectors.patch" = "verity/flock/upstream_agreement/verifier/circuit-vectors.patch"
+"verity/ml/flock/verifier/circuit_type_agree.py" = "verity/flock/upstream_agreement/verifier/circuit_type_agree.py"
+"verity/ml/flock/verifier/cut_check_agree.py" = "verity/flock/upstream_agreement/verifier/cut_check_agree.py"
+"verity/ml/flock/verifier/firewall_agree.py" = "verity/flock/upstream_agreement/verifier/firewall_agree.py"
+"verity/ml/flock/verifier/firewall_controls.sh" = "verity/flock/upstream_agreement/verifier/firewall_controls.sh"
+"verity/ml/flock/verifier/firewall_finish_agree.py" = "verity/flock/upstream_agreement/verifier/firewall_finish_agree.py"
+"verity/ml/flock/verifier/firewall_finish_agree.sh" = "verity/flock/upstream_agreement/verifier/firewall_finish_agree.sh"
+"verity/ml/flock/verifier/fuzz.py" = "verity/flock/upstream_agreement/verifier/fuzz.py"
+"verity/ml/flock/verifier/layout_agree.py" = "verity/flock/upstream_agreement/verifier/layout_agree.py"
+"verity/ml/flock/verifier/lookup_v2_vectors.json" = "verity/flock/upstream_agreement/verifier/lookup_v2_vectors.json"
+"verity/ml/flock/verifier/netlist-vectors.patch" = "verity/flock/upstream_agreement/verifier/netlist-vectors.patch"
+"verity/ml/flock/verifier/qcall_agree.py" = "verity/flock/upstream_agreement/verifier/qcall_agree.py"
+"verity/ml/flock/verifier/qword_agree.py" = "verity/flock/upstream_agreement/verifier/qword_agree.py"
+"verity/ml/flock/verifier/qword_program_agree.py" = "verity/flock/upstream_agreement/verifier/qword_program_agree.py"
+"verity/ml/flock/verifier/record_text.py" = "verity/flock/upstream_agreement/verifier/record_text.py"
+"verity/ml/flock/verifier/redigest.py" = "verity/flock/upstream_agreement/verifier/redigest.py"
+"verity/ml/flock/verifier/selftest_records.py" = "verity/flock/upstream_agreement/verifier/selftest_records.py"
+"verity/ml/flock/verifier/template_query_agree.py" = "verity/flock/upstream_agreement/verifier/template_query_agree.py"
+"verity/ml/flock/verifier/tool.py" = "verity/flock/verifier/tool.py"
+"verity/ml/flock/verifier/transcript_check.py" = "verity/flock/upstream_agreement/verifier/transcript_check.py"
+"verity/ml/flock/verifier/unit_cut_agree.py" = "verity/flock/upstream_agreement/verifier/unit_cut_agree.py"
+"verity/ml/flock/verifier/upstream-build.sh" = "verity/flock/upstream_agreement/verifier/upstream-build.sh"
+"verity/ml/flock/verifier/upstream.json" = "verity/flock/upstream_agreement/verifier/upstream.json"
+"verity/ml/flock/verifier/vectors.json" = "verity/flock/upstream_agreement/verifier/vectors.json"
+"verity/ml/flock/verifier/zk_mutants.py" = "verity/flock/upstream_agreement/verifier/zk_mutants.py"
+
+[modules]
+"verity.core.service" = "verity.flock"
+"verity.ml.flock.pod" = "verity.flock.pod"
+"verity.ml.flock.python" = "verity.flock.python"
+"verity.ml.flock.tests" = "verity.flock.tests"
+"verity.ml.flock.tool" = "verity.flock.tool"
+"verity.ml.flock.verifier.agree" = "verity.flock.upstream_agreement.verifier.agree"
+"verity.ml.flock.verifier.ci" = "verity.flock.upstream_agreement.verifier.ci"
+"verity.ml.flock.verifier.circuit_type_agree" = "verity.flock.upstream_agreement.verifier.circuit_type_agree"
+"verity.ml.flock.verifier.cut_check_agree" = "verity.flock.upstream_agreement.verifier.cut_check_agree"
+"verity.ml.flock.verifier.firewall_agree" = "verity.flock.upstream_agreement.verifier.firewall_agree"
+"verity.ml.flock.verifier.firewall_finish_agree" = "verity.flock.upstream_agreement.verifier.firewall_finish_agree"
+"verity.ml.flock.verifier.fuzz" = "verity.flock.upstream_agreement.verifier.fuzz"
+"verity.ml.flock.verifier.layout_agree" = "verity.flock.upstream_agreement.verifier.layout_agree"
+"verity.ml.flock.verifier.qcall_agree" = "verity.flock.upstream_agreement.verifier.qcall_agree"
+"verity.ml.flock.verifier.qword_agree" = "verity.flock.upstream_agreement.verifier.qword_agree"
+"verity.ml.flock.verifier.qword_program_agree" = "verity.flock.upstream_agreement.verifier.qword_program_agree"
+"verity.ml.flock.verifier.record_text" = "verity.flock.upstream_agreement.verifier.record_text"
+"verity.ml.flock.verifier.redigest" = "verity.flock.upstream_agreement.verifier.redigest"
+"verity.ml.flock.verifier.selftest_records" = "verity.flock.upstream_agreement.verifier.selftest_records"
+"verity.ml.flock.verifier.template_query_agree" = "verity.flock.upstream_agreement.verifier.template_query_agree"
+"verity.ml.flock.verifier.tool" = "verity.flock.verifier.tool"
+"verity.ml.flock.verifier.transcript_check" = "verity.flock.upstream_agreement.verifier.transcript_check"
+"verity.ml.flock.verifier.unit_cut_agree" = "verity.flock.upstream_agreement.verifier.unit_cut_agree"
+"verity.ml.flock.verifier.zk_mutants" = "verity.flock.upstream_agreement.verifier.zk_mutants"
+
+[retired]
+paths = []
+
+[rewrite]
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch", "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]

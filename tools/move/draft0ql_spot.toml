@@ -1,0 +1,83 @@
+# DRAFT, not of record: a layout map written by top's staging worker from vllm's assign.json (4456fda7569c),
+# to find out whether tools/move carries a move of this size. vllm's maps of record replace it; where they differ,
+# theirs stand. Move 9 of 21: 195 files to verity/spot/ (paths: vllm's rule 0q). It runs on the tree the drafts before it leave.
+
+[roots]
+old = { band_gpu = "benchmarks/pous/band_gpu", circuit_check = "tools/verity/circuit_check/src/circuit_check", circuit_properties = "benchmarks/circuit_properties/circuit_properties", cluster = "infra/cluster/src/cluster", datacenter = "benchmarks/datacenter/datacenter", e2e_h200 = "examples/h200/e2e_h200", exact_kit = "benchmarks/pouw/exact_kit/exact_kit", memory_challenger = "benchmarks/pous/memory_challenger", p2_v1 = "benchmarks/pous/p2_v1", research = "tools/research/src/research", rho = "benchmarks/rho/rho", slack_events = "infra/slack-events/service/slack_events", training_slowdown = "benchmarks/training_slowdown/training_slowdown", verity = "verity", verity_bench = "benchmarks/harness/verity_bench", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_difftest = "verity/difftest/python/verity_difftest", verity_e2e_demo = "examples/h200/interfaces/verity_e2e_demo", verity_flock = "verity/ml/flock/python/verity_flock", verity_graph = "tools/verity/graph/verity_graph", verity_machine_model = "verity/hardware/pouw/machine_model/verity_machine_model", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_ops = "infra/ops/verity_ops", verity_proof_throughput = "benchmarks/proof_throughput/verity_proof_throughput", verity_vllm = "integrations/vllm/verity_vllm", workload = "benchmarks/network_sim/workload" }
+new = { band_gpu = "benchmarks/pous/band_gpu", circuit_check = "tools/verity/circuit_check/src/circuit_check", circuit_properties = "benchmarks/circuit_properties/circuit_properties", cluster = "infra/cluster/src/cluster", datacenter = "benchmarks/datacenter/datacenter", e2e_h200 = "examples/h200/e2e_h200", exact_kit = "benchmarks/pouw/exact_kit/exact_kit", memory_challenger = "benchmarks/pous/memory_challenger", p2_v1 = "benchmarks/pous/p2_v1", research = "tools/research/src/research", rho = "benchmarks/rho/rho", slack_events = "infra/slack-events/service/slack_events", training_slowdown = "benchmarks/training_slowdown/training_slowdown", verity = "verity", verity_bench = "benchmarks/harness/verity_bench", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_difftest = "verity/difftest/python/verity_difftest", verity_e2e_demo = "examples/h200/interfaces/verity_e2e_demo", verity_flock = "verity/ml/flock/python/verity_flock", verity_graph = "tools/verity/graph/verity_graph", verity_machine_model = "verity/hardware/pouw/machine_model/verity_machine_model", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_ops = "infra/ops/verity_ops", verity_proof_throughput = "benchmarks/proof_throughput/verity_proof_throughput", verity_vllm = "integrations/vllm/verity_vllm", workload = "benchmarks/network_sim/workload" }
+
+[paths]
+"benchmarks/recursion_figures/" = "verity/spot/recursion_figures/"
+"benchmarks/sampling_plan/" = "verity/spot/sampling_plan/"
+"benchmarks/spot_figures/" = "verity/spot/spot_figures/"
+"verity/core/protocols/__init__.py" = "verity/spot/verifier/protocols/__init__.py"
+"verity/core/protocols/bandwidth/" = "verity/core/protocols/bandwidth/"
+"verity/core/protocols/certifier/" = "verity/core/protocols/certifier/"
+"verity/core/protocols/composition/" = "verity/core/protocols/composition/"
+"verity/core/protocols/network/" = "verity/core/protocols/network/"
+"verity/core/protocols/pous/" = "verity/core/protocols/pous/"
+"verity/core/protocols/pouw/" = "verity/core/protocols/pouw/"
+"verity/core/protocols/profile.py" = "verity/spot/verifier/protocols/profile.py"
+"verity/core/protocols/pyproject.toml" = "verity/spot/verifier/protocols/pyproject.toml"
+"verity/core/protocols/remote_bandwidth/" = "verity/core/protocols/remote_bandwidth/"
+"verity/core/protocols/reporting.py" = "verity/core/protocols/reporting.py"
+"verity/core/protocols/spot/README.md" = "verity/spot/verifier/python/README.md"
+"verity/core/protocols/spot/__init__.py" = "verity/spot/verifier/python/__init__.py"
+"verity/core/protocols/spot/candidates.py" = "verity/spot/candidates.py"
+"verity/core/protocols/spot/challenger.py" = "verity/spot/device/challenger.py"
+"verity/core/protocols/spot/coins.py" = "verity/spot/device/coins.py"
+"verity/core/protocols/spot/consumers.py" = "verity/spot/verifier/python/consumers.py"
+"verity/core/protocols/spot/costfit.py" = "verity/spot/costfit.py"
+"verity/core/protocols/spot/one_stage/" = "verity/spot/verifier/python/one_stage/"
+"verity/core/protocols/spot/optimize.py" = "verity/spot/optimize.py"
+"verity/core/protocols/spot/parties.py" = "verity/spot/verifier/python/parties.py"
+"verity/core/protocols/spot/plancheck.py" = "verity/spot/plancheck.py"
+"verity/core/protocols/spot/pyproject.toml" = "verity/spot/verifier/python/pyproject.toml"
+"verity/core/protocols/spot/remote.py" = "verity/spot/device/remote.py"
+"verity/core/protocols/spot/second_stage.py" = "verity/spot/verifier/python/second_stage.py"
+"verity/core/protocols/spot/service.py" = "verity/spot/verifier/python/service.py"
+"verity/core/protocols/spot/tests/" = "verity/spot/verifier/python/tests/"
+"verity/core/protocols/tests/" = "verity/spot/verifier/tests/"
+"verity/core/service/spot/" = "verity/spot/verifier/"
+
+[tokens]
+"verity/core/protocols" = "verity/protocols"
+"verity/core/protocols/spot" = "verity/spot/verifier/python"
+
+[modules]
+"benchmarks.recursion_figures" = "verity.spot.recursion_figures"
+"benchmarks.sampling_plan" = "verity.spot.sampling_plan"
+"benchmarks.spot_figures" = "verity.spot.spot_figures"
+"verity.core.protocols" = "verity.spot.verifier.protocols"
+"verity.core.protocols.bandwidth" = "verity.core.protocols.bandwidth"
+"verity.core.protocols.certifier" = "verity.core.protocols.certifier"
+"verity.core.protocols.composition" = "verity.core.protocols.composition"
+"verity.core.protocols.network" = "verity.core.protocols.network"
+"verity.core.protocols.pous" = "verity.core.protocols.pous"
+"verity.core.protocols.pouw" = "verity.core.protocols.pouw"
+"verity.core.protocols.profile" = "verity.spot.verifier.protocols.profile"
+"verity.core.protocols.remote_bandwidth" = "verity.core.protocols.remote_bandwidth"
+"verity.core.protocols.reporting" = "verity.core.protocols.reporting"
+"verity.core.protocols.spot" = "verity.spot.verifier.python"
+"verity.core.protocols.spot.candidates" = "verity.spot.candidates"
+"verity.core.protocols.spot.challenger" = "verity.spot.device.challenger"
+"verity.core.protocols.spot.coins" = "verity.spot.device.coins"
+"verity.core.protocols.spot.consumers" = "verity.spot.verifier.python.consumers"
+"verity.core.protocols.spot.costfit" = "verity.spot.costfit"
+"verity.core.protocols.spot.one_stage" = "verity.spot.verifier.python.one_stage"
+"verity.core.protocols.spot.optimize" = "verity.spot.optimize"
+"verity.core.protocols.spot.parties" = "verity.spot.verifier.python.parties"
+"verity.core.protocols.spot.plancheck" = "verity.spot.plancheck"
+"verity.core.protocols.spot.remote" = "verity.spot.device.remote"
+"verity.core.protocols.spot.second_stage" = "verity.spot.verifier.python.second_stage"
+"verity.core.protocols.spot.service" = "verity.spot.verifier.python.service"
+"verity.core.protocols.spot.tests" = "verity.spot.verifier.python.tests"
+"verity.core.protocols.tests" = "verity.spot.verifier.tests"
+"verity.core.service.spot" = "verity.spot.verifier"
+
+[retired]
+paths = []
+
+[rewrite]
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch", "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]

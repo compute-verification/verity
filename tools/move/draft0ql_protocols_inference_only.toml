@@ -1,0 +1,24 @@
+# DRAFT, not of record: a layout map written by top's staging worker from vllm's assign.json (4456fda7569c),
+# to find out whether tools/move carries a move of this size. vllm's maps of record replace it; where they differ,
+# theirs stand. Move 15 of 21: 107 files to verity/protocols/inference_only/ (paths: vllm's rule 0q). It runs on the tree the drafts before it leave.
+
+[roots]
+old = { band_gpu = "benchmarks/pous/band_gpu", circuit_check = "tools/verity/circuit_check/src/circuit_check", circuit_properties = "benchmarks/circuit_properties/circuit_properties", cluster = "infra/cluster/src/cluster", datacenter = "benchmarks/datacenter/datacenter", e2e_h200 = "examples/h200/e2e_h200", exact_kit = "benchmarks/pouw/exact_kit/exact_kit", memory_challenger = "benchmarks/pous/memory_challenger", p2_v1 = "benchmarks/pous/p2_v1", research = "tools/research/src/research", rho = "benchmarks/rho/rho", slack_events = "infra/slack-events/service/slack_events", training_slowdown = "benchmarks/training_slowdown/training_slowdown", verity = "verity", verity_bench = "benchmarks/harness/verity_bench", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_difftest = "verity/difftest/python/verity_difftest", verity_e2e_demo = "examples/h200/interfaces/verity_e2e_demo", verity_flock = "verity/flock/prover/python/verity_flock", verity_graph = "tools/verity/graph/verity_graph", verity_machine_model = "verity/hardware/pouw/machine_model/verity_machine_model", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_ops = "infra/ops/verity_ops", verity_proof_throughput = "benchmarks/proof_throughput/verity_proof_throughput", verity_vllm = "integrations/vllm/verity_vllm", workload = "benchmarks/network_sim/workload" }
+new = { band_gpu = "benchmarks/pous/band_gpu", circuit_check = "tools/verity/circuit_check/src/circuit_check", circuit_properties = "benchmarks/circuit_properties/circuit_properties", cluster = "infra/cluster/src/cluster", datacenter = "benchmarks/datacenter/datacenter", e2e_h200 = "examples/h200/e2e_h200", exact_kit = "benchmarks/pouw/exact_kit/exact_kit", memory_challenger = "benchmarks/pous/memory_challenger", p2_v1 = "benchmarks/pous/p2_v1", research = "tools/research/src/research", rho = "verity/protocols/inference_only/rho/rho", slack_events = "infra/slack-events/service/slack_events", training_slowdown = "benchmarks/training_slowdown/training_slowdown", verity = "verity", verity_bench = "benchmarks/harness/verity_bench", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_difftest = "verity/difftest/python/verity_difftest", verity_e2e_demo = "examples/h200/interfaces/verity_e2e_demo", verity_flock = "verity/flock/prover/python/verity_flock", verity_graph = "tools/verity/graph/verity_graph", verity_machine_model = "verity/hardware/pouw/machine_model/verity_machine_model", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_ops = "infra/ops/verity_ops", verity_proof_throughput = "benchmarks/proof_throughput/verity_proof_throughput", verity_vllm = "integrations/vllm/verity_vllm", workload = "benchmarks/network_sim/workload" }
+
+[paths]
+"benchmarks/nci/" = "verity/protocols/inference_only/nci/"
+"benchmarks/rho/" = "verity/protocols/inference_only/rho/"
+"verity/core/protocols/network/nci/" = "verity/protocols/inference_only/verifier/nci/"
+
+[modules]
+"benchmarks.nci" = "verity.protocols.inference_only.nci"
+"benchmarks.rho" = "verity.protocols.inference_only.rho"
+"verity.core.protocols.network.nci" = "verity.protocols.inference_only.verifier.nci"
+
+[retired]
+paths = []
+
+[rewrite]
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch", "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
