@@ -1,4 +1,4 @@
-# proofs' Goals page (CON-12): the 24 open goals and one new, a row each. Draft by HOUSEKEEP, Tue 10 Nov 04:16Z
+# proofs' Goals page (CON-12): the 24 open goals and one new, a row each. Draft by HOUSEKEEP, Tue 10 Nov 04:37Z
 
 **Nothing here is written to the page.** `proofs-goals-fix.sh`, beside this file, holds one `research goals set` line a
 goal (25 lines) and has not been run. The page was read at Tue 10 Nov 02:27Z (`research goals show --json`): 233
