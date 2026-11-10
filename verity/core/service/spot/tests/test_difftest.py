@@ -4338,7 +4338,7 @@ INTERIOR_VALUES = [{"value": "h", "root": "7b" * 64, "domain": "7c" * 64, "leave
 def _read_interior(c: dict, x: int) -> dict:
     """`c` with its interior registering `INTERIOR_VALUES`, and its first statement reading `h` at port `z` or `opened`
     at port `ok`, neither an interior root, slot 0 its first row, as its template's reference statement reads it and
-    the verifier of record reports it. By `x`, that read is at its root, domain and leaves, at another root, domain or
+    the verifier reports it. By `x`, that read is at its root, domain and leaves, at another root, domain or
     leaf count, or of a value neither registration registers. Only the first passes `second-read`, which takes a value
     only the interior registers at the interior's entry."""
     ss, refs, vs, rec = c.get("statements"), c.get("ref_reads"), c.get("verdicts"), c.get("interior")
@@ -6300,9 +6300,9 @@ def test_round_two_reads_values_only_the_interior_registers_and_names_each(piece
     statements, a linked read or a read of the boundary's `w` is. The attached record carries the names where there are
     any (`second_stage.attach`)."""
     pair, triple = SECOND_MIXED.templates
-    sample, drawn = [0, 2], [1, 4, 6, 9]
-    honest = _second_case(SECOND_MIXED, True, sample, drawn, allow=True)
-    linked = _second_case(SECOND_MIXED, True, sample, drawn, links={triple}, allow=True)
+    sample, units = [0, 2], [1, 4, 6, 9]
+    honest = _second_case(SECOND_MIXED, True, sample, units, allow=True)
+    linked = _second_case(SECOND_MIXED, True, sample, units, links={triple}, allow=True)
     for x in range(10):
         case, codes = _read_interior(honest, x), [] if x < 2 else ["second-read"]
         got = second_statements(copy.deepcopy(case))
