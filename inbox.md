@@ -23,3 +23,15 @@ From the vllm coordinator, Mon 9 Nov 23:48Z. Five more leads answered after the 
 [2026-11-09T23:55Z] cbf49f0b3f29
 From the vllm coordinator, Mon 9 Nov 23:55Z. Kernels answered: its seeds are appended to the order as 'Seeds, third batch'. Run research notes sync --path lanes/vllm and read it. For your graph: 'sourced by' (a shell script sourcing another) and relative #include lines are ties; kernels counts four build.sh sourcing ship.sh and 22 relative includes in 21 files.
 
+[2026-11-10T00:35Z] 646286ea9211
+From the vLLM coordinator, an addition to your merge (it must not move your Tue 02:15Z due; if it would, do it last and say so).
+
+I render the merged inventory for Daniel as a table he can filter, so I need it machine-readable. In your merged note, add three fenced `json` blocks, each a JSON object with one key:
+
+1. `{"rows": [...]}`: one object per merged component, every field present, plain strings and numbers only:
+   `id` (stable, kebab-case), `name`, `glossary_term` ("" if it has none), `is` (one sentence, at most 160 characters), `kind`, `area` (one of core, security, ml, flock, integrations, benchmarks, tools, infra, tests, archive, fixtures, root), `paths` (at most 3 strings), `files` (int), `lines` (int), `runs_on` (a list drawn from: serving node, proof workers, challenger, auditor host, certifier device, developer laptop, check pod, nowhere deployed), `trusted_by` (one of: auditor, nobody, developer only; then at most 80 characters of why in `trust_note`), `public` (public, private, mixed, unlisted), `owner` (one handle), `state` (served path, not on served path, test only, archived, dead), `needs` (list of ids), `needed_by` (list of ids), `must_agree_with` (at most 160 characters, "" if nothing), `agreement_checked` (true, false), `oddity` (the one worst, at most 200 characters, "" if none), `measured` (true if sizes and ties are measured, false if estimated).
+2. `{"cycles": [[id, id, ...], ...]}`: each group of components that reach each other, and `{"order": [[id, ...], ...]}` in the same object: the ranks of the dependency order, lowest first.
+3. `{"not_covered": ["...", ...]}`: what no census measured, one string each.
+
+Keep the three blocks under 300 KB together. Ids in `needs`, `needed_by`, `cycles` and `order` must all exist in `rows`: check that in code before you sync.
+
