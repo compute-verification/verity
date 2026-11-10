@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from rho import envelopes, hardware, lean
-from rho.envelopes import Certifier, Context, Detection, Onsite, Remote
+from rho.envelopes import Certifier, Context, Detection, Onsite, Remote, Wipe
 from rho.params import Param, Registry
 from rho.scenario import build, evaluate_named
 from rho.theorem import Budget, multiple_bound, overhead
@@ -414,9 +414,21 @@ def test_delta_sums_every_subprotocol_and_the_wipe_per_server_and_per_wipe(scena
     d = r.delta(ctx)
     assert set(d.by) == {"pouw", "detection", "wipe", "certifier"}
     games = ctx.fleet.count * getattr(ctx.location, per) * ctx.period.seconds / r.wipe.wipe_s
-    assert d.by["wipe"] == pytest.approx((games * 2**-128, games * r.wipe.prf_advantage))
+    assert r.wipe.game_delta_coin == REG["regime.onsite.game_delta_coin"] > 0
+    assert d.by["wipe"] == pytest.approx((games * r.wipe.game_delta_coin, games * r.wipe.prf_advantage))
     assert d.by["pouw"] == pytest.approx(r.pouw.delta(ctx)) and d.by["certifier"] == (0.0, 0.0)
     assert d.coin == pytest.approx(math.fsum(c for c, _ in d.by.values()))
     assert d.crypto == pytest.approx(math.fsum(x for _, x in d.by.values()))
-    assert d.coin == pytest.approx(r.pouw.window_delta_coin / r.pouw.eps_agg + games * 2**-128)
+    assert d.coin == pytest.approx(r.pouw.window_delta_coin / r.pouw.eps_agg + games * r.wipe.game_delta_coin)
     assert d.json()["by"]["wipe"]["coin"] == d.by["wipe"][0]
+
+
+def test_a_wipe_games_failure_is_stated_once_in_the_registry():
+    """The retention game fails with the coins' probability plus `Adv_PRF`. `Wipe` restates neither (a wipe not given
+    them adds nothing), and the registry sets each once, at `regime.onsite`, which every regime with a wipe inherits."""
+    assert (Wipe().game_delta_coin, Wipe().prf_advantage) == (0.0, 0.0)
+    for leaf in ("game_delta_coin", "prf_advantage"):
+        assert [p.key for p in REG.params() if p.key.rpartition(".")[2] == leaf] == [f"regime.onsite.{leaf}"]
+    stated = (REG["regime.onsite.game_delta_coin"], REG["regime.onsite.prf_advantage"])
+    wiped = [r for r in (envelopes.regime(REG, name) for name in REG.names("regime")) if isinstance(r, Onsite)]
+    assert wiped and all((r.wipe.game_delta_coin, r.wipe.prf_advantage) == stated for r in wiped) and min(stated) > 0
