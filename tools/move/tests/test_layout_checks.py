@@ -30,11 +30,12 @@ TREE = {
     "tests/test_repository.py": 'UNSUITED_TEST_DIRS = ("old/kernels/",)\n',
     "old/kernels/test_gpu.py": "def test_gpu():\n    pass\n",
     "old/pkg/pyproject.toml": '[project]\nname = "pkg"\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n'
-                              '[tool.verity.tests]\ninputs_only = true\ninputs = ["old/lib"]\n',
+                              '[tool.verity.tests]\ninputs_only = true\ninputs = ["old/lib", "old/__init__.py"]\n',
     "old/pkg/tests/conftest.py": "",
     "old/pkg/tests/test_a.py": "from old.lib import mod\n\n\ndef test_a():\n    assert mod\n",
     "old/pkg/tests/test_b.py": "def test_b():\n    pass\n",
     "old/pkg/tests/test_lister.py": "NAMES = []\n",                # named as a test file, defines no test
+    "old/__init__.py": "",
     "old/lib/__init__.py": "",
     "old/lib/mod.py": "from . import deep\n",
     "old/lib/deep.py": "",
@@ -43,9 +44,11 @@ TREE = {
     "docs.md": "Read old/lib and old/lib/mod.py, then every old/lib/*.py. The suite is old/pkg.\n",
 }
 ROOTS = '[roots]\nold = { old = "old" }\nnew = { new = "new" }\n'
-WHOLE = ROOTS + '[paths]\n"old/pkg/" = "new/pkg/"\n"old/lib/" = "new/lib/"\n"old/kernels/" = "new/kernels/"\n'
+WHOLE = ROOTS + ('[paths]\n"old/pkg/" = "new/pkg/"\n"old/lib/" = "new/lib/"\n"old/kernels/" = "new/kernels/"\n'
+                 '"old/__init__.py" = "new/__init__.py"\n')
 #: the library file by file, one of them elsewhere
-PARTS = ('"old/pkg/" = "new/pkg/"\n"old/kernels/" = "new/kernels/"\n"old/lib/__init__.py" = "new/lib/__init__.py"\n'
+PARTS = ('"old/__init__.py" = "new/__init__.py"\n'
+         '"old/pkg/" = "new/pkg/"\n"old/kernels/" = "new/kernels/"\n"old/lib/__init__.py" = "new/lib/__init__.py"\n'
          '"old/lib/mod.py" = "new/lib/mod.py"\n"old/lib/deep.py" = "new/elsewhere/deep.py"\n')
 
 
@@ -123,12 +126,26 @@ def test_an_imported_module_outside_the_inputs_is_named(repo: Path) -> None:
     assert [(x["module"], x["lands"], x["imported_by"], x["holds_it_after"]) for x in r["inputs"]] == [
         ("old/lib/deep.py", "new/elsewhere/deep.py", "old/lib/mod.py", "new/elsewhere")]
     assert r["needs"] == [{"suite": "old/pkg/pyproject.toml", "suite_lands": "new/pkg/pyproject.toml",
-                           "add": ["new/elsewhere"], "more_than_today": {}}]
+                           "add": ["new/elsewhere"], "more_than_today": {}, "add_init": []}]
 
 
 def test_the_entry_to_add_is_a_directory_only_where_its_files_were_the_suites(repo: Path) -> None:
     rows = ROOTS + "[paths]\n" + PARTS + '"docs.md" = "new/elsewhere/docs.md"\n[tokens]\n"old/lib/" = "new/lib/"\n'
     assert [x["add"] for x in suites(repo, rows)["needs"]] == [["new/elsewhere/deep.py"]]
+
+
+def test_the_init_of_a_package_above_an_import_is_an_input_too(repo: Path) -> None:
+    """`layout.py` adds `new/elsewhere/__init__.py`, Python runs it before `deep`, and no input holds it. The root's
+    `__init__.py` is an input today and moves by its row, so it is one after."""
+    rows = ROOTS + "[paths]\n" + PARTS + '"docs.md" = "new/elsewhere/docs.md"\n[tokens]\n"old/lib/" = "new/lib/"\n'
+    r = suites(repo, rows)
+    assert [(x["init"], x["above"], x["created"], x["at_import"]) for x in r["packages"]] == [
+        ("new/elsewhere/__init__.py", "new/elsewhere/deep.py", True, True)]
+    assert r["needs"][0]["add_init"] == ["new/elsewhere/__init__.py"]
+    today = suites(repo)
+    assert (today["packages"], today["packages_outside_today"]) == ([], [])
+    without = suites(repo, rows.replace('"old/__init__.py" = "new/__init__.py"\n', ""))    # the root's is created too
+    assert sorted(x["init"] for x in without["packages"]) == ["new/__init__.py", "new/elsewhere/__init__.py"]
 
 
 def test_an_import_inside_a_function_is_told_from_one_a_test_file_runs(repo: Path) -> None:

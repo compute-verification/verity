@@ -37,9 +37,11 @@ where no test runs is. So 3 is wider than the read guard, and each finding says 
 imported (`at_import`: outside every function and `if TYPE_CHECKING:`), which the guard is sure to see. The last line
 says how many imports are outside their suite's inputs on REF already, which 3 counts none of.
 
-3 is also narrower than the read guard in one way: it follows modules, and not the `__init__.py` of each package above
-a module, which Python runs and the guard counts. Where a module lands under packages its suite's inputs don't hold,
-the suite needs those `__init__.py` too, and neither the count nor the entries to add have them."""
+Python also runs the `__init__.py` of each package above a module, and the read guard counts those. So for each module
+a suite's tests import, 3 takes the `__init__.py` of every package from where it lands up to its import root (`packages`:
+one the maps move there, leave there, or `layout.py` creates) and fails where the suite's inputs don't hold it. Two
+things 3 does not follow: what such an `__init__.py` itself imports, where today's packages ran another, and a module a
+test imports by a bare name through `sys.path`."""
 from __future__ import annotations
 
 import argparse
@@ -250,7 +252,23 @@ def check(m: Moved) -> dict:
             return posixpath.dirname(m.new[path + "/pyproject.toml"]) or "."
         return m.directory(path) or path
 
-    lost, loads, reached, outside = {}, {}, set(), {}
+    old_roots = sorted(set(imports.roots.values()), key=len, reverse=True)
+    new_roots = sorted({d for lay in m.layouts for d in lay.new_roots.values()}, key=len, reverse=True)
+    after = {m.new[f]: f for f in m.files}                      # each path after the maps, and the file it is today
+    there = set(after) | m.created
+
+    def above(path: str, roots: list[str], exists, test: bool) -> list[str]:
+        """The `__init__.py` run before the file at `path`. A module: one a package, from its import root down. A test
+        file, which pytest imports from the first directory above it that is no package: those up to there."""
+        root = next((r for r in roots if path.startswith(r + "/")), None)
+        out, d = [], posixpath.dirname(path)
+        while d and (f"{d}/__init__.py" in exists if test else root and (d == root or d.startswith(root + "/"))):
+            if f"{d}/__init__.py" in exists:
+                out.append(f"{d}/__init__.py")
+            d = posixpath.dirname(d)
+        return out
+
+    lost, loads, reached, outside, packages, outside_pk = {}, {}, set(), {}, {}, {}
     for p in sorted(suites) if m.layouts else ():
         if p in archived:
             continue
@@ -277,8 +295,22 @@ def check(m: Moved) -> dict:
                     "at_import": f in opened,
                     "holds_it_after": m.new[f][: -len(rest)] if m.new[f].endswith(rest) and len(rest) < len(m.new[f])
                     else posixpath.dirname(m.new[f])})
+            # the packages above each module: today's, to know which were outside the inputs already, then the maps'
+            loaded = [*((f, True, True) for f in files),
+                      *((f, f in opened, False) for f in imports.reach(files) if f not in archived and f not in files)]
+            for f, runs, test in loaded:
+                for i in above(f, old_roots, m.tracked, test):
+                    if not any(under(i, path) for _, path in inputs):
+                        x = outside_pk.setdefault((p, i), {"suite": p, "init": i, "at_import": False})
+                        x["at_import"] |= runs
+            for f, runs, test in loaded:
+                for i in above(m.new[f], new_roots, there, test):
+                    if any(under(i, n) for n in now) or (p, after.get(i)) in outside_pk:
+                        continue
+                    x = packages.setdefault((p, i), {"suite": p, "suite_lands": m.new[p], "init": i, "above": m.new[f],
+                                                     "created": i in m.created, "at_import": False})
+                    x["at_import"] |= runs
 
-    after = {m.new[f]: f for f in m.files}                      # each path after the maps, and the file it is today
     kids = defaultdict(set)
     for n in after:
         while n:
@@ -305,12 +337,14 @@ def check(m: Moved) -> dict:
         return picks + sorted(need - set(after)), {e: more[e] for e in picks if more.get(e)}
 
     needs = []
-    for p in sorted({x["suite"] for x in lost.values()}):
+    for p in sorted({x["suite"] for x in (*lost.values(), *packages.values())}):
         covers = [path for q in (p, *(q for _, q in sent[p])) for _, path in inputs_of(q)]
         mine = {f for f in m.files if any(path == "." or under(f, path) for path in covers)}
         add, more = entries(mine, {x["lands"] for x in lost.values() if x["suite"] == p})
-        needs.append({"suite": p, "suite_lands": m.new[p], "add": add, "more_than_today": more})
+        inits = sorted(i for q, i in packages if q == p and not any(under(i, e) for e in add))
+        needs.append({"suite": p, "suite_lands": m.new[p], "add": add, "more_than_today": more, "add_init": inits})
     return {"orphans": orphans, "parted": parted, "inputs": list(lost.values()), "needs": needs,
+            "packages": list(packages.values()), "packages_outside_today": list(outside_pk.values()),
             "loads_archive": sorted(loads.values(), key=lambda x: x["module"]), "archived_with_code": with_code,
             "sent_with_code": with_suite, "reached": len(reached), "outside_today": list(outside.values())}
 
@@ -338,6 +372,10 @@ def main(argv: list[str] | None = None) -> int:
     at_import = [x for x in r["inputs"] if x["at_import"]]
     print(f"  of the {len(r['inputs'])}, {len(at_import)} in {len({x['suite'] for x in at_import})} suites are imported when a test "
           f"file is: the read guard refuses those; the rest are imported inside a function, which a test may never reach")
+    pk, pk_run = r["packages"], [x for x in r["packages"] if x["at_import"]]
+    print(f"  {len(pk)} `__init__.py` of the packages above what they import are outside the inputs of "
+          f"{len({x['suite'] for x in pk})} suites, {len(pk_run)} of them in {len({x['suite'] for x in pk_run})} suites run when "
+          f"a test file is imported; the maps create {sum(x['created'] for x in pk)} of the {len(pk)}")
 
     def show(title: str, groups: dict[str, list[str]]) -> None:
         for head, lines in sorted(groups.items()):
@@ -365,12 +403,15 @@ def main(argv: list[str] | None = None) -> int:
               f"suite{'s' if len(x['suites']) != 1 else ''} reach it)")
     for x in sorted(r["needs"], key=lambda x: x["suite_lands"]):
         add = [e + (f" ({n} files more than today)" if (n := x["more_than_today"].get(e)) else "") for e in x["add"]]
-        print(f"  {x['suite_lands']}: add to its inputs {', '.join(add)}")
+        print(f"  {x['suite_lands']}: add to its inputs {', '.join(add + x['add_init'])}")
     if r["reached"]:
         today = r["outside_today"]
         print(f"  not counted: {len(today)} of the {r['reached']} imports (a suite and a module its tests reach) are outside the "
               f"suite's inputs on {m.ref[:12]} as it is, {sum(x['at_import'] for x in today)} of them imported when a test file is")
-    return 1 if r["orphans"] or r["parted"] or r["inputs"] or r["loads_archive"] else 0
+        today = r["packages_outside_today"]
+        print(f"  not counted: {len(today)} `__init__.py` above them are outside it too, {sum(x['at_import'] for x in today)} of "
+              f"them run when a test file is imported")
+    return 1 if r["orphans"] or r["parted"] or r["inputs"] or r["loads_archive"] or r["packages"] else 0
 
 
 if __name__ == "__main__":

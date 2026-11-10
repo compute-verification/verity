@@ -28,6 +28,9 @@ class Moved:
         self.old_dirs = _dirs(tree)
         #: `deleted`: files a commit after the maps deletes (an emptied package level's `__init__.py`), by today's path
         self.new_dirs = _dirs(n for p, n in self.new.items() if p not in dropped and p not in deleted)
+        #: the `__init__.py` files `layout.py` adds: one in each directory between a moved module, whose old directory is
+        #: a package, and its import root, where the maps leave none; and a map's `[create]` files
+        self.created = self._created()
         self._cat = None
 
     def _git(self, *args: str) -> str:
@@ -35,6 +38,21 @@ class Moved:
 
     def _file(self, p: str) -> str:
         return next((n for lay in self.layouts if (n := lay.file(p)) is not None), p)
+
+    def _created(self) -> set[str]:
+        after = {self.new[p] for p in self.files}
+        roots = sorted({d for lay in self.layouts for d in lay.new_roots.values()}, key=len, reverse=True)
+        made = {p for lay in self.layouts for p in lay.data.get("create", {})}
+        for p in self.files:
+            n = self.new[p]
+            if n == p or not n.endswith(".py") or posixpath.join(posixpath.dirname(p), "__init__.py") not in self.tracked:
+                continue
+            root = next((r for r in roots if n.startswith(r + "/")), None)
+            d = posixpath.dirname(n)
+            while root and (d == root or d.startswith(root + "/")):
+                made.add(f"{d}/__init__.py")
+                d = posixpath.dirname(d)
+        return made - after
 
     def directory(self, d: str) -> str | None:
         """Where a reference to old directory `d` reads after the maps: None when no map has a row or a `[tokens]` row for it."""
