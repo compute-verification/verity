@@ -28809,3 +28809,109 @@ Read first: your 16:20Z brief, PRF-505, CI-489, and TOP-394 down to 15:57Z. **Tw
 How I know each line: the rows and their numbers [read: the notes' file now, 47 lines and 1 insert, last changed at the 15:15Z sync, which changed only its header comment]; the two runs [read: their `stdout.log` and per-test reports at 15:25Z to 15:33Z, as my 15:34Z entry records; my VM was restarted since, so I cannot reread them here]; `eb0b` [read now: `git show` of the four files at `d833bd4b05c3`]. [not checked: that the staging launched at 16:50Z applies them; `eb0b` is over `c3ae3eaaf0b7`, not over `034a1702664b`.]
 
 **State after the restart:** the notes clone and my tools are back from the notes; the scratch trees are gone. Next: the fixtures' digests and the stager's dry run on `034a1702664b`'s moved tree, then the rehearsal of the 25. No staging over `034a1702664b` is pushed yet [run: `git ls-remote`, 16:24Z: the newest `cursor/top-layout-staged-*` is `eb0b`].
+
+## PRF-456 BREAKEVEN, Tue 10 Nov 16:33Z: PRF-456's four answers, ready to paste: the 0.1 is assumed and measured for no type, and kernels' rows 1 and 2 on HASH-98 would replace it; at 1.0, 0.5 and 0.25 goal 6's 427 GB is 1,682, 985 and 636, and the 300 GB path reaches 300 GB at none
+
+From PRF-456 BREAKEVEN (bc-e2494105-e1f5-5e73-ac1e-73d7e99a95fa), on your 15:55Z brief. The text between the two rules is the comment for PRF-456, ready to paste. After it come five things for you alone. I marked, landed and opened nothing, and pushed only this entry and my notes. Every run was on vy-nebius-cpu-1 (CPU, the proofs pool); none touched a GPU node.
+
+---
+
+proofs, on benchmarks' replay above (70.9% of the plan's 5.43% is `reprice.DEFAULT`'s 0.1, labelled assumed): **the four answers.**
+- **The 0.1 is assumed.** No run measures it for any type, and none measures the 64-key sparse-MLA part warm. KSTEADY's rows 1 and 2 on HASH-98 would replace it.
+- **At 1.0, 0.5 and 0.25, goal 6's 427 GB [452] becomes 1,682, 985 and 636 GB [1,778, 1,041 and 673].** The plan as the art labels it would cost 27.6%, 15.3% and 9.1% of the compute.
+- **TOP-394's 300 GB path reaches 300 GB at none of the three.** At 0.25 its best is 384 GB [406].
+- **The rows of record are in the patterns' form,** not the capped one.
+
+How these were made: the planner at `a5e4e56a11`, with only the 0.1 made a parameter, re-planned at the 10% point at each factor (modeled). There is one run per factor, on a CPU node. At 0.1 it reproduces exactly all 25 rows it shares with the runs of record. Benchmarks' replay keeps the plan's sample and moves its cost; these runs keep the 10% point and move the bound. Both are below.
+
+**(1) The server runs of record.** These are the prices the plan takes with `server=True` (`reprice.apply_server`). All are measured on node A's H200s unless marked.
+- **`SERVER_K1`, five types at K = 1** on the verifier-filed clock: the group quant at K = 6144 and 2048, the DSA logits, the residual add and the all-reduce, r20261108-120549-6ab1. The RMSNorm: r20261108-110634-2b30.
+- **`SERVER_FIT`, each statement split into fixed seconds and seconds a block:** a two-point fit to r20261108-045435-b9cb (full statements) and r20261108-060840-1189 (quarter and half statements). The points are measured; the split is a fit.
+- **`FUSED_SERVER`, the fused experts:**
+  - w13's fit comes from the same two runs;
+  - its proving share is M1's 1.101 s (r20261108-124824-5bf6) times 0.570 sessions a second at K = 1;
+  - it is scaled to `FUSED_SESSIONS_S`, the mean of 0.53 and 0.59 sessions a second. No note or entry records the run behind those two, so treat them as assumed until it is named;
+  - w2 is scaled by the server's w2 over w13 (assumed).
+- **FlashInfer's FP8 linear at K = 6144 and 2048 in lookup slots** (the runs' `K6144` and `FI2048`): r20261109-144301-d7bf, warm, full statements. The K = 6144 statement's 5.12 s is assumed.
+- **The measured statement-cache factors (`CACHE`),** each warm on one H200:
+  - the group quant at K = 6144, 0.087, r20261108-161726-28bc;
+  - FlashInfer at K = 2048, 0.046, r20261108-144544-805a;
+  - the group quant at K = 2048, 0.043, r20261108-120157-a741.
+  - Three more are modeled: the all-reduce's 0.070 from its uncached split, and the group quant at K = 1536 (0.159) and the sparse-MLA combine (0.180) from CPU shares.
+- **Not in the plan yet:** FUSEDSERVE's (bc-9ba78e86-0458-556d-862b-7270a18bc563) G2, r20261110-071007-9daa. It times served fused members at K = 1, 2 and 4: 24 rows, 1,264 sessions accepted. It gives no fit of a statement's and a block's seconds, so it can't replace `FUSED_SERVER` as it stands.
+
+**(2) The 0.1 is not measured.**
+- **What it is.** `reprice.DEFAULT = (0.1, 0.9)` is the statement-cache factor, with the host's share, for every type with no measured factor. That is 128 of the plan's 150 cells and 72.6% of its proving. `SparseMlaSplitPart_v1{T=64,…}` alone is 70.2% (r20261110-054052-9a23's `mix.json`).
+- **Where it comes from.** It is a round figure near the median of the six factors above (0.079, range 0.043 to 0.180). It is measured for no type.
+- **What scales with it.** 45.3% of the plan's proving scales with it, so the plan as labelled costs \(5.43\% \times (0.547 + 4.53 f)\) of the compute: 27.6%, 15.3% and 9.1% at 1.0, 0.5 and 0.25. That is 9a23's sample at r20261110-162125-7241's cell prices (modeled), and it reproduces benchmarks' replay.
+- **No run measures the 64-key part warm.** On `main`'s census its form, `SparseMlaSplitPart_v1`, has no served zero-knowledge path: Lean's verifier refuses it in slots. So no steady row of it is coming.
+- **The rows that would replace it** are KSTEADY's (bc-f944c53d-53aa-581d-ab39-a46f095b1cde) rows 1 and 2 on HASH-98: `SparseMlaHeadBlock` with `NVIS=64`, row 1 `FIRST=false` and row 2 `FIRST=true`. Each gives one prover's GPU-seconds a statement and ms a block at steady state. Together they replace the 0.1 and the cold statement price it multiplies.
+- **Two conditions come first:**
+  - SERVEDCARD (bc-013624b7-e3ef-5b9f-9e2d-e1534630b379, PRF-502) composes them on node A's cores, 70 to 81 minutes each, with the first path and pin due about 19:00Z;
+  - the planner must price #8281's census, where these two types are the 64-key part, rather than `main`'s.
+
+**(3) Each figure of ours that rests on it.** These are GB that can leave at 10% of total compute, at δ = 0.01 and λ = 1.05, with the network check's ×1.057 in brackets (modeled). The world is 3.75 × 10^8 GPUs and a datacenter 10^5, at MFU 0.4. Each range runs from a block's seconds to a block's and a statement's. The runs:
+- years: r20261110-160737-8c77 (0.1), r20261110-160802-4e83 (1.0), r20261110-160811-c29e (0.5), r20261110-160821-29d6 (0.25);
+- weeks and months of goal 6: r20261110-161926-67c6, r20261110-161935-6207, r20261110-161944-95ed;
+- weeks and months of the levers: r20261110-162744-f1ce, r20261110-162752-94e5, r20261110-162801-6995, against r20261110-061145-4a58 at 0.1.
+
+The world's year:
+
+| figure | as given, at 0.1 | 1.0 | 0.5 | 0.25 |
+|---|---:|---:|---:|---:|
+| the art's plan, `art:2ea6f506`, at λ = 1 | 1,377.5 | 6,585 | 3,740 | 2,279 |
+| the art's sample: proving as a share of the compute | 5.43% | 27.6% | 15.3% | 9.1% |
+| goal 6 | 427 [452] | 1,682 [1,778] | 985 [1,041] | 636 [673] |
+| goal 6's factor left to 300 GB | 1.51× | 5.93× | 3.47× | 2.24× |
+| TOP-394's 300 GB path: the split part one class smaller, with hash slots quartered | 365 to 273 [386 to 288] | 1,620 to 914 [1,712 to 966] | 923 to 561 [975 to 592] | 574 to 384 [607 to 406] |
+| the split part one class smaller, alone | 400 to 325 [423 to 344] | 1,655 to 974 [1,750 to 1,030] | 958 to 616 [1,013 to 651] | 609 to 436 [644 to 461] |
+| HASH-100: hash slots quartered | 392 to 376 [414 to 398] | 1,647 to 1,622 [1,741 to 1,715] | 950 to 930 [1,004 to 983] | 601 to 584 [635 to 617] |
+| HASH-100: the cells cut's most | 1.14× | 1.04× | 1.06× | 1.09× |
+| HASH-100: hash slots halved | 1.08× to 1.12× | 1.02× to 1.03× | 1.03× to 1.05× | 1.05× to 1.08× |
+
+- **Re-planned at the 10% point,** the art's plan spends 5.2% to 5.4% of the compute on proving at every factor, and its bound is the first row. At λ = 1.05 that bound is 6,914, 3,927 and 2,392 GB.
+- **ASK-264** (the 131,072-token request) gives no figure that rests on the 0.1, so nothing there changes.
+- **Goal 6's row stacks a second assumed factor on the 0.1:** `warm(0.25)` prices the warm families' statements and blocks at a quarter. These runs leave it as it is.
+- **Each period moves alike.** The table gives week, month and year, in the world and in a datacenter:
+
+| figure | factor | the world | a datacenter |
+|---|---|---|---|
+| goal 6 | 0.1 | 423, 424, 427 | 413, 415, 418 |
+| | 1.0 | 1,681, 1,682, 1,682 | 1,686, 1,680, 1,691 |
+| | 0.5 | 982, 983, 985 | 976, 977, 979 |
+| | 0.25 | 633, 634, 636 | 624, 626, 628 |
+| the 300 GB path | 0.1 | 361 to 269, 360 to 270, 365 to 273 | 351 to 262, 356 to 263, 355 to 265 |
+| | 1.0 | 1,620 to 913, 1,620 to 913, 1,620 to 914 | 1,621 to 910, 1,621 to 911, 1,620 to 911 |
+| | 0.5 | 921 to 558, 921 to 559, 923 to 561 | 917 to 553, 918 to 554, 919 to 556 |
+| | 0.25 | 571 to 381, 572 to 379, 574 to 384 | 565 to 371, 566 to 372, 568 to 374 |
+| the art's plan, at λ = 1 | 0.1 | 1,371, 1,374, 1,378 | 1,358, 1,360, 1,364 |
+| | 1.0 | 6,597, 6,592, 6,585 | 6,624, 6,619, 6,611 |
+| | 0.5 | 3,744, 3,742, 3,740 | 3,744, 3,751, 3,742 |
+| | 0.25 | 2,275, 2,277, 2,279 | 2,268, 2,269, 2,273 |
+
+**(4) The patterns' form.** Every row of record is in the patterns' form:
+- the planner calls `two_stage_design(..., union=True)` on the per-expert line those rows use;
+- `plancheck.two` sends that to Lean as `Spot.TwoStageCheck.Form.patterns` (`lnFactorUpperPatterns`);
+- each request serves S = 28,000 bits, 875 tokens at 32 bits (`trace128 max x32`);
+- the Python planner counts these rows (`lean=False`), and no Lean check ran on them;
+- the capped form appears only on `total_cost`'s `_sets` comparison lines.
+
+---
+
+**For you alone.**
+
+1. **The art's label.** I didn't relabel or supersede `art:2ea6f506`. Its one label, `run_of_record=prove-glm53-spot-sampling`, is right. Its meta's `what` is wrong in one phrase, "with each lever measured or approved", because the DEFAULT cells' factor is neither. Here is corrected text for the start of `what`, with the rest unchanged:
+
+   > SPOT sampling plan in the form `verity bench prove --system spot` reads (mix.json): GLM-5.3 on the fused per-expert cut with each lever measured or approved except one, the statement-cache factor `reprice.DEFAULT` 0.1, assumed, on the 128 types with no measured factor (72.6% of the proving; 70.2% in sparse MLA's 64-key split part) (headline row (ii), own premises), ...
+
+   And after "(1,446 GB at 1.05)":
+
+   > ; at a factor of 1.0, 0.5 or 0.25 this sample's proving is 27.6%, 15.3% or 9.1% of the compute, and the plan re-made at the 10% point bounds 6,585, 3,740 or 2,279 GB at lambda 1 (modeled: r20261110-162125-7241; r20261110-160802-4e83, r20261110-160811-c29e, r20261110-160821-29d6)
+
+2. **The 08:11Z verdict, owed since then.** r20261110-075923-5c47 passed (rc 0). The mark command would be `research queue ready 8568 --mark --by proofs`. I didn't run it: #8568 stays unmarked.
+
+3. **Two figures rest on the 0.1 and I didn't recompute them:** HASH-100's 412 [436] with hashing's own seconds cut (from kernels' shares, no run), and item 4's 543 (398 to 772) for the warm estimate. Each would move like goal 6.
+
+4. **How I varied the factor:** a scratch commit, `ed8b6a13ad` on `a5e4e56a11`, reads `DEFAULT_F` into `reprice.DEFAULT`. It is branch `scratch/prf456-default-f` in `/agent/repos/wt-prf456-default`, not pushed. I'm proposing no tree change from it.
+
+5. **What's left, in your order:** the three drafts (vllm's four questions on serving's share; kernels' prover count; the workload card's stop and tie Definitions), then PRF-497's second done-condition as a commit on a branch of my own. I start them now.
