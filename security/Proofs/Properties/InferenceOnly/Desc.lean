@@ -4,7 +4,7 @@ public import InferenceOnlyCheck.Desc
 public import Mathlib.Tactic
 
 /-!
-# The description-sized NCI check against the unrolled one
+# The description-sized inference-only check against the unrolled one
 
 `InferenceOnlyCheck.Desc.evaluate` (`verity/protocols/inference_only/verifier/inference_only/lean/InferenceOnlyCheck/Desc.lean`) computes per IU its size and
 its novel reads from one summary per Definition, where `InferenceOnlyCheck.evaluate` walks the circuit gate by gate. What is

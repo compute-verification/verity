@@ -40,7 +40,7 @@ declarations) holds R2's program to the day's one declared circuit (`declaredCod
 declaration, `R2-declared-twice` when it has more than one, and `R2-declared` when the record's program is not the
 day's.
 
-A value that is an output of an earlier run (`outputs`; never NCI's baseline θ, which holds registered public data only)
+A value that is an output of an earlier run (`outputs`; never the inference-only policy's baseline θ, which holds registered public data only)
 reuses that run's commitment: its entry has the domain and root of the port in the `roots` of the log's record with that
 digest, whose leaf count must be the value's rows (`R7-output` otherwise). One may instead reuse an earlier record's
 registered value (`Earlier.value`): its entry has the domain and root of that value's entry in the `registered` of the

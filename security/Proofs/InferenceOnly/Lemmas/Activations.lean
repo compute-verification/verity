@@ -3,7 +3,7 @@ module
 public import Definitions.InferenceOnly.Guarantees.Activations
 
 /-!
-# NCI's activations bound over all of training ([ACTIVATIONS-BOUND]): lemmas
+# The inference-only policy's activations bound over all of training ([ACTIVATIONS-BOUND]): lemmas
 
 The statements of `Definitions.InferenceOnly.Guarantees.Activations` that are steps of its guarantees' proofs rather than
 guarantees. Each is a `def G : Prop` under the guarantees' namespace, proved by the `SecurityProofs` theorem of the same

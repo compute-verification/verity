@@ -7,7 +7,7 @@ public import Definitions.Core.Boolean
 # The working draft's Lemma 1 and Theorem 3
 
 Stated on core's circuit and partition (`Definitions.Core.Formalism`). Appendix A's translation of a `(c, k)`-partition
-into NCI's coverings is `InferenceOnly.Guarantees.PartitionCovers`, and NCI's policy as a `(c, k)`-partition is
+into the inference-only policy's coverings is `InferenceOnly.Guarantees.PartitionCovers`, and the inference-only policy as a `(c, k)`-partition is
 `InferenceOnly.Guarantees.CompliesCK`. The serving blocks are inference blocks of at most `c_S` gates reading at most `k_S`, summed by
 `ServingBlockSum`, with each serving block's inference cap from `InferenceCap`. The AND count `andSize`, in
 which credit and reporting are stated, is at most `size` (`AndSizeLe`), and on Flock's circuits counts its AND gates

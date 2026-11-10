@@ -6,7 +6,7 @@ public import Proofs.InferenceOnly.Contained
 public import Proofs.InferenceOnly.Lemmas
 
 /-!
-# Proofs of NCI's guarantees under training's incompressibility
+# Proofs of the inference-only policy's guarantees under training's incompressibility
 
 `TrainingIncompressible` is one sampling design over divisions of the reference circuit. A small IU `R` is a division of `c` into
 `R` and the rest (`splitOff`), so the sampling design gives `WeightsIncompressible` and `ActivationsIncompressible` on `R`; on a
