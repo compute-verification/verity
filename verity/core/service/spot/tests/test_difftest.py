@@ -21,7 +21,8 @@ Call among them, whose unit `Q_word` takes in the 32-bit class and `Q_call` at `
 `Q_call` unit at `X = 16` holds a constant another unit reads. Records are v1 and, on the programs with root parameters to register
 (`REGISTERED_SETUPS`, 16- and 32-bit), mostly v2: the verifier expects values registered (`registered`, with its program
 function's `parameters`), and the record (and an earlier one in the log) registers `Registered.commit`'s entries; on
-the programs with a pair of digests to fill (`SUPPLIED_SETUPS`, 32- and 1-bit leaves) the verifier fills it itself from
+the programs with a pair of digests to fill (`SUPPLIED_SETUPS`, 32- and 1-bit leaves, or a digest a row in a bit-row
+format) the verifier fills it itself from
 the record, the log's positions and its coin bound to its binding and the record's window (`supplied`,
 `registered.supplied_root`), which the record registers as it fills it, and it may pin a value's root (`pinned`, R7-held)
 or take W as an output of the log's earlier record (`outputs`: W's entry is that record's port `EARLIER_OUT`, its domain
@@ -60,7 +61,7 @@ from verity_difftest import protocol as PR
 from verity.core.protocols.pouw import audit as PA
 from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.profile import Bernoulli, Stratified, Stratum
-from verity.core.protocols.spot import challenger as CH, second_stage as SS, service
+from verity.core.protocols.spot import challenger as CH, schedule as SCH, second_stage as SS, service
 from verity.core.protocols.spot.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
                                                             partition as P, produced as PD, proofs as PF,
                                                             registered as G, registration as R)
@@ -260,10 +261,11 @@ class RegisteredSetup(Setup):
 
 class SuppliedSetup(RegisteredSetup):
     """A `RegisteredSetup` whose verifier fills some values itself: `sup`, `{value: rows of sources}`
-    (`registered.sources`), each expected registered with the others in some of `values`."""
+    (`registered.sources`), each expected registered with the others in some of `values`, in its row format of
+    `formats` (`row/v1` where it names none)."""
 
-    def __init__(self, program, values, sup):
-        super().__init__(program, values)
+    def __init__(self, program, values, sup, formats=None):
+        super().__init__(program, values, formats)
         self.sup = sup
 
     def supplied(self, values) -> dict:
@@ -285,7 +287,9 @@ REGISTERED_SETUPS = [
         ("A", Array(8, Value(8))), ("B", Array(4, Value(16)))), ("A", "B")),
         [{"A": 2}, {"A": 1, "B": 2}, {"B": 4}, {"A": 4, "x": 2}], {"A": G.SCHEMA_V2, "B": G.SCHEMA_SEG})]
 #: Programs with a value the verifier fills itself, as PoUW's `pouw.roots`: `S`, each row a pair of digests of 32-bit
-#: leaves (rows of x's root and W's registered root, and W's and out's) or of 1-bit leaves (out's root and bytes of its own).
+#: leaves (rows of x's root and W's registered root, and W's and out's) or of 1-bit leaves (out's root and bytes of its own),
+#: or, in a bit-row format, one `Digest` a row in `row/v2` (out's root, then bytes of its own: 32 u16 words a row) or
+#: one digest of 1-bit leaves a row in `row-seg/v1` (x's root, then bytes of its own).
 SUPPLIED_SETUPS = [
     SuppliedSetup(_registered_program("CoreSpotSupplied32", 3, (
         ("S", Array(2, Array(2, Array(16, Value(32))))), ("W", Array(6, Value(16)))), ("S", "W")),
@@ -297,7 +301,13 @@ SUPPLIED_SETUPS = [
     SuppliedSetup(_registered_program("CoreSpotSuppliedPW", 3, (
         ("S", Array(2, Array(2, Array(16, Value(32))))), ("W", Array(6, Value(16)))), ("S", "W")),
         [{"S": 32, "W": 2}, {"W": 3, "S": 32}],
-        {"S": [[{"window": COIN}] + [{"position": "0"}] * 8, [{"position": "2"}] * 8 + [{"window": COIN}]]})]
+        {"S": [[{"window": COIN}] + [{"position": "0"}] * 8, [{"position": "2"}] * 8 + [{"window": COIN}]]}),
+    SuppliedSetup(_registered_program("CoreSpotSuppliedDigestV2", 2, (
+        ("S", Array(2, Array(8, Array(64, Value(1))))),), ("S",)),
+        [{"S": 32}, {"x": 2, "S": 32}], {"S": [[{"port": "out"}], [{"bytes": "5a" * 64}]]}, {"S": G.SCHEMA_V2}),
+    SuppliedSetup(_registered_program("CoreSpotSuppliedBitsSeg", 2, (
+        ("S", Array(2, Array(512, Value(1)))),), ("S",)),
+        [{"S": 32}, {"x": 2, "S": 32}], {"S": [[{"port": "x"}], [{"bytes": "a5" * 64}]]}, {"S": G.SCHEMA_SEG})]
 REGISTERED_SETUPS += SUPPLIED_SETUPS
 #: A program whose window opens a pool from `pin` and leaves it in `pout`, each one SHA-512 digest of 32-bit leaves, and
 #: the empty pool's root a chain restarts from.
@@ -578,7 +588,7 @@ def decode_params(j) -> dict:
         if not isinstance(j["row_schemas"], dict):
             raise D.Reject("row formats are not an object")
         try:
-            R._schemas(j["row_schemas"], j["registered"] or {}, G.sources(j.get("supplied", {})))
+            R._schemas(j["row_schemas"], j["registered"] or {})
         except ValueError as e:
             raise D.Reject(str(e)) from None
     if "binding" in j:
@@ -1677,7 +1687,8 @@ def _record_of(s: Setup, values, law: dict, window: dict, log=(), binding=None, 
     rec = R.record(s.program, s.query, law, SCHEME, roots, window, registered=entries, **kw)
     if not sup:
         return rec
-    filled = [G.supplied_value(s.program, v, rows, rec, sorted(sup), list(log), binding=binding).entry()
+    filled = [G.supplied_value(s.program, v, rows, rec, sorted(sup), list(log), binding=binding,
+                               schema=s.formats.get(v, G.SCHEMA)).entry()
               for v, rows in G.sources(sup).items()]
     return R.record(s.program, s.query, law, SCHEME, roots, window, registered=entries + filled, **kw)
 
@@ -3722,7 +3733,7 @@ def _two_stage_text(seed: int) -> str:
     the replay sample in order, its second stage from another session's challenger opened after the interior
     registration's digest; the verdicts accepting, the second-stage session's statement the honest one
     (`_second_statement`), each slot reading the boundary's `x` and `o0` at its PAIR instance's row of its cell's replay
-    block, which the verifier of record names as it checked it (`_checked_names`), and the auditor's
+    block, which the verifier names as it checked it (`_checked_names`), and the auditor's
     params naming its template's circuit file, reference header (`_second_reference`) and the registered reads its
     reference statement reads, the statement's, which round 2 compares but for the run's fields
     (`second_stage.blank_reads`)."""
@@ -3984,7 +3995,7 @@ def second_statements(j):
     `wires` (each null for none derived) and the `rows` they place its units at (null for none), the reads the
     `verdicts` of record report (`audit.session_registered`) and
     what they name of the sessions they checked (`second_stage.verified_of`), and each template's reference header
-    (`refs`, `{template: header}`, null for none) and the registered reads its reference statement was verified against
+    (`refs`, `{template: header}`, null for none) and the registered reads the params give it, taken as given
     (`ref_reads`, `{template: registered}`, each null for none, null for no template's)."""
     j = _json(j)
     if not (isinstance(j, dict) and isinstance(j.get("allow"), bool)):
@@ -4044,7 +4055,7 @@ def _second_case(s: Setup, named: bool, sample: list[int], drawn: list[int], lin
     registering it, those in `own` read it from their own `x`, each slot its own row, and each reader of `wires`,
     ``(reader, writer)`` pairs, reads it from its writer's `out`, each slot its writer's first slot in its cell, the
     design wiring it and the interior then not registering the reader's `x`, which its header holds at its writer's
-    root and binding; the design's rows place each linked and wired unit so; the verifier of record reports those
+    root and binding; the design's rows place each linked and wired unit so; the verifier reports those
     reads, and a verdict of
     record names each statement's session as it checked it (`_checked_by`); and each template's reference header is
     its part's (`_second_reference`) over the ports its session has, and its reference statement's registered reads
@@ -4307,7 +4318,7 @@ def _read_registered(c: dict, x: int) -> dict:
 #: A change to a second_statements input, its `x` drawn: a statement changed (`_restated`), reversed, one dropped, none,
 #: a slot drawn more, the sample reversed, one replay block more or one fewer, a registered value's read by a port of
 #: no interior root, every read moved on (checked as moved, or not), the design's links, wires or rows, the reads the
-#: verifier of record reports, what a verdict of record names of a session it checked (`_unverified`), the reference
+#: verifier reports, what a verdict of record names of a session it checked (`_unverified`), the reference
 #: headers (`_referenced`), the reference statements' registered reads (`_valued`), a registered value read where the
 #: reference reads it or another (`_read_registered`), the interior record's replay sample or run (`_reordered`), or
 #: the rows a header shares (`_shared_rows`).
@@ -4530,6 +4541,58 @@ def replay_rows(j):
 #: The replay_rows piece's input: replay_links' (`replay_link_inputs`), whose boundary record it doesn't read.
 REPLAY_ROWS = D.Port(PIECES, "replay_rows", replay_rows,
                      st.integers(0, 3).flatmap(lambda i: JSON if i == 3 else replay_link_inputs()), package=PACKAGE)
+
+
+def second_schedule(j):
+    """`Pieces.secondSchedule`: why round 2 refuses `record`'s schedule (`schedule.failure`), null for none, and each of
+    `blocks`' request and positions under it (`schedule.at`), null where no run holds it or the record commits no list
+    of runs."""
+    bs = j.get("blocks") if isinstance(j, dict) else None
+    if not isinstance(bs, list):
+        raise D.Reject("blocks is not a list")
+    rec = j.get("record")
+    w = rec.get("window") if isinstance(rec, dict) else None
+    runs = SCH.runs_of(w.get("schedule") if isinstance(w, dict) else None)
+    at = [SCH.at(runs, b) if runs is not None and _nat(b) else None for b in bs]
+    return {"failure": SCH.failure(rec), "at": [None if x is None else list(x) for x in at]}
+
+
+@st.composite
+def schedule_inputs(draw) -> dict:
+    """The second_schedule piece's input: a record whose window commits runs of requests `a` and `b` that are a schedule
+    of its population, or that schedule changed (a run from another block or position, of no block or position, with a
+    key added or a field of another type, the population another or not a number, the schedule or the window not one);
+    and blocks from before the first to past the last."""
+    runs, block, nxt = [], 0, {}
+    for _ in range(draw(st.integers(0, 4))):
+        r, n, length = draw(st.sampled_from("ab")), draw(st.integers(1, 3)), draw(st.integers(1, 4))
+        runs.append({"request": r, "first_span": block, "spans": n, "first_position": nxt.get(r, 0), "length": length})
+        block, nxt[r] = block + n, nxt.get(r, 0) + n * length
+    rec = {"population": block, "window": {"schedule": runs}}
+    change = draw(st.sampled_from([None] * 4 + ["population", "window", "span", "position", "zero", "extra", "type"]))
+    if change == "population":
+        rec["population"] = draw(st.sampled_from([block + 1, block - 1, str(block), None]))
+    elif change == "window":
+        rec["window"] = draw(st.sampled_from([None, 5, [], {}, {"schedule": None}, {"schedule": {}}, {"schedule": 5}]))
+    elif change is not None and runs:
+        k = draw(st.integers(0, len(runs) - 1))
+        r = dict(runs[k])
+        if change == "span":
+            r["first_span"] += draw(st.sampled_from([-1, 1]))
+        elif change == "position":
+            r["first_position"] += draw(st.sampled_from([-1, 1]))
+        elif change == "zero":
+            r[draw(st.sampled_from(["spans", "length"]))] = 0
+        elif change == "extra":
+            r["extra"] = 0
+        else:
+            r[draw(st.sampled_from(sorted(r)))] = draw(st.sampled_from([True, "1", None, -1, 2]))
+        runs[k] = r
+    return {"record": rec, "blocks": draw(st.lists(st.integers(-1, block + 1), max_size=4))}
+
+
+SECOND_SCHEDULE = D.Port(PIECES, "second_schedule", second_schedule,
+                         st.integers(0, 3).flatmap(lambda i: JSON if i == 3 else schedule_inputs()), package=PACKAGE)
 RUN = D.Port(PIECES, "run", run, st.one_of(
     runs(), runs(), runs(changes=1), runs(changes=1), runs(changes=2), st.builds(_as_rate, runs(), st.integers(0, 63)),
     runs([RECORD], 1), runs([PARAMS], 1), runs([ENTRIES, REGISTERED_PARAMS], 1), runs([EVIDENCE, VERDICTS_OF], 1),
@@ -4908,7 +4971,7 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATE
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (SELECT_SECOND, 300), (SECOND_STATEMENTS, 400),
-              (REPLAY_LINKS, 300), (REPLAY_WIRES, 300), (FITS, 400), (TEMPLATE_CIRCUITS, 300)]
+              (REPLAY_LINKS, 300), (REPLAY_WIRES, 300), (SECOND_SCHEDULE, 300), (FITS, 400), (TEMPLATE_CIRCUITS, 300)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])
@@ -5810,11 +5873,11 @@ def test_round_two_holds_each_session_to_its_part(pieces):
     parts' order (else `second-order`), with a part's `x` read from the boundary where the design links it, each slot
     at its unit's row of its cell's replay block, or read from its own `x` at its own rows, and fail only on the form
     while it is refused (`two-stage-form`); every part needs a statement, the second stage drawing in it or not
-    (`second-cover`); a read of the boundary at another cell's replay block, of its own `x` at
-    another slot's rows, of a boundary port the design doesn't link, or of a linked port anywhere but the boundary port
-    its link names, or a linked port not read (`second-read`) is refused, as are reads the verifier of record doesn't
-    report (`second-reported`); links none derived, one for a template of no part, or one whose rows don't place its
-    part's units, are refused (`second-links`);
+    (`second-cover`); a read of the boundary at another cell's replay block, of a tree of more than `2^64` leaves, of
+    its own `x` at another slot's rows, of a boundary port the design doesn't link, or of a linked port anywhere but
+    the boundary port its link names, or a linked port not read (`second-read`) is refused, as are reads the verifier
+    of record doesn't report (`second-reported`); links none derived, one for a template of no part, or one whose rows
+    don't place its part's units, are refused (`second-links`);
     a header that isn't its template's reference header placed in the run (`second_stage.at_run`: its set
     `served/<run>/m<k>` at its template's position, its ports' bindings the window rule's) but for the run's fields
     (`second_stage.RUN_FIELDS`, `units.blocks` and `registered` among them), or of a template with none, is refused
@@ -5832,6 +5895,17 @@ def test_round_two_holds_each_session_to_its_part(pieces):
 
     def placed(c: dict, **w) -> dict:
         return {**c, "interior": {**c["interior"], "window": {**c["interior"]["window"], **w}}}
+
+    def wide(c: dict, per: int) -> dict:
+        """`c` with the boundary's `x` of `per` rows a replay block, TRIPLE's rows naming them, its slots reading their
+        units' rows there."""
+        b, s, (r,) = c["boundary"], c["statements"][1], c["rows"]
+        e = s["registered"]["ports"]["x"]
+        read = {**e, "leaves": b["population"] * per,
+                "reads": [x // r["per"] * per + x % r["per"] for x in e["reads"]]}
+        return {**_second_with(c, 1, registered={**s["registered"], "ports": {"x": read}}), "rows": [{**r, "per": per}],
+                "boundary": {**b, "roots": [{**x, "leaves": read["leaves"]} if x["port"] == BX else x
+                                            for x in b["roots"]]}}
     elsewhere = _second_reference(triple, 0, h1["instances"], ("out", "x"))
     assert elsewhere != honest["refs"][triple] and SS.blank_run(elsewhere) == SS.blank_run(honest["refs"][triple])
     assert h0["set"] == "served/r-test/m0" and h1["set"] == "served/r-test/m1" and sorted(b0) == ["out", "x"]
@@ -5848,6 +5922,8 @@ def test_round_two_holds_each_session_to_its_part(pieces):
         ({**honest, "allow": False}, ["two-stage-form"]),
         ({**honest, "statements": honest["statements"][::-1]}, ["second-order"]),
         (linked, []),
+        (wide(linked, 2 ** 64 // linked["boundary"]["population"]), []),
+        (wide(linked, 2 ** 64 // linked["boundary"]["population"] + 1), ["second-read"]),
         (own, []),
         ({**own, "allow": False}, ["two-stage-form"]),
         (_second_case(SECOND_MIXED, True, sample, drawn, links={pair, triple}, allow=True), []),
@@ -5903,6 +5979,61 @@ def test_round_two_holds_each_session_to_its_part(pieces):
         got = second_statements(copy.deepcopy(case))
         assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), (codes, got)
         assert got["codes"] == codes and got["ok"] == (codes == []), (codes, got)
+
+
+def test_round_two_holds_the_boundary_schedule_to_its_replay_blocks(pieces):
+    """Round 2's schedule, Lean's the Python's whole, over the two-template interior after a replay sample of two: a
+    boundary record that commits a schedule of its four replay blocks (`window.schedule`: runs of positions of its
+    requests, in block order and each request's positions in order) passes, all blocks one run or several, a request's
+    positions resumed in a later run, as does a record that commits none; runs that skip a block, repeat one, restart a
+    request's positions or skip some, cover fewer or more blocks than the population, hold no block or no position, or
+    aren't runs fail ``second-schedule``, after ``second-interior-order`` when the interior names another sample; and
+    each block's request and positions are `schedule.at`'s (`second_schedule`)."""
+    honest = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], allow=True)
+
+    def scheduled(runs) -> dict:
+        return {**honest, "boundary": {**honest["boundary"], "window": {"schedule": runs}}}
+
+    def run(r: str, f: int, n: int, p: int, length: int) -> dict:
+        return {"request": r, "first_span": f, "spans": n, "first_position": p, "length": length}
+    resumed = [run("a", 0, 1, 0, 2), run("b", 1, 2, 0, 1), run("a", 3, 1, 2, 2)]
+    restarted = [run("a", 0, 1, 0, 2), run("a", 1, 3, 3, 2)]
+    assert honest["boundary"]["population"] == 4
+    cases = [
+        (honest, []),
+        (scheduled([run("a", 0, 4, 0, 1)]), []),
+        (scheduled(resumed), []),
+        ({**honest, "boundary": {**honest["boundary"], "window": {}}}, []),
+        (scheduled(None), []),
+        (scheduled([run("a", 0, 3, 0, 1)]), ["second-schedule"]),
+        (scheduled([run("a", 0, 5, 0, 1)]), ["second-schedule"]),
+        (scheduled([run("a", 0, 1, 0, 2), run("b", 2, 2, 0, 1)]), ["second-schedule"]),
+        (scheduled([run("a", 0, 2, 0, 1), run("b", 1, 3, 0, 1)]), ["second-schedule"]),
+        (scheduled([run("a", 0, 1, 0, 2), run("a", 1, 3, 0, 2)]), ["second-schedule"]),
+        (scheduled(restarted), ["second-schedule"]),
+        (scheduled([run("a", 0, 4, 1, 1)]), ["second-schedule"]),
+        (scheduled([run("a", 0, 4, 0, 0)]), ["second-schedule"]),
+        (scheduled([run("a", 0, 0, 0, 1), run("a", 0, 4, 0, 1)]), ["second-schedule"]),
+        (scheduled([{**run("a", 0, 4, 0, 1), "extra": 0}]), ["second-schedule"]),
+        (scheduled([{**run("a", 0, 4, 0, 1), "request": 5}]), ["second-schedule"]),
+        (scheduled({"a": run("a", 0, 4, 0, 1)}), ["second-schedule"]),
+        ({**scheduled([run("a", 0, 3, 0, 1)]), "interior": {**honest["interior"], "window": {
+            **honest["interior"]["window"], "replay_sample": [2, 0]}}}, ["second-interior-order", "second-schedule"]),
+    ]
+    for case, codes in cases:
+        got = second_statements(copy.deepcopy(case))
+        assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), (codes, got)
+        assert got["codes"] == codes and got["ok"] == (codes == []), (codes, got)
+    for c, want in [
+        ({"record": scheduled(resumed)["boundary"], "blocks": [0, 1, 2, 3, 4, -1]},
+         {"failure": None, "at": [["a", 0, 2], ["b", 0, 1], ["b", 1, 2], ["a", 2, 4], None, None]}),
+        ({"record": scheduled(restarted)["boundary"], "blocks": [0, 1]},
+         {"failure": "a run of a from position 3, not from position 2", "at": [["a", 0, 2], ["a", 3, 5]]}),
+        ({"record": scheduled([run("a", 0, 3, 0, 1)])["boundary"], "blocks": []},
+         {"failure": "runs of 3 blocks, not the population's 4", "at": []}),
+    ]:
+        assert second_schedule(copy.deepcopy(c)) == want
+        assert D.replay(SECOND_SCHEDULE, c, pieces) == ("output", D.canonical(want)), c
 
 
 def test_round_two_holds_a_wired_port_to_its_writers_output(pieces):
@@ -5975,9 +6106,9 @@ def test_round_two_reads_each_unit_at_the_row_its_rows_name(pieces):
     unit, from unit 1, one unit more, for another port, or none), refuse the link (`second-links`), and rows a block
     other than the writer's units a block refuse the wire (`second-wires`)."""
     pair, triple = SECOND_MIXED.templates
-    sample, drawn = [0, 2], [1, 4, 6, 9]
-    linked = _second_case(SECOND_MIXED, True, sample, drawn, links={triple}, allow=True)
-    wired = _second_case(SECOND_MIXED, True, sample, drawn, wires=[(triple, pair)], allow=True)
+    sample, units = [0, 2], [1, 4, 6, 9]
+    linked = _second_case(SECOND_MIXED, True, sample, units, links={triple}, allow=True)
+    wired = _second_case(SECOND_MIXED, True, sample, units, wires=[(triple, pair)], allow=True)
     lx, wx = (c["statements"][1]["registered"]["ports"]["x"] for c in (linked, wired))
     (lr,), (wr,) = linked["rows"], wired["rows"]
     assert (lr["per"], lr["runs"], lx["reads"], lx["leaves"]) == (3, [[0, 2, 0, 1]], [0, 1, 6, 7], 12)

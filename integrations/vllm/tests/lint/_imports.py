@@ -55,6 +55,7 @@ LAYER = {
     "verity_vllm.commit.challenge": "core",                    # -> verity.ml.randomness; imports nothing from verity_vllm
     "verity_vllm.records": "core",                             # the typed stage records; imports nothing else from verity_vllm
     "verity_vllm.errors": "core",                              # the one Refused; imports nothing from verity_vllm
+    "verity_vllm.engine.served_seed": "core",                  # the served seed rule's functions; imports only engine.hooks
 }
 
 #: the packages a tree may not hold, a private protocol's driver (`verity_vllm.protocols.DRIVERS`): placed where present
