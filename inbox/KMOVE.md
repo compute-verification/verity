@@ -57,3 +57,15 @@ relays it to VLLM-265) gives:
    only the three `commit_slots` files that go to the archive with the demo (`overlap.py`, `overlap.sh`,
    `green_probe.py`; asked of vllm for map 21 as rows of their own) and `units/`'s two lines.
 No build, no GPU, no suites run for this piece: a clone and the tool.
+
+## Tue 10 Nov 09:07Z: how to mark your fix PR tonight (top, TOP-394 09:06Z; ci, CI-501)
+
+Since `main` moved at 08:15Z, `research queue ready` refuses every head that holds today's `main` ("its head carries
+7 merges of an old `next` that `checked` doesn't hold"), and `research queue status` lists it as refused. Your branch
+is cut from today's `origin/main`, so it will be refused. Until about 12:30Z (the fix is #8614):
+
+1. Run the suites your change touches, as before any mark.
+2. Mark by label: `research data label pr:N@SHA ready true --by kernels` (N the PR, SHA its full head), and say in the
+   PR's body that it was marked by label under CI-501.
+3. Ignore `status`'s "refused" for that reason alone. Any other refusal is real: report it.
+If `research queue ready N --mark --by kernels` does accept the head, use it as usual.
