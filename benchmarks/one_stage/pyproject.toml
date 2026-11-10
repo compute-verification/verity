@@ -25,7 +25,7 @@ untraced = [
     "tests/test_a5_reserve.py",
     "tests/test_a5_tp_gates.py",
     "tests/test_a5_tp_store.py",
-    "tests/test_a5_warden.py",
+    "tests/test_a5_network_certifier.py",
     "tests/test_served_bandwidth.py",
     "tests/test_served_overhead.py",
     "tests/test_served_verdicts.py",
@@ -39,7 +39,7 @@ untraced = [
 # serves it through kernels' staging decode, and the toy), run through bash, which no tracer sees; its party's Lean
 # verifier, `remote-audit-verifier`, which `p2_party` has `lake` build in remote_bandwidth/lean, is under `verity`.
 # `integrations/vllm/verity_vllm`, `benchmarks/network_traces`: a5_warden's window, committed as serving commits it, over the
-# cells of a network certifier run its tests drive tick by tick (`test_warden_serve._run`).
+# cells of a network certifier run its tests drive tick by tick (`test_network_certifier_serve._run`).
 # `examples/h200/interfaces/verity_e2e_demo`: served_verdicts' block record (`block_record`, its schema) and prove_bundle's
 # bundle check (`replay_bundle`, with kernels' commit call `commit_slots/slots.py`), and its bundle and registration
 # fixtures; `benchmarks/prove_path/records_audit.py`: prove_bundle's verifier window. `examples/vllm/serve_load.py`:

@@ -2,7 +2,7 @@ module
 
 public import Definitions.NetworkCertifier.Tap
 public import Definitions.Core.Assumptions
-public import Proofs.NetworkCertifier.Warden
+public import Proofs.NetworkCertifier.Cells
 
 /-!
 # What the tap's certifier saw is what its relay sent
@@ -23,17 +23,17 @@ variable {κ Cell Ob Srv Dev : Type}
 
 /-- The cells the trusted tap sends are the relay's code's. -/
 theorem tap_cells (f : TapRecord κ Cell Ob) (arr : Srv → κ → Arrivals Cell) (tap : Dev)
-    (run : Dev → WardenSchedule κ × Srv → (κ → List (ℕ × CellView Cell)) × Ob)
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p => tapCode f p.1 (arr p.2)) (s : WardenSchedule κ)
-    (σ : Srv) : (run tap (s, σ)).1 = wardenCode s (arr σ) := by
+    (run : Dev → CertifierSchedule κ × Srv → (κ → List (ℕ × CellView Cell)) × Ob)
+    (htrust : Verity.Assumptions.TrustedHost tap run fun p => tapCode f p.1 (arr p.2)) (s : CertifierSchedule κ)
+    (σ : Srv) : (run tap (s, σ)).1 = certifierCode s (arr σ) := by
   rw [htrust (s, σ)]
   rfl
 
 /-- **What the certifier saw is what the relay sent**: on a schedule the record format holds, the cells the trusted tap
 sends read back from the record its same run writes. -/
 theorem tap_cells_read (f : TapRecord κ Cell Ob) (arr : Srv → κ → Arrivals Cell) (tap : Dev)
-    (run : Dev → WardenSchedule κ × Srv → (κ → List (ℕ × CellView Cell)) × Ob)
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p => tapCode f p.1 (arr p.2)) (s : WardenSchedule κ)
+    (run : Dev → CertifierSchedule κ × Srv → (κ → List (ℕ × CellView Cell)) × Ob)
+    (htrust : Verity.Assumptions.TrustedHost tap run fun p => tapCode f p.1 (arr p.2)) (s : CertifierSchedule κ)
     (hfit : f.fits s) (σ : Srv) : (run tap (s, σ)).1 = f.read s (run tap (s, σ)).2 := by
   rw [htrust (s, σ)]
   exact (f.read_record s hfit (arr σ)).symm
@@ -42,12 +42,12 @@ theorem tap_cells_read (f : TapRecord κ Cell Ob) (arr : Srv → κ → Arrivals
 of connection `c`'s stream, when its lane has cell `j` and no fail cell at or before it, is in the record as that
 cell's data, in its bucket. -/
 theorem tap_data_read (f : TapRecord κ Cell Ob) (arr : Srv → κ → Arrivals Cell) (tap : Dev)
-    (run : Dev → WardenSchedule κ × Srv → (κ → List (ℕ × CellView Cell)) × Ob)
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p => tapCode f p.1 (arr p.2)) (s : WardenSchedule κ)
+    (run : Dev → CertifierSchedule κ × Srv → (κ → List (ℕ × CellView Cell)) × Ob)
+    (htrust : Verity.Assumptions.TrustedHost tap run fun p => tapCode f p.1 (arr p.2)) (s : CertifierSchedule κ)
     (hfit : f.fits s) (σ : Srv) (c : κ) {j : ℕ} (hj : j < s.cells c) (hd : j < (arr σ c).stream.length)
     (hf : ∀ i, failCell s (arr σ) c = some i → j < i) :
     (f.read s (run tap (s, σ)).2 c)[j]? = some (s.bucket c j, .data (arr σ c).stream[j]) := by
-  rw [← tap_cells_read f arr tap run htrust s hfit σ, tap_cells f arr tap run htrust s σ, wardenCode_eq]
+  rw [← tap_cells_read f arr tap run htrust s hfit σ, tap_cells f arr tap run htrust s σ, certifierCode_eq]
   simp only [clientView, List.getElem?_map, List.getElem?_range hj, Option.map_some, cellView_of_lt _ hf,
     streamCell, hd, ↓reduceDIte]
 

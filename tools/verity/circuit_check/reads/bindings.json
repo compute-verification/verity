@@ -1875,7 +1875,7 @@
     "verity/core/protocols/certifier/replay_step.py",
     "verity/core/protocols/certifier/schedule.py",
     "verity/core/protocols/certifier/served_rows.py",
-    "verity/core/protocols/certifier/warden.py",
+    "verity/core/protocols/certifier/network_certifier.py",
     "verity/core/protocols/certifier/window_charge.py",
     "verity/core/protocols/pous/__init__.py",
     "verity/core/protocols/pouw/circuit/h1device.py",

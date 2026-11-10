@@ -1,6 +1,6 @@
-"""`python warden_probe.py ARGS...`: `benchmarks/network_traces/warden_serve.py ARGS...`, with probes the network certifier doesn't
-keep, for telling a late tick's cause: every tick's lateness (`Warden.lateness`, which warden.json keeps only as
-quantiles), how long each tick's own work took (`Warden._tick`), when the publisher packed, signed and committed each
+"""`python network_certifier_probe.py ARGS...`: `benchmarks/network_traces/network_certifier_serve.py ARGS...`, with probes the network certifier doesn't
+keep, for telling a late tick's cause: every tick's lateness (`NetworkCertifier.lateness`, which warden.json keeps only as
+quantiles), how long each tick's own work took (`NetworkCertifier._tick`), when the publisher packed, signed and committed each
 record (`Publisher.keep`) and every garbage collection of the network certifier's process (serve turns the collector off, so any is
 an explicit one).
 
@@ -28,7 +28,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-SERVE = ROOT / "benchmarks" / "network_traces" / "warden_serve.py"
+SERVE = ROOT / "benchmarks" / "network_traces" / "network_certifier_serve.py"
 #: a collection kept in `gc` by its own: any of generation 1 or 2, else one that took at least this long
 GC_MS = 1.0
 #: in `--out`: the spawned publisher's keeps, one JSON line [monotonic start, seconds, link, window] each
@@ -64,16 +64,16 @@ class Probe:
     `--out` (where a spawned publisher's keeps are, and its pid goes)."""
 
     def __init__(self, clock=time.monotonic, out: Path | None = None) -> None:
-        self.clock, self.out, self.warden, self.work, self.publish = clock, out, None, [], []
+        self.clock, self.out, self.network_certifier, self.work, self.publish = clock, out, None, [], []
         self.collections = Collections(clock)
         self.publisher_pid, self.handoff, self.close = None, [], None
 
-    def install(self, warden_cls: type, publisher_cls: type, process_cls: type | None = None) -> None:
-        run, tick, keep = warden_cls.run, warden_cls._tick, publisher_cls.keep
+    def install(self, network_certifier_cls: type, publisher_cls: type, process_cls: type | None = None) -> None:
+        run, tick, keep = network_certifier_cls.run, network_certifier_cls._tick, publisher_cls.keep
         probe = self
 
         async def probed_run(self) -> None:
-            probe.warden = self
+            probe.network_certifier = self
             await run(self)
 
         def probed_tick(self, t: int) -> None:
@@ -90,7 +90,7 @@ class Probe:
             finally:
                 probe.publish.append((start, probe.clock() - start, record.link, record.window))
 
-        warden_cls.run, warden_cls._tick, publisher_cls.keep = probed_run, probed_tick, probed_keep
+        network_certifier_cls.run, network_certifier_cls._tick, publisher_cls.keep = probed_run, probed_tick, probed_keep
         if process_cls is None:
             return
         init, call, close = process_cls.__init__, process_cls.__call__, process_cls.close
@@ -125,7 +125,7 @@ class Probe:
                 "close": None if self.close is None else [round(self.close[0] - origin, 4), round(self.close[1], 3)]}
 
     def doc(self) -> dict:
-        w = self.warden
+        w = self.network_certifier
         return {"origin": w.origin, "bucket_ms": w.params.bucket_ms, "window": w.params.window, "slack_ms": w.slack * 1000,
                 "gc_enabled": gc.isenabled(), "switch_ms": sys.getswitchinterval() * 1000,
                 "cpus": sorted(os.sched_getaffinity(0)),
@@ -160,17 +160,17 @@ def _path() -> None:
 def main(argv: list[str]) -> int:
     out = Path(argv[argv.index("--out") + 1]) if "--out" in argv else None
     _path()
-    import warden_serve
+    import network_certifier_serve
 
-    from verity.core.protocols.certifier import warden
+    from verity.core.protocols.certifier import network_certifier
 
     probe = Probe(out=out)
     gc.callbacks.append(probe.collections)
-    probe.install(warden.Warden, warden_serve.Publisher, getattr(warden_serve, "PublisherProcess", None))
+    probe.install(network_certifier.NetworkCertifier, network_certifier_serve.Publisher, getattr(network_certifier_serve, "PublisherProcess", None))
     try:
-        return warden_serve.main(argv)
+        return network_certifier_serve.main(argv)
     finally:
-        if out is not None and probe.warden is not None:
+        if out is not None and probe.network_certifier is not None:
             (out / "ticks.json").write_text(json.dumps(probe.doc(), separators=(",", ":")))
 
 
@@ -178,6 +178,6 @@ if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
 elif __name__ == "__mp_main__":
     _path()
-    import warden_serve
+    import network_certifier_serve
 
-    time_keeps(warden_serve.Publisher)
+    time_keeps(network_certifier_serve.Publisher)

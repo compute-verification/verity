@@ -245,7 +245,7 @@ scan() {
     ${CR_SCAN_ARGS:-}; fi > "$OUT/scan.log" 2>&1
   echo $? > "$W/scan.rc"; keep "$SCANOUT" "$OUT/scan"; log "chain: scan done, rc $(cat "$W/scan.rc")"
   [ "$(cat "$W/scan.rc")" = 0 ] || tail -n 1 "$OUT/scan.log" | cut -c1-600 > "$W/scan.why"
-  [ -n "$wr" ] && echo "$WARDEN" > "$W/scan.warden"
+  [ -n "$wr" ] && echo "$WARDEN" > "$W/scan.network_certifier"
 }
 tie() {
   [ "${CR_PATH:-}" = warden ] || return 0
@@ -279,7 +279,7 @@ EOF
 PA=${CR_PERIOD_ANSWER:-}; [ -z "$PA" ] || [ -e "$PA" ] || PA=${RESEARCH_RUN_DIR:?}/inputs/$PA
 "$PY" "$CR" report --custody "$OUT/custody.json" --certs "$OUT/certs.json" --endpoint "$OUT/endpoint/report.json" \
   $( [ -n "${CR_SCAN_ONLY:-}" ] || echo --n2 "$OUT/n2/summary.json") --scan "$OUT/scan/summary.json" --job "$OUT/job.json" \
-  $( [ -f "$W/scan.warden" ] && echo --warden-run "$(cat "$W/scan.warden")") ${CR_AUDIT:+--audit $CR_AUDIT} \
+  $( [ -f "$W/scan.network_certifier" ] && echo --warden-run "$(cat "$W/scan.network_certifier")") ${CR_AUDIT:+--audit $CR_AUDIT} \
   $( [ "${CR_PATH:-}" = warden ] && echo --tie "$OUT/tie/summary.json") \
   ${PA:+--period-answer "$PA"} ${CR_SERVER:+--server "$CR_SERVER"} --out "$OUT/report" | tee -a "$OUT/job.log"
 rc=${PIPESTATUS[0]}
