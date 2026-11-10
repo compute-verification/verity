@@ -317,6 +317,14 @@ def braces(token: str) -> list[str]:
     return [e for alt in m.group(1).split(",") for e in braces(token[:m.start()] + alt + token[m.end():])]
 
 
+def parsed(text: str) -> ast.Module | None:
+    """`text` as Python; None where it doesn't parse, and a reader then finds nothing in it."""
+    try:
+        return ast.parse(text)
+    except (SyntaxError, ValueError):
+        return None
+
+
 def lists(path: str, text: str) -> list[tuple[str, tuple[int, int], list[tuple[int, int]]]]:
     """The lists `text` holds whose entries may each be a path, as (what parts one entry from the next, the list's span,
     each entry's span). In Python a list, tuple or set of nothing but string literals and `*names`; in TOML and JSON an
@@ -325,9 +333,7 @@ def lists(path: str, text: str) -> list[tuple[str, tuple[int, int], list[tuple[i
     `HEAD:path` after `git rev-parse`; after `tar` a word that is no option's value)."""
     out = []
     if path.endswith(".py"):
-        try:
-            tree = ast.parse(text)
-        except (SyntaxError, ValueError):
+        if (tree := parsed(text)) is None:
             return out
         lines, starts = text.splitlines(keepends=True), [0]
         for line in lines:
@@ -1084,9 +1090,7 @@ class Run:
 
     def _aliases(self, old: str, text: str) -> dict[str, str]:
         """The names this file binds to modules by importing them: {local name: old module name}."""
-        try:
-            tree = ast.parse(text)
-        except SyntaxError:
+        if (tree := parsed(text)) is None:
             return {}
         me, pkg, out = module_name(old, self.L.old_roots), old.endswith("__init__.py"), {}
         for node in ast.walk(tree):
