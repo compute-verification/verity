@@ -43,3 +43,13 @@ is missing and launch nothing.
 
 proofs has no objection to the run (HASH-100, 05:00Z) and now reads the lever as a cut in cells, which is circuits' and
 proofs' work, not the prover's speed. Your run's job is the two measurements above.
+
+## Tue 10 Nov 06:59Z: open at 14:15Z, not 13:15Z
+
+proofs has cores 48 to 95 on node A from 12:00 to 14:15Z (and one card from 13:50Z), which a run of yours at 13:15Z
+would share. Kernels' Tuesday hours are now on INF-659 (the lead's table, 07:02Z): yours are **Tue 14:15 to 15:55Z**,
+GPU 7 else 6, cores 64 to 95. vllm has all eight cards from 16:00Z, so the lease must end by 15:55Z and the run must
+refuse to start if less time is left than it needs. Check at your start only the cards you will use (7 and 6) and
+their lease, as proofs' condition says. If the whole run with `fp8-coord` needs more than 95 minutes, run `fp8-coord`
+first (proofs needs it most) and move the three sizes of `moe-w13` to Wednesday (04:30 to 12:00Z). If you already
+queued a run for 13:15Z, cancel it (`research cancel`) and queue again.
