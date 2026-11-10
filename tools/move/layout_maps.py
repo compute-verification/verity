@@ -51,8 +51,8 @@ or gives a path nobody would look for. A row the rule itself now gives is report
 
 A FILE THE DATA DOESN'T KNOW (tracked at REF, added since the data was cut) goes with the files beside it: a directory
 that goes one way takes it along; in a directory several components share it goes with the one component that holds
-the other files of that directory, and where that isn't one component the script stops and names it, for a row in
-`NEW`. A path of the data that REF no longer tracks is dropped and reported.
+the other files of that directory, archived files aside, and is printed; where that isn't one component the script
+stops and names it, for a row in `NEW`. A path of the data that REF no longer tracks is dropped and reported.
 
 KINDS, each treated one way:
 - Python packages. A whole directory is one directory row; a directory whose files part ways gets one row a file (or a
@@ -449,8 +449,9 @@ def place(data, tracked, say):
     stuck = []
     for p in unknown:
         keys = beside.get(posixpath.dirname(p), set())
-        if len(keys) == 1:
-            owner[p] = next(iter(keys))
+        live = keys - {"archived"}                     # the archive speaks for no directory: a file beside an archived one
+        if len(live) == 1:                             # goes with the one component that still lives there
+            owner[p] = next(iter(live))
             say(f"new since the data was cut: {p} goes with the other files of its directory ({owner[p]})")
         else:
             stuck.append(f"{p}: " + ("its directory holds no file the data knows" if not keys else

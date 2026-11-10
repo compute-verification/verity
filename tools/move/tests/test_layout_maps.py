@@ -108,6 +108,12 @@ def test_a_file_the_data_does_not_know_goes_with_its_directory_or_stops_the_scri
                                                     "its directory (stays)")
     dest, said = plan(["tools/t.py"], alone)
     assert "dropped, benchmarks/old/ is no longer tracked: a path of archived" in said
+    shared = {**DATA, "archived": ["tools/old.py"], "stays": ["tools/t.py"]}     # an archived file beside it has no say
+    dest, said = plan(["tools/old.py", "tools/t.py", "tools/u.py"], shared)
+    assert "tools/u.py" not in dest and dest["tools/old.py"][0] == "archive/tools/old.py"
+    assert "new since the data was cut: tools/u.py goes with the other files of its directory (stays)" in said
+    with pytest.raises(SystemExit, match=r"tools/u\.py: its directory's files are archived"):
+        plan(["tools/old.py", "tools/u.py"], {**shared, "stays": []})        # nothing lives there: a person places it
 
 
 def test_a_whole_directory_is_one_row_and_a_shared_one_is_a_row_a_file():
