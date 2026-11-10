@@ -1,7 +1,7 @@
-"""a5_warden's window on a network certifier run driven tick by tick (`test_warden_serve._run`), before anything is lowered or proved
-(`a5_warden.main` does, through `a5.audit`, on a node): each transfer-gate chunk's registered port's rows, the network certifier's
+"""a5_warden's window on a network certifier run driven tick by tick (`test_network_certifier_serve._run`), before anything is lowered or proved
+(`a5_network_certifier.main` does, through `a5.audit`, on a node): each transfer-gate chunk's registered port's rows, the network certifier's
 bucket rows committed under its salts, open the network certifier's signed root at the rows the verifier's own reads name, each
-unit's read (q, k) the Program's units' (`warden_rows.Units`, from public structure alone) placed by the wiring the network certifier
+unit's read (q, k) the Program's units' (`network_certifier_rows.Units`, from public structure alone) placed by the wiring the network certifier
 signed on connection q's own cell, and the header names the units' value and the same rows; the registration passes the
 verifier's check with every transfer-gate unit proved (work 0, floor all of them); the window's provenance is the
 verifier's read of the network certifier's registrations; the prover's own root under the network certifier's certificate, provenance naming
@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.core.protocols.certifier import warden_rows as WR
+from verity.core.protocols.certifier import network_certifier_rows as WR
 from verity.core.protocols.certifier.active import HEADER
 from verity.core.protocols.spot.one_stage import draw as D, verifier as V
 from verity.ml.windows import rows as SR
@@ -26,8 +26,8 @@ from verity.ml.windows import rows as SR
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "network_traces" / "tests"))
-import a5_warden as AW  # noqa: E402
-import test_warden_serve as tws  # noqa: E402
+import a5_network_certifier as AW  # noqa: E402
+import test_network_certifier_serve as tws  # noqa: E402
 
 N, REST = 8, 4
 

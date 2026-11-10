@@ -4,7 +4,7 @@ public import Aesop.BuiltinRules
 public import Definitions.Core.Assumptions
 public import Definitions.NetworkCertifier.Tap
 public import Mathlib.Tactic.ToDual
-public import Proofs.NetworkCertifier.Warden
+public import Proofs.NetworkCertifier.Cells
 import Mathlib.Data.Finset.Attr
 import Mathlib.Tactic.Finiteness.Attr
 import Mathlib.Tactic.SetLike

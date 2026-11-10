@@ -491,7 +491,7 @@ def test_the_scans_block_round_is_accepted_like_its_honest_round_and_is_no_negat
     assert (got["verdict"], got["why"]) == ("failed", "block: window refused")
 
 
-def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
+def test_leak_counts_the_scans_terms_on_the_network_certifier_run(tmp_path):
     import math
     from dataclasses import asdict
     sz = sys.modules.get("scan_zk") or _load("scan_zk")

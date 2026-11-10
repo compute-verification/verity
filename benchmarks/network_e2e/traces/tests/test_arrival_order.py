@@ -101,7 +101,7 @@ def test_inversions_count_the_pairs_put_the_other_way_round(mod):
     assert summary.inversions(["b", "x", "a"], ["a", "b"]) == 1
 
 
-def warden_trace(root):
+def network_certifier_trace(root):
     """A corpus of one trace through the network certifier: four requests sent in order r0..r3 and admitted together at bucket 1;
     r0's request takes four ingress buckets, so the network certifier releases r1, r2 (bucket 2) and r3 (3) before it (4), and the
     engine schedules them in that order."""
@@ -158,7 +158,7 @@ def warden_trace(root):
 
 def test_summary_orders_arrivals_along_the_wire_and_writes_the_wardens_views(tmp_path, mod):
     summary = mod("summary")
-    d = warden_trace(tmp_path)
+    d = network_certifier_trace(tmp_path)
     t = summary.summarize(tmp_path)["traces"]["w"]
     reqs = {r["id"]: r for r in summary.read_jsonl(d / "requests.jsonl")}
     r0 = reqs["r0"]

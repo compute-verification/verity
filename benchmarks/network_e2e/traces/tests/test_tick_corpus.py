@@ -249,7 +249,7 @@ def test_summary_keeps_a_tick_traces_releases_pool_and_gate(tmp_path, mod):
     assert "| heavy | 2 | 0.4 | 5.0 | 10.0 |" in readme
 
 
-def test_the_tick_takes_the_warden_traces_but_not_the_hostile_ones_nor_a_warden_bucket_off_tau(monkeypatch, mod):
+def test_the_tick_takes_the_network_certifier_traces_but_not_the_hostile_ones_nor_a_network_certifier_bucket_off_tau(monkeypatch, mod):
     corpus = mod("corpus")
     tick = corpus.tick_for(["heavy", "warden-heavy", "warden-smallkv"], None, "2,3")
     assert tick == corpus.tick_args(None, "2,3") and tick["bucket_us"] == corpus.WARDEN_SCHEDULE["bucket_ms"] * 1000
@@ -262,21 +262,21 @@ def test_the_tick_takes_the_warden_traces_but_not_the_hostile_ones_nor_a_warden_
     assert corpus.tick_for(["heavy"], None, "2,3") == tick
 
 
-def test_a_warden_under_the_tick_streams_the_watermark_to_the_server(tmp_path, monkeypatch, mod):
+def test_a_network_certifier_under_the_tick_streams_the_watermark_to_the_server(tmp_path, monkeypatch, mod):
     corpus = mod("corpus")
     started = []
 
-    class Warden:
+    class NetworkCertifier:
         def __init__(self, argv, **kwargs):
             started.append(argv)
             self.stdout = io.StringIO(json.dumps({"listening": ["127.0.0.1", 1]}) + "\n")
 
     monkeypatch.setattr(corpus.subprocess, "run", lambda *args, **kwargs: None)
-    monkeypatch.setattr(corpus.subprocess, "Popen", Warden)
+    monkeypatch.setattr(corpus.subprocess, "Popen", NetworkCertifier)
     (tmp_path / "warden").mkdir()
     (tmp_path / "warden" / "deployment.json").write_text('{"run_id": "ab"}')
     for on in (False, True):
-        assert corpus.start_warden(tmp_path, 1, 300, 10.0, tmp_path / "key", {}, watermark=on)[1] == {"run_id": "ab"}
+        assert corpus.start_network_certifier(tmp_path, 1, 300, 10.0, tmp_path / "key", {}, watermark=on)[1] == {"run_id": "ab"}
     assert [argv.count("--watermark") for argv in started] == [0, 1]
 
 
@@ -318,7 +318,7 @@ def test_the_servers_feed_reads_the_wardens_releases_and_watermark(tmp_path, mon
                                      {"run": RUN, "t": 2, "n": 3}, {"run": RUN, "end": True}]
 
 
-def warden_trace(root, released: dict[int, tuple[int, int]], schedule: dict):
+def network_certifier_trace(root, released: dict[int, tuple[int, int]], schedule: dict):
     """`tick_corpus`'s requests a and b as a network certifier trace's, its network certifier on `schedule`: through its connections
     1 and 2, which its log releases as `released` (ordinal -> (N, a)) in run `RUN`, while the server's feed says the
     release headers gave a N 0 in bucket 0 and b N 1 in bucket 1."""
@@ -336,9 +336,9 @@ def warden_trace(root, released: dict[int, tuple[int, int]], schedule: dict):
     return d
 
 
-def test_summary_takes_a_warden_traces_releases_from_the_server_where_the_warden_agrees(tmp_path, mod):
+def test_summary_takes_a_network_certifier_traces_releases_from_the_server_where_the_network_certifier_agrees(tmp_path, mod):
     summary = mod("summary")
-    warden_trace(tmp_path, {1: (0, 0), 2: (1, 1)}, mod("corpus").WARDEN_SCHEDULE)
+    network_certifier_trace(tmp_path, {1: (0, 0), 2: (1, 1)}, mod("corpus").WARDEN_SCHEDULE)
     t = summary.summarize(tmp_path)["traces"]["warden-heavy"]
     assert t["tick"]["releases"] == {"from": "the server's feed (raw/tick-feed.jsonl)", "run": RUN, "released": 2,
                                      "agree": 2, "unlogged": 0, "disagree": 0, "disagreeing": []}
@@ -350,14 +350,14 @@ def test_summary_takes_a_warden_traces_releases_from_the_server_where_the_warden
             in (tmp_path / "README.md").read_text())
 
 
-def test_summary_leaves_out_a_release_the_warden_didnt_make(tmp_path, mod):
+def test_summary_leaves_out_a_release_the_network_certifier_didnt_make(tmp_path, mod):
     summary, schedule = mod("summary"), mod("corpus").WARDEN_SCHEDULE
-    d = warden_trace(tmp_path, {1: (0, 0), 2: (1, 2)}, schedule)
+    d = network_certifier_trace(tmp_path, {1: (0, 0), 2: (1, 2)}, schedule)
     r = summary.summarize(tmp_path)["traces"]["warden-heavy"]["tick"]["releases"]
     assert (r["agree"], r["disagree"], r["disagreeing"]) == (1, 1, [{"id": "b", "server": [RUN, 1, 1], "warden": [RUN, 1, 2]}])
     assert [q.get("release") for q in summary.read_jsonl(d / "requests.jsonl")] == [0, None]
     # one the network certifier has no record of keeps the server's; another run's releases are none of this network certifier's
-    warden_trace(tmp_path / "unlogged", {1: (0, 0)}, schedule)
+    network_certifier_trace(tmp_path / "unlogged", {1: (0, 0)}, schedule)
     r = summary.summarize(tmp_path / "unlogged")["traces"]["warden-heavy"]["tick"]["releases"]
     assert (r["agree"], r["unlogged"], r["disagree"]) == (1, 1, 0)
     dep = d / "warden" / "deployment.json"
