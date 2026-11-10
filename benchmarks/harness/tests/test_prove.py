@@ -886,6 +886,8 @@ def test_a_steady_state_run_that_cant_be_read_is_left_out_and_listed(tmp_path):
     assert {x["source"]: x["block_types"] for x in doc["sources"]}[P.STEADY] == 0
     assert [(x["record"], x["type"], x["why"]) for x in doc["unread"]] == [
         ("r20261109-000000-0004", name, why) for name, why in ROW_WHYS.items()]
+    assert doc["inputs"][2]["what"] == ("0 staged types measured at steady state at 1 prover; 8 row(s) of no block type of "
+                                        "the census, listed under Unread")
     assert [x["seconds"] for x in doc["unread"]] == [1.0, *[None] * 7]
     text = R.render(doc, rows=0)
     assert text.count("\n- r20261109-000000-0004: `") == 8 and text.index("Refused (not read):") < text.index("Unread (")

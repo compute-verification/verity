@@ -269,9 +269,10 @@ def steady_rows(store: Any, target: str) -> dict[str, tuple[list[P.Steady], list
     return {target: _rows(_read(store, target, ART_RATES), runs[0], target)}
 
 
-def flock(store: Any, workload: Workload, provers: int = 1) -> tuple[P.Flock, list[dict], list[dict]]:
+def flock(store: Any, workload: Workload, census: P.Census, provers: int = 1) -> tuple[P.Flock, list[dict], list[dict]]:
     """Flock's prover at `provers` provers from the workload's records: the steady-state runs' and arts' rows
-    (`steady_rows`), the single-session card's; the inputs, and the steady-state runs, arts and rows left out with why."""
+    (`steady_rows`), the single-session card's; the inputs, and the steady-state runs, arts and rows left out with why.
+    The steady-state input counts what the rows measure of `census`: its block types, and the rows that are none."""
 
     art = of_record(store, workload.record(SINGLE), "single-session card")
     value = card(store, art, "proof_overhead", workload)
@@ -287,10 +288,13 @@ def flock(store: Any, workload: Workload, provers: int = 1) -> tuple[P.Flock, li
         if found:
             steady += found
             runs.append(target)
-    measured = len({s.definition for s in steady if s.measured and s.provers == provers})
+    prover = P.Flock(tuple(steady), sessions, art, provers=provers)
+    table = prover.table(census)
+    measured = sum(r.cost.source == P.STEADY for r in table.rows)
     count = f"{provers} prover{'' if provers == 1 else 's'}"
-    return P.Flock(tuple(steady), sessions, art, provers=provers), [
-        _input(STEADY, workload, runs, f"{measured} staged types measured at steady state at {count}" if runs else
+    unread = f"; {len(table.unread)} row(s) of no block type of the census, listed under Unread" if table.unread else ""
+    return prover, [
+        _input(STEADY, workload, runs, f"{measured} staged types measured at steady state at {count}{unread}" if runs else
                "none of record: no block type is measured at steady state"),
         _input(SINGLE, workload, [art], f"{len(sessions)} block types on the {value.get('device')}")], refused
 
@@ -339,7 +343,7 @@ def build(system: str, workload: str, *, sampling: str | None = None, provers: i
         completion.pull_labels()
     store, w = completion.store, WORKLOADS[workload]
     blocks, inputs = census(store, w)
-    prover, more, refused = flock(store, w, provers)
+    prover, more, refused = flock(store, w, blocks, provers)
     rate = serving(root, w)
     seconds = rate.gpu_seconds_per_token(blocks)
     inputs += more
