@@ -247,7 +247,7 @@ expansion meets it at Γ·W gates and k = ⌊α_f·Γ·W⌋. `DampenerThreaded` 
 **How it is checked.**
 
 - *By whom.* Not by remote yet: the policy isn't one of its subprotocols (Subprotocols, above). Its check runs on its
-  own, as `nci-check` (`NciCheck.Baseline.check`, `verity/core/protocols/network/nci/lean`); once composed, the
+  own, as `nci-check` (`NciCheck.Theta.check`, `verity/core/protocols/network/nci/lean`); once composed, the
   verifier runs it on an auditor host in each verification phase.
 - *On what.* The registered circuit's description, its inference partition and θ's provenance, against the registration
   log. No hardware at the site is involved.
@@ -261,7 +261,7 @@ expansion meets it at Γ·W gates and k = ⌊α_f·Γ·W⌋. `DampenerThreaded` 
 **Assumes.** The data the registration names was public, not computed off the books before
 (`Nci.Assumptions.ThetaRegistered`; only part 6 reads its Lean form); the verifier's copy of the registration log
 is the deployment's; that the registered roots bind their data (`Nci.Assumptions.RootsBind`, named in
-`Security/Properties/Nci/Baseline.lean`, not yet stated); and, once the policy is composed, SHA-512 collision resistance
+`Security/Properties/Nci/Theta.lean`, not yet stated); and, once the policy is composed, SHA-512 collision resistance
 for its tie to one registration. Nothing about learning: the policy restricts the shape of the registered circuit, and
 part 6's premises say why that shape trains little.
 
@@ -271,9 +271,9 @@ part 6's premises say why that shape trains little.
    composite rule ties the policy's registration to the one sampled proofs and PoUW bind. The composition's proved
    property, `Properties.Composition.AcceptMeans`, makes a composite accept each subprotocol's accept, so this link
    needs the policy among remote's subprotocols, with that tie.
-2. *The policy's check accepts ⇒ `Baseline.evaluate` complies ⇒ `Desc.evaluate` complies.* The bridge `baseline_desc`
+2. *The policy's check accepts ⇒ `Theta.evaluate` complies ⇒ `Desc.evaluate` complies.* The bridge `theta_desc`
    is a proof lemma (`Security/Proofs/Nci/Cover/Checked.lean`), not a locked property, and the policy's check has no
-   `AcceptMeans`: **open** as a property. θ's provenance: `NciCheck.Properties.SecurityProofs.BaselineProvenance`,
+   `AcceptMeans`: **open** as a property. θ's provenance: `NciCheck.Properties.SecurityProofs.ThetaProvenance`,
    **proved**.
 3. *A compliance verdict of `Desc.evaluate` ⇒ `Nci.CompliesRate Γ α_f` of the laid-out `Verity.RegisteredCircuit`, on every
    expansion:*
@@ -425,7 +425,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
 - **The pooled δ.** δ_ks and δ_bind have no number, so PoUW's failure over a monitoring period has none either.
 - **The inference-only policy's link to the bound** (part 4, links 1, 2, 5 and 6): the policy composed into remote,
   with a rule tying its registration to the one sampled proofs and PoUW bind; the policy's check accepting as a
-  property (`baseline_desc` is a proof lemma); bounds on k_F and k_a per inference block; and the bound reading a
+  property (`theta_desc` is a proof lemma); bounds on k_F and k_a per inference block; and the bound reading a
   verdict's rate.
 - **The inference-only policy in zero knowledge.** Its check reads the partition into inference blocks in the clear;
   its check inside the ZK server is open.

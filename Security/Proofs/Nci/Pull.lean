@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Nci.Assumptions.Baseline
+public import Definitions.Nci.Assumptions.Theta
 public import Proofs.Core.Circuit
 
 /-!

@@ -19,6 +19,6 @@ inputs = [
 [[tool.verity.tests.reads]]
 tests = ["tests/test_lifecycle.py"]
 paths = [
-    "verity/core/protocols/network/nci/lean/scripts/baseline_difftest_vectors.py",
+    "verity/core/protocols/network/nci/lean/scripts/theta_difftest_vectors.py",
     "verity/core/protocols/network/nci/lean/scripts/difftest_vectors.py",
 ]

@@ -59,7 +59,7 @@ scenarios register a policy as if it were a subprotocol.
 `lean/` is the Lake package `nci_check`, code that reads Programs with Flock's decoder (`Flock.Program`) and imports
 nothing else but Lean core and the core interface (`core_protocol`).
 
-- `nci-check` runs `NciCheck.Baseline.check`: `NciCheck.Desc.check`, which decides `Nci.CompliesRate c α` for a declared
+- `nci-check` runs `NciCheck.Theta.check`: `NciCheck.Desc.check`, which decides `Nci.CompliesRate c α` for a declared
   division aligned to the root's Calls at the cost of the descriptor (one summary per Definition), then each θ entry's
   provenance against the deployment's registration log.
 - `nci-check --count` runs `NciCheck.Count.check`, the count of (c, k)-inference blocks: the declaration names its block
@@ -78,7 +78,7 @@ nothing else but Lean core and the core interface (`core_protocol`).
 - `nci-check --unrolled` runs the same with `NciCheck.check`, the check gate by gate, kept as the reference; its input
   format is in `NciCheck.Check`'s docstring. `nci-check --policy` runs the policy's check alone, without θ's
   provenance, which is what `benchmarks/verifier_cost` measures.
-- `inference-only id | check | serve` runs `NciCheck.Baseline.check` as the core protocol `verity/inference-only/v0`
+- `inference-only id | check | serve` runs `NciCheck.Theta.check` as the core protocol `verity/inference-only/v0`
   (`NciCheck.Protocol`), the subprotocol of onsite and remote.
 - `nci-difftest`, `nci-desc-difftest`, `nci-desc-liveness`, `nci-desc-fuzz` and `nci-baseline-difftest` hold them to
   each other and to the Python reference `lean/scripts/nci_reference.py`, run by `../tests/test_nci_*.py`;
@@ -88,7 +88,7 @@ nothing else but Lean core and the core interface (`core_protocol`).
 The check's agreement with `Nci.CompliesRate` is proved: its verdict is the definition's (`DescReports`), and a
 compliance verdict witnesses the policy at its rate (`DescWitnesses`); on a verdict of the unrolled check that complies,
 every block meets the (c, k) budgets at c = `gamma` and k = α·c (`refines`, a lemma of `Reports`). What is open is the step from the check's
-accept to that verdict as a property (`baseline_desc` is a proof lemma), and remote doesn't run the check yet. `benchmarks/nci` holds the
+accept to that verdict as a property (`theta_desc` is a proof lemma), and remote doesn't run the check yet. `benchmarks/nci` holds the
 literature index and the training algorithms' traits.
 
 ## Names

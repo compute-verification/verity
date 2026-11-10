@@ -1,6 +1,6 @@
 module
 
-public import Properties.Nci.Baseline
+public import Properties.Nci.Theta
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 import Mathlib.Data.NNRat.Floor
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -17,15 +17,15 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Properties.Nci.BaselineSteps
+import Proofs.Properties.Nci.ThetaSteps
 import Proofs.Properties.Nci.DescAgree
 
 /-!
 # θ's provenance check's property, proved
 
-`BaselineProvenance` (`Properties.Nci.Baseline`) of `NciCheck.Baseline.evaluate`, from its steps
-(`Proofs.Properties.Nci.BaselineSteps`) and, for each θ entry naming a node, the policy check's θ fold
-(`DescAgree.nodeThetaFold_ok`), which `NciCheck.Baseline.evaluate` runs first.
+`ThetaProvenance` (`Properties.Nci.Theta`) of `NciCheck.Theta.evaluate`, from its steps
+(`Proofs.Properties.Nci.ThetaSteps`) and, for each θ entry naming a node, the policy check's θ fold
+(`DescAgree.nodeThetaFold_ok`), which `NciCheck.Theta.evaluate` runs first.
 -/
 
 @[expose] public section
@@ -34,10 +34,10 @@ namespace NciCheck.Properties.SecurityProofs
 
 open Lean (Json)
 
-theorem BaselineProvenance : Properties.BaselineProvenance := by
+theorem ThetaProvenance : Properties.ThetaProvenance := by
   intro j tr out h
-  refine BaselineSteps.provenanceHeld_of j tr out h fun i h1 t ht => ?_
-  obtain ⟨hdesc, -⟩ := BaselineSteps.evaluate_ok j tr out h
+  refine ThetaSteps.provenanceHeld_of j tr out h fun i h1 t ht => ?_
+  obtain ⟨hdesc, -⟩ := ThetaSteps.evaluate_ok j tr out h
   obtain ⟨i', P, reads, mask, own, h1', -, -, -, -, -, -, hfold, -⟩ := DescAgree.descEvaluate_ok j _ hdesc
   rw [h1, Except.ok.injEq] at h1'
   subst h1'
