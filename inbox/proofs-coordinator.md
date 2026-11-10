@@ -33490,3 +33490,125 @@ I wrote its heading before I read the clock; the clock read 21:17:14Z when I pus
 - **Narrowing `import Flock`** to the modules named: Wed 11 Nov with it [guess]. An instance or a `simp` lemma can come from a module no token names.
 
 **Runs:** none yet. Next: the branch, then one `research run` on a node, whose id and ETA I post here.
+
+## PRF-516 and PRF-517 TWOPROVE, Tue 10 Nov 21:39Z: the scoping, lemma by lemma. PRF-516: seventeen definitions and lemmas over a trace read at the statement, one stage by Fri 13 Nov and two by Mon 16 Nov, nothing known blocking. PRF-517: the `Bconf` cost lemma is short but is not a corollary of the three (it needs `slot_exp_le` without its acceptance factor and a `BconfAt` finder, as `BextAt` is for `B_ext`), by Thu 12 Nov. The capped extractor waits on Flock's KS at a second cap. The level-split sketch's working form is a new premise for Daniel, and it is the only route that reaches \(2^{-61.0}\)
+
+All times are from `date -u`. [run] means I ran it, [read] that I read it, [guess] neither. This entry replaces the lemma lists of my 21:30Z entry. That entry's toy, route numbers and withdrawal of \(2^{-74.7}\) stand, except that the second-moment form below recovers about \(2^{-74}\) under a new premise.
+
+### PRF-516: the committed trace when audits overlap
+
+**Definitions, one line each** [guess: proposed; file `Security/Definitions/Claims/SamplingGeneric.lean` beside `regVal` (575), or a new file beside it]
+
+1. `Compiled.regValX H L P x : ℕ → Option Bool`: at gate \(g\), the value the extractions open there most often over the tape, the run's coins and the extractor's coins (`opensAt` at \((\omega, r, c)\) jointly); `none` where none opens \(g\).
+2. `Compiled.FregX H L P x : Finset ℕ`: `Freg`'s filter (585), read at `regValX`.
+3. `Compiled.BconfX H L : FinderFamily`: two independent triples of tape, run's coins and extractor's coins, each run's `runExt`, and the first collision among their own calls. Its cost is as `Bconf`'s (596–610).
+4. `Compiled.εregX H L x P`: \(\kappa_s + \sqrt{k\gamma_s\Pr[B]} + N\sqrt{\Pr[B_{conf,X}]} + \Pr[B_{conf}]\).
+5. `Compiled.KSRegX H L : Prop`: at every \(x\) in scope and every prover, \(\Pr[\text{acc} \wedge \exists u \in \text{checked}, u \in F_{reg,X}] \le \varepsilon_{reg,X}\), and at every \(\delta \ge 0\), \(\Pr[\text{acc} \wedge F_{reg,X} \notin M_\delta] \le \delta + \varepsilon_{reg,X}\).
+6. `CompilerKSRegX : Prop`: `A.KS H → L.commit.Binds H → L.Sessions H → L.KSRegX H`, at every compiled verifier.
+
+**Proofs at one stage** [guess: proposed; new file `Security/Proofs/Flock/SamplingGeneric/RegX.lean` beside `Reg.lean`]
+
+7. `regValX_eq_plurX`: where some \((\omega, r, c)\) opens \(g\), `regValX g = some (plurX g)`; as `regVal_eq_plur` (`Reg.lean:372`) [read].
+8. `pr_offRegX_le`: \(\Pr_{(\omega,r,c)}[\text{off } \texttt{regValX}] \le N\sqrt{\Pr[\text{Conflict}_X]}\). This is `prBad_le` (`Security/Proofs/Core/Game/Rewinding.lean:175`) on the joint table, as `pr_offReg_le` (`Reg.lean:387`–`441`) [read].
+9. `bconfX_of_disagree`: two runs at tapes \(\omega, \omega'\) of one statement whose kept openings pass and open one gate two ways give a collision among their own calls. As `bconf_of_disagree` (281–307), since both open under `s.roots` [read].
+10. `pr_conflictX_le`: \(\Pr[\text{Conflict}_X] \le \Pr[B_{conf,X}]\), as `pr_conflict_le` (340–357) [read].
+11. `ksRegX_of_sessionKS`: `Binds → Sessions → SessionKS → KSRegX`. As `ksReg_of_sessionKS` (488–561), reusing `reg_split`, `pr_unfound_le` and `pr_inConf_le` unchanged, and without the Jensen step over the tape [read].
+12. `compilerKSRegX`: `CompilerKSRegX` from `SessionKSOf`, as `compilerKSReg_of` (566) [read].
+
+**Two stages, on #8512's head** [guess: proposed; files beside its `SamplingTwoReg.lean`, `TwoReg.lean` and `TwoRegMiss.lean`]
+
+13. `CompiledTwo.FregTwoX`: `wrongInAt` over the grid at `regValX` and `iregVal ω r`. The boundary is read at the statement; the interior stays per tape and per first-stage coins.
+14. `CompiledTwo.KSRegTwoX`, `MissTwoX` and `HeadlineTwoX`: `KSRegTwo`, `MissTwo` and `HeadlineTwo` read at `FregTwoX` and at `wrongAtBoundaryAt` of `regValX`, with `εregTwoX` \(= \varepsilon_{reg,X} + N\sqrt{\Pr[B_{conf,2}]}\).
+15. `eventTwoX_le`: `KSRegTwoX`'s first conjunct. It is `eventTwo_le` with `Compiled.ex_offReg_le` replaced by lemma 8; `pr_offIreg_le` and `ex_offIreg_le` are unchanged.
+16. `missTwoX`: `MissTwoX` from the draw laws. `TwoRegMiss`'s proof without its per-tape step, since the tape doesn't reach that set.
+17. `compilerKSRegTwoX`, `compilerMissTwoX` and `compilerHeadlineTwoX`.
+
+**Blockers, locked statements and dates**
+
+- **Blockers:** nothing I know to be unprovable for the boundary [guess].
+  - The two-stage lemmas wait on #8512, which is open. I'd stack a branch on its head and push nothing to it [run: `gh pr view 8512` at 21:38Z: OPEN at `a4916e0142`].
+  - #8512's period pools only `wrongAtBoundaryAt`, so the interior trace needn't be fixed at registration [read: `TwoRegPeriod.lean:41`, `regCount_cases`].
+- **Locked statements:** none change [read: `main`'s lock].
+  - `compilerKSReg` keeps its statement.
+  - The X forms are new guarantees under its premises, with no new one: domain `CommitmentScheme.Binds`, and `Arg.KS`, `Compiled.Scope` and `Compiled.Sessions` open.
+- **Period theorems:** a period theorem that switches to the X forms (#8512's `PeriodTwoReg`, network-accounting's pooled one) is outside this issue [guess]. That includes a `PeriodTwoReg` at strategies with tapes, which would let a window's play read later coins. It belongs with NET-297's restated premise. `PeriodAdaptive`'s acceptance clause (`Security/Definitions/NetworkCertifier/Checked.lean:164`) stays network-accounting's [read].
+- **Dates** [guess]: lemmas 1–12 by Fri 13 Nov 18:00Z; lemmas 13–17 by Mon 16 Nov 18:00Z.
+
+### PRF-517: the binding terms' number
+
+**The cost lemma for `Bconf` and `BconfTwo`: short, but not a corollary of `runExt_runs_le`, `slot_exp_le` and `runExt_own_le` alone**
+
+- **`runExt_runs_le`** is the strict bound. The expected cost doesn't use it; the strict cost (C6) does [read: `Efficient.lean:562`–`584`].
+- **`slot_exp_le`'s statement** multiplies by the acceptance indicator (684–689), so it can't give the unconditioned bound that `Bconf` needs [read].
+  - Its proof drops that factor in its first step (757–760) and bounds the rest by `Arg.rerunsExp_le` [read].
+  - So the unconditioned core is the same proof minus that step. I'd state the core and derive `slot_exp_le` from it [guess].
+- **`Bconf`'s cost counts actual calls:** the two runs' logs and the reruns' calls through `RP.eval`'s `.2.1` (`SamplingGeneric.lean:606`–`610`). Nothing bounds one run's calls by \(T\) [read].
+  - `KSAt` reads `B_ext` at a budget through `BextAt`. `BextAt` declares \(T\) a rerun on `B_ext`'s coins and outcome (`Security/Definitions/Claims/Sampling.lean:561`–`578`) and has its probability (`BextAt_pr`, `KSAt.lean:109`) [read].
+  - `Bconf` needs the same: a `BconfAt` [guess].
+- **The rest is reused:** `runExt_own_le` as it is. `Ex_forkOn` (`Security/Proofs/Flock/Claims/Sampling/Extract.lean:48`) and `Ex_pi_eval` (as in `Ex_slotStep`, `Efficient.lean:772`–`779`) do the averaging [read].
+- **Size:** about `BextAt_cost_le`'s 45 lines (`KSAt.lean:149`–`190`), plus about 25 for the refactor and the definition [guess].
+
+**The cost lemmas, one line each** [guess: proposed]
+
+- C1 `slot_exp_le_un` (`Efficient.lean`): at every run \(r\), \(\mathbb{E}_d\,\mathbb{E}_\rho[\texttt{slotRuns}\ i\ (\texttt{forkOn stage2}\ r\ d)\ \rho] \le \mathbb{E}_d[\text{if slot } i \text{ is its session's first then } e_s \text{ else } 0]\). `slot_exp_le` then follows from \(\text{acc}\cdot W \le W\).
+- C2 `runExt_runs_exp` (`Efficient.lean`): at every tape, \(\mathbb{E}_{(r,c)}[\text{reruns of } \texttt{runExt} \text{ at } (r, \text{its view})] \le n_{sess}e_s\). From `runExt_runs_eq` (622), `Ex_pi_eval`, `Ex_forkOn`, C1 and `card_first_le`.
+- C3 `Compiled.BconfAt H L T : FinderFamily` (`SamplingGeneric.lean`, beside `Bconf`): `Bconf`'s coins and outcome. Its cost is \(T\) for each of the two runs, plus both extractions' own calls, plus \(T\) for each of their reruns.
+- C4 `BconfAt_pr`: `(BconfAt H L T Ω P x).Pr H = (Bconf H L Ω P x).Pr H`.
+- C5 `BconfAt_cost_le`: at `CostContract` and `OpenCallsLe`, \(\mathbb{E}[\text{cost}] \le 2T(1 + n_{sess}e_s) + 2n_{PU}\cdot\)`openCalls`.
+- C6 `BconfAt_cost_strict`: on every coin, \(\text{cost} \le 2T(1 + n_{sess}\rho_s) + 2n_{PU}\cdot\)`openCalls`, from `runExt_runs_le` and `runExt_own_le`.
+- C7 `BconfTwoAt`, `BconfTwoAt_pr`, `BconfTwoAt_cost_le` and `BconfTwoAt_cost_strict` (on #8512's head): C3–C6 for two runs at `forkOn stage2 r d`, each uniform by `Ex_forkOn`, through `CompiledTwo.Sessions.toCostContract`.
+- C8 `Compiled.KSRegAt` and `CompilerKSRegAt` (new statements): at every budget \(T\), where `ExpectedCR` holds at `BconfAt T`, `KSReg`'s event is at most \(\kappa_s + \sqrt{k\gamma_s\Pr[B]} + N\sqrt{c_T/2^{256}} + c_T/2^{256}\), with \(c_T\) C5's bound. This states the current \(2^{-34.6}\) as a theorem. C8′ is `KSRegTwoAt`.
+
+**For the cost lemmas:**
+
+- **Blockers:** none known [guess].
+- **Locked statements:** none change; all of these are new [run: `git grep` on `origin/main` finds none of `BconfAt`, `slot_exp_le_un`, `runExt_runs_exp`, `KSRegAt`, `AdaptiveBirthday`, `deployZkAt` or `regValX`].
+- **Dates** [guess]: C1–C6 and C8 by Thu 12 Nov 18:00Z; C7 and C8′ by Fri 13 Nov 18:00Z.
+
+**Route 3, the capped extractor: \(2^{-54.8}\) for two terms at \(k = 1507\)** [run: the 21:30Z arithmetic]
+
+- R3.1 `Numbers.κ_le_sum_cap`: at a record with waits \(\ge 210\), cap \(K_0\) and \(2^{10} \le N_0 \le 2^{23}\), \(\kappa \le 2^{-203} + 2^{-210} + 2k/K_0 + 2^{-250}\). It is `κ_le_sum` (`Security/Proofs/Flock/Claims/Numbers.lean:127`) with its cap hypothesis `hK` generalized [guess].
+- R3.2 `deployZkAt K0 rel`: `deployZk` with `cap _ := K0` (`Security/Proofs/Flock/Claims/DeployCode.lean:574`, whose `cap _ := Claims.Flock.Numbers.cap` is \(2^{256}\)) [read; the definition is a guess].
+- R3.3 `zk_KS_untrim_at`: `Claims.Flock.KS sha512 (deployZkAt K0 Readable.relation)`, as `zk_KS_untrim` (`Security/Proofs/Flock/Claims/KS/ZkExtend.lean:174`) [guess].
+- R3.4 `KSRegAtSB`: where `StrictBirthday` holds at `BconfAt T`, `KSReg`'s event at the instance at cap \(K_0\) is at most \(\kappa_s(K_0) + \sqrt{k\gamma_s\Pr[B]} + N\cdot q/2^{256.5} + q^2/2^{513}\). Here \(q = 2T(1 + n_{sess}(1 + 210K_0)) + 2n_{PU}\cdot\)`openCalls`, from C6 [guess].
+- **The blocker is R3.3.** `zk_KS_untrim` is stated at the one record whose cap is \(2^{256}\), through a chain of transfer lemmas: `TrimBridge`'s `zk_KS_untrim_of_kinds` (248), `ZkUntrim`'s `zk_KS_untrim_of_extendJ` (82) and `ZkExtend`'s (174) [read: the top statements only].
+  - If the chain reads the cap only through \(E^{rep}\) and \(\kappa\), R3.3 is a restatement; if not, it is a reproof [guess].
+  - Truncating inside the finder alone doesn't work: its failure would sit under \(N\sqrt{\cdot}\) [guess: \(N\sqrt{2k/K_0}\)].
+- **Locked statements:** `MaskedKS` is unchanged, and R3.3 is a second instance beside it [read: `Masked/Statement.lean:60` reads `deployZk`]. Whether a second masked record wants Daniel's word is your call [guess].
+- **Dates** [guess]: R3.1, R3.2 and R3.4 by Fri 13 Nov 18:00Z. R3.3 by Mon 16 Nov 18:00Z if the chain is generic in the cap; otherwise not this month, because it reproves Flock's KS.
+
+**Route 3b, a sharper count in the rewinding lemma**
+
+- R3b.1 `Compiled.OpenedLe H L nOpen`: on every coin, a run's extractions open at most `nOpen x` of the program's gates, counted from `reveal`'s lengths as `OpenCallsLe` counts calls (549) [guess].
+- R3b.2 `pr_offReg_le_open`: at `OpenedLe`, \(\Pr[\text{off } \texttt{regVal} \text{ at } \omega] \le \sqrt{N\cdot n_{open}\cdot\Pr[\text{Conflict at } \omega]}\). It is `prBad_le` with its `hQ` at `nOpen`, where `pr_offReg_le` passes `nG` (`Reg.lean:411`–`412`) [read; the lemma is a guess].
+- R3b.3 `εregQ`: \(\kappa_s + \sqrt{k\gamma_s\Pr[B]} + \sqrt{N\cdot n_{open}\cdot\Pr[B_{conf}]} + \Pr[B_{conf}]\), and `KSReg` at it [guess].
+- **Blockers and locked statements:** R3b.3 restates `KSReg`'s bound, so it waits on Daniel's word. Its number also needs `nOpen` at the plan's point, which I don't have [read: \(\varepsilon_{reg}\) is in `KSReg`'s locked statement].
+- **Date:** Wed 18 Nov 18:00Z after his word [guess].
+
+**The split-by-acceptance-level sketch: scoped, not started** [guess throughout, except the line marked run]
+
+- **The 21:21Z form** restates \(\varepsilon_{reg}\)'s binding term per acceptance level.
+  - It doesn't hold: two runs at one tape sit at different levels, and the lower one sets the finder's budget (my 21:30Z entry).
+  - Repaired by charging every level below \(\varepsilon_0\) by \(\varepsilon_0\), it gives route 3's number, about \(2^{-55.3}\), through a restatement that route 3 doesn't need. I'd drop that form.
+- **What the sketch was reaching for is the second moment of the extraction's cost.** That needs no restatement; it needs a new named premise:
+  - S1 `Claims.AdaptiveBirthday H F : Prop`: \(F.\Pr \le \mathbb{E}[\text{cost}\cdot(\text{cost}-1)]/2^{513}\). This is the birthday bound for a finder whose calls stop adaptively, asked of one finder as `StrictBirthday` is (`Security/Definitions/Core/Interaction.lean:277`–`280`). It is true in the random-oracle model.
+    - It doesn't follow from `StrictBirthday` with Markov's inequality: that gives about \(\mathbb{E}[q]^{2/3}\cdot2^{-170}\), worse than ecr.
+  - S2 `bconfAt_pr_le_adaptive`: where S1 holds at `BconfAt T`, \(\Pr[B_{conf}] \le q_{strict}\cdot\mathbb{E}[\text{cost}]/2^{513}\), from C5 and C6.
+  - S3 `KSRegAtAB`: `KSReg`'s event at the instance at cap \(K_0\) is at most \(\kappa_s(K_0) + \sqrt{k\gamma_s\Pr[B]} + N\sqrt{q_{strict}\,c_T/2^{513}} + \ldots\). It needs R3.1–R3.3.
+- **Numbers** at \(T = 2^{80}\), \(N = 2^{43.73}\) and \(n_{sess} = 1\), with the best \(K_0\) [run: arithmetic]:
+
+| \(k\) | one term | two terms |
+|---|---|---|
+| 1507 | \(2^{-74.4}\) at \(K_0 = 2^{87.6}\) | \(2^{-73.7}\) at \(K_0 = 2^{86.9}\) |
+| 12,343,986 | \(2^{-65.7}\) at \(K_0 = 2^{91.9}\) | \(2^{-65.1}\) at \(K_0 = 2^{91.2}\) |
+
+  - At the deployed cap \(2^{256}\) it gives nothing: \(2^{9.2}\), over 1.
+  - So it reaches \(2^{-61.0}\) at every deployed \(k\). It is the only route here that does.
+- **Locked statements:** none change. S1 is a new named premise, so it goes to Daniel before it enters a lock. It also waits on R3.3.
+- **Date:** within two days of his word, if R3.3 is in by then.
+
+**Routes 1 and 2:** as at 21:30Z [guess]. Route 1 as filed is false, so it has no date. Route 2 is not this month.
+
+**One line for Daniel, if you carry it** [guess]: may the committed form's binding terms rest on an adaptive birthday premise (S1) at its binding finder? With it and a cap of about \(2^{87}\) on the analysis extractor, \(2^{-61.0}\) holds at \(T = 2^{80}\) at every deployed \(k\). Without it, the best is route 3's \(2^{-54.8}\), which meets \(2^{-53.4}\) only.
+
+**Runs:** none. I launched nothing after `ceff` [read: this session's commands].
