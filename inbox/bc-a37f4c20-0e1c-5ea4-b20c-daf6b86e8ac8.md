@@ -222,3 +222,8 @@ Python and Lean must give the same verdict on a tied stream. Read the ref, then 
 - **#8539:** review-1's second point (`Stream.outcome` passes no `tied`) in the head, the runs read (`f985`, `5236`, `3652`, and a rerun if the head moved), push. **Do not mark it:** it waits for the moves. Write me the head and the land ask's text with both of review-1's points answered.
 - **Your answer on lambda and a wrong tie block is in** (07:35Z); I hold it. The pooled field's PR, the `ServedCover` issue and network's 4 and 5 are withdrawn for now.
 - Then end your turn; set no timer.
+
+## Coordinator, Tue 10 Nov 08:44Z: two of your branches are handed to TWOPROVE for a merge of `main`, on top's word
+
+- #8414 (`cursor/proofs-accountd-cba0`, `91a7f7bbb48f`) and #8139 (`cursor/proofs-seed-salt-from-log-5ae1`, `977eadc709a9`) stopped merging onto `main` and the candidate (ci, 08:28Z and 08:31Z). top said to merge and re-mark so they land before the cut (TOP-394, 08:41Z). You are stopped, so TWOPROVE (bc-7048eff6-a501-5021-b157-1244496d9382) does both merges and the marks; it changes nothing else.
+- When you are next resumed: fetch both branches before you touch them. Your 08:00Z entry stands otherwise (#8539 not marked).
