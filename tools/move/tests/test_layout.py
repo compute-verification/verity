@@ -309,6 +309,29 @@ def test_a_path_that_is_a_shell_variables_default_follows_the_move(tmp_path):
         'W=pre-flock/pod/catalog.py\n')
 
 
+def test_the_brace_that_closes_a_shell_default_is_no_part_of_its_path(tmp_path):
+    """`${T:-flock/tests/test_a.py}`: the file has no row of its own, so the path is read from its directory's row on,
+    and that reading takes braces in (`tests/{a,b}.py` is a path too). The `}` no `{` of the path opens closes the
+    expansion. Read as part of the path it makes `test_a.py}` a pattern under `flock/tests/`, which this map splits
+    (`data.json` goes elsewhere), and a reference to a split directory stops the move."""
+    r = tmp_path / "repo"
+    files = {"run.sh": 'T=${T:-flock/tests/test_a.py}\nU="${U:-flock/tests/test_a.py}"\n', "flock/tests/test_a.py": "",
+             "flock/tests/data.json": "{}\n", "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
+    for p, t in files.items():
+        (r / p).parent.mkdir(parents=True, exist_ok=True)
+        (r / p).write_text(t)
+    (tmp_path / "map.toml").write_text(
+        '[roots]\nold = {}\nnew = {}\n\n[paths]\n"flock/tests/" = "prover/tests/"\n'
+        '"flock/tests/data.json" = "data/data.json"\n\n[modules]\n"flock.tests" = "prover.tests"\n')
+    git(r, "init", "-q", "-b", "main")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "old")
+    p = subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock"],
+                       capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert (r / "run.sh").read_text() == 'T=${T:-prover/tests/test_a.py}\nU="${U:-prover/tests/test_a.py}"\n'
+
+
 def test_rust_literals_spans_strings_and_skips_comments_chars_and_lifetimes():
     text = '''// "no" \n/* "no" /* "nested" */ */ let a = "x\\"y"; let b = br##"r"#"##; let c = '"'; fn f<'a>() { "z" }'''
     got = [text[s:e] for s, e in L.rust_literals(text)]
