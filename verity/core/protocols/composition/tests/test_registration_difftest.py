@@ -310,12 +310,7 @@ def test_the_example_and_its_refusals_agree_with_the_lean_guards() -> None:
     view = G.check(AUDITOR, "onsite", chain("onsite", EXAMPLE)).view()
     assert view.value("weights") == WEIGHTS and view.theta == ITEMS[:2] and view.builder == ITEMS[2]
     assert view.site.locs == LOCS
-<<<<<<< 99c8914848
-    assert view.declared(0) == DAY0.declared() and view.declared(1) is None
-||||||| merged common ancestors
-=======
     assert view.declared(0) == DAY0 and view.declared(1) is None
->>>>>>> 7af4d24fca3e
     malformed = {**chain("onsite", EXAMPLE)[2].to_json(), "program": "1"}
     with pytest.raises(G.Malformed, match="program"):
         G.entry_of(malformed)
