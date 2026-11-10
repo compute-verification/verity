@@ -86,7 +86,7 @@ from verity.core.protocols.spot.optimize import (Cell, Grain, ReplayGrain, grain
 from verity.ml.circuits.partition_v2 import unit_class
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 ADVERSARY, DEPLOYMENTS, HARDWARE = ("benchmarks/census/adversary.json", "benchmarks/census/deployments.json",
                                     "benchmarks/census/hardware.json")
 RHO, RHO_HARDWARE = "benchmarks/rho/data/reference.toml", "benchmarks/rho/data/hardware.toml"
