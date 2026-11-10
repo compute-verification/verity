@@ -169,9 +169,9 @@ setsid nohup uv run -q python tools/verity/check/check.py --record --on "$machin
   > "$log" 2>&1 < /dev/null &
 pid=$!
 # with twins (`check: --on: twins PAIR on M1, M2: ...`) one run launches per machine, and only one of them runs the check
-# 30 min: drive launches several runs at once, each gathering ~1 GiB of verdicts into TMPDIR on the control pod's network
-# volume, which can take past 10 min
-launch_wait_s=1800
+# 60 min: the queue launches a check's shards at once, each gathering and combining its verdict packs into TMPDIR on the
+# control pod's network volume, which takes 7 to 20 min a shard and past 30 with three at once
+launch_wait_s=3600
 want=1 ids=
 for _ in $(seq $((launch_wait_s / 5))); do
   kill -0 "$pid" 2>/dev/null || break

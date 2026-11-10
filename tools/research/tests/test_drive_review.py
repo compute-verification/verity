@@ -1906,7 +1906,7 @@ def test_a_shard_of_the_after_landing_run_that_prints_no_run_ids_within_the_boun
     h.clock += 1
     h.tick()
     (post,) = [p for p in h.posts if "--shard 2/2 registered no run" in p]
-    assert "no run ids 60 min after its launch" in post, post
+    assert f"no run ids {LAUNCH_LOST_S // 60} min after its launch" in post, post
     assert h.cancelled == ["r-one"] and starts == [main] * 5, world.logs
 
 
@@ -1958,6 +1958,24 @@ def test_a_detached_train_launch_runs_its_own_copy_of_train_sh(tmp_path, monkeyp
         os.waitpid(job["pid"], 0)
     ids, tail = launched(job)
     assert ids == [rid] and f"train: {copy} in {repo}" in tail, tail
+
+
+def test_a_detached_train_launch_given_a_train_sh_runs_a_copy_of_it_in_the_clone(tmp_path, monkeypatch):
+    """The loop launches with its own train.sh (`script_from`): a copy of that one runs, in the clone, the clone's ignored."""
+    from research.drive import launched, train_launch
+
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    repo, own, rid = tmp_path / "clone", tmp_path / "own" / "train.sh", "r20261026-093000-abcd"
+    script = repo / "tools" / "verity" / "check" / "train.sh"
+    for path, text in ((script, 'echo "RUN r20261026-093000-ffff"\n'), (own, f'echo "train: own in $PWD"\necho "RUN {rid}"\n')):
+        path.parent.mkdir(parents=True)
+        path.write_text(text)
+    job = train_launch(repo, "c0ffee", "m1", False, deferred=LEAN_STEP, detached=True, script_from=own)
+    assert (Path(job["dir"]) / "train.sh").read_text() == own.read_text()
+    with contextlib.suppress(ChildProcessError):                         # its end, not a clock
+        os.waitpid(job["pid"], 0)
+    ids, tail = launched(job)
+    assert ids == [rid] and f"train: own in {repo}" in tail, tail
 
 
 def test_an_eject_off_drive_leaves_next_as_it_is_and_records_the_ejection(world, monkeypatch, capsys):

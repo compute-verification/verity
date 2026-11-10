@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -17,7 +18,8 @@ from research.drive import (ACTIVE, AFTER_LANDING, LAUNCH_LOST_S, LOST_AFTER_S, 
                             step_paths, step_records, touches)
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
                              Red, Snapshot, Verdict, _inherited, decide, meets)
-from research.vqueue_slim import BUILD, CHECK, WHOLE, audit_failures, based, combine, judge, key, reads, start, step_test, unnamed
+from research.vqueue_slim import (BUILD, CHECK, OWN_TRAIN, WHOLE, audit_failures, based, combine, judge, key, reads, start,
+                                  step_test, unnamed)
 from test_drive_executor import PREFLIGHTS, _slim
 from test_drive_policy import _policy
 from test_drive_review import GATED_TREE, _main, _move_main
@@ -116,7 +118,7 @@ def test_start_launches_what_drive_launches_beside_the_executors_check_with_main
     rec = start(h.d, sha, base)
     steps = ["lean-agreement", "ratchet-gate"] if agreement else ["ratchet-gate"]
     assert h.posted == [(sha, ",".join(steps), {"base": base, "agreement": agreement, "no_cache": False, "circuit_cache": False,
-                                                "no_regenerate": True})]
+                                                "no_regenerate": True, "train_from": OWN_TRAIN})]
     assert rec == {"ids": ["r-post-0"], "tip": sha, "base": base, "at": h.clock, "steps": steps,
                    **({} if agreement else {"skip": ["lean-agreement"]})}
     assert asked == [(base, sha, "check")]
@@ -125,7 +127,8 @@ def test_start_launches_what_drive_launches_beside_the_executors_check_with_main
                for x in world.logs), world.logs
     pl = {"verified": base}
     h.d._start_slim({}, pl, sha, False)
-    assert h.posted[1] == h.posted[0], "drive's own launch of the same run"
+    assert h.posted[1] == (sha, ",".join(steps), {k: v for k, v in h.posted[0][2].items() if k != "train_from"}), \
+        "drive's own launch of the same run, from the clone's train.sh"
     assert pl["slim"]["ratchet_base"] == base
     assert {k: v for k, v in pl["slim"].items() if k not in ("ids", "ratchet_base")} == \
         {k: v for k, v in rec.items() if k not in ("ids", "base")}
@@ -167,7 +170,8 @@ def test_a_launch_that_registers_no_run_is_infra(world, monkeypatch, tmp_path):
     h.clock += LAUNCH_LOST_S
     assert judge(h.d, rec) == Verdict(PENDING)
     h.clock += 1
-    assert judge(h.d, rec).infra[0].task.startswith("the run beside its check registered no run: no run ids 60 min after its launch")
+    assert judge(h.d, rec).infra[0].task.startswith(f"the run beside its check registered no run: no run ids "
+                                                    f"{LAUNCH_LOST_S // 60} min after its launch")
 
 
 @pytest.mark.parametrize("how", ["dry_run", "shadow"])
@@ -345,6 +349,19 @@ AUDIT = ("AUDIT /w/lean-audit-scratch-{n}-x/Security/Proofs: FAIL; built WITHOUT
 RECORD = "  record: the statement of G changed\n"
 
 
+@pytest.mark.parametrize("shards", [1, 3])
+def test_start_launches_each_shard_with_the_loops_own_train_sh(world, monkeypatch, shards):
+    """A candidate's tree doesn't decide how long its launch is waited for: every launch runs the loop's own train.sh, this
+    tree's, which the loop's pin deploys."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on, given, launch = "m1,m2,m3", [], h.d.launch_postland
+    h.d.launch_postland = lambda repo, commit, machine, steps, train_from=None, **kw: given.append(train_from) or launch(
+        repo, commit, machine, steps, **kw)
+    start(h.d, sha, base, shards=shards)
+    assert given == [OWN_TRAIN] * shards and OWN_TRAIN.is_file()
+    assert OWN_TRAIN == Path(__file__).resolve().parents[3] / "tools" / "verity" / "check" / "train.sh"
+
+
 @pytest.mark.parametrize("agreement", [False, True])
 def test_start_with_shards_launches_drives_after_landing_run_of_every_step_a_shard_a_launch(world, monkeypatch, agreement):
     """The check that gates is drive's after-landing run of the candidate above ``base``: every step sent, with the keywords
@@ -356,14 +373,14 @@ def test_start_with_shards_launches_drives_after_landing_run_of_every_step_a_sha
     rec = start(h.d, sha, base, shards=3)
     kw = h.d._postland_args({"verified": base}, sha, False)[0]
     assert kw == {"base": base, "agreement": agreement, "no_cache": False, "circuit_cache": False, "no_regenerate": True}
-    assert h.posted == [(sha, ",".join(AFTER_LANDING), {**kw, "shard": f"{k}/3"}) for k in (1, 2, 3)]
+    assert h.posted == [(sha, ",".join(AFTER_LANDING), {**kw, "shard": f"{k}/3", "train_from": OWN_TRAIN}) for k in (1, 2, 3)]
     assert machines == shard_machines("m1,m2,m3,m4", 3) == ["m1,m4", "m2", "m3"]
     assert rec == {"ids": ["r-post-0", "r-post-1", "r-post-2"], "groups": [["r-post-0"], ["r-post-1"], ["r-post-2"]],
                    "tip": sha, "base": base, "at": h.clock, "gate": CHECK,
                    "steps": [s for s in AFTER_LANDING if agreement or s != "lean-agreement"],
                    **({} if agreement else {"skip": ["lean-agreement"]})}
     whole = start(h.d, sha, base, shards=1)
-    assert h.posted[3] == (sha, ",".join(AFTER_LANDING), kw) and machines[3] == "m1,m2,m3,m4"
+    assert h.posted[3] == (sha, ",".join(AFTER_LANDING), {**kw, "train_from": OWN_TRAIN}) and machines[3] == "m1,m2,m3,m4"
     assert whole == {**{k: v for k, v in rec.items() if k != "groups"}, "ids": ["r-post-3"]}
 
 
