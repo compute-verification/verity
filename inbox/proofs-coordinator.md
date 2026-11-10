@@ -29539,3 +29539,43 @@ This corrects my 16:36Z guess of "no on time": it was wrong, and I now expect ye
 **One caution on comparing with 2bb7.** Both nodes are the same EPYC-Genoa with the prover on 16 vCPUs that are 8 cores' two threads. cpu-9's load average was 64 when 2bb7 ran and cpu-4's is 5 to 6 now, and the tree is today's `main`, not `b9ea4245b3`. So today's times are faster than 2bb7's for one or both of those reasons; I can't separate them from this run. [run for the loads, guess for the cause]
 
 **Schedule.** The session began at 16:38:13Z and its last window ends at 22:05:43Z; Lean then verifies the 16 releases. The lead I set (5,400 s) was far longer than needed: the inner proof, staging and caps took 5 minutes. I left the run alone, since restarting with a shorter lead would save about 80 minutes and cost the slot's one large place twice.
+
+## PRF-460 TWOWITNESS, Tue 10 Nov 17:07Z: `7c72` passed File and Inputs; head `7027dce9d3` adds the partition's checks and the setup's walks, which `e2c3` tries on cpu-12 (ETA about 19:45Z)
+
+**`r20261110-160744-7c72`** (cpu-12, commit `9ccbf2ef98`) passed with rc 0 [run: its log, read for skips].
+
+| File | Result |
+|---|---|
+| File | lean exit 0 in 2813 s. Both walks elaborate: `parse_cX` through `HmRow.parse` and `parseOut_cX` through `HmOut.parse`. The axiom probe put its 15 theorems on the three allowed axioms. |
+| Heals | identity's `Domains` and Claims' `CompleteFails` and `Bridge/OfGame` built, exit 0. |
+| Inputs | lean exit 0 in 345 s, then `--siblings`: no name clash. 17 theorems on the three allowed axioms, `ins_x`, `insOf_x`, `readOf_x` and `hiddenOf_x` among them. |
+
+- The axiom probe reads only `theorem` and `lemma` (`THEOREM` in `tools/verity/lean/axiom_probe.py`), so it never lists a `fwd_def` walk such as `parseOut_cX` [read]. The Lean check's kernel replay does check them. Friction, for whoever owns the probe: let `THEOREM` also match `fwd_def V T` and take `T`.
+- File's 2813 s is one module's elaboration [run]. Every later file of (A) imports File, so a try on a slot where File is stale pays it again.
+- One linter warning, `Inputs.lean:110:27`: `<;>` where `;` suffices. My next commit fixes it.
+
+**A decision you may overturn: the statement carries no program** (`38e8c9d0bc`) [read].
+- Why: `Program.decode` reads the program into a `HashMap String` keyed by `String.hash`, which the kernel doesn't evaluate, so no walk passes it. With no program, `setupHidden`'s finding is `pure f` and it never reaches `HmLinks.check`.
+- What it costs: the statement's units come from its header (`unitsJ`), not from a program, and no links check runs. TWOINSTANCE's `Ref.links` are SPOT's second-stage links, not Flock's, so `Ref` is unaffected [read: `Instance.lean` at `a81a1b11ea`].
+- The alternative: prove `Program.decode` on the program's bytes from `Std.HashMap` lemmas. It brings back derived units and the links check, at the cost of a proof I haven't sized [guess].
+
+**Head** [run: pushed]: `cursor/proofs-twowitness-0d28` at `7027dce9d3`.
+- `79ab009d6b` moves `sha512Hex_of` to Digests, so Partition no longer waits on File.
+- `e91829a973`, Partition: `cpo_part`, which is `HmRow.checkPartitionObject partObj = .ok ("Q_template_instance", 0)`, and `canon_part`, the partition's canonical text. `templatesOf`'s match on an array literal has no equation lemmas, so its `simp` runs with `iota := false` [run: a probe on a stand-in].
+- `7027dce9d3`, Setup: `load_pubX` walks `HmIn.loadPublic` on the public file; `setup_stX` walks `Stmt.setupHidden` to `stX`, keeping Δ as `oA` and `oB`; `setupTables_X` is `Stmt.setupTables` at one table. The canonical texts (the units, both headers, the identity) and the hello are hypotheses.
+
+**Run `r20261110-170159-e2c3`** [run]: cpu-12, launched 17:02Z with `--pool proofs` alone. 7c72's command had `slot.py` twice (mine inside `--pool`'s), so it held two proofs slots; this one holds one. It tries Partition, Inputs and Setup, and Setup's imports build File first. ETA about 19:45Z [guess: a rebuild, since Bytes changed, then File's 47 minutes, then Setup's walk].
+
+**What (A) still needs, in order** [guess for the order and the sizes]:
+1. Setup's three walks (`e2c3`).
+2. Setup's hypotheses at the instance: the canonical texts as Concrete's `canon_eq`, `canonUtf8_eq` and `hu2_of` give them, the hello as `hhello_of` does, and `hCe`. I'm writing these now.
+3. File's premises at the fixed nets' layouts: `hc1` and `hc2`; `hps`, `hph` and `hck` from `FixedNetsBuild`; `hcl` at the class hash (`classOf`'s two `findByte`s and META's canonical text, no walk); `hH` by definition.
+4. The rest of `Ins.setup`: each table's `checkRegistered`, `Registered.checkFull`, `RecSetup.checks`, `Zk.shapeOk` (Δ through `oA` and `oB`, as Concrete's `all_dA`), `RecCoins.check`, `RecVStar.checkPubRows` and `ProvedScope.drawLaw`. Then `setupOf true (x r)` and `Stmt.checked`.
+5. `zkOk`, `templateOk` (a walk of `Flock.Desc.parseStmt`) and `scopeCheck`.
+6. A records run, and `--siblings` for each new file.
+
+**Dates** [guess]: (A) Wed 18:00Z holds if Setup's walks pass within two tries; steps 4 and 5 are new walks and carry the risk. (D) Fri 12:00Z holds. I stay on `main`'s paths, move no file and land nothing today.
+
+**For PRF-460, ready to paste:**
+
+> File's two walks and the statement's inputs pass (run `r20261110-160744-7c72`). The partition's checks and the setup's walks are on `cursor/proofs-twowitness-0d28` at `7027dce9d3`, which `r20261110-170159-e2c3` tries. The statement carries no program, since the kernel can't run `Program.decode`'s string hash. Next: the setup's hypotheses at the instance, then the rest of `Ins.setup`.
