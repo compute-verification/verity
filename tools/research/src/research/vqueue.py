@@ -61,7 +61,8 @@ class Ready:
     number: int
     head: str
     files: frozenset[str]          # the paths its change touches, against its merge base with `main`
-    lean: bool = False             # it changes Lean, a lock or a spec: a batch holds at most `Snapshot.lean` such members
+    lean: bool = False             # its Lean change compiles (a spec's or a Lean source's, not a lock's alone): a batch holds
+                                   # at most `Snapshot.lean` such members
     rank: int = 0                  # the queue's order, lowest first (drive's priority file, then mark time)
     conflict: bool = False         # it doesn't merge onto `main`: the queue skips it until its head changes
 
@@ -137,7 +138,7 @@ class Snapshot:
     batch: int = 6                 # the most members a candidate takes
     depth: int = 2                 # the most candidates checked at once, each on the one below
     rings: int = 2                 # infra verdicts on one candidate before infra is rung; 2 at most
-    lean: int = 1                  # the most members of a batch that change Lean, a lock or a spec
+    lean: int = 1                  # the most members of a batch whose Lean change compiles (`Ready.lean`)
     now: float | None = None       # when the snapshot was taken, in seconds since the epoch; None: nothing times out
     pending_s: float = 4 * 3600    # how long the lowest candidate is pending after its first enqueue before it is retried
     tree_ejects: bool = False      # infra errors marked `tree` are bisected and eject; off while graph2 marks `tree` on any
@@ -145,14 +146,16 @@ class Snapshot:
     launch_tries: int = 3          # readings of launch-only infra (`Failed.launch`) on one candidate before it is handled
                                    # as any other infra: a tree that keeps its own launch from registering is found then
     records: bool = False          # a Lean batch's records are regenerated before its check (`Build.records`); off, they aren't
+    left: tuple[tuple[int, str, str], ...] = ()  # each other open PR into `main`, as (number, head, why the queue doesn't
+                                   # take it now): what a candidate's drop for a member that left `ready` says
 
 
 @dataclass(frozen=True)
 class Build:
     """Merge ``members`` in order onto ``base``, push the result to `queue/<sha12>` and enqueue `ready:<sha>` at ``priority``;
     with ``records`` (a member changes Lean, a lock or a spec), launch its records run instead, and its check waits for it
-    (`Candidate.waits`).  A member that doesn't merge onto what is built so far is left out and its owner told: the
-    candidate's members are what merged."""
+    (`Candidate.waits`).  A member that doesn't merge onto what is built so far is left out and its owner told, unless what
+    it merges onto or `main` already holds its head: the candidate's members are what merged."""
     members: tuple[int, ...]
     base: str
     priority: int
@@ -390,6 +393,7 @@ def _chain(s: Snapshot, ready: dict[int, Ready], acts: list[Action]) -> tuple[li
 
     chain: list[Candidate] = []
     below: set[int] = set()
+    untaken = {n: (head, why) for n, head, why in s.left}
     top = s.main
     while on := [c for c in above.get(top, ()) if c.sha not in done]:
         fixed = {c.repairs: c.sha for c in on if c.repairs is not None}
@@ -402,7 +406,7 @@ def _chain(s: Snapshot, ready: dict[int, Ready], acts: list[Action]) -> tuple[li
         for c in on:
             if c is not keep:
                 drop(c, f"a second candidate on {top[:12]}: {keep.sha[:12]}'s members come first in rank")
-        if why := _stale(keep, ready, below):
+        if why := _stale(keep, ready, below, untaken):
             drop(keep, why)
             break
         done.add(keep.sha)
@@ -424,15 +428,24 @@ def _ranks(c: Candidate, ready: dict[int, Ready]) -> list[tuple[int, int, int]]:
     return sorted((0, ready[m].rank, m) if m in ready else (1, 0, m) for m in c.members)
 
 
-def _stale(c: Candidate, ready: dict[int, Ready], below: set[int]) -> str | None:
+def _stale(c: Candidate, ready: dict[int, Ready], below: set[int], untaken: dict[int, tuple[str, str]]) -> str | None:
+    """Why ``c`` leaves the chain, naming its first member's cause: a new head (and, untaken, why: ``untaken``, by number,
+    is `Snapshot.left`), the queue no longer taking it and why, its PR no longer open into `main`, or a candidate below it
+    holding it too; None while no member has one."""
     for m, h in zip(c.members, c.heads):
-        r = ready.get(m)
-        if r is None:
-            return f"#{m}'s ready mark was withdrawn"
-        if r.head != h:
-            return f"#{m}'s head moved from {h[:12]} to {r.head[:12]}"
-        if m in below:
-            return f"#{m} is in a candidate below it too"
+        if (r := ready.get(m)) is not None:
+            if r.head != h:
+                return f"#{m}'s head moved from {h[:12]} to {r.head[:12]}" + (
+                    ", which doesn't merge onto `main`" if r.conflict else "")
+            if m in below:
+                return f"#{m} is in a candidate below it too"
+            continue
+        if m not in untaken:
+            return f"#{m} isn't an open PR into `main` now"
+        head, why = untaken[m]
+        if head != h:
+            return f"#{m}'s head moved from {h[:12]} to {head[:12]}, which isn't taken: {why}"
+        return f"#{m} isn't taken now: {why}"
     return None
 
 
