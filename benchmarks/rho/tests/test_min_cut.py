@@ -1,8 +1,10 @@
-"""The min-cut bound: `rho.min_cut` against the Lean text it computes, its rows of `β(k)`, the bound at a policy, and
-the class in `CLASSES`."""
+"""The min-cut bound: `rho.min_cut` against the Lean text it computes, its rows of `β(k)`, the bound at a policy, the
+class in `CLASSES`, and `periods.py --bounds`."""
 
 import itertools
+import json
 import math
+import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -205,3 +207,33 @@ def test_outputs_per_product_is_the_models_shape():
     assert lora.outputs_per_product is None
     with pytest.raises(Outside, match="outputs_per_product"):
         CLASSES["min-cut"].allowance(lora)
+
+
+def test_periods_bounds_gives_the_rows_of_one_class_alone_and_says_what_they_cover(tmp_path, monkeypatch, capsys):
+    """On the min-cut bound alone the declared blocks hold almost none of the rate, so onsite's figure is remote's:
+    the uncertified routes' and the unregistered pool's, which the header says beside the rows. Without the flag the
+    header has no such sentence."""
+    import periods
+
+    names = ("reference-onsite-h200", "reference-remote-h200")
+    alone = periods.only(REG, names, ["min-cut"])
+    assert [b.name for b in build(alone, names[0]).bounds] == ["min-cut"]
+    assert len(build(REG, names[0]).bounds) == len(CLASSES)
+    with pytest.raises(ValueError, match="not classes"):
+        periods.only(REG, names, ["min-cut", "no-such-class"])
+
+    argv = ["periods.py", *(a for n in names for a in ("--scenario", n))]
+    monkeypatch.setattr(sys, "argv", [*argv, "--bounds", "min-cut", "--out", str(tmp_path)])
+    periods.main()
+    text = capsys.readouterr().out
+    assert "Each row is bounded by `min-cut` alone (`--bounds`)" in text
+    doc = json.loads((tmp_path / "periods.json").read_text())
+    assert doc["bounds"] == ["min-cut"] and len(doc["rows"]) == 2 * len(periods.FLEETS) * len(periods.PERIODS)
+    onsite, remote = ([x for x in doc["rows"] if x["scenario"] == n] for n in names)
+    for x, y in zip(onsite, remote, strict=True):
+        assert x["parts"]["setter"] == y["parts"]["setter"] == "min-cut"
+        assert x["slowdown"] == pytest.approx(y["slowdown"], rel=1e-12) and 2.9 < x["slowdown"] < 3.1
+        assert x["scaled"]["per_window_share"] < 1e-5 < 0.99 < x["scaled"]["routes_share"]
+    monkeypatch.setattr(sys, "argv", ["periods.py", "--scenario", names[1]])
+    periods.main()
+    assert "--bounds" not in capsys.readouterr().out

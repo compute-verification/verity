@@ -27,9 +27,13 @@ world-inference-2027) and each monitoring period (`PERIODS`, core's, through `rh
 
 `--measured CIRCUIT` evaluates them with a measured step's design in place of the FLOP model (`circuits.in_place`: its
 structure's `s_×` and its gates per FLOP), and sets the step beside the FLOP model first (`circuits.compare`).
+`--bounds CLASS` (repeatable) bounds each scenario by that class alone (`only`), and the header then says what such a
+row's figure covers (`alone_md`).
 
     uv run python benchmarks/rho/periods.py                # Markdown on stdout
     uv run python benchmarks/rho/periods.py --measured smollm2-135m-step
+    uv run python benchmarks/rho/periods.py --bounds min-cut --scenario reference-onsite-h200 \
+        --scenario reference-remote-h200                     # the min-cut bound alone, onsite and remote
     uv run python benchmarks/rho/periods.py --out DIR        # and periods.md and periods.json in DIR
 """
 
@@ -38,14 +42,15 @@ from __future__ import annotations
 import argparse
 import json
 import math
+from collections.abc import Iterable, Sequence
 from dataclasses import asdict
 from pathlib import Path
 
 import run
 from rho import analysis, circuits, lean, operating, params
-from rho.classes import premise_status, premises
+from rho.classes import CLASSES, premise_status, premises
 from rho.envelopes import ROUTES
-from rho.params import Registry
+from rho.params import Param, Registry
 from rho.scenario import Result, _binding_k
 
 SCENARIOS = ("reference-onsite-h200", "reference-remote-h200", "reference-remote-h200-sampled",
@@ -65,6 +70,16 @@ LIMITS = dict.fromkeys(params.BLOCK_OUTPUT_BITS, "the size class's limit (provis
 
 def choices(name: str, fleet: str, period: str) -> dict[str, str]:
     return {f"scenario.{name}.fleet": fleet, f"scenario.{name}.horizon": period}
+
+
+def only(reg: Registry, names: Iterable[str], bounds: Sequence[str]) -> Registry:
+    """`reg` with each scenario of `names` bounded by the classes `bounds` alone: `scenario.<name>.bounds`, the key a
+    scenario's table leaves out to take every class."""
+    unknown = [b for b in bounds if b not in CLASSES]
+    if unknown:
+        raise ValueError(f"{unknown} are not classes of rho.classes.CLASSES: {', '.join(CLASSES)}")
+    keys = {f"scenario.{n}.bounds": list(bounds) for n in names}
+    return Registry({p.key: p for p in reg.params()} | {k: Param(k, v) for k, v in keys.items()})
 
 
 def proofs(r: Result) -> str:
@@ -206,7 +221,20 @@ def measured_md(reg: Registry, m: circuits.Comparison) -> list[str]:
              f"{fmt(m.s_x_unsplit)}) | — |"), ""]
 
 
-def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.Comparison | None = None) -> str:
+def alone_md(rows: list[dict], bounds: Sequence[str]) -> list[str]:
+    """What rows bounded by the classes `bounds` alone cover (`only`): a figure is those classes' on the blocks they
+    cap and no class's on the rest, so the share on the blocks stands beside it."""
+    shares = [x["scaled"]["per_window_share"] for x in rows]
+    names = ", ".join(f"`{b}`" for b in bounds)
+    return [(f"Each row is bounded by {names} alone (`--bounds`), every other class left out. A class caps the blocks "
+             f"its premises hold at, which hold {min(shares):.2g} to {max(shares):.2g} of a row's rate here; the rest "
+             "is the uncertified routes and the unregistered pool at `q_U`, which no class sets, and a block no class "
+             "caps counts at its capacity. So a figure in these rows is a class's only on that share: \"what sets "
+             "it\" and \"Its parts\" name the rest."), ""]
+
+
+def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.Comparison | None = None,
+             bounds: Sequence[str] = ()) -> str:
     fmt = run.fmt
     out = ["# The slowdown per monitoring period", "",
            ("The slowdown's lower bound at the measured H200 inputs, for each monitoring period, over "
@@ -219,6 +247,7 @@ def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.
             "`T_0 / (MFU₀ Φ_total)`. Each row says what it assumes about proofs: every unit proved, or proofs "
             "sampled at the regime's compute share (`regime.<name>.proof_share`), where each accepted incorrect proof "
             "block injects the widest public size class of output bits (`step_bits`)."), "",
+           *(alone_md(rows, bounds) if bounds else ()),
            *(measured_md(reg, measured) if measured else ()),
            "## The lower bound", "",
            ("| scenario | proofs | over | period | slowdown ≥ | range | corner | padded size ratio | status, premises | "
@@ -315,24 +344,29 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--scenario", action="append", help=f"scenario names (default: {', '.join(SCENARIOS)})")
     ap.add_argument("--set", action="append", default=[], help="KEY=VALUE registry overrides")
+    ap.add_argument("--bounds", action="append", default=[], metavar="CLASS",
+                    help="bound every scenario by this class alone (repeatable: by these; default: every class)")
     ap.add_argument("--measured", metavar="CIRCUIT",
                     help="a circuit of data/circuits.toml whose design replaces the FLOP model (circuits.in_place)")
     ap.add_argument("--out", metavar="DIR", help="write periods.md and periods.json to DIR")
     args = ap.parse_args()
+    names = tuple(args.scenario or SCENARIOS)
     reg = Registry.load()
     if args.set:
         reg = reg.override({k: json.loads(v) for k, v in (a.split("=", 1) for a in args.set)})
+    if args.bounds:
+        reg = only(reg, names, args.bounds)
     measured = circuits.compare(reg, args.measured) if args.measured else None
     if args.measured:
         reg = circuits.in_place(reg, args.measured)
-    rows = evaluate(reg, tuple(args.scenario or SCENARIOS))
-    text = markdown(reg, rows, measured=measured)
+    rows = evaluate(reg, names)
+    text = markdown(reg, rows, measured=measured, bounds=args.bounds)
     print(text)
     if args.out:
         out = Path(args.out)
         out.mkdir(parents=True, exist_ok=True)
-        doc = {"rows": rows} | ({"measured": asdict(measured) | {"u_over_w": measured.u_over_w(measured.s_x)}}
-                               if measured else {})
+        doc = {"rows": rows} | ({"bounds": args.bounds} if args.bounds else {}) | (
+            {"measured": asdict(measured) | {"u_over_w": measured.u_over_w(measured.s_x)}} if measured else {})
         (out / "periods.md").write_text(text + "\n")
         (out / "periods.json").write_text(json.dumps(_finite(doc), indent=1, allow_nan=False))
 
