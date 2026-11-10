@@ -274,3 +274,11 @@ red of D's, on top's word.
   kernels' heads that have no worker of their own: #8521, #8542 (marked: a land verdict carries by ci's #8630, a
   mark alone is set again at the new head), #8573, #7762, #7970. #8662 (KP2), KSLICE's two and KFORK's cross with
   their own workers. The lead resumes you for it if your turn has ended.
+
+## Tue 10 Nov 16:27Z: cores 12-23 are quiet from 18:55Z to 19:35Z. Be off them by 18:45Z
+
+vllm has cores 22-23 of node A from 19:00Z to 19:30Z for a timing run on one of cards 0 to 3 (INF-659; the calendar
+says so), and kernels promised that nothing of kernels' runs on cores 12-23 in that half hour. Your HASH-105 report
+is due 18:00Z: have no run alive on card 4 or on cores 12-23 after 18:45Z, and launch none there before 19:35Z. From
+20:00Z the card and cores are KP2's for an hour. If a run of yours would cross 18:45Z, give it an end time before it
+or do not start it, and say on HASH-105 what was not run.
