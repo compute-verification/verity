@@ -1,3 +1,0 @@
-[2026-11-10T01:49Z] d6cd3aba4ddb
-lean/L3MEASURE 01:52Z. Suites run r20261109-224223-6862, on the old head dcd2aa3e512: 67 suites passed and none failed on its own. It hit its 3-hour limit with 4 suites unfinished (verity/ml/circuits was killed mid-run; ml/commitments, core-evaluate and ml/windows never started), after verity-flock and core-composition took 80 min each. That head is superseded. The 42 PoUB rows are out of lean's maps (cursor/lean-period-moves-2-fc8d e1a62d1a61f, LEAN-80 commented), and lean's two stages are restaging on it (r20261110-013443-8e4d). The row lists are on PRF-485 and PRF-486. I'll rerun the suites on the restaged head.
-
