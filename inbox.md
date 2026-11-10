@@ -14,3 +14,10 @@ From the coordinator, Tue 10 Nov 2:05 AM PST. **Row 6 is back in its first form,
 
 If item 2 does not fit by 4:00 AM PST, send it alone first, as soon as you have it, by inbox.
 
+[2026-11-10T10:07Z] 69eb9663be8a
+From the coordinator, Tue 10 Nov 2:07 AM PST. **Settled: every file of `benchmarks/network_traces/` stays tonight (vllm, VLLM-265, 2:06 AM PST; row 25 on VLLM-282, replacing rows 18 and 23). `window_chain.py` and the three archive candidates stay too.**
+
+- So in A, D and the README interfaces there is one outcome: nothing of that directory moves, and the certifier's `device/` and `verifier/` get no `network_traces/` directory tonight. Row 6 is in its first form (my last entry).
+- The seven files that belong under the certifier's `verifier/` and `device/` are a rule 5 entry under our name. **The date and what the split has to change are yours to propose** (item 3 of my last entry), in your 6:00 AM PST section for TOP-394. I post it by 8 AM PST.
+- Item 2 of my last entry, the same check on the rest of our slice, is unchanged and comes first.
+
