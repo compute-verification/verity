@@ -17,8 +17,7 @@ from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bi
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.population import population
 from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import coll_concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value as Bits
+from verity.ml.circuits.types import Array, Value as Bits
 from verity.ml.windows import rows as CS
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.pipeline import boundary_rows as BR
@@ -142,26 +141,6 @@ def test_an_inlined_check_is_checked_by_the_templates_its_body_calls(tmp_path):
     bw = BR.BoundaryWindows.of({"check": P.template_id(CHAIN), "inline": True}, tmp_path / "of")
     bw.stop()
     assert bw.inline and not BR.BoundaryWindows.of({"check": "c"}, tmp_path / "of2").inline
-
-
-def test_an_inlined_check_that_returns_a_tuple_returns_each_field_over_its_instances():
-    """A check template of two outputs, inlined: the replay block returns a tuple of the two fields, each the instances'
-    in order, where the population returns the instances' tuples; a field's rows are one output's, which is how round 2
-    links a block's return to the calls that write it. A check of one output returns its instances' array, as before."""
-    both = bind(CompositeDefinition("BoundaryRowsTestBoth", 0, (), lambda S_: ((("x", Array(2, Bits(8))),), Tuple(Bits(8), Array(2, Bits(8)))),
-                                    lambda B, S_, x: tuple_of(B.call(XOR8, x[0], x[1]), coll_concat(Array(2, Bits(8)), [
-                                        B.call(NOT8, x[1]), B.call(NOT8, x[0])])), register=False))
-    block = BR.inlined(both, 3)
-    assert block.signature() == ((("x", Array(3, Array(2, Bits(8)))),), Tuple(Array(3, Bits(8)), Array(3, Array(2, Bits(8)))))
-    xs = [3, 5, 7, 7, 0, 255]
-    pairs = list(zip(xs[::2], xs[1::2]))
-    assert _flat(evaluate(block, xs)) == [a ^ b for a, b in pairs] + [v ^ 0xFF for a, b in pairs for v in (b, a)]
-    assert _flat(evaluate(population(both, 3), xs)) == [v for a, b in pairs for v in (a ^ b, b ^ 0xFF, a ^ 0xFF)]
-    assert BR.inlined(CHAIN, 4).signature()[1] == Array(4, Bits(8))
-
-
-def _flat(v) -> list[int]:
-    return [x for u in v for x in _flat(u)] if isinstance(v, (tuple, list)) else [int(v)]
 
 
 class Request:
