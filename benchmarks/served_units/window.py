@@ -122,13 +122,15 @@ def name(unit: str, n: str) -> str:
 
 def key() -> str:
     """prove_time.sh's KEY: the staging tree's digest that names each statement's directory. Like prove_time.sh, it refuses
-    a tree without one of KEY_PATHS, whose digest would lack what was under that path."""
+    a tree without one of KEY_PATHS, whose digest would lack what was under that path, and raises where a step of the
+    digest's pipeline fails, whose message it lets through."""
     for p in KEY_PATHS.split():
         if not (REPO / p).exists():
             raise SystemExit(f"window.py: no {p} in {REPO}, a path of the staging key: correct KEY_PATHS in "
                              "benchmarks/served_units/prove_time.sh and window.py together")
-    return subprocess.run(["bash", "-c", f"find {KEY_PATHS} -name '*.py' -type f | LC_ALL=C sort | xargs sha256sum "
-                           "| sha256sum | cut -c1-16"], cwd=REPO, capture_output=True, text=True, check=True).stdout.strip()
+    return subprocess.run(["bash", "-o", "pipefail", "-c", f"find {KEY_PATHS} -name '*.py' -type f | LC_ALL=C sort "
+                           "| xargs sha256sum | sha256sum | cut -c1-16"], cwd=REPO, stdout=subprocess.PIPE, text=True,
+                          check=True).stdout.strip()
 
 
 def procs() -> dict[int, tuple[int, int]]:

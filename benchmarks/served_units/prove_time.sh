@@ -68,7 +68,8 @@ for p in $KEY_PATHS; do
   [ -e $REPO/$p ] || { echo "prove_time.sh: no $p in $REPO, a path of the staging key: correct KEY_PATHS in" \
     "benchmarks/served_units/prove_time.sh and window.py together"; exit 1; }
 done
-KEY=$(cd $REPO && find $KEY_PATHS -name '*.py' -type f | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
+KEY=$(cd $REPO && find $KEY_PATHS -name '*.py' -type f | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16) \
+  || { echo "prove_time.sh: no staging key: find, xargs or sha256sum failed under KEY_PATHS (its own message is above)"; exit 1; }
 
 # name UNIT N: the statement's directory name, a census name's past 96 characters cut to 80 and its digest's first 12
 name() {

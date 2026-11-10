@@ -3,8 +3,8 @@
 names are compared on every block type a served card's plan stages, each at the sizes it takes, and on the cases the rule
 treats apart (case, characters outside the name's, a trailing dash, the 96-character cut); the key on a stand-in tree, as
 files under its hashed paths and outside them change. The paths each key hashes (its KEY_PATHS) are held to this tree, and
-on a stand-in tree without one of them each key refuses: a digest of what is left would keep its value across a change
-to what is missing."""
+on a stand-in tree without one of them, or with a file its pipeline fails on, each key refuses: a digest of what is left
+would keep its value across a change to what is missing."""
 from __future__ import annotations
 
 import re
@@ -176,3 +176,15 @@ def test_key_refuses_a_missing_path(monkeypatch, tmp_path):
         with pytest.raises(SystemExit) as stop:
             w.key()
         assert str(stop.value) == f"window.py: {why}"
+
+
+def test_key_refuses_a_failed_pipeline(monkeypatch, repo):
+    """Each key reads its pipeline's status: where a step before the last fails (here xargs, at the unmatched quote in a
+    file's name), prove_time.sh's lines stop and window.py's key() raises, rather than keep the digest of what got through."""
+    w = load(monkeypatch, "window.py")
+    monkeypatch.setattr(w, "REPO", repo)
+    tree(repo, {"verity/ml/it's.py": ""})
+    r = sh_key(repo)
+    assert r.returncode == 1 and r.stdout.startswith("prove_time.sh: no staging key: "), r.stdout + r.stderr
+    with pytest.raises(subprocess.CalledProcessError):
+        w.key()
