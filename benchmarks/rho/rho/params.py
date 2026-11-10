@@ -13,8 +13,9 @@ refused). From `verity`: the monitoring periods are core's (`PERIODS`), each the
 bits an incorrect proof block injects are the widest public size class of a block's outputs (`BLOCK_OUTPUT_BITS`); the
 per-window δ is core's (`profile.WINDOW_DELTA`); and the incorrect-outputs row reports at core's reporting δs. From the
 census (`benchmarks/census`): the reference datacenter's machines (`DATACENTER_FLEETS`) and the world's active
-parameters. From the inference-only policy's calibrations (`benchmarks/nci/calibrations.json`): each policy's `K`, its
-range, and `Γ`.
+parameters. From the inference-only policy's calibrations (`benchmarks/nci/calibrations.json`): the calibrated policy's
+`K`, its range, and `Γ`. The session policy's `K` is a ruling its layer states, and only its range is the calibrations'
+(`ranges`; a file that gives such a key a range is refused).
 
 A table becomes an object through its layer's `build`, which takes its fields by name (`Registry.fields`). Every
 parameter of every layer is then one key, so a sweep is `registry.override({key: value})` and a rebuild, whatever the
@@ -54,8 +55,9 @@ DATACENTER_FLEETS = ("reference-h200", "reference-h100", "reference-b200")
 #: the census's adversary, the world's inference, and the registry's model it serves
 WORLD = "world-inference-2027"
 WORLD_MODEL = "deepseek-v4-pro"
-#: the calibration the policies take `K` from (the policy of its name, and the reference datacenter's session at the
-#: world's model), and the calibrations at the ends of `K`'s range (the coded prompts, the write-up's `K`)
+#: the calibration the policy of its name takes `K` and `Γ` from; the session policy, the reference datacenter's at the
+#: world's model, whose `K` is ruled at the same size; and the calibrations at the ends of `K`'s range for both (the
+#: coded prompts, the write-up's `K`)
 CALIBRATION = "kimi-k2-1m-raw"
 SESSION = "v4-pro-session"
 K_RANGE = ("kimi-k2-1m-coded", "kimi-k2-11mb-raw")
@@ -95,12 +97,16 @@ class Registry:
 
     @classmethod
     def load(cls, paths: Iterable[Path] | None = None) -> Registry:
-        params = {p.key: p for p in sourced()}
+        params, spans = {p.key: p for p in sourced()}, ranges()
         for path in sorted(paths if paths is not None else DATA.glob("*.toml")):
             with open(path, "rb") as f:
                 for key, p in _flatten(tomllib.load(f)):
                     if key in params:
                         raise ValueError(f"{key} is set twice (again in {path.name})")
+                    if key in spans:
+                        if p.low is not None or p.high is not None:
+                            raise ValueError(f"{key}'s range is read from its source, not set (in {path.name})")
+                        p = replace(p, low=spans[key][0], high=spans[key][1])
                     params[key] = p
         return cls(params)
 
@@ -200,21 +206,30 @@ def _deltas() -> list[Param]:
     ]
 
 
+def ranges() -> dict[str, tuple[float, float]]:
+    """The ranges another file states for a parameter a layer sets: the layer states the value and no range
+    (`Registry.load` refuses one). The session policy's `K` is its layer's, a ruling; its range is the calibrations'."""
+    return {f"policy.{SESSION}.k": _k_range()}
+
+
+def _k_range() -> tuple[float, float]:
+    low, high = (entry(CALIBRATIONS, name)["K"] for name in K_RANGE)
+    return low, high
+
+
 def _policies() -> list[Param]:
     cal, world = entry(CALIBRATIONS, CALIBRATION), entry(ADVERSARY, WORLD)
-    low, high = (entry(CALIBRATIONS, name)["K"] for name in K_RANGE)
+    low, high = _k_range()
     where = f"benchmarks/nci/calibrations.json {CALIBRATION}"
-    ends = f"; low: {K_RANGE[0]}; high: {K_RANGE[1]}"
     session = cal["K"] / cal["b_tok"] * world["flop_per_active_param_per_token"] * world["active_params"]
     return [
         Param(f"policy.{CALIBRATION}.gamma", cal["Gamma"], "FLOP", status="declared",
               source=f"{where} Gamma: 1M tokens x 2 x 32B active"),
-        Param(f"policy.{CALIBRATION}.k", cal["K"], "bit", low, high, f"{where} K (2.5 MB){ends}", "declared"),
+        Param(f"policy.{CALIBRATION}.k", cal["K"], "bit", low, high,
+              f"{where} K (2.5 MB); low: {K_RANGE[0]}; high: {K_RANGE[1]}", "declared"),
         Param(f"policy.{SESSION}.gamma", session, "FLOP", status="derived",
               source=f"a 1M-token session ({where}'s K at its b_tok bits a token) at benchmarks/census/adversary.json "
                      f"{WORLD}'s FLOP per active parameter per token and active parameters"),
-        Param(f"policy.{SESSION}.k", cal["K"], "bit", low, high,
-              f"ruled: a session returns at most 2.5 MB (1M tokens at 20 bits), {where}'s K{ends}", "ruled"),
     ]
 
 

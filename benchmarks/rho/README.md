@@ -60,8 +60,9 @@ beside it (`circuits.py`).
   for a window's coins and for the sampled proofs' draw and twice for the window's cryptography; and the reporting δs
   the incorrect-outputs row reports at. From `benchmarks/census`: the reference datacenter's machines
   (`deployments.json`), the count of each reference fleet of 8-GPU servers, and the world's active parameters
-  (`adversary.json`). From `benchmarks/nci/calibrations.json`: each policy's `K`, with the least and the greatest
-  calibrated `K` as its range, and `Γ`. `data/scenarios*.toml` and
+  (`adversary.json`). From `benchmarks/nci/calibrations.json`: the calibrated policy's `K`, with the least and the
+  greatest calibrated `K` as its range, and `Γ`; the session policy's `K` is a ruling `data/reference.toml` states,
+  and only its range is read (`params.ranges`). `data/scenarios*.toml` and
   `data/reference.toml` name the scenarios; `data/premises.toml` says where each assumption stands and up to what
   block size; `data/circuits.toml` holds training steps measured as Boolean circuits (the census's gates, ANDs and
   counted products, and `circuit_properties`' `s_×`, `a_out` and `a_in`).
@@ -130,7 +131,7 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 | `circuits.py` | `Circuit` (a measured training step), `compare → Comparison` with the FLOP model, `in_place` |
 | `hardware.py` | `Units`, `Location`, `Fleet`, `MonitoringPeriod` |
 | `envelopes.py` | `Pouw`, `Detection`, `Wipe`, `Certifier`; `Regime.partition`, `Regime.delta`; `Policy` |
-| `params.py` | `Registry`: dotted keys over `data/*.toml` and what another file states (`sourced`: core's monitoring periods, `PERIODS`, per-window δ and reporting δs, a proof block's widest output size class, `BLOCK_OUTPUT_BITS`, the census's reference datacenter and world, and the calibrations' `K` and `Γ`), `override`, `fields` |
+| `params.py` | `Registry`: dotted keys over `data/*.toml` and what another file states (`sourced`: core's monitoring periods, `PERIODS`, per-window δ and reporting δs, a proof block's widest output size class, `BLOCK_OUTPUT_BITS`, the census's reference datacenter and world, and the calibrations' `K` and `Γ`; `ranges`: a range read for a value a file states), `override`, `fields` |
 | `scenario.py` | `build`, `evaluate → Result`, `seconds` |
 | `analysis.py` | `sweep`, `tornado`, `threshold`, `dangers`, `rescues`, `corner`, `margins`, `phase`, `frontier`, `attribution`, `upto` |
 | `operating.py` | `work`, `exfil`, `points`, `incorrect` |

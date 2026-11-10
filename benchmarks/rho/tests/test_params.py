@@ -52,7 +52,9 @@ def test_what_another_file_states_is_read_from_it_and_no_file_restates_it(tmp_pa
     """Each parameter of `params.sourced` is the value its source states: core's monitoring periods, per-window δ (once
     for a window's coins and for the sampled proofs' draw, twice for the window's cryptography) and reporting δs; the
     census's reference datacenter's machines and the world's active parameters; the calibrations' `K`, `Γ`, and the
-    least and greatest `K` as the range. A file under `data/` that sets one of their keys is refused."""
+    least and greatest `K` as the range. A file under `data/` that sets one of their keys is refused. The session
+    policy's `K` is its layer's, held to the calibration's, with the same range read: a file that gives it a range is
+    refused."""
     window, deltas = float(profile.WINDOW_DELTA), [float(d) for d in reporting.DELTAS]
     dc = entries("census/deployments.json")["dc-12500-machines-600s"]
     world = entries("census/adversary.json")["world-inference-2027"]
@@ -72,7 +74,6 @@ def test_what_another_file_states_is_read_from_it_and_no_file_restates_it(tmp_pa
         "policy.kimi-k2-1m-raw.gamma": (raw["Gamma"], None, None),
         "policy.kimi-k2-1m-raw.k": k,
         "policy.v4-pro-session.gamma": (session, None, None),
-        "policy.v4-pro-session.k": k,
         f"model.{world['model'].lower()}.n_active": (world["active_params"], None, None),
     }
     sourced = params.sourced()
@@ -84,6 +85,13 @@ def test_what_another_file_states_is_read_from_it_and_no_file_restates_it(tmp_pa
         restated.write_text(f"[{table}]\n{leaf} = {{ value = {p.value!r} }}\n")
         with pytest.raises(ValueError, match=f"{re.escape(p.key)} is set twice"):
             Registry.load([restated])
+    assert params.ranges() == {"policy.v4-pro-session.k": k[1:]}
+    ruled = REG.param("policy.v4-pro-session.k")
+    assert (ruled.value, ruled.low, ruled.high) == k and ruled.source and ruled.status == "ruled"
+    ranged = tmp_path / "ranged.toml"
+    ranged.write_text(f"[policy.v4-pro-session]\nk = {{ value = {ruled.value!r}, high = {ruled.high!r} }}\n")
+    with pytest.raises(ValueError, match="policy.v4-pro-session.k's range is read from its source"):
+        Registry.load([ranged])
 
 
 def test_an_override_of_a_key_that_does_not_exist_is_an_error():

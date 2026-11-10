@@ -27,9 +27,11 @@ kind = "pretrain"
 tokens = { value = 3.3e13, unit = "token", source = "ruled: the work reference (33T tokens)", status = "ruled" }
 compute = { value = 9.7e24, unit = "FLOP", source = "ruled: 6 x 49e9 x 33e12", status = "ruled" }
 
-# The session's k, its range, and gamma are not set here: a session returns at most 2.5 MB (1M tokens at 20 bits),
-# the calibrations' K, and gamma is those tokens at the census's FLOP per active parameter per token (rho/params.py).
+# k's range and gamma are not set here: the registry reads the range from the inference-only policy's calibrations
+# (benchmarks/nci/calibrations.json: low kimi-k2-1m-coded, high kimi-k2-11mb-raw), and gamma is the session's tokens at
+# the census's FLOP per active parameter per token (rho/params.py).
 [policy.v4-pro-session]
+k = { value = 2e7, unit = "bit", source = "ruled: a session returns at most 2.5 MB (1M tokens at 20 bits)", status = "ruled" }
 inference_overhead = { value = nan, unit = "x", source = "not modeled: a placeholder for the honest inference workload's overhead under this partition; this package models no honest inference circuit to partition" }
 
 # Each fleet is the whole world's compute: sized to serve the census's world-inference-2027
