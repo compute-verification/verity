@@ -37,7 +37,7 @@ V = 16
 SERVED_V = 154880
 ROW = descriptor_id(bind(SA.GumbelTopPTokenSelectSharedGreedy, V=V))
 TMPLS = [t for t, _n in SRW.unit_templates(ROW)[1:]]
-CAPS = dict.fromkeys(TMPLS, 7)
+PER_CHUNK = dict.fromkeys(TMPLS, 7)
 STEP = 4
 
 
@@ -80,8 +80,8 @@ class Served:
         return self.tok[lo:hi], None
 
 
-def members(s: Served, tmpls=TMPLS, caps=CAPS):
-    return ST.wire(SRW.members(tmpls, [s.rows] * len(tmpls), None, caps), tmpls, [s.rows] * len(tmpls))
+def members(s: Served, tmpls=TMPLS, per_chunk=PER_CHUNK):
+    return ST.wire(SRW.members(tmpls, [s.rows] * len(tmpls), None, per_chunk), tmpls, [s.rows] * len(tmpls))
 
 
 def read(s: Served, ms, tmpls=TMPLS):

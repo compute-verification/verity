@@ -10,7 +10,7 @@ row's, and a top-p row's ``temp``, ``top_p``, ``seed``, ``pos`` and ``splits``, 
 constants and the sampler's committed seed and splits at the row's step, `_operand`), and for each parameter the plan wires (its
 ``Unit.wires``) the output of the unit that writes it, words serving never stores: the reader computes every unit's outputs with
 the row family's twin (`topp_stage_twins.stage_rows`, `greedy_stages.twin`), whose token it holds to the row's served one.  The
-window wires each such row to its writer's output row (`wire`, `commit.wiring`), so a sampled unit's carried words are the
+window wires each such row to its writer's output row (`wire`, `commit.wiring`), so a sampled proof block's carried words are the
 committed output of the unit that wrote them."""
 from __future__ import annotations
 
