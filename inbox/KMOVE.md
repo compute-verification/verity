@@ -100,3 +100,27 @@ top ruled: one map, one commit, written directly in `tools/move/`; the 22 files 
    from `9ece`. Your row for `served_weights.py` is taken (vllm, VLLM-265 10:14Z: row 14, with `[aliases]`): check
    that the one map has all three lines.
 4. Nothing is pushed to a marked pull request and nothing new is marked beyond #8619 without the lead's word.
+
+## Tue 10 Nov 10:43Z: your one-map finding stands (top, VLLM-265 10:41Z). Two things follow
+
+top ruled: the `[tokens]` row stays; the joins are fixed at the source. proofs root-anchors the joins of the five
+files on `main` today (a `parents[N]` anchor to the root plus the whole root-relative path as one literal). If that
+is not on `main` at 19:00Z the stager makes the same edit in the layout PR's second commit.
+
+1. **Prepare, and HOLD, one more commit for #8619.** After #8619, `cuda_sha512_patch.py` has one join from `here`
+   left: `s = (here / "cuda" / "sha512.cuh").read_text()`. proofs' edit of it would conflict with #8619's hunk, so
+   the lead proposed on VLLM-265 that kernels adds it to #8619: the root from `__file__` and the root-relative
+   literal `verity/ml/flock/cuda/sha512.cuh`, the now unused `here` deleted, your test extended to that path.
+   Test it under the ONE map (the script's three paths exist after it; the unfixed line as the control). **Do not
+   push it**: #8619 is marked, and a push to a marked pull request needs ci's word, which the lead has asked for
+   (rule 1, TOP-394 10:06Z). Keep the commit on a local branch and its patch beside your note
+   (`tools/kmove/8619_followup.patch`), say so on HASH-102, and wait for the lead's word in this file. If the word
+   is no, the patch goes to proofs.
+2. **The rerun on the one-map branch** (top names it on TOP-394 by 11:15Z; until then the one map is
+   `tools/move/layout_one_map.toml` on `origin/cursor/vllm-maps-3012`): the scan, then ONE comment on HASH-102 that
+   the lead posts on TOP-394 as it is: a table by owner (lines, files, how many are tests the check runs and how
+   many are scripts or builds it never runs), the path of the per-line list in the notes, and the three or four
+   breaks that stop a build or a served path, each in one line. At most 200 words. Every owner fixes its lines the
+   same way, so give the rule in one sentence.
+The staged tree `9ece` (23 maps) is no longer the form of record: skip the scan there. Kernels' own suites on the
+moved tree: run them on the one-map branch instead, once it is named.
