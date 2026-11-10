@@ -12,6 +12,8 @@ reads carries its instance's fields (`Owns`) and lays out a circuit (`LaidOut`),
 
 `pinnedOpens_of`: what a pinned reader opens (`PinnedOpens`) from the closure digest's pin (`DigestPins`), the
 check's provenance (`Provenance`) and a layout that reads a Definition's signature alone (`LayoutReads`).
+
+`pin_listed`: the pin an opened row is held under is one the instance lists, from `Owns` and `Provenance`.
 -/
 
 @[expose] public section
@@ -29,7 +31,7 @@ theorem complies_of {F : Form} (hown : Owns F) (hlaid : LaidOut F) (hcount : Cou
   obtain ⟨hΓ, hα⟩ := hrate _ _ _ _ hnone
   have hcar := hown j tr c hread
   have hden : (0 : ℝ) < (F.inst c).den := by
-    obtain ⟨-, -, -, -, h⟩ := hcar
+    obtain ⟨-, -, -, -, h, -⟩ := hcar
     exact_mod_cast h
   refine ⟨hcar, hlaid j tr c hread, fun d hd => ?_⟩
   have hmeets : ∀ u, Meets d d.𝓘 (F.inst c).gamma (((F.inst c).num : ℝ) / (F.inst c).den) u := by
@@ -75,5 +77,17 @@ theorem pinnedOpens_of {F : Form} (hpins : DigestPins) (hprov : Provenance F) (h
       exact ⟨hof P₀ P k₀ k hsame hopens, hlay e e₀ hparams.symm hret.symm⟩
     · exact Or.inr hcol
   · exact Or.inl fun k d hk' _ => absurd ⟨k, hk'⟩ hex
+
+/-- The pin an opened row is held under is one the instance lists. -/
+theorem pin_listed {F : Form} (hown : Owns F) (hprov : Provenance F) {j tr : Json} {c : F.Case} {P : Prog}
+    {pj : Json} {r : Row} {name p pin : String} (hread : F.read j tr = .ok c)
+    (hdec : Flock.Program.decode (F.inst c).program.toUTF8 = .ok P)
+    (hparse : Flock.JsonParse.parse (F.inst c).program = .ok pj) (hheld : F.held c r = some (.opened name p pin)) :
+    ∃ ps : Array Json, j.getObjVal? "pins" = .ok (.arr ps) ∧ Json.str pin ∈ ps := by
+  obtain ⟨log, run, -, -, hgood⟩ := hprov j tr c P pj hread hdec hparse
+  obtain ⟨-, hmem, -⟩ :
+      IsTheta log run p ∧ pin ∈ (F.inst c).pins ∧ closureDigest pj r.tid = .ok pin ∧ _ := hgood r _ hheld
+  obtain ⟨-, -, -, -, -, hpins⟩ := hown j tr c hread
+  exact ⟨_, hpins, List.mem_toArray.mpr (List.mem_map.mpr ⟨pin, hmem, rfl⟩)⟩
 
 end NciCheck.Properties.Record.SecurityProofs
