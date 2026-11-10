@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.SpotFlock.InstanceStmt.Meta
+public import Proofs.Flock.SpotFlock.InstanceStmt.Digests
 public import Proofs.Flock.SessionLoop.Concrete.File
 public import Proofs.Flock.SessionLoop.Concrete.Inputs
 import Proofs.Pouw.Period.Sort
@@ -154,14 +155,6 @@ theorem hsplit (ls lh : HmNets.Laid) : (joinNl (lines ls lh)).splitOn "\n" = lin
 
 def lsJ : Lean.Json := match J.get metaJ "leaf_scheme" "" with | .ok j => j | .error _ => .null
 def pinJ : Lean.Json := tz.pinnedLeafScheme.getD .null
-
-/-- `isSha512Hex` through `toList`: the kernel does not run `String.all`, so the walk cannot decide it on META's two
-digests (`prog_hex`, `part_hex`) by itself. -/
-theorem sha512Hex_of (s : String)
-    (h : (s.toList.length == 128 && s.toList.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')) = true) :
-    HmRow.isSha512Hex s = true := by
-  rw [HmRow.isSha512Hex, String.all_bool_eq, ← String.length_toList]
-  exact h
 
 theorem prog_hex : HmRow.isSha512Hex ((metaJ.getObjValAs? String "program_sha512").toOption.getD "") = true :=
   sha512Hex_of _ (by decide +kernel)

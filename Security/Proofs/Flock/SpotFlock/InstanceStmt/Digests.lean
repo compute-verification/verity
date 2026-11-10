@@ -65,4 +65,12 @@ theorem partHex_eq : (hexOf <$> HmRow.partitionDigest partObj).toOption = some p
   simp only [canon_fuel 8]
   decide +kernel
 
+/-- `isSha512Hex` through `toList`: the kernel does not run `String.all`, so no walk decides it on a digest by itself
+(META's two, `prog_hex` and `part_hex`, and the partition's program, `program_hex`). -/
+theorem sha512Hex_of (s : String)
+    (h : (s.toList.length == 128 && s.toList.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')) = true) :
+    HmRow.isSha512Hex s = true := by
+  rw [HmRow.isSha512Hex, String.all_bool_eq, ← String.length_toList]
+  exact h
+
 end SpotFlock.InstanceStmt
