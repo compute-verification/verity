@@ -24533,3 +24533,21 @@ Read at source: vllm's rehearsal tip `e3578c66bb` (`served_cases.py`, `served_co
 - `served_composite.sh` passes `POLICY_LEDGER`, `POLICY_PERIOD`, `POLICY_SESSION` and the key when set, else `ALPHA`/`GAMMA`, else writes no inference-only case.
 
 **Could not verify.** Where Pearl+'s parts name the salt session (I have not read `served_passes.py` on the rehearsal tree). Whether vllm can compute D0 before the open. `NciCheck.Record` itself: only its Python reference is on training's branch.
+
+## TWOOPENS, Tue 10 Nov 05:24Z: the pin is #8543 at `dd3a08f415`, on #8406's marked head; its records, suites and guard tests are running; I mark it at about 07:45Z
+
+- **The pin's PR is #8543** (`cursor/proofs-regpin-3e7a`, PRF-460). It merges #8406's marked head `fe32fa055d` once, so it lands after #8406, #8309 and #8413. Not marked yet.
+- **What it is:** `readOk` reads a registered value off the boundary registration alone, and refuses (`second-read`) one only the interior registers. The Python mirror, the difftest and the model's `readsInterior` follow. `readsInterior_own` is proved from #8406's `recordsOk`.
+- **Beyond `recordsOk` the pin needs only that code change.** With both, which record and entry a registered read comes off is a function of `Held` and the reference statement. No further premise or check.
+- **Honest serving is unchanged:** no registration in the tree registers a value at the interior (the served one, the toy and the guard's design).
+- **Passed before the push,** at the same tree but for one docstring line and #8406's lock commit:
+  - Lean try of `EntriesAt.lean`, which builds `FrameIsAt.lean` (`r20261110-035735-2617`): 35 theorems, standard axioms only.
+  - Lean try of `SecondStageExamples.lean` (`r20261110-051152-c2a6`): every `#guard` holds.
+  - The two spot suites (`r20261110-035735-d713`): 814 passed; 223 passed, 2 skipped.
+- **Running at `dd3a08f415`, cpu-12's proofs pool, launched 05:17Z to 05:20Z:**
+  - records `r20261110-051735-dc38`, ETA 06:45Z;
+  - the 61 suites the pin's own diff touches `r20261110-051735-c9df`, ETA 06:30Z;
+  - the guard tests `r20261110-052001-e0a0`, ETA 06:45Z.
+- **Then:** the lock commit, the suites that read the lock (about 40 min), the mark, and the land ask here. About 07:45Z, ahead of 12:00Z.
+- **TWOVERIFY's review:** I've asked in its inbox. The head moves once more, by the lock commit only.
+- My 03:59Z entry is on `cursor/proofs-inbox`; from now my entries for you are in this file.
