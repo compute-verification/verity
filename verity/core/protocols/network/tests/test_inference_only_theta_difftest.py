@@ -2,7 +2,7 @@
 
 `verity/core/protocols/network/inference_only/lean/scripts/theta_difftest_vectors.py` writes 1,218 declarations with θ, θ's
 provenance and the service's trusted input (the deployment's registration log, the run and its parameters), each expanded
-gate by gate where the policy check gives a verdict, and `scripts/inference_only_reference.py`'s `check_baseline` on each. `check`
+gate by gate where the policy check gives a verdict, and `scripts/inference_only_reference.py`'s `check_theta` on each. `check`
 runs the Lean half in its Lean audit (`runs` in that package's `lean-audit.json`): `InferenceOnlyCheck/ThetaDifftestMain.lean`
 fails unless `InferenceOnlyCheck.Theta.check` gives Python's result on every case and `InferenceOnlyCheck.Theta.checkUnrolled` the same
 on every expansion. As for the inference-only check's other two difftests, the audit checks the data against the record's SHA-256 and caches
@@ -55,7 +55,7 @@ def test_the_random_cases_reach_every_code():
     got = Counter()
     for seed in range(300):
         c = vectors.case(seed)["case"]
-        out = reference.check_baseline(c["instance"], c["trusted"])
+        out = reference.check_theta(c["instance"], c["trusted"])
         got[out.get("error")] += 1
         if "error" not in out:
             assert out == reference.check_desc(c["instance"])
@@ -73,10 +73,10 @@ def test_the_pinned_cases_get_their_codes():
                                                 "run-program"]
     for p in pinned:
         inst, tr = p["case"]["instance"], p["case"]["trusted"]
-        out = reference.check_baseline(inst, tr)
+        out = reference.check_theta(inst, tr)
         assert out.get("error") == p["malformed"]
         if (e := vectors.expanded(p["case"])) is not None:
-            assert reference.check_baseline_unrolled(e["instance"], e["trusted"]) == out
+            assert reference.check_theta_unrolled(e["instance"], e["trusted"]) == out
 
 
 def _relinked(log: list[dict], run: int, program: str) -> dict:
@@ -100,17 +100,17 @@ def test_a_windows_record_binds_its_program_whatever_theta():
     for p in (a, b):
         inst, tr = p["case"]["instance"], p["case"]["trusted"]
         assert inst["theta"] == [] and inst["provenance"] == []
-        assert reference.check_baseline(inst, tr) == reference.check_desc(inst) and reference.check_desc(inst)["complies"]
+        assert reference.check_theta(inst, tr) == reference.check_desc(inst) and reference.check_desc(inst)["complies"]
     assert a["case"]["instance"]["program"] != b["case"]["instance"]["program"]
     assert ab["case"] == {"instance": b["case"]["instance"], "trusted": a["case"]["trusted"]}
     assert ba["case"] == {"instance": a["case"]["instance"], "trusted": b["case"]["trusted"]}
     for p in (ab, ba):
-        out = reference.check_baseline(p["case"]["instance"], p["case"]["trusted"])
+        out = reference.check_theta(p["case"]["instance"], p["case"]["trusted"])
         assert out["error"] == "run-program", out
     inst, tr = ab["case"]["instance"], ab["case"]["trusted"]
     run = [reference.record_digest(r) for r in tr["log"]].index(tr["run"])
     fixed = tr | _relinked(tr["log"], run, codec.program_digest(json.loads(inst["program"])))
-    assert reference.check_baseline(inst, fixed) == reference.check_desc(inst)
+    assert reference.check_theta(inst, fixed) == reference.check_desc(inst)
 
 
 def test_an_output_entry_is_refused_as_an_unknown_kind():
@@ -125,13 +125,13 @@ def test_an_output_entry_is_refused_as_an_unknown_kind():
     digests = [reference.record_digest(r) for r in tr["log"]]
     src = tr["log"][digests.index(out["record"])]
     assert reference.last_with(src, "roots", "port", out["port"])["root"] == out["root"]
-    assert reference.check_baseline(inst, tr)["error"] == "theta-provenance"
+    assert reference.check_theta(inst, tr)["error"] == "theta-provenance"
     unknown = inst | {"provenance": [*inst["provenance"][:t], out | {"kind": "weights"}, *inst["provenance"][t + 1:]]}
-    assert reference.check_baseline(unknown, tr)["error"] == "theta-provenance"
+    assert reference.check_theta(unknown, tr)["error"] == "theta-provenance"
     value = next(e["value"] for e in src["registered"] if e["root"] == out["root"])
     registered = {"kind": "registered", "registration": out["record"], "value": value, "root": out["root"]}
     fixed = inst | {"provenance": [*inst["provenance"][:t], registered, *inst["provenance"][t + 1:]]}
-    assert reference.check_baseline(fixed, tr) == reference.check_desc(inst)
+    assert reference.check_theta(fixed, tr) == reference.check_desc(inst)
 
 
 def test_theta_cites_the_first_record_of_the_deployments_log():
@@ -148,14 +148,14 @@ def test_theta_cites_the_first_record_of_the_deployments_log():
         digests = [reference.record_digest(r) for r in tr["log"]]
         assert tr["log"][0]["previous"] is None and digests.index(tr["run"]) == run
         assert inst["provenance"] and all(e["registration"] == digests[0] for e in inst["provenance"])
-        assert reference.check_baseline(inst, tr) == reference.check_desc(inst)
+        assert reference.check_theta(inst, tr) == reference.check_desc(inst)
     inst, tr = mid["case"]["instance"], mid["case"]["trusted"]
     digests = [reference.record_digest(r) for r in tr["log"]]
     t, e = next((t, e) for t, e in enumerate(inst["provenance"]) if e["registration"] != digests[0])
     assert digests.index(e["registration"]) == 1 and digests.index(tr["run"]) == 2
     assert reference.last_with(tr["log"][1], "registered", "value", e["value"])["root"] == e["root"]
-    out = reference.check_baseline(inst, tr)
+    out = reference.check_theta(inst, tr)
     assert out["error"] == "theta-not-at-deployment-start"
     first_record = e | {"registration": digests[0]}
     fixed = inst | {"provenance": [*inst["provenance"][:t], first_record, *inst["provenance"][t + 1:]]}
-    assert reference.check_baseline(fixed, tr) == reference.check_desc(inst)
+    assert reference.check_theta(fixed, tr) == reference.check_desc(inst)
