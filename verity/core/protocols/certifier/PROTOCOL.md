@@ -2047,6 +2047,30 @@ certified response holds at most its request's `max_tokens` tokens, hence at mos
 (`NetTiming.Guarantees.ResponseCapped`). The cap and its reason enter the parameters' digest, so every record head binds
 them; an uncapped schedule hashes neither and keeps its digest. The period check reads uncapped schedules only.
 
+**The lengths rows** (`WardenParams.lengths`, id form only, none by default) are what the network certifier signs of the
+requests it released, beside its cells: each one's place in the release order, its request's bytes, its response's
+outputs (its `DATA` cells) and whether it ended in a `FAIL`. With them the network certifier:
+- releases no connection whose client has failed (no `END`, no place in the release order, nothing for the server), so
+  every released connection ends at an egress slot, in its `END` or a server's `FAIL`;
+- fails such a connection at its first egress slot, bucket s + D, with padding both ways until then, so every
+  connection holds its lane through s + D, as long as the ingress proof block's scan holds its slot, and a client's
+  failure leaves the next admission a slot. The read of the records in the clear (`warden.audit`) fails no window for
+  a connection that was never released;
+- cuts a request cell only where the ingress proof block's reference reads it as the next cell of a canonical id
+  request (`io_request.read`). A request that is none fails as its client's (`malformed`), unreleased: no server sees
+  it, so it is never a server's failure;
+- lays each execution phase's releases out a row a slot stride in two tables, `lengths` and `fails`, K =
+  `WardenParams.stride_releases` slots a row whatever the load, commits each as it commits its cells' rows, and signs
+  one head for the link's execution phase, once, that lists both (`connection_rows`, whose docstring has the slots,
+  the head and the registration). It signs execution phase w's head at the close of execution phase w + 1, where every
+  connection released in w has ended, so a period's last execution phase needs the one after it. An execution phase
+  whose records, or the next one's, weren't published complete has no head.
+
+The tables say what the same execution phases' records say, in another order: the network certifier writes both from
+the cells it cut and released, and that they agree rests on its own code (`trusted-host`), not on a proof. The form
+enters the parameters' digest; a schedule without lengths rows hashes nothing of it and keeps its digest, records, heads
+and certificates. The period check reads schedules without lengths rows only, and no proof block opens the tables yet.
+
 **The leak bound** is what a server can signal on the wire beyond the response it sends:
 - **0 size bits.** Every cell is B bytes, whatever its kind (`PAD`, `DATA`, `END`, `FAIL` or `REFUSED`).
 - **0 timing bits, at bucket resolution.**
