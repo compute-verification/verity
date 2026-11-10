@@ -101,6 +101,9 @@ def kind_of(path: str, text: str) -> str:
 
 
 def _tail(r: subprocess.CompletedProcess, n: int = 12) -> str:
+    if (keep := os.environ.get("STAGE_KEEP_OUTPUT")):      # STAGING ONLY: a failed script's whole output, for the stager
+        with open(keep, "a") as f:
+            f.write(f"==== {shlex.join(map(str, r.args))} (exit {r.returncode})\n{r.stdout}\n---- stderr\n{r.stderr}\n")
     return "\n".join((r.stderr.strip() or r.stdout.strip()).splitlines()[-n:])
 
 
