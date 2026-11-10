@@ -70,7 +70,7 @@ theorem real_step_charged {V S T O E q b : ℝ} (hS : 0 ≤ S) (hO : 0 ≤ O) (h
     _ = √(S / (4 * q) * O + S / (4 * q) * E) := by rw [mul_add]
     _ ≤ √(S / (4 * q) * O) + √(S / (4 * q) * E) := sqrt_add_le (mul_nonneg hs hO) (mul_nonneg hs hE)
     _ ≤ √(S / (4 * q) * O) + √(S / (4 * q) * (T / b)) :=
-        add_le_add_left (Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left hE' hs)) _
+        add_le_add le_rfl (Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left hE' hs))
     _ = √(S * O / q) / 2 + √(S * T / (q * b)) / 2 := by rw [h2, h3]
 
 /-- **`HECharged` from the counts over a set of blocks.** (H) at the cap `k` holds at what each block of `G` reads, so
@@ -81,7 +81,7 @@ theorem HECharged_of_countsOn (hC : CountsOn) : Guarantees.HECharged := by
   obtain ⟨Vc, F, E, hN, hV, hF, hbE, hb0⟩ := hC ι d W m T P G hT
   have hq : 0 < βw * βx := mul_pos hw hx
   have h4 : (0 : ℝ) < 4 * βw * βx := mul_pos (mul_pos four_pos hw) hx
-  have hΠ : ((∑ u ∈ G, piMax d W (d.unregistered (P.gates u)).card : ℕ) : ℝ) ≤ S / (4 * (βw * βx)) :=
+  have hpi : ((∑ u ∈ G, piMax d W (d.unregistered (P.gates u)).card : ℕ) : ℝ) ≤ S / (4 * (βw * βx)) :=
     calc ((∑ u ∈ G, piMax d W (d.unregistered (P.gates u)).card : ℕ) : ℝ)
         = ∑ u ∈ G, (piMax d W (d.unregistered (P.gates u)).card : ℝ) := Nat.cast_sum _ _
       _ ≤ ∑ u ∈ G, ((d.unregistered (P.gates u)).card : ℝ) ^ 2 / (4 * βw * βx) :=
@@ -96,7 +96,7 @@ theorem HECharged_of_countsOn (hC : CountsOn) : Guarantees.HECharged := by
       _ ≤ (((∑ u ∈ G, piMax d W (d.unregistered (P.gates u)).card) * (W.O + E) : ℕ) : ℝ) := Nat.cast_le.2 h0
       _ = ((∑ u ∈ G, piMax d W (d.unregistered (P.gates u)).card : ℕ) : ℝ) * ((W.O + E : ℕ) : ℝ) :=
           Nat.cast_mul _ _
-      _ ≤ S / (4 * (βw * βx)) * ((W.O + E : ℕ) : ℝ) := mul_le_mul_of_nonneg_right hΠ (Nat.cast_nonneg _)
+      _ ≤ S / (4 * (βw * βx)) * ((W.O + E : ℕ) : ℝ) := mul_le_mul_of_nonneg_right hpi (Nat.cast_nonneg _)
       _ = S / (4 * (βw * βx)) * (W.O + E) := by rw [Nat.cast_add]
   have hbE' : b * (E : ℝ) ≤ T := by
     by_cases h : W.fed.Nonempty
@@ -128,7 +128,7 @@ theorem HECharged_of_countsOn (hC : CountsOn) : Guarantees.HECharged := by
         mul_le_mul_of_nonneg_left hfirst (Nat.cast_nonneg γ)
     _ = γ * ((∑ u ∈ Gᶜ, (W.inside (P.gates u)).card : ℕ) : ℝ) + γ * workHEOn T S (βw * βx) b W.O :=
         mul_add _ _ _
-    _ ≤ (Gᶜ.card : ℝ) * c + γ * workHEOn T S (βw * βx) b W.O := add_le_add_right hheld _
+    _ ≤ (Gᶜ.card : ℝ) * c + γ * workHEOn T S (βw * βx) b W.O := add_le_add hheld le_rfl
 
 theorem toy_card_P2 : ∀ u, (Toy.P2.gates u).card ≤ 1 := by decide
 
