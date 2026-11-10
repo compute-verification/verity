@@ -23,11 +23,7 @@ check run keeps each audit's and its provers' (`status_export.py --facts`), a re
 
 ~~~text
 bash tools/verity/lean/setup.sh PKG                      elan, PKG's lean-toolchain, its pinned dependencies, Mathlib's cache when
-                                                  Mathlib is a dependency, and main's cached build of PKG (below); a PKG
-                                                  of an earlier layout is taken through the recorded moves
-python3 tools/verity/lean/moved.py PATH | --carry        where a directory of an earlier layout is now (research's `moves.json`);
-                                                  --carry: after a layout move, move each package's `.lake` in this
-                                                  checkout from the package's former path to where the package is
+                                                  Mathlib is a dependency, and main's cached build of PKG (below)
 python tools/verity/lean/cache.py get [PKG...]           main's cached build of each package, every file sha256-checked
 python tools/verity/lean/check.py [--build] PKG...       audit these packages (--build: setup.sh and lake build first)
 python tools/verity/lean/check.py --update PKG...        write the guarantees' records from the build; commit the diff (a copy of
