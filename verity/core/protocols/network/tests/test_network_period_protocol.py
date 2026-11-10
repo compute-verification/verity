@@ -122,6 +122,7 @@ ROWS_REFUSALS = {
     "rows-prog-unwired": ("is no compute audit's slot entries",) * 2,
     "rows-tied-undrawn": ("units drawn: K charges a tied audit no faulty term",) * 2,
     "rows-state-untied": (PC.UNSTATED,) * 2,
+    "rows-answer-tied": (PC.TIE_UNHELD,) * 2,
 }
 
 
@@ -130,8 +131,9 @@ def test_the_rows_form_refuses_what_it_must(server):
     connection (traffic past its Program slots), a registration not under the deployment key, the scan's answer for
     another window's rows, rows under a schedule whose digest isn't the bound one, scans at two δ, a scan answered over
     other than its 2T units, a scan whose `prog` is no compute audit's output, one whose `prog` is an audit's output but
-    no `SlotEntry_v1` template's entries, an audit a scan's `prog` is tied to with a unit unsampled, and a scan whose
-    state is not its wired audit's `SCAN_STATE`: Lean and the mirror each refuse every one at that check."""
+    no `SlotEntry_v1` template's entries, an audit a scan's `prog` is tied to with a unit unsampled, a scan whose
+    state is not its wired audit's `SCAN_STATE`, and a scan whose answer names a tied Input other than its `prog`
+    alone: Lean and the mirror each refuse every one at that check."""
     for m, (lean, mirror) in ROWS_REFUSALS.items():
         for n in range(4):
             case = build(m, n, small=n % 2 == 0)
@@ -173,6 +175,49 @@ def test_a_scan_whose_state_is_not_its_wired_audits_is_refused(server, monkeypat
     monkeypatch.setattr(PC, "_state_tied", lambda p, audits, reg: True)
     for n in range(2):
         refused_by_lean_alone(build("rows-state-untied", n, small=True), server, PC.UNSTATED)
+
+
+def test_a_scan_whose_answer_names_a_tie_the_check_does_not_wire_is_refused(server, monkeypatch):
+    """One-stage's registration check lets several proof blocks read a run Input only where its verifier names it tied,
+    and its answer's public outputs then name it (`PC.TIED_KEY`): the acceptance rests on a later check that ties the
+    Input's rows to the registrations that computed them. The period check holds one such tie, the scan's `prog`'s
+    (`wired`), so the rows form refuses, in Lean and in the mirror and by name, every other list (`PC.TIED_LISTS`): a
+    second tied Input beside `prog`, before or after it, another one alone, `prog`'s registration entry in place of
+    its parameter, `prog` twice, and what is no list of names one-stage writes (none, a string, a nested list, null);
+    and a mirror that skips the check accepts what Lean refuses."""
+    lists = PC.TIED_LISTS
+    for u in lists:
+        monkeypatch.setattr(PC, "TIED_LISTS", (u,))
+        for n in range(2):
+            case = build("rows-answer-tied", n, small=n % 2 == 0)
+            windows = json.loads(bytes.fromhex(case["evidence"]))["windows"]
+            assert any(x["answer"]["public"][PC.TIED_KEY] == u for x in windows), (u, n)
+            assert PC.TIE_UNHELD in reference(case)["reason"], (u, n, reference(case))
+            verdict, out = D.replay(PORT, case, server)
+            assert verdict == REJECT and PC.TIE_UNHELD in json.loads(out)["reason"], (u, n, out)
+    monkeypatch.setattr(PC, "TIED_LISTS", lists)
+    monkeypatch.setattr(PC, "_tied_input_wired", lambda a: True)
+    for n in range(2):
+        refused_by_lean_alone(build("rows-answer-tied", n, small=True), server, PC.TIE_UNHELD)
+
+
+def test_an_honest_scans_answer_names_its_prog_tied_or_nothing(server):
+    """Over honest rows periods, each link-window's scan's answer names its `prog` tied, and nothing else, exactly
+    where several of its units read one slot entry (the schedule's `every` ≥ 2), as one-stage's registration check
+    publishes it, and names nothing where each reads its own (`every` = 1): Lean accepts each with the mirror's
+    public, some of either kind."""
+    seen = Counter()
+    for n in range(12):
+        case = build("rows-honest", n, small=n % 2 == 0)
+        shared = case["params"]["schedule"]["every"] > 1
+        windows = json.loads(bytes.fromhex(case["evidence"]))["windows"]
+        assert all(x["answer"]["public"].get(PC.TIED_KEY) == ([PC.PROG_PARAM] if shared else None) for x in windows), n
+        out = reference(case)
+        assert out["verdict"] == ACCEPT, (n, out)
+        verdict, got = D.replay(PORT, case, server)
+        assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (n, got)
+        seen[shared] += 1
+    assert seen[True] and seen[False], seen
 
 
 def test_a_scan_whose_prog_is_no_audits_output_is_refused(server, monkeypatch):

@@ -333,7 +333,8 @@ theorem rowsStateTied : RowsStateTied := by
   · cases h
   · cases h
   · rename_i hF
-    have h0 := firstFinding_none hF _ (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem))
+    have h0 := firstFinding_none hF _
+      (List.mem_append_right _ (List.mem_append_left _ (Array.mem_toList_iff.mpr hmem)))
     unfold stateCheck at h0
     split at h0
     · assumption

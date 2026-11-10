@@ -159,7 +159,13 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   the row before it, the prover's word for none; row 0 is the empty state, which no unit reads, and only the Programs
   anchored at bucket 0 read it, whose entries the scan reads for no slot, since its state before bucket 0 has none
   occupied. A slot's Program anchored at bucket a reads row a, the scan's state before a, so it computes its entry on
-  the requests the scan read, not on a state the prover chose (`Properties.NetworkPeriod.RowsStateTied`).
+  the requests the scan read, not on a state the prover chose (`Properties.NetworkPeriod.RowsStateTied`);
+* in the rows form, link-window `w`'s scan's answer names no tied Input but the one that wiring holds
+  (`tiedInputWired`): where its public outputs hold `rests_on_period_check`, the run Inputs one-stage's registration
+  check let several proof blocks read because a later check ties their rows to the registrations that computed them,
+  it is exactly `["prog"]`, the scan root's parameter its `scan/prog` entry registers. An answer that names another
+  Input, or a second one, rests on a tie no check holds, and is refused; one with no such key names none
+  (`Properties.NetworkPeriod.RowsTiedInputWired`).
 
 **Public**, on acceptance: `K` and its terms, each a ceiling of `log2` of `PeriodLeakAccepted`'s factor:
 
@@ -1123,6 +1129,39 @@ def stateChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × S
   | .rows s .. => c.windows.zipIdx.map fun (reg, i) => stateCheck p s c.audits (p.first + i) reg
   | .clock _ => #[]
 
+/-- The scan root's parameter its `progName` entry registers: the name one-stage's registration check publishes where it
+lets several proof blocks read that Input. -/
+def progParam : String := "prog"
+
+/-- The key of one-stage's public outputs that holds its registration check's tied Inputs: the run Inputs it let
+several proof blocks read because a later check ties their rows to the registrations that computed them. -/
+def tiedKey : String := "rests_on_period_check"
+
+/-- Whether one-stage's answer names no tied Input but the one `wired` holds: its public outputs have no `tiedKey`,
+or under it exactly the scan's Programs' row (`progParam`). It compares the published name; that the name is the Input
+`progName` registers is one-stage's registration check's. -/
+def tiedInputWired (a : Core.Answer) : Bool := match a.published with
+  | none => true
+  | some pub => match pub.getObjVal? tiedKey with
+    | .ok (.arr #[.str t]) => t == progParam
+    | .ok _ => false
+    | .error _ => true
+
+/-- Link-window `w`'s tied Input finding in the rows form: a refusal unless its scan's answer names no tied Input
+but the scan's `prog` (`tiedInputWired`). -/
+def tiedInputCheck (w : Nat) (x : Window) : Option (Core.Verdict × String) :=
+  if tiedInputWired x.answer then none else
+    some (.reject, s!"window {w}: the scan's answer rests on a tie this check does not hold: its public outputs' \
+      {tiedKey} is not [\"{progParam}\"] alone, and this check wires only the scan's {progName} to a compute audit's \
+      slot entries, so another Input that several proof blocks read has rows nothing ties to the registration that \
+      computed them. Name only {progParam} tied in the scan's registration check, and let no two proof blocks read \
+      another run Input")
+
+/-- The rows form's tied Input findings, one a link-window, in order (`tiedInputCheck`); none in the clock form. -/
+def tiedInputChecks (p : Params) (e : Evidence) : Array (Option (Core.Verdict × String)) := match p.form with
+  | .rows .. => e.windows.zipIdx.map fun (x, i) => tiedInputCheck (p.first + i) x
+  | .clock _ => #[]
+
 def findingOf {α : Type} : Found α → Option (Core.Verdict × String)
   | .error x => some x
   | .ok _ => none
@@ -1237,7 +1276,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Pro
         (.reject, s!"a scan's δ {f.delta.toString} is not the period's, {f0.delta.toString}")
     let as := auditChecks p c e
     match firstFinding (ws.toList.map findingOf ++ [oneDelta] ++ as.toList.map findingOf ++ (wiredChecks p c).toList ++
-        (stateChecks p c).toList) with
+        ((stateChecks p c).toList ++ (tiedInputChecks p e).toList)) with
     | some (.reject, r) => .reject r
     | some (_, r) => .undecided r
     | none =>

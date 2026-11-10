@@ -26,7 +26,9 @@ registration holding both rows' roots and domains and its `prog` (`PROG`) at the
 that link-window's slot entries' template (`slot_entry`, `io_shell.SlotEntry_v1` at its smallest circuit-check row, a
 pinned Definition, with one member a slot) in its own audit's registration and Program (`_prog_tied`, `_wired`), and its
 state (`STATE`) at the root and domain of that audit's `SCAN_STATE` (`_state_tied`), answered by one-stage with a
-stratified or subset sample at the period's δ; the scan's Program is its generator form, stand-ins of its three templates
+stratified or subset sample at the period's δ, its public outputs naming its `prog` tied (`TIED_KEY`) where several of
+its units read one slot entry (`every` ≥ 2), as one-stage's registration check publishes it; the scan's Program is
+its generator form, stand-ins of its three templates
 at small widths in the Boolean profile's types, as the scan's Definitions have them (`scan_descriptor`), and a Program in
 the checker form is a bad scan (`bad_scans`), as is each check's negative of what `NetTiming.Layout.Fits` asks
 (`scan_negatives`). Beside them, the compute audits (in the rows form at least one, whose registrations' `roots` hold the
@@ -35,7 +37,9 @@ scans' `prog`), each registered over its Program, a population of one or two sta
 sample (a work sampling design's) and its bound on incorrect proof blocks, every unit sampled for an audit a scan's `prog` is tied to
 (`tied-undrawn`: one such audit sampled `subset:k`, k < N), and a link-window whose scan's state is not its wired audit's
 `SCAN_STATE` refused (`state-untied`: a `SCAN_STATE` that skips or alters one of the scan's transitions, at another root
-or domain, or none, `UNSTATES`). `case(kind, seed, form)` is a small period of the form aimed at a verdict, or at a
+or domain, or none, `UNSTATES`), and one whose scan's answer names a tied Input the check does not wire
+(`answer-tied`: a second one beside `prog`, another alone, or no such list, `TIED_LISTS`). `case(kind, seed, form)`
+is a small period of the form aimed at a verdict, or at a
 decoding failure (`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)` one of each with its answer, as a
 composition's difftest takes a real component's cases.
 
@@ -750,6 +754,10 @@ PROG = "scan/prog"
 #: value a window circuit registers the scan's state rows as (`stateValue`, the certifier's `blocks.SCAN_STATE`)
 STATE = "scan/state"
 SCAN_STATE = "verity/certifier/scan-state/v1"
+#: `progParam`: the scan root's parameter its `PROG` entry registers, as one-stage's registration check names it
+PROG_PARAM = "prog"
+#: `tiedKey`: the key of one-stage's public outputs that holds the tied Inputs its registration check let through
+TIED_KEY = "rests_on_period_check"
 
 
 def output_port(port) -> bool:
@@ -824,6 +832,12 @@ def _state_tied(p: Params, audits: list[dict], reg: dict) -> bool:
     return all(map(at, es)) and any(
         _wired(dataclasses.replace(p, audits=[a]), [r], reg) and bool(ss := _states(r)) and all(map(at, ss))
         for a, r in zip(p.audits, audits))
+
+
+def _tied_input_wired(a: dict) -> bool:
+    """`tiedInputWired`: the answer's public outputs name no tied Input, or the scan's `prog` alone."""
+    pub = a["public"]
+    return not (isinstance(pub, dict) and TIED_KEY in pub) or pub[TIED_KEY] == [PROG_PARAM]
 
 
 def _prog_tied(audits: list[dict], reg: dict) -> bool:
@@ -908,6 +922,8 @@ def _audit_check(i: int, audit: Audit, reg: dict, a: dict, tied: bool = False) -
 UNWIRED = "the scan's prog is no compute audit's slot entries"
 #: `stateCheck`'s refusal, after its window's number.
 UNSTATED = "the scan's state is no wired audit's SCAN_STATE"
+#: `tiedInputCheck`'s refusal, after its window's number.
+TIE_UNHELD = "the scan's answer rests on a tie this check does not hold"
 
 
 def clog2(x: int) -> int:
@@ -983,6 +999,8 @@ def check(p: Params, c: Commitment, e) -> tuple:
                      if not _wired(p, c.audits, reg)]
         findings += [Finding(REJECT, f"window {p.first + i}: {UNSTATED}") for i, reg in enumerate(c.windows)
                      if not _state_tied(p, c.audits, reg)]
+        findings += [Finding(REJECT, f"window {p.first + i}: {TIE_UNHELD}") for i, x in enumerate(windows)
+                     if not _tied_input_wired(x.answer)]
     if rejected := next((f for f in findings if f.verdict == REJECT), None):
         return REJECT, rejected.reason
     if findings:
@@ -1036,7 +1054,8 @@ EXPECT = {
     "rows-schedule": REJECT,
     "rows-answer-protocol": REJECT, "rows-answer-other": REJECT, "rows-answer-window": REJECT,
     "rows-answer-reject": REJECT, "rows-answer-undecided": UNDECIDED, "rows-answer-profile": REJECT,
-    "rows-answer-bound": REJECT, "rows-delta": REJECT, "rows-units": REJECT, "rows-prog-untied": REJECT,
+    "rows-answer-bound": REJECT, "rows-answer-tied": REJECT, "rows-delta": REJECT, "rows-units": REJECT,
+    "rows-prog-untied": REJECT,
     "rows-prog-unwired": REJECT, "rows-tied-undrawn": REJECT, "rows-state-untied": REJECT,
     "rows-audit-other": REJECT, "rows-audit-reject": REJECT, "rows-audit-undecided": UNDECIDED,
     "rows-audit-profile": REJECT, "rows-audit-bound": REJECT, "rows-audit-program": REJECT, "rows-audit-units": REJECT,
@@ -1293,6 +1312,10 @@ UNWIRES = ("output", "key", "members", "body")
 #: scan's transitions), no state entry or one under another name, at another audit's `SCAN_STATE`, its root no string,
 #: or a second state entry at another root; the wired audit's `SCAN_STATE` absent, at another root, or beside a second
 UNSTATES = ("root", "domain", "missing", "renamed", "other", "untyped", "extra", "audit", "audit-root", "audit-extra")
+#: What `rows-answer-tied` puts under `TIED_KEY` in its link-window's scan's answer: a second tied Input beside `prog`,
+#: another one alone, `prog`'s registration entry in place of its parameter, `prog` twice, and what is no list of names
+#: one-stage writes: none (it writes the key only with a name), a string, a nested list, null
+TIED_LISTS = (["prog", "state"], ["state", "prog"], ["state"], [PROG], ["prog", "prog"], [], "prog", [["prog"]], None)
 
 
 def _present(e: dict) -> dict:
@@ -1526,8 +1549,13 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         answer = _accepted(digest, program, rec["partition"], units, k,
                            r.choice([d for d in DELTAS if d != delta]) if aimed and m == "delta" else delta,
                            r.randint(0, units), strata)
+        if sched.every > 1:
+            # every `every` units read one slot entry, which one-stage's registration check lets through only tied
+            answer["public"][TIED_KEY] = [PROG_PARAM]
         if aimed:
-            if m == "answer-protocol":
+            if m == "answer-tied":
+                answer["public"][TIED_KEY] = r.choice(TIED_LISTS)
+            elif m == "answer-protocol":
                 answer["protocol"] = "verity/sampled-proofs/two-stage/v1"
             elif m == "answer-other":
                 answer["commitment"] = r.choice([r.randbytes(64).hex(), R.digest(rec | {"population": 1})])
