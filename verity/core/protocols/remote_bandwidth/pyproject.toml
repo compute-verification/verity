@@ -19,6 +19,11 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/spot/one_stage/verdict.py",
           "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments",
           "verity/ml/crypto", "verity/ml/randomness",
+          # what test_appends.py and test_gate_ranges.py import of the circuits (the requirement and its census, the
+          # scalar ops, the silicon semantics), each by its own path, and the `__init__.py` of `verity.ml.definitions`
+          # and `verity.hardware`: an import of a module under either package executes it
+          "verity/ml/circuits/requirement.py", "verity/ml/circuits/census.py", "verity/ml/circuits/ops",
+          "verity/ml/circuits/silicon", "verity/ml/definitions/__init__.py", "verity/hardware/__init__.py",
           # PoUS's setup, P2 and vk, which a P2 store is under (`p2.py`)
           "verity/core/protocols/pous",
           "verity/ml/protocols/__init__.py", "verity/ml/protocols/pous",

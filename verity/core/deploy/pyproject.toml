@@ -7,4 +7,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # What the tests import of `verity`: the deployment layer, the wire it reads frames with, and S1's LMS for the parties'
 # test keys (the handshake signs with them).
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/wire", "verity/ml/__init__.py",
-          "verity/ml/crypto"]
+          "verity/ml/crypto",
+          # the commitments package's `__init__.py` and the modules it imports: an import of a module under that package
+          # executes them
+          "verity/ml/commitments/__init__.py", "verity/ml/commitments/identity.py", "verity/ml/commitments/indexed.py",
+          "verity/ml/commitments/limits.py", "verity/ml/commitments/merkle.py", "verity/ml/commitments/scheme.py"]
