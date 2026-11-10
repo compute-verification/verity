@@ -2,7 +2,7 @@ module
 
 public import Definitions.Accounting.Schedule
 public import RemoteAudit.Schedule
-public import Properties.RemoteAudit
+public import Properties.Accounting.Remote
 
 /-!
 # The schedule check fixes each credited pass's plan (`RemoteAudit.Schedule`)
@@ -19,8 +19,7 @@ prover committed before the session's first coin, and returns the schedule's bit
   passes and the same appends. A layout that follows a coin at a schedule the verifier counted is refused.
 
 They take no premise. The schedule's bits (`scheduleBits`) are one-to-one on well-formed schedules
-<<<<<<< ours
-(`ScheduleCode.scheduleBits_injective` in `Proofs.Properties.RemoteAudit.Schedule`: LEB128 is prefix-free, and each
+(`ScheduleCode.scheduleBits_injective` in `Proofs.Properties.Accounting.Remote.Schedule`: LEB128 is prefix-free, and each
 list comes after its length).
 
 The model's layout (`Accounting.ScheduleDeterministic`, `Accounting.Assumptions.SteeredLayout`) is the verifier's:
@@ -37,24 +36,7 @@ coins.
 Each property's premises hold at the deployed shape (`planBlocks_honest`, `codeLayoutTiles_honest`,
 `opensAtPosition_honest`, `steered_of_checked_honest`), and each conclusion fails for an input an accept-all verifier
 would take (`planBlocks_nontrivial`, `codeLayoutTiles_nontrivial`, `opensAtPosition_nontrivial`,
-`steered_of_checked_nontrivial`), in `Proofs.Properties.RemoteAudit.Schedule`.
-||||||| base
-(`ScheduleCode.scheduleBits_injective` in `Proofs.Properties.RemoteAudit.Schedule`: LEB128 is prefix-free, and each
-list comes after its length). What is left between the code and the model's layout (`Accounting.ScheduleDeterministic`,
-`Accounting.Assumptions.SteeredLayout`) is one `Prop`, `ScheduleLayoutGap`: that the model's layout of a pass is the
-verifier's position map of the session's appends and the plan the pass sent. Under it the check's acceptance at the
-cap `a` at every coin gives `ScheduleDeterministic` at `a` and `SteeredLayout` at `a + 1`
-(`scheduleDeterministic_of_checked`, `steered_of_checked`). The cap is fixed before the coins, so it is one `a` at
-every coin, where the bits of the schedule published after them can follow the coins.
-=======
-(`ScheduleCode.scheduleBits_injective` in `Proofs.Properties.Accounting.Remote.Schedule`: LEB128 is prefix-free, and each
-list comes after its length). What is left between the code and the model's layout (`Accounting.ScheduleDeterministic`,
-`Accounting.Assumptions.SteeredLayout`) is one `Prop`, `ScheduleLayoutGap`: that the model's layout of a pass is the
-verifier's position map of the session's appends and the plan the pass sent. Under it the check's acceptance at the
-cap `a` at every coin gives `ScheduleDeterministic` at `a` and `SteeredLayout` at `a + 1`
-(`scheduleDeterministic_of_checked`, `steered_of_checked`). The cap is fixed before the coins, so it is one `a` at
-every coin, where the bits of the schedule published after them can follow the coins.
->>>>>>> theirs
+`steered_of_checked_nontrivial`), in `Proofs.Properties.Accounting.Remote.Schedule`.
 -/
 
 @[expose] public section

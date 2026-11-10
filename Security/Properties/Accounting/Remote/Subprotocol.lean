@@ -16,22 +16,10 @@ node's g accepting a record's session (`Properties.RemoteAudit.Line.Verified`). 
 * **AcceptIsVerified**, the refinement: what the component's check accepts is a session the parameters and the log
   decode to (`RemoteAudit.Protocol.sessionOf`: its parameters, its g, coins, append coins, clock floor and events),
   which `Shared.run g` runs from `State.init` to an accepted state with a record `sm`, and the public outputs are
-<<<<<<< ours
   `certify params g sm`'s, the reads that record's openings certify and their error. The check refuses what
   `sessionOf` refuses, so what it accepts is `Shared.run g`'s, never `Flight.run`'s at one window in flight, which no
   property covers.
-* **LineHeldAtComponent**: `Properties.RemoteAudit.Line.LineHeld` with the component's acceptance in the event in place
-||||||| base
-  `certify sm g`'s, the reads that record's openings certify and their error. The check refuses what `sessionOf`
-  refuses, so what it accepts is `Shared.run g`'s, never `Flight.run`'s at one window in flight, which no property
-  covers.
-* **LineHeldAtComponent**: `Properties.RemoteAudit.Line.LineHeld` with the component's acceptance in the event in place
-=======
-  `certify sm g`'s, the reads that record's openings certify and their error. The check refuses what `sessionOf`
-  refuses, so what it accepts is `Shared.run g`'s, never `Flight.run`'s at one window in flight, which no property
-  covers.
 * **LineHeldAtSubprotocol**: `Properties.RemoteAudit.Line.LineHeld` with the component's acceptance in the event in place
->>>>>>> theirs
   of `Verified`. On the same node, trace, records and premises, and the bytes `a ω`, `b ω` and `e ω` the component is
   given at each outcome (the parameters, the commitment and the evidence), the probability that the component accepts
   bytes that play the record of `ω` on the node (`Plays`) while the network certifiers sign nothing but the verifier's
@@ -49,7 +37,7 @@ that is not the record's is an outcome the bound counts nothing for, not one the
 
 Each property is its verifier's instance of a form over the verifier, so that its witnesses can say what the verifier
 contributes. `AcceptIsVerifiedFor chk` and `PublishedEpsFor chk` are `AcceptIsVerified` and `PublishedEps` at a check
-`chk`, and `LineHeldAtComponentBy acc ver sum` is `LineHeldAtComponent` at an acceptance `acc` in the event, a verdict
+`chk`, and `LineHeldAtSubprotocolBy acc ver sum` is `LineHeldAtSubprotocol` at an acceptance `acc` in the event, a verdict
 `ver` the trace reads and a record `sum` the line reads: at `RemoteAudit.Protocol.check`, and at `Plays`, `Verified`
 and `Record.summary`, they are the three properties. `LineHeldBy ver sum` is `LineHeld` at a verdict `ver` in the event
 and the trace and a record `sum`: at `Verified` and `Record.summary` it is `LineHeld`. The honest instance the witnesses
@@ -83,12 +71,12 @@ def AcceptIsVerified : Prop :=
         .ok (rs, s) ∧
       s.outcome = some "accepted" ∧ s.summary = some sm ∧ pub = (RemoteAudit.Protocol.certify params g sm).1
 
-/-- **The component publishes the draw term of `LineHeldAtComponent`'s bound.** Whenever `RemoteAudit.Protocol.check`
+/-- **The component publishes the draw term of `LineHeldAtSubprotocol`'s bound.** Whenever `RemoteAudit.Protocol.check`
 accepts parameters `p`, a registration `reg` and a log `e` with public outputs `pub`: `p` and `e` decode to a session
 (`sessionOf`: its parameters, its windows a draw g, coins, append coins, clock floor and events), and either the public
 outputs certify nothing (`eps` and `q_bytes` 0, the pooled bound refusing the windows), or at every node of those
 parameters and g whose δ is the component's `RemoteAudit.Protocol.DELTA` the published `eps` is `δ + Σ_c s/2^64` over
-the node's `⌈W/g⌉` draws (`Node.draws`) at its `samples` s, the draw term of `LineHeldAtComponent`'s bound. It is a
+the node's `⌈W/g⌉` draws (`Node.samples`) at its `samples` s, the draw term of `LineHeldAtSubprotocol`'s bound. It is a
 constant of the session's parameters, not of the draws the session made. -/
 def PublishedEps : Prop :=
   ∀ (p : RemoteAudit.Protocol.Params) (reg : RemoteAudit.Registration) (e : RemoteAudit.Protocol.Evidence)
@@ -101,7 +89,7 @@ def PublishedEps : Prop :=
         ∀ node : Node, node.params = params → node.groupsPerCoin = g →
           (node.delta : ℚ) = RemoteAudit.Protocol.DELTA →
           (pub.eps.num : ℚ) / pub.eps.den =
-            (node.delta : ℚ) + ((∑ _c : Fin node.draws, node.params.samples : ℕ) : ℚ) / 2 ^ 64)
+            (node.delta : ℚ) + ((∑ _c : Fin node.samples, node.params.samples : ℕ) : ℚ) / 2 ^ 64)
 
 /-- **The component accepts bytes that play the record on the node.** The parameters `a` (canonical JSON), the
 commitment `b` and the evidence `e` decode under the component's decoders, its check accepts them
@@ -116,59 +104,28 @@ def Plays (node : Node) (rec : Record) (a b e : ByteArray) : Prop :=
       .ok (node.params, node.groupsPerCoin, rec.coins, rec.appendCoins, rec.notBeforeNs, rec.events) ∧
     ∃ pub prof, RemoteAudit.Protocol.check p node.reg ev = .accept pub prof
 
-<<<<<<< ours
 /-- **The memory line of record, in bits read, at the bandwidth component.** `LineHeld`'s node, trace, records and
-premises verbatim, one coin for each of the session's draws (`Node.draws`), and the bytes the component is given at
-||||||| base
-/-- **The memory line of record, link-charged, at the bandwidth component.** `LineHeld`'s node, trace, records and
-premises verbatim, one coin for each of the session's draws (`Node.draws`), and the bytes the component is given at
-=======
-/-- **The memory line of record, link-charged, at the bandwidth component.** `LineHeld`'s node, trace, records and
 premises verbatim, one coin for each of the session's draws (`Node.samples`), and the bytes the component is given at
->>>>>>> theirs
 each outcome (`a`, `b`, `e`: the parameters, the commitment and the evidence): the probability that the component
-<<<<<<< ours
 accepts bytes that play the record of `ω` on the node (`Plays`) while the network certifiers sign nothing but the
 verifier's messages entering the node over the credited passes and the record's line credits more bits read than the
 passes read is at most `δs + δnet + (δ + Σ_c s / 2^64 + Σ_c adv_c + Σ_c hide_c + bind)`, `LineHeld`'s bound. -/
-def LineHeldAtComponent : Prop :=
-  ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.draws → Pous.Bits κ → Blocks receiptMax)
-    (rest : DrawCoins node.draws κ X → Fin node.draws → ℕ → ℕ) (recs : Cm → DrawCoins node.draws κ X → Record)
-    (correct : Cm → Fin node.draws → DrawCoins node.draws κ X → Finset ℕ) (com : DrawCoins node.draws κ X → Cm)
-    (T : Trace (DrawCoins node.draws κ X)) (R : Receipts node.draws κ X) (δs δnet : ℝ)
-    (a b e : DrawCoins node.draws κ X → ByteArray),
-||||||| base
-accepts bytes that play the record of `ω` on the node (`Plays`) while a stretch of the record's link-charged line
-credits more than the trace held over its span is at most `δs + (δ + Σ_c s / 2^64 + Σ_c adv_c + Σ_c hide_c + bind)`,
-`LineHeld`'s bound. -/
-def LineHeldAtComponent : Prop :=
-  ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.draws → Pous.Bits κ → Blocks receiptMax)
-    (rest : Coins node.draws κ X → Fin node.draws → ℕ → ℕ) (recs : Cm → Coins node.draws κ X → Record)
-    (correct : Cm → Fin node.draws → Coins node.draws κ X → Finset ℕ) (com : Coins node.draws κ X → Cm)
-    (T : Trace (Coins node.draws κ X)) (R : Receipts node.draws κ X) (δs : ℝ)
-    (a b e : Coins node.draws κ X → ByteArray),
-=======
-accepts bytes that play the record of `ω` on the node (`Plays`) while a stretch of the record's link-charged line
-credits more than the trace held over its span is at most `δs + (δ + Σ_c s / 2^64 + Σ_c adv_c + Σ_c hide_c + bind)`,
-`LineHeld`'s bound. -/
 def LineHeldAtSubprotocol : Prop :=
   ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
-    (rest : Coins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → Coins node.samples κ X → Record)
-    (correct : Cm → Fin node.samples → Coins node.samples κ X → Finset ℕ) (com : Coins node.samples κ X → Cm)
-    (T : Trace (Coins node.samples κ X)) (R : Receipts node.samples κ X) (δs : ℝ)
-    (a b e : Coins node.samples κ X → ByteArray),
->>>>>>> theirs
+    (rest : DrawCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → DrawCoins node.samples κ X → Record)
+    (correct : Cm → Fin node.samples → DrawCoins node.samples κ X → Finset ℕ) (com : DrawCoins node.samples κ X → Cm)
+    (T : Trace (DrawCoins node.samples κ X)) (R : Receipts node.samples κ X) (δs δnet : ℝ)
+    (a b e : DrawCoins node.samples κ X → ByteArray),
     let r := played recs com
     let F := recordCommitted node recs correct
-    ∀ (O : Outside (ofRecord T node r)) (I : Ingress (DrawCoins node.draws κ X)),
+    ∀ (O : Outside (ofRecord T node r)) (I : Ingress (DrawCoins node.samples κ X)),
     Paced (ofRecord T node r) (recordPace node r) → Covers (ofRecord T node r) →
     SketchBoundAt (ofRecord T node r) O δs → Covered (ofRecord T node r) O I →
     IngressCounted (ofRecord T node r) I δnet → (∀ c, Live (F.view c)) →
     Refused (F.play com) prf rest (ofRecord T node r) R → Counted (F.play com) (ofRecord T node r) →
-<<<<<<< ours
     Pouw.pr (fun ω => Plays node (r ω) (a ω) (b ω) (e ω) ∧
         ¬ (Quiet (ofRecord T node r) I.counted ω → ReadAt (ofRecord T node r) ω node (r ω))) ≤
-      δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.draws, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
+      δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
           ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
         (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)
@@ -206,7 +163,7 @@ def PublishedEpsFor (chk : RemoteAudit.Protocol.Params → RemoteAudit.Registrat
         ∀ node : Node, node.params = params → node.groupsPerCoin = g →
           (node.delta : ℚ) = RemoteAudit.Protocol.DELTA →
           (pub.eps.num : ℚ) / pub.eps.den =
-            (node.delta : ℚ) + ((∑ _c : Fin node.draws, node.params.samples : ℕ) : ℚ) / 2 ^ 64)
+            (node.delta : ℚ) + ((∑ _c : Fin node.samples, node.params.samples : ℕ) : ℚ) / 2 ^ 64)
 
 /-- The groups the line reads of record `r` on the node, when a verifier records it as `sum node r`: `Record.groups`
 at `sum = Record.summary`. -/
@@ -252,53 +209,45 @@ def traceBy {Ω : Type} (T : Trace Ω) (node : Node) (ver : Node → Record → 
 the event and the trace (`Verified`) and `sum` for the record the line and its paced session read
 (`Record.summary`). `LineHeld` is it at `Verified` and `Record.summary`. -/
 def LineHeldBy (ver : Node → Record → Prop) (sum : Node → Record → Option RemoteAudit.Session.Summary) : Prop :=
-  ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.draws → Pous.Bits κ → Blocks receiptMax)
-    (rest : DrawCoins node.draws κ X → Fin node.draws → ℕ → ℕ) (recs : Cm → DrawCoins node.draws κ X → Record)
-    (correct : Cm → Fin node.draws → DrawCoins node.draws κ X → Finset ℕ) (com : DrawCoins node.draws κ X → Cm)
-    (T : Trace (DrawCoins node.draws κ X)) (R : Receipts node.draws κ X) (δs δnet : ℝ),
+  ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
+    (rest : DrawCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → DrawCoins node.samples κ X → Record)
+    (correct : Cm → Fin node.samples → DrawCoins node.samples κ X → Finset ℕ) (com : DrawCoins node.samples κ X → Cm)
+    (T : Trace (DrawCoins node.samples κ X)) (R : Receipts node.samples κ X) (δs δnet : ℝ),
     let r := played recs com
     let F := recordCommitted node recs correct
-    ∀ (O : Outside (traceBy T node ver r)) (I : Ingress (DrawCoins node.draws κ X)),
+    ∀ (O : Outside (traceBy T node ver r)) (I : Ingress (DrawCoins node.samples κ X)),
     Paced (traceBy T node ver r) (paceBy sum node r) → Covers (traceBy T node ver r) →
     SketchBoundAt (traceBy T node ver r) O δs → Covered (traceBy T node ver r) O I →
     IngressCounted (traceBy T node ver r) I δnet → (∀ c, Live (F.view c)) →
     Refused (F.play com) prf rest (traceBy T node ver r) R → Counted (F.play com) (traceBy T node ver r) →
     Pouw.pr (fun ω => ver node (r ω) ∧
         ¬ (Quiet (traceBy T node ver r) I.counted ω → ReadBy sum (traceBy T node ver r) ω node (r ω))) ≤
-      δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.draws, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
-||||||| base
-    Pouw.pr (fun ω => Plays node (r ω) (a ω) (b ω) (e ω) ∧ ¬ HeldAt (ofRecord T node r) ω node (r ω) 1) ≤
-      δs + ((node.delta : ℝ) + ((∑ _t : Fin node.draws, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
-=======
-    Pouw.pr (fun ω => Plays node (r ω) (a ω) (b ω) (e ω) ∧ ¬ HeldAt (ofRecord T node r) ω node (r ω) 1) ≤
-      δs + ((node.delta : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
->>>>>>> theirs
+      δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
           ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
         (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)
 
-<<<<<<< ours
-/-- **`LineHeldAtComponent` at a verifier**: its node, trace, records, premises and bound verbatim, with `acc` for the
+/-- **`LineHeldAtSubprotocol` at a verifier**: its node, trace, records, premises and bound verbatim, with `acc` for the
 component's acceptance in the event (`Plays`), the trace's verdict `ver` (`Verified`) and the record the line and its
-paced session read `sum` (`Record.summary`). `LineHeldAtComponent` is it at `Plays`, `Verified` and
+paced session read `sum` (`Record.summary`). `LineHeldAtSubprotocol` is it at `Plays`, `Verified` and
 `Record.summary`. -/
-def LineHeldAtComponentBy (acc : Node → Record → ByteArray → ByteArray → ByteArray → Prop)
+def LineHeldAtSubprotocolBy (acc : Node → Record → ByteArray → ByteArray → ByteArray → Prop)
     (ver : Node → Record → Prop) (sum : Node → Record → Option RemoteAudit.Session.Summary) : Prop :=
-  ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.draws → Pous.Bits κ → Blocks receiptMax)
-    (rest : DrawCoins node.draws κ X → Fin node.draws → ℕ → ℕ) (recs : Cm → DrawCoins node.draws κ X → Record)
-    (correct : Cm → Fin node.draws → DrawCoins node.draws κ X → Finset ℕ) (com : DrawCoins node.draws κ X → Cm)
-    (T : Trace (DrawCoins node.draws κ X)) (R : Receipts node.draws κ X) (δs δnet : ℝ)
-    (a b e : DrawCoins node.draws κ X → ByteArray),
+  ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
+    (rest : DrawCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → DrawCoins node.samples κ X → Record)
+    (correct : Cm → Fin node.samples → DrawCoins node.samples κ X → Finset ℕ) (com : DrawCoins node.samples κ X → Cm)
+    (T : Trace (DrawCoins node.samples κ X)) (R : Receipts node.samples κ X) (δs δnet : ℝ)
+    (a b e : DrawCoins node.samples κ X → ByteArray),
     let r := played recs com
     let F := recordCommitted node recs correct
-    ∀ (O : Outside (traceBy T node ver r)) (I : Ingress (DrawCoins node.draws κ X)),
+    ∀ (O : Outside (traceBy T node ver r)) (I : Ingress (DrawCoins node.samples κ X)),
     Paced (traceBy T node ver r) (paceBy sum node r) → Covers (traceBy T node ver r) →
     SketchBoundAt (traceBy T node ver r) O δs → Covered (traceBy T node ver r) O I →
     IngressCounted (traceBy T node ver r) I δnet → (∀ c, Live (F.view c)) →
     Refused (F.play com) prf rest (traceBy T node ver r) R → Counted (F.play com) (traceBy T node ver r) →
     Pouw.pr (fun ω => acc node (r ω) (a ω) (b ω) (e ω) ∧
         ¬ (Quiet (traceBy T node ver r) I.counted ω → ReadBy sum (traceBy T node ver r) ω node (r ω))) ≤
-      δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.draws, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
+      δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
           ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
         (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)
@@ -349,7 +298,7 @@ group's span `[s_g, e_g]` on the record's clock. -/
 def HonestSchedule {Ω Cm : Type} (node : Node) (passes : ℕ) (tick : Ω → ℕ → ℕ) (recs : Cm → Ω → Record)
     (com : Ω → Cm) : Prop :=
   1 ≤ node.windows ∧ (∀ ω p, tick ω p < tick ω (p + 1)) ∧
-    (∀ c c' ω ω' t, (recs c ω).drawReceiptsAt node t = (recs c' ω').drawReceiptsAt node t) ∧
+    (∀ c c' ω ω' t, (recs c ω).sampleReceiptsAt node t = (recs c' ω').sampleReceiptsAt node t) ∧
     ∀ ω, Verified node (played recs com ω) → ∀ gs, (played recs com ω).groups node = gs →
       gs.size = node.windows ∧
       (∀ g < node.windows, 1 ≤ gs[g]!.passes ∧ gs[g]!.releasedNs ≤ gs[g]!.lastNs) ∧
@@ -358,9 +307,4 @@ def HonestSchedule {Ω Cm : Type} (node : Node) (passes : ℕ) (tick : Ω → �
       ∀ g < node.windows, ∀ p, firstPass gs g ≤ p → p < firstPass gs (g + 1) →
         released gs node.windows g ≤ tick ω p ∧ tick ω (p + 1) ≤ ended gs g
 
-end Properties.RemoteAudit.Component
-||||||| base
-end Properties.RemoteAudit.Component
-=======
 end Properties.RemoteAudit.Subprotocol
->>>>>>> theirs

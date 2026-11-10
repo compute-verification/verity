@@ -102,9 +102,8 @@ at `δ_s = 1%` and through 115 at `10⁻⁶`, and `ε(j) < 1%` from 3,857 and 11
 What H1's instance takes that the deployed path doesn't give, each a named premise:
 * `RegisteredBeforeDraw`, with the window's rows committed by its registration: the binding premise reads both. The
   tiles' registered roots are tags (below), so the registration commits no row (`anchors []`, `wires []`), and an
-<<<<<<< ours
-  opening the service gives is bound to nothing fixed before the draw. Discharge path: the loop's anchors
-  committed before the draw coin with ALLP-H1LOOP's binding of the tiles' rows to them (above).
+  opening the service gives is bound to nothing fixed before the sample. Discharge path: the loop's anchors
+  committed before the sampling coin with ALLP-H1LOOP's binding of the tiles' rows to them (above).
 * `SaltIsLiveCoin`: each window's salt is its round's live coin. The check reads it: a live window (`coins` live in its
   check item) carries its salt in its service answer, and `PouwCheck.windowSaltReason`
   (`Properties.Pouw.Check.SaltKept`) accepts it only as the round-0 salt of a salt-only live session's coin, opened on
@@ -117,23 +116,6 @@ What H1's instance takes that the deployed path doesn't give, each a named premi
   still stand in a SHA-512 of the step's salt key for the salt. What remains: the served windows' salt from the
   auditor's challenger, and a tie of the proved tiles to that salt (their salt port is still a value the prover
   records).
-||||||| base
-  opening the service gives is bound to nothing fixed before the draw. Discharge path: the loop's anchors
-  committed before the draw coin with ALLP-H1LOOP's binding of the tiles' rows to them (above).
-* `SaltIsLiveCoin`: each window's salt is its round's live coin. The deployed path doesn't meet it: the loop is given
-  its salt before it serves, and nothing in the record binds the salt to a live coin (`core_check.salt` is not part of
-  `answer`; the check item names no coin mode, so the window is seeded, and `Scope`'s `Declared.Live` and
-  `LayerCommitted` fail of the circuit it runs). Its discharge path is ALLP-SALT; the per-epoch live
-  salt is the fix's shape (`Properties.Pouw.LiveSalt`, `PouwCheck.liveSaltCheck`), done for Pearl-C and not yet for H1.
-=======
-  opening the service gives is bound to nothing fixed before the sample. Discharge path: the loop's anchors
-  committed before the sampling coin with ALLP-H1LOOP's binding of the tiles' rows to them (above).
-* `SaltIsLiveCoin`: each window's salt is its round's live coin. The deployed path doesn't meet it: the loop is given
-  its salt before it serves, and nothing in the record binds the salt to a live coin (`core_check.salt` is not part of
-  `answer`; the check item names no coin mode, so the window is seeded, and `Scope`'s `Declared.Live` and
-  `LayerCommitted` fail of the circuit it runs). Its discharge path is ALLP-SALT; the per-epoch live
-  salt is the fix's shape (`Properties.Pouw.LiveSalt`, `PouwCheck.liveSaltCheck`), done for Pearl-C and not yet for H1.
->>>>>>> theirs
 * `StagedPins`: the leg's proofs are of the window's staged statement, not the pinned flat circuit `core_check.opening`
   reads. The bridge is stated over the staged statement (`ServiceSound` is the service's soundness for it, `stagedAt`),
   and `StagedPins` is what links it to the flat tile's rightness, which the lucks are claims of (`flatAtCoin`). No Lean
@@ -334,29 +316,13 @@ def CheckedCreditPeriod : Prop :=
 
 /-- **Each window's salt is its live coin** (H1's instance). On every path, window `w`'s salt (`salt x w`: the 64-byte
 salt the verifier holds for the window, which every tile's noise reads through its public row, `PouwCheck.publicBc`, and
-<<<<<<< ours
-the proof of every unit in the sample is held to) is `enc` of the window's round-0 coin, the model's coin, released
-after the round's values are committed. The check holds a live window to it: `PouwCheck.windowSaltReason` accepts a
-live window's salt only as its salt session's live coin (`Properties.Pouw.Check.SaltKept`), opened after the window's
+every sampled proof block's proof is held to) is `enc` of the window's round-0 coin, the model's coin, released after the
+round's values are committed. The check holds a live window to it: `PouwCheck.windowSaltReason` accepts a live
+window's salt only as its salt session's live coin (`Properties.Pouw.Check.SaltKept`), opened after the window's
 committed activations (`anchoredEpochRoot W X k`). The served windows don't meet it yet: no path that serves H1 windows
 takes its salt from such a session, and the proved tiles' salt port is a value the prover records. A named assumption
 in the lock: a deployment gap until the salt is a live coin from the auditor's challenger and the proved tiles are tied
 to it. -/
-||||||| base
-every drawn unit's proof is held to) is `enc` of the window's round-0 coin, the model's coin, released after the
-round's values are committed. The deployed path doesn't meet it: the loop is given its salt before it serves, nothing
-in the record binds the salt to a live coin (`core_check.salt` is not part of `answer`), and the check item names no
-coin mode, so the window is seeded. Its discharge path is ALLP-SALT; the per-epoch live salt is the
-fix's shape (`Properties.Pouw.LiveSalt`, `PouwCheck.liveSaltCheck`), done for Pearl-C and not yet for H1. A named
-assumption in the lock: a deployment gap until the salt is a live coin. -/
-=======
-every sampled proof block's proof is held to) is `enc` of the window's round-0 coin, the model's coin, released after the
-round's values are committed. The deployed path doesn't meet it: the loop is given its salt before it serves, nothing
-in the record binds the salt to a live coin (`core_check.salt` is not part of `answer`), and the check item names no
-coin mode, so the window is seeded. Its discharge path is ALLP-SALT; the per-epoch live salt is the
-fix's shape (`Properties.Pouw.LiveSalt`, `PouwCheck.liveSaltCheck`), done for Pearl-C and not yet for H1. A named
-assumption in the lock: a deployment gap until the salt is a live coin. -/
->>>>>>> theirs
 def SaltIsLiveCoin {C B : Type} {m n : ℕ} (hm : 0 < m) (salt : Paths (Paths C m × B) n → Fin n → ByteArray)
     (enc : C → ByteArray) : Prop :=
   ∀ x w, salt x w = enc (coinAt (coinAt x w).1 ⟨0, hm⟩)

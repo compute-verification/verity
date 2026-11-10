@@ -15,23 +15,11 @@ the receipts' and the store's meaning as the game's oracle and words, the window
 premise or a proofs unit of the bridge, named in each docstring.
 
 The memory line of record (`RemoteAudit.Line.line`, its W from `RemoteAudit.Pooled`) is one statement over what this
-<<<<<<< ours
 verifier accepts: `Properties.RemoteAudit.Line.LineHeld`, the bits its credited passes read
-(`Properties/RemoteAudit/Line.lean`, proved in `Proofs/Accounting/RemoteHeld/Line.lean`, where `heldAt_of_read` derives
+(`Properties/Accounting/Remote/Line.lean`, proved in `Proofs/Accounting/RemoteHeld/Line.lean`, where `heldAt_of_read` derives
 memory held from it under the device model), with no code-to-model premise (the trace of record is over the
-registration's blocks by definition, `Properties/RemoteAudit/Line/Premises.lean`, and the verifier refuses a record not
-of the registration given, `LineRegistered`) and the W's cover of the session's pooled bound in `Properties/RemoteAudit/Pooled.lean`.
-||||||| base
-verifier accepts: `Properties.RemoteAudit.Line.LineHeld` and `LineHeldIdentity` (`Properties/RemoteAudit/Line.lean`,
-proved in `Proofs/Accounting/RemoteHeld/Line.lean`), with no code-to-model premise (`Registered` holds of the trace of
-record, `Properties/RemoteAudit/Line/Premises.lean`, and the verifier refuses a record not of the registration given,
-`LineRegistered`) and the W's cover of the session's pooled bound in `Properties/RemoteAudit/Pooled.lean`.
-=======
-verifier accepts: `Properties.RemoteAudit.Line.LineHeld` and `LineHeldIdentity` (`Properties/Accounting/Remote/Line.lean`,
-proved in `Proofs/Accounting/RemoteHeld/Line.lean`), with no code-to-model premise (`Registered` holds of the trace of
-record, `Properties/Accounting/Remote/Line/Premises.lean`, and the verifier refuses a record not of the registration given,
-`LineRegistered`) and the W's cover of the session's pooled bound in `Properties/Accounting/Remote/Pooled.lean`.
->>>>>>> theirs
+registration's blocks by definition, `Properties/Accounting/Remote/Line/Premises.lean`, and the verifier refuses a record not
+of the registration given, `LineRegistered`) and the W's cover of the session's pooled bound in `Properties/Accounting/Remote/Pooled.lean`.
 
 The window (`verifyWindow`):
 
