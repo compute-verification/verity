@@ -69,3 +69,15 @@ is cut from today's `origin/main`, so it will be refused. Until about 12:30Z (th
    PR's body that it was marked by label under CI-501.
 3. Ignore `status`'s "refused" for that reason alone. Any other refusal is real: report it.
 If `research queue ready N --mark --by kernels` does accept the head, use it as usual.
+
+## Tue 10 Nov 10:08Z: two queue rules from top (TOP-394, 10:06Z), until ci changes the loop
+
+One mark dropped two candidates at 09:45Z (29 pull requests, 38 minutes of check). So:
+
+1. **From your mark until #8619 is on `main`, push nothing to it and withdraw nothing, unless it is wrong.** A fix
+   or a follow-up is a new pull request. So the three shell defaults, if MOVESTAGE's report says no, are a NEW PR,
+   not a follow-up commit; and so is anything piece C needs landed.
+2. **Never mark a pull request that contains another of kernels' open, marked ones** (#8521, #8542, #8619). Cut any
+   new branch from `origin/main`, not from one of those.
+If either must be broken, stop and tell the lead: it is asked of ci on CI-489 first.
+`research queue status` shows #8619 as refused for the old-`next` reason only: that is CI-501's fault, as told.
