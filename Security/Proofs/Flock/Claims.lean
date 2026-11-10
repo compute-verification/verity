@@ -361,6 +361,18 @@ public import Proofs.Flock.Claims.KS
 public import Proofs.Flock.Claims.KS.ZkAccepts
 public import Proofs.Flock.Claims.Recursion
 public import Proofs.Flock.Claims.ZK
+public import Proofs.Flock.Claims.Recursion.SeqCap
+public import Proofs.Flock.Claims.Recursion.SeqKey
+public import Proofs.Flock.Claims.Recursion.SeqDeploy
+public import Proofs.Flock.Claims.Recursion.SeqStop
+public import Proofs.Flock.Claims.Recursion.SeqDeployStop
+public import Proofs.Flock.Claims.Recursion.LastColsE
+public import Proofs.Flock.Claims.GS.Decode
+public import Proofs.Flock.Claims.GS.Flock
+public import Proofs.Flock.Claims.GS.Radius
+public import Proofs.Flock.Claims.GS.ZkRadius
+public import Proofs.Flock.Claims.GS.RadiusFamily
+public import Proofs.Flock.Claims.GS.RadiusDeploy
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its
 record, which holds the claims' text.

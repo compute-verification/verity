@@ -37,7 +37,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Accounting.RateAudit.Chain
+public import Proofs.Accounting.RateAudit.Chain
+public import Definitions.Accounting.RateAuditRemote
 import Proofs.Accounting.RateAudit.Windows
 import Std.Tactic.BVDecide.Normalize.Prop
 import Proofs.Pous.Prob

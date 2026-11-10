@@ -4,6 +4,8 @@ public import Definitions.Pouw.Assumptions.Deadline
 public import Definitions.Pouw.PearlC.Deadline
 public import Definitions.Pouw.PearlC.DevicePricesLoop
 public import Definitions.Pouw.PearlC.Deadline
+public import Definitions.Pouw.Game.Deadline
+public import Definitions.Pouw.PearlC.Game
 
 /-!
 # The deadline guarantees' premises are satisfiable (non-vacuity witnesses)

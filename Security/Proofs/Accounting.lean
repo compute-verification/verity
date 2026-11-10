@@ -115,6 +115,10 @@ public import Proofs.Accounting.Additive
 public import Proofs.Accounting.Coverage
 public import Proofs.Accounting.ServingBlocks
 public import Proofs.Accounting.ServingBlocks.Witnesses
+public import Proofs.Accounting.Defs.Actual.Source
+public import Proofs.Accounting.Defs.Localization
+public import Definitions.Accounting.JointBlocks
+public import Definitions.Pous.P2.Cost
 
 /-!
 # The proofs of resource accounting's guarantees

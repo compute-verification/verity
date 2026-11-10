@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.PinnedCols
 public import Proofs.Flock.Soundness.Discharge.Layout.PinsX
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteH
 import Mathlib.Tactic.ENatToNat
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational

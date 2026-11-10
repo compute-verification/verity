@@ -4,6 +4,8 @@ public import Mathlib
 public import Definitions.Accounting.Guarantees.RateAuditNamed
 public import Proofs.Accounting.RateAudit.Conservation
 public import Proofs.Accounting.RateAudit.Pooled
+public import Definitions.Accounting.RateAuditRemote
+public import Proofs.Accounting.RateAudit.Chain
 
 /-!
 # Conservation over tiers with named words: the proof

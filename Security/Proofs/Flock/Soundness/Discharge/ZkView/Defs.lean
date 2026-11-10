@@ -27,6 +27,7 @@ public import Proofs.Flock.Soundness.CROnly.ZKKey
 public import Proofs.Flock.Soundness.Headline
 public import Proofs.Flock.Soundness.Registered.Binding
 public import Proofs.Flock.Soundness.Types.ProgramPlaces
+public import Proofs.Flock.Soundness.CROnly
 
 /-!
 # The `--zk` tables at the executable's leaves, and the honest prover's pre-final messages

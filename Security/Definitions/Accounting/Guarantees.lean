@@ -58,6 +58,7 @@ public import Definitions.Accounting.Guarantees.Sheet
 public import Definitions.Accounting.Guarantees.TS.Stages
 public import Definitions.Accounting.Guarantees.TS.FoldFanIn
 public import Definitions.Accounting.Guarantees.TS.LowBit
+public import Definitions.Accounting.RateAuditRemote
 
 /-! Resource accounting's guarantee statements: the joint guarantee and its covert residual, the joint guarantee over
 a period audited by every protocol, over a horizon of periods and over a horizon of server-time blocks and the

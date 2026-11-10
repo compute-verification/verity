@@ -13,6 +13,7 @@ public import Proofs.Pouw.PearlC.TTOutFp4W1
 public import Proofs.Pouw.PearlC.TTOutW1Item1
 public import Proofs.Pouw.Lemmas.PearlC
 public import Proofs.Pouw.QTree
+public import Proofs.Pouw.PearlC.RowSeedSkip
 
 /-!
 # Proofs of Pearl-C's guarantees

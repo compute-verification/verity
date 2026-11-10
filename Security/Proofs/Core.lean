@@ -54,6 +54,7 @@ public import Proofs.Core.QSort
 public import Proofs.Core.Fp32
 public import Proofs.Core.HongKung
 public import Proofs.Core.UnionBound
+public import Definitions.Core.Annotation
 
 /-!
 # Proofs of core's guarantees

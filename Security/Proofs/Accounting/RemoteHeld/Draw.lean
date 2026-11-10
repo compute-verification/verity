@@ -5,6 +5,8 @@ public import Proofs.Accounting.RateAudit.Pooled
 public import Proofs.Accounting.Actual.Sampler
 public import Proofs.Accounting.Prob
 public import Proofs.Hash.RowBinding
+public import Definitions.Accounting.RateAuditRemote
+public import Proofs.Accounting.RateAudit.Chain
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Ring.Star

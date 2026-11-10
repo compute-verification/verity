@@ -6,6 +6,21 @@ public import Proofs.Core.TC.Sound
 public import Proofs.Core.TC.AmpereSound
 public import Proofs.Core.TC.Boundary
 public import Proofs.Core.TC.Vectors
+public import Proofs.Core.TC.Proofs.Step
+public import Proofs.Core.TC.Proofs.Words
+public import Proofs.Core.TC.Proofs.Norm
+public import Proofs.Core.TC.Proofs.Fold
+public import Proofs.Core.TC.Proofs.Group
+public import Proofs.Core.TC.Proofs.SemGroup
+public import Proofs.Core.TC.Proofs.Prod
+public import Proofs.Core.TC.Proofs.Complete
+public import Proofs.Core.TC.Proofs.Pack
+public import Proofs.Core.TC.Ampere.Arith
+public import Proofs.Core.TC.Ampere.Group
+public import Proofs.Core.TC.Ampere.SemGroup
+public import Proofs.Core.TC.Ampere.Step
+public import Proofs.Core.TC.Ampere.Words
+public import Proofs.Core.TC.Ampere.Complete
 
 /-!
 # Proofs of the tensor-core guarantees
