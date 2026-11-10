@@ -33,7 +33,8 @@ after-landing run on `checked`'s tip.  It reports each step's real verdict; what
                                                             upstream build and inputs when the commit changes verity/ml/flock/
                                                             against --base REF (default origin/main; also ratchet-gate's base
                                                             unless --ratchet-base REF is given), and presigned URLs for
-                                                            the pinned Lean dependency bundles; with --on, in a free check slot of M
+                                                            the pinned Lean dependency bundles and the newest recorded checks'
+                                                            verdict packs (`verdict_url_file`); with --on, in a free check slot of M
                                                             (`tools/verity/check/slot.py`), the lock and cores the train checks take,
                                                             and in the run's own clone of the shipped tree (`--cwd clone`);
                                                             --priority takes the next free slot ahead of waiting lane checks,
@@ -64,14 +65,15 @@ after-landing run on `checked`'s tip.  It reports each step's real verdict; what
                                                             then the machine --on auto would take; --json, the documents
     uv run python tools/verity/check/check.py --plan [COMMIT] [--json] [--on MACHINE]
                                                             each part's key at COMMIT (default HEAD) and whether a recorded
-                                                            pass under it is here or in a pack `gather_verdicts` would take;
+                                                            pass under it is here or in a pack a recorded check imports
+                                                            (`verdict_packs`);
                                                             runs nothing (`plan.py`), read by `research merge --verdicts`;
                                                             --on: planned on that check node, a short `research run`
     uv run python tools/verity/check/check.py --lean-deps-files    the `--send` for those URLs, for `research merge --train`
     python tools/verity/check/check.py --preflight                 the preflight alone, for `research merge --train --prepare`
     ... [--verdicts-in PACK]                                import the passes another machine stored (`verdicts.py`) before
-                                                            the steps; with --record, added to the pack it gathers from the
-                                                            newest recorded checks, and with --on that pack travels with the run
+                                                            the steps; with --record, beside the newest recorded checks' packs,
+                                                            and with --on PACK travels with the run
     uv run python tools/verity/check/check.py --record --shard K/N --on M
                                                             shard K of ci.toml's plan with N shards, on machine M (each shard
                                                             on a pod of the lander's choosing): an Attempt no gate takes alone
@@ -233,10 +235,12 @@ with each step's log beside it, and `verdicts.tar.gz`: the passes this run store
 `--verdicts-in`, written again as each step ends, every few minutes and on SIGTERM (`Packs`), so a cancelled check's pack holds
 what its steps had passed.  `--record` declares it an output, so custody uploads it however the run ends: a cancel's SIGKILL
 leaves no result.json, and the pack is then in the attempt's run record alone (`attempt_pack` reads either).  Custody misses it only
-where it uploads nothing: `--no-custody-r2` and a run without `--on`, and a run whose runner is killed or whose machine is lost.  `--record` without `--no-cache` (or with `--circuit-cache` beside it, for circuit-check's entries alone) sends one pack of the newest recorded checks' packs, failed and cancelled
-ones' too, since a pack holds only passes (`gather_verdicts`), with a
-`--verdicts-in` pack added to them, never in their place, so every machine reuses every pass a recorded check earned; the pack
-imported is named in the result's `verdicts`.
+where it uploads nothing: `--no-custody-r2` and a run without `--on`, and a run whose runner is killed or whose machine is lost.
+`--record` without `--no-cache` (or with `--circuit-cache` beside it, for circuit-check's entries alone) sends presigned URLs of
+the newest recorded checks' packs, failed and cancelled ones' too, since a pack holds only passes, up to `GATHER_BYTES` of them
+(`verdict_url_file`): the launcher fetches none, and the run fetches and imports each before its steps (`verdicts_fetched`),
+beside a `--verdicts-in` pack, never in its place, so every machine reuses every pass a recorded check earned; each pack imported
+is named in the result's `verdicts`.
 
 The evidence store.  A recorded check runs the store-backed tests (integrations/vllm's `store_io`) on the store's remote, never
 skipped: its steps get VERITY_STORE_REQUIRED=1 (a missing remote fails those tests) and, as CHECK_STORE_CUSTODY, the run's custody
@@ -257,6 +261,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import http.client
 import importlib.util
 import json
 import os
@@ -270,6 +275,8 @@ import tarfile
 import tempfile
 import threading
 import time
+import urllib.error
+import urllib.request
 import weakref
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
@@ -358,6 +365,10 @@ def agreement_files(out: Path) -> dict[str, Path]:
 #: variable for a local one
 LEAN_DEPS_URLS = "lean-deps-urls.json"
 LEAN_DEPS_URLS_ENV = "CHECK_LEAN_DEPS_URLS"
+#: the newest recorded checks' verdict packs, each with a presigned URL of its blob (`verdict_url_file`), among a recorded run's
+#: inputs, or named by this variable for a local one
+VERDICT_URLS = "verdicts-urls.json"
+VERDICT_URLS_ENV = "CHECK_VERDICT_URLS"
 #: the parts a recorded shard runs (none for a combine), among its inputs: the preflight asks only for the Lean dependencies of
 #: the packages it audits, since it carries URLs for no others
 SHARD_PARTS = "check-shard-parts.json"
@@ -696,6 +707,30 @@ def take_lean_deps_urls(out: Path) -> Path | None:
     return Path(tmp)
 
 
+#: what each pack `verdict_url_file` lists carries
+VERDICT_URL_KEYS = {"run": str, "sha256": str, "bytes": int, "url": str}
+
+
+def take_verdict_urls(out: Path) -> list[dict]:
+    """The packs `verdict_url_file` listed for the run, read from its inputs and deleted there before any step starts, since each
+    URL grants a read until it expires (custody deletes a file left there: `research.store.custody.CREDENTIALS`); for a local
+    run, read from the file `VERDICT_URLS_ENV` names.  [] when the run was sent none, or none that reads as a list of packs."""
+    sent = out / "inputs" / VERDICT_URLS
+    path = sent if sent.is_file() else Path(u) if (u := SETTINGS.get(VERDICT_URLS_ENV)) else None
+    if path is None:
+        return []
+    try:
+        doc = json.loads(path.read_text())
+    except (OSError, ValueError) as e:
+        print(f"check: verdicts: the packs' URLs sent can't be read ({type(e).__name__}); the run imports none", flush=True)
+        doc = []
+    finally:
+        if path == sent:
+            sent.unlink(missing_ok=True)
+    return [p for p in doc if isinstance(p, dict) and all(isinstance(p.get(k), t) for k, t in VERDICT_URL_KEYS.items())] \
+        if isinstance(doc, list) else []
+
+
 #: Lean's job code, which the lean-audit and lean-changed steps run (`lean_audit.py`, `lean_changed.py`)
 LEAN_JOBS = ROOT / "tools" / "verity" / "lean"
 
@@ -1028,7 +1063,7 @@ def pool_env(pool: str | None, on: str | None, priority: bool) -> list[str]:
     """The `research run` options that put a `--record --on MACHINE --pool NAME` check in a slot of MACHINE's NAME pool, the
     pool `research run --pool NAME` takes (`slot_only.pool_slots`), rather than its merge-check slots, which on the CPU nodes are
     only=trains: slot.py reads the pool's slots file from CHECK_SLOTS.  The command stays `slot_wrap`'s around the declared one,
-    not `slot_only.in_pool`'s (`env ... nice -n 19`), so `research merge` and `gather_verdicts` read the attempt as a check of its
+    not `slot_only.in_pool`'s (`env ... nice -n 19`), so `research merge` and `verdict_packs` read the attempt as a check of its
     commit.  ValueError when the pool can't be taken so; with --on auto or none, `lane_machine` picks the machine."""
     if pool is None:
         return []
@@ -1077,12 +1112,12 @@ def record(argv: list[str]) -> int:
     """`--record [--on MACHINE|auto|M1,M2] [--base REF] [--ratchet-base RREF] [--agreement]`: `research run --tool check` on this
     clean commit, with the pinned upstream build and inputs (fetched from the store) when the commit changes a path
     `tools/verity/check/tool.py` names against REF (default origin/main, fetched first), or whenever --agreement is given, with
-    `--on` REF's commit (`BASE_FILE`, ratchet-gate's base unless RREF's commit, `RATCHET_BASE_FILE`, is), and the newest recorded checks' verdicts (`gather_verdicts`) unless it is given a pack or
-    --no-cache without --circuit-cache. A commit that can't land on REF as it is (`landable`) gets a warning and is checked anyway. `--on auto` or a list takes the machine `choose` picks, first of all, or
+    `--on` REF's commit (`BASE_FILE`, ratchet-gate's base unless RREF's commit, `RATCHET_BASE_FILE`, is), and the presigned URLs of
+    the newest recorded checks' verdict packs (`verdict_url_file`) unless --no-cache without --circuit-cache. A commit that can't land on REF as it is (`landable`) gets a warning and is checked anyway. `--on auto` or a list takes the machine `choose` picks, first of all, or
     launches `twins` there and on the others (one `research run` each, waited on together: 0 when one passed, the exit of the
     one that ran otherwise, and slot.py's NOT_STARTED (75) when none ran, say with HOME unreachable: rerun it).  With
     `--deferred STEP,...` it is a `research run` without `--tool check` of those steps alone (no gate reads it), with the
-    gathered verdicts and no upstream build or Lean dependencies.  `--pool NAME` (with `--on MACHINE`, or `--on auto` or none for
+    verdict packs' URLs and no upstream build or Lean dependencies.  `--pool NAME` (with `--on MACHINE`, or `--on auto` or none for
     the machine `lane_machine` picks) waits for a slot of that machine's NAME pool instead of its merge-check slots (`pool_env`);
     `--timeout S` is the run's (`research run --timeout`, custody 24 h).
     `--shard auto:K/N --shard-plan-file PLAN` (with --on) is shard K of the auto plan PLAN, sent as the run's `AUTO_PLAN` input."""
@@ -1216,12 +1251,18 @@ def record(argv: list[str]) -> int:
         shutil.copyfile(plan_file, d / AUTO_PLAN)
         cmd += ["--send", str(d / AUTO_PLAN)]
     if not combining and not records and ("--no-cache" not in rest or "--circuit-cache" in rest):
-        given = None
         if "--verdicts-in" in rest[:-1]:
             i = rest.index("--verdicts-in")
-            given, rest = Path(rest[i + 1]).resolve(), rest[:i] + rest[i + 2:]
-        if pack := gather_verdicts(d, given=given):
-            rest += ["--verdicts-in", str(pack)]
+            rest[i + 1] = str(given := Path(rest[i + 1]).resolve())
+            if not given.is_file():
+                raise SystemExit(f"check: --verdicts-in {given}: no such pack")
+            if why := VERDICTS.refusal(given):
+                raise SystemExit(f"check: --verdicts-in {given}: refused ({why})")
+        if urls := verdict_url_file(d):
+            if on:
+                cmd += ["--send", str(urls)]
+            else:
+                env[VERDICT_URLS_ENV] = str(urls)
     if on:
         cmd += ["--on", on, "--source", "."]
         if "--verdicts-in" in rest:                    # the pack travels with the run; on the machine it's found in the run's inputs/
@@ -1247,41 +1288,43 @@ def record(argv: list[str]) -> int:
         shutil.rmtree(d, ignore_errors=True)
 
 
-#: how many of the newest recorded checks' verdict packs a recorded check gathers (`gather_verdicts`)
+#: how many of the newest recorded checks' verdict packs a recorded check imports (`verdict_packs`)
 GATHER = 12
-#: the bytes of recorded checks' packs one gather fetches (`gathered_packs`): a pack that would take it past this is passed over
-#: by name, so what a launch stages (the packs, `combine`'s spill of every entry and the pack it writes) stays bounded whatever
-#: a recorded check published
+#: the bytes of recorded checks' packs one check imports (`verdict_packs`): a pack that would take them past this is passed over
+#: by name, by the size the store lists, before anything fetches it, so what a run fetches and unpacks before its first step
+#: stays bounded whatever a recorded check published.  The packs it passes over hold circuit-check's per-target stores, near
+#: 1 GiB a pack, which no gated check reads (circuit-check is off the merge gate)
 GATHER_BYTES = 256 << 20
+#: how long the URLs `verdict_url_file` signs stay valid, in seconds: a run fetches them once it takes a slot, after its wait
+VERDICT_URL_TTL_S = 6 * 3600
 
 
-def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None = None) -> Path | None:
-    """One pack (`verdicts.py combine`) of the verdicts the ``limit`` recorded checks that ended last stored, for `--record` to
-    send with `--verdicts-in`: a suite whose key one of them earned is reused on any machine, and names the run that earned it.  Only
-    recorded runs' packs are taken, a failed or cancelled run's too: its pack holds only the passes its steps stored, each
-    under a key of everything it read.  A pack ``given`` (`--record --verdicts-in`) is added to them, never in their place, so no
-    flag turns reuse off but `--no-cache`.  A recorded run's pack that `combine` would refuse, or that would take the gather
-    past `GATHER_BYTES`, is passed over by name, so its verdicts are recomputed, never reused; a refused pack given is an
-    error.  None when there is no pack at all (the check then runs on its own cache)."""
-    from research.store.local import LocalStore
+def verdict_url_file(d: Path, store=None) -> Path | None:
+    """`VERDICT_URLS` in ``d`` (mode 600): the packs `verdict_packs` selects among those the store's remote holds, each with a GET
+    of its blob that the remote signs for `VERDICT_URL_TTL_S`, for the run to fetch and import before its steps
+    (`verdicts_fetched`): the launcher lists and signs, and fetches nothing.  None, with the reason printed, when the store can't
+    be read, no remote here signs URLs or no recorded check published a pack: the run then reuses only its node's own passes and a
+    pack given."""
+    from research.store.local import LocalStore, object_key
 
-    if given is not None and not given.is_file():
-        raise SystemExit(f"check: --verdicts-in {given}: no such pack")
-    if given is not None and (why := VERDICTS.refusal(given)):
-        raise SystemExit(f"check: --verdicts-in {given}: refused ({why})")
-    packs = [given] if given is not None else []
     try:
-        packs += [p for _, p in gathered_packs(d, store or LocalStore(), limit)]
-    except Exception as e:  # noqa: BLE001  (no pack: the check reuses only this machine's passes and the one given)
-        print(f"check: no verdicts gathered from the store ({type(e).__name__}: {e})", flush=True)
-        del packs[given is not None:]
+        store = store or LocalStore()
+        if (sign := getattr(store.remote, "presign", None)) is None:
+            print("check: verdicts: no store remote here signs URLs, so the run imports no recorded check's pack", flush=True)
+            return None
+        packs = [{"run": p["run"], "sha256": p["sha256"], "bytes": p["bytes"], "url": sign(object_key(p["sha256"]), VERDICT_URL_TTL_S)}
+                 for p in verdict_packs(store, remote=True)]
+    except Exception as e:  # noqa: BLE001  (no URL: the check reuses only its node's passes and the one given)
+        print(f"check: no verdict packs listed from the store ({type(e).__name__}: {e})", flush=True)
+        return None
     if not packs:
         return None
-    n = VERDICTS.combine(packs, d / "verdicts-gathered.tar.gz")
-    names = [*([f"{given.name} (given)"] if given is not None else []), *(p.parent.name for p in packs[given is not None:])]
-    print(f"check: verdicts: {n} entries gathered from {len(packs) - (given is not None)} recorded checks"
-          f"{' and the pack given' if given is not None else ''} ({', '.join(names)})", flush=True)
-    return d / "verdicts-gathered.tar.gz"
+    path = d / VERDICT_URLS
+    with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as f:
+        json.dump(packs, f)
+    print(f"check: sending presigned URLs for the verdict packs of {len(packs)} recorded checks "
+          f"({sum(p['bytes'] for p in packs) / 2**20:.0f} MiB): {', '.join(p['run'] for p in packs)}", flush=True)
+    return path
 
 
 #: the packs a recorded check writes in its run dir, which `record` declares outputs: the passes its steps stored (`Packs`), and
@@ -1292,50 +1335,60 @@ PACK_FILES = ("verdicts.tar.gz", REUSED_PACK)
 DECLARED = (*PACK_FILES, LIVE.LIVE_FILE)
 
 
-def attempt_pack(store, rid: str, d: Path, name: str = "verdicts.tar.gz") -> Path | None:
-    """The verdict pack the attempt ``rid`` published (``name`` among its run files, or in its run record when a SIGKILL left it
-    no result.json to list them), fetched under ``d``, or None."""
-    out = (store.get_attempt(rid) or {}).get("outputs") or {}
-    for art in dict.fromkeys(a for a in (out.get("run_files"), out.get("run_record")) if a):
-        if any(f["path"] == name for f in store.listing(art)):
-            return store.fetch(art, d / name.split(".", 1)[0] / rid, paths=[name]) / name
-    return None
-
-
-def pack_bytes(store, rid: str, name: str = "verdicts.tar.gz") -> int | None:
-    """The size the store lists for the pack `attempt_pack` would fetch for ``rid``; None when it published none or lists no size."""
+def pack_file(store, rid: str, name: str = "verdicts.tar.gz") -> tuple[str, dict] | None:
+    """(artifact, its listing's row: path, bytes, sha256, remote) of the pack ``name`` the attempt ``rid`` published among its run
+    files, or in its run record when a SIGKILL left it no result.json to list them; None when it published none."""
     out = (store.get_attempt(rid) or {}).get("outputs") or {}
     for art in dict.fromkeys(a for a in (out.get("run_files"), out.get("run_record")) if a):
         for f in store.listing(art):
             if f["path"] == name:
-                return f.get("bytes")
+                return art, f
     return None
 
 
-def gathered_packs(d: Path, store, limit: int = GATHER) -> list[tuple[str, Path]]:
-    """(attempt, pack) of the ``limit`` recorded checks that ended last and published a pack `combine` takes, newest first
-    (`gather_verdicts`); one it refuses is passed over by name, and so, before it is fetched, is one whose listed size would
-    take the packs gathered past `GATHER_BYTES`.  The store's attempts are refreshed first when it has a remote."""
+def attempt_pack(store, rid: str, d: Path, name: str = "verdicts.tar.gz") -> Path | None:
+    """The verdict pack the attempt ``rid`` published (`pack_file`), fetched under ``d``, or None."""
+    if (got := pack_file(store, rid, name)) is None:
+        return None
+    return store.fetch(got[0], d / name.split(".", 1)[0] / rid, paths=[name]) / name
+
+
+def verdict_packs(store, limit: int = GATHER, remote: bool = False) -> list[dict]:
+    """{run, sha256, bytes} of the pack of each of the ``limit`` recorded checks that ended last and published one, newest first: a
+    failed or cancelled run's too, since its pack holds only the passes its steps stored, each under a key of everything it read.
+    One whose listed size would take them past `GATHER_BYTES` is passed over by name, unfetched, and with ``remote`` so is one the
+    store's remote doesn't hold, which no URL fetches.  The store's attempts are refreshed first when it has a remote."""
     if store.remote is not None:
         store.refresh(attempts_only=True)
     rows = store.index.sql(f"SELECT id FROM attempts WHERE {COMMON.RECORDED_CHECKS} AND state IN ('done', 'failed', 'cancelled') "
                            "ORDER BY julianday(start_utc) + COALESCE(wall_s, 0) / 86400.0 DESC LIMIT ?", (4 * limit,))
     packs, room = [], GATHER_BYTES
     for (rid,) in rows:
-        size = pack_bytes(store, rid)
-        if size is not None and size > room:
-            print(f"check: verdicts: skipping {rid}'s pack: its {size / 2**20:.0f} MiB would take this gather past "
+        if (got := pack_file(store, rid)) is None or (remote and not got[1].get("remote")):
+            continue
+        if (size := got[1]["bytes"]) > room:
+            print(f"check: verdicts: skipping {rid}'s pack: its {size / 2**20:.0f} MiB would take this check's packs past "
                   f"{GATHER_BYTES / 2**20:.0f} MiB (GATHER_BYTES); its verdicts are recomputed", flush=True)
             continue
-        if (pack := attempt_pack(store, rid, d)) is None:
-            continue
-        if why := VERDICTS.refusal(pack):
-            print(f"check: verdicts: skipping {rid}'s pack, which import refuses ({why}); its verdicts are recomputed", flush=True)
-            continue
-        packs.append((rid, pack))
-        room -= size if size is not None else (pack.stat().st_size if pack.is_file() else 0)
+        packs.append({"run": rid, "sha256": got[1]["sha256"], "bytes": size})
+        room -= size
         if len(packs) == limit:
             break
+    return packs
+
+
+def gathered_packs(d: Path, store, limit: int = GATHER) -> list[tuple[str, Path]]:
+    """(attempt, pack) of the packs `verdict_packs` selects, fetched under ``d``, newest first, for a plan read here (`plan.py`,
+    `measure`); one import refuses is passed over by name."""
+    packs = []
+    for p in verdict_packs(store, limit):
+        if (pack := attempt_pack(store, p["run"], d)) is None:
+            continue
+        if why := VERDICTS.refusal(pack):
+            print(f"check: verdicts: skipping {p['run']}'s pack, which import refuses ({why}); its verdicts are recomputed",
+                  flush=True)
+            continue
+        packs.append((p["run"], pack))
     return packs
 
 
@@ -1351,6 +1404,54 @@ def verdicts_in(pack: Path, run_dir: Path | None, only: str | None = None) -> di
     added, kept = VERDICTS.import_(pack, only)
     print(f"check: verdicts: {added} imported, {kept} already here, from {pack.name}{f' (only {only})' if only else ''}", flush=True)
     return {"pack": pack.name, "sha256": _sha256(pack), "added": added, "already": kept, **({"only": only} if only else {})}
+
+
+#: how long a fetch of a recorded check's pack may wait on the store before the run passes the pack over, in seconds
+VERDICT_FETCH_TIMEOUT_S = 120
+
+
+def fetch_pack(p: dict, dest: Path) -> str | None:
+    """Fetch the pack ``p`` that `take_verdict_urls` read to ``dest``, never more bytes than it lists; None once the bytes are the
+    ones listed (their size and sha256), else why not, which never holds the URL."""
+    h, n = hashlib.sha256(), 0
+    try:
+        with urllib.request.urlopen(p["url"], timeout=VERDICT_FETCH_TIMEOUT_S) as r, open(dest, "wb") as f:  # noqa: S310  (a presigned URL)
+            while n <= p["bytes"] and (chunk := r.read(1 << 20)):
+                h.update(chunk)
+                f.write(chunk)
+                n += len(chunk)
+    except (OSError, ValueError, http.client.HTTPException) as e:     # urllib's errors, which name the URL, aren't printed
+        return f"it can't be fetched ({type(e).__name__}{f' {e.code}' if isinstance(e, urllib.error.HTTPError) else ''})"
+    if (n, h.hexdigest()) != (p["bytes"], p["sha256"]):
+        return f"the {n} bytes fetched aren't the {p['bytes']} the store lists under its sha256"
+    return None
+
+
+def verdicts_fetched(listed: list[dict], only: str | None = None) -> list[dict]:
+    """Fetch each pack ``listed`` (`take_verdict_urls`, newest first) and import it before the steps run (`verdicts.import_`, which
+    never replaces an entry here, so where two packs hold one entry the newer's is kept); with ``only``, just its entries under
+    that pack path.  A pack that can't be fetched, isn't the one listed or that import refuses is passed over by name, so its
+    verdicts are recomputed.  Each pack's record for the result's `verdicts`."""
+    got, t0 = [], time.monotonic()
+    with tempfile.TemporaryDirectory(prefix="check-verdicts-") as d:
+        pack = Path(d) / "verdicts.tar.gz"
+        for p in listed:
+            if (why := fetch_pack(p, pack)) is None:
+                try:
+                    added, kept = VERDICTS.import_(pack, only)
+                except (VERDICTS.BadPack, tarfile.TarError, OSError, EOFError) as e:
+                    why = f"import refuses it ({type(e).__name__}: {e})"
+                else:
+                    got.append({"run": p["run"], "sha256": p["sha256"], "added": added, "already": kept,
+                                **({"only": only} if only else {})})
+                    continue
+            print(f"check: verdicts: skipping {p['run']}'s pack: {why}; its verdicts are recomputed", flush=True)
+            got.append({"run": p["run"], "sha256": p["sha256"], "skipped": why})
+    taken = [g for g in got if "skipped" not in g]
+    print(f"check: verdicts: {sum(g['added'] for g in taken)} imported, {sum(g['already'] for g in taken)} already here, from "
+          f"{len(taken)} of {len(listed)} recorded checks' packs{f' (only {only})' if only else ''} in {time.monotonic() - t0:.0f} s",
+          flush=True)
+    return got
 
 
 #: The suites whose tests run `lake` or what the Lean steps build under `.lake/`: a step of the Lean group once `lean-build` has
@@ -2491,11 +2592,11 @@ REUSED_PLAN_S = 1200
 class Reused:
     """The passes a recorded check reuses, packed as `REUSED_PACK` beside `verdicts.tar.gz` (which holds only those its steps
     stored), so one recent check's two packs answer for every part it passed, each entry still naming the run that earned it.
-    They are what its plan of its own tree (`plan.py --own`: this run's caches, the gathered pack imported) finds passed, of the
+    They are what its plan of its own tree (`plan.py --own`: this run's caches, the packs imported) finds passed, of the
     entries here before its steps ran (``before``).  The plan runs once the twins are built (`run`'s `prebuild`, which no other
     process may import while it compiles them), beside the steps; it runs again once circuit-check ends when it found no task
     list to read circuit-check's targets from.  xz with a dictionary spanning many entries (`verdicts.XZ_FILTERS`): one tree's
-    circuit-check entries run past a GB, and pack to a few MB.  `gather_verdicts` never takes it; `plan.py` does, for a check
+    circuit-check entries run past a GB, and pack to a few MB.  `verdict_packs` never takes it; `plan.py` does, for a check
     of the commit it plans and each `--from`.  With ``only`` (`--no-cache --circuit-cache`), just its entries under that pack
     path: the plan also finds suites' passes here, which such a run runs again."""
 
@@ -3035,7 +3136,10 @@ def main(argv: list[str], script: bool = False) -> int:
             return 2
         print(f"check: off the merge gate, left to the after-landing run (`--deferred`): {', '.join(OFF_GATE)}", flush=True)
     out = run_dir or Path(tempfile.mkdtemp(prefix="check-"))
-    verdicts = {"in": verdicts_in(pack, run_dir, None if cache else CIRCUIT_ENTRIES)} if pack and circuit_cache else {}
+    listed, verdicts = take_verdict_urls(out), {}
+    if circuit_cache and (pack or listed):
+        part = None if cache else CIRCUIT_ENTRIES
+        verdicts["in"] = [*([verdicts_in(pack, run_dir, part)] if pack else []), *(verdicts_fetched(listed, part) if listed else [])]
     if records is not None and (only is None or any(p.partition(":")[0] == "circuit-check" for p in only)):
         why = (cc_records_in(records, cache_dir() / "circuit-check") if circuit_cache
                else "circuit-check reuses no cache here (--no-cache without --circuit-cache)")

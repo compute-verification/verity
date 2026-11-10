@@ -717,9 +717,10 @@ def test_a_slot_wrapped_check_is_a_recorded_check_whose_bundle_and_verdicts_are_
     index = _attempts(tmp_path, [("r-lean", "python3", "failed", DEFERRED), ("r-other", "python3", "done", ["python3", "x.py"]),
                                  ("r-lean-tool", "python3", "done", ["python3", "tools/verity/lean/check.py", "--build"]),
                                  ("r-check", "check", "done", ["check"]), ("r-running", "python3", "running", DEFERRED)])
-    runs = {r: [("lean-audit/lean-artifacts.tar.gz", r[2] * 64, True)] for r in ("r-lean", "r-other", "r-lean-tool", "r-check", "r-running")}
+    runs = {r: [("lean-audit/lean-artifacts.tar.gz", r[2] * 64, True), ("verdicts.tar.gz", r[3] * 64, True)]
+            for r in ("r-lean", "r-other", "r-lean-tool", "r-check", "r-running")}
     store = types.SimpleNamespace(remote=None, index=index, get_attempt=lambda r: {"outputs": {"run_files": f"art:{r}"}},
-                                  listing=lambda art: [{"path": p, "sha256": h, "remote": on} for p, h, on in runs[art[4:]]])
+                                  listing=lambda art: [{"path": p, "sha256": h, "remote": on, "bytes": 1} for p, h, on in runs[art[4:]]])
     assert LA.shared_bundles(store) == ["l" * 64, "c" * 64]
     monkeypatch.setattr(CHECK, "attempt_pack", lambda store, rid, d, name="verdicts.tar.gz": d / rid)
     monkeypatch.setattr(CHECK.VERDICTS, "refusal", lambda pack: None)

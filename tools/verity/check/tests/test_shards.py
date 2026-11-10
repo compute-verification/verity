@@ -519,7 +519,7 @@ def test_record_sends_a_shard_only_what_its_own_steps_read(tmp_path, monkeypatch
 
 def test_a_recorded_shard_tells_the_preflight_its_parts(monkeypatch):
     """The preflight asks for the Lean dependencies of the packages a shard audits, the only ones it carries URLs for."""
-    monkeypatch.setattr(CHECK, "gather_verdicts", lambda d, given=None: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
     real, parts = subprocess.run, []
 
     def run(cmd, *a, **k):
@@ -688,7 +688,7 @@ def test_each_shard_holding_circuit_check_starts_from_the_records_and_one_refuse
 
 def test_record_of_the_records_step_launches_it_alone_with_circuit_checks_memory(monkeypatch):
     """`--record --cc-records`: recorded without the check tool (no gate reads it), in a train slot's memory as circuit-check
-    takes, with no upstream build, Lean dependencies or gathered verdicts."""
+    takes, with no upstream build, Lean dependencies or verdict packs' URLs."""
     real, launched = subprocess.run, []
 
     def run(cmd, *a, **k):
@@ -700,7 +700,7 @@ def test_record_of_the_records_step_launches_it_alone_with_circuit_checks_memory
     monkeypatch.setattr(subprocess, "run", run)
     monkeypatch.setattr(CHECK, "landable", lambda base: True)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: (_ for _ in ()).throw(AssertionError("Lean dependencies sent")))
-    monkeypatch.setattr(CHECK, "gather_verdicts", lambda d, given=None: (_ for _ in ()).throw(AssertionError("verdicts gathered")))
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: (_ for _ in ()).throw(AssertionError("verdict packs' URLs sent")))
     monkeypatch.setattr(CHECK, "slot_wrap", lambda priority: ["slot"])
     assert CHECK.record(["--base", "HEAD", "--agreement", "--on", "vy-x", "--priority", "--keep-going", "--cc-records"]) == 0
     [cmd] = launched

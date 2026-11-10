@@ -190,11 +190,33 @@ def test_the_lean_dependency_urls_leave_the_run_directory_before_any_step(tmp_pa
     assert CHECK.take_lean_deps_urls(tmp_path) == Path("/somewhere/urls.json")
 
 
-def test_custody_deletes_the_lean_dependency_urls_wherever_a_run_leaves_them():
-    """A run of anything else, or a check that ends before `check.py` starts, leaves them in inputs/ for custody to delete."""
-    from research.store.custody import CREDENTIALS
+def test_the_verdict_pack_urls_leave_the_run_directory_before_any_step(tmp_path, monkeypatch, capsys):
+    """Each URL grants a read of its pack until it expires, and the run's record keeps what its run directory holds.  A file that
+    isn't a list of packs imports none and goes all the same; a local recorded run reads its launcher's file where it is."""
+    monkeypatch.delenv(CHECK.VERDICT_URLS_ENV, raising=False)
+    assert CHECK.take_verdict_urls(tmp_path) == []
+    (tmp_path / "inputs").mkdir()
+    pack = {"run": "r-new", "sha256": "a" * 64, "bytes": 3, "url": "https://r2/o?sig"}
+    (sent := tmp_path / "inputs" / CHECK.VERDICT_URLS).write_text(json.dumps([pack, {**pack, "bytes": "3"}, {"run": "r-x"}, "r-y"]))
+    assert CHECK.take_verdict_urls(tmp_path) == [pack] and not sent.exists()
+    for garbled in ("[", json.dumps(pack)):
+        sent.write_text(garbled)
+        assert CHECK.take_verdict_urls(tmp_path) == [] and not sent.exists()
+    assert capsys.readouterr().out.count("check: verdicts: the packs' URLs sent can't be read (JSONDecodeError); the run imports none") == 1
+    (local := tmp_path / "urls.json").write_text(json.dumps([pack]))
+    monkeypatch.setenv(CHECK.VERDICT_URLS_ENV, str(local))                              # a local recorded run's launcher
+    assert CHECK.take_verdict_urls(tmp_path) == [pack] and local.exists()
 
-    assert f"inputs/{CHECK.LEAN_DEPS_URLS}" in CREDENTIALS
+
+def test_custody_deletes_the_presigned_urls_wherever_a_run_leaves_them(tmp_path):
+    """A run of anything else, or a check that ends before `check.py` takes them, leaves them in inputs/ for custody to delete."""
+    from research.store.custody import drop_credentials
+
+    (tmp_path / "inputs").mkdir()
+    for name in (CHECK.LEAN_DEPS_URLS, CHECK.VERDICT_URLS, "sent.txt"):
+        (tmp_path / "inputs" / name).write_text("x")
+    drop_credentials(tmp_path)
+    assert [p.name for p in (tmp_path / "inputs").iterdir()] == ["sent.txt"]
 
 
 def test_the_agreement_leaves_memory_for_the_steps_beside_it(monkeypatch):
@@ -369,7 +391,7 @@ def test_record_warns_when_the_commit_cannot_land_as_is_and_checks_it_anyway(mon
 
     monkeypatch.setattr(subprocess, "run", run)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
-    monkeypatch.setattr(CHECK, "gather_verdicts", lambda d, given=None: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
     for can, said in ((False, True), (True, False)):
         monkeypatch.setattr(CHECK, "landable", lambda base, can=can: can)
         assert CHECK.record(["--base", "HEAD"]) == 0 and len(launched) == 1
@@ -502,55 +524,63 @@ def test_the_ratchet_gate_step_fails_when_its_base_is_head_or_above_it(tmp_path,
     assert CHECK.ratchet_gate(out, True) == "skipped: no base: origin/main names no commit here"
 
 
-def test_record_sends_the_verdicts_it_gathers_with_a_pack_given_added_unless_no_cache(tmp_path, monkeypatch):
-    """`--verdicts-in` adds to the gathered pack, never replaces it: a stale pack given once turned reuse off for every check
-    it rode with, because the gathered pack it replaced held the passes."""
+def test_record_sends_the_verdict_packs_urls_with_a_pack_given_beside_them_unless_no_cache(tmp_path, monkeypatch):
+    """A launch sends the newest recorded checks' packs as URLs the run fetches, never the packs: fetching and combining them on
+    the launcher held each shard's launch some ten minutes.  `--verdicts-in` travels beside them, never in their place: a stale
+    pack given once turned reuse off for every check it rode with, because the gathered pack it replaced held the passes."""
     import subprocess
     import sys
 
-    real, launched, given_to = subprocess.run, [], []
+    real, launched, listed = subprocess.run, [], []
 
     def run(cmd, *a, **k):
         if cmd[:4] == [sys.executable, "-m", "research", "run"]:
-            launched.append(cmd)
+            head = cmd[:cmd.index("--")]
+            launched.append((cmd[cmd.index("--") + 1:], [head[i + 1] for i, x in enumerate(head) if x == "--send"], k["env"], head))
             return subprocess.CompletedProcess(cmd, 0)
         return real(cmd, *a, **k)
 
-    def gathered(d: Path, given: Path | None = None) -> Path:
-        given_to.append(given)
-        (d / "verdicts-gathered.tar.gz").write_bytes(b"")
-        return d / "verdicts-gathered.tar.gz"
+    def url_file(d: Path) -> Path:
+        listed.append(d / CHECK.VERDICT_URLS)
+        listed[-1].write_text("[]")
+        return listed[-1]
 
     monkeypatch.setattr(subprocess, "run", run)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
     monkeypatch.setattr(CHECK, "landable", lambda base: True)
     monkeypatch.setattr(CHECK, "slot_wrap", lambda priority: [])
-    monkeypatch.setattr(CHECK, "gather_verdicts", gathered)
+    monkeypatch.setattr(CHECK, "verdict_url_file", url_file)
+    monkeypatch.delenv(CHECK.VERDICT_URLS_ENV, raising=False)
     assert CHECK.record(["--base", "HEAD", "--on", "vy-x"]) == 0
-    [cmd] = launched
-    tail = cmd[cmd.index("--") + 1:]
-    assert tail[-2] == "--verdicts-in" and tail[-1].endswith("verdicts-gathered.tar.gz") and cmd[cmd.index("--send") + 1] == tail[-1]
-    assert given_to == [None]
+    [(tail, sends, env, _)] = launched
+    assert str(listed[-1]) in sends and "--verdicts-in" not in tail and CHECK.VERDICT_URLS_ENV not in env
     launched.clear()
-    assert CHECK.record(["--base", "HEAD", "--on", "vy-x", "--verdicts-in", "mine.tar.gz"]) == 0
-    [cmd] = launched
-    tail = cmd[cmd.index("--") + 1:]
-    assert given_to[-1] == Path("mine.tar.gz").resolve() and "mine.tar.gz" not in " ".join(cmd)
-    assert tail[-2:] == ["--verdicts-in", cmd[cmd.index("--send") + 1]] and tail[-1].endswith("verdicts-gathered.tar.gz")
+    CHECK.VERDICTS._write(mine := tmp_path / "mine.tar.gz", [("tests/k.json", b"{}")])
+    with monkeypatch.context() as here:                                 # the run starts elsewhere: it's given the path whole
+        here.chdir(tmp_path)
+        assert CHECK.record(["--base", "HEAD", "--on", "vy-x", "--verdicts-in", "mine.tar.gz"]) == 0
+    [(tail, sends, _, _)] = launched
+    mine = mine.resolve()
+    assert tail[tail.index("--verdicts-in") + 1] == str(mine) and str(mine) in sends and str(listed[-1]) in sends
     launched.clear()
-    assert CHECK.record(["--base", "HEAD", "--no-cache"]) == 0 and len(given_to) == 2
-    assert not any(x.endswith("verdicts-gathered.tar.gz") for x in launched[0])
+    assert CHECK.record(["--base", "HEAD"]) == 0                                       # a local recorded run
+    [(tail, sends, env, _)] = launched
+    assert env[CHECK.VERDICT_URLS_ENV] == str(listed[-1]) and sends == []
     launched.clear()
-    # drive's after-landing run: circuit-check's passes come from the gathered pack (main imports only theirs)
-    assert CHECK.record(["--base", "HEAD", "--on", "vy-x", "--no-cache", "--circuit-cache"]) == 0 and len(given_to) == 3
-    [cmd] = launched
-    tail = cmd[cmd.index("--") + 1:]
-    assert tail[-4:-2] == ["--no-cache", "--circuit-cache"] and tail[-2] == "--verdicts-in", tail
-    launched.clear()
-    assert CHECK.record(["--base", "HEAD", "--no-cache"]) == 0 and len(given_to) == 3
-    head = launched[0][:launched[0].index("--")]
+    assert CHECK.record(["--base", "HEAD", "--no-cache"]) == 0 and len(listed) == 3
+    [(_, sends, env, head)] = launched
+    assert sends == [] and CHECK.VERDICT_URLS_ENV not in env
     assert [head[i + 1] for i, x in enumerate(head) if x == "--declared-output"] == [*CHECK.PACK_FILES, "check-live.json"], \
         "custody uploads the packs and the live record however the run ends, never trimming them as undeclared"
+    launched.clear()
+    # drive's after-landing run: circuit-check's passes come from the packs sent (main imports only theirs)
+    assert CHECK.record(["--base", "HEAD", "--on", "vy-x", "--no-cache", "--circuit-cache"]) == 0 and len(listed) == 4
+    [(tail, sends, _, _)] = launched
+    assert tail[-2:] == ["--no-cache", "--circuit-cache"] and str(listed[-1]) in sends
+    (bad := tmp_path / "bad.tar.gz").write_bytes(b"not a pack")
+    for given, why in ((bad, "refused"), (tmp_path / "absent.tar.gz", "no such pack")):
+        with pytest.raises(SystemExit, match=why):
+            CHECK.record(["--base", "HEAD", "--on", "vy-x", "--verdicts-in", str(given)])
 
 
 def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path, monkeypatch, capsys):

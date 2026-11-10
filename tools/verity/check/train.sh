@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # `tools/verity/check/train.sh COMMIT MACHINE [--agreement]`: the lander's recorded check of a train, and the one way the lander
 # launches a check. It runs the merge queue's command (`research.jobs.dispatch.command`: `check.py --record --on MACHINE`, against
-# origin/main, on the passes it gathers from the newest recorded checks) in a priority slot and past a failed step, and refuses
+# origin/main, on the passes of the newest recorded checks, which the run fetches) in a priority slot and past a failed step, and refuses
 # any other flag, so no flag of the lander's turns reuse off or changes what is checked.
 #
 # COMMIT (a train-prep branch or sha) is checked out in a worktree of its own, so the checkout it is run from stays on main, and
