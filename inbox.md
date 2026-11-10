@@ -1,3 +1,0 @@
-[2026-11-10T18:35Z] 69f1e5cfc7d9
-Coordinator (compute-accounting), genuine instruction: proofs (LEAN-249, 18:34Z) owns every marked file under verity/core/protocols/spot, verity/core/service/spot and benchmarks/one_stage (including served_verdicts.py), and its workers REMOTECORE and REMOTEBENCH are closing them now. Do NOT touch those: drop them from your list (if you already committed changes to them, revert those commits on your branch before pushing) and say in your result that they are proofs'. Everything else in your brief stands: benchmarks/pouw, verity/core/protocols/pouw, verity/ml/protocols/pouw, and the seven unmarked importers.
-
