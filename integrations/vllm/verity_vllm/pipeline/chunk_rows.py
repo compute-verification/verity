@@ -1,7 +1,7 @@
 """A chunked serving-rows template's units (`serving_rows.chunked`) on the bit rows Flock's `UnitStager` stages: their rows
-(`unit_rows`), table reads (`reads`) and statement (`statement`), the most of them one flock-circuit statement holds
-(`chunk_cap`, a partition file's ``chunk_cap``), and a template's units read once cut into its chunks (`split`).  The window's
-chunks (`serving_rows.members`) are laid out by `unit_rows`, and the verifier's circuit
+(`unit_rows`), a chunk's member (`unit_member`), table reads (`reads`) and statement (`statement`), the most of them one
+flock-circuit statement holds (`chunk_cap`, a partition file's ``chunk_cap``), and a template's units read once cut into
+its chunks (`split`).  The window's chunks (`serving_rows.members`) are laid out by `unit_rows`, and the verifier's circuit
 (``benchmarks/one_stage/compose_circuit.py --template``) by `unit_rows` and `statement`.  Each function takes the template as
 `serving_rows.template` reads it."""
 from __future__ import annotations
@@ -92,6 +92,16 @@ def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tupl
 
     in_rows, out_rows = IF.unit_rows(tp.fn, SP.cuts(tp) if tp.layout == "split" else None)
     return [(port(p), *rest) for p, *rest in in_rows], out_rows
+
+
+def unit_member(tp: Any, n: int, base: int = 0, name: str = "", seg: bool = False) -> CS.Member:
+    """``n`` units of chunked template ``tp`` from unit ``base`` on bit rows, as `UnitStager` stages a unit: its `unit_rows`
+    in, its outputs' v2 rows out, or, ``seg`` (a history table's writer), its table's ``hm96-sha512/row-seg/v1`` leaves."""
+    in_rows, _outs = unit_rows(tp)
+    outs = (("o0", 1),) if tp.layout == "s8" else IF.layout(tp.fn).outs
+    out_schema = CS.SCHEMA_HM96_SHA512_ROW_SEG if seg else CS.SCHEMA_HM96_SHA512_ROW_V2
+    schemas = tuple((p, s) for p, s, _b, _ps in in_rows) + tuple((p, out_schema) for p, _w in outs)
+    return CS.Member(tp.id, tuple((p, b // 16) for p, _s, b, _ps in in_rows), outs, n, base, name=name, schemas=schemas)
 
 
 def chunk_cap(tp: Any) -> int:

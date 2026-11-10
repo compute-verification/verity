@@ -25,7 +25,8 @@ from verity.core.protocols.spot import challenger as Ch, second_stage as SS, ser
 from verity.core.protocols.spot.one_stage import partition as P, registered as RG, registration as R
 from verity.ml.commitments import history as HT
 from verity.ml.commitments.gates import embedding as E
-from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT, interior_rows as IR, serving_rows as SRW
+from verity_vllm.pipeline import (boundary_rows as BR, boundary_tables as BT, chunk_rows as CR, interior_rows as IR,
+                                  serving_rows as SRW)
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -214,7 +215,7 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
     for t in layout.tables:
         hs[t] = HT.HistoryTable(layout.partition["program"], t, BT.WORDS, cap)
         hs[t].append(BT.fill(rng.integers(0, 1 << 16, (3, BT.WORDS), dtype=np.uint16), prompt, outputs, cap))
-    member = IR.named(SRW.unit_member(tid, cells))
+    member = IR.named(CR.unit_member(SRW.template(tid), cells))
     table = tuple(IR.Supply(tid, p, f"{key}/{p}", layout.n_rho, (0, 0, 1, 1)) for p in IR.TABLE)
     opening = tuple(IR.Operand(tid, p, f"{key}/{p}", cells, tuple(range(cells)), w) for p, w in member.rows
                     if p not in IR.TABLE)

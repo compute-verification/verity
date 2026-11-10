@@ -25,7 +25,8 @@ from verity.ml.circuits.refs import coll_concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.definitions.registry import dead_free as DF
 from verity.ml.windows import rows as CS
-from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT, interior_rows as IR, serving_rows as SRW
+from verity_vllm.pipeline import (boundary_rows as BR, boundary_tables as BT, chunk_rows as CR, interior_rows as IR,
+                                  serving_rows as SRW)
 
 #: two templates of one shape, (x0, best, idx: one I32) -> I32: `A` stands for the unit reading ``c``, `B` for ``i``'s
 A, B = bind(DF.TokenSelectCombineV2, V=64, C=64), bind(DF.TokenSelectCombineV2, V=32, C=32)
@@ -59,7 +60,7 @@ SUPPLIES = (IR.Supply(P.template_id(A), "idx", f"{KEY}/c", NC, tuple(range(NC)),
 OPERANDS = (*(IR.Operand(P.template_id(A), p, f"{KEY}/{p}", NC, tuple(range(NC)), 1) for p in ("x0", "best")),
             *(IR.Operand(P.template_id(B), p, f"{KEY}/y{p}", G * W, tuple(range(G * W)), 1) for p in ("x0", "best")))
 LINKS = (*SUPPLIES, *OPERANDS)
-MEMBERS = tuple(IR.named(SRW.unit_member(P.template_id(t), n)) for t, n in zip((A, B), CELLS, strict=True))
+MEMBERS = tuple(IR.named(CR.unit_member(SRW.template(P.template_id(t)), n)) for t, n in zip((A, B), CELLS, strict=True))
 
 
 def _u32(xs) -> np.ndarray:

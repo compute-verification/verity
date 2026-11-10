@@ -29,7 +29,8 @@ from verity.ml.commitments import history as HT
 from verity.ml.commitments.gates import embedding as E
 from verity.ml.windows import rows as CS
 from verity.ml.windows.interface import digest_words
-from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT, interior_rows as IR, serving_rows as SRW
+from verity_vllm.pipeline import (boundary_rows as BR, boundary_tables as BT, chunk_rows as CR, interior_rows as IR,
+                                  serving_rows as SRW)
 
 RD = E.read(8, 2)
 SPANS, Q, CELLS, SALT, ROW, DELTA = 3, 2, 2, bytes(range(32)), "interior-table-test", 2.0 ** -40
@@ -57,7 +58,7 @@ BLOCK = _block()
 #: the reads' root and domain, the verifier's: one row a sampled span, which both of its reads take, under the names round
 #: 2 gives the block's parameters where the boundary record names its ports by template
 SUPPLIES = tuple(IR.Supply(P.template_id(RD), p, f"{descriptor_id(BLOCK)}/{p}", 1, (0,) * CELLS) for p in IR.TABLE)
-MEMBER = IR.named(SRW.unit_member(P.template_id(RD), CELLS))
+MEMBER = IR.named(CR.unit_member(SRW.template(P.template_id(RD)), CELLS))
 #: the reads' key and opening, the replay's: a row a read, of its port's words
 OPERANDS = tuple(IR.Operand(P.template_id(RD), p, f"{descriptor_id(BLOCK)}/{p}", CELLS, tuple(range(CELLS)), w)
                  for p, w in MEMBER.rows if p not in IR.TABLE)

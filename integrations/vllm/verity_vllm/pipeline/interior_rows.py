@@ -63,7 +63,7 @@ from verity_vllm.check.replay.compare import _tp_member_alias
 from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, ProgramIndex, node_runs
 from verity_vllm.check.replay.opening import _ITEMSIZE, _NPDTYPE
 from verity_vllm.engine.sampler_capture import CAPTURE
-from verity_vllm.pipeline import interior_links as IL, serving_rows as SRW
+from verity_vllm.pipeline import chunk_rows as CR, interior_links as IL, serving_rows as SRW
 from verity_vllm.pipeline.interior_links import (DIGEST, HELD, INDEX, READ, TABLE, Cells, Link, Members, Operand, Supply,
                                                  history, kept_table, link_schemas, link_values, link_words, links,
                                                  sources, span_values, supplied, table_reads)
@@ -379,7 +379,7 @@ def _combine(x0: np.ndarray, best: np.ndarray, idx: np.ndarray, c: int) -> np.nd
 
 
 def named(m: CS.Member) -> CS.Member:
-    """Unit member ``m`` (`serving_rows.unit_member`) with each row named after the parameter it holds (row ``in<g>``,
+    """Unit member ``m`` (`chunk_rows.unit_member`) with each row named after the parameter it holds (row ``in<g>``,
     parameter g), as the second stage stages an interior member (`class_statement.member_stager`: row r is its
     Definition's input r) and round 2 names a wire's or a link's port."""
     names = {f"in{g}": p for g, (p, _t) in enumerate(SRW.template(m.template).fn.signature()[0])}
@@ -392,7 +392,7 @@ def pieces(s: Span, c: int | None = None) -> tuple[Span, Span]:
     """A token select's span ``s`` as the units Flock proves it by, as `TokenSelect_v4` calls them: each token's V / c
     `TokenSelectChunk_v2{C=c}` units, one a chunk of its logits row, then its `TokenSelectCombine_v2{V, C=c}` unit over
     logits[0] and the chunks' (best, idx). Each piece's member is its template's bit rows, as Flock stages a unit
-    (`serving_rows.unit_member`), each row named after its parameter (`named`). The chunks' outputs are computed here (`numerics.token_select_rows`), and the combine's must
+    (`chunk_rows.unit_member`), each row named after its parameter (`named`). The chunks' outputs are computed here (`numerics.token_select_rows`), and the combine's must
     be ``s``'s tokens, or nothing is committed. The chunks' ``group`` is a token's V / c units, so a span pads by whole
     tokens, as `TokenSelect_v4` inlined in a replay block (one instance a served token) lays its pieces out.
     ``c``: `TokenSelect_v4`'s chunk, ``min(CHUNK, V)``."""
@@ -412,7 +412,7 @@ def pieces(s: Span, c: int | None = None) -> tuple[Span, Span]:
               [s.data["outs"][out]]))
     got = []
     for t, units, ins, outs in split:
-        m = named(SRW.unit_member(t, units))
+        m = named(CR.unit_member(SRW.template(t), units))
         data = {"rows": {p: a.astype(np.uint16) for (p, _w), a in zip(m.rows, ins, strict=True)},
                 "outs": {p: a.astype(np.uint16) for (p, _w), a in zip(m.outs, outs, strict=True)}}
         scale = units // n
