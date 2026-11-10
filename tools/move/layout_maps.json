@@ -25,6 +25,7 @@
   {"id": "core:integrity-profile", "name": "Integrity profile", "to": "verity/protocols/spot/verifier", "part": "verifier", "trusted": true, "paths": ["verity/core/protocols/profile.py", "verity/core/protocols/tests/test_profile.py"]},
   {"id": "core:reporting-grid", "name": "the reporting grid", "to": "verity", "part": "", "trusted": false, "paths": ["verity/core/protocols/pyproject.toml", "verity/core/protocols/reporting.py"]},
   {"id": "core:claims", "name": "the claims' ids", "to": "verity", "part": "", "trusted": false, "paths": ["verity/core/claims/"]},
+  {"id": "core:periods", "name": "ticks, spans and the monitoring period (the Python mirror of `CoreProtocol.Period`)", "to": "verity", "part": "", "trusted": true, "paths": ["verity/core/periods/"]},
   {"id": "core:attest", "name": "a party's signed period roots (attest)", "to": "verity/commitments", "part": "", "trusted": true, "paths": ["verity/core/attest/"]},
   {"id": "core:deploy", "name": "the deployment layer (parties, channels, the runtime, the configuration)", "to": "verity/configuration", "part": "", "trusted": true, "paths": ["verity/core/deploy/"]},
   {"id": "core:wire", "name": "the wire", "to": "verity/configuration", "part": "", "trusted": true, "paths": ["verity/core/wire/"]},

@@ -244,6 +244,25 @@ NEW = {
     "verity/ml/definitions/registry/boolean_fa2_train.py": "ml:definitions-torch",  # its Boolean version, as `boolean_torch_words`
     "verity/ml/definitions/registry/boolean_fa2_train.circuit-check.py": "ml:definitions-torch",
     "verity/ml/definitions/tests/test_fa2_train.py": "ml:definitions-torch",
+    "verity/core/service/flock/Flock/RegBound.lean": "core:flock-lean-verifier",
+    "verity/ml/flock/tests/test_fmaxf_commit.py": "ml:flock-lowering",
+    "verity/ml/commitments/gates/sha512_stream.py": "ml:commitment-gates",          # SHA-512 over a stream, as gates
+    "verity/ml/commitments/gates/sha512_stream.circuit-check.py": "ml:commitment-gates",
+    "verity/ml/commitments/gates/sha512_stream.circuit-check.json": "ml:commitment-gates",
+    "verity/ml/commitments/tests/test_boolean_sha512_stream.py": "ml:commitment-gates",
+    "verity/ml/commitments/keyed.py": "ml:commitment-schemes",          # keyed leaves, a scheme beside `history.py`
+    "verity/ml/commitments/tests/test_keyed.py": "ml:commitment-schemes",
+    "verity/ml/crypto/transport.py": "ml:aead",        # the AEAD's transport, tested in the commitments' suite
+    "verity/ml/commitments/tests/test_transport.py": "ml:aead",
+    "verity/ml/definitions/registry/linear_cut.py": "ml:definitions-registry",
+    "verity/ml/definitions/registry/linear_cut.circuit-check.py": "ml:definitions-registry",
+    "verity/ml/definitions/registry/linear_cut.circuit-check.json": "ml:definitions-registry",
+    "verity/ml/definitions/tests/test_linear_cut.py": "ml:definitions-registry",
+    "verity/ml/definitions/registry/pearl_c_tile.py": "ml:definitions-registry",
+    "verity/ml/definitions/registry/pearl_c_tile.circuit-check.py": "ml:definitions-registry",
+    "verity/ml/definitions/registry/pearl_c_tile.circuit-check.json": "ml:definitions-registry",
+    "benchmarks/pouw/pearlplus_lean/": "stays",        # a benchmark's Lean, in a directory part of which is archived
+    "benchmarks/network_traces/tests/test_scan_zk_v3c.py": "stays",
     "benchmarks/pouw/np_kernel/": "archived",          # its owner archives the kernel: only its test imports it,
     "benchmarks/pouw/tests/test_np_kernel.py": "archived",              # and the test goes with it
 }
