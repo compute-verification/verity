@@ -112,6 +112,10 @@ theorem cO_classSha (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse)
     (cO ls lh H C A B A' B' s1).classSha = C := rfl
 theorem cO_meta (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 : String) :
     (cO ls lh H C A B A' B' s1).metaJ = metaJ := rfl
+theorem cO_g (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 : String) :
+    (cO ls lh H C A B A' B' s1).g = 1 := by kernel_rfl'
+theorem cO_upv (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 : String) :
+    (cO ls lh H C A B A' B' s1).upv = 1 := by kernel_rfl'
 
 /-- The partition's digest in hex, as `HmRow.checkPartition` compares it with META's. -/
 theorem partDigest_hex : hexOf (Sha512.hash (HmRow.PARTITION_V1.toUTF8.push 0 ++ partText.toUTF8)) = partHex := by
@@ -184,8 +188,8 @@ fwd_def stX setup_stX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' 
   [parseOut_cX ls lh H C A B A' B' s1 hH hcl hls hlh hps hph hc1 hc2 hck,
     load_pubX r ls lh H C A B A' B' s1 s3 s4 hr hCe hu1 hu2 hd, checkPartition_X ls lh H C A B A' B' s1, map_some_ok,
     deriveTemplateUnits_X ls lh H C A B A' B' s1, linksCheck_X r ls lh H C A B A' B' s1 s3 s4,
-    cpo_part, canon_part, cO_sha, cO_classSha, cO_meta, bne_self, hd2, hid,
-    hhello, unit_eq, delta_in]
+    cpo_part, canon_part, cO_sha, cO_classSha, cO_meta, cO_g, cO_upv, hCe, bne_self, hd2, hid,
+    hhello, unit_eq, delta_in, hH, hcl, hls, hlh, hps, hph, hc1, hc2, hck, hu1, hu2, hd]
   block [HmNets.check, HmNets.shaLaid, HmNets.hmLaid, HmNets.sha512x3Net, HmNets.hm96Net, canon, canonUtf8, Net.parse,
     HmRow.classOf, HmRow.parse, HmOut.parse, HmIn.loadPublic, HmRow.loadPublic, HmRow.checkPartitionObject,
     HmRow.deriveTemplateUnits, HmLinks.check, HmRow.delta, HmOut.delta, oA, oB]
@@ -212,6 +216,7 @@ fwd_def tabX setupTables_X (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A 
     Stmt.setupTables tz (bytesOf ls lh) (pubOf r (hexOf H) (hexOf C)) coinsX 1 [] (some drawJ) (some partObj)
       (some progBytes) none none none none by
   [setup_stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello hr hH hcl hls hlh hps hph hc1 hc2 hck hCe hu1 hu2 hd hd2 hid
+    hhello, cO_meta, cO_classSha, cO_g, cO_upv, hCe, hH, hcl, hls, hlh, hps, hph, hc1, hc2, hck, hu1, hu2, hd, hd2, hid,
     hhello]
   block [HmNets.check, HmNets.shaLaid, HmNets.hmLaid, HmNets.sha512x3Net, HmNets.hm96Net, canon, canonUtf8, Net.parse,
     HmRow.classOf, HmRow.parse, HmOut.parse, HmIn.loadPublic, HmRow.loadPublic, Stmt.setupHidden]
