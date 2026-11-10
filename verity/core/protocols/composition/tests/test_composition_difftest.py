@@ -795,17 +795,8 @@ def test_product_over_remotes_subprotocols_is_remote_on_fewer_cases(product_remo
 @pytest.mark.slow
 def test_product_over_onsites_subprotocols_is_onsite(product_onsite_server, recorded):
     """`product IDS serve` over onsite's subprotocols, which `verity run`'s verifier runs, is held to the reference as
-    `onsite serve` is (`test_onsite_agrees`): only its own run on whole cases shows that executable to be onsite. Its
-    two hundred cases reach what `test_product_over_onsites_subprotocols_is_onsite_on_fewer_cases` draws too seldom."""
+    `onsite serve` is (`test_onsite_agrees`): only its own run on whole cases shows that executable to be onsite."""
     _agree(PRODUCT[R.ONSITE.id], product_onsite_server, SEEN["onsite"], 200, (R.REJECT, "reject, a component undecided"))
-
-
-@pytest.mark.slow
-def test_product_over_onsites_subprotocols_is_onsite_on_fewer_cases(product_onsite_server, recorded):
-    """`test_product_over_onsites_subprotocols_is_onsite` on `FEWER_OF_PRODUCT` cases: only whole cases through
-    `product IDS serve` show that it runs onsite for onsite's ids."""
-    _agree(PRODUCT[R.ONSITE.id], product_onsite_server, SEEN["onsite"], FEWER_OF_PRODUCT,
-           (R.REJECT, "reject, a component undecided"))
 
 
 def test_onsites_bandwidth_is_p2():
