@@ -214,11 +214,11 @@ The sections above describe the target. `main` differs from it in these ways:
   exceptions (`tests/test_boundaries.py`).
 - **A stated list of the messages between workload and prover.** Today the workload hands its values to the prover
   through function calls and files (`verity/ml/windows/`).
-- **Parties for every protocol.** Only `spot`, PoUS and PoUB declare their parties. The served run that `verity run`
-  knows is driven by a shell script, not by parties.
-- **Hardware as an argument.** No protocol declares which part of the registered hardware it accounts for. Registration
-  refuses a boundary link with no network certifier and memory that no memory challenger reaches. Nothing checks that
-  every device is under PoUW or all memory under PoUS.
+- **Parties for every protocol.** Only `spot`, PoUS and PoUB declare their parties. The one served run that
+  `verity run`, the command that starts a run, knows is driven by a shell script, not by parties.
+- **Hardware as an argument.** No protocol declares which part of the registered hardware it accounts for. For onsite,
+  registration refuses a host's link to the outside with no network certifier on it, and memory that no memory
+  challenger reaches. Nothing checks that every device is under PoUW or all memory under PoUS.
 - **No decision in Python.** Python still holds decisions: the verifiers of the protocols not yet switched to Lean, a
   Python copy of the registration check, and the configuration check.
 - **Two adapters.** There is one adapter, for vLLM. It is not split into a PyTorch adapter and a vLLM adapter on it.
