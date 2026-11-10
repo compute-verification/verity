@@ -365,7 +365,7 @@ def test_sigv4_matches_the_aws_list_objects_example():
     assert h["Authorization"].endswith("Signature=34b48302e7b5fa45bde8084f4b7868a86f0a534bc59db6670ed5711ef69dc6f7")
 
 
-def test_the_config_names_the_registry_channel_and_every_loop_post_start_starts():
+def test_the_config_names_the_registry_channel_and_watches_every_loop_post_start_starts_and_no_other():
     reg = json.loads((ROOT / ".agents/skills/using-slack/registry.json").read_text())
     assert REAL["channel"] == reg["channels"]["agent-alerts"]["id"]
     assert REAL["mention"] == next(h["usergroup"] for h in reg["handles"] if h["handle"] == "infra")
@@ -373,6 +373,8 @@ def test_the_config_names_the_registry_channel_and_every_loop_post_start_starts(
     watched = " ".join(loop["started_by"] for loop in REAL["loop"])
     unwatched = [s for s in started if s not in watched and s != "/data/infra/cloud_watch.sh"]   # it can't watch itself
     assert unwatched == [] and "research pods guard" in watched, f"add a [[loop]] to cloud_watch.toml for {unwatched}"
+    unstarted = [s for loop in REAL["loop"] if (s := loop["started_by"].split()[0]).startswith("/data/") and s not in started]
+    assert unstarted == [], f"post_start.sh starts none of {unstarted}: remove its [[loop]] from cloud_watch.toml"
 
 
 def test_the_agent_watchs_stall_names_the_top_group_and_pages_a_person_an_hour_later(tmp_path):
