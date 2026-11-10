@@ -292,10 +292,11 @@ def test_a_held_node_2_takes_no_job_until_its_hold_ends_and_the_placement_says_u
     (src / auto.DESCRIPTION).write_text(f'[[shares]]\nproject = "verity"\nnode = "{N2}"\ncpus = "48-95"\n')
 
     def read(now: str) -> dict:
+        """Node 2's answer at `now`, its share's document alone."""
         at = datetime.fromisoformat(now).replace(tzinfo=UTC).timestamp()
         with monkeypatch.context() as m:
             m.setattr(auto, "SPILL", ())                                       # node 2 alone is asked
-            return auto.read(src, 4, reach=lambda name: [sys.executable, "-"], now=at)[N2]
+            return {"share": auto.read(src, 4, reach=lambda name: [sys.executable, "-"], now=at)[N2]["share"]}
 
     assert read("2030-01-31T17:00")["share"]["free"] == 48, "no file, no hold"
     hold.write_text("2030-02-01T00:00Z one lane has the whole node\nany later line is a note\n")
