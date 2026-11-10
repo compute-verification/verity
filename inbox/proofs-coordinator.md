@@ -27506,3 +27506,92 @@ Next entry: the 09:40Z check.
   - At 09:00Z, INF-673 is in Backlog with no comment. If it still has no done comment when their runs pass, I write the two heads here as "ready to mark on INF-673".
   - I mark #8414 as soon as its run passes.
 - **Next:** #8139's merge, while the runs go.
+
+## FUSEDSERVE, 09:05Z Tue (CIR-185): G2's verdict. The served fused members' price at K = 1, 2, 4: 24 rows, none void, 1,264 sessions accepted. Turn ended, timers off
+
+**The run.** `r20261110-071007-9daa` on vy-spot-glm53, GPU 0, from `0e694dd53e`, 08:10Z to 08:42Z, exit 0. Its record is
+art:f20c78ea80d998959b09a3c219a22612d4aa1f42a53e3ad5bdff65323a1e2b5f, preserved.
+
+**Its basis, in one line.** One member of each of the four fused templates of the served window (`r20261110-042659-14a1`, rank 0,
+the served values), proved under `--zk` by K streaming provers on one H200 through `benchmarks/one_stage/server_rate.py`, timed
+on the verifier's clock, twice (32 and 64 timed sessions a row).
+
+**What holds.**
+- All 24 rows have a rate and none is void. All 1,264 sessions were accepted by Flock's verifier; none was refused.
+- Lean's `ks-form` accepts all six statements' forms (`r20261110-055846-47b2`). Lean's `verify` was not run on a session's record.
+- Each row proves one member again and again, warm. No other member's values were proved.
+
+**The price.** A block is one fused block; a member is one statement. GPU seconds are 1 / rate, on one H200.
+
+| type | blocks a member | members a rank | K | statements/s (32, 64 sessions) | GPU s a member | ms a block |
+|---|---:|---:|---:|---|---|---|
+| w13 QGMMA | 256 | 4,096 | 1 | 1.48, 1.40 | 0.675, 0.712 | 2.64, 2.78 |
+| w13 QGMMA | 256 | 4,096 | 2 | 3.00, 2.68 | 0.333, 0.373 | 1.30, 1.46 |
+| w13 QGMMA | 256 | 4,096 | 4 | 3.92, 4.16 | 0.255, 0.240 | 1.00, 0.94 |
+| w13 MMA v2 | 31 | 4,096 | 1 | 1.65, 1.58 | 0.604, 0.633 | 19.49, 20.41 |
+| w13 MMA v2 | 31 | 4,096 | 2 | 3.08, 3.40 | 0.325, 0.294 | 10.48, 9.48 |
+| w13 MMA v2 | 31 | 4,096 | 4 | 5.54, 5.13 | 0.180, 0.195 | 5.82, 6.29 |
+| w2 QGMMA | 256 | 1,536 | 1 | 1.70, 1.79 | 0.588, 0.559 | 2.30, 2.18 |
+| w2 QGMMA | 256 | 1,536 | 2 | 2.50, 2.34 | 0.399, 0.428 | 1.56, 1.67 |
+| w2 QGMMA | 256 | 1,536 | 4 | 4.22, 3.70 | 0.237, 0.270 | 0.93, 1.06 |
+| w2 MMA v2 | 31 | 1,536 | 1 | 2.03, 2.06 | 0.494, 0.485 | 15.92, 15.65 |
+| w2 MMA v2 | 31 | 1,536 | 2 | 3.33, 3.26 | 0.301, 0.306 | 9.70, 9.88 |
+| w2 MMA v2 | 31 | 1,536 | 4 | 5.02, 4.90 | 0.199, 0.204 | 6.43, 6.59 |
+
+- The two passes differ by 2% to 12%. The steady windows are short: 4 to 20 s at 32 sessions, 11 to 44 s at 64.
+- Four provers peak at 36.8 GB on the card and 46 GB of host memory; the card is 62% to 84% busy.
+
+**Over a rank's fused members** (11,264 members, 1,616,384 blocks; the range is the two passes):
+
+| | K = 1 | K = 2 | K = 4 |
+|---|---|---|---|
+| w13, ms a block | 4.46 to 4.68 | 2.18 to 2.43 | 1.47 to 1.57 |
+| w2, ms a block | 3.64 to 3.77 | 2.44 to 2.56 | 1.52 to 1.65 |
+| both, GPU-s a rank | 6,845 to 7,169 | 3,643 to 3,987 | 2,395 to 2,572 |
+
+The MMA v2 members are 10.8% of the blocks and 42% to 47% of the GPU time, because each holds only 31 blocks.
+
+**What it replaces.** `FUSED_H200` in BREAKEVEN's `reprice.py` rests on two runs of STATIONARY's on synthetic `fr-w13` and
+`fr-w2`: `r20261108-000152-53c3` (one prover, 512 and 1,024 blocks a statement) and `r20261108-005139-36f3` (four provers, 128
+and 256 blocks). G2 is the served measurement in their place; it also supersedes the retry's own thin proving rows
+(`r20261110-042659-14a1`). BREAKEVEN can cite G2's run and art above.
+- **Same circuits for two types.** Served w13 MMA v2 is `fr-w13`'s Definition (9,144,187 ANDs) and served w2 QGMMA is `fr-w2`'s
+  (10,680,491). The served window has two types `FUSED_H200` has no price for: w13 QGMMA (8,572,219) and w2 MMA v2 (11,443,115).
+- **Smaller members.** A member is one table's units of one router slot, so it holds the window's tokens through that kernel:
+  256 and 31 here. The partition's limit of 1,024 a statement does not bind. A window with more tokens gives larger members.
+- **No (fixed, per-block) pair.** One size a type gives one point. What replaces `FUSED_H200` is a price a member by type, the
+  table above. Mixing kernels or prover builds to make a pair would not be sound, and you ruled out a fit, so I give none.
+- **Against `FUSED_H200` at the sizes it was timed at:**
+
+  | ms a block | `FUSED_H200` | served, over a rank |
+  |---|---|---|
+  | one prover | w13 3.57, w2 3.64 (at 1,024 blocks) | w13 4.46 to 4.68, w2 3.64 to 3.77 |
+  | four provers | w13 3.04, w2 3.26 (at 256 blocks) | w13 1.47 to 1.57, w2 1.52 to 1.65 |
+
+- **Not like for like.** The prover build and the harness have changed since those runs, and I did not time the synthetic
+  statements on this build. So the four-prover gap is not the served cut being cheaper. The nearer neighbour is STATIONARY's
+  re-timing on this harness at 1,024 blocks (`r20261108-110634-2b30`, `r20261108-114629-ff1f`): 2.65, 2.03 and 1.61 ms a block
+  for `fr-w13` at K = 1, 2, 4, and 2.83, 2.16 and 1.40 for `fr-w2`.
+
+**The scale reads are not timed.** A rank's 416 read members of 11,680 (two templates, 287 units each) have no price.
+- **A bound:** priced at the slowest fused member, they add at most 4.1% to 4.5% to a rank's fused GPU time (296 s on 7,169 s
+  at K = 1; 113 s on 2,572 s at K = 4).
+- **What it rests on:** an assumption, not a timing: that a read member proves no slower than the slowest fused member. A
+  read's unit is about a quarter the size (2.50M and 2.59M ANDs at k_log 23, against 8.6M to 11.4M at k_log 25). But the reads
+  are templated statements, which take a prover path (`--tmpl-unit`) this run did not use.
+- They stay out of any total called verified.
+
+**What "served" still lacks, for your wording.** The window's values were served and committed on stock vLLM's TP8 path, and
+every rank's record built. The Commit's own verdict, its CPU replay from the sealed bundles, was not run and cannot be now: the
+bundles are deleted, as you asked. One member a template was proved, from rank 0.
+
+**#8454** is marked at `0e694dd53e` (07:21Z; quick suites `r20261110-070323-3236`, 50 of 50) and untouched since. I will change
+two sentences of its body that say the price is not measured yet; that moves neither the head nor the mark.
+
+**Node A.** Nothing of mine holds a card (lease back 08:42Z; all eight free at 08:54Z), and `/dev/shm` and `/tmp` hold nothing
+of mine. Kept, in my private directory `/workspace/research/fusedserve` (1.5 GB): the six staged statements without the four
+fused circuits (660 MB), the tables, the key and the prover build. They would let the reads be timed later without a new
+Commit. I delete them on your word.
+
+**Per your 08:00Z entry:** no scale reads, no fit, no further slot. My three timers are off and I set none. Nothing went to
+BREAKEVEN or SERVEDCARD. The CIR-185 comment carries the table.
