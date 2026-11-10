@@ -66,8 +66,7 @@ and the header itself are as `canon` and `canonUtf8` write them, which it takes 
 the statement `stX`: the partition checks (`cpo_part`, `canon_part`), the sample's header is `hdrD`, whose text it
 takes as a hypothesis (`hd2`), and Δ is kept as `oA` and `oB`, as `FlockDeploy.Concrete.setup_stW` keeps
 `HmRow.delta`'s; its partition finding is `checkPartition_X`'s, `HmRow.checkPartition` at the statement's circuit and
-partition object. `setupTables_X` is `Stmt.setupTables` at one table, `tabX`. With no program, the statement's units
-come from its header, and Flock's links check (`HmLinks.check`) never runs in this witness.
+partition object. `setupTables_X` is `Stmt.setupTables` at one table, `tabX`.
 -/
 
 @[expose] public section

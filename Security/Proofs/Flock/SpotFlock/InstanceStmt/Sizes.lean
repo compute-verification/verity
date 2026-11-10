@@ -219,6 +219,7 @@ theorem public_lt {r : Run} (hr : r.Plain) : (pubOf r (hexOf circuitHash) (hexOf
 
 theorem draw_size : (printJson drawJ).toUTF8.size < 2 ^ 12 := by decide +kernel
 theorem partition_size : (printJson partObj).toUTF8.size < 2 ^ 12 := by decide +kernel
+theorem program_size : progBytes.size < 2 ^ 12 := by decide +kernel
 theorem registered_size : (printJson regJ).toUTF8.size < 2 ^ 12 := by decide +kernel
 theorem name_size : NAME.toUTF8.size < 2 ^ 12 := by decide +kernel
 
@@ -240,7 +241,11 @@ theorem raw_fits (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) : (raw r).Fits w
     simp only [raw, rawOf, Option.some.injEq] at h
     subst h
     exact Nat.lt_trans partition_size (by decide)
-  program := by intro _ h; cases h
+  program := by
+    intro b h
+    simp only [raw, rawOf, Option.some.injEq] at h
+    subst h
+    exact Nat.lt_trans program_size (by decide)
   work := by intro _ h; cases h
   workTable := by intro _ h; cases h
   stratified := by intro _ h; cases h
@@ -268,6 +273,7 @@ theorem x_small (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) : (x r).length < 
   have hp := public_lt hr
   have hd := draw_size
   have hq := partition_size
+  have hg := program_size
   have hg' := registered_size
   have hs := name_size
   have hf : FlockDeploy.FORMAT.toUTF8.size < 2 ^ 12 := by decide +kernel

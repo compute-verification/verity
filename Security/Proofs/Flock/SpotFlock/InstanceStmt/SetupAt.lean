@@ -10,8 +10,7 @@ public import Proofs.Flock.SpotFlock.InstanceStmt.Texts
 under `setupTables_X`'s premises, as `FlockDeploy.Concrete.setup_rC` is the concrete statement's. `setup_x` is it at the
 statement's own: where the verifier's two fixed nets build (`FixedNetsBuild`), every premise holds, the nets' from their
 build (`FlockDeploy.fixedNets_parse`, `sha_lines`, `hm_lines`), the class from `classOf_eq`, and the texts and the hello
-from their values holding only integers (`Texts`). Its one table is `tabAt r`. With no program, the statement's units
-come from its header, and Flock's links check (`HmLinks.check`) never runs in this witness.
+from their values holding only integers (`Texts`). Its one table is `tabAt r`.
 -/
 
 @[expose] public section
