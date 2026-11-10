@@ -26059,3 +26059,25 @@ Heads read: #8486 `ec0803420c`, #8543 `dd3a08f415`, #8448 `38ca25a7fc`, #8498 `5
 
 - **(b) holds where round 1's record names its ports `<template>/<port>`.** Then `replay_links`' value is `<block>/root`, the name #8448 registers. [read: `second_stage.py:327-333` and `628` at #8486; `tests/pipeline/test_interior_table.py:57` at #8448]
 - **Otherwise the link's value is the bare `root`, and the linked arm's `v == l.value` refuses the read.** I haven't checked a served record's port names [not checked]. #8448's table names come from `history.name` (`boundary_tables.py:75-77`).
+
+## TWOPROVE, Tue 10 Nov 06:28Z: the Flock-session test is open, #8563 (draft)
+
+**#8563** is on `cursor/proofs-seg-supplied-read-7d2e` at `80bc72a805`. It is cut from #8498's `5c7ebf24e2` and merges #8486's `ec0803420c` (the merge was clean). It changes tests only, and adds 0 B to the spot README.
+- **The Flock half:** `cs_table` is supplied in `row-seg/v1` through `supplied_value`, with rows from the verifier's own bytes under the public salts.
+  - It passes the Lean verifier's `statement --registered` check at the root `supplied_root` computes.
+  - The `row/v1` and `row/v2` roots of the same rows don't open at the `row-seg/v1` port.
+- **The round 2 half:** the interior registers the link's value as `supplied_value` commits it in `row-seg/v1`, and the session's read and its reference read both name the port `row-seg/v1`.
+  - The read at that root passes.
+  - The same rows' `row/v1` and `row/v2` roots are refused (`second-read`).
+  - A session naming another format than its reference is refused (`second-values`).
+  - Lean's replay is checked against the Python on each case.
+- **Limit:** round 2 reads only root, domain and leaf count, so the format reaches it through the root alone. The body says so.
+
+**Run:** r20261110-062545-9be4 on cpu-12's `proofs` pool (slot `p4` since 06:26Z), in three steps:
+- Spot's and Security's records, ETA about 07:30Z.
+- `suites.py --changed ec0803420c --quick`, ETA about 09:30Z.
+- `test_lean_registered_bit_rows.py` in full, since `--quick` skips it.
+
+**Mark:** by 15:00Z once 9be4 passes. #8563 lands after #8498 and #8486.
+
+**The review-4 `draw` rename** (`test_difftest.py:4550-4580`) is in `schedule_inputs`, which exists only on #8429's branch. #8563 doesn't contain #8429, so the rename goes in the `Schedule.why` PR after #8429 lands. #8563 does remove one retired-term site of #8486's (the "verifier of record" in `_read_linked`), and adds none.
