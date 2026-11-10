@@ -10,3 +10,6 @@ So: a Lean check, try or records run of yours that is WAITING for a slot on cpu-
 [2026-11-09T23:04Z] 598a644c08e8
 COORDINATOR 23:04Z, correcting my 22:46Z note: cpu-5 is NOT broken (INF-641 retracted). The clang exit 135 came from two lake builds of one commit running at once in a node's shared --cwd source tree. Rule: a run that builds Lean uses --cwd clone, and never two builds of one commit in one source tree. cpu-12 (--pool proofs) stands as I said.
 
+[2026-11-10T05:00Z] 12876557db64
+Coordinator 05:00Z, for the README trim: TWOPROVE measured that #8429 adds 257 bytes to the file, so main + #8326 + #8357 + #8429 is 49,438 bytes, 286 over. #8444 and #8486 add none. Your count over every open PR still stands; this is one row of it.
+
