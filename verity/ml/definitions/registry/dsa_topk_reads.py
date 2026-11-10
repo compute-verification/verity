@@ -10,8 +10,9 @@ and Row its H u16 words): a static, as `boolean_fp8_moe`'s is, so this module im
 and Path are READ's; `READ_PORTS` its parameters.  The body is three stages, each a unit or several (`cut`, `CUTS`):
 
 * the mask, `DsaTopKMaskCounted_v2{N,TOPK}` (scores, n), cut past `dsa_topk_mask_cut.WHOLE_MAX` keys and up to it a unit,
-  `DsaTopKMaskWhole_v1{N,TOPK,BLOCK}`, each block's mask its own output;
-* the index, over the row's blocks of BLOCK keys (`dsa_topk_mask_cut.blocks`): per block,
+  `DsaTopKMaskWhole_v1{N,TOPK}`;
+* the index, over a block a mask unit (`index_block`): the row's blocks of BLOCK keys (`dsa_topk_mask_cut.blocks`) where the
+  mask is cut, and the whole row where it is one unit.  Per block,
   ``DsaMaskPositions_v1{N,AT,K}`` compacts its members (its mask in u16 words, `dsa_topk_mask_cut.words`) to their positions,
   ascending, and counts them; then
   ``DsaPositionsMerge_v1{M,K}`` writes the M blocks' lists one after another, each at the count of those before it, and 0 past
@@ -212,9 +213,17 @@ DsaPositionsSlot = EW.specialized(
                 "more, by the definitions' test_dsa_topk_reads.py")
 
 
+def index_block(N: int, TOPK: int, block: int) -> int:
+    """The index's block at a row of N keys: ``block`` past `dsa_topk_mask_cut.WHOLE_MAX`, where the mask is cut a block a
+    unit, and N up to it, where the mask is one unit, so that each `DsaMaskPositions_v1` reads one mask unit's whole output.
+    The whole mask with a block an output instead would have 5 rows at 40,960 keys, so 8 hm96 slots for its 3 rows' 4, and
+    be past Flock's 2^27 bits."""
+    return block if N > X.WHOLE_MAX else N
+
+
 def index(B, N: int, K: int, block: int, mask) -> Coll:
-    """The K positions of a row's mask (Array<N, BIT>, a Coll of ``B``): a `DsaMaskPositions_v1` per block, on the block's
-    mask in u16 words, then the merge, its ``pos_b`` and ``count_b`` block b's two outputs."""
+    """The K positions of a row's mask (Array<N, BIT>, a Coll of ``B``): a `DsaMaskPositions_v1` per block of ``block`` keys,
+    on the block's mask in u16 words, then the merge, its ``pos_b`` and ``count_b`` block b's two outputs."""
     lists, counts = [], []
     for lo, hi in X.blocks(N, K, block):
         out = B.call(bind(DsaMaskPositions, N=hi - lo, AT=lo, K=K),
@@ -252,7 +261,7 @@ def _rows_sig(S):
 def _rows(B, S, scores, n, root, domain, row, salt, path):
     _, row_t = _read(S)
     mask = B.call(bind(BM.DsaTopKMaskCountedV2, N=S.N, TOPK=S.TOPK), scores, n)
-    tok = index(B, S.N, S.TOPK, S.BLOCK, mask)
+    tok = index(B, S.N, S.TOPK, index_block(S.N, S.TOPK, S.BLOCK), mask)
     out = B.batch(S.READ, tok, root, domain, row, salt, path, axes=(0, None, None, 0, 0, 0))
     w = row_t.leaves
     return tuple_of(Coll(Array(S.TOPK, row_t), strided_view(out, 0, w, w + 1, 1, S.TOPK * w)),
@@ -268,7 +277,8 @@ def _refuse_rows(b: dict) -> str | None:
             return str(e)
     if TOPK is not None and block is not None and block < TOPK:
         return f"a block of BLOCK >= TOPK keys (BLOCK={block}, TOPK={TOPK})"
-    if N is not None and TOPK is not None and block is not None and any(e - a < 2 for a, e in X.blocks(N, TOPK, block)):
+    if (N is not None and TOPK is not None and block is not None
+            and any(e - a < 2 for a, e in X.blocks(N, TOPK, index_block(N, TOPK, block)))):
         return f"blocks of at least 2 keys, as a block's positions take (N={N}, TOPK={TOPK}, BLOCK={block})"
     return None
 
@@ -280,24 +290,24 @@ DsaTopKReadRows = CompositeDefinition(
                 "definitions' test_dsa_topk_reads.py",
     refuse=_refuse_rows,
     doc="(kv, ok): the TOPK rows READ opens at the positions of the counted mask's members (DsaTopKMaskCounted_v2{N,TOPK}), "
-        "ascending, from the table of root and domain (DsaMaskPositions_v1 a block of BLOCK keys, DsaPositionsMerge_v1), "
-        "ok[j] read j's verdict")
+        "ascending, from the table of root and domain (DsaMaskPositions_v1 a block of index_block(N, TOPK, BLOCK) keys, "
+        "DsaPositionsMerge_v1), ok[j] read j's verdict")
 
 DSA_TOPK_READS = [DsaMaskPositions, DsaPositionsMerge, DsaPositionsChunk, DsaPositionsSlot, DsaTopKReadRows]
 
 
 def cut(t) -> list[tuple[Any, int]]:
     """The units a binding of `DsaTopKReadRows_v1` is cut into, each Definition bound and how many of it: the mask's own (its
-    `dsa_topk_mask_cut.cut`, else the mask whole, `DsaTopKMaskWhole_v1{N,TOPK,BLOCK}`, block b's mask its output b), a
-    `DsaMaskPositions_v1` a block, block b's reading the mask unit of block b, the merge, ceil(TOPK/CHUNK) of
+    `dsa_topk_mask_cut.cut`, else the mask whole, `DsaTopKMaskWhole_v1{N,TOPK}`), a `DsaMaskPositions_v1` a block of
+    `index_block` keys, block b's reading the mask unit of block b, the merge, ceil(TOPK/CHUNK) of
     `DsaPositionsChunk_v1{K=TOPK,W=CHUNK}`, chunk c's c its input, TOPK of `DsaPositionsSlot_v1{K=CHUNK,N}`, slot j's
     slots chunk j // CHUNK's output and its j the input j mod CHUNK, and TOPK of READ, read j at slot j's output.  The body
     computes the same function with the reads over the merge's slots directly: a slot's output is the merge's slot j
     wherever that is below N, as every one is."""
     N, TOPK, block, READ = int(t.bindings["N"]), int(t.bindings["TOPK"]), int(t.bindings["BLOCK"]), t.bindings["READ"]
     mask = bind(BM.DsaTopKMaskCountedV2, N=N, TOPK=TOPK)
-    bl = X.blocks(N, TOPK, block)
-    units: Counter = Counter(dict(X.cut(mask) or [(bind(X.DsaTopKMaskWhole, N=N, TOPK=TOPK, BLOCK=block), 1)]))
+    bl = X.blocks(N, TOPK, index_block(N, TOPK, block))
+    units: Counter = Counter(dict(X.cut(mask) or [(bind(X.DsaTopKMaskWhole, N=N, TOPK=TOPK), 1)]))
     units.update(bind(DsaMaskPositions, N=hi - lo, AT=lo, K=TOPK) for lo, hi in bl)
     units[bind(DsaPositionsMerge, M=len(bl), K=TOPK)] += 1
     units[bind(DsaPositionsChunk, K=TOPK, W=CHUNK)] += -(-TOPK // CHUNK)
@@ -336,9 +346,9 @@ def slot(slots: Sequence[int], j: int, N: int) -> int:
 
 
 def values(mask: Sequence[int], K: int, block: int = BLOCK) -> dict[tuple, tuple]:
-    """Each index unit's outputs on a row's mask (N bits), by key: ("positions", b) block b's (K positions, count), ("merge",)
-    the K positions, ("chunk", c) chunk unit c's CHUNK positions, ("slot", j) slot unit j's position (its chunk's slot
-    j mod CHUNK)."""
+    """Each index unit's outputs on a row's mask (N bits) in blocks of ``block`` keys (the long row's: `index_block`), by key:
+    ("positions", b) block b's (K positions, count), ("merge",) the K positions, ("chunk", c) chunk unit c's CHUNK
+    positions, ("slot", j) slot unit j's position (its chunk's slot j mod CHUNK)."""
     mask = [int(m) & 1 for m in mask]
     out: dict[tuple, tuple] = {}
     lists, counts = [], []

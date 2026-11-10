@@ -8,7 +8,7 @@ to the whole mask:
   short last block joined to the one before, TOPK 1 and TOPK a whole block) and, with ``VERITY_ML_DEFINITIONS_SLOW`` set, at the
   served ones (TOPK 2,048, the first class past `WHOLE_MAX` and 131,072).  Every port is whole u16 words: each writer's bits
   past its value are 0, and each reader's outputs are the same with them random;
-* `DsaTopKMaskWhole_v1`, the mask up to `WHOLE_MAX` a unit, gives block b's mask as its output b;
+* `DsaTopKMaskWhole_v1`, the mask up to `WHOLE_MAX` a unit, is the counted mask in u16 words;
 * `DsaTopKDigitPick_v1`, block b's counts its own port ``counts_b``, is gate for gate the pick over one port of the M blocks'
   counts, at small statics and at the served ones (M = 8, each round, TOPK 2,048);
 * `plan` wires each parameter to one earlier unit's output of its width and `cut` counts its units, None up to `WHOLE_MAX`.
@@ -127,18 +127,15 @@ def test_each_unit_is_its_twin_and_the_units_compose_to_the_counted_mask(N, TOPK
     _check(N, TOPK, block, 24, N * 7 + TOPK)
 
 
-@pytest.mark.parametrize("N,TOPK,block", [(20, 4, 8), (18, 4, 8), (9, 1, 4), (30, 16, 16), (40, 5, 16)])
-def test_the_whole_mask_is_the_counted_mask_a_block_an_output(N, TOPK, block) -> None:
-    """`DsaTopKMaskWhole_v1`'s output b is `DsaTopKMaskCounted_v1`'s mask over block b, then 0 to the block's last u16 word."""
+@pytest.mark.parametrize("N,TOPK", [(20, 4), (16, 4), (9, 1), (30, 16), (40, 5)])
+def test_the_whole_mask_is_the_counted_mask_in_words(N, TOPK) -> None:
+    """`DsaTopKMaskWhole_v1`'s output is `DsaTopKMaskCounted_v1`'s mask, then 0 to its last u16 word."""
     rows, ns = _rows(random.Random(N * 31 + TOPK), N, 24, TOPK)
     whole = np.asarray(E.evaluate_batch(bind(M.DsaTopKMaskCounted, N=N, TOPK=TOPK), rows, ns)).reshape(len(rows), -1)
-    t = bind(X.DsaTopKMaskWhole, N=N, TOPK=TOPK, BLOCK=block)
+    t = bind(X.DsaTopKMaskWhole, N=N, TOPK=TOPK)
     got = np.asarray(BS.evaluate_bits(t, _bits(rows, 32).reshape(len(rows), -1), _bits(ns, 32))).reshape(len(rows), -1)
-    bl = X.blocks(N, TOPK, block)
-    assert _fields(t) == [X.wide(e - a) for a, e in bl]
-    at = np.cumsum([0, *_fields(t)])
-    for (a, e), lo in zip(bl, at):
-        assert np.array_equal(got[:, lo:lo + e - a], whole[:, a:e]) and not got[:, lo + e - a:lo + X.wide(e - a)].any()
+    assert _fields(t) == [X.wide(N)] and t.signature()[1] == X.words(N)
+    assert np.array_equal(got[:, :N], whole) and not got[:, N:].any()
 
 
 @pytest.mark.slow

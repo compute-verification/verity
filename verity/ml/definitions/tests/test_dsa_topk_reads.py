@@ -10,10 +10,10 @@
 * the units composed over a row's blocks (each on the outputs before it) give the rows network's order over the whole row
   (`DsaTopKRow_v2`'s construction), then 0, on masks of at most K members;
 * `DsaTopKReadRows_v1` over a table that holds a history gives today's long row's kv (`DsaButterflyRowsPad_v1` at the counted
-  mask's settings over the history and a zero pad) with every ok 1, at small statics over three blocks, and ok 0 at a slot whose
-  opening is not the table's;
-* `cut` counts its units at the served statics, the mask whole a unit up to `WHOLE_MAX` keys with each block's mask an
-  output, and malformed bindings are refused;
+  mask's settings over the history and a zero pad) with every ok 1, at small statics (the mask whole, so one block), and ok 0
+  at a slot whose opening is not the table's;
+* `cut` counts its units at the served statics, the mask whole a unit up to `WHOLE_MAX` keys and read by one block's
+  positions, and malformed bindings are refused;
 * every unit of the cut at every served class has the rows Flock's composer proves and passes the window builder's
   `interface.check_proof_block`, each mask in u16 words (`dsa_topk_mask_cut.words`), which a block's positions read whatever
   the bits past its keys are.
@@ -262,7 +262,8 @@ def _scores(rng: random.Random, Nb: int, N: int) -> list[list[int]]:
 def test_the_long_row_reads_todays_kv_rows() -> None:
     """The one test of the long row whole: the units' tests hold each part, this one their wiring into the reads and the
     reads' openings against a committed table, which no cheaper test builds.  A history of Nb = 18 rows read at its class
-    N = 20 (TOPK 4, blocks of 8 keys: three blocks), each row of scores at several n past TOPK up to Nb, from a table of
+    N = 20 (TOPK 4, the mask whole and so one block of 20 keys, BLOCK 8 aside: `test_the_index_units_compose_to_the_rows_
+    networks_order` composes several), each row of scores at several n past TOPK up to Nb, from a table of
     V = 32 rows of H = 2 words, the openings at the mask's members by position: kv is `DsaButterflyRowsPad_v1`'s over the
     history and its zero pad at `DsaButterflySettings_v1` of `DsaTopKMaskCounted_v1`, ok all 1; a flipped row bit, another
     member's salt and another position's path each give ok 0 at their slot alone, whose kv is the row it was opened with."""
@@ -318,13 +319,11 @@ def test_the_cut_counts_its_units() -> None:
     for N in (4096, X.WHOLE_MAX, X.WHOLE_MAX + 2048, 65536, SERVED_V):
         t = bind(R.DsaTopKReadRows, N=N, TOPK=SERVED_TOPK, BLOCK=R.BLOCK, READ=READ)
         cut = dict(R.cut(t))
-        bl = X.blocks(N, SERVED_TOPK, R.BLOCK)
-        whole = bind(X.DsaTopKMaskWhole, N=N, TOPK=SERVED_TOPK, BLOCK=R.BLOCK)
+        bl = X.blocks(N, SERVED_TOPK, R.index_block(N, SERVED_TOPK, R.BLOCK))
+        whole = bind(X.DsaTopKMaskWhole, N=N, TOPK=SERVED_TOPK)
         masks = len(X.plan(N, SERVED_TOPK)) if N > X.WHOLE_MAX else 1
         assert (whole in cut) == (N <= X.WHOLE_MAX) and bind(BM.DsaTopKMaskCountedV2, N=N, TOPK=SERVED_TOPK) not in cut
-        if N <= X.WHOLE_MAX:
-            _, ret = whole.signature()
-            assert [f.leaves for f in ret.fields] == [X.wide(hi - lo) for lo, hi in bl]
+        assert bl == ([(0, N)] if N <= X.WHOLE_MAX else X.blocks(N, SERVED_TOPK, R.BLOCK))
         assert cut[READ] == SERVED_TOPK and cut[bind(R.DsaPositionsMerge, M=len(bl), K=SERVED_TOPK)] == 1
         assert cut[bind(R.DsaPositionsChunk, K=SERVED_TOPK, W=R.CHUNK)] == SERVED_TOPK // R.CHUNK == 64
         assert cut[bind(R.DsaPositionsSlot, K=R.CHUNK, N=N)] == SERVED_TOPK
@@ -378,9 +377,10 @@ def test_the_index_and_read_units_pass_the_window_builders_proof_block_check() -
 
 
 #: the mask's units and the block positions, each with the least k_log their rows allow over the served classes: a block's
-#: scores, 64 KiB at 16,384 keys, are most of a unit's rows, and the whole mask's are up to WHOLE_MAX keys, 2^27 from 24,576
+#: scores, 64 KiB at 16,384 keys, are most of a unit's rows, and the whole mask's are up to WHOLE_MAX keys, 2^27 from 24,576;
+#: positions over the whole row read up to 5 KiB of mask words
 MASK_UNITS = {"DsaTopKMaskWhole_v1": {24, 25, 26, 27}, "DsaTopKDigitCount_v1": {23, 24, 25, 26}, "DsaTopKDigitPick_v1": {23, 24},
-              "DsaTopKMaskBlock_v1": {23, 24, 25, 26}, "DsaMaskPositions_v1": {23}}
+              "DsaTopKMaskBlock_v1": {23, 24, 25, 26}, "DsaMaskPositions_v1": {23, 24}}
 
 
 def test_the_mask_units_pass_the_window_builders_proof_block_check() -> None:

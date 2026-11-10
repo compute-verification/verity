@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-#: the mask whole a unit (`dsa_topk_mask_cut.DsaTopKMaskWhole_v1`) at the long row's served statics, TOPK 2,048 in blocks of
-#: `dsa_topk_mask_cut.BLOCK` up to `WHOLE_MAX`: the first class, one block, the first of two blocks, the first whose rows alone
-#: need 2^27 bits, and the last
+#: the mask whole a unit (`dsa_topk_mask_cut.DsaTopKMaskWhole_v1`) at the long row's served statics, TOPK 2,048 up to
+#: `WHOLE_MAX`: the first class, the first whose rows alone need 2^27 bits, and the last
 RANGES = {
-    "DsaTopKMaskWhole_v1{N=4096..40960 step 2048,TOPK=2048,BLOCK=16384}": ("N=4096", "N=40960", "N=18432", "N=24576"),
+    "DsaTopKMaskWhole_v1{N=4096..40960 step 2048,TOPK=2048}": ("N=4096", "N=40960", "N=24576"),
 }
 
 
@@ -18,8 +17,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     the second's at rounds 1 and 3 (`DsaRowValidFrom_v1`, the prefix compare), each with `DsaTopKPopCount_v1`; the picks of
     rounds 0, 1 and 3 over both blocks' counts (TOPK a constant, then read, and the last round's key and r per block; at M = 2
     each is under `targets.MAX_GATES`); each block's mask unit (reaching `DsaTopKKeyCompare_v1` and `DsaRadixTies_v1`); and the
-    mask whole over both blocks, each its own output (6 bits in a u16 word).  And the picks the cut serves, each round's over
-    8 blocks' counts at TOPK 2,048 (`plan(131072, 2048)`), over `MAX_GATES` and each held to its digest pin."""
+    mask whole, its 14 bits in a u16 word.  And the picks the cut serves, each round's over 8 blocks' counts at TOPK 2,048
+    (`plan(131072, 2048)`), over `MAX_GATES` and each held to its digest pin."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import dsa_topk_mask_cut as X
 
@@ -36,5 +35,5 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("DsaTopKDigitPick_v1-last", lambda: bind(X.DsaTopKDigitPick, M=2, K=3, TOPK=4)),
         ("DsaTopKMaskBlock_v1", lambda: bind(X.DsaTopKMaskBlock, N=8, AT=0, TOPK=4)),
         ("DsaTopKMaskBlock_v1-at", lambda: bind(X.DsaTopKMaskBlock, N=6, AT=8, TOPK=4)),
-        ("DsaTopKMaskWhole_v1", lambda: bind(X.DsaTopKMaskWhole, N=14, TOPK=4, BLOCK=8)),
+        ("DsaTopKMaskWhole_v1", lambda: bind(X.DsaTopKMaskWhole, N=14, TOPK=4)),
     ]

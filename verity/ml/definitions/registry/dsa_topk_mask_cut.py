@@ -26,8 +26,8 @@ the threshold's key and r_b.  The Call's mask is the mask units' outputs in bloc
 
 Every port of a unit is whole u16 words, as a row of `verity.ml.windows.interface.layout` is: a mask of n bits is
 `words`(n), Array<ceil(n/16), Array<16, BIT>>, bit j word j // 16's bit j mod 16, and a prefix or an r is `wide` of its bits.  A
-writer sets the bits past its value's to 0 and a reader ignores them.  ``DsaTopKMaskWhole_v1{N,TOPK,BLOCK}`` is the counted mask
-up to `WHOLE_MAX` keys, a unit, each block's mask its own output, so that a block's reader reads one whole output.
+writer sets the bits past its value's to 0 and a reader ignores them.  ``DsaTopKMaskWhole_v1{N,TOPK}`` is the counted mask up to
+`WHOLE_MAX` keys, a unit, in u16 words.
 """
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import NOT, ZERO, add, and_reduce, compress_columns, const_bits, sub
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.ops.boolean import elementwise as EW
-from verity.ml.circuits.refs import Coll, concat, strided_view, tuple_of
+from verity.ml.circuits.refs import Coll, concat, strided_view
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.definitions.registry import boolean_dsa_topk_mask as BM
 from verity.ml.definitions.registry.boolean_dsa_topk import decode, key
@@ -252,26 +252,15 @@ DsaTopKMaskBlock = CompositeDefinition("DsaTopKMaskBlock", 1, ("N", "AT", "TOPK"
                                        conformance="exact-model-tested")
 
 
-def _whole_sig(S):
-    return ((("scores", Array(S.N, F32)), ("n", I32)), Tuple(*[words(e - a) for a, e in blocks(S.N, S.TOPK, S.BLOCK)]))
-
-
 def _whole(B, S, scores, n):
-    """`DsaTopKMaskWhole_v1{N,TOPK,BLOCK}`: `DsaTopKMaskCounted_v2{N,TOPK}`'s mask, each block of `blocks`(N, TOPK, BLOCK) its
-    own output in u16 words."""
-    mask = B.call(bind(BM.DsaTopKMaskCountedV2, N=S.N, TOPK=S.TOPK), scores, n)
-    return tuple_of(*[to_words(B, Coll(Array(e - a, BIT), mask.refs.slice(a, e)), e - a)
-                      for a, e in blocks(S.N, S.TOPK, S.BLOCK)])
+    """`DsaTopKMaskWhole_v1{N,TOPK}`: `DsaTopKMaskCounted_v2{N,TOPK}`'s mask in u16 words, the mask a unit up to `WHOLE_MAX`
+    keys.  `_v2` itself keeps `_v1`'s Array<N, BIT>, as `_v1`'s Boolean version must."""
+    return to_words(B, B.call(bind(BM.DsaTopKMaskCountedV2, N=S.N, TOPK=S.TOPK), scores, n), S.N)
 
 
-def _refuse_whole(b: dict) -> str | None:
-    if b.get("TOPK") is not None and b.get("BLOCK") is not None and b["BLOCK"] < b["TOPK"]:
-        return f"a block of BLOCK >= TOPK keys (BLOCK={b['BLOCK']}, TOPK={b['TOPK']})"
-    return None
-
-
-DsaTopKMaskWhole = CompositeDefinition("DsaTopKMaskWhole", 1, ("N", "TOPK", "BLOCK"), _whole_sig, _whole, doc=_whole.__doc__,
-                                       conformance="exact-model-tested", refuse=_refuse_whole)
+DsaTopKMaskWhole = CompositeDefinition("DsaTopKMaskWhole", 1, ("N", "TOPK"),
+                                       lambda S: ((("scores", Array(S.N, F32)), ("n", I32)), words(S.N)), _whole,
+                                       doc=_whole.__doc__, conformance="exact-model-tested")
 
 
 @dataclass(frozen=True)
