@@ -13,11 +13,14 @@ import kappa  # noqa: E402
 import slowdown as S  # noqa: E402
 import tiers as T  # noqa: E402
 
-ROOT = HERE.parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 
 
 #: the defaults at the threading ReferenceThreaded gives under its conjecture, where the closed-form memory cap binds
 KEYED = T.DEFAULTS | {"d": T.REFERENCE_THREADED[0]}
+#: batched proving's cost, at which the injecting blocks' pool is worth less than the fleet's capacity, so the cheating
+#: share is below the 1 it stops at
+BATCHED = {"overhead": 1.6e8}
 #: Kimi K2's MoE capacity factor, routed slots per token over its top-k: no workload declares one, and the circuits' MoE
 #: Definitions (verity/ml/circuits/ops/moe.py) are dropless, one body per token and top-k slot, which is factor 1, the
 #: one ReferenceLayered states
@@ -178,23 +181,37 @@ def test_helpers_within_the_read_deadline_refill_what_a_wipe_leaves():
 
 
 def test_the_cheating_pool_does_not_grow_with_the_fleet():
-    small = T.evaluate(T.DEFAULTS | {"nodes": 1e3}, T.TIERS["T5"])
-    large = T.evaluate(T.DEFAULTS, T.TIERS["T5"])
+    p = T.DEFAULTS | BATCHED
+    small = T.evaluate(p | {"nodes": 1e3}, T.TIERS["T5"])
+    large = T.evaluate(p, T.TIERS["T5"])
     assert small["cheat_steps"] == large["cheat_steps"] > 0
-    assert small["cheat"] == pytest.approx(100 * large["cheat"])
-    q = T.DEFAULTS["share"] / (T.DEFAULTS["overhead"] + T.DEFAULTS["replay"])
-    assert large["cheat_steps"] == pytest.approx(T.DEFAULTS["luck"] * math.log(1 / T.DEFAULTS["p_evade"]) / q)
+    assert 1 > small["cheat"] == pytest.approx(100 * large["cheat"])
+    q = p["share"] / (p["overhead"] + p["replay"])
+    assert large["cheat_steps"] == pytest.approx(p["luck"] * math.log(1 / p["p_evade"]) / q)
+
+
+def test_the_cheating_share_stops_at_the_fleets_capacity():
+    """A proof block's outputs fit its Definition's public size class, and an incorrect block injects the widest.
+    At today's sparse samples the pool is then worth more than the fleet's capacity: the share is 1 and SPOT bounds
+    nothing, while at batched proving it is the chord times the injected bits."""
+    assert T.DEFAULTS["step_bits"] == T.partition_v2.UNIT_CLASS_MAX
+    sparse, batched = (T.evaluate(T.DEFAULTS | over, T.TIERS["T5"]) for over in ({}, BATCHED))
+    worth = 2 / T.DEFAULTS["kappa"] * T.chord(T.DEFAULTS, sparse["cheat_bits"]) * sparse["cheat_bits"]
+    capacity = T.DEFAULTS["nodes"] * T.DEFAULTS["node_flops"] * T.DEFAULTS["years"] * T.YEAR
+    assert worth > capacity and sparse["cheat"] == 1.0 and sparse["efficiency"] > 1
+    assert 1 > batched["cheat"] == pytest.approx(
+        2 / T.DEFAULTS["kappa"] * T.chord(T.DEFAULTS, batched["cheat_bits"]) * batched["cheat_bits"] / capacity)
 
 
 def test_luck_multiplies_skipped_work_but_not_injected_bits():
     """A block that injects a chosen output fails whenever it is sampled, so ln(1/delta) (1/q + floor_steps) blocks inject
     step_bits each, whatever the luck factor."""
-    p = T.DEFAULTS | {"floor_steps": 1e9}
+    p = T.DEFAULTS | BATCHED | {"floor_steps": 1e9}
     lucky, unlucky = T.evaluate(p, T.TIERS["T5"]), T.evaluate(p | {"luck": 1.0}, T.TIERS["T5"])
     assert lucky["cheat_steps"] == pytest.approx(8 * unlucky["cheat_steps"])
-    assert lucky["cheat"] == unlucky["cheat"] > 0
+    assert 1 > lucky["cheat"] == unlucky["cheat"] > 0
     q = p["share"] / (p["overhead"] + p["replay"])
-    assert lucky["cheat_bits"] == pytest.approx(math.log(1 / p["p_evade"]) * (1 / q + 1e9) * 16)
+    assert lucky["cheat_bits"] == pytest.approx(math.log(1 / p["p_evade"]) * (1 / q + 1e9) * p["step_bits"])
 
 
 def _block_bound(p: dict, S: float) -> float:
@@ -252,10 +269,10 @@ def test_the_verdict_lag_adds_a_lag_of_skipped_work_per_identity():
 
 def test_the_recipe_multiplier_scales_only_the_constrained_terms():
     """m scales nu, chi and the memory cap but not the residual or unmonitored compute (C2 dossier)."""
-    p = KEYED | {"unmonitored": 0.01, "residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
+    p = KEYED | BATCHED | {"unmonitored": 0.01, "residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
     base, amped = T.evaluate(p, T.TIERS["T5"]), T.evaluate(p | {"m": 3.0}, T.TIERS["T5"])
     assert amped["declared"] == pytest.approx(3 * base["declared"], rel=1e-6)
-    assert amped["cheat"] == pytest.approx(3 * base["cheat"], rel=1e-6)
+    assert 1 > amped["cheat"] == pytest.approx(3 * base["cheat"], rel=1e-6)
     assert amped["residual"] == pytest.approx(base["residual"], rel=1e-6)
     assert amped["unmonitored"] == pytest.approx(base["unmonitored"], rel=1e-6)
     capped = p | {"residual": 0.9, "pous_rounds": 74000.0, "pous_floor": 0.0, "unfilled_gb": 0.83}
