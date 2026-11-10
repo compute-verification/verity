@@ -81,7 +81,8 @@ any run on an agent waiting on background work, so otherwise every such wake is 
 A cloud worker (a coordinator's Task subagent) is not in `GET /v1/agents`, lists no runs, and can't be started (POST runs:
 400 legacy workflow), so only its coordinator can resume it, and a lane's workers can all stop mid-step unnoticed for hours. The watch finds workers in the `origin:` of the notes (`--notes`, a research-notes clone)
 under `lanes/` modified in the last `WORKER_NOTES_S`, and in `workers.d/*.json` beside `--log` (`{agent_id, lane,
-launched_by}`, for a coordinator that registers its workers), and in the `task` tool calls of every run it follows (the
+launched_by}`, for a coordinator that registers its workers; one with `placed_by` the watch wrote itself, for a sender it placed
+by its name, below), and in the `task` tool calls of every run it follows (the
 call's `args.agentId` is the worker launched or resumed, so a worker named nowhere else is still watched), minus the coordinators and every agent the list has. Each sweep
 it reads each one once (`GET /v1/agents/{id}`; `WORKERS_NEW` first reads a sweep; one IDLE for `WORKER_IDLE_S` only when a
 note of its changes; a 404 never again), and records **worker_idle** when it went from ACTIVE to IDLE (once per transition,
@@ -121,7 +122,14 @@ records each once as **run_ended** for whoever sent it (the request's `submitted
 lane): a coordinator's own handle, or a former one's (`lineage`), a worker's launcher's (its coordinator resumes it with Task:
 Cursor refuses a run on a worker), or its parent's when the watch learned it from a Task call, else the lane's (`--by`, the
 job's lane, or a handle `submitted_by` names) when that is a handle, else the handle of the branch whose head the run's tree was
-(`branch_handle`: the registry's `branch_suffixes`, or `cursor/<handle>-...`). The runs of one read whose sender no handle owns are one
+(`branch_handle`: the registry's `branch_suffixes`, or `cursor/<handle>-...`). A sender none of these places is placed by its
+name (`place_by_name`) when the name starts with an issue key (`TEAM-7 NAME: ...`, as a worker is named after its issue) whose
+Linear team is exactly one registry handle's `linear` (`issue_lane`): the watch takes the name the agent list or an earlier sweep
+gave it, else reads it once (`GET /v1/agents/{id}`, the first time it meets the sender), writes the sender to workers.d as that
+lane's worker (`{agent_id, lane, role, name, placed_by: "name", issue}`, an entry any other source overrides) and records the
+run for that handle as a worker's, with `placed_by` and `issue`, so the relay rings the lane once and says how it was found. A
+name with no key at its start, a team no handle or several have, and a name the API won't give place nobody: the runs of one
+read whose sender no handle owns are one
 `run_ended` with role `unknown`, each run with its `sender`, for the relay to ring infra once; a run whose handle
 `quiet_handles` lists (ci: drive reads its own train checks' ends) is skipped. `run_ends.json` keeps each node's last read and the runs
 seen (`RUN_ENDS_KEEP_S`); runs that ended before the first read are never rung. `agent_watch.py runs` prints what it would read.
@@ -224,6 +232,8 @@ STUCK = {"CREATING": 10 * 60, "WAITING_FOR_BACKGROUND_WORK": 2 * 3600}
 GOAL = "run-goal-"              # a goal run's id: the runs endpoint and its stream take only run-<uuid> (400)
 #: the handle a run's sender no route knows is watched under (`ring_run`): its idle and silence ring infra, who finds its owner
 UNOWNED = "infra"
+#: a Linear issue key (its team's key, a number) at the very start of an agent's name: a worker is named after its issue
+ISSUE_KEY_RE = re.compile(r"([A-Z]+)-[0-9]+\b")
 SUBAGENT = {"tool-call-delta"}          # interaction_update types that report a subagent's progress, not the parent's
 CONTINUE = ("continue: your run was held from {since} (the agent watch saw nothing for {mins} min after {after}, and "
             "cancelled it). Read your inbox and carry on from where you stopped.")
@@ -429,15 +439,29 @@ def lane_handle(lane: str, names: set[str]) -> str | None:
     return max((h for h in names if h and lane.startswith(h + "-")), key=len, default=None)
 
 
+def issue_lane(name: str, registry: Path | None) -> tuple[str, str] | None:
+    """(handle, issue key) when an agent's `name` starts with a Linear issue key (`TEAM-7 NAME: ...`, as a worker is named
+    after its issue) whose team exactly one registry handle has as its `linear`. None, never a guess, for a name with no key at
+    its very start (a key further in is an issue the agent works with, which can be another lane's), a team no handle has, and
+    a team several handles share (a lane with no team of its own files under another's, told apart only by a label)."""
+    if not (m := ISSUE_KEY_RE.match(name)):
+        return None
+    lanes = [str(h["handle"]) for h in read_json(registry).get("handles") or [] if h.get("handle") and h.get("linear") == m[1]]
+    return (lanes[0], m[0]) if len(lanes) == 1 else None
+
+
 def workers(notes: Path | None, workers_d: Path, registry: Path | None, coords: dict[str, str], t: float) -> dict[str, dict]:
     """agent id -> {"lane", "handle", "heard", "branches"}: each cloud worker (a Task subagent, which `GET /v1/agents` doesn't
     list) named by `workers_d/*.json` (`{agent_id, lane, launched_by, branch}`, which a coordinator writes for the workers it
     launches) or by the `origin:` of a note under `notes/lanes/` modified in the last `WORKER_NOTES_S`, minus the coordinators
     (`coords`). Its handle is its launcher's (`launched_by`), else its lane's when the lane is a handle, else that of a
     coordinator its note's origin names (`started by proofs bc-...`); `heard` is the newest such file's mtime; `branches` the
-    `branch` its workers.d file names; `parent` its launcher (`launched_by`, or that coordinator), if known."""
+    `branch` its workers.d file names; `parent` its launcher (`launched_by`, or that coordinator), if known. A workers.d entry
+    with `placed_by` is the watch's own, for a sender it placed by its name (`place_by_name`): it is read last, so a lane or a
+    handle that an entry a coordinator wrote, or a note, gives always wins over it."""
     names = {str(h.get("handle")) for h in read_json(registry).get("handles") or []}
     out: dict[str, dict] = {}
+    placed: list[tuple] = []
 
     def add(agent: str, lane: str, handle: str | None, heard: float, branches: tuple[str, ...] = (),
             parent: str | None = None) -> None:
@@ -450,13 +474,19 @@ def workers(notes: Path | None, workers_d: Path, registry: Path | None, coords: 
         if (m := AGENT_RE.fullmatch(str(d.get("agent_id") or ""))) and m[0] not in coords:
             lane, by = str(d.get("lane") or ""), AGENT_RE.search(str(d.get("launched_by") or ""))
             handle = (lineage(registry, coords, by[0]) if by else None) or lane_handle(lane, names)
-            add(m[0], lane, handle, p.stat().st_mtime, (str(d["branch"]),) if d.get("branch") else (), by[0] if by else None)
+            row = (m[0], lane, handle, p.stat().st_mtime, (str(d["branch"]),) if d.get("branch") else (), by[0] if by else None)
+            if d.get("placed_by"):
+                placed.append(row)
+            else:
+                add(*row)
     for p, heard, fm in recent_notes(notes, t):
         ids, lane = AGENT_RE.findall(fm.get("origin", "")), fm.get("lane") or p.parent.name
         launcher = next((i for i in ids if i in coords), None)
         for agent in ids:
             if agent not in coords:
                 add(agent, lane, lane_handle(lane, names) or coords.get(launcher or ""), heard, parent=launcher)
+    for row in placed:
+        add(*row)
     return out
 
 
@@ -1656,6 +1686,51 @@ class Watch:
               file=sys.stderr, flush=True)
         return dict(kid)
 
+    def place_by_name(self, agent: str) -> tuple[str, str, str] | None:
+        """A sender no handle owns, placed by its name: when the name starts with an issue key of one lane's Linear team
+        (`issue_lane`), the sender is written to `workers.d` as that lane's worker, with `placed_by: name` and the `issue`
+        (`workers` reads such an entry last, so its coordinator's own entry or a note wins), and is that lane's worker from this
+        run on, as a stray a note names is. Returns (the lane's handle, the name, the issue key), or None when nothing places it
+        and infra is rung as before: a name with no such key, or one the API won't give. The name is the one the watch has (the
+        agent list's, `watch_workers`' read, `learn`'s); only a sender it has never read costs a `GET /v1/agents/{id}`, once: a
+        failed read leaves a stray, which `watch_workers` reads from the next sweep on."""
+        t, w = self.clock(), self.workers.get(agent) or {}
+        with self.kids_lock:
+            kid = dict(self.children.get(agent) or {})
+        stray = bool(kid.get("owner"))
+        name = self.names.get(agent) or str(w.get("name") or kid.get("name") or "")
+        if not name and "read" not in w and not stray:
+            try:
+                info = self.api.get(f"/v1/agents/{agent}") or {}
+            except (urllib.error.URLError, OSError, ValueError) as e:
+                print(f"{iso(t)} run ends: the name of {agent} was not read ({type(e).__name__}: {e}), so its name places it "
+                      "nowhere", file=sys.stderr, flush=True)
+                return None
+            if info.get("repos") and not verity(info):
+                return None
+            name = str(info.get("name") or "")
+            self.worker_status[agent] = str(info.get("status") or "unknown")
+        name = name[:120]
+        if not (found := issue_lane(name, self.registry)):
+            return None
+        handle, key = found
+        write_atomic(self.log.with_name("workers.d") / f"placed-{agent}.json", (json.dumps(
+            {"agent_id": agent, "lane": handle, "role": "worker", "name": name, "placed_by": "name", "issue": key})
+            + "\n").encode())
+        if stray:                                   # watched as infra's until now: its lane's, as when a note names it
+            with self.kids_lock:
+                self.children.pop(agent, None)
+            w.pop("lane", None)
+        if agent in self.names:                     # a listed agent has an owner, not a worker's entry (`watch_workers`)
+            self.owners[agent] = handle
+        else:
+            w = self.workers.setdefault(agent, {"heard": 0.0})
+            w.update(lane=w.get("lane") or handle, handle=handle, name=name, heard=max(w["heard"], t))
+        self.save()
+        print(f"{iso(t)} run ends: placed {agent} ({name}) as @{handle}'s worker by its name's issue key {key}",
+              file=sys.stderr, flush=True)
+        return handle, name, key
+
     def own_cancel(self, row: dict, agent: str, handle: str, name: str, parent: str | None, coords: dict[str, str]) -> bool:
         """Whether `row`'s run was cancelled by its own lane (`research cancel`, its events' cancel_intent): its BY or reason
         names the sender (its id, or its name's first word, SALT-WIRE's "superseded ... at SALT-WIRE's final head (research
@@ -1741,7 +1816,8 @@ class Watch:
 
     def ring_run(self, node: str, row: dict, coords: dict[str, str], handles: set[str], ended: float,
                  quiet: set[str] = frozenset()) -> dict | None:
-        """Record `row`'s end for its sender's handle; a run whose sender no handle owns is returned instead, for `run_ends` to
+        """Record `row`'s end for its sender's handle, a sender no handle owns being first placed by its name where that names
+        one lane (`place_by_name`); a run whose sender is still nobody's is returned instead, for `run_ends` to
         record with the read's others as one (a day's unowned senders can send hundreds of runs: one ring each would bury infra)."""
         sent = str(row.get("submitted_by") or "")
         by = AGENT_RE.search(sent)
@@ -1758,6 +1834,7 @@ class Watch:
         if agent and not known and not lineage(self.registry, coords, agent) and self.learn_left > 0:
             kid = self.learn(agent, coords, self.clock())
         parent = w.get("parent") or kid.get("parent")
+        placed: dict = {}
         if agent in coords:
             handle, role, name = coords[agent], "coordinator", self.names.get(agent, "")
         elif agent and (h := lineage(self.registry, coords, agent)):
@@ -1772,6 +1849,9 @@ class Watch:
             handle, role, name = lane, "lane", ""
         elif h := branch_handle(self.branch_of(str(row.get("tree") or "")), self.registry, handles):
             handle, role, name = h, "lane", ""
+        elif agent and (found := self.place_by_name(agent)):
+            (handle, name, key), role, w = found, "worker", self.workers.get(agent) or {}
+            placed = {"placed_by": "name", "issue": key}
         else:
             handle, role, name = "", "unknown", ""
         if handle in quiet:
@@ -1785,7 +1865,8 @@ class Watch:
                             node=node, what=what[:80], rc=row.get("rc"), state=row.get("state"),
                             after=duration(row.get("wall_s")), at=iso(ended), lane=w.get("lane") or lane or "", quiet=True,
                             cancelled_by=str(row.get("cancelled_by") or ""), cancel_reason=str(row.get("cancel_reason")),
-                            sender_status=self.sender_status(agent), **({"parent": parent} if role == "worker" and parent else {}))
+                            sender_status=self.sender_status(agent), **({"parent": parent} if role == "worker" and parent else {}),
+                            **placed)
             if self.awaiting.pop(agent, None) is not None:
                 self.save()
             return None
@@ -1802,7 +1883,7 @@ class Watch:
                     rc=row.get("rc"), state=row.get("state"), after=duration(row.get("wall_s")), at=iso(ended),
                     lane=w.get("lane") or lane or "", sender_status=self.sender_status(agent),
                     **({"parent": parent} if role == "worker" and parent else {}),
-                    **({"listed": True} if role == "worker" and agent in self.names else {}))
+                    **({"listed": True} if role == "worker" and agent in self.names else {}), **placed)
         # who must act on it: its sender when the list has it or it is a worker, else the lane's handle's coordinator
         target = agent if agent in self.names or role == "worker" else next((a for a, h in coords.items() if h == handle), None)
         if target:

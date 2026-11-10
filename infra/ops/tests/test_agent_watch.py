@@ -2637,6 +2637,186 @@ def test_a_listed_stray_stays_unowned_and_is_never_resumed_as_infras(tmp_path):
     assert not [p for p, _ in api.posts if p == f"/v1/agents/{stray}/runs"], "never resumed"
 
 
+KEYED = "bc-efefefef-efef-efef-efef-efefefefefef"
+
+
+def linear_teams(tmp_path):
+    """Each registry handle's Linear team: circuits' and vllm's are their own, and two more handles share one."""
+    reg = json.loads((tmp_path / "registry.json").read_text())
+    for h in reg["handles"]:
+        h.update({"linear": team} if (team := {"circuits": "CIR", "vllm": "VLLM"}.get(h["handle"])) else {})
+    reg["handles"] += [{"handle": "compute-accounting", "linear": "CMP"}, {"handle": "compute-research", "linear": "CMP"}]
+    (tmp_path / "registry.json").write_text(json.dumps(reg))
+    return tmp_path / "registry.json"
+
+
+def sends(roots, clock, w, agent, rid, **kw):
+    """A `research run` sent by `agent` ends a minute on, and the watch reads the nodes 5 min later."""
+    clock.t += 60
+    node_run(roots["vy-nebius-1"], rid, clock.t, by=f"https://cursor.com/agents/{agent}", **kw)
+    clock.t += 5 * 60
+    w.sweep(lambda r: None)
+
+
+def placed_files(tmp_path):
+    return {p.name: json.loads(p.read_text()) for p in (tmp_path / "workers.d").glob("placed-*.json")}
+
+
+def test_an_issue_key_names_a_lane_only_at_a_names_start_and_only_when_one_handle_has_its_team(tmp_path):
+    coordinators(tmp_path, [], {})
+    reg = linear_teams(tmp_path)
+    assert W.issue_lane("VLLM-97 KFLAGS: the committer's flag, byte comparison", reg) == ("vllm", "VLLM-97")
+    assert W.issue_lane("CIR-206: one calibration", reg) == ("circuits", "CIR-206")
+    assert W.issue_lane("VLLM-7", reg) == ("vllm", "VLLM-7")
+    for name in ("KFORK: the forked committer (VLLM-61)", "vllm-metrics: the flat list for CIR-389", "graph2 CIR-489 fixes",
+                 "[VLLM-97] KFLAGS", " VLLM-97 KFLAGS", "vllm-97 KFLAGS", "VLLM-97x KFLAGS", "VLLM97 KFLAGS", "VLLM- KFLAGS",
+                 "XVLLM-97 KFLAGS", "Fix the audit", ""):
+        assert W.issue_lane(name, reg) is None, f"{name!r} starts with no issue key of a team a handle has"
+    assert W.issue_lane("CMP-377 HARDNESS-SPEC", reg) is None, "two handles file under this team: never a guess"
+    assert W.issue_lane("NOPE-12 a team no handle has", reg) is None
+    assert W.issue_lane("VLLM-97 KFLAGS", None) is None and W.issue_lane("VLLM-97 KFLAGS", tmp_path / "absent.json") is None
+
+
+def test_an_unowned_sender_named_after_one_lanes_issue_is_placed_as_that_lanes_worker(tmp_path):
+    """A worker its coordinator never registered, whose brief names no coordinator, went to infra to place by hand at its
+    first run's end, though its name began with its lane's issue. The watch places it: its workers.d entry, marked as
+    inferred, and that run recorded for the lane with how it was found. From then on it is any worker of that lane."""
+    name = "VLLM-97 KFLAGS: the committer's flag, byte comparison"
+    api, clock, w, sh, roots = nodes_setup(tmp_path)
+    linear_teams(tmp_path)
+    api.workers[KEYED] = worker("IDLE", W.iso(T0 - 600), name)
+    api.convs[KEYED] = [("user_message", "You are KFLAGS. Read the note and go on.")]
+    w.sweep(lambda r: None)
+    sends(roots, clock, w, KEYED, "r20261105-110000-0001", state="failed", rc=1)
+    (rec,) = ended(tmp_path)
+    assert {k: rec.get(k) for k in ("agent", "name", "handle", "role", "lane", "placed_by", "issue", "sender_status")} == {
+        "agent": KEYED, "name": name, "handle": "vllm", "role": "worker", "lane": "vllm", "placed_by": "name",
+        "issue": "VLLM-97", "sender_status": "IDLE"}
+    assert placed_files(tmp_path) == {f"placed-{KEYED}.json": {
+        "agent_id": KEYED, "lane": "vllm", "role": "worker", "name": name, "placed_by": "name", "issue": "VLLM-97"}}
+    assert api.gets.count(f"/v1/agents/{KEYED}") == 1, "one read of a sender the watch meets for the first time"
+    assert KEYED not in w.children and w.workers[KEYED]["handle"] == "vllm" and KEYED in w.awaiting, \
+        "never a stray: its lane's worker, whose coordinator resumes it"
+    sends(roots, clock, w, KEYED, "r20261105-120000-0002")
+    later = ended(tmp_path)[-1]
+    assert (later["run"], later["handle"], later["role"], later["lane"]) == ("r20261105-120000-0002", "vllm", "worker", "vllm")
+    assert "placed_by" not in later and len(ended(tmp_path)) == 2, "placed once: its later runs are a worker's like any other"
+    restarted = W.Watch(api, tmp_path / "events.jsonl", clock, registry=tmp_path / "registry.json", routes=tmp_path / "routes.d",
+                        notes=tmp_path / "notes", nodes=tmp_path / "nodes.json", sh=sh)
+    sends(roots, clock, restarted, KEYED, "r20261105-130000-0003")
+    assert [(r["handle"], r["role"], r.get("placed_by")) for r in ended(tmp_path)][-1] == ("vllm", "worker", None)
+    assert not [r for r in ended(tmp_path) if r["role"] == "unknown"], "infra is never rung for it"
+
+
+def test_a_name_that_names_no_one_lane_places_nobody_and_infra_is_rung_as_before(tmp_path):
+    """No guess: a name with no issue key at its start, a key of a team no handle has, and a key of a team two handles share
+    leave the sender unowned, its runs one record for infra and nothing written."""
+    senders = {"bc-a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1": "KFORK: the forked committer (VLLM-61)",
+               "bc-a2a2a2a2-a2a2-a2a2-a2a2-a2a2a2a2a2a2": "NOPE-12 a team no handle has",
+               "bc-a3a3a3a3-a3a3-a3a3-a3a3-a3a3a3a3a3a3": "CMP-377 HARDNESS-SPEC"}
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    linear_teams(tmp_path)
+    for agent, name in senders.items():
+        api.workers[agent] = worker("IDLE", W.iso(T0 - 600), name)
+    w.sweep(lambda r: None)
+    clock.t += 60
+    for i, agent in enumerate(senders):
+        node_run(roots["vy-nebius-1"], f"r20261105-11000{i}-000{i}", clock.t, by=f"https://cursor.com/agents/{agent}")
+    clock.t += 5 * 60
+    w.sweep(lambda r: None)
+    (rec,) = ended(tmp_path)
+    assert (rec["role"], rec["handle"], rec["count"]) == ("unknown", None, 3) and "placed_by" not in rec
+    assert rec["senders"] == sorted(f"https://cursor.com/agents/{a}" for a in senders)
+    assert all(w.children[a]["owner"] == W.UNOWNED for a in senders) and not w.awaiting
+    assert placed_files(tmp_path) == {}
+    clock.t += 60
+    w.sweep(lambda r: None)
+    sends(roots, clock, w, next(iter(senders)), "r20261105-120000-0009")
+    assert [r["role"] for r in ended(tmp_path)] == ["unknown", "unknown"] and placed_files(tmp_path) == {}, \
+        "nor by the name the watch has read since"
+
+
+def test_a_sender_whose_name_cant_be_read_is_infras_until_the_watch_has_its_name(tmp_path, capsys):
+    """A failed read places nobody and is said in the log; the sender is a stray, read each sweep as any stray is, and the
+    name that read gives places it at its next run's end, with no read of its own."""
+    name = "VLLM-97 KFLAGS: the committer's flag, byte comparison"
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    linear_teams(tmp_path)
+    api.workers[KEYED] = worker("ACTIVE", W.iso(T0 - 600), name)
+    down, get = [True], api.get
+
+    def flaky(path, **params):
+        if down[0] and path == f"/v1/agents/{KEYED}":
+            api.gets.append(path)
+            raise TimeoutError("reads are past this sweep's budget")
+        return get(path, **params)
+    api.get = flaky
+    w.sweep(lambda r: None)
+    sends(roots, clock, w, KEYED, "r20261105-110000-0001", state="failed", rc=1)
+    (rec,) = ended(tmp_path)
+    assert rec["role"] == "unknown" and rec["senders"] == [f"https://cursor.com/agents/{KEYED}"]
+    assert w.children[KEYED]["owner"] == W.UNOWNED and placed_files(tmp_path) == {}
+    assert f"the name of {KEYED} was not read (TimeoutError: reads are past this sweep's budget)" in capsys.readouterr().err
+    reads = api.gets.count(f"/v1/agents/{KEYED}")
+    sends(roots, clock, w, KEYED, "r20261105-110000-0002")
+    assert [r["role"] for r in ended(tmp_path)] == ["unknown", "unknown"], "still unread: still infra's"
+    assert api.gets.count(f"/v1/agents/{KEYED}") == reads + 1, "the sweep's read of a stray, and no second one for its name"
+    down[0] = False
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert w.workers[KEYED]["name"] == name and w.workers[KEYED]["handle"] == W.UNOWNED, "read as a stray, infra's so far"
+    reads = api.gets.count(f"/v1/agents/{KEYED}")
+    clock.t += 5 * 60
+    node_run(roots["vy-nebius-1"], "r20261105-120000-0003", clock.t, by=f"https://cursor.com/agents/{KEYED}", rc=2, state="failed")
+    w.run_ends(w.coords, clock.t)
+    assert api.gets.count(f"/v1/agents/{KEYED}") == reads, "placed by the name the watch already has"
+    rec = ended(tmp_path)[-1]
+    assert (rec["handle"], rec["role"], rec["lane"], rec["placed_by"], rec["issue"]) == ("vllm", "worker", "vllm", "name", "VLLM-97")
+    assert KEYED not in w.children and w.workers[KEYED]["handle"] == "vllm" and list(placed_files(tmp_path)) == [
+        f"placed-{KEYED}.json"]
+
+
+def test_a_coordinators_own_entry_always_wins_over_one_the_watch_inferred_from_a_name(tmp_path):
+    """A sender its coordinator registered is never placed by its name, whatever the name says; and an entry a coordinator
+    writes after the watch placed a sender moves it, whichever file sorts first."""
+    name = "VLLM-97 KFLAGS: the committer's flag, byte comparison"
+    (tmp_path / "workers.d").mkdir()
+    (tmp_path / "workers.d" / f"{W1_}.json").write_text(json.dumps({"agent_id": W1_, "lane": "circuits", "launched_by": CO}))
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    linear_teams(tmp_path)
+    api.workers[W1_] = api.workers[KEYED] = worker("IDLE", W.iso(T0 - 600), name)
+    w.sweep(lambda r: None)
+    sends(roots, clock, w, W1_, "r20261105-110000-0001")
+    sends(roots, clock, w, KEYED, "r20261105-110000-0002")
+    assert [(r["agent"], r["handle"], r["role"], r.get("placed_by")) for r in ended(tmp_path)] == [
+        (W1_, "circuits", "worker", None), (KEYED, "vllm", "worker", "name")]
+    assert list(placed_files(tmp_path)) == [f"placed-{KEYED}.json"], "nothing is written for a registered sender"
+    (tmp_path / "workers.d" / f"zz-{KEYED}.json").write_text(json.dumps({"agent_id": KEYED, "lane": "circuits", "launched_by": CO}))
+    got = W.workers(None, tmp_path / "workers.d", tmp_path / "registry.json", w.coords, clock.t)[KEYED]
+    assert (got["lane"], got["handle"], got["parent"]) == ("circuits", "circuits", CO)
+    sends(roots, clock, w, KEYED, "r20261105-120000-0003")
+    rec = ended(tmp_path)[-1]
+    assert (rec["agent"], rec["handle"], rec["lane"], rec["role"], rec.get("placed_by")) == (KEYED, "circuits", "circuits", "worker", None)
+    assert w.workers[KEYED]["handle"] == "circuits" and w.workers[KEYED]["parent"] == CO
+
+
+def test_a_listed_sender_is_placed_by_the_name_the_list_gives_and_owned_by_its_lane(tmp_path):
+    """An agent the list has is placed with no read of its own; it gets an owner, as one a workers.d entry names does."""
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    linear_teams(tmp_path)
+    api._agents.append({"id": KEYED, "name": "CIR-206 CCALONE: one calibration", "status": "IDLE", "latestRunId": "run-s",
+                        "updatedAt": W.iso(T0 - 1800)})
+    api._runs["run-s"] = dict(FINISHED)
+    api.convs[KEYED] = [("user_message", "Do the thing.")]
+    w.sweep(lambda r: None)
+    sends(roots, clock, w, KEYED, "r20261105-110000-0001")
+    (rec,) = ended(tmp_path)
+    assert (rec["handle"], rec["role"], rec["listed"], rec["placed_by"], rec["issue"]) == ("circuits", "worker", True, "name", "CIR-206")
+    assert f"/v1/agents/{KEYED}" not in api.gets and w.owners[KEYED] == "circuits" and KEYED not in w.workers
+    sends(roots, clock, w, KEYED, "r20261105-120000-0002")
+    assert [(r["handle"], r["role"], r.get("placed_by")) for r in ended(tmp_path)][-1] == ("circuits", "worker", None)
+
+
 def test_a_relaunched_worker_routes_as_its_lanes_worker_and_the_watch_resumes_it(tmp_path):
     """A relaunched worker is an agent the list has, so `watch_workers` drops it from the workers it reads; its runs
     resolved as nobody's. Its workers.d entry (launched by its coordinator) makes it its lane's worker: its run's end routes to
