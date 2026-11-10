@@ -1379,11 +1379,11 @@ class LakeArtifacts:
             return 0
         used: dict[str, float] = {}
         for e in (self.store / MK.INDEX).glob("*.json"):
-            at = e.stat().st_mtime
             try:
+                at = e.stat().st_mtime
                 doc = json.loads(e.read_text())
-            except ValueError:
-                e.unlink(missing_ok=True)               # damaged on disk, as `module_keys.entry` takes it
+            except (FileNotFoundError, ValueError):     # gone since it was listed (`module_keys.entry` removes one under
+                e.unlink(missing_ok=True)               # the tree's lock, not this one), or damaged on disk, as it takes it
                 continue
             names = doc.get("digests") if isinstance(doc, dict) else None
             for a in names if isinstance(names, dict) else ():
