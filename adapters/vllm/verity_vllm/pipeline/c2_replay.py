@@ -28,10 +28,6 @@ from verity_vllm.commit import opened as OV
 from verity_vllm.commit import store_dump as SD
 
 
-class ReplayReused(Exception):
-    """Control flow: this pair's C2 record is the cached one (see --replay-cache)."""
-
-
 def rss_kb() -> tuple[int | None, int | None]:
     try:
         cur = hwm = None
@@ -43,6 +39,16 @@ def rss_kb() -> tuple[int | None, int | None]:
         return cur, hwm
     except (OSError, ValueError, IndexError):
         return None, None
+
+
+def mib(kb: int | None) -> int | None:
+    """An `rss_kb` reading in whole MiB; None where there is none."""
+    return None if kb is None else kb >> 10
+
+
+def freed_mib(before: int | None, after: int | None) -> int | None:
+    """The whole MiB that left the resident set between two `rss_kb` readings; None where either is absent."""
+    return None if before is None or after is None else (before - after) >> 10
 
 
 @dataclass
@@ -135,7 +141,8 @@ def cache_key(s: ReplaySources) -> str | None:
 def run(s: ReplaySources, replay_cache: dict[str, dict[str, Any]]) -> None:
     """The replay + linkage of the run on `s`, their artifact (`sampled_replay_p<pair>.json`) and their components on `s.row`.  A
     replay this host cannot hold (`driver.PoolDoesNotFit`) is raised, not recorded: it says nothing about the run."""
-    from verity_vllm.check.replay.driver import PoolDoesNotFit
+    from verity_vllm.check.replay.driver import SCHEMA, PoolDoesNotFit
+    from verity_vllm.check.replay.linkage import LINKAGE_SCHEMA
 
     pair, rc = s.pair, s.rc
     _rc_key = cache_key(s)
@@ -146,21 +153,20 @@ def run(s: ReplaySources, replay_cache: dict[str, dict[str, Any]]) -> None:
         print(f"[delta] replay cache: pair {pair} key differs from pair {_v0['pair']}'s in {_d0}: own replay (root {rc.run_root.hex()[:16]} vs {_v0['run_root'][:16]})", flush=True)
     s.tl.start("validate.sampled_replay", pair=pair, cached=_cached is not None)
     held: dict[str, Any] = {}
-    try:
-        if _cached is not None:
-            raise ReplayReused()
-        sr, lk = evaluate(s, held)
-        if _rc_key is not None and sr.get("result") is not None:
-            replay_cache[_rc_key] = {"pair": pair, "run_root": rc.run_root.hex(), "sr": sr, "lk": lk, "artifact": str(s.out / f"sampled_replay_p{pair}.json"),
-                                     "seed": (sr.get("sample") or {}).get("seed"), "code": s.versions.get("git_head")}
-    except ReplayReused:
+    if _cached is not None and _rc_key is not None:
         sr, lk = reused(s, _cached, _rc_key)
-    except PoolDoesNotFit:
-        raise
-    except Exception as e:  # noqa: BLE001  -- fail closed: an unrunnable replay is 'not evaluated', never PASS
-        sr = {"schema": "verity-sweep/sampled-replay/v1", "method": "sampled-exact-replay", "result": None, "grade": "not-evaluated",
-              "why": f"sampled replay not run: {e!r}"[:300], "error": repr(e)[:300]}
-        lk = {"schema": "verity-sweep/boundary-linkage/v1", "result": None, "why": f"boundary linkage not run: {e!r}"[:300], "pairs": 0, "linked": 0}
+    else:
+        try:
+            sr, lk = evaluate(s, held)
+            if _rc_key is not None and sr.get("result") is not None:
+                replay_cache[_rc_key] = {"pair": pair, "run_root": rc.run_root.hex(), "sr": sr, "lk": lk, "artifact": str(s.out / f"sampled_replay_p{pair}.json"),
+                                         "seed": (sr.get("sample") or {}).get("seed"), "code": s.versions.get("git_head")}
+        except PoolDoesNotFit:
+            raise
+        except Exception as e:  # noqa: BLE001  -- fail closed: an unrunnable replay is 'not evaluated', never PASS
+            sr = {"schema": SCHEMA, "method": "sampled-exact-replay", "result": None, "grade": "not-evaluated",
+                  "why": f"sampled replay not run: {e!r}"[:300], "error": repr(e)[:300]}
+            lk = {"schema": LINKAGE_SCHEMA, "result": None, "why": f"boundary linkage not run: {e!r}"[:300], "pairs": 0, "linked": 0}
     _art = s.out / f"sampled_replay_p{pair}.json"
     _art.write_text(json.dumps({"sampled_replay": sr, "boundary_linkage": lk}, indent=1, default=str) + "\n")
     free_programs(sr, held, pair)
@@ -498,7 +504,7 @@ def free_programs(sr: dict, held: dict[str, Any], pair: int) -> None:
     held.clear()
     gc.collect()
     _rss_c2g = rss_kb()[0]
-    _trim = None
+    _trim: int | str | None = None
     try:
         import ctypes
 
@@ -506,11 +512,11 @@ def free_programs(sr: dict, held: dict[str, Any], pair: int) -> None:
     except Exception as e:  # noqa: BLE001  -- not glibc: the gc-only delta stands, named
         _trim = repr(e)[:80]
     _rss_c2b = rss_kb()[0]
-    sr["programs_freed"] = {"rss_before_kb": _rss_c2a, "rss_after_gc_kb": _rss_c2g, "rss_after_kb": _rss_c2b, "freed_mib": (_rss_c2a - _rss_c2b) >> 10,
-                            "freed_by_gc_mib": (_rss_c2a - _rss_c2g) >> 10, "freed_by_malloc_trim_mib": (_rss_c2g - _rss_c2b) >> 10, "malloc_trim": _trim,
+    sr["programs_freed"] = {"rss_before_kb": _rss_c2a, "rss_after_gc_kb": _rss_c2g, "rss_after_kb": _rss_c2b, "freed_mib": freed_mib(_rss_c2a, _rss_c2b),
+                            "freed_by_gc_mib": freed_mib(_rss_c2a, _rss_c2g), "freed_by_malloc_trim_mib": freed_mib(_rss_c2g, _rss_c2b), "malloc_trim": _trim,
                             "when": "after the sampled-replay + boundary-linkage records, before openings-after-release"}
-    print(f"[delta] C2 PROGRAMS FREED (pair {pair}): RSS {_rss_c2a >> 10} -> {_rss_c2g >> 10} (gc) -> {_rss_c2b >> 10} MiB (malloc_trim {_trim}): "
-          f"{(_rss_c2a - _rss_c2b) >> 10} MiB back before the openings-after-release replay", flush=True)
+    print(f"[delta] C2 PROGRAMS FREED (pair {pair}): RSS {mib(_rss_c2a)} -> {mib(_rss_c2g)} (gc) -> {mib(_rss_c2b)} MiB (malloc_trim {_trim}): "
+          f"{freed_mib(_rss_c2a, _rss_c2b)} MiB back before the openings-after-release replay", flush=True)
 
 
 def record(s: ReplaySources, sr: dict, lk: dict, _art: Path) -> None:
