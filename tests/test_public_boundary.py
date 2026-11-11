@@ -3,8 +3,10 @@ it doesn't, beyond the edges `public_boundary_allowed.txt` lists, which only shr
 (`public_export.py`), whose manifests lose only the entries naming what it doesn't copy."""
 from __future__ import annotations
 
+import ast
 import importlib.util
 import json
+import os
 import re
 import subprocess
 import sys
@@ -49,6 +51,45 @@ def test_every_public_group_covers_a_file() -> None:
     boundary, tree = PB.Boundary.load(), PB.Tree(ROOT)
     empty = [g for g, r in boundary.groups.items() if not any(r.fullmatch(f) for f in tree.files)]
     assert not empty, f"public groups whose globs cover no tracked file: {empty}; fix their globs in public_boundary.toml"
+
+
+#: the vLLM integration's Pearl-C path, and the kernel directories a run's `kernel` setting names to it
+PEARL_C = ROOT / "adapters" / "vllm" / "verity_vllm" / "protocols" / "pouw" / "pearl_c"
+PEARL_C_KERNELS = ("benchmarks/pouw/pearl_c_sm120", "benchmarks/pouw/pearl_c_sm90")
+INCLUDE = re.compile(r'^[ \t]*#[ \t]*include[ \t]+"([^"]+)"', re.MULTILINE)
+
+
+def _loaded(module: Path) -> set[str]:
+    """The files a module's `_load` calls take from a kernel directory: each call's ``"NAME.py"``."""
+    calls = [n for n in ast.walk(ast.parse(module.read_text(encoding="utf-8")))
+             if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "_load"]
+    return {c.value for n in calls for c in ast.walk(n)
+            if isinstance(c, ast.Constant) and isinstance(c.value, str) and c.value.endswith(".py")}
+
+
+def test_the_pearl_c_kernels_the_integration_loads_are_public() -> None:
+    """`verity_vllm.protocols.pouw.pearl_c.kernel` loads ``run.py``, ``fixture.py`` and the cubin from the directory a run's
+    ``kernel`` setting names, and `pearl_c.grouped` the ``grouped.py`` beside that ``run.py``: paths a run gives, which the
+    check reads no edge for. So a `public` glob covers each kernel directory's loaded files and what builds its cubin:
+    ``build.sh``, the source it compiles and every file that source includes, which the check doesn't read either. What
+    those files import, reach and run in turn are edges the check reads."""
+    boundary, tree = PB.Boundary.load(), PB.Tree(ROOT)
+    always, beside = _loaded(PEARL_C / "kernel.py"), _loaded(PEARL_C / "grouped.py")
+    assert {"run.py", "fixture.py"} <= always and beside, (
+        f"pearl_c's `_load` calls name {sorted(always)} and {sorted(beside)}: read here what it loads as it names it now")
+    needs: set[str] = set()
+    for d in PEARL_C_KERNELS:
+        needs |= {f"{d}/{n}" for n in always} | {f"{d}/{n}" for n in beside if f"{d}/{n}" in tree.files} | {f"{d}/build.sh"}
+        todo = [f"{d}/{n}" for n in re.findall(r"\$HERE/([\w.-]+\.cu)\b", tree.text(f"{d}/build.sh"))]
+        assert todo, f"{d}/build.sh compiles no `$HERE/NAME.cu`: read here the source its cubin is built from"
+        while todo:
+            f = todo.pop()
+            if f in tree.files and f not in needs:
+                todo += [PB._rel(os.path.join(os.path.dirname(f), i)) for i in INCLUDE.findall(tree.text(f))]
+            needs.add(f)
+    private = sorted(f for f in needs if f not in tree.files or boundary.is_private(f) or boundary.group(f) is None)
+    assert not private, ("the public vLLM integration serves Pearl-C from files the export doesn't copy; name each in "
+                         f"public_boundary.toml's `benchmarks` group (a boundary decision), or stop loading it: {private}")
 
 
 BOUNDARY = """
