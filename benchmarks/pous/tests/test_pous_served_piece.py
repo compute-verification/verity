@@ -486,6 +486,23 @@ def test_a_kept_store_that_is_not_the_points_blocks_is_no_answer(served, tmp_pat
     assert not (served.out / "answer.json").exists()
 
 
+def test_kept_sessions_under_another_id_than_the_windows_are_not_answered(served, tmp_path, monkeypatch):
+    """The answers derive the session's id again, from the window's binding and what setup published, and take neither
+    from what was kept: the same sessions asked for as another window's, and then a kept record naming another id, are
+    refused before anything is answered, and what was kept stays."""
+    s = served
+
+    def other():
+        with pytest.raises(SP.Refusal, match="not this window's"):
+            SP.answers(s.serve, 4, s.out, private=s.private, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
+        run = json.loads((s.private / "run.json").read_text())
+        (s.private / "run.json").write_text(json.dumps(run | {"session_id": "00" * 32}))
+    with pytest.raises(SP.Refusal, match="under another binding or id than the ones window 3 of"):
+        _parts(s, tmp_path, monkeypatch, between=other)
+    assert _names(s.out) == ["stamps.txt"]
+    assert _names(s.private) == sorted(["digests.bin", "run.json", SP.HELD, SP.STORE])
+
+
 def test_a_store_missing_blocks_is_rejected_with_its_reason(served, tmp_path, monkeypatch):
     """A prover that no longer holds most of C* answers the challenged blocks it dropped with zeros: the run's check
     refuses the session, and the answer is a reject with its reason, still under a hiding commitment."""

@@ -76,9 +76,10 @@ and ``key_pinned``, and under ``decided_by`` the program whose verdict the answe
 appends its timeline to ``DIR/stamps.txt`` (a UTC second and an event a line: the weights loaded, setup, each session,
 each answer, the case written; `served_piece.sh` adds its own) and prints one ``POUS`` line.
 Weights that aren't the pin's are a reject, and a session the challenger's side couldn't complete is undecided, each with
-its reason. Exit 0 on accept, 1 on any other answer, 2 when no answer could be made (no serve.json, no snapshot, no
-kept sessions for ``--answers``). ``--sessions`` exits 0 when the sessions are kept, with no answer yet, and 1 when
-they left one already, which is never an accept.
+its reason. Exit 0 on accept, 1 on any other answer, 2 when no answer could be made (no serve.json, no snapshot, and
+for ``--answers`` no kept sessions, or ones kept under another binding or id than the window's and its setup's).
+``--sessions`` exits 0 when the sessions are kept, with no answer yet, and 1 when they left one already, which is
+never an accept.
 """
 from __future__ import annotations
 
@@ -315,6 +316,20 @@ def binding(model: str, revision: str, window: int, registration: str | None) ->
     return hashlib.sha512(BINDING_TAG + canonical_json_bytes(doc)).digest()
 
 
+def _window(serve_dir: Path, window: int) -> tuple[str, str, str | None, bytes]:
+    """The served model and its revision (``serve.json``), the SHA-512 of the serve dir's weights registration where it
+    has one, and the window's binding over them (`binding`); `Refusal` where ``serve.json`` names no model."""
+    if not (serve_dir / "serve.json").is_file():
+        raise Refusal(f"{serve_dir} has no serve.json")
+    serve = json.loads((serve_dir / "serve.json").read_text())
+    repo, rev = serve.get("model"), serve.get("revision")
+    if not (isinstance(repo, str) and isinstance(rev, str)):
+        raise Refusal(f"serve.json names no model and revision ({repo!r}, {rev!r})")
+    reg_file = serve_dir / "weights_registration.json"
+    reg_sha = hashlib.sha512(reg_file.read_bytes()).hexdigest() if reg_file.is_file() else None
+    return repo, rev, reg_sha, binding(repo, rev, window, reg_sha)
+
+
 def _no(verdict: str, reason: str, commitment: str | None = None, protocol: str = period.PROTOCOL) -> dict[str, Any]:
     return {"commitment": commitment, "profile": None, "protocol": protocol, "public": None, "reason": reason,
             "verdict": verdict}
@@ -384,12 +399,7 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
     written as `answers` writes one and returned, never an accept. Else None: what the sessions left is kept for
     `answers`, in ``private`` (``run.json`` and the table, `STORE`, `HELD`) and ``bw_private`` (by default
     ``SERVE_DIR/private/bandwidth``). `Refusal` when no answer can be made."""
-    if not (serve_dir / "serve.json").is_file():
-        raise Refusal(f"{serve_dir} has no serve.json")
-    serve = json.loads((serve_dir / "serve.json").read_text())
-    repo, rev = serve.get("model"), serve.get("revision")
-    if not (isinstance(repo, str) and isinstance(rev, str)):
-        raise Refusal(f"serve.json names no model and revision ({repo!r}, {rev!r})")
+    repo, rev, reg_sha, bind = _window(serve_dir, window)
     snapshot = hf_home / "hub" / f"models--{repo.replace('/', '--')}" / "snapshots" / rev
     if not snapshot.is_dir():
         raise Refusal(f"no snapshot of {repo}@{rev} under {hf_home}")
@@ -402,9 +412,6 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
     out.mkdir(parents=True, exist_ok=True)
     for name in (STORE, HELD):   # what an earlier run kept is never answered as this one's
         (private / name).unlink(missing_ok=True)
-    reg_file = serve_dir / "weights_registration.json"
-    reg_sha = hashlib.sha512(reg_file.read_bytes()).hexdigest() if reg_file.is_file() else None
-    bind = binding(repo, rev, window, reg_sha)
     summary: dict[str, Any] = {"window": window, "model": repo, "revision": rev, "node": node, "challenger": party.host,
                                "binding": bind.hex(), "registration_sha512": reg_sha,
                                "decided_by": period.decided_by(None)}
@@ -415,7 +422,7 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
     t0 = time.monotonic()
     ck, wrong = checkpoint(snapshot, _pin(repo, rev, pins))
     if reg_sha is not None:
-        reg = json.loads(reg_file.read_text()).get("model") or {}
+        reg = json.loads((serve_dir / "weights_registration.json").read_text()).get("model") or {}
         if (reg.get("repo"), reg.get("revision")) != (repo, rev):
             wrong.append(f"the weights registration is of {reg.get('repo')}@{reg.get('revision')}, not the served "
                          f"{repo}@{rev}")
@@ -515,24 +522,31 @@ def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str = TR
     run protocol's Lean (``pous-run-protocol``), whose answer on the case is then the verdict. What the sessions kept
     only for this (`STORE`, `HELD`, the P2 case not yet answered) is removed last, once both answers are written and
     each Lean asked for has answered its case: a call that ended before then, or whose Lean didn't answer or agree,
-    can be made again over the same sessions. `Refusal` when ``private`` holds no sessions."""
+    can be made again over the same sessions. The session's id is derived again here, from the window's binding
+    (``serve_dir``'s model and registration, ``window``) and what setup published, never taken from what was kept.
+    `Refusal`, before either answer, when ``private`` holds no sessions, or holds sessions kept under another binding
+    or id than those."""
     private = private or serve_dir / "private" / "pous" / f"w{window}"
     bw_out = bw_out or out.parent / "bandwidth"
     bw_private = bw_private or serve_dir / "private" / "bandwidth"
     if not (private / HELD).is_file():
         raise Refusal(f"{private} holds no sessions to answer ({HELD}, which --sessions leaves)")
-    out.mkdir(parents=True, exist_ok=True)
+    repo, rev, _, bind = _window(serve_dir, window)
     held, kept = json.loads((private / HELD).read_text()), json.loads((private / "run.json").read_text())
     summary = held["summary"]
-    bind, node, host = bytes.fromhex(summary["binding"]), summary["node"], summary["challenger"]
+    node, host = summary["node"], summary["challenger"]
     point, published = period.point_of(kept["point"]), R.Setup.from_json(kept["published"])
-    sid, key = bytes.fromhex(kept["session_id"]), bytes.fromhex(kept["public_key"])
+    sid, key = CS.session_id(bind, published.commitment, published.salt), bytes.fromhex(kept["public_key"])
+    if (summary["binding"], kept["session_id"]) != (bind.hex(), sid.hex()):
+        raise Refusal(f"{private} keeps sessions under another binding or id than the ones window {window} of "
+                      f"{serve_dir} and its setup fix (challenger_session.session_id): they are not this window's")
+    out.mkdir(parents=True, exist_ok=True)
     session, digests = R.ChallengePhaseRecord.from_json(kept["session"]), (private / "digests.bin").read_bytes()
     key_sha = hashlib.sha512(key).hexdigest()
     trusted = (key,) if key_sha == trusted_sha512 else ()
     bandwidth = bw = None
     if held["bandwidth"] is not None:
-        bw = HB.decide(bw_private, bw_out, bind=HB.binding(summary["model"], summary["revision"], window),
+        bw = HB.decide(bw_private, bw_out, bind=HB.binding(repo, rev, window),
                        window=window, pous_case={"commitment": canonical_json_bytes(published.to_json()).hex()},
                        case_exe=bw_case_exe)
         bandwidth = {"verdict": bw["verdict"], "out": str(bw_out)} | held["bandwidth"]
