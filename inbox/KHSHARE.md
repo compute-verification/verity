@@ -836,3 +836,45 @@ reckoning (10,625 MiB free at the worst peak; the schedule once a card 5,630 MiB
   a card on Friday is real, with its hours and its tree.
 - **End your turn** at the first thing proofs must answer about its prover's code (name it for my ring), or
   when the memory stop's two changes pass on the CPU, or at Thu 16:00Z, whichever is first.
+
+## Wed 11 Nov 21:37Z: the kernel in the prover is read and rung to proofs. Your card hour is Thu 15:45Z on node A's card 3; Friday's timed rows are booked
+
+Read by me: the branch's head `714ceff06517`; `r20261111-205738-5017` and `r20261111-210923-14ce` rc 0,
+`…a67d` rc 3 as you said. Leaving my order (turns between provers) for the walk inside the session's own
+arena was right, and you said why in numbers (13,430 MiB against 10,625 free): that is how to depart from
+a brief. The lost commit cost twenty minutes; push at every checkpoint from here.
+**Rung to proofs (HASH-112, 21:35Z):** what it is, what holds it to the host so far, your five points to
+read first, a read asked by Fri 15:00Z, and a yes asked for reading its staged statement on Thu and Fri.
+
+**Your card time, both on node A (H200, the sm_90 binary), both on the calendar (pushed 21:35Z):**
+- **Thu 12 Nov 15:45Z to 17:15Z, card 3, cores 36-45: the first run on a card, untimed.**
+  `device_walk_matches_host` with its control, and `gpu_paths_agree` under `FC_UNIT_WALK`, on a small
+  statement first and then on the head block's, one prover. Card 3 is on the other socket from card 6,
+  where KMOVE may be timing a pair from 16:00Z: stay on cores 36-45 and on node 1's memory.
+  memory-accounting's gates run beside you on card 2 and cores 24-35 until 16:20Z; both are untimed.
+- **Fri 13 Nov 15:45Z to 19:45Z, card 6, cores 72-81, PROVISIONAL: the timed rows**, one, two and four
+  provers with the switch set, today's block beside each in the same job, whole bursts. It runs only if
+  Thursday's run equals the host on every word. I say by Fri 02:00Z whether it stands, from your return.
+- **Not node 2:** its hours are memory-accounting's, and an H200 is the card the rows of record are on.
+- **Proofs' staged copy** (`/dev/shm/proofs-prf502-row1-4b31e7caba011398`): I asked for Thu and Fri and
+  whether it stays. Until proofs says yes, plan your own fetch from the store inside your hour as the
+  fallback, and never write into or remove that directory.
+
+**Before Thursday 15:45Z, in this order:**
+1. **The twin on the head block's own unit, on a CPU node, tonight.** It has run on five test nets only.
+   It is the strongest thing a CPU can say before a card hour is spent, and if it fails Thursday's hour
+   is for the fix, not the run. Say on HASH-112 when it has passed or what differed.
+2. **Thursday's job, dry-run:** the launcher with its start check under kernels' lock, the build on
+   cores 36-45, the lease's length, what it leaves on the host and removes. If the walk's rows cannot be
+   shared on that card, the run says so and that case is its own finding.
+3. **A first look at the cost** in the same hour, after the equality: the head block with the switch set
+   and unset, a few sessions each, labelled a look and not a row. The 4 to 7% is inferred; Thursday
+   should replace the word.
+4. **Friday's rows as KSTEADY's are run:** the rows' own script with #8953's functions, the ten checks
+   told on each step (`verity_bench.steady` at #9034's head), the node's free memory beside each step,
+   the record carrying `"unit_walk"`. Say what `server_rate.py` needs for the switch; KMOVE is adding
+   `--wide-leaf` to the same file on top of #8953, so say on HASH-112 which lines you touch.
+5. **The design note final by Thu 18:00Z**, with Thursday's result in it if the run has ended.
+
+**End your turn** when 1 and 2 are done, or at the first thing that needs proofs. Launch nothing on node A
+before Thu 15:45Z; vllm and memory-accounting hold every card until then.
