@@ -697,6 +697,11 @@ theorem session_step {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c 
 
 /-! ## The members' steps -/
 
+/-- `SessDone` at an equal count of sessions. -/
+theorem SessDone.of_eq {R : ℕ} {P : Fin R → List Release → Frame → Prop} {su : Fin R → ℕ} {Lg : List Release}
+    {done : List (List Release)} {u u' : ℕ} (h : SessDone P su Lg done u) (e : u = u') : SessDone P su Lg done u' :=
+  e ▸ h
+
 /-- **The members' steps' invariant**, at the widened coins `ω`, the position `r` the members' traces end at, the
 place `i` and the position `p` its member's session starts at: the walk from `p` stops where `StopOf` says, with
 the releases after the logs `done` answered in the log of the play on `r`'s tape (`Walked`), those being the picks
@@ -746,7 +751,7 @@ theorem memberSteps_of_sessions (V : Vocab d α) (θ : ByteArray) (F : Array Byt
   refine memberSteps_of_verdicts V θ F c k P W t _ σ _ M _ _ _ (fun ω r => ?_)
     (fun ω i m p q r out hm hd hI hpi _ hmr hqr _ hacc => ?_) (fun ω i m p r hm hd hI => ?_)
   · exact ⟨[], _, fun _ => True, [], fun _ => rfl, stopOf_rootStop V θ F c _ σ (M.start ω) hP, walked_nil _ _,
-      by rw [drawnBefore_zero]; exact sessDone_nil _ _ _, Pos.Past.refl _⟩
+      (sessDone_nil _ _ _).of_eq (drawnBefore_zero _ _).symm, Pos.Past.refl _⟩
   · obtain ⟨pre, f, a, done, hf, hSO, hW, hDn, hrp⟩ := hI
     have hdS : (m.part ((W.extend M.widening).L.draw ω)).Nonempty := hd
     have hWS := hses ω r.tape (hrp.trans (hmr.past.trans hqr)).through hacc.1 hacc.2.2
@@ -760,8 +765,7 @@ theorem memberSteps_of_sessions (V : Vocab d α) (θ : ByteArray) (F : Array Byt
         hWS.specs hWS.order hTr (hWS.all hMA) hA hτ hev hfd hmP
     refine ⟨⟨pre'', f'', a'', done'', hf'', hSO'', hW'', ?_, hrp.trans (hmr.past.trans (Pos.past_consume q))⟩,
       a₀, bs, keys, s, record, spec, tabs, rest, proofs, units, hst, hv, ?_⟩
-    · rw [drawnBefore_succ_of_drawn (S := (W.extend M.widening).L.draw ω) hm hdS]
-      exact hDn''
+    · exact hDn''.of_eq (drawnBefore_succ_of_drawn hm hdS).symm
     · intro spec' sts' sess' hs' hdec'
       have hspec : spec = spec' := (Prod.mk.inj (Except.ok.inj (hs.symm.trans hs'))).1
       rw [← hspec] at hdec' ⊢
@@ -769,8 +773,6 @@ theorem memberSteps_of_sessions (V : Vocab d α) (θ : ByteArray) (F : Array Byt
       exact ⟨hdr, hB, hPt, hRp, hPf⟩
   · obtain ⟨pre, f, a, done, hf, hSO, hW, hDn, hrp⟩ := hI
     have hdS : ¬ (m.part ((W.extend M.widening).L.draw ω)).Nonempty := hd
-    refine ⟨pre, f, a, done, hf, hSO, hW, ?_, hrp⟩
-    rw [drawnBefore_succ_of_not (S := (W.extend M.widening).L.draw ω) hm hdS]
-    exact hDn
+    exact ⟨pre, f, a, done, hf, hSO, hW, hDn.of_eq (drawnBefore_succ_of_not hm hdS).symm, hrp⟩
 
 end Verity.Sampled
