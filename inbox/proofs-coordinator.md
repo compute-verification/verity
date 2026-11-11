@@ -54440,3 +54440,44 @@ Tags: [read] a file I read now, [run] a command I ran now, [relayed] another lan
 **Out:** `4a49`, `25e8`, `8bf3`, `8c84` and `f109`. Their rows go in my next entry, each with its reading's tag and its bits cell from the table above.
 
 For the table: BREAKEVEN's GB rows are at the plan's cut, so their bits are (b) at M = 4,130 under one M (record 2^-95.87; κ 2^-4 2^-95.28; κ 2^-6 2^-97.28; κ 2^-7 2^-98.28), and none holds 2^-100; "(b), over the served wiring; modeled; no Lean statement at the code is behind it".
+
+## WITNESS, Wed 11 Nov 12:33Z: the served unit beside `main`'s own build is in: #8933 saves 2.7 to 2.8 of `main`'s 11.6 CPU-s a statement (0.76; `r20261111-103531-9ad6`, a loaded node), and HEADPROF's card host says the same (12.68 to 9.95 CPU-s, 0.79 of the seconds) [relayed]; #8891 alone is 0.94 there, with one round of three ABOVE `main`'s; the ready line for #8933 stands, nothing of mine is running
+
+**The served unit, six cases interleaved on one staged copy** [run: `r20261111-103531-9ad6`, cpu-3 (Genoa, shared), `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`, 31,981,569 rows, pin `4b31e7caba011398` (HEADPROF's staged copy has the same pin [relayed]), 256 slots, width 1, 4 threads, three rounds of two walks, rc 0; 72 walks, every one "same" and "ok"; the follow-up here is its first three commits (`c5952ee9b3`), not its head]:
+
+| build, switches | CPU-s a statement, the six walks | median | of `main`'s | by round |
+|---|---|---|---|---|
+| `main` `8201dacff2`, `--gpu` (its loop on the device prover's small pages) | 10.66, 10.46, 11.85, 11.40, 15.33, 13.94 | 11.62 | 1 | |
+| #8891, both switches off | 12.21, 13.45, 12.79, 12.73, 17.72, 17.00 | 13.12 | 1.13 | 1.21, 1.10, 1.19 |
+| #8891, its defaults | 12.14, 11.79, 8.61, 8.80, 10.59, 11.36 | 10.97 | 0.94 | 1.13, 0.75, 0.75 |
+| #8933, kept on small pages, distance 64 | 8.48, 9.10, 7.85, 9.72, 9.44, 8.41 | 8.79 | 0.76 | 0.83, 0.76, 0.61 |
+| #8933, no switch set (huge pages, 256) | 8.79, 9.01, 6.87, 7.78, 9.81, 11.42 | 8.90 | 0.77 | 0.84, 0.63, 0.73 |
+| `main` with the huge-page advice (not what a device prover runs) | 10.10, 9.52, 9.88, 9.90, 9.02, 10.11 | 9.89 | 0.85 | 0.93, 0.85, 0.65 |
+
+- **The node was loaded and getting more so** [run: the job's log]: load 36 at the first case, 76 to 80 for the rest of round 1, 80 to 111 in rounds 2 and 3, on 128 cores. `main`'s own walks went from 10.6 to 14.6 CPU-s across the rounds. So I trust the ratios by round more than any median, and neither to better than a tenth.
+- **#8933: under `main`'s loop in every round** (0.61 to 0.84), about 2.7 to 2.8 CPU-s a statement of 11.6.
+- **#8891 alone: not shown on this unit on this node.** One round reads it 13% above `main`'s loop, two read it 25% below. Its switched-off path is above `main`'s in every round (1.10 to 1.21), as on the small unit and the card.
+- Kept pages' size and the distance do not separate here either (8.79 and 8.90).
+
+**HEADPROF's four rows of #8933 on the card host** [relayed: its 12:20Z entry; `r20261111-115454-5832`, `r20261111-113118-f049`, vy-dc-h200-3, one prover on six cores]:
+- No switch set: 2.712 and 2.746 GPU-s a statement against 3.435 and 3.456 today (0.790, 0.794). The prover's walk threads spend 9.95 CPU-s a statement where today's spend 12.68.
+- `FC_UNIT_AHEAD=64`: 2.7457 (0.794). `FC_UNIT_AHEAD=64 FC_UNIT_KEEP=small`: 2.7476 (0.800). "The card host does not decide for or against 256." So distance 256 stays in the head: the served unit on Genoa favoured it by 2.7% (`d202`), the card is neutral.
+- Both switched off: 3.1177 (0.907). The off path is under today's code, where #8891's was over it.
+- `compact_stall` 0 in every window: the first statement's huge pages cost no compaction there.
+
+**The two measures agree** [run, relayed]: 2.7 to 2.8 CPU-s a statement saved on a CPU node's walk alone (`9ad6`), 2.73 on the card host's prover threads (HEADPROF's thread samples, `f049`).
+
+**State.**
+- #8891, `88f0665ab6644e3cb511868343230babeb27d792`: marked by you, admitted [run: `research queue status`, 12:22Z]. Head not moved.
+- #8933, `3784b0a0dd6fb5998e65c2d9cd2c64d7dbb82a76`: unmarked, ready line in my 12:04Z entry (pushed at 12:03Z). Its body has the quick tier's verdict and HEADPROF's first card pair since 12:05Z; I add this table and HEADPROF's four rows to both bodies now (body edits, no head moves).
+- Nothing of mine is running. No run of mine holds a node.
+
+**What is left, sized, not built** [guess unless tagged]:
+- Sums shared between rows: up to 40% of the walk's reads [run: my 09:00Z count], a plan of GBs a net, about 200 lines in `ir_block.rs`. Not small, and the walk moves to the card by Monday (kernels, 0.078 s a statement standalone [relayed, HASH-114 11:24Z]).
+- The transpose (`lanes_into`) fused into the walk: about 15% of what the walk is once the vectors are kept.
+- Width 4 a pass: slower on the card [relayed, HEADPROF]. Left alone.
+- #8891's switched-off path stays slower than `main`'s loop until #8933 lands on it.
+
+For HEADPROF: cursor/proofs-witness-follow-41b5 at 3784b0a0dd6fb5998e65c2d9cd2c64d7dbb82a76 (unchanged; nothing more asked). Thank you for the four rows.
+For BREAKEVEN: the head block's host witness with #8891 and #8933: 2.7 CPU-s a statement saved, measured twice: 12.68 to 9.95 CPU-s on the card host's prover threads (HEADPROF, `r20261111-113118-f049`, vy-dc-h200-3) [relayed], and 11.62 to 8.79 on a CPU node's walk of the served unit (`r20261111-103531-9ad6`, loaded node, #8933's first three commits). In seconds a statement at one prover: 0.79 of today's (HEADPROF, two runs). #8891 alone: 0.925 on the card, 0.94 on the CPU node with one round of three above 1.
+For the table: head block's host witness: #8891 (marked) 0.925, and with #8933 (ready line written, unmarked) 0.79 of today's seconds a statement at one prover on the card (measured twice by HEADPROF); 2.7 CPU-s a statement off the walk (measured on the card host and on a CPU node).
