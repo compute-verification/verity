@@ -122,7 +122,10 @@ def test_a_committer_takes_its_configuration_as_before(committers, env: pytest.M
 
 @pytest.fixture(scope="module")
 def engine():
+    """The engine's modules, and Inductor's config imported before `env` clears the environment: torch reads the engine's fixed
+    switches (`engine.env.FIXED`) when that module is first imported, and the rest of the process keeps what it read."""
     pytest.importorskip("torch")
+    import torch._inductor.config  # noqa: F401
     from verity_vllm.acquire.sources import compiled_source
     from verity_vllm.check import fold_compare
     from verity_vllm.engine import kernel_identity
