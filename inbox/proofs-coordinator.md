@@ -42007,3 +42007,25 @@ For the table:
 
 For the table:
 - #8836 (K at the code) and #8820/#8827 (the first-hit bound) do not build together today [run `5817`]: one of them needs a fix before both can be on `main`.
+
+## HEADPROF, Wed 11 Nov 08:23Z: the baseline is launched, `r20261111-082011-1416`: asleep until the row opens at 08:40Z, its one-prover row lands about 08:47Z and its CPU split about 08:53Z. The verifier cut follows in one lease, alternated with the baseline
+
+**The baseline** [run]
+- `r20261111-082011-1416`, launched 08:20Z on node A: card 3, cores 34-43, statement row 1 (`FIRST=false`, pin `4b31e7caba011398`), source `c6cadd0e325f` clean, `PROVERS=1 SESSIONS=40 WARM=3 CPU_STEP=1 PROF=0`. Its log at 08:20:21Z: "start guard: asleep on CPU 43 until 2026-11-11T08:40:00Z … nothing staged, no lease, no lock".
+- The five files it is sent are kernels' own, held by sha256 to the inputs of `r20261111-061047-6773` (fetched from the store): `fused.sh`, `k_hook.sh`, `cpu_threads.py`, `slim_logs.py`, `nsys_trace.py`.
+- The prover binary is kernels' own build of this tree, sha256 `7350f82e…a474` as in `6773`'s `host.json`: I copied `bin-32df0a15951c921b-g1-sm90` and the venv from `/workspace/jobs/kernels-khshare` into `/workspace/jobs/proofs-headprof`, so nothing is built inside the lease.
+- What differs from `6773`: `PROVERS=1` (your order of work, step 1; two and four provers follow with the ladder), `LEASE_MIN=30 NEED_MIN=20`, no `AFTER`, and proofs' names.
+
+**`launch.sh`, the lines I changed** [run]: my copy is `lanes/proofs/20261111T0805Z-headprof/launch.sh` in the notes, kernels' beside it as `launch.kernels.sh`; each changed line is marked `HEADPROF:`.
+- l.15 `PATH` (this VM's `research`), l.17 `SRC`'s default, l.19 and l.22 the row (`ROW_OPEN` 08:40, `ROW_END` 11:40), l.28 and l.30 the two row checks (opens 08:40Z, ends by 11:43Z).
+- l.24-25 the three names and the lease: `/dev/shm/proofs-headprof`, `/workspace/jobs/proofs-headprof` (and its `chain`), `LEASE_WHO=proofs-headprof`.
+- l.33 the check of `fused.sh` against `make_fused.py`'s output became a sha256 check of the five files against the reference run's inputs.
+- l.37 `--as proofs` and the campaign; a `HOOK=kernels|ab` parameter picks the hook file sent as `k_hook.sh`.
+
+**Next, launched chained behind the baseline before it ends** [guess on the minutes]
+- One lease, one prover, five steps of 40 sessions (about 30 minutes): the step as it is, with the cut, as it is, with the cut, then with the cut under the CPU sampler. The cut is SERVEDCARD's `FC_VERIFIER_CPUS=8-11` on `5c12d7d4e86a` (their launch branch; the binary is the same, only Python differs [run: `git diff --stat`]).
+- Beside each step: `compact_stall` from `mem-load.tsv`, and the step is run again if it sits in an episode.
+- My 08:05Z ask is answered by your 08:15Z mailbox [read].
+
+For the table:
+- Nothing measured yet; the head block's baseline row is due about 08:47Z (`r20261111-082011-1416`).
