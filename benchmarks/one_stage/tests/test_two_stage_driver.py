@@ -26,8 +26,8 @@ from verity.protocols.spot.verifier import second_stage as SS, service as S
 from verity.protocols.spot.verifier.one_stage import partition as P, registered as RG, registration as R
 from verity.commitments import history as HT
 from verity.commitments.gates import embedding as E
-from verity_vllm.pipeline import (boundary_rows as BR, boundary_tables as BT, chunk_rows as CR, interior_rows as IR,
-                                  serving_rows as SRW)
+from verity_vllm.pipeline import (boundary_rows as BR, boundary_stop as BS, boundary_tables as BT, chunk_rows as CR,
+                                  interior_rows as IR, serving_rows as SRW)
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -288,11 +288,11 @@ def test_a_class_under_a_stop_rule_registers_its_boundary_values_and_is_sampled_
     """A serve's stop rule cuts a class's boundary rows into `b.request`, `b.prompt` and `b.egress`: the class's Spec
     names those, its first stage registers their record and samples its spans, and its stop word, the stop record's
     port, is no value of this stream. Its spans set ``ignore_eos``, so the stop id one of them serves ends none."""
-    stop = BR.Stop((3,), 64, 4)
+    stop = BS.Stop((3,), 64, 4)
     spans = [BR.Span(f"r{i}", (i, i + 1, i + 2), GREEDY, (7, 8, 9, i), "length") for i in range(N)]
     c = BR.commit(spans, BR.Layout(PAIR, 0, 1, 4, 4, N, BR.run_root("test-serve", 0), stop=stop), 0)
     assert list(c.public()["values"]) == [*BR.PARTS, BR.STOP]
-    got = TS.first(c.public(), PAIR, RULE, FC.Challenger("first"))
+    got = TS.first(c.public(), PAIR, RULE, FC.Challenger("first"), stop=stop)
     assert [v.name for v in got.stream.spec.values if v.phase == "serve"] == list(BR.PARTS)
     assert [r["port"] for r in got.registration.record["roots"]] == list(BR.PARTS)
     assert got.registration.record["population"] == N and len(got.draw.units) == Q

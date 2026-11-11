@@ -17,6 +17,9 @@ gives its outcome (`prove`, `outcome_of`).
   `TwoStage(grain, replay, k)` over the class's replay block; the check, its templates' programs and their query
   (`Layout.templates`, `Layout.query`: the check template's instances, or, inlined, the templates its body calls) with
   its proof deadline; and the public items both registrations show.
+* **The stop rule** (``--stop``): the verifier's own copy of the rule the serve registered, as ``--check`` is its own
+  copy of the check template. A class is laid out under it (`boundary_rows.layout_of`), and a ``commit.json`` that
+  names another rule, or names one where the verifier holds none, is refused: the serve chooses neither.
 * **The coins.** `first` takes a class's `ChallengerCoins` (a test's in-process challenger). The command opens one
   challenger session on the window's run (`a5_coins.start`: ``local``, ``loopback:HOST:PORT`` or ``gate:USER@HOST``),
   each class a rank of it, sampling on a thread of its own in its turn; the session's evidence goes into every class's
@@ -62,17 +65,19 @@ value the verifier supplies is not its yet.
 Usage::
 
     two_stage.py first --boundary DIR [DIR ...] --check TEMPLATE --replay rate:NUM/DEN --k K --challenger local \\
-        --main FILE --out OUT [--interior FILE.json [--span-values VALUES.json]] [--advice REGISTRATION.json] [--proof-deadline S]
+        --main FILE --out OUT [--interior FILE.json [--span-values VALUES.json]] [--advice REGISTRATION.json] [--proof-deadline S] \\
+        [--stop RULE]
     two_stage.py second --stage1 OUT/<class>/stage1.json --boundary DIR --capture CAPTURE --challenger local --main FILE \\
         --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out OUT2 [--proofs PARAMS.json] [--rids IDS.json] [--firewall F] \\
-        [--unlinked]
+        [--unlinked] [--stop RULE]
 
 Each DIR a class's (``w<window>/p<P>-o<O>/``), every one of one window (``second``: one class's, with its private
 files); FILE.json the interior values, ``[[name, schema], ...]``; VALUES.json the replay block's parameters the interior
 registration registers as values, ``[[name, rows a sampled span, leaf type], ...]`` (`interior_rows.span_values`);
 REGISTRATION.json the window's advice registration, whose ``binding`` the records' windows name; CAPTURE the replay's
 capture of the sampled spans; PARAMS.json the auditor's params; IDS.json the capture's request id for a span's engine
-id, where they differ. ``second`` writes under OUT2 the interior window (``interior/``, its private files too), the
+id, where they differ; RULE the stop rule as JSON, ``{"ids": [...], "max_model_len": n, "outputs": T}``
+(`boundary_stop.Stop.of`). ``second`` writes under OUT2 the interior window (``interior/``, its private files too), the
 params (``proofs.json``, ``references/``), a5's records (``audit/``), the sessions' statements (``statements.json``),
 its challenger session's records (``challenger/``), both stages' coin evidence (``coins.json``) and ``summary.json``;
 it exits 0 when the second stage held (`held`). A ``local`` session's challenger reads its coins through
@@ -101,7 +106,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import SpecializedDefinition
 from verity.circuits.program import Program
 from verity.commitments.windows import links as LK, rows as CS
-from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT, interior_rows as IR
+from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS, boundary_tables as BT, interior_rows as IR
 
 HERE = Path(__file__).resolve().parent
 FORMAT = "verity-vllm/two-stage/stage1/v0"
@@ -270,14 +275,15 @@ class First:
 
 def first(pub: Mapping[str, Any], check: SpecializedDefinition, rule: Rule, coins: CC.ChallengerCoins, *,
           previous: str | None = None, window: Mapping[str, Any] | None = None, delta: float = 0.5,
-          window_root: str | None = None, **kwargs: Any) -> First:
-    """One class's first stage on ``coins``: its stream registers the boundary record (`boundary_rows.record`, at the
-    rule's first-stage law over its spans, chained after ``previous``, its window naming ``window``'s items), the coins
-    commit to the registration's digest, and the stream samples once. Raises `service.Refused` as the stream does."""
-    layout = BR.layout_of(pub, check)
+          window_root: str | None = None, stop: BS.Stop | None = None, **kwargs: Any) -> First:
+    """One class's first stage on ``coins``, laid out under the verifier's own check template and stop rule (``stop``):
+    its stream registers the boundary record (`boundary_rows.record`, at the rule's first-stage law over its spans,
+    chained after ``previous``, its window naming ``window``'s items), the coins commit to the registration's digest,
+    and the stream samples once. Raises `service.Refused` as the stream does."""
+    layout = BR.layout_of(pub, check, stop)
     coins = coins if isinstance(coins, Recorded) else Recorded(coins)
     stream = stream_of(layout, rule, coins, delta=delta, **kwargs)
-    rec = BR.record(pub, check, S.selection_law(stream.spec.selection, layout.spans), previous, window)
+    rec = BR.record(pub, check, S.selection_law(stream.spec.selection, layout.spans), previous, window, stop=stop)
     reg = stream.register(rec, layout.ports(), **({} if window_root is None else {"window_root": window_root}))
     coins.commit(bytes.fromhex(reg.digest))
     draw = stream.select(reg)
@@ -285,14 +291,15 @@ def first(pub: Mapping[str, Any], check: SpecializedDefinition, rule: Rule, coin
 
 
 def resume(stage1: Mapping[str, Any], check: SpecializedDefinition, then: CC.ChallengerCoins | None = None, *,
-           delta: float = 0.5, window_root: str | None = None, **kwargs: Any) -> First:
-    """A class's stream again at the end of its first stage, from its ``stage1.json``: the record registered again and
-    sampled again on the bytes the sample read, then on ``then`` once the interior registration's digest is committed
-    (`Staged.commit`). ValueError when the Spec, the registration or the sample isn't ``stage1.json``'s."""
+           delta: float = 0.5, window_root: str | None = None, stop: BS.Stop | None = None, **kwargs: Any) -> First:
+    """A class's stream again at the end of its first stage, from its ``stage1.json``, under the verifier's own check
+    template and stop rule: the record registered again and sampled again on the bytes the sample read, then on ``then``
+    once the interior registration's digest is committed (`Staged.commit`). ValueError when the Spec, the registration
+    or the sample isn't ``stage1.json``'s."""
     if stage1.get("format") != FORMAT:
         raise ValueError(f"not a {FORMAT} hand-off")
     pub, rule = stage1["commit"], Rule.from_json(stage1["rule"])
-    layout = BR.layout_of(pub, check)
+    layout = BR.layout_of(pub, check, stop)
     coins = Staged(bytes.fromhex(stage1["read"]), then)
     stream = stream_of(layout, rule, coins, delta=delta, **kwargs)
     if stream.spec.digest() != stage1["spec"]:
@@ -719,10 +726,11 @@ def prove(a: argparse.Namespace, r: Replayed, c: BR.Committed, out: Path,
 
 
 def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefinition, rule: Rule | None,
-               window: Mapping[str, Any] | None) -> list[dict]:
+               window: Mapping[str, Any] | None, stop: BS.Stop | None = None) -> list[dict]:
     """Every class's first stage on one challenger session over the window's run, each class a rank on a thread of its own
     (`a5_coins.Draws`: the session opens once every rank has planned): each class's ``stage1.json`` contents, or why it
-    sampled nothing. ``rule``: every class's, or None for each class's own from its replay block (`rule_of`)."""
+    sampled nothing. ``rule``: every class's, or None for each class's own from its replay block (`rule_of`). ``stop``:
+    the verifier's own stop rule."""
     import a5_coins as AC
 
     root = pubs[0]["run"]
@@ -733,10 +741,10 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
     def run(k: int) -> None:
         coins = AC.RankCoins(draws, k)
         try:
-            layout = BR.layout_of(pubs[k], check)
+            layout = BR.layout_of(pubs[k], check, stop)
             mine = rule if rule is not None else rule_of(layout, a.replay, a.k, a.proof_deadline)
             coins.plan(AC.need(mine.replay, layout.program, layout.grain, layout.spans))
-            got = first(pubs[k], check, mine, coins, window=window, delta=a.delta, window_root=root)
+            got = first(pubs[k], check, mine, coins, window=window, delta=a.delta, window_root=root, stop=stop)
             out[k] = {**got.stage1(), "window_root": root}
         except (S.Refused, ValueError, KeyError, TypeError, OSError) as e:  # its stage1.json says why; the others go on
             out[k] = {"format": FORMAT, "commit": pubs[k], "refused": getattr(getattr(e, "verdict", None), "codes", None),
@@ -785,9 +793,9 @@ def _second(a: argparse.Namespace) -> int:
     if "units" not in stage1:
         return done(1, refused=f"the first stage sampled nothing: {stage1.get('error')}")
     try:
-        check = template_fn(stage1["commit"]["check"])
-        c = BR.reopen(Path(a.boundary), check)
-        again = resume(stage1, check, delta=a.delta, window_root=stage1.get("window_root"))
+        check, stop = template_fn(stage1["commit"]["check"]), _stop(a.stop)
+        c = BR.reopen(Path(a.boundary), check, stop=stop)
+        again = resume(stage1, check, delta=a.delta, window_root=stage1.get("window_root"), stop=stop)
     except (S.Refused, ValueError, KeyError, OSError) as e:
         return done(1, refused=f"{type(e).__name__}: {e}")
     sample = [int(u) for u in again.draw.units]
@@ -836,6 +844,14 @@ def _second(a: argparse.Namespace) -> int:
         manager.shutdown()
 
 
+STOP_HELP = ("the verifier's own copy of the serve's stop rule, as JSON: {\"ids\": [...], \"max_model_len\": n, "
+             "\"outputs\": T} (boundary_stop.Stop.of); without it a class committed under a stop rule is refused")
+
+
+def _stop(text: str | None) -> BS.Stop | None:
+    return None if text is None else BS.Stop.of(json.loads(text))
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -850,6 +866,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     f.add_argument("--proof-deadline", type=float, default=PROOF_DEADLINE_S)
     f.add_argument("--span-values", help="the replay block's parameters the interior registration registers as values, "
                                          "a JSON list of [name, rows a sampled span, leaf type]")
+    f.add_argument("--stop", help=STOP_HELP)
     f.add_argument("--delta", type=float, default=0.5)
     f.add_argument("--challenger", required=True, help="local, loopback:HOST:PORT or gate:USER@HOST (a5_coins.start)")
     f.add_argument("--main", required=True, help="the verifier's own `git rev-list --first-parent origin/main`, a file")
@@ -874,6 +891,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     g.add_argument("--lean", required=True, help="flock-verify")
     g.add_argument("--firewall", help="Lean's flock-firewall: every session behind the ZK server; without it each runs "
                                       "prove --zk itself, as SPOT[Flock]'s proof server does")
+    g.add_argument("--stop", help=STOP_HELP)
     g.add_argument("--delta", type=float, default=0.5)
     g.add_argument("--port", type=int, default=0, help="the sessions' first port (0: a free block)")
     g.add_argument("--session-timeout", type=float, default=3600)
@@ -897,7 +915,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         a.replay, a.k, tuple((str(n), str(s)) for n, s in json.loads(Path(a.interior).read_text())),
         a.proof_deadline, _span_values(json.loads(Path(a.span_values).read_text())) if a.span_values else ())
     out = Path(a.out)
-    for d, s in zip(a.boundary, _first_all(a, pubs, check, rule, window), strict=True):
+    for d, s in zip(a.boundary, _first_all(a, pubs, check, rule, window, _stop(a.stop)), strict=True):
         dest = out / Path(d).name
         dest.mkdir(parents=True, exist_ok=True)
         (dest / STAGE1).write_text(json.dumps(s, indent=1) + "\n")

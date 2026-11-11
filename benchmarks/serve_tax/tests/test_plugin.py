@@ -272,7 +272,7 @@ def test_a_tensor_parallel_engine_takes_an_edge_each_period_of_each_loads_servin
 
 
 def test_boundary_rows_installs_the_integrations_boundary_windows_from_the_configs_object(tmp_path, monkeypatch):
-    """``boundary_rows`` hands its object to the integration's boundary windows (`verity_vllm.pipeline.boundary_rows`, a
+    """``boundary_rows`` hands its object to the integration's boundary windows (`verity_vllm.pipeline.boundary_windows`, a
     stand-in here), which commit each class under out/boundary/ and write a line each to boundary.<pid>.jsonl. Behind
     the certifier's release order they also get the gate's key, each request's release; without it, none."""
     got: dict = {}
@@ -288,11 +288,11 @@ def test_boundary_rows_installs_the_integrations_boundary_windows_from_the_confi
             got["sched"] = sched
             return self
 
-    stub = types.ModuleType("verity_vllm.pipeline.boundary_rows")
+    stub = types.ModuleType("verity_vllm.pipeline.boundary_windows")
     stub.BoundaryWindows = Windows
     monkeypatch.setitem(sys.modules, stub.__name__, stub)
     if "verity_vllm.pipeline" in sys.modules:
-        monkeypatch.setattr(sys.modules["verity_vllm.pipeline"], "boundary_rows", stub, raising=False)
+        monkeypatch.setattr(sys.modules["verity_vllm.pipeline"], "boundary_windows", stub, raising=False)
     sched, cfg = Scheduler(), {"check": "t", "per_prompt": 0, "per_output": 1, "window_s": 5.0}
     done = P.install(sched, {"out": str(tmp_path), "boundary_rows": cfg})
     assert isinstance(done[0], Windows)

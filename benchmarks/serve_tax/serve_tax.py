@@ -193,8 +193,8 @@ PRIVATE = "{private}"
 #: counters kept on the node
 TOPK = (("verity_dsa_topk = dsa_topk:register", "benchmarks/dsa_topk"),)
 TOPK_ENV = {"VERITY_DSA_TOPK": "canonical", "VERITY_DSA_TOPK_LOG": f"{PRIVATE}/topk-log"}
-#: the boundary commitment's object (`verity_vllm.pipeline.boundary_rows.BoundaryWindows.of`): a replay block of one
-#: check a served id with the check template's body in place, a window closed when it drains
+#: the boundary commitment's object (`verity_vllm.pipeline.boundary_windows.BoundaryWindows.of`): a replay block of
+#: one check a served id with the check template's body in place, a window closed when it drains
 ROWS = {"inline": True, "per_prompt": 0, "per_output": 1, "drained": True}
 #: one attention layer's latent history tables in the boundary commitment (its ``tables``): the first layer's, their
 #: rows and salts kept on the node
