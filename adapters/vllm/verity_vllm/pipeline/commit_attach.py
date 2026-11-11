@@ -6,18 +6,24 @@ from __future__ import annotations
 
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 from verity_vllm import settings
+from verity_vllm.acquire import fa2_plane_classes as FP
+from verity_vllm.acquire import install as INSTALL
+from verity_vllm.acquire import stage as STAGE
 from verity_vllm.acquire.sources import hidden_source as HS
+from verity_vllm.acquire.sources import moe_source as MOE
 from verity_vllm.acquire.sources import taps as TAPS
 from verity_vllm.check.commit_rules import (
     HIDDEN_CLASS_BY_FA,
     hidden_classes_required,
     required_classes_default,
 )
+from verity_vllm.commit import binding as BD
 from verity_vllm.log import init_logger
 
 logger = init_logger(__name__)
@@ -51,7 +57,6 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
                     list(required_classes))
     # MLA / DSA sparse MLA: no hidden class, no FA2 source
     if args.hidden_so and _hidden_required is not False and (required_classes_cli or hidden_family):
-        from verity_vllm.acquire.sources.hidden_source import HiddenM1Source, make_hidden_source
         # the op namespace defaults to the .so stem (verity_fa2_matReq | verity_fa2_matAll), as e2e_commit_run.py does.
         # the source class follows the tap build (FA2 v7/v8 -> HiddenM1Source, FA3 v9 -> HiddenM1SourceFA3) and must agree with
         # the attention implementation the built engine executes (`observed_flash_attn_version`, the TargetProfile fact): a mismatch is
@@ -59,8 +64,8 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
         src_cls = getattr(com, "hidden_source_cls", None)                # native_collect_v2 supplies its C++ FA2 glue
         if args.tap_cap_mb is not None:
             settings.put("VERITY_FA2_TAP_CAP_MB", str(int(args.tap_cap_mb)))   # read by NativeHiddenM1Source at construction
-        com.attach_source(make_hidden_source(com, args.hidden_so, ns=(args.hidden_ns or Path(args.hidden_so).stem), flash_attn_version=fa_version,
-                                             fa2_cls=src_cls, fa3_cls=getattr(com, "hidden_source_cls_fa3", None), manifest=required_manifest))
+        com.attach_source(HS.make_hidden_source(com, args.hidden_so, ns=(args.hidden_ns or Path(args.hidden_so).stem), flash_attn_version=fa_version,
+                                                fa2_cls=src_cls, fa3_cls=getattr(com, "hidden_source_cls_fa3", None), manifest=required_manifest))
         logger.info("[delta] hidden source attached: %s -> committer %s (%s, engine FA%s)", args.hidden_so, com.name,
                     type(com.sources[-1]).__name__ if getattr(com, "sources", None) else "?", fa_version)
         _hsrc = com.sources[-1] if getattr(com, "sources", None) else None
@@ -91,8 +96,7 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
                     "Program's MoE construction has no MOE-01 rows) -- nothing is staged that the manifest does not name",
                     list((required_manifest.get("populations") or {}).get("by_family") or {}))
     if args.moe_source != "off" and _moe_planes_required is not False and hasattr(com, "attach_source") and getattr(com, "model", None) is not None:
-        from verity_vllm.acquire.sources.moe_source import MoeBlockSource
-        msrc = MoeBlockSource(com, com.model)
+        msrc = MOE.MoeBlockSource(com, com.model)
         if msrc.layers:
             com.attach_source(msrc)
             moe_attached = True
@@ -109,9 +113,7 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
     # manifest instead of by class) and the binding map binds it to the producer's identity.  Armed BEFORE size_arena / install; a
     # table the manifest cannot state unambiguously is refused by name (binding.PROMOTED_INPUT_RULE), never guessed.
     if required_manifest is not None and hasattr(com, "acquire_inputs") and getattr(com, "model", None) is not None:
-        from verity_vllm.commit.binding import promoted_input_acquisition
-
-        _pia = promoted_input_acquisition(required_manifest)
+        _pia = BD.promoted_input_acquisition(required_manifest)
         if _pia["problems"]:
             logger.error("[delta] REFUSE: the required-value manifest's promoted members have no unambiguous observation point: %s", _pia["problems"][:4])
             sys.exit(3)
@@ -132,15 +134,11 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
     # layer's stages one swapped row, so "every layer the same count" is a consequence for one-class Programs, not a rule.  Without the
     # record the committer keeps the uniformity rule (fails closed on a two-class Program) and says so here.
     if required_manifest is not None and hasattr(com, "identity_check"):
-        from collections import Counter as _Cnt
-
-        from verity_vllm.acquire import fa2_plane_classes as FP
-
         _impls, _impls_path = FP.attention_impls_of_record(program_dir=getattr(args, "program_dir", None), programs_root=getattr(args, "programs_root", None))
         _decls = FP.declarations_from_attention_impls(_impls) if _impls else []
         if _decls:
             com.attention_layer_decls = _decls
-            _cls = sorted(_Cnt(("windowed" if d.window is not None else "global") + ("-gqa" if d.NH > d.KVH else "-mha") for d in _decls).items())
+            _cls = sorted(Counter(("windowed" if d.window is not None else "global") + ("-gqa" if d.NH > d.KVH else "-mha") for d in _decls).items())
             logger.info("[delta] X-03 attention plane classes: %s layer declaration(s) from %s -> classes %s; per-layer expectation derived per "
                         "step (fa2_plane_classes), uniformity not assumed", len(_decls), _impls_path, _cls)
         else:
@@ -156,15 +154,12 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
         if required_manifest is None or not hasattr(com, "_modules") or getattr(com, "model", None) is None:
             logger.error("[delta] REFUSE: the acquisition plan needs --required-manifest and a hooking committer (got %s)", kind)
             sys.exit(3)
-        from verity_vllm.acquire.install import IncompletePlan as _IncompletePlan, apply_plan_to_committer as _apply_plan
-        from verity_vllm.acquire.stage import plan_at_stage as _plan_at_stage
-
         try:
-            _docs = _plan_at_stage(com.model, getattr(eng, "runner", None), required_manifest, out, source=f"commit_delta {kind}")
+            _docs = STAGE.plan_at_stage(com.model, getattr(eng, "runner", None), required_manifest, out, source=f"commit_delta {kind}")
             for _ln in _docs.log_lines("delta"):
                 logger.info("%s", _ln)
-            _rec = _apply_plan(com, _docs.plan)
-        except _IncompletePlan as e:
+            _rec = INSTALL.apply_plan_to_committer(com, _docs.plan)
+        except INSTALL.IncompletePlan as e:
             logger.error("[delta] REFUSE: acquisition plan: %s", e)
             sys.exit(3)
         (out / "acquisition_engine.json").write_text(json.dumps({"engine": "v2", "plan_digest": _docs.plan.digest, **_rec}, indent=1) + "\n")
