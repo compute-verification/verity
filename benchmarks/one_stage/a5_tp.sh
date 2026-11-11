@@ -82,7 +82,9 @@
 #   A5_JOBS=2.
 # ZK_SERVER=1: every session's prover runs behind the Lean ZK server's send check (--firewall to a5.py and each STANDIN
 #   script, the core protocols' path); by default each runs `prove --zk` itself, as SPOT[Flock]'s proof server does (Figure
-#   1's dev arm).
+#   1's dev arm). An audit's members are then verified by one kept process (`flock-verify verify-members`, a0.VerifyMembers).
+# A5_VERIFY_ALONE=1 (with ZK_SERVER=1; a5.py reads it): each member's session is also verified by a `verify` process of its
+#   own, and a member whose two verdicts differ in anything but their seconds is refused (a0.held_to_alone).
 # A5_MEMBER_SECONDS=1: each audit's seconds a member outside its prover's clock and in Lean's verify before its first check,
 #   split by what is read (member_seconds.py): the audit runs on stamping wrappers of flock-circuit, flock-verify and
 #   flock-firewall, and each audit's member-seconds.json is kept beside its summary.

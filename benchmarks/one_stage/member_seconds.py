@@ -21,7 +21,10 @@ session behind the ZK server (``--firewall``) or not.
 * **Lean** (`lean`), per member: the draw check, ``archive-put``, and ``verify`` split by its own lines (``inputs:``, the
   files read by key and the circuit parsed; ``setup (drawn):``; the session's line, whose remainder is the check).
   Before the first check is the member's own ``archive-put`` and ``verify`` less the check. The audit's one
-  ``archive-put`` of the window's files before its sessions is the window's (`window`), counted once.
+  ``archive-put`` of the window's files before its sessions is the window's (`window`), counted once. A member the
+  window's kept verifier checked (`a0.VerifyMembers`) has no ``verify`` process: its seconds are from its line to its
+  answer, on its log's first lines, and the kept process's life is the window's. Where the audit also ran ``verify`` on
+  the member's session alone (A5_VERIFY_ALONE=1), that process's seconds are beside the kept ones (``verify_alone``).
 * **Each reader alone** (`alone`, unless ``--no-alone``), from the member's stamped commands on the member's files, the
   median of ``--reps``: the verifier's and the prover's load (`flock-circuit statement` on the public file and on the
   prover's file), the Lean loop's start to ``LISTENING`` with and without the window's partition and program, its setup at
@@ -54,6 +57,9 @@ exec {real} "$@"
 """
 BUILT = re.compile(r"^statement \S+ .* built in ([\d.]+)s", re.MULTILINE)
 LEAN_MS = re.compile(r"^(.+): (\d+) ms$", re.MULTILINE)
+#: a member's verify log from the window's kept verifier (`a0.VerifyMembers.verify`): its place, and its seconds
+KEPT_MEMBER = re.compile(r"^# run as member (\d+) of: ", re.MULTILINE)
+TOOK = re.compile(r"^# rc \S+ in ([0-9.]+) s$", re.MULTILINE)
 #: the clock the readers run alone are timed with
 clock = time.perf_counter
 
@@ -142,6 +148,7 @@ def found(audit: Path, k: int, all_stamps: list[dict]) -> dict:
     child = [x for x in all_stamps if x["program"] == "flock-firewall" and prove is not None and x["ppid"] == prove["pid"]
              and x["ns"] >= prove["ns"]]
     verify = [x for x in all_stamps if x["program"] == "flock-verify" and len(x["argv"]) > 1]
+    alone = [x for x in verify if x["argv"][0] == "verify" and under(flag(x["argv"], "--session"), s)]
     return {"serve": serve, "prove": prove,
             "tap": last([x for x in child if x["argv"][0] == "tap"], exited),
             "loop": last([x for x in child if x["argv"][0] == "session"], exited),
@@ -149,8 +156,7 @@ def found(audit: Path, k: int, all_stamps: list[dict]) -> dict:
                               ended(s / "u1-u3.lean.log")),
             "archive-put": last([x for x in verify if x["argv"][0] == "archive-put" and under(x["argv"][1], s)],
                                 ended(s / "archive-put.log")),
-            "verify": last([x for x in verify if x["argv"][0] == "verify" and under(flag(x["argv"], "--session"), s)],
-                           ended(s / "lean-verify.log"))}
+            "verify": last(alone, ended(s / "lean-verify.log")), "verify-alone": last(alone, ended(s / "lean-verify-alone.log"))}
 
 
 def session(audit: Path, k: int, at: dict) -> dict:
@@ -176,21 +182,37 @@ def lean(audit: Path, k: int, at: dict) -> dict:
     put, whole = sub(ended(s / "archive-put.log"), ns["archive-put"]), sub(ended(s / "lean-verify.log"), ns["verify"])
     # a member whose files the window archived (`window`) puts nothing, and has no log of a put
     own = 0.0 if not (s / "archive-put.log").exists() else put
-    lines = lean_lines(text(s / "lean-verify.log"), at["verify"] and flag(at["verify"]["argv"], "--session"))
-    return {"waited_s": sub(ns["draw-test"], ended(s / "prove.log")),
-            "draw_test_s": sub(ended(s / "u1-u3.lean.log"), ns["draw-test"]), "archive_put_s": put, "verify_s": whole, **lines,
-            "verify_rest_s": less(whole, lines["inputs_s"], lines["session_s"]),
-            "before_first_check_s": less(None if own is None or whole is None else own + whole, lines["check_s"])}
+    log = text(s / "lean-verify.log")
+    head = log.split("--- stdout", 1)[0]
+    kept, session = KEPT_MEMBER.search(head), at["verify"] and flag(at["verify"]["argv"], "--session")
+    if kept:    # no process of its own: the command line its line stands for, and its seconds from the line to the answer
+        took = TOOK.search(head)
+        whole, session = took and float(took.group(1)), flag(head.splitlines()[0].split(" "), "--session")
+    lines = lean_lines(log, session)
+    got = {"waited_s": sub(ns["draw-test"], ended(s / "prove.log")),
+           "draw_test_s": sub(ended(s / "u1-u3.lean.log"), ns["draw-test"]), "archive_put_s": put, "verify_s": whole, **lines,
+           "verify_rest_s": less(whole, lines["inputs_s"], lines["session_s"]),
+           "before_first_check_s": less(None if own is None or whole is None else own + whole, lines["check_s"]),
+           "kept_member": kept and int(kept.group(1))}
+    if at["verify-alone"] is not None:
+        whole = sub(ended(s / "lean-verify-alone.log"), ns["verify-alone"])
+        lines = lean_lines(text(s / "lean-verify-alone.log"), flag(at["verify-alone"]["argv"], "--session"))
+        got["verify_alone"] = {"verify_s": whole, **lines, "verify_rest_s": less(whole, lines["inputs_s"], lines["session_s"])}
+    return got
 
 
 def window(audit: Path, all_stamps: list[dict]) -> dict:
     """What Lean does once for the window: `a5.audit`'s one ``archive-put`` of every sampled member's files, before the
-    first session; no figure for an audit whose members each put their own."""
+    first session, and its kept verifier's life, from its start to its exit after the last member; no figure for an audit
+    whose members each put their own, or each have a ``verify`` of their own."""
     d = audit / "lean-verify"
-    end = ended(d / "archive-put.log")
-    at = last([x for x in all_stamps if x["program"] == "flock-verify" and x["argv"][0] == "archive-put" and len(x["argv"]) > 1
-               and same(x["argv"][1], d / "archive")], end)
-    return {"archive_put_s": sub(end, at and at["ns"]), "files": at and len(at["argv"]) - 2}
+    mine = [x for x in all_stamps if x["program"] == "flock-verify" and len(x["argv"]) > 1]
+    end, closed = ended(d / "archive-put.log"), ended(d / "verify-members.log")
+    at = last([x for x in mine if x["argv"][0] == "archive-put" and same(x["argv"][1], d / "archive")], end)
+    kept = last([x for x in mine if x["argv"][0] == "verify-members" and same(flag(x["argv"], "--archive") or "", d / "archive")],
+                closed)
+    return {"archive_put_s": sub(end, at and at["ns"]), "files": at and len(at["argv"]) - 2,
+            "verify_members_s": sub(closed, kept and kept["ns"])}
 
 
 def sizes(audit: Path, k: int) -> dict:
@@ -310,7 +332,8 @@ def audits(root: Path) -> list[Path]:
 
 
 #: the logs whose modification times are their processes' ends
-LOGS = {"prove": "prove.log", "draw-test": "u1-u3.lean.log", "archive-put": "archive-put.log", "verify": "lean-verify.log"}
+LOGS = {"prove": "prove.log", "draw-test": "u1-u3.lean.log", "archive-put": "archive-put.log", "verify": "lean-verify.log",
+        "verify-alone": "lean-verify-alone.log"}
 
 
 def measure(audit: Path, all_stamps: list[dict]) -> dict:
@@ -378,7 +401,9 @@ def main(argv=None) -> int:
         print("MEMBER-SECONDS " + json.dumps({"audit": audit.name, "window_archive_put_s": got["window"]["archive_put_s"], "members": [
             {"k": r["k"], "template": r["template"], "before_clock_s": r["session"]["before_clock_s"],
              "verifier_ahead_s": r["session"]["verifier_ahead_s"], "e2e_s": r["session"]["e2e_s"],
-             "before_first_check_s": r["lean"]["before_first_check_s"], "check_s": r["lean"]["check_s"]} for r in got["members"]]}))
+             "before_first_check_s": r["lean"]["before_first_check_s"], "check_s": r["lean"]["check_s"],
+             "verify_s": r["lean"]["verify_s"], "verify_alone_s": r["lean"].get("verify_alone", {}).get("verify_s")}
+            for r in got["members"]]}))
     if not ok:
         print("member_seconds: a member's readers could not be run alone (its `alone` is the error)", file=sys.stderr)
     return 0 if ok else 1

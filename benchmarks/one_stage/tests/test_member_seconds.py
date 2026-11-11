@@ -1,7 +1,8 @@
 """`member_seconds.py` on a planted audit: two members' logs, records and stamps at fixed times. Each member's seconds
 before its prover's clock and before Lean's first check come out exactly, a negative's later processes on the same member
 are not the member's, a member with no Lean loop or no setup line has those parts absent rather than zero, the window's
-one put before its sessions is the window's and no member's, a wrapper stamps its start and execs its binary under its
+one put before its sessions is the window's and no member's, a member the window's kept verifier checked has its seconds
+from its own log and the kept process's life is the window's, a wrapper stamps its start and execs its binary under its
 own pid, and each reader run alone is the member's own command on the member's files (on stand-in binaries, under an
 injected clock)."""
 from __future__ import annotations
@@ -104,28 +105,31 @@ def test_a_members_seconds_are_its_own_processes(tmp_path):
     got = MS.measure(audit, MS.stamps((d / MS.STAMPS).read_text()))
     assert {x: got[x] for x in ("audit", "firewall", "stamped", "staging", "window")} == {
         "audit": "rank0", "firewall": True, "stamped": True, "staging": {"drawn_s": 1.5},
-        "window": {"archive_put_s": None, "files": None}}
+        "window": {"archive_put_s": None, "files": None, "verify_members_s": None}}
     m0, m1 = got["members"]
     assert (m0["k"], m0["template"], m0["n"], m0["to_next_member_s"]) == (0, "T0", 8, 1.0) and "alone" not in m0
     ns = T * 10**9
     assert m0["starts_ns"] == {"serve": ns, "prove": ns + 3 * 10**9, "tap": ns + 61 * 10**8, "loop": ns + 62 * 10**8,
-                               "draw-test": ns + 205 * 10**8, "archive-put": ns + 207 * 10**8, "verify": ns + 2175 * 10**7}
+                               "draw-test": ns + 205 * 10**8, "archive-put": ns + 207 * 10**8, "verify": ns + 2175 * 10**7,
+                               "verify-alone": None}
     assert m0["ends_ns"] == {"prove": ns + 20 * 10**9, "draw-test": ns + 207 * 10**8, "archive-put": ns + 217 * 10**8,
-                             "verify": ns + 2475 * 10**7}
+                             "verify": ns + 2475 * 10**7, "verify-alone": None}
     assert m0["bytes"] == {"circuit": 100, "partition": 11, "program": 13, "registered": 7, "public:pub-8.bin": 20,
                            "prover:inst-8.bin": 300, "table:t.u32": 16}
     assert m0["session"] == {"verifier_ahead_s": 3.0, "verifier_built_s": 2.5, "prover_s": 17.0, "prover_built_s": 3.0,
                              "tap_at_s": 3.1, "to_loop_s": 3.2, "loop_to_clock_s": 3.3, "before_clock_s": 6.5, "e2e_s": 10.0,
                              "witness_s": 4.0, "prove_total_s": 1.0, "after_clock_wait_s": 0.5, "accepted": True, "session_s": 20.1}
     assert m0["lean"] == {"waited_s": 0.5, "draw_test_s": 0.2, "archive_put_s": 1.0, "verify_s": 3.0, "inputs_s": 1.5,
-                          "setup_s": 0.25, "session_s": 1.0, "check_s": 0.75, "verify_rest_s": 0.5, "before_first_check_s": 3.25}
+                          "setup_s": 0.25, "session_s": 1.0, "check_s": 0.75, "verify_rest_s": 0.5, "before_first_check_s": 3.25,
+                          "kept_member": None}
     # no Lean loop, no draw check and a verify that printed no setup: absent, never zero
     assert (m1["k"], m1["template"], "to_next_member_s" in m1) == (1, "T1", False)
     assert m1["session"] == {"verifier_ahead_s": 1.0, "verifier_built_s": 0.5, "prover_s": 8.0, "prover_built_s": 0.75,
                              "tap_at_s": None, "to_loop_s": None, "loop_to_clock_s": None, "before_clock_s": 2.0, "e2e_s": 6.0,
                              "witness_s": None, "prove_total_s": None, "after_clock_wait_s": 0.0, "accepted": True, "session_s": 9.0}
     assert m1["lean"] == {"waited_s": None, "draw_test_s": None, "archive_put_s": 0.25, "verify_s": 1.0, "inputs_s": 0.4,
-                          "setup_s": None, "session_s": None, "check_s": None, "verify_rest_s": None, "before_first_check_s": None}
+                          "setup_s": None, "session_s": None, "check_s": None, "verify_rest_s": None, "before_first_check_s": None,
+                          "kept_member": None}
 
 
 def test_an_audit_that_archived_its_window_once_counts_the_put_once(tmp_path):
@@ -140,11 +144,43 @@ def test_an_audit_that_archived_its_window_once_counts_the_put_once(tmp_path):
     with open(d / MS.STAMPS, "a") as f:
         f.write(stamp("flock-verify", 90, 1, -1, "archive-put", audit / "lean-verify" / "archive", "a", "b", "c"))
     got = MS.measure(audit, MS.stamps((d / MS.STAMPS).read_text()))
-    assert got["window"] == {"archive_put_s": 0.4, "files": 3}
+    assert got["window"] == {"archive_put_s": 0.4, "files": 3, "verify_members_s": None}
     m0, m1 = got["members"]
     assert m0["starts_ns"]["archive-put"] is None and m0["ends_ns"]["archive-put"] is None
     assert (m0["lean"]["archive_put_s"], m0["lean"]["before_first_check_s"]) == (None, 2.25)
     assert (m1["lean"]["archive_put_s"], m1["lean"]["before_first_check_s"]) == (None, None)
+
+
+def test_a_member_the_kept_verifier_checked_has_its_seconds_on_its_own_log(tmp_path):
+    """Behind the ZK server one `verify-members` process checks the window's members (`a0.VerifyMembers`): a member has no
+    `verify` process, so its seconds are the ones its log gives, from its line to its answer, split by `verify`'s own lines
+    as a process's are; the kept process's life is the window's. Where the audit also ran `verify` on the member's session
+    alone, after the kept verdict, that process's seconds are beside them, and a negative's later `verify` is neither."""
+    audit, d = plant(tmp_path)
+    s = audit / "session-m0"
+    (s / "archive-put.log").unlink()
+    (audit / "lean-verify").mkdir()
+    kept = f"/x/flock-verify verify-members --archive {audit / 'lean-verify' / 'archive'} --program k9"
+    verify = f"--statement verity/flock-circuit --archive {s / 'archive'} --circuit  --public k1 --zk --session {s / 'sessions' / 'abc'}"
+    lines = f"inputs: 1500 ms\nsetup (drawn): 250 ms\n{s / 'sessions' / 'abc'}: 1000 ms\n"
+    (s / "lean-verify.log").write_text(f"$ /x/flock-verify verify {verify}\n# rc 0 in 2.625 s\n# run as member 0 of: {kept}\n"
+                                       f"--- stdout\nVERDICT {{}}\n\n--- stderr\n{lines}")
+    at(s / "lean-verify.log", 23.5)
+    run_log(s / "lean-verify-alone.log", 27, "VERDICT {}", lines.replace("1500", "1750"))
+    run_log(audit / "lean-verify" / "verify-members.log", 33)
+    stamps = [x for x in (d / MS.STAMPS).read_text().splitlines(keepends=True) if " 302 " not in x]
+    stamps += [stamp("flock-verify", 95, 1, -0.5, *kept.split(" ")[1:]), stamp("flock-verify", 303, 1, 23.75, "verify", *verify.split(" "))]
+    got = MS.measure(audit, MS.stamps("".join(stamps)))
+    assert got["window"] == {"archive_put_s": None, "files": None, "verify_members_s": 33.5}
+    m0, m1 = got["members"]
+    assert (m0["starts_ns"]["verify"], m0["starts_ns"]["verify-alone"]) == (None, T * 10**9 + 2375 * 10**7)
+    assert m0["lean"] == {"waited_s": 0.5, "draw_test_s": 0.2, "archive_put_s": None, "verify_s": 2.625, "inputs_s": 1.5,
+                          "setup_s": 0.25, "session_s": 1.0, "check_s": 0.75, "verify_rest_s": 0.125, "before_first_check_s": 1.875,
+                          "kept_member": 0,
+                          "verify_alone": {"verify_s": 3.25, "inputs_s": 1.75, "setup_s": 0.25, "session_s": 1.0, "check_s": 0.75,
+                                           "verify_rest_s": 0.5}}
+    # member 1 had a `verify` of its own: no kept place, and nothing alone
+    assert m1["lean"]["kept_member"] is None and "verify_alone" not in m1["lean"] and m1["lean"]["verify_s"] == 1.0
 
 
 def test_measure_writes_each_audit_under_the_root(tmp_path, capsys):
@@ -153,9 +189,9 @@ def test_measure_writes_each_audit_under_the_root(tmp_path, capsys):
     line = json.loads(capsys.readouterr().out.removeprefix("MEMBER-SECONDS "))
     assert line == {"audit": "rank0", "window_archive_put_s": None, "members": [
         {"k": 0, "template": "T0", "before_clock_s": 6.5, "verifier_ahead_s": 3.0, "e2e_s": 10.0, "before_first_check_s": 3.25,
-         "check_s": 0.75},
+         "check_s": 0.75, "verify_s": 3.0, "verify_alone_s": None},
         {"k": 1, "template": "T1", "before_clock_s": 2.0, "verifier_ahead_s": 1.0, "e2e_s": 6.0, "before_first_check_s": None,
-         "check_s": None}]}
+         "check_s": None, "verify_s": 1.0, "verify_alone_s": None}]}
     assert [m["k"] for m in json.loads((audit / "member-seconds.json").read_text())["members"]] == [0, 1]
     assert MS.main(["measure", str(tmp_path / "stamped"), "--stamped", str(d), "--no-alone"]) == 1
     assert "no audit under" in capsys.readouterr().err

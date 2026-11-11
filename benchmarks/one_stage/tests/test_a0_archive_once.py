@@ -15,11 +15,27 @@ sys.path.insert(0, str(HERE.parent))
 
 import a0  # noqa: E402
 
-#: a stand-in for flock-verify: ``archive-put`` as Lean's (each file under its SHA-512, logged to ``puts``), and ``verify``
-#: accepting when the circuit and public objects it is named hash to their keys, as `archiveGet` holds them
+#: a stand-in for flock-verify: ``archive-put`` as Lean's (each file under its SHA-512, logged to ``puts``); ``verify``
+#: accepting when the circuit and public objects it is named hash to their keys, as `archiveGet` holds them, with
+#: `verify`'s lines on standard error; and ``verify-members``, that check for each line of standard input, a member's
+#: arguments, then its ``MEMBER`` line (`Flock.VerifyMembers`). A session's ``mode`` file makes the stand-in misbehave on it.
 FAKE = '''#!{python}
 import hashlib, json, pathlib, sys
 args = sys.argv[1:]
+
+def verify(args):
+    session = pathlib.Path(args[args.index("--session") + 1])
+    mode = (session / "mode").read_text() if (session / "mode").exists() else ""
+    if mode == "usage":
+        print("usage: verify ...", file=sys.stderr)
+        return 2, mode
+    arc = pathlib.Path(args[args.index("--archive") + 1]) / "sha512"
+    ok = all(hashlib.sha512((arc / args[args.index(f) + 1]).read_bytes()).hexdigest() == args[args.index(f) + 1]
+             for f in ("--circuit", "--public"))
+    print("inputs: 5 ms\\nsetup (drawn): 1 ms\\n" + str(session) + ": 3 ms", file=sys.stderr)
+    print("VERDICT " + json.dumps({{"accepted": ok, "why": None if ok else "archive", "session": str(session)}}))
+    return 0 if ok else 1, mode
+
 if args[0] == "archive-put":
     d = pathlib.Path(args[1]) / "sha512"
     d.mkdir(parents=True, exist_ok=True)
@@ -31,10 +47,18 @@ if args[0] == "archive-put":
         (d / h).write_bytes(b)
         print(h + "  " + p)
 elif args[0] == "verify":
-    arc = pathlib.Path(args[args.index("--archive") + 1]) / "sha512"
-    ok = all(hashlib.sha512((arc / args[args.index(f) + 1]).read_bytes()).hexdigest() == args[args.index(f) + 1]
-             for f in ("--circuit", "--public"))
-    print("VERDICT " + json.dumps({{"accepted": ok, "why": None if ok else "archive"}}))
+    sys.exit(verify(args[1:])[0])
+elif args[0] == "verify-members":
+    program = pathlib.Path(args[args.index("--archive") + 1]) / "sha512" / args[args.index("--program") + 1]
+    if not program.is_file():
+        print("program: no such object", file=sys.stderr)
+        sys.exit(2)
+    for index, line in enumerate(sys.stdin):
+        status, mode = verify(json.loads(line))
+        if mode == "dies":
+            sys.exit(3)
+        end = {{"exit": status, "index": index + (mode == "another place")}}
+        print("MEMBER " + ("no JSON" if mode == "no JSON" else json.dumps(end, separators=(",", ":"))), flush=True)
 '''
 
 

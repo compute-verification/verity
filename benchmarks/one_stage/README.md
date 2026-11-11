@@ -76,7 +76,10 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   `flock-verify` and `flock-firewall`; each member's seconds are its own processes' starts and ends and its logs' lines, and
   each reader of its files is then run alone (the verifier's and the prover's load, the ZK server's Lean loop's start with
   and without the window's partition and program, `archive-put` of each file). `STANDIN=warden` is the smallest window with
-  members of two templates.
+  members of two templates. Behind the ZK server (`ZK_SERVER=1`) one kept `flock-verify verify-members` process verifies an
+  audit's members in turn (`a0.VerifyMembers`), and a member's seconds there are from its line to its answer; with
+  `A5_VERIFY_ALONE=1` each session is also verified by a `verify` process of its own, the two verdicts are held equal but
+  for their seconds, and both paths' seconds are in one record.
 - `a5_glm53_commit.sh`, `a5_glm53_cpu.sh`: A5 on GLM-5.3 in its two halves. The first is the GPU job, from the source tree
   (`bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU

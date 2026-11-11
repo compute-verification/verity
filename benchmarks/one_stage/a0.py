@@ -19,6 +19,7 @@ import hashlib
 import json
 import os
 import secrets
+import select
 import shutil
 import subprocess
 import sys
@@ -360,13 +361,136 @@ def archive_put(lean: str, archive: Path, files: Sequence[Path], log: Path, held
     return keys
 
 
+#: `VerifyMembers` waits this long for a member's answer, as `run` waits for a `verify` process, and this long for the
+#: process to exit once its standard input is closed or its output has ended (seconds)
+MEMBER_WAIT, EXIT_WAIT = 3600.0, 60.0
+
+
+class VerifyMembers:
+    """Lean's `flock-verify verify-members`, one process for a run's members (`Flock.VerifyMembers`): started on the run's
+    registered program (``program``, its key in ``archive``), which it reads once, it takes a member as one line, the JSON
+    array of `verify`'s arguments for it, and answers with what `verify` prints for that member and then
+    ``MEMBER {"exit":E,"index":I}``, E `verify`'s exit status and I the line's place.
+
+    `verify` hands it the next member and writes that member's log as `run` writes a `verify` process's, with one more
+    line saying how it was run, so the log's readers read either. A member is handed in once, in the members' order. A
+    member the process does not answer (it ended, it wrote nothing for ``timeout`` seconds, or it answered another place)
+    has no verdict, and neither has any member after it: the process is ended, by its PID, and never started again.
+    `close` ends it and writes its own log (``log``); until then its standard error is the ``.stderr`` file beside it."""
+
+    def __init__(self, lean: str, archive: Path, program: str, log: Path, timeout: float = MEMBER_WAIT):
+        self.cmd = [lean, "verify-members", "--archive", str(archive), "--program", program]
+        self.log, self.stderr, self.timeout, self.started = log, log.with_suffix(".stderr"), timeout, time.time()
+        # appended to, so this side's reads of the file move nothing the process writes; unbuffered pipes, read and
+        # written through their descriptors
+        with self.stderr.open("ab") as err:
+            self.proc = subprocess.Popen(self.cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=err, bufsize=0,
+                                         env=environ(None))
+        self.members, self.ended = 0, None
+        self._buf, self._err_read, self._ends = b"", 0, []
+
+    def _stop(self, why: str, kill: bool = False) -> None:
+        """The process answers no member from here: ``why``, with its exit status, is every later member's reason."""
+        if kill and self.proc.poll() is None:
+            self.proc.kill()
+        try:
+            self.proc.wait(timeout=EXIT_WAIT)
+        except subprocess.TimeoutExpired as e:
+            self.proc.kill()
+            self.proc.wait()
+            why = f"{why}, and did not exit in {e.timeout:.0f} s"
+        self.ended = f"{why} (it exited {self.proc.returncode})"
+
+    def _line(self, wait: float) -> bytes | str:
+        """The process's next line of standard output; or, a str, why there is none: its output ended, or it wrote
+        nothing for ``wait`` seconds."""
+        late = time.monotonic() + wait
+        while b"\n" not in self._buf:
+            left = late - time.monotonic()
+            if left <= 0 or not select.select([self.proc.stdout], [], [], left)[0]:
+                return f"wrote nothing for {wait:.0f} s"
+            got = os.read(self.proc.stdout.fileno(), 1 << 16)
+            if not got:
+                return "ended"
+            self._buf += got
+        line, _, self._buf = self._buf.partition(b"\n")
+        return line
+
+    def _stderr(self) -> str:
+        """What the process wrote on standard error since the last call."""
+        with self.stderr.open("rb") as f:
+            f.seek(self._err_read)
+            got = f.read()
+        self._err_read += len(got)
+        return got.decode(errors="replace")
+
+    def verify(self, args: Sequence[str], log: Path) -> tuple[str, str]:
+        """The next member, `verify`'s arguments ``args``: what `verify` printed for it, nothing where the process did not
+        answer it; and why it has no verdict if it has none (`verify`'s exit status, or what the process did instead).
+        ``log``: the member's log."""
+        i, t = self.members, time.time()
+        self.members += 1
+        printed, status = [], None
+        if self.ended is None:
+            line = json.dumps(list(args)).encode() + b"\n"
+            try:
+                while line:
+                    line = line[os.write(self.proc.stdin.fileno(), line):]
+            except OSError as e:
+                self._stop(f"the kept verifier could not be handed member {i} ({e})")
+        while self.ended is None and status is None:
+            line = self._line(self.timeout)
+            if isinstance(line, str):
+                self._stop(f"the kept verifier {line} before member {i}'s MEMBER line", kill=line != "ended")
+            elif not line.startswith(b"MEMBER "):
+                printed.append(line.decode(errors="replace"))
+            else:
+                self._ends.append(line.decode(errors="replace"))
+                try:
+                    end = json.loads(line[7:])
+                except ValueError as e:
+                    end = f"not JSON ({e})"
+                if isinstance(end, dict) and end.get("index") == i and isinstance(end.get("exit"), int):
+                    status = end["exit"]
+                else:
+                    self._stop(f"the kept verifier answered member {i} with {self._ends[-1][:200]}", kill=True)
+        stderr = self._stderr()
+        # what the process printed for a member it did not answer is kept, and is no verdict to any reader of the log
+        stdout = "".join(("" if status is not None else "not taken: ") + x + "\n" for x in printed)
+        why = f"no verdict (rc {status}): {stderr[-400:]}" if status is not None else f"no verdict: {self.ended}: {stderr[-400:]}"
+        log.write_text(f"$ {self.cmd[0]} verify {' '.join(args)}\n# rc {status} in {time.time() - t:.3f} s\n"
+                       f"# run as member {i} of: {' '.join(self.cmd)}" + ("" if status is not None else f"\n# {self.ended}")
+                       + f"\n--- stdout\n{stdout}\n--- stderr\n{stderr}")
+        return (stdout if status is not None else ""), why
+
+    def close(self) -> int:
+        """Ends the process, its standard input closed so that it exits once it has answered what it was handed: its exit
+        status, and its log as `run` writes one (its members' ``MEMBER`` lines; their verdicts are in their own logs)."""
+        if self.ended is None:
+            self.proc.stdin.close()
+            while isinstance(line := self._line(EXIT_WAIT), bytes):
+                self._ends.append(line.decode(errors="replace"))
+            self._stop("closed after its last member" if line == "ended" else f"the kept verifier {line} once its input closed",
+                       kill=line != "ended")
+        self.log.write_text(f"$ {' '.join(self.cmd)}\n# rc {self.proc.returncode} in {time.time() - self.started:.1f} s\n"
+                            f"# {self.members} members handed in; {self.ended}\n--- stdout\n"
+                            + "".join(x + "\n" for x in self._ends) + self._buf.decode(errors="replace")
+                            + f"\n--- stderr\n{self.stderr.read_text(errors='replace')}")
+        self.stderr.unlink()
+        for f in (self.proc.stdin, self.proc.stdout):
+            f.close()
+        return self.proc.returncode
+
+
 def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: str = "lean-verify",
-                flags: Sequence[str] = ()) -> dict:
+                flags: Sequence[str] = (), members: VerifyMembers | None = None) -> dict:
     """The verifier: Lean `flock-verify verify` on the session's record, with the circuit and the public file
     held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`,
     `hold_registered`) when the statement reads registered values; `zk`, a `--zk` session's. `log` names its logs under
     `out` (a negative's own, beside the honest verdict's). `flags`: more of `verify`'s (a plain session's ``--coins tree
-    --stratified K``). ``st["archived"]``, a dict a run's members share (`archive_put`'s ``held``): a file archived once,
+    --stratified K``). ``members``: the run's kept verifier (`VerifyMembers`), which is handed `verify`'s arguments for
+    this session as its next member in place of a `verify` process of its own, and gives the same verdict.
+    ``st["archived"]``, a dict a run's members share (`archive_put`'s ``held``): a file archived once,
     the members' circuit or a file the run put before its sessions, is linked into every later archive rather than put
     again. ``st["statement"]``: the statement `verify` sets up
     (a templated one's ``verity/flock-circuit/tmpl``), else `STATEMENT_ID`. The verdict keeps what `verify` names of the
@@ -381,16 +505,31 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
                        st.get("archived"))
     bound = [y for x in ("partition", "program", "registered") if st.get(f"{x}_file")
              for y in (f"--{x}", keys.get(Path(st[f"{x}_file"]), ""))]
+    args = ["--statement", st.get("statement", STATEMENT_ID), "--archive", str(archive),
+            "--circuit", keys.get(files[0], ""), "--public", keys.get(files[1], ""), *bound,
+            *(["--zk"] if zk else []), *flags, "--session", str(sessions[-1].parent)]
     t = time.time()
-    p = run([lean, "verify", "--statement", st.get("statement", STATEMENT_ID), "--archive", str(archive),
-             "--circuit", keys.get(files[0], ""), "--public", keys.get(files[1], ""), *bound,
-             *(["--zk"] if zk else []), *flags, "--session", str(sessions[-1].parent)], out / f"{log}.log")
-    line = next((x for x in p.stdout.splitlines() if x.startswith("VERDICT ")), None)
-    v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": f"no verdict (rc {p.returncode}): {p.stderr[-400:]}"}
+    if members is None:
+        p = run([lean, "verify", *args], out / f"{log}.log")
+        stdout, none = p.stdout, f"no verdict (rc {p.returncode}): {p.stderr[-400:]}"
+    else:
+        stdout, none = members.verify(args, out / f"{log}.log")
+    line = next((x for x in stdout.splitlines() if x.startswith("VERDICT ")), None)
+    v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": none}
     return {"accepted": v.get("accepted") is True, "why": v.get("why"), "of_record": True, "verify_s": round(time.time() - t, 1),
             "partition": v.get("partition"), **({"registered": v["registered"]} if "registered" in v else {}),
             **{k: v[k] for k in ("public_header_sha512", "registered_sha512", "unit_draw", "session_tables") if k in v},
             "digest": hashlib.sha512(line.encode()).hexdigest() if line else None}
+
+
+def held_to_alone(kept: dict, alone: dict) -> dict:
+    """The kept verifier's verdict of a session (`lean_verify` with ``members``), held to `verify`'s own of the same session
+    (`lean_verify` without): ``kept`` where the two are equal but for their seconds, else a refusal naming what differs."""
+    differ = sorted(x for x in kept.keys() | alone.keys() if x != "verify_s" and kept.get(x) != alone.get(x))
+    if not differ:
+        return kept
+    return {"accepted": False, "of_record": True, "verify_s": kept.get("verify_s"), "partition": None, "digest": None,
+            "why": f"the kept verifier's verdict is not verify's alone: they differ in {', '.join(differ)}"}
 
 
 def lean_refused(v: dict, names: str | None = None) -> bool:

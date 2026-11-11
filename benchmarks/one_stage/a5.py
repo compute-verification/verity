@@ -93,7 +93,11 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   statement's unit (`--tmpl-unit`) goes to both its sides there. Under ``--firewall`` (Lean's `flock-firewall`), the
   core protocols' path, each runs behind the ZK server's send check instead (`FC_FIREWALL=1`, live PROTOCOL.md §10.4), its `Hello`
   set up on the statement's partition and program. Lean `verify --zk` holds each session with `--partition` and `--program`
-  (units derived).
+  (units derived). Under ``--firewall`` the window's members are verified by one kept process, `flock-verify verify-members`
+  (`a0.VerifyMembers`), which reads the window's program once and is handed each member as its session ends; a member it
+  gives no verdict is refused, and so is every member after it, with no second try. A5_VERIFY_ALONE=1 also runs `verify`
+  on each session as a process of its own (``lean-verify-alone.log``) and refuses a member whose two verdicts differ in
+  anything but their seconds (`a0.held_to_alone`).
 * **Plain sessions** (``--plain``; `--zk` is the default): Flock's unmasked protocol, which Lean's soundness covers at one
   table under a stratified sample, hidden outputs included (`SoundExecH`), until proofs' multi-table coverage (`PLAIN_SCOPE`).
   So a plain audit takes only a stream's sample (``--challenger``) by a stratified law, over a window of one member with no
@@ -920,7 +924,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             got[f"lean-verify/m{k}"] = {**a0.lean_verify(a.lean, mm["st"], m.n, sdir, flags=flags),
                                         "tool": f"flock-verify verify {' '.join(flags)} --archive"}
         else:
-            lv = s["lean_verify"] if "handle" in s else a0.lean_verify(a.lean, mm["st"], m.n, sdir, zk=True)
+            lv = s["lean_verify"] if "handle" in s else a0.lean_verify(a.lean, mm["st"], m.n, sdir, zk=True, members=kept)
+            if kept is not None and os.environ.get("A5_VERIFY_ALONE") == "1":
+                lv = a0.held_to_alone(lv, a0.lean_verify(a.lean, mm["st"], m.n, sdir, zk=True, log="lean-verify-alone"))
             got[f"lean-verify/m{k}"] = {**lv, "tool": "flock-verify verify --zk --archive"}
         lean_v = got[f"lean-verify/m{k}"]
         return {"mm": mm, "sdir": sdir, "staged_s": s["staged_s"], "verdicts": got, "lean_verify": lean_v,
@@ -940,17 +946,25 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     # its sessions at its close, each member's audit then a verdict. What Lean's verify reads of the window (each sampled
     # member's circuit, public file, tables and registered reads, the partition and the program) is fixed once staged, so
     # one process archives it all before the first session (``lean-verify/archive``) and a member's own archive links it.
+    # Behind the ZK server one kept process then verifies the members in turn, on the window's program in that archive.
+    kept = None
     try:
         statements = [staged(mm, local) for mm, local in drawn]
         if statements:
             (out / "lean-verify").mkdir(exist_ok=True)
-            a0.archive_put(a.lean, out / "lean-verify" / "archive",
-                           [f for s in statements for f in a0.archive_files(s["mm"]["st"], s["mm"]["m"].n)],
-                           out / "lean-verify" / "archive-put.log", archived)
+            keys = a0.archive_put(a.lean, out / "lean-verify" / "archive",
+                                  [f for s in statements for f in a0.archive_files(s["mm"]["st"], s["mm"]["m"].n)],
+                                  out / "lean-verify" / "archive-put.log", archived)
+            if a.firewall and not plain(a):
+                kept = a0.VerifyMembers(a.lean, out / "lean-verify" / "archive",
+                                        keys.get(Path(statements[0]["mm"]["st"]["program_file"]), ""),
+                                        out / "lean-verify" / "verify-members.log")
         with ThreadPoolExecutor(1) as lean:
             checks = [lean.submit(member_checks, member_session(i, s)) for i, s in enumerate(statements)]
             done = [c.result() for c in checks]
     finally:
+        if kept is not None:
+            kept.close()
         if server is not None:
             exits = server.close()
             (out / "proof-server" / "server.json").write_text(json.dumps({"routes": server.routes, "exits": exits},
