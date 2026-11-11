@@ -280,22 +280,22 @@ theorem linkPoints_size (st : _root_.Flock.Stmt) (c : Array F128) :
   simp [_root_.Flock.Firewall.Drive.linkPoints]
 
 /-- A `--zk` schedule's facts the opening's asks read: a lane round before the pair, and its counts within a squeeze's. -/
-def schedOk (m : ℕ) : Bool :=
+def schedOk (wideLeaf : Bool) (m : ℕ) : Bool :=
   match _root_.Flock.Zk.schedule wideLeaf m with
   | .ok (sch, _) => decide (1 ≤ sch.k0) && decide (sch.n < 2 ^ 62) &&
       sch.levels.all (fun lv => decide (lv.q < 2 ^ 63)) && decide ((default : _root_.Flock.Level).q < 2 ^ 63)
   | .error _ => true
 
-/-- Every `--zk` schedule, `m < 36`, by the kernel's evaluation. -/
-theorem schedOk_lt : ∀ m, m < 36 → schedOk m = true := by decide +kernel
+/-- Every `--zk` schedule, `m < 36` at either statement version, by the kernel's evaluation. -/
+theorem schedOk_lt : ∀ (w : Bool) (m : Fin 36), schedOk w m.val = true := by decide +kernel
 
 theorem sched_facts {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.Zk.schedule wideLeaf m = .ok (sch, tp)) :
     m < 36 ∧ 1 ≤ sch.k0 ∧ sch.n < 2 ^ 62 ∧ ∀ i, (sch.levels.getD i default).q < 2 ^ 63 := by
   have hm : m < 36 := by
     by_contra hc
-    obtain ⟨e, he⟩ := Loop.schedule_ge (m := m) (by omega)
+    obtain ⟨e, he⟩ := Loop.schedule_ge (wideLeaf := wideLeaf) (m := m) (by omega)
     rw [he] at h; cases h
-  have hok := schedOk_lt m hm
+  have hok := schedOk_lt wideLeaf ⟨m, hm⟩
   unfold schedOk at hok
   rw [h] at hok
   simp only [Bool.and_eq_true, decide_eq_true_eq, Array.all_eq_true] at hok

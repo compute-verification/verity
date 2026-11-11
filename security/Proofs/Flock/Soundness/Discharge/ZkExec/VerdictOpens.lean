@@ -774,7 +774,7 @@ theorem zk_rep_reqs {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T
       ∃ (R : Req) (rest : List Req), pend.lig.reqs = R :: rest ∧ R.level = 0 ∧
         R.positions = (Flock.positions (sch.levels.getD 0 default)
           (rounds[(st.m + (st.kLog - 6)) + (2 + extras.size + 1) + (sch.k0 + 8)]!).coins).toList := by
-  obtain ⟨h25, -, -, hk0, -, hdim, hlv, hα1, -⟩ := zk_schedule_seams _ _ _ hsch
+  obtain ⟨h25, -, -, hk0, -, hdim, hlv, hα1, -⟩ := zk_schedule_seams _ _ _ _ hsch
   have hTm : T.S.m = st.m := hseam.hm
   have h7 : 7 ≤ T.S.m := by omega
   unfold repProg at hrun
@@ -925,7 +925,7 @@ theorem zk_opens_ok {mPts : ℕ} (T : ZkSession.TabZK 𝔽 mPts) (pts : Fin 2 �
     (hp : Plays fOf (ZkLink.repZCAt execArith hs512 T pts r) (repMsgsZ st sch (2 + extras.size) tPad zp)
       (rounds.toList.map (·.coins)) pend) :
     ZkLink.OpensOKZ H512 enc512 leaf512 (ZkLink.width₀ T) cap₀ r.val pend.lig os.rows os.salts := by
-  obtain ⟨-, -, -, -, -, hdim, hlv, -, -⟩ := zk_schedule_seams _ _ _ hsch
+  obtain ⟨-, -, -, -, -, hdim, hlv, -, -⟩ := zk_schedule_seams _ _ _ _ hsch
   obtain ⟨-, h2, hl0, -⟩ := hdim
   obtain ⟨pend', hp', hcaps, hreqs, -⟩ :=
     zk_rep_reqs hs512 T pts r st sch tPad extras zp rounds dom tr hsch hseam hlen hext hwf hrun hk

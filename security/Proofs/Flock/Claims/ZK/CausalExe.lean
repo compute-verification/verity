@@ -884,7 +884,7 @@ def RepOk : Prop :=
           (repSrcCut PE x (czExe PE x c') (cutC x wt ω p c') j r)
 
 theorem schOk_of {st : _root_.Flock.Stmt} (y : ZkHidden.ZkTab st) : SchOk (_root_.Flock.Setup.ofCircuit st) y.sch := by
-  obtain ⟨h1, -, h3, h4, -, ⟨hn, hL, -⟩, hlv, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ y.hz
+  obtain ⟨h1, -, h3, h4, -, ⟨hn, hL, -⟩, hlv, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ y.hz
   exact ⟨show 14 ≤ st.m by omega, by omega, h4, hL, fun j hj => (hlv j hj).q_ne_zero⟩
 
 section Generic
@@ -964,7 +964,7 @@ theorem repStreams_agree (hx : Live x) {n : ℕ} {s : FlockDeploy.Ins} {spec : _
   rw [htab, hsch, tabSrcCut_rep _ _ hj hr, tabSrcCut_rep _ _ hj hr]
   refine ⟨schOk_of _, ?_, ?_⟩
   · have hk6 := (zkTab x ⟨k / 2, hj⟩).wf.1.hk6
-    have hm := (FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ (zkTab x ⟨k / 2, hj⟩).hz).1
+    have hm := (FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ (zkTab x ⟨k / 2, hj⟩).hz).1
     rw [FlockComplete.ZkTables.repStart_succ, hst]
     unfold FlockDeploy.repRounds
     simp only [↓reduceIte, (zkTab x ⟨k / 2, hj⟩).hz]

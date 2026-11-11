@@ -537,7 +537,7 @@ theorem innerPre_slot {x : Msg} {s spec} (hs : FlockDeploy.setupOf true x = some
     simp [FlockDeploy.tabsOf]
     rfl
   have hz := (zkTab x j).hz
-  obtain ⟨h25, -, hsm, hk0, -, ⟨hn7, h2, -⟩, hlv, -, -⟩ := ZkExec.zk_schedule_seams _ _ _ hz
+  obtain ⟨h25, -, hsm, hk0, -, ⟨hn7, h2, -⟩, hlv, -, -⟩ := ZkExec.zk_schedule_seams _ _ _ _ hz
   have hk6 := (zkTab x j).wf.1.hk6
   have hx : extras.size = spec.points * (stAt x j).regions.size := by
     rw [htab] at he

@@ -2,7 +2,7 @@
 # Flock's zero-knowledge session cost on a CPU node (zk_cost.py --cpu): zk_cost.sh's sweep of W8A8 coordinates in statements
 # of c units, each session proving k sampled by Lean, by `flock-circuit prove --zk` on the node's CPUs with the ZK server's send
 # check, then Lean `verify --zk` on every session; what one sampled statement costs a CPU node, for sizing a block's sample.
-# The prover is built as prove_path/run.sh builds it (60-circuit.sh GPU=0), Lean's flock-verify and flock-firewall in the tree,
+# The prover is built as prove_path/run.sh builds it (60-circuit.sh GPU=0), the Lean verifier and ZK server binaries in the tree,
 # and flock-read-tmpl, the template a table read (stage.py's `table-read`) is staged on; with ZK_UNITS, flock-tmpl-unit in a
 # copy of the package (hidden_zk/job.sh's build_tmpl_unit), which places a templated unit's rows for its prover.
 # Run from the verity tree in a proofs slot (one point at a time, so a session's peak is its own):
@@ -52,10 +52,10 @@ Z=$W/zk
 ZK() { "$PY" benchmarks/one_stage/zk_cost.py "$@" --out "$Z"; }
 
 if [ -n "${ZK_UNITS:-}" ]; then
-  log "stage: units $ZK_UNITS, sizes ${ZK_SIZES:-1,8}, draws ${ZK_DRAWS:-1,c}; $RAYON_NUM_THREADS threads"
+  log "stage: units $ZK_UNITS, sizes ${ZK_SIZES:-1,8}, samples ${ZK_DRAWS:-1,c}; $RAYON_NUM_THREADS threads"
   ZK stage --units "$ZK_UNITS" --sizes "${ZK_SIZES:-1,8}" --draws "${ZK_DRAWS:-1,c}" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST
 else
-  log "stage: K ${ZK_KS:-4096,16384}, sizes ${ZK_SIZES:-1,8}, draws ${ZK_DRAWS:-1,c}; $RAYON_NUM_THREADS threads"
+  log "stage: K ${ZK_KS:-4096,16384}, sizes ${ZK_SIZES:-1,8}, samples ${ZK_DRAWS:-1,c}; $RAYON_NUM_THREADS threads"
   ZK stage --lean "$LEAN" --ks "${ZK_KS:-4096,16384}" --sizes "${ZK_SIZES:-1,8}" --draws "${ZK_DRAWS:-1,c}" 2>&1 \
     | tee -a "$O/zk.log" | grep ZKCOST
 fi

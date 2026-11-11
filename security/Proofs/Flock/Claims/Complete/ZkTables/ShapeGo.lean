@@ -202,11 +202,11 @@ theorem wInner_size_le (p : Zk.InnerProof) {nY nD : ℕ} (hr : p.root.size = 64)
 most `1024`. -/
 theorem zkSchedule_file {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) :
     schedPartZk v.1 64 (some 192) ≤ 2 ^ 32 ∧ v.2 ≤ 1024 := by
-  have key : ∀ k : Fin 11, (match Zk.schedule wideLeaf (k.val + 25) with
+  have key : ∀ (w : Bool) (k : Fin 11), (match Zk.schedule w (k.val + 25) with
       | .ok v => decide (schedPartZk v.1 64 (some 192) ≤ 2 ^ 32 ∧ v.2 ≤ 1024)
       | .error _ => false) = true := by
     decide +kernel
-  have := key ⟨m - 25, by omega⟩
+  have := key wideLeaf ⟨m - 25, by omega⟩
   simp only [show m - 25 + 25 = m by omega, h, decide_eq_true_eq] at this
   exact this
 
@@ -352,7 +352,7 @@ theorem shapeRest (H : Claims.Msg → Claims.Msg) : ShapeRest H := by
     rw [hmerk]
     rfl
   have htb : (packed tr (Setup.ofCircuit st).m).size = 2 ^ v.1.n := by simp [packed, hn]; rfl
-  obtain ⟨hLg, hyb⟩ := h1 _ (Claims.hOf H) (Setup.ofCircuit st).m v (shapeZk (Setup.ofCircuit st) v.1 e.size) _ cm
+  obtain ⟨hLg, hyb⟩ := h1 (Setup.ofCircuit st).wideLeaf _ (Claims.hOf H) (Setup.ofCircuit st).m v (shapeZk (Setup.ofCircuit st) v.1 e.size) _ cm
     _ _ _ _ rep (ω.extra i) (ω.lanePad i) (ω.salt i 0 0) (ω.salt i rep) (ω.nonce i rep) _ tI lL lI lg zl rec
     (JsonRT.hOf_size h64) h25 h35 hin.schedule rfl (by rw [hH]; rfl) (by rw [hS]; rfl) htb
     (by simp [basisVals, hn]; rfl) hcm hlg

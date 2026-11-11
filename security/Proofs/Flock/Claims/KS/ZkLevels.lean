@@ -289,7 +289,7 @@ theorem zkLevels_verifyRepWith (hs : Hashes Flock.V) (spec : SessionSpec) (st : 
             (stream.rounds[zkLevelRound st.m st.kLog sch.k0 (2 + extras.size) (sch.levels.size - 1) ℓ]!).coins)
           (openAt zp.proof.ligerito (sch.levels.size - 1) ℓ).1 (openAt zp.proof.ligerito (sch.levels.size - 1) ℓ).2.1
           (openAt zp.proof.ligerito (sch.levels.size - 1) ℓ).2.2 (2 ^ (sch.levels.getD ℓ default).lanes) = .ok () := by
-  obtain ⟨h25, -, hsm, hk0, -, hdim, hL, -, -⟩ := zk_schedule_seams _ _ _ hsch
+  obtain ⟨h25, -, hsm, hk0, -, hdim, hL, -, -⟩ := zk_schedule_seams _ _ _ _ hsch
   have hq : ∀ j < sch.levels.size, (sch.levels.getD j default).q ≠ 0 := fun j hj => (hL j hj).q_ne_zero
   have hn : sch.n ≠ 0 := by rw [hdim.1, hsm]; omega
   have h2 : 2 ≤ sch.levels.size := hdim.2.1

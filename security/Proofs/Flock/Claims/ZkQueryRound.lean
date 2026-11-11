@@ -411,7 +411,7 @@ theorem zkQueryRound_verifyRepWith (hs : Hashes V) (spec : SessionSpec) (st : Se
         zp.proof.ligerito.initialProof.rows zp.proof.ligerito.initialProof.siblings
         zp.proof.ligerito.initialProof.salts (2 ^ (sch.levels.getD 0 default).lanes + Zk.EXTRA_LANES) = .ok () ∧
       cap = zp.proof.cap.foldl (· ++ ·) ByteArray.empty ∧ cap = sess.rootB[i]! := by
-  obtain ⟨h25, -, hsm, hk0, -, hdim, hL, -, -⟩ := zk_schedule_seams _ _ _ hsch
+  obtain ⟨h25, -, hsm, hk0, -, hdim, hL, -, -⟩ := zk_schedule_seams _ _ _ _ hsch
   have hq : (sch.levels.getD 0 default).q ≠ 0 := (hL 0 (by have := hdim.2.1; omega)).q_ne_zero
   have hn : sch.n ≠ 0 := by rw [hdim.1, hsm]; omega
   unfold Zk.verifyRepWith at h

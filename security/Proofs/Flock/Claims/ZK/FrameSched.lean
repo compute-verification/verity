@@ -1252,7 +1252,7 @@ def TabAlike (t t' : _root_.Flock.Firewall.Finish.Tab) : Prop :=
 
 /-- **Two level 0s the loop samples at one `m`**, of packed tables of one size, give tables of one shape, or are both
 refused. -/
-theorem tabOfLevel0_alike (st : _root_.Flock.Setup) {m : ℕ} {g g' : Array F128} {d d' : ByteArray}
+theorem tabOfLevel0_alike (st : _root_.Flock.Setup) {wideLeaf : Bool} {m : ℕ} {g g' : Array F128} {d d' : ByteArray}
     {l l' : _root_.Flock.Firewall.Level0.Level0} (h : _root_.Flock.Firewall.Level0.ofDraws wideLeaf m g d = .ok l)
     (h' : _root_.Flock.Firewall.Level0.ofDraws wideLeaf m g' d' = .ok l') (hg : g.size = g'.size)
     (hd : 64 * 2 ^ l.lv.d < 2 ^ 64) :

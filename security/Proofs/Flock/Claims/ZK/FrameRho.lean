@@ -447,20 +447,20 @@ theorem openStep_rho (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : B
     exact spw_bind (fun _ _ h => h) _ _ ho
 
 /-- Every `--zk` schedule asks `z`'s coins, and Ligerito's rounds `k₀ + 2` and `k₀ + 3` (`ρ₀`'s and `ρ₁`'s) two each. -/
-def rhoOk (m : ℕ) : Bool :=
+def rhoOk (wideLeaf : Bool) (m : ℕ) : Bool :=
   match _root_.Flock.Zk.schedule wideLeaf m with
   | .ok (sch, _) => decide (1 ≤ sch.n) &&
       ((_root_.Flock.Firewall.Session.ligeritoCoins sch).toList.filter (· != 0))[sch.k0 + 2]? == some 2 &&
       ((_root_.Flock.Firewall.Session.ligeritoCoins sch).toList.filter (· != 0))[sch.k0 + 3]? == some 2
   | .error _ => true
 
-/-- Every `--zk` schedule, `m < 36`, by the kernel's evaluation. -/
-theorem rhoOk_lt : ∀ m, m < 36 → rhoOk m = true := by decide +kernel
+/-- Every `--zk` schedule, `m < 36` at either statement version, by the kernel's evaluation. -/
+theorem rhoOk_lt : ∀ (w : Bool) (m : Fin 36), rhoOk w m.val = true := by decide +kernel
 
 theorem sched_rho {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.Zk.schedule wideLeaf m = .ok (sch, tp)) :
     1 ≤ sch.n ∧ ∀ e < 2,
       ((_root_.Flock.Firewall.Session.ligeritoCoins sch).toList.filter (· != 0))[sch.k0 + 2 + e]? = some 2 := by
-  have hok := rhoOk_lt m (sched_facts h).1
+  have hok := rhoOk_lt wideLeaf ⟨m, (sched_facts h).1⟩
   unfold rhoOk at hok
   rw [h] at hok
   simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at hok
@@ -472,7 +472,7 @@ theorem sched_rho {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.Z
 
 theorem openList_length {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.Zk.schedule wideLeaf m = .ok (sch, tp))
     {c : ℕ} (hc : c ≠ 0) : (openList c sch).length = c + 1 + (sch.k0 + 7 + 11 * (sch.levels.size - 1)) := by
-  have hlig := Loop.ligOk_all m
+  have hlig := Loop.ligOk_all (wideLeaf := wideLeaf) m
   unfold Loop.ligOk at hlig
   rw [h] at hlig
   simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at hlig
@@ -652,7 +652,7 @@ theorem rho_of_prog (T : ZKMal.CoinLayer.TableData) (x : Msg) (hx : Masked.Live 
   obtain ⟨hts', ⟨tp, htp⟩, hxs⟩ := Count.placeholder_tab hph
   rw [hz, Except.ok.injEq, Prod.mk.injEq] at htp
   obtain ⟨htsch, -⟩ := htp
-  obtain ⟨hm36, hk0, hn, hq⟩ := Count.sched_facts (htsch ▸ hz : _root_.Flock.Zk.schedule wideLeaf _ = .ok (t.sch, y.tPad))
+  obtain ⟨hm36, hk0, hn, hq⟩ := Count.sched_facts (htsch ▸ hz : _root_.Flock.Zk.schedule _ _ = .ok (t.sch, y.tPad))
   obtain ⟨⟨hmp, hmp0, hpc⟩, hdom', hxr, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
   obtain ⟨-, -, -, -, hdm, -⟩ := placeholder_ok hph
   have hls : (wordsAt x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) 0).size =
@@ -688,7 +688,7 @@ theorem rho_of_prog (T : ZKMal.CoinLayer.TableData) (x : Msg) (hx : Masked.Live 
     rw [Count.piop_counts, hts', List.length_map, Array.length_toList] at eA
     exact eA
   have hplan := congrArg List.length (Count.repPlan_list (spec := spec) (htsch ▸ hz :
-    _root_.Flock.Zk.schedule wideLeaf _ = .ok (t.sch, y.tPad)))
+    _root_.Flock.Zk.schedule _ _ = .ok (t.sch, y.tPad)))
   rw [Array.length_toList, repPlan_size] at hplan
   simp only [repRounds_true, hz, List.length_append] at hplan
   have h4 : ([1, _root_.Flock.Firewall.Session.INNER_CONS, 1, _root_.Flock.Zk.Q].filter (· != 0)).length = 4 := by

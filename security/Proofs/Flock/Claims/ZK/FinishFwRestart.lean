@@ -188,7 +188,7 @@ theorem fwRestart_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
        obtain ⟨⟨rfl, -⟩, -⟩ := hp
        rfl)
   -- the setup is the statement's
-  obtain ⟨h25, -, hsm, hk0, -, ⟨hn7, h2, -⟩, hlv, -, -⟩ := ZkExec.zk_schedule_seams _ _ _ (zkTab x j).hz
+  obtain ⟨h25, -, hsm, hk0, -, ⟨hn7, h2, -⟩, hlv, -, -⟩ := ZkExec.zk_schedule_seams _ _ _ _ (zkTab x j).hz
   have hk6' : 6 ≤ (stAt x j).c.kLog := (zkTab x j).wf.1.hk6
   have hkm : (stAt x j).c.kLog ≤ (stAt x j).m := (zkTab x j).wf.1.hk
   have hj : j.val < (stsOf x).size := lt_of_jOf j
@@ -324,7 +324,7 @@ theorem fwRestart_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
           (FlockComplete.ZkTables.Level0.pairLane extra (2 * r.val + 1)
             (FlockComplete.LigLock.tabS (ligCoin c) (ligP0 x j r) (ligTab x w τ j) (zkTab x j).sch.k0).size)) col := by
     obtain ⟨hnL, hL, -, -, -, hm⟩ := tabC_z PE x j
-    obtain ⟨-, -, hl0, -, -, -⟩ := zkLevel0 wideLeaf (zkTab x j).hz
+    obtain ⟨-, -, hl0, -, -, -⟩ := zkLevel0 (zkTab x j).hz
     unfold lv0 at hnL hL hm
     rw [hl0] at hnL hm
     have hmL : (ligSt x j).m = (tabC PE x j).S.m := by
@@ -404,7 +404,7 @@ theorem fwRestart_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
         (congrArg₂ (· * ·) rfl (congrArg FlockLevel3.embed e1))
   -- the restart, column by column
   obtain ⟨-, hL, -, -, -, -⟩ := tabC_z PE x j
-  obtain ⟨-, -, -, -, -, hk7⟩ := zkLevel0 wideLeaf (zkTab x j).hz
+  obtain ⟨-, -, -, -, -, hk7⟩ := zkLevel0 (zkTab x j).hz
   unfold lv0 at hL
   have hLm : (tabC PE x j).z.L = 2 ^ ((stAt x j).m - 7 - (zkTab x j).sch.k0) := by
     rw [hL]

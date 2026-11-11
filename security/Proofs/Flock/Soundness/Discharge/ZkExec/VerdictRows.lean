@@ -296,7 +296,7 @@ theorem zk_inner_rows {mPts : ℕ} (T : ZkSession.TabZK 𝔽 mPts) (pts : Fin 2 
         (rounds.toList.map (·.coins)) pend ∧
       pend.inner (innerOpensOf zp.inner) ∧
       ∀ jj < Zk.Q, pend.qpos jj = (T.pos (fOf ((rounds[rounds.size - 1]!).coins[jj]!))).val := by
-  obtain ⟨h25, -, -, hk0, -, hdim, hlv, hα1, -⟩ := zk_schedule_seams _ _ _ hsch
+  obtain ⟨h25, -, -, hk0, -, hdim, hlv, hα1, -⟩ := zk_schedule_seams _ _ _ _ hsch
   have hTm : T.S.m = st.m := hseam.hm
   have h7 : 7 ≤ T.S.m := by omega
   obtain ⟨b1, b2, b3, b4, b5, b6, b7, b8, b9, d1, d2, d3⟩ := lay_lt (layZ st sch)

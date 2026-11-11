@@ -305,7 +305,7 @@ theorem innerPre_holds (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArra
       (rsCoinsR resp (Setup.ofCircuit st) l.size e)) ((Setup.ofCircuit st).m - 7)).size = 2 ^ v.1.n := by
     simp [basisVals, hn]; rfl
   rw [hmerk] at hlig
-  have hLF := L0.lanes resp hsh _ v _ cm0 _ _ lay pads.h rep (tape.extra i) (tape.lanePad i) (tape.salt i rep)
+  have hLF := L0.lanes _ resp hsh _ v _ cm0 _ _ lay pads.h rep (tape.extra i) (tape.lanePad i) (tape.salt i rep)
     (tape.nonce i rep) _ tI lL lI lg zl rec h25 h35 hv htb hb hlig
   have hx : ∀ c ∈ claimsR resp (Setup.ofCircuit st) tr l.size e, c.x.size = st.m - 6 :=
     claims_xsize' st hkm (by omega) tr (Zc.coinsAt resp l.size) (lcCoinsR resp (Setup.ofCircuit st) l.size) pts e he

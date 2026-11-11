@@ -146,6 +146,7 @@ the `2^lanes + 4` lanes' first `t_pad` padding coefficients and the salts of the
 past them, as `Level0.toIn` reads a level 0 sampled at those sizes. -/
 noncomputable def linkIn (x : Msg) (w : Claims.Flock.Wit) (t : UE.Tape) (j : Fin (jOf x)) :
     _root_.Flock.Firewall.Link.In where
+  wideLeaf := (stAt x j).wideLeaf
   m := (stAt x j).m
   g := (FlockComplete.tablesP (FlockDeploy.tabsOf (stsOf x)) (FlockComplete.ZkTables.traces (stsOf x)
     (FlockComplete.ZkTables.maskWOf x w (UE.tapeZk t).mask)))[j.val]!

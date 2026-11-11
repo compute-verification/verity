@@ -298,7 +298,7 @@ theorem m1_check_34_35 : ∀ m, 34 ≤ m → m ≤ 35 →
   interval_cases m <;> decide +kernel
 
 /-- The rational check for `32 ≤ m ≤ 35` on the wide-leaf schedule. -/
-theorem m1_check_wide : ∀ m, 32 ≤ m → m ≤ 35 →
+theorem m1_check_wideLeaf : ∀ m, 32 ≤ m → m ≤ 35 →
     padLinkUp (m1Schedule true m) (m1Pad true m) +
         padRepUp (m1Schedule true m) (m1Pad true m) 2 (m1SqrtUp true m) ^ 2 ≤ (1 / 2) ^ 205 := by
   intro m h1 h2
@@ -320,7 +320,7 @@ theorem m1_check : ∀ m, 25 ≤ m → m ≤ 35 →
     · obtain ⟨-, e1, e2, e3⟩ := m1_of_le (m := m) (by omega)
       rw [e1, e2, e3]
       exact hf
-    · exact m1_check_wide m h h2
+    · exact m1_check_wideLeaf m h h2
 
 theorem padRadius_pos_of (l : Level) (t : ℕ) (sbar : ℚ) (h0 : 0 ≤ sbar)
     (hs : l.padRate t ≤ (sbar : ℝ) ^ 2) (hlt : sbar < 49 / 50) : 0 < l.padRadius t := by

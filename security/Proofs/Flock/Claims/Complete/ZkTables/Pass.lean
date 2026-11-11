@@ -392,7 +392,7 @@ theorem sessionPZk_reach (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArra
     obtain ⟨hm, hk6⟩ := hsts (k / 2) hi
     rw [← getElem!_pos sts (k / 2) hi] at hm hk6
     obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, -, -⟩ :=
-      FlockSoundness.Discharge.ZkExec.zk_schedule_seams sts[k / 2]!.m schs[k / 2]!.1 schs[k / 2]!.2 (hv _ hi)
+      FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ sts[k / 2]!.m schs[k / 2]!.1 schs[k / 2]!.2 (hv _ hi)
     obtain ⟨hn7, h2, -, -, -, -, -⟩ := hdim
     obtain ⟨hl₂, hrho, hb, -⟩ := repPZk_exact (sch := schs[k / 2]!.1) (hm := hm) (hn := by rw [hn7, hsm]; omega) (hk0 := hk0) (hL := h2)
       (hq := fun i hi => (hlv i hi).q_ne_zero) (h := e2)
@@ -509,7 +509,7 @@ theorem repRanAt_sends (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArra
   obtain ⟨v, extras, dom, tr, tb, cm0, pads, ic, extra, lanePad, salt, nonce, l, hz, hx, hl, hrun⟩ := h
   have hs := sends_le (repPZk_sends resp hsh _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) hrun
   obtain ⟨-, -, -, hk0, -, hdim, -, -, -⟩ :=
-    FlockSoundness.Discharge.ZkExec.zk_schedule_seams sts[k / 2]!.m v.1 v.2 hz
+    FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ sts[k / 2]!.m v.1 v.2 hz
   obtain ⟨-, h2, -, -, -, -, -⟩ := hdim
   have hi : k / 2 < sts.size := by omega
   obtain ⟨hm, hk6⟩ := hsts (k / 2) hi
@@ -576,7 +576,7 @@ theorem sessionPZk_rho_stop (resp : ℕ → Claims.Msg) (h : ByteArray → ByteA
   obtain ⟨hm, hk6⟩ := hsts (q / 2) hi
   rw [← getElem!_pos sts (q / 2) hi] at hm hk6
   obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, -, -⟩ :=
-    FlockSoundness.Discharge.ZkExec.zk_schedule_seams sts[q / 2]!.m v.1 v.2 hz
+    FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ sts[q / 2]!.m v.1 v.2 hz
   obtain ⟨hn7, h2, -, -, -, -, -⟩ := hdim
   have hp := piopZk_ofCircuit (by omega) hk6 hx
   have := (repPZk_rho_stop resp h _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hm (by rw [hn7, hsm]; omega) hk0 h2
@@ -612,7 +612,7 @@ theorem sessionPZk_beta_stop (resp : ℕ → Claims.Msg) (h : ByteArray → Byte
   obtain ⟨hm, hk6⟩ := hsts (q / 2) hi
   rw [← getElem!_pos sts (q / 2) hi] at hm hk6
   obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, -, -⟩ :=
-    FlockSoundness.Discharge.ZkExec.zk_schedule_seams sts[q / 2]!.m v.1 v.2 hz
+    FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ sts[q / 2]!.m v.1 v.2 hz
   obtain ⟨hn7, h2, -, -, -, -, -⟩ := hdim
   have hp := piopZk_ofCircuit (by omega) hk6 hx
   have := (repPZk_beta_stop resp h _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hm (by rw [hn7, hsm]; omega) hk0 h2

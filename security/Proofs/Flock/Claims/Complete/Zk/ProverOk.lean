@@ -63,12 +63,12 @@ variable {wideLeaf : Bool}
 /-- The `--zk` schedule's level 0 caps at most its depth, and at most `32`. -/
 theorem zkSchedule_cap0 {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) :
     (v.1.levels.getD 0 default).cap ≤ (v.1.levels.getD 0 default).d ∧ (v.1.levels.getD 0 default).cap ≤ 32 := by
-  have key : ∀ k : Fin 11, (match Zk.schedule wideLeaf (k.val + 25) with
+  have key : ∀ (w : Bool) (k : Fin 11), (match Zk.schedule w (k.val + 25) with
       | .ok v => decide ((v.1.levels.getD 0 default).cap ≤ (v.1.levels.getD 0 default).d ∧
           (v.1.levels.getD 0 default).cap ≤ 32)
       | .error _ => false) = true := by
     decide +kernel
-  have := key ⟨m - 25, by omega⟩
+  have := key wideLeaf ⟨m - 25, by omega⟩
   simp only [show m - 25 + 25 = m by omega, h, decide_eq_true_eq] at this
   exact this
 

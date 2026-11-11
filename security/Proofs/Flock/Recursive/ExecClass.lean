@@ -153,8 +153,10 @@ noncomputable def execClassAt (st : Flock.Stmt) : ExecClass :=
   if h : ClassOk (shapeOf st) then ExecClass.ofStmt st h else ExecClass.fixed
 
 theorem ClassOk.of_shape {st : Flock.Stmt} (h : ClassOk (shapeOf st)) : ClassOk st := by
-  obtain ⟨hwf, hr, hp⟩ := h
-  refine ⟨⟨hwf.hk6, hwf.hk, hwf.pin, hwf.slots⟩, ⟨hr.hm, hr.mPts, fun reg hreg => ?_⟩, hp⟩
+  obtain ⟨hwf, hr, p, hp⟩ := h
+  have hm : 25 ≤ st.m ∧ st.m ≤ 35 := ZkHidden.schedule_range hp
+  refine ⟨⟨hwf.hk6, hwf.hk, hwf.pin, hwf.slots⟩, ⟨hr.hm, hr.mPts, fun reg hreg => ?_⟩,
+    ZkHidden.schedule_ok_of_range _ hm.1 hm.2⟩
   have hmem : stripBytes reg ∈ (shapeOf st).regions.toList := by
     rw [show (shapeOf st).regions = st.regions.map stripBytes from rfl, Array.toList_map]
     exact List.mem_map.2 ⟨reg, hreg, rfl⟩
@@ -162,8 +164,10 @@ theorem ClassOk.of_shape {st : Flock.Stmt} (h : ClassOk (shapeOf st)) : ClassOk 
   exact ⟨w.free_lt, w.nodup, w.free_size⟩
 
 theorem ClassOk.to_shape {st : Flock.Stmt} (h : ClassOk st) : ClassOk (shapeOf st) := by
-  obtain ⟨hwf, hr, hp⟩ := h
-  refine ⟨⟨hwf.hk6, hwf.hk, hwf.pin, hwf.slots⟩, ⟨hr.hm, hr.mPts, fun reg hreg => ?_⟩, hp⟩
+  obtain ⟨hwf, hr, p, hp⟩ := h
+  have hm : 25 ≤ st.m ∧ st.m ≤ 35 := ZkHidden.schedule_range hp
+  refine ⟨⟨hwf.hk6, hwf.hk, hwf.pin, hwf.slots⟩, ⟨hr.hm, hr.mPts, fun reg hreg => ?_⟩,
+    ZkHidden.schedule_ok_of_range _ hm.1 hm.2⟩
   rw [show (shapeOf st).regions = st.regions.map stripBytes from rfl, Array.toList_map] at hreg
   obtain ⟨r, hr', rfl⟩ := List.mem_map.1 hreg
   have w := hr.regions r hr'

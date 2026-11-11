@@ -102,7 +102,8 @@ theorem zkSchedule_ok {m : ℕ} (h25 : 25 ≤ m) (h35 : m ≤ 35) : ∃ p, Flock
 /-- **A masked rep that `Zk.shapeOk` passes runs rounds.** -/
 theorem repRounds_pos (spec : SessionSpec) {st : Stmt} (h : Flock.Zk.shapeOk st = .ok ()) :
     0 < FlockDeploy.repRounds true spec st := by
-  obtain ⟨⟨sch, t⟩, hp⟩ := zkSchedule_ok (Flock.Readable.m25_of_shapeOk h) (m35_of_shapeOk h)
+  obtain ⟨⟨sch, t⟩, hp⟩ :=
+    zkSchedule_ok (wideLeaf := st.wideLeaf) (Flock.Readable.m25_of_shapeOk h) (m35_of_shapeOk h)
   simp only [FlockDeploy.repRounds, ↓reduceIte, hp]
   omega
 

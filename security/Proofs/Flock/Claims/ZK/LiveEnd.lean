@@ -106,7 +106,7 @@ theorem afterLinkPZk_sendsLe (resp : ℕ → Claims.Msg) (h : ByteArray → Byte
     have hst : sts[i]! = sts[i] := getElem!_pos sts i hi
     have hv := hschs i hi
     obtain ⟨-, -, -, hk0, -, hdim, -, -, -⟩ :=
-      FlockSoundness.Discharge.ZkExec.zk_schedule_seams sts[i].m schs[i]!.1 schs[i]!.2 hv
+      FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ sts[i].m schs[i]!.1 schs[i]!.2 hv
     obtain ⟨-, h2, -, -, -, -, -⟩ := hdim
     have hm := hsts i hi
     extract_lets

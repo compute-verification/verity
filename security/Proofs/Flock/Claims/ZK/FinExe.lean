@@ -1692,7 +1692,7 @@ theorem repExact : RepExact := by
   intro x w τ c spec i hi r cm0 extras ic l hC p t l' e
   obtain ⟨e', hv, hm, -, hx'⟩ := FinRep.repHE_asks hC e
   obtain ⟨-, -, -, ⟨s, hsx⟩, hr, -, -, -, hl⟩ := hC
-  obtain ⟨-, -, hsm, hk0, -, hdim, hlv, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ hv
+  obtain ⟨-, -, hsm, hk0, -, hdim, hlv, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ hv
   obtain ⟨hn7, hL2, -, -, -, -, -⟩ := hdim
   obtain ⟨hl3, -, -, -⟩ := FlockComplete.repPZk_exact (hm := hm) (hn := by rw [hn7, hsm]; omega) (hk0 := hk0)
     (hL := hL2) (hq := fun i hi => (hlv i hi).q_ne_zero) (h := e')
@@ -1712,7 +1712,7 @@ theorem repPoints : RepPoints := by
   intro x w τ c spec i hi cm0 extras ic l hC p t l' e
   obtain ⟨e', hv, hm, hk6, -⟩ := FinRep.repHE_asks hC e
   obtain ⟨-, -, -, ⟨s, hsx⟩, -, -, -, -, hl⟩ := hC
-  obtain ⟨-, -, hsm, hk0, -, hdim, hlv, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ hv
+  obtain ⟨-, -, hsm, hk0, -, hdim, hlv, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ hv
   obtain ⟨hn7, hL2, -, -, -, -, -⟩ := hdim
   obtain ⟨hl3, -, -, -⟩ := FlockComplete.repPZk_exact (hm := hm) (hn := by rw [hn7, hsm]; omega) (hk0 := hk0)
     (hL := hL2) (hq := fun i hi => (hlv i hi).q_ne_zero) (h := e')
@@ -2162,9 +2162,9 @@ position of some opened position (`coinedOf_s0_val`). -/
 theorem q0At_opened {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf x)) (r : Fin 2) {p : ℕ}
     (hp : p ∈ q0At c j r) :
     p < 2 ^ (lv0 x j).d ∧ ∃ a : Fin (tabC PE x j).z.nS, (((tabC PE x j).T (czExe PE x c j)).s0 (.inl a)).val = p := by
-  obtain ⟨-, -, -, -, ht2, hdim, hlv, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ (zkTab x j).hz
+  obtain ⟨-, -, -, -, ht2, hdim, hlv, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ (zkTab x j).hz
   obtain ⟨-, hL2, -, -, -, -, -⟩ := hdim
-  obtain ⟨hd, -, -, -, -, -⟩ := zkLevel0 wideLeaf (zkTab x j).hz
+  obtain ⟨hd, -, -, -, -, -⟩ := zkLevel0 (zkTab x j).hz
   obtain ⟨hrate, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_pad _ _ _ (zkTab x j).hz
   obtain ⟨hts, hLs, hcs⟩ := tabSizes x j
   have hseam : FlockSoundness.Refine.LevelSeam (lv0 x j) := hlv 0 (by omega)
@@ -2252,7 +2252,7 @@ theorem repOpenRest_l0 : ∀ x w τ c spec i hi r cm0 extras ic l, RepCtx x w τ
   intro x w τ c spec i hi r cm0 extras ic l hC p q t l' hp hq _
   obtain ⟨e', hv, hm, hk6, hx'⟩ := FinRep.repHE_asks hC hq
   obtain ⟨hx, hw, hA, ⟨s, hsx⟩, hr, hcm, -, he, hl⟩ := hC
-  obtain ⟨-, -, hsm, hk0, -, hdim, hlv, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ hv
+  obtain ⟨-, -, hsm, hk0, -, hdim, hlv, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ hv
   obtain ⟨hn7, hL2, -, -, -, -, -⟩ := hdim
   have hi' : i < (stsOf x).size := lt_of_jOf ⟨i, hi⟩
   have htab : (FlockDeploy.tabsOf (stsOf x))[i]! = _root_.Flock.Setup.ofCircuit (stsOf x)[i]! := by
