@@ -8,10 +8,13 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import asdict, dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from verity_vllm import config
 from verity_vllm.config import EnginePin
+
+if TYPE_CHECKING:
+    from verity_vllm.protocols import Composition
 
 
 @dataclass(frozen=True)
@@ -248,13 +251,13 @@ class LLM:
         engine_args = {k: opts[k] for k in ENGINE_ARGS if k in options}
         if self.pin.world > 1:
             engine_args["tensor_parallel_size"] = self.pin.world
-        env = {} if opts["engine_class"] is None else {"env": EC.env(opts["engine_class"])}
+        env: dict[str, Any] = {} if opts["engine_class"] is None else {"env": EC.env(opts["engine_class"])}
         self._engine = va.build_engine(config.CHECKPOINTS, max_num_seqs=opts["max_num_seqs"], case=self.pin.case,
                                        engine_args=engine_args,
                                        execution=opts["execution"] or va.execution_label_of(opts["enforce_eager"]), **env)
         self.records: list[GenerateRecord] = []
         self.spec_digest: str | None = None
-        self.protocols = None
+        self.protocols: Composition | None = None
         self._explicit, self._installs = dict(options), 0
         self.admission = None
         if opts["engine_class"] is not None:
