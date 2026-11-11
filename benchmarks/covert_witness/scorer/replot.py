@@ -1,39 +1,43 @@
-"""training/algorithm-policy rebuilt with every rotation product priced as the GEMM it ran as, and what moved.
+"""training/algorithm-policy rebuilt from the scorer's state, with runs' steps traced again, and what moved.
 
-    python scorer/replot.py node --state K --inputs IN --scratch S --out OUT     # on the scorer's node
-    python scorer/replot.py check --run OUT --out FILE [--stated STATED.json]    # what moved, before publishing
+    python scorer/replot.py node --state K --inputs IN --scratch S --out OUT \\
+        [--layer NAME=CHECKOUT=TRACED ...] [--publish NAME]                       # on the scorer's node
+    python scorer/replot.py check --run OUT --out FILE [--same NAME ...] [--expect LEAF ...]
     python scorer/replot.py diff --out FILE LABEL=PANEL.json LABEL=PANEL.json [...]
 
-Run from benchmarks/covert_witness with the scorer's interpreter (K/venv's). te_core.rotations names a rotating run's
-rotation products `tf32`; te_core.ledger's ingest applies it to a new record. The ledger's rows were ingested before
-it, so `node` builds the panel again from the scorer's state, changing nothing in K:
+Run from benchmarks/covert_witness with the scorer's interpreter (K/venv's). `node` builds the panel again from the
+scorer's state, changing nothing in K, once as the published tables were built (the control) and once per `--layer`: a
+trace40.py node run's out/ (TRACED) of some runs, traced by the te_core at CHECKOUT, which those runs' rows are then
+read from. IN holds the published tables (last/: the uncut search tables and the last refresh's meta.json; served/: the
+overlay's stored tables and the console's two panels as served) and the finals' inputs.
 
 1. the price: te_core.gates_main, te_core's gate table against main's (IN/main/training_slowdown), statement for
    statement. The table's own check (`python -m te_core.gates --check`) compiles the Definitions, which the scorer's
    interpreter doesn't hold: main's check runs it on main's copy;
-2. the measured ledger as the last refresh built it (trace40.py's `ledger`, on a copy of K/ledger, from the capture
-   layers the last refresh's meta.json names, each checked by its te_core tree);
-3. the control: te_core.algorithm_policy on that ledger (v1cycle's POLICY_IO, the last refresh's pins, ladder fit,
-   gate factors and failed traces). It reproduces the last refresh's tables where nothing but te_core's VERSION moved,
-   so every later difference is the rotations';
-4. a copy of the measured ledger with each rotating run's rows as ingest writes them now (`rotations.repriced`, from
-   the run's record in K/state): which runs rotate is read from every row's program and stored arguments, and a record
-   te_core.rotations refuses (`Unread`) keeps its rows, listed with why. The rewritten rows go to OUT whole;
-5. the builder on that copy, twice: as te_core reads it (the price, and te_core.tiles' 32-bit operands for a row
-   named `tf32`), and with the tiles' width for such a row held at a bf16 row's (`PRICE_ONLY`), which no panel
-   publishes: the second is what the price alone moves;
-6. the finals table from its own inputs (islands/integrator/finals_table.py: the reruns' records fetched from the
-   store and ingested afresh, so the hook names their rotations), and the overlay (plot2_final.py) of each finals
-   table over each search table: the served pair, the control, the price alone, and the one to publish (OUT/overlay);
-7. each panel's rows, cell by cell, across those builds (`compare`), under OUT/diff.
+2. per build, the measured ledger (trace40.py's `ledger`, on a copy of K/ledger): the control's from the capture
+   layers the last refresh's meta.json names, each checked by its te_core tree; a layer's with TRACED over them, taken
+   (trace40.py's `take`) into a trace cache under S that links K's;
+3. per build, a copy of that ledger with each rotating run's rows as te_core.ledger's ingest writes them now
+   (`rotations.repriced`, from the run's record in K/state: the ledger's rows were ingested before te_core.rotations
+   named a rotation product `tf32`). Which runs rotate is read from every row's program and stored arguments, and a
+   record te_core.rotations refuses (`Unread`) keeps its rows, listed with why;
+4. per build, te_core.algorithm_policy on that copy (v1cycle's POLICY_IO, the last refresh's pins, ladder fit, gate
+   factors and failed traces);
+5. the finals table from its own inputs (islands/integrator/finals_table.py: the reruns' records fetched from the
+   store and ingested afresh), and the overlay (plot2_final.py) of a finals table over each build's search table: the
+   one the served overlay read over the control's, the rebuilt one over each layer's. The overlay of `--publish` (the
+   last layer unless named) is OUT/overlay, the one to publish;
+6. each panel's rows, cell by cell, across the published tables and the builds (`compare`), under OUT/diff.
 
 Every build's tables, console copies and logs go to OUT, so nothing is read back from the node.
 
-`check` reads `node`'s OUT and says whether the rebuild may be published (`verdict`): the control reproduces the last
-refresh and the served overlay, the fit is the served one, a run that doesn't rotate moves only in p and only where
-its H did, a rotating run's |C| rose by its rotations' added gates, and each rotating row's move in every rho, in p and
-in S, split into the price's and the width's. STATED.json holds rho_own values someone stated for rows of the rebuild
-(`{"rows": [{"run", "step", "before", "after"}]}`); each is compared at `DIGITS` significant digits.
+`check` reads `node`'s OUT and says whether the rebuild may be published (`verdict`): the control is the published
+search table and the served overlay in every cell; the fit, its points and the refused rows are the published ones in
+every build, and every build rewrites the same rotating rows; in a layer's build no row of a run the layer didn't trace
+moves; a build named by `--same` (a layer traced as the published one was) is the control in every cell; and in every
+other layer's build a traced run's row moves only in the leaves `--expect` names (a column, or a path into a cell that
+holds a JSON object, `kinds/sensitivity/update`; `*` matches within a name). Every move is listed, leaf by leaf, with
+the count of cells that don't move.
 
 `diff` is `compare` on stored panels.
 """
@@ -42,35 +46,28 @@ from __future__ import annotations
 import argparse
 import ast
 import collections
+import fnmatch
 import hashlib
 import json
+import multiprocessing
 import os
-import re
 import shutil
 import subprocess
 import sys
-import tarfile
 import time
+from concurrent.futures import ProcessPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 CW = HERE.parent
 sys.path.insert(0, str(CW))
-#: the builder with the tiles reading a `tf32` row's operands at a bf16 row's width: the price's effect alone
-PRICE_ONLY = 'from te_core import tiles\ntiles.WIDTH = dict(tiles.WIDTH) | {"gemm/tf32": tiles.WIDTH["gemm/bf16"]}\n'
 #: the uncut tables a build of te_core.algorithm_policy writes
 TABLES = ("algorithm-policy.json", "frontier-fit.json", "frontier-points.json", "coverage.json", "refused.json")
 #: a panel's fields that say when and by what it was built, never compared as content
 STAMPS = ("updated_at", "source")
 #: the column that carries the builder's VERSION, which every rebuilt row changes
 VERSION_COLUMN = "te_core"
-#: the columns a row's slowdown is read in, each rho kind, and the cells a run that doesn't rotate may move in: its p
-#: over an H that moved, and the overlay's record cell, which spells p's range
-RHOS = ("rho_own", "rho_default", "rho_console", "rho_served")
-H_CELLS = {"p", "H_gates", "record"}
-#: the significant digits a stated value is compared at, and the relative room two sums of one row's gates get
-DIGITS, ROOM = 4, 1e-9
 T0 = time.monotonic()
 
 
@@ -206,185 +203,119 @@ def deep(a, b, path: str = "", skip: tuple[str, ...] = ()) -> list[dict]:
 # -- before publishing
 
 
-def sig(x: float, digits: int = DIGITS) -> float:
-    return float(f"{x:.{digits}g}")
-
-
-def at(doc, path: str):
-    """The node of `doc` at one of `deep`'s paths."""
-    for part in path.strip("/").split("/"):
-        doc = doc[int(part)] if isinstance(doc, list) else doc[part]
-    return doc
-
-
-def step_of(record: str) -> int:
-    return int(str(record).split(";")[0].rsplit("@", 1)[1])
+def leaves(a: dict, b: dict) -> dict[str, tuple]:
+    """Each leaf at which two rows differ, as (before, after), `VERSION_COLUMN` aside: a cell that holds a JSON object
+    in both is walked (`deep`), its leaves named COLUMN/PATH; any other cell is its own leaf."""
+    out = {}
+    for c in a:
+        if c == VERSION_COLUMN or c not in b or a[c] == b[c]:
+            continue
+        x, y = a[c], b[c]
+        if isinstance(x, str) and isinstance(y, str) and x[:1] == "{" == y[:1]:
+            try:
+                out |= {c + d["at"]: (d["before"], d["after"]) for d in deep(json.loads(x), json.loads(y))}
+                continue
+            except ValueError:
+                pass
+        out[c] = (x, y)
+    return out
 
 
 def moves(a: dict, b: dict) -> dict[tuple, dict]:
-    """Per row of both tables whose cells differ (`VERSION_COLUMN` aside): each differing cell's (before, after)."""
-    out = {}
-    for k in a.keys() & b.keys():
-        cells = {c: (a[k][c], b[k][c]) for c in a[k] if c != VERSION_COLUMN and c in b[k] and a[k][c] != b[k][c]}
-        if cells:
-            out[k] = cells
-    return out
+    """Per row of both tables that differs: its leaves (`leaves`)."""
+    out = {k: leaves(a[k], b[k]) for k in a.keys() & b.keys()}
+    return {k: v for k, v in out.items() if v}
 
 
-def split(control: dict, price: dict, priced: dict, rotating: set[str]) -> list[dict]:
-    """Each rotating run's row that moved: per rho kind, p and S = p rho_own, its change under the price alone and
-    under the price and the tiles' width, and the greater total."""
-    def s_of(d: dict):
-        return d["p"] * d["rho_own"] if isinstance(d.get("p"), float) and isinstance(d.get("rho_own"), float) else None
-    out = []
-    for k in sorted(control.keys() & price.keys() & priced.keys(), key=str):
-        if k[0] not in rotating:
-            continue
-        cells = {}
-        for c in (*RHOS, "p", "C_gates", "S"):
-            was, mid, now = ((s_of(t[k]) if c == "S" else t[k].get(c)) for t in (control, price, priced))
-            if was != now or was != mid:
-                cells[c] = {"control": was, "price": mid, "priced": now, "price_only": change(was, mid),
-                            "price_and_width": change(was, now)}
-        if cells:
-            out.append({"run": k[0], "g": k[1], "record": priced[k].get("record"), "cells": cells,
-                        "largest": max((abs(v["price_and_width"]) for c, v in cells.items()
-                                        if c != "C_gates" and v["price_and_width"] is not None), default=0.0)})
-    return out
+def listed(rows: dict[tuple, dict], tab: dict) -> list[dict]:
+    """`moves`' rows as a list: run, gain target, record cell, and each leaf's before, after and relative change."""
+    return [{"run": k[0], "g": k[1], "record": tab[k].get("record") if k in tab else None,
+             "leaves": {leaf: {"before": x, "after": y, "change": change(x, y)} for leaf, (x, y) in sorted(v.items())}}
+            for k, v in sorted(rows.items(), key=str)]
 
 
-def verdict(OUT: Path, stated: dict | None = None) -> dict:
+def cells(was: dict, now: dict) -> dict:
+    """How many cells of the rows two tables share move and how many don't, the version's column counted apart."""
+    keys = was.keys() & now.keys()
+    cols = [c for c in next(iter(now.values()), {}) if c != VERSION_COLUMN]
+    moved = sum(len({leaf.split("/")[0] for leaf in v}) for v in moves(was, now).values())
+    return {"rows": len(keys), "columns": len(cols), "cells": len(keys) * len(cols), "moved": moved,
+            "unmoved": len(keys) * len(cols) - moved, "rows_moved": len(moves(was, now)),
+            "rows_in_one_only": len(was.keys() ^ now.keys())}
+
+
+def verdict(OUT: Path, same: tuple[str, ...] = (), expect: tuple[str, ...] = ()) -> dict:
     """What `node`'s OUT says, as checks that each hold or name their rows (module docstring)."""
     def load(*parts: str) -> dict:
         return json.loads(OUT.joinpath(*parts).read_text())
     name = TABLES[0]
-    rot, inputs = load("rotations.json"), load("inputs.json")
-    rotating = set(rot["runs"])
-    search = {n: table(load("search", n, name)) for n in ("control", "price", "priced")}
-    over = {"control": table(load("overlays", "control", "tables", name)),
-            "price": table(load("overlays", "price", "tables", name)), "priced": table(load("overlay", "tables", name))}
-    diff = {n: load("diff", f"{n}.json") for n in ("search", "overlay", "frontier-fit", "finals-table", "console")}
-    checks, lists = {}, {}
+    builds, inputs = load("builds.json"), load("inputs.json")
+    layers, publish = builds["layers"], builds["publish"]
+    for n in same:
+        if n not in layers:
+            raise SystemExit(f"replot: --same {n}: the rebuild's layers are {sorted(layers)}")
+    names = ["control", *layers]
+    tabs = {"search": {n: table(load("search", n, name)) for n in names},
+            "overlay": {n: table(load("overlay" if n == publish else f"overlays/{n}", "tables", name)) for n in names}}
+    published = {"search": table(load("published", "search", name)), "overlay": table(load("published", "overlay.json"))}
+    diff = {n: load("diff", f"{n}.json") for n in ("frontier-fit", "finals-table", "console")}
+    checks, lists, counts = {}, {}, {}
 
-    # the control is the last refresh's table, and its overlay the served one
-    for what, d, a, b in (("search", diff["search"], "last", "control"), ("overlay", diff["overlay"], "served", "control")):
-        off = [m for m in d["moved"] if f"{a}/{b}" in m["between"]] + [o for o in d["only"] if set(o["in"]) & {a, b}
-                                                                         and not {a, b} <= set(o["in"])]
-        checks[f"the control {what} table is the {a} one"] = not off
-        lists[f"{what}: {a} against control"] = off
     fit = diff["frontier-fit"]
-    checks["frontier-fit: the table is the last refresh's in every build, and the console's is the served one"] = (
-        all(v["rows"] and v["columns"] for v in fit["tables"].values()) and all(fit["refused"].values())
-        and fit["console_served_against_rebuilt"]["rows"] and fit["console_served_against_rebuilt"]["columns"])
-    # the frontier's points, which the fit's table is drawn from: a point moves only where its row was rewritten
-    with tarfile.open(OUT / "priced-rows.tar.gz") as t:
-        rewritten = {Path(n).stem for n in t.getnames()}
-    was, now = load("search", "control", TABLES[2]), load("search", "priced", TABLES[2])
-    points = []
-    for x in deep(was, now):
-        point = at(was, x["at"].rsplit("/", 1)[0])
-        source = point.get("source") if isinstance(point, dict) else None
-        row = re.search(r"\(([^()@]+)@\d+\)\s*$", source or "")
-        points.append(x | {"source": source, "rewritten_row": bool(row and row.group(1) in rewritten)})
-    same = fit["points"]["control"]
-    checks["frontier points: the control's are the last refresh's, and one moves only where its row is a rotating run's"] = (
-        (same["rows"] and same["columns"] if isinstance(same, dict) else same)
-        and all(x["rewritten_row"] and x["at"].endswith("/C_gates") for x in points)
-        and load("search", "price", TABLES[2]) == now)
-    lists["frontier points that moved"] = points
-    # a run the re-pricing couldn't read has no row in any table
-    shown = {k[0] for t in (*search.values(), *over.values()) for k in t}
-    named = json.dumps([load("search", n, TABLES[4]) for n in search])
-    apart = {why: sorted(rot[why]) for why in ("unread", "no_record", "no_arguments", "unknown_program")}
+    checks["the fit, its points and the refused rows are the published ones in every build, and the console's fit is "
+           "the served one"] = (
+        all(v["rows"] and v["columns"] for v in fit["tables"].values()) and all(fit["points"].values())
+        and all(fit["refused"].values()) and fit["console_served_against_rebuilt"]["rows"]
+        and fit["console_served_against_rebuilt"]["columns"])
+    lists["finals table: leaves that differ from the one the served overlay read"] = diff["finals-table"]["differ"]
+    checks["the finals table rebuilt is the one the served overlay read"] = not diff["finals-table"]["differ"]
+    rot = {n: load("rotations", f"{n}.json") for n in names}
+    checks["every build rewrites the same rotating rows"] = all(r == rot["control"] for r in rot.values())
+    shown = {k[0] for t in tabs.values() for tab in t.values() for k in tab}
+    named = json.dumps([load("search", n, TABLES[4]) for n in names])
+    apart = {why: sorted(rot["control"][why]) for why in ("unread", "no_record", "no_arguments", "unknown_program")}
     held = {why: [r for r in runs if r in shown or r in named] for why, runs in apart.items()}
     checks["no run the re-pricing couldn't read has a row in a table"] = not any(held.values())
     lists["runs not re-priced"] = apart
     lists["runs not re-priced that have a row in a table"] = held
 
-    # a run that doesn't rotate moves only in p, and only over an H that moved
-    for what, tabs in (("search", search), ("overlay", over)):
-        other = {k: c for k, c in moves(tabs["control"], tabs["priced"]).items() if k[0] not in rotating}
-        beyond = {k: c for k, c in other.items() if set(c) - H_CELLS or ("p" in c and "H_gates" in tabs["priced"][k]
-                                                                         and "H_gates" not in c)}
-        checks[f"{what}: no run without a rotation moves but in p over an H that moved"] = not beyond
-        lists[f"{what}: rows without a rotation that moved otherwise"] = [
-            {"run": k[0], "g": k[1], "cells": c} for k, c in sorted(beyond.items(), key=str)]
-        lists[f"{what}: rows without a rotation whose p moved"] = [
-            {"run": k[0], "g": k[1], "p": c["p"], "change": change(*c["p"]), "H_gates": c.get("H_gates")}
-            for k, c in sorted(other.items(), key=str) if "p" in c]
+    for what, t in tabs.items():
+        was, control = published[what], t["control"]
+        off = moves(was, control)
+        checks[f"{what}: the control is the published table in every cell"] = not off and was.keys() == control.keys()
+        lists[f"{what}: published against control"] = listed(off, control)
+        lists[f"{what}: rows in only one of published and control"] = sorted(map(list, was.keys() ^ control.keys()))
+        counts[what] = {"published against control": cells(was, control)}
+        for n, layer in layers.items():
+            traced, got = set(layer["runs"]), moves(control, t[n])
+            outside = {k: v for k, v in got.items() if k[0] not in traced}
+            checks[f"{what}, {n}: no row of a run the layer didn't trace moves, and no row comes or goes"] = (
+                not outside and control.keys() == t[n].keys())
+            lists[f"{what}, {n}: rows of other runs that move"] = listed(outside, t[n])
+            lists[f"{what}, {n}: rows in only one of control and {n}"] = sorted(map(list, control.keys() ^ t[n].keys()))
+            lists[f"{what}, {n}: rows that move"] = listed(got, t[n])
+            lists[f"{what}, {n}: traced runs with a row"] = sorted(traced & {k[0] for k in t[n]})
+            counts[what][f"control against {n}"] = cells(control, t[n]) | {
+                "leaves": dict(collections.Counter(leaf for v in got.values() for leaf in v).most_common())}
+            if n in same:
+                checks[f"{what}, {n}: every cell is the control's"] = not got
+                continue
+            beyond = {k: {leaf: v for leaf, v in ls.items() if not any(fnmatch.fnmatchcase(leaf, e) for e in expect)}
+                      for k, ls in got.items()}
+            beyond = {k: v for k, v in beyond.items() if v}
+            checks[f"{what}, {n}: a row moves only in the leaves expected"] = not beyond
+            lists[f"{what}, {n}: leaves that move beyond the expected"] = listed(beyond, t[n])
 
-    # a rotating run's |C| rose by its rotations' added gates through the row's checkpoint
-    off, still = [], []
-    for k, d in sorted(search["priced"].items(), key=str):
-        if k[0] not in rotating or k not in search["control"]:
-            continue
-        was, now = search["control"][k]["C_gates"], d["C_gates"]
-        cp = rot["runs"][k[0]]["checkpoints"].get(str(step_of(d["record"])))
-        if cp is None or abs((now - was) - cp["gates_added"]) > ROOM * now:
-            off.append({"run": k[0], "g": k[1], "record": d["record"], "C_gates": [was, now], "checkpoint": cp})
-        if now == was:
-            still.append({"run": k[0], "g": k[1], "record": d["record"]})
-    checks["search: each rotating row's |C| rose by its rotations' added gates"] = not off
-    lists["search: rotating rows whose |C| moved otherwise"] = off
-    lists["search: rotating rows whose |C| stayed"] = still
-
-    # each rotating row's move, the price's and the width's
-    parts = {what: split(t["control"], t["price"], t["priced"], rotating) for what, t in (("search", search), ("overlay", over))}
-    width = [{"run": m["run"], "g": m["g"], "cells": {c: v for c, v in m["cells"].items() if v["price"] != v["priced"]}}
-             for m in parts["overlay"] if any(v["price"] != v["priced"] for v in m["cells"].values())]
-    lists["overlay: rotating rows the tiles' width moves beyond the price"] = width
-    lists["overlay: rotating rows, split"] = parts["overlay"]
-    lists["search: rotating rows, split"] = parts["search"]
-
-    def largest(rows: list[dict], cols: tuple[str, ...]) -> dict | None:
-        best = None
-        for m in rows:
-            for c in cols:
-                v = m["cells"].get(c)
-                if v and v["price_and_width"] is not None and (best is None or abs(v["price_and_width"]) > abs(best["change"])):
-                    best = {"run": m["run"], "g": m["g"], "column": c, "change": v["price_and_width"],
-                            "price_only": v["price_only"], "before": v["control"], "after": v["priced"]}
-        return best
-    p_all = [{"run": k[0], "g": k[1], "column": "p", "change": change(*c["p"]), "before": c["p"][0], "after": c["p"][1],
-              "rotating": k[0] in rotating}
-             for k, c in moves(over["control"], over["priced"]).items() if "p" in c and change(*c["p"]) is not None]
-    summary = {"rotating_runs": len(rotating),
-               "overlay_rows": len(over["priced"]),
-               "overlay_rows_moved": len(moves(over["control"], over["priced"])),
-               "overlay_rows_moved_rotating": sum(k[0] in rotating for k in moves(over["control"], over["priced"])),
-               "search_rows": len(search["priced"]), "search_rows_moved": len(moves(search["control"], search["priced"])),
-               "largest_move_in_rho": largest(parts["overlay"], RHOS),
-               "largest_move_in_p": max(p_all, key=lambda x: abs(x["change"]), default=None),
-               "largest_move_in_S": largest(parts["overlay"], ("S",)),
-               "rows_moving_over_1_percent": [m for m in parts["overlay"] if m["largest"] > 0.01],
-               "console": {k: diff["console"][k] for k in ("served_rows", "rebuilt_rows", "served_rows_the_rebuild_drops",
-                                                           "rows_the_rebuild_adds", "bytes", "note")},
-               "finals_table_leaves_that_differ": len(diff["finals-table"]["differ"]),
-               "versions": {n: d[VERSION_COLUMN] for n, d in diff["overlay"]["panels"].items()}}
-    checks["the console's cut drops no row the served one kept"] = not diff["console"]["served_rows_the_rebuild_drops"]
-
-    # values stated for rows of the rebuild
-    if stated:
-        rows = []
-        for e in stated["rows"]:
-            for k, d in sorted(search["priced"].items(), key=str):
-                if not k[0].endswith(e["run"]) or (e.get("step") is not None and step_of(d["record"]) != e["step"]):
-                    continue
-                was, mid, now = (search[n][k]["rho_own"] for n in ("control", "price", "priced"))
-                cp = rot["runs"].get(k[0], {}).get("checkpoints", {}).get(str(step_of(d["record"])))
-                factors = {c: change(search["control"][k][c], d[c]) for c in RHOS}
-                rows.append({"run": k[0], "g": k[1], "record": d["record"], "stated": [e["before"], e["after"]],
-                             "rho_own": {"control": was, "price": mid, "priced": now},
-                             "before_agrees": sig(was) == sig(e["before"]), "price_agrees": sig(mid) == sig(e["after"]),
-                             "priced_agrees": sig(now) == sig(e["after"]),
-                             "stated_delta": e["before"] / e["after"] - 1,
-                             "delta": cp["gates_added"] / cp["C_before"] if cp and cp["C_before"] else None,
-                             "rotation_macs": cp["rotation_macs"] if cp else None,
-                             "every_rho_by_one_factor": len({sig(f, 6) for f in factors.values() if f is not None}) <= 1,
-                             "factors": factors, "structures": rot["runs"].get(k[0], {}).get("structures")})
-        checks["every stated rho_own agrees with the rebuild"] = bool(rows) and all(r["priced_agrees"] for r in rows)
-        lists["stated rows"] = rows
-        lists["stated rows that differ"] = [r for r in rows if not r["priced_agrees"]]
+    console = diff["console"]
+    checks["the console's cut drops no row the served one kept"] = not console["served_rows_the_rebuild_drops"]
+    summary = {"layers": {n: {"te_core": layer["te_core"], "commit": layer["commit"], "te_tree": layer["te_tree"],
+                              "runs": len(layer["runs"]), "errors": sorted(layer["errors"])} for n, layer in layers.items()},
+               "publish": publish, "same": list(same), "expect": list(expect), "cells": counts,
+               "console": {k: console[k] for k in ("served_rows", "rebuilt_rows", "served_rows_the_rebuild_drops",
+                                                   "rows_the_rebuild_adds", "bytes", "note")} | {
+                   "rows_moved": len(console["rows"]["moved"]),
+                   "columns_moved": sorted({c for m in console["rows"]["moved"] for c in m["cells"]}),
+                   "versions": {n: d[VERSION_COLUMN] for n, d in console["rows"]["panels"].items()}}}
     return {"run_out": str(OUT), "code": inputs.get("code"), "main_head": inputs.get("main_head"),
             "holds": all(checks.values()), "checks": checks, "summary": summary, "lists": lists}
 
@@ -415,8 +346,9 @@ def layers(K: Path, meta: dict) -> tuple[Path, list[Path]]:
 
 
 def scorer_env(K: Path, S: Path) -> dict:
-    """refresh-node.sh's environment, with the ledger a copy under `S` and the measured ledger beside it."""
-    return os.environ | {"TE_SCORER_STATE": str(K / "state"), "TE_SCORER": str(K / "state"),
+    """refresh-node.sh's environment, with the ledger a copy under `S` and the scorer's state the one under `S`
+    (`scratch_state`)."""
+    return os.environ | {"TE_SCORER_STATE": str(K / "state"), "TE_SCORER": str(S / "state"),
                          "TE_LEDGER": str(S / "ledger"), "TE_LEDGER_40": str(S / "measured"),
                          "TE_REPO": str(K / "repo.git"), "TE40_WT": str(K / "wt" / "te40"),
                          "TE_RESCORE_WT": str(K / "wt" / "rescore"), "TE_NEXT_WT": str(K / "wt" / "te-next"),
@@ -443,29 +375,54 @@ def facts(K: Path) -> dict:
             "cores": os.cpu_count(), "research": shutil.which("research")}
 
 
-def measured_ledger(K: Path, S: Path, meta: dict, logs: Path) -> dict:
-    """Step 2 (module docstring): K/ledger's records copied and indexed, then trace40.py's measured ledger of them."""
-    env = scorer_env(K, S)
+def scratch_state(K: Path, S: Path) -> None:
+    """S/state: K/state's entries as links, its trace cache a directory of links to K's caches, so a layer taken into
+    it (trace40.py's `take`) is a cache K never holds."""
+    (S / "state" / "trace40").mkdir(parents=True)
+    for p in (K / "state").iterdir():
+        if p.name != "trace40":
+            os.symlink(p, S / "state" / p.name)
+    for p in (K / "state" / "trace40").iterdir():
+        os.symlink(p, S / "state" / "trace40" / p.name)
+
+
+def taken(name: str, checkout: Path, traced: Path, K: Path, S: Path, logs: Path) -> dict:
+    """A trace40.py node run's out/ (`traced`) taken as the cache of `checkout`'s te_core: what it traced, and by what."""
+    tree = git("rev-parse", "HEAD:benchmarks/covert_witness/te_core", cwd=checkout)
+    if (K / "state" / "trace40" / tree[:12]).exists():
+        raise SystemExit(f"replot: the scorer already holds a trace cache of {checkout}'s te_core ({tree[:12]}), which "
+                         f"taking {name} would write into; a layer is a te_core it hasn't traced with")
+    run([sys.executable, HERE / "trace40.py", "take", name, "--te", checkout, "--src", traced], logs / f"take-{name}.log",
+        cwd=HERE, env=scorer_env(K, S))
+    runs = json.loads((traced / "traced.json").read_text())
+    init = git("show", "HEAD:benchmarks/covert_witness/te_core/__init__.py", cwd=checkout)
+    return {"checkout": str(checkout), "commit": git("rev-parse", "HEAD", cwd=checkout), "te_tree": tree,
+            "te_core": next((x.split('"')[1] for x in init.splitlines() if x.startswith("VERSION = ")), ""),
+            "manifest": json.loads((traced / "manifest.json").read_text()),
+            "runs": sorted(k for k, v in runs.items() if not v.get("error")),
+            "errors": {k: str(v["error"])[-400:] for k, v in runs.items() if v.get("error")}}
+
+
+def ledger_copy(K: Path, S: Path, logs: Path) -> dict:
+    """K/ledger's records copied under `S` and indexed."""
     shutil.copytree(K / "ledger" / "records", S / "ledger" / "records")
-    run([sys.executable, "-m", "te_core.ledger", "--root", S / "ledger", "index"], logs / "ledger-index.log", env=env)
+    run([sys.executable, "-m", "te_core.ledger", "--root", S / "ledger", "index"], logs / "ledger-index.log",
+        env=scorer_env(K, S))
     theirs, mine = K / "ledger" / "index.jsonl", S / "ledger" / "index.jsonl"
-    te40, over = layers(K, meta)
-    r = run([sys.executable, HERE / "trace40.py", "ledger", "--out", S / "measured", "--te", te40,
-             *(x for o in over for x in ("--over", o))], logs / "trace40-ledger.log", cwd=HERE, env=env)
-    built = json.loads(r.stdout.strip().splitlines()[-1])
-    was = (meta.get("trace") or {}).get("ledger")
     return {"records": sum(1 for _ in (S / "ledger" / "records").glob("*/*.json")),
-            "index_as_the_node_holds_it": theirs.exists() and sha256(theirs) == sha256(mine),
-            "capture": str(te40), "over": [str(o) for o in over], "built": built, "last_refresh_built": was,
-            "as_last_refresh": built == was}
+            "index_as_the_node_holds_it": theirs.exists() and sha256(theirs) == sha256(mine)}
 
 
-def linked(src: Path, dst: Path) -> None:
-    """`src`'s records under `dst`, each file a hard link."""
-    for p in sorted((src / "records").glob("*/*")):
-        d = dst / "records" / p.parent.name / p.name
-        d.parent.mkdir(parents=True, exist_ok=True)
-        os.link(p, d)
+def measured_ledger(K: Path, S: Path, meta: dict, out: Path, log: Path, more: tuple[Path, ...] = ()) -> dict:
+    """Step 2 (module docstring): trace40.py's measured ledger of the copy, from the last refresh's capture layers and
+    then `more`'s."""
+    te40, over = layers(K, meta)
+    r = run([sys.executable, HERE / "trace40.py", "ledger", "--out", out, "--te", te40,
+             *(x for o in (*over, *more) for x in ("--over", o))], log, cwd=HERE, env=scorer_env(K, S))
+    made = json.loads(r.stdout.strip().splitlines()[-1])
+    was = (meta.get("trace") or {}).get("ledger")
+    return {"capture": str(te40), "over": [str(o) for o in (*over, *more)], "built": made, "last_refresh_built": was,
+            "as_last_refresh": made == was}
 
 
 def gate_factors(K: Path, stamp: str) -> Path:
@@ -491,8 +448,7 @@ def policy_source() -> str:
     return got["POLICY_IO"]
 
 
-def builder(out: Path, root: Path, K: Path, meta: dict, cap: Path, failed: Path, policy_io: str,
-            before: str = "") -> subprocess.Popen:
+def builder(out: Path, root: Path, K: Path, meta: dict, cap: Path, failed: Path, policy_io: str) -> subprocess.Popen:
     """te_core.algorithm_policy as the scorer's refresh runs it (v1cycle's POLICY_IO; nothing published), started."""
     out.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(gate_factors(K, meta["stamp"].replace(":", "")), out / "analysis-gates.json")
@@ -500,7 +456,7 @@ def builder(out: Path, root: Path, K: Path, meta: dict, cap: Path, failed: Path,
             *(x for p in meta["pins"] for x in ("--pin", p)), "--ladder-fit", str(cap)]
     env = {k: v for k, v in os.environ.items() if k not in ("TE_SERVED", "TE_TABLES_CITE", "TE_VM_PUT")}
     log = (out / "run.log").open("w")
-    return subprocess.Popen([sys.executable, "-c", before + policy_io, *args], cwd=CW, stdout=log,
+    return subprocess.Popen([sys.executable, "-c", policy_io, *args], cwd=CW, stdout=log,
                             stderr=subprocess.STDOUT, env=env | {"TE_TRACE_FAILED": str(failed)})
 
 
@@ -512,7 +468,7 @@ def built(name: str, proc: subprocess.Popen, out: Path) -> dict[str, dict]:
 
 
 def reprice(measured: Path, priced: Path, K: Path) -> dict:
-    """Step 4 (module docstring): `measured`'s records under `priced`, a rotating run's rows rewritten and every other
+    """Step 3 (module docstring): `measured`'s records under `priced`, a rotating run's rows rewritten and every other
     file linked; what it found, per run."""
     from te_core import gates, rotations
 
@@ -604,8 +560,24 @@ def reprice(measured: Path, priced: Path, K: Path) -> dict:
     return out | {"counts": dict(n), "rotating_runs": len(out["runs"]), "runs_in_ledger": len(by_run)}
 
 
+def build(name: str, more: tuple[Path, ...], K: Path, S: Path, OUT: Path, meta: dict, cap: Path, failed: Path,
+          policy_io: str) -> dict:
+    """Steps 2 to 4 for one build, under S/NAME: what its ledger and its re-pricing found; its tables are in
+    S/NAME/out."""
+    led = measured_ledger(K, S, meta, S / name / "measured", OUT / "logs" / f"{name}-ledger.log", more)
+    say(f"{name}: the measured ledger: {led['built']}")
+    rot = reprice(S / name / "measured", S / name / "priced", K)
+    rot["rewritten"] = len(rot["rewritten"])
+    say(f"{name}: {rot['rotating_runs']} rotating runs of {rot['runs_in_ledger']}: {rot['counts']}; unread "
+        f"{len(rot['unread'])}, unknown programs {len(rot['unknown_program'])}, no record {len(rot['no_record'])}, no "
+        f"arguments {len(rot['no_arguments'])}")
+    built(name, builder(S / name / "out", S / name / "priced", K, meta, cap, failed, policy_io), S / name / "out")
+    say(f"{name}: built")
+    return {"ledger": led, "rotations": rot}
+
+
 def finals(S: Path, IN: Path, logs: Path, inputs: dict) -> dict:
-    """Step 6's finals table: islands/integrator/finals_table.py on its own inputs, the reruns' records fetched again."""
+    """Step 5's finals table: islands/integrator/finals_table.py on its own inputs, the reruns' records fetched again."""
     script = CW / "islands" / "integrator" / "finals_table.py"
     f = IN / "finals"
     run([sys.executable, script, "fetch", "--launches", f / "launches-snap.jsonl", "--to", S / "finals-records",
@@ -640,12 +612,27 @@ def node(a) -> int:
     K, IN, S, OUT = a.state, a.inputs, a.scratch, a.out
     logs = OUT / "logs"
     logs.mkdir(parents=True, exist_ok=True)
+    specs = {}
+    for spec in a.layer:
+        name, checkout, traced = spec.split("=", 2)
+        if name in specs or name in ("control", "published", "served"):
+            raise SystemExit(f"replot: --layer {spec}: the name {name} is taken")
+        specs[name] = (Path(checkout), Path(traced))
+    publish = a.publish or next(reversed(specs), "control")
+    if publish not in ("control", *specs):
+        raise SystemExit(f"replot: --publish {publish}: the builds are control, {', '.join(specs)}")
     inputs = json.loads((IN / "inputs.json").read_text())
     dump(OUT / "inputs.json", inputs | {"sha256": {str(p.relative_to(IN)): sha256(p) for p in sorted(IN.rglob("*"))
                                                     if p.is_file()}})
     meta = json.loads((IN / "last" / "meta.json").read_text())
     factors = gate_factors(K, meta["stamp"].replace(":", ""))
     dump(OUT / "node.json", facts(K) | {"gate_factors": {"path": str(factors), "sha256": sha256(factors)}})
+    ap, ff = TABLES[0], TABLES[1]
+    for n in TABLES:
+        (OUT / "published" / "search").mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(IN / "last" / n, OUT / "published" / "search" / n)
+    for n in ("overlay.json", "finals-table.json", "console-algorithm-policy.json", "console-frontier-fit.json"):
+        shutil.copyfile(IN / "served" / n, OUT / "published" / n)
     say("the price")
     held = run([sys.executable, "-m", "te_core.gates_main", IN / "main" / "training_slowdown"], logs / "gates-main.log",
                check=False)
@@ -654,73 +641,71 @@ def node(a) -> int:
     dump(OUT / "gates.json", gates)
     if held.returncode:
         raise SystemExit(f"replot: te_core's gate table isn't main's: {gates}; {held.stderr.strip()[-600:]}")
-    say("the measured ledger")
-    led = measured_ledger(K, S, meta, logs)
-    dump(OUT / "ledger.json", led)
-    say(f"the measured ledger: {led['built']} (the last refresh's: {led['last_refresh_built']})")
+    say("the layers")
+    scratch_state(K, S)
+    layer = {name: taken(name, checkout, traced, K, S, logs) for name, (checkout, traced) in specs.items()}
+    dump(OUT / "builds.json", {"publish": publish, "layers": layer})
+    for name, x in layer.items():
+        say(f"{name}: te_core {x['te_core']} at {x['commit'][:12]} (tree {x['te_tree'][:12]}): {len(x['runs'])} runs "
+            f"traced, {len(x['errors'])} not")
     failed = K / "v1" / meta["stamp"].replace(":", "") / "trace-failed.json"
     if not failed.exists():
         raise SystemExit(f"replot: {failed}, the runs whose trace failed at the last refresh, is gone, and without it "
                          "their rows would read 'not yet traced'")
     shutil.copyfile(failed, OUT / "trace-failed.json")
     cap = IN / "finals" / "CAP.json"
-    say("the control build starts")
+    say("the ledger's copy")
+    copy = ledger_copy(K, S, logs)
+    names = ["control", *specs]
+    say(f"the builds start: {', '.join(names)}")
     policy_io = policy_source()
-    procs = {"control": builder(S / "control", S / "measured", K, meta, cap, failed, policy_io)}
-    say("the rotating runs' rows")
-    rot = reprice(S / "measured", S / "priced", K)
-    (S / "rewritten.txt").write_text("".join(f"{x}\n" for x in rot.pop("rewritten")))
-    run(["tar", "-C", S / "priced", "-czf", OUT / "priced-rows.tar.gz", "-T", S / "rewritten.txt"], logs / "priced-rows.log")
-    dump(OUT / "rotations.json", rot)
-    rotating = set(rot["runs"])
-    say(f"{rot['rotating_runs']} rotating runs of {rot['runs_in_ledger']}: {rot['counts']}; unread {len(rot['unread'])}, "
-        f"unknown programs {len(rot['unknown_program'])}, no record {len(rot['no_record'])}, no arguments "
-        f"{len(rot['no_arguments'])}")
-    linked(S / "priced", S / "priced-width")
-    procs["priced"] = builder(S / "priced-out", S / "priced", K, meta, cap, failed, policy_io)
-    procs["price"] = builder(S / "price-out", S / "priced-width", K, meta, cap, failed, policy_io, PRICE_ONLY)
-    say("the finals table")
-    fin = finals(S, IN, logs, inputs)
-    dump(OUT / "finals" / "reruns.json", fin)
-    for n in ("finals-table.json", "finals-table.md"):
-        shutil.copyfile(S / "finals" / n, OUT / "finals" / n)
-    shutil.copyfile(S / "finals-records" / "fetch.json", OUT / "finals" / "fetch.json")
-    served_finals = IN / "served" / "finals-table.json"
-    dump(OUT / "diff" / "finals-table.json",
-         {"before": "the finals table the served overlay read", "after": "the finals table rebuilt",
-          "differ": deep(json.loads(served_finals.read_text()), json.loads((S / "finals" / "finals-table.json").read_text()),
-                         skip=("built_at", "te_core", "inputs"))})
-    say("waiting for the three builds")
-    dirs = {"control": S / "control", "priced": S / "priced-out", "price": S / "price-out"}
-    tabs = {name: built(name, procs[name], dirs[name]) for name in ("control", "price", "priced")}
-    for name, d in dirs.items():
+    with ProcessPoolExecutor(len(names), mp_context=multiprocessing.get_context("fork")) as ex:
+        jobs = {n: ex.submit(build, n, (specs[n][0],) if n in specs else (), K, S, OUT, meta, cap, failed, policy_io)
+                for n in names}
+        say("the finals table")
+        fin = finals(S, IN, logs, inputs)
+        dump(OUT / "finals" / "reruns.json", fin)
+        for n in ("finals-table.json", "finals-table.md"):
+            shutil.copyfile(S / "finals" / n, OUT / "finals" / n)
+        shutil.copyfile(S / "finals-records" / "fetch.json", OUT / "finals" / "fetch.json")
+        served_finals = IN / "served" / "finals-table.json"
+        dump(OUT / "diff" / "finals-table.json",
+             {"before": "the finals table the served overlay read", "after": "the finals table rebuilt",
+              "differ": deep(json.loads(served_finals.read_text()), json.loads((S / "finals" / "finals-table.json").read_text()),
+                             skip=("built_at", "te_core", "inputs"))})
+        say("waiting for the builds")
+        found = {n: j.result() for n, j in jobs.items()}
+    dump(OUT / "ledger.json", copy | {n: f["ledger"] for n, f in found.items()})
+    for n, f in found.items():
+        dump(OUT / "rotations" / f"{n}.json", f["rotations"])
+    rotating = set(found["control"]["rotations"]["runs"])
+    tabs = {}
+    for n in names:
+        d = S / n / "out"
+        tabs[n] = {t: json.loads((d / "tables" / t).read_text()) for t in TABLES}
         for f in (*TABLES, "coverage.md"):
-            (OUT / "search" / name).mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(d / "tables" / f, OUT / "search" / name / f)
-        shutil.copyfile(d / "run.log", OUT / "search" / name / "run.log")
-        shutil.copytree(d / "console", OUT / "search" / name / "console")
+            (OUT / "search" / n).mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(d / "tables" / f, OUT / "search" / n / f)
+        shutil.copyfile(d / "run.log", OUT / "search" / n / "run.log")
+        shutil.copytree(d / "console", OUT / "search" / n / "console")
     last = {n: json.loads((IN / "last" / n).read_text()) for n in TABLES}
-    ap, ff = TABLES[0], TABLES[1]
     dump(OUT / "diff" / "search.json",
-         compare({"last": last[ap], "control": tabs["control"][ap], "price": tabs["price"][ap],
-                  "priced": tabs["priced"][ap]}, rotating, base="control"))
+         compare({"published": last[ap], **{n: tabs[n][ap] for n in names}}, rotating, base="control", last=publish))
     served_fit = json.loads((IN / "served" / "console-frontier-fit.json").read_text())
-    new_fit = json.loads((S / "priced-out" / "console" / "frontier-fit.json").read_text())
+    new_fit = json.loads((S / publish / "out" / "console" / "frontier-fit.json").read_text())
     dump(OUT / "diff" / "frontier-fit.json",
          {"tables": {n: same_rows(last[ff], tabs[n][ff]) for n in tabs},
-          "points": {n: same_rows(last[TABLES[2]], tabs[n][TABLES[2]]) if isinstance(last[TABLES[2]], dict)
-                     and "rows" in last[TABLES[2]] else last[TABLES[2]] == tabs[n][TABLES[2]] for n in tabs},
+          "points": {n: last[TABLES[2]] == tabs[n][TABLES[2]] for n in tabs},
           "refused": {n: last[TABLES[4]] == tabs[n][TABLES[4]] for n in tabs},
           "console_served_against_rebuilt": same_rows(served_fit, new_fit)})
     say("the overlays")
     new_finals = S / "finals" / "finals-table.json"
-    over = {"served": json.loads((IN / "served" / "overlay.json").read_text()),
-            "control": overlay(served_finals, S / "control" / "tables" / ap, S / "overlay-control", logs / "overlay-control.log"),
-            "price": overlay(new_finals, S / "price-out" / "tables" / ap, S / "overlay-price", logs / "overlay-price.log"),
-            "priced": overlay(new_finals, S / "priced-out" / "tables" / ap, OUT / "overlay", logs / "overlay.log")}
-    for name in ("control", "price"):
-        shutil.copytree(S / f"overlay-{name}", OUT / "overlays" / name)
-    dump(OUT / "diff" / "overlay.json", compare(over, rotating, base="control"))
+    over = {"served": json.loads((IN / "served" / "overlay.json").read_text())}
+    for n in names:
+        where = OUT / "overlay" if n == publish else OUT / "overlays" / n
+        over[n] = overlay(served_finals if n == "control" else new_finals, S / n / "out" / "tables" / ap, where,
+                          logs / f"overlay-{n}.log")
+    dump(OUT / "diff" / "overlay.json", compare(over, rotating, base="control", last=publish))
     was = json.loads((IN / "served" / "console-algorithm-policy.json").read_text())
     now = json.loads((OUT / "overlay" / "console" / ap).read_text())
     served, rebuilt = set(table(was)), set(table(now))
@@ -742,9 +727,17 @@ def main(argv=None) -> int:
     n.add_argument("--inputs", type=Path, required=True, help="the last builds' stored tables and the finals' inputs")
     n.add_argument("--scratch", type=Path, required=True)
     n.add_argument("--out", type=Path, required=True)
+    n.add_argument("--layer", action="append", default=[], metavar="NAME=CHECKOUT=TRACED",
+                   help="a build with a trace40.py node run's out/ (TRACED), traced by CHECKOUT's te_core, over the "
+                        "last refresh's capture layers; repeatable")
+    n.add_argument("--publish", default=None, help="the build whose overlay is OUT/overlay (default: the last layer)")
     c = sub.add_parser("check", help="what a rebuild moved, and whether it may be published")
     c.add_argument("--run", type=Path, required=True, help="`node`'s OUT")
-    c.add_argument("--stated", type=Path, default=None, help="rho_own values stated for rows of the rebuild")
+    c.add_argument("--same", action="append", default=[], metavar="NAME",
+                   help="a layer whose build is to be the control in every cell; repeatable")
+    c.add_argument("--expect", action="append", default=[], metavar="LEAF",
+                   help="a leaf a traced run's row may move in (a column, or COLUMN/PATH into a JSON cell; fnmatch); "
+                        "repeatable")
     c.add_argument("--out", type=Path, required=True)
     d = sub.add_parser("diff", help="stored panels' rows, cell by cell")
     d.add_argument("--out", type=Path, required=True)
@@ -754,7 +747,7 @@ def main(argv=None) -> int:
     if a.cmd == "node":
         return node(a)
     if a.cmd == "check":
-        v = verdict(a.run, json.loads(a.stated.read_text()) if a.stated else None)
+        v = verdict(a.run, tuple(a.same), tuple(a.expect))
         dump(a.out, v)
         for what, ok in v["checks"].items():
             print(f"{'holds' if ok else 'FAILS'}: {what}")

@@ -1,8 +1,7 @@
-"""replot.py: a rotating run's ledger rows are rewritten from its record and every other file linked, and panels are
-compared cell by cell."""
+"""replot.py: a rotating run's ledger rows are rewritten from its record and every other file linked, panels are
+compared cell by cell, and a rebuild with runs traced again moves only those runs' rows, in the leaves expected."""
 import json
 import sys
-import tarfile
 from pathlib import Path
 
 import pytest
@@ -153,65 +152,76 @@ def test_the_builders_script_is_read_from_the_refreshs_source_without_importing_
 
 
 def whole(rows):
-    cols = ["run", "g", "record", "te_core", "C_gates", "H_gates", "p", *replot.RHOS]
+    cols = ["record", "gain_target", "te_core", "C_gates", "p", "rho_own", "kinds", "rho_inputs"]
     return {"columns": cols, "rows": [[r.get(c) for c in cols] for r in rows]}
 
 
-def cells(run, c, h, rho, te="1", g=0.01):
-    return {"run": run, "g": g, "record": f"{run}@40", "te_core": te, "C_gates": c, "H_gates": h, "p": c / h,
-            **{k: rho for k in replot.RHOS}}
+def a_row(run, reduction, te="1", rho=3.0, spaced=False):
+    kinds = {"bound": {"fresh_products": rho}, "sensitivity": {"reduction": reduction, "update": reduction / 10}}
+    return {"record": f"{run}@40", "gain_target": 1.1, "te_core": te, "C_gates": 100.0, "p": 2.0, "rho_own": rho,
+            "kinds": json.dumps(kinds, indent=1 if spaced else None),
+            "rho_inputs": json.dumps({"delta_grad_bits": reduction * 8, "fresh_per_c": {"65536": [1e-9, reduction]}})}
 
 
-def test_a_rotating_rows_move_is_split_into_the_prices_and_the_widths(tmp_path):
-    def write(path, rows):
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(whole(rows)))
+def rebuilt(root, builds, layers, publish="fixed"):
+    """`node`'s OUT for `builds` (name: rows), the published tables being the control's."""
     name = replot.TABLES[0]
-    builds = {"control": [cells("rot", 100.0, 50.0, 4.0), cells("still", 80.0, 40.0, 3.0), cells("h", 60.0, 30.0, 2.0)],
-              "price": [cells("rot", 101.0, 50.0, 3.96, "2"), cells("still", 80.0, 40.0, 3.0, "2"),
-                        cells("h", 60.0, 30.3, 2.0, "2")],
-              "priced": [cells("rot", 101.0, 50.0, 3.95, "2"), cells("still", 80.0, 40.0, 3.0, "2"),
-                         cells("h", 60.0, 30.3, 2.0, "2")]}
     for n, rows in builds.items():
-        write(tmp_path / "search" / n / name, rows)
-        replot.dump(tmp_path / "search" / n / replot.TABLES[4], {"rows": [["gone@3", "refused"]]})
-        replot.dump(tmp_path / "search" / n / replot.TABLES[2], {"v": [
-            {"C_gates": 5.0, "source": "start s"},
-            {"C_gates": 7.0 if n == "control" else 7.5, "source": "m from s (row-1@40)"}]})
-        write(tmp_path / ("overlay" if n == "priced" else f"overlays/{n}") / "tables" / name, rows)
-    (tmp_path / "row-1.json").write_text("{}")
-    with tarfile.open(tmp_path / "priced-rows.tar.gz", "w:gz") as tar:
-        tar.add(tmp_path / "row-1.json", arcname="records/island/row-1.json")
-    tabs = {n: json.loads((tmp_path / "search" / n / name).read_text()) for n in builds}
-    last = {"last": tabs["control"], "served": tabs["control"]}
-    replot.dump(tmp_path / "diff" / "search.json", replot.compare({"last": last["last"], **tabs}, {"rot"}, base="control"))
-    replot.dump(tmp_path / "diff" / "overlay.json", replot.compare({"served": last["served"], **tabs}, {"rot"}, base="control"))
+        replot.dump(root / "search" / n / name, whole(rows))
+        replot.dump(root / "search" / n / replot.TABLES[4], {"rows": [["other@3", "refused"]]})
+        replot.dump(root / ("overlay" if n == publish else f"overlays/{n}") / "tables" / name, whole(rows))
+        replot.dump(root / "rotations" / f"{n}.json", {"runs": {"rot": {}}, "unread": {}, "no_record": ["gone"],
+                                                        "no_arguments": [], "unknown_program": {}})
+    replot.dump(root / "published" / "search" / name, whole(builds["control"]))
+    replot.dump(root / "published" / "overlay.json", whole(builds["control"]))
     same = {"rows": True, "columns": True}
-    replot.dump(tmp_path / "diff" / "frontier-fit.json", {"tables": {"priced": same}, "points": {"control": True},
-                                                         "refused": {"priced": True}, "console_served_against_rebuilt": same})
-    replot.dump(tmp_path / "diff" / "finals-table.json", {"differ": []})
-    replot.dump(tmp_path / "diff" / "console.json", {"served_rows": 3, "rebuilt_rows": 3, "bytes": {}, "note": "",
-                                                    "served_rows_the_rebuild_drops": [], "rows_the_rebuild_adds": []})
-    replot.dump(tmp_path / "inputs.json", {"code": "c", "main_head": "m"})
-    replot.dump(tmp_path / "rotations.json", {
-        "runs": {"rot": {"checkpoints": {"40": {"gates_added": 1.0, "C_before": 100.0, "C_after": 101.0,
-                                               "rotation_macs": 1}}, "structures": {}}},
-        "unread": {}, "no_record": ["gone"], "no_arguments": ["nowhere"], "unknown_program": {}})
-    v = replot.verdict(tmp_path, {"rows": [{"run": "rot", "step": 40, "before": 4.0, "after": 3.96}]})
-    assert v["lists"]["runs not re-priced that have a row in a table"] == {"unread": [], "no_record": ["gone"],
-                                                                           "no_arguments": [], "unknown_program": []}
-    assert v["checks"]["search: each rotating row's |C| rose by its rotations' added gates"]
-    assert v["checks"]["frontier points: the control's are the last refresh's, and one moves only where its row is a "
-                       "rotating run's"]
-    [point] = v["lists"]["frontier points that moved"]
-    assert point["at"] == "/v/1/C_gates" and point["rewritten_row"] and point["source"] == "m from s (row-1@40)"
-    assert v["checks"]["overlay: no run without a rotation moves but in p over an H that moved"]
-    [moved] = v["lists"]["overlay: rows without a rotation whose p moved"]
-    assert moved["run"] == "h" and moved["change"] == pytest.approx(1 / 1.01 - 1)
-    [r] = v["lists"]["overlay: rotating rows, split"]
-    assert r["cells"]["rho_own"]["price_only"] == pytest.approx(-0.01)
-    assert r["cells"]["rho_own"]["price_and_width"] == pytest.approx(-0.0125)
-    assert r["largest"] == pytest.approx(0.0125) and v["summary"]["rows_moving_over_1_percent"] == [r]
-    [s] = v["lists"]["stated rows"]
-    assert s["price_agrees"] and not s["priced_agrees"] and not v["holds"]
-    assert s["delta"] == pytest.approx(0.01) and s["stated_delta"] == pytest.approx(4.0 / 3.96 - 1)
+    replot.dump(root / "diff" / "frontier-fit.json", {"tables": dict.fromkeys(builds, same), "points": dict.fromkeys(builds, True),
+                                                      "refused": dict.fromkeys(builds, True),
+                                                      "console_served_against_rebuilt": same})
+    replot.dump(root / "diff" / "finals-table.json", {"differ": []})
+    replot.dump(root / "diff" / "console.json", {
+        "served_rows": 2, "rebuilt_rows": 2, "bytes": 1, "note": "", "served_rows_the_rebuild_drops": [],
+        "rows_the_rebuild_adds": [], "rows": replot.compare({"served": whole(builds["control"]),
+                                                             "rebuilt": whole(builds[publish])})})
+    replot.dump(root / "inputs.json", {"code": "c", "main_head": "m"})
+    replot.dump(root / "builds.json", {"publish": publish, "layers": {
+        n: {"te_core": n, "commit": "c", "te_tree": "t", "runs": runs, "errors": {}} for n, runs in layers.items()}})
+
+
+def test_a_traced_runs_row_moves_only_in_the_leaves_expected_and_no_other_row_moves(tmp_path):
+    expect = ("kinds/sensitivity/*", "rho_inputs/delta_grad_bits", "rho_inputs/fresh_per_c/*")
+    builds = {"control": [a_row("cut", 100.0), a_row("still", 7.0)],
+              "old": [a_row("cut", 100.0, "2", spaced=True), a_row("still", 7.0, "2")],
+              "fixed": [a_row("cut", 200.0, "2"), a_row("still", 7.0, "2")]}
+    rebuilt(tmp_path / "a", builds, {"old": ["cut"], "fixed": ["cut"]})
+    v = replot.verdict(tmp_path / "a", ("old",), expect)
+    assert v["holds"], [k for k, ok in v["checks"].items() if not ok]
+    assert v["checks"]["overlay, old: every cell is the control's"]
+    [row] = v["lists"]["search, fixed: rows that move"]
+    assert row["run"] == "cut" and row["leaves"]["kinds/sensitivity/reduction"] == {
+        "before": 100.0, "after": 200.0, "change": 1.0}
+    assert sorted(row["leaves"]) == ["kinds/sensitivity/reduction", "kinds/sensitivity/update",
+                                     "rho_inputs/delta_grad_bits", "rho_inputs/fresh_per_c/65536/1"]
+    n = v["summary"]["cells"]["search"]["control against fixed"]
+    assert (n["rows"], n["cells"], n["moved"], n["unmoved"], n["rows_moved"]) == (2, 14, 2, 12, 1)
+    assert v["summary"]["cells"]["search"]["control against old"]["moved"] == 0
+    assert v["summary"]["console"]["columns_moved"] == ["kinds", "rho_inputs"]
+    # without the leaves named, the same rebuild fails, naming them
+    v = replot.verdict(tmp_path / "a", ("old",), expect[:1])
+    assert not v["holds"] and not v["checks"]["search, fixed: a row moves only in the leaves expected"]
+    [row] = v["lists"]["search, fixed: leaves that move beyond the expected"]
+    assert sorted(row["leaves"]) == ["rho_inputs/delta_grad_bits", "rho_inputs/fresh_per_c/65536/1"]
+    # a row of a run the layer didn't trace moves, the old rule's build is not the control, and a row is gone
+    builds = {"control": builds["control"], "old": [a_row("cut", 101.0, "2"), a_row("still", 7.0, "2")],
+              "fixed": [a_row("cut", 200.0, "2", rho=4.0), a_row("still", 7.0, "2", rho=2.0)]}
+    rebuilt(tmp_path / "b", builds, {"old": ["cut"], "fixed": ["cut"]})
+    v = replot.verdict(tmp_path / "b", ("old",), expect)
+    assert not v["holds"] and not v["checks"]["search, old: every cell is the control's"]
+    assert not v["checks"]["search, fixed: no row of a run the layer didn't trace moves, and no row comes or goes"]
+    [row] = v["lists"]["search, fixed: rows of other runs that move"]
+    assert row["run"] == "still" and sorted(row["leaves"]) == ["kinds/bound/fresh_products", "rho_own"]
+    [row] = v["lists"]["search, fixed: leaves that move beyond the expected"][:1]
+    assert row["run"] == "cut" and sorted(row["leaves"]) == ["kinds/bound/fresh_products", "rho_own"]
+    assert v["checks"]["search: the control is the published table in every cell"]
+    with pytest.raises(SystemExit, match="--same nope"):
+        replot.verdict(tmp_path / "b", ("nope",), expect)
