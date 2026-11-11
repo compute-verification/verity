@@ -1231,7 +1231,8 @@ def unmatched(allow: frozenset[tuple[str, str]], audited: list[Path], log=print)
     for d in audited if allow else []:
         try:
             reps = json.loads((d / "audit.json").read_text()).get("packages") or []
-        except (OSError, ValueError, AttributeError):
+        except (OSError, ValueError, AttributeError) as e:
+            log(f"lean-records: check.py's reports under {d} can't be read ({e!r}), so no allowance matches a failure of them")
             continue
         for r in reps if isinstance(reps, list) else []:
             seen.update(failures_of(r) if isinstance(r, dict) else [])
