@@ -15,6 +15,8 @@ from verity_vllm.protocols.linear.api import LinearSite, Shard, Stack
 
 #: torch's dtype names -> the site's weight format
 FORMATS = {"bfloat16": "bf16", "float16": "fp16", "float32": "fp32", "float8_e4m3fn": "e4m3", "uint8": "packed-u8"}
+#: the whole model on one rank: `discover`'s shard unless it is given one
+_UNSHARDED = Shard()
 
 
 def linear_types() -> tuple[type, ...]:
@@ -22,7 +24,7 @@ def linear_types() -> tuple[type, ...]:
     return (LinearBase,)
 
 
-def discover(model: Any, shard: Shard = Shard(), types: tuple[type, ...] | None = None) -> list[tuple[LinearSite, Any]]:
+def discover(model: Any, shard: Shard = _UNSHARDED, types: tuple[type, ...] | None = None) -> list[tuple[LinearSite, Any]]:
     """Every linear layer of `model` (``LinearBase`` unless `types` says otherwise), in module order, with its site."""
     types = types or linear_types()
     named = model.named_modules() if hasattr(model, "named_modules") else ((str(i), m) for i, m in enumerate(model.modules()))

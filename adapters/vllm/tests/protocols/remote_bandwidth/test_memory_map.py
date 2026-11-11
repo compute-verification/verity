@@ -151,7 +151,10 @@ def test_a_serving_trace_is_a_memory_map_the_driver_replays_as_the_store_holds_i
     assert [w.index for w in written] == list(range(37, 37 + len(written)))
     # K0 K1 V0 V1 of page p in layer l are store blocks 3 + 16 l + 4 p + (0, 1, 2, 3)
     l0, l1 = (lambda p, *cs: [3 + 4 * p + c for c in cs]), (lambda p, *cs: [19 + 4 * p + c for c in cs])
-    whole = lambda p: tuple(l0(p, 0, 1, 2, 3) + l1(p, 0, 1, 2, 3))
+
+    def whole(p):
+        return tuple(l0(p, 0, 1, 2, 3) + l1(p, 0, 1, 2, 3))
+
     assert [(x.freed, tuple(w.slot for w in x.written)) for x in steps] == [
         (tuple(l0(2, 0, 2) + l1(2, 0, 2)), whole(1)),
         (tuple(l0(2, 1, 3) + l1(2, 1, 3)), tuple(l0(2, 0, 2) + l1(2, 0, 2))),

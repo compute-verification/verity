@@ -956,9 +956,11 @@ def test_the_batch_order_is_model_runner_v2s():
 AUDITOR = "vy-challenger-1:7811"
 #: where a window's sample session is reached (`challenger_host.DRAW_PORT`, the gate's answer's ``port``)
 DRAW_AT = f"vy-challenger-1:{CH.DRAW_PORT}"
+#: the challenge phase `_host` serves unless told another
+_FIRST_SESSION = CH.session_id(1)
 
 
-def _host(tmp_path, monkeypatch, name="auditor", seed=1, rounds=3, challenger=None, session=CH.session_id(1),
+def _host(tmp_path, monkeypatch, name="auditor", seed=1, rounds=3, challenger=None, session=_FIRST_SESSION,
           leaves=None, ledger=None, gated=True, reserved=True):
     """A challenger host serving one challenge phase over a live epoch of `rounds` round coins, reached at `AUDITOR`, whose coin
     commitment `SESSION` (ncp-v2's gate answer) names; `RESERVED` (H1's reserve answer) names its challenge phase, which the

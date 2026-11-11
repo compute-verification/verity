@@ -236,7 +236,10 @@ def test_windows_end_on_the_verifiers_messages_and_the_first_chains_from_the_reg
     r = runner()
     b.on_load(r)
     b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
-    step = lambda: b.on_schedule(EMPTY, SimpleNamespace(num_scheduled_tokens={}))
+
+    def step():
+        return b.on_schedule(EMPTY, SimpleNamespace(num_scheduled_tokens={}))
+
     step()
     assert s._open_pass.seed is None
     sigma = [bytes([t + 7]) * 32 for t in range(2)]
@@ -269,7 +272,10 @@ def test_a_steps_memory_map_digests_are_of_the_kv_its_forward_wrote(passes):
     b.on_load(r)
     b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
     m = s.record_memory_map(registration=bytes(range(64)))
-    open_step = lambda: s._open_pass and s._open_pass.step
+
+    def open_step():
+        return s._open_pass and s._open_pass.step
+
     page = Block(1)
     page.ref_cnt = 1
     s.kv_alloc([1, 2])

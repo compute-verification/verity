@@ -132,7 +132,7 @@ def test_a_forward_that_raises_still_ends_at_the_source_and_its_pass_is_ended_un
     stack.activate(PEARLC)
     with pytest.raises(ZeroDivisionError), stack.pass_() as p, stack.forward():
         stack.apply(SITES[0], Layer(), "x", None, original)
-        1 / 0
+        raise ZeroDivisionError("the forward raises")
     assert src.ended == [0] and p.ended == 1 and stack.passes == []
 
 

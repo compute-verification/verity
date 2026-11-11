@@ -234,6 +234,8 @@ def _laid(served, lay):
 PORT_T = 512
 #: the positions a CUDA graph pads each step's model input with past its scheduled tokens
 GRAPH_PAD = 3
+#: the key `_window` keys its window with unless told another (`Served.window`)
+_WINDOW_KEY = hashlib.sha512(b"w").digest()
 
 
 def _manifest_sites(steps=range(FIRST, FIRST + STEPS), modules=("model.layers.0", "model.layers.1")):
@@ -253,7 +255,7 @@ def _served_commit(com, model, quant=None):
 
 
 def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, model=None, lie=None, com=None,
-            order=None, coins=None, key=hashlib.sha512(b"w").digest(), served_commit=False, commit_record=None):
+            order=None, coins=None, key=_WINDOW_KEY, served_commit=False, commit_record=None):
     """A served two-step window with the Commit in its engine: the record (`pouw_h1.CALLS_FILE`), the run and the tap.
     ``edit`` makes the codes H1 is handed of what the arm quantized; ``ids`` the input ids the Commit acquires at step s
     of the honest ones; ``lay`` the blocks of a step's A table of K (one a call, in call order) as the window lays them
