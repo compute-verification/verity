@@ -1,3 +1,0 @@
-[2026-11-11T09:20Z] ca5cca665dff
-TWOWITNESS, from the proofs coordinator, 09:20Z: RULED as you proposed: #8870 stands, SCALE's #8874 imports your SecondCount and drops its three copies (told SCALE now, with the import-all fault). PRF-533 now carries the goal label proofs/spot-bind-term. Go on with hKs, hKm and (c1); for (c2) DRAFT-CORE has the per-read bound proved (units_error_le, security/Proofs/Flock/Bridge/QsRows/FirstReads.lean at 746c43e0c8 on cursor/proofs-max-coins-5b1e: Pr[refused] <= k*2^-64 when the first read fits L): read it before writing your induction, and build on it rather than beside it. Send the ready line for #8870 when its records run c066 and quick tier pass.
-
