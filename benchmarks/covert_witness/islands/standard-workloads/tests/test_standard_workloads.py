@@ -287,10 +287,10 @@ def test_the_note_cites_tables_in_a_research_runs_out_and_a_build_elsewhere_cite
         assert not SW.TABLES.search(SW.note({"rows": []}, tables))
 
 
-def test_a_put_takes_a_cited_body_only_over_the_panel_the_build_read_and_reads_it_back(tmp_path, monkeypatch):
+def test_a_put_takes_a_cited_body_only_over_the_panel_the_build_read_and_reads_it_back(tmp_path, monkeypatch, capsys):
     """`put` PUTs a build's console body where the route still serves the panel the build read (`--served`), the body
     keeps its rows, the route takes it and its note cites stored tables; then the panel it GETs must be the body.
-    Where someone PUT since, nothing is PUT."""
+    Where someone PUT since, nothing is PUT. A dry put is refused where a put is, and PUTs nothing."""
     fx = json.loads(PINNED.read_text())
     p, _, _ = build(formalism.from_json(fx["measured"]), fx, monkeypatch)
     old = json.loads(console.body(p | {"note": SW.note(p, TABLES)}))
@@ -314,8 +314,18 @@ def test_a_put_takes_a_cited_body_only_over_the_panel_the_build_read_and_reads_i
         SW.put(body(p | {"rows": [], "note": SW.note(p, "run:r20261104-081500-abcd/out/tables")}), sent)
     with pytest.raises(SystemExit, match="someone PUT over it"):
         SW.put(body(p), {SW.PANEL: old | {"updated_at": "2026-11-02T00:00:00Z"}})
+    with pytest.raises(SystemExit, match="cites no stored tables"):
+        SW.put(body(p), sent, dry=True)
     assert puts == []
     new = json.loads(console.body(p | {"note": SW.note(p, "run:r20261104-081500-abcd/out/tables")}))
+    monkeypatch.setattr(console, "refusal", lambda q: "another checkout's te_core")
+    capsys.readouterr()
+    assert SW.put(body(new), sent, dry=True) == 0 and puts == [] and route[SW.PANEL] == old
+    sent_body = console.body(new)
+    assert capsys.readouterr().out.strip() == (
+        f"dry: {SW.PANEL}: sha256 {hashlib.sha256(sent_body).hexdigest()}, {len(sent_body)} bytes, {len(new['rows'])} "
+        f"rows, note {len(new['note'])} characters; console.put would refuse: another checkout's te_core; nothing "
+        f"stored, nothing PUT")
     assert SW.put(body(new), sent) == 0 and puts == [new] and route[SW.PANEL] == new
     monkeypatch.setattr(console, "put", lambda q: "400 refused")
     assert SW.put(body(old), {SW.PANEL: new}) == 1
