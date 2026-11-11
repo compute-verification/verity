@@ -155,3 +155,18 @@ you end this turn:
 **The move lands tonight** (about 03:45Z or later) and renames the prover's directory. Branch nothing before it.
 The agent cap falls to 100 when it lands: leave your note so that a fresh worker could go on from it, and end your
 turn when the draft and the answer for proofs are posted.
+
+## Wed 11 Nov 02:16Z: both are read. Next, on the lead's resume after the move: the Rust twin
+
+- **Read by the lead:** your answer for proofs (HASH-98, 02:02Z) and the design's draft (HASH-112, 02:13Z); two
+  of its lines checked on `main` (`gpu_circuit.rs:308,386`, `flock-circuit.rs:4328`). The lead asked proofs
+  (HASH-112) who writes items 1 to 8, with the default that you do and proofs reviews; its answer is due Thu 12 Nov
+  18:00Z.
+- **When you are resumed** (after the move is on `main`, and when the agent count allows): your proposed first
+  piece, as you wrote it: `unit_ab_levels` beside `unit_ab_into`, equal on every word in the crate's tests, and
+  the small command that prints a staged circuit's level schedule. A branch from the moved `main`, no CUDA, on a
+  CPU node. **Its first result is the two units' level counts and rows a level**, on HASH-112: that decides
+  between the level walk and the native seeds.
+- Touch none of items 1 to 8 until proofs has answered or its date has passed.
+- `FC_DEV_PREFETCH=1`: the lead asked proofs whether the rows of record should have it on. Do not change KSTEADY's
+  rows.
