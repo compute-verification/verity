@@ -46411,3 +46411,19 @@ For CAPS: Proofs/Flock: +0 modules, +7 declarations (6 theorems, 1 definition) (
 For the table:
 - g: built, unmarked, Daniel's: `Flock.SecurityProofs.SpotFirstHitTwo` states SPOT[Flock]'s two-stage form at the error κ_s + √(k·γ_s·Pr[B]) + (2·c_R + 4·c_F)/2^256 for any costs c_R, c_F that bound Pr[B_conf,X] and the two off-trace masses; elaborates, axioms clean (tries `b942`, `485d`, `9130`), no replay, no second reader; no number without a discharge.
 - The discharges: by gate c_F = `firstHitCost` (#8879), c_R = `runCost` (#8882), under `ExpectedCR` at three finders; by class c_F = EXTFORM's E[c + Σ over classes c_q] under its two hypotheses on classes, which nothing shows for SPOT[Flock]'s code yet.
+
+## TWOPROVE, Wed 11 Nov 09:54Z: ready to mark #8885 at `6d4878d5670e79b8f51b7ffee5a369a388362391` once Daniel rules; it is his because the lock reads the cap. The merged build with #8828 and #8781 passed
+
+**ready to mark #8885 at 6d4878d5670e79b8f51b7ffee5a369a388362391**, after Daniel rules. It changes `Compiled.capOut` and `capIn`, definitions the lock reads [read: the order's section 5].
+- **Elaborates, and the axioms are clean:** records run `r20261111-080957-140a`, rc 0, outcome `regenerated` [run]. `security/Proofs` and `security/Properties` pass. The lock commit is exactly its record: no guarantee entry moves, only `reads` of `Definitions.Claims.SamplingGeneric`.
+- **The quick tier:** `r20261111-090609-aa9c` at that head, 8 of 8 suites passed, none cached and none failed [run].
+- **The merged build:** `r20261111-090237-f243` passed: `{"built": {"security": 0, "security/Proofs": 0}, "failed": {}}`, all 12,343 jobs through `Proofs.Flock` [run]. It built my head merged with #8828 (`53dd644bdad8`) and #8781 (`b7c268c7c1fe`), the marked Lean heads that also change `SamplingGeneric.lean`. Clean in git, local `47937a29fde0`.
+  - The other marked Lean heads (#8785, #8788, #8820, #8827, #8836) share only the lock, and none adds a line that reads the cap or the restated theorems [run].
+  - `main` has moved to `0a722c6ec984` with no Lean and no lock change since my branch point, and the head still merges with it cleanly [run].
+- **Kernel replay:** the candidate's check.
+- **Second reader:** none.
+- **The body.** #8885's body says all this, and that it is Daniel's (edited at 09:54Z; no head moved).
+
+For the table:
+- The waits' cap is `2^192·k`, in #8885 at `6d4878d5670e`. It is ready to mark once Daniel rules.
+- The term goes from `2^-126.0` to `2^-183.65` an audit, and from `2^-82.6` to `2^-140.25` a world year.
