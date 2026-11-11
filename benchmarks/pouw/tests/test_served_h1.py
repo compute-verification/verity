@@ -186,7 +186,7 @@ def test_a_opens_against_the_step_root_and_refuses_neg_b():
     """On PoUW's side, a call's A table is AROW's row table (`row_table.commit` over `s8_row`s gives the root `leaf` and
     `levels` give), a tile's 32 A rows open against it and the step's A root, A' = -b (the tile's B rows negated) is refused
     against the committed root, and re-committing A' moves both roots."""
-    from verity.ml.commitments import row_table as RT
+    from verity.commitments import row_table as RT
 
     t, k, key = 64, 64, bytes(range(64))
     calls = [_padded_call(5, t, 64, k, 20 + w) for w in range(3)]
@@ -319,7 +319,7 @@ def test_b_tables_are_row_tables_under_the_weights_root():
     """root(B) is AROW's row-table format over the weight rows and their scales (`b_rows`, `s8_table`), built in pool chunks
     or whole; the weights' root is the tree over the B roots, each opens in it, a tile's 32 B rows open against root(B) and
     a tampered weight row is refused."""
-    from verity.ml.commitments import row_table as RT
+    from verity.commitments import row_table as RT
 
     SV = _load("serve")
     layers = [_Layer(96, 64, 1), _Layer(64, 128, 2)]
@@ -412,7 +412,7 @@ MAIN = ["e1" * 20, PIN]
 @functools.cache
 def _host_key():
     """The fake auditor host's LMS key: 16 leaves, a window's ledger entries, record and close at one each."""
-    from verity.ml.crypto import lms
+    from verity.commitments.crypto import lms
     return lms.keygen(lms.Params(64, 4, 4), bytes([7]) * 64)
 
 
@@ -429,8 +429,8 @@ class _Host:
     def __init__(self, tmp_path, epoch: int = EPOCH, rounds: int | None = ROUNDS, host: str = "vy-challenger-1",
                  root: bytes = ROOT, secret: bytes = bytes([5]) * 32, sid: str = SID, withhold: bool = False,
                  parent: _Host | None = None) -> None:
-        from verity.core.protocols.spot import remote as R
-        from verity.ml.crypto import lms
+        from verity.protocols.spot.device import remote as R
+        from verity.commitments.crypto import lms
         self.tmp_path, self.epoch, self.host, self.sid, self.draw = tmp_path, epoch, host, sid, None
         self.R, self.directory, self.secret = R, tmp_path / ("session" if parent is None else "draw") / "out", secret
         self.directory.mkdir(parents=True)
@@ -471,7 +471,7 @@ class _Host:
         self._thread.start()
 
     def sign(self, message: bytes) -> bytes:
-        from verity.ml.crypto import lms
+        from verity.commitments.crypto import lms
         return lms.sign_at(self.private, next(self.leaves), message).encode()
 
     def open_draw(self, root: bytes, withhold: bool = True) -> CO.Endpoint:
@@ -521,7 +521,7 @@ def _serve_window(cs, sv, calls: list[dict], root: bytes) -> dict:
     """A served window's coin path on `cs`: the salt coin after the window's root, round s's coin after step s's round
     root and the step's units under its live salt, then the sampling coin after the receipts root; the manifest, its window
     `WINDOW`."""
-    from verity.ml.protocols.pouw.circuit import h1tile as HT
+    from verity.protocols.pouw.prover.circuit import h1tile as HT
     salt = cs.salt(root)
     log = []
     for s in sorted({c["step"] for c in calls}):
@@ -554,7 +554,7 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
     refuses a session the manifest doesn't name, a manifest naming another window, a window outside the verifier's
     period, an open of another layout, and a window whose round root, opening, salt or sample root isn't what the
     challenger logged."""
-    from verity.ml.crypto import lms
+    from verity.commitments.crypto import lms
     SV = _load("serve")
     host = _Host(tmp_path)
     cs = CO.open_coins(host.session, EPOCH, ROUNDS, open_draw=host.open_draw)
@@ -698,7 +698,7 @@ def test_round_coins_pipelined_off_node_open_each_after_its_root_in_order(tmp_pa
     each coin comes back opened after its own root, round by round in the challenger's own release log and under
     `order_reason`; closing waits for the coins still out, then closes the session.  In process the same roots open at
     once, and a root past the epoch's rounds is refused before it is sent."""
-    from verity.core.protocols.spot import remote as R
+    from verity.protocols.spot.device import remote as R
     host = _Host(tmp_path, rounds=4)
     cs = CO.open_coins(host.session, EPOCH, 4)
     roots = [hashlib.sha512(b"round %d" % i).digest() for i in range(4)]
@@ -753,7 +753,7 @@ def test_the_draw_coin_and_its_time_are_read_under_the_lock_round_roots_are_sent
 def _pipe_server(sock, challenger, answers: list[str]) -> None:
     """The challenger's side of a `RoundPipe` stream for its refusals: the hello's commitment, then each open frame's
     reply as `answers` names it in turn ("ok" its coin, "refuse" a refusal, "other" the next coin's opening)."""
-    from verity.core.protocols.spot import remote as R
+    from verity.protocols.spot.device import remote as R
     w = R._Wire(sock)
     w.recv()
     w.send({"type": "commitment", "commitment": challenger.commitment.to_json()})
@@ -771,7 +771,7 @@ def _pipe_server(sock, challenger, answers: list[str]) -> None:
 def test_round_coins_pipelined_refuse_every_later_round_after_a_refusal_or_a_bad_opening(answer, why):
     """A `RoundPipe` whose challenger refuses round 1's open, or answers it with another coin's opening, ends the session:
     round 1's coin and every later one are refused, round 0's (back before) is kept, and no root is sent after."""
-    from verity.core.protocols.spot import remote as R
+    from verity.protocols.spot.device import remote as R
     lay = CO.layout(EPOCH, 4)
     ch = CO.Ch.LiveChallenger(lay["scheme"], lay["epoch"], lay["families"], random.Random("host").randbytes)
     a, b = socket.socketpair()
@@ -1028,7 +1028,7 @@ def test_an_address_makes_the_window_live_and_seeded_coins_with_one_are_refused(
     `$POUW_CHALLENGER_SECRET_FILE`) and no ``--coins``, it opens the challenger's session before anything else (this
     host's layout isn't the window's, so it stops there), and ``--coins seeded`` beside a session is refused.
     ``--gate`` is refused, with a session or without, and the refusal names the gated served window of record, vllm's H1
-    path (`integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py`)."""
+    path (`adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py`)."""
     SV = _load("serve")
     host = _Host(tmp_path, EPOCH, ROUNDS + 1)
     CO.write_secret(tmp_path / "secret", host.secret)
@@ -1047,7 +1047,7 @@ def test_an_address_makes_the_window_live_and_seeded_coins_with_one_are_refused(
             for name in (CO.CHALLENGER_ENV, CO.SESSION_ENV, CO.SECRET_ENV):
                 monkeypatch.delenv(name)
         with pytest.raises(ValueError, match=r"--gate research@gate: served_h1's own gated window is superseded; .*"
-                                             r"integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py \(#3053\)"):
+                                             r"adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py \(#3053\)"):
             SV.main([*argv, "--gate", "research@gate"])
 
 
