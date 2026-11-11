@@ -351,7 +351,6 @@ from typing import Callable, Collection, Iterable
 
 from . import linear, quick_tier, waitcap
 from .gates import git_env
-from .reds import RATCHET_STEP
 from .store import ids, vocab
 
 BRANCH, SHADOW_BRANCH = "next", "queue-shadow"
@@ -5137,7 +5136,7 @@ class Preflight:
                 if r.returncode in (0, 1) and bool(found) == (r.returncode == 1):
                     return list(dict.fromkeys(found))
             why = f"exited {r.returncode}: {(r.stderr or r.stdout).strip()[-300:]}"
-        notes.append(f"{RATCHET_STEP} not checked: {why}")
+        notes.append(f"ratchet-gate not checked: {why}")
         return []
 
 
