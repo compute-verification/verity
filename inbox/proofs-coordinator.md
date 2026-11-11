@@ -49376,3 +49376,37 @@ Inside one log, two checks on `main` give it, and no line is added:
 
 For the table:
 - stop check, the audit side (NET): spec for form A written [read, nothing built]. One stop record a class record, 13 a window. The order inside a log is `R7-output` and `coins`, on `main`; across streams it rests on the driver's seeding, one lookup no Lean checks yet. No number changes: the output count stays charged, 24,447,500 GB a world year at the 1,024 class (modeled at 0.4; the rate is not measured at the headline's mix), until a served audit draws a stop block.
+
+## CONCRETE, Wed 11 Nov 10:47Z: the year at the 10:07Z table's rows, by the tree's code: summed over a year of runs no row keeps 2^-100 if 2^80 calls are each run's, and in compressions the sessions' share alone is over it
+
+No claim changes and no code changes: these are the evaluator's figures at #8907's head `14643669694c` (`binding.terms`, `binding.periods`, `binding.most_gates`, exact rationals) [run, on the VM, now]. All modeled; the bound of #8827's lemma (first hit + conflict + rewinding under `StrictBirthday`, κ_s counted as 0), per run at a padded first stage of K0 = 6, one 2^35-bit table a session, T = 2^80 calls in every run, a registration with no always-checked block, one machine. K a run is SCALE's 09:52Z, typed in [relayed]; the sessions a run are 6 times the checked blocks [relayed: your 10:07Z table's designs].
+
+**Summed over the runs of a period, one run an execution phase of 600 s (1,008 a week, 4,320 a month, 52,560 a year; a year is 15.68 bits):**
+
+| design | counted | a run | a week | a month | a year |
+|---|---|---|---|---|---|
+| record | by gates, calls | 2^-98.33 | 2^-88.36 | 2^-86.26 | 2^-82.65 |
+| record | by reader sets, calls | 2^-110.62 | **2^-100.65** | 2^-98.55 | 2^-94.94 |
+| record | by reader sets, compressions | 2^-101.62 | 2^-91.64 | 2^-89.55 | 2^-85.94 |
+| 2,647 GB plan | by gates, calls | 2^-96.49 | 2^-86.52 | 2^-84.42 | 2^-80.81 |
+| 2,647 GB plan | by reader sets, calls | 2^-108.83 | 2^-98.85 | 2^-96.75 | 2^-93.15 |
+| 2,647 GB plan | by reader sets, compressions | 2^-99.83 | 2^-89.85 | 2^-87.75 | 2^-84.14 |
+| width, κ 2^-6 | by gates, calls | 2^-99.99 | 2^-90.02 | 2^-87.92 | 2^-84.31 |
+| width, κ 2^-6 | by reader sets, calls | 2^-112.33 | **2^-102.35** | **2^-100.25** | 2^-96.65 |
+| width, κ 2^-6 | by reader sets, compressions | 2^-103.33 | 2^-93.35 | 2^-91.25 | 2^-87.64 |
+| width, κ 2^-7 | by gates, calls | 2^-100.99 | 2^-91.02 | 2^-88.92 | 2^-85.31 |
+| width, κ 2^-7 | by reader sets, calls | 2^-113.33 | **2^-103.35** | **2^-101.25** | 2^-97.65 |
+| width, κ 2^-7 | by reader sets, compressions | 2^-104.33 | 2^-94.35 | 2^-92.25 | 2^-88.64 |
+
+Bold: at most 2^-100. By gates in compressions is 9.00 bits above each "by gates, calls" cell (2^-73.65 to 2^-76.31 a year).
+
+**What the year needs, by the same code.**
+
+- **In calls**, the first-hit term over a year of runs is at most 2^-100 only at K a run of at most 2^26.22 (record), 2^26.78 (width κ 2^-6), 2^26.92 (width κ 2^-7); by reader sets K a run is 2^32.07, 2^30.36, 2^29.36, so each row is 2.4 to 5.9 bits over. At the 2,647 GB plan no K does it: its sessions' share alone (the term at K = 1) is 2^-99.10 over a year.
+- **In compressions**, the sessions' share alone, `4·T·e_s·N_s/2^256` at 513·2^80, is 2^-92.19 (record), 2^-90.10 (the plan), 2^-93.60, 2^-94.60 over a year: above 2^-100 at every row whatever the classes are. Only fewer sessions a run, fewer reruns a session (e_s = 1 + 210·k, k from the table's symbols), or a budget T that is the year's and not each run's moves it.
+- **If 2^80 is the year's budget** and not each run's, the year column is not this sum; which it is, is Daniel's wording (your 09:10Z update). The code sums a per-run bound at T each run.
+- **The waits' term** (TWOPROVE's, #8885, unmarked) at k = 2^10: 2^-125.99 a run and 2^-110.31 a year at the cap 2^128·k; 2^-183.64 and 2^-167.96 at 2^192·k. It keeps 2^-100 over a year at either cap, and over 2^10.3 machines at the lower cap.
+- A datacenter of m machines adds log2 m bits to every period's cell.
+
+For the table: summed over a year of runs (52,560, one machine, T = 2^80 calls each run; modeled, by the tree's code at `14643669694c`): by gates 2^-80.81 to 2^-85.31 in calls; by reader sets 2^-93.15 to 2^-97.65 in calls and 2^-84.14 to 2^-88.64 in compressions. No row keeps 2^-100 over a year; by reader sets in calls the record keeps it over a week, width κ 2^-6 and 2^-7 over a month.
+For the table: in compressions over a year the sessions' share alone is 2^-90.10 to 2^-94.60, so no count of classes reaches 2^-100; in calls a year needs K a run ≤ 2^26.2 to 2^26.9 (reader sets give 2^29.36 at best).
