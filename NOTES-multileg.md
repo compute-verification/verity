@@ -4,55 +4,38 @@ Scratch notes for PRF-490, on `cursor/soundness-multileg-8fb2` only. This file n
 
 Base: `cursor/soundness-remote-deployed-8fb2` (#8569, `remote_soundness_deployedReady`, the one-member form). Everything
 is in namespace `Verity.Sampled`, package `security_proofs`, under
-`Security/Proofs/Properties/Verity/Sampled/`, registered in `Security/Proofs/lakefile.toml` and reached from the lock's
-roots (`Window.Assembled`, `Window.Members`, `Members`). One worker (LEG) since the restart; the three earlier
-branches are merged here.
+`Security/Proofs/Properties/Verity/Sampled/` (`Window.lean` and `Window/*.lean`), registered in
+`Security/Proofs/lakefile.toml` and `Security/Proofs/lean-audit.json`. One worker (LEG).
 
 ## The statement
 
-`Window/Assembled.lean`:
+`Window/Instance.lean`:
 
 ```lean
-theorem windowSpotSound_assembled (e : 𝔽 ≃ (Fin 128 → Bool)) (rd : WindowReadings) (K : WindowConstructions V)
-    (dev : Exchange → Properties.Challenger.History)
-    (D : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
-      WindowDecoders V θ F c W σ)
-    (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String) (nc : ℕ)
-    {S : ByteArray → Array ByteArray → Option Window}
-    (hD : WindowDeployed V ((K.withBinding dev k).withProject V rd D
-      (windowSampleMaps e V rd label (afterAt V k) fun W => W.srcCoinsAt nc)) S)
-    (hCov : WindowCovers V k S)
-    (I : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
-      (W.extend (windowSampleMaps e V rd label (afterAt V k) (fun W => W.srcCoinsAt nc) W θ F c σ).widening).L.Ω → ℕ →
-        Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop)
-    (hP : ∀ θ F W, S θ F = some W → ∀ o : Exchange, o.params = θ → Lines.PrintsLog (dev o) o.log)
-    (hS : ∀ θ F W, S θ F = some W → ∀ c, Binding.SignsPlay V dev θ F c)
-    (hL : ∀ θ F W, S θ F = some W → W.Lb 0 = nc * 64)
-    (hR : ∀ θ F W, S θ F = some W → ∀ (c : ByteArray) j pre fr, (rd W θ F c).round j pre fr →
-      ∃ i s n, fr = .opening i s n)
-    (hm : ∀ θ F W, S θ F = some W → ∀ (c : ByteArray) (σ : Strategy (V.game θ F c)),
-      MemberSteps V θ F c k
-        (fun o => (Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent) ∧
-          SampledDigest k o.sent (afterAt V k θ F c σ))
-        W (V.cost θ F c σ) (rd W θ F c) σ (D W θ F c σ)
-        (windowSampleMaps e V rd label (afterAt V k) (fun W => W.srcCoinsAt nc) W θ F c σ)
-        (fun _ _ => linkEmptyAt e (finish (V.signer θ) θ F c σ.1))
-        (fun _ => roundEmptyAt e (finish (V.signer θ) θ F c σ.1)) (I W θ F c σ)) :
-    V.SpotSound k
+theorem remote_soundness_window (I : WindowInstance d α) (K₀ : WindowConstructions I.base)
+    (reg : Option Claims.Msg → ByteArray) (ev : ℕ → Exchange → Option Claims.Msg)
+    (filesDec : Claims.Msg → Array ByteArray)
+    (record₀ : Window → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
+    (recordDigest : Window → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
+    (hC : I.ClaimTransfers (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest))
+    (hRg : I.RegisteredFiles) (hWa : I.WindowAt .remote) (hWR : I.WindowReads .remote ev filesDec)
+    (hW : I.base.PouwSound .remote) (hI : I.base.InferenceOnlySound .remote) :
+    (I.vocab (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest)).SoundnessAt .remote
 ```
 
-**Status of this form.** Built and probed at `a8013ac42d` (run `r20261110-163654-4fe7`: `Window/Charge.lean` and
-`Window/Leg.lean` build, `Window/Assembled.lean` elaborates, its 3 theorems on the three standard axioms). The
-earlier form at `388586f624` carried one more hypothesis, `hε` (over every member's stops the openings' gaps and
-empty classes are at most the hiding term), off `linkEmpty`/`roundEmpty`; `Window/Charge.lean` proves that term's
-bound off the count-aware events at every strategy, so `hε` is gone.
+Same shape as the one-member `remote_soundness_deployedAt` (`Sampled/Instance.lean`): `RemoteSoundness`
+(`remote_soundness_of_subprotocols`) with its sampled leg `WindowInstance.spotSound`, which is
+`windowSpotSound_sessions` at the deployed vocabulary. The sampled leg's error at a window is `Window.delta`:
+`W.drawMiss + (W.joint t).eps` (`JointShareV5`: the one sample's own miss and `Σ_k (ε_ks,k + ε_bind,k)` at member
+`k`'s part of the one sample), one two-continuation term per round of every member's session
+(`W.rounds = Σ_m m.rounds`, each member's closing round among them: 1026 a member at the deployed table), the
+record's, the bound digests', the hiding term, and the read finder's bound.
 
-`V.SpotSound k` is the same target the one-member leg meets (`Vocab.SpotSound`): at every parameters, files,
-commitment and strategy, the plays v2's sampled verdict accepts while the claim fails are at most `V.error`, which is
-conditional on the vocabulary's finder premises. So the conclusion plugs into `Verity.Soundness` where the one-member
-`spotSound` does: at `k = .remote` it is the first hypothesis of `remote_soundness_of_subprotocols`
-(`RemoteSoundness`), as `spotSound_of_targets` is in `remote_soundness_of_targets`. No theorem states that
-application yet; it belongs with the window instance (open item 4).
+`WindowInstance` (the deployment over windows, before SPOT's names): `base : Vocab d α`, `deployment`,
+`signer` (the base's signer is the deployed device's), `costs : CostsRead`, `window : ByteArray → Option Window`,
+`SetsUp : ByteArray → Array ByteArray → Window → Prop` (the files the verifier sets that window's sessions up on),
+`lb` (a set-up window reads `MAX_COINS` frames' bytes), `members` (`MembersAt W W.table`: each member has the one
+table, hm96-sha512 rows).
 
 How it is put together, each layer proved once:
 
@@ -61,98 +44,86 @@ How it is put together, each layer proved once:
 | the bound: `JointShareV5`'s, applied at `Window.joint`, not proved again | `Window.ks`, `spotSound_of_window` | `Window.lean` |
 | the projection through m sessions in order, under its joint law | `prob_seqP`, `seqOff_le_prob`, `windowLogged`, `windowCouplingTarget_of_logged` | `Window/Walk.lean` |
 | the run-of-record walk a member at a time | `SeqReach.chain`, `SeqChain.forall₂`, `windowDecodes_of_members` | `Window/Reach.lean` |
-| what a member's trace keeps and logs (`StopsAt`, the play's start, the released coins) | `MemberReach.stopsAt`, `MemberReach.logged`, `MemberSteps`, `memberDecodes_of_stops` | `Window/Logged.lean` |
+| what a member's trace keeps and logs | `MemberReach.stopsAt`, `MemberReach.logged`, `MemberSteps`, `memberDecodes_of_stops` | `Window/Logged.lean` |
 | the draw to member subsets and its marginals; the coin map's premise over the window | `Member.mem_part`, `Window.sum_part_card`, `Window.avg_design`, `Window.eps_extend`, `windowCouples_of_close`, `windowSampleMap_fresh`, `windowSampleMap_start` | `Window/Draw.lean` |
-| the stops' term within the hiding term at every strategy | `seqErr_le`, `windowErr_le_of_charge`, `windowErr_sampleMap_le_at`, `windowCouplingTarget_of_sample_at` | `Window/Charge.lean` |
+| the stops' term within the hiding term at every strategy | `seqErr_le`, `windowErr_sampleMap_le_at`, `windowCouplingTarget_of_sample_at` | `Window/Charge.lean` |
 | the composition | `windowSpotSound_of_sample` | `Window/Leg.lean` |
 | (a), (a') and the sample's coins | `windowSpotSound_assembled` | `Window/Assembled.lean` |
 | v2's acceptance as m verdicts in order | `Verdicts`, `run_verdicts_at`, `Verdicts.getElem` | `Window/Accepts.lean` |
-
-The bound it reaches is `spotSound_of_window`'s: `W.sessionDelta t = W.drawMiss + (W.joint t).eps` (the one sample's
-own miss, and `Σ_k (ε_ks,k + ε_bind,k)` at member `k`'s part of the one sample), one two-continuation term per round of
-every member's session (`W.rounds = Σ_m (2·2^roundsLog_m + 1)`), the record's, the bound digests', the hiding term, the
-read finder's collision and the forger's forgery.
+| the sessions held one after another, in the device's log | `OpensInOrder`, `EvidenceRecorded`, `SessionsInOrder` | `Window/Order.lean` |
+| a session's verdict is `--zk`'s acceptance of what the member's writer writes | `SessionVerdict.accepts_member`, `StatesMember` | `Window/Writes.lean` |
+| the members' answered stops, in order in the play's log | `Walked`, `Walked.next` | `Window/Answered.lean` |
+| the readings, a session at a time (the `u`-th tree opened is the `u`-th session's) | `openedTrees`, `sessionRound`, `closeSlot` | `Window/Sessions.lean` |
+| the rounds a session's trace leaves on one stream; which session each answered release is of | `session_stream_logs`, `SessionPicks`, `OpensLast` | `Window/Streams.lean`, `Window/Trees.lean` |
+| a session's moves are its record's (roots, link points, rep rounds, the closing round's evidence) | `SessionRead`, `sessionReveal`, `MemberMovesOf` clauses | `Window/Record.lean` |
+| a stop's frame on any tape through it, session counts | `stop_frame_through`, `session_card` | `Window/Counts.lean` |
+| a session's read with its closing opening dropped | `DropPre.reads`, `SessionOpens.drop_iff`, `SessionRead.of_dropped` | `Window/Closing.lean` |
+| **the members' steps from each session's read** | `memberSteps_of_sessions` (premises `MembersAt`, `WindowSessions`) | `Window/Steps.lean` |
+| **the sessions of the window's one sample, at the sample-coupled coin map** | `windowSessions_firstStop`, `memberSteps_sampleMap`, `windowSpotSound_sessions` (premise `WindowRead`) | `Window/Read.lean` |
+| **the deployed vocabulary over windows** | `WindowInstance.deployed`, `.covers`, `.spotSound`, `remote_soundness_window` | `Window/Instance.lean` |
 
 ## What each premise is
 
-Discharged inside the statement, with what each rests on:
+Discharged inside the statement:
 
 | What | By | Rests on |
 |---|---|---|
 | the sample's coins are uniform | `Window.avg_srcCoinsAt`, from `Window.hA3` | uniform randomness (A3 at the device's bytes) |
-| (a) the log v2 read is the device's and the pinned tables are the registered files | `Binding.logged_tables_le`, `Binding.binds_of_prints` | SHA512CR (the read finder), LmsUnforgeable (the forger; remote only), and `hP`, `hS` below |
+| (a) the log v2 read is the device's and the pinned tables are the registered files | `Binding.logged_tables_le`, `Binding.binds_of_prints` | SHA512CR (the read finder), LmsUnforgeable (the forger; remote only), the device's log (`Device.printsLog_dev`, `Device.signsPlay_dev`) |
 | (a') v2 samples at the strategy's `afterAt` | `prob_not_sampledDigest_le` at `windowBindFinder` | SHA512CR (a two-continuation finder) |
-| the coin map's premise at the sample-coupled map | `windowSampleMap_couples_at` | nothing further |
-| the stops' term within the hiding term | `windowErr_sampleMap_le_at` (`avg_pathCharge_game_le`: the class errors along a play of the period's game are within the potential from no tree open, however many sessions it runs) | nothing further |
-| each member's trace keeps the play's start and `StopsAt` | `MemberReach.inv`, `MemberReach.stopsAt` | `hR` below |
-| the bound | `Window.ks` (`JointShareV5`) | SHA512CR per finder (`JointFinderCR`), in `WindowDeployed.finderCR` |
+| the coin map's premise at the sample-coupled map; the stops' term within the hiding term | `windowSampleMap_couples_at`, `windowErr_sampleMap_le_at` | nothing further |
+| each round's reading picks only openings | `windowReadingAt_picks` | nothing further |
+| **`MemberSteps`** (each member's step: `--zk` accepts what the member's writer writes for its session's outcome) | `memberSteps_of_sessions`, `memberSteps_sampleMap` at the invariant `StepInv` | `WindowReads` below |
+| `WindowDeployed.finder`, `.forger`, `.loss`, `.finderCR`, `.delta` | `WindowInstance.deployed` (`Window.delta_extend`) | SHA512CR per finder, in `error`'s condition (`JointFinderCR`, the strict birthday bound at the two-continuation finders) |
+| `WindowCovers` | `WindowInstance.covers` | `RegisteredFiles`, `WindowAt` below; SHA512CR at the two file finders |
+| the bound | `Window.ks` (`JointShareV5`) | SHA512CR per finder |
 
-Left as hypotheses:
+Left as hypotheses of `remote_soundness_window`:
 
-| Premise | What it is | Class |
+| Premise | What it is | Whose |
 |---|---|---|
-| `hP` | the device printed each play's log (`Lines.PrintsLog`) | honest verifier server's log premise (the one-member leg takes the same) |
-| `hS` | the device's history at each play signed what the play's signatures are on (`Binding.SignsPlay`) | honest verifier server's log premise (`Device.signsPlay_dev` at the deployed device) |
-| `hL` | the window reads `nc` frames' bytes | a fact of the deployment's windows `S` (the one-member `hL`) |
-| `hR` | each round's reading picks only openings | a fact of the readings `rd`; holds at the layout's readings once they are built for a window (open item 2) |
-| `hD : WindowDeployed` | the vocabulary reads these constructions: finder, forger, no loss, `finderCR` (the per-finder SHA-512 premises follow from `V.finderCR` and `V.premises`), `delta` (the published `δ` is at least the window's), and `claim` | `finder`, `forger`, `loss`, `finderCR`, `delta` are the instance's bookkeeping (`Instance.lean` does the one-member ones); **`claim` is open item 3** |
-| `hCov : WindowCovers` | where `S` holds no window, the one-stage form is covered at the published `δ` | the instance's: the one-member leg at the windows of one member (`spotSound` of `Sampled/Leg.lean`) |
-| `hm : MemberSteps` | each member's step: **open items 1 and 2** | not a trust premise; to be proved |
+| `hWR : I.WindowReads .remote ev filesDec` | at each play the sampled verdict accepts on files the verifier sets one of the windows up on (and (a), (a') hold): `WindowRead`, i.e. every release of the sample's family precedes every opening, and where the play's coins of that family are the window's bytes at `ω`, `WindowSessions` at the window's sample at `ω`: the log opens at most as many trees as drawn members, each naming its streams once, an opening of a tree opened before is of the last tree opened, and each drawn member has a `SessionVerdict` at a statement that is its own (`StatesMember`) whose record carries the member's part of the sample, is the record sent for its session, decodes to what the verifier's read holds the log to (`SessionRead`), on a tree the log opens, with proof files decoded from the evidence its closing round reveals | the per-member verifier's (the port, PRF-371): what `membersRun`'s acceptance gives of a play. Not provable on this base: v2 here is `oneSession` |
+| `hWa : I.WindowAt .remote` | committed files that name the registered circuit and public files and that some play's sampled verdict accepts are files the verifier sets the window up on (the one-member `SessionAt`'s shape) | the port's, with `SetsUp` |
+| `hRg : I.RegisteredFiles` | the registered files pass the file check wherever some files do | the registration's (the one-member form takes the same; `registeredFiles_of` proves it at `registeredOf`) |
+| `hC : I.ClaimTransfers …` | `WindowDeployed.claim`: where the extracted transcript fails the claim on the committed files at the published share, more than the window's `ε` share of its population's proof blocks is incorrect at the projected strategy (`JointAuditV5.wrongSet`) | **open, needs soundness's decision** (below) |
+| `hW`, `hI` | PoUW's and the inference-only policy's targets at the base | the other legs' (as in the one-member form) |
 
-Trust base when the open items close: SHA512CR, uniform randomness, the honest verifier server's log premises;
+Trust base when those close: SHA512CR, uniform randomness, the honest verifier server's log premises;
 LmsUnforgeable remote only. Nothing else is introduced.
 
 ## What is left
 
-1. **A member's proof files against the next member's coins** (a ruling, asked on PRF-490 at 15:41Z, unanswered).
-   `JointAuditV5.sessions` (`seqG`) sends member `i`'s proof files before member `i+1`'s coins. The period's game sends
-   every blob with the evidence, after every coin. Decoding member `i`'s files from the play on the tape its walk ends
-   on is wrong at some strategy (two members whose files are both valid iff one coin bit of member 2's session is 0:
-   accepted with 1/2, projected with 1/4), so the earlier `MemberDecodes.step` could not be met as stated.
-   What the branch does now: a member's decoders (`PosDecoders`) give its proof files as a function of the position
-   its walk ends at (`files`), so the statement no longer fixes where they come from. `Decoders.atEnd` is the old
-   reading. `MemberSteps.step` can hold only at a `files` that the play fixes by that position, which needs one of:
-   - **(A) bind it**: v2's per-member form holds statement `i+1` (its `Hello` nonce, or its first opening) to SHA-512
-     of statement `i`'s evidence entry. Then `files` reads the cut's most likely message at the end position
-     (`q.toStop.modes`), with one more two-continuation term per member. A cut at a `Hello` that is not an opening
-     also needs a handoff step between members in `seqP`, not written.
-   - **(B) a member at a time**: couple each member's session alone, every other tree's coins in its law, then
-     `MemberV5.accepted_drawnWrong_le` and a union. No protocol change; it drops the `seqG` walk and is not
-     `JointAuditV5`'s game, so the bound would not be `JointShareV5`'s as it stands.
-2. **`hm`, each member's step** (`MemberSteps.step`): from member `i`'s trace (`MemberReach`), the invariant, and a
-   tape past its end whose play v2 accepts at the cut, conclude `AcceptsZKP m.I m.own (m.wr … out)`.
-   Already at hand for it: `MemberReach.logged` (the outcome is the root at the first stop, the link points, the
-   answered rounds in order and `files`; the play releases their bits at the stops' openings; its `hML`, `hBL`, `hM`,
-   `hB` at the sample maps are `rfl`/`id`, at the count-aware events they need the count match), and v2's side as m
-   verdicts (`run_verdicts_at`, `Verdicts.getElem`: member `i`'s `SessionVerdict`).
-   Missing: the one-session record and moves chain at tree `i` and start `p`. `MovesReach*`, `Moves`, `Record/*`,
-   `Stops.firstStop_*`, `readingAt`/`decodersAt`, `accepts_sent`, `wr_accepts_of_verdict`, `CountsReach` are stated
-   at `A : Live`, `ParamsAt`, one record, `firstStop` and one tree (`trees.size = 1`); each needs the member's tree
-   index and its start position in place of the root. `Walk.lean` (`walk_relK`, `StopOf`, `TreesOf`) and the
-   `RoundsReach.*` half of `Stops.lean` are already stated at any position and any number of trees
-   (`RoundsEnd.reach`, `RoundsReach.ends` bridge to them). This is the largest piece.
-3. **The claim's transfer** (`WindowDeployed.claim`): `JointAuditV5`'s bound concludes in `wrongSet` form (the
-   members' incorrect proof blocks at V5's own openings). The one-member leg goes on to the deployed commitment
-   (`Live.ks`: `AssemblyTargetV5`, `RootFixesDomainL`, `OpensUnder`); Flock has no joint analog, and `Vocab.read` reads
-   one circuit file and one public file.
-4. **The window instance**: `WindowDeployed`'s other fields and `WindowCovers` at the deployed vocabulary, and a
-   theorem in the shape of `remote_soundness_deployedReady` with `windowSpotSound_assembled` as its sampled leg.
-5. **The verifier's gate (done-when 2) is not liftable on this base.** `MULTI_REFUSED`, `runMembers` and
-   `membersHeld` are in the staged merge (`875cc642dc`, `sampled_proofs/SampledProofs/OneStageZk.lean`, the gate near
-   line 971) and on `origin/remote`; this base's gate is `Spot.OneStageZk.oneSession`. After the restack: lift the
-   gate for the per-member form only, once items 1 to 4 close (the verifier gains no form ahead of its proof), keep
-   every other several-member form refused, and rewrite `Window/Members.lean` (a stand-in over this tree's `step`:
-   `PerMember.statementOf`, `membersHeld`, `runMembers`, `runMembers_iff`, `accepts_iff`) against the verifier's own
-   `runMembers`. On this base the Python reference
-   (`verity/core/protocols/composition/tests/reference.py`) mirrors `oneSession`; it and its difftest change with
-   the gate.
-6. **Sequential sessions only** (the coordinator's ruling). `SeqReach` walks member `i+1`'s stops after member
-   `i`'s; the readings must miss a play that opens two members' coin trees at once.
-7. **`Window.hcls`** stays a field: `JointAuditV5.hcls_of_bounds` discharges it from bounds.
+1. **The claim's transfer (`ClaimTransfers`).** `V.read θ F` is one statement's files: `FileRead` holds one circuit
+   file and one public file, `programDigest`/`publicDigest` are single digests, and `partsOf`, `Opens`, `extract`
+   are over `(V.read θ F).circuit`. A window's members each have their own circuit file and public file
+   (`Member.I`). So `¬ IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) ε` cannot be carried to
+   `JointAuditV5.wrongSet` (`⋃_k (memberWrong τ k).image emb`) for several members with different circuits without
+   the vocabulary's reading of several members' files. Two shapes: (i) the vocabulary reads the window's files as
+   one circuit, the members' summed, with `partsOf` the members' parts through `emb`; (ii) the claim is stated a
+   member at a time. Either is a statement in `Security/Properties/Verity/Game.lean`, soundness's. Then the proof
+   needs the several-member analog of the one-member `Live.ks` route (`unbound_subset_faulty_part`,
+   `AssemblyTargetV5`'s `faulty ⊆ wrongRegZc`, `OpensUnder`), which Flock has only at one member. Asked on PRF-490.
+2. **`WindowReads` and `WindowAt` from the per-member verifier** (the port, PRF-371; done-when 2). On this base v2
+   is `Spot.OneStageZk.oneSession`; the port's `membersRun` (`heldStep`, `laidHeld`, `membersTreesHeld`,
+   `sessionEvidence`) still refuses (`checkMembersAt_refuses`, `MULTI_REFUSED`). The gate is lifted there, for the
+   per-member form only, with `WindowReads` proved of its acceptance. `WindowSessions`' shape matches the port's
+   form at `ad6e765e05`: one session per drawn member, in the members' order, the closing round's evidence the
+   proof files' bytes. The Python mirror and difftest change with the gate, there.
+3. **The window's own class** (`row-table` roots and `registered` values; soundness's 03:35Z ruling, my answer of
+   03:53Z): `MemberSteps` holds at such a window but says nothing of the class. Covering it takes proofs'
+   several-member `EndToEndRegisteredRows`, then a clause on `StatesMember` and the step's conclusion. Soundness
+   chooses (a) accept with the open premise named, or (b) refuse until then; I build for (b).
+4. **Records.** The fast path for Security and Security/Proofs at the final head.
+5. `Window.hcls` stays a field of `Window` (`JointAuditV5.hcls_of_bounds` discharges it from bounds).
 
-The forms off the empty classes themselves (`windowOpenMap_couples`, `windowSampleMap_couples`,
-`windowCouplingTarget_of_sample`), which needed a bound on the stops' term, are deleted: the count-aware forms
-replace them.
+## Rulings in force (PRF-490)
+
+- 19:35Z Nov 10 (soundness): the sessions are held one after another, ordered by the honest verifier server's log,
+  the nonce chain only as a fallback; (B), a member at a time, is out.
+- 00:48Z Nov 11 (soundness): the closing round is in the member's own coin tree (1026 rounds a member).
+- 03:35Z Nov 11 (soundness): member m's roots are the `roots` entries whose `port` is `<m's key>/<port>`; a window
+  with row tables is refused in the per-member form until the statement covers that class.
+- The guarantee enters the lock with the port onto main's v2 (PRF-371), not from this branch.
 
 ## Runs
 
@@ -160,22 +131,14 @@ replace them.
 
 | Run | File | Tree | rc | Probe |
 |---|---|---|---|---|
-| `r20261110-152439-446b` | `Window/Leg.lean` | `8078441923` | 0 | standard axioms |
-| `r20261110-153404-936b` | `Window/Logged.lean` | `8078441923` | 0 | standard axioms |
-| `r20261110-153404-ef4c` | `Window/Draw.lean` | `8078441923` | 0 | standard axioms |
-| `r20261110-154050-b5dd` | `Window/Members.lean` | `46dfb5e5d3` | 0 | 28 theorems, standard axioms |
-| `r20261110-155915-3c61` | `Window/Draw.lean` | `PosDecoders` in the working tree | 0 | see the run |
-| `r20261110-155916-d15d` | `Window/Leg.lean` | `PosDecoders` and the first `windowSpotSound_of_sample` | 0 | 3 theorems, standard axioms |
-| `r20261110-162404-7405` | `Window/Logged.lean` | `388586f624` | 0 | 6 theorems, standard axioms |
-| `r20261110-162404-e1be` | `Window/Leg.lean` | `388586f624` | 0 | 3 theorems, standard axioms |
-| `r20261110-162404-5413` | `Window/Assembled.lean` | `388586f624` (the form with the stops' term as a premise) | 0 | 3 theorems, standard axioms |
-| `r20261110-163654-4fe7` | `Window/Assembled.lean` | the tree of `a8013ac42d` (`Window/Charge.lean`, no `hε`) | 0 | 3 theorems, standard axioms; `Charge` and `Leg` built as its imports |
+| `r20261110-163654-4fe7` | `Window/Assembled.lean` | `a8013ac42d` | 0 | 3 theorems, standard axioms |
+| `r20261111-021917-5b7e` | `Window/Record.lean` | `66aa92551e` | 0 | standard axioms |
+| `r20261111-022013-9626` | `Window/Counts.lean` | `9e8f2ea265` | 0 | standard axioms |
+| `r20261111-025914-f994` | `Window/Closing.lean` | `66a4360c93` | 0 | standard axioms |
+| `r20261111-033352-9065` | `Window/Steps.lean` | `c8e650a71b` | 1 | 3 rewrite errors in `memberSteps_of_sessions`, fixed in `c2bda01148` |
 
-## The base moved
-
-`cursor/soundness-remote-deployed-8fb2` gained commits after this branch forked from it (the Bridge's `domOf` and
-`dupId`, `Sampled.lean`, `Sampled/OpensAt.lean`, the Security and Security/Properties locks). They are not merged
-here; the restack takes them.
+Earlier rows (the layers up to `Window/Assembled.lean`, and the failed tries fixed forward) are in the git history of
+this file.
 
 ## Branch name
 
