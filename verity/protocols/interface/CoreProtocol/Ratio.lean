@@ -49,8 +49,13 @@ private def pieces (done : List String) (piece : List Char) : List Char → List
   | c :: cs => if c = '/' then pieces (String.ofList piece.reverse :: done) [] cs else pieces done (c :: piece) cs
 
 /-- The inverse of `toString`: refuses a zero denominator, a denominator written as 1, and a ratio not in lowest terms,
-so every ratio has exactly one spelling. -/
+so every ratio has exactly one spelling. A string of `2 ^ 32` bytes or more is refused by its size, which is stored
+with it, before a character of it is read. Compiled `String.toList` counts a string's characters in 32 bits
+(`Core.Canonical`'s header), and a string of fewer than `2 ^ 32` bytes has fewer characters than that, so compiled code
+reads every string as this definition does. `2 ^ 32` is the largest bound that gives that, so it refuses the fewest
+strings. -/
 def Ratio.ofString (s : String) (ctx : String) : V Ratio := do
+  if 2 ^ 32 ≤ s.utf8ByteSize then throw s!"{ctx}: a string of {s.utf8ByteSize} bytes is too long to be a ratio"
   match pieces [] [] s.toList with
   | [n] => pure ⟨← natOf n ctx, 1⟩
   | [n, d] =>
