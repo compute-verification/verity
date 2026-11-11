@@ -26,9 +26,11 @@ What is held is the step and the kind of the encoding, not the weights, E's byte
 - **Expected differences.** A route's CPU count differs from a program's CUDA record in ways that are the device's
   (`width`, `attention`, `norm`) and in ways that are the program's own arrangement of a computation the route
   takes too: AdamW's kernel, the fused one that the record's program asks torch for where a route takes torch's
-  default (`adamw`), and the loss as the rows' means over the rows kept where a route means over the tokens
-  (`loss`). Each is named by a rule that fires only on its own exact case (`width`, `RULES`); the output names each
-  one that fired with the MACs on both sides. Anything else is printed as a difference, and the command exits 1.
+  default (`adamw`), the loss as the rows' means over the rows kept where a route means over the tokens (`loss`),
+  and the average of the weights as one op over every tensor of the model where a route averages each tensor it
+  trains (`average`). Each is named by a rule that fires only on its own exact case (`width`, `RULES`); the output
+  names each one that fired with the MACs on both sides. Anything else is printed as a difference, and the command
+  exits 1.
 - **The position tables.** One expected difference is the harness's (`HARNESS`): the records' harness checked the
   model's buffers that θ doesn't hold, the position tables, like θ's weights, so a product with one is θ's, where
   `run.Harness` takes such a buffer for a weight the route made. `tables` counts the step again as the records'
@@ -86,6 +88,8 @@ UNFUSED_ADAMW = (("lerp_", 2), ("mul_", 1), ("addcmul_", 3), ("div", 1), ("addcd
 #: the argument by which the records' programs drop rows from a step's loss: that share of a forward's rows, the ones
 #: of the highest loss, get no gradient
 DROPS_ROWS = "--trunc"
+#: the argument by which the records' programs keep an average of the weights: its horizon, a share of the steps so far
+AVERAGES = "--ema-frac"
 
 
 def held(path: Path = HELD) -> dict:
@@ -313,7 +317,48 @@ def loss(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
     return found
 
 
-RULES = (attention, norm, loss, adamw)
+def average(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
+    """The average of the weights: a record's program may keep one of every tensor of the model, those it never
+    trains too, in one `_foreach_lerp_` a step, where route `ema` keeps one of each tensor it trains, a `lerp_` a
+    tensor. Fires where the record's program's arguments state an average (`AVERAGES`, not 0), on the record's one
+    `_foreach_lerp_`, once a step, over tensors each beside its average and priced at one MAC an element, beside the
+    config's `lerp_` of a tensor with one of its shape, priced alike, for some of the record's tensors and no other.
+    Neither side may have another `lerp_` or `_foreach_lerp_`, and the config's unequal entries no other product of
+    an unfused AdamW step, whose `lerp_` one of these could then be (`adamw` runs first and takes such a step's
+    out). The record's tensors the config has none of are those the route does not train: the output counts them."""
+    name = ("other", "param")
+    theirs = [k for k in rec if k[:3] == (*name, "_foreach_lerp_")]
+    mine = {k: json.loads(k[3]) for k in cfg if k[:3] == (*name, "lerp_")}
+    try:
+        states = float(stated(args, AVERAGES) or 0) != 0
+    except ValueError:
+        return None
+    if (not states or len(theirs) != 1 or not mine or any(k[:3] == (*name, "lerp_") for k in rec)
+            or any(k[:2] == name and k[2] in ("_foreach_lerp_", "addcmul_", "addcdiv_") for k in cfg)):
+        return None
+    left = collections.Counter(tuple(t) for t in json.loads(theirs[0][3]))
+    if any(n % 2 for n in left.values()) or rec[theirs[0]] != [1, sum(math.prod(t) * n // 2 for t, n in left.items())]:
+        return None
+    for k, operands in mine.items():
+        n, t = cfg[k][0], tuple(operands[0])
+        if len(operands) != 2 or operands[0] != operands[1] or cfg[k] != [n, n * math.prod(t)] or 2 * n > left[t]:
+            return None
+        left[t] -= 2 * n
+    trained, more = sum(cfg[k][0] for k in mine), sum(left.values()) // 2
+    untrained = (f"those {trained} and {more} more that the route does not train "
+                 f"({sum(math.prod(t) * n // 2 for t, n in left.items()):,} MACs a step): the program averages every "
+                 "tensor of the model, those it never trains too" if more else f"the same {trained}")
+    found = {"rule": "average", "record_macs": rec[theirs[0]][1], "config_macs": sum(cfg[k][1] for k in mine),
+             "what": f"the route's average of each tensor it trains, {trained} of them, an op a tensor, for the "
+                     f"record's program's in one op: {untrained}"}
+    del rec[theirs[0]]
+    for k in mine:
+        del cfg[k]
+    return found
+
+
+#: in this order: `adamw` before `average`, since an unfused AdamW step has a `lerp_` of its own
+RULES = (attention, norm, loss, adamw, average)
 
 
 def _plural(n: int, one: str, many: str = "") -> str:
