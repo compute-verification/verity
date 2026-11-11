@@ -162,6 +162,41 @@ def plain(name: str, commit: str, main: str, base1: str) -> dict:
     return rec
 
 
+def named(name: str, commit: str, main: str, moves: list[str]) -> dict:
+    """A head as it is (not merged with the commit below the move), each move named: `--move-commit M... --onto MAIN`."""
+    args = [commit, "--main", main, "--onto", main]
+    for m in moves:
+        args += ["--move-commit", m]
+    r, secs, rc = restack(name, args)
+    rec = {"name": name, "kind": "named", "commit": commit, "seconds": round(secs), "exit": rc, "restack": r}
+    if r and r.get("result") and r.get("status") in ("clean", "locks-stale", "pins-stale"):
+        rec["result"] = r["result"]
+        rec["facts"] = facts(name, commit, r["result"], None, main, main)
+        say(f"{name}: the result {r['result'][:12]} holds the commit crossed: {rec['facts']['holds_commit']}, holds the staged head: "
+            f"{rec['facts']['holds_main']}; after (against the staged head): {rec['facts']['after']}")
+    return rec
+
+
+def pins(name: str, commit: str, main: str) -> dict:
+    """restack.py's own pins step on a merge made by hand: its `regen_pins` on ``commit``, and the commit it would add."""
+    sys.path.insert(0, os.path.dirname(RS))
+    import restack as R  # the staged tree's
+    os.environ.update({k: v for k, v in ENV.items() if k.startswith("GIT_")})
+    t = time.time()
+    tree, output, fresh = R.regen_pins(commit, sys.executable, None)
+    result = commit if tree is None else R.commit_tree(tree, [commit], f"restack: regenerate stale pins ({R.PINS} --regen)\n", None)
+    rec = {"name": name, "kind": "pins", "commit": commit, "seconds": round(time.time() - t), "result": result,
+           "restack": {"status": "clean" if fresh else "pins-stale", "step": "pins", "result": result},
+           "pins_changed": tree is not None, "pins_fresh": fresh, "pins_output": output}
+    rec["facts"] = facts(name, commit, result, None, main, main)
+    say(f"{name}: pins.py --regen on {commit[:12]}: every pin fresh after: {fresh}; it changed the tree: {tree is not None}; the "
+        f"result {result[:12]} holds the staged head: {rec['facts']['holds_main']}; against the staged head: {rec['facts']['after']}; "
+        f"files with conflict markers among those changed: {len(rec['facts']['conflict_markers'])}")
+    for line in output[-8:]:
+        say(f"{name}:    | {line[:300]}")
+    return rec
+
+
 def child_onto(name: str, commit: str, parent: dict, main: str) -> dict:
     lp = parent.get("result")
     if not lp:
@@ -186,12 +221,13 @@ def child_steps(name: str, commit: str, parent: dict, main: str) -> dict:
         say(f"{name}: its parent {parent['name']} has no crossed result; not tried")
         return {**rec, "skipped": "parent has no result"}
     tip, moves, t = commit, moves_of(main, lc), time.time()
-    for n, (m, script, margs) in enumerate(moves, 1):
-        steps = git("log", "--format=%H", f"--grep=^Restack-move: {m}", lp, "--not", lc, main).split()
-        if not steps:
-            say(f"{name}: move {n} of {len(moves)}, {m[:12]}: no script step of {parent['name']}'s crossing names it; stopped")
-            return {**rec, "seconds": round(time.time() - t), "stopped": f"no script step for {m}"}
-        s = steps[-1]
+    # The parent's own script steps, one a move, oldest first: those on the first-parent line from its result back to its head
+    # (a parent that is itself a child names its own parent's steps in their trailers, so they are not found by the move's id).
+    own = git("log", "--first-parent", "--reverse", "--format=%H", "--grep=^Restack-move: ", lp, "--not", lc).split()
+    if len(own) != len(moves):
+        say(f"{name}: {parent['name']}'s crossing has {len(own)} script steps for {len(moves)} moves; stopped")
+        return {**rec, "seconds": 0, "stopped": f"{len(own)} script steps for {len(moves)} moves"}
+    for n, ((m, script, margs), s) in enumerate(zip(moves, own), 1):
         args = [tip, "--move-commit", s, "--script", script, *[f"--script-arg={a}" for a in margs], "--main", main]
         args += ["--onto", lp] if n == len(moves) else ["--no-pins"]
         r, secs, rc = restack(f"{name}.x{n}", args)
@@ -214,16 +250,17 @@ def main() -> int:
     ap.add_argument("specs", nargs="+")
     ap.add_argument("--main", required=True)
     ap.add_argument("--jobs", type=int, default=1)
+    ap.add_argument("--below", help="a commit below every move to cross (default: the first spec's commit)")
     a = ap.parse_args()
     os.makedirs(OUT, exist_ok=True)
     main_sha = git("rev-parse", f"{a.main}^{{commit}}")
     specs = []
     for spec in a.specs:
         name, _, rest = spec.partition("=")
+        rest, _, how = rest.partition(":")
         commit, _, parent = rest.partition("@")
-        parent, _, how = parent.partition(":")
         specs.append({"name": name, "commit": git("rev-parse", f"{commit}^{{commit}}"), "parent": parent or None, "how": how})
-    all_moves = moves_of(main_sha, specs[0]["commit"])
+    all_moves = moves_of(main_sha, git("rev-parse", f"{a.below}^{{commit}}") if a.below else specs[0]["commit"])
     base1 = git("rev-parse", f"{all_moves[0][0]}^") if all_moves else main_sha
     uv = subprocess.run(["uv", "--version"], capture_output=True, text=True).stdout.strip()
     say(f"staged {main_sha}; the commit below the first move {base1}; moves {[m[0][:12] for m in all_moves]}")
@@ -244,7 +281,11 @@ def main() -> int:
             if s["parent"]:
                 events[s["parent"]].wait()
             with gate:
-                if not s["parent"]:
+                if s["how"] == "named":
+                    rec = named(s["name"], s["commit"], main_sha, [m[0] for m in all_moves])
+                elif s["how"] == "pins":
+                    rec = pins(s["name"], s["commit"], main_sha)
+                elif not s["parent"]:
                     rec = plain(s["name"], s["commit"], main_sha, base1)
                 elif s["how"] == "onto":
                     rec = child_onto(s["name"], s["commit"], done[s["parent"]], main_sha)
