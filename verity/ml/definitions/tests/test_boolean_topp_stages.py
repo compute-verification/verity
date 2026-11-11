@@ -148,8 +148,9 @@ def test_the_served_select_chunks_compute_the_twin_s_words():
     """At GLM-5.3's vocabulary, select chunks of a served row compute the twin's words on its inputs for them, as words and on
     bits (bit-sliced, so with every word `gumbel_boolean.philox_round` commits): the first chunk, the last, and the two forms
     of a middle one that a V = 64 row's chunks of two lanes never take, a chunk that a slice's end falls inside at S = 32
-    and one at S = 16 and 32 both (`topp_stages.positions`' wrap, which every later chunk's carried offsets, slices and tie
-    counts follow from).  About a minute, most of it the twin over the row: these are the Definitions a served row's 4,840
+    and one at S = 16 and 32 both, which carry on the offsets `topp_stages.positions` leaves past the end.  The row is a
+    plain one, on which no tie count decides a lane past the end: what those lanes read is held on rows of 1,000 lanes
+    (`test_topp_stages`).  About a minute, most of it the twin over the row: these are the Definitions a served row's 4,840
     select units are, at their 32 lanes, and no smaller row has them."""
     V, n = SERVED_V, T.chunk(SERVED_V)
     lg = row(V, "plain", seed=V)
@@ -181,8 +182,8 @@ def test_a_served_select_chunk_on_bits_is_within_the_largest_unit_proved():
     (`topp_stages.chunk`), not the chunk's own, whose lowering takes minutes and gigabytes: what grows faster than the lanes
     (the tie counts' scan, the running best) is left out of it.  It fails when a lane's nonzeros grow back
     (`gumbel_boolean.philox_round` commits each round's words, and without that a lane has ten times these and a chunk of 32
-    more than twice the bound) and when `topp_stages.SELECT_N` goes past four times its 32 lanes, which are a quarter of the
-    bound; the lanes themselves are held by the served counts (`test_topp_stages`)."""
+    more than twice the bound) and when `topp_stages.SELECT_N` is raised until a chunk passes the bound, a little over four
+    times its 32 lanes, which are a quarter of it; the 32 lanes themselves are held by the served counts (`test_topp_stages`)."""
     from verity_flock.class_statement import unit_lowering
 
     def nnz(lanes: int) -> int:

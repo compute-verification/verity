@@ -4,6 +4,8 @@
 * every unit's Definition on the twin's inputs for it (its lanes of the row, the Call's operands and its writers' outputs)
   computes the twin's outputs, and the twin's token is the Call's in both its forms, as the circuit evaluator computes them: on
   rows with ties, -inf and NaN lanes, at temperature 0, 0.7 and 1, at every split count;
+* a select chunk of `SELECT_N` lanes that a slice ends inside counts its ties as the row does, on rows where that count
+  decides the Call's token;
 * the twin's keep bits are `topp_keep`'s at every split count on the edge rows (NaN and +inf lanes, a few finite lanes, a
   uniform row, p = 0 and 1);
 * `plan` wires each parameter to an earlier unit's output of its type and `cut` counts its units, at small and served statics;
@@ -91,6 +93,34 @@ def test_the_units_compute_the_twin_s_words_whose_token_is_the_call_s(kind, temp
                 bad.append(u.key)
         assert bad == []
         assert [int(v) for v in outs[T.plan(V)[-1].key][0]] == [tok]
+
+
+@pytest.mark.slow
+def test_a_select_chunk_counts_its_ties_across_a_slice_s_end():
+    """A V = 1000 row's select chunks hold `SELECT_N` lanes, and at split counts 2, 4, 8 and 16 a slice ends inside the chunk
+    of lane 504 before it, which no chunk of a V = 64 row has (its two lanes end with their slices).  On these two rows the
+    lane's tie count decides the token: it ties with lanes 3 and 470 and its noise beats theirs, so the Call's token is lane 3
+    when top_p keeps two of the ties (it is the third along the row) and lane 504 when it keeps three.  Every select chunk
+    computes the twin's words, which count ties along the row: a chunk that read a lane past the slice's end with the ties
+    before the slice it began in keeps the lane on the first row, one that read the slice after's drops it on the second, and
+    one that didn't restart its count at the slice's end carries another count.  Half a minute, most of it the twin."""
+    V, lane = 1000, 504
+    sel = [u for u in T.plan(V) if u.key[0] == "select"]
+    at = sel[lane // T.SELECT_N]
+    assert T.chunk(V) == T.SELECT_N and at.lanes[0] <= lane < at.lanes[1]
+    for S in (2, 4, 8, 16):
+        assert any(at.lanes[0] < end <= lane for end in range(T.Geo(V, S).L, V, T.Geo(V, S).L)), S
+    for ties, top_p, tok in ((6, 0.3, 3), (7, 0.4, lane)):
+        x = np.full(V, 1.0, np.float32)
+        x[[3, 470, lane, 600, 700, 800, 900][:ties]] = 8.0
+        lg = bf16_row(x)
+        ops = {"top_p": f32(top_p), "seed": 0x1234_5678_9ABC_DEF0, "pos": 42, "temp": f32(0.7)}
+        for S in (2, 4, 8, 16):
+            assert evaluate(bind(SA.GumbelTopPTokenSelect, V=V), [int(v) for v in lg], *(ops[o] for o in OPERANDS[:4]), S) == (tok,)
+            got, outs = TW.stage_rows(V, lg, splits=S, **ops)
+            bad = [u.key for u in sel if [int(v) for v in evaluate(u.defn, *unit_args(u, lg, {**ops, "splits": S}, outs))]
+                   != [int(v) for f in outs[u.key] for v in f]]
+            assert (got, bad) == (tok, []), (top_p, S)
 
 
 EDGE = ["ties", "nan", "few", "uniform", "posinf", "plain", "neginf"]
