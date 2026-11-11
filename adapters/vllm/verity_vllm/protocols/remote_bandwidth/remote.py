@@ -38,7 +38,7 @@ Commit's instrumented run (`Lockstep`: each pass's engine step is the run's next
 the steps the Commit commits), its store's encode on the GPU by kv.cu (`KvDevice`).
 
 `benchmarks/remote_session` is not a package: `session_module` loads its ``prover.py`` from the source tree
-(`config.REMOTE_SESSION`), and `prove` takes the wire from it. The verifier's side, the wire among it, is
+(`REMOTE_SESSION`, below), and `prove` takes the wire from it. The verifier's side, the wire among it, is
 `verity.protocols.poub.verifier.session`.
 """
 from __future__ import annotations
