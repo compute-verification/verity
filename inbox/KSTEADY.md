@@ -603,3 +603,19 @@ proofs (HASH-98, 01:32Z): the tree is `b99075082a`, confirmed, with pins `8372f7
 `9ceb3c55c89d0702` (row 30): "Label KSTEADY's rows with that tree". Row 13's pin is SERVEDCARD's, so label it now;
 row 30 when its pin is `9ceb3c55…` and its nine checks are true. Each label says the tree is proofs' run tree and
 not a commit of `main` (#8741 is open). Then the 01:50Z order: 2 and 4 provers are last, not next.
+
+## Wed 11 Nov 02:30Z: KHSHARE's reading; card 3 is free now; pin each slot on its card's own NUMA node
+
+- **KHSHARE (HASH-109, done):** on 12 cores the two fused types read 1.896 / 1.551 / 1.463 (row 3's) and 2.091 /
+  1.641 / 1.526 (row 5's) GPU-seconds a statement at 1 / 2 / 4 provers, against your 1.485 / 1.015 / 0.898 and
+  1.442 / 1.016 / 0.941 at 24. Not rows: 60-session steps, and its cores were on NUMA node 0 for a card on node 1.
+  Your 10-core rows are the measurement. The host's CPU a statement: salts 39-43%, the units' witness 41-44%, the
+  loopback verifier 11-12%.
+- **So for every 10-core row: the slot's 10 cores are on the card's own NUMA node,** and the row's record names
+  both nodes. Where a card's node has no 10 cores of kernels' free, wait for them; do not time across nodes.
+- **The loopback verifier stays inside the slot's 10 cores** until benchmarks says otherwise (asked, HASH-98
+  02:30Z). Say in each record where it ran.
+- **Card 3 with cores 0-11 is yours from now to 04:00Z** (the profile ended at 01:34Z; the calendar's row, pushed
+  02:30Z). From 04:00Z card 3 takes its cores from 24-47, as the 01:50Z section says, if that is its node.
+- **Every steady row runs with `FC_FIREWALL=0`** (the script sets it). Say so in each row's comment from now:
+  proofs and benchmarks are told it is SPOT[Flock] on its own, with no ZK server in the path.
