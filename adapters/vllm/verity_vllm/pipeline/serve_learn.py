@@ -70,6 +70,7 @@ def warm_up(engine: Any, com: Any, opts: Any, proto: Any, defaults: Mapping[str,
         return None
     from verity_vllm.acquire.sources import taps as TAPS
     from verity_vllm.commit import challenge
+    from verity_vllm.engine.served_seed import served
 
     shape, t0, rng = shape_of(opts), clock(), challenge.generator(WARMUP_SEED)
     top = int(vocab if vocab is not None else engine.vllm_config.model_config.get_vocab_size())
@@ -80,7 +81,7 @@ def warm_up(engine: Any, com: Any, opts: Any, proto: Any, defaults: Mapping[str,
         for i in range(shape["requests"]):
             req = proto.parse({**body, "prompt": rng.integers(FIRST_ID, top, size=shape["prompt_ids"]).tolist()})
             engine.add_request(request_id=f"learn-warmup-{i}", prompt={"prompt_token_ids": list(req.prompt)},
-                               params=proto.seeded(proto.sampling_params(req, shape["steps"], dict(defaults or {}))))
+                               params=served(proto.sampling_params(req, shape["steps"], dict(defaults or {})), None, None)[0])
         steps = 0
         while engine.has_unfinished_requests():
             engine.step()

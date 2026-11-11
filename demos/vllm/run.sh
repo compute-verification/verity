@@ -12,7 +12,7 @@
 #   commit   once per workload: its Build, Match and Commit with its sealed replay bundle (commit.sh), a workload dir under
 #            LLAMA_ROOT (placement.toml's COMMIT_RUN names the one `window` and `serve` use)
 #   serve    the endpoint alone, serving until UNTIL (serve.sh)
-# Further FLAGs go to `research run` (`--env WC_RECORD_TIMEOUT=3h`, `--env PP_CHALLENGER=...`); --dry-run prints the command and
+# Further FLAGs go to `research run` (`--env WC_TIMEOUT=45m`, `--env PP_CHALLENGER=...`); --dry-run prints the command and
 # starts nothing. It returns once the run starts: `research status RUN` checks on it.
 set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)

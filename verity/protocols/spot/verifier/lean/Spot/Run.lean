@@ -6,7 +6,7 @@ check the stream ran on it, in the stream's order.
 * `register`: the public-items rule on the Spec's values (`Service.checkPublic`), the population (a positive integer),
   the rule's rate over it and the program's strata (`Select.Rule.over`, `Select.strataSizes`: `rate`, a count of none or
   more than the population) and the work table it is expanded over (`Select.Rule.tableOver`: `rate`, a work rate law
-  whose strata or table don't apply), then R1–R7 (`Registration.check`) against the challenger's copies under the sampling design the rule names over
+  whose strata or table don't apply), then R1–R8 (`Registration.check`) against the challenger's copies under the sampling design the rule names over
   that population (`Select.Rule.lawOver`, whatever law the copies carry) and that work table, a `bernoulli` sampling
   design at any `p` (`Draw.bernoulli`: `bernoulli`), a
   program and query whose population is not the registration's units in order (`Slots.popOk`: `population-order`), and
@@ -25,7 +25,7 @@ check the stream ran on it, in the stream's order.
   sample's `Q · n` proof blocks, `n = Σ n_t` those of one replay block, `n_t` its instances of template `t`
   (`Select.replayCells` of the challenger's replay block Program under the check's query), template-major, replay block
   `sample[i]`'s instances of template `t` being `[off_t + i·n_t, off_t + (i+1)·n_t)`, `off_t = Q · Σ_{t'<t} n_t'`: the
-  public-items rule on the interior values, the population (else `interior-population`), R1–R7 against its copies under
+  public-items rule on the interior values, the population (else `interior-population`), R1–R8 against its copies under
   `subset:Q·n` (all of them committed), `population-order`, and its receipt; and `second`: the second stage on its own
   coins (`Select.selectSecond`, the rule's counts over the cells, `Select.Counts.over`), read after the interior
   registration's digest and carrying their evidence as the first stage's do (`coins`);

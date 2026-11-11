@@ -34,3 +34,13 @@ Beside the modules are each Definition module's binding file and pins (`<module>
 `tests/` is this package's suite (`uv run tools/verity/check/suites.py verity/definitions/ops`), which tests
 `verity.definitions.silicon` too. [`tests/fixtures/`](tests/fixtures/README.md) holds the hardware captures the semantics
 are replayed against.
+
+## Interface
+
+- **Provides:** the primitive circuits' Definitions, one family a module, their Boolean versions (`ops.boolean`), and each
+  module's sidecar and pins, which `circuit-check` reads.
+- **Loaded by:** the served workloads' Definitions (`verity.definitions`), the protocols' provers
+  (`verity.ml.protocols`), Flock (`verity_flock`), the vLLM integration (`verity_vllm`), `archive/examples/h200` and benchmarks.
+  No verifier loads it.
+- **Loads:** `verity.circuits` (its types, its Boolean forms and `silicon`) and numpy, and `verity.definitions.kernels.tc`,
+  whose batch kernels `gemm`, `moe` and `prims` register.

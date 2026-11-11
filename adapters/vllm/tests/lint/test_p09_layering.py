@@ -70,7 +70,6 @@ PACKAGE_OF = {
     "verity_vllm.protocols": "protocol_options",
     "verity_vllm.protocols.linear": "linear",
     "verity_vllm.protocols.remote_bandwidth": "store",
-    "verity_vllm.protocols.remote_bandwidth.commit_map": "pipeline",
     "verity_vllm.program.predict": "predict",
     "verity_vllm.engine.collectives": "collectives",
     "verity_vllm.engine.served_seed": "served_seed",

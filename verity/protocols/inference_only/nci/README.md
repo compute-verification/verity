@@ -19,7 +19,8 @@ The slowdown lower bound's numbers come from [`verity/protocols/inference_only/r
 `fit.py` and `figures.py` read. Hosts carry no compute and no run beats the reference's efficiency (`GLOSSARY.md`), so
 `host_share` is 0 and the residual trains at MFU₀ (`tiers.evaluate`'s `residual_mfu`), while the counted
 multiplications (the inference-only policy's term, χ, the memory cap) stay at peak: at `tiers.py`'s defaults the slowdown is 3.02
-where every unit is proved (T1 to T4), and rho's remote scenario at the H200 gives 3.04. Without the reference-efficiency assumption they are 1.21 and 1.22, without the
+where every unit is proved (T1 to T4), and rho's remote scenario at the H200 gives 3.04. PoUW's credit sets both: with nothing credited (`residual` 1) both are 1.
+Without the reference-efficiency assumption they are 1.21 and 1.22, without the
 hosts assumption 2.19 and 2.80, and without both 1 and 1.12. The code and its outputs keep the older names (`slowdown.py`, and `tiers.py`'s `efficiency` and `residual`;
 `GLOSSARY.md`, Older names).
 

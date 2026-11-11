@@ -150,7 +150,7 @@ def test_the_verdicts_log_and_records_are_the_whole_logs():
     assert {i: c[2] for i, c in refused.items()} == {
         **dict.fromkeys((4, 13, 22), ("R6-window",)), **dict.fromkeys((6, 17, 28), ("R6-previous",)),
         **dict.fromkeys((5, 8, 21, 25, 34, 39), ("disagree",))}
-    assert all("'lean': {'ok': False, 'codes': ['R6-window']}" in refused[i][3] for i in (5, 25))
+    assert all("'lean': {'ok': False, 'codes': ['R6-window'], " in refused[i][3] for i in (5, 25))
     assert all("'lean': {'ok': True" in refused[i][3] for i in (8, 21, 34)) and "non-integer" in refused[39][3]
     assert [stream.log[j]["window"].get("tags", "float") for j in stream._irregular] == [("t", 3), ("t", 23), "float"]
     assert set(symbols) == {"accept", "reject", "late"} and stream.failures == sum(s != "accept" for s in symbols)
@@ -158,10 +158,28 @@ def test_the_verdicts_log_and_records_are_the_whole_logs():
     assert 25 not in {c[5] for c in forgetful if c[0] == "refused"} and forgetful != want[0]
 
 
+def test_r8_lets_a_tied_value_through_on_both_verifiers():
+    """R8's tied values on both verifiers, which compare the tied values a verdict publishes: a v1 record whose members
+    all read `W`, named tied, is let through and its verdict publishes `W`; not named, or a name that isn't a parameter
+    named instead, it is refused; and `W` named tied while expected registered is refused (`R8-tied`), since a tied value
+    is never a registered value."""
+    prog = _program()
+    first, ports = _registered_record(prog, _registered(prog))
+    v1 = R.record(prog, Q, LAW, SCHEME, first["roots"], SERVED)
+    for rec, registered, tied, codes, through in (
+            (v1, None, ["W"], (), ("W",)), (v1, None, None, ("R8-shared-input",), ()),
+            (v1, None, ["nope"], ("R8-tied", "R8-shared-input"), ()), (first, {"W": 2}, ["W"], ("R8-tied",), ()),
+            (first, {"W": 2}, None, (), ())):
+        v = V.check(rec, prog, Q, LAW, SCHEME, ports, None, (), (), None, None, registered, tied=tied)
+        assert v.codes == codes and v.rests_on_period_check == through, (tied, v)
+        assert v.verifiers["lean"]["codes"] == list(codes), (tied, v)
+
+
 def test_r7_reads_each_values_first_registration():
     """Registered values: a log of 24 records, two in three registering `W` under its first root and the rest v1. A
     candidate's check gets the last record and the first registration, and the verifier gives it the verdict the
-    whole log gives: the held root, a fresh root (R7-held), a window logged before, a wrong previous, a v1 record."""
+    whole log gives: the held root, a fresh root (R7-held), a window logged before, a wrong previous, a v1 record. The
+    program's members all read `W`, so a v1 record, whose `W` no verifier holds, is refused for it (R8-shared-input)."""
     prog = _program()
     reg = _registered(prog)
     first, ports = _registered_record(prog, reg)
@@ -182,8 +200,8 @@ def test_r7_reads_each_values_first_registration():
             (at(row, last, _registered(prog).entry()), {"W": 2}, ("R7-held",)),
             (at(SERVED["row"] + 5, last, reg.entry()), {"W": 2}, ("R6-window",)),
             (at(row, "ab" * 64, reg.entry()), {"W": 2}, ("R6-previous",)),
-            (at(row, last, None), None, ()),
-            (at(SERVED["row"], last, None), None, ("R6-window",))):
+            (at(row, last, None), None, ("R8-shared-input",)),
+            (at(SERVED["row"], last, None), None, ("R6-window", "R8-shared-input"))):
         earlier = stream._earlier(cand)
         assert earlier == [first, stream._log[-1]] or (cand["window"]["row"] != row and len(earlier) == 3)
         held = ["W"] if registered else None

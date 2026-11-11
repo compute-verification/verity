@@ -176,6 +176,8 @@ class ProgramIndex:
         # a warm Program's cached-prefix input (`cached_prefix.layout_of`), and per request reading it the producers' rows (`populate`)
         self.kv_prefix: dict[str, Any] | None = CP.layout_of(program_dir)
         self.cached_prefix: dict[str, CP.CachedPrefix] = {}
+        # per warm request whose Program recomputes its hit instead (`recomputed_prefix`, `populate`): its C and certified prompt
+        self.recomputed: dict[str, tuple[int, list[int]]] = {}
         self.segs = RM.segment_steps(self.rows, inst.get("checks"))
         self._seg_lo = [lo for lo, _hi in self.segs]
         self.by_i = {int(r["i"]): r for r in self.rows}

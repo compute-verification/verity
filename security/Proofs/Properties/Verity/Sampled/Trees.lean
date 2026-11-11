@@ -380,7 +380,8 @@ theorem accepted_trees {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitmen
   unfold Spot.OneStageZk.checkBlobs Core.atCoins at h
   split at h
   case h_2 => cases h
-  unfold Spot.OneStageZk.checkBlobsAt at h
+  replace h := (Spot.OneStageZk.checkBlobsAt_accept h).1
+  unfold Spot.OneStageZk.checkOneAt at h
   dsimp only at h
   split at h
   case h_1 => cases h

@@ -28,11 +28,12 @@ Each part of the check, with its key at COMMIT and the recorded passes under tha
                           passes too where the repository's own suite (tests/), which holds `LINTS`, passed
     lean                  `skipped`, in place of every Lean part, on a tree without the verifier's Lean package (check
                           skips its Lean group there): a skip passes nothing
-    lean-changed          no verdict, never required: it vouches for nothing, the audit decides
+    lean-changed          no verdict, never required: it vouches for nothing, the audit decides, and is off the merge gate
     ratchet-gate          no verdict, never required: it judges the merges above the check's base, not COMMIT's tree, and
                           is off the merge gate
 
-A job off the merge gate (drive's policy, policy.toml's `off_gate`: circuit-check, ratchet-gate) is listed, and none of its parts is required.
+A job off the merge gate (drive's policy, policy.toml's `off_gate`: circuit-check, lean-changed, ratchet-gate) is listed, and none
+of its parts is required.
 
 The steps that build or fetch what other steps read (`IMPLIED`) keep no verdict of their own.  Each is
 `implied` when every part that reads what it makes has passed (`implied_by`), and `must-run` when one hasn't.  Why those passes

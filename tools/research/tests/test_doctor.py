@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import io
 import json
 import math
 import os
@@ -93,6 +94,16 @@ def test_a_secret_the_vm_injects_and_lost_is_a_finding_whose_fix_is_a_fresh_shel
     c = doctor.check_secrets("lane")
     assert c.status == OK and c.detail.startswith("the 6 names the lane role needs and the 7 this VM injects are set; 2 taken back from "
                                                   "the tmux server because this shell had lost them (R2_BUCKET, JOBS_TOKEN)")
+
+
+def test_a_notes_token_the_vm_injects_and_the_shell_lacks_is_no_finding(monkeypatch):
+    """An agent's notes token is the GitHub broker's: one that emptied the injected variable has lost nothing."""
+    for n in LANE:
+        monkeypatch.setenv(n, "dummy")
+    monkeypatch.setenv("CLOUD_AGENT_INJECTED_SECRET_NAMES", ",".join([*LANE, notes_sync.TOKEN_ENV]))
+    assert doctor.check_secrets("lane") == Check("secrets", OK, "the 6 names the lane role needs and the 6 this VM injects are set")
+    monkeypatch.setenv("CLOUD_AGENT_INJECTED_SECRET_NAMES", ",".join([*LANE, notes_sync.TOKEN_ENV, "JOBS_TOKEN"]))
+    assert doctor.check_secrets("lane").detail == "not set here: JOBS_TOKEN"
 
 
 # ---- what a check prints ------------------------------------------------------------------------------------------------------------
@@ -232,6 +243,64 @@ def test_notes_push_needs_a_clone_and_pushes_through_the_token_s_helper(monkeypa
     _git("remote", "remove", "origin", cwd=clone)
     c = doctor.check_notes_push()
     assert c.status == FINDING and c.detail.startswith(f"the notes clone {clone} has no origin: notes committed here reach nobody")
+
+
+class _Broker:
+    """The agents' GitHub broker, faked where `notes_sync.notes_token` opens it, for an agent with a Cursor identity: an hour's
+    token to whoever asks, or `refuse` as its HTTP status."""
+
+    def __init__(self, monkeypatch):
+        self.refuse, self.asked = None, 0
+        monkeypatch.setattr(slack, "oidc_token", lambda aud: "dummy-identity")
+        monkeypatch.setattr(notes_sync.urllib.request, "build_opener", lambda *handlers: self)
+        monkeypatch.setattr(notes_sync, "clock", lambda: 0.0)
+        monkeypatch.setattr(notes_sync, "_BROKER_REFUSED", [])
+        for k in (notes_sync.SOURCE_ENV, notes_sync.EXPIRES_ENV):         # notes_token sets them in os.environ: undone after
+            monkeypatch.setenv(k, "")
+            monkeypatch.delenv(k)
+
+    def open(self, req, timeout=None):
+        self.asked += 1
+        if self.refuse:
+            raise urllib.error.HTTPError(req.full_url, self.refuse, "x", {}, None)
+        return io.BytesIO(json.dumps({"token": "dummy-from-broker", "expires_at": "1970-01-01T01:00:00Z"}).encode())
+
+
+def test_notes_push_names_its_credential_and_says_when_the_variable_is_no_longer_needed(monkeypatch, tmp_path):
+    clone = _clone(tmp_path, origin="https://github.com/compute-verification/research-notes.git")
+    monkeypatch.setenv("RESEARCH_NOTES", str(clone))
+    runs_ = Runs(monkeypatch, git=(0, ""))
+    said = f"origin of {clone} accepts a push (dry run); the credential is "
+    c = doctor.check_notes_push()                                                 # conftest: no Cursor identity here
+    assert (c.status, c.detail) == (OK, f"{said}git's own: there is no notes token (no Cursor identity here, and "
+                                        "RESEARCH_NOTES_TOKEN is not set)")
+    monkeypatch.setenv("RESEARCH_NOTES_TOKEN", "not-to-be-printed")
+    c = doctor.check_notes_push()                                                 # a laptop, the control pod: the variable, as before
+    assert (c.status, c.detail) == (OK, f"{said}RESEARCH_NOTES_TOKEN, since the GitHub broker gave no token (no Cursor identity here)")
+    broker = _Broker(monkeypatch)                                                 # an agent whose VM still injects the variable
+    c = doctor.check_notes_push()
+    assert (c.status, c.detail) == (OK, f"{said}the GitHub broker's token, by this agent's Cursor identity; RESEARCH_NOTES_TOKEN is "
+                                        "set here too and is not used: a Cursor agent no longer needs it")
+    assert notes_sync.notes_token() == "dummy-from-broker" and broker.asked == 1, "the helper reads the broker's, asked once"
+    assert not any(t in c.detail + " ".join(runs_.calls[-1][0]) for t in ("not-to-be-printed", "dummy-from-broker"))
+    runs_.answers["git"] = (128, "fatal: Authentication failed for 'https://github.com/x'")
+    c = doctor.check_notes_push()
+    assert c.status == FINDING and c.fix.startswith("the GitHub broker's notes token was refused: the agents' App needs")
+    assert "the credential is the GitHub broker's token" in c.detail and broker.asked == 1
+
+
+def test_a_refused_variable_with_a_broker_that_gives_no_token_says_both(monkeypatch, tmp_path):
+    clone = _clone(tmp_path, origin="https://github.com/compute-verification/research-notes.git")
+    monkeypatch.setenv("RESEARCH_NOTES", str(clone))
+    Runs(monkeypatch, git=(128, "fatal: Authentication failed for 'https://github.com/x'"))
+    monkeypatch.setenv("RESEARCH_NOTES_TOKEN", "not-to-be-printed")
+    _Broker(monkeypatch).refuse = 503
+    c = doctor.check_notes_push()
+    assert c.status == FINDING and c.detail.endswith("; the credential is RESEARCH_NOTES_TOKEN, since the GitHub broker gave no token "
+                                                     "(the broker answered HTTP 503)")
+    assert c.fix.startswith("RESEARCH_NOTES_TOKEN was refused (expired or revoked), and the GitHub broker gave no token to use instead "
+                            "(the broker answered HTTP 503): on a Cursor agent run this again in a minute")
+    assert "not-to-be-printed" not in c.detail + c.fix
 
 
 # ---- store, slack ---------------------------------------------------------------------------------------------------------------

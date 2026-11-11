@@ -28,6 +28,8 @@ clock64 for the whole kernel and for its tensor phases) are diagnostics. Timings
   table, and the fills and bursts compared, over one or more runs' `out/` directories. `tests/` holds its verdict to
   the card on made-up points.
 
+`verity bench tensor_duty` runs `run.sh`, which writes under a run's `$OUT` and refuses without one, so run it as:
+
 ~~~text
 research run --on NODE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
   -- bash benchmarks/tensor_duty/run.sh

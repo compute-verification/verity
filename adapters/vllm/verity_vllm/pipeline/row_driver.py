@@ -290,11 +290,13 @@ class Row:
             pass
 
     def research_result(self) -> None:
-        """The research runner's result envelope, from the stage verdicts (only under a research run)."""
-        if self.env.research_run_dir and os.path.isdir(self.d):
+        """The research runner's result envelope, from the stage verdicts (only under a research run), into the row's run dir: the
+        one `--research-run-dir` names, which a caller whose run dir is published points elsewhere."""
+        rd = self.env.research_run_dir
+        if rd and os.path.isdir(self.d):
             with open(f"{self.d}/row.log", "a") as f:
-                subprocess.run(self.cli("research-result", self.d, self.row, self.role, self.stages), stdout=f, stderr=subprocess.STDOUT,
-                               cwd=self.tree, env=self.child_env or dict(self.env.environ))
+                subprocess.run(self.cli("research-result", self.d, self.row, self.role, self.stages, "--run-dir", rd), stdout=f,
+                               stderr=subprocess.STDOUT, cwd=self.tree, env=self.child_env or dict(self.env.environ))
 
     # ------------------------------------------------------------------------------------------------ processes
     def cli(self, *args: str, py: str | None = None) -> list[str]:
@@ -374,20 +376,6 @@ class Row:
         self.log(f"GPU lease ({GL.RECORD}): waited {rec['waited_min']} min, held {rec['held_min']} min, released {rec['released']} after "
                  f"{rec['released_at']}{' (kept: ' + rec['kept'] + ')' if rec.get('kept') else ''}, rc={rc}")
         return rc
-
-    def gpu_exclusive(self, why: str) -> None:
-        """One engine per pod: ask the pod's hot Commit workers to stop before a stage starts its own engine (an idle
-        worker exits, a busy one is waited for, never killed); the wait is on the timeline."""
-        root = self.env.hot_root
-        if not any(Path(root).glob("*/worker.json")):
-            return
-        t0 = time.time()
-        _, out = self.output(self.cli("hot", "stop", "--root", root))
-        out = ("".join(ln + " " for ln in out.split("\n")[-3:]) if out else "")[:300]
-        s = round(time.time() - t0, 3)
-        if '"stopped": []' not in out and out:
-            self.log(f"hot worker(s) stopped before {why} (one engine per pod, {s}s): {out}")
-        self.tl("hot.gpu_exclusive", "mark", ("why", why), ("s", s), ("out", out))
 
     # ------------------------------------------------------------------------------------------------ prechecks
     def release_line(self, fallback: str) -> tuple[str, str]:

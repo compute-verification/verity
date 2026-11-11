@@ -201,9 +201,13 @@ request with outputs still to keep and no next Commit period, is refused.
 ## The leak bound
 
 `leak_bounds.py` is the one calculator of K, the bits a covert sender's secrets can number over a monitoring period.
-`per_link` gives K for one link: one network certifier on one uplink, certifying a request rate of one scan class (an
-`ingress_scan.Class`, or a window class's `scan`). `datacenter` sums K over a datacenter's links, and `world` over the
-world's. Each comes in two forms, beside its share of one copy of the weights and its ε. The terms are those of
+It scales K in two ways. By requests, `verity bench certifier_term` prints the network certifier's own terms at the
+load of a node, a datacenter and the world, all a scope serves counted by each check's own rule (`leak_bounds.table`;
+its rows, columns and inputs are in `benchmarks/certifier_term/README.md`). By links, the rest of this section: `per_link` gives K for
+one link, one network certifier on one uplink, certifying a request rate of one scan class (an `ingress_scan.Class`,
+or a window class's `scan`); `datacenter` sums K over a datacenter's links; and `at_link_rate` sums as many links at
+one link's rate as a scope has machines. Each comes in two forms, beside its share of one copy of the weights and its
+ε. The terms are those of
 `NetTiming.Guarantees.PeriodLeakAccepted` (`security/Definitions/NetworkCertifier/Guarantees/Period.lean`, proved in
 `security/Proofs/NetworkCertifier.lean`) as `NetworkCheck.Period`'s rows form counts them, whose execution phases'
 failures `NetTiming.periodLeak_le_sum` sums by a union bound (`security/Proofs/NetworkCertifier/PeriodSum.lean`); the
@@ -262,15 +266,17 @@ The two forms:
   (`NetworkCheck.Period`'s `eps`), each scan at its δ (`leak_bounds.SCAN_DELTA`, `scan_zk --delta`'s default).
 
 The scale:
-- A week, a month and a year of one link, of the census's reference datacenter (`benchmarks/census/deployments.json`,
-  one link a machine, `leak_bounds.datacenter_links`) and of the world: the adversary resource model's compute
-  (`benchmarks/census/adversary.json`) in machines of the reference datacenter's GPUs, one link each
+- A week, a month and a year of one link, and of as many links as the census's reference datacenter
+  (`benchmarks/census/deployments.json`, one link a machine, `leak_bounds.datacenter_links`) and the world have
+  machines: the world is rho's world fleet (`verity/protocols/inference_only/rho/data/reference.toml`, `fleet.world-h200`), the census's
+  inference (`benchmarks/census/adversary.json`) at the fleet's serving MFU, one link a machine
   (`leak_bounds.world_links`).
-- Every link has one network certifier in front of all its machine's compute, serving at the run's rate. A
-  datacenter's and the world's links are each pooled at δ / links. The world's requests past its links' rate are
-  uncertified, and no row counts them.
-- The weights are one copy of Llama-3.2-1B in BF16 (`leak_bounds.WEIGHTS`), whatever the links. The served checkpoint
-  is int8, so every share names the copy it is of.
+- Every link has one network certifier in front of all its machine's compute, serving at the run's rate
+  (`leak_bounds.at_link_rate`, the scaling by links). A datacenter's and the world's links are each pooled at
+  δ / links. A scope's requests past its links' rate are uncertified, and no row counts them, so these rows are not
+  the scope's K: `verity bench certifier_term` counts the network certifier's terms over every request a scope serves.
+- The weights are one copy of GLM-5.3 in FP4, its workload card's parameters at 4 bits each (`leak_bounds.WEIGHTS`),
+  whatever the links and whatever checkpoint the run served, so every share names the copy it is of.
 
 FILE has both readings of the free inputs. `prog` as registered is the record's K. `prog` only at its anchored entries
 is what the generator-form lowering would give if it registers `prog` everywhere but its anchors, and is not the

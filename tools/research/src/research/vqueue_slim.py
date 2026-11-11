@@ -1,23 +1,21 @@
 """The run beside each candidate of the verified queue (`research.vqueue`) of what its graph2 check doesn't check: no graph/v2
-task runs lean-agreement or the preflights.  It is drive's run beside the executor's check (`Driver._start_slim`):
-`train.sh SHA MACHINES --deferred STEPS` of `SLIM_STEPS`, lean-agreement left out when a run of every step would skip it,
-whose check runs the preflights before any step.  It is judged as `Driver._follow_slim` judges it, on drive's merge gate:
-the preflights and lean-agreement count, policy.toml's `off_gate` (ratchet-gate) doesn't.  A candidate passes only once its
+task runs lean-agreement or the preflights.  It is `train.sh SHA MACHINES --deferred STEPS` of `SLIM_STEPS`, lean-agreement
+left out when a run of every step would skip it (`Landing.beside_args`), whose check runs the preflights before any step.  It
+is judged on the merge gate: the preflights and lean-agreement count, policy.toml's `off_gate` (ratchet-gate) doesn't.  A candidate passes only once its
 graph2 check's gating tasks and this run both passed (`combine`).
 
 What the loop does.  It starts the run with each candidate's build, beside each candidate's check, so up to its `--depth`
-of them at once take drive's machines, or once for a candidate on `main`'s chain whose start its log doesn't hold; until
+of them at once take the queue's machines, or once for a candidate on `main`'s chain whose start its log doesn't hold; until
 then the candidate's run verdict is pending (`Verdict(PENDING)`, not `judge` of None, which is infra), and a candidate dropped
 while its run runs (pending, or a check that gates failed before it ended) cancels it (one still launching has no run ids to
 cancel yet).  It calls `start` once a candidate, `judge` each tick, and saves the record after
 every `judge`: `judge` fills it in (the run ids once a detached launch printed them, the verdict once the run ended or was
-given up, which it returns from then on without reading the run again), and a launch read once is gone (`Driver._resolve`
+given up, which it returns from then on without reading the run again), and a launch read once is gone (`Landing._resolve`
 removes its directory).  On
 `vqueue.Retry` with this run's verdict infra, it calls `start` again and keeps the new record in place of the old.  It gives
-the Driver the `on` of drive.toml at its `main` (`MAIN`): `start` refuses a Driver without machines.  Under `--dry-run` it
+the `Landing` the `on` of drive.toml at its `main` (`MAIN`): `start` refuses a `Landing` without machines.  Under `--dry-run` it
 calls neither `start` nor `judge`.  The candidate's verdict for `vqueue.decide` is `combine` of graph2's and this one's.  The
-loop's Driver outlives its ticks, so `judge` reads the runs' states afresh each call, never through `Driver._states`, which
-reads each run once a tick.  Nothing here writes drive's state.
+loop's `Landing` outlives its ticks, so `judge` reads the runs' states afresh each call.
 
 A failed step's `Failed.key` is its content key at the candidate (`key`): SHA-512 over the step's name and the files it
 reads (`reads`) as git holds them in the candidate's tree; its `base_key` is the same at the base, computed from the base's
@@ -29,15 +27,15 @@ the run beside the base's own check, which the loop keeps beside `main` (started
 never runs), says what the base fails (`based`): failed there too, a step's failure is inherited by `vqueue.decide`'s rule
 of failing tests.
 
-The check that gates (`research queue vqueue --gate check`).  `start` with ``shards`` launches drive's after-landing run of
-the candidate in place of the run of `SLIM_STEPS`: every step of `AFTER_LANDING` as that many shards, one launch a shard on
-its own machines (`shard_machines`), with the keywords drive's own gets (`Driver._postland_args`).  ``shards`` `auto:N`
-(`AUTO_SHARDS`) is N shards of an auto plan of the candidate's tree, which splits pytest by suite where ci.toml's plans can't
-split it: `start` has `check.py --shard-plan --deferred STEPS --n N` make it in the background (`Driver.plan_shards`), and
-the first `judge` that finds it made (`Driver.planned`) launches every shard `--shard auto:K/N` with its file, which is
-removed once each shard has sent it with its run; pending until then, infra when it failed or took past `PLAN_WAIT_S`.  A
-candidate dropped while its plan is made launches nothing (`abandon`).  Its
-record says so (``gate``), and `judge` then judges every step `main` waits for at the candidate's base (`Driver._gating` there, the
+The check that gates (`research queue vqueue --gate check`).  `start` with ``shards`` launches a whole check of the
+candidate in place of the run of `SLIM_STEPS`: every step of `AFTER_LANDING` as that many shards, one launch a shard on its
+own machines (`shard_machines`), with the same keywords (`Landing.beside_args`).  ``shards`` `auto:N` (`AUTO_SHARDS`) is N
+shards of an auto plan of the candidate's tree, which splits pytest by suite where ci.toml's plans can't split it: `start`
+has `check.py --shard-plan --deferred STEPS --n N` make it in the background (`Landing.plan_shards`), and the first `judge`
+that finds it made (`Landing.planned`) launches every shard `--shard auto:K/N` with its file, which is removed once each
+shard has sent it with its run; pending until then, infra when it failed or took past `PLAN_WAIT_S`.  A candidate dropped
+while its plan is made launches nothing (`abandon`).  Its record says so (``gate``), and `judge` then judges every step
+`main` waits for at the candidate's base (`Landing._gating` there, the
 preflights and a lean-agreement that ran, less policy.toml's `off_gate` and drive.toml's `warn_steps`), a step a shard holds
 passed only once every shard holding it passed (`shard_passed`).  A failed step's tests are what its failure names
 (`failing`), so `vqueue.decide` takes as inherited only a failure whose every failing test the run beside the base fails
@@ -62,9 +60,9 @@ import signal
 from dataclasses import replace
 from pathlib import Path
 
-from .drive import (ACTIVE, AFTER_LANDING, AUTO_PLAN, KILLED_RC, LAUNCH_LOST_S, LEAN_AUDIT_RE, PLAN_WAIT_S, PREFLIGHT,
-                    SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS, SUITE_STEPS, Driver, _epoch, _step_log, implicated, killed, not_run,
-                    shard_machines, shard_passed, shard_steps, step_paths, step_records, suite_paths, suite_rows)
+from .landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, KILLED_RC, LAUNCH_LOST_S, LEAN_AUDIT_RE, PLAN_WAIT_S, PREFLIGHT,
+                      SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS, SUITE_STEPS, Landing, _epoch, _step_log, implicated, killed, not_run,
+                      shard_machines, shard_passed, shard_steps, step_paths, step_records, suite_paths, suite_rows)
 from .queue import _SUMMARY_RE, CHECK_STEPS, _git
 from .reds import named
 from .store.fixtures import REPLICA_MAP, entries
@@ -118,7 +116,7 @@ def shard_count(shards: int | str) -> tuple[int, bool]:
     raise ValueError(f"shards {shards!r}: N, ci.toml's plan with N shards, or auto:N, N shards of an auto plan")
 
 
-def deselection(driver: Driver, listed: Path | None) -> Path | None:
+def deselection(driver: Landing, listed: Path | None) -> Path | None:
     """The file a candidate's check leaves out the tests of (`train.sh --deselect`), from the loop's list ``listed``, read at
     each launch: its node ids (`DESELECT_RE`; blank and `#` lines skipped), written beside it as ``<name>.sent``, each other
     line logged and left out, so a typo there drops no test and reds no candidate.  None while it is absent or names none."""
@@ -138,25 +136,24 @@ def deselection(driver: Driver, listed: Path | None) -> Path | None:
     return sent
 
 
-def start(driver: Driver, sha: str, base: str, shards: int | str = 0, deselect: Path | None = None) -> dict | None:
-    """Launch the run beside candidate ``sha``'s check, ``base`` the commit of `main` below it, as `Driver._start_slim` launches
-    it beside the executor's check of ``sha`` with ``base`` verified: `SLIM_STEPS` but those a run of every step of ``sha``
-    above ``base`` skips by name (lean-agreement, unless what it checks changed), with that run's keywords (ratchet-gate
-    judges the merges above ``base``), on drive's machines (`Driver.on`).  With ``shards``, the check that gates instead, as
-    `Driver.start_postland` launches the after-landing run: `--deferred` every step of `AFTER_LANDING` (each check runs the
+def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect: Path | None = None) -> dict | None:
+    """Launch the run beside candidate ``sha``'s check, ``base`` the commit of `main` below it: `SLIM_STEPS` but those a run
+    of every step of ``sha`` above ``base`` skips by name (lean-agreement, unless what it checks changed), with that run's
+    keywords (`Landing.beside_args`: ratchet-gate judges the merges above ``base``), on the queue's machines (`Landing.on`).
+    With ``shards``, the check that gates instead: `--deferred` every step of `AFTER_LANDING` (each check runs the
     preflights first), `--shard K/N` on shard K's machines (`shard_machines`) for each of that many, one whole run for 1;
-    `auto:N` has the auto plan its shards launch by made first (`Driver.plan_shards`, ``plan``, which `judge` follows).
-    The record to keep (`Driver._started`): ``ids``, none yet while a detached launch runs (its ``launch`` then, or each
+    `auto:N` has the auto plan its shards launch by made first (`Landing.plan_shards`, ``plan``, which `judge` follows).
+    The record to keep (`Landing._started`): ``ids``, none yet while a detached launch runs (its ``launch`` then, or each
     shard's in ``shards``, which `judge` makes ``groups``, each shard's ids); the candidate (``tip``), ``base``, when it
     launched (``at``), the ``steps`` it runs and those it skips (``skip``), and ``gate`` (`CHECK`) with ``shards``.  None,
     logged, when it registered no run (a shard that registered none stops the others), or when ``driver`` launches nothing (a
-    dry run, or its queue's shadow), as `Driver._start_slim` does.  Every launch leaves out the tests the loop's list
-    ``deselect`` names (`deselection`), each shard's alike; the nightly uncached check, which reads no list, runs them."""
+    dry run, or its queue's shadow).  Every launch leaves out the tests the loop's list ``deselect`` names (`deselection`), each
+    shard's alike; the nightly uncached check, which reads no list, runs them."""
     if not driver.on:
-        raise ValueError("the run beside a candidate's check needs drive's machines: build the Driver with drive.toml's `on` "
-                         "(`research.queue.drive_flags(q.workdir)[0].on`)")
+        raise ValueError("the run beside a candidate's check needs the queue's machines: build the Landing with drive.toml's `on` "
+                         "(`research.queue.flags_at(repo, main).on`)")
     n, auto = shard_count(shards)
-    kw, skip, _, flags = driver._postland_args({"verified": base}, sha, False)
+    kw, skip, flags = driver.beside_args(sha, base)
     if left := deselection(driver, deselect):
         kw = {**kw, "deselect": str(left)}
         flags += f" --deselect {left} ({len(left.read_text().splitlines())} tests)"
@@ -187,7 +184,7 @@ def start(driver: Driver, sha: str, base: str, shards: int | str = 0, deselect: 
             **({"gate": CHECK} if n else {})}
 
 
-def _launch(driver: Driver, sha: str, sent: str, kw: dict, n: int, plan: str | None = None) -> tuple[dict | None, str]:
+def _launch(driver: Landing, sha: str, sent: str, kw: dict, n: int, plan: str | None = None) -> tuple[dict | None, str]:
     """Each of ``n`` shards of candidate ``sha``'s check launched on its machines (`shard_machines`): `--shard K/N` of ci.toml's
     plan, or of the auto plan whose file is ``plan``, `--shard auto:K/N` with it.  The record of every shard's launch
     (``shards``); None with the tail of one that registered no run, the others' runs cancelled."""
@@ -225,7 +222,7 @@ def abandon(rec: dict) -> None:
         _unplan(rec)
 
 
-def _planned(driver: Driver, rec: dict, what: str) -> Verdict:
+def _planned(driver: Landing, rec: dict, what: str) -> Verdict:
     """The auto plan ``rec``'s shards launch by (`start` with `auto:N`), followed: pending while `check.py --shard-plan` makes
     it, up to `PLAN_WAIT_S` after the start, then stopped; once made, every shard launched `--shard auto:K/N` with its file
     (`_launch`, ``plan``'s ``made``, ``at`` their launch), and pending.  Infra, kept, when it failed, has another N than asked,
@@ -256,19 +253,19 @@ def _planned(driver: Driver, rec: dict, what: str) -> Verdict:
     return Verdict(PENDING)
 
 
-def judge(driver: Driver, rec: dict | None) -> Verdict:
-    """The verdict of the run `start` recorded in ``rec``, read as `Driver._follow_slim` reads it, on the steps it judges on
-    the merge gate: `SLIM_JUDGED` but a step it skipped and policy.toml's `off_gate` at ``tip``; of the check that gates
-    (``gate``), every step `main` waits for at ``base`` (`Driver._gating`), the preflights and a lean-agreement it ran, but
-    policy.toml's `off_gate` there and drive.toml's `warn_steps` (`_gate`).  Pending while its auto plan is made, the call
-    that finds it made launching the shards (`_planned`), and while it launches or runs, each shard's launch read as the run's
-    own is; the check that gates, while it runs, fails once a shard has failed one of those steps (`_early`).
+def judge(driver: Landing, rec: dict | None) -> Verdict:
+    """The verdict of the run `start` recorded in ``rec``, read on the steps it judges on the merge gate: `SLIM_JUDGED` but a
+    step it skipped and policy.toml's `off_gate` at ``tip``; of the check that gates (``gate``), every step `main` waits for
+    at ``base`` (`Landing._gating`), the preflights and a lean-agreement it ran, but policy.toml's `off_gate` there and
+    drive.toml's `warn_steps` (`_gate`).  Pending while its auto plan is made, the call that finds it made launching the
+    shards (`_planned`), and while it launches or runs, each shard's launch read as the run's own is; the check that gates,
+    while it runs, fails once a shard has failed one of those steps (`_early`).
     Infra when it registered no run (``rec`` None, its auto plan failed, or a detached launch that printed no run ids,
     a shard's stopping the other shards; `Failed.launch` when it says one of `LAUNCH_ONLY`), never ran or was stopped, or was lost or killed before it passed each of those
     steps; infra's one `Failed` says which.  Once it ended, pass when it passed each of them (the check that gates: in
     every shard that holds it, `shard_passed`), a step that failed only on what an unexpired allowance of policy.toml at
     ``base`` covers counting as passed, so no candidate's allowance covers its own failure; fail with each of them it failed
-    (a `Failed`: ``step NAME``, the step's content key at the candidate, the paths drive names that failure's culprit by,
+    (a `Failed`: ``step NAME``, the step's content key at the candidate, the paths that failure names its culprit by,
     `step_paths`, its content key at ``base``, `key`, and the step's one test, `step_test`; the check that gates: the tests
     and paths its failure names, `failing`), and infra when it failed none but passed fewer (one skipped, or absent from its
     steps.jsonl).  Each verdict but pending is kept in ``rec`` (``verdict``, with the steps it passed) and read from there."""
@@ -352,19 +349,19 @@ def judge(driver: Driver, rec: dict | None) -> Verdict:
                                  "steps.jsonl"), passed)
 
 
-def _gate(driver: Driver, rec: dict) -> list[str]:
-    """The steps the check that gates (``rec``) is judged on: every step `main` waits for at its base (`Driver._gating`), the
+def _gate(driver: Landing, rec: dict) -> list[str]:
+    """The steps the check that gates (``rec``) is judged on: every step `main` waits for at its base (`Landing._gating`), the
     preflights and a lean-agreement it ran, but policy.toml's `off_gate` there and drive.toml's `warn_steps`."""
     at = rec.get("base") or rec["tip"]
     gate = {*SLIM_JUDGED, *driver._gating(at)} - {*driver._policy(at).off_gate, *driver.warn_steps}
     return [s for s in CHECK_STEPS if s in gate and (s in rec["steps"] or s in PREFLIGHT)]
 
 
-def _early(driver: Driver, rec: dict, states: dict) -> Verdict:
+def _early(driver: Landing, rec: dict, states: dict) -> Verdict:
     """The verdict of the check that gates (``rec``) while a shard of it runs: pending until one of its runs says it failed
-    (one running names its failures so far, `drive.failing`; one ended exited 1), then fail with each step it is judged on
+    (one running names its failures so far, `landing.failing`; one ended exited 1), then fail with each step it is judged on
     (`_gate`) that such a run failed, not by a signal, or a suite of which it failed a named test, uncovered by an allowance
-    at its base, read as once every shard ended (`failing`), from their dirs fetched afresh (`drive.evidence`: the Driver's
+    at its base, read as once every shard ended (`failing`), from their dirs fetched afresh (`landing.evidence`: the Landing's
     own cache holds what the end's reading reads).  A suite failed beyond its tests alone, as a stop marks each suite it
     cuts short, waits for the end.  Never kept, so not ``ended``: `vqueue.decide` reads a fail whose every failure is
     inherited as pending until the check ends.  ``rec`` holds it (``early``: its failures as `_keep` keeps a verdict's, with
@@ -422,7 +419,7 @@ def unnamed(key: str) -> str:
     return f"unnamed:{key}"
 
 
-def failures(driver: Driver, rec: dict | None, step: str) -> dict[str, str] | None:
+def failures(driver: Landing, rec: dict | None, step: str) -> dict[str, str] | None:
     """What the run ``rec`` records failed of ``step``, a step `judge` leaves out (policy.toml's `off_gate`, drive.toml's
     `warn_steps`), once its verdict is kept: each failure the step's logs name (`reds.named`: ratchet-gate's merges,
     circuit-check's failures), by its key with its line, else the step itself; {} when it passed.  A shard's twin that passed
@@ -445,8 +442,8 @@ def failures(driver: Driver, rec: dict | None, step: str) -> dict[str, str] | No
     return out
 
 
-def failing(driver: Driver, at: str, d: Path, st: dict, rest: str) -> tuple[set[str], set[str]]:
-    """What failed step ``st`` of the check that gates names in its run dir ``d``, as drive reads it: the paths its culprit
+def failing(driver: Landing, at: str, d: Path, st: dict, rest: str) -> tuple[set[str], set[str]]:
+    """What failed step ``st`` of the check that gates names in its run dir ``d``: the paths its culprit
     is named by, and its failing tests.  A step that runs suites (`SUITE_STEPS`): of each suite of its that failed
     (`suite_rows`) uncovered by ``at``'s allowances (its base's), `suite_paths` and `SUITE::TEST` of each test it failed,
     and ``rest`` under the suite's name when it names none or failed for more than its tests (its row's `beyond_tests` isn't
@@ -626,7 +623,7 @@ def _data(node: ast.AST, names: dict[str, str]) -> str | tuple | None:
 
 
 def _inputs(paths: set[str]) -> frozenset[str]:
-    """``paths`` as `vqueue.meets` reads them, meeting the files `drive.touches` matches them to: an absolute one (a traceback's
+    """``paths`` as `vqueue.meets` reads them, meeting the files they name: an absolute one (a traceback's
     frame) as each of its tails that has a directory, since a bare `conftest.py` would meet every conftest."""
     out: set[str] = set()
     for p in paths:

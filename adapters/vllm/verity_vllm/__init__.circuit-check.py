@@ -113,7 +113,7 @@ def _vocabulary_bindings() -> list[tuple[str, Any]]:
                         fn = make(**{a: (dt if a == "DT" else table[a]) for a in names})
                         _ = getattr(fn, "gates", None)
                         break
-                    except Exception as e:  # noqa: BLE001  (retried with the next table, then named)
+                    except (KeyError, ValueError, AssertionError, TypeError) as e:  # a table that doesn't fit: retried with the next, then named
                         fn, err = None, f"{type(e).__name__}: {str(e)[:160]}"
                 out.append((label + suffix, fn if fn is not None else err))
     return out

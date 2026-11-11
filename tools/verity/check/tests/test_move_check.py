@@ -1321,6 +1321,43 @@ def test_anchor_that_names_another_directory_is_refused(tmp_path):
     assert f["path"] == "pkg/tests/protocols/bandwidth/test_remote.py" and "parents[4]" in f["hunk"]
 
 
+LEFT_BODY = "".join(f"STEP_{i} = {i}  # unchanged by the move\n" for i in range(12))
+LEFT_OLD = ("HERE = Path(__file__).resolve().parent\nsys.path.insert(0, str(Path(__file__).resolve().parents[1]))\n"
+            + LEFT_BODY)
+LEFT_NEW = ('HERE = (Path(__file__).resolve().parent.parent.parent / "bench" / "kv")\n'
+            'sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "bench")))\n' + LEFT_BODY)
+LEFT_BY_HAND = ('HERE = Path(__file__).resolve().parent.parent.parent / "bench" / "kv"\n'
+                'sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "bench"))\n' + LEFT_BODY)
+
+
+def _left(tmp_path: Path, new: str) -> dict:
+    """`bench/kv/run.py` moves to `pkg/kv/`, and the rest of `bench/kv/` stays."""
+    repo, base = _repo(tmp_path, {"bench/kv/run.py": LEFT_OLD, "bench/kv/stay.py": "x = 1\n", "pkg/__init__.py": ""})
+    _move(repo, "bench/kv/run.py", "pkg/kv/run.py")
+    _write(repo, {"pkg/kv/run.py": new})
+    return _check(repo, base)
+
+
+def test_an_anchor_joined_back_to_the_directory_its_file_left_is_certified(tmp_path):
+    """As `tools/move/layout.py` writes it: the anchor gains the path back, and parentheses around the two."""
+    r = _left(tmp_path, LEFT_NEW)
+    assert r["certified"], r["refusals"]
+
+
+def test_an_anchor_joined_back_by_hand_with_no_parentheses_of_its_own_is_certified(tmp_path):
+    """Where the anchor is a call's whole argument, the call's parentheses are around it and are not ones it gained."""
+    r = _left(tmp_path, LEFT_BY_HAND)
+    assert r["certified"], r["refusals"]
+
+
+def test_an_anchor_joined_to_another_directory_than_its_file_left_is_refused(tmp_path):
+    for i, (was, now) in enumerate((('"bench" / "kv"', '"bench" / "other"'), ("parents[2]", "parents[1]"),
+                                    ('(Path(__file__).resolve().parent.parent.parent / "bench" / "kv")',
+                                     '(Path(__file__).resolve().parent.parent.parent / "bench" / "kv").parent'))):
+        [f] = _left(tmp_path / str(i), LEFT_NEW.replace(was, now))["refusals"]
+        assert f["path"] == "pkg/kv/run.py" and now.split(" / ")[-1] in f["hunk"]
+
+
 SH_BODY = "".join(f'echo "step {i} of the session, unchanged by the move"\n' for i in range(12))
 SH_OLD = ('#!/usr/bin/env bash\nSELF=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")\n'
           'ROOT=$(cd "$(dirname "$SELF")/../../.." && pwd)\ncd "$(dirname "${BASH_SOURCE[0]}")/../../.."\n'

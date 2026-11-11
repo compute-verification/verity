@@ -6,8 +6,14 @@
 ``--window`` is the window directory `prove_path/run.sh` keeps (``out/sampled-proofs/served/window``): its v1 case
 (``case.json``), the verifier's partition (``partition.json``), ``m0/`` with the public file, ``compose.log`` and the
 circuit file, and ``session-m0/sessions/*/`` with each session's ``session.json`` and ``*.bin``. The case is a5.py's
-`case_v2` of those: v1's params with the partition and ``proofs: {circuit, registered: null}``, v1's commitment, the
-evidence with the sessions' proofs, and the blobs' paths.
+`case_v2` of those: v1's params with the partition and ``proofs: {circuit, public, registered: null}``, v1's commitment,
+the evidence with the sessions' proofs, and the blobs' paths.
+
+``public`` is the digest the audit took when it staged the public file, before the sample, where the window keeps it:
+``case-v2.json``'s ``params.proofs.public``, the audit's own v2 case. A kept public file with another SHA-512 is refused,
+with an error naming both files. A window that keeps none (its audit wrote no v2 case, or one naming no public file)
+gets the kept file's own SHA-512, taken after the audit: its case then shows that the kept files verify, not that the
+public file was fixed before the sample.
 
 A run that didn't keep the circuit file gets it rebuilt in ``--scratch`` by the command its ``m0/compose.log`` records
 (`compose_circuit.py` over the verifier's synthetic input set, `run.sh`'s ``verity_numerical.bench.generate --n 4 --seed
@@ -16,9 +22,10 @@ anyway. The case goes to ``--out`` private as `composite.py` reads it (0700, its
 ``params.json``, ``commitment.bin``, ``evidence.json`` and, with ``--exe`` (``sampled-proofs-one-stage-zk``),
 ``answer.json``. A blob with no file leaves only ``missing.json`` saying why, so `composite.py` leaves the protocol out.
 
-Prints one ``V2CASE`` line (the pin, where the circuit file came from, the sessions and blobs) and, with ``--exe``, one
-``V2`` line with the answer's verdict only: the whole answer is witness-adjacent (its query is the partition's digest) and
-stays in ``--out``. Exits as the check does (0 accept, 1 reject, 2 undecided), 2 for a missing case, 0 without ``--exe``.
+Prints one ``V2CASE`` line (the pin, where the circuit file and the public digest came from, the sessions and blobs) and,
+with ``--exe``, one ``V2`` line with the answer's verdict only: the whole answer is witness-adjacent (its query is the
+partition's digest) and stays in ``--out``. Exits as the check does (0 accept, 1 reject, 2 undecided), 2 for a missing
+case, 0 without ``--exe``.
 """
 from __future__ import annotations
 
@@ -71,7 +78,12 @@ def rebuild(c: dict, scratch: Path) -> tuple[Path | None, str]:
 
 
 def case(window: Path, scratch: Path) -> tuple[dict, str, int]:
-    """`case_v2` of `window`'s kept files: the case, where its circuit file came from, and its sessions' count."""
+    """`case_v2` of `window`'s kept files: the case, where its circuit file and its public digest came from, and its
+    sessions' count. The public digest is the one the audit's own v2 case names (``case-v2.json``'s
+    ``params.proofs.public``, which a5 took when it staged the file, before the sample), and a kept public file with
+    another SHA-512 is refused. A window that keeps no such digest gets the kept public file's own SHA-512, taken here,
+    after the audit: its case then shows that the kept files verify, not that the public file was fixed before the
+    sample."""
     c = compose_command((window / "m0/compose.log").read_text())
     v1 = json.loads((window / "case.json").read_text())
     v1["params"]["partition"] = json.loads((window / "partition.json").read_text())
@@ -82,7 +94,16 @@ def case(window: Path, scratch: Path) -> tuple[dict, str, int]:
     if not circuit.is_file():
         got, how = rebuild(c, scratch)
         circuit = got or circuit
-    v2 = a5.case_v2(v1, names, proof=PF.Proof(circuit, pub, sessions), circuit=c["pin"], registered=None, tables=[])
+    public, record = PF.file_sha512(pub), window / "case-v2.json"
+    staged = json.loads(record.read_text())["params"]["proofs"].get("public") if record.is_file() else None
+    if staged not in (None, public):
+        raise ValueError(f"{pub} is not the public file the audit staged before the sample: its SHA-512 is "
+                         f"{public[:16]}…, and {record} names {staged[:16]}…")
+    how = f"circuit file {how}; public digest " + (
+        "the kept file's own, taken after the audit: the window keeps none from staging" if staged is None else
+        "case-v2.json's, taken when the audit staged the file, before the sample")
+    v2 = a5.case_v2(v1, names, proof=PF.Proof(circuit, pub, sessions), circuit=c["pin"], public=public, registered=None,
+                    tables=[])
     return v2, how, len(sessions)
 
 
@@ -92,7 +113,7 @@ def write(out: Path, v2: dict, how: str) -> list[str]:
         (out / f).unlink(missing_ok=True)
     gone = [b for b in v2["blobs"] if not Path(b).is_file()]
     if gone:
-        why = f"no file for {', '.join(gone)} (circuit: {how})"
+        why = f"no file for {', '.join(gone)} ({how})"
         write_private(out, {"missing.json": (json.dumps({"protocol": ID, "why": why}) + "\n").encode()})
         return gone
     write_private(out, {"case.json": json.dumps(v2, sort_keys=True).encode(), "params.json": canonical(v2["params"]),
@@ -110,7 +131,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     a = ap.parse_args(argv)
     v2, how, n = case(a.window, a.scratch)
     gone = write(a.out, v2, how)
-    print("V2CASE " + json.dumps({"circuit": v2["params"]["proofs"]["circuit"], "circuit_file": how, "sessions": n,
+    print("V2CASE " + json.dumps({"circuit": v2["params"]["proofs"]["circuit"], "files": how, "sessions": n,
                                   "blobs": len(v2["blobs"]), "missing": gone}), flush=True)
     if gone:
         return 2

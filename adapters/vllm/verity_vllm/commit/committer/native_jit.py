@@ -34,7 +34,7 @@ SOURCES = ("native_collect.cpp", "native_gather.cu", "native_rows.cu")
 #: headers a source includes by name from outside the sources' directory: the GPU's one SHA-512 and its one row commit
 SHARED = {"sha512.cuh": str(SHA512), "row_commit.cuh": str(ROW_COMMIT)}
 CFLAGS = ("-O3",)
-CUDA_CFLAGS = ("-O3", "--use_fast_math")
+CUDA_CFLAGS = ("-O3",)
 
 _DEF = re.compile(r'\.def(?:_readonly|_readwrite|_property_readonly|_property|_static)?\(\s*"([A-Za-z_][A-Za-z0-9_]*)"')
 _CLASS = re.compile(r'py::class_<[^>]+>\(\s*m\s*,\s*"(\w+)"')

@@ -65,7 +65,7 @@ Python and CUDA: the provers, and Python that mirrors the Lean
 
 ### Circuits
 
-`verity.circuits` defines circuits. A program is one circuit, stored compressed as Definitions called from a root body, with a canonical layout that locates any gate without expanding it and a SHA-512 digest that names it. `verity.definitions.ops` holds the primitive circuits for NVIDIA accelerators, `verity.definitions.silicon` their exact hardware semantics, and `verity.circuits.evaluation` evaluates any circuit exactly. A circuit describes logical computation, never a GPU schedule, a proof system, a commitment layout or a sampling policy. Circuits are total: they match the hardware on every input bit pattern, NaN and infinity included. Applications define only their own Definitions, and every new or changed circuit passes `circuit-check`; that a circuit computes what the served model computes is completeness, never proved (`AGENTS.md`).
+`verity.circuits` defines circuits. A program is one circuit, stored compressed as Definitions called from a root body, with a canonical layout that locates any gate without expanding it and a SHA-512 digest that names it. `verity.definitions.ops` holds the primitive circuits for NVIDIA accelerators, `verity.definitions.silicon` their exact hardware semantics, and `verity.circuits.evaluation` evaluates any circuit exactly. A circuit describes logical computation, never a GPU schedule, a proof system, a commitment layout or a sampling policy. Circuits are total: they match the hardware on every input bit pattern, NaN and infinity included. Applications define only their own Definitions.
 
 A partition divides a circuit's computed gates into proof blocks and fixes what the developer commits (Glossary, "Partition").
 
@@ -75,7 +75,7 @@ A partition divides a circuit's computed gates into proof blocks and fixes what 
 
 ### Proofs and protocols
 
-`verity.protocols.spot.verifier.profile` defines the integrity profile, what an accepted audit established. A proof counts only when it verifies against the intended statement and an approved prover identity, not merely some self-consistent statement. Which parts of a circuit are checked, how they are sampled and what is committed before a challenge are protocol questions, and none changes the circuit. Each protocol is a directory of `verity/protocols/` whose Lean is its definition and its verifier (`AGENTS.md`, "Design rules").
+`verity.protocols.spot.verifier.profile` defines the integrity profile, what an accepted audit established. A proof counts only when it verifies against the intended statement and an approved prover identity, not merely some self-consistent statement. Which parts of a circuit are checked, how they are sampled and what is committed before a challenge are protocol questions, and none changes the circuit.
 
 ### The accounting layer
 
@@ -90,7 +90,7 @@ The joint ledger charges each device's time once. Without attribution, it subtra
 
 ### The proof system
 
-Flock (`verity/protocols/flock/prover`) is the proof system's prover: it proves statements over arbitrary Boolean circuits, and its verifier is Lean (`verity/protocols/flock/verifier/`). It consumes circuits and commitments, never branches on a model name or another source-system label, and is testable without an adapter. A plain path (Flock without `--zk`) stays beside the zero-knowledge ones, for a configuration whose values needn't be hidden; its guarantee is soundness alone.
+Flock (`verity/protocols/flock/prover`) is the proof system's prover: it proves statements over arbitrary Boolean circuits, and its verifier is Lean (`verity/protocols/flock/verifier/`). It consumes circuits and commitments, never branches on a model name or another source-system label, and is testable without an adapter.
 
 ### The reference deployment
 
@@ -98,7 +98,7 @@ The workers' GPU servers send only through a data diode, to the ZK server, which
 
 ### Adapters
 
-An adapter makes Verity work end to end with a real system, and hands Verity only what the rule "Integrations are frontends" lists (`AGENTS.md`, under the adapter's older name). Any serving system plugs in without changing `verity/`, and nothing under `verity/` imports an adapter (`tests/test_integration_boundaries.py` lists the sites that still do). The vLLM adapter (`adapters/vllm/`), the only one so far, builds each served workload's circuit, supplies its silicon-specific bindings, and commits the trace while serving.
+An adapter makes Verity work end to end with a real system, and hands Verity only what the rule "Integrations are frontends" lists (`AGENTS.md`, under the adapter's older name). Any serving system plugs in without changing `verity/`. The vLLM adapter (`adapters/vllm/`), the only one so far, builds each served workload's circuit, supplies its silicon-specific bindings, and commits the trace while serving.
 
 ## Documentation
 
@@ -170,7 +170,7 @@ Code, docs, CLI help and output fields use these terms. When a term changes, thi
 - **Φ**: a compute rate in gates per second: Φ_X for a location X, with |A[X, J]| ≤ Φ_X·|J| over an interval J, and Φ_s for a server.
 - **Assumed memory capacity** M_s: server s's capacity over every tier (HBM, host RAM, disks), with |state(s, t)| ≤ M_s, a public parameter of the physical model. The memory wipe's operating point is a parameter of the model too: at each memory wipe's tick a server keeps at most 5 GB (4×10^10 bits) of prior content, plus its egress E, and that one term is the server block's residue k_S, so a server is not sampled as its GPUs only. The memory wipe certifies HBM only so far; its statement per server, over every tier, is not yet made.
 - **Guarantee** (security guarantee): a proved `Prop` in which named assumptions imply a conclusion, such as network certification's bound on what a covert sender carries out. A package laid out under the four names (`AGENTS.md`, "Lean") states each as a `def G : Prop` in its `Guarantees` and proves it in `SecurityProofs.G`; the lock records its statement. A theorem is a guarantee when something relies on it as proved: a ledger row, a published table, the docs site, a claim id in `verity.claims` (which names the kinds Table 1 cites), or code that reads its result; a mention in prose, a PR, a test or an internal table doesn't make one.
-- **Protocol soundness**: the composed protocol's soundness guarantee, `Verity.Soundness` (per composite, from open targets): when the verifier accepts, the monitoring period's claims hold, except with probability δ. Never "the one theorem": AGENTS.md's rule "Soundness is one theorem" is a requirement on it, not its name.
+- **Protocol soundness**: the composed protocol's soundness guarantee, `Verity.Soundness` (per composite): when the verifier accepts, the monitoring period's claims hold, except with probability δ. Never "the one theorem": AGENTS.md's rule "Soundness is one theorem" is a requirement on it, not its name.
 - **Composite protocol**: a verifier taken as one value, its registered subprotocols and the inference-only policy's check, such as onsite or remote (Lean's `Composite`). Protocol soundness is stated per composite protocol. It is not the configuration that assigns roles to machines.
 - **Fixed finder** and **fixed forger**: explicit constructions from the prover's strategy that output a SHA-512 collision, or an LMS forgery under a device's registered key. The assumptions `ecr/sha-512` and `euf-cma/lms-sha512-n64` apply only to them, and several finders combine as a uniform mixture, never by picking the best one. Their success is the Break term ([`GLOSSARY.md`](GLOSSARY.md)), charged in the bound and never assumed away.
 - **Honest lemma** and **nontrivial lemma**: a guarantee's two companions. The honest lemma shows the guarantee's hypotheses hold at the honest deployed instance, constructed rather than assumed; the nontrivial lemma shows the guarantee fails for a verifier that accepts everything.

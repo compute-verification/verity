@@ -50,9 +50,11 @@ Lake keeps a module its tree already holds, by its own input hash, over what was
 `settle` takes the trace of each keyed module of that package its build holds in a version the index doesn't: Lake then
 restores the staged version or compiles the module, and the build's `put` indexes what it compiled. After a build every
 keyed module of the built package is thus the index's version, and a module version is compiled once a node, not once
-a tree. A module `put` could not index (`UNSTORED`), like one without a key, is left to Lake, and so is every module of
-a package the build requires by path: its build is that package's, which an audit seals and other builds and tests read,
-so no other package's build takes a trace there, and its own build settles it.
+a tree. A module `put` could not index (`UNSTORED`), like one without a key, is left to Lake. So is every module of
+a package the build requires by path and the same run audits: that build is sealed, other builds and tests of the run
+read it, and its own build settled it. The build of a path dependency the run doesn't audit is settled with the builds
+that require it: in an audit's tree it is a copy of a kept build, the run's alone, which no build of its own would ever
+settle there. The first build of the run that reaches a module in it settles that module as one of its own.
 
 A module enters the index (`LakeArtifacts.put`) only from a run that compiled it in the sandbox, whether the run then
 passed, failed or was killed, from sources none of which runs code while it compiles outside a reviewed listing
@@ -64,7 +66,7 @@ its key reads (`loads`), each built in the package `keys` found it in, and its o
 module it reads is indexed before it. An indexed key is thus computed from a parse Lake agreed with, and the same sources
 and the same outputs of what they read give the same key wherever they are checked out. Each entry records what its key
 read (`record`), and the index keeps which entry each module was last indexed under (`LAST`), so a build says which
-input of a module it didn't restore differs from that entry's (`differs`). Stdlib only, loaded by path
+inputs of a module it didn't restore differ from that entry's (`differs`). Stdlib only, loaded by path
 (`check.sibling`)."""
 from __future__ import annotations
 
@@ -78,7 +80,7 @@ import shutil
 import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import NamedTuple
+from typing import Iterable, NamedTuple
 
 HERE = Path(__file__).resolve().parent
 #: the task graph's contract, whose key rule and digests key every module
@@ -435,7 +437,8 @@ def step(level: int, how: How) -> int:
 def loads(mod: str, keyed: dict[str, Key]) -> dict[str, int]:
     """{module: its level} for each workspace module the compile of ``mod`` loads: every module a legacy file imports,
     transitively, at ALL, since Lean loads a legacy file's imports at the private level, and a `module` file's as `step`
-    walks them from it."""
+    walks them from it over `keys`' folded imports (`How`), which may hold a module for its code that Lean loads no
+    code of (`indexable`)."""
     k = keyed[mod]
     if not k.module:
         return dict.fromkeys(k.closure, ALL)
@@ -481,7 +484,7 @@ SHORT = 12
 def record(mod: str, keyed: dict[str, Key], digests: dict[tuple[str, str], str],
            loaded: dict[str, int] | None = None) -> dict | None:
     """What an index entry records of ``mod``'s key (`key`, of the same arguments), so that a later miss can say which
-    input differs (`differs`): its vars, its env's parts, the digest of each file it reads by path, and for each module it
+    inputs differ (`differs`): its vars, its env's parts, the digest of each file it reads by path, and for each module it
     loads `SHORT` hex digits of a digest of the outputs it reads of it. None when a read's digest is missing."""
     k, reads = keyed[mod], {}
     for g, level in sorted((loads(mod, keyed) if loaded is None else loaded).items()):
@@ -499,24 +502,24 @@ NEVER, GONE, BEHIND, UNKEYED_READ = ("never indexed here", "no input: its entry 
 
 
 def differs(now: dict, was: dict | None) -> str:
-    """Which input of a module's key (``now``, its `record`) differs from the one it was last indexed under (``was``, that
-    entry's record; None: it never was, here), the first of: its library, the toolchain, the fetched packages, its source,
-    its lakefile, an input file, an output it reads. `GONE` when none does: the entry under this key was removed."""
+    """Which inputs of a module's key (``now``, its `record`) differ from those it was last indexed under (``was``, that
+    entry's record; None: it never was, here), every one of them in one phrase and in this order: its library, the
+    toolchain, the fetched packages, its source, its lakefile, an input file, an output it reads. Every one, since the
+    first alone reads as the cause where another changed too. `GONE` when none does: the entry under this key was
+    removed."""
     if not isinstance(was, dict):
         return NEVER
-    src = f"{now['vars']['package']}/"
-    lakefile = f"{src}lakefile.toml"
-    if now["vars"] != was.get("vars"):
-        return "its library"
-    for part, what in ((TOOLCHAIN, "the toolchain"), (FETCHED, "the fetched packages")):
-        if now["env"].get(part) != (was.get("env") or {}).get(part):
-            return what
     a, b = now["files"], was.get("files") or {}
-    if changed := sorted(f for f in set(a) | set(b) if a.get(f) != b.get(f)):
-        if lakefile in changed:
-            return "its lakefile"
-        return "its source" if any(f.endswith(".lean") for f in changed) else "an input file"
-    return "an output it reads" if now["reads"] != was.get("reads") else GONE
+    changed = {f for f in set(a) | set(b) if a.get(f) != b.get(f)}
+    lakefile = {f"{now['vars']['package']}/lakefile.toml"} & changed
+    source = {f for f in changed - lakefile if f.endswith(".lean")}
+    which = [what for what, other in (
+        ("its library", now["vars"] != was.get("vars")),
+        *((what, now["env"].get(part) != (was.get("env") or {}).get(part))
+          for part, what in ((TOOLCHAIN, "the toolchain"), (FETCHED, "the fetched packages"))),
+        ("its source", source), ("its lakefile", lakefile), ("an input file", changed - lakefile - source),
+        ("an output it reads", now["reads"] != was.get("reads"))) if other]
+    return " and ".join(filter(None, (", ".join(which[:-1]), *which[-1:]))) or GONE
 
 
 def last_path(store: Path, scope: str, mod: str) -> Path | None:
@@ -680,11 +683,18 @@ def indexable(mod: str, keyed: dict[str, Key], pkgs: list[Package],
               owners: dict[tuple[str, str], str | None] | None = None) -> str | None:
     """Why ``mod``'s build may not be indexed under its key, or None: Lake read its header as `keys` did. Its
     `<module>.setup.json` names it and the package `keys` found it in, and the workspace modules there (`importArts`, an
-    `.olean` under the build of one of ``pkgs``, the workspace's packages) are the modules its key reads (`loads`), each
-    built in the package `keys` found it in. Lake hands a compile the modules Lean will load (`fetchTransImportArts`,
-    `Lake/Build/Module.lean`): every module a legacy file imports, transitively, and of a `module` file's imports
-    those its own imports and their `public import`s reach, with all that a `meta import` or an `import all` needs
-    below them. What an import of a `module` file imports privately is not among them, and the key doesn't read it.
+    `.olean` under the build of one of ``pkgs``, the workspace's packages) are modules its key reads (`loads`), each
+    built in the package `keys` found it in, and every module its key reads but one it reads for its code alone. Lake
+    hands a compile the modules Lean will load (`fetchTransImportArts`, `Lake/Build/Module.lean`; `importModulesCore`,
+    `Lean/Environment.lean`): every module a legacy file imports, transitively, and of a `module` file's imports those
+    its own imports and their `public import`s reach, every import below one loaded for its code, private ones
+    included, and every import of one an `import all` reaches. `loads` reads no less but may read more code, since
+    `keys` folds a module's imports of one module into one (`How`): a `public import M` beside a private `meta import M`
+    reads as `public meta import M`, so what M imports privately is read for its code, which Lean loads only where that
+    `meta import` is the compiled module's own. Stepping each import alone would read what Lean loads exactly, and move
+    the key of every module above such a pair. Lean reads the IR of a module it needs and wasn't handed from
+    `LEAN_PATH`, the build's own (`loadIR`), as it does where Lake's walk reaches a module it took through an `import
+    all` again through a `meta import` and leaves out what that needs: the key reads that IR either way.
     Every other module there is a fetched package's, one the module's own package fetches, read where the key's root
     pins it (`pinned_as`, ``pkgs[0]`` being the root's package). ``owners`` holds, for one build's calls and by the
     module's package, the package whose build holds each directory an
@@ -721,10 +731,11 @@ def indexable(mod: str, keyed: dict[str, Key], pkgs: list[Package],
             return owner.removeprefix(REFUSED)
         if owner is not None:
             built[name(i)] = owner
-    want = set(loads(mod, keyed))
-    if set(built) != want:
-        return f"Lake imports {sorted(set(built) - want)[:3]} and not {sorted(want - set(built))[:3]} of the workspace"
-    if bad := sorted(i for i in want if built[i] != keyed[i].package.name):
+    want = loads(mod, keyed)
+    extra, unhanded = set(built) - set(want), {i for i, level in want.items() if i not in built and level != CODE}
+    if extra or unhanded:
+        return f"Lake imports {sorted(extra)[:3]} and not {sorted(unhanded)[:3]} of the workspace"
+    if bad := sorted(i for i in built if built[i] != keyed[i].package.name):
         return f"{bad[0]} is built in {built[bad[0]]}, not {keyed[bad[0]].package.name}"
     return None
 
@@ -795,6 +806,8 @@ def entry(store: Path, key: str, mod: str, scope: str) -> dict | None:
 #: a store's record of each key `LakeArtifacts.put` computed for a module a build compiled and could not index
 #: (`<key>.json`: the module, its package, why): `settle` leaves such a module to Lake, as a module without a key is
 UNSTORED = "unstored"
+#: how `stage` explains a module whose key has a record (`UNSTORED`), before the words the record gives
+UNINDEXED = "put could not index it"
 #: why `settle` took a module's trace: the cache holds another version under its key, which Lake then restores; or
 #: the cache holds none, so Lake compiles it and the build's `put` indexes it
 REPLACED, ABSENT = "the cache holds another version", "not in the cache"
@@ -840,7 +853,8 @@ def _names(trace: Path) -> set[str] | None:
 
 
 def settle(store: Path, root: Path, keyed: dict[str, Key], found: dict[str, tuple[str, dict, dict[str, int]]],
-           done: set[str], named: dict[tuple[str, str], str], threads: int = 8) -> tuple[dict[str, int], int]:
+           done: set[str], named: dict[tuple[str, str], str], threads: int = 8, also: Iterable[Path] = (),
+           seen: set[tuple[Path, str]] | None = None) -> tuple[dict[str, int], int]:
     """Take the trace of each module of ``root``'s own package that its build holds in a version the cache doesn't, so
     that the build ahead ends with every keyed module of the package either the cache's version or compiled by it, and
     then indexed (`LakeArtifacts.put`). Lake keeps a module whose trace has its input hash, 64 bits of a hash that isn't
@@ -848,10 +862,16 @@ def settle(store: Path, root: Path, keyed: dict[str, Key], found: dict[str, tupl
     build left in the tree and the cache lacks would stay there, restored nowhere else and bound to its source by that
     hash alone.
 
-    Nothing in the build of a package ``root`` requires by path is touched. That build is another package's: an audit of
-    it may have sealed its files, and other builds, audits and tests read them while this one runs. A trace taken there
-    would have this build's Lake compile or restore the module over them. Such a module is settled by its own package's
-    build, as a root; here it stays as the tree holds it.
+    Of the packages ``root`` requires by path, only those of ``also`` are settled with it: the ones whose builds are
+    this run's alone, which no build of their own settles in this tree (a copy of a kept build, taken for a package the
+    run doesn't audit). A module the cache lacks there is never indexed, and `put` then records every module that loads
+    it as one it could not index, in every build that takes such a copy. The first build of the run that reaches a module
+    there settles it (``seen``, the run's, takes each one reached): by a later build's turn an earlier one has compiled
+    the module, which the cache holds only when the run ends, and another package of the run may be reading it. Nothing
+    in any other path dependency's build is touched. That build is another package's: an audit of it may have sealed its
+    files, and other builds, audits and tests read them while this one runs. A trace taken there would have this build's
+    Lake compile or restore the module over them. Such a module is settled by its own package's build, as a root; here
+    it stays as the tree holds it.
 
     In import order, as `stage` walked (``found``, ``done``, and ``named``, the digests its entries name):
 
@@ -871,9 +891,13 @@ def settle(store: Path, root: Path, keyed: dict[str, Key], found: dict[str, tupl
     took: dict[str, int] = {}
     left: set[str] = set()
     own = root.resolve()
+    theirs = {d.resolve() for d in also} - {own}
+    seen = set() if seen is None else seen
     for m, k in keyed.items():
         if k.package.dir != own:
-            continue
+            if k.package.dir not in theirs or (k.package.dir, m) in seen:
+                continue
+            seen.add((k.package.dir, m))
         trace = k.package.build() / "lib" / "lean" / path_of(m, ".trace")
         if (names := _names(trace)) is None:
             continue
@@ -911,7 +935,8 @@ def sweep(store: Path, proc: Path = Path("/proc")) -> None:
 
 
 def stage(store: Path, root: Path, extra: list[str] | tuple[str, ...], dest: Path,
-          threads: int = 8, report: dict | None = None, settled: bool = False) -> tuple[dict[tuple[str, str], str], int]:
+          threads: int = 8, report: dict | None = None, settled: bool = False, also: Iterable[Path] = (),
+          seen: set[tuple[Path, str]] | None = None) -> tuple[dict[tuple[str, str], str], int]:
     """Fill ``dest``, a Lake cache directory (`artifacts/`, `outputs/<package>/<input hash>.json`), with each module of
     ``root``'s build whose key ``store``'s index holds, whose every artifact there has the digest the entry names, and whose
     every read is staged: in import order, each module is keyed once what it reads has its entry, from the digests those
@@ -920,10 +945,12 @@ def stage(store: Path, root: Path, extra: list[str] | tuple[str, ...], dest: Pat
     and so is every module reading one, so Lake can't restore one module from another's. Returns ({(package, input hash):
     module} for each module staged, the number of modules with a key). ``report`` takes why each other keyed module isn't
     staged: `missed`, {reason: how many}, and `first`, {reason: the first such module}. A module whose own key has no
-    entry is explained against the entry it was last indexed under (`differs`); the others read a module that isn't
+    entry is explained by the words of `put`'s record that it could not index it under that key (`UNINDEXED`), else
+    against the entry it was last indexed under (`differs`); the others read a module that isn't
     staged (`BEHIND`), or have an entry Lake can't be handed (two under one input hash, or an artifact that differs).
-    With ``settled`` the traces of ``root``'s own package are settled against what was staged (`settle`), and ``report``
-    takes how many it took by reason (`took`) and how many modules it left to Lake (`left`)."""
+    With ``settled`` the traces of ``root``'s own package, and of each package of ``also`` it requires by path, are
+    settled against what was staged (`settle`, with ``seen``), and ``report`` takes how many it took by reason (`took`)
+    and how many modules it left to Lake (`left`)."""
     keyed = keys(root, extra)
     store.mkdir(parents=True, exist_ok=True)
     with open(store / LOCK, "a") as lock:
@@ -968,7 +995,7 @@ def stage(store: Path, root: Path, extra: list[str] | tuple[str, ...], dest: Pat
             staged[(e["scope"], e["hash"])] = m
             os.utime(entry_path(store, h))
         if settled:
-            took, left = settle(store, root, keyed, found, done, named, threads)
+            took, left = settle(store, root, keyed, found, done, named, threads, also, seen)
             if report is not None:
                 report |= {"took": took, "left": left}
         if report is not None:
@@ -985,6 +1012,8 @@ def stage(store: Path, root: Path, extra: list[str] | tuple[str, ...], dest: Pat
                     why = BEHIND
                 elif (now := record(m, keyed, named, loaded)) is None:
                     why = UNKEYED_READ
+                elif (h := key(m, keyed, named, loaded)) is not None and (f := unstored(store, h)) is not None:
+                    why = f"{UNINDEXED}: {json.loads(f.read_text()).get('why')}"
                 else:
                     why = differs(now, last(store, k.package.name, m))
                 missed[why] = missed.get(why, 0) + 1

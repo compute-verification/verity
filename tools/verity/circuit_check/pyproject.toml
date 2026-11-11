@@ -177,6 +177,9 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py",
           "verity/protocols/certifier/prover/compile_slice_v7.py",
           "verity/protocols/certifier/prover/compile_slice_v7.circuit-check.py",
           "verity/protocols/certifier/prover/compile_slice_v7.circuit-check.json",
+          "verity/protocols/certifier/prover/lengths_row.py", "verity/protocols/certifier/prover/lengths_row.circuit-check.py",
+          "verity/protocols/certifier/prover/lengths_row.circuit-check.json",
+          "verity/protocols/certifier/verifier/connection_rows.py", "verity/protocols/certifier/verifier/warden_rows.py",
           "verity/protocols/certifier/verifier/served_rows.py", "verity/protocols/certifier/verifier/warden.py",
           "verity/protocols/certifier/verifier/release.py",
           "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/certifier/__init__.py", "verity/protocols/pouw/__init__.py", "verity/protocols/spot/__init__.py", "verity/protocols/spot/device/__init__.py",
@@ -228,9 +231,10 @@ paths = [
 ]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_attention_split_digests_*.py", "tests/test_bodies.py", "tests/test_declared_tables.py",
-         "tests/test_named_targets.py", "tests/test_pinned_targets.py", "tests/test_ranges.py", "tests/test_structural.py",
-         "tests/test_targets.py"]
+tests = ["tests/test_attention_split.py", "tests/test_attention_split_digests_*.py", "tests/test_bodies.py",
+         "tests/test_declared_tables.py", "tests/test_metadata_files.py", "tests/test_named_targets.py",
+         "tests/test_pinned_targets.py", "tests/test_ranges.py", "tests/test_split_prims_serve.py",
+         "tests/test_structural.py", "tests/test_targets.py"]
 paths = [
     "adapters/vllm/verity_vllm/engine/served_seed.py",
     "adapters/vllm/verity_vllm/pipeline/boundary_rows.circuit-check.py",

@@ -103,10 +103,11 @@ class Admission:
     prompt_ids: list[int]
     params: Any
     deliver: Callable[[Delta], None]
-    ingress: dict[str, Any]
+    brought: dict[str, Any]                  # the sampling fields it sent, as it sent them
     user: str | None = None
     release: tuple[str, int] | None = None   # (the network certifier's run, the request's place in its release order)
     times: dict[str, float] = field(default_factory=dict)   # wall-clock stamps (telemetry): head, received, submitted, admitted
+    ingress: dict[str, Any] = field(default_factory=dict, init=False)   # its ingress record, once the engine loop seeds and adds it
 
 
 def engine_id_of(http_id: str) -> str:

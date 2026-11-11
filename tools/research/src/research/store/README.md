@@ -510,6 +510,7 @@ research data pull --from MACHINE RUN --project P    (the machine is bound to a 
 research data reindex [--remote]
 research data sql "SELECT ..." [--index] [--json]   read-only: the catalog, or the index (§5.1)
 research data mint-credential [--ttl 6h] [--permission P] [--prefix P]... [--actions A,B] [--via auto|local|api] [--env]   (§7.1)
+research data mint-credential --job push|fetch [--ttl 6h] [--env]   a cluster job's key: custody's actions (§7.1)
 ~~~
 
 No query DSL: flags for common facets + `sql`. Every command takes `--store ROOT`. `--ref name=a,b` or a repeated name makes a

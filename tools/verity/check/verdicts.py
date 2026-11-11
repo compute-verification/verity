@@ -292,9 +292,9 @@ def refusal(pack: Path) -> str | None:
     return None
 
 
-def import_(pack: Path, only: str | None = None) -> tuple[int, int]:
-    """Add the pack's entries that don't exist here, with ``only`` just those whose pack path starts with it; (added, already
-    here).  Nothing is written when the pack is refused."""
+def import_(pack: Path, only: str | tuple[str, ...] | None = None) -> tuple[int, int]:
+    """Add the pack's entries that don't exist here, with ``only`` just those whose pack path starts with it (or one of them);
+    (added, already here).  Nothing is written when the pack is refused."""
     base = roots()
     added = kept = 0
     with tarfile.open(pack, "r:*") as tar:

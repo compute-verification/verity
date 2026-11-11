@@ -5,6 +5,18 @@ from __future__ import annotations
 from typing import Any, Callable
 
 
+def _cut_served_roots() -> list[Any]:
+    """The units a served head is cut into, on bits, at D = 64 and BN = 192 on Hopper: `AttnBlockFirst_v3` at a first block of
+    1, 35 and all 192 keys, and `AttnHeadEnd_v2`.  Each is over `targets.MAX_GATES`, so it holds a ``digests`` pin, which keeps
+    it in ``--all``: the 192-key block is the largest a head has, and the only one here whose every k-step is whole."""
+    from verity.circuits.defs import bind
+    from verity.definitions.registry import boolean_attention
+
+    fa3 = boolean_attention.ATTENTION_FA3
+    return [*(bind(boolean_attention.AttnBlockFirstV3, D=64, NVIS=nvis, BN=192, DOT=fa3["DOT"]) for nvis in (1, 35, 192)),
+            bind(boolean_attention.AttnHeadEndV2, D=64, INV=fa3["INV"])]
+
+
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions in tiny whole-model configurations (`circuit_check.targets.TINY`, the vLLM tests'), and the
     leaf families they do not reach, at small statics."""

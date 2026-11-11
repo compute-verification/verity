@@ -119,6 +119,8 @@ class Unit:
     chunks: tuple = ()
     carried_out: bool = False
     edge: tuple = ()
+    recomputed: int = 0
+    hit_steps: tuple = ()
 
 
 @dataclass(frozen=True)
@@ -312,7 +314,7 @@ def test_a_split_count_other_than_the_registered_one_is_refused_before_a_program
 def test_r2_a_planner_that_reads_the_batch_is_refused():
     adv, ing = _mixed({k: v for k, v in TOPP.items() if k != "seed"})
     by_batch = lambda a, ad, i: plan(a, ad, i, seed_of=lambda advice, body: len(advice.requests))  # noqa: E731
-    with pytest.raises(BatchDependent, match=r"request 1: compiled alone it's .*1, 'q1', 0, \(\), False, \(\)\), in its batch .*3, 'q1', 0, \(\), False, \(\)\)"):
+    with pytest.raises(BatchDependent, match=r"request 1: compiled alone it's .*1, 'q1', 0, 0, \(\), False, \(\)\), in its batch .*3, 'q1', 0, 0, \(\), False, \(\)\)"):
         check_compiled(None, adv, ing, _compile(adv, ing, by_batch), by_batch)
 
 
@@ -362,8 +364,8 @@ def test_r2_c_planned_from_the_batch_is_refused():
     """A planner that takes r1's C from the batch (its first request's prompt length, r0's 4) plans it alone at the stand-in's 2."""
     adv, ing = _hit(2)
     by_batch = lambda a, ad, i: plan(a, ad, i, C_of=lambda advice, row: advice.requests[0].prompt_len if row.cache_hit else 0)  # noqa: E731
-    with pytest.raises(BatchDependent, match=r"request 1: compiled alone it's \(LP, T, policy, seed, id, C, chunks, carried out, edge\) = "
-                                             r".*'q1', 2, \(\), False, \(\)\), in its batch .*'q1', 4, \(\), False, \(\)\)"):
+    with pytest.raises(BatchDependent, match=r"request 1: compiled alone it's \(LP, T, policy, seed, id, C, recomputed, chunks, carried out, edge\) = "
+                                             r".*'q1', 2, 0, \(\), False, \(\)\), in its batch .*'q1', 4, 0, \(\), False, \(\)\)"):
         check_compiled(None, adv, ing, _compile(adv, ing, by_batch), by_batch)
 
 

@@ -127,7 +127,7 @@ SPEC = [
     {"key": "g", "main": True, "label": "Compute amplifier g: the developer's algorithmic advantage over the reference recipe (1 against the best known recipe)", "unit": "x", "min": 1, "max": 100, "log": True},
     {"key": "residual", "main": True, "label": "Monitored compute residual r-hat on the GPUs, their share outside the certificate (floor credit at the locked clock 0.323, with an attested clock 0.213; best plausible design 0.01; nothing credited today: 1)", "unit": "", "min": 1e-12, "max": 1, "log": True, "zero": True},
     {"key": "eps_w", "label": "PoUW's deficit eps_W: the share of certified work a certificate that isn't wrong may credit without its running, which charges eps_W W_cert/C to r (CircuitCredit 0.744%; best plausible design 0.06-0.25%)", "unit": "", "min": 1e-4, "max": 0.1, "log": True, "zero": True},
-    {"key": "eps_agg", "label": "Aggregation slack eps': the share of capacity whose PoUW certificates may be wrong, which Markov's inequality over the windows charges to r (1e-4 with per-window failure 3 x 2^-40 gives the theorem's delta of 2.7e-8; each halving costs about 4e-5 of PoUW's deficit)", "unit": "", "min": 1e-8, "max": 1e-2, "log": True, "zero": True},
+    {"key": "eps_agg", "label": "Aggregation slack eps': the share of capacity whose PoUW certificates may be wrong, which Markov's inequality over the windows charges to r (the theorem's delta is p/eps' at PoUW's per-window failure p, which has no value yet: 2.7e-8 at 1e-4 if p were 3 x 2^-40; each halving costs about 4e-5 of PoUW's deficit)", "unit": "", "min": 1e-8, "max": 1e-2, "log": True, "zero": True},
     {"key": "clock_share", "label": "GPU capacity above the clock PoUW credits (0: PoUW credits 2,430 MHz, the card table's ceiling and the SKU's maximum; above 0 only on a card whose SKU or firmware reaches past its table)", "unit": "", "min": 1e-4, "max": 0.3, "log": True, "zero": True},
     {"key": "host_share", "label": "Host CPUs' compute, as a share of server compute at the card table's peak: 0 under hosts carry no compute; without that assumption, at datasheet peak (Xeon 6776P INT8 AMX 12.6%; hosts without matrix units, two EPYC 9015s, 0.22%)", "unit": "", "min": 1e-6, "max": 0.5, "log": True, "zero": True},
     {"key": "pous_rounds", "main": True, "label": "Proof-of-space rounds per audit (deployed 111; 1/19 needs 86; streamed labels make 74,000 cheap)", "unit": "", "min": 10, "max": 1e6, "log": True},
@@ -200,8 +200,9 @@ STATUS = [
      "with its premises granted. Under the floor credit r-hat = 0.449: GPU floor time 0.323 (honest kernels at 1.72 "
      "times the floor, unpublished), the clock 0 (PoUW credits the card "
      "table's 2,430 MHz, the SKU's maximum; the premise that a node's cards are that SKU and firmware is "
-     "unattested) and host CPUs at INT8 AMX peak 0.126. eps' = 1e-4 is what the theorem's delta of 2.7e-8 costs "
-     "(Markov over the windows)."),
+     "unattested) and host CPUs at INT8 AMX peak 0.126. eps' = 1e-4 is a chosen slack: the theorem's delta is "
+     "p/eps' (Markov over the windows), 2.7e-8 if PoUW's per-window failure p were 3 x 2^-40, which has no value "
+     "yet."),
     ("Memory cap", "ThreadedRuntime and ThreadedRate give the closed form's shape; its value needs Threaded "
      "at window scale, which fails. The fit bound (FitBoundSlots under ReachSlots and FitsSlots, adopted for dense "
      "recipes) replaces it at token threads, conditional on F1 and F4 per parameter slot, F3, intake "

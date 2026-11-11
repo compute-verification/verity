@@ -76,7 +76,7 @@ def test_one_mathlib():
 #: the size of each lock's `unwitnessed`, as the regeneration that recorded every guarantee's premises left it: the
 #: guarantees stating what an acceptance means, or an exclusion's bound, that have no `honest` and `nontrivial` witnesses
 #: (`check.py`'s `witness_failures`)
-# Security's 279: Flock.SecurityProofs.SpotExfilTwo, NetTiming.SecurityProofs.SampledLeakChecked and PooledLeakChecked carry
+# Security's 253: Flock.SecurityProofs.SpotExfilTwo, NetTiming.SecurityProofs.SampledLeakChecked and PooledLeakChecked carry
 # their nontrivial witnesses; their honest ones are due with the two-stage layout and the deployed check pinning CheckedUnique
 UNWITNESSED = {"security": 303, "security/Properties": 191, "verity/protocols/flock/verifier": 7}
 
@@ -146,6 +146,17 @@ def test_lean_module_roots_are_disjoint():
                for x, y in itertools.combinations(claims, 2) if clash(x, y)]
     assert len(claims) >= 10
     assert not clashes, clashes
+
+
+def test_every_lock_is_owned():
+    """A lock with no owner, issue or due date in it is unowned, and the Lean check holds it to no owner rule
+    (`check.py`'s `unowned_lock`): the lock of a tree with no lanes.  This tree has lanes, so each of its locks that
+    lists a guarantee or a premise names who answers for it."""
+    merge = _load("lean_merge", ROOT / "tools" / "verity" / "lean" / "merge.py")
+    unowned = [_rel(p) for p in lake_packages() if merge.A.unowned_lock(_lock(p))]
+    assert not unowned, (f"locks that name no owner, so no entry of theirs owes one: {unowned}; run `check.py --update "
+                         f"--owner @lane` on each, which owns its entries")
+    assert any(merge.A.unowned_lock({s: {"X": {}}}) for s in merge.A.LANE_ENTRIES)
 
 
 def test_every_record_merges_with_the_driver():

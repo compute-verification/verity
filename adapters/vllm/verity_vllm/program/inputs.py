@@ -30,7 +30,7 @@ from typing import Any
 KINDS = ("block", "certified", "registered", "advice", "witness")
 
 #: the window charge's terms that count a Program input's bits: none yet (`ChargeCount_v2` counts advice v1's decisions, its
-#: hits past the pool bound and its order entries), so no Program input is advice until a term counts it
+#: order entries and its length terms), so no Program input is advice until a term counts it
 CHARGED: frozenset[str] = frozenset()
 
 #: each relation whose check bit a served Program returns: its Definition's base id -> the evidence that it holds for one value

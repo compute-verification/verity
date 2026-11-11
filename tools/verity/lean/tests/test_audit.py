@@ -260,6 +260,122 @@ def test_every_guarantee_has_an_owner_and_an_update_keeps_it():
     assert text == [f"guarantee P.t: owner @lean -> @compute-accounting: {A.OWNED}"] and A.statement_changes(text) == []
 
 
+def laneless(lock: dict) -> dict:
+    """``lock`` as a tree with no lanes holds it: no entry's owner, issue or due date, and no section of their defaults."""
+    return {k: {n: {f: v for f, v in r.items() if f not in A.LANE_FIELDS} if isinstance(r, dict) else r
+                for n, r in sec.items()} if k in A.LANE_ENTRIES and isinstance(sec, dict) else sec
+            for k, sec in lock.items() if k not in A.LANE_SECTIONS}
+
+
+def unowned_and_its_facts() -> tuple[dict, dict]:
+    """An unowned lock that passes, listing a guarantee and the open premise it takes, and its package's facts."""
+    now = sounded(assumption_reads={"P.Sound": [{"name": "P.Sound", "kind": "def", "module": "P.Defs", "sha256": "5" * 64}]})
+    seed = {"P.Defs": {"issue": "LEAN-1", "due": "2026-11-30"}}
+    owned = A.judge({**POLICY, "assumptions": {}, "open_seed": seed}, now, FILES, update=True)[1]
+    assert A.judge(owned, now, FILES)[0] == [] and set(owned["open"]["P.Sound"]) == {"owner", "digest", "issue", "due"}
+    return laneless(owned), now
+
+
+def test_a_lock_with_no_lane_field_is_unowned_and_owes_no_owner_and_no_ticket():
+    """A lock is unowned by its content: it lists a guarantee or a premise, and holds no owner, issue, due date or section
+    of their defaults.  No entry of it owes an owner, and an `open` entry is its digest alone; a premise it doesn't list
+    still fails.  One lane field makes it an owned lock, held to every rule, so a lock that lost only some of them fails."""
+    lock, now = unowned_and_its_facts()
+    assert A.unowned_lock(lock) and set(lock["open"]["P.Sound"]) == {"digest"} and lock["guarantees"]["P.t"]
+    assert A.judge(lock, now, FILES)[0] == []
+    assert [f.code for f in A.judge({**lock, "open": {}}, now, FILES)[0]] == ["open.unlisted"]
+    for section, entry, field, value in (("guarantees", "P.t", "owner", "@lean"), ("open", "P.Sound", "owner", "@lean"),
+                                         ("open", "P.Sound", "due", "2026-11-30"), ("open", "P.Sound", "issue", "LEAN-1")):
+        half = {**lock, section: {entry: lock[section][entry] | {field: value}}}
+        assert not A.unowned_lock(half) and {f.code for f in A.judge(half, now, FILES)[0]} & {
+            "guarantees.no-owner", "open.no-owner", "open.unlisted", "open.form"}, (section, field)
+    for section, value in (("default_owner", "@lean"), ("open_default_issue", "LEAN-1"), ("open_seed", {})):
+        assert not A.unowned_lock({**lock, section: value}), section
+        assert "guarantees.no-owner" in {f.code for f in A.judge({**lock, section: value}, now, FILES)[0]}, section
+    for nothing_to_own in ({}, {"roots": ["P"]}, {"roots": ["P"], "guarantees": {}, "open": {}},
+                           {"roots": ["P"], "assumptions": ["P.Assumptions"]}):
+        assert not A.unowned_lock(nothing_to_own)
+    assert A.unowned_lock({"guarantees": {"P.t": None}}), "a listed guarantee with no record yet is an entry"
+
+
+def test_an_update_and_a_bookkeeping_repair_write_no_owner_and_no_ticket_into_an_unowned_lock():
+    """`--update` writes an unowned lock's records and no owner; and the repair `--bookkeeping warn` makes lists no
+    premise on a ticket in it, so the lock that comes out is unowned too."""
+    lock, now = unowned_and_its_facts()
+    assert A.judge(lock, now, FILES, update=True) == ([], lock)
+    bare = {**lock, "guarantees": {"P.t": None}}
+    assert A.judge(bare, now, FILES, update=True) == ([], lock)
+    unlisted = {**lock, "open": {}}
+    fails = A.judge(unlisted, now, FILES)[0]
+    fixed = A.repaired(unlisted, now, FILES, fails, TICKET)
+    assert A.unowned_lock(fixed) and not fixed.get("open")
+    assert [f.code for f in A.judge(fixed, now, FILES)[0]] == ["open.unlisted"]
+
+
+def test_an_update_given_an_owner_writes_every_entrys_owner_into_an_unowned_lock():
+    """`--owner` is an explicit act: a run given one reads an unowned lock as owned, so `--update --owner` owns each
+    guarantee and each premise in it, as it does in a new package's lock."""
+    owned, now = recorded(), facts()
+    lock = laneless(owned)
+    assert A.unowned_lock(lock) and set(lock["assumptions"]) == {"P.Hyp"} and A.judge(lock, now, FILES)[0] == []
+    fails, written = A.judge(lock, now, FILES, update=True, owner="@proofs")
+    assert fails == [] and not A.unowned_lock(written)
+    assert written["guarantees"]["P.t"]["owner"] == written["assumptions"]["P.Hyp"]["owner"] == "@proofs"
+    assert laneless(written) == lock, "nothing but the owners is written"
+    fresh = {**lock, "guarantees": {"P.t": {}}, "assumptions": {"P.Hyp": {}}}
+    assert A.judge(fresh, now, FILES, update=True, owner="@proofs") == ([], written), "a new package's first update"
+
+
+def test_an_update_given_an_owner_holds_an_unowned_lock_to_the_ticket_rule():
+    """In the run that owns it every rule applies, the open premises' ticket rule too: an `open` entry that is its digest
+    alone fails there as it does on an owned lock, so the update can't pass and write a lock the next check fails."""
+    lock, now = unowned_and_its_facts()
+    assert A.judge(lock, now, FILES)[0] == []
+    owned = {**lock, "guarantees": {"P.t": lock["guarantees"]["P.t"] | {"owner": "@proofs"}}}
+    expect = [f.code for f in A.judge(owned, now, FILES, update=True)[0]]
+    assert expect == ["open.unlisted"]
+    assert [f.code for f in A.judge(lock, now, FILES, update=True, owner="@proofs")[0]] == expect
+
+
+def test_the_plain_audit_after_an_update_given_an_owner_reads_the_lock_as_owned():
+    """The lock `--update --owner` wrote names its owners, so it is owned by its content: the next audit, given no owner,
+    passes it and holds it to every owner rule."""
+    lock, now = laneless(recorded()), facts()
+    written = A.judge(lock, now, FILES, update=True, owner="@proofs")[1]
+    assert A.judge(written, now, FILES) == ([], written) and not A.unowned_lock(written)
+    for section, entry in (("guarantees", "P.t"), ("assumptions", "P.Hyp")):
+        half = {**written, section: {entry: {k: v for k, v in written[section][entry].items() if k != "owner"}}}
+        assert [f.code for f in A.judge(half, now, FILES)[0]] == [f"{section}.no-owner"], section
+
+
+def test_the_lean_check_names_an_unowned_lock_and_repairs_no_bookkeeping_in_it(tmp_path, monkeypatch, capsys):
+    """`check.py` itself (`main` and `audit`, the package's Lean stubbed out): an unowned lock's line says `unowned` and
+    its report holds `unowned`, an owned lock's neither; and under `--bookkeeping warn` an unowned lock that doesn't list
+    a premise fails on it, with no repair."""
+    audit = A.audit
+    monkeypatch.setattr(A, "audit", lambda *a, seals=None, **k: audit(*a, **k))   # a seal copies a real build
+    lock, now = unowned_and_its_facts()
+
+    def run(name, lock, *flags):
+        (sub := tmp_path / name).mkdir()
+        pkg, _ = bookkeeping_audit(sub, monkeypatch, lock | {"shape": {"frozen": {"P.t": "frozen: open"}}}, now)
+        code = A.main([str(pkg), "--regenerate", *flags, "--no-runs", "--out", str(sub / "out"), "--repo", str(tmp_path)])
+        (rep,) = json.loads((sub / "out" / "audit.json").read_text())["packages"]
+        (head,) = (line for line in capsys.readouterr().out.splitlines() if line.startswith(f"AUDIT {pkg}: "))
+        return code, rep, head
+    code, rep, head = run("passes", lock)
+    assert code == 0 and rep["unowned"] is True and head.startswith(f"AUDIT {tmp_path}/passes/pkg: PASS  ")
+    assert head.endswith("; unowned")
+    code, rep, head = run("unlisted", {**lock, "open": {}}, "--bookkeeping", "warn")
+    assert code == 1 and rep["failure_codes"] == ["open.unlisted"] and rep["unowned"] is True and head.endswith("; unowned")
+    assert not {"repairs", "bookkeeping", "regenerated", "bookkeeping_left"} & set(rep)
+    owned = recorded()
+    assert laneless(owned) != owned
+    now = facts()
+    code, rep, head = run("owned", owned)
+    assert code == 0 and "unowned" not in rep and "unowned" not in head
+
+
 def spec_facts(reads=None, outside=(), spec=()):
     """``facts()`` whose guarantee reads ``reads`` under `meaning` and stops at ``outside`` ([name, module] pairs) outside it,
     in a package whose spec modules declare ``spec`` ({name, module, kind})."""
@@ -830,6 +946,80 @@ def test_a_changed_premise_is_listed_under_its_section_with_its_owner():
          "line": "open premise P.Leaves: changed (its statement or a definition it reads)"}]
 
 
+SCOPE = "the compiled circuits the bound is stated over"
+
+
+def domain_by_hand() -> tuple[dict, dict, dict, dict, dict]:
+    """(`witnessed`'s facts; its lock with `P.Compiled` open; that lock without the entry; that one with the entry written
+    under `domain` by hand, P.sound's record still taking it as open; and the lock an `--update` of that writes)."""
+    pol, f = witnessed()
+    opened = A.judge(pol | {"open_seed": {"P.Defs": {"issue": "LEAN-1", "due": "2026-11-30"}}}, f, FILES, update=True)[1]
+    unlisted = {k: v for k, v in opened.items() if k != "open"}
+    entry = {k: v for k, v in opened["open"]["P.Compiled"].items() if k not in ("issue", "due")} | {"owner": "@amy"}
+    hand = unlisted | {"domain": {"P.Compiled": entry | {"why": SCOPE}}}
+    dom = A.judge(hand, f, FILES, update=True)[1]
+    assert A.judge(dom, f, FILES)[0] == [] and dom["guarantees"]["P.sound"]["premises"]["domain"] == ["P.Compiled"]
+    return f, opened, unlisted, hand, dom
+
+
+def test_a_domain_hypothesis_the_lock_did_not_list_gets_a_line_with_its_why_and_its_takers():
+    """A premise under `domain` that the lock before listed under none of `assumptions`, `domain` and `open` gets one line
+    of the review, with its `why` and the guarantees whose records take it: a statement change, and an item of `changes`
+    under `domain` with its entry's owner.  So does the one an update lists itself, another listed guarantee's statement,
+    with the guarantee it cites.  One that was open keeps the line that says so, and one the lock before lists the same
+    way gets none: the review compares two locks, and an entry written into the first is in both."""
+    scope = SCOPE
+    f, opened, unlisted, hand, dom = domain_by_hand()
+    line = f"domain hypothesis P.Compiled, taken by P.sound: new: {scope}"
+    assert A.assumption_changes(unlisted, dom) == [line]
+    notes = A.review(unlisted, dom, f, {})
+    assert line in A.statement_changes(notes)
+    assert [c for c in A.changes(notes, unlisted, dom) if c["kind"] == "domain"] == [
+        {"entry": "P.Compiled", "kind": "domain", "owners": ["@amy"], "line": line}]
+    assert A.assumption_changes(opened, dom) == [f"domain hypothesis P.Compiled: a domain hypothesis: {scope} (was open)"]
+    assert A.assumption_changes(hand, dom) == [] and A.assumption_changes(dom, dom) == []
+
+    several = {"domain": {"P.Scope": {"owner": "@amy", "why": scope}},
+               "guarantees": {"P.v": {"premises": {"domain": ["P.Scope"]}}, "P.t": {"premises": {"domain": ["P.Scope"]}},
+                              "P.w": {"premises": {"domain": []}}, "P.x": {"owner": "@lean"}}}
+    assert A.assumption_changes({}, several) == [f"domain hypothesis P.Scope, taken by P.t, P.v: new: {scope}"]
+
+    before = POLICY | {"guarantees": {"P.t": {"owner": "@lean"}, "P.u": {"owner": "@lean"}}}
+    assert A.assumption_changes(before, cited()[1]) == [
+        "domain hypothesis P.Guarantees.U, taken by P.t: new: P.u's statement, another listed guarantee, citing P.u"]
+
+
+def test_a_premise_a_record_takes_as_another_kind_is_named_on_its_guarantee_s_line_a_statement_change():
+    """A record that takes a premise as another kind than it did (`premises`), at the same type hash and named assumptions,
+    is no reprint: its guarantee's line names the premise, how it is taken now and how it was, a domain hypothesis with
+    its `why`, and is a statement change under `guarantees` with the guarantee's owner.  It reads the records, so the
+    update of a lock whose `domain` entry a person wrote by hand, which changes no listed premise, prints it too.
+    Records with equal `premises`, or one that holds none, still print as the same statement."""
+    f, opened, unlisted, hand, dom = domain_by_hand()
+    line = f"guarantee P.sound: takes P.Compiled as a domain hypothesis (was open): {SCOPE}"
+    notes = A.review(hand, dom, f, {})
+    assert notes == [line] == A.statement_changes(notes) and A.assumption_changes(hand, dom) == []
+    assert A.changes(notes, hand, dom) == [{"entry": "P.sound", "kind": "guarantees", "owners": ["@lean"], "line": line}]
+    assert A.review(opened, dom, f, {}) == [line, f"domain hypothesis P.Compiled: a domain hypothesis: {SCOPE} (was open)"]
+    assert A.review(dom, opened, f, {})[0] == "guarantee P.sound: takes P.Compiled as open (was a domain hypothesis)"
+
+    def taking(lock: dict, **premises: list[str]) -> dict:
+        rec = lock["guarantees"]["P.sound"]
+        return lock | {"guarantees": lock["guarantees"] | {"P.sound": rec | {"premises": rec["premises"] | premises}}}
+    assert A.review(taking(hand, open=[]), dom, f, {}) == [
+        f"guarantee P.sound: takes P.Compiled as a domain hypothesis (new): {SCOPE}"]
+    assert A.review(dom, taking(dom, domain=[], reads=["P.Compiled"]), f, {}) == [
+        "guarantee P.sound: reads P.Compiled without taking it (was a domain hypothesis)"]
+    assert A.review(dom, taking(dom, domain=[], assumptions=[]), f, {}) == [
+        "guarantee P.sound: no longer takes P.Compiled (was a domain hypothesis); no longer takes P.Hyp (was a named "
+        "assumption)"]
+    reprinted = dom["guarantees"]["P.sound"] | {"signature": ["P.sound, printed otherwise"]}
+    same = [f"guarantee P.sound: {A.REPRINTED}"]
+    assert A.review(dom, dom | {"guarantees": dom["guarantees"] | {"P.sound": reprinted}}, f, {}) == same
+    bare = {k: v for k, v in reprinted.items() if k != "premises"}
+    assert A.review(dom | {"guarantees": dom["guarantees"] | {"P.sound": bare}}, dom, f, {}) == same
+
+
 TICKET = {"issue": "LEAN-186", "due": "2026-11-14", "owner": "@lean"}
 
 
@@ -942,7 +1132,7 @@ def test_each_bookkeeping_repair_is_listed_with_its_entry_its_code_and_its_owner
                 if r["entry"] == "P.Sound")
     assert (sound["code"], sound["owners"]) == ("open.unlisted", ["@amy"]) and " (@amy): " in sound["line"]
 
-    ownerless = {**POLICY, "assumptions": {}, "guarantees": {"P.t": {}}}
+    ownerless = {**POLICY, "assumptions": {}, "guarantees": {"P.t": {}}, "open_default_issue": "LEAN-200"}
     fails = A.judge(ownerless, sounded(), FILES)[0]
     listed = A.bookkeeping_repairs(fails, A.repaired(ownerless, sounded(), FILES, fails, ticket), ticket)
     assert {(r["entry"], r["code"]) for r in listed} == {("P.t", "guarantees.no-owner"), ("P.Sound", "open.unlisted")}
@@ -967,7 +1157,8 @@ def test_bookkeeping_files_a_premise_on_the_locks_default_issue_and_its_guarante
     assert A.judge(fixed, now, FILES)[0] == []
     assert "bookkeeping: P.Sound (@amy): listed under `open` on LEAN-200, due 2026-11-14 (open.unlisted)" in \
         A.bookkeeping_warnings(fails, fixed, ticket)
-    ownerless = {**POLICY, "assumptions": {}, "guarantees": {"P.t": {}}}
+    ownerless = {**POLICY, "assumptions": {}, "guarantees": {"P.t": {}}, "open_default_issue": "LEAN-200",
+                 "default_owner": "@lean"}
     fails = A.judge(ownerless, sounded(), FILES)[0]
     fixed = A.repaired(ownerless, sounded(), FILES, fails, ticket)
     assert fixed["guarantees"]["P.t"]["owner"] == fixed["open"]["P.Sound"]["owner"] == "@lean"
@@ -1632,7 +1823,8 @@ def test_no_step_before_the_judge_reads_a_section_build_inputs_leaves_out():
              "homes": {"layers"}, "tree_roles": {"trees"}, "read_by_dependents": {"reads"}, "_finish": whole,   # the judge's
              "load": whole, "dump": whole,                                   # the reader and the writer themselves
              "packages": whole,                                              # the file's name, among a directory's
-             "controls_of": whole}                                           # a control's copy of a fixture
+             "controls_of": whole,                                           # a control's copy of a fixture
+             "unowned_at": whole}                                            # the report's `unowned`, of the judged lock
     for name, got in by_path.items():
         if name not in apart:
             reads.setdefault(name, set()).update(A.JUDGED if got is None else got)
@@ -3290,7 +3482,9 @@ def test_a_premise_of_a_statement_in_an_excepted_module_changes_its_record(tmp_p
     `Proofs.Flock.SessionLoop`) is recorded through `G`'s body. A premise added to it that no named assumption stands for
     (`n ≠ 5`), or dropped from it while another guarantee still takes it (`Hyp`, whose assumption entry and module record
     stay, though the build no longer has `G` read it), changes the record, and the drop its `premises` too, which the
-    audit refuses until `--update` records it, and the review prints `G` as it is now. A walk that stopped at `G` would record its name alone, and
+    audit refuses until `--update` records it, and the review prints `G` as it is now. For the drop the guarantee's own
+    line comes first and names the premise it no longer takes: its type hash is the same and its `premises` are not, so
+    it is no reprint. A walk that stopped at `G` would record its name alone, and
     neither change would move the lock. What `G` reads under `meaning` (`twice`) is recorded too."""
     pkg, build, audit, lock = excepted_toy(
         tmp_path, "Control.Loop", LOOP,
@@ -3330,8 +3524,10 @@ def test_a_premise_of_a_statement_in_an_excepted_module_changes_its_record(tmp_p
         assert after["reads"]["Control.Loop"]["digest"] not in seen
         seen.add(after["reads"]["Control.Loop"]["digest"])
         changes = A.statement_changes(rep["review"])
-        assert changes[0] == "definition Control.Guarantees.Loop (Control.Loop), read by Control.doubles: changed", changes
-        assert any(shows in line for line in changes[1:]), changes
+        dropped = [] if premises else ["guarantee Control.doubles: no longer takes Control.Hyp (was a named assumption)"]
+        assert changes[:len(dropped) + 1] == [
+            *dropped, "definition Control.Guarantees.Loop (Control.Loop), read by Control.doubles: changed"], changes
+        assert any(shows in line for line in changes[len(dropped) + 1:]), changes
         for module in ("Control.Loop", "Control.Assumptions"):
             after["reads"][module] = before["reads"][module]
         assert after == before, "the statement's record changed, and nothing else"
@@ -5529,6 +5725,35 @@ def test_with_the_node_s_artifact_cache_each_build_step_reads_a_cache_staged_for
     assert not (lib / "P" / "Q.trace").exists() and not cache.exists()
 
 
+def test_an_audit_has_its_build_settle_only_the_path_dependencies_its_run_does_not_audit(tmp_path, monkeypatch):
+    """A path dependency this run audits is sealed and settled by its own build; the build of one it doesn't audit (in
+    an audit's tree, a copy of a kept build) is settled by the builds that require it, or the modules the cache lacks
+    there are never indexed (`stage_build`'s ``unaudited``)."""
+    d, pkg, given = tmp_path / "d", tmp_path / "p", []
+    for at, name, requires in ((d, "D", []), (pkg, "P", [{"type": "path", "name": "d", "dir": "../d"}])):
+        at.mkdir()
+        (at / A.POLICY).write_text(json.dumps({"roots": [name]}))
+        (at / "lean-toolchain").write_text("leanprover/lean4:v4.34.0\n")
+        (at / "lakefile.toml").write_text(f'name = "{name.lower()}"\ndefaultTargets = ["{name}"]\n\n[[lean_lib]]\nname = "{name}"\n')
+        (at / "lake-manifest.json").write_text(json.dumps({"name": name.lower(), "packages": requires}))
+        (at / f"{name}.lean").write_text("")
+
+    def stage_build(mk, pkg, roots, dest, unaudited=()):
+        given.append(list(unaudited))
+        return {}, {"modules": 0, "keyed": 0, "missed": {}, "first": {}, "took": {}, "left": 0}
+
+    monkeypatch.setattr(A, "sandboxed", lambda: True)
+    monkeypatch.setattr(A, "in_sandbox", lambda pkg, argv: argv)
+    monkeypatch.setattr(A, "setup", lambda pkg, toolchain, log: (0, ""))
+    monkeypatch.setattr(A, "run", lambda argv, cwd, log=None, timeout=0: (1, "fake build"))
+    monkeypatch.setattr(A, "ARTIFACTS", tmp_path / "store")
+    monkeypatch.setattr(A, "stage_build", stage_build)
+    A.audit(pkg, tmp_path / "out", build=True, runs=False)
+    A.audit(pkg, tmp_path / "out", build=True, runs=False, ready=lambda q: True)
+    A.audit(pkg, tmp_path / "out", build=True, runs=False, ready=lambda q: False)
+    assert given == [[d.resolve()], [], []]
+
+
 def test_before_its_first_build_step_an_audit_leaves_whether_its_builds_run_in_the_sandbox(tmp_path, monkeypatch):
     """What a build compiled goes into the node's artifact cache only on check.py's word that it ran in the sandbox. A
     check.py that is killed writes no report, so that word is in the package's work directory from before the first
@@ -5659,6 +5884,7 @@ def test_a_planted_olean_among_the_restored_modules_fails_once_it_is_sampled(tmp
     fails, rep = A.sampled_recompile(b, ["P"], tmp_path / "w2", set(), [], log=lambda s: None)
     assert rep["modules"] == sorted(samples[hit]) and [(x.code, x.entry) for x in fails] == [("sampled", "P.M2")], fails
     assert ".lake/build/lib/lean/P/M2.olean differs from what its source compiles to (olean differ" in fails[0]
+    assert rep["mismatched"] == {"P.M2": str(b.resolve())}, "the report names the module and its package's directory"
     assert files_of(build) == before, "the build is never written"
     upper = tmp_path / "w2" / "sampled" / "0" / "upper" / "build"
     assert (upper / "lib/lean/P/M2.olean").read_bytes() == (a / ".lake/build/lib/lean/P/M2.olean").read_bytes()
@@ -6003,7 +6229,8 @@ def _two_dependents(tmp_path, monkeypatch, b_build_exit=0):
     monkeypatch.setattr(A, "setup", lambda pkg, toolchain, log: (0, ""))
     monkeypatch.setattr(A, "run", fake_run)
     monkeypatch.setattr(A, "sampled_recompile", sampled)
-    audit = lambda p: A.audit(tmp_path / "ws" / p, tmp_path / "out", build=True, runs=False, log=lambda s: None)
+    def audit(p):
+        return A.audit(tmp_path / "ws" / p, tmp_path / "out", build=True, runs=False, log=lambda s: None)
     return audit, ran, later, real
 
 
@@ -6131,7 +6358,7 @@ def test_a_spec_never_reads_a_proving_package_whose_build_did_not_pass(tmp_path,
     monkeypatch.setattr(A, "audit", fake)
     assert A.main([str(s), "--out", str(tmp_path / "out")]) == 1
     assert seen["ready"] is False
-    with pytest.raises(RuntimeError, match=r"\.\./p's build did not pass"):
+    with pytest.raises(A.Unpassed, match=r"\.\./p's build did not pass"):
         A.proved(s, json.loads((s / A.POLICY).read_text()), facts(modules=[], pins={}), tmp_path / "work",
                  ready=lambda q: False)
 
@@ -6455,7 +6682,8 @@ def test_a_seal_replays_the_build_at_the_seal_not_a_swap_a_dependent_makes(tmp_p
         (S / rel).write_text((S / rel).read_text().replace(old, new))
     A.dump(S, A.load(S) | kernel["policy"])
     lib = S / ".lake" / "build" / "lib" / "lean" / "Control"
-    build = lambda d=S: subprocess.run(["lake", "build"], cwd=d, check=True, capture_output=True, env=A.lake_env())
+    def build(d=S):
+        return subprocess.run(["lake", "build"], cwd=d, check=True, capture_output=True, env=A.lake_env())
 
     def stash(dst: Path) -> Path:
         dst.mkdir()

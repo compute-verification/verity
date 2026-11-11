@@ -181,14 +181,15 @@ CONFIGURATIONS = {
 }
 
 
-def priced_card(model: str = "GLM-5.3") -> dict:
+def priced_card(model: str = "GLM-5.3", serving: str = "assumed") -> dict:
     """The model's `serve_tax` card priced from its parts: each part's GPU-seconds a token over a token's at serving's
-    MFU, hashing at the `commitment` card's rate (and at `HASH_RATES` for the range), the tick rule's throughput loss
+    MFU (under `serving="measured"`, at the `serving_rate` card's rate: `figure1.token_seconds`), hashing at the
+    `commitment` card's rate (and at `HASH_RATES` for the range), the tick rule's throughput loss
     (`TICKS`), the pause at a replay block's edge (`EDGE_PAUSE`), the deterministic top-k (`TOPK_SHARE`) and, for the
     batch-invariant comparison, `BATCH_INVARIANT`.  (C)'s is a lower bound: hashing alone."""
-    c = f1.cards(model)
+    c = f1.cards(model, serving=serving)
     sc = f1.slot_cards(model)
-    token_s = 2 * c["partition"].value["served_macs_per_token"] / (c["mfu_serve"].value * c["peak_flops"].value)
+    token_s = f1.token_seconds(c, c["partition"].value["served_macs_per_token"])
     rate = c["hash_rate"].value
 
     def hashed(part: str, nbytes: float, source: str, scale: tuple[float, float, float] = (1, 1, 1)) -> dict:
@@ -235,8 +236,10 @@ def priced_card(model: str = "GLM-5.3") -> dict:
 
     return spot_cards.check({
         "schema": spot_cards.SCHEMA, "slot": "serve_tax", "model": model, "status": "modeled", "provisional": True,
-        "source": "priced from each configuration's parts against a token's GPU-seconds at serving's MFU on the H200's "
-                  "dense FP8 peak (total_cost.priced_card); measured values replace it configuration by configuration",
+        "source": "priced from each configuration's parts against a token's GPU-seconds at "
+                  + ("the serving_rate card's measured tokens a GPU-second" if "serving_rate" in c
+                     else "serving's MFU on the H200's dense FP8 peak")
+                  + " (total_cost.priced_card); measured values replace it configuration by configuration",
         "runs": SERVED_RUNS, "owner": "@proofs",
         "value": {"baseline": "stock vLLM, compiled, on the model's served circuit",
                   "configurations": [entry("tokens", [ticks, edge, topk]),
@@ -530,8 +533,8 @@ def captions(out: dict, scope: str) -> dict[str, str]:
             "least bound. Replay is full-batch: the model's tokens come out bit-exact only in their served batch, so a "
             f"sampled request replays its replay block, one machine's {out['inputs']['window']['value']:g} s, whole "
             f"from its edge, {out['registrations']['machine']['requests']:,.0f} requests at {out['inputs']['replay_factor']['value']:g}× "
-            "serving's busy GPU-seconds (0.97× to 1.02× measured), and a sampled layer of one token its engine step's "
-            "whole batch at that layer.")
+            "serving's busy GPU-seconds (0.97× to 1.02× measured on Moonlight on one H200), and a sampled layer of one "
+            "token its engine step's whole batch at that layer.")
     regs, window = out["registrations"], out["inputs"]["window"]["value"]
     head += (f" A two-stage statement holds one Definition's sampled proof blocks of a sampled request (of (B), a "
              f"sampled layer of one token) or of a registration's: a registration spans the {window:g} s window on one machine "
@@ -631,19 +634,22 @@ def captions(out: dict, scope: str) -> dict[str, str]:
 
 
 def run(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None = None, request: str = "census",
-        workers: int = 1, lean: bool = True) -> dict:
+        workers: int = 1, lean: bool = True, serving: str = "assumed") -> dict:
     """Figure 1's JSON in its total-cost form over the scopes named (default all), planned on `workers` processes
-    (`figure1.processes`), with Lean checking every line's designs unless `lean` is off."""
+    (`figure1.processes`), with Lean checking every line's designs unless `lean` is off.  `serving` is where serving's
+    rate comes from (`figure1.SERVING`): the measured reading's JSON says which rate it read (`serving`), and its serve
+    taxes are still the `serve_tax` card's, priced at the assumed reading until `priced_card` prices one at the
+    measured."""
     with f1.processes(workers, lean) as each:
-        return _run(model_name, scope_names, request, each, lean)
+        return _run(model_name, scope_names, request, each, lean, serving)
 
 
-def _lines(model_name: str, request: str, verify: bool = True) -> tuple:
+def _lines(model_name: str, request: str, verify: bool = True, serving: str = "assumed") -> tuple:
     """The model's cards and, for each configuration it has the cut of, its priced inputs (with each statement's
     verify where `verify` and the model has a `verifier_cost` card), its line (proof blocks a token, fill and marginal
     overhead) and which of its cells' types are computed."""
-    sc = f1.slot_cards(model_name)
-    c = f1.cards(model_name, request)
+    sc = f1.slot_cards(model_name, serving)
+    c = f1.cards(model_name, request, serving)
     cuts = {card["value"]["name"]: card for card in spot_cards.load_all("partition", model_name)}
     confs = {n: conf for n, conf in CONFIGURATIONS.items() if conf.partition is None or conf.partition in cuts}
     inputs = {n: priced(cut(c, cuts[conf.partition]) if conf.partition else c, sc["proof_overhead"])
@@ -663,8 +669,9 @@ def _lines(model_name: str, request: str, verify: bool = True) -> tuple:
     return sc, c, cuts, confs, inputs, lines, computed
 
 
-def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, each, lean: bool) -> dict:
-    sc, c, cuts, confs, inputs, lines, computed = _lines(model_name, request)
+def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, each, lean: bool,
+         serving: str = "assumed") -> dict:
+    sc, c, cuts, confs, inputs, lines, computed = _lines(model_name, request, serving=serving)
     tax = taxes(spot_cards.load("serve_tax", model_name), tuple(confs))
     part, fill, h = lines["tokens"]
     betas = sorted(set(BETAS) | set(c["budgets"].value))
@@ -673,6 +680,9 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
     tokens = c["tokens_per_request"].value
     refs = f1.references(c, model_name, sc.get("references", []))
     notes = f1.reference_notes(sc.get("references", []), refs)
+    if serving == "measured":
+        for panel in PANELS:
+            notes.setdefault(panel, []).append(f1.reading_note(f1.reading(sc, c, part)))
     chosen = [s for s in f1.scopes(c, part) if scope_names is None or s.name in scope_names]
     series: dict[str, list[dict]] = {p: [] for p in PANELS}
     bases, plans = {}, []
@@ -709,7 +719,8 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
                          "machines": registration_gpu_seconds(r, c) / (c["machine_gpus"].value * c["window"].value),
                          "gpu_seconds": registration_gpu_seconds(r, c),
                          "requests": per_gpu_s * registration_gpu_seconds(r, c)} for r, label in REGISTRATIONS.items()}
-    out = {"schema": SCHEMA, "model": model_name, "request": request, "overhead": h, "registrations": registrations,
+    out = ({"serving": f1.reading(sc, c, part)} if serving == "measured" else {}) | {
+           "schema": SCHEMA, "model": model_name, "request": request, "overhead": h, "registrations": registrations,
            "lean": {"exe": plancheck.EXE, "slack": str(plancheck.SLACK), "search": plancheck.SEARCH,
                     "precision": plancheck.TWO_P} if lean else None,
            "overhead_label": sc["proof_overhead"]["value"]["label"], "betas": betas, "budgets": c["budgets"].value,
@@ -825,14 +836,15 @@ def _breakeven(job: tuple) -> tuple[float | None, dict | None]:
 
 
 def breakeven(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None = None, request: str = "census",
-              workers: int = 1, rel: float = 0.01, lean: bool = True) -> dict:
+              workers: int = 1, rel: float = 0.01, lean: bool = True, serving: str = "assumed") -> dict:
     """Each patterns'-form line's break-even on each scope: the marginal overhead at which its bound at β =
     `RATIO_BUDGET` reaches each of the weights (`weights`), the β at which it does at the line's own overhead, and its
     floor, the bound at the least overhead `SPANS` searches.  With `lean`, each has Lean's certificate (`certify`): a
     row's `lean` holds, for its floor and each break-even, the point Lean certifies (`at`, an overhead for `h`), the
     bits it certifies there and which of them and the served bits binds, so its β is an upper bound on the β at which
-    the line's bound reaches the weights, and its overhead a lower bound on the overhead at which it does."""
-    _, c, _, confs, inputs, lines, computed = _lines(model_name, request)
+    the line's bound reaches the weights, and its overhead a lower bound on the overhead at which it does.  `serving`
+    is where serving's rate comes from (`figure1.SERVING`)."""
+    sc, c, _, confs, inputs, lines, computed = _lines(model_name, request, serving=serving)
     targets = weights(c)
     chosen = [s for s in f1.scopes(c, lines["tokens"][0]) if scope_names is None or s.name in scope_names]
     keys = [(n, s) for s in chosen for n, conf in confs.items() if conf.form == "patterns"]
@@ -855,7 +867,8 @@ def breakeven(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None =
                 if cert and cert["at"] is not None:
                     cert["at"] *= oh
         rows.append(row)
-    return {"beta": f1.RATIO_BUDGET, "targets": targets, "rel": rel, "spans": SPANS, "rows": rows,
+    return ({"serving": f1.reading(sc, c, lines["tokens"][0])} if serving == "measured" else {}) | {
+            "beta": f1.RATIO_BUDGET, "targets": targets, "rel": rel, "spans": SPANS, "rows": rows,
             "lean": {"exe": plancheck.EXE, "slack": str(plancheck.SLACK), "search": plancheck.SEARCH,
                      "precision": plancheck.TWO_P, "steps": STEPS} if lean else None}
 
@@ -886,12 +899,14 @@ def breakeven_table(be: dict) -> str:
              _size(r["lean"]["floor"]["y"] if lean else r["floor"])]
             + [cell(r, "h", n, be["spans"]["h"][1] * r["overhead"]) for n in names]
             + [cell(r, "beta", n, be["spans"]["beta"][1]) for n in names] for r in be["rows"]]
-    return "\n".join(" | ".join(x) for x in [head] + rows) + "\n"
+    note = f1.reading_note(be["serving"]) + "\n\n" if "serving" in be else ""
+    return note + "\n".join(" | ".join(x) for x in [head] + rows) + "\n"
 
 
 def at_budgets(out: dict) -> list[dict]:
     """Each line's point at the design card's budgets: the bound, its x, and its share of the scope's served bits
-    (exfiltration, infiltration) or FLOP (skipped work)."""
+    (exfiltration, infiltration) or FLOP (skipped work).  An exfiltration row at the measured reading names the rate it
+    read (`figure1.at_reading`)."""
     rows = []
     for panel, p in out["panels"].items():
         for s in p["series"]:
@@ -901,7 +916,8 @@ def at_budgets(out: dict) -> list[dict]:
                 whole = sc["flop"] if panel == "skipped_work" else sc["served_bits"]
                 rows.append({"panel": panel, "scope": s["scope"], "config": s["config"], "beta": beta, "x": s["x"][i],
                              "bound": s["y"][i], "share": s["y"][i] / whole,
-                             **({"binds": s["binds"][i]} if "binds" in s else {})})
+                             **({"binds": s["binds"][i]} if "binds" in s else {}),
+                             **(f1.at_reading(out.get("serving"), s["y"][i]) if panel == "exfiltration" else {})})
     return rows
 
 
@@ -1059,12 +1075,18 @@ def render(out: dict, scope: str, outdir: Path) -> list[Path]:
     return paths
 
 
+#: `--serving`'s help, here and in figures.py
+SERVING_HELP = ("where serving's rate comes from: rho's fleet utilization (assumed, the default), or the model's "
+                "serving_rate card (measured)")
+
+
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     pc = sub.add_parser("priced-card", help="write the model's priced serve_tax card")
     pc.add_argument("--model", choices=spot_cards.MODELS, default=spot_cards.MODELS[0])
     pc.add_argument("--out", type=Path, required=True)
+    pc.add_argument("--serving", choices=f1.SERVING, default=f1.SERVING[0], help=SERVING_HELP)
     rd = sub.add_parser("render", help="plot Figure 1 from its JSON")
     rd.add_argument("json", type=Path)
     rd.add_argument("--scope", action="append", help="a scope's name, as the JSON's `scopes` has it; default all")
@@ -1075,14 +1097,16 @@ def main(argv=None) -> None:
     be.add_argument("--scope", action="append", help="a scope's name; default all")
     be.add_argument("--workers", type=int, default=1)
     be.add_argument("--no-lean", action="store_true", help="skip Lean's certificate of each break-even")
+    be.add_argument("--serving", choices=f1.SERVING, default=f1.SERVING[0], help=SERVING_HELP)
     args = ap.parse_args(argv)
     if args.cmd == "priced-card":
-        args.out.write_text(json.dumps(priced_card(args.model), indent=1) + "\n")
+        args.out.write_text(json.dumps(priced_card(args.model, args.serving), indent=1) + "\n")
         print(args.out)
         return
     if args.cmd == "breakeven":
         out = breakeven(args.model, tuple(args.scope) if args.scope else None, workers=args.workers,
-                        lean=not args.no_lean)
+                        lean=not args.no_lean, serving=args.serving)
+        args.out = f1.outdir(args.out, args.serving)
         args.out.mkdir(parents=True, exist_ok=True)
         (args.out / "breakeven.json").write_text(json.dumps(out, indent=1, allow_nan=False) + "\n")
         (args.out / "breakeven.txt").write_text(breakeven_table(out))

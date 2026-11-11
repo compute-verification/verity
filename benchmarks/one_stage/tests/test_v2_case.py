@@ -1,13 +1,19 @@
 """v2_case.py: sampled proofs v2's case of a served window from its kept files. The rebuild reads what a served run's
 ``m0/compose.log`` (``fixtures/served-window-m0``, a served H200 run's) records, and the case is written private as
-`composite.py` reads it, or, when a blob has no file, only ``missing.json``, which `composite.py` leaves out."""
+`composite.py` reads it, or, when a blob has no file, only ``missing.json``, which `composite.py` leaves out. `case`
+runs on a small kept window, so it is held to a5's `case_v2` as that is: its public digest is the one the audit staged
+where the window keeps it, else the kept file's own, which it says."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import stat
 import sys
 from pathlib import Path
+
+import pytest
+from test_a5_case_v2 import RP  # noqa: F401 -- the fixture: this suite's `replay` under the name a5's `case_v2` imports
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import composite as C
@@ -48,3 +54,60 @@ def test_a_blob_with_no_file_leaves_only_missing(tmp_path):
     why = json.loads((out / "missing.json").read_text())
     assert why["protocol"] == V.ID and str(gone) in why["why"] and "rebuild failed" in why["why"]
     assert C.case_dirs([out]) == []
+
+
+PUBLIC = hashlib.sha512(b"public").hexdigest()
+
+
+def _window(tmp_path: Path) -> Path:
+    """A kept window as `case` reads it: the served run's ``compose.log`` beside a circuit file and a public file, the
+    verifier's partition, one session, and the v1 case whose evidence names it."""
+    w = tmp_path / "window"
+    s = w / "session-m0" / "sessions" / "a"
+    s.mkdir(parents=True)
+    (s / "session.json").write_text("{}")
+    (s / "rep-0.bin").write_bytes(b"rep")
+    (w / "m0").mkdir()
+    (w / "m0" / "compose.log").write_text(LOG.read_text())
+    (w / "m0" / "circuit.txt").write_text("gates")
+    (w / "m0" / "pub-4.bin").write_bytes(b"public")
+    (w / "partition.json").write_text('{"rule": "r"}')
+    evidence = {"sessions": ["s0"], "verdicts": {"m0": {"accepted": True}}}
+    (w / "case.json").write_text(json.dumps({"commitment": "ab", "params": {"delta": "1/100"},
+                                             "evidence": json.dumps(evidence).encode().hex()}))
+    return w
+
+
+def test_a_window_keeping_no_staged_digest_gets_the_kept_public_files_own_which_the_case_says(tmp_path, RP):
+    """No ``case-v2.json``, or one of an audit that named no public file in its params: the digest is taken after the
+    audit, so the case shows only that the kept files verify, and `how` says which digest it is."""
+    w = _window(tmp_path)
+    v2, how, n = V.case(w, tmp_path / "scratch")
+    pin = V.compose_command(LOG.read_text())["pin"]
+    assert v2["params"] == {"delta": "1/100", "partition": {"rule": "r"},
+                            "proofs": {"circuit": pin, "public": PUBLIC, "registered": None}}
+    assert n == 1 and how == ("circuit file kept; public digest the kept file's own, taken after the audit: the window "
+                              "keeps none from staging")
+    s = w / "session-m0" / "sessions" / "a"
+    assert v2["blobs"] == [str(f) for f in (w / "m0" / "circuit.txt", w / "m0" / "pub-4.bin", s / "session.json",
+                                            s / "rep-0.bin")]
+    e = json.loads(bytes.fromhex(v2["evidence"]))
+    assert "verdicts" not in e and [x["name"] for x in e["proofs"]["sessions"]] == e["sessions"] == ["s0"]
+    (w / "case-v2.json").write_text(json.dumps({"params": {"proofs": {"circuit": pin, "registered": None}}}))
+    assert V.case(w, tmp_path / "scratch") == (v2, how, n)
+
+
+def test_the_case_names_the_public_digest_the_audit_staged_and_refuses_a_kept_file_with_another(tmp_path, RP, capsys):
+    w, out = _window(tmp_path), tmp_path / "v2"
+    kept = w / "case-v2.json"
+    kept.write_text(json.dumps({"params": {"proofs": {"circuit": "cc" * 64, "public": PUBLIC, "registered": None}}}))
+    v2, how, _ = V.case(w, tmp_path / "scratch")
+    assert v2["params"]["proofs"]["public"] == PUBLIC
+    assert how == "circuit file kept; public digest case-v2.json's, taken when the audit staged the file, before the sample"
+    assert V.main(["--window", str(w), "--out", str(out), "--scratch", str(tmp_path / "scratch")]) == 0
+    assert json.loads((out / "params.json").read_text())["proofs"]["public"] == PUBLIC
+    assert json.loads(capsys.readouterr().out.removeprefix("V2CASE "))["files"] == how
+    (w / "m0" / "pub-4.bin").write_bytes(b"public, changed since the audit staged it")
+    with pytest.raises(ValueError, match="not the public file the audit staged before the sample") as x:
+        V.case(w, tmp_path / "scratch")
+    assert str(w / "m0" / "pub-4.bin") in str(x.value) and str(kept) in str(x.value) and PUBLIC[:16] in str(x.value)

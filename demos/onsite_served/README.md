@@ -58,7 +58,7 @@ deploy bindings:
 | `POUS_CMD`, `POUS_ARGS` | PoUS | `memory-challenger.pous`: `host`, `address`, `command`, `key-sha512`; `--rounds` is `[params."verity/pous/p2/v4/run"] challenges`, 320 (ε = 2^-20) |
 | `SERVE_ARGS` (`--remote-verifier`) | PoUB | `bandwidth-verifier.bandwidth`: `address` |
 | `CERTIFIER_FRONT`, `CERTIFIER_CMD` | the network certifier | `network-certifier.certifier`: `gate` (`USER@HOST`) |
-| `WIPE_CMD`, `WIPE_CHALLENGER`, `WIPE_ADDRESS`, `WIPE_COMMAND` | the wipe | `memory-challenger.wipe`: `host`, `address`, `command` |
+| `WIPE_CMD`, `WIPE_CHALLENGER`, `WIPE_ADDRESS`, `WIPE_COMMAND`, `WIPE_KEY_SHA512` | the wipe | `memory-challenger.wipe`: `host`, `address`, `command`, `key-sha512` |
 | `OUT` | the run | `STATE/out`, the served window's public record |
 
 `BANDWIDTH_CMD` has no piece in the tree yet, so the record names PoUB's row missing and composes `pending` while it is.
@@ -88,6 +88,7 @@ key-sha512 = "HEX"
 host = "HOST"
 address = "HOST:PORT"
 command = "COMMAND"
+key-sha512 = "HEX"               # the wipe party's own key, not PoUS's
 
 [bandwidth-verifier.bandwidth]
 address = "HOST:PORT"

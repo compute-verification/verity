@@ -2738,6 +2738,270 @@ def test_a_listed_stray_stays_unowned_and_is_never_resumed_as_infras(tmp_path):
     assert not [p for p, _ in api.posts if p == f"/v1/agents/{stray}/runs"], "never resumed"
 
 
+KEYED = "bc-efefefef-efef-efef-efef-efefefefefef"
+
+
+def linear_teams(tmp_path):
+    """The registry's lanes, each a handle with a Linear team that a cloud agent holds: circuits and vllm with a team of their
+    own, two that share one, one whose name extends vllm's, and kernels, renamed from another name. Three handles are no
+    lane: console (no team, a desktop agent's), dashboard (a team, a desktop agent's) and steward (a cloud agent's, no team)."""
+    reg = json.loads((tmp_path / "registry.json").read_text())
+    for h in reg["handles"]:
+        h.update({"linear": team} if (team := {"circuits": "CIR", "vllm": "VLLM"}.get(h["handle"])) else {})
+    reg["handles"] += [
+        {"handle": "compute-accounting", "holder": f"its coordinator ({W4_})", "linear": "CMP"},
+        {"handle": "compute-research", "holder": f"its coordinator ({W5_})", "linear": "CMP"},
+        {"handle": "vllm-serve", "holder": f"its coordinator ({W6_})", "linear": "SRV"},
+        {"handle": "kernels", "holder": f"its coordinator ({W3_})", "linear": "HASH", "charter": "renamed from @hash"},
+        {"handle": "dashboard", "holder": "a desktop agent (4d92fa93-101a-42e1-8282-d4a998892829)", "linear": "CON"},
+        {"handle": "steward", "holder": f"its agent ({W2_})"}]
+    (tmp_path / "registry.json").write_text(json.dumps(reg))
+    return tmp_path / "registry.json"
+
+
+def sends(roots, clock, w, agent, rid, **kw):
+    """A `research run` sent by `agent` ends a minute on, and the watch reads the nodes 5 min later."""
+    clock.t += 60
+    node_run(roots["vy-nebius-1"], rid, clock.t, by=f"https://cursor.com/agents/{agent}", **kw)
+    clock.t += 5 * 60
+    w.sweep(lambda r: None)
+
+
+def placed_files(tmp_path):
+    return {p.name: json.loads(p.read_text()) for p in (tmp_path / "workers.d").glob("placed-*.json")}
+
+
+def by_key(handle, key, **named):
+    return handle, {"placed_by": "name", "issue": key, **named}
+
+
+def test_an_issue_key_names_a_lane_only_at_a_names_start_and_only_when_one_lane_has_its_team(tmp_path):
+    coordinators(tmp_path, [], {})
+    reg = linear_teams(tmp_path)
+    assert W.name_lane("VLLM-97 KFLAGS: the committer's flag, byte comparison", reg) == by_key("vllm", "VLLM-97")
+    assert W.name_lane("CIR-206: one calibration", reg) == by_key("circuits", "CIR-206")
+    assert W.name_lane("VLLM-7", reg) == by_key("vllm", "VLLM-7")
+    for name in ("KFORK: the forked committer (VLLM-61)", "graph2 CIR-489 fixes", "[VLLM-97] KFLAGS", " VLLM-97 KFLAGS",
+                 "VLLM-97x KFLAGS", "VLLM97 KFLAGS", "VLLM- KFLAGS", "XVLLM-97 KFLAGS", "Fix the audit", ""):
+        assert W.name_lane(name, reg) is None, f"{name!r} starts with no issue key of a team a lane has"
+    assert W.name_lane("CMP-377 HARDNESS-SPEC", reg) is None, "two lanes file under this team: never a guess"
+    assert W.name_lane("NOPE-12 a team no handle has", reg) is None
+    assert W.name_lane("CON-12 the goals page", reg) is None, "its team's handle is a desktop agent's: no lane"
+    assert W.name_lane("VLLM-97 KFLAGS", None) is None and W.name_lane("VLLM-97 KFLAGS", tmp_path / "absent.json") is None
+
+
+def test_a_key_of_a_team_two_lanes_share_places_only_when_the_name_also_names_exactly_one_of_them(tmp_path):
+    coordinators(tmp_path, [], {})
+    reg = linear_teams(tmp_path)
+    assert W.name_lane("CMP-377 HARDNESS-SPEC (compute-research)", reg) == by_key(
+        "compute-research", "CMP-377", named="compute-research")
+    assert W.name_lane("CMP-12 compute-accounting: the table", reg) == by_key(
+        "compute-accounting", "CMP-12", named="compute-accounting")
+    for name in ("CMP-12 compute-research answers compute-accounting", "CMP-12 compute-researcher", "CMP-12 compute-research-x",
+                 "CMP-12 xcompute-research", "CMP-12 pre-compute-research", "CMP-12 vllm: its rows", "CMP-12 Compute-Research"):
+        assert W.name_lane(name, reg) is None, f"{name!r} names both, or neither as a whole word"
+    for name in ("VLLM-97 compute-research: its rows", "VLLM-97 vllm: its rows"):
+        assert W.name_lane(name, reg) == by_key("vllm", "VLLM-97"), \
+            "a team of one lane's own needs no second word, and a handle further in changes nothing"
+
+
+def test_a_leading_handle_names_its_lane_whole_the_longest_first_and_only_a_lane_that_runs_workers(tmp_path):
+    coordinators(tmp_path, [], {})
+    reg = linear_teams(tmp_path)
+    led = {"placed_by": "handle"}
+    assert W.placing(reg) == {"circuits": "CIR", "vllm": "VLLM", "compute-accounting": "CMP", "compute-research": "CMP",
+                              "vllm-serve": "SRV", "kernels": "HASH"}
+    for name, handle in (("vllm-longrow-s1b: one served Count staged and measured", "vllm"), ("compute-research: x", "compute-research"),
+                         ("compute-accounting-y", "compute-accounting"), ("vllm: x", "vllm"), ("vllm/x", "vllm"), ("vllm x", "vllm"),
+                         ("vllm\tx", "vllm"), ("vllm-97 KFLAGS", "vllm"), ("vllm-metrics: the flat list for CIR-389", "vllm"),
+                         ("vllm-serve-rows: x", "vllm-serve"), ("vllm-serve: x", "vllm-serve"), ("vllm-server: x", "vllm"),
+                         ("kernels-fold: x", "kernels")):
+        assert W.name_lane(name, reg) == (handle, led), name
+    for name in ("computex: z", "compute: z", "compute-x: z", "vllm", "vllmx: y", "vllm_x", "vllm.x", "Vllm-x", "VLLM: x",
+                 " vllm-x", "the vllm-x", "review-1: a reviewer"):
+        assert W.name_lane(name, reg) is None, f"{name!r} starts with no whole handle"
+    assert W.name_lane("hash-fold: x", reg) is None, "a retired name is no handle, whatever was renamed from it"
+    for name in ("console-panels: x", "dashboard-goals: x", "steward-sync: x"):
+        assert W.name_lane(name, reg) is None, f"{name!r} starts with a handle that is no lane"
+    assert W.name_lane("CIR-206 vllm-rows: x", reg) == by_key("circuits", "CIR-206"), "an issue key at the start wins"
+    assert W.name_lane("vllm-longrow-s1b: x", None) is None
+
+
+def test_an_unowned_sender_named_after_one_lanes_issue_is_placed_as_that_lanes_worker(tmp_path):
+    """A worker its coordinator never registered, whose brief names no coordinator, went to infra to place by hand at its
+    first run's end, though its name began with its lane's issue. The watch places it: its workers.d entry, marked as
+    inferred, and that run recorded for the lane with how it was found. From then on it is any worker of that lane."""
+    name = "VLLM-97 KFLAGS: the committer's flag, byte comparison"
+    api, clock, w, sh, roots = nodes_setup(tmp_path)
+    linear_teams(tmp_path)
+    api.workers[KEYED] = worker("IDLE", W.iso(T0 - 600), name)
+    api.convs[KEYED] = [("user_message", "You are KFLAGS. Read the note and go on.")]
+    w.sweep(lambda r: None)
+    sends(roots, clock, w, KEYED, "r20261105-110000-0001", state="failed", rc=1)
+    (rec,) = ended(tmp_path)
+    assert {k: rec.get(k) for k in ("agent", "name", "handle", "role", "lane", "placed_by", "issue", "sender_status")} == {
+        "agent": KEYED, "name": name, "handle": "vllm", "role": "worker", "lane": "vllm", "placed_by": "name",
+        "issue": "VLLM-97", "sender_status": "IDLE"}
+    assert placed_files(tmp_path) == {f"placed-{KEYED}.json": {
+        "agent_id": KEYED, "lane": "vllm", "role": "worker", "name": name, "placed_by": "name", "issue": "VLLM-97"}}
+    assert api.gets.count(f"/v1/agents/{KEYED}") == 1, "one read of a sender the watch meets for the first time"
+    assert KEYED not in w.children and w.workers[KEYED]["handle"] == "vllm" and KEYED in w.awaiting, \
+        "never a stray: its lane's worker, whose coordinator resumes it"
+    sends(roots, clock, w, KEYED, "r20261105-120000-0002")
+    later = ended(tmp_path)[-1]
+    assert (later["run"], later["handle"], later["role"], later["lane"]) == ("r20261105-120000-0002", "vllm", "worker", "vllm")
+    assert "placed_by" not in later and len(ended(tmp_path)) == 2, "placed once: its later runs are a worker's like any other"
+    restarted = W.Watch(api, tmp_path / "events.jsonl", clock, registry=tmp_path / "registry.json", routes=tmp_path / "routes.d",
+                        notes=tmp_path / "notes", nodes=tmp_path / "nodes.json", sh=sh)
+    sends(roots, clock, restarted, KEYED, "r20261105-130000-0003")
+    assert [(r["handle"], r["role"], r.get("placed_by")) for r in ended(tmp_path)][-1] == ("vllm", "worker", None)
+    assert not [r for r in ended(tmp_path) if r["role"] == "unknown"], "infra is never rung for it"
+
+
+def test_a_name_that_names_no_one_lane_places_nobody_and_infra_is_rung_as_before(tmp_path):
+    """No guess: a name with no issue key at its start, a key of a team no handle has, a key of a team two lanes share, a
+    name that starts with part of a handle, with a retired name, or with a handle that is no lane leave the sender unowned,
+    its runs one record for infra and nothing written."""
+    senders = {"bc-a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1": "KFORK: the forked committer (VLLM-61)",
+               "bc-a2a2a2a2-a2a2-a2a2-a2a2-a2a2a2a2a2a2": "NOPE-12 a team no handle has",
+               "bc-a3a3a3a3-a3a3-a3a3-a3a3-a3a3a3a3a3a3": "CMP-377 HARDNESS-SPEC",
+               "bc-a4a4a4a4-a4a4-a4a4-a4a4-a4a4a4a4a4a4": "computex: z",
+               "bc-a5a5a5a5-a5a5-a5a5-a5a5-a5a5a5a5a5a5": "hash-fold: the retired name",
+               "bc-a6a6a6a6-a6a6-a6a6-a6a6-a6a6a6a6a6a6": "dashboard-goals: a desktop agent's handle"}
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    linear_teams(tmp_path)
+    for agent, name in senders.items():
+        api.workers[agent] = worker("IDLE", W.iso(T0 - 600), name)
+    w.sweep(lambda r: None)
+    clock.t += 60
+    for i, agent in enumerate(senders):
+        node_run(roots["vy-nebius-1"], f"r20261105-11000{i}-000{i}", clock.t, by=f"https://cursor.com/agents/{agent}")
+    clock.t += 5 * 60
+    w.sweep(lambda r: None)
+    (rec,) = ended(tmp_path)
+    assert (rec["role"], rec["handle"], rec["count"]) == ("unknown", None, 6) and "placed_by" not in rec
+    assert rec["senders"] == sorted(f"https://cursor.com/agents/{a}" for a in senders)
+    assert all(w.children[a]["owner"] == W.UNOWNED for a in senders) and not w.awaiting
+    assert placed_files(tmp_path) == {}
+    clock.t += 60
+    w.sweep(lambda r: None)
+    sends(roots, clock, w, next(iter(senders)), "r20261105-120000-0009")
+    assert [r["role"] for r in ended(tmp_path)] == ["unknown", "unknown"] and placed_files(tmp_path) == {}, \
+        "nor by the name the watch has read since"
+
+
+def test_an_unowned_sender_whose_name_starts_with_its_lanes_handle_is_placed_as_that_lanes_worker(tmp_path):
+    """A lane that names its workers with its handle first had each of them go to infra to place by hand. The handle places
+    them as an issue key does, and the entry and the record say which it was; a key of a shared team places by the one
+    sharing lane the name names."""
+    led, shared = KEYED, "bc-a7a7a7a7-a7a7-a7a7-a7a7-a7a7a7a7a7a7"
+    names = {led: "vllm-longrow-s1b: one served Count staged and measured", shared: "CMP-377 HARDNESS-SPEC (compute-research)"}
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    linear_teams(tmp_path)
+    for agent, name in names.items():
+        api.workers[agent] = worker("IDLE", W.iso(T0 - 600), name)
+    w.sweep(lambda r: None)
+    sends(roots, clock, w, led, "r20261105-110000-0001", state="failed", rc=1)
+    sends(roots, clock, w, shared, "r20261105-110000-0002")
+    first, second = ended(tmp_path)
+    assert {k: first.get(k) for k in ("agent", "name", "handle", "role", "lane", "placed_by", "issue", "named")} == {
+        "agent": led, "name": names[led], "handle": "vllm", "role": "worker", "lane": "vllm", "placed_by": "handle",
+        "issue": None, "named": None}
+    assert {k: second.get(k) for k in ("agent", "handle", "role", "lane", "placed_by", "issue", "named")} == {
+        "agent": shared, "handle": "compute-research", "role": "worker", "lane": "compute-research", "placed_by": "name",
+        "issue": "CMP-377", "named": "compute-research"}
+    assert placed_files(tmp_path) == {
+        f"placed-{led}.json": {"agent_id": led, "lane": "vllm", "role": "worker", "name": names[led], "placed_by": "handle"},
+        f"placed-{shared}.json": {"agent_id": shared, "lane": "compute-research", "role": "worker", "name": names[shared],
+                                  "placed_by": "name", "issue": "CMP-377", "named": "compute-research"}}
+    assert w.workers[led]["handle"] == "vllm" and w.workers[shared]["handle"] == "compute-research" and not w.children
+    sends(roots, clock, w, led, "r20261105-120000-0003")
+    later = ended(tmp_path)[-1]
+    assert (later["agent"], later["handle"], later["role"], later.get("placed_by")) == (led, "vllm", "worker", None)
+    assert not [r for r in ended(tmp_path) if r["role"] == "unknown"], "infra is never rung for either"
+
+
+def test_a_sender_whose_name_cant_be_read_is_infras_until_the_watch_has_its_name(tmp_path, capsys):
+    """A failed read places nobody and is said in the log; the sender is a stray, read each sweep as any stray is, and the
+    name that read gives places it at its next run's end, with no read of its own."""
+    name = "VLLM-97 KFLAGS: the committer's flag, byte comparison"
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    linear_teams(tmp_path)
+    api.workers[KEYED] = worker("ACTIVE", W.iso(T0 - 600), name)
+    down, get = [True], api.get
+
+    def flaky(path, **params):
+        if down[0] and path == f"/v1/agents/{KEYED}":
+            api.gets.append(path)
+            raise TimeoutError("reads are past this sweep's budget")
+        return get(path, **params)
+    api.get = flaky
+    w.sweep(lambda r: None)
+    sends(roots, clock, w, KEYED, "r20261105-110000-0001", state="failed", rc=1)
+    (rec,) = ended(tmp_path)
+    assert rec["role"] == "unknown" and rec["senders"] == [f"https://cursor.com/agents/{KEYED}"]
+    assert w.children[KEYED]["owner"] == W.UNOWNED and placed_files(tmp_path) == {}
+    assert f"the name of {KEYED} was not read (TimeoutError: reads are past this sweep's budget)" in capsys.readouterr().err
+    reads = api.gets.count(f"/v1/agents/{KEYED}")
+    sends(roots, clock, w, KEYED, "r20261105-110000-0002")
+    assert [r["role"] for r in ended(tmp_path)] == ["unknown", "unknown"], "still unread: still infra's"
+    assert api.gets.count(f"/v1/agents/{KEYED}") == reads + 1, "the sweep's read of a stray, and no second one for its name"
+    down[0] = False
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert w.workers[KEYED]["name"] == name and w.workers[KEYED]["handle"] == W.UNOWNED, "read as a stray, infra's so far"
+    reads = api.gets.count(f"/v1/agents/{KEYED}")
+    clock.t += 5 * 60
+    node_run(roots["vy-nebius-1"], "r20261105-120000-0003", clock.t, by=f"https://cursor.com/agents/{KEYED}", rc=2, state="failed")
+    w.run_ends(w.coords, clock.t)
+    assert api.gets.count(f"/v1/agents/{KEYED}") == reads, "placed by the name the watch already has"
+    rec = ended(tmp_path)[-1]
+    assert (rec["handle"], rec["role"], rec["lane"], rec["placed_by"], rec["issue"]) == ("vllm", "worker", "vllm", "name", "VLLM-97")
+    assert KEYED not in w.children and w.workers[KEYED]["handle"] == "vllm" and list(placed_files(tmp_path)) == [
+        f"placed-{KEYED}.json"]
+
+
+def test_a_coordinators_own_entry_always_wins_over_one_the_watch_inferred_from_a_name(tmp_path):
+    """A sender its coordinator registered is never placed by its name, whatever the name says; and an entry a coordinator
+    writes after the watch placed a sender moves it, whichever file sorts first."""
+    name = "VLLM-97 KFLAGS: the committer's flag, byte comparison"
+    (tmp_path / "workers.d").mkdir()
+    (tmp_path / "workers.d" / f"{W1_}.json").write_text(json.dumps({"agent_id": W1_, "lane": "circuits", "launched_by": CO}))
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    linear_teams(tmp_path)
+    api.workers[W1_] = api.workers[KEYED] = worker("IDLE", W.iso(T0 - 600), name)
+    w.sweep(lambda r: None)
+    sends(roots, clock, w, W1_, "r20261105-110000-0001")
+    sends(roots, clock, w, KEYED, "r20261105-110000-0002")
+    assert [(r["agent"], r["handle"], r["role"], r.get("placed_by")) for r in ended(tmp_path)] == [
+        (W1_, "circuits", "worker", None), (KEYED, "vllm", "worker", "name")]
+    assert list(placed_files(tmp_path)) == [f"placed-{KEYED}.json"], "nothing is written for a registered sender"
+    (tmp_path / "workers.d" / f"zz-{KEYED}.json").write_text(json.dumps({"agent_id": KEYED, "lane": "circuits", "launched_by": CO}))
+    got = W.workers(None, tmp_path / "workers.d", tmp_path / "registry.json", w.coords, clock.t)[KEYED]
+    assert (got["lane"], got["handle"], got["parent"]) == ("circuits", "circuits", CO)
+    sends(roots, clock, w, KEYED, "r20261105-120000-0003")
+    rec = ended(tmp_path)[-1]
+    assert (rec["agent"], rec["handle"], rec["lane"], rec["role"], rec.get("placed_by")) == (KEYED, "circuits", "circuits", "worker", None)
+    assert w.workers[KEYED]["handle"] == "circuits" and w.workers[KEYED]["parent"] == CO
+
+
+def test_a_listed_sender_is_placed_by_the_name_the_list_gives_and_owned_by_its_lane(tmp_path):
+    """An agent the list has is placed with no read of its own; it gets an owner, as one a workers.d entry names does."""
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    linear_teams(tmp_path)
+    api._agents.append({"id": KEYED, "name": "CIR-206 CCALONE: one calibration", "status": "IDLE", "latestRunId": "run-s",
+                        "updatedAt": W.iso(T0 - 1800)})
+    api._runs["run-s"] = dict(FINISHED)
+    api.convs[KEYED] = [("user_message", "Do the thing.")]
+    w.sweep(lambda r: None)
+    sends(roots, clock, w, KEYED, "r20261105-110000-0001")
+    (rec,) = ended(tmp_path)
+    assert (rec["handle"], rec["role"], rec["listed"], rec["placed_by"], rec["issue"]) == ("circuits", "worker", True, "name", "CIR-206")
+    assert f"/v1/agents/{KEYED}" not in api.gets and w.owners[KEYED] == "circuits" and KEYED not in w.workers
+    sends(roots, clock, w, KEYED, "r20261105-120000-0002")
+    assert [(r["handle"], r["role"], r.get("placed_by")) for r in ended(tmp_path)][-1] == ("circuits", "worker", None)
+
+
 def test_a_relaunched_worker_routes_as_its_lanes_worker_and_the_watch_resumes_it(tmp_path):
     """A relaunched worker is an agent the list has, so `watch_workers` drops it from the workers it reads; its runs
     resolved as nobody's. Its workers.d entry (launched by its coordinator) makes it its lane's worker: its run's end routes to

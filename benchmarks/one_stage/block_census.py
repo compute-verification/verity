@@ -62,10 +62,14 @@ def misfit(e: dict) -> str | None:
 
 def slots(spec: str, units: list[dict]) -> list[list[list[dict]]]:
     """The slots of a split of row ``spec`` over its sized units (``units``, the row's unit templates past itself): each a
-    list of options coarse to fine, an option the units it takes."""
+    list of options coarse to fine, an option the units it takes.  A ``PARTS`` row's split is its ``PARTS`` cut when every part
+    has units, else its ``FINAL`` cut (the norm whole: the census names no op_path to tell a layer's norm from the final one)."""
     base = spec_base(spec)
     if base in ST.PARTS:
-        return [[[u] for u in units if spec_base(u["spec"]) == p[0]] for p in ST.PARTS[base]]
+        for c in (ST.PARTS[base], ST.FINAL.get(base, ())):
+            got = [[[u] for u in units if spec_base(u["spec"]) == p[0]] for p in c]
+            if all(got):
+                return got
     if base in ST.CUT or base in ST.CHAINS or base in ST.STAGES:
         return [[[u]] for u in units]
     if base in ST.KCHUNKS:

@@ -435,13 +435,13 @@ def _toy_edge_request(LP: int, C: int, E: int, last: bool, checks: bool = False)
     return d.bind(LP=LP, C=C, E=E, LAST=last, CHK=int(checks))
 
 
-def _edge_wl(units: dict, edge: W.Edge) -> W.WorkloadProgram:
+def _edge_wl(units: dict, edge: W.Edge, **kw) -> W.WorkloadProgram:
     reqs = []
     for i, shape in units.items():
         fn = _toy_edge_request(*shape)
         c = W.request_component(encode_program(Program(fn)), REGISTRY, [(n, repr(t)) for n, t in fn.signature()[0]])
         reqs.append(W.WorkloadRequest(f"r{i}", i, shape[0], 1, 0, c, T=0))
-    return W.WorkloadProgram(reqs, lag=0, edge=edge)
+    return W.WorkloadProgram(reqs, lag=0, edge=edge, **kw)
 
 
 def _groups(E: int, LP: int = 3) -> tuple:
