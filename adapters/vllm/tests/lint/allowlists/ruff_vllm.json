@@ -2468,7 +2468,6 @@
     {"file": "verity_vllm/program/mla_capture.py", "kind": "T201", "symbol": "check_bits", "detail": "`print` found"},
     {"file": "verity_vllm/program/mla_capture.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 2},
     {"file": "verity_vllm/program/mla_capture.py", "kind": "T201", "symbol": "produce", "detail": "`print` found"},
-    {"file": "verity_vllm/program/model.py", "kind": "E741", "symbol": "mla_layer_weights_type", "detail": "Ambiguous variable name: `I`", "count": 2},
     {"file": "verity_vllm/program/moe_difftest.py", "kind": "E741", "symbol": "production", "detail": "Ambiguous variable name: `I`"},
     {"file": "verity_vllm/program/predict/aot.py", "kind": "B023", "symbol": "_predict_rank", "detail": "Function definition does not bind loop variable `LP`"},
     {"file": "verity_vllm/program/predict/aot.py", "kind": "B023", "symbol": "_predict_rank", "detail": "Function definition does not bind loop variable `T`"},

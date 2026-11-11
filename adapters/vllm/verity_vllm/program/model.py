@@ -368,22 +368,22 @@ def mla_layer_weights_type(C: dict[str, Any], *, dense: bool) -> RecordType:
     fields += linear("o_w", H, NH * DV)
     fields += [("ln2", Array(H, BF16))]
     if dense:
-        I = int(C["I_DENSE"])
-        fields += linear("gate_up_w", 2 * I, H)
-        fields += linear("down_w", H, I)
+        inter = int(C["I_DENSE"])
+        fields += linear("gate_up_w", 2 * inter, H)
+        fields += linear("down_w", H, inter)
         return RecordType(*fields)
-    E, I, S = int(C["NUM_EXPERTS"]), int(C["I"]), int(C["SHARED_EXPERTS"])
+    E, inter, S = int(C["NUM_EXPERTS"]), int(C["I"]), int(C["SHARED_EXPERTS"])
     fields += [("gate_w", mat(E, H, BF16 if G else F32)), ("gate_bias", Array(E, F32))]
-    fields += linear("sh_gate_up_w", 2 * I * S, H)
-    fields += linear("sh_down_w", H, I * S)
+    fields += linear("sh_gate_up_w", 2 * inter * S, H)
+    fields += linear("sh_down_w", H, inter * S)
     if G:
-        g = fp8_moe_block(G, I, H)
-        fields += [("w13", Array(E, mat(2 * I, H, E4M3))),
-                   ("w13_ws", Array(E, mat(-(-(2 * I) // g), -(-H // g), F32))),
-                   ("w2", Array(E, mat(H, I, E4M3))),
-                   ("w2_ws", Array(E, mat(-(-H // g), -(-I // g), F32)))]
+        g = fp8_moe_block(G, inter, H)
+        fields += [("w13", Array(E, mat(2 * inter, H, E4M3))),
+                   ("w13_ws", Array(E, mat(-(-(2 * inter) // g), -(-H // g), F32))),
+                   ("w2", Array(E, mat(H, inter, E4M3))),
+                   ("w2_ws", Array(E, mat(-(-H // g), -(-inter // g), F32)))]
     else:
-        fields += [("w13", Array(E, mat(2 * I, H))), ("w2", Array(E, mat(H, I)))]
+        fields += [("w13", Array(E, mat(2 * inter, H))), ("w2", Array(E, mat(H, inter)))]
     return RecordType(*fields)
 
 
