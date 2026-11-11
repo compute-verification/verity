@@ -106,3 +106,12 @@ name = "challenger-publish"
 argv = ["bash", "{dir}/challenger/publish.sh", "--every", "300"]
 env_files = ["/root/.config/verity/r2.env"]
 env = { VY_CHALLENGER_STATE = "{dir}/challenger/state", RESEARCH_STORE = "/root/watchers-challenger-store" }
+
+# the labels pack, rebuilt and uploaded hourly (research data labels-pack): every assertion of the store's labels/ as one
+# tarball at a fixed key, which a labels sync that lacks most of them takes in one request. Its store is on the pod's own disk,
+# as the preflight probe's is; after a reset its first pass refills it from the pack it uploaded last
+[[loop]]
+name = "labels-pack"
+argv = ["python3.12", "-s", "-m", "research", "data", "labels-pack", "--every", "3600"]
+env_files = ["/root/.config/verity/r2.env"]
+env = { RESEARCH_STORE = "/root/watchers-labels-pack-store" }
