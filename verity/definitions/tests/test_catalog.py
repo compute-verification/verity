@@ -30,9 +30,9 @@ repo = Path(sys.argv[1])
 print(json.dumps({
     "ids": sorted(registry.defs),
     "errors": errors,
-    "core": sorted(m for m in sys.modules if m.startswith("verity.core")),
+    "core": sorted(m for m in sys.modules if m.startswith("verity.protocols")),
     "integration": sorted(m for m, mod in list(sys.modules.items())
-                          if Path(getattr(mod, "__file__", None) or "/").resolve().is_relative_to(repo / "integrations")),
+                          if Path(getattr(mod, "__file__", None) or "/").resolve().is_relative_to(repo / "adapters")),
 }))
 """
 
