@@ -42,7 +42,7 @@ WIDTHS = (8, 16, 32, 64)
 MEASURED_X = 10.66
 
 
-def planes(N, even=False):
+def planes(N: int, even: bool = False) -> np.ndarray:
     """U's plane weights for U on ±1..±N: (1, 2, …, N/2, N + 1); `even` doubles the first and drops the odd top."""
     p = N.bit_length()
     w = [1 << j for j in range(p - 1)] + [N + 1]
@@ -54,21 +54,21 @@ def planes(N, even=False):
 class NarrowBlock(CellGrid):
     """checked_strip.py's CellGrid with U = −N + β·w, N the half-width the planes span."""
 
-    def __init__(self, design, n, k, n2, r, L, w):
+    def __init__(self, design: str, n: int, k: int, n2: int, r: int, L: int, w: np.ndarray) -> None:
         super().__init__(design, n, k, n2, r, L, w=w)
         self.off = int(np.sum(w)) // 2
 
-    def fields(self, Z):
+    def fields(self, Z: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         U, c, b, z = super().fields(Z)
         return U + 64 - self.off, c, b, z
 
 
-def sample_u(rng, n, r, w):
+def sample_u(rng: np.random.Generator, n: int, r: int, w: np.ndarray) -> np.ndarray:
     beta = rng.integers(0, 2, (n, r, len(w)))
     return -(int(np.sum(w)) // 2) + beta @ w
 
 
-def word_routes_p(kk, x, p):
+def word_routes_p(kk: int, x: float, p: int) -> list[tuple[float, float]]:
     m = n_digits((kk // 32) * -128, (kk // 32) * 127)
     routes = [(-(kk // 32), (1 + p) * x * (kk // 32))]
     if m > 1:
@@ -76,7 +76,7 @@ def word_routes_p(kk, x, p):
     return routes + [o_routes("co32c", kk)["scalar"](x)]
 
 
-def weighted_best(fold, x, p, mname):
+def weighted_best(fold: float, x: float | None, p: int, mname: str) -> float:
     h = c_ = 0.0
     for _, kk, nn in TS_SHAPES[mname]:
         th, tb = ts_best("co32c", kk, nn, fold, word_routes_p(kk, x, p) if x else [])
@@ -84,7 +84,7 @@ def weighted_best(fold, x, p, mname):
     return h / c_ - 1
 
 
-def breakeven(fold, p, mname):
+def breakeven(fold: float, p: int, mname: str) -> float:
     """The least x (to 0.01) at which no bit-sliced route gains over the cheater that does every IMMA."""
     base = weighted_best(fold, None, p, mname)
     lo, hi = 0.0, 64.0
@@ -97,7 +97,7 @@ def breakeven(fold, p, mname):
     return hi
 
 
-def main():
+def main() -> None:
     checks = Checks()
     rng = np.random.default_rng(20261017)
     out = {}
