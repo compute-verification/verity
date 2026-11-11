@@ -55,7 +55,7 @@ def fa2_swapped(max_seqlen_q: int, H: int, Hk: int, head_dim: int, window_left: 
     UN-swapped kernel (b*H slabs of 1 row); a mirror of `max_seqlen_q == 1 and H > Hk` alone would declare the swapped geometry there and
     the kernel would refuse the launch (arm check b*h <= vt.H fails: verity_tap_skipped++ -> 'skipped by the kernel' -> X-03 COMMIT FAIL, never
     a wrong binding).  This mirrors the kernel's own rule so the declared (HB, M) is the launched one."""
-    return (int(max_seqlen_q) == 1 and H > Hk and int(window_left) < 0 and int(window_right) < 0 and float(dropout_p) == 0.0
+    return (int(max_seqlen_q) == 1 and Hk < H and int(window_left) < 0 and int(window_right) < 0 and float(dropout_p) == 0.0
             and head_dim % 8 == 0 and alibi_slopes is None)
 
 

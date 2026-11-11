@@ -192,11 +192,8 @@ class TPPartialSource:
         n_moe_out = 0
         for n, m in self.modules:
             cls = type(m).__name__
-            isz = 2
-            try:
-                isz = next(m.parameters()).element_size()
-            except StopIteration:
-                pass
+            first = next(m.parameters(), None)
+            isz = first.element_size() if first is not None else 2
             if cls == LC.ROW_LINEAR:
                 per_token += int(getattr(m, "output_size", 0) or 0) * isz
             elif cls == LC.EMBEDDING:
@@ -515,15 +512,15 @@ class TPPartialSource:
             res["verdict"], res["why"] = "FAIL", f"no oracle records {recp}"
             return res
         by_step: dict[int, list[dict]] = {}
-        for l in recp.open():
-            if l.strip():
-                x = json.loads(l)
+        for line in recp.open():
+            if line.strip():
+                x = json.loads(line)
                 by_step.setdefault(int(x["step"]), []).append(x)
         recorded: dict[int, dict[str, dict]] = {}
         if (wp := cap / OW.witness_file(self.rank)).exists():
-            for l in wp.open():
-                if l.strip():
-                    x = json.loads(l)
+            for line in wp.open():
+                if line.strip():
+                    x = json.loads(line)
                     w = recorded.setdefault(int(x["step"]), {}).setdefault(x["module"], {"k": int(x["k"]), "sha256": {}})
                     w["sha256"][x["member"]] = x["sha256"]
         received = set(self.received_site_names())
@@ -685,27 +682,27 @@ def late_read_check(com: Any, rc: Any, rank: int) -> dict[str, Any]:
         if not outs:
             continue
         steps += 1
-        last = max(L for L, _n in outs)
-        for L, n in outs:
-            nxt = n.rsplit(".layers.", 1)[0] + (f".layers.{L + 1}.input_layernorm/0" if L < last else ".norm/0")
+        last = max(layer for layer, _n in outs)
+        for layer, n in outs:
+            nxt = n.rsplit(".layers.", 1)[0] + (f".layers.{layer + 1}.input_layernorm/0" if layer < last else ".norm/0")
             try:
                 a = _committed(rd, step, metas.get(n))
                 b = _committed(rd, step, metas.get(nxt))
             except OpeningNotVerified as e:
                 not_verified += 1
                 if len(pairs) < 240:
-                    pairs.append({"step": step, "layer": L, "out": n, "next_norm": nxt, "not_verified": str(e)[:200]})
+                    pairs.append({"step": step, "layer": layer, "out": n, "next_norm": nxt, "not_verified": str(e)[:200]})
                 continue
             if a is None or b is None:
                 missing += 1
                 if len(pairs) < 240:
-                    pairs.append({"step": step, "layer": L, "out": n, "next_norm": nxt, "missing": [x for x, v in (("out", a), ("next_norm", b)) if v is None]})
+                    pairs.append({"step": step, "layer": layer, "out": n, "next_norm": nxt, "missing": [x for x, v in (("out", a), ("next_norm", b)) if v is None]})
                 continue
             compared += 1
             eq = a == b
             equal += int(eq)
             if eq or step < 2 or len(pairs) < 96:
-                pairs.append({"step": step, "layer": L, "out": n, "next_norm": nxt, "out_sha": hashlib.sha256(a).hexdigest()[:16],
+                pairs.append({"step": step, "layer": layer, "out": n, "next_norm": nxt, "out_sha": hashlib.sha256(a).hexdigest()[:16],
                               "next_norm_sha": hashlib.sha256(b).hexdigest()[:16], "nbytes": len(a), "equal": eq})
     # a dense TP workload (Llama: no fused-MoE `/out` member in any step) has nothing for this detector to compare -- record NOT
     # APPLICABLE (result None, applicable False) rather than a False that reads as a detected late read; on a MoE workload the rule is
