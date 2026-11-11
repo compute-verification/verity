@@ -73,7 +73,7 @@ import tomllib
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
-from math import ceil, inf, log, sqrt
+from math import inf, log, sqrt
 from multiprocessing import get_context
 from pathlib import Path
 from typing import Callable, Iterator, Sequence
@@ -82,8 +82,7 @@ import cards as spot_cards
 from verity.protocols.reporting import PERIODS
 from verity.protocols.spot import plancheck
 from verity.protocols.spot.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
-                                                           two_stage_design)
-from verity.circuits.partition_v2 import unit_class
+                                                           two_stage_design, two_stage_strata)
 
 HERE = Path(__file__).resolve().parent
 ROOT = Path(__file__).resolve().parents[2]
@@ -515,15 +514,9 @@ def lean_check(points: list[tuple[Model, str, str, dict]]) -> list[tuple[bool | 
     return out
 
 
-def _size_class(bits: float) -> int:
-    if (w := unit_class(ceil(bits))) is None:
-        raise ValueError(f"a proof block of {bits} bits fits no public size class")
-    return w
-
-
-def split_cells(cells: Sequence[Cell], merged: int) -> list[Cell]:
-    """The cells in a two-stage design's strata: the size classes up to `merged` in stratum 0, each wider one its own."""
-    return [replace(c, stratum=0 if _size_class(c.bits) <= merged else _size_class(c.bits)) for c in cells]
+def split_cells(cells: Sequence[Cell], merged: int | None) -> list[Cell]:
+    """The cells in the strata of a two-stage design whose row's `merged` is this (`optimize.two_stage_strata`)."""
+    return two_stage_strata(cells, merged)
 
 
 def lean_two(cells: Sequence[Cell], replay_blocks: float, row: dict, delta: float, served: float | None = None,
@@ -590,10 +583,14 @@ PLAN = ("merged", "kappa", "q", "k", "draws", "replay_sample", "prove", "replay"
 
 def _plan(row: dict) -> dict:
     """A point's planner row as the series carry it: a two-stage design's k by stratum, a wide stratum by its size
-    class's bits and the merged one by the widest class it holds (`all` when it is the only one)."""
+    class's bits and the merged one by the widest class it holds (`all` when it is the only one); where each width is
+    a stratum (`merged` None), by `w` and the width's place among the widths."""
     out = {k: row[k] for k in PLAN if k in row}
     if isinstance(k := out.get("k"), dict):
-        out["k"] = {str(t) if t else "all" if len(k) == 1 else f"<={row['merged']}": v for t, v in k.items()}
+        if "merged" in row and row["merged"] is None:
+            out["k"] = {f"w{t}": v for t, v in k.items()}
+        else:
+            out["k"] = {str(t) if t else "all" if len(k) == 1 else f"<={row['merged']}": v for t, v in k.items()}
     return out
 
 

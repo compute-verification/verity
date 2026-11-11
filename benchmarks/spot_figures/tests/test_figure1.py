@@ -290,6 +290,23 @@ def test_lean_two_sends_the_planners_design_in_each_form(monkeypatch):
         f.lean_two(cells, 4, row, .01, 80.0, True)
 
 
+def test_a_design_of_a_stratum_a_width_is_read_in_the_planners_strata(monkeypatch):
+    """A row whose `merged` is None has a stratum a distinct width (`optimize.two_stage_strata`): `split_cells` gives
+    them, Lean's checker is sent the cells in them, and a series' plan names each by its width's place."""
+    cells = (Cell(3, 16), Cell(2, 48), Cell(1, 64))
+    assert [c.stratum for c in f.split_cells(cells, None)] == [0, 1, 2]
+    assert [c.stratum for c in f.split_cells(cells, 16)] == [0, 64, 64]
+    row = {"merged": None, "k": {0: 2, 1: 1, 2: 1}, "q": .5, "theta": 2.0, "bound": 50.0}
+    seen = []
+    monkeypatch.setattr(f.plancheck, "check", lambda ds: seen.extend(ds) or [(Fraction(10**6, 7), Fraction(3))])
+    f.lean_two(cells, 4, row, .01, 80.0, True)
+    assert seen == [f.plancheck.two([Cell(3, 16), Cell(2, 48, stratum=1), Cell(1, 64, stratum=2)], row["k"], 4, .5, .01,
+                                    80.0, True, 2.0)]
+    assert f._plan(row)["k"] == {"w0": 2, "w1": 1, "w2": 1}
+    assert f._plan({"merged": 16, "k": {0: 3, 64: 1}})["k"] == {"<=16": 3, "64": 1}
+    assert f._plan({"merged": 64, "k": {0: 3}})["k"] == {"all": 3}
+
+
 #: the bits the stubbed checker certifies for a two-stage point, and the θ it finds
 LEAN_BITS, LEAN_THETA = Fraction(10**9, 7), Fraction(3)
 

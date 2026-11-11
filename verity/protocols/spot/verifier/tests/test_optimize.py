@@ -30,7 +30,7 @@ from verity.protocols.spot.optimize import (HM96_ANDS, PROVING_ONLY, SHA512_ANDS
                                                            OVERFLOW, registration_cap, replay_cost, row_ands,
                                                            sensitivity, sqrt_grain, template_cost, touched,
                                                            two_stage_design, two_stage_exfil, two_stage_price,
-                                                           two_stage_statements, weigh, work_law)
+                                                           two_stage_statements, two_stage_strata, weigh, work_law)
 from verity.circuits.partition_v2 import UNIT_CLASS_MAX
 
 SLACK = 1 + 2.0 ** -18
@@ -772,6 +772,36 @@ def test_the_width_stratified_design_beats_the_uniform_one_when_proving_costs():
         else:
             assert rows[True]["bound"] == pytest.approx(rows[False]["bound"], rel=1e-2)
     assert two_stage_design(cells, replay_blocks, delta, budget=1.0, replay=1.0, boundary=2.0) is None
+
+
+def test_a_stratum_a_width_samples_a_narrower_block_at_its_own_rate():
+    """A costly type a few bits over a size class shares the next class with a rare block of that class's whole
+    width, so the class's stratum samples it at the wide block's rate.  With `widths` each width is a stratum: the
+    costly type is sampled at the rate its own bits ask and the bound falls.  The family only grows, so `widths` is
+    never worse: where each class holds one width it changes nothing, and a uniform design has no strata to split."""
+    delta, replay_blocks, budget, served = 2.0 ** -20, 10 ** 8, 1e7, 4096.0
+    cells = [Cell(10 ** 5, 16.0, prove=1e-3, commit_bytes=2.0), Cell(2000, 2100.0, prove=1e-2, commit_bytes=300.0),
+             Cell(4, 4096.0, prove=1e-3, commit_bytes=512.0)]
+    assert [c.stratum for c in two_stage_strata(cells, 16)] == [0, 4096, 4096]
+    assert [c.stratum for c in two_stage_strata(cells, 4096)] == [0, 0, 0]
+    assert [c.stratum for c in two_stage_strata(cells[::-1], None)] == [2, 1, 0]
+    kw = {"budget": budget, "replay": 1.0, "boundary": 1e5, "h": 1e-6, "served": served, "union": True}
+    classes = two_stage_design(cells, replay_blocks, delta, **kw)
+    row = two_stage_design(cells, replay_blocks, delta, widths=True, **kw)
+    assert classes["merged"] == 16 and set(classes["k"]) == {0, 4096}
+    assert row["merged"] is None and set(row["k"]) == {0, 1, 2} and row["design"] == "stratified"
+    strata = two_stage_strata(cells, None)
+    assert row["bound"] == two_stage_exfil(strata, row["k"], replay_blocks, row["q"], delta, served, True)
+    assert row["prove"] == pytest.approx(row["replay_sample"] * two_stage_price(strata, row["k"])[2])
+    assert row["total"] <= budget * (1 + 1e-12)
+    assert row["k"][1] / 2000 < 0.6 * classes["k"][4096] / 2004 and row["bound"] < 0.7 * classes["bound"]
+    uniform = {"stratify": False, **kw}
+    assert two_stage_design(cells, replay_blocks, delta, widths=True, **uniform) == two_stage_design(
+        cells, replay_blocks, delta, **uniform)
+    apart = [Cell(10 ** 5, 16.0, prove=1e-3, commit_bytes=2.0), Cell(4, 131072.0, prove=1e-3, commit_bytes=2.0 ** 14)]
+    kw = {"budget": budget, "replay": 1.0, "boundary": 1e5, "h": 1e-6}
+    assert two_stage_design(apart, replay_blocks, delta, widths=True, **kw) == two_stage_design(
+        apart, replay_blocks, delta, **kw)
 
 
 def test_a_capped_design_charges_what_a_request_serves():
