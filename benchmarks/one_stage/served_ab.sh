@@ -27,9 +27,11 @@
 # Before the first lease, on CORES alone (the whole script runs under `taskset -c CORES`; the card is CARD): `verity-vllm
 # predict row` for the row's Build of record; the two taps (pod_fa3_tap.sh's guarded build at TAP_HDIMS, pod_norm_tap.sh)
 # with the venv's CUDA (TAP_CUDA); Pearl-C's sm_90 cubin (pearl_c_sm90.sh, CUBIN_CUDA); the Lean verifier of record the
-# in-process challenger reads (`lake build pouw-check-difftest`). Taps, caches, the predicted Build and the serve dirs are
-# under STAGE (default /dev/shm/compute-accounting-served-ab, kept between runs so a second run rebuilds nothing; the
-# node's / is nearly full), never in the run dir.
+# in-process challenger reads (`lake build pouw-check-difftest`). Taps, caches, the cubin and the predicted Build are under
+# STAGE (default /workspace/compute-accounting-served-ab, under 1 GB, kept between runs so a second run rebuilds nothing:
+# a filesystem that maps shared objects, as the node's /dev/shm, mounted noexec, doesn't); the serve dirs, a few GB a
+# Commit window, under SERVE_ROOT (default /dev/shm/compute-accounting-served-ab: the node's / is nearly full) until
+# their lifetime's record is written. Neither is in the run dir.
 # The card's start check is gpu_lease.sh's, taken without --wait: a card whose lock is held, or with another's compute
 # process on it, ends the run (exit 75) instead of waiting. The container's CPU throttle count is written at each round's
 # start and end (served_ab.txt), since another lane's timed row on this node is void when it moves. With NOT_AFTER (a UTC
@@ -43,7 +45,7 @@ CARD=${CARD:-1} CORES=${CORES:-0-11}
 if [ -z "${SERVED_AB_PINNED:-}" ]; then
   exec env SERVED_AB_PINNED=1 OUT="$OUT" taskset -c "$CORES" bash "$TREE/benchmarks/one_stage/served_ab.sh" "$@"
 fi
-STAGE=${STAGE:-/dev/shm/compute-accounting-served-ab}
+STAGE=${STAGE:-/workspace/compute-accounting-served-ab} SERVE_ROOT=${SERVE_ROOT:-/dev/shm/compute-accounting-served-ab}
 ROW_ID=${ROW_ID:-llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager}
 REPO=${REPO:-unsloth/Llama-3.2-1B} REV=${REV:-9535bd9b1d1dea6acafbdc4813b728796aeb28da} PRECISION=${PRECISION:-bfloat16}
 VENV=${VENV:-/workspace/venv312}
@@ -58,7 +60,7 @@ CUBIN_CUDA=${CUBIN_CUDA:-$(first_dir /usr/local/cuda-13.0 /usr/local/cuda-13.3 /
 HIDDEN_SO=${HIDDEN_SO:-$STAGE/fa2/build/fa3_matReqG/verity_fa3_matReqG.so}
 NORM_TAP_SO=${NORM_TAP_SO:-$STAGE/norm_tap/build/verity_norm_tap.so}
 PRED=${PRED:-$STAGE/predicted/$ROW_ID}
-RUNS=$STAGE/runs/${RESEARCH_RUN_ID:-local}
+RUNS=$SERVE_ROOT/runs/${RESEARCH_RUN_ID:-local}
 export PY=$VENV/bin/python HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 CUDA_HOME=$TAP_CUDA
 export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
 export TORCH_EXTENSIONS_DIR=$STAGE/cache/torch-extensions TRITON_CACHE_DIR=$STAGE/cache/triton VLLM_CACHE_ROOT=$STAGE/cache/vllm
@@ -183,7 +185,7 @@ prep() {  # on CORES, no card held: the Build of record, the taps, the cubin, th
 
 if [ "${1:-}" = round ]; then round "$2" "$3"; exit $?; fi
 { id -un; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; echo "cores $CORES ($(nproc)) card $CARD"; nvidia-smi -L
-  cat /sys/fs/cgroup/cpu.max 2>/dev/null; echo "stage $STAGE arms $ARMS reps $REPS loads $LOADS warm $WARM"; } > "$OUT/machine.txt"
+  cat /sys/fs/cgroup/cpu.max 2>/dev/null; echo "stage $STAGE serve dirs $SERVE_ROOT arms $ARMS reps $REPS loads $LOADS warm $WARM"; } > "$OUT/machine.txt"
 for f in "$PY" "$TAP_CUDA/bin/nvcc" "$HF_HOME"; do [ -e "$f" ] || { say "PREFLIGHT: no $f"; exit 3; }; done
 for a in $ARMS; do
   case $a in stock | commit | pearl) ;;
