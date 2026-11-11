@@ -229,7 +229,9 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   test unrun, and `--update` records it. Generated data stays out of Git and out of the key of `check`'s audit step, so
   a test of the package's own (PoUW's `verity/core/protocols/pouw/tests/test_lean_package.py`) checks that the generator still writes the recorded
   data. `--no-runs` skips them.
-- `assumptions_module`: the module (or a submodule) with named assumptions. `assumptions`: the named assumptions (with
+- `assumptions_module`: the module (or a submodule) with named assumptions, or a list of such modules (`Security/Properties`
+  lists `Properties.Assumptions` beside `Definitions.Assumptions`, for an assumption stated over the code); each must be
+  a module of the build or of a package it requires. `assumptions`: the named assumptions (with
   `owner`), the premises declared there. `domain`: a premise that is part of what its guarantee says (a scope, the layer
   below's guarantee), with `owner` and a one-line `why`; `--update` adds one that is another listed guarantee's
   statement, citing it (`cites`), and an honest witness must conclude each. `open`: every other premise, with `owner`,
@@ -302,7 +304,7 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   (`tests/test_lean_packages.py` checks the test exists), so a counterexample fails `check`; a falsified one refuses every
   property resting on it, which stays under `frozen` only as `falsified`. Every package is checked: without a `shape`
   section each guarantee is frozen or fails. An entry added to `frozen`, and a conjecture added or with a new status,
-  is a claims change: the landing DM shows it with its reason (`research/spec_alert.py`), and nothing waits on it.
+  is a claims change: the landing DM shows it with its reason, and nothing waits on it.
 - **The spec**, what a guarantee is stated over, is the `layers` prefixes: the modules whose imports the
   policy rules. Every definition a guarantee's statement reads (theorems are not read: a statement means the same
   whatever proves the propositions in it), followed through `meaning` and where the walk leaves it, must lie in the spec
@@ -336,10 +338,11 @@ the replay pass it: only the records see it, and only a person can judge it. `--
 it: each changed guarantee's signature before and after, and each changed definition a guarantee
 reads, with the guarantees that read it and its source now (also in `review.txt` among the reports). Say so in the PR.
 An audit without `--update` whose only failures are record differences (a guarantee's signature, named assumptions,
-premises or type hash, a `reads` group, a premise's digest: what merging two PRs on `next`, each recorded on its own side, can
-leave) writes the `lean-audit.json` and `review.txt` that `--update` would among its reports, and its `report.json`'s
-`regenerated` names that file; a missing record or name, an owner or any other failure writes none. Code decides which
-failures those are, not text: each failure's code (`check.py`'s `Failure`) is in `report.json`'s `failure_codes`
+premises or type hash, a `reads` group, a premise's digest) writes the `lean-audit.json` and `review.txt` that `--update`
+would among its reports; its `report.json`'s `regenerated` names that file, and `changes` lists the review's
+statement changes (`entry`, `kind`: the lock's section, `owners`, `line`). A missing record or name, an owner or any
+other failure writes none. Code decides which
+failures those are, not text: each failure's code (`Failure`) is in `report.json`'s `failure_codes`
 (`settled_codes`: what `--regenerate` settled), and the record differences are `RECORD_DIFFERENCE`'s. The Lean check of a commit of `next` runs with
 `--regenerate`, and drive commits the records it regenerated when it lands that commit (drive.toml's `regenerate_locks`);
 drive's after-landing run passes `--no-regenerate`, so a record difference that reaches `checked` fails there.
@@ -358,7 +361,8 @@ an axiom beyond the standard three, `sorry`, `native_decide`, a kernel bypass an
 repairs the caps, in copies that audit.json's `repaired` names (`raised_unread`, `held_caps`): an unread area over its cap,
 and a lock count over its cap in `tests/test_lean_packages.py` (UNWITNESSED, INLINE), are raised to the count, and such a
 cap more than its `ROOM` above its count is lowered to the count and its room. Elsewhere a loose cap only warns (`_held`), so lowering a count never fails a check. Each repair is one
-warning naming the entry and its owner, in audit.json's `bookkeeping`. Drive commits the repaired files with the locks
+warning naming the entry and its owner, in audit.json's `bookkeeping`; a package's are its report's `repairs` (`entry`,
+`code`, `owners`, `line`). Drive commits the repaired files with the locks
 (`research.merge.REPAIRED`, held byte for byte to the run's copies), lists the warnings in the lock commit, and tells the
 Lean lane and each owner they name; the next PR fixes them. No other check takes the flag.
 
@@ -399,7 +403,7 @@ are renamed, and `Facts.lean` writes each guarantee's statement and each definit
 mapped back to the old ones, a lifted statement also with its definition unfolded. The review compares those texts with the
 records of the old names: a guarantee that says what its record says gets one line, "the same statement under its old
 names" (moved from its old name, lifted as above, or both), and the definitions the same under their old names are counted
-on one line. The landing DM, which reads only the records, leaves out a guarantee renamed with its type hash unchanged and
+on one line. The landing DM leaves out a guarantee renamed with its type hash unchanged and
 a definition moved with its content. Everything else prints as without the map. A map the comparison could not read back
 is refused (`check.py`'s `move_errors`); an old theorem kept under its old name as the lemma behind a new guarantee is no
 conflict.
@@ -498,7 +502,7 @@ ArkLib. A miss, a mismatch, a missing read credential (the `LEAN_CACHE_*` variab
 `~/.config/verity/lean-cache-read.env`), the kill switch or `LEAN_CACHE=off` means building from source. The audit never
 reads it: `lake_env()` sets `LEAN_CACHE=off`, and check's audit and a records run restore only from their node's own Lake
 cache, which only a passing run there fills, by each module's compile key (`lean_audit.LakeArtifacts`, `module_keys.py`). `cache.py`'s
-docstring has the bucket's layout and how integration publishes (as root, outside the build's sandbox, from a clean
+docstring has the bucket's layout and how integration publishes (from a clean
 checkout of `origin/main`), and `run_daily.py`'s the daily publish.
 
 ## Using it from another repository
