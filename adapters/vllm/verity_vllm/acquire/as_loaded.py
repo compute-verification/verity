@@ -7,7 +7,7 @@ checkpoint's [E][N][K/2] packed e2m1 bytes and [E][N][K/32] e8m0 bytes (`registr
 registers: per layer, composed from the pinned checkpoint at the rank's (world, rank) by the composer the TP driver hands in
 (`weights_of_record.rank_composer`), and held to the served tensors by Marlin's repack of them, a difference refused by name.
 `attach_rank` gives the rank's weights as `register_weights`, the weights pin and the replay's weight reader read them
-(`protocol_options.WeightsView`).  The composed bytes stay on the host for the Commit: the size of the rank's experts.
+(`protocols.WeightsView`).  The composed bytes stay on the host for the Commit: the size of the rank's experts.
 """
 from __future__ import annotations
 
