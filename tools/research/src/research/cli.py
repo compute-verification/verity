@@ -10,7 +10,7 @@
                                                  # onto vy-nebius-2 from this checkout (kind agent-test: 4 CPUs, 16 GB, 60 min unless given;
                                                  # a suites.py run of named suites: their [tool.verity.tests] worker_gb and timeout_s),
                                                  # on whole cores of its own, waiting on the node while none are free; or, when it starts
-                                                 # sooner there, a slot of a CPU node's research pool (research/auto.py's SPILL)
+                                                 # sooner there, a slot of a CPU node's research pool (research/auto.py's `spill`: every CPU node)
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--gpus N] [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # where gpu-lease hands out the GPUs, only --gpus N (a FCFS wait for N) shows the run any
@@ -198,7 +198,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--on", default=None, metavar="MACHINE",
                     help="run on an existing authorized machine listed in the machines file; `auto`: an agent's suite or build, "
                          "queued onto vy-nebius-2 from this checkout, 4 CPUs, 16 GB and 60 min unless the run says otherwise, or "
-                         "a slot of a CPU node's research pool when it starts sooner there (research/auto.py's SPILL); the "
+                         "a slot of a CPU node's research pool when it starts sooner there (research/auto.py's `spill`: every CPU node); the "
                          "launch says where it went and when it should start")
     ap.add_argument("--accept-wait", action="store_true",
                     help="with --on auto: queue the run though it isn't expected to start within 10 minutes "
