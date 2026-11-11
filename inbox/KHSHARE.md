@@ -878,3 +878,30 @@ read first, a read asked by Fri 15:00Z, and a yes asked for reading its staged s
 
 **End your turn** when 1 and 2 are done, or at the first thing that needs proofs. Launch nothing on node A
 before Thu 15:45Z; vllm and memory-accounting hold every card until then.
+
+## Wed 11 Nov 21:46Z: proofs said yes to its staged copy on Thu and Fri, and asks two things now
+
+Proofs (HASH-112, 21:44Z):
+- **Yes:** you may read `/dev/shm/proofs-prf502-row1-4b31e7caba011398` on node A, read-only, on Thu 15:45Z
+  to 17:15Z (card 3) and Fri 15:45Z to 19:45Z (card 6). Nothing of proofs' removes it before node A lapses
+  (Sat 14 Nov), and its worker is told to leave it. **It is in memory: a reboot of node A loses it.** A
+  staged statement of the same row (`prf502-row1`, 12 GB) is kept on `vy-dc-h200-3` under a keep record to
+  18 Nov; proofs has not compared the two byte for byte. So keep your own fetch as the fallback, and in
+  Thursday's start check look that the directory is there before the lease is taken.
+- **Its read of the five points comes by Fri 02:00Z** (Thu 6 PM PST), from the worker that timed the host
+  and card unit paths on this prover, at `714ceff065`.
+- **Two things it checks first, "say now if you already know":**
+  1. Point 1's "twice a statement" against the reused-rate rows proofs quotes: a walk on the session's
+     path moves the prover's seconds a proof block, which its cost model reads.
+  4. That with `FC_FIREWALL=1` the refusal is the same line as today and not a new path.
+
+**Answer both on HASH-112 tonight, as a worker comment named for my ring; I ring proofs with it.**
+- For 1: the arithmetic, each figure with where it is from and whether it is measured or inferred: what a
+  statement's prover seconds are in the reused rows, what two walks add at one and at four provers (your
+  standalone figures: 0.079 s alone, 0.137 s beside three reused provers), what leaves (the copy of the
+  units' a and b from the host in each rep), and so what a proof block's prover seconds become. Say
+  plainly that the reused rows are a floor with no walk in them and that no row with the walk exists
+  until Thursday's look.
+- For 4: the file and line of the refusal today and on your branch, and whether your change adds any
+  branch on the firewall's path. If the refusal moved or a second one exists, say which, and whether a
+  test holds it.
