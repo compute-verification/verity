@@ -122,11 +122,10 @@ def reference(s: device.DeviceStore, seed: bytes, q: int, step: int = 1 << 15) -
     """Segment q's receipts under pass `seed` by the reference's definition and none of the kernels' code, 64 bytes a
     block: σ is torch's float32 product of the blocks' bytes as int8 with the signs of `receipts.sign_bits` (exact:
     `sketching.sketch_torch`), and y is `SketchReceipter.receipt`, SHA-512 on the CPU."""
-    torch, gpu = s.torch, s.gpus[s.seg_gpu[q]]
+    torch, dev = s.torch, s.seg_ring[q]["ys"].device
     bits = np.unpackbits(skr.sign_bits(seed), axis=1, bitorder="little")
     receipt, width, out = rb.SketchReceipter(seed).receipt, 4 * skr.ROWS, []
-    with s.on(gpu):
-        dev = torch.device("cuda", gpu.index)
+    with s.on(s.gpus[s.seg_gpu[q]]):
         for a in range(0, s.n[q], step):
             e = s.data_g[q][a * BLOCK:min(a + step, s.n[q]) * BLOCK].to(dev).view(torch.int8).view(-1, BLOCK)
             sigma = sketching.sketch_torch(torch, e, bits).cpu().numpy().astype("<i4").tobytes()
@@ -197,7 +196,7 @@ def host_part(b: device.GpuBackend, base: tuple, slot: int, reads: int) -> tuple
             e1.record(stream)
         spans.append((e0, e1))
         if reads:
-            xr = torch.zeros(1, dtype=torch.int64, device=f"cuda:{gpu.index}")
+            xr = torch.zeros(1, dtype=torch.int64, device=s.data_g[hbm].device)
             with s.on(gpu):
                 for _ in range(reads):
                     b.lib.call("rb_read", s.data_g[hbm].data_ptr(), s.n[hbm] * BLOCK, xr.data_ptr(), 16 * gpu.sms)
@@ -297,13 +296,14 @@ def main() -> int:
             r["ok"] = bool(r["gate"]["ok"] and r["equal"]["ok"])
         except Exception as error:  # noqa: BLE001
             r["error"], r["ok"] = f"{type(error).__name__}: {error}", False
-            s.sync()
         log(f"{label(row)}: gate {r.get('gate', {}).get('ok')}, equal {json.dumps(r.get('equal'))}"
             + (f", error {r['error']}" if "error" in r else ""))
+        write()
+        if "error" in r:
+            s.sync()   # a device a kernel faulted on raises here, and the record above is what the run leaves
         if r["ok"]:
             passed.append(row)
             base = base or got
-        write()
         if base is None:
             log("`pass` itself failed its gate or equality: nothing is timed")
             return 6
@@ -318,76 +318,83 @@ def main() -> int:
         log("a pass whose host part wrote nothing was not refused: nothing is timed")
         return 6
 
+    def timed() -> bool:
+        """`alone`, `beside` and `chain` over the rows that passed; whether every rep left the pass's bytes."""
+        use(b, rows[0])
+        again = poisoned_pass(s, seed)   # the devices hold this pass's constants and signs from here to `chain`
+        slot = s.launched % device.SLOTS
+        if again[0] != base[0]:
+            log("the pass at the same seed is not the same root: nothing is timed")
+            return False
+        del again
+        for arm in ("alone", "beside"):
+            times: dict = {label(row): [] for row in passed}
+            wrong: dict = {label(row): 0 for row in passed}
+            reads = 0
+            if arm == "beside":
+                # Bare reads of the shard for 1.5 times as long as the slowest row alone lasts.
+                reads = int(1.5 * max(x["ms"]["max"] for x in out["alone"].values()) / read["hbm_ms"]) + 2
+            for rep in range(a.reps + 1):
+                if left() <= 0:
+                    out["cut"].append(f"{arm}: after {rep} reps")
+                    break
+                for row in passed:
+                    use(b, row)
+                    ms, ok = host_part(b, base, slot, reads)
+                    wrong[label(row)] += not ok
+                    if rep:
+                        times[label(row)].append(ms)
+            out[arm] = {k: {"ms": spread(v), "bytes_per_s": rate(spread(v)["p50"]), "wrong": wrong[k], "each_ms": v}
+                        for k, v in times.items() if v}
+            if reads:
+                out[arm + "_reads"] = reads
+            log(f"{arm}: " + "; ".join(
+                f"{k} {x['ms']['p50']:.2f} ms ({x['bytes_per_s'] / 1e9:.1f} GB/s"
+                f"{', WRONG ' + str(x['wrong']) if x['wrong'] else ''})" for k, x in out[arm].items()))
+            write()
+            if not out[arm]:
+                break
+        challenge, prev = rng.bytes(rb.CHALLENGE_BYTES), bytes(rb.DIGEST_BYTES)
+        chains: dict = {label(row): {"interval_ms": [], "host_ms": [], "roots_sha256": []} for row in passed}
+        for rnd in range(a.chain_rounds):
+            for row in passed:
+                if left() <= 0:
+                    out["cut"].append(f"chain: round {rnd}, {label(row)}")
+                    continue
+                use(b, row)
+                s.pass_gpu_ms.clear()
+                s.pass_host_ms.clear()
+                s.start_chain(challenge, prev)
+                roots, seen = hashlib.sha256(), []
+                for _, root, _, at in s.chain(a.chain_passes):
+                    roots.update(root)
+                    seen.append(at)
+                s.sync()
+                c = chains[label(row)]
+                c["interval_ms"] += [(y - x) / 1e6 for x, y in zip(seen[1:], seen[2:])]
+                c["host_ms"] += s.pass_host_ms[1:]
+                c["roots_sha256"].append(roots.hexdigest())
+        want = chains[label(rows[0])]["roots_sha256"][:1]
+        out["chain"] = {k: {"pass_ms": spread(c["interval_ms"]), "host_ms": spread(c["host_ms"]),
+                            "host_bytes_per_s": rate(spread(c["host_ms"])["p50"]), "passes": len(c["interval_ms"]),
+                            "roots_are_pass_s": bool(want) and all(x == want[0] for x in c["roots_sha256"])}
+                        for k, c in chains.items() if c["interval_ms"] and c["host_ms"]}
+        log("chain: " + "; ".join(
+            f"{k} pass {c['pass_ms']['p50']:.2f} ms, host part {c['host_ms']['p50']:.2f} ms "
+            f"({c['host_bytes_per_s'] / 1e9:.1f} GB/s){'' if c['roots_are_pass_s'] else ', ROOTS DIFFER'}"
+            for k, c in out["chain"].items()))
+        return (all(not x["wrong"] for arm in ("alone", "beside") for x in out.get(arm, {}).values())
+                and all(c["roots_are_pass_s"] for c in out["chain"].values()))
+
     gc.collect()
     gc.freeze()
     gc.disable()
-    use(b, rows[0])
-    again = poisoned_pass(s, seed)   # the devices hold this pass's constants and signs from here to `chain`
-    slot = s.launched % device.SLOTS
-    if again[0] != base[0]:
-        log("the pass at the same seed is not the same root: nothing is timed")
-        return 6
-    for arm in ("alone", "beside"):
-        times: dict = {label(row): [] for row in passed}
-        wrong: dict = {label(row): 0 for row in passed}
-        reads = 0
-        if arm == "beside":
-            # Bare reads of the shard for 1.5 times as long as the slowest row alone lasts.
-            slowest = max(x["ms"]["max"] for x in out["alone"].values())
-            reads = int(1.5 * slowest / read["hbm_ms"]) + 2
-        for rep in range(a.reps + 1):
-            if left() <= 0:
-                out["cut"].append(f"{arm}: after {rep} reps")
-                break
-            for row in passed:
-                use(b, row)
-                ms, ok = host_part(b, base, slot, reads)
-                wrong[label(row)] += not ok
-                if rep:
-                    times[label(row)].append(ms)
-        out[arm] = {k: {"ms": spread(v), "bytes_per_s": rate(spread(v)["p50"]), "wrong": wrong[k], "each_ms": v}
-                    for k, v in times.items() if v}
-        if reads:
-            out[arm + "_reads"] = reads
-        log(f"{arm}: " + "; ".join(f"{k} {x['ms']['p50']:.2f} ms ({x['bytes_per_s'] / 1e9:.1f} GB/s"
-                                   f"{', WRONG ' + str(x['wrong']) if x['wrong'] else ''})" for k, x in out[arm].items()))
-        write()
-        if not out[arm]:
-            break
-
-    challenge, prev = rng.bytes(rb.CHALLENGE_BYTES), bytes(rb.DIGEST_BYTES)
-    chains: dict = {label(row): {"interval_ms": [], "host_ms": [], "roots_sha256": []} for row in passed}
-    for rnd in range(a.chain_rounds):
-        for row in passed:
-            if left() <= 0:
-                out["cut"].append(f"chain: round {rnd}, {label(row)}")
-                continue
-            use(b, row)
-            s.pass_gpu_ms.clear()
-            s.pass_host_ms.clear()
-            s.start_chain(challenge, prev)
-            roots, seen = hashlib.sha256(), []
-            for _, root, _, at in s.chain(a.chain_passes):
-                roots.update(root)
-                seen.append(at)
-            s.sync()
-            c = chains[label(row)]
-            c["interval_ms"] += [(y - x) / 1e6 for x, y in zip(seen[1:], seen[2:])]
-            c["host_ms"] += s.pass_host_ms[1:]
-            c["roots_sha256"].append(roots.hexdigest())
-    want = chains[label(rows[0])]["roots_sha256"][:1]
-    out["chain"] = {k: {"pass_ms": spread(c["interval_ms"]), "host_ms": spread(c["host_ms"]),
-                        "host_bytes_per_s": rate(spread(c["host_ms"])["p50"]), "passes": len(c["interval_ms"]),
-                        "roots_are_pass_s": bool(want) and all(x == want[0] for x in c["roots_sha256"])}
-                    for k, c in chains.items() if c["interval_ms"]}
-    gc.enable()
-    gc.unfreeze()
-    log("chain: " + "; ".join(f"{k} pass {c['pass_ms']['p50']:.2f} ms, host part {c['host_ms']['p50']:.2f} ms "
-                             f"({c['host_bytes_per_s'] / 1e9:.1f} GB/s){'' if c['roots_are_pass_s'] else ', ROOTS DIFFER'}"
-                             for k, c in out["chain"].items()))
-    timed_ok = (all(not x["wrong"] for arm in ("alone", "beside") for x in out.get(arm, {}).values())
-                and all(c["roots_are_pass_s"] for c in out["chain"].values()))
-    out["ok"] = bool(refused and timed_ok and all(r["ok"] for r in out["rows"].values()))
+    try:
+        timed_ok = timed()
+    finally:
+        gc.enable()
+        gc.unfreeze()
+    out["ok"] = bool(timed_ok and all(r["ok"] for r in out["rows"].values()))
     write()
     s.close()
     return 0 if out["ok"] else 6
