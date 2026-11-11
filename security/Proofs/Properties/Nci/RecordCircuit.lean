@@ -16,8 +16,8 @@ off the first grid that does, a remainder by the slots, of which there is at lea
 `names_divides`: the two things the registered circuit takes beside the wired circuit `D`. θ is the gates of `D` that
 are leaves of a row `held` holds; each is an input gate, since a leaf of a reader row is one (`OwnRows`) and `D`'s
 gates have the Program's kinds (`LaysOut`). The blocks give an input gate none and a computed gate the slot of a unit
-it lies in: a computed gate lies in a unit (`GatesOwn`), and every unit has a slot below `n`. Where a computed gate
-lies in more than one unit the division takes one of them, by choice.
+it lies in: a computed gate lies in a unit (`GatesOwn`), and every unit has a slot below `n`. The division takes, by
+choice, a unit the gate lies in; that no gate lies in two units is not used.
 -/
 
 @[expose] public section
