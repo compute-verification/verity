@@ -689,11 +689,12 @@ def test_the_load_that_repeats_a_prefix_is_four_planned_requests_sent_one_at_a_t
     load, plan = S.LOADS["prefix"], S.PAIRS
     assert (load.plan, load.prompts, load.rungs, load.number, load.file) == (plan, 4, (1,), False, None)
     assert [n for n, x in S.LOADS.items() if x.number] == ["chat", "long"]
-    assert S.planned(plan) == {"requests": 4, "prompt_tokens": 519647, "repeated_tokens": 259712}
+    assert S.planned(S.trace_lines(plan)) == {"requests": 4, "prompt_tokens": 519647, "repeated_tokens": 259712,
+                                              "span_s": 0.0}
     # every request with its output fits the context the load names, and a pair shares whole blocks both prompts have
     assert all(r.prompt + r.output <= load.context for r in plan)
     assert [(r.after, r.blocks * S.BLOCK) for r in plan] == [(None, 0), (0, 130752), (None, 0), (2, 128960)]
-    f = Path(S.write_trace(tmp_path / "prefix.trace.jsonl", plan))
+    f = Path(S.write_trace(tmp_path / "prefix.trace.jsonl", S.trace_lines(plan)))
     lines = [json.loads(x) for x in f.read_text().splitlines()]
     assert lines == S.trace_lines(plan) and all(set(x) == {"timestamp", "input_length", "output_length", "hash_ids"} for x in lines)
     assert [(x["input_length"], x["output_length"]) for x in lines] == [(r.prompt, r.output) for r in plan]
@@ -708,8 +709,9 @@ def test_the_load_that_repeats_a_prefix_is_four_planned_requests_sent_one_at_a_t
     # the client sends the file's lines in its order, one in flight, each prompt as token ids of its planned length
     argv = S.bench_argv(S.MODELS["glm53"], Path("/ck"), 1, load, 1, tmp_path, "prefix@1-r1", dataset=str(f))
     at = argv.index("--dataset-name")
-    assert argv[at:at + 12] == ["--dataset-name", "timed_trace", "--timed-trace-chunk-hash-size", "64", "--no-self-timed",
-                                "--dataset-path", str(f), "--num-prompts", "4", "--seed", "0", "--request-rate"]
+    assert argv[at:at + 12] == ["--dataset-name", "timed_trace", "--timed-trace-chunk-hash-size", "64",
+                                "--dataset-path", str(f), "--num-prompts", "4", "--seed", "0", "--no-self-timed",
+                                "--request-rate"]
     assert argv[argv.index("--max-concurrency") + 1] == "1" and argv[argv.index("--goodput") + 1:][:2] == [
         "tpot:80", "--percentile-metrics"]
     # its engine's context is its own, so it is served in a run of its own
@@ -720,6 +722,135 @@ def test_the_load_that_repeats_a_prefix_is_four_planned_requests_sent_one_at_a_t
         S.parse_loads("prefix=2")
     with pytest.raises(SystemExit, match="prefix is served in a run of its own"):
         S.parse_loads("chat,prefix")
+
+
+#: a table of planned requests: the second begins as the first does, on two whole blocks, and the fourth on one
+TABLE = [{"at_s": 0.0, "prompt": 200, "output": 8},
+         {"at_s": 2.5, "prompt": 130, "output": 8, "after": 0, "blocks": 2},
+         {"at_s": 30.0, "prompt": 64, "output": 8},
+         {"at_s": 30.0, "prompt": 100, "output": 8, "after": 0, "blocks": 1}]
+
+
+def test_a_table_of_planned_requests_is_checked_and_sent_as_its_requests_arrive(tmp_path: Path, capsys):
+    """``--dataset prefix=FILE`` serves a table of planned requests in place of the four: arrival times and lengths,
+    with the earlier line a request repeats, and nothing else; each request is sent at its arrival time, and what the
+    table plans is read from its lines."""
+    load, f = S.LOADS["prefix"], tmp_path / "table.jsonl"
+    f.write_text("".join(json.dumps(x) + "\n" for x in TABLE))
+    plan = S.read_plan("prefix", f)
+    assert plan == (S.Planned(0.0, 200, 8), S.Planned(2.5, 130, 8, 0, 2), S.Planned(30.0, 64, 8), S.Planned(30.0, 100, 8, 0, 1))
+    lines = S.trace_lines(plan)
+    # what repeats is the whole leading blocks an earlier line begins with: 128 tokens of the second, 64 of the fourth
+    assert S.planned(lines) == {"requests": 4, "prompt_tokens": 494, "repeated_tokens": 192, "span_s": 30.0}
+    # an id an earlier line has repeats nothing unless it is where both prompts begin
+    assert S.planned([{"timestamp": 0.0, "input_length": 200, "output_length": 8, "hash_ids": [1, 2, 3, 4]},
+                      {"timestamp": 1.0, "input_length": 64, "output_length": 8, "hash_ids": [2]},
+                      {"timestamp": 2.0, "input_length": 100, "output_length": 8, "hash_ids": [1, 3]}])["repeated_tokens"] == 64
+    loads = S.parse_loads("prefix")
+    files = S.parse_datasets([f"prefix={f}"], loads)
+    assert files == {"prefix": str(f)}
+    # the given table is sent as its requests arrive; with none, the four are, one in flight
+    assert S.passes_of(loads, files) == ({"prefix": (S.ARRIVING,)}, {"prefix": lines})
+    assert S.passes_of(loads, {}) == ({"prefix": (1,)}, {"prefix": S.trace_lines(S.PAIRS)})
+    assert S.pass_name("prefix", S.ARRIVING) == "prefix@0"
+    # a pass sends every line; a warm-up the lines that arrive in its seconds, one at least, or two a request in flight
+    assert [S.pass_prompts(load, S.ARRIVING, lines, w) for w in (None, 20.0, 30.0, 0.0)] == [4, 2, 4, 1]
+    assert S.pass_prompts(load, S.ARRIVING, lines[1:], 1.0) == 1
+    assert [S.pass_prompts(x, c, None, w) for x, c, w in ((load, 1, None), (load, 1, 20.0), (S.LOADS["chat"], 8, None),
+                                                          (S.LOADS["chat"], 8, 20.0))] == [4, 2, 200, 16]
+    # the client then sends each at its arrival: nothing holds a concurrency, and nothing turns the file's times off;
+    # the file it reads is the one the arm wrote from the table, never the table
+    trace = S.write_trace(tmp_path / "prefix.trace.jsonl", lines)
+    assert [json.loads(x) for x in Path(trace).read_text().splitlines()] == lines
+    assert S.client_files({"chat": "chat.json", **files}, {"prefix": trace}) == {"chat": "chat.json", "prefix": trace}
+    assert S.client_files({"chat": "chat.json"}, {}) == {"chat": "chat.json"}
+    argv = S.bench_argv(S.MODELS["glm53"], Path("/ck"), 1, load, S.ARRIVING, tmp_path, "prefix@0-r1", dataset=trace, prompts=4)
+    at = argv.index("--dataset-name")
+    assert argv[at:at + 11] == ["--dataset-name", "timed_trace", "--timed-trace-chunk-hash-size", "64",
+                                "--dataset-path", trace, "--num-prompts", "4", "--seed", "0", "--ignore-eos"]
+    assert not {"--no-self-timed", "--request-rate", "--max-concurrency"} & set(argv)
+    # the guards of the four stand: no rung is named for it, and it is served in a run of its own
+    with pytest.raises(SystemExit, match="'prefix=0': each rung is a concurrency of 1 or more"):
+        S.parse_loads("prefix=0")
+    with pytest.raises(SystemExit, match="prefix is served in a run of its own"):
+        S.parse_datasets([f"prefix={f}"], S.parse_loads("long,prefix"))
+    with pytest.raises(SystemExit, match=r"--dataset prefix=.*absent\.jsonl: no such file"):
+        S.parse_datasets([f"prefix={tmp_path / 'absent.jsonl'}"], loads)
+    # a line that is not a request under the table's names is refused, so a table holds no token and no text
+    one = TABLE[0]
+    bad = tmp_path / "bad.jsonl"
+    for line, why in ((one | {"text": "a text"}, "line 2: a request is at_s, prompt, output, with after and blocks where it "
+                                                 "begins as an earlier one does, and nothing else"),
+                      (one | {"token_ids": [1, 2, 3, 4]}, "and nothing else"),
+                      (one | {"after": 0}, "and nothing else"),
+                      ([1, 2], "and nothing else"),
+                      (one | {"prompt": 0}, "a prompt and an output of whole tokens"),
+                      (one | {"output": 8.5}, "a prompt and an output of whole tokens"),
+                      (one | {"prompt": True}, "a prompt and an output of whole tokens"),
+                      (one | {"output": 131072 - 199}, "131,072 at most together"),
+                      (one | {"after": 1, "blocks": 1}, "line 2: after: an earlier line, counted from 0; blocks: whole "
+                                                        "blocks of 64 tokens both prompts have"),
+                      (one | {"after": 0, "blocks": 4}, "after: an earlier line"),
+                      (one | {"after": 0, "blocks": 0}, "after: an earlier line"),
+                      (one | {"after": 0, "blocks": 1.0}, "after: an earlier line"),
+                      (one | {"at_s": -1.0}, "an arrival in seconds, from zero on and no earlier than the line's before it"),
+                      (one | {"at_s": "0"}, "an arrival in seconds"),
+                      ("{", "line 2: not a JSON object")):
+        bad.write_text(json.dumps(one) + "\n" + (line if isinstance(line, str) else json.dumps(line)) + "\n")
+        with pytest.raises(SystemExit, match=why):
+            S.read_plan("prefix", bad)
+    bad.write_text(json.dumps(TABLE[2]) + "\n" + json.dumps(TABLE[0]) + "\n")       # the table's order is the order sent
+    with pytest.raises(SystemExit, match="line 2: an arrival in seconds, from zero on and no earlier than the line's before it"):
+        S.passes_of(loads, {"prefix": str(bad)})
+    bad.write_text("\n")
+    with pytest.raises(SystemExit, match="no request"):
+        S.read_plan("prefix", bad)
+    # the command a job runs before it holds a GPU reads the table and says what it plans
+    capsys.readouterr()
+    assert S.main(["passes", "--loads", "prefix", "--dataset", f"prefix={f}"]) == 0
+    assert capsys.readouterr().out == (
+        "[serve-tax] load prefix: a table's planned requests, each sent at its arrival time, of synthetic token ids "
+        f"(vLLM's timed_trace dataset); 4 prompts a pass as they arrive, from {f} (SHA-256 {S.file_digest(f)[:16]}...), "
+        "192 of their 494 prompt tokens repeated, arriving over 30.0 s\n")
+    assert S.main(["passes", "--loads", "prefix"]) == 0
+    assert capsys.readouterr().out.endswith("(vLLM's timed_trace dataset); 4 prompts a pass at concurrency 1, 259,712 of "
+                                            "their 519,647 prompt tokens repeated\n")
+
+
+def test_the_full_size_table_is_the_one_its_source_names_and_its_maker_makes(tmp_path: Path):
+    """`prefix_plan.jsonl` is the table `prefix_plan.source.json` records, it reads as a planned load, and its two
+    repeats are the four requests' own; `prefix_plan.table` makes such a table from a serve plan's rows and meta."""
+    import prefix_plan as M
+
+    source = json.loads(M.SOURCE.read_text())
+    table = M.HERE / source["table"]
+    assert S.file_digest(table) == source["sha256"] and source["plan"].startswith("art:") and len(source["files"]) == 2
+    plan = S.read_plan("prefix", table)
+    assert S.planned(S.trace_lines(plan)) == {"requests": 651, "prompt_tokens": 2235146, "repeated_tokens": 259712,
+                                              "span_s": 1486.955}
+    repeats = [(plan[r.after], r) for r in plan if r.after is not None]
+    assert [(x.prompt, y.prompt, y.blocks) for x, y in repeats] == [
+        (x.prompt, y.prompt, y.blocks) for x, y in ((S.PAIRS[0], S.PAIRS[1]), (S.PAIRS[2], S.PAIRS[3]))]
+    assert all(x.at_s < y.at_s for x, y in repeats) and M.BLOCK == S.BLOCK
+    # the maker: the rows sent within the span, arrivals the running sum of the draws over the rate, and a long
+    # request's hit as the earlier long request of its book and the whole blocks the two share
+    rows = [{"i": 0, "kind": "chat", "prompt_len": 20, "max_tokens": 8, "gap_draw": 0.2},
+            {"i": 1, "kind": "long128k", "book": "b", "prompt_len": 200, "max_tokens": 8, "gap_draw": 0.4},
+            {"i": 2, "kind": "long128k-followup", "book": "b", "prompt_len": 190, "max_tokens": 8, "gap_draw": 0.4},
+            {"i": 3, "kind": "chat", "prompt_len": 5, "max_tokens": 8, "gap_draw": 1.0}]
+    meta = {"rate": 0.4, "max_model_len": 4096, "sent_within_span": 3,
+            "long_rows": [{"i": 1, "model": {"prefix_hit": 0}}, {"i": 2, "model": {"prefix_hit": 128}}]}
+    lines = M.table(rows, meta)
+    assert lines == [{"at_s": 0.5, "prompt": 20, "output": 8}, {"at_s": 1.5, "prompt": 200, "output": 8},
+                     {"at_s": 2.5, "prompt": 190, "output": 8, "after": 1, "blocks": 2}]
+    f = tmp_path / "made.jsonl"
+    f.write_text(M.text(lines))
+    assert S.read_plan("prefix", f) == (S.Planned(0.5, 20, 8), S.Planned(1.5, 200, 8), S.Planned(2.5, 190, 8, 1, 2))
+    meta["long_rows"][1]["model"]["prefix_hit"] = 100
+    with pytest.raises(SystemExit, match="row 2: its hit of 100 is not whole blocks of one earlier row of its book"):
+        M.table(rows, meta)
+    with pytest.raises(SystemExit, match="row 1 does not fit the context of 100"):
+        M.table(rows, meta | {"max_model_len": 100})
 
 
 @pytest.fixture
@@ -1021,7 +1152,10 @@ def both(name: str, chat: list[float], long: list[float]) -> dict:
 
 
 #: what an arm's directory says of the load that repeats a prefix: its plan's counts and its file's digest
-PLANNED = {"prefix": S.planned(S.PAIRS) | {"sha256": "5" * 64}}
+PLANNED = {"prefix": S.planned(S.trace_lines(S.PAIRS)) | {"sha256": "5" * 64}}
+#: the same of a table of planned requests that arrive over a thousand seconds, a quarter of their prompt tokens repeated
+ARRIVE = {"prefix": {"requests": 10, "prompt_tokens": 1000, "repeated_tokens": 250, "span_s": 1000.0, "sha256": "8" * 64,
+                     "table_sha256": "9" * 64}}
 
 
 def repeats(a: dict, rate: list[float], cached: float | None = None, ttft: float | None = None,
@@ -1033,6 +1167,26 @@ def repeats(a: dict, rate: list[float], cached: float | None = None, ttft: float
     for r in served["prefix@1"]:
         r |= {"sent": 4, "ok": 4, "prompt_cached_share": cached, "ttft_p50_s": ttft, "itl_p99_s": gap}
     return a | {"loads": a["loads"] | served, "planned": PLANNED}
+
+
+def arrives(a: dict, tok: list[float], spans: list[float], cached: float, ttft: list[float], gap: float) -> dict:
+    """``a`` with a table of planned requests (`ARRIVE`) served as they arrive: a rep each value of ``spans``, the
+    seconds its pass took, of ``tok``, its output tokens a second, and of ``ttft``, its time to the first token; 10
+    requests a rep; the share of the prompt tokens its prefix cache served; its 99th-percentile gap between tokens."""
+    served = cost_arm(a["arm"], {S.ARRIVING: [1.0] * len(spans)}, load="prefix")["loads"]
+    for r, span, rate, first in zip(served["prefix@0"], spans, tok, ttft):
+        r |= {"sent": 10, "ok": 10, "output_tok_per_s": rate, "span_s": span, "prompt_cached_share": cached,
+              "ttft_p50_s": first, "itl_p99_s": gap}
+    return a | {"loads": a["loads"] | served, "planned": ARRIVE}
+
+
+def arriving(last: float = 1100.0) -> list[dict]:
+    """Stock, stock with its prefix cache off and the launch line, each with the number's loads and a table of planned
+    requests served as they arrive over two reps: stock's first pass ends 10 s after the last arrival, and its second
+    ``last`` seconds after the first one."""
+    return [arrives(both("compiled", [2.0, 2.0, 2.0], [1.0, 1.0, 1.0]), [100.0, 100.0], [1010.0, last], 0.25, [0.5, 0.5], 0.05),
+            arrives(both("no-prefix-cache", [2.0, 1.99, 2.0], [1.0, 0.99, 1.0]), [99.5, 100.0], [1030.0] * 2, 0.0, [0.55, 0.5], 0.05),
+            arrives(both("two-stage", [1.95, 1.96, 1.97], [0.94, 0.935, 0.93]), [99.0, 98.0], [1020.0] * 2, 0.0, [0.6, 0.65], 0.055)]
 
 
 def rowed(arms: list[dict]) -> list[dict]:
@@ -1374,6 +1528,112 @@ def test_the_row_under_the_number_is_the_cost_on_a_repeated_prefix_with_no_targe
     assert S.prefix_text(longer)[0].startswith("  on a repeated prefix, two prompts near")
     # with the reference's cache off as the arm, no second line repeats it
     assert S.cost_report(cost_arms(), arm="no-prefix-cache")["prefix"]["cache_off"] is None
+
+
+def test_the_row_of_requests_sent_as_they_arrive_says_whether_stock_kept_up_and_which_figure_is_the_cost():
+    """A table's requests arrive at their own times. Where stock keeps up with them, each arm's tokens a second
+    follows the arrivals and is no cost: the row's cost is the two latencies. Where stock does not, the row is read as
+    the number is. It prints tokens a second and both latencies either way, each as its readings, one a rep, with no
+    mean and no interval."""
+    r = S.cost_report(arriving())
+    row = r["prefix"]
+    assert (row["load"], row["what"], row["scaled_down"], row["rung"], row["reps"]) == ("prefix", S.GIVEN, False, S.ARRIVING, 2)
+    assert "target" not in row and "verdict" not in row
+    assert row["planned"] == ARRIVE["prefix"] | {"repeated_share": 25.0}
+    # stock served all that arrived and its longest pass ended 100 s after the last arrival, a tenth of the 1,000 s
+    # they arrive over: it kept up
+    assert (row["reference"]["tail_s"], row["arm"]["tail_s"], row["kept_up"], row["why"], S.KEPT_UP) == (
+        100.0, 20.0, True, "compiled kept up", 0.1)
+    # so the cost is the two latencies; every figure is its two readings, and the row has no value
+    assert (row["cost"], row["value"], row["ci95"]) == (S.LATENCY, None, None)
+    assert (row["ttft"], row["itl_p99"]) == ({"value": None, "ci95": None, "readings": [20.0, 30.0]},
+                                             {"value": None, "ci95": None, "readings": [10.0, 10.0]})
+    assert row["tokens"] == {"value": None, "ci95": None, "readings": [1.01, 2.04]}
+    assert [(row[k]["arm"], row[k]["cached_share"], row[k]["served_all"]) for k in ("reference", "arm")] == [
+        ("compiled", 25.0, True), ("two-stage", 0.0, True)]
+    off = row["cache_off"]
+    assert (off["cost"], off["kept_up"], off["value"], off["tokens"]["readings"], off["ttft"]["readings"],
+            off["arm"]["tail_s"]) == (S.LATENCY, True, None, [0.5, 0.0], [10.0, 0.0], 30.0)
+    assert S.cost_text(r).splitlines()[1:6] == [
+        "  on a repeated prefix, a table's planned requests, each sent at its arrival time, of synthetic token ids "
+        "(vLLM's timed_trace dataset); no target, and it judges nothing: the time to the first token 20.00%, 30.00% "
+        "longer, the 99th-percentile gap between tokens 10.00%, 10.00% longer, a reading a rep over 2 reps, as they "
+        "arrive; compiled kept up, so the cost is the two latencies, two-stage's over compiled's, less one: at "
+        "arrivals compiled keeps up with, tokens a second follows the arrivals and is not a cost",
+        "    compiled kept up where it served all that arrived and each of its passes ended within a tenth of the time "
+        "the requests arrive over after the last one arrived: they arrive over 1,000.0 s, and its longest pass ended "
+        "100.0 s after the last arrived, two-stage's 20.0 s after",
+        "    10 requests, 25.00% of their prompt tokens planned to repeat; the prefix cache served 25.00% (compiled) and "
+        "0.00% (two-stage); compiled served all that arrived, two-stage served all that arrived",
+        "    compiled's output tokens a second over two-stage's, less one, which is no cost here: 1.01%, 2.04%; "
+        "compiled 100.0 output tokens/s, two-stage 98.5",
+        "    no-prefix-cache, compiled with its prefix cache off: in output tokens a second, which is no cost here, "
+        "0.50%, 0.00%, a reading a rep over 2 reps, 99.8 output tokens/s; the time to the first token 10.00%, 0.00% "
+        "longer, the 99th-percentile gap between tokens 0.00%, 0.00% longer; its prefix cache served 0.00%; "
+        "compiled served all that arrived, no-prefix-cache served all that arrived; its longest pass ended 30.0 s "
+        "after the last arrival"]
+    # the number is given with this row under it as with the four's, and reads nothing of it
+    assert (r["value"], r["label"], r["prefix"]["cost"]) == (6.95, "no repeated prefix", S.LATENCY)
+    # the run's result: the row's measurement has no value, its cost named and why, the readings beside it, and stands
+    ok, _, what, ms = S.result_of(r)
+    under = next(m for m in ms if m["name"] == "prefix")
+    assert ok and what["loads"] == ["chat", "long", "prefix"] and ms[-1]["prefix"].items() <= under.items()
+    assert (under["value"], under["ci95"], under["cost"], under["kept_up"], under["why"], under["ttft"]["readings"],
+            under["itl_p99"]["readings"], under["tokens"]["readings"], under["scaled_down"], under["rung"],
+            under["target"], under["verdict"]) == (
+        None, None, S.LATENCY, True, "compiled kept up", [20.0, 30.0], [10.0, 10.0], [1.01, 2.04], False, 0, None, None)
+    # a row whose cost is the latencies does not stand where a rep has no reading of one
+    arms = arriving()
+    arms[-1]["loads"]["prefix@0"][1]["ttft_p50_s"] = None
+    gone = S.cost_report(arms)
+    assert gone["prefix"]["ttft"]["readings"] == [20.0, None] and not S.result_of(gone)[0]
+    assert "the time to the first token 20.00%, — longer" in S.cost_text(gone)
+    # one pass of stock's ended later than a tenth of the span after the last arrival: it did not keep up, and the
+    # row is read as the number is, by tokens a second, still as its readings
+    late = S.cost_report(arriving(last=1100.1))
+    row = late["prefix"]
+    assert (row["kept_up"], row["cost"], row["value"], row["ci95"], row["tokens"]["readings"]) == (
+        False, S.TOKENS, None, None, [1.01, 2.04])
+    assert row["why"] == ("compiled's longest pass ended 100.1 s after the last arrival, over a tenth of the 1,000.0 s "
+                          "the requests arrive over")
+    assert S.cost_text(late).splitlines()[1:5] == [
+        "  on a repeated prefix, a table's planned requests, each sent at its arrival time, of synthetic token ids "
+        "(vLLM's timed_trace dataset); no target, and it judges nothing: 1.01%, 2.04%, a reading a rep over 2 reps, as "
+        "they arrive; compiled's longest pass ended 100.1 s after the last arrival, over a tenth of the 1,000.0 s the "
+        "requests arrive over, so the row is read as the number is: the cost is compiled's output tokens a second over "
+        "two-stage's, less one: compiled 100.0 output tokens/s, two-stage 98.5",
+        "    compiled kept up where it served all that arrived and each of its passes ended within a tenth of the time "
+        "the requests arrive over after the last one arrived: they arrive over 1,000.0 s, and its longest pass ended "
+        "100.1 s after the last arrived, two-stage's 20.0 s after",
+        "    10 requests, 25.00% of their prompt tokens planned to repeat; the prefix cache served 25.00% (compiled) and "
+        "0.00% (two-stage); compiled served all that arrived, two-stage served all that arrived",
+        "    two-stage over compiled: the time to the first token 20.00%, 30.00% longer, the 99th-percentile gap "
+        "between tokens 10.00%, 10.00% longer"]
+    ok, _, _, ms = S.result_of(late)
+    under = next(m for m in ms if m["name"] == "prefix")
+    assert ok and (under["value"], under["cost"], under["kept_up"], under["tokens"]["readings"]) == (
+        None, S.TOKENS, False, [1.01, 2.04])
+    # stock that left a request of a rep unserved did not keep up either, however early its passes ended
+    arms = arriving()
+    arms[0]["loads"]["prefix@0"][1]["ok"] = 9
+    short = S.cost_report(arms)["prefix"]
+    assert (short["kept_up"], short["cost"], short["why"], short["reference"]["tail_s"]) == (
+        False, S.TOKENS, "compiled did not serve all that arrived", 100.0)
+    # an arm that left a request of a rep unserved is said by name, and stock still kept up
+    arms = arriving()
+    arms[-1]["loads"]["prefix@0"][1]["ok"] = 9
+    assert S.cost_report(arms)["prefix"]["kept_up"]
+    assert ("compiled served all that arrived, two-stage did not serve all that arrived\n") in S.cost_text(S.cost_report(arms))
+    # the four requests' row says none of it: one request in flight, its cost in tokens a second, a value with its
+    # interval over the reps
+    four = S.cost_report(cost_arms())["prefix"]
+    assert (four["cost"], four["kept_up"], four["why"], four["tokens"], four["reference"]["tail_s"]) == (
+        S.TOKENS, None, None, {"value": four["value"], "ci95": four["ci95"]}, None)
+    assert four["value"] is not None and "readings" not in four["ttft"] and four["scaled_down"]
+    # a directory whose plan names no span of arrivals, as one in flight needs none, is of the four requests all the same
+    arms = [a | {"planned": {"prefix": {k: v for k, v in a["planned"]["prefix"].items() if k != "span_s"}}}
+            if "planned" in a else a for a in cost_arms()]
+    assert S.cost_report(arms)["prefix"]["scaled_down"]
 
 
 def test_the_cost_says_what_the_arms_boundary_commitment_did_and_whether_its_tables_were_built():
