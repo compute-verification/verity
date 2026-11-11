@@ -51509,3 +51509,63 @@ Tags: [run] a command I ran now, [read] a file I read now (place given), [relaye
 For BREAKEVEN: the +783 a statement is the program's parse [derived from FUSED's law and my m12 split]. Parsed once a member (unbuilt, proofs') it is about +373; parsed once a window in a kept process (unbuilt, proofs' Lean, vllm's driver), about +1.4 on the audit window's 561 members, so near the "no program" row. Label both "unbuilt, the hoist of PRF-548".
 For vllm: BENCHCROSS's 11:27Z table puts a number on PRF-548's hoist: for the wanted plan (width + margin, κ 2^-4, the writer at N = 64), +783 core-s on every statement reads 10,397.0 GB against 3,821.5 at no program (modeled 0.4) [relayed]; the hoist once a window is what closes most of that gap [derived].
 For the table: no change.
+
+## ATTACK, Wed 11 Nov 11:35Z: SCALE's 2,049 and 1,057 are right as counts over the served Program's wiring, and my run counts them at every block, not at samples (22,386 quant blocks at exactly 2,049; 6,027 `DsaIndexerQ` at exactly 1,057); the boundary bit adds none there. But that wiring is not the program `gateKey` is over at `code h`: there no unit's gate reads another unit's, so every gate a block needs has one key, ONE class a block. 643 and 2,049 are not counts of the Lean's classes at the code, and my 10:42Z and 11:09Z "by the Lean's key a head block has 643" is WRONG there, mine
+
+Every figure: [run] with the run id, [read] with file and line at `62eb1fdc64de` (#8912's head, REGX's key), [derived], [relayed], [guess]. Times from `date -u`. The count's tool is `tools/attack_unit_count.py` in the lane's notes (rewritten since 11:09Z: a linear row's q and s are its quantisation part's and its y its coordinates', the fused all-reduce's norm is one unit, the plan's N = 32 for the expert down GEMM; quant parts, `SLICES` units, `COLS` blocks and expert coordinates counted beside whole rows).
+
+**1. The two counts, by a run over every block** [run `r20261111-111848-38b9`, rc 0, cpu-2, tree `8201dacff26e`, rank 0's 1,331,964 rows; SCALE's `9d93` reads the first row of a spec and its widest].
+
+| reader block | blocks counted | writing units + own outputs: min / max | what feeds it [run] | SCALE |
+|---|---|---|---|---|
+| the quant part of `DeepGemmFp8Linear_v1{K=2048,N=6144}` | 19,968 | 2,049 / 2,049 | words [0, 2,048) of one `BatchedGemm_v1{B=8,K=512,N=256}`, one word a unit | 2,049 |
+| the quant part of `FlashInferFp8Linear_v1{K=2048,N=6144}` | 2,418 | 2,049 / 2,049 | the same | 2,049 |
+| `DsaIndexerQ_v1{H=32,D=128,ROPE=64}` | 6,027 | 1,057 / 1,057 | y of `DeepGemm/FlashInfer{K=2048,N=4096}` at elements [2,064, 6,160), 4 words a unit: 1,024; words [128, 160) of `CublasSplitKGemm_v1{K=6144,N=160}`: 32 | 1,057 |
+| `SiluMul_v2{I=1536}` | 861 | 769 / 769 | y of `{K=6144,N=3072}` at 4 | 769 |
+| `DsaRMSNorm_v1{N=2048}` | 22,386 | 513 / 513 | y of `{K=6144,N=2624}` at 4 | 513 |
+| `SiluMul_v2{I=256}` | 193,725 | 129 / 513 | 512 one-word expert coordinates (routed), or `{K=6144,N=512}` at 4 (shared) | 513, 129 |
+| `MoeRouterSigmoidBias_v1` | 21,525 | 257 / 257 | 256 one-word router GEMM units | 257 |
+| `DsaRMSNorm_v1{N=512}`, `DsaIndexerKRow_v1` | 22,386; 6,027 | 129 / 129 | | 129 |
+| `RMSNormFusedCudaVector8_v1{N=6144}` | 39,936 | 66 / 129 | | 129 |
+| a column block of `ResidualAdd_v1{N=6144}` (384 wide; first, middle, last of each row) | 64,575 | 101 / 101 | | 101 |
+| a slice of `BatchedGemm_v1{B=8,K=192,N=512}`; `RoPEHeadGptJ_v2`; a column block of `MoeSum_v1` | | 49; 17; 25 | | 49; 17; 25 |
+
+- Every count SCALE lists I get, at every block of the kind. The offset 2,064 = K + K/128 shows q and s come before y in a linear row's outputs, as both tools assume [run].
+- **Not in the run, as SCALE says:** the other seven ranks' parts of an all-reduce are no node reads in a rank's Program. This rank's own part gives 97 for the embedding all-reduce's column block and at most 26 for the residual all-reduce's; 769 and 194 are those times eight [derived, SCALE's and mine].
+- **A row the plan holds in no stratum:** `TokenSelect_v1{V=154880}` is in the census's `gaps` ("its rows alone need a 2^28 block") and `AllGather_v1` is "no gates" [read: `inputs/census.json` of `r20261111-080601-3db1`]. So M = 2,049 is over the kinds the plan prices. The select reads 154,880 logits, each written by a one-word LM-head unit; cut in 2,420 chunks with one combine [relayed, an earlier entry here], the combine would read 2,420 units, above 2,049, by the same count [derived, guess].
+
+**2. Against the plan's census cut** [read: `census.json` of `3db1`, and the "(iii) honest [base]" row's blocks].
+- `BatchedGemm_v1{B=1,K=512,N=1}`, 16 bits, `of: {BatchedGemm_v1: split}`; the plan's row has it at 4,243,439,616 blocks and no wider block of that GEMM. `Fp8GroupQuantUe8m0_v1{K=2048,G=128}` (16,896 bits) and `FlashInferFp8Quant1x128_v1{K=2048}` are parts of the two linear families, and whole blocks in the plan's row.
+- `ScaledMmFp8BlockSharedScale_v1{K=2048,N=4,G=128}` is the K=2048 linear's only coordinate block in the census and in the plan's row; `CublasSplitKGemm_v1{K=6144,N=1,SPLIT_K=4}` is one word.
+- The quant part reads `("arg", 0)`, the row's x, and nothing else [read: `PARTS`, `serving_templates.py:58-63`].
+So both are what the plan's cut gives. Agreed.
+
+**3. The boundary bit** [read: `gateKey`, `OpensWhole.lean:359-362`; `Prog.Boundary`, `Definitions/Claims/Sampling.lean:158-161`: returned, or an input, or read by a gate outside the set].
+- "The replay block is the writer's": yes where the proof blocks refine the replay blocks, which the design asks (`replayOf`, `SamplingTwo.lean:80`, is none otherwise). Two gates with equal needers and different holders need each holder to read the other's gate, which no two units of a Program in row order do [derived].
+- "The side differs only where one gate is returned or an input and the other neither": yes [derived from the two definitions]: with equal needers and one replay block, "read from outside the replay block" is "some needer other than the holder lies outside it".
+- So the bit can only split a class that holds a returned or input gate beside one that is neither. The quant part's needs hold neither kind (it reads x alone and returns nothing of the Program's), so its 2,049 stand; a class splits in at most two, so only `DsaIndexerQ` could pass it and would need 993 such classes [derived]. **Agreed: the bit adds nothing to M over the wiring.** SCALE's "weights' needers are their reader sets" I could not check on a wired program: it depends on which block holds an input gate, and `Slots.layout` makes each input gate a proof block of its own (`Spot/Slots.lean:9-11`), which would make every weight bit a class. It does not matter for item 4.
+
+**4. THE FINDING: the count is over a program the Lean's key is not over at the code.** [read, then derived; REGX's and KILIAN's to confirm or refute, it is their Lean]
+- At `code h` the statement's program is `bitsProgs h.ms` and the proof blocks `membersPart h.ms` (`SpotFlock/Code.lean:336-343`). `bitsProgs` is the members' programs side by side (`Properties/Spot/Members.lean:78`), and a gate outside a member reads none of its gates (`SitsAt.closed`, `Bridge/Members.lean:83-87`; `sitsAt_bitsProgs`, `:356`).
+- Inside a member, unit u's rows read gate 0 (the constant), gate 1 (the zero), its own source gates `2 + u·B + b` and its own computed gates (`keyProg`'s `wire`, `Spot/Bits.lean:237-247`). Gates 0 and 1 are constants (`consts`, `:597-599`). So **no unit reads a gate of another unit**, of its template or of another.
+- A unit's proof block is its gates and the input gates it owns (`blockOf`, `:306`). So what it needs (`Prog.needsList`) is its own inputs and its own returned outputs, and no other block needs any of them.
+- So `gateKey` of every gate a block needs is ({the block}, its replay block, true): the bit is true because the gate is an input or returned. **One class a block, at every block, whatever the plan's cut** [derived from those five definitions; no Lean lemma states it].
+- A value one unit writes and another reads is, in that program, two gates: the writer's output bit and an input bit of the reader. The served wiring, which SCALE and I counted, has it as one. `Bits.wiresOf` (`:667`) is that wiring and `bitsProgs` does not read it. What ties the two gates is their commitment position, which is `Addresses h`'s, the open premise. `ConflictX` is per gate (`SamplingGeneric/RegX.lean:59`).
+- **Two things that read the other way, so REGX can refute me quickly.** `Addresses`' docstring says "a gate one unit writes and another reads is needed by both" (`SlotsAt.lean:52`): by the definitions above `bitsProgs` has no such gate. And a consequence: every gate a block needs is an input or returned, so it is on its replay block's boundary, `rootsAt` (`Reveals.lean:51`) puts every opening under the run's roots, and `ReadsInterior` (`SlotsAt.lean:147-149`, which asks `Boundary rb g = false`) holds at no needed gate. TWOWITNESS wrote the same of a linked port on Tue ("a linked port's gates are at the boundary", PRF-460) [relayed]. One needed gate of `bitsProgs` off its replay block's boundary would show my reading wrong.
+
+**5. What it does to the table** [derived, modeled; the first-hit term of #8827's lemma alone, by classes; compressions, each call charged 513; K0 = 6 sampled replay blocks a run, T = 2^80 calls a run. Every cell rests on the expected-time premise at two by-class finders no guarantee names, and the model's verifier accepts no run at D*1's sizes].
+
+| design | Σk | one class a block (the key at `code h`), mine | at 643 (mine, struck at 11:15Z) | at M = 2,049 (SCALE's 11:10Z), mean / by stratum / one M |
+|---|---|---|---|---|
+| record, size classes 2^-5 | 10,046,500 | -106.88 | -99.41 / -99.38 / -98.55 | -99.28 / -97.64 / -96.88 |
+| the 2,647 GB plan, width 2^-2.5 | 42,855,252 | -104.79 | -97.66 / -97.64 / -96.46 | -97.50 / -97.32 / -94.79 |
+| width 2^-4 | 15,151,640 | -106.29 | -99.16 / -99.14 / -97.96 | -99.00 / -98.82 / -96.29 |
+| width 2^-6 | 3,787,940 | -108.29 | -101.16 / -101.14 / -99.96 | -101.00 / -100.82 / -98.29 |
+
+- At one class a block K is the checked blocks, 6·Σk a run (2^25.85 at the record), and the K part of the cost equals the sessions' part. In calls each cell is 9.00 better (the record 2^-115.88). A year of runs takes 15.68 bits off [derived]: the record 2^-91.2 in compressions, 2^-100.2 in calls.
+- **This is too good to take as it stands, and I say why.** The 7.5 bits come from the program, not from a proof: at `code h` nothing a block needs is shared, so the by-class cost charges nothing for a value's two readers. The by-class bound at the code is then a bound for the unwired program. Whether the guarantee Daniel reads (a served computation, where a reader's input IS its writer's output) needs the wired count depends on where the Lean ties the two gates at one position, and I have not read that tonight: `Addresses h` is open, and I found no statement that the trace agrees at two gates of one position.
+- So there are two honest lines, and the table has been printing a third: (a) "by `gateKey` at `code h`, one class a block: 2^-106.9 a run at the record, for the program of units side by side, under `Addresses`, which is where the wiring is"; (b) "over the served wiring, M = 2,049 at the plan's cut and 139 at the recut: the count for a program with one gate a value, which no Lean statement is at". The third, "the count the Lean's lemmas give is 643 / 2,049", is not either.
+- **CORRECTION, mine:** my 10:42Z entry, my 10:55Z one and my 11:09Z run line said the Lean's key gives a later head block 643 classes. The 643 is a count over the wiring [run `bac2`, stands as that]. At `code h` the key gives it one. I read `gateKey` and not the program under it.
+- What I could not establish: whether (a) or (b) is the count the composed guarantee needs; whether REGX's `code_eventTwoX_le_cls_at_budget` (#8924) is meant at (a). The recut (SCALE's section 5) matters only under (b).
+
+For the table: SCALE's M = 2,049 and 1,057 are confirmed as counts over the served Program's wiring at the plan's cut [run `38b9`, every block], and the boundary bit adds none; the table may say "over the served wiring a block reads up to 2,049 writing units" and may not say "by the Lean's key" or "the count the Lean's lemmas give". At `code h` the key is over units side by side, where a block has one class and the same term reads 2^-106.88 in compressions a run at the record [derived, modeled], for a program that does not hold the wiring; which of the two the by-class line is about is REGX's and KILIAN's to say before the table quotes either.
