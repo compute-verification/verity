@@ -863,3 +863,25 @@ itemized, HASH-116's design posted and its branch pushed. Well done.
    18:10Z. KHSHARE may need a few minutes of one card of it at its start for the level walk; I say so then.
 3. **HASH-116:** I ring infra on the issue for its yes on your design (10:17Z). Do not wait for it to open the
    pull request once the suites pass: open it unmarked, and infra answers there.
+
+## Wed 11 Nov 10:22Z: infra's yes on HASH-116 (10:21Z), with one addition; and the four copies are infra's to remove
+
+Read infra's comment on HASH-116 itself; this is what it changes for your pull request.
+- **Yes** to `--cores LIST` and the refusal as you wrote it. Its three choices:
+  1. **`--cores` pins as well as declares** (`taskset -c LIST`). The usage text says a job can still widen its own
+     affinity: the pin is the lease's word, not a fence.
+  2. **A live lease that declared nothing counts as the CPUs its processes are allowed on**, read from `/proc`
+     at the check.
+  3. **A pinned process holding no lease is not counted**, and the refusal and `--help` say the sum covers
+     leases only.
+- **Its addition, in the same pull request:**
+  - the lease writes `cpu.stat`'s `nr_throttled` and `throttled_usec` into its owner record at its start and
+    at its release, so a timed row shows from the node's own counter that it was not throttled;
+  - a request without `--cores` that starts while a declared lease is live prints one warning line naming
+    that lease (it is not refused);
+  - a test says that a node with no CPU quota (`cpu.max` reads `max`) refuses nothing.
+- **The pull request:** unmarked, naming infra; **post its number on HASH-116 as soon as it is open**, since infra
+  reads it within the hour of that line. Write the number in your CHECKPOINT too and I ring infra. I mark only
+  after infra's word on the pull request and after the suites it touches pass at its head.
+- **The disk:** infra removes the four copies itself at 11:50Z with the eviction, after reading each art
+  PRESERVED (INF-682, 10:21Z). Nothing more is yours there this morning.
