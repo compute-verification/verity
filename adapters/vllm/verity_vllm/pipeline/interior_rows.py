@@ -596,7 +596,10 @@ def write(it: Interior, directory: str | Path) -> dict[str, Any]:
                 port = w.held(m, p)
                 if port not in held:
                     held[port] = LK.Port.of(c, port)
-                entry[p] = held[port].header(w.held_leaves(m, p))
+                # a wired port with no tree of its own has its writer's rows, whole, as its table: Flock's verifier takes
+                # one position and one path a table row (`Flock.Registered.checkPort`), not one a reading unit
+                at = range(dict(m.tables)[p]) if port != m.port(p) else w.held_leaves(m, p)
+                entry[p] = held[port].header(at)
         registered[m.key] = entry
     window = {k: v for k, v in it.record["window"].items() if k not in ("kind", "run")}
     CS.write(c, directory, window, {"interior": True, "members": [m.key for m in w.members], "entries": it.entries},
