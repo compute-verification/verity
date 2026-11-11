@@ -42,16 +42,16 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from verity.commitments.randomness import derive
 from verity.configuration.deploy import stream
 from verity.configuration.deploy.manifest import Channel, Manifest, Role
 from verity.configuration.deploy.party import Finish, Identity, Received, Send
 from verity.configuration.deploy.stream import Side
 from verity.configuration.wire import Body, Int, Message, Schema
-from verity.commitments.randomness import derive
-
-from . import memory_challenger as mc
 from verity.protocols.pous.verifier import run as R
 from verity.protocols.pous.verifier.schemes.p2 import P2Params
+
+from . import memory_challenger as mc
 
 END = 2 ** 64 - 1
 #: the untimed exchanges before round 0 (`challenger_party`'s docstring); the index is public, so they reveal no coin

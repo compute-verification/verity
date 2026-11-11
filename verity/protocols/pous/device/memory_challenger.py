@@ -78,13 +78,18 @@ from types import MappingProxyType
 from typing import Any, Protocol
 
 from verity.commitments import hm96
+from verity.commitments.crypto import lms
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.limits import VerificationLimits
-from verity.commitments.merkle import Commitment, CommitmentDomain, Opening, tree_levels, verify_opening
-from verity.commitments.rowleaf import sha512_row_v2_digest
-from verity.commitments.crypto import lms
+from verity.commitments.merkle import (
+    Commitment,
+    CommitmentDomain,
+    Opening,
+    tree_levels,
+    verify_opening,
+)
 from verity.commitments.randomness import derive
-
+from verity.commitments.rowleaf import sha512_row_v2_digest
 from verity.protocols.pous.verifier.params import SALT_BITS
 from verity.protocols.pous.verifier.protocol import CapacityBound, Scheme
 from verity.protocols.pous.verifier.verifier import DIGEST_BYTES

@@ -63,14 +63,26 @@ from typing import Any, BinaryIO
 from verity.configuration.deploy import stream
 from verity.configuration.deploy.party import Finish, Identity, Received, Send
 from verity.configuration.deploy.runtime import ProtocolDef
+from verity.configuration.wire import Message, Phase, Refused
 from verity.protocols.pous.device import memory_challenger as mc
+from verity.protocols.pous.device.challenger_session import (
+    CHALLENGER,
+    MANIFEST,
+    MODULE,
+    PROVER,
+    SETUPS,
+    WARMUP_INDEX,
+    WARMUPS,
+    Frames,
+    Polled,
+    Prover,
+    coin_session_id,
+    session_id,
+    setup_of,
+)
 from verity.protocols.pous.verifier import period
 from verity.protocols.pous.verifier import run as R
 from verity.protocols.pous.verifier import setup as pous_setup
-from verity.protocols.pous.device.challenger_session import (CHALLENGER, MANIFEST, MODULE, PROVER, SETUPS, WARMUP_INDEX,
-                                                           WARMUPS, Frames, Polled, Prover, coin_session_id, session_id,
-                                                           setup_of)
-from verity.configuration.wire import Message, Phase, Refused
 
 COIN_BYTES = 64
 """The session's coins, which the challenger flips first (`main`'s `secrets.token_bytes(64)`), before its coin tree's
@@ -276,8 +288,14 @@ def _logs(device: Path) -> tuple[mc.SaltLog, mc.SessionLog]:
     return mc.SaltLog(device / "salts"), mc.SessionLog(device / "sessions")
 
 
+def _reply(line: str) -> None:
+    """One line of the side's stdout, which the party that started it reads (`stream.Side.talk`)."""
+    sys.stdout.write(line + "\n")
+    sys.stdout.flush()
+
+
 def _refused(e: BaseException) -> int:
-    print(json.dumps({"refused": str(e)}), flush=True)
+    _reply(json.dumps({"refused": str(e)}))
     return 1
 
 
@@ -292,7 +310,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         salts, sessions = _logs(device)
         if "salt" in request:
             source = give_salt(salts, request["salt"])
-            print(json.dumps({"source": source.hex()}), flush=True)
+            _reply(json.dumps({"source": source.hex()}))
             return 0
         if "audit" in request:
             designate(request, salts, sessions)
@@ -302,14 +320,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     signer = period.challenger(device, workers=min(period.SETUP_WORKERS, len(os.sched_getaffinity(0))))
     host, _, port = a.listen.rpartition(":")
     with socket.create_server((host, int(port))) as srv:
-        print(json.dumps({"listening": srv.getsockname()[1]}), flush=True)
+        _reply(json.dumps({"listening": srv.getsockname()[1]}))
         conn, _ = srv.accept()
         with conn:
             conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             sid, s = serve(Polled(conn), request, signer=signer, log=sessions, salts=salts,
                            coins=secrets.token_bytes(COIN_BYTES), domain=period.SESSION_DOMAIN)
     keep(device, sid, request)
-    print(json.dumps(report(sid, s, signer.public_key), sort_keys=True), flush=True)
+    _reply(json.dumps(report(sid, s, signer.public_key), sort_keys=True))
     return 0
 
 

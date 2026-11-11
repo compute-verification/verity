@@ -16,9 +16,9 @@ import verity_difftest as D
 from hypothesis import strategies as st
 
 from verity.commitments import attest
+from verity.commitments.crypto import lms
 from verity.commitments.indexed import RangeU64Domain
 from verity.commitments.merkle import CommitmentDomain
-from verity.commitments.crypto import lms
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -142,9 +142,9 @@ def test_hss_verify(server, device):
     """The liveness record and the signed root under their messages, the identity, the deployment and the party, each
     now and then another one's, and the signature flipped, cut, or another identity's."""
     live, signed = device["live"], device["signed"]
-    I = device["lower"][:16]
-    messages = {live: lms.liveness_message(I, DEPLOYMENT, PARTY, ATTACHMENT, LINK, PERIOD, 2),
-                signed: lms.period_root_message(I, DEPLOYMENT, PARTY, ATTACHMENT, LINK, PERIOD, len(RECORDS),
+    identifier = device["lower"][:16]
+    messages = {live: lms.liveness_message(identifier, DEPLOYMENT, PARTY, ATTACHMENT, LINK, PERIOD, 2),
+                signed: lms.period_root_message(identifier, DEPLOYMENT, PARTY, ATTACHMENT, LINK, PERIOD, len(RECORDS),
                                                 device["root"])}
 
     @st.composite

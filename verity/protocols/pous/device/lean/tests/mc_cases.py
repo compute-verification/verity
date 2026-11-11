@@ -20,12 +20,12 @@ from functools import cache
 from pathlib import Path
 from typing import Any
 
-from hypothesis import strategies as st
-
 import verity_difftest as D
+from hypothesis import strategies as st
 from verity_difftest import protocol as P
-from verity.protocols.pous.device import memory_challenger as mc
+
 from verity.commitments.crypto import lms
+from verity.protocols.pous.device import memory_challenger as mc
 
 HERE = Path(__file__).resolve().parent
 PACKAGE = HERE.parent
@@ -199,10 +199,10 @@ def test_key(secret: bytes, height: int) -> lms.PrivateKey:
 class _SparseTree:
     """A deployed key's tree for leaf 0 alone (`test_pous_memory_challenger._SparseTree`)."""
 
-    def __init__(self, I: bytes, seed: bytes) -> None:
+    def __init__(self, identifier: bytes, seed: bytes) -> None:
         self.root = b""
-        probe = lms.sign_at(lms.PrivateKey(lms.DEPLOYED, I, seed, self), 0, b"probe")  # type: ignore[arg-type]
-        self.root = lms.root_of(lms.DEPLOYED, I, b"probe", probe)
+        probe = lms.sign_at(lms.PrivateKey(lms.DEPLOYED, identifier, seed, self), 0, b"probe")  # type: ignore[arg-type]
+        self.root = lms.root_of(lms.DEPLOYED, identifier, b"probe", probe)
 
     def __getitem__(self, r: int) -> bytes:
         return self.root if r == 1 else hashlib.sha512(b"sibling%d" % r).digest()
@@ -210,8 +210,9 @@ class _SparseTree:
 
 @cache
 def deployed_key() -> lms.PrivateKey:
-    I, seed = hashlib.sha512(b"memory-challenger-lean/I").digest()[:16], hashlib.sha512(b"memory-challenger-lean/seed").digest()
-    return lms.PrivateKey(lms.DEPLOYED, I, seed, _SparseTree(I, seed))  # type: ignore[arg-type]
+    identifier = hashlib.sha512(b"memory-challenger-lean/I").digest()[:16]
+    seed = hashlib.sha512(b"memory-challenger-lean/seed").digest()
+    return lms.PrivateKey(lms.DEPLOYED, identifier, seed, _SparseTree(identifier, seed))  # type: ignore[arg-type]
 
 
 @dataclass(frozen=True)
