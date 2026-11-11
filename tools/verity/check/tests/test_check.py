@@ -1592,13 +1592,15 @@ def test_a_cold_check_runs_the_opt_in_tests_after_their_steps_suites_and_no_othe
 
 
 def test_the_opt_in_tests_run_with_their_variable_set_and_fail_their_step_unless_each_passed(tmp_path, monkeypatch, capsys):
-    """Each suite's named tests in a `suites.py` run of its own with its variable set and no other's.  A named test that skipped
-    (its mark reads another variable) or that its suite lacks (pytest's "not found") ran nowhere, so it fails the step."""
+    """Each suite's named tests in one `suites.py` run of its own with its variables set, every one of them, and no other
+    suite's.  A named test that skipped (its mark reads a variable its suite doesn't list) or that its suite lacks (pytest's
+    "not found") ran nowhere, so it fails the step."""
     from collections import namedtuple
 
     suite = namedtuple("suite", "name path")
-    monkeypatch.setattr(CHECK, "OPT_IN", {"a/one": ("VERITY_A_SLOW", ("tests/test_a.py::test_x", "tests/test_a.py::test_y")),
-                                          "b/two": ("VERITY_B_SLOW", ("tests/test_b.py::test_z",))})
+    monkeypatch.setattr(CHECK, "OPT_IN", {"a/one": {"VERITY_A_SLOW": ("tests/test_a.py::test_x",),
+                                                    "VERITY_A_E2E": ("tests/test_a.py::test_y",)},
+                                          "b/two": {"VERITY_B_SLOW": ("tests/test_b.py::test_z",)}})
     monkeypatch.setattr(CHECK.SUITES, "discover", lambda: [suite("one", "a/one"), suite("two", "b/two")])
     monkeypatch.setattr(CHECK, "AFTER_LEAN", ("two",))
     ran: list = []
@@ -1607,7 +1609,8 @@ def test_the_opt_in_tests_run_with_their_variable_set_and_fail_their_step_unless
 
     def run(cmd, cwd, env):
         suite = cmd[2]
-        ran.append((suite, [v for v in ("VERITY_A_SLOW", "VERITY_B_SLOW") if env.get(v) == "1"], cmd[cmd.index("--") + 1:]))
+        ran.append((suite, [v for v in ("VERITY_A_SLOW", "VERITY_A_E2E", "VERITY_B_SLOW") if env.get(v) == "1"],
+                    cmd[cmd.index("--") + 1:]))
         rc, counts = outcome[suite]
         if counts is not None:
             Path(cmd[cmd.index("--json") + 1]).write_text(json.dumps([{"suite": suite, "status": "passed", "counts": counts}]))
@@ -1615,7 +1618,8 @@ def test_the_opt_in_tests_run_with_their_variable_set_and_fail_their_step_unless
 
     monkeypatch.setattr(CHECK.subprocess, "run", run)
     assert CHECK.opt_in(tmp_path, "pytest", ["--fresh"]) == 0
-    assert ran == [("a/one", ["VERITY_A_SLOW"], ["tests/test_a.py::test_x", "tests/test_a.py::test_y"])], "pytest's suites alone"
+    assert ran == [("a/one", ["VERITY_A_SLOW", "VERITY_A_E2E"], ["tests/test_a.py::test_x", "tests/test_a.py::test_y"])], \
+        "pytest's suites alone, each in one run"
     ran.clear()
     assert CHECK.opt_in(tmp_path, "lean-suites", []) == 0 and ran == [("b/two", ["VERITY_B_SLOW"], ["tests/test_b.py::test_z"])]
     capsys.readouterr()
@@ -1623,7 +1627,7 @@ def test_the_opt_in_tests_run_with_their_variable_set_and_fail_their_step_unless
     outcome["b/two"] = (4, None)
     assert CHECK.opt_in(tmp_path, "all", []) == 1
     said = capsys.readouterr().out
-    assert "a/one: 1 of the 2 tests named with VERITY_A_SLOW=1 passed (1 skipped)" in said
+    assert "a/one: 1 of the 2 tests named with VERITY_A_SLOW=1, VERITY_A_E2E=1 passed (1 skipped)" in said
     assert "b/two: 0 of the 1 tests named with VERITY_B_SLOW=1 passed (suites.py exited 4)" in said
     assert CHECK.opt_in(tmp_path, "circuit-check", []) == 2
 
