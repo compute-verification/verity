@@ -1195,24 +1195,26 @@ keeps of the file is dropped. -/
 def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UInt32 :=
   (verifyCmdBy (fun program => (ProgramRead.of program).readers) .anew args upstream).run' none
 
-/-- One member of `verify-members`: `verify` on the member's argument list `args`, its program read through `kept`'s
-readers and its circuit file through what the member before it kept (`circuit`), with what this member keeps of its
-own circuit file, for the member after it. It takes the kept program, the kept circuit file and that member's
-arguments and nothing else: no other member's arguments, sessions, coins, registered reads or verdict reach it. All it
-reads of `kept` is `kept.readers`, which compare the member's own program bytes with `kept`'s; all it reads of `circuit`
+/-- One member of `verify-members`: `verify` on the member's argument list `args`, its program read through `kept` where
+its bytes are `kept`'s, compared in full, and through a read of its own where they are not (`ProgramRead.orOf`), so a
+member with another program reads it once, as `verify` does; and its circuit file through what the member before it
+kept (`circuit`), with what this member keeps of its own circuit file, for the member after it. It takes the kept
+program, the kept circuit file and that member's arguments and nothing else: no other member's arguments, sessions,
+coins, registered reads or verdict reach it. All it reads of `kept` is that read's readers; all it reads of `circuit`
 is `CircuitRead.readers circuit`, which compare the member's own circuit file, and everything else its parse is a
 function of, with what `circuit` is at; each returns what the readers anew return. -/
 def verifyMember (kept : ProgramRead) (circuit : Option CircuitRead) (args : List String) :
     IO (UInt32 × Option CircuitRead) :=
-  (verifyCmdBy (fun _ => kept.readers) (CircuitRead.readers circuit) args).run none
+  (verifyCmdBy (fun program => (kept.orOf program).readers) (CircuitRead.readers circuit) args).run none
 
 /-- **A member's check is `verify`**: whatever program and whatever circuit file are kept, `verifyMember` on a member's
 arguments, what it keeps for the next member set aside, is `verifyCmd` on them, the same action: the same files read,
 the same lines printed, the same exit status. -/
 theorem verifyMember_eq (kept : ByteArray) (circuit : Option CircuitRead) :
     (fun args => (·.1) <$> verifyMember (ProgramRead.of kept) circuit args) = fun args => verifyCmd args :=
-  have h : (fun _ : ByteArray => (ProgramRead.of kept).readers) = fun program => (ProgramRead.of program).readers :=
-    funext fun program => (ProgramRead.readers_of kept).trans (ProgramRead.readers_of program).symm
+  have h : (fun program : ByteArray => ((ProgramRead.of kept).orOf program).readers)
+      = fun program => (ProgramRead.of program).readers :=
+    funext fun program => (ProgramRead.readers_orOf kept program).trans (ProgramRead.readers_of program).symm
   funext fun args =>
     (congrArg (fun readers => (·.1) <$> (verifyCmdBy readers (CircuitRead.readers circuit) args).run none) h).trans
       (congrArg (fun circuits =>

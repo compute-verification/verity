@@ -11,7 +11,9 @@ of its bytes as JSON; its `digestAt`, `descAt` and `progAt` are the digest and t
 a run that hands them to its setups parses its program once. `TemplateQuery.Desc.parseOf`, `Program.decodeOf` and
 `ProvedScope.programDigestOf` are the two readings and the program's digest from that JSON. `ProgramRead.Readers` is the
 three as one value, and a `ProgramRead`'s are the originals whatever program it holds (`ProgramRead.readers_of`): that is
-what lets one `ProgramRead` serve calls whose programs it was not made from.
+what lets one `ProgramRead` serve calls whose programs it was not made from. `ProgramRead.orOf` is the read such a call
+reads its program through, the kept one on the kept bytes and the program's own on any other, so a call parses its
+program once whichever it is; its readers are the originals too (`ProgramRead.readers_orOf`).
 -/
 module
 
@@ -168,6 +170,21 @@ def ProgramRead.readers (r : ProgramRead) : ProgramRead.Readers := ⟨r.digestAt
 theorem ProgramRead.readers_of (program : ByteArray) : (ProgramRead.of program).readers = ProgramRead.Readers.anew := by
   unfold ProgramRead.readers ProgramRead.Readers.anew
   rw [ProgramRead.digestAt_of, ProgramRead.descAt_of, ProgramRead.progAt_of]
+
+/-- The read a call whose program is `b` reads it through: `r` on `r`'s own bytes, compared in full, and `b`'s own on any
+other, so the call reads `b` as JSON once whichever it is. -/
+def ProgramRead.orOf (r : ProgramRead) (b : ByteArray) : ProgramRead :=
+  match withPtrEqDecEq b r.bytes (fun _ => inferInstance) with
+  | isTrue _ => r
+  | isFalse _ => ProgramRead.of b
+
+/-- **Its readers are the readers anew**, whatever program is kept and whatever program the call names. -/
+theorem ProgramRead.readers_orOf (program b : ByteArray) :
+    ((ProgramRead.of program).orOf b).readers = ProgramRead.Readers.anew := by
+  unfold ProgramRead.orOf
+  split
+  · exact ProgramRead.readers_of program
+  · exact ProgramRead.readers_of b
 
 namespace HmRow
 
