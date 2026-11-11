@@ -33,7 +33,9 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
-SCHEMA = "verity-capture/log/v1"
+from verity_vllm.records.schema_ids import CAPTURE_LOG_SCHEMA
+
+SCHEMA = CAPTURE_LOG_SCHEMA
 
 # torch dtype name (without the "torch." prefix) -> bytes per element.  The pure side never imports torch.
 DTYPE_BYTES: dict[str, int] = {

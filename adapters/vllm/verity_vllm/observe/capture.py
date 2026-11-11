@@ -49,8 +49,8 @@ from collections.abc import Callable
 import numpy as np
 import torch
 
-from verity_vllm.observe.events import (Event, Note, Root, RunEnd, RunHeader, SampleEnd, StepEnd, StepLink, StepStart, StorageAlloc,
-                     ViewDesc)
+from verity_vllm.observe.events import (SCHEMA, Event, Note, Root, RunEnd, RunHeader, SampleEnd, StepEnd, StepLink, StepStart,
+                                        StorageAlloc, ViewDesc)
 from verity_vllm.observe.log import LogWriter
 from verity_vllm.observe.observer import EmptyMode, ModuleNamer, Observer, Recorder, reenter_impl_name
 from verity_vllm.observe.storage import StorageAdapter
@@ -59,9 +59,7 @@ from verity_vllm.engine import hooks
 from verity_vllm.engine.build import Engine
 from verity_vllm.observe.pinned import DEVICE_BACKED, IDENTITY_ALIAS_OPS, PinnedArena, device_backed, spanned_bytes, storage_bytes_view
 from verity_vllm.engine.run_facts import model_config_subset, profile_manifest
-
-
-SCHEMA = "verity-capture/log/v1"
+from verity_vllm.records.schema_ids import CAPTURE_SNAPSHOTS_SCHEMA
 
 
 @dataclass
@@ -767,7 +765,7 @@ class Capture:
 
     def _write_snapshot_index(self) -> None:
         p = Path(self.cfg.snapshot_dir) / "snapshots.json"
-        p.write_text(json.dumps({"schema": "verity-capture/snapshots/v1", "layout": "spanned-storage-bytes",
+        p.write_text(json.dumps({"schema": CAPTURE_SNAPSHOTS_SCHEMA, "layout": "spanned-storage-bytes",
                                  "note": "file = raw bytes of the storage range [byte_offset, byte_offset+nbytes) the view spans, "
                                          "copied D2H stream-ordered right after the call; content-addressed (sha256) so identical "
                                          "bytes share a file; 'sub' = sub-view (dim, index) of an oversize KV-cache tensor",

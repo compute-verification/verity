@@ -20,8 +20,8 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import option
+from verity_vllm.records.schema_ids import RUNTIME_TREE_SCHEMA
 
-RUNTIME_TREE_SCHEMA = "verity-vllm/runtime-tree/v1"
 RUNNER_PATH = "runner.sampler"          # v1's path of the sampler's Values (the runner's `sample()` return, not a module hook)
 
 
