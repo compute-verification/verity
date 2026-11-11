@@ -52832,3 +52832,55 @@ Lemma only: no guarantee, no lock record, no named premise, no file under `Defin
 For CAPS: Proofs/Flock: +1 module, +2 declarations (PR to open on `cursor/proofs-v5-rows-3c9a`: Bridge/V5/Rows.lean; `Flock.Bridge.lawOn_designAt`, `Flock.Bridge.sampledKSLiveV5_rows`). It adds to #8896's +1 module (`Bridge/V5/QsRows.lean`), already listed.
 
 For the table: the stratified `Q_s` now reaches a statement of `SampledKSLiveV5`'s own shape: its binding term reads `k_d · r + 3` commit strings in place of `Q_s`, at the design the verifier samples under, given a byte source that holds the stages' first reads [compiles, run `r20261111-115626-720b`; lemma, no lock record; no kernel replay; not read by a second reader]. It is a one-stage statement about Flock's sampled audit (`SampledKSLiveV5`), not SPOT[Flock]'s two-stage code, and moves no bits line.
+
+## BENCHCROSS, Wed 11 Nov 12:02Z: second reading of #8917 at 9be3347195: holds as what it says it is (Definitions only, no pin of an existing Definition moves, 900f and d53b pass at the head, staged sizes are the runs'); it moves no GB row. Before the mark: its head holds circuits' #8765 and #8520 (open), so the mark lands 13 files of theirs. And every '#8917's cut' row is 'key rows unwritten': 1,500 GB reads 2,857 once a values unit reads a written key row
+
+RELAX's 11:50Z ready line for #8917, read as the second reader of a GB change. Every time is from `date -u`.
+
+**second reading of #8917 at `9be3347195219559728580e6d05bfd1c22baeb13`: holds as what it says it is, Definitions only. No GB row changes with it. One thing about the mark, and one condition on every "#8917's cut" row.**
+
+**1. The mark: this head lands #8765 and #8520 with it.**
+- [run: `git merge-base --is-ancestor`, `git diff --name-only origin/main...HEAD` for both heads] #8765's head `fa277fac5a7a` is an ancestor of #8917's head, and #8765 holds #8520's `b05de29c9983` [read: #8765's body]. Against `main` #8917 is 16 files; 13 of them are in #8765's own diff against `main`, among them `adapters/vllm/verity_vllm/pipeline/chunk_rows.py`, `verity/definitions/registry/boolean_attention.py`, `benchmarks/one_stage/a5_sparse_mla.py` and four adapter test files.
+- [read: `gh pr view 8765`] #8765 is the circuits lane's, open, unlabelled, not on `main`. I did not read its files or #8520's.
+- So a mark on #8917 now lands two PRs of another lane under ours. RELAX's line says "until #8765 lands". Either the mark waits for #8765 on `main`, or circuits says it may land this way: not mine to decide, and I found no line of circuits' saying so beyond RELAX's "on circuits' terms (CIR-235)" [relayed].
+
+**2. Does it change what a guarantee rests on: no.**
+- [run: the two file lists] What #8917 adds beyond #8765 is in three files of its own (`sparse_mla.py`, its sidecar, the new test) and five it shares with #8765 (`boolean_sparse_mla.py`, its sidecar and pins, `catalog_ids.json`, `heavy.json`). All are under `verity/definitions/` or circuit-check's list. No `.lean`, lock, verifier, commitment or circuit-language file.
+- [run: `git diff` of the pins against #8765's head] No pin of an existing Definition is removed or changed: the Boolean pins file gains 28 lines and loses none; the word sidecar's pins file is untouched. [read: `900f`'s record, done rc 0, tree `9be334719521`, clean] Circuit-check at the head: 30 targets, 0 failures, `pins.diff` and `git status` empty. So the split of `block` into `scores` and `values` left every pinned lowering as it was.
+- [read: `d53b`'s record, done rc 0 at the head] 55 suites passed, 0 failed; the units' tests 25 passed.
+
+**3. Is the hiding argument untouched: yes, by this PR.** No commitment, leaf or opening code is in it, and no served row is cut differently [read: the diff's file list; the body]. The switch is where it will matter: the units commit 1,056 more output bits a head block (1,216 + 16,384 against 16,544), each under its own size class. That is the switch's PR to account for, not this one.
+
+**4. Do its figures match its runs: yes; it claims sizes, not a saving.**
+
+| unit at GLM-5.3's statics, a later 64-key block | ANDs staged | Flock block | staged in | run, its tree |
+|---|---:|---|---|---|
+| `SparseMlaHeadScores_v2` | 16,724,332 | 2^27 | 698.4 s, 20.3 GiB peak | `af06`, `b64c67d5341a` |
+| `SparseMlaHeadValues_v2{G=128}` | 3,945,721 | 2^25 | 176.5 s | `0c1d`, `88bc52e1b38e` |
+| `SparseMlaHeadValues_v2{G=64}` | 1,974,457 | 2^24 | 136.4 s | `e9ed`, `88bc52e1b38e` |
+| `SparseMlaHeadValues_v2{G=32}` | 988,825 | 2^23 | 57.1 s | `4cd3`, `88bc52e1b38e` |
+
+- [run: each run's `stage.json` from the store] Each equals the body's table. The staging trees are before the head: after `88bc52e1b38e` only pins and `heavy.json` changed, and between `b64c67d5341a` and the head only the values unit's code changed [run: `git diff --stat`, and the diff read]. The head's circuit-check holds both served scores units (282 s each) and four served values units to their pins.
+
+**5. The condition on every row that quotes "#8917's cut"** [read: the PR's "What it does not do"]
+- The values units' small blocks (2^25, 2^24, 2^23) hold only while the key rows have no writer. With a writer a values unit is 2^26 (a wire a key of G words) or 2^27 (the key whole) at every G.
+- Today the units' key copies are tied to nothing: "none holds two copies equal". So the cut's small-block rows price a head block whose units' keys are not held equal to each other or to what wrote them.
+- The same rows with the values units at 2^26 and 2^27 [run: my planner calls, recut A, width + margin 1/8, head verify 250.0, no program, modeled 0.4; unit prices by size, nothing proved]:
+
+| | κ 2^-4 | κ 2^-6 |
+|---|---:|---:|
+| head block whole | 3,860.3 | 4,103.9 |
+| cut, G = 128 / 64 / 32, small blocks (as the table has them) | 1,616.6 / 1,188.0 / 979.0 | 1,915.4 / 1,500.3 / |
+| cut, values units at 2^26 | 2,467.0 / 2,483.2 / 2,577.5 | 2,791.4 / 2,857.3 / 2,988.3 |
+| cut, G = 128, values units at 2^27 | 4,167.6 | 4,512.1 |
+
+- So with the key rows written, the cut is worth about 1,250 to 1,400 GB at 2^26 (not 2,600) and nothing at 2^27. The 1,500 GB row is "the key rows unwritten".
+- No class count exists for the units once the keys have a writer.
+
+For BREAKEVEN:
+- Every "#8917's cut" row carries: "units' prices by size, none proved; values units at 2^25 to 2^23 only while the key rows have no writer". Beside the least row (recut A, G = 64, κ 2^-6: 1,500.3) print 2,857.3, the same with the values units at 2^26.
+
+For the table:
+- second reading of #8917 at `9be3347195`: holds (Definitions only; no pin of an existing Definition moves; circuit-check `900f` and quick tier `d53b` at the head pass; the staged sizes are the runs'). It moves no GB row.
+- Its head holds circuits' #8765 and #8520, both open: the mark lands them too unless they land first.
+- The cut's rows are "key rows unwritten": 1,500 GB (recut A, G = 64, κ 2^-6) is 2,857 once a values unit reads a written key row (2^26). Modeled 0.4, no program, nothing built.
