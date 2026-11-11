@@ -1,0 +1,272 @@
+# Model architectures and training runs (rho/instances.py): the one place a model's shape is stated, which the other
+# benchmarks read through instances.models (verity/protocols/inference_only/nci/kappa.py, benchmarks/circuit_properties' references). A model's
+# matrices are, by group, rows of [name, d_in, d_out, copies in the model, copies a token uses]; legs and fanout are
+# derived from them (instances.derived_legs, instances.derived_fanout) wherever their status is "derived". Its attention
+# table is the attention as its config.json states it (kind "gqa" or "mla"), which the attention matrices follow from
+# (instances.attention_matrices). A dense MLP without a gate row is a GELU one.
+
+[model.kimi-k2]
+n_total = { value = 1.04e12, unit = "param", source = "Kimi K2 report (arXiv 2507.20534) 2.3: 1.04 trillion parameters", status = "datasheet" }
+n_active = { value = 3.2e10, unit = "param", source = "Kimi K2 report (arXiv 2507.20534) 2.3: 32 billion activated parameters", status = "datasheet" }
+d_model = { value = 7168, source = "moonshotai/Kimi-K2-Instruct config.json hidden_size", status = "datasheet" }
+layers = { value = 61, source = "moonshotai/Kimi-K2-Instruct config.json num_hidden_layers", status = "datasheet" }
+vocab = { value = 163840, source = "Kimi K2 report (arXiv 2507.20534): the vocabulary V", status = "datasheet" }
+legs = { value = 512, source = "the least d_in of a layer's matrices: MLA's kv latent into kv_b (Kimi K2's configuration)", status = "derived" }
+fanout = { value = 37248, low = 37248, high = 49152, source = "the MoE input: 384 router columns + 2 x 2048 x (8 routed + 1 shared), from Kimi K2's configuration; high: dq_rope kept", status = "derived" }
+
+[model.kimi-k2.attention]
+kind = "mla"
+heads = { value = 64, source = "moonshotai/Kimi-K2-Instruct config.json num_attention_heads", status = "datasheet" }
+q_rank = { value = 1536, source = "moonshotai/Kimi-K2-Instruct config.json q_lora_rank", status = "datasheet" }
+kv_rank = { value = 512, source = "moonshotai/Kimi-K2-Instruct config.json kv_lora_rank", status = "datasheet" }
+nope = { value = 128, source = "moonshotai/Kimi-K2-Instruct config.json qk_nope_head_dim", status = "datasheet" }
+rope = { value = 64, source = "moonshotai/Kimi-K2-Instruct config.json qk_rope_head_dim", status = "datasheet" }
+v = { value = 128, source = "moonshotai/Kimi-K2-Instruct config.json v_head_dim", status = "datasheet" }
+
+# moonshotai/Kimi-K2-Instruct config.json (Kimi-K2-Base's is the same): first_k_dense_replace 1 (intermediate 18432);
+# 384 routed experts of 2048, 8 active, 1 shared, in 60 layers.
+[model.kimi-k2.matrices]
+attention = [["q_a", 7168, 1536, 61, 61], ["q_b", 1536, 12288, 61, 61], ["kv_a", 7168, 576, 61, 61],
+             ["kv_b", 512, 16384, 61, 61], ["o", 8192, 7168, 61, 61]]
+dense = [["gate", 7168, 18432, 1, 1], ["up", 7168, 18432, 1, 1], ["down", 18432, 7168, 1, 1]]
+experts = [["gate", 7168, 2048, 23040, 480], ["up", 7168, 2048, 23040, 480], ["down", 2048, 7168, 23040, 480]]
+shared = [["gate", 7168, 2048, 60, 60], ["up", 7168, 2048, 60, 60], ["down", 2048, 7168, 60, 60]]
+router = [["gate", 7168, 384, 60, 60]]
+head = [["head", 7168, 163840, 1, 1]]
+
+[model.deepseek-v3]
+n_total = { value = 6.71e11, unit = "param", source = "DeepSeek-V3 report (arXiv 2412.19437): 671B total parameters, the main model's (the model card counts the MTP module's 14B apart)", status = "datasheet" }
+n_active = { value = 3.7e10, unit = "param", source = "DeepSeek-V3 report (arXiv 2412.19437): 37B activated for each token", status = "datasheet" }
+d_model = { value = 7168, source = "deepseek-ai/DeepSeek-V3-Base config.json hidden_size", status = "datasheet" }
+layers = { value = 61, source = "deepseek-ai/DeepSeek-V3-Base config.json num_hidden_layers", status = "datasheet" }
+vocab = { value = 129280, source = "deepseek-ai/DeepSeek-V3-Base config.json vocab_size", status = "datasheet" }
+mtp = { value = 1, source = "deepseek-ai/DeepSeek-V3-Base config.json num_nextn_predict_layers", status = "datasheet" }
+legs = { value = 512, source = "the least d_in of a layer's matrices: MLA's kv latent into kv_b", status = "derived" }
+fanout = { value = 37120, source = "the MoE input: 256 router columns + 2 x 2048 x (8 routed + 1 shared)", status = "derived" }
+
+[model.deepseek-v3.attention]
+kind = "mla"
+heads = { value = 128, source = "deepseek-ai/DeepSeek-V3-Base config.json num_attention_heads", status = "datasheet" }
+q_rank = { value = 1536, source = "deepseek-ai/DeepSeek-V3-Base config.json q_lora_rank", status = "datasheet" }
+kv_rank = { value = 512, source = "deepseek-ai/DeepSeek-V3-Base config.json kv_lora_rank", status = "datasheet" }
+nope = { value = 128, source = "deepseek-ai/DeepSeek-V3-Base config.json qk_nope_head_dim", status = "datasheet" }
+rope = { value = 64, source = "deepseek-ai/DeepSeek-V3-Base config.json qk_rope_head_dim", status = "datasheet" }
+v = { value = 128, source = "deepseek-ai/DeepSeek-V3-Base config.json v_head_dim", status = "datasheet" }
+
+# deepseek-ai/DeepSeek-V3-Base config.json: first_k_dense_replace 3 (intermediate 18432); 256 routed experts of 2048,
+# 8 active, 1 shared, in 58 layers.
+[model.deepseek-v3.matrices]
+attention = [["q_a", 7168, 1536, 61, 61], ["q_b", 1536, 24576, 61, 61], ["kv_a", 7168, 576, 61, 61],
+             ["kv_b", 512, 32768, 61, 61], ["o", 16384, 7168, 61, 61]]
+dense = [["gate", 7168, 18432, 3, 3], ["up", 7168, 18432, 3, 3], ["down", 18432, 7168, 3, 3]]
+experts = [["gate", 7168, 2048, 14848, 464], ["up", 7168, 2048, 14848, 464], ["down", 2048, 7168, 14848, 464]]
+shared = [["gate", 7168, 2048, 58, 58], ["up", 7168, 2048, 58, 58], ["down", 2048, 7168, 58, 58]]
+router = [["gate", 7168, 256, 58, 58]]
+head = [["head", 7168, 129280, 1, 1]]
+
+# DeepSeek-V4-Pro's sizes are in reference.toml. Its matrices, from
+# adapters/vllm/tests/check/fixtures/deepseek_v4/config.json: q_lora_rank 1536, one 512-wide kv head, 128 query heads
+# of 512, the output projected in 16 groups of 8 heads (o_lora_rank 1024), a 64 x 128 indexer query in the 30 CSA
+# layers; 384 routed experts of 3072, 6 active, 1 shared, in every layer. The compressors, the mHC mixing and the MTP
+# module are left out (under 2% of the parameters). reference.toml's legs (1536) and fanout (65536, wq_b's output) are
+# derived from these.
+[model.deepseek-v4-pro.matrices]
+attention = [["wq_a", 7168, 1536, 61, 61], ["wkv", 7168, 512, 61, 61], ["wq_b", 1536, 65536, 61, 61],
+             ["wo_a", 4096, 1024, 976, 976], ["wo_b", 16384, 7168, 61, 61], ["indexer_wq_b", 1536, 8192, 30, 30]]
+experts = [["gate", 7168, 3072, 23424, 366], ["up", 7168, 3072, 23424, 366], ["down", 3072, 7168, 23424, 366]]
+shared = [["gate", 7168, 3072, 61, 61], ["up", 7168, 3072, 61, 61], ["down", 3072, 7168, 61, 61]]
+router = [["gate", 7168, 384, 61, 61]]
+head = [["head", 7168, 129280, 1, 1]]
+
+[model.llama3-405b]
+n_total = { value = 4.05e11, unit = "param", source = "Llama 3 herd paper (arXiv 2407.21783): 405B", status = "datasheet" }
+n_active = { value = 4.05e11, unit = "param", source = "dense: every parameter per token", status = "datasheet" }
+d_model = { value = 16384, source = "meta-llama/Llama-3.1-405B config.json hidden_size", status = "datasheet" }
+layers = { value = 126, source = "meta-llama/Llama-3.1-405B config.json num_hidden_layers", status = "datasheet" }
+vocab = { value = 128256, source = "meta-llama/Llama-3.1-405B config.json vocab_size", status = "datasheet" }
+legs = { value = 16384, source = "the least d_in of a layer's matrices: d_model", status = "derived" }
+fanout = { value = 106496, source = "the MLP input: 2 x 53248 (SwiGLU gate and up)", status = "derived" }
+
+[model.llama3-405b.attention]
+kind = "gqa"
+heads = { value = 128, source = "meta-llama/Llama-3.1-405B config.json num_attention_heads", status = "datasheet" }
+kv_heads = { value = 8, source = "meta-llama/Llama-3.1-405B config.json num_key_value_heads", status = "datasheet" }
+head_dim = { value = 128, source = "meta-llama/Llama-3.1-405B config.json: hidden_size / num_attention_heads", status = "derived" }
+
+# meta-llama/Llama-3.1-405B config.json: SwiGLU intermediate 53248, untied embeddings.
+[model.llama3-405b.matrices]
+attention = [["q", 16384, 16384, 126, 126], ["k", 16384, 1024, 126, 126], ["v", 16384, 1024, 126, 126],
+             ["o", 16384, 16384, 126, 126]]
+dense = [["gate", 16384, 53248, 126, 126], ["up", 16384, 53248, 126, 126], ["down", 53248, 16384, 126, 126]]
+head = [["head", 16384, 128256, 1, 1]]
+
+[model.qwen25-7b]
+n_total = { value = 7.61e9, unit = "param", source = "Qwen2.5 technical report (arXiv 2412.15115): 7.61B", status = "datasheet" }
+n_active = { value = 7.07e9, unit = "param", source = "Qwen2.5 technical report: 6.53B non-embedding + the untied LM head (152064 x 3584)", status = "derived" }
+d_model = { value = 3584, source = "Qwen/Qwen2.5-7B config.json hidden_size", status = "datasheet" }
+layers = { value = 28, source = "Qwen/Qwen2.5-7B config.json num_hidden_layers", status = "datasheet" }
+vocab = { value = 152064, source = "Qwen/Qwen2.5-7B config.json vocab_size", status = "datasheet" }
+legs = { value = 3584, source = "the least d_in of a layer's matrices: d_model", status = "derived" }
+fanout = { value = 37888, source = "the MLP input: 2 x 18944 (SwiGLU gate and up)", status = "derived" }
+
+[model.qwen25-7b.attention]
+kind = "gqa"
+heads = { value = 28, source = "Qwen/Qwen2.5-7B config.json num_attention_heads", status = "datasheet" }
+kv_heads = { value = 4, source = "Qwen/Qwen2.5-7B config.json num_key_value_heads", status = "datasheet" }
+head_dim = { value = 128, source = "Qwen/Qwen2.5-7B config.json: hidden_size / num_attention_heads", status = "derived" }
+
+# Qwen/Qwen2.5-7B config.json: SwiGLU intermediate 18944, untied embeddings.
+[model.qwen25-7b.matrices]
+attention = [["q", 3584, 3584, 28, 28], ["k", 3584, 512, 28, 28], ["v", 3584, 512, 28, 28], ["o", 3584, 3584, 28, 28]]
+dense = [["gate", 3584, 18944, 28, 28], ["up", 3584, 18944, 28, 28], ["down", 18944, 3584, 28, 28]]
+head = [["head", 3584, 152064, 1, 1]]
+
+[model.qwen25-1b5]
+n_total = { value = 1.54e9, unit = "param", source = "Qwen2.5 technical report (arXiv 2412.15115): 1.54B", status = "datasheet" }
+n_active = { value = 1.54e9, unit = "param", source = "Qwen2.5 technical report: 1.31B non-embedding + the LM head tied to the embedding", status = "derived" }
+d_model = { value = 1536, source = "Qwen/Qwen2.5-1.5B config.json hidden_size", status = "datasheet" }
+layers = { value = 28, source = "Qwen/Qwen2.5-1.5B config.json num_hidden_layers", status = "datasheet" }
+vocab = { value = 151936, source = "Qwen/Qwen2.5-1.5B config.json vocab_size", status = "datasheet" }
+legs = { value = 1536, source = "the least d_in of a layer's matrices: d_model", status = "derived" }
+fanout = { value = 17920, source = "the MLP input: 2 x 8960 (SwiGLU gate and up)", status = "derived" }
+tied_embeddings = true
+
+[model.qwen25-1b5.attention]
+kind = "gqa"
+heads = { value = 12, source = "Qwen/Qwen2.5-1.5B config.json num_attention_heads", status = "datasheet" }
+kv_heads = { value = 2, source = "Qwen/Qwen2.5-1.5B config.json num_key_value_heads", status = "datasheet" }
+head_dim = { value = 128, source = "Qwen/Qwen2.5-1.5B config.json: hidden_size / num_attention_heads", status = "derived" }
+
+# Qwen/Qwen2.5-1.5B config.json: SwiGLU intermediate 8960, the LM head tied to the embedding.
+[model.qwen25-1b5.matrices]
+attention = [["q", 1536, 1536, 28, 28], ["k", 1536, 256, 28, 28], ["v", 1536, 256, 28, 28], ["o", 1536, 1536, 28, 28]]
+dense = [["gate", 1536, 8960, 28, 28], ["up", 1536, 8960, 28, 28], ["down", 8960, 1536, 28, 28]]
+head = [["head", 1536, 151936, 1, 1]]
+
+[model.smollm2-135m]
+n_total = { value = 134515008, unit = "param", source = "HuggingFaceTB/SmolLM2-135M config.json: the 49152 x 576 embedding tied to the LM head, 30 layers of 3,538,944 matrix weights and two 576-wide norms, and the final norm", status = "derived" }
+n_active = { value = 134515008, unit = "param", source = "dense: every parameter per token, the LM head tied to the embedding", status = "derived" }
+d_model = { value = 576, source = "HuggingFaceTB/SmolLM2-135M config.json hidden_size", status = "datasheet" }
+layers = { value = 30, source = "HuggingFaceTB/SmolLM2-135M config.json num_hidden_layers", status = "datasheet" }
+vocab = { value = 49152, source = "HuggingFaceTB/SmolLM2-135M config.json vocab_size", status = "datasheet" }
+legs = { value = 576, source = "the least d_in of a layer's matrices: d_model", status = "derived" }
+fanout = { value = 3072, source = "the MLP input: 2 x 1536 (SwiGLU gate and up)", status = "derived" }
+tied_embeddings = true
+
+[model.smollm2-135m.attention]
+kind = "gqa"
+heads = { value = 9, source = "HuggingFaceTB/SmolLM2-135M config.json num_attention_heads", status = "datasheet" }
+kv_heads = { value = 3, source = "HuggingFaceTB/SmolLM2-135M config.json num_key_value_heads", status = "datasheet" }
+head_dim = { value = 64, source = "HuggingFaceTB/SmolLM2-135M config.json: hidden_size / num_attention_heads", status = "derived" }
+
+# HuggingFaceTB/SmolLM2-135M config.json (HF LlamaForCausalLM): SwiGLU intermediate 1536, the LM head tied to the
+# embedding.
+[model.smollm2-135m.matrices]
+attention = [["q", 576, 576, 30, 30], ["k", 576, 192, 30, 30], ["v", 576, 192, 30, 30], ["o", 576, 576, 30, 30]]
+dense = [["gate", 576, 1536, 30, 30], ["up", 576, 1536, 30, 30], ["down", 1536, 576, 30, 30]]
+head = [["head", 576, 49152, 1, 1]]
+
+[model.qwen3-235b-a22b]
+n_total = { value = 2.35e11, unit = "param", source = "Qwen/Qwen3-235B-A22B model card: 235B in total", status = "datasheet" }
+n_active = { value = 2.2e10, unit = "param", source = "Qwen/Qwen3-235B-A22B model card: 22B activated", status = "datasheet" }
+d_model = { value = 4096, source = "Qwen/Qwen3-235B-A22B config.json hidden_size", status = "datasheet" }
+layers = { value = 94, source = "Qwen/Qwen3-235B-A22B config.json num_hidden_layers", status = "datasheet" }
+vocab = { value = 151936, source = "Qwen/Qwen3-235B-A22B config.json vocab_size", status = "datasheet" }
+legs = { value = 1536, source = "the least d_in of a layer's matrices: an expert's hidden width into its down projection", status = "derived" }
+fanout = { value = 24704, source = "the MoE input: 128 router columns + 2 x 1536 x 8 routed", status = "derived" }
+
+[model.qwen3-235b-a22b.attention]
+kind = "gqa"
+heads = { value = 64, source = "Qwen/Qwen3-235B-A22B config.json num_attention_heads", status = "datasheet" }
+kv_heads = { value = 4, source = "Qwen/Qwen3-235B-A22B config.json num_key_value_heads", status = "datasheet" }
+head_dim = { value = 128, source = "Qwen/Qwen3-235B-A22B config.json head_dim", status = "datasheet" }
+# Qwen3 report (arXiv 2505.09388) 2: QK-Norm on the attention.
+qk_norm = true
+
+# Qwen/Qwen3-235B-A22B config.json: 128 experts of 1536 (moe_intermediate_size), 8 active, none shared, in every layer
+# (mlp_only_layers is empty); untied embeddings.
+[model.qwen3-235b-a22b.matrices]
+attention = [["q", 4096, 8192, 94, 94], ["k", 4096, 512, 94, 94], ["v", 4096, 512, 94, 94], ["o", 8192, 4096, 94, 94]]
+experts = [["gate", 4096, 1536, 12032, 752], ["up", 4096, 1536, 12032, 752], ["down", 1536, 4096, 12032, 752]]
+router = [["gate", 4096, 128, 94, 94]]
+head = [["head", 4096, 151936, 1, 1]]
+
+# The thread draft's dense example, which verity/protocols/inference_only/nci prices (its models.json dense-100b and the
+# dense-pretrain-thread-draft row): no released model, so every number is assumed. 96 heads of 128 and a 4x GELU MLP, 12 d^2
+# weights a layer.
+[model.dense-100b]
+n_total = { value = 1e11, unit = "param", source = "the thread draft's dense example: 1e11 parameters", status = "assumed" }
+n_active = { value = 1e11, unit = "param", source = "dense: every parameter per token", status = "assumed" }
+d_model = { value = 12288, source = "the thread draft's dense example: d_model 12288", status = "assumed" }
+layers = { value = 55, source = "1e11 weights at 12 d^2 a layer: 55 layers", status = "assumed" }
+vocab = { value = 128256, source = "Llama 3's vocabulary (meta-llama/Llama-3.1-405B config.json vocab_size)", status = "assumed" }
+legs = { value = 12288, source = "the least d_in of a layer's matrices: d_model", status = "derived" }
+fanout = { value = 49152, source = "the MLP input: 4 x 12288 (GELU, one up projection)", status = "derived" }
+
+[model.dense-100b.attention]
+kind = "gqa"
+heads = { value = 96, source = "the thread draft's dense example: 96 heads of 128, d_model wide", status = "assumed" }
+kv_heads = { value = 96, source = "full multi-head attention: as many key and value heads as query heads", status = "assumed" }
+head_dim = { value = 128, source = "the thread draft's dense example: 96 heads of 128, d_model wide", status = "assumed" }
+
+[model.dense-100b.matrices]
+attention = [["q", 12288, 12288, 55, 55], ["k", 12288, 12288, 55, 55], ["v", 12288, 12288, 55, 55],
+             ["o", 12288, 12288, 55, 55]]
+dense = [["up", 12288, 49152, 55, 55], ["down", 49152, 12288, 55, 55]]
+head = [["head", 12288, 128256, 1, 1]]
+
+# Runs: the targets. kind is one of instances.RUN_KINDS; compute, when given, is the reference algorithm's FLOPs.
+
+[run.kimi-k2-pretrain]
+model = "kimi-k2"
+kind = "pretrain"
+tokens = { value = 1.55e13, unit = "token", source = "Kimi K2 technical report: 15.5T tokens", status = "datasheet" }
+step_tokens = { value = 6.7e7, unit = "token", source = "Kimi K2 technical report (arXiv 2507.20534): 67M tokens a batch", status = "datasheet" }
+
+[run.frontier-pretrain]
+model = "deepseek-v4-pro"
+kind = "pretrain"
+compute = { value = 3e26, unit = "FLOP", source = "a frontier pretraining run of 2026, about 3e26 FLOP (assumed), on V4-Pro's architecture, the newest frontier one with known shapes (overtrained at 49B active: about 1e15 tokens)", status = "assumed" }
+step_tokens = { value = 9.44e7, unit = "token", source = "ruled: the work reference, one V4-Pro optimizer step is a 94.4M-token batch", status = "ruled" }
+
+[run.llama3-405b-pretrain]
+model = "llama3-405b"
+kind = "pretrain"
+tokens = { value = 1.56e13, unit = "token", source = "Llama 3 herd paper: 15.6T tokens", status = "datasheet" }
+compute = { value = 3.8e25, unit = "FLOP", source = "Llama 3 herd paper: 3.8e25 FLOP", status = "datasheet" }
+step_tokens = { value = 1.6e7, unit = "token", source = "Llama 3 herd paper: the batch grows to 16M tokens", status = "datasheet" }
+
+[run.qwen25-7b-pretrain]
+model = "qwen25-7b"
+kind = "pretrain"
+tokens = { value = 1.8e13, unit = "token", source = "Qwen2.5 technical report: 18T tokens", status = "datasheet" }
+
+[run.kimi-k2-rl]
+model = "kimi-k2"
+kind = "rl-agentic"
+compute = { value = 1e25, unit = "FLOP", source = "frontier agentic RL at about pretraining's compute (verity/protocols/inference_only/nci/parameters.json rl.compute_share/frontier-2025 high 1.0; about 1e25), over three times Kimi K2's own 3e24", status = "assumed" }
+
+[run.kimi-k2-rlvr]
+model = "kimi-k2"
+kind = "rl-elicit"
+compute = { value = 3e23, unit = "FLOP", source = "verity/protocols/inference_only/nci/parameters.json rl.compute_share/frontier-2025 (0.01, 0.1, 1.0) of Kimi K2's 6 x 3.2e10 x 1.55e13 = 3e24 pretraining FLOP", status = "derived" }
+
+[run.qwen25-1b5-grpo]
+model = "qwen25-1b5"
+kind = "rl-elicit"
+tokens = { value = 2.6e7, unit = "token", source = "measured GRPO runs on GSM8K: 48 prompts x 100 steps (the 7B arm used a third); about 8 rollouts of about 700 tokens a prompt, assumed", status = "assumed" }
+step_tokens = { value = 2.6e5, unit = "token", source = "a hundredth of the run's tokens: 48 prompts x about 8 rollouts x about 700 tokens a step", status = "assumed" }
+
+[run.kimi-k2-sft]
+model = "kimi-k2"
+kind = "sft"
+tokens = { value = 1e10, unit = "token", source = "a frontier SFT stage of millions of examples at a few thousand tokens each", status = "assumed" }
+
+# One optimizer step, measured as a Boolean circuit (data/circuits.toml circuit.smollm2-135m-step): 8 packed sequences of
+# 512 tokens under SFT cross-entropy.
+[run.smollm2-135m-step]
+model = "smollm2-135m"
+kind = "sft"
+tokens = { value = 4096, unit = "token", source = "one optimizer step of B = 8 sequences of S = 512 tokens (circuit.smollm2-135m-step batch x seq_len)", status = "declared" }
+compute = { value = 3305840836608, unit = "FLOP", source = "6 x n_active x tokens: 6 x 134,515,008 x 4,096 (instances.Run.target's convention, attention's products left out)", status = "derived" }
+step_tokens = { value = 4096, unit = "token", source = "one optimizer step, one micro-batch", status = "declared" }
