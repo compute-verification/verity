@@ -57,6 +57,13 @@ PEARL_ARM=pouw:pearl-c-h100-v1-h3
 first_dir() { local d; for d in "$@"; do [ -x "$d/bin/nvcc" ] && { echo "$d"; return; }; done; }
 TAP_CUDA=${TAP_CUDA:-$(first_dir /usr/local/cuda-12.9 /usr/local/cuda)}
 CUBIN_CUDA=${CUBIN_CUDA:-$(first_dir /usr/local/cuda-13.0 /usr/local/cuda-13.3 /usr/local/cuda-12.9)}
+if [ ! -f "$TAP_CUDA/include/cusparse.h" ]; then  # a toolkit without the math libraries' headers, which torch's ATen/cuda
+  # headers include (node A's 12.9): the venv's wheels' copies, for the norm tap's build and the Commit's JIT builds
+  for lib in cusparse cusolver cufft curand; do
+    for d in "$VENV"/lib/python*/site-packages/nvidia/"$lib"/include; do [ -d "$d" ] && CPATH=${CPATH:+$CPATH:}$d; done
+  done
+  export CPATH
+fi
 HIDDEN_SO=${HIDDEN_SO:-$STAGE/fa2/build/fa3_matReqG/verity_fa3_matReqG.so}
 NORM_TAP_SO=${NORM_TAP_SO:-$STAGE/norm_tap/build/verity_norm_tap.so}
 PRED=${PRED:-$STAGE/predicted/$ROW_ID}
