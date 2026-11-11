@@ -1,36 +1,56 @@
 {
  "definitions": {
-  "DsaMaskPositions_v1{N=4,AT=0,K=2}": {
-   "and": 10,
-   "type": "c8e9bfa53dc4430e1b802ea8d9e78f25793b4d3103d84a749363107d3c999eef32a8f9f3da1836d8bd5a98015c0bd66c5abe4f28702af4178f038325a00d9650"
-  },
-  "DsaMaskPositions_v1{N=4,AT=4,K=2}": {
-   "and": 10,
-   "type": "a6c846721b211e99047c2d423fcab796ac740fa5e2b15efce5ac0df06a9060893caa834f17b9e5d9fdcfc2fc2a8fbbabcea0e35109011b8c44144ff2d1c23c00"
-  },
-  "DsaMaskPositions_v1{N=4,AT=8,K=2}": {
-   "and": 10,
-   "type": "5503739a51598efe7f50973393351b6ce310ebb601b2a9a2d514e66f7c307e9e4bd5e33d00005b30867701e5cd42923c4cdf50b812bcab46b43e0dffdbc9e009"
+  "DsaMaskPositions_v1{N=12,AT=0,K=2}": {
+   "and": 47,
+   "type": "87ea69b9b768ec9097a0ec01e65f9162bdaddef6ebca4591af757357c3e57c0fe9ba1e59c87917739df690c1057e8c98c2c0269dea5be1f02097ba4ae46c99c8"
   },
   "DsaMaskPositions_v1{N=6,AT=8,K=4}": {
    "and": 48,
-   "type": "11354c862e4cb84caa4e831a66a22a6770ecbf32231d2e824cccfeadfbf4378f0481f457376cc983ff54fd9843d3b819d19bf627bf0e73ba82ebcf887687aac0"
+   "type": "7426fe1f2643d5fa7bf2f077e1d1903c1bfc44ba46d003436f80ddccde4beea1cec838f321e0fbdadc96189e4ac2de4941ce0ec02bda2f1a52d68f27aefd1e71"
   },
   "DsaMaskPositions_v1{N=8,AT=0,K=4}": {
    "and": 52,
-   "type": "a5e385083664392fc72b565ced2278f80c20a6a31108b4e2dd5d443c6d04ae71b9695bb48b87c9af8cf0ede37ebf30d269faa083234fde872baab32b517b51bb"
+   "type": "ffb44b0fd6c3bed8f35e83eda78c13a4bfcc35a5714154788ee32af391fe37f351bb5cb27f4cf0f61ec3474d29029dc98abf01ff34b4eb382a5640db2bad37a4"
+  },
+  "DsaPositionsChunk_v1{K=4,W=2}": {
+   "and": 158,
+   "type": "e7f40205f8d712de275c89009e2509d571bc2b70773a80e699763dd656fe83ef1ae0e6d6fd8a27ca47e24f3e1eeb52c95ffa789cfa3e6c4167bae6ae96765b11"
+  },
+  "DsaPositionsChunk_v1{K=5,W=2}": {
+   "and": 255,
+   "type": "255548f395b63ddfa2db26fa1168e40491e516cd75155d0609369eab9ebf0c94a315a417ec50895ff9e7a15b3df4045f6f2bbc7d2b5a736c408b0023d9c70abe"
+  },
+  "DsaPositionsMerge_v1{M=1,K=2}": {
+   "and": 95,
+   "type": "a8d311c03e330eeb1a599d8aa156ead2fb465b34d370ee05d4cbf41aeac9dcb9d4a0f6ea2bfc1dff54707fa1db1f0448b0360ed0644c8e56a226f8f51d6d1159"
   },
   "DsaPositionsMerge_v1{M=1,K=4}": {
    "and": 160,
    "type": "4ca32b729205f8a8d8f5ad7c458816e0966241caaf4a11f49f366fdc6f7362d5ef140df22d124d0ea9a86053ae45e1cc6da7a22803e61f5e69eeb809b5abd9aa"
   },
-  "DsaPositionsMerge_v1{M=3,K=2}": {
-   "and": 611,
-   "type": "a0f50f9f50504449b679fd3f31c775caab813c2220215d87abe4811184f45ffe9ad6f2f4d630df6047d13fba00f25eb5e9ce5f0995183e5503593aee292b7ba4"
-  },
   "DsaPositionsMerge_v1{M=3,K=4}": {
    "and": 1321,
    "type": "d54eb48fe30ababfdd41ab80556105c5124e64caa154a318d4cc456c71b614b01b75f05ecaa2fb25f214087008a7ebb809de3cc946aa0078d5f7ad56cf941cfe"
+  },
+  "DsaPositionsSlot_v1{K=32,N=131072}": {
+   "and": 1065,
+   "type": "7e5072b393d5ab81b318d2fe20a7a59dd69a0a1de91f8166069e09eebea7e175ee4d0d2752083e0d5ed39ef845c5fe7f4527953cf15bbdaa4ce20f04972892a2"
+  },
+  "DsaPositionsSlot_v1{K=4,N=20}": {
+   "and": 187,
+   "type": "4bfe3b364fb226c9260c9d767681bb4f21282a767e0e49aa4adca7c57c7d1ac1a52f0b60504c677f1aae195565d847f0c95de8bcb30e4df79b60f2b86cfa8d5b"
+  },
+  "DsaPositionsSlot_v1{K=5,N=12}": {
+   "and": 285,
+   "type": "e7037dd9624034ea9cc8b43de814bc43f48852b6b84bb3cb799607a104d069c8804f47b2869856b1ee0129468310191880e5d98f1bee0e93e166dba223b8fe60"
+  }
+ },
+ "digests": {
+  "DsaPositionsChunk_v1{K=2048,W=32}": {
+   "sha512": "2d6cb894d64cd7183afab4e0e4931727558d24cd608c2f9e9fbaa681999ee71e6a3630b1e16fd5c96769d547820deac8cf7c0f5cdc0a0d326a6b47ab977264f7"
+  },
+  "DsaPositionsMerge_v1{M=8,K=2048}": {
+   "sha512": "722b747a383a52da6f25117cd46875e7f7a29a24f9d47b5a81ce7526c5d353568a212c38f14646becdc783c1f58a7e225436fbdaf68984fbf82157cbb11a42ed"
   }
  }
 }

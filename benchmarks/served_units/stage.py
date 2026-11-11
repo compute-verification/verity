@@ -85,6 +85,9 @@ FP8 scale groups of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 r
     rmsnorm-v8  `CENSUS`: RMSNormFusedCudaVector8_v1{N=6144,BLOCK=256}, the fused residual add and RMSNorm of one token row.
     table-read  `READS`: EmbeddingRead_v1{V,H}, one read of a request's history table for sparse MLA: V = 131072 ranks (the
                 table's capacity), H = 576 words (a kv row's 512 latent and 64 rope bf16 words), L = 8192 rows filled.
+    dsa-chunk   DsaPositionsChunk_v1{K,W}: chunk c of the long row's index, the merge's K = 2048 slots in chunks of W = 32,
+                each port its own row; its slots below N = 131072 (the longest row's class) but a tenth of any u32.
+    dsa-slot    DsaPositionsSlot_v1{K,N}: slot j of a chunk (K = 32), held below N = 131072 whatever its inputs.
     the rest    `PARTS`: the capture map's Programs (``glm-moe-dsa-eager-hopper-tp8-v0``) at their GLM-5.3 statics; the MoE
                 tiles' KB and SWAP are Triton's 128 and swapped until the H200 capture pins them."""
 from __future__ import annotations
@@ -114,7 +117,7 @@ from verity_flock import class_statement as CS
 from verity_flock import partition_units as PU
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.ops.prims import HopperE4m3QgmmaDot32
-from verity.definitions.registry import act, b1, dsa, fp8_moe, fp8_moe_experts, moe, ref_prims, sparse_mla
+from verity.definitions.registry import act, b1, dsa, dsa_topk_reads, fp8_moe, fp8_moe_experts, moe, ref_prims, sparse_mla
 from verity.definitions.registry import boolean_fp8 as BF
 
 
@@ -180,11 +183,28 @@ def _s8_coord_values(S: dict, n: int, rng: np.random.Generator):
     return {"x": np.stack(xs), "w": np.stack(ws)}, np.stack(twin)
 
 
+def _dsa_index_rows(S: dict, n: int, rng: np.random.Generator):
+    """A merge's slots (positions below N, a tenth of them any u32, as a slot unit's bound sees them) and an index below the
+    unit's count, one word pair a port: a chunk's (slots, c) when S has W, a slot's (slots, j) else; the twin `dsa_topk_reads`'
+    `chunk` or `slot`."""
+    K, N, W = S["K"], S["N"], S.get("W")
+    slots = np.where(rng.random((n, K)) < 0.9, rng.integers(0, N, (n, K)), rng.integers(0, 1 << 32, (n, K))).astype(np.uint32)
+    idx = rng.integers(0, -(-K // W) if W else K, n).astype(np.uint32)
+    twin = [dsa_topk_reads.chunk(s.tolist(), int(i), W) if W else [dsa_topk_reads.slot(s.tolist(), int(i), N)]
+            for s, i in zip(slots, idx)]
+    return {"slots": np.stack([words(s) for s in slots]), "i": idx.view("<u2").reshape(n, 2)}, \
+        np.stack([words(np.array(t, np.uint32)) for t in twin])
+
+
 UNITS: dict[str, Unit] = {
     "fp8-coord": Unit(lambda S: bind(BF.ScaledMmFp8BlockCoordinateV2, K=S["K"], G=S["G"]),
                       (("x", SEG, ("xq", "sx")), ("w", V2, ("wrow", "sw"))), _fp8_coord_values, {"K": 6144, "G": 128}),
     "s8-coord": Unit(lambda S: bind(BG.ScaledMmS8Coordinate, K=S["K"], **BG.GEMM_SM120_S8),
                      (("x", SEG, ("x", "sx")), ("w", V2, ("wrow", "sw"))), _s8_coord_values, {"K": 2048}),
+    "dsa-chunk": Unit(lambda S: bind(dsa_topk_reads.DsaPositionsChunk, K=S["K"], W=S["W"]),
+                      (("slots", SEG, ("slots",)), ("i", SEG, ("c",))), _dsa_index_rows, {"K": 2048, "W": 32, "N": 1 << 17}),
+    "dsa-slot": Unit(lambda S: bind(dsa_topk_reads.DsaPositionsSlot, K=S["K"], N=S["N"]),
+                     (("slots", SEG, ("slots",)), ("i", SEG, ("j",))), _dsa_index_rows, {"K": 32, "N": 1 << 17}),
 }
 
 
