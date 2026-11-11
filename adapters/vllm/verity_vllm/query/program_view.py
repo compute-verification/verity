@@ -401,7 +401,8 @@ class _Builder:
             if len(pidx) == 1:
                 if idx not in seen:
                     seen.add(idx)
-                    rc.append(idx); rp.append(pidx[0])
+                    rc.append(idx)
+                    rp.append(pidx[0])
                 return
             hit = False
             for p, pi in zip(port_tables[s], pidx):
@@ -409,12 +410,14 @@ class _Builder:
                     hit = True
                     if (idx, pi) not in seen:
                         seen.add((idx, pi))
-                        rc.append(idx); rp.append(pi)
+                        rc.append(idx)
+                        rp.append(pi)
             if not hit and forms[c.form_idx[idx]] == "batch":  # a batch member beyond the single-instance signature: one port
                 pi = pidx[0]
                 if (idx, pi) not in seen:
                     seen.add((idx, pi))
-                    rc.append(idx); rp.append(pi)
+                    rc.append(idx)
+                    rp.append(pi)
 
         def param(idx: int, lo: int, hi: int, step: int = 0, count: int = 1) -> None:
             """The ports of `count` runs `[lo + k*step, hi + k*step)` of parameter `idx`, in first-touch order (ascending for a
@@ -434,8 +437,10 @@ class _Builder:
             for pi in sel:
                 if (pv.id, pi) not in seen:
                     seen.add((pv.id, pi))
-                    rc.append(pv.id); rp.append(pi)
-                    prc.append(pv.id); prp.append(pi)
+                    rc.append(pv.id)
+                    rp.append(pi)
+                    prc.append(pv.id)
+                    prp.append(pi)
 
         param_lo, param_hi = self._param_lo, self._param_hi
         p_idx = p_lo = p_hi = -1                 # [p_lo, p_hi): the port of parameter p_idx the last one-port progression read
@@ -446,7 +451,10 @@ class _Builder:
                     for key in ports:
                         if key not in seen:
                             seen.add(key)
-                            rc.append(key[0]); rp.append(key[1]); prc.append(key[0]); prp.append(key[1])
+                            rc.append(key[0])
+                            rp.append(key[1])
+                            prc.append(key[0])
+                            prp.append(key[1])
                     continue
             for run in operand:
                 space = run[0]
@@ -465,8 +473,10 @@ class _Builder:
                             pid, pi = params[idx].id, param_pidx[idx][k]
                             if (pid, pi) not in seen:
                                 seen.add((pid, pi))
-                                rc.append(pid); rp.append(pi)
-                                prc.append(pid); prp.append(pi)
+                                rc.append(pid)
+                                rp.append(pi)
+                                prc.append(pid)
+                                prp.append(pi)
                             continue
                         param(idx, lo, hi, dL, cnt)
                         continue
