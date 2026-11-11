@@ -511,3 +511,31 @@ through the API changes them. So three slots at once is the most, two from 08:00
 says. One thing for your rows: **a card's share of this machine is 10.2 cores and each row is timed with 24.** Keep
 naming the cores in every row's record and comment, and keep the card's busy fraction with it: benchmarks and
 proofs are told (HASH-98, 01:00Z) that a row whose card is not busy nearly all the window is bound by the host.
+
+## Wed 11 Nov 01:30Z: yes to `b99075082a` for rows 13 and 30; then the heaviest types again at 10 cores a card
+
+**1. Rows 13 and 30: your tree is right.** `b99075082a` (`cursor/proofs-served-tmpl-run-518c`) is `0a0e98be69` plus
+#8741's head, 21 lines in `benchmarks/served_units/stage.py` and its test [`git diff`, by the lead]; it is proofs'
+own run tree, the one SERVEDCARD staged from. Time from it, with the script as you have it. **No label until** each
+pin equals SERVEDCARD's (`8372f70f9df7f6d0`, `9ceb3c55c89d0702`) **and** proofs confirms that tree on HASH-98 (the
+lead asked at 01:30Z), as for rows 3 and 5.
+
+**2. Next after them, ahead of the 2- and 4-prover sweeps: "a card's share" rows.** Node A gives a card 10.2 cores
+and every row so far was timed with 24. benchmarks' SPOT preview on the new census (HASH-98, 01:22Z: 0.0236 prover
+GPUs a serving GPU) rests mostly on rows whose card was busy under half the window: the head blocks (39.4% of
+SPOT's proving, busy 22% and 23% at one prover) and the fused reads (19.9%, busy 37% and 40%). So:
+- **Time again at 10 cores for the card,** one prover, then 2 and 4, in this order: row 2 (the head block,
+  `FIRST=false`), row 1, row 3, row 5, then `DsaMqaLogits_v3`, the RMSNorm row and the group quant at K=6144.
+  The same statements and pins as the 24-core rows; reuse what is staged where the pin is the same. Stage with
+  whatever cores the slot has if your harness can separate staging from timing; the timed window is what must have
+  10.
+- **Where:** one or two slots at 10 cores, with what you pin over the whole node at or under 80: until 04:00Z card 4
+  (cores 12-21) and card 5 (cores 24-33) beside two 24-core slots on cards 6 and 7 (48 + 10 + 10, and KHSHARE's 12
+  until 03:30Z); from 04:00Z card 5 only (card 4 and cores 12-23 are KMOVE's). Rows 13 and 30 keep a 24-core slot.
+- **Records:** each names `cores 10`, the card's busy fraction, host memory, what ran beside it, and passes the same
+  nine checks. **Do not label them into the set benchmarks' reader reads** until benchmarks says on HASH-98 how
+  its reader tells a 10-core row from a 24-core one: a 10-core row must never replace a 24-core row by accident.
+  Put each on HASH-98 beside its 24-core figure, and in the store.
+- If benchmarks names another order or core count on HASH-98 before you start, take theirs and say so.
+- KHSHARE has the two fused types on 12 cores (HASH-109, due 04:00Z): if its figures are in before you reach rows
+  3 and 5, still time them at 10; say both.
