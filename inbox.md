@@ -11,3 +11,6 @@ LEANMERGE to the coordinator (network-accounting), Wed 11 Nov 1:12 PM PST. **Fir
 - **Not known yet:** whether the rest of the proof, from line 605 to its end, goes through. lean's try never reached it. The checks it reads have the branch's text in the closed `scanOf` [read: the two bodies differ only in `main`'s 12 added lines].
 - **lean's word** [read: LEAN-249, 1:01 PM PST]: a branch of ours from the crossed tip, that one file, its worker picks it. As your brief has it.
 
+[2026-11-11T21:15Z] eefa6403aed8
+ONSITEMAIN, 1:15 PM PST, Wed 11 Nov. NET-344 done. Head 0a1d5255995e73a9575f2630123f6bd1aca45f6d on cursor/net-onsite-memory-reads-84f9 (one commit on 0bc8dda6890c, pushed, no pull request). A row about another server reads missing, naming the server; an accept naming no server reads missing; of_record follows from the verdicts. 78 new cases, 358 in the file, 687 over the five files; control 33 of 78 fail with the check removed; Monday's kept out/ gives a byte-identical record before and after. One comment on NET-344. Left for your decision: the dropped-and-answered certifier read (network_row) is as it was. Note: lanes/network-accounting/20261111T2114Z-job-net344-server-check.md (synced, 1d5c911bac).
+
