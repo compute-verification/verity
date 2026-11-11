@@ -1,11 +1,16 @@
-"""The Lean card tables agree with the card files, number by number.
+"""The Lean card tables agree with the card files, number by number, and the generated ones are the generator's output.
 
 A GPU card file names its Lean table (``lean``). Its ``clock``, ``tensorClock`` (``clock`` where the table has none) and
 ``card`` definitions are evaluated as exact rationals (``^`` a power, ``/`` exact, and a natural-number field refused
 where Lean's division would truncate) and each arm is
-compared with what the card file gives, for every store, resource and format the ACCEL ops are priced in
-(``Security/Definitions/Core/Accel/Isa.lean``): a constructor added there fails here until the card files carry it.
-The B200 has no card table yet, and its data sheet (``Accounting.TS.Sheets.B200``) is held to its card file instead.
+compared with what the card file gives (``verity.hardware.lean.table``), for every store, resource and format the ACCEL
+ops are priced in (``Security/Definitions/Core/Accel/Isa.lean``): a constructor added there fails here until the card
+files carry it. The B200 has no card table yet, and its data sheet (``Accounting.TS.Sheets.B200``) is held to its card
+file instead.
+
+Each such card also has a generated table (``verity.hardware.lean.render``, committed under ``lean.OUT``), held to the
+generator byte for byte and to the card file by the same evaluation: it declares the names its hand-written table
+declares, with the same numbers.
 """
 
 from __future__ import annotations
@@ -19,12 +24,15 @@ from pathlib import Path
 
 import pytest
 
-from verity.hardware.cards import WORD, load, number, rate, skus
+from verity.errors import InvalidArtifact
+from verity.hardware import lean
+from verity.hardware.cards import load, number, skus
+from verity.hardware.lean import table
 
 ROOT = Path(__file__).resolve().parents[3]
 ISA = ROOT / "Security/Definitions/Core/Accel/Isa.lean"
 SHEET = ROOT / "Security/Definitions/Accounting/Sheets/B200.lean"
-LEAN = [sku for sku in skus("gpu") if "lean" in load(sku)]
+LEAN = lean.tabled()
 OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv}
 
 
@@ -80,26 +88,10 @@ def card_table(text: str) -> tuple[dict[str, Fraction], dict[str, dict[str, str]
     return {"clock": hz, "tensorClock": evaluate(tensor.group(1)) if tensor else hz}, fields
 
 
-def expected(card: dict) -> tuple[dict[str, Fraction], dict[str, dict[str, Fraction] | Fraction]]:
-    """The Lean table the card file gives: its clocks in Hz (``tensorClock`` the card's ``clock.tensor``, its
-    ``clock.sm`` where it has none), each store's words, each resource's units a second
-    (``verity.hardware.cards.rate``, so the arms hold the one calculator), each format's weight, and the model's ranges."""
-    sms, clock = number(card["sm"]["count"]), card["clock"]
-    clocks = {"clock": number(clock["sm"]) * 10 ** 6, "tensorClock": number(clock.get("tensor", clock["sm"])) * 10 ** 6}
-    store = card["store"]
-    size = {"reg": sms * (number(store["reg"]) + number(store["reg_extra"])),
-            "smem": sms * number(store["smem"]) / WORD, "l2": number(store["l2"]) / WORD,
-            "dram": number(store["dram"]) / WORD}
-    rho = {r: rate(card, r) for r in [*card["rate"], "dram"]}
-    return clocks, {"size": size, "ρ": rho, "weight": {f: number(e) for f, e in card["weight"].items()},
-                    "exact": number(card["model"]["exact"]),
-                    "text": number(store["dram"]) / number(card["model"]["instruction_bytes"])}
-
-
 def disagreements(card: dict, text: str) -> list[str]:
     """Every number on which the Lean table ``text`` and the card file differ, and every constructor either lacks."""
     clock, fields = card_table(text)
-    want_clock, want = expected(card)
+    want_clock, want = table(card)
     out = [f"{name}: Lean {clock[name]}, card file {want_clock[name]}" for name in want_clock
            if clock[name] != want_clock[name]]
     for field, kinds, nat in (("size", "Store", True), ("ρ", "Res", False), ("weight", "Fmt", False)):
@@ -169,14 +161,14 @@ def test_the_tensor_runs_at_its_own_clock_where_the_card_has_one() -> None:
     the tensor at the SM clock, and disagrees with that table on the clock and the tensor arm."""
     card = load("h200-sxm-141gb")
     text = (ROOT / card["lean"]).read_text(encoding="utf-8")
-    assert card_table(text)[0] == expected(card)[0] == {"clock": 1980 * 10 ** 6, "tensorClock": 1830 * 10 ** 6}
-    assert expected(card)[1]["ρ"]["tensor"] == 132 * 4096 * 1830 * 10 ** 6
+    assert card_table(text)[0] == table(card)[0] == {"clock": 1980 * 10 ** 6, "tensorClock": 1830 * 10 ** 6}
+    assert table(card)[1]["ρ"]["tensor"] == 132 * 4096 * 1830 * 10 ** 6
     at_sm = text.replace("132 * 4096 * tensorClock", "132 * 4096 * clock")
     assert disagreements(card, at_sm) == [f"ρ tensor: Lean 132 * 4096 * clock = {132 * 4096 * 1980 * 10 ** 6}, "
                                           f"card file {132 * 4096 * 1830 * 10 ** 6}"]
     untimed = copy.deepcopy(card)
     del untimed["clock"]["tensor"]
-    assert expected(untimed)[0] == {"clock": 1980 * 10 ** 6, "tensorClock": 1980 * 10 ** 6}
+    assert table(untimed)[0] == {"clock": 1980 * 10 ** 6, "tensorClock": 1980 * 10 ** 6}
     assert disagreements(untimed, text) == [
         f"tensorClock: Lean {1830 * 10 ** 6}, card file {1980 * 10 ** 6}",
         f"ρ tensor: Lean 132 * 4096 * tensorClock = {132 * 4096 * 1830 * 10 ** 6}, card file {132 * 4096 * 1980 * 10 ** 6}"]
@@ -187,3 +179,102 @@ def test_a_truncating_nat_division_is_refused() -> None:
     with pytest.raises(AssertionError, match="truncates"):
         evaluate("141 * 2 ^ 30 / 7", nat=True)
     assert evaluate("1 / 8") == Fraction(1, 8)
+
+
+GENERATED = lean.modules()
+
+
+def values(text: str) -> tuple[dict[str, Fraction], dict[str, dict[str, Fraction] | Fraction]]:
+    """A Lean table's numbers: its clocks, each store's, resource's and format's arm (the default's where it has none),
+    and the model's ranges."""
+    clock, fields = card_table(text)
+    out: dict[str, dict[str, Fraction] | Fraction] = {}
+    for field, kinds, nat in (("size", "Store", True), ("ρ", "Res", False), ("weight", "Fmt", False)):
+        out[field] = {name: evaluate(fields[field].get(name, fields[field].get("_")), clock, nat)
+                      for name in constructors(kinds)}
+    return clock, out | {field: evaluate(fields[field], clock, nat=True) for field in ("exact", "text")}
+
+
+def declared(text: str) -> list[str]:
+    """What a Lean table declares: its namespace, then each definition's name."""
+    return re.findall(r"^(?:namespace|def|abbrev|theorem|lemma|instance|structure) (\S+)", text, re.M)
+
+
+@pytest.mark.parametrize("path", GENERATED)
+def test_a_generated_table_is_the_generators_output(path: str) -> None:
+    """Byte for byte: nobody edits a generated module, and a changed card file or generator is a rewritten one."""
+    file = ROOT / path
+    assert file.is_file(), f"{path} is missing; write it: `{lean.COMMAND}`"
+    assert file.read_bytes() == GENERATED[path].encode("utf-8"), (
+        f"{path} is not what `verity.hardware.lean.render` gives for its card file. It is generated: change the card "
+        f"file or the generator, never this file, then write it: `{lean.COMMAND}`")
+
+
+def test_the_generated_directory_holds_only_generated_tables() -> None:
+    """Every file under ``lean.OUT`` is one the generator writes: no hand-written module sits beside the tables, and
+    the table of a card that no longer names one is deleted."""
+    found = sorted(p.relative_to(ROOT).as_posix() for p in (ROOT / lean.OUT).iterdir())
+    assert found == sorted(GENERATED), (
+        f"{lean.OUT} holds {sorted(set(found) - set(GENERATED))}, which `{lean.COMMAND}` does not write: delete them, "
+        "or keep a hand-written module elsewhere")
+
+
+@pytest.mark.parametrize("sku", LEAN)
+def test_a_generated_table_agrees_with_the_card_file(sku: str) -> None:
+    card = load(sku)
+    assert disagreements(card, lean.render(sku)) == []
+
+
+@pytest.mark.parametrize("sku", LEAN)
+def test_a_generated_table_is_the_hand_written_one(sku: str) -> None:
+    """The generated module declares the names the card's hand-written table declares, in its namespace, and every
+    number of it is that table's: an importer that changes tables changes its import and reads the same values."""
+    hand, text = (ROOT / load(sku)["lean"]).read_text(encoding="utf-8"), lean.render(sku)
+    assert declared(text) == declared(hand)
+    assert values(text) == values(hand)
+
+
+def test_a_generated_table_states_its_source_and_no_number_in_prose() -> None:
+    """A generated module opens by naming the command that wrote it and its card file, and says not to edit it. Its
+    comments name the card file's keys and restate none of its numbers."""
+    for sku in LEAN:
+        text = lean.render(sku)
+        opening = text.split("@[expose] public section")[0]
+        assert lean.COMMAND in opening and f"verity/hardware/cards/{sku}.toml" in opening and "do not edit" in opening
+        comments = re.findall(r"/-[-!].*?-/", text, re.S)
+        assert len(comments) >= 3
+        assert not re.search(r"\d", re.sub(r"`[^`]*`", "", "\n".join(comments))), f"{sku}: a comment states a number"
+
+
+def test_a_generated_table_follows_its_card_file() -> None:
+    """The generator isn't a copy of today's tables: a changed entry of the card file is a changed arm, which the old
+    card file disagrees with; a fractional rate or weight is written ``p / q``; and a card without ``clock.tensor``
+    gets no ``tensorClock`` and a tensor at the SM clock."""
+    was = load("h200-sxm-141gb")
+    card = copy.deepcopy(was)
+    card["rate"]["issue"]["value"], card["rate"]["sfu"]["value"], card["weight"]["s8"]["value"] = 5, "0.5", "0.75"
+    text = lean.render(card)
+    for line in ("    | .issue => 132 * 5 * clock", "    | .sfu => 132 * (1 / 2) * clock", "    | .s8 => 3 / 4"):
+        assert f"\n{line}\n" in text
+    assert disagreements(card, text) == []
+    assert [m.split(":")[0] for m in disagreements(was, text)] == ["ρ issue", "ρ sfu", "weight s8"]
+    del card["clock"]["tensor"]
+    untimed = lean.render(card)
+    assert "tensorClock" not in untimed and "\n    | .tensor => 132 * 4096 * clock\n" in untimed
+    assert disagreements(card, untimed) == []
+
+
+@pytest.mark.parametrize("section, key, value, named", [
+    ("store", "l2", 50 * 2 ** 20 + 2, "store.l2 in words"), ("store", "smem", 262146, "store.smem in words"),
+    ("store", "reg", "65536.5", "store.reg"), ("sm", "count", "131.5", "sm.count"),
+    ("model", "instruction_bytes", 7, "store.dram over model.instruction_bytes"), ("model", "exact", "30.5", "model.exact")])
+def test_a_generated_table_has_no_truncating_division(section: str, key: str, value: object, named: str) -> None:
+    """A field of ℕ in a generated table is whole numbers with no ``/``, so Lean's ℕ division has nothing to truncate; a
+    card file whose entry would leave a fraction there is refused, naming the entry."""
+    for sku in LEAN:
+        _, fields = card_table(lean.render(sku))
+        assert not any("/" in arm for arm in [*fields["size"].values(), fields["exact"], fields["text"]])
+    card = copy.deepcopy(load("h200-sxm-141gb"))
+    card[section][key]["value"] = value
+    with pytest.raises(InvalidArtifact, match=f"{re.escape(named)} is .*not a whole number"):
+        lean.render(card)

@@ -5,7 +5,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test_lean.py holds the Lean card tables and the B200's data sheet to the card files, and reads the stores, resources
-# and formats of Isa.lean.
+# and formats of Isa.lean. The generated tables are a directory: the test also lists it, since every file in it is one
+# verity.hardware.lean writes.
 inputs = ["verity/__init__.py", "verity/errors.py", "Security/Definitions/Core/Accel/Isa.lean",
           "Security/Definitions/Core/Accel/H200.lean", "Security/Definitions/Core/Accel/Sm120.lean",
-          "Security/Definitions/Accounting/Sheets/B200.lean"]
+          "Security/Definitions/Accounting/Sheets/B200.lean", "Security/Proofs/Core/Accel/Cards"]

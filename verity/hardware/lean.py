@@ -151,11 +151,11 @@ def main(argv: list[str] | None = None) -> int:
     top, stale = root(), 0
     for path, text in modules().items():
         file = top / path
-        if file.is_file() and file.read_text(encoding="utf-8") == text:
+        if file.is_file() and file.read_bytes() == text.encode("utf-8"):
             continue
         if a.write:
             file.parent.mkdir(parents=True, exist_ok=True)
-            file.write_text(text, encoding="utf-8")
+            file.write_bytes(text.encode("utf-8"))
             print(f"wrote {path}")
         else:
             stale += 1
