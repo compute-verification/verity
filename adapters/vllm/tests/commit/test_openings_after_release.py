@@ -118,7 +118,7 @@ def test_a_replay_that_differs_in_one_byte_fails_exactly_that_opening():
 
 def test_replay_with_a_different_layout_is_refused():
     orig = _committer("none")
-    rc = _run(orig)
+    _run(orig)
     other = _committer("host")
     _run(other, seed=1)
     other._layouts[0][0].nbytes += 4                  # layout digest differs -> not the same committed step

@@ -1808,7 +1808,6 @@
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "UP037", "symbol": "NativeHostCommitter.open", "detail": "Remove quotes from type annotation"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "UP037", "symbol": "_Footprint.families", "detail": "Remove quotes from type annotation"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "UP037", "symbol": "hazard_of_record", "detail": "Remove quotes from type annotation"},
-    {"file": "verity_vllm/commit/committer/native_host.py", "kind": "UP037", "symbol": "tp_partials_bad", "detail": "Remove quotes from type annotation"},
     {"file": "verity_vllm/commit/committer/native_jit.py", "kind": "T201", "symbol": "jit_load", "detail": "`print` found"},
     {"file": "verity_vllm/commit/committer/run_values.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/commit/committer/run_values.py", "kind": "UP035", "symbol": "<module>", "detail": "Import from `collections.abc` instead: `Callable`, `Iterable`, `Mapping`"},

@@ -1973,7 +1973,6 @@
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "dict-item", "symbol": "NativeHostCommitter.identity_check", "detail": ""},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "index", "symbol": "NativeHostCommitter._move_step_to_host", "detail": ""},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "misc", "symbol": "NativeHostCommitter.finalize", "detail": "", "count": 2},
-    {"file": "verity_vllm/commit/committer/native_host.py", "kind": "name-defined", "symbol": "tp_partials_bad", "detail": ""},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "union-attr", "symbol": "NativeHostCommitter._absorb_step", "detail": ""},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "union-attr", "symbol": "NativeHostCommitter._acquire_by_cudart", "detail": "", "count": 2},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "union-attr", "symbol": "NativeHostCommitter._commit_step", "detail": ""},

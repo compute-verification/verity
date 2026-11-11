@@ -275,7 +275,6 @@ def test_late_read_verifies_but_fails_correspondence():
     c, run, bmap = commit(overwritten)
     pop = list(B.expected_population(structure(), workload()))
     assert B.coverage_check(pop, bmap)["ok"]                    # the identity IS bound (to the wrong bytes)
-    ident = B.identity(PD, "r0", 1, 0, "model.layers.0.self_attn.qkv_proj", "0", 0, -1, 0)
     e = B.map_index(bmap)[("r0", 1, 0, "model.layers.0.self_attn.qkv_proj", "0", 0)][0]
     ops = c.open([(1, e["leaf_lo"] + 1)])
     assert all(c.verify(run, o) for o in ops), "openings verify against the committed root"

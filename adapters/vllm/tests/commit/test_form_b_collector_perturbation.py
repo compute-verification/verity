@@ -25,7 +25,7 @@ import numpy as np
 
 from verity_vllm.commit import binding as B
 from verity_vllm.check import oracle_compare as OC
-from tests.check.test_oracle_compare import H, ROWS, U0, U1, make_match, reader
+from tests.check.test_oracle_compare import H, ROWS, make_match, reader
 
 PD = "p" * 64
 # the collector's committed members of step 0 (packed over the engine's row order: U1's 3 rows first, then U0's 5), names as the hook table emits them

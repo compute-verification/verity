@@ -40,6 +40,7 @@ import gc
 import os
 import threading
 import time
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -208,11 +209,9 @@ TP_PARTIAL_RE = re.compile(r"/(part|shard)_rank\d+$")   # <module path>/part_ran
 CALL_DEPENDENT_RE = re.compile(r"/(all_reduce|x_q|x_s)$")   # bound only on the calls whose token count takes that path; the manifest requires them
 
 
-def tp_partials_bad(man: dict[str, Any], names: "Counter[str]") -> dict[str, int]:
+def tp_partials_bad(man: dict[str, Any], names: Counter[str]) -> dict[str, int]:
     """TP rank-local collective inputs: exactly one `tp/<site>/{part,shard}_rank<r>` per expected site, none from elsewhere
     (`NativeHostCommitter.identity_check`'s per-step TP rule over the step's tensor names)."""
-    from collections import Counter
-
     tp_bad: dict[str, int] = {}
     tp_sites = man.get("tp_sites") or []
     tp_counts = Counter(n.rsplit("/", 1)[0] for n in names.elements() if TP_PARTIAL_RE.search(n))
@@ -1092,7 +1091,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         self.sources.append(src)
         self.name = f"{self.name}+{getattr(src, 'short_name', 'hidden_m1')}"
 
-    def flush_after_plane(self, what: str) -> bool:  # noqa: ARG002
+    def flush_after_plane(self, what: str) -> bool:
         """Hook for acquisition sources whose tensor is overwritten before the next module hook: the arena committer
         snapshots at `_acquire` (D2D on the compute stream), so nothing is staged and nothing needs to leave early -> False.  The gather
         collector (`native_collect.NativeCollectCommitter`) overrides this with the flush."""
@@ -1750,8 +1749,6 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         duplicates another keeps its count and FAILS (1) or (4).  With a route source (`acquire.sources.route_source`: the capture map's
         model), the names the map lists are held to the map's names for the step's routes (`routes_bad`) instead of (1) and (4), and (1)
         covers the hooked modules the map has no entry for.  -> `RunCommitment.extra['identity_check']`."""
-        from collections import Counter
-
         from verity_vllm.acquire import fa2_plane_classes as FP
         man = manifest or self.expected_manifest()
         expected_modules = set(man["modules"])
