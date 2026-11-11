@@ -12004,7 +12004,19 @@
    "type_hash": "53f421070c113209ffc605594adc7e8132cf18c8e72e973c096e7b22343e9d06"
   },
   "Claims.SamplingGeneric.Compiled.KSRegAtSB_fails": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.Compiled.KSRegAtSB_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) : Exists fun A => Exists fun L => Not (Claims.SamplingGeneric.Compiled.KSRegAtSB H L)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.Compiled.Scope", "Claims.StrictBirthday"],
+    "reads": []
+   },
+   "type_hash": "d39c55ef226f4fe140830319c3f061b4c270e18f74d5920078893e77939e9908"
   },
   "Claims.SamplingGeneric.Compiled.KSRegAt_fails": {
    "owner": "@proofs",
@@ -12479,10 +12491,38 @@
    "unfolded_hash": "e8a286c2f3b096ef084393f165a712e95bb1c252594b184314e8b4c6552bf7e0"
   },
   "Claims.SamplingGeneric.compilerKSRegAtSB": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": ["Claims.SamplingGeneric.compilerKSRegAtSB : Claims.SamplingGeneric.CompilerKSRegAtSB"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.CommitmentScheme.Binds"],
+    "open": [
+     "Claims.SamplingGeneric.Arg.KS",
+     "Claims.SamplingGeneric.Compiled.OpenCallsLe",
+     "Claims.SamplingGeneric.Compiled.Scope",
+     "Claims.SamplingGeneric.Compiled.Sessions",
+     "Claims.StrictBirthday"
+    ],
+    "reads": []
+   },
+   "type_hash": "ab85d8453843a4f9c08a9f137d975435787ed4aad28e747b7d2de8fa08c86646",
+   "unfolded_hash": "383337c0b2875cd962f8e45aa5c30ce939e23c0696946f03cb5e7f9ba1fef0d6"
   },
   "Claims.SamplingGeneric.compilerKSRegAtSB_nontrivial": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerKSRegAtSB_nontrivial :",
+    "  Not (Claims.SamplingGeneric.Compiled.KSRegAtSB FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksL Bool))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.Compiled.Scope", "Claims.StrictBirthday"],
+    "reads": []
+   },
+   "type_hash": "d366aee3de223853756c82f099a9dba6ee0ac3f625009ce3a203e826d91d94da"
   },
   "Claims.SamplingGeneric.compilerKSRegAt_nontrivial": {
    "owner": "@proofs",
@@ -32908,7 +32948,7 @@
    }
   },
   "Definitions.Claims.SamplingGeneric": {
-   "digest": "1e52971ae1901732d756a1a6bc7e0ca135bb129b3f0c60359d2e6fd8ddb60fba",
+   "digest": "5cccaba440b16bf3867ea18fce3d9b45ec703534aa4e5e0e7392078c8f789478",
    "definitions": {
     "Claims.SamplingGeneric.Arg": "a3523e27db94bc0fc6aa14e539db934e8b8be4d90fc860bd46115063083b28bf",
     "Claims.SamplingGeneric.Arg.E": "af0ca8a8061e3a89bb9774829557e74a7af338ec04da1c21cfd55abc0da27f8e",
@@ -32948,6 +32988,7 @@
     "Claims.SamplingGeneric.Compiled.KSCount": "bd12c6d6e9b95cefdb5b49bcaab7709aed20d5f4a5c9bf2d4a2ac24384ddbbc5",
     "Claims.SamplingGeneric.Compiled.KSReg": "27e0547943b0d12b8ba33d4968aed193b4729a174e7916f7e3a739cb41d425dd",
     "Claims.SamplingGeneric.Compiled.KSRegAt": "ddda1fd37832e5ca8f2ef02af26149889e30b712ce372209fddd195107d0beab",
+    "Claims.SamplingGeneric.Compiled.KSRegAtSB": "310a83285f3957286d9c1bda2be4b52491a3d7197198d4b65a734a888e407bf1",
     "Claims.SamplingGeneric.Compiled.OpenCallsLe": "240e61974b75645833c0f95ae02f47cb674dada6c380ae1480eeb7ce29f7df41",
     "Claims.SamplingGeneric.Compiled.P": "2879a4497e10cba9d0ce03ef8315dc43840f62b7a885b71eacdcc920f8483cca",
     "Claims.SamplingGeneric.Compiled.Scope": "a8711fb89d051d62f4852a2a177baf5d84781ac11493a4a0f128f32c51edb387",
@@ -32956,6 +32997,7 @@
     "Claims.SamplingGeneric.Compiled.Tape": "404da7559ac0a892c57a09eb525918f1f27125efb135ef43f7687d7fcc2008b1",
     "Claims.SamplingGeneric.Compiled.V": "12648206c67ea131061c8667d52c55cdb6bbe3031f07da449efb25defce803cb",
     "Claims.SamplingGeneric.Compiled.bconfCost": "7b2c6f26cf47813e21fd5428dff2f11399192cb548dc6b01eee88dea18190a9b",
+    "Claims.SamplingGeneric.Compiled.bconfCostStrict": "3cb638ea87e3f4a2685f9e6683a900ca14dae274dbc35e53ff335a498ce69e03",
     "Claims.SamplingGeneric.Compiled.capIn": "10c8195a70ea20c2f6d48a1669d21c7fa3d303c08e53fa44e0f5cbd5b154d112",
     "Claims.SamplingGeneric.Compiled.capOut": "188b30eeb8649bdd07d62f4a91aee1929f07b6162499506bb402a1b38cbd2a77",
     "Claims.SamplingGeneric.Compiled.checked": "b2bc82c22073a67a6ba4428e72ca2b9effdfd1ffa55e9ff5e3f82ad4bd93fb5b",
@@ -32999,6 +33041,7 @@
     "Claims.SamplingGeneric.Compiled.δc": "1567746d9428dd56d2d9af23295b2912153c9a73fc03a88d9972bc38d5f952f9",
     "Claims.SamplingGeneric.Compiled.εreg": "319db40121955316d771a9abeb026ceab37238c8205b1864e4324da841c18ed3",
     "Claims.SamplingGeneric.Compiled.εregAt": "9ae3d95b2fad4ad83a362a34d9b3d72e6a06cb8cb184aaf180628a83a268b02e",
+    "Claims.SamplingGeneric.Compiled.εregSB": "2327bd0fe797d755ce82ff43212c4adf9b06f310aec665cd40218aa04511ea5d",
     "Claims.SamplingGeneric.Compiled.κ": "0f14e7a74f045978a0452ff3ae360047270da6c58a74b8032b82e19488c361d2",
     "Claims.SamplingGeneric.Compiled.κb": "a56f97768830ec102f69bcfecfc923f65c01344afac98a865a109cbc01dfffb1",
     "Claims.SamplingGeneric.Compiled.κs": "febf751edb3d8ac654777c3253f8af6172ea659553c5530f7762215eae25d51c",
@@ -33011,6 +33054,7 @@
     "Claims.SamplingGeneric.CompilerKSCount": "e15d555b4209363f8cd8ae63a3b92d8bacb599c777f228120167a8fae91c6161",
     "Claims.SamplingGeneric.CompilerKSReg": "b165887cff85d22c09d4b8bd22a75701d0ab2c7bf034f13cbb60c15cd7e798ff",
     "Claims.SamplingGeneric.CompilerKSRegAt": "e61a91c23cfc21716862edca7c9849157ed0941cfbc1327d5a6f8cb9e423a561",
+    "Claims.SamplingGeneric.CompilerKSRegAtSB": "99f145c7f704b6bab79eb75bf5625115745193e4bdc5444bd1ed586484f4c304",
     "Claims.SamplingGeneric.CompilerZK": "0ddf1b31bd73de024274bf0cc99855a8ea13d2456cdac3dd849d4b065f256a5d",
     "Claims.SamplingGeneric.Step": "ed0e1433c9da221834a30ec29a9d62d5c97b968b46db05f4791c92aaf44be715",
     "Claims.SamplingGeneric.Step.casesOn": "a0c65b92b0435a7cb415e5d65ad8e5cd9055d8a3528b0514dd65d5e958f2ac93",
