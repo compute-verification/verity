@@ -18,7 +18,7 @@ from verity_vllm.program.predict.common import kind
 
 H200 = TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False, moe_backend="triton")
 #: one TP8 rank of GLM-5.3-FP8: experts, hidden, a rank's expert width, the FP8 block, top-k and the routed scaling factor
-E, H, I, G, TOPK, SCALE = 256, 6144, 256, 128, 8, 2.5
+E, H, INTER, G, TOPK, SCALE = 256, 6144, 256, 128, 8, 2.5
 LAUNCHES = range(1, 8193)
 
 
@@ -33,7 +33,7 @@ def _served(module) -> set[str]:
 
 def _compiled(M: int) -> tuple[str, str, str, tuple]:
     """The ids `predict.dsa`'s MoE block binds at an M-token launch (its statics as it writes them), and the tile."""
-    cfg = fused_moe_config(E, I, "NVIDIA H200", "fp8_w8a8", (G, G), M)
+    cfg = fused_moe_config(E, INTER, "NVIDIA H200", "fp8_w8a8", (G, G), M)
     return _bound(cfg["BLOCK_SIZE_M"], cfg["BLOCK_SIZE_N"], min(cfg["BLOCK_SIZE_K"], G), cfg["num_warps"], moe.router_kernel(E, M, TOPK))
 
 
@@ -44,7 +44,7 @@ def _bound(BM: int, BN: int, KB: int, warps: int, kernel: str) -> tuple[str, str
     assert TG.moe_fp8_tuned_tile_refusal(H200, BM, BN, KB, warps, swap) is None
     st = {"E": E, "G": G, "KB": KB, "SWAP": swap, "DOT": TG.moe_expert_fp8_launch_dot(H200, BM, BN, warps, swap)}
     router = kind("moe_router_sigmoid_bias", E=E, TOPK=TOPK, RSF=SCALE, KERNEL=kernel)
-    return (kind("moe_expert_gemm_dot", K=H, N=2 * I, **st).id, kind("moe_expert_gemm_w_dot", K=I, N=H, **st).id, router.id,
+    return (kind("moe_expert_gemm_dot", K=H, N=2 * INTER, **st).id, kind("moe_expert_gemm_w_dot", K=INTER, N=H, **st).id, router.id,
             (BM, BN, swap, st["DOT"].id))
 
 

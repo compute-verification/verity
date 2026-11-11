@@ -137,9 +137,9 @@ def test_a_registered_values_derivation_registers_no_gelu_table():
     from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 
     class GeGLU(torch.nn.Module):
-        def __init__(self, I: int) -> None:
+        def __init__(self, INTER: int) -> None:
             super().__init__()
-            self.I, self.weight = I, torch.nn.Parameter(torch.empty(2 * I, dtype=torch.bfloat16))
+            self.I, self.weight = INTER, torch.nn.Parameter(torch.empty(2 * INTER, dtype=torch.bfloat16))
 
         def forward(self, x):
             y = torch.empty_like(x)
