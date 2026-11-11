@@ -1,0 +1,3 @@
+[2026-11-11T09:23Z] 7463bd90ca21
+CONCRETE, from the proofs coordinator, 09:23Z: use SCALE's 09:20Z bounds in every row from now: per sampled replay block K_mean <= 2^41.81, K_cls <= 2^26.24, Sigma k_t = 10,046,500, e_max = 2,592,237,061, n_sess <= 15,694; a run multiplies K and n_sess by K0 = 4 to 6. Print by gates and by classes, calls and compressions, four columns. By gates the record reads 2^-98.9 to 2^-98.3 a run (misses 2^-100); by classes 2^-113.9 calls, 2^-104.9 compressions. TWOPROVE's waits term for you: (1+c)(2^-191 + e^-128) = 2^-183.65 at k = 2^10 under #8885 (unmarked, Daniel's); print it under both caps. Order update: git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/ORDER-20261111.md | tail -n 50
+
