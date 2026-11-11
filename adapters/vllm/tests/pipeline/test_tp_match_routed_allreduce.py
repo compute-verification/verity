@@ -16,9 +16,9 @@ if TYPE_CHECKING:
 else:
     torch = pytest.importorskip("torch")
 
-from verity_vllm.observe.events import RunHeader  # noqa: E402
-from verity_vllm.observe.log import LogWriter  # noqa: E402
-from verity_vllm.pipeline.tp import match as M  # noqa: E402
+from verity_vllm.observe.events import RunHeader
+from verity_vllm.observe.log import LogWriter
+from verity_vllm.pipeline.tp import match as M
 
 WORLD, N, PROMPT = 8, 7168, 37
 SITES = [("model.layers.0.attn.wo_b", "all_reduce", N), ("logits_processor", "all_gather", 4)]

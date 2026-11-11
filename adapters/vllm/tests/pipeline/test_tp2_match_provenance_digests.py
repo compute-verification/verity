@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 else:
     torch = pytest.importorskip("torch")
 
-from verity_vllm.pipeline.tp import match as M  # noqa: E402
+from verity_vllm.pipeline.tp import match as M
 
 SITES = [("model.embed_tokens", "all_reduce", 8), ("model.layers.0.self_attn.o_proj", "all_reduce", 8), ("logits_processor", "all_gather", 4)]
 
