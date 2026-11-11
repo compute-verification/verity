@@ -4,63 +4,73 @@
  "model": "GLM-5.3",
  "status": "measured",
  "provisional": true,
- "source": "The Lean verifier (verify --zk --partition --program) on today's flat statement of one block, one core, setup included, measured on vy-spot-prove's CPU for nine of GLM-5.3's proof-block types at TP8; peak resident memory measured for two of them, restaged and verified under perf on vy-nebius-cpu-2 (FlashInfer K2048, 99.6 GB, run r20261107-163607-8de4) and vy-nebius-cpu-6 (quant K6144, 111 GB, run r20261107-163659-b576), null where not measured. The time goes as about 10 s plus 0.6 to 0.8 \u00b5s a matrix entry of the unit, most of it reading the unrolled circuit file (hashing it three times, decoding and tokenizing every row). A family's other types scale on the line through its members, through 10 s at size 0 where it has one; the expert GEMMs and the all-reduces take their member's seconds; any other type the nine's median. Converted at the core-seconds that cost one GPU-second at Nebius AI Cloud's on-demand list prices.",
+ "source": "The Lean verifier (flock-verify verify --zk --partition --program) on one block's flat statement with its MUFU table reads inline (m1_unit.py's default; chunk_rows.reads serves each of these types' MUFU reads inline too, where it has any), setup included, its process's user and system CPU seconds and peak resident memory under /usr/bin/time, measured on vy-nebius-cpu-1 at checked 00d07520b3 for 11 of GLM-5.3's proof-block types at TP8, each staged and proved at one block (benchmarks/one_stage/m1_unit.py) and verified once, the median of its verifies where it was verified more than once. Each verify was a --zk session, on which Lean runs Flock.KsScope's form check, and Lean accepted every one; no type here is timed in lookup slots, the form KsScope refuses under --zk. A family's other types scale on the line through its members, through the fixed seconds at size 0 where it has one; the expert GEMMs and the all-reduces take their member's seconds; any other type the measured types' median. Converted at the core-seconds that cost one GPU-second at Nebius AI Cloud's on-demand list prices. The time goes as about 7 s, which the smallest type bounds (MoeExpertFp8GemmW, 8.2 s at 7.9 million matrix entries of its unit), plus 0.10 to 0.17 \u00b5s a matrix entry for the others.",
  "runs": [
-  "r20261107-163607-8de4",
-  "r20261107-163659-b576"
+  "r20261109-191738-c631",
+  "r20261109-211436-1bcd"
  ],
  "owner": "@proofs",
  "value": {
-  "verifier": "Lean verify --zk --partition --program, today's flat statement, setup included",
-  "device": "one core of vy-spot-prove's CPU",
+  "verifier": "Lean verify --zk --partition --program on the flat statement, its MUFU table reads inline, setup included",
+  "device": "vy-nebius-cpu-1's CPU, the verify process's user and system CPU seconds",
   "core_seconds_per_gpu_second": 81.81818181818181,
   "ratio_source": "Nebius AI Cloud's on-demand list prices (docs.nebius.com/compute/resources/pricing): an H200 NVLink at $5.40 a GPU-hour against one non-GPU AMD EPYC Genoa core, two vCPUs at $0.015 a vCPU-hour with its 8 GiB at $0.0045 a GiB-hour",
-  "fixed_seconds": 10.0,
+  "fixed_seconds": 7.0,
   "types": [
    {
-    "block": "FlashInferFp8Linear_v1{K=2048,",
-    "core_seconds": 2474.0,
-    "peak_gb": 99.6
+    "block": "Fp8GroupQuantUe8m0_v1{K=6144,",
+    "core_seconds": 575.7,
+    "peak_gb": 104.0
    },
    {
-    "block": "Fp8GroupQuantUe8m0_v1{K=6144,",
-    "core_seconds": 2100.0,
-    "peak_gb": 111.0
+    "block": "FlashInferFp8Linear_v1{K=2048,",
+    "core_seconds": 339.4,
+    "peak_gb": 94.1
    },
    {
     "block": "SparseMlaCombine_v1{NSPLIT=12,",
-    "core_seconds": 1634.0,
-    "peak_gb": null
+    "core_seconds": 316.7,
+    "peak_gb": 77.6
    },
    {
     "block": "RMSNormFusedCudaVector8_v1{N=6144,",
-    "core_seconds": 769.0,
-    "peak_gb": null
+    "core_seconds": 153.2,
+    "peak_gb": 31.6
    },
    {
     "block": "Fp8GroupQuantUe8m0_v1{K=2048,",
-    "core_seconds": 681.0,
-    "peak_gb": null
+    "core_seconds": 132.0,
+    "peak_gb": 32.7
+   },
+   {
+    "block": "SparseMlaCombine_v1{NSPLIT=5,",
+    "core_seconds": 130.2,
+    "peak_gb": 34.5
    },
    {
     "block": "Fp8GroupQuantUe8m0_v1{K=1536,",
-    "core_seconds": 508.0,
-    "peak_gb": null
-   },
-   {
-    "block": "SparseMlaCombine_v1{NSPLIT=2,",
-    "core_seconds": 324.0,
-    "peak_gb": null
+    "core_seconds": 99.4,
+    "peak_gb": 25.5
    },
    {
     "block": "AllReduceMultimem_v1{",
-    "core_seconds": 314.0,
-    "peak_gb": null
+    "core_seconds": 75.5,
+    "peak_gb": 15.2
+   },
+   {
+    "block": "SparseMlaCombine_v1{NSPLIT=2,",
+    "core_seconds": 61.5,
+    "peak_gb": 16.8
    },
    {
     "block": "MoeExpertFp8GemmW_v1{",
-    "core_seconds": 15.0,
-    "peak_gb": null
+    "core_seconds": 8.2,
+    "peak_gb": 1.0
+   },
+   {
+    "block": "ScaledMmFp8BlockSharedScale_v1{K=2048,",
+    "core_seconds": 7.8,
+    "peak_gb": 1.2
    }
   ],
   "families": [
@@ -126,5 +136,5 @@
    }
   ]
  },
- "art": "art:d8f40870920ccca7175c641e9e62dfdfe8ff672b87ace259694862526c324e60"
+ "art": "art:a2955661ab025dd981c035e8bb206594dce585ec30191362f6e586b4856a3028"
 }
