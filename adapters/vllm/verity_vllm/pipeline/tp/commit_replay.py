@@ -32,16 +32,26 @@ import resource
 import socket
 import sys
 import time
+import traceback
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.check import oracle_compare as OC
+from verity_vllm.check import weights_of_record as WR
+from verity_vllm.check.replay.driver import PoolDoesNotFit
+from verity_vllm.commit import store_dump as SD
 from verity_vllm.config import option
 from verity_vllm.errors import Refused
 from verity_vllm.log import init_logger
+from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline.tp import c2 as C2
+from verity_vllm.pipeline.tp import config_run as TPC
+from verity_vllm.pipeline.tp import rank_replay as RR
+from verity_vllm.pipeline.tp import run_root as RT
+from verity_vllm.program.compiled_relations import warm_vml
 
 logger = init_logger(__name__)
 
@@ -82,9 +92,6 @@ def _of_record(out: Path, dd: dict[str, Any], b: dict[str, Any], pair: int, rank
     """(the run's row, the rank's commit block, store, run, binding map) once the bundle is shown to be the record's; else Refused.
     ``awaiting=False`` (a reader of the committed values, `tp.serving_rows.from_bundle`): the rank's replay was deferred to this
     bundle and is pending or passed; a rank whose replay failed is refused."""
-    from verity_vllm.commit import store_dump as SD
-    from verity_vllm.pipeline.tp import run_root as RT
-
     ctx, bdir = b["context"], Path(b["path"])
     ent = next((x for x in dd.get("bundles") or [] if (int(x["pair"]), int(x["rank"])) == (pair, rank)), None)
     if ent is None or ent.get("manifest_sha256") != b["manifest_sha256"]:
@@ -129,15 +136,11 @@ def _manifest(o: Options, ctx: dict[str, Any]) -> dict | None:
 
 
 def checkpoint_index(o: Options) -> Any:
-    from verity_vllm.check import weights_of_record as WR
-
     return WR.CheckpointIndex(o.checkpoint_dir, checkpoints_manifest=o.checkpoints_manifest, model=o.model, revision=o.revision)
 
 
 def registered_roles(p: Any) -> dict[str, dict[str, Any]]:
     """The rank's Build `weight_roles` by registered name (`cpu_replay.registered_roles` of its request Programs' dirs, less its index's prefix)."""
-    from verity_vllm.pipeline import cpu_replay as CPU
-
     return CPU.registered_roles((v.get("dir") for v in p.loaded.values()), getattr(p.index, "prefix", "") or "")
 
 
@@ -148,13 +151,6 @@ def _peak_rss() -> int:
 def replay_rank(o: Options, out: Path, dd: dict[str, Any], pair: int, rank: int, ck: Callable[[], Any] | None = None) -> dict[str, Any]:
     """The rank's C2 from its bundle (module docstring), its record written to `sampled_replay_p<pair>_rank<r>.json`.  ``ck``: the
     checkpoint's index, shared by the ranks one process replays, since building it reads every shard whole for its sha256."""
-    import traceback
-
-    from verity_vllm.check import oracle_compare as OC
-    from verity_vllm.check.replay.driver import PoolDoesNotFit
-    from verity_vllm.pipeline import cpu_replay as CPU
-    from verity_vllm.pipeline.tp import rank_replay as RR
-
     t0 = time.perf_counter()
     try:
         b = RB.open_bundle(RB.path(out, pair, rank=rank))
@@ -207,7 +203,6 @@ def replay_rank(o: Options, out: Path, dd: dict[str, Any], pair: int, rank: int,
 def fold(out: Path) -> bool | None:
     """The Commit decided from every rank's replay on the record (None, nothing written, while a rank's is missing): each rank's
     gates after its pre-replay verdict, then everything the in-process Commit derives from them."""
-    from verity_vllm.pipeline.tp import config_run as TPC
 
     dd = json.loads((out / C2.DEFERRED).read_text())
     results: dict[tuple[int, int], dict] = {}
@@ -296,9 +291,6 @@ def fold(out: Path) -> bool | None:
 
 
 def main(o: Options) -> int:
-    from verity_vllm.check.replay.driver import PoolDoesNotFit
-    from verity_vllm.program.compiled_relations import warm_vml
-
     out = Path(o.commit_out)
     try:
         if not (out / C2.DEFERRED).is_file():
