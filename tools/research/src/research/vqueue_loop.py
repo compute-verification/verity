@@ -74,7 +74,8 @@ after it started, a fail whose every other failure is inherited is pending.
 The gate (`--gate`).  With `graph2`, the default, a candidate's verdict is the two combined, as above.  With `check`, drive's
 after-landing check gates in graph2's place: the run beside each candidate, and beside `main`, is every after-landing step
 as `--shards` shards on `--on`'s machines (`vqueue_slim.start` with ``shards``: N, ci.toml's plan, or `auto:N`, an auto
-plan of the candidate's tree, which splits pytest by suite), judged on every step `main` waits for,
+plan of the candidate's tree, which splits pytest by suite), each one's lists rotated so its shard 1 first tries a machine
+no other check still running started its shard 1 on (`vqueue_slim.rotation`), judged on every step `main` waits for,
 and its verdict alone is the candidate's; a run started while graph2 gated is started again as the check.  A failed step
 is inherited by its failing tests, those the run beside its base's check failed too.  A shard that failed a step it is
 judged on, or a suite of one, fails it while the other shards still run (an early red, `vqueue_slim.judge`), decided as a
@@ -1698,6 +1699,9 @@ class Tick:
     advanced: str | None = None
     #: `main` fetched again, the first time this tick a notice needed it (`Loop._landed`)
     fetched: str | None = None
+    #: the record of the run beside each check, by its sha (`main`'s too): the log's, each start's once it started, a dropped
+    #: candidate's gone; a start rotates its shards' machines away from theirs (`vqueue_slim.rotation`)
+    beside: dict[str, dict | None] = field(default_factory=dict)
 
 
 class Loop:
@@ -1754,7 +1758,9 @@ class Loop:
         def height(sha: str, seen: tuple[str, ...] = ()) -> int:
             return 1 + height(bases[sha], (*seen, sha)) if bases.get(sha) in bases and sha not in seen else 0
 
-        below = self._below(past, whole, n, main, origin, wrote)
+        beside = {sha: (whole if sha in older else past).slim(sha)[1] for sha in mine}
+        below = self._below(past, whole, n, main, origin, wrote, beside)
+        beside[main] = below[0]
         w._theirs, w._listed = {}, {}
         try:
             for sha in sorted(mine, key=lambda s: (height(s), s)):      # each after its base, whose record it reads as judged now
@@ -1766,7 +1772,7 @@ class Loop:
                                graph2=j.graph2, listed=False, theirs=j.theirs)
                 # where the check gates, a candidate on `main` is read by its check too: graph2's verdict decides nothing
                 if self.slim is not None and (self.gate == CHECK_GATE or not w._ancestor(sha, main)):
-                    j = self._beside(p, n, main, origin, sha, base, prs, heads, j, wrote, chained(sha),
+                    j = self._beside(p, n, main, origin, sha, base, prs, heads, j, wrote, beside, chained(sha),
                                      below if base == main else ((judged[base].record if base in judged else None)
                                                                  or p.slim(base)[1], p.slim_started(base)[1]))
                 judged[sha] = j
@@ -1789,7 +1795,7 @@ class Loop:
                         pulled=frozenset(w.pulled | set(out) | set(taken)),
                         flying=tuple(Ready(m, h, frozenset() if h in gone else w._changed(main, h),
                                            lean=m in wide and h not in gone and w._judge(main, h)[0]) for m, h in sorted(flying)))
-        return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0], riding=riding)
+        return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0], riding=riding, beside=beside)
 
     def _shadow_main(self, past: Past, origin: str) -> str:
         """The shadow's `main`: the newest candidate it advanced (`SHADOW`, else its log's newest advance) while origin's `main`
@@ -1801,14 +1807,14 @@ class Loop:
                 return sha
         return origin
 
-    def _below(self, past: Past, whole: Past, n: int, main: str, origin: str,
-               wrote: list[dict]) -> tuple[dict | None, float | None]:
+    def _below(self, past: Past, whole: Past, n: int, main: str, origin: str, wrote: list[dict],
+               beside: dict[str, dict | None]) -> tuple[dict | None, float | None]:
         """The record of the run beside ``main``'s own check, which says what the steps a candidate on ``main`` fails are
         (`vqueue_slim.based`), and when it started: the run beside the candidate ``main`` advanced to (the same tree), else
         one started here on ``main`` against itself, so lean-agreement never runs (at startup, each time ``main`` moves, and
-        once more when it ended in infra).  Judged each tick, its record logged per ``main`` (to ``wrote`` too) whenever it
-        changed, and never cancelled; past the window, read from the whole log (``whole``, where the snapshot read it).
-        None with --dry-run, which starts nothing."""
+        once more when it ended in infra), beside the runs ``beside`` records (`_started`).  Judged each tick, its record
+        logged per ``main`` (to ``wrote`` too) whenever it changed, and never cancelled; past the window, read from the whole
+        log (``whole``, where the snapshot read it).  None with --dry-run, which starts nothing."""
         if self.slim is None or self.dry_run:
             return None, None
         if not past.slim(main)[0]:
@@ -1824,26 +1830,27 @@ class Loop:
                 wrote.append(got)
             if v.state != INFRA or starts > 1:
                 return rec, since
-        self.write(got := self._started(n, main, origin, line, "started again beside `main`" if starts else
+        self.write(got := self._started(n, main, origin, line, beside, "started again beside `main`" if starts else
                                         "started beside `main`"))
         wrote.append(got)
         return got["record"], self.now()
 
     def _beside(self, past: Past, n: int, main: str, origin: str, sha: str, base: str, prs: tuple[int, ...],
-                heads: tuple[str, ...], j: Judged, wrote: list[dict], chained: bool,
+                heads: tuple[str, ...], j: Judged, wrote: list[dict], beside: dict[str, dict | None], chained: bool,
                 below: tuple[dict | None, float | None] = (None, None)) -> Judged:
         """``j`` combined with the verdict of the run beside candidate ``sha``'s check (`vqueue_slim`), which its build starts
         beside each candidate's check, and here, once, one on ``main``'s chain (``chained``) the log holds no start of (its
-        build's tick stopped first); again by a retry of its infra or a rerun of its failure.  Judged each tick, its record
-        logged (to ``wrote`` too) whenever it changed; with --dry-run neither started nor judged, so pending.  A check that
-        failed to list stays list-failed beside a run that hasn't ended, which `combine` reads as pending: one that never
-        starts would hold it so.  Each step it failed is compared with the run beside its base's check (``below``: its record
-        and start, `_below` for ``main``, a base candidate's as judged this tick), which `vqueue.decide` takes as inherited
-        when that run failed it too, a base candidate's still running by what it failed so far (`vqueue_slim.based`); a fail
-        whose every other failure is inherited waits (pending) while the run beside ``main``, started at most `pending_s`
-        ago, hasn't said, and one on a candidate stays a fail, which `vqueue.decide` holds until its base's says.  Where the
-        check gates (`CHECK_GATE`), the run's verdict alone is the candidate's, graph2's kept beside it (`Judged.shadow`, its
-        note marked so), and a run started while graph2 gated counts as none started."""
+        build's tick stopped first), beside the runs ``beside`` records (`_started`); again by a retry of its infra or a rerun
+        of its failure.  Judged each tick, its record logged (to ``wrote`` too) whenever it changed; with --dry-run neither
+        started nor judged, so pending.  A check that failed to list stays list-failed beside a run that hasn't ended, which
+        `combine` reads as pending: one that never starts would hold it so.  Each step it failed is compared with the run
+        beside its base's check (``below``: its record and start, `_below` for ``main``, a base candidate's as judged this
+        tick), which `vqueue.decide` takes as inherited when that run failed it too, a base candidate's still running by what
+        it failed so far (`vqueue_slim.based`); a fail whose every other failure is inherited waits (pending) while the run
+        beside ``main``, started at most `pending_s` ago, hasn't said, and one on a candidate stays a fail, which
+        `vqueue.decide` holds until its base's says.  Where the check gates (`CHECK_GATE`), the run's verdict alone is the
+        candidate's, graph2's kept beside it (`Judged.shadow`, its note marked so), and a run started while graph2 gated
+        counts as none started."""
         started, rec = past.slim(sha)
         started, gates = started and not self._other(rec), self.gate == GRAPH2_GATE
         line = dict(sha=sha, base=base, members=prs, heads=heads)
@@ -1851,7 +1858,7 @@ class Loop:
             v = Verdict(PENDING)
         else:
             if not started:
-                self.write(got := self._started(n, main, origin, line))
+                self.write(got := self._started(n, main, origin, line, beside))
                 wrote.append(got)
                 rec = got["record"]
             was = json.dumps(rec, sort_keys=True)
@@ -2080,20 +2087,25 @@ class Loop:
                 *self._start(t, tip, a.base, {"members": line["members"], "heads": line["heads"]})]
 
     def _start(self, t: Tick, sha: str, base: str, line: dict, why: str = "started") -> list[dict]:
-        """The run beside candidate ``sha``'s check started (`vqueue_slim.start`), its record logged; a start that fails is
-        logged with no record, which `vqueue_slim.judge` reads as infra."""
+        """The run beside candidate ``sha``'s check started (`vqueue_slim.start`) beside the tick's (`Tick.beside`), its record
+        logged; a start that fails is logged with no record, which `vqueue_slim.judge` reads as infra."""
         if self.slim is None:
             return []
-        return [self._started(t.n, t.main, t.origin, {**line, "sha": sha, "base": base}, why)]
+        return [self._started(t.n, t.main, t.origin, {**line, "sha": sha, "base": base}, t.beside, why)]
 
-    def _started(self, n: int, main: str, origin: str, line: dict, why: str = "started") -> dict:
+    def _started(self, n: int, main: str, origin: str, line: dict, beside: dict[str, dict | None],
+                 why: str = "started") -> dict:
+        """The run beside ``line``'s check started, and its line: where the check gates, its shards' machines rotated away from
+        those of each run ``beside`` records still in check (`vqueue_slim.rotation`), which then records it by its sha."""
         d = self.world.slim_driver()                       # drive.toml naming no machines stops the tick: no run is infra
         try:
             rec, error = self.slim.start(d, line["sha"], line["base"],
-                                         **({"shards": self.shards} if self.gate == CHECK_GATE else {}),
+                                         **({"shards": self.shards, "others": [*beside.values()]}
+                                            if self.gate == CHECK_GATE else {}),
                                          **({"deselect": f} if (f := getattr(self.world, "deselect_file", None)) else {})), None
         except (QueueError, ValueError, OSError, subprocess.SubprocessError) as e:
             rec, error = None, f"{type(e).__name__}: {e}"[-600:]
+        beside[line["sha"]] = rec
         return self._line(n, main, origin, "slim", **line, why=why, record=rec, done=True,
                           **({"start_error": error} if error else {}))
 
@@ -2125,11 +2137,12 @@ class Loop:
         return self.record(t, "on_main", **line, why="drive's steps once its members are on `main`", told=told, done=True)
 
     def _drop(self, a: Drop, c: Candidate, t: Tick) -> dict:
-        """Cancel ``c``'s check and the run beside it while that runs (it would hold drive's machines for nothing), delete its
-        branch and log its outcome.  A run still launching (its shards, of a sharded one) has no run ids yet: its record is
-        logged (`beside_launching`), and `_launched` cancels it once it has them; an auto plan still being made is given up
-        (`vqueue_slim.abandon`), so no shard of it launches.  One decided on a check that gates failed while it ran (an early
-        red) logs when its first failure was written and when it was dropped (``early_red``)."""
+        """Cancel ``c``'s check and the run beside it while that runs (it would hold drive's machines for nothing, so a start
+        after it rotates away from it no more: `Tick.beside`), delete its branch and log its outcome.  A run still launching
+        (its shards, of a sharded one) has no run ids yet: its record is logged (`beside_launching`), and `_launched` cancels
+        it once it has them; an auto plan still being made is given up (`vqueue_slim.abandon`), so no shard of it launches.
+        One decided on a check that gates failed while it ran (an early red) logs when its first failure was written and when
+        it was dropped (``early_red``)."""
         w, j = self.world, t.judged.get(c.sha)
         cancel = w.cancel(c.sha)
         rec = _running(j)
@@ -2138,6 +2151,7 @@ class Loop:
         ids = list(rec.get("ids") or ())
         failed = w.cancel_runs(ids, f"vqueue: candidate {c.sha[:12]} was dropped: {a.why}") if ids else {}
         w.push("", branch(c.sha), c.sha)
+        t.beside.pop(c.sha, None)
         early = (rec.get("early") or {}).get("at") if rec and a.outcome is not None and j.slim.state == FAIL else None
         return self.record(t, "drop", sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=a.why, outcome=a.outcome,
                            failed=c.verdict.failed, cancel=cancel, done=True,
@@ -2637,7 +2651,9 @@ def main(argv: list[str]) -> int:
                          f"plan for, or auto:N, N shards of an auto plan of the candidate's tree made before they launch, "
                          f"which splits pytest by suite (default {SHARDS})")
     ap.add_argument("--on", default="", help="the machines the run beside each check takes, a comma list, each shard its "
-                                             "share of them as drive gives its own (default drive.toml's `on` at `main`)")
+                                             "share of them as drive gives its own, rotated so a check's shard 1 first tries "
+                                             "a machine no other running check's shard 1 started on (default drive.toml's "
+                                             "`on` at `main`)")
     ap.add_argument("--shadow", action="store_true", help="log advance, eject, ring, red, flakes and messages, and do none of "
                                                           "them; its own main is refs/vqueue/shadow in the clone")
     ap.add_argument("--dry-run", action="store_true", help="print the snapshot and the actions; write nothing")

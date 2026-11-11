@@ -31,8 +31,9 @@ of failing tests.
 
 The check that gates (`research queue vqueue --gate check`).  `start` with ``shards`` launches drive's after-landing run of
 the candidate in place of the run of `SLIM_STEPS`: every step of `AFTER_LANDING` as that many shards, one launch a shard on
-its own machines (`shard_machines`), with the keywords drive's own gets (`Driver._postland_args`).  ``shards`` `auto:N`
-(`AUTO_SHARDS`) is N shards of an auto plan of the candidate's tree, which splits pytest by suite where ci.toml's plans can't
+its own machines (`shard_machines`, each list rotated away from the other checks' still running: `rotation`), with the
+keywords drive's own gets (`Driver._postland_args`).  ``shards`` `auto:N` (`AUTO_SHARDS`) is N shards of an auto plan of
+the candidate's tree, which splits pytest by suite where ci.toml's plans can't
 split it: `start` has `check.py --shard-plan --deferred STEPS --n N` make it in the background (`Driver.plan_shards`), and
 the first `judge` that finds it made (`Driver.planned`) launches every shard `--shard auto:K/N` with its file, which is
 removed once each shard has sent it with its run; pending until then, infra when it failed or took past `PLAN_WAIT_S`.  A
@@ -61,6 +62,7 @@ import shutil
 import signal
 from dataclasses import replace
 from pathlib import Path
+from typing import Iterable
 
 from .drive import (ACTIVE, AFTER_LANDING, AUTO_PLAN, KILLED_RC, LAUNCH_LOST_S, LEAN_AUDIT_RE, PLAN_WAIT_S, PREFLIGHT,
                     SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS, SUITE_STEPS, Driver, _epoch, _step_log, implicated, killed, not_run,
@@ -138,24 +140,28 @@ def deselection(driver: Driver, listed: Path | None) -> Path | None:
     return sent
 
 
-def start(driver: Driver, sha: str, base: str, shards: int | str = 0, deselect: Path | None = None) -> dict | None:
+def start(driver: Driver, sha: str, base: str, shards: int | str = 0, deselect: Path | None = None,
+          others: Iterable[dict | None] = ()) -> dict | None:
     """Launch the run beside candidate ``sha``'s check, ``base`` the commit of `main` below it, as `Driver._start_slim` launches
     it beside the executor's check of ``sha`` with ``base`` verified: `SLIM_STEPS` but those a run of every step of ``sha``
     above ``base`` skips by name (lean-agreement, unless what it checks changed), with that run's keywords (ratchet-gate
     judges the merges above ``base``), on drive's machines (`Driver.on`).  With ``shards``, the check that gates instead, as
     `Driver.start_postland` launches the after-landing run: `--deferred` every step of `AFTER_LANDING` (each check runs the
-    preflights first), `--shard K/N` on shard K's machines (`shard_machines`) for each of that many, one whole run for 1;
+    preflights first), `--shard K/N` on shard K's machines (`shard_machines`) for each of that many, one whole run for 1,
+    each list rotated left by ``rot`` (`rotation` of ``others``, the records of the runs beside the other checks);
     `auto:N` has the auto plan its shards launch by made first (`Driver.plan_shards`, ``plan``, which `judge` follows).
     The record to keep (`Driver._started`): ``ids``, none yet while a detached launch runs (its ``launch`` then, or each
     shard's in ``shards``, which `judge` makes ``groups``, each shard's ids); the candidate (``tip``), ``base``, when it
-    launched (``at``), the ``steps`` it runs and those it skips (``skip``), and ``gate`` (`CHECK`) with ``shards``.  None,
-    logged, when it registered no run (a shard that registered none stops the others), or when ``driver`` launches nothing (a
-    dry run, or its queue's shadow), as `Driver._start_slim` does.  Every launch leaves out the tests the loop's list
-    ``deselect`` names (`deselection`), each shard's alike; the nightly uncached check, which reads no list, runs them."""
+    launched (``at``), the ``steps`` it runs and those it skips (``skip``), and with ``shards`` its ``gate`` (`CHECK`) and
+    ``rot`` unless 0.  None, logged, when it registered no run (a shard that registered none stops the others), or when
+    ``driver`` launches nothing (a dry run, or its queue's shadow), as `Driver._start_slim` does.  Every launch leaves out the
+    tests the loop's list ``deselect`` names (`deselection`), each shard's alike; the nightly uncached check, which reads no
+    list, runs them."""
     if not driver.on:
         raise ValueError("the run beside a candidate's check needs drive's machines: build the Driver with drive.toml's `on` "
                          "(`research.queue.drive_flags(q.workdir)[0].on`)")
     n, auto = shard_count(shards)
+    rot = rotation(driver.on, n, others) if n else 0
     kw, skip, _, flags = driver._postland_args({"verified": base}, sha, False)
     if left := deselection(driver, deselect):
         kw = {**kw, "deselect": str(left)}
@@ -174,31 +180,49 @@ def start(driver: Driver, sha: str, base: str, shards: int | str = 0, deselect: 
         rec, tail = {"ids": [], "plan": {**driver.plan_shards(driver.repo, sha, sent, n=n), "n": n, "deferred": sent,
                                          "kw": kw}}, ""
     elif n > 1:
-        rec, tail = _launch(driver, sha, sent, kw, n)
+        rec, tail = _launch(driver, sha, sent, kw, n, rot=rot)
         if rec is not None and not any("launch" in r for r in rec["shards"]):
             _grouped(rec)
     else:
-        rec, tail = driver._started(driver.launch_postland(driver.repo, sha, driver.on, sent, **kw, train_from=OWN_TRAIN))
+        rec, tail = driver._started(driver.launch_postland(driver.repo, sha, _machines(driver.on, 1, rot)[0], sent, **kw,
+                                                           train_from=OWN_TRAIN))
     if rec is None:
         driver.q.log(f"research queue vqueue: {what} registered no run: {tail}")
         return None
     driver.q.log(f"research queue vqueue: {what}: {' '.join(rec['ids']) or ('planning' if auto else 'launching')}")
     return {**rec, "tip": sha, "base": base, "at": driver.now(), "steps": steps, **({"skip": skip} if skip else {}),
-            **({"gate": CHECK} if n else {})}
+            **({"gate": CHECK} if n else {}), **({"rot": rot} if rot else {})}
 
 
-def _launch(driver: Driver, sha: str, sent: str, kw: dict, n: int, plan: str | None = None) -> tuple[dict | None, str]:
-    """Each of ``n`` shards of candidate ``sha``'s check launched on its machines (`shard_machines`): `--shard K/N` of ci.toml's
-    plan, or of the auto plan whose file is ``plan``, `--shard auto:K/N` with it.  The record of every shard's launch
-    (``shards``); None with the tail of one that registered no run, the others' runs cancelled."""
+def _launch(driver: Driver, sha: str, sent: str, kw: dict, n: int, plan: str | None = None,
+            rot: int = 0) -> tuple[dict | None, str]:
+    """Each of ``n`` shards of candidate ``sha``'s check launched on its machines (`shard_machines`, each list rotated left by
+    ``rot``): `--shard K/N` of ci.toml's plan, or of the auto plan whose file is ``plan``, `--shard auto:K/N` with it.  The
+    record of every shard's launch (``shards``); None with the tail of one that registered no run, the others' runs
+    cancelled."""
     got = [driver._started(driver.launch_postland(driver.repo, sha, on, sent, **kw, shard=f"{'auto:' * bool(plan)}{k}/{n}",
                                                   **({"shard_plan": plan} if plan else {}), train_from=OWN_TRAIN))
-           for k, on in enumerate(shard_machines(driver.on, n), 1)]
+           for k, on in enumerate(_machines(driver.on, n, rot), 1)]
     if any(r is None for r, _ in got):
         if ids := [i for r, _ in got if r for i in r["ids"]]:
             driver.cancel(driver.repo, ids, f"vqueue: a shard of candidate {sha[:12]}'s check registered no run")
         return None, next(t for r, t in got if r is None)
     return {"ids": [], "shards": [r for r, _ in got]}, ""
+
+
+def rotation(on: str, n: int, others: Iterable[dict | None]) -> int:
+    """How far left each shard's list of a check of ``n`` shards on ``on``'s machines is rotated (`_machines`): the smallest
+    offset into shard 1's list that no run of ``others`` still in check (its verdict not kept) took (its ``rot``), else 0.
+    Shard 1 holds the `security` audits, and check.py puts a shard on the first machine of its list where a check slot and a
+    Lean check slot are free (its `choose`): given one list, every check's shard 1 would start on the same machine while it
+    had both, their audits side by side there."""
+    taken = {r.get("rot", 0) for r in others if r is not None and "verdict" not in r}
+    return next((k for k in range(len(shard_machines(on, n)[0].split(","))) if k not in taken), 0)
+
+
+def _machines(on: str, n: int, rot: int) -> list[str]:
+    """Each of ``n`` shards' machines from ``on``'s (`shard_machines`), each list rotated left by ``rot`` modulo its length."""
+    return [",".join(ms[rot % len(ms):] + ms[:rot % len(ms)]) for ms in (s.split(",") for s in shard_machines(on, n))]
 
 
 def _grouped(rec: dict) -> dict:
@@ -243,7 +267,7 @@ def _planned(driver: Driver, rec: dict, what: str) -> Verdict:
     elif doc["n"] != plan["n"]:
         why = f"has {doc['n']} shards, not {plan['n']}"
     got, tail = (None, f"its auto plan {why}") if why is not None else _launch(
-        driver, rec["tip"], plan["deferred"], plan["kw"], plan["n"], str(Path(plan["out"]) / AUTO_PLAN))
+        driver, rec["tip"], plan["deferred"], plan["kw"], plan["n"], str(Path(plan["out"]) / AUTO_PLAN), rec.get("rot", 0))
     if got is None:
         abandon(rec)
         return _keep(rec, _down(rec, f"registered no run: {tail}"))

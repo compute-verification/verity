@@ -432,6 +432,27 @@ def test_start_with_shards_launches_drives_after_landing_run_of_every_step_a_sha
     assert whole == {**{k: v for k, v in rec.items() if k != "groups"}, "ids": ["r-post-3"]}
 
 
+@pytest.mark.parametrize("shards", [3, "auto:3"])
+@pytest.mark.parametrize("on, lists, rot", [("m1,m2", ["m1", "m2", "m1"], 0), ("m1,m2,m3,m4", ["m4,m1", "m2", "m3"], 1)])
+def test_a_check_beside_others_rotates_each_shard_list_modulo_its_length_and_with_fewer_machines_than_shards_none(
+        world, monkeypatch, tmp_path, shards, on, lists, rot):
+    """A check started beside others rotates each shard's list left by the smallest offset into shard 1's that no run still
+    in check took (one that registered no run takes none, one whose verdict is kept took none), each list modulo its own
+    length: with fewer machines than shards each list is one machine, so it launches as before, at offset 0, though that is
+    taken; with four, shard 1's list has two and only it moves.  An auto plan's shards launch, once it is made, as its
+    record says."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on, machines, launch = on, [], h.d.launch_postland
+    h.d.launch_postland = lambda repo, commit, machine, steps, **kw: machines.append(machine) or launch(repo, commit, machine,
+                                                                                                         steps, **kw)
+    plans = Plans(h.d, tmp_path)
+    rec = start(h.d, sha, base, shards=shards, others=[None, {"ids": ["r-1"]}, {"ids": ["r-2"], "rot": 1, "verdict": PASS}])
+    if shards == "auto:3":
+        plans.answers[str(tmp_path / "plan-1")] = (_plan_doc(3), None)
+        assert machines == [] and judge(h.d, rec) == Verdict(PENDING)
+    assert machines == lists and rec.get("rot", 0) == rot
+
+
 def test_every_shard_of_a_candidates_check_leaves_out_the_tests_the_loops_list_names(world, monkeypatch, tmp_path):
     """The loop's deselect list, read at each launch: every shard is sent the node ids it names (`train.sh --deselect`), written
     beside it; a line that is no node id is logged and left out, so a typo drops no test and reds no candidate; no list, or one

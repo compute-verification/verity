@@ -3428,6 +3428,74 @@ def test_under_gate_check_auto_shards_launch_once_each_checks_plan_is_made_and_a
     assert loop.tick() == [] and len(runs.launches) == 12 and len(plans.asked) == 3
 
 
+#: nine machines in the order drive.toml's `on` names them: of three shards, shard 1 gets cpu-13, cpu-9 and cpu-2
+NINE = ",".join(f"vy-nebius-cpu-{k}" for k in (13, 7, 11, 9, 4, 5, 2, 6, 1))
+
+
+def _cpus(*ks: int) -> str:
+    return ",".join(f"vy-nebius-cpu-{k}" for k in ks)
+
+
+def _lists(runs: Runs, sha: str) -> list[str]:
+    """The machines each of the three shards of ``sha``'s newest check launched on, shard 1's first."""
+    return [m for c, m, _, _ in runs.launches if c == sha][-3:]
+
+
+def _built(logged: list[dict]) -> str:
+    (sha,) = [r["sha"] for r in logged if r["action"] == "build"]
+    return sha
+
+
+def _rotating(env: Env, monkeypatch, prs: int = 3) -> tuple[Loop, Runs, list[str]]:
+    """A loop whose check gates, at depth 3 a PR a candidate, three shards on `NINE`: `main`'s own check started and passed
+    before ``prs`` PRs are ready, then three candidates built, a tick each, each while the checks below it run."""
+    loop = env.loop(vqueue.decide, slim=vqueue_slim, gate="check", batch=1, depth=3)
+    runs = Runs(env, loop, monkeypatch, on=NINE)
+    loop.tick()
+    runs.end(env.main())
+    for n in range(1, prs + 1):
+        env.put(n, {f"{n}.txt": f"{n}\n"})
+    return loop, runs, [_built(loop.tick()) for _ in range(3)]
+
+
+def test_under_gate_check_each_candidate_started_beside_running_checks_starts_its_shard_1_where_none_of_theirs_did(
+        env, monkeypatch):
+    """Shard 1 holds the `security` audits, and check.py puts a shard on the first machine of its list with a free check slot
+    and Lean check slot, which an audit building there doesn't hold: three candidates started one after another, each while
+    the checks below it run, rotate their shard lists by the smallest offset none of those took, so each one's shard 1
+    starts on a machine of its own, cpu-13, cpu-9 and cpu-2, every shard's list rotated alike, the offset in its record."""
+    _, runs, built = _rotating(env, monkeypatch)
+    assert [_lists(runs, sha) for sha in built] == [[_cpus(13, 9, 2), _cpus(7, 4, 6), _cpus(11, 5, 1)],
+                                                     [_cpus(9, 2, 13), _cpus(4, 6, 7), _cpus(5, 1, 11)],
+                                                     [_cpus(2, 13, 9), _cpus(6, 7, 4), _cpus(1, 11, 5)]]
+    assert [r["record"].get("rot") for r in env.lines() if r["action"] == "slim" and r["why"] == "started"] == [None, 1, 2]
+
+
+def test_under_gate_check_a_check_that_ended_frees_its_offset_for_the_next_candidate_started(env, monkeypatch):
+    """Only a check still running holds its offset: once the lowest candidate lands, the fourth, built in the same tick,
+    takes its offset (0, cpu-13); once the second lands, the fifth takes the second's (1, cpu-9), not 0, the fourth's."""
+    loop, runs, (one, two, _) = _rotating(env, monkeypatch, prs=5)
+    runs.end(one)
+    four = _built(logged := loop.tick())
+    assert _acts(logged) == ["slim", "advance", "on_main", "drop", "build", "slim"] and env.main() == one
+    runs.end(two)
+    five = _built(logged := loop.tick())
+    assert _acts(logged) == ["slim", "advance", "on_main", "drop", "build", "slim"] and env.main() == two
+    assert [_lists(runs, sha)[0] for sha in (four, five)] == [_cpus(13, 9, 2), _cpus(9, 2, 13)]
+
+
+def test_under_gate_check_main_s_own_check_while_it_runs_holds_its_offset_as_a_candidate_s_does(env, monkeypatch):
+    """`main`'s own check holds shard 1's audits too: the candidate built in the tick that starts it starts its shard 1 on
+    the next machine of the list."""
+    main = env.main()
+    env.put(1, {"1.txt": "1\n"})
+    loop = env.loop(vqueue.decide, slim=vqueue_slim, gate="check")
+    runs = Runs(env, loop, monkeypatch, on=NINE)
+    _, built, started = loop.tick()
+    assert [_lists(runs, sha)[0] for sha in (main, built["sha"])] == [_cpus(13, 9, 2), _cpus(9, 2, 13)]
+    assert started["record"]["rot"] == 1
+
+
 def test_the_gate_is_graph2_unless_the_command_says_check_which_needs_the_run_beside_each_check(capsys, tmp_path):
     with pytest.raises(SystemExit):
         Q.main(["vqueue", "--help"])
