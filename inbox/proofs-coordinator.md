@@ -45163,3 +45163,48 @@ For BREAKEVEN:
 For the table:
 - `BlockGemm_v3` of today's cut is measured at one prover on one H200 with ten cores, accepted by Flock's Rust verifier in loopback: 0.940 ms a block (decode) and 1.011 (prefill) (`r20261111-090001-54d6`, `r20261111-091243-8ece`), on a machine 12.9% slower than node A.
 - Today's cut on measured prices: about 4,569 GB over a world year (modeled on measured rows; the planner's run `r20261111-092121-7fbe` is out), where the range was 4,566 to 4,762.
+
+## RELAX (HEADCIRC), Wed 11 Nov 09:27Z: the cut is built on #8765's head and is exact, but a values half does not fit 2^26: the cut is scores + four quarters, and by width it reads 0.57 of the head block at the planner's price, not 0.37
+
+**Verdict.** [run] `SparseMlaHeadScores` and `SparseMlaHeadValues` (word `_v1`, Boolean `_v2` as Calls over #8765's parts) are on `cursor/proofs-headcirc-fa30` at `b64c67d5341a26e8cd77ef6e88a0ae0de54d23cd`, which holds #8765's head `fa277fac5a7a` by a merge. Scores then values on each column block equal `SparseMlaHeadBlock_v1` word for word at small and at GLM statics, specials planted, and a head run through the units equals `SparseMlaHead_v1`; the Boolean units agree with their word views (20 tests, 9 s, local, `verity/definitions/tests/test_sparse_mla_head_units.py`). No PR yet: circuit-check and the quick tier are out (below).
+
+**The correction to my 08:47Z table and to "two values halves" (say it early).** Exact counts, read off the Calls with `FC.unit_block` [run, local, at `b64c67d`]:
+
+| unit at GLM statics, a later 64-key block | ANDs | out bits | sha512x3 slots | unit slot | block |
+|---|---|---|---|---|---|
+| `SparseMlaHeadBlock_v3` (today's, #8765) | 30,909,225 | 16,544 | 206 | 2^25 | 2^27 |
+| `SparseMlaHeadScores_v2` | 16,741,552 | 1,216 | 196 | 2^25 | 2^27 |
+| `SparseMlaHeadValues_v2{G=256}` (a half) | 7,888,249 | 8,192 | 198 | **2^24** | **2^27** |
+| `SparseMlaHeadValues_v2{G=128}` (a quarter) | 3,945,721 | 4,096 | 195 | 2^23 | 2^26 |
+| `SparseMlaHeadValues_v2{G=64}` | 1,974,457 | 2,048 | 194 | 2^22 | 2^26 |
+
+- [run] A later block's half is 557,057 cells over a 2^23 slot (8,945,665 of 8,388,608): it must compute its own columns' key words' own gates (802,816 ANDs, which the block shares with the score steps) and its input group is 2^20. So it takes a 2^27 block and by width would cost more than today's block. The first block's half fits by 65,535 cells. The cut is therefore **scores + four quarters**, five units a block; the Definition takes any G that divides DV.
+- [run] **A values unit's block does not fall below 2^26 at any G**: it opens the block's 64 key rows whole, 585 compressions, 195 slots of 2^18 = 51.1M of the block's 67.1M bits. "The price a column" (HARMSEARCH's 0.37 and 0.23) does not hold below a quarter.
+- [run] The same on main's forms, staged: `m1_unit` built the traced quarter at k_log 26, unit_log 23, 195 sha512x3 lookups in 80 s and 5.65 GB (`r20261111-090632-64ad`), and the traced half at k_log 27, unit_log 24 in 166 s (`r20261111-090632-2c69`); these two are at `a09424d`, the forms before circuits' terms, and are not the units HEADPROF times.
+- [run] The cut costs 5.2% more ANDs than the block (32,524,436 against 30,909,225) and three times its block space (one 2^27 and four 2^26 against one 2^27), and commits 1,056 more output bits (bf16(P) and the rescale).
+
+**What I did with circuits' terms (mailbox 09:13Z).** [run] Base: merged `fa277fac5a7a` (no rebase, no force); ids regenerated with `test_catalog.py --update` (1,530). Form: the Boolean units are `EW.on_bits` over `SparseMlaDotStepB`, `SparseMlaDotStep`, `AttnDotStepA` and `boolean_attention._softmax`; `_head_block_calls` is untouched, so #8765's pins cannot move. Word forms bound small; the served Boolean units (scores and a quarter, later and first block) are in `_glm53_served_roots`; their `digests` pins and `heavy.json` lines come from the circuit-check run. No `block_held.HELD` entry. The test asserts the blocks with `FC.unit_block` and `FC.past_block`: scores 2^27, each quarter (23, 26), the later half (24, 27), which is what is true, not the 2^26 half the terms name. [run] The eleven existing word Definitions' program digests are identical before and after my refactor of `sparse_mla.block` into `scores` and `values` (small and served statics).
+- **The two-head unit is out of the branch** (it is in history at `8da9f74`, where circuit-check passed its two bindings, `r20261111-085655-9498`: 14 targets, 0 failures). [guess] By width it adds only what the cap gives, and under circuits' terms it would need a Calls form and served pins; say if you want it back.
+- Cancelled, all mine: `r20261111-085655-b9de` (asked 420 GB on a node capped at 403 GiB, never started), `-7871`, `-685c`, `r20261111-090632-7188`, `r20261111-091308-0994`, `-9881`, each superseded by a later head.
+
+**Out now, at `b64c67d`:** `r20261111-092444-c887` (`m1_unit` build of a quarter), `r20261111-092444-e2cc` (of the scores; [guess] about 25 min once it has a slot, from the head block's 2,674 s in `r20261111-081440-c5ea`), `r20261111-092444-a0f1` (circuit-check of both sidecars with `--update-pins`), `r20261111-092444-965c` (quick tier and the new tests). Slots have been taking 1 to 12 min to come.
+
+**For item 7 (staged by 13:15Z?): yes for both, [guess] by about 10:15Z**, unless a slot is slow; I write the minute each `built` line is in.
+
+For HEADPROF: branch `cursor/proofs-headcirc-fa30`, sha `b64c67d5341a26e8cd77ef6e88a0ae0de54d23cd` (it needs #8765's parts, which the branch holds). The units, later 64-key block, GLM statics:
+```
+python benchmarks/one_stage/m1_unit.py --spec 'SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}' --out DIR
+python benchmarks/one_stage/m1_unit.py --spec 'SparseMlaHeadValues_v1{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},G=128,C=0}' --out DIR
+```
+[run] Both specs resolve through `serving_templates.template` (layout "row"); [guess] the stager lowers their Boolean versions, the Calls forms, so expect ands 16,741,552 (k_log 27) and 3,945,721 (k_log 26): unconfirmed until the two builds print `built`. A quarter stages in minutes, so time it first. The row to time for the lever is one scores and one quarter; a block's price is scores + 4 quarters.
+
+For circuits (CIR-235), a question and a lever, neither mine to build: a values unit reads G of a key's 576 words and opens the 64 rows whole. [run, modeled by the tree's placement rule on the exact ANDs] If a block's kv_c reached it as rows of its own G columns (a wire reads its writer's row whole), a quarter would be a 2^25 block (46 slots), G=64 2^24, G=32 2^23. Does the chain's writer of the key rows allow that?
+
+For BREAKEVEN: one later 64-key block of one head, output bits × the planner's price for an unmeasured type (`rate * 2**k_log`, `total_cost.priced` [read]), in units of one 2^27 block. All [modeled] until HEADPROF's row; proving follows the block's size, and gates move it only where they move `k_log` (the slot arithmetic above), which is why the half fails.
+- today: 16,544 by width; 28,000 in class 32,768 at the cap (the plan of record).
+- scores + four quarters: 1,216 + 4 × 4,096 × 0.5 = **9,408 by width: 0.57 of 16,544**; against the plan of record's 28,000: 0.34 (0.37 if class 2,048's widest type is 2,048 bits). First block: 9,376.
+- scores + two halves: 17,600 by width: worse than today. Do not use the 08:47Z row (10,236, 0.36 "at any cap"): it took the half at 2^26.
+- if the keys come as column rows (circuits' answer): scores + quarters 5,312 (0.32), + G=64 3,264 (0.20), + G=32 2,240 (0.14); below that the scores' 1,216 bits at 2^27 are the floor.
+- gates: 30,909,225 before, 32,524,436 after, exact (read off Calls).
+
+For the table: HEADCIRC: head block cut at P into scores + four column quarters, exact (word-for-word tests; Calls forms on #8765) [run]; by width 0.57 of the block at the planner's price, 0.34 of the plan of record [modeled, price unmeasured]; a half does not fit 2^26; staging out, PR after circuit-check.
