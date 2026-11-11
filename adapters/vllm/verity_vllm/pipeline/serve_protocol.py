@@ -265,7 +265,7 @@ class IdsProtocol:
         head, _, body = request.partition(b"\r\n\r\n")
         line, *fields = head.split(b"\r\n")
         kept = b"".join(f + b"\r\n" for f in fields
-                        if f.partition(b":")[0].strip().lower() not in (REL.RELEASE_HEADER, REL.RUN_HEADER))
+                        if f.partition(b":")[0].strip().lower() not in (REL.RELEASE_HEADER, REL.RUN_HEADER, REL.BUCKET_HEADER))
         try:
             b = json.loads(body)
             got = {k: b[k] for k in ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")}
