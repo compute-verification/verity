@@ -580,6 +580,79 @@ def test_end_pass_commits_each_engine_step_as_the_per_step_reach_in_did(monkeypa
         assert len({p["activation_roots"] for p in b if p["units"]}) == 5
 
 
+@pytest.mark.parametrize("dev", ["recording", pytest.param("twin", marks=[
+    pytest.mark.slow, pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")])])
+def test_an_install_over_an_epoch_made_ahead_commits_each_engine_step_as_one_that_makes_its_own(monkeypatch, tmp_path, dev):
+    """`pouw.prepare` makes the epoch with the model untouched: the weights committed once, the salt coin opened once,
+    after their root, and the device run made.  The install handed it (the pouw setting ``prepared``) commits no weight
+    and opens no coin, and what it serves is what an install that makes its own epoch serves under the same key and
+    coins: per step the same pass commitment, tile leaves, A roots and screen flags, the same passes, commitment and
+    composition record.  An epoch is taken once: a second install refuses it, as does an install on another model's
+    weights or under another entry, each before it touches the model; one no install took is closed by its ``close``,
+    its run finished."""
+    from verity_vllm import protocols as PO
+    from verity_vllm.protocols import pouw
+
+    rng = np.random.default_rng(13)
+    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
+               for w, n in ((0, 256), (1, 128))}
+    pd = HD.build(tmp_path) if dev == "twin" else None
+    kernel = lambda: PPD.Kernel(R, F, TwinDev(pd) if dev == "twin" else RecordingDev(), "0" * 64)  # noqa: E731
+    asked, roots = [], PPD.weight_roots
+
+    def counted(*a, **kw):
+        asked.append("weights")
+        return roots(*a, **kw)
+
+    class Coins(Challenger):
+        def open(self, family, root):
+            asked.append(family)
+            return super().open(family, root)
+
+    def context(more=None):
+        settings = {"coins": Coins(0, random.Random(7).randbytes), "device": "cuda", "kernel": "k", **(more or {})}
+        return PO.Context(stage="serve", enabled=(f"pouw:{SCHEME}",), settings={"pouw": settings})
+
+    def served(model, comp):
+        option, engine = comp.get("pouw"), _Engine(model, SERVED_STEPS)
+        hooks, out = _per_step(engine, _end_pass(option))
+        for _ in SERVED_STEPS:
+            engine.step()
+        hooks.uninstall()
+        comp.close()
+        return out, [dict(p) for p in option.details["passes"]], dict(option.commitment()), comp.record()
+
+    model, comp, _ = _served(monkeypatch, kernel(), weights)
+    own = served(model, comp)
+    monkeypatch.setattr(PPD, "weight_roots", counted)
+    second = kernel()
+    monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: second))
+    model = _Model(weights)
+    ahead = pouw.prepare(SCHEME, PO.Target(model, context()))
+    assert asked == ["weights", "salt"] and sorted(ahead.seconds) == ["run", "salt", "weights"] and not ahead.taken
+    assert all(m.quant_method.apply is None for m in model.layers)
+    comp = PO.install(model, context({"prepared": ahead}))
+    assert asked == ["weights", "salt"] and ahead.taken and comp.get("pouw").end_pass.__self__ is ahead.run
+    assert served(model, comp) == own and asked == ["weights", "salt"]
+
+    with pytest.raises(ValueError, match="the setting 'prepared' is not an epoch made ahead for this install: it is taken"):
+        PO.install(model, context({"prepared": ahead}))
+    spare = pouw.prepare(SCHEME, PO.Target(model, context()))
+    other = _Model({w: t.clone() for w, t in weights.items()})
+    with pytest.raises(ValueError, match="over other weights than the model's linears'"):
+        PO.install(other, context({"prepared": spare}))
+    with pytest.raises(ValueError, match="pouw:another's"):
+        PO.install(model, context({"prepared": dataclasses.replace(spare, entry="pouw:another")}))
+    assert all(m.quant_method.apply is None for m in (*model.layers, *other.layers)) and not spare.taken
+    with pytest.raises(ValueError, match="'prepared' is an epoch made ahead of its install"):
+        pouw.Settings.of({"prepared": {"run": None}})
+    finished, finish = [], spare.run.finish
+    spare.run.finish = lambda: finished.append(finish())
+    spare.close()
+    spare.close()
+    assert spare.taken and finished == [None]
+
+
 def test_a_long_served_run_ending_a_pass_each_engine_step_never_overflows(monkeypatch):
     """A pass holds 32 tiles and 512 screened rows, and each step takes 24 tiles and 400 rows: with `end_pass` at each step's
     end, 256 steps (6,144 tiles) each commit in a pass of their own; without it, the install's one pass overflows at the

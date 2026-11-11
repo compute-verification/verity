@@ -48,7 +48,7 @@ import os
 import time
 from collections import deque
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
 from typing import Any
@@ -108,7 +108,7 @@ QUANT_PARAMS = ("weight_scale", "weight_scale_inv", "input_scale", "weight_zero_
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
 KEYS = ("coins", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin", "schedule", "start_forward",
         "rows", "steps", "runner", "rounds", "challenger", "session", "admission", "gate", "served", "graphs", "period", "unit", "ks",
-        "backend", "draw_session", "commit_record", "kept_rows")
+        "backend", "draw_session", "commit_record", "kept_rows", "prepared")
 #: ``ncp-v2``'s negative controls (`Settings.tamper`): a prover that commits and opens one value wrong
 TAMPERS = ("tile", "bias")
 #: where the Commit computes `ncp-v2`'s values: the host (`pouw_native`, the default) or ``cuda``, the serving kernel
@@ -138,6 +138,31 @@ def schemes() -> tuple[str, ...]:
 def executes(scheme: str) -> tuple[str, ...]:
     """The sites where `scheme`'s executor replaces the computation: none under H1, whose arm serves its own y."""
     return () if scheme == PH.SCHEME else EXECUTES
+
+
+@dataclass
+class Prepared:
+    """A Pearl-C epoch on the device made ahead of its install (`prepare`), the model untouched: the weights' commitment
+    under the epoch's own hm96 key (``committed``, `commit_weights`' answer), the device run made over it once its salt
+    coin was open (``run``), the live session that coin came from (``session``, None for in-process coins), the layers'
+    weights it was made over (``weights``, in order) and what each part took (``seconds``).  The install that is handed
+    it (the setting ``prepared``) takes it (``taken``) and from then on closes it as it closes its own; one no install
+    took is closed by `close`."""
+
+    entry: str
+    weights: tuple[Any, ...]
+    committed: dict[str, Any]
+    run: Any
+    session: Any = None
+    seconds: dict[str, float] = field(default_factory=dict)
+    taken: bool = False
+
+    def close(self) -> None:
+        """An epoch no install took: its run finished and its session closed (`pouw_h1_window.finish`).  Nothing once an
+        install has taken it, or it is closed."""
+        if not self.taken:
+            self.taken = True
+            PHW.finish(self.run, self.session)
 
 
 @dataclass(frozen=True)
@@ -208,6 +233,9 @@ class Settings:
     #: Pearl-C on the device: the served model's weight rows files, written once (`keep_rows`), which each install's
     #: retained passes link where they would write the rows again; None, and each install writes its own
     kept_rows: Mapping[str, Any] | None = None
+    #: Pearl-C on the device: the epoch made ahead of this install (`prepare`), which then only hooks the model; None, and
+    #: the install makes its own
+    prepared: Any = None
 
     @classmethod
     def of(cls, raw: Mapping[str, Any]) -> Settings:
@@ -251,9 +279,12 @@ class Settings:
         kept = raw.get("kept_rows")
         if kept is not None and not isinstance(kept, Mapping):
             raise ValueError("pouw setting 'kept_rows' is the served model's weight rows files, as `keep_rows` returns them")
+        prepared = raw.get("prepared")
+        if prepared is not None and not isinstance(prepared, Prepared):
+            raise ValueError("pouw setting 'prepared' is an epoch made ahead of its install, as `prepare` returns it")
         *h1, draw_session, commit_record = PHS.of(raw)
         return cls(coins, retain, tdir, draws, tamper, device, *paths, schedule, start, *h1, backend, draw_session,
-                   commit_record, kept)
+                   commit_record, kept, prepared)
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
@@ -278,6 +309,8 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
                 out.append(str(e))
         elif settings.schedule != "serial":
             out.append(f"{scheme}: the pouw setting 'schedule' is Pearl-C's; this executor runs serially")
+        if settings.prepared is not None and scheme not in PPD.SCHEMES:
+            out.append(f"{scheme}: the pouw setting 'prepared' is an epoch of Pearl-C's device path, made ahead (`prepare`)")
         out += PHS.refusals(scheme, settings, ctx.stage, ctx.filled_of(NAME))
         out += PL.refusals(scheme, settings)
         if settings.start_forward and scheme not in pouw_circuit.SCHEMES:
@@ -632,6 +665,8 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     _, layers, shapes = _layers(scheme, target)
     if scheme in PPD.SCHEMES:
         settings = Settings.of(target.context.settings_of(NAME))
+        if settings.prepared is not None:
+            return dict(_prepared(entry, settings, layers).committed)
         key = _SALT_KEYS[entry] = PPD.new_salt_key(scheme)
         roots = PPD.weight_roots(PPD.Kernel.load(settings.kernel, settings.cubin), {w: m.weight for w, m in enumerate(layers)}, scheme,
                                  salt_key=key)
@@ -681,26 +716,32 @@ def challenged(settings: Mapping[str, Mapping[str, Any]], enabled: Any, epoch: i
     return out
 
 
-def install(scheme: str, target: Target) -> Option:
-    entry = f"{NAME}:{scheme}"
-    settings = Settings.of(target.context.settings_of(NAME))
-    if scheme == PL.SCHEME:
-        return _install_lead(entry, settings, target)
-    if settings.coins is None and not (scheme in CHALLENGED and settings.challenger is not None):
-        raise ValueError(f"{entry}: no 'coins' setting: the epoch's salt is its challenger's salt coin, opened after the "
-                         "weights' root, and there is no beacon")
-    if scheme == PH.SCHEME:
-        return _install_h1(entry, settings, target)
-    s, layers, shapes = _layers(scheme, target)
-    committed = target.weight_commitments.get(entry) or commit_weights(scheme, target)
+def _prepared(entry: str, settings: Settings, layers: list[Any]) -> Prepared:
+    """The setting ``prepared`` as this install may take it: an epoch of `entry` made over these layers' own weights, that
+    no install has taken; ValueError otherwise."""
+    ahead = settings.prepared
+    if ahead.entry != entry or ahead.taken or len(ahead.weights) != len(layers) or any(
+            a is not m.weight for a, m in zip(ahead.weights, layers)):
+        raise ValueError(f"{entry}: the setting 'prepared' is not an epoch made ahead for this install: it is "
+                         + ("taken or closed" if ahead.taken else f"{ahead.entry}'s" if ahead.entry != entry
+                            else "over other weights than the model's linears'"))
+    return ahead
+
+
+def _epoch(scheme: str, entry: str, settings: Settings, target: Target, s: Any, layers: list[Any],
+           shapes: dict[int, tuple[int, int]], committed: Mapping[str, Any]) -> tuple[Any, Any, dict[str, float]]:
+    """An epoch over weights committed as `committed`: its salt coin opened after their root (the settings' ``coins``, or
+    the live session ``challenger`` names) and its run made under that salt.  Returns the run, the session (None for
+    in-process coins; closed here when the run can't be made) and the seconds the coin and the run took."""
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
     declared = Workload(tuple(Matmul(w, Shape(16, k, n), w) for w, (n, k) in shapes.items()))
-    session, device, k = None, scheme in PPD.SCHEMES, None
+    session, device, k, t0 = None, scheme in PPD.SCHEMES, None, time.perf_counter()
     if settings.challenger is not None:
         session, commitment, opening, salt, carried, k = PHW.salt_session(entry, settings, weights_root(roots), device)
     else:
         commitment, opening = settings.coins.commitment, settings.coins.open("salt", weights_root(roots))
         salt = Epoch.start(declared, roots, commitment, opening).salt
+    t1 = time.perf_counter()
     with PHW.closed_on_error(session):
         if device:
             run = PPD.PearlCDeviceRun(s, entry, PPD.Kernel.load(settings.kernel, settings.cubin),
@@ -714,6 +755,54 @@ def install(scheme: str, target: Target) -> Option:
             run.commits.update(coins=commitment.to_json(), salt_opening=opening.to_json())
         if session is not None:
             run.commits.update(coin_source=PH.CHALLENGER, session=carried)
+    return run, session, {"salt": round(t1 - t0, 4), "run": round(time.perf_counter() - t1, 4)}
+
+
+def _coins_given(scheme: str, entry: str, settings: Settings) -> None:
+    if settings.coins is None and not (scheme in CHALLENGED and settings.challenger is not None):
+        raise ValueError(f"{entry}: no 'coins' setting: the epoch's salt is its challenger's salt coin, opened after the "
+                         "weights' root, and there is no beacon")
+
+
+def prepare(scheme: str, target: Target) -> Prepared:
+    """Pearl-C on the device: an epoch made ahead of its install, the model untouched, in the install's own order: the
+    weights committed under a fresh hm96 key (`commit_weights`), then the salt coin opened after their root (a live
+    session's, opened by the settings' ``gate`` on the epoch's root, or the in-process challenger's), then the device run
+    made under that salt (B̃ formed, its first pass begun).  The settings are the install's, less its transcript dir and
+    runner, which only its hooks read.  The install handed the result (the setting ``prepared``) commits no weight and
+    opens no coin: it hooks the model onto this run.  A refusal is the install's (ValueError), with no session left
+    open."""
+    entry = f"{NAME}:{scheme}"
+    if scheme not in PPD.SCHEMES:
+        raise ValueError(f"{entry}: only Pearl-C's device path makes an epoch ahead ({', '.join(PPD.SCHEMES)})")
+    settings = Settings.of(target.context.settings_of(NAME))
+    _coins_given(scheme, entry, settings)
+    s, layers, shapes = _layers(scheme, target)
+    t0 = time.perf_counter()
+    committed = commit_weights(scheme, target)
+    t1 = time.perf_counter()
+    run, session, seconds = _epoch(scheme, entry, settings, target, s, layers, shapes, committed)
+    return Prepared(entry, tuple(m.weight for m in layers), committed, run, session, {"weights": round(t1 - t0, 4), **seconds})
+
+
+def install(scheme: str, target: Target) -> Option:
+    entry = f"{NAME}:{scheme}"
+    settings = Settings.of(target.context.settings_of(NAME))
+    if scheme == PL.SCHEME:
+        return _install_lead(entry, settings, target)
+    device = scheme in PPD.SCHEMES
+    if not (device and settings.prepared is not None):
+        _coins_given(scheme, entry, settings)
+    if scheme == PH.SCHEME:
+        return _install_h1(entry, settings, target)
+    s, layers, shapes = _layers(scheme, target)
+    if device and settings.prepared is not None:
+        ahead = _prepared(entry, settings, layers)
+        ahead.taken, run, session = True, ahead.run, ahead.session
+    else:
+        committed = target.weight_commitments.get(entry) or commit_weights(scheme, target)
+        run, session, _ = _epoch(scheme, entry, settings, target, s, layers, shapes, committed)
+    with PHW.closed_on_error(session):
         if isinstance(run, _CircuitRun):
             _CIRCUIT_RUNS[entry] = (run, _sites(target.model, layers))
         h = target.hooks(entry)
