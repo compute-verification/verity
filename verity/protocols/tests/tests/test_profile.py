@@ -658,6 +658,36 @@ def test_harm_bound_holds_over_several_large_strata():
         assert upper - lower <= Decimal("1e-9") * upper
 
 
+#: strata past 2^53 units, where the search's last float threshold leaves more than `HARM_WHOLE` proof blocks
+AT_ONCE = [[(3348 * 10 ** 18, 6_974_586, 262_144.0)], [(10 ** 19, 300, 3.0), (10 ** 19, 300, 3.0)],
+           [(10 ** 20, 2, 1.0), (10 ** 20, 10 ** 9, 1e6)], [(10 ** 19, 7, 1e-30), (10 ** 19, 100_000, 3e-28)]]
+
+
+@pytest.mark.parametrize("rows", AT_ONCE)
+def test_the_last_blocks_taken_at_once_are_the_blocks_one_by_one(rows, monkeypatch):
+    """With `HARM_WHOLE` out of reach every block left is taken by itself: the same bound to the floats' resolution
+    (one by one, a block under half the sum's last place adds nothing to it, so at once is never the smaller)."""
+    from verity.protocols.spot.verifier import profile
+
+    law = Stratified(tuple(Stratum(f"s{i}", n, k) for i, (n, k, _) in enumerate(rows)))
+    harm = {f"s{i}": v for i, (_, _, v) in enumerate(rows)}
+    at_once = law.harm_bound(harm, 2.0 ** -40)
+    monkeypatch.setattr(profile, "HARM_WHOLE", 10 ** 30)
+    assert at_once == pytest.approx(law.harm_bound(harm, 2.0 ** -40), rel=1e-9)
+
+
+@pytest.mark.parametrize("rows, delta", [([(20_000, 1, 1e-30)], 0.5), ([(20_000, 1, 1e-30), (5_000, 2, 3e-30)], 0.3),
+                                         ([(30_000, 3, 1e80), (9_000, 1, 4e79)], 0.01)])
+def test_harm_bound_holds_where_the_search_cannot_close(rows, delta):
+    """Harms so small or so large that the threshold lies outside the search's range: it stops short of the optimum by
+    thousands of proof blocks, which are then taken one by one, in order, never at once at the first one's ratio."""
+    lower, upper = _optimum_bracket(rows, delta)
+    law = Stratified(tuple(Stratum(f"s{i}", n, k) for i, (n, k, _) in enumerate(rows)))
+    bound = Decimal(law.harm_bound({f"s{i}": v for i, (_, _, v) in enumerate(rows)}, delta))
+    assert lower <= bound <= upper * (1 + 4 * Decimal(HARM_MARGIN))
+    assert upper - lower <= Decimal("2e-3") * upper
+
+
 @pytest.mark.parametrize("strata", [(), (Stratum("a", 3, 1), Stratum("a", 2, 1)), ("a",)])
 def test_ill_formed_stratified_laws_are_refused(strata):
     with pytest.raises(ValueError):

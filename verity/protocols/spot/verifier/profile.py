@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from fractions import Fraction
-from math import comb, expm1, floor, inf, log, log1p, nextafter, prod
+from math import ceil, comb, expm1, floor, inf, log, log1p, nextafter, prod
 from types import MappingProxyType
 
 from verity.circuits.partition import Hierarchy, Level
@@ -319,13 +319,13 @@ class IntegrityProfile:
 
 
 #: `Stratified.harm_bound`'s margin: the risk budget and the result are raised by this relative amount, far above what
-#: a float risk can exceed the exact one by (`neg_log_escape`: 2^-40 relative at any size), so the bound is never below
+#: a float risk can exceed the exact one by (`neg_log_escape`: 2^-38 relative at any size), so the bound is never below
 #: the relaxation's optimum
 HARM_MARGIN = 2.0 ** -20
 
-#: `Stratified.harm_bound` spends what its search leaves of the budget in whole proof blocks, one by one, only while
-#: fewer than this many of the cheapest fit in it: more are ties, or at a large size blocks under the summed risks' own
-#: rounding, and are taken at once
+#: `Stratified.harm_bound` spends what its search leaves of the budget one proof block at a time while at most this
+#: many of the cheapest fit in it; where the search closed on one float and more fit (past 2^53 units a float
+#: threshold moves many blocks at once), they are ties to the floats' resolution and are taken at once
 HARM_WHOLE = 1 << 10
 
 #: `neg_log_escape` sums its terms one by one up to this many, and takes their closed form beyond
@@ -347,10 +347,12 @@ def _log1p_less(y: float) -> float:
 
 def neg_log_escape(n: int, k: int, m: int) -> float:
     """-ln(C(n - m, k) / C(n, k)) in floats, for 0 <= k, 0 <= m and m + k <= n: the risk of m incorrect proof blocks
-    among n when k are sampled.  It is never above the exact value by more than 2^-40 of it, at any size.
+    among n when k are sampled.  It is never above the exact value by more than 2^-38 of it, at any size.
 
     The ratio is prod_{i < t} (1 - s / (n - i)) at t = min(m, k), s = max(m, k) (it is symmetric in m and k).  While
-    t <= `ESCAPE_TERMS` the t terms are summed, each `neg_log_ratio`'s, a few units in the last place.
+    t <= `ESCAPE_TERMS` the t terms are summed, each to a few units in the last place (`neg_log_ratio`'s, its log1p
+    taken directly where every term's ratio is at least 1/2), and a sum of 2^14 floats of one sign is within 2^-39 of
+    itself however it rounds.
 
     Beyond, the sum of f(i) = ln(n - i) - ln(n - s - i) over i < t is taken from below by the trapezoid rule: f is
     convex, so the sum is at least the integral of f over [0, t - 1] plus (f(0) + f(t - 1)) / 2, and exceeds it by at
@@ -363,8 +365,12 @@ def neg_log_escape(n: int, k: int, m: int) -> float:
     if not (0 <= k and 0 <= m and m + k <= n):
         raise ValueError("neg_log_escape needs 0 <= k, 0 <= m and m + k <= n")
     t, s = min(m, k), max(m, k)
+    if t == 0:
+        return 0.0
     if t <= ESCAPE_TERMS:
-        return sum((neg_log_ratio(n - s - i, n - i) for i in range(t)), 0.0)
+        if n >= 2 * s + t - 1:
+            return -sum(log1p(-s / (n - i)) for i in range(t))
+        return sum(neg_log_ratio(n - s - i, n - i) for i in range(t))
     tau = t - 1
     b, c, d = n - tau, n - s, n - s - tau
     first, last = neg_log_ratio(c, n), neg_log_ratio(d, b)
@@ -392,7 +398,7 @@ class Stratum:
         return self.size - self.k if self.k else self.size
 
     def _risk(self, m: int) -> float:
-        """-ln escape(m) in floats, for searching only (`neg_log_escape`: at most 2^-40 above the exact value)."""
+        """-ln escape(m) in floats, for searching only (`neg_log_escape`: at most 2^-38 above the exact value)."""
         if self.k == 0 or m == 0:
             return 0.0
         if m > self._finite():
@@ -565,9 +571,11 @@ class Stratified:
         fills the most harmful units first, so the value of m incorrect proof blocks is concave in m while the risk is convex, and
         the linear relaxation (units taken in the order of risk increment per unit of harm, the last one fractionally)
         is the optimum from above.  The float risks are searched, then the budget and the result are raised by
-        `HARM_MARGIN`.  What the search leaves of the budget is spent in whole proof blocks, each at its own increment
-        (`Stratum._step`), and the last of it at the best ratio of increment to harm then open, which no later block
-        beats: at once where more than `HARM_WHOLE` blocks would fit in it."""
+        `HARM_MARGIN`.  What the search leaves of the budget is spent one proof block at a time, each at its own
+        increment (`Stratum._step`), the last one fractionally.  Where the search closed on one float and more than
+        `HARM_WHOLE` blocks still fit, every block that fits is within the floats' resolution of the best ratio of
+        increment to harm still open, which no later block beats, and the rest of the budget is spent at that ratio at
+        once: never less than the blocks one by one."""
         if not 0 < delta < 1:
             raise ValueError("0 < delta < 1")
         if not set(harm) <= {s.name for s in self.strata}:
@@ -596,7 +604,7 @@ class Stratified:
                 for v, c in sg:
                     top = min(m + c, f)
                     x = top if s.k == 0 else 0 if tau * v <= 0 else \
-                        max(0, min(top, floor(s.size - s.k / -expm1(-tau * v)) + 1))
+                        max(0, min(top, s.size - ceil(s.k / -expm1(-tau * v)) + 1))
                     whole = x == m + c
                     if x > m:
                         value, m = value + (x - m) * v, x
@@ -613,16 +621,16 @@ class Stratified:
             mid = (lo + hi) / 2
             lo, hi = (mid, hi) if fill(mid)[2] <= budget else (lo, mid)
         ms, value, risk = fill(lo)
-        room = budget - risk
+        room, closed = budget - risk, lo < hi <= nextafter(lo, inf)
         while True:
             options = [(s._step(m) / unit(i, m), i) for i, (s, m) in enumerate(zip(self.strata, ms))
                        if m < s._finite() and unit(i, m) > 0]
             if not options:
                 break
-            ratio, i = min(options)
+            _, i = min(options)
             step = self.strata[i]._step(ms[i])
-            if step > 0 and not step * HARM_WHOLE >= room >= step:
-                value += room / ratio
+            if step > 0 and (room < step or (closed and room > step * HARM_WHOLE)):
+                value += unit(i, ms[i]) * room / step
                 break
             room, value, ms[i] = room - step, value + unit(i, ms[i]), ms[i] + 1
         return nextafter(value * (1 + HARM_MARGIN), inf)
