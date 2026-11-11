@@ -133,8 +133,10 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
 - `v2_case.py`: sampled proofs v2's `--cases` directory from a served window's kept files (`case_v2` of its v1 case,
   partition, public file, sessions and circuit file), with its own Lean answer with `--exe`. A circuit file the run didn't
   keep is rebuilt by the command its `m0/compose.log` records and used only at the log's pin. The case names the public
-  file by the digest the audit staged, where the window keeps it (`case-v2.json`), and refuses a kept file with another;
-  a window keeping none gets the kept file's own digest, so its case shows only that the kept files verify.
+  file by the digest the audit staged, where the window keeps it (`case-v2.json`), and refuses a kept file with another,
+  leaving only `missing.json`; a window keeping none gets the kept file's own digest, so its case shows only that the
+  kept files verify. `case.json` says which under `files`, and whether the audit staged the file before the sample or
+  after one its caller handed it (the window's `summary.json`), or that the window cannot tell.
 - `kept_composite.sh SRC [K]`: remote's and onsite's Lean verdicts on a served run's kept records (`served_verdicts.sh`'s
   `out/`, or a tarball of it) on a CPU node: it builds the products and the pieces' checks, writes PoUW's pieces
   (`pouw_piece.py`; the period from the kept `pieces/pouw/`, `main.txt`, `H1_KEY_SHA512` and the sampled and live runs'
