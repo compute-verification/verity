@@ -136,6 +136,8 @@ def test_the_program_digest_check_reads_the_candidates_build_summary(tmp_path, m
     _write(tmp_path / "candidate" / KEY, "build_workload/workload_program.json", {"workload_digest": "composed-candidate"})
     act = PD.actual(row)
     assert act["commit_keyed_by"] == "keyed-candidate" and act["workload_program_digest"] == "composed-candidate"
+    exp = PD.expected(row)                                  # the reference's, whatever the candidate holds
+    assert (exp["build_summary"]["request"], exp["commit_keyed_by"], exp["workload_program_digest"]) == ("request-reference",) + ("workload-reference",) * 2
 
 
 def _identity(layer: int, **more) -> dict:
