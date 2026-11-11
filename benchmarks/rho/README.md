@@ -16,7 +16,8 @@ A scenario is one choice from every part: a fleet (its location and dark share),
 inference-only policy, a monitoring period (its `horizon`, one of core's), a run (the target and its model), the
 algorithm families the adversary may use, and the bounds and attacks applied. For each one the package reports:
 
-- **the slowdown's lower bound** (`Result.lo`): every bound met at once, at the family the adversary picks. Under a
+- **the slowdown's lower bound** (`Result.lo`): every bound a lock states met at once (`bounds.lock_only`, below), at
+  the family the adversary picks. Under a
   bound it is `max(1, 1/(s + a x))` (`theorem.multiple_bound`), with the dark share `s` training like the reference and
   the bound's other terms `x`, free compute, at `a = 1` under reference efficiency, so that it is the padded size ratio;
   at `a = 1/MFU₀` (peak) without it, Lean's `Nci.Dampener.remoteDampener` and, for a remote regime,
@@ -127,6 +128,11 @@ structure (`structure.train-step-v1`, SmolLM2-135M's training step) is `s_×` in
 `evidence`, the runs that measured it, cited beside the straddling premise; `circuits.in_place` puts it in place with
 `units.gates_per_flop` counted on the same design, where `G` no longer cancels and a gate holds `u/w = 2G / (κ s_×)` of
 the reference's weight.
+
+**Only a bound a lock states sets the lower bound.** A class one of whose own citations is a `draft:` statement sets
+it at no block size (`bounds.lock_only`, `data/premises.toml`; `scenario._combine`). The class is still evaluated alone
+and listed, labeled draft (`Estimate.drafts`). A cut's premises and the structure's (`draft:no-straddle`) are not a
+class's own. `--set bounds.lock_only=false` admits every bound whose premises aren't refuted at a block.
 
 **The min-cut bound.** `min_cut.py` is the one place that computes Lean's `HE` and `HEShared` (`min_cut.HE`,
 `min_cut.HE_SHARED`), each function one side of an inequality they conclude or that inequality solved for one term; it

@@ -10,7 +10,8 @@ world-inference-2027) and each monitoring period (`PERIODS`, core's, through `rh
   (`proof_share`), where each accepted incorrect proof block injects the widest public size class of output bits;
 * **the slowdown's lower bound** and its range: each ranged parameter alone at either end of its plausible range, the
   rest at reference (`analysis.tornado`), and the corner, all of them at their worse ends at once (`analysis.corner`);
-  and the padded size ratio `|A| / T_0` it comes from;
+  and the padded size ratio `|A| / T_0` it comes from. Only a bound a lock states sets it (`bounds.lock_only`,
+  `LOCK_ONLY`);
 * **without the ruled assumptions**: the lower bound with every regime's host CPUs at their datasheet peak (without
   hosts carry no compute), with free compute at peak (without reference efficiency), and without both, sensitivities
   beside the headline (`sensitivities`);
@@ -96,6 +97,9 @@ def without_hosts(reg: Registry) -> dict[str, float]:
     return {f"regime.{r}.host": 1.0 for r in reg.names("regime") if f"regime.{r}.host" in reg}
 
 
+#: what the header says while `bounds.lock_only` holds
+LOCK_ONLY = (" Only a bound a lock states sets a row: a class one of whose own citations is a `draft:` statement sets "
+             "none, at any block size (`bounds.lock_only`), and `rho.md` lists it alone, labeled draft.")
 #: the overrides without the reference-efficiency assumption (`GLOSSARY.md`): a bound counts free compute at peak
 WITHOUT_REFERENCE_EFFICIENCY = {"task.reference_efficiency": False}
 
@@ -240,7 +244,8 @@ def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.
            ("The slowdown's lower bound at the measured H200 inputs, for each monitoring period, over "
             + _fleet_md(reg, fleets) + ". Each row is the scenario with its `fleet` and `horizon` choices set "
             "(`scenario.<name>.fleet`, `.horizon`). The range is each ranged parameter alone at either end of its "
-            "plausible range, the rest at reference; the corner is all of them at their worse ends at once. The "
+            "plausible range, the rest at reference; the corner is all of them at their worse ends at once."
+            + (LOCK_ONLY if reg["bounds.lock_only"] else "") + " The "
             "slowdown is the hardware multiple over the reference training algorithm at its MFU, MFU₀ (Lean's "
             "`hardwareMultiple`, at least 1, so no protocol gives 1); the padded size ratio `|A| / T_0` is the "
             "intermediate it comes from. The time to the target is wall-clock, at least the slowdown times "
