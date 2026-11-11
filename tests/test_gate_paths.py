@@ -120,7 +120,7 @@ def test_every_suite_input_and_artifact_is_in_this_tree():
     passes with nothing checked. A registered fixture, or a path inside one, keys its id. An artifact is a Lake build's
     output, so its package must be here."""
     tables = _suite_tables()
-    assert "verity/ml/circuits/pyproject.toml" in tables
+    assert "verity/circuits/pyproject.toml" in tables
     bad = [(f, i) for f, t in tables.items() for i in t.get("inputs", []) if (f, i) not in EXEMPT and not resolves(i)
            and not any(i.rstrip("/") == r or i.startswith(r + "/") for r in registered())]
     bad += [(f, a) for f, t in tables.items() for a in t.get("artifacts", [])
@@ -277,14 +277,14 @@ def test_the_cluster_kinds_inputs_are_in_this_tree():
 
 def test_each_check_catches_a_dangling_path():
     """The detectors above find what a move would leave behind, on a toy tree."""
-    files = frozenset({"verity/ml/flock/live/lib.rs", "verity/ml/flock/README.md", "tools/verity/check/x.py", "tools/verity/check/data/a.json"})
-    assert rule_dangling(["verity/ml/flock/", "!README.md"], files) == []
-    assert rule_dangling(["verity/ml/flock/", "verity/flock/", "!README.md"], files) == ["verity/flock/"]
+    files = frozenset({"verity/protocols/flock/prover/live/lib.rs", "verity/protocols/flock/prover/README.md", "tools/verity/check/x.py", "tools/verity/check/data/a.json"})
+    assert rule_dangling(["verity/protocols/flock/prover/", "!README.md"], files) == []
+    assert rule_dangling(["verity/protocols/flock/prover/", "verity/flock/", "!README.md"], files) == ["verity/flock/"]
     assert rule_dangling(["tools/verity/check/data/a.json"], files) == []
 
     from research.store.tool import Tool
 
-    tool = Tool(name="t", command=["bash", "verity/ml/flock/run.sh"], closure=["verity/ml/flock/live/**", "elsewhere/**"],
+    tool = Tool(name="t", command=["bash", "verity/ml/flock/run.sh"], closure=["verity/protocols/flock/prover/live/**", "elsewhere/**"],
                 after_land=["python", "tools/verity/check/x.py"], merge_requires={"s": ["verity/flock/"]})
     assert tool_problems("t", tool, files) == ["closure glob 'elsewhere/**' matches no tracked file",
                                                "command names 'verity/ml/flock/run.sh', which isn't tracked",
@@ -297,7 +297,7 @@ def test_each_check_catches_a_dangling_path():
     assert tool_problems("g", tool, gkr) == ["command runs -m gpu.run, which isn't a module here"]
 
     text = ('from pathlib import Path\nROOT = Path(__file__).resolve().parents[3]\nA = ROOT / "tools" / "verity" / "check" / "x.py"\n'
-            'B = ROOT / "tools" / "verity" / "lean"\nC = "verity/ml/flock/live"\nD = ("verity/gone/x.py", "data/a.json")\n'
+            'B = ROOT / "tools" / "verity" / "lean"\nC = "verity/protocols/flock/prover/live"\nD = ("verity/gone/x.py", "data/a.json")\n'
             'E = Path(__file__).parent / "data" / "b.json"\nF = "origin/main"\n')
     got = dangling_constants(files | {"tools/verity/check/y.py"}, read=lambda f: text if f == "tools/verity/check/y.py" else "")
     assert got == ["tools/verity/check/y.py:4: tools/verity/lean (join)", "tools/verity/check/y.py:6: verity/gone/x.py (string)",
