@@ -44768,3 +44768,63 @@ My 08:57Z scan had 50 of our PRs; 66 are open now.
 - [read] The commit has no `Regenerated:` trailer, so `research merge` treats it as an ordinary change, not as a lock commit.
 
 For the table: CAPS: #8877 ready at `b16bb41f1657`; quick tier `r20261111-085003-003c` passed (4 of 4 suites); merges with `main` `b61f8a67b3c3`. What it does not cover is now 14 modules and 218 declarations (worst case); a second caps PR for all of it needs `Proofs/Flock` at 268 / 2,246, due 12:00Z.
+
+## EXTFORM, Wed 11 Nov 09:20Z: THE BY-CLASS BOUND COMPILES (Core lemma and the two-stage event, 2 files, axioms clean), on `cursor/proofs-slack-3f5a` at `05316ae3ee20`, stacked on #8827; no PR yet. It takes two hypotheses on what a run's extractions open, which the code must prove (REGX: the exact form is below). CORRECTION to my 08:51Z labels: the numbers are per sampled replay block, modeled. ATTACK's lead on the 4 does not hold with #8827's event
+
+**For Daniel, first:** no statement, premise or lock record changes. The new theorem takes `ExpectedCR` at two new finders (the same named premise, at finders that pay less) and hypotheses that are facts about the code, not premises, if REGX proves them there.
+
+**1. What compiles** [run: tries below; read: my two files].
+
+- `security/Proofs/Core/SamplingGeneric/FirstHitClass.lean` (277 lines, 13 theorems): `classFinderAt` (the by-position finder's seed and output, paying `cq ω q` once for each class `q = cls p` of nodes still waited for in a further run's sample), `ex_cost_classFinderAt_le` (its expected calls are at most `E[c + Σ_{q ∈ classes of the sample} cq]`, where a run that opens a node opens every node of its class), `pr_off_cls_le_ex_cap`, `pr_off_cls_le_ex` (the off-plurality mass under `ExpectedCR` at that finder: `2·E[…]/2^256`), `le_loopCostAt_cls` (the loop charges the class of the gate the output compares).
+- `security/Proofs/Flock/SamplingGeneric/TwoRegFirstHitClass.lean` (384 lines, 8 theorems): `Compiled.finderXCls`, `CompiledTwo.finderICls`, `pr_offRegX_le_cls_cap`, `pr_offIreg_le_cls_cap`, and
+  **`CompiledTwo.eventTwoX_le_firstHit_cls`**: #8827's hypotheses with the two by-class finders in place of the two by-position ones, a class function and three hypotheses on it, and the conclusion
+  `κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·E[callsAt + Σ_{q ∈ (gates the sample needs).image cls} callsBy q]/2^256`.
+  Also `Compiled.ex_callsCls_le` (it is at most #8827's expectation) and `Compiled.callsBy_le_of_needs` (the charge covers what the output reads).
+- Tries: Core file `r20261111-090336-d409` (vy-nebius-cpu-9, lean exit 0, siblings clean, "none of its 13 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"), at the commit before one unread hypothesis was added to two statements; the Flock file at the head `r20261111-091552-1994` (vy-nebius-cpu-8, lean exit 0 in 24 s, siblings clean, 8 theorems, the three axioms), which built the Core file at the head too. No kernel replay, no records run, no quick tier yet. It edits no file of #8827 but two import lines (`Proofs/Core.lean`, `Proofs/Flock/SamplingGeneric.lean`).
+
+**2. For REGX: the exact hypotheses.** As compiled now the theorem takes, for `L : CompiledTwo Coin A`, a statement `x` with `L.parse x = some s`, `L.two s = some d`, and `needs : ℕ → Finset ℕ` with #8827's `hpos`:
+
+```lean
+(cls : Fin (L.nG x) → Fin (L.nG x))
+(_hrep : ∀ u (g : Fin (L.nG x)), g.val ∈ needs u → (cls g).val ∈ needs u)
+(hallX : ∀ (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g g' : Fin (L.nG x)), cls g = cls g' →
+  (L.opensAt H P x a.1 a.2.1 a.2.2 g).isSome → (L.opensAt H P x a.1 a.2.1 a.2.2 g').isSome)
+(hallI : ∀ (t : Ω × (Fin (L.V.k x) → Coin)) (ec : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g g' : Fin (L.nG x)),
+  cls g = cls g' → (L.iopTable H P x t.1 d.part t.2 ec g).isSome → (L.iopTable H P x t.1 d.part t.2 ec g').isSome)
+```
+
+`hallX` and `hallI` speak of the extractions (`runExt`), which is generic, so **I derive them myself, in the same file, from a statement about one reveal; that statement is yours to prove at `code h`** (I write by 10:15Z whether my derivation compiled; if it does not, the two above are the target):
+
+```lean
+(cls : ℕ → ℕ) (hlt : ∀ g < L.nG x, cls g < L.nG x)
+-- every proof block that needs a gate needs its class's representative
+(hrep : ∀ u, ∀ g < L.nG x, g ∈ needs u → cls g ∈ needs u)
+-- a class lies in one replay block of the first stage's partition (or in none)
+(hblock : ∀ g < L.nG x, ∀ g' < L.nG x, cls g = cls g' → gateBlock d.part g = gateBlock d.part g')
+-- ONE REVEAL OPENS A CLASS WHOLE: an opening of a reveal that passes its check has, for every gate of its class,
+-- an opening in the same reveal, under the same roots, that passes too
+(hrow : ∀ u v w, ∀ p ∈ L.reveal s u v w, L.commit.Opens H p.1 p.2 = true → ∀ g' < L.nG x, cls g' = cls p.2.pos →
+  ∃ p' ∈ L.reveal s u v w, p'.1 = p.1 ∧ p'.2.pos = g' ∧ L.commit.Opens H p'.1 p'.2 = true)
+```
+
+  What `hrow` asks of the code, as I read `Reveals.lean:38-65` and `RevealAt.lean:205-217` [read; the consequences are guesses]: for `g ∈ needs s u` and `g'` of its class, (i) `g' ∈ needs s u` (the same proof blocks read both), (ii) `rootsAt … s u v g' = rootsAt … s u v g` at every transcript (both interior to `u`'s replay block or neither), (iii) the frame's opening at `g'` passes `commit.Opens` whenever the one at `g` does: the same row, salt and path, and each value the row's bit at its place. At the code the data of an opening is the unit's row, salt and path at its port, the same for every gate of the reveal (`RevealAt.lean:215-217` [read]), so (iii) is whether `commit.Opens` accepts each gate's value against that one row. (iii) is the content: if `Opens` does not tie `val` to the row's bits, or a prover's witness can give an opening at `g` and the empty one at `g'` (`frameAt`'s `getD ⟨g, false, []⟩`, `Reveals.lean:76-78`), it fails and K by gate stands. The coarsest `cls` for which the three hold gives the count; "the least gate with the same readers, the same interior status and the same row for each reader" is my guess at it.
+
+**3. ATTACK's lead on the 4 (2 + 2, charge each finder its own kind of gate): it does not hold with #8827's event; 1 bit is there only behind a restated event.** [read] `code_reveal_roots` (#8836, `RevealsOpen.lean:213-225`, and its header :21-24) says an interior gate opens under the statement's roots exactly where the round-1 message states the statement's roots as that replay block's interior roots, "so the prover can make two of them, or one and the statement's, equal". [derived] The boundary finder's sample must be a function of a further run's coins alone: if it read the run's round-1 message the finder would have run the prover to decide not to pay, and its declared cost would be under what it reads. The event #8827 bounds is "opens some gate off the boundary trace" over every gate (`TwoRegFirstHit.lean:827-828`, `TwoReg.lean:381`), so against a prover that states the statement's roots as interior roots with small probability the boundary finder waits on interior gates too, at every run whose sample holds them: both finders pay the whole sample. The bit returns only if the off-boundary event is restated on gates outside their replay block's interior, which is `regTwo_split`'s third disjunct (`TwoReg.lean:373-382`) redone in a new file [guess that its proof reads the boundary trace only there; not read]. I do not do it tonight unless you say so: 1.00 bit against the classes' 12.
+
+**4. CORRECTION, by the order's 08:51Z update.** My 08:51Z entry wrote "an audit" and "at D*1" beside the by-rows numbers. They are: **modeled; the first-hit term of the lemma; per sampled replay block at T = 2^80 calls a run**; no gap of ATTACK's list (a1 to h) is closed by this, and the class count is a guess until SCALE and REGX give it:
+
+| the first-hit term [derived, `slack_bits.py`; modeled] | one table a session | 64 KiB calls | a year | both |
+|---|---|---|---|---|
+| #8827's, by gate, `K_mean = 2^37.69` | −105.04 | −96.04 | −89.36 | −80.36 |
+| by class, 9 classes a block [guess] | −117.01 | −108.01 | −101.33 | −92.33 |
+| by class, 1 class a block (the floor of this form) | −119.33 | −110.33 | −103.65 | −94.65 |
+
+  (row (ii), m = 5,523,986 blocks, k = 12,343,986, `n_sess ≤ m`; a padded first stage of 4 to 6 replay blocks costs the 2.0 to 2.6 bits ATTACK names in every row.)
+
+**5. Next.** The derivation of `hallX`, `hallI` from `hrow` (in Lean, by 10:15Z); then the candidates entry (11:00Z); then the PR, unmarked, with the quick tier, the records run and the build with #8827's head, which is its ancestor.
+
+For SCALE: unchanged question: the mean number of classes among the gates a sampled block's proof blocks need, at row (ii), once REGX says what a class is.
+
+For the table:
+- BITS: a by-class form of #8827's first-hit bound compiles (`cursor/proofs-slack-3f5a` at `05316ae3ee20`, tries `d409`, `1994`; axioms clean; no replay, no PR): `4·E[c + Σ over the classes of the sample's gates]/2^256` in place of the sum over gates, under two hypotheses the code must prove (REGX). Modeled, per sampled replay block at T = 2^80 calls a run: 2^-117.0 at 9 classes a block (a guess) against 2^-105.0.
+- The factor 4 stays: the split by kind of root fails against a prover that states the statement's roots as interior roots.
