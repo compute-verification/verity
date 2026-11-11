@@ -66,7 +66,7 @@ settings_ok() {  # $1, the settings file: what the rehearsal's serve is, held be
     for v in ROW PP_CHALLENGER PP_PEER MAIN_FILE PP_CHALLENGER_KEY ALPHA GAMMA LIMITS_UNIT DAY DAY_PROGRAM DAY_LOG DAY_PARAMS; do
       [ -n "${!v-}" ] || no "$v is unset"
     done
-    # the lead's ruling: the record states the class's own two numbers with what they prove
+    # the record states the class's own two numbers with what they prove
     [ -n "${LIMITS_PROVE-}" ] || no "LIMITS_PROVE is unset: the limits are the class's own two numbers, and the record" \
       "says in a sentence what they prove (the slowdown they prove is 1, that is none)"
     for v in MAIN_FILE PP_CHALLENGER_KEY DAY_PARAMS; do
