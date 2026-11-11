@@ -10,10 +10,28 @@ import sys
 from pathlib import Path
 
 import pytest
-from datacenter import (FLEET_CLOSED, Assumption, Cadence, Computed, Credit, Datacenter, DeviceEntry, Interval, LinkEntry,
-                        Plan, Zone, account, ands, crossings, names, place, register)
+from datacenter import (
+    FLEET_CLOSED,
+    Assumption,
+    Cadence,
+    Computed,
+    Credit,
+    Datacenter,
+    DeviceEntry,
+    Interval,
+    LinkEntry,
+    Plan,
+    Zone,
+    account,
+    ands,
+    crossings,
+    names,
+    place,
+    register,
+)
 from datacenter.logical import census_of
 from datacenter.models import s8_grid
+
 from verity.protocols.pouw.prover.circuit import compile as pouw
 from verity.protocols.pouw.prover.circuit import h1tile
 
