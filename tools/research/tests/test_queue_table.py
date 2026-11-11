@@ -43,6 +43,7 @@ def test_a_verdict_is_the_first_land_and_a_newest_hold_is_a_hold():
 def test_a_drop_is_read_from_the_loops_reason():
     assert qt.drop_cause("on main") == "on main"
     assert qt.drop_cause("its base was dropped") == qt.drop_cause("its base failed") == "dropped base"
+    assert qt.drop_cause("not on main's chain: its base dddddddddddd is neither main nor a chain member") == "dropped base"
     assert qt.drop_cause("#12's ready mark was withdrawn") == "withdrawn mark"
     assert qt.drop_cause("failed: step lean-audit, step lean-suites") == "red"
     assert qt.drop_cause("#13 isn't taken now: ejected at 0a0a0a0a: candidate cccccccccccc fails pytest") == "red"
@@ -170,67 +171,67 @@ def test_the_table_holds_each_number_over_its_windows():
     d = doc()
     rows = {r["name"]: r for r in qt.table(d, {"now": d["now"] - 3600, "nodes": {"vy-nebius-cpu-1": {"stat": [5000 - 3600 * 100 * 30, 0]}}})}
     m2m = rows["Mark to `main`"]
-    assert m2m["hour"] == m2m["today"] == "p50 95, p90 111 min (n=2)"            # 115 and 75 min, landed 55 min ago
-    assert rows["Share on `main` within 2 h of the mark"]["today"] == "2 of 2 landed (100%)"
+    assert m2m["hour"] == m2m["day"] == "p50 95, p90 111 min (n=2)"            # 115 and 75 min, landed 55 min ago
+    assert rows["Share on `main` within 2 h of the mark"]["day"] == "2 of 2 landed (100%)"
     assert rows["Marked and waiting now (the backlog)"]["now"].startswith("3 PRs: 1 with a land verdict, 2 without; 1 in a candidate being checked")
-    assert rows["Mark to land verdict (the review wait)"]["today"] == "p50 18, p90 28 min (n=2)"     # 30 and 5 min
+    assert rows["Mark to land verdict (the review wait)"]["day"] == "p50 18, p90 28 min (n=2)"     # 30 and 5 min
     assert rows["Marked heads with no land verdict now"]["now"] == "2: 1 held by a reviewer, 1 not looked at, the oldest of those marked 90 min ago"
     assert rows["Quick tier: waiting for a slot"]["now"] == "1 in line, longest 15 min so far"
-    assert rows["Quick tier: waiting for a slot"]["today"] == "p50 20, p90 20 min (n=1)"
+    assert rows["Quick tier: waiting for a slot"]["day"] == "p50 20, p90 20 min (n=1)"
     assert rows["Quick tier: running"]["hour"] == "p50 30, p90 30 min (n=1)"
-    assert rows["Candidate: build to verdict"]["today"] == "p50 60, p90 60 min (n=1)"
+    assert rows["Candidate: build to verdict"]["day"] == "p50 60, p90 60 min (n=1)"
     plain = rows["Round with no Lean change: build to verdict"]
-    assert plain["today"] == ("p50 60, p90 60 min (n=1), of 1 with a verdict; slowest step `pytest`, p50 50 min, the slowest in 1 of 1; "
+    assert plain["day"] == ("p50 60, p90 60 min (n=1), of 1 with a verdict; slowest step `pytest`, p50 50 min, the slowest in 1 of 1; "
                               "slowest test `tests/test_x.py::test_slow` of suite `tools/research`, p50 40 min, the slowest in 1 of 1")
     assert plain["now"] == ("0 of the 1 being checked change no Lean; the newest verdict: built 01:00Z in 1 shards, 60 min, 0 Lean files "
                             "of 5 changed, slowest step `pytest` 50 min")
     assert plain["target"] == "30"
-    assert rows["The floor: a round's slowest suite and slowest test"]["today"] == (
+    assert rows["The floor: a round's slowest suite and slowest test"]["day"] == (
         "slowest suite `tools/research`, p50 45 min, the slowest in 1 of 1; slowest test `tests/test_x.py::test_slow` of suite "
         "`tools/research`, p50 40 min, the slowest in 1 of 1")
-    assert rows["Candidates by outcome"]["today"] == "4 built: 1 green, 1 red, 1 dropped for another reason, 1 being checked"
-    assert rows["Check that started no shard: build to its `infra` verdict"]["today"] == "none"
-    shard = rows["Shard 1/1: its slot to the end of its last step on the gate"]["today"]
+    assert rows["Candidates by outcome"]["day"] == "4 built: 1 green, 1 red, 1 dropped for another reason, 1 being checked"
+    assert rows["Check that started no shard: build to its `infra` verdict"]["day"] == "none"
+    shard = rows["Shard 1/1: its slot to the end of its last step on the gate"]["day"]
     assert shard.startswith("p50 50, p90 50 min (n=1); slowest step `pytest` in 1 of 1, p50 50 min; then it holds the slot p50 10, p90 10 min more")
-    assert rows["Red: first failure to the candidate's drop"]["today"] == "p50 30, p90 30 min (n=1)"
-    assert rows["Red: drop to the next candidate built"]["today"] == "p50 10, p90 10 min (n=1)"
-    assert rows["Reds by kind"]["today"] == "1 test, 0 Lean audit, 0 preflight, 0 infrastructure"
-    assert rows["PR-rounds lost, by cause"]["today"] == "3: 2 red, 1 dropped base"
+    assert rows["Red: first failure to the candidate's drop"]["day"] == "p50 30, p90 30 min (n=1)"
+    assert rows["Red: drop to the next candidate built"]["day"] == "p50 10, p90 10 min (n=1)"
+    assert rows["Reds by kind"]["day"] == "1 test, 0 Lean audit, 0 preflight, 0 infrastructure"
+    assert rows["PR-rounds lost, by cause"]["day"] == "3: 2 red, 1 dropped base"
     assert rows["Executor (in shadow, not the gate): tasks finished a minute"]["hour"] == "0.1"             # 3 results in 60 min
-    assert rows["Executor: cores working in a slot"]["today"] == "2.0 on average, p50 2.0 (n=1 runs)"
-    assert rows["Executor: overhead before a run's first task result"]["today"] == "p50 10, p90 10 s (n=1)"
+    assert rows["Executor: cores working in a slot"]["day"] == "2.0 on average, p50 2.0 (n=1 runs)"
+    assert rows["Executor: overhead before a run's first task result"]["day"] == "p50 10, p90 10 s (n=1)"
     cache = rows["Executor: share served from the cache; tasks waiting on other tasks"]
     assert cache["now"] == ("6 waiting on other tasks, 5 waiting for a slot, 1 given to a worker, in 2 checks; 1 of those checks, with 2 of "
                             "the tasks, are of no candidate being checked now")
-    assert cache["hour"] == "50% from the cache (10 of 20 tasks in 1 checks)" and cache["today"] == "65% from the cache (40 of 62 tasks in 3 checks)"
+    assert cache["hour"] == "50% from the cache (10 of 20 tasks in 1 checks)" and cache["day"] == "65% from the cache (40 of 62 tasks in 3 checks)"
     assert rows["Cores busy over cores paid, the check nodes"]["now"] == "25 of 100 (25%)"
     assert rows["Cores busy over cores paid, the check nodes"]["hour"] == "30 of 100 (30%), the average over the last 60 min"
     assert rows["Slots busy over slots, the check nodes"]["now"] == ("check slots: 1 of 2 busy, 0 free but blocked, 0 runs in line; "
                                                                     "lane slots: 4 of 4 busy, 0 free but blocked, 3 runs in line")
-    assert rows["Reserved against used, a check's shard"]["now"] == ("1 running: cores p50 12, most 12, of 96 in its slot; memory without the "
+    assert rows["Reserved against used, a check's shard"]["now"] == ("1 of the 1 running, the ones whose cgroup was found: cores p50 12, most 12, of 96 in its slot; memory without the "
                                                                     "page cache p50 40 GiB, most 40 GiB; peak with the page cache most 120 GiB, "
                                                                     "of 300 GiB reserved")
     held = rows["Parallel suites running in a shard: a worker's memory against what it declares"]
     assert held["now"] == ("`tools/wide`: 3 workers in 1 shard, a worker holds p50 21.0, most 22.0 GiB; declares 8 GiB: **over, 2.8 "
                            "times**; `tools/plain`: 1 workers in 1 shard, a worker holds p50 3.0, most 3.0 GiB (7.5 GiB with the "
                            "processes it started); declares none, so the runner counts 9 GiB: within it")
-    assert held["hour"] == held["today"] == ("`tools/wide`: most 22.0 GiB a worker, running at 1 of 1 readings; declares 8 GiB: **over, "
+    assert held["hour"] == held["day"] == ("`tools/wide`: most 22.0 GiB a worker, running at 1 of 1 readings; declares 8 GiB: **over, "
                                              "2.8 times**; `tools/plain`: most 3.0 GiB a worker, running at 1 of 1 readings; declares "
                                              "none, so the runner counts 9 GiB: within it")
-    assert rows["Reserved against used, a quick tier"]["today"].startswith("cores: p50 2.0 used of 16 in its slot; memory: p50 8 GiB peak")
-    assert rows["Ready to built"]["today"] == "p50 15, p90 19 min (n=2)"          # #1: verdict 00:40 to 01:00; #2: mark 00:50 to 01:00
+    assert rows["Reserved against used, a quick tier"]["day"].startswith("cores: p50 2.0 used of 16 in its slot; memory: p50 8 GiB peak")
+    assert rows["Ready to built"]["day"] == "p50 15, p90 19 min (n=2)"          # #1: verdict 00:40 to 01:00; #2: mark 00:50 to 01:00
     assert rows["The loop's tick: minutes between tick ends"]["hour"] == "p50 4.0, p90 4.0 min (n=2)"
-    assert rows["Green candidate: verdict to `main`"]["today"] == "p50 5, p90 5 min (n=1)"
-    assert all(set(r) == {"row", "name", "now", "hour", "today", "target", "how"} for r in rows.values())
+    assert rows["Green candidate: verdict to `main`"]["day"] == "p50 5, p90 5 min (n=1)"
+    assert all(set(r) == {"row", "name", "now", "hour", "day", "target", "how"} for r in rows.values())
 
 
 def test_a_round_is_plain_only_when_its_candidate_is_known_to_change_no_lean():
     d = doc()
     d["lean"] = {"a" * 12: [qt.COMPARE_FILES, 0]}       # the compare's list was full, so a Lean file may be past its end
     row = {r["name"]: r for r in qt.table(d)}["Round with no Lean change: build to verdict"]
-    assert row["today"] == "none of the 1 with a verdict (1 not known)"
+    assert row["day"] == "none of the 1 with a verdict (1 not known)"
     d["lean"] = {"a" * 12: [qt.COMPARE_FILES, 4]}
-    assert {r["name"]: r for r in qt.table(d)}["Round with no Lean change: build to verdict"]["today"] == "none of the 1 with a verdict"
+    assert {r["name"]: r for r in qt.table(d)}["Round with no Lean change: build to verdict"]["day"] == "none of the 1 with a verdict"
 
 
 def test_where_a_landed_prs_time_went_adds_up_to_its_total():
@@ -245,7 +246,7 @@ def test_the_rendered_table_is_markdown_and_names_what_was_not_read():
     d = doc()
     d["errors"] = ["vy-nebius-cpu-2: no answer in 100 s"]
     text = qt.render(qt.table(d), d)
-    assert "| # | Number | Now | Last hour | Today | Target | How it is measured |" in text
+    assert "| # | Number | Now | Last hour | Last 24 h | Target | How it is measured |" in text
     assert "Not read: vy-nebius-cpu-2: no answer in 100 s" in text
     assert "not measured: needs a run of this command" in text      # no earlier reading of the CPU counters
     d["now"] += (qt.SHARD_LAYOUT_H + 1) * 3600                      # a layout no shard has used lately has no rows; b's still runs
@@ -256,7 +257,7 @@ def test_the_rendered_table_is_markdown_and_names_what_was_not_read():
     d = doc()
     d["errors"] = ["vy-nebius-cpu-2: no answer in 100 s"]
     short = qt.render(qt.table(d), d, short=True)
-    assert "| # | Number | Now | Last hour | Today | Target |\n|---|---|---|---|---|---|\n" in short and "How it is measured" not in short
+    assert "| # | Number | Now | Last hour | Last 24 h | Target |\n|---|---|---|---|---|---|\n" in short and "How it is measured" not in short
     d["control"]["executor"], d["control"]["executor_why"] = [], "its status printed nothing"
     assert "| not measured: its status printed nothing |" in qt.render(qt.table(d), d)
 
@@ -279,7 +280,7 @@ def test_a_workers_memory_is_held_to_its_suites_declaration_over_the_saved_readi
     row = {r["name"]: r for r in qt.table(d, None, earlier)}[name]
     assert row["now"] == "no shard is running"                                              # none whose processes were read
     assert row["hour"] == "`a`: most 12.0 GiB a worker, running at 1 of 3 readings; declares 8 GiB: **over, 1.5 times**"
-    assert row["today"] == "`a`: most 30.0 GiB a worker, running at 2 of 4 readings; declares 8 GiB: **over, 3.8 times**"
+    assert row["day"] == "`a`: most 30.0 GiB a worker, running at 2 of 4 readings; declares 8 GiB: **over, 3.8 times**"
     d["nodes"]["vy-nebius-cpu-1"]["runs"][1]["parallel"] = []
     row = {r["name"]: r for r in qt.table(d)}[name]
     assert (row["now"], row["hour"]) == ("no parallel suite is running in the 1 shard running",
@@ -296,4 +297,14 @@ def test_a_check_that_started_no_shard_is_timed_from_its_build_to_its_infra_verd
     built = next(qt.ts(r["at"]) for r in decisions() if r["action"] == "build" and r["sha"].startswith("d"))
     row = {r["name"]: r for r in qt.table(d)}["Check that started no shard: build to its `infra` verdict"]
     minutes = (qt.ts(at("02:49")) - built) / 60
-    assert row["hour"] == row["today"] == f"p50 {minutes:.0f}, p90 {minutes:.0f} min (n=1)"
+    assert row["hour"] == row["day"] == f"p50 {minutes:.0f}, p90 {minutes:.0f} min (n=1)"
+
+
+def test_the_long_window_is_the_last_day_and_a_shard_still_running_is_never_outside_it():
+    d = doc()
+    assert qt.window_start(d) == T0 and qt.window_start(dict(d, day="2026-11-10T02:15:00Z")) == qt.ts(at("02:15"))
+    d["day"] = "2026-11-10T02:15:00Z"                      # read later: only D's build (02:40) is inside the window
+    rows = {r["name"]: r for r in qt.table(d)}
+    assert rows["Candidates by outcome"]["day"] == "1 built: 0 green, 0 red, 0 dropped for another reason, 1 being checked"
+    assert rows["Reserved against used, a check's shard"]["now"].startswith("1 of the 1 running")     # b's shard took its slot at 01:26
+

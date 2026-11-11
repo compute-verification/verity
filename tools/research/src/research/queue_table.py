@@ -1,6 +1,6 @@
 """`research queue stats` with no `--log`: the merge queue's core numbers as one table, read live in under two minutes.
 
-Each row is one number with its unit, over three windows: now, the last hour, and today since 00:00 UTC. What is read:
+Each row is one number with its unit, over three windows: now, the last hour, and the last 24 hours. What is read:
 
   the loop's decision log   `decisions.jsonl` beside the verified queue's loop on the control pod (`vqueue_loop`): each
                             candidate's build, its verdict as the loop judged it, its drop and why, and each move of `main`;
@@ -48,6 +48,8 @@ COMPARE_FILES = 300
 PLAIN_ROUND_MIN = 30
 #: a layout of shards (so many a candidate) has its rows while one of its shards runs or took its slot in the last so many hours
 SHARD_LAYOUT_H = 3
+#: the long window, in hours back from the read
+WINDOW_H = 24
 #: where the last reading of each node's CPU counters is kept, so the next run gives the average over the time between
 STATE = Path.home() / ".research" / "queue-table.json"
 
@@ -375,15 +377,17 @@ def collect(store_root=None, sample_s: float = 5.0, nodes: list[str] | None = No
     from .queue import label_target
 
     now = now or datetime.now(UTC).timestamp()
-    day = datetime.fromtimestamp(now, UTC).strftime("%Y-%m-%d")
-    y = datetime.fromtimestamp(now - 86400, UTC)
-    control, err = _remote(CONTROL, CONTROL_SCRIPT, LIVE, f"{y:%Y-%m-%d}T00:00:00Z")
+    y = datetime.fromtimestamp(now - WINDOW_H * 3600, UTC)
+    day = f"{y:%Y-%m-%dT%H:%M:%SZ}"
+    # the loop's lines from a day before the window: a PR that landed in the window was first built before it
+    lead = datetime.fromtimestamp(now - (WINDOW_H + 24) * 3600, UTC)
+    control, err = _remote(CONTROL, CONTROL_SCRIPT, LIVE, f"{lead:%Y-%m-%d}T00:00:00Z")
     doc: dict = {"now": now, "day": day, "errors": [f"{CONTROL}: {err}"] if control is None else [], "control": control or {}}
     checks = check_nodes((control or {}).get("args", ""))
     doc["check_nodes"] = checks
     names = nodes or [*checks, *(n for n in CPU_NODES if n not in checks)]
     with ThreadPoolExecutor(max(1, len(names))) as ex:
-        got = list(ex.map(lambda n: _remote(n, NODE_SCRIPT, "r" + day.replace("-", ""), str(sample_s)), names))
+        got = list(ex.map(lambda n: _remote(n, NODE_SCRIPT, f"r{y:%Y%m%d}", str(sample_s)), names))
         gh = ex.submit(subprocess.run, ["gh", "pr", "list", "--repo", REPO, "--state", "open", "--limit", "2000", "--json",
                                         "number,headRefOid"], capture_output=True, text=True)
         doc["nodes"] = {n: d for n, (d, _) in zip(names, got) if d is not None}
@@ -418,6 +422,11 @@ def collect(store_root=None, sample_s: float = 5.0, nodes: list[str] | None = No
 
 def ts(s: str) -> float:
     return datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp()
+
+
+def window_start(doc: dict) -> float:
+    """When the long window starts: ``doc["day"]``, a UTC timestamp or a date (its 00:00Z)."""
+    return ts(doc["day"] if "T" in doc["day"] else doc["day"] + "T00:00:00Z")
 
 
 def rid_time(rid: str) -> float:
@@ -463,7 +472,7 @@ def drop_cause(why: str) -> str:
         return "on main"
     if why.startswith("ci dropped it by hand"):
         return "by hand"
-    if why.startswith("its base"):
+    if why.startswith(("its base", "not on main's chain")):
         return "dropped base"
     if re.match(r"#\d+ isn't taken now: held", why):
         return "hold"
@@ -539,11 +548,11 @@ def gate_end(shard: dict, off_gate: tuple[str, ...]) -> float | None:
 
 
 def parts(doc: dict) -> list[dict]:
-    """Where each PR landed today spent its time, in minutes: `review` (mark to land verdict), `to_build` (that to the first
+    """Where each PR landed in the long window spent its time, in minutes: `review` (mark to land verdict), `to_build` (that to the first
     candidate holding it), `rework` (that build to the build of the candidate it landed in), `check` (that build to the
     candidate's verdict) and `to_main` (the verdict to the move of `main`)."""
     decisions, labels = doc["control"].get("decisions") or [], doc["labels"]
-    day = ts(doc["day"] + "T00:00:00Z")
+    day = window_start(doc)
     built: dict[tuple[str, str], list[float]] = {}
     build_at, judged = {}, {}
     for r in decisions:
@@ -621,20 +630,21 @@ def declares(m: dict) -> str:
 
 
 def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()) -> list[dict]:
-    """The rows: each `{row, name, now, hour, today, target, how}`; a cell that could not be read says what it needs.
+    """The rows: each `{row, name, now, hour, day, target, how}`; a cell that could not be read says what it needs.
     ``readings`` are this machine's saved ones, for the rows that only see what is running when the command reads."""
     now = doc["now"]
-    hour, day = now - 3600, ts(doc["day"] + "T00:00:00Z")
+    hour, day = now - 3600, window_start(doc)
     hours = max(1e-9, (now - day) / 3600)
     decisions = doc["control"].get("decisions") or []
     labels, open_prs = doc["labels"], doc["open"]
     off_gate = tuple(doc.get("off_gate") or OFF_GATE)
     checks = [n for n in doc["check_nodes"] if n in doc["nodes"]]
-    runs = {r["id"]: dict(r, node=n) for n, d in doc["nodes"].items() for r in d["runs"]}
+    runs = {r["id"]: dict(r, node=n) for n, d in doc["nodes"].items() for r in d["runs"]
+            if r.get("end") is None or rid_time(r["id"]) >= day}
     rows: list[dict] = []
 
-    def add(row: str, name: str, now_: str = "", hour_: str = "", today: str = "", target: str = "", how: str = "") -> None:
-        rows.append({"row": row, "name": name, "now": now_, "hour": hour_, "today": today, "target": target, "how": how})
+    def add(row: str, name: str, now_: str = "", hour_: str = "", day_: str = "", target: str = "", how: str = "") -> None:
+        rows.append({"row": row, "name": name, "now": now_, "hour": hour_, "day": day_, "target": target, "how": how})
 
     def win(xs: list[tuple[float, float | None]], since: float) -> list[float | None]:
         return [v for at, v in xs if at >= since]
@@ -707,7 +717,7 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
         if w or q:
             by_node.append(f"cpu-{n.rsplit('-', 1)[1]}: " + (f"{pct(w, .5):.0f}/{pct(w, .9):.0f} (n={len(w)})" if w else "none started")
                            + (f", {q} in line" if q else ""))
-    add("3", "Quick tier: wait by node, p50/p90 min", "", "", "; ".join(by_node) or "none", "", "today's runs that took a slot")
+    add("3", "Quick tier: wait by node, p50/p90 min", "", "", "; ".join(by_node) or "none", "", "the runs of the last 24 hours that took a slot")
 
     # 4. a candidate's check
     b2v = [(c["verdict"], _m(c["verdict"] - c["build"])) for c in cands if c.get("verdict")]
@@ -810,7 +820,7 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
     kinds = {k: sum(c.get("kind") == k for c in reds) for k in ("test", "Lean audit", "preflight", "infrastructure")}
     add("5", "Red: first failure to the candidate's drop", "", _dist(win(f2d, hour)), _dist(win(f2d, day)), "10",
         "the earliest failed suite's result file or failed step's end among the shards, to the loop's `drop`; "
-        f"{len(reds) - len(f2d)} of today's {len(reds)} reds recorded no failure time on a node")
+        f"{len(reds) - len(f2d)} of the window's {len(reds)} reds recorded no failure time on a node")
     add("5", "Red: drop to the next candidate built", "", _dist(win(d2b, hour)), _dist(win(d2b, day)), "", "the loop's `drop` to its next `build`")
     add("5", "Reds by kind", "", "", ", ".join(f"{v} {k}" for k, v in kinds.items()), "", "from the loop's reason and failed tasks")
     lost: dict[str, int] = {}
@@ -901,11 +911,13 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
     going = [dict(r, cores=r["scope_cpu_s"] / (doc["nodes"][r["node"]]["now"] - r["took"])) for r in runs.values()
              if r["kind"] == "shard" and r.get("scope_cpu_s") and r.get("took") and doc["nodes"][r["node"]]["now"] > r["took"]]
     res = [mem[(r["node"], r["slot"])] for r in going if (r["node"], r.get("slot")) in mem]
-    add("7", "Reserved against used, a check's shard", (f"{len(going)} running: cores p50 {pct([r['cores'] for r in going], .5):.0f}, most "
+    live = sum(1 for r in runs.values() if r["kind"] == "shard" and r.get("took") and r.get("end") is None)
+    add("7", "Reserved against used, a check's shard", (f"{len(going)} of the {live} running, the ones whose cgroup was found: cores p50 {pct([r['cores'] for r in going], .5):.0f}, most "
         f"{max(r['cores'] for r in going):.0f}, of {pct([r.get('slot_cores') or 0 for r in going], .5):.0f} in its slot; memory without the page "
         f"cache p50 {pct([r['scope_anon_gb'] for r in going], .5):.0f} GiB, most {max(r['scope_anon_gb'] for r in going):.0f} GiB; peak with the "
         f"page cache most {max(r['scope_peak_gb'] for r in going):.0f} GiB" + (f", of {pct(res, .5):.0f} GiB reserved" if res else ""))
-        if going else "no shard is running", "", "not measured: a shard's cgroup is gone when it ends", "",
+        if going else f"no cgroup was found for the {live} running" if live else "no shard is running", "",
+        "not measured: a shard's cgroup is gone when it ends", "",
         "the shards running now, from each one's own cgroup (`check-SLOT-RUN.scope`): CPU seconds over its seconds in the slot so far, "
         "`anon` of `memory.stat`, and `memory.peak`, which counts the page cache")
     read = [r for r in runs.values() if r["kind"] == "shard" and r.get("parallel") is not None]
@@ -932,7 +944,7 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
         "seen. Each process of a running shard's cgroup, grouped by the working directory of the pytest the runner started for "
         "a suite; a worker is a child of that pytest, its memory `RssAnon` of `/proc/PID/status` (no page cache, no shared "
         "memory); the declaration is `worker_gb` of `[tool.verity.tests]` in the suite's `pyproject.toml` at the candidate's "
-        "commit, else `TEST_PROCESS_GB` of `suites.py`, which the runner divides the slot's GiB by; the hour and today: the same "
+        "commit, else `TEST_PROCESS_GB` of `suites.py`, which the runner divides the slot's GiB by; the hour and the 24 hours: the same "
         "over this machine's saved readings")
     for kind, name in (("tier", "a quick tier"), ("worker", "an executor run")):
         rs = [r for r in runs.values() if r["kind"] == kind and r.get("end") and r.get("took") and r.get("cpu_s") and r["end"] > r["took"]]
@@ -940,7 +952,7 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
         add("7", f"Reserved against used, {name}", "", "", (f"cores: p50 {pct([r['cpu_s'] / (r['end'] - r['took']) for r in rs], .5):.1f} used of "
             f"{pct([r.get('slot_cores') or 0 for r in rs], .5):.0f} in its slot; memory: p50 {pct([r.get('mem_peak_gb') or 0 for r in rs], .5):.0f} GiB peak"
             + (f" of {pct(res, .5):.0f} GiB reserved" if res else ", its slot reserves none") + f" (n={len(rs)})") if rs else "none ended", "",
-            "today's runs that ended: CPU seconds and peak memory from the run's cgroup's last sample; the slot's cores and `mem=`")
+            "the window's runs that ended: CPU seconds and peak memory from the run's cgroup's last sample; the slot's cores and `mem=`")
 
     # 8. what else explains waiting
     ps = parts(doc)
@@ -972,16 +984,16 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
 
 
 def largest(doc: dict) -> str:
-    """The part of mark-to-`main` that took the most PR-minutes among the PRs landed today, as one sentence."""
+    """The part of mark-to-`main` that took the most PR-minutes among the PRs landed in the long window, as one sentence."""
     ps = parts(doc)
     if not ps:
-        return "No PR landed today, so no part of mark-to-`main` can be ranked."
+        return f"No PR landed in the last {WINDOW_H} hours, so no part of mark-to-`main` can be ranked."
     names = {"review": "the wait for a land verdict", "to_build": "ready to built: the wait for a first candidate",
              "rework": "rounds lost: the first candidate to the one that landed", "check": "the landing candidate's check",
              "to_main": "the candidate's verdict to the move of `main`"}
     total = {k: sum(p[k] for p in ps) for k in names}
     k = max(total, key=total.get)
-    return (f"Largest part of mark-to-`main` for the {len(ps)} PRs landed today: {names[k]}, p50 {pct([p[k] for p in ps], .5):.0f} min, "
+    return (f"Largest part of mark-to-`main` for the {len(ps)} PRs landed in the last {WINDOW_H} hours: {names[k]}, p50 {pct([p[k] for p in ps], .5):.0f} min, "
             f"{total[k] / sum(total.values()):.0%} of all their minutes (" + ", ".join(
                 f"{names[x].split(':')[0]} {total[x] / sum(total.values()):.0%}" for x in sorted(names, key=lambda x: -total[x]) if x != k) + ").")
 
@@ -989,10 +1001,10 @@ def largest(doc: dict) -> str:
 def render(rows: list[dict], doc: dict, short: bool = False) -> str:
     """The table as Markdown; ``short`` leaves out the column saying how each number is measured."""
     at = datetime.fromtimestamp(doc["now"], UTC)
-    cols = {"row": "#", "name": "Number", "now": "Now", "hour": "Last hour", "today": "Today", "target": "Target", "how": "How it is measured"}
+    cols = {"row": "#", "name": "Number", "now": "Now", "hour": "Last hour", "day": f"Last {WINDOW_H} h", "target": "Target", "how": "How it is measured"}
     if short:
         del cols["how"]
-    lines = [f"The merge queue's numbers at {at:%Y-%m-%d %H:%MZ}. Windows: now; the last hour; today since 00:00Z. Times in minutes unless said.",
+    lines = [f"The merge queue's numbers at {at:%Y-%m-%d %H:%MZ}. Windows: now; the last hour; the last {WINDOW_H} hours. Times in minutes unless said.",
              "", "| " + " | ".join(cols.values()) + " |", "|" + "---|" * len(cols)]
     lines += ["| " + " | ".join(str(r[k]).replace("|", "/") for k in cols) + " |" for r in rows]
     lines += ["", largest(doc)]
