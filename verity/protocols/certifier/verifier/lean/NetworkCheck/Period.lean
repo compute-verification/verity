@@ -756,39 +756,27 @@ so each ingress gate is an input and a template reads only input gates outside i
 is an ingress row's input node, so no egress gate depends on an ingress gate; and the Program is topological
 (`Prog.orderViolation`, as `NciCheck.Desc.evaluate` checks it), so a gate reads only gates before it.
 
-<<<<<<< ours
 The ingress templates' entry ports `prog<j>` all have one type, a slot entry's, and lane `j`'s read one input node of
 its own, distinct from every other lane's and from the rows, lane `j`'s slot entries (`T / every` rows each, `lanes ·
 T / every` counted once among the input gates): bucket `t`'s `prog<j>` is its row `⌊t / every⌋` (`readsEntries`), the
 leaf the period check's `wired` holds to chunk `j` of an audit's `SlotEntry_v1` or `SelectEntry_v1` entries port;
-their bits are the scan's `entries`. -/
-||||||| base
-The ingress templates' entry ports `prog<j>` all have one type, a slot entry's, and read one input node of their own,
-the slot entries (`lanes · T / every` rows, counted once among the input gates): bucket `t`'s `prog<j>` is its row
-`j · T / every + ⌊t / every⌋` (`readsEntries`), the row the period check's `wired` holds to an audit's
-`SlotEntry_v1` entries port. -/
-=======
-The ingress templates' entry ports `prog<j>` all have one type, a slot entry's, and read one input node of their own,
-the slot entries (`lanes · T / every` rows, counted once among the input gates): bucket `t`'s `prog<j>` is its row
-`j · T / every + ⌊t / every⌋` (`readsEntries`), the row the period check's `wired` holds to an audit's
-`SlotEntry_v1` entries port.
+their bits are the scan's `entries`.
 
 The scan's two ties equate rows of one length: a later bucket's `sin` with the state the bucket before returned, and an
 egress bucket's `state` with the view its ingress bucket returned. So the ingress templates return exactly a u16, a
 state of `sin`'s leaves and a view of the egress template's `state`'s leaves (`ingressReturn`); a return of another
 shape is refused.
 
-An input gate is read as one thing: the row, state and egress arguments read input nodes of their own, none the slot
-entries' (`argsApart`). The input gates are counted as a sum of bits against the parameters' and the slot entries', so
-two arguments on one node would leave that sum room for an input node nothing reads, and a state argument on the slot
-entries' node would make a slot entry a state gate.
+An input gate is read as one thing: the row, state and egress arguments read input nodes of their own, none a lane's
+slot entries' (`argsApart`). The input gates are counted as a sum of bits against the parameters' and the slot
+entries', so two arguments on one node would leave that sum room for an input node nothing reads, and a state argument
+on a lane's slot entries' node would make a slot entry a state gate.
 
-And every input gate is read: each of those arguments is all its node's leaves, the slot entries' node holds the
-`lanes · T / every` entries and no other leaf, and the root has no other input node (`inputsRead`). That sum counts
-bits and this counts leaves, node by node, so the scan's input gates are read off the check itself, with no appeal to
-the widths the decoder holds a reference to. A slot entry's leaves are at most its bits (a leaf is at least a bit wide,
+And every input gate is read: each of those arguments is all its node's leaves, each lane's slot entries' node holds
+its `T / every` entries and no other leaf, and the root has no other input node (`inputsRead`). That sum counts bits
+and this counts leaves, node by node, so the scan's input gates are read off the check itself, with no appeal to the
+widths the decoder holds a reference to. A slot entry's leaves are at most its bits (a leaf is at least a bit wide,
 which the decoder gives and this holds), so the entries' bits bound the entries' gates. -/
->>>>>>> theirs
 def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   let prog ← (Flock.Program.decode (← Flock.canon j).toUTF8).mapError fun e => s!"scan: {e}"
   need (Flock.hexOf prog.sha512 == program) "scan: its SHA-512 is not the registered Program's (program)"
@@ -849,7 +837,6 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
       xe.args.all fun a => (inputArg prog a).isSome)
     "scan: a template's row, state or egress argument is not one input node's leaves"
   need (xe.args.all fun a => !rows.contains (inputArg prog a)) "scan: an egress template's argument is an ingress \
-<<<<<<< ours
     row's input node, so an egress gate would depend on the ingress (NetTiming.BoundaryGates.Fits)"
   let a0 ← needSome ((List.range s.lanes).mapM fun j => xf.args[1 + j]?) "scan: bucket 0 has no entry port a lane"
   let pks := a0.map fun a => (a.memberRef 0 0).i
@@ -862,39 +849,14 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
       later.all fun (x, _) => readsEntries x 2 1 s.every ety.leaves pks)
     s!"scan: bucket t's prog<j> is not row ⌊t / {s.every}⌋ of lane j's slot entries' input node, its slot of the \
       boundary bucket t reads (NetworkCheck.Period.readsEntries)"
-||||||| base
-    row's input node, so an egress gate would depend on the ingress (NetTiming.Layout.Fits)"
-  let a0 ← needSome xf.args[1]? "scan: bucket 0 has no entry port"
-  let pk := (a0.memberRef 0 0).i
-  need (!(a0.memberRef 0 0).p && !rows.contains (some pk) && match root.body.nodes[pk]? with
-      | some n => NciCheck.Desc.isInputNode prog n
-      | none => false)
-    "scan: bucket 0's prog0 reads no input node of its own, the slot entries'"
-  need (readsEntries xf 1 0 s.lanes nb s.every ety.leaves pk &&
-      later.all fun (x, _) => readsEntries x 2 1 s.lanes nb s.every ety.leaves pk)
-    s!"scan: bucket t's prog<j> is not row j · {nb} + ⌊t / {s.every}⌋ of the slot entries' input node, lane j's \
-      slot of the boundary bucket t reads (NetworkCheck.Period.readsEntries)"
-=======
-    row's input node, so an egress gate would depend on the ingress (NetTiming.Layout.Fits)"
-  let a0 ← needSome xf.args[1]? "scan: bucket 0 has no entry port"
-  let pk := (a0.memberRef 0 0).i
-  need (!(a0.memberRef 0 0).p && !rows.contains (some pk) && match root.body.nodes[pk]? with
-      | some n => NciCheck.Desc.isInputNode prog n
-      | none => false)
-    "scan: bucket 0's prog0 reads no input node of its own, the slot entries'"
-  need (readsEntries xf 1 0 s.lanes nb s.every ety.leaves pk &&
-      later.all fun (x, _) => readsEntries x 2 1 s.lanes nb s.every ety.leaves pk)
-    s!"scan: bucket t's prog<j> is not row j · {nb} + ⌊t / {s.every}⌋ of the slot entries' input node, lane j's \
-      slot of the boundary bucket t reads (NetworkCheck.Period.readsEntries)"
   let own := (xf.args.extract 0 1 ++ (later.map fun (x, _) => x.args.extract 0 2).getD #[] ++ xe.args).toList
-  need (argsApart prog own [pk]) "scan: two of the templates' row, state and egress arguments read one input node, or \
-    one reads the slot entries': an input node would be left that nothing reads, or a slot entry would be a state gate \
-    (NetworkCheck.Period.argsApart)"
-  need (inputsRead prog own [pk] (s.lanes * nb * ety.leaves) && ety.leaves ≤ bitsOf ety)
+  need (argsApart prog own pks) "scan: two of the templates' row, state and egress arguments read one input node, or \
+    one reads a lane's slot entries': an input node would be left that nothing reads, or a slot entry would be a \
+    state gate (NetworkCheck.Period.argsApart)"
+  need (inputsRead prog own pks (nb * ety.leaves) && ety.leaves ≤ bitsOf ety)
     s!"scan: an input node with a leaf nothing reads: a row, state or egress argument that is not all its input \
-      node's leaves, a slot entries' node of other leaves than its {s.lanes * nb} entries' (each of at least a bit), \
+      node's leaves, a lane's slot entries' node of other leaves than its {nb} entries' (each of at least a bit), \
       or an input node that is neither's (NetworkCheck.Period.inputsRead)"
->>>>>>> theirs
   need prog.orderViolation.isNone "scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program \
     is not topological, so a gate's operands could be gates after it"
   pure { steps := T, free := 0, ingress := bitsOf df.ret, egress := bitsOf de.ret,

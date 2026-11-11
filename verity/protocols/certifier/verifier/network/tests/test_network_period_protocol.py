@@ -407,30 +407,13 @@ def test_each_lanes_prog_is_its_own_chunk():
 
 def test_the_scan_is_read_off_its_program(server):
     """The rows form's scan terms are its registered Program's, in the generator form: T, no free input (its `prog` a
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
     compute audit's output), an ingress and an egress instance's committed bits (their returns: a u16 with the state
     and view, or with the row), and its slot entries' bits (lanes · T / every entries of its `prog` ports' width); and
     Lean and the mirror refuse, as parameters, a scan that isn't a descriptor, another Program's, one in the checker
     form (its egress row an input), one whose templates have other parameters or other than 1, T − 1 and T instances,
     or rows other than the schedule's, one whose lane reads another row of its input than its bucket's or another
-    lane's input, one with an input gate no template's, and each negative of a check of what
-    `NetTiming.BoundaryGates.Fits` asks."""
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-    compute audit's output), and an ingress and an egress instance's committed bits (their returns: a u16 with the
-    state and view, or with the row); and Lean and the mirror refuse, as parameters, a scan that isn't a descriptor,
-    another Program's, one
-    in the checker form (its egress row an input), one whose templates have other parameters or other than 1, T − 1
-    and T instances, or rows other than the schedule's, one with an input gate no template's, and each negative of a
-    check of what `NetTiming.Layout.Fits` asks."""
-=======
-    compute audit's output), and an ingress and an egress instance's committed bits (their returns: a u16 with the
-    state and view, or with the row); and Lean and the mirror refuse, as parameters, a scan that isn't a descriptor,
-    another Program's, one
-    in the checker form (its egress row an input), one whose templates have other parameters or other than 1, T − 1
-    and T instances, or rows other than the schedule's, one with an input gate no template's, and each negative of a
-    check of the rows the scan's ties equate, of what `NetTiming.Layout.Fits` asks or of the input nodes its arguments
-    read."""
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
+    lane's input, one with an input gate no template's, and each negative of a check of the rows the scan's ties
+    equate, of what `NetTiming.BoundaryGates.Fits` asks or of the input nodes its arguments read."""
     for n in range(3):
         case = build("rows-honest", n, small=n % 2 == 0)
         p, desc = PC.params(case["params"]), case["params"]["scan"]
@@ -444,21 +427,11 @@ def test_the_scan_is_read_off_its_program(server):
             assert verdict == REJECT and "scan" in json.loads(out)["reason"], (n, out)
 
 
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
-def test_each_fits_check_refuses_its_negative(server):
-    """Each of the scan's checks of what `NetTiming.BoundaryGates.Fits` asks refuses, in Lean and in the mirror, a scan that
-    passes every check before it (`PC.scan_negatives`): one past the resolution's walk, one whose root doesn't return
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-def test_each_fits_check_refuses_its_negative(server):
-    """Each of the scan's checks of what `NetTiming.Layout.Fits` asks refuses, in Lean and in the mirror, a scan that
-    passes every check before it (`PC.scan_negatives`): one past the resolution's walk, one whose root doesn't return
-=======
 def test_each_scan_check_refuses_its_negative(server):
-    """Each of the scan's checks of the rows its ties equate, of what `NetTiming.Layout.Fits` asks and of the input
-    nodes its arguments read refuses, in Lean and in the mirror, a scan that passes every check before it
+    """Each of the scan's checks of the rows its ties equate, of what `NetTiming.BoundaryGates.Fits` asks and of the
+    input nodes its arguments read refuses, in Lean and in the mirror, a scan that passes every check before it
     (`PC.scan_negatives`): one whose ingress view is not its egress `state`'s leaves, one (a window of more than one
     bucket) whose `sin` is not the returned state's, one past the resolution's walk, one whose root doesn't return
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
     an egress leaf, one whose egress template passes a parameter's leaves through, one whose bucket 0 row is a constant
     gate's, one with an egress argument a later ingress output, one whose egress state is an ingress row's input, one
     (a window of more than one bucket) whose `sin` reads its row's input node, one whose egress state is the slot

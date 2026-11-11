@@ -1142,20 +1142,13 @@ def entry_reads(prog: Program, query: dict, members: list[SimpleNamespace], cls:
 def program(M, cls: IS.Class, templates: tuple[str, ...], G: int, T: int, out: Path) -> SimpleNamespace:
     """A round's Program and partition (`members_of`'s templates and counts) and each template's stager, every output
     its own row. The scan's three templates' (`TEMPLATES`) is the generator form (`scan_root`), its one-stage reads
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
-    of the slot entries each unit's (`entry_reads`); every other round's a population of its templates."""
+    of the slot entries each unit's (`entry_reads`), and its ``prog<j>``, one a lane, the values it names tied
+    (``tied``): every `EVERY` units read one slot entry of each lane, the output of the block that registered it,
+    which `NetworkCheck.Period`'s rows form ties to the scan (`progTied`, `wired`), so R8 lets them through and the
+    registration verdict publishes them (`rests_on_period_check`): the round's acceptance rests on that period
+    check, which refuses the block round's stand-in; every other round's a population of its templates, which names
+    none."""
     defs, members = _defs(cls), members_of(templates, G, T, entries=entries_of(cls, G, T), lanes=cls.NR)
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-    of the slot entries each unit's (`entry_reads`); every other round's a population of its templates."""
-    defs, members = _defs(cls), members_of(templates, G, T, entries=entries_of(cls, G, T))
-=======
-    of the slot entries each unit's (`entry_reads`), and its ``prog`` the one value it names tied (``tied``): every
-    `EVERY` units read one slot entry, the output of the block that registered it, which `NetworkCheck.Period`'s rows
-    form ties to the scan (`progTied`, `wired`), so R8 lets it through and the registration verdict publishes it
-    (`rests_on_period_check`): the round's acceptance rests on that period check, which refuses the block round's
-    stand-in; every other round's a population of its templates, which names none."""
-    defs, members = _defs(cls), members_of(templates, G, T, entries=entries_of(cls, G, T))
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
     counts = counts_of(members)
     nb = G * T // cls.EVERY
     prog = scan_root([(defs[tp], counts[tp], FIXED[tp]) for tp in templates], nb, cls.EVERY) \

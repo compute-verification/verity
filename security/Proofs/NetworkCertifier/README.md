@@ -76,15 +76,6 @@ content and order. Conventions follow POUS's package (`verity/protocols/pous/lea
                                the leak relation at the rows its trace holds (OpensAtInputs, RLeakCarried)
 ../../Definitions/NetworkCertifier/Guarantees/Carried.lean  trusted: the leak bounds over a carried pool
                                (SampledLeakCarried, PooledLeakCarried)
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
-../../Definitions/NetworkCertifier/Witness.lean  trusted: the instances the honest and nontrivial lemmas are
-                               stated at, each built by hand (trivLay, notLay, certOps; the honest certifier at a
-                               Program, the reference schedule, the verifier and the sender that accept and leak
-                               everything, a sampled audit, the rows format of the fixture `fxQueue`)
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-../../Definitions/NetworkCertifier/Witness.lean  trusted: the layouts and openings the nontrivial lemmas fail at
-                               (trivLay, notLay, certOps)
-=======
 ../../Definitions/NetworkCertifier/PeriodConditions.lean  trusted: a period statement's conditions (WindowsPlaced,
                                RecordFormat.ReadsBy, PeriodChannelReg) and the windows' count (windowsCount)
 ../../Definitions/NetworkCertifier/Assumptions/RegisteredInputs.lean  trusted: RegisteredInputsHeld, an open premise
@@ -92,9 +83,10 @@ content and order. Conventions follow POUS's package (`verity/protocols/pous/lea
                                (certifierRun) and the leak relation there (RLeakCertifierChecked)
 ../../Definitions/NetworkCertifier/Guarantees/PeriodChecked.lean  trusted: WindowGoodChecked and PeriodLeakChecked,
                                stated and not proved
-../../Definitions/NetworkCertifier/Witness.lean  trusted: the layouts and openings the nontrivial lemmas fail at
-                               (trivLay, notLay, certOps)
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
+../../Definitions/NetworkCertifier/Witness.lean  trusted: the instances the honest and nontrivial lemmas are
+                               stated at, each built by hand (trivLay, notLay, certOps; the honest certifier at a
+                               Program, the reference schedule, the verifier and the sender that accept and leak
+                               everything, a sampled audit, the rows format of the fixture `fxQueue`)
 Lemmas.lean     the statements that are only steps of the guarantees' proofs, Theorem 1(b) among them,
                                each a `def G : Prop` under the same namespace (`Guarantees.G`)
 ../NetworkCertifier.lean  proved: `SecurityProofs.G : Guarantees.G` for each guarantee and lemma, from the modules below

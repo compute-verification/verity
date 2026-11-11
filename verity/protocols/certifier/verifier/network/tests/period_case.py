@@ -30,17 +30,9 @@ slots' `ScanSlots_v2`, each a pinned Definition with one member a slot) in its o
 state (`STATE`) at the root and domain of that audit's `SCAN_STATE` (`_state_tied`), answered by one-stage with a
 stratified or subset sample at the period's δ; the scan's Program is its generator form, stand-ins of its three templates
 at small widths in the Boolean profile's types, as the scan's Definitions have them (`scan_descriptor`), and a Program in
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
-the checker form is a bad scan (`bad_scans`), as is each check's negative of what `NetTiming.BoundaryGates.Fits` asks
-(`scan_negatives`). Beside them, the compute audits (in the rows form at least one, whose registrations' `roots` hold the
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-the checker form is a bad scan (`bad_scans`), as is each check's negative of what `NetTiming.Layout.Fits` asks
-(`scan_negatives`). Beside them, the compute audits (in the rows form at least one, whose registrations' `roots` hold the
-=======
 the checker form is a bad scan (`bad_scans`), as is each negative of a check of the rows the scan's ties equate, of
-what `NetTiming.Layout.Fits` asks or of the input nodes its arguments read (`scan_negatives`). Beside them, the compute
-audits (in the rows form at least one, whose registrations' `roots` hold the
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
+what `NetTiming.BoundaryGates.Fits` asks or of the input nodes its arguments read (`scan_negatives`). Beside them, the
+compute audits (in the rows form at least one, whose registrations' `roots` hold the
 scans' `prog`), each registered over its Program, a population of one or two stand-in templates whose units commit from
 8 to 320 bits, with its slot entries' in the rows form (`audit_descriptor`), and answered with a subset or stratified
 sample (a work sampling design's) and its bound on incorrect proof blocks, every unit sampled for an audit a scan's
@@ -537,30 +529,16 @@ def _audit(a, ctx: str) -> Audit:
 def _scan(j, program: str, s: WardenParams) -> Scan:
     """`scanOf`: the scan's terms from its Program's descriptor, which must be the registered Program and the generator
     form of the schedule's link-window in the Boolean profile's types (`BOOL_BYTE`, `BOOL_U16`), an egress template
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
-    with a row among its parameters (the checker form) refused first. Then what `NetTiming.BoundaryGates.Fits` asks: the
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-    with a row among its parameters (the checker form) refused first. Then what `NetTiming.Layout.Fits` asks: the
-=======
     with a row among its parameters (the checker form) refused first, and an ingress return that is not a u16, a
     state of `sin`'s leaves and a view of the egress `state`'s (`_ingress_return`), the rows the scan's two ties
-    equate. Then what `NetTiming.Layout.Fits` asks: the
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
+    equate. Then what `NetTiming.BoundaryGates.Fits` asks: the
     walk within `FUEL` (`_walkable`), the root returning every egress leaf, the egress template returning only gates it
     computes (`_own_returns`), each ingress row and every template's row, state and egress argument one input node's
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
     leaves (`_input_arg`), no egress argument an ingress row's, bucket t's `prog<j>` row `⌊t / every⌋` of lane j's
-    own input node of its slot entries (`_reads_entries`), and the Program topological (`_topological`). It reads
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-    leaves (`_input_arg`), no egress argument an ingress row's, bucket t's `prog<j>` row `j · T / every + ⌊t / every⌋`
-    of one input node of the slot entries (`_reads_entries`), and the Program topological (`_topological`). It reads
-=======
-    leaves (`_input_arg`), no egress argument an ingress row's, bucket t's `prog<j>` row `j · T / every + ⌊t / every⌋`
-    of one input node of the slot entries (`_reads_entries`), the row, state and egress arguments' input nodes
-    pairwise distinct and none the slot entries' (`argsApart`), each of those arguments all its node's leaves, the
-    slot entries' node its entries' leaves and no other input node (`inputsRead`), and the Program topological
-    (`_topological`). It reads
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
+    own input node of its slot entries (`_reads_entries`), the row, state and egress arguments' input nodes
+    pairwise distinct and none a lane's slot entries' (`argsApart`), each of those arguments all its node's leaves,
+    each lane's slot entries' node its entries' leaves and no other input node (`inputsRead`), and the Program
+    topological (`_topological`). It reads
     the descriptor's nodes, signatures and returns; Flock's decoder, which Lean runs on it, refuses no descriptor
     this module writes."""
     if not isinstance(j, dict) or j.get("schema") != SCHEMA:
@@ -635,34 +613,22 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
         raise D.Reject("scan: bucket 0's prog<j> reads no input node of lane j's own, its slot entries', distinct from "
                        "every other lane's")
     E = leaves_of(ety)
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
     if not (_reads_entries(xf, 1, 0, s.every, E, pks, j)
             and all(_reads_entries(x, 2, 1, s.every, E, pks, j) for x, _ in later)):
         raise D.Reject(f"scan: bucket t's prog<j> is not row ⌊t / {s.every}⌋ of lane j's slot entries' input node, "
                        "its slot of the boundary bucket t reads (NetworkCheck.Period.readsEntries)")
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-    if not (_reads_entries(xf, 1, 0, L, nb, s.every, E, r0[1], j)
-            and all(_reads_entries(x, 2, 1, L, nb, s.every, E, r0[1], j) for x, _ in later)):
-        raise D.Reject(f"scan: bucket t's prog<j> is not row j · {nb} + ⌊t / {s.every}⌋ of the slot entries' input "
-                       "node, lane j's slot of the boundary bucket t reads (NetworkCheck.Period.readsEntries)")
-=======
-    if not (_reads_entries(xf, 1, 0, L, nb, s.every, E, r0[1], j)
-            and all(_reads_entries(x, 2, 1, L, nb, s.every, E, r0[1], j) for x, _ in later)):
-        raise D.Reject(f"scan: bucket t's prog<j> is not row j · {nb} + ⌊t / {s.every}⌋ of the slot entries' input "
-                       "node, lane j's slot of the boundary bucket t reads (NetworkCheck.Period.readsEntries)")
     own = [_input_arg(a, nodes, j) for a in own_args]
-    if len(set(own)) != len(own) or r0[1] in own:
+    if len(set(own)) != len(own) or any(k in own for k in pks):
         raise D.Reject("scan: two of the templates' row, state and egress arguments read one input node, or one reads "
-                       "the slot entries': an input node would be left that nothing reads, or a slot entry would be a "
-                       "state gate (NetworkCheck.Period.argsApart)")
+                       "a lane's slot entries': an input node would be left that nothing reads, or a slot entry would "
+                       "be a state gate (NetworkCheck.Period.argsApart)")
     whole = lambda a: (q := _affine(_parts(a["refs"], nodes)[0]))[3] == _members(nodes[q[1]])  # noqa: E731
-    if not (all(whole(a) for a in own_args) and _members(nodes[r0[1]]) == L * nb * E and E <= bits_of(ety)
-            and all(k == r0[1] or k in own for k, x in enumerate(nodes) if _is_input(x, j))):
+    if not (all(whole(a) for a in own_args) and all(_members(nodes[k]) == nb * E for k in pks)
+            and E <= bits_of(ety) and all(k in pks or k in own for k, x in enumerate(nodes) if _is_input(x, j))):
         raise D.Reject("scan: an input node with a leaf nothing reads: a row, state or egress argument that is not all "
-                       f"its input node's leaves, a slot entries' node of other leaves than its {L * nb} entries' "
+                       f"its input node's leaves, a lane's slot entries' node of other leaves than its {nb} entries' "
                        "(each of at least a bit), or an input node that is neither's "
                        "(NetworkCheck.Period.inputsRead)")
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
     if not _topological(j):
         raise D.Reject("scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program is not "
                        "topological, so a gate's operands could be gates after it")
@@ -1400,23 +1366,11 @@ def scan_descriptor(T: int, row: int, widths: tuple[int, int, int, int], counts:
                     every: int = 1, skew: int = 0, shared: bool = False) -> str:
     """The canonical descriptor of a scan's Program in the generator form: bucket 0's stand-in instance, `T − 1` later
     ingress instances (no template when there are none) and `T` egress instances (or `counts`), each ingress template's
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
-    row `row` bytes, the ingress buckets' state, entry and view bits and the egress bucket's state words `widths`, and
+    row `row` bytes, the ingress buckets' state, entry and view bits and the egress bucket's state words `widths` (in
+    the generator form the view is 16 bits a state word, the egress bucket reading it as u16 words), and
     `lanes` entry ports a bucket, bucket t's `prog<j>` row `⌊t / every⌋` of lane j's input `prog<j>` of the slot
     entries (`_scan_root`), or `skew` rows on, cyclically, or lane 0's input (`shared`); `checker`: in the checker form
     instead, `T` ingress and `T` egress instances (or `counts`) that take their rows."""
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-    row `row` bytes, the ingress buckets' state, entry and view bits and the egress bucket's state words `widths`, and
-    `lanes` entry ports a bucket, bucket t's `prog<j>` row `j · T / every + ⌊t / every⌋` of one input of the slot
-    entries (`_scan_root`), or `skew` rows on, cyclically; `checker`: in the checker form instead, `T` ingress and `T`
-    egress instances (or `counts`) that take their rows."""
-=======
-    row `row` bytes, the ingress buckets' state, entry and view bits and the egress bucket's state words `widths` (in
-    the generator form the view is 16 bits a state word, the egress bucket reading it as u16 words), and
-    `lanes` entry ports a bucket, bucket t's `prog<j>` row `j · T / every + ⌊t / every⌋` of one input of the slot
-    entries (`_scan_root`), or `skew` rows on, cyclically; `checker`: in the checker form instead, `T` ingress and `T`
-    egress instances (or `counts`) that take their rows."""
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
     state, prog, view, words = widths
     ingress = {"ROW": row, "STATE": state, "PROG": prog, "VIEW": view}
     names = names or (first_params(lanes), ingress_params(lanes), EGRESS_PARAMS)
@@ -2104,18 +2058,10 @@ def _scan_widths(desc: dict) -> tuple[int, int, int, int]:
 def bad_scans(p: dict) -> list[dict]:
     """Rows-form parameters whose scan `scanOf` refuses, each one change to `p`: not a descriptor, another Program's
     (its SHA-512 not `program`), and, each under its own SHA-512, the checker form (its egress row an input), templates
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
     with other parameters, another number of instances, rows not the schedule's, a lane's `prog<j>` another row of its
-    input than its bucket's or another lane's input, an input gate no template's, and each negative of a check of what
-    `NetTiming.BoundaryGates.Fits` asks (`scan_negatives`)."""
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-    with other parameters, another number of instances, rows not the schedule's, an input gate no template's, and each
-    negative of a check of what `NetTiming.Layout.Fits` asks (`scan_negatives`)."""
-=======
-    with other parameters, another number of instances, rows not the schedule's, an input gate no template's, and each
-    negative of a check of the rows the scan's ties equate, of what `NetTiming.Layout.Fits` asks or of the input nodes
-    its arguments read (`scan_negatives`)."""
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
+    input than its bucket's or another lane's input, an input gate no template's, and each negative of a check of the
+    rows the scan's ties equate, of what `NetTiming.BoundaryGates.Fits` asks or of the input nodes its arguments read
+    (`scan_negatives`)."""
     s, desc = p["schedule"], p["scan"]
     T, row, widths = s["window"], s["lanes"] * s["slots"] * s["cell_bytes"], _scan_widths(desc)
     L, every = s["lanes"], s["every"]
@@ -2157,19 +2103,12 @@ DEEP = 2 ** 30
 
 
 def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
-    """Rows-form parameters each refused by one of `scanOf`'s checks of what `NetTiming.BoundaryGates.Fits` asks and by none
-    before it, each one change to `p`'s generator-form scan under its own SHA-512, with a fragment of both refusals:
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-    """Rows-form parameters each refused by one of `scanOf`'s checks of what `NetTiming.Layout.Fits` asks and by none
-    before it, each one change to `p`'s generator-form scan under its own SHA-512, with a fragment of both refusals:
-=======
     """Rows-form parameters each refused by one of `scanOf`'s checks of the rows its ties equate, of what
-    `NetTiming.Layout.Fits` asks or of the input nodes its arguments read, and by none before it, each one change to
-    `p`'s generator-form scan under its own SHA-512, with a fragment of both refusals: `view`, the ingress templates'
-    view one bit more than the egress template's `state`; `state` (when `T > 1`), the later ingress template's `sin`
-    one bit more than the state the templates return (its input node and the template's argument grown with it);
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
+    `NetTiming.BoundaryGates.Fits` asks or of the input nodes its arguments read, and by none before it, each one change
+    to `p`'s generator-form scan under its own SHA-512, with a fragment of both refusals: `view`, the ingress
+    templates' view one bit more than the egress template's `state`; `state` (when `T > 1`), the later ingress
+    template's `sin` one bit more than the state the templates return (its input node and the template's argument
+    grown with it);
     `walk`, the egress template calling a composite of `2^90` gates in three nested batches, unread, so the walk to an
     operand is past `FUEL`; `returns`, the root returning an input leaf for the last egress leaf; `computes`, the egress
     template returning its `state`'s first 16 leaves as its u16; `row`, bucket 0's row bound to a constant primitive's
