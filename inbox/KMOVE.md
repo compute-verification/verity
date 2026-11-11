@@ -860,3 +860,27 @@ retired terms added at benchmarks/one_stage/server_rate.py:121 ('cap', in a6.chu
 ('the drawn statements'; GLOSSARY.md says the sample / sampled)". Your `--wide-leaf` change is kernels'
 next pull request on that file: fix both lines in it, as a commit of their own, and say so in the body.
 Read the two lines at #8953's head first (it sits on #8679), since the numbers may have moved.
+
+## Wed 11 Nov 21:27Z: proofs' answer on the typed statement's tag is NO. The prover refuses the wide leaf there; it does not derive a name
+
+Proofs (HASH-119, 21:25Z; lines 296, 425, 438, 439 and 472 of `Tags.lean` read by its lead on its branch at
+`5fa334aa31`, not on `main` yet):
+- **There is no rule that derives a name.** Each statement's rep domain is a literal in the tags
+  (`verity/protocols/flock/verifier/Flock/Tags.lean:82`: the prefix, then `r` in decimal).
+- **The wide leaf has two statements:** `flock-circuit/fast100-wide-leafx2/rep` (`:438`; with several tables
+  `flock-circuit/fast100-wide-leafx2/{table}/rep{r}`, `:439`) and
+  `flock-circuit-tmpl/fast100-wide-leafx2/rep` (`:472`). `Tags.wideLeaf` is true at those two only (`:425`).
+- **The typed statement has one prefix, `flock-circuit-types/fast100x2/rep`** (`:296`, the same on `main`).
+  "A session under your string is in no statement the verifier knows, so it is refused." A wide typed
+  statement would be a new statement; it is not in proofs' second pull request and no audit can ask for it.
+- "Nothing you built needs to change for the two wide-leaf statements that exist."
+
+**So, in your pull request, before it opens:**
+1. **`--wide-leaf` with the typed statement is refused by the prover, with the reason in the message** (the
+   wide leaf has no typed statement; the two it has, by name). A prover path whose sessions no verifier
+   accepts fails late and far from its cause; it fails at the flag instead. Delete the derived
+   `flock-circuit-types/fast100-wide-leafx2/rep{r}`, and add the test of the refusal.
+2. **Hold your two strings to proofs' literals, byte for byte, in a test:** the three forms above, the
+   several-tables one included. If your prover builds the several-tables tag by another pattern than
+   `…/{table}/rep{r}`, say so on HASH-119 before the pull request opens.
+3. Say both in the body, in one line each, for proofs' read.
