@@ -124,6 +124,13 @@ def test_every_served_unit_s_proof_block_composes():
                    "GreedyCombine_v1{V=154880,N=16384}": 25}
 
 
+def test_verify_zk_takes_every_served_unit():
+    """Each served unit reads in slots but no table a slot holds, so `verify --zk` takes it (`chunk_rows.zk_refusal`)."""
+    for d, _n in G.cut(bind(b1.TokenSelect, V=SERVED_V)):
+        tp = SRW.template(descriptor_id(d))
+        assert (CR.zk_refusal(tp), CR.slot_tables(tp.fn)) == (None, ()), tp.id
+
+
 def test_each_combine_parameter_is_wired_to_the_chunk_that_wrote_it():
     s = Served(n=2)
     ms = members(s)
