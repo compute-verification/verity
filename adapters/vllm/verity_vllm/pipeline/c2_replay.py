@@ -41,7 +41,7 @@ def rss_kb() -> tuple[int | None, int | None]:
             elif line.startswith("VmHWM:"):
                 hwm = int(line.split()[1])
         return cur, hwm
-    except Exception:  # noqa: BLE001
+    except (OSError, ValueError, IndexError):
         return None, None
 
 
