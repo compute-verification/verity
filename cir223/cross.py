@@ -93,7 +93,8 @@ def restack(tag: str, args: list[str]) -> tuple[dict | None, float, int]:
         return None, secs, rc
     say(f"{tag}: status {r.get('status')} step {r.get('step')} result {r.get('result')} head {r.get('head')}")
     say(f"{tag}: move {r.get('move')} base {r.get('base')} onto {r.get('onto')} crossed {r.get('crossed')}")
-    say(f"{tag}: plain merge {r['plain']['status']} ({len(r['plain']['files'])} files) {' '.join(r['plain']['files'][:40])}")
+    pm = r.get("plain") or {}
+    say(f"{tag}: plain merge {pm.get('status')} ({len(pm.get('files') or [])} files) {' '.join((pm.get('files') or [])[:40])}")
     for f in r.get("files", []):
         say(f"{tag}: file {f}")
     if r.get("error"):
@@ -141,6 +142,16 @@ def moves_of(main: str, head: str) -> list[tuple[str, str, list[str]]]:
 def plain(name: str, commit: str, main: str, base1: str) -> dict:
     r, secs, rc = restack(name, [commit, "--main", main])
     rec = {"name": name, "kind": "plain", "commit": commit, "seconds": round(secs), "exit": rc, "restack": r}
+    if r and r.get("status") == "conflicted" and r.get("step") == "base" and r.get("crossed"):
+        # A stop at a later move's `base` names no commit: cross the moves it passed again, alone, for the head a mend starts from.
+        args = [commit, "--main", main, "--no-pins"]
+        for m in r["crossed"]:
+            args += ["--move-commit", m]
+        p, psecs, _ = restack(f"{name}.partial", args)
+        if p and p.get("result"):
+            rec["partial"], rec["partial_seconds"] = p["result"], round(psecs)
+            say(f"{name}: crossed over {[m[:12] for m in r['crossed']]} alone it is {p['result']} ({p.get('status')}); the stop is "
+                f"its merge with {r.get('base')}")
     if r and r.get("result") and r.get("status") in ("clean", "locks-stale", "pins-stale"):
         rec["result"] = r["result"]
         rec["facts"] = facts(name, commit, r["result"], base1 if holds(base1, commit) else None, main, main)
@@ -255,7 +266,9 @@ def main() -> int:
     for name, rec in done.items():
         tips = {"": rec.get("result")}
         r = rec.get("restack") or {}
-        if not rec.get("result") and r.get("steps"):
+        if rec.get("partial"):
+            tips["-partial"] = rec["partial"]
+        elif not rec.get("result") and r.get("steps"):
             tips["-partial"] = r["steps"][-1]["commit"]
         for suffix, tip in tips.items():
             if tip and tip not in excl:
