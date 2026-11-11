@@ -48,7 +48,9 @@ included, as any build this user runs by hand can. `--update` writes the record 
 run, whose source tree the commit's other runs share: there it is in the run's `lean-audit/audit-*/`, and on either path a
 record that changed is also kept as `lean-audit/record/<path>/lean-audit.json` (PKG's also as
 `lean-audit/record/lean-audit.json`), which `research queue`'s records gate reads, each with a line saying what to commit it
-over. A run marks the slot tree (`DIRTY`: its id, package and phase) while it works there and clears the mark when it ends
+over. A record changed when it says something else than the committed lock, the two compared parsed (`says`): one that
+says the same in another order of keys or layout, as a lock merged or edited by hand has, is no change, so its package
+ends `pass`, nothing is kept or written back, and its pass is kept on the lock as committed. A run marks the slot tree (`DIRTY`: its id, package and phase) while it works there and clears the mark when it ends
 without a check.py killed, so the next run knows a slot tree left mid-way (a run cancelled, timed out or killed for memory) and
 says so. Before each build it `repair`s the slot tree: a module an interrupted build or a restore from Lake's cache left half-written (an output its trace lists missing, an `.olean` that is
 not one, a `.hash` that is not the trace's or is older than its output) loses its trace and `.hash` files, so Lake rebuilds
@@ -79,7 +81,7 @@ first failing status on `failed` and 2 on `refused`.
 A package whose records need no run is skipped, and with none left nothing is built and no slot taken (`reused`; the
 `result.json`'s `path` is `reused`). Each package whose check.py passes is kept under `lean-records/passes/`, keyed on the
 content of every file its records read (`inputs_key`: its `closure`'s files and the auditor's, this file included), with
-each lock this run regenerated as check.py left it, so a commit of the records `--update` wrote finds it; `result.json`'s
+each lock this run regenerated as check.py left it, so a commit of the records the run kept finds it; `result.json`'s
 `passes` ({key: package}) lists the same keys, and each record its package's `inputs_key` as the commit has it. A package
 needs no run when such a pass, or the Lean check's own pass (`lean_audit.key`), is kept on these inputs on this node, or a
 result the store holds (`stored`, by `research data select`: the store's index where the machine has one, its catalog
@@ -1630,17 +1632,38 @@ def regenerates(p: str, pkg: str, got: int, update: bool, out: Path, at: Path, l
     return True
 
 
+def says(lock: bytes | None) -> str | None:
+    """What a lock's bytes say, to compare two locks by: its JSON with every object's keys sorted, so neither the order of
+    an object's keys nor the layout counts, while a list's order and every value do (`true` is not `1`); None for no lock
+    and for bytes that are not JSON, which say nothing to compare."""
+    try:
+        return None if lock is None else json.dumps(json.loads(lock), sort_keys=True)
+    except ValueError:
+        return None
+
+
 def checked(p: str, pkg: str, got: int, record: Path, committed: bytes | None, up: bool, _update: bool, out: Path,
             log=print) -> bytes | None:
     """After check.py on ``p`` exited ``got``: when it ran with `--update` (``up``) and the record it wrote (``record``)
-    differs from the ``committed`` bytes, that record, kept under ``out``'s `record/<p>/` (`keep`) and returned, which
-    `settled` drops again when ``p`` fails otherwise; None when check.py was killed, which leaves no record to keep."""
+    says something else than the ``committed`` lock (`says`), that record, kept under ``out``'s `record/<p>/` (`keep`) and
+    returned, which `settled` drops again when ``p`` fails otherwise. A record that says what the committed lock says, in
+    another order of keys or layout, is no change: None, with nothing kept and the ``committed`` bytes put back over it
+    (on the `--dev-cache` path ``record`` is this checkout's lock), so ``p`` ends `PASS` unless it fails otherwise. None
+    too when check.py was killed, which leaves no record to keep."""
     if not up:
         return None
     if AUDIT.killed(got):
         log(f"lean-records: {p}: check.py was killed, so what it left at {record} is not kept")
         return None
-    return keep(p, pkg, record, out) if record.read_bytes() != committed else None
+    wrote = record.read_bytes()
+    if wrote == committed:
+        return None
+    if (said := says(wrote)) is not None and said == says(committed):
+        record.write_bytes(committed)
+        log(f"lean-records: {p}: the record check.py --update wrote says what {p}/{LOCK} says, in another order of keys or "
+            "layout: no change, so no record is kept and the lock stays as committed")
+        return None
+    return keep(p, pkg, record, out)
 
 
 def write_back(p: str, record: Path, log=print) -> None:

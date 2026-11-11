@@ -464,6 +464,121 @@ def test_a_package_failing_for_another_reason_keeps_no_record_though_update_wrot
     assert (got[S], got[P]["outcome"]) == ({"outcome": LC.FAILED, "inputs_key": got[S]["inputs_key"]}, LC.REGENERATED)
 
 
+#: `s`'s record as check.py `--update` writes it, with the sections a merge used to leave out of its order
+ORDERED = json.dumps({"format": 1, "proved_in": ["proofs"], "meaning": ["A", "B"],
+                      "unwitnessed": {"G": "new", "H": "new"},
+                      "guarantees": {"G": {"type_hash": "new"}, "H": {"type_hash": "new"}},
+                      "shape": {"inline": {"G": {"p": "why p", "q": "why q"}, "H": {"r": "why r"}}}}) + "\n"
+
+
+def reordered(lock: str, change=None) -> str:
+    """``lock`` with every object's keys in the reverse order and another layout, after ``change`` (if any) edits what it
+    says: with none, a lock that says what ``lock`` says and shares no line with it."""
+    def flip(v):
+        return {k: flip(v[k]) for k in reversed(v)} if isinstance(v, dict) else v
+
+    doc = json.loads(lock)
+    if change:
+        change(doc)
+    return json.dumps(flip(doc), indent=2) + "\n"
+
+
+@pytest.mark.parametrize("hold", [lambda *a, **k: None, refuse], ids=["slot", "dev-cache"])
+def test_a_committed_lock_out_of_check_py_s_order_that_says_what_the_build_says_ends_pass_and_keeps_no_record(
+        pair, tmp_path, monkeypatch, hold):
+    """`s`'s committed lock says what check.py `--update` writes, with its `unwitnessed` entries, its `shape.inline`
+    guarantees and every other object's keys in another order and another layout, as a merge of two branches' locks left
+    `security`'s. Nothing failed, so the run ends `pass` for both packages: no record is kept (`record/` is not made), no
+    line says to commit one, each package's pass is kept on the commit's own inputs key, which is the key `research queue`'s
+    records gate asks the store for, and the checkout's lock is as committed on both paths, though the `--dev-cache`
+    path's check.py rewrote it there. Compared by bytes, the run ended `regenerated` with a record that said nothing new,
+    and its pass was kept under that record's key only, so the commit it ran on had none. An unrecorded run, which writes
+    a changed record back into the checkout, leaves it alone too."""
+    root, calls, _ = pair
+    monkeypatch.setattr(LC.LEAN_SLOT, "hold", hold)
+    monkeypatch.setitem(BUILT, S, ORDERED)
+    committed = {S: reordered(ORDERED), P: BUILT[P]}
+    assert committed[S] != ORDERED and json.loads(committed[S]) == json.loads(ORDERED)
+    assert [list(json.loads(committed[S])[k]) for k in ("unwitnessed", "guarantees")] == [["H", "G"], ["H", "G"]]
+    for p in (S, P):
+        (root / p / LC.LOCK).write_text(committed[p])
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-order")
+    files = LC.LA.COMMON.tracked_files(root)
+    head = {p: LC.inputs_key(p, files) for p in (S, P)}
+    said = []
+    assert LC.audit_records(S, tmp_path / "deps", update=True, log=said.append) == 0
+    assert [(p, up) for p, up, _ in calls] == [(S, True), (P, False)]
+    assert calls[1][2][S] == committed[S], "the requirer is audited on the lock as committed"
+    doc = json.loads((run_dir / "result.json").read_text())
+    assert (doc["outcome"], doc["validation"]["status"]) == (LC.PASS, "passed")
+    assert {p: doc["records"][p] for p in (S, P)} == {p: {"outcome": LC.PASS, "inputs_key": head[p]} for p in (S, P)}
+    assert doc["passes"] == {head[S]: S, head[P]: P}, "each pass is on the commit's own key, and on no other"
+    assert not (run_dir / "lean-audit" / "record").exists(), "a record that says nothing new is not kept"
+    assert not any("commit it over" in s for s in said)
+    assert sum(f"{S}: the record check.py --update wrote says what {S}/{LC.LOCK} says" in s for s in said) == 1
+    assert {p: (root / p / LC.LOCK).read_text() for p in (S, P)} == committed, "the checkout's locks are as committed"
+    assert outcome_line(said) == {"outcome": LC.PASS, "package": S, "records": doc["records"], "passes": doc["passes"]}
+    calls.clear()
+    assert LC.audit_records(S, tmp_path / "deps", update=True, log=said.append) == 0 and calls == [], \
+        "the same commit needs no second run"
+    monkeypatch.delenv("RESEARCH_RUN_DIR")
+    monkeypatch.delenv("RESEARCH_RUN_ID")
+    said.clear()
+    out = tmp_path / "out"
+    assert LC.audit_records(S, tmp_path / "deps", update=True, out=out, log=said.append, rebuild=True) == 0
+    assert [(p, up) for p, up, _ in calls] == [(S, True), (P, False)] and outcome_line(said)["outcome"] == LC.PASS
+    assert not (out / "record").exists() and not any(f"wrote {root / S / LC.LOCK}" in s for s in said)
+    assert {p: (root / p / LC.LOCK).read_text() for p in (S, P)} == committed
+
+
+#: ways a committed lock says something else than `ORDERED`, each an edit of what it says
+ELSE = {"a value": lambda d: d["unwitnessed"].update(H="old"),
+        "an entry gone": lambda d: d["shape"]["inline"].pop("H"),
+        "a list in another order": lambda d: d["meaning"].reverse(),
+        "true for 1": lambda d: d.update(format=True)}
+
+
+@pytest.mark.parametrize("differs", list(ELSE))
+@pytest.mark.parametrize("hold", [lambda *a, **k: None, refuse], ids=["slot", "dev-cache"])
+def test_a_committed_lock_that_says_something_else_than_the_build_still_ends_regenerated_with_its_record_kept(
+        pair, tmp_path, monkeypatch, hold, differs):
+    """`s`'s committed lock is out of check.py's order and also says something else than the record `--update` writes: one
+    value, an entry the build has and the lock doesn't, a list in another order (a list's order is part of what a lock
+    says), or `true` where the record has `1` (equal to Python, not to a reader of the JSON). Each is a real difference:
+    the run ends `regenerated` with the record check.py wrote kept under `record/`, a line saying what to commit it over,
+    and the package's pass on that record's key, never on the commit's own; committing the kept record needs no run."""
+    root, calls, _ = pair
+    monkeypatch.setattr(LC.LEAN_SLOT, "hold", hold)
+    monkeypatch.setitem(BUILT, S, ORDERED)
+    committed = reordered(ORDERED, ELSE[differs])
+    assert json.dumps(json.loads(committed), sort_keys=True) != json.dumps(json.loads(ORDERED), sort_keys=True)
+    (root / S / LC.LOCK).write_text(committed)
+    (root / P / LC.LOCK).write_text(BUILT[P])
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-else")
+    files = LC.LA.COMMON.tracked_files(root)
+    head = LC.inputs_key(S, files)
+    said = []
+    assert LC.audit_records(S, tmp_path / "deps", update=True, log=said.append) == 0
+    assert [(p, up) for p, up, _ in calls] == [(S, True), (P, False)]
+    doc = json.loads((run_dir / "result.json").read_text())
+    kept = run_dir / "lean-audit" / "record" / S / LC.LOCK
+    assert kept.read_text() == (run_dir / "lean-audit" / "record" / LC.LOCK).read_text() == ORDERED
+    assert (doc["outcome"], doc["validation"]["status"]) == (LC.REGENERATED, "passed")
+    assert doc["records"][S] == {"outcome": LC.REGENERATED, "inputs_key": head, "record": f"lean-audit/record/{S}/{LC.LOCK}",
+                                 "record_sha256": hashlib.sha256(ORDERED.encode()).hexdigest()}
+    assert doc["records"][P]["outcome"] == LC.PASS and not (run_dir / "lean-audit" / "record" / P).exists()
+    assert sum(f"commit it over {S}/{LC.LOCK}" in s for s in said) == 1
+    assert head not in doc["passes"], "the commit it ran on has no pass: its lock is not the record"
+    (root / S / LC.LOCK).write_bytes(kept.read_bytes())
+    assert doc["passes"][LC.inputs_key(S, files)] == S, "the commit of the kept record has one"
+
+
 def unwitnessed(h: str) -> str:
     """`s/props`' lock whose guarantee G, which reads `S.DrawIsCoin`, has an `unwitnessed` entry: its statement's hash."""
     return json.dumps({"guarantees": {"G": {"type_hash": h}}, "unwitnessed": {"G": h}}) + "\n"
