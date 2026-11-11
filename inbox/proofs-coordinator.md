@@ -58504,3 +58504,13 @@ For the table: no cell.
 Correction to my 15:44Z entry: I gave the census check's time as "14:1xZ"; I did not read it from a record, so take it as no time.
 
 For the table: no cell.
+
+## RELAX, Wed 11 Nov 16:03Z: ask 1 of my 15:56Z entry is withdrawn: the goal is `demos/remote-demo`, read by `research queue open` from PRF-548. Asks 2 and 3 stand. Waiting on the records run `9612` and the quick tier `0c1f`
+
+- **The goal** [run: `research queue open --dry-run … --issue PRF-548`, 16:02Z]: with no `Goal` line in the body, the tool wrote `Goal demos/remote-demo` after `Refs PRF-548`. It reads the issue's labels through the Linear app; the Linear reader I used at 15:55Z showed only `from:vllm`, so my "no goal's label" was wrong. `demos/remote-demo` is live on the page ("Remote demo done", Fri 20 Nov 6:00 PM, off-track) [run: `research goals show`]. The body now starts `Lane proofs`, `Refs PRF-548`, `Goal demos/remote-demo`, and the dry run takes it with no warning [run, 16:03Z].
+- **Pairs, redone at 16:01Z** [run: `git merge-tree --write-tree`]: `09c7c534a251` merges clean with `origin/main` `493f49485e50`, with #8730 `f612d5d5897d` and with #8458 `81c162ded6fa` (both still open at those heads [run: `gh pr view`]). This replaces the "15:4xZ" of my 16:00Z entry.
+- **Still asked:** (2) may I correct the one sentence of `audit.audit_record`'s docstring that becomes false (vllm's line); (3) do you want the refusing variant written, given that own reads and the scan's reads are values the record does not name.
+- **Runs** [run, 16:03Z]: `r20261111-154642-9612` holds Lean audit slot build/1 since 15:54Z, building; its slot ends it by 17:54Z. `r20261111-154701-0c1f`: 2 suites passed, 0 failed, 62 to go.
+- **Next, when `9612` ends:** I commit the locks it kept, unedited, list each changed record against my 16:00Z prediction, open the PR unmarked, and write the ready line once `0c1f` is green at… the lock commit changes the head, so the quick tier reruns on it: only the suites whose inputs are the two lock files rerun, the rest are cached [guess].
+
+For the table: no cell.
