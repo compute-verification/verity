@@ -57521,3 +57521,55 @@ For (A)'s line: "ω is defined from the registration alone at a wired port, and 
 - One figure of my 14:18Z entry: 0.55 to 0.63 of `d4ef`'s 250.6 s is 137 to 159 s, not 158.
 
 For the table: #8789 quick tier at the head: 72 of 91 passed, 0 failed, 19 out.
+
+## RELAX, Wed 11 Nov 14:42Z: the gates fit: both select units compose at 2^27 on their cut rows, so a select is 122 blocks of 2^27. The select's entry is built at `20ac4fee7711` after two reds of mine; no quick tier of the draft has ended: `7022` has 20 suites passed and none failed with `verity-vllm` still running, so the draft is not offered
+
+Mailbox (newest section 13:44Z, unchanged) and ORDER through 14:14Z reread at 14:24Z [run: `git show origin/cursor/proofs-inbox:…`].
+
+**1. Do the gates fit beside the rows in 2^27: yes, both** [run: Flock's `UnitStager` composing each unit on its rows, rc 0, at `4d09b85bea6c`].
+
+| unit, as staged | rows | k_log | run |
+|---|---|---|---|
+| group unit `TokenSelectGroups_v1{C=1280,G=16}`, uncut | 3 | 22 | `r20261111-135039-9a0b` |
+| the same, `x` in 160 eight-word rows (the window's layout) | 162 | **27** | `9a0b` |
+| combine `TokenSelectCombine_v2{V=154880,C=16}`, uncut | 4 | 26 | `r20261111-140805-2749` |
+| the same, `best` and `idx` in 121 rows each (the window's layout) | 244 | **27** | `2749` |
+| group unit at C = 640, `x` in 80 eight-word rows | 82 | 26 | `9a0b` |
+| group unit at C = 1,280, `x` in 80 sixteen-word rows | 82 | 26 | `9a0b` |
+
+- Each cut unit is one unit a block (`vus_per_block` 1), and the composer placed the combine's gates in a 2^22 range beside its rows [run `2749`: `unit_log` 22]. Reads laid out in slots give the same circuit as inline, for both [run: equal `unit_sha256`].
+- **The least cut: at eight-word rows with one combine, the group unit cannot be under 2^27** [derived]. One combine reads two rows a group unit, so it holds at most 127 of them (`select_width`'s second bound), so C ≥ 1,220, and the least such C that divides 154,880 in whole groups is 1,280: 160 rows. A 2^26 block holds at most 128 rows.
+  - C = 640 is a 2^26 group unit [run], but `select_width` does not allow it: 242 group units are 486 rows of the combine, past the 256 a block holds [derived from `interface.MAX_ROWS`]. It would need a combine of combines, which is a new Definition (circuits').
+  - Sixteen-word rows give a 2^26 group unit [run], and the LM head cannot go to 16 words [your 13:44Z].
+- So the select is **121 + 1 blocks of 2^27** [run for each unit's size]. The 13:44Z label "the select's units 2^27 each as wired [run], not priced" can drop "whether the gates fit is not run". ORDER 14:14Z's "at most +1.54 with both units priced as 2^27 blocks" is priced at the size these runs give.
+
+**2. Quick tiers.** **No quick tier of the draft has ended, so none is green and the draft is not offered** [run: both read at 14:41Z].
+- `r20261111-133543-7022` (at `4d09b85bea6c`, before the select's commits; vy-nebius-cpu-1): running. Its named tests 143 passed, rc 0. 20 suites passed, none failed, among them `benchmarks/prove_path` (143 passed; the three reds of the `COLS` form are gone), `benchmarks/one_stage` (493), `repository` (294), `research` and `verity-flock`. Left: `verity-vllm` (running since 14:13Z), `verity-numerical`, circuit-check's suite. `verity-vllm` is the one that says whether any test names a `WIDE_SLICES` family's row whole at a power-of-two extent without its cap (my 13:38Z open risk); it has not said.
+- `r20261111-141506-c5a0` (at the head `20ac4fee7711`; vy-nebius-cpu-6): running. Its named tests, the select's file and `test_interior_rows.py` among them, 190 passed, rc 0. 16 suites passed, none failed. Left: `verity-vllm`, `verity-numerical`, `verity-flock`, `research`, `verity-commitments-benchmarks`, `verity-tc-probe`, circuit-check's suite.
+- I write one line when either ends, with its verdict, and fix what `verity-vllm` shows before anything else.
+
+**3. The select's entry: built** (commits `bc2211ce0e79`, `4327b970c7b9`, `20ac4fee7711`; the draft touches only `adapters/vllm`).
+- A `TokenSelect_v1{V}` row is offered as its split: V / C `TokenSelectGroups_v1{C,G=16}` units and one `TokenSelectCombine_v2{V,C=16}`, each its own slot (`STAGES`). At V = 154,880: 121 units of 1,280 logits in 160 eight-word rows, and the combine with row s of its bests and of its indices wired to group unit s's two output rows [run, my VM: `test_serving_rows_select.py`, 6 passed].
+- The reader computes every group's best and index and holds the combine's token to the served one, against the row's own twin (`token_select_first_max`), with ties, a NaN first logit and a group of NaNs and -inf in the test rows. Each unit's Definition on its rows, parsed as Flock's stager parses them, computes its outputs (at V = 32,768, the least power of two with a split) [run, the same file].
+- With the draft the unchanged census cuts `TokenSelect_v1{V=154880}` into the 121 + 1 units with no pin [run, my VM: `block_census.cut` returns `split`]. **It sizes them 2^22 and 2^26**, because its sizer (`m1_families.block`) reads a Definition's own ports, not the rows the adapter stages (`chunk_rows.unit_rows`). That is the one thing the census's owner has to change for the select; it is not a pin.
+- Limits, each stated in the code:
+  - The row width is chosen from V alone (the least power of two with a split: 8 at this V). The adapter cannot see the LM head's block width from the select row's spec.
+  - The group units read their logits by value. Nothing in the serving rows wires them to the LM head's slices; the cut rows are where such a wire would land. `x0` is read by value too.
+  - A template of the two families is a stage only at a split's statics. `TokenSelectCombine_v2` is also `TokenSelect_v4`'s combine over its chunks, which `interior_rows.pieces` and a Program row read whole; those keep their layout. One template has one layout in the serving rows, so `pieces(s, 16)` at a vocabulary with a split would be refused (its default chunk is 64; no caller passes 16 outside a test at V = 64).
+  - A vocabulary whose group unit is no proof block (no row past a SHA-512 block) has no split, so a small model's select row is as it was.
+- **Two reds of mine on the way.**
+  - The first form made every `TokenSelectCombine_v2` template a cut stage: six `test_interior_rows.py` tests failed on my VM. Not pushed; replaced by the rule above.
+  - **Pushed red:** `bc2211ce0e79` moved `select_width` and the group size out of `tp.grain` (a lazy import of it from `serving_templates` is a P9 module cycle) and left `program/predict/window_circuit.py` importing `GROUP` from there. Quick tier `r20261111-140033-3939`: `verity-vllm` collected nothing, 7 modules with `ImportError` [run]. I had searched for attribute uses and not for `from … import`. Fixed at `4327b970c7b9` [run, my VM: the module imports; `test_serving_rows_weights.py` 6 passed; `test_p09_layering.py` 5 passed]. Cancelled `3939`.
+- `20ac4fee7711` keeps the combine's numpy twin in the adapter (one copy, which `interior_rows` now reads) instead of moving it under `verity/`, so the draft reruns the adapter's suites and not 56.
+- One test fails on my VM with and without the select's commits: `test_a_sampler_capture_is_the_token_select_span_and_registers_as_its_interior` (`Refused: disagree`). It passed on a node at `cb5c6d3ff458` [run `a260`: `verity-vllm` 13,996 passed, 1 failed, the size lint]. The tier at the head decides.
+
+**4. The pin table's text: eleven pins, and the select needs none.** Add to the ten of my 12:49Z text:
+- the LM head: `Gemm_v2{K=6144,N=8,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}`, 2,420 a row of `Gemm_v2{K=6144,N=19360,…}`. The adapter draft lists it after the slice of one word, which the census's first fit takes, so it needs its pin. circuit-check rc 0, 2^27, no warning [run `a996`].
+- the select: no pin. With the adapter draft the census takes both of its units, since a `STAGES` row's units are each a slot of their own. What it needs instead: the sizer to size a unit on its staged rows (2^27 each [run]), where it reads 2^22 and 2^26 today.
+- and one correction to that text: `SiluMul_v2{I=192}` is listed by the adapter now (`ROW_COLS`), and the indexer's head too (`ELEMENTS`); "the adapter does not cut a row into them yet" is no longer so.
+
+**5. Not established.** A green quick tier at the head. A served window at any of these widths. The LM head's dot (read off the plan's blocks file, not a served Program). Whether a port given as its writers' rows whole (the interior's form) could let the combine read 121 group units in 4 rows; that is another wiring, and I have not read whether a served window has it [guess that it does not].
+
+For the table:
+- RELAX | the select's units staged on their cut rows [run `9a0b`, `2749`] | group unit 162 rows, 2^27; combine 244 rows, 2^27; the gates fit; 122 blocks of 2^27 a select | under 2^27 only with a combine of combines (a new Definition) or a 16-word LM head
+- RELAX | the adapter draft `cursor/proofs-recut-c2b3` at `20ac4fee7711`, unmarked | lists all twelve: eleven widths and the select's split | no quick tier ended yet (`7022`: 20 suites passed, 0 failed, `verity-vllm` running; `c5a0` at the head: 16 passed, 0 failed); not offered; the census sizes the select's units 22 and 26 (its sizer reads uncut ports)
