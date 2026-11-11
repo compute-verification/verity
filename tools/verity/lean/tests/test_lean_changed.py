@@ -538,15 +538,18 @@ def test_a_package_one_check_py_leaves_no_report_of_fails(proved, tmp_path, monk
     assert (got[S]["outcome"], got[P]["outcome"]) == (LC.PASS, LC.FAILED)
 
 
-@pytest.mark.parametrize("why", ["nothing listed", "a failure that is no package's", "a sealed file changed"])
+@pytest.mark.parametrize("why", ["nothing listed", "a failure listed beside exit 0", "a failure that is no package's",
+                                 "a sealed file changed"])
 def test_a_check_py_whose_failure_is_not_only_its_packages_own_fails_each_of_them(proved, tmp_path, monkeypatch, why):
     """check.py's exit 1 is taken as other packages' failure only when its reports explain it whole. One that lists no
-    failed package, one that lists a failure no report of a package holds (its controls'), and one in which a file the
-    process had sealed changed (`tamper`, in the report of whichever package was being audited) fail every package the
-    check.py audited: none passes on its own clean report."""
+    failed package, one that exits 0 and lists one, one that lists a failure no report of a package holds (its
+    controls'), and one in which a file the process had sealed changed (`tamper`, in the report of whichever package was
+    being audited) fail every package the check.py audited: none passes on its own clean report."""
     def change(doc, _rc):
         if why == "nothing listed":
             return doc | {"failed": []}, 1
+        if why == "a failure listed beside exit 0":
+            return doc | {"failed": [doc["packages"][-1]["package"]], "passed": False}, 0
         if why == "a failure that is no package's":
             return doc | {"failed": ["controls (tamper)"], "passed": False}, 1
         last = doc["packages"][-1]

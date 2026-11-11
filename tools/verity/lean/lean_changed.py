@@ -1885,7 +1885,7 @@ def own_reports(batch: list[str], pkg: str, out: Path, base: Path, got: int, log
         (d := reports(out, pkg, p)).mkdir(parents=True, exist_ok=True)
         (d / "audit.json").write_text(json.dumps(doc | {"packages": mine, "failed": failed, "passed": not failed},
                                                  indent=1, ensure_ascii=False) + "\n")
-    if not explained and got:
+    if not explained:
         log(f"lean-records: check.py exit {got} is not only its packages' own failures (it lists {doc['failed']}), so it "
             f"fails each of {', '.join(batch)}")
     return status
