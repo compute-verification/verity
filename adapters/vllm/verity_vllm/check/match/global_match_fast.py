@@ -39,6 +39,9 @@ from verity_vllm.check.match import program_loaders as PL
 from verity_vllm.check.match import projection as PJ
 from verity_vllm.check.program_ops import Ops
 from verity_vllm.check.replay.fork import die_with_parent
+from verity_vllm.log import init_logger
+
+logger = init_logger(__name__)
 
 FLAG = "MATCH_IMPL"
 
@@ -484,16 +487,13 @@ def _spec_id_memo(fn):
     component's load on the real record.  The id is a pure function of the (immutable after construction) definition + bindings: it
     is kept ON the definition object (no memo table pins the decoded IR, which RootView.__init__ drops for memory), and only after a
     successful computation -- `descriptor_id` reads every static's binding, so a partially bound specialization raises instead of caching."""
-    try:
-        return fn.__dict__["_gmf_spec_id"]
-    except (AttributeError, KeyError):
-        pass
-    from verity.circuits.codec import descriptor_id
-    sid = descriptor_id(fn)
-    try:
-        fn.__dict__["_gmf_spec_id"] = sid
-    except AttributeError:   # a __slots__ definition class: nothing to keep it on; recompute as the checker of record does
-        pass
+    kept = getattr(fn, "__dict__", None)   # None for a __slots__ definition class: nothing to keep it on; recompute as the checker of record does
+    sid = kept.get("_gmf_spec_id") if kept is not None else None
+    if sid is None:
+        from verity.circuits.codec import descriptor_id
+        sid = descriptor_id(fn)
+        if kept is not None:
+            kept["_gmf_spec_id"] = sid
     return sid
 
 
@@ -669,8 +669,8 @@ def request_legs(items: list, fn: Callable, n_workers: int, weight: Callable | N
         finally:
             try:
                 os.unlink(path)
-            except OSError:
-                pass
+            except OSError as left:
+                logger.warning("worker %d's result file %s is left behind: %r", pid, path, left)
         if not payload.get("ok"):
             errors.append(payload)
             continue
