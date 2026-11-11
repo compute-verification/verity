@@ -230,7 +230,7 @@ def _commit(on: str, index: int, scheme: str, call: PC.Call, flags: int = HASH,
     b, t = call.b.rows(0, call.b.n)
     leaves, yleaves = np.zeros(nat.population * 32, np.uint8), np.zeros(nw.population * 32, np.uint8)
     y = np.zeros((sh.m, sh.n), np.uint16)
-    c = lambda v, dt: np.ascontiguousarray(v, dt)
+    c = np.ascontiguousarray
     args = [sh.m, sh.k, sh.n, c(call.a, np.int8), c(call.s, np.uint32), c(b, np.int8), c(t, np.uint32), c(call.bias, np.uint16),
             np.frombuffer(call.salt, np.uint8).copy(), call.forward, call.position, call.weight, c(call.rowids, np.uint32),
             c(call.colids, np.uint32), c(nat.pi, np.uint32), c(nw.inv, np.uint32), leaves, yleaves, y]
@@ -373,7 +373,10 @@ def _values(tag: str, m: int, k: int, n: int) -> dict[str, np.ndarray]:
     raw, at, out = _stream(tag, sum(sizes.values())), 0, {}
     for key, size in sizes.items():
         out[key], at = raw[at:at + size], at + size
-    scale = lambda u: (np.float32(1e-3) + u.view("<u2").astype(np.float32) * np.float32(0.01 / 65535)).view(np.uint32)
+
+    def scale(u: np.ndarray) -> np.ndarray:
+        return (np.float32(1e-3) + u.view("<u2").astype(np.float32) * np.float32(0.01 / 65535)).view(np.uint32)
+
     bias = ((out["bias"].view("<u2").astype(np.float32) / np.float32(16384) - np.float32(2)).view(np.uint32) >> 16).astype(np.uint16)
     return {"a": ((out["a"] & 0x7F).astype(np.int16) - 64).astype(np.int8).reshape(m, k),
             "b": ((out["b"] & 0x7F).astype(np.int16) - 64).astype(np.int8).reshape(n, k),
@@ -385,7 +388,10 @@ def gate_call(tag: str, m: int, k: int, n: int, *, a=None, b=None, s=None, t=Non
               site: int = 0, weight: int = 2) -> PC.Call:
     """One call of the gate: its inputs fixed by ``tag`` (`_values`), any of them given instead."""
     v = _values(tag, m, k, n)
-    pick = lambda given, key, dt: v[key] if given is None else np.asarray(given, dt)
+
+    def pick(given, key: str, dt) -> np.ndarray:
+        return v[key] if given is None else np.asarray(given, dt)
+
     return PC.Call(pick(a, "a", np.int8), pick(s, "s", np.uint32), PC.Quantized(pick(b, "b", np.int8), pick(t, "t", np.uint32)),
                    pick(bias, "bias", np.uint16), v["salt"], forward=forward, layer=layer, site=site, weight=weight,
                    rowids=np.arange(1000, 1000 + m, dtype=np.uint32), colids=v["colids"])
