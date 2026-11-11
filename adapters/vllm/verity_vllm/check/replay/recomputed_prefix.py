@@ -77,7 +77,9 @@ class RecomputedPrefix:
             raise ValueError(f"request {rid}: a hit of {C} positions of its {len(prompt)}-token prompt (at least one, and short of it)")
         self.store, self.rid, self.C, self.arrive = store, str(rid), int(C), int(arrive)
         self.per = positions(pi)
-        self.replay = None if plan else Replay(pi, rid, prompt, weights, arrive=arrive)
+        if weights is None and not plan:
+            raise TypeError(f"request {rid}: its recomputed prefix is replayed from the registered weights, and none are given")
+        self.replay = None if plan or weights is None else Replay(pi, rid, prompt, weights, arrive=arrive)
         self.reads: list[list[Any]] = []
 
     def words(self, rid: str, step: int, op_path: str, member: str, elo: int, ehi: int) -> tuple[np.ndarray | None, str]:
@@ -121,7 +123,7 @@ def adopt(pi: ProgramIndex, rid: str, warm: Mapping[str, Any] | None) -> frozens
     return prefix_rows(pi, C)
 
 
-def stores(indices: Mapping[Any, Any], store: Any, weights: Callable | None, arrivals: Mapping[str, int], *,
+def stores(indices: Mapping[int | str, ProgramIndex], store: Any, weights: Callable | None, arrivals: Mapping[str, int], *,
            plan: bool = False) -> dict[str, RecomputedPrefix]:
     """Each adopted request's store over ``store`` (`adopt`)."""
     return {rid: RecomputedPrefix(store, pi, rid, *pi.recomputed[rid], weights, arrive=int(arrivals.get(rid, 0)), plan=plan)
