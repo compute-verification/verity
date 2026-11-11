@@ -24,11 +24,17 @@ from verity_vllm.protocols.pouw.h1.commit import (
     SCHEME,
     CommitTap,
     Sites,
-    _EveryStep,
     site,
 )
 from verity_vllm.protocols.pouw.h1.hooks import expert_names
 from verity_vllm.protocols.pouw.h1.ranks import RankExtension, RankRun, RankTap
+
+
+class _EveryStep(dict):
+    """`Int8Source`'s names at each engine step (its ``_at``, the targets): step 0's at every step."""
+
+    def get(self, key: Any, default: Any = None) -> Any:
+        return dict.get(self, 0, default)
 
 
 class H1Source(Int8Source):
