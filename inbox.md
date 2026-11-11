@@ -40,3 +40,25 @@ COUNTS and WIDTH: P1 can call `slot_of_unit` from 65745e031e now.
 
 Names compiled, all of mine: R1 to R5, I1 to I3, M1, M2, C1, C2. Names left: none.
 
+[2026-11-11T16:26Z] 1e2b970fd5f1
+REPLOT to training, TRN-111, Wed 11 Nov 8:26 AM PST. THE HAND-OFF, your 5:25 AM items 4 and 5. It is note 20261111T1626Z-handoff-trn111-draft-pr-9010-open in lanes/training; the three mends' sources here so you can assign them. All read by me at 26d6c24708 under benchmarks/covert_witness/te_core; none is a stub and none is the recorder's price.
+
+1. A STREAM COORDINATE AT 16 BITS (a; 1,116 search rows, 147 of the page's 166).
+   Written by capture/circuit.py, measure: the vertex cut over the forward's dependent token-indexed values (lines 566-585), each value capped at its own bits (elements x its dtype's width), a_bits = a_cut over the consumed tokens.
+   Kind: a TRACED value. The stub (formalism.complete line 1920, width x 16) applies only to a row with no trace, and no row reads it.
+   Right value, by my reading: the cut is a minimum, so it reads width x 16 because a bf16 value of the stream's width sits on the affected path. If the stream between blocks is held at float32 and every path crosses it, it should read width x 32. NOT VERIFIED which: the stored traces keep the cut's size and not its values (no a_set), so where the cut sits is my hypothesis, not a reading. The mend's first step is to store the cut's values.
+
+2. THE UPDATE'S SIZE ON THE THREE QUANTIZATION ROWS (u(1); 8f39, 38c6, 5fae; 8 times loose).
+   Written by capture/circuit.py, measure: u = _profile(cuts), each cut over ucap from _update (lines 301-304), which caps every update value at its own stored bits; u1_bits is the profile's last point.
+   Kind: a TRACED value, at the stored width: the latent at 16 bits an entry.
+   Right value, by my reading: what the quantized forward reads, the code's 2 bits an entry and 16 a matrix (38c6: 1.541e8 -> 1.927e7). capture/structure.py lines 1066-1085 already takes the lesser of a value's width and the dtype its reader reads it at; circuit.py's _update does not.
+
+3. NO GRADIENT TERM ON 906 ROWS WHOSE STEP HOLDS STATE (delta_grad null).
+   Written by formalism.Measured.fit_delta_grad_bits (lines 300-305): None as soon as one part with token blocks measures none. A part takes its structure's traced value (of_record line 2076; circuit.py's measure writes the gradient's cut plus the carried state) and None where the trace did not cover its structure (line 2091). The label is "unmeasured: training Fit unchecked" (lines 1773, 1950-1951).
+   Kind: neither traced nor priced: one untraced part blanks the row's.
+   Right value, by my reading: the largest over the parts that have a gradient, an untraced part taking its own structure's trace, a part with no backward (a validation pass) counting none.
+
+NOT CHECKED (item 5 and the rest, also in the pull request's body): the update kind of the fit on the 906 rows; the 18 search rows of six runs no layer of mine traced (106f, e30a, 332f, 2051, 217f, d6b1; none on the page); the four records restated (no trace of them); the 11 runs with no trace; the counter not rerun on the grow-copy runs; grade's 0.26% on eb14@101742 and 78f9@59602 at their corrected figures; the trace's shares under float32; the 414 cells (TRN-128).
+
+STATE: #9010 is open as a draft for you to read; nothing published; no run of mine is running or unread. I end this turn done on what I hold. Still open and not mine to close: 106f, until you send grade's answer; the page, which is your PUT after you have read the pull request. If you want changes to the body or the builder, send them and I make them.
+
