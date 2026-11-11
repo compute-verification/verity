@@ -42341,3 +42341,60 @@ Branch `cursor/proofs-witness-9dbc` at `8201dacff26e50e4b9ea73e6ec98986e200428d9
 For BREAKEVEN: 0 CPU-s saved so far [measured: nothing]. Candidates 1 and 2 are guesses of 2 to 4 CPU-s each of the 8.7, not to be priced until a run id stands beside them.
 
 For the table: WITNESS | host witness 8.7 CPU-s = `unit_ab_into`, 4 walks of 1.37 G indices | no cut measured yet; `FC_UNIT_WIDE=4` testable today with no build | prefetch cut next, PR by 11:30Z or a sized list
+
+## CONCRETE, Wed 11 Nov 08:28Z: the evaluator is #8867 (open, unmarked) and reproduces every cell of both tables; at D*1 with 32 tables a session it reads 2^-100.03, with 0.04 bits of room for REGX's term; the Lean instance at 32 tables elaborates but for one cast, fixed and in its second try
+
+No guarantee's statement or premise moves in either change: the evaluator is Python under `benchmarks/`, and the Lean is one new file of proof-only definitions and lemmas under `security/Proofs`. I read the order, its 07:59Z and 08:12Z updates and SCALE's 07:59Z entry [read].
+
+**1. The evaluator: #8867, `cursor/proofs-binding-evaluator-1fe2` at `64f7cb635e3d3ce573381f25ed4fb2a71f84b02c`.**
+
+- [run] `benchmarks/spot_figures/binding.py`, its tests (34 pass on the VM in 0.15 s) and a README paragraph. It is there because that package holds the SPOT figures' other security numbers (δ on the `design` card, the bounds at δ), is a model with each input labelled, and nothing in `verity/` needs to import it. Every value is an `int` or a `Fraction`; the printed exponent is the floor of -log2 in hundredths, by integer arithmetic.
+- The command: `uv run python benchmarks/spot_figures/binding.py --K 2^37.69 --sessions 5523986 --symbols 2^23 --tables 32` (by position, the Lean's form), or `--card GLM-5.3 --symbols 2^10` and `--K 2^40.23 --k 12343986 --d 167` (by gate, the brief's form); `--row-bytes 65536` counts T in calls; it prints one audit and a week, a month and a year of audits, and the most gates that keep the target.
+- **Where the two forms differ** [read: SCALE 07:59Z, #8827 `eventTwoX_le_firstHit_at`]: the brief's `2K·(T(1 + d·e_s) + d·openCalls)/2^256 + p_ref·|opensSet| + |opensSet|/(M+1)` against the Lean's `4·T·(1 + n_sess·e_max + (1 + e_max)·K_mean)/2^256`. The Lean's has 4 for 2, K's mean for its max, no d, the first run with every session extracted added once, no openCalls, and no cap term (it drops under the premise at every cap). The evaluator has both: `--sessions` selects the Lean's.
+
+**2. Does it reproduce the cells? Yes, every one** [run, the tree's code at `64f7cb635e3d`, T = 2^80]. Each cell of the options table is the by-gate first term alone (openCalls, p_ref, |opensSet| at 0).
+
+| cell (by gate) | stated | computed |
+|---|---|---|
+| no cap on a stratum's sample, k = 1,507, d = 1 (K = 27,191,776 from the tree's GLM-5.3 card) | -132.0 | -132.03 |
+| priced, k = 1,507, d = 1 (K = 2^40.23 to 2^43.23) | -116.5 to -113.5 | -116.49 to -113.49 |
+| priced, one table (k = 12,343,986), d = 167 | -96.1 to -93.1 | -96.11 to -93.11 |
+| priced, 200 tables (k = 2,468,797,139), d = 167 | -88.5 to -85.5 | -88.47 to -85.47 |
+| T in calls on 64 KiB rows | -9.0 | exactly ×513, -9.00 |
+| a year of 600 s audits on one stream | -15.7 | 52,560 audits, -15.68 |
+
+- [run] SCALE's correction stands: at the least ZK session (k = 12,055) the second line reads -113.49 to -110.49.
+- [run] SCALE's D* table by position reproduces to a hundredth: (ii) -105.04 at the row's K mean 2^37.6874 (-105.03 at 2^37.69 rounded up); (iii) -104.03; (i) -100.90; κ = 2^-8 -108.03 and -100.40 at 200 tables; κ = 2^-9 -109.03; κ = 0 -121.11, -113.48 at 200 tables, -105.43 over a year, -97.79 at 200 tables over a year. Its "most tables for 2^-100" (32, 16, 1, 263, 526) reproduce at the rows' unrounded means; at the means rounded up to two places 263 and 526 read 262 and 525.
+- **What is not computed by tree code:** K and K mean at the priced designs. They are typed in from REPBREAK's rows (`log2_K_max`, `log2_K_mean`), rounded up; the planner run that gave them is not a command on `main`. Only K at one block a stratum comes from a card in the tree.
+
+**3. D*1 at 1, 32 and 200 tables a session, three readings** [run, same commit; K mean = ⌈2^37.69⌉ = 221,727,998,429, n_sess = 5,523,986, by position]:
+
+| tables a session | k | compressions | calls on 64 KiB rows | a year of audits | both |
+|---|---|---|---|---|---|
+| 1 | 12,343,986 | 2^-105.03 | 2^-96.03 | 2^-89.35 | 2^-80.35 |
+| 32 | 395,007,543 | 2^-100.03 | 2^-91.03 | 2^-84.35 | 2^-75.35 |
+| 200 | 2,468,797,139 | 2^-97.39 | 2^-88.39 | 2^-81.71 | 2^-72.71 |
+
+- **32 tables has 0.04 bits of room** [run]: the bound is at most 2^-100 only while K mean ≤ 227,711,235,758 (2^37.728), which is 6.4·10^9 gates (2.9%) above the row's 221,333,941,485. 33 tables reads 2^-99.99. REGX's always-checked term adds to K mean, and REPBREAK says rows (ii) and (iii) omit the in_bits of 5 strata [relayed], so 32 is not a safe cap: 16 tables leaves 1.04 bits (K mean up to 2^38.72), 8 tables 2.04.
+- **The year, first cut** [run]: with 2^80 compressions an audit, no priced design keeps 2^-100 over a year on one stream at any session size; κ = 0 keeps it up to 43 tables a session (4,437 counting 64 KiB calls at one audit, none with both). [derived] The bound is linear in T, so if 2^80 is the prover's budget over the whole period and not per audit, a period's bound is one audit's at T = 2^80 and the year costs nothing; the 15.7 bits are the price of reading the budget per audit (2^95.7 a year). Which reading is the claim is Daniel's.
+
+**4. The Lean instance (32 tables), not yet a PR.** Branch `cursor/proofs-binding-instance-1fe2` (local), one new file `security/Proofs/Flock/Claims/NumbersFinder.lean` and its import in `Proofs/Flock/Claims.lean`:
+
+- `Claims.Flock.Numbers.firstHitBound (T n k : ℕ) (Kmean : ℚ) : ℚ := 4·T·(1 + n·e + (1 + e)·Kmean)/2^256` at `e = sessionReruns k = 1 + waits·k`;
+- `firstHitBound_tables32 : firstHitBound (2^80) 5523986 395007543 227711235758 ≤ 1/2^100` by `norm_num`, and `firstHitBound_tables32_tight` (one gate more is above);
+- `k_le_of_tables_le_32`: `N₀ ≤ 32·2^23 → ⌈4N₀/e⌉₊ ≤ 395007543`, from the same nine-digit bounds on e as `kRep_eq`;
+- `real_tables32_le`: for reals `T ≤ 2^80`, `0 ≤ n ≤ 5523986`, `0 ≤ e ≤ 1 + 210·395007543`, `0 ≤ K ≤ 227711235758`: `4 * T * (1 + n * e + (1 + e) * K) / 2 ^ (256 : ℝ) ≤ 2 ^ (-(100 : ℝ))`. This is the form that composes: it needs no shared definition, only that KILIAN's right-hand side is that expression.
+- [run] Try `r20261111-081848-a87f` (cpu-7, 63 s): 11 of 12 declarations elaborate on the three axioms; the twelfth failed on one cast (`push_cast` evaluated `2^80`), fixed. Second try `r20261111-082241-0479` (cpu-3) is running.
+
+For KILIAN: if your instantiated theorem's binding term is `4 * T * (1 + n * e + (1 + e) * K) / 2 ^ (256 : ℝ)` with real `T n e K` (or casts of naturals), `Claims.Flock.Numbers.real_tables32_le` closes it to `2 ^ (-(100 : ℝ))` from four upper bounds and three `0 ≤`; `real_le_two_rpow_neg_100` does the same at any numerals whose `firstHitBound` is at most `1/2^100`. If your expression has another shape (a different grouping, openCalls, `e` per session), write it in your 09:00Z entry and I match it.
+
+For SCALE: the instance is stated at K mean ≤ 227,711,235,758, the most 32 tables allow, not at 2^37.69, so it holds for D*1 plus an always-term of up to 6.4·10^9 gates. Say if the instance should be at 16 tables instead (room 1.04 bits).
+
+**Runs.** Quick tier at #8867's head: `r20261111-082355-4b45` (cpu-12, queued about 5 min at launch, ETA 09:00Z); the earlier head's `r20261111-080939-1a18` is superseded. `research queue open` needs `--issue`; I passed PRF-539 (AUDIT-TABLE, "one command that prints every guarantee's number") and it linked #8867 there, the only thing of mine that reached Linear. It warned that PRF-539 has no goal label. Relink if another issue is right.
+
+**Next:** the try's verdict, then the Lean PR with a records run of `security/Proofs` and its quick tier; the ready line for #8867 when `4b45` passes; the year with TWOPROVE's cap; KILIAN's and SCALE's 09:00Z entries.
+
+For the table:
+- By gate (the options table), computed by the tree's code at `64f7cb635e3d` (#8867, not on `main`), T = 2^80: no cap at the smallest session 2^-132.03; priced 2^-116.49 to 2^-113.49 (k = 1,507) and 2^-113.49 to 2^-110.49 (the least ZK session); one table, d = 167: 2^-96.11 to 2^-93.11; 200 tables: 2^-88.47 to 2^-85.47. All modeled; K at the priced designs is typed in from REPBREAK's rows.
+- By position (#8827's form at the code, two steps of it unproved), D*1 at 1, 32 and 200 tables a session, same commit: 2^-105.03, 2^-100.03, 2^-97.39 in compressions; 2^-96.03, 2^-91.03, 2^-88.39 in 64 KiB calls; 2^-89.35, 2^-84.35, 2^-81.71 over a year of per-audit budgets. Modeled.
+- 32 tables keeps 2^-100 only while K mean ≤ 2^37.728, 0.04 bits above the row's value and before REGX's term.
