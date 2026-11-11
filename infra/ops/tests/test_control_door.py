@@ -23,7 +23,7 @@ from verity_ops import deploy
 ROOT = Path(__file__).resolve().parents[3]
 CONTROL = ROOT / "infra" / "control"
 NOW = budgets.parse_time("2026-10-19T18:30:00Z")
-IID = "computeinstance-e00ea3tycx9kk3dafr"
+IID = "computeinstance-e00fakeinstance0id"
 SHA = "0123456789abcdef0123456789abcdef01234567"
 CONTROL_POD, LANE_POD, OTHER_POD = "p1ugdh9hfgqe5d", "abc123def45678", "mmm000nnn11122"
 KEY_A = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI" + "DummyAgentsKeyDummyAgentsKeyDummyAgents"

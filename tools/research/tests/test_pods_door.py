@@ -12,7 +12,7 @@ import pytest
 from research import remote
 from research.pods import budgets, door, runpod
 
-IID = "computeinstance-e00ea3tycx9kk3dafr"
+IID = "computeinstance-e00fakeinstance0id"
 STATE = {"last_ok_poll": 100.0, "budgets": {"lines": {}}}
 
 
