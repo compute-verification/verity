@@ -149,9 +149,9 @@ LIMITS = st.one_of(st.sampled_from([1, 2, 7, 1000, 500_000, 1 << 32, TOP - 1, TO
 
 
 @st.composite
-def statics(draw) -> dict:
-    K = draw(st.integers(1, 6))
-    return {"K": K, "M": draw(st.integers(0, K + 2)), "LIMIT": draw(LIMITS)}
+def statics(sample) -> dict:
+    K = sample(st.integers(1, 6))
+    return {"K": K, "M": sample(st.integers(0, K + 2)), "LIMIT": sample(LIMITS)}
 
 
 BAD_STATICS = st.sampled_from([
@@ -161,10 +161,10 @@ BAD_STATICS = st.sampled_from([
 
 
 @st.composite
-def sessions(draw) -> dict:
-    s = draw(statics())
-    kinds = draw(st.lists(st.sampled_from(sorted(KINDS) + ["span"]), min_size=s["K"], max_size=s["K"]))
-    return _instance(s["K"], s["M"], s["LIMIT"], kinds, draw(st.integers(0, 1 << 32)))
+def sessions(sample) -> dict:
+    s = sample(statics())
+    kinds = sample(st.lists(st.sampled_from(sorted(KINDS) + ["span"]), min_size=s["K"], max_size=s["K"]))
+    return _instance(s["K"], s["M"], s["LIMIT"], kinds, sample(st.integers(0, 1 << 32)))
 
 
 def _malformed(i: dict, how: str) -> dict:

@@ -62,27 +62,27 @@ CASE_EDITS = [
 
 
 @st.composite
-def drawn(draw) -> dict:
-    s = draw(WC.sessions())
-    x = draw(st.integers(0, 2 ** 16))
-    how = draw(st.sampled_from(["as-is", "as-is", "mutated", "mutated", "unsigned", "json", "case", "other"]))
+def sampled(sample) -> dict:
+    s = sample(WC.sessions())
+    x = sample(st.integers(0, 2 ** 16))
+    how = sample(st.sampled_from(["as-is", "as-is", "mutated", "mutated", "unsigned", "json", "case", "other"]))
     if how == "mutated":
-        s = draw(st.sampled_from(WC.MUTATIONS))(s, x)
+        s = sample(st.sampled_from(WC.MUTATIONS))(s, x)
     signed = None if how == "unsigned" else s.signed
     if how == "other":
-        server, session = draw(st.sampled_from([(s.commitment.server + b"x", None), (None, M._flip(s.commitment.session, x))]))
+        server, session = sample(st.sampled_from([(s.commitment.server + b"x", None), (None, M._flip(s.commitment.session, x))]))
         return C.wipe_case(s.commitment, signed, s.trusted, server=server, session=session)
     c = C.wipe_case(s.commitment, signed, s.trusted)
     if how == "json":
-        return _json_edit(c, draw(st.sampled_from(WC.JSON_MUTATIONS)), x)
+        return _json_edit(c, sample(st.sampled_from(WC.JSON_MUTATIONS)), x)
     if how == "case":
-        return draw(st.sampled_from(CASE_EDITS))(c, x)
+        return sample(st.sampled_from(CASE_EDITS))(c, x)
     return c
 
 
 @pytest.mark.slow
 def test_the_test_protocol_agrees(signers_server):
-    stats = D.run(signers_port(drawn()), examples=400, server=signers_server)
+    stats = D.run(signers_port(sampled()), examples=400, server=signers_server)
     assert stats.counts.get("accept", 0) > 20 and stats.counts.get("undecided", 0) > 10 and stats.rejects > 150, stats
 
 
