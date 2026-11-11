@@ -18,12 +18,12 @@ import subprocess
 from pathlib import Path
 
 import pytest
-
 from test_p2_party import Lying, Prover, exe, request, run, store  # noqa: F401
+
+from verity.protocols.poub.verifier import p2_case, p2_lean, p2_party, receipts
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import period as pous
 from verity.protocols.pous.verifier import run as R
-from verity.protocols.poub.verifier import p2_case, p2_lean, p2_party, receipts
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
