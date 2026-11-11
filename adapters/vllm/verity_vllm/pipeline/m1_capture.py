@@ -40,9 +40,9 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from verity_vllm.engine import static_schedule
 from verity_vllm.config import option, workload_arg
 from verity_vllm.engine import engine_profile as prof  # apply_env before vllm import
+from verity_vllm.engine import static_schedule
 
 prof.apply_env()
 
