@@ -37845,3 +37845,47 @@ To lean's 6:42 PM PST (02:42Z). **The `whole_run.py` commit is run. Take `efc525
 1. lean's merge of `efc525cff78f`, after you post the text. If the base moves first, the same `git merge-tree` line with the new head says whether it still merges.
 2. TRN-83's `README.md` line, a PR of its own from the moved `main`. `main` reads `a930252c4993`, no move, at 03:17Z [run]. When it lands: the branch, `tests/test_documented_commands.py` and the directory's quick suite on a node, `research queue open`, and "ready to mark #N at SHA".
 3. Never run by me: a served run on a GPU node; `benchmarks/prove_path`'s slow tests; the Lean check.
+
+## TWOPROVE, Wed 11 Nov 03:21Z: ready to mark #8788 (route 3) at `65a2d97d9387` once its quick tier `r20261111-031920-a68e` passes (ETA 03:40–03:55Z); its records `3500` passed
+
+**Route 3 is in [#8788](https://github.com/compute-verification/verity/pull/8788).** \[run\]
+
+- Head `65a2d97d9387fdb554591ed96edc2a5037019227` on `cursor/proofs-capped-extractor-acc7`, base `main`.
+- `gh pr view` reads OPEN, MERGEABLE, not a draft and no labels, so it is unmarked.
+- It is linked to PRF-517: the body ends `Refs PRF-517` and opens `Lane proofs`, `Goal proofs/spot-bind-term`.
+- The head is `3500`'s commit `ad3db50852` plus one commit, `65a2d97d93`. That commit writes `lean-audit/record/Security/lean-audit.json` over `Security/lean-audit.json` byte for byte, and nothing else. The sha256 is `cbc5592f…138c`, the `record_sha256` in `result.json`.
+- No merge of `main`: the head doesn't hold `a930252c4993`, and its merge base with it is `2b869ed35db5`.
+
+**Records `r20261111-015243-3500`** (vy-nebius-cpu-7) \[run\]
+
+- It reads "done rc=0 class=SUCCESS result=valid". Its `result.json` gives commit `ad3db50852` and validation passed.
+- Per package: `Security` regenerated, `Security/Properties` pass, `Security/Proofs` pass. stdout ends "AUDIT: PASS".
+- **What it regenerated, and why:** compared as JSON with the branch's lock, no entry is added, removed or changed, and no statement or premise changed. Only the order of two maps changed:
+  - in `unwitnessed`, `NetTiming.SecurityProofs.PooledLeakCarried` and `Verity.SecurityProofs.ServingBlockSum` change place, because the run writes that map sorted and the branch's copy wasn't;
+  - in `shape.inline`, `Verity.SecurityProofs.RefineIncorrect` changes place.
+
+**Quick tier `r20261111-031920-a68e`** (vy-nebius-cpu-1) at `65a2d97d93`
+
+- It runs your command: `uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py --changed origin/main --quick`.
+- \[read: `suites.py`'s `changed_base` and `merge_base`\] `origin/main` is fetched from the shipped tree's origin, and the change is taken from the merge base, so it is the branch's own change.
+- It launched at 03:19Z. ETA \[guess\] 03:40–03:55Z, well before 04:40Z.
+
+**Two warnings, and nothing else:**
+
+- `research queue open` warned twice, as on #8781 and #8785: "no label of it names a live goal of the Goals page (its labels: from:proofs, goal:proofs/spot-bind-term)", and "the body's `Goal proofs/spot-bind-term` names a goal no label of PRF-517 names". \[guess\] The goal `proofs/spot-bind-term` isn't live on the Goals page.
+- \[run\] The retired-terms lint counts 16 new "cap" sites in `DeployCode.lean`, `TrimBridge.lean` and `Numbers.lean`, 142 → 158 over the files #8788 changes. It warns and does not fail.
+
+**R3.4** \[run\]
+
+- **Try `r20261111-024409-8b37`** (vy-nebius-cpu-1, at `fd3c8b79ad`):
+  - "lean exit 0 in 590 s";
+  - "axiom probe: none of its 8 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". `SamplingDeploy.κs_compiledTrunc_le` is among them.
+  - Siblings: "no built module of its package that doesn't import Proofs.Flock.SamplingGeneric.MaskedTrunc declares a name it does". About 1,456 modules were left unchecked, not built in that slot.
+- **Records `r20261111-024117-ba02`** (vy-nebius-cpu-7, at `ca25f11624`): running at 03:20Z at 45.4 GiB. ETA \[guess\] 04:00–04:30Z.
+  - The run predates `fd3c8b79ad`, which changes `Security/Proofs`' inputs.
+  - So `ba02` tells me whether any statement or premise moves, and R3.4's final records come from a run on the moved tree after `tools/move/restack.py`, as you expect.
+
+**Next:**
+
+- \#8788: I take no further action unless its quick tier fails. When it passes I append its verdict line here.
+- R3.4: when `ba02` ends I read it and name what it regenerates. Then I cross the move with `tools/move/restack.py` and run its records and quick tier on the moved tree.
