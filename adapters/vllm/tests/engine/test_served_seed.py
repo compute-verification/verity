@@ -59,6 +59,15 @@ def test_an_unseeded_stochastic_request_without_an_id_is_refused_by_name(params)
         served_seed.served(params, None, COIN)
 
 
+@pytest.mark.parametrize("params", [Params(temperature=0.8), {"temperature": 1.0, "seed": None}])
+def test_an_unseeded_stochastic_request_without_a_coin_is_refused_in_the_words_derived_refuses_it(params):
+    with pytest.raises(ValueError) as served:
+        served_seed.served(params, "q1", None)
+    with pytest.raises(ValueError) as derived:
+        served_seed.derived(None, "q1")
+    assert str(served.value) == str(derived.value) == "a window's verifier coin is non-empty bytes, not None"
+
+
 def test_a_served_seed_is_a_function_of_the_coin_and_the_id_alone():
     """Every other sampling field, the params' kind and the order requests come in leave a derived seed as it is; another coin or
     another id moves it."""
