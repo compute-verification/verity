@@ -1,5 +1,5 @@
-"""Both named schemes sit behind ``CommitmentScheme``; frame-v3's configured scheme reproduces ``MerkleTree`` exactly,
-and every layout's digest is the tree leaf rule it stands for."""
+"""frame-v3 sits behind ``CommitmentScheme``; its configured scheme reproduces ``MerkleTree`` exactly, and every layout's
+digest is the tree leaf rule it stands for.  That vllm-v1 sits behind it too is ``test_vllm_v1.py``'s."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from verity.ml.commitments.frame_v3 import FrameV3, Port, WordLeaf
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, MerkleTree
 from verity.ml.commitments.scheme import CommitmentScheme
-from verity.ml.commitments.vllm_v1 import VllmV1
 
 
 def _domain(n: int) -> CommitmentDomain:
@@ -36,8 +35,7 @@ def test_frame_v3_word_leaves_match_merkle_tree(n: int) -> None:
             assert not scheme.verify_path("v", tree.commitment.root, n, p, leaves[(p + 1) % n], path)
 
 
-def test_both_schemes_implement_the_interface() -> None:
+def test_frame_v3_implements_the_interface() -> None:
     frame = FrameV3({"v": Port(_domain(1), WordLeaf("u16", 2))})
-    vllm = VllmV1({})
-    assert isinstance(frame, CommitmentScheme) and isinstance(vllm, CommitmentScheme)
-    assert {frame.name, vllm.name} == {"frame-v3", "vllm-v1"}
+    assert isinstance(frame, CommitmentScheme)
+    assert frame.name == "frame-v3"
