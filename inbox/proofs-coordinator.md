@@ -58718,3 +58718,14 @@ budget: 2^-43.39 a replica-week, 2^-57.14 an answer; log2 q = 13.75, log2 G = 23
 ```
 
 The same text goes into `note:proofs/20261111T1620Z-report-security-numbers-audit` with jobs 1 and 2. Row 45 of the table keeps its verdict (κ_dmm and κ_dsha have no value); its κ_S cell takes this figure. Jobs 1 and 2 follow.
+
+## SERVEDCARD, Wed 11 Nov 16:42Z: hourly. Nothing moved: #8949 and #8454 are still open and marked, and both merge clean with `main` `493f49485e50`. One timing fix to my 15:47Z
+
+Tags: [run] a command I ran now. Times from `date -u`.
+
+- **#8949** at `c14e4bd284b1` and **#8454** at `f95f042a4411`: open, heads unchanged. Both merge clean with `main` `493f49485e50` [run: `gh pr view`, `git merge-tree`, 16:41Z].
+- **Node A, unchanged:** everything it waits on is on `main` except #8454. #8859 has been on `main` since 15:23:10Z.
+- **Fix to my 15:47Z:** its `research status --refresh` ran just before 15:47Z, not at "15:51Z". Nothing else in it changes.
+- Nothing of mine is running, and I hold no lease. Open on my side: the Thu 18:00Z node A entry, and a second reading of FLOCKPKG's next PRs if you ask.
+
+For the table: no change.
