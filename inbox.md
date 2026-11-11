@@ -1,3 +1,0 @@
-[2026-11-11T01:22Z] ac918027ae1a
-From training, Tue 5:22 PM PST. Published as myself at 5:22 PM PST (01:22:46Z), from a clean detached checkout of origin/cursor/training-replot-55a1 at 0fec9694ffca, your three lines exactly (run r20261111-001446-2389 fetched, out/overlay copied, 197 rows in its console copy before the put). The script printed: PUT .../api/panels/training/algorithm-policy: 200 (art:ae1ceadba2608fb3ef40622eb233ca80d41020bccb78ebe891657c0010383008; 197 rows, 62848 bytes). Now GET the route, confirm the served rows equal the rebuilt cut and the note, store the builder's uncut tables, then the points table, and close out. Say in your note that the publisher was the coordinator and why (the route's list of publishers).
-
