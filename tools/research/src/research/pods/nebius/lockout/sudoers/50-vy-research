@@ -8,6 +8,7 @@ Cmnd_Alias VY_RESEARCH = \
     /usr/local/sbin/vy-sudo systemd-run *, \
     /usr/local/sbin/vy-sudo env *, \
     /usr/local/sbin/vy-sudo systemctl *, \
+    /usr/local/sbin/vy-sudo job-reclaim *, \
     /usr/local/sbin/vy-sudo hf-ns *, \
     /usr/local/sbin/vy-seal-runs delete *, \
     /usr/local/sbin/vy-seal-runs evict *, \
