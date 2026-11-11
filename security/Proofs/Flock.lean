@@ -79,8 +79,10 @@ public import Proofs.Flock.SpotFlock.EntriesAt
 public import Proofs.Flock.SpotFlock.HeaderRoots
 public import Proofs.Flock.SpotFlock.Depths
 public import Proofs.Flock.SpotFlock.ScopeOf
+public import Proofs.Flock.SpotFlock.ScopeDesc
 public import Proofs.Flock.Encodings
 public import Proofs.Flock.SpotFlock.Reveals
+public import Proofs.Flock.SpotFlock.RevealsOpen
 public import Proofs.Flock.SpotFlock.RevealsLe
 public import Proofs.Flock.SpotFlock.UnitRows
 public import Proofs.Flock.SpotFlock.UnitEmbeds
