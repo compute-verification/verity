@@ -270,7 +270,8 @@ class Windows:
 
     def __init__(self, com: Any, record: Any, out: Path, window_steps: int, coins: Any) -> None:
         self.com, self.record, self.out, self.window_steps, self.coins = com, record, out, int(window_steps), coins
-        self.window, self.is_open, self.records, self.seed_coin = -1, False, [], None
+        self.window, self.is_open, self.seed_coin = -1, False, None
+        self.records: list[dict[str, Any]] = []
 
     def before_step(self) -> None:
         if self.is_open and int(self.com._step_index) >= self.window_steps:
@@ -291,9 +292,9 @@ class Windows:
         readback = self.record.absorb(self.com, self.window) if rc is not None else None
         self.com.uninstall()
         self.is_open = False
-        rec = {"window": self.window, "commit": window_commit(rc) if rc is not None else {"passed": True, "steps": 0, "empty": True},
-               "seed_coin": self.seed_coin, "readback": readback}
-        rec["passed"] = rec["commit"]["passed"] and (readback is None or readback["passed"])
+        commit: dict[str, Any] = window_commit(rc) if rc is not None else {"passed": True, "steps": 0, "empty": True}
+        rec = {"window": self.window, "commit": commit, "seed_coin": self.seed_coin, "readback": readback}
+        rec["passed"] = commit["passed"] and (readback is None or readback["passed"])
         self.records.append(rec)
         with open(self.out / "windows.jsonl", "a") as fh:
             fh.write(json.dumps(rec) + "\n")
