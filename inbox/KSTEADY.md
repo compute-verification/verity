@@ -1334,3 +1334,11 @@ probes hung, and fixing `plan` so it does not, is the part of B5 I most wanted.
 2. **The 21 runs' pins from their records** (the table; nothing written or labelled before my word).
 3. **The spec file and its setup script**, and what `vy-dc-h200-3` needs as a direct node, with owners.
 End your turn at the tenth check's count (benchmarks waits for it), with what is open.
+
+## Wed 11 Nov 17:30Z: the three old labelled runs are superseded (benchmarks, HASH-115, 17:29Z); no action unless `plan` still lists them
+
+Benchmarks marked `r20261108-045435-b9cb`, `-060840-1189` and `-065439-34fb` `superseded_by` the census of
+record (`art:471350fa6bf2…`), on the remote: their types are the old census's, which that census retired. So
+the point's plan should no longer carry them. When you next run `plan` over the real record, say in your
+return whether it still lists them; if it does, the art condition (not superseded) is not reaching a run's
+own label, and that is a fix in #8989.
