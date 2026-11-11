@@ -42191,3 +42191,65 @@ For the table:
 - The stop count: a Definition on `main` (`StopRule_v1`, `_v2`), bound and pinned at the 1,024 class on `cursor/proofs-net-1d7e` at `df881f327aa1` (circuit-check `r20261111-081552-9bd2`, 0 failures); no proof block of GLM-5.3's served program outputs it, and the binding in the replay block is vllm's (VLLM-318, change Thu 02:00Z [relayed]).
 - Once bound, core's two-stage proves it in every sampled request; it adds no priced seconds (modeled) and no term to the pooled count (modeled); a request the server ends as failed is outside it.
 - The certifier's part as charged on `main` is 57.8 million GB a world year (26 bits a request, modeled, their model); with lengths held and timing taken once it is the failed connections' charge, which needs a failure rate nobody has measured.
+
+## RELAX, Wed 11 Nov 08:27Z: I am HEADCIRC now ((b′) parked, last section). The census: the head block's own gates are near their floor; what is paid eight times is the read of the keys. Each head's block opens the same 73,728 bytes of key rows with 576 SHA-512 compressions, 50.3M rows of the 2^27 block against 30.9M rows of arithmetic. Two heads a block halves the block rows a head, exactly, but it is not local
+
+My run id is bc-565eabcb-e806-54fe-a7bf-8ac557647ed4; branch `cursor/proofs-headcirc-fa30` at `origin/main` `8201dacff26e`, no commit yet.
+
+**1. The census of one block, `SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT=HopperBF16WgmmaDot16_v1,SCALE=1/16}`**
+- **Where.** [read] The word Definition and its body are `verity/definitions/registry/sparse_mla.py` (`SparseMlaHeadBlock` :222, `block` :99, `head_chain` :244, the cut of a `SparseMla_v1` row); its Boolean twin `SparseMlaHeadBlock_v2` is `boolean_sparse_mla.py`, traced flat. The tensor-core step is `fp.tc_dot16` (`verity/definitions/silicon/fp.py` :381, `_tc_total` :436, `tc_step.group_sum`). The 192-Definition card is `benchmarks/sampling_plan/glm53_blocks.json`.
+- **What it reads and returns.** [run: the bound Definition's signature] In: `q_nope` 8,192 bits, `q_rope` 1,024, `kv` 589,824 (64 keys of 576 bf16 words), `m_prev` 32, `l_prev` 128, `o_prev` 16,384. Out: 32 + 128 + 16,384 = 16,544 bits. `FIRST=true` takes no state.
+- **Its word gates.** [run] 905 nodes; 69,632 multiply-adds in 4,352 k16 steps: the scores S, 64 keys of 36 steps (2,304), and P·V, 4 steps on each of 512 columns (2,048).
+- **ANDs by part, the card's count.** [run: `m1_families.estimate`, each leaf lowered once times its count; it returns the card's `ands` to the digit, and its docstring calls it an upper bound]
+
+| part | calls | ANDs | share |
+|---|---|---|---|
+| S: `DotBf16_v2{K=576}` | 64 | 18,968,832 | 50.49% |
+| P·V: `HopperBF16WgmmaDot16_v1` | 2,048 | 16,861,184 | 44.88% |
+| `F32MulFtz` (the rescale of O, 512 columns) | 514 | 1,299,392 | 3.46% |
+| `F32FmaSubFtz` (a score's exponent) | 64 | 295,552 | 0.79% |
+| lanes, exp (65 table reads), max, casts, sub | 258 | 143,943 | 0.38% |
+| **all** | | **37,568,903** | |
+
+- **One k16 step, 8,233 ANDs.** [run: the builder with a phase label on each AND] Aligning 17 terms 2,553 (31.0%); 16 products of 8-bit significands 1,920 (23.3%); NaN, infinity and zero flags 767 (9.3%); the finite stand-ins 742 (9.0%); the signed sum 525; operand decode 480; the largest exponent 458; normalising 312; the special select 243; exponent adds 142; packing 91.
+- **As lowered.** [run, at DR=16, DV=16 or 32, NVIS=16 or 32 only] With the lowering's AND memo the unit is 0.80 to 0.83 of that count: an S step about 7,000, a P·V step about 6,350, because each operand's decode and flags are built once. Those five local lowerings peaked at 1.4 to 2.9 GB, over the VM's 1 GB: my mistake, and the rest runs on a node. [relayed: kernels, HASH-114 05:40Z] The level walk reads 30.9M rows (`FIRST=false`) and 29.5M (`FIRST=true`). [run: `circuit._flat_useful`] 30.9M cells is 29.8M ANDs. Exact counts at the served statics by part come from `r20261111-081440-a00a`, and the tree's own stager's from `r20261111-081440-c5ea`; both run now.
+- **The block.** [run: `circuit.unit_block`, Flock's own placement rule; it returns the card's `k_log` 27]
+
+| range | rows | of 2^27 |
+|---|---|---|
+| `sha512x3` slots: 206 of 2^18, for 617 compressions | 54,001,664 | 40.2% |
+| of which the `kv` row: 576 compressions, 192 slots | 50,331,648 | 37.5% |
+| the unit's slot, 2^25 (30.9M used) | 33,554,432 | 25.0% |
+| `hm96` slots: 16 of 2^18 | 4,194,304 | 3.1% |
+| the mask | 16,384 | |
+| unused | 42,450,944 | 31.6% |
+
+- **Which part dominates:** the read of the visible keys. Opening the 64 keys costs more rows than everything computed on them.
+- **Proof units.** [read: `chain_rows.py`'s docstring] Serving stages the block as one unit, whose outputs are the 16,544 bits. [run: `r20261111-081440-f649`, circuit-check of the sidecar: 6 targets, 0 failures, 6 unchecked (`vectors/none`)] Its `q_call` line reads `2948u/93312b`: [read: `checks.py` :45] 2,948 proof blocks and 93,312 committed bits under the per-call partition circuit-check derives, which is not the cut serving stages.
+
+**2. What is paid more than once, sized**
+- **The keys, eight times.** [read: `SparseMla` :267, `chain_rows.py`] A token's 8 heads batch over one `kv`, and `head_chain` gives each head its own block, so each of the 8 units opens the same 64 key rows. That is 7 × 50.3M = 352M of the 1,074M block rows the 8 heads take a key block.
+- **The keys' decode, eight times.** [guess: about 60 ANDs a word on 36,864 words] 2.2M ANDs a head, 7% of the unit.
+- **The finite stand-ins.** [read] `HopperBF16WgmmaDot16_v3` is in the tree without them, opt-in, and `fp.tc_dot16`'s docstring argues it is the same function. [run, small statics] -3.9% of the unit; [guess] -1.4M rows at the served statics, 4.5% of the unit and 1.0% of the block. It changes no slot and no `k_log`. Exact from `r20261111-081440-8cdd`.
+- **`FIRST=false` against `FIRST=true`.** [run] +1,317,315 ANDs by the card's count, 3.5%: the 513 rescales of O, 4 lane FMAs, one exp, one max, one sub; and 5 more `sha512x3` slots for the state. FA3 does these; none is a repeat.
+- **64 keys.** [read: the module docstring] BN = 64 is FA3's `kBlockN`: a full block is 64 served keys. Only the first visited block is partial, bound at its own NVIS, and its padding rows are constants.
+- **Nothing else.** [read] The circuit is bits already: no range check, no decomposition, no comparison by subtraction. The only table is the 65 exp reads, 0.12%.
+
+**3. The largest exact cut: two heads of one key block in one unit**
+- **Size.** [run: `_block_ranges` on my port list] 658 compressions in 220 slots, the unit's slot 2^26, `k_log` 27: the same 2^27 block then holds two heads' blocks. Block rows a head 134.2M → 67.1M; `sha512x3` compressions a head 617 → 329. [guess] The unit is about 58.5M of its 67.1M cells. Three heads need 2^28, past `K_MAX` 27.
+- **Exact:** the unit is a batch of today's block over two heads on one `kv`; no step changes.
+- **Not local.** It changes the cut, so the proof blocks, the staged rows and the card move. Files: `verity/definitions/registry/sparse_mla.py` (a new Definition, `head_chain`), `boolean_sparse_mla.py`, `sparse_mla_split.py` (`split_chain`), their three sidecars and pins, `verity/definitions/tests/catalog_ids.json`; then vllm's `adapters/vllm/verity_vllm/pipeline/chain_rows.py`, `serving_templates.py`, `serving_rows.py` and the twins; `benchmarks/sampling_plan/glm53_blocks.json`, `benchmarks/one_stage/glm53_sparse_mla_tp8_step16.json`; five test files.
+- **One obstacle.** [read: `circuit.unit_block`] circuit-check sizes a word Definition by the upper-bound count: 2 × 37.6M reads as a 2^27 slot and a 2^28 block, so it would fail `block/past-range` although the lowered unit fits. The Boolean twin's own And count is the lowered one.
+- **What I do next unless you say otherwise:** build only the Definition (word and Boolean, sidecar bindings, its circuit-check report, a test that it equals two single blocks) on my branch, touching `sparse_mla.py`, `boolean_sparse_mla.py`, their sidecars and `catalog_ids.json`, and leave `head_chain` and every adapter file alone. Then HEADPROF can stage it with `m1_unit.py --spec` and time 256 two-head units against 512 single ones. **I touch none of these until you have told circuits.** A ready line by 12:00Z is unlikely; the switch of the cut is circuits' and vllm's.
+
+For BREAKEVEN:
+- Before, a head block: 2^27 = 134,217,728 block rows [modeled: the tree's placement rule]; unit 30.9M rows [relayed: kernels' level walk]; 37,568,903 ANDs by the card's upper-bound count [run].
+- After, two heads a block: 67,108,864 block rows a head [modeled]; unit rows a head about 29.3M [guess].
+- Whether proving follows block rows or unit rows, I do not know for this prover; nobody has timed it. [relayed: HASH-114] The witness build, 8.7 of the 23.2 host CPU-seconds, walks the unit's rows: it would not move. [read: `zk_hooks.rs`, `LeafSalts`] Salts are 192 bytes a leaf of the proof's trees, 13,996,032 leaves at a 2^35 table, so they follow block rows: per head they would halve. [guess] The card's 0.52 s and the loopback verifier follow the table too. So today about a third fewer host CPU-seconds a head block, and about half once the witness is on the card. All of it modeled; HEADPROF's timing of the two-head unit would make it a measurement.
+- The stand-ins: 0 block rows, -4.5% unit rows [guess until `8cdd` ends]. Under kernels' 5% floor for a measurable row.
+
+For the table:
+- Head block, gates: 37,568,903 ANDs by the card's count, 29.8M as lowered; its 2^27 block is 40% key-row hashing, 25% the unit's slot [modeled, tree's rule].
+- Largest exact cut: two heads a block, block rows a head 134.2M → 67.1M [modeled]; not local, nothing built yet.
+
+**(b′), parked on your 08:00Z order** [read: my checkpoint note `20261111T0732Z-report-relax`]: branch `cursor/proofs-registered-kept-d8c6` at `4c8634f60134c8ce2b1fd45c09895213ef9a1a2c`, one commit, pushed, no PR. It holds the relaxed check in Lean and Python, the restated conjunct, its proof and the difftests. **It changes what a guarantee says, so it is Daniel's.** Nothing Lean is built on a machine yet: no try, no records run, no quick tier, lock not regenerated; the refusing variant is not written. The conjunct, before: `(registered present ∨ opened present) → SameRoots opened registered` (equal sizes, each opened entry a registered one). After: `OpenedRegistered opened registered`, each opened entry a registered one at an equal root. Three questions for when I resume at 16:00Z: (1) `audit_record`'s docstring now states the old rule and rule 4 gives it to vllm; (2) the Goal line, `demos/remote-demo` or `proofs/exfiltration-under-300gb`; (3) rule 3: sessions do report values the record does not name [read: `scan_zk.py` `warden_roots`, `windows/rows.py` `committed/<port>`], so a refusing variant would refuse those paths.
