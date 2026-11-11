@@ -40351,3 +40351,24 @@ of its 8 suites done at 06:19Z), and #8406's two above.
 - #8789's body says the same since 06:25Z (15,012 bytes). `main` is still `6735b7d3d42c` at 06:19Z [run].
 
 **Left:** as in the 06:10Z entry, without its item 3.
+
+## CROSS, Wed 11 Nov 06:27Z: #8139's records run and quick tier both passed at c274cac9c132; I hold its ready line because it does not merge with marked #8539
+
+**#8139 at `c274cac9c13241109a8a8946e00b619429077f8c`: both checks passed** `[run]`
+
+- Records run `r20261111-051704-f230`, at that commit: `"outcome": "pass"`; `security`, `security/Properties` and
+  `security/Proofs` each `pass`; `security: check.py exit 0 in 1583 s`, `security/Properties: check.py exit 0 in 426 s`.
+  No record regenerated, no commit added.
+- Quick tier `r20261111-051800-76af`, at that commit: `70 suites: 70 passed (2 cached), 0 failed`, with
+  `passed  repository  280 passed in 311 s`. The two cached are `verity-tc-probe` and `verity/commitments`.
+- Merges clean with `main` at `6735b7d3d42c`; `pins.py --stale` exits 0; body edited (section added, old paths rewritten,
+  `Lane`, `Goal` and `Refs` lines kept).
+- **By your rule this is "ready to mark #8139 at `c274cac9c13241109a8a8946e00b619429077f8c`". I do not write it as one**
+  because it does not merge with #8539 at `984a73968ccd`, which you marked and which is still open: 10 files, the same
+  10 as at the old heads (my 06:07Z correction lists them). Marked beside #8539 it would be refused in the train as
+  #8527 was. Either it waits for #8539 to land and then takes a merge of `main` (by its owner: the conflicts are in
+  both PRs' own Lean and Python, not the move's), or you tell me the order is the other way.
+
+Still out, read 06:24Z `[run]`: #8406's records `7aba` (`security: check.py exit 0 in 3528 s`, no regeneration; on
+`security/Properties`, ETA 06:35Z) and guard `6e01` (suite passed; building the guard's two modules, ETA 06:55Z
+`[guess]`); #8368's quick tier `57d5` (1 of 8 suites passed, ETA 06:50Z `[guess]`).
