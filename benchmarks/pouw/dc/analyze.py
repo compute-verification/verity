@@ -21,6 +21,8 @@ import re
 import sys
 from pathlib import Path
 
+__all__ = ["analyze", "balanced", "K_OF", "lane_of", "LD_REGS", "main", "MARGIN", "SYNC_SLOTS", "tmem_model", "upper"]
+
 MARGIN = 0.02
 K_OF = {"s8": 32, "u8s8": 32, "e4m3": 32, "e5m2": 32, "f16": 16, "bf16": 16, "tf32": 8, "b1": 256}
 #: mma.sync forms: (pattern prefix, slots a warp instruction). Every m16n8 form writes 16 x 8 = 128 32-bit slots.

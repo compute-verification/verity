@@ -44,6 +44,10 @@ sys.path.insert(0, str(MM))
 
 from verity_machine_model.model import census, model  # noqa: E402
 
+__all__ = ["BULK_BYTES", "bulk_counts", "census", "class_of", "CLASS_RULES", "facet_loads", "gate_loops",
+           "l2_bytes_per_s", "L2_ROW", "load_rows", "main", "MMA_FORMS", "model", "program", "rates_by_class",
+           "unpriced"]
+
 SMSPS = 4
 
 #: a SASS opcode (the dotted name, no guard) to its census class. The MMA forms map to their own kind (for the joint

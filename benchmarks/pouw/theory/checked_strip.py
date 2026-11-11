@@ -71,6 +71,10 @@ from exact_kit import f2
 from exact_kit.checks import Checks
 from exact_kit.sat import SOLVER, Cnf
 
+__all__ = ["CellGrid", "co32c_words", "cross_ranks", "digits", "honest_words", "instance", "main", "MASK", "n_digits",
+           "o_routes", "pv_routes", "pv_served", "pv_words", "PVBlock", "s32", "ts_best", "TS_FACETS", "ts_pv",
+           "TS_SHAPES", "ts_time", "W_RE", "word_routes"]
+
 M32 = np.uint32
 MASK = (1 << 32) - 1
 W_RE = np.array([1, 2, 4, 8, 16, 32, 65], dtype=np.int64)

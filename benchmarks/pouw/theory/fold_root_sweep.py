@@ -33,6 +33,8 @@ import time
 from collections.abc import Sequence
 from pathlib import Path
 
+__all__ = ["jobs_for", "kj_last", "kj_scaled", "main", "near_inverse", "ROT"]
+
 HERE = Path(__file__).resolve().parent
 #: rotations at width n standing in for (13, 19) at 32: the pair sums to n, the smaller about 0.4 n
 ROT = {6: (2, 4), 8: (3, 5), 10: (4, 6), 12: (5, 7), 14: (6, 8), 16: (6, 10)}

@@ -11,6 +11,8 @@ import collections
 import json
 import re
 
+__all__ = ["CC_ARCH", "count", "parse"]
+
 IMAD = re.compile(r"^(IMAD|IMUL)$")
 ALU = re.compile(r"^(IADD3|IADD|LOP3|LOP|SHF|PRMT|LEA)$")
 MODES = {0: "cpw_none", 1: "cpw_redux", 2: "cpw_red64", 3: "cpw_atoms64", 4: "cpw_shfl", 5: "cpw_egress",

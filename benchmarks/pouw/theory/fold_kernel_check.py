@@ -30,6 +30,8 @@ import numpy as np
 from exact_kit import search, wrap
 from exact_kit.checks import Checks
 
+__all__ = ["build", "enumerate_kernels", "fold", "g3_ok", "key_ok_r11", "main", "mitm_k1"]
+
 HERE = Path(__file__).resolve().parent
 
 

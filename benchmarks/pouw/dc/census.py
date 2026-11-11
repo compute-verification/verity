@@ -58,6 +58,8 @@ analyze = _module("dc_analyze", HERE / "analyze.py")
 eps1 = _module("dc_eps1", HERE.parent / "opcode_probe" / "eps1.py")
 rowsmod = _module("dc_rows", HERE.parent / "opcode_probe" / "rows.py")
 
+__all__ = ["analyze", "census", "Device", "JI_ROW", "kept", "main", "OWN_ROW", "rows_csv", "rowsmod", "tables"]
+
 MARGIN = analyze.MARGIN
 SMSPS = 4
 DEVICE = {"sm90": "sm_90", "sm100": "sm_100"}

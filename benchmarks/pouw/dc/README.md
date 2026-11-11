@@ -102,6 +102,12 @@ dump checks, the header's host build, the design that prices it). A probe's rate
 SM a clock, timed only after its SASS gate, its poisoned sink and its no-write control pass
 (`../opcode_probe/README.md`).
 
+The directory is scripts run by their paths, and no package: nothing outside `benchmarks/pouw/` imports it. Two
+modules are loaded by file by another, `analyze.py` by `census.py` and `census.py` by `pipe.py`; each one's `__all__`
+lists what its readers and the tests take, and every other name is the script's own. No Python here starts a process
+or touches a GPU: the `.sh` jobs do, and the Python reads what a run wrote and writes only where its command says
+(`--json`, `--write`, a probe table's header).
+
 ## Measured results
 
 No run that measured these is one `research status RUN` finds (the device directories' `rows.csv` name the runs), so

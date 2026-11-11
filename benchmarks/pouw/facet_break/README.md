@@ -20,6 +20,12 @@ first gate with its refusals (`gate0.txt`), `sass/`, each chunk's `gate.json`, `
 `chunks/`, every chunk's rows in `rows.jsonl`, and `loads.jsonl` and `summary.txt`. The `loads.py` commands after it
 read any runs' `rows.jsonl` on a CPU. The tests are `../tests/test_facet_break.py`.
 
+`loads.py` is the one module other code loads, by file: `generate.py`, `../sass_census/diff_menu.py` (a SASS
+opcode's census class, `class_of`), the census-cover fixtures' generator and the tests, which load `generate.py`
+too. Its `__all__` lists what they read.
+It reads the machine model and never writes it: a refit or a refitted family is printed, as the lines to add by
+hand under `--emit`. No Python here starts a process or touches a GPU; `run.sh` does.
+
 ~~~bash
 research run --on MACHINE --project verity --source . --cwd source --custody-ttl 12h \
   --env GPU_LEASE_WHO=facet-break -- bash benchmarks/pouw/facet_break/run.sh --seed 2 --n 300

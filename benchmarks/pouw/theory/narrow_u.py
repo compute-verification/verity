@@ -38,6 +38,8 @@ from checked_strip import (TS_SHAPES, CellGrid, co32c_words, cross_ranks, instan
                            ts_best)
 from exact_kit.checks import Checks
 
+__all__ = ["main", "NarrowBlock", "planes"]
+
 WIDTHS = (8, 16, 32, 64)
 MEASURED_X = 10.66
 
