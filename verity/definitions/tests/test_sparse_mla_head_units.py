@@ -1,15 +1,10 @@
-"""The units a head's key block can be proved as, each held to `SparseMlaHeadBlock_v1` word for word (Gaussian rows, and zeros,
-subnormals, infinities and NaNs planted in the queries, the keys and the carried state), at small statics and at GLM-5.3's
-served ones.
+"""A head's key block cut at P, each unit held to `SparseMlaHeadBlock_v1` word for word (Gaussian rows, and zeros, subnormals,
+infinities and NaNs planted in the queries, the keys and the carried state), at small statics and at GLM-5.3's served ones:
+`SparseMlaHeadScores_v1`'s running max and lanes are the block's, and `SparseMlaHeadValues_v1` on its bf16(P) and rescale, over
+the DV / G column blocks, is the block's O; a head run through such units block after block, each unit's outputs the next
+one's state, then its end on each column block, is the head (`SparseMlaHead_v1`).
 
-The block cut at P: `SparseMlaHeadScores_v1`'s running max and lanes are the block's, and `SparseMlaHeadValues_v1` on its bf16(P)
-and rescale, over the DV / G column blocks, is the block's O; a head run through such units block after block, each unit's
-outputs the next one's state, then its end on each column block, is the head (`SparseMlaHead_v1`).
-
-Several heads in one unit: `SparseMlaHeadsBlock_v1` is each head's own block on the one ``kv``; a row's heads run through such
-units, then each head's end, are the row (`SparseMla_v1`).
-
-The Boolean versions agree with their word views."""
+The Boolean versions agree with their word views, and at the served statics each is one Flock block, read off its Calls."""
 from __future__ import annotations
 
 import numpy as np
@@ -48,14 +43,15 @@ def _planted(rng, a: np.ndarray, specials: np.ndarray, p: float) -> np.ndarray:
     return a
 
 
-def _inputs(n: int, NHB: int, NVIS: int, FIRST: bool, DR: int, DV: int, seed: int) -> list[np.ndarray]:
-    """``n`` instances of a heads block's operands, each (n, NHB, ...) but the keys, which are (n, NVIS, DV + DR)."""
+def _inputs(n: int, NVIS: int, FIRST: bool, DR: int, DV: int, seed: int) -> list[np.ndarray]:
+    """``n`` instances of a head block's operands: the query's two parts, the block's keys and, past the first visited block,
+    the carried max, lanes and O."""
     rng = np.random.default_rng(seed)
-    out = [_planted(rng, _bf16(rng, shape), BF16_SPECIALS, 0.02) for shape in ((n, NHB, DV), (n, NHB, DR), (n, NVIS, DV + DR))]
+    out = [_planted(rng, _bf16(rng, shape), BF16_SPECIALS, 0.02) for shape in ((n, DV), (n, DR), (n, NVIS, DV + DR))]
     if not FIRST:
-        m = rng.standard_normal((n, NHB)).astype(np.float32).view(np.uint32)
-        lanes = np.abs(rng.standard_normal((n, NHB, 4))).astype(np.float32).view(np.uint32)
-        o = rng.standard_normal((n, NHB, DV)).astype(np.float32).view(np.uint32)
+        m = rng.standard_normal(n).astype(np.float32).view(np.uint32)
+        lanes = np.abs(rng.standard_normal((n, 4))).astype(np.float32).view(np.uint32)
+        o = rng.standard_normal((n, DV)).astype(np.float32).view(np.uint32)
         out += [_planted(rng, x, F32_SPECIALS, 0.1) for x in (m, lanes, o)]
     return out
 
@@ -67,25 +63,11 @@ def _fields(words, widths: list[int]) -> list[np.ndarray]:
     return np.split(words, np.cumsum(widths)[:-1], axis=1)
 
 
-def _held_to_single_blocks(st: dict, NHB: int, NVIS: int, FIRST: bool, n: int, seed: int) -> None:
-    many = bind(M.SparseMlaHeadsBlock, NHB=NHB, NVIS=NVIS, FIRST=FIRST, **st)
-    one = bind(M.SparseMlaHeadBlock, NVIS=NVIS, FIRST=FIRST, **st)
-    qn, qr, kv, *state = _inputs(n, NHB, NVIS, FIRST, st["DR"], st["DV"], seed)
-    widths = [1, 4, st["DV"]]
-    got = _fields(E.evaluate_batch(many, qn, qr, kv, *state), [NHB * w for w in widths])
-    for h in range(NHB):
-        want = _fields(E.evaluate_batch(one, qn[:, h], qr[:, h], kv, *(x[:, h] for x in state)), widths)
-        for field, (g, w, width) in enumerate(zip(got, want, widths, strict=True)):
-            bad = np.flatnonzero((g[:, h * width:(h + 1) * width] != w).any(axis=1))
-            assert not bad.size, f"{many.id}: head {h}'s field {field} differs from {one.id} in {bad.size} of {n}, first {bad[:5]}"
-
-
 def _cut_is_the_block(st: dict, NVIS: int, FIRST: bool, G: int, n: int, seed: int) -> None:
     DR, DV = st["DR"], st["DV"]
     block = bind(M.SparseMlaHeadBlock, NVIS=NVIS, FIRST=FIRST, **st)
     scores = bind(M.SparseMlaHeadScores, NVIS=NVIS, FIRST=FIRST, **st)
-    qn, qr, kv, *state = _inputs(n, 1, NVIS, FIRST, DR, DV, seed)
-    qn, qr, state = qn[:, 0], qr[:, 0], [x[:, 0] for x in state]
+    qn, qr, kv, *state = _inputs(n, NVIS, FIRST, DR, DV, seed)
     m, lanes, o = _fields(E.evaluate_batch(block, qn, qr, kv, *state), [1, 4, DV])
     got = _fields(E.evaluate_batch(scores, qn, qr, kv, *state[:2]), [1, 4, NVIS] + [1] * (not FIRST))
     for name, g, w in (("running max", got[0], m), ("lanes", got[1], lanes)):
@@ -152,62 +134,17 @@ def test_the_cuts_units_take_what_they_read() -> None:
             _ = bind(M.SparseMlaHeadValues, NVIS=16, FIRST=True, G=G, C=C, **cols).body
 
 
-@pytest.mark.parametrize("NHB,NVIS,FIRST", [(2, 16, False), (2, 16, True), (2, 5, True), (3, 16, False), (1, 16, False),
-                                            (8, 1, True)])
-def test_a_heads_block_is_each_heads_own_block(NHB: int, NVIS: int, FIRST: bool) -> None:
-    _held_to_single_blocks(SMALL, NHB, NVIS, FIRST, 48, 1000 * NHB + 2 * NVIS + FIRST)
-
-
-@pytest.mark.parametrize("NVIS,FIRST", [(64, False), (64, True), (2, True)])
-def test_two_heads_of_a_block_at_the_served_statics(NVIS: int, FIRST: bool) -> None:
-    _held_to_single_blocks(SERVED, 2, NVIS, FIRST, 4, 7 + NVIS + FIRST)
-
-
-@pytest.mark.parametrize("T,NH,NHB", [(37, 4, 2), (16, 2, 2), (33, 3, 3), (5, 4, 2)])
-def test_a_rows_heads_through_their_heads_blocks_are_the_row(T: int, NH: int, NHB: int) -> None:
-    """The NH heads in groups of NHB, each group's key blocks in FA3's order as one unit each, a unit's three outputs the next
-    one's ``m_prev``, ``l_prev`` and ``o_prev`` as they are; then each head's end on its entries of the last unit's lanes and O."""
-    DR, DV, BN = SMALL["DR"], SMALL["DV"], SMALL["BN"]
-    rng = np.random.default_rng(T + 10 * NH)
-    qn, qr, kv = _bf16(rng, (NH, DV)), _bf16(rng, (NH, DR)), _bf16(rng, (T, DV + DR))
-    row = bind(M.SparseMla, T=T, NH=NH, INV=GLM["INV"], **SMALL)
-    want = np.asarray(evaluate(row, qn.ravel().tolist(), qr.ravel().tolist(), kv.ravel().tolist()), dtype=np.uint32)
-    end = bind(M.SparseMlaHeadEnd, DV=DV, INV=GLM["INV"])
-    got = []
-    for h0 in range(0, NH, NHB):
-        state: list = []
-        for j, (lo, hi) in enumerate(M.visits(T, BN)):
-            unit = bind(M.SparseMlaHeadsBlock, NHB=NHB, NVIS=hi - lo, FIRST=j == 0, **SMALL)
-            out = evaluate(unit, qn[h0:h0 + NHB].ravel().tolist(), qr[h0:h0 + NHB].ravel().tolist(), kv[lo:hi].ravel().tolist(),
-                           *state)
-            state = [list(out[:NHB]), list(out[NHB:5 * NHB]), list(out[5 * NHB:])]
-        for h in range(NHB):
-            got += list(evaluate(end, state[1][4 * h:4 * h + 4], state[2][DV * h:DV * (h + 1)]))
-    assert np.array_equal(np.asarray(got, dtype=np.uint32), want)
-
-
-def test_a_heads_block_takes_its_blocks_statics() -> None:
-    unit = bind(M.SparseMlaHeadsBlock, NHB=2, NVIS=16, FIRST=False, **SMALL)
-    assert [n for n, _ in unit.signature()[0]] == ["q_nope", "q_rope", "kv", "m_prev", "l_prev", "o_prev"]
-    first = bind(M.SparseMlaHeadsBlock, NHB=2, NVIS=16, FIRST=True, **SMALL)
-    assert [n for n, _ in first.signature()[0]] == ["q_nope", "q_rope", "kv"]
-    with pytest.raises(ValueError, match="NHB=0 heads"):
-        _ = bind(M.SparseMlaHeadsBlock, NHB=0, NVIS=16, FIRST=True, **SMALL).body
-    with pytest.raises(ValueError, match="only the first visited block is partial"):
-        _ = bind(M.SparseMlaHeadsBlock, NHB=2, NVIS=5, FIRST=False, **SMALL).body
-
-
 _BITS = dict(DR=16, DV=16, BN=16, DOT=BM.SPARSE_MLA_GLM53["DOT"])
 AGREEMENT = [bind(BM.SparseMlaHeadScoresV2, NVIS=5, FIRST=True, SCALE=0.0625, **_BITS),
              bind(BM.SparseMlaHeadScoresV2, NVIS=16, FIRST=False, SCALE=0.0625, **_BITS),
              bind(BM.SparseMlaHeadValuesV2, NVIS=5, FIRST=True, G=4, C=3, **_BITS),
-             bind(BM.SparseMlaHeadValuesV2, NVIS=16, FIRST=False, G=8, C=1, **_BITS),
-             bind(BM.SparseMlaHeadsBlockV2, NHB=2, NVIS=5, FIRST=True, SCALE=0.0625, **_BITS),
-             bind(BM.SparseMlaHeadsBlockV2, NHB=2, NVIS=16, FIRST=False, SCALE=0.0625, **_BITS)]
+             bind(BM.SparseMlaHeadValuesV2, NVIS=16, FIRST=True, G=16, C=0, **_BITS),
+             bind(BM.SparseMlaHeadValuesV2, NVIS=16, FIRST=False, G=8, C=1, **_BITS)]
 
 
 def _operands(fn, n: int, seed: int) -> list[np.ndarray]:
-    """``n`` instances of each of ``fn``'s parameters: Gaussian bf16 rows and f32 words, specials planted in half of them."""
+    """``n`` instances of each parameter of the word Definition ``fn``: Gaussian bf16 rows and f32 words, specials planted in
+    half of them."""
     rng = np.random.default_rng(seed)
     out = []
     for _name, ty in fn.signature()[0]:
@@ -219,20 +156,37 @@ def _operands(fn, n: int, seed: int) -> list[np.ndarray]:
     return out
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("target", AGREEMENT, ids=lambda t: t.id)
 def test_boolean_agrees_with_its_word_view(target) -> None:
-    """The six units trace some millions of ANDs between them (minutes): what the word-level tests can't see is each Boolean
-    unit's agreement with its word view on special words through the padding and the carried state, that a values unit reads
-    its own columns of the keys, and that two heads share one ``kv``."""
+    """What the word-level tests can't see: each Boolean unit's agreement with its word view on special words through the
+    padding and the carried state, a values unit reading its own columns of the keys (in whole steps by their own gates,
+    in a partial step beside zero rows), and the two written over the block's Calls."""
     word = TR.word_of(target)
     lifted = {k: (TR.word_of(x) if k == "DOT" else x) for k, x in target.bindings.items()}
     assert (word.defn.name, word.defn.version, word.bindings) == (target.defn.name, 1, lifted)
     assert SW.boolean_version(word).id == target.id
     n = 64
-    inputs = _operands(target, n, sum(map(ord, target.id)))
+    inputs = _operands(word, n, sum(map(ord, target.id)))
     got = np.asarray(BS.evaluate_words(target, *inputs)).astype(np.uint64).reshape(n, -1)
     want = np.asarray(E.evaluate_batch(word, *inputs)).astype(np.uint64).reshape(n, -1)
     assert got.shape == want.shape
     bad = np.flatnonzero((got != want).any(axis=1))
     assert not bad.size, f"{target.id}: {bad.size} of {n} instances differ from {word.id}, first {bad[:5]}"
+
+
+def test_the_served_units_are_one_flock_block_each() -> None:
+    """At GLM-5.3's statics, read off the Boolean units' Calls: the scores of a 64-key block take the block's own 2^27, and a
+    quarter of O's columns a 2^26 block, where a half of a later block's is over a 2^23 slot and so takes 2^27 again."""
+    from verity_flock import circuit as FC
+
+    S = {k: BM.SPARSE_MLA_GLM53[k] for k in ("DR", "DV", "BN", "DOT", "SCALE")}
+    cols = {k: v for k, v in S.items() if k != "SCALE"}
+    block = FC.unit_block(bind(BM.SparseMlaHeadBlockV3, NVIS=64, FIRST=False, **S))
+    for first in (False, True):
+        scores = FC.unit_block(bind(BM.SparseMlaHeadScoresV2, NVIS=64, FIRST=first, **S))
+        assert FC.past_block(scores) is None and scores["k_log"] == block["k_log"] == 27
+        for c in range(4):
+            quarter = FC.unit_block(bind(BM.SparseMlaHeadValuesV2, NVIS=64, FIRST=first, G=128, C=c, **cols))
+            assert FC.past_block(quarter) is None and (quarter["unit_log"], quarter["k_log"]) == (23, 26)
+    half = FC.unit_block(bind(BM.SparseMlaHeadValuesV2, NVIS=64, FIRST=False, G=256, C=0, **cols))
+    assert FC.past_block(half) is None and (half["unit_log"], half["k_log"]) == (24, 27)
