@@ -65240,3 +65240,45 @@ The condition, in soundness's words: nothing of member k+1 is in the challenger'
 - The first pull request, which waits on the three above reaching `main`.
 - The memory under `MIMALLOC_PURGE_DELAY=-1`, unless you say the driver will set it.
 - The scan for the order condition in the one-stage audit's verifier: not mine to start without approval, and it waits on PRF-490.
+
+## OUTBITS, Wed 11 Nov 21:37Z: the check that holds a served cap to what a replay block returns is built and marked ready, pull request #9066. Its only new behaviour is one published number and one refusal; no guarantee's statement changes. It does not show that a served request stays under its cap
+
+Times from `date -u`. Tags: [run] with the run's id, [read] with the place, [mine] for my arithmetic, [guess].
+
+### What is marked
+
+- Pull request [#9066](https://github.com/compute-verification/verity/pull/9066), branch `cursor/proofs-servedcover-c903`, head `23b637d143`, base `61f13c2275`, marked ready at that head by 21:35Z on the lane's word [run: `research queue ready 9066 --mark --by proofs`; its preflight merged the head onto `main` at `75ef75838f`, refused nothing, and built the 5 changed Lean modules, run `r20261111-213231-2f7c`]. `research queue status` reads "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict" [run]. It touches the SPOT verifier's Python and Lean, so it is not low-risk: it waits on a reviewer's land verdict, which is yours to ask for.
+- What it does [read: the branch's diff]:
+  - `second_stage.returned_bits` (Lean `SecondStage.returnedBits`, new file `Spot/Returned.lean`) counts the bits one replay block returns from its registered Definition: for each part of its return, its units times 16 bits for each 16-bit word of the returned field. The Lean count reads `Spot.Bits.wordsOf`, the same rule the verifier applies to one proof block from its circuit file (`OneStageZk.returnedBits`).
+  - A two-stage registration carries the count (`WindowCommitmentRecord.returned`).
+  - `plancheck.two` requires the count with a served cap and refuses a cap below it (`served-cover`); the patterns' form takes only a cap equal to it.
+  - The figures pass their model's count, which equals the served bits they already price, so no figure moves [run: `r20261111-201524-462d`, `benchmarks/spot_figures` 203 passed with its slow tests].
+- What it shows on numbers [run: `r20261111-201524-462d`, `test_two_stage.py`]: a stand-in replay block of 1,024 units returning one 32-bit id each returns 32,768 bits, and a cap of 875 ids, 28,000 bits, is refused for it; the same block at 512 units, 16,384 bits, is held. Four units of one 18-bit value each return 128 bits for the 72 they hold; two units of eight 18-bit values in one field return 288 bits, exactly what they hold. These are test Definitions on `main`'s code, not a served request.
+
+### The runs
+
+| run | what | exit | result |
+|---|---|---|---|
+| `r20261111-201419-579e` | the SPOT Lean difftest suite, the new piece's tests and the two neighbouring ones | 0 | 4 passed: the Lean count builds and agrees with the Python, fuzzed and case by case |
+| `r20261111-201524-462d` | the pre-mark run, `suites.py --changed 61f13c2275 --quick` at the head | 0 | 62 suites, 62 passed, 0 failed; the SPOT verifier's 853 passed, the SPOT Lean difftest whole 253 passed and 2 skipped, the vLLM adapter's 13,966 passed and 424 skipped |
+| `r20261111-201612-e5f7` | `lean_changed.py --records verity/protocols/spot/verifier/lean --update` | 0 | the SPOT package, `security`, `security/Proofs` and `security/Properties` each pass; no lock record changed |
+| `r20261111-213231-2f7c` | the mark's preflight Lean build | 0 failed | 5 modules built |
+
+### What is open, and the line that stops each
+
+1. The land verdict. The line: "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict" [run: `research queue status`].
+2. A warning the mark printed, which refuses nothing: "`verity/protocols/spot/verifier/README.md` is 50073 bytes at 23b637d143c7, over its 49152-byte cap ... and was 49721 bytes at 61f13c2275fb" [run: the mark's preflight]. The file was 569 bytes over before; my paragraph adds 352 [mine]. The fix, 921 bytes trimmed, is owed in the lane's next pull request that touches it. I did not trim other lanes' text in this one.
+3. That a served request returns at most its cap is not shown by this. The replay block the vLLM adapter registers on `main` is a population of one check template, so today the count is of that template's outputs [read: the 19:50Z entry, 1.1]. The request's Definition and an output class at the cap are the serving side's.
+4. The Lean lemma, that the capped form's premise holds at this count over the connected program, is not written. It waits on the restated guarantees landing (#9043) [read: the 19:50Z entry, 1.3].
+5. `plancheck.two` trusts its caller for the count, as it does for the fan-out. A caller on another branch that passes a served cap without the count is now refused with a message naming `WindowCommitmentRecord.returned` [read: the diff].
+
+### One thing I did wrong
+
+Shortly before 20:00Z [guess for the minute] a local test selection ran a test that calls the Lean verifier, which built the SPOT Lean package on my VM, about 11 CPU-minutes, outside `research run` [run: this VM]. Every result above comes from the cluster runs, not from that build.
+
+### What a fresh worker does next
+
+1. Ask a reviewer for the land verdict on #9066 and watch its candidate.
+2. When #9043 lands, state and prove the lemma in `security/Proofs`: `ServedCover` at S equal to `SecondStage.returnedBits`, with N the published fan-out, over the connected program. Both halves are in the 19:50Z entry, 1.3.
+3. Pass the three numbers of the 19:50Z entry's section 4 to the cost-model run on `cursor/proofs-count-71ac`, and file the issue text of its section 2 for @circuits and @vllm.
+4. Trim `verity/protocols/spot/verifier/README.md` by 921 bytes in the next pull request that touches it.
