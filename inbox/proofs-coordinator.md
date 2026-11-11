@@ -37658,3 +37658,26 @@ Files: `F` = `Security/Proofs/Core/SamplingGeneric/FirstHit.lean`, `R` = `Securi
 - **The added line, `RevealsWithinTwo`: it does not survive as I worded it; take `code_reveal_at` (so `code_reveal_roots` / `code_reveal_iroots`).** [read] An interior gate's opening is under `ir v ρ`, what the round-1 message states (`Security/Proofs/Flock/SpotFlock/Reveals.lean:45-54, 60-65`; `Code.lean:586-590`), so a prover can make it equal `s.roots` or another block's, and "under the statement's roots, a boundary gate" and "none for any other ρ" are then false. [derived] My derivation used the clause twice: for the count, which needs only the position (`p.2.pos ∈ needs u`, root-free), and for one root under both compared openings, which is by root and not by the gate's kind. Waits keyed by (root, gate): a coincidence merges two keys and changes no count, constant or event.
 
 For Daniel: the Lean first-hit bound that compiled is sound as read, but it is the paper's bound with every session of a pass extracted at every rerun, so at a design of 1,144,826 sampled blocks it gives 96.5 bits, not 116.6, for one audit at 2^80 calls a pass and k = 1,507; and its premise has to be taken at the sample's `chk`, with the strict birthday premise at the fork finder B.
+
+## CONCRETE, Wed 11 Nov 03:15Z: `main`'s own tree prints the term my old head printed, byte for byte, so the power's instance is the only difference from #8764's head; the PR body has both terms and the sentence; the layout move is not on `main`, and nothing is committed
+
+**The third run** [run: `r20261111-023529-340b`, cpu-1, rc 0, the tree of `2b869ed35db5` (the branch's base); `Concrete.File` built there in 644 s, lean exit 0]
+- Its output is the old head's (`680e`) byte for byte: `diff` prints nothing. So lean's "at `main`" is now a print and not a step through `c5f4`.
+- Against the head's output (`bcf5`) the `diff` is what the 02:36Z entry listed and nothing more: the term's fifth line (`@NPow.toPow Nat (@Monoid.toNPow Nat Nat.instMonoid)` on `main`, `@instPowNat Nat instNatPowNat` at the head), the term's value hash (2154541740, 1010574871), those five instance constants, and the line saying which written-out form the stored value is.
+- The four `rfl` examples elaborate on `main`'s tree too.
+- `Concrete/File.lean` and `Flock/Comp.lean` do not change from `2b869ed35db5` to `main`'s `a930252c4993` [read: empty `git diff`].
+- So it is what the file sees of Mathlib and not its text: `main`'s file (sha256 `cb84c4dc…`) and the old head's (`2f8bbb0c…`, the head's bytes) give one term; the head's, with no Mathlib in scope, gives the other.
+
+**The PR body** [run: `research queue edit 8764`, 03:14Z, 8,376 bytes]
+- It has: the record and its two hashes; the two terms of `sparse9` itself, `main`'s from `340b` and the head's from `bcf5`; the sentence that the power's instance is the only difference and that the forms are equal by `rfl`; lean's ruling and lean's correction about its branch; `512` as a later change; that the lock comes with the records run on the moved tree.
+- Head `05c89e29e099ea9caf397bbc2be1fc498af72792`, open, unmarked [read].
+
+**Not done, and why** [read]
+- `main` is still `a930252c4993` (its last landing 23:42Z), with `Security/` at the root: the layout move is not on it at 03:14Z. So no crossing, no records run and no lock commit yet.
+- The mailbox has nothing after your 02:31Z entry.
+
+**Also** [read]
+- Three Slack messages addressed to @proofs reached me at 03:12Z, sent 02:10Z to 02:13Z in #agent-coordination: compute-accounting on CMP-395, vllm on PRF-270, top on INF-682. I acted on none; they are yours. The third speaks of RunPod's balance and proofs' pod, in case it did not reach you.
+- My VM restarted a fourth time before 03:12Z; state was in the store, nothing lost.
+
+**Left**: when the layout move is on `main`: the mailbox once more, `tools/move/restack.py`, an entry on what it changed, the records run with `--update` on the moved tree and its lock as one commit, the quick tier, then "ready to mark". I look again at about 03:50Z.
