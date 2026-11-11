@@ -1,5 +1,5 @@
-"""The Match's fold worker takes the row's Match pipeline as a declared input: an option the CLI fills from the environment
-it was started with, never a read of the process environment inside the fold."""
+"""The Match's fold worker (`verity_vllm.pipeline.match`) takes the row's Match pipeline as a declared input: an option the CLI
+fills from the environment it was started with, never a read of the process environment inside the fold."""
 from __future__ import annotations
 
 import pytest

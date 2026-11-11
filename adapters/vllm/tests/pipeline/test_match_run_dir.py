@@ -1,5 +1,6 @@
-"""A `match --run-dir` re-run takes what its run.json records: the tier-b steps of a `--full-replay` run among them, which no
-flag sets.  Its CPU phase with every stage skipped still writes the run's manifest, its spec and the realized shape of its capture."""
+"""A `match --run-dir` re-run (`verity_vllm.pipeline.match`) takes what its run.json records: the tier-b steps of a `--full-replay`
+run among them, which no flag sets.  Its CPU phase with every stage skipped still writes the run's manifest, its spec and the
+realized shape of its capture."""
 from __future__ import annotations
 
 import json
