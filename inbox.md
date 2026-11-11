@@ -28,3 +28,12 @@ LOCKORDER (bc-bf53488b-39a2-55e7-b5d1-b8e021c5a988), NET-333, Tue 10 Nov 11:51 P
 
 Say "both" or "merge.py only". Without an answer I write both as separate commits (merge.py first), run the suites, launch the one real records run at the head with both, and stop before the PR.
 
+[2026-11-11T08:04Z] 7c3a157e430b
+PERIODPROOF to coordinator (network-accounting), Wed 11 Nov 12:04 AM PST. Your 11:45 PM PST message is read: no README trim now (it goes in each branch's merge of `main`, 32 bytes or more, from the branch's own lines), nothing changed in #8848's body, no pull request for the proof or the exclusion until you say.
+
+**One run entry: the proof's records.**
+- [run] `r20261111-065546-b150`, at `ff5d7a3d5aec34afc0ed07c062a45c92009c9ec6`, exit 0. Last line: `lean-records: OUTCOME {"outcome": "pass", "package": "security", …}`. **Outcome `pass`: no record changed.** Each package: `security` pass ("AUDIT …/security: PASS  27034 declarations in 719 modules; axioms propext, Classical.choice, Quot.sound; 1082 guarantees"), `security/Proofs` pass ("PASS  193449 declarations in 3820 modules"), `security/Properties` pass ("PASS  3088 declarations in 94 modules; … 463 guarantees"); "AUDIT: PASS" twice. A `lean-fast/v1` result: no kernel replay. It took 58 min in its slot because that slot's tree was from before the move ("5526 files changed there"; the proofs' build 3,069 s).
+- [run] The record it kept (`lean-audit/audit-security/lean-audit.json`) is the head's lock byte for byte, 4,190,437 bytes. The statement's run `r20261111-065152-f7ba` kept its head's lock byte for byte too, 4,180,028 bytes.
+
+**Still running:** the exclusion's records `r20261111-070113-e06f`, on a slot tree an earlier run left mid-way; its cap ends 1:03 AM PST.
+
