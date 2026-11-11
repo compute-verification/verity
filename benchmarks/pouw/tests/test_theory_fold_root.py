@@ -8,8 +8,7 @@ from pathlib import Path
 
 import pytest
 
-THEORY = Path(__file__).resolve().parents[1] / "theory"
-sys.path.insert(0, str(THEORY))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "theory"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/pouw/receipts"))
 
 import fold_root_check as fr
