@@ -378,7 +378,7 @@
   "Verity.Accel.Machine.Fits": {
    "owner": "@compute-research",
    "digest": "3af395280aa76f238b3df3ad0243be45fbb61f48e3f20b71c8f9e51773ba2b90",
-   "why": "Part of what `OnCard` says, which the honest witnesses conclude: the devices' programs it matches are those that fit the machine. An antecedent inside a concluded definition, not a hypothesis of a guarantee."
+   "why": "`OnCard`'s scope: the programs of the pooled machine that `OnCard` asks the accelerator to hold, code within the card's text and use within `ρ_r·T` (G1, G2). An antecedent inside a premise the honest witnesses conclude, which no witness is asked to conclude."
   },
   "Verity.Assumptions.GemmAmpereStep": {
    "owner": "@proofs",
