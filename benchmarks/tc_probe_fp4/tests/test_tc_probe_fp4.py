@@ -22,7 +22,7 @@ import pytest
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from verity.ml.circuits.silicon.term import Term
+    from verity.definitions.silicon.term import Term
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
@@ -37,8 +37,8 @@ import sp_e4m3 as SP  # noqa: E402
 import sparse as S  # noqa: E402
 import tool  # noqa: E402
 import w1_price as W  # noqa: E402
-from verity.ml.circuits.silicon import models as M  # noqa: E402
-from verity.ml.circuits.silicon.term import PRODUCT_WIDTH  # noqa: E402
+from verity.definitions.silicon import models as M  # noqa: E402
+from verity.definitions.silicon.term import PRODUCT_WIDTH  # noqa: E402
 
 
 @pytest.fixture

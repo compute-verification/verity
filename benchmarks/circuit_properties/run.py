@@ -1,11 +1,11 @@
-"""Measure the reference circuits' structural properties and set them beside benchmarks/rho's shape-derived ones.
+"""Measure the reference circuits' structural properties and set them beside verity/protocols/inference_only/rho's shape-derived ones.
 
     uv run --extra torch-cpu verity bench circuit_properties [--models NAME,...] [--T T] [--out DIR]
 
 For each configuration in `references.configs()`, one b1 layer at T positions on bits (`references.layer`) is measured
 (`measure.measure`) under `references.GEMM_PRODUCTS`, and so is the Boolean GEMM `Gemm_v3{K=32,N=4}`. Beside each layer's
 a_out, a_in and |𝒥| per position: rho's `fanout`, `legs` and active layer products, as recorded for the model in
-benchmarks/rho/data/models.toml when it has a row, and as `derived_fanout` / `derived_legs` derive them from the
+verity/protocols/inference_only/rho/data/models.toml when it has a row, and as `derived_fanout` / `derived_legs` derive them from the
 config's own matrices (q, k, v, o, gate, up, down) otherwise and always. Each circuit's products are also checked
 whole-in-block (`measure.whole`) under two partitions: one block per root activation, and the gates cut in half. Writes
 DIR/properties.json (DIR defaults to $OUT) and prints one line per circuit.
@@ -23,7 +23,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rho"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity" / "protocols" / "inference_only" / "rho"))
 
 from circuit_properties import references as R
 from circuit_properties.measure import Blocks, describe, measure, whole
@@ -78,7 +78,7 @@ def main() -> int:
     ap.add_argument("--T", type=int, default=1)
     ap.add_argument("--out", default=os.environ.get("OUT"))
     a = ap.parse_args()
-    rows = [row("Gemm_v3{K=32,N=4}", R.boolean_gemm(32, 4), "verity.ml.circuits.ops.boolean.gemm", 1, None)]
+    rows = [row("Gemm_v3{K=32,N=4}", R.boolean_gemm(32, 4), "verity.definitions.ops.boolean.gemm", 1, None)]
     print(json.dumps({k: rows[0][k] for k in ("circuit", "gates", "products", "s_x", "a_out", "a_in")}), flush=True)
     configs = R.configs()
     for name in a.models.split(","):

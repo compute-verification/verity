@@ -116,7 +116,7 @@ def lean_key(commit: str, packages: list[str], cwd: Path | None = None) -> str:
 
 #: preflight.py's AVX512, for a tree from before it
 AVX512_BEFORE_PREFLIGHT = r"target-cpu=(native|x86-64-v4)\b|avx512"
-UPSTREAM = "verity/ml/flock/verifier/upstream.json"
+UPSTREAM = "verity/protocols/flock/agreement/upstream.json"
 
 
 def _show(commit: str, path: str, cwd: Path | None = None) -> str | None:
