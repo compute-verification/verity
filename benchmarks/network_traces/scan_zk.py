@@ -35,7 +35,7 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   hold, as is a schedule the class doesn't serve and a response that isn't id-form.
 * **The group** (``--group G``, default 1; `link`'s ``start``, its first execution phase, 0): G execution phases of each
   link, one registration, the scan's buckets 0 … G·T − 1 from the empty state, T an execution phase's.
-* **The scan's rows**, committed by the prover before the sample as hiding rows (`verity.ml.commitments.advice`, each
+* **The scan's rows**, committed by the prover before the sample as hiding rows (`verity.commitments.advice`, each
   tree's root in the registration): ``state``, G·T leaves, leaf t S_{t−1} and leaf 0 the empty state, the rows a
   window circuit of the group reads as its `SCAN_STATE` (`ingress_scan.window_state` from bucket 0), so S_{G·T−1},
   which no bucket of the group reads, has no leaf; ``prog``, the slot entries (`slot_entries`),
@@ -159,31 +159,32 @@ sys.path.insert(0, str(HERE))
 
 import leak_scan as LS  # noqa: E402
 import warden_zk as WZ  # noqa: E402
-from verity.ml.circuits import boolean as BL  # noqa: E402
-from verity.ml.circuits.boolean import trace as TR  # noqa: E402
-from verity.ml.circuits.codec import canonical_json  # noqa: E402
-from verity.ml.circuits.defs import CompositeDefinition, bind  # noqa: E402
-from verity.ml.circuits.program import Program  # noqa: E402
-from verity.ml.circuits.refs import Coll, array_of, coll_concat  # noqa: E402
-from verity.ml.circuits.types import Array, Tuple  # noqa: E402
-from verity.ml.commitments import advice as ADV  # noqa: E402
-from verity.ml.commitments.frame_v3 import BitRowLeaf  # noqa: E402
-from verity.ml.commitments.identity import identity_digest_sha512  # noqa: E402
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, bit_row, row_leaf  # noqa: E402
-from verity.ml.crypto import lms  # noqa: E402
-from verity.ml.protocols.certifier import egress as EG, ingress_scan as IS  # noqa: E402
-from verity.ml.windows.rows import own_entries  # noqa: E402
-from verity.core.protocols.certifier import io_tie as IT, warden as W  # noqa: E402
-from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
-from verity.core.protocols.certifier.active import DATA, id_request  # noqa: E402
-from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
-from verity.core.protocols.spot import coins as CC, service as S  # noqa: E402
-from verity.core.protocols.spot.consumers import exfiltration_bound, location_bits  # noqa: E402
-from verity.core.protocols.spot.one_stage import audit as AU, draw as DR, partition as PA, produced  # noqa: E402
-from verity.core.protocols.spot.one_stage import registered as REG, registration as RG  # noqa: E402
-from verity.core.protocols.spot.one_stage.draw import stratum_k  # noqa: E402
+from verity.circuits import boolean as BL  # noqa: E402
+from verity.circuits.boolean import trace as TR  # noqa: E402
+from verity.circuits.codec import canonical_json  # noqa: E402
+from verity.circuits.defs import CompositeDefinition, bind  # noqa: E402
+from verity.circuits.program import Program  # noqa: E402
+from verity.circuits.refs import Coll, array_of, coll_concat  # noqa: E402
+from verity.circuits.types import Array, Tuple  # noqa: E402
+from verity.commitments import advice as ADV  # noqa: E402
+from verity.commitments.frame_v3 import BitRowLeaf  # noqa: E402
+from verity.commitments.identity import identity_digest_sha512  # noqa: E402
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, bit_row, row_leaf  # noqa: E402
+from verity.commitments.crypto import lms  # noqa: E402
+from verity.protocols.certifier.prover import egress as EG, ingress_scan as IS  # noqa: E402
+from verity.commitments.windows.rows import own_entries  # noqa: E402
+from verity.protocols.certifier.verifier import io_tie as IT, warden as W  # noqa: E402
+from verity.protocols.certifier.verifier import warden_rows as WR  # noqa: E402
+from verity.protocols.certifier.verifier.active import DATA, id_request  # noqa: E402
+from verity.protocols.certifier.verifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
+from verity.protocols.spot.device import coins as CC
+from verity.protocols.spot.verifier import service as S  # noqa: E402
+from verity.protocols.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import audit as AU, draw as DR, partition as PA, produced  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import registered as REG, registration as RG  # noqa: E402
+from verity.protocols.spot.verifier.one_stage.draw import stratum_k  # noqa: E402
 
-_TRAFFIC = HERE.parents[1] / "verity/core/protocols/certifier/tests/scan_traffic.py"
+_TRAFFIC = HERE.parents[1] / "verity/protocols/certifier/verifier/tests/scan_traffic.py"
 _spec = importlib.util.spec_from_file_location("scan_traffic", _TRAFFIC)
 traffic = sys.modules["scan_traffic"] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(traffic)

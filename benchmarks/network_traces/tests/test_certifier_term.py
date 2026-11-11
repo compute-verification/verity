@@ -25,7 +25,7 @@ HERE = Path(__file__).resolve().parents[1]
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 import leak_bounds as LB  # noqa: E402
-from verity.ml.protocols.certifier import ingress_scan as IS  # noqa: E402
+from verity.protocols.certifier.prover import ingress_scan as IS  # noqa: E402
 
 #: a link's execution phases of 128 s over a week, a month and a year
 PHASES = {"week": 4_725, "month": 20_250, "year": 246_375}
@@ -198,7 +198,7 @@ def test_the_scale_is_read_from_the_files_and_every_input_is_marked():
     assert [inp[k].value for k in ("response_ids", "id_bits", "phase_buckets", "bucket_s", "lanes", "syncs")] == [
         4_096, 18, 1_280, LB.TAU, None, 128]
     assert LB.TAU == Fraction(1, 10) and "calibration.py" in inp["syncs"].source
-    assert (ROOT / "verity/core/protocols/certifier/calibration.py").is_file()
+    assert (ROOT / "verity/protocols/certifier/verifier/calibration.py").is_file()
     given = LB.inputs(world_requests=1e16, response_ids=875, syncs=16, lanes=512)
     assert (given["world_requests"].value, given["world_requests"].mark) == (1e16, "assumed")
     assert [given[k].value for k in ("response_ids", "syncs", "lanes")] == [875, 16, 512]
