@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.Nci.Record
+public import Proofs.Properties.Nci.RecordRead
 public import NciCheck.Record
 
 /-!
@@ -9,6 +10,8 @@ public import NciCheck.Record
 A scratch file, never merged. `recordForm` is `NciCheck.Record`'s functions put in the fields of
 `NciCheck.Properties.Record.Form`, so that a statement about a `Form` can be read at the check itself.
 
+* `text_recordForm`: on every record the check reads, the form's Program, text, wiring, slots and held rows are the
+  ones the first seven clauses of `Served` name.
 * `layoutReads_recordForm`: the check's layout reads a Definition's parameters and return type alone.
 * `rates_recordForm`: the check's rate rule gives the two bounds on a summary, at every `Γ`, `num` and `den`.
 -/
@@ -24,8 +27,9 @@ open Flock.Program (Prog Defn)
 def recordForm : Form where
   Case := NciCheck.Record.Case
   read := NciCheck.Record.read
-  inst := fun c => { program := c.f.i.program, record := c.f.i.record, gamma := c.f.i.gamma, num := c.f.i.num,
-    den := c.f.i.den, pins := c.f.i.pins.toList }
+  inst := fun c =>
+    { program := c.f.i.program, record := c.f.i.record, gamma := c.f.i.gamma, num := c.f.i.num, den := c.f.i.den,
+      pins := c.f.i.pins.toList }
   wiring := fun c => c.W
   slot := fun c => c.slot
   held := fun c => c.heldAt
@@ -39,6 +43,28 @@ def recordForm : Form where
 theorem rate_recordForm (Γ num den : ℕ) (c : NciCheck.Record.Case) :
     recordForm.rate Γ num den (recordForm.summarize c) =
       NciCheck.Record.rate Γ num den (NciCheck.Record.summarize c) := rfl
+
+/-- **The check reads the record as the text states it**: on every record the check reads, the first seven clauses
+of `Served` at `recordForm`, with the check's own Program and text. -/
+theorem text_recordForm {j tr : Json} {c : NciCheck.Record.Case} (h : NciCheck.Record.read j tr = .ok c) :
+    ∃ W : Spot.Wires.Wiring, Flock.Program.decode (recordForm.inst c).program.toUTF8 = .ok c.f.P ∧
+      Flock.JsonParse.parse (recordForm.inst c).record = .ok c.f.doc ∧
+      NciCheck.RecordText.wiring c.f.doc = .ok W ∧ (recordForm.wiring c).cuts = W.cuts ∧
+      (recordForm.wiring c).wires = W.wires ∧ recordForm.slot c = NciCheck.RecordText.slot c.f.P c.f.doc ∧
+      ∀ r hd, recordForm.held c r = some hd →
+        NciCheck.RecordText.declared c.f.P c.f.doc r = some hd.declared := by
+  obtain ⟨hP, hdoc⟩ := NciCheck.Record.SecurityProofs.inst_of_read h
+  obtain ⟨W, hW, hcuts, hwires⟩ := NciCheck.Record.SecurityProofs.wiring_of_read h
+  have hdec : Flock.Program.decode c.f.i.program.toUTF8 = .ok c.f.P := by
+    unfold NciCheck.decodeProgram at hP
+    split at hP
+    · rename_i P hok
+      have hPP := Except.ok.inj hP
+      subst hPP
+      exact hok
+    · cases hP
+  exact ⟨W, hdec, hdoc, hW, hcuts, hwires, NciCheck.Record.SecurityProofs.slot_of_read h,
+    fun r hd hh => NciCheck.Record.SecurityProofs.declared_of_heldAt h hh⟩
 
 theorem layoutOf_reads {d d' : Defn} (hp : d.params = d'.params) (hr : d.ret = d'.ret) :
     NciCheck.Record.layoutOf d = NciCheck.Record.layoutOf d' := by
@@ -59,10 +85,7 @@ theorem failure_one_none {Γ num den a b : ℕ} (h : NciCheck.failure Γ num den
   have h0 : (0 : ℕ) ∈ List.range (#[(a, b)] : Array (ℕ × ℕ)).size := List.mem_range.mpr Nat.zero_lt_one
   have hf := List.findSome?_eq_none_iff.mp h 0 h0
   have hf' : (if a > Γ then some ((0 : ℕ), "size") else if b * den > num * a then some (0, "nci") else none) =
-      none := by
-    first
-      | exact hf
-      | simpa using hf
+      none := hf
   by_cases h1 : a > Γ
   · rw [if_pos h1] at hf'
     cases hf'
@@ -82,6 +105,6 @@ theorem rates_recordForm : Rates recordForm := by
   | some p =>
     have h' : (NciCheck.failure Γ num den #[(s.gates, s.fresh)]).map (·.2) = none := h
     rw [hf] at h'
-    exact Option.noConfusion (h' : some p.2 = none)
+    simp at h'
 
 end NciCheck.Properties.Record.Attack
