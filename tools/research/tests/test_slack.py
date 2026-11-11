@@ -2254,12 +2254,12 @@ def test_pages_lists_the_lanes_recent_asks_with_status_decision_and_newest_comme
 
 
 def test_pages_still_lists_the_pages_when_the_connection_cannot_read_comments(notion, registry, capsys, monkeypatch):
-    """A connection without Notion's Read comments capability answers 403 on /comments, which failed the whole command
-    (network-accounting, 10 Nov): the pages list with their status and decision, and one line says what to turn on."""
+    """A connection without Notion's Read comments capability answers 403 on /comments, which failed the whole command:
+    the pages list with their status and decision, and one line says what to turn on."""
     monkeypatch.setattr(slack, "_now", lambda: NOW)
 
     def page(i: int) -> dict:
-        return {"id": f"p-{i}", "url": f"https://app.notion.com/p/p{i}", "last_edited_time": "2026-09-30T20:00:00Z",
+        return {"id": f"p-{i}", "url": f"https://pages.example.invalid/p{i}", "last_edited_time": "2026-09-30T20:00:00Z",
                 "properties": {"Ask": {"type": "title", "title": [{"plain_text": f"Ask {i}?"}]},
                                "Status": {"type": "status", "status": {"name": "Waiting on Daniel"}}}}
 

@@ -4003,7 +4003,7 @@ def cmd_pages(ns: argparse.Namespace, reg: dict) -> int:
                     raise
                 readable = False
                 print(f"ask-daniel pages: {e}: the pages are listed without their comments. The Notion connection behind "
-                      "$NOTION_API_KEY lacks the Read comments capability (notion.so/profile/integrations, the connection, "
+                      "$NOTION_API_KEY lacks the Read comments capability (Notion's integration settings, the connection, "
                       "Capabilities); until its owner turns it on, read a page's comments in Notion or with the Notion MCP",
                       file=sys.stderr)
         newest = comments[-1] if comments else None
