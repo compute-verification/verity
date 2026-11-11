@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import io
+
 import pytest
 
 from verity_vllm.observe.events import (DTYPE_BYTES, DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepLink, StepStart,
                                    StorageAlloc, TritonLaunch, ViewDesc, from_json, to_json, views_in)
-from verity_vllm.observe.log import LogWriter, dumps, read_log, split_steps
+from verity_vllm.observe.log import LogWriter, dumps, read_log, read_log_lines, split_steps
 from verity_vllm.observe.fold.tree import build_trees, op_histogram, step_events
 
 
@@ -72,9 +74,7 @@ def test_log_roundtrip_file(tmp_path):
         assert w.count == len(evs)
     back = list(read_log(p))
     assert back == evs
-    dumped = tmp_path / "dumped.jsonl"
-    dumped.write_text(dumps(evs))
-    assert list(read_log(dumped)) == evs
+    assert list(read_log_lines(io.StringIO(dumps(evs)))) == evs
 
 
 def test_split_steps_and_trees():

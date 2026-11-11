@@ -57,6 +57,13 @@ def read_log(path: str | Path) -> Iterator[Event]:
                 yield from_json(json.loads(line))
 
 
+def read_log_lines(lines: Iterable[str]) -> Iterator[Event]:
+    for line in lines:
+        line = line.strip()
+        if line:
+            yield from_json(json.loads(line))
+
+
 def dumps(events: Iterable[Event]) -> str:
     buf = io.StringIO()
     for ev in events:
