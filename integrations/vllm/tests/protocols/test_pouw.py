@@ -24,6 +24,7 @@ from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocols import pouw
 from verity_vllm.protocols.pouw import pearl_c as PPD
+from verity_vllm.protocols.pouw.pearl_c import epoch as PE
 from verity_vllm.protocols.pouw.pearl_c import kernel as PPK
 
 K, N = 1088, 1600            # inside ncp-v1's domain: 1,088 <= k, 1,600 <= n
@@ -408,3 +409,16 @@ def test_pearl_cs_schedule_is_a_setting_checked_against_the_scheme():
     assert any("'schedule' is one of" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings={"pouw": {**on, "schedule": "h3o"}})))
     assert any("Pearl-C's; this executor runs serially" in r
                for r in pouw.refusals("ncp-v1", _serve("pouw:ncp-v1", settings={"pouw": {"coins": _coins(), "schedule": "deferred"}})))
+
+
+def test_the_rows_kept_once_and_the_epoch_made_ahead_are_settings_of_pearl_c_on_the_device():
+    """``kept_rows`` and ``prepared`` are refused under a scheme that has no device epoch, and each takes only what its
+    maker returns (`pouw.keep_rows`, `pouw.prepare`)."""
+    for more in ({"kept_rows": {}}, {"prepared": PE.Prepared("pouw:ncp-v1", (), {}, None)}):
+        said = pouw.refusals("ncp-v1", _serve("pouw:ncp-v1", settings={"pouw": {"coins": _coins(), **more}}))
+        assert any("'prepared' and 'kept_rows' are Pearl-C's on the device" in r for r in said)
+    assert pouw.refusals("ncp-v1", _serve("pouw:ncp-v1", settings={"pouw": {"coins": _coins()}})) == ()
+    for raw, why in (({"kept_rows": ["0.rows.bf16"]}, "'kept_rows' is the served model's weight rows files"),
+                     ({"prepared": {"run": None}}, "'prepared' is an epoch made ahead of its install")):
+        with pytest.raises(ValueError, match=why):
+            pouw.Settings.of(raw)
