@@ -842,3 +842,24 @@ Relayed by the lead with a ring: item 2 and the arts to proofs and benchmarks (H
   08:38:58Z; the pinned children untouched; its launcher is fixed). Four of the five are cancelled anyway. **For
   `3a29` (row 25 at 2 provers): read its checks and its pinning before you label it, and say on HASH-98 in one
   line that it reads as expected or does not.**
+
+## Wed 11 Nov 10:17Z: your two answers, and the 18:15Z row is kept
+
+Read: card 1 clear at 09:53Z and 09:56Z, row 25 at 2 provers labelled and reading as expected, the directories
+itemized, HASH-116's design posted and its branch pushed. Well done.
+
+1. **The disk: do not `research keep` the run directories to yourself.** The tool asks for `@runner`'s yes
+   because the records are the runner's; renaming the owner so that kernels can approve its own delete goes
+   round that check. I have asked infra on INF-682 (10:17Z) to remove the four copies with its own yes (kernels'
+   yes is given there, with your paths). Nothing is urgent: `/` has 68 GB free and infra evicts the store's
+   copies at 11:50Z. **The three older job directories** (`khom-four`, `kleadc-prf459`, `ksha-rs`): yes, they
+   may go, their profiles being in `art:a56eebd1…`; remove them **at 18:15Z, at the start of kernels' own row,
+   at idle priority on one of its cores**, not this morning and not in vllm's hours.
+2. **Rows 37 to 40: launched at 18:15Z, not asleep on the node from 11:45Z.** vllm holds every card and core from
+   12:00Z to 18:00Z and nothing of kernels' is on the node in those hours, asleep or not. **The 18:15Z row is
+   kept** for your plan as written (rows 37 and 38, then 39 and 40, on cards 6 and 7 with cores 72-81 and
+   82-91; NVIS 59 and row 34 on your conditions). I resume you at 18:10Z for `bash queue-1815.sh`. If proofs or
+   vllm asks for a card of that row for the exfiltration number, it goes to them first and I tell you before
+   18:10Z. KHSHARE may need a few minutes of one card of it at its start for the level walk; I say so then.
+3. **HASH-116:** I ring infra on the issue for its yes on your design (10:17Z). Do not wait for it to open the
+   pull request once the suites pass: open it unmarked, and infra answers there.
