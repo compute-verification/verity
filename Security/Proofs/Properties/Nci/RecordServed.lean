@@ -20,9 +20,10 @@ A scratch file, never merged, beside `Proofs.Properties.Nci.RecordAttack`.
   `Spot.Wires.Wiring.ofJson` of `wiresOf`. The kernel runs it on texts given as their characters: a text of no wire
   (`tie_empty`), one of a cut (`tie_cuts`), `wires` given twice (`tie_twice`: the last), `cuts` null and `wires`
   absent and a text that is a list (`tie_cutsNull`, `tie_noWires`, `tie_list`: refused), `templates` and `order`
-  stated (`tie_dropped`: read as none), and `blocks` and `registered` stated (`tie_rest`: read as the text of no wire
-  is). A text with a wire is not run here: the reading of a wire sorts its keys by a recursion the kernel does not
-  unfold.
+  stated (`tie_dropped`: read as none), `blocks` and `registered` stated (`tie_rest`) and a stated record's `cap`,
+  `format` and `templates` (`tie_stated`): each read as the text of no wire is; a cut of 1 is read as stated
+  (`tie_cutOne`). Two texts of one tie serve the same circuits (`served_retext_tie`). A text with a wire is not run
+  here: the reading of a wire sorts its keys by a recursion the kernel does not unfold.
 * **A served record, but for the decoder.** `served_empty`: the record of no wire over the Program of no node lays
   out the circuit of no gate, given that `Flock.Program.decode` reads the Program's text, that the template query
   finds no unit in it and that it has no gate. Those three are about the decoder's output, which the kernel does not
@@ -32,7 +33,8 @@ A scratch file, never merged, beside `Proofs.Properties.Nci.RecordAttack`.
   kernel, its order stated: the kernel does not unfold the order the check makes where none is stated) and given the
   decoder's output on that Program as `OneUnit` states it, gate by gate. With the unit's row held, θ is the input
   gate (`served_one_held`) and the block reads no fresh bit (`fresh_one_held`); with nothing held it reads sixteen
-  (`served_one_fresh`, `fresh_one`). The record's text is the same in both, and registers nothing.
+  (`served_one_fresh`, `fresh_one`). The record's text is the same in both, and registers nothing; a text with a
+  stated record's `cap`, `format` and `templates` serves the same (`served_one_stated`).
 * **What the summary counts.** `counts_one_checked`: on that one text, the check that holds the row counts every
   block at no fresh bit, in every circuit the record lays out (`served_one_shape`), and the check that holds nothing
   does not.
@@ -83,6 +85,27 @@ theorem not_served_of_tie {F : Form} {c : F.Case} {cs : List Char} (hrec : (F.in
     rfl
   rw [h', hof] at h
   simp [Except.toOption] at h
+
+/-- A text that parses, and whose wiring `Spot.Wires.Wiring.ofJson` reads, is one `readTie` reads. -/
+theorem readTie_of {cs : List Char} {doc : Json} {W : Spot.Wires.Wiring}
+    (hp : Flock.JsonParse.parse (String.ofList cs) = .ok doc)
+    (ho : Spot.Wires.Wiring.ofJson (wiresOf doc) = .ok W) : readTie cs = some W := by
+  rw [Flock.JsonParse.parse_eq, String.toList_ofList] at hp
+  have h' : readTie cs = (Spot.Wires.Wiring.ofJson (wiresOf doc)).toOption := by
+    unfold readTie
+    rw [hp]
+    rfl
+  rw [h', ho] <;> rfl
+
+/-- **Two texts of one tie serve the same circuits**, whatever else either states. -/
+theorem served_retext_tie {F : Form} {c : F.Case} {d : Verity.RegisteredCircuit} {s : F.Case → String}
+    {cs cs' : List Char} (hrec : (F.inst c).record = String.ofList cs) (hs : s c = String.ofList cs')
+    (h : readTie cs' = readTie cs) (hd : Served F c d) : Served (retext F s) c d := by
+  have hd' := hd
+  obtain ⟨P, doc, W, S, rs, at_, -, hparse, hof, hc, hw, -⟩ := hd'
+  rw [hrec] at hparse
+  obtain ⟨doc', hp', ho'⟩ := tie_of (h.trans (readTie_of hparse hof))
+  exact served_retext_of F s c d ((congrArg Flock.JsonParse.parse hs).trans hp') ho' hc hw hd
 
 /-- `{"wires":[]}` -/
 def recordEmpty : List Char :=
@@ -148,6 +171,24 @@ theorem tie_dropped : readTie recordDropped = some ⟨[], [], [], none⟩ := by 
 
 /-- `blocks` and `registered` stated: the text reads as the text of no wire does. -/
 theorem tie_rest : readTie recordRest = readTie recordEmpty := by decide +kernel
+
+/-- `{"cuts":{"B":{"x":1}},"wires":[]}` -/
+def recordCutOne : List Char :=
+  ['{', '"', 'c', 'u', 't', 's', '"', ':', '{', '"', 'B', '"', ':', '{', '"', 'x', '"', ':', '1', '}', '}',
+   ',', '"', 'w', 'i', 'r', 'e', 's', '"', ':', '[', ']', '}']
+
+/-- A cut of 1 the text states is read as stated, not as none. -/
+theorem tie_cutOne : readTie recordCutOne = some ⟨[], [("B", [("x", 1)])], [], none⟩ := by decide +kernel
+
+/-- `{"cap":1,"format":"verity/window-circuit/v1","templates":[["Copy_v1",1]],"wires":[]}` -/
+def recordStated : List Char :=
+  ['{', '"', 'c', 'a', 'p', '"', ':', '1', ',', '"', 'f', 'o', 'r', 'm', 'a', 't', '"', ':', '"', 'v', 'e',
+   'r', 'i', 't', 'y', '/', 'w', 'i', 'n', 'd', 'o', 'w', '-', 'c', 'i', 'r', 'c', 'u', 'i', 't', '/', 'v',
+   '1', '"', ',', '"', 't', 'e', 'm', 'p', 'l', 'a', 't', 'e', 's', '"', ':', '[', '[', '"', 'C', 'o', 'p',
+   'y', '_', 'v', '1', '"', ',', '1', ']', ']', ',', '"', 'w', 'i', 'r', 'e', 's', '"', ':', '[', ']', '}']
+
+/-- A text with a stated record's `cap`, `format` and `templates` is read as the text of no wire is. -/
+theorem tie_stated : readTie recordStated = readTie recordEmpty := by decide +kernel
 
 /-! ### The wires check on the wiring of no wire -/
 
@@ -716,5 +757,12 @@ block at no fresh bit, and the check that holds nothing does not. -/
 theorem counts_one_checked {P : Prog} (hdec : Flock.Program.decode programOne.toUTF8 = .ok P) (h : OneUnit P) :
     Counts (formOne (some (.read "w")) 0) ∧ ¬ Counts (formOne none 0) :=
   ⟨counts_one_held check_one hdec h, not_counts_one check_one hdec h⟩
+
+/-- The one unit on a text with a stated record's `cap`, `format` and `templates`: `Served` reads of it what it reads
+of the text of no wire. -/
+theorem served_one_stated {P : Prog} (hdec : Flock.Program.decode programOne.toUTF8 = .ok P) (h : OneUnit P) :
+    Served (retext (formOne none 16) fun _ => String.ofList recordStated) () dOne :=
+  served_retext_tie (F := formOne none 16) (c := ()) (s := fun _ => String.ofList recordStated)
+    (cs := recordEmpty) (cs' := recordStated) rfl rfl tie_stated (served_one_checked hdec h).1
 
 end NciCheck.Properties.Record.Attack
