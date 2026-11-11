@@ -490,7 +490,8 @@ def _layout_fail(probe: Probe, instr: str, label: str, want: np.ndarray, got: np
     raise RuntimeError(f"layout check ({label}) failed for {instr}: {bad}/{want.size} elements differ; first: {ex}")
 
 
-def _exact_operands(rng, instr: str, n: int, steps: int):
+def _exact_operands(rng: np.random.Generator, instr: str, n: int,
+                    steps: int) -> tuple[np.ndarray, np.ndarray, np.ndarray | None, np.ndarray | None, np.ndarray, np.ndarray]:
     """Exact small-integer operands of ``steps`` chained k-blocks and C + A.B as FP32 words (every partial sum exact in FP32)."""
     k, nblk = K_OF[instr], NBLK[instr]
     fa, fb = k32.ROWS[instr][:2] if instr in k32.ROWS else ("e2m1", "e2m1")
@@ -597,19 +598,19 @@ def families_nvf4(rng: np.random.Generator, n_random: int, scale_kind: str,
     k = 64
     nblk = 4 if scale_kind == "ue4m3" else 2
 
-    def codes(shape):
+    def codes(shape: int | tuple[int, ...]) -> np.ndarray:
         return rng.integers(0, 16, shape).astype(np.uint8)
 
-    def scales(shape, lo=None, hi=None):
+    def scales(shape: int | tuple[int, ...], lo: int | None = None, hi: int | None = None) -> np.ndarray:
         if scale_kind == "ue4m3":
             return UE4M3_VALID[rng.integers(0, len(UE4M3_VALID), shape)]
         lo, hi = (107, 148) if lo is None else (lo, hi)
         return rng.integers(lo, hi, shape).astype(np.uint8)  # moderate E8M0 exponents (autoproof's random_scale), 0xFF NaN excluded
 
-    def acc_random(n, lo=-30, hi=40):
+    def acc_random(n: int, lo: int = -30, hi: int = 40) -> np.ndarray:
         return f32_bits((rng.standard_normal((n, 16, 8)) * np.exp2(rng.integers(lo, hi, (n, 16, 8)))).astype(np.float32))
 
-    def zeros(n):
+    def zeros(n: int) -> np.ndarray:
         return np.zeros((n, 16, 8), np.uint32)
 
     n = n_random
@@ -724,7 +725,8 @@ def _scale_value(codes: np.ndarray, scale_kind: str) -> np.ndarray:
     return np.exp2((c - 127).astype(np.float64))
 
 
-def _signed_pow2_acc(rng, shape, e_lo: int, e_hi: int, exact_frac: float = 0.5) -> np.ndarray:
+def _signed_pow2_acc(rng: np.random.Generator, shape: int | tuple[int, ...], e_lo: int, e_hi: int,
+                     exact_frac: float = 0.5) -> np.ndarray:
     """FP32 words +-(1.f) 2^e, e uniform in [e_lo, e_hi], f = 0 with probability ``exact_frac`` else uniform 23 bits."""
     n = int(np.prod(shape))
     e = rng.integers(e_lo, e_hi + 1, n) + 127
@@ -741,14 +743,14 @@ def families_fp4_re(rng: np.random.Generator, n_random: int, scale_kind: str,
     gpb = 4 // nblk  # groups (of 16) per scale block
     ue4 = scale_kind == "ue4m3"
 
-    def codes(shape):
+    def codes(shape: int | tuple[int, ...]) -> np.ndarray:
         return rng.integers(0, 16, shape).astype(np.uint8)
 
-    def nz_codes(shape):
+    def nz_codes(shape: int | tuple[int, ...]) -> np.ndarray:
         c = rng.integers(1, 16, shape)
         return np.where(c == 8, 1, c).astype(np.uint8)  # never a zero (0x0 / 0x8)
 
-    def scales(shape, lo=None, hi=None):
+    def scales(shape: int | tuple[int, ...], lo: int | None = None, hi: int | None = None) -> np.ndarray:
         if ue4:
             if lo is None:
                 return UE4M3_VALID[rng.integers(0, len(UE4M3_VALID), shape)]
@@ -756,10 +758,10 @@ def families_fp4_re(rng: np.random.Generator, n_random: int, scale_kind: str,
         lo, hi = (100, 150) if lo is None else (lo, hi)
         return rng.integers(lo, hi, shape).astype(np.uint8)
 
-    def pm_zero(shape):
+    def pm_zero(shape: int | tuple[int, ...]) -> np.ndarray:
         return np.where(rng.random(shape) < 0.5, np.uint32(0x80000000), np.uint32(0)).astype(np.uint32)
 
-    def zeros(n):
+    def zeros(n: int) -> np.ndarray:
         return np.zeros((n, 16, 8), np.uint32)
 
     # --- D16: the sign-of-zero matrix.  Accumulator +-0 x (a) all-zero A against random B, (b) random A against all-zero B,
@@ -946,13 +948,13 @@ def families_mxf4_edges(rng: np.random.Generator) -> Iterator[tuple[str, np.ndar
     cancellation of overflowing blocks, and moderate products."""
     k, nblk = 64, 2
 
-    def nz(shape, lo=1):
+    def nz(shape: int | tuple[int, ...], lo: int = 1) -> np.ndarray:
         return (rng.integers(lo, 8, shape) | (rng.integers(0, 2, shape) << 3)).astype(np.uint8)
 
-    def neg(c):
+    def neg(c: np.ndarray) -> np.ndarray:
         return np.where(c & 7, c ^ 8, c).astype(np.uint8)
 
-    def acc_from(pool, n, zero_tiles=None):
+    def acc_from(pool: np.ndarray, n: int, zero_tiles: np.ndarray | None = None) -> np.ndarray:
         acc = pool[rng.integers(0, len(pool), (n, 16, 8))]
         if zero_tiles is not None:
             acc[zero_tiles] = 0
@@ -1082,7 +1084,7 @@ def scale_split_twins(rng: np.random.Generator, n: int,
     off = np.array(TWIN_OFFSETS)[np.arange(h) % len(TWIN_OFFSETS)][:, None, None]
     acc = ((rng.integers(0, 2, (h, 16, 8)).astype(np.uint32) << 31) | ((x_max - off + 127).astype(np.uint32) << 23)).astype(np.uint32)
 
-    def twin(u, v):
+    def twin(u: np.ndarray, v: np.ndarray) -> np.ndarray:
         out = np.empty((2 * h, *u.shape[1:]), u.dtype)
         out[0::2], out[1::2] = u, v
         return out
@@ -1112,7 +1114,7 @@ def scale_bit7_twins(rng: np.random.Generator,
         lo_a[:, r, 0] = lo_b[:, r, 0] = byte & 0x7F
     acc = f32_bits((rng.standard_normal((n, 16, 8)) * np.exp2(rng.integers(-10, 10, (n, 16, 8)))).astype(np.float32))
 
-    def twin(x1, x2):
+    def twin(x1: np.ndarray, x2: np.ndarray) -> np.ndarray:
         out = np.empty((2 * n,) + x1.shape[1:], x1.dtype)
         out[0::2], out[1::2] = x1, x2
         return out
@@ -1151,7 +1153,7 @@ def twin_summary(D: np.ndarray, models: dict) -> dict:
 
     off = np.array(TWIN_OFFSETS)[np.arange(D.shape[0] // 2) % len(TWIN_OFFSETS)]
 
-    def differ(words):
+    def differ(words: np.ndarray) -> dict[str, int]:
         d = words[0::2] != words[1::2]
         return {f"off{o}": int(d[off == o].sum()) for o in TWIN_OFFSETS}
 
@@ -1164,7 +1166,7 @@ def twin_summary(D: np.ndarray, models: dict) -> dict:
 def families_bf16(rng: np.random.Generator,
                   n_random: int) -> Iterator[tuple[str, np.ndarray, np.ndarray, np.ndarray | None, np.ndarray | None, np.ndarray]]:
     k = 16
-    def cast(x):
+    def cast(x: np.ndarray) -> np.ndarray:
         return to_bf16_bits(x.astype(np.float32))
     n = n_random
     yield "randn_random_acc", cast(rng.standard_normal((n, 16, k))), cast(rng.standard_normal((n, 8, k))), None, None, \
@@ -1266,7 +1268,7 @@ class FakeProbe:
         return D
 
 
-def _init(instr: str, group: int):
+def _init(instr: str, group: int) -> None:
     _CTX["instr"] = instr
     _CTX["group"] = group
     try:
@@ -1280,7 +1282,8 @@ def _init(instr: str, group: int):
         _CTX["init_error"] = repr(e)
 
 
-def _eval_chunk(args):
+def _eval_chunk(args: tuple[np.ndarray, np.ndarray, np.ndarray | None, np.ndarray | None, np.ndarray],
+                ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
     """Every model's word per element of the chunk: ({model: D (n,16,8)}, {model: domain-error mask})."""
     if "init_error" in _CTX:
         raise RuntimeError(f"model worker failed to initialize: {_CTX['init_error']}")

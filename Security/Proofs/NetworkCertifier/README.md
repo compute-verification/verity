@@ -21,11 +21,12 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
 ../../Definitions/NetworkCertifier/AdviceV1.lean  trusted: advice v1's charge, `ChargeCount_v1{N}`'s reference one for one: the
                                counting arithmetic coder (Tally, countStep), the book's KT estimate at min(run, 2),
                                a window's charge (window) and a run's (charges), the streams no window refuses (Streams)
-../../Definitions/NetworkCertifier/WindowCharge.lean  trusted: advice v1's whole window charged, `ChargeCount_v2{N, H, O}`'s
+../../Definitions/NetworkCertifier/WindowCharge.lean  trusted: advice v1's whole window charged, `ChargeCount_v2{N, H, O, L}`'s
                                reference one for one: the window's symbols in `code_v1`'s order (syms: n_arrived, the
                                decisions, n_hits, the hits, n_resumes, n_order, the order entries, n_lag), each integer
-                               a bin and a uniform offset (binned, uniform), counted in one segment (window), the carry
-                               the decisions' and the last order entry's position and rank, a run's charges (charges)
+                               a bin and a uniform offset (binned, uniform), counted in one segment, then the length
+                               terms' tail (tailBits) (window), the carry the decisions' and the last order entry's
+                               position and rank, a run's charges (charges)
 ../../Definitions/NetworkCertifier/Warden.lean  trusted: the warden (design v3): its cells (CellView), its public schedule
                                (CertifierSchedule), what reaches it from the server (Arrivals), its code (certifierLane,
                                certifierCode), the fail cell (failCell) and the client's view (clientView)
@@ -141,6 +142,11 @@ Carried.lean    the leak bounds over a carried pool: one run's relation at the r
                                          size (encard_pooledCarried_le); sampledLeakCarried, pooledLeakCarried; at
                                          the empty pool, the period's bound with checked inputs over windows that
                                          each hold a pool of their own (pooledLeakChecked_of_carried)
+PoolRoots.lean  the opened rows' roots, a lemma: a run's check that holds its opened and left rows to the roots it
+                                         registers (CheckedRoots) and its leak relation give them those roots
+                                         (digests_of_leakAt), and the record rule registers at a run's opening the root
+                                         of the row poolOpen names (digest_open_of_leakAt), so CarriedRoots holds
+                                         (rootsOfChecked)
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 Witnesses.lean  each acceptance guarantee's two lemmas: `G_honest`, its hypotheses at the deployed

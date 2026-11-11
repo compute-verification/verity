@@ -6,7 +6,8 @@ public import Flock.Bytes
 # The record's hex round trips
 
 The record writes bytes as lowercase hex (`hexOf`) and an F128 as `{hi:016x}{lo:016x}` (`F128.toHex`); the decoder reads
-them back with `unhex` and `f128OfHex`. Both round trips are exact: `unhex_hexOf`, `f128OfHex_toHex`.
+them back with `unhex` and `f128OfHex`. Both round trips are exact: `unhex_hexOf` (`Flock.Hex`, beside the codec),
+`f128OfHex_toHex`.
 -/
 
 @[expose] public section
@@ -15,132 +16,8 @@ namespace FlockComplete.JsonRT
 
 open Flock
 
-theorem foldl_loop_eq {β : Type} (f : β → UInt8 → β) (as : ByteArray) (stop : Nat) (h : stop ≤ as.size) :
-    ∀ (i j : Nat) (b : β), i + j = stop →
-      ByteArray.foldlM.loop (m := Id) (fun b a => pure (f b a)) as stop h i j b =
-        ((as.data.toList.drop j).take i).foldl f b := by
-  intro i
-  induction i with
-  | zero => intro j b _; unfold ByteArray.foldlM.loop; split <;> rfl
-  | succ i ih =>
-    intro j b hij
-    unfold ByteArray.foldlM.loop
-    have hj : j < stop := by omega
-    rw [dite_eq_left_of_eq_true (eq_true hj)]
-    have hjs : j < as.data.toList.length := by simp; omega
-    rw [List.drop_eq_getElem_cons hjs]
-    simp only [List.take_succ_cons, List.foldl_cons]
-    rw [← ih (j + 1) _ (by omega)]
-    simp [Array.getElem_toList]
-    rfl
-
-theorem byteArray_foldl_eq {β : Type} (f : β → UInt8 → β) (init : β) (as : ByteArray) :
-    as.foldl f init = as.data.toList.foldl f init := by
-  unfold ByteArray.foldl ByteArray.foldlM
-  rw [dite_eq_left_of_eq_true (eq_true (Nat.le_refl _))]
-  dsimp only
-  rw [foldl_loop_eq f as as.size (Nat.le_refl _) (as.size - 0) 0 init (by omega)]
-  simp only [List.drop_zero, Nat.sub_zero]
-  rw [List.take_of_length_le (by simp)]
-  rfl
-
-/-- A nibble's lowercase hex digit. -/
-def hd (d : Nat) : Char := if d < 10 then Char.ofNat (48 + d) else Char.ofNat (87 + d)
-
-theorem foldl_push2 (d₁ d₂ : UInt8 → Char) : ∀ (l : List UInt8) (s : String),
-    (l.foldl (fun s x => (s.push (d₁ x)).push (d₂ x)) s).toList =
-      s.toList ++ l.flatMap fun x => [d₁ x, d₂ x]
-  | [], s => by simp
-  | x :: l, s => by
-    rw [List.foldl_cons, foldl_push2 d₁ d₂ l]
-    simp [String.toList_push]
-
-theorem hexOf_toList (b : ByteArray) :
-    (hexOf b).toList = b.data.toList.flatMap fun x => [hd (x.toNat / 16), hd (x.toNat % 16)] := by
-  unfold hexOf
-  rw [byteArray_foldl_eq, foldl_push2]
-  simp only [String.toList_empty, List.nil_append]
-  congr 1
-
-
-/-- `unhex`'s digit value. -/
-def hv (c : Char) : Option Nat :=
-  if c.isDigit = true then some (c.toNat - 48)
-  else if (decide ('a' ≤ c) && decide (c ≤ 'f')) = true then some (c.toNat - 87) else none
-
-theorem hv_hd_nat : ∀ d < 16, hv (hd d) = some d := by decide +kernel
-
-theorem hv_hd {d : Nat} (h : d < 16) : hv (hd d) = some d := hv_hd_nat d h
-
-theorem length_flatMap2 (L : List UInt8) (f g : UInt8 → Char) :
-    (L.flatMap fun x => [f x, g x]).length = 2 * L.length := by
-  induction L with
-  | nil => rfl
-  | cons a L ih => simp only [List.flatMap_cons, List.length_append, ih, List.length_cons, List.length_nil]; omega
-
-theorem flatMap_get? (L : List UInt8) (f g : UInt8 → Char) (i : Nat) (hi : i < L.length) :
-    (L.flatMap fun x => [f x, g x])[2 * i]? = some (f L[i]) ∧
-      (L.flatMap fun x => [f x, g x])[2 * i + 1]? = some (g L[i]) := by
-  induction L generalizing i with
-  | nil => simp at hi
-  | cons a L ih =>
-    cases i with
-    | zero => simp
-    | succ i =>
-      have := ih i (by simpa using hi)
-      simp only [List.flatMap_cons, List.getElem_cons_succ]
-      rw [List.getElem?_append_right (by simp; omega), List.getElem?_append_right (by simp; omega)]
-      simpa [show 2 * (i + 1) - 2 = 2 * i by omega, show 2 * (i + 1) + 1 - 2 = 2 * i + 1 by omega] using this
-
-theorem flatMap_getD (L : List UInt8) (f g : UInt8 → Char) (i : Nat) (hi : i < L.length) :
-    (L.flatMap fun x => [f x, g x]).toArray.getD (2 * i) ' ' = f L[i] ∧
-      (L.flatMap fun x => [f x, g x]).toArray.getD (2 * i + 1) ' ' = g L[i] := by
-  obtain ⟨h1, h2⟩ := flatMap_get? L f g i hi
-  simp [Array.getD_eq_getD_getElem?, h1, h2]
-
-theorem forIn_bytes (L : List UInt8) (body : Nat → ByteArray → V (ForInStep ByteArray))
-    (hb : ∀ i (hi : i < L.length) acc, body i acc = .ok (.yield (acc.push L[i]))) :
-    ∀ n s acc, s + n = L.length →
-      forIn (List.range' s n) acc body = .ok ⟨acc.data ++ (L.drop s).toArray⟩ := by
-  intro n
-  induction n with
-  | zero =>
-    intro s acc h
-    simp [show L.drop s = [] from List.drop_eq_nil_of_le (by omega)]
-    rfl
-  | succ n ih =>
-    intro s acc h
-    rw [List.range'_succ, List.forIn_cons, hb s (by omega) acc]
-    show forIn (List.range' (s + 1) n) (acc.push L[s]) body = _
-    rw [ih (s + 1) _ (by omega), List.drop_eq_getElem_cons (i := s) (l := L) (by omega)]
-    simp [ByteArray.data_push]
-
-/-- **Hex reads back**: `unhex` of `hexOf b` is `b`. -/
-theorem unhex_hexOf (b : ByteArray) : unhex (hexOf b) = .ok b := by
-  have hl := hexOf_toList b
-  have hlen : (hexOf b).toList.toArray.size = 2 * b.data.toList.length := by
-    rw [hl, List.size_toArray, length_flatMap2]
-  unfold unhex
-  simp only [hlen, Nat.mul_mod_right, bne_self_eq_false, Bool.false_eq_true, ite_false,
-    Nat.mul_div_cancel_left _ (by decide : 0 < 2), Std.Legacy.Range.forIn_eq_forIn_range']
-  have hd2 : ∀ i (hi : i < b.data.toList.length),
-      (hexOf b).toList.toArray.getD (2 * i) ' ' = hd (b.data.toList[i].toNat / 16) ∧
-        (hexOf b).toList.toArray.getD (2 * i + 1) ' ' = hd (b.data.toList[i].toNat % 16) := by
-    intro i hi
-    rw [hl]
-    exact flatMap_getD _ _ _ i hi
-  rw [forIn_bytes b.data.toList _ ?_ _ 0 _ (by simp)]
-  · simp only [ByteArray.emptyWithCapacity, List.drop_zero, Array.toArray_toList]
-    show Except.ok (⟨#[] ++ b.data⟩ : ByteArray) = _
-    rw [Array.empty_append]
-  · intro i hi acc
-    have hx : b.data.toList[i].toNat < 256 := UInt8.toNat_lt _
-    obtain ⟨e1, e2⟩ := hd2 i hi
-    have v1 := hv_hd (d := b.data.toList[i].toNat / 16) (by omega)
-    have v2 := hv_hd (d := b.data.toList[i].toNat % 16) (by omega)
-    unfold hv at v1 v2
-    simp only [e1, e2, v1, v2, Nat.div_add_mod', Nat.toUInt8_eq, UInt8.ofNat_toNat]
-    rfl
+export Flock.Hex (foldl_loop_eq byteArray_foldl_eq hd foldl_push2 hexOf_toList hv hv_hd_nat hv_hd length_flatMap2
+  flatMap_get? flatMap_getD forIn_bytes unhex_hexOf)
 
 /-- A word's eight bytes, most significant first. -/
 def be8 (x : UInt64) : List UInt8 :=
