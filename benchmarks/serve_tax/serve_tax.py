@@ -336,7 +336,7 @@ MODELS = {
                        Part("the snapshot bundle", 0.17, ("the edge snapshot",),
                             "the pause to copy and hash the cache at each edge and the carried pages' hash, with "
                             "the prefix cache on")),
-                   metric="vllm/serving-cost-glm53", check="TokenSelect_v4{V=154880}"),
+                   metric="vllm/serving-cost-glm53", check="TokenSelectUnits_v1{V=154880,K=20}"),
 }
 
 
