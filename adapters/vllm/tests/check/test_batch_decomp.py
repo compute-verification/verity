@@ -184,17 +184,17 @@ def test_multi_node_weights_are_shared_inputs_not_cross_request_reads(monkeypatc
     assert reqs[R0]["n_instances"] == 4 and reqs[R1]["n_instances"] == 4
     assert res["missing_derived"] == [[2, 0], [3, 0]] and res["verdict"] == "MISSING_DERIVED"   # nothing refused: only the components are absent
     # the projection's canonical sources: weight reads name the FIELD by Record-global offset (input_base), not node-local offset 0
-    P = bd.Projection(B, "oracle[r0]", [0, 2, 4, 6], tok_node=0, weights_node={2, 3, 4})
+    P = bd.Projection(B, "oracle[r0]", [0, 2, 4, 6], tok_node=0, weights_node={2, 3, 4}, seed_node=None)
     assert P.canon(0) == [[("TOK", 0, 1)], [("W", "w_e4m3", 0, 4)]]
     assert P.canon(1) == [[("N", 0, 0, 0, 2)], [("W", "w_scale", 0, 6)]]
     assert P.canon(2) == [[("N", 0, 1, 0, 2)], [("W", "norm", 0, 2)]]
     assert not P.xreq
     # the other request's prompt is still a cross-request read (the set fix does not widen what counts as shared)
-    Q = bd.Projection(B, "oracle[r1-wrong]", [0, 2, 4, 6], tok_node=1, weights_node={2, 3, 4})
+    Q = bd.Projection(B, "oracle[r1-wrong]", [0, 2, 4, 6], tok_node=1, weights_node={2, 3, 4}, seed_node=None)
     Q.canon(0)
     assert Q.xreq == {"prompt-param": 1}
     # the old single-node call form (an int) still means that one node
-    S = bd.Projection(B, "oracle[r0]", [0], tok_node=0, weights_node=2)
+    S = bd.Projection(B, "oracle[r0]", [0], tok_node=0, weights_node=2, seed_node=None)
     assert S.weights_nodes == frozenset({2}) and S.weights_node == 2
 
 

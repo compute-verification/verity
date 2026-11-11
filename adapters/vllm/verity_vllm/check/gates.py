@@ -117,6 +117,9 @@ HOLDOUT_GATES = ("G1", "G2", "G3", "G4", "G5", "G6")
 #: Structural gates outside the frozen G1..G7 set (evaluated and reported, verdict rule in `verdict`).
 STRUCTURAL_GATES = ("G8",)
 GATE_NAMES["G8"] = "VU partition"
+#: Each gate's id by what it checks: a reader of a gates document reads its keys by these names.
+OBSERVATION, SEMANTIC_CLOSURE, ROOT_CLOSURE, PRIMITIVE, COMPOSITION, CANONICALITY, HOLDOUT = GATES
+(VU_PARTITION,) = STRUCTURAL_GATES
 #: Integrity gates outside the frozen set: the fail-closed reference-integrity rule.
 INTEGRITY_GATES = ("R1",)
 GATE_NAMES["R1"] = "reference integrity (fail-closed)"

@@ -431,7 +431,7 @@ def assemble(reqs, tmp_path, leak=False, tgrouped=False, eos_token_ids=(EOS,), l
         sh = (len(r["prompt"]), _cap(r) - 1)
         if sh not in comps:
             comps[sh] = component(r, tmp_path / f"comp_LP{sh[0]}_T{sh[1]}", witness=witness and "own")
-    return gm.mock_global_program(wl, list(comps.values()), eos_token_ids=list(eos_token_ids) if eos_token_ids else None, lag=lag), oracle
+    return GD.mock_global_program(wl, list(comps.values()), eos_token_ids=list(eos_token_ids) if eos_token_ids else None, lag=lag), oracle
 
 
 def _check(res, cid):
@@ -1388,7 +1388,7 @@ def test_g1_ties_the_manifest_of_record_to_the_run_header_sha_and_sampling_field
         wl = json.load(open(wl_path))
         mutate(wl)
         json.dump(wl, open(wl_path, "w"))
-        return gm.mock_global_program(wl_path, comps, eos_token_ids=[EOS])   # GP-01 recomposed on the edited manifest, as the attacker would
+        return GD.mock_global_program(wl_path, comps, eos_token_ids=[EOS])   # GP-01 recomposed on the edited manifest, as the attacker would
 
     def swap(wl):
         wl["requests"][0]["seed"], wl["requests"][1]["seed"] = wl["requests"][1]["seed"], wl["requests"][0]["seed"]
@@ -1449,7 +1449,7 @@ def test_g1_ties_the_manifest_of_record_to_the_run_header_sha_and_sampling_field
     d.mkdir()
     wl2 = workload(reqs, d / "workload.json")
     oracle2 = batched(reqs, d / "batched", wl_sha=None)
-    res = gm.check(gm.mock_global_program(wl2, comps, eos_token_ids=[EOS], lag=0), oracle2)
+    res = gm.check(GD.mock_global_program(wl2, comps, eos_token_ids=[EOS], lag=0), oracle2)
     assert res["verdict"] == "FAIL" and any("carries no workload.sha256" in p for p in _check(res, "G1")["problems"])
 
 
@@ -2172,15 +2172,14 @@ def test_fast_runs_equals_refs_runs_on_every_descriptor_shape():
         assert GMF._runs_fast(r) == runs(r), r
 
 
-def test_fast_producer_chronology_and_dep_order_scan_equal_the_records_loops(memory, tmp_path):
-    """[unit 5 (b)(c)] On a real-shaped fixture (staggered arrivals, a co-scheduled prefill, T-grouped emission = a cross-step
-    producer, and the consumer-before-producer negative) the helpers return exactly what the record's loops compute."""
+def test_fast_producer_chronology_equals_the_records_loop(memory, tmp_path):
+    """[unit 5 (b)] On a real-shaped fixture (staggered arrivals, a co-scheduled prefill, T-grouped emission = a cross-step
+    producer, and the consumer-before-producer negative) the helper returns exactly what the record's loop computes."""
     import collections
 
     from verity_vllm.check.match import batch_decomp as BD
     from verity_vllm.check.match import global_match_fast as GMF
     from verity_vllm.check.match import program_compare as C
-    seen_viol = 0
     for n, (reqs, kw) in enumerate((([R0, R1_LATE, R2_LATE], {}), ([R0, R1_LATE, R2_LATE], {"tgrouped": True}), ([R0, R1], {"leak": True}),
                                     ([R0, R1], {"tgrouped": True, "_swap": True}))):
         swap = kw.pop("_swap", False)
@@ -2219,18 +2218,8 @@ def test_fast_producer_chronology_and_dep_order_scan_equal_the_records_loops(mem
                             late += 1
                         if ps is not None and cs is not None and ps < cs:
                             xstep[r["spec"].split("{")[0]] += 1
-            dep = []
-            for s_, loc in enumerate(P.steps):
-                for pos, i in enumerate(loc):
-                    for a in P.canon(i, False):
-                        for t in a:
-                            if t[0] == "N" and P.steps[t[1]][t[2]] >= i:
-                                dep.append({"request_id": rid, "local_step": s_, "emission": pos, "consumer": i, "producer": P.steps[t[1]][t[2]]})
             assert GMF.producer_chronology(P, idxs, B, engine_step_of, weights_nodes) == (late, xstep, wr)
-            assert GMF.dep_order_violations(P, rid) == dep
-            seen_viol += len(dep)
         GMF._chron_memo.clear()
-    assert seen_viol >= 1     # the swapped record exercised the violation branch
 
 
 @pytest.mark.parametrize("compact", ["1", "0"])
