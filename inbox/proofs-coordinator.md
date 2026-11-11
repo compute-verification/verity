@@ -35240,3 +35240,187 @@ Now nothing of mine is running or queued [run `research status` on `e39b`, `7cdc
 - PRF-522's own item is done: branch `cursor/proofs-remote-publicunits-537a` at `f2090e464bd925aa65c52a6d389d70193177b0f9`, named on LEAN-249 at 23:40Z, all its checks run.
 - I am now on the cures of your 00:20Z message, on `cursor/proofs-remote-cures-dac3`, cut from `f63a7b76334d`, not pushed yet. Next entry by 01:30Z.
 - My VM came back without its worktrees at 00:23Z. Nothing was lost: every commit was pushed. A fresh worker needs only the two branch names.
+
+## CHECKS2, Wed 11 Nov 00:35Z: chaining is answered from the code on main and its tests (nothing crosses a phase's end in the two-stage audit) but by no served run; replay cost has no result and needs a GPU run; the page's "network certifier in the path" is "taps" misread
+
+Read at `origin/main` `2b869ed35db5` (fetched Wed 00:04Z and 00:28Z, unchanged). Marks: [run ID] means I read that run's record; [read FILE:LINE] is at that SHA unless another is named; [guess] is unchecked. I changed nothing on `main` and decide nothing about what a guarantee says. My mailbox had nothing newer than Tue 18:46Z.
+
+**Short version**
+
+1. **Chaining.** In the two-stage audit on `main`, no value is handed from one execution phase to the next, so there is nothing to commit or to assume. The check that holds a sampled replay to the values committed while serving exists, and its tests pass at the SHA [run r20261111-001054-28d0]. No served run has exercised it, and the verifier refuses every two-stage run at its last check. I give a scope sentence.
+2. **Replay cost.** No result. What exists is wall-clock time of whole-run replays with a few steps captured, and a priced figure. Closing it needs a GPU run, which I only describe. I give a scope sentence.
+3. **The page's wording of check 2 is wrong.** The check is "replay cost with taps", and a tap there is a capture hook on a committed value. The network certifier is not in a replay's path.
+4. The goal's new description and blockers are at the end.
+
+### What the two checks are
+
+- They are items 5 and 7 of the list the goal came from [read: Linear PRF-461's description, this hour]:
+  - "**Window chaining.** A window's starting state (KV snapshot or journal pages) is a boundary value. A wrong one is caught only if the replay of the window that produced it is checked against it. Confirm that end-of-window check exists in the replay path, and count the starting state in the bound at its sampling rate."
+  - "**Replay cost with taps.** Measure proof-server GPU time per sampled replay unit, with every boundary value tapped and committed, divided by serving time."
+- "With taps" became "with the network certifier in the path" in the page's rewrite of 10 Nov [read, under `~/.research/notes/lanes/proofs/goals-20261110/`: `goals-read.json:3181` before, `proofs__spot-checks-closed.desc.md:13` after; its `lint.py` tells the writer to say "network certifier" for "tap"]. Here a tap is a capture hook: "a tap on every committed gate" [read `ARCHITECTURE.md:135`], "MLA tap's `kv_gathered`" [read `benchmarks/spot_proved/capture.py:85`].
+
+### Check 1: chaining from one execution phase to the next
+
+**Answer: neither "committed and checked" nor "only assumed". Nothing is handed over.**
+
+Serving [read `integrations/vllm/verity_vllm/pipeline/boundary_rows.py`]:
+
+- `:5-6`: "A window's spans are the requests that finished in it …; a request still running at a close is carried to the next window, so a span never crosses one." `close` (`:476-486`) commits only finished requests and counts the rest as `carried`.
+- A span is one request: one `b.ingress` row (prompt length, sampling inputs, seed, prompt ids) and one `b.egress` row (ids served, finish) (`:10-16`, `PORTS` at `:68`). There is no state value.
+- `install` refuses a scheduler that caches prefixes: "a hit would read another request's rows, across the replay blocks' boundary" (`:513-519`).
+- [run r20261111-001054-28d0] `integrations/vllm/tests/pipeline/test_boundary_rows.py`: 6 passed, `--fresh`, tree `2b869ed35db5` clean. Its test at `:181-218` closes a window with two finished requests and one carried (`carried == 1`), commits the carried one in the next window, and asserts the prefix-cache refusal.
+- [run r20261109-223637-4078 `out/boundary/w{0,1}/p131072-o1024/commit.json`; run r20261109-220303-3352 `out/boundary/w0/p256-o256/commit.json`] The served records hold exactly those two values a phase (one span a phase in 4078, eight in 3352). The `carried` count goes to the hook's sink line (`boundary_rows.py:505`), not to `commit.json`, so I cannot say that any served run had a response open at a close.
+
+The verifier [read `verity/core/protocols/spot/`]:
+
+- A sampled replay block is held to the values committed while serving:
+  - `tests/test_two_stage.py:270-284`, `test_a_replay_block_is_held_to_the_boundary_values_committed_while_serving`: "a replay can't start from, or end at, a state other than the one committed while serving";
+  - round two's `second-read`: `second_stage.py:910` (`_read_ok`), `:955` (`_linked_read`), `:1041-1042`; Lean `verity/core/service/spot/Spot/SecondStage.lean:814, 841, 924`.
+- [run r20261111-001054-28d0] The suite `verity/core/protocols/spot`: 846 passed in 161 s, `--fresh`, same tree. It holds that test, `tests/test_service_outputs.py` and the pool-chain tests of `tests/test_registered.py`.
+- The verifier refuses every two-stage run at its last check: `FORM = False` (`second_stage.py:79, 1150`; Lean `SecondStage.lean:133, 1031`).
+- Inside one registration nothing ties one replay block's ending value to another's starting value. Each replay block reads only its own row of a boundary value (`second_stage.py:87-89` `LINKS_WHY`, `:896-900`). A record's step schedule (`schedule.py:1-6`) is checked for order only; no check reads a block's positions (`schedule.at` has no caller, and Lean `Schedule.at?` only the difftest's piece, `Spot/Pieces.lean:775`).
+
+Where state does cross between registrations, the rule exists [read]:
+
+- One-stage records: a later registration can read a port an earlier record committed (`tests/test_service_outputs.py:127`, `test_a_window_reads_the_state_an_earlier_window_left`). A Program with a pool must open the pool the previous window of record left, refused by name `R7-pool-chain` (`one_stage/registration.py:112-116, 648-710`; `tests/test_registered.py:1322`).
+- Lean, proved on `main`, none in `deployed` [read `Security/lean-audit.json`]:
+  - `Flock.SecurityProofs.IntegrityHorizonCarried` (`Security/Proofs/Flock/EndToEnd/Carry/Statement.lean:295`): a period with carried leaves, each adding one binding term; one-stage sessions; open premise `FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw`.
+  - `NetTiming.SecurityProofs.PooledLeakCarried` (`Security/Definitions/NetworkCertifier/Guarantees/Carried.lean:96`): runs chained through the pool's root; "its inputs are named …, none discharged yet" (`:26-27`); open `NetTiming.CheckedUnique` and `Verity.Assumptions.TrustedHost`.
+  - `WeightSecurity.SecurityProofs.two_undetected` (`Security/Proofs/WeightSecurity/Two.lean:236`): T phases of the two-stage audit, each its own game on its own statement, "the run leaves `T·(K − 1) + 1` incorrect replay blocks undetected with probability at most `Σ_t ε_t`" (`:233-235`). It has no carried value, and needs none while nothing is handed over. It is not a guarantee in the lock, and its per-phase premise (`SpotKSTwo`) is open on `Claims.SamplingGeneric.CompiledTwo.Scope` and `SpotFlock.Addresses`.
+
+The honest side, measured [run r20261107-125416-f460 `out/mixed/restore/restore.json`]: GLM-5.3 on eight H200s, a replay block cut mid-traffic with 166 requests running and 78 waiting. A fresh engine restored the edge state and replayed 226 steps to the next edge: KV root equal, 329 requests, 50,517 tokens, 0 differing. It shows that honest serving passes an end-of-block comparison. It has no commitment of record, no verifier and no sample.
+
+**What this does not show**
+
+- No served run in which a response open at a phase's end was sampled, replayed and verified. No GLM-5.3 run has had a second stage [read: the Goals page, `proofs/spot-two-stage-e2e`; relayed, not checked by me].
+- The replay block that served runs register is a stand-in (`boundary_rows.py:21-25`: "a stand-in until the class's request Definition lands"). So "replayed from its committed input" is the design, not yet the registered circuit.
+- The outputs a response releases before a phase's end are under no commitment until the phase where it finishes, and a response can stay open up to its length cap [read `boundary_rows.py:476-486`; the consequence is my reading].
+- The prefix cache on. The overhead rows of record assume it: "design (d): approved, not built" (`benchmarks/spot_figures/cards/headline.glm-5.3.json:34, 38`), "certified hits, replays reprove hits" [read: BREAKEVEN's entries in this file].
+  - Under "replays reprove hits" a replay still starts from the request's own tokens, so nothing is handed over there either. It is not built, and I found no run that replays, alone, a request served from cached pages [guess: I searched this lane's notes only].
+  - LIFETIME's earlier variant (pages "committed when written") hands values across requests and phases. It would need a link and a carried statement that the two-stage design does not have.
+- The two layers treat a response open at a phase's end differently, and nothing I read reconciles them:
+  - SPOT's hook carries it whole: prompt P and every output, in the later phase.
+  - The network certifier cuts it and continues it "as an ordinary arrival: the same request with the ids already released appended to its prompt" [read `verity/core/protocols/certifier/continuation.py:4-7` at the head `6cf106234e` of its open PR, not on `main`; the circuits on `main` say the same, `verity/core/protocols/certifier/README.md:186-189`].
+  - For SPOT on its own the hook's rule is the one in force. For the demonstration, which composes both, one of them has to move. Owner: you with @network-accounting.
+
+**Scope sentence for the post** (true as worded at `2b869ed35db5`; yours and Daniel's to accept):
+
+> In the two-stage audit, the audit of one execution phase reads no value from another: a response still running when a phase ends is not split but committed and audited whole in the phase where it finishes, and serving refuses to run with the prefix cache on. No audit has yet sampled a response that crossed a phase's end.
+
+**Why a scope and not a result:** the facts come from code and from unit tests on built values. The served path has not been through a second stage.
+
+**What would close it**
+
+- The smallest run (GPU, described only; owner @vllm): the two-stage serving with a phase shorter than its longest response, so that a phase closes with `carried` ≥ 1, and the hook's line for each phase, which already holds `carried`, kept in the run's public output. Then the second round samples that response in the phase where it finished. Size: no new mechanism, one public output and one load setting.
+- No new statement is needed while nothing is handed over. A design that hands a value across (pages committed when written, or the certifier's cut) needs a read link from one replay block to a row another wrote (`second_stage.py`, `SecondStage.lean`, the difftest) and a two-stage form of `IntegrityHorizonCarried`. That changes what a guarantee says, so I stop there.
+
+### Check 2: the cost of a sampled replay with every value tapped and committed
+
+**Answer: no result.** Nothing measures "proof-server GPU time per sampled replay unit, with every boundary value tapped and committed, divided by serving time".
+
+Read literally, with the certifier in the path:
+
+- By design it is not in it: "the proof server talks only to the verifier", and SPOT "reads that stamp as a certified input" [read `verity/core/protocols/spot/README.md:40, 43`].
+- The one serving run behind the certifier's program kept the engine's traces and no commitment or replay [run r20261108-200706-1758, record listing: `out/raw/` arrivals, requests, steps, outputs, tick; `out/server/step_trace…`]. Nobody replayed it [read: vllm's note `lanes/vllm/20261108T2205Z-result-certtick-rerun.md`, which lists its runs].
+
+What was measured: wall-clock time of whole-run replays from an empty engine, every capture hook installed [run, each run's `out/replay/replay.json`]:
+
+| run | served span (s) | replay (s) | ratio | decoding steps (differing) | steps captured |
+|---|---:|---:|---:|---:|---:|
+| r20261108-203339-cf6c | 1,495.4 | 2,022.5 | 1.352 | 11,350 (0) | 3 |
+| r20261108-162707-a1ee | 1,494.6 | 1,219.5 | 0.816 | 14,903 (0) | 1 |
+| r20261108-102600-1418 | 243.9 | 734.6 | 3.012 | 1,326 (0) | 2 |
+| r20261108-165049-9c8d | 243.9 | 689.1 | 2.825 | 1,326 (0) | 2 |
+
+- The ratios are not costs. The served span includes waits for arrivals (a1ee's replay is shorter than its serving), and the excess follows the captured steps.
+- cf6c's three captured steps took 288.5, 267.2 and 160.3 s each [run cf6c `out/commit/rank0/step*/meta.json`], against 0.13 s a step of serving on average (1,495.4 / 11,350, my arithmetic). That capture writes tensors to disk, 13.7 to 37.9 GB a rank a step. It does not commit them in the scheme the audit reads.
+- cf6c's engine ran with `enable_prefix_caching=True` [run cf6c `out/replay.log:11`]. A whole-run replay reproduces cache hits as hits; it is not the replay of one sampled request.
+- [run r20261107-125416-f460] 226 steps replayed in 73.5 s, of which 31.1 s is the far edge's pause, so about 42 s, against 49.9 s of serving wall time for the same steps (its step trace, t[1066] − t[841]; my arithmetic). Its record holds no busy GPU-seconds.
+
+What is priced [read]:
+
+- `benchmarks/spot_figures/cards/replay.glm-5.3.json:13`: `factor: 1.0`. Its source (`:7`) reads "at 0.97-1.02x serving's busy GPU-seconds (measured on Moonlight at 1x H200 and on GLM-5.3 at TP8, mid-traffic)".
+  - The ratio is Moonlight's alone: 0.97x, 1.017x and 1.001x [read RESTORE's note `lanes/proofs/20261107T1001Z-report-restore.md:95-96`].
+  - The GLM-5.3 run of record, f460, has no such number. Neither replay runner used on GLM-5.3 counts busy time: `benchmarks/serve_tax/tp_restore.py` and `replay.py` have no busy counter, and `restore.py:266` has one.
+- The planner charges a sampled replay block `per = replay + interior + prove` (`verity/core/protocols/spot/optimize.py:1428`). `interior` is the bytes of its cells' commitments at the commitment card's hash rate (`:1406`), a modeled rate (`benchmarks/spot_figures/cards/commitment.all.json:5-11`).
+- [guess] If the interior is every proof block's outputs, the serve-tax card prices those bytes at 5.69 times serving (`serve_tax.glm-5.3.json:144-145`, flagged a lower bound). A sampled replay with its interior committed would then cost about 6.7 times its serving GPU time before proving. No card holds this figure; it is my sum.
+
+**Scope sentence for the post:**
+
+> The cost of a sampled replay is priced, not measured. The overhead figures charge a sampled request its own serving time for the replay, and price the commitment of the values inside it from their size and a hash rate measured separately. Replay was timed against serving in GPU time only on Moonlight (0.97 to 1.02 times); on GLM-5.3, replays were checked bit for bit and timed by the wall clock, over a whole serving run. No run has yet replayed one sampled request on the proof server while committing those values.
+
+**What would close it** (two GPU runs, described only; no CPU run settles any part):
+
+1. Replay against serving in GPU time, on GLM-5.3. Install the per-step busy counter that exists (`benchmarks/serve_tax/boundary.py:930` `Busy`, `:979` `busy_compare`, used at `restore.py:216, 268`) in `benchmarks/serve_tax/replay.py`'s engine, and replay a served 128k run with no step captured.
+   - Size: a few lines in one benchmark file and its test, then one run of about 25 minutes on the eight H200s (cf6c less its three captures is about 1,300 s; my arithmetic).
+   - Owner: @proofs for the runner; the node time is @vllm's this week.
+   - [guess] Whether the served runs kept per-step busy seconds to compare against, I did not check.
+2. The whole quantity. In @vllm's second round on served data (first run Fri 13 Nov noon PST), record the proof server's GPU-seconds for the sampled request's replay and for registering its interior, beside that request's serving GPU-seconds.
+   - Size: three numbers from a command that is not on `main` yet and that I have not read [guess].
+   - Owner: @vllm; @proofs reads the result into the replay card.
+
+### Smells, by owner
+
+1. Yours, the page: the goal asks for a check that does not exist ("with the network certifier in the path"). The text below states the check Daniel listed.
+2. Yours, the cards: the replay card says its ratio was measured on GLM-5.3 too. It was not (above).
+3. Yours, the cards: `benchmarks/spot_figures/cards/serve_tax.glm-5.3.json:28, 62, 103` still say "the run with the real network certifier is pending". r20261108-200706-1758 ran behind the certifier's program on 8 Nov [read: vllm's note; I listed 1758's record and not the certifier's].
+4. @network-accounting's page says of the bound for phases that share the KV cache "checked, not yet on main". `PooledLeakCarried`, with a run's operator reading the runs before it, is on `main` since 9 Nov [read `Security/Proofs/NetworkCertifier/Carried.lean:399`; `git log` of `Security/Definitions/NetworkCertifier/Carried.lean`]. It may mean a later form.
+5. @vllm's page says Monday's served run "committed each request's input, output and carried state". The records of 4078 and 3352 hold two values a phase, the input and the output [run]. If the carried state is elsewhere, it is not in a public output I found.
+6. Mine: my ledger had `two_undetected` as a per-phase statement. It is over T phases (above).
+
+### The run I launched
+
+`r20261111-001054-28d0`: `research run --on auto --cwd source --max-min 45 -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py verity/core/protocols/spot --fresh && uv run tools/verity/check/suites.py verity-vllm --fresh -- tests/pipeline/test_boundary_rows.py'`. Launched 00:10Z, ended rc 0 by 00:24Z; record `art:285be8fdccfeeae46629abac9272dc92158b5d5ad2a6da039e871ae8c46e5454`. It shows the checks pass at the SHA on built values. It shows nothing about a served run.
+
+The placer put it in a slot of vy-nebius-cpu-6's research pool, which its list on `main` holds (`tools/research/src/research/auto.py:60-61`). Your rule of Tue 04:56Z names cpu-6 a check node. If that rule covers the pool's slots too, the placer's list is where to say so.
+
+### The goal's new text, for you to apply
+
+It passes the lint of the 10 Nov rewrite with no hard finding (the two files are under `~/.research/notes/lanes/proofs/goals-20261111-checks2/`, the lint is `goals-20261110/lint.py` beside it). Three things in it are yours to settle before you write it:
+
+- Whether chaining counts as settled. I wrote it as answered from code and not by a served run, and left the count of settled checks at six.
+- Step 2 of the plan says only that @vllm's run is the first that can time the replay. Timing it is an ask you would make of @vllm.
+- The last sentence, on callers that fix a sample count, is carried from the current text. I did not reread it.
+
+The status stays off-track until the post's draft carries the scope sentences. With them in the draft by Wed 6 PM PST the goal's own condition ("a result, or the post states its scope") is met, and the cost's measurement is @vllm's run on Fri.
+
+Description:
+
+~~~markdown
+Each check of the guarantee that today's measurements do not cover has a result, or the post states its scope.
+
+Six of the eight are settled:
+- replay on a second machine is bit-exact: $0$ rows differ over $14{,}903$ decoding steps;
+- the rule that ends a response is checked inside the circuit, on main;
+- seeds and routing between replicas are classified as advice, and no proved block ties the seed yet;
+- the verifier refuses a sample that is not drawn at a public rate, on main;
+- speculative decoding is excluded with a reason, which the post has to state;
+- Daniel dropped one check.
+
+One is answered from the code on main and not yet by a served run, chaining from one execution phase to the next:
+- the two-stage audit of one phase reads no value from another phase;
+- a response still running when a phase ends is not split: it is committed and audited whole in the phase where it finishes;
+- serving refuses to start with the prefix cache on, the other way a request could read what an earlier phase computed;
+- the verifier holds a sampled response's replay to the input and the output committed while it was served, and the tests of that check pass on main's code;
+- not shown: no audit has yet sampled a response that crossed a phase's end, and the Lean verifier refuses every two-stage audit at its last check until [Two-stage soundness proved for running code](#proofs/spot-two-stage-sound);
+- the network certifier's own rule for a response still open at a phase's end is separate, under [Responses continue across execution phases](#network/carry-edge-rule).
+
+One has no result, the cost of replaying a sampled response with every value inside it committed:
+- no run has measured it. The network certifier is not in a replay's path: the proof server talks only to the verifier;
+- replaying a whole run of GLM-5.3 at a context of $131{,}072$ tokens reproduced all $11{,}350$ decoding steps and took $2{,}022$ s against $1{,}495$ s for the run it replays, with three decoding steps captured in full at $160$ to $289$ s each. Those are wall-clock times for a whole run, and the capture writes values to disk where the audit would commit them;
+- the replay's GPU time against serving's was measured only on Moonlight, at $0.97$ to $1.02$ times. On GLM-5.3 the replay's outputs were compared and its wall-clock time taken, not its GPU time;
+- the cost table charges a sampled response its own serving time for the replay, and prices the commitment of the values inside it from their size and a hashing rate measured on its own.
+
+Plan:
+1. Wed, @proofs: the post's draft carries a scope sentence for each of speculative decoding, chaining and the replay's cost. The last two are written.
+2. By Fri noon, @vllm: [Audit's second round runs on served data](#vllm/second-round-on-served-data) has its first run, the first that can time one sampled response's replay and the commitment of its inside values against that response's serving.
+3. After that run, @proofs: the cost table takes the measured cost in place of the priced one.
+
+The callers that still fix a sample count instead of a rate have not moved.
+~~~
+
+Blockers:
+
+~~~markdown
+The cost of replaying a sampled response with its inside values committed has never been measured, and chaining between execution phases is answered from the code on main but not by a served run. The post carries no scope sentence for either yet; the first run that can measure the cost is @vllm's, on Fri 13 Nov.
+~~~
