@@ -11,7 +11,7 @@
 //!   flock-circuit statement --instances PUB --circuit FILE    (the statement the verifier builds, its digest; nothing proved)
 //!   flock-circuit stacked  --table R.bin (--root-out ROOT.json | --points P.json --statement-digest HEX --verifier ADDR [--dump F])   (`stacked`)
 //!   flock-circuit unit-levels --circuit FILE [--net N] [--widths]   (the unit's level schedule, `unit_levels`; nothing proved)
-//!   flock-circuit unit-cut --instances INST --circuit FILE [--split-port P] [--walk [--slots N]]   (the unit's level schedule cut at its
+//!   flock-circuit unit-cut --instances INST --circuit FILE [--widths] [--walk [--slots N]]   (the unit's level schedule cut at its
 //!                          SHA-512 compressions' chaining values, `unit_cut`; nothing proved)
 //!
 //! The verifier loads only its own public file (`verity_flock.circuit.stage(..., public_only=True)`: roots and each row's
@@ -4933,15 +4933,16 @@ fn level_widths(widths: &[usize]) -> serde_json::Map<String, Value> {
 /// `unit-cut`: the statement's unit, its level schedule cut at the chaining values of the SHA-512 compressions among its
 /// rows (`sha512_native::unit_compressions`: each one's committed state and feed-forward rows are the seeds). A `COMPS`
 /// line: the compressions by their rounds and by their feed-forward rows, and the seeds. A `CUT` line: the levels before
-/// and after the cut (`ir_block::schedule_seeded`), the rows a level after it, per input port the rows that read it
-/// (through other rows too) and how deep they are, and the same either side of `split`, one past the last row before the
-/// outputs that reads port `--split-port` (default the 1,536-bit one, a read's salt: the read's rows before it, what
-/// follows the read after it, `own_levels` its levels with every row before `split` given). With `--walk`, a `SEEDED`
+/// and after the cut (`ir_block::schedule_seeded`), the rows a level after it, and the same for the rows before the
+/// outputs by what they are to the seeds: `after_a_seed` reads one, through other rows too (the hashing past each first
+/// compression, the seeds among them), `before_the_seeds` reads none and is read by one of those, `other` is the rest
+/// (what the unit computes beside its hashing; `other_own_levels` its levels with every row outside it given), then the
+/// outputs' rows. `--widths` adds a `WIDTHS` line, the rows of each level after the cut. With `--walk`, a `SEEDED`
 /// line: over the instance file's unit slots (`--slots N`: the first N), whether the walk on the cut schedule
 /// (`unit_ab_seeded`, the seeds' z the host evaluator's, `unit_rows_z`) packs `unit_ab_into`'s words, every word compared,
 /// and whether one seed off in one slot is refused.
 fn unit_cut(st: &Arc<Stmt>, inst: &Arc<Instances>) {
-    use flock_live::circuit::{port_cols, unit_ab_into, unit_ab_seeded, unit_rows_z};
+    use flock_live::circuit::{unit_ab_into, unit_ab_seeded, unit_rows_z};
     use flock_live::ir_block::{UnitSched, schedule, schedule_seeded};
     use rayon::prelude::*;
     let (c, ni) = (&st.c, st.c.unit_net);
@@ -4967,41 +4968,42 @@ fn unit_cut(st: &Arc<Stmt>, inst: &Arc<Instances>) {
         at
     };
     let (at_full, at_cut) = (levels(&full), levels(&cut));
-    // the input ports each row reads, through other rows too (the first 64 ports)
-    let ports = port_cols(&net.in_groups);
-    let mut reads = vec![0u64; net.useful];
-    for (p, &(col, width)) in ports.iter().enumerate().take(64) {
-        reads[col..col + width].fill(1 << p);
-    }
+    // the rows before the outputs by what they are to the chaining values: `after` reads one, through other rows too (the
+    // seeds among them); `before` reads none and one of those rows reads it, through other rows too; `other` is the rest
+    let mut seed = vec![false; net.useful];
+    seeds.iter().for_each(|&r| seed[r as usize] = true);
+    let mut after = seed.clone();
     for i in first..cp {
-        let through = net.a.row(i).iter().chain(net.b.row(i)).fold(0, |m, &x| m | reads[x as usize]);
-        reads[i] = through;
+        let reads = net.a.row(i).iter().chain(net.b.row(i)).any(|&x| (x as usize) < i && after[x as usize]);
+        after[i] = after[i] || reads;
     }
-    let reads = &reads;
-    let deepest = |at: &[u32], rows: &mut dyn Iterator<Item = usize>| rows.map(|i| at[i]).max().unwrap_or(0);
-    let by_port: Vec<Value> = ports.iter().enumerate().take(64).map(|(p, &(_, width))| {
-        let of = || (first..cp).filter(move |&i| reads[i] >> p & 1 == 1);
-        json!({"bits": width, "rows": of().count(), "last_row": of().last(), "levels": deepest(&at_full, &mut of()), "cut_levels": deepest(&at_cut, &mut of())})
-    }).collect();
-    let port = Some(arg("--split-port", "")).filter(|p| !p.is_empty()).map(|p| p.parse::<usize>().expect("--split-port"))
-        .or_else(|| ports.iter().position(|x| x.1 == 1536));
-    let split = port.map(|p| (first..outputs).rev().find(|&i| reads[i] >> p & 1 == 1).map_or(first, |i| i + 1));
-    let side = |lo: usize, hi: usize| -> Value {
+    let mut feeds = after.clone();
+    for i in (first..cp).rev() {
+        if feeds[i] {
+            net.a.row(i).iter().chain(net.b.row(i)).filter(|&&x| (x as usize) < i).for_each(|&x| feeds[x as usize] = true);
+        }
+    }
+    let side = |rows: Vec<usize>| -> Value {
         let mut widths = vec![0usize; cut.levels()];
-        (lo..hi).for_each(|i| widths[at_cut[i] as usize - 1] += 1);
+        rows.iter().for_each(|&i| widths[at_cut[i] as usize - 1] += 1);
         widths.truncate(widths.iter().rposition(|&w| w > 0).map_or(0, |l| l + 1));
-        let mut v = json!({"rows": hi - lo, "levels": deepest(&at_full, &mut (lo..hi)), "cut_levels": widths.len(),
-                           "seeds": seeds.iter().filter(|&&r| (lo..hi).contains(&(r as usize))).count()});
+        let mut v = json!({"rows": rows.len(), "first_row": rows.first(), "last_row": rows.last(), "levels": rows.iter().map(|&i| at_full[i]).max().unwrap_or(0),
+                           "cut_levels": widths.len(), "seeds": rows.iter().filter(|&&i| seed[i]).count()});
+        // of the levels that hold one of these rows
+        widths.retain(|&w| w > 0);
         v.as_object_mut().unwrap().extend(level_widths(&widths));
         v
     };
-    let split = split.map(|at| {
-        let given: Vec<u32> = (first..at).map(|i| i as u32).collect();
-        json!({"port": port, "row": at, "before": side(first, at), "after": side(at, outputs), "outputs": side(outputs, cp),
-               "own_levels": deepest(&levels(&schedule_seeded(net, &given)), &mut (at..cp))})
-    });
+    let other: Vec<usize> = (first..outputs).filter(|&i| !feeds[i]).collect();
+    // the other rows' own depth: every row that is none of them given
+    let given: Vec<u32> = (first..cp).filter(|&i| feeds[i] || i >= outputs).map(|i| i as u32).collect();
+    let at_own = levels(&schedule_seeded(net, &given));
+    let own_levels = other.iter().map(|&i| at_own[i]).max().unwrap_or(0);
     let mut line = json!({"net": ni, "name": c.nets[ni].0, "seeds": seeds.len(), "levels": full.levels(), "cut_levels": cut.levels(),
-                          "ports": by_port, "split": split, "schedules_s": t.elapsed().as_secs_f64()});
+                          "after_a_seed": side((first..outputs).filter(|&i| after[i]).collect()),
+                          "before_the_seeds": side((first..outputs).filter(|&i| feeds[i] && !after[i]).collect()),
+                          "other": side(other), "other_own_levels": own_levels, "outputs": side((outputs..cp).collect()),
+                          "schedules_s": t.elapsed().as_secs_f64()});
     let widths: Vec<usize> = (0..cut.levels()).map(|l| cut.level(l).len()).collect();
     line.as_object_mut().unwrap().extend(level_widths(&widths));
     println!("CUT\t{line}");
