@@ -1,5 +1,5 @@
-"""Falsification tests of H-1T's two conjectures (`Security/Definitions/Pouw/Assumptions/Fp8Atom/H1TAssumptions.lean`), the
-tests that `shape.conjectures` in `Security/lean-audit.json` names:
+"""Falsification tests of H-1T's two conjectures (`security/Definitions/Pouw/Assumptions/Fp8Atom/H1TAssumptions.lean`), the
+tests that `shape.conjectures` in `security/lean-audit.json` names:
 
 * `DistinctLiveH1T`: on a legal unit `U`, `U.word` is injective and no credited word is free (a constant or a raw XOF
   word);
@@ -34,7 +34,7 @@ import numpy as np
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
-LEAN = HERE.parents[3] / "Security"
+LEAN = HERE.parents[3] / "security"
 SCRIPT = HERE / "lean" / "scripts" / "h1t_vectors.py"
 SEED = 2026101001
 N = 256

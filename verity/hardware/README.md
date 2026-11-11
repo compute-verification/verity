@@ -11,9 +11,9 @@ no second card). Each number is an entry `{ value, unit, mark, source }`:
 
 | SKU | kind | file | Lean table |
 |---|---|---|---|
-| RTX PRO 6000 Blackwell Server Edition (board 900-2G153-0000-000) | gpu | `cards/rtx-pro-6000-server.toml` | `Security/Definitions/Core/Accel/Sm120.lean` |
-| H200 SXM 141 GB (board 692-2G520-0280-001) | gpu | `cards/h200-sxm-141gb.toml` | `Security/Definitions/Core/Accel/H200.lean` |
-| B200 SXM 180 GB (board 692-2G525-0220-000) | gpu | `cards/b200-sxm-180gb.toml` | none yet: `Security/Definitions/Accounting/Sheets/B200.lean` is held to it |
+| RTX PRO 6000 Blackwell Server Edition (board 900-2G153-0000-000) | gpu | `cards/rtx-pro-6000-server.toml` | `security/Definitions/Core/Accel/Sm120.lean` |
+| H200 SXM 141 GB (board 692-2G520-0280-001) | gpu | `cards/h200-sxm-141gb.toml` | `security/Definitions/Core/Accel/H200.lean` |
+| B200 SXM 180 GB (board 692-2G525-0220-000) | gpu | `cards/b200-sxm-180gb.toml` | none yet: `security/Definitions/Accounting/Sheets/B200.lean` is held to it |
 | Two Xeon 6776P, the RTX node's host | host | `cards/xeon-6776p-2s.toml` | none |
 | Two Xeon Platinum 8468, the H200 nodes' host | host | `cards/xeon-platinum-8468-2s.toml` | none |
 
@@ -41,4 +41,4 @@ the card's numbers itself, and `tests/test_lean.py` holds it to each Lean table.
 
 **Changing a number:** change the card file, then its Lean table to match. `tests/test_lean.py` evaluates each Lean
 `card` arm as an exact rational and fails on any number that differs, and on a store, resource or format of
-`Security/Definitions/Core/Accel/Isa.lean` that either side lacks. A new SKU is a new card file and its own Lean table.
+`security/Definitions/Core/Accel/Isa.lean` that either side lacks. A new SKU is a new card file and its own Lean table.

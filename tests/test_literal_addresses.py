@@ -136,8 +136,8 @@ ALLOWED: dict[str, int] = {
     "benchmarks/pouw/dc/dc.cuh": 1,
     "benchmarks/pouw/harness/README.md": 1,
     # links in the locks and data, and the Lean cache's route
-    "Security/Properties/lean-audit.json": 2,
-    "Security/lean-audit.json": 1,
+    "security/Properties/lean-audit.json": 2,
+    "security/lean-audit.json": 1,
     "benchmarks/census/adversary.json": 1,
     "tools/verity/lean/cache.py": 1,
 }

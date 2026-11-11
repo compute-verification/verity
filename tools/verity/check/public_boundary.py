@@ -654,7 +654,7 @@ def write_allowed(edges: Iterable[str], path: Path = ALLOWED) -> None:
 
 def _area(path: str) -> str:
     parts = path.split("/")
-    return "/".join(parts[:3] if parts[0] in ("Security", "verity") else parts[:2])
+    return "/".join(parts[:3] if parts[0] in ("security", "verity") else parts[:2])
 
 
 def main(argv: list[str] | None = None) -> int:

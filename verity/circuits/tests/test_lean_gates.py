@@ -1,6 +1,6 @@
 """The circuit model (`Accounting.Gates`: `intervals`, `census`, `classOf`, `units`) held to the Python it states.
 
-Security/Proofs/Accounting/Gates/Rows.lean carries rows the kernel evaluates the model on (`s8Rows`, `censusRows`,
+security/Proofs/Accounting/Gates/Rows.lean carries rows the kernel evaluates the model on (`s8Rows`, `censusRows`,
 `classRows`, `h1ClassRows`, `familyRows`, `tableReadRows`, `unitsRows`, `tableUnitsRows`), and each test here recomputes its
 rows from the Python: `s8.no_wrap`'s `T_t` and `D_g`, census/v1 of the same Program (with property/v1's units of it),
 property/v1's `class_of` and `gather` with circuits' input ids, and property/v1's units of a Program built gate for gate.
@@ -24,7 +24,7 @@ from verity.circuits.program import Program, input_id
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple as TupleT, Value
 
-ROWS = Path(__file__).resolve().parents[3] / "Security" / "Proofs" / "Accounting" / "Gates" / "Rows.lean"
+ROWS = Path(__file__).resolve().parents[3] / "security" / "Proofs" / "Accounting" / "Gates" / "Rows.lean"
 S8T, S16, S32, BIT = Value(8), Value(16), Value(32), Value(1)
 #: the s8 family's word steps, s8·s8 and u8·s8
 DOT = {False: prims.BlackwellS8ImmaDot32, True: prims.BlackwellU8S8ImmaDot32}

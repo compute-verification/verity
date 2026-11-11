@@ -1098,7 +1098,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   need it).
 - **The pass and its step.** A pass covers one step \(s\) of the served circuit's execution, which it names with its
   root (§4; for vLLM, the engine step its Store backend tags each pass with). The step is the requirement's (the Lean
-  module `Definitions.Accounting.Requirement` in `Security/`), and the pass's plan is to hold every complete block
+  module `Definitions.Accounting.Requirement` in `security/`), and the pass's plan is to hold every complete block
   the circuit reads at \(s\), `blocks (creditedReads s) ⊆ plan` (`PlanMatches`), and may hold others (filler, a
   gathered table's unselected rows, a paused request's pages). The honest plan is the store resident when \(s\)
   begins (`Store.resident s`, which holds them under `StoreMatches`): the blocks
@@ -1628,7 +1628,7 @@ values, by name, before the first coin; the Lean reads them from the request.
   \(\varepsilon = 257 \cdot\) `timing.sign_rank_at_most(16, 11)` \(= 2^{-95.2491}\) (\(2^{-96.2548}\) at 4,096-byte
   blocks' 128 sectors). The memory line's `SketchBoundAt` follows from it by `SketchBoundLine`, which holds at every
   \(m\).
-- No property in `Security/Properties/Accounting/Remote` states yet what the Lean accepts of a P2 session; the difftest
+- No property in `security/Properties/Accounting/Remote` states yet what the Lean accepts of a P2 session; the difftest
   (`lean/tests/test_p2.py`'s `p2_session`) holds `p2.Session` to it.
 - Not yet built: the registry's one live registration a node for P2, and the zero-knowledge opening unit of a P2 unit
   (§8).
