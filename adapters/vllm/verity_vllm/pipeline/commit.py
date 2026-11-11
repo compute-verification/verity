@@ -1540,7 +1540,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 # windowed staging ring instead of per-step blocks; device staging = slots x window regardless of the step size
                 wi = com.enable_windows(asz)
                 print(f"[delta] windowed staging (P0): {wi['slots']} x {wi['window_bytes'] >> 20} MiB ring + scratch (largest tensor bound "
-                      f"{wi['largest_tensor_bound'] >> 20} MiB); layout {wi['layout']}; in-place hashing: {wi['in_place_hashing']}", flush=True)
+                      f"{wi['largest_tensor_bound'] >> 20} MiB); in-place hashing: {wi['in_place_hashing']}", flush=True)
                 (out / f"window_ring_{kind}.json").write_text(json.dumps(wi, indent=1, default=str) + "\n")
         if args.flip_weight:
             # NEGATIVE TEST ONLY: one element of one served parameter, changed before registration -- the pin (below, per pair) must name it
