@@ -1,10 +1,10 @@
-"""Ahead-of-time prediction of the Build's Programs from a row's declared facts φ, without tracing, and its score against the traces.
+"""Ahead-of-time prediction of the Build's Programs from a row's declared facts φ, without tracing, and its comparison with the traces.
 
 `phi` (φ: checkpoint config, target, TP, shape, sampler, execution), `build` (BuildProgram(φ): the `Derived[vLLM*]` Program the
 Build would derive, from a hand-written vocabulary, with the Llama-family decoder), `dsa` and `dsv4` (the family decoders it
 dispatches to by `FAMILY_FACTS[...]["arch"]`), `node` (a tensor-parallel node's Program: its ranks' forwards in one body, joined at
-their collectives, with no peer Input), `common` (what every decoder writes with), `inventory` (the traced rows and their
-Builds), `score` (predicted vs traced, per row and granularity: digest, equivalence verdict, first divergence), `aot` (the
+their collectives, with no peer Input), `common` (what every decoder writes with), `score` (φ of a row from its declared
+inputs, the predicted workload Program and the predictor's code version), `aot` (the
 comparison that switches a row, and a switched row's AOT Build), `compiled` (the served-compiled Build from a model's config and
 its pins), `cli` (`verity-vllm predict`), `domain` (what of φ a predicted Program can't be the prediction of), `steps` (I2,
 the compiler from a served run's advice to the Programs its committed rows must pass) with `batch` (its batch invariance),

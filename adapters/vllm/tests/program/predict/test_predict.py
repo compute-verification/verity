@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine, UsageError
+from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine
 from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR, pinned_hf_config
 from verity_vllm.program.model import INT8_EXACT_LMHEAD_QUANT, INT8_EXACT_QUANT
 from verity_vllm.program.predict import score as S
@@ -419,19 +419,6 @@ def test_the_h200_int8_rows_predict_their_builds_of_record(row):
 def test_unexpressible_names_the_fact(cfg, phi_kw, fact):
     with pytest.raises(Unexpressible, match=re.escape(fact)):
         build_program(_phi(cfg, **phi_kw), "step")
-
-
-def test_memory_estimate_is_above_a_measured_peak():
-    """A Qwen3-4B request of LP+T = 79 peaked at 814 MB resident (`_child`'s max_rss_mb); the pool admits units by the estimate."""
-    assert S.mem_estimate_mb(model_shape(json.loads((FIX / "qwen3-4b.config.json").read_text())), [79]) > 814
-
-
-def test_score_never_writes_into_a_rows_root(tmp_path):
-    rows = tmp_path / "rows"
-    (rows / "job" / "row").mkdir(parents=True)
-    with pytest.raises(UsageError, match="never written into a Build row"):
-        S._refuse_inside(str(rows / "job" / "row" / "score.json"), [str(rows)])
-    S._refuse_inside(str(tmp_path / "out" / "score.json"), [str(rows)])
 
 
 def test_the_record_path_reaches_the_predictor_only_through_a_switched_rows_aot_build():

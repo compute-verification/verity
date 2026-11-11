@@ -20,7 +20,6 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 PHI_SCHEMA = "verity-predict/phi/v1"
@@ -93,7 +92,3 @@ def _prompt_len(r: dict) -> int:
 
 def _cap(r: dict) -> int:
     return int(r.get("max_tokens") or (r.get("sampling_params") or {}).get("max_tokens") or 0)
-
-
-def load_phi(path: str | Path) -> Phi:
-    return Phi.from_json(json.loads(Path(path).read_text()))
