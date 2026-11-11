@@ -45,7 +45,7 @@ too; what a failure doesn't name is one test no other key has (`unnamed`), so it
 shard has failed a step it judges, or a suite of one, while the others run (`_early`: a shard's failures so far, which its
 check writes as each one fails), a failure read then as it would be at the end; a candidate on another candidate whose check
 runs is compared with what that check has failed so far, the rest unknown until it ends (`based` with ``so_far``).  A
-candidate built on another in flight, no member of it changing a Lean input (`LEAN_INPUTS`), audits nothing itself where its
+candidate built on another in flight, no member of it changing a Lean input (`lean_inputs`), audits nothing itself where its
 base's check is judged on lean-audit (`audits`) or took its verdict on it from the check of a candidate below that is: `start`
 with ``audit_from``, the candidate whose check ran it, leaves lean-audit out of its run (``lean_audit_from``), and `audited`
 gives it the verdict on the step that the run beside `main` keeps once that candidate has landed (`answers`), pending until
@@ -63,6 +63,7 @@ import os
 import re
 import shutil
 import signal
+from collections.abc import Iterable
 from dataclasses import replace
 from pathlib import Path
 
@@ -110,18 +111,31 @@ AUDIT_FAIL_RE = re.compile(r"^lean-audit: FAIL: .*$", re.M)
 AUDIT_SAYS = ("closure:", "staged:", "trust gap:", "heartbeats:")
 #: the audit's scratch tree, which each run names anew
 SCRATCH_RE = re.compile(r"\S*?/lean-audit-scratch-[^/\s]+/")
-#: the Lean inputs, as `vqueue.meets` reads them: a candidate one of whose members changes any of them runs lean-audit itself
-#: rather than take its base's verdict on it (`start`'s ``audit_from``): every Lean source and Lake file, any lock, the Lean
-#: check's code and check's own, the task graph's contract (`lean_audit.CONTRACT`, in every audit's key), and the Lean tree
-#: whole, its READMEs too (`security/`, and `Security/`, its name before, which a member branched then still changes).  It
-#: leaves out two kinds of file the audit reads: the Lean packages' other files that `lean_audit.inputs` declares (one a
-#: module reads with `include_str`, as pouw's `check/models.json`, a package's README, `TRUSTED.sha256` or `check.sh`), and
-#: what the unread ratchet reads outside Lean after the audits (`lean_audit.unread_ratchet`: code and pyproject.toml naming an
-#: analysis declaration or module, the docs a lock names).  A change touching only those takes its base's verdict on
-#: lean-audit, until this set holds every file `lean_audit.inputs` declares
+#: the Lean inputs of every tree, as `vqueue.meets` reads them (`lean_inputs` adds a tree's Lean packages): every Lean source
+#: and Lake file, any lock, the Lean check's code and check's own, the task graph's contract (`lean_audit.CONTRACT`, in every
+#: audit's key), and the Lean tree whole, its READMEs too (`security/`, and `Security/`, its name before, which a member
+#: branched then still changes)
 LEAN_INPUTS = ("**/*.lean", "**/lakefile.lean", "**/lakefile.toml", "**/lake-manifest.json", "**/lean-toolchain",
                "**/lean-audit.json", "tools/verity/lean", "tools/verity/check", "tools/verity/graph/verity_graph/contract.py",
                "security", "Security")
+#: the files whose directory `lean_inputs` takes whole as a Lean package's: a Lake package's lakefile, an audited one's lock
+LEAN_PACKAGE_FILES = ("lakefile.toml", "lakefile.lean", "lean-audit.json")
+
+
+def lean_inputs(files: Iterable[str]) -> tuple[str, ...]:
+    """The Lean inputs of the tree whose tracked files are ``files``, as `vqueue.meets` reads them: a candidate one of whose
+    members changes any of them runs lean-audit itself rather than take its base's verdict on it (`start`'s ``audit_from``).
+    `LEAN_INPUTS`, and every directory holding one of `LEAN_PACKAGE_FILES`, whole (the root's as ``**``), wherever the tree
+    puts its packages.  So every file `lean_audit.inputs` declares there is one: a package's own files (one a module reads with
+    `include_str`, as pouw's `check/models.json`, its scripts, the vectors its tests read, PoUS's `TRUSTED.sha256`), its path
+    dependencies' and its provers', which are Lake packages too, and the auditor's (`lean_audit.tool_files`), which
+    `LEAN_INPUTS` names (`tests/test_gate_paths.py` holds the two together on the tree).  A package's file that no audit
+    declares counts too: a candidate changing only it audits where it could have taken its base's verdict, which costs the
+    audit and nothing else.  It leaves out what the unread ratchet reads outside Lean after the audits
+    (`lean_audit.unread_ratchet`: code and pyproject.toml naming an analysis declaration or module, the docs a lock names),
+    which no audit's key holds: a change touching only those takes its base's verdict on lean-audit."""
+    dirs = {f.rpartition("/")[0] or "**" for f in files if f.rpartition("/")[2] in LEAN_PACKAGE_FILES}
+    return (*LEAN_INPUTS, *sorted(dirs))
 
 
 def shard_count(shards: int | str) -> tuple[int, bool]:

@@ -3203,6 +3203,28 @@ def test_under_gate_check_a_candidate_changing_only_the_task_graph_s_contract_au
     assert started[top]["base"] == lean and started[top]["record"].get("lean_audit_from") is None
 
 
+@pytest.mark.parametrize("path, takes", [("verity/protocols/pouw/verifier/lean/check/models.json", False),
+                                         ("verity/protocols/pouw/verifier/lean/models.json", True)])
+def test_under_gate_check_a_candidate_changing_only_a_lean_package_s_file_audits_itself_and_one_beside_it_does_not(
+        env, monkeypatch, path, takes):
+    """An audit reads every file of its package (`lean_audit.inputs`), one a module reads with `include_str` among them, as
+    pouw's `check/models.json`: the candidate on a Lean one in flight, which adds that package, whose member changes only
+    such a file runs lean-audit itself, its record naming no check whose verdict it takes; one whose member changes only a
+    file beside the package's directory takes its base's."""
+    from research.drive import AFTER_LANDING
+
+    pkg = "verity/protocols/pouw/verifier/lean/check"
+    env.put(1, {f"{pkg}/lakefile.toml": 'name = "PouwCheck"\n', f"{pkg}/PouwCheck/Credit.lean": "-- a\n"})
+    env.put(2, {path: "{}\n"})
+    loop, runs = _check(env, monkeypatch, batch=1, depth=2)
+    _, built, _ = loop.tick()
+    lean, top = built["sha"], loop.tick()[0]["sha"]
+    every, free = ",".join(AFTER_LANDING), ",".join(s for s in AFTER_LANDING if s != "lean-audit")
+    assert [_steps(runs, c) for c in (lean, top)] == [[every] * 3, [free if takes else every] * 3]
+    started = {r["sha"]: r for r in env.lines() if r["action"] == "slim" and r["why"] == "started"}
+    assert started[top]["base"] == lean and started[top]["record"].get("lean_audit_from") == (lean if takes else None)
+
+
 @pytest.mark.parametrize("first", ["its base's check", "its own"])
 def test_under_gate_check_a_candidate_that_took_lean_audit_from_its_base_passes_only_on_its_base_s_verdict_on_it(
         env, monkeypatch, first):
