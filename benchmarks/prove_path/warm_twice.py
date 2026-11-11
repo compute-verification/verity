@@ -32,7 +32,8 @@ didn't sync; 70 too little free space to start; 71 free space under the floor; 7
 76 the cache is still there (whatever else happened); 77 ended by a signal.
 
 ``--stop-at-gb`` and ``--stop-at-templates`` end a pass early and count it as run: a tryout of the command line on one small
-circuit, with ``--jobs 1 --passes 1``. ``--stand-in`` and ``--free-from`` are the tests' (``tests/test_warm_twice.py``).
+circuit, with ``--jobs 1 --passes 1``. ``--stand-in`` and ``--free-from`` are the tests' (``tests/test_warm_twice.py``), which
+start no unit (``--guardian detached``).
 """
 from __future__ import annotations
 
@@ -50,7 +51,7 @@ from pathlib import Path
 
 GB, GIB = 10**9, 2**30
 EXIT_ARG, EXIT_SYNC, EXIT_START, EXIT_FLOOR, EXIT_DEADLINE, EXIT_PASS, EXIT_LEFT, EXIT_SIGNAL = 64, 66, 70, 71, 72, 73, 76, 77
-RSS_EVERY_S, PSS_EVERY_S, TERM_WAIT_S = 5.0, 60.0, 10.0
+RSS_EVERY_S, PSS_EVERY_S, END_WAIT_S = 5.0, 60.0, 60.0
 SYNC = "uv sync -q --all-packages --extra torch-cpu"
 
 # The guardian: started in a transient user unit (else detached), with no environment of the job's, so nothing that ends the
@@ -227,21 +228,25 @@ class Job:
     # ---- the pass
 
     def end_child(self) -> None:
-        """End the running pass and every process of its session: no writer is left when the removal starts."""
+        """End the running pass and every process of its session, with SIGKILL: a pass has nothing to put in order that the
+        removal doesn't remove, and no writer is left when the removal starts."""
         p, self.child = self.child, None
         if p is None:
             return
-        for sig, wait in ((signal.SIGTERM, TERM_WAIT_S), (signal.SIGKILL, 60.0)):
-            if not session(p.pid) and p.poll() is not None:
+        t_end = time.monotonic() + END_WAIT_S
+        while True:
+            running, left = p.poll() is None, session(p.pid)
+            if not running and not left:
                 break
-            try:
-                os.killpg(p.pid, sig)
-            except OSError:
-                pass
-            t_end = time.monotonic() + wait
-            while time.monotonic() < t_end and (p.poll() is None or session(p.pid)):
-                time.sleep(0.2)
-        p.poll()
+            for target, kill in ((p.pid, os.killpg), *((pid, os.kill) for pid in left)):
+                try:
+                    kill(target, signal.SIGKILL)
+                except OSError:
+                    pass
+            if time.monotonic() >= t_end:
+                say(f"the pass's session still has processes {END_WAIT_S:g} s after SIGKILL")
+                break
+            time.sleep(0.2)
 
     def memory(self, sid: int, peak: dict, pss: bool) -> None:
         pids = session(sid)
@@ -341,7 +346,7 @@ class Job:
             return "none"
         cmd = [sys.executable, "-c", GUARDIAN, str(os.getpid()), st[19], str(self.root)]
         quiet = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
-        if not self.a.stand_in and shutil.which("systemd-run"):
+        if self.a.guardian == "unit" and shutil.which("systemd-run"):
             unit = ["systemd-run", "--user", "--collect", "--quiet", f"--unit=warm-twice-guard-{os.getpid()}", "--"]
             try:
                 if subprocess.run([*unit, *cmd], timeout=30, **quiet).returncode == 0:  # type: ignore[call-overload]
@@ -486,6 +491,8 @@ def parse(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--deadline-min", type=float, default=85.0, help="minutes after its start at which the job ends itself")
     p.add_argument("--stop-at-gb", type=float, help="tryout: end a pass once its cache holds this much")
     p.add_argument("--stop-at-templates", type=int, help="tryout: end a pass once this many templates are composed")
+    p.add_argument("--guardian", default="unit", choices=("unit", "detached"), help="how the guardian is started: in a transient "
+                   "user unit, outside the job's cgroup (a machine without one falls back to detached), or only detached")
     p.add_argument("--stand-in", help="tests: a shell command run in `warm`'s place, the cache's directory its $1")
     p.add_argument("--free-from", help="tests: a file holding the free bytes to read in the file system's place")
     return p.parse_args(argv)

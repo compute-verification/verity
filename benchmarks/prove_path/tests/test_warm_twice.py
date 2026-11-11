@@ -40,7 +40,7 @@ def job(tmp_path: Path, stand_in: str, *more: str, **env: str) -> subprocess.Pop
         (tmp_path / d).mkdir()
     return subprocess.Popen(
         [sys.executable, str(JOB), "--window", str(tmp_path / "no-window"), "--cache-parent", str(tmp_path / "parent"),
-         "--stand-in", stand_in, "--watch-every", "0.05", *more],
+         "--stand-in", stand_in, "--watch-every", "0.05", "--guardian", "detached", *more],
         cwd=tmp_path / "tree", env={**os.environ, "OUT": str(tmp_path / "out"), **env}, stdout=subprocess.PIPE, text=True)
 
 
