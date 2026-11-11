@@ -112,7 +112,7 @@ def test_each_unit_is_its_twin_and_the_units_compose_to_the_counted_mask(N, TOPK
 
 @pytest.mark.slow
 @pytest.mark.skipif(not settings.VERITY_ML_DEFINITIONS_SLOW,
-                    reason="VERITY_ML_DEFINITIONS_SLOW=1 runs it: about 2 min at 43,008 keys and 3.5 at 131,072 on a CPU node, 4 GB")
+                    reason="VERITY_ML_DEFINITIONS_SLOW=1 runs it (the served statics' units, built and evaluated whole)")
 @pytest.mark.parametrize("N", [X.WHOLE_MAX + 2048, 131072])
 def test_the_units_compose_to_the_counted_mask_at_served_statics(N) -> None:
     """At TOPK 2,048 and `BLOCK`: the first class the cut serves and the longest row at 128k context, 8 blocks.  The small
