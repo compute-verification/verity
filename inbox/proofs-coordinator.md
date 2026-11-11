@@ -66416,3 +66416,76 @@ theorem addressesWired_id (hA : Addresses h) : AddressesWired h id (fun _ => tru
 3. Thu 02:00Z: the property's final statement with shape 3's condition, and the witness.
 
 Next entry: at the try's verdict or 23:30Z, whichever is first. Checkpoint note `lanes/proofs/20261111T2205Z-report-frame.md`, synced [run].
+
+## WIRES, Wed 11 Nov 22:19Z: the session numbers are 13 theorems in one new file on `cursor/proofs-session-numbers-4a7e` at `e553abb84cc8`, not yet a pull request: the records run `r20261111-215130-1209` still waits in line (verdict about 23:45Z); job 2's four questions are answered below; one statement of my 21:30Z entry is corrected
+
+**For Daniel, in plain words.** Nothing below ran on the served engine and nothing changes what a guarantee says. Every figure is arithmetic on the proved bound's formula at numbers no run has.
+
+1. *The binding error at a datacenter's 600 s verification phase, by how many tables one second-stage session holds.* [derived] The verifier on `main` takes only sessions of one table, so the columns to the right of the first are what the bound would read if it took more.
+
+| what is proved for a sampled request | sampled proof blocks a verification phase | 1 table a session | 2 | 16 | 200 |
+|---|---|---|---|---|---|
+| the partition `main` defines | 70,254,678 | 2^-95.6 | 2^-94.6 | 2^-91.6 | 2^-88.0 |
+| the plan of record, one session for each subcircuit template | 407,870,370 | 2^-93.1 | 2^-92.1 | 2^-89.1 | 2^-85.5 |
+| every designed step | 5.12 billion | 2^-89.5 | 2^-88.5 | 2^-85.5 | 2^-81.8 |
+
+   - [derived] Each doubling of the tables in a session costs one bit: the bound charges a session's expected reruns in proportion to the whole session's size.
+   - [derived] Against a line at 2^-88: the partition `main` defines stays under it up to 200 tables a session, with nothing to spare at 200 (2^-88.004); the plan of record stays under it up to 16 tables; every designed step up to 2 tables.
+2. *A session of many tables is further from the code than I wrote at 21:30Z.* [read] I called the tables in a session something the prover sets. It is not free: the GPU prover proves one table a session; the CPU prover and the Lean verifier take at most 64; the challenger refuses a session's coin commitment above 127 tables; the zero-knowledge proof's scope ends at 200. No code today takes a session of 200 tables.
+3. *What refuses first at a datacenter is the challenger's release log, already at one table a session.* [read, derived] The log holds 2^20 lines of session coins. A one-table session writes 178 to 322 of them, so one log holds about 3,300 to 5,900 sessions, and a datacenter's 600 s needs 154,869 sessions (the partition `main` defines) to 797,817 (the plan of record by template). Putting more tables in a session does not help: the lines are two for each round of each table, whichever session the table is in.
+4. *The printed exfiltration figures do not move when a stratum is split into groups sampled at the same rate.* [read] The planner computes them from each stratum's sampling rate, not from the exact product over the cells. Only the rounding of each group's sample to a whole number moves them.
+5. *Runs of a session of more than two tables:* [run, relayed] one found, at four tables, on CPU, timing the Lean verifier (accepted; 225 s to verify against 43 s at one table). None above four.
+6. *Can the bound stop charging a session's reruns for the whole session?* [relayed, read] Yes, but only with new math: an extractor that recovers one table of a session at a time, with its own proof. It is not written and I do not write it.
+
+**Job 1: the numbers.** Branch `cursor/proofs-session-numbers-4a7e`, head `e553abb84cc8e8efd2a94cba5fcac333ed32e2cf`, base `75ef75838f99` [run: `git log`]; `main` has moved to `118003ab7a` with no change under `security/` or to `tools/verity/lean/unread-caps.json` [run: `git diff --stat 75ef75838f99 origin/main -- security tools/verity/lean/unread-caps.json`, empty].
+
+- *The file.* [read] `security/Proofs/Flock/SamplingGeneric/TwoFirstHitClassNumbersTables.lean`, a file beside `TwoFirstHitClassNumbers.lean`, not in it: the aggregator `Proofs.Flock.SamplingGeneric` imports that file publicly and eleven modules import the aggregator [run: `rg 'import Proofs.Flock.SamplingGeneric$' security`], so a theorem added to it rebuilds them and what is behind them; the new file is a leaf that only `Proofs/Flock.lean` imports (one line added). It also stays out of a file other open branches of the lane edit [guess: I did not list them].
+- *The instances* [read: the file; each proved by `norm_num` on `hashBound`'s expression], all at `513·2^80` calls and at most 2^30 sessions:
+
+| sessions of | classes summed over the sampled proof blocks, at most | expected reruns a session, at most | the sum is at most | and above |
+|---|---|---|---|---|
+| 1 table | 2^39 | 2,592,237,061 | 2^-94 | 2^-95 |
+| 2 tables | 2^39 | 5,184,474,121 | 2^-93 | 2^-94 |
+| 16 tables | 2^39 | 41,475,792,121 | 2^-90 | 2^-91 |
+| 200 tables | 2^39 | 518,447,399,191 | 2^-87 | 2^-88 |
+| 1 table | 2^41 | 2,592,237,061 | 2^-92 | 2^-93 |
+| 1 table | 2^45 | 2,592,237,061 | 2^-88 | 2^-89 |
+
+- [derived] The three datacenter configurations of your 21:39Z section, at 4,130 classes a sampled proof block (the constant COUNT's run typed in, an assumption), are 2^38.08, 2^40.62 and 2^44.27 classes: your 2^40.6 and 2^44.3 check. The 2^39, 2^41 and 2^45 instances cover them in that order. The table in Daniel's section is the same expression at each configuration's own count, which is why it reads up to 1.6 bits below the instances.
+- *What feeds the expected reruns at several tables.* [read] `SpotFlock.ref_numbers` (`Accepting.lean:50-53`): a session of n tables, 1 to 200, has at most n·2^23 level-0 symbols, so its rerun count is at most ⌈4·n·2^23/e⌉ (24,687,972, 197,503,772 and 2,468,797,139 at 2, 16 and 200 tables; the file proves each is that ceiling exactly). `κF_le` reads the same count through the coarser `200·2^24` (`k_le_mul`). A run today has `ref_one_table`'s 12,343,986, because `templateOk` holds each template's reference statement to one table. The file's docstring says all of this and that no instance is a premise of a guarantee.
+- *Runs.* [run] First try `r20261111-214539-082c` (vy-nebius-cpu-1), at `e91cf194ffdf` (the first 10 theorems): exit 0 in 252 s, no axiom beyond `propext`, `Classical.choice`, `Quot.sound`, siblings clean. [run: `research inspect` at 22:16Z] At the head: the try `r20261111-215130-ee1e` (vy-nebius-cpu-3; 3 checks ahead), the records run `r20261111-215130-1209` (vy-nebius-cpu-3; 6 ahead) and the quick tier `r20261111-215215-b3c6` (vy-nebius-cpu-12; 4 ahead) all wait in the check line since 21:52Z. [guess] The records run starts about 23:00Z and ends about 23:45Z.
+- [run] I first launched the records run and the quick tier at `e91cf194ffdf`, before I had read your 21:39Z section; I cancelled both (`r20261111-214653-bcfe`, `r20261111-214833-e66f`; neither had left the line) and relaunched at the head with the two instances you added.
+- *The records run's working directory.* [read] You wrote `--cwd source`; I used `--cwd clone`, the line `tools/verity/lean/README.md` gives, because `--update` writes into the tree and the writing-runs skill sends such a job to a clone.
+- *The unread cap: two things for you to rule.* [read] PRF-517's rule applies: no guarantee reads the new module. My diff sets `Proofs/Flock` in `tools/verity/lean/unread-caps.json` to 262 modules and 2,045 declarations: `main`'s count of 261 and 2,032 [relayed: lean's count at `61f13c2275fb`; not run by me, the records run prints it and I correct the line if it differs] plus my 1 and 13.
+  - [read] `main`'s line is 265 and 2,130, so the rule as written makes my diff lower it by 3 modules and 85 declarations, which is room other listed pull requests lean on. If you want `main`'s cap plus mine instead (266 and 2,143), say so and I move the head.
+  - [read] `unread-caps.json` has no merge driver (`.gitattributes`), so two pull requests that each set this line conflict in a candidate.
+
+**Job 2, the four things left unread.**
+
+*(i) Do a session's rounds grow with its tables? Yes, in proportion.*
+- [read] A session's coin commitment has one stream for the session and two for each table, each of 2^9 rounds of 512 coins (`coin_spec_of`, `flock-circuit.rs:728-735`; `Zk.coinSpec`, `Flock/Zk.lean:415-416`). It is never shared between sessions.
+- [read] The challenger writes one release-log line for the commitment and one for each round it opens (`challenger.py:247-253`, `TREE_EVENT`, `OPEN_EVENT`).
+- [run: `verity_flock.rec_live.rep_rounds` on the VM] One repetition of one table takes 88 rounds at a table of 2^25 rows and 138 at 2^35, with one region; each further region adds 2. Each table has two repetitions.
+- [derived] So a session writes 2 lines plus twice its tables times the rounds of a repetition: 178 to 278 at one table, 35,202 to 55,202 at 200. [relayed: an earlier entry of this file, line 42940, from run `6773`] A measured one-table session wrote 322 (320 rounds). [read] The model's bound is `2 + 4400·tables` rounds (`Claims/NumbersDeploy.lean:480`).
+- [read] `MAX_TREE_LINES = 2^20` (`challenger.py:247`, refused at `:1842`; Lean `Spot/ChallengerSession.lean:85`) is one challenger session's whole count of these lines. [derived] That is 3,256 to 5,890 one-table sessions, or 16 to 29 sessions of 200 tables.
+- [derived] A datacenter's 600 s at one table a session: 154,869 sessions (the partition `main` defines; my count of 21:30Z) write 27.6 to 49.9 million lines, 26 to 48 times the cap; 797,817 sessions (the plan of record by template) [relayed: COUNT] write 142 to 257 million, 135 to 245 times. [read] #8914 (open, unmarked) raises the cap to 2^23: [derived] still 3.3 to 31 times short. [guess] I take a verification phase to use one challenger session; I did not read whether the plan splits it over several.
+- [read] The caps a larger session meets before the lines: the challenger's `MAX_TREE_COINS = 2^26` on one commitment (`challenger.py:257`, `:1857`; device only, no Lean twin [run: `rg`]): [derived] (1 + 2·tables)·2^18 coins fit up to 127 tables, and 200 tables are 105,119,744 coins, refused. [read] `MAX_TABLES = 64` in the prover (`flock-circuit.rs:59`) and the Lean verifier (`Flock/Tags.lean:85`). [read] The GPU prover refuses `--session-tables` above 1 (`flock-circuit.rs:7589-7591`).
+
+*(ii) Do the two-stage exfiltration figures read the exact product or the per-stratum bound? The per-stratum bound.*
+- [read] `two_stage_rankin` (`verity/protocols/spot/optimize.py:1163-1262`) is what `two_stage_exfil`, `two_stage_design`, `benchmarks/spot_figures/total_cost.py` (`write_form`) and `figure1.py` call. Its docstring: `escCell(n, k, m) = C(n − m, k)/C(n, k) <= (1 − m/n)^k <= e^{−k m/n}`. It groups strata by (output bits, rate k/n).
+- [derived] So a stratum split into groups drawn at the same rate gives the same figure. [read] What can move a figure is each group's k rounded to a whole number (`plancheck.two` rounds down; Lean `Spot.TwoStageCheck`).
+
+*(iii) The evidence store, for a run of a session of more than 2 tables: one, at four tables.*
+- [run: `research inspect r20261109-013707-fb68 --on vy-nebius-cpu-12`] Run `r20261109-013707-fb68`: exit 0, 1,252 s, Mon 9 Nov 01:37Z to 01:58Z, command `tables_prof.sh`, tree `9e0e393f2650`. [relayed: VERIFYFAST-B's note `lanes/proofs/20261109T0145Z-checkpoint-verifyfast-b.md`] It ran the flat RMSNorm v3 N1024 statement's same four proof blocks as sessions of 1, 2 and 4 tables on CPU: checks 18.3, 39.1 and 78.7 s, the whole verify 43.0, 121.3 and 225.3 s, all accepted.
+- [relayed: the same notes] `r20261109-002611-0158` (vy-nebius-cpu-3) timed a templated statement's setup at two and four tables (RMSNorm v1 at four: 222.6 s, 39.5 GB peak); the verifier refused both as designed, since a templated session is held to one table.
+- [run] Nothing above four. The queries, on this VM's catalog (`~/.research/store/catalog.sqlite`): `SELECT value, count(*) FROM artifact_meta WHERE key='workload_fingerprint.session.tables' GROUP BY value` gives 58 artifacts, all `1`; `SELECT count(*) FROM attempts WHERE manifest_json LIKE '%session-tables%' OR manifest_json LIKE '%session_tables%' OR manifest_json LIKE '%tables_prof%'` gives 0.
+- [run] What that covers: 78,568 artifacts after a `research data refresh` that hit my 900 s bound, and 11,836 attempts, all from Mon 9 Nov 21:47Z on. The two runs above are older than the catalog's attempts and I found them in the lane's notes. A second refresh runs now; I repeat the queries when it ends and say if anything changes.
+
+*(iv) Can a session's reruns be charged table by table, removing the tables from the binding error? Yes, by a new extractor with its own knowledge-soundness proof.*
+- [relayed: EXTFORM's 10:11Z lines, `inbox/proofs-coordinator.md` 47536-47560; read: `security/Definitions/Claims/SamplingGeneric.lean:147-190, 995-1012`] Today's extractor replays a whole session: `Arg.ofFlock` sets the accepted reruns it waits for to ⌈4·N₀/e⌉ with N₀ the whole session's level-0 length, and it assembles the whole witness or none. An extractor that decodes one table of a session would wait for one table's reruns, so the 200-tables column of the table above would read as the one-table column. What it takes: a new `Arg.ext` for one table, its `Arg.KS` proof (new math: a session's tables share the link exchange and one root, so one table's reruns have to be shown enough while the others are held fixed), and the compiled bound restated over it. `Arg.ext` is a definition the locks read. I write none of it.
+
+**Correction to my 21:30Z entry.** [read] I wrote that the tables in a session are a dial. The limits are the ones in (i): one table on the GPU prover, 64 in the CPU prover and the Lean verifier, 127 at the challenger's coin commitment, 200 in the zero-knowledge scope (`Accepting.lean:79-80`).
+
+**Job 3, two figures ahead of its entry (due Thu 02:00Z).** [derived: the design COUNT's run `r20261111-200232-e76d` dumped for the partition `main` defines, each stratum at `Flock.Draw.Stratum.need` = 2·k·width(n) + 64 bytes] A datacenter's 600 s: 26 sampled replay blocks of 2,702,103 sampled proof blocks in 13 strata read 66,513,862 bytes each, 1,729,360,412 in all (24.6 bytes a sampled proof block): 27,021,256 coins of 64 bytes, 25.8 times the challenger's 2^20 coins. A 64-machine pod's 600 s: 2 sampled replay blocks of 12 proof blocks read 2,096 bytes, 33 coins.
+
+**Next.** The records run and the quick tier; then the pull request, opened and marked by me if nothing is regenerated and both pass (by Thu 01:00Z). Job 3's entry by Thu 02:00Z. Checkpoint note `lanes/proofs/20261111T2219Z-report-wires-session-numbers.md`.
