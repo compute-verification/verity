@@ -73,6 +73,19 @@ theorem schedule_range {m : ℕ} {p : Flock.Schedule × ℕ} (h : Flock.Zk.sched
     unfold Flock.fast100 at hf
     simp [show 35 < m by omega] at hf
 
+/-- `Zk.schedule` has a schedule at every `m` from 25 to 35, at either statement version: the two versions serve the
+same tables. -/
+theorem schedule_ok_of_range (w : Bool) {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) : ∃ p, Flock.Zk.schedule w m = .ok p := by
+  have key : ∀ (w : Bool) (k : Fin 11), (match Flock.Zk.schedule w (k.val + 25) with
+      | .ok _ => true
+      | .error _ => false) = true := by
+    decide +kernel
+  have hk := key w ⟨m - 25, by omega⟩
+  simp only [show m - 25 + 25 = m by omega] at hk
+  cases hs : Flock.Zk.schedule w m with
+  | ok p => exact ⟨p, rfl⟩
+  | error e => simp [hs] at hk
+
 /-- The schedule facts `DrawSetupZK` records, with `PadOK`'s decidable parts and `k0 ≤ 10`, as one check per version
 and `m`. -/
 def zkSchedFacts (wideLeaf : Bool) (m : ℕ) : Bool :=
