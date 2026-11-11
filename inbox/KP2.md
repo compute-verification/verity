@@ -131,3 +131,17 @@ comes first.
   `benchmarks/remote_session/gate_run.sh` does); inside its window the queue is off the node; infra is told
   (INF-660). If your job is refused for the lane's name, say so on HASH-113 and its worker launches yours as
   written. Write the jobs so that either can launch them.
+
+## Wed 11 Nov 03:01Z: memory-accounting adds two lines to the profile, and offers the 64-row pass (HASH-113, 03:00Z)
+
+- **Two lines of their own in the pass's split:** the sketch's tensor-core time, and the receipt hash's time,
+  each apart from the leaves and the tree. Why: Daniel's audit wants PoUB's memory line at 2^-100, which takes 64
+  sketch rows where the session runs 16 (MEM-253): four times the tiles a block, and three compressions a
+  receipt where there is one, by its worker's reading of `reader.cu`. So those two lines predict a 64-row pass's
+  cost. Plan the profile so they can be read off it (kernel names, NVTX ranges or a split run), and say in your
+  method how.
+- **Its offer:** memory-accounting writes and times the 64-row pass itself (MEM-258, its worker starts Wed). The
+  lead's answer, **to put in your grid comment on HASH-113** (due Thu 12 Nov 16:00Z): memory-accounting writes
+  it; kernels reviews it against the kernel-engineering skill's bar (the SASS gate, 0xA5 poisoning and a no-write
+  control, the reference verifier on the run's own transcript) once its branch builds, and asks it to name the
+  branch on HASH-113. The review is yours, after Thursday's measurements; it is not a reason to change them.
