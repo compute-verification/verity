@@ -31,15 +31,15 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import verity_difftest as D
 from hypothesis import strategies as st
 
-import verity_difftest as D
-from verity.definitions.circuits import requirement as R
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.definitions.ops import fp32
 from verity.circuits.program import Program
 from verity.circuits.refs import array_of
 from verity.circuits.types import Array, Value
+from verity.definitions.circuits import requirement as R
+from verity.definitions.ops import fp32
 
 LEAN = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
