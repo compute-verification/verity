@@ -28,8 +28,10 @@ proof blocks don't make that row. Its reader is one proof block, of its shape's 
 input gives the honest row, so a prover who records W''s row instead has a proof block whose proof fails.
 
 **Records** (opt-in, `VERITY_PROVE_PATH_REMOTETIE`: the window's record, commit and write take a minute): R registers the
-circuit's values at W's entries and nothing else, chained right after W, and its sampling design draws from each shape's
-template, a value's readers units of one. `records_audit.tie_of` with no prefix ties the audit to W (each value
+circuit's values at W's entries and nothing else, chained right after W. Its sampling design is the tie's, work:1 over
+the work table the verifier's record states (`prove_path.stated`), which gives each shape's template, a value's readers
+units of one, the floor under which at most `FLOORS`' share of Pearl+'s reader units is wrong (`window_law.reader_table`),
+and every other template one draw. `records_audit.tie_of` with no prefix ties the audit to W (each value
 by its own name, in ``row-seg/v1`` rows of 32-bit words), and R1-R7 (`registration.check`) accept R on the log [W] and
 refuse it on [W'] (R6, and R7 at the flipped value's root). An R' written by hand after W' is accepted on [W']: no record
 holds a row, so the flipped row is refused by its reader's proof alone.
@@ -47,14 +49,17 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
 import settings
+from verity_vllm.pipeline.window_law import reader_floors, reader_table
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_circuit as WC
+from verity_vllm.program.predict import window_cut as WK
 from verity_vllm.program.predict import window_rows as WRS
 from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.phi import Phi
@@ -72,6 +77,7 @@ from verity.ml.windows import interface as IF, rows as CS
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
+import prove_path as PP  # noqa: E402
 import records_audit as RA  # noqa: E402
 
 ROOT = HERE.parents[2]
@@ -90,7 +96,9 @@ KEY, SALT_KEY = bytes(range(32)), bytes(range(64, 96))
 SALT = bytes(range(100, 164))
 #: the audited window's run root
 RUN = "ab" * 64
-LAW = D.parse_design("stratified:1")
+LAW = D.parse_design("work:1")
+#: the share of Pearl+'s reader units a sample may leave wrong and how often it leaves more, which the work table's floors hold
+FLOORS = (Fraction(4, 125), Fraction(1, 100))
 PROMPT = [(7 * i + 3) % 500 for i in range(CLASS.prompt)]
 #: the flipped bit: round 1's o-projection's (call 1) A row 0, its first word's high half (the BF16 of x's first element)
 FLIP = (PEARL.a(1, 1), 0, 1)
@@ -286,9 +294,11 @@ def test_a_w_whose_root_isnt_the_credited_one_is_refused_and_its_row_is_off_its_
 @pytest.fixture(scope="module")
 def written(toy, tmp_path_factory) -> SimpleNamespace:
     """The toy's window recorded, committed and written as window-commit writes it after W (R in its
-    ``registration.json``), and the verifier's own window and circuit record from its records."""
+    ``registration.json``) under the work table of `FLOORS`' floors (``table``), and the verifier's own window and circuit
+    record from its records."""
     c, out = toy.low.circuit, tmp_path_factory.mktemp("window")
-    win = IF.Window(c, RUN, LAW, 64, registered={**toy.values, **_reuse(toy, toy.W)}, forms=WRS.FORMS)
+    table = reader_table(c.units, WK.readers(c), *FLOORS)
+    win = IF.Window(c, RUN, LAW, 64, registered={**toy.values, **_reuse(toy, toy.W)}, forms=WRS.FORMS, work_table=table)
     win.supply(G)
     toy.rows.record(win)
     committed = win.close()
@@ -298,7 +308,7 @@ def written(toy, tmp_path_factory) -> SimpleNamespace:
     mine, doc = IF.of_records(out, LAW, RA.catalog_resolve)
     publics = {m.key: (out / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)}
     return SimpleNamespace(dir=out, R=json.loads((out / "registration.json").read_text()), mine=mine, doc=doc,
-                           leaf_layer=CS.leaf_layer(publics))
+                           leaf_layer=CS.leaf_layer(publics), table=table)
 
 
 def _by_hand(written, W: dict) -> dict:
@@ -312,17 +322,18 @@ def _check(written, W: dict, R: dict):
     tied, _pins = RA.tie_of(written.doc, W, None)
     mine = written.mine
     return REG.check(R, mine.program, mine.query, LAW, CS.SCHEME, CS.expected_ports(mine), written.leaf_layer, (),
-                     tied["log"], registered=tied["registered"], outputs=tied["outputs"], schemas=tied["schemas"],
-                     window_root=RUN)
+                     tied["log"], work_table=mine.work_table, registered=tied["registered"], outputs=tied["outputs"],
+                     schemas=tied["schemas"], window_root=RUN)
 
 
 @pytest.mark.slow
 @RECORDS
 def test_r_registers_ws_values_and_r1_r7_accept_it_on_w_and_refuse_it_on_a_w_of_another_root(toy, written):
     """R registers the 16 values at W's entries and nothing else, chained right after W; its sampling design (R1 holds it to
-    the verifier's own) draws from each of the 6 shapes' templates, a value's readers units of one. R1-R7 tied to W accept
-    it, and tied to W' refuse it: it is chained after W (``R6-previous``), and of its values only the flipped one's root is
-    not the one W' registers (``R7-held``)."""
+    the verifier's own, under the work table its circuit record states as the verifier's record of the circuit does)
+    samples each of the 6 shapes' templates, a value's readers units of one, at its floor, and every other template once.
+    R1-R7 tied to W accept it, and tied to W' refuse it: it is chained after W (``R6-previous``), and of its values only the
+    flipped one's root is not the one W' registers (``R7-held``)."""
     R, W = written.R, toy.W
     assert R["format"] == REG.FORMAT_V2 and R["previous"] == REG.digest(W)
     assert sorted(R["registered"], key=lambda e: e["value"]) == sorted(_calls(W), key=lambda e: e["value"])
@@ -331,7 +342,12 @@ def test_r_registers_ws_values_and_r1_r7_accept_it_on_w_and_refuse_it_on_a_w_of_
         readers.setdefault(v, set()).add(tid)
     shapes = {t for ts in readers.values() for t in ts}
     assert all(len(ts) == 1 for ts in readers.values()) and len(readers) == len(_calls(W))
-    assert len(shapes) == 6 and all(strata[t]["k"] >= 1 for t in shapes)
+    floors = reader_floors({t: toy.low.circuit.units[t] for t in shapes}, *FLOORS)
+    assert len(shapes) == 6 and shapes == set(WK.readers(toy.low.circuit))
+    assert {t: (s["work"], s["floor"], s["k"]) for t, s in strata.items()} == {
+        t: (1, floors.get(t, 1), floors.get(t, 1)) for t in toy.low.circuit.units}
+    assert IF.circuit_of(written.doc) == PP.stated(IF.descriptor_record(toy.low.circuit, 64), written.table)
+    assert written.mine.work_table == written.table
     assert list(_check(written, W, R).codes) == []
     got = _check(written, _flipped(toy).W, R)
     assert list(got.codes) == ["R6-previous", "R7-held"] and got.detail["R7-held"]["value"] == FLIP[0], got
@@ -376,12 +392,12 @@ def _one_stage() -> SimpleNamespace:
 
 def _v1_case(one, written, W: dict, R: dict) -> dict:
     """a5's v1 case of an audit of ``R`` tied to ``W`` (``window/case.json``: R, the evidence its record was handed and the
-    verifier's params): `_check`'s params; a stratified sample's first proof blocks of each stratum, the verifier's
+    verifier's params): `_check`'s params; the first proof blocks of each stratum of the design's sample, the verifier's
     receipt of R, and a verdict of record that accepted, reporting R's values' roots as the ones its readers opened
     against, standing in for their proofs."""
     mine, (tied, _pins) = written.mine, RA.tie_of(written.doc, W, None)
     program, query = mine.program, mine.query
-    drawn = D.derive(program, query, LAW)
+    drawn = D.derive(program, query, LAW, mine.work_table)
     units = sorted(u for s in drawn["strata"] for u in [u for lo, hi in s["units"] for u in range(lo, hi)][:s["k"]])
     draw = {**drawn, "population": P.units(program, query), "units": units}
     proved = D.proved(draw)
@@ -391,7 +407,8 @@ def _v1_case(one, written, W: dict, R: dict) -> dict:
                 "sessions": [], "statement": {},
                 "verdicts": {"lean": {"accepted": True, "of_record": True, "registered": opened}}}
     params = one.RP.params(program, query, LAW, CS.expected_ports(mine), written.leaf_layer, "1/20", log=tied["log"],
-                           registered=tied["registered"], scheme=CS.SCHEME, outputs=tied["outputs"], schemas=tied["schemas"])
+                           work_table=mine.work_table, registered=tied["registered"], scheme=CS.SCHEME,
+                           outputs=tied["outputs"], schemas=tied["schemas"])
     params |= {"window_root": RUN}
     return {"commitment": canonical_json(R).hex(), "evidence": canonical_json(evidence).hex(),
             "params": json.loads(json.dumps(params))}
