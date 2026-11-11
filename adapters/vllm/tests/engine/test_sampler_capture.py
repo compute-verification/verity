@@ -6,6 +6,7 @@ other bits are refused, as are a sharded sampler and logits that are not one bf1
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any
 
 import numpy as np
 import pytest
@@ -17,9 +18,10 @@ from verity_vllm.pipeline import interior_rows as IR
 V = 64
 TSEL = "TokenSelect_v1{V=64}"
 #: the replay's step trace: rows (request, start, n), and the tokens each step emitted
-STEPS = [{"step": 0, "rows": [["a", 0, 4], ["b", 0, 2]], "emitted": {"b": 1}},
-         {"step": 1, "rows": [["a", 4, 2], ["b", 2, 1]], "emitted": {"a": 1, "b": 1}},
-         {"step": 2, "rows": [["a", 6, 1]], "emitted": {"a": 1}}]
+STEPS: list[dict[str, Any]] = [
+    {"step": 0, "rows": [["a", 0, 4], ["b", 0, 2]], "emitted": {"b": 1}},
+    {"step": 1, "rows": [["a", 4, 2], ["b", 2, 1]], "emitted": {"a": 1, "b": 1}},
+    {"step": 2, "rows": [["a", 6, 1]], "emitted": {"a": 1}}]
 PREFILL = {"a": 6, "b": 2}
 
 

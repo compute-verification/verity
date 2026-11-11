@@ -40,7 +40,7 @@ def test_e4m3fn_rounds_to_nearest_even_over_the_whole_format():
     xs = np.array(mids + [-m for m in mids], dtype=np.float32)
     assert all(Fraction(float(x)) == Fraction(m) for x, m in zip(xs, mids))
     assert np.array_equal(F.e4m3fn(xs), np.array([_nearest_even(float(x), grid) for x in xs], dtype=np.uint8))
-    k = np.arange(4096, dtype=np.int64)
+    k: np.ndarray = np.arange(4096, dtype=np.int64)
     xs = ((k * 7919 % 8191 - 4095).astype(np.float32) / np.float32(4096.0)) * np.exp2((k % 22 - 14).astype(np.float32))
     assert np.array_equal(F.e4m3fn(xs), np.array([_nearest_even(float(x), grid) for x in xs], dtype=np.uint8))
     assert F.e4m3fn(np.array([-0.0, 0.0, -1e-9, 1e-9], dtype=np.float32)).tolist() == [0x80, 0x00, 0x80, 0x00]

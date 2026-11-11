@@ -114,8 +114,8 @@ def test_recipe_container_and_config(tmp_path):
     for kept in ("model.layers.0.self_attn.q_proj.bias", "model.layers.0.self_attn.rotary_emb.inv_freq", "lm_head.weight",
                  "model.embed_tokens.weight"):
         assert names[kept][0] not in ("I8",) and kept + "_scale" not in names
-    q = np.frombuffer(data["model.layers.0.mlp.down_proj.weight"], dtype=np.int8).reshape(128, 256)
-    s = np.frombuffer(data["model.layers.0.mlp.down_proj.weight_scale"], dtype="<f4").reshape(128, 1)
+    q: np.ndarray = np.frombuffer(data["model.layers.0.mlp.down_proj.weight"], dtype=np.int8).reshape(128, 256)
+    s: np.ndarray = np.frombuffer(data["model.layers.0.mlp.down_proj.weight_scale"], dtype="<f4").reshape(128, 1)
     w = (_bf16(128 * 256, 7, 0.05).reshape(128, 256).astype(np.uint32) << 16).view(np.float32)
     assert np.array_equal(q, I.quantize(w, I.channel_scales(w))) and np.array_equal(s, I.channel_scales(w))
     cfg = json.loads((out / "config.json").read_text())

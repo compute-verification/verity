@@ -81,7 +81,8 @@ class FakeScheduler:
             self._resumed.add(victim)
         nst: dict[str, int] = {}
         left = self.budget
-        new, cached = [], []
+        new: list[str] = []
+        cached: list[str] = []
         for rid in self.running:
             q = self.requests[rid]
             n = min(q.num_tokens - q.num_computed_tokens, left)

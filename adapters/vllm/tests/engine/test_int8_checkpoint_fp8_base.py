@@ -120,7 +120,7 @@ def _rn32(x: Fraction) -> float:
 
 
 def test_the_e4m3_table_is_the_format():
-    codes = np.arange(256, dtype=np.uint8)
+    codes: np.ndarray = np.arange(256, dtype=np.uint8)
     v = I.E4M3_VALUES
     assert np.isnan(v[[0x7F, 0xFF]]).all() and np.array_equal(v[np.isfinite(v)], F.e4m3fn_value(codes)[np.isfinite(v)])
 
@@ -155,7 +155,7 @@ def test_the_exact_rule_is_one_rounding_of_the_exact_values():
 def test_ties_round_to_even_on_the_exact_quotient():
     # block 0's scale is 127, so a = 127 and s = 1; block 1 (scale 1) holds the ties W / s = +-0.5, 1.5, 2.5, 3.5
     one, half, one5, two5, three5 = 0x38, 0x30, 0x3C, 0x42, 0x46                 # e4m3 codes of 1, 0.5, 1.5, 2.5, 3.5
-    codes = np.zeros((8, 256), dtype=np.uint8)
+    codes: np.ndarray = np.zeros((8, 256), dtype=np.uint8)
     codes[:, 0] = one
     codes[0, 128:134] = [half, one5, two5, three5, two5 | 0x80, half | 0x80]
     w = I.fp8_exact(codes, np.array([[127.0, 1.0]], dtype=np.float32), 0, G)
@@ -177,8 +177,8 @@ def test_the_bf16_linears_are_vllms_upcast():
 def test_nan_codes_and_non_finite_scales_are_refused(tmp_path, bad):
     base = _base(tmp_path / "base")
     t = _linear("model.layers.0.self_attn.q_a_proj", 256, H, 3)
-    codes = np.frombuffer(t["model.layers.0.self_attn.q_a_proj.weight"][2], dtype=np.uint8).copy()
-    scale = np.frombuffer(t["model.layers.0.self_attn.q_a_proj.weight_scale_inv"][2], dtype=np.float32).copy()
+    codes: np.ndarray = np.frombuffer(t["model.layers.0.self_attn.q_a_proj.weight"][2], dtype=np.uint8).copy()
+    scale: np.ndarray = np.frombuffer(t["model.layers.0.self_attn.q_a_proj.weight_scale_inv"][2], dtype=np.float32).copy()
     if bad == "code":
         codes[77] = 0x7F
     else:

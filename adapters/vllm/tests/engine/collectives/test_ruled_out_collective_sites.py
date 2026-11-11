@@ -171,7 +171,7 @@ def test_match_verdict_lists_the_recorders_ruled_out_sites(tmp_path):
 
 
 def _calls_in(path: Path, fn: str, cls: str | None = None) -> set[str]:
-    tree = ast.parse(path.read_text())
+    tree: ast.AST = ast.parse(path.read_text())
     if cls is not None:
         tree = next(n for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name == cls)
     tree = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == fn)

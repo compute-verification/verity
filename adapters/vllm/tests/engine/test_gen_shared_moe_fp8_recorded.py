@@ -97,7 +97,8 @@ def profile():
 @functools.cache
 def _resolved():
     """step -> (StepEvents, resolutions) under the recorded header."""
-    header, roots, out = None, {}, {}
+    roots: dict[int, list[Root]] = {}
+    header, out = None, {}
     for pre, step in split_steps(read_log(FIXTURE)):
         header = next((e for e in pre if isinstance(e, RunHeader)), header)
         collect_roots(pre, roots)

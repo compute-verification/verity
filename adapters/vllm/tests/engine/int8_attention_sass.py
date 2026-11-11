@@ -78,6 +78,7 @@ class ToolMissing(RuntimeError):
 def harness() -> ModuleType:
     """benchmarks/pouw/harness/sass_gate.py: its nvdisasm parser, `Function` (subroutine regions) and `flagged`."""
     spec = importlib.util.spec_from_file_location("pouw_harness_sass_gate", HARNESS)
+    assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -164,7 +165,9 @@ def _int_seed(op: list[str]) -> bool:
 def sass_rules(kernel: str, text: str) -> dict[str, Any]:
     G = harness()
     c: Counter = Counter()
-    flagged_out, foreign, mma = Counter(), Counter(), Counter()
+    flagged_out: Counter = Counter()
+    foreign: Counter = Counter()
+    mma: Counter = Counter()
     for fd in G.parse_nvdisasm(text):
         fn = G.Function(fd)
         sub = {k: name for name, s, e in fn.subroutines.values() for k in range(s, e)}

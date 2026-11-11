@@ -144,7 +144,7 @@ def test_fold_refuses_a_declared_construction_the_profile_cannot_fold():
     """A `padded` declaration on a profile without the hook FAILS by name before the log is read: the MOE-01 fold is never a silent stand-in."""
     from verity_vllm.pipeline.match import fold_summary_result
     fake = types.ModuleType("verity_vllm.observe.fold.profiles._moe_test_nohook")
-    fake.PROFILE = OV.PROFILE
+    fake.__dict__.update(PROFILE=OV.PROFILE)
     sys.modules["verity_vllm.observe.fold.profiles._moe_test_nohook"] = fake
     try:
         with pytest.raises(SystemExit, match="with_moe_construction"):

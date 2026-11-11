@@ -240,7 +240,7 @@ LEAF_BASES = {"Attention_v3", "Embedding_v1", "Gemm_v1", "RMSNormFusedCuda_v2", 
 def _weights_intervals(C):
     """(lo, hi) of the `embed` and `lm_head` fields in the family's weights parameter (leaf space)."""
     from verity_vllm.program.frontend.rules.family import _field_intervals
-    iv = {}
+    iv: dict[str, tuple[int, int]] = {}
     for lo, hi, name in _field_intervals(analytic.weights_type(C), ""):
         fld = name.split(".", 1)[0]
         a, b = iv.get(fld, (lo, hi))

@@ -186,7 +186,8 @@ def test_the_fold_gives_each_recorded_collective_one_peers_field_per_peer_rank(r
     assert [(c["step"], c["k"], c["kind"], c["site"], c["rows"], c["N"]) for c in res.collectives] == COLLECTIVES
     (layout,) = res.peers_layout
     peers = [r for r in range(WORLD) if r != rank]
-    want, off = [], 0
+    want: list[tuple[str, int, int, int]] = []
+    off = 0
     for step, k, _kind, _site, rows, N in COLLECTIVES:
         for pr in peers:
             want.append((f"s{step}_k{k}_r{pr}", off, len(want), rows))
@@ -262,7 +263,7 @@ def _sides(rank: int, m: dict, rs: list[tuple], layout: dict, compact: bool) -> 
     reads = [("n", PEERS0 + i, j * N, (j + 1) * N) for i in range(len(mine))]
     A = _prog(f"build{rank}", m["spec"], own_spec, N, ins, {PEERS0 + i: [(0, x["ordinal"])] for i, x in enumerate(mine)},
               reads[:rank] + [("n", OWN, 0, N)] + reads[rank:], compact)
-    want = [("PEER", x["ordinal"], j * N, (j + 1) * N) for x in mine]
+    want: list[tuple] = [("PEER", x["ordinal"], j * N, (j + 1) * N) for x in mine]
     want.insert(rank, ("N", 0, 0, 0, N))
     return A, F, want
 

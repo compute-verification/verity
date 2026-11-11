@@ -74,7 +74,9 @@ def _bf16_value(w: int) -> Fraction | None:
 
 def _exact_bf16_sum(a: int, b: int) -> int:
     """RN-even of the EXACT sum of two finite bf16 values to bf16 (the reference `add.rn.bf16x2` semantics), by rational arithmetic."""
-    x = _bf16_value(a) + _bf16_value(b)
+    va, vb = _bf16_value(a), _bf16_value(b)
+    assert va is not None and vb is not None
+    x = va + vb
     if x == 0:
         return 0x8000 if (a >> 15) & (b >> 15) & 1 else 0
     neg = x < 0

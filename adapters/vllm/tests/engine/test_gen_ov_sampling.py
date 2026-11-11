@@ -89,7 +89,7 @@ def test_sampling_params_prefers_the_request_params(monkeypatch):
         def __init__(self, **kw):
             calls.append(kw)
     fake = types.ModuleType("vllm")
-    fake.SamplingParams = SP
+    fake.__dict__.update(SamplingParams=SP)
     monkeypatch.setitem(sys.modules, "vllm", fake)
     samp = {"temperature": 1.0, "top_p": 1.0, "top_k": 0, "seed": 0, "n": 1}
     fn({"max_tokens": 16, "seed": None, "n": 1, "temperature": 0.0, "top_p": 1.0, "top_k": 0}, samp)   # the pinned greedy workload
@@ -303,7 +303,7 @@ def test_gumbel_argmax_temp_definition_matches_the_div_full_oracle():
         t = dict(zip([g for _, _, g in Pg.input_coll(0).refs], words))
         evaluate_region(C, C[0:C.size], t)
         steps = [c for c in C.root_calls() if not c.is_primitive and c.fn.name == "GumbelArgmaxTempStep"]
-        rcp = np.uint32(P.DivFullRcp.evaluate(tb)).view(np.float32)
+        rcp: np.float32 = np.uint32(P.DivFullRcp.evaluate(tb)).view(np.float32)
         x = (np.asarray(words, dtype=np.uint32) << 16).view(np.float32)
         y = (x * rcp).astype(np.float32) + gumbel_noise_exact(seed, pos, V)
         assert int(t[steps[-1].returns[1]]) == int(np.argmax(y))

@@ -201,19 +201,20 @@ def vllm_stub(monkeypatch):
                          VLLM_ALLREDUCE_USE_SYMM_MEM=True, VLLM_USE_NCCL_SYMM_MEM=False, VLLM_ALLREDUCE_USE_FLASHINFER_PCIE_IPC=False,
                          VLLM_DISABLE_PYNCCL=False)
     dist = types.ModuleType("vllm.distributed")
-    dist.get_tensor_model_parallel_rank = lambda: 3
+    dist.__dict__.update(get_tensor_model_parallel_rank=lambda: 3)
     comm = SimpleNamespace(world_size=8, fi_ar_comm=SimpleNamespace(disabled=False), qr_comm=None, fi_pcie_ipc_ar_comm=None,
                            aiter_ar_comm=None, ca_comm=SimpleNamespace(disabled=True, max_size=256 << 10),
                            symm_mem_comm=SimpleNamespace(disabled=False, max_size=64 << 20),
                            pynccl_comm=SimpleNamespace(disabled=False, nccl_version=22907))
     ps = types.ModuleType("vllm.distributed.parallel_state")
-    ps.get_tp_group = lambda: SimpleNamespace(device_communicator=comm)
+    ps.__dict__.update(get_tp_group=lambda: SimpleNamespace(device_communicator=comm))
     dc = types.ModuleType("vllm.distributed.device_communicators")
     fi = types.ModuleType("vllm.distributed.device_communicators.flashinfer_all_reduce")
-    fi._fi_ar_workspace = SimpleNamespace(backend="mnnvl")
-    dist.parallel_state, dist.device_communicators, dc.flashinfer_all_reduce = ps, dc, fi
+    fi.__dict__.update(_fi_ar_workspace=SimpleNamespace(backend="mnnvl"))
+    dist.__dict__.update(parallel_state=ps, device_communicators=dc)
+    dc.__dict__.update(flashinfer_all_reduce=fi)
     pkg = types.ModuleType("vllm")
-    pkg.envs, pkg.distributed = envs, dist
+    pkg.__dict__.update(envs=envs, distributed=dist)
     for name, mod in (("vllm", pkg), ("vllm.envs", envs), ("vllm.distributed", dist), ("vllm.distributed.parallel_state", ps),
                       ("vllm.distributed.device_communicators", dc), ("vllm.distributed.device_communicators.flashinfer_all_reduce", fi)):
         monkeypatch.setitem(sys.modules, name, mod)

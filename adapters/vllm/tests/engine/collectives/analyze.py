@@ -272,7 +272,7 @@ def bf16_to_f32(u16: np.ndarray) -> np.ndarray:
 
 
 def f32_to_bf16_rne(f: np.ndarray) -> np.ndarray:
-    u = f.astype(np.float32).view(np.uint32).astype(np.uint64)
+    u: np.ndarray = f.astype(np.float32).view(np.uint32).astype(np.uint64)
     nan = np.isnan(f)
     bias = ((u >> 16) & 1) + 0x7FFF
     out = ((u + bias) >> 16).astype(np.uint16)

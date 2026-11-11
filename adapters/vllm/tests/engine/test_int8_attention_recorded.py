@@ -25,9 +25,10 @@ import pytest
 from verity.definitions.numerics.int8_rows import ROWS
 
 from tests.engine import int8_attention_cut as C
-from verity_vllm.observe.events import Note, RunHeader, ViewDesc
+from verity_vllm.observe.events import Note, Root, RunHeader, ViewDesc
 from verity_vllm.observe.fold.resolve_log import collect_roots
 from verity_vllm.observe.fold.resolver import Compute, Const, Group, spec_label
+from verity_vllm.observe.fold.tree import TreeNode
 from verity_vllm.observe.log import read_log, split_steps
 from verity_vllm.query.manifest import format as RM
 
@@ -93,7 +94,8 @@ def refused(c: Compute, mem: Memory) -> list[str]:
 
 @functools.cache
 def _cut() -> tuple[RunHeader, dict, dict[int, list], dict[int, Memory]]:
-    header, roots, steps = None, {}, {}
+    roots: dict[int, list[Root]] = {}
+    header, steps = None, {}
     for pre, step in split_steps(read_log(FIXTURE)):
         header = next((e for e in pre if isinstance(e, RunHeader)), header)
         collect_roots(pre, roots)
@@ -105,7 +107,7 @@ def _cut() -> tuple[RunHeader, dict, dict[int, list], dict[int, Memory]]:
     return header, roots, steps, mems
 
 
-def _fold(step: int, header: RunHeader | None = None) -> tuple[Group, object]:
+def _fold(step: int, header: RunHeader | None = None) -> tuple[Group, TreeNode]:
     h, roots, steps, _ = _cut()
     return C.fold_scope(header or h, steps[step], roots)
 

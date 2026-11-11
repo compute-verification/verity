@@ -161,6 +161,7 @@ def marlin_module(where: Path, name: str = "fake_marlin_moe", source: str = MARL
     path = where / f"{name}.py"
     path.write_text(source)
     spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     return m

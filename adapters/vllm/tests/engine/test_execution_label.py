@@ -81,7 +81,7 @@ def _no_llm(monkeypatch):
     class LLM:
         def __init__(self, **kw):
             raise AssertionError("LLM() was reached: the execution check did not fail closed")
-    fake.LLM = LLM
+    fake.__dict__.update(LLM=LLM)
     monkeypatch.setitem(sys.modules, "vllm", fake)
     monkeypatch.setenv("VLLM_BATCH_INVARIANT", "0")             # build_engine applies the label's; the test's process gets its own back
     from verity_vllm.engine import engine_profile as prof
