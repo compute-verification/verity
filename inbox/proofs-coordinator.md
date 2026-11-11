@@ -37414,3 +37414,76 @@ How these compare [derived]:
 - A year of 600 s runs on one stream adds 15.7 bits if T = 2^80 is per run [relayed: ATTACK row 5].
 
 Scripts: `design_m.py`, the rows' rerun with the capture, and its output, in `note:proofs/20261111T0255Z-finding-rows-design` [run].
+
+## SCALE, Wed 11 Nov 02:58Z: no one-stage instance of SPOT[Flock] on `main`; `RegTwo.always` is the free field `h.reg.always`, so in Lean K has no cap below every block's needs (one for Daniel tonight); `hpos` and item 2 written as Lean, try `r20261111-025055-6cd6` running
+
+**Item 1's first question: there is no one-stage instance.** SPOT[Flock]'s only `Compiled` on `main` is the two-stage instance's own `toCompiled`.
+- [read] `ksTwo_spot`, `sessionsTwo_spot` and `ksAtTwo_spot` are all stated at `SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h) (rs h) (cap h)` (`Security/Proofs/Flock/SpotFlock/KS.lean:73, 84, 96` at `a930252c49`). [run: `rg compiledAt|deployOf` under `SpotFlock/`] Nothing under `SpotFlock/` builds a `compiledAt … (code h)` of its own.
+- [read] `CompiledTwo` extends `Compiled` (`Security/Definitions/Claims/SamplingTwo.lean:241`). So KILIAN's `hpos` has exactly one code to be stated at: `(compiledTwo … ).toCompiled`. Its `reveal` is `(code h).reveal` definitionally (`compiledTwo`, `TwoDeployed.lean:110`; `deployOf`'s `reveal := c.reveal`, `Claims/Sampling/Deployed.lean:208`; `compiled_reveal … := rfl`, `SamplingGeneric/Deployed.lean:364`).
+- [derived] Stated there, `pr_offReg_le_needs_ex` bounds the boundary off term of the two-stage split (openings under `s.roots`). So item 1 is not void: it is at that `toCompiled`. Item 2 covers the interior term.
+- **The gap REPBREAK named.** [read] My `code_reveal_pos` (`RevealsOpen.lean:65-67` at `db65e96678`) concludes `p.2.pos ∈ opensSet`, the gates *some* block of the partition needs, not `needs u`. The per-unit line at the code was missing.
+  - [derived] It is one line, because `(code h).reveal` is `Reveal.reveal (partition h) (two h) (iroots []) (Reveal.frameAt h.frame)` (`Code.lean:610`) and `Reveal.mem_reveal` gives each opening as `openAt … g` with `g ∈ needs u` (`Reveals.lean`).
+  - Closed by `code_reveal_at` and `hpos_spot` below, in `RevealsOpen.lean` on `cursor/proofs-canonical-node-331e` at local `4c9a8b0068`. Pushed once the try passes; its run is `r20261111-025055-6cd6`.
+  - `hpos` holds under every root, not only `s.roots`.
+
+**`RegTwo.always` at the instance, in one line:** `always = h.reg.always`, a free field.
+- [read] `reg x = (decode x).map fun _ => h.reg` (`Code.lean:618`). `Held.reg : RegTwo` (`Code.lean:119`) is a structure field, and no field of `Held` and no lemma constrains `.always`.
+- [read] At every non-refused coin, `RegTwo.checked` puts every block below `N` with `always v` in `checked` (`Claims/Sampling/Reg.lean:90-94`).
+- [read] Nothing bounds it but `N`: the cap is `min (nBlocks h) (K * perBlock h + |always|)` (`Cap.lean:169`).
+- [read, ATTACK's 02:51Z §5 re-read] At the deployed design it is empty. The facts ask `always` only on input slots' cells, which are empty (`Facts.lean:368-380`), and the deployed sample has no always-checked proof block (`verity/core/service/spot/Spot/Slots.lean:86-89`).
+- [read] `Addresses h` does not empty it: `SlotsAt.lean:40-49` only says the premise can fail at an always-checked unit.
+
+**So, for Daniel tonight** [derived]: K is a public function of the statement, because `always` is the auditor's registration and not the prover's. But no Lean line caps K below `|opensSet|`, every block's needs. With `always` true everywhere, K = `|opensSet|`, about 2^57.6 at B, and the one-audit miss at T = 2^80, k = 1,507, d = 1 is -99.1 instead of the sample's figure (ATTACK's [run]).
+
+There are three ways to close it:
+- (a) A hypothesis `∀ v, h.reg.always v = false` on the K lemma. That is a lemma premise, not a lock record, and it is what I state below.
+- (b) Carry `K_always = Σ_{v<N, always v} |needs v|` as a public term of K.
+- (c) A `Held` field or a guarantee premise that pins `always`. That changes what the deployed guarantee rests on, so it is Daniel's.
+
+I decide none of them.
+
+**Item 2 as I will prove it.** These are the Lean statements, copy-ready, in namespace `SpotFlock`, `open Claims Claims.Sampling SamplingDeploy`, `variable (h : Held)`. All four are in the try that is running.
+
+~~~lean
+theorem code_reveal_at (x : Msg) (s : AuditStatement) (u : ℕ) (v : Seen) (w : Claims.Flock.Wit) :
+    ∀ p ∈ (code h).reveal s u v w, p.2.pos ∈ Reveal.needs (partition h) s u ∧
+      p.1 = Reveal.rootsAt (partition h) (two h) (iroots x) s u v p.2.pos
+
+theorem hpos_spot {T : Type} (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) T)
+    (s : AuditStatement) :
+    ∀ u v w, ∀ p ∈ (compiledTwo F (code h) iroots (two h) (rs h) (cap h)).toCompiled.reveal s u v w,
+      p.1 = s.roots → p.2.pos ∈ (Reveal.needs (partition h) s u).toFinset
+
+theorem code_reveal_roots (x : Msg) {s : AuditStatement} {P : Partition} {d : Design.Two}
+    (hP : partition h s = some P) (hd : two h s = some d) {u ρ : ℕ} {rb : List ℕ}
+    (hρ : replayOf P d.part u = some ρ) (hrb : d.part.blocks[ρ]? = some rb) (v : Seen) (w : Claims.Flock.Wit) :
+    ∀ p ∈ (code h).reveal s u v w, p.1 = s.roots → p.2.pos ∈ Reveal.needs (partition h) s u ∧
+      (p.2.pos ∈ rb ∧ s.prog.Boundary rb p.2.pos = false → iroots x v ρ = s.roots)
+
+theorem code_reveal_iroots (x : Msg) {s : AuditStatement} {P : Partition} {d : Design.Two}
+    (hP : partition h s = some P) (hd : two h s = some d) (u ρ' : ℕ) (v : Seen) (w : Claims.Flock.Wit) :
+    ∀ p ∈ (code h).reveal s u v w, p.1 = iroots x v ρ' → p.2.pos ∈ Reveal.needs (partition h) s u ∧
+      ((∃ ρ rb, replayOf P d.part u = some ρ ∧ d.part.blocks[ρ]? = some rb ∧ p.2.pos ∈ rb ∧
+          s.prog.Boundary rb p.2.pos = false ∧ iroots x v ρ = iroots x v ρ') ∨ s.roots = iroots x v ρ')
+~~~
+
+**Where this differs from EXTFORM's wording.** [derived from `Reveal.rootsAt`, `Reveals.lean`, and `iroots` reading the round-1 message, `Code.lean:586-590`] The literal `RevealsWithinTwo` is false at the code:
+- "Under `s.roots`, a boundary gate" fails when the prover's round-1 message makes u's replay block's interior roots equal `s.roots`.
+- "None for any other ρ" fails when it makes two replay blocks' interior roots equal.
+- What holds is `code_reveal_roots` and `code_reveal_iroots`: the same, with each such coincidence named as an equality of roots.
+- The events don't change. Two passing openings at one (root, gate) with two values collide whichever block's roots they are (`bconf_of_disagree`), and `iopensAt`/`iregVal` read only the root.
+
+**What I suggest KILIAN take in its two-stage bridge** [derived]. The position fact needs no root at all:
+
+~~~lean
+(needs : ℕ → Finset ℕ) (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u)
+~~~
+- At the code this is `fun u v w p hp => List.mem_toFinset.2 (code_reveal_at h x s u v w p hp).1`. It covers both the boundary term (`p.1 = s.roots`) and the interior term (`p.1 = L.iroots x v ρ`), so the one-stage form is its special case.
+- If the bridge also wants each opening's root to be the statement's or a replay block's, I will add `rootsAt_cases : Reveal.rootsAt part two ir s u v g = s.roots ∨ ∃ ρ, Reveal.rootsAt part two ir s u v g = ir v ρ` with the next try. KILIAN, say which you take here.
+
+**Next.** Item 3's Lean is short at the registration level, so it goes in the next try:
+- `RegTwo.card_biUnion_checked_le`: at coins where `selectSecond` returns `(draw, n)`, `|⋃_{v ∈ checked} needs v| ≤ Σ_{v<N, always v} |needs v| + Σ_{j ∈ proved draw} |needs (blockAt sample j)|`.
+- Its code-level form.
+- On paper: `|proved draw| ≤ |sample|·Σ_t k_t` with `|sample| ≤ Kfirst`, because no Lean lemma bounds `selectSecond`'s draw.
+
+Checkpoint at 03:55Z or at the run's verdict, whichever is first.
