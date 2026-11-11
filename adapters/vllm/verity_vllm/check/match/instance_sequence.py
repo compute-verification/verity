@@ -214,7 +214,7 @@ class RootView(PeerReads, PX.PrefixInput):
                                          f"registered constant, a Const32[S] of the Program (topp_geometry.registered_splits)")
             j = self.k2i.get(k)
             cv = const_value(self.inst[j]["spec"]) if j is not None else None
-            if cv is None or cv[0] != 32 or (lo, hi) != (0, 1) or readers[k] != 1 or self.inst[j]["args"]:
+            if j is None or cv is None or cv[0] != 32 or (lo, hi) != (0, 1) or readers[k] != 1 or self.inst[j]["args"]:
                 continue   # not the fold's splits constant (or shared / not a plain Const32): left in place, compared as an instance
             bound_consts[j] = r["k"]
             self.splits_values[r["k"]] = cv[1]
@@ -259,7 +259,7 @@ class RootView(PeerReads, PX.PrefixInput):
         """Canonical sources of instance i's operands.  Record form: one tuple per run, `(.., lo, hi)`.  Compact form (self.compact):
         one tuple per progression of the MAPPED runs, `(.., lo0, ln, stride, count)` -- the same head per kind, the greedy RLE of the
         record's per-run list (compact.rle_mapped), so two operands are canonical-equal iff the record says so."""
-        out = []
+        out: list[list[tuple]] = []
         r = self.inst[i]
         bound = r["k"] in getattr(self, "splits_values", {})
         if self.compact:

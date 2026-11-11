@@ -92,7 +92,7 @@ def scheduled_live_counts(requests: list[dict], present: dict[str, list[int]]) -
         ok = (a_r is not None and finish in ("length", "eos")
               and (finish != "eos" or e.get("eos_verified") is True)
               and not e.get("g6_problems"))
-        if not ok:
+        if not ok or a_r is None:
             for s in ps:
                 unest[s].append(rid)
             per_req[rid] = {"established": False, "observed_steps": [ps[0], ps[-1]]}
@@ -164,7 +164,8 @@ def sampler_geometry_check(gp: dict, B, engine_step_of: dict[int, int], steps: d
     if n_topp == 0:
         info["note"] = "no top-p TokenSelect in the fold: nothing to check"
         return {"info": info, "problems": problems}
-    sg = gp.get("sampler_geometry") if isinstance(gp.get("sampler_geometry"), dict) else {}
+    sg = gp.get("sampler_geometry")
+    sg = sg if isinstance(sg, dict) else {}
     nsm = sg.get("num_sms")
     if nsm is None:
         nsm = ((gp.get("applicability") or {}).get("components") or {}).get("num_sms")

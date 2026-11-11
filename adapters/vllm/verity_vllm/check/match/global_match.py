@@ -82,6 +82,7 @@ import os
 import sys
 import time
 from dataclasses import dataclass
+from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.check.match import batch_decomp as BD
@@ -190,6 +191,7 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
             tokens = json.load(f)
     rec = read_record(log_path)
     mark("read_record")
+    res: dict[str, Any]
     res = {"schema": GM_SCHEMA, "comparator": COMPARATOR, "rules_version": RULES_VERSION,
            "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "oracle_dir": oracle_dir, "log": log_path,
            "global_program": {"schema": gp.get("schema"), "builder": gp.get("builder"), "workload": gp.get("workload"),
@@ -381,7 +383,7 @@ def main(a: Options) -> int:
     _gc_tune()
     if a.decomp_out and a.no_x09:
         raise UsageError("--decomp-out needs the X-09 run (drop --no-x09)")
-    loaded = {X09_EXTRA_DERIVED: list(a.derived)}   # shared with check(): the fold / components decoded once + the X-09 document
+    loaded: dict[str, Any] = {X09_EXTRA_DERIVED: list(a.derived)}   # shared with check(): the fold / components decoded once + the X-09 document
     if a.global_program:
         with open(a.global_program) as f:
             gp = json.load(f)

@@ -27,6 +27,8 @@ class Attribution:
 def attribute_instances(run: MatchRun, hdr_reqs: list[dict]) -> Attribution:
     """Attribute every fold instance to its request: the fold's meta channel, else the rows of its engine step."""
     B, steps = run.fold, run.steps
+    if B.oracle_rows is None:
+        raise ValueError(f"{run.oracle_dir}: the view passed as the fold has no instances.jsonl rows")
     n_in = B.n_input_nodes
     # the shared weights = the Input nodes no request owns (one per leaf field of a mixed-width Record:
     # FP8 435; one node for a homogeneous bf16 Record) -- never `n_input_nodes - 1`.  The request-owned inputs are the prompts

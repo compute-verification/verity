@@ -127,25 +127,25 @@ def within_step_order(run: MatchRun, att: Attribution, reqs: RequestFacts, by_st
                 if any((glob2loc.get(per_req[rid][il]) or shared_loc.get(per_req[rid][il], {}).get(rid) or (None, None, None))[2] != pos
                        for pos, il in enumerate(P_.steps[s_])):
                     perm_targets.append((ent, rid, s_))
-    for ent, rid, s in perm_targets[:32]:
+    for ent, rid, step in perm_targets[:32]:
         A, P = comps[rid], proj[rid]
-        if not perm_eligible(A, P, s):
+        if step is None or not perm_eligible(A, P, step):
             continue
         # Merkle (order-insensitive) matching of the step's instances: B instance -> A index with the same DAG hash -- the leg's
         # matching when it ran (computed where the hashes were), else this process's hashes on both sides
-        pi = (perm_facts.get(rid) or {}).get(s)
+        pi = (perm_facts.get(rid) or {}).get(step)
         if pi is None:
-            pi = perm_match(A, P, s, ops.dag_hashes(A), ops.dag_hashes(P))
+            pi = perm_match(A, P, step, ops.dag_hashes(A), ops.dag_hashes(P))
         same_dag = all(x is not None for x in pi)
         moved = [(j, x) for j, x in enumerate(pi) if x != j]
-        es = engine_step_of.get(per_req[rid][P.steps[s][0]])
+        es = engine_step_of.get(per_req[rid][P.steps[step][0]])
         # which computations were displaced: the specs of the A instances that moved by more than the induced shift, with their
         # Attention T (= query position + 1) against the positions of the OTHER requests' rows in the same engine step
         offs = collections.Counter(x - j for j, x in moved if x is not None)
         big = [(j, x) for j, x in moved if x is not None and abs(x - j) > 2]
-        displaced = collections.Counter(A.inst[A.steps[s][x]]["spec"] for _, x in big)
+        displaced = collections.Counter(A.inst[A.steps[step][x]]["spec"] for _, x in big)
         t_re = re.compile(r"\{T=(\d+)")
-        disp_pos = sorted({int(m.group(1)) - 1 for _, x in big for m in [t_re.search(A.inst[A.steps[s][x]]["spec"])] if m})
+        disp_pos = sorted({int(m.group(1)) - 1 for _, x in big for m in [t_re.search(A.inst[A.steps[step][x]]["spec"])] if m})
         others = sorted({p for r_, p in steps.get(es, {}).get("rows", []) if r_ != rid}) if es is not None else []
         if within_step == "sequence":
             statement = ("the request's own instances of this step are exactly its component's computations (Merkle-identical DAG multiset) "
@@ -160,14 +160,14 @@ def within_step_order(run: MatchRun, att: Attribution, reqs: RequestFacts, by_st
                          "wiring and dependency order are the component's (Merkle-identical), each is addressed by its canonical component index; "
                          "recorded as batch layout, not re-sorted" if same_dag else
                          "NOT a permutation of the component's step (different DAG): reported by G3")
-        perms.append({"request_id": rid, "local_step": s, "engine_step": es, "n": len(pi), "moved": len(moved), "same_dag_multiset": same_dag,
+        perms.append({"request_id": rid, "local_step": step, "engine_step": es, "n": len(pi), "moved": len(moved), "same_dag_multiset": same_dag,
                       "unmatched": sum(1 for x in pi if x is None), "offset_histogram": dict(offs.most_common(6)),
                       "displaced_specs": dict(displaced.most_common(6)), "displaced_query_positions": disp_pos[:16],
                       "coscheduled_other_positions": others[:16], "permutation_head": pi[:8], "statement": statement})
         if within_step == "sequence":
-            c.fail(f"{rid}: local step {s} (engine step {es}) is a permutation of its component's step ({len(moved)}/{len(pi)} moved; displaced query "
+            c.fail(f"{rid}: local step {step} (engine step {es}) is a permutation of its component's step ({len(moved)}/{len(pi)} moved; displaced query "
                    f"positions {disp_pos[:6]} vs co-scheduled others' positions {others[:6]})" if same_dag
-                   else f"{rid}: local step {s} differs structurally from its component ({sum(1 for x in pi if x is None)} unmatched)")
+                   else f"{rid}: local step {step} differs structurally from its component ({sum(1 for x in pi if x is None)} unmatched)")
     c.info.update({"shared_steps": len(layout), "batch_layout": layout[:6] + ([{"...": len(layout) - 6}] if len(layout) > 6 else []),
                    "steps_with_emission_out_of_canonical_order": len(nonmono_steps),
                    "order_source": "request-local canonical order: the component Program; cross-request row interleaving and (under dag) the "

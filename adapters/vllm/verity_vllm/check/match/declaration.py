@@ -247,10 +247,10 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
     wl = Workload.load(wl_path) if wl_path and workload_file(wl_path).is_file() else None
     declared = () if wl is None else wl.requests
     for i, q in enumerate(declared):
-        if q.prompt_token_ids is None:
+        if wl is not None and q.prompt_token_ids is None:
             raise RecordError(wl.where, f"requests[{i}].prompt_token_ids", "is absent (a lengths-only plan): the Program declares each prompt")
     # prompts by manifest POSITION (the Program's r<k>); the manifest's own request_id is the workload (UUID) id
-    prompts = {request_id_of(i): list(q.prompt_token_ids) for i, q in enumerate(declared)}
+    prompts = {request_id_of(i): list(q.prompt_token_ids) for i, q in enumerate(declared) if q.prompt_token_ids is not None}
     wl_uuids = {request_id_of(i): q.request_id for i, q in enumerate(declared)}
     amap = {r["request_id"]: r for r in (art.get("address_map") or {}).get("requests", [])}
     chron = {r["request_id"]: r for r in (art.get("chronology") or {}).get("requests", [])}
@@ -330,9 +330,12 @@ def record_engine_facts(header: dict, oracle_dir: str | None = None) -> dict:
     but unreadable} -- the caller FAILS on any disagreement, on an unreadable location and when nothing is attested."""
     from verity_vllm.pipeline.global_program import compilation_facts
     header = header if isinstance(header, dict) else {}
-    prof = header.get("profile") if isinstance(header.get("profile"), dict) else {}
-    ek_top = header.get("engine_kwargs") if isinstance(header.get("engine_kwargs"), dict) else {}
-    ek_prof = prof.get("engine_kwargs") if isinstance(prof.get("engine_kwargs"), dict) else {}
+    prof = header.get("profile")
+    prof = prof if isinstance(prof, dict) else {}
+    ek_top = header.get("engine_kwargs")
+    ek_top = ek_top if isinstance(ek_top, dict) else {}
+    ek_prof = prof.get("engine_kwargs")
+    ek_prof = ek_prof if isinstance(ek_prof, dict) else {}
     ek_ver: dict = {}
     unreadable: dict[str, str] = {}
     if oracle_dir:
@@ -561,7 +564,7 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
                 c.fail(f"no declared seed for {request_id_of(i)} but the run header records seed={hs}")
             elif ws is not None and hs is None:
                 c.fail(f"{request_id_of(i)}: manifest declares seed={ws} but the run header records no seed")
-            elif ws is not None and int(ws) != int(hs):
+            elif ws is not None and hs is not None and int(ws) != int(hs):
                 c.fail(f"{request_id_of(i)}: manifest declares seed={ws} but the run header records seed={hs}")
         m_s, h_s = manifest_sampling(wl), dict((header.get("workload") or {}).get("sampling") or {})
         c.info["sampling"] = {"manifest": m_s, "header": {k: h_s.get(k) for k in ("variant", "temperature", "top_p", "top_k") if k in h_s}}
