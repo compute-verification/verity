@@ -18,8 +18,8 @@ the scale is a batch of `DsaRMSNormSquares` over the 128 threads, then one of `D
 apply unit is `DsaRMSNormScale` once and a batch of `DsaRMSNormOut` over its G elements, an output element's circuit cut at the
 scale every element reads (`EW.shared_operand`), so r is decoded once, as one trace of the unit decodes it.  Each piece is
 traced from the word body's steps over `bit_ops`, as the `_v2`s are, so a bf16 operand's 16 zero bits, a square's equal
-operands and the constants N and eps are folded into its gates, and the pieces of a scale or apply unit together are the
-`_v2`'s circuit, gate for gate.  `DsaRMSNorm_v3` is the scale and then the apply unit over the row; an element's own gates,
+operands and the constants N and eps are folded into its gates, and the pieces of a scale or apply unit together hold the
+`_v2`'s gates, count for count.  `DsaRMSNorm_v3` is the scale and then the apply unit over the row; an element's own gates,
 which one trace of the row shares between its square and its output, are computed by each (circuit-check counts them as
 redundant gates, a warning).  They are ``opt_in`` (`verity.definitions.boolean`): `boolean_version` keeps the `_v2`s, and a
 `_v3` serves only a caller that binds it."""
