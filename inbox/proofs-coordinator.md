@@ -44136,3 +44136,90 @@ For the coordinator to ask:
 For the table:
 - The stop check as vllm would naively bind it (two outputs, ids from the token blocks) is refused by the verifier's round 2 [run: local probe]; it needs one output and ids from a boundary row.
 - Any two-stage audit is refused by the Lean verifier today (`FORM` off), so the output count cannot leave through a two-stage sample before that switch; a one-stage audit of stop blocks at the boundary could (designed, not built).
+
+## FUSED, Wed 11 Nov 09:05Z: of the lever row's two verifier changes, the flat-column cut is ALREADY ON MAIN (#8101, #8145) and 91% of both factors is taken on the head block, which has no template and no measured Lean second: with it flat and uncut the lever row is 3,688 GB, not 3,229 (`r20261111-084510-5ce0`). `BlockGemm_v3`'s steady row is running on `vy-dc-h200-3`
+
+Tags: [run] I ran it, [read] I read it in the named file, [relayed] another's entry, [guess]. Times are `date -u`.
+
+**0. The answer to your question.** The −11.5% is the **Lean verifier's** term, not the Rust loopback check [read: `benchmarks/spot_figures/breakeven/reprice.py` 305-313 at `4ab2b732df`: `fixed += verify * v / CORE_PER_GPU`, each statement's Lean core-seconds at 81.8 core-seconds a GPU-second; the planner holds no loopback term]. It is **wrong for the head block**: the head block is priced as if a template existed for it, and none does. What it is with the head block flat is the table below.
+
+GB at 10% of a world year, read as BREAKEVEN reads it (`breakeven_at_target.py`, ×1.05) [run: `r20261111-084510-5ce0`, cpu-2, done 09:03:41Z rc 0: `lever_split.py` (in the lane's notes, `tools/fused_lever_split.py`) over BREAKEVEN's own job and inputs at `a5e4e56a11`, six betas; the rows marked "as run" are BREAKEVEN's cases unchanged, and (iii) and the lever row equal `r20261111-065519-e0bd`'s 4,042.4 and 3,228.7]:
+
+| Row | GB | against (iii) |
+|---|---|---|
+| (iii), as run | 4,042.4 | |
+| templated check at its goal, as run | 3,568.4 | −11.7% |
+| the same, head block kept flat | 4,002.1 | −1.0% |
+| the same, on the fused MoE blocks alone | 4,019.3 | −0.6% |
+| the same, on the two measured families alone | 4,042.4 | 0 (they are in (iii) already) |
+| flat-column cut, as run | 3,927.4 | −2.8% |
+| the same, head block uncut | 4,036.4 | −0.15% |
+| the same, on the two measured families alone | 4,040.4 | −0.05% |
+| replay over the lifetime, as run | 3,731.7 | −7.7% |
+| **the lever row, as run** | **3,228.7** | −20.1% |
+| **the lever row, head block flat and uncut** | **3,688.2** | −8.8% |
+| the lever row, both verifier changes on the measured families alone | 3,730.1 | −7.7% |
+
+So of the 503 GB the two verifier changes take off after the replay (3,731.7 to 3,228.7), 460 GB (91%) is the head block's [run: arithmetic on the table]. The datacenter year reads the same within 0.4% (the lever row 3,221.4, with the head block flat and uncut 3,681.3) [run: `5ce0`].
+
+**1. The three changes.**
+
+**(a) The templated check.** Lean verifies a statement from `struct_lower`'s template (`verity/flock-circuit/tmpl`), so its work is in the size of the description and not of the unrolled circuit.
+- *How the planner takes it* [read: `reprice.py` 95-96, 221-229]. `tmpl="goal"` sets each type's Lean seconds a statement, but the RMSNorm families', to the smaller of its measured value and `VERIFY_TEMPLATED = 125/2100` of today's column. That ratio is one estimate on quant K6144, "taken for every type (assumed)". `tmpl="measured"`, which (iii) already holds, is two measured ratios: FlashInfer's family ×31.1/304.3 and RMSNorm's ×96.1/138.9.
+- *What exists on main* [read: the PRs' states by `gh`]. Lean's templated verify (#7999, #8096, #8145, #8315, all merged 9 Nov), the staging (`m1_unit.py --structural`), the timing tool (#7826). Measured at one block on eleven types, every verify accepted under `--zk`: 257.7 core-s templated against 1,899.6 flat, 0.136 [read: VERIFYFAST-B's checkpoint note; my own sum of the `/usr/bin/time` files of `r20261109-194350-d5cf`, `r20261109-202306-4f0a` (templated) and `r20261109-191738-c631`, `r20261109-211436-1bcd` (flat) gives 257.6 and 1,899.5]. By type it runs from 0.05 (quant K6144, 28.7 against 575.7 s) to 1.45 (`MoeExpertFp8GemmW`, 11.9 against 8.2 s: a template slower than the flat).
+- *What is open.* #8425 (the proof server and `prove_leg.py` take templated statements; 10 files, +206 −70, head `d4967690ac`) and #8771 on it (`server_rate.py`; 13 files against main with #8425's inside): both are the prover's side and neither changes a Lean second. #8432 (circuits', open): the head chain's templates the size of their descriptions. Not started: the served audit composing templated statements (`compose_circuit.py --structural`, a5's `--structural`) [read: #8425's body, "Not in this PR"].
+- *What the factor is taken on* [run: the strata of the priced rows at the pinned beta]. The planner has **no measured Lean second for the head block**: it prices a 256-block statement at 60.56 core-s, the median of its other types, and the goal takes that to 24.4. The lever row takes it to 20.75. The fused blocks go from 38.9 and 42.6 core-s a 1,024-block statement to 4.0 and 4.4, a 10× that nothing measures.
+- *The head block has no template* [read: #8520's body; SERVEDCARD 07:48Z, relayed]. The served `_v2` block is one traced circuit, "its description is as long as its gates" (2,228 MB for the 64-key block), staged flat because that is the form `verify --zk` takes. #8520 reports one `verify --zk` that reads that program at 982 s and 79 GB. FLOCKPKG measures its flat seconds now (`d4ef`, `e3ed`, about 10:00Z to 10:20Z) and predicts 150 to 190 s at one block [relayed].
+- *The fused block's template on main is not small* [run: my VM, `m1_unit.py --structural iv/hybrid/4`, build only, `8201dacff26e`]: `MoeExpertFp8ReadGemm_v1{…H=3072,K=6144,N=1…}` lowers in 325 s to a template of 6,399,122 rows for a unit of 9,272,008 (31 defs, a circuit file of 846 MB). FlashInfer K2048's template is 844,863 rows for a unit of 5,116,415, quant K6144's 376,488 for 11,068,800, and `MoeExpertFp8GemmW`'s, the one type where the template is slower, 650,895 for 1,187,215 [read: `d5cf`'s logs]. So I expect far less than 10× on the fused blocks [guess, until `a3e0` and `7268` end].
+
+**(b) The flat-column verifier cut.** "The flat verifier with its file reading cut and the HmOut.delta twin" [read: `reprice.py` 124-130].
+- **It is built and on main.** The file reading is #8101 (`6fb0fd67a717`) and the twin is #8145 (`c05b37ffe0ef`), both merged 9 Nov 07:33Z, both inside `checked` `00d07520b3` and `main` [run: `git merge-base --is-ancestor`]. The verifier-cost card on main (#8453, merged 11 Nov 01:30Z) was measured at `00d07520b3`, so its eleven flat figures have the cut inside.
+- *The factor.* Measured on two families (FlashInfer K2048 304.3 against 350.5 s, RMSNorm N=6144 138.9 against 214.7 s); ×0.85 assumed for every other type; the MoE family is left uncut [read].
+- *What it is taken on* [run]. 95% of its −2.8% is the head block's assumed ×0.85. On the two measured families it is −0.05%.
+- So this change is not a lever any more. What replaces it is the head block's measured flat seconds, which are FLOCKPKG's.
+
+**(c) The replay over the lifetime alone.** vllm's (VLLM-320); under `For vllm:` below.
+
+**2. Nearest to done, and what I am building.** The flat-column cut is done. For the templated check the nearest thing that turns a factor from assumed into measured is the Lean verifier on the two block types the lever is taken on and that the eleven do not hold. I launched it at 08:52Z, by the card's own method (VERIFYFAST-B's `ty_pins.sh` as `d5cf` ran it, its three paths moved to today's layout, nothing else; one block, proved on CPU, verified by Lean three times under `/usr/bin/time`), source `8201dacff26e` [run]:
+- `r20261111-085259-9c37` (cpu-11): the head block `SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=64,BN=64}`, FIRST false and true, **templated**. It answers first whether `struct_lower` lowers it at all and how large the template is, then whether Lean accepts it under `--zk`, then its seconds. (On my VM `struct_lower` ran out of the 9 GB I gave it while replaying the template [run], so I know nothing yet.)
+- `r20261111-085245-a3e0` (cpu-12): the two fused blocks, templated. `r20261111-085313-7268` (cpu-10): the same two, flat.
+- No PR from me by 12:00Z: no code is missing for (b), and (a)'s open code is #8425 and #8771, which are not mine to mark. If `9c37` shows the head block lowers and Lean accepts it, the PR that follows is the stager's (serve the `_v2` head block as its template), and it is circuits' and vllm's tree.
+
+**3. The plan for each of the two.**
+
+*The templated check on the head block (the 91%).*
+1. Files: `verity/protocols/flock/prover/python/verity_flock/struct_lower.py` (with #8432's "large primitives as calls"), `adapters/vllm/verity_vllm/pipeline/chunk_rows.py` (`reads`: a Boolean key block is `inline` and flat today), `benchmarks/served_units/stage.py` (stages the `_v2` flat), then #8425 and #8771 so the proof server proves it.
+2. Size: nothing in Lean if `scopeOkT` takes the template as it is; the stager's switch is tens of lines; #8425 and #8771 are 13 files already written.
+3. The run that measures it: `9c37` on main, then the same at #8432's head if main's template is large; then FLOCKPKG's flat seconds beside it give the ratio.
+4. Then a steady row on a templated head-block statement (`steady.sh` with `TMPL_UNIT=1`), which is kernels'.
+5. What in it is a claim: nothing, if the template is the same circuit (circuit-check `--structural` holds it to the Definition) and Lean's verdict is unchanged. If `scopeOkT` must change to accept it, that is a change to what `verify --zk` accepts: Daniel's, built unmarked.
+
+*The flat column.*
+1. Files: none in the verifier. The planner's column: `reprice.py`'s `VERIFY_FAST`, `VERIFY_CUT`, and the card `verifier_cost.glm-5.3.json`, which has no head block and no fused type.
+2. Size: a card row a type.
+3. The runs: FLOCKPKG's `d4ef` and `e3ed` (head block, flat, with the growth in blocks); mine `7268` (fused, flat, one block).
+4. What in it is a claim: nothing; it is a measurement replacing an assumed 0.85.
+
+**4. `BlockGemm_v3`'s steady row, on `vy-dc-h200-3`** (your 08:52Z message; the order's 08:51Z update).
+- The card was free at 08:56:31Z: 0 MiB used, no compute process, load 0.00, 16 cores, 194 GB free [run: `r20261111-085627-1500`].
+- `r20261111-090001-54d6`, launched 09:00:01Z [run]: kernels' `steady.sh` unchanged (sha256 `3821a8ee084f2091`), source `c6cadd0e325f` (the rows' tree [read: kernels' `ksteady-jobs/rows.md`]), `census:MoeExpertFp8BlockGemm_v3{K=6144,N=1,G=128,KB=128,SWAP=false,…MmaV2…}` (decode, 14.9% of the census), a full statement, one prover, pinned to CPUs 0-9 as the ten-core rows are, a 90-minute lease.
+- It differs from node A's rows in the machine (one H200 of 143,771 MiB, 16 cores), in `FLOCK_WORK=/workspace/cache/proofs-fused` (the run's user cannot write `/workspace/jobs` here; my first launch, `r20261111-085751-f3ab`, ended rc 4 on that `mkdir` before anything was built) and in the CUDA toolkit, which the harness unpacks itself where 13.3 is not installed.
+- The prefill kind (SWAP=true) follows on the same card when the decode's build is kept.
+
+For vllm:
+- **Where the replay lever is defined** [read, all at `4ab2b732df` on `cursor/proofs-headline-driver-c41e`]: `benchmarks/spot_figures/breakeven/reprice.py` 458-463 (`LIFETIME_128K = 458.0`, `BLOCKS_128K = 5258.0`, `COMMIT_WRITE = 0.00045`); `sweep.py` 83 and 94 (`Case.live`, `Case.commit_write`), 118-128 (`Case.tax`: `edge = 0.0 if self.live else EDGE_PAUSE / (self.edge_s or WINDOW)`, plus `COMMIT_WRITE` if `commit_write`), 352 and 397 (`life = dict(replay=reprice.LIFETIME_128K, live=True, commit_write=True)`); `headline.py` 53-54 (the measured side: `"replay": 5258.0, "live": False, "commit_write": False`); in the lane's notes `tools/headline_rows.py` 78 (the lever's name).
+- **What it assumes**: (1) a sampled request's replay costs its own lifetime, 458.0 GPU-s, and not every 600 s machine block its lifetime spans from the edge before it, 5,258.0 GPU-s, both compute-weighted over the 128k plan's served requests; (2) the replay reads the edge's state live, so the edge snapshot's pause leaves the serve tax; (3) every full K/V page is hashed when it is written, at 0.00045 of a GPU. In the priced row [run, pinned beta]: the replay's share of compute 0.000529 against 0.002916, the serve tax 0.042204 against 0.043387; 4,042.4 to 3,731.7 GB.
+
+For HEADPROF:
+- `vy-dc-h200-3`: `r20261111-090001-54d6` asks gpu-lease for the card once its build and staging end (about 09:15Z [guess]) and holds it at most 90 minutes; the lease's name reads `kernels-ksteady` because the harness sets it, and it is mine. The prefill kind follows, about 40 minutes more [guess]. If you need the card sooner, say so in an entry and I put the prefill kind behind you.
+
+For BREAKEVEN:
+- **Corrected: the lever row's two verifier factors** [run: `r20261111-084510-5ce0`, `out/at_target.txt`, 24 rows a scope]. They are taken 91% on `SparseMlaHeadBlock`, which has no template and no measured Lean second. With the head block flat and uncut the lever row is 3,688.2 GB, and the templated check alone is −1.0%, not −11.7%.
+- **Corrected: the flat-column cut is not unbuilt.** #8101 and #8145 are on main; its assumed ×0.85 on the head block is replaced by FLOCKPKG's measured seconds when `d4ef` ends.
+- **A slope to hold ready for FLOCKPKG's number**: (iii) moves with the head block's Lean seconds a 256-block statement, 60.56 core-s today, assumed. At 2.5×, 5× and 10× that (151, 303, 606 core-s) (iii) reads 5,132.6, 6,949.5 and 10,583.2 GB at 10% of a world year: **12.0 GB a core-second**, linear. The lever row reads 3,588.1, 4,187.0 and 5,385.0, and with the head block flat and uncut 4,736.9, 6,484.7 and 9,980.2 [run: `5ce0`]. #8520's 982 s a verify and FLOCKPKG's forecast of 150 to 190 s at one block are both above 60.56 [relayed]; what a 256-block statement costs is theirs to say.
+- Not yet measured, runs out: the head block templated (`9c37`), the fused blocks templated and flat (`a3e0`, `7268`), `BlockGemm_v3`'s steady row (`54d6`).
+
+For the table:
+- Templated check: its −11.7% is the Lean verifier's term at an assumed ratio, 91% of it on the head block, which has no template; with the head block flat it is −1.0% (4,002 GB). Measured on eleven other types: 0.137 of the flat.
+- Flat-column cut: on main since 9 Nov (#8101, #8145); its −2.8% is 95% an assumed ×0.85 on the head block; measured families alone −0.05%.
+- Replay over the lifetime: vllm's; −7.7% as priced; defined at `reprice.py` 458-463 and `sweep.py` 118-128.
