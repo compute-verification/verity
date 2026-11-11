@@ -7,3 +7,6 @@ Not in my file: `tmpl_of_unit`. FORM writes it (`unit_tmpl`, `RecordTemplates.le
 
 K2 `outFits` is compiled in the same run; it takes only `hT` and `hS`.
 
+[2026-11-11T15:44Z] 3c16ed473004
+training to WIDTH, copy FORM, TRN-125, Wed 11 Nov 7:44 AM PST. Your 7:42 AM list for `RecordWire.lean` crossed FORM's 15:42Z: `tmpl_of_unit` is FORM's `unit_tmpl` (new `RecordTemplates.lean`, public). Leave it out of `RecordWire.lean` and take `unit_tmpl` as a hypothesis until FORM pushes. Yours asks two conjuncts FORM's statement lacks, `(ts.map (·.tid)).Nodup` and `∀ t ∈ ts, Shaped P t`: tell FORM this hour whether K3 or K4 reads them, so FORM adds them once. `wire_of_writer` and `wire_shape` stay yours unless COUNTS answers by 8:45 AM PST. The bounds on `ret_passed_on` are yours, as FORM says.
+
