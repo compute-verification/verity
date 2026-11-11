@@ -23,8 +23,7 @@ Every path git sees changed must be one of:
   `from M import` line (a relative one, `.m`, read from the file's own place), or a `Path(__file__).parents[N]` anchor
   (or `Path(m.__file__)`'s, and the path joined to it) recounted to name, from where it now is, what the old one named,
   moved; in a shell script, likewise a path from its own directory (`$(dirname "$0")/../..`, or after
-  `${BASH_SOURCE[0]}` or a variable it sets to its own path, `SH_SELF`, or once to its own directory,
-  `here=$(cd "$(dirname "$0")" && pwd)`: `rules`'s `anchor`);
+  `${BASH_SOURCE[0]}` or a variable it sets to its own path, `SH_SELF`);
 - an added line in `REGISTRIES` that registers exactly a package the range created: a root `pyproject.toml` workspace
   member (or its `tool.uv.sources` entry) for a directory that is new at HEAD, a `tests/test_lean_packages.py` entry for a
   new Lake package with its `lean-audit.json`; and in any `pyproject.toml`, an added line of a new Lake package's own
@@ -63,6 +62,8 @@ Every path git sees changed must be one of:
   its new name. And a
   deleted `__init__.py` of a package the range's moves took away: files left its directory by a rename and HEAD has none
   at or below it (`rules`'s `emptied` in the `--json` report);
+- an edit to a shell script that recounts a path after a variable the script sets once to its own directory
+  (`here=$(cd "$(dirname "$0")" && pwd)`, then `$here/../..`), as a path from its own directory is (`rules`'s `anchor`);
 - a list of paths rewritten as a cover (`rules`'s `cover`): a list `tools/move/layout.py` reads as one (its `lists`: a
   Python list, tuple or set of string literals, a TOML or JSON array of strings, the objects of `git rev-parse` and the
   members of `tar`) with an entry that names what went to no one place, a directory whose files the range sent apart or
