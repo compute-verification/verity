@@ -1,4 +1,4 @@
-"""One-stage audit, run A5, on a row-table stand-in: `integrations/vllm/tests/pipeline/test_row_tables.py`'s window (40
+"""One-stage audit, run A5, on a row-table stand-in: `adapters/vllm/tests/pipeline/test_row_tables.py`'s window (40
 `ScaledMmS8Coordinate_v1{K=64}` units in eight chunks, each of whose ``x`` rows link one of four row tables, one per engine step and linear
 over two engine steps, under the stratified sampling design), its run ``<ROOT>/rank0``, committed as serving commits it
 (`pipeline.serving_rows._read_s8` on the fixture's served values, `ml.windows.rows.commit` under the step roots
@@ -13,7 +13,7 @@ docstring), and the run exits 0 only when the outcome is accepted and every nega
 serving wrote (``window/``, its private files too) and a5's records
 (``rank0/``, ``challenger/``, ``summary.json``).
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
       python benchmarks/one_stage/a5_row_tables.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
         [--firewall flock-firewall] --main FILE --out DIR
 """
@@ -28,21 +28,21 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[1] / "integrations" / "vllm"))
+sys.path.insert(0, str(HERE.parents[1] / "adapters" / "vllm"))
 
 import a5  # noqa: E402
 import a5_coins as AC  # noqa: E402
 from tests.pipeline import test_row_tables as TR  # noqa: E402
-from verity.core.protocols.spot.one_stage import registration as R  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import registration as R  # noqa: E402
 from verity_vllm.commit import index as IX, row_tables as RTB  # noqa: E402
-from verity.ml.windows import rows as CS  # noqa: E402
+from verity.commitments.windows import rows as CS  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
 
 #: the stand-in's session root, as a TP Commit's run root is its ranks' session root
 ROOT = hashlib.sha512(b"verity/a5/row-table-stand-in/v1").hexdigest()
 #: Two of the fixture's 40 proof blocks, and a twentieth of however many it registers.
 RULE = "stratified-rate:1/20"
-OF = {"fixture": "integrations/vllm/tests/pipeline/test_row_tables.py", "context": TR.CTX.hex()}
+OF = {"fixture": "adapters/vllm/tests/pipeline/test_row_tables.py", "context": TR.CTX.hex()}
 
 
 def commit(out: Path) -> tuple[CS.Binding, dict[int, bytes]]:
