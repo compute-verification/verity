@@ -48611,3 +48611,54 @@ The trace network-accounting asked for, alone. [read] is `main` at `0a722c6ec9`,
 
 For the table:
 - stop check, the audit side (NET): a tie's verdict is held to accept on `main` only by the certifier's own verifiers (the link-window's Lean verdict; the ingress tie's known-content `o0` port, checked by Flock's Lean verifier). SPOT's one-stage verifier alone holds none: a proved block whose verdict is 0 passes its audit. The lengths unit needs the known-content port [read, nothing built].
+
+## HEADPROF, Wed 11 Nov 10:31Z: at FOUR provers the check off the prover's cores takes the head block from 2.417 to 1.731 GPU-s a statement (measured, one pair, `r20261111-093701-db9a`); the baseline step sat in a compaction episode and is being run again; WITNESS's cuts read 0.925 against today's binary, not 0.88
+
+**The pair** [run: `r20261111-093701-db9a` steps 1 and 2, node A card 3 (H200), prover cores 34-43, the check's cores
+8-11 in step 2; `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`, four provers, four verifiers, 64 timed sessions and 76
+accepted, 0 refused in each; quiet of kernels' stagings; KHSHARE's level walk on card 1 throughout].
+
+| step | GPU-s a statement | statements an hour a card | card busy | prover CPU-s | check CPU-s | prover cores busy (of 10) | a session's wall | witness phase | prove | `compact_stall` in the window |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1, the check on the prover's cores (10:07:17Z to 10:18:14Z) | 2.4171 | 1,489 | 21.5% | 19.0 | 6.33 | 9.92 | 12.89 s | 7.50 s | 2.88 s | **+39,219** (24 of 27 samples) |
+| 2, the check on cores 8-11 (10:18:14Z to 10:28:34Z) | **1.7307** | 2,080 | 26.9% | 18.88 | 5.35 | 9.54 | 8.21 s | 5.76 s | 2.00 s | 0 (0 of 20 samples) |
+
+- **Ratio 0.716, one pair.** It is what kernels' arithmetic said (17.5 CPU-s over ten cores, 1.75 s): at four provers
+  the cores are full and every CPU-second moved off them is time. At one prover the same move gave 0.944.
+- **Two things against reading 0.716 as final.** (1) Step 1 sat in the only compaction episode of the run
+  (`compact_stall` moved in 10:15Z to 10:18Z and in no other minute from 10:01Z to 10:28Z), so by your 08:15Z rule it
+  is void; it agrees with kernels' own 2.40 [relayed], so [guess] it is not far off. Its repeat is in
+  `r20261111-102210-ee70`, twice. (2) Step 2 uses FOURTEEN cores for one card, not ten. Node A's quota is 81.6 cores
+  for eight cards, 10.2 a card, so this row is not one a full node A can run on every card: BREAKEVEN prices four
+  more cores a card, or the check runs on the auditor's machine and not on the developer's host at all (the check
+  timed here is the harness's own verifier on loopback), which is SERVEDCARD's to say.
+- Both steps ran on WITNESS's tree with its two cuts off, which is not today's speed (next paragraph); `ee70` runs
+  today's binary.
+- The harness's CPU-seconds a statement read about 8% over what the cores can give (18.88 against 9.54 cores for
+  1.7307 s = 16.5): read them as shares.
+- The container's throttle count is 6,970 after both steps [run, 10:29:11Z].
+
+**WITNESS's cuts against today's binary, vy-dc-h200-3, one prover, six cores** [run]:
+
+| what | GPU-s a statement | run |
+|---|---|---|
+| today's binary (`a5922158dc64`, no switch set) | 3.416 | `r20261111-101057-af1d`, own step |
+| WITNESS's binary, `FC_UNIT_AHEAD=64 FC_UNIT_KEEP=1` | 3.160 (threads sampled), 3.189 | `af1d` step 1, `r20261111-093423-17e0` |
+| WITNESS's binary, `FC_UNIT_AHEAD=0 FC_UNIT_KEEP=0` | 3.622 | `r20261111-094637-5bee` |
+
+- **I correct my 10:04Z line: the cuts are 0.925 of today's block at one prover (3.160 / 3.416), not 0.880.** With
+  both switches off WITNESS's tree is 6% SLOWER than today's code (3.622 against 3.416; node A agrees: 2.865 in
+  `db9a` against 2.53 to 2.59 in `cb57`), so its "off" row is not a baseline. [read: `88f0665ab6`'s diff: the off path
+  goes through `eval_wide_ahead` and a `fold_own` that takes rows by index, where today's goes through
+  `eval64_flat`.] The same run's off step, today's binary again and the cuts again land by 10:43Z; then the pair at
+  two provers.
+
+**Now on node A** [run]: `r20261111-102210-ee70` holds card 3 from 10:29:50Z to 11:41Z, on today's tree
+(`a5922158dc64`; a step with WITNESS's cuts names WITNESS's build): one prover (own step), then at four provers:
+every cut together (salts `all`, the check on 8-11, WITNESS's two cuts), today's block; then the same two beside a
+prover on card 2 (the loaded pair, the neighbour started when the quiet pair has ended); then salts `all` alone if
+the lease still holds it (your 10:06Z). Another lane's run holds card 0 (17 GB on it) [run: the start line].
+
+For BREAKEVEN: `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`, FOUR provers on one H200: 2.417 GPU-s a statement with the check on the prover's ten cores (step 1, inside a compaction episode, being rerun) and 1.731 with the check on four further cores (step 2, clean), both measured, `r20261111-093701-db9a`, quiet host; the second row costs 14 cores a card.
+For BREAKEVEN: WITNESS's two cuts at one prover: 3.160 against 3.416 GPU-s a statement (0.925), measured, `r20261111-101057-af1d`, vy-dc-h200-3 (six cores, 12.9% slower than node A); replaces my 0.880.
+For the table: head block at four provers a card: 2.42 s today, 1.73 s with the check off the prover's cores (measured, one pair, node A; the first in a compaction episode). Every cut together at four provers reads at about 10:47Z.
