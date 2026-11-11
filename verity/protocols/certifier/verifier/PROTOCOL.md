@@ -2096,6 +2096,23 @@ registered reads from the network certifier's opening and refuses request rows t
 one. The period check reads schedules without lengths rows only: nothing yet ties the request row to the compute
 side's committed values or reads the block's verdict and failures.
 
+**The content rows' formats** (`content_rows`) are three rows of a released connection that hold what it carried:
+its request (u32 bytes, the bytes, zeros to its class's size), its response (u32 m, then O u32 ids, the ids of the
+m `DATA` cells released before its `END` or `FAIL` and zeros to O) and its end (a fails slot: (0, 0), or (1, n)
+after a `FAIL`). A row's size is its class's, a size of prompt ids and a size of ids released, each a power of two.
+Only the formats exist: the network certifier writes no such row, and no table, head or registration holds one.
+
+**The response tie's proof block** (`verity.protocols.certifier.prover.response_tie`, `ResponseTie`, in no Spec) is one
+a connection, in one of two forms by its class. It reads the compute side's committed row of the connection's O ids,
+the network certifier's end row and, in a stop class, the compute side's committed stop word (n + finish·2^13), and no
+cell. Its gates compute the response row: the count, then the first count ids and zeros to O. In a stop class the
+count is the stop word's n, and the block checks that the end row is (0, 0), that the finish is not 0 and that n is
+at most O; in a failed class the count is the end row's `at`, and it checks that the class is 1 and that `at` is at
+most O. Its outputs are a verdict and the row. Where a check fails the row's count word is all ones, a count no
+response row has, so a statement that registers the row as a read of the signed one opens its root on no refused
+input, whether or not anything reads the verdict. Every switch is computed and none is witness. A row is the block's
+output whole, so O is at most 4,096 (`content_rows.check_ids`).
+
 **The leak bound** is what a server can signal on the wire beyond the response it sends:
 - **0 size bits.** Every cell is B bytes, whatever its kind (`PAD`, `DATA`, `END`, `FAIL` or `REFUSED`).
 - **0 timing bits, at bucket resolution.**
