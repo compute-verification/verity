@@ -262,7 +262,8 @@ class StepNeeds:
             out.append((self.kind("token_select", V=V * W), sampling["greedy"]))
         seeded, unseeded = sampling.get("seeded", 0), sampling.get("random", 0)
         if seeded:
-            out.append((self.kind("token_select_stochastic", V=V * W, CONSTRUCTION=self.tp.effective_sampler_construction()), seeded))
+            from verity.definitions.registry.topp_geometry import registered_splits
+            out.append((self.kind("token_select_stochastic_split", V=V * W, S=registered_splits(int(self.tp.num_sms))), seeded))
         if unseeded:
             fi = flashinfer_sampler and not seeded and bool(sampling.get("top_k") or sampling.get("top_p"))
             out.append((Need("token-select", _id("flashinfer-sampler" if fi else "select-random", V=V * W),
