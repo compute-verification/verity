@@ -65,7 +65,13 @@ says so. Before each build it `repair`s the slot tree: a module an interrupted b
 not one, a `.hash` that is not the trace's or is older than its output) loses its trace and `.hash` files, so Lake rebuilds
 it, as does a module's `.hash` file when the module has no trace, and after a run left mid-way, a package's fetched dependencies that run was taking, or that hold such a
 module or a checkout other than the manifest's, are taken again. A spec whose `proved_in` package's build did not pass
-never reads that package's `.lake` (`check.proved`), which an earlier or interrupted build left.
+never reads that package's `.lake` (`check.proved`), which an earlier or interrupted build left. When check.py fails a
+package only on its sampled recompile (`check.sampled_recompile`: a module the tree kept or restored compiles from its
+source to other outputs, which Lean's nondeterminism can do as staleness can), on record differences and on a spec's
+`proved_in` package whose build that failure kept from passing (`proved_in.unpassed`), the run drops each of those
+modules' trace, `.hash` files and objects in the tree (`mismatched`, `forget`) and runs that check.py once more, on the
+packages it was given, with nothing restored from the artifact cache, so Lake compiles them; the first one's reports go
+to `mismatched/<path>/` (its first package's), and a second failure fails the run.
 
 It audits with it, the same way, every package whose guarantees' records read PKG's build (`requirers`: PKG is in its
 `closure`, by path or by `proved_in`). Packages whose first audit takes the same flags share one check.py (`batches`), so
@@ -81,7 +87,8 @@ directory. Of the facts documents, only PKG's own stays beside its reports (`che
 guarantees read
 (`security/Properties`' when `security` changes) fails here, not at the Lean check of `next`. With `--update`, a requirer whose every
 failure is a record difference (`settles`) is audited again with `--update`, in a check.py of its own, so one run
-regenerates every lock the change moved; one failing for any other reason fails. With `--moved` too, each requirer's first
+regenerates every lock the change moved; one failing for any other reason fails. That check.py runs once more after a
+sampled recompile differs only when the one the requirer shared did not, and reads the artifact cache only then. With `--moved` too, each requirer's first
 audit takes `--update --moved`
 (`first_update`; check.py reads `--moved` only with `--update`), so a rename its records read resolves before its
 failures are judged. The exit status is the first failure's. A slot tree
@@ -116,7 +123,7 @@ Its result is of kind `FAST_KIND`, never a Lean verdict: no kernel replay and no
 in a recorded run, into its `result.json`, the Attempt's result. `check` fails its lean-audit step on a report of that kind or
 one without the replay (`check.lean_fast`), and `research merge` refuses an attempt whose result is of that kind
 (`research.merge.REFUSED_KINDS`), whatever `--tool` recorded it. The compiled modules it leaves are not a verdict either: in a
-run they go into its `lean-audit/` as a bundle (`lean_audit.LakeArtifacts.bundle_into`), and a node that restores one still
+run they go into its `lean-audit/` in bundles (`lean_audit.LakeArtifacts.bundle_into`), and a node that restores one still
 replays every declaration through the kernel. `research run` sends a records run the URLs of the newest such bundles and of
 the checks' (`research.cli.lean_records_urls`, `lean_audit.shared_bundles`), and where builds are sandboxed the run takes
 them into the node's artifact cache before its first build (`sent_urls`), so it restores what another node compiled.
@@ -1300,7 +1307,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     What each check.py's builds compiled goes into the node's artifact cache when it ends, whatever its exit (`put_built`: its
     packages', and those of the provers it audits), and what a run that was killed left goes in when the next run takes
     the tree (`put_left`). In a run, the module versions it added go into ``out``
-    as one bundle for other nodes (`LakeArtifacts.bundle_into`), as a recorded check's do, and on a node whose builds are
+    in bundles for other nodes (`LakeArtifacts.bundle_into`), as a recorded check's do, and on a node whose builds are
     sandboxed the bundles other nodes' runs left, whose URLs `research run` sent it (`sent_urls`), go into that cache first
     (`LakeArtifacts.take`), so its builds restore what they compiled."""
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
@@ -1388,25 +1395,41 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 all_out, since = reports(out, pkg, batch[0]), time.time()
                 (all_out / "audit.json").unlink(missing_ok=True)
                 mark(tree, package=batch[0], packages=batch, phase="check", since=since, out=str(all_out))
-                all_got = subprocess.run(check_argv([tree / p for p in batch], all_out, first, moved, pkg in batch,
-                                                    artifacts=artifacts.store, facts_cache=facts_dir()),
-                                         cwd=tree, env=env, pass_fds=fds).returncode
+                store, redone = artifacts.store, False
+
+                def audit(ps: list[str], to: Path, with_update: bool) -> int:
+                    nonlocal store, redone
+                    got = subprocess.run(check_argv([tree / p for p in ps], to, with_update, moved, pkg in ps, artifacts=store,
+                                                    facts_cache=facts_dir()), cwd=tree, env=env, pass_fds=fds).returncode
+                    if redone or not got or AUDIT.killed(got) or not (bad := mismatched(to, tree, log)):
+                        return got
+                    store, redone = None, True
+                    for mod, d in bad.items():
+                        forget(lib := d / ".lake" / "build" / "lib" / "lean", lib / LA.MK.path_of(mod, ".trace"))
+                    label(aside := set_aside(to, out, ps[0]))
+                    log(f"lean-records: {'+'.join(ps)}: check.py's sampled recompile compiled {', '.join(sorted(bad))} to "
+                        f"other outputs than {tree} kept (Lean's output isn't reproducible for every module); each loses its "
+                        f"trace, its .hash files and its objects, and check.py audits {' and '.join(ps)} once more, where "
+                        f"Lake compiles them, with nothing restored from the artifact cache (the first audit's reports: "
+                        f"{aside})")
+                    return audit(ps, to, with_update)
+
+                all_got = audit(batch, all_out, first)
+                shared = store, redone
                 put_built(artifacts, LA.built(all_out), since, log, f"lean-records: {who}")
                 log(f"lean-records: {who}: check.py exit {all_got} in {time.monotonic() - t0:.0f} s on {tree} ({n} files "
-                    f"changed there), without the kernel replay or the tests: a {FAST_KIND} result, which check and research "
-                    f"merge refuse; reports in {all_out}")
+                    f"changed there{', audited twice' if redone else ''}), without the kernel replay or the tests: a "
+                    f"{FAST_KIND} result, which check and research merge refuse; reports in {all_out}")
                 own = own_reports(batch, pkg, out, tree, all_got, log) if len(batch) > 1 else {batch[0]: all_got}
                 for p in batch:
                     mine_out, up, got = reports(out, pkg, p), first, own[p]
                     if not up and regenerates(p, pkg, got, update, mine_out, tree / p, log):
-                        t1, since = time.monotonic(), time.time()
+                        t1, since, (store, redone) = time.monotonic(), time.time(), shared
                         mark(tree, package=p, phase="check", since=since, out=str(mine_out))
-                        up, got = True, subprocess.run(check_argv([tree / p], mine_out, True, moved, p == pkg,
-                                                                  artifacts=artifacts.store, facts_cache=facts_dir()),
-                                                       cwd=tree, env=env, pass_fds=fds).returncode
+                        up, got = True, audit([p], mine_out, True)
                         put_built(artifacts, LA.built(mine_out), since, log, f"lean-records: {p}")
                         log(f"lean-records: {p}: check.py exit {got} in {time.monotonic() - t1:.0f} s on {tree}, audited again "
-                            f"with --update; reports in {mine_out}")
+                            f"with --update{', twice' if redone and not shared[1] else ''}; reports in {mine_out}")
                     if AUDIT.killed(got):
                         killed[p] = got
                     label(mine_out)
@@ -1434,8 +1457,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 (tree / DIRTY).unlink(missing_ok=True)
             if run_dir and artifacts.added and out.is_relative_to(Path(run_dir).resolve()):
                 try:
-                    dest, n = artifacts.bundle_into(out)
-                    log(f"lean-records: {n} module version(s) it added bundled for other nodes ({dest.name})")
+                    log(f"lean-records: {LA.bundled(*artifacts.bundle_into(out), len(artifacts.added))}")
                 except OSError as e:
                     log(f"lean-records: nothing bundled for other nodes: {e}")
             records = verdicts(outcomes, new, out, tree, files, skip, log, committed)
@@ -1901,6 +1923,41 @@ def settles(out: Path, at: Path) -> bool:
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return False
     return len(bad) == 1 and bool(bad[0].get("regenerated")) and Path(str(bad[0].get("package"))).resolve() == at.resolve()
+
+
+def mismatched(out: Path, tree: Path, log=print) -> dict[str, Path]:
+    """{module: its package's directory} of each module whose outputs in ``tree`` check.py's sampled recompile found other
+    than what its source compiles to (the reports' `sampled` `mismatched`, under ``out``), when every other failure there
+    is a record difference (`RECORD_DIFFERENCE`), which `--update` settles, or a spec's `proved_in.unpassed`, which a
+    prover's failures there cause; {} when there is none, when another failure is there, when a package it names is
+    outside ``tree``, or when the reports can't be read, which it says (``log``). Lean's output is not reproducible for every module (`olean_graph`): a kept build compiled once can
+    differ from a recompile of the same source, as a stale one does."""
+    found: dict[str, Path] = {}
+    try:
+        for r in json.loads((out / "audit.json").read_text())["packages"]:
+            fails, codes, s = r.get("failures") or [], r.get("failure_codes") or [], r.get("sampled")
+            mods = s.get("mismatched") or {} if isinstance(s, dict) else {}
+            if len(codes) != len(fails) or codes.count("sampled") != len(mods) or \
+                    not all(c in ("sampled", "proved_in.unpassed") or c in AUDIT.RECORD_DIFFERENCE for c in codes):
+                return {}
+            found |= {m: Path(d).resolve() for m, d in mods.items()}
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+        log(f"lean-records: check.py's reports in {out / 'audit.json'} can't be read for the modules its sampled recompile "
+            f"failed ({type(e).__name__}: {e}), so none is compiled again")
+        return {}
+    return found if all(d.is_relative_to(tree.resolve()) for d in found.values()) else {}
+
+
+def set_aside(mine_out: Path, out: Path, p: str) -> Path:
+    """Move check.py's reports on ``p`` (its `audit.json` and `audit-*` directories under ``mine_out``) to
+    `mismatched/<path>/` under ``out``, where no reader of the run's verdict looks; that directory."""
+    aside = out / "mismatched" / re.sub(r"[^A-Za-z0-9]+", "_", p)
+    shutil.rmtree(aside, ignore_errors=True)
+    aside.mkdir(parents=True)
+    for f in [mine_out / "audit.json", *sorted(mine_out.glob("audit-*"))]:
+        if f.exists():
+            shutil.move(f, aside / f.name)
+    return aside
 
 
 def first_update(p: str, pkg: str, update: bool, moved: Path | None, log=print) -> bool:
