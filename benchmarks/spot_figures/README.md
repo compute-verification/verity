@@ -202,6 +202,11 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   ~~~sh
   uv run python benchmarks/spot_figures/breakeven/sweep.py --out DIR [--workers N] [--scopes all] [--only NAME...]
   ~~~
+
+  `--steady ROWS.json` (a case's `steady`) prices each block type the file holds a steady-state row of at what the
+  row measured (`reprice.steady`: a statement's GPU-seconds, its blocks, its provers and the run or art that holds
+  it), in place of the tables' price for it. Each priced stratum then names its basis, that record or the table that
+  priced it, and each proof-server case's row gives every basis's share of its proving (`basis`).
 - **Figure 6** (`figure6.py`), the certified tick's trade-off:
   - (a) a timeline of continuous admission against tick admission, with the network certifier stamping release
     buckets as its own layer;

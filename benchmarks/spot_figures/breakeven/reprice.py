@@ -245,10 +245,59 @@ def server_price(x) -> tuple[float, float, float, int] | None:
     return next((v for p, v in SERVER.items() if x["block"].startswith(p)), None)
 
 
+#: what a steady-state row holds (`steady`): the block type as the strata name it, a statement's GPU-seconds, the
+#: blocks a statement held, the provers that shared the GPU, and the run or art that holds the measurement
+STEADY_FIELDS = ("block", "statement_seconds", "blocks", "provers", "record")
+
+
+def steady(path) -> dict[str, dict]:
+    """The proof server's steady-state rows in a file, by block type: `{"rows": [...]}`, each row with
+    STEADY_FIELDS. They are measurements a run made, so they arrive as a file a case names (`sweep.Case.steady`) and
+    never as a table here."""
+    rows = json.load(open(path))["rows"]
+    for r in rows:
+        if lacks := [k for k in STEADY_FIELDS if k not in r]:
+            raise ValueError(f"{path}: the row of `{r.get('block')}` lacks {', '.join(lacks)}")
+        if not (r["statement_seconds"] > 0 and r["blocks"] >= 1 and r["provers"] >= 1):
+            raise ValueError(f"{path}: the row of `{r['block']}` is no measurement: {r}")
+    by = {r["block"]: r for r in rows}
+    if len(by) != len(rows):
+        raise ValueError(f"{path}: two rows price one block type")
+    return by
+
+
+def basis(x) -> str:
+    """What prices a stratum's proving off the steady state, by the table's name: a server price, or the card's
+    seconds with the statement cache's factor from CACHE, from FAMILY's member or from DEFAULT."""
+    if server_price(x):
+        return "reprice.FUSED_SERVER" if x.get("kind") == "fused" else "reprice.SERVER"
+    if expert(x):
+        return "reprice.EXPERT"
+    how = cache_factor(x)[2]
+    return {"measured": "reprice.CACHE", "CPU share": "reprice.CACHE (a CPU share)", "family": "reprice.FAMILY",
+            "assumed": "reprice.DEFAULT"}[how]
+
+
+def basis_shares(strata) -> dict[str, float]:
+    """Each basis's share of the proving a token takes with every block proved in full statements (a block's seconds
+    and its share of a statement's fixed seconds, the verifier's included), the largest first; a steady-state row's
+    basis is `steady: ` and its record."""
+    cost: dict[str, float] = {}
+    for x in strata:
+        s = x["per_token"] * (x["seconds_per_block"] + x["fixed_seconds"] / max(1, x["statement_blocks"]))
+        cost[x.get("basis", "the card")] = cost.get(x.get("basis", "the card"), 0.0) + s
+    total = sum(cost.values())
+    return {k: v / total for k, v in sorted(cost.items(), key=lambda kv: -kv[1])} if total else {}
+
+
 def apply_server(strata, prover=1.0, k4=False, front=False, quant6144=None, host=1.0, plain=False, verify=0.0,
                  column="fast", tmpl=False, fused_busy=None, verify_other=None, k_gain="measured", dense_k=2,
-                 verify_cut=False, cold=0.0):
-    """The strata priced as the long-running proof server proves them, with the statement cache warm: the measured
+                 verify_cut=False, cold=0.0, steady=None):
+    """The strata priced as the long-running proof server proves them, with the statement cache warm. A type with a
+    steady-state row (`steady`, by block type) costs what its row measured and nothing else: its statement's
+    GPU-seconds over the statement's blocks for each block, at the prover count the row ran, in statements of the
+    row's blocks, with no fixed seconds of its own (a statement of fewer blocks is charged in proportion, which no
+    row measured) and no lever below but the Lean verifier's. Of the rest, the measured
     types at their server prices and full statements, the rest at the card with the cache's factor and MARGINAL's
     seconds a block (quant K6144 at `quant6144` when given); then a GPU prover `prover` times faster on proving
     shares, K provers an H200 on full statements (`k4`: four, `dense_k` on the dense types, one on
@@ -259,13 +308,17 @@ def apply_server(strata, prover=1.0, k4=False, front=False, quant6144=None, host
     --zk, every prover's proving `1 + cold` times longer (the share of its time a cold session takes), and the Lean
     verifier's core-seconds a statement from `column` times `verify`, cut by its family's measured cut with
     `verify_cut` (VERIFY_CUT_MEASURED, VERIFY_CUT elsewhere, the MoE family's uncut; the templated check where it is
-    cheaper, `tmpl` = `measured` or `goal`, see `templated_seconds`; the assumed types at `verify_other` when given)."""
+    cheaper, `tmpl` = `measured` or `goal`, see `templated_seconds`; the assumed types at `verify_other` when given).
+    Each stratum says what priced its proving (`basis`): `steady: ` and its row's record, or `basis`'s table."""
     table, floor = VERIFY_COLUMNS[column]
     out = []
     for x in strata:
         fixed, marginal, cap = x["fixed_seconds"], x["seconds_per_block"], x["statement_blocks"]
-        sp = server_price(x)
-        if sp:
+        row = steady.get(x["block"]) if steady else None
+        sp = None if row else server_price(x)
+        if row:
+            fixed, marginal, cap, bf, bm = 0.0, row["statement_seconds"] / row["blocks"], row["blocks"], 0.0, 0.0
+        elif sp:
             fixed, marginal, b, cap = sp
             if fused_busy is not None and x.get("kind") == "fused":
                 b = fused_busy
@@ -286,7 +339,7 @@ def apply_server(strata, prover=1.0, k4=False, front=False, quant6144=None, host
             bf = 1 - host_s / fixed if fixed else 1.0
             bm = 1 - host_m / marginal if marginal else 1.0
         k = 1
-        if k4 and not x["block"].startswith(ONE_PROVER):
+        if k4 and not row and not x["block"].startswith(ONE_PROVER):
             k = dense_k if x["block"].startswith(DENSE) else 4
             k = min(k, next((m for p, m in K_MAX.items() if x["block"].startswith(p)), k))
         if k_gain == "mps_types" and k > 1:
@@ -298,10 +351,11 @@ def apply_server(strata, prover=1.0, k4=False, front=False, quant6144=None, host
                     else (k_gain == "types" and type_gain(x, k)) or K_GAIN[k])
             fixed *= gpu_factor(bf, prover, k, front, gain)
             marginal *= gpu_factor(bm, prover, k, front, gain)
-        if plain:
+        if plain and not row:
             p = 1 - share(PLAIN, x)
             fixed, marginal = fixed * p, marginal * p
-        fixed, marginal = fixed * (1 + cold), marginal * (1 + cold)
+        if not row:
+            fixed, marginal = fixed * (1 + cold), marginal * (1 + cold)
         if verify:
             v, how = verifier_seconds(x, table, floor)
             if tmpl:
@@ -312,7 +366,8 @@ def apply_server(strata, prover=1.0, k4=False, front=False, quant6144=None, host
                 v *= next((r for types, r in VERIFY_CUT_MEASURED if x["block"].startswith(types)), VERIFY_CUT)
             fixed += verify * v / CORE_PER_GPU
         out.append(x | {"fixed_seconds": fixed, "seconds_per_block": marginal, "statement_blocks": int(cap),
-                        "priced": "measured" if sp else x["priced"]})
+                        "priced": "steady" if row else "measured" if sp else x["priced"],
+                        "basis": f"steady: {row['record']}" if row else basis(x)})
     return out
 
 
