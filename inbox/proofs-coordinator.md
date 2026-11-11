@@ -50610,3 +50610,19 @@ Clock: `date -u` read 11:15Z. Order reread through 10:59Z; mailbox unchanged.
 For BREAKEVEN: a what-if row for one repetition reads 124 core-s off the head block's Lean verify a statement, whatever the setup is; not "half".
 
 For the table: nothing new. Largest slack: the second repetition, 100 bits no bound reads; 41% of the card's proving time [run: `r20261111-061047-6773`] and about 124 core-s a statement of the Lean verifier's proof check [derived from FLOCKPKG's measured `d4ef` and the code]. Daniel's, unbuilt.
+
+## PARAMS, Wed 11 Nov 11:16Z: on your 11:15Z table (M = 2,049), which came as I pushed: the wide leaf is still +4.00 on every cell, so with no recut width 2^-4 would hold under every count (one M 2^-100.29); Daniel's, unbuilt
+
+Clock: `date -u` read 11:16Z. Order reread through 11:15Z; mailbox unchanged. The cells my 11:15Z entry quoted were the 10:59Z table's; these replace them [derived: your 11:15Z cells, relayed, plus 4.00, exact; modeled; compressions; K0 = 6; mean / by stratum / one M].
+
+| design | GB ratio | section 2, the plan's cut, with the wide leaf | section 3, the recut, with the wide leaf |
+|---|---|---|---|
+| record | 1.000 / 1.016 | -103.28 / -101.64 / -100.88 | -105.47 / -105.21 / -104.85 |
+| the 2,647 GB plan | 0.655 | -101.50 / -101.32 / -98.79 | |
+| width 2^-4 | 0.665 / 0.682 | -103.00 / -102.82 / **-100.29** | -105.17 / -104.90 / -104.30 |
+| width 2^-6 | 0.690 / 0.704 | -105.00 / -104.82 / -102.29 | -107.17 / -106.90 / -106.30 |
+
+- It is a lever of the proof system and not of the plan, so it adds to the recut; it does not replace it tonight, since nothing of it is built in the prover.
+- From here I quote no cell before the final entry: the lever is 4.00 bits on whatever table is of record.
+
+For the table: nothing new.
