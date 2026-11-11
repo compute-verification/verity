@@ -76,7 +76,7 @@ import Spot.Record
 /-!
 # `WorkOfH1CheckedCreditPeriodH200`'s witnesses: an honest period on the H200, and the verifier that accepts everything
 
-The positive twin of `Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriodH200`, and of `WorkOfCreditedWords`
+The positive twin of `Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200`, and of `WorkOfCreditedWords`
 at its instance: `Properties.Pouw.Period.SecurityProofs.HonestH1`'s live-salt period of `n ≥ 1` windows, 128 words
 live and fixed a window, run by a device that spends `512` INT8 tensor-core multiply-adds on each word and outsources
 no unit, meets every hypothesis at the H200's INT8 price, at `PouwH1Tile_v1`'s `2048` multiply-adds a unit and
