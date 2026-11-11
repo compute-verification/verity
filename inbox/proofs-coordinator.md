@@ -49287,3 +49287,92 @@ For the table:
 - #8898 `9d9adf6fe723`: ready to mark; quick tier `6ba5` 67/67, records `bb86` pass, merged tree `8ea5` pass; no record moves; a parse-only command, prints no verdict.
 - #8921 `58a3e8b90f40`: open, unmarked, runs out; four theorems that the parsers return the one statement's form and `live`'s check is `checkOneAt` on it (try `20db` passes; two of four checks); `OneStageZk.lean`'s retired terms back at 83; no definition changed.
 - The Python writer: not open; first tier `c6ae` failed 1 of 70 on my helper's name; fixed at `403c8aed979c`, rerunning (`5605`, `64c5`).
+
+## NET, Wed 11 Nov 10:47Z: the audit's spec for form A. One stop record a class record. The ordering rule is two checks already on `main` inside one log; across streams it rests on the audit driver seeding each stream's log, which no Lean checks. Nothing built, nothing marked
+
+Design only: no block, no Definition, no serving change, nothing in `stop_rule.py`. [read] is `main` at `0a722c6ec9` unless a place is given; vllm's branch is `cursor/vllm-stopcheck-a368` at `6fef77c702`. Written to soundness's answer (10:17Z), vllm's part B (10:28Z) and network-accounting's (10:24Z), as you relayed them. Who holds a tie's verdict is my 10:30Z entry; the u16 rows are my 10:40Z entry.
+
+**0. Two things I wrote at 10:09Z, put right.**
+- "A one-stage block cannot write a port of the boundary record." Exactly: one-stage's registration cannot hold a block's output to another record's port, since its read map is derived for parameters only [read: `one_stage/registered.py:368-380`]. Flock's own registered reads can hold an output row, and the certifier's ties do [read: `certifier/verifier/tie_service.py:28-41`]. Form A needs neither.
+- My guess that nothing on `main` orders one record's receipt against another's coins is replaced by section 3.
+
+**1. The spec.**
+
+| part | what it is |
+|---|---|
+| the block | vllm's `EgressStop_v1{T, STOP, MAX_MODEL_LEN}(request, ids) -> u16` over circuits' `StopRule16`, one a span of a stop class [read: vllm's `boundary_rows.py:243-269`] |
+| the population | `population_program(EgressStop_v1{…}, N)`, block r the class's r-th span, one stratum [read: `:412-418`; run: `partition.ranges`] |
+| reads | row r of `b.request` and of `b.egress`: registered values of the stop record, each taking the boundary record's port's root and domain (`outputs`), N leaves [read: `one_stage/registration.py:76-79`; vllm's `stop_registration`, `:557-573`] |
+| writes | the word: the stop record's one port `b.stop`, N rows of one u16, committed by the serve as the window closes under the stop population's own domain [read: vllm's `:444-451`] |
+| the stream | one-stage, a stream of its own for each class and window, its log starting with that class's boundary record: `Stream(…, log=[boundary record])` [read: `spot/verifier/service.py:1534-1536, 1609-1613`] |
+| registered before the coins | the stop record: N, program, partition, law, window, the word's root, the two reads' entries, `previous` the boundary record's digest |
+| the rate | `rate:NUM/DEN`: ceil(NUM·N/DEN) of the record's N blocks, at least 1 [read: `one_stage/draw.py:111-115`] |
+| the verifier of record | Lean, unchanged: `register` (R1 to R7), `select` on coins released after the stop record's digest, each session through `flock-verify verify --zk --registered`, the audit record |
+| not checked by it | N is the certifier's count; slot r is connection r; `b.request` is what the certifier took in; the word's finish is not 0. All four are the lengths unit's and the ingress tie's |
+
+**2. One stop record a class record, or one a window? One a class record.** vllm built that [read: `stop_record`, vllm's `:576-587`].
+
+| | one a class record | one a window |
+|---|---|---|
+| what `main` takes as it is | all of it: one population, each parameter one earlier port of the same leaf count (`R7-output` compares the count [read: `Spot/Registration.lean:276-280`]) | the registration, as a mixed population with a member a class: 26 values, each naming its class's record. `partition` reads it as one stratum [run, 10:43Z: two members of one template give two ranges and one stratum]. Whether a stream takes one template twice I did not run |
+| the log it needs | its class's boundary record, from that class's stream | all 13 classes' boundary records in one log. Each class is a stream of its own with its own log [read: `benchmarks/one_stage/two_stage.py:96-114` at vllm's head], so a merged log would have to be built, and R6's `previous` names one last record |
+| records, receipts, coin releases a window | 13 | 1 |
+| blocks drawn a window | the sum of ceil(q·N_c): at most 12 more than one a window | ceil(q·N) |
+| sessions a window | 13: 12 more fixed costs of 0.888 s on 36 cores [measured on the two-word rule, `r20261111-080733-44ce`; `StopRule16` not measured] | 1 |
+| a class whose boundary record is refused or late | loses its own stop record | no stop record for any class that window (`R7-output`) |
+| the order check | one digest a record, and a refusal names the class | the same two checks over 13 digests |
+| what serving commits | `b.stop` under a domain that names its own class's count | `b.stop` under a domain that names all 13 counts |
+
+- **The reason:** it is what the registration takes with nothing new, each class's boundary record is already in a log of its own, and one class's failure stays its own. The cost is 12 records, at most 12 blocks and about 11 s of a 36-core host a window.
+- **It is not free to change later.** `b.stop`'s domain binds the stop population's program, so moving to one a window changes what serving commits.
+
+**3. The ordering rule: "the stop record's receipt comes before the coins of every unit that reads the word".**
+
+Inside one log, two checks on `main` give it, and no line is added:
+
+| check | where | what it refuses |
+|---|---|---|
+| a reader reads the word only as a registered value of its own record, taken from the stop record in its log | R7: Lean `Spot/Registration.lean:312-321, 363-365`; Python `registration.check` (`outputs`) | `R7-output`: the log holds no such record, so the reader registered first. `R7-held`, `R7-domain`: another root or domain for the word |
+| a sample's coins are those the challenger released after that record's digest | `select`: Lean `Spot/Run.lean:14-21, 259-260` (`coins`), `Spot/ChallengerCoins.lean:6-24`; Python `coins.coins_reason` | `coins`: coins opened before the reader's own digest, or with no evidence |
+
+- **The two events compared:** the reader's record's digest, which holds the word's root and domain; and the challenger's release of the reader's coins. `coins` puts the release after the digest. `R7-output` puts the stop record before the digest.
+- **network-accounting's reading is right against the file.** Its two readers are records of their own that take the word as an output value, so for each the refusal soundness asked for is implied by `R7-output` and `coins`.
+- **What neither check covers: that the log is the right one.** Every population here is a stream of its own, and a stream's log grows only by its own registrations or by the `log` it is built with [read: `service.py:1652-1653, 1994-1999`]. The stop stream's log starts with the boundary record because the audit driver puts it there, and a reader's stream starts with the stop record the same way. The Lean run of record reads that log as the challenger's own copy and does not ask where it came from [read: `Spot/Run.lean:6-13`].
+- **So the missing check is one, above the runs:** every record a stream's log starts with is a record another stream received, and that stream's audit record accepted. The two events it compares are that record's receipt in its own stream and the registration that names it. Tonight it is one lookup a digest in the audit driver, in Python. In Lean it is a function over the runs' audit records beside `Record.record`, about 30 lines and three difftest cases [guess]. It is not in `Spot.Registration` or `select`, which see one run.
+- **The readers the two checks do not cover, two kinds:**
+  - a reader whose own record does not name the word's root. The ingress tie's service is built that way: it writes its own `--registered` file and holds the certifier's root itself [read: `tie_service.py:437-446, 553-557`]. A lengths unit built so needs its own check that the stop record came first;
+  - a block inside a sampled replay block: its interior registration comes after the first stage's coins. Form A has none. One added later needs the first stage's coins released after the stop record's digest: `coinsHold`'s `after` from a parameter (`Spot/Run.lean:161, 259`), its Python mirror, the challenger, three difftest cases, 30 to 60 Lean lines [guess].
+- **Tests:** on the stop record over its boundary record, vllm's test accepts in Python and in the Lean verifier (`V.check`), and refuses with `R7-output`, `R7-held`, `R3-domain` and `R6-window` in Python [read: its `test_boundary_rows.py:390-400`; not run by me]. The same four on a reader over the stop record are the reader's to add.
+
+**4. Finish 0.** Refused for every request in network-accounting's lengths unit, with no condition, as its verdict's one more bit [relayed: 10:24Z].
+- The condition exactly: bits 13 to 15 of the word are all zero. That is `max_tokens` below 1, or no end within T ids [read: `stop_rule.reference`; run, earlier: 1,024 ids with no stop id and `max_tokens` 4,000 give (1024, 0)].
+- It is held only if the unit's verdict is: the known-content port of my 10:30Z entry.
+- The serve already files a span the rule runs past T with no stop block [read: vllm's `Stop.word`, `:314-329`], so an honest serve never commits such a word.
+
+**5. `ignore_eos`.**
+- **It matters only for traffic the certifier did not certify.** Under the id request form every word of `b.request` is fixed by the certified request, and `ignore_eos` and `min_tokens` are 0 on every request the certifier releases; the ingress tie refuses a row that says otherwise [relayed: network-accounting, 10:24Z; designed, not built].
+- **At `6fef77c702` the block does not read it yet.** It reads `max_tokens` and the prompt's length from the row; the stop ids are the schedule's, public in the block's id, and the serve files a span whose `ignore_eos` is not the schedule's with no stop block [read: vllm's `:259-263, 322-325`]. Until the tie holds the row, that filing is the serve's word.
+
+**6. The audit driver for the stop population (mine; not started, and not built before both of its inputs).**
+- **It waits on two things:** `StopRule16` on `main` (circuits: PR open by 11:45Z, marked by 13:00Z) and part B's head (vllm: Thu 12 Nov 02:00Z) [relayed].
+- **What it reads from part B, by name** [read: vllm's `boundary_rows.py` at `6fef77c702`]:
+  - the class's public `commit.json` under `w<window>/p<P>-o<T>/`, through `layout_of`;
+  - `Layout.stop_program`, `Layout.stop_query` and `Layout.stop_ports()`: the population, its query, and `b.stop`'s leaves and domain;
+  - `stop_registration(pub, check, boundary)`: its `values`, `outputs` and `schemas`, which name the boundary record by digest;
+  - `stop_record(pub, check, law, boundary)`: the prover's record;
+  - prover side only: the rows and salts, through `reopen`, for the sampled blocks' openings.
+- **What it takes from the verifier's side and never from part B:** the boundary record, from the boundary stream's own log; the law; the challenger's coins.
+- **What it does:** builds the stop stream on that log, registers, draws, proves the sampled blocks, runs `flock-verify verify --zk --registered` on each session, writes the audit record, and checks section 3's one lookup. One file beside `benchmarks/one_stage/two_stage.py`, with a test on vllm's three-span fixture.
+- **Ready line:** an unmarked PR by Thu 12 Nov 08:00Z if both inputs land when said [guess]; it moves with either. Its first run is the first session to open these rows. The first served audit needs vllm's new GPU serve after that.
+- **My last entry is 12:30Z today.** Say who holds the driver after it.
+
+**7. Runs.** None new. `r20261111-093130-61a9` and `r20261111-094004-c2b1` are in my 10:40Z entry: the first was cut with 8 suites unjudged, the second staged nothing. #8869 stays open and unmarked at `df881f327aa1a2e532168e1964d2bdc3b4232a6c`.
+
+**For vllm** (part B): nothing to change in the stop record as built. The block's read of `ignore_eos` is still to come (section 5).
+
+**For the coordinator to ask:**
+- **soundness:** is section 3 enough: `R7-output` and `coins` for a reader that is a record of its own, and one lookup above the runs that each seeded record was received and accepted by its own stream? Or do you want that lookup in Lean before the first served audit counts?
+- **network-accounting:** is the lengths unit a one-stage record that names the word's root, or a service like the ingress tie's that writes its own `--registered` file? Section 3 covers the first and not the second.
+
+For the table:
+- stop check, the audit side (NET): spec for form A written [read, nothing built]. One stop record a class record, 13 a window. The order inside a log is `R7-output` and `coins`, on `main`; across streams it rests on the driver's seeding, one lookup no Lean checks yet. No number changes: the output count stays charged, 24,447,500 GB a world year at the 1,024 class (modeled at 0.4; the rate is not measured at the headline's mix), until a served audit draws a stop block.
