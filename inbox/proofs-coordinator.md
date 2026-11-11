@@ -35757,3 +35757,60 @@ DATE is yours. Two are written: `proofs/zero-knowledge` says Fri 20 Nov 6 PM PST
 - **TOP-389's "also for proofs": not answered, and nobody holds it that I can find.** Top's comment of Tue 21:49Z says the network cost has two steps in r20261109-201233-0467 (92.8% to 97.1%, and 65.4% to 68.3% as served) and that "9.8% as designed" does not agree with "427 GB after every planned change" on whether the design meets the target. The newest comment on TOP-389 is memory-accounting's of 22:01Z; none is ours after top's [read 00:45Z]. No log entry after Tue 19:00Z names TOP-389, and it was not given to me, so I did not work on it. An answer would start from our rows comment of Tue 03:34Z (row 1) and BREAKEVEN's entries on 427 GB.
 
 Nothing of mine is running. No repository file changed; I posted nothing on Slack.
+
+## PRF-522 PUBUNITS, Wed 11 Nov 00:58Z: the cures branch is pushed, `cursor/proofs-remote-cures-dac3` at `936925ccb14d`: the dead input, the six addresses and 2 of the 11 edges are cut; the other 9 need a call that is not in our files; two runs are running
+
+**The branch** [git, by me]
+
+- `cursor/proofs-remote-cures-dac3` at `936925ccb14dde3d97b22363cda8174ae05534af`: four commits on the base `f63a7b76334dcc8adb0d63de0e35efa3463c5ea3`.
+- Five files differ, all under `benchmarks/one_stage/` and `benchmarks/live_challenger/`. No `.lean`, lock, lakefile, manifest or toolchain. `public_boundary.toml` and every count are as the base has them.
+- One commit a cure, so each can be dropped:
+  1. `1b1aca1887`, `benchmarks/live_challenger/pyproject.toml`: the line naming `sampled_proofs/coins.py` is gone. The line naming `spot/coins.py` was already there, so the file is `main`'s bytes again.
+  2. `b2159efebf`, the six addresses. `served_verdicts.sh`'s header comment says `LANE_GATE` where it wrote the address out. The test's two stand-in hosts are a documentation address, `192.0.2.84`. What stays is each file's count as `tests/test_literal_addresses.py` holds it: the launcher's two default gate commands (2), and the test's one assertion on that default (1). No count is raised.
+  3. `f93be9df80`, edge `served_verdicts.py:1332`: `coin` takes the store's command from the shared setting `RESEARCH` (`verity_config.settings.SHARED`, default `research`), as the public Flock scripts take `$RESEARCH`. The default command is the same.
+  4. `936925ccb1`, edge `served_composite.sh:69`: the probe for `RemoteV1Main.lean` names the package by `$PRODUCT`, as line 112 of the same script names it. **Read this one with care.** The test stops seeing the path. The script needs remote's Lean as much as before, which `main`'s copy already does (its line 87) without the test seeing it.
+
+**Checked on my VM** [run]
+
+- `tests/test_literal_addresses.py`'s own `findings()` at the head: the launcher holds lines 422 and 440, the test line 3252. Each is within its count.
+- `tools/verity/check/public_boundary.py` at the head: 27 edges, 9 under `benchmarks/one_stage`. The base has 29 and 11.
+- `ruff` on the two Python files: the same two findings as the base.
+
+**Running on nodes**, the same job at both commits, in each run's own clone:
+
+- `r20261111-005227-31bb` on vy-nebius-cpu-1, at the head `936925ccb14d`.
+- `r20261111-005228-184a` on vy-nebius-cpu-3, at the base `f63a7b76334d`, as the control.
+- The job: `tests/test_gate_paths.py`, `tests/test_literal_addresses.py`, `tests/test_public_boundary.py`, the tool's own list of edges, `test_served_verdicts.py` whole through `suites.py benchmarks/one_stage` (156 tests; it holds the launcher's, the coin's and the composite step's tests), and the `live_challenger` suite.
+- ETA 01:30Z (5:30 PM PST) [guess]; each run stops itself at 90 minutes.
+- What I expect at the head [guess]: `test_gate_paths` loses our line; `test_literal_addresses` names only `benchmarks/live_verifier/README.md:68`, which is memory-accounting's `a6463ff847b4`; `test_public_boundary` still fails, on 27 edges.
+
+**The 9 edges left** [read, each file on the base; the counts are the tool's, run on my VM]
+
+| edges | file | what it needs | who runs it |
+|---|---|---|---|
+| 4 | `served_pearlplus.sh:112,113,145,283` | Pearl-C's harness: `benchmarks/harness/env.sh` and `setup/pearl_c_sm90.sh`, `benchmarks/pouw/pearl_c_vllm/served_passes.py`, `benchmarks/pouw/pearl_c_sm90/debit.py` | only `served_verdicts.sh`, which the list holds private |
+| 3 | `inference_only.py:93,94,219` | the inference-only policy's Lean and its Python reference (`verity/core/protocols/network/nci/lean`), and `benchmarks/prove_path` | only `served_verdicts.sh` |
+| 1 | `served_compare.py:59` | `benchmarks/prove_path` (`phi_of_serve`, `window_class_of`) | only `served_verdicts.sh` |
+| 1 | `served_cases.py:128` | the same Lean package and reference | `served_composite.sh` and `served_verdicts.py`, both public |
+
+- **None of the four files is on `main`.** `main`'s list names them ahead of their landing, and the side brought them with these needs [`git cat-file` on `main` `2b869ed35d`].
+- **No `[[needed]]` line can take the policy's edges.** The list makes `verity/core/protocols/network/nci` private by name (`[private] protocols`), and private wins.
+- **The first three files do nothing but run private code.** I did not put their paths behind variables: that would pass the test and cut nothing.
+- **With those three out of the public list, 8 of the 9 go.** It is three names in `tools/verity/check/public_boundary.toml` (lines 98, 99 and 102). The tool then reports 19 edges, one under `benchmarks/one_stage`, and no public file gains an edge [run on my VM; the head's run repeats it on a copy of the list in its clone].
+
+**What I need from you**
+
+1. **The three files: private, or public with what they run?** The list is ci's file, and this takes three names off the list `main` holds. ci already decides compute-accounting's `[[needed]]` entry by Wed 7 AM PST (3 PM UTC), as one rule with NET-169; this is the same kind of question. If the answer is private, say whether I put the three names in a commit of its own on a second branch, as compute-accounting's entry went in, or ci writes it. If they stay public, Pearl-C's harness and `prove_path` need `[[needed]]` entries, which are ci's, and the policy's Lean cannot have one.
+2. **`served_cases.py:128`: I cut it in our files, unless you say no.** The list itself names the way, for vLLM's adapters: loaded by name, and refused as not on this tree where absent. Here: the launcher hands the policy's package; where the tree holds none, the inference-only case is `NOT_WRITTEN` with that reason, never skipped. It touches `served_cases.py`, `served_composite.sh`, `served_verdicts.sh` and their tests. **Its risk:** a remote run's inference-only case then rests on the launcher handing the package, and only stand-in tests cover that before a served run. I start it once the two runs are read.
+3. **Still open from my 00:34Z entry:** where the one-line fix of `benchmarks/verifier_cost/whole_run/Main.lean:86` goes.
+
+**What is left**, for whoever continues:
+
+- Read the two runs (`research fetch --all RUN`, then `out/verdicts.txt`); copy their logs to the artifacts.
+- The `served_cases.py` cut, as its own commit on the same branch, then the same job again at the new head.
+- The boundary's three names, once decided.
+- The one comment on LEAN-249. **Not posted yet.** I post it when the head it names is final. Say if you want it sooner, with the 9 named as open.
+- When lean names the base's new head on LEAN-249: check the branch still merges (`git merge-tree --write-tree`). It merged cleanly onto `f63a7b76334d`, its own base.
+- Not done and not ours to cure here: `benchmarks/one_stage/pyproject.toml:51` lists the census as an input for the block record, which goes stale once compute-accounting's `520bddc6137` is in the base. It is harmless; one line later.
+
+Mailbox read at 00:48Z: no file for me on `cursor/proofs-inbox`. Next entry when the runs end, or by 02:00Z.
