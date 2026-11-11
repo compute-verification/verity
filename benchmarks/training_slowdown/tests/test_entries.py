@@ -228,6 +228,8 @@ EPS, ROUNDINGS = torch.finfo(torch.float32).eps, 4 * STEPS
 #: each entry's reference: the output model plain torch ends at under the entry's dials, and how close the route's
 #: comes to it
 REFERENCES = {
+    "m-t20-1.1x-ref-optim-fullmuon": (under(muon), CLOSE_BF16),
+    "m-t20-1.1x-wildcard-topcode": (under(muon), CLOSE_BF16),
     "s-t20-1.1x-accumulate": (under(adamw), CLOSE),
     "s-t20-1.1x-adafactor": (under(adafactor), CLOSE),
     "s-t20-1.1x-adamw": (under(adamw), CLOSE),
@@ -239,9 +241,15 @@ REFERENCES = {
     "s-t20-1.1x-qat-top3": (qat, CLOSE),
     "s-t20-1.1x-qat-top4": (qat, CLOSE),
     "s-t20-1.1x-ref-optim": (under(muon), CLOSE_BF16),
+    "s-t20-1.1x-ref-optim-961": (under(muon), CLOSE_BF16),
+    "s-t20-1.1x-ref-optim-fullmuon-758": (under(muon), CLOSE_BF16),
+    "s-t20-1.1x-ref-optim-fullmuon-841": (under(muon), CLOSE_BF16),
     "s-t20-1.1x-sgd": (under(sgd), CLOSE),
+    "s-t20-1.1x-shallow-depthshare-3": (under(muon), CLOSE_BF16),
+    "s-t20-1.1x-shallow-depthshare-6": (under(muon), CLOSE_BF16),
     "s-t20-1.1x-shallow-strideshare": (under(muon), CLOSE_BF16),
     "s-t20-1.1x-shampoo": (under(shampoo), CLOSE),
+    "s-t20-1.1x-wildcard-topcode": (under(muon), CLOSE_BF16),
 }
 
 

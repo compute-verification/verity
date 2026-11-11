@@ -1,0 +1,65 @@
+# The run of record each entry of attacks/ that ports a run is held to. `training_slowdown.of_record` reads it and
+# checks every record it opens against it.
+#
+# An entry: `run` is the run, `art` the store artifact holding its record, `path` the record's file there and `sha256`
+# that file's.
+#
+# `record_only`, where an entry has it, lists the lines of the record's own program that the route rightly does not
+# compute, each a table `[[held."ENTRY".record_only]]`: the line's `phase`, `kind`, `op` and `shapes` as the command
+# prints them, the `count` and `macs` the record's step has of it over the config's (all of the line where the config
+# has none of it), and `why` the route does not compute it. The command prints such a line as named and counts the
+# entry equal; a line named here that the record's step does not have over the config's as named is a difference.
+
+[held."s-t20-1.1x-ref-optim-fullmuon-758"]
+run = "r20261103-151852-c62c"
+art = "art:6b9356b811adedf01d4acfcba372847a831fa415fb02b7057f33fe4f478eb9c7"
+path = "out/run/run.json"
+sha256 = "ec7f25c68dea28b79ab9047a60d6d36d0963d20ca0d68f9f537c808a2e4d00ae"
+
+[held."s-t20-1.1x-ref-optim-fullmuon-841"]
+run = "r20261103-154524-84c2"
+art = "art:31af90b46cdcbb89270ad1867685bbce4354af4d789e7b1dbd53f20906d275a7"
+path = "out/run/run.json"
+sha256 = "a618f30ab3eaf2c99dc2154be3baa6cfd834154aa1a8e7d25522071c0a604b08"
+
+[held."s-t20-1.1x-ref-optim-961"]
+run = "r20261103-111728-d00e"
+art = "art:9555e049c72e924c4ca3ba9de8c5bbe0e424c0283516c7d2b138f480b249d985"
+path = "out/run/run.json"
+sha256 = "906400ca7ad7c8e1da5794d157077fca3c5e31701dcc089884b4d15a9706e7ba"
+
+[held."s-t20-1.1x-wildcard-topcode"]
+run = "r20261103-093615-cdac"
+art = "art:5518f8327dd11a35ed895857c597d77f46f946f04d46bdaebdeec163754d7994"
+path = "out/run/run.json"
+sha256 = "bf19a42efa044feb2978625fd1f44c27de0c8706c572d7a6e5df49583ac53514"
+
+[held."m-t20-1.1x-ref-optim-fullmuon"]
+run = "r20261103-184231-7066"
+art = "art:8b3f4eb85ec2c6ebce450e7470e33f395aaf06e6a32f4546b2f4e7e1260aaf17"
+path = "out/run/run.json"
+sha256 = "9bffc580d8ad132f68e26effc7faf14199142c061db3cf2920888c15e12a16c1"
+
+[held."m-t20-1.1x-wildcard-topcode"]
+run = "r20261103-133655-1bde"
+art = "art:ffd391ed9869316664fef44f782c14388483dd95891f1d6df0a0f38acbcf3aeb"
+path = "out/run/run.json"
+sha256 = "411f8501ff98360e45d37a1f3377bf9aeb1ae7034a25340b78a97ea4c86db42f"
+
+[held."s-t20-1.1x-shallow-depthshare-3"]
+run = "r20261103-225333-9784"
+art = "art:28aebf16378a80c42e71b3d107c895f89392f86616f5566926e12f3ab8d607c5"
+path = "out/run/run.json"
+sha256 = "a6342b0e49d01d26e5df335e54599c63088351466af0b7cc05e33f4cf89b0f53"
+
+[held."s-t20-1.1x-shallow-depthshare-6"]
+run = "r20261103-231145-05da"
+art = "art:b5050b7ba6ef50397f7635c8e7ff9667dcbc3afdf4d0a591ee3973f70a992992"
+path = "out/run/run.json"
+sha256 = "f7706253a265c969ada2efaa58c7e8aaa4c4816efd27e319270bf31c53deff52"
+
+[held."s-t20-1.1x-shallow-strideshare"]
+run = "r20261104-001944-1b6b"
+art = "art:aa227b76ec6b95d26d8a608375aec0014bb1a1e3da7b1251d86d363904316c42"
+path = "out/run/run.json"
+sha256 = "ee3a333586d25cd7a60585071efd97a9d7a83e39b4863d5c7852741cb42f643f"
