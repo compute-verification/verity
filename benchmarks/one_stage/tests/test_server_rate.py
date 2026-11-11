@@ -29,10 +29,10 @@ class Session:
 
 class Server:
     """K provers that file session i at FILED0 + i, refuse the sessions in ``refuse``, write ``log`` to the first prover's
-    log, close with ``exits`` and report the verifiers placed on ``verifier_cpus``."""
+    log and close with ``exits``."""
 
-    def __init__(self, out: Path, provers: int, refuse=(), exits=None, log: str = "", verifier_cpus: str | None = None) -> None:
-        self.out, self.k, self.refuse, self.verifier_cpus = out, provers, set(refuse), verifier_cpus
+    def __init__(self, out: Path, provers: int, refuse=(), exits=None, log: str = "") -> None:
+        self.out, self.k, self.refuse = out, provers, set(refuse)
         self.exits = exits or {**{f"prover-gpu0-{j}": 0 for j in range(provers)}, "verifier-t": 0}
         (out / "prover-gpu0-0.log").write_text("LIVE\t{}\n" + log)
 
@@ -49,6 +49,9 @@ class Server:
 
     def close(self) -> dict[str, int]:
         return dict(self.exits)
+
+    #: where `ProofServer` placed the verifiers (``FC_VERIFIER_CPUS``); none unplaced
+    verifier_cpus: str | None = None
 
 
 class Device:
@@ -95,7 +98,8 @@ def test_a_row_keeps_its_verifier_cpus_and_their_seconds(monkeypatch, tmp_path):
         (tmp_path / d).mkdir()
     _, row = run(monkeypatch, tmp_path / "shared")
     assert (row["verifier_cpus"], row["verifier_cpu_s_per_statement"], row["verifier_cpu_gone"]) == (None, 0.0, [])
-    _, row = run(monkeypatch, tmp_path / "placed", verifier_cpus="44-47")
+    monkeypatch.setattr(Server, "verifier_cpus", "44-47")
+    _, row = run(monkeypatch, tmp_path / "placed")
     assert row["verifier_cpus"] == "44-47"
 
 
