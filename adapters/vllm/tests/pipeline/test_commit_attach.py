@@ -7,6 +7,7 @@ back, what is armed on the committer, the record written, and every line.  CPU o
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
@@ -126,9 +127,16 @@ class Acquisition:
 
 
 @pytest.fixture
-def said(capsys: pytest.CaptureFixture[str]) -> Lines:
-    """The lines `commit_attach` has written since the last call."""
-    return lambda: capsys.readouterr().out.splitlines()
+def said(caplog: pytest.LogCaptureFixture, capsys: pytest.CaptureFixture[str]) -> Lines:
+    """The lines `commit_attach` has logged since the last call, each after its level; it prints none."""
+    caplog.set_level(logging.INFO, logger=CA.__name__)
+
+    def lines() -> list[str]:
+        assert capsys.readouterr().out == ""
+        got = [f"{r.levelname} {r.getMessage()}" for r in caplog.records if r.name == CA.__name__]
+        caplog.clear()
+        return got
+    return lines
 
 
 def attach(com: Any, args: Any, required_manifest: Record | None, out: Path, *, classes: tuple[str, ...] = CLASSES, cli: bool = False,
@@ -144,8 +152,8 @@ def refused(run: Callable[[], Any]) -> None:
     assert stop.value.code == 3
 
 
-NO_PLAN = "[delta] committer stub: no acquisition plan (the served source acquires every value of the Build)"
-NO_RECORD = ("[delta] NOTE: X-03 attention plane classes: no Build record with attention_impls_observed under --program-dir/--programs-root "
+NO_PLAN = "INFO [delta] committer stub: no acquisition plan (the served source acquires every value of the Build)"
+NO_RECORD = ("WARNING [delta] NOTE: X-03 attention plane classes: no Build record with attention_impls_observed under --program-dir/--programs-root "
              "(None, None); the uniformity rule runs (a Program with two attention classes fails X-03 closed)")
 
 
@@ -173,7 +181,7 @@ def test_a_manifest_that_names_no_hidden_identity_attaches_no_hidden_source(tmp_
     assert (got.required_classes, got.hidden_required, got.moe_attached) == (classes, False, False)
     assert steps.named("taps")[0][3] == classes, "the taps see the classes without the hidden one, unless they were given"
     assert said() == [
-        ("[delta] hidden source NOT attached: the required-value manifest names no fa2_hidden_m1_stream / fa3_hidden_m1_stream identity "
+        ("INFO [delta] hidden source NOT attached: the required-value manifest names no fa2_hidden_m1_stream / fa3_hidden_m1_stream identity "
          f"(families ['instance_outputs']); required classes {list(classes)}"), NO_RECORD, NO_PLAN]
 
 
@@ -188,8 +196,8 @@ def test_the_hidden_source_is_built_for_the_engine_s_attention_and_its_bounded_t
     assert src.built["so"] == TAP and src.telemetry_path == str(tmp_path / "fa2_tap_windows.jsonl")
     assert (got.required_classes, got.hidden_required) == (CLASSES, True)
     assert said() == [
-        f"[delta] hidden source attached: {TAP} -> committer stub (BoundedSource, engine FA2)",
-        ("[delta] fa2 tap bound: cap 64 MiB (ONE bounded device buffer; launches above it are split into sequence groups); telemetry "
+        f"INFO [delta] hidden source attached: {TAP} -> committer stub (BoundedSource, engine FA2)",
+        ("INFO [delta] fa2 tap bound: cap 64 MiB (ONE bounded device buffer; launches above it are split into sequence groups); telemetry "
          f"{tmp_path / 'fa2_tap_windows.jsonl'}"), NO_RECORD, NO_PLAN]
 
 
@@ -202,8 +210,8 @@ def test_the_hidden_source_takes_the_committer_s_own_classes_and_the_namespace_g
     assert steps.named("hidden") == [("hidden", com, TAP, {"ns": "ns", "flash_attn_version": 3, "fa2_cls": "the native FA2 source",
                                                            "fa3_cls": "the native FA3 source", "manifest": None})]
     assert com.sources[0].telemetry_path == "unset", "with no out dir the telemetry path is left as built"
-    assert said() == [f"[delta] hidden source attached: {TAP} -> committer stub (UnboundedSource, engine FA3)",
-                      "[delta] fa2 tap bound: cap 0 MiB (OFF: unbounded per-geometry buffers); telemetry unset", NO_PLAN]
+    assert said() == [f"INFO [delta] hidden source attached: {TAP} -> committer stub (UnboundedSource, engine FA3)",
+                      "INFO [delta] fa2 tap bound: cap 0 MiB (OFF: unbounded per-geometry buffers); telemetry unset", NO_PLAN]
 
 
 def test_without_a_manifest_and_without_given_classes_or_a_hidden_family_no_hidden_source_is_built(
@@ -226,7 +234,7 @@ def test_the_taps_are_attached_for_the_manifest_and_the_classes_they_return_are_
 
 @pytest.mark.parametrize("mode, line", [
     ("off", None),
-    ("auto", ("[delta] MoE block source NOT attached: the required-value manifest names no moe_block_stream identity (families "
+    ("auto", ("INFO [delta] MoE block source NOT attached: the required-value manifest names no moe_block_stream identity (families "
               "['instance_outputs']; the Program's MoE construction has no MOE-01 rows) -- nothing is staged that the manifest does not name"))])
 def test_a_manifest_that_names_no_moe_plane_attaches_no_moe_block_source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, said: Lines,
                                                                          mode: str, line: str | None) -> None:
@@ -240,14 +248,14 @@ def test_an_moe_block_source_asked_for_is_refused_where_the_manifest_names_no_pl
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch, said: Lines) -> None:
     steps = Acquisition(monkeypatch)
     refused(lambda: attach(committer(), options(moe_source="on"), manifest(instance_outputs=8), tmp_path))
-    no_plane = ("[delta] REFUSE: --moe-source on but the required-value manifest required_manifest.json names no moe_block_stream identity "
+    no_plane = ("ERROR [delta] REFUSE: --moe-source on but the required-value manifest required_manifest.json names no moe_block_stream identity "
                 "(the Program has no MOE-01 rows -- a padded construction's MoE identity is the module output): the source would stage planes "
                 "the arena has no slot for")
     assert steps.named("moe") == [] and said() == [no_plane]
     com = committer()
     refused(lambda: attach(com, options(moe_source="on"), manifest(moe_block_stream=6), tmp_path))
     assert steps.named("moe") == [("moe", com, com.model)] and com.sources == []
-    assert said() == ["[delta] REFUSE: --moe-source on but the model has no MoE-runner modules"]
+    assert said() == ["ERROR [delta] REFUSE: --moe-source on but the model has no MoE-runner modules"]
     assert attach(com, options(moe_source="auto"), manifest(moe_block_stream=6), tmp_path).moe_attached is False
     assert said() == [NO_RECORD, NO_PLAN]
 
@@ -259,7 +267,7 @@ def test_a_model_s_moe_layers_get_the_block_source_and_its_class_unless_the_clas
     got = attach(com, options(moe_source="auto", required_classes=given), manifest(moe_block_stream=6), tmp_path)
     assert steps.named("moe") == [("moe", com, com.model)] and [s.layers for s in com.sources] == [["L0", "L1"]]
     assert (got.moe_attached, got.required_classes) == (True, classes)
-    assert said() == [f"[delta] MoE block source attached: 2 MoE layers -> committer stub; required classes {list(classes)}", NO_RECORD, NO_PLAN]
+    assert said() == [f"INFO [delta] MoE block source attached: 2 MoE layers -> committer stub; required classes {list(classes)}", NO_RECORD, NO_PLAN]
     bare = committer("model")
     assert attach(bare, options(moe_source="on"), None, tmp_path, served=SERVED).moe_attached is False
     assert len(steps.named("moe")) == 1, "a committer with no model is given no MoE block source"
@@ -271,12 +279,12 @@ def test_a_promoted_member_is_acquired_at_its_first_consumer_s_input(tmp_path: P
     attach(com, options(), required, tmp_path)
     assert com.acquire_inputs == {"model.layers.0.mlp": 16}
     assert said() == [
-        ("[delta] acquisition extended by the manifest (promoted members): 1 consumer input(s) ['model.layers.0.mlp/in'] bind "
+        ("INFO [delta] acquisition extended by the manifest (promoted members): 1 consumer input(s) ['model.layers.0.mlp/in'] bind "
          "['model.layers.0.norm/out'] (2 promoted manifest rows; model.layers.0.norm: RmsNorm_v1 width 8 bf16 at model.layers.0.mlp)"), NO_PLAN]
     away = committer("identity_check", modules=("model.layers.1.mlp",))
     attach(away, options(), required, tmp_path)
     assert away.acquire_inputs == {"model.layers.0.mlp": 16}
-    assert said()[1] == ("[delta] NOTE: 1 promoted-member consumer(s) are not modules of the built model (['model.layers.0.mlp']): their "
+    assert said()[1] == ("WARNING [delta] NOTE: 1 promoted-member consumer(s) are not modules of the built model (['model.layers.0.mlp']): their "
                          "identities stay unbound (coverage names them)")
     for untouched in (committer("identity_check", "acquire_inputs"), committer("identity_check", "model")):
         attach(untouched, options(), required, tmp_path)
@@ -290,7 +298,7 @@ def test_a_promoted_member_with_no_observation_point_is_refused(tmp_path: Path, 
     Acquisition(monkeypatch)
     com = committer()
     refused(lambda: attach(com, options(), manifest([promoted(consumers=())]), tmp_path))
-    no_point = ("[delta] REFUSE: the required-value manifest's promoted members have no unambiguous observation point: ['promoted row "
+    no_point = ("ERROR [delta] REFUSE: the required-value manifest's promoted members have no unambiguous observation point: ['promoted row "
                 "model.layers.0.norm/out (spec RmsNorm_v1) names no consumer: no observation point']")
     assert com.acquire_inputs == {} and said() == [no_point]
 
@@ -304,7 +312,7 @@ def test_the_attention_plane_classes_come_from_the_build_s_record(tmp_path: Path
     attach(com, options(program_dir=str(tmp_path)), manifest(instance_outputs=8), tmp_path)
     assert [(d.layer, d.NH, d.KVH, d.D, d.window) for d in com.attention_layer_decls] == [(0, 4, 2, 8, None), (1, 4, 4, 8, 16)]
     assert said() == [
-        (f"[delta] X-03 attention plane classes: 2 layer declaration(s) from {tmp_path / 'result.json'} -> classes [('global-gqa', 1), "
+        (f"INFO [delta] X-03 attention plane classes: 2 layer declaration(s) from {tmp_path / 'result.json'} -> classes [('global-gqa', 1), "
          "('windowed-mha', 1)]; per-layer expectation derived per step (fa2_plane_classes), uniformity not assumed"), NO_PLAN]
     for com in (committer("identity_check"), committer()):
         attach(com, options(program_dir=str(tmp_path)), None if hasattr(com, "identity_check") else manifest(instance_outputs=8), tmp_path)
@@ -313,7 +321,7 @@ def test_the_attention_plane_classes_come_from_the_build_s_record(tmp_path: Path
     attach(bare, options(program_dir=str(tmp_path / "absent"), programs_root=str(tmp_path / "none")), manifest(instance_outputs=8), tmp_path)
     assert not hasattr(bare, "attention_layer_decls")
     assert said() == [
-        ("[delta] NOTE: X-03 attention plane classes: no Build record with attention_impls_observed under --program-dir/--programs-root "
+        ("WARNING [delta] NOTE: X-03 attention plane classes: no Build record with attention_impls_observed under --program-dir/--programs-root "
          f"({str(tmp_path / 'absent')!r}, {str(tmp_path / 'none')!r}); the uniformity rule runs (a Program with two attention classes fails "
          "X-03 closed)"), NO_PLAN]
 
@@ -327,8 +335,8 @@ def test_the_committer_s_hooks_come_from_the_acquisition_plan_and_its_record_is_
     assert json.loads((tmp_path / "acquisition_engine.json").read_text()) == {
         "engine": "v2", "plan_digest": "d" * 16, "modules_after": ["m0", "m1"], "plan_inputs": ["m2"], "deferred_sites": ["s0"]}
     assert (got.required_classes, got.moe_attached, got.hidden_required) == (CLASSES, False, False)
-    assert said() == ["[delta] runtime tree 3 modules", "[delta] acquisition plan abcd",
-                      "[delta] committer stub: 2 module output hooks from the plan, consumer inputs ['m2'], deferred sites 1"]
+    assert said() == ["INFO [delta] runtime tree 3 modules", "INFO [delta] acquisition plan abcd",
+                      "INFO [delta] committer stub: 2 module output hooks from the plan, consumer inputs ['m2'], deferred sites 1"]
 
 
 @pytest.mark.parametrize("without, required", [((), None), (("_modules",), manifest(instance_outputs=8)), (("model",), manifest(instance_outputs=8))])
@@ -337,7 +345,7 @@ def test_a_plan_needs_a_manifest_and_a_committer_that_hooks(tmp_path: Path, monk
     steps = Acquisition(monkeypatch)
     refused(lambda: attach(committer("identity_check", "acquire_inputs", *without), options(), required, tmp_path, served=None))
     assert steps.named("plan") == [] and not (tmp_path / "acquisition_engine.json").exists()
-    assert said() == ["[delta] REFUSE: the acquisition plan needs --required-manifest and a hooking committer (got rows-sha512)"]
+    assert said() == ["ERROR [delta] REFUSE: the acquisition plan needs --required-manifest and a hooking committer (got rows-sha512)"]
 
 
 def test_a_plan_that_names_unsupported_values_is_refused_and_nothing_is_recorded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
@@ -345,5 +353,5 @@ def test_a_plan_that_names_unsupported_values_is_refused_and_nothing_is_recorded
     steps = Acquisition(monkeypatch, installed=install.IncompletePlan("2 Values are UNSUPPORTED"))
     refused(lambda: attach(committer("identity_check"), options(), manifest(instance_outputs=8), tmp_path, served=None))
     assert len(steps.named("install")) == 1 and not (tmp_path / "acquisition_engine.json").exists()
-    assert said() == ["[delta] runtime tree 3 modules", "[delta] acquisition plan abcd",
-                      "[delta] REFUSE: acquisition plan: 2 Values are UNSUPPORTED"]
+    assert said() == ["INFO [delta] runtime tree 3 modules", "INFO [delta] acquisition plan abcd",
+                      "ERROR [delta] REFUSE: acquisition plan: 2 Values are UNSUPPORTED"]
