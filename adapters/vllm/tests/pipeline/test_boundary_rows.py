@@ -156,7 +156,8 @@ def test_a_class_that_says_so_commits_the_ids_its_replay_block_returns_as_a_thir
     span in span then output order, row j the id of output j as two words, the low one first, and past the ids served
     the last one again, as the replay pads a span; under core's window domain at N·O leaves, a salt a row in
     ``salts.bin`` after the two values'. It registers by both verifiers against the challenger's copies from
-    ``commit.json`` alone and reopens from its files. A class without ``ids`` writes the record it wrote before: the
+    ``commit.json`` alone and reopens from its files, and a value's port for a later window to read is its rows,
+    salts and root. A class without ``ids`` writes the record it wrote before: the
     same two roots under the same salts, and no ``ids``. Refused before anything is committed where the block returns
     no such ids: a check that returns other than 32 bits, or more instances than outputs."""
     assert _u32s(BR.id_rows(BR.Span("e", (1,), GREEDY, (70000, 5), "stop"), 4)) == [70000, 5, 5, 5]
@@ -193,6 +194,13 @@ def test_a_class_that_says_so_commits_the_ids_its_replay_block_returns_as_a_thir
     assert (d / BR.SALTS).read_bytes() == b"".join(c.salts[p] for p in L.values)
     assert [len(c.salts[p]) // CS.SALT_BYTES for p in L.values] == [5, 5, 20]
     assert BR.reopen(d, PICK).roots == c.roots
+    port = BR.reopen(d, PICK).port("o0")
+    assert (port.value, port.words, port.leaves, port.root, port.domain) == ("o0", 2, 20, c.roots["o0"], L.domain("o0"))
+    assert _u32s(port.rows_at([4, 7, 19])) == [70010, 70012, 70043]
+    assert port.salts_at([19, 0]) == c.salts["o0"][-CS.SALT_BYTES:] + c.salts["o0"][:CS.SALT_BYTES]
+    assert sorted(port.header([7, 4])) == ["paths", "positions", "value"] and c.port(BR.EGRESS).root == c.roots[BR.EGRESS]
+    with pytest.raises(ValueError, match="no value the class commits rows of"):
+        c.port("logits")
     (d / BR.SALTS).write_bytes((d / BR.SALTS).read_bytes()[:-1])
     with pytest.raises(ValueError, match="bytes of salts"):
         BR.reopen(d, PICK)

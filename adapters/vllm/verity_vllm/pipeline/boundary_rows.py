@@ -44,7 +44,7 @@ replay block it is configured with.
 **Files** (`write`), under ``w<window>/p<P>-o<O>/``: ``commit.json`` (public: the layout, each value's root, domain and
 leaves, the index's hiding leaf), and prover-only ``index.json`` (each span's engine id, prompt, sampling inputs, ids
 served and finish), ``index-salt.bin`` and ``salts.bin`` (every leaf's salt, value by value); `reopen` recommits from
-them and checks the roots.
+them and checks the roots, and `Committed.port` opens a value's rows, strings and paths for a later statement to read.
 """
 from __future__ import annotations
 
@@ -78,7 +78,7 @@ from verity.commitments import history as HT
 from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
-from verity.commitments.windows import rows as CS
+from verity.commitments.windows import links as LK, rows as CS
 from verity_vllm.pipeline import boundary_tables as BT
 from verity_vllm.records.boundary_commit import FILE as COMMIT, SCHEMA as FORMAT, BoundaryCommit
 from verity_vllm.records.boundary_tables import TableRoots
@@ -423,6 +423,19 @@ class Committed:
     def record(self, law: Mapping[str, Any], previous: str | None = None,
                window: Mapping[str, Any] | None = None) -> dict[str, Any]:
         return record(self.public(), self.layout.check, law, previous, window)
+
+    def port(self, value: str) -> LK.Port:
+        """Value ``value`` as a later statement reads its rows (`links.Port`): its rows, every row's ``b || c`` and
+        salt, recommitted here and held to its root. What the replay side opens a return's rows from (`Layout.returned`),
+        prover only: a row's salt opens the row."""
+        L = self.layout
+        if value not in L.values:
+            raise ValueError(f"{value!r} is no value the class commits rows of: {list(L.values)}")
+        rows, domain = port_rows(self.spans, L)[value], L.domain(value)
+        roots, bc = CS.commit_ports({value: domain}, {value: rows}, {}, {value: self.salts[value]}, schemas={value: SCHEMA})
+        if roots[value] != self.roots[value]:
+            raise ValueError(f"{value}: its rows and salts recommit to another root than the class's")
+        return LK.Port(value, SCHEMA, L.words(value), domain, bytes(bc[value]), rows, bytes(self.salts[value]))
 
 
 def layout_of(pub: Mapping[str, Any], check: SpecializedDefinition) -> Layout:
