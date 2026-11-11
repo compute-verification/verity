@@ -21,4 +21,5 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 untraced = ["tests/test_service.py"]
 # The service runs `research msg`'s slack.py as a single file and routes by the registry; build.py copies both into the
 # deployment, and the tests load them from the tree.
-inputs = ["tools/research/src/research/slack.py", ".agents/skills/using-slack/registry.json"]
+inputs = ["tools/research/src/research/slack.py", ".agents/skills/using-slack/registry.json",
+          "tools/research/src/research/__init__.py"]
