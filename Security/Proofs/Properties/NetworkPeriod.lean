@@ -22,7 +22,8 @@ connections and the windows (the compute audits, or the scans) are sums over `Fi
 `RowsTiedCharged` reads the public the rows form accepts with (`check_rows`): with no finding, every audit's check gave
 its facts and every link-window's its scan's, so the public's `audits` and `units` hold them position for position
 (`getElem?_filterMap_of_isSome`), `charged` is `chargedOf` over the audits (`charged_eq`), and a link-window's term's
-`faultyEntries` is `faultyEntries` of its registration.
+`faultyEntries` is `faultyEntries` of its registration. An audit's facts are `factsOf`'s, which refuses a profile
+sampling more than its level holds (`factsOf_sampled_le_units`).
 -/
 
 @[expose] public section
@@ -379,6 +380,24 @@ theorem auditCheck_facts {i : ℕ} {a : Audit} {reg : Lean.Json} {x : Core.Answe
       by_cases c1 : (reg.getObjValD "program" == Lean.Json.str a.program) = true <;>
         by_cases c2 : g.units = a.units <;> simp_all [refuse, pure, Except.pure]
 
+/-- The facts `factsOf` gives sample no more than their level holds: it refuses a profile that names more. -/
+theorem factsOf_sampled_le_units {what : String} {prof : Core.Integrity} {pub : Lean.Json} {f : Facts}
+    (h : factsOf what prof pub = .ok f) : f.drawn ≤ f.units := by
+  have one : ∀ (body : Core.Level → Found Facts) (alt : Found Facts),
+      (match prof.levels with | #[l] => body l | _ => alt) = .ok f → alt = .ok f ∨ ∃ l, body l = .ok f := by
+    intro body alt hm
+    rcases hls : prof.levels with ⟨_ | ⟨l, _ | ⟨l', ls⟩⟩⟩ <;> rw [hls] at hm
+    · exact .inl hm
+    · exact .inr ⟨l, hm⟩
+    · exact .inl hm
+  unfold factsOf at h
+  rcases one _ _ h with h | ⟨l, h⟩
+  · cases h
+  · simp only [bind, Except.bind, pure, Except.pure, refuse] at h
+    repeat' split at h
+    all_goals cases h
+    all_goals assumption
+
 /-- A link-window with no finding has its scan's facts and its tied audits' free inputs. -/
 theorem rowsWindows_ok {p : Params} {c : Commitment} {e : Evidence} {s : Schedule} {sd : ByteArray}
     (hws : ∀ y ∈ rowsWindows p c e s sd, findingOf y = none) :
@@ -428,10 +447,13 @@ theorem rowsTiedCharged : RowsTiedCharged := by
     intro y hy
     obtain ⟨v, rfl⟩ := findingOf_none (has y hy)
     rfl
-  refine ⟨_, f, hx, auditCheck_facts hf, ?_, ?_⟩
+  have hfacts := auditCheck_facts hf
+  refine ⟨_, f, hx, hfacts, ?_, ?_, ?_⟩
   · show ((auditChecks p c e).filterMap (·.toOption))[i]? = some f
     rw [getElem?_filterMap_of_isSome _ _ hall, hget]
     rfl
+  · obtain ⟨_, _, -, hfo⟩ := hfacts
+    exact factsOf_sampled_le_units hfo
   · intro hd
     have hch : chargedOf p c (auditChecks p c e) i = some f := by
       simp [chargedOf, hget, hform, tiedOf, htied, hd]
