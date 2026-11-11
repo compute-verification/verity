@@ -63,3 +63,102 @@ run = "r20261104-001944-1b6b"
 art = "art:aa227b76ec6b95d26d8a608375aec0014bb1a1e3da7b1251d86d363904316c42"
 path = "out/run/run.json"
 sha256 = "ee3a333586d25cd7a60585071efd97a9d7a83e39b4863d5c7852741cb42f643f"
+
+[held."s-t20-1.1x-qat-top4"]
+run = "r20261103-235502-8f39"
+art = "art:eb1598bc7a1b6104cba80fdd4aba67b54acb93425d34f43760d0025c6148b6eb"
+path = "out/run/run.json"
+sha256 = "ac11be843b6bb0b481402d92d832c0bb9486139b80a8e4e9cac64699630ddb56"
+
+[[held."s-t20-1.1x-qat-top4".record_only]]
+phase = "other"
+kind = "param"
+op = "mul"
+shapes = [[1]]
+count = 28
+macs = 28
+why = "each coded matrix's scale times the program's multiplier of the scales, which is 1"
+
+[[held."s-t20-1.1x-qat-top4".record_only]]
+phase = "fwd"
+kind = "theta"
+op = "mul"
+shapes = [[]]
+count = 1
+macs = 1
+why = "the program's running average of the loss, which it prints: the step's loss times its weight"
+
+[[held."s-t20-1.1x-qat-top4".record_only]]
+phase = "other"
+kind = "param"
+op = "mul"
+shapes = [[]]
+count = 1
+macs = 1
+why = "the program's running average of the loss, which it prints: the average so far times its weight"
+
+[held."s-t20-1.1x-qat-top3"]
+run = "r20261103-183131-38c6"
+art = "art:43e397f80d85f400869162ffc61e5ecc4d750d27ba164fbd8d27210a641cae90"
+path = "out/run/run.json"
+sha256 = "b70e63889eeed5fcdb8bc2cfd0127b2d52c16f06f0bfed1d12d65ee98f8eb08f"
+
+[[held."s-t20-1.1x-qat-top3".record_only]]
+phase = "other"
+kind = "param"
+op = "mul"
+shapes = [[1]]
+count = 21
+macs = 21
+why = "each coded matrix's scale times the program's multiplier of the scales, which is 1"
+
+[[held."s-t20-1.1x-qat-top3".record_only]]
+phase = "fwd"
+kind = "theta"
+op = "mul"
+shapes = [[]]
+count = 1
+macs = 1
+why = "the program's running average of the loss, which it prints: the step's loss times its weight"
+
+[[held."s-t20-1.1x-qat-top3".record_only]]
+phase = "other"
+kind = "param"
+op = "mul"
+shapes = [[]]
+count = 1
+macs = 1
+why = "the program's running average of the loss, which it prints: the average so far times its weight"
+
+[held."s-t20-1.1x-qat-top2"]
+run = "r20261103-181612-5fae"
+art = "art:77b340fe9f7cb6d98098a3ef0b67e6570fc987bf8b7e439182033891709361a2"
+path = "out/run/run.json"
+sha256 = "2cb49d18ea025921b8b5e95b2e302e03b2ad3110ab39c0e1f7cef82fa4116a51"
+
+[[held."s-t20-1.1x-qat-top2".record_only]]
+phase = "other"
+kind = "param"
+op = "mul"
+shapes = [[1]]
+count = 14
+macs = 14
+why = "each coded matrix's scale times the program's multiplier of the scales, which is 1"
+
+[[held."s-t20-1.1x-qat-top2".record_only]]
+phase = "fwd"
+kind = "theta"
+op = "mul"
+shapes = [[]]
+count = 1
+macs = 1
+why = "the program's running average of the loss, which it prints: the step's loss times its weight"
+
+[[held."s-t20-1.1x-qat-top2".record_only]]
+phase = "other"
+kind = "param"
+op = "mul"
+shapes = [[]]
+count = 1
+macs = 1
+why = "the program's running average of the loss, which it prints: the average so far times its weight"
