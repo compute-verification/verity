@@ -119,6 +119,30 @@ def test_the_lean_build_trees_are_never_walked(tmp_path, monkeypatch):
     assert not [d for d in walked if V._skipped("check", d.split("/")[0]) or ".lake" in d.split("/")]
 
 
+def test_a_part_of_the_cache_kept_on_another_disk_behind_a_link_is_packed(tmp_path, monkeypatch):
+    """A machine may keep a directory at the top of check's cache on another disk, behind a link (`check.cc_records_in` unpacks
+    where circuit-check's cache resolves for that reason).  circuit-check stores through the link and `import_` adds through it,
+    so the walk follows it too: a walk that skipped it wrote an empty pack of a check that stored every target.  A part never
+    packed stays unwalked behind its link, and a link further down is not followed."""
+    r = _machine(tmp_path, monkeypatch, "a")
+    r["check"].mkdir(parents=True)
+    for name in ("circuit-check", "lean-builds"):
+        (tmp_path / "disk" / name).mkdir(parents=True)
+        (r["check"] / name).symlink_to(tmp_path / "disk" / name, target_is_directory=True)
+    _fill(r)
+    _write(tmp_path / "elsewhere" / "x.json", "{}")
+    (r["check"] / "lean-audit" / "linked").symlink_to(tmp_path / "elsewhere", target_is_directory=True)
+    assert sorted(V.entries()) == VERDICTS
+    before = V.snapshot()
+    _write(r["check"] / "circuit-check" / "v1" / "d2" / "e9.json", '{"report": 2}')
+    pack = tmp_path / "run.tar.gz"
+    assert V.export(pack, before) == 1
+    with tarfile.open(pack) as tar:
+        assert tar.getnames() == ["check/circuit-check/v1/d2/e9.json"]
+    _machine(tmp_path, monkeypatch, "b")
+    assert V.import_(pack) == (1, 0) and sorted(V.entries()) == ["check/circuit-check/v1/d2/e9.json"]
+
+
 def test_since_a_snapshot_a_pack_holds_only_what_the_run_stored(tmp_path, monkeypatch):
     r = _machine(tmp_path, monkeypatch, "a")
     _fill(r)
@@ -129,6 +153,44 @@ def test_since_a_snapshot_a_pack_holds_only_what_the_run_stored(tmp_path, monkey
     assert V.export(pack, before) == 2
     with tarfile.open(pack) as tar:
         assert sorted(tar.getnames()) == ["check/lean-audit/k2.json", "tests/k4.json"]
+
+
+def test_a_pack_holds_what_its_entries_need_whether_or_not_the_run_stored_it(tmp_path, monkeypatch):
+    """circuit-check's entries refer to read records each stored once, which a later run's entries share: a pack of that run's
+    entries holds the records they name though an earlier run wrote them, and those the records name, but nothing a need names
+    in another root or that is no verdict entry here."""
+    r = _machine(tmp_path, monkeypatch, "a")
+    _fill(r)
+    cc = r["check"] / "circuit-check" / "v1"
+    _write(cc / "reads" / "r1.json", json.dumps({V.NEEDS: ["r2.json"]}))
+    _write(cc / "reads" / "r2.json", "{}")
+    _write(cc / "reads" / "r3.json", "{}")
+    before = V.snapshot()
+    _write(cc / "d" / "e3.json", json.dumps({V.NEEDS: ["../reads/r1.json", "../reads/absent.json", "../../../../tests/k1.json",
+                                                       "../d/.e2.tmp"]}))
+    held = ["check/circuit-check/v1/d/e3.json", "check/circuit-check/v1/reads/r1.json", "check/circuit-check/v1/reads/r2.json"]
+    assert V.export(pack := tmp_path / "run.tar.gz", before) == 3
+    with tarfile.open(pack) as tar:
+        assert sorted(tar.getnames()) == held
+    assert V.export_paths(reused := tmp_path / "reused.tar.xz", [held[0]], xz=True) == 3
+    with tarfile.open(reused) as tar:
+        assert tar.getnames() == held
+
+
+def test_an_entry_that_is_not_json_is_packed_as_it_is_and_needs_nothing(tmp_path, monkeypatch, capsys):
+    """An entry cut short where it names what it needs can't be read by any lookup, here or where its pack goes: it is packed
+    byte for byte with nothing it names, and the export says so rather than failing the run's every other verdict."""
+    r = _machine(tmp_path, monkeypatch, "a")
+    cc = r["check"] / "circuit-check" / "v1"
+    _write(cc / "reads" / "r1.json", "{}")
+    before = V.snapshot()
+    _write(cc / "d" / "e3.json", (cut := '{"needs": ["../reads/r1.json"'))
+    _write(cc / "d" / "e4.json", json.dumps([{V.NEEDS: ["../reads/r1.json"]}]))
+    assert V.export(pack := tmp_path / "run.tar.gz", before) == 2
+    with tarfile.open(pack) as tar:
+        assert sorted(tar.getnames()) == ["check/circuit-check/v1/d/e3.json", "check/circuit-check/v1/d/e4.json"]
+        assert tar.extractfile("check/circuit-check/v1/d/e3.json").read().decode() == cut
+    assert "verdicts: check/circuit-check/v1/d/e3.json is not JSON (" in capsys.readouterr().err
 
 
 def test_snapshot_and_export_read_only_what_the_index_does_not_know(tmp_path, monkeypatch):

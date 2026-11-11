@@ -171,8 +171,8 @@ def registered_entries(roots: list[Any]) -> list[Entry]:
 
 
 def _kind(fn: Any) -> str | None:
-    from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition
-    from verity.ml.circuits.evaluation import ScalarReference
+    from verity.circuits.defs import PrimitiveDefinition, SpecializedDefinition
+    from verity.circuits.evaluation import ScalarReference
 
     return "P" if isinstance(fn, PrimitiveDefinition) else "S" if isinstance(fn, SpecializedDefinition) else \
         "R" if isinstance(fn, ScalarReference) else None
@@ -198,7 +198,7 @@ def _calls(fn: Any) -> list[str]:
 def _described(fn: Any, k: str) -> dict:
     """What a record holds of ``fn`` (of kind ``k``) beyond what it reaches: its descriptor and, unless it is a reference, its
     name and its descriptor id where that is not its id."""
-    from verity.ml.circuits import codec as C
+    from verity.circuits import codec as C
 
     out = {"d": CC.descriptor(fn)}
     if k != "R":
@@ -213,7 +213,7 @@ def _reach(roots: list[Any], described: bool = True, pinned: frozenset[str] | No
     """What ``roots`` reach (`targets.reachable`, building every body), each as a record holds it, and the objects; without
     ``described``, no descriptor, name or descriptor id (a sixth of the build, which only a record checks against).  Described
     (`_described`): each one `targets.select` could keep, the ``pinned`` ids (default `targets.pinned`) among them."""
-    from verity.ml.circuits import boolean as BL
+    from verity.circuits import boolean as BL
 
     objs = TG.reachable(roots)
     nodes: dict[str, dict] = {}
@@ -415,8 +415,7 @@ def _lookup(cache: Path, repo: Path, e: Entry) -> tuple[dict, dict[str, list[str
         found = sorted(CC._dir(cache, e.key).glob("*.json"))
     for p in found:
         try:
-            with CC.internal():
-                rec = json.loads(p.read_text())
+            rec = CC.read(p)
             if rec.get("key") != e.key:
                 continue
             reads = rec["reads"]
@@ -428,7 +427,8 @@ def _lookup(cache: Path, repo: Path, e: Entry) -> tuple[dict, dict[str, list[str
             for fid in e.root_ids:
                 got["nodes"][fid]["k"]
             return {**got, "seconds": _took(p)}, reads
-        except (OSError, KeyError, TypeError, AttributeError, ValueError):
+        except (OSError, KeyError, TypeError, AttributeError, ValueError) as x:
+            CC._miss(p, x)
             continue
     return None
 
@@ -476,7 +476,7 @@ def _noting(got: list) -> Iterator[None]:
     """``got`` set to what runs inside did beyond what it returns: ``[id, word id]`` of each Definition it registered, in the
     order it registered them (a Boolean Definition's ``word``'s id, else None), and each in-tree module it imported, in the
     order it imported them."""
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
 
     defs, mods = set(dict.keys(REGISTRY.defs)), set(sys.modules)
     try:
@@ -491,15 +491,15 @@ def _replay(units: tuple[str, ...], effects: list) -> bool:
     """Do what ``effects`` (`_noting`'s) notes, under ``units`` as making their roots ran (`cache.producing`, so what it makes
     is theirs): import each module, then make each Definition not registered yet, in order, by its id
     (`codec.lookup_primitive`: an input, a family made on demand) or as the Boolean version made on demand of its word
-    (`verity.ml.definitions.boolean.made_on_demand`).  False where a module doesn't import, the next Definition is made by
+    (`verity.definitions.boolean.made_on_demand`).  False where a module doesn't import, the next Definition is made by
     neither or making it raises: the roots are to be made then, and register the rest as they did."""
     import importlib
 
     regs, mods = effects
     if not regs and not mods:
         return True
-    from verity.ml.circuits.codec import lookup_primitive
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.codec import lookup_primitive
+    from verity.circuits.defs import REGISTRY
 
     with CC.producing(units) if units else nullcontext():
         try:
@@ -512,7 +512,7 @@ def _replay(units: tuple[str, ...], effects: list) -> bool:
                     lookup_primitive(REGISTRY, fid)
                 except KeyError:
                     if word is not None:
-                        from verity.ml.definitions.boolean import made_on_demand
+                        from verity.definitions.boolean import made_on_demand
 
                         made_on_demand(word)
                 if not dict.__contains__(REGISTRY.defs, fid):
@@ -679,7 +679,7 @@ def store_roots(cache: Path, repo: Path, plan: Plan) -> str | None:
 
 def owners(plan: Plan) -> dict[str, str]:
     """`sidecars.owner` of each Definition a loaded module binds at its top level, by id, as a full build has it before its
-    checks: in a process forked from this one that imports every module of `sidecars.PACKAGES` a binding's build imported (its
+    checks: in a process forked from this one that imports every module of `sidecars.packages` a binding's build imported (its
     reads' ``modules``, its record's or its process's), so this process imports none of them, as it builds no body.  Where two
     Definitions of one id are bound, the first owner by name.  `Stale` when one of them doesn't import there."""
     import importlib
@@ -687,7 +687,8 @@ def owners(plan: Plan) -> dict[str, str]:
 
     from . import sidecars as SC
 
-    mods = sorted({m for e in plan.entries for m in (e.reads or {}).get("modules", ()) if m.partition(".")[0] in SC.PACKAGES})
+    tops = SC.packages()
+    mods = sorted({m for e in plan.entries for m in (e.reads or {}).get("modules", ()) if m.partition(".")[0] in tops})
     sys.stdout.flush()
     sys.stderr.flush()
     with CC.internal():
@@ -720,7 +721,7 @@ def _word_steps(plan: Plan) -> Iterator[list]:
     """`made_words`' steps, each as it comes to it: ``[id, node, module, binding]`` of each Boolean Definition a binding's build
     registered (``words``) that this process doesn't hold yet, with the id its record reaches it by (``node``: its own, else
     the first of its family) and the module that holds it."""
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
 
     for e in plan.entries:
         for fid, _word, *where in e.words or ():
@@ -740,7 +741,7 @@ def made_words(plan: Plan, steps: Iterable[list] | None = None) -> int:
     stood for its node (`make` then made nothing).  `Stale` for one neither registers; the count made."""
     import importlib
 
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
 
     n = 0
     for fid, node, where, by in _word_steps(plan) if steps is None else steps:
@@ -1031,9 +1032,10 @@ def store(cache: Path, repo: Path, entries: list[Entry], only_rebuilt: bool) -> 
 
 
 def held(cache: Path, entries: list[Entry]) -> int:
-    """The bytes ``entries``' records and the catalog's roots record take in ``cache``: what a run from a copy of it copies."""
+    """The bytes ``entries``' records and the catalog's roots record take in ``cache``, with the read records they share
+    (`cache.held`): what a run from a copy of it copies."""
     with CC.internal():
-        return sum(p.stat().st_size for k in [*(e.key for e in entries), key(ROOTS, 0)] for p in CC._dir(cache, k).glob("*.json"))
+        return CC.held(p for k in [*(e.key for e in entries), key(ROOTS, 0)] for p in CC._dir(cache, k).glob("*.json"))
 
 
 def made_entries() -> list[Entry]:
@@ -1102,10 +1104,10 @@ def _reach_one(e: Entry, described: bool = False, pinned: frozenset[str] | None 
 
 
 def _words(before: set[str]) -> list[list[str | None]]:
-    """``[id, word id, module]`` of each Boolean Definition (a ``word`` and a ``build``, as `verity.ml.circuits.boolean.trace`
+    """``[id, word id, module]`` of each Boolean Definition (a ``word`` and a ``build``, as `verity.circuits.boolean.trace`
     registers one) registered since the registry held ``before``, in the order it was registered; ``module`` the first imported
     that holds it by a name (one that registers it as it is imported), else None."""
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
 
     new = []
     for fid, d in REGISTRY.defs.items():
@@ -1155,7 +1157,7 @@ def _child(e: Entry, out: Any, described: bool = False, side: list[str] | None =
     its share of the task list's reads, and what it did that the tracer cannot see (`cache.untraced`, past the parent's
     ``untraced``); and the Boolean Definitions its build registered (`_words`).  ``pinned``: the parent's (`targets.pinned`),
     so the pins are no read of the binding's build."""
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
 
     from . import cli
 

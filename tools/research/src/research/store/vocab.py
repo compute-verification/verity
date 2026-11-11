@@ -237,6 +237,10 @@ TASKS_GRAPH = "tasks_graph"
 VERITY_GRAPH = "verity_graph"
 #: On `task:<key>`, by the executor's worker that ran a graph/v2 task (`verity graph run`): its result/v1 document.
 TASK_RESULT = "result"
+#: On `commit:<sha>`, by the control pod's nightly loop (infra/control/nightly_check.py): what the uncached check of that commit
+#: of `main` said; the label's ref is its run.
+NIGHTLY_CHECK = "nightly_check"
+NIGHTLY_CHECK_OUTCOMES = ("passed", "contradicted", "failed", "error")
 
 
 def canonical_key(name: str) -> str:
@@ -406,10 +410,12 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(GRANT, GROUP_VERIFICATION, ENUM, "a reviewer's grant on pr:<n>@<head>: the role that reviewed that exact head; a record only, which no merge waits on",
        GRANT_ROLES),
     _k(READY, GROUP_VERIFICATION, BOOL, "the owner's word that pr:<n>@<head> is ready for the merge queue (`research queue ready`); a new head needs it "
-       "again unless its own change is the same (`StoreLabels`); a train member needs none (Q14)"),
+       "again unless its own change is the same, or, in the verified queue's loop, an older head's carried across the moves "
+       "`main` landed since (`StoreLabels`); a train member needs none (Q14)"),
     _k(REVIEWED, GROUP_VERIFICATION, ENUM, "a reviewer's verdict on pr:<n>@<head> (`research queue review`): land, or hold with the "
        "reason as its ref; drive's review landing counts one only by a reviewer who isn't the PR's owner, and at a new head "
-       "whose own change is the same",
+       "whose own change is the same (in the verified queue's loop, or an older head's carried across the moves `main` landed "
+       "since)",
        REVIEW_VERDICTS),
     _k(LABEL_AUTH, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>, beside a `ready = true` or `reviewed = land` by the same author: "
        "{for, token, delegation?}, a Cursor OIDC token whose nonce is the label's (`research.labelauth`); drive.toml's "
@@ -436,6 +442,11 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(EXECUTOR_SHADOW, GROUP_VERIFICATION, TEXT, "on commit:<sha>, by drive with `executor = \"shadow\"`: a JSON object comparing "
        "the after-landing run's verdicts with the executor's ({check, graph, run, units, agree, disagree: [{unit, old, executor}], "
        "pending, missing, executor_only, error, incomplete}); `research queue shadow-report` reads it"),
+    _k(NIGHTLY_CHECK, GROUP_VERIFICATION, ENUM, "on commit:<sha>, by the control pod's nightly loop: what the uncached check of "
+       "that commit of main (`check.py --no-cache`, every path counted as changed) said, with its run as the ref: passed, and "
+       "the check named no cached pass it contradicts; contradicted, it named one, a cached pass that answers for something "
+       "it failed; failed, and it named none; error, no verdict (it never started, timed out or was lost)",
+       NIGHTLY_CHECK_OUTCOMES),
     # evidence
     _k(INSTRUCTION, GROUP_EVIDENCE, TEXT, "the tensor-core instruction probed, as the registry names it (sm89.mma.m16n8k32.e4m3)"),
     _k(MODEL, GROUP_EVIDENCE, TEXT, "the silicon model the capture was compared with"),
@@ -447,7 +458,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(INSTANCES_DATASET, GROUP_EVIDENCE, TEXT, "the instance dataset a run or set draws from, e.g. bench-instances/v1"),
     _k(INSTANCES_TIER, GROUP_EVIDENCE, TEXT, "the tier within the dataset, e.g. vu-k1536"),
     _k(MISMATCHES, GROUP_EVIDENCE, INT, "tiles or instances that disagreed with the reference"),
-    _k(TARGET, GROUP_EVIDENCE, TEXT, "the verification target the evidence is for (a verity.ml.circuits.targets.target name)"),
+    _k(TARGET, GROUP_EVIDENCE, TEXT, "the verification target the evidence is for (a verity.definitions.circuits.targets.target name)"),
     _k(DEVICE, GROUP_EVIDENCE, TEXT, "the physical GPU the capture ran on, as its UUID (nvidia-smi --query-gpu=uuid: GPU-...); the trust framework's device identity"),
     _k(INSTANCES_MANIFEST_SHA256, GROUP_EVIDENCE, TEXT, "sha256 of the instance set's manifest (or its contract-pinned recipe digest) a replay checked"),
     _k(COMPONENT, GROUP_EVIDENCE, TEXT, "the component a measurement isolates (encoder, hash, lookup, ...)"),

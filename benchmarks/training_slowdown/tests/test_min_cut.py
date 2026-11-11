@@ -1,5 +1,5 @@
 """`training_slowdown.formalism`'s copy of the min-cut bound's arithmetic against the slowdown calculator's module, the
-one place that computes it (`benchmarks/rho/rho/min_cut.py`, loaded by path): `BETA_K` and `beta_k`, `he_rho` and
+one place that computes it (`verity/protocols/inference_only/rho/rho/min_cut.py`, loaded by path): `BETA_K` and `beta_k`, `he_rho` and
 `SHARE`."""
 import importlib.util
 import itertools
@@ -10,7 +10,7 @@ import pytest
 
 from training_slowdown import formalism as F
 
-MIN_CUT = Path(__file__).resolve().parents[3] / "benchmarks/rho/rho/min_cut.py"
+MIN_CUT = Path(__file__).resolve().parents[3] / "verity/protocols/inference_only/rho/rho/min_cut.py"
 
 
 def _min_cut():
@@ -26,16 +26,18 @@ M = _min_cut()
 #: one of cheap weights
 POINTS = ((2.0e9, 3.0e7, 15.9, 15.9, 16.0, 1.0e9, 6.5e4, 5.0e12),
           (7.2986e14, 3.5673e11, 15.9, 15.9, 16.0, 4.6566e14, 65_536, 1.2017e19),
-          (3.6e10, 2.8e8, 16.0, 1.02, 16.0, 1.4e13, 4.2e8, 1.4e13),
+          (3.6e10, 2.8e8, 16.0, 0.37, 16.0, 1.4e13, 4.2e8, 1.4e13),
           (1.0e18, 2.7e14, 2.5, 4.0, 4.0, 2.45e19, 2.0e7, 3.0e21))
 
 
-def test_the_rows_of_beta_are_the_calculators():
+def test_the_rows_of_beta_are_the_calculators_and_between_two_both_read_the_next():
     assert F.BETA_K == M.BETA
     ks = [k for k, _ in F.BETA_K]
-    between = [x for a, b in itertools.pairwise(ks) for x in (math.sqrt(a * b), a + (b - a) / 3)]
+    between = [x for a, b in itertools.pairwise(ks) for x in (a + 1, math.sqrt(a * b), a + (b - a) / 3, b - 1)]
     for k in (1, 640, ks[0] - 1, *ks, *between, 422_197_408):
         assert F.beta_k(k) == M.beta(k) is not None, k
+    for (k0, _), (k1, b1) in itertools.pairwise(F.BETA_K):
+        assert all(k0 < k < k1 and F.beta_k(k) == b1 for k in (k0 + 1, math.sqrt(k0 * k1), k1 - 1))
     for k in (ks[-1] + 1, 1e9, 1.7e9):
         assert F.beta_k(k) is None and M.beta(k) is None
 

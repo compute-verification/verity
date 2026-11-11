@@ -82,6 +82,22 @@ def test_the_status_command_reads_the_verified_queues_admission_onto_main_not_ne
     assert (loop[1].state, loop[1].why, loop[2].state) == ("queued", "landed: its head is on `main`", "ready"), loop
 
 
+def test_the_status_command_says_a_move_lands_only_with_a_land_verdict_and_refuses_one_that_conflicts_with_main(world, monkeypatch):
+    """The verified queue builds a move PR by its merge, as any PR, and only with a land verdict: `status --loop` refuses one
+    that doesn't merge onto `main`, and says of one that does that it never lands on its mark alone."""
+    h = Review(world, monkeypatch, land_into="checked")
+    base = _main(world)
+    _move_main(world, {"a.txt": "main\n"})
+    world.gh.put(1, world.change({"b.txt": "1\n"}))
+    for n, files, at in ((2, {"c.txt": None, "moved/c.txt": "c\n"}, "origin/main"), (3, {"a.txt": "3\n"}, base)):
+        world.gh.put(n, world.change(files, base=at), body=f"Lane `lane-{n}`.\nMove: tools/move/x_map.toml\n")
+    loop = h.q.status(loop=True)
+    assert [loop[n].state for n in (1, 2, 3)] == ["ready", "ready", "refused"], loop
+    assert loop[1].why.endswith(", or on its mark alone when it is low-risk"), loop[1]
+    assert loop[2].why.endswith(": a move lands only with one, never on its mark alone"), loop[2]
+    assert loop[3].why == "conflicts with `main` in a.txt: merge `main` into the branch and re-mark it", loop[3]
+
+
 def test_a_red_after_landing_run_moves_nothing_on_main_and_its_culprit_is_reverted_on_checked(world, monkeypatch, tmp_path):
     _owning(world, {"lane-2": [], "pkg-owner": ["pkg/"]})
     h = Review(world, monkeypatch, land_into="checked")
@@ -266,9 +282,9 @@ def test_while_circuit_check_is_red_a_pr_touching_its_inputs_waits_and_an_unrela
     _circuit_red(h, tmp_path)
     h.tick()
     assert h.postland()["red"]["step circuit-check"]["culprit"] is None
-    world.gh.put(2, world.change({"verity/ml/circuits/library.py": "X = 2\n"}))
+    world.gh.put(2, world.change({"verity/definitions/circuits/library.py": "X = 2\n"}))
     world.gh.put(3, world.change({"b.txt": "3\n"}))
-    world.gh.put(4, world.change({"verity/ml/circuits/README.md": "4\n", "verity/ml/circuits/tests/test_x.py": "4\n"}))
+    world.gh.put(4, world.change({"verity/circuits/README.md": "4\n", "verity/circuits/tests/test_x.py": "4\n"}))
     for n in (2, 3, 4):
         h.review(n)
     assert h.tick().startswith("landed #4"), world.logs
@@ -286,7 +302,7 @@ def test_a_pr_that_says_it_fixes_the_red_circuit_check_lands_through_the_hold(wo
     _landed(h, {"a.txt": "1\n"})
     _circuit_red(h, tmp_path)
     h.tick()
-    world.gh.put(2, world.change({"verity/ml/circuits/library.py": "X = 2\n"}), body="Lane `lane-2`. Fixes step `circuit-check`")
+    world.gh.put(2, world.change({"verity/definitions/circuits/library.py": "X = 2\n"}), body="Lane `lane-2`. Fixes step `circuit-check`")
     h.review(2)
     assert h.tick().startswith("landed #2"), world.logs
 

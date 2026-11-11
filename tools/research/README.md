@@ -84,7 +84,7 @@ research fetch RUN [--all]               # records only, or every file sha256-ve
 research status [RUN] [--refresh] [--all] [--json]   # under each active run, a `mem` line per cgroup it executes in (scopemem.py):
                                          # current, peak, cap, growth from its own samples, NEAR CAP within 10%; remote: with RUN or --refresh
 research inspect RUN [--json|--py-spy]   # fetch, status RUN and inspect take a run another VM launched (a full id): found on
-                                         # --on NAME, else on each ssh machine, and its records fetched here
+                                         # --on NAME, else on each ssh machine but the auditor hosts, and its records fetched here
 research data SUBCOMMAND ...             # the store: put/show/fetch/select/... and lookup / pull / attempt publish
 research pods create --name N --max-hours H ... | list | terminate | check-part    # RunPod lifecycle (pods/runpod.py, pods/part.py)
 research pods extend TARGET --hours H | lease TARGET                               # the pod's lease (pods/lease.py)
@@ -102,8 +102,9 @@ research merge --mirror [SHA]                                           # main o
 research merge --canary [--tool check] [--json]                    # the gates' daily self-test, in scratch stores
 research queue status|sync|land|eject|drive|ready|open [--dry-run]  # the merge queue on `next` (queue.py)
 research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
-research queue stats --log FILE [--hours 24] [--until T] [--json]  # where landed PRs' time went (queue_stats.py)
+research queue stats [--json] [--short]  # the queue's numbers (queue_table.py); --log FILE: queue_stats.py
 research lean-times ...  # Lean tasks' p95
+research run-times [--hours 12] [--on MACHINE,...] [--json]  # each run's wait to start, setup and run time, by kind, machine and pool (run_times.py)
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
 research msg send|close|read|list|names|traffic|owners|handles|subscriptions|ask-daniel|groups sync [--dry-run]   # Slack (slack.py, below)
 ~~~
@@ -568,7 +569,7 @@ at = "10:30Z"
 weekday = "mon"                              # weekly; daily without it
 source = "/workspace/steward/verity"         # the tree it is launched from: its cwd, and its workspace on PYTHONPATH
 args = ["--on", "vy-lean-small", "--project", "verity", "--source", ".", "--cwd", "source", "--tool", "lean_upstream", "--",
-        "python", "tools/verity/lean/upstream.py", "Security/Proofs", "--fetch", "--rev", "origin/main"]
+        "python", "tools/verity/lean/upstream.py", "security/Proofs", "--fetch", "--rev", "origin/main"]
 ~~~
 
 `args` are `research run`'s and must put the run on a machine (`--on`). The steward runs `research run --id <run id> <args>`,

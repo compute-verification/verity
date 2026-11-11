@@ -80,14 +80,18 @@ def test_a_records_timeout_is_its_runs_not_the_checks(launched):
     assert head[head.index("--timeout") + 1] == "14400" and "--timeout" not in tail
 
 
+#: the CPU nodes `auto.read` asks here
+NODES = (CPU1, "vy-nebius-cpu-3", "vy-nebius-cpu-5")
+
+
 def _lines(free: str | None) -> dict:
-    """Node 2's share free, and each of research.auto's SPILL machines' research pool with its one slot held but ``free``'s,
-    as `auto.read` returns them; with ``free`` None, no SPILL machine answers."""
+    """Node 2's share free, and each of NODES' research pool with its one slot held but ``free``'s, as `auto.read` returns
+    them; with ``free`` None, no CPU node answers."""
     def pool(held: bool) -> dict:
         return {"research": {"file": "/workspace/research/locks/research/slots", "waiters": [], "slots": [
             {"name": "r0", "cpus": "8-19", "mem": 40, "trains": False, "holder": {"pid": 1} if held else None, "blocked": None}]}}
     return {auto.AUTO_NODE: {"share": {"share": 48, "claims": 0, "waiters": 0, "free": 48, "fits": True}},
-            **{m: pool(m != free) if free else "no answer in 30 s" for m, _ in auto.SPILL}}
+            **{m: pool(m != free) if free else "no answer in 30 s" for m in NODES}}
 
 
 @pytest.mark.parametrize("argv, why", [
@@ -105,7 +109,7 @@ def test_a_pool_that_cannot_be_taken_so_is_refused_before_anything_launches(laun
 def test_on_auto_waits_in_the_research_pool_research_run_on_auto_would_spill_to(launched, monkeypatch, capsys):
     """`--on auto --pool research`, or `--pool research` alone, takes the machine whose research pool `research run --on auto`
     would spill a run to now, its lines read as it reads them: so the command a lane is told to run names no node."""
-    free, reads = auto.SPILL[2][0], []
+    free, reads = NODES[2], []
     monkeypatch.setattr(auto, "read", lambda source, cpus, **k: reads.append(Path(source)) or _lines(free))
     for argv in (["--on", "auto", "--pool", "research"], ["--pool", "research"]):
         assert CHECK.record(["--base", "HEAD", *argv, "--deferred", "lean-agreement"]) == 0
@@ -138,7 +142,7 @@ def test_record_inside_a_research_run_is_refused_with_the_command_that_records_i
 
 
 def test_the_lane_pool_is_the_pool_research_run_on_auto_spills_to():
-    assert CHECK.LANE_POOL in {p for _, p in auto.SPILL} and CHECK.LANE_POOL in slot_only.POOLS
+    assert CHECK.LANE_POOL == auto.SPILL_POOL and CHECK.LANE_POOL in slot_only.POOLS
 
 
 def test_the_commands_printed_for_a_lane_name_no_node():
