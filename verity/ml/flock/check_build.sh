@@ -6,6 +6,9 @@
 # `check_build.sh test` (check's flock-rust-tests step) runs the Rust tests on the same checkout instead, in release as upstream's
 # CI does: flock-live's unit tests in the proving build's and the selftests' feature sets, and every test of the six crates the
 # patches change (the live crate's features don't reach them, so one run).
+# `check_build.sh bin DEST` builds the proving binary on the same checkout instead, as pod/60-circuit.sh builds it on a CPU
+# (release, sha512 and glue), and copies it to DEST while it holds the checkout: a test that proves runs its own copy, which
+# no later build of another tree replaces.
 # env: FLOCK_CHECKOUT (default $HOME/.cache/verity/flock-b684b12, cloned when missing; its target/ is kept between runs),
 # RUST_TOOLCHAIN (default the pin below, installed through rustup when missing: a machine's default toolchain doesn't decide it,
 # and an agent VM's, 1.83, can't parse upstream's edition-2024 manifests)
@@ -41,6 +44,12 @@ if [ "${1:-}" = test ]; then
   # take the buffer it gave back
   cargo test --release -q -p flock-core -p flock-parallel -p flock-prover -p flock-merkle -p flock-transcript -p flock-hash \
     -- --skip scratch::tests::take_reuses_given_buffer
+  exit
+fi
+if [ "${1:-}" = bin ]; then
+  echo "check_build: cargo build --release flock-circuit --features sha512,glue"
+  cargo build --release -q -p flock-live --bin flock-circuit --features sha512,glue
+  cp target/release/flock-circuit "${2:?check_build.sh bin DEST}"
   exit
 fi
 for features in sha512 sha512,glue sha512,glue,seed-injection; do

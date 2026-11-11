@@ -11,6 +11,8 @@
 # tables on a dry run's toy scratch (`test_a5_tp_store`, through `integrations/vllm/verity_vllm`'s `ops/store_trees.sh`),
 # and the vLLM demo's endpoint serving under predict's row in a toy tree (`test_vllm_example`). Decode's FP8 linear's
 # two cuts are sized for real in ANDs a token (`test_flashinfer_decode_cut`: its units lowered by `m1_families.estimate`).
+# One test proves: `test_audit_two_members` takes two members of a tiny window through the records audit on the real
+# flock-circuit, flock-firewall and flock-verify.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
@@ -21,6 +23,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
     "tests/test_a0_archive_once.py",
+    "tests/test_audit_two_members.py",
     "tests/test_a5_coins.py",
     "tests/test_a5_memo.py",
     "tests/test_a5_outputs.py",
@@ -32,6 +35,11 @@ untraced = [
     "tests/test_served_overhead.py",
     "tests/test_served_verdicts.py",
 ]
+# The Lean verifier and the ZK server's Lean, which `test_audit_two_members` runs and skips without: check's lean-build step
+# builds them before this suite (`AFTER_LEAN`). Its flock-circuit is `verity/ml/flock/check_build.sh bin`'s, from the
+# live crate and the patches under `verity`.
+artifacts = ["verity/core/service/flock/.lake/build/bin/flock-verify",
+             "verity/core/service/flock/.lake/build/bin/flock-firewall"]
 # `verity`: the stream and its verifiers of record, and the Lean packages `sampled-proofs-verifier` builds from; its lakefile,
 # named on its own, is the package its tests build (`one_stage.verifier.executable`), so check runs them after lean-build.
 # `verity/core/protocols/network/nci/lean/lakefile.toml`, named on its own too: served_cases' inference-only case goes through
