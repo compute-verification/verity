@@ -371,7 +371,7 @@ JOBS = {"whole": {"dials": {"trainable": "*", "lr": 1e-2}},
 COUNTS = ("tokens", "matmul_macs", "elementwise_macs", "macs")
 
 
-def counted(root: Path, steps: int, math: bool = False, **over):
+def job_counted(root: Path, steps: int, math: bool = False, **over):
     """A job's steps through the harness's own loop (`run.train` under `run.Harness`), in this process, under the
     attention kernel torch picks as a job runs (a fused one) or under the math kernel: the counter's record, and what
     the job's trace is taken from (its config, route, model and optimizers)."""
@@ -390,9 +390,9 @@ def counted(root: Path, steps: int, math: bool = False, **over):
 
 
 def counted_and_traced(root: Path, steps: int, **over):
-    """A job's steps as it runs them (`counted`), and then its trace as the job takes it: the counter's record, the
+    """A job's steps as it runs them (`job_counted`), and then its trace as the job takes it: the counter's record, the
     trace, the capture's graph the trace was read from, and the model."""
-    rec, (cfg, route, model, optimizers) = counted(root, steps, **over)
+    rec, (cfg, route, model, optimizers) = job_counted(root, steps, **over)
     return rec, *run.traced_step(cfg, route, model, optimizers, "cpu"), model
 
 
@@ -447,9 +447,9 @@ def test_a_jobs_record_is_one_record_under_either_attention_kernel(tmp_path, job
 
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(flops.Counter, "_attention", spy)
-        fused = steps_of(counted(tmp_path / "fused", 3, **JOBS[job])[0])
+        fused = steps_of(job_counted(tmp_path / "fused", 3, **JOBS[job])[0])
         kernels, seen[:] = set(seen), []
-        math = steps_of(counted(tmp_path / "math", 3, math=True, **JOBS[job])[0])
+        math = steps_of(job_counted(tmp_path / "math", 3, math=True, **JOBS[job])[0])
     assert kernels == {"aten._scaled_dot_product_flash_attention_for_cpu",
                        "aten._scaled_dot_product_flash_attention_for_cpu_backward"} and not seen
     assert fused == math and fused[2]["matmul_macs"] > 0 < fused[2]["elementwise_macs"]
