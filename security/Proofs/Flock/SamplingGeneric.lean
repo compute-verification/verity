@@ -33,6 +33,7 @@ public import Proofs.Flock.SamplingGeneric.TwoRegX
 public import Proofs.Flock.SamplingGeneric.TwoRegFirstHit
 public import Proofs.Flock.SamplingGeneric.TwoRegFirstHitClass
 public import Proofs.Flock.SamplingGeneric.RunExtAt
+public import Proofs.Flock.SamplingGeneric.TwoFirstHitAt
 
 /-!
 # The sampled compiler in the claims core, at Flock
