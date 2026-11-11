@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from synthetic import run_job, tiny_data, tiny_registry, tiny_start, write_config
 from torch import nn
 
-from training_slowdown import config, policy, run, starts
+from training_slowdown import VERSION, config, formalism, policy, run, starts
 from training_slowdown.capture import products
 from training_slowdown.codecs import Identity, Plan, QuantDelta, SeedReplay, derive_seed
 from training_slowdown.counterexample import check
@@ -271,14 +271,15 @@ RAW = {"count", "phase", "op", "dims", "token_dims", "dtypes", "affected", "widt
 
 
 def test_the_job_traces_its_routes_step(ran):
-    """The record's `trace` is the capture's measurement of the route's last step at the job's batch and the start's
-    context, the tokens the counter counted a step, with the rows unpriced and nothing the formalism derives; the
-    rows price where they are read."""
-    rec = ran[0]
+    """The record's `trace` is the capture's measurement of the middle one of the route's last three steps at the
+    job's batch and the start's context, the tokens the counter counted a step, with the version of the code that
+    took it, the rows unpriced and nothing the formalism derives; the rows price where they are read."""
+    rec, cfg = ran[0], ran[1]
     tr = rec["trace"]
-    assert set(tr) == {"capture", "torch", "step", "axes", "tokens", "order", "updated", "rows", "k", "p_match", "at",
-                       "elementwise_products", "data_dependent", "carried_scalars"}
-    assert (tr["capture"], tr["torch"], tr["step"]) == (products.CAPTURE, torch.__version__, 2)
+    assert set(tr) == {"capture", "capture_code", "torch", "step", "axes", "tokens", "order", "updated", "rows", "k",
+                       "p_match", "at", "elementwise_products", "data_dependent", "carried_scalars", "circuit"}
+    assert (tr["capture"], tr["capture_code"], tr["torch"]) == (products.CAPTURE, VERSION, torch.__version__)
+    assert tr["step"] == 1 and len(rec["steps"]) == run.TRACED_STEPS
     assert tr["axes"] == {"batch": 2, "seq": 1024} and {s["tokens"] for s in rec["steps"]} == {tr["tokens"]} == {2048}
     assert tr["data_dependent"] == tr["carried_scalars"] == [] and tr["k"] == policy.CONSOLE[1]
     assert sorted(map(int, tr["at"])) == sorted(set(products.DIAL_K) - {int(tr["k"])})
@@ -290,6 +291,30 @@ def test_the_job_traces_its_routes_step(ran):
     priced = [products.priced(r) for r in tr["rows"]]
     assert sum(r["count"] * r["macs"] for r in priced if r["phase"] == "forward" and all(r["affected"])) > 0
     assert all(r["gates_per_mac"] > 0 and "dtypes" not in r for r in priced)
+    # the step's circuit, raw: the gradient's cut and a token group's partial are the trained matrices' dW at the
+    # accumulator's 32 bits, the carried state no token op reads AdamW's two moments, and a window's tokens are read
+    # at its inputs and its last target
+    weights = sum(p.numel() for p in config.route(cfg.route).build(cfg.start.shape, cfg.dials)[0].parameters()
+                  if p.requires_grad)
+    c = tr["circuit"]
+    assert {*formalism.TRACED_STRUCTURE, "tau_ids", "tau_other_bits", "a_bits", "u_in", "u1_bits", "tail_share"} < set(c)
+    assert not {"parts", "labels", "u", "trace", *formalism.READ_BACKS} & set(c)
+    assert c["grad_cut_bits"] == c["partial_cut_bits"] == c["u1_bits"] == 32 * weights > 0
+    assert c["state_bits"] == 2 * 32 * weights and c["delta_grad_bits"] == 3 * 32 * weights
+    assert (c["region"], c["tokens"], c["token_factor"], c["tau_ids"]) == (1, tr["tokens"], 1, 1025 / 1024)
+    assert 0 < c["affected_share"] < c["sigma"] < 1
+
+
+@pytest.mark.parametrize("steps, traced", [(1, 0), (2, 1), (5, 3)])
+def test_the_traced_step_has_a_step_before_it_where_the_run_has_one(tmp_path, steps, traced):
+    """The traced step is the middle one of the run's last three, the second of a run of two, and the only step of a
+    run of one, which reads θ alone: its circuit shows no update."""
+    cfg = config.load(write_config(tmp_path / "a.toml", budget={"steps": steps, "batch": 2}),
+                      starts.registry(tiny_registry(tmp_path / "reg")))
+    route = config.route(cfg.route)
+    tr = run.trace_step(cfg, route, *route.build(cfg.start.shape, cfg.dials), "cpu")
+    assert tr["step"] == traced
+    assert (tr["circuit"]["affected_share"] > 0) == (tr["circuit"]["u1_bits"] > 0) == (steps > 1)
 
 
 def test_a_retrace_writes_the_same_record_and_refuses_another_digest(ran, tmp_path):
