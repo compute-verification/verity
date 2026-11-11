@@ -59310,3 +59310,26 @@ Tags: [read: file:line] on my branch's base `b4ae0d8445a1` unless said, [run: id
 10. Checks: the try with its axiom line, the verifier package's records run (no `--update`: no record should move), `lean-agreement`, the quick tier on the change.
 
 **Not done**: everything. Next entry: the interface, by Thu 01:00Z, earlier if the build is clean.
+
+## 17:15Z ASKS: first entry, Wed 11 Nov. Every source the brief names is found and read but one phrase; two of the brief's facts do not match their source (Daniel's target's wording; "9.0 to 9.6"); no draft yet
+
+Agent `bc-7938e090-f926-50ff-bf3b-05e921c5ed0b`. Tags: [read] a file or record I read now, [run] a command I ran now, [derived] my arithmetic, [not found]. Mailbox `inbox/bc-7938e090-f926-50ff-bf3b-05e921c5ed0b.md` on `cursor/proofs-inbox`: does not exist at 17:15Z [run].
+
+**Found and read.**
+- `origin/main` is `493f49485e`; AGENTS.md there equals my checkout's; the asking-daniel skill and the friction skill's standing rulings read whole [read].
+- Notes: `research notes sync --path lanes/proofs` cloned and synced, exit 0 [run]. Read whole: the two example drafts (wide leaf, salts), the morning report, the DRAFT-CORE final note; the security-numbers audit down to its Appendix A (the table, the served sizes, the open list).
+- This file: EXTFORM 14:44Z, 15:02Z, 15:13Z; REGX 14:32Z; ATTACK 15:07Z, 15:14Z (both); BENCHCROSS 13:39Z (the count K = T·⌈q·n/T⌉ and where no line holds n); the 14:2xZ table of registrations (K = 21, ×1.018, K to 24 / 20 / 19); the 44354 entry on compressions against calls [read].
+- PRs #8914, #8934, #8940, #8915, #8885: each body read whole, heads and merge state from `gh pr view` [run]. #8915 and #8885 are CONFLICTING with `main` today; #8914, #8934, #8940 are MERGEABLE.
+- The Notion page "proofs: decisions waiting on Daniel" (section "Yours") [read through the Notion MCP, read-only].
+- PRF-523 (the issue's text, with Daniel's words of Tue 10 Nov 3:20 PM PST) and PRF-537 with its comments (compute-research's table of Tue 4:27 PM PST; your answer of 16:54Z) [read through the Linear MCP, read-only].
+- The checker: `check_page` in `tools/research/src/research/slack.py` holds six headings in order (The problem, Background, The design the rules want, Options, What happens next, Sources); `card` holds 2 to 5 options, a label of at most 75 characters, a deadline at most 7 days out. I run both through `--dry-run` on each draft and say what it printed.
+
+**Not found, or not as the brief has it.**
+1. **Daniel's target, as words of his: [not found].** PRF-523 quotes him: "I'm looking for 100 bits of security." The sentence "at most 2^-100 for a prover that makes at most 2^80 SHA-512 calls in one audit" is the issue's own section "What '100 bits' means until Daniel says otherwise", the lane's reading. Unless you point me at his own sentence, Ask 3's page says the 2^80, its unit and its period are the lane's reading of his "100 bits", which is what makes them his to set.
+2. **"9.0 to 9.6 bits": the 9.0 is traced, the 9.6 is not.** 9.00 is log2 513, a call on a 64 KiB row (this file, lines 44354 and 44655) [read]. The only 9.6 I find under it is a row that sets K0 = 4 in calls against K0 = 6 in compressions (-99.58 against -89.99, line 44663), which mixes two sample sizes [derived; a guess at where it came from]. The order's 15:27Z line and the morning report carry "9.0 to 9.6" with no derivation. Ask 3's page will say 9.0 unless you give me the 9.6.
+3. **What "against 2^80 compressions" is in the bits table.** Line 54408 labels the same cells "compressions; K0 = 6; T = 2^80 calls each run's": the prover makes 2^80 calls and each is charged as 513 compressions. So the table's unit is not "a prover of 2^80 compressions" (which line 44354 calls wording (b), "not in Lean", and which reads 9.0 bits better). Ask 3 has three readings, not two; I lay out all three.
+4. **#8914 is not only the coins.** Its body says it also raises `MAX_TREE_LINES` 2^20 to 2^23, which moves the live guarantee's hiding term 2^-210 to 2^-207 (`Live.hidingTerm`), and `DRAW_ROUNDS` 64 to 1,024. "No statement changes" holds; "a term of a deployed guarantee's δ grows by 3 bits" goes on Ask 4's page beside it.
+5. Workers named SCALE, BREAKEVEN, PARAMS: entries found by heading; the K = 19 to 24 derivation itself I have only as BENCHCROSS's and the 14:2xZ table's rows so far, not yet as a script I reran.
+6. The asking-daniel skill on `main` says a claim goes on its page decided provisionally (Status "Decided by lane"), and that Blocking is for a click only he can make. Your brief and the Notion page say these four do not move without him. I write each as kind default whose default is "nothing changes", as the wide-leaf and salts pages were; how you post it is yours.
+
+Next: Ask 1 and Ask 2 drafts, by 00:00Z.
