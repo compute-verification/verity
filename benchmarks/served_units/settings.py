@@ -13,7 +13,7 @@ DECLARED: dict[str, tuple[str | None, str]] = {
     "WIN_CPUS": (None, "the most cores the job's affinity may hold"),
     "WIN_NICE": ("0", "the least niceness the job may run at"),
     "WIN_MEM_GB": ("", "host memory the job may hold, GB (unset: stage 600, prove 268)"),
-    "WIN_DISK_GB": (None, "stage: FLOCK_WORK's size cap, GB"),
+    "WIN_DISK_GB": (None, "stage: the most FLOCK_WORK may hold, GB"),
     "WIN_FREE_GB": ("50", "stage: GB left free on FLOCK_WORK's filesystem"),
     "WIN_UNTIL": (None, "stage: the UTC time every staging is done by, e.g. 2026-11-10T01:30Z"),
     "WIN_SLOW": ("1.3", "stage: a staging's estimated seconds times this must end before WIN_UNTIL"),
