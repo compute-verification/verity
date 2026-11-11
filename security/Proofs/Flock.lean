@@ -55,6 +55,7 @@ public import Proofs.Flock.SamplingGeneric.TwoAt
 public import Proofs.Flock.SamplingGeneric.Guarantees
 public import Proofs.Flock.SpotFlock.Cap
 public import Proofs.Flock.SpotFlock.Code
+public import Proofs.Flock.Claims.Sampling.Refused
 public import Proofs.Flock.SpotFlock.Coins
 public import Proofs.Flock.SpotFlock.Accepting
 public import Proofs.Flock.SpotFlock.Facts
