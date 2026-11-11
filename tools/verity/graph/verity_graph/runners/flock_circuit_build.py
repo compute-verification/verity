@@ -1,4 +1,4 @@
-"""flock-circuit-build: `verity/ml/flock/check_build.sh` as check's flock-circuit-build step runs it: on the Flock checkout the
+"""flock-circuit-build: `verity/protocols/flock/prover/check_build.sh` as check's flock-circuit-build step runs it: on the Flock checkout the
 script pins and keeps (`$FLOCK_CHECKOUT`), with this tree's patches and live crate, `cargo check` of flock-circuit in each CPU
 feature set a pod builds.  It fails when its log shows the tree at fault (a patch that doesn't apply, a crate that doesn't
 compile); any other failing exit is the machine's (rustup, the clone, a crate's download, a kill), an error."""
@@ -10,7 +10,7 @@ from .. import ROOT
 from ..graph import LOG
 from . import call
 
-SCRIPT = "verity/ml/flock/check_build.sh"
+SCRIPT = "verity/protocols/flock/prover/check_build.sh"
 #: what the log shows when the tree is at fault: `git apply` refusing a patch, cargo a crate (ci.toml's `halts_on`)
 FAILS = ("patch does not apply", "patch failed", "error: could not compile")
 

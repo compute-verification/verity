@@ -10,7 +10,7 @@ word maps of `tools/move/`, which name the words they retire; and of a `.lean` f
 (``lean_prose``, the lane-text lint's reader), where every site is held to its file's count in ``LEAN_LIST``: a file past
 its count, or with a site and no entry, fails, and the ratchet gate holds the list's total from rising, so it only shrinks
 (``--prune`` lowers it to what the tree holds). A term matches case-insensitively as two words, hyphenated, or wrapped onto
-the next line (behind a comment marker or not). Every file under `benchmarks/rho/`, `benchmarks/network_traces/` and the
+the next line (behind a comment marker or not). Every file under `verity/protocols/inference_only/rho/`, `benchmarks/network_traces/` and the
 network tests retires more (``INCORRECT_TERMS``): its proof blocks, their steps, outputs and windows, and K's terms for
 them are incorrect, never faulty or wrong, while a faulty node, link or device keeps the word. Identifiers (`proof_unit`,
 a key that mirrors a Lean name such as `faulty_bits`) are code; the retired-terms table
@@ -49,7 +49,7 @@ _SEP = r"(?:[ \t]+|-|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
 _TERM = re.compile(rf"\b(?:(?:proof|faulty){_SEP}units?|proof{_SEP}services?|faulty{_SEP}ANDs)\b", re.I)
 
 #: Retired in every file under INCORRECT too, and what to write instead.
-INCORRECT = ("benchmarks/rho/", "benchmarks/network_traces/", "verity/core/protocols/network/tests/")
+INCORRECT = ("verity/protocols/inference_only/rho/", "benchmarks/network_traces/", "verity/protocols/certifier/verifier/network/tests/")
 INCORRECT_TERMS = {"faulty outputs, faulty step, faulty ingress unit, faulty block, faulty set":
                    "incorrect outputs, incorrect step, incorrect ingress unit, incorrect proof block, the incorrect set",
                    "faulty window, wrong unit": "incorrect window, incorrect proof block",
@@ -105,7 +105,7 @@ DOC_TERMS = {
     "C-Flock": "Flock (Succinct's is upstream Flock)",
     "netlist": "a private circuit, or the circuit's description",
     "M0": "Flock's circuit prover",
-    "IR, Verity IR": "circuit or Program (`verity.ml.circuits`)",
+    "IR, Verity IR": "circuit or Program (`verity.circuits`)",
     "verifier of record": "the verifier (other checking code is named for what it is: the Rust cross-check, a Python mirror)",
     "audit coin": "the challenger's coins (the step that reads them is the verification phase)",
     "declaration block, declaration period": "execution block, execution phase",
@@ -201,7 +201,7 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|\bcommit{_SPACE}periods?\b")
 _DOC_COMMAND = re.compile(r"\bverity[ \t]+(?:bench\|)?example\b")
 #: The commitments' own docs, where hm96 rows keep their name.
-HM96_HOME = "verity/ml/commitments/"
+HM96_HOME = "verity/commitments/"
 _CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\2(?!`)", re.M | re.S)
 
 ALLOWED: dict[str, str] = {
@@ -222,7 +222,7 @@ ALLOWED: dict[str, str] = {
     "report-proof-service-": "a cited note's id",
     "Faulty ANDs (`Stratified.harm_bound`": "`sampling_plan/h200.py`'s docstring: a queued PR on next rewrites the line beside "
                                             "it; renamed after it lands",
-    "no wrong certificate, faulty block or detection": "a comment beside `Remote.CITES` in `benchmarks/rho/rho/envelopes.py`, "
+    "no wrong certificate, faulty block or detection": "a comment beside `Remote.CITES` in `verity/protocols/inference_only/rho/rho/envelopes.py`, "
                                                        "which a queued PR on next rewrites; renamed after it lands",
     "no faulty proof block, every one being drawn": "`benchmarks/network_traces/leak_bounds.py`'s docstring: a queued PR on "
                                                     "next rewrites the line beside it; renamed after it lands",
@@ -236,13 +236,13 @@ ALLOWED: dict[str, str] = {
 }
 
 PENDING: dict[str, str] = {
-    "verity/core/protocols/pouw/credit.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean",
-    "verity/core/protocols/pouw/tests/test_pouw_credit.py": "its messages mirror the Lean's, which a difftest compares; "
+    "verity/protocols/pouw/verifier/credit.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean",
+    "verity/protocols/pouw/verifier/tests/test_pouw_credit.py": "its messages mirror the Lean's, which a difftest compares; "
                                                             "renamed with the Lean",
-    "integrations/vllm/tests/protocols/test_credit_gate.py": "its messages mirror the Lean's, which a difftest compares; "
+    "adapters/vllm/tests/protocols/test_credit_gate.py": "its messages mirror the Lean's, which a difftest compares; "
                                                              "renamed with the Lean",
     "benchmarks/recursion_e2e/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "examples/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
+    "demos/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
 }
 
 
@@ -525,27 +525,27 @@ def test_the_scan_reads_each_form():
 
 
 def test_the_scan_reads_rho_terms():
-    """`benchmarks/rho`'s incorrect outputs, steps and ingress units, on toy files: its keys and Lean-mirroring names,
+    """`verity/protocols/inference_only/rho`'s incorrect outputs, steps and ingress units, on toy files: its keys and Lean-mirroring names,
     a faulty node, link or device, and the same words outside it stay."""
     docs = {
-        "benchmarks/rho/a.py": ('"""The faulty-outputs channel: each faulty\n    step; a faulty ingress unit and the faulty '
+        "verity/protocols/inference_only/rho/a.py": ('"""The faulty-outputs channel: each faulty\n    step; a faulty ingress unit and the faulty '
                                 'set."""\nx = s["exfil.faulty"], c.faulty_unit_bits  # faultyIngressBits; a faulty node, '
                                 "link or device\n"),
-        "benchmarks/rho/data/b.toml": "# Faulty outputs, a faulty proof block, two faulty blocks\n[incorrect]\n",
+        "verity/protocols/inference_only/rho/data/b.toml": "# Faulty outputs, a faulty proof block, two faulty blocks\n[incorrect]\n",
         "c.py": "# faulty outputs and faulty blocks outside it\n",
     }
     assert offenders(list(docs), read=docs.__getitem__)[0] == [
-        ("benchmarks/rho/a.py", 1, "faulty-outputs"), ("benchmarks/rho/a.py", 1, "faulty step"),
-        ("benchmarks/rho/a.py", 2, "faulty ingress unit"), ("benchmarks/rho/a.py", 2, "faulty set"),
-        ("benchmarks/rho/data/b.toml", 1, "Faulty outputs"), ("benchmarks/rho/data/b.toml", 1, "faulty proof block"),
-        ("benchmarks/rho/data/b.toml", 1, "faulty blocks")]
+        ("verity/protocols/inference_only/rho/a.py", 1, "faulty-outputs"), ("verity/protocols/inference_only/rho/a.py", 1, "faulty step"),
+        ("verity/protocols/inference_only/rho/a.py", 2, "faulty ingress unit"), ("verity/protocols/inference_only/rho/a.py", 2, "faulty set"),
+        ("verity/protocols/inference_only/rho/data/b.toml", 1, "Faulty outputs"), ("verity/protocols/inference_only/rho/data/b.toml", 1, "faulty proof block"),
+        ("verity/protocols/inference_only/rho/data/b.toml", 1, "faulty blocks")]
 
 
 def test_the_scan_reads_the_network_terms():
     """The network tests' and `benchmarks/network_traces`' incorrect proof blocks, windows and K's terms for them, on toy
     files: a key or a name that mirrors the Lean's (`faulty_bits`, `wrong_units`, `faultySets`), a faulty certifier, a
     wrong verdict, and the same words outside them stay."""
-    net = "verity/core/protocols/network/tests/a.py"
+    net = "verity/protocols/certifier/verifier/network/tests/a.py"
     docs = {
         net: ('"""Its faulty bits, no faulty\n    term and at most 3 wrong units."""\n'
               'class _Faulty(Certifier):  # a faulty certifier; a wrong verdict\n'
@@ -595,12 +595,12 @@ def test_the_doc_scan_reads_each_form():
 
 def test_the_doc_scan_reads_the_party_terms():
     """The developer, the composite protocols, the registered circuit and assumptions, on toy files: the proving side's
-    prover, a theorem's premise, a deployment record, `verity.core.deploy` and a registered workload stay."""
+    prover, a theorem's premise, a deployment record, `verity.configuration.deploy` and a registered workload stay."""
     docs = {
         "a.md": "Nothing the prover runs or hosts; a machine the prover doesn't\ncontrol, the prover's node, a "
                 "prover-controlled host and the prover system. The remote deployment's registered work, under a named\n"
                 "premise and the card premise. Flock's prover, a cheating prover, a theorem's premise, a deployment record,"
-                " `verity.core.deploy` and a registered workload stay.\n",
+                " `verity.configuration.deploy` and a registered workload stay.\n",
     }
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
         ("a.md", 1, "prover runs or hosts"), ("a.md", 1, "prover doesn't control"), ("a.md", 2, "prover's node"),
@@ -660,7 +660,7 @@ def test_the_doc_scan_reads_the_training_terms():
     slowdown lower bound and a window that caps its samples stay."""
     docs = {
         "a.md": "The compute dampener D; Dampeners. NCI's check, novel\ncommunication intensity.\n"
-                "`Nci.Dampener.remoteDampener` and `benchmarks/nci`, the nci directory, NciCheck stay.\n"
+                "`Nci.Dampener.remoteDampener` and `verity/protocols/inference_only/nci`, the nci directory, NciCheck stay.\n"
                 "The machine model's coverage\ntable, an envelope op; a serving block, two server-windows, the server time block.\n"
                 "The overhead lower bound, an exclusion bound, the training classes, per-block caps; dark compute, certified work.\n"
                 "The `machine-model` command, a server block, the slowdown lower bound and a window that caps its samples stay.\n",
