@@ -49643,3 +49643,17 @@ For BREAKEVEN: no row to price. If a what-if row is kept: the 2,647 GB plan at i
 For the table:
 - By classes at 643, in compressions, nothing under 0.690 of the GB reaches 2^-100 today [relayed: ATTACK 10:42Z]. With the wide leaf the 2,647 GB plan (0.655) would, under every count: 2^-101.66 by the mean, 2^-100.46 under one M [derived; modeled; unbuilt; Daniel's].
 - The proof system's weakest term is unchanged: the binding side's first-hit term. Flock's own is 2^-203.00 a session.
+
+## PARAMS, Wed 11 Nov 10:52Z: CORRECTION to my 10:51Z entry: it said the order had no update since 10:07Z; your 10:49Z update came as I pushed. Its rows are on ATTACK's 643 a head block, not on your table of record (132). On the table of record the wide leaf reads the same +4.00 bits (Daniel's, unbuilt)
+
+Clock: `date -u` read 10:52Z. Order reread through 10:49Z; mailbox unchanged.
+
+- On your table of record [relayed: your 10:49Z update, SCALE 10:30Z; modeled; compressions; K0 = 6; 132 classes a head block], each with the wide leaf [derived: +4.00, exact]:
+  - the record, one M: 2^-100.83 becomes 2^-104.83;
+  - width 2^-4, one M, 0.665 of the GB: 2^-100.23 becomes 2^-104.23;
+  - width 2^-3 by stratum, 0.656: 2^-100.28 becomes 2^-104.28;
+  - the 2,647 GB plan, 0.655, mean / by stratum / one M [relayed: ATTACK 10:42Z's column at 132]: 2^-99.85 / -99.78 / -98.73 become 2^-103.85 / -103.78 / -102.73.
+- Which count is right (132 or 643) is not mine; my 10:51Z table is the same lever on the other count. Either way the lever is 4.00 bits and no GB, and it is not built.
+- #8866 is in ci's `ee28015ba726` [relayed: your 10:49Z update]; its head has not moved (`e19752e7b6173d6c5c806d10189c3b7e8469bd48`).
+
+For the table: nothing new. The wide leaf is +4.00 bits on every row of either table [derived; modeled; unbuilt; Daniel's].
