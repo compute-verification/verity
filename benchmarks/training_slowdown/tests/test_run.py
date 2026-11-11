@@ -1,5 +1,6 @@
 import hashlib
 import json
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -10,7 +11,7 @@ from synthetic import run_job, tiny_data, tiny_registry, tiny_start, write_confi
 from torch import nn
 from torch.nn.attention import SDPBackend, sdpa_kernel
 
-from training_slowdown import VERSION, config, formalism, grade, policy, run, starts, work
+from training_slowdown import VERSION, config, flops, formalism, grade, policy, run, starts, work
 from training_slowdown.capture import products
 from training_slowdown.codecs import Identity, Plan, QuantDelta, SeedReplay, derive_seed
 from training_slowdown.counterexample import check
@@ -361,18 +362,19 @@ def test_a_weight_is_passed_at_the_updates_width_only_among_the_runs_first_steps
 
 
 LORA = {"targets": "blocks.0.wq.weight,blocks.0.w_up.weight", "rank": 2, "alpha": 4.0, "lr": 1e-2}
-#: the whole model, one block, LoRA's adapters, and one block under Muon in two micro-batches
+#: the whole model, one block, LoRA's adapters, one block's average, and one block under Muon in two micro-batches
 JOBS = {"whole": {"dials": {"trainable": "*", "lr": 1e-2}},
         "block": {"dials": {"trainable": "blocks.0.*,norm", "lr": 1e-2}},
         "lora": {"route": "lora", "dials": LORA},
+        "ema": {"route": "ema", "dials": {"trainable": "blocks.0.*,norm", "lr": 1e-2, "ema_decay": 0.5}},
         "muon": {"dials": {"trainable": "blocks.0.*,norm", "opt": "muon", "lr": 1e-2, "micro_batches": 2}}}
 COUNTS = ("tokens", "matmul_macs", "elementwise_macs", "macs")
 
 
-def counted_and_traced(root: Path, steps: int, **over):
-    """A job's steps through the harness's own loop (`run.train` under `run.Harness`), in this process and under the
-    math attention kernel, and then its trace as the job takes it: the counter's record, the trace, the capture's
-    graph the trace was read from, and the model."""
+def counted(root: Path, steps: int, math: bool = False, **over):
+    """A job's steps through the harness's own loop (`run.train` under `run.Harness`), in this process, under the
+    attention kernel torch picks as a job runs (a fused one) or under the math kernel: the counter's record, and what
+    the job's trace is taken from (its config, route, model and optimizers)."""
     reg = tiny_registry(root / "reg")
     registry = starts.registry(reg)
     cfg = config.load(write_config(root / "a.toml", budget={"steps": steps, "batch": 4}, **over), registry)
@@ -380,14 +382,21 @@ def counted_and_traced(root: Path, steps: int, **over):
                      clock=lambda: 0.0)
     route = config.route(cfg.route)
     torch.manual_seed(0)
-    with sdpa_kernel([SDPBackend.MATH]), te.counter:
+    with sdpa_kernel([SDPBackend.MATH]) if math else nullcontext(), te.counter:
         model, optimizers = route.build(cfg.start.shape, cfg.dials)
         stream = Stream(Data.of(cfg.start.data, registry), 0, ctx=int(cfg.start.shape["ctx"]))
         run.train(te, cfg, route, stream, model, optimizers)
-    return te.finish({}), *run.traced_step(cfg, route, model, optimizers, "cpu"), model
+    return te.finish({}), (cfg, route, model, optimizers)
 
 
-@pytest.mark.parametrize("job, steps", [("whole", 1), ("whole", 3), ("block", 3), ("lora", 3), ("muon", 3)])
+def counted_and_traced(root: Path, steps: int, **over):
+    """A job's steps as it runs them (`counted`), and then its trace as the job takes it: the counter's record, the
+    trace, the capture's graph the trace was read from, and the model."""
+    rec, (cfg, route, model, optimizers) = counted(root, steps, **over)
+    return rec, *run.traced_step(cfg, route, model, optimizers, "cpu"), model
+
+
+@pytest.mark.parametrize("job, steps", [("whole", 1), ("whole", 3), ("block", 3), ("lora", 3), ("ema", 3), ("muon", 3)])
 def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, steps):
     """What a job's trace says of a step (`run.traced_step`: the capture's graph of it, from shapes alone) against
     what the job's counter recorded of that same step as it ran: the step's tokens, its GEMMs' MACs, its elementwise
@@ -398,9 +407,8 @@ def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, st
     step on the counter holds it at the gather Definition's multiplexers, which |C| counts and no product is, so the
     counter's forward is the trace's forward GEMMs, that lookup and the forward's elementwise work.
 
-    Under the math attention kernel. A job runs torch's fused attention, which the counter counts by torch's FLOP
-    formula for the whole op and the trace takes apart into the products autograd runs, so the two differ on a job's
-    attention; under the math kernel the counter sees those products too, and nothing else of a step differs.
+    As a job runs: under torch's fused attention kernel, which the counter counts as the ops the math kernel computes
+    attention by (`flops.Counter._attention`), the ones the trace holds.
 
     The step's `updated` rows are not compared: the trace's are by update dependence and the counter's by use. No
     cheaper test holds the trace to the counter: each of the two has its own tests, on its own count."""
@@ -420,8 +428,35 @@ def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, st
     assert formalism.other_program(rows, grade.macs_log(rec, None)) is None
 
 
+@pytest.mark.parametrize("job", JOBS)
+def test_a_jobs_record_is_one_record_under_either_attention_kernel(tmp_path, job):
+    """A job's steps under the fused attention kernel it runs against the same job's under the math kernel, the one
+    its trace is taken under: every step's counts, its op log, its updated nodes and the weights it read, the setup's
+    and the tail's too. The fused kernel does run: the model's attention reaches the counter as one op."""
+    seen = []
+    inner = flops.Counter._attention
+
+    def spy(self, func, *rest):
+        seen.append(str(func.overloadpacket))
+        return inner(self, func, *rest)
+
+    def steps_of(rec):
+        keep = ("step", "tokens", "macs", "matmul_macs", "elementwise_macs", "approx_macs", "by", "shapes", "device_macs")
+        return [{k: s.get(k) for k in keep} | rec["structures"][s["struct"]] | {"weights": sorted(s["weights"])}
+                for s in (rec["setup"], *rec["steps"], rec["tail"])]
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(flops.Counter, "_attention", spy)
+        fused = steps_of(counted(tmp_path / "fused", 3, **JOBS[job])[0])
+        kernels, seen[:] = set(seen), []
+        math = steps_of(counted(tmp_path / "math", 3, math=True, **JOBS[job])[0])
+    assert kernels == {"aten._scaled_dot_product_flash_attention_for_cpu",
+                       "aten._scaled_dot_product_flash_attention_for_cpu_backward"} and not seen
+    assert fused == math and fused[2]["matmul_macs"] > 0 < fused[2]["elementwise_macs"]
+
+
 def test_a_routes_output_is_the_traces_step_and_the_counters_next_step_or_tail(tmp_path):
-    """The one place the two differ under the math kernel. A route's `output` (LoRA's: each adapted matrix with its
+    """The one place the two differ. A route's `output` (LoRA's: each adapted matrix with its
     B·A merged in) is traced as the end of the measured step and counted where the harness calls it, after the
     step's checkpoint: in the step after it, or in the tail after the last. So a run of one step traces the merge in
     its step and counts it in its tail, and the step's counts differ by exactly the tail's; a longer run's traced

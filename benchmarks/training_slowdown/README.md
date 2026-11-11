@@ -108,7 +108,17 @@ A job trains the config's start along its route and scores each checkpoint on it
 owns the loop, the batches, the checkpoints and each checkpoint's E, the weights that differ from θ encoded by the
 route's plan. A checkpoint's output model, the one scored, is what E rebuilds from θ: the trained weights under a
 plan that keeps them whole, and the model the kept bits give under one that keeps less. Everything a route computes
-through torch is counted; the harness's own work (loading, evaluating, encoding) isn't. A route that names anything of `training_slowdown` but the codecs and the model,
+through torch is counted; the harness's own work (loading, evaluating, encoding) isn't. |C| counts the circuit a
+trace of the step holds: each product by its shape and each elementwise multiplication at one MAC an element
+(`flops.py`), and a fused attention kernel as the ops the math kernel computes attention by, which are the ones a
+trace runs: the forward's two scalings and two products, and in the backward the products and scalings of the
+gradients the step asks for. A job's record is the same under either kernel, and its counted step is its trace's
+(`tests/test_run.py`). A fused optimizer kernel is one op, priced at a constant per parameter
+(`opnames.FUSED_OPTIMIZER_MACS`, which the counter and the trace both read), above what its unfused step counts:
+AdamW at 8 multiplications a parameter where the unfused step makes 6 (5 with no weight decay), Adam at 7 where it
+makes 6 (5), Adagrad at 4 where it makes 2 or 3. SGD's 2 is its unfused step's with momentum alone: one above a
+plain step, and below a step with weight decay or Nesterov momentum, which make one more each; no route steps SGD
+in its fused kernel. A route that names anything of `training_slowdown` but the codecs and the model,
 or a route around the dispatcher (`run.FORBIDDEN`), is refused, and one that uses an op the counter can't price, reads
 token data out of torch, starts a thread or a process, or imports a module the screen refuses makes its run invalid
 (`run.py`'s docstring has the screen).

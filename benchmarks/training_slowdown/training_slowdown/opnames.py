@@ -23,7 +23,9 @@ ELEMENTWISE_NAMES = frozenset({"mul", "mul_", "div", "div_", "addcmul", "addcmul
                                "_foreach_lerp_"})
 #: counted as elementwise multiplications only with a scale (`alpha` other than 1)
 SCALED_NAMES = frozenset({"add", "add_", "sub", "sub_", "_foreach_add", "_foreach_add_", "_foreach_sub", "_foreach_sub_"})
-#: fused optimizer steps, at the multiplications per parameter their unfused forms make
+#: fused optimizer steps, each at a constant per parameter: above the multiplications its unfused form makes (AdamW's
+#: 6, Adam's 6, Adagrad's 3 at most), but for SGD, whose 2 is its unfused step's with momentum alone (weight decay and
+#: Nesterov momentum make one more each)
 FUSED_OPTIMIZER_MACS = {"_fused_adam_": 7, "_fused_adamw_": 8, "_fused_sgd_": 2, "_fused_adagrad_": 4}
 LINALG_NAMES = frozenset({"_linalg_eigh", "linalg_eigh", "_linalg_svd", "linalg_svd", "linalg_qr", "linalg_cholesky_ex",
                           "linalg_inv_ex", "_linalg_solve_ex", "linalg_solve_triangular", "linalg_lu_factor_ex",

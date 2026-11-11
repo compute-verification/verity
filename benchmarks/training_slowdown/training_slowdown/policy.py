@@ -26,13 +26,13 @@ decoder: d_model, layers, heads, d_ff, vocab), and it counts every product of tw
 - each layer's matrices, attention's four (4·d²) and the SwiGLU MLP's three (3·d·d_ff), at every token;
 - the LM head over the tied embedding (d·V), at every token: the model's forward computes logits at each position;
 - attention's score and value products (QKᵀ and AV, d each per position attended, every layer): a prompt token
-  attends over the whole prompt, as training_slowdown.flops counts the causal SDPA (torch's formula, the full score
-  matrix, which every counted |C| uses), and the j-th output token over the prompt and the output tokens up to itself,
-  its KV cache;
+  attends over the whole prompt, as training_slowdown.flops counts the causal SDPA (the math kernel's two products
+  over the full score matrix, which every counted |C| uses), and the j-th output token over the prompt and the output
+  tokens up to itself, its KV cache;
 
 each MAC at the served precision's GEMM price (`SERVED_PRECISION`, bf16: training_slowdown.gates' 1,480.125 gates). The
-elementwise ops (RoPE, the norms' gains, SwiGLU's product) are left out: under 0.1% of a token's counted MACs, and
-their count moves with training_slowdown.flops' version.
+elementwise ops (RoPE, the norms' gains, SwiGLU's product, attention's scalings) are left out: under 0.1% of a
+token's counted MACs, and their count moves with training_slowdown.flops' version.
 
 The console's dials move the reference model over `REFERENCE_SIZES` (20M to 1B at vocab 50,304, each a shape `SHAPES`
 states) and k over `K_GRID`, a session's input ids at each of `DIAL_IN_TOKENS` input tokens (16,384 to 524,288 bits).
