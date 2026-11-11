@@ -1,6 +1,7 @@
 """Replay one served window of a ``record`` arm (`serve_tax`) under its recorded schedule, and say how close it came.
 
-    replay.py --arm-dir OUT/record --load NAME [--rep 1] [--checkpoint DIR] [--eager] [--against EARLIER_OUT] --out DIR
+    replay.py --arm-dir OUT/record --load NAME [--rep 1] [--checkpoint DIR] [--eager] [--against EARLIER_OUT] [--tp N]
+              [--capture ID,... [--capture-template T]] --out DIR
 
 The window is the load's requests: its step trace's steps from the first one's arrival to the last one's finish, all of them
 the load's own (each load starts from an empty prefix cache and ends drained). The replay builds the served engine again
@@ -12,7 +13,9 @@ then compared with the served one, step by step: the rows (request, first positi
 that does, and each request's sampled tokens against the ones the client received. replay.json has the counts, the
 differing requests (each one's lengths and first differing position) and the replay's wall time beside the served window's
 (first arrival to last step); replay_tokens.jsonl.gz has every request's replayed tokens, which ``--against`` compares a
-later replay's with, to tell a replay that differs from serving from one that differs from itself.
+later replay's with, to tell a replay that differs from serving from one that differs from itself. ``--capture`` takes the
+named requests' logits rows and ids at every rank's sampler (`verity_vllm.engine.sampler_capture`) into OUT/capture, a
+token-select span each, and replay.json says whether each one's ids are the ones served.
 """
 from __future__ import annotations
 
@@ -73,12 +76,13 @@ def window(arm_dir: Path, load: str, rep: int) -> dict[str, Any]:
             "served_s": steps[-1]["t"] - arrive[0]["t"], "served_t0": arrive[0]["t"]}
 
 
-def engine(checkpoint: Path, header: dict, eager: bool) -> Any:
+def engine(checkpoint: Path, header: dict, eager: bool, tp: int = 1) -> Any:
     from vllm import EngineArgs
     from vllm.v1.engine.llm_engine import LLMEngine
 
     cfg = header["config"]
     args = EngineArgs(model=str(checkpoint), dtype="bfloat16", seed=0, trust_remote_code=True, enforce_eager=eager,
+                      **({"tensor_parallel_size": tp} if tp > 1 else {}),
                       max_model_len=cfg["max_model_len"], max_num_seqs=cfg["max_num_seqs"],
                       max_num_batched_tokens=cfg["max_num_batched_tokens"], enable_chunked_prefill=cfg["enable_chunked_prefill"],
                       enable_prefix_caching=cfg["enable_prefix_caching"], async_scheduling=cfg["async_scheduling"],
@@ -95,13 +99,17 @@ def params(r: dict, logprobs: bool = False) -> Any:
                           logprobs=0 if logprobs else None)
 
 
-def replay(w: dict, checkpoint: Path, eager: bool, logprobs: bool = False) -> dict:
+def replay(w: dict, checkpoint: Path, eager: bool, logprobs: bool = False, tp: int = 1,
+           capture: tuple[list[str], Path] | None = None) -> dict:
     sys.path.insert(0, str(ROOT / "integrations/vllm"))
+    from verity_vllm.engine import sampler_capture as SC
     from verity_vllm.engine.hooks import Hooks
     from verity_vllm.engine.step_trace import StepTrace
 
     t0 = time.monotonic()
-    eng = engine(checkpoint, w["header"], eager)
+    eng = engine(checkpoint, w["header"], eager, tp)
+    if capture:
+        eng.collective_rpc(SC.install, args=(capture[0],))
     ready = time.monotonic() - t0
     trace = StepTrace().install(eng)
     pending = sorted(w["requests"], key=lambda r: r["before_step"])
@@ -137,10 +145,11 @@ def replay(w: dict, checkpoint: Path, eager: bool, logprobs: bool = False) -> di
                 if logprobs:
                     lps[o.request_id] = [float(c.logprobs[i][t].logprob) for i, t in enumerate(c.token_ids)]
     wall = time.monotonic() - start
+    takes = eng.collective_rpc(SC.take, args=(str(capture[1]),)) if capture else None
     hooks.uninstall()
     trace.uninstall()
     return {"ready_s": ready, "wall_s": wall, "steps": [r for r in trace.records if r["kind"] == "step"], "tokens": tokens,
-            "logprobs": lps}
+            "logprobs": lps, "takes": takes}
 
 
 def emitted_at(steps: list[dict]) -> dict[str, list[int]]:
@@ -237,6 +246,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--against", type=Path, help="an earlier replay's --out, whose tokens this one's are compared with too")
     ap.add_argument("--logprobs", action="store_true",
                     help="record each sampled token's logprob too, and compare them with --against's, step by step")
+    ap.add_argument("--tp", type=int, default=1, help="the tensor-parallel width the window was served at")
+    ap.add_argument("--capture", help="engine ids: take their logits rows and ids at the sampler (`sampler_capture`) into "
+                                      "OUT/capture, each a span of --capture-template's units")
+    ap.add_argument("--capture-template", default="TokenSelect_v4{V=154880}")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args(argv)
     if sys.flags.hash_randomization:
@@ -245,7 +258,8 @@ def main(argv: list[str] | None = None) -> int:
     meta = json.loads((a.arm_dir / "meta.json").read_text())
     checkpoint = a.checkpoint or Path(meta["checkpoint"])
     w = window(a.arm_dir, a.load, a.rep)
-    got = replay(w, checkpoint, a.eager, a.logprobs)
+    capture = (a.capture.split(","), a.out / "capture" / "ranks") if a.capture else None
+    got = replay(w, checkpoint, a.eager, a.logprobs, a.tp, capture)
     out = {"schema": "verity-bench/serve-tax/replay/v0", "arm_dir": str(a.arm_dir), "served_run_id": meta.get("run_id"),
            "run_id": SHARED.RESEARCH_RUN_ID, "load": a.load, "rep": a.rep, "mode": "eager" if a.eager else "compiled",
            "served_mode": "eager" if "--enforce-eager" in meta["server_argv"] else "compiled", "requests": len(w["requests"]),
@@ -256,6 +270,14 @@ def main(argv: list[str] | None = None) -> int:
         out["against"] = {"replay": str(a.against), "requests_tokens_differing": len(d), "requests_differing": d[:DIFFERING_MAX]}
         if a.logprobs and (a.against / "replay_logprobs.jsonl.gz").is_file():
             out["against"]["logprobs"] = logprob_diff(read_logprobs(a.against), got["logprobs"], got["steps"])
+    if capture:
+        from verity_vllm.engine import sampler_capture as SC
+        spans = SC.spans(got["takes"], got["steps"])
+        SC.write(a.out / "capture", a.capture_template, spans)
+        served = {r["engine_id"]: r["served"] for r in w["requests"]}
+        out["capture"] = {rid: {"tokens": len(s["tokens"]), "as_served": s["tokens"] == served[rid], "program": s["program"]}
+                          for rid, s in spans.items()}
+        out["capture_missing"] = sorted(set(capture[0]) - set(spans))
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "replay.json").write_text(json.dumps(out, indent=1))
     write_tokens(a.out, got["tokens"])

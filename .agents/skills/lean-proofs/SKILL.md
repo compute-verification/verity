@@ -86,8 +86,9 @@ the lock's sections, each naming the docstring with the detail. This is the work
 
 ## Assumptions and guarantees
 
-- **An assumption** (AGENTS.md "Lean") is declared in `Definitions/Assumptions.lean`, the lock's `assumptions_module`,
-  or in a module under it when the public export copies its area (`Assumptions/Flock.lean`, since the root module
+- **An assumption** (AGENTS.md "Lean") is declared in `Definitions/Assumptions.lean`, the lock's `assumptions_module`
+  (a module or a list of them: `Security/Properties` also lists `Properties/Assumptions.lean`, for one stated over the
+  code, which the spec can't import), or in a module under it when the public export copies its area (`Assumptions/Flock.lean`, since the root module
   reads Nci); an area's other premises live in its `Definitions/<Area>/Assumptions` (Flock's in
   `Proofs/Flock/Soundness/Assumptions` for now), each owner in the lock. Its docstring opens with its claim id
   (`verity.core.claims`) and gives its rationale; a ledger points to it.

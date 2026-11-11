@@ -1492,11 +1492,16 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         fails.append(Failure("assumptions.modules", None, f"assumptions: the policy lists assumption modules "
                              f"({', '.join(prefixes)}); list the assumptions by name instead, each with its record: "
                              f"`check.py --update` converts the list"))
-    if (home := policy.get("assumptions_module")) is not None and home not in set(facts["modules"]) | set(
-            facts.get("graph") or {}) | set(facts.get("source_modules") or ()):
-        fails.append(Failure("assumptions.module", None, f"assumptions: `assumptions_module` names {home!r}, which "
-                             f"neither the build nor the packages it requires has a module of; name the one module the "
-                             f"named assumptions are declared in"))
+    if (home := policy.get("assumptions_module")) is not None and not (isinstance(home, str) or (
+            isinstance(home, list) and home and all(isinstance(h, str) for h in home))):
+        fails.append(Failure("assumptions.module-form", None, "assumptions: `assumptions_module` is the module the named "
+                             "assumptions are declared in, or a list of such modules"))
+    built = set(facts["modules"]) | set(facts.get("graph") or {}) | set(facts.get("source_modules") or ())
+    for home in assumption_homes(policy):
+        if home not in built:
+            fails.append(Failure("assumptions.module", None, f"assumptions: `assumptions_module` names {home!r}, which "
+                                 f"neither the build nor the packages it requires has a module of; name the modules the "
+                                 f"named assumptions are declared in"))
     cited = stated_by(policy, facts)
     kept, premised, unfolds, recorded, compared, homes = {}, {}, {}, set(), set(), {}
     listed = listed_premises(policy) | dict.fromkeys(cited)
@@ -2048,14 +2053,22 @@ def listed_premises(policy: dict, domain: bool = True) -> dict:
     return (d if isinstance(d, dict) else {}) | (o if isinstance(o, dict) else {}) | (a if isinstance(a, dict) else {})
 
 
+def assumption_homes(policy: dict) -> list[str]:
+    """The modules `assumptions_module` names, where a named assumption is declared (or in a module under one): one
+    module, or a list of them, as in `Security/Properties`, whose assumptions stated over the code can't sit in the
+    spec's."""
+    home = policy.get("assumptions_module")
+    return [home] if isinstance(home, str) else [h for h in home if isinstance(h, str)] if isinstance(home, list) else []
+
+
 def read_props(pin: dict, policy: dict) -> set[str]:
-    """The `Prop`s of `assumptions_module`, of an `Assumptions` module or of one under `shape.premises` that a statement
-    reads (``pin``'s `reads`): what its `premises.reads` record holds, less what it takes. Each is recorded with its
-    digest there, so a statement may take one inside a definition, and a conjecture may be one a guarantee refutes."""
-    home, held = policy.get("assumptions_module"), (policy.get("shape") or {}).get("premises")
+    """The `Prop`s of an `assumptions_module` module, of an `Assumptions` module or of one under `shape.premises` that a
+    statement reads (``pin``'s `reads`): what its `premises.reads` record holds, less what it takes. Each is recorded with
+    its digest there, so a statement may take one inside a definition, and a conjecture may be one a guarantee refutes."""
+    declared_in, held = assumption_homes(policy), (policy.get("shape") or {}).get("premises")
     held = [m for m in held if isinstance(m, str)] if isinstance(held, list) else []
     return {e["name"] for e in pin.get("reads") or [] if e.get("name") and (
-        (m := e.get("module") or "") == home or "Assumptions" in m.split(".") or under(held, m))}
+        (m := e.get("module") or "") in declared_in or "Assumptions" in m.split(".") or under(held, m))}
 
 
 def stated_by(policy: dict, facts: dict) -> dict[str, str]:
@@ -2738,8 +2751,8 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     """The `assumptions` and `open` records as the build has them, the failures, {premise: the guarantees that take it}
     (``premised`` with each alias of listed premises as those), {premise: its kind, `assumptions`, `domain` or `open`},
     which each guarantee's record lists as its `premises`, and the `domain` records.
-    A named assumption is declared in the module `assumptions_module` names or one under it (`Definitions.Assumptions`, the real
-    ones: a hash's collision resistance, the auditor's devices).  A domain hypothesis is part of what its guarantee says
+    A named assumption is declared in a module `assumptions_module` names (one, or a list of them) or one under it
+    (`Definitions.Assumptions`, the real ones: a hash's collision resistance, the auditor's devices).  A domain hypothesis is part of what its guarantee says
     (a domain or scope, an event a lemma conditions on, a specification the deployed instance meets), listed under
     `domain` with `why`, one line naming what it restricts, and owing no issue; one that is another listed guarantee's
     statement (``cited``, `stated_by`) is one citing it (`cites`), which an update writes.  Where a guarantee that takes
@@ -2770,7 +2783,8 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     premised in its place.  Under an update, a premise that doesn't unfold counts as listed, since the update adds it."""
     assumed, opened, fails, out, opens = policy.get("assumptions", {}), policy.get("open", {}), [], {}, {}
     domained, domains, cited, cover = policy.get("domain", {}), {}, cited or {}, cover or {}
-    home, seed = policy.get("assumptions_module"), policy.get("open_seed")
+    declared_in, seed = assumption_homes(policy), policy.get("open_seed")
+    home = " or ".join(declared_in)
     if not isinstance(opened, dict):
         fails.append(Failure("open.form", None, "open: `open` is {premise: {owner, digest[, issue], due}}"))
         opened = {}
@@ -2819,7 +2833,7 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
         return read[d][0] if d in read else walked[d][0] if d in walked else (homes or {}).get(d)
 
     def real(d: str) -> bool:
-        return home is not None and (m := module(d)) is not None and under([home], m)
+        return (m := module(d)) is not None and under(declared_in, m)
 
     moved = sorted(a for a in assumed if (a in opened or a in domained) and not real(a))
     if not update:
@@ -2915,8 +2929,9 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
                                      f"or move its entry to `open` with the issue that discharges it and its due date, or "
                                      f"to `domain` with a one-line `why` if it is part of what the guarantee says"))
             elif kind == "assumptions":
-                fails.append(Failure(f"{section}.declared", a, f"{section}: {a} is declared in {home}, so it is a named "
-                                     f"assumption: run `check.py --update`, which moves its entry to `assumptions`"))
+                fails.append(Failure(f"{section}.declared", a, f"{section}: {a} is declared in "
+                                     f"{' or '.join(h for h in declared_in if under([h], m))}, so it is a named assumption: run "
+                                     f"`check.py --update`, which moves its entry to `assumptions`"))
             else:
                 fails.append(Failure("open.cited", a, f"open: {a} is the statement of {cited[a]}, another listed "
                                      f"guarantee, so it is a domain hypothesis citing it: run `check.py --update`, which "
@@ -4334,10 +4349,21 @@ SAMPLED_OUTPUTS = ("olean", "ilean", "olean.server", "olean.private", "ir", "ir.
 SAMPLED_BESIDE = ("trace", "setup.json", *(f"{o}.hash" for o in SAMPLED_OUTPUTS))
 #: the outputs that keep the path of the module's source (a message's), compared as object graphs when their bytes differ
 PATH_PARTS = ("olean.server", "olean.private")
-#: (its package's build, module) of each module a build of this process compiled (`sampled_recompile`): a dependent's
-#: build reuses what its path dependencies' audits compiled, which without the sandbox is as cold as its own
+#: (its package's build, module) of each module a build step of this process compiled (`note_compiled`): another
+#: package's build reuses what this run compiled into a path dependency's build, which without the sandbox is as cold as
+#: its own (`sampled_recompile`)
 RUN_COMPILED: set[tuple[Path, str]] = set()
 _RUN_COMPILED_LOCK = threading.Lock()
+
+
+def note_compiled(keyed: dict, log: Path) -> None:
+    """Add each module of ``keyed`` (`module_keys.keys`) that the build step whose output is ``log`` compiled
+    (`build_seconds`) to `RUN_COMPILED`, a failed step's too. The caller still holds the step's `writing`, so once it is
+    released the set holds every module this run compiled into those builds, before another package's build can find
+    them up to date and compile nothing."""
+    got = {(keyed[m].package.build().resolve(), m) for m in build_seconds([log]) if m in keyed}
+    with _RUN_COMPILED_LOCK:
+        RUN_COMPILED.update(got)
 
 
 def sampled_file(mk, build: Path, mod: str, ext: str) -> Path:
@@ -4378,7 +4404,6 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
     s = time.monotonic()
     keyed = mk.keys(pkg, roots)
     with _RUN_COMPILED_LOCK:
-        RUN_COMPILED.update((k.package.build().resolve(), m) for m, k in keyed.items() if m in built)
         cold = set(RUN_COMPILED)
     pop = sorted(m for m, k in keyed.items()
                  if m not in built and sampled_file(mk, k.package.build(), m, "trace").is_file())
@@ -5390,6 +5415,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         if n is not None:
             rep["build_threads"] = n
         staged: dict[tuple[str, str], str] = {}
+        keyed: dict | None = None
         pipe = Pipeline(pkg, policy, rep["toolchain"], work, replay_cache, closure, log=log) \
             if pipelined(pkg, build, replay, replay_cache, lifts) else None
         try:
@@ -5406,11 +5432,17 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                     continue
                 if callable(argv) and not (argv := argv()):
                     continue
+                if argv is not None and keyed is None:
+                    keyed = sibling("module_keys").keys(pkg, policy["roots"])
                 with contextlib.nullcontext() if argv is None else writing(pkg, log):
                     s = time.monotonic()
-                    rc, text = setup(pkg, rep["toolchain"], work / "setup.log") if argv is None else \
-                        run(argv, pkg, work / f"{step}.log") if pipe is None else \
-                        run(argv, pkg, work / f"{step}.log", on_line=pipe.line)
+                    try:
+                        rc, text = setup(pkg, rep["toolchain"], work / "setup.log") if argv is None else \
+                            run(argv, pkg, work / f"{step}.log") if pipe is None else \
+                            run(argv, pkg, work / f"{step}.log", on_line=pipe.line)
+                    finally:
+                        if argv is not None:
+                            note_compiled(keyed, work / f"{step}.log")
                     rep["seconds"][step] = round(time.monotonic() - s, 1)
                 if rc:
                     rep["failures"].append(Failure(step, None, f"{step}: exit {rc}\n{text[-3000:]}"))

@@ -9,8 +9,9 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # the plugin patches through the integration's hooks, routes.py reads traces with its kernel_trace, settings.py is built on
 # verity_config's registry, and gap.py evaluates the class G decoder (`program.predict.dsa`, which reads most of the
-# integration, the Definitions' registry and the circuits it builds) on class G's workload row and the capture map; the row
-# is a stored workload, which `config.row_file` checks against its directory's SHA256SUMS and fetches by its art id
+# integration, the Definitions' registry, the circuits it builds and the seed rule's SHA-512 gates) on class G's workload row
+# and the capture map; the row is a stored workload, which `config.row_file` checks against its directory's SHA256SUMS and
+# fetches by its art id
 inputs = [
     "fixtures/artifacts.json",
     "tools/config/verity_config",
@@ -19,6 +20,8 @@ inputs = [
     "verity/settings.py",
     "verity/ml/__init__.py",
     "verity/ml/circuits",
+    "verity/ml/commitments",
+    "verity/ml/crypto",
     "verity/ml/definitions",
     "verity/ml/kernels",
     "integrations/vllm/verity_vllm",

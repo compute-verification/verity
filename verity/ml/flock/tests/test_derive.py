@@ -21,7 +21,7 @@ from verity_flock import layouts as LY
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent / "verifier"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "verity/ml/flock/verifier"))
 from test_circuit_types import _adder, _full_adder  # noqa: E402
 
 VECTORS = HERE / "derive_vectors.json"
@@ -234,7 +234,7 @@ LEAN_ROWS = {
 
 def test_generated_reads_are_lean_buildv2():
     """Each small table of `lookup_v2_vectors.json`: this generator's rows digest is the Lean one."""
-    lean = HERE.parent / "verifier" / "lookup_v2_vectors.json"
+    lean = Path(__file__).resolve().parents[4] / "verity/ml/flock/verifier/lookup_v2_vectors.json"
     want = ({e["label"]: e["rows_sha512"] for e in json.loads(lean.read_text())["small"]} if lean.exists() else LEAN_ROWS)
     for label, n, lo, bits, ws in _small_tables():
         d = D.gen_read(ws, _sha(ws), n, lo, bits)

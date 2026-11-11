@@ -137,12 +137,14 @@ keeps or drops from and never adds to.
   (PoUW's `verity/core/protocols/pouw/tests/test_lean_package.py`).
 - `axioms` (optional): the allowed axioms.
 - `assumptions_module`, `assumptions`, `domain`, `open`: the premises the guarantees take, by kind
-  (`assumption_records`, `unfolding`, `read_props`). A named assumption is declared in `assumptions_module` or under
-  it; a domain hypothesis is part of what its guarantee says, with a one-line `why`, or `cites` the listed guarantee
-  whose statement it is; every other premise is open, with the Linear `issue` that discharges it and its `due` date,
-  written by hand. Each has an `owner` and a `digest`, so a change to a premise or to what it reads fails under its
-  own name. `open_seed`, `open_default_issue` and `default_owner` are what `--update` and the lock run fill an entry
-  from (`bookkeeping_ticket`).
+  (`assumption_records`, `unfolding`, `read_props`). A named assumption is declared in a module `assumptions_module`
+  names or in one under it; it names one module or a list of them (`Security/Properties` lists
+  `Properties.Assumptions` beside `Definitions.Assumptions`, for an assumption stated over the code), each a module of
+  the build or of a package it requires. A domain hypothesis is part of what its guarantee says, with a one-line
+  `why`, or `cites` the listed guarantee whose statement it is; every other premise is open, with the Linear `issue`
+  that discharges it and its `due` date, written by hand. Each has an `owner` and a `digest`, so a change to a premise
+  or to what it reads fails under its own name. `open_seed`, `open_default_issue` and `default_owner` are what
+  `--update` and the lock run fill an entry from (`bookkeeping_ticket`).
 - `trust`: `base` ({premise: the trust assumption it states}, the same in every lock) and `extra` ({deployed guarantee:
   {premise: the ruling's rule}}, what it alone may rest on). `deployed`: the guarantees that state the deployed system.
   `trust_gap`: {deployed guarantee: its premises outside its trust}, which only a person adds to and `--update` drops

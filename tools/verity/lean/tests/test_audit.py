@@ -4769,6 +4769,42 @@ def test_a_named_assumption_may_sit_in_a_module_under_assumptions_module():
     assert named & set(codes("P.AssumptionsX"))
 
 
+def test_assumptions_module_may_list_several_homes():
+    """`assumptions_module` may list modules (`Security/Properties` lists `Properties.Assumptions` beside the spec's, for an
+    assumption stated over the code, which the spec can't import): one declared in any of them is a named assumption, one
+    declared outside them all fails naming each, and every listed home is a module the build has. The string form is
+    one home, as the one-element list."""
+    def sound(module):
+        return facts(pins={"P.t": fact(
+            signature="P.t (h : P.Hyp) (s : P.Sound) (n : Nat) : P.f n = n",
+            hyps=fact()["hypotheses"] + [{"binder": "s", "type": "P.Sound", "closed": True, "named": "P.Sound",
+                                          "module": module}],
+            reads=fact()["reads"] + [{"name": "P.Sound", "module": module, "kind": "def", "hash": "5" * 32}])})
+    two = {**POLICY, "assumptions_module": ["P.Assumptions", "P.Defs"],
+           "assumptions": POLICY["assumptions"] | {"P.Sound": {"owner": "@lean"}}}
+    fails, pol = A.judge(two, sound("P.Defs"), FILES, update=True)
+    assert fails == [] and set(pol["assumptions"]) == {"P.Hyp", "P.Sound"}
+    assert pol["guarantees"]["P.t"]["premises"]["assumptions"] == ["P.Hyp", "P.Sound"]
+    assert A.judge(pol, sound("P.Defs"), FILES)[0] == []
+    outside = [x for x in A.judge(pol | {"assumptions_module": ["P.Assumptions", "P.Thms"]}, sound("P.Defs"), FILES)[0]
+               if x.code == "assumptions.outside-module"]
+    assert outside == ["assumptions: P.Sound is declared in P.Defs, not in P.Assumptions or P.Thms, where a named "
+                       "assumption is declared: move its definition there if it is a real one, or move its entry to "
+                       "`open` with the issue that discharges it and its due date, or to `domain` with a one-line `why` "
+                       "if it is part of what the guarantee says"]
+    one = A.judge(POLICY, facts(), FILES, update=True)
+    assert A.judge({**POLICY, "assumptions_module": ["P.Assumptions"]}, facts(), FILES, update=True)[0] == one[0] == []
+    assert A.judge({**POLICY, "assumptions_module": ["P.Assumptions"]}, facts(), FILES, update=True)[1] == \
+        one[1] | {"assumptions_module": ["P.Assumptions"]}
+    missing = A.judge({**POLICY, "assumptions_module": ["P.Assumptions", "P.Nowhere"]}, facts(), FILES, update=True)[0]
+    assert [x for x in missing if x.code == "assumptions.module"] == [
+        "assumptions: `assumptions_module` names 'P.Nowhere', which neither the build nor the packages it requires has a "
+        "module of; name the modules the named assumptions are declared in"]
+    for bad in ([], {"P.Assumptions": 1}, ["P.Assumptions", 2]):
+        assert "assumptions.module-form" in [x.code for x in A.judge({**POLICY, "assumptions_module": bad}, facts(),
+                                                                       FILES, update=True)[0]]
+
+
 def test_an_assumption_is_listed_by_name_with_its_record():
     """Each assumption has an owner and the digest of its definition as `reads` holds it, so a changed assumption is its own
     record; an entry no guarantee reads fails; an update converts a list of assumption modules into the definitions read
@@ -5323,7 +5359,7 @@ def test_another_package_reads_a_sampled_dependency_s_build_unchanged_while_the_
     """A dependent's sample takes modules of its path dependency, whose `.lake/build` other packages' audits read at the same
     time: their tests open its `.olean` files, and `main` re-hashes every package's sealed `.olean` files after each audit
     (`tampered`). Both look inside the recompile's window, as it starts and as Lake returns, and find every file of both
-    builds at its path with its bytes; afterwards no file was written. #8258 moved the sample's outputs out and back, and
+    builds at its path with its bytes; afterwards no file was written. When the sample moved its outputs out and back,
     this failed in the window: `D.olean` was missing."""
     if not A.sandboxed():
         pytest.skip("no sandbox here, so the recompile has no overlay to run in")
@@ -5389,7 +5425,7 @@ def test_without_the_sandbox_a_module_no_build_of_the_run_compiled_fails_the_aud
     assert fails[0].endswith("rerun on a node whose builds are sandboxed, or after fixing the probe")
     assert not (tmp_path / "w1").exists(), "nothing is recompiled"
 
-    assert A.sampled_recompile(d, ["D"], tmp_path / "w2", {"D"}, [], log=lambda s: None)[0] == []
+    A.RUN_COMPILED.add(((d / ".lake" / "build").resolve(), "D"))
     fails, rep = A.sampled_recompile(p, ["P"], tmp_path / "w3", {"P"}, [], log=lambda s: None)
     assert fails == [] and rep["population"] == 1 and rep["modules"] == [] and rep["unsampled"].startswith("no sandbox")
     fails, rep = A.sampled_recompile(p, ["P"], tmp_path / "w4", {"D", "P"}, [], log=lambda s: None)
@@ -5400,6 +5436,78 @@ def test_without_the_sandbox_a_module_no_build_of_the_run_compiled_fails_the_aud
     fails, rep = A.sampled_recompile(p, ["P"], tmp_path / "w5", set(), [], log=lambda s: None)
     assert rep["modules"] == ["D", "P"] and "unsampled" not in rep
     assert fails == ["sampled: the recompile of D, P exited 1\nrecompiled"]
+
+
+def _two_dependents(tmp_path, monkeypatch, b_build_exit=0):
+    """`b` and `c` require `d` by path, which no audit of the run builds (its pass was reused), so neither waits for it:
+    `b`'s `lake build` compiles `D` and `B` and exits ``b_build_exit``, and `c`'s, after it, finds `D` up to date and
+    compiles `C`. Each fake build writes the traces of what it logs; no sandbox. Returns (an audit of a package, the
+    sampled recompiles that ran: (package, failures, report), the ones `b`'s audit put off: their arguments, and the real
+    `sampled_recompile`)."""
+    d, b, c = (tmp_path / "ws" / n for n in "dbc")
+    for at in (d, b, c):
+        name = at.name.upper()
+        req = "" if at == d else '\n[[require]]\nname = "d"\npath = "../d"\n'
+        (at / ".lake" / "build" / "lib" / "lean").mkdir(parents=True)
+        (at / "lakefile.toml").write_text(f'name = "{at.name}"\ndefaultTargets = ["{name}"]\n{req}\n'
+                                          f'[[lean_lib]]\nname = "{name}"\n')
+        (at / "lean-toolchain").write_text("leanprover/lean4:v4.34.0\n")
+        (at / f"{name}.lean").write_text(f"{'' if at == d else 'import D' + chr(10)}\ndef {name}.v : Nat := 1\n")
+        (at / "lake-manifest.json").write_text(json.dumps({"packages": [] if at == d else [
+            {"type": "path", "name": "d", "dir": "../d"}]}))
+        if at != d:
+            (at / A.POLICY).write_text(json.dumps({"roots": [name]}))
+    compiles = {("b", "build"): ["D", "B"], ("c", "build"): ["C"]}
+
+    def fake_run(argv, cwd, log=None, timeout=0, on_line=None):
+        step = Path(log).stem
+        mods = compiles.get((cwd.name, step), [])
+        for m in mods:
+            ((d if m == "D" else cwd) / ".lake" / "build" / "lib" / "lean" / f"{m}.trace").write_text("{}")
+        Path(log).write_text("".join(f"✔ [{i}/{len(mods)}] Built {m} (1.0s)\n" for i, m in enumerate(mods, 1)))
+        return (b_build_exit if (cwd.name, step) == ("b", "build") else 0), ""
+
+    real, ran, later = A.sampled_recompile, [], []
+
+    def sampled(pkg, *args, **kw):
+        if pkg.name == "b":
+            later.append((pkg, *args))
+            return [A.Failure("sampled", None, "sampled: b samples later")], {}
+        ran.append((pkg.name, *real(pkg, *args, **kw)))
+        return [A.Failure("sampled", None, "sampled: the test stops here")], ran[-1][2]
+
+    monkeypatch.setattr(A, "sandboxed", lambda: False)
+    monkeypatch.setattr(A, "RUN_COMPILED", set())
+    monkeypatch.setattr(A, "setup", lambda pkg, toolchain, log: (0, ""))
+    monkeypatch.setattr(A, "run", fake_run)
+    monkeypatch.setattr(A, "sampled_recompile", sampled)
+    audit = lambda p: A.audit(tmp_path / "ws" / p, tmp_path / "out", build=True, runs=False, log=lambda s: None)
+    return audit, ran, later, real
+
+
+def test_a_dependency_another_package_s_build_compiled_is_this_run_s_before_that_package_samples(tmp_path, monkeypatch):
+    """`b`'s build compiles `D` and releases its hold on `d`'s `.lake`; `c`'s build, after it, finds `D` up to date, so
+    `D` isn't among the modules `c` compiled. `c` samples before `b` does, and without the sandbox `D` passes only if `b`'s
+    build step counted it as this run's (`note_compiled`), not `b`'s sample, which hasn't run."""
+    audit, ran, later, real = _two_dependents(tmp_path, monkeypatch)
+    assert audit("b")["failures"] == ["sampled: b samples later"]
+    assert audit("c")["failures"] == ["sampled: the test stops here"]
+    [(name, fails, rep)] = ran
+    assert (name, fails, rep["population"], rep["modules"]) == ("c", [], 1, []) and rep["unsampled"].startswith("no sandbox")
+    [(b, *args)] = later
+    fails, rep = real(b, *args)
+    assert fails == [] and rep["population"] == 0, "b compiled D and B itself"
+
+
+def test_what_a_failed_build_compiled_before_it_failed_is_this_run_s(tmp_path, monkeypatch):
+    """`b`'s build compiles `D` and then fails, so `b`'s audit ends before its sample. `D`'s outputs are still this run's,
+    not restored or kept, so `c`, whose build finds `D` up to date, passes without the sandbox rather than failing with a
+    `sampled` that says otherwise; the run fails on `b`'s build."""
+    audit, ran, later, real = _two_dependents(tmp_path, monkeypatch, b_build_exit=1)
+    assert audit("b")["failure_codes"] == ["build"] and later == []
+    assert audit("c")["failures"] == ["sampled: the test stops here"]
+    [(name, fails, rep)] = ran
+    assert (name, fails, rep["population"]) == ("c", [], 1)
 
 
 def test_a_guarantee_is_proved_by_exactly_one_package():

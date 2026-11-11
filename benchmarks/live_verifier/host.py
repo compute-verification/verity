@@ -106,7 +106,7 @@ from pathlib import Path
 from typing import Any, BinaryIO, Callable, Iterator
 
 HERE = Path(__file__).resolve().parent
-TREE = HERE.parents[1]
+TREE = Path(__file__).resolve().parents[2]
 VERIFIER = TREE / "benchmarks" / "remote_session" / "verifier_process.py"
 REPLAY = TREE / "verity" / "core" / "protocols" / "remote_bandwidth" / "lean" / "tests"
 DIFFTEST = TREE / "verity" / "core" / "difftest" / "python"

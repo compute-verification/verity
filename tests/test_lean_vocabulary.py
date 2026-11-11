@@ -643,8 +643,6 @@ KNOWN: dict[str, str] = {
     "Security/Properties/Accounting/Remote/Line/Record.lean::Properties.RemoteAudit.Line.Record":
         "duplicate of the auditor's record chain (`Spot.Challenger.LedgerEntry`): becomes what RemoteAudit becomes (lean)",
     # benchmarks/
-    "benchmarks/bandwidth/gpu.py::Commitment":
-        "duplicate of `merkle.Commitment`: becomes a client of it (one pass's root) (memory-accounting)",
     "benchmarks/circuit_properties/circuit_properties/ops.py::Site":
         "homonym, an op's site in a Definition: rename (training)",
     "benchmarks/datacenter/datacenter/logical.py::Registration":
@@ -655,8 +653,6 @@ KNOWN: dict[str, str] = {
         "homonym, a protocol's served benchmark rows: rename (benchmarks)",
     "benchmarks/network_e2e/encodings/replay.py::Trace":
         "homonym, a served run's step trace (`verity-vllm/step-trace/v1`): rename (network-accounting)",
-    "benchmarks/network_e2e/encodings/v1.py::Record":
-        "duplicate of `NetworkCheck.Check.Certificate`: becomes its certified record (network-accounting)",
     "benchmarks/network_sim/workload/block.py::Block":
         "homonym, the simulator's model of one served block: rename (network-accounting)",
     "benchmarks/network_sim/workload/lab.py::Session":
@@ -722,8 +718,6 @@ KNOWN: dict[str, str] = {
     "benchmarks/property_redteam/squaring.py::Op": "homonym, a red-team model's op: rename (memory-accounting)",
     "benchmarks/remote_session/serve.py::Trace":
         "homonym, the engine's steps as a remote session runs them: rename (memory-accounting)",
-    "benchmarks/resource_accounting/joint.py::Challenger":
-        "duplicate of `parties.Challenger`: becomes a client of the memory challenger's (memory-accounting)",
     "benchmarks/rho/rho/circuits.py::Circuit":
         "homonym, a benchmark row naming a Definition at its size: rename (training)",
     "benchmarks/rho/rho/params.py::Registry": "homonym, a table of benchmark parameters: rename (training)",
@@ -765,6 +759,8 @@ KNOWN: dict[str, str] = {
     "integrations/vllm/verity_vllm/acquire/committer_api.py::Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a client of it (circuits)",
     "integrations/vllm/verity_vllm/commit/memory_map.py::Layout": "homonym, the engine's KV pool map: rename (circuits)",
+    "integrations/vllm/verity_vllm/pipeline/advice_code/codec.py::Record":
+        "duplicate of `NetworkCheck.Check.Certificate`: becomes its certified record (vllm)",
     "integrations/vllm/verity_vllm/program/frontend/registration.py::Registration":
         "homonym, the builder's allocation of registered inputs: rename (circuits)",
     "integrations/vllm/verity_vllm/protocols/pouw/credit_gate.py::Trace":
@@ -799,14 +795,6 @@ KNOWN: dict[str, str] = {
         "homonym, a link's online state: rename (network-accounting)",
     "verity/core/devices/memory_challenger/lean/MemoryChallenger/Records.lean::MemoryChallenger.CoinTree":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
-    "verity/core/protocols/bandwidth/audit.py::Opening":
-        "duplicate of `remote_bandwidth`'s own type (MEM-138): becomes it (the bandwidth package is deleted) (memory-accounting)",
-    "verity/core/protocols/bandwidth/audit.py::Store":
-        "duplicate of `remote_bandwidth`'s own type (MEM-138): becomes it (the bandwidth package is deleted) (memory-accounting)",
-    "verity/core/protocols/bandwidth/audit.py::Verdict":
-        "duplicate of `remote_bandwidth`'s own type (MEM-138): becomes it (the bandwidth package is deleted) (memory-accounting)",
-    "verity/core/protocols/bandwidth/audit.py::Window":
-        "duplicate of `remote_bandwidth`'s own type (MEM-138): becomes it (the bandwidth package is deleted) (memory-accounting)",
     "verity/core/protocols/certifier/audit.py::Verdict":
         "duplicate of `Core.Verdict`: becomes a reading of it (network-accounting)",
     "verity/ml/protocols/certifier/cache_step_v2.py::Op":
