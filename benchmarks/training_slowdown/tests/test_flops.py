@@ -518,9 +518,10 @@ def test_every_fused_attention_kernel_names_the_operands_the_counter_reads():
         "efficient_attention": ["attn_bias", "dropout_p"],
         "efficient_attention_backward": ["attn_bias", "dropout_p", "grad_input_mask"],
         "cudnn_attention": ["attn_bias", "dropout_p"], "cudnn_attention_backward": ["attn_bias", "dropout_p"]}
-    others = {n for n in dir(torch.ops.aten) if "scaled_dot_product" in n} - {f"_scaled_dot_product_{k}" for k in names}
-    assert others == {"scaled_dot_product_attention", "_scaled_dot_product_attention_math_for_mps",
-                      "_scaled_dot_product_fused_attention_overrideable",
+    every = {s.name.removeprefix("aten::") for s in torch._C._jit_get_all_schemas() if "scaled_dot_product" in s.name}
+    others = every - {f"_scaled_dot_product_{k}" for k in names}
+    assert others == {"scaled_dot_product_attention", "_scaled_dot_product_attention_math",
+                      "_scaled_dot_product_attention_math_for_mps", "_scaled_dot_product_fused_attention_overrideable",
                       "_scaled_dot_product_fused_attention_overrideable_backward"}
     assert all(opnames.gemm_like(n) for n in others)
 
