@@ -1626,10 +1626,14 @@ def _same_commitment(a: Path, b: Path) -> None:
         assert all((oa[q][0] == ob[q][0]).all() for q in oa), k
 
 
+@pytest.mark.slow
 def test_a_served_windows_fused_cut_is_the_row_drivers_window_given_the_tables_and_the_checkpoint(fused, tmp_path):
     """`commit1` on the sealed served window, the per-expert tables read under the committer's key and the expert weights
     composed from the checkpoint (the window's bundle carries none), against the in-Commit hook's window over the same
-    committed step."""
+    committed step.  Minutes: a window of this cut builds its templates' gates once a process, here and in the fixture's, and
+    its registration walks them at each write.  It catches what the adapter's test of `deferred_rows.from_bundle` can't:
+    this command's own window maker, on a sealed window that names no Programs, committing other rows, tables or weights
+    than the Commit's own window of the step."""
     a, compiler = _fused_args(fused), PP.Capped(OfRecord(program_dir=fused["program_dir"]))
     bound = AW.binding(compiler, "ad" * 64, 8)
     got = PP.commit1(a, compiler, [], bound, tmp_path / "w")
@@ -1644,7 +1648,11 @@ def test_a_served_windows_fused_cut_is_the_row_drivers_window_given_the_tables_a
     assert PP.source1(hook, window, held)["codes"] == ["kind", "of", "link", "compiler", "advice"]
 
 
+@pytest.mark.slow
 def test_a_served_windows_fused_cut_is_refused_without_the_tables_or_the_checkpoint(fused, tmp_path):
+    """Each refusal by name and before any registration is written (seconds once the templates are built, over a minute
+    alone): only a sealed window shows that it brings neither the tables nor the expert weights, so that `commit1` refuses
+    the cut unless it is handed both."""
     compiler = PP.Capped(OfRecord(program_dir=fused["program_dir"]))
     with pytest.raises(ValueError, match=r"is not among the committer's tables \(commit_tables\)"):
         PP.commit1(_fused_args(fused, serving_rows_tables=None), compiler, [], {}, tmp_path / "w1")
