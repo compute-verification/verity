@@ -1,7 +1,7 @@
-"""window_charge: `ChargeCount_v2` charges advice v1's whole window, its hits and order entries with its decisions.
-Held to v1's own charges (each fixture stream's windows at their own sizes, the hits included), to `code_v1`'s on
-windows with hits and order entries seeded and on their cut into slots, to `ChargeCount_v1` on windows of decisions
-alone, and the circuits to their reference."""
+"""window_charge: `ChargeCount_v2` charges advice v1's whole window, its hits, order entries and length terms with its
+decisions. Held to v1's own charges (each fixture stream's windows at their own sizes, the hits and length terms
+included), to `code_v1`'s on windows with hits, order entries and length terms seeded and on their cut into slots, to
+`ChargeCount_v1` on windows of decisions alone, and the circuits to their reference."""
 from __future__ import annotations
 
 import json
@@ -30,13 +30,14 @@ def _streams():
 
 
 def _whole(book, rows, lens):
-    """Each of `rows` (decisions, hits, positions, ranks) at its own sizes, every slot enabled, the carry passed
-    along: (charge, its length) each."""
+    """Each of `rows` (decisions, hits, positions, ranks, length terms) at its own sizes, every slot enabled, the carry
+    passed along: (charge, its length) each."""
     carry, out = WC.first_carry(book), []
-    for (bits, hits, p, r, *_x), length in zip(rows, lens, strict=True):
-        N, H, O = len(bits), len(hits), len(p)
-        ok, got, carry = WC.reference_window(N, H, O, WC.window_book(book, N, H, O)[0], carry, [1] * N, _ints(bits),
-                                             [1] * H, hits, [1] * O, p, r)
+    for (bits, hits, p, r, terms, *_x), length in zip(rows, lens, strict=True):
+        N, H, O, L = len(bits), len(hits), len(p), len(terms)
+        ok, got, carry = WC.reference_window(N, H, O, L, WC.window_book(book, N, H, O)[0], carry, [1] * N, _ints(bits),
+                                             [1] * H, hits, [1] * O, p, r, [1] * L, [m for m, _n in terms],
+                                             [n for _m, n in terms])
         assert ok
         out.append((got, length))
     return out
@@ -44,30 +45,34 @@ def _whole(book, rows, lens):
 
 def _cut(stream):
     win = stream["window"]
-    slots = [(_ints(en), _ints(bits), _ints(hen), short, _ints(oen), p, r) for en, bits, hen, short, oen, p, r, _l
-             in win["cut"]]
-    return win["N"], win["H"], win["O"], stream["decisions"]["book"], slots, [w[-1] for w in win["cut"]]
+    slots = [(_ints(en), _ints(bits), _ints(hen), short, _ints(oen), p, r, _ints(qen), mt, olen)
+             for en, bits, hen, short, oen, p, r, qen, mt, olen, _l in win["cut"]]
+    return win["N"], win["H"], win["O"], win["L"], stream["decisions"]["book"], slots, [w[-1] for w in win["cut"]]
 
 
 def test_each_window_at_its_own_sizes_is_v1s_charge():
-    """Every fixture stream's own windows, decisions, hits and order entries each in as many slots as it sends, are
-    charged v1's charges over the whole stream: async-prefix-cache's first window sends 27 hits, which
-    `ChargeCount_v1` leaves out. The same windows with 12 hits and 10 order entries seeded in are charged
-    `code_v1`'s, as is their cut into (4, 2, 2) slots with gaps."""
-    windows = hits = seeded = cut = 0
+    """Every fixture stream's own windows, decisions, hits, order entries and length terms each in as many slots as it
+    sends, are charged v1's charges over the whole stream, each window's segment and its length terms' tail:
+    async-prefix-cache's first window sends 27 hits, which `ChargeCount_v1` leaves out. The same windows with 12 hits,
+    10 order entries and 8 length terms seeded in are charged `code_v1`'s, as is their cut into (4, 2, 2, 2) slots with
+    gaps."""
+    windows = hits = terms = seeded = cut = 0
     for s in _streams():
         win = s["window"]
-        got = _whole(s["decisions"]["book"], win["own"], s["charge"])
-        assert [g for g, _l in got] == s["charge"], s["source"]
+        got = _whole(s["decisions"]["book"], win["own"], win["charge"])
+        assert [g for g, _l in got] == win["charge"], s["source"]
+        tails = [sum(WC.length_bits(m) for m, _n in w[4]) for w in win["own"]]
+        assert [c - t for c, t in zip(win["charge"], tails)] == s["charge"], s["source"]
         got = _whole(s["decisions"]["book"], win["seeded"], [w[-1] for w in win["seeded"]])
         assert all(g == length for g, length in got), s["source"]
-        N, H, O, book, slots, lens = _cut(s)
-        assert [x[0] for x in WC.session(N, H, O, book, slots)] == lens, s["source"]
+        N, H, O, L, book, slots, lens = _cut(s)
+        assert [x[0] for x in WC.session(N, H, O, L, book, slots)] == lens, s["source"]
         windows += len(win["own"])
         hits += sum(len(w[1]) for w in win["own"])
-        seeded += sum(len(w[1]) + len(w[2]) for w in win["seeded"])
+        terms += sum(len(w[4]) for w in win["own"])
+        seeded += sum(len(w[1]) + len(w[2]) + len(w[4]) for w in win["seeded"])
         cut += len(slots)
-    assert (windows, hits, seeded, cut) == (15, 27, 115, 188)
+    assert (windows, hits, terms, seeded, cut) == (15, 27, 56, 203, 214)
 
 
 def _random_book(rng, N, H, O):
@@ -94,7 +99,7 @@ def test_a_window_of_decisions_alone_is_v1s():
         c2 = WC.WindowCarry(carry.counts, carry.run, 7, 9)
         for en, bits, _l in dec["cut"]["windows"]:
             want = AE.reference_charge(N, v1book, carry, _ints(en), _ints(bits))
-            got = WC.reference_window(N, 0, 0, wb, c2, _ints(en), _ints(bits))
+            got = WC.reference_window(N, 0, 0, 0, wb, c2, _ints(en), _ints(bits))
             assert got[:2] == want[:2] and got[2] == WC.WindowCarry(want[2].counts, want[2].run, 7, 9)
             carry, c2 = want[2], got[2]
     for _ in range(300):
@@ -106,7 +111,7 @@ def test_a_window_of_decisions_alone_is_v1s():
         run = rng.randrange(4)
         en, bits = [rng.randrange(2) for _ in range(N)], [rng.randrange(2) for _ in range(N)]
         want = AE.reference_charge(N, v1book, AE.Carry(counts, run), en, bits)
-        got = WC.reference_window(N, 0, 0, book, WC.WindowCarry(counts, run), en, bits)
+        got = WC.reference_window(N, 0, 0, 0, book, WC.WindowCarry(counts, run), en, bits)
         assert got[0] == want[0] and (not want[0] or got[1:] == (want[1], WC.WindowCarry(want[2].counts, want[2].run)))
 
 
@@ -130,20 +135,25 @@ def test_the_coding_is_code_pys():
 
 def test_refusals():
     """A carry-in's run past 2 or rank past 2^24 + 1, a hit past hit_units, an order entry before the last one's
-    position, a gap past 2^24, a rank past 2^24 or a position of 2^32 − 1; and the books `window_book` refuses."""
+    position, a gap past 2^24, a rank past 2^24 or a position of 2^32 − 1, a length term's max_tokens past the u32's
+    top or output_len past bitlen(max_tokens) bits; and the books `window_book` refuses."""
     book = _random_book(random.Random(1), 1, 1, 1)
     good = WC.WindowCarry(rank=(1 << 24) + 1, pos=10)
     one = ([1], [0])
 
-    def ok(carry=good, short=(0,), p=(10,), r=(0,)):
-        return WC.reference_window(1, 1, 1, book, carry, *one, [1], list(short), [1], list(p), list(r))[0]
+    def ok(carry=good, short=(0,), p=(10,), r=(0,), mt=(256,), olen=(511,)):
+        return WC.reference_window(1, 1, 1, 1, book, carry, *one, [1], list(short), [1], list(p), list(r), [1],
+                                   list(mt), list(olen))[0]
 
     assert ok() == 1 and ok(short=(1 << 16,), p=(10 + (1 << 24),), r=(1 << 24,)) == 1
+    assert ok(mt=(0,), olen=(0,)) == 1 and ok(mt=((1 << 32) - 1,), olen=((1 << 32) - 1,)) == 1
     for bad in (dict(carry=WC.WindowCarry(run=3)), dict(carry=WC.WindowCarry(rank=(1 << 24) + 2)),
                 dict(short=((1 << 16) + 1,)), dict(p=(9,)), dict(p=(11 + (1 << 24),)), dict(r=((1 << 24) + 1,)),
-                dict(carry=WC.WindowCarry(pos=(1 << 32) - 1), p=((1 << 32) - 1,))):
+                dict(carry=WC.WindowCarry(pos=(1 << 32) - 1), p=((1 << 32) - 1,)), dict(olen=(512,)),
+                dict(mt=(0,), olen=(1,)), dict(mt=(1 << 32,), olen=(0,))):
         assert ok(**bad) == 0, bad
-    assert WC.reference_window(1, 1, 1, book, good, *one, [0], [(1 << 17) - 1], [0], [9], [(1 << 25) - 1])[0] == 1
+    assert WC.reference_window(1, 1, 1, 1, book, good, *one, [0], [(1 << 17) - 1], [0], [9], [(1 << 25) - 1], [0],
+                               [1 << 33], [1 << 34])[0] == 1
     raw = json.loads(FIXTURE.read_text())["streams"][0]["decisions"]["book"]
     assert WC.window_book(raw, 4, 2, 2)[1] == WC.first_carry(raw)
     for caps, N, H, O in (({"gap": 1 << 20}, 1, 1, 1), ({"order_len": 2}, 1, 1, 1), ({"hits": 2}, 1, 4, 1),
@@ -155,9 +165,9 @@ def test_refusals():
                                                                                     "escape": 1}}}}, 1, 1, 1)
 
 
-def _random_slots(rng, N, H, O, carry):
+def _random_slots(rng, N, H, O, L, carry):
     """Slots at a random density, the values at their caps' edges now and then and past them, the order entries'
-    positions after the carry's or before it."""
+    positions after the carry's or before it, each output_len at the top of its max_tokens' width or past it."""
     en, bits = [int(rng.random() < 0.6) for _ in range(N)], [rng.randrange(2) for _ in range(N)]
     def past(good, bad):
         return rng.choice(bad) if rng.random() < 0.05 else rng.choice(good)
@@ -176,7 +186,11 @@ def _random_slots(rng, N, H, O, carry):
         p.append(pp)
         r.append(rr)
         pos, rank = (pp + 1, rr + 1) if pp < (1 << 32) - 1 and rr < 1 << 25 else (pos, rank)
-    return en, bits, hen, short, oen, p, r
+    qen = [int(rng.random() < 0.6) for _ in range(L)]
+    mt = [rng.choice([0, 1, 255, 256, rng.randrange(1 << 32), (1 << 32) - 1]) for _ in range(L)]
+    olen = [past([0, (1 << m.bit_length()) - 1, rng.randrange(1 << m.bit_length())],
+                 [min(1 << m.bit_length(), (1 << WC.MW) - 1)]) for m in mt]
+    return en, bits, hen, short, oen, p, r, qen, mt, olen
 
 
 def _random_carry(rng):
@@ -190,13 +204,13 @@ def _random_carry(rng):
                           (1 << 24) + 2 if rng.random() < 0.05 else rng.choice([0, rng.randrange(1 << 24), (1 << 24) + 1]))
 
 
-def _random_link(rng, N, H, O):
+def _random_link(rng, N, H, O, L):
     book, carry = _random_book(rng, N, H, O), _random_carry(rng)
-    slots = _random_slots(rng, N, H, O, carry)
+    slots = _random_slots(rng, N, H, O, L, carry)
     row_in = list(WC.encode(carry))
     if rng.random() < 0.1:
         row_in[rng.randrange(149, WC.ROW_BITS)] = 1
-    ok, _length, nxt = WC.reference_window(N, H, O, book, carry, *slots)
+    ok, _length, nxt = WC.reference_window(N, H, O, L, book, carry, *slots)
     row_out = list(WC.encode(nxt) if ok else WC.encode(carry))
     if rng.random() < 0.2:
         row_out[rng.randrange(WC.ROW_BITS)] ^= 1
@@ -206,11 +220,11 @@ def _random_link(rng, N, H, O):
 @pytest.mark.slow
 def test_the_chain_on_the_cut_is_code_v1s():
     """Each fixture stream's cut windows chained under hiding commitments: the verifier's check passes, and
-    `ChargeLink_v2{4, 2, 2}` on each window's committed rows is ok at `code_v1`'s charge. A carry-in other than the last
+    `ChargeLink_v2{4, 2, 2, 2}` on each window's committed rows is ok at `code_v1`'s charge. A carry-in other than the last
     carry-out is refused by the chain (CH-carry), and the session must start at the book's first carry (CH-first)."""
     for s in _streams():
-        N, H, O, book, slots, lens = _cut(s)
-        ses = WC.session(N, H, O, book, slots)
+        N, H, O, L, book, slots, lens = _cut(s)
+        ses = WC.session(N, H, O, L, book, slots)
         values = []
         for _length, _c_in, c_out in ses:
             values.append(WC.commit_window(PROGRAM, book, WC.carry_of(c_out), REGISTRATION,
@@ -222,29 +236,29 @@ def test_the_chain_on_the_cut_is_code_v1s():
             assert WC.check_chain([ops[0], ops[2]], PROGRAM, book).startswith("CH-carry")
         wb = WC.window_book(book, N, H, O)[0]
         cases = [(wb, WC.CC.unrow(v.rows[0]), WC.CC.unrow(v.rows[1]), *sl) for v, sl in zip(values, slots)]
-        assert WC.evaluate_links(N, H, O, cases) == [(1, length) for length in lens], s["source"]
+        assert WC.evaluate_links(N, H, O, L, cases) == [(1, length) for length in lens], s["source"]
     v = values[0]
     assert v.salts[0] == WC.CC.start_salt(PROGRAM, WC.VALUE) and v.bcs[0] == WC.start_opening(PROGRAM, book)
 
 
 @pytest.mark.slow
 def test_the_circuits_are_the_reference():
-    """`ChargeLink_v2{4, 2, 2}` against `reference_link` on random cases (books with skewed bins and now and then a
+    """`ChargeLink_v2{4, 2, 2, 2}` against `reference_link` on random cases (books with skewed bins and now and then a
     bin the coder refuses, carries at their edges, values at and past their caps, carry-outs one bit off), and
-    `ChargeCount_v2{1, 1, 1}`'s outputs, the carry' included, against `reference_window`."""
+    `ChargeCount_v2{1, 1, 1, 1}`'s outputs, the carry' included, against `reference_window`."""
     rng = random.Random(422)
-    cases = [_random_link(rng, 4, 2, 2) for _ in range(400)]
-    want = [WC.reference_link(4, 2, 2, *c) for c in cases]
+    cases = [_random_link(rng, 4, 2, 2, 2) for _ in range(400)]
+    want = [WC.reference_link(4, 2, 2, 2, *c) for c in cases]
     assert sum(w[0] for w in want) > 100 and sum(not w[0] for w in want) > 100
-    for c, g, w in zip(cases, WC.evaluate_links(4, 2, 2, cases), want):
+    for c, g, w in zip(cases, WC.evaluate_links(4, 2, 2, 2, cases), want):
         assert (g[0] == 0) if w[0] == 0 else g == w, (c, g, w)
     cases = []
     for _ in range(300):
         book, carry = _random_book(rng, 1, 1, 1), _random_carry(rng)
-        cases.append((book, carry, *_random_slots(rng, 1, 1, 1, carry)))
-    want = [WC.reference_window(1, 1, 1, *c) for c in cases]
+        cases.append((book, carry, *_random_slots(rng, 1, 1, 1, 1, carry)))
+    want = [WC.reference_window(1, 1, 1, 1, *c) for c in cases]
     assert sum(w[0] for w in want) > 100 and sum(not w[0] for w in want) > 50
-    for c, g, w in zip(cases, WC.evaluate_windows(1, 1, 1, cases), want):
+    for c, g, w in zip(cases, WC.evaluate_windows(1, 1, 1, 1, cases), want):
         assert (g[0] == 0) if w[0] == 0 else g == w, (c, g, w)
 
 
@@ -253,19 +267,21 @@ def test_build_link_inline_and_the_bound():
     """`build_link`, the call a caller's circuit makes, is the unit, and a caller holding its charge to c_w (as the
     compile slice does) accepts c_w = the charge and refuses one bit less."""
     from verity.ml.circuits.boolean.forms import Circuit, sub
-    N, H, O, rng = 1, 1, 1, random.Random(3)
-    cases = [_random_link(rng, N, H, O) for _ in range(40)]
+    N, H, O, L, rng = 1, 1, 1, 1, random.Random(3)
+    cases = [_random_link(rng, N, H, O, L) for _ in range(40)]
     C = Circuit(cse=True)
     fields = WC.book_fields(N, H, O)
     pub = C.input("pub", sum(n * w for _f, n, w in fields))
     row_in, row_out = C.input("in", WC.ROW_BITS), C.input("out", WC.ROW_BITS)
     en, bits, hen, oen = C.input("en", N), C.input("bits", N), C.input("hen", H), C.input("oen", O)
     short, p, r, c = C.input("short", 17), C.input("p", 32), C.input("r", 25), C.input("c", AE.CW)
+    qen, mt, olen = C.input("qen", L), C.input("mt", WC.MW), C.input("olen", WC.MW)
     elems, at = [], 0
     for _f, n, w in fields:
         elems += [pub[at + k * w:at + (k + 1) * w] for k in range(n)]
         at += n * w
-    ok, count = WC.build_link(C, N, H, O, elems, row_in, row_out, en, bits, hen, [short], oen, [p], [r])
+    ok, count = WC.build_link(C, N, H, O, L, elems, row_in, row_out, en, bits, hen, [short], oen, [p], [r], qen, [mt],
+                              [olen])
     C.output("res", [ok, sub(C, c, count, AE.CW)[1].inv()] + count)
 
     def sliced(rows):
@@ -276,14 +292,16 @@ def test_build_link_inline_and_the_bound():
 
     for drop in (0, 1):
         pubs = [[b for f in AE._args(fields, WC.book_values(cs[0])) for b in f] for cs in cases]
-        want = [WC.reference_link(N, H, O, *cs) for cs in cases]
+        want = [WC.reference_link(N, H, O, L, *cs) for cs in cases]
         bound = [max(w[1] - drop, 0) for w in want]
         outs, _fail = C.evaluate({
             "pub": sliced(pubs), "in": sliced([cs[1] for cs in cases]), "out": sliced([cs[2] for cs in cases]),
             "en": sliced([cs[3] for cs in cases]), "bits": sliced([cs[4] for cs in cases]),
             "hen": sliced([cs[5] for cs in cases]), "short": sliced(ints([cs[6][0] for cs in cases], 17)),
             "oen": sliced([cs[7] for cs in cases]), "p": sliced(ints([cs[8][0] for cs in cases], 32)),
-            "r": sliced(ints([cs[9][0] for cs in cases], 25)), "c": sliced(ints(bound, AE.CW))}, len(cases))
+            "r": sliced(ints([cs[9][0] for cs in cases], 25)), "qen": sliced([cs[10] for cs in cases]),
+            "mt": sliced(ints([cs[11][0] for cs in cases], WC.MW)),
+            "olen": sliced(ints([cs[12][0] for cs in cases], WC.MW)), "c": sliced(ints(bound, AE.CW))}, len(cases))
         for t, (cs, w) in enumerate(zip(cases, want)):
             res = [(v >> t) & 1 for v in outs["res"]]
             g = (res[0], sum(b << j for j, b in enumerate(res[2:])))
@@ -317,8 +335,11 @@ def test_rows():
 
 @pytest.mark.slow
 def test_size_counts_the_gates():
+    """With no length slots the circuit is the one before them; each length slot adds its ANDs and no more."""
     assert WC.size("charge", 2, 0, 0)["ands"] == AE.size("charge", N=2)["ands"] + 24 == 19560
-    assert WC.size("charge", 1, 1, 1)["ands"] == ands(WC.charge_unit(1, 1, 1)) == 53287
+    assert WC.size("charge", 1, 1, 1)["ands"] == ands(WC.charge_unit(1, 1, 1, 0)) == 53287
+    assert WC.size("charge", 1, 1, 1, 1)["ands"] == ands(WC.charge_unit(1, 1, 1, 1)) == 53408
+    assert WC.size("charge", 1, 1, 1, 4)["ands"] - WC.size("charge", 1, 1, 1, 2)["ands"] == 218
 
 
 @pytest.mark.slow
@@ -330,7 +351,7 @@ def test_no_and_reads_a_form_its_earlier_slots_grew():
     from verity.ml.circuits.boolean.forms import Circuit
 
     def widest(N, H, O):
-        S = SimpleNamespace(N=N, H=H, O=O)
+        S = SimpleNamespace(N=N, H=H, O=O, L=0)
         C = Circuit(cse=True)
         params, _ = WC._sig_window(S)
         ins = [C.input(f"p{i}e{j}", w) for i, (_n, t) in enumerate(params) for j, w in enumerate(BL.elements(t))]
