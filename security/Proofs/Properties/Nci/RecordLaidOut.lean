@@ -9,7 +9,9 @@ public import Proofs.Properties.Nci.RecordInputs
 public import Proofs.Properties.Nci.RecordLeafWide
 public import Proofs.Properties.Nci.RecordPrim
 public import Proofs.Properties.Nci.RecordProgram
+public import Proofs.Properties.Nci.RecordReads
 public import Proofs.Properties.Nci.RecordRows
+public import Proofs.Properties.Nci.RecordServed
 public import Proofs.Properties.Nci.RecordTemplates
 public import Proofs.Properties.Nci.RecordUnits
 public import Proofs.Properties.Nci.RecordWhole
@@ -35,6 +37,10 @@ Of the property's clauses on a unit: its rows are its own input gates, and what 
 are its own (`RecordRows`). Of the wires: what `Spot.Wires.check` has tested of a wire and gives of a row the wire
 covers (`RecordWire`), a wired row holds its output (`RecordWide`), whose leaves are leaves of the writer's return
 (`RecordFields`), a gate is as wide as the leaf that names it (`RecordLeafWide`), and the wires' declarations come
-first, so no row the check holds has a writer (`RecordInputs`). Every unit has a slot, and a wired circuit has its θ
-and its blocks (`RecordCircuit`).
+first, so no row the check holds has a writer (`RecordInputs`); every wire lands whole and every bit of a wired row
+is its writer's (`RecordAligned`). Every unit has a slot, and a wired circuit has its θ and its blocks
+(`RecordCircuit`). `RecordServed` puts them together: `form_laidOut`.
+
+Of the count: a gate a block reads from outside itself, that θ does not hold, is one a read of a row of the block's
+slot lands on (`RecordReads`).
 -/
