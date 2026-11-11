@@ -28,7 +28,9 @@ no job writes): the grade never reads it and passes it on, beside each record it
   reads the record's `trace`, the step the job traced itself, and prices its product rows here (`traced`,
   `training_slowdown.capture.products.priced`): the grade holds no price. A search record with no trace, with one
   the capture refused or of a capture version this tree doesn't read, or with a step `formalism.measure` refuses, has
-  no ρ, and then there is no S; the reason names how the trace is taken again (`retrace`);
+  no ρ, and then there is no S; the reason names how the trace is taken again (`retrace`). So does a record whose
+  trace was not taken (`trace.failed`: the process that traced the step raised, or ended), whose ρ is unmeasured,
+  not refused: nothing was found against the step;
 - **the sensitivities** beside ρ, never in it (`formalism.SENSITIVITIES`' reduction and update), and the version of
   the code that took the trace (`capture_code`): from the trace's `circuit`, the measured step's own cut of its
   gradient and its structure, and its `capture_code`. A record whose trace has neither still grades, at the same ρ
@@ -83,7 +85,8 @@ BOUND_BESIDE = ("rho's products term is this theorem's closed form for the slowd
                 "count solved for the fewest blocks, times c/|C| (min_cut.blocks_at_least), on the same N, O, β, b and "
                 "F: the closed form is never above the solved count, so the two are lower bounds on one slowdown, this "
                 "the larger, and S keeps rho's; the two are never combined")
-#: the job that takes a record's trace again (`training_slowdown.run`'s `retrace`), which a refused trace's reason names
+#: the job that takes a record's trace again (`training_slowdown.run`'s `retrace`), which the reason names where ρ
+#: has no trace to read: one refused, or one that was not taken
 RETRACE = "python -m training_slowdown.run --retrace RUN_JSON --out DIR --device cpu"
 
 
@@ -333,12 +336,17 @@ def traced(record: dict, row: dict) -> dict:
 
     Raises `formalism.Refused`, with how the trace is taken again (`retrace`), for a record with no trace, with one
     the capture refused, with one of a capture version this tree's `priced` doesn't read, or with one that lacks a
-    key of `TRACE`; and for a checkpoint with a nonempty E that no step after the run's first update precedes."""
+    key of `TRACE`; and for a checkpoint with a nonempty E that no step after the run's first update precedes. A
+    record whose trace was not taken (`failed`, with why: `run.inside`, `run.outside`) raises a plain `ValueError`
+    with the same way out: its step is unmeasured, and nothing refused it."""
     from .capture import products
 
     tr = record.get("trace")
     if not tr:
         raise F.Refused(f"the search record has no trace, and ρ reads a traced step; {retrace(record)}")
+    if "failed" in tr:
+        raise ValueError(f"the search record's trace was not taken ({tr['failed']}), and ρ reads a traced step; "
+                         f"{retrace(record)}")
     if "refused" in tr:
         r = tr["refused"]
         raise F.Refused(f"the capture refused the search record's step ({r.get('reason')}, {r.get('op')}: "

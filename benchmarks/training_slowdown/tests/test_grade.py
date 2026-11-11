@@ -416,6 +416,11 @@ def test_no_rho_from_a_trace_the_grade_cannot_read_and_the_reason_says_how_it_is
     del lacking["record"]["trace"]["at"], lacking["record"]["trace"]["carried_scalars"]
     assert why(lacking, **here) == (f"refused: the search record's trace has no at, carried_scalars, which ρ reads; "
                                     f"{again}")
+    # a trace that was not taken is no refusal: nothing was found against the step, and the reason is the job's
+    for failed in ("the route's process was ended by SIGSEGV after it wrote the job's record",
+                   "RuntimeError: no trace today"):
+        assert why(traced([OVER, UNDER]), trace={"failed": failed}, **here) == (
+            f"unmeasured: the search record's trace was not taken ({failed}), and ρ reads a traced step; {again}")
     for search in (job([OVER, UNDER], split="search"), traced([OVER, UNDER], capture="0.1"),
                    traced([OVER, UNDER]) | {"record": traced([OVER, UNDER])["record"] | {"trace": refused}}):
         assert why(search).endswith(f"; {orphan}") and "python" not in why(search)

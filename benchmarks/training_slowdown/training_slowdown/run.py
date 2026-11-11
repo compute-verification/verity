@@ -58,14 +58,20 @@ refused.
 
 After the last step, outside the count, the job traces its route's step once for the grade (`trace_step`), among
 the run's last steps: the record's `trace` is what the capture measures of it, the product rows unpriced and the
-step's circuit, and a step the capture refuses is recorded as refused and leaves the job valid. `--retrace` takes a
-record's trace again with this tree's capture, from the record's own config text, for a record whose trace a later
-grade doesn't read.
+step's circuit, and a step the capture refuses is recorded as refused and leaves the job valid. The trace is the one
+part of a record a job can end without. The route's process writes its record twice: whole before it takes the
+trace, with why there is none in the trace's place (`trace.failed`), and again with the trace. So a trace that
+raises (its error is the reason) or that ends the process (the signal or the status is, `ended`) leaves the count,
+the digests and the scores of an untraced job: the job is as valid as they are, exits as one whose trace was taken,
+and says on stderr that it has none. A trace is read only of a route's process that exits with status 0. The grade
+reads such a record as unmeasured, with the reason. `--retrace` takes a record's trace again with this tree's
+capture, from the record's own config text, for a record whose trace a later grade doesn't read or that has none.
 
-Writes `OUT/run.json` (the count, the checkpoints, the flags, the config with its digest and text, the route, θ's
-digest, the trace and the job's label). No weights are kept by default: of the last checkpoint the job keeps E, the
-bytes that rebuild its output from θ, when E is under 50 MiB (`E_KEEP_BYTES`), and with `--keep-weights` the whole
-state. Torch
+Writes `OUT/run.json` once, when the route's process has ended: that process's record (the count, the checkpoints,
+the flags, the config with its digest and text, the route, θ's digest, the trace or why there is none, and the job's
+label) with the scores in, over every segment the job ran in; a job told to stop writes the record of the stop there
+instead. No weights are kept by default: of the last checkpoint the job keeps E, the bytes that rebuild its output
+from θ, under `OUT` when E is under 50 MiB (`E_KEEP_BYTES`), and with `--keep-weights` the whole state. Torch
 compilation is disabled and CUDA graph replay refused: both run work the counter can't see. For the same reason a run is
 invalid when it uses an op the counter can't price (flops.py), reads token data out of torch, starts a thread or a
 process, or imports a module that names a way around the dispatcher or that was written during the run (`Imports`).
@@ -117,6 +123,9 @@ E_KEEP_BYTES = 50 * 2**20
 #: the steps the trace's capture takes, the run's last (`trace_step`): the measured one, the one before it, which
 #: wrote the values it reads, and the one after it, which reads the values it makes
 TRACED_STEPS = 3
+#: the `trace.failed` of the record the route's process writes before it takes the trace: what a process that ends
+#: there leaves
+UNTRACED = "the route's process ended before it wrote the trace"
 
 
 class BudgetExceeded(RuntimeError):
@@ -490,9 +499,16 @@ class Harness:
                 v = check(fam.dir, rec, self.theta, rec["c"], n_sample=n, device=self.device, plan=fam.plan)
                 (fam.dir / "verified.json").write_text(json.dumps(v.to_json(), indent=1) + "\n")
                 rec["families"].append(v.to_json())
-        self._self_cpu(rec)
-        self.record.write_text(json.dumps(rec) + "\n")
+        self.write(rec)
         return rec
+
+    def write(self, rec: dict) -> None:
+        """`rec` as the run's record, whole or not at all: written beside the record, then moved into its place, so
+        a process that ends while it writes leaves the record that was there."""
+        self._self_cpu(rec)
+        part = self.record.with_name(self.record.name + ".part")
+        part.write_text(json.dumps(rec) + "\n")
+        os.replace(part, self.record)
 
 
 HERE = Path(__file__).resolve().parent
@@ -645,7 +661,8 @@ def trace_step(cfg: config.Config, route, model, optimizers, device: str) -> dic
     (`circuit`, `capture.circuit.measure`): the gradient's cut and one token group's partial, the carried state no
     token op reads, the update's profile and its cut, τ, a, and the shares of the step's gates in token ops (σ) and
     in ops an update reaches, at the gate prices of the code that took the trace. Nothing the formalism derives is in
-    it. A step the capture refuses gives {"refused": {"reason", "op", "message"}}.
+    it. A step the capture refuses gives {"refused": {"reason", "op", "message"}}; any other error is raised, and the
+    job records it in the trace's place ({"failed": why}, `inside`).
 
     The batch is traced as its inputs and each window's last target apart, so the token axes are the batch and the
     context, the tokens the counter counts a step."""
@@ -1022,7 +1039,9 @@ def outside(a: argparse.Namespace, argv: list[str]) -> int:
     without the store's key in its environment or on its disk (`routes_environment`), scores
     each state that process hands out, under the digest it hashes the state to itself, keeps what continuing needs
     where the job has a state directory (`Kept`), and writes the record with the scores in (`with_scores`) over
-    every segment the job ran in (`joined`). Told to stop (SIGTERM, to itself or to the route's process), it writes
+    every segment the job ran in (`joined`). A route's process that wrote its record and then ended badly, as it
+    took the trace, leaves a job without a trace: the record's `trace.failed` says how it ended (`ended`), and the
+    job is as valid as its record. Told to stop (SIGTERM, to itself or to the route's process), it writes
     the record of the stop (`stop_record`), ends the route's process and returns `STOPPED` with the state left;
     ending any other way it removes the state."""
     reg = starts.registry(a.starts)
@@ -1109,11 +1128,15 @@ def outside(a: argparse.Namespace, argv: list[str]) -> int:
         # the job ends by itself from here: with its record, or failed
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
         record = scratch / "run.json"
-        if child.returncode or not record.is_file():
+        if not record.is_file():
             if state:
                 state.clear()
             return child.returncode or 1
         rec = joined(prior, with_scores(json.loads(record.read_text()), scores))
+        if child.returncode:
+            # the record was whole before the trace began: the job is its count and its scores, without a trace
+            rec["trace"] = {"failed": f"the route's process {ended(child.returncode)} after it wrote the job's record"}
+            print(f"training_slowdown: {rec['trace']['failed']}: the record stands, without a trace", file=sys.stderr)
         a.out.mkdir(parents=True, exist_ok=True)
         (a.out / "run.json").write_text(json.dumps(rec) + "\n")
         if state:
@@ -1136,6 +1159,16 @@ def outside(a: argparse.Namespace, argv: list[str]) -> int:
         shutil.rmtree(scratch, ignore_errors=True)
 
 
+def ended(status: int) -> str:
+    """How a process ended whose `returncode` is `status`, not 0: by which signal, or with which status."""
+    if status > 0:
+        return f"exited with status {status}"
+    try:
+        return f"was ended by {signal.Signals(-status).name}"
+    except ValueError:
+        return f"was ended by signal {-status}"
+
+
 def with_scores(rec: dict, scores: list[tuple[str, dict]]) -> dict:
     """The route's process's record with each checkpoint's score in, where the states scored, each by the digest the
     job's own process hashed it to, are its checkpoints' outputs one for one; else the record, invalid."""
@@ -1155,7 +1188,8 @@ def inside(a: argparse.Namespace) -> int:
     hashes to as it holds it, before it imports the route; then it names its config's digest. The job's own process
     ends it at the first when the tensors aren't what the record of the segment that kept them states, and at the
     second when the kept state is another config's. Then it trains as the module's docstring says, from θ or from
-    the kept tensors, and leaves its record, the checkpoints unscored, in the job's scratch directory."""
+    the kept tensors, and leaves its record, the checkpoints unscored, in the job's scratch directory: once before
+    it takes the trace (`trace.failed`: `UNTRACED`) and once with the trace, or with the error the trace raised."""
     reg = starts.registry(a.starts)
     hidden = sandbox.final_sets(reg)
     if reached := sandbox.refusals([*hidden, *([a.state.resolve()] if a.state is not None else [])]):
@@ -1215,11 +1249,19 @@ def inside(a: argparse.Namespace) -> int:
                 train(te, cfg, route, stream, model, optimizers, state)
             except BudgetExceeded as e:
                 stopped = str(e)
-        # after the last checkpoint and outside the count: nothing the trace runs reaches the record's count or scores
-        meta["trace"] = trace_step(cfg, route, model, optimizers, a.device)
-    if stopped:
-        meta["stopped"] = stopped
-    te.finish(meta, imports.problems())
+        if stopped:
+            meta["stopped"] = stopped
+        # the record is written before the trace is taken, so nothing the trace runs reaches its count or its
+        # scores, and a trace that ends this process (a step can corrupt the heap the capture runs it on) leaves it
+        found = imports.problems()
+        rec = te.finish(meta | {"trace": {"failed": UNTRACED}}, found)
+        try:
+            rec["trace"] = trace_step(cfg, route, model, optimizers, a.device)
+        except Exception as e:  # noqa: BLE001  (whatever the trace raises, the record stands, and says it)
+            rec["trace"] = {"failed": f"{type(e).__name__}: {e}"}
+    # a module the trace imported is screened as the job's
+    rec["invalid"] = imports.problems() + rec["invalid"][len(found):]
+    te.write(rec)
     return 0
 
 
@@ -1235,7 +1277,8 @@ def report(rec: dict) -> int:
         {k: cp.get(k) for k in ("step", "macs", "bpb", "e_bytes", "source")} for cp in rec["checkpoints"]],
         "flags": rec["flags"], "invalid": rec["invalid"], "families": [
             {k: f[k] for k in ("family", "passed", "failed", "covers")} for f in rec["families"]],
-        "trace": {"refused": tr["refused"]} if "refused" in tr else {k: tr.get(k) for k in ("capture", "tokens")}}))
+        "trace": next(({k: tr[k]} for k in ("refused", "failed") if k in tr),
+                      {k: tr.get(k) for k in ("capture", "tokens")})}))
     return 1 if rec["invalid"] else 0
 
 

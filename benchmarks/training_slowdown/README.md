@@ -172,10 +172,19 @@ aren't the run's first steps, the first of them reads the run's own weights, not
 step a circuit, which the trace keeps as the capture measures it (`circuit`: the gradient's cut and a token group's
 partial, the carried state, τ, a, the update's profile, and the shares of its gates in token ops and in ops an update
 reaches, at the gate prices of the code that took it), with that code's version (`capture_code`). A step the capture
-refuses is recorded as refused, and the job stays valid.
+refuses is recorded as refused, and the job stays valid. A step that deep-copies the model, a parameter or an
+optimizer is refused so (`deep_copy`): the trace runs on tensors without data, and a step that needs the weights as
+they were copies the state dict.
 
-A job's output holds no weights by default: its record, and its last checkpoint's E when E is under 50 MiB. The
-command's `--weights` makes each job it runs keep its last checkpoint's whole state too.
+A job has its record whether or not its trace is taken. The route's process writes the record whole before the
+trace and again with it, so a trace that raises, or that ends the process, leaves the count, the digests and the
+scores, with the reason where the trace would be (`trace.failed`: the error, or the signal or status the process
+ended with). Such a job is as valid as its count, exits as one whose trace was taken and says on stderr that it has
+none; the grade reads its ρ as unmeasured, with the reason.
+
+A job's output is its record, `OUT/run.json`, which its own process writes once, when the route's process has ended,
+with the scores in. It holds no weights by default: beside the record, its last checkpoint's E when E is under
+50 MiB. The command's `--weights` makes each job it runs keep its last checkpoint's whole state too.
 
 Run the `python -m` commands from this directory. A start and its data are read where `starts.toml` says a node holds them, and checked
 against it; elsewhere, `research data fetch ART --path starts/NAME/theta.safetensors` (and its `start.json`) gets a
@@ -218,7 +227,9 @@ name that is neither is refused. p is read on the final set where the attack and
 record, else on the search split, and the block says which. A search record with no trace, with one the capture
 refused, or with one of a capture version the tree's `priced` doesn't read has no ρ, and then there is no S: the
 reason names the job that takes the trace again at the record's commit and `config.text` (`--retrace`, above, which
-takes it with the capture of the tree it runs in), or says the record has no config to re-trace from. A record's
+takes it with the capture of the tree it runs in), or says the record has no config to re-trace from. A record
+whose trace was not taken (`trace.failed`) has none either, and its ρ is "unmeasured", not "refused", with why the
+trace failed and the same job: the step was not refused, the process that traced it ended or raised. A record's
 `provenance`, where it has one (no job writes it), is passed on unread, beside the record and in what S rests on.
 
 ## Limits of the count

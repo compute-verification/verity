@@ -1,5 +1,8 @@
+import copy
 import hashlib
 import json
+import signal
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -406,6 +409,119 @@ def test_a_step_the_capture_refuses_is_recorded_as_refused(tmp_path):
     tr = run.trace_step(cfg, Branching, model, optimizers, "cpu")
     assert set(tr) == {"refused"} and set(tr["refused"]) == {"reason", "op", "message"}
     assert tr["refused"]["reason"] == "dynamic_control_flow" and "reads a tensor's value" in tr["refused"]["message"]
+
+
+def test_a_step_that_deep_copies_the_model_is_recorded_as_refused_with_what_to_write_instead(tmp_path):
+    """A route's step that deep-copies its model can't be traced, and the copy would end the process that tried:
+    the trace says so before any tensor is copied, with the line and the state dict's copy the step is to take."""
+    cfg = config.load(write_config(tmp_path / "a.toml"), starts.registry(tiny_registry(tmp_path / "reg")))
+    route = config.route(cfg.route)
+
+    class Copying:
+        @staticmethod
+        def step(model, rows, optimizers, dials, t, n):
+            was = copy.deepcopy(model)
+            route.step(model, rows, optimizers, dials, t, n)
+            return was
+
+    tr = run.trace_step(cfg, Copying, *route.build(cfg.start.shape, cfg.dials), "cpu")
+    assert set(tr) == {"refused"} and (tr["refused"]["reason"], tr["refused"]["op"]) == ("deep_copy", None)
+    assert "copy the state dict instead, {k: v.detach().clone() for k, v in model.state_dict().items()}" in \
+        tr["refused"]["message"] and "in step: was = copy.deepcopy(model)" in tr["refused"]["message"]
+
+
+def test_a_processs_status_says_how_it_ended():
+    assert run.ended(-signal.SIGKILL) == "was ended by SIGKILL" and run.ended(-signal.SIGSEGV) == "was ended by SIGSEGV"
+    assert run.ended(245) == "exited with status 245" and run.ended(-200) == "was ended by signal 200"
+
+
+#: what a job's record holds of clocks: no two runs of one job agree on them
+CLOCKS = {"cpu_s", "wall_s", "gpu_s", "process_cpu_s", "process_wall_s", "children_cpu_s", "self_cpu_s"}
+
+
+def unclocked(x):
+    if isinstance(x, dict):
+        return {k: unclocked(v) for k, v in x.items() if k not in CLOCKS}
+    return [unclocked(v) for v in x] if isinstance(x, list) else x
+
+
+def test_the_routes_process_writes_its_record_before_it_traces_and_a_trace_that_raises_is_the_traces_reason(
+        tmp_path, monkeypatch):
+    """The route's process has its record on disk, whole, when the trace begins, with why there is no trace where
+    the trace goes; a trace that raises leaves that record with its error as the reason, and the process ends well.
+    A module the trace imported is still screened as the job's. In this process, the sandbox's check stood in for."""
+    reg, scratch, sneaky = tiny_registry(tmp_path / "reg"), tmp_path / "scratch", tmp_path / "written_as_it_ran.py"
+    scratch.mkdir()
+    argv = ["--config", write_config(tmp_path / "a.toml"), "--seed", 0, "--split", "search", "--out",
+            tmp_path / "out", "--starts", reg, "--device", "cpu", "--inside", scratch]
+    monkeypatch.setattr(run.sandbox, "refusals", lambda hidden: [])
+    monkeypatch.syspath_prepend(tmp_path)
+    seen = []
+
+    def trace(*a):
+        seen.append(json.loads((scratch / "run.json").read_text()))
+        sneaky.write_text("")
+        import written_as_it_ran   # noqa: F401
+        raise RuntimeError("no trace today")
+
+    monkeypatch.setattr(run, "trace_step", trace)
+    assert run.main(argv) == 0 and [p.name for p in scratch.iterdir()] == ["run.json"]
+    rec = json.loads((scratch / "run.json").read_text())
+    (before,), screened = seen, rec.pop("invalid")
+    assert before.pop("trace") == {"failed": run.UNTRACED} and rec.pop("trace") == {"failed": "RuntimeError: no trace today"}
+    assert before.pop("invalid") == [] and len(screened) == 1 and screened[0].startswith(
+        "modules the job imported break the route contract: ['written_as_it_ran (") and "written during the run" in screened[0]
+    assert unclocked(before) == unclocked(rec) and len(rec["steps"]) == 3 and rec["totals"]["macs"] > 0
+    assert [cp["step"] for cp in rec["checkpoints"]] == [0, 1, 2] and all(cp["output_sha256"] for cp in rec["checkpoints"])
+
+
+STANDIN = """#!{python}
+import os, signal, sys
+if sys.argv[1:3] != ["-m", "training_slowdown.run"]:
+    os.execv({python!r}, [{python!r}, *sys.argv[1:]])
+import training_slowdown.capture as capture
+from training_slowdown import run
+
+def ends(*a, **k):
+    {how}
+
+capture.capture_steps = ends
+sys.exit(run.main(sys.argv[3:]))
+"""
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("how, ended", [("os.kill(os.getpid(), signal.SIGKILL)", "was ended by SIGKILL"),
+                                        ("os._exit(245)", "exited with status 245")])
+def test_a_job_whose_routes_process_ends_as_it_takes_the_trace_writes_its_record_without_one(
+        ran, tmp_path, monkeypatch, capfd, how, ended):
+    """A route's process that is killed while it takes the trace, or leaves there with a status, leaves a job with
+    its record: the count, the outputs' digests and the scores of the job whose trace was taken, valid, with how the
+    process ended where the trace would be, and the job says so and exits as that job does. The route's process is
+    the job's own but for the capture, which ends the process it runs in. Slow: a job as a node runs it, and only
+    that shows the job's own process reading its child's end."""
+    standin = tmp_path / "bin" / "python"
+    standin.parent.mkdir()
+    standin.write_text(STANDIN.format(python=sys.executable, how=how))
+    standin.chmod(0o755)
+    monkeypatch.setattr(run.sys, "executable", str(standin))
+    rec, _, _, out = run_job(tmp_path / "job")
+    why = f"the route's process {ended} after it wrote the job's record"
+    assert rec["trace"] == {"failed": why} and rec["invalid"] == [] and "stopped" not in rec
+    assert f"training_slowdown: {why}: the record stands, without a trace" in capfd.readouterr().err
+    whole = ran[0]
+    assert "capture" in whole["trace"] and rec["training_slowdown"] == whole["training_slowdown"] == VERSION
+
+    def count(r):
+        return (r["totals"]["macs"], r["theta_sha256"], r["config"], r["c"], [(s["step"], s["tokens"], s["macs"], s["by"])
+                                                                             for s in r["steps"]])
+
+    def outputs(r):
+        return [(cp["step"], cp["macs"], cp["output_sha256"], cp["bpb"], cp["e_bytes"], cp.get("e_sha256"))
+                for cp in r["checkpoints"]]
+
+    assert count(rec) == count(whole) and outputs(rec) == outputs(whole) and all(cp["bpb"] for cp in rec["checkpoints"])
+    assert sorted(p.name for p in out.iterdir()) == ["e", "run.json"]
 
 
 def test_each_checkpoint_of_a_registered_start_is_scored_on_the_jobs_split(tmp_path):

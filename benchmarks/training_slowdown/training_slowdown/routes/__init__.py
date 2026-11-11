@@ -24,6 +24,12 @@ functions' arguments, and imports from `training_slowdown` only `codecs` and `mo
 (`from ._optimizers import Lion`, `from . import subset`), which is held to the same screen. A module whose name
 starts with `_` is no route: no config names it.
 
+A step copies a state dict, never the module: where it needs the weights as they were, it takes
+`{k: v.detach().clone() for k, v in model.state_dict().items()}`. A job's trace runs `step` on tensors without data
+(`training_slowdown.capture`), which have nothing a deep copy can copy, so the capture refuses a step that deep-copies
+the model, one of its parameters or an optimizer (`copy.deepcopy`), naming the line: the job stays valid and has no
+trace, so no ρ.
+
 A job may stop after any checkpoint and continue in another process, which calls `build` again and then gets back
 what the job kept (`run.resume_state`): the model's `state_dict`, each optimizer's `state_dict`, and torch's, numpy's
 and Python's global generators. So a route carries from one step to the next only those. Anything else it would
