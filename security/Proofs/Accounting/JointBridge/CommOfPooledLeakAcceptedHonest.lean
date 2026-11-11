@@ -60,6 +60,12 @@ open Claims Claims.Sampling NetTiming Accounting.JointBridge Accounting.NetWitne
 open NetTiming.Witness (notLay obs1 notLay_fits notProg_val)
 open Claims.Witness.SamplingGeneric (notProg)
 
+/-- `negStmt` is the witnesses' `notStmt`, restated among the definitions: an edit to either side fails this file. -/
+theorem negStmt_eq_notStmt : negStmt = Claims.Witness.SamplingGeneric.notStmt := rfl
+
+/-- `negPart` is the witnesses' `notPart`, restated among the definitions: an edit to either side fails this file. -/
+theorem negPart_eq_notPart : negPart = Claims.Witness.SamplingGeneric.notPart := rfl
+
 /-- At ingress `false` the circuit that negates its ingress puts a frame of no bits on its link. -/
 theorem notProg_row (a : ℕ → Bool) (ℓ σ : Fin 1) :
     rowOf (valOver notProg (notLay.inputOf 1 [[false]] a) (fun _ => none)) (notLay.egress 0 ℓ) σ = some [] := by
