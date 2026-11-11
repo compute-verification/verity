@@ -16,9 +16,12 @@ inputs = [
     "adapters/vllm/verity_vllm/__init__.py",
     "adapters/vllm/verity_vllm/engine/__init__.py",
     "adapters/vllm/verity_vllm/engine/hooks.py",
+    "adapters/vllm/verity_vllm/errors.py",
     "adapters/vllm/verity_vllm/pipeline/__init__.py",
     "adapters/vllm/verity_vllm/pipeline/serve_admit.py",
     "adapters/vllm/verity_vllm/pipeline/tick_plugin.py",
+    # `CUT`'s traces load the carried pool's cut (tests/test_tick_corpus.py takes each trace's VERITY_CUT through it)
+    "adapters/vllm/verity_vllm/pipeline/cut_plugin.py",
     "adapters/vllm/verity_vllm/settings.py",
     # `verity.protocols.certifier.verifier.release` (tests/test_tick_corpus.py): the release headers and the watermark as
     # the network certifier makes them, which the server's feed reads in a warden trace under `--admit tick`, and its

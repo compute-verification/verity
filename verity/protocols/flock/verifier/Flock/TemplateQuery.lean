@@ -80,53 +80,6 @@ def Desc.parseWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [Monad
 
 def Desc.parse (bytes : ByteArray) : V Desc := Desc.parseWith (fun b => pure (Sha512.hash b)) bytes
 
-/-- `Desc.parseWith` from the descriptor's bytes as `Program.readJson` read them (`Desc.parseWith_eq_of`). -/
-def Desc.parseOfWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (sha512 : ByteArray → M ByteArray)
-    (read : Option (Except String Json)) : M Desc := do
-  let some parsed := read | throw "program: not UTF-8"
-  let j ← match parsed with
-    | .ok j => pure j
-    | .error e => throw s!"program: not JSON: {e}"
-  if (j.getObjValAs? String "schema").toOption != some "verity-ir/descriptor/v1" then
-    throw "program: not a verity-ir/descriptor/v1 descriptor"
-  let bare := match j with
-    | .obj kvs => Json.mkObj (kvs.toArray.filter (·.1 != "annotations")).toList
-    | x => x
-  let callees ← match j.getObjVal? "callees" with
-    | .ok (.arr a) => a.mapM fun c => match c.getStr? with | .ok s => pure s | .error _ => throw "program: a callee is not a string"
-    | _ => throw "program: callees"
-  let defs ← match j.getObjVal? "definitions" with
-    | .ok (.obj kvs) => kvs.toArray.mapM fun (id, dj) => do
-      let form := (dj.getObjValAs? String "form").toOption.getD ""
-      if form == "primitive" then pure (id, ({ prim := true, nodes := #[] } : DDef))
-      else if form == "composite" then
-        let nodes ← match (dj.getObjVal? "body").toOption.bind (fun b => (b.getObjVal? "nodes").toOption) with
-          | some (.arr ns) => ns.mapM fun nj => do
-            let form := (nj.getObjValAs? String "form").toOption.getD ""
-            let some fn := (nj.getObjValAs? Nat "fn").toOption | throw s!"program: {id}: a node without a callee"
-            if fn ≥ callees.size then throw s!"program: {id}: a node's callee is outside callees"
-            pure ({ form, fn, n := (nj.getObjValAs? Nat "n").toOption.getD 1 } : DNode)
-          | _ => throw s!"program: {id}: a composite without body nodes"
-        pure (id, ({ prim := false, nodes } : DDef))
-      else throw s!"program: {id}: an unknown definition form {form}"
-    | _ => throw "program: definitions"
-  let some root := (j.getObjValAs? String "root").toOption | throw "program: root"
-  if (defs.find? (·.1 == root)).isNone then throw "program: the root is not a definition"
-  return { callees, defs, root, sha512 := ← sha512 (← canon bare).toUTF8 }
-
-theorem Desc.parseWith_eq_of {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M]
-    (sha512 : ByteArray → M ByteArray) (bytes : ByteArray) :
-    Desc.parseWith sha512 bytes = Desc.parseOfWith sha512 (Program.readJson bytes) := by
-  unfold Desc.parseWith Desc.parseOfWith Program.readJson
-  generalize String.fromUTF8? bytes = o
-  cases o <;> rfl
-
-/-- `Desc.parse` from the descriptor's bytes as `Program.readJson` read them (`Desc.parse_eq_of`). -/
-def Desc.parseOf (read : Option (Except String Json)) : V Desc := Desc.parseOfWith (fun b => pure (Sha512.hash b)) read
-
-theorem Desc.parse_eq_of (bytes : ByteArray) : Desc.parse bytes = Desc.parseOf (Program.readJson bytes) :=
-  Desc.parseWith_eq_of _ bytes
-
 /-- The descriptor as the template queries read it, from the program `Program.decode` decoded: its definitions in the
 decoder's order, each node naming its callee by that order, so `callees` is the definitions' keys. At every definition the
 root reaches it reads what `Desc.parse` reads from the same bytes; it holds no definition or callee the program doesn't
