@@ -319,6 +319,26 @@ def test_the_stop_block_reads_ignore_eos_off_the_request_row_and_takes_no_stop_i
         (_word(2, 1), _word(4, 2))
 
 
+def test_the_stop_block_at_the_registered_class_is_the_rules_reference():
+    """`egress_stop` at GLM-5.3's three stop ids, a model of 131,072 ids and a cap of 1,024, where circuit-check
+    compares no realization with the reference: the block's output is `StopRule16_v1`'s reference on a stop id first,
+    in the middle and last, on ``max_tokens`` under the cap and at it, past the cap (finish 0), at the model's length
+    and under ``ignore_eos``; and `Stop.word` is that output for a span served so."""
+    glm = BS.Stop((154820, 154827, 154829), 131072, 1024)
+    cases = [((154820, 5, 5), 1024, 3, False, (1, 1)), ((*[9] * 500, 154827, 9), 1024, 3, False, (501, 1)),
+             ((*[9] * 1023, 154829), 1024, 3, False, (1024, 1)), ((9,) * 700, 700, 3, False, (700, 2)),
+             ((9,) * 1024, 1024, 3, False, (1024, 2)), ((9,) * 1024, 2000, 3, False, (1024, 0)),
+             ((9,) * 72, 1024, 131000, False, (72, 3)), ((*[9] * 10, 154820, *[9] * 5), 16, 3, True, (16, 2))]
+    for ids, mt, lp, ignores, (n, finish) in cases:
+        s = _ended("x", ids, "length", mt, tuple(range(lp)), ignore_eos=ignores)
+        stops = (stop_check.NOT_AN_ID,) if ignores else glm.ids
+        assert _block(glm, s) == _word(n, finish) == stop_rule.reference16(
+            [*ids, *[0] * (glm.outputs - len(ids))], mt, stops, lp, glm.max_model_len), (n, finish)
+    assert glm.word(_ended("s", (*[9] * 500, 154827), "stop", 1024)) == _word(501, 1)
+    assert glm.word(_ended("l", (9,) * 72, "length", 1024, tuple(range(131000)))) == _word(72, 3)
+    assert glm.word(_ended("p", (9,) * 1024, "length", 2000)) is None
+
+
 def test_a_stop_class_takes_a_span_only_as_the_rule_ends_it():
     """`Stop.word` is None, and the span in no stop class, for an abort, an error, a request still running, an end that
     isn't the rule's and a ``min_tokens`` other than 0, which the rule doesn't read."""
