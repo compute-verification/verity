@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.SessionLoop.Concrete.Fwd
 public import Proofs.Flock.SessionLoop.ConcreteNet
+public import Proofs.Flock.Soundness.Refine.Walk
 public import Properties.Flock.Nets
 public import Flock
 public import VStar.Unit
@@ -182,7 +183,7 @@ def unitLaid : HmNets.Laid :=
 
 def mjC : Json := (JsonParse.parseList metaChars).toOption.getD .null
 
-theorem meta_parse : JsonParse.parseList metaChars = .ok mjC := by kernel_rfl'
+theorem meta_parse : JsonParse.parseList metaChars = .ok mjC := by kernel_rfl
 
 def t0 : Tags := Tags.circuitEb90718f
 def coins0 : Coins := .tree (Zk.coinSpec (t0.tableNames 1))
@@ -368,7 +369,7 @@ end
 def sparse9 (r : Array (Array Nat)) : Sparse := (Sparse.ofRows r (2 ^ 9)).toOption.getD default
 def UN : Net := { built "copy16" 257 ⟨0, 1, #[16]⟩ ⟨1, 1, #[16]⟩ 1 (sparse9 unitLaid.ra) (sparse9 unitLaid.rb) with unitLog := 9 }
 
-theorem unit_netOf : HmNets.netOf "copy16" unitLaid = .ok UN := by kernel_rfl'
+theorem unit_netOf : HmNets.netOf "copy16" unitLaid = .ok UN := by kernel_rfl
 
 theorem tok_copy16 : FlockDeploy.ConcreteNet.Tok "copy16" := ⟨by decide, by simp [NoWs]⟩
 
