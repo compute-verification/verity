@@ -13,7 +13,7 @@ import pytest
 import torch
 from synthetic import SCORE_REL, tiny_registry, write_config
 
-from training_slowdown import NO_STATE, NOTHING, TOLD, VERSION, config, grade, run, starts, stop_record, told
+from training_slowdown import NOTHING, TOLD, VERSION, config, grade, run, starts, stop_record, told
 from training_slowdown.data import Data
 
 #: what depends on when a job ran, not on what it computed: its times, and the flags read from them
@@ -45,15 +45,26 @@ def scored(cp: dict) -> dict:
 def assert_continues(whole: dict, cut: dict, at: int, keyed: bool = True) -> None:
     """`cut`, a job stopped and continued from step `at`, records what `whole`, the unbroken one, does: every step's
     count, every checkpoint's digests, its score to within `SCORE_REL` (`scored`), and everything else but its
-    times, its segments and the route's build, which the second segment ran and counted again."""
-    again = cut["setup"]["macs"] - whole["setup"]["macs"]
+    times, its segments and what it counted outside its steps: the route's build, which the second segment ran and
+    counted again, and under a route's `output` that computes (`lora`'s) the output at the checkpoint the job
+    stopped at. The unbroken job counts that in step `at`; the stopped one counted it after its last kept step, so
+    `cut` holds it outside the steps and its step `at` is short of exactly it. It is what each checkpoint's output
+    counts, the last one's among them: the unbroken job's tail."""
+    build, output = whole["setup"]["macs"], whole["tail"]
     assert [(s["first"], s["steps"]) for s in cut["segments"]] == [(0, at), (at, len(whole["steps"]) - at)]
     assert [(s["first"], s["steps"]) for s in whole["segments"]] == [(0, len(whole["steps"]))]
-    assert sum(s["macs"] for s in cut["segments"]) == cut["totals"]["macs"] == whole["totals"]["macs"] + again
-    assert again == whole["setup"]["macs"] > 0
+    assert sum(s["macs"] for s in cut["segments"]) == cut["totals"]["macs"] == whole["totals"]["macs"] + build
+    assert cut["setup"]["macs"] == 2 * build + output["macs"] and build > 0
     a, b = timeless(whole, keyed), timeless(cut, keyed)
+    if output["macs"]:
+        short, full = b["steps"][at], a["steps"][at]
+        counts, by = ("macs", "matmul_macs", "elementwise_macs", "approx_macs"), ("by", "device_macs")
+        assert {k: short[k] + output[k] for k in counts} == {k: full[k] for k in counts}
+        assert {k: run._added(short[k], output[k]) for k in by} == {k: full[k] for k in by}
+        assert short["struct"] != full["struct"]
+        b["steps"][at] = short | {k: full[k] for k in (*counts, *by, "struct")}
     assert b["steps"] == a["steps"] and [s["step"] for s in b["steps"]] == list(range(len(b["steps"])))
-    assert [cp | {"macs": cp["macs"] - again * (cp["step"] >= at)} for cp in b["checkpoints"]] == [
+    assert [cp | {"macs": cp["macs"] - build * (cp["step"] >= at)} for cp in b["checkpoints"]] == [
         scored(cp) for cp in a["checkpoints"]]
     assert b["structures"].items() >= a["structures"].items()
 
@@ -128,6 +139,60 @@ def test_a_kept_state_without_its_optimizers_state_continues_to_other_weights(ti
     assert all(a["output_sha256"] != b["output_sha256"] for a, b in zip(again["checkpoints"], rest["checkpoints"]))
 
 
+def test_a_kept_state_with_other_buffers_than_the_route_built_is_refused(tiny, stopped):
+    """The model's buffers outside its state dict come back by name: a state that holds others than `build`
+    registered is another model's."""
+    assert sorted(stopped["state"]["buffers"]) == ["cos", "sin"]
+    for buffers, held in (({}, r"\[\]"), (stopped["state"]["buffers"] | {"average_0": torch.zeros(2)},
+                                           r"\['average_0', 'cos', 'sin'\]")):
+        with pytest.raises(SystemExit, match=rf"the kept state holds the buffers {held} outside the model's state "
+                                             rf"dict and the route built \['cos', 'sin'\]"):
+            segment(tiny, {"step": 2}, stopped["state"] | {"buffers": buffers})
+
+
+#: the routes with an `output`, each with dials for the tiny start
+OUTPUTS = {"ema": {"trainable": "blocks.0.w_*", "lr": 1e-2, "ema_decay": 0.9},
+           "lora": {"targets": "blocks.0.w_*.weight", "rank": 2, "lr": 1e-2}}
+
+
+def bare(state: dict) -> dict:
+    """A kept state without what a route with an `output` carries beside the weights θ holds: `ema`'s averages and
+    `lora`'s B, each zeros, as `build` leaves it."""
+    def zeros(tensors: dict, named) -> dict:
+        return {k: torch.zeros_like(v) if named(k) else v for k, v in tensors.items()}
+    return state | {"buffers": zeros(state["buffers"], lambda k: k.startswith("average_")),
+                    "model": zeros(state["model"], lambda k: k.endswith(".b"))}
+
+
+@pytest.mark.parametrize("route", sorted(OUTPUTS))
+def test_a_job_of_a_route_with_an_output_keeps_the_model_it_trains_and_continues_as_the_unbroken_job(
+        tmp_path, route):
+    """The harness alone, in one process. Under a route's `output` a checkpoint scores the output model (`ema` an
+    average of the weights, `lora` its adapters merged into theirs), which is not what the route's next step reads.
+    What the job keeps is the model the route trains, whose digest each checkpoint states beside its output's, and
+    the model's buffers outside its state dict, where `ema` carries its averages. The segment that continues from
+    it, served fresh windows from the kept position, ends at the unbroken job's outputs bit for bit, and the two
+    records joined are the unbroken job's (`assert_continues`); without what the route carries beside θ's weights
+    (`bare`) it ends at other outputs."""
+    reg = tiny_registry(tmp_path / "reg", read=(1,))
+    tiny = tmp_path, reg, write_config(tmp_path / "a.toml", route=route, budget=BUDGET, windows="fresh",
+                                       dials=OUTPUTS[route])
+    whole = run.joined(None, segment(tiny))
+    assert whole["invalid"] == [] and len({cp["output_sha256"] for cp in whole["checkpoints"]}) == 4
+    cut = segment(tiny, stop_after=1)
+    kept, last = cut["state"], cut["record"]["checkpoints"][-1]
+    assert last["step"] == 1 and run.theta_sha256(kept["model"]) == last["trained_sha256"] != last["output_sha256"]
+    assert [k for k in kept["buffers"] if k.startswith("average_")] == ["average_0", "average_1", "average_2"] * (
+        route == "ema")
+    rest = segment(tiny, {"step": 2}, kept)
+    both = run.joined(run.joined(None, cut["record"]), rest)
+    assert both["invalid"] == [] and both["windows"] == whole["windows"]
+    assert_continues(whole, both, at=2)
+    assert (whole["tail"]["macs"] > 0) == (route == "lora")
+    other = segment(tiny, {"step": 2}, bare(kept))
+    assert all(a["output_sha256"] != b["output_sha256"] for a, b in zip(other["checkpoints"], rest["checkpoints"]))
+
+
 def test_the_generators_a_step_may_read_come_back_as_they_were_kept():
     import random
 
@@ -178,8 +243,8 @@ def test_each_part_of_a_kept_state_has_a_sha512_of_its_own(stopped):
     """One bit of a part changed moves that part's digest and no other's; a mapping's order and a tuple written as
     a list move none."""
     whole = run.kept_sha512(stopped["state"])
-    assert sorted(whole) == ["generators", "model", "optimizers", "stream"]
-    assert all(len(d) == 128 and int(d, 16) >= 0 for d in whole.values()) and len(set(whole.values())) == 4
+    assert sorted(whole) == ["buffers", "generators", "model", "optimizers", "stream"]
+    assert all(len(d) == 128 and int(d, 16) >= 0 for d in whole.values()) and len(set(whole.values())) == 5
     for part in whole:
         got = run.kept_sha512(changed(stopped["state"], part))
         assert [k for k in whole if got[k] != whole[k]] == [part]
@@ -393,39 +458,19 @@ def test_a_job_that_asked_for_fresh_windows_stopped_and_run_again_is_served_the_
     assert [(cp["output_sha256"], cp["e_sha256"]) for cp in cut["checkpoints"]] == states and len(set(states)) == 4
 
 
-#: the routes with an `output`, each with dials for the tiny start
-OUTPUTS = {"ema": {"trainable": "blocks.0.w_*", "lr": 1e-2, "ema_decay": 0.9},
-           "lora": {"targets": "blocks.0.w_*.weight", "rank": 2, "lr": 1e-2}}
-
-
-def stop_once_scored(monkeypatch, step: int):
-    """Tell the job to stop (SIGTERM) once its own process has scored the checkpoint of `step`: a job that keeps no
-    state has nothing later to be stopped at."""
-    score, scores = run.Evaluator.__call__, []
-
-    def stop_after(self, state, weights_digest):
-        scores.append(score(self, state, weights_digest))
-        if len(scores) == step + 1:
-            os.kill(os.getpid(), signal.SIGTERM)
-        return scores[-1]
-
-    monkeypatch.setattr(run.Evaluator, "__call__", stop_after)
-
-
 @pytest.mark.slow
 @pytest.mark.parametrize("route", sorted(OUTPUTS))
-def test_a_stopped_job_of_a_route_with_an_output_starts_again_and_writes_the_unbroken_jobs_record(
-        tmp_path, fresh, monkeypatch, capfd, route):
-    """The job as a node runs it, three times, each two processes, so slow: that a job keeps no state is decided in
-    the route's process, where it imports the route, and said to the job's own process, which no test of the harness
-    alone reaches. A route with an `output` hands out its output model at a checkpoint (`ema` an average, `lora`
-    its adapters merged into their weights): a job that continued from it would train on from other weights than an
-    unbroken one, and its record would be valid. So: an unbroken job that asked for fresh windows, whose record says
-    it keeps no state; the same job told to stop (SIGTERM) once the checkpoint of step 1 is scored, which leaves the
-    record of its stop, saying the same, and nothing in its state directory; and the stopped job again, which starts
-    from θ and writes the unbroken job's record in one segment: every step's count, every checkpoint's output bit
-    for bit, and the windows served step for step, none of them one the start read, and none left out for having
-    been served to the run that was stopped."""
+def test_a_stopped_job_of_a_route_with_an_output_continues_and_writes_the_unbroken_jobs_record(
+        tmp_path, fresh, monkeypatch, route):
+    """The job as a node runs it, three times, each two processes, so slow: what the quick test of the harness alone
+    doesn't reach is the kept model on its way through the job's own process, which holds it to the record's last
+    checkpoint by the digest of the model the route trains and not of the output it scored (`Kept.load`), and into
+    a route's process that built its model anew. A route with an `output` hands out its output model at a
+    checkpoint (`ema` an average, `lora` its adapters merged into their weights). So: an unbroken job that asked
+    for fresh windows; the same job told to stop (SIGTERM) once it has kept its state after step 1, whose state
+    holds the trained model, not the output; and the stopped job again, which continues in a second segment and
+    writes the unbroken job's record: every step's count (`assert_continues`), every checkpoint's output bit for
+    bit, and the windows served step for step, none of them one the start read."""
     _, reg, _ = fresh
     path = write_config(tmp_path / "a.toml", route=route, budget=BUDGET, windows="fresh", dials=OUTPUTS[route])
 
@@ -436,26 +481,26 @@ def test_a_stopped_job_of_a_route_with_an_output_starts_again_and_writes_the_unb
     assert job("whole", "state-whole") == 0 and not (tmp_path / "state-whole").exists()
     whole = json.loads((tmp_path / "whole" / "run.json").read_text())
     served = whole["windows"]["served"]
-    assert whole["invalid"] == [] and whole["no_state"] == NO_STATE and "kept" not in whole["segments"][0]
+    assert whole["invalid"] == [] and len(whole["segments"]) == 1
     assert len(served) == 4 and whole["windows"]["rounds"] == 1 and not {2} & {i for step in served for i in step}
-    assert f"training_slowdown: {NO_STATE}\n" in capfd.readouterr().err
 
     with monkeypatch.context() as stopping:
-        stop_once_scored(stopping, 1)
+        stop_once_kept(stopping, 1)
         assert job("cut", "state") == run.STOPPED
-    assert json.loads((tmp_path / "cut" / "run.json").read_text()) == stop_record(0, "final") | {"no_state": NO_STATE}
-    assert not any((tmp_path / "state").iterdir())
-    assert f"it kept no state in {tmp_path / 'state'}, so its next run starts again from θ" in capfd.readouterr().err
+    assert told(json.loads((tmp_path / "cut" / "run.json").read_text()))
+    so_far = json.loads((tmp_path / "state" / "state.json").read_text())["record"]
+    last, kept = so_far["checkpoints"][-1], torch.load(tmp_path / "state" / "tensors-0000001.pt", weights_only=True)
+    assert last["step"] == 1 and run.theta_sha256(kept["model"]) == last["trained_sha256"] != last["output_sha256"]
+    assert so_far["segments"][-1]["kept"] == run.kept_sha512(kept) and sorted(kept) == [
+        "buffers", "generators", "model", "optimizers", "stream"]
+    assert (so_far["windows"]["served"], so_far["windows"]["rounds"]) == (served[:2], 0)
 
     assert job("cut", "state") == 0 and not (tmp_path / "state").exists()
     cut = json.loads((tmp_path / "cut" / "run.json").read_text())
-    assert cut["invalid"] == [] and [(s["first"], s["steps"]) for s in cut["segments"]] == [(0, 4)]
-    a, b = timeless(whole, keyed=False), timeless(cut, keyed=False)
-    assert b["windows"] == a["windows"] and b["steps"] == a["steps"]
-    assert b["checkpoints"] == [scored(cp) for cp in a["checkpoints"]]
-    assert len({cp["output_sha256"] for cp in cut["checkpoints"]}) == 4
-    assert {k: v for k, v in b.items() if k not in ("checkpoints", "digest_key")} == {
-        k: v for k, v in a.items() if k not in ("checkpoints", "digest_key")}
+    assert cut["invalid"] == [] and cut["windows"] == whole["windows"]
+    assert_continues(whole, cut, at=2, keyed=False)
+    states = [(cp["output_sha256"], cp["e_sha256"]) for cp in whole["checkpoints"]]
+    assert [(cp["output_sha256"], cp["e_sha256"]) for cp in cut["checkpoints"]] == states and len(set(states)) == 4
 
 
 def test_a_route_that_names_a_signal_is_refused():
@@ -495,8 +540,7 @@ def test_a_job_stopped_after_a_checkpoint_and_run_again_writes_the_unbroken_jobs
     the job's own process keeping the state, the stop, and the sandbox. An unbroken job; the same job told to stop
     (SIGTERM) once it has kept its state after step 1, and told again as it ends the route's process, which ends
     with `STOPPED`, the record of its stop and the state left; a
-    job of another config on that state, refused by both digests before it trains, the state left; a job of a route
-    with an `output` on it, refused since such a job keeps no state, the state left; the stopped job
+    job of another config on that state, refused by both digests before it trains, the state left; the stopped job
     on its state with one bit of the optimizers' part flipped, in the state directory and then only in the copy
     handed to the route's process, refused each time by that part's two SHA-512; the stopped job told to continue
     from nothing, and from a `state.json` of another sha256, refused each time; and the stopped job again, told
@@ -544,12 +588,6 @@ def test_a_job_stopped_after_a_checkpoint_and_run_again_writes_the_unbroken_jobs
                                          f"{config.load(other, starts.registry(reg)).digest}"):
         job("other", "state", other)
     assert sorted(p.name for p in (tmp_path / "state").iterdir()) == kept and not (tmp_path / "other").exists()
-
-    averaged = write_config(tmp_path / "averaged.toml", route="ema", budget=BUDGET, dials=OUTPUTS["ema"])
-    with pytest.raises(SystemExit, match="isn't one this job continues: a job of this config keeps none .the route "
-                                         "has an `output`"):
-        job("averaged", "state", averaged)
-    assert sorted(p.name for p in (tmp_path / "state").iterdir()) == kept and not (tmp_path / "averaged").exists()
 
     stated = so_far["segments"][-1]["kept"]
     tensors = tmp_path / "state" / "tensors-0000001.pt"

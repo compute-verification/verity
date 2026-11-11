@@ -3,6 +3,7 @@ as a multiset derived from the architecture alone, the upstream counts, φ and t
 step's circuit among its neighbours, and the refusals."""
 from __future__ import annotations
 
+import copy
 from collections import Counter
 from fractions import Fraction
 
@@ -515,3 +516,42 @@ def test_refuses_batch_dependent_graph():
     with pytest.raises(CaptureRefused) as e:
         capture_step(model, torch.optim.SGD(model.parameters(), lr=0.1), loss, (torch.empty(4, 8),))
     assert e.value.reason == "batch_dependent"
+
+
+@pytest.mark.parametrize("what", ["model", "parameter", "optimizer"])
+def test_refuses_a_deep_copy_of_what_the_trace_runs_on_and_leaves_every_other_deep_copy_alone(what):
+    """A step that deep-copies the model, one of its parameters or an optimizer is refused at that line, with what
+    to write instead, before torch copies a tensor that has no data (which kills the process later). A step that
+    copies the state dict is traced. The refusal is in force only while a capture records: torch's own deep copy is
+    back after a capture that was refused and after one that was taken, and copies the model as before."""
+    torchs = torch.Tensor.__deepcopy__
+    model = mlp()
+    batch, opts = (torch.empty(4, 8),), [torch.optim.SGD(model.parameters(), lr=0.1)]
+
+    def train(m, rows, optimizers):
+        m(rows[0]).sum().backward()
+        optimizers[0].step()
+        optimizers[0].zero_grad(set_to_none=True)
+
+    def copies(m, rows, optimizers):
+        copy.deepcopy({"model": m, "parameter": m[0].weight, "optimizer": optimizers[0]}[what])
+        train(m, rows, optimizers)
+
+    def keeps(m, rows, optimizers):
+        was = {k: v.detach().clone() for k, v in m.state_dict().items()}
+        train(m, rows, optimizers)
+        assert set(was) == set(m.state_dict())
+
+    def copied() -> None:
+        assert torch.Tensor.__deepcopy__ is torchs
+        twin = copy.deepcopy(model)
+        assert [k for k, v in twin.state_dict().items() if not torch.equal(v, model.state_dict()[k])] == []
+        assert all(a is not b for a, b in zip(twin.parameters(), model.parameters()))
+
+    with pytest.raises(CaptureRefused) as e:
+        capture_steps([copies] * 3, model, batch, measured=1, optimizers=opts)
+    assert e.value.reason == "deep_copy" and e.value.op is None and "in copies: copy.deepcopy(" in e.value.where
+    assert "copy the state dict instead, {k: v.detach().clone() for k, v in model.state_dict().items()}" in str(e.value)
+    copied()
+    assert capture_steps([keeps] * 3, model, batch, measured=1, optimizers=opts).tokens == 4
+    copied()

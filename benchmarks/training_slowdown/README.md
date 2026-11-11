@@ -97,30 +97,34 @@ writes nothing into the tree it runs from, which every run of its commit shares:
 run's own, built by `uv sync --frozen` in a directory the job makes under /tmp (`UV_PROJECT_ENVIRONMENT`), which the
 job's shell removes when the job ends, stopped or not.
 
-A stopped job continues, unless its route has an `output` (`ema`, `lora`): a job of such a route keeps no state, since
-its checkpoints hand out the output model and not what its next step reads, says so in its record (`no_state`), in
-the record of its stop and on stderr, and told to stop starts again from θ. After each checkpoint but the last any
-other job keeps what continuing needs in its state directory
-(`--state`): the model, the optimizers' state, the stream's position, the generators, and the record so far with its
-scores and its clock. Told to stop (SIGTERM: an eviction, or the end of its run's time) it first writes a `run.json`
-that says so (`stopped`: "told to stop", with no step or checkpoint), then ends the route's process and leaves the
-state. The command reads a stop from that record and never from the run's exit status, which is whatever stopped the
+A stopped job continues. After each checkpoint but the last a job keeps what continuing needs in its state directory
+(`--state`): the model its route trains (under a route's `output`, `ema`'s or `lora`'s, not the output model a
+checkpoint scores), the model's buffers outside its state dict, the optimizers' state, the stream's position, the
+generators, and the record so far with its scores and its clock. Told to stop (SIGTERM: an eviction, or the end of
+its run's time) it first writes a `run.json` that says so (`stopped`: "told to stop", with no step or checkpoint),
+then ends the route's process and leaves the state. The command reads a stop from that record and never from the run's exit status, which is whatever stopped the
 job reports (a lease out of time: `timeout`'s 124, whatever the job's own): a run that didn't end with 0 is stopped
 when its record says so, and failed when it holds no record or one that doesn't. A job told to stop before its own
 process is up has written none, and is failed. The command's next run starts a stopped job again, and the job
 continues from the state when it is its own (the same
 config digest, seed, split and `training_slowdown` VERSION, a model that hashes to the record's last checkpoint) and
 refuses any other, naming what differs. The job's own process states in the record so far, for the segment that
-kept the state, the SHA-512 of each of its parts (the model, the optimizers' state, the stream's position, the
-generators); the job that continues hashes them again, in the state directory and as the route's process holds them
-before it imports the route, and refuses a state a part of which hashes to anything else. That record lies beside
+kept the state, the SHA-512 of each of its parts (the model, its buffers outside its state dict, the optimizers'
+state, the stream's position, the generators); the job that continues hashes them again, in the state directory and
+as the route's process holds them before it imports the route, and refuses a state a part of which hashes to
+anything else. That record lies beside
 the tensors, so the command ties it to the stopped run's record on the store, which no job writes: it tells the
 job the sha256 the store lists for that record's `state.json` (`--continues`), or that it found none, and the job
 continues from no other state (a state on a node's disk has no such copy, and none is checked). The record lists
 the segments
 the job ran in, and its count is their sum: every step once, and each segment's `build`. What a stopped segment
-computed after its last kept checkpoint is run again and is in no record. A state is a cache: the command keeps it
-with the stopped run's output on the store, the next run fetches it on whichever machine it gets (`NODE_STATE` in
+computed after its last kept checkpoint is run again and is in no record. A route's `output` at the checkpoint a job
+stopped at is counted outside the steps (`setup`), where an unbroken job counts it in the step after. A job with
+updated MACs or tokens outside a step is invalid, so an `output` that computed on token data with an updated weight
+would make a continued job invalid: it makes the unbroken job invalid too, whose last checkpoint's output is counted
+after its last step, unless it computes so at an earlier checkpoint and not at the last. That is a limit, and no
+route here meets it: `ema`'s output computes nothing and `lora`'s multiplies each adapter's two matrices. A state is
+a cache: the command keeps it with the stopped run's output on the store, the next run fetches it on whichever machine it gets (`NODE_STATE` in
 `run.py` here places it on the node's disk instead), and losing it costs a start from θ. The state directory is
 hidden from the route's process as a final set is, and only the job's own process writes it. A state is at most three
 times its model (the weights and two buffers of the optimizer for each), and a run holds three states at once while
@@ -145,7 +149,11 @@ A job trains the config's start along its route and scores each checkpoint on it
 owns the loop, the batches, the checkpoints and each checkpoint's E, the weights that differ from θ encoded by the
 route's plan. A checkpoint's output model, the one scored, is what E rebuilds from θ: the trained weights under a
 plan that keeps them whole, and the model the kept bits give under one that keeps less. Everything a route computes
-through torch is counted; the harness's own work (loading, evaluating, encoding) isn't. A route that names anything of `training_slowdown` but the codecs and the model,
+through torch is counted; the harness's own work (loading, evaluating, encoding) isn't. The count calls a forward
+product updated when it reads a weight that has left θ. A buffer of the model that θ doesn't hold (a position
+table, in the state dict or not) is held at the value it has when the model is registered and checked like θ's
+weights: a product with it is θ's, a buffer a step writes is an updated weight from that write on, under its own
+name, and one written where the counter can't see makes the run invalid, as for a weight. A route that names anything of `training_slowdown` but the codecs and the model,
 or a route around the dispatcher (`screen.FORBIDDEN`), is refused, and one that uses an op the counter can't price, reads
 token data out of torch, starts a thread or a process, or imports a module the screen refuses makes its run invalid
 (`screen.py` has the screen).
@@ -173,10 +181,25 @@ aren't the run's first steps, the first of them reads the run's own weights, not
 step a circuit, which the trace keeps as the capture measures it (`circuit`: the gradient's cut and a token group's
 partial, the carried state, τ, a, the update's profile, and the shares of its gates in token ops and in ops an update
 reaches, at the gate prices of the code that took it), with that code's version (`capture_code`). A step the capture
-refuses is recorded as refused, and the job stays valid.
+refuses is recorded as refused, and the job stays valid. A step that deep-copies the model, a parameter or an
+optimizer is refused so (`deep_copy`): the trace runs on tensors without data, and a step that needs the weights as
+they were copies the state dict.
 
-A job's output holds no weights by default: its record, and its last checkpoint's E when E is under 50 MiB. The
-command's `--weights` makes each job it runs keep its last checkpoint's whole state too.
+A job has its record whether or not its trace is taken. The route's process writes the record whole before the
+trace and again with it, so a trace that raises, or that ends the process, leaves the count, the digests and the
+scores, with the reason where the trace would be (`trace.failed`: the error, or the signal or status the process
+ended with). Such a job is as valid as its count, exits as one whose trace was taken and says on stderr that it has
+none; the grade reads its ρ as unmeasured, with the reason.
+
+A job's output is its record, `OUT/run.json`, which its own process writes once, when the route's process has ended,
+with the scores in. It holds no weights by default: beside the record, its last checkpoint's E when E is under
+50 MiB. The command's `--weights` makes each job it runs keep its last checkpoint's whole state too.
+
+A job on a CPU computes with oneDNN held below AMX (`ONEDNN_MAX_CPU_ISA=AVX512_CORE_BF16`, `run.limit_cpu`): each of
+its two processes sets the limit itself, over whatever it was started with, before torch computes anything, because
+oneDNN's AMX kernels can return a wrong bf16 product on a virtual CPU and a step run twice then gives two results.
+The record names the variable and the value the route's process set (`cpu_isa`); on a GPU a job sets nothing and
+the field is null.
 
 Run the `python -m` commands from this directory. A start and its data are read where `starts.toml` says a node holds them, and checked
 against it; elsewhere, `research data fetch ART --path starts/NAME/theta.safetensors` (and its `start.json`) gets a
@@ -219,7 +242,9 @@ name that is neither is refused. p is read on the final set where the attack and
 record, else on the search split, and the block says which. A search record with no trace, with one the capture
 refused, or with one of a capture version the tree's `priced` doesn't read has no ρ, and then there is no S: the
 reason names the job that takes the trace again at the record's commit and `config.text` (`--retrace`, above, which
-takes it with the capture of the tree it runs in), or says the record has no config to re-trace from. A record's
+takes it with the capture of the tree it runs in), or says the record has no config to re-trace from. A record
+whose trace was not taken (`trace.failed`) has none either, and its ρ is "unmeasured", not "refused", with why the
+trace failed and the same job: the step was not refused, the process that traced it ended or raised. A record's
 `provenance`, where it has one (no job writes it), is passed on unread, beside the record and in what S rests on.
 
 ## Limits of the count

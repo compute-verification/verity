@@ -33,7 +33,8 @@ def trace_step(cfg: config.Config, route, model, optimizers, device: str) -> dic
     (`circuit`, `capture.circuit.measure`): the gradient's cut and one token group's partial, the carried state no
     token op reads, the update's profile and its cut, τ, a, and the shares of the step's gates in token ops (σ) and
     in ops an update reaches, at the gate prices of the code that took the trace. Nothing the formalism derives is in
-    it. A step the capture refuses gives {"refused": {"reason", "op", "message"}}.
+    it. A step the capture refuses gives {"refused": {"reason", "op", "message"}}; any other error is raised, and the
+    job records it in the trace's place ({"failed": why}, `run.inside`).
 
     The batch is traced as its inputs and each window's last target apart, so the token axes are the batch and the
     context, the tokens the counter counts a step."""

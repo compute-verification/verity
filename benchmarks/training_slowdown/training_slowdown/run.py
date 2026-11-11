@@ -28,13 +28,15 @@ make the run invalid. c is `C_PER_FORWARD_TOKEN` times the start's forward MACs 
 the registered model.
 
 With `--state DIR` a stopped job continues (`Kept`). After each checkpoint but the last, which is the job's end, the
-job's own process keeps in DIR what continuing needs: the tensors the route's process hands it (the model, the
-optimizers' state, the stream's position, torch's, numpy's and Python's generators) and, written by itself, the
+job's own process keeps in DIR what continuing needs: the tensors the route's process hands it (the model the route
+trains, which under a route's `output` is not the model a checkpoint scores; its buffers outside its state dict;
+the optimizers' state; the stream's position; torch's, numpy's and Python's generators) and, written by itself, the
 record so far with its scores, where the clock stands and, in the record's last segment, the SHA-512 of each part
 of the tensors as DIR holds them (`kept_sha512`). DIR is hidden from the route's process as a final set is. A job
 that finds a state in DIR continues from it when the state is its own: the same `training_slowdown` VERSION, seed,
 split and config digest, tensors whose every part hashes to what the record states, and a model that hashes to its
-record's last checkpoint. Any other it refuses, naming what differs, and trains nothing. The record a state is
+record's last checkpoint (`trained_sha256` where the trained model is not the output, else `output_sha256`). Any
+other it refuses, naming what differs, and trains nothing. The record a state is
 checked against lies beside its tensors; `--continues SHA256` ties it to the copy in the stopped run's record, which
 no job writes: whoever starts the job reads the sha256 of `state.json` there, and the job refuses a `state.json` of
 another, or under `--continues nothing` any state at all. The route's process then
@@ -50,22 +52,27 @@ state. That record is how whoever runs the job again knows it was stopped: the s
 its stopper's, `timeout`'s 124 under a lease out of time. A job that ends itself, with its record or with a failure,
 removes the state.
 
-A job whose route has an `output` keeps no state. Its checkpoints hand out the output model, which is not what the
-route's next step reads, and what such a route carries from one step to the next beside its trained weights (an
-average, an adapter) is in none of the tensors a job keeps. Told to stop, it starts again from θ: its record and
-the record of its stop say why (`no_state`: `NO_STATE`), so does the job on stderr, and a state found for it is
-refused.
+A route's `output` is computed and counted after its step, so in an unbroken job the output of one checkpoint is
+counted in the step after it. A job that stopped at that checkpoint counted it after its last kept step: the record
+holds it outside the steps (`setup`), and the first step of the segment that continues is short of it. The job's
+count is the unbroken job's and each further segment's `build`.
 
 After the last step, outside the count, the job traces its route's step once for the grade (`traced.trace_step`), among
 the run's last steps: the record's `trace` is what the capture measures of it, the product rows unpriced and the
-step's circuit, and a step the capture refuses is recorded as refused and leaves the job valid. `--retrace` takes a
-record's trace again with this tree's capture, from the record's own config text, for a record whose trace a later
-grade doesn't read.
+step's circuit, and a step the capture refuses is recorded as refused and leaves the job valid. The trace is the one
+part of a record a job can end without. The route's process writes its record twice: whole before it takes the
+trace, with why there is none in the trace's place (`trace.failed`), and again with the trace. So a trace that
+raises (its error is the reason) or that ends the process (the signal or the status is, `ended`) leaves the count,
+the digests and the scores of an untraced job: the job is as valid as they are, exits as one whose trace was taken,
+and says on stderr that it has none. A trace is read only of a route's process that exits with status 0. The grade
+reads such a record as unmeasured, with the reason. `--retrace` takes a record's trace again with this tree's
+capture, from the record's own config text, for a record whose trace a later grade doesn't read or that has none.
 
-Writes `OUT/run.json` (the count, the checkpoints, the flags, the config with its digest and text, the route, θ's
-digest, the trace and the job's label). No weights are kept by default: of the last checkpoint the job keeps E, the
-bytes that rebuild its output from θ, when E is under 50 MiB (`E_KEEP_BYTES`), and with `--keep-weights` the whole
-state. Torch
+Writes `OUT/run.json` once, when the route's process has ended: that process's record (the count, the checkpoints,
+the flags, the config with its digest and text, the route, θ's digest, the trace or why there is none, and the job's
+label) with the scores in, over every segment the job ran in; a job told to stop writes the record of the stop there
+instead. No weights are kept by default: of the last checkpoint the job keeps E, the bytes that rebuild its output
+from θ, under `OUT` when E is under 50 MiB (`E_KEEP_BYTES`), and with `--keep-weights` the whole state. Torch
 compilation is disabled and CUDA graph replay refused: both run work the counter can't see. For the same reason a run is
 invalid when it uses an op the counter can't price (flops.py), reads token data out of torch, starts a thread or a
 process, or imports a module that names a way around the dispatcher or that was written during the run (`Imports`).
@@ -73,6 +80,11 @@ The screen (`training_slowdown.screen`) refuses, in the route and in every modul
 the names that run code it never reads: `exec`, `eval` and `compile` (called or not), `runpy`, `importlib`,
 `__import__`, `marshal`, pickle, `FunctionType`, `CodeType`, `__code__` and `sys.meta_path`; while the job runs no
 bytecode cache is read, so what runs is the source that was screened.
+
+On a CPU each of the job's two processes limits oneDNN's instruction set to below AMX before torch computes anything
+(`limit_cpu`, `CPU_ISA`): oneDNN's AMX kernels can return a wrong bf16 product on a virtual CPU, so that one step run
+twice gives two results, and a job's products are to be the same every time. The record names the variable and the
+value the route's process set (`cpu_isa`; null on any other device, where nothing is set).
 """
 from __future__ import annotations
 
@@ -100,7 +112,7 @@ import numpy as np
 import torch
 import torch.nn.modules.module as nn_module
 
-from . import BUDGET_SLACK, NO_STATE, NOTHING, SCHEMA, STOPPED, VERSION, config, sandbox, starts, stop_record
+from . import BUDGET_SLACK, NOTHING, SCHEMA, STOPPED, VERSION, config, sandbox, starts, stop_record
 from .codecs import Identity, Plan, Unencodable
 from .counterexample import SAMPLE_FINAL, SAMPLE_SEARCH, Family, check
 from .data import SPLITS, Data, Stream
@@ -115,6 +127,13 @@ CHECKPOINTS = 20
 C_PER_FORWARD_TOKEN = 4096
 #: a job keeps its last checkpoint's E under OUT when E is smaller than this
 E_KEEP_BYTES = 50 * 2**20
+#: the `trace.failed` of the record the route's process writes before it takes the trace: what a process that ends
+#: there leaves
+UNTRACED = "the route's process ended before it wrote the trace"
+#: the variable that limits oneDNN's instruction set and the limit of a job on a CPU (`limit_cpu`), the widest below
+#: AMX: oneDNN's AMX kernels return a wrong bf16 product now and then when the process is preempted on a virtual CPU,
+#: on one thread or several, so two calls of one product on one input differ; below AMX it is the same every time
+CPU_ISA = ("ONEDNN_MAX_CPU_ISA", "AVX512_CORE_BF16")
 
 
 class BudgetExceeded(RuntimeError):
@@ -168,8 +187,9 @@ def _feed(h, x) -> None:
 
 
 def kept_sha512(state: dict) -> dict[str, str]:
-    """The SHA-512 of each part of a kept state (`resume_state`: the model, the optimizers' state, the stream's
-    position, the generators), over its values as they are held: every bit of every tensor and number in it."""
+    """The SHA-512 of each part of a kept state (`resume_state`: the model, its buffers outside its state dict, the
+    optimizers' state, the stream's position, the generators), over its values as they are held: every bit of every
+    tensor and number in it."""
     out = {}
     for part in sorted(state):
         h = hashlib.sha512()
@@ -208,8 +228,9 @@ class Harness:
                  families: Path | None = None, record: Path | None = None, kept: dict | None = None, keep=None,
                  stream: Stream | None = None):
         """`kept` is where a job that continues stands (`step`, the next one; `elapsed_s`; `digest_key`), and
-        `keep(state)` is called with the trained state after each planned checkpoint but the last. `stream` is the
-        one the steps are served from: the record states what a fresh one served (`Stream.record`)."""
+        `keep(trained)` is called with the model the route trains (`trained`) after each planned checkpoint but the
+        last. `stream` is the one the steps are served from: the record states what a fresh one served
+        (`Stream.record`)."""
         kept = kept or {}
         self.stream = stream
         self.theta, self.out = theta, Path(out)
@@ -293,9 +314,9 @@ class Harness:
         if self.output_fn is not None or self.model is not None:
             due = bool(self.n_steps) and index in self.cp_steps
         if due:
-            state = self._checkpoint(index)
+            self._checkpoint(index)
             if self.keep is not None and index != max(self.cp_steps):
-                self.keep(state)
+                self.keep(self.trained())
         if self.budget_s and self.elapsed() > BUDGET_SLACK * self.budget_s:
             raise BudgetExceeded(f"{self.elapsed():.0f} s past the tier's {self.budget_s:.0f} s budget")
 
@@ -309,20 +330,42 @@ class Harness:
         return self.register(model)
 
     def register(self, model: torch.nn.Module) -> torch.nn.Module:
-        self.counter.register(model.state_dict(keep_vars=True))
+        """Name θ's weights in `model`, and hold each buffer of it that θ lacks (a position table, in the state dict
+        or not) as a constant, at its value now: the counter checks and counts it as it does θ's weights, so a
+        product with a table is θ's, a buffer a step writes is an updated weight from then on, and a write the
+        dispatcher doesn't see makes the run invalid (`Counter.register`). A constant is no part of θ, of E or of the
+        output."""
+        self.counter.register(model.state_dict(keep_vars=True), dict(model.named_buffers()))
         self.model = model
         self._measure(model)
         return model
 
+    def trained(self) -> dict[str, dict[str, torch.Tensor]]:
+        """The registered model as the route's next step reads it, in plain values: its state dict (`model`), and
+        its buffers outside the state dict (`buffers`), where a route carries what its `output` reads (an average
+        of the weights). It is what a job keeps and continues from, whatever its checkpoints hand out."""
+        if self.model is None:
+            raise RuntimeError("register the model (te.load) before a checkpoint the job keeps its state at")
+        model = self.model.state_dict()
+        return plain({"model": {k: v.detach() for k, v in model.items()},
+                      "buffers": {k: v.detach() for k, v in self.model.named_buffers() if k not in model}})
+
     def resume(self, model: torch.nn.Module, optimizers, stream: Stream, state: dict) -> None:
-        """Put a kept state (`resume_state`) back after θ's load: the model's weights, written in place so the
-        counter's names for them stand, each optimizer's state, the stream's position and the generators', uncounted
-        as θ's load is."""
+        """Put a kept state (`resume_state`) back after θ's load: the model's weights and its buffers outside the
+        state dict, written in place so the counter's names for them stand (a buffer with another value than `build`
+        gave it is an updated weight, as one a step wrote is), each optimizer's state, the stream's position and
+        the generators', uncounted as θ's load is."""
         if len(optimizers) != len(state["optimizers"]):
             raise SystemExit(f"training_slowdown: the kept state holds {len(state['optimizers'])} optimizers' state "
                              f"and the route built {len(optimizers)}")
-        with self.counter.pause():
+        buffers = {k: v for k, v in model.named_buffers() if k not in model.state_dict()}
+        if sorted(buffers) != sorted(state["buffers"]):
+            raise SystemExit(f"training_slowdown: the kept state holds the buffers {sorted(state['buffers'])} outside "
+                             f"the model's state dict and the route built {sorted(buffers)}")
+        with self.counter.pause(), torch.no_grad():
             model.load_state_dict(state["model"])
+            for name, value in state["buffers"].items():
+                buffers[name].copy_(value)
             for o, s in zip(optimizers, state["optimizers"]):
                 o.load_state_dict(s)
             stream.at = int(state["stream"])
@@ -377,11 +420,13 @@ class Harness:
         state = self.output_fn() if self.output_fn else self.model.state_dict()
         return {k: v.detach() for k, v in state.items()}
 
-    def _checkpoint(self, step: int) -> dict[str, torch.Tensor]:
+    def _checkpoint(self, step: int) -> None:
+        """The checkpoint after step `step`: of the registered model's state, or of what the route's `output` makes
+        of it, which is then not the model the route trains, so the checkpoint states that one's digest too."""
         with torch.no_grad():
             state = plain(self._state())
-        self.checkpoint_state(step, state, {"source": "output"})
-        return state
+            trained = None if self.output_fn is None or self.model is None else self.trained()["model"]
+        self.checkpoint_state(step, state, {"source": "output"}, trained)
 
     def _encode(self, step: int, state: dict[str, torch.Tensor], digests: dict[str, str]) -> tuple[dict, bytes | None, dict]:
         """E of `state`: its weights that differ from θ (a weight θ lacks against zeros), by `encoding`, with its size,
@@ -403,13 +448,16 @@ class Harness:
                  "rebuild_macs": self.encoding.cost_macs(enc, bases), "changed": len(changed)}, enc,
                 {k: rebuilt[k] for k in changed if digest(rebuilt[k]) != digests[k]})
 
-    def checkpoint_state(self, step: int, state: dict[str, torch.Tensor], extra: dict | None = None) -> dict:
+    def checkpoint_state(self, step: int, state: dict[str, torch.Tensor], extra: dict | None = None,
+                         trained: dict[str, torch.Tensor] | None = None) -> dict:
         """Encode `state`, the model after step `step` (inclusive), and score the output model, uncounted. The
         output model is what E rebuilds from θ: `state` itself under a plan that keeps the weights whole, and under
         one that keeps less (a quantized delta) the model its bits give, which is then what is hashed, scored and
-        kept, with `trained_sha256` the digest of `state`. Of the planned steps' last checkpoint the job keeps E
-        under `e/` when it is smaller than `E_KEEP_BYTES` (`e_path`), and with `keep_weights` the whole output under
-        `checkpoints/` (`path`); of any other, nothing."""
+        kept. `trained_sha256` is the digest of the model the route trains, which a job continues from (`Kept.load`),
+        wherever that is not the output model: of `trained`, the registered model's state where `state` is a
+        route's `output` of it, else of `state` under a plan that keeps less. Of the planned steps' last checkpoint
+        the job keeps E under `e/` when it is smaller than `E_KEEP_BYTES` (`e_path`), and with `keep_weights` the
+        whole output under `checkpoints/` (`path`); of any other, nothing."""
         with self.uncounted(), torch.no_grad():
             digests = {k: digest(v) for k, v in state.items()}
             fields, enc = {}, None
@@ -419,6 +467,8 @@ class Harness:
                     fields["trained_sha256"] = state_sha256(digests)
                     state = state | rebuilt
                     digests = digests | {k: digest(v) for k, v in rebuilt.items()}
+            if trained is not None:
+                fields["trained_sha256"] = theta_sha256(trained)
             out_sha256 = state_sha256(digests)
             score = self.evaluator(state, out_sha256) if self.evaluator else None
             cp = {"step": step, "macs": self.macs_so_far(), "bpb": score["bpb"] if score else None, "score": score,
@@ -488,9 +538,16 @@ class Harness:
                 v = check(fam.dir, rec, self.theta, rec["c"], n_sample=n, device=self.device, plan=fam.plan)
                 (fam.dir / "verified.json").write_text(json.dumps(v.to_json(), indent=1) + "\n")
                 rec["families"].append(v.to_json())
-        self._self_cpu(rec)
-        self.record.write_text(json.dumps(rec) + "\n")
+        self.write(rec)
         return rec
+
+    def write(self, rec: dict) -> None:
+        """`rec` as the run's record, whole or not at all: written beside the record, then moved into its place, so
+        a process that ends while it writes leaves the record that was there."""
+        self._self_cpu(rec)
+        part = self.record.with_name(self.record.name + ".part")
+        part.write_text(json.dumps(rec) + "\n")
+        os.replace(part, self.record)
 
 
 HERE = Path(__file__).resolve().parent
@@ -573,12 +630,13 @@ def set_generators(kept: dict) -> None:
     random.setstate((version, tuple(internal), gauss))
 
 
-def resume_state(trained: dict[str, torch.Tensor], optimizers, stream: Stream) -> dict:
-    """What a route's process continues from, in plain values: the trained model's whole state (not the output E
-    rebuilds), each optimizer's state, the stream's position and the generators'. A route that carries anything
-    else from one step to the next (`training_slowdown.routes`) doesn't continue as an unbroken job runs."""
-    return plain({"model": trained, "optimizers": [o.state_dict() for o in optimizers], "stream": stream.at,
-                  "generators": generators()})
+def resume_state(trained: dict[str, dict[str, torch.Tensor]], optimizers, stream: Stream) -> dict:
+    """What a route's process continues from, in plain values: the model the route trains (`Harness.trained`: its
+    whole state dict and its buffers outside it, not the output a route makes of them or E rebuilds), each
+    optimizer's state, the stream's position and the generators'. A route that carries anything else from one step
+    to the next (`training_slowdown.routes`) doesn't continue as an unbroken job runs."""
+    return plain(trained | {"optimizers": [o.state_dict() for o in optimizers], "stream": stream.at,
+                            "generators": generators()})
 
 
 def stream_of(cfg: config.Config, data: Data, seed: int, root: Path | None = None) -> Stream:
@@ -724,10 +782,9 @@ class Outside:
         process ends it here when that isn't what the record of the segment that kept them states."""
         self._say(kept=kept)
 
-    def names(self, digest: str, no_state: str | None = None) -> None:
-        """Say which config this process runs, and why it keeps no state where it keeps none (`NO_STATE`): the job's
-        own process ends it here when its kept state is another's, or is one for a job that keeps none."""
-        self._say(digest=digest, no_state=no_state)
+    def names(self, digest: str) -> None:
+        """Say which config this process runs: the job's own process ends it here when its kept state is another's."""
+        self._say(digest=digest)
 
     def __call__(self, state: dict[str, torch.Tensor], weights_digest: str) -> None:
         self._hand("state", {k: v.cpu() for k, v in state.items()})
@@ -891,11 +948,18 @@ def joined(prior: dict | None, rec: dict) -> dict:
     checkpoints are every segment's in order, a checkpoint's `macs` counting from the job's first step. Its count
     is the segments' sum: `totals` adds up, and `setup` holds what every segment counted outside its steps
     (`outside_steps`), so a segment's own setup is counted, and the steps a stopped segment ran after its last kept
-    checkpoint, which the next one ran again, are not. `segments` lists each one's first step, its steps, its count
-    and its commit, and of one that was continued the digests of the state it kept last (`Kept.write`). Of a job
-    served fresh windows (`windows`), the windows served are every segment's in order and the times their order
-    started again add up. A segment whose record names another job than the kept one's, or leaves other parts out
-    of the fresh windows, is refused."""
+    checkpoint, which the next one ran again, are not. What a stopped segment counted after its last kept step is
+    its route's `output` at that checkpoint, which an unbroken job counts in the step after it: here it is in
+    `setup`, and that step, the next segment's first, is short of it. A job is invalid for updated MACs or tokens
+    outside a step (`Harness.so_far`), so an output that computes on token data with an updated weight would make
+    the continued job invalid; it makes the unbroken job invalid too, whose last checkpoint's output is counted
+    after its last step, unless it computes so at an earlier checkpoint and not at the last. No route here has such
+    an output (`ema`'s computes nothing, `lora`'s multiplies each adapter's two matrices), and one that had would
+    find its stopped jobs invalid, never valid where the unbroken job is not. `segments` lists each one's first
+    step, its steps, its count and its commit, and of one that was continued the digests of the state it kept last
+    (`Kept.write`). Of a job served fresh windows (`windows`), the windows served are every segment's in order and
+    the times their order started again add up. A segment whose record names another job than the kept one's, or
+    leaves other parts out of the fresh windows, is refused."""
     first = len(prior["steps"]) if prior else 0
     segment = {"first": first, "steps": len(rec["steps"]), "macs": rec["totals"]["macs"], "commit": rec.get("commit")}
     if prior is None:
@@ -959,12 +1023,14 @@ def outside(a: argparse.Namespace, argv: list[str]) -> int:
     without the store's key in its environment or on its disk (`routes_environment`), scores
     each state that process hands out, under the digest it hashes the state to itself, keeps what continuing needs
     where the job has a state directory (`Kept`), and writes the record with the scores in (`with_scores`) over
-    every segment the job ran in (`joined`). Told to stop (SIGTERM, to itself or to the route's process), it writes
+    every segment the job ran in (`joined`). A route's process that wrote its record and then ended badly, as it
+    took the trace, leaves a job without a trace: the record's `trace.failed` says how it ended (`ended`), and the
+    job is as valid as its record. Told to stop (SIGTERM, to itself or to the route's process), it writes
     the record of the stop (`stop_record`), ends the route's process and returns `STOPPED` with the state left;
     ending any other way it removes the state."""
     reg = starts.registry(a.starts)
     scratch = Path(tempfile.mkdtemp(prefix="training-slowdown-"))
-    child, stopping, no_state = None, [], {}
+    child, stopping = None, []
 
     def stop(signum=None, frame=None) -> None:
         """SIGTERM's handler. The record of the stop comes first, here and not where `Stopped` is caught: what
@@ -975,7 +1041,7 @@ def outside(a: argparse.Namespace, argv: list[str]) -> int:
             return
         stopping.append(signum)
         a.out.mkdir(parents=True, exist_ok=True)
-        (a.out / "run.json").write_text(json.dumps(stop_record(a.seed, a.split) | no_state) + "\n")
+        (a.out / "run.json").write_text(json.dumps(stop_record(a.seed, a.split)) + "\n")
         if child is not None and child.poll() is None:
             child.terminate()
         raise Stopped
@@ -1018,11 +1084,6 @@ def outside(a: argparse.Namespace, argv: list[str]) -> int:
                     if "kept" in said:
                         state.same(said["kept"], prior["segments"][-1]["kept"], "the route's process read it")
                     elif "digest" in said:
-                        if said.get("no_state"):
-                            no_state["no_state"] = said["no_state"]
-                            print(f"training_slowdown: {said['no_state']}", file=sys.stderr)
-                            if prior:
-                                state.refuse(f"a job of this config keeps none ({said['no_state']})")
                         if prior and said["digest"] != prior["config"]["digest"]:
                             state.refuse(f"its config digest is {prior['config']['digest']} and this job's is "
                                          f"{said['digest']}")
@@ -1046,11 +1107,15 @@ def outside(a: argparse.Namespace, argv: list[str]) -> int:
         # the job ends by itself from here: with its record, or failed
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
         record = scratch / "run.json"
-        if child.returncode or not record.is_file():
+        if not record.is_file():
             if state:
                 state.clear()
             return child.returncode or 1
         rec = joined(prior, with_scores(json.loads(record.read_text()), scores))
+        if child.returncode:
+            # the record was whole before the trace began: the job is its count and its scores, without a trace
+            rec["trace"] = {"failed": f"the route's process {ended(child.returncode)} after it wrote the job's record"}
+            print(f"training_slowdown: {rec['trace']['failed']}: the record stands, without a trace", file=sys.stderr)
         a.out.mkdir(parents=True, exist_ok=True)
         (a.out / "run.json").write_text(json.dumps(rec) + "\n")
         if state:
@@ -1073,6 +1138,16 @@ def outside(a: argparse.Namespace, argv: list[str]) -> int:
         shutil.rmtree(scratch, ignore_errors=True)
 
 
+def ended(status: int) -> str:
+    """How a process ended whose `returncode` is `status`, not 0: by which signal, or with which status."""
+    if status > 0:
+        return f"exited with status {status}"
+    try:
+        return f"was ended by {signal.Signals(-status).name}"
+    except ValueError:
+        return f"was ended by signal {-status}"
+
+
 def with_scores(rec: dict, scores: list[tuple[str, dict]]) -> dict:
     """The route's process's record with each checkpoint's score in, where the states scored, each by the digest the
     job's own process hashed it to, are its checkpoints' outputs one for one; else the record, invalid."""
@@ -1092,7 +1167,8 @@ def inside(a: argparse.Namespace) -> int:
     hashes to as it holds it, before it imports the route; then it names its config's digest. The job's own process
     ends it at the first when the tensors aren't what the record of the segment that kept them states, and at the
     second when the kept state is another config's. Then it trains as the module's docstring says, from θ or from
-    the kept tensors, and leaves its record, the checkpoints unscored, in the job's scratch directory."""
+    the kept tensors, and leaves its record, the checkpoints unscored, in the job's scratch directory: once before
+    it takes the trace (`trace.failed`: `UNTRACED`) and once with the trace, or with the error the trace raised."""
     reg = starts.registry(a.starts)
     hidden = sandbox.final_sets(reg)
     if reached := sandbox.refusals([*hidden, *([a.state.resolve()] if a.state is not None else [])]):
@@ -1115,10 +1191,8 @@ def inside(a: argparse.Namespace) -> int:
     with no_bytecode():
         cfg = config.load(a.config, reg)
         route = config.route(cfg.route)
-    # under an `output` what a checkpoint hands out is not what the route's next step reads: no state is kept of it
-    no_state = NO_STATE if own and a.state is not None and hasattr(route, "output") else None
     if own:
-        own.names(cfg.digest, no_state)
+        own.names(cfg.digest)
     s = cfg.start
     root = a.starts_root or Path(reg["installed"])
     theta = starts.load(s, root)
@@ -1126,7 +1200,7 @@ def inside(a: argparse.Namespace) -> int:
     stream = stream_of(cfg, data, a.seed, root)
     torch.manual_seed(a.seed)
 
-    def keep(trained: dict[str, torch.Tensor]) -> None:
+    def keep(trained: dict[str, dict[str, torch.Tensor]]) -> None:
         tensors = resume_state(trained, optimizers, stream)
         with te.uncounted():
             own.keep(tensors, te.so_far(meta, imports.problems()), te.elapsed())
@@ -1134,13 +1208,14 @@ def inside(a: argparse.Namespace) -> int:
     te = Harness(theta, a.out, seed=a.seed, tier=a.tier, device=a.device, start=s.entry(), evaluator=own,
                  split=a.split, budget_s=60 * cfg.budget.get("minutes", 0), keep_weights=a.keep_weights,
                  digests=a.digests != "off", families=a.families, record=a.inside / "run.json", kept=kept,
-                 keep=keep if own and a.state is not None and not no_state else None, stream=stream)
+                 keep=keep if own and a.state is not None else None, stream=stream)
     guard_exits()
-    meta = json.loads(a.meta) | ({"no_state": no_state} if no_state else {}) | {
+    meta = json.loads(a.meta) | {
         "config": cfg.record(), "route": {"name": cfg.route, "version": cfg.route_version,
                                           "sha256": file_sha256(route.__file__)},
         "label": f"{config.LABEL_KEY}={config.Job(cfg, a.seed, a.split).label}", "commit": git_commit(),
         "hardware": torch.cuda.get_device_name() if torch.cuda.is_available() else "cpu",
+        "cpu_isa": a.cpu_isa,
         "peak_macs_per_s": a.peak_macs_per_s,
         "sandbox": {"interfaces": sandbox.interfaces(),
                     "final_sets": {str(d): "empty" if d.exists() else "absent" for d in hidden}}}
@@ -1152,17 +1227,37 @@ def inside(a: argparse.Namespace) -> int:
                 train(te, cfg, route, stream, model, optimizers, state)
             except BudgetExceeded as e:
                 stopped = str(e)
-        # after the last checkpoint and outside the count: nothing the trace runs reaches the record's count or scores
-        meta["trace"] = trace_step(cfg, route, model, optimizers, a.device)
-    if stopped:
-        meta["stopped"] = stopped
-    te.finish(meta, imports.problems())
+        if stopped:
+            meta["stopped"] = stopped
+        # the record is written before the trace is taken, so nothing the trace runs reaches its count or its
+        # scores, and a trace that ends this process (a step can corrupt the heap the capture runs it on) leaves it
+        found = imports.problems()
+        rec = te.finish(meta | {"trace": {"failed": UNTRACED}}, found)
+        try:
+            rec["trace"] = trace_step(cfg, route, model, optimizers, a.device)
+        except Exception as e:  # noqa: BLE001  (whatever the trace raises, the record stands, and says it)
+            rec["trace"] = {"failed": f"{type(e).__name__}: {e}"}
+    # a module the trace imported is screened as the job's
+    rec["invalid"] = imports.problems() + rec["invalid"][len(found):]
+    te.write(rec)
     return 0
+
+
+def limit_cpu(device: str) -> dict[str, str] | None:
+    """Limits oneDNN's instruction set in this process (`CPU_ISA`) where the job's device is a CPU, whatever the
+    process was started with, and returns what it set, the record's `cpu_isa`; on any other device it sets nothing
+    and returns None. oneDNN reads the variable once, at its first product, so each of a job's processes calls this
+    before torch computes anything (`main`)."""
+    if torch.device(device).type != "cpu":
+        return None
+    os.environ[CPU_ISA[0]] = CPU_ISA[1]
+    return dict([CPU_ISA])
 
 
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else [str(x) for x in argv]
     a = parse(argv)
+    a.cpu_isa = limit_cpu(a.device)
     return inside(a) if a.inside is not None else outside(a, argv)
 
 
@@ -1172,7 +1267,8 @@ def report(rec: dict) -> int:
         {k: cp.get(k) for k in ("step", "macs", "bpb", "e_bytes", "source")} for cp in rec["checkpoints"]],
         "flags": rec["flags"], "invalid": rec["invalid"], "families": [
             {k: f[k] for k in ("family", "passed", "failed", "covers")} for f in rec["families"]],
-        "trace": {"refused": tr["refused"]} if "refused" in tr else {k: tr.get(k) for k in ("capture", "tokens")}}))
+        "trace": next(({k: tr[k]} for k in ("refused", "failed") if k in tr),
+                      {k: tr.get(k) for k in ("capture", "tokens")})}))
     return 1 if rec["invalid"] else 0
 
 

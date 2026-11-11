@@ -36,6 +36,12 @@ per tensor through every op within a step:
   dtypes, and is then checked as a registered one; any other is a weight θ doesn't hold, so it differs. A tensor made
   inside the step by a factory op (`randn`, `zeros`, ...) is a fast value with no roots. The counter holds every tensor
   it has named a θ weight, so no other tensor takes its memory.
+- a *constant*: a buffer of the registered model that θ doesn't hold (a position table, in the state dict or not),
+  which `register` holds under its own name at the value it has then. It is checked and counted as a θ weight is: a
+  product with it is θ's while it has that value, a buffer a step writes is a weight with roots from that write on
+  (an updated weight, by its name), and a write the dispatcher doesn't see is caught like one into a weight
+  (`unseen_writes`). It is not θ: no unseen tensor is taken for one, since a buffer's value (zeros) is not one only
+  the model's buffer has.
 
 A node is `updated` when it is in a forward pass (outside autograd's backward), one operand is token-indexed and another
 (the weight, or an initial accumulator) has roots: the counter's updated multiplications, which were U before training_slowdown
@@ -430,6 +436,7 @@ class Counter(TorchDispatchMode):
                  clock=time.perf_counter, cpu_clock=time.process_time, first: int = 0, key: bytes | None = None):
         super().__init__()
         self.theta_cpu = theta or {}
+        self.constants: set[str] = set()
         self.digests = digests
         self.wdigest = KeyedDigest(key or os.urandom(16)) if digests else None
         self.first = first
@@ -464,9 +471,11 @@ class Counter(TorchDispatchMode):
         continues from a kept state) and this counter's own."""
         return self.first + len(self.steps)
 
-    def register(self, named: dict[str, torch.Tensor]) -> None:
+    def register(self, named: dict[str, torch.Tensor], buffers: dict[str, torch.Tensor] | None = None) -> None:
         """Name θ's weights by the live tensors that hold them (a model's `state_dict(keep_vars=True)`), each of which must
-        equal θ's value (cast to its dtype) bit for bit."""
+        equal θ's value (cast to its dtype) bit for bit. `buffers` are the model's (`named_buffers()`): each that θ
+        doesn't hold is a constant from here on (the module docstring), held under its name at the value it has
+        now."""
         with torch.utils._python_dispatch._disable_current_modes():
             for name, t in named.items():
                 if name not in self.theta_cpu:
@@ -475,8 +484,16 @@ class Counter(TorchDispatchMode):
                     raise ValueError(f"registered weight {name!r} is not θ's value")
                 self._hold(t, name)
             missing = sorted(set(self.theta_cpu) - set(self.weights))
-        if missing:
-            raise ValueError(f"θ weights not registered: {missing[:5]}{'...' if len(missing) > 5 else ''}")
+            if missing:
+                raise ValueError(f"θ weights not registered: {missing[:5]}{'...' if len(missing) > 5 else ''}")
+            for name, t in (buffers or {}).items():
+                # a buffer in memory the counter already holds is checked as what holds it
+                if name in self.theta_cpu or not t.numel() or _ptr(t) in self.theta_ptr:
+                    continue
+                # a new dict: the one the counter was given is the harness's θ
+                self.theta_cpu = self.theta_cpu | {name: t.detach().cpu().clone()}
+                self.constants.add(name)
+                self._hold(t, name)
 
     def _hold(self, t: torch.Tensor, name: str) -> None:
         ptr = _ptr(t)
@@ -500,12 +517,13 @@ class Counter(TorchDispatchMode):
         return t.dtype == th.dtype or torch.equal(t.to(th.dtype), self._ref(name, th.dtype, t.device))
 
     def _adopt(self, t: torch.Tensor, ptr: int) -> str | None:
-        """θ's weight an unseen persistent tensor holds, if any (the module docstring)."""
+        """θ's weight an unseen persistent tensor holds, if any (the module docstring). Never a constant: a tensor
+        that equals a buffer of the model (an optimizer's zero state, an average's first value) is not that buffer."""
         n = t.numel()
         if (not self.theta_cpu or not t.is_contiguous() or t.storage_offset()
                 or t.untyped_storage().nbytes() != n * t.element_size()):
             return None
-        names = [k for k, v in self.theta_cpu.items() if tuple(v.shape) == tuple(t.shape)]
+        names = [k for k, v in self.theta_cpu.items() if k not in self.constants and tuple(v.shape) == tuple(t.shape)]
         if not names:
             return None
         at = sorted({0, n // 3, 2 * n // 3, n - 1})
@@ -922,13 +940,13 @@ def flags(totals: dict, peak_macs_per_s: float = 0.0) -> list[str]:
 
 def forward_macs_per_token(model: torch.nn.Module, ctx: int, vocab: int, device=None) -> float:
     """The model's MACs per token for one forward pass over a `ctx`-token sequence, counted by `Counter` with its weights
-    as θ (so a lookup of its own table computes nothing): the start model's figure, from which the inference block's c is
-    set."""
+    as θ (so a lookup of its own table computes nothing) and its other buffers as constants, as a job counts them: the
+    start model's figure, from which the inference block's c is set."""
     device = device or next(model.parameters()).device
     idx = torch.zeros(1, ctx, dtype=torch.long, device=device) % max(vocab, 1)
     state = model.state_dict(keep_vars=True)
     c = Counter({k: v.detach().cpu() for k, v in state.items()}, digests=False)
-    c.register(state)
+    c.register(state, dict(model.named_buffers()))
     with torch.no_grad(), c:
         model(idx)
     return c.setup.macs / ctx

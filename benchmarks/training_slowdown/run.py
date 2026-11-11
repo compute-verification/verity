@@ -24,8 +24,8 @@ and never in the run's exit status, which is whatever stopped it reports: a leas
 its record says it was told to stop, and failed when it holds no record or one that doesn't say so. A job told to
 stop before its own process is up, while its environment is made or its state fetched, has written no record and
 is failed. Nothing runs a stopped job again by itself: the command's
-next run finds it stopped and starts it again, from the state it kept, or from θ where it kept none, as a job whose
-route has an `output` does (`training_slowdown.NO_STATE`). Where the state is between the two runs is
+next run finds it stopped and starts it again, from the state it kept, or from θ where it kept none (one stopped
+before its first checkpoint). Where the state is between the two runs is
 `NODE_STATE`: by default with the stopped run's output, on the store, from where the next run fetches it on
 whichever machine it gets. The command tells that run which state it continues from (`--continues`: the sha256 the
 store lists for the `state.json` in the stopped run's record, or `nothing`), and the job refuses any other it finds
