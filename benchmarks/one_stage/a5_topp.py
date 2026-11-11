@@ -16,18 +16,25 @@ stats blocks, and split count 1 alone: one unit a row of each of 8 templates of 
 ``TopPStatsExp``, ``TopPProbs``, ``TopPStep``), and no ``GumbelTopPSelect`` chunk. A window with a stage that is not composed
 is refused before anything is committed.
 
+``--select-only`` holds the row's select chunks alone, which are composed at any V (the rows a chunk reads from the step
+blocks are past one SHA-512 block): the row's every stage is wired as the fixture wires it and the window keeps the select
+chunks, each wired to the chunk before it, while the rows they read from every split count's last step are committed as plain
+input rows that no unit of the window writes (`select_alone`). Such a window proves each sampled chunk on the rows it commits
+and holds those rows to no step block's output.
+
 It stands in for the served row's stages (V = 154,880: 8,159 units of 85 templates), whose units it does not prove. On bits
 the run exits 0 only when the outcome is accepted and every negative refused; with ``--stages slots`` only when the outcome is
 not accepted and Lean refused each sampled proof block's statement by that reason. ``--out`` holds the window serving wrote
 (``window/``, its private files too) and a5's records (``rank0/``, ``challenger/``, ``summary.json``, which names each sampled
 proof block's template, family and verdicts, and each family's units held and sampled). The arguments but ``--stages``,
-``--v``, ``--splits`` and ``--rows`` are `a5_sparse_mla.parser`'s, and the PYTHONPATH is that script's.
+``--v``, ``--splits``, ``--select-only`` and ``--rows`` are `a5_sparse_mla.parser`'s, and the PYTHONPATH is that script's.
 """
 from __future__ import annotations
 
 import hashlib
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -52,6 +59,8 @@ ROOT = hashlib.sha512(b"verity/a5/topp-stages-stand-in/v1").hexdigest()
 FIXTURE = "adapters/vllm/tests/pipeline/test_serving_rows_stages.py"
 #: the most units a member holds, the fixture's
 MEMBER_UNITS = 7
+#: the select chunks' family
+SELECT = "GumbelTopPSelect"
 
 
 def split_counts(s: str) -> tuple[int, ...]:
@@ -71,26 +80,44 @@ def templates(v: int, splits: tuple[int, ...]) -> tuple[str, list[str]]:
     return spec, [t for t, _n in SRW.unit_templates(spec)[1:] if t in held]
 
 
-def commit(out: Path, v: int, splits: tuple[int, ...], rows: int, stages: str) -> tuple[CS.Binding, dict]:
-    """The window of ``rows`` rows at V = ``v`` over the stages of ``splits`` (`templates`), on bits or, with ``stages``
-    ``slots``, as words, under ``<ROOT>/rank0``, committed into ``out`` (`a5_sparse_mla.committed`), and what it is a stand-in
-    of. Refused (SystemExit) when Flock's composer would refuse one of its templates' proof blocks."""
-    spec, words = templates(v, splits)
+def select_alone(ms: list[CS.Member]) -> list[CS.Member]:
+    """Of a row's stage members ``ms``, every stage named and wired (the fixture's ``members``), the select chunks' as a
+    window of their own: each keeps its wire to the chunk before it, and the rows it reads from the step blocks, which the
+    window does not hold, are plain input rows that no unit of the window writes."""
+    mine = [m for m in ms if SRW.template(m.template).fn.name == SELECT]
+    lo = min(m.base for m in mine)
+    if any(m.base > lo for m in ms if m not in mine) or any(min(ws) < lo <= max(ws) for m in mine for _p, _o, ws in m.wired):
+        raise ValueError("the select chunks are not the row's last units, each wire's writers all before them or all among them")
+    return [replace(m, base=m.base - lo, wired=tuple((p, o, tuple(u - lo for u in ws)) for p, o, ws in m.wired if min(ws) >= lo))
+            for m in mine]
+
+
+def commit(out: Path, v: int, splits: tuple[int, ...], rows: int, stages: str, select_only: bool = False
+           ) -> tuple[CS.Binding, dict]:
+    """The window of ``rows`` rows at V = ``v`` over the stages of ``splits`` (`templates`), or with ``select_only`` over the
+    select chunks alone (`select_alone`), on bits or, with ``stages`` ``slots``, as words, under ``<ROOT>/rank0``, committed into
+    ``out`` (`a5_sparse_mla.committed`), and what it is a stand-in of. Refused (SystemExit) when Flock's composer would refuse
+    one of its templates' proof blocks."""
+    spec, words = templates(v, K.SPLIT_COUNTS if select_only else splits)
     tmpls = words if stages == "slots" else [TS.boolean(t) for t in words]
-    for t in tmpls:
+    held = [t for t in tmpls if SRW.template(t).fn.name == SELECT] if select_only else tmpls
+    for t in held:
         try:
             IF.check_proof_block(SRW.template(t).fn)
         except ValueError as e:
-            raise SystemExit(f"a5_topp: V = {v} with split counts {list(splits)} holds a stage whose proof block Flock's "
-                             f"composer refuses, so a5 stages no window of it (a stats block is composed from 56 lanes a "
-                             f"slice: --v of at least {56 * max(splits)}): {e}") from e
+            raise SystemExit(f"a5_topp: V = {v} with {'the select chunks alone' if select_only else f'split counts {list(splits)}'} "
+                             f"holds a stage whose proof block Flock's composer refuses, so a5 stages no window of it (a stats "
+                             f"block is composed from 56 lanes a slice: --v of at least 56 times its split count): {e}") from e
     s = TS.Served(spec, n=rows)
     ms = TS.members(s, tmpls, dict.fromkeys(tmpls, MEMBER_UNITS))
-    defs = [(SRW.template(t).fn, sum(m.n for m in ms if m.template == t)) for t in tmpls]
+    ms = select_alone(ms) if select_only else ms
+    defs = [(SRW.template(t).fn, sum(m.n for m in ms if m.template == t)) for t in held]
     w = a5.rated(CS.Binding(*CS.population_program(defs, several=True), a5.D.parse_design("stratified:1"), f"{ROOT}/rank0",
                             tuple(ms)), SM.RULE)
     of = {"fixture": FIXTURE, "row": spec, "rows": rows, "splits": list(splits), "stages": stages}
-    return SM.committed(w, TS.read(s, w.members, tmpls), out, of, "a5_topp.py"), of
+    if select_only:
+        of = {**of, "splits": [], "select_only": True}
+    return SM.committed(w, TS.read(s, w.members, held), out, of, "a5_topp.py"), of
 
 
 def families(held: dict) -> dict:
@@ -135,13 +162,17 @@ def main() -> int:
     ap.add_argument("--stages", choices=("bits", "slots"), default="bits", help="the partition names each stage on bits "
                     "(_v2, laid out flat) or as words (slots: _v1, its table reads in lookup slots, to be refused by Lean)")
     ap.add_argument("--v", type=int, default=64, help="the rows' V")
-    ap.add_argument("--splits", type=split_counts, default=(1,), help="the split counts whose stages the window holds, "
-                    "comma-separated; the select chunks only with all of them")
+    ap.add_argument("--splits", type=split_counts, help="the split counts whose stages the window holds, comma-separated "
+                    "(default 1); the select chunks only with all of them")
+    ap.add_argument("--select-only", action="store_true", help="the window holds the select chunks alone, the rows they read "
+                    "from the step blocks plain input rows that no unit of the window writes (no --splits)")
     ap.add_argument("--rows", type=int, default=2, help="the window's rows: each template's units are its units a row "
                     "times this, so that a sample of one of each leaves units unsampled for the negatives")
     a = ap.parse_args()
+    if a.select_only and a.splits:
+        ap.error("--select-only holds the select chunks alone: no --splits")
     out = Path(a.out)
-    mine, of = commit(out / "window", a.v, a.splits, a.rows, a.stages)
+    mine, of = commit(out / "window", a.v, a.splits or (1,), a.rows, a.stages, a.select_only)
     summary, rank = SM.audited(a, mine, of, ROOT)
     proved = sessions(mine, rank)
     summary.update(stages=a.stages, families=families(summary["window"]["templates"]), sessions=proved,

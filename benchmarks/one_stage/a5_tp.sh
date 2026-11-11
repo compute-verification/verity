@@ -17,9 +17,10 @@
 #     column ends and combines, each read row wired to the unit that wrote it), run as the entry row-tables is.
 #     The STANDIN entry topp is a5_topp.py: test_serving_rows_stages' window (GumbelTopPTokenSelectSharedGreedy rows cut into
 #     their stages, each stage on bits and each carried row wired to the unit that wrote it: at V = 64, split count 1's stats,
-#     probs and step blocks; A5_TOPP its other statics, a5_topp.py's arguments, e.g. '--v 128 --splits 1,2'), run as the entry
-#     row-tables is. topp:slots names the stages as words, their table reads in lookup slots, each to be refused by Lean's
-#     verify --zk.
+#     probs and step blocks; A5_TOPP its other statics, a5_topp.py's arguments, e.g. '--v 128 --splits 1,2', or
+#     '--v 16 --select-only', the select chunks alone, the rows they read from the step blocks plain input rows), run as the
+#     entry row-tables is. topp:slots names the stages as words, their table reads in lookup slots, each to be refused by
+#     Lean's verify --zk.
 #     The STANDIN entry row-tables is a5_row_tables.py: test_row_tables' window (ScaledMmS8Coordinate chunks whose x rows link
 #     its row tables) as rank 0 of a one-rank step, on a local challenger's coins (it needs A5_CHALLENGER for --main).
 #     The STANDIN entries warden and warden:KIND are a5_warden.py: transfer-gate chunks whose ports open the bucket rows of

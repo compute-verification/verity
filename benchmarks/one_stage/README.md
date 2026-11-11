@@ -56,7 +56,8 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   table reads go in lookup slots, and Lean refuses each sampled proof block's statement. The window holds the stages whose
   proof blocks are composed: a stats block from 56 lanes a slice, so by default V = 64 and split count 1's stats, probs and
   step blocks, and the select chunks only where every split count's are (`A5_TOPP`, the script's `--v`, `--splits` and
-  `--rows`).
+  `--rows`). `--select-only` holds the select chunks alone, composed at any V, each wired to the chunk before it, with the
+  rows they read from the step blocks committed as plain input rows that no unit of the window writes.
 - `a5_warden.py` (`a5_tp.sh` with `STANDIN=warden`, `warden:altered`, `warden:pad`, `warden:pad-named` or `warden:swapped`):
   A5 on a window with transfer gates, which no served window has yet: two chunks of the certifier's toy unit whose ports are the
   bucket rows of one connection's ingress and egress cells (a row a bucket, registration v2), committed under the certifier's
