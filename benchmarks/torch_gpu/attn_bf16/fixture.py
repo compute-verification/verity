@@ -1,6 +1,6 @@
 """attn_bf16's check: each case's inputs and the output buffers the kernels must leave, from the Definition.
 
-Every word the kernels write is `GemmCoordinate_v2{K, GEMM_HOPPER}` (verity.ml.circuits.ops.gemm), evaluated by its numpy
+Every word the kernels write is `GemmCoordinate_v2{K, GEMM_HOPPER}` (verity.definitions.ops.gemm), evaluated by its numpy
 twin (`evaluate_batch`, kernel "auto"), and the twin is held to the Definition's reference evaluator on a sample of each
 case's words (every special-valued one first); any disagreement exits 1 before anything is written:
 
@@ -47,9 +47,9 @@ import sys
 
 import numpy as np
 
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops import gemm as G
+from verity.circuits import evaluation as E
+from verity.circuits.defs import bind
+from verity.definitions.ops import gemm as G
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gen

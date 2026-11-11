@@ -82,13 +82,13 @@ sys.path.insert(0, str(HERE))
 
 import certifier_serve as cs  # noqa: E402
 import leak_scan as LS  # noqa: E402
-from verity.core.protocols.certifier import head_check as HC  # noqa: E402
-from verity.core.protocols.certifier import service as SVC  # noqa: E402
-from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer  # noqa: E402
-from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
-from verity.core.protocols.certifier.service import LinkWindows  # noqa: E402
-from verity.core.protocols.spot import service as S  # noqa: E402
-from verity.core.protocols.spot.one_stage import partition as P  # noqa: E402
+from verity.protocols.certifier.verifier import head_check as HC  # noqa: E402
+from verity.protocols.certifier.verifier import service as SVC  # noqa: E402
+from verity.protocols.certifier.verifier.certificate import CertifiedRecord, Direction, Issuer  # noqa: E402
+from verity.protocols.certifier.verifier.schedule import ClockSync  # noqa: E402
+from verity.protocols.certifier.verifier.service import LinkWindows  # noqa: E402
+from verity.protocols.spot.verifier import service as S  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import partition as P  # noqa: E402
 
 ENDS = ("egress", "ingress")
 #: the sampled period's negative (``--draw K``, K < n): the prover proves another K-subset than the sample of record's
@@ -348,8 +348,8 @@ def _one_stage():
     import a0
     import a8
     import numpy as np
-    from verity.core.protocols.spot.one_stage import proofs as PF
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity.protocols.spot.verifier.one_stage import proofs as PF
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
     from verity_flock import circuit as FC
     from verity_flock import class_statement as CS
 

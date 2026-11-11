@@ -1,6 +1,6 @@
 # benchmarks/codec_tensor
 
-The bandwidth audit's (PoUB, `verity/core/protocols/remote_bandwidth`) work on the GPU, and the tensor-core wide-word
+The bandwidth audit's (PoUB, `verity/protocols/poub/verifier`) work on the GPU, and the tensor-core wide-word
 codec. `wt.cu` is the codec, a fused decode with its receipts, held to `wide.py`, its byte-exact reference. `reader.cu`
 (with `reader.py`, `reader.sh`) is the device reader: the audit's receipts, leaves and receipt tree, gated byte for byte
 against the audit's `receipts.py`. `sketch_receipt.py` is the reference for the audit's `sketch-sha512` receipt.
@@ -9,7 +9,7 @@ against the audit's `receipts.py`. `sketch_receipt.py` is the reference for the 
 **Status: active.** `benchmarks/remote_session/session.cu` includes `reader.cu`; `benchmarks/kv_filler`,
 `benchmarks/vllm_encoded` and `benchmarks/harness` build `wt.cu` and `reader.cu`; `benchmarks/pouw/served_h1` includes
 `sha512.cuh`; and the audit's `PROTOCOL.md` and vectors test name `sketch_receipt.py`. Decided by `rg codec_tensor` over
-`verity/`, `benchmarks/`, `examples/`, `tests/` and `integrations/`.
+`verity/`, `benchmarks/`, `demos/`, `tests/` and `adapters/`.
 
 **Run:** `uv run tools/verity/check/suites.py benchmarks/codec_tensor` checks `wide.py`, `sketch_receipt.py`
 and `sketching.py` against the audit's code and `tests/vectors.json`, and the decode step's plan, on the CPU. `run.sh`

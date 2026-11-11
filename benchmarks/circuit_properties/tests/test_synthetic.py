@@ -11,7 +11,7 @@ from circuit_properties import flat
 from circuit_properties.measure import Ambiguous, Blocks, measure, whole
 from circuit_properties.ops import Designation, NotSeparable, Site, op_shape
 
-from verity.ml.circuits.defs import bind
+from verity.circuits.defs import bind
 
 
 def test_op_shape_by_hand():
@@ -61,8 +61,8 @@ def test_one_value_in_two_lanes_is_refused_not_miscounted():
 
 
 def test_a_word_primitive_has_no_products_of_its_own():
-    from verity.ml.circuits.ops import gemm as G
-    from verity.ml.circuits.program import Program
+    from verity.definitions.ops import gemm as G
+    from verity.circuits.program import Program
     p = Program(bind(G.Gemm, K=16, N=1, **G.GEMM_AMPERE))
     with pytest.raises(NotSeparable):
         measure(p, Designation(sites=(Site(op=r"AmpereBF16TcDot16_v\d+", x="a", w="b"),)))

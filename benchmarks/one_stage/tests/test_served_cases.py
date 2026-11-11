@@ -40,19 +40,19 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.pouw import credit as Cr
-from verity.core.protocols.pouw import weights as PW
-from verity.core.protocols.spot import service as S
-from verity.core.protocols.spot.one_stage import draw as DR
-from verity.core.protocols.spot.one_stage import partition as P
-from verity.core.protocols.spot.one_stage import proofs as PF
-from verity.core.protocols.spot.one_stage import registered as G
-from verity.core.protocols.spot.one_stage import registration as R
-from verity.ml.circuits import codec, partition_object as PO
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.types import Array, Value as Bits
-from verity.ml.crypto import lms
+from verity.protocols.pouw.verifier import credit as Cr
+from verity.protocols.pouw.verifier import weights as PW
+from verity.protocols.spot.verifier import service as S
+from verity.protocols.spot.verifier.one_stage import draw as DR
+from verity.protocols.spot.verifier.one_stage import partition as P
+from verity.protocols.spot.verifier.one_stage import proofs as PF
+from verity.protocols.spot.verifier.one_stage import registered as G
+from verity.protocols.spot.verifier.one_stage import registration as R
+from verity.circuits import codec, partition_object as PO
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.types import Array, Value as Bits
+from verity.commitments.crypto import lms
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -950,7 +950,7 @@ def test_a_usage_error_exits_64(capsys, argv):
 
 #: the H200's declared target (`pins/NVIDIA_H200.json`), at which V2 serves the 4,32,4 class
 H200 = {"compute_capability": [9, 0], "num_sms": 132}
-#: `integrations/vllm`'s tests' TINY Llama, at whose caps (64 positions) the 4,32,4 class's 36 fit
+#: `adapters/vllm`'s tests' TINY Llama, at whose caps (64 positions) the 4,32,4 class's 36 fit
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128,
         "num_attention_heads": 4, "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256,
         "rms_norm_eps": 1e-5, "tie_word_embeddings": True, "max_position_embeddings": 64, "hidden_act": "silu"}

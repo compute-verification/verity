@@ -9,7 +9,7 @@ misses F ≤ f₀, the (1 − α) quantile of the honest miss count, Poisson wit
 false-alarm rate, never soundness.  ε_proof(d) is an ideal-permutation-model bound, and τ counts whole `Π₂` calls of
 `call_ns`, the model's unit: at the reference Feistel-SHAKE256 `Π₂` a prover rebuilds a label from 1.53% of `C` in 481
 Keccak-f, about a tenth of a call, so neither bounds an adversary there (the red team's state attack,
-`verity.core.protocols.pous.primitives.pi2_keccak_f`).
+`verity.protocols.pous.verifier.primitives.pi2_keccak_f`).
 
 The page evaluates the file with plain floats and closed forms only (§6 "The rules"), and `evaluate` is that evaluation
 here, from the file alone:
@@ -160,9 +160,9 @@ FINE = np.arange(int(1.002e5 / H_US) + 1) * H_US
 
 
 def call_ns(block_bytes: int) -> int:
-    """The fastest whole `Π₂` call on `block_bytes` labels (`verity.core.protocols.pous.primitives.pi2_call_ns`, in bits): the
+    """The fastest whole `Π₂` call on `block_bytes` labels (`verity.protocols.pous.verifier.primitives.pi2_call_ns`, in bits): the
     ideal-permutation model's unit, not the adversary's floor at the reference Feistel-SHAKE256 `Π₂`."""
-    from verity.core.protocols.pous.primitives import pi2_call_ns
+    from verity.protocols.pous.verifier.primitives import pi2_call_ns
 
     return pi2_call_ns(8 * block_bytes)
 

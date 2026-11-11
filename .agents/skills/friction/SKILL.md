@@ -138,7 +138,7 @@ Keys and access:
 Landing:
 
 - Lint ratchets are no-growth, and a change to a lint is judged like source; cleanup lanes pay the exceptions down and a
-  feature PR owes none. `integrations/vllm/tools/ratchet_gate.py`'s docstring states the rules (the integration's ratchets
+  feature PR owes none. `adapters/vllm/tools/ratchet_gate.py`'s docstring states the rules (the integration's ratchets
   and `noqa` count, `tests/lint/`'s lists, each landing's changed Python, checked after it lands, ringing its owner,
   never reverting). Fix the code, never the list: a rename moves its entries (`--move OLD NEW`), an environment read
   goes through the area's settings registry, and a swallowing handler re-raises, records the outcome, or narrows.
@@ -186,7 +186,7 @@ Protocols and claims:
   are for the whole node. PoUB treats the developer's resources as one pool (conservation, no identity
   assumption), claims 0.15% over a 10-minute monitoring period with every window at most 1%, and never changes the
   model's logits.
-- PoUW's bar is T1–T3, not Dither or SAK; the lead (`verity/pouw/v2`) is next. See `verity/core/protocols/pouw/README.md`.
+- PoUW's bar is T1–T3, not Dither or SAK; the lead (`verity/pouw/v2`) is next. See `verity/protocols/pouw/verifier/README.md`.
 - PoUW's guarantees, and only PoUW's, may rest on random-oracle assumptions for SHA-512
   (`StraightLineExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. Flock's
   knowledge soundness keeps the collision form.

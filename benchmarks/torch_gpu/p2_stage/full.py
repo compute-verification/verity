@@ -147,7 +147,7 @@ class Audit:
 
     def __init__(self, args: argparse.Namespace, lay: L.StoreLayout) -> None:
         import sketch as K
-        from verity.core.protocols.remote_bandwidth import receipts as R
+        from verity.protocols.poub.verifier import receipts as R
 
         self.K, self.R = K, R
         self.store_units = lay.params.blocks_per_segment * lay.params.segments // K.PER
@@ -428,7 +428,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--layout", type=Path, required=True, help="the store's layout JSON (p2_v1/store.py layout)")
     ap.add_argument("--weights", type=Path, required=True, help="the weights stream's manifest, with digests")
     ap.add_argument("--w", type=Path, help="the weights stream's bytes at their stream offsets (else the generator's)")
-    ap.add_argument("--generator", default="e2e_h200.served_weights", help="the seeded generator, without --w")
+    ap.add_argument("--generator", default="benchmarks.torch_gpu.p2_stage.served_weights", help="the seeded generator, without --w")
     ap.add_argument("--shape", default="h200", help="its shape")
     ap.add_argument("--weights-seed", default="text:verity/cmp92/h200/weights/v1", help="its seed")
     ap.add_argument("--encoded", type=Path, required=True, help="the encoded store's directory, read only")

@@ -1,5 +1,5 @@
 """HIGHUTIL: an 8B model's linear layers at full batch on one GPU, each call credited through Dither's no-fold receipt
-(v31.py's ``Fill``, under verity/core/protocols/pouw/dither/PROTOCOL.md v3.2's commit phase) on accel_v31's prover,
+(v31.py's ``Fill``, under verity/protocols/pouw/verifier/dither/PROTOCOL.md v3.2's commit phase) on accel_v31's prover,
 with live coins: the declared utilization the periods establish (the credited MACs a second over the tensor pipe's MAC
 rate at the card's ceiling, their MFU) and the prover overhead γ against plain GEMMs on the same linears.
 
@@ -77,12 +77,12 @@ sys.path.insert(0, str(TREE / "benchmarks" / "pouw" / "accel_v31"))
 
 import v31  # noqa: E402
 
-from verity.ml.commitments.identity import identity_digest_sha512  # noqa: E402
-from verity.ml.commitments.indexed import RangeIndexedDomain  # noqa: E402
-from verity.ml.commitments.limits import VerificationLimits  # noqa: E402
-from verity.ml.commitments.merkle import Commitment, CommitmentDomain, Opening, tree_levels, verify_opening  # noqa: E402
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, row_leaf  # noqa: E402
-from verity.ml.randomness import derive  # noqa: E402
+from verity.commitments.identity import identity_digest_sha512  # noqa: E402
+from verity.commitments.indexed import RangeIndexedDomain  # noqa: E402
+from verity.commitments.limits import VerificationLimits  # noqa: E402
+from verity.commitments.merkle import Commitment, CommitmentDomain, Opening, tree_levels, verify_opening  # noqa: E402
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, row_leaf  # noqa: E402
+from verity.commitments.randomness import derive  # noqa: E402
 
 #: the model's linears; a config's LAYERS are its calls (`calls`), the linears with down split along K
 LINEARS = (("qkv", 6144, 4096), ("o", 4096, 4096), ("up", 28672, 4096), ("down", 4096, 14336))
@@ -117,7 +117,7 @@ def lowering(card: dict | None) -> str:
     """The s8 lowering credited_ands counts, on the card's own step (sm_120's when no card is given)."""
     sm90 = bool(card) and str(card.get("arch", "")).startswith("sm_90")
     return (f"GemmAccumulatorS8_v2{{K, **{'GEMM_SM90_S8' if sm90 else 'GEMM_SM120_S8'}}} "
-            "(verity.ml.circuits.ops.boolean.gemm)")
+            "(verity.definitions.ops.boolean.gemm)")
 
 
 def load_card(spec: str) -> dict:
@@ -719,7 +719,7 @@ class Coins:
 
     def __init__(self, how: str, main: Path, peer: str | None, key_record: str | None, gate_key: str | None) -> None:
         import a5_coins as A5
-        from verity.core.protocols.spot import remote as R
+        from verity.protocols.spot.device import remote as R
         self.A5, self.R, self.how = A5, R, how
         self.main = R.main_lines(main)
         self.peer, self.key_record, self.gate_key = peer, key_record, gate_key
@@ -736,7 +736,7 @@ class Coins:
         """The verifier's check of the session once it has ended: the auditor's ledger and the session's sealed files
         (`remote.trusted_session`), every coin used opened against its signed commitment after the receipt it was
         recorded after, and the open's pin on main."""
-        from verity.core.protocols.spot import challenger as Ch
+        from verity.protocols.spot.device import challenger as Ch
         try:
             directory, ledger, pins_log, key = session.finish(dest)
             commitment, roots = self.R.trusted_session(directory, [ledger], {"root": root}, key, self.A5.lms_verify)

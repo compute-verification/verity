@@ -5,7 +5,7 @@ with the challenger on the developer's node (the lower bound) and on another mac
 challenger is auditor hardware and never runs on the developer's node). It also measures the wire's floor, the fastest an
 answer of a given size can cross the path, which bounds a timed read from below. `lat.cu` is the tree's only UDP
 challenger and responder, with one challenge datagram and a per-challenge answer datagram size; the memory challenger
-(`verity/core/devices/memory_challenger`) has no network transport yet.
+(`verity/protocols/pous/device`) has no network transport yet.
 
 Measuring:
 

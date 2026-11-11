@@ -68,7 +68,7 @@ PRODUCT=${PRODUCT:-onsite}
 case $PRODUCT in
   onsite) products=(remote onsite) ;;
   remote) products=(remote)
-    [ "${POUW:-}" = pearlplus ] && [ -f verity/core/protocols/remote/RemoteV1Main.lean ] && products=(remote-v1) ;;
+    [ "${POUW:-}" = pearlplus ] && [ -f verity/protocols/remote/verifier/RemoteV1Main.lean ] && products=(remote-v1) ;;
   *) say "COMPOSITE: not run, PRODUCT is onsite or remote, not $PRODUCT"; exit 1 ;;
 esac
 [ -f benchmarks/one_stage/composite.py ] || { say "COMPOSITE: not run, this tree has no benchmarks/one_stage/composite.py"; exit 1; }
@@ -111,7 +111,7 @@ fi
 
 bad=0
 for x in "${products[@]}"; do
-  e=$(exe "$x" "verity/core/protocols/${x%-v1}") || { bad=1; continue; }
+  e=$(exe "$x" "verity/protocols/${x%-v1}") || { bad=1; continue; }
   cases=()
   while IFS= read -r c; do cases+=(--cases "$c"); done < <("$TPY" - "$D/private" "$x" "$P" "$D/private/pouw" \
     "$D/private/compose" "$D/private/deferred" <<'EOF'

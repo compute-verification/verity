@@ -8,7 +8,7 @@ proved by Flock `prove --zk` behind the Lean ZK server and held by Lean `verify 
 
 * **The slice** (``--slice``): ``demo`` (the default), the demonstration class (`compile_slice.demo`, 59,341 ANDs a
   unit), whose candidates take real prefix hits; ``corpus``, corpus-smallkv's first seven steps
-  (`verity/core/protocols/certifier/tests/fixtures/compile_slice_smallkv.json`, about 7.6M ANDs a unit), which `prove`
+  (`verity/protocols/certifier/verifier/tests/fixtures/compile_slice_smallkv.json`, about 7.6M ANDs a unit), which `prove`
   first checks is the corpus's (`replay_vectors.vectors` on corpus-smallkv: the arrivals, the decisions and the replay's
   rows; `cache_vectors`' tokens of each arrival); or ``w212``, window 212 of vLLM's served run (the encodings'
   ``vllm-8eb1`` fixture) padded into the run's public engine class, (R, W, A) = (8, 1, 9), Q 4, D 32, P 54, K 4, no
@@ -44,7 +44,7 @@ proved by Flock `prove --zk` behind the Lean ZK server and held by Lean `verify 
   which are the schedule its server served (its own rows, the hit taken), so its ``cache`` check alone refuses it.
   Every unit's ``srv`` rows are its window's but ``sixpass-own``'s, which are its own run's.
 * **The bindings**, checked natively by the verifier on the row commitments b‖c the public file holds: each unit's
-  ``adv`` row is row i of the advice's hiding registration (`verity.ml.commitments.advice`: its leaf from b‖c, its path
+  ``adv`` row is row i of the advice's hiding registration (`verity.commitments.advice`: its leaf from b‖c, its path
   to the registered root), its ``srv`` row j is leaf i·(P / G) + j of the served rows' registration
   (`served_rows.leaf`, `served_rows.leaf_ok`), its
   ``cert`` row is the certified record's commitment (a stand-in: one ``cert`` row under the certifier's salt, b‖c as
@@ -82,15 +82,15 @@ sys.path.insert(0, str(HERE))
 
 import leak_scan as LS  # noqa: E402
 import n2_zk as N2  # noqa: E402
-from verity.core.protocols.certifier import arith_encode as AE  # noqa: E402
-from verity.core.protocols.certifier import charge_chain as CC  # noqa: E402
-from verity.core.protocols.certifier import compile_slice as CS  # noqa: E402
-from verity.core.protocols.certifier import served_rows as SR  # noqa: E402
-from verity.ml.commitments import advice as ADV  # noqa: E402
-from verity.ml.commitments.frame_v3 import BitRowLeaf  # noqa: E402
-from verity.ml.commitments.rowleaf import bit_row, row_leaf  # noqa: E402
+from verity.protocols.certifier.verifier import arith_encode as AE  # noqa: E402
+from verity.protocols.certifier.verifier import charge_chain as CC  # noqa: E402
+from verity.protocols.certifier.verifier import compile_slice as CS  # noqa: E402
+from verity.protocols.certifier.verifier import served_rows as SR  # noqa: E402
+from verity.commitments import advice as ADV  # noqa: E402
+from verity.commitments.frame_v3 import BitRowLeaf  # noqa: E402
+from verity.commitments.rowleaf import bit_row, row_leaf  # noqa: E402
 
-FIXTURES = REPO / "verity/core/protocols/certifier/tests/fixtures"
+FIXTURES = REPO / "verity/protocols/certifier/verifier/tests/fixtures"
 FIXTURE = FIXTURES / "compile_slice_smallkv.json"
 W212 = FIXTURES / "compile_slice_w212_class_async.json"
 TRACE_8EB1 = REPO / "benchmarks/network_e2e/encodings/tests/fixtures/vllm-8eb1/advice_trace.jsonl.gz"

@@ -1,0 +1,30 @@
+# The proof system's challenger on its auditor host: `serve.py` over `verity.protocols.spot.device.remote`, which
+# `auditor.py` runs there as the auditor user, one session a window under its signed ledger (`run.sh`: a development
+# session elsewhere). Not a package: the suite runs serve.py as a process over loopback with a test key, the Lean verifier's
+# coins stubbed (`tests/stub_serve.py`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "tests/test_auditor_certifier.py",
+    "tests/test_auditor_load.py",
+    "tests/test_auditor_rt4.py",
+    "tests/test_auditor_warden.py",
+    "tests/test_coin_link.py",
+    "tests/test_serve.py",
+]
+# The load's verbs read and write the store with `benchmarks/network_traces/load_relay.py`, which commits with the
+# certifier's transfer rows and PoUS's P2 scheme. The rehearsal unit's RuntimeMaxSec bounds the gate's --minutes.
+inputs = ["benchmarks/network_traces/load_relay.py", "verity/protocols/certifier", "verity/protocols/pous",
+          "verity/hardware/record.py",
+          "tools/research/src/research/pods/nebius/challenger/vy-certifier@.service",
+          "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+          "verity/protocols/spot/verifier/profile.py", "verity/protocols/spot/verifier/__init__.py",
+          "verity/claims/__init__.py",
+          "verity/protocols/spot/device/challenger.py", "verity/protocols/spot/device/coins.py",
+          "verity/protocols/spot/device/remote.py",
+          "verity/protocols/spot/verifier/one_stage", "verity/ml/__init__.py", "verity/circuits",
+          "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness", "verity/protocols/pouw/verifier",
+          "verity/ml/protocols", "verity/definitions/kernels/__init__.py", "verity/definitions/kernels/tc.py"]

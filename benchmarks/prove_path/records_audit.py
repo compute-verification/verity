@@ -1,4 +1,4 @@
-"""A window's audit from its records alone: what an integration hands Verity (`verity.ml.windows.interface`), and nothing else.
+"""A window's audit from its records alone: what an integration hands Verity (`verity.commitments.windows.interface`), and nothing else.
 
 The records, every one in the window's directory but the advice's opening:
 
@@ -72,7 +72,7 @@ prover's development verifier (`PEARL_CREDIT`). Once the records are read and be
 audit stopped before its proofs end still says what it was tied to.
 
 ``--day N --day-log LOG``: the window is day N's, and the deployment's registration log declares the day's one circuit
-(`verity.core.protocols.registration.Declaration`). R2 holds the registration's program to it (`declared_day`, one-stage's
+(`verity.hardware.registration.Declaration`). R2 holds the registration's program to it (`declared_day`, one-stage's
 Declared day), a negative moves the declaration to another program, and the summary's ``day`` names the day's declared
 program and where the day came from (`DAY_SOURCES`). ``--day`` and the prover's log are the development fallback: they
 bind the day to no time the auditor's device signed. ``--day-ledger LEDGER`` reads the day from the challenger's signed
@@ -172,13 +172,13 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
-from verity.core import site as ST  # noqa: E402
-from verity.core.protocols import registration as G  # noqa: E402
-from verity.core.protocols.certifier.blocks import SCAN_STATE  # noqa: E402
-from verity.core.protocols.pouw import credit as CR  # noqa: E402
-from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
-from verity.ml.circuits.codec import program_digest  # noqa: E402
-from verity.ml.windows import history as HW, interface as IF  # noqa: E402
+from verity.hardware import site as ST  # noqa: E402
+from verity.hardware import registration as G  # noqa: E402
+from verity.protocols.certifier.verifier.blocks import SCAN_STATE  # noqa: E402
+from verity.protocols.pouw.verifier import credit as CR  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
+from verity.circuits.codec import program_digest  # noqa: E402
+from verity.commitments.windows import history as HW, interface as IF  # noqa: E402
 
 #: where an audit's ports start when ``--port`` isn't given (`free_ports`): below Linux's ephemeral range (32768-60999), from
 #: which outbound connections take theirs
@@ -191,7 +191,7 @@ REFUSED = 2
 def catalog_resolve(tid: str) -> Any:
     """`interface.resolve` over the whole of Verity's catalog, the registry's Definitions loaded too (a window's io shell and
     its blocks, which `interface`'s own walk can't import); a refusal names the registry modules that failed to import."""
-    from verity.ml.definitions.registry.catalog import load
+    from verity.definitions.registry.catalog import load
 
     _, errors = load()
     try:
@@ -635,7 +635,7 @@ def device_day(lines: list[str], root: str, key: Any, verify: Callable[[Any, byt
     one-stage R2's shape: the UTC day of the window open's signed ``started_utc``, and the declarations its lane signed
     before that open), never ``--day``. The tied W's naming is held to `registration.Declaration` rebuilt from the
     device's entry of its day. ValueError (`challenger.CoinError`) where the reader refuses the ledger."""
-    from verity.core.protocols.spot import challenger as Ch
+    from verity.protocols.spot.device import challenger as Ch
     got = Ch.declared_day(lines, {"root": root}, key, verify)
     day = got["day"]
     declarations = [{"blocks": list(d["blocks"]), "day": d["day"], "program": d["program"]} for d in got["declarations"]]
@@ -848,7 +848,7 @@ def proof_edits(lean: str, wdir: Path, members: tuple, out: Path, most: int) -> 
     bit flipped (``public-bit-*``) under the honest proof."""
     import a0
     # the directory of `zk_mutants.py` and the modules it imports beside it
-    sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/ml/flock/verifier/zk_mutants.py").parent))
+    sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/protocols/flock/agreement/zk_mutants.py").parent))
     import zk_mutants as ZM
 
     k, honest = next(((k, s.parent) for k in range(len(members))
@@ -916,7 +916,7 @@ def audit(a: argparse.Namespace) -> int:
         pins |= histories
         reads = IF.registered_reads(doc, mine, pins, registered=REG)
         if a.day_ledger:
-            from verity.core.protocols.spot import challenger as Ch, remote as SPR
+            from verity.protocols.spot.device import challenger as Ch, remote as SPR
             key = Ch.key_of_record(json.loads(Path(a.challenger_key).read_text()))
             day = device_day(SPR.ledger_lines(a.day_ledger), mine.run, key, AC.lms_verify, w_tie)
         else:

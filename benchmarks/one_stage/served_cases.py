@@ -118,18 +118,18 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
-from verity.core.protocols.pouw import credit as Cr
-from verity.core.protocols.pouw import period_check as PC
-from verity.core.protocols.spot.one_stage import proofs as PF
-from verity.core.protocols.spot.one_stage import registration as R
-from verity.core.protocols.spot.one_stage import verifier as VF
-from verity.ml.circuits import codec
+from verity.protocols.pouw.verifier import credit as Cr
+from verity.protocols.pouw.verifier import period_check as PC
+from verity.protocols.spot.verifier.one_stage import proofs as PF
+from verity.protocols.spot.verifier.one_stage import registration as R
+from verity.protocols.spot.verifier.one_stage import verifier as VF
+from verity.circuits import codec
 
 ROOT = Path(__file__).resolve().parents[2]
 V1 = R.PROTOCOL
 V1_LEAN = (VF.PACKAGE, "sampled-proofs-one-stage")
 SAMPLED = "verity/sampled-proofs/v1"
-SAMPLED_LEAN = (ROOT / "verity/core/service/vstar/recursive", "vstar-recursive")
+SAMPLED_LEAN = (ROOT / "verity/protocols/recursion/verifier/recursive", "vstar-recursive")
 #: `vstar-recursive`'s command for sampled proofs (`VStar.Recursive.Sampled.main`), ahead of ``check``
 SAMPLED_CMD = ("sampled",)
 #: The form remote's sampled proofs case names: one-stage v2's audit (`VStar.Recursive.Sampled.ONE_STAGE`)
@@ -383,8 +383,8 @@ def parameters(desc: Mapping[str, Any], root: Any, given: Any = None) -> list[li
     rebuilt over the root's template batches in order, held to the descriptor's digest. ``given``, v1's own copy where
     its params carry one, names the registered values the population takes ahead of its templates' parameters
     (`_values`), and must be the rebuilt program's."""
-    from verity.ml.circuits.population import POPULATION_VERSIONS, mixed_population_program, population_program
-    from verity.ml.circuits.program import is_input
+    from verity.circuits.population import POPULATION_VERSIONS, mixed_population_program, population_program
+    from verity.circuits.program import is_input
 
     members = [(n.fn, getattr(n, "n", 1)) for n in root.body.nodes if not is_input(n.fn)]
     values = _values(given, members)

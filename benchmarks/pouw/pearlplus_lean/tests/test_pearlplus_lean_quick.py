@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
-LEAN = ROOT / "verity" / "core" / "protocols" / "pouw" / "lean" / "pearlplus" / "PouwPearlPlus"
+LEAN = ROOT / "verity" / "protocols" / "pouw" / "verifier" / "lean" / "pearlplus" / "PouwPearlPlus"
 CASES = Path(__file__).resolve().parent / "test_pearlplus_lean.py"
 
 

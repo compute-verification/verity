@@ -209,7 +209,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-for _p in (Path(__file__).resolve().parent, ROOT / "examples" / "h200" / "interfaces"):
+for _p in (Path(__file__).resolve().parent, ROOT / "benchmarks" / "one_stage" / "interfaces"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
@@ -770,7 +770,7 @@ def gate_ready(gate: str, lane: str, main: Path | None = None, root: str | None 
     """Whether this run may reserve its windows' sessions at `gate` (the ``gate`` subcommand), and its ``GATE`` line; with
     `root`, the run root a session of this run opens on, also refused once an open in the ledger names it: the gate opens
     a root once, ever."""
-    from verity.core.protocols.spot import challenger as CH
+    from verity.protocols.spot.device import challenger as CH
     from verity_vllm.protocols.pouw.h1 import window as PHW
 
     ledger = _gate_out(gate, "ledger").decode().splitlines()
@@ -1074,14 +1074,14 @@ def credit_inputs(serve_dir: Path, statements: Path | None = None, live: Path | 
 
 def check_challenger(calls: Path, tree: Path, ledger: Path, pins: Path, main: Path | None, key: str, out: Path,
                      inputs: Mapping[str, str], python: str) -> dict[str, Any]:
-    """`pouw_h1_gpu.py --check-challenger` (run by `python` in integrations/vllm, so ``tests`` is that package's) of the
+    """`pouw_h1_gpu.py --check-challenger` (run by `python` in adapters/vllm, so ``tests`` is that package's) of the
     window's record `calls` against its session's tree `tree`, with credit's `inputs` (`credit_inputs`); its
     ``pouw_h1_challenger.json``."""
     out.mkdir(parents=True, exist_ok=True)
     argv = [python, "-m", "tests.protocols.pouw_h1_gpu", "--check-challenger", str(calls), str(tree), "--key-sha512", key,
             "--ledger", str(ledger), "--pins", str(pins), *(["--main", str(main)] if main else []), "--out", str(out),
             *(x for kv in inputs.items() for x in kv)]
-    p = subprocess.run(argv, cwd=ROOT / "integrations" / "vllm", capture_output=True, text=True, check=False)
+    p = subprocess.run(argv, cwd=ROOT / "adapters" / "vllm", capture_output=True, text=True, check=False)
     (out / "check.log").write_text(p.stdout + p.stderr)
     try:
         return json.loads((out / "pouw_h1_challenger.json").read_text())
@@ -1190,8 +1190,8 @@ def pearlplus_coins(served: Mapping[str, Any], out: Path, gate: str | None, key:
     `out`, with main's first-parent line `main` (`remote.main_lines`), each pass's manifest held by
     `core_check.live_salt` under the challenger key whose public key's SHA-512 is `key` (`challenger.pinned_key`).
     ``{session, closed, passes, reason}``: the passes checked, and None or the first refusal."""
-    from verity.core.protocols.pouw import core_check as CC
-    from verity.core.protocols.spot import remote
+    from verity.protocols.pouw.verifier import core_check as CC
+    from verity.protocols.spot.device import remote
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
     coins = served.get("coins") or {}
@@ -1242,10 +1242,10 @@ def pearlplus_draw(record: Path, out: Path, gate: str | None, key: str | None, m
     the record's source its coin. `fetch` replaces the gate's answers (tests). ``{from, session, reason}``: the draw's
     origin, its session and None or the first refusal; a node's draw has no session and no refusal here (the compose
     refuses it, `pearlplus_live_draw`)."""
-    from verity.core.protocols.pouw import salt as PS
-    from verity.core.protocols.pouw import window as Wd
-    from verity.core.protocols.spot import challenger as Ch
-    from verity.core.protocols.spot import remote
+    from verity.protocols.pouw.verifier import salt as PS
+    from verity.protocols.pouw.verifier import window as Wd
+    from verity.protocols.spot.device import challenger as Ch
+    from verity.protocols.spot.device import remote
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
     got: dict[str, Any] = {"from": None, "session": None, "reason": None}
@@ -1441,7 +1441,7 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     can't be read; the record holds the verdict to W, `pearlplus_of_record`), and why it credits nothing by itself names
     the Pearl-C period the epoch's live salt session joined (`pearlplus_why_tied`, or `PEARLPLUS_WHY_TIED_IN_PROCESS`)."""
     import served_shares as SS
-    from verity.core.protocols.spot.one_stage import registration as REG
+    from verity.protocols.spot.verifier.one_stage import registration as REG
 
     out.mkdir(parents=True, exist_ok=True)
     reasons = []
@@ -1534,7 +1534,7 @@ def check_answer(a: Any) -> dict[str, Any]:
     """``a`` when it is an answer in the shapes `Answer.ofJson` reads (`pouw.core_check.answer_of`, the Python mirror of
     the core interface's decoder): an accept has no reason and both its public outputs and its profile, a refusal a
     reason and neither. Anything else is a ValueError, which the row reports as the subprotocol's error."""
-    from verity.core.protocols.pouw import core_check as CC
+    from verity.protocols.pouw.verifier import core_check as CC
 
     try:
         CC.answer_of(a)
@@ -1631,9 +1631,9 @@ def pearlplus_live_draw(record: Mapping[str, Any], piece_dir: Path, key: str, la
     first reserve of lane `lane` after its Pearl-C period `period` closed, withheld with a draw session's layout alone,
     and the one session opened on C, so a prover who draws again under another session holds a draw no compose takes;
     and the record's opening its coin ``pouw/draw`` 0 after C (`challenger.live_reason`), the record's source that coin."""
-    from verity.core.protocols.pouw import window as Wd
-    from verity.core.protocols.spot import challenger as Ch
-    from verity.core.protocols.spot import remote
+    from verity.protocols.pouw.verifier import window as Wd
+    from verity.protocols.spot.device import challenger as Ch
+    from verity.protocols.spot.device import remote
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
     from verity_vllm.protocols.pouw.h1 import window as PHW
 
@@ -1712,8 +1712,8 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, sampled_proofs:
 
     The answer is Pearl+'s, its work the Lean's, its profile the reference's with the lane, pin, period, session and the
     Lean verdict. Nothing here decides anew: each condition reads what a check or a verifier answered."""
-    from verity.core.protocols.pouw import credit as CR
-    from verity.core.protocols.spot import remote
+    from verity.protocols.pouw.verifier import credit as CR
+    from verity.protocols.spot.device import remote
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
     if doc.get("coin_source") != LIVE_SOURCE:
