@@ -40279,3 +40279,30 @@ and why. Neither head changed.
 
 Still out, read 06:08Z: records `7aba` (#8406); quick `76af` (#8139), `2ba5` (#8339), `e003` (#8406), `61dd` (#8414),
 `57d5` (#8368); the guard `7600` (#8339).
+
+## TWOPROVE, Wed 11 Nov 06:17Z: R3.4 is open unmarked as #8828 at `53dd644bda`; its lock commit is `9bb6`'s record and moves only what was expected; quick tier `fb5d` is running, ETA about 06:40Z
+
+**First, the one thing that can hold #8828: the queue reads #8781 at its crossed head `b7c268c7` as "waiting: not marked ready at b7c268c7"** [run, `research queue status` at 06:15Z]. Your mark on `1081b1f735` did not carry across its crossing. #8828 stacks on it, so #8828 can't land before #8781 is marked again. #8788 reads `ready` and admitted at `65a2d97d` [run].
+
+- **PR:** [#8828](https://github.com/compute-verification/verity/pull/8828), opened 06:14Z with `--by proofs`, unmarked, no labels, linked to PRF-517 [run].
+  - Its head is `53dd644bdad809d6e7646f8a2561e1c490e94437` on `cursor/proofs-r34-crossed-d2e2`, one lock-only commit on `d2e20a395135`, pushed as a fast-forward [run].
+  - The body opens `Lane proofs` / `Goal proofs/spot-bind-term` / `Refs PRF-517`, and the Refs line appears once [run].
+  - `queue open` refuses without `--issue`, so I passed `--issue PRF-517`, R3.4's issue [run].
+  - The goal warnings, verbatim, which I left as you said: "no label of it names a live goal of the Goals page (its labels: from:proofs, goal:proofs/spot-bind-term): label PRF-517 with the goal it serves (its id on the page, `research goals show`)" and "the body's `Goal proofs/spot-bind-term` names a goal no label of PRF-517 names".
+- **What `9bb6` regenerated** [run]. It ended rc 0 with `OUTCOME {"outcome": "regenerated", "package": "security"}`, and stdout line 689 reads "the regenerated record is …/record/security/lean-audit.json; commit it over security/lean-audit.json".
+  - That is the one file it regenerated. `record/lean-audit.json` beside it is the same bytes (sha256 `495fa057…13de`, 4,181,690 bytes).
+  - `audit.json`'s `regenerated` is `{}` because it reports the last pass, `security/Properties`, which passed on that record (`lean_audit.py:1481` names only records a pass settles) [read].
+- **What moved** [run]: 18 differences from `d2e20a3951`'s lock, all additions.
+  - The three records of `Claims.SamplingGeneric.compilerKSRegAtSB`, `…_nontrivial` and `Compiled.KSRegAtSB_fails`: signature, type_hash, premises and assumptions, plus `unfolded_hash` for the first.
+  - `reads/Definitions.Claims.SamplingGeneric` gains `Compiled.KSRegAtSB`, `Compiled.bconfCostStrict`, `Compiled.εregSB` and `CompilerKSRegAtSB`, and its digest moves from `1e52971a…` to `5cccaba4…`.
+  - No other statement, premise or record moved, as `ba02` showed before the move. The premises are `compilerKSRegAt`'s with `Claims.StrictBirthday` for `ExpectedCR`.
+  - Against main's lock: +6 guarantees (#8781's three and R3.4's three), none changed or removed. `open`, `domain`, `assumptions`, `trust`, `deployed`, `trust_gap`, `unwitnessed` and `shape` are unchanged.
+- **The lock commit is `9bb6`'s bytes,** sha256 `495fa057…13de` on both, so no second records run [run].
+- **The three lock counts at `53dd644bda`** [run]: 4,181,690 bytes (under 4,194,304); `Security/` 6; old paths 0.
+  - The lock now has 12,614 bytes left under the move script's read cap [derived]. From main's lock to this head took 6,111 bytes for six guarantees, so about 12 more of this size would cross it [derived].
+- **Merges** [run]: `git merge-tree --write-tree origin/main 53dd644bda` exits 0 at main `6735b7d3d42c`. Main is one landing past the `c4290f5b74e2` you named: #8798, a check prose fix. It also exits 0 against #8781's `b7c268c7c1` and #8788's `65a2d97d93`. Nothing was merged into the branch.
+- **Quick tier `r20261111-061053-fb5d`** (vy-nebius-cpu-11, launched 06:10:53Z at `53dd644bda` with your command) is running at 5.1 GiB [run]. ETA 06:35–06:45Z [guess, from `da28`'s 25 minutes].
+  - It should clear `da28`'s 7 failures (`KeyError: 'signature'`), whose only cause was the three missing records that this commit adds [derived].
+- **The PR body's four checks** [run]: every statement elaborates, and its axioms are clean (`9bb6`'s audit, plus `8b37`'s per-theorem probe before the move). None is kernel-replayed yet (the fast path), and none is red-teamed.
+- **This turn:** the VM had been reset, so I rebuilt the worktree from the pushed branch. I reread `AGENTS.md` at `6735b7d3d4`: #8794 rewrote the Map for the move, and no rule I work under changed [read]. Nothing went to Linear.
+- **Next:** when you resume me with `fb5d`'s verdict, I write `ready to mark #8828 at 53dd644bda` or name the red. The `second-return` check for PRF-477 is a PR of its own after this one; not started.
