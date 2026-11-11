@@ -55,3 +55,41 @@ LEANMERGE to the coordinator (network-accounting), Wed 11 Nov 1:21 PM PST. **The
 - **`main` has since moved the clock openings out of `Period.lean`** (148 lines out, into `NetworkCheck.Clocks`, `10b04d4a70`). `git merge-tree` of the mend's commit with `main` now stops on 24 paths, none of them `Period.lean`, a file of the scan's or one under `security/Proofs` [ran]. I did not build anything over that `main`.
 - Where I did not look: the other 95 modules of ours, any Python, any suite.
 
+[2026-11-11T21:23Z] c7db81c9b446
+SCANLEAN, NET-304, Wed 11 Nov 1:23 PM PST. The statement of `RowsTiedInputWired` on the merged tree, old and new, before I prove it.
+
+Branch `cursor/na-tied-need-crossed-37ad`, cut from the crossed head `5ed73f441056`. Nothing pushed yet.
+
+**Old** (#8708, one `scan/prog`) [read]:
+
+    def RowsTiedInputWired : Prop :=
+      ∀ p c e pub prof, check p c e = .accept pub prof →
+        ∀ s sd scan, p.form = .rows s sd scan →
+          ∀ i reg x, c.windows[i]? = some reg → e.windows[i]? = some x →
+            tiedInputWired x.answer = true ∧ wired p.audits s c.audits reg = true
+
+with `tiedInputWired a`: the answer's public has no `rests_on_period_check`, or under it exactly `["prog"]`.
+
+**New** (merged tree, one `scan/prog<j>` a lane) [read, not yet built]:
+
+    def RowsTiedInputWiredAt (p : Params) (c : Commitment) (e : Evidence) : Prop :=
+      ∀ s sd scan, p.form = .rows s sd scan →
+        ∀ i reg x, c.windows[i]? = some reg → e.windows[i]? = some x →
+          tiedInputWired s x.answer = true ∧ wired p.audits s c.audits reg = true
+    def RowsTiedInputWired : Prop :=
+      ∀ p c e pub prof, check p c e = .accept pub prof → RowsTiedInputWiredAt p c e
+
+with `tiedInputWired s a`: the answer's public has no `rests_on_period_check`, or under it exactly
+`progParams s.programSlots`, that is `["prog0", …, "prog<lanes−1>"]`, each lane's name once, in the lanes' order.
+
+What changed, and how I read it:
+
+1. `tiedInputWired` takes the schedule. The names `wired` holds are now one a lane (`wired` runs over `j < s.programSlots`), so "exactly the entry `wired` holds" is "exactly the entries `wired` holds". At one lane it is the old rule under the name `prog0`.
+2. The `…At` / `…Of` / guarantee split is the merged file's pattern for its three other properties (`RowsProgWiredAt` and the rest). Mine takes `e` because the answers are evidence, as `RowsTiedChargedAt` does.
+
+I read both as names, not substance: an absent key passes, exactly what `wired` wires passes, anything else is refused. So I am going on with it and not stopping. Say so if you read it otherwise.
+
+The one choice inside it, yours to overrule: **exactly the list, in order** (what I am porting) against **any list of lanes' names** (a subset, any order). Why exact is complete for honest scans [read]: `Registration.tiedThrough` publishes the verifier's `tied` list filtered to the names shared, in the verifier's order; `scan_zk.program` names `lane_kinds(cls)`, every lane in order; and in the generator form every lane is read by the same units (`firstParams`, `ingressParams`), so at `every` ≥ 2 every lane is shared and at `every` = 1 none is. A verifier that names the lanes in another order would be refused, with the fix in the message. The subset form would refuse nothing an honest run publishes and still give "every name the answer carries is one this check wires". It is one line different in Lean and in the mirror; the statement's text is the same either way.
+
+Item 2 [read]: PRF-504's fix is not on `main` (`75ef75838f99`) nor on the crossed head. `Spot.OneStage.Public` is `{drawn, proved, bound, perTemplate}` and `publicJson` writes no `rests_on_period_check`; PRF-504 is in Backlog. So the test of a `need` on a Lean-computed answer is left out.
+
