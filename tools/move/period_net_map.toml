@@ -5,9 +5,9 @@
 # its program and the verifier). `tools/move/rename.py --map tools/move/period_net_map.toml` renames them in one move.
 # The word becomes the Glossary's for what it denotes: a window that is an execution phase -> "execution phase"; the
 # link-window -> "transfer blocks" (an execution phase's transfer blocks); a monitoring period's "period" -> "monitoring
-# period"; a certifier's 32-byte session id -> "attachment". Two words name a declaration of another area too, which
-# this move renames with ours, in the same sense: `windowsOn` (CoreOnsite (soundness)) and `windowOf`
-# (FlockSoundness.KeyedDraw (proofs)). Where the same word names something else, [keep_in] keeps it.
+# period"; a certifier's 32-byte session id -> "attachment". One word names a declaration of another area too, which
+# this move renames with ours, in the same sense: `windowsOn` (CoreOnsite (soundness)). Where the same word names
+# something else, or another move renames it with its family, [keep_in] keeps it.
 # `NetTiming.WindowCharge.Window` takes the code's new name with it, so that the refactor that makes it a use of
 # `NetworkCertifier.WindowCharge.Window` finds one name.
 
@@ -140,7 +140,9 @@ strings = ["MonitoringPeriodLeaksChecked", "MonitoringPeriodAdaptive", "Monitori
 [keep_in]
 # The words where another area's declaration holds them in another sense: PoUW's `windowOf`s, compute-accounting's to
 # move with their Python mirrors, and PoUB's `RemoteAudit.Verifier.windowCheck`, whose window is the span one challenge
-# covers, not an execution phase.
+# covers, not an execution phase. Flock's keyed sample's `windowOf` (FlockSoundness.KeyedDraw (proofs)) takes the same
+# name in `period_proofs_map.toml`'s move, with the family beside it that names the same window.
 "verity/protocols/pouw/verifier/**" = ["windowOf"]
 "verity/protocols/poub/verifier/**" = ["windowCheck"]
 "security/Properties/Accounting/Remote/Live.lean" = ["windowCheck"]
+"security/Proofs/Flock/Soundness/KeyedDraw.lean" = ["windowOf"]
