@@ -64,9 +64,9 @@ theorem sum_range_ge (S A : ℕ) (hA : A ≤ S) :
     ∑ z ∈ range S, (if z < A then (0 : ℝ≥0∞) else 1) = ((S - A : ℕ) : ℝ≥0∞) := by
   obtain ⟨R, rfl⟩ : ∃ R, S = A + R := ⟨S - A, by omega⟩
   have h1 : (∑ z ∈ range A, if z < A then (0 : ℝ≥0∞) else 1) = ∑ _z ∈ range A, (0 : ℝ≥0∞) :=
-    Finset.sum_congr rfl fun z hz => by rw [if_pos (Finset.mem_range.1 hz)]
+    Finset.sum_congr rfl fun z hz => by rw [ite_eq_left (Finset.mem_range.1 hz)]
   have h2 : (∑ x ∈ range R, if A + x < A then (0 : ℝ≥0∞) else 1) = ∑ _x ∈ range R, (1 : ℝ≥0∞) :=
-    Finset.sum_congr rfl fun x _ => by rw [if_neg (by omega)]
+    Finset.sum_congr rfl fun x _ => by rw [ite_eq_right (by omega)]
   rw [Finset.sum_range_add, h1, h2]
   simp
 
@@ -190,7 +190,7 @@ theorem failL_le (n F : ℕ) : ∀ (c i ℓ : ℕ), i + c ≤ n → c * Flock.Dr
           failL n (F + 1) (List.range' (i + 1) c) (bsOf b)) := by
       intro a b hlt
       rw [List.range'_succ]
-      simp only [failL, uniformL_step, if_pos hlt]
+      simp only [failL, uniformL_step, ite_eq_left hlt]
     unfold prCoin
     rw [avg_split (H := fun bs => if failL n (F + 1) (List.range' i (c + 1)) bs then 1 else 0)]
     calc (avg fun a : Fin (Flock.Draw.width (n - i)) → Fin 256 => avg fun b : Fin ℓ' → Fin 256 =>
@@ -201,14 +201,14 @@ theorem failL_le (n F : ℕ) : ∀ (c i ℓ : ℕ), i + c ≤ n → c * Flock.Dr
           refine avg_mono fun a => ?_
           by_cases hlt : beL (bsOf a) <
               2 ^ (8 * Flock.Draw.width (n - i)) - 2 ^ (8 * Flock.Draw.width (n - i)) % (n - i)
-          · rw [if_pos hlt, zero_add]
+          · rw [ite_eq_left hlt, zero_add]
             refine le_trans (le_of_eq ?_) (ih (i + 1) ℓ' (by omega) hℓ')
             unfold prCoin
             congr 1
             funext b
             congr 1
             exact propext (hev a b hlt)
-          · rw [if_neg hlt]
+          · rw [ite_eq_right hlt]
             exact le_trans (prCoin_le_one fun b : Fin ℓ' → Fin 256 =>
               failL n (F + 1) (List.range' i (c + 1)) (bsOf a ++ bsOf b)) le_self_add
       _ = avg (fun a : Fin (Flock.Draw.width (n - i)) → Fin 256 =>
@@ -268,7 +268,7 @@ theorem onWith_first (T : ℕ → ByteArray) (i need : ℕ) (run : ByteArray →
   have hg : (tapeGet T i need).run pos = some ((T i).extract 0 need, Function.update pos i need) := by
     show (if pos i + need ≤ (T i).size then
       some ((T i).extract (pos i) (pos i + need), Function.update pos i (pos i + need)) else none) = _
-    rw [hpos, Nat.zero_add, if_pos hT]
+    rw [hpos, Nat.zero_add, ite_eq_left hT]
   have hfuel : (_root_.Properties.Spot.SecurityProofs.onWithFuel (tapeGet T i) need run (0 + 1)
       ((T i).extract 0 need)).run (Function.update pos i need) = some (some D, Function.update pos i need) :=
     (congrArg (fun x : StateT (ℕ → ℕ) Option (Option (Array ℕ)) => x.run (Function.update pos i need))

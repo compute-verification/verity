@@ -56,12 +56,12 @@ theorem qs_card_le_split (L : Law n) (T : Fin n → Finset vb.Pos) (E : Finset v
         rw [Finset.sum_const, smul_eq_mul])))
     have hd : (L.draw ω).card * r ≤ kd * r + (if ω ∈ bad then n * r else 0) := by
       by_cases hb : ω ∈ bad
-      · rw [if_pos hb]
+      · rw [ite_eq_left hb]
         have hn : (L.draw ω).card ≤ n := by
           have := Finset.card_le_univ (L.draw ω)
           rwa [Fintype.card_fin] at this
         exact (Nat.mul_le_mul_right r hn).trans (Nat.le_add_left _ _)
-      · rw [if_neg hb, Nat.add_zero]
+      · rw [ite_eq_right hb, Nat.add_zero]
         exact Nat.mul_le_mul_right r (hgood ω hb)
     calc (Finset.univ.filter fun c => ReadsDrawZ A P planZ tab vb c ω).card
         ≤ ((L.draw ω).biUnion T ∪ E).card := Finset.card_le_card hsub
