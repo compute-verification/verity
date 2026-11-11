@@ -5,9 +5,7 @@ during development. One installable package, one CLI (`research`), stdlib
 only. It runs commands and records what happened; it imports nothing from
 Verity's packages (enforced by `tests/test_cli.py::test_no_packages_import`).
 
-The user-facing procedure (when to record a run, how to find one, how to hand
-off) will be a repo-level skill, once it exists. This file is for people changing
-the tool.
+This file is for people changing the tool.
 
 ## Layout and provenance
 
@@ -93,7 +91,6 @@ research pods register|unregister|registry ...                    # the pod regi
 research pods ssh TARGET [--print] [-- CMD...]                    # TARGET = machines.toml name | pod id | pod name (pods/connect.py)
 research pods sync TARGET [SRC] [--dest DIR] [--exclude G]...     # the worktree's git-visible files -> DIR (default /workspace/src)
 research tele SUBCOMMAND ...             # the harness's own surface
-research data SUBCOMMAND ...             # the evidence store (below)
 research merge REF [--into main] [--tool check] [-m MSG] [--push] [--dry-run]   # the merge gate (merge.py)
 research merge --train A B C [--on MACHINE --project P] [--command CMD] [--push]  # several refs, one checked candidate
 research merge --train --prepare BRANCH [--onto BASE] [--allow-removal PATH] N@SHA ...  # build, lint, push a train
@@ -285,8 +282,8 @@ any launch while an exclusive holder is.
 The shipped tree is extracted with extraction mtimes (`tar -m`), not the commit time `git archive` stamps: a build dir shared
 across commits (Cargo's `/workspace/sp1-target`) judges freshness by mtime, and with commit times an older commit shipped after a
 newer build looked built and ran the newer binary. Installed binaries (`/workspace/bin`, or `$RESEARCH_BIN_DIRS`) carry their
-own provenance: a build runs `python -m research.binprov record BINARY --source TREE` after installing (the SP1 and Ligero
-bootstraps do), writing `BINARY.provenance.json` (sha256, source commit/tree/dirty), and every run records each binary's sha256
+own provenance: a build runs `python -m research.binprov record BINARY --source TREE` after installing,
+writing `BINARY.provenance.json` (sha256, source commit/tree/dirty), and every run records each binary's sha256
 with its provenance `recorded` / `stale` (replaced since) / `missing` in job.json `run.binaries` (`binprov.py`).
 
 `--mem-gb N` is memory admission on the machine (`mem.py`). A pod's processes
@@ -366,9 +363,7 @@ keeps them all (`store/evict.py`).
 
 `src/research/store/` is the evidence store; its `README.md` is the contract
 (four objects: Tool, Derivation, Attempt, Artifact; two relations: Replica,
-Label). Artifacts are immutable, typed, content-addressed manifests with an
-optional file or tree payload; the id is the sha256 of the canonical manifest.
-Local root `~/.research/store` (or `$RESEARCH_STORE`); an optional remote in
+Label). Local root `~/.research/store` (or `$RESEARCH_STORE`); an optional remote in
 `~/.research/store.toml` (or `$RESEARCH_STORE_CONFIG`: `fs` directory or
 `s3`/R2 via stdlib SigV4). The sqlite catalog is disposable (`reindex`).
 
@@ -382,17 +377,16 @@ research data label ART verified accepted --by red-team-1 [--ref RUN]           
 research data reindex [--remote]             research data sql "SELECT ..."       # read-only connection
 ~~~
 
-Python: `research.store.local.LocalStore`, its methods listed in the contract. Nothing is
-called PRESERVED without a remote; nothing in the store is ever overwritten.
+Python: `research.store.local.LocalStore`, its methods listed in the contract.
 
 ### The evidence store: `--tool`, `--scratch`, and the publish step
 
-`src/research/store/README.md` is the contract. What `research run` does:
+What `research run` does:
 
 - Before launch it collects `research.env.conditions()` (source tree, runtime,
   hardware, execution; `None` when unknown), resolves the harness `--input`
   paths to content identity, and, with `--tool NAME` (registry in
-  `store/tools_registry.py`: `tc_probe`, `bench_vu`) or `--tool module:NAME`,
+  `store/tools_registry.py`: `tc_probe`) or `--tool module:NAME`,
   loads the `Tool` declaration, parses the workload argv into params, replaces
   path-valued key params by the content they point at, hashes the declared
   closure, and computes the derivation id and the `reuse_key` (`None` on a
