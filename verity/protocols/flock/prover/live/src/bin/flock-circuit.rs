@@ -13,6 +13,8 @@
 //!   flock-circuit unit-levels --circuit FILE [--net N] [--widths]   (the unit's level schedule, `unit_levels`; nothing proved)
 //!   flock-circuit walk-twin --instances FILE --circuit FILE [--slots N]   (the device's level walk on the host against the host's
 //!       builder on the statement's own unit slots, `walk_twin`; nothing proved)
+//!   flock-circuit unit-cut --instances INST --circuit FILE [--split-port P] [--walk [--slots N]]   (the unit's level schedule cut at its
+//!                          SHA-512 compressions' chaining values, `unit_cut`; nothing proved)
 //!
 //! The verifier loads only its own public file (`verity_flock.circuit.stage(..., public_only=True)`: roots and each row's
 //! `b || c`, the output rows' too; no row, no salt, no output word) and the pinned circuit, from which it derives Δ, the regions and their values; it checks the
@@ -4954,8 +4956,23 @@ fn unit_levels(c: &Composite) {
     let net = &c.nets[ni].1;
     let s = flock_live::ir_block::schedule(net);
     let widths: Vec<usize> = (0..s.levels()).map(|l| s.level(l).len()).collect();
+    let mut line = json!({"net": ni, "name": c.nets[ni].0, "unit_log": net.unit_log, "rows": net.useful,
+        "inputs": net.in_words * 128, "nnz_a": net.a.nnz(), "nnz_b": net.b.nnz(), "one_pass": net.one_pass(),
+        "position_map": net.order.is_some(), "levels": s.levels(), "levels0": s.levels0, "late_rows": s.late_rows.len(),
+        "cut_rows": s.cut_rows.len()});
+    line.as_object_mut().unwrap().extend(level_widths(&widths));
+    println!("LEVELS\t{line}");
+    if flag("--widths") {
+        println!("WIDTHS\t{}", json!(widths));
+    }
+}
+
+/// A schedule's levels by their rows (`widths`, in level order): `level_rows` (all of them), `rows_a_level` (least, median,
+/// mean, most), `widest_levels_holding` (how many of the widest levels hold half, 90% and 99% of the rows) and `by_width`
+/// (the levels of under 32 rows, of under 1,024, 32,768 and 1,048,576, and the rest, with their rows).
+fn level_widths(widths: &[usize]) -> serde_json::Map<String, Value> {
     let rows: usize = widths.iter().sum();
-    let mut sorted = widths.clone();
+    let mut sorted = widths.to_vec();
     sorted.sort_unstable_by(|a, b| b.cmp(a));
     let holding = |share: f64| -> usize {
         let mut held = 0;
@@ -4967,16 +4984,119 @@ fn unit_levels(c: &Composite) {
         let of: Vec<usize> = widths.iter().copied().filter(|&w| lo <= w && w < hi).collect();
         json!({"under": (hi != usize::MAX).then_some(hi), "levels": of.len(), "rows": of.iter().sum::<usize>()})
     }).collect();
-    println!("LEVELS\t{}", json!({"net": ni, "name": c.nets[ni].0, "unit_log": net.unit_log, "rows": net.useful,
-        "inputs": net.in_words * 128, "nnz_a": net.a.nnz(), "nnz_b": net.b.nnz(), "one_pass": net.one_pass(),
-        "position_map": net.order.is_some(), "levels": s.levels(), "levels0": s.levels0, "late_rows": s.late_rows.len(),
-        "cut_rows": s.cut_rows.len(), "level_rows": rows,
+    let Value::Object(m) = json!({"level_rows": rows,
         "rows_a_level": {"min": sorted.last(), "median": sorted.get(sorted.len() / 2), "mean": rows as f64 / widths.len().max(1) as f64,
                          "max": sorted.first()},
-        "widest_levels_holding": {"0.5": holding(0.5), "0.9": holding(0.9), "0.99": holding(0.99)}, "by_width": by_width}));
+        "widest_levels_holding": {"0.5": holding(0.5), "0.9": holding(0.9), "0.99": holding(0.99)}, "by_width": by_width}) else { unreachable!() };
+    m
+}
+
+/// `unit-cut`: the statement's unit, its level schedule cut at the chaining values of the SHA-512 compressions among its
+/// rows (`sha512_native::unit_compressions`: each one's committed state and feed-forward rows are the seeds). A `COMPS`
+/// line: the compressions by their rounds and by their feed-forward rows, and the seeds. A `CUT` line: the levels before
+/// and after the cut (`ir_block::schedule_seeded`), the rows a level after it, per input port the rows that read it
+/// (through other rows too) and how deep they are, and the same either side of `split`, one past the last row before the
+/// outputs that reads port `--split-port` (default the 1,536-bit one, a read's salt: the read's rows before it, what
+/// follows the read after it, `own_levels` its levels with every row before `split` given). With `--walk`, a `SEEDED`
+/// line: over the instance file's unit slots (`--slots N`: the first N), whether the walk on the cut schedule
+/// (`unit_ab_seeded`, the seeds' z the host evaluator's, `unit_rows_z`) packs `unit_ab_into`'s words, every word compared,
+/// and whether one seed off in one slot is refused.
+fn unit_cut(st: &Arc<Stmt>, inst: &Arc<Instances>) {
+    use flock_live::circuit::{port_cols, unit_ab_into, unit_ab_seeded, unit_rows_z};
+    use flock_live::ir_block::{UnitSched, schedule, schedule_seeded};
+    use rayon::prelude::*;
+    let (c, ni) = (&st.c, st.c.unit_net);
+    let net = c.unit();
+    let (first, cp) = (net.in_words * 128, net.const_pos);
+    let outputs = net.out_groups.iter().map(|g| g.col * 128).min().unwrap_or(cp);
+    let tally = |it: &mut dyn Iterator<Item = usize>| -> Value {
+        let mut m = std::collections::BTreeMap::new();
+        it.for_each(|x| *m.entry(x).or_insert(0usize) += 1);
+        json!(m.into_iter().map(|(x, n)| json!([x, n])).collect::<Vec<_>>())
+    };
+    let comps = flock_live::sha512_native::unit_compressions(net);
+    let seeds: Vec<u32> = comps.iter().flat_map(|x| x.seeds()).collect();
+    println!("COMPS\t{}", json!({"net": ni, "name": c.nets[ni].0, "rows": net.useful, "inputs": first, "outputs_from": outputs,
+        "compressions": comps.len(), "by_rounds": tally(&mut comps.iter().map(|x| x.rounds)),
+        "by_feed_forward_rows": tally(&mut comps.iter().map(|x| (x.ff.1 - x.ff.0) as usize)), "seeds": seeds.len(),
+        "first_state_row": comps.first().map(|x| x.state[7]), "last_feed_forward_end": comps.last().map(|x| x.ff.1)}));
+    let t = Instant::now();
+    let (full, cut) = (schedule(net), schedule_seeded(net, &seeds));
+    let levels = |s: &UnitSched| -> Vec<u32> {
+        let mut at = vec![0u32; net.useful];
+        (0..s.levels()).for_each(|l| s.level(l).iter().for_each(|&r| at[r as usize] = l as u32 + 1));
+        at
+    };
+    let (at_full, at_cut) = (levels(&full), levels(&cut));
+    // the input ports each row reads, through other rows too (the first 64 ports)
+    let ports = port_cols(&net.in_groups);
+    let mut reads = vec![0u64; net.useful];
+    for (p, &(col, width)) in ports.iter().enumerate().take(64) {
+        reads[col..col + width].fill(1 << p);
+    }
+    for i in first..cp {
+        let through = net.a.row(i).iter().chain(net.b.row(i)).fold(0, |m, &x| m | reads[x as usize]);
+        reads[i] = through;
+    }
+    let reads = &reads;
+    let deepest = |at: &[u32], rows: &mut dyn Iterator<Item = usize>| rows.map(|i| at[i]).max().unwrap_or(0);
+    let by_port: Vec<Value> = ports.iter().enumerate().take(64).map(|(p, &(_, width))| {
+        let of = || (first..cp).filter(move |&i| reads[i] >> p & 1 == 1);
+        json!({"bits": width, "rows": of().count(), "last_row": of().last(), "levels": deepest(&at_full, &mut of()), "cut_levels": deepest(&at_cut, &mut of())})
+    }).collect();
+    let port = Some(arg("--split-port", "")).filter(|p| !p.is_empty()).map(|p| p.parse::<usize>().expect("--split-port"))
+        .or_else(|| ports.iter().position(|x| x.1 == 1536));
+    let split = port.map(|p| (first..outputs).rev().find(|&i| reads[i] >> p & 1 == 1).map_or(first, |i| i + 1));
+    let side = |lo: usize, hi: usize| -> Value {
+        let mut widths = vec![0usize; cut.levels()];
+        (lo..hi).for_each(|i| widths[at_cut[i] as usize - 1] += 1);
+        widths.truncate(widths.iter().rposition(|&w| w > 0).map_or(0, |l| l + 1));
+        let mut v = json!({"rows": hi - lo, "levels": deepest(&at_full, &mut (lo..hi)), "cut_levels": widths.len(),
+                           "seeds": seeds.iter().filter(|&&r| (lo..hi).contains(&(r as usize))).count()});
+        v.as_object_mut().unwrap().extend(level_widths(&widths));
+        v
+    };
+    let split = split.map(|at| {
+        let given: Vec<u32> = (first..at).map(|i| i as u32).collect();
+        json!({"port": port, "row": at, "before": side(first, at), "after": side(at, outputs), "outputs": side(outputs, cp),
+               "own_levels": deepest(&levels(&schedule_seeded(net, &given)), &mut (at..cp))})
+    });
+    let mut line = json!({"net": ni, "name": c.nets[ni].0, "seeds": seeds.len(), "levels": full.levels(), "cut_levels": cut.levels(),
+                          "ports": by_port, "split": split, "schedules_s": t.elapsed().as_secs_f64()});
+    let widths: Vec<usize> = (0..cut.levels()).map(|l| cut.level(l).len()).collect();
+    line.as_object_mut().unwrap().extend(level_widths(&widths));
+    println!("CUT\t{line}");
     if flag("--widths") {
         println!("WIDTHS\t{}", json!(widths));
     }
+    if !flag("--walk") {
+        return;
+    }
+    let rows = inst.instance_rows(c).unwrap_or_else(|| refuse("unit-cut --walk: the prover's instance file, with its rows".into()));
+    let per = c.unit_range().count;
+    let all = st.blocks() * per;
+    let slots = arg("--slots", &all.to_string()).parse::<usize>().expect("--slots").min(all);
+    let ins: Vec<Vec<F128>> = (0..slots).into_par_iter().map(|x| st.unit_inputs(Some(&rows), x / per, x % per)).collect();
+    let uw = 1usize << (net.unit_log - 7);
+    let (mut want, mut got) = (vec![0u64; 4 * uw * slots], vec![!0u64; 4 * uw * slots]);
+    let t = Instant::now();
+    let host = unit_ab_into(net, ni, uw, &ins, &mut want);
+    let host_s = t.elapsed().as_secs_f64();
+    let seed_z = |g: usize| unit_rows_z(net, &seeds, &ins[32 * g..(32 * g + 32).min(slots)]);
+    let t = Instant::now();
+    let walk = unit_ab_seeded(net, &cut, &seeds, seed_z, uw, &ins, &mut got);
+    let walk_s = t.elapsed().as_secs_f64();
+    let differing = want.par_iter().zip(&got).filter(|(x, y)| x != y).count();
+    // one seed off in slot 0: its lane group alone is walked again
+    let n0 = slots.min(32);
+    let off = unit_ab_seeded(net, &cut, &seeds, |g| {
+        let mut z = seed_z(g);
+        z[seeds.len() / 2] ^= 1;
+        z
+    }, uw, &ins[..n0], &mut got[..4 * uw * n0]);
+    println!("SEEDED\t{}", json!({"net": ni, "slots": slots, "slots_with_inputs": ins.iter().filter(|w| w.iter().any(|x| *x != F128::ZERO)).count(),
+        "seeds": seeds.len(), "cut_levels": cut.levels(), "words": want.len(), "host_ok": host, "walk_ok": walk, "words_differing": differing,
+        "same": host && walk == Some(true) && differing == 0, "off_seed_walk_ok": off, "host_s": host_s, "walk_s": walk_s}));
 }
 
 /// `walk-twin`: the device's level walk on the host (`circuit::unit_walk_words`: the device's arrays, `ir_block::WalkRows`,
@@ -7883,6 +8003,7 @@ fn main() {
             "regions": st.regions.len(), "circuit_sha512": hex(&st.c.sha512), "statement_digest": hex(&st.digest),
             "public_sha512": hex(&inst.public_sha512), "identity": st.identity})),
         "walk-twin" => walk_twin(&st, &inst),
+        "unit-cut" => unit_cut(&st, &inst),
         "zkstat" => zkstat(&st, &inst),
         "zkaudit" => zkaudit(&st, &inst),
         "zkrewind" => zkrewind(&st, &inst),
@@ -7916,6 +8037,6 @@ fn main() {
                 println!("LIVE\t{v}");
             });
         }
-        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ... | stacked --table R.bin ... | unit-walk --circuit FILE [--slots N] [--wide 1,2,4,8] [--ahead 0,64] [--keep 0,1,2] [--huge-pages] | unit-levels --circuit FILE [--net N] [--widths] | walk-twin --instances FILE --circuit FILE [--slots N]"),
+        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ... | stacked --table R.bin ... | unit-walk --circuit FILE [--slots N] [--wide 1,2,4,8] [--ahead 0,64] [--keep 0,1,2] [--huge-pages] | unit-levels --circuit FILE [--net N] [--widths] | walk-twin --instances FILE --circuit FILE [--slots N] | unit-cut --instances FILE --circuit FILE [--walk]"),
     }
 }
