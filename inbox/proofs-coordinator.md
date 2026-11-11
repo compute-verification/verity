@@ -61026,3 +61026,85 @@ Not reached at these sizes, so no run of mine says anything about them.
 **Where this leaves the brief's end condition** [guess, from the list]: no run reaches an accept at the command's own shapes, and each stop has an owner. The first one nobody has a branch for is stop 1 with stop 2 behind it (the vLLM lane's round 1 and its command); GATHER's fix clears stop 5 only.
 
 **Next:** read the ZK server run; merge GATHER's commits when they exist (due 20:30Z) and run the smallest configuration on the new select beside today's; an entry at each rerun; the list as my final message at 22:00Z.
+
+## OUTBITS, Wed 11 Nov 18:43Z: the brief. Nothing justifies half; the one reduction with a reason is the token id at the vocabulary's 18 bits under a certified cap of 875 ids (15,750 bits a request with an incorrect proof block, 0.56 of 28,000), worth about 8% on the best designed configuration (5,445 to about 5,000 GB, my arithmetic, not a run); the seed and the length rule move neither figure, and the length is charged beside both, 11 bits on every request, until the stop check is in a served audit's sample
+
+Tags as in my 18:26Z entry: [run], [read] with its place, [relayed], [mine], [guess]. Times from `date -u`. Mailbox read at 18:41Z: still its one section of 18:07Z [run]. The brief is the note `proofs/20261111T1842Z-draft-outbits-output-charge` (`kind: draft`, synced) [run], and whole below: 692 words by `wc` outside its one table.
+
+**What a request's output is charged, and what would lower it on principle**
+
+Tags: [read n] a file I read today, listed under Places; [relayed] another lane's figure, unchecked; [mine] my arithmetic or derivation. Every GB is the cost model's, for a year over the world's datacenters at utilization 0.4; none is measured end to end.
+
+**Recommendation.** Stop quoting a halved output and replace it with the one reduction that has a reason: return and commit each token id at the vocabulary's 18 bits (154,880 ids) under a certified cap of 875 ids, so that a request with an incorrect proof block carries at most 15,750 bits, 0.56 of today's 28,000; half is below what 875 such ids can carry at all (15,086 bits) [mine]. It is not built and it is small: the best designed configuration goes from 5,445 GB to about 5,000 GB, and the lowest quoted figure from 3,735 GB to about 3,820 GB [mine, from the lane's cost-model runs]. The sampler's randomness and the length rule move neither figure, and the length matters far more than both: it is charged beside them, 11 bits on every request, 24.4 million GB a year [relayed], until the stop check is in a served audit's sample.
+
+**What is charged today.**
+- A request whose proof blocks are all correct is charged 0 bits, sampled or not. The Lean guarantee counts incorrect proof blocks only, each at its committed bits [read 1].
+- A request with an incorrect block is charged the smaller of those bits and every bit it returns, by a lemma beside the guarantee [read 2]. No bit counts for half.
+- The cost model has the same form with the returned bits set by hand: 144,000 a request on `main`, and 28,000 (875 ids of 32 bits) in the quoted figures, by scripts in the notes and on a branch [read 3]. "Half" is 28,000 times 0.5; nothing computes it [read 4].
+- The two disagree on the size. `main`'s statement is over proof blocks laid side by side, every block's outputs returned, so there the cap never binds; what joins the blocks is the open premise `SpotFlock.Addresses` [read 5]. No check holds a request to 28,000 bits: the size class that holds 875 ids commits 1,026 words of 32 bits, 32,832 bits [read 6].
+- A verification phase whose proof fails gets no bound from this guarantee [read 1].
+
+**What the registered circuit already fixes: for a correct request, everything.**
+- **Tokens.** The token select is a registered Definition. Temperature, top-p, `max_tokens` and the seed arrive in the certified request. A request with no seed takes one derived from a verifier's coin fixed before the execution phase's first request, and its Program returns a check holding the sampler to it [read 7]. On `main`; no served audit has proved that check [read 8].
+- **Length.** The first stop id or `max_tokens`, by a rule the request Program can return as a check [read 9]. No served audit samples it, so the length is still sent as advice and charged [read 10].
+- **Release times.** Set by the network certifier's schedule [read 11].
+
+The developer still chooses the length (11 to 13 bits a request), which blocks are incorrect (0.0088 bit a request at 19,642 GB, 0.0025 at 5,445 GB [mine]), and, in the network lane's terms, a failed connection and timing inside a release interval.
+
+**Options, smallest change first.**
+
+| Option | What changes | Owner | Charge a request afterwards | Left free | State |
+|---|---|---|---|---|---|
+| Charge only unsampled requests | nothing | none | unchanged | as today | already so: a correct request costs 0; an incorrect one passes only unsampled or with its incorrect blocks missed |
+| Seed certified, or from a verifier's coin | a seed check in each sampled request's Program | @vllm | 0 bits at a correct request; an unheld seed is 64 [read 7] | an incorrect request's cap, unchanged | on `main`, in no served audit |
+| Certified response cap | the network certifier refuses requests above a registered cap, a limit on what is served | @network-accounting | fixes the cap's count of ids | every id up to it | on `main` today, none registered by default; the cost model's read of an 875-id cap is an open pull request [read 12] |
+| Stop check in the sample | a proof block computes the length; lengths are no longer sent | @circuits, @vllm, @network-accounting, @proofs | length: 11 bits on every request becomes 16 to 41 at a request with an incorrect stop block, about 0.1 GB a year [relayed] | a wrong length where that block is unsampled | 16-bit form in review; not served [read 13] |
+| Token id at 18 bits (recommended) | ids returned and committed packed at 18 bits; the id on the wire held to it | @circuits, @vllm, @network-accounting | cap 15,750 bits at 875 ids; 18,468 at today's 1,026 words | 18 bits a token of an incorrect request | not built; the network lane's count already assumes 18 bits an id [read 14] |
+| The cap shown for the served circuit | each class checked against the cap; the premise joining the blocks proved | @proofs | none: the capped figures become statements about what is served | nothing | not started, due 13 Nov; in progress, due 30 Nov [read 15] |
+
+**The figures under the recommendation** [mine: interpolated between the lane's cost-model runs at 28,000, 20,000 and 14,000 bits; not a run].
+- Best designed configuration (new partition, smaller head blocks, neither served): 5,445 GB becomes about 5,000 GB, or 5,100 to 5,250 GB at 1,026 words.
+- The two-stage sampling design on `main`'s partition (second stage not run on a served engine): not established. No run prices it below 28,000 bits; if it fell in proportion to the cap, 19,642 GB would read about 11,000 GB [guess].
+- With nothing built, the justified cap is 32,832 bits: 1% to 2% above 5,445 GB [mine], and 9% to 16% above 19,642 GB if Tuesday's runs carry over [relayed].
+
+**Places** (all on `main` at `cc6ee74462` unless said; read today).
+1. `security/Proofs/Flock/SamplingGeneric/Guarantees.lean:84-87` (`Flock.Guarantees.SpotExfilTwo`); `security/Definitions/Claims/SamplingTwo.lean:195-200, 215-218, 333-339` (`admissibleTwo`, `bitsOf`, `influenceTwo`, `CompiledTwo.Exfil`); `security/Definitions/Claims/Sampling.lean:158-161, 185, 587-590` (`Prog.Boundary`, `committed`, `KSLinOn`).
+2. `security/Proofs/Flock/SamplingGeneric/TwoServed.lean:398-404` (`card_influenceTwo_le_served_min`); `security/Definitions/Claims/SamplingServed.lean:27-28` (`servedBits`); `security/Properties/Spot/TwoStageCheck.lean:89-107` (`ServedCover`, `TwoStageCheckServedSound`).
+3. `verity/protocols/spot/optimize.py:1157-1293` (`two_stage_exfil`, `two_stage_rankin`); `benchmarks/spot_figures/figure1.py:107, 275-279` (the headline design has no cap; `served_bits`); the notes' `lanes/proofs/tools/headline_rows.py:169`; pull request #8853 at `9c9da7466a`, `benchmarks/spot_figures/breakeven/headline.py` (`SERVED_BITS = 875 * 32.0`), open.
+4. The notes' `lanes/proofs/tools/headline_world_waterfall.py:193-194`; this file, line 54178 ("assumed; no S lever built").
+5. `security/Properties/Spot/Members.lean:52-56, 78-79` (`sideBySide`, `bitsProgs`); `verity/protocols/spot/verifier/lean/Spot/Bits.lean:233-251` (`keyProg`); `security/lean-audit.json`, the entry `Flock.SecurityProofs.SpotExfilTwo` (open: `SpotFlock.Addresses`, `Claims.Sampling.InScopeTwo`, `Claims.SamplingGeneric.CompiledTwo.Scope`).
+6. `adapters/vllm/verity_vllm/pipeline/boundary_rows.py:5-18` (a request's committed rows; `b.egress` is the count, the finish reason and O ids, each a 32-bit word); the goals page, `proofs/spot-output-accounting` ("no check holds a served request to the 28,000 bits the plan assumes, and the cap's size class allows 32,832"); Linear PRF-509.
+7. `verity/definitions/registry/sampling.py:1-30` (the token select Definitions; seed, position and temperature are operands); `verity/protocols/certifier/verifier/active.py:568-609` (the certified request's fields); `adapters/vllm/verity_vllm/engine/served_seed.py:1-18`; `adapters/vllm/verity_vllm/program/frontend/seed_rule.py:1-34`; `adapters/vllm/verity_vllm/program/predict/reads.py:14-23`.
+8. The goals page, `proofs/spot-checks-closed`: "no proved block ties the seed yet".
+9. `adapters/vllm/verity_vllm/program/frontend/stop_rule.py:1-8`; `reads.py:51-62`; `adapters/vllm/verity_vllm/pipeline/build.py:739-753` (the length rule is the option `--stop`).
+10. `adapters/vllm/verity_vllm/pipeline/advice_code/lengths.py:1-16`; `codec.py:289-301` (`send_lengths` on by default); the note `vllm/20261111T1704Z-certserve-results` ("No stop check and no lengths rows are in this run"); Linear VLLM-318 (Backlog, due 12 Nov).
+11. `adapters/vllm/verity_vllm/pipeline/advice_code/codec.py:10-16`; `verity/protocols/certifier/verifier/PROTOCOL.md:2099-2104`.
+12. `verity/protocols/certifier/verifier/PROTOCOL.md:2048-2055`; `security/Definitions/NetworkCertifier/ResponseCap.lean`; pull request #8405, merged 14:02Z today; #8499 (the period check reads the cap) and #8462 (the cost model takes the bits a request returns from a registered cap of 875 ids), both open.
+13. Pull request #8925, open; the goals page, `circuits/stop-rule-one-output`.
+14. `benchmarks/network_traces/leak_bounds.py:428, 567-569` (`ID_BITS = 18`, labelled assumed); `benchmarks/spot_figures/record.json:41` (the 154,880 vocabulary); `benchmarks/spot_figures/tests/test_figure1.py:552-555` (why the cost model takes 32).
+15. Linear PRF-509 (Backlog, no assignee, due 13 Nov) and PRF-460 (In Progress, due 30 Nov).
+
+Relayed, not checked by me: 11 bits a request and 24,447,500 GB a world year (this file, lines 51346 to 51348 and 55961); 16 bits at an incorrect stop block (the goals page, `circuits/stop-rule-one-output`) and 23 to 41 bits and 0.110 GB once sampled (this file, line 51349); the cost model's runs at 14,000 against 28,000 bits (this file, lines 57021 to 57025) and "S from 20,000 to 32,832 moves GB by 2.5%" for the design by width (line 47240); Tuesday's runs at 32,832 against 28,000 bits (line 30753); 1.778e16 requests a world year (the goals page, `network/term-in-the-number`); the figures 19,642, 5,445 and 3,735 GB (the goals page, `proofs/exfiltration-under-300gb`).
+
+**Corrections to my 18:26Z entry.**
+- I wrote that the demo's load sends temperature 0 (`demos/vllm/serve_load.py:141`). That line is the load in the network certifier's id form; the same file's other load mixes temperatures 0, 0.7 and 1.0 with a seed on about half (`:63-66`) [read]. I cannot say which sampler a served run used, and the brief does not say it.
+- I wrote that 875 ids is the longest response of the 128-request trace. It is also the cap the headline is read at "under the ruling that `max_tokens` is certified and the headline is at an 875-token cap": pull request #8462's body (open), which makes the cost model take the bits a request returns from the network certifier's registered cap [read: `gh pr view 8462`, 18:39Z]. The size class's 1,026 words still stand against it (PRF-509) [read].
+
+**For the table of steps to 300 GB (this file, the 18:28Z section, step 11).** With the recommendation in place of the halving, by the same interpolation [mine; not a run; modeled at utilization 0.4]: where no program is read, 1,697.4 becomes about 1,440 GB (the halving gave 1,388.4) with the head's values in units of 128 columns, and 1,373.6 becomes about 1,120 GB (1,066.8) in units of 64; where the program is read as `main` reads it, 5,445 becomes about 5,000 GB and the 3,735 GB figure about 3,820 GB. The step's state would read: not built; owners @circuits and @vllm for the packed ids, @network-accounting for the id on the wire, @proofs for the cost model's card and PRF-509; I found no Linear issue for it [run: two Linear searches, 18:40Z].
+
+**Why the cap moves the designed configuration so little** [guess, from the cost model's form at `optimize.py:1163-1293` and the runs' sizes]: once each proof block's second-stage rate follows its width, the cheapest way past the audit is a few narrow incorrect blocks, each charged its own committed bits, which are under the cap; the cap binds only on wide blocks, which that design samples most. On the partition `main` defines the blocks are wide and the cap binds often, which is why Tuesday's runs moved 9% to 16% for a cap 17% larger.
+
+**What I could not establish.**
+1. The figure on the partition `main` defines (19,642 GB) at any cap under 28,000 bits: no run prices it, and I ran none. One CPU run of the cost model at 15,750, 18,468 and 32,832 bits on both configurations replaces every interpolation above.
+2. Whether the figure on that partition falls in proportion to the cap, more slowly or faster. At a fixed design the count the Lean states falls no faster than the cap [mine: each term's exponent is concave in the cap]; I did not check that the cost model's own bound, which also chooses the design, has that property, so 11,000 GB is a guess and not a floor.
+3. Whether ids packed at 18 bits need a verifier change. The Lean statement's returned gates are 16-bit leaves (`Bits.lean:233-251`), so one id cannot be an 18-bit leaf; a packing Definition of wires only, whose output the request Program returns, should do [guess]. I did not check it against circuit-check or the boundary row's layout. How the first stage commits a request's returned ids is being settled now (one row a token, by this file's 18:41Z section, stop 1 [relayed]); the id's width belongs in that decision.
+4. Which sampler and which length rule any served run used, and whether a request Program with the seed check or the length rule has been proved anywhere but tests.
+5. What the accounting charges for what a rejected verification phase had already served. The guarantee gives it no bound; I found no statement that does.
+6. The `max_tokens` the clients of the 128-request trace asked for: with a cap certified, an incorrect request can return up to its own certified `max_tokens`, so the cap on its charge could be taken request by request.
+
+**Runs.** None of mine: I read, searched and did arithmetic. Commands: `git fetch`, `git show`, `rg`, `gh pr view` (read only), Linear reads of PRF-460, PRF-509 and VLLM-318, `research goals show --json`, `research notes sync --path lanes/proofs`; each exited 0 [run]. I pushed only this file's sections and my two notes, and wrote nothing to Linear or Slack.
+
+**What a fresh worker would do next.**
+1. Launch the one cost-model run of item 1 (the harness of this file's 14:12Z section, with the multiplier on the bits a request returns set to 0.5625, 0.6596 and 1.1726) and replace my figures.
+2. Ask the coordinator to file the packed 18-bit id with @circuits and @vllm, with PRF-509's check restated at 18 bits.
+3. Read #8462 and #8414 whole against PRF-509: which of the row's 1,026 words a request "returns" once the request's Definition lands.
