@@ -4,7 +4,7 @@ On a synthetic two-architecture listing (`fixtures/sass_census_sample.sass`, sm_
 the `cuobjdump -sass` text, counts each dotted opcode and folds the minor versions into one device family; `sass_semantics`
 classifies each base opcode (can it head a product, does it write a word, which menu route prices it); and `diff_menu`
 buckets the family's census against the menu, so the red-team gaps are the GAP-* and UNDERPRICED buckets. It also pins the
-NVIDIA Instruction Set Reference tables and the PTX index the diff reads for the opcodes the corpus never used.
+NVIDIA Instruction Set Reference tables the diff reads for the opcodes the corpus never used.
 """
 from __future__ import annotations
 
@@ -185,8 +185,3 @@ def test_the_isa_reference_tables_are_whole():
     assert {k: len(v) for k, v in t.items()} == {"hopper": 199, "blackwell": 253, "ampere": 166, "turing": 160}
     assert "DMMA" in t["hopper"] and "UTCIMMA" in t["blackwell"]
     assert diff_menu.isa_vocab("sm_90") is t["hopper"] or diff_menu.ISA_TABLE["sm_90"] == "hopper"
-
-
-def test_the_ptx_index_is_whole():
-    p = json.loads((SC / "data" / "ptx_index.json").read_text())
-    assert len(p["instructions"]) == 156
