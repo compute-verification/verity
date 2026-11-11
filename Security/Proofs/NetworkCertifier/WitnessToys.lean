@@ -4,6 +4,7 @@ public import Proofs.NetworkCertifier.Witnesses
 public import Proofs.NetworkCertifier.SampledLeak
 public import Proofs.NetworkCertifier.Counting
 public import Proofs.NetworkCertifier.RecordRows
+public import Definitions.NetworkCertifier.Witness
 public import Definitions.NetworkCertifier.PooledLeak
 public import Definitions.NetworkCertifier.TapRows
 public import Definitions.NetworkCertifier.Schedule
@@ -11,33 +12,31 @@ public import Definitions.NetworkCertifier.Ingress
 public import Definitions.NetworkCertifier.Assumptions
 
 /-!
-# The instances the network certifier's count and period witnesses are stated at
+# What holds at the instances the network certifier's count and period witnesses are stated at
 
-Each built by hand, at a positive instance where the guarantee allows one: several steps, two execution blocks of one
-advice bit each, a non-empty incorrect set at a positive `δ`. `CountWitnesses` and `PeriodWitnesses` state the
-witnesses; `Witnesses` has the steps `obs0` and `obs1` and the accepting verifiers at the negation `notStmt` (`leakL`,
-`certL`), which these extend.
+The instances are definitions of `Definitions.NetworkCertifier.Witness`, which the witnesses' statements read; this
+module proves what `CountWitnesses` and `PeriodWitnesses` conclude from. Each is built by hand, at a positive instance
+where the guarantee allows one: several steps, two execution blocks of one advice bit each, a non-empty incorrect set at
+a positive `δ`. `Witnesses` has the accepting verifiers at the negation `notStmt` (`leakL`, `certL`), which these
+extend.
 
-* `honestI P a`: the honest certifier at the Program `P` under the advice `a`, which records and puts on the wire `P`'s
-  rows, so `P` accepts its run over every number of steps (`honestI_accepted`, `honestI_mem`).
-* `fxRate`: the constant-rate Program over two execution blocks of two buckets (`T = 2`, `g = 1`), one link of two
-  slots and one advice bit per block (`k = 1`), whose two frames, both at the block's first send tick, carry the
-  block's advice bit and its negation.
-* `acceptAll`, the verifier that accepts everything: `AccSeqsAt acceptAll` is `AccSeqs` with it in place of the
-  Program's acceptance, and over any positive number of steps its sequences are infinitely many
+* `honestI P a`, the honest certifier at the Program `P` under the advice `a`: `P` accepts its run over every number of
+  steps (`honestI_accepted`, `honestI_mem`).
+* `acceptAll`, the verifier that accepts everything: `AccSeqsAt` at the Program's acceptance is `AccSeqs`
+  (`accSeqs_eq_at`), and over any positive number of steps `AccSeqsAt acceptAll`'s sequences are infinitely many
   (`accSeqsAt_acceptAll_not_le`).
-* `fxLeakI`: a sender whose secret is its every step's frame length, which `fxLeakDec` reads back from the last step of
+* `fxLeakI`, a sender whose secret is its every step's frame length: `fxLeakDec` reads it back from the last step of
   the wire or the record, so at `acceptAll` every secret is decoded (`fxLeak_not_le`, `fxLeakObs_not_le`).
-* `inI`: a certifier recording one frame a bucket in the first of two slots, every status complete, meeting W2, W4 at
-  one frame a bucket and J (`statusComplete_inI`, `oneRow_packed`, `oneRow_count`).
-* `sampProg`: two inputs and the negation of the first, the first the ingress (`notLay`), one proof block `{0, 1, 2}`
-  sampled Bernoulli at rate `1/2` (`sampDesign`). At `δ = 1/4` both `∅` and `{0}` are possible incorrect sets
-  (`single_mem_sampFaulty`), each committing at most its three gates' bits (`sampBits`), and one input is free
-  (`sampFree`). The step `obs1`, the empty frame the negation of `false` holds, is accepted (`obs1_sampAcc`).
+* `inI`, a certifier recording one frame a bucket: every status is complete, and it meets W2, W4 at one frame a bucket
+  and J (`statusComplete_inI`, `oneRow_packed`, `oneRow_count`).
+* `sampProg`, sampled Bernoulli at rate `1/2` (`sampDesign`), its first input the ingress (`notLay`). At `δ = 1/4`
+  both `∅` and `{0}` are possible incorrect sets (`single_mem_sampFaulty`), each committing at most its three gates'
+  bits (`sampBits`), and one input is free (`sampFree`). The step `obs1`, the empty frame the negation of `false`
+  holds, is accepted (`obs1_sampAcc`).
 * `pooled_bound_fails`: `PooledLeakAccepted`'s bound fails at an audit that always accepts, at one window of one step
   whose incorrect set holds the one unit `Fmax = 1` allows none of, at `δ = 1/2`.
-* `fxRows`: a rows format of the Python network certifier's fixture `fxQueue` (three connections, `fixtureAgrees`
-  checks its egress record), one window of ten buckets of four slots, which `fxQueueSched` fits (`fxQueue_fits`).
+* `fxRows`, a rows format of the Python network certifier's fixture `fxQueue` (`fixtureAgrees` checks its egress
+  record): it is well formed (`fxRows_wf`), and over one window of four slots `fxQueueSched` fits it (`fxQueue_fits`).
 -/
 
 @[expose] public section
@@ -48,20 +47,6 @@ open Claims Claims.Sampling Claims.Witness Claims.Witness.Sampling
 open Claims.Witness.SamplingGeneric (notStmt notPart)
 
 /-! ## The honest certifier -/
-
-/-- The operator, which sends nothing. -/
-def unitOp {L K S : ℕ} : ℕ → List (Obs L K S) → Unit := fun _ _ => ()
-
-/-- **The honest certifier at `P` under the advice `a`**: at each step it records and puts on the wire `P`'s row on
-the ingress so far, jitter class 0 and every status complete, whatever the sender does. -/
-def honestI {L K S : ℕ} {Adv : Type} (P : EgressPrediction L S Unit Adv) (a : Adv) :
-    Interaction L K S Unit Unit Unit (Obs L K S) where
-  certifier :=
-    { obs := fun k xs _ => ⟨P.rows k xs a, 0, fun _ => .complete⟩
-      wire := fun k xs _ => ⟨P.rows k xs a, 0, fun _ => .complete⟩
-      fault := fun _ => False }
-  op := unitOp
-  snd := fun _ _ _ => ()
 
 /-- **`P` accepts the honest certifier's run under `a`**, over every number of steps. -/
 theorem honestI_accepted {L K S : ℕ} {Adv : Type} (P : EgressPrediction L S Unit Adv) (a : Adv) (n : ℕ) :
@@ -87,32 +72,7 @@ theorem honestI_mem {L K S : ℕ} {Adv : Type} (P : EgressPrediction L S Unit Ad
   obtain ⟨k, xs, as, rfl⟩ := Interaction.mem_obsRun _ () n x hx
   exact Nat.one_pos
 
-/-! ## The reference schedule -/
-
-/-- Two frames on the one link at the execution block's first send tick: the block's advice bit, then its negation. -/
-def fxFrames : List Unit → Fin 2 → (Fin 1 → Bool) → Fin 1 → List LogicalFrame :=
-  fun _ _ v _ => [⟨[v 0], 0⟩, ⟨[!v 0], 0⟩]
-
-/-- **The constant-rate Program** over two execution blocks of two buckets (`T = 2`, `g = 1`), one link of two slots,
-one advice bit per block. -/
-def fxRate : EgressPrediction 1 2 Unit (Fin 2 → Fin 1 → Bool) :=
-  constantRate 2 1 2 fxFrames
-
-/-- `fxRate`'s advice: the bit `true` in both execution blocks. -/
-def fxAdv : Fin 2 → Fin 1 → Bool := fun _ _ => true
-
-/-- The honest certifier at `fxRate` under `fxAdv`. -/
-def fxHonestI : Interaction 1 1 2 Unit Unit Unit (Obs 1 1 2) := honestI (K := 1) fxRate fxAdv
-
 /-! ## The verifier that accepts everything -/
-
-/-- The observation sequences of length `n` with jitter below `D` that the acceptance `acc` passes: `AccSeqs` with
-`acc` in place of the Program's acceptance (`accSeqs_eq_at`). -/
-def AccSeqsAt {L K S : ℕ} (acc : List (Obs L K S) → Prop) (n D : ℕ) : Set (List (Obs L K S)) :=
-  {o | o.length = n ∧ (∀ x ∈ o, x.jitter < D) ∧ acc o}
-
-/-- The verifier that accepts everything. -/
-def acceptAll {L K S : ℕ} (_ : List (Obs L K S)) : Prop := True
 
 theorem accSeqs_eq_at {L K S : ℕ} {In Adv : Type} (P : EgressPrediction L S In Adv)
     (op : ℕ → List (Obs L K S) → In) (n D : ℕ) : AccSeqs P op n D = AccSeqsAt (AcceptedUpTo P op n) n D :=
@@ -138,21 +98,6 @@ theorem accSeqsAt_acceptAll_not_le {S n : ℕ} (hS : 0 < S) (hn : 0 < n) (N : �
   obtain ⟨k, rfl⟩ : ∃ k, n = k + 1 := ⟨n - 1, by omega⟩
   rw [(accSeqsAt_acceptAll_infinite hS k).encard_eq]
   simp
-
-/-- **A sender whose secret shows**: its secret `z` is its every action, and the certifier records and puts on the wire
-one frame of `z` bits in the first slot, jitter class 0, its one status complete. -/
-def fxLeakI : Interaction 1 1 2 ℕ Unit ℕ (Obs 1 1 2) where
-  certifier :=
-    { obs := fun _ _ as => ⟨fun _ σ => if σ = 0 then some (List.replicate (as.getLast?.getD 0) true) else none, 0,
-        fun _ => .complete⟩
-      wire := fun _ _ as => ⟨fun _ σ => if σ = 0 then some (List.replicate (as.getLast?.getD 0) true) else none, 0,
-        fun _ => .complete⟩
-      fault := fun _ => False }
-  op := unitOp
-  snd := fun z _ _ => z
-
-/-- `fxLeakI`'s decoder: the length of the last step's first frame. -/
-def fxLeakDec (w : List (Obs 1 1 2)) : ℕ := ((w.getLast?.bind fun o => o.rows 0 0).map List.length).getD 0
 
 theorem fxLeak_wire (z k : ℕ) : fxLeakDec (fxLeakI.wireRun z (k + 1)) = z := by
   first
@@ -203,24 +148,11 @@ theorem twoContents_encard : ({fun _ => [[true]], fun _ => [[false]]} : Set (Fin
 
 /-! ## Ingress -/
 
-/-- One frame `[true]` in the first of two slots. -/
-def oneRow : Row 2 (List Bool) := fun σ => if σ = 0 then some [true] else none
-
 theorem oneRow_packed : RowLeftPacked fun s => (oneRow s).isSome := by
   first | decide | (unfold RowLeftPacked oneRow; decide)
 
 theorem oneRow_count : (rowCount oneRow : ℕ) ≤ 1 := by
   first | decide | rfl | (simp [rowCount, oneRow]; decide)
-
-/-- **A certifier at one frame a bucket**: at every step it records and puts on the wire `oneRow` on its one link,
-jitter class 0, its one status complete. -/
-def inI : Interaction 1 1 2 Unit Unit Unit (Obs 1 1 2) where
-  certifier :=
-    { obs := fun _ _ _ => ⟨fun _ => oneRow, 0, fun _ => .complete⟩
-      wire := fun _ _ _ => ⟨fun _ => oneRow, 0, fun _ => .complete⟩
-      fault := fun _ => False }
-  op := unitOp
-  snd := fun _ _ _ => ()
 
 theorem statusComplete_inI (n : ℕ) : StatusComplete n (inI.obsRun () n) := by
   intro t ht
@@ -229,15 +161,6 @@ theorem statusComplete_inI (n : ℕ) : StatusComplete n (inI.obsRun () n) := by
   rfl
 
 /-! ## A sampled audit with a possible incorrect proof block -/
-
-/-- Two inputs and the negation of the first, the negation returned. -/
-def sampProg : Claims.Sampling.Prog := ⟨[.input, .not 0, .input], [1]⟩
-
-/-- One class of one stratum of one proof block, `{0, 1, 2}`. -/
-def sampPart : Claims.Sampling.Partition := ⟨[[[[0, 1, 2]]]]⟩
-
-/-- The one class sampled Bernoulli at rate `1/2`. -/
-def sampDesign : Claims.Sampling.Design := ⟨[.bernoulli 1 2]⟩
 
 theorem sampLay_fits : notLay.Fits sampProg 1 := by
   refine ⟨fun t _ ℓ σ g hg => ?_, fun t _ g hg => ?_, fun t _ t' _ htt' => absurd htt' (by omega)⟩
@@ -340,30 +263,6 @@ theorem pooled_bound_fails :
   simp [Pr, Claims.prUniform, PooledGood] <;> norm_num
 
 /-! ## The Python network certifier's fixture -/
-
-/-- A frame of the fixture's three connections, as a number below `9`: its connection's ordinal times three, plus its
-kind. -/
-def fxCode : Fin 3 × CellView Unit → ℕ
-  | (c, .data _) => 3 * c.val
-  | (c, .pad) => 3 * c.val + 1
-  | (c, .fail) => 3 * c.val + 2
-
-/-- The frame a number below `9` is. -/
-def fxFrame (n : ℕ) : Option (Fin 3 × CellView Unit) :=
-  if h : n < 9 then
-    some (⟨n / 3, by omega⟩, if n % 3 = 0 then .data () else if n % 3 = 1 then .pad else .fail)
-  else none
-
-/-- **A rows format of the fixture `fxQueue`**: its three connections in order, a frame encoded as that many `true`
-bits, one egress link and one status, ten buckets a window. -/
-def fxRows : RowsFormat (Fin 3) Unit 1 1 where
-  conns := List.finRange 3
-  enc x := List.replicate (fxCode x) true
-  dec l := fxFrame l.length
-  link := 0
-  T := 10
-  jitter _ _ _ := 0
-  status _ _ _ _ := .complete
 
 theorem fxRows_wf : fxRows.Wf := by
   refine ⟨List.nodup_finRange 3, List.mem_finRange, ?_⟩
