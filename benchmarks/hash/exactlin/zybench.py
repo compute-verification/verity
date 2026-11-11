@@ -56,7 +56,7 @@ def rows_for(m: int) -> int:
 
 def tests(out: Path) -> dict:
     cmd = [sys.executable, "-m", "pytest", *TESTS, "-rs", f"--junitxml={out / 'pytest.xml'}"]
-    p = subprocess.run(cmd, cwd=ROOT / "integrations/vllm", capture_output=True, text=True)
+    p = subprocess.run(cmd, cwd=ROOT / "adapters/vllm", capture_output=True, text=True)
     (out / "pytest.log").write_text(p.stdout + p.stderr)
     tail = (p.stdout.strip().splitlines() or [""])[-1]
     counts = {k: int(v) for v, k in re.findall(r"(\d+) (passed|failed|skipped|error|errors|xfailed|xpassed)", tail)}

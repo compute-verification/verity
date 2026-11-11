@@ -26,4 +26,4 @@ instances' outputs.
 
 - **Provides:** `run.py`, a command, and the result file it writes.
 - **Loaded by:** nothing.
-- **Loads:** `verity.ml.definitions`, `verity.ml.circuits`, `verity.ml.commitments.rowleaf` and Flock (`verity_flock`).
+- **Loads:** `verity.definitions`, `verity.circuits`, `verity.commitments.rowleaf` and Flock (`verity_flock`).
