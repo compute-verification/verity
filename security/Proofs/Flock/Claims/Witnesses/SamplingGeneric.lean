@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Claims.SamplingGeneric
+public import Definitions.Claims.SamplingGenericX
 public import Proofs.Flock.Claims.Witnesses.Sampling
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -54,7 +55,8 @@ in scope).
   at `δ = 0` or at the count `t = 1`. Its extractor and `B_conf` make no SHA-512 call of their own, so `B_ext` and
   `B_conf` find nothing, `B` finds nothing, and `κ < 1/3` at `δ = 0`: `Compiled.KS_fails`, `Compiled.KSCount_fails`.
   Its committed trace opens nothing, so its incorrect set is `{0}`, whose acceptance probability is `0`, while the
-  committed form's error is `0`: `Compiled.KSReg_fails`, at `δ = 0`.
+  committed form's error is `0`: `Compiled.KSReg_fails`, at `δ = 0`. Its trace read at the statement opens nothing
+  either, and `BconfX` finds nothing: `Compiled.KSRegX_fails`, at `δ = 0`.
 
 The lock's `meets` witnesses of these claims are Flock's decoder bounds at its deployed records
 (`Claims.Flock.decoder_meets_plain`, `_zk`), the checkable antecedent `FlockKS` and `FlockKSReg` read at Flock, and
@@ -192,6 +194,16 @@ theorem bconf_pr (H : Msg → Msg) (L : Compiled Coin A) (hs : ∀ x u v, L.sess
   · exact finder_pr_none H _ fun q => by
       simp [ownLog_noHash _ _ _ (noHash_runExt L hs _ _ _ _ _), findColl]
 
+/-- At a compiled verifier with no sessions, `BconfX` finds nothing. -/
+theorem bconfX_pr (H : Msg → Msg) (L : Compiled Coin A) (hs : ∀ x u v, L.session x u v = none) (Ω : Type)
+    [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) : (Compiled.BconfX H L Ω P x).Pr H = 0 := by
+  simp only [Compiled.BconfX]
+  -- The finder's coins are the match's, so the parse is generalized everywhere at once.
+  rcases L.parse x with _ | s
+  · exact finder_pr_none H _ fun _ => rfl
+  · exact finder_pr_none H _ fun q => by
+      simp [ownLog_noHash _ _ _ (noHash_runExt L hs _ _ _ _ _), findColl]
+
 end NoSessions
 
 /-! ## `sksL`'s numbers -/
@@ -206,6 +218,31 @@ theorem toy_correct_val (val : ℕ → Option Bool) (ι : ℕ → Bool) (h : toy
   obtain ⟨b, hb, _⟩ := (h 0 (List.mem_singleton.2 rfl)).2 toy_boundary
   have hr : toyProg.refIn [0] val ι 0 = val 0 := by simp [Claims.Sampling.Prog.refIn, toy_boundary]
   exact ⟨b, hr.symm.trans hb⟩
+
+/-- The proof block is correct at no values that agree, on the program's gates, with a trace that holds nothing at its
+input. -/
+theorem toy_incorrect_of {tr : ℕ → Option Bool} (htr : tr 0 = none) {b : List ℕ} (hb : toyPart.blocks[0]? = some b)
+    {val : ℕ → Option Bool} {ι : ℕ → Bool} (hv : ∀ g < toyStmt.prog.gates.length, val g = tr g)
+    (hc : toyStmt.prog.Correct (toyStmt.prog.refIn b val ι) b) : False := by
+  rw [toyPart_blocks] at hb
+  simp only [List.getElem?_cons_zero, Option.some.injEq] at hb
+  subst hb
+  obtain ⟨c, hc⟩ := toy_correct_val val ι hc
+  rw [hv 0 Nat.one_pos, htr] at hc
+  cases hc
+
+/-- A set that holds the proof block has acceptance probability `0`: it is outside `M_0`. -/
+theorem toy_notM {F : Finset ℕ} (h0 : 0 ∈ F) : F ∉ toyStmt.design.M toyPart 0 := by
+  have hw : Claims.Sampling.window 0 1 F ≠ ∅ := by
+    intro hw
+    have h0' : 0 ∈ Claims.Sampling.window 0 1 F := by
+      simp [Claims.Sampling.window, h0]
+    rw [hw] at h0'
+    simp at h0'
+  intro hM
+  have hpa : (0 : ℝ) < toyStmt.design.Pa toyPart F := hM
+  rw [toy_Pa] at hpa
+  simp [hw] at hpa
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem sksL_scope (x : Msg) : (sksL Coin).Scope x := ⟨toyStmt, toyPart, rfl, rfl, inScope_toy⟩
@@ -278,32 +315,47 @@ theorem sksL_Freg (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : 
   refine ⟨Finset.mem_range.2 Nat.one_pos, ?_⟩
   rintro ⟨b, hb, val, ι, hv, hc⟩
   change toyPart.blocks[0]? = some b at hb
-  rw [toyPart_blocks] at hb
-  simp only [List.getElem?_cons_zero, Option.some.injEq] at hb
-  subst hb
-  obtain ⟨c, hc⟩ := toy_correct_val val ι hc
-  rw [hv 0 Nat.one_pos, sksL_regVal] at hc
-  cases hc
+  exact toy_incorrect_of (tr := (sksL Coin).regVal H P x ω) (sksL_regVal H P x ω 0) hb hv hc
 
 /-- Whose acceptance probability is `0`: the incorrect set is outside `M_0`. -/
 theorem sksL_notM (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) :
-    (sksL Coin).Freg H P x ω ∉ toyStmt.design.M ((sksL Coin).part toyStmt) 0 := by
-  have hw : Claims.Sampling.window 0 1 ((sksL Coin).Freg H P x ω) ≠ ∅ := by
-    intro hw
-    have h0 : 0 ∈ Claims.Sampling.window 0 1 ((sksL Coin).Freg H P x ω) := by
-      simp [Claims.Sampling.window, sksL_Freg H P x ω]
-    rw [hw] at h0
-    simp at h0
-  intro hM
-  have hpa : (0 : ℝ) < toyStmt.design.Pa toyPart ((sksL Coin).Freg H P x ω) := hM
-  rw [toy_Pa] at hpa
-  simp [hw] at hpa
+    (sksL Coin).Freg H P x ω ∉ toyStmt.design.M ((sksL Coin).part toyStmt) 0 :=
+  toy_notM (sksL_Freg H P x ω)
 
 /-- `sksL`'s committed form's error is `0`. -/
 theorem sksL_εreg (H : Msg → Msg) (x : Msg) : (sksL Coin).εreg H x silentP = 0 := by
   have hb : PrB H (sksL Coin).V silentP x = 0 := prB_accV H silentP x
   unfold Compiled.εreg
   rw [sksL_κs, hb, bconf_pr H (sksL Coin) (fun _ _ _ => rfl) Unit silentP x]
+  simp
+
+/-- `sksL`'s trace read at the statement opens nothing. -/
+theorem sksL_regValX (H : Msg → Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) (x : Msg) (g : ℕ) :
+    (sksL Coin).regValX H P x g = none := by
+  simp [Compiled.regValX, sksL_opensAt, Pr_false]
+
+open Classical in
+/-- So its incorrect set holds the proof block. -/
+theorem sksL_FregX (H : Msg → Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) (x : Msg) :
+    0 ∈ (sksL Coin).FregX H P x := by
+  have hp : (sksL Coin).parse x = some toyStmt := rfl
+  simp only [Compiled.FregX, hp]
+  rw [Finset.mem_filter]
+  refine ⟨Finset.mem_range.2 Nat.one_pos, ?_⟩
+  rintro ⟨b, hb, val, ι, hv, hc⟩
+  change toyPart.blocks[0]? = some b at hb
+  exact toy_incorrect_of (tr := (sksL Coin).regValX H P x) (sksL_regValX H P x 0) hb hv hc
+
+/-- Whose acceptance probability is `0`: the incorrect set is outside `M_0`. -/
+theorem sksL_notMX (H : Msg → Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) (x : Msg) :
+    (sksL Coin).FregX H P x ∉ toyStmt.design.M ((sksL Coin).part toyStmt) 0 :=
+  toy_notM (sksL_FregX H P x)
+
+/-- `sksL`'s committed form's error at the trace read at the statement is `0`. -/
+theorem sksL_εregX (H : Msg → Msg) (x : Msg) : (sksL Coin).εregX H x silentP = 0 := by
+  have hb : PrB H (sksL Coin).V silentP x = 0 := prB_accV H silentP x
+  unfold Compiled.εregX
+  rw [sksL_κs, hb, bconfX_pr H (sksL Coin) (fun _ _ _ => rfl) Unit silentP x]
   simp
 
 end Numbers
@@ -347,6 +399,20 @@ theorem compiledKSReg_fails (H : Msg → Msg) : ¬ (sksL Coin).KSReg H := by
       iff_true_intro ⟨run_accV_out H silentP [] p.1 p.2, sksL_notM H silentP [] p.1⟩) Claims.ZKMal.Pr_true
   have h2 : (1 : ℝ) ≤ 0 + (sksL Coin).εreg H [] silentP := hp.symm.trans_le h1
   rw [sksL_εreg] at h2
+  norm_num at h2
+
+/-- **`Compiled.KSRegX` fails** at `sksL`'s silent prover, at `δ = 0`: it accepts always, with the incorrect set of its
+trace read at the statement outside `M_0`, at an error of `0`. -/
+theorem compiledKSRegX_fails (H : Msg → Msg) : ¬ (sksL Coin).KSRegX H := by
+  intro h
+  have h1 := (h [] (sksL_scope []) Unit silentP).2 toyStmt rfl 0 le_rfl
+  have hp : Pr (fun p : Unit × (Fin ((sksL Coin).V.k []) → Coin) =>
+      (run H silentP (sksL Coin).V [] p.1 p.2).out = .acc ∧
+        (sksL Coin).FregX H silentP [] ∉ toyStmt.design.M ((sksL Coin).part toyStmt) 0) = 1 :=
+    Eq.trans (Pr_congr fun p : Unit × (Fin ((sksL Coin).V.k []) → Coin) =>
+      iff_true_intro ⟨run_accV_out H silentP [] p.1 p.2, sksL_notMX H silentP []⟩) Claims.ZKMal.Pr_true
+  have h2 : (1 : ℝ) ≤ 0 + (sksL Coin).εregX H [] silentP := hp.symm.trans_le h1
+  rw [sksL_εregX] at h2
   norm_num at h2
 
 end Claims
@@ -681,5 +747,10 @@ theorem Compiled.KSCount_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inh
 theorem Compiled.KSReg_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
     ∃ (A : Arg Coin) (L : Compiled Coin A), ¬ L.KSReg H :=
   ⟨_, _, Witness.SamplingGeneric.compiledKSReg_fails H⟩
+
+/-- **`Compiled.KSRegX` fails** at some compiled verifier. -/
+theorem Compiled.KSRegX_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
+    ∃ (A : Arg Coin) (L : Compiled Coin A), ¬ L.KSRegX H :=
+  ⟨_, _, Witness.SamplingGeneric.compiledKSRegX_fails H⟩
 
 end Claims.SamplingGeneric
