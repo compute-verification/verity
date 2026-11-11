@@ -1,8 +1,9 @@
 """The long row's units written as Calls (`dsa_topk_reads.DsaPositionsMerge_v2`, `boolean_dsa_topk_mask.DsaRadixTies_v2` and
-the mask units that call it, `dsa_topk_mask_cut.DsaTopKDigitPick_v2`): each has its traced version's signature and is that
-version and its reference bit for bit; the merge and the pick have the traced one's ANDs count for count and the ties no more
-from a few dozen keys on; the pieces are the steps they name; at the served statics a description is a few rows of Calls and
-the unit fits a Flock block; and the pieces lower by their builders to the circuit their gates lower to."""
+the mask units that call it, `dsa_topk_mask_cut.DsaTopKDigitPick_v2`, `dsa_topk_reads.DsaMaskPositions_v2`): each has its
+traced version's signature and is that version and its reference bit for bit; the merge and the pick have the traced one's
+ANDs count for count, and the ties and the positions no more from a few dozen keys on; the pieces are the steps they name; at
+the served statics a description is a few rows of Calls and the unit fits a Flock block; and the pieces lower by their
+builders to the circuit their gates lower to."""
 from __future__ import annotations
 
 __models__ = ("zai-org/GLM-5.3",)
@@ -24,6 +25,7 @@ from verity.definitions.registry import dsa_topk_reads as R
 SERVED = dict(M=8, K=2048)
 PIECES = (R.DsaPositionsKeep, R.DsaPositionsShift, R.DsaPositionsShiftIn, R.DsaPositionsFirstOffset, R.DsaPositionsOffset)
 TIES_PIECES = (BM.DsaCountSum, BM.DsaCountSplit, BM.DsaRadixTie)
+POSITION_PIECES = (BM.DsaCountSum, BM.DsaCountSplit, BM.DsaButterflyTag, R.DsaBitAppend, R.DsaPositionWord)
 PICK_PIECES = (X.DsaTopKCountAdd, X.DsaTopKDigitGe, X.DsaTopKDigitEdge, X.DsaTopKDigitTake, X.DsaTopKDigitBits,
                X.DsaTopKDigitLeft, X.DsaTopKDigitShare)
 
@@ -343,6 +345,100 @@ def test_the_picks_builders_lower_to_their_gates(monkeypatch: pytest.MonkeyPatch
     circuit, built = _lowered(unit)
     assert names <= set(built)
     for piece in PICK_PIECES:
+        monkeypatch.delattr(piece, "build")
+    by_gates, built = _lowered(unit)
+    assert not names & set(built) and by_gates == circuit
+
+
+
+def _masks(N: int, rows: int, seed: int) -> np.ndarray:
+    """``rows`` masks of N keys: sparse, half, dense and full."""
+    rng = random.Random(seed)
+    return np.array([[int(rng.random() < (0.1, 0.5, 0.9, 1.0)[t % 4]) for _ in range(N)] for t in range(rows)], dtype=np.uint8)
+
+
+@pytest.mark.parametrize("N,K", [(2, 1), (2, 2), (3, 2), (5, 3), (8, 4), (13, 13), (16, 8), (20, 16), (33, 8), (64, 16),
+                                 (100, 7), (257, 64), (1000, 100)])
+def test_the_tags_and_count_as_calls_are_the_traced_tags_and_count(N: int, K: int) -> None:
+    """`DsaButterflyTagsCount_v1` is `DsaButterflyTagBits_v1`'s tags (the reference: each key's mask bit and the members
+    before it mod 2^kb) and the mask's count, as `DsaTopKPopCount_v1` has it.  From 13 keys on it has no more ANDs than the
+    two traced ones together; below that the traced ones fold an AND or two more."""
+    rows, kb = 24, max(1, (K - 1).bit_length())
+    mask = _masks(N, rows, N * 100 + K)
+    got = _flat(BS.evaluate_bits(bind(BM.DsaButterflyTagsCount, N=N, K=K), mask), rows)
+    before = (np.cumsum(mask, axis=1, dtype=np.int64) - mask) % (1 << kb)
+    want = np.concatenate([mask[..., None], (before[..., None] >> np.arange(kb)) & 1], axis=2).reshape(rows, -1)
+    assert np.array_equal(got[:, :-32], want)
+    assert np.array_equal(got[:, :-32], np.asarray(BS.evaluate_bits(bind(BM.DsaButterflyTagBits, N=N, K=K), mask)).reshape(rows, -1))
+    assert [r[0] for r in _words(got[:, -32:])] == mask.sum(axis=1).tolist()
+    if N >= 13:
+        traced = sum(BS.compile(bind(d, **st)).counts["and"] for d, st in ((BM.DsaButterflyTagBits, dict(N=N, K=K)),
+                                                                           (X.DsaTopKPopCount, dict(N=N))))
+        assert BS.compile(bind(BM.DsaButterflyTagsCount, N=N, K=K)).counts["and"] <= traced
+
+
+@pytest.mark.parametrize("N,AT,K", [(8, 0, 4), (6, 8, 4), (14, 0, 4), (40, 16, 16), (16, 16, 8), (37, 5, 9), (64, 192, 16)])
+def test_the_mask_positions_as_calls_are_the_traced_positions(N: int, AT: int, K: int) -> None:
+    """`DsaMaskPositions_v2` has `_v1`'s signature and its function, every slot of it, and the reference's (the unit has no
+    word view): the mask's count, and where the mask has at most K members, as a counted mask has, slot s its s-th member's
+    position.  Blocks that start at a multiple of their length, off one (a run of one position among them) and past a power
+    of two."""
+    rows = 24
+    mask = _masks(16 * -(-N // 16), rows, N + AT)
+    calls, traced = (bind(d, N=N, AT=AT, K=K) for d in (R.DsaMaskPositionsV2, R.DsaMaskPositions))
+    assert calls.signature() == traced.signature()
+    got = _flat(BS.evaluate_bits(calls, mask), rows)
+    assert np.array_equal(got, _flat(BS.evaluate_bits(traced, mask), rows))
+    words, few = _words(got), 0
+    for i, m in enumerate(mask[:, :N].tolist()):
+        members = [AT + j for j, b in enumerate(m) if b]
+        assert words[i][K] == len(members)
+        if len(members) <= K:
+            few += 1
+            assert words[i][:len(members)] == members
+    assert few >= 3
+
+
+def test_the_positions_pieces_are_its_steps() -> None:
+    """The indices 0 .. 2^L - 1 from the two constant bits, an index's position in its run, a bit after a row, and a key's
+    tag of its mask bit and the count before it."""
+    rng = random.Random(3)
+    zero, one = np.zeros((1, 1), np.uint8), np.ones((1, 1), np.uint8)
+    for L in (1, 2, 7):
+        got = np.asarray(BS.evaluate_bits(bind(R.DsaIndexBits, L=L), zero, one)).reshape(1 << L, L)
+        assert [r[0] for r in _words(got, L)] == list(range(1 << L))
+    idx = [rng.randrange(1 << 5) for _ in range(32)]
+    for hi in (0, 1, 5, (1 << 26) - 1):
+        got = _words(BS.evaluate_bits(bind(R.DsaPositionWord, L=5, HI=hi), _bits(idx, 5)))
+        assert [r[0] for r in got] == [hi << 5 | i for i in idx]
+    b = [rng.getrandbits(1) for _ in idx]
+    assert [r[0] for r in _words(BS.evaluate_bits(bind(R.DsaBitAppend, W=5), _bits(idx, 5), _bits(b, 1)), 6)] == [
+        i | x << 5 for i, x in zip(idx, b)]
+    assert [r[0] for r in _words(BS.evaluate_bits(bind(BM.DsaButterflyTag, W=5, KB=7), _bits(b, 1), _bits(idx, 5)), 8)] == [
+        x | i << 1 for i, x in zip(idx, b)]
+    assert [r[0] for r in _words(BS.evaluate_bits(bind(BM.DsaButterflyTag, W=0, KB=7), _bits(b, 1)), 8)] == b
+
+
+@pytest.mark.parametrize("N,AT", [(X.BLOCK, X.BLOCK), (X.WHOLE_MAX, 0)])
+def test_the_mask_positions_as_calls_stay_small_at_the_served_statics(N: int, AT: int) -> None:
+    """At the long row's served statics (a block of the cut, and the longest row masked whole) the positions written as
+    Calls are the switches' batches, as `_v1`'s are, a few batches a level of the count's tree and a run of positions for
+    each bit of the block's length: a description under 2 MiB and under a byte for every 32 of the gates, where `_v1`'s
+    holds every gate of its tags and its count and a constant for every bit of a position."""
+    unit = bind(R.DsaMaskPositionsV2, N=N, AT=AT, K=2048)
+    size = len(canonical_json(encode_program(Program(unit))))
+    assert size < 1 << 21 and size * 32 < unit.gates
+
+
+def test_the_positions_builders_lower_to_their_gates(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Each piece of the positions carries a builder: the circuit Flock's flat lowering makes of a block of 13 keys off a
+    multiple of its length is the one its gates lower to, AND for AND.  `DsaBitAppend_v1` has no gate, so the lowering
+    meets no activation of it: its output is its operands' wires."""
+    unit = bind(R.DsaMaskPositionsV2, N=13, AT=6, K=4)
+    names = {p.name for p in POSITION_PIECES}
+    circuit, built = _lowered(unit)
+    assert names - set(built) == {"DsaBitAppend"}
+    for piece in POSITION_PIECES:
         monkeypatch.delattr(piece, "build")
     by_gates, built = _lowered(unit)
     assert not names & set(built) and by_gates == circuit
