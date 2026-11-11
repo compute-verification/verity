@@ -24,7 +24,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from verity.circuits.codec import descriptor_id, program_digest
-from verity.circuits.defs import FunctionDefinition, PrimitiveDefinition, SpecializedDefinition
+from verity.circuits.defs import (
+    FunctionDefinition,
+    PrimitiveDefinition,
+    SpecializedDefinition,
+)
 from verity.circuits.refs import Refs
 
 
