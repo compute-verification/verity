@@ -38720,3 +38720,56 @@ The quick tier started before the pins commit so that what the moved tree breaks
 **The 04:12Z notice:** I have written nothing to Linear through the connector, today or before (read only: PRF-546, TRN-96).
 
 **Left, in order:** (1) `fab3`'s three fixtures, one commit, pushed, named here; (2) `b4d1`'s verdict, then the eleven; (3) `3071`'s verdict and a fix commit for each failure it shows; (4) the suites that read the fixtures, at the pins commit; (5) #8789's body rewritten for the crossed head; then "ready to mark". (6) PRF-546's assessment, by Thu 02:00Z. Not started: (B)'s branch and PR (Condition 2 wants it open before the mark: say if it may follow the mark instead), M6's crossing.
+
+## BENCHCROSS, Wed 11 Nov 04:31Z: part 1 HOLDS: every read-off of `ce3c` reproduces from its rows (16,948.3 / 14,239.8 / 8,697.5 / 2,459.2 / 1,965.2 GB; 41.45% and 267.80% at 300 GB); at one head the driver gives the old record's two rows exactly; rows pinned at each read-off confirm them; 5,783.2 against 8,697.5 GB is lambda and the census, not the heads; three notes that move no figure
+
+**Part 1, the second read of `r20261111-034244-ce3c`: HOLDS.** I read its 252 rows (`out/rows.jsonl`, sha256 `71975204221d…`, 0 errors) and recomputed every read-off in your 04:02Z message; none differs in a digit shown. Marks: [run] a node run or arithmetic on its rows; [read] a file I read; [derived]; [guess]. I wrote nothing through the Linear connector today (your 04:25Z notice).
+
+**1. The read-offs, recomputed** [run: `tools/h8_readoff.py` on `ce3c`'s rows]. The 10% point is where the row's `total` is 0.10 (linear in beta between the pinned betas), the bound there by ln-ln interpolation, times 1.05.
+
+| row | world year, GB at 10% | datacenter year | 300 GB at (world year) | FP4 target, lambda 1 / 1.05 |
+|---|---|---|---|---|
+| `(i) honest`, eight heads | 16,948.3 | 16,285.8 | 317.89% (beta 313.13%) | 242.20 / 254.09% |
+| `(i) honest`, eight heads, one request count (`h8lin`) | 14,239.8 | 13,707.9 | 267.80% (beta 263.09%) | 204.21 / 214.20% |
+| `(i) honest`, one head, one request count (`h1lin`) | 7,108.4 | 6,572.6 | 135.90% (beta 131.32%) | 104.16 / 109.15% |
+| `(ii) honest`, eight heads | 8,697.5 | 8,761.3 | 165.29% (beta 160.71%) | 126.45 / 132.55% |
+| `(iii) honest`, eight heads | 2,459.2 | 2,455.6 | 49.93% (beta 45.41%) | 38.95 / 40.67% |
+| the lever row, eight heads | 1,965.2 | 1,958.2 | 41.45% (beta 36.87%); datacenter 41.32% | 32.49 / 33.90% |
+
+- Per monitoring period, the lever row at 300 GB: world 41.42 / 41.39 / 41.45% (week / month / year), datacenter 41.23 / 41.26 / 41.32%. Its bound at 10%: world 1,963.7 / 1,962.0 / 1,965.2 GB, datacenter 1,953.2 / 1,955.1 / 1,958.2 GB. `(ii) honest` at 10%: world 8,717.9 / 8,709.3 / 8,697.5 GB, datacenter 8,757.1 / 8,750.9 / 8,761.3 GB. All as BREAKEVEN wrote them.
+- Request counts, `replay_sample / q`, world year [run]: 2.1157e16 for `(i) honest` without the added prefixes, 1.7784e16 with them and for every fused row. 7,108.4 / 8,455.9 = 0.8406 = 1.7784 / 2.1157 [derived]. The rows' own `requests` field reads 2.029e16 on every row: it is the planner's default scope's, not the count the row is priced over (see 5).
+- The interpolation is not what makes them agree [run: `r20261111-041631-656d`, the same job with a beta pinned at each read-off, 288 rows, 0 errors]: at each 10% beta the row's `total` is 10.0000% and its bound x 1.05 is the read-off to 0.1 GB; at each 300 GB beta the bound x 1.05 is 300.00 GB and the total is the read-off to 0.005 points (lever row 41.451%, `h8lin` 267.798%).
+
+**2. The only change against the old record's runs is the head count** (and the two `LINEARS` prefixes in the `lin` variants).
+- [run: `diff -rq` of the two `tools.tgz`] `ce3c`'s tools are the record's (`r20261110-054052-9a23`, `r20261110-053642-6e43`, sha256 `ff6dde289cda…`) byte for byte, plus two drivers (`headline_world_h8.py`, `headline_world_all.py`). The job script has the record's sha256 (`c864ebc953c6…`); the tree (`a5e4e56a11`), `K6144`, `FI2048`, the step and `WORLDS` are the record's [read: the three `job.json`].
+- [read] `headline_world_h8.py` is `headline_world.py` plus: the three per-head factors of `MLA128` times the head count (full parts, partial parts, the combine; the one-split whole rows, which hold all eight heads, are not scaled), `reprice.LINEARS` extended per job in a fresh child process, the lever row added to the all-scopes list, and five more fields a row.
+- [run: `r20261111-040919-a332` on vy-nebius-cpu-5, 220 rows, 0 errors: the same job with a one-head variant `h1` and the records' two betas added] **At one head the driver gives the old record's rows exactly**: `(ii) honest` at beta 0.05544106123672309 is 1,377.5321862282801 GB, q 1.4123959861219053e-07, and the lever row at 0.05577266739386515 is 406.91803791035824 GB; every numeric field of `9a23`'s and `6e43`'s row is equal, relative difference 0.0. Its one-head read-offs are the page's old figures: 8,455.9 / 1,446.4 / 542.7 / 427.3 GB, and 160.82 / 31.20 / 14.49 / 12.40% at 300 GB.
+- [run: the same run] Its `h8`, `h1lin` and `h8lin` rows equal `ce3c`'s on all 108 shared rows, relative difference 0.0, on another node.
+
+**3. Lambda 1.05 and the 10% are applied as the Goals page reads them.**
+- [read: `breakeven_burst_price.evaluate`, `headline_at10.run`] `share = 1 - 1/1.05` sets only `target_bits = weights / 1.05`, the target `sweep.solve` would solve for; the driver replaces `solve` by the pinned beta, and `bound_bits` is the planner's bound at that beta, with no lambda in it. So x 1.05 is applied once, by the reader. The lever row carries no share (`target_bits` = the weights), and its 1,965.2 GB is its bound x 1.05 the same way.
+- [read, run] `total = serve + edge + beta + compile + pool`, each a share of the scope's GPU-seconds (world year 1.1825e16 = 46.87 million machines x 8 GPUs x a year); the terms add to the row's `total` to the last digit.
+- One wording on the page [run: the pinned rows]: "41.45% of a world year's compute, of which 36.87% is proving" is the audit budget beta. Proving is 36.18% and the sampled replays 0.68%; the rest of the 41.45% is the serve tax 4.22%, compile 0.25%, the pool 0.07% and edges 0.04%.
+
+**4. BREAKEVEN's statement on 5,783.2 GB against 8,697.5 GB holds: both are at eight heads; the gap is lambda, then the census.**
+- [derived] 8,697.5 = 8,283.4 x 1.05, at beta 0.055433. At my plan's beta, 0.0554411, the old census at eight heads reads 8,282.2 GB at lambda 1 [run: `a332`'s `h8` row at that beta]. Mine, `r20261111-022552-0bf3`, is 5,783.2 GB at lambda 1, the census of record at the planner's prices. So like for like the census is x 0.698.
+- [run on the VM: the two plans' `mix.json`, the same code and inputs as the node job, 7 s each; the node copy of the old census's eight-head plan, `r20261111-041929-9bfd` on vy-nebius-cpu-7, was still waiting for a slot at 04:29Z] What a sampled replay block proves, in GPU-seconds:
+
+| | old census, eight heads | census of record, eight heads | 
+|---|---|---|
+| sparse-MLA blocks taken | 5.677 million split parts, 56,946 combines | 5.477 million head blocks, 7,996 combines |
+| seconds a block, as planned | 31.7 ms a part, 359 ms a combine | 25.4 ms a head block, 24 ms a combine |
+| sparse MLA | 200,358 | 139,184 |
+| everything else | 6,997 | 5,937 |
+| total | 207,354 | 145,121 (x 0.700) |
+
+- So the head count is the same in both (3.5% fewer blocks in mine, from the plan's launch shapes and its keys below 2,048, as BREAKEVEN wrote). The gap is the block types: the census of record's head block is priced 20% under the old split part by the planner's own rule, and it has no 32-split combine, which is 9.9% of the old plan's proving. Benchmarks' rows are the next step and a separate one: 5,783.2 to 3,846.2 GB, the head block at 15.9 ms as planned.
+
+**5. Three things I found that change no figure above but that you should know.**
+- **The utilization line on the page is arithmetic, not a run** [run: `r20261111-041651-7952`, `h8lin` `(i) honest` world year at `mfu_serve` 0.2 and 0.6]: it reads 7,096.6 GB at 0.2 and 21,400.6 GB at 0.6, where the page has 7,120 and 21,360 (-0.3%, +0.2%). The 300 GB point is 135.69% at 0.2 and 400.23% at 0.6.
+- **The rows' `split` field does not see the lever** [run, read]. `split.families` is written from the pricing call, before `headline_rows.run` multiplies the sparse-MLA blocks a token. In `ce3c`'s `h8lin` row it says sparse MLA is 0.03% of proving and 98.57% of proving is priced `measured`. In that row's plan sparse MLA is 58.3% of proving, 52.3% of it the split part, which the planner prices `computed` [run on the VM: the row's `mix.json` at beta 0.0554411; its bound, 13,557.18 GB, equals `a332`'s `h8lin` row there]. The row's `requests` field (2.029e16) is likewise not the row's count. Both matter for #8779's reader, which reads `split.families` for its "98.6% measured" line: part 3 of my 10:00Z entry.
+- **The lever adds attention blocks but no served MACs** [derived from the two workload cards]. The request count comes from 79.25e9 served MACs a token, which holds sparse MLA at the census request's 235 keys. The eight-head lever's blocks hold about 1.0e10 MACs a token more (12.6% of 79.25e9; 11.2% on the census of record), 1.4% at one head. If the serve plan's token costs that much more, requests and every GB figure of the path are x 0.89. I did not change it: it is inside the utilization range the page already states, and it is the planner's premise at one head too.
+
+**Runs** (all on the planner tree `a5e4e56a11`, the record's tools and job, preserved, nothing labelled): `r20261111-040919-a332` (vy-nebius-cpu-5; one-head control and the records' betas; `rows.jsonl` sha256 `cefd94dd2d47…`), `r20261111-041631-656d` (vy-nebius-cpu-1; betas pinned at the read-offs; `238f919863a9…`), `r20261111-041651-7952` (vy-nebius-cpu-3; utilization 0.2 and 0.6; `28e6a7aa27d7…`), `r20261111-041929-9bfd` (vy-nebius-cpu-7; the old census's eight-head plan as a `mix.json`; waiting). Tools, in the lane's notes: `tools/h8_readoff.py`, `tools/h8_control_compare.py`, `tools/h8_pinned_check.py`, `tools/mix_families.py`, `tools/mla128_lever.old8.json`, `tools/h8_second_read/` (the three launch commands). No file of the repository changed.
+
+**Next, part 2 (10:00Z).** Benchmarks' labels are pulled again (04:22 to 04:25Z); #8664's head moved to `a4947c3d0e` at 04:13Z, a crossing of the layout move with the reader's logic unchanged [read: the diff of `prove_records.py` is one path]. The census of record's own card has today's MoE cut as `MoeExpertFp8BlockGemm_v3{K=6144,N=1}`, `MoeExpertFp8GemmW_v1{E=256,K=256,N=1}` and `MoeRouterSigmoidBias_v1`; whether the reader holds a row for each decides whether `(i) honest` can be built there, and I say so either way.
