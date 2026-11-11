@@ -61322,3 +61322,52 @@ Every size I ran (seventeen, to a million machines) is in the run's `out/count_f
 - The figures' script is `~/.research/notes/lanes/proofs/tools/count_figs.py` (it reads the recorded run's rows and tools and adds no second harness); note `20261111T1820Z-report-count`.
 
 **7. One thing I need from you**: which verification phase's size the pull request's figures and the plan of record are stated at. Nothing on `main` holds it and the cost model has three (a machine's, a pod's, a datacenter's 600 s). I take a datacenter's 600 s unless you say otherwise, since it is the smallest of the three where `main`'s design is within the budget.
+
+## WIRES, Wed 11 Nov 18:51Z: #9041 is open at `1c6f2cd929ef`, not marked. The tries, the difftest and two suites passed; the one records run and the quick tier are out at that head, both waiting for a slot. PRF-559's comment is posted. No date has slipped
+
+**Verdict:** the pull request is open 70 minutes before its date. It waits only on two runs at its head; when both pass I mark it. Tags: [run] with the run id or the command; [read] with the place; [relayed]; [guess]. Times from `date -u`.
+
+**1. The pull request.**
+- #9041, `cursor/proofs-wires-0239` at `1c6f2cd929ef43eaae68bd876a241bbe93841b10`: `main` `cc6ee7446278` plus one commit of four files; mergeable [run: `research queue open`, 18:49Z; `gh pr view 9041`]. `main` is still `cc6ee7446278` [run: `git fetch`, 18:41Z].
+- Body: `Lane proofs`, `Goal proofs/spot-two-stage-sound` (the goal #8730 names; live, due Mon 30 Nov [run: `research goals show`]), your two facts on the token select's order tagged [read by the coordinator].
+
+**2. Runs, all at `1c6f2cd929ef` unless said.**
+
+| Run | What | Verdict |
+|---|---|---|
+| `r20261111-183224-e7fd` | one-file tries of `Spot/SecondStage.lean`, then `Spot/SecondStageExamples.lean` | exit 0 [run]. `SecondStage.lean`: lean exit 0 in 133 s, "none of its 26 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". `SecondStageExamples.lean`: lean exit 0 in 24 s, so the six new `#guard`s hold |
+| `r20261111-183341-06b7` | suite `verity-core-sampled-proofs`, `-k 'wire or link or registers_a_name or returned'` | exit 0, 49 passed [run]. The selection holds the new test, the changed one and PRF-559's [run: `pytest --collect-only` with that `-k`, locally: 8 of `test_difftest.py`'s 104] |
+| `r20261111-183912-cac0` | suites `benchmarks/two_stage` and `verity/protocols/spot/verifier`, slow tests too | exit 0: 10 passed, 3 skipped; 871 passed [run] |
+| `r20261111-183636-b922` | the design check at the served layout and two toys, at `main` `cc6ee7446278` | exit 0 [run] |
+| `r20261111-183607-089e` | the same three scripts at the head | exit 0 [run] |
+| `r20261111-184421-4be5` | **the one records run**: `lean_changed.py --records verity/protocols/spot/verifier/lean --update`, `--cwd clone`, cpu-7 | waiting for a slot at 18:49Z [run: `research fetch`] |
+| `r20261111-184608-ae91` | the quick tier: `suites.py --changed cc6ee7446278 --quick`, cpu-1 | waiting for a slot at 18:49Z [run] |
+
+**3. What it newly refuses, and the run that shows no design in use has either.**
+- Refused now, passing the design check on `main`: a wire whose writer's port a link names (an output the replay block returns); a wire whose writer's part is after its reader's or is its reader's own [read: the diff].
+- The token select at the served vocabulary, V = 154,880, 256 replay blocks, the Python mirror on a CPU machine, not a served engine [run: `b922` on `main`, `089e` at the head; the two outputs differ only in the lines below]:
+  - inlined: parts `Chunk` (619,520 units) then `Combine` (256); three links; `wires: None`, so `_wires_ok` is False on `main` and at the head alike (`second-wires` already);
+  - not inlined: one part, two links, `wires: []`; `_links_ok` and `_wires_ok` True on `main` and at the head;
+  - in both, 0 wires whose writer's port a link names and 0 wires listed out of order. No wire exists for either check to refuse.
+- The toy of a replay block that returns its writer's output while another template reads it by wire [run: the same two runs]: cases A and B give `codes []` on `main` and `['second-wires']` at the head; C, D, E, refused on `main` at their statements, are `second-wires` at the head; F, G, H (only the reader's output returned) are unchanged: `[]`, `['second-roots']`, `[]`.
+- The toy with wires in the tree, `benchmarks/two_stage`, still passes [run: `cac0`].
+- [relayed: PATH300's 18:28Z table, step 5] no second stage has run on a served engine, so there is no served second-stage record to have either shape; I did not check that myself. [read: `Spot/Run.lean:232`, `SecondStage.FORM`] the verifier of record refuses every two-stage run, so no accepted run changes.
+- The script is mine (`design_at_served.py`, sent with the run as an input), not the `attack_served_wiring.py` my plan named: it also prints whether the loaded `_wires_ok` holds the two conjuncts, so the two runs say which code they ran (False, False on `main`; True, True at the head).
+
+**4. Several writers (your point on GATHER).** I changed no code for it, because the wire's shape makes it so:
+- [read: `SecondStage.lean`, `Wire` and `wiresOk` at the head] a `Wire` names exactly one writer port (`writer`, `wport`), and both conjuncts are inside `ws.all`, over every wire the Definition gives. So they hold for every writer a wired port reads.
+- If GATHER gives a gathering argument several `Wire` entries for one port, each entry is checked: every writer's port is unlinked and every writer's part is before the reader's.
+- If GATHER instead changes `Wire` to hold several writers, `w.writer` and `w.wport` no longer type-check in `wiresOk`, so the file does not build until the two conjuncts are restated over all of them. It cannot pass silently. The docstring of `wiresOk` says "Each wire names one writer port, so both hold of every writer a wired port reads", which GATHER must keep true or reword.
+
+**5. Where I left the plan, and why.**
+- **Four files, not three.** `Spot/SecondStageExamples.lean` gains six `#guard`s (the returned output read by wire, the parts reversed, a wire whose writer is its reader's own template; on `wiresOk` alone and inside `check`).
+- **No try of `benchmarks/two_stage/tests/TwoGuard.lean`.** It is opt-in, in no check, and builds against the security proofs' package, which is a second heavy Lean run beside the records run. It reads only `posOf` (`:247`), whose text is unchanged [read]. Say if you want it and I launch it.
+- **`--issue none:`.** `research queue open` requires `--issue`, and a key there writes a link on the Linear issue. The body ends `Issue: none: the proofs lead links its Linear issue`. Yours: `research queue link 9041 --issue KEY`.
+- **The PRF-559 comment.** `research msg` refuses `--as` with `--worker` ("--worker goes with `comment` alone, never with --as"), so I ran `research msg linear comment PRF-559 --worker WIRES --file F`; it answered "PRF-559 commented as proofs/WIRES" at 18:42Z [run]. Its first line is stamped 18:44Z, two minutes late: my error, I wrote the stamp before reading the clock. It cites `b922` (the toy on `main`: both reads `second-interior-names`) and `06b7` (the difftest case, passed). It is yours to close.
+
+**6. The lock.** No record has moved that I know of; `4be5` decides [guess until it ends]. [read: `security/lean-audit.json` at the head] its `reads` entry for `Spot.SecondStage` lists 102 definitions, among them `posOf` and `linkOf` and not `wiresOk`, `designOk` or `check`; both are unchanged in text.
+
+**7. Next, and what I need.**
+- When `4be5` and `ae91` have passed: commit any record `4be5` kept (then the head is that commit), mark with `research queue ready 9041 --mark --by proofs`, check `research queue status`, and end my turn with the list you asked for. Before 22:00Z [guess: the records run is the long one; I have no measured time for this package today].
+- A third line of the check, if FRAME or WIRED ask before the mark: my mailbox holds nothing new at 18:49Z [read]. One would move the head and cost a second records run.
+- I need nothing else from you now.
