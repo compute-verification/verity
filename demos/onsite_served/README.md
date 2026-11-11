@@ -8,6 +8,17 @@ The file is `served_table.configuration` rendered by `verity.configuration.deplo
 `tools/verity/cli/tests/test_onsite_served.py` holds it to that byte for byte. It names no host and no address: those are
 the deploy bindings' (below), so binding another host changes no hash.
 
+## Interface
+
+What code outside this directory may use. Everything else here is internal.
+
+| Entry point | What it is |
+|---|---|
+| `verity run demos/onsite_served/config.toml [--dry-run] [--on MACHINE] [--bindings FILE] [--state DIR]` | The directory's one command (Running it, below). It reads `config.toml` and the deploy bindings, runs the pieces of the parties placed on this machine, and keeps the run under `STATE`: the served window's public record in `STATE/out`, and the monitoring period's `VERDICT` line, printed and written to `STATE/record/verdicts.jsonl`. |
+| `config.toml` | The configuration, `verity/config/v0` (`verity.configuration.deploy.config`): the workload and its parameters, the listed subprotocols, each party's machine and the channels. `served_table.configuration(commit: str) -> dict[str, Any]` is the same configuration as data. |
+| `served_table` (`served_table.py`), the table `verity run` loads by its path | What `verity run` reads of the served window: `MANIFESTS` (each subprotocol's declaration, a `Component`), `WORKLOADS` (the workload's declaration with its piece), `PARTIES` (each subprotocol's piece for each of its parties, a `Piece`), `ORDER`, and `live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result`, which runs the pieces of the parties here and returns each party's outcome or refusal. |
+| `demo.toml` | The demo's doneness for the examples' ladder (`demos/README.md`): its protocol, workload and placement, and how far its run and its proof have got (`run`, `proof`). |
+
 ## The phases
 
 - **Registration**: the site (the prover node the configuration places the developer's parties on), θ (the served

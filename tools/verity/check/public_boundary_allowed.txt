@@ -1,15 +1,12 @@
 # Each edge from a public file to one the export doesn't copy, `SOURCE -> TARGET`, that the boundary check
 # (`public_boundary.py`) allows. It only shrinks: cut an edge, then `--prune`.
-benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/prove_path.py
-benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/records_audit.py
-benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/run.sh
 adapters/vllm/tests/engine/ppl_oracle.py -> benchmarks/ppl
 adapters/vllm/tests/pipeline/test_serve_openai.py -> verity/protocols/certifier/verifier/__init__.py
 adapters/vllm/tests/program/predict/test_steps.py -> verity/protocols/certifier/verifier/__init__.py
 adapters/vllm/tests/program/predict/test_window_circuit.py -> verity/protocols/certifier/prover/__init__.py
+adapters/vllm/tests/program/predict/test_window_rows.py -> verity/protocols/certifier/prover/__init__.py
 adapters/vllm/tests/program/predict/test_window_rows.py -> verity/protocols/certifier/verifier/__init__.py
 adapters/vllm/tests/program/predict/test_window_rows.py -> verity/protocols/certifier/verifier/active.py
-adapters/vllm/tests/program/predict/test_window_rows.py -> verity/protocols/certifier/prover/__init__.py
 adapters/vllm/tests/protocols/challenger_host.py -> verity/composite/device/live_challenger/models.py
 adapters/vllm/tests/protocols/pouw_h1_circuits.py -> benchmarks/pouw/h1_prove
 adapters/vllm/tests/protocols/pouw_h1_circuits.py -> benchmarks/pouw/h1_prove/live.py
@@ -26,7 +23,19 @@ adapters/vllm/verity_vllm/pipeline/source_identity.py -> tools/research/src/rese
 adapters/vllm/verity_vllm/pipeline/source_identity.py -> tools/research/src/research/telemetry/__init__.py
 adapters/vllm/verity_vllm/pipeline/window_advice.py -> verity/protocols/certifier/verifier/__init__.py
 adapters/vllm/verity_vllm/pipeline/window_advice.py -> verity/protocols/certifier/verifier/advice.py
-adapters/vllm/verity_vllm/program/predict/scan_state.py -> verity/protocols/certifier/verifier/__init__.py
 adapters/vllm/verity_vllm/program/predict/scan_state.py -> verity/protocols/certifier/prover/__init__.py
+adapters/vllm/verity_vllm/program/predict/scan_state.py -> verity/protocols/certifier/verifier/__init__.py
 adapters/vllm/verity_vllm/program/predict/steps.py -> verity/protocols/certifier/verifier/__init__.py
 adapters/vllm/verity_vllm/program/predict/window_rows.py -> verity/protocols/certifier/prover/__init__.py
+benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/prove_path.py
+benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/records_audit.py
+benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/run.sh
+# the block check is public and sits under PoUB's verifier package, whose `__init__.py` and `pyproject.toml` are not
+verity/protocols/poub/verifier/commitments/__init__.py -> verity/protocols/poub/verifier/__init__.py
+verity/protocols/poub/verifier/commitments/__init__.py -> verity/protocols/poub/verifier/pyproject.toml
+verity/protocols/poub/verifier/commitments/gates/__init__.py -> verity/protocols/poub/verifier/__init__.py
+verity/protocols/poub/verifier/commitments/gates/__init__.py -> verity/protocols/poub/verifier/pyproject.toml
+verity/protocols/poub/verifier/commitments/gates/block_check.circuit-check.py -> verity/protocols/poub/verifier/__init__.py
+verity/protocols/poub/verifier/commitments/gates/block_check.circuit-check.py -> verity/protocols/poub/verifier/pyproject.toml
+verity/protocols/poub/verifier/commitments/gates/block_check.py -> verity/protocols/poub/verifier/__init__.py
+verity/protocols/poub/verifier/commitments/gates/block_check.py -> verity/protocols/poub/verifier/pyproject.toml

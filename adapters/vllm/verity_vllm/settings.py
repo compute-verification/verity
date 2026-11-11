@@ -138,6 +138,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_COLLECT_DEAD_GRACE_S", float, 120.0, WHERE, "seconds a dead collector waits for progress before its watchdog exits"),
     S("VERITY_COLLECT_WATCHDOG_MARKER", str, "", WHERE, "the file the collector's watchdog writes when it exits (the Commit sets it)"),
     S("VERITY_CONSUMER_DELAY_MS", float, 0.0, DEBUG, "milliseconds the collector's consumer sleeps per step (a stall injected for tests)"),
+    S("VERITY_CUT", json.loads, None, VALUE, "the carried pool's cut at each window edge under vLLM's engine core "
+      "(`pipeline.cut_plugin`), a JSON object: every_s or every_steps, hold_s, the log directory and the sent feed (`cut_plugin.SentFeed`); unset, none"),
     S("VERITY_DRAIN_SIDE", flag, True, VALUE, "the collector drains a gather replay on its side stream (native_collect.cpp)"),
     S("VERITY_DSA_TOPK", str, None, VALUE, "the DSA top-k plugin's row past INDEX_TOPK keys: canonical rewrites it to the top set in "
       "ascending index order, the order DsaButterflyRows reads (`engine_classes.DSA_TOPK_ENV`); unset, the kernels' own order"),
@@ -193,6 +195,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_INT8_FUSED_PRODUCERS", flag, True, VALUE, "the int8 linears' norms and silu-and-mul quantize their outputs in the "
       "same launch (`engine.int8_producers`)"),
     S("VERITY_INT8_PARTS", csv, (), VALUE, "the int8 parts a rank registers when it starts (`engine.int8_ranks`)"),
+    S("VERITY_POOL_ROW", int_or_zero, 0, VALUE, "the carried pool's token width CTW: the engine keys its blocks by BlockKey_v1 "
+      "for tokens of CTW bits and each window's close exports its pool row (`engine.pool_row`); 0, off"),
     S("VERITY_ROPE_CACHE_FUSED", flag, True, VALUE, "the rope and the KV-cache write run as one launch a layer "
       "(`engine.rope_cache`)"),
     S("VERITY_SPARSE_MLA_NUM_SPLITS", stripped, "0", VALUE, "FA3's sparse MLA splits: 1 pins one split, 0 leaves vLLM's heuristic; "
@@ -225,8 +229,6 @@ SETTINGS: dict[str, Setting] = _declare(
       "though `global_match_fast.enabled` reads unset as off (`--match-impl`, which the row exports)"),
     S("MATCH_WORKERS", stripped, "", VALUE, "forked workers for the match's per-request parts; empty, min(cpu_count, 8)"),
     S("MATCH_COMPACT", not_zero, True, VALUE, "the match holds operands as run progressions; 0, as runs (the representation's A/B)"),
-    S("STOCH_DECLARED_CHRONOLOGY_S", one, False, VALUE, "1: a workload Program composes components derived under stoch's "
-      "experimental per-event S schedule, which it otherwise refuses"),
     S("X09_PROFILE_OUT", str, None, DEBUG, "the file the batch decomposition writes its phase profile to; unset or blank, no profile"),
     S("X09_FORCE_DAG", str, None, VALUE, "1 runs the batch decomposition's DAG diagnostic even when the sequence criterion held, adding "
       "its fields to the record (diagnostic only, never on a workload of record)"),

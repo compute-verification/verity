@@ -61,9 +61,10 @@ from verity.protocols.certifier.verifier import charge_chain as CC
 from verity.protocols.certifier.verifier import compile_slice as CS
 from verity.protocols.certifier.verifier import served_rows as SRW
 from verity_vllm.commit.served_record import BlockValues, base_id, served_rows, window_commit
+from verity_vllm.errors import Refused
 from verity_vllm.pipeline.seal_process import SealFailed
 from verity_vllm.pipeline.serve_seal import GB, committed_bytes, extras_of, freeze, seal_window, thaw, window_requests
-from verity_vllm.pipeline.spans import commit_s_of
+from verity_vllm.pipeline.spans import commit_s_of, end_lap, gc_of, phases_of
 
 #: The compile slice the served windows are proved by, `compile_slice_v7.CompileSlice`'s id: CompileSlice_v1's statics,
 #: rows and schedule, charging the window's decisions and each certified arrival's output length. The serve path commits
@@ -104,17 +105,6 @@ REQUEST_USERS = "request_users.jsonl"
 #: traces, which hold request values, stay in the serve dir with the served rows' salts, and what reads them runs there
 MIRRORED = ("serve.json", REQUEST_USERS, "windows.jsonl", "seals.jsonl", "pauses.jsonl", "summary.json", "remote_session.json",
             "memory_map.jsonl")
-
-
-def gc_of(rc: Any) -> dict[str, Any] | None:
-    """A window's Python collections (the committer's `GcPauses` record, while it was installed): how many, their total and
-    longest, and each of 50 ms or more as (generation, start on `time.perf_counter`, seconds, thread)."""
-    g = (getattr(rc, "extra", None) or {}).get("gc")
-    if not g:
-        return None
-    p = list(g.get("pauses") or [])
-    return {"n": len(p), "total_s": round(sum(x[2] for x in p), 4), "max_s": round(max((x[2] for x in p), default=0.0), 4),
-            "long": [[x[0], round(x[1], 3), round(x[2], 3), x[3]] for x in p if x[2] >= 0.05], "freeze_s": g.get("freeze_s")}
 
 
 class Mirror:
@@ -238,15 +228,6 @@ class _Closed:
     seal_wait: float = 0.0                                     # ... and how long the loop waited for the sealer's room
 
 
-def _phases(laps: Sequence[tuple[str, float]]) -> dict[str, float]:
-    return {name: round(t - s, 4) for (_, s), (name, t) in zip(laps, laps[1:])}
-
-
-def _lap(laps: list[tuple[str, float]], clock: Callable[[], float], name: str) -> None:
-    """The end of a close's phase ``name``, marked in ``laps`` (`_phases` reads them)."""
-    laps.append((name, clock()))
-
-
 class CommitWindows:
     """The committer's windows over a serving engine, and every request's `LiveRequest`. ``committer`` is a
     `NativeHostCommitter` with a `served_record.SamplerInputsSource` attached (or its offline stand-in in the tests:
@@ -260,7 +241,8 @@ class CommitWindows:
     at its close, before the committer comes off or its window is detached, its hooks being on top of the committer's; what
     its ``close`` returns is the window line's ``pouw_h1`` (the arm's ``outcome_key`` where it has one), and when that is a
     `Future` (its release off the loop) the line is written once it resolves, the loop and the sealer going on. An arm with
-    ``sealed`` hears each window's seal line, or why it has none."""
+    ``sealed`` hears each window's seal line, or why it has none. With ``pool`` (a call for the engine's live ``BlockPool``)
+    and its blocks' size ``pool_block``, each close exports the pool's row on the loop (`_pool_row`)."""
 
     def __init__(self, committer: Any, out: Path, *, run_id: str, window_steps: int, idle_close_steps: int = 1,
                  eos_ids: Sequence[int] = (), decode: Callable[[Sequence[int]], str] | None = None,
@@ -268,8 +250,13 @@ class CommitWindows:
                  marks: Callable[[int, str], None] | None = None, seal: Mapping[str, Any] | None = None,
                  served: Mapping[str, int] | None = None, sealer: Any = None, window_bytes: int | None = None, disk: Any = None,
                  on_floor: Callable[[str], None] | None = None, mirror: Callable[[], None] | None = None,
-                 request_cap: int = 0, arm: Any = None, release: Any = None) -> None:
+                 request_cap: int = 0, arm: Any = None, release: Any = None, pool: Callable[[], Any] | None = None,
+                 pool_block: int | None = None) -> None:
         self.com, self.out, self.clock, self.wall, self.marks = committer, Path(out), clock, wall, marks
+        if (pool is None) != (pool_block is None):
+            raise ValueError("a pool row needs both the live pool and its blocks' size")
+        self.pool, self.pool_block = pool, pool_block
+        self._pool_out: dict[int, dict[str, Any]] = {}   # each window's pool row record (`_pool_row`), until its line
         self.release = release                           # `serve_release.Draws`: each window's draw-gated release, before its seal
         self.arm, self._arm_out = arm, {}                # each window's arm outcome, until its line is written
         self.arm_key = getattr(arm, "outcome_key", "pouw_h1")   # the line's and the summary's key for it
@@ -437,10 +424,13 @@ class CommitWindows:
         the window's finalize and everything that reads it, then runs on the sealer's threads in window order, and this returns None."""
         t0 = self.clock()
         laps = [("", t0)]
-        lap = functools.partial(_lap, laps, self.clock)
+        lap = functools.partial(end_lap, laps, self.clock)
         if self.arm is not None:
             self._close_arm()
             lap("arm")
+        if self.pool is not None:
+            self._pool_row()
+            lap("pool_row")
         if self.off_loop:
             return self._close_off_loop(laps, lap)
         rc = self.com.finalize() if int(self.com._step_index) else None    # a window whose one step() only drained outputs
@@ -458,7 +448,7 @@ class CommitWindows:
         self._check_finished(c.finished)
         lap("requests")
         rec["seconds"] = {"open": round(self.open_s, 4), "close": round(laps[-1][1] - t0, 4)}
-        rec["close_phases_s"] = _phases(laps)
+        rec["close_phases_s"] = phases_of(laps)
         self._write_window(rec)
         if self.marks is not None:
             self.marks(self.window, "close")
@@ -467,6 +457,19 @@ class CommitWindows:
         if isinstance(job, tuple):
             self._land(rec, job)
         return rec
+
+    def _pool_row(self) -> None:
+        """The prefix cache's pool at the close as its row (`engine.pool_row.export`), the row and its root to
+        ``pool_rows/w<k>.json``: the window line's ``pool_row`` is the row's NB and root, or why the row can't hold
+        the pool (a block a running request holds). No coin or verdict reads it yet, so it doesn't fail the window."""
+        from verity_vllm.engine import pool_row as PR
+
+        try:
+            got = PR.export(self.pool(), self.pool_block, self.out / "pool_rows" / f"w{self.window}.json")
+        except Refused as e:
+            got = {"refused": str(e)[:500]}
+        with self._lock:
+            self._pool_out[self.window] = got
 
     def _close_off_loop(self, laps: list[tuple[str, float]], lap: Callable[[str], None]) -> None:
         view = self.com.detach() if int(self.com._step_index) else None
@@ -485,7 +488,7 @@ class CommitWindows:
         c.t_close = self.clock()
         c.seal_wait = self.sealer.submit(functools.partial(self._finish, c, queued), nbytes)
         lap("seal_wait")
-        c.on_loop = _phases(laps)
+        c.on_loop = phases_of(laps)
         queued.set()
         return None
 
@@ -495,7 +498,7 @@ class CommitWindows:
         queued.wait()
         t0 = self.clock()
         laps = [("", t0)]
-        lap = functools.partial(_lap, laps, self.clock)
+        lap = functools.partial(end_lap, laps, self.clock)
         job: Any = None
         waited, checking = 0.0, False
         try:
@@ -524,7 +527,7 @@ class CommitWindows:
         on_loop = sum(c.on_loop.values())
         rec["seconds"] = {"open": round(c.open_s, 4), "close": round(on_loop + laps[-1][1] - t0, 4), "on_loop": round(on_loop, 4),
                           "finalize_wait": round(waited, 4), "seal_wait": round(c.seal_wait, 4), "queued": round(t0 - c.t_close, 4)}
-        rec["close_phases_s"] = {"on_loop": round(on_loop, 4), **_phases(laps)}
+        rec["close_phases_s"] = {"on_loop": round(on_loop, 4), **phases_of(laps)}
         rec["on_loop_phases_s"] = c.on_loop
         self._write_window(rec)
         with self._lock:
@@ -585,6 +588,8 @@ class CommitWindows:
                 return
             if self.arm is not None:
                 rec[self.arm_key] = self._arm_out.pop(rec["window"], None)
+            if self.pool is not None:
+                rec["pool_row"] = self._pool_out.pop(rec["window"], None)
             self.records.append(rec)
             with open(self.out / "windows.jsonl", "a") as fh:
                 fh.write(json.dumps(rec) + "\n")

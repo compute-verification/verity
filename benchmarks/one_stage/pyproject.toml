@@ -28,6 +28,7 @@ untraced = [
     "tests/test_a5_tp_gates.py",
     "tests/test_a5_tp_store.py",
     "tests/test_a5_warden.py",
+    "tests/test_commit_records.py",
     "tests/test_served_bandwidth.py",
     "tests/test_served_overhead.py",
     "tests/test_served_verdicts.py",
@@ -54,7 +55,8 @@ untraced = [
 # fixtures; `benchmarks/prove_path/records_audit.py`: prove_bundle's verifier window. `demos/vllm/serve_load.py`:
 # served_verdicts' load, whose timings file its tests read and whose fixed window `test_serve_load` runs against
 # serve-openai's endpoint (`adapters/vllm/verity_vllm`) over a stand-in engine; `demos/vllm/serve.sh`: the
-# demo's endpoint (`test_vllm_example`). `verity/protocols/poub/device/live_verifier/host.py`: the compose gate, which `gate-compose`'s tests
+# demo's endpoint (`test_vllm_example`); `demos/vllm/commit.sh`: the demo's Commit, which `test_commit_records` runs
+# through bash in a toy tree. `verity/protocols/poub/device/live_verifier/host.py`: the compose gate, which `gate-compose`'s tests
 # send a hand-off through.
 # `test_served_pearlplus_lean`: served_pearlplus.sh's Lean step (`served_passes.py lean`) on the pouw suite's toy passes
 # (its `test_pearl_c_vllm` and what that imports by path), with PouwCheck.PearlPlus's `pouw-pearlplus`.
@@ -72,6 +74,7 @@ inputs = ["verity/configuration/config/verity_config", "verity/protocols/pouw/cl
           "tools/verity/circuit_check/src/circuit_check/entries.py", "tools/verity/circuit_check/src/circuit_check/targets.py",
           "benchmarks/one_stage/interfaces/verity_e2e_demo", "benchmarks/torch_gpu/commit_slots/slots.py",
           "benchmarks/prove_path/records_audit.py", "demos/vllm/serve_load.py", "demos/vllm/serve.sh",
+          "demos/vllm/commit.sh",
           "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-bundle.json",
           "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-bundle.bin",
           "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-registration.json",

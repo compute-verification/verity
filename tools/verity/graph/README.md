@@ -1,7 +1,7 @@
 # `verity graph`
 
 The fine-grained check: Verity's checks as a graph of tasks that depends only on the commit. An executor runs any part of it
-with one result cache, one artifact store and one event stream; drive only reads results. This package is Verity's side:
+with one result cache, one artifact store and one event stream; the verified queue only reads results. This package is Verity's side:
 the listing (graph/v2), one task's run (result/v1) and a serial reference executor. `verity tasks` (`tools/verity/check/
 tasks.py`, tasks/v1) is the coarse graph `check` runs today.
 
@@ -20,9 +20,9 @@ verity graph check --local [--family F ...] [--work DIR] [--retries N] [--events
 
 1. Keys come from declared inputs, not traced reads. A sandbox enforces the declaration: an undeclared read is an error.
 2. Keys include repository paths. A pure move reruns what it moved, once.
-3. Runners report facts. What gates, what may stay red and what a red triggers is drive's configuration, never a runner's.
+3. Runners report facts. What gates, what may stay red and what a red triggers is the verified queue's configuration, never a runner's.
 4. `tasks.toml` holds families (tens of entries), not one row per task.
-5. No `owner` field anywhere in the graph, results or events: who is paged is drive's policy, from paths. The listing
+5. No `owner` field anywhere in the graph, results or events: who is paged is the verified queue's policy, from paths. The listing
    refuses one in a table or a task, and `contract.result_errors` in a result.
 
 ## Layout
@@ -68,7 +68,11 @@ lister, its kinds' runners, its tests and its own `tasks.toml` table, and edits 
 - Tasks are sorted by id. An id is `<kind>:<name>`, unique in the graph.
 - `argv` defaults to `["verity", "graph", "run", "<id>"]`; `vars` is `{name: string}`. Both are in the key, so a lister puts in
   `vars` what a run depends on of the tree beyond its inputs' bytes: the circuit-binding family's `lookups` is the digest of
-  what the tree answers each path its runs look for, so a module file added there reruns them.
+  the names, not the bytes, of the paths where its runs can look (every path under circuit-check's declared inputs, and the
+  module names at the root, each workspace member's import-path entry and each directory above a declared input: the var
+  `places`), so a path added, removed or renamed there reruns them and an edit reruns none. Its runner judges each run by
+  the run's own report: a file read outside the task's inputs, a probe or listing outside `places`, or a library git
+  doesn't have is an undeclared read.
 - `inputs` are files of the tree, sorted. The core adds the kind's runner (`runners/<kind>.py` and `runners/__init__.py`) to
   every task's inputs, so a runner's change reruns every task of its kind.
 - `reads` name another task's output; `outputs` are files, by relative path in the task's work directory.
@@ -177,7 +181,7 @@ runs them, one task a step:
 `lean-suites` reads every one and puts it at that path in the tree before suites.py runs (its var `bin`). A part's task
 (its var `files`) hands suites.py a timing record with none of the suite's files (`--timings`), so part K is every M-th test
 file by path from the K-th, the same wherever it runs, and the M parts hold each file once. A lean-suites fail names each
-failed suite with its failed tests (`detail.failed`), which drive names, allows and blames as that suite's red. A
+failed suite with its failed tests (`detail.failed`), which the verified queue names, allows and blames as that suite's red. A
 run that ran nothing is no pass: ci.py skipping every set of the agreement, a partition check that compared no cut, a suite
 suites.py didn't run. Each is an error, so no result. The agreement fetches the upstream
 build and inputs `upstream.json` pins (`research data fetch`, as ci.py fetches what it pins) and holds them to the pin's
@@ -185,9 +189,9 @@ sha256, so the store and its client are no input. Those fetches and ci.py's read
 environment names: a `research run` job on a node with no store config of its own gets one with `--store-read`, and without
 one the task is an error that says so. Each runner reports a fail only for the tree's fault and an error for the
 machine's: a toolchain that didn't set up, a pin that didn't fetch, check.py's `cannot run here`, a command a signal killed,
-and for `check_build.sh` any failing exit whose log shows no refused patch and no crate that didn't compile. Drive counts no
-lean-agreement task's result: it takes lean-agreement, and ratchet-gate, which no family lists, from a train.sh run beside
-the executor's check (`research.drive.SLIM_STEPS`).
+and for `check_build.sh` any failing exit whose log shows no refused patch and no crate that didn't compile. The verified
+queue's loop counts no lean-agreement task's result: it takes lean-agreement, and ratchet-gate, which no family lists, from a
+train.sh run beside the executor's check (`research.landing.SLIM_STEPS`, `research.vqueue_slim`).
 
 ## Writing a family
 

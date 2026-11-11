@@ -170,6 +170,7 @@
   "Proofs.Properties.Verity.Recursive.Target",
   "Proofs.Properties.Verity.Recursive.Refusals",
   "Proofs.Properties.Verity.Sampled.RecursiveRefused",
+  "Proofs.Properties.Verity.Sampled.MemberForm",
   "Proofs.Properties.Verity.Recursive.Audit"
  ],
  "exempt": {

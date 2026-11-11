@@ -20,6 +20,7 @@ from __future__ import annotations
 import threading
 import time
 from collections import defaultdict
+from collections.abc import Callable, Sequence
 from contextlib import contextmanager
 from typing import Any, Iterator
 
@@ -96,3 +97,24 @@ def commit_s_of(rc: Any) -> dict[str, dict[str, float]] | None:
         return None
     per = per_step.values()
     return {side: {c: round(sum(float(d.get(c, 0.0)) for d in per), 4) for c in cs} for side, cs in COMMIT_S.items()}
+
+
+def gc_of(rc: Any) -> dict[str, Any] | None:
+    """A window's Python collections (the committer's `GcPauses` record, while it was installed): how many, their total and
+    longest, and each of 50 ms or more as (generation, start on `time.perf_counter`, seconds, thread)."""
+    g = (getattr(rc, "extra", None) or {}).get("gc")
+    if not g:
+        return None
+    p = list(g.get("pauses") or [])
+    return {"n": len(p), "total_s": round(sum(x[2] for x in p), 4), "max_s": round(max((x[2] for x in p), default=0.0), 4),
+            "long": [[x[0], round(x[1], 3), round(x[2], 3), x[3]] for x in p if x[2] >= 0.05], "freeze_s": g.get("freeze_s")}
+
+
+def phases_of(laps: Sequence[tuple[str, float]]) -> dict[str, float]:
+    """A close's phases, each one's seconds by its name: the time between two laps (`end_lap` marks them)."""
+    return {name: round(t - s, 4) for (_, s), (name, t) in zip(laps, laps[1:])}
+
+
+def end_lap(laps: list[tuple[str, float]], clock: Callable[[], float], name: str) -> None:
+    """The end of a close's phase ``name``, marked in ``laps`` (`phases_of` reads them)."""
+    laps.append((name, clock()))

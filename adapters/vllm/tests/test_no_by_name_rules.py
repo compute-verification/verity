@@ -57,7 +57,7 @@ REPO = ROOT.parents[1]
 SCAN = ((ROOT, "verity_vllm", None), (REPO, "verity/definitions", frozenset({"registry"})))
 SKIP_DIRS = frozenset({"tests", "__pycache__", "kernels", "numerics"}); SKIP_FILES = frozenset({"engine_profile.py"})   # relayout: program/kernels/ and engine/engine_profile.py come from the two packages SCAN never covered; 13 by-name rules -- decide (Draft 3.1 §12.4), do not just allowlist
 #: program/kernels/ (`numerics/` in `verity.definitions`), and its modules that stay in the package, skipped wherever they go
-SKIP_FILES |= {"relations.py", "sampling_rng.py", "libdevice_sampling.py", "rmsnorm_fused_sweep.py", "gemm_target_correspondence.py",
+SKIP_FILES |= {"relations.py", "sampling_rng.py", "gemm_target_correspondence.py",
                "compiled_relations.py", "compiled_norm_literal.py"}
 #: engine_profile.py's `CASES`, which moved here with 11 of its 13 by-name rules: skipped by path, as its old file is by name
 SKIP_PATHS = frozenset({"verity_vllm/engine/profiles/cases.py"})

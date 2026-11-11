@@ -232,7 +232,7 @@ def test_p3_closure_the_moe_block_uses_only_lselect_and_lgatherrow_from_the_spec
     assert spec_used, "the MoE block must reach the specified class (its selects and gathers)"
     families = {i.split("_v1")[0].rstrip("0123456789x") for i in spec_used}
     assert all(i.startswith(("LSelect", "LGatherRow")) for i in spec_used), spec_used   # (i): nothing MoE-specific joined the list
-    assert not any(i.startswith("LSplitsFor") or i.startswith("LStepLive") or i.startswith("LBot") or i.startswith("LIsActive") for i in spec_used)
+    assert not any(i.startswith("LStepLive") or i.startswith("LBot") or i.startswith("LIsActive") for i in spec_used)
     # (ii) the gather population per pair: TOPK·(2N+K) expert-row calls × K gathers each, over ALL E experts — whatever the route
     rows = [c for call in p.circuit.root_calls() for c in _walk(call) if c.node.fn.id.startswith("Lifted[MoeExpertRow_v1]")]
     assert len(rows) == TOPK * (2 * N + K)

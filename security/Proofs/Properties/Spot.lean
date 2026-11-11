@@ -790,6 +790,13 @@ theorem poolMarks_nil (w : Json) (pool : Option Registration.Pool) (log : Array 
   rw [Registration.poolMarks, kept_nil, kept_nil, kept_nil, kept_nil]
   exact ⟨fun ⟨⟨⟨⟨a, r⟩, wk⟩, s⟩, o⟩ => ⟨a, r, wk, s, o⟩, fun ⟨a, r, wk, s, o⟩ => ⟨⟨⟨⟨a, r⟩, wk⟩, s⟩, o⟩⟩
 
+/-- R8's codes (`Registration.r8Codes`) add none exactly when R8 holds. -/
+theorem r8Codes_nil (v : Registration.Verifier) (c : Array String) :
+    Registration.r8Codes v c = #[] ↔ c = #[] ∧ R8 v := by
+  unfold Registration.r8Codes R8
+  rw [kept_nil, kept_nil]
+  exact ⟨fun ⟨⟨h, t⟩, r⟩ => ⟨h, t, r⟩, fun ⟨h, t, r⟩ => ⟨⟨h, t⟩, r⟩⟩
+
 theorem any_false_iff {α : Type} (xs : Array α) (p : α → Bool) : xs.any p = false ↔ ∀ x ∈ xs, p x = false := by
   rw [Bool.eq_false_iff, ne_eq, Array.any_eq_true']
   simp
@@ -853,26 +860,31 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
   unfold Registration.checkRef
   extract_lets v2 get c0 w program part partDigest mine roots previous j14 j13 j12 j11 j10 j9 j8 distinct j7 j6 j5 jD j4 j3 j2
     j1 j0 c1
-  have h14 : ∀ c, j14 () c = #[] ↔ c = #[] ∧ RL v ∧ True :=
-    step_ite (P := True) (RL v) j14 (fun _ c => (pure c : Id (Array String))) _ _
+  have h14 : ∀ c, j14 () c = #[] ↔ c = #[] ∧ R8 v ∧ RL v := fun c =>
+    (step_ite (P := True) (RL v)
+      (fun _ c => (pure (if Registration.linkRefused v = true then addCode c "link-points" else c) : Id (Array String)))
+      (fun _ c => (pure c : Id (Array String))) (Registration.linkRefused v) "link-points"
       (fun c => ⟨fun h => ⟨h, trivial⟩, fun h => h.1⟩) (fun _ => rfl) (linkRefused_false_iff v)
+      (Registration.r8Codes v c)).trans
+      ⟨fun ⟨h, l, _⟩ => ⟨((r8Codes_nil v c).1 h).1, ((r8Codes_nil v c).1 h).2, l⟩,
+        fun ⟨h, r, l⟩ => ⟨(r8Codes_nil v c).2 ⟨h, r⟩, l, trivial⟩⟩
   have h13 : ∀ c, j13 () c = #[] ↔ c = #[] ∧ WindowSeedSalt rec v ∧ WindowPoolReset rec v ∧ WindowPoolWeek rec v ∧
-      WindowPoolSpent rec v ∧ PoolResetOnce v ∧ (v2 = true → R7 rec v ∧ PoolChained rec v) ∧ RL v ∧ True := by
+      WindowPoolSpent rec v ∧ PoolResetOnce v ∧ (v2 = true → R7 rec v ∧ PoolChained rec v) ∧ R8 v ∧ RL v := by
     intro c
     simp only [j13]
     by_cases hv : v2 = true
     · simp only [hv, ↓reduceIte, true_implies]
       rw [h14, kept_nil, checkOutputs_nil, poolMarks_nil, kept_nil, poolChained_iff]
-      exact ⟨fun ⟨⟨⟨⟨⟨a, s⟩, r, wk, p, o⟩, b⟩, q⟩, l⟩ => ⟨a, s, r, wk, p, o, ⟨b, q⟩, l⟩,
-        fun ⟨a, s, r, wk, p, o, ⟨b, q⟩, l⟩ => ⟨⟨⟨⟨⟨a, s⟩, r, wk, p, o⟩, b⟩, q⟩, l⟩⟩
+      exact ⟨fun ⟨⟨⟨⟨⟨a, s⟩, r, wk, p, o⟩, b⟩, q⟩, e⟩ => ⟨a, s, r, wk, p, o, ⟨b, q⟩, e⟩,
+        fun ⟨a, s, r, wk, p, o, ⟨b, q⟩, e⟩ => ⟨⟨⟨⟨⟨a, s⟩, r, wk, p, o⟩, b⟩, q⟩, e⟩⟩
     · simp only [hv, Bool.false_eq_true, ↓reduceIte, false_implies, h14, kept_nil, poolMarks_nil]
-      exact ⟨fun ⟨⟨⟨a, s⟩, r, wk, p, o⟩, l⟩ => ⟨a, s, r, wk, p, o, trivial, l⟩,
-        fun ⟨a, s, r, wk, p, o, _, l⟩ => ⟨⟨⟨a, s⟩, r, wk, p, o⟩, l⟩⟩
+      exact ⟨fun ⟨⟨⟨a, s⟩, r, wk, p, o⟩, e⟩ => ⟨a, s, r, wk, p, o, trivial, e⟩,
+        fun ⟨a, s, r, wk, p, o, _, e⟩ => ⟨⟨⟨a, s⟩, r, wk, p, o⟩, e⟩⟩
   have h12 : ∀ c, j12 () c = #[] ↔ c = #[] ∧ (∀ sp, v.binding = some sp →
       jeq (getD (get "window") "stream") (.str sp.1) = true ∧
       jeq (getD (get "window") "prover") (.str sp.2) = true) ∧
       (WindowSeedSalt rec v ∧ WindowPoolReset rec v ∧ WindowPoolWeek rec v ∧ WindowPoolSpent rec v ∧ PoolResetOnce v ∧
-        (v2 = true → R7 rec v ∧ PoolChained rec v) ∧ RL v ∧ True) := by
+        (v2 = true → R7 rec v ∧ PoolChained rec v) ∧ R8 v ∧ RL v) := by
     intro c
     simp only [j12]
     rcases hb : v.binding with _ | ⟨stream, prover⟩
@@ -1045,16 +1057,17 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
   rw [ek, ef, e7]
   constructor
   · rintro ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, _, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩, hloop, hpop, _, hdecl, hsch, hroots, hports,
-      h7', h4', h5', h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h, h7r, hrl, _⟩
+      h7', h4', h5', h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h, h7r, h8, hrl⟩
     have ⟨l1, l2, l3⟩ := (r2loop get _ _ _).1 hloop
     exact ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3 d hd'⟩, hpop, hdecl⟩,
       ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7'⟩, h4', h5',
-      ⟨h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h⟩, fun hv => ⟨(h7r hv).1, (h7r hv).2, pinnedHeld_of_R7 (h7r hv).1⟩, hrl⟩
+      ⟨h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h⟩, fun hv => ⟨(h7r hv).1, (h7r hv).2, pinnedHeld_of_R7 (h7r hv).1⟩,
+      h8, hrl⟩
   · rintro ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3⟩, hpop, hdecl⟩,
-      ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h⟩, h7r, hrl⟩
+      ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h⟩, h7r, h8, hrl⟩
     refine ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, rfl, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩,
       (r2loop get _ _ _).2 ⟨l1, l2, fun d' hd'' => ?_⟩, hpop, rfl, hdecl, hsch, ⟨hr1, hr2⟩, ⟨hp1, hp2, hp3⟩, h7', h4',
-      h5', h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h, fun hv => ⟨(h7r hv).1, (h7r hv).2.1⟩, hrl, trivial⟩
+      h5', h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h, fun hv => ⟨(h7r hv).1, (h7r hv).2.1⟩, h8, hrl⟩
     have : some d' = some d := hd''.symm.trans hd'
     cases this
     exact l3
@@ -1319,7 +1332,7 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
 
 theorem acceptMeans : AcceptMeans := fun p c e pub prof => (acceptMeans_iff p c e pub prof).1
 
-/-- Completeness of `AcceptMeans`: a commitment whose registration keeps R1–R7, with a sample of the agreed law over the
+/-- Completeness of `AcceptMeans`: a commitment whose registration keeps R1–R8, with a sample of the agreed law over the
 registered population, its units proved and served as sampled, and verdicts that accept, is accepted, publishing
 `publicOf` and the profile `profileOf`. -/
 theorem acceptMeans_complete (p : Params) (c : Commitment) (e : Evidence) (law : Json) (d : Core.SamplingDesign) (n : Nat)
