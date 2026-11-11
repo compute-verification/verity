@@ -255,7 +255,7 @@ theorem WorkSoundAtTables_honest :
       (shaUnits 3400 152 (3608 / 32)) (List.Mem.head _)⟩
 
 /-- **`WorkSoundAtTables`'s nontrivial witness**: at some accelerator `G`, period `Pd` and prices `μ`, the statement's
-conclusion (`WorkBound`, at the registered work `μ · hon`) fails for the no-fold round `twRound` with two sampling
+conclusion (`WorkBound`, at `W_reg = μ · hon`) fails for the no-fold round `twRound` with two sampling
 blocks under the verdict that accepts everything (`fun _ _ _ _ => True`), at `ε = κ = 1/2`: a verdict that checks
 nothing bounds no prover's freed compute.
 
