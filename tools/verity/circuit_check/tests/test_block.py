@@ -68,10 +68,14 @@ def test_rows_that_push_a_fitting_slot_past_the_block_fail():
 
 
 def test_the_held_list_only_shrinks():
-    """`block_held.HELD` is at most `block_held.MAX` long, and each entry says why."""
+    """`block_held.HELD` is at most `block_held.MAX` long, and each entry says why, as itself: no PR or Linear id."""
+    import re
+
     from circuit_check import block_held as BH
 
     assert len(BH.HELD) <= BH.MAX and all(why.strip() for why in BH.HELD.values())
+    ids = {i: why for why in set(BH.HELD.values()) for i in re.findall(r"#\d+|\b[A-Z]{2,4}-\d+\b(?!\.)", why)}
+    assert not ids, f"block_held.py: state each reason as itself (what serving stages instead), not by PR or issue: {ids}"
 
 
 def test_a_held_definition_is_reported_held_and_a_held_one_that_fits_is_stale(monkeypatch):
@@ -158,3 +162,18 @@ def test_sparse_mla_is_held_to_the_block_by_its_head_chain():
     assert not F.failures and b["whole"]["k_log"] == 30 and b["k_log"] == 27
     assert [(u["unit"].partition("{")[0], u["count"]) for u in b["cut"]] == [
         ("SparseMlaHeadBlock_v1", 8), ("SparseMlaHeadBlock_v1", 8), ("SparseMlaHeadEnd_v1", 8)]
+
+
+def test_sparse_mla_split_is_held_to_the_block_by_its_split_chain():
+    """GLM-5.3's `SparseMlaSplit_v1` at T = 130 in two splits (split 0 of two blocks) is past the block whole and cut by
+    `sparse_mla_split.CUTS` into each split's blocks, its ends in column blocks and each column block's combine, whose
+    largest, a full block, fits."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.definitions.registry import sparse_mla as M, sparse_mla_split as W
+
+    F = CK.Findings()
+    b = CK.block_range(bind(W.SparseMlaSplit, T=130, NS=2, **M.SPARSE_MLA_GLM53), F)
+    assert not F.failures and b["whole"]["k_log"] > 27 and b["k_log"] == 27
+    assert [(u["unit"].partition("{")[0], u["count"]) for u in b["cut"]] == [
+        ("SparseMlaHeadBlock_v1", 8), ("SparseMlaHeadBlock_v1", 8), ("SparseMlaHeadBlock_v1", 8),
+        *[("SparseMlaSplitEndCols_v1", 16)] * 8, ("SparseMlaCombine_v1", 64)]
