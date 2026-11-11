@@ -1,0 +1,10 @@
+# `verity bench compute` (`run.py`): the share of a served model's MACs that Pearl+ credits over the tokens a served run
+# served, read from the verifier's side of the run's record. Not a package: the suite holds the printer and the model's
+# MAC count to the small record under tests/fixtures, with a stand-in for the evidence store, so nothing is fetched in
+# it (`uv run tools/verity/check/suites.py benchmarks/compute`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.verity.tests]
+# run.py reads the run's output directory through verity_config's SHARED registry, which is built on verity/settings.py
+inputs = ["verity/configuration/config/verity_config", "verity/__init__.py", "verity/settings.py"]
