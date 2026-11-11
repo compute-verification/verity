@@ -61261,3 +61261,64 @@ Tags: [run] a command I ran in this turn, [read] a file or record I read in this
 **Runs.** I launched no `research run`. `research queue status` four times, the last at 18:37Z, `research msg owners` twice, `research status` once, `research goals show --json`, `research notes sync --path lanes/proofs` twice: all exit 0. `git ls-remote` and `gh pr view` at 18:43Z: #8949, #8789, #9005, #8961, #8454, #8933 and #8875 are all open, heads as in the table. I wrote nothing to Linear or Slack and pushed only this file.
 
 **What a fresh worker would do next.** Read step 10's table when it is in (21:30Z) and restate the chain under `main`'s count. Run the tree's own figure command on `main` for steps 5, 9 and 16 in place of my arithmetic. Read VLLM-335 again after proofs answers it, and move step 7 from "nobody" when it has an owner.
+
+## COUNT, Wed 11 Nov 18:47Z: the figures under `main`'s first stage, which samples a whole number of each verification phase's replay blocks and never fewer than one. Where 19,642 GB and 5,445 GB were priced (a verification phase of one machine's 600 s) no design is within the 10% budget: one sampled replay block costs 487 and 257 times it. At a datacenter's 600 s they are 20,114 GB and 5,202 GB, with binding errors 2^-93.75 and 2^-92.78 a verification phase (26 and 51 sampled replay blocks, not 6). All modeled, utilization 0.4, world year; the planner is on my branch, not on `main`
+
+Every figure here is modeled: the planner's bound at the budget where the recorded total is 10%, times 1.05, at utilization 0.4, over a world year, on prices nobody has run on the served engine. The planner that prices `main`'s first stage is on branch `cursor/proofs-count-71ac` at `9ac6befc87` (pushed, no pull request yet). The binding figures are the Lean expression's value at modeled sizes; no Lean statement at the served engine is behind them.
+
+**1. What was wrong with the quoted pair** [read: the recorded run `r20261111-163515-2cd7`'s design calls, `out/rows.jsonl`; `optimize.py` on `main` `cc6ee7446278`].
+- 19,641.8 GB and 5,444.6 GB were priced with a verification phase of one machine's 600 s, 7,219 replay blocks, sampled at a rate that takes 0.0011 and 0.0039 replay blocks of it on average. The planner on `main` prices that average and pads to 3 and 4.
+- `main`'s verifier samples exactly ⌈q·n⌉ of the n replay blocks, so at least one of each verification phase. One sampled replay block of 7,219 is 932 and 257 times the average those figures paid for.
+- 2^-95.87 took 6 sampled replay blocks a verification phase. Nothing tied that 6 to either gigabyte figure: at their rates a verification phase that samples 6 replay blocks is 5,590 and 1,539 machines' 600 s.
+
+**2. The control** [run `r20261111-183522-b5bb`, rc 0, tree `cc6ee7446278`, `main`'s planner]. Replaying the recorded design calls gives the recorded bound at all twelve budgets to the last digit, and 19,641.8 GB and 5,444.6 GB at the 10% point, read as the recorded run reads it and evaluated at that budget directly. So the differences below are the first stage's law and nothing else.
+
+**3. The figures under `main`'s first stage** [run `r20261111-183448-041d`, rc 0, tree `9ac6befc87`; the same table with one more column in `r20261111-183916-abb5`, rc 0]. One machine's 600 s is 7,219 replay blocks; K is the replay blocks the first stage samples of one verification phase; the cost is against the 10% point's budget; the binding error is a verification phase's, first with the quoted figure's own inputs and K (10,046,500 sampled proof blocks a sampled replay block), then in brackets with the design's own sampled proof blocks.
+
+The partition `main` defines (19,641.8 GB as quoted):
+
+| a verification phase of | K | cost / budget | GB | binding error |
+|---|---:|---:|---:|---|
+| one machine's 600 s | none fits: at the datacenter's design one costs 487 budgets | | | |
+| a 64-machine pod's 600 s | 2, of 12 proof blocks each | 0.719 | 1.8 billion | no bound worth the name; at the datacenter's design one costs 7.6 budgets |
+| 128 machines' | 1 | 0.959 | 42,375 | 2^-98.45 (2^-101.01) |
+| 256 machines' | 3 | 0.982 | 28,251 | 2^-96.87 (2^-101.58) |
+| 512 machines' | 2 | 0.995 | 21,204 | 2^-97.45 (2^-100.35) |
+| 1,536 machines' | 6 | 0.998 | 21,204 | 2^-95.87 (2^-98.58) |
+| a datacenter's (12,500 machines) | 26 | 0.995 | 20,114 | 2^-93.75 (2^-95.65) |
+| 100,000 machines' | 108 | 1.000 | 19,519 | 2^-91.70 (2^-92.70) |
+| the whole year as one | 2.66e9 | 1.000 | 19,507 | 2^-67.14 (2^-68.14) |
+
+The best designed configuration (5,444.6 GB as quoted):
+
+| a verification phase of | K | cost / budget | GB | binding error |
+|---|---:|---:|---:|---|
+| one machine's 600 s | none fits: one costs 257 budgets | | | |
+| a 64-machine pod's 600 s | none fits: one costs 4.0 budgets | | | |
+| 256 machines' | none fits: one costs 1.0002 budgets | | | |
+| 512 machines' | 2 | 0.974 | 5,434 | 2^-97.45 (2^-98.81) |
+| 1,536 machines' | 6 | 0.955 | 5,434 | 2^-95.87 (2^-97.23) |
+| a datacenter's (12,500 machines) | 51 | 0.991 | 5,202 | 2^-92.78 (2^-94.14) |
+| 100,000 machines' | 411 | 0.998 | 5,164 | 2^-89.77 (2^-91.13) |
+| the whole year as one | 1.01e10 | 1.000 | 5,153 | 2^-65.21 (2^-66.57) |
+
+Every size I ran (seventeen, to a million machines) is in the run's `out/count_figs.txt`.
+
+**4. What to say** [derived from 3].
+- The gigabytes barely move once a verification phase is large enough to hold one sampled replay block of the design within the budget: 19,507 to 21,204 GB against 19,642, and 5,153 to 5,434 GB against 5,445. The size is the new condition: about 487 machines' 600 s (3.5 million replay blocks) on the partition `main` defines and 257 machines' (1.9 million) at the best designed configuration. Below that the planner can only sample fewer proof blocks of each sampled replay block, and the bound goes fast: 28,251 GB at 256 machines', 42,375 GB at 128, nothing at a pod's or a machine's. At the best designed configuration, whose proof blocks a replay block are fixed by its rule, nothing fits below 257 machines'. A verification phase can be wide (many machines for 600 s, which needs one committer over their boundary rows [read: `benchmarks/spot_figures/README.md`, Limits]) or long (one machine for 81 hours and 43 hours).
+- The binding error moves with K, one bit a doubling, and K is the verification phase's size times the rate. With 6, the pair that is one configuration is 21,204 GB or 5,434 GB at 2^-95.87, at a verification phase of 1,536 machines' 600 s. At a datacenter's 600 s the pairs are 20,114 GB at 2^-93.75 and 5,202 GB at 2^-92.78.
+- Pooled over a period the binding error does not depend on the size: it is the period's sampled replay blocks times 2^-98.45 (the quoted inputs). A world year samples 2.7e9 to 5.1e9 replay blocks on the partition `main` defines (by the design) and 1.0e10 at the best designed configuration, so 2^-67.1 to 2^-66.2 and 2^-65.2; a datacenter's year at verification phases of its 600 s (52,560 of them) 2^-78.1 and 2^-77.1; a week is 5.7 bits better than a year and a month 3.6 [derived: the expression is linear in K to the third decimal; a union over verification phases, each at the quoted 2^80 calls].
+- With FINDER's 6.71 bits (not built) every binding figure above improves by that much: the gain does not read K [relayed: FINDER 18:34Z].
+
+**5. Three things that are not one configuration yet, each stated so nobody reads more than there is.**
+- The 10,046,500 sampled proof blocks and the 4,130 classes of gates a proof block in 2^-95.87 are the plan of record's (another design, 4,042 GB), not these two designs' [read: your file, line 44641]. The bracketed figures use each design's own sampled proof blocks (2.7 and 3.9 million at a datacenter's 600 s) and keep 4,130, since no file I read counts classes for these partitions.
+- The planner's strata are width classes; `main`'s second stage has one stratum a template, and one session a template a verification phase, where the planner splits a block type's sampled blocks into sessions of at most its cap [read: `Spot/SecondStage.lean` header; `optimize.two_stage_statements`]. I priced the planner's strata. Statements shared across a verification phase's sampled replay blocks are worth 6% at the best designed configuration (5,202 against 5,528 GB at a datacenter's 600 s with each sampled replay block's own statements) [run `abb5`].
+- The count is whole, so a verification phase between sizes pays for rounding: at 1,536 machines' the planner's own design on the partition `main` defines moves to fewer proof blocks a replay block to fit 6 where the unrounded rate would take 1.6.
+
+**6. State.**
+- [run] Branch `cursor/proofs-count-71ac` at `9ac6befc87`, pushed: `verity/protocols/spot/optimize.py` (the first stage samples exactly K of a verification phase's n, priced and bounded at K/n; a verification phase's statements hold its whole sample, no padding for the count; no design when one sampled replay block is over the budget) and its tests, 52 passed on my VM, ruff clean. `registration_cap` and `OVERFLOW` are gone.
+- Open, the line that stops it: `benchmarks/spot_figures/total_cost.py:144` and `:403` still read `registration_cap` and the old `two_stage_price` arguments, and `breakeven/zkstack.py:73` calls `opt._registration_q`, which is gone. So `benchmarks/spot_figures`' suite fails on my branch until I move those drivers, their captions and the README. That is the rest of the cost model's pull request.
+- Your 18:36Z note is read: the plan of record re-put with the two cells named by the census's block types, the one-line test, and `verity bench prove --system spot` beside 0.0367 go in that pull request.
+- The figures' script is `~/.research/notes/lanes/proofs/tools/count_figs.py` (it reads the recorded run's rows and tools and adds no second harness); note `20261111T1820Z-report-count`.
+
+**7. One thing I need from you**: which verification phase's size the pull request's figures and the plan of record are stated at. Nothing on `main` holds it and the cost model has three (a machine's, a pod's, a datacenter's 600 s). I take a datacenter's 600 s unless you say otherwise, since it is the smallest of the three where `main`'s design is within the budget.
