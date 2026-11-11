@@ -7,7 +7,7 @@ commitment and source, every opened tile's verdict in order, and an accepted run
 `credit_at_assumption`: the credited MACs, tiles and MACs, ρ, ε and the draws over the inert-work bound) under each
 `over_cap` rule, `uncredited` (the default: a tile over its bound is credited nothing and the run goes on) and `reject`,
 and the window record W it held the passes to (`verify_run.tie`, ``--tie W``: each call's A rows and y, and each
-weight's B rows at the root PoUW's weights tree commits them under).
+fixed operand's B rows at the root PoUW's fixed operands' tree commits them under).
 The passes are a test instance's, read as one (``test_instance``, ``--test-instance``), so the work credits nothing;
 read as a served run's they are refused (their tile is not 64 x 64), as passes of two salts are. A layer past `K_MAX` is
 refused at load on both sides. Passes salted by a live session's coins load under that session's commitment, and a coin
@@ -148,7 +148,7 @@ def test_an_honest_pass(exe, tmp_path):
 
 
 def test_an_excluded_weight_row_zeroes_its_block(exe, tmp_path):
-    """The band rule on both sides: weight 1's row 20 fails liveness, so it is excluded and takes its block of 64 columns,
+    """The band rule on both sides: fixed operand 1's row 20 fails liveness, so it is excluded and takes its block of 64 columns,
     all 32 of the second call's.  That call has no ticket and no credited cell, its exclusion tile is opened and passes,
     and the run's credited cells' MACs (``macs``; a test instance's credit is 0) are the first call's alone, its 19
     credited rows x 16 columns at |K| = 128."""
@@ -252,7 +252,7 @@ def test_the_forming_term_reads_a_row_some_of_whose_blocks_are_inert(exe, tmp_pa
 
 
 def test_openings_that_fail(exe, tmp_path):
-    """A weight row, an activation row or a transcript leaf that isn't what the pass committed; a file whose size or
+    """A fixed-operand row, an activation row or a transcript leaf that isn't what the pass committed; a file whose size or
     SHA-256 isn't its manifest entry's; and records that leave out the excluded row."""
     path = T.proved_pass(tmp_path, H100)[0]
     man = json.loads(path.read_text())
@@ -319,7 +319,7 @@ def test_a_served_y_row_that_ends_before_its_tiles_columns(exe, tmp_path):
 
 
 def test_a_layer_past_k_max(exe, tmp_path):
-    """A weight of K_MAX + 1 = 2^16 + 1 channels, its call at the split's k (whole promotion groups) and |K|, with the
+    """A fixed operand of K_MAX + 1 = 2^16 + 1 channels, its call at the split's k (whole promotion groups) and |K|, with the
     records root the pass publishes over them: the pass load refuses it (`DomainError`, k ≤ 2^16 among the domain's
     bounds) before the coin, in both; `checkTile` refuses the same past any load."""
     path = T.proved_pass(tmp_path, H100)[0]
@@ -360,7 +360,7 @@ def test_an_epochs_passes(exe, tmp_path):
 
 def test_a_served_runs_tile_and_salt(exe, tmp_path):
     """Read as a served run's, a test instance's pass is refused before the coin: its instance is k_min 32 at 16 x 16 or
-    64 x 64 tiles, not the served k_min 1,024 at 64 x 64. Passes of two salts (other weights under the one coin), each
+    64 x 64 tiles, not the served k_min 1,024 at 64 x 64. Passes of two salts (other fixed operands under the one coin), each
     holding calls 0 and 1, are refused, test instance or not."""
     a = T.proved_pass(tmp_path / "a", H100)[0]
     wide = T.proved_pass(tmp_path / "wide", H100, tile=(64, 64))[0]
@@ -464,10 +464,10 @@ def test_a_challenger_draw_that_is_not_the_runs_coin(exe, tmp_path):
 
 
 def test_a_run_tied_to_its_window_record(exe, tmp_path):
-    """A window record W registering each call's A rows and y and each weight's B rows once: the Lean holds the passes to W as the Python does and
+    """A window record W registering each call's A rows and y and each fixed operand's B rows once: the Lean holds the passes to W as the Python does and
     prints the same tie, W's digest and its table count, also when W lists a round dropped before the coin (the coin
     record's rounds and dropped, which the Python wrote). A W that states no version (version 1, the run of record's,
-    registering the calls alone) accepts in both on the calls' tables, the tie naming its weights untied."""
+    registering the calls alone) accepts in both on the calls' tables, the tie naming its fixed operands untied."""
     warm, a, b = (T.proved_pass(tmp_path / n, H100, ix)[0] for n, ix in (("w", (0, 1)), ("a", (2, 3)), ("b", (4, 5))))
     (w := tmp_path / "w.json").write_text(json.dumps(T.window_record(a, b)))
     got = same(exe, [a, b], 8, tie=w, record=tmp_path / "coin.json")
@@ -484,9 +484,9 @@ def test_a_run_tied_to_its_window_record(exe, tmp_path):
 
 
 def test_a_pass_that_is_not_ws(exe, tmp_path):
-    """W whose entry for a call or a weight has another root (B another weight's: a foreign rootB) or domain, or lacks
-    one, or registers a call or weight the run doesn't have, or one twice, or registers no weight at all at version 2
-    (every call's entry right: untied, not a tie), or states no version (version 1) and registers a weight, or states a
+    """W whose entry for a call or a fixed operand has another root (B another fixed operand's: a foreign rootB) or domain, or lacks
+    one, or registers a call or fixed operand the run doesn't have, or one twice, or registers no fixed operand at all at version 2
+    (every call's entry right: untied, not a tie), or states no version (version 1) and registers a fixed operand, or states a
     version other than 2, or isn't a v2 record: refused before the coin (Python's `ValueError`, in its words), as the
     Python does."""
     a, b = (T.proved_pass(tmp_path / n, H100, ix)[0] for n, ix in (("a", (0, 1)), ("b", (2, 3))))

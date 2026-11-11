@@ -104,9 +104,9 @@ def TilePassGivesTheChainCap : Prop :=
         1 / 400 * creditDevRev1 devH100 sh * tileShare sh P (tl.cols g)
 
 /-- **(c) A passed tile is within the inert-work bound**: a tile of a pass `load` gives, which is audit tile `g` of `U`,
-under the semantics' salt and weight root, whose weight rows all pass the rules (`TileGood`'s second conjunct, as (d)
+under the semantics' salt and fixed operand's root, whose fixed-operand rows all pass the rules (`TileGood`'s second conjunct, as (d)
 takes it), whose openings are its unit's commitment `c`, that carries a ticket under the band rule, and that
-`checkTile` passes on its weight's noise, has its replayed inert work within the game's bound at `ρ = 1/400`. -/
+`checkTile` passes on its fixed operand's noise, has its replayed inert work within the game's bound at `ρ = 1/400`. -/
 def TilePassGivesTheCap : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (H : Q → R) (s : S)
     (coins : PouwCheck.PearlPlus.EpochCoins) (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening)

@@ -13,7 +13,7 @@ the code's terms: its openings, the words its replay forms, its leaf and its row
 game's: a tile of a loaded pass that the check passes or finds only over the bound, whose openings are its unit's commitment, has `TileWordsGood` at the deployed semantics, or SHA-512 collides on
 two different messages, one hashed in digesting the words the check forms and one in digesting the commitment's words on
 the tile (the leaf binds the tile's words through `sha512/row-seg/v1`). The check refuses a tile whose unit is outside its
-scheme's domain, `k ≤ K_MAX` among its bounds, which `WordsAreTheSemantics` reads. `TileGood` adds the cap and every weight row's rules, which wait on
+scheme's domain, `k ≤ K_MAX` among its bounds, which `WordsAreTheSemantics` reads. `TileGood` adds the cap and every fixed-operand row's rules, which wait on
 the restated credit set and acceptance event (`Rules.lean`).
 -/
 
@@ -23,7 +23,7 @@ namespace Pouw.PearlPlus.Bridge
 
 open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus
 
-/-- Tile `tid` of pass `p` is audit tile `g` of `U`'s layout: the same unit, shape and weight, rows and columns. -/
+/-- Tile `tid` of pass `p` is audit tile `g` of `U`'s layout: the same unit, shape and fixed operand, rows and columns. -/
 def TileOf (p : Pass) (tid : ℕ) (U : Pouw.PearlC.Workload) (g : ℕ) : Prop :=
   ∃ pos rows cols, p.tile? tid = some (pos, rows, cols) ∧
     g < (auditTiling 64 64 U.layout).NT ∧
@@ -64,7 +64,7 @@ def commitHashed (p : Pass) (tid : ℕ) (c : Pouw.PearlC.Commit) : List ByteArra
   | some (_, rows, cols) => Properties.Pouw.PearlPlus.segHashed (leafBytes (commitWords c rows cols))
   | none => []
 
-/-- The tile's openings are unit `u`'s commitment `c`: its A rows are `c`'s activation rows and its B rows the weight's
+/-- The tile's openings are unit `u`'s commitment `c`: its A rows are `c`'s activation rows and its B rows the fixed operand's
 (each word below `2^32`), and its leaf is the digest of `c`'s ticket and useful words on the tile. -/
 def OpensCommitted (p : Pass) (tid : ℕ) (o : TileOpening) (U : Pouw.PearlC.Workload) (u : ℕ) (c : Pouw.PearlC.Commit) : Prop :=
   ∀ pos rows cols, p.tile? tid = some (pos, rows, cols) →
@@ -76,8 +76,8 @@ def OpensCommitted (p : Pass) (tid : ℕ) (o : TileOpening) (U : Pouw.PearlC.Wor
     ∀ i ∈ rows, ∀ j ∈ cols, c.ticket i j < 2 ^ 32 ∧ c.useful i j < 2 ^ 32
 
 /-- **(d) A passed tile's words are good**: a tile of a pass `load` gives, which is audit tile `g` of `U`, under the
-semantics' salt and weight root, whose weight rows all pass the rules (`TileGood`'s second conjunct), whose openings are
-its unit's commitment `c`, and that `checkTile` passes on its weight's noise or finds only over its inert-work bound, has
+semantics' salt and fixed operand's root, whose fixed-operand rows all pass the rules (`TileGood`'s second conjunct), whose openings are
+its unit's commitment `c`, and that `checkTile` passes on its fixed operand's noise or finds only over its inert-work bound, has
 every word of its credited rows at the
 reference values, or SHA-512 collides on two different messages, one hashed in digesting the words the check forms and
 one in digesting `c`'s words on the tile. -/

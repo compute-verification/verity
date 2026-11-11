@@ -3,20 +3,20 @@
 
   python benchmarks/pouw/pearl_c_vllm/verify_run.py RUN_DIR/manifest.json --coins COINS.json [--draws T] [--jobs J] [--commit SHA] [--fast]
 
-- **The execution phase** is re-started from the manifest's salt coin and every weight's root (`Epoch.start`): the coin must open
+- **The execution phase** is re-started from the manifest's salt coin and every fixed operand's root (`Epoch.start`): the coin must open
   against the execution phase's coin commitment as the challenger published it (``--coins``, not the pass's copy; a live session's
-  when its scheme is `window.LIVE_SCHEME`, `epoch_coins`), as the salt coin, opened after the weights' root (a live
+  when its scheme is `window.LIVE_SCHEME`, `epoch_coins`), as the salt coin, opened after the fixed operands' root (a live
   session's after its salt epoch's root), and the salt must be the manifest's.  A pass recorded before the execution phase's coins (a v1 manifest)
   carries a beacon instead, and is read only with ``--recorded`` (`Epoch.unverified`, a salt that claims nothing).
 - **The call indices** are each below 2^32 and none twice (`credit.passes_distinct`: ``call-range``, ``repeated-call``);
   `served_passes.py` holds a run's passes of one salt to distinct indices too.
-- **The records** (each matmul's real rows, width, excluded and voluntary rows; each weight's excluded and voluntary rows)
+- **The records** (each matmul's real rows, width, excluded and voluntary rows; each fixed operand's excluded and voluntary rows)
   are the manifest's (`records_of`).  Their root must be the one the pass published before any sample.
 - **The samples' source** is 32 bytes of the Lean verifier's coins (`pouw.verifier.coins`, `IO.getRandomBytes`,
   `uniform/io-getrandombytes`), the verifier's own, sampled here after the transcript is fixed: a
   `clear_work.RecordedDraw` of round 1, after the commitment's 0.
 - **The prover only opens.** Each opening's value and path come from the pass's files: A's rows and tree levels per call,
-  B's rows and tree levels per weight, the tile tree.  Each is checked against the published roots.  Under ``hm96-sha512``
+  B's rows and tree levels per fixed operand, the tile tree.  Each is checked against the published roots.  Under ``hm96-sha512``
   (-h3's) a node is 64 bytes and each value is followed by its salt, `audit.hm96_salt` under the manifest's
   ``hm96_salt_key`` (the prover's, retained for this replay), and the scheme reads the value less its salt.
 - **The tiles** are `clear_work.audit`'s: its t work-weighted samples (`draw`) and one tile per excluded row
@@ -37,15 +37,15 @@ With a window record W (`tie`, Pearl+'s ``verity/registration/v2`` record of the
 retention, whose values the one-stage registration takes as outputs), W is held to the passes before the coin: round s's call c (the served run's
 s-th pass with calls, its manifest's c-th call) is W's ``pearl-a/<s>/<c>`` and ``pearl-y/<s>/<c>``
 (`window_class.PearlTables`), each with its call's root, the domain recomputed from the pass's salt and the call's index,
-and its rows, words and word bits; each weight w the passes read is W's ``pearl-b/<w>``, at the root the epoch's weights'
+and its rows, words and word bits; each fixed operand w the passes read is W's ``pearl-b/<w>``, at the root the epoch's fixed operands'
 root folds and the tiles' B rows open against, under `audit.weight_binding`'s domain, its n rows of K 32-bit words; and W
 names no other Pearl+ value but a dropped round's calls'. Any mismatch rejects the run, since a tie to roots the verdict
 didn't credit is vacuous. W states its version (`pearl_c.window.version_of`): this is version 2's tie, and a version-2 W
 that registers no ``pearl-b/`` value at all is such a mismatch, named as one (`UNTIED_WEIGHTS`): its calls may all
 match, but the run's B is no registered value, so it never reads as a tie. A W that states no version is version 1,
-written before W registered the weights: it is held to the calls alone, as it was then, and the tie names its weights
+written before W registered the fixed operands: it is held to the calls alone, as it was then, and the tie names its fixed operands
 untied (``"weights": WEIGHTS_UNTIED``, in the answer's tie and the verdict's line), so its accept never reads as a tie of
-the weights; a version-1 W that registers a ``pearl-b/`` value is refused (`V1_WEIGHTS`).
+the fixed operands; a version-1 W that registers a ``pearl-b/`` value is refused (`V1_WEIGHTS`).
 
 The prover may drop passes from its retention before the coin (`served_passes.py retain`: a pass its CPU replay didn't
 finish, or one left over a cap): the verdict is over the retained passes alone, each at its round, and the dropped ones
@@ -252,8 +252,8 @@ def read(path: Path) -> tuple[dict, str, str]:
 
 
 def records_of(man: dict, matmuls) -> list[PW.UnitRecord]:
-    """The records the manifest declares, a call's and its weight's: real rows, |K|, excluded and voluntary A rows (a call's
-    ``excluded_a`` and ``voluntary_a``), and excluded and voluntary B rows (its weight's ``excluded_b`` and ``voluntary_b``)."""
+    """The records the manifest declares, a call's and its fixed operand's: real rows, |K|, excluded and voluntary A rows (a call's
+    ``excluded_a`` and ``voluntary_a``), and excluded and voluntary B rows (its fixed operand's ``excluded_b`` and ``voluntary_b``)."""
     def weight(mm):
         return man["weights"][str(mm.weight)]
     return [PW.UnitRecord(mm, u["real_rows"], u["k_kept"], tuple(u["excluded_a"]), tuple(weight(mm)["excluded_b"]),
@@ -486,15 +486,15 @@ def run_commitment(passes: list[Pass]) -> bytes:
 
 
 TIE_A, TIE_Y, TIE_B = "pearl-a/{s}/{c}", "pearl-y/{s}/{c}", "pearl-b/{w}"
-#: W's Pearl+ values: a call's (a round's, `TIE_CALLS`) and a weight's
+#: W's Pearl+ values: a call's (a round's, `TIE_CALLS`) and a fixed operand's
 TIE_PREFIXES = ("pearl-a/", "pearl-y/", "pearl-b/")
 TIE_CALLS = TIE_PREFIXES[:2]
-#: why `tie` refuses a version-2 W that ties the calls alone: it reads as untied weights, never as a tie
+#: why `tie` refuses a version-2 W that ties the calls alone: it reads as untied fixed operands, never as a tie
 UNTIED_WEIGHTS = "W registers no weight's B rows (no pearl-b/ value: a window record written before W registered them)"
 #: the tie's ``weights`` for a version-1 W (`pearl_c.window.version_of`), which ties the calls alone: named in the
-#: verdict, never read as a tie of the weights
+#: verdict, never read as a tie of the fixed operands
 WEIGHTS_UNTIED = "weights untied (W v1)"
-#: why `tie` refuses a version-1 W that registers a weight's B rows
+#: why `tie` refuses a version-1 W that registers a fixed operand's B rows
 V1_WEIGHTS = "W states no version (version 1), whose values are the calls' alone, and registers"
 #: the coin record's schema (module docstring, "The coin record")
 COIN_SCHEMA = "verity-pouw/pearl-plus-coin/v2"
@@ -522,9 +522,9 @@ def node_draw(root: bytes, asking: Any) -> tuple[bytes, dict]:
 def tie_entries(passes: list[Pass], rounds: list[int] | None = None, weights: bool = True) -> dict[str, dict]:
     """What a window record must register for each call of the run (`tie`): A, its m16 committed rows of K FP32 words under
     `activation_binding`'s domain, and y, its real rows of N FP32 words under `served_y.y_domain`'s, each at its root; then,
-    with ``weights`` (a version-2 W's), for each weight the passes read (pass by pass, by ascending id), B, its n rows of K
+    with ``weights`` (a version-2 W's), for each fixed operand the passes read (pass by pass, by ascending id), B, its n rows of K
     FP32 words under `weight_binding`'s domain, at the root the pass's epoch commits it under. Pass i is round
-    ``rounds[i]`` (default i): its place among the served run's passes with calls. ValueError for a weight two passes
+    ``rounds[i]`` (default i): its place among the served run's passes with calls. ValueError for a fixed operand two passes
     commit under another root or shape."""
     want, ss = {}, list(range(len(passes)) if rounds is None else rounds)
     for s, p in zip(ss, passes, strict=True):
@@ -557,10 +557,10 @@ def _owner(v: str) -> str:
 
 def tie(w: dict, passes: list[Pass], rounds: list[int] | None = None, dropped: tuple[int, ...] = ()) -> dict:
     """``{"record": digest(W), "tables": n}`` for a window record W at version 2 (`pearl_c.window.version_of`) that
-    registers exactly the run's calls' A rows and y and its weights' B rows (`tie_entries`, pass i as round ``rounds[i]``)
+    registers exactly the run's calls' A rows and y and its fixed operands' B rows (`tie_entries`, pass i as round ``rounds[i]``)
     among its ``pearl-a/``, ``pearl-y/`` and ``pearl-b/`` values, beside any of the ``dropped`` rounds' calls' (passes
     left out of the retention before the coin, which credit nothing). For a W at version 1, which registers no ``pearl-b/``
-    value, the tie is of the calls alone, as it was at that version, and the answer names the weights untied:
+    value, the tie is of the calls alone, as it was at that version, and the answer names the fixed operands untied:
     ``"weights": WEIGHTS_UNTIED``. ValueError naming the first mismatch otherwise."""
     if not isinstance(w, dict) or w.get("format") != REG.FORMAT_V2 or not isinstance(w.get("registered"), list):
         raise ValueError(f"W is no {REG.FORMAT_V2} record with registered values")
