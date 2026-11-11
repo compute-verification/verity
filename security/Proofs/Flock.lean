@@ -50,6 +50,7 @@ public import Proofs.Flock.Claims
 public import Proofs.Flock.SamplingClaims
 public import Proofs.Flock.SamplingGeneric
 public import Proofs.Flock.SamplingGeneric.Masked
+public import Proofs.Flock.SamplingGeneric.MaskedTrunc
 public import Proofs.Flock.SamplingGeneric.TwoCode
 public import Proofs.Flock.SamplingGeneric.TwoAt
 public import Proofs.Flock.SamplingGeneric.Guarantees
@@ -77,8 +78,11 @@ public import Proofs.Flock.SpotFlock.RowsOpen
 public import Proofs.Flock.SpotFlock.EntriesAt
 public import Proofs.Flock.SpotFlock.HeaderRoots
 public import Proofs.Flock.SpotFlock.Depths
+public import Proofs.Flock.SpotFlock.ScopeOf
+public import Proofs.Flock.SpotFlock.ScopeDesc
 public import Proofs.Flock.Encodings
 public import Proofs.Flock.SpotFlock.Reveals
+public import Proofs.Flock.SpotFlock.RevealsOpen
 public import Proofs.Flock.SpotFlock.RevealsLe
 public import Proofs.Flock.SpotFlock.UnitRows
 public import Proofs.Flock.SpotFlock.UnitEmbeds

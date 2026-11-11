@@ -15,7 +15,7 @@ def test_gumbel_lane_noise_is_bit_exact_against_the_gpu_probe():
     import numpy as np
     from verity.definitions.registry.sampling import GumbelNoiseLane, GumbelStreamKey
 
-    from verity_vllm.program.libdevice_sampling import gumbel_noise_exact
+    from tests.engine.gumbel_oracle import gumbel_noise_exact
     probe = Path(__file__).resolve().parents[2] / "out/gen/lanes/ov-sampling/runs/probe"
     cmp = probe / "compare.json"
     if not cmp.exists():
