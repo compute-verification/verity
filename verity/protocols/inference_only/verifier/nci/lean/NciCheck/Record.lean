@@ -49,10 +49,10 @@ record first, and the digest of the run's own record. `params` is not read.
 5. `run-program`, `run-circuit`: the run's record does not name this Program, or its `window.circuit` is not the
    SHA-512 of this record's text.
 6. `templates`: the record does not name the Program, or its `templates` are not the root's nodes that are no input,
-   each a call or a batch of a template of its own, in order (`Flock.TemplateQuery.evaluate`); or a template's
-   parameter is not whole 16-bit words, an output has no bit, or two of its ports share a name. A template's rows
-   are its Definition's parameters, one row a parameter, and its outputs the fields of its return type
-   (`RecordText.templatesOf`).
+   each a call or a batch of a template of its own, in order (`Flock.TemplateQuery.evaluate`); or a root node
+   calls a composite keyed as an input id (`RecordText.keyedAsInput`); or a template's parameter is not whole
+   16-bit words, an output has no bit, or two of its ports share a name. A template's rows are its Definition's
+   parameters, one row a parameter, and its outputs the fields of its return type (`RecordText.templatesOf`).
 7. `own-rows`: the root hands some unit a row that is not input gates of its own (`ownRows`, "Rows of its own"
    below).
 8. `wires`: SPOT's reader refuses the record's wires, cuts or order (`Spot.Wires.Wiring.ofJson`), or SPOT's check
