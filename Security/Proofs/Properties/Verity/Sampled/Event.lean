@@ -120,6 +120,7 @@ theorem run_event {p : _root_.Spot.OneStageZk.Own} {s : _root_.Spot.OneStageZk.R
           programSha want ⟨#[], #[], #[], true⟩ s = .ok r := by
   unfold _root_.Spot.OneStageZk.run at h
   dsimp only at h
+  obtain ⟨_, -, h⟩ := ebind_ok h
   split at h
   · rename_i tags0 htags
     obtain ⟨_, -, h⟩ := ebind_ok h
