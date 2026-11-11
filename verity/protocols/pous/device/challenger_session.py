@@ -112,12 +112,6 @@ class Polled:
     def flush(self) -> None:
         pass
 
-    def __enter__(self) -> Polled:
-        return self
-
-    def __exit__(self, *exc: object) -> None:
-        return None
-
 
 def _read(f: BinaryIO, n: int) -> bytes:
     b = f.read(n)

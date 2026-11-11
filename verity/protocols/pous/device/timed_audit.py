@@ -507,7 +507,6 @@ def calibrate_only(host: str, port: int, block_bytes: int, *, pings: int, cpu: i
 
 def main(argv: list[str] | None = None) -> int:
     from verity.protocols.pous.verifier import audit as pous_audit
-    from verity.protocols.pous.verifier import schemes
     from verity.protocols.pous.verifier.verifier import DIGEST_BYTES, VerifierKey
 
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
