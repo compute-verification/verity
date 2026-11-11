@@ -5,6 +5,9 @@ the step keys are fixed, so the bytes each part of a committer makes are the one
 roots, run root, context and layout digests (step hashing), a leaf opening and a range opening (retention and openings), a
 dumped store's files, the weights' registration, and the windowed collector's roots over its CPU stand-ins.  A change that
 moves one of them changes the commitment, wherever the code that makes it lives.
+
+The modules under test: ``verity_vllm.commit.committer.native_host`` (the offline core), ``verity_vllm.commit.step_rows``,
+``verity_vllm.commit.store_dump`` and ``verity_vllm.commit.committer.native_collect`` (the windowed collector).
 """
 from __future__ import annotations
 
