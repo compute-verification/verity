@@ -116,8 +116,8 @@ theorem traceServed_eq_of {s : AuditStatement} {Pt Pρ : Partition} (hC : s.prog
     fun v hv g hg hb => hT g (mem_biUnion.2 ⟨v, hv, List.mem_toFinset.2 (List.mem_filter.2 ⟨hg, hb⟩)⟩)
   funext i
   have ho : s.prog.outs[i] ∈ s.prog.outs := List.getElem_mem i.isLt
-  have hglue : ∀ (X : ℕ → Option Bool) (κ : ℕ → ℕ → Bool), s.prog.read X s.prog.outs[i] =
-      s.prog.read (glue s.prog Pρ X κ) s.prog.outs[i] := fun X κ =>
+  have hglue : ∀ (tv : ℕ → Option Bool) (κ : ℕ → ℕ → Bool), s.prog.read tv s.prog.outs[i] =
+      s.prog.read (glue s.prog Pρ tv κ) s.prog.outs[i] := fun tv κ =>
     s.prog.read_congr (glue_of_boundary fun r => Prog.boundary_of_out r ho).symm
   show (s.prog.read val s.prog.outs[i]).getD false = (s.prog.read val' s.prog.outs[i]).getD false
   rw [hglue val ι, hglue val' ι']
