@@ -29,6 +29,7 @@ members = [
     "verity",
     "verity-bench",
     "verity-bench-specs",
+    "verity-certifier-timing",
     "verity-check",
     "verity-circuit-check",
     "verity-cli",
@@ -2364,6 +2365,21 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "verity-vllm", editable = "adapters/vllm" }]
+
+[[package]]
+name = "verity-certifier-timing"
+version = "0.0.0"
+source = { virtual = "benchmarks/certifier_timing" }
+dependencies = [
+    { name = "verity" },
+    { name = "verity-config" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "verity", editable = "." },
+    { name = "verity-config", editable = "verity/configuration/config" },
+]
 
 [[package]]
 name = "verity-check"
