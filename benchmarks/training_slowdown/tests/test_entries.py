@@ -212,8 +212,12 @@ EPS, ROUNDINGS = torch.finfo(torch.float32).eps, 4
 #: comes to it
 REFERENCES = {
     "l16-t20-1.1x-fullmuon-fe-wsd": (under(muon), CLOSE_BF16),
+    "l16-t20-1.1x-fullmuon-fe-wsd-5383": (under(muon), CLOSE_BF16),
+    "l16-t20-1.1x-fullmuon-fe-wsd-5383-ema": (averaged, CLOSE),
     "l16-t20-1.1x-fullmuon-fe-wsd-ema": (averaged, CLOSE),
     "m-t20-1.1x-fullmuon-wsd": (under(muon), CLOSE_BF16),
+    "m-t20-1.1x-fullmuon-wsd-4611": (under(muon), CLOSE_BF16),
+    "m-t20-1.1x-fullmuon-wsd-4611-ema": (averaged, CLOSE),
     "m-t20-1.1x-fullmuon-wsd-ema": (averaged, CLOSE),
     "s-t20-1.1x-accumulate": (under(adamw), CLOSE),
     "s-t20-1.1x-adafactor": (under(adafactor), CLOSE),
