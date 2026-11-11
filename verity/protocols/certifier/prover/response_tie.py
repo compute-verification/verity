@@ -3,7 +3,8 @@ computed, as the proof block's gates, from the compute side's committed row of t
 network certifier's end row of it. Nothing here is in a Spec or proved, and no table holds the rows it reads and
 returns: `content_rows` has their formats alone.
 
-**One proof block a connection** (`ResponseTie`), in one of two forms by its class (the static STOP). It reads
+**One proof block a connection**, of one of two Definitions by its class: `ResponseTieStop` in a stop class and
+`ResponseTieFailed` in a failed class. It reads
 ``egress``, the compute side's committed row of the O ids it served the connection, O its class's size; in a stop
 class ``stop``, the compute side's committed stop word of the same connection; and ``end``, the network certifier's
 end row of it, a certified input. Its outputs are ``o0``, a u16 whose bit 0 is 1 (`ACCEPT`) exactly when every check
@@ -28,11 +29,12 @@ count where every check holds.
 
 **The two forms** (`refusals`):
 
-- a stop class (STOP = 1), whose connections ended in their `END` where the stop rule ends them. The checks: the
-  end row is (0, 0); the stop word's finish is not 0; its n is at most O. The count is n. No other value of the
-  finish is refused: the stop word is its own proof block's output, and this one reads where it ends, not why.
-- a failed class (STOP = 0), whose connections ended in a `FAIL`; it has no stop word. The checks: the end row's
-  class is 1; its `at` is at most O. The count is `at`.
+- a stop class (`ResponseTieStop`), whose connections ended in their `END` where the stop rule ends them. The
+  checks: the end row is (0, 0); the stop word's finish is not 0; its n is at most O. The count is n. No other
+  value of the finish is refused: the stop word is its own proof block's output, and this one reads where it
+  ends, not why.
+- a failed class (`ResponseTieFailed`), whose connections ended in a `FAIL`; it has no stop word. The checks: the
+  end row's class is 1; its `at` is at most O. The count is `at`.
 
 So in either form an end row whose class is neither 0 nor 1 is refused.
 
@@ -49,8 +51,8 @@ against the count's (`_below`, 2^w − w − 1 ANDs for a half of w bits), and o
 One AND an id bit then keeps the ids below the count, and the count word takes one OR a bit. The checks are an OR
 over the end row's bits, the count's comparison with O, and in a stop class the finish's three bits.
 
-    ResponseTie{O, STOP=1}(egress: Array<32·O>, stop: Array<16>, end: Array<32>) -> (u16, Array<32·(O + 1)>)
-    ResponseTie{O, STOP=0}(egress: Array<32·O>, end: Array<32>) -> (u16, Array<32·(O + 1)>)
+    ResponseTieStop{O}(egress: Array<32·O>, stop: Array<16>, end: Array<32>) -> (u16, Array<32·(O + 1)>)
+    ResponseTieFailed{O}(egress: Array<32·O>, end: Array<32>) -> (u16, Array<32·(O + 1)>)
         ANDs = 33·O + 2^⌊k/2⌋ + 2^⌈k/2⌉ − k + c       (`Shape.ands`)
         c = 48 in a stop class and 32 in a failed class; one fewer at O = 2, whose count has one bit below O's,
         and in a stop class at k = 12, whose stop word has no bit past the count's bit k
@@ -58,12 +60,11 @@ over the end row's bits, the count's comparison with O, and in a stop class the 
 Every array is of bits, least significant first. O is a class's size of ids released, a power of two from
 `content_rows.MIN_SIZE` to `content_rows.most_ids`, so the outputs fit the widest public size class (16 + 32·(O + 1)
 bits of at most `UNIT_CLASS_MAX`): `content_rows.check_ids` is that rule, which the shape is held to where it is
-built. It is one Definition with a static for the form, since the two forms return the same row from the same ids
-under the same comparison and differ in the word the count is read from and in three checks; the static adds the
-stop word's parameter, as `compile_slice_v6`'s AS adds its cap bits. Bound at a form it is that form's own circuit,
-so the two forms are two circuit files and two sessions: a failed class's circuit has no ``stop`` port, and every
-port of either is a row each connection of its class has, as a statement's registered reads need
-(`Flock.Registered`'s `checkPort` and `complete`).
+built. The two forms are two Definitions, each with the one static O and no optional port: a statement's every
+port is a row each of its instances reads (`Flock.Registered`'s `checkPort` and `complete`), and a failed class
+has no stop word, so each form is a circuit file and a session of its own. They share their gates (`_build`): the
+same row from the same ids under the same comparison, and differ in the word the count is read from and in three
+checks.
 """
 from __future__ import annotations
 
@@ -85,8 +86,8 @@ BIT = HC.BIT
 U16 = Array(16, BIT)
 #: o0 of a row whose checks all hold
 ACCEPT = 1
-#: the Definition's statics, in order
-STATICS = ("O", "STOP")
+#: each Definition's one static: the ids its class's rows hold
+STATICS = ("O",)
 #: an id's and a count's bits, and an end row's
 ID_BITS, END_BITS = 8 * CT.U32_BYTES, 8 * CT.END_BYTES
 #: the stop word: n in its low `COUNT_BITS` bits and the finish in the `FINISH_BITS` above. `COUNT_BITS` is the stop
@@ -99,17 +100,17 @@ AT_BITS = END_BITS // 2
 
 @dataclass(frozen=True)
 class Shape:
-    """A response tie's proof block: a row of O ids, in a stop class (STOP = 1), whose rows have a stop word, or in
-    a failed class (STOP = 0)."""
+    """A response tie's proof block: a row of O ids, in a stop class (`stop`), whose rows have a stop word and
+    whose Definition is `ResponseTieStop`, or in a failed class, whose Definition is `ResponseTieFailed`."""
 
     O: int
-    STOP: int
+    stop: bool
 
     def __post_init__(self) -> None:
         CT.check_ids(self.O)
-        if type(self.STOP) is not int or self.STOP not in (0, 1):
-            raise ValueError(f"a response tie's STOP is 1, a stop class's form, or 0, a failed class's, not "
-                             f"{self.STOP!r}")
+        if type(self.stop) is not bool:
+            raise ValueError(f"a response tie's class is a stop class (True) or a failed class (False), not "
+                             f"{self.stop!r}")
         if self.k >= self.count_bits:
             raise ValueError(f"a row of O = {self.O} ids has a count its form's count field, of {self.count_bits} "
                              f"bits, doesn't hold: at most {1 << self.count_bits - 1} ids")
@@ -117,7 +118,7 @@ class Shape:
     @property
     def count_bits(self) -> int:
         """The bits of the field the form reads its count from: the stop word's n, or the end row's `at`."""
-        return COUNT_BITS if self.STOP else AT_BITS
+        return COUNT_BITS if self.stop else AT_BITS
 
     @property
     def k(self) -> int:
@@ -135,7 +136,7 @@ class Shape:
 
     @property
     def input_bits(self) -> int:
-        return self.egress_bits + STOP_BITS * self.STOP + END_BITS
+        return self.egress_bits + STOP_BITS * self.stop + END_BITS
 
     @property
     def output_bits(self) -> int:
@@ -145,15 +146,12 @@ class Shape:
     def ands(self) -> int:
         """The proof block's AND gates (the module docstring's formula)."""
         k = self.k
-        checks = 48 - (k == COUNT_BITS - 1) if self.STOP else 32
+        checks = 48 - (k == COUNT_BITS - 1) if self.stop else 32
         return 33 * self.O + (1 << k // 2) + (1 << k - k // 2) - k + checks - (k == 1)
 
     def statics(self) -> dict[str, int]:
+        """Its Definition's statics."""
         return {k: getattr(self, k) for k in STATICS}
-
-
-def _shape(S: Any) -> Shape:
-    return Shape(S.O, S.STOP)
 
 
 # --- the reference ---------------------------------------------------------------------------------------------------
@@ -182,7 +180,7 @@ def _end(end: bytes) -> tuple[int, int]:
 
 def _word(sh: Shape, stop: int | None) -> tuple[int, int]:
     """The stop word's (n, finish) in a stop class; a failed class has none."""
-    if not sh.STOP:
+    if not sh.stop:
         if stop is not None:
             raise ValueError("a failed class's row has no stop word")
         return 0, 0
@@ -198,7 +196,7 @@ def refusals(sh: Shape, egress: Sequence[int], end: bytes, stop: int | None = No
     out = []
     if cls > CT.FAILED:
         out.append(f"the end row's class is {cls}, not {CT.ENDED} or {CT.FAILED}")
-    if sh.STOP:
+    if sh.stop:
         if cls == CT.FAILED:
             out.append("the end row has a failure, and a stop class's connection ended in its END")
         if cls == CT.ENDED and at:
@@ -216,32 +214,32 @@ def refusals(sh: Shape, egress: Sequence[int], end: bytes, stop: int | None = No
 
 
 def outputs(sh: Shape, egress: Sequence[int], end: bytes, stop: int | None = None) -> tuple[int, bytes]:
-    """`ResponseTie`'s outputs on an egress row (its first ids, the rest 0), an end row's bytes and, in a stop
-    class, a stop word: o0, `ACCEPT` or 0, and o1, the response row's bytes, its count `content_rows.NO_COUNT`
+    """The shape's Definition's outputs on an egress row (its first ids, the rest 0), an end row's bytes and, in a
+    stop class, a stop word: o0, `ACCEPT` or 0, and o1, the response row's bytes, its count `content_rows.NO_COUNT`
     where o0 is 0."""
     ids, (_, at), (n, _) = _ids(sh, egress), _end(end), _word(sh, stop)
-    count = n if sh.STOP else at
+    count = n if sh.stop else at
     refused = bool(refusals(sh, egress, end, stop))
     row = struct.pack(f"<{sh.O + 1}I", CT.NO_COUNT if refused else count, *ids[:count], *[0] * (sh.O - min(count, sh.O)))
     return (0 if refused else ACCEPT), row
 
 
 def arguments(sh: Shape, egress: Sequence[int], end: bytes, stop: int | None = None) -> list[list[int]]:
-    """`ResponseTie`'s arguments in its signature's order, each its leaves' bits."""
+    """The shape's Definition's arguments in its signature's order, each its leaves' bits."""
     ids, _, _ = _ids(sh, egress), _end(end), _word(sh, stop)
-    word = [HC._int_bits(stop, STOP_BITS)] if sh.STOP else []
+    word = [HC._int_bits(stop, STOP_BITS)] if sh.stop else []
     return [[b for t in ids for b in HC._int_bits(t, ID_BITS)], *word, HC._bytes_bits(end)]
 
 
 def output_bits(sh: Shape, egress: Sequence[int], end: bytes, stop: int | None = None) -> list[int]:
-    """`ResponseTie`'s outputs as its leaves' bits: o0's 16, then the row's, bit 8b + i bit i of byte b."""
+    """The shape's Definition's outputs as its leaves' bits: o0's 16, then the row's, bit 8b + i bit i of byte b."""
     verdict, row = outputs(sh, egress, end, stop)
     return HC._int_bits(verdict, 16) + HC._bytes_bits(row)
 
 
 def block(sh: Shape):
-    """`ResponseTie` bound at a shape."""
-    return bind(ResponseTie, **sh.statics())
+    """The shape's Definition, `ResponseTieStop` or `ResponseTieFailed`, bound at its O."""
+    return bind(ResponseTieStop if sh.stop else ResponseTieFailed, **sh.statics())
 
 
 def evaluate(sh: Shape, cases: Sequence[tuple]) -> list[tuple[int, bytes]]:
@@ -258,11 +256,16 @@ def evaluate(sh: Shape, cases: Sequence[tuple]) -> list[tuple[int, bytes]]:
 
 # --- the circuit -----------------------------------------------------------------------------------------------------
 
-def _sig(S):
-    sh = _shape(S)
-    word = (("stop", U16),) if sh.STOP else ()
-    return ((("egress", Array(sh.egress_bits, BIT)),) + word + (("end", Array(END_BITS, BIT)),),
-            Tuple(U16, Array(sh.row_bits, BIT)))
+def _sig(stop: bool):
+    """A form's signature: the egress row, in a stop class the stop word, and the end row."""
+
+    def sig(S):
+        sh = Shape(S.O, stop)
+        word = (("stop", U16),) if stop else ()
+        return ((("egress", Array(sh.egress_bits, BIT)),) + word + (("end", Array(END_BITS, BIT)),),
+                Tuple(U16, Array(sh.row_bits, BIT)))
+
+    return sig
 
 
 def _below(C, x: Sequence) -> list:
@@ -292,33 +295,46 @@ def _prefix(C, low: Sequence, top) -> tuple[list, Any]:
     return out, some
 
 
-def _build(C, S, egress, *rest):
-    sh = _shape(S)
-    O, k, end = sh.O, sh.k, rest[-1]
-    cls, at = end[:AT_BITS], end[AT_BITS:]
-    if sh.STOP:
-        count, finish = rest[0][:COUNT_BITS], rest[0][COUNT_BITS:]
-        bad = [or_reduce(C, end), or_reduce(C, finish).inv()]
-    else:
-        count = at
-        bad = [cls[0].inv(), or_reduce(C, cls[1:])]
-    past = or_reduce(C, count[k + 1:])
-    below, some = _prefix(C, count[:k], OR(C, count[k], past))
-    refused = or_reduce(C, bad + [OR(C, past, C.AND(count[k], some))])
-    ids = [C.AND(below[p], b) for p in range(O) for b in egress[ID_BITS * p:ID_BITS * (p + 1)]]
-    m = [OR(C, refused, b) for b in count[:k + 1]] + [refused] * (ID_BITS - k - 1)
-    return [[refused.inv()] + [ZERO] * 15, m + ids]
+def _build(stop: bool):
+    """A form's gates: its checks and the word its count is read from, then the row, which both forms build alike."""
+
+    def build(C, S, egress, *rest):
+        sh = Shape(S.O, stop)
+        O, k, end = sh.O, sh.k, rest[-1]
+        cls, at = end[:AT_BITS], end[AT_BITS:]
+        if stop:
+            count, finish = rest[0][:COUNT_BITS], rest[0][COUNT_BITS:]
+            bad = [or_reduce(C, end), or_reduce(C, finish).inv()]
+        else:
+            count = at
+            bad = [cls[0].inv(), or_reduce(C, cls[1:])]
+        past = or_reduce(C, count[k + 1:])
+        below, some = _prefix(C, count[:k], OR(C, count[k], past))
+        refused = or_reduce(C, bad + [OR(C, past, C.AND(count[k], some))])
+        ids = [C.AND(below[p], b) for p in range(O) for b in egress[ID_BITS * p:ID_BITS * (p + 1)]]
+        m = [OR(C, refused, b) for b in count[:k + 1]] + [refused] * (ID_BITS - k - 1)
+        return [[refused.inv()] + [ZERO] * 15, m + ids]
+
+    return build
 
 
-ResponseTie = part(
-    "ResponseTie", STATICS, _sig, _build,
-    "one response row of the network certifier's content rows computed from the egress row of O u32 ids, the end row "
-    "(u16 class, u16 at) and, at STOP = 1, the stop word (u16 n + finish * 8192): the second output is u32 m then O "
-    "u32 ids, id p of the egress row for p below the count and 0 from there, the count the stop word's n at STOP = 1 "
-    "and the end row's at at STOP = 0; the first has 1 in bit 0 exactly when, at STOP = 1, the end row is (0, 0), "
-    "the finish is not 0 and n <= O, and at STOP = 0, the end row's class is 1 and at <= O; m is the count where "
-    "that bit is 1 and 0xFFFFFFFF where it is 0. Every field little-endian, the row's bit 8b + i bit i of byte b")
+ResponseTieStop = part(
+    "ResponseTieStop", STATICS, _sig(True), _build(True),
+    "one response row of the network certifier's content rows computed from a stop class's egress row of O u32 ids, "
+    "its stop word (u16 n + finish * 8192) and the end row (u16 class, u16 at): the second output is u32 m then O "
+    "u32 ids, id p of the egress row for p below n and 0 from there; the first has 1 in bit 0 exactly when the end "
+    "row is (0, 0), the finish is not 0 and n <= O; m is n where that bit is 1 and 0xFFFFFFFF where it is 0. Every "
+    "field little-endian, the row's bit 8b + i bit i of byte b")
+
+ResponseTieFailed = part(
+    "ResponseTieFailed", STATICS, _sig(False), _build(False),
+    "one response row of the network certifier's content rows computed from a failed class's egress row of O u32 "
+    "ids and the end row (u16 class, u16 at): the second output is u32 m then O u32 ids, id p of the egress row for "
+    "p below at and 0 from there; the first has 1 in bit 0 exactly when the end row's class is 1 and at <= O; m is "
+    "at where that bit is 1 and 0xFFFFFFFF where it is 0. Every field little-endian, the row's bit 8b + i bit i of "
+    "byte b")
 
 
-__all__ = ["ACCEPT", "AT_BITS", "COUNT_BITS", "END_BITS", "FINISH_BITS", "ID_BITS", "ResponseTie", "STATICS",
-           "STOP_BITS", "Shape", "arguments", "block", "evaluate", "output_bits", "outputs", "refusals", "stop_word"]
+__all__ = ["ACCEPT", "AT_BITS", "COUNT_BITS", "END_BITS", "FINISH_BITS", "ID_BITS", "ResponseTieFailed",
+           "ResponseTieStop", "STATICS", "STOP_BITS", "Shape", "arguments", "block", "evaluate", "output_bits",
+           "outputs", "refusals", "stop_word"]

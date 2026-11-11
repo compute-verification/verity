@@ -1,8 +1,8 @@
-"""The response tie's proof block (`response_tie`): the Boolean Definition computes its reference's outputs bit for
-bit, in both forms, on rows whose checks hold and on rows that fail each one. Where the checks hold its second
-output is the content rows' response row of the egress row's first ids (`content_rows.response_row`), whatever the
-egress row holds past the count; where one fails the verdict refuses and the row's count word is all ones, which no
-response row has."""
+"""The response tie's proof block (`response_tie`): each of its two Boolean Definitions, a stop class's and a failed
+class's, computes its reference's outputs bit for bit, on rows whose checks hold and on rows that fail each one.
+Where the checks hold its second output is the content rows' response row of the egress row's first ids
+(`content_rows.response_row`), whatever the egress row holds past the count; where one fails the verdict refuses
+and the row's count word is all ones, which no response row has."""
 
 from __future__ import annotations
 
@@ -27,6 +27,10 @@ SIZES = tuple(1 << k for k in range(1, 13))
 #: either side of the split's halves, and the largest
 HELD = (2, 4, 8, 16, 32, 128, 1024, 4096)
 ENDED, NO_COUNT = CT.end_row(False, 0), struct.pack("<I", CT.NO_COUNT)
+#: the two forms: whether the class is a stop class, and its Definition
+FORMS = ((True, RT.ResponseTieStop), (False, RT.ResponseTieFailed))
+#: a test's two classes
+CLASSES = pytest.mark.parametrize("stop", (True, False), ids=("stop", "failed"))
 
 
 def end(cls: int, at: int) -> bytes:
@@ -40,25 +44,27 @@ def count_of(row: bytes) -> int:
 # --- the shape -------------------------------------------------------------------------------------------------------
 
 
-def test_the_shape_and_the_statics_are_checked():
+def test_the_shape_and_the_static_are_checked():
     """A row of O ids is 32·(O + 1) bits behind the u16, within the widest size class, so O is a power of two from 2
-    to 4,096 (`content_rows.check_ids`, the one rule); STOP is the form, 1 or 0. The Definition refuses the same
-    statics when its signature is read."""
+    to 4,096 (`content_rows.check_ids`, the one rule), and a shape's class is a stop class or a failed class. Each
+    Definition has the one static, O, and refuses the same sizes when its signature is read."""
     assert SIZES[-1] == CT.most_ids() == 4096
-    sh = RT.Shape(4096, 1)
+    sh = RT.Shape(4096, True)
     assert (sh.k, sh.egress_bits, sh.row_bits, sh.input_bits, sh.output_bits) == (12, 131_072, 131_104, 131_120, 131_120)
     assert sh.output_bits <= UNIT_CLASSES[-1] < 16 + 32 * (2 * sh.O + 1)
-    assert (RT.Shape(16, 0).input_bits, RT.Shape(16, 0).output_bits) == (544, 560)
-    refused = ((dict(O=0), "power of two of at least 2"), (dict(O=1), "power of two of at least 2"),
-               (dict(O=24), "power of two of at least 2"), (dict(O=True), "power of two of at least 2"),
-               (dict(O=8192), "at most 4096 ids, not O=8192"), (dict(STOP=2), "STOP is 1"),
-               (dict(STOP=True), "STOP is 1"), (dict(STOP=-1), "STOP is 1"))
-    for kw, match in refused:
-        statics = RT.Shape(16, 1).statics() | kw
-        with pytest.raises(ValueError, match=match):
-            RT.Shape(**statics)
-        with pytest.raises(ValueError, match=match):
-            bind(RT.ResponseTie, **statics).signature()
+    assert (RT.Shape(16, False).input_bits, RT.Shape(16, False).output_bits) == (544, 560)
+    assert sh.statics() == RT.Shape(4096, False).statics() == {"O": 4096}
+    refused = ((0, "power of two of at least 2"), (1, "power of two of at least 2"), (24, "power of two of at least 2"),
+               (True, "power of two of at least 2"), (8192, "at most 4096 ids, not O=8192"))
+    for O, match in refused:
+        for stop, definition in FORMS:
+            with pytest.raises(ValueError, match=match):
+                RT.Shape(O, stop)
+            with pytest.raises(ValueError, match=match):
+                bind(definition, O=O).signature()
+    for stop in (1, 0, 2, None, "stop"):
+        with pytest.raises(ValueError, match=r"a stop class \(True\) or a failed class \(False\)"):
+            RT.Shape(16, stop)
 
 
 def test_a_row_whose_count_its_field_doesnt_hold_is_refused(monkeypatch):
@@ -66,20 +72,24 @@ def test_a_row_whose_count_its_field_doesnt_hold_is_refused(monkeypatch):
     word's 13 bits count, and a failed class's at most 32,768, the end row's 16."""
     monkeypatch.setattr(CT, "UNIT_CLASS_MAX", 1 << 22)
     assert CT.most_ids() == 65_536
-    assert RT.Shape(4096, 1).k == 12 and RT.Shape(32_768, 0).k == 15
+    assert RT.Shape(4096, True).k == 12 and RT.Shape(32_768, False).k == 15
     with pytest.raises(ValueError, match="count field, of 13 bits, doesn't hold: at most 4096 ids"):
-        RT.Shape(8192, 1)
+        RT.Shape(8192, True)
     with pytest.raises(ValueError, match="count field, of 16 bits, doesn't hold: at most 32768 ids"):
-        RT.Shape(65_536, 0)
+        RT.Shape(65_536, False)
 
 
-def test_the_block_reads_the_egress_row_the_end_row_and_in_a_stop_class_the_stop_word():
-    """The proof block's inputs are the egress row, the stop word where its class has one, and the end row, and
-    nothing else (every switch computed, none witness); its outputs are the u16 and the response row, gates of the
-    circuit."""
+def test_each_form_is_a_definition_of_its_own_with_no_optional_port():
+    """A stop class's proof block and a failed class's are two Definitions, each with the one static O, so neither
+    has a port by a static's leave: a stop class's reads the egress row, the stop word and the end row, a failed
+    class's the egress row and the end row, and nothing else (every switch computed, none witness). The outputs of
+    both are the u16 and the response row, gates of the circuit."""
+    assert [(d.name, d.version, tuple(d.statics)) for _, d in FORMS] == \
+        [("ResponseTieStop", 1, ("O",)), ("ResponseTieFailed", 1, ("O",))]
     for O in (2, 16, 1024):
-        for stop in (1, 0):
+        for stop, definition in FORMS:
             sh = RT.Shape(O, stop)
+            assert RT.block(sh) is bind(definition, O=O) and RT.block(sh).id == f"{definition.name}_v1{{O={O}}}"
             params, out = RT.block(sh).signature()
             assert [(name, t.leaves) for name, t in params] == \
                 [("egress", 32 * O)] + [("stop", 16)] * stop + [("end", 32)]
@@ -91,7 +101,7 @@ def test_the_block_reads_the_egress_row_the_end_row_and_in_a_stop_class_the_stop
 def test_the_reference_refuses_rows_of_no_form():
     """The reference reads an egress row of at most O u32 ids, an end row of four bytes, and a stop word exactly
     where its class has one."""
-    stop, failed = RT.Shape(4, 1), RT.Shape(4, 0)
+    stop, failed = RT.Shape(4, True), RT.Shape(4, False)
     assert RT.stop_word(5, 2) == 5 + 2 * 8192 and RT.stop_word(8191, 7) == 0xFFFF
     for n, finish in ((8192, 1), (-1, 1), (3, 8), (3, -1), (True, 1)):
         with pytest.raises(ValueError, match="a count of 13 bits and a finish of 3"):
@@ -116,7 +126,7 @@ def test_the_stop_word_is_the_stop_rules():
     response the rule ends, with the rule's n as its count, and refuses one the rule doesn't end."""
     assert (RT.COUNT_BITS, RT.STOP_BITS) == (stop_rule.N_BITS, 16)
     assert stop_rule.FINISH[0] is None and max(stop_rule.FINISH) < 1 << RT.FINISH_BITS
-    sh = RT.Shape(4, 1)
+    sh = RT.Shape(4, True)
     for ids, max_tokens, prompt_len, want in (([5, 7, 6, 8], 9, 10, (2, 1)), ([5, 6, 8, 9], 3, 10, (3, 2)),
                                               ([5, 6, 8, 9], 9, 98, (2, 3)), ([5, 6, 8, 7], 9, 10, (4, 1)),
                                               ([5, 6, 8, 9], 9, 10, (4, 0))):
@@ -143,7 +153,7 @@ def _rows(sh: RT.Shape, rng: random.Random, n: int) -> list[tuple]:
     for _ in range(n):
         ids = [rng.choice((0, 1, 0xFFFF_FFFF, rng.randrange(1 << 32))) for _ in range(sh.O)]
         count = rng.choice((0, 1, sh.O - 1, sh.O, sh.O + 1, rng.randrange(sh.O + 1), rng.randrange(top + 1), top))
-        if sh.STOP:
+        if sh.stop:
             row = ENDED if rng.random() < 0.7 else \
                 end(rng.choice((0, 1, 2, 0x100, 0x8000)), rng.choice((0, 1, count, 0xFFFF)))
             finish = rng.choice((1, 2, 3)) if rng.random() < 0.7 else rng.choice((0, 4, 7))
@@ -155,9 +165,9 @@ def _rows(sh: RT.Shape, rng: random.Random, n: int) -> list[tuple]:
 
 
 @pytest.mark.parametrize("O", HELD)
-@pytest.mark.parametrize("stop", (1, 0), ids=("stop", "failed"))
+@CLASSES
 def test_the_circuit_is_its_reference(O, stop):
-    """The Boolean Definition's two outputs are the reference's on every row: the verdict, and the row it still
+    """Each Boolean Definition's two outputs are the reference's on every row: the verdict, and the row it still
     computes where the verdict refuses, with rows it accepts and rows it refuses both among them. An accepted row
     is a response row of the form; a refused one is not."""
     sh = RT.Shape(O, stop)
@@ -176,7 +186,7 @@ def test_the_circuit_is_its_reference(O, stop):
     assert np.asarray(leaves).reshape(-1).tolist() == RT.output_bits(sh, *rows[0])
 
 
-@pytest.mark.parametrize("stop", (1, 0), ids=("stop", "failed"))
+@CLASSES
 def test_every_count_of_a_small_row(stop):
     """At O = 4, every word the count is read from: all 2^16 stop words under an end row of (0, 0), and all 2^16
     values of `at` under a class of 1. The circuit is the reference on each, accepts exactly the counts 0 to 4
@@ -193,7 +203,7 @@ def test_every_count_of_a_small_row(stop):
 
 
 @pytest.mark.parametrize("O", (2, 16, 64, 4096))
-@pytest.mark.parametrize("stop", (1, 0), ids=("stop", "failed"))
+@CLASSES
 def test_an_honest_row_is_the_response_row(O, stop):
     """Rows whose checks hold, in either form: a response of no id, of one, of O, one with an id of 0 inside its
     count, and an egress row that holds ids past the count, which the output doesn't carry. The circuit accepts and
@@ -217,28 +227,28 @@ def test_an_honest_row_is_the_response_row(O, stop):
     assert got[3][1][4:] == got[4][1][4:] == bytes(4 * O) and (count_of(got[3][1]), count_of(got[4][1])) == (1, 2)
 
 
-#: each check of a form, failed alone on a row of 16 ids that is honest but for it: the form, the end row, the stop
-#: word's (n, finish) in a stop class, and the line of `refusals` that names it
+#: each check of a form, failed alone on a row of 16 ids that is honest but for it: whether the class is a stop
+#: class, the end row, the stop word's (n, finish) in a stop class, and the line of `refusals` that names it
 REFUSALS = [
-    ("the finish is 0", 1, (0, 0), (5, 0), "the stop word's finish is 0"),
-    ("the finish is 0 and no id", 1, (0, 0), (0, 0), "the stop word's finish is 0"),
-    ("n above O", 1, (0, 0), (17, 1), "the stop word counts 17 ids and the row holds 16"),
-    ("n far above O", 1, (0, 0), (8191, 3), "the stop word counts 8191 ids and the row holds 16"),
-    ("n above O by a high bit", 1, (0, 0), (16 + 4096, 2), "the stop word counts 4112 ids"),
-    ("an end row of (0, at)", 1, (0, 5), (5, 1), "the end row has no failure and at = 5, not 0"),
-    ("an end row of (0, at) at a high bit", 1, (0, 0x8000), (5, 1), "no failure and at = 32768"),
-    ("class 1 in a stop class", 1, (1, 5), (5, 1), "the end row has a failure, and a stop class's connection"),
-    ("class 1 and no cell in a stop class", 1, (1, 0), (5, 2), "the end row has a failure"),
-    ("a class of 2 in a stop class", 1, (2, 0), (5, 1), "the end row's class is 2, not 0 or 1"),
-    ("a class of 256 in a stop class", 1, (0x100, 0), (5, 1), "the end row's class is 256"),
-    ("class 0 in a failed class", 0, (0, 0), None, "the end row has no failure, and a failed class's connection"),
-    ("class 0 with cells in a failed class", 0, (0, 5), None, "the end row has no failure"),
-    ("at above O", 0, (1, 17), None, "the connection failed after 17 cells and the row holds 16 ids"),
-    ("at far above O", 0, (1, 0xFFFF), None, "failed after 65535 cells"),
-    ("at above O by a high bit", 0, (1, 16 + 0x2000), None, "failed after 8208 cells"),
-    ("a class of 2 in a failed class", 0, (2, 5), None, "the end row's class is 2, not 0 or 1"),
-    ("a class of 3 in a failed class", 0, (3, 5), None, "the end row's class is 3"),
-    ("a class of 257 in a failed class", 0, (0x101, 5), None, "the end row's class is 257"),
+    ("the finish is 0", True, (0, 0), (5, 0), "the stop word's finish is 0"),
+    ("the finish is 0 and no id", True, (0, 0), (0, 0), "the stop word's finish is 0"),
+    ("n above O", True, (0, 0), (17, 1), "the stop word counts 17 ids and the row holds 16"),
+    ("n far above O", True, (0, 0), (8191, 3), "the stop word counts 8191 ids and the row holds 16"),
+    ("n above O by a high bit", True, (0, 0), (16 + 4096, 2), "the stop word counts 4112 ids"),
+    ("an end row of (0, at)", True, (0, 5), (5, 1), "the end row has no failure and at = 5, not 0"),
+    ("an end row of (0, at) at a high bit", True, (0, 0x8000), (5, 1), "no failure and at = 32768"),
+    ("class 1 in a stop class", True, (1, 5), (5, 1), "the end row has a failure, and a stop class's connection"),
+    ("class 1 and no cell in a stop class", True, (1, 0), (5, 2), "the end row has a failure"),
+    ("a class of 2 in a stop class", True, (2, 0), (5, 1), "the end row's class is 2, not 0 or 1"),
+    ("a class of 256 in a stop class", True, (0x100, 0), (5, 1), "the end row's class is 256"),
+    ("class 0 in a failed class", False, (0, 0), None, "the end row has no failure, and a failed class's connection"),
+    ("class 0 with cells in a failed class", False, (0, 5), None, "the end row has no failure"),
+    ("at above O", False, (1, 17), None, "the connection failed after 17 cells and the row holds 16 ids"),
+    ("at far above O", False, (1, 0xFFFF), None, "failed after 65535 cells"),
+    ("at above O by a high bit", False, (1, 16 + 0x2000), None, "failed after 8208 cells"),
+    ("a class of 2 in a failed class", False, (2, 5), None, "the end row's class is 2, not 0 or 1"),
+    ("a class of 3 in a failed class", False, (3, 5), None, "the end row's class is 3"),
+    ("a class of 257 in a failed class", False, (0x101, 5), None, "the end row's class is 257"),
 ]
 
 
@@ -264,7 +274,7 @@ def test_a_refused_rows_ids_are_still_the_gates():
     """Where a check fails the ids of the row are what the gates compute, the egress row's below the count the form
     reads and 0 from there: all of them for a count past O, the first n where the finish is 0. The count word alone
     says the row is refused."""
-    sh, ids = RT.Shape(4, 1), [11, 12, 13, 14]
+    sh, ids = RT.Shape(4, True), [11, 12, 13, 14]
     got = RT.evaluate(sh, [(ids, ENDED, RT.stop_word(9, 1)), (ids, ENDED, RT.stop_word(2, 0)),
                            (ids, end(1, 0), RT.stop_word(4, 2)), (ids, end(2, 7), RT.stop_word(0, 0))])
     assert got == [(0, struct.pack("<5I", CT.NO_COUNT, 11, 12, 13, 14)), (0, struct.pack("<5I", CT.NO_COUNT, 11, 12, 0, 0)),
@@ -272,23 +282,25 @@ def test_a_refused_rows_ids_are_still_the_gates():
     assert RT.refusals(sh, ids, end(2, 7), RT.stop_word(9, 0)) == [
         "the end row's class is 2, not 0 or 1", "the stop word's finish is 0: the stop rule doesn't end the response "
         "within the row's ids", "the stop word counts 9 ids and the row holds 4"]
-    failed = RT.Shape(4, 0)
+    failed = RT.Shape(4, False)
     assert RT.evaluate(failed, [(ids, end(1, 6)), (ids, end(0, 3)), (ids, end(4, 0))]) == \
         [(0, struct.pack("<5I", CT.NO_COUNT, 11, 12, 13, 14)), (0, struct.pack("<5I", CT.NO_COUNT, 11, 12, 13, 0)),
          (0, struct.pack("<5I", CT.NO_COUNT, 0, 0, 0, 0))]
 
 
 def test_the_blocks_ands():
-    """The proof block's ANDs are its shape's formula at every size of row and in both forms, and at the bindings
-    circuit-check pins they are these."""
+    """Each Definition's ANDs are its shape's formula at every size of row, and at the bindings circuit-check pins
+    they are these."""
     memo: dict = {}
     for O in SIZES:
-        for stop in (1, 0):
+        for stop, _ in FORMS:
             sh = RT.Shape(O, stop)
             assert HC.ands(RT.block(sh), memo) == sh.ands, (O, stop)
-    assert {shape: RT.Shape(*shape).ands for shape in ANDS} == ANDS
-    assert RT.Shape(1024, 1).ands - 33 * 1024 == 2 * 32 - 10 + 48
+    pinned = [RT.Shape(O, stop) for O, stop in ((16, True), (16, False), (1024, True), (2, False), (4096, True))]
+    assert {RT.block(sh).id: sh.ands for sh in pinned} == ANDS
+    assert RT.Shape(1024, True).ands - 33 * 1024 == 2 * 32 - 10 + 48
 
 
-#: the ANDs of `ResponseTie_v1{O, STOP}` at each binding circuit-check pins, by (O, STOP)
-ANDS = {(16, 1): 580, (16, 0): 564, (1024, 1): 33_894, (2, 0): 99, (4096, 1): 135_331}
+#: the ANDs at each binding circuit-check pins, by the binding's id
+ANDS = {"ResponseTieStop_v1{O=16}": 580, "ResponseTieFailed_v1{O=16}": 564, "ResponseTieStop_v1{O=1024}": 33_894,
+        "ResponseTieFailed_v1{O=2}": 99, "ResponseTieStop_v1{O=4096}": 135_331}

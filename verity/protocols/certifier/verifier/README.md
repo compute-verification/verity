@@ -166,8 +166,8 @@ A spec-level reference for network accounting's timing channel:
   execution phase and slot stride, which computes the lengths row from the compute side's committed request row and
   the network certifier's fails row (`connection_rows`) with no witness, as a registered read of the signed row
   (`connection_rows.port`); with it its reference and the prover's side (`blocks`, `reads`);
-- the response tie's proof block (`verity.protocols.certifier.prover.response_tie`, `ResponseTie`), in no Spec, and
-  the content rows' formats it reads and returns (`content_rows`), which no table holds;
+- the response tie's two proof blocks (`verity.protocols.certifier.prover.response_tie`), in no Spec, and the
+  content rows' formats they read and return (`content_rows`), which no table holds;
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
   rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one

@@ -1,22 +1,22 @@
 {
  "definitions": {
-  "ResponseTie_v1{O=1024,STOP=1}": {
-   "and": 33894,
-   "type": "efc613fe2ae29b676cee07c939941b9595460fd540efb9ae36b77c86323a1c16feda3d3d5bd851a112528b808a1c348998a0e7c670c8a6a4d5960534ca168644"
-  },
-  "ResponseTie_v1{O=16,STOP=0}": {
+  "ResponseTieFailed_v1{O=16}": {
    "and": 564,
    "type": "68a1a6bf65c84eef2f1421984468359439c3e52f80f60a4a7a14a335c5e5edeafde5489ba945e0729ae67214c1d22021f804d0c2cce256c9fdcf87ab4aed893d"
   },
-  "ResponseTie_v1{O=16,STOP=1}": {
-   "and": 580,
-   "type": "3ad33a9a0ca28dd9c14912f6f592012aaecf86c5fc500a40c2713a3ef9999710ddddb0d24a097a136a1a640a3fee073a4108d2ad197b875295b13e14ab5570ec"
-  },
-  "ResponseTie_v1{O=2,STOP=0}": {
+  "ResponseTieFailed_v1{O=2}": {
    "and": 99,
    "type": "a0cc03ec476bfc114818835d9ba8f92c48b2cd69a9d0de4d9ac4bf95b2783895a5d7ff97906dec35e5bc5438519ae3e36b49bbb535b0815ad540e8145b9a2faf"
   },
-  "ResponseTie_v1{O=4096,STOP=1}": {
+  "ResponseTieStop_v1{O=1024}": {
+   "and": 33894,
+   "type": "efc613fe2ae29b676cee07c939941b9595460fd540efb9ae36b77c86323a1c16feda3d3d5bd851a112528b808a1c348998a0e7c670c8a6a4d5960534ca168644"
+  },
+  "ResponseTieStop_v1{O=16}": {
+   "and": 580,
+   "type": "3ad33a9a0ca28dd9c14912f6f592012aaecf86c5fc500a40c2713a3ef9999710ddddb0d24a097a136a1a640a3fee073a4108d2ad197b875295b13e14ab5570ec"
+  },
+  "ResponseTieStop_v1{O=4096}": {
    "and": 135331,
    "type": "27b8f7bd459e2f67534d46af817762c0824bc59af253e9b3c001547fb42655f42f89560656e1e5c5d8dee47171f19e7a293eead2e439c2a46bfb4f8ab15c6dad"
   }
