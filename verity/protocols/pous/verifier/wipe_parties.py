@@ -28,7 +28,14 @@ from collections.abc import Callable
 from typing import Any
 
 from verity.configuration.deploy.manifest import Channel, Manifest, Role
-from verity.configuration.deploy.party import Finish, Identity, Received, LogEntry, Send, Timer
+from verity.configuration.deploy.party import (
+    Finish,
+    Identity,
+    LogEntry,
+    Received,
+    Send,
+    Timer,
+)
 from verity.configuration.deploy.runtime import ProtocolDef
 from verity.configuration.wire import Body, Int, List, Message, Phase, Refused, Schema
 

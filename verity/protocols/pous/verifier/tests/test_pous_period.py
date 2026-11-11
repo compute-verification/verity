@@ -13,6 +13,7 @@ from fractions import Fraction
 import pytest
 from pous_fakes import Clock
 from pous_test_signer import SCHEMES, TestSigner, session_log
+
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import period
 from verity.protocols.pous.verifier import run as R
