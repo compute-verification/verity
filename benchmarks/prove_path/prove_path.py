@@ -42,7 +42,7 @@ Two kinds of committed run:
     prove_path.py commit (--tp-commit DIR --build-root DIR | --bundle DIR --row-dir DIR --workload F [--hf-config F] \\
         | --serve-run DIR --window K --row-dir DIR [--hf-config F] [--target F]) [--advice FILE] [--opening FILE] --partition F \\
         --out WINDOWS [--cap-bits L] [--ranks 0,1] [--jobs N] [--forge MEMBER:UNIT] [--transfer-gate T ...] \\
-        [--serving-rows-tables REGISTRATION --serving-rows-tables-key KEY]
+        [--serving-rows-tables REGISTRATION --serving-rows-tables-key KEY] [--checkpoint-dir DIR]
     prove_path.py audit (the same committed run) [--opening FILE] --windows WINDOWS --partition F --template-sets DIR \\
         --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall --out DIR [--cap-bits L] \\
         [--ranks 0,1] [--jobs N] [--forged] [--plain] [--transfer-gate T ...] --challenger local|gate:USER@HOST --main FILE
@@ -69,7 +69,9 @@ Two kinds of committed run:
   Programs for it, ``WINDOWS/rank<r>/``. ``--forge MEMBER:UNIT`` commits that unit with bit 0 of its first output word flipped
   (`forging`): its rows, commit strings and roots all agree with the flipped word, so only the proof can refuse it.
   ``--serving-rows-tables`` (with its key) gives each window the committer's registration of the per-expert cut's tables
-  (`tables_of`), without which a partition of table reads or fused blocks is refused.
+  (`tables_of`), without which a partition of table reads or fused blocks is refused, and ``--checkpoint-dir`` the checkpoint
+  it composes the registered weights its rows read from (`checkpoint_of`): a bundle carries none a checkpoint holds, so
+  without one a row reading such a weight is refused by the weight's name.
 * **audit** (the verifier): each window from the record, the opened advice and its own compiler (`open_advice`, `window_of`;
   a single-GPU or served window's Programs from its own Builds, written into ``--builds``, default ``OUT/builds``),
   audited by a5 on the verifier's coins with the advice negatives beside it (`more_negatives`), then `advice_before_draw` on the
@@ -882,12 +884,24 @@ def tables_of(a: argparse.Namespace) -> dict[str, str] | None:
     return {"key": a.serving_rows_tables_key, "registration": a.serving_rows_tables} if a.serving_rows_tables else None
 
 
+def checkpoint_of(a: argparse.Namespace) -> Any:
+    """The checkpoint ``--checkpoint-dir`` a window composes the registered weights its rows read from: its bundle carries the
+    registered buffers and engine constants alone (`replay_bundle.weights_extra`). Its shards aren't hashed: each tensor read
+    is held to its committed tensor root, or refused by name (`cpu_replay.OnRead`). None without one."""
+    if not a.checkpoint_dir:
+        return None
+    from verity_vllm.check import weights_of_record as WR
+
+    return WR.CheckpointIndex(a.checkpoint_dir, verify_shards=False)
+
+
 def commit1(a: argparse.Namespace, compiler: Capped, requests: list[dict], bound: Mapping[str, Any], out: Path) -> dict:
     """A single-GPU Commit's stand-in window into ``out`` (`serving_rows.after_commit`, as `deferred_rows.from_bundle` writes one)
     over ``compiler``'s Programs for the advice's ``requests``, ``bound`` in its provenance: every value read through an opening
     verified against the record's run root, the weights (none for an activation template) each opened on its first read
-    against the committed weights root (`cpu_replay.OnRead`), and the per-expert cut's tables committed under the committer's
-    key and registration (`tables_of`), read before the bundle is opened."""
+    against the committed weights root (`cpu_replay.OnRead`), from the bundle's tensors and the checkpoint (`checkpoint_of`,
+    composed as the Build's weight roles say, `cpu_replay.registered_roles`), and the per-expert cut's tables committed under
+    the committer's key and registration (`tables_of`), read before the bundle is opened."""
     from verity_vllm.check.oracle_compare import OpenedReader
     from verity_vllm.check.replay.index import ProgramIndex
     from verity_vllm.pipeline import cpu_replay as CPU
@@ -901,10 +915,12 @@ def commit1(a: argparse.Namespace, compiler: Capped, requests: list[dict], bound
     p = compiler.load(0, 1, requests)
     k0 = next(iter(p.progs))
     tree = json.loads((r.bdir / "weights" / "tree.json").read_text())
-    words = CPU.OnRead(r.bdir, tree, (r.row["commit"].get("weight_registration") or {}).get("root"), None)
+    prefix, ck = ProgramIndex(p.progs[k0], program_dir=p.dirs[k0]).prefix, checkpoint_of(a)
+    words = CPU.OnRead(r.bdir, tree, (r.row["commit"].get("weight_registration") or {}).get("root"), ck,
+                       roles=CPU.registered_roles(p.dirs.values(), prefix) if ck is not None else None)
     bmap = json.loads((r.out / f"binding_map_p{r.pair}.json").read_text())
     res = SRW.after_commit(str(out), partition_file=str(a.partition), programs=p.progs, bmap=bmap, committed=OpenedReader(r.store, r.run),
-                           weights=CPU.provider(words, ProgramIndex(p.progs[k0], program_dir=p.dirs[k0]).prefix, set()),
+                           weights=CPU.provider(words, prefix, set()),
                            manifest=r.manifest if isinstance(r.manifest, dict) else None, run_root=r.run.run_root,
                            row=r.row.get("label"), arrivals=p.arrivals, program_dirs=p.dirs, digests=p.digs,
                            committer={"from": "replay bundle", "pair": r.pair, "source": r.ctx.get("code")}, workers=a.workers,
@@ -992,7 +1008,8 @@ def commit_rank(job: tuple[argparse.Namespace, int, list[dict], dict]) -> dict:
         if single(a):
             got = commit1(a, compiler, requests, bound, out)
         else:
-            got = AW.commit_window(a.tp_commit, r, a.partition, out, compiler, requests, bound, workers=a.workers, tables=tables_of(a))
+            got = AW.commit_window(a.tp_commit, r, a.partition, out, compiler, requests, bound, workers=a.workers, tables=tables_of(a),
+                                   checkpoint=checkpoint_of(a))
     return {**got, "forged": {"member": forge[0], "unit": forge[1]} if forge else None}
 
 
@@ -1767,6 +1784,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--serving-rows-tables", metavar="REGISTRATION_JSON", help="the per-expert cut's tables registration (verity-vllm "
                    "tp-register-tables --out; {rank} in its path its rank's): each window commits the tables its reads read under it")
     p.add_argument("--serving-rows-tables-key", metavar="KEY", help="the committer's key file --serving-rows-tables is registered under")
+    p.add_argument("--checkpoint-dir", help="the checkpoint the registered weights a window's rows read are composed from, each "
+                   "held to its committed tensor root (default none: only the tensors the bundle carries open)")
     p = sub.choices["audit"]
     p.add_argument("--windows", required=True, help="the prover's windows, rank<r>/ each (prove_path.py commit --out)")
     p.add_argument("--template-sets", required=True, help="one input set per member template, for the lowering")
