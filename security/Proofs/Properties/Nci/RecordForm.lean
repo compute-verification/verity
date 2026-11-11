@@ -101,13 +101,10 @@ theorem parse_fields {j : Json} {i : Instance} (h : parse j = .ok i) :
   unfold parse at h
   simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
   repeat (split at h <;> try cases h)
-  try subst_vars
   refine ⟨field_ok (by assumption), field_ok (by assumption), ⟨_, field_ok (by assumption), by assumption⟩,
     ⟨_, _, alpha _ _ _ (by assumption) (by assumption), by assumption, by assumption⟩,
-    Nat.pos_of_ne_zero (by first | assumption | (intro h0; simp_all)),
-    pins _ _ _ ?_ (by assumption) (by assumption)⟩
+    Nat.pos_of_ne_zero (by assumption), pins _ _ _ ?_ (by assumption) (by assumption)⟩
   intro x s hx
-  try dsimp only at hx
   split at hx
   · split at hx
     · cases hx; rfl
@@ -141,13 +138,11 @@ theorem form_rates : Properties.Record.Rates form := by
       rw [hf] at h'
       simp at h'
   unfold failure at h1
-  have h0 := List.findSome?_eq_none_iff.mp h1 0 (List.mem_range.mpr (by first | decide | simp))
-  have e : (#[(s.gates, s.fresh)] : Array (Nat × Nat))[0]! = (s.gates, s.fresh) := by first | rfl | simp
+  have h0 := List.findSome?_eq_none_iff.mp h1 0 (List.mem_range.mpr (by simp))
+  have e : (#[(s.gates, s.fresh)] : Array (Nat × Nat))[0]! = (s.gates, s.fresh) := rfl
   have h2 : (if s.gates > Γ then some (0, "size") else if s.fresh * den > num * s.gates then some (0, "nci")
       else none) = (none : Option (Nat × String)) := by
-    first
-      | simpa only [e] using h0
-      | simpa using h0
+    simpa only [e] using h0
   by_cases hg : s.gates > Γ
   · simp [hg] at h2
   · by_cases hn : s.fresh * den > num * s.gates
