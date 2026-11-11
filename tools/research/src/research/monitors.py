@@ -1,8 +1,8 @@
 """Monitors: invariants in code, each with an owner, a severity, a threshold and an action (the infra vision's Signals surface).
 One registry (MONITORS) and one runner. Node 2's service (`vy-monitors.timer`, pods/nebius/monitoring/) runs the node-side
 monitors and writes each incident once when it opens and once when it clears; the relay on the control pod
-(infra/control/watchers.toml) runs the relay-side ones (they need GitHub, the evidence store or Slack) and posts both sets to
-#agent-alerts. Every Nebius machine runs the `machine`
+(infra/control/watchers.toml) runs the relay-side ones (they need GitHub, the evidence store, Slack or the pod's own files, as
+the guard that `main`'s nightly check gave an outcome does) and posts both sets to #agent-alerts. Every Nebius machine runs the `machine`
 monitors (`vy-watchdog.timer`: `run --where machine --machine NAME --peer HOST ...`): memory pressure that holds, each process
 the OOM killer took (named with its run and the run's sender), a peer that stops answering, /workspace filling within hours on its
 recent trend (named with the biggest live runs), a unit deploy.toml runs there that was never installed or is off, and
@@ -756,6 +756,36 @@ def unverified_main(ctx: Ctx) -> list[Finding]:
                     f"`/{VQUEUE_DECISIONS}` is from {iso(since)}, and `main` moves only through it.", owners=("ci", "top"))]
 
 
+#: the control pod's nightly loop's state (infra/control/nightly_check.py): `last`, its newest outcome and when it was read;
+#: `since`, when the loop first ran there; `night`, the one in progress
+NIGHTLY_STATE = "data/watchers/nightly-check.json"
+NIGHTLY_SILENT_S = 36 * 3600
+
+
+def nightly_check(ctx: Ctx) -> list[Finding]:
+    """`main`'s nightly uncached check has given no outcome for 36 h. The control pod's `nightly-check` loop
+    (infra/control/nightly_check.py) starts one a day and keeps its newest outcome in its state (`NIGHTLY_STATE`): passed,
+    contradicted, failed, or an error, which is an outcome too, since the loop posts each itself. Timed from when that outcome
+    was read, or from the loop's first pass there while it has none; a pod whose loop never wrote its state is found as well."""
+    path = ctx.root / NIGHTLY_STATE
+    if not path.exists():
+        return [Finding("absent", f"*The nightly check of `main` isn't running*: the control pod has no `/{NIGHTLY_STATE}`, "
+                        "which its `nightly-check` loop writes on its first pass.",
+                        cleared="*Cleared:* the nightly check's loop runs on the control pod.")]
+    state = json.loads(path.read_text())
+    last, night = state.get("last") or {}, state.get("night") or {}
+    if not (since := last.get("at") or state.get("since")):
+        raise RuntimeError(f"/{NIGHTLY_STATE} names neither a last outcome nor when its loop first ran")
+    if (silent := ctx.now - calendar.timegm(time.strptime(since, STAMP))) < NIGHTLY_SILENT_S:
+        return []
+    was = (f"its last was `{last.get('outcome')}` at {since}, of `{str(last.get('commit'))[:12]}`"
+           + (f" (run `{last['run']}`)" if last.get("run") else "") if last else f"its loop has run since {since} and none has ended")
+    now = (f" The one in progress, of {night.get('day')}, is `{night.get('phase')}`"
+           + (f" (run `{night['run']}`)" if night.get("run") else "") + "." if night and night.get("phase") != "done" else "")
+    return [Finding("silent", f"*The nightly check of `main` has given no outcome for {int(silent // 3600)} h*: {was}.{now}",
+                    cleared="*Cleared:* the nightly check of `main` gave an outcome.")]
+
+
 # ---- every machine: its memory, the runs infrastructure killed, the peers it watches, the checks lost -----------------------------
 
 USER_SLICE = "/sys/fs/cgroup/user.slice/user-1001.slice"      # each research run is a session scope here (one ssh login each)
@@ -1486,6 +1516,12 @@ MONITORS: list[Monitor] = [
             "pod: start a loop that stopped again, or fix what a stuck one fails on each tick. It rings again each hour until "
             "the queue decides again.",
             every_s=600, events=True, unread_s=3600),
+    Monitor("nightly-check", "infra", "warn", "relay", nightly_check,
+            "On the control pod, read /data/watchers/log/nightly-check.log (each pass says what it did) and status.json (is "
+            "the loop up); a run in progress is `research status RUN`. A loop the supervisor doesn't run is deployed by "
+            "infra/control/README.md's watchers steps; one stuck on a run that never ends gives it up an hour past the run's "
+            "timeout. The log's `launch:` line is the command, to run a night by hand.",
+            every_s=600, for_s=1800, unread_s=3600),
 ]
 BY_ID = {m.id: m for m in MONITORS}
 
