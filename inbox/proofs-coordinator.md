@@ -58810,3 +58810,77 @@ ready to mark #9005 at accab1a9bc512eeeaa8fbab01ddb460b21c40d94
 **Left:** #8789 as the 16:26Z section orders it (read `f5c4`, the lock diff and commit, the pass at the lock commit, the tier's suites that read the locks again, the body, the ready line); then the allocator's interleaved rerun (three base/setting pairs on the head block, 260 GB), after the lock run; then the one-parse PR, (B) #8814 and M6, each after #8789 and #8949 are on `main`.
 
 For the table: the allocator setting: PR #9005 at `accab1a9bc51`, ready to mark after a second reader; quick tier 63 of 63; head check 0.55 to 0.63 (one run, loaded node), fused call 0.91, peak memory +6% to +11% [measured `a3a2`, `5ef7`]; no GB cell uses it.
+
+## AUDITSUM, Wed 11 Nov 16:53Z: JOB 1, the served sizes: the files settle the floor (2^34.32 units, not 57,344) and 3,320.5 tokens a request, not the cut, the gate count or A's 1,843 requests; at whole-audit sizes none of the eight rows changes verdict, rows 3, 10, 14 and 19 lose 11.7 to 55.6 bits, and row 14 keeps its "yes" by 3.2 bits at A
+
+**Finding.** The Tuesday audits' unit counts were too small at all three points, so every row that sums over units or sessions is worse than the table said: by 18.5 bits at the floor and 11.7 bits at B and A for a term linear in the count, and by up to 55.6 bits for row 3, which grows as its cube. None of the eight rows changes its verdict under the note's rule. Row 14 keeps its "yes" by only 3.2 bits at A, and loses it at the 64-table cap or if the budget counts whole calls on 64 KiB rows. Row 10's "yes at the floor" is gone. Row 3 at A is above 1 as main states it. [run: the script below, on the card at `origin/main` `493f49485e50`, fetched 16:48Z]
+
+### The sizes
+
+The files settle the floor and the tokens of a request. They do not settle the cut at B and A, the gate count `nG`, or A's count of requests.
+
+| Point | What the Tuesday audits took | What the files give for a whole audit | Not decided by a file |
+|---|---|---|---|
+| Floor: the card's window, one request of 256 prompt and 32 generated tokens, counted as 287 tokens, on 8 ranks | \(N = 2^{43.73}\), 57,344 units (\(2^{15.81}\)) | \(2^{34.32}\) units (proof blocks), \(2^{43.72}\) MACs, \(2^{54.15}\) ANDs (the estimator's upper bound), \(2^{53.63}\) input and output bits, \(2^{39.29}\) output bits [run on `benchmarks/spot_figures/cards/workload.glm-5.3.json`] | `nG`. Tuesday's N is the card's MACs at one gate a MAC. 57,344 is the `macs` field of one block type (`DsaMqaLogits_v3{N=14,H=32,D=128}`), not a count of blocks [run]. |
+| B: a compute audit of one request of 3,320.5 computed tokens [read `benchmarks/spot_figures/breakeven/reprice.py:510`, `C343`, vLLM's 128k serve plan] | \(N = 2^{47.9}\), \(2^{24.2}\) units, which is one token's blocks | Fused cut: \(2^{35.91}\) units, from 1.942e7 blocks a token [read in `note:network-accounting/20261111T0240Z-report-net329-periodproof`; the count is from a planner run and is not in the tree]. The card's cut: \(2^{37.85}\) units, from 74,768,956 blocks a token [run]. N: \(2^{47.9}\) MACs and \(2^{58.3}\) ANDs as network-accounting posts, or \(2^{47.26}\) and \(2^{57.68}\) from the card's counts a token [run]. | Which cut is served: the two differ by 1.9 bits. Network-accounting did not check that the planner multiplies by tokens nowhere later [read in its note]. The posted MACs are 0.64 bits above the card's [derived]. I carry both. |
+| A: the class audit of one link-window, 1,843 requests at 512 lanes [read in network-accounting's note; neither number is in a file on main] | \(N = 2^{58.8}\), \(2^{35.1}\) units, which is one token's blocks times 1,843 | Fused cut: \(2^{46.76}\) units. The card's cut: \(2^{48.70}\) units. N: \(2^{58.8}\) MACs and \(2^{69.2}\) ANDs, or \(2^{58.10}\) and \(2^{68.53}\) [run]. | The 1,843 requests, and the cut as at B. |
+
+- **"Served" has two answers.** The card is a census of GLM-5.3's circuit for one request, with `status: measured` and `provisional: true` [read]. The only audit that ran on served work is the onsite run of record, Llama 3.2 1B INT8 on one H200, on the onsite branch and not on main: 870,412 units a request (\(2^{19.73}\)), \(N = 2^{44.77}\) Boolean gates at 856 a MAC, and 6,963,296 units in its window of 8 requests [read: vllm's comment on PRF-523, 01:47Z]. The script's last block gives the rows at that size.
+- **A link-window's scan** is 2,560 units, which is neither B nor A [read in network-accounting's note].
+
+### Which quantity each formula's symbol is
+
+None of the eight formulas reads a gate count directly. Six of them read a count of units or sessions.
+
+| Row | Symbol | What it counts |
+|---|---|---|
+| 3 | `n_out`, `n_in`, `n_sess`, `n_PU`; `openCalls` | All four are the whole partition's proof blocks on main's one-stage instance: `nOut := nPU`, `nIn := nPU`, `nSess = nPU` [read `security/Proofs/Flock/SamplingGeneric/Deployed.lean:99-100, 124`]. `work` is at `security/Definitions/Claims/SamplingGeneric.lean:433-435` [read]. `openCalls` is reveals times (4 + depth): reveals is the largest block's input and output bits, 1,085,664 on the card [run]; depth 25 is SP's [guess]. |
+| 4 | W | Input and output wire bits of the audit's blocks [read in SP's script]. Q_s, the strings the sample reads, is the other reading, and no statement has it. |
+| 7 | k = S·R | S sessions, which is the units on main, times R rounds a session [read in SP's script]. |
+| 10 | q | Sessions [read in SP's script]. |
+| 14 | n | Sessions; FL takes one a unit [read in FL's script]. |
+| 19 | `n_sess` | Sessions [read in PD, which cites `AnyErrBound.lean:228`]. |
+| 22 | N | Committed bits, the output bits plus the weights, not gates [read in PD: TAIL's "every committed row, weight rows included"]. |
+| 24 | L | Leaves. CY bounds it by N in gates; no file counts leaves, so I carry N in MACs and in ANDs. |
+
+### The eight rows at the settled sizes
+
+Every figure is the log2 of the error of one audit at \(2^{80}\) calls, at the floor / B / A [run]. "Fused" takes network-accounting's units at B and A; "card" takes the card's cut there. The floor is the same in both.
+
+| Row | Formula as its source writes it | Old figure (Tuesday's sizes) | New figure, fused cut | New figure, the card's cut | Does the verdict change? |
+|---|---|---|---|---|---|
+| 3 | `2T·work/2^256`, `work = 1 + k_out + k_out·k_in·(1 + n_sess·e_s) + k_out·k_in·n_PU·openCalls`, as main states it with `n_sess = n_PU` (SP row 11) | -80.7 / -55.5 / -22.8 | -25.1 / -20.4 / above 1 (\(2^{12.2}\)) | -25.1 / -14.5 / above 1 (\(2^{18.0}\)) | No: "no" stays. |
+| 3 | The same with the extractor's own calls counted once, `2(T·reruns + own)/2^256` (SP row 12) | -87.3 / -62.1 / -29.4 | -31.8 / -27.0 / above 1 (\(2^{5.5}\)) | -31.8 / -21.2 / above 1 (\(2^{11.4}\)) | |
+| 3 | The same at one session (SP) | -103.1 / -86.3 / -64.5 | -66.1 / -62.9 / -41.2 | -66.1 / -59.0 / -37.3 | The one figure that reached, the floor at one session, now misses by 33.9 bits. |
+| 3 | As stated at one session with `openCalls` = \(2^{12}\) (HD's `ext_lin`) | -93.6 / -68.4 / -35.7 | -38.0 / -33.3 / -0.7 | -38.0 / -27.4 / above 1 (\(2^{5.1}\)) | |
+| 4 | `W·(2t′(1+k)/2^256 + 1/(e·M) + k/(e·R_w))/(1−ρ)` at t′ = T (SP row 34) | -96.8 / -92.6 / -81.7 | the same: the floor's W was already the card's, and B and A scale it by SP's [guess] | -96.8 / -93.3 / -82.4, with W the card's bits a token times the tokens | No: "no" stays. |
+| 7 | `√(k·γ_s)·2T/2^256.5`, k = S·R, S = `n_PU`, R = 4,402, one table, under `StrictBirthday` (SP row 2) | -142.5 / -138.3 / -132.9; worst case (200 tables) -125.3 at A | -133.3 / -132.5 / -127.1; worst case -119.4 at A | -133.3 / -131.5 / -126.1; worst case -118.5 at A | No: "yes (under `StrictBirthday` only)" stays. Under `ExpectedCR` it is -45.3 / -44.5 / -39.1. |
+| 10 | `q·δ_c`, δ_c = (6m − 20)/2^128 a table, m = 35, q = `n_PU` (SP row 16) | -104.6 / -96.2 / -85.3 | -86.1 / -84.5 / -73.7 | -86.1 / -82.6 / -71.7 | No: "no" stays, and the floor now misses too, by 13.9 bits. |
+| 14 | `n·(κ + fork)`, κ = \(2^{-202.98}\), fork = \(2^{-150.0}\) at one table, n = `n_PU` (FL) | -134.2 / -125.8 / -114.9 | -115.7 / -114.1 / -103.2 | -115.7 / -112.1 / -101.3 | No by the note's rule: "yes" stays, by 3.2 bits at A (1.3 at the card's cut). At FL's 64-table cap the same sum is -110.1 / -108.5 / -97.7 (card: -95.7 at A), which misses at A; FL did not sum the cap over sessions. One session is unchanged at \(2^{-150.0}\). |
+| 19 | `n_sess` × one session's `errAt`, \(2^{-82.13}\) at t = 53 (PD; FL) | -66.3 / -57.9 / -47.0 | -47.8 / -46.2 / -35.4 | -47.8 / -44.3 / -33.4 | No: "no" stays. |
+| 22 | `N × 2^-174.5`, N the committed bits, output bits plus weights (PD, relaying TAIL) | -131.9 / -130.5 / -120.1 | the same: the floor was already in the card's units; B and A scale by PD's [guess] | -131.9 / -130.8 / -120.8 | No: "yes (unbuilt)" stays. With N every read, which PD carried at the floor only: -120.9 / -116.7 / -105.8. |
+| 24 | `L·2^-192`, L ≤ N (CY row 3) | -148.3 / -144.1 / -133.2 | L in MACs: the same. L in ANDs: -137.9 / -133.7 / -122.8 | MACs: -148.3 / -144.7 / -133.9. ANDs: -137.9 / -134.3 / -123.5 | No: "yes (under an open premise)" stays. CY's row 5, `L·2^-156` with the tail held to \(2^{-100}\): -112.3 / -108.1 / -97.2 in MACs, -101.9 / -97.7 / -86.8 in ANDs, which misses at B and A. |
+
+- **At \(2^{64}\) calls** rows 3, 4, 7 and 14 gain 16 bits and row 19 gains 8 [run]. Row 3 as stated is then -41.1 / -36.4 / -3.8, and row 4 is -112.7 / -108.5 / -97.6.
+- **Row 17 is not one of the eight and also reads the unit count** (FL's [guess] that its n is `n_PU`): \(2^{-59.3}\) to \(2^{-36.2}\) becomes \(2^{-50.1}\) to \(2^{-30.4}\) (card's cut: to \(2^{-29.4}\)) [run]. Its "no" stays.
+- **At the sizes that ran** (the onsite record, one request, 870,412 units): row 3 as stated \(2^{-68.9}\), row 7 \(2^{-140.6}\), row 10 \(2^{-100.7}\), row 14 \(2^{-130.3}\), row 19 \(2^{-62.4}\) [run on a relayed count].
+
+### The same rows against \(2^{80}\) compressions
+
+Each source gives its own conversion, and they are of two kinds: the budget is \(2^{80}\) compressions, or it is \(2^{80}\) calls and each call hashes a whole row.
+
+- **Row 3.** At \(2^{80}\) compressions SP multiplies the extractor's own calls by 3.1 on 4 KiB rows and 19.6 on 64 KiB rows (the split of an opening's calls is SP's [guess]). As main states it: -23.5 / -18.7 / above 1 at 4 KiB, -20.8 / -16.1 / above 1 at 64 KiB [run].
+- **Rows 4 and 7.** SP: a term linear in T stands at \(2^{80}\) compressions, and loses 5.0 to 9.0 bits if the budget is \(2^{80}\) whole calls on rows of 33 to 513 compressions [read]. Row 7 at A is then \(2^{-122.1}\) to \(2^{-118.1}\), still past the bar; row 4 at the floor is \(2^{-91.8}\) to \(2^{-87.8}\) [derived: the row's figure plus 5.0 and 9.0].
+- **Rows 14 and 19.** FL: both read the same at \(2^{80}\) compressions, because the finder's cost is a multiple of the prover's own run [read]. If the budget stays in calls of L blocks, FL's base argument loses between √L and L. Row 14 at A is then \(2^{-100.7}\) to \(2^{-98.2}\) on 4 KiB rows and \(2^{-98.7}\) to \(2^{-94.2}\) on 64 KiB rows (card's cut: \(2^{-96.8}\) to \(2^{-92.3}\)) [run]. FL gives no such conversion for row 19.
+- **Row 22.** PD: plus 9.0 bits with the budget in calls on 64 KiB rows: -122.9 / -121.5 / -111.1 [run].
+- **Rows 10 and 24** read no budget.
+
+### The recount
+
+By the note's rule the verdict column is unchanged: 13 yes, 25 no, 10 by design, 19 not evaluated [derived]. What moved is inside the verdicts.
+
+- Row 14 is now the weakest "yes": 3.2 bits over the bar at A, where the note said the least was 14.9. That is less than the 9.0 to 9.6 bits between a call on a 64 KiB row and a compression, so its "yes" at A depends on the unit Daniel picks. If it is held to the 64-table cap or to whole calls on 64 KiB rows it is a "no", and the count is 12 / 26 / 10 / 19.
+- Row 10 no longer reaches at any of the three points.
+- Row 3's only figure past the bar (one session at the floor) is gone.
+
+The script and its output are Appendix A of `note:proofs/20261111T1620Z-report-security-numbers-audit`, synced with this section, the nine rows' cells and the size bullet. The count is 13 / 25 / 10 / 19 before JOB 2, which follows with the re-ordered miss list.
