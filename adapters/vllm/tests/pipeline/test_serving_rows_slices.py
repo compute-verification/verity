@@ -45,7 +45,7 @@ ROWS = {"LlBf16DotprodGemm_v1": (LL.LlBf16DotprodGemmWord, {"N": 3, "K": 64, "BS
         "AllGather_v1": (T2.AllGather, {"WORLD": 4, "N": 3})}
 #: each wide family's row (statics over ``ROWS``') and the widths c > 1 its slices take along its wide axis, coarse to fine
 WIDE = {"BatchedGemm_v1": ({"N": 8}, (8, 4, 2)), "LlBf16DotprodGemm_v1": ({"N": 8}, (4, 2)),
-        "CublasSplitKGemmF32Out_v1": ({"N": 4}, (2,)), "EmbeddingShard_v1": ({"H": 8}, (4, 2))}
+        "CublasSplitKGemmF32Out_v1": ({"N": 4}, (2,)), "EmbeddingShard_v1": ({"H": 8}, (4, 2)), "Gemm_v2": ({"N": 24}, (8, 4, 2))}
 #: every slice a test reads: a family, its row's statics over ``ROWS``' and the slice's width
 CASES = [(f, None, 1) for f in sorted(ROWS)] + [(f, st, c) for f, (st, cs) in sorted(WIDE.items()) for c in (1, *cs)]
 OP = "model.layers.3.mlp.gate"
@@ -139,7 +139,7 @@ def test_a_wide_family_s_row_also_holds_its_slices_c_wide_listed_after_the_slice
     """The row's unit templates are the row, its slice of one element, then its slices c wide, coarse to fine: a reader that
     takes the first of a row's units that fits takes the slice of one element where it did before.  A row that is one member
     along every other axis, at a power-of-two extent, is itself its widest slice (the ``slice`` layout, one unit), so it is not
-    listed again; a row of several members is a row."""
+    listed again; a row of several members, or of another extent (the LM head's, 24 here), is a row."""
     st, widths = WIDE[family]
     wide = SRW.WIDE_SLICES[family]
     others = [a for a in SRW.SLICES[family][0] if a != wide]
@@ -151,7 +151,8 @@ def test_a_wide_family_s_row_also_holds_its_slices_c_wide_listed_after_the_slice
         assert (t.layout, t.word, SRW.slice_width(u)) == ("slice", u, c)
     N = int(statics(family, st)[wide])
     whole = all(int(statics(family, st)[a]) == 1 for a in others)
-    assert (SRW.template(spec).layout, SRW.slice_width(spec)) == (("slice", N) if whole else ("row", 0))
+    own = whole and N & (N - 1) == 0
+    assert (SRW.template(spec).layout, SRW.slice_width(spec)) == (("slice", N) if own else ("row", 0))
     if not whole:
         one = {**st, **dict.fromkeys(others, 1)}
         row1 = descriptor_id(defn(family, st=one))
