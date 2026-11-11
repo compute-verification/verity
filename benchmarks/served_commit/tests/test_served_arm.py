@@ -15,7 +15,7 @@ from types import ModuleType, SimpleNamespace
 
 import pytest
 
-SERVED_COMMIT = Path(__file__).resolve().parents[2] / "served_commit"
+SERVED_COMMIT = Path(__file__).resolve().parents[1]
 
 
 def _module(name: str, **attrs) -> ModuleType:

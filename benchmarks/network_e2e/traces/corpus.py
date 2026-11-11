@@ -17,6 +17,13 @@ and DIR/README.md. `compare` does the same comparison across corpora that serve 
 prefill, an 8192-token budget): ``honest`` under vLLM's own scheduler, the others under `vllm_adversarial_plugin`'s hostile
 one, with its seed and prefix-cache mode. If a request's output ids moved with the hostile choices, `compare` shows it.
 
+`CUT`'s traces serve honest's server and load with the carried pool's cut at every window edge
+(`verity_vllm.pipeline.cut_plugin`, configured by ``VERITY_CUT``): at each edge every running request is preempted and
+continues in the next window, hitting its own cached blocks. Each open request is held at what the server has sent of it
+(`cut_plugin.SentFeed`, a middleware inside the tick's, writes ``raw/sent.jsonl``). `compare` against ``honest`` shows
+whether a cut moves any request's output ids, and each edge's record (``raw/cut.PID.jsonl``) holds its hold, its cut set
+and its cost.
+
 `WARDEN`'s traces serve a trace's server and load through the active warden: `warden_serve.py serve` in front of the
 server, a process beside it on its host (``warden beside the server, not on the auditor host``), and the client
 (`drive_warden`) speaking cells through the relay's shim. The relay, the client and the server each run on cores of
@@ -53,10 +60,12 @@ request by `request_seed` from its id, which is the same in every trace, as `eng
 ``add_request``. Model Runner V2 samples a sampled token's Gumbel noise from Philox keyed by that seed and the token's
 position. `MODELS`:
 
-* ``llama32_1b``: unsloth/Llama-3.2-1B in bf16, vLLM's own attention.
-* ``llama31_8b_int8``: the int8_exact linears (``--quantization verity_int8``) with vLLM's own attention. The int8 attention
-  (``attention_backend CUSTOM``) refuses a request whose query rows are neither its whole window nor one row
-  (`verity_vllm.engine.int8_ops._requests`), which is every prefix-cache hit and every later prefill chunk.
+* ``llama32_1b``: unsloth/Llama-3.2-1B in bf16, vLLM's own attention on FlashAttention 2 (`FA2`). On Hopper vLLM picks
+  FlashAttention 3, whose tile depends on the step's longest query, so a row's attention changes with the step it is in
+  even under batch invariance; FlashAttention 2's doesn't, and it is what vLLM picks below Hopper.
+* ``llama31_8b_int8``: the int8_exact linears (``--quantization verity_int8``) with vLLM's own attention on `FA2`. The
+  int8 attention (``attention_backend CUSTOM``) refuses a request whose query rows are neither its whole window nor one
+  row (`verity_vllm.engine.int8_ops._requests`), which is every prefix-cache hit and every later prefill chunk.
 * ``glm53``: GLM-5.3 (block-FP8 ``GlmMoeDsaForCausalLM``) at TP8 on an 8-GPU node, vLLM's own kernels, as the
   integration's GLM53 rows serve it (``VLLM_BATCH_INVARIANT=0``). Its rates are measured on its node, so `run` takes
   ``--rate``.
@@ -135,6 +144,11 @@ TRACES |= {name: (["--enable-chunked-prefill", "--max-num-batched-tokens", "8192
                   f"heavy's load, chunked prefill (8192-token budget), a hostile scheduler (seed {h[1]}: random "
                   f"preemptions, hold-backs, order and prefill splits; {CACHE_WHAT[h[0]]})")
            for name, h in HOSTILE.items()}
+#: cut trace -> its ``VERITY_CUT`` less the log (`verity_vllm.pipeline.cut_plugin.cut_config`): honest's server and load,
+#: every open request cut at each window edge
+CUT = {"cut-8": {"every_steps": 8}, "cut-64": {"every_steps": 64}, "cut-1s": {"every_s": 1.0}}
+TRACES |= {name: (TRACES["honest"][0], f"{TRACES['honest'][1]}, cut at every window edge ({json.dumps(c)})")
+           for name, c in CUT.items()}
 #: warden trace -> (the trace whose server and load it serves, D in buckets). The client reaches the server only through the
 #: active warden (`verity.protocols.certifier.verifier.warden`, run by `benchmarks/network_traces/warden_serve.py serve`), in
 #: cells. A late egress cell fails its connection closed and vLLM aborts the request, so D, from the warden's egress base
@@ -173,6 +187,7 @@ TICK_HOLD_MS = 5000
 #: `tick_plugin.TickFeed`, the server's side of the release headers and the watermark (the network certifier's or
 #: `StandIn`'s)
 TICK_MIDDLEWARE = "verity_vllm.pipeline.tick_plugin.TickFeed"
+CUT_MIDDLEWARE = "verity_vllm.pipeline.cut_plugin.SentFeed"
 
 
 @dataclass(frozen=True)
@@ -191,17 +206,20 @@ class Model:
         return hub / f"models--{self.repo.replace('/', '--')}" / "snapshots" / self.revision
 
 
+#: vLLM's own attention on FlashAttention 2 on every GPU, the version whose output doesn't depend on the step's shape
+FA2 = ("--attention-config", '{"flash_attn_version": 2}')
+
 MODELS = {
     # a decode step takes about 20 ms from 10 to 180 rows and whole prefills run at about 105k tokens/s; 8192 KV tokens
     # serve about 7 requests/s
     "llama32_1b": Model("unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "llama-3.2-1b",
                         "Llama-3.2-1B (G-A's LLAMA32_1B), bf16, the bi-eager engine, vLLM's own attention",
-                        ("--dtype", "bfloat16"), {},
+                        ("--dtype", "bfloat16", *FA2), {},
                         {"light": 4.0, "medium": 20.0, "heavy": 300.0, "chunked": 40.0, "smallkv": 10.0}),
     # a decode step takes about 32 ms from 5 to 50 rows and whole prefills run at about 37k tokens/s
     "llama31_8b_int8": Model("verity-int8/Llama-3.1-8B-INT8", "723d342ac443b040931242c768df342b0f6f15a7", "llama-3.1-8b-int8",
                              "Llama-3.1-8B INT8 (int8_exact linears, `--quantization verity_int8`), the bi-eager engine, "
-                             "vLLM's own attention", ("--quantization", "verity_int8"), {"VERITY_INT8_PARTS": "linears"},
+                             "vLLM's own attention", ("--quantization", "verity_int8", *FA2), {"VERITY_INT8_PARTS": "linears"},
                              {"light": 2.0, "medium": 10.0, "heavy": 100.0, "chunked": 20.0, "smallkv": 10.0}),
     "glm53": Model("zai-org/GLM-5.3", "aca966e4e02791568aa6a4ced368624b3d897f42", "glm-5.3",
                    "GLM-5.3 (the integration's GLM53, block-FP8 GlmMoeDsaForCausalLM) at TP8, eager, vLLM's own kernels "
@@ -272,15 +290,18 @@ def load_docs(c4: Path, tokenizer: Path, n: int) -> list[list[int]]:
     return [e.ids for e in tok.encode_batch(texts, add_special_tokens=False)]
 
 
-def plugin_site(site: Path, tick: bool = False) -> Path:
+def plugin_site(site: Path, tick: bool = False, cut: bool = False) -> Path:
     """A directory whose .dist-info declares `vllm_adversarial_plugin.register` and `vllm_trace_plugin.register` as vLLM
     general plugins, in that order: vLLM calls them in the file's order, so the tracer wraps the adversary's `schedule`
-    and records the step after the adversary has put back what it held. With `tick`, `tick_plugin.register` too, whose
-    gate wraps each scheduler built after them, so that the tracer sees a request when the gate adds it."""
+    and records the step after the adversary has put back what it held. With `cut`, `cut_plugin.register` between them,
+    so that the tracer records the step after the cut. With `tick`, `tick_plugin.register` too, whose gate wraps each
+    scheduler built after them, so that the tracer sees a request when the gate adds it, and adds it through the cut's
+    numbering in release order."""
     d = site / "verity_trace_corpus-0.0.dist-info"
     d.mkdir(parents=True, exist_ok=True)
     (d / "METADATA").write_text("Metadata-Version: 2.1\nName: verity-trace-corpus\nVersion: 0.0\n")
-    (d / "entry_points.txt").write_text("[vllm.general_plugins]\nverity_adversary = vllm_adversarial_plugin:register\n"
+    (d / "entry_points.txt").write_text("[vllm.general_plugins]\nverity_adversary = vllm_adversarial_plugin:register\n" +
+                                        ("verity_cut = verity_vllm.pipeline.cut_plugin:register\n" if cut else "") +
                                         "verity_trace = vllm_trace_plugin:register\n" +
                                         ("verity_tick = verity_vllm.pipeline.tick_plugin:register\n" if tick else ""))
     return site
@@ -720,7 +741,8 @@ def check_warden(d: Path) -> int:
 
 def rate_of(model: Model, name: str, rate: float | None) -> float | None:
     """A trace's Poisson rate: `rate` where given, else the model's for the trace's load (None if it has none)."""
-    return rate if rate is not None else model.rates.get("heavy" if name in HOSTILE else WARDEN.get(name, (name,))[0])
+    return rate if rate is not None else model.rates.get("heavy" if name in HOSTILE or name in CUT
+                                                         else WARDEN.get(name, (name,))[0])
 
 
 def tick_args(trace: str | None, given_ms: str | None) -> dict:
@@ -773,6 +795,9 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
     tick = getattr(args, "tick", None)
     hostile = HOSTILE.get(name)
     adversary = {"VERITY_ADV_CACHE": hostile[0], "VERITY_ADV_SEED": str(hostile[1])} if hostile else {}
+    if (cut := CUT.get(name)) is not None:
+        raw = out / name / "raw"
+        adversary["VERITY_CUT"] = json.dumps({**cut, "log": str(raw), "feed": str(raw / "sent.jsonl")})
     if base == "smallkv":
         server_args = [*server_args, "--kv-cache-memory-bytes", str(KV_SMALL_TOKENS * kv_bytes_per_token(checkpoint))]
     d = out / name
@@ -781,6 +806,7 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
     argv = [sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", str(checkpoint), "--served-model-name",
             model.served, "--host", "127.0.0.1", "--port", str(port), *model.args, *BASE_ARGS,
             "--async-scheduling" if async_scheduling else "--no-async-scheduling", *server_args,
+            *(["--middleware", CUT_MIDDLEWARE] if cut is not None else []),
             *(["--middleware", TICK_MIDDLEWARE] if tick else [])]
     engine_env = {**ENGINE_ENV, **model.env}
     env = dict(os.environ, **engine_env, **adversary, VERITY_TRACE_DIR=str(d / "raw"),
@@ -794,7 +820,7 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
     ids = [request_id(r["i"]) for r in requests]
     cpus = cpu_plan(list(os.sched_getaffinity(0))) if delay is not None else None
     meta = {"trace": name, "rate": rate, "why": why, "server_argv": argv[1:], "engine_env": engine_env,
-            "adversary": {"cache": hostile[0], "seed": hostile[1]} if hostile else None,
+            "adversary": {"cache": hostile[0], "seed": hostile[1]} if hostile else None, "cut": cut,
             "requests": len(requests), "arrivals_span_s": round(arr[-1], 3)}
     if delay is not None:
         meta["cpus"] = cpus or f"not pinned: the job has {len(os.sched_getaffinity(0))} cores"
@@ -924,7 +950,8 @@ def run(args: argparse.Namespace) -> int:
         (out / "meta.json").write_text(json.dumps(meta, indent=1))
         try:
             meta["traces"][name] = run_trace(name, out, model, checkpoint, requests,
-                                             plugin_site(out / ".site", tick=args.tick is not None), args)
+                                             plugin_site(out / ".site", tick=args.tick is not None,
+                                                         cut=any(n in CUT for n in traces)), args)
         except Exception as e:  # noqa: BLE001 -- the next trace still runs
             meta["traces"][name] = {"error": f"{type(e).__name__}: {e}"}
             print(f"[corpus] {name}: FAILED {e}", flush=True)
