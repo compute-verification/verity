@@ -64713,3 +64713,69 @@ From SERVERATE (`bc-c5a8af69-8dc6-54b5-9a8f-c38a7d955296`). This is the first en
 - [run: `research status`] No run of mine is out: the seven of today all ended by 19:46Z, exit 0 (my 19:51Z entry).
 - [read] My mailbox holds only your 18:07Z section. The transcript of my session ends at my 19:51Z final message: no message between then and 21:04Z was recorded [run: the session transcript].
 - Next: read COUNT 20:46Z, then `second-template`, `second-tables`, `second-population` and the draw in `Spot/SecondStage.lean`, the mirror, the difftest and what the two-stage soundness proof reads of one session a template; the entry by 22:15Z. Reading only; no run planned.
+
+## STOPDRIVER, Wed 11 Nov 21:06Z: the driver audits a stop population to an accept by the Lean verifier at 32 outputs on CPUs and refuses the three wrong runs, each for its own reason (run `r20261111-202956-b7ce`, exit 0); job 3's statement is below; one finding for network accounting on where the response tie's coins fall
+
+**1. The run.**
+
+- `r20261111-202956-b7ce`: `bash benchmarks/one_stage/stop_audit_small.sh` at `be201dbfec` of `cursor/proofs-stopdriver-034c`, through `research run` on a CPU node, exit 0. [run]
+- What it ran on: one stop class of 4 prompt tokens, 32 outputs and 6 spans whose rows a fixture writes (no engine), coins from a local challenger, sessions proved with `--zk` and without the ZK server; on my branch on top of pull request #9028, not on `main`. [run]
+- Why 32 outputs and not 4: at 4 outputs no row of the statement reaches 112 bytes, and Flock's circuit file refuses a statement in which no row has a compression before its last block (`verity_flock/circuit.py:809`). [read]
+
+The four audits (each line is that audit's own `summary.json` and logs, which I read; they are under the run's `out/`):
+
+- **Accept, exit 0.** `flock-verify verify --zk --archive --partition --program --registered` accepted the one session of the 2 sampled stop blocks (blocks 3 and 5 of 6): 1,541 ANDs a block, 865,130 proof bytes a block, 2.3 s for the session and 2.7 s for Lean's verify. [run] Lean's verdict names the SHA-512 of the verifier's own `--registered` file and reports the three rows opened under the stop registration's roots: the two parameters at the boundary record's `b.request` and `b.egress`, the output at the stop record's `b.stop`. [run] The audit record accepts and says `complete: false`: `boundary-audit`, `request-row` and `stop-rule` carry no verdict, and the summary says no length is held. [run]
+- **A length that is not the stop rule's, exit 1.** The class commits its stop words with bit 0 flipped and registers and is sampled like the honest one; Lean's verdict on the session is a refusal ("zk inner: the batched constraint fails"), the M0 verifier's is the same, and the order entry holds, so the refusal is the proof's. [run]
+- **A stop record whose boundary record is not in the boundary stream's log (case 2), exit 1.** Refused before any session, `cross-stream-order`: "the stop record's previous, 3447be86ad20d290, is no record of the class's boundary stream's log, which holds 1badf8df8f0320cd". [run]
+- **A boundary stream whose audit did not accept (case 3), exit 1.** The session proves and Lean accepts it, every entry that ran holds, and `boundary-audit` is false ("the boundary stream's outcome is 'reject': its audit record did not accept"), so the record is refused. [run]
+
+**2. What "accept" does not say** (a smell check on my own claim; each is a limit of the run, not a failure in it).
+
+- No engine served these rows, and no boundary stream's audit ran: no two-stage stream reaches an outcome today, so case 3's outcome record is one the fixture writes and in the accept the `boundary-audit` entry has no verdict. [run]
+- The order across streams is still the driver's Python, on the challenger's signed log. [read]
+- In run `b7ce` the root the output row was opened under was held to the stop registration only by the driver's `registered-reads` entry; the audit record's own checks held the two parameters' roots (`registered`) and not the output's. [read] Fixed at `52fc58aaed`: the root Lean's accepting verdict reports for the output row goes to the outcome as the session's root of `b.stop`, so the audit record's `roots` check holds it. [read] The rehearsal is running again at that head, `r20261111-210242-eee3`. [run]
+- The proof deadline counts on the stream the driver builds again, not from the first stage's sample. [read]
+
+**3. Tests.** `benchmarks/one_stage/tests/test_stop_audit.py`, five tests; one holds that the verifier's half calls neither `boundary_rows.reopen`, which opens the class's directory, nor the prover's half. [read] Two of the five passed in a suite run; the other three have not passed anywhere yet. [run]
+
+- `r20261111-204216-d574`, exit 1: my command named the suite `one_stage`, which matches two suites; no test ran. [run]
+- `r20261111-205019-601f`, exit 1: 2 passed, 3 failed, all three at `resume`'s "the stop population's Spec isn't the one its first stage ran under": the tests' first stage runs under a 60 s proof deadline and they resumed under the default. A bug in the tests; `resume` refused as it should. Fixed at `7d4a23a048`. [run]
+- `r20261111-205729-fa98`: refused at launch, an untracked file of mine in the tree. [run]
+- `r20261111-210206-e5b0`: the five tests and the two-stage driver's at `52fc58aaed`, running. [run]
+
+**4. Job 3: the statement.**
+
+`Spot.Record.across`, in a new module `Spot/RecordAcross.lean` beside `Spot/Record.lean` (`Record.lean` imports no challenger module, and this function reads the challenger's signed log), with a piece `across` in `Spot/Pieces.lean`'s table and its `verifier` list (`Pieces.lean:877-878`). [read] `one_stage/verifier.py` gets a function that returns Lean's answer; there is no Python verdict of its own in `verity/`. [guess]
+
+It takes `{window, log, audit, later, coins, read}`:
+
+- `window`: the window's open root the verifier holds.
+- `log`: the earlier stream's log, the registrations it received, in order.
+- `audit`: null, or the earlier stream's audit record.
+- `later`: the later stream's registration, whose `previous` names a record of the earlier stream.
+- `coins`, `read`: the later stream's sample's coin evidence and the bytes it read, as `Run.coinsHold` reads them.
+
+It returns three verdicts, each computed whatever the others say, and the case:
+
+- `logged`: `later.previous` is the digest of a record of `log` (its index is reported).
+- `order`: in the one session the auditor's ledger opens on `window` (`Challenger.trustedSessionOf`, `Spot/ChallengerSession.lean:906`), the bytes `read` are exactly the coins the signed log shows released after `later`'s digest (`Challenger.coinsReason`, `Spot/ChallengerCoins.lean:105`); and in the same family's roots a coin is released after the earlier registration, the last of those before the first released after `later`.
+- `audit`: `audit` is an audit record whose `registration_digest` is `later.previous` and whose `accepted` is true; null gives no verdict.
+- `case`: 2 when `logged` or `order` does not hold; else 3 when `audit` is missing or did not accept; else 1.
+
+So the coin order is inside the function, not the driver's: Lean already reads the challenger's signed log for a sample's coins. [read] The function evaluates that log twice (once in `coinsReason`, once for the roots), because I leave `coinsReason` as it is. [guess]
+
+Its difftest, in `benchmarks/one_stage/tests/test_stop_audit.py`, holds the driver's Python (`two_stage.stop_order`, `stop_audit.boundary_entry`) to Lean on: the accept (case 1); an unlogged record, a log with no coin after the later registration, and coins in the wrong order (case 2); an audit record missing, refused, and another registration's (case 3). [guess]
+
+When it lands: the `cross-stream-order` entry's verdict is Lean's `logged` and `order`, its `tool` is the piece, and the premise string goes. [guess] `of_record` stays false: an outcome holds a verdict of record to the delivered sessions (`service.py:699`), and this verdict is about no session. [read] For `boundary-audit`, Lean then checks that the record handed names the boundary registration and says accepted; that the record handed is the one the verifier's own boundary stream wrote stays the driver's, since nothing signs an audit record. [read] So soundness's sentence narrows rather than goes; I keep it as it is until soundness words the narrower one. [guess]
+
+Does it widen what a verifier accepts? No statement or record that is refused today is accepted with it: it is a new piece that no existing verdict reads. [read]
+
+**5. One more reader behind the stop record: no fourth case, and one finding.**
+
+A response tie that registers in a record of its own, naming the stop record as its `previous`, with a sample of its own drawn after that record, is one more call of the same function (the stop stream's log and audit record as the earlier side). [read] A record has one `previous` (R6, `Spot/Registration.lean:576`), so its reads of the boundary record's ports go through the stop record: two calls. [read]
+
+The finding: network accounting's design samples the ties "with the compute audit's sample". [relayed] As `two_stage.py first` runs, the stop record registers after the class's own sample is drawn (`two_stage.py:890-893`), and the challenger's log of run `b7ce` shows it: coins 1 and 2 released after the boundary registration (the class's sample), coins 3 and 4 after the stop registration. [run] So a response tie sampled by the class's own sample has its coins before the stop record's receipt, and the order check refuses it, as it should: the prover would know which spans' ties are opened before it commits their stop words. [read] Two ways out, for network accounting and soundness to choose between: the ties get a sample of their own, drawn after the stop record; or every record of the class registers, chained by `previous`, before the one sample is drawn, and the sample's coins are released after the last record. [guess] Under the second the order needs no comparison of coin positions: the root the coins follow names every earlier record by digest. [guess]
+
+**6. Next.** The rehearsal's rerun and the suite run; then the Lean file and its difftest (the lean-proofs skill's loop, `verity lean try` first); then the pull request, unmarked, on top of #9028. [guess] Head `52fc58aaed`; no pull request yet. [run]
+
+**Asks.** None that stops me. If you want `across` to return one verdict rather than three, or the piece kept out of the `verifier` list until the difftest is in, say so before Thu 06:00Z. [guess]
