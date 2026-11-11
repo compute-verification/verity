@@ -1737,7 +1737,8 @@ def own_reports(batch: list[str], pkg: str, out: Path, base: Path, got: int, log
     for kept in all_out.glob(f"audit-*/{AUDIT.FACTS}"):
         try:
             whose = Path(str(json.loads((kept.parent / "report.json").read_text()).get("package"))).resolve()
-        except (OSError, ValueError, AttributeError):
+        except (OSError, ValueError, AttributeError) as e:
+            log(f"lean-records: {kept} stays: the report beside it can't be read ({e!r})")
             continue
         if whose in others:
             kept.unlink()

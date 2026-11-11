@@ -483,6 +483,33 @@ def test_each_package_one_check_py_audits_has_its_own_verdict(proved, tmp_path, 
     assert any(s == f"lean-records: {fails}: {LC.FAILED} (of that check.py, its own records exit 1)" for s in said)
 
 
+def test_of_the_facts_documents_one_check_py_keeps_only_pkgs_stays(proved, tmp_path, monkeypatch):
+    """check.py keeps the facts document of each package it is named (`--facts named`), and a records run keeps PKG's alone:
+    its requirer's is dropped, as when a check.py of its own kept none, and one beside no report that can be read stays
+    and is said."""
+    fake, kept = LC.subprocess.run, []
+
+    def run(argv, **kw):
+        got = fake(argv, **kw)
+        if argv[1:2] == [str(LC.AUDIT_PY)]:
+            kept.append(argv[argv.index("--facts") + 1])
+            out = Path(argv[argv.index("--out") + 1])
+            for at in map(Path, named(argv)):
+                (out / f"audit-{at.name}").mkdir(parents=True, exist_ok=True)
+                (out / f"audit-{at.name}" / LC.AUDIT.FACTS).write_bytes(b"facts")
+                (out / f"audit-{at.name}" / "report.json").write_text(json.dumps({"package": str(at.resolve())}))
+            (out / "audit-torn").mkdir()
+            (out / "audit-torn" / LC.AUDIT.FACTS).write_bytes(b"facts")
+        return got
+
+    monkeypatch.setattr(LC.subprocess, "run", run)
+    said, out = [], tmp_path / "out"
+    assert LC.audit_records(S, tmp_path / "deps", out=out, log=said.append) == 0
+    assert kept == ["named"]
+    assert sorted(f.parent.name for f in out.glob(f"audit-*/{LC.AUDIT.FACTS}")) == ["audit-s", "audit-torn"]
+    assert sum("audit-torn" in s and "stays" in s for s in said) == 1
+
+
 def rewritten(monkeypatch, change):
     """The pair's check.py, its `audit.json` and exit status as ``change`` (the document, the status) returns them."""
     fake = LC.subprocess.run
