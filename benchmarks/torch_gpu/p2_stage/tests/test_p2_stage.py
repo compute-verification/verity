@@ -466,7 +466,7 @@ def test_layer_driver_reads_an_encoded_store_without_the_stream(tmp_path: Path,
     padding control's last block from the generator. Refused: an encode step, another commitment, a store of other
     weights, an unfinished segment; a tensor whose digest differs fails the run."""
     import layer
-    from verity.core.protocols.pous import setup as P
+    from verity.protocols.pous.verifier import setup as P
 
     monkeypatch.setattr(S.gpu, "Kernels", XorKernels)
     monkeypatch.setattr(layer.gpu, "Kernels", XorKernels)
