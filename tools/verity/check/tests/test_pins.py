@@ -216,7 +216,7 @@ def lake_repo(tmp_path, monkeypatch):
 def _side(root: Path, base: str, name: str, before: bool, top: bool = True) -> str:
     """A branch off ``base`` whose `base` package requires a new package ``name`` by path (first in its lakefile, or last), with
     base's manifest regenerated there, and top's and the pin unless not ``top`` (a side that regenerates only its own
-    package's manifest, which leaves Security/Proofs' stale)."""
+    package's manifest, which leaves security/Proofs' stale)."""
     subprocess.run(["git", "checkout", "-q", "-b", name, base], cwd=root, check=True, env=ENV)
     (root / name).mkdir()
     (root / name / "lakefile.toml").write_text(f'name = "{name}"\n')
@@ -260,7 +260,7 @@ def test_a_conflict_in_a_file_merged_doesn_t_generate_exits_3(lake_repo):
 
 
 def test_a_manifest_that_fetches_the_same_packages_in_another_order_keeps_its_bundle_under_its_new_key(lake_repo, monkeypatch):
-    """Security/Proofs on 0fcc's fix: `lake update` reordered the fetched entries, so the dependency key moved and the bundle,
+    """security/Proofs on 0fcc's fix: `lake update` reordered the fetched entries, so the dependency key moved and the bundle,
     the same packages at the same revisions, was pinned under it. A manifest that fetches anything else is only named."""
     root, base = lake_repo
     git_entry = {"type": "git", "name": "m2", "url": "u", "rev": "b" * 40}

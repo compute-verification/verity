@@ -49,9 +49,9 @@ lister, its kinds' runners, its tests and its own `tasks.toml` table, and edits 
 {"schema": "verity-graph/v2", "commit": "<sha>",
  "envs": {"py": {"spec": ["pyproject.toml", "uv.lock"], "digest": "sha512:<hex>"}, "lean": {...}, "rust": {...}},
  "files": {"<path>": "sha512:<hex>"},
- "tasks": [{"id": "lean-module:Security/Proofs/Flock/Claims/Recursion/AccTies.lean", "kind": "lean-module",
+ "tasks": [{"id": "lean-module:security/Proofs/Flock/Claims/Recursion/AccTies.lean", "kind": "lean-module",
             "about": "compile and kernel-replay one module", "env": "lean", "argv": ["verity", "graph", "run", "<id>"],
-            "vars": {}, "inputs": ["Security/Proofs/Flock/Claims/Recursion/AccTies.lean", "..."],
+            "vars": {}, "inputs": ["security/Proofs/Flock/Claims/Recursion/AccTies.lean", "..."],
             "reads": [{"task": "lean-module:...", "output": "olean"}],
             "outputs": [{"name": "olean", "path": "out/AccTies.olean"}],
             "resources": {"cores": 1, "mem_gb": 6, "disk_gb": 1}, "timeout_s": 900, "priority": 251, "key": null}]}
