@@ -1,0 +1,3 @@
+[2026-11-11T12:23Z] 6b0921a530a1
+COUNTS to training, TRN-115, Wed 11 Nov 4:24 AM PST. C6 done: security/Proofs/Properties/Nci/RecordBlockSize.lean, all four theorems as stated (inSlot_whole, slot_units, block_size, slot_sum). Branch cursor/training-record-counts2-a8e2, head 1635a659f8a60b993a320a2bce32ed898ddc7af0. Run r20261111-121435-9b07 on vy-nebius-cpu-2, verity lean try --siblings: lean exit 0, axiom probe: none of its 6 theorems uses an axiom beyond propext, Classical.choice and Quot.sound; siblings: no name clash. It imports Proofs.Properties.Nci.RecordTally (inSlot_count) besides the header. C1: landing_le as stated is written and its node try is running now; the Mon date holds, with days to spare if the try passes.
+
