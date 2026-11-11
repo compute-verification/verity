@@ -1,7 +1,5 @@
-"""verity_vllm.pipeline.telemetry.admission — synthetic-interval unit tests of the sweep, the model and the plan document."""
+"""verity_vllm.pipeline.telemetry.admission — synthetic-interval unit tests of the sweep and the model."""
 from __future__ import annotations
-
-import json
 
 from verity_vllm.pipeline.telemetry import admission as adm
 
@@ -153,26 +151,3 @@ def test_under_fitted_capture_models_are_flagged_not_silently_admitted():
     assert llama["lower_bound_terms"] == []
     assert mistral["lower_bound_terms"] == ["match.capture.hidden_values", "match.capture.instance_records", "match.capture.token_values"]
     assert any("#60" in t["basis"] for t in mistral["terms"] if t["name"].startswith("match.capture."))
-
-
-# ---- the plan document ---------------------------------------------------------------------------------------------
-def _workload(row: str) -> dict:
-    return {"sweep": {"row_id": row, "batch": 8, "max_input": 1024, "max_output": 128}, "requests": [{"prompt_len": 400, "max_tokens": 64}] * 8}
-
-
-def test_plan_row_writes_the_document_and_names_what_a_limit_would_refuse(tmp_path):
-    wl = _workload("mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager")
-    out = tmp_path / "admission.json"
-    doc = adm.plan_row(adm.row_config_from_workload(wl, host_limit_bytes=188_000_000_000), str(out))
-    assert json.loads(out.read_text())["line"] == doc["line"]
-    assert doc["schema"] == adm.ADMISSION_SCHEMA and doc["advisory"] is True and doc["model"] == "mistral-7b"
-    assert doc["config"] == {**doc["config"], "requests": 8, "prompt_tokens": 3200, "decode_rows": 512, "prefill_rows": 3200, "snapshot_steps": "0,1"}
-    assert {s: d["verdict"] for s, d in doc["stages"].items()} == {"build": "ADMIT", "match": "LOWER_BOUND", "commit": "REFUSE"}
-    assert doc["would_refuse"] == ["commit"] and doc["lower_bound"] == ["match"] and doc["stages"]["commit"]["decision"]["short_by_bytes"] > 0
-    assert doc["line"].startswith("ADMISSION advisory WARN would-refuse commit mistral-7b limit 179290 MiB: ") and "commit=REFUSE" in doc["line"]
-    # only the stages the row runs
-    cfg = adm.row_config_from_workload(wl, host_limit_bytes=188_000_000_000, stages="commit")
-    assert list(adm.plan_row(cfg, None)["stages"]) == ["commit"]
-    # a model with no calibration: the dense default, named in the line; no limit, no refusal
-    line = adm.plan_row(adm.row_config_from_workload(_workload("granite-3b__bf16__h100__tp1__b2__i64__o8__mixed__t1__eager")), None)["line"]
-    assert "no calibration for model 'granite-3b'" in line and "no cgroup limit read" in line and "WARN" not in line

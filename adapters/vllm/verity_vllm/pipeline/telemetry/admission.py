@@ -18,7 +18,6 @@ Commit's refusal reads (`pipeline.admission_bound.committer_resident`); `peak_ov
 """
 from __future__ import annotations
 
-import datetime as _dt
 import json
 import re
 from collections.abc import Iterable
@@ -414,11 +413,8 @@ def predict(cfg: RowScale) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# A row's plan-time config from its workload, and the plan as one document.
+# A row's plan-time config from its workload.
 # ---------------------------------------------------------------------------------------------------------------------
-ADMISSION_SCHEMA = "verity-sweep/admission/v1"
-
-
 def model_key_for_row(row_id: str) -> str:
     """`<model>__<dtype>__<device>__...` -> MODELS key (`-padded` variants share the base model's coefficients)."""
     key = row_tokens(row_id)[0]
@@ -456,47 +452,3 @@ def row_config_from_workload(workload_path: str | dict[str, Any], row_id: str | 
     cfg.stages = stages
     cfg.hf_model = w.get("model")
     return cfg
-
-
-def plan_row(cfg: RowScale, out_path: str | None, advisory: bool = True) -> dict[str, Any]:
-    """predict() for one sweep row -> the plan document, written to `out_path` when given, with its one-line summary (`line`).
-
-    ADVISORY: the document records per stage reserved_bytes, the named terms, verdict (ADMIT / REFUSE / LOWER_BOUND /
-    NO_LIMIT) and short_by; `would_refuse` lists the stages a fail-closed runner would have stopped.  Nothing here stops a run.
-    """
-    pred = predict(cfg)
-    stages = [s for s in ("build", "match", "commit") if s in pred and s in (getattr(cfg, "stages", "build,match,commit") or "").split(",")]
-    doc: dict[str, Any] = {
-        "schema": ADMISSION_SCHEMA, "advisory": advisory, "t_utc": _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),  # noqa: UP017, RUF100
-        "model": cfg.model, "hf_model": getattr(cfg, "hf_model", None), "host_limit_bytes": cfg.host_limit_bytes,
-        "config": {"requests": cfg.requests, "prompt_tokens": cfg.prompt_tokens, "decode_rows": cfg.decode_rows, "steps": cfg.steps, "max_context": cfg.max_context,
-                   "pairs": cfg.pairs, "replay_workers": cfg.workers(), "prefill_rows": getattr(cfg, "prefill_rows", None),
-                   "snapshot_steps": getattr(cfg, "snapshot_steps", None), "snapshot_max_bytes": getattr(cfg, "snapshot_max_bytes", None),
-                   "largest_vu_in_parent": cfg.largest_vu_in_parent, "n_instances_est": cfg.instances(), "largest_tensor_bytes_est": cfg.largest_tensor(),
-                   # the host-working-set mechanisms the plan models (gc.freeze default-on in the code; bounded staging by flags)
-                   "fork_gc_freeze": cfg.fork_gc_freeze, "retain": cfg.retain, "bounded_staging": cfg.bounded_staging, "retain_exclude": sorted(cfg.retain_exclude)},
-        "notes": list(cfg.notes), "stages": {}, "would_refuse": [], "lower_bound": [],
-    }
-    for s in stages:
-        p = pred[s]
-        doc["stages"][s] = {"reserved_bytes": p["reserved_bytes"], "reserved_mib": p["reserved_mib"], "peak_point": p["peak_point"], "verdict": p["verdict"],
-                            "decision": p["decision"], "lower_bound_terms": p["lower_bound_terms"], "live_at_peak_mib": p["live_at_peak"], "margin_mib": p["margin"],
-                            "device_bytes": p["device_bytes"], "terms": p["terms"]}
-        if s == "commit":
-            doc["stages"][s].update({k: p[k] for k in ("pinned_pool", "fork_gc_freeze", "parent_c2_heap_mib", "largest_tensor_mib", "replay_workers_requested",
-                                                       "replay_workers_admissible", "replay_workers_note") if k in p})
-        if p["verdict"] == "REFUSE":
-            doc["would_refuse"].append(s)
-        elif p["verdict"] == "LOWER_BOUND":
-            doc["lower_bound"].append(s)
-    parts = []
-    for s in stages:
-        d = doc["stages"][s]
-        tail = f"(short {d['decision'].get('short_by_mib')} MiB)" if d["verdict"] == "REFUSE" else (f"({','.join(d['lower_bound_terms'])})" if d["verdict"] == "LOWER_BOUND" else "")
-        parts.append(f"{s}={d['verdict']} {d['reserved_mib']}MiB{tail}")
-    lim = f"limit {cfg.host_limit_bytes // MiB} MiB" if cfg.host_limit_bytes else "no cgroup limit read"
-    flag = ("WARN would-refuse " + ",".join(doc["would_refuse"]) + " ") if doc["would_refuse"] else ("NOTE lower-bound " + ",".join(doc["lower_bound"]) + " " if doc["lower_bound"] else "")
-    doc["line"] = f"ADMISSION advisory {flag}{cfg.model} {lim}: " + "; ".join(parts) + (f" [{'; '.join(cfg.notes)}]" if cfg.notes else "")
-    if out_path:
-        Path(out_path).write_text(json.dumps(doc, indent=1, default=str) + "\n")
-    return doc
