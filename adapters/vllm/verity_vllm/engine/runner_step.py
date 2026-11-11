@@ -73,7 +73,7 @@ class Part:
         return None
 
     def after_forward(self, step: Step) -> None:
-        """After vLLM's ``execute_model`` returned (``step.forward``) and every ``around_forward`` was left."""
+        """After vLLM's ``execute_model`` returned (``step.forwarded``) and every ``around_forward`` was left."""
 
     def around_sample(self, step: Step) -> AbstractContextManager[None] | None:
         """The context vLLM's ``sample`` runs in."""
@@ -93,7 +93,7 @@ class Step:
     #: the parts that were on when ``execute_model`` began, in the order they run
     parts: tuple[Part, ...]
     #: what ``execute_model`` returned; set before ``after_forward``
-    forward: Any = None
+    forwarded: Any = None
     #: ``sample``'s three arguments; set before ``around_sample``
     hidden_states: Any = None
     input_batch: Any = None
@@ -138,10 +138,10 @@ class _Wraps:
             step = self.step = Step(self.runner, scheduler_output, self.on)
             for part in self._each(step):
                 part.before_forward(step)
-            step.forward = self._inside(step, "around_forward", lambda: vllm(scheduler_output, *a, **kw))
+            step.forwarded = self._inside(step, "around_forward", lambda: vllm(scheduler_output, *a, **kw))
             for part in self._each(step, last_first=True):
                 part.after_forward(step)
-            return step.forward
+            return step.forwarded
 
         return execute_model
 

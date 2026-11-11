@@ -115,10 +115,10 @@ def test_a_step_carries_the_calls_arguments_and_results() -> None:
         rank = Rank.COMMIT
 
         def before_forward(self, step: Step) -> None:
-            seen.append(("before_forward", step.runner, step.scheduler_output, step.forward))
+            seen.append(("before_forward", step.runner, step.scheduler_output, step.forwarded))
 
         def after_forward(self, step: Step) -> None:
-            seen.append(("after_forward", step.forward, step.input_batch))
+            seen.append(("after_forward", step.forwarded, step.input_batch))
 
         def around_sample(self, step: Step) -> None:
             seen.append(("around_sample", step.hidden_states, step.input_batch, step.grammar_output, step.sampled))
@@ -169,7 +169,7 @@ def test_no_after_runs_when_vllms_call_raises_and_the_step_stays_open() -> None:
     assert log == ["admit before_forward", "pass before_forward", "admit enter forward", "pass enter forward", "vllm execute_model",
                    "pass leave forward", "admit leave forward"]
     failed, = outer.steps
-    assert failed.forward is None
+    assert failed.forwarded is None
     del log[:]
     runner.fails = "sample"
     with pytest.raises(OSError, match="sample failed"):
