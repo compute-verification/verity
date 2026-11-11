@@ -18,6 +18,13 @@ RUNTIME_TREE_SCHEMA = "verity-vllm/runtime-tree/v1"
 #: write
 MANIFEST_VERIFY_SCHEMA = "verity-sweep/manifest-verify/v1"
 
+# --- the acquisition (`verity_vllm.acquire`)
+#: a committer's coverage declaration (`acquire.committer_api.DECLARATION_SCHEMA`), which `declaration` writes
+COVERAGE_DECLARATION_SCHEMA = "verity/commit-integ/coverage-declaration/v1"
+#: the record of `verity-vllm gate call-boundaries` (`acquire.gate.CALL_BOUNDARIES_SCHEMA`), which `call_boundaries_of`
+#: writes
+CALL_BOUNDARIES_GATE_SCHEMA = "verity-vllm/call-boundaries-gate/v1"
+
 # --- the Match (`verity_vllm.check.match`)
 #: the global workload Program's interface as the Match reads it (`check.match.declaration.GP_SCHEMA`)
 GLOBAL_PROGRAM_SCHEMA = "cb-a/global-program/v1"
@@ -40,7 +47,7 @@ SAMPLED_REPLAY_SCHEMA = "verity-sweep/sampled-replay/v1"
 #: the MoE planes' alias check, which `check.replay.population.moe_plane_alias_check` writes
 MOE_PLANE_ALIAS_CHECK_SCHEMA = "verity-sweep/moe-plane-alias-check/v1"
 #: the PoUW circuit's replay, which `check.replay.pouw_circuit.replay` writes
-POUW_NCP_V2_REPLAY_SCHEMA = "verity-vllm/pouw-ncp-v2-replay/v3"
+POUW_CIRCUIT_REPLAY_SCHEMA = "verity-vllm/pouw-ncp-v2-replay/v3"
 #: the boundary linkage's record (`check.replay.linkage.LINKAGE_SCHEMA`); `pipeline.c2_replay`, `pipeline.replay_bundle`
 #: and `pipeline.tp.rank_replay` write it for a linkage that did not run
 BOUNDARY_LINKAGE_SCHEMA = "verity-sweep/boundary-linkage/v1"
