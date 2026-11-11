@@ -47,3 +47,14 @@ def _mask_calls_roots() -> list[Any]:
 
     return [bind(X.DsaTopKMaskBlockV2, N=8, AT=0, TOPK=4), bind(X.DsaTopKMaskBlockV2, N=6, AT=8, TOPK=4),
             bind(X.DsaTopKMaskWholeV2, N=14, TOPK=4), bind(X.DsaTopKMaskBlockV2, N=X.BLOCK, AT=X.BLOCK, TOPK=2048)]
+
+
+def _pick_calls_roots() -> list[Any]:
+    """The picks as Calls (`DsaTopKDigitPick_v2`), at the `_v1` picks' bindings: rounds 0, 1 and 3 over two blocks' counts
+    (reaching each of its pieces), and each round's over 8 blocks' counts at TOPK 2,048, as the cut serves them, over
+    `targets.MAX_GATES` and each held to its digest pin."""
+    from verity.circuits.defs import bind
+    from verity.definitions.registry import dsa_topk_mask_cut as X
+
+    return [*(bind(X.DsaTopKDigitPickV2, M=2, K=k, TOPK=4) for k in (0, 1, 3)),
+            *(bind(X.DsaTopKDigitPickV2, M=8, K=k, TOPK=2048) for k in range(X.ROUNDS))]

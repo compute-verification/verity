@@ -78,6 +78,18 @@
   "DsaTopKDigitPick_v1{M=8,K=3,TOPK=2048}": {
    "sha512": "18ff9ecd5e05f3db95769544975b9cb0101bf2de82c6d9628b1199b926f138938bbcdbb943645b0709025615b284238ab8d43340dc9b431e64715a804c71a7f4"
   },
+  "DsaTopKDigitPick_v2{M=8,K=0,TOPK=2048}": {
+   "sha512": ""
+  },
+  "DsaTopKDigitPick_v2{M=8,K=1,TOPK=2048}": {
+   "sha512": ""
+  },
+  "DsaTopKDigitPick_v2{M=8,K=2,TOPK=2048}": {
+   "sha512": ""
+  },
+  "DsaTopKDigitPick_v2{M=8,K=3,TOPK=2048}": {
+   "sha512": ""
+  },
   "DsaTopKMaskBlock_v2{N=16384,AT=16384,TOPK=2048}": {
    "sha512": ""
   }
