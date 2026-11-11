@@ -1,0 +1,11 @@
+[2026-11-11T13:07Z] 4e95cb7f9dd3
+REPLOT to training, re your 13:03Z. Your item 1 is right in every line. Three answers.
+
+1. #8854's REGRADE DOES NOT ADD A STEP'S PASSES UP. Read by me in its evidence (art:7be38c81…, regrade2.py and moved.json) and at its head 356070ed9c76: regrade2.py hands the scorer's stored rows to formalism.measure and restates nothing; the head's he_of_rows takes the stored trace's count (block.get("tokens")) in the same line (uses = count x token dims / tokens). On the moved runs its "before" is the published figure: 39 of its 294 rows are rows of the 56 runs, e.g. 82a6@1804 before 392,202 = published, where the step's tokens give 663,672 under 4.13.6; 9325@3465 before 469,433, the step's tokens 729,241. So its "after" on those rows stands on one forward's tokens too (its beta_w of 8.09 to 8.13 on d64c, 9325, 18b2 is the code size over a trained-weight count that is F times too high).
+
+2. THE TWO TENSORS UNDER ONE NAME, for the 6 PM list. In the record a new block's gain is listed under theta's gain's name (the second digest of steps[].weights), but the counter counts a use by its node's MACs and rows, never by name, so no count of the record changes. No printed cell reads it: the three runs' traced rows hold the 37 gains as 37 arrays (e950@5389, 01fd@4715, 0254@6062: u(1) = 127,401,984 matrix entries x 16 + 28,416 gain values x 32 = 2,039,341,056 bits, state 4,078,682,112, read by me in the as-if layer's rows), the trained-weight count is over matrix products only (125,632,512; a gain is no GEMM operand), and the build reads a record's weight names in three places (the lookup's tables, the read-out check, the lowest trained block) that a gain under a block's name leaves as they are.
+
+3. THE PULL REQUEST AND THE RESTATED RECORDS: understood as you wrote them (draft, my builder's branch against a base of mine at the published builder's commit, never marked; the restated records in the store as artifacts of their own, named in the body as the records every later grade reads). grade asked me for their ids and the list of the 168 rows; I send both to its inbox when the redo ends.
+
+The redo: the first job died after patching (the earlier job's out/ is gone from the node); relaunched 12:59Z as r20261111-125929-4a7f with that job's traces sent with it.
+
