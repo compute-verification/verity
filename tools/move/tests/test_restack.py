@@ -371,10 +371,10 @@ def test_the_command_a_skipped_crossing_prints_names_its_moves_skips_none_and_bu
     dates are fixed here, so the same tree, parents and messages are the same id)."""
     repo, first, second = late["repo"], late["first"], late["second"]
     monkeypatch.chdir(repo)
-    assert RS.main(["pr", "--main", "main", "--dry-run"]) == 1
+    code = RS.main(["pr", "--main", "main", "--dry-run"])
     said = capsys.readouterr().out
-    assert f"crossed 1 move: {second[:12]}]\n" in said and f"skipped the move {first[:12]} " in said
     assert "nothing is pushed and the exit is 1" in said and "with the moves named, which skips none:\n" in said
+    assert code == 1 and f"crossed 1 move: {second[:12]}]\n" in said and f"skipped the move {first[:12]} " in said
     command = shlex.split(said.rstrip("\n").rsplit("\n", 1)[1])
     assert command == ["python3", "tools/move/restack.py", "pr", "--move-commit", second, "--onto",
                        git(repo, "rev-parse", "main"), "--main", "main", "--dry-run"]
@@ -396,10 +396,11 @@ def test_a_crossing_that_skipped_a_move_pushes_nothing_until_its_moves_are_named
     repo, first = late["repo"], late["first"]
     remote = _remote(repo, tmp_path)
     monkeypatch.chdir(repo)
-    assert RS.main(["pr", "--main", "main", "--push-to", "pr-crossed", "--json"]) == 1
+    code = RS.main(["pr", "--main", "main", "--push-to", "pr-crossed", "--json"])
     said = capsys.readouterr()
     [found] = json.loads(said.out)
-    assert found["status"] == "clean-skipped" and "pushed" not in found and git(remote, "branch", "--list") == ""
+    assert "pushed" not in found and git(remote, "branch", "--list") == "", "a crossing that skipped a move was pushed"
+    assert (code, found["status"]) == (1, "clean-skipped")
     assert f"--push-to pr-crossed: pr skipped the move {first[:12]}, " in said.err and "; nothing pushed. " in said.err
     assert said.err.rstrip("\n").endswith(": " + shlex.join(found["confirm"]))
     assert found["confirm"][-3:] == ["--push-to", "pr-crossed", "--json"]
