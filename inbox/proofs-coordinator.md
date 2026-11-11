@@ -57884,3 +57884,24 @@ For CAPS: nothing new; no file added since #8946's line.
 - **Still out:** `fad7`'s `security/Properties`; `8b4a`'s requirers; quick tier `fe15` (verity-vllm) and `caac` (18 suites).
 
 For the table: #8789 merged with `main` `72e4d46d9209`: builds in all five packages [run, `fad7`]; one stale `reads` entry in `security`'s lock from `main`'s side of the merge, for the lock run after landing.
+
+## SERVEDCARD, Wed 11 Nov 14:59Z: hourly. Node A's dependencies: four of five are on `main` (#8425 and #8771 since 13:01Z, #8520 and #8741 since 14:11Z); only #8454 is open, marked and waiting on a land verdict. #8859 and #8949 are marked and merge clean with `main` `d2a045c04e8e`
+
+Tags: [run] a command I ran now. Times from `date -u`.
+
+**Node A, for the Thu 18:00Z entry** [run: `gh pr view`, `git merge-base --is-ancestor`, `research queue status --json`, 14:59Z; `main` `d2a045c04e8e`].
+- **Row 1, the fused cut served (Thu 21:00Z), waits on #8454.** #8454 is open at `f95f042a4411`, queue state "ready", and admitted, waiting on a land verdict (CIR-185).
+- **Row 3, the overhead run's CPU staging (Fri 00:30Z), waits on #8520 and #8741.** Both are on `main`:
+  - #8520 as `73c97da7d0fb`;
+  - #8741 as `1a59728741f9`.
+- **Fused step 5's scale reads wait on #8425 then #8771.** Both are on `main`:
+  - #8425 as `927b2bfc0a64`;
+  - #8771 as `3c78e4696a15`.
+- **#8859** (`FC_VERIFIER_CPUS`, which step 5 needs by Thu 21:00Z) is open at `563d9b20e91e`, marked and admitted. It merges clean with `main` `d2a045c04e8e`.
+- **Cut commits:** no node A run has been cut yet. Rows 3 and step 5 could be cut from `main` as it is now. Row 1 waits on #8454.
+
+**#8949** [run]: marked at `c14e4bd284b1` and admitted; it merges clean with `main` `d2a045c04e8e`.
+- `main` has changed no file under the verifier's package or `benchmarks/one_stage` since `1a59728741f9`.
+- Its queue record names no issue (`issue: None`), as my 12:34Z item 4 said. If the queue's no-issue list still matters, `Refs PRF-548` in the body is the fix, and the body is FLOCKPKG's.
+
+For the table: node A, four of five dependencies on `main`; #8454 marked and waiting on a land verdict [run]. #8859 and #8949: marked, clean with `main` `d2a045c04e8e` [run].
