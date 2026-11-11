@@ -1185,3 +1185,67 @@ Now, in this order:
 3. **What `vy-dc-h200-3` needs to be a direct node**, each item with its owner, in your return.
 End your turn when the spec's pull request is open with its suites read, or at the first question only an
 owner can answer. No GPU, nothing on node A, no marks.
+
+## Wed 11 Nov 16:02Z: benchmarks' review is in, a day early (HASH-115, 16:00Z): LAND BOTH, WITH FIXES. These go ahead of the 21 runs and the spec
+
+Benchmarks' worker read both pull requests and ran their suites (#8979 at `310defe26d`: 3 passed; #8989 at
+`c5b35e1916`: 5 passed). Its verdict: "land both, with the fixes below ... Mark each when its fixes are in.
+You don't need a second review from benchmarks for them." **Stop the 21 runs' table where it is and do these
+first.** The review's findings, word for word (its line numbers are at those two heads):
+
+**#8979, fixes before it lands:**
+- **A1. The burst cut ignores the tail.** `burst_parts` (`steady.py:348-357`) drops the sessions after the
+  last whole burst. A 31-gap window, 24 level gaps then 7 at 5×, fails by thirds and passes with `period: 4`.
+  When the window isn't whole bursts, also cut the tail, and fail if either cut fails. Your two rows keep
+  their verdicts.
+- **A2. NaN passes.** `_seconds` (`steady.py:156-157`) accepts NaN and inf: a NaN window passes `level`, an
+  infinite rate passes `not_void`. Require `math.isfinite`.
+- **A3. The shared-card rule is unreachable.** It lives only in `verdicts` (`steady.py:413-436`), which only
+  tests call; #8989 calls `verdict`. Move it where callers reach it, or delete it.
+- **A4. Wrong tool named.** "nvidia-smi gave no answer" (`steady.py:320-321`) also prints for the node's
+  gpu-lease status line. Name the tool the line names.
+- **A5. A row without `gpus` passes** `one_lease_own_card` (`steady.py:294`), where `after.py` required
+  `gpus == 1`. Make it "cannot tell".
+
+**#8989, B1 and B2 before its first real run:**
+- **B1.** `tests/test_steady_point.py:92-97` starts git through a shell and isn't in `untraced`
+  (`pyproject.toml:29`), so the graph's test-file task errors (run `r20261111-152533-28f6`). Add it, or use a
+  stand-in.
+- **B2.** `steady_node.main` (369-376) has no SIGTERM handler, and the scratch (326) is removed only in
+  `finally`. A timeout or cancel leaves the staged statement in `/dev/shm`. Turn TERM and INT into
+  `SystemExit(143)`, as `steady.sh` did, with a test.
+- **B3.** `completed_rows` (`steady_plan.py:87-108`) checks that `derivation.json` exists but never reads it,
+  so an art could also change `accepted` or `exits`. Take only the fields the run's own row lacks, or those
+  the derivation names, and say "cannot tell" on any other difference.
+- **B4.** A run with no files (141-143), or two standing arts completing one run (133-134, last wins), gives
+  no `why`. Say so.
+- **B5.** `labelled_rows` hasn't been run over the real record: two read-only probes on a node printed
+  nothing in 24 and 34 minutes, cause not found. Post one run over the real record, with its row count and
+  wall time.
+- **B6.** The identity-mismatch message (`steady_node.py:305-307`) should say that untracked files under the
+  closure directories cause it on a node with no `.git`. "The timed step never ran" (335-336) is also what a
+  preemption mid-step prints.
+
+**Against the design** (benchmarks' words, shortened by me): (a), (b) and (d) hold, (d) subject to B3 and B4.
+The kit is not on `main` yet (#8572), so #8989 carries copies (a third gpu-lease argv, `RESULT_SCHEMA`,
+`write_result`, the direct dispatch), and its `versions.cuda` is nvcc's toolkit version where the kit's `cuda`
+is the driver's: whichever of #8572 and #8989 lands second switches to `kit.lease` and `kit.RESULT_SCHEMA` and
+renames one `cuda`; if #8989 lands first, benchmarks does that. (e): once #8979 lands, benchmarks makes
+`prove_records.row_why` call `steady.accepted`, `not_void`, `exits` and `flat`; its worker found made-up rows
+the two judge differently (`unfiled` absent or nonzero, empty `exits`, an `error` or `skipped` key,
+`warm < 0`). Tests: "good. No wall clock, deterministic, and each check is tested failing alone."
+
+**What I want, in this order:**
+1. **#8979: A1 to A5, each with its test** (A1's 31-gap case as the reviewer gives it, and your two rows
+   keeping their verdicts; A2 for NaN and inf in every place `_seconds` guards; A3 moved where #8989's caller
+   reaches it, not deleted, unless moving it is wrong: say why). Suites at the new head. **Then rerun the
+   comparison's agreement at that head** (the 356 rows: say whether any verdict moved, A5 and A2 are the ones
+   that could) and say the counts.
+2. **#8989 restacked: B1 to B6, each with its test where one fits**, all six now, not only B1 and B2. **B5 is
+   a run of its own** over the real record, with its row count and wall time, posted on HASH-115; if it does
+   not finish, find why (the reviewer's two probes printed nothing in 24 and 34 minutes) before anything else
+   in #8989, because a `plan` that cannot read the record plans nothing.
+3. **End your turn with both heads, their runs, the comparison's counts at the new head and B5's run.** I read
+   the fixes, mark #8979, and mark #8989 once #8979 is on `main`. Then the 21 runs and the spec.
+I read the module whole at 15:59Z and saw neither A1 nor A2; the reviewer did. Hold your own tests to that
+standard: a tail the cut drops, a value that is not a number.
