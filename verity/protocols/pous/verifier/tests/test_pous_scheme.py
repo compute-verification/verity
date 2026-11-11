@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import hashlib
-import os
 import random
 
 import pytest
 
+import settings
 from verity.protocols.pous.verifier.labels import component, from_bytes, join, split, tag, to_bytes, transpose, w_labels, w_value
 from verity.protocols.pous.verifier.oracle import run
 from verity.protocols.pous.verifier.params import LEAN_P3_MEETS, OPERATING_POINT, Params
@@ -108,7 +108,7 @@ def test_vectors():
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(not os.environ.get("VERITY_POUS_SLOW"), reason="about a minute: set VERITY_POUS_SLOW=1")
+@pytest.mark.skipif(not settings.SLOW, reason="about a minute: set VERITY_POUS_SLOW=1")
 def test_operating_point_segment():
     """One whole 64 KB-label segment: its pinned digest and a bit-exact decode (about a minute)."""
     import json

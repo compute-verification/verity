@@ -156,4 +156,4 @@ def test_statics_refused(statics):
         V.gates(**statics)
     if not any(isinstance(v, bool) for v in statics.values()):  # `bind` keys True as 1
         with pytest.raises(ValueError):
-            bind(V.PousVerdict, **statics).gates
+            _ = bind(V.PousVerdict, **statics).gates

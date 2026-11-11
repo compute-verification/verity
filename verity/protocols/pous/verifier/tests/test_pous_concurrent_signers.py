@@ -38,16 +38,15 @@ def _waiting(monkeypatch) -> queue.SimpleQueue:
 
 def _at_once(said: queue.SimpleQueue, release, calls) -> tuple[list, list]:
     """Each of `calls` in a thread of its own while the test holds a lock, which `release` lets go once every thread has
-    said something: "waiting" on the lock, or "done" (it refused). -> what each said first, and what each returned or
-    raised."""
+    said something: "waiting" on the lock, or "done" (it refused). -> what each said first, and what each returned
+    (`None` for one that raised)."""
     out: list = [None] * len(calls)
 
     def run(i: int) -> None:
         try:
             out[i] = calls[i]()
-        except Exception as e:  # noqa: BLE001: the test reads it
-            out[i] = e
-        said.put("done")
+        finally:
+            said.put("done")
 
     threads = [threading.Thread(target=run, args=(i,)) for i in range(len(calls))]
     for t in threads:
