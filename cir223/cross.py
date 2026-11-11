@@ -346,6 +346,17 @@ def main() -> int:
             say(f"{s['name']}: the driver failed: {e!r}")
             rec = {"name": s["name"], "commit": s["commit"], "driver_error": repr(e)}
         done[s["name"]] = rec
+        if rec.get("result") and not rec.get("given"):
+            # each result is bundled as it is made (`NAME.bundle`), for a reader who doesn't wait for the run's end
+            try:
+                ref = f"cir223/{s['name']}"
+                git("branch", "-f", ref, rec["result"])
+                skip = {main_sha, *(x["commit"] for x in specs), *(d["result"] for d in list(done.values()) if d.get("given"))}
+                skip.discard(rec["result"])
+                git("bundle", "create", "-q", os.path.join(OUT, f"{s['name']}.bundle"), ref, *[f"^{c}" for c in sorted(skip)])
+                say(f"{s['name']}: bundled as {s['name']}.bundle: {rec['result']}")
+            except Exception as e:
+                say(f"{s['name']}: its own bundle failed: {e!r}")
         events[s["name"]].set()
         with LOCK:
             with open(os.path.join(OUT, "results.json"), "w") as f:
