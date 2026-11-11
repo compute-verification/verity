@@ -277,7 +277,6 @@
     {"file": "tests/check/test_xrank_routed.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/commit/test_commit_fail_closed.py", "kind": "E741", "symbol": "test_e2e_windowed_release_before_keep_fails_openings", "detail": "Ambiguous variable name: `l`"},
     {"file": "tests/commit/test_memory_map.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "tests/commit/test_native_jit_keying.py", "kind": "SIM115", "symbol": "test_ext_keys_its_build_dir_by_the_digest_and_refuses_a_stale_load", "detail": "Use a context manager for opening files"},
     {"file": "tests/commit/test_p0_footprint.py", "kind": "E741", "symbol": "test_e2e_windowed_roots", "detail": "Ambiguous variable name: `l`"},
     {"file": "tests/commit/test_pinned_pool_exact.py", "kind": "E741", "symbol": "_cgroup_anon_shmem", "detail": "Ambiguous variable name: `l`"},
     {"file": "tests/commit/test_pinned_pool_exact.py", "kind": "E741", "symbol": "test_exact_pool_blocks_are_shared_across_fork_not_copied", "detail": "Ambiguous variable name: `l`"},

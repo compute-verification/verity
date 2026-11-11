@@ -104,7 +104,7 @@ def test_the_commit_reads_only_the_keys_enable_windows_returns(monkeypatch):
             and n.value.id in bound and isinstance(n.slice, ast.Constant)}
     assert {"slots", "window_bytes"} <= read, "main no longer subscripts a name it binds to enable_windows(): point this test at its reader"
     info = committer(monkeypatch, "none", VERITY_WINDOW_MB=P.WINDOW_MB, VERITY_WINDOW_SLOTS=str(P.SLOTS)).enable_windows(None)
-    assert not read - set(info), (f"pipeline.commit.main reads {sorted(read - set(info))} of the dictionary enable_windows returns, "
+    assert not read - set(info), (f"pipeline.commit.main reads {sorted(read - set(info), key=repr)} of the dictionary enable_windows returns, "
                                   f"whose keys are {sorted(info)}: a windowed Commit stops there with a KeyError")
 
 

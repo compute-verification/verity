@@ -145,11 +145,10 @@ def staged_sources(build_dir: str, sources: Sequence[str]) -> list[str]:
             body = f.read()
         dst = os.path.join(sd, rel)
         os.makedirs(os.path.dirname(dst), exist_ok=True)
-        try:
+        same = False
+        if os.path.isfile(dst):
             with open(dst, "rb") as f:
                 same = f.read() == body
-        except FileNotFoundError:
-            same = False
         if not same:
             tmp = f"{dst}.{os.getpid()}.tmp"
             with open(tmp, "wb") as f:
