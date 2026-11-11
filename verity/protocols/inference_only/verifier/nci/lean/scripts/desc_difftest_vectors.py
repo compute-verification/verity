@@ -14,7 +14,7 @@ Instance `seed`'s program, for the first `COUNT`, is one of `difftest_vectors.pr
 across its arrays' rows (`transposed`), then each distinct descriptor
 the circuits fixtures hold (`verity/circuits/tests/*_vectors.json`: pass-throughs, scans with carries, batches of
 composites, root batches and scans) for `PER_FIXTURE` instances each, then six on a composite keyed with an input id
-(`decoys`), which is no input node, then two on a gate reading a nested scan's carry (`walks`), one past
+(`decoys`), which the decoder refuses, then two on a gate reading a nested scan's carry (`walks`), one past
 `NciCheck.Desc.walkBound`'s limit, then four on a scan of no iterations (`empties`), three of them refused, its carry a
 value, read or not, then twelve on whole members of a batch returning leaves of two arguments they share, each another
 node's (`shared`), then `mistyped_vectors.cases()`'s (`mistyped`: references that name leaves of other widths than
@@ -39,7 +39,7 @@ from pathlib import Path
 import verity.circuits
 from verity.circuits import codec
 from verity.circuits.defs import Builder, CompositeDefinition, bind
-from verity.circuits.program import Program
+from verity.circuits.program import Program, is_input_entry
 from verity.circuits.refs import Affine, Coll, Strided, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 
@@ -166,8 +166,8 @@ def _probe_type(params, body) -> "Type":
 
 
 def decoy(batch: bool) -> str:
-    """A declaration whose root Calls (or batches, `batch`) a composite keyed with an input id, `Input16_v1`: its gates
-    are computed, so its root node is no input node, though its callee's key reads as one."""
+    """A declaration whose root Calls (or batches, `batch`) a composite keyed with an input id, `Input16_v1`. An input
+    id keys only the input primitive, so no decoder reads it."""
     w = 8
     op = vectors.prim((w, w), w)
     Decoy = bind(CompositeDefinition("Input16", 1, (), lambda S: ((("x", Value(w)),), Value(w)),
@@ -183,17 +183,18 @@ def decoy(batch: bool) -> str:
 
 
 def decoys() -> list[dict]:
-    """Instances on `decoy`'s declarations: the decoy node in θ and in no IU, in no IU, and in an IU. Their inputs are
-    bound per run, so θ holds no input node."""
+    """Instances on `decoy`'s declarations: the decoy node in θ and in no IU, in no IU, and in an IU. Each is refused
+    as `program`, whatever it says of the node, so its Γ and α are never read."""
     out = []
     for batch in (False, True):
         text = decoy(batch)
-        inp, _, spans = reference.root_nodes(text)
-        dk = next(k for k in range(len(inp)) if not inp[k])
+        desc = json.loads(text)
+        fids = [desc["callees"][nd["fn"]] for nd in desc["definitions"][desc["root"]]["body"]["nodes"]]
+        dk = fids.index("Input16_v1")
         for theta, at in (([dk], "input"), ([], "input"), ([], 0)):
-            owner = ["input" if inp[k] else 0 for k in range(len(inp))]
+            owner = ["input" if is_input_entry(f, desc["definitions"][f]) else 0 for f in fids]
             owner[dk] = at
-            out.append({"program": text, "theta": theta, "owner": owner, "gamma": spans[-1][1], "alpha": [16, 1]})
+            out.append({"program": text, "theta": theta, "owner": owner, "gamma": 1, "alpha": [16, 1]})
     return out
 
 

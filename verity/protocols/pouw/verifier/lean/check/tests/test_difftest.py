@@ -510,10 +510,11 @@ def test_honest_j10r_windows_are_credited(pass_server):
 
 def test_decoy_windows_are_refused(pass_server):
     """A window honest in everything but a decoy (`decoy_window`: a composite keyed with an input id, which its circuit's
-    root or its live Program's also calls) is refused for that Program's body, by `credit.window` and by the compiled
-    `Credit.window`: the node is no input, so the root's units are not the ones its record names. A reader of ids alone
-    skips the node and credits the window. `test_credit` replays decoys but holds only the two sides to each other."""
-    for live, refusal in ((False, ["layout", Cr.BODY]), (True, [Cr.LIVE, Cr.LIVE_BODY])):
+    root or its live Program's also calls) is refused by `credit.window` and by the compiled `Credit.window`: its
+    circuit's descriptor as one the decoder refuses, since an input id keys only the input primitive, and its live
+    Program, which no decoder reads, for its body, the node being no input. A reader of ids alone skips the node and
+    credits the window. `test_credit` replays decoys but holds only the two sides to each other."""
+    for live, refusal in ((False, ["layout", Cr.DESCRIPTOR_FORM]), (True, [Cr.LIVE, Cr.LIVE_BODY])):
         for seed in range(3):
             case = credit_cases.decoy_window(random.Random(f"decoy/{live}/{seed}"), live)
             assert window(case) == {"refused": refusal}, (live, seed)

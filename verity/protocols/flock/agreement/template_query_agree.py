@@ -4,8 +4,9 @@
     python template_query_agree.py --lean BIN --vectors template_instance_vectors.json --out DIR
 
 For each case: the program's SHA-512, the population, the ranges and every unit's root node, member and gate interval; for each
-refusal: `query-refused` with core's reason; for each malformed query: its parameters refused. Writes DIR/result.json; exits 1
-unless every vector agrees.
+refusal: `query-refused` with core's reason; for each program core's decoder refuses: refused in the decoder's words (a missing
+definition: as a `KeyError`); for each malformed query: its parameters refused. Writes DIR/result.json; exits 1 unless every
+vector agrees.
 """
 import argparse, json, subprocess, sys
 from pathlib import Path
@@ -31,6 +32,8 @@ def main():
         case(f"case{i}", v["descriptors"][d], q, ("ok", exp["object"]["program"], exp["population"], exp["ranges"], [u[:5] for u in exp["units"]]))
     for i, (_label, d, q, why) in enumerate(v["refused"]):
         case(f"refused{i}", v["descriptors"][d], q, ("refused", why.split(") ", 1)[1]))
+    for i, (_label, desc, q, why) in enumerate(v["undecoded"]):
+        case(f"undecoded{i}", desc, q, ("undecoded", why))
     for i, (_label, q, codes) in enumerate(v["malformed"]):
         case(f"malformed{i}", v["descriptors"]["population"], q, ("malformed", codes))
     p = subprocess.run([a.lean, "template-query", *files], capture_output=True, text=True)
@@ -46,11 +49,15 @@ def main():
             ok = g.get("ok") and (g["program_sha512"], g["population"], g["ranges"], g["units"]) == w[1:]
         elif w[0] == "refused":
             ok = not g.get("ok", True) and g.get("error", "").startswith("query-refused: ") and g["error"].split(": ", 1)[1] == w[1]
+        elif w[0] == "undecoded":
+            kind, words = w[1].split(": ", 1)
+            ok = not g.get("ok", True) and (g.get("error", "").startswith("KeyError: ") if kind == "KeyError" else g.get("error") == words)
         else:
             ok = not g.get("ok", True) and any(c in g.get("error", "") for c in w[1])
         if not ok:
             bad.append(f)
-    result = {"vectors": str(a.vectors), "cases": len(v["cases"]), "refused": len(v["refused"]), "malformed": len(v["malformed"]),
+    result = {"vectors": str(a.vectors), "cases": len(v["cases"]), "refused": len(v["refused"]), "undecoded": len(v["undecoded"]),
+              "malformed": len(v["malformed"]),
               "agree": len(files) - len(bad), "disagree": bad}
     (a.out / "result.json").write_text(json.dumps(result, indent=1))
     print(json.dumps(result))
