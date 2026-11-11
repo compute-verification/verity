@@ -177,9 +177,9 @@ def _figure(he: dict, c: float, C: float, tau: float | None = None, beta_code: f
     best the groups whose contraction K is below K_thr = (F·k/2)²·b_y/(β_w·β_x·(k + α)): on a group that short the
     count's outputs' term is at least its main one at the m = N/(k + α) its MACs alone would need. What it read: the
     binding subset, each subset's term, β_w, β_x, β (their geometric mean), b_y, F, α (the calculator's
-    `min_cut.alpha` times F), N, O, K_thr, β(k), `beta_code` where it caps a weight in M (`code_bound`), the first
+    `min_cut.alpha` times F), N, O, K_thr, β(k), `beta_code` where it bounds a weight in M (`code_bound`), the first
     steps left out, M_P's share of the candidates' MACs, whether an operand's own β (its rate or β_eff, before either
-    cap) is below its width (`below_width`) and the step's r_step."""
+    bound) is below its width (`below_width`) and the step's r_step."""
     k, mod = he["k"], _min_cut()
     bk = mod.beta(k)
     if bk is None:
