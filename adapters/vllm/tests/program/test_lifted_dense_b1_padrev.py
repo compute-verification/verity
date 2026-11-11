@@ -18,6 +18,7 @@ _ = pytest.importorskip("verity.definitions.registry.lifted", reason="the lifted
 
 from verity.circuits import Program  # noqa: E402
 from verity.definitions.registry import b1  # noqa: E402
+
 from tests.program.test_serve3 import LP, TINY  # noqa: E402
 
 RNG = np.random.default_rng(20260920)

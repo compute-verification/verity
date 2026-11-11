@@ -8,15 +8,14 @@ import json
 
 import numpy as np
 import pytest
-
-from verity.circuits.evaluation import evaluate
 from verity.circuits.codec import decode_program, encode_program
 from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
+from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
 from verity.circuits.types import Array
 from verity.definitions.registry import sampling as SM
-from verity.definitions.registry import topp_split as TS
 from verity.definitions.registry import topp_keep_builder as TKB
+from verity.definitions.registry import topp_split as TS
 from verity.definitions.registry import topp_word_gates as TWGates
 from verity.definitions.registry import topp_words as TWG
 from verity.definitions.registry.prims import BIT, F32

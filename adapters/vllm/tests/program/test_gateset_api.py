@@ -8,16 +8,15 @@ from __future__ import annotations
 import json
 
 import pytest
-
+from verity.circuits import query_ast as G
 from verity.circuits.defs import PrimitiveDefinition, bind
 from verity.circuits.layout import FunctionCall
 from verity.circuits.parts import Part, n_members
 from verity.circuits.program import Program
-from verity.definitions.registry import b1
-from verity.circuits import query_ast as G
-from verity.circuits.query_ast import GateSet, QueryError, evaluate
 from verity.circuits.query import parse, query
+from verity.circuits.query_ast import GateSet, QueryError, evaluate
 from verity.circuits.query_codec import from_json, query_id, to_json
+from verity.definitions.registry import b1
 
 GEMM = 'members("//Gemm_v1{K=*,N=*}", "@batch:GemmCoordinate_v1")'
 ATTN = '''each("//AttentionHead_v3{*}",
@@ -28,7 +27,7 @@ ATTN = '''each("//AttentionHead_v3{*}",
                instances("@call:DotBf16_v1"),
                rest())),
            rest()))'''
-CANONICAL = 'override(default(32), {"//Gemm_v1{*}": %s, "//AttentionHead_v3{*}": %s})' % (GEMM, ATTN)
+CANONICAL = f'override(default(32), {{"//Gemm_v1{{*}}": {GEMM}, "//AttentionHead_v3{{*}}": {ATTN}}})'
 
 
 @pytest.fixture(scope="module")
@@ -329,7 +328,7 @@ def test_override_and_canonical_query(gemm, rms, attn):
     fam_b, sets_b = materialise(attn, ATTN)
     assert set(sets_a) == set(sets_b)
     # a case whose G matches nothing keeps the base
-    fam_c, sets_c = materialise(rms, 'override(default(32), {"//Gemm_v1{*}": %s})' % GEMM)
+    fam_c, sets_c = materialise(rms, f'override(default(32), {{"//Gemm_v1{{*}}": {GEMM}}})')
     assert sets_c == list(evaluate(rms, "default(32)"))
 
 

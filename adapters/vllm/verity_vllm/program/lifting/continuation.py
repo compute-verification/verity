@@ -37,6 +37,7 @@ from enum import Enum
 from typing import Any
 
 from verity.definitions.registry import lifted as L
+
 from verity_vllm.program.lifting import lifted_records
 
 CONTINUATION_VERSION = "continuation-v1"  # every Continuation_v1 result carries it (recorder, builder and Match share one version)
@@ -56,7 +57,7 @@ RNG_STATEMENT = ("RNG advances iff r_t: the sampler of slot t executes iff r_t =
                  "sequential state)")
 
 
-def rng_accounting(slots: Sequence["Slot"], *, prompt_len: int | None = None) -> dict[str, Any]:
+def rng_accounting(slots: Sequence[Slot], *, prompt_len: int | None = None) -> dict[str, Any]:
     """The named RNG field: how many samples the rule says the Program makes, and where the post-EOS one is (position relative to the prompt, and
     absolute when `prompt_len` is known).  A statement about the Definition; the record-side count is stoch_recompute's."""
     exe = executed_slots(slots)

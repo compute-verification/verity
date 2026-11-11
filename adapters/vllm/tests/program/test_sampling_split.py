@@ -60,7 +60,11 @@ SLOW_TRACE = ("GumbelLane_v1", "GumbelLaneTail_v1", "GumbelNoiseGroup_v1{G=1}", 
 
 def defining_module(fn) -> str | None:
     """The module whose code a Definition runs: a primitive's evaluator's, a composite's body's, a traced Boolean one's build's."""
-    from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
+    from verity.circuits.defs import (
+        CompositeDefinition,
+        PrimitiveDefinition,
+        SpecializedDefinition,
+    )
 
     d = fn.defn if isinstance(fn, SpecializedDefinition) else fn
     f = d.evaluate if isinstance(d, PrimitiveDefinition) else getattr(d, "build", d.body) if isinstance(d, CompositeDefinition) else None

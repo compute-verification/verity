@@ -92,6 +92,7 @@ def test_a_warm_request_finds_its_own_program_and_a_cold_one_never_takes_it(tmp_
 
 def test_a_warm_programs_cached_rows_are_not_token_ids():
     from types import SimpleNamespace as NS
+
     from verity_vllm.query.required import ValueRef, cached_prefix_inputs
     P_ = NS(params=[NS(id="prompt", port_table=[NS(name="out")]), NS(id="prefix", port_table=[NS(name="out")]),
                     NS(id="weights", port_table=[NS(name="w0"), NS(name="w1")])])

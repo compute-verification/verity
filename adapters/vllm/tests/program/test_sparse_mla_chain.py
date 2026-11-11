@@ -11,7 +11,6 @@ __models__ = ("zai-org/GLM-5.3",)
 
 import numpy as np
 import pytest
-
 from verity.circuits import evaluation as E
 from verity.circuits.boolean import trace as TR
 from verity.circuits.codec import canonical_json, encode_program
@@ -25,6 +24,7 @@ from verity.definitions.registry import boolean_attention as BA
 from verity.definitions.registry import boolean_sparse_mla as BM
 from verity.definitions.registry import dead_free as DF
 from verity.definitions.registry import sparse_mla as M
+
 from tests.program.test_boolean_fp8 import _flat, _inputs
 from tests.program.test_sparse_mla import FA3, _bf16, _case, _run_head
 

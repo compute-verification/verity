@@ -12,7 +12,6 @@ import re
 
 import numpy as np
 import pytest
-
 from verity.circuits import evaluation as E
 from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
@@ -22,11 +21,12 @@ from verity.definitions import boolean as SW
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics import sparse_mla_split_twins as TW
 from verity.definitions.registry import boolean_sparse_mla_split as BX
-from verity_vllm.program import mla_capture as MC
 from verity.definitions.registry import sparse_mla as M
 from verity.definitions.registry import sparse_mla_split as W
+
 from tests.program.test_boolean_fp8 import F32_SPECIALS, _flat, _inputs
 from tests.program.test_sparse_mla import FA3, _bf16, _case, _run_head, _val
+from verity_vllm.program import mla_capture as MC
 
 GLM = M.SPARSE_MLA_GLM53
 U32 = np.uint32

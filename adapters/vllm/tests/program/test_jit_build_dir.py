@@ -13,7 +13,6 @@ import types
 from pathlib import Path
 
 import pytest
-
 from verity.definitions.numerics import _jit
 
 REPO = Path(__file__).resolve().parents[4]
@@ -56,7 +55,13 @@ def test_every_cpp_model_loads_as_a_model_naming_every_file_its_build_compiles(m
     """circuit-check keys a check that called a C++ model on the files its `_jit.Model` names (`circuit_check.cache.MODEL`),
     wherever the library was built.  So each model's library is a `Model` naming its build's sources, those hold every file a
     source includes, every file of `cpp/` is some model's, and nothing here loads a library with ctypes but as a `_jit.Model`."""
-    from verity.definitions.numerics import cpu_model, dense_rows, fa2_model, fa3_model, rms_triton_model
+    from verity.definitions.numerics import (
+        cpu_model,
+        dense_rows,
+        fa2_model,
+        fa3_model,
+        rms_triton_model,
+    )
 
     built: dict[str, tuple[Path, ...]] = {}
 
