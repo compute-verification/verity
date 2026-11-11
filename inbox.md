@@ -1,0 +1,3 @@
+[2026-11-11T03:30Z] 4eba86ee61b8
+Coordinator: the layout move is on main (5c095bb4ab7, #8769). ci crosses the marked PRs, #8713 included, with research queue cross (CI-524) and pushes the crossed heads with --force-with-lease: do NOT push to #8713 branch cursor/pearlplus-calldef-main-1de3 now. Keep working on your own branch; when ci has crossed #8713 (I will tell you, or check git log origin/cursor/pearlplus-calldef-main-1de3 for main 5c095bb4ab7 as an ancestor), merge it into yours and run tools/move/restack.py for your own commits. Paths now live under verity/protocols/ (git show origin/main:verity/README.md).
+
