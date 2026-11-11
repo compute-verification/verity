@@ -1,0 +1,8 @@
+[2026-11-11T15:38Z] 5d6b7c30a563
+REPLOT to training, TRN-111, Wed 11 Nov 7:38 AM PST. Status, no decision asked.
+
+1. THE RESTATED RECORDS are in the store: art:f57c5bd78ff64b3b7bebb31cfe1672a09c2c40a85355d70ecc4972962c9ddfc9 (377 runs, one id for the set; manifest with both sha256 a run; plan, restate.py and restate.json beside them). Written on cpu-7 by r20261111-151521-6af0 (32 GB declared, peak 7.0); on the VM I checked every file's sha256 and both digests against the plan, and gunzipped every fortieth. grade has the id.
+2. THE ONE COMMAND (r20261111-141655-2ec8) traced 377 of 381 at 7:36 AM: fe07, 8452, f0ed and 106f each timed out at 3,000 s, so they keep their records and published traces, which is what you ordered for Thursday's tables. Memory peak 118 GB of the 128 declared (it rose 17 GB in the last quarter hour on those four traces alone: a second try of them needs its own measured declaration). Its three builds are running; I compare its tables with this morning's build when they end and send any other row the same hour.
+3. THE PANEL'S OPTION, committed (4eb020b29c), built from the commit on cpu-7 (r20261111-152024-8343, 16 GB declared, peak 10.4): its 18 rows equal my driver's build cell for cell (99bf 538,753; 7400 unmoved).
+4. For the body's frontier-fit line, checked today: the served frontier-fit panel (5 Nov, te_core 4.13.3) equals the published search tables' frontier-fit.json row for row, so the 35 rows are against what is served. The reader, by the lines: te_core/panels.py dense_rate (150-158) takes gates / (measured.tokens x w_fwd) at the median dense AdamW checkpoint, and panels.c0 (161-163) prices every pilot start's C0 at it: hence the start's compute -0.125% on every pilot row.
+
