@@ -42,8 +42,7 @@ row's Definition is cut into them (``CUT``: its body batches the template's word
 does not compute what the row computes is no match), or when the template's word is the row's Definition at N = 1 (``COORDS``: the
 row is split into its N coordinates), or for a ``WIDE_COORDS`` family at N = c (its N / c coordinates of c outputs), or at a halving of its width (``COLS``: the row is split into column blocks), or when it
 is a part of the row's Definition (``PARTS``: the row is split into Definitions of its own, one member per part), or when it
-is the row's Definition at every axis of a batch 1 (``SLICES``: the row is split into its slices along those axes), or for a
-``WIDE_SLICES`` family at c along its wide axis and 1 along the others (its slices c elements wide there), or when it
+is the row's Definition at every axis of a batch 1 (``SLICES``: the row is split into its slices along those axes; a ``WIDE_SLICES`` family's also c wide along one), or when it
 is a K-chunk of the row's coordinate (``KCHUNKS``, `kchunk_rows`), a key block, an end or a combine of its heads' chains
 (``CHAINS``, `chain_rows`), or a stage of its cut (``STAGES``, `stage_rows`).  A Boolean Program's rows are its word view (`pipeline.build_instances`: each row the word Definition
 its Call's Boolean Definition computes, that Boolean Definition its ``bits``), so a template matches the same rows under either IR,
@@ -103,16 +102,9 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    (`part_rows`); one index entry per row
   ``Gemm_v2{N=1,..}``, ``BatchedGemm_v1{B=1,N=1,..}``, ..  every slice of the rows of that Definition at any extents along its
                                    axes (``SLICES``): ``in<g>`` per argument group, its element along each axis it carries and
-                                   whole along the others (a GEMM coordinate: ``x`` whole, ``w[n]``) -> ``out.<member>``, the
-                                   row's output element; packed ports, one index entry per row; chunked (``chunk_cap``), v2
-                                   bit rows (`chunk_rows.unit_rows`) -> ``o0``
-  ``DsaIndexerQHead_v1{NH=H,..}``  every head of the rows of ``DsaIndexerQ_v1{H,..}``, the Definition that row's body calls once a
-                                   head (``ELEMENTS``): as a slice, head h reading ``q[h]``, the RoPE row whole and ``w[h]`` ->
-                                   ``out.<member>`` per field the row returns, its element h
-  ``BatchedGemm_v1{B=1,N=c,..}``,  every slice c wide of the rows of that Definition (``WIDE_SLICES``, c a power of two that
-  ``EmbeddingShard_v1{H=c,..}``, .. divides the row's extent along the wide axis): as a slice, with elements [jc, (j + 1)c)
-                                   along the wide axis (``x[b]`` whole, ``w[b, jc:(j + 1)c]``; the shard's columns) -> the
-                                   row's c output elements there
+                                   whole along the others (a GEMM coordinate: ``x`` whole, ``w[n]``) -> ``out.<member>`` per field the row returns, its
+                                   element there; packed ports, one index entry per row; chunked (``chunk_cap``), v2 bit rows (`chunk_rows.unit_rows`) -> ``o0``, ..;
+                                   a ``WIDE_SLICES`` family's also at c along its wide axis (elements [jc, (j + 1)c) there), an ``ELEMENTS`` family's as the Definition its row calls once an element (``DsaIndexerQ_v1``'s head)
   ``EmbeddingRead_v1{V=2^17,H=..}``  every history read of a ``DsaHistoryReads_v1`` row where the partition file says
                                    ``"histories": true`` (`history_rows`: its ports, and its writer's row-seg ``o0``); always
                                    chunked, v2 bit rows
