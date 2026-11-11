@@ -233,9 +233,10 @@ def _refused(request, salts: mc.SaltLog, log: mc.SessionLog) -> str:
     with pytest.raises(CP.Refusal) as e:
         CP.designate(request, salts, log)
     a, b = socket.socketpair()
-    with a, b, a.makefile("rwb") as f, pytest.raises(CP.Refusal) as served:
-        CP.serve(f, request, signer=ts.TestSigner(b"unused", 2), log=log, salts=salts, coins=COINS,
-                 domain=period.SESSION_DOMAIN, clock=Clock())
+    with a, b, a.makefile("rwb") as f:
+        with pytest.raises(CP.Refusal) as served:
+            CP.serve(f, request, signer=ts.TestSigner(b"unused", 2), log=log, salts=salts, coins=COINS,
+                     domain=period.SESSION_DOMAIN, clock=Clock())
     assert str(served.value) == str(e.value)
     return str(e.value)
 

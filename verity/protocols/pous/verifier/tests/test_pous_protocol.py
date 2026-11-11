@@ -140,8 +140,8 @@ def test_band_through_the_interface_is_the_pinned_band_codec():
 
 def test_registry():
     assert set(schemes.REGISTRY) == {"band-chain/d12/v1", "dense-chain/v1", "p3/v1", "p2-16448/v4", "p2-16448/v2"}
-    assert band.BAND12.name == schemes.DEFAULT
-    assert {"p2-16448/v4", "p2-16448/v2"} == schemes.EXPERIMENTAL and schemes.DEFAULT not in schemes.EXPERIMENTAL
+    assert schemes.DEFAULT == band.BAND12.name
+    assert schemes.EXPERIMENTAL == {"p2-16448/v4", "p2-16448/v2"} and schemes.DEFAULT not in schemes.EXPERIMENTAL
     assert schemes.get().experimental is None
     b = schemes.get()
     assert isinstance(b, schemes.Band) and b.params == band.SECURE_FIRST and b.name == "band-chain/d12/v1"
@@ -585,7 +585,7 @@ def test_p2_wide_certificate_is_period_held_at():
 
     fam = family_certificate(P2Params(16448, 21065, 256, 1)).to_json()
     assert CERT_WIDE_BLOCKS == (1 << 19, 1 << 27)
-    assert (*P2_CLAIMS, "p2-ring-round-secure-wide", "pous-ring-device-at", "statistical-hiding") == WIDE_CLAIMS
+    assert WIDE_CLAIMS == (*P2_CLAIMS, "p2-ring-round-secure-wide", "pous-ring-device-at", "statistical-hiding")
     for bps, segments in ((1 << 16, 8), (1 << 12, 128), (1 << 16, 129), (1 << 16, 1038), (1 << 16, 1 << 11)):
         cert = wide_certificate(P2Params(16448, 21065, bps, segments))
         assert cert.to_json() == fam | {"theorem": "Pous.Period.SecurityProofs.periodHeldAt",

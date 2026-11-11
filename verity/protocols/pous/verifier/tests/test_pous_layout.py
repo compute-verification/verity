@@ -25,14 +25,13 @@ def test_decode_per_tensor(align):
     assert all(layout.unpack(w, name) == data[name] for name in data)
     prims = reference(layout.params)
     enc = encode(layout.params, prims, w, b"\x09" * 24)
-    read: set[int] = set()
-
-    def block(i):
-        read.add(i)
-        return enc.block(i)
-
     for name in data:
-        read.clear()
+        read = set()
+
+        def block(i):
+            read.add(i)
+            return enc.block(i)
+
         assert decode_tensor(layout, prims, enc.salt, name, block) == data[name]
         assert read == set(layout.blocks(name))
     if align:

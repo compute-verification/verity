@@ -228,7 +228,7 @@ def session(side: Side, request: Mapping[str, Any], prover: sw.Prover, *,
 
     def drive(s: socket.socket) -> tuple[int, dict[str, str]]:
         s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        connection = {k: f"{a[0]}:{a[1]}" for k, a in (("local", s.getsockname()), ("peer", s.getpeername()))}
+        connection = {k: "%s:%d" % a[:2] for k, a in (("local", s.getsockname()), ("peer", s.getpeername()))}
         with s.makefile("rwb") as f:
             return answer(f, prover, stop_after), connection
 

@@ -43,7 +43,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from functools import cache, lru_cache
+from functools import lru_cache
 from typing import Protocol
 
 from verity.commitments.randomness import Key, derive
@@ -435,7 +435,7 @@ def _expand(label: bytes, n: int) -> bytes:
     return bytes(out[:n])
 
 
-@cache
+@lru_cache(maxsize=None)
 def diffusion_stages(words: int) -> int:
     """The fewest butterfly stages after which every output word depends on every input word."""
     if words < 2:
@@ -537,7 +537,7 @@ def bit_diffusion_stages(name: str, words: int, bits: Sequence[int] | None = Non
     return max(_bit_reach(name, words, b, limit) for b in bits)
 
 
-@cache
+@lru_cache(maxsize=None)
 def butterfly_stages(name: str, words: int) -> int:
     """Twice the bit-level count, and at least twice word-level diffusion plus 12 (20 stages at 256 words, the top of
     the measured 16–20)."""
