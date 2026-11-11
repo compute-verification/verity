@@ -7323,10 +7323,11 @@ fn zk_self_check() -> zkv::SelfCheck {
 /// as `serve` checks it (no rows, its public words, Linking) once for its consecutive sessions, each population size's
 /// statement is built once, the sample is served at Register as `--draw-file`'s is, and the session's line carries its
 /// label. With `--tree-from`, every session's coin tree comes from one challenger session, opened at the first line and
-/// closed when the queue ends. No `--instances`, `--draw*`, `--links`, `--rec-run` or session tables.
+/// closed when the queue ends. A templated statement's circuit is loaded with its unit (`--tmpl-unit`), as `serve` loads it.
+/// No `--instances`, `--draw*`, `--links`, `--rec-run` or session tables.
 fn serve_queue(c: Composite, path: &str) {
     use std::io::BufRead;
-    let given = ["--instances", "--draw", "--draw-law", "--draw-file", "--links", "--rec-run", "--tmpl-unit"]
+    let given = ["--instances", "--draw", "--draw-law", "--draw-file", "--links", "--rec-run"]
         .into_iter().filter(|f| !arg(f, "").is_empty()).collect::<Vec<_>>();
     if !given.is_empty() || tables_arg() > 1 {
         refuse(format!("--queue: each session's population and sample come from its line, so no {given:?} or --session-tables"));
@@ -7404,15 +7405,16 @@ fn serve_queue(c: Composite, path: &str) {
 /// `prove --stream FILE [--gpu] [--warm W]`: a long-lived proof server's prove loop over sessions of statements of any
 /// circuits, read a line at a time as they arrive (FILE `-`: stdin, until it closes). A line is `{"circuit": FILE, "tables":
 /// DIR, "instances": INST, "verifier": ADDR, "label": NAME}`, optionally with `"pin"`, the circuit's SHA-512, by which it is
-/// loaded once (else by its path), and `"self_check": "skip"` (a negative control's session, as `FC_ZK_SELF_CHECK=skip`). A
+/// loaded once (else by its path), `"tmpl_unit": F`, a templated statement's unit rows at their positions, which its circuit
+/// is loaded with (as `--tmpl-unit`), and `"self_check": "skip"` (a negative control's session, as `FC_ZK_SELF_CHECK=skip`). A
 /// reader thread loads each circuit and builds its population's statement once, and a population's instance file once
 /// for its consecutive sessions, while earlier sessions prove. The sessions run in order through one prove loop
 /// ([`prove_jobs`]), so the witness pipeline and `FC_VERIFY_AHEAD` span statements, and `FC_STMT_CACHE` keeps each drawn
 /// statement for the process. The first W sessions are warm. Each session's `LIVE` record carries its label. No ZK server
-/// (`FC_FIREWALL=1`), salt refs, session tables or templated units.
+/// (`FC_FIREWALL=1`), salt refs or session tables, and a templated unit comes on its circuit's line, not `--tmpl-unit`.
 fn prove_stream(path: &str) {
     if tables_arg() > 1 || !arg("--salt-refs", "").is_empty() || !arg("--firewall-state", "").is_empty() || !arg("--tmpl-unit", "").is_empty() {
-        refuse("--stream: one table a session, and no --salt-refs, --firewall-state or --tmpl-unit".into());
+        refuse("--stream: one table a session, no --salt-refs or --firewall-state, and a templated unit on its line (\"tmpl_unit\"), not --tmpl-unit".into());
     }
     sverify::Lincheck::from_env().unwrap_or_else(|e| refuse(e));
     let (tx, rx) = std::sync::mpsc::channel();
@@ -7438,8 +7440,9 @@ fn prove_stream(path: &str) {
             let key = j["pin"].as_str().map_or_else(|| circuit.clone(), str::to_string);
             let tb = Instant::now();
             let loaded = (!stmts.contains_key(&key)).then(|| {
+                let unit = j["tmpl_unit"].as_str().map(|f| std::fs::read_to_string(f).unwrap_or_else(|e| refuse(format!("{f}: {e}"))));
                 let c = Composite::parse_with(&std::fs::read_to_string(&circuit).unwrap_or_else(|e| refuse(format!("{circuit}: {e}"))),
-                                              Some(&field("tables")), None).unwrap_or_else(|e| refuse(e));
+                                              Some(&field("tables")), unit.as_deref()).unwrap_or_else(|e| refuse(e));
                 if j["pin"].is_string() && hex(&c.sha512) != key {
                     refuse(format!("{circuit}: its SHA-512 {} is not the pinned circuit {key}", hex(&c.sha512)));
                 }

@@ -10,7 +10,8 @@
   of the server's (the server's own ``RAYON_NUM_THREADS``, else rayon's default: the CPUs it may run on, within its cgroup's
   CPU quota), so each sizes its work, its host witness's lane groups a pass among it, for the cores it has rather than for
   every core.
-* **Verifiers.** One a type and prover: `serve --zk --queue -`, its circuit loaded once, each session's public file and
+* **Verifiers.** One a type and prover: `serve --zk --queue -`, its circuit loaded once (a templated statement's with its
+  unit, `Statement.tmpl_unit`, which the prover's line names too), each session's public file and
   sample taken from the line `submit` writes for it, its record filed under the session's ``out`` (else the verifier's own
   directory). A verifier serves its queue in the order its connections arrive, so it takes one prover's sessions, and
   `submit` writes a session's two lines together.
@@ -48,8 +49,9 @@ __all__ = ["ProofServer", "ProofServerError", "Session", "Statement"]
 @dataclass(frozen=True)
 class Statement:
     """A staged statement: its pinned circuit (``pin``, the circuit file's SHA-512 in hex, which names its type), the
-    circuit's tables, the prover's instance file and the verifier's public file, and for a circuit that declares links
-    the verifier's links file."""
+    circuit's tables, the prover's instance file and the verifier's public file, for a circuit that declares links
+    the verifier's links file, and for a templated statement (``verity/flock-circuit/tmpl``) its unit's rows at their
+    positions (``tmpl_unit``, `flock-tmpl-unit`'s), which both sides load its circuit with."""
 
     pin: str
     circuit: Path
@@ -57,6 +59,7 @@ class Statement:
     instances: Path
     public: Path
     links: Path | None = None
+    tmpl_unit: Path | None = None
 
 
 class ProofServerError(RuntimeError):
@@ -308,6 +311,8 @@ class ProofServer:
             q["out"] = str(out)
         line = {"circuit": str(st.circuit), "tables": str(st.tables), "instances": str(st.instances), "pin": st.pin,
                 "verifier": v.addr, "label": label}
+        if st.tmpl_unit is not None:
+            line["tmpl_unit"] = str(st.tmpl_unit)
         if self_check is not None:
             line["self_check"] = self_check
         with self._send:
@@ -394,7 +399,8 @@ class ProofServer:
                     raise ProofServerError(f"{name}'s challenger: {e}") from e
                 ch = (d, p)
             cmd = [self.binary, "serve", *(["--zk"] if self.zk else []), "--queue", "-", "--listen", "127.0.0.1:0",
-                   "--out", str(self.out / base), "--circuit", str(st.circuit), "--tables", str(st.tables), "--pin", st.pin,
+                   "--out", str(self.out / base), "--circuit", str(st.circuit),
+                   *([] if st.tmpl_unit is None else ["--tmpl-unit", str(st.tmpl_unit)]), "--tables", str(st.tables), "--pin", st.pin,
                    "--operator", "proof-server", "--concurrency", str(self.verify_ahead + 1), *(flags if ch else [])]
             with self._lock:
                 v = self._verifiers[(st.pin, key)] = self._start(name, "verifier", (st.pin, key), cmd, self._env)
