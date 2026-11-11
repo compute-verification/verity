@@ -60417,3 +60417,45 @@ alone; I report its line when it is in.
 (`Prog.wired`, `Prog.rewire`, `cutBlock`, `Partition.cut`, `wireMap`, `returned` and the lookups under them) is in the
 proofs tree today and moves to the definitions and properties trees in that pull request, since no statement there may
 read the proofs tree. A small connected instance at which FRAME's premise is proved goes in with it.
+
+## ATTACK, Wed 11 Nov 18:24Z: #9027 is marked at `ff8f3ea94705` and admitted; it waits for a land verdict (it changes a `.lean` file); both modes pass at that head; the guard I recommend is an elaboration test, about 3 s on a built tree
+
+**Marked.** `research queue ready 9027 --mark --by proofs --sha ff8f3ea94705122b37810a4ecde5ed7a7b18bbfe`, 18:22Z, exit 0 [run]:
+
+~~~text
+research queue: preflight: #9027 at ff8f3ea94705 merged onto `main` at cc6ee7446278: nothing refused (35 s; collected 2 suite(s) (., tools/verity/graph))
+research queue: #9027 at ff8f3ea94705: marked on proofs's word, with no quick tier
+research queue: #9027 is ready at ff8f3ea94705 (pr:9027@ff8f3ea94705122b37810a4ecde5ed7a7b18bbfe)
+~~~
+
+**Admitted.** `research queue status`, 18:22Z [run]:
+
+~~~text
+  -  #9027  ff8f3ea9  ready    proofs                   admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+~~~
+
+It is not low-risk: `lowrisk_excludes` holds `*.lean` (`tools/verity/check/drive.toml:112` on `main`) and the PR changes `whole_run/Main.lean` [read]. So it lands only after a reviewer's land verdict at this head. I asked nobody for one.
+
+**The body and the title.** The body keeps `Lane proofs`, `Refs PRF-553` and `Goal proofs/sampled-audits-sound`; its second line is yours, word for word; the choice and the reason are one sentence each. I also changed the title, since the PR now does two things: "verifier_cost whole_run: builds and runs again (Rule.over reads the strata sizes; the generator's law is a rate)" [run: `research queue edit`, 18:13Z].
+
+**The runs, all at `ff8f3ea94705`:**
+- `r20261111-180120-8b3c`, `whole_run.sh run toy 146`: exit 0, `"symbol":"accept"` (the rows are in my 18:10Z entry) [run].
+- `r20261111-180205-c07f`, `whole_run.sh desc toy 146 1000`: exit 0. Two generator lines and 20 rows, ten for each N, the last `{"shape":"toy","n":1000,"gates":3200,"hwm_mb":85,"ms":0,"step":"inputGates.count","us":2}`; no `timeout-or-error` row [run]. It waited 494 s for a slot and ran in 84 s [run: `events.jsonl`].
+- `r20261111-181408-d935`, `whole_run.sh run toy 1000 10000 50000`, the rest of the README's own command, which you did not ask for: exit 0, and the `run` row is `"symbol":"accept"` at each N, in 87 ms, 164 ms and 465 ms; no `timeout-or-error` row and no `not ok` line [run]. So the rate holds the sample at K = 3 while P grows, on the Lean side too.
+- `r20261111-180601-e67a`, `suites.py --changed 493f49485e50 --quick`, `--cwd source`: exit 0. `repository` 304 passed, `verity-graph` 207 passed; "2 suites: 2 passed (0 cached), 0 failed" [run]. One run, no second copy; no Lean records run.
+- Merges: `git merge-tree` with `main` at `cc6ee7446278` gives a tree with no conflict, so I merged nothing [run]. With #8999 too, at its new head `dc1baf648bf3` [run]. Note that #8999's head has moved since my reading, which was at `fef48ce41a13` and says nothing about `dc1baf648bf3`.
+
+**What would have caught it (report only; I built none).** Today nothing can: `whole_run.sh:27-40` copies `Main.lean` into a scratch package, no lakefile is under `benchmarks/`, and the Lean check's packages are the directories that hold a `lean-audit.json` (`tools/verity/lean/lean_audit.py:198-200`) [read]. Seven `Main.lean` under `benchmarks/verifier_cost/` are in that state: two import Spot, four Flock, one NciCheck [read].
+
+1. **(A) An elaboration test, which I recommend.** One test: `lake build Spot`, then `lake env lean` on each `Main.lean`, then `whole_run.py DIR toy 146 --check`. It needs a suite, since `benchmarks/verifier_cost` has none: a `pyproject.toml`, the root's `members` line, an entry in `AFTER_LEAN` (`tools/verity/check/suites.py:210`), `inputs` naming the verifier packages it reads, and the test file under `untraced`. No lock, no lakefile.
+2. **(A)'s cost, measured** on the two mains that import Spot [run `r20261111-181159-3283`]: a no-op `lake build Spot` 0.16 s, both elaborations 1.37 s, the generator's check 1.68 s: 3.2 s where the package is built. Where it is not, `lake build Spot` took 47 s in one fresh clone and 273 s in another [run `r20261111-180404-d956`, `-3283`]. It reruns when Spot changes, so #7918 would have met it, and it catches both of #7918's breaks: the type mismatch and the generator's refused law.
+3. **(B) A test that runs the script.** `whole_run.sh run toy 146` took 72.8 s end to end [run `-8b3c`], `desc toy 146 1000` 55.8 s [run `r20261111-171253-222c`], and 287 s to its failure on a cold build [run `r20261111-165740-b3dc`]. It also catches a refusal at run time in the Lean. It needs (A)'s suite, and the script changed to run inside a test: today it wants `$OUT`, runs `uv sync`, and builds into the verifier's `.lake`, so it runs only from a clone (`whole_run.sh:6`) [read].
+4. **(C) A real Lake target.** Either a package under `benchmarks/verifier_cost/` (a lakefile, a manifest, a toolchain file, a `lean-audit.json`, an entry in `tests/test_lean_packages.py`), which the Lean check then builds and replays on every Spot change; or the file moved into `core_spot` as a `lean_exe`, which puts a measurement inside the verifier's package and its lock. Cost NOT MEASURED: I may launch no package audit tonight. Neither catches the Python break.
+5. **Why (A):** seconds against (B)'s minute, no lock or Lake file against (C), and it is the only one of the three that covers all seven mains and the generator at once. What it misses, a run-time refusal in the Lean, `--check` covers through the Python reference, which the difftest holds to the Lean [derived].
+6. NOT CHECKED: whether the five mains that import Flock or NciCheck elaborate on `main` today. `registration/Main.lean`, the other one on Spot, does [run `r20261111-180404-d956`, 0.66 s, exit 0].
+
+For the table:
+- #9027: head `ff8f3ea94705`, marked 18:22Z, admitted; waits for a land verdict (`*.lean` keeps it off the low-risk lane).
+- Law `stratified-rate:2/P`: K = 3 and the sample 1, 2, 1, as the old law gave. Runs: `-8b3c` (run 146) 0, `-c07f` (desc 146, 1000) 0, `-d935` (run 1000, 10000, 50000) 0, `-e67a` (suites) 0.
+- Guard, recommended: a `benchmarks/verifier_cost` suite with one elaboration test over its seven `Main.lean` plus `whole_run.py --check`: 3.2 s on a built tree, no lock.
+- #8999's head is now `dc1baf648bf3`; my reading covers `fef48ce41a13` only.
