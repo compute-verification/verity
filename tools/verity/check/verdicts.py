@@ -4,15 +4,14 @@
     python tools/verity/check/verdicts.py snapshot OUT.json                     every verdict entry here, by path and sha256
     python tools/verity/check/verdicts.py export OUT.tar.gz [--since SNAP.json] the entries (those new or changed since SNAP) as a pack
     python tools/verity/check/verdicts.py import PACK.tar.gz                    add a pack's entries here, never replacing one
-    python tools/verity/check/verdicts.py combine OUT.tar.gz PACK.tar.gz...     one pack of several, the first's entry where two hold one
 
 A verdict is a pass that one step stored under a key of everything it read: a suite's pass and its tests' (`suites.py`, under `$VERITY_TEST_CACHE`),
 and under `$CHECK_CACHE` a circuit-check target's report, a Lean package's audit (`lean_audit.py`) and the agreement's pass
 (`check.py`).  A step looks an entry up by the key it computes from this machine's own inputs, so a pack can answer only for inputs
-identical to the ones that earned it.  It is trusted as far as its source: `check.py --record` gathers packs only from recorded
-runs (`gather_verdicts`).
+identical to the ones that earned it.  It is trusted as far as its source: a recorded check imports packs only from recorded
+runs (`check.verdict_packs`), each held to the sha256 the store lists for it (`check.verdicts_fetched`).
 Never packed, since they aren't verdicts: `lean-deps/` (fetched dependencies), `lean-builds/` (the Lean audit's kept builds,
-`lean_audit.WarmBuilds`, whose `ir/*.setup.json` run to 9 MB each and grew a combined pack past 15 GB), `lean-artifacts/`
+`lean_audit.WarmBuilds`, whose `ir/*.setup.json` run to 9 MB each), `lean-artifacts/`
 (Lake's cache of built modules, `lean_audit.LakeArtifacts`, whose index entries name files no pack carries), the trees steps build in, not even walked since a
 tree holds a package's dependencies, some 170k files (`lean_changed.py`'s `lean-changed/` for check's early Lean step and
 `lean-records/` for the Lean fast path, and `lean_audit.py`'s `lean-audit-scratch-*/`, which another slot may remove while this one
@@ -22,6 +21,10 @@ it is read (`suites.py` keeps only a module's newest passes) is left out.
 Each root keeps a hidden index, `.verdicts-index.json`, memoizing its entries' sha256 by (size, mtime_ns), so `snapshot` and a
 check's closing `export` stat the cache instead of re-reading it (hundreds of GB once grown); only new or changed entries are
 read.  Hidden files are never listed and never packed, and a missing or garbled index only costs the re-read.
+
+An entry may name the entries it can't be read without (`NEEDS`), and a pack that holds it holds them too, whether or not they
+are new: circuit-check's entries refer to read records each stored once (`circuit_check.cache`), which a later run's entries
+share.
 
 A pack is a tar of regular files under `check/` and `tests/`, gzipped, or xz-compressed when `export_paths` writes a recorded
 check's reused passes (`check.Reused`), whose circuit-check entries share most of their bytes. `import` refuses a pack holding anything else (a link, an
@@ -37,9 +40,11 @@ import io
 import json
 import lzma
 import os
+import posixpath
 import importlib.util
 import sys
 import tarfile
+import zlib
 from pathlib import Path
 
 _spec = importlib.util.spec_from_file_location("verdicts_settings", Path(__file__).resolve().parent / "settings.py")
@@ -48,6 +53,9 @@ SETTINGS = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(SETTINGS)
 SKIP = {"check": {"lean-deps", "lean-builds", "lean-changed", "lean-records", "lean-artifacts"}, "tests": {"logs", "durations.json"}}
 SCRATCH = {"check": ("lean-audit-scratch-",), "tests": ()}
+#: an entry's top-level list of the entries it can't be read without, each by its path from the entry's own directory, in its
+#: own root: a cache that stores each distinct part of its entries once (`circuit_check.cache`'s read records) names them here
+NEEDS = "needs"
 
 
 def _skipped(prefix: str, top: str) -> bool:
@@ -62,14 +70,18 @@ def roots() -> dict[str, Path]:
 
 
 def entries() -> dict[str, Path]:
-    """`{pack path: file}` for every verdict entry here, a pack path being `check/...` or `tests/...`."""
+    """`{pack path: file}` for every verdict entry here, a pack path being `check/...` or `tests/...`.  A directory at a cache's
+    top that is a link (a machine keeping `circuit-check/` on another disk than the cache around it) is walked like any other:
+    the step that stores there, `import_` and `export_paths` all follow it, so a walk that didn't would pack nothing the step
+    stored.  A link further down is never followed."""
     out = {}
     for prefix, base in roots().items():
         if not base.is_dir():
             continue
-        for d, dirs, names in os.walk(base):
+        for d, dirs, names in os.walk(base, followlinks=True):
             top = Path(d) == base
-            dirs[:] = [x for x in dirs if not x.startswith(".") and not (top and _skipped(prefix, x))]
+            dirs[:] = [x for x in dirs if not x.startswith(".") and not (top and _skipped(prefix, x))
+                       and (top or not os.path.islink(os.path.join(d, x)))]
             for name in names:
                 p = Path(d) / name
                 rel = p.relative_to(base)
@@ -187,45 +199,73 @@ def changed(since: dict[str, str]) -> dict[str, tuple[str, Path]]:
     return {k: (d, found[k]) for k, d in _digests(found).items() if since.get(k) != d}
 
 
-def export(out: Path, since: dict[str, str] | None = None, new: dict[str, tuple[str, Path]] | None = None) -> int:
-    """Write the entries new or changed since `since` (all when None; ``new``, `changed(since)`, when given) as a pack at `out`;
-    the number written.  With `since`, only the new or changed entries are read (`_digests`), so a check's closing export costs
-    what the run stored, not the whole cache."""
-    if since is None and new is None:
-        found = entries()
+def _entry_file(base: dict[str, Path], k: str) -> Path | None:
+    """The file of the verdict entry at pack path ``k`` here; None when it isn't here or the path names no verdict entry."""
+    prefix, _, rel = k.partition("/")
+    parts = Path(rel).parts
+    if prefix in base and k.endswith(".json") and parts and ".." not in parts and not any(x.startswith(".") for x in parts) \
+            and not _skipped(prefix, parts[0]) and (base[prefix] / rel).is_file():
+        return base[prefix] / rel
+    return None
 
-        def items():
-            for k, p in sorted(found.items()):
-                data = _read(p)
-                if data is not None:
-                    yield k, data
+
+def _needs(k: str, data: bytes) -> list[str]:
+    """The pack paths the entry at ``k``, of bytes ``data``, names in its `NEEDS`, each in its own root.  An entry whose bytes are
+    not JSON is packed as it is and needs none: no lookup reads it, here or where the pack goes (circuit-check counts it as no
+    entry), so nothing it names is needed, and refusing the pack for it would lose every other verdict of the run."""
+    if f'"{NEEDS}"'.encode() not in data:
+        return []
+    try:
+        doc = json.loads(data)
+    except ValueError as e:
+        print(f"verdicts: {k} is not JSON ({e}): packed as it is, with none of what it names", file=sys.stderr)
+        return []
+    got = doc.get(NEEDS) if isinstance(doc, dict) else None
+    top, here = k.split("/", 1)[0], posixpath.dirname(k)
+    return [p for n in got if isinstance(n, str) and (p := posixpath.normpath(posixpath.join(here, n))).startswith(top + "/")] \
+        if isinstance(got, list) else []
+
+
+def _closed(files: dict[str, Path]) -> dict[str, Path]:
+    """``files`` (`{pack path: file}`) with every entry here that one of them needs (`NEEDS`), and each one those need."""
+    base, out, todo = roots(), dict(files), list(files)
+    while todo:
+        k = todo.pop()
+        data = _read(out[k])
+        for n in _needs(k, data) if data is not None else ():
+            if n not in out and (f := _entry_file(base, n)) is not None:
+                out[n] = f
+                todo.append(n)
+    return out
+
+
+def export(out: Path, since: dict[str, str] | None = None, new: dict[str, tuple[str, Path]] | None = None) -> int:
+    """Write the entries new or changed since `since` (all when None; ``new``, `changed(since)`, when given), with every entry
+    they need (`_closed`), as a pack at `out`; the number written.  With `since`, only the new or changed entries and what they
+    need are read (`_digests`), so a check's closing export costs what the run stored, not the whole cache."""
+    if since is None and new is None:
+        files = entries()
     else:
         new = changed(since) if new is None else new
-
-        def items():
-            for k in sorted(new):
-                data = _read(new[k][1])
-                if data is not None:
-                    yield k, data
-    return _write(out, items())
+        files = _closed({k: p for k, (_d, p) in new.items()})
+    return _write(out, sorted(files.items()))
 
 
 def export_paths(out: Path, paths, xz: bool = False) -> int:
-    """Write the entries here that ``paths`` (pack paths) name as a pack at `out`, in path order, each once; one that isn't here
-    (or is no verdict entry) is left out.  The number written."""
+    """Write the entries here that ``paths`` (pack paths) name, with every entry they need (`_closed`), as a pack at `out`, in
+    path order, each once; one that isn't here (or is no verdict entry) is left out.  The number written."""
     base = roots()
-    files = {}
-    for k in paths:
-        prefix, _, rel = k.partition("/")
-        parts = Path(rel).parts
-        if prefix in base and k.endswith(".json") and parts and ".." not in parts and not any(x.startswith(".") for x in parts) \
-                and not _skipped(prefix, parts[0]) and (base[prefix] / rel).is_file():
-            files[k] = base[prefix] / rel
-    return _write(out, sorted(files.items()), xz)
+    files = {k: f for k in paths if (f := _entry_file(base, k)) is not None}
+    return _write(out, sorted(_closed(files).items()), xz)
 
 
 class BadPack(Exception):
     pass
+
+
+#: what reading a pack raises when it isn't one `import` takes: a member that isn't a verdict entry, or a file that isn't a tar
+#: or whose compressed stream is cut short or corrupt (past the first header `tarfile` leaves zlib's and lzma's errors as they are)
+UNREADABLE = (BadPack, tarfile.TarError, OSError, EOFError, zlib.error, lzma.LZMAError)
 
 
 def _members(tar: tarfile.TarFile) -> list[tarfile.TarInfo]:
@@ -242,19 +282,19 @@ def _members(tar: tarfile.TarFile) -> list[tarfile.TarInfo]:
 
 
 def refusal(pack: Path) -> str | None:
-    """Why `import` and `combine` would refuse the pack (not a gzipped or xz-compressed tar, or a member that isn't a verdict entry); None when
-    they take it."""
+    """Why `import` would refuse the pack (`UNREADABLE`: not a gzipped or xz-compressed tar, one cut short or corrupt, or a member
+    that isn't a verdict entry); None when it takes it."""
     try:
         with tarfile.open(pack, "r:*") as tar:
             _members(tar)
-    except (BadPack, tarfile.TarError, OSError, EOFError) as e:
+    except UNREADABLE as e:
         return f"{type(e).__name__}: {e}"
     return None
 
 
-def import_(pack: Path, only: str | None = None) -> tuple[int, int]:
-    """Add the pack's entries that don't exist here, with ``only`` just those whose pack path starts with it; (added, already
-    here).  Nothing is written when the pack is refused."""
+def import_(pack: Path, only: str | tuple[str, ...] | None = None) -> tuple[int, int]:
+    """Add the pack's entries that don't exist here, with ``only`` just those whose pack path starts with it (or one of them);
+    (added, already here).  Nothing is written when the pack is refused."""
     base = roots()
     added = kept = 0
     with tarfile.open(pack, "r:*") as tar:
@@ -276,30 +316,6 @@ def import_(pack: Path, only: str | None = None) -> tuple[int, int]:
     return added, kept
 
 
-def combine(packs: list[Path], out: Path) -> int:
-    """Write one pack at `out` holding every entry of ``packs``, the first pack's where two hold one path (an entry's path is its
-    key, so both say the same); the number written.  A pack `import` would refuse is refused here too, and nothing is written.
-    Each entry is spilled to a file beside `out` as it is read and streamed back in path order, so memory holds one entry at a
-    time: the newest recorded checks' packs, held whole, outgrew a 15 GB VM (`check.py --record`'s `gather_verdicts`)."""
-    import shutil
-    import tempfile
-
-    out.parent.mkdir(parents=True, exist_ok=True)
-    spill = Path(tempfile.mkdtemp(prefix=".combine-", dir=out.parent))
-    try:
-        found: dict[str, Path] = {}
-        for pack in packs:
-            with tarfile.open(pack, "r:*") as tar:
-                for m in _members(tar):
-                    if m.name not in found:
-                        p = found[m.name] = spill / str(len(found))
-                        with tar.extractfile(m) as src, open(p, "wb") as dst:
-                            shutil.copyfileobj(src, dst)
-        return _write(out, sorted(found.items()))
-    finally:
-        shutil.rmtree(spill, ignore_errors=True)
-
-
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="verdicts", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -311,9 +327,6 @@ def main(argv: list[str]) -> int:
     e.add_argument("--since", type=Path)
     i = sub.add_parser("import")
     i.add_argument("pack", type=Path)
-    c = sub.add_parser("combine")
-    c.add_argument("out", type=Path)
-    c.add_argument("packs", type=Path, nargs="+")
     a = ap.parse_args(argv)
     if a.cmd == "list":
         found = entries()
@@ -327,17 +340,9 @@ def main(argv: list[str]) -> int:
         n = export(a.out, json.loads(a.since.read_text()) if a.since else None)
         print(f"verdicts: {n} entries -> {a.out}")
         return 0
-    if a.cmd == "combine":
-        try:
-            n = combine(a.packs, a.out)
-        except (BadPack, tarfile.TarError) as err:
-            print(f"verdicts: refused: {err}", file=sys.stderr)
-            return 1
-        print(f"verdicts: {n} entries from {len(a.packs)} packs -> {a.out}")
-        return 0
     try:
         added, kept = import_(a.pack)
-    except (BadPack, tarfile.TarError) as err:
+    except UNREADABLE as err:
         print(f"verdicts: refused {a.pack}: {err}", file=sys.stderr)
         return 1
     print(f"verdicts: {added} added, {kept} already here, from {a.pack}")

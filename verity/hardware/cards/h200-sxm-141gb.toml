@@ -1,7 +1,7 @@
 # The NVIDIA H200 SXM 141 GB: the one source of its numbers (verity/hardware/README.md).
 # Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this SKU and firmware exceeds it, what the
 # model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or "placeholder"
-# (neither, open). Per-SM rates are a SM-clock's. Security/Definitions/Core/Accel/H200.lean is held to this file. The
+# (neither, open). Per-SM rates are a SM-clock's. security/Definitions/Core/Accel/H200.lean is held to this file. The
 # host the card sits in is its own card (xeon-platinum-8468-2s.toml on our nodes).
 
 kind = "gpu"
@@ -11,7 +11,7 @@ die = "GH100"
 arch = "sm_90a"
 board = "692-2G520-0280-001"
 vbios = "96.00.A5.00.03"
-lean = "Security/Definitions/Core/Accel/H200.lean"
+lean = "security/Definitions/Core/Accel/H200.lean"
 nodes = "two H200 nodes (art:72daa20de42c, art:28ff838a63c9: identical apart from the current clocks)"
 
 [sm]
@@ -51,7 +51,7 @@ bandwidth = { value = 4.916736e12, unit = "B/s", mark = "ceiling", source = "clo
 [weight]
 s8 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "rate.tensor's unit" }
 u8 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "the data sheet's INT8 rate, u8 as s8" }
-b1 = { value = 0.125, unit = "tensor unit/MAC", mark = "measurement", source = "measured: the H200's b1 MMA (BGMMA m64n256k256) runs 32764.6 b1 MACs a SM-clock, exactly 8 times s8's 4095.6 at the same instruction rate; no document gives a b1 peak" }
+b1 = { value = 0.125, unit = "tensor unit/MAC", mark = "measurement", source = "measured: the H200's b1 MMA (BGMMA m64n256k256) runs 32764.6 b1 MACs a SM-clock, exactly 8 times s8's 4095.6 at the same instruction rate (art:83dbd28b545b; both rows carry the probe's throttled tag); no document gives a b1 peak" }
 e4m3 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "the H200 data sheet: FP8 1,979 dense TFLOPS, the INT8 rate" }
 e5m2 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "as e4m3" }
 e2m1 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "the card has no FP4 MMA: an op the card lacks only adds programs to the model" }

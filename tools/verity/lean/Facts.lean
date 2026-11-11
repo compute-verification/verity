@@ -47,8 +47,9 @@ judgement; `check.py` holds the policy.
 - each pin's `inline`: the `Prop` binders of its statement, with a definition under `meaning` it applies unfolded once
   (`liftOf`), in each conjunct, instance binders aside, each split past its leading `∀` over data and at `∧`
   (`inlineParts`): as printed with those `∀`s, its head as written and past reducible unfolding (`premiseHead`), whether
-  it is a plain range (`plainRange`), whether it is closed, whether the statement as written binds it (`outer`), and the
-  constants it uses whose names its text shows (`consts`).
+  it is a plain range (`plainRange`), whether it is closed, whether the statement as written binds it (`outer`), the
+  constants it uses whose names its text shows (`consts`), and each field its text shows by field notation, `x.f`, with
+  the object as printed and the constant it stands for (`fields`, `fieldsShown`).
 - `constants`: each name under `names` (what `check.py` asks after: the names in the lock's `shape.inline` texts) and
   each of the inline parts' `consts` that is a constant here, with its kind; a definition's and a theorem's `readCanon` is
   a `const:` line, so `check.py` can tell a renamed declaration from another one.
@@ -1018,10 +1019,29 @@ def plainRange (t : Expr) : Bool :=
     | some a, some b => (a < 2 && b < 2) || (a + b == 2 && a != b)
     | _, _ => false
 
+/-- The fields `text`, `e` as printed, shows by field notation: each application in `e` the delaborator can print as
+`x.f` (`fieldNotationCandidate?`, a structure's projection or generalized field notation) whose printed `x.f` the text
+holds, as `[x as printed, f, the constant x.f stands for]`, so that `check.py` can tell what a dotted name ending in a
+field names. -/
+def fieldsShown (e : Expr) (text : String) : MetaM (Array Json) := do
+  let out ← IO.mkRef (#[] : Array (String × String × String))
+  discard <| Meta.transform e (pre := fun s => do
+    if let .const c _ := s.getAppFn.consumeMData then
+      let args := s.getAppArgs
+      if let some (field, i) ← tryCatch (PrettyPrinter.Delaborator.fieldNotationCandidate? s.getAppFn args true)
+          fun _ => pure none then
+        if h : i < args.size then
+          let x := toString (← ppExpr args[i])
+          if (text.splitOn s!"{x}.{field}").length > 1 then
+            out.modify (·.push (x, field.toString, c.toString))
+    return .continue)
+  let lt := fun (a b : String × String × String) => a.1 < b.1 || a.1 == b.1 && (a.2.1 < b.2.1 || a.2.1 == b.2.1 && a.2.2 < b.2.2)
+  return ((← out.get).toList.eraseDups.toArray.qsort lt).map fun (x, f, c) => toJson #[x, f, c]
+
 /-- The parts of a premise `t` for the inline rule, under the binders `ys` stripped so far: past its leading `∀` over data
 (`∀ ω`), split at `∧`. Each is printed with those binders, with its head as written and past reducible unfolding
-(`premiseHead`, which also passes its antecedents: `A → X` asks less than `X`), whether it is a plain range, and the
-constants it uses whose names its text shows. -/
+(`premiseHead`, which also passes its antecedents: `A → X` asks less than `X`), whether it is a plain range, the
+constants it uses whose names its text shows, and the fields its text shows by field notation (`fieldsShown`). -/
 partial def inlineParts (moduleOf : Name → Option Name) (ys : Array Expr) (t : Expr) : MetaM (Array Json) := do
   let t := t.consumeMData
   if let .forallE n d b bi := t then
@@ -1035,7 +1055,8 @@ partial def inlineParts (moduleOf : Name → Option Name) (ys : Array Expr) (t :
   let text := toString (← ppExpr e)
   let consts := (e.getUsedConstants.map toString).filter fun c => (text.splitOn c).length > 1
   return #[Json.mkObj [("type", toJson text), ("head", toJson (head.map toString)),
-    ("unfolded", toJson (unfolded.map toString)), ("range", toJson (plainRange t)), ("consts", toJson (consts.qsort (· < ·)))]]
+    ("unfolded", toJson (unfolded.map toString)), ("range", toJson (plainRange t)), ("consts", toJson (consts.qsort (· < ·))),
+    ("fields", toJson (← fieldsShown e text))]]
 
 /-- Each pin's `inline`: the `Prop` binders of the statement `t`, a definition under `meaning` it applies unfolded once
 (`liftOf`), in each of its conjuncts, instance binders aside, split by `inlineParts`, each with its binder's name, whether

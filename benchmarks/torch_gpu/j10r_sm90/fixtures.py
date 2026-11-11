@@ -25,8 +25,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import shape as S
-from verity.ml.protocols.pouw.circuit import h1tile as HT
-from verity.ml.protocols.pouw.circuit import seeds as SD
+from verity.protocols.pouw.prover.circuit import h1tile as HT
+from verity.protocols.pouw.prover.circuit import seeds as SD
 
 SCHEMA = "j10r-sm90/fixtures/v1"
 ARRAYS = ("units", "receipts", "z", "seed_c", "sigma")

@@ -1,4 +1,4 @@
-"""The one table of domain separators (`verity.ml.commitments.domains`, Lean `Identity.Domains`): the two are equal, entry for
+"""The one table of domain separators (`verity.commitments.domains`, Lean `Identity.Domains`): the two are equal, entry for
 entry; the protocols that read it (``READERS``) carry no literal of it; and every entry is read, or still written somewhere
 by an owner whose code doesn't read the table yet."""
 
@@ -9,38 +9,48 @@ import re
 import subprocess
 from pathlib import Path
 
-from verity.ml.commitments import domains
+from verity.commitments import domains
 
 ROOT = Path(__file__).resolve().parents[1]
-LEAN = ROOT / "verity/core/primitives/identity/Identity/Domains.lean"
-PYTHON = ROOT / "verity/ml/commitments/domains.py"
+LEAN = ROOT / "verity/commitments/identity/Identity/Domains.lean"
+PYTHON = ROOT / "verity/commitments/domains.py"
 #: The protocols whose code reads every separator from the table, Python and Lean, outside their tests and scripts. It
 #: only grows: a protocol joins in the change that makes its code read the table. A Lean definition a lock reads keeps
 #: its literal until its record next changes (the record hashes the value as written), tied to its entry by an
 #: `example : … Domains.NAME … := rfl` in its file (`TIE`).
-READERS: tuple[str, ...] = ("verity/core/protocols/pouw",)
+READERS: tuple[str, ...] = ("verity/protocols/pouw/verifier",)
 SKIPPED_PARTS = {"tests", "scripts"}
 ABBREV = re.compile(r'abbrev ([A-Z][A-Z0-9_]*) : String :=\s*"([^"\\]*)"')
 TIE = re.compile(r"^example : (.*) := rfl$", re.M)
 #: the module header every Lean file has (`tools/verity/lean/modules.py`)
 MODULE = re.compile(r"^(?:module|@\[expose\] public section)$", re.M)
+#: a part of the table, `Identity/Domains/NAME.lean`, which `LEAN` imports ahead of its own entries
+PART = re.compile(r"^public import Identity\.Domains\.([A-Za-z]+)$", re.M)
+
+
+def lean_files() -> list[Path]:
+    """The Lean table's files in its order: the parts `LEAN` imports, in its order, then `LEAN`."""
+    return [LEAN.with_suffix("") / f"{p}.lean" for p in PART.findall(LEAN.read_text())] + [LEAN]
 
 
 def lean_entries() -> list[tuple[str, str]]:
-    body = re.sub(r"/-.*?-/", "", LEAN.read_text(), flags=re.S)
-    body = re.sub(r"--[^\n]*", "", body)
-    rest = MODULE.sub("", ABBREV.sub("", body)).replace("namespace Domains", "").replace("end Domains", "")
-    assert not rest.strip(), (f"{LEAN.relative_to(ROOT)} holds only its module header and `abbrev NAME : String := \"…\"` "
-                              f"lines, found: {rest.strip()[:200]}")
-    return ABBREV.findall(body)
+    entries = []
+    for path in lean_files():
+        body = re.sub(r"/-.*?-/", "", path.read_text(), flags=re.S)
+        body = re.sub(r"--[^\n]*", "", body)
+        rest = PART.sub("", MODULE.sub("", ABBREV.sub("", body))).replace("namespace Domains", "").replace("end Domains", "")
+        assert not rest.strip(), (f"{path.relative_to(ROOT)} holds only its module header, the table's parts it imports "
+                                  f"and `abbrev NAME : String := \"…\"` lines, found: {rest.strip()[:200]}")
+        entries += ABBREV.findall(body)
+    return entries
 
 
 def test_lean_and_python_are_one_table():
     lean = lean_entries()
     assert len({n for n, _ in lean}) == len(lean), "a name appears twice in the Lean table"
     assert lean == list(domains.TABLE.items()), (
-        "the Lean table (Identity/Domains.lean) and the Python one (verity/ml/commitments/domains.py) differ: write each "
-        "entry in both, in the same order")
+        "the Lean table (Identity/Domains.lean, after the parts it imports from Identity/Domains/) and the Python one "
+        "(verity/commitments/domains.py) differ: write each entry in both, in the same order")
 
 
 def test_entries_are_distinct_and_bare():
@@ -131,18 +141,18 @@ def test_readers_carry_no_literal_of_the_table():
             found += [f"{rel}:{line}: {v!r} is `{by_value[v.rstrip(chr(0))]}`" for line, v in literals
                       if v.rstrip("\0") in by_value]
     assert not found, ("a protocol that reads the table writes a separator of it as a literal; read it from "
-                       "`verity.ml.commitments.domains` (Python) or `Domains` (Lean, `import Identity.Domains`; a "
+                       "`verity.commitments.domains` (Python) or `Domains` (Lean, `import Identity.Domains.Pouw`; a "
                        "definition a lock reads keeps its literal, tied in its file by `example : … Domains.NAME … := "
                        "rfl`):\n"
                        + "\n".join(found))
 
 
 def test_every_entry_is_read_or_still_written():
-    files = subprocess.run(["git", "ls-files", "-z", "verity"], cwd=ROOT, check=True, capture_output=True).stdout
-    text = []
+    files = subprocess.run(["git", "ls-files", "-z", "verity", "adapters/vllm/verity_vllm/commitments"], cwd=ROOT, check=True, capture_output=True).stdout
+    text, table = [], {*lean_files(), PYTHON}
     for rel in files.decode().split("\0"):
         path = ROOT / rel
-        if rel and path.suffix in (".py", ".lean", ".c", ".cu", ".cuh", ".h", ".rs", ".json") and path not in (LEAN, PYTHON):
+        if rel and path.suffix in (".py", ".lean", ".c", ".cu", ".cuh", ".h", ".rs", ".json") and path not in table:
             text.append(path.read_text(errors="replace"))
     corpus = "\n".join(text)
     names = set(re.findall(r"\b[A-Z][A-Z0-9_]*\b", corpus))

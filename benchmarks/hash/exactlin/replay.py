@@ -3,9 +3,9 @@ on each dumped x against the kernel's xq and s_a, and `ScaledMmS8_v1` (int8_rows
 on the kernel's xq and s_a, row by row, against its y.  The npz files are `kgate.py --dump`'s (OUT/replay/), words
 throughout; CPU only.
 
-`--evaluators` is an int8_rows.py to load in place of the installed `verity.ml.definitions.numerics.int8_rows`, e.g. a
+`--evaluators` is an int8_rows.py to load in place of the installed `verity.definitions.numerics.int8_rows`, e.g. a
 commit's:
-    git show REV:verity/ml/definitions/numerics/int8_rows.py > /tmp/int8_rows.py
+    git show REV:verity/definitions/numerics/int8_rows.py > /tmp/int8_rows.py
     python replay.py RUN/out/replay --evaluators /tmp/int8_rows.py
 """
 from __future__ import annotations
@@ -15,14 +15,18 @@ import importlib.util
 import json
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
+if TYPE_CHECKING:
+    from types import ModuleType
 
-def load(path: str | None):
+
+def load(path: str | None) -> ModuleType:
     if path is None:
         try:
-            from verity.ml.definitions.numerics import int8_rows
+            from verity.definitions.numerics import int8_rows
         except ImportError as e:
             raise SystemExit(f"replay.py: {e}; install verity, or pass --evaluators (see the docstring)") from e
         return int8_rows
@@ -32,7 +36,7 @@ def load(path: str | None):
     return mod
 
 
-def check(ev, f: Path) -> dict:
+def check(ev: ModuleType, f: Path) -> dict:
     d = np.load(f)
     x, xq, s, w, sw, y = (d[k] for k in ("x", "xq", "s", "w", "sw", "y"))
     m, k = x.shape
@@ -55,14 +59,14 @@ def check(ev, f: Path) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("dump", help="a directory of kgate.py --dump's npz files")
-    ap.add_argument("--evaluators", help="an int8_rows.py to load (default: verity.ml.definitions.numerics.int8_rows)")
+    ap.add_argument("--evaluators", help="an int8_rows.py to load (default: verity.definitions.numerics.int8_rows)")
     a = ap.parse_args()
     ev = load(a.evaluators)
     rows = [check(ev, f) for f in sorted(Path(a.dump).glob("*.npz"))]
     for r in rows:
         print(json.dumps(r), flush=True)
     doc = {"ok": bool(rows) and all(r["ok"] for r in rows), "files": len(rows), "scaled_mm": hasattr(ev, "scaled_mm"),
-           "evaluators": a.evaluators or "verity.ml.definitions.numerics.int8_rows"}
+           "evaluators": a.evaluators or "verity.definitions.numerics.int8_rows"}
     print(json.dumps(doc), flush=True)
     return 0 if doc["ok"] else 4
 

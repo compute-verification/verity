@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 
 from verity_flock import multi_unit as MU
-from verity.ml.definitions.numerics import derived_rows as DR
+from verity.definitions.numerics import derived_rows as DR
 
 G = 128
 SALT_KEY = b"multi-unit-benchmark"
@@ -54,15 +54,15 @@ def draw(K: int, N: int, n: int, seed: int = 0):
 
 
 def definition(K: int, N: int):
-    from verity.ml.circuits.defs import bind
-    from verity.ml.definitions.registry import boolean_fp8 as BF
+    from verity.circuits.defs import bind
+    from verity.definitions.registry import boolean_fp8 as BF
 
     return bind(BF.ScaledMmFp8BlockV2, K=K, N=N, G=G)
 
 
 def reference(K: int, N: int, rows: dict) -> np.ndarray:
     """The whole Definition's IR reference on each instance's leaves (the rows' bits, low first)."""
-    from verity.ml.circuits.evaluation import evaluate
+    from verity.circuits.evaluation import evaluate
 
     d = definition(K, N)
     out = []

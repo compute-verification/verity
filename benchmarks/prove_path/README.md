@@ -16,7 +16,7 @@ store, since their bundles and requests hold request values. The docstrings say 
 
 A declared run's audit (`a5.py --tp-commit`) derives each rank's Programs from the workload the record served. Under arbitrary
 usage no workload is declared: serving decides the batches, arrivals and lengths, and the advice (I1,
-`verity.core.protocols.certifier.advice`) records those decisions. The advice is private: it is committed under hiding
+`verity.protocols.certifier.verifier.advice`) records those decisions. The advice is private: it is committed under hiding
 commitments and never published.
 
 1. **Registration binds the compiler and the advice's hiding root, not a workload.** The rank's window provenance (core's
@@ -63,8 +63,8 @@ commitments and never published.
    - The advice can only choose among Programs the compiler emits. Every unit's values are still committed under hiding leaves
      and opened only inside the proof.
 7. **Transfer gates are proved whole** (`--transfer-gate T`, both sides). The compiler lists the templates whose units hold
-   transfer gates (the I/O shell's), and its digest covers the list. The window's `work:K` sampling design samples every unit of theirs beside
-   K of the rest, and the stream registers with that work table. a5's `transfer_gate_negatives` refuse a proved set short of one
+   transfer gates (the I/O shell's), and its digest covers the list. The window's work sampling design (`work-rate:NUM/DEN`, the
+   stream's rule) samples every unit of theirs beside the rest's share, and the stream registers with that work table. a5's `transfer_gate_negatives` refuse a proved set short of one
    of them, a sample trading one away, and a registration sampling them as the rest. Until the compiler lists the I/O shell's
    units, a stand-in template stands for them; on Llama TP1 that is layer 0's 160 RoPE heads (`llama32_1b_tg_l0_step1.json`).
 
@@ -76,11 +76,11 @@ What doesn't change:
 
 ## What an accepted audit means
 
-Each guarantee below is listed in the lock (`Security/lean-audit.json`), which records its statement, the definitions it
+Each guarantee below is listed in the lock (`security/lean-audit.json`), which records its statement, the definitions it
 reads and its named assumptions.
 
 **A `--zk` session's acceptance, read in the sampling relation.** `Flock.SecurityProofs.SampledKSLiveV3`
-(`Security/Proofs/Flock/Bridge/KSLive.lean`): on the event that `flock-verify verify --zk` accepts the transcript and the
+(`security/Proofs/Flock/Bridge/KSLive.lean`): on the event that `flock-verify verify --zk` accepts the transcript and the
 files (their ports `sha512/row/v1`, `row/v2` or `row-seg/v1` rows of distinct names, no root registered under two domains)
 and the sampled-proofs run passes the registration's population, the committed transcript, read as the sampling witness, is
 outside the sampling relation `RelS` at δ with probability at most δ + ε_ks + δ_link. It takes no hypothesis on the files.
@@ -88,10 +88,10 @@ It follows from `SampledKSLiveV2`, the same bound at the circuit files the verif
 are the coins (A3, `FlockSoundness.Assumptions.UniformRandomBytes`), the live verifier, and SHA-512's collision resistance.
 
 **The property.** `NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted`, at any
-sampling deployment `D`: `∀ H D L K S lay k, Claims.Sampling.KS H D → KSAccepted H D L K S lay k`. The sampled step units
-are its sampled class. On the statements in scope (`ScopeAcc`), at every δ ≥ 0, every decoder within Flock's radius and
-every prover, Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind, with ε_ks = κ(δ) − δ + √(γ·Pr[B]) and ε_bind = Pr[B_ext]. Pr[B] and
-Pr[B_ext] are the chances of finding a SHA-512 collision in the run, not an assumption. `RAcc δ` holds when:
+compiled sampled verifier `D`: `∀ H D L K S lay k, D.KS H → KSAccepted H D L K S lay k` (`Compiled.KS`). The sampled
+step units are its sampled class. On the statements in scope (`ScopeAcc`), at every δ ≥ 0 and every prover,
+Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind, with ε_ks = κ(δ) − δ + √(γ·Pr[B]) and ε_bind = Pr[B_ext]. Pr[B] and Pr[B_ext] are
+the chances of finding a SHA-512 collision in the run, not an assumption. `RAcc δ` holds when:
 - the incorrect set is in M_δ = {B : P_a(B) > δ} (`RelS`);
 - no incorrect proof block is in a class sampled `all`: the transfer-gate units and the network certifier's head checks
   (`allSlots`);
@@ -101,8 +101,8 @@ Pr[B_ext] are the chances of finding a SHA-512 collision in the run, not an assu
   `free` is empty and `Accepted` is exact.
 
 **The leak bound.** `NetTiming.SecurityProofs.SampledLeakAccepted : NetTiming.Guarantees.SampledLeakAccepted`
-(`NetTiming.sampledLeak_reg`) composes the property with the count `EncardAccSeqsSampledLe`, over any deployment. Given
-`SampledAuditAccepted` and `Claims.Sampling.KS` at the deployment, except with probability δ + ε_ks + ε_bind, an accepted
+(`NetTiming.sampledLeak_reg`) composes the property with the count `EncardAccSeqsSampledLe`, over any compiled
+verifier. Given `SampledAuditAccepted` and `Compiled.KS` there, except with probability δ + ε_ks + ε_bind, an accepted
 audit's carried sequences, cut at the horizon, number at most 2^c · #faultySets(δ) · 2^β · D^n, at whatever values the
 statement's registered inputs `reg` hold (`AsReg`). So the audit leaks at most c + λ_δ + β_δ + n·log2 D bits:
 - c = #(`freeInputs` \ `reg`): the free inputs are the circuit's input gates that no step before the horizon lists as
@@ -131,37 +131,37 @@ history would discharge, and doesn't discharge them yet.
   and a partial window, which lacks a writer's template, so the wire from it is not made and its port is free. No figure
   states the leak bound there. Over several windows, c is their sum, and null if any one's is.
 - δ is `delta`. Per rank, `ranks.<r>.audit.wrong_units` is `{delta, of, bound, rule, per_template}` (the
-  `wrong_units` function in `verity/core/protocols/spot/one_stage/audit.py`). Except with probability δ, at most
+  `wrong_units` function in `verity/protocols/spot/verifier/one_stage/audit.py`). Except with probability δ, at most
   `bound` of the `of` units are incorrect, and at most `per_template[t]` of them are in template t (`Stratified.count_bound`,
   `stratum_bounds`).
 - β_δ is `harm_bound`: the profile's `harm_bound`, each template's units weighted by its committed bits (`_template_bits`
-  in `verity/core/protocols/spot/one_stage/partition.py`). λ_δ is `location_bits` (`consumers.location_bits`):
+  in `verity/protocols/spot/verifier/one_stage/partition.py`). λ_δ is `location_bits` (`consumers.location_bits`):
   log2 of the at most Σ_{j ≤ bound} C(n, j) incorrect sets. `exfiltration_bound` is β_δ + λ_δ.
 - The run doesn't print ε_ks or ε_bind (the profile's `epsilon_log2` is null), or n·log2 D, which is the certifier's term.
 
 **A plain audit** (`--plain`, `PP_PLAIN=1`) is one table under a stratified sample, each window one member with no registered
 reads or shared rows (`a5.PLAIN_SCOPE`). `flock_verify_sound`'s plain part covers each session at one table (`SoundExec`,
 `SoundExecH` at hidden outputs, `SoundExecHR` with registered reads), in the game form
-(`Security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean`). No theorem carries a plain session's acceptance to the
+(`security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean`). No theorem carries a plain session's acceptance to the
 sampling relation, as `SampledKSLiveV3` does under `--zk`, so a plain audit shows each session's soundness, not the audit
 guarantee above.
 
 **The named assumptions.**
 - SHA-512 collision resistance: `FlockSoundness.Assumptions.SHA512CRStrict` and `SHA512CRExpected`
-  (`Security/Definitions/Assumptions/Flock.lean`, the lock's named assumptions), and `Claims.StrictBirthday` and
-  `Claims.ExpectedCR` (`Security/Definitions/Core/Interaction.lean`).
+  (`security/Definitions/Assumptions/Flock.lean`, the lock's named assumptions), and `Claims.StrictBirthday` and
+  `Claims.ExpectedCR` (`security/Definitions/Core/Interaction.lean`).
 - A3, the coins: `FlockSoundness.Assumptions.UniformRandomBytes` (the same file as the first two).
 - Record custody: under `--zk`, `FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw`
-  (`Security/Proofs/Flock/Soundness/Assumptions/ZkP.lean`; `RecordCustodyZKJ`, its instance at no public inputs, is in
-  `Security/Proofs/Flock/Soundness/Premises.lean`) and `Zk.RecordCustodyZKLaw` and its forms
-  (`Security/Proofs/Flock/Soundness/Assumptions/CustodyZk.lean`); in plain, `FlockSoundness.Assumptions.RecordCustodyExec`
-  and `RecordCustodyExecH` (`Security/Proofs/Flock/Soundness/Assumptions/Custody.lean`).
-- `Verity.Assumptions.TrustedHost` (`Security/Definitions/Core/Assumptions.lean`), which is why `Carries` holds of the
+  (`security/Proofs/Flock/Soundness/Assumptions/ZkP.lean`; `RecordCustodyZKJ`, its instance at no public inputs, is in
+  `security/Proofs/Flock/Soundness/Premises.lean`) and `Zk.RecordCustodyZKLaw` and its forms
+  (`security/Proofs/Flock/Soundness/Assumptions/CustodyZk.lean`); in plain, `FlockSoundness.Assumptions.RecordCustodyExec`
+  and `RecordCustodyExecH` (`security/Proofs/Flock/Soundness/Assumptions/Custody.lean`).
+- `Verity.Assumptions.TrustedHost` (`security/Definitions/Core/Assumptions.lean`), which is why `Carries` holds of the
   real run.
-- The certifier's wire (`Security/Definitions/NetworkCertifier/Assumptions.lean`): W2 `NetTiming.Regenerates`, W4
+- The certifier's wire (`security/Definitions/NetworkCertifier/Assumptions.lean`): W2 `NetTiming.Regenerates`, W4
   `NetTiming.Packed` and `NetTiming.Allocated`, and J `NetTiming.JitterBounded`. They enter through the wire bounds, which
   have no sampled form yet.
-- For privacy, not soundness, under `--zk`: `Claims.Hm96Hiding` (`Security/Definitions/Core/Hm96.lean`).
+- For privacy, not soundness, under `--zk`: `Claims.Hm96Hiding` (`security/Definitions/Core/Hm96.lean`).
 
 **Off the page:** whether the circuit matches the model. That is completeness: an honest run on a circuit that doesn't
 match is refused. It is never a soundness gap.
@@ -185,7 +185,7 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
 - **Statement.** The unit outputs one bit, and it is 1 exactly when all three hold:
   1. ρ is the root of a's rows:
      - row i is a[32i … 32i + 31], zero-padded;
-     - leaf i is `verity.ml.commitments.advice.leaf(D, 256, i, row_i, y_i)`: the hm96-sha512 commit string of the row's
+     - leaf i is `verity.commitments.advice.leaf(D, 256, i, row_i, y_i)`: the hm96-sha512 commit string of the row's
        sha512/row/v2 digest under y_i, as an `hm96-sha512/row/v2` row leaf at rank i;
      - the tree is the frame-v3-sha512 tree over those leaves, with domain D = CommitmentDomain(`advice_windows.commitment_binding(C)`,
        −1, RangeIndexedDomain(R), sha512).
@@ -227,7 +227,7 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
     as vllm's registered compiler refuses it), and each request's body as that compiler gives it (`serve_ingress`: the sampling
     fields its ingress record says it brought, with its prompt ids, by its I1 id: its `user`, else its HTTP id). It is named
     as `verity-vllm advice` names it and runs the server's code (`served_identity`: `compile_steps` by module path, its
-    digest over `source_identity.code_identity`, which covers `integrations/vllm` and `verity`), so the audit runs on a tree
+    digest over `source_identity.code_identity`, which covers `adapters/vllm` and `verity`), so the audit runs on a tree
     whose two are the server's. Its digest is the single-GPU one (`I2Compiler.digest`) with that code in place of this
     tree's: it covers φ (`serve.json`'s model and revision, that pin's `config.json`, the target and the execution), the
     default seed, ℓ and the transfer gates, so a `serve.json` whose model, revision, target or execution differs from the
@@ -246,7 +246,7 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
   still to keep, its record, or a counter of its state). Its negatives run beside the audit's. `serve-standin`
   lays a single-GPU Commit of record out as a served run, the stand-in until serve-openai seals its windows.
 - **The audit from the records alone** (`records_audit.py audit`, `run.sh` with `PP_RECORDS=1` on a served window) reads only
-  what an integration hands Verity (`verity.ml.windows.interface`): the window's `circuit.json`, which its registration binds
+  what an integration hands Verity (`verity.commitments.windows.interface`): the window's `circuit.json`, which its registration binds
   by SHA-512; the registered compiler and the advice's root and length; the registration and the committed values; and the
   advice's opening, the named gap. The verifier's window is the circuit record's, each template's Definition from Verity's
   catalog or the verifier's own input set. The compile check runs the registered compiler as the command the verifier's
@@ -277,5 +277,5 @@ reads after the seal:
 
 ~~~text
 python window_cost.py PROBE.json --target h200 --project 8,1024,64 [--measure-cpu SCRATCH] \
-    [--stream ../../integrations/vllm/tests/pipeline/fixtures/admission/b16.json] [--out FILE]
+    [--stream ../../adapters/vllm/tests/pipeline/fixtures/admission/b16.json] [--out FILE]
 ~~~

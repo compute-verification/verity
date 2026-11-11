@@ -1,7 +1,7 @@
 """One-stage audit, run A0: a template's captured served values through registration, the verifier's sample, M0's prover and
 verifier, the Lean verifier's sample checks, and the audit record with its integrity profile; then the negatives.
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
       python benchmarks/one_stage/a0.py --set DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR \\
       [--k 16] [--delta 0.01] [--port 7511]
 
@@ -26,14 +26,14 @@ import time
 from collections.abc import Sequence
 from pathlib import Path
 
-from verity.ml.commitments.identity import identity_digest, identity_digest_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain
-from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
-from verity.ml.circuits.program import Program
+from verity.commitments.identity import identity_digest, identity_digest_sha512
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain
+from verity.circuits.codec import canonical_json, encode_program, program_digest
+from verity.circuits.program import Program
 from verity_flock.input_sets import InputSet
-from verity.core.protocols.spot import challenger as Ch, coins as CC
-from verity.core.protocols.spot.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
+from verity.protocols.spot.device import challenger as Ch, coins as CC
+from verity.protocols.spot.verifier.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
 
 import r2_population as R2
 
@@ -253,6 +253,27 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
             live.update(accepted=False, why=f"challenger: {json.dumps(got)[:600]}")
     recs = sorted((out / "sessions").glob("*/session.json"))
     return (json.loads(recs[-1].read_text()) if recs else None), live
+
+
+def templated(st, d: Path, tmpl_unit_bin: str | None) -> dict:
+    """A templated statement's reads beyond a flat one's (none for a flat one): `verify`'s statement, and the prover's unit
+    rows at their positions (``d/unit.placed``, `--tmpl-unit`), which `flock-tmpl-unit` places from the circuit's template
+    section and META's layout mode (``d/unit.tmpl``, ``d/unit.layout``)."""
+    from verity_flock import circuit as FC
+
+    if st.meta.get("statement") != FC.TMPL_STATEMENT:
+        return {}
+    if not tmpl_unit_bin:
+        raise SystemExit("a templated statement's prover reads its unit placed by flock-tmpl-unit: give --tmpl-unit-bin")
+    placed = d / "unit.placed"
+    if not placed.exists():
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "unit.tmpl").write_text(FC.template_of(st.text))
+        (d / "unit.layout").write_text(st.meta["layout"])
+        p = run([tmpl_unit_bin, str(d / "unit.tmpl"), "--layout", st.meta["layout"], "--out", str(placed)], d / "tmpl-unit.log")
+        if p.returncode:
+            raise SystemExit(f"flock-tmpl-unit: exit {p.returncode} ({d / 'tmpl-unit.log'})")
+    return {"statement": FC.TMPL_STATEMENT, "tmpl_unit": placed}
 
 
 def lean_draw_test(lean: str, cases: list[dict], out: Path, name: str) -> list[dict]:

@@ -46,10 +46,10 @@ NUM = re.compile(r"\d+")
 def load(build_dir: str):
     """(calls, names, K, ret runs): the root body's Calls (after its K prescribed-input nodes), each Call's CallName, and the runs of
     the body's return."""
-    from verity.ml.circuits.codec import decode_program
-    from verity.ml.circuits.program import is_input
-    from verity.ml.circuits.refs import runs
-    from verity.ml.definitions.registry.catalog import load as load_registry
+    from verity.circuits.codec import decode_program
+    from verity.circuits.program import is_input
+    from verity.circuits.refs import runs
+    from verity.definitions.registry.catalog import load as load_registry
     from verity_vllm.correspondence.reader_for_query import call_name_of, parse_call_name
     from verity_vllm.correspondence.runtime import RuntimeCorrespondence
 
@@ -84,8 +84,8 @@ def layer_of(module: str) -> tuple[str | None, str]:
 
 
 def analyze(build_dir: str, rates: dict[int, float]) -> dict:
-    from verity.ml.circuits.codec import descriptor_id
-    from verity.ml.circuits.refs import runs
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.refs import runs
     from verity_vllm.query.program_view import ports_of_type
 
     calls, names, K, ret, source = load(build_dir)

@@ -1,0 +1,663 @@
+"""The ingress tie through the proof system: each bucket row of an ingress link-window of the warden's cells proved as
+`io_request.IoTieRequest`, and the verifier that builds `IoTieVerdict`, the tie of a link's requests to its
+certified ingress, only from IoTieRequest proofs it verified on lanes it computed itself (PROTOCOL.md, "The ingress
+tie").
+
+**What is committed** is the network certifier's own (`warden_rows`): an ingress execution phase's T bucket rows, row t
+bucket t's S = L·R slots of B bytes (a slot no connection holds B zero bytes), each an `hm96-sha512/row/v2` row under
+the network certifier's fresh salt in its `frame-v3-sha512` tree under the network certifier's domain
+(`warden_rows.domain`: the session, the link, ingress and the window), whose root the network certifier's signed head
+names (`warden_rows.CellsHead`). The tie registers that root with the challenger (`IngressTie.registration`, on the head
+`warden_rows.check_registration` reads off the network certifier's signed registration); the rows and their salts are
+the prover's, which the network certifier hands it privately, and the challenger and the verifier see the root. A
+registration is one execution phase, its `window` provenance `{"kind": "served", "window": w}` held to the
+registration's order (`IngressTie.register`), and T proof blocks, proof block t bucket row t. Selection is `All`.
+
+**The check** is `IngressTie.unit`, `NetworkIngressTieBucket` v1{B, L, R}: one gate naming
+`io_request.IoTieRequest_v1{B, L, R}` and its circuit digest, pinned in `io_request.circuit-check.json` and held to the
+Definition by circuit-check (`gate`, as `head_check.gate` holds the head check), with one output bit, IoTieRequest's.
+Its witness row is the bucket row itself, which the proof system's registered read holds to the network certifier's root
+(`warden_rows.bucket_port`: proof block t reads row t, the verifier's own `--registered` port, `IngressTie.registered`),
+so no gate hashes it. A size class no sidecar pins has a gate that names no digest, and no proof of its proof block is
+accepted (`proved`).
+
+**The statement is the verifier's own** (`io_request.lanes`): proof block t's public row is bucket t's lanes, from the
+advice's v0 prompt lengths and the network certifier's ingress release (`io_request.Release`: each connection's first
+bucket and its request cells a bucket), which the verifier takes in the clear as it takes the ingress record's wiring (the named
+gap), never from the prover. The proof's ``pub`` row is a unit's lanes, its ``wit`` row the unit's bucket row under the
+warden's salt, and its ``o0`` row one u16 word holding the output bit (`IngressTie.layout`). Every port is one of the
+verifier's own registered reads (`IngressTie.registered`), so no row the unit reads or outputs is committed afresh and
+free in the relation the verifier checks (Flock's `Registered.checkComplete`): ``wit`` reads the warden's root, and
+``pub`` and ``o0`` read values the verifier registers at known content (`IngressTie.known`), row t its own lanes of
+bucket t and the one word 1, each under a public salt, which hides nothing since both rows are public.
+
+**The verifier** is `IngressTie.verify(…, advice=A, releases=…, head=…)`, which decides on the delivered
+proof and public inputs alone. It accepts the window when the verifier's own run of Flock's Lean verifier, with its
+own registered reads (`registered`: the warden's root, its own lanes and the output words 1), accepts every session,
+they prove this tie's registered unit (`proved`: its gate names the pinned digest, every session the registered
+Program) and every sampled proof block, and each unit's ``pub`` row opens, under the salt delivered, to the verifier's own lanes
+and its ``o0`` row to 1. Its public outputs are `verdict` and `advice`, A's `digest`. A proof on another
+advice's lanes or another release, or of an output word 0, fails the registered read of ``pub`` or ``o0``, and a row
+that isn't the warden's fails ``wit``'s.
+
+**The advice** (`LinkAdvice`) is I1's advice (`advice.Advice`) and `received[w]`, window w's request cells, under the
+link's public profile (`AdvisedProfile`: its windows, its framing and its own frames, fixed before the run).
+
+**The tie** (`IngressTie.tie`) is `IoTieVerdict(link, registrations, digest(A), accepted)`: the link,
+the stream's registrations (each one's `registration.digest`, in order), A's digest and one bit a registration, read
+from the stream's outcomes of record alone. Window w is accepted when the stream's w-th registration is window w's and
+its outcome of record accepted, decided on the proof, naming A's digest, and when the release is the network certifier's
+schedule for A (`io_request.lanes` takes it on every bucket: ordinals admitted in order, each connection one advice request,
+its cells its request's) and gives A's `received`, each window's request cells. Every window is refused when they
+don't, when the stream holds a registration past A's windows or misses one, and when the profile's framing isn't the
+warden's cut of A's prompt lengths (`framing`) or names an own frame, which the warden's ingress has none of. A
+connection's lanes chain by construction from (0, 0) into its first bucket to (0, n) out of its `END`'s, so an
+accepted verdict on every window says what IoTieRequest's units say together: connection i + 1 is an id request of
+v0's `prompt_len` prompt fields (a carried field count is held by the bucket before). The verifier reads it only from
+its own source (`Ties`: the tie, its stream and the release), never from what the prover delivers, and the verdict
+names the link and its registrations, so a verdict on another link or another ingress record isn't this one's.
+
+**What it doesn't establish.** The prompt ids' values (the ingress-ids tie, `io_ids`). The release is taken in the
+clear (the named gap). That the warden's cells are the frames the ingress certifier counted is the device's: both are
+the auditor's device's record of the link.
+"""
+from __future__ import annotations
+
+import hashlib
+from dataclasses import dataclass
+from functools import cached_property, lru_cache
+from pathlib import Path
+from typing import Any, Mapping, Sequence
+
+from verity.circuits.codec import canonical_json, encode_program
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program
+from verity.commitments.merkle import CommitmentDomain
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
+from verity.protocols.certifier.verifier import advice as ADV, head_check as HC, io_request as Q
+from verity.protocols.certifier.verifier import service as SVC, warden_rows as WR
+from verity.protocols.certifier.verifier.certificate import Direction
+from verity.protocols.certifier.verifier.warden import WardenParams
+from verity.protocols.spot.verifier import service as S
+from verity.protocols.spot.verifier.one_stage import partition as P, produced, proofs as PF
+from verity.protocols.spot.verifier.one_stage import registered as G, registration as R
+from verity.protocols.spot.verifier.one_stage.proofs import Finding
+from verity.protocols.spot.verifier.one_stage.verdict import Verdict
+
+SPEC = "verity-network-certifier/ingress-tie-spec/v1"
+STATEMENT = "verity-network-certifier/ingress-tie-statement/v1"
+VERDICT = "verity-network-certifier/ingress-tie-verdict/v1"
+VALUE = "cells"
+SCHEMA = SCHEMA_HM96_SHA512_ROW_V2
+VERIFIER = "ingress-tie"
+OUTPUTS = ("verdict", "advice")
+ROWS, PORTS, OUT_BITS = SVC.ROWS, SVC.PORTS, SVC.OUT_BITS
+#: the proof block's witness parameter: the bucket row, which the registered read holds to the network certifier's root
+WITNESS = ("row",)
+#: the circuit port the network certifier's rows are read on: each proof block's witness row is its bucket row
+REGISTERED = "wit"
+#: the circuit ports the verifier registers at known content (`IngressTie.known`): each unit's lanes and its output row
+KNOWN = ("pub", "o0")
+#: a ``--registered`` port's known content (Flock's `Registered.KNOWN_KEY`)
+KNOWN_KEY = "known"
+_STATICS = ("B", "L", "R")
+U32_MAX = (1 << 32) - 1
+#: the advice's digest (`digest`), which each window's `advice` output and the tie's verdict name
+DIGEST = "verity-network-certifier/advised-advice/v2"
+
+PUBLIC = (
+    S.Public("population", "structure", "T proof units per registration, unit t the link-window's bucket row t"),
+    S.Public("window", "structure", "provenance: the ingress link-window's index, held to the registration's order"),
+    S.Public(f"leaves:{VALUE}", "structure", "T leaves, one bucket row of L·R cells each"),
+    S.Public(f"domain:{VALUE}", "structure", "the warden's domain (`warden_rows.domain`), which binds the session, the "
+             "link, ingress and the window"),
+    S.Public(VALUE, "commitment", "the warden's salted root over the window's bucket rows, its signed head's"),
+    S.Public("shape", "structure", "B, L, R and T: the cells' bytes, the warden's lanes, its r and its buckets a "
+             "window, fixed before the run"),
+    S.Public("verdict", "output", "the window's IoTieRequest verdict, every bucket row's, accept or reject"),
+    S.Public("advice", "output", "the advice the window's statement is computed from (`digest`): its v0 "
+             "prompt lengths and the warden's release give each bucket's lanes (`io_request.lanes`), a unit's public "
+             "row in the named gap; `IngressTie.tie` holds every window to one advice"),
+)
+
+
+@lru_cache(maxsize=None)
+def gate(B: int, L: int, R: int) -> PrimitiveDefinition:
+    """`IoTieRequest_v1{B, L, R}` as one gate that names it and its pinned circuit digest (`io_request.PINS`),
+    `Gate[IoTieRequest_v1{…}@<digest>]_v2`, as `head_check.gate` holds the head check."""
+    d = bind(Q.IoTieRequest, B=B, L=L, R=R)
+    return HC.gate_of(d, HC.pinned_digest(d, Q.PINS), "the ingress tie")
+
+
+@lru_cache(maxsize=None)
+def _expanded(B: int, L: int, R: int):
+    return HC.expand(gate(B, L, R), bind(Q.IoTieRequest, B=B, L=L, R=R))
+
+
+def _unit(check) -> CompositeDefinition:
+    def sig(S_):
+        return gate(S_.B, S_.L, S_.R).signature()
+
+    def body(B, S_, *args):
+        return B.call(check(S_.B, S_.L, S_.R), *args)
+
+    return CompositeDefinition(
+        "NetworkIngressTieBucket", 1, _STATICS, sig, body, register=False,
+        doc="the proof block of the ingress tie: one bucket row of the warden's ingress link-window, its "
+            "`io_request.IoTieRequest` on the row the registered read holds to the warden's root and the verifier's "
+            "lanes")
+
+
+_UNIT = _unit(gate)
+#: the same proof block with the gate replaced by the Definition it names, as a proof's circuit lowers it
+_PROOF_UNIT = _unit(_expanded)
+
+
+def request_cells(prompt_len: int, B: int) -> int:
+    """The network certifier's request cells of an id request of a `prompt_len`-token prompt (`warden.cells`' cut, which
+    `io_request.carries` reads)."""
+    return len(Q.carries(prompt_len, B)) - 1
+
+
+def framing(B: int, n_max: int) -> tuple[int, ...]:
+    """The link's framing as the warden cuts requests, for `AdvisedProfile.request_frames`: entry n − 1 is the request
+    cells an id request of an n-token prompt takes at B (`request_cells`), n = 1 … n_max."""
+    return tuple(request_cells(n, B) for n in range(1, n_max + 1))
+
+
+@dataclass(frozen=True)
+class AdvisedProfile:
+    """The link's public sizes the tie reads, fixed before the run: its windows; `request_frames`, the link's framing,
+    whose entry n − 1 is the ingress frames a request of an n-token prompt takes, for every prompt length the link
+    admits (`framing`); and `own`, the ingress certifier's own frames at the head of every window's first bucket: 1
+    with its salt on (`active.Proxy(salt=…)`), else 0. The warden's ingress has none, so `IngressTie.tie` refuses a
+    profile with one."""
+
+    windows: int
+    request_frames: tuple[int, ...]
+    own: int = 0
+
+    def __post_init__(self) -> None:
+        if not all(type(x) is int for x in (self.windows, self.own)) or self.windows < 1 or self.own not in (0, 1):
+            raise ValueError(f"a tie's profile has one or more windows and 0 or 1 own frames a window, not {self!r}")
+        frames = self.request_frames
+        if not isinstance(frames, (tuple, list)) or not frames or \
+                not all(type(n) is int and 1 <= n <= U32_MAX for n in frames):
+            raise ValueError(f"a tie's framing is one positive u32 frame count a prompt length, from 1 token on, not "
+                             f"{frames!r:.200}")
+        object.__setattr__(self, "request_frames", tuple(frames))
+
+
+def _sha512_hex(x: Any) -> bool:
+    return type(x) is str and len(x) == 128 and not set(x) - set("0123456789abcdef")
+
+
+@dataclass(frozen=True)
+class LinkAdvice:
+    """What the prover delivers beside the link's public profile: I1's advice and `received[w]`, window w's request
+    frames. It carries no tie: one delivered beside the advice is the prover's (a verdict built from its own advice's
+    digest), so the tie is only `IngressTie.tie`'s, from IoTieRequest proofs the verifier verified. Construction
+    refuses (`advice.MalformedAdvice`) an advice that isn't an `advice.Advice` and a `received` that isn't u32s."""
+
+    advice: ADV.Advice
+    received: tuple[int, ...]
+
+    def __post_init__(self) -> None:
+        if type(self.advice) is not ADV.Advice:
+            raise ADV.MalformedAdvice(f"a link's advice is an advice.Advice, not a {type(self.advice).__name__}")
+        received = self.received
+        if not isinstance(received, (tuple, list)) or not all(type(x) is int and 0 <= x <= U32_MAX for x in received):
+            raise ADV.MalformedAdvice(f"received is a sequence of u32s, not {received!r:.200}")
+        object.__setattr__(self, "received", tuple(received))
+
+
+@dataclass(frozen=True)
+class IoTieVerdict:
+    """The tie of a link's requests to its certified ingress (`IngressTie.tie`): the `IoTieRequest` verdict on each of
+    the link's ingress windows, `accepted[w]`, on the link named `link`, whose ingress windows the challenger
+    registered as `registrations` (each one's `registration.digest`, in window order), on the request view the verifier
+    computed from the advice whose `digest` is `advice`. An accepted verdict on every window says the link's j-th
+    certified request is advice request j and its prompt is v0's `prompt_len` ids long. Only `IngressTie.tie` builds
+    one, from IoTieRequest proofs the verifier verified itself; at a size class with no pinned IoTieRequest digest
+    every window is refused (PROTOCOL.md, fail closed). Construction refuses (`advice.MalformedAdvice`) a `link` that
+    isn't a non-empty string, `registrations` and an `advice` that aren't SHA-512 hex digests, and verdicts that aren't
+    one bool a registration."""
+
+    link: str
+    registrations: tuple[str, ...]
+    advice: str
+    accepted: tuple[bool, ...]
+
+    def __post_init__(self) -> None:
+        if type(self.link) is not str or not self.link:
+            raise ADV.MalformedAdvice("IoTieRequest's verdict names its link, a non-empty string")
+        regs, acc = self.registrations, self.accepted
+        if isinstance(regs, (str, bytes)) or not isinstance(regs, (tuple, list)) or \
+                not all(_sha512_hex(r) for r in regs):
+            raise ADV.MalformedAdvice("IoTieRequest's verdict names each ingress window's registration by its "
+                                      "`registration.digest`, 128 hex digits")
+        if not _sha512_hex(self.advice):
+            raise ADV.MalformedAdvice("IoTieRequest's verdict names its advice by `tie_service.digest`, 128 hex digits")
+        if isinstance(acc, (str, bytes)) or not isinstance(acc, (tuple, list)) or \
+                not all(type(x) is bool for x in acc) or len(acc) != len(regs):
+            raise ADV.MalformedAdvice("IoTieRequest's verdict is one bool an ingress window's registration")
+        object.__setattr__(self, "registrations", tuple(regs))
+        object.__setattr__(self, "accepted", tuple(acc))
+
+
+def digest(link: LinkAdvice) -> str:
+    """The SHA-512 of the advice's canonical encoding (`advice.encode`) and `received`: the `advice` output each window
+    of the tie reports, by which `IngressTie.tie` holds every window to one advice."""
+    body = {"format": DIGEST, "advice": ADV.encode(link.advice).hex(), "received": list(link.received)}
+    return hashlib.sha512(canonical_json(body)).hexdigest()
+
+
+def prompt_lens(advice: LinkAdvice) -> tuple[int, ...]:
+    """The advice's v0 prompt lengths, in its requests' order."""
+    return tuple(q.prompt_len for q in advice.advice.requests)
+
+
+@dataclass(frozen=True)
+class Delivered:
+    """An ingress link-window's proof as the verifier receives it: the statement's proof files (`proofs.Proof`, its
+    circuit file the auditor's own lowering of the unit), and for each sampled proof block, by its index, the salts of its
+    public row and its output row (``pub``, ``o0``, the known values' public salts, `IngressTie.known_tree`) and its
+    output word, which the verifier opens against the public file's commitments to those rows. Never a witness row's
+    salt: the warden's, which the registered read holds."""
+
+    proof: PF.Proof
+    salts: Mapping[int, Mapping[str, bytes]]
+    outputs: Mapping[int, int]
+
+    def sessions(self) -> list[str]:
+        """The delivered sessions' SHA-512s, their `session.json`s', in order."""
+        return [PF.file_sha512(Path(s) / "session.json") for s in self.proof.sessions]
+
+
+def _opened(delivered: Delivered, unit: int, public: bytes | None, bits: int) -> int | None:
+    """Unit `unit`'s output bit, once the proof's public file holds its public row as `public` (the verifier's own
+    copy, `bits` long) and its output row as the word delivered, each under the salt delivered; else None."""
+    bcs, word = SVC._commitments(delivered.proof.public, unit), delivered.outputs.get(unit)
+    salts = delivered.salts.get(unit) or {}
+    if public is None or bcs is None or type(word) is not int or word not in (0, 1):
+        return None
+    if not (SVC._opens(public, bits, salts.get("pub"), bcs["pub"])
+            and SVC._opens(SVC.output_row(word), OUT_BITS, salts.get("o0"), bcs["o0"])):
+        return None
+    return word
+
+
+def _sha512(obj: Any) -> str:
+    return hashlib.sha512(canonical_json(obj)).hexdigest()
+
+
+def window_cells(releases: Sequence[Q.Release], T: int) -> dict[int, int]:
+    """Each window's request cells under the release, buckets of T, where there are any."""
+    out: dict[int, int] = {}
+    for rel in releases:
+        for k, c in enumerate(rel.cells):
+            if c:
+                out[(rel.first + k) // T] = out.get((rel.first + k) // T, 0) + c
+    return out
+
+
+@dataclass(frozen=True)
+class IngressTie:
+    """The ingress tie on one link, every field public: the link, the network certifier's schedule
+    (`warden.WardenParams`: B, its lanes L, its r and its buckets a window T), the session that names the network
+    certifier's domains, and the proof deadline in seconds."""
+
+    link: str
+    params: WardenParams
+    session: bytes
+    proof_deadline: float | None = None
+
+    def __post_init__(self) -> None:
+        if type(self.params) is not WardenParams or not (isinstance(self.link, str) and self.link) or \
+                type(self.session) is not bytes:
+            raise ValueError("an ingress tie is on a named link, of a warden.WardenParams and a session")
+        Q.Shape(self.params.cell_bytes, self.params.lanes, self.params.slots)
+
+    @property
+    def shape(self) -> Q.Shape:
+        p = self.params
+        return Q.Shape(p.cell_bytes, p.lanes, p.slots)
+
+    @property
+    def T(self) -> int:
+        return WR.rows_of(self.params)
+
+    @property
+    def key(self) -> tuple[int, int, int]:
+        sh = self.shape
+        return sh.B, sh.L, sh.R
+
+    @cached_property
+    def unit(self):
+        return bind(_UNIT, **dict(zip(_STATICS, self.key)))
+
+    @cached_property
+    def proof_block(self):
+        """The proof block a proof's circuit lowers: `unit` with its gate the Definition it names (`head_check.expand`,
+        a `ValueError` for an unpinned size class)."""
+        return bind(_PROOF_UNIT, **dict(zip(_STATICS, self.key)))
+
+    @cached_property
+    def query(self) -> dict[str, Any]:
+        return P.template_instance_query(self.unit)
+
+    @cached_property
+    def _program(self) -> Program:
+        return P.population_program(self.unit, self.T)
+
+    @cached_property
+    def _partition(self) -> dict[str, Any]:
+        return P.partition(self._program, self.query)
+
+    @property
+    def partition(self) -> dict[str, Any]:
+        return self._partition
+
+    @cached_property
+    def program(self) -> bytes:
+        """The registered Program's descriptor, the verifier's own copy, whose SHA-512 the partition object names."""
+        return canonical_json(encode_program(self._program))
+
+    @cached_property
+    def spec(self) -> S.Spec:
+        context = canonical_json({"format": SPEC, "link": self.link, "session": self.session.hex(),
+                                  "params": self.params.digest.hex()})
+        check = S.Check(P.program_sha512(Program(self.unit)), self.query, public_outputs=OUTPUTS,
+                        proof_deadline=self.proof_deadline)
+        return S.Spec((S.Value(VALUE, SCHEMA, "serve"),), S.All(), check, PUBLIC, context)
+
+    def stream(self, **kwargs: Any) -> S.Stream:
+        return S.Stream(self.spec, self.unit, **kwargs)
+
+    def domain(self, window: int) -> CommitmentDomain:
+        """The network certifier's domain of the ingress execution phase's T rows (`warden_rows.domain`)."""
+        return WR.domain(self.params, self.session, self.link, Direction.INGRESS, window)
+
+    def ports(self, window: int) -> dict[str, dict[str, Any]]:
+        return {VALUE: {"leaves": self.T, "domain": self.domain(window).domain_id.hex()}}
+
+    @staticmethod
+    def provenance(window: int) -> dict[str, Any]:
+        return {"kind": "served", "window": window}
+
+    def _held(self, head: WR.CellsHead) -> None:
+        p = self.params
+        if type(head) is not WR.CellsHead or head.link != self.link or head.direction is not Direction.INGRESS or \
+                (head.parameters, head.cell_bytes, head.slots, head.rows) != \
+                (p.digest, p.cell_bytes, p.grid.allocation, self.T) or \
+                head.domain != self.domain(head.window).domain_id:
+            raise ValueError("the head isn't the warden's of this link's ingress rows under this schedule and session")
+
+    # the challenger
+
+    def registration(self, head: WR.CellsHead, previous: str | None = None) -> dict[str, Any]:
+        """One-stage's record of the execution phase: the network certifier's root of its rows, from its head
+        (`warden_rows.check_registration`'s, the network certifier's signed registration as the challenger reads it),
+        and nothing of the rows. Raises `ValueError` on a head of another link, direction, schedule or session."""
+        self._held(head)
+        roots = [{"port": VALUE, "root": head.root.hex(), **self.ports(head.window)[VALUE]}]
+        return R.record(self._program, self.query, {"law": "subset", "k": self.T}, S.SCHEME, roots,
+                        self.provenance(head.window), previous=previous)
+
+    def register(self, stream: S.Stream, record: Mapping[str, Any]) -> S.WindowCommitmentRecord:
+        """`stream.register` with the window's own ports, after holding its `window` provenance to exactly
+        `{"kind": "served", "window": order}`."""
+        window = len(stream.records)
+        if not isinstance(record, Mapping) or record.get("window") != self.provenance(window):
+            raise S.Refused(Verdict(False, ("window",), {"window": {"expected": self.provenance(window)}}))
+        return stream.register(record, self.ports(window))
+
+    def known_tree(self, head: WR.CellsHead, port: str, rows: Sequence[bytes]) -> G.Registered:
+        """Port `port`'s rows (one a unit, each its bytes) as the value the verifier registers at known content on
+        `head`'s link-window (`known`): row t under its public salt (`registered.supplied_salts`) in a tree whose
+        domain binds the registered Program and the warden's root. The prover commits its own rows of `port` the same
+        way, so they open the verifier's root only where they are its rows."""
+        if port not in KNOWN or len(rows) != self.T:
+            raise ValueError(f"a known value is one of {KNOWN}, one row a unit of the window's {self.T}")
+        program, value = self._partition["program"], f"{head.value}/{VERIFIER}/{port}"
+        return G.Registered.commit(program, value, [WR.words(r) for r in rows],
+                                   G.supplied_salts(program, value, self.T), G.WORD_BITS, SCHEMA,
+                                   window=head.root.hex())
+
+    def known(self, head: WR.CellsHead, lanes: Sequence[Sequence[Q.Lane]] | None) -> dict[str, G.Registered] | None:
+        """The values the verifier registers at known content on `head`'s link-window (`known_tree`): ``pub``, row t
+        the public row of bucket t's `lanes` (`public_arguments`), and ``o0``, every row the output word 1. None
+        without a public row for every bucket."""
+        args = None if lanes is None or len(lanes) != self.T else [self.public_arguments(ln) for ln in lanes]
+        if args is None or None in args:
+            return None
+        rows = {"pub": [self.row(a, "pub") for a in args], "o0": [SVC.output_row(1)] * self.T}
+        return {p: self.known_tree(head, p, rows[p]) for p in KNOWN}
+
+    def registered(self, head: WR.CellsHead, lanes: Sequence[Sequence[Q.Lane]] | None,
+                   reads_from: int = 0) -> dict[str, Any] | None:
+        """The verifier's own `--registered` file, which names every port of the statement (Flock's
+        `Registered.checkComplete`): unit `reads_from + t`'s ``wit`` row reads row t of the warden's root
+        (`warden_rows.bucket_port`), and its ``pub`` and ``o0`` rows row t of the values the verifier registers at
+        known content on its own `lanes` (`known`), each named with its rows and salts (`KNOWN_KEY`), from which the
+        Lean verifier recomputes its root. None where `known` is."""
+        self._held(head)
+        known = self.known(head, lanes)
+        if known is None:
+            return None
+        ports = {REGISTERED: WR.bucket_port(head, self.params, reads_from)}
+        for p, v in known.items():
+            ports[p] = produced.port(v.value, v.entry(), v.root.hex(), list(range(self.T)), SCHEMA) \
+                | ({G.READS_FROM: int(reads_from)} if reads_from else {}) \
+                | {KNOWN_KEY: {"rows": [list(r) for r in v.rows], "salts": [s.hex() for s in v.salts]}}
+        return WR.reads_file(ports)
+
+    # the statement and the proof block's arguments
+
+    def lanes(self, advice: Any, releases: Sequence[Q.Release], window: int) -> tuple[tuple[Q.Lane, ...], ...] | None:
+        """Each of the window's buckets' lanes from `advice`'s v0 prompt lengths and the warden's `releases`
+        (`io_request.lanes`), None without a `LinkAdvice`, past its windows, or where the release isn't the
+        warden's schedule for its requests."""
+        if type(advice) is not LinkAdvice or not 0 <= window < len(advice.received):
+            return None
+        try:
+            return tuple(Q.lanes(self.shape, prompt_lens(advice), releases, window * self.T + t)
+                         for t in range(self.T))
+        except ValueError:
+            return None
+
+    def arguments(self, row: bytes, lanes: Sequence[Q.Lane]) -> dict[str, list[int]] | None:
+        """One proof block's arguments on its bucket `row` and `lanes`, by parameter, each its leaves' bits: the
+        prover's side. None where the row isn't the proof block's N cells of B bytes or a lane isn't five u32s."""
+        sh = self.shape
+        if len(row) != sh.N * sh.B:
+            return None
+        try:
+            args = Q.arguments(sh, Q.Instance(tuple(row[i * sh.B:(i + 1) * sh.B] for i in range(sh.N)), tuple(lanes)))
+        except ValueError:
+            return None
+        return dict(zip((n for n, _ in self.unit.signature()[0]), args))
+
+    def public_arguments(self, lanes: Sequence[Q.Lane]) -> dict[str, list[int]] | None:
+        """A proof block's public arguments (`layout`'s ``pub``) as the verifier derives them: its lanes."""
+        args = self.arguments(bytes(self.shape.N * self.shape.B), lanes)
+        return None if args is None else {n: args[n] for n in self.layout["pub"]}
+
+    def outputs(self, row: bytes, lanes: Sequence[Q.Lane]) -> int:
+        """A proof block's output bit on its row by its gate's reference (`io_request.reference`), which the tests hold
+        to the circuit: what the prover claims."""
+        sh = self.shape
+        if len(row) != sh.N * sh.B:
+            return 0
+        return Q.reference(sh, Q.Instance(tuple(row[i * sh.B:(i + 1) * sh.B] for i in range(sh.N)), tuple(lanes)))
+
+    @cached_property
+    def layout(self) -> dict[str, tuple[str, ...]]:
+        """The statement's two input rows (`ROWS`), each its parameters in the proof block's signature's order: ``pub``
+        the lanes, ``wit`` the bucket row (`WITNESS`), each the little-endian concatenation of its parameters' bits in
+        whole u16 words, so a proof block's ``wit`` row is its bucket row's bytes."""
+        params, _ = self.unit.signature()
+        out = {r: tuple(n for n, _ in params if (n in WITNESS) == (r == "wit")) for r in ROWS}
+        for r, names in out.items():
+            bits = sum(t.leaves for n, t in params if n in names)
+            if bits % 16:
+                raise ValueError(f"the unit's {r} row is {bits} bits, not whole u16 words")
+        return out
+
+    def bits(self, row: str) -> int:
+        if row == "o0":
+            return OUT_BITS
+        params, _ = self.unit.signature()
+        return sum(t.leaves for n, t in params if n in self.layout[row])
+
+    def row(self, args: Mapping[str, Sequence[int]], row: str) -> bytes:
+        bits = [b for n in self.layout[row] for b in args[n]]
+        return bytes(sum(b << j for j, b in enumerate(bits[k:k + 8])) for k in range(0, len(bits), 8))
+
+    # the verifier
+
+    def gates(self) -> list[PrimitiveDefinition]:
+        return [gate(*self.key)]
+
+    def proved(self, findings: Sequence[Finding]) -> bool:
+        """Whether `findings` prove this tie's proof block: its gate names IoTieRequest's pinned circuit digest, and one
+        or more sessions each accepted and named the registered Program."""
+        want = self._partition["program"]
+        return all(HC.pinned(g) for g in self.gates()) and bool(findings) \
+            and all(f.accepted and f.program == want for f in findings)
+
+    def clear(self, cells: WR.Cells, draw: S.Draw, advice: Any, releases: Sequence[Q.Release]) -> dict[str, Any]:
+        """The in-the-clear check on the network certifier's opening of the rows, the witness: the debug comparison
+        `verify` makes on request, never a verdict of record. Accepted when the opening reproduces the registered root
+        and IoTieRequest's reference accepts every row on the verifier's lanes from `advice` and `releases`."""
+        reg = draw.registration.record
+        root, w = reg["roots"][0]["root"], reg["window"]["window"]
+        lanes = self.lanes(advice, releases, w)
+        accepted = cells.window == w and cells.root.hex() == root and lanes is not None and \
+            all(self.outputs(r, ln) == 1 for r, ln in zip(cells.rows, lanes))
+        return {"of_record": False, "accepted": accepted}
+
+    def verify(self, draw: S.Draw, delivered: Delivered, *, circuit_sha512: str, advice: Any,
+               releases: Sequence[Q.Release], head: WR.CellsHead, opening: WR.Cells | None = None) -> dict[str, Any]:
+        """The verdict of record on the window's delivered proof, from public inputs and the proof alone: accepted when
+        the verifier's own run of Flock's Lean verifier (`proofs.verify`, on the circuit file the auditor built,
+        `circuit_sha512`, and the verifier's own registered reads, `registered`: the warden's root at `head`, the
+        warden's head of the registered root, and its own lanes of each bucket from `advice` and `releases`, `lanes`,
+        and the output words 1) accepts every session, they prove this tie's registered unit (`proved`) and every sampled
+        proof block, and each sampled proof block's public row opens to the verifier's own copy (`public_arguments` on its lanes) and
+        its output row to 1. Without lanes for every bucket nothing is verified and the window is refused. It reports
+        `advice`'s digest (`digest`), None without an `LinkAdvice`. A head that isn't the registered
+        root's refuses. `opening` (the witness) is for a debug comparison only: given, the verdict also carries
+        `clear`'s accept bit, which decides nothing."""
+        reg = draw.registration.record
+        w, root = reg["window"]["window"], reg["roots"][0]
+        try:
+            self._held(head)
+            ok_head = head.window == w and head.root.hex() == root["root"] and head.domain.hex() == root["domain"]
+        except ValueError:
+            ok_head = False
+        accepted = False
+        lanes = self.lanes(advice, releases, w) if ok_head else None
+        reads = None if lanes is None else self.registered(head, lanes)
+        if reads is not None:
+            findings, refused = PF.verify(delivered.proof, circuit_sha512=circuit_sha512, program=self.program,
+                                          partition=self._partition, registered=reads)
+            units = list(draw.units)
+            proved = refused is None and self.proved(findings) and all(list(f.units) == units for f in findings)
+            accepted = proved and len(units) == self.T and all(
+                _opened(delivered, u, self.row(self.public_arguments(lanes[u]), "pub"), self.bits("pub")) == 1
+                for u in units)
+        public = {"verdict": int(accepted), "advice": digest(advice) if type(advice) is LinkAdvice else None}
+        sessions = delivered.sessions()
+        bound = _sha512({"format": VERDICT, "registration": draw.registration.digest, "sessions": sessions,
+                         "accepted": accepted, "public": public})
+        verdict = {"of_record": True, "decided_by": "proof", "accepted": accepted, "digest": bound,
+                   "sessions": sessions, "public": public}
+        if opening is not None:
+            verdict["clear"] = {"accepted": self.clear(opening, draw, advice, releases)["accepted"]}
+        return verdict
+
+    def statement(self, draw: S.Draw) -> dict[str, Any]:
+        reg = draw.registration.record
+        return {"format": STATEMENT, "check": self.spec.check.program, "link": self.link,
+                "window": reg["window"]["window"], "root": reg["roots"][0]["root"]}
+
+    def outcome(self, stream: S.Stream, draw: S.Draw, delivered: Delivered, *, circuit_sha512: str, advice: Any,
+                releases: Sequence[Q.Release], head: WR.CellsHead, opening: WR.Cells | None = None) -> S.Outcome:
+        """`stream.outcome` on the verifier's verdict (`verify`), with the registered root as the session's."""
+        verdict = self.verify(draw, delivered, circuit_sha512=circuit_sha512, advice=advice, releases=releases,
+                              head=head, opening=opening)
+        return stream.outcome(draw, {VERIFIER: verdict}, self.statement(draw),
+                              session_roots={VALUE: draw.registration.record["roots"][0]["root"]})
+
+    def tie(self, stream: S.Stream, advice: LinkAdvice, profile: AdvisedProfile,
+            releases: Sequence[Q.Release]) -> IoTieVerdict:
+        """The tie of `advice` on this link (the module docstring), `IoTieVerdict` on this link and the stream's
+        registrations (each one's `registration.digest`, in order), one bit a registration: window w accepted when the
+        stream's w-th registration is window w's and its outcome of record accepted, on the proof, naming `advice`'s
+        digest, and `releases` is the network certifier's schedule for `advice`'s requests on every bucket of its
+        windows (`lanes`) and gives its `received`; every window refused when they don't, when the stream has more or
+        fewer registrations than `advice` has windows, or when `profile`'s framing isn't the network certifier's cut at
+        B for `advice`'s
+        prompt lengths (`framing`) or names an own frame. Raises `ValueError` on a stream that isn't this tie's, an
+        advice that isn't a `LinkAdvice` or a profile that isn't an `AdvisedProfile`."""
+        if stream.spec.digest() != self.spec.digest():
+            raise ValueError("the stream is not this tie's: its spec isn't IngressTie.spec")
+        if type(advice) is not LinkAdvice or type(profile) is not AdvisedProfile:
+            raise ValueError("a tie is of a tie_service.LinkAdvice under a tie_service.AdvisedProfile")
+        name, lens, n = digest(advice), prompt_lens(advice), len(advice.received)
+        frames, B = profile.request_frames, self.shape.B
+        framed = profile.own == 0 and \
+            all(k <= len(frames) and frames[k - 1] == request_cells(k, B) for k in set(lens))
+        released = all(self.lanes(advice, releases, w) is not None for w in range(n)) and \
+            window_cells(releases, self.T) == {w: c for w, c in enumerate(advice.received) if c}
+        outcomes = {r["registration"]: r for r in stream.records}
+        log, ok = stream.log, []
+        for w in range(n):
+            reg = log[w] if w < len(log) else None
+            if reg is None or reg.get("window") != self.provenance(w):
+                break
+            body = outcomes.get(R.digest(reg))
+            verdict = ((body or {}).get("audit") or {}).get("verdicts", {}).get(VERIFIER) or {}
+            ok.append(body is not None and body["symbol"] == S.ACCEPT and body["public"].get("advice") == name
+                      and verdict.get("decided_by") == "proof")
+        held = len(log) == len(ok) == n and framed and released
+        accepted = tuple(held and x for x in ok) + (False,) * (len(log) - len(ok))
+        return IoTieVerdict(self.link, tuple(R.digest(r) for r in log), name, accepted)
+
+
+@dataclass(frozen=True)
+class Ties:
+    """The verifier's own tie source on one link: the ingress tie, its stream of record, the challenger's and the
+    verifier's, never the prover's, and the warden's ingress release as the verifier read it off the ingress
+    record (`releases`, the named gap). `registrations` is the stream's registrations (each one's
+    `registration.digest`, in order) and `verdict` is `IngressTie.tie` on the stream, so IoTieRequest's verdict comes
+    only from outcomes the verifier decided on proofs. Each raises `ValueError` on another link than the
+    tie's."""
+
+    ingress: IngressTie
+    stream: S.Stream
+    releases: tuple[Q.Release, ...]
+
+    def __post_init__(self) -> None:
+        if type(self.ingress) is not IngressTie or type(self.stream) is not S.Stream or \
+                self.stream.spec.digest() != self.ingress.spec.digest():
+            raise ValueError("a tie source is an IngressTie and its own stream")
+        object.__setattr__(self, "releases", tuple(self.releases))
+
+    def _on(self, link: str) -> None:
+        if link != self.ingress.link:
+            raise ValueError(f"the tie source is on link {self.ingress.link!r:.80}, not {link!r:.80}")
+
+    def registrations(self, link: str) -> tuple[str, ...]:
+        self._on(link)
+        return tuple(R.digest(r) for r in self.stream.log)
+
+    def verdict(self, link: str, advice: LinkAdvice, profile: AdvisedProfile) -> IoTieVerdict:
+        self._on(link)
+        return self.ingress.tie(self.stream, advice, profile, self.releases)
+
+
+__all__ = ["AdvisedProfile", "Delivered", "IngressTie", "IoTieVerdict", "KNOWN", "KNOWN_KEY", "LinkAdvice", "OUTPUTS",
+           "PORTS", "PUBLIC", "REGISTERED", "ROWS", "Ties", "VALUE", "VERIFIER", "WITNESS", "digest", "framing", "gate",
+           "prompt_lens", "request_cells", "window_cells"]
