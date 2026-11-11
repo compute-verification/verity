@@ -149,7 +149,7 @@ fwd_def cpX checkPartition_X (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' 
     HmRow.checkPartition (cO ls lh H C A B A' B' s1) (some partObj) by
   [cpo_part, canon_part, cO_meta, partDigest_hex, bne_self]
   block [canon, canonUtf8, HmRow.checkPartitionObject]
-  shallow [metaText] trace
+  shallow [metaText]
 
 open Properties.Spot.SecurityProofs (qsort_fuel) in
 fwd_def dtX deriveTemplateUnits_X (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 : String) :
