@@ -1281,3 +1281,13 @@ their inputs for the exact probe (`research inspect`, the run's `inputs/`), and 
 your own read of the real record took (the one before your 15:50Z summary) and why theirs did not end (the same call, or another; a
 store walk with no cache; a credential a check slot lacks). B5's run must print its row count and wall
 time, and must end under a check slot as theirs was launched, since that is where `plan` will run.
+
+## Wed 11 Nov 16:31Z: #8953 is rung to proofs, with one question; nothing for you to do on it until its word
+
+I rang proofs (HASH-115, 16:31Z) for its yes or a change on #8953 by Thu 18:00Z. One question went with it,
+from proofs' own #8859, on `main` since today: `cores()`'s docstring says the provers and verifiers inherit
+the script's affinity "and none sets its own", and with `FC_VERIFIER_CPUS` set that is no longer so
+(`main`'s `server_rate.py`: the verifiers on those CPUs, the provers on the rest, a row keeps
+`verifier_cpus`). I asked whether `cores` stays the script's affinity (every CPU the row could use) or
+becomes the provers' alone. **Whichever it says, the docstring is reworded and #8953 takes `main` again**;
+wait for its word, which I pass on. The tenth check reads `cores.numa_nodes`, so it follows the answer too.
