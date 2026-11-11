@@ -30,7 +30,7 @@ Implementations (`IMPLS`), each adding one class:
   - It runs through that tree's frozen harness, `verity-vllm pous-dense-bench`, with the flags of the band's run of
     record (`FROZEN_FLAGS`).
   - Nothing here changes that harness; its `dense-bench.json` is read back.
-* `p2-v1-gpu`: P2 v4, the specification (`p2_v1/`): its reference pinned by the spec's vectors, its GPU library
+* `p2-v1-gpu`: P2 v4, the specification (`p2_v1/`): the verifier's reference pinned by the spec's vectors, the prover's GPU library
   (decode with per-block keys on `p2_gpu/p2dec.cu`'s tuned squaring, encode by two roots) and the same harness steps as `band-gpu`
   at k = 105, so the two compare side by side (`side_by_side.py`). It is its own scheme (`--scheme` is ignored): the spec's P2 is
   not a `verity.protocols.pous.verifier` registered scheme, whose P2 is the MVP's `p2-16448/v4` (the spec's

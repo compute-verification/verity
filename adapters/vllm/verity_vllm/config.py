@@ -49,7 +49,7 @@ CHECKPOINTS = MANIFESTS / "checkpoints.json"
 RECORDS = MANIFESTS / "records.json"
 #: The PoUB session's processes (not a package), whose prover runs in the Commit's (`store.remote`).
 REMOTE_SESSION = (ROOT.parent.parent / "verity/protocols/poub/prover/remote_session/prover.py").parent
-#: kv.cu's launchers over torch (``paged.py``, with ``word_codec/kv_bench.py``), the remote session's device encode.
+#: kv.cu's launchers over torch (``paged.py``, with ``kv_bench.py`` beside it), the remote session's device encode.
 VLLM_ENCODED = (ROOT.parent.parent / "verity/protocols/poub/prover/word_codec/paged.py").parent
 #: The package of P2's encoded weights store (``store.py``) and its CUDA library's wrapper, which POUS encodes with
 #: (`protocols.pous`): its directory, whose name is the package's.
