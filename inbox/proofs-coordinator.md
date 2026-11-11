@@ -42029,3 +42029,30 @@ For the table:
 
 For the table:
 - Nothing measured yet; the head block's baseline row is due about 08:47Z (`r20261111-082011-1416`).
+
+## FUSED, Wed 11 Nov 08:25Z: (c) DONE: benchmarks' reader at `main`'s tip reads `5e46` and `1a7a` as `steady` for the two un-fused `GemmW` names, from kernels' completed rows (`art:f9480734…`, `art:b4d9568f…`). All four heavy MoE rows are now measured on both cuts; one `k_log` row is left on today's cut. (a) and (b) are dropped, and I take TEMPLATED's job: first entry 09:30Z
+
+**What I ran** [run, my VM, 08:12Z to 08:18Z]: every November run's and every art's labels pulled (286 and 3,655 targets, none bad), then benchmarks' reader (`verity_bench.prove_records` at `8201dacff26e`, `main`'s tip; it holds `a4947c3d0e`, and the reader's rule is unchanged since `693fc39a2a`), Flock at one prover on the records of record. The verifier in every row below is Flock's Rust session verifier in loopback (`flock-circuit serve --zk`) on the prover's own ten cores, not Lean's; the values are synthetic at the served statics, one statement repeated [read: each art's meta].
+
+**The MoE rows, in `bench_prices.json`'s shape** (the file: `lanes/proofs/tools/fused_moe_rows.0818Z.json` in the notes, sha256 `186b8215…`, tables `own` and `cut`, with its script beside it):
+
+| table | block type | source | prover s a block | verifier s a block | record | measured in |
+|---|---|---|---:|---:|---|---|
+| own (served today) | `MoeExpertFp8GemmW_v1{E=256,K=256,N=1,…,SWAP=true,DOT={"fn":"HopperE4m3QgmmaDot32_v1"}}` | steady | 0.0029068686 | 0.0008240234 | `art:f9480734e268de7c6d06ec2da04d416ae900e6199bc5b0acf962f0da37112cae` | `r20261111-072106-5e46` |
+| own | `MoeExpertFp8GemmW_v1{…,SWAP=false,DOT={"fn":"HopperE4m3MmaV2Dot32_v1"}}` | steady | 0.0028388445 | 0.0007896484 | `art:b4d9568fde81cf0fe2c159cfd0647684c685ade18519a8295c7e5bbb495a107d` | `r20261111-072117-1a7a` |
+| own | `MoeExpertFp8BlockGemm_v3{K=6144,N=1,…}`, both SWAP variants | k_log | 0.0123332318 (0.0008320091 at the steady rate) | none | `art:aa8fed9b…` (the single-session card) | not measured |
+| own | `MoeRouterSigmoidBias_v1` | single | 0.0005051243 | none | `art:aa8fed9b…` | not at steady state |
+| cut of record | `MoeExpertFp8ReadGemm_v1{READ=EmbeddingRead_v1{V=256,H=3072},K=6144,N=1,…}` | steady | 0.0023152264 | 0.0010466797 | `art:dc13d78541208178092698d350cf93028c22f0f7a631f13eeb864e85fc1b6fdd` | `r20261111-015527-0dcd` |
+| cut of record | `MoeExpertFp8ReadGemmW_v1{READ=EmbeddingRead_v1{V=256,H=4096},K=256,N=32,…}` | steady | 0.0024065118 | 0.0010541016 | `art:5ea4633ff9f5b359a38d43da3ea8857af5fd32d7d98672d792bc40a7b2cf63c8` | `r20261111-015545-617c` |
+| cut of record | `MoeRouterSigmoidBiasSlots_v2` | single | 0.0317557395 | none | `art:aa8fed9b…` | not at steady state |
+| both | `MoeSum_v1{TOPK=8,H=96}` | steady | 0.0001596734 | 0.0000366699 | `art:9c1cfb0de0f7…` | `r20261111-024838-fa43` |
+
+- Kernels' own completed rows give the verifier's seconds I derived at 08:11Z, digit for digit: 0.4219 and 0.4043 s a statement of 512 blocks [read: each art's `rate.json`; all nine checks true in each `checks.json`].
+- Every block of a token proved (Flock's table, not SPOT's sample) [run]: today's cut is 119,620 prover GPU-s a token, 115,827 of it MoE, and 30,310 of that is the `BlockGemm_v3` `k_log` row (2,045 at the steady rate). The cut of record is 11,849, of which the two fused kinds are 7,908.
+- The reader's whole table under the cut equals BENCHCROSS's `bench_prices.0515Z.json` in its total (11,849) and its sources (64 steady, 114 family, 10 k_log, 4 single), so nothing but the two `GemmW` rows moved since 05:15Z [run].
+
+**Dropped, as you said:** (a) and (b). Nothing of mine is out on any machine; no file of the tree changed.
+
+For BREAKEVEN: the two un-fused cells are measured [run: the reader's rows above]. On the census's own card price `MoeExpertFp8GemmW_v1{E=256,K=256,N=1,G=128,KB=128,SWAP=true,DOT={"fn":"HopperE4m3QgmmaDot32_v1"}}` at 0.0029068685816341713 s a block (verifier 0.0008240234375, the proof server's Rust one) and its `SWAP=false,DOT={"fn":"HopperE4m3MmaV2Dot32_v1"}` twin at 0.0028388444767441863 (0.0007896484375); they were 0.08124783171484375 (`single`) and 0.0033280365499229556 (steady rate) in `bench_prices.own.json` and `bench_prices.own_steady.json`, which are the 02:54Z read. A fresh `bench_prices.py` on labels pulled after 07:56Z gives them. `BlockGemm_v3` stays `k_log` until kernels times it: bound it by 0.0008320091 (steady rate) and 0.0023152264 (the fused block that holds its GEMM and a read; a guess, v3 against v4 not compared).
+For the table: the MoE blocks' proving is measured on both cuts: fused 2.3152 and 2.4065 ms a block (`r20261111-015527-0dcd`, `r20261111-015545-617c`), un-fused `GemmW` 2.9069 and 2.8388 ms a block (`r20261111-072106-5e46`, `r20261111-072117-1a7a`), each at one prover on one H200 with ten cores, accepted by Flock's Rust verifier in loopback, not Lean's.
+For the table: not measured: `MoeExpertFp8BlockGemm_v3{K=6144,N=1}` of today's cut (kernels is asked), worth a 4% range on today's figure and nothing on the cut of record's.
