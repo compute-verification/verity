@@ -537,7 +537,7 @@ def test_every_definition_a_guarantee_reads_says_what_it_means():
 
 
 #: the theorems the spec (`security`) states: `theorem` and `lemma` declarations in its files
-SPEC_THEOREMS = {"security": 156}
+SPEC_THEOREMS = {"security": 160}
 
 
 def test_the_spec_states_no_new_lemma():
