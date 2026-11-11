@@ -190,7 +190,6 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_VU_EXPORT_DIR", str, None, WHERE, "where pair 0's replay exports its VU sample (`commit --vu-export-dir`)"),
     # ---- the engine (engine/)
     S("VERITY_INDUCTOR_DIR_PER_PROCESS", flag, False, WHERE, "TORCHINDUCTOR_CACHE_DIR is this process's own (`engine.env.INDUCTOR_DIR_MARK`)"),
-    S("VERITY_INT8_CREDITED_READ", str, None, VALUE, "MODE:PAGED_SO, the int8 attention's credited read every engine installs"),
     S("VERITY_INT8_PARTS", csv, (), VALUE, "the int8 parts a rank registers when it starts (`engine.int8_ranks`)"),
     S("VERITY_POOL_ROW", int_or_zero, 0, VALUE, "the carried pool's token width CTW: the engine keys its blocks by BlockKey_v1 "
       "for tokens of CTW bits and each window's close exports its pool row (`engine.pool_row`); 0, off"),

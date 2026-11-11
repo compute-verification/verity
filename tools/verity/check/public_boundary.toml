@@ -166,7 +166,7 @@ protocols = [
     "verity/commitments/identity/Identity/Domains.lean",
     "Security/{Properties,Proofs/Properties}/Identity{,.lean}",
     # vLLM's PoUB session tests run PoUB's verifier side in process
-    "adapters/vllm/tests/protocols/remote_bandwidth/{test_remote_session,test_in_place_gpu}.py",
+    "adapters/vllm/tests/protocols/remote_bandwidth/test_remote_session.py",
     "adapters/vllm/tests/pipeline/test_registration_log.py",
     # the network certifier's advice code (advice v1), private with its protocol: the public compiler reads it only through
     # a registration's `decode`, and its test of that is private with it
@@ -186,7 +186,6 @@ protocol_tests = [
     "adapters/vllm/tests/commit/test_memory_map.py",
     "adapters/vllm/tests/protocols/{remote_bandwidth,test_pous_option.py,pous_gpu.sh,pous_gpu.py}",
     "adapters/vllm/tests/pipeline/test_serve_remote.py",
-    "adapters/vllm/tests/engine/int8_store_gpu.py",
 ]
 # vLLM's test of GLM-5.3's served templates at TP 8, which reads the records `benchmarks/one_stage`'s served window wrote
 served_records = ["adapters/vllm/tests/pipeline/test_served_unit_rows.py"]

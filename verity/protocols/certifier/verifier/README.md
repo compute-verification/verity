@@ -162,6 +162,12 @@ A spec-level reference for network accounting's timing channel:
   network certifier's egress row t (`warden_rows.bucket_port`), which opens only if the computed row is the network
   certifier's. It has the reference (`bucket_map`, `computed`, `rendered`, `outputs`) and the state's egress-view layout
   (`Shape`'s offsets), which the scan's ingress step writes;
+- the lengths row's proof block (`verity.protocols.certifier.prover.lengths_row`, `LengthsRow`), in no Spec: one a link,
+  execution phase and slot stride, which reads the compute side's committed request row and the network certifier's
+  fails row (`connection_rows`), a registered read, and computes the lengths row from them with no witness: its
+  outputs are a verdict, the row's failures and the row, committed as a registered read of the network certifier's
+  lengths row (`connection_rows.port`), which opens only if the computed row is the signed one. It has the reference
+  (`request_bytes`, `refusals`, `outputs`) and the prover's side (`blocks`, `reads`);
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
   rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one
@@ -300,6 +306,11 @@ A spec-level reference for network accounting's timing channel:
   input, and the verifier places each read, the (connection, cell) the Program's proof blocks' wiring pins (`Units`,
   whose digest the port's value names), with the network certifier's wiring (`PROTOCOL.md`, "The network certifier's
   cells as rows"; `benchmarks/network_traces/warden_zk.py`);
+- the network certifier's connection rows (`connection_rows`), in a schedule with lengths rows
+  (`WardenParams.lengths`): each execution phase's releases as two tables a row a slot stride, `lengths` and `fails`,
+  committed as the cells' rows are and listed under one head the network certifier signs once; the registration the
+  verifier reads (`check_registration`) and its `--registered` port of the proof blocks that read a table, one a row
+  (`port`);
 - the output value the certifier relayed as a registered value (`out_commit`): `commit_out` commits its rows at the
   reading program's registered shape (`OutShape`: its program, the value, ``words`` a row and ``rows``, both sides
   taking them from the circuit's registered read) under the domain the verifier derives for that pinned value, with the
@@ -401,7 +412,7 @@ A spec-level reference for network accounting's timing channel:
 The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
 The Boolean Definitions above that core doesn't import (`advice_check`, `cache_step_v2`, `cache_step_v3`, `compile_slice_v2`,
-`compile_slice_v3`, `compile_slice_v4`, `compile_slice_v5`, `compile_slice_v6`, `compile_slice_v7`, `egress`, `ingress_scan`, `io_ids`, `served_statics`, `served_tie`, `window_charge`) are in
+`compile_slice_v3`, `compile_slice_v4`, `compile_slice_v5`, `compile_slice_v6`, `compile_slice_v7`, `egress`, `ingress_scan`, `io_ids`, `lengths_row`, `served_statics`, `served_tie`, `window_charge`) are in
 `verity.protocols.certifier.prover`, stated over the ones here.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`security/`, area `NetworkCertifier`).
 
