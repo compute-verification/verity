@@ -17,10 +17,15 @@ LIB = "libp2v1.so"
 CUDA_LIB = Path(__file__).resolve().parents[2] / "word_codec" / "cuda_lib.py"
 _v, _u, _q = ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint64
 ABI = {"p2v1_decode": [_v, _v, _v, _v, _u, _u, _v, _v], "p2v1_encode": [_v, _v, _v, _v, _u, _u, _u, _u, _u, _v, _v]}
-BUILT = {   # each where the build has it: P2_FUSED's, and P2_KEYS's or P2_KEYS4's
+BUILT = {   # each where the build has it: P2_FUSED's, P2_KEYS's or P2_KEYS4's, and P2_FAST's encode
     "p2v1_decode_fused": [_v, _v, ctypes.c_char_p, ctypes.c_int, _q, _u, _q, _u, _v, _v],
     "p2v1_keys": [ctypes.c_char_p, ctypes.c_int, _q, _u, _q, _v, _v, _v],
+    "p2v1_encode_sq": ABI["p2v1_encode"],
+    "p2v1_encode_ctas_per_sm": [ctypes.c_int],
 }
+ENCODERS = {"cgbn": "p2v1_encode", "p2sq": "p2v1_encode_sq"}
+"""The library's encoders, each giving the same rows: `cgbn`, CGBN's root, which every caller gets unless it asks; and
+`p2sq`, the root on the decode's squaring (`p2enc.cuh`)."""
 
 
 def exponent_split(params: reference.Params) -> tuple[int, int, int]:
@@ -98,14 +103,20 @@ class Kernels:
             raise RuntimeError(f"p2v1_decode: CUDA error {rc}")
         return m
 
-    def encode(self, m: Any, first: int = 0) -> Any:
+    def encode(self, m: Any, first: int = 0, encoder: str = "cgbn", out: Any = None) -> Any:
+        """`c` rows of the `m` rows of labels `first ..`, by one of `ENCODERS`, into `out` when given."""
+        name = ENCODERS[encoder]
+        if not hasattr(self.lib, name):
+            raise RuntimeError(f"{LIB} has no {name}: build it with FAST='-DP2_FAST -DP2_KEYS4 -DP2SQ_KARA'")
         k, t = self.keys(first, m.shape[0])
-        c = self.torch.empty_like(m)
+        c = self.torch.empty_like(m) if out is None else out
+        if c.shape != m.shape or c.dtype != m.dtype or not c.is_contiguous():
+            raise ValueError("out is rows like m's")
         a, n, r = self.split
-        rc = self.lib.p2v1_encode(m.data_ptr(), c.data_ptr(), k.data_ptr(), t.data_ptr(), m.shape[0], self.params.c0, a, n, r,
-                                  self.flags.data_ptr(), self._stream())
+        rc = getattr(self.lib, name)(m.data_ptr(), c.data_ptr(), k.data_ptr(), t.data_ptr(), m.shape[0], self.params.c0, a, n, r,
+                                     self.flags.data_ptr(), self._stream())
         if rc:
-            raise RuntimeError(f"p2v1_encode: CUDA error {rc}")
+            raise RuntimeError(f"{name}: error {rc}")
         return c
 
     def raised(self) -> int:

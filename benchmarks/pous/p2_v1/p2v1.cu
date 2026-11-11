@@ -24,6 +24,7 @@
 
 #ifdef P2_FAST
 #include "p2sq.cuh"
+#include "p2enc.cuh"
 #endif
 #if defined(P2_KEYS) && defined(P2_KEYS4)
 #error "P2_KEYS (v1's SHAKE256 keys) and P2_KEYS4 (v4's SHA-512 keys) are one or the other"
@@ -242,6 +243,33 @@ extern "C" int p2v1_encode(const void *m, void *c, const void *k, const void *t,
       (const uint32_t *)m, (uint32_t *)c, (const uint32_t *)k, (const uint32_t *)t, n, c0, ea, en, er, (uint32_t *)flags);
   return (int)cudaGetLastError();
 }
+
+#ifdef P2_FAST
+// p2v1_encode on p2enc.cuh's kernel, every root's squaring p2sq.cuh's: the same rows, bytes and flags. -1 when the
+// exponent's steps don't fit a Chain
+extern "C" int p2v1_encode_sq(const void *m, void *c, const void *k, const void *t, uint32_t n, uint32_t c0, uint32_t ea,
+                              uint32_t en, uint32_t er, void *flags, void *stream) {
+  p2sq::Chain chain;
+  if (!p2sq::chain_for(ea, en, er, chain)) return -1;
+  if (n == 0) return 0;
+  int dev = 0, sms = 0, occ = 0;
+  cudaGetDevice(&dev);
+  cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev);
+  cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ, (const void *)encode_sq_kernel, 32 * P2SQ_WARPS, 0);
+  uint64_t full = ((uint64_t)n + P2SQ_WARPS - 1) / P2SQ_WARPS, cap = (uint64_t)(occ > 0 ? occ : 1) * (sms > 0 ? sms : 1);
+  encode_sq_kernel<<<(uint32_t)std::max<uint64_t>(1, std::min<uint64_t>(full, cap)), 32 * P2SQ_WARPS, 0, (cudaStream_t)stream>>>(
+      chain, (const uint32_t *)m, (uint32_t *)c, (const uint32_t *)k, (const uint32_t *)t, n, c0, (uint32_t *)flags);
+  return (int)cudaGetLastError();
+}
+
+// How many CTAs of an encoder's kernel one SM runs at once, by the driver: p2v1_encode's (0) or p2v1_encode_sq's (1)
+extern "C" int p2v1_encode_ctas_per_sm(int sq) {
+  int occ = 0;
+  if (sq) cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ, (const void *)encode_sq_kernel, 32 * P2SQ_WARPS, 0);
+  else cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ, (const void *)encode_v1_kernel, P2_TPB, 0);
+  return occ;
+}
+#endif
 
 #ifdef P2_KEYS
 // K and t rows (as gpu.Kernels.keys) of blocks first .. first + count - 1, under the expansion prefix; -1 if it doesn't fit
