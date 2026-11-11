@@ -16,7 +16,10 @@
 # gets.
 #
 # A job's disk: the command asks for each job's own (--disk-gb, from its start's size: the copies of a kept state a
-# run holds at once), so the kind states no disk_gb.
+# run holds at once), so the kind states no disk_gb. A job writes nothing into the tree it runs from, which every run
+# of its commit shares: its Python environment is the run's own, in a directory it makes under /tmp
+# (UV_PROJECT_ENVIRONMENT) and removes when it ends, stopped or not. Where /tmp is not on the runs' filesystem, the
+# queue's hold for --disk-gb doesn't measure it.
 
 [kinds.training-attack]
 phase = "gpu1"

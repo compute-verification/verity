@@ -31,6 +31,11 @@ store lists for the `state.json` in the stopped run's record, or `nothing`), and
 in its state directory; a state on a node's disk has no copy in a record, and the job is told nothing of it. A
 state is a cache: one that is lost costs the job a start from θ, and no result is read from it.
 
+A queued job writes nothing into the tree it runs from, which every run of its commit shares. Its Python
+environment is the run's own: it makes a directory under /tmp, has `uv sync` build the environment there
+(`UV_PROJECT_ENVIRONMENT`) from the tree's lock as it is, and its shell removes the directory when the job ends,
+stopped or not (`ENV`, `SYNC`).
+
 A job's output holds no weights: its record, and its last checkpoint's E (the bytes that rebuild its output model
 from θ) when E is under 50 MiB. `--weights` makes each job this call runs keep its last checkpoint's whole state too,
 for a promoted config; a job that already has its record isn't run again for them.
@@ -63,8 +68,21 @@ KIND = "training-attack"
 #: the asserter of the command's labels
 BY = "training-slowdown"
 RUN_RE = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
-#: a queued job's environment: the workspace with the members' CUDA torch (the suites' `--extra torch-cpu` elsewhere)
-SYNC = "uv sync -q --all-packages --extra torch"
+#: where a queued job makes its directory, for its Python environment
+TMP = "/tmp"
+#: a queued job's Python environment is the run's own, in a directory it makes under `TMP`, never the tree's `.venv`,
+#: which every run of the commit would share. Per run and not per commit: a node's /tmp is every run's and nothing
+#: empties it, so an environment a commit's runs shared would stay there after the last of them, and each run would
+#: execute what an earlier one left in it. The job's shell removes the directory when it ends (`trap ... EXIT`). To
+#: do so it outlives a stop (`trap : TERM`): what stops a run signals every process of it, so the job's own process is
+#: told beside its shell, and the shell goes on waiting for the job, which keeps the run's end the job's.
+ENV = ('tmp=$(mktemp -d {tmp}/training-slowdown.XXXXXX) && trap \'rm -rf "$tmp"\' EXIT && trap : TERM && '
+       'export UV_PROJECT_ENVIRONMENT="$tmp/venv"')
+#: the environment's programs
+PYTHON, RESEARCH = '"$UV_PROJECT_ENVIRONMENT/bin/python"', '"$UV_PROJECT_ENVIRONMENT/bin/research"'
+#: what goes into the environment: the workspace with the members' CUDA torch (the suites' `--extra torch-cpu`
+#: elsewhere), from the lock as the tree has it (`--frozen`), so the lock isn't written either
+SYNC = "uv sync -q --frozen --all-packages --extra torch"
 #: where a job's state is between two of its runs. None: under the run's $OUT, so a stopped run's state is in its
 #: record on the store, and the job's next run fetches it into its own $OUT on whichever machine it gets. A directory
 #: of the nodes' own disks: the state stays there under the job's label, never leaves the node, and the job's next run
@@ -79,7 +97,8 @@ STATE_OVER_MODEL = 3
 #: beside the old one until it takes its place (`training_slowdown.run.Kept.write`)
 STATE_COPIES = 3
 #: the GB a run writes besides: its environment, its tree, a checkpoint on its way to be scored and its output. The
-#: queue's own figure for a job that declares none.
+#: queue's own figure for a job that declares none. The queue holds a run for room on the filesystem of its runs, so
+#: where `TMP` is on another one the environment is in the figure and not in what the hold measures.
 OUTSIDE_GB = 20
 DONE, PENDING, STOPPED, FAILED, MISSING = "done", "pending", "stopped", "failed", "missing"
 
@@ -143,7 +162,7 @@ def research_argv(job: config.Job, a: argparse.Namespace, after: State | None = 
                          f"{job.config.path} is outside {HERE}") from None
     py = " ".join(shlex.quote(x) for x in job_args(job, str(rel), a))
     # the stopped run's out/state, into this run's $OUT (the run directory's out/)
-    fetch = (f'.venv/bin/research data fetch {after.kept} --path "out/state/*" --to "$(dirname "$OUT")" && '
+    fetch = (f'{RESEARCH} data fetch {after.kept} --path "out/state/*" --to "$(dirname "$OUT")" && '
              if after and after.kept else "")
     if NODE_STATE:
         # no record holds a copy of a state on a node's disk: the job continues from the one it finds there
@@ -151,9 +170,9 @@ def research_argv(job: config.Job, a: argparse.Namespace, after: State | None = 
     else:
         # the job is told which state.json the stopped run's record holds, and continues from no other
         state = f'"$OUT/state" --continues {after.stated if fetch else NOTHING}'
-    # exec: the job's process is the run's, so it is the one told to stop
-    cmd = (f'{SYNC} && {fetch}cd {HERE.relative_to(ROOT)} && exec ../../.venv/bin/python {py} --state {state} '
-           f'--out "$OUT"')
+    # no exec: the shell stays, to remove the environment once the job has ended (`ENV`)
+    cmd = (f'{ENV.format(tmp=TMP)} && {SYNC} && {fetch}cd {HERE.relative_to(ROOT)} && {PYTHON} {py} '
+           f'--state {state} --out "$OUT"')
     minutes = run_minutes(job.config)
     if a.on:
         # a machine named by hand declares nothing to the queue, its disk included

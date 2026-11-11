@@ -18,6 +18,10 @@ _spec.loader.exec_module(cmd)
 ART = "art:" + "e" * 64
 #: the store's sha256 of the state.json a record holds
 STATED = "5" * 64
+#: how a queued job's script starts: a directory of the run's own under /tmp, removed when its shell ends, which a
+#: SIGTERM doesn't end, and the job's Python environment in it
+ENV = ('tmp=$(mktemp -d /tmp/training-slowdown.XXXXXX) && trap \'rm -rf "$tmp"\' EXIT && trap : TERM && '
+       'export UV_PROJECT_ENVIRONMENT="$tmp/venv"')
 
 
 class Research:
@@ -102,10 +106,13 @@ def test_each_missing_job_is_queued_once_and_labelled(tree, reg_path, capsys):
                              "verity", "--source", str(tree.parents[2]), "--cwd", "source", "--gpus", "1"]
         script = argv[-1]
         assert argv[-3:-1] == ["bash", "-lc"] and script.startswith(
-            cmd.SYNC + " && cd benchmarks/training_slowdown && exec ../../.venv/bin/python -m training_slowdown.run ")
+            f'{ENV} && {cmd.SYNC} && cd benchmarks/training_slowdown && "$UV_PROJECT_ENVIRONMENT/bin/python" '
+            f'-m training_slowdown.run ')
         assert (f"--config attacks/a.toml --seed {job.seed} --split {job.split} --starts {reg_path.resolve()}"
                 in script and script.endswith(f'--state "$OUT/state" --continues {cmd.NOTHING} --out "$OUT"'))
+        assert ".venv" not in script and "exec " not in script
         assert (r.run_of(job.label), config.LABEL_KEY, job.label) in r.labels
+    assert (cmd.TMP, cmd.SYNC) == ("/tmp", "uv sync -q --frozen --all-packages --extra torch")
     assert "3 of 3 jobs pending" in capsys.readouterr().out
     assert command(r, "a", "--starts", str(reg_path)) == 3 and len(r.runs) == 3  # pending: nothing queued again
 
@@ -200,8 +207,9 @@ def test_a_stopped_job_is_run_again_from_the_state_its_run_kept(tree, reg_path, 
     again, fresh = r.runs[2:]
     assert again[:6] == fresh[:6] == ["research", "run", "--queue", "--kind", "training-attack", "--preemptible"]
     assert again[-5] == "--store-read" and "--store-read" not in fresh and "--on" not in again
-    assert again[-1].startswith(f'{cmd.SYNC} && .venv/bin/research data fetch {ART} --path "out/state/*" --to '
-                                f'"$(dirname "$OUT")" && cd benchmarks/training_slowdown && exec ')
+    assert again[-1].startswith(f'{ENV} && {cmd.SYNC} && "$UV_PROJECT_ENVIRONMENT/bin/research" data fetch {ART} '
+                                f'--path "out/state/*" --to "$(dirname "$OUT")" && cd benchmarks/training_slowdown '
+                                f'&& "$UV_PROJECT_ENVIRONMENT/bin/python" -m ')
     assert "research data fetch" not in fresh[-1] and fresh[-1] == r.runs[1][-1]
     assert again[-1].endswith(f'--state "$OUT/state" --continues {STATED} --out "$OUT"')
     assert fresh[-1].endswith('--state "$OUT/state" --continues nothing --out "$OUT"')

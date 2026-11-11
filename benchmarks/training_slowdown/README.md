@@ -54,7 +54,10 @@ jobs, one per seed and split, each labelled in the store `training-slowdown=<dig
 its labels lack: on the queue (kind `training-attack`, `infra/cluster/kinds/training.toml`), on one machine with `--on`,
 or here, one after another, with `--local`. It exits 0 when every job has its record, 3 while one is pending or
 stopped and 1 when one failed; a failed job is never run again. A job's run gets the time its config's budget gives
-it (`budget.minutes`, the job's own limit over every run it continues in; without it, the kind's).
+it (`budget.minutes`, the job's own limit over every run it continues in; without it, the kind's). A queued job
+writes nothing into the tree it runs from, which every run of its commit shares: its Python environment is the
+run's own, built by `uv sync --frozen` in a directory the job makes under /tmp (`UV_PROJECT_ENVIRONMENT`), which the
+job's shell removes when the job ends, stopped or not.
 
 A stopped job continues. After each checkpoint but the last a job keeps what continuing needs in its state directory
 (`--state`): the model, the optimizers' state, the stream's position, the generators, and the record so far with its
