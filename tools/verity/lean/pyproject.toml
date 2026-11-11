@@ -39,7 +39,8 @@ untraced = [
 inputs = ["tools/verity/lean/README.md", "tools/verity/check/common.py", "tools/verity/check/lean_slot.py",
           "tools/verity/check/slot.py", "tools/verity/graph/verity_graph/contract.py",
           "tools/verity/graph/tests/key_vectors.json", "tools/verity/cli/verity_cli/__init__.py",
-          "tools/lean/setup.sh", "tools/research/src/research/store/moves.json"]
+          "tools/lean/setup.sh", "tools/research/src/research/store/moves.json",
+          "tools/research/src/research/__init__.py", "tools/verity/graph/verity_graph/__init__.py", "tools/research/src/research/store/__init__.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
