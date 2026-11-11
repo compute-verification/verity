@@ -1359,7 +1359,7 @@ def test_the_sandbox_is_handed_the_resolved_lake_paths_of_a_linked_slot_tree(tmp
     assert argv[argv.index("ro") + 1:argv.index("--", argv.index("ro"))] == [str(real / "Sec" / ".lake" / "packages")]
 
 
-def read_only(tmp: Path, dirs: list[Path], cmd: list[str]) -> tuple[int, list[str]]:
+def read_only(tmp: Path, dirs: list[Path], cmd: list[str], monkeypatch) -> tuple[int, list[str]]:
     """`READ_ONLY` as the sandbox runs it, on ``dirs`` and then ``cmd``, where a test may not mount: `mount` is a stand-in
     that records its arguments and the `.lake` directories then under the directory it is given. The status, and its lines."""
     stand_in, log = tmp / "mount-stand-in", tmp / "mount.log"
@@ -1367,12 +1367,14 @@ def read_only(tmp: Path, dirs: list[Path], cmd: list[str]) -> tuple[int, list[st
     (stand_in / "mount").write_text('#!/usr/bin/env bash\necho "$* : $(cd "${@: -1}" && echo */.lake)" >> "$MOUNT_LOG"\n')
     (stand_in / "mount").chmod(0o755)
     log.unlink(missing_ok=True)
-    env = {**os.environ, "PATH": f"{stand_in}{os.pathsep}{os.environ['PATH']}", "MOUNT_LOG": str(log)}
-    rc = subprocess.run(["bash", "-c", LC.READ_ONLY, "ro", *map(str, dirs), "--", *cmd], env=env).returncode
+    monkeypatch.setenv("PATH", str(stand_in), prepend=os.pathsep)
+    monkeypatch.setenv("MOUNT_LOG", str(log))
+    rc = subprocess.run(["bash", "-c", LC.READ_ONLY, "ro", *map(str, dirs), "--", *cmd]).returncode
     return rc, log.read_text().splitlines() if log.is_file() else []
 
 
-def test_a_dependency_with_a_lakefile_lean_and_no_lake_directory_gets_an_empty_one_before_its_read_only_mount(tmp_path):
+def test_a_dependency_with_a_lakefile_lean_and_no_lake_directory_gets_an_empty_one_before_its_read_only_mount(
+        tmp_path, monkeypatch):
     """Lake keeps a `lakefile.lean` dependency's compiled configuration in the workspace's `.lake/config`, by the dependency's
     place among the packages it loads, and where that place holds no trace of it Lake first makes the dependency's own
     `.lake`. Under the read-only mount that failed the load, on a tree whose dependencies were fetched again under an older
@@ -1396,7 +1398,7 @@ def test_a_dependency_with_a_lakefile_lean_and_no_lake_directory_gets_an_empty_o
         return {p.relative_to(packages).as_posix() for p in packages.rglob("*")}
 
     before = held()
-    rc, mounts = read_only(tmp_path, [packages, none_fetched], ["bash", "-c", "exit 7"])
+    rc, mounts = read_only(tmp_path, [packages, none_fetched], ["bash", "-c", "exit 7"], monkeypatch)
     assert rc == 7, "the command runs after the mounts, and its status is the sandbox's"
     assert held() - before == {"leansqlite/.lake"} and before <= held()
     assert [p.name for p in elsewhere.iterdir()] == ["lakefile.lean"], "nothing is written through a link"
@@ -1405,7 +1407,7 @@ def test_a_dependency_with_a_lakefile_lean_and_no_lake_directory_gets_an_empty_o
                                                     for d in (packages, none_fetched) for i in (0, 1)]
     assert "leansqlite/.lake" in mounts[0].split(" : ")[1].split(), "it is there before the first mount of its directory"
     after = held()
-    assert read_only(tmp_path, [packages, none_fetched], ["true"])[0] == 0 and held() == after, "and stays as it is"
+    assert read_only(tmp_path, [packages, none_fetched], ["true"], monkeypatch)[0] == 0 and held() == after, "and stays as it is"
 
 
 @pytest.mark.parametrize("copy", [False, True])
@@ -1420,7 +1422,7 @@ def test_a_lake_directory_made_in_a_tree_never_appears_in_the_dependencies_the_n
     assert LC.link("pkg", tree, deps, links, log=lambda _: None, copy=copy) and links == {"pkg": "k"}
     packages = tree / "pkg" / ".lake" / "packages"
     assert (packages / "leansqlite" / "lakefile.lean").samefile(deps / "k" / "leansqlite" / "lakefile.lean") == (not copy)
-    assert read_only(tmp_path, [packages], ["true"])[0] == 0 and (packages / "leansqlite" / ".lake").is_dir()
+    assert read_only(tmp_path, [packages], ["true"], monkeypatch)[0] == 0 and (packages / "leansqlite" / ".lake").is_dir()
     assert sorted(p.relative_to(deps).as_posix() for p in (deps / "k").rglob("*")) == ["k/leansqlite", "k/leansqlite/lakefile.lean"]
 
 
