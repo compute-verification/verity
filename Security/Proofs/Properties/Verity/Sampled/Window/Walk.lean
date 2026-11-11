@@ -12,11 +12,12 @@ window's audit. It registers the decoding of the record's most likely message; o
 a tape of the period's game; and it walks `σ`'s play on the tape through each member's session in turn. In a member's
 session it sends, at the session's first stop, the decoding of `Commit`'s roots, writes the live link points into the
 tape there, and at each later stop sends the round's decoded submission and writes the round's live coins in; at the
-session's end it sends the member's proof files, which its decoders give from the position the walk is at, and the
-next member's session starts from that position. A session that ends early (a stop that decodes no submission) leaves
-the walk at that stop, which the next session starts from. A member with no proof block in the sample has no
-statement, so the period's play holds no session of its own: the projection plays an idle session for it, which
-consumes no stop, and the next member's session starts from the same position.
+session's end it sends the member's proof files, which its decoders give from the position the walk is at; it then
+consumes the stop after it, the session's closing round's, with nothing written in (a closing round releases no
+coin), and the next member's session starts from the position past it. A session that ends early (a stop that
+decodes no submission) leaves the walk at that stop, which is consumed the same way. A member with no proof block in
+the sample has no statement, so the period's play holds no session of its own: the projection plays an idle session
+for it, which consumes no stop, and the next member's session starts from the same position.
 
 * **A member's decoders** (`PosDecoders`): `Decoders`, with the proof files a function of the position the member's
   session's walk ends at. The window's audit takes a member's files before the next member's coins, and the period's
@@ -28,8 +29,10 @@ consumes no stop, and the next member's session starts from the same position.
   (`stopOffK`, `roundsOffK`, `sessionOffK`) and its support off them (`RoundsReachK`, `SessionReachK`) are `Project`'s
   with the same continuation.
 * **A member's session, or none** (`memberK`, `memberWK`, `memberOffK`, `MemberReachK`): the session's where the
-  sample holds one of the member's proof blocks; else an idle session (`idleOut`, `skipK`, `skipWK`), whose joint law
-  flips only its link points and whose share and support are what follows the member's, from the same position.
+  sample holds one of the member's proof blocks, with what follows it taken past the session's closing round's stop
+  (`Pos.consume` of the stop after the session's walk); else an idle session (`idleOut`, `skipK`, `skipWK`), whose
+  joint law flips only its link points and whose share and support are what follows the member's, from the same
+  position.
 * **The parameters** (`WindowCoinMap`): one widening and one start for the window, and each member's link points and
   round coins written at its own stops (`WindowCoinMap.member`). The decoders are a member's each, by its place in the
   window.
@@ -388,26 +391,28 @@ theorem prob_skipK (E : γ → Prop) (finP : (a : τ) → Strategy (K a)) (finW 
     ((prob_idleK dg J wr K E finP #[] pts N fun _ _ => []).trans (h (wr (idleOut J pts)) (w pts)))
 
 /-- **A member's projection, then what follows it**: its session's (`sessionK`) where the sample holds one of its
-proof blocks (`true`); else an idle session (`skipK`), which consumes no stop of the period's play, and what follows
-from the same position. A member with no proof block in the sample has no statement, so the period's play holds no
-session of its own. -/
+proof blocks (`true`), then what follows from the position past the stop after the session's walk, its closing
+round's, consumed with nothing written in (the closing round releases no coin); else an idle session (`skipK`), which
+consumes no stop of the period's play, and what follows from the same position. A member with no proof block in the
+sample has no statement, so the period's play holds no session of its own. -/
 noncomputable def memberK (next : Pos g σ Claims.Msg (Fin R) → (a : τ) → Strategy (K a)) (N : ℕ)
     (p : Pos g σ Claims.Msg (Fin R)) : Bool → Strategy (((liveSession dg J mPts N).map wr).bind K)
-  | true => sessionK D M dg J wr K next N p
+  | true => sessionK D M dg J wr K (fun q => next q.toStop.consume) N p
   | false => skipK dg J wr K (next p) N
 
 /-- **A member's joint law, then what follows it**: its session's (`sessionWK`) where the sample holds one of its
-proof blocks; else the idle session's (`skipWK`), and what follows from the same position. -/
+proof blocks, then what follows from the position past the session's closing round's stop; else the idle session's
+(`skipWK`), and what follows from the same position. -/
 noncomputable def memberWK {ο : Type} (next : Pos g σ Claims.Msg (Fin R) → τ → Game ο) (N : ℕ)
     (p : Pos g σ Claims.Msg (Fin R)) : Bool → Game ο
-  | true => sessionWK D M dg J wr next N p
+  | true => sessionWK D M dg J wr (fun q => next q.toStop.consume) N p
   | false => skipWK J wr (next p)
 
 /-- A member's joint law's strategy: what follows the member's, at its end. -/
 noncomputable def memberWKS {ο : Type} (next : Pos g σ Claims.Msg (Fin R) → τ → Game ο)
     (wn : ∀ q a, Strategy (next q a)) (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)) :
     (b : Bool) → Strategy (memberWK D M dg J wr next N p b)
-  | true => sessionWKS D M dg J wr next wn N p
+  | true => sessionWKS D M dg J wr (fun q => next q.toStop.consume) (fun q => wn q.toStop.consume) N p
   | false => fun _ => wn p _
 
 /-- **A member's projection, then what follows it, has its events' probabilities under the member's joint law**,
@@ -419,22 +424,25 @@ theorem prob_memberK (E : γ → Prop) (nextP : Pos g σ Claims.Msg (Fin R) → 
     ∀ (b : Bool) (w : Strategy (memberWK D M dg J wr nextW N p b)),
       prob E (((liveSession dg J mPts N).map wr).bind K) (memberK D M dg J wr K nextP N p b) =
         prob (fun o => E o.1) (memberWK D M dg J wr nextW N p b) w
-  | true, w => prob_sessionK D M dg J wr K E nextP nextW h N p w
+  | true, w => prob_sessionK D M dg J wr K E (fun q => nextP q.toStop.consume) (fun q => nextW q.toStop.consume)
+      (fun q => h q.toStop.consume) N p w
   | false, w => prob_skipK dg J wr K E (nextP p) (nextW p) (h p) N w
 
 /-- **A member's share off `BL` and `B`, then what follows it**: its session's (`sessionOffK`) where the sample holds
-one of its proof blocks; else what follows, from the same position. -/
+one of its proof blocks, then what follows from the position past the session's closing round's stop; else what
+follows, from the same position. -/
 noncomputable def memberOffK (BL : LinkHold mPts) (e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (N : ℕ)
     (p : Pos g σ Claims.Msg (Fin R)) : Bool → ℝ≥0∞
-  | true => sessionOffK D M J B BL e N p
+  | true => sessionOffK D M J B BL (fun q => e q.toStop.consume) N p
   | false => e p
 
 /-- **A member's joint law's support off `BL` and `B`, then what follows it**, from the position `p`: its session's
-(`SessionReachK`) where the sample holds one of its proof blocks; else any link points of the idle session, and
-`next`'s trace from `p` at the idle outcome on them. -/
+(`SessionReachK`) where the sample holds one of its proof blocks, then `next`'s trace from the position past the
+session's closing round's stop; else any link points of the idle session, and `next`'s trace from `p` at the idle
+outcome on them. -/
 def MemberReachK {ο : Type} (BL : LinkHold mPts) (next : Pos g σ Claims.Msg (Fin R) → τ → ο → Prop) (N : ℕ)
     (p : Pos g σ Claims.Msg (Fin R)) (o : ο) : Bool → Prop
-  | true => SessionReachK D M dg J B wr BL next N p o
+  | true => SessionReachK D M dg J B wr BL (fun q => next q.toStop.consume) N p o
   | false => ∃ pts : Fin 2 → Fin mPts → 𝔽, next p (wr (idleOut J pts)) o
 
 variable {D M dg J B wr} in
@@ -448,7 +456,8 @@ theorem memberOffK_le_prob {ο : Type} (BL : LinkHold mPts) (E H : ο → Prop)
     ∀ (b : Bool) (w : Strategy (memberWK D M dg J wr nextW N p b)),
       (∀ o, MemberReachK D M dg J B wr BL nextR N p o b → H o → E o) →
       memberOffK D M J B BL e N p b ≤ prob E (memberWK D M dg J wr nextW N p b) w
-  | true, w, h => sessionOffK_le_prob BL E H e nextW nextR hn N p w h
+  | true, w, h => sessionOffK_le_prob BL E H (fun q => e q.toStop.consume) (fun q => nextW q.toStop.consume)
+      (fun q => nextR q.toStop.consume) (fun q => hn q.toStop.consume) N p w h
   | false, w, h =>
     (avg_const (C := Fin 2 → Fin mPts → 𝔽) (e p)).symm.le.trans
       (avg_mono fun pts => hn p (wr (idleOut J pts)) (w pts) fun o ho => h o ⟨pts, ho⟩)

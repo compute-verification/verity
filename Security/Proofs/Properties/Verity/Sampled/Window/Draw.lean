@@ -226,10 +226,11 @@ noncomputable def sessionErrK (γL : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞)
   γL p.toStop + Pos.resample (roundsErrK D J γ e N) p.toStop.consume
 
 /-- **A member's error, then what follows it**: its session's (`sessionErrK`) where the sample holds one of its proof
-blocks (`true`); else what follows, from the same position. -/
+blocks (`true`), then what follows over the tapes from the session's closing round's stop, past it (a closing round
+releases no coin, so its stop adds no error of its own); else what follows, from the same position. -/
 noncomputable def memberErrK (γL : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞)
     (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)) : Bool → ℝ≥0∞
-  | true => sessionErrK D J γ γL e N p
+  | true => sessionErrK D J γ γL (fun q => Pos.resample e q.toStop.consume) N p
   | false => e p
 
 variable (M : CoinMap g σ Ω R mPts) (B : RoundHold)
@@ -271,21 +272,21 @@ theorem sessionErrK_toStop (γL e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) 
 /-- A member's share off `BL` and `B`, then what follows it, is at most 1 wherever what follows is. -/
 theorem memberOffK_le_one (BL : LinkHold mPts) {e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (he : ∀ q, e q ≤ 1) (N : ℕ)
     (p : Pos g σ Claims.Msg (Fin R)) : ∀ b : Bool, memberOffK D M J B BL e N p b ≤ 1
-  | true => sessionOffK_le_one D J M B BL he N p
+  | true => sessionOffK_le_one D J M B BL (fun q => he q.toStop.consume) N p
   | false => he p
 
 /-- A member's share off `BL` and `B` reads the position only at its next stop, wherever what follows does. -/
 theorem memberOffK_toStop (BL : LinkHold mPts) (e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞)
     (he : ∀ q, e q.toStop = e q) (N : ℕ) (p : Pos g σ Claims.Msg (Fin R)) :
     ∀ b : Bool, memberOffK D M J B BL e N p.toStop b = memberOffK D M J B BL e N p b
-  | true => sessionOffK_toStop D J M B BL e N p
+  | true => sessionOffK_toStop D J M B BL (fun q => e q.toStop.consume) N p
   | false => he p
 
 /-- A member's error reads the position only at its next stop, wherever what follows does. -/
 theorem memberErrK_toStop (γL e : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞) (he : ∀ q, e q.toStop = e q) (N : ℕ)
     (p : Pos g σ Claims.Msg (Fin R)) :
     ∀ b : Bool, memberErrK D J γ γL e N p.toStop b = memberErrK D J γ γL e N p b
-  | true => sessionErrK_toStop D J γ γL e N p
+  | true => sessionErrK_toStop D J γ γL (fun q => Pos.resample e q.toStop.consume) N p
   | false => he p
 
 variable {D J γ M B} in
@@ -434,10 +435,37 @@ theorem avg_sessionOffK_le {γL : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (h
     _ = _ := rfl
 
 open Classical in
+/-- **Past a stop with nothing written in, what follows keeps its share within its error**: wherever what follows
+has, over a uniform tape from each position, the event's share within its own error, it has from a position the
+event's share within its error past the position's next stop, consumed as it is, the error taken over the tapes from
+that stop. The tape from the next stop is uniform and independent of the walk to it (`Pos.avg_toStop`), and consuming
+a stop changes no tape. -/
+theorem avg_tapeInd_consume (Q : CoinTape g σ → Prop) {eO eE : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞}
+    (hK : ∀ q : Pos g σ Claims.Msg (Fin R), avg (fun z : CoinTape q.g' q.s' => tapeInd Q (q.withTape z)) ≤
+      avg (fun z : CoinTape q.g' q.s' => eO (q.withTape z)) + avg fun z : CoinTape q.g' q.s' => eE (q.withTape z))
+    (q : Pos g σ Claims.Msg (Fin R)) :
+    avg (fun z : CoinTape q.g' q.s' => tapeInd Q (q.withTape z)) ≤
+      avg (fun z : CoinTape q.g' q.s' => eO (q.withTape z).toStop.consume) +
+      avg fun z : CoinTape q.g' q.s' => Pos.resample eE (q.withTape z).toStop.consume :=
+  calc avg (fun z : CoinTape q.g' q.s' => tapeInd Q (q.withTape z))
+      = avg fun z : CoinTape q.g' q.s' => tapeInd Q (q.withTape z).toStop :=
+        congrArg avg (funext fun z => (tapeInd_toStop Q _).symm)
+    _ = avg fun z : CoinTape q.g' q.s' => Pos.resample (tapeInd Q) (q.withTape z).toStop := Pos.avg_toStop _ q
+    _ ≤ avg fun z : CoinTape q.g' q.s' =>
+          Pos.resample eO (q.withTape z).toStop.consume + Pos.resample eE (q.withTape z).toStop.consume :=
+        avg_mono fun z => hK (q.withTape z).toStop.consume
+    _ = (avg fun z : CoinTape q.g' q.s' => Pos.resample eO (q.withTape z).toStop.consume) +
+          avg fun z : CoinTape q.g' q.s' => Pos.resample eE (q.withTape z).toStop.consume := avg_add _ _
+    _ = _ :=
+        congrArg (fun a => a + avg fun z : CoinTape q.g' q.s' => Pos.resample eE (q.withTape z).toStop.consume)
+          (Pos.avg_toStop (fun r => eO r.consume) q).symm
+
+open Classical in
 variable {D J γ M B} in
 /-- **A member's share off `BL` and `B`, then what follows it, is within the member's error of uniform from where it
-starts**: its session's (`avg_sessionOffK_le`) where the sample holds one of its proof blocks; else what follows has
-the event's share within its own error, from the same position. -/
+starts**: its session's (`avg_sessionOffK_le`) where the sample holds one of its proof blocks, with what follows
+taken past the session's closing round's stop (`avg_tapeInd_consume`); else what follows has the event's share within
+its own error, from the same position. -/
 theorem avg_memberOffK_le {γL : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (hL : M.LinkClose γL) (hR : M.RoundClose γ)
     (BL : LinkHold mPts) (Q : CoinTape g σ → Prop) {eO eE : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (hO : ∀ q, eO q ≤ 1)
     (hK : ∀ q : Pos g σ Claims.Msg (Fin R), avg (fun z : CoinTape q.g' q.s' => tapeInd Q (q.withTape z)) ≤
@@ -448,7 +476,8 @@ theorem avg_memberOffK_le {γL : Pos g σ Claims.Msg (Fin R) → ℝ≥0∞} (hL
       avg fun z : CoinTape p.g' p.s' =>
         memberErrK D J (fun q j s => γ q j s + prCoin (B q.g' j s)) (fun q => γL q + prCoin (BL q.g')) eE N
           (p.withTape z) b
-  | true => avg_sessionOffK_le hL hR BL Q hO hK N p
+  | true => avg_sessionOffK_le hL hR BL Q (eO := fun q => eO q.toStop.consume)
+      (eE := fun q => Pos.resample eE q.toStop.consume) (fun q => hO q.toStop.consume) (avg_tapeInd_consume Q hK) N p
   | false => hK p
 
 end SessionErr

@@ -161,8 +161,8 @@ variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 /-- **The members' steps, from each drawn member's session's verdict and moves**: `MemberSteps` at an invariant `I`
 that holds at the play's start and is kept at a member with no proof block in the sample, wherever the session's trace
 of each member `m` with a proof block in the sample, under `MemberSteps.step`'s premises, has `I` at the next place
-and the position its session ends at, a session's verdict (`SessionVerdict`) at a statement that is `m`'s
-(`StatesMember`), and its outcome's moves those the verdict's record decodes to with the verdict's proof files
+and the position past the stop after its session's end, a session's verdict (`SessionVerdict`) at a statement that is
+`m`'s (`StatesMember`), and its outcome's moves those the verdict's record decodes to with the verdict's proof files
 (`MemberMovesOf`). The acceptance of what the member's writer writes is `member_step_accepts`. -/
 theorem memberSteps_of_verdicts (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : Window) (t : ℕ)
     (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : WindowDecoders V θ F c W σ)
@@ -181,7 +181,7 @@ theorem memberSteps_of_verdicts (k : Verity.Registration.Composite) (P : Exchang
       q.Past r → r.Inv (roundCuts V θ F c rd) →
       V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ r.tape) ∧ NoMiss V θ F c rd σ r.tape ∧
         P (CoinTape.run (V.game θ F c) σ r.tape) →
-      I ω r (i + 1) q ∧ ∃ (a : StepAt) (bs : _root_.Core.Blobs) (keys : Array String)
+      I ω r (i + 1) q.toStop.consume ∧ ∃ (a : StepAt) (bs : _root_.Core.Blobs) (keys : Array String)
         (s : _root_.Spot.OneStageZk.RunFiles) (record : String) (spec : Flock.SessionSpec)
         (tabs : Array Flock.Setup) (rest : Json × Json) (proofs : Array ByteArray) (units : Array ℕ),
         StatesMember a m ∧ SessionVerdict a bs keys s record spec tabs rest proofs units ∧

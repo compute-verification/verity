@@ -203,8 +203,9 @@ theorem stopsAt_rootStop {R : ℕ} (rd : Reading R) (σ : Strategy (V.game θ F 
 start on the coin map's tape, whatever `r` (`start`); the session's trace of each member with a proof block in the
 sample, from a position `I` holds at that keeps the play's start and whose stop is where `StopsAt` says, ending at a
 position `q` that `r` is past, where `r` keeps the play's start and its tape's play the sampled verdict accepts,
-misses at no round and not at the record and `P` holds of, has `I` at the next place and `q` and writes a transcript
-flock-verify `--zk` accepts at the member's `own` (`step`); and a member with no proof block in the sample, which has
+misses at no round and not at the record and `P` holds of, has `I` at the next place and the position past the stop
+after `q`, the session's closing round's, and writes a transcript flock-verify `--zk` accepts at the member's `own`
+(`step`); and a member with no proof block in the sample, which has
 no statement and no session in the play, has `I` at the next place and the same position (`skip`). It is
 `MemberDecodes` with what every member's trace keeps handed to the step. -/
 structure MemberSteps (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : Window) (t : ℕ)
@@ -223,7 +224,7 @@ structure MemberSteps (k : Verity.Registration.Composite) (P : Exchange → Prop
     r.Inv (roundCuts V θ F c rd) →
     V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ r.tape) ∧ NoMiss V θ F c rd σ r.tape ∧
       P (CoinTape.run (V.game θ F c) σ r.tape) →
-    I ω r (i + 1) q ∧ FlockSoundness.Discharge.ZkHidden.AcceptsZKP m.I m.own
+    I ω r (i + 1) q.toStop.consume ∧ FlockSoundness.Discharge.ZkHidden.AcceptsZKP m.I m.own
       (m.wr (m.part ((W.extend M.widening).L.draw ω)) (windowReg V θ F c W rd σ D) out)
   skip : ∀ (ω : (W.extend M.widening).L.Ω) (i : ℕ) (m : Flock.Guarantees.MemberV5 ByteArray W.nJ)
     (p r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds)),
@@ -247,7 +248,8 @@ theorem memberDecodes_of_stops (k : Verity.Registration.Composite) (P : Exchange
   start ω r := ⟨h.start ω r, Pos.inv_root _ _, stopsAt_rootStop V θ F c rd σ (M.start ω) hP⟩
   step ω i m p q r out hm hd hI hmr hqr hri hacc := by
     obtain ⟨hI', hacc'⟩ := h.step ω i m p q r out hm hd hI.1 hI.2.1 hI.2.2 hmr hqr hri hacc
-    exact ⟨⟨hI', hmr.inv hI.2.1, hmr.stopsAt hP hI.2.2⟩, hacc'⟩
+    exact ⟨⟨hI', Pos.inv_consume (Pos.toStop_spec (hmr.inv hI.2.1)).2.2,
+      StopsAt.next hP (hmr.stopsAt hP hI.2.2) id⟩, hacc'⟩
   skip ω i m p r hm hd hI := ⟨h.skip ω i m p r hm hd hI.1, hI.2.1, hI.2.2⟩
 
 end Verity.Sampled
