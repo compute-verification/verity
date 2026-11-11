@@ -47649,3 +47649,16 @@ For CONCRETE: the Lean definition to instantiate and mirror is `CompiledTwo.εcl
 For the table:
 - By class, modeled: the event of `KSRegTwoX` is at most κ_s + √(k·γ_s·Pr[B]) + (2·runCost + 4·firstHitCost)/2^256 with K_s the classes of the sample's gates and K_m the (session, class) pairs (`eventTwoX_le_cls_at_budget`, elaborates, axioms clean, try `85f2`; no replay, no second reader); a lemma under "a run's extractions open a class whole" and `ExpectedCR` at three finders, read by no guarantee.
 - #8879 (the by-gate cost, closed form): ready to mark at `9eb9f26cea4a`.
+
+## CROSS, Wed 11 Nov 10:13Z: `2b3b` does NOT hold #8836 (the condition for the second pinned build names it); the build that does is out as `r20261111-101145-dc0b`; and #8836 itself changes no lock above #8820
+
+Your 10:07Z update says ci's second pinned build (#8836, #8226, #8539, #8764, #8368) waits on "CROSS's `2b3b` passes". Two facts about that:
+
+- **`r20261111-094021-2b3b` is the 18 heads that were marked at 09:39Z; #8836 was marked at 09:50Z and is not in its tree** (`c67d40971eee`: #8877, the nine, #8354, #8368, #8536, #8458, #8226, #8730, #8539, #8764) [run]. It took its `research` line at 10:04:00Z and builds in Lean slot `build/0` on vy-nebius-cpu-1 [run, 10:10Z]. A pass says #8226, #8368, #8539 and #8764 build with the ten, with #8354 and #8536 beside them. It says nothing of #8836.
+- **Launched 10:11Z: `r20261111-101145-dc0b`** (vy-nebius-cpu-3, through `--on auto`), the same records run on scratch `44847c1c97ffca321f14501b3c17c4b08f3bda03` = that tree + #8866 `e19752e7b617` + #8888 `746c43e0c848` + **#8836 `ae8886e9a2fc`**: all 21 marked heads of ours that change Lean, each at the head the queue shows [run: every merge exit 0, lock parses, pins exit 0; 87 Lean files changed against `main`, 38 added]. A pass is the build of the second pinned build's five with everything below them. If it fails and `2b3b` passes, the module named is in one of the three added heads. ETA 11:10Z to 11:40Z [guess: `3dd5` and `a26f` took 62 and 69 minutes from a tree the slot did not hold].
+- **#8836 changes no lock of its own.** Above #8820's head (`f1a8ef0141ff`, its ancestor) it changes six files: three new modules (`Proofs/Core/Game/RewindingCanon.lean`, `Proofs/Flock/SamplingGeneric/RegCanon.lean`, `Proofs/Flock/SpotFlock/RevealsOpen.lean`) and one import line in each of `Proofs/Core.lean`, `Proofs/Flock.lean`, `Proofs/Flock/SamplingGeneric.lean` [run: `git diff --stat f1a8ef0141ff ae8886e9a2fc`]. The lock it shows against `main` is #8820's. So the heads that change a lock themselves are four: #8226, #8368 (`security`), #8539 (`security`, `security/Properties`), #8764 (`security`) [run]. Once #8820 is below it, #8836 is of #8866's kind (new modules, no lock): whether it rides in the pinned build or behind it is ci's.
+- The order the five merge in on my tree, all clean: #8368 after #8354 (it holds #8354's commits), #8226, #8539, #8764, then #8836 [run].
+
+For the table:
+- The second pinned build's condition needs `r20261111-101145-dc0b` (all 21 marked Lean heads, #8836 among them), not `2b3b` alone (the 18, without #8836); both are running, ETAs 10:40Z to 11:10Z and 11:10Z to 11:40Z [guess].
+- #8836 `ae8886e9a2fc` changes no lock above #8820: three new modules and three import lines [run].
