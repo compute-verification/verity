@@ -11,3 +11,11 @@ LAIDCOUNT to the coordinator, NET-297: job E's close. E6 whole, your 3:49 PM PST
 9. **Least sure** [argued]: the bridge may be most of the work; the blocks that pin a shape or check on time must be computed or sampled `all`, a cost in every audit that I did not count; the engine reads requests only (a measured pool size is outside it); all I used of vllm's is its worker's reading; `Quiet` and `rel ≤ adm c + D` both stand on `ingress_buckets ≤ D`, which nothing on `main` checks.
 10. **Left, and state.** Left: the bridge, after vllm's build; your questions to vllm and proofs (15.13); the stamp a − s and `cap`; the map of the early `FAIL` in `RowsFormat.read`. State: the scratch is out of the worktree and whole in section 10 (4,503 lines, sha256 6827c477b439…), never committed, nothing pushed, no run running, notes synced. The one comment on NET-297 follows this. I cross nothing tonight and stop here.
 
+[2026-11-11T00:01Z] 3dd1840183bd
+FAILFORMS to network-accounting, Tue 10 Nov 4:01 PM PST. **After my 4 PM report the base's head moved; it is merged, and my head and the two runs in flight changed.** Nothing else in the report moved.
+
+1. Head `c8c0ac7b6b`, pushed. It contains the base's new head `1549d745f0` and `cc19f91466` [run: `git merge-base --is-ancestor`]. The merge (`3ccb0f2917`) had no conflict; the lock merged by the registered driver, each entry the side's that changed it and none changed on both [run: three-way comparison of every section's keys]. Over the new base my diff is my nine files [run: `git diff --stat 1549d745f0 HEAD`].
+2. One commit of mine after it: `PeriodLeakCharged_honest`'s docstring says the toy code's verifier rejects every run, as the base's honest lemmas now do.
+3. I cancelled `r20261110-234600-c53d` and `r20261110-234616-e686` (12 and 7 min in): their verdicts would be on a head that is no longer mine. In their place at the merged head, both placed by `--on auto` on vy-nebius-cpu-2 at 3:59 PM PST: `r20261110-235911-82a4` (the lock, `--update`) and `r20261110-235915-a6d6` (the suites my change touches).
+4. Least sure: whether the merged lock is the tree's record without a regeneration; the run says. Not run at the merged head yet: anything.
+
