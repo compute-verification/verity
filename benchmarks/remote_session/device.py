@@ -1435,9 +1435,10 @@ class GpuBackend:
         out["pass_receipts"], out["pass_root"] = small.receipts() == ys, got == ref.commitment.root
         out["ok"] = (out["payload_root"] and out["encode"] and out["decode"] and not any(out["no_write"].values())
                      and out["pass_receipts"] and out["pass_root"])
-        if small.rows == skr.ROWS64:
-            # A consumer warp computes a tile itself only where it is on an SM before any receipt CTA
-            # (`help64_tile`), which no pass can be counted on to do. With no receipt grid every tile is a consumer's.
+        if small.rows == skr.ROWS64 and small.h0 <= 8:
+            # A consumer warp (there are none above h0 = 8) computes a tile itself only where it is on an SM before any
+            # receipt CTA (`help64_tile`), which no pass can be counted on to do. With no receipt grid every tile is a
+            # consumer's.
             ctas, small.sketch_ctas = small.sketch_ctas, -1
             got, _ = small.run_pass(seed)
             small.sketch_ctas = ctas
