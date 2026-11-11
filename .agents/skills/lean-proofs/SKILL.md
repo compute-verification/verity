@@ -12,7 +12,7 @@ description: >
 
 # Lean proofs
 
-The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean/README.md`. This is the workflow.
+The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean/README.md`.
 
 ## Where the work goes
 
@@ -40,10 +40,10 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 
 - **The edit loop is `verity lean try FILE`** (the README): `lake env lean FILE` in FILE's package against its built
   imports (`bash tools/verity/lean/setup.sh PKG`, then `lake build` there, once), with lean's status. Lean's exit 0
-  isn't proof: the last line, the axiom probe's, names each theorem of FILE whose axioms go beyond `propext`,
-  `Classical.choice` and `Quot.sound` (`sorryAx` too). After editing a file others import, `lake build` its module, then
+  isn't proof: the last line, the axiom probe's, names each theorem of FILE whose axioms go beyond the three AGENTS.md
+  allows (`sorryAx` too). After editing a file others import, `lake build` its module, then
   try an importer. Try one that adds or renames declarations with `--siblings --on auto` too: a name another module
-  declares otherwise clashes first at the package root, an hour into a records run.
+  declares otherwise clashes first at the package root.
 - **Build on a CPU machine.** Never `lake update` or change an external dependency (a git `require` or its revision,
   Mathlib, ArkLib, `lean-toolchain`) in a feature PR; a `path` require between in-repo packages that AGENTS.md "Lean"
   allows may go in one, in its own commit with the regenerated `lake-manifest.json`, the requires acyclic. The full
@@ -135,8 +135,8 @@ token, and the parse error lands far from the binder).
 - The PR says which guarantees changed and why; the ledger's status rows match `lean-audit.json`.
 - Fetch and merge `main`, never rebase, with `python tools/verity/lean/merge.py --install` run once per clone so
   `lean-audit.json` merges without a rebuild, by `origin/main`'s copy of the driver; each `merge.py:` warning names an
-  entry it took from one side, so read them. It conflicts only where it can't vouch for the merge (a newer lock `format`,
-  the worktree's copy merging in newer merge rules, a merge that drops most of a section), and says why: do what it says.
+  entry it took from one side, so read them. It conflicts only where it can't vouch for the merge (AGENTS.md "Lean"),
+  and says why: do what it says.
 - Record your lock at your own head, then mark; a passing Lean check, a clean merge of `main` over a passing head, or a
   commit of exactly the records a passing run kept needs no new run. Once your PR lands, drive's lock run regenerates
   records another PR moved; re-record only what it can't (a hand-written entry a merge warning says took theirs, `shape`, a
@@ -171,7 +171,7 @@ Their history is in the decisions log.
   exhibits. For a commit-then-coin step the break is the fork form (two runs of the prover's strategy sharing a
   commitment); the knowledge form (`EndToEndHidden`, `Claims.KS`) is preferred.
 - A PoUW scheme gets new Lean only once its honest overhead γ ≤ 10 at both operating points, as the benchmarks'
-  overhead front door measures it. Measure first, prove second.
+  overhead front door measures it.
 - Every security guarantee has an honest lemma (its hypotheses hold at the honest deployed instance) and a nontrivial
   one (its conclusion fails for a verifier that accepts everything), in the lock as a claim's `meets` and `fails`;
   failing either, it says nothing. Both build their instance (`witnesses` in `check.py`), taking
