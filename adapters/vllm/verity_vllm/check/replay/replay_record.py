@@ -119,28 +119,6 @@ def population_record(all_vus: list[dict], requests: list[str], not_ev: Counter[
             "query_checks": qpop["query_checks"], "scope": qpop["scope"]}
 
 
-def strata_keys(strata: dict[str, dict], ranks: list[int], all_vus: list[dict], picked: list[dict], ring_slots: int | None,
-                anchors: dict[str, dict]) -> dict[str, Any]:
-    """The record's `strata_keys`: what the strata's keys range over, with the rule of each field."""
-    steps_seen = sorted({v["step"] for v in picked})
-    return {"mechanisms": sorted({k.split("|")[0] for k in strata}), "requests": sorted({k.split("|")[1] for k in strata}),
-            "ranks": (["rank 0 (tp1, or the rank-0 shard of a per-rank map)"] if ranks == [0] else [f"rank {r}" for r in ranks]),
-            "steps": {"early": sorted(s for s in steps_seen if s <= 1), "late": sorted(s for s in steps_seen if s > 1)},
-            "phases": sorted({k.split("|")[3] for k in strata}),
-            "modules": len({k.split("|")[4] for k in strata if k.count("|") >= 4}),
-            "key": "spec | request | rank | phase | module op_path | lifetime (window); attention rows: spec with T -> NB = ceil(T/BN) "
-                   "(the block-count mechanism; the row's own spec keeps T)",
-            "lifetime": {"values": dict(Counter(v["lifetime"] for v in all_vus)), "ring_slots": ring_slots,
-                         "rule": "engine step >= ring_slots -> recycled-window (storage the ring already committed under an earlier step's "
-                                 "identities); else fresh-window; unwindowed collectors: one value, stated",
-                         "sampled": dict(Counter(v["lifetime"] for v in picked))},
-            "phase": ("prefill / first-decode / mid / last EXECUTED step of each request (`last` is anchored to n_exec - 1 "
-                      "under the executed prefix -- the lag step of an EOS-stopped request -- else to the cap; steps past the "
-                      "prefix are 'not-executed', split out of the pool by name)"),
-            # per request: the step `last` is anchored to, the anchor's rule, and the lag step when there is one
-            "phase_anchor": {r: anchors[r] for r in sorted(anchors)}}
-
-
 def unreplayable(not_ev_fam: Counter[str]) -> list[dict[str, Any]]:
     """Not-evaluable families BY NAME WITH COUNTS + reason (footnoted on the row; bounds the claim)."""
     return [{"family": fam, "n": int(not_ev_fam[fam]),

@@ -428,6 +428,28 @@ def _picks_by_request_step(results: list) -> dict[str, dict[str, list[int]]]:
     return {r: {str(s): v for s, v in sorted(d.items())} for r, d in sorted(picks_by_step.items())}
 
 
+def _strata_keys(strata: dict[str, dict], ranks: list[int], all_vus: list[dict], picked: list[dict], ring_slots: int | None,
+                 anchors: dict[str, dict]) -> dict[str, Any]:
+    """The record's `strata_keys`: what the strata's keys range over, with the rule of each field."""
+    steps_seen = sorted({v["step"] for v in picked})
+    return {"mechanisms": sorted({k.split("|")[0] for k in strata}), "requests": sorted({k.split("|")[1] for k in strata}),
+            "ranks": (["rank 0 (tp1, or the rank-0 shard of a per-rank map)"] if ranks == [0] else [f"rank {r}" for r in ranks]),
+            "steps": {"early": sorted(s for s in steps_seen if s <= 1), "late": sorted(s for s in steps_seen if s > 1)},
+            "phases": sorted({k.split("|")[3] for k in strata}),
+            "modules": len({k.split("|")[4] for k in strata if k.count("|") >= 4}),
+            "key": "spec | request | rank | phase | module op_path | lifetime (window); attention rows: spec with T -> NB = ceil(T/BN) "
+                   "(the block-count mechanism; the row's own spec keeps T)",
+            "lifetime": {"values": dict(Counter(v["lifetime"] for v in all_vus)), "ring_slots": ring_slots,
+                         "rule": "engine step >= ring_slots -> recycled-window (storage the ring already committed under an earlier step's "
+                                 "identities); else fresh-window; unwindowed collectors: one value, stated",
+                         "sampled": dict(Counter(v["lifetime"] for v in picked))},
+            "phase": ("prefill / first-decode / mid / last EXECUTED step of each request (`last` is anchored to n_exec - 1 "
+                      "under the executed prefix -- the lag step of an EOS-stopped request -- else to the cap; steps past the "
+                      "prefix are 'not-executed', split out of the pool by name)"),
+            # per request: the step `last` is anchored to, the anchor's rule, and the lag step when there is one
+            "phase_anchor": {r: anchors[r] for r in sorted(anchors)}}
+
+
 #: the replay's own population, kept for one reader after it (the VU exporter, `pipeline.vu_store`, which arms `keep_population`
 #: and takes it right after the replay record); never read by the replay or a verdict
 _POPULATION: dict[str, Any] = {}
@@ -675,7 +697,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
             "why_classes": {"by_name": list(WHY_CLASSES_BY_NAME), "fault": list(WHY_CLASSES_FAULT),
                             "rule": "a by-name class is a gap of this replay version (may be carried on a PASS when form (B) covers the values); "
                                     "a fault class is a run that did not evaluate (never carried)"},
-            "strata_keys": RR.strata_keys(strata, ranks, all_vus, picked, ring_slots, anchors),
+            "strata_keys": _strata_keys(strata, ranks, all_vus, picked, ring_slots, anchors),
             "mismatch": [{k: m.get(k) for k in ("spec", "request_id", "step", "engine_step", "op_path", "row", "phase", "inputs", "outputs", "why")} for m in mism[:12]],
             "mismatch_by": RR.mismatch_by(fold),                          # every mismatch by name, uncapped
             "not_evaluated": not_evald[:12],
