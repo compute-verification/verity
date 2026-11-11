@@ -5238,7 +5238,9 @@ def test_what_a_build_published_is_restored_only_under_lake_s_input_hash_and_onl
 def test_the_sampled_recompile_runs_on_every_restore_before_the_build_publishes(tmp_path, monkeypatch):
     """A module a build restored from what another build published was not compiled by it, so it is among those the
     sampled recompile draws from (its population: what the build holds and didn't compile), on every restore. And the
-    publish comes after the sample: a build whose sample differs publishes nothing, and is never announced."""
+    publish comes after the sample: a build whose sample differs publishes nothing, and is never announced. Nor does it go
+    into this node's cache when check.py is killed before its report: what it leaves for the callers' `put` says the sample
+    failed."""
     pkg, store, bundle = _publishing(tmp_path, monkeypatch)
     _built_once(pkg, monkeypatch)
     first = sorted(os.listdir(bundle))
@@ -5249,6 +5251,15 @@ def test_the_sampled_recompile_runs_on_every_restore_before_the_build_publishes(
     shutil.rmtree(store)
     assert _built_once(pkg, monkeypatch, sample_fails=True)[2:] == [("sampled", ["P"]), ["sampled: P: planted"]]
     assert _store_holds(store) == [] and sorted(os.listdir(bundle)) == first, "P compiled, but its build's sample failed"
+    spec = importlib.util.spec_from_file_location("lean_audit_for_a_killed_sample", HERE.parent / "lean_audit.py")
+    LA = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(LA)
+    left = LA.built(pkg.parent / "out")
+    assert list(left.values()) == [{"package": str(pkg), "sandbox": True, "failures": ["sampled: P: planted"]}], \
+        "a check.py killed before its report leaves the sample's failure for the callers' put"
+    assert LA.LakeArtifacts(store).put(left, log=lambda s: None) == 0 and _store_holds(store) == []
+    assert LA.LakeArtifacts(store).put({pkg: {"sandbox": True}}, log=lambda s: None) > 0 and _store_holds(store) == ["P"], \
+        "the same build without the failure goes in"
 
 
 def test_nothing_a_build_without_the_sandbox_or_a_failed_build_step_compiled_is_published(tmp_path, monkeypatch):

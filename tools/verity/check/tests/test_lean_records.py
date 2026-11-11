@@ -214,6 +214,29 @@ def test_in_a_run_check_py_bundles_what_each_build_published_and_the_records_ste
     assert "--bundle" not in _calls(tmp_path)[0]["argv"], "outside a run no one would take it"
 
 
+def test_a_build_whose_sampled_recompile_differs_is_refused_by_the_records_step_s_put_reported_or_killed(repo, tmp_path,
+                                                                                                         monkeypatch):
+    """A build whose sampled recompile differs stores nothing, in this node's cache either: the records step hands `put`
+    check.py's word on it, its report (`put_built`) or, from a run killed mid-way, what check.py wrote beside the build
+    (`put_left`), and `put` refuses either for the sample's failure."""
+    real, handed, logged = LC.LA.LakeArtifacts.put, [], []
+    monkeypatch.setattr(LC.LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print: handed.append(reports) or 0)
+    said = {"sandbox": True, "failures": ["sampled: Aa: the build's olean differs from its recompile"]}
+    tree = tmp_path / "cache" / "lean-records" / "tree"
+    monkeypatch.setenv("AUDIT_RC", "1")
+    monkeypatch.setenv("AUDIT_SAID", json.dumps(said))
+    assert LC.audit_records("a", tmp_path / "deps", tree, out=tmp_path / "reports") == 1
+    left = tmp_path / "left"
+    (left / "audit-a").mkdir(parents=True)
+    (left / "audit-a" / LC.LA.BUILDING).write_text(json.dumps({"package": str(tree / "a"), **said}))
+    LC.put_left(tree, {"since": 0, "package": "a", "phase": "check", "out": str(left)}, LC.LA.LakeArtifacts(tmp_path / "s"),
+                log=logged.append)
+    assert [{p: r["failures"] for p, r in reps.items()} for reps in handed] == [{tree / "a": said["failures"]}] * 2
+    for reps in handed:
+        assert real(LC.LA.LakeArtifacts(tmp_path / "s"), reps, log=logged.append) == 0
+    assert sum("(`sampled`)" in ln for ln in logged) == 2
+
+
 def test_the_copy_is_taken_from_hard_links_after_the_dependencies_lock_is_released(repo, tmp_path, monkeypatch):
     """A copy of some 8 GB under `lean-deps/<k>.lock` held check's lean-audit, which moves the dependencies in under that lock,
     for as long as it took (red team). Under the lock only hard links are made; the copy is taken from them after, and

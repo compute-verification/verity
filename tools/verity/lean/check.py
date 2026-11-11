@@ -61,8 +61,8 @@ ROOT = HERE.parents[2]
 SEAL_BASE = ROOT / ".lake" / "sealed"
 POLICY = "lean-audit.json"
 #: what a package's work directory holds from the moment its builds are about to run: the package, and whether they run in
-#: the sandbox. A run that is killed leaves no report, and this is then what says whether the modules it compiled may go
-#: into the artifact cache (`lean_audit.built`)
+#: the sandbox, and once its sampled recompile differs, that failure too. A run that is killed leaves no report, and this is
+#: then what says whether the modules it compiled may go into the artifact cache (`lean_audit.built`)
 BUILDING = "building.json"
 #: the lock's schema version, which every lock this file writes carries as `format`: bump it with any change to what a lock
 #: holds or how its sections read, and `merge.py`'s `FORMAT` with it, so an older driver leaves a newer lock to git's
@@ -5519,6 +5519,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                     ["env", "-u", "LAKE_CACHE_DIR", *([f"LEAN_NUM_THREADS={n}"] if n is not None else [])], log)
             if fails:
                 rep["failures"] += fails
+                (work / BUILDING).write_text(json.dumps({"package": rep["package"], "sandbox": rep["sandbox"],
+                                                         "failures": rep["failures"]}))
                 return reported(rep)
     # the seal, taken before the build is announced (`built`): every reader below reads these private copies, so a
     # dependent's build, which may write this package's `.lake` once it is announced, cannot change what they see
