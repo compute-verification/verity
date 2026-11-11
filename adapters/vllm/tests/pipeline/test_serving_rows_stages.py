@@ -2,7 +2,8 @@
 ``GumbelTopPTokenSelect_v1{V}`` or ``GumbelTopPTokenSelectSharedGreedy_v1{V}`` row holds the units `topp_stages.plan` lists (at
 GLM-5.3's V = 154,880, 3,924 of 85 Definitions; at V = 16, 392 of 59), and a window of a V = 16 row's every stage template:
 
-* reads each unit's operands off the row (its logits lanes, the Program's constants, the sampler's seed and splits) and its
+* reads each unit's operands off the row (its logits lanes, the Program's constants, the split count among them, and the
+  sampler's seed) and its
   carried words off the twin, whose token is the row's served one, so each unit's Definition on its rows, parsed as Flock's
   stager parses them, is its committed output;
 * wires every carried parameter to the output row of the unit that wrote it, and refuses a row whose served token is not the
@@ -198,11 +199,11 @@ def test_a_partition_without_a_stage_s_template_is_refused():
 
 
 def test_a_row_reads_the_program_s_constants_and_the_sampler_s_words_at_its_step():
-    """A Program constant is its one word; the sampler's seed and splits are the request's committed words at the row's step
-    (``splits``' slice names that step); any other row's reads refuse them, as before."""
+    """A Program constant is its one word, the split count S among them; the sampler's seed is the request's committed word at
+    the row's step; a ``splits`` Program input is no sampler input, so the serving rows' reads refuse it, as any other."""
     class Pi:
         pnames = ["weights", "seed", "splits"]
-        by_i = {3: {"spec": "Const32[0x3f666666]_v1"}, 4: {"spec": "Const64[0x2a]_v1"}}
+        by_i = {3: {"spec": "Const32[0x3f666666]_v1"}, 4: {"spec": "Const64[0x2a]_v1"}, 5: {"spec": "Const32[0x8]_v1"}}
 
         def member_at(self, a, lo, hi):
             return None
@@ -210,13 +211,15 @@ def test_a_row_reads_the_program_s_constants_and_the_sampler_s_words_at_its_step
     class Store:
         def words(self, rid, step, op, member, lo, hi):
             assert (rid, op, lo, hi) == ("r0", SAMPLER_OP, 0, 1)
-            return (np.array([step * 100 + {"seed": 1, "splits": 2}[member]], np.int64), None)
+            return (np.array([step * 100 + {"seed": 1}[member]], np.int64), None)
 
-    got = ST._operand(Pi(), Store(), None, "r0", 10, [["n", 3, 0, 1], ["n", 4, 0, 1], ["p", 1, 0, 1], ["p", 2, 5, 6]], 5, SRW._slices)
+    got = ST._operand(Pi(), Store(), None, "r0", 10, [["n", 3, 0, 1], ["n", 4, 0, 1], ["p", 1, 0, 1], ["n", 5, 0, 1]], 5, SRW._slices)
     assert [(a.dtype.name, a.tolist()) for a in got] == [("uint32", [0x3F666666]), ("uint64", [42]), ("int64", [1501]),
-                                                         ("int64", [1502])]
-    with pytest.raises(LookupError, match=re.escape("splits slice [4, 5) is not the sampler's one word at the row's step 5")):
-        ST._operand(Pi(), Store(), None, "r0", 10, [["p", 2, 4, 5]], 5, SRW._slices)
+                                                         ("uint32", [8])]
+    with pytest.raises(LookupError, match=re.escape("seed slice [4, 6) is not the sampler's one word at the row's step 5")):
+        ST._operand(Pi(), Store(), None, "r0", 10, [["p", 1, 4, 6]], 5, SRW._slices)
+    with pytest.raises(LookupError, match="the serving rows read committed members and registered weights only"):
+        ST._operand(Pi(), Store(), None, "r0", 10, [["p", 2, 5, 6]], 5, SRW._slices)
     with pytest.raises(LookupError, match="is not inside one committed member"):
         ST._operand(Pi(), Store(), None, "r0", 10, [["n", 7, 0, 1]], 5, SRW._slices)
     with pytest.raises(LookupError, match="the serving rows read committed members and registered weights only"):

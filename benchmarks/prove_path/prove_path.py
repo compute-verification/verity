@@ -1333,9 +1333,10 @@ def circuit_of_advice(a: argparse.Namespace) -> dict[str, int]:
     with tempfile.TemporaryDirectory(prefix="builds-", dir=Path(a.out).resolve().parent) as builds:
         a.builds = builds
         compiler = compiler_of_args(a)
-        p, pf = compiler.load(0, 1, compile_advice(compiler, data)), json.loads(Path(a.partition).read_text())
-        window, rows = SRW.population(p.progs, pf, "", p.dirs, arrivals=p.arrivals, transfer_gates=compiler.transfer_gates)
-        record = SRW.circuit_record(window, rows, p.arrivals, bool(pf.get("dsa_table_reads")))
+        p = compiler.load(0, 1, compile_advice(compiler, data))
+        window, rows = SRW.population(p.progs, json.loads(Path(a.partition).read_text()), "", p.dirs, arrivals=p.arrivals,
+                                      transfer_gates=compiler.transfer_gates)
+        record = SRW.circuit_record(window, rows, p.arrivals)
     Path(a.out).write_bytes(IF.circuit_bytes(record))
     c = AW.codec_of()
     return {"bits": int(c.total_bits(c.decode(data)))}

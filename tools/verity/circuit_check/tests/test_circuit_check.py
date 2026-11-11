@@ -9,6 +9,9 @@ here.
 The tests that read the suite (the `suite` fixture) or the Calls it gives (`targets.call_families`) are marked slow: the process
 that runs one builds circuit-check's catalog first (conftest.py), from the bindings' records when they count and binding by
 binding without them, and only the whole suite shows what they hold (every registered family checked, every Call partitioned).
+The two walks of every Call over the partition budget (`_unchecked_walk`) are opt-in (`_opt_in`), and the nightly cold check runs
+them by name (check.py's `OPT_IN`): `circuit-check --all` fails a Call whose partition nothing checks by its name, and the walks
+hold `targets.CALLEE_CALLS` and `OVER_PARTITION_BUDGET` current.
 A test that selects targets by family reads the family off the catalog (`Catalog.reached`), so it makes only those.
 """
 from __future__ import annotations
@@ -37,6 +40,12 @@ TEMPLATES = {label: (sub, sts) for label, sub, sts in TG.templates()}
 
 def _clean(entry: dict) -> None:
     assert not entry["failures"], "\n".join(f["name"] for f in entry["failures"])
+
+
+def _opt_in(takes: str):
+    """The mark of a test that takes ``takes`` on a node: it stays out of `check` and runs where VERITY_CIRCUIT_CHECK_SLOW asks."""
+    return pytest.mark.skipif(not os.environ.get("VERITY_CIRCUIT_CHECK_SLOW"),
+                              reason=f"{takes} on a node: VERITY_CIRCUIT_CHECK_SLOW=1")
 
 
 # --- coverage -----------------------------------------------------------------------------------------------------------------
@@ -1170,6 +1179,7 @@ def _unchecked_walk(catalog) -> tuple[dict[str, set[str]], set[str], dict[str, s
 
 
 @pytest.mark.slow
+@_opt_in("~40 min")
 def test_every_call_the_suite_checks_is_partitioned(catalog):
     """No Call passes with its partition unchecked: each is within `Options.partition_max_gates` (the Boolean attention Calls
     at T = 17 are about 1.9M gates, 2.1M with Gemma-2's softcap; DeepSeek-V4's Boolean FlashMLA prefill and mHC Calls at their
@@ -1188,6 +1198,7 @@ def test_every_call_the_suite_checks_is_partitioned(catalog):
 
 
 @pytest.mark.slow
+@_opt_in("~40 min")
 def test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees(catalog):
     """`targets.CALLEE_CALLS` is the families of the Definitions an `checks.uncut` Call calls (and, through each callee `uncut`
     itself, its callees), apart from those that are Calls otherwise, each with the families of the Calls that pass it
@@ -1794,8 +1805,7 @@ def test_two_writers_of_one_entry_at_once_both_store_it(tmp_path, monkeypatch):
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(not os.environ.get("VERITY_CIRCUIT_CHECK_SLOW"),
-                    reason="~2.5 h on a node: VERITY_CIRCUIT_CHECK_SLOW=1")
+@_opt_in("~2.5 h")
 def test_parallel_jobs_give_the_serial_report(tmp_path):
     """It checks four real targets serially and in worker processes, so it catches a `--jobs` worker whose report differs from
     the serial one. Opt-in: run it after a change to `cli.run`, `cli.parallel` or the task list's order. Only an isolated

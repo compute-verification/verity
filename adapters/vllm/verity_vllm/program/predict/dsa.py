@@ -371,7 +371,7 @@ class _Model:
         V, W = int(self.C["V"]), self.net.world
         lg = self.cublas([row], self.w["lm_head"], sampled=True)
         gathered = self.call(self.k("all_gather", WORLD=W, N=V), self.peers.rows(lg)[0])
-        return select_token(self.call, self.k, gathered.refs, V * W, self.net.tp, event, pos, policy)
+        return select_token(self.call, self.k, gathered.refs, V * W, pos, policy)
 
     # -- collectives (`collectives.AllReduceRule`, `FusedAllReduceRmsNormRule`)
 

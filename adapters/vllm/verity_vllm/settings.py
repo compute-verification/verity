@@ -220,8 +220,6 @@ SETTINGS: dict[str, Setting] = _declare(
       "though `global_match_fast.enabled` reads unset as off (`--match-impl`, which the row exports)"),
     S("MATCH_WORKERS", stripped, "", VALUE, "forked workers for the match's per-request parts; empty, min(cpu_count, 8)"),
     S("MATCH_COMPACT", not_zero, True, VALUE, "the match holds operands as run progressions; 0, as runs (the representation's A/B)"),
-    S("STOCH_DECLARED_CHRONOLOGY_S", one, False, VALUE, "1: a workload Program composes components derived under stoch's "
-      "experimental per-event S schedule, which it otherwise refuses"),
     S("X09_PROFILE_OUT", str, None, DEBUG, "the file the batch decomposition writes its phase profile to; unset or blank, no profile"),
     S("X09_FORCE_DAG", str, None, VALUE, "1 runs the batch decomposition's DAG diagnostic even when the sequence criterion held, adding "
       "its fields to the record (diagnostic only, never on a workload of record)"),

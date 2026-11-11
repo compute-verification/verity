@@ -117,6 +117,30 @@ def test_the_lean_build_trees_are_never_walked(tmp_path, monkeypatch):
     assert not [d for d in walked if V._skipped("check", d.split("/")[0]) or ".lake" in d.split("/")]
 
 
+def test_a_part_of_the_cache_kept_on_another_disk_behind_a_link_is_packed(tmp_path, monkeypatch):
+    """A machine may keep a directory at the top of check's cache on another disk, behind a link (`check.cc_records_in` unpacks
+    where circuit-check's cache resolves for that reason).  circuit-check stores through the link and `import_` adds through it,
+    so the walk follows it too: a walk that skipped it wrote an empty pack of a check that stored every target.  A part never
+    packed stays unwalked behind its link, and a link further down is not followed."""
+    r = _machine(tmp_path, monkeypatch, "a")
+    r["check"].mkdir(parents=True)
+    for name in ("circuit-check", "lean-builds"):
+        (tmp_path / "disk" / name).mkdir(parents=True)
+        (r["check"] / name).symlink_to(tmp_path / "disk" / name, target_is_directory=True)
+    _fill(r)
+    _write(tmp_path / "elsewhere" / "x.json", "{}")
+    (r["check"] / "lean-audit" / "linked").symlink_to(tmp_path / "elsewhere", target_is_directory=True)
+    assert sorted(V.entries()) == VERDICTS
+    before = V.snapshot()
+    _write(r["check"] / "circuit-check" / "v1" / "d2" / "e9.json", '{"report": 2}')
+    pack = tmp_path / "run.tar.gz"
+    assert V.export(pack, before) == 1
+    with tarfile.open(pack) as tar:
+        assert tar.getnames() == ["check/circuit-check/v1/d2/e9.json"]
+    _machine(tmp_path, monkeypatch, "b")
+    assert V.import_(pack) == (1, 0) and sorted(V.entries()) == ["check/circuit-check/v1/d2/e9.json"]
+
+
 def test_since_a_snapshot_a_pack_holds_only_what_the_run_stored(tmp_path, monkeypatch):
     r = _machine(tmp_path, monkeypatch, "a")
     _fill(r)

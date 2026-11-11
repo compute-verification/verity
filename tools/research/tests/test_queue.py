@@ -3380,7 +3380,9 @@ def test_ready_mark_from_an_agent_vm_builds_the_lean_it_reaches_on_a_node_refuse
 def test_the_lean_step_falls_back_to_the_next_node_when_one_cannot_start_the_build_and_refuses_when_none_can(tmp_path):
     """One node (cpu-3) that can't start a run (its `build` slots full, drained, unreachable) would refuse every Lean mark: each
     node but the last takes its slot with `--no-wait`, and a node that can't start passes the build to the next, within the
-    one deadline; only when none builds is the mark refused, naming each node's reason and the fix."""
+    one deadline; only when none builds is the mark refused, naming each node's reason and the fix. Each launch's budget carries
+    its unit, as `research run` refuses a bare number under five minutes for a machine."""
+    from research.cli import _short_bare_timeout
     from research.queue import LEAN_BUILDER, PREFLIGHT_LEAN_ON, LakeBuild
 
     assert (PREFLIGHT_LEAN_ON, LakeBuild().pool) == (("vy-nebius-cpu-9", "vy-nebius-cpu-5"), None)
@@ -3392,13 +3394,14 @@ def test_the_lean_step_falls_back_to_the_next_node_when_one_cannot_start_the_bui
     built = "lean-build: " + json.dumps({"built": {"lean/b": 0}, "failed": {}, "skipped": {}})
     drained = f"research: run {{rid}} refused on {second}: the node is drained\n"
     for k, says in enumerate(({first: (2, full), second: (0, built)}, {first: (255, None), second: (1, drained)})):
-        argvs, now, runs = [], [0.0], tmp_path / f"runs-{k}"
+        argvs, now, runs, timeouts = [], [0.0], tmp_path / f"runs-{k}", []
 
-        def run(argv, cwd, left, argvs=argvs, says=says, now=now, runs=runs):
+        def run(argv, cwd, left, argvs=argvs, says=says, now=now, runs=runs, timeouts=timeouts):
             if argv[3] == "fetch":
                 return 0, ""
             node = argv[argv.index("--on") + 1]
             argvs.append((node, argv[argv.index("--") + 3:], left))
+            timeouts.append(argv[argv.index("--timeout") + 1])
             now[0] += 30                                               # each launch spends 30 s of the budget
             rc, out = says[node]
             if out is None:
@@ -3414,6 +3417,7 @@ def test_the_lean_step_falls_back_to_the_next_node_when_one_cannot_start_the_bui
                         clock=lambda now=now: now[0])(tmp_path / "wt", ["lean/b/B/Use.lean"], 100)
         assert [(n, tail[:2], left) for n, tail, left in argvs] == [(first, ["--no-wait", "--build"], 100),
                                                                      (second, ["--build", "lean/b/B/Use.lean"], 70)]
+        assert [_short_bare_timeout(["--timeout", t]) for t in timeouts] == [None, None], "`research run` refuses it"
         if says[second][0] == 0:
             assert got.failed == {} and got.notes == [] and got.where == f"on {second} (run r20261030-190002-abcd)"
             assert got.passed == [f"* not built on {first} (run r20261030-190001-abcd): no `build` Lean slot here (all 8 Lean "
@@ -3437,7 +3441,7 @@ def test_the_lean_step_ships_the_merged_tree_to_a_node_for_ready_on_and_reads_it
     rid = "r20261026-120000-abcd"
     line = "lean-build: " + json.dumps({"built": {"lean/b": 1}, "failed": {"lean/b/B/Use.lean": "error: B/Use.lean:2:0: x"},
                                         "skipped": {}})
-    tail = ["--as", "ci", "--project", "verity", "--source", str(tmp_path / "wt"), "--cwd", "clone", "--timeout", "90", "--wait",
+    tail = ["--as", "ci", "--project", "verity", "--source", str(tmp_path / "wt"), "--cwd", "clone", "--timeout", "90s", "--wait",
             "--wait-every", "5", "--wait-max", "90", "--", "python3", LEAN_BUILDER, "--build", "lean/b/B/Use.lean"]
     for pool, flags in ((None, []), ("research", ["--pool", "research", "--pool-wait", "90"])):
         argvs = []
