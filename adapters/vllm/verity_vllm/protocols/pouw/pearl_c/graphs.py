@@ -71,6 +71,7 @@ from typing import Any
 from verity.protocols.pouw.verifier.protocol import Matmul, Shape
 from verity.protocols.pouw.prover.schemes import pearl_c_work as PW
 
+from verity_vllm.protocols.pouw.pearl_c.ends import _RunState
 from verity_vllm.protocols.pouw.pearl_c.passes import call_index
 from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _event, _Lane, _write, _zeros, torch_uint8
 from verity_vllm.protocols.pouw.pearl_c.screen import excluded, scatter_into
@@ -153,7 +154,7 @@ class _Slots:
     after: tuple[int, int, int]
 
 
-class GraphCalls:
+class GraphCalls(_RunState):
     """`PearlCDeviceRun`'s graph path, as its base class: the run's ``graphs``, ``driver``, ``fork``, ``order``, ``nb`` (its
     trees' node bytes), ``key_slots``, ``offs``, ``_host_keys``, ``_host_offs``, ``_slots_copied``, ``_predicted`` and
     ``_graphs``, its `_call_steps` and `_call_cuts`, and its pass and the pass's buffers (``roots_buf``, ``flag_buf``, whose
@@ -340,7 +341,7 @@ class GraphCalls:
 
     def _slots(self, calls: tuple[WholeCall, ...], at: tuple[int, int, int]) -> _Slots:
         import numpy as np
-        base = self.cur.base
+        base = self.cur.first
         index, tiles_at, flags_at = base + at[0], at[1], at[2]
         offs, predicted = np.empty((len(calls), 3), np.int64), {}
         for i, c in enumerate(calls):
@@ -383,7 +384,7 @@ class GraphCalls:
         rows, appended to the pass, as `_after` appends them for a call made alone; in a retained pass, each call's record and
         files; and with hashing, the next forward's slots for the same calls, staged while the GPU runs this one."""
         cur = self.cur
-        index = cur.base + len(cur.matmuls)
+        index = cur.first + len(cur.matmuls)
         cur.matmuls.extend(Matmul(index + i, Shape(c.m16, c.k, c.n), c.w) for i, c in enumerate(calls))
         if not self.hashing or not calls:
             return
@@ -469,6 +470,7 @@ class GraphCalls:
         if self.fork is None:
             self.fork = _Lane(self.device, "greatest", -2)
         D, dev, fork = self.driver, self.kernel.dev, self.fork
+        assert D is not None
         start, first, end = _event(), _event(), _event()
 
         def go():
@@ -519,7 +521,7 @@ class GraphCalls:
     def _offsets(self, index: int, tiles_at: int, flags_at: int) -> tuple[int, int, int]:
         """Call `index`'s byte offsets in the pass's buffers: its leaves, its flags, its A root (at its position in the pass,
         the index past the pass's base)."""
-        return self.nb * tiles_at, 2 * flags_at, self.nb * (index - self.cur.base)
+        return self.nb * tiles_at, 2 * flags_at, self.nb * (index - self.cur.first)
 
     def _slot(self, w: int, index: int, m16: int, m: int, stream: Any) -> None:
         """The call's keys and offsets in its weight's slot, which its graph reads.  At a forward's first weight, every

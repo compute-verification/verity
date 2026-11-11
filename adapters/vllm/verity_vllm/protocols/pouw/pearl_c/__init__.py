@@ -388,7 +388,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
             "pass_end": ("an engine step's commitment read back at the next end" + (", its tile tree on a stream of its own"
                                                                                      if aside_ends else "")) if lag_ends else "read back at its end",
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound"}
-        self.cur: _Pass | None = None
+        self.cur = _Pass(None)              # no pass yet: `begin` reads it for the epoch's calls so far (`pass_base`)
         self.begin()
 
     # ---- the schedule -----------------------------------------------------------------------------------------------
@@ -619,7 +619,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
         if self.hashing:
             size = pipe.size["tree_a"]
             if not scattered:
-                self.copy(self.roots_buf.data_ptr() + self.nb * (index - cur.base), sh.buf("tree_a").data_ptr() + size - self.nb,
+                self.copy(self.roots_buf.data_ptr() + self.nb * (index - cur.first), sh.buf("tree_a").data_ptr() + size - self.nb,
                           self.nb, self.stream())
             flags = self.flag_buf[cur.flag_rows:cur.flag_rows + m]
             if not screened:
