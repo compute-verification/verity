@@ -879,7 +879,7 @@ def render(doc: dict) -> str:
         "## The terms in GB", "",
         *_pipes(("scope", "period", "row", "request count", "schedules", "cells",
                  *(head("jitter", dj) for dj in at),
-                 *(c for dj in at for c in (head("term", dj), "x target", "x weights")),
+                 *(head(c, dj) for dj in at for c in ("term", "x target", "x weights")),
                  "entries, the compute side's"),
                 [(r["scope"], r["period"], r["row"], r["request_count"], _n(r["schedules"]["GB"]),
                   _n(r["cells"]["GB"]), *(_n(r["jitter"][dj]["GB"]) for dj in at),

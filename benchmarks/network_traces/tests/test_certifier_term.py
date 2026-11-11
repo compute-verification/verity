@@ -444,7 +444,9 @@ def test_the_headline_is_the_scans_world_year_term_at_two_release_schedules_and_
     assert held.endswith(f" Without that card the jitter alone, at D_j = 2, is {LB._n(jitter)} GB over the world's "
                          f"year, {LB._n(jitter / 300)} times the target.")
     heads = [[c.strip() for c in line.strip("|").split("|")] for line in text if line.startswith("| scope")]
-    assert [sum("D_j = 1" in c for c in head) for head in heads] == [0, 2, 4]
+    assert [sum("D_j = 1" in c for c in head) for head in heads] == [0, 4, 4]
+    assert [c for c in heads[1] if c.startswith("x ")] == [
+        f"{c}, D_j = {dj}" for dj in ("1, set-time card (not yet tested)", "2") for c in ("x target", "x weights")]
     for head in heads:
         assert all(c.endswith(", D_j = 1, set-time card (not yet tested)") for c in head if "D_j = 1" in c)
         assert sum("D_j = 2" in c for c in head) == sum("D_j = 1" in c for c in head)

@@ -91,7 +91,7 @@ cells, and nothing else.
   rows of two don't compare.
 - **The terms in GB**: schedules, cells, the jitter at each D_j, and the term at each D_j with its multiple of the
   target (`x target`, `--target-gb`) and of one copy of the weights in FP4 (`x weights`); then the entries. Every
-  column at D_j = 1 has the label in its header, as `set-time card (not yet tested)`.
+  column at D_j = 1, the multiples too, has the label in its header, as `set-time card (not yet tested)`.
 - **The terms in bits**: the same pooled totals in bits, beside the term for one execution phase of one link
   (`a link's phase`) and for one request (`a request`), the term as a share of the compute it covers.
 
