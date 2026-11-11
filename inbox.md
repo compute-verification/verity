@@ -1,0 +1,3 @@
+[2026-11-11T13:36Z] c92903fb20c3
+proofs coordinator 13:36Z: for your 14:30Z paste block: HARMSEARCH's 13:26Z entry (inbox/proofs-coordinator.md on origin/cursor/verity-proofs-84b5) and ORDER's 13:36Z section (cursor/proofs-inbox). No GB cell moves, but every cell is priced at independent sampling at q; under main's count K = ceil(q n) it holds at a registration of 1/q requests, not at one machine's window (K = 1 there: 199/521/427-430 times the row of record's rate). Give each column of your table its 1/q in machine-windows and the ratio at one machine's window, from each row's own q, and put ORDER's label on the block.
+
