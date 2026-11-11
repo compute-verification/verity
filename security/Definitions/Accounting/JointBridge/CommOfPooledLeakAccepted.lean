@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.JointPeriod
 public import Definitions.NetworkCertifier.PooledLeak
+public import Definitions.NetworkCertifier.Checked
 public import Definitions.NetworkCertifier.Tap
 public import Definitions.Core.Assumptions
 import Mathlib.Algebra.Order.Floor.Extended
@@ -51,6 +52,10 @@ proof blocks paid for once over the monitoring period, so `K` is the bits of tha
 monitoring period, where the realization beside this one is the reading per phase. The run carries the deployed
 network certifier in `PooledLeakAccepted`'s form, and its trust, `trusted-host` (`Verity.Assumptions.TrustedHost`), is
 a field.
+
+`PhaseLeaks` names the second of the two inputs `PooledLeakAccepted` takes at each execution phase, the leak relation
+at the witness's incorrect set. The first, the miss probability given the earlier phases' coins, has its name among
+the network certifier's definitions.
 -/
 
 @[expose] public section
@@ -58,6 +63,20 @@ a field.
 namespace Accounting.JointBridge
 
 open Claims Claims.Sampling NetTiming
+
+/-- **The leak relation at each execution phase's own incorrect set**, the second input `PooledLeakAccepted` takes
+(its `hleak`): at each secret `z ∈ Zs`, over the monitoring period's coins `ω`, execution phase `i`'s audit accepts
+while its observations `obs z ω i` fail the leak relation at the incorrect set `W z ω i` (`LeakAt`) with probability
+at most `e' i`. The leak guarantee of one sampled audit, on live coins and at the incorrect set of the witness
+computed before the sample, is what gives it at an execution phase. It is the input the pooled bounds over checked
+inputs name for their leak relations, here for `LeakAt`. -/
+def PhaseLeaks {L K S m : ℕ} {Ω Z : Type} [Fintype Ω] (lay : AuditStatement → BoundaryGates L S)
+    (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ) (sw : Fin m → AuditStatement)
+    (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool) (op : Fin m → ℕ → List (Obs L K S) → List Bool) (Zs : Set Z)
+    (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop) (W : Z → (Fin m → Ω) → Fin m → Finset ℕ)
+    (obs : Z → (Fin m → Ω) → Fin m → List (Obs L K S)) (e' : Fin m → ℝ) : Prop :=
+  ∀ z ∈ Zs, ∀ i, Pr (fun ω => acc z i ω (ω i) ∧
+    ¬LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i) (W z ω i) (obs z ω i)) ≤ e' i
 
 /-- **A period whose communication audit is the network certifier's monitoring period of `m` sampled audits,
 pooled**, at the public layouts `lay`, horizons `k`, registered inputs `reg`, jitter bound `Dj` and the bound `Fmax`
@@ -74,7 +93,7 @@ on the period's incorrect proof blocks, with the claim at `K`. Every field is a 
   state gives the cells the client receives and its record of the period's execution phases; its record format
   (`fmt`) and what reaches it from the server on each connection (`arr`); and, at the coins, its schedule (`sched`),
   which the format holds (`fits`), and the server's state (`srv`). The record that the claim and the audits read is
-  its run's on those two;
+  its run's on those two (`record`);
 * the network certifier runs its code on its host (`trusted`, `trusted-host`);
 * at execution phase `i`, after the earlier phases' coins: its audit's verdict at its own coins `x` (`acc ξ i ω x`),
   and the incorrect set of the witness computed from its registration, before its sample (`W ξ ω i`). Neither reads
@@ -90,9 +109,9 @@ on the period's incorrect proof blocks, with the claim at `K`. Every field is a 
   cells each gives a connection): they come with that tie.
 
 The two inputs that `PooledLeakAccepted` takes at each execution phase are not fields: the miss probability given the
-earlier phases' coins (`MissWithin`) and the leak relation at the witness's incorrect set (`LeakWithin`), stated over
-`acc`, `W` and the record, are the premises of `Accounting.Guarantees.Bridge.CommOfPooledLeakAccepted` (`hesc`,
-`hleak`). -/
+earlier phases' coins (`NetTiming.PeriodEscapes` at `acc` and `W`) and the leak relation at the witness's incorrect
+set (`PhaseLeaks` at `acc`, `W` and `record`), each at every value of the other audits' coins, are the premises of
+`Accounting.Guarantees.Bridge.CommOfPooledLeakAccepted` (`hesc`, `hleak`). -/
 structure RealizesCommOfPooledLeakAccepted {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit}
     {I : Type} {Ω : I → Type} [DecidableEq I] [∀ i, Fintype (Ω i)]
     (r : PeriodRun d α C Ω) (K : ℝ) (L Kₒ S : ℕ)
@@ -161,33 +180,15 @@ structure RealizesCommOfPooledLeakAccepted {ι : Type} {d : Device ι} {α : Typ
 attribute [instance] RealizesCommOfPooledLeakAccepted.coinFintype RealizesCommOfPooledLeakAccepted.coinNonempty
   RealizesCommOfPooledLeakAccepted.connFintype
 
-namespace RealizesCommOfPooledLeakAccepted
-
-variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit} {I : Type} {Ω : I → Type}
-  [DecidableEq I] [∀ i, Fintype (Ω i)] {r : PeriodRun d α C Ω} {K : ℝ} {L Kₒ S : ℕ}
-  {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {reg : AuditStatement → Finset ℕ}
-  {Dj m Fmax : ℕ} (R : RealizesCommOfPooledLeakAccepted r K L Kₒ S lay k reg Dj m Fmax)
-
-/-- **The miss probability given the earlier phases' coins**, `PooledLeakAccepted`'s first input (its `hesc`) on this
-run: at every value `ξ` of the other audits' coins and after any coins `ω` of the earlier phases, execution phase
-`i`'s audit accepts with probability at most `(1 - q)^|W ξ ω i| + e i` over its own coins. `q` is the sampling
-design's detection probability of one incorrect proof block in an execution phase, and `e i` what the audit's
-knowledge soundness adds. A premise: SPOT's guarantee at each verification phase, given what came before it, is what
-gives it, and no proof here does. -/
-def MissWithin (q : ℝ) (e : Fin m → ℝ) : Prop :=
-  ∀ ξ i ω, Claims.Pr (R.acc ξ i ω) ≤ (1 - q) ^ (R.W ξ ω i).card + e i
-
-/-- **The leak relation at the witness's incorrect set**, `PooledLeakAccepted`'s second input (its `hleak`) on this
-run: at every value `ξ` of the other audits' coins, over the period's coins `ω`, execution phase `i`'s audit accepts
-while its observations in the network certifier's record fail the leak relation at `W ξ ω i` (`LeakAt`) with
-probability at most `e' i`. A premise: the leak guarantee of one sampled audit, on live coins and at the incorrect set
-of the witness computed before the sample, is what gives it, and no proof here does. -/
-def LeakWithin (e' : Fin m → ℝ) : Prop :=
-  ∀ ξ i, Claims.Pr (fun ω : Fin m → R.Coin => R.acc ξ i ω (ω i) ∧
-    ¬LeakAt lay k reg Dj (R.sw i) (R.Pw i) (R.ρ i) (R.op i) (R.W ξ ω i)
-      ((R.run R.device (R.sched (Function.update ξ (r.own .network) (R.coins.symm ω)),
-        R.srv (Function.update ξ (r.own .network) (R.coins.symm ω)))).2 i)) ≤ e' i
-
-end RealizesCommOfPooledLeakAccepted
+/-- **The network certifier's record of the period's execution phases**, at the other audits' coins `ξ` and the
+verification phases' coins `ω`: its run's record on the schedule and the server's state at those coins, which the
+claim (`comm_iff`) and the leak relation (`PhaseLeaks`) read. -/
+def RealizesCommOfPooledLeakAccepted.record {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit}
+    {I : Type} {Ω : I → Type} [DecidableEq I] [∀ i, Fintype (Ω i)] {r : PeriodRun d α C Ω} {K : ℝ} {L Kₒ S : ℕ}
+    {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {reg : AuditStatement → Finset ℕ}
+    {Dj m Fmax : ℕ} (R : RealizesCommOfPooledLeakAccepted r K L Kₒ S lay k reg Dj m Fmax) (ξ : (i : I) → Ω i)
+    (ω : Fin m → R.Coin) : Fin m → List (Obs L Kₒ S) :=
+  (R.run R.device (R.sched (Function.update ξ (r.own .network) (R.coins.symm ω)),
+    R.srv (Function.update ξ (r.own .network) (R.coins.symm ω)))).2
 
 end Accounting.JointBridge
