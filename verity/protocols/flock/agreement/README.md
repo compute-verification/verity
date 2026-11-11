@@ -143,7 +143,7 @@ with two sessions or none, a session opened and not composed, a composed session
 the first Hello, a second staging or one of other inputs, and a record that isn't closed (`RecCompose.checkRun`;
 `check_oneRun` proves acceptance gives `OneRun`, and `ComposeParts.composed_run` reads it at the compiled verifier's
 parts). The record is the auditor's: it is read from the challenger's host (`trusted-host`), never from the prover's
-bundle. `verity_flock.rec_compose` is its Python mirror (`tests/test_lean_rec_compose.py`). The pod's Lean step
+bundle. `verity_flock.rec_compose` is its Python mirror (`verity/protocols/flock/prover/tests/test_lean_rec_compose.py`). The pod's Lean step
 (`85-rec-reprice.sh`, `lean_verdicts.py --compose`) gives every part those files and composes V*'s parts over the run's
 record: on loopback the pod is the challenger's host, and under `MODES=firewall` (one session per staged statement) its
 oprove step keeps the record (`v-sess/rec-run.jsonl`, one event a line): it stages the rows file and the shared set of
@@ -267,7 +267,7 @@ Each holds one Lean part to its Python or Rust counterpart, or generates inputs 
 | `selftest_records.py` | the prover's selftest cases as replayable sets |
 | `record_text.py` | the record's canonical text against Lean's |
 | `zk_mutants.py` | `--zk` session mutants |
-| `template_query_agree.py`, `qword_agree.py`, `qword_program_agree.py`, `qcall_agree.py`, `cut_check_agree.py`, `unit_cut_agree.py`, `layout_agree.py`, `circuit_type_agree.py` | each Lean part against its Python counterpart in `verity.ml` |
+| `template_query_agree.py`, `qword_agree.py`, `qword_program_agree.py`, `qcall_agree.py`, `cut_check_agree.py`, `unit_cut_agree.py`, `layout_agree.py`, `circuit_type_agree.py` | each Lean part against its Python counterpart in `verity` |
 | `firewall_agree.py`, `firewall_controls.sh`, `firewall_finish_agree.py`, `firewall_finish_agree.sh` | the ZK server's contract and session loop against the inner phase's proxy, and each tamper control held to a visible refusal |
 | `tool.py` | the agreement job's store declaration: `ci-pod.sh` with its settings, the shipped bundle as its input |
 
