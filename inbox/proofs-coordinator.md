@@ -47702,3 +47702,89 @@ For KILIAN: unchanged for you. `real_table1_le` now takes `Ns ≤ 2^30`; `real_t
 For the table:
 - #8873 at `676a777193e2`, unmarked, runs out: Lean instances of the first-hit term at most 2^-100 at N_s ≤ 2^30: in calls at K ≤ 2^42 a run, and with every call charged as 513 compressions at K ≤ 2^33. In compressions it covers the record by reader sets (K 2^32.07 a run, 2^-101.63) and width κ 2^-6 and 2^-7; not the 2,647 GB plan (2^33.86, 2^-99.84). It proves the arithmetic at the caps, not that a design meets them.
 - The tree's evaluator at #8867's marked head reproduces every cell of the 10:07Z table and ATTACK's count-times-max row (2^-98.19 to 2^-97.61 a run by gates).
+
+## TWOPROVE, Wed 11 Nov 10:14Z: #8862, MARK WITH A NOTE: the verifier accepts exactly what it did, with the same public outputs, but two links of that are by reading and not by lemma: that the deployed parsers return only the one statement's form, and that `checkOneAt` is the old `checkBlobsAt`
+
+**MARK WITH A NOTE: the lemmas say both directions against `checkOneAt`, and "what the old check accepted, the new one accepts" only on parameters with `members = none` and evidence with `statements = none` (`checkBlobsAt_one`); no lemma says `paramsOfJson` and `evidenceOf` return only those (their last lines do, `OneStageZk.lean:257`, `:293`), and no Lean statement can say `checkOneAt` is the old `checkBlobsAt` (the diff does: its body word for word). Soundness needs neither link: its 15 proofs go through `checkBlobsAt_accept`, which holds on every input.**
+
+Second reader, statements only, at head `23e96bd37477a08445bfe1551e2898d75aaa4a16`, against its merge base with `main`, `5c095bb4ab7012ba359e0a85f4ecf19892b99629` [run]. `main` (`0a722c6ec9`) changes none of the three locks, `Spot/OneStageZk.lean`, `Spot/ChallengerTrees.lean` or `Spot/OneStage.lean` since that base [run: `git diff --stat` empty], so the base's copies are today's `main`'s. Git only; I built nothing and launched no run: no doubt needed a compile [run]. Lines are at the head unless marked base; the file is `verity/protocols/spot/verifier/lean/Spot/OneStageZk.lean`. Clock: `date -u` read 10:12Z when I began writing; my VM was reset since my last entry, so the scratch files were rebuilt [run].
+
+### (a) The five definitions
+
+- **`Params`** (:179-182; base :133-135): one field more, `members : Option (Array Member)` (:182); `base` and `own` unchanged, and `Own` itself unchanged (:161-167 = base :125-131) [read].
+- **`Evidence`** (:196-199; base :142-144): one field more, `statements : Option (Array StatementFiles)` (:199) [read].
+- **`paramsOfJson`** (:243-257; base :188-201): line for line the base's but its final record, which gains `members := none` (:256-257) [run: `diff` of the two bodies].
+- **`evidenceOf`** (:283-293; base :227-237): the same but `statements := none` (:293) [run: the diff's hunk].
+- **`checkBlobsAt`** (:1277-1282) is new: a match on `(p.members, e.statements)`, `none, none` to `checkOneAt` (:1280), `some ms, some sts` to `checkMembersAt` (:1281), anything else `.reject FORMS` (:1282). The old body is `checkOneAt` (:748-764), word for word base :692-708 but its name and docstring [run: `diff` of the two bodies; read].
+- **Nothing else changes.** The file's diff has nine hunks and removes 10 lines [run: each hunk mapped to its declaration]:
+  - one line of the module docstring;
+  - the two parser lines above;
+  - the old `checkBlobsAt`'s docstring (6 lines) and its `def` line, renamed.
+  Every added line outside the five is module-docstring prose, a new declaration or a `#guard`. `Spot/ChallengerTrees.lean` removes no line: it adds a docstring passage and one block (:351-535) between the base's last `#guard` and its difftest pieces [run].
+
+### (b) The three lemmas, and what they say together
+
+- **`checkMembersAt_refuses`** (:1260-1267): for every `p ms c ξ e sts bs pub prof`, `checkMembersAt p ms c ξ e sts bs ≠ .accept pub prof` [read].
+- **`checkBlobsAt_accept`** (:1286-1294): for every `p c ξ e bs pub prof`, if `checkBlobsAt p c ξ e bs = .accept pub prof` then `checkOneAt p c ξ e bs = .accept pub prof ∧ p.members = none ∧ e.statements = none` [read].
+- **`checkBlobsAt_one`** (:1297-1300): if `p.members = none` and `e.statements = none` then `checkBlobsAt p c ξ e bs = checkOneAt p c ξ e bs`. This is an equality of outcomes: accepts with the same `pub` and `prof`, rejects with the same reason, undecided the same [read].
+- **Together:**
+  - New accepts ⇒ old accepts, on every input, with the same `pub` and `prof` (`checkBlobsAt_accept`).
+  - Old accepts ⇒ new accepts, as an equality, on the subset with no members and no statements (`checkBlobsAt_one`) [derived].
+  - That subset is every old input: the old `Params` and `Evidence` had neither field, so each old input is exactly one new one with both `none` [read: base :133-144]. It is also everything `paramsOfJson` and `evidenceOf` return, by their last lines; no lemma states it [run: `git grep 'members = none\|statements = none\|members := none\|statements := none'` at the head finds only those two lines and the two lemmas' statements].
+  - Every "old" in this is `checkOneAt`; that it is the old `checkBlobsAt` is the diff in (a), and its callees' recorded hashes are equal in both locks (`oneSession`, `treesOf`, `orderHeld`, `treesHeld`, `popHeld`, `publicHeld`, `run`, `linesOf`, `coinsOf`, `checkBlobs`) [run].
+- **The proofs that read it:** 15 proofs in 11 files of `security/Proofs` change, each `unfold …checkBlobsAt at h` to `replace h := (…checkBlobsAt_accept h).1; unfold …checkOneAt at h` [run: `git diff`, 15 lines out and 15 in]. The files are `Properties/Remote.lean`, `Spot/Credited.lean` (3), `Spot/Tables.lean`, and `Verity/Sampled/Event.lean`, `Link.lean`, `LinkFirst.lean`, `Moves.lean`, `Record/Accepts.lean` (2), `Trees.lean`, `SampledDraw.lean`, `SampledRead.lean` (2) [run]. So soundness rests on the direction proved for every input [derived].
+
+### (c) No new form is accepted
+
+- **`checkMembersAt_refuses` holds for every input, not for an example.** All nine arguments are bound by the theorem, and the proof splits every branch of `checkMembersAt` (:1247-1256) [read]:
+  - `membersRun` errs: `.reject`.
+  - `OneStage.checkAt` accepts: `.reject` with `MULTI_REFUSED`, or "a session's verifier did not accept".
+  - `OneStage.checkAt` rejects or is undecided: passed through.
+- **A mixed pair** (members without statements, or the reverse) is `.reject FORMS` for every input (:1282; the third case of `checkBlobsAt_accept`'s proof, :1294) [read].
+- **The deployed verifier cannot parse the form either** [read]:
+  - `protocol` (:1308-1322) has `params := paramsOfJson` (:1315) and `evidence := evidenceOf` (:1317).
+  - `live` (:1325-1329) calls `checkBlobsAt`.
+  - `main` (:1335-1349) reads `ownOfJson` and `proofsOf`, else `protocol.main`.
+  - The form's parsers have no caller outside the file's own `#guard`s: `membersParamsOfJson` (:823), `paramsEitherOfJson` (:833), `membersEvidenceOf` (:839), `evidenceEitherOf` (:852) [run: `git grep` over the whole tree at the head].
+- So the form is wired and every acceptance of it is refused; the AGENTS.md rule holds [derived].
+
+### (d) The JSON `paramsOfJson` reads
+
+- **It accepts exactly the texts it accepted, refuses exactly those it refused, with the same reasons.** On each accepted text it returns the old record with `members := none` [derived from (a)].
+  - Every refusal (:244-255) is the base's (:189-200). That includes `exactly pr #["circuit", "public", "registered"]` (:247; base :192), so a `proofs` naming `members` still refuses [read].
+  - Its callees' recorded hashes are equal in both locks [run]: `deployedKey`, and the private `exactly`, `committedOf`, `digestOf` and `without` (recorded as `_private.Spot.OneStageZk.0.…`).
+  - `ownOfJson`, `sessionOf` and `proofsOf`, which follow it in the file, are unchanged line for line too [run: the same `diff`].
+  - `OneStage.paramsOfJson` is in `Spot/OneStage.lean`, which neither the PR nor `main` changes [run].
+- **`evidenceOf` is the same.** `proofsOf` still takes exactly `{"sessions"}` (:279; base :223), and `sessionOf` is unchanged [run: hash]. So a `proofs` naming `statements` refuses [read].
+- `#guard`s at :1484 and :1499 check the `members` and `statements` cases on one example each. The argument for every text is the unchanged text above [read].
+
+### (e) The lock diff
+
+I compared each lock as parsed JSON, section by section and entry by entry, base against head [run].
+
+- **`security/lean-audit.json`.** Only two `reads` entries move:
+  - `Spot.ChallengerTrees`: its digest, and 10 definitions new; none changed, none removed.
+  - `Spot.OneStageZk`: its digest, 63 definitions new and exactly the five changed (`Params`, `Evidence`, `paramsOfJson`, `evidenceOf`, `checkBlobsAt`); none removed; 91 recorded definitions become 154.
+  - **`guarantees`: 1,077 entries, equal entry for entry**, and every other section equal [run].
+  - The text diff also moves two keys of `unwitnessed` and one of `shape.inline` into sorted order, with equal values (head :5335-5541, :28733-28748). That is a reordering, and no record changes [run].
+- **`security/Properties/lean-audit.json`**: the same two `reads` entries with the same counts and the same five; **`guarantees`: 463 entries, equal**; every hunk lies inside `reads` (head :23654-24186) [run].
+- **`security/Proofs/lean-audit.json`**: one line, `roots` gains `Proofs.Properties.Verity.Sampled.MemberForm`; it holds no guarantees [run].
+- The readers (1 guarantee of @proofs, 29 of @soundness) are MEMBERS's count from the records run's report; a lock entry doesn't record which modules its guarantee reads, so I couldn't recount them from the locks [relayed].
+
+### Runs
+
+- **I launched none.**
+- **Read: `r20261111-080302-a139`** (records, `lean_changed.py --records … --update`). Its `job.json` names commit `23e96bd37477a08445bfe1551e2898d75aaa4a16`. Outcome `pass` on the four packages, each with axioms `propext`, `Classical.choice` and `Quot.sound` only [run: its `stdout.log`]:
+  - Spot: 5,553 declarations in 49 modules.
+  - `security`: 1,077 guarantees.
+  - `security/Properties`: 463 guarantees.
+  - `security/Proofs`: 193,505 declarations.
+  - It is a `lean-fast/v1` result: no kernel replay.
+  - I could not fetch the security locks it wrote, so "no lock rewritten" is MEMBERS's [relayed].
+- **Read: `r20261111-080306-3938`** (quick tier): done, rc 0 [run: `research fetch`].
+
+### Not done, and the rule
+
+- I did not read #8898 (the `members` command, stacked on this PR) or the Python writer [read].
+- The PR changes five definitions two security locks read, and no guarantee's record. Whether tonight's "Claims are Daniel's" rule makes the mark Daniel's is yours to say [read].
+- Job 2 is next: I read TWOWITNESS's and SCALE's newest entries before writing any of it.
