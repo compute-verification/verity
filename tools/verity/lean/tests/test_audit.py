@@ -2,6 +2,7 @@
 installed (the fixture package passes clean and fails each check once a violation is added)."""
 from __future__ import annotations
 
+import ast
 import gzip
 import hashlib
 import importlib.util
@@ -1462,6 +1463,264 @@ def test_facts_key_folds_source_digests_so_a_scanned_source_edit_with_the_same_o
     # the finding the edit changes is in the new document, so reusing the old one would have been stale
     body = json.loads(gzip.decompress((cache / f"{after['facts_key']}.json.gz").read_bytes()))
     assert any(h["option"] == "maxHeartbeats" and h["value"] == 400000 for h in body["findings"]["heartbeats"])
+
+
+def test_build_inputs_holds_what_the_lock_gives_every_step_before_the_judge():
+    """`build_inputs`, which a lock run compares before it keeps a pass for the commit of its regenerated locks
+    (`lean_audit.keep_regenerated`).  A record's value is not in it (a statement's hash, an assumption's digest, a `reads`
+    group, an owner), nor is a section only the judge reads; what `Facts.lean` walks is (a listed guarantee, a listed
+    premise, a name an inline text prints, an honest witness, `shape.premises`), and so is every other section, one this
+    file doesn't know included."""
+    pol = recorded()
+    base = A.build_inputs(pol)
+    stale = json.loads(json.dumps(pol))
+    stale["guarantees"]["P.t"] |= {"type_hash": "0" * 64, "owner": "@other"}
+    stale["assumptions"]["P.Hyp"] |= {"digest": "0" * 64, "owner": "@other"}
+    stale["reads"] = {m: g | {"digest": "0" * 64} for m, g in stale["reads"].items()} | {"P.More": {"digest": "1" * 64}}
+    stale |= {"format": 0, "unwitnessed": {"P.t": "0" * 64}, "trust_gap": {"P.t": "why"}, "witnesses_assumed": {"P.t": []},
+              "open_seed": {"P.t": []}, "witnesses": {"P.t": {"meets": ["P.w"]}},
+              "shape": {"properties": {"P.t": {"function": "P.f", "outcome": "none"}}, "frozen": {"P.t": "0" * 64}}}
+    assert stale != pol and A.build_inputs(stale) == base
+    for change in [{"guarantees": pol["guarantees"] | {"P.u": {"owner": "@lean"}}},      # a listed guarantee
+                   {"assumptions": {}}, {"open": {"P.Open": {"owner": "@lean"}}}, {"domain": {"P.Dom": {}}},
+                   {"shape": {"inline": {"P.t": {"P.Small 3": "why"}}}},                 # a name an inline text prints
+                   {"shape": {"premises": ["P.Premises"]}},
+                   {"witnesses": {"P.t": {"honest": ["P.w"]}}},
+                   {"roots": ["P", "Q"]}, {"exempt": {"Scratch": "why"}}, {"runs": {"T": {}}}, {"proved_in": ["../q"]},
+                   {"compile_time": {"P.Gen": "why"}}, {"dependency_unchecked": {"D": "why"}}, {"upstream": {}},
+                   {"axioms": []}, {"meaning": ["P.Defs"]}, {"layers": {}}, {"trees": {}}, {"claims": {}},
+                   {"a_section_of_a_later_check": 1}]:
+        assert A.build_inputs(pol | change) != base, change
+    with pytest.raises(KeyError):
+        A.build_inputs({})
+
+
+def test_no_step_before_the_judge_reads_a_section_build_inputs_leaves_out():
+    """`build_inputs` leaves `JUDGED` out, so no step of `audit` before the judge may read one of those sections: a lock
+    run keeps a pass for the commit of its regenerated locks on the ground that their audit would build, seal, extract,
+    replay and test exactly what the run did (`lean_audit.keep_regenerated`).  This walks `check.py`: from `audit`, through
+    every function it hands the lock to (by position or keyword, through `timed` and an executor's `submit`), short of
+    the ones `audit_from_facts` runs on the live lock too (the judge) and of `facts_config`, whose slice `build_inputs`
+    holds.  The exceptions, each read by hand: `proved` takes `guarantees`, `shape` and `witnesses` and `listed_premises`
+    the premise sections only to fill the lock slice it gives the prover's `facts_of` (`facts_config` again) and
+    `assign` (the names); it loads the prover's lock itself (`qpol`), whose `guarantees` it reads as empty or not.
+
+    A lock loaded by its path is handed down by nobody, so that walk does not meet it.  Every call of `load` and every
+    use of `POLICY` in `check.py`, a mention in an f-string and a test that the file is there aside, is therefore in a
+    function listed here with the sections it reads of that lock, which the same walk finds from the load.  One that a
+    step before the judge runs (`before`) reads only what `build_inputs` compares; a new one fails until it is listed,
+    and as a handed-down read does when it reads more.  The others (`apart`) are the judge's, called only where
+    `audit_from_facts` calls them too, on the locks of the tree it is given, or no step of an audit.  The lock's file is
+    named by `POLICY` alone, and what `check.py` calls of the siblings it loads never names it."""
+    judge = {"_finish", "judge", "inline_failures", "renamed_current", "audit.judged", "facts_config"}
+    names = {"proved": {"guarantees", "shape", "witnesses"}, "listed_premises": {"assumptions", "domain", "open"}}
+    funcs: dict[str, ast.FunctionDef] = {}
+    module = ast.parse((HERE.parent / "check.py").read_text())
+    for top in module.body:
+        for n in ast.walk(top):
+            if isinstance(n, ast.FunctionDef):
+                funcs[n.name if n is top else f"{top.name}.{n.name}"] = n
+
+    def called(n: ast.Call) -> tuple[ast.AST, list[ast.AST]]:
+        """(What ``n`` calls, its positional arguments), through `timed` and an executor's `submit`."""
+        f, args = n.func, list(n.args)
+        while args and isinstance(args[0], ast.Name) and (
+                (isinstance(f, ast.Attribute) and f.attr == "submit") or (isinstance(f, ast.Name) and f.id == "timed")):
+            f, args = args[0], args[1:]
+        return f, args
+
+    def walk(todo: list[tuple[str, set[str]]], short: set[str] = judge) -> tuple[dict[str, set[str]], set[str], set[str]]:
+        """({function: the sections it reads of the lock it holds}, the functions that use that lock in a way this does
+        not read, the calls that hand it past the callee's parameters) from ``todo``, each a function and the names it
+        holds the lock under, short of the functions in ``short``."""
+        reads: dict[str, set[str]] = {}
+        odd, loose = set(), set()
+        while todo:
+            name, held = todo.pop(0)
+            if name in reads or name in short:
+                continue
+            keys, used = reads.setdefault(name, set()), set()
+            for n in ast.walk(funcs[name]):
+                f = getattr(n, "func", None)
+                if isinstance(n, ast.Subscript) and isinstance(n.value, ast.Name) and n.value.id in held \
+                        and isinstance(n.slice, ast.Constant):
+                    keys.add(n.slice.value)
+                    used.add(id(n.value))
+                elif isinstance(n, ast.Compare) and len(n.ops) == 1 \
+                        and isinstance(n.ops[0], (ast.Is, ast.IsNot, ast.In, ast.NotIn)):
+                    for side, other in ((n.left, n.comparators[0]), (n.comparators[0], n.left)):
+                        if isinstance(side, ast.Name) and side.id in held and (isinstance(n.ops[0], (ast.Is, ast.IsNot)) or (
+                                side is n.comparators[0] and isinstance(other, ast.Constant))):
+                            keys.update([other.value] if isinstance(n.ops[0], (ast.In, ast.NotIn)) else [])
+                            used.add(id(side))
+                elif isinstance(n, ast.Call) and isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name) \
+                        and f.value.id in held and f.attr == "get" and n.args and isinstance(n.args[0], ast.Constant):
+                    keys.add(n.args[0].value)
+                    used.add(id(f.value))
+                elif isinstance(n, ast.Call):
+                    f, args = called(n)
+                    given = [(i, a) for i, a in enumerate(args)] + [(k.arg, k.value) for k in n.keywords]
+                    for at, a in given:
+                        if not (isinstance(a, ast.Name) and a.id in held):
+                            continue
+                        used.add(id(a))
+                        callee = f.id if isinstance(f, ast.Name) else None
+                        callee = next((c for c in (f"{name}.{callee}", f"{callee}.__init__", callee) if c in funcs), None)
+                        params = [p.arg for p in funcs[callee].args.args][callee.endswith(".__init__"):] if callee else []
+                        if isinstance(at, int) and at >= len(params):
+                            loose.add(f"{name} -> {ast.unparse(f)}")
+                        else:
+                            todo.append((callee, {params[at] if isinstance(at, int) else at}))
+            if any(isinstance(n, ast.Name) and n.id in held and isinstance(n.ctx, ast.Load) and id(n) not in used
+                   for n in ast.walk(funcs[name])):
+                odd.add(name)
+        return reads, odd, loose
+
+    reads, odd, loose = walk([("audit", {"policy", "current"}), ("proved", {"policy", "qpol"}), ("replay_step", {"policy"})])
+    # `final_replay(*args)` is `replay_step(*args)`, walked from here; `Pipeline` keeps the lock, and only to hand it to
+    # `replay_step`; `facts_key` reads `FINDINGS_SECTIONS` by a variable
+    assert loose == {"audit -> final_replay"} and odd == {"Pipeline.__init__", "facts_key"}, (loose, odd)
+    pipeline = ast.unparse(next(n for n in module.body if isinstance(n, ast.ClassDef) and n.name == "Pipeline"))
+    assert pipeline.count("self.policy") == 2 and "replay_step(self.pkg, self.policy," in pipeline
+    assert {"tests", "scans", "listings", "dependency_scans", "facts_of", "facts_key", "proved", "lift", "replay_step",
+            "Pipeline.__init__", "run_paths"} <= set(reads), sorted(reads)
+    assert not set(A.FINDINGS_SECTIONS) & A.JUDGED
+
+    parent = {id(c): p for p in ast.walk(module) for c in ast.iter_child_nodes(p)}
+    owner = {id(n): name for name, f in funcs.items() for n in ast.walk(f)}     # the innermost: a nested one is listed later
+
+    def sections(lock: ast.AST) -> set[str] | None:
+        """The sections read of the lock the expression ``lock`` gives: the one it is asked for there, or what the walk
+        finds from the name it is bound to or from the function it is handed to; None (all of it) when this can't tell."""
+        use, key = parent[id(lock)], None
+        if isinstance(use, ast.Attribute) and use.attr == "get" and isinstance(got := parent[id(use)], ast.Call) and got.args:
+            key = got.args[0]
+        elif isinstance(use, ast.Subscript) and use.value is lock:
+            key = use.slice
+        if isinstance(key, ast.Constant):
+            return {key.value}
+        if isinstance(use, ast.Assign) and len(use.targets) == 1 and isinstance(use.targets[0], ast.Name):
+            start = (owner[id(lock)], {use.targets[0].id})
+        elif isinstance(use, ast.Call) and lock in use.args and isinstance(use.func, ast.Name) and use.func.id in funcs:
+            start = (use.func.id, {funcs[use.func.id].args.args[use.args.index(lock)].arg})
+        else:
+            return None
+        found, unread, past = walk([start], set())
+        return None if unread or past else set().union(*found.values())
+
+    by_path: dict[str, set[str] | None] = {}
+    for n in ast.walk(module):
+        if not (isinstance(n, ast.Name) and n.id in ("load", "POLICY") and isinstance(n.ctx, ast.Load)):
+            continue
+        use, lock = parent[id(n)], None
+        if n.id == "load":
+            lock = use if isinstance(use, ast.Call) and use.func is n else None
+        else:
+            path = isinstance(use, ast.BinOp) and isinstance(use.op, ast.Div) and use.right is n
+            how = parent[id(use)] if path else use
+            if isinstance(how, ast.FormattedValue) or (path and isinstance(how, ast.Attribute) and how.attr in ("exists", "is_file")):
+                continue
+            # `json.loads((pkg / POLICY).read_text())` is the lock, as `load(pkg)` is
+            parsed = parent[id(parent[id(how)])] if path and isinstance(how, ast.Attribute) and how.attr == "read_text" else None
+            lock = parsed if isinstance(parsed, ast.Call) and ast.unparse(parsed.func) == "json.loads" else None
+        got, name = None if lock is None else sections(lock), owner.get(id(n), "")
+        by_path[name] = None if got is None or by_path.get(name, set()) is None else by_path.get(name, set()) | got
+    whole = None
+    before = {"memory_refusal": {"proved_in"}, "main": {"proved_in"},       # which packages a run audits, and on what machine
+              "proved": {"roots", "exempt", "guarantees", "compile_time"}}   # the prover's lock, `qpol` above
+    apart = {"_open": whole,                                                 # the lock the walk starts from: `policy` in `audit`
+             "homes": {"layers"}, "tree_roles": {"trees"}, "read_by_dependents": {"reads"}, "_finish": whole,   # the judge's
+             "load": whole, "dump": whole,                                   # the reader and the writer themselves
+             "packages": whole,                                              # the file's name, among a directory's
+             "controls_of": whole}                                           # a control's copy of a fixture
+    for name, got in by_path.items():
+        if name not in apart:
+            reads.setdefault(name, set()).update(A.JUDGED if got is None else got)
+    for name, keys in sorted(reads.items()):
+        assert not (bad := (keys & A.JUDGED) - names.get(name, set())), (
+            f"`{name}` reads the lock's {', '.join(sorted(bad))} before the judge, so two locks that differ there no longer "
+            f"give an audit the same build, facts, replay or tests: read it in the judge, or take the section out of `JUDGED` "
+            f"(`build_inputs` then compares it, and a lock run that rewrites it keeps no pass for its lock commit)")
+    listed = before | apart
+    changed = {f: by_path.get(f, "no load") for f in sorted({*by_path, *listed}) if by_path.get(f, "") != listed.get(f, "")}
+    assert not changed, (
+        f"check.py's loads of a lock by its path changed ({changed}): list each function with the sections it reads of that "
+        f"lock, under `before` when a step of `audit` before the judge runs it, else under `apart` with why it is apart")
+
+    def callers(name: str) -> set[str]:
+        return {owner.get(id(n), "") for n in ast.walk(module) if isinstance(n, ast.Call) and getattr(called(n)[0], "id", None) == name}
+
+    both, judged = {"audit", "audit_from_facts"}, {"audit.judged", "audit_from_facts.judged"}
+    assert {f: callers(f) for f in ("_open", "_finish", "read_by_dependents", "tree_roles", "reads_home", "homes")} == {
+        "_open": both, "_finish": both, "read_by_dependents": both, "tree_roles": judged, "reads_home": judged,
+        "homes": {"reads_home"}}, "a load that is apart as the judge's is called only where `audit_from_facts` calls it too"
+    assert all("rep, policy, work = _open(pkg, out)" in ast.unparse(funcs[f]) for f in both), "the name the walk starts from"
+    assert [n.value for n in ast.walk(module) if isinstance(n, ast.Constant) and isinstance(n.value, str)
+            and (n.value == A.POLICY or n.value.endswith("/" + A.POLICY))] == [A.POLICY], "a lock's path that `POLICY` does not name"
+    # the siblings check.py loads name the lock's file in `policy_roots` (its `roots`, for `lean_audit.py`'s index) and in
+    # `upstream.py`'s own command line, and check.py calls neither
+    siblings = {c.args[0].value for c in ast.walk(module) if isinstance(c, ast.Call) and getattr(c.func, "id", None) == "sibling"}
+    naming = {f"{s}.{getattr(top, 'name', '')}" for s in siblings for top in ast.parse((HERE.parent / f"{s}.py").read_text()).body
+              if any((isinstance(v := getattr(n, "value", None), str) and A.POLICY in v) or getattr(n, "id", None) == "POLICY"
+                     for n in ast.walk(top))}
+    assert naming == {"module_keys.policy_roots", "upstream.", "upstream.main"}, (
+        f"of the siblings check.py loads ({', '.join(sorted(siblings))}), these name the lock's file: {sorted(naming)}; one that "
+        f"a step before the judge calls reads the lock by its path, where this walk does not follow it")
+    assert not {"policy_roots", "main"} & {n.attr for n in ast.walk(module) if isinstance(n, ast.Attribute)}, \
+        "check.py calls a sibling's function that reads the lock by its path"
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_two_locks_that_differ_only_in_records_give_the_same_facts_document_and_replay(tmp_path, sandboxed_node):
+    """What a lock run rests on when it keeps a pass for the commit of its regenerated locks (`lean_audit.keep_regenerated`),
+    on a real build: audited under two locks that differ only in record fields (a statement's hash, an assumption's
+    digest), one build has the same `build_inputs`, the same `facts_key` (which folds every own module's `replay_keys`,
+    the sources and the lock slice `Facts.lean` reads) and a byte-identical facts document, each written by its own
+    extraction, and the replay under the second lock checks no module again.  The stale lock's regenerated lock, judged
+    from that document (`audit_from_facts`), leaves what a full audit of it leaves: nothing.  A lock that lists a name
+    the other doesn't (an inline entry of no guarantee, which a regeneration drops) differs on `build_inputs`, and
+    `Facts.lean` writes another document for it."""
+    def noop(*_):
+        return None
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    A.audit(pkg, tmp_path / "pop", build=False, replay=False, runs=False, update=True, log=noop)
+    recorded = A.load(pkg)
+
+    def audited(name: str, lock: dict) -> tuple[dict, bytes]:
+        A.dump(pkg, lock)
+        rep = A.audit(pkg, tmp_path / name, runs=False, facts_cache=tmp_path / f"{name}-facts", facts_reuse=True,
+                      replay_cache=tmp_path / "replay", store=True, log=noop)
+        return rep, (tmp_path / f"{name}-facts" / f"{rep['facts_key']}.json.gz").read_bytes()
+
+    a, doc = audited("a", recorded)
+    assert a["failures"] == [] and counts(a)[0] > 0 and counts(a)[1] == 0
+
+    stale = json.loads(json.dumps(recorded))
+    stale["guarantees"]["Control.main_thm"]["type_hash"] = "0" * 64
+    stale["assumptions"]["Control.Hyp"]["digest"] = "0" * 64
+    b, again = audited("b", stale)
+    assert b["failures"] and all(A.RECORD_DIFFERENCE.match(f) for f in b["failures"]), b["failures"]
+    assert A.build_inputs(stale) == A.build_inputs(recorded)
+    assert b["facts_key"] == a["facts_key"] and again == doc, "the same facts document, extracted again"
+    assert counts(b) == (0, counts(a)[0]), "and the same replay inputs: every module's key is the one that passed"
+
+    regenerated = A.load(Path(b["regenerated"]).parent)
+    assert regenerated == recorded and A.build_inputs(regenerated) == A.build_inputs(stale)
+    A.dump(pkg, regenerated)
+    stored = tmp_path / "b-facts" / f"{b['facts_key']}.json.gz"
+    assert A.audit_from_facts(pkg, tmp_path / "sb", stored, log=noop)["failures"] == []
+    assert A.audit(pkg, tmp_path / "full", runs=False, replay_cache=tmp_path / "replay", store=True, log=noop)["failures"] == []
+
+    inline = json.loads(json.dumps(recorded))
+    inline.setdefault("shape", {}).setdefault("inline", {})["Control.gone"] = {"Control.Small 3": "why"}
+    c, other = audited("c", inline)
+    dropped = A.load(Path(c["regenerated"]).parent)
+    assert "Control.gone" not in (dropped.get("shape") or {}).get("inline", {})
+    assert A.build_inputs(dropped) != A.build_inputs(inline), "what a lock run compares, so it keeps no pass here"
+    assert c["facts_key"] != a["facts_key"] and other != doc
 
 
 def test_the_facts_cache_reads_a_document_only_by_its_key_and_refuses_a_tampered_or_stale_one(tmp_path):
@@ -3568,6 +3827,23 @@ def test_a_generic_entry_is_one_claim_s_only_entry_and_names_a_claim():
     assert generic_codes({**policy, "claims": {**rule, "generic": ["P.Compiler"]}}, f)[0] == ("claims.generic-form", None)
 
 
+def test_claims_not_excuses_no_closed_statement():
+    """A closed `def C : Prop` under `claims.modules` that `claims.not` lists fails with the fix (move it to
+    `claims.generic` with its guarantee and witnesses), and passes once it is there; a predicate with parameters under
+    `claims.not`, a helper, still passes."""
+    policy, f = generic_fixture()
+    rule = policy["claims"]
+    excused = {**policy, "claims": {**rule, "generic": {}, "not": {**rule["not"], "P.Compiler": "proved of every program"}}}
+    assert generic_codes(excused, f) == [("claims.not-closed", "P.Compiler")]
+    assert A.claim_failures(excused, f)[0] == (
+        "claims: P.Compiler (P.Claims) is a closed statement (`def P.Compiler : Prop`) that `claims.not` excuses, so "
+        "nothing holds it to witnesses: move it to `claims.generic` with the guarantee that states it (`theorem …: "
+        "P.Compiler`, under `guarantees`) and its `witnesses`, honest lemmas, its antecedents holding together at one "
+        "instance (at least two sessions or rounds where it composes them), and a nontrivial one, its conclusion failing "
+        "at an instance")
+    assert generic_codes(policy, f) == []
+
+
 def test_a_meets_witness_says_something_about_the_deployment():
     """A `meets` witness whose statement is `True`, a conjunction of `True`s, a reflexivity, one of its own
     hypotheses, a bound variable, a fact of Init alone, or anything under a `False` hypothesis fails; one whose every
@@ -5182,6 +5458,22 @@ def test_two_builds_that_write_one_path_dependency_s_lake_run_one_at_a_time(tmp_
     assert [reps[p]["failures"] for p in "ab"] == [["build: exit 1\nfake build"]] * 2
 
 
+def test_a_build_s_log_says_in_one_line_how_many_modules_it_restored_and_why_not_the_others():
+    """One line a build, so that any run's log says what the cache missed: the misses by reason, most frequent first,
+    each with the first module it names."""
+    assert A.staged_line({"modules": 3, "keyed": 3, "missed": {}, "first": {}}) == \
+        "3 of 3 keyed modules restored from the artifact cache"
+    assert A.staged_line({"modules": 1, "keyed": 6, "missed": {"reads a module not restored": 3, "its source": 2},
+                          "first": {"reads a module not restored": "P", "its source": "P.A"}}) == \
+        ("1 of 6 keyed modules restored from the artifact cache; missed: 3 reads a module not restored (first P), "
+         "2 its source (first P.A)")
+    assert A.staged_line({"error": "no keys"}) == "nothing restored from the artifact cache: no keys"
+    assert A.staged_line({"modules": 4, "keyed": 9, "missed": {}, "first": {}, "left": 2,
+                          "took": {"not in the cache": 3, "the cache holds another version": 1}}) == \
+        ("4 of 9 keyed modules restored from the artifact cache; traces taken from the build: 3 not in the cache, "
+         "1 the cache holds another version; 2 left to Lake, which the cache could not index")
+
+
 def test_with_the_node_s_artifact_cache_each_build_step_reads_a_cache_staged_for_it(tmp_path, monkeypatch):
     """Lake finds a module in a cache by its 64-bit input hash alone, so no build reads the node's artifact cache: each
     step reads a directory staged inside it for this build (`LAKE_CACHE_DIR`, with `LAKE_ARTIFACT_CACHE` unset: read,
@@ -5199,7 +5491,7 @@ def test_with_the_node_s_artifact_cache_each_build_step_reads_a_cache_staged_for
     (store / "artifacts" / ("a" * 16 + ".olean")).write_bytes(b"P")
     (store / mk.INDEX).mkdir()
     mk.entry_path(store, mk.key("P", mk.keys(pkg), {})).write_text(json.dumps({
-        "module": "P", "scope": "p", "hash": "1" * 16, "outputs": {"o": ["a" * 16 + ".olean"]},
+        "schema": mk.SCHEMA, "module": "P", "scope": "p", "hash": "1" * 16, "outputs": {"o": ["a" * 16 + ".olean"]},
         "digests": {"a" * 16 + ".olean": mk.C.digest(b"P")}}))
     cache = store / mk.STAGE / f"{os.getpid()}-p"
     seen = []
@@ -5221,7 +5513,9 @@ def test_with_the_node_s_artifact_cache_each_build_step_reads_a_cache_staged_for
     rep = A.audit(pkg, tmp_path / "out", build=True, runs=False)
     assert seen == [(["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build"], True),
                     (["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build", "+P"], True)]
-    assert rep["staged"] == {"modules": 1, "keyed": 1} and "stage" in rep["seconds"] and not cache.exists()
+    assert rep["staged"] == {"modules": 1, "keyed": 1, "missed": {}, "first": {}, "took": {}, "left": 0}
+    assert "stage" in rep["seconds"]
+    assert not cache.exists()
     assert rep["failures"] == ["build-roots: exit 1\nfake build"]
     lib = pkg / ".lake" / "build" / "lib" / "lean"
     lib.mkdir(parents=True)
@@ -5233,6 +5527,32 @@ def test_with_the_node_s_artifact_cache_each_build_step_reads_a_cache_staged_for
     rep = A.audit(pkg, tmp_path / "out", build=True, runs=False)
     assert [f.code for f in rep["failures"]] == ["build"] and "P.Q (P's)" in rep["failures"][0]
     assert not (lib / "P" / "Q.trace").exists() and not cache.exists()
+
+
+def test_before_its_first_build_step_an_audit_leaves_whether_its_builds_run_in_the_sandbox(tmp_path, monkeypatch):
+    """What a build compiled goes into the node's artifact cache only on check.py's word that it ran in the sandbox. A
+    check.py that is killed writes no report, so that word is in the package's work directory from before the first
+    build step, and an audit that never builds, or builds elsewhere than the one before it, leaves no earlier one."""
+    pkg, out = tmp_path / "p", tmp_path / "out"
+    pkg.mkdir()
+    (pkg / A.POLICY).write_text(json.dumps({"roots": ["P"]}))
+    (pkg / "lean-toolchain").write_text("leanprover/lean4:v4.34.0\n")
+    (pkg / "P.lean").write_text("theorem p : True := trivial\n")
+    began = out / "audit-p" / A.BUILDING
+    seen = []
+    monkeypatch.setattr(A, "setup", lambda pkg, toolchain, log: (0, ""))
+    monkeypatch.setattr(A, "run", lambda argv, cwd, log=None, timeout=0: seen.append(json.loads(began.read_text())) or (1, ""))
+    monkeypatch.setattr(A, "in_sandbox", lambda pkg, argv: argv)
+    for sandbox in (True, False):
+        monkeypatch.setattr(A, "sandboxed", lambda: sandbox)
+        assert A.audit(pkg, out, build=True, runs=False)["sandbox"] is sandbox
+        assert seen[-1] == {"package": str(pkg), "sandbox": sandbox}
+    (pkg / A.POLICY).write_text("{")
+    assert A.audit(pkg, out, build=True, runs=False)["failures"] and began.exists(), "a package it never opened keeps its own"
+    (pkg / A.POLICY).write_text(json.dumps({"roots": ["P"]}))
+    monkeypatch.setattr(A, "run", lambda argv, cwd, log=None, timeout=0: (1, ""))
+    A.audit(pkg, out, build=False, runs=False, replay=False)
+    assert not began.exists(), "this audit built nothing: what the one before it said is gone"
 
 
 def test_the_sampled_recompile_follows_the_build_and_its_failure_fails_the_audit_before_the_build_is_announced(
@@ -5317,7 +5637,7 @@ def test_a_planted_olean_among_the_restored_modules_fails_once_it_is_sampled(tmp
     monkeypatch.setattr(A, "ARTIFACTS", store)
     cache = store / mk.STAGE / "test"
     staged, said = A.stage_build(mk, b, ["P"], cache)
-    assert said == {"modules": 11, "keyed": 11}
+    assert said == {"modules": 11, "keyed": 11, "missed": {}, "first": {}, "took": {}, "left": 0}
     assert "Built" not in lake(b, "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}")
     lib = b / ".lake" / "build" / "lib" / "lean"
     assert (lib / "P/M2.olean").read_bytes() == (v / ".lake/build/lib/lean/P/M2.olean").read_bytes(), "planted"
@@ -5397,6 +5717,208 @@ def test_another_package_reads_a_sampled_dependency_s_build_unchanged_while_the_
     assert fails == [] and rep["modules"] == ["D", "P"], (fails, rep)
     assert window == [([], olean), ([], olean)], "a reader in the window finds the dependency's build as it was"
     assert [files_of(b) for b in builds] == before, "nothing wrote either build"
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_dependent_staged_on_a_cold_cache_rewrites_no_file_its_dependency_s_audit_sealed(tmp_path, monkeypatch):
+    """A node's artifact cache holds nothing under these keys. `d` is staged and built, and its `.olean` files are sealed
+    as `main` seals them once its build ends; only then is `p`, which requires `d` by path, staged and built, as `main`
+    orders them. The cache still lacks `D`: an audit stores what its builds compiled when all of them have ended. When
+    staging `p` took `D`'s trace for that, `p`'s Lake compiled `D` again inside `d`'s build, and every audit beside it
+    that hashed a sealed `.olean` or ran a test on one in that window found it changed or gone. Now staging `p` writes
+    nothing in `d`'s build, Lake finds `D` up to date and compiles `P` alone, and each sealed file is the file the seal
+    hashed: its inode, its time and its bytes. What the two builds compiled is then stored, each module once, and a
+    second tree compiles neither."""
+    spec = importlib.util.spec_from_file_location("lean_audit_for_sealed", HERE.parent / "lean_audit.py")
+    LA = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(LA)
+    mk = A.sibling("module_keys")
+    store = tmp_path / "artifacts"
+    monkeypatch.setattr(A, "ARTIFACTS", store)
+    stages = iter(range(99))
+
+    def tree(ws: Path) -> tuple[Path, Path]:
+        for name, text, requires in (("D", "def D.v : Nat := 1\n", []), ("P", "import D\n\ndef P.v : Nat := D.v + 1\n", [
+                {"type": "path", "scope": "", "name": "d", "manifestFile": "lake-manifest.json", "inherited": False,
+                 "dir": "../d", "configFile": "lakefile.toml"}])):
+            at = ws / name.lower()
+            at.mkdir(parents=True)
+            (at / "lakefile.toml").write_text(
+                f'name = "{name.lower()}"\ndefaultTargets = ["{name}"]\n'
+                + "".join(f'\n[[require]]\nname = "{r["name"]}"\npath = "{r["dir"]}"\n' for r in requires)
+                + f'\n[[lean_lib]]\nname = "{name}"\n')
+            (at / "lake-manifest.json").write_text(json.dumps({
+                "version": "1.2.0", "packagesDir": ".lake/packages", "packages": requires, "name": name.lower(),
+                "lakeDir": ".lake", "fixedToolchain": False}))
+            shutil.copy(HERE / "fixtures" / "control" / "lean-toolchain", at)
+            (at / f"{name}.lean").write_text(text)
+        return ws / "d", ws / "p"
+
+    def build(pkg: Path) -> tuple[set[str], dict]:
+        """(the modules Lake compiled, what staging took from the tree) of ``pkg``'s build as an audit runs it: staged from
+        the node's cache, then `lake build` reading what was staged."""
+        cache = tmp_path / "staged" / str(next(stages))
+        _, said = A.stage_build(mk, pkg, [pkg.name.upper()], cache)
+        r = subprocess.run(["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build"], cwd=pkg,
+                           capture_output=True, text=True, env=A.lake_env())
+        assert r.returncode == 0, r.stdout + r.stderr
+        shutil.rmtree(cache)
+        return {m for m, *_ in A.BUILT.findall(r.stdout + r.stderr)}, said["took"]
+
+    d, p = tree(tmp_path / "ws")
+    assert build(d) == ({"D"}, {})
+    lib = d / ".lake" / "build" / "lib" / "lean"
+    seals = {str(f): A.sha256(f) for f in A.olean_files(lib)}
+    sealed = {f: at for f, at in files_of(lib).items() if str(f) in seals}
+    trace = (lib / "D.trace").read_bytes()
+    assert len(sealed) == len(seals) > 0 and not list((store / mk.INDEX).glob("*")), "d is sealed, and the cache still cold"
+
+    compiled, took = build(p)
+    assert {f: at for f, at in files_of(lib).items() if str(f) in seals} == sealed, "p's build rewrote a file d's audit sealed"
+    assert A.tampered(dict(seals), []) == [] and (lib / "D.trace").read_bytes() == trace
+    assert (compiled, took) == ({"P"}, {}), "p's staging takes no trace of d's, so its Lake compiles P alone"
+
+    assert LA.LakeArtifacts(store).put({d: {"sandbox": True}, p: {"sandbox": True}}, log=lambda s: None) == 2
+    d2, p2 = tree(tmp_path / "elsewhere" / "ws")
+    assert (build(d2), build(p2)) == ((set(), {}), (set(), {})), "a second tree restores D and P and compiles neither"
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_dependent_that_fetches_more_than_its_dependency_stores_both_on_a_cold_cache(tmp_path, monkeypatch):
+    """`d` fetches a package `x`; `p` requires `d` by path and fetches `z` too, as a proofs package requires the
+    definitions' and fetches more than they do. A node's artifact cache holds nothing. `d` is built, by its own Lake over
+    its own copy of `x`, then `p`, whose Lake finds `D` up to date, and what the two builds compiled is stored. `D`'s key
+    names `x`'s pin and no `z`, which `d` can't import: it is one key under `d` and under `p`, so the compile `d`'s build
+    left is `D`'s entry under `p` as well and `P`, which loads it, is stored above it. When `D`'s key under `p` named
+    `z` too, `d`'s own compile of it was no compile of that key, nothing stood under it, and every tree compiled `P`
+    again. A second tree compiles neither package's modules."""
+    spec = importlib.util.spec_from_file_location("lean_audit_for_fetched", HERE.parent / "lean_audit.py")
+    LA = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(LA)
+    mk = A.sibling("module_keys")
+    store = tmp_path / "artifacts"
+    monkeypatch.setattr(A, "ARTIFACTS", store)
+    stages = iter(range(99))
+    toolchain = HERE / "fixtures" / "control" / "lean-toolchain"
+    git = {**{k: v for k, v in os.environ.items() if not k.startswith("GIT_")},   # the caller's, less what steers git
+           "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull,
+           **{f"GIT_{who}_{what}": v for who in ("AUTHOR", "COMMITTER") for what, v in (("NAME", "a"), ("EMAIL", "a@example.org"))}}
+
+    def manifest(name: str, packages: list[dict]) -> str:
+        return json.dumps({"version": "1.2.0", "packagesDir": ".lake/packages", "packages": packages, "name": name,
+                           "lakeDir": ".lake", "fixedToolchain": False})
+
+    def fetched(name: str) -> dict:
+        """A package `name` with one module, as a Git repository under `upstream`: its entry in a manifest that pins it."""
+        repo = tmp_path / "upstream" / name
+        repo.mkdir(parents=True)
+        (repo / "lakefile.toml").write_text(f'name = "{name}"\n\n[[lean_lib]]\nname = "{name.upper()}"\n')
+        (repo / "lake-manifest.json").write_text(manifest(name, []))
+        (repo / f"{name.upper()}.lean").write_text(f"def {name.upper()}.v : Nat := 1\n")
+        (repo / ".gitignore").write_text(".lake\n")
+        shutil.copy(toolchain, repo)
+        for argv in (["init", "-q"], ["add", "-A"], ["commit", "-q", "-m", name]):
+            subprocess.run(["git", *argv], cwd=repo, check=True, capture_output=True, env=git)
+        rev = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True,
+                             env=git).stdout.strip()
+        return {"url": str(repo), "type": "git", "subDir": None, "scope": "", "rev": rev, "name": name,
+                "manifestFile": "lake-manifest.json", "inputRev": rev, "inherited": False, "configFile": "lakefile.toml"}
+
+    x_pin, z_pin = fetched("x"), fetched("z")
+    by_path = {"type": "path", "scope": "", "name": "d", "manifestFile": "lake-manifest.json", "inherited": False,
+               "dir": "../d", "configFile": "lakefile.toml"}
+
+    def tree(ws: Path) -> tuple[Path, Path]:
+        for name, text, requires in (("D", "import X\n\ndef D.v : Nat := X.v\n", [x_pin]),
+                                     ("P", "import D\nimport Z\n\ndef P.v : Nat := D.v + Z.v\n",
+                                      [by_path, z_pin, x_pin | {"inherited": True}])):
+            at = ws / name.lower()
+            at.mkdir(parents=True)
+            (at / "lakefile.toml").write_text(
+                f'name = "{name.lower()}"\ndefaultTargets = ["{name}"]\n'
+                + "".join(f'\n[[require]]\nname = "{r["name"]}"\n'
+                          + (f'path = "{r["dir"]}"\n' if r["type"] == "path" else f'git = "{r["url"]}"\nrev = "{r["rev"]}"\n')
+                          for r in requires if not r["inherited"])
+                + f'\n[[lean_lib]]\nname = "{name}"\n')
+            (at / "lake-manifest.json").write_text(manifest(name.lower(), requires))
+            shutil.copy(toolchain, at)
+            (at / f"{name}.lean").write_text(text)
+            for r in requires:
+                if r["type"] == "git":
+                    shutil.copytree(tmp_path / "upstream" / r["name"], at / ".lake" / "packages" / r["name"], symlinks=True)
+        return ws / "d", ws / "p"
+
+    def build(pkg: Path) -> set[str]:
+        """The modules of `d` and `p` that Lake compiled in ``pkg``'s build as an audit runs it: staged from the node's
+        cache, then `lake build` reading what was staged. Each tree compiles its own copies of `x` and `z`, which an
+        audit's fetched packages come built."""
+        cache = tmp_path / "staged" / str(next(stages))
+        _, said = A.stage_build(mk, pkg, [pkg.name.upper()], cache)
+        r = subprocess.run(["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build"], cwd=pkg,
+                           capture_output=True, text=True, env=A.lake_env())
+        assert r.returncode == 0 and "error" not in said and not said["took"], (said, r.stdout + r.stderr)
+        shutil.rmtree(cache)
+        return {m for m, *_ in A.BUILT.findall(r.stdout + r.stderr)} & {"D", "P"}
+
+    d, p = tree(tmp_path / "ws")
+    assert (build(d), build(p)) == ({"D"}, {"P"}) and not list((store / mk.INDEX).glob("*")), "the cache is cold"
+    under = {r.name: mk.keys(r)["D"] for r in (d, p)}
+    one_key = (under["d"].env, under["d"].task) == (under["p"].env, under["p"].task)
+    stored = LA.LakeArtifacts(store).put({d: {"sandbox": True}, p: {"sandbox": True}}, log=lambda s: None)
+    d2, p2 = tree(tmp_path / "elsewhere" / "ws")
+    again = (build(d2), build(p2))
+    assert (one_key, stored, again) == (True, 2, (set(), set())), "D has one key under d and p, and a second tree compiles neither"
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_required_package_moved_is_compiled_by_no_build(tmp_path, monkeypatch):
+    """`p` requires `d` by path. Both are built and stored. A second tree holds `d` somewhere else, with the `path` of
+    `p`'s `require` and the `dir` of its manifest's entry rewritten and nothing else changed. A key reads neither, and
+    neither does Lake's own input hash of a module, under which the staged outputs are restored: the second tree's
+    builds compile no module."""
+    spec = importlib.util.spec_from_file_location("lean_audit_for_moved", HERE.parent / "lean_audit.py")
+    LA = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(LA)
+    mk = A.sibling("module_keys")
+    store = tmp_path / "artifacts"
+    monkeypatch.setattr(A, "ARTIFACTS", store)
+    stages = iter(range(99))
+
+    def tree(ws: Path, at: str) -> tuple[Path, Path]:
+        """Under ``ws``: `p`, and `d` at ``at`` from `p`'s directory."""
+        p = ws / "p"
+        d = Path(os.path.normpath(p / at))
+        for pkg, name, text, requires in ((d, "D", "def D.v : Nat := 1\n", []), (p, "P", "import D\n\ndef P.v : Nat := D.v + 1\n", [
+                {"type": "path", "scope": "", "name": "d", "manifestFile": "lake-manifest.json", "inherited": False,
+                 "dir": at, "configFile": "lakefile.toml"}])):
+            pkg.mkdir(parents=True)
+            (pkg / "lakefile.toml").write_text(
+                f'name = "{name.lower()}"\ndefaultTargets = ["{name}"]\n'
+                + "".join(f'\n[[require]]\nname = "{r["name"]}"\npath = "{r["dir"]}"\n' for r in requires)
+                + f'\n[[lean_lib]]\nname = "{name}"\n')
+            (pkg / "lake-manifest.json").write_text(json.dumps({
+                "version": "1.2.0", "packagesDir": ".lake/packages", "packages": requires, "name": name.lower(),
+                "lakeDir": ".lake", "fixedToolchain": False}))
+            shutil.copy(HERE / "fixtures" / "control" / "lean-toolchain", pkg)
+            (pkg / f"{name}.lean").write_text(text)
+        return d, p
+
+    def build(pkg: Path) -> set[str]:
+        """The modules Lake compiled in ``pkg``'s build as an audit runs it: staged from the node's cache, then built."""
+        cache = tmp_path / "staged" / str(next(stages))
+        A.stage_build(mk, pkg, [pkg.name.upper()], cache)
+        r = subprocess.run(["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build"], cwd=pkg,
+                           capture_output=True, text=True, env=A.lake_env())
+        assert r.returncode == 0, r.stdout + r.stderr
+        shutil.rmtree(cache)
+        return {m for m, *_ in A.BUILT.findall(r.stdout + r.stderr)}
+
+    d, p = tree(tmp_path / "ws", "../d")
+    assert (build(d), build(p)) == ({"D"}, {"P"})
+    assert LA.LakeArtifacts(store).put({d: {"sandbox": True}, p: {"sandbox": True}}, log=lambda s: None) == 2
+    d2, p2 = tree(tmp_path / "elsewhere" / "ws", "../moved/to/d")
+    assert (p / "lakefile.toml").read_text() != (p2 / "lakefile.toml").read_text() and d2.parent.name == "to"
+    assert (build(d2), build(p2)) == (set(), set()), "the moved package and the one requiring it are restored, not compiled"
 
 
 def test_without_the_sandbox_a_module_no_build_of_the_run_compiled_fails_the_audit(tmp_path, monkeypatch):

@@ -719,6 +719,46 @@ def test_the_move_bases_script_runs_and_the_branchs_copy_is_kept(repo):
     assert show(repo, script["commit"], "tools/move/helper.py") == "import app.util\n"
 
 
+#: the toy script with the real one's limit: it leaves a text file over `TEXT_LIMIT` as it is, and says nothing
+LIMITED = edit(edit((HERE / "toy_layout.py").read_text(), "MAP = tomllib", "TEXT_LIMIT = 400\nMAP = tomllib"), "    raw = Path(f).read_bytes()\n",
+               "    if os.path.getsize(f) > TEXT_LIMIT:\n        continue\n    raw = Path(f).read_bytes()\n")
+GROWN = MAIN + "".join(f"X{i} = app.util.f{i % 7 + 1}\n" for i in range(30))
+
+
+def _limited(tmp_path: Path, **old: str) -> Path:
+    """`repo` with the limited script, and `old` among the files of its first commit."""
+    r = tmp_path / "limited"
+    r.mkdir()
+    git(r, "init", "-q", "-b", "main")
+    commit(r, "old", {"app/__init__.py": "", "app/util.py": UTIL, "app/main.py": MAIN, **old})
+    git(r, "branch", "pr")
+    commit(r, "base", {"tools/move/layout.py": LIMITED, "tools/move/layout_map.toml": MAP})
+    git(r, "tag", "base")
+    git(r, "tag", "move", generate(r))
+    return r
+
+
+def test_a_file_the_branch_grew_past_the_scripts_limit_is_rewritten_as_the_move_rewrote_it(tmp_path):
+    """The move rewrote the file, under the limit on its base. Left to its limit, the script would pass over the branch's
+    larger copy, and the branch would cross clean with every old name in it (a Lean lock did)."""
+    r = _limited(tmp_path)
+    assert len(MAIN) < 400 < len(GROWN) and "import app.core.util\n" in show(r, "move", "app/main.py")
+    on(r, "pr", ("grow main", {"app/main.py": GROWN}))
+    got = RS.restack("pr", "move", cwd=str(r))
+    assert got["status"] == "clean", got
+    assert show(r, got["result"], "app/main.py") == GROWN.replace("app.util", "app.core.util")
+    assert show(r, got["result"], "tools/move/layout.py") == LIMITED and got["steps"][1]["restored"] == []
+
+
+def test_a_move_that_left_a_file_over_its_limit_as_it_was_is_not_crossed(tmp_path):
+    """A crossing treats a file as the move did: where the move passed over one for its size, no branch crosses."""
+    r = _limited(tmp_path, **{"docs/big.md": "`app.util` is the module\n" * 20})
+    assert "app.core.util" not in show(r, "move", "docs/big.md")
+    on(r, "pr", ("edit util", {"app/util.py": edit(UTIL, "return 5", "return 50")}))
+    with pytest.raises(SystemExit, match=r"isn't what tools/move/layout.py writes .* the script's own limit.*\n  docs/big\.md$"):
+        RS.restack("pr", "move", cwd=str(r))
+
+
 def test_a_script_that_fails_is_reported_and_nothing_else_happens(repo):
     on(repo, "pr", ("trip the toy script", {"LAYOUT_FAIL": ""}))
     before = git(repo, "worktree", "list", "--porcelain")

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Put the redacting env/printenv, the credential-URL git guard and the `research` shim (research.sh) ahead of /usr/bin on
+# Put the redacting env/printenv, the credential-stripping git guard and the `research` shim (research.sh) ahead of /usr/bin on
 # this VM. Idempotent; /usr/bin/env (shebangs) and /usr/bin/git are untouched. Both guards are tested where they are
 # installed; the git guard is removed if a check fails, the env guard kept.
 set -euo pipefail
