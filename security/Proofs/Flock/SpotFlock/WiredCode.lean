@@ -19,11 +19,12 @@ programs with every wired read sent to its writer's output (`wireMap`), returnin
 * `parseWired`, `partitionWired`, `twoWired`: the statement at the connected program, the members' partition with
   each proof block's moved gates removed (`Partition.cut`), and the two-stage design with its replay partition cut
   the same way, where `two h` evaluates and the wiring is covered.
-* `revealWired`: what a session reveals at the connected program, one opening for each gate the unit's proof block
+* `revealWiredAt`: what a session reveals at the connected program, one opening for each gate the unit's proof block
   needs side by side, at the gate the wiring sends it to and under that gate's roots there. The count of openings a
   unit is the side-by-side count.
-* `baseWired`, `codeWired`, `rsWired`: `base h`, `code h` and `rs h` with those four and the gated verifier; the
-  sessions, their rounds, the samples and the frame are `code h`'s.
+* `codeWired`, `rsWired`: `code h` and `rs h` with those four and the gated verifier; the sessions, their rounds,
+  the samples and the frame are `code h`'s. Each is its `At` form at the check's verdict (`twoWiredAt`,
+  `baseWiredAt`, `codeWiredAt`, `rsWiredAt`), which a proof reads at `true` and at `false`.
 
 The verifier's runs are `V h`'s wherever the wiring is covered (`gated`), so every fact of an accepted run of `V h`
 is one of the connected code's.
@@ -59,28 +60,34 @@ moves (`Partition.cut`). -/
 def partitionWired (_ : AuditStatement) : Option Partition :=
   some ((membersPart h.ms).cut (wireMap h))
 
+/-- **The two-stage design at the connected program, behind the check's verdict `ok`**: `two h`'s with its replay
+partition cut the same way, where `two h` evaluates and `ok` holds; none otherwise. -/
+def twoWiredAt (ok : Bool) (s : AuditStatement) : Option Design.Two :=
+  if ok then (two h s).map fun d => { d with part := d.part.cut (wireMap h) } else none
+
 /-- **The two-stage design at the connected program**: `two h`'s with its replay partition cut the same way, where
 `two h` evaluates and the wiring is one the proof covers (`wiredOk`). -/
-def twoWired (s : AuditStatement) : Option Design.Two :=
-  if wiredOk h then (two h s).map fun d => { d with part := d.part.cut (wireMap h) } else none
+def twoWired : AuditStatement → Option Design.Two := twoWiredAt h (wiredOk h)
 
 /-- **What a session's witness reveals for unit `u` at the connected program**: one opening for each gate its proof
 block needs side by side (`Reveal.needs` at the members' programs), at the gate the wiring sends it to, under that
-gate's roots at the connected program (`Reveal.rootsAt` at `partitionWired` and `twoWired`), holding the frame's
+gate's roots at the connected program (`Reveal.rootsAt` at `partitionWired` and the design), holding the frame's
 opening for the side-by-side gate under those roots. Two of a unit's gates sent to one gate are two openings at one
 position under one roots. -/
-def revealWired (s : AuditStatement) (u : ℕ) (v : Seen) (wF : Claims.Flock.Wit) : List (List Msg × Opening Bool) :=
+def revealWiredAt (ok : Bool) (s : AuditStatement) (u : ℕ) (v : Seen) (wF : Claims.Flock.Wit) :
+    List (List Msg × Opening Bool) :=
   (Reveal.needs (partition h) { s with prog := bitsProgs h.ms } u).map fun i =>
-    (Reveal.rootsAt (partitionWired h) (twoWired h) (iroots []) s u v (wireMap h i),
+    (Reveal.rootsAt (partitionWired h) (twoWiredAt h ok) (iroots []) s u v (wireMap h i),
       { Reveal.frameAt h.frame { s with prog := bitsProgs h.ms } u v wF i
-          (Reveal.rootsAt (partitionWired h) (twoWired h) (iroots []) s u v (wireMap h i)) with
+          (Reveal.rootsAt (partitionWired h) (twoWiredAt h ok) (iroots []) s u v (wireMap h i)) with
         pos := wireMap h i })
 
-/-- **The code at the connected program, before its samples**: `base h` with the gated verifier, the statement, the
-partition and the reveal at the connected program. The reveal count is the side-by-side one. -/
-noncomputable def baseWired : Code :=
+/-- **The code at the connected program, before its samples, behind the check's verdict `ok`**: `base h` with the
+gated verifier, the statement, the partition and the reveal at the connected program. The reveal count is the
+side-by-side one. -/
+noncomputable def baseWiredAt (ok : Bool) : Code :=
   { h.frame with
-    V := gated (wiredOk h) (V h)
+    V := gated ok (V h)
     parse := parseWired h
     scopeCheck := fun x => ((parseWired h x).bind (partitionWired h)).isSome
     partition := partitionWired h
@@ -89,7 +96,7 @@ noncomputable def baseWired : Code :=
     rounds := fun _ u => univ.filter fun t =>
       off h (templateOf h.ms u) ≤ t.val ∧ t.val < off h (templateOf h.ms u) + k₀ h (templateOf h.ms u)
     session := fun _ u v => session h u v
-    reveal := revealWired h
+    reveal := revealWiredAt h ok
     reveals := Reveal.reveals (partition h) (parse h)
     sessions := fun _ => h.ms.length
     tables := fun _ => ((List.range (h.ms.length + 1)).map fun t => (shapeOf (h.xS₀ t)).length).foldr max 0
@@ -97,32 +104,40 @@ noncomputable def baseWired : Code :=
     innerN₀ := fun _ => n₀ h 0 }
 
 /-- The run's round order at the connected code: `order h`, the gated verifier having `V h`'s rounds. -/
-def orderWired (x : Msg) : Order ((baseWired h).V.k x) := order h x
+def orderWiredAt (ok : Bool) (x : Msg) : Order ((baseWiredAt h ok).V.k x) := order h x
 
-/-- **SPOT[Flock]'s two-stage code at the connected program**: `baseWired h` at its round order, its checked units
-the two stages' on the auditor's registration, each stage's bytes its own coin's. -/
-noncomputable abbrev codeWired : Code :=
-  codeTwoAt (baseWired h) (reg h) (fun _ => L) (fun _ => L) (orderWired h) (fun _ => coinByte) (fun _ => coinByte)
+/-- **The two-stage code at the connected program, behind the check's verdict `ok`**: `baseWiredAt h ok` at its
+round order, its checked units the two stages' on the auditor's registration, each stage's bytes its own coin's. -/
+noncomputable abbrev codeWiredAt (ok : Bool) : Code :=
+  codeTwoAt (baseWiredAt h ok) (reg h) (fun _ => L) (fun _ => L) (orderWiredAt h ok) (fun _ => coinByte)
+    (fun _ => coinByte)
 
 /-- **The replay sample of record at the connected code**: the first stage's checked slots on the replay layout. -/
-noncomputable def rsWired : (x : Msg) → (Fin ((codeWired h).V.k x) → FlockDeploy.Coin) → List ℕ :=
-  replayTwo ((baseWired h).atOrder (orderWired h)) (reg h) (fun _ => L)
-    (bytesFirst (baseWired h) (fun _ => L) (orderWired h) fun _ => coinByte)
+noncomputable def rsWiredAt (ok : Bool) :
+    (x : Msg) → (Fin ((codeWiredAt h ok).V.k x) → FlockDeploy.Coin) → List ℕ :=
+  replayTwo ((baseWiredAt h ok).atOrder (orderWiredAt h ok)) (reg h) (fun _ => L)
+    (bytesFirst (baseWiredAt h ok) (fun _ => L) (orderWiredAt h ok) fun _ => coinByte)
 
-/-- Where the wiring is covered, the gated verifier is `V h`. -/
+/-- **SPOT[Flock]'s two-stage code at the connected program**: the verifier refuses every run where the wiring is not
+one the proof covers (`wiredOk`), and is `V h` where it is. -/
+noncomputable abbrev codeWired : Code := codeWiredAt h (wiredOk h)
+
+/-- **The replay sample of record at the connected code.** -/
+noncomputable def rsWired : (x : Msg) → (Fin ((codeWired h).V.k x) → FlockDeploy.Coin) → List ℕ :=
+  rsWiredAt h (wiredOk h)
+
+/-- Where the check passes, the gated verifier is `V`. -/
 theorem gated_true (V : Verifier FlockDeploy.Coin) : gated true V = V := by
   cases V
   simp [gated]
 
-/-- Where the wiring is not covered, the design does not evaluate: no statement is in the connected code's scope. -/
-theorem twoWired_none (hw : wiredOk h = false) (s : AuditStatement) : twoWired h s = none := by
-  unfold twoWired
-  simp [hw]
+/-- Where the check fails, the design does not evaluate: no statement is in the connected code's scope. -/
+theorem twoWiredAt_false (s : AuditStatement) : twoWiredAt h false s = none := by
+  simp [twoWiredAt]
 
-/-- Where the wiring is covered, the design is `two h`'s with its replay partition cut. -/
-theorem twoWired_eq (hw : wiredOk h = true) (s : AuditStatement) :
-    twoWired h s = (two h s).map fun d => { d with part := d.part.cut (wireMap h) } := by
-  unfold twoWired
-  simp [hw]
+/-- Where the check passes, the design is `two h`'s with its replay partition cut. -/
+theorem twoWiredAt_true (s : AuditStatement) :
+    twoWiredAt h true s = (two h s).map fun d => { d with part := d.part.cut (wireMap h) } := by
+  simp [twoWiredAt]
 
 end SpotFlock
