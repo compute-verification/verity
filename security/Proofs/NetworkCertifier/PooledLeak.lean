@@ -58,12 +58,17 @@ leak relations' errors `e' i`.
 
 The count half: a family of incorrect sets with fewer than `Fmax` proof blocks in total is the proof blocks listed by some
 `Fin Fmax → Option (Σ i, Fin (n i))` (`exists_famOf_eq`), so there are at most `(N + 1)^Fmax` of them. At one family,
-each window's observations number at most `2^#(freeInputs \ reg) · 2^(faultyBits) · Dj^k` (`encard_leakAt_le`, from
-`encard_acceptedFaulty_le` at `AsReg`), and the faulty bits sum to at most `b · Fmax`. Under `trusted-host` the cells
-the client receives read back from the network certifier's record under the schedule, one its record format holds
-(`certifier_cells_read`), so they
+each window's observations number at most `2^#(freeInputs \ reg) · 2^(faultyBits) · Dj^k` at any operator
+(`encard_leakAt_le`, from `encard_acceptedFaulty_le` at `AsReg`), and the window's operator is the one the earlier
+windows' observations fix (`runsBefore`), so the periods number at most the product of the windows' bounds, by
+induction over the windows (`encard_chain_le`); the faulty bits sum to at most `b · Fmax`. Under `trusted-host` the
+cells the client receives read back from the network certifier's record under the schedule, one its record format
+holds (`certifier_cells_read`), so they
 number at most `#Ss` times those records, which bounds the secrets they decode to (`encard_pooledGood_le`);
 `∏_c (cap_c + 1)` is room, as in the period's bound.
+
+At operators that read no earlier window the statement is the one with each window's operator fixed before the
+period (`pooledLeak_fixed`).
 -/
 
 @[expose] public section
@@ -339,7 +344,7 @@ theorem encard_pooledFam_le {L K S m : ℕ} (Good : Fin m → Finset ℕ → Lis
 
 theorem encard_pooledGood_le {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ)
     {m : ℕ} (sw : Fin m → AuditStatement) (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool)
-    (op : Fin m → ℕ → List (Obs L K S) → List Bool) (n : Fin m → ℕ) (b : ℕ)
+    (op : Fin m → List (List (Obs L K S)) → ℕ → List (Obs L K S) → List Bool) (n : Fin m → ℕ) (b : ℕ)
     (hb : ∀ i, ∀ v < n i, faultyBits (sw i).prog (Pw i) {v} ≤ b)
     {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
     (f : RecordFormat Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
@@ -352,11 +357,17 @@ theorem encard_pooledGood_le {L K S : ℕ} (lay : AuditStatement → BoundaryGat
     {z | z ∈ Zs ∧ PooledGood lay k reg Dj sw Pw ρ op Fmax (W z) (run tap (sched z, srv z)).2}.encard ≤
       Ss.encard * (((∏ c, (cap c + 1)) * ((∑ i, n i) + 1) ^ Fmax * 2 ^ (b * Fmax) *
         ∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ reg (sw i)).card * Dj ^ k (sw i)) : ℕ) : ℕ∞) :=
-  encard_pooledFam_le (fun i => LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i)) n b
+  encard_pooledJoint_le
+    (fun F o => ∀ i, LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i (runsBefore o i)) (F i) (o i)) n b
     (fun i => (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ reg (sw i)).card) (fun i => Dj ^ k (sw i))
     (fun i F => faultyBits (sw i).prog (Pw i) F) (fun i _ hF => faultyBits_le_card_mul _ _ hF (hb i))
-    (fun i F _ => encard_leakAt_le lay k reg Dj (sw i) (Pw i) (ρ i) (op i) F) arr f tap run htrust cap Ss hfit Zs sched
-    srv hs dec hdz W hWn Fmax
+    (fun F _ => by
+      have h := encard_chain_le (fun i l => {x | LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i l) (F i) x})
+        (fun i => 2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ reg (sw i)).card *
+          (2 ^ faultyBits (sw i).prog (Pw i) (F i) * Dj ^ k (sw i)))
+        fun i l => encard_leakAt_le lay k reg Dj (sw i) (Pw i) (ρ i) (op i l) (F i)
+      exact h)
+    arr f tap run htrust cap Ss hfit Zs sched srv hs dec hdz W hWn Fmax
 
 /-! ### The monitoring period -/
 
@@ -404,8 +415,51 @@ theorem pooledLeak : Guarantees.PooledLeakAccepted := by
       _ ≤ Real.exp (-Real.log (1 / δ)) := Real.exp_le_exp.2 (by nlinarith)
       _ = δ := by rw [one_div, Real.log_inv, neg_neg, Real.exp_log hδ]
   have h := pr_pooled_le (acc z) (hacc z) (W z) (hW z) e e' he q hq0 hq1 (hesc z hz)
-    (fun i ω => LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i) (W z ω i) ((run tap (schedOf z ω, srvOf z ω)).2 i))
+    (fun i ω => LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i (runsBefore (run tap (schedOf z ω, srvOf z ω)).2 i))
+      (W z ω i) ((run tap (schedOf z ω, srvOf z ω)).2 i))
     (hleak z hz) Fmax
   exact h.trans (by linarith)
+
+set_option linter.unusedVariables false in
+/-- **`PooledLeakAccepted` at operators fixed before the period**: its statement with window `i`'s operator `op i` one
+that reads no earlier window, `PooledGood` written out, which is `PooledLeakAccepted` at the operator
+`fun i _ => op i`, one that ignores the windows before it. -/
+theorem pooledLeak_fixed (h : Guarantees.PooledLeakAccepted) :
+    ∀ {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
+      (reg : AuditStatement → Finset ℕ) (Dj : ℕ) {m : ℕ} (sw : Fin m → AuditStatement) (Pw : Fin m → Partition)
+      (ρ : Fin m → ℕ → Bool) (op : Fin m → ℕ → List (Obs L K S) → List Bool)
+      (n : Fin m → ℕ) (b : ℕ) (hb : ∀ i, ∀ v < n i, faultyBits (sw i).prog (Pw i) {v} ≤ b)
+      {Ω : Type} [Fintype Ω] [Nonempty Ω] {Conn Cell Srv Dev Z : Type} [Fintype Conn]
+      (arr : Srv → Conn → Arrivals Cell) (f : RecordFormat Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
+      (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L K S)))
+      (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
+      (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (hcap : ∀ s ∈ Ss, ∀ c, s.cells c ≤ cap c)
+      (hfit : ∀ s ∈ Ss, f.fits s)
+      (Zs : Set Z) (schedOf : Z → (Fin m → Ω) → CertifierSchedule Conn) (srvOf : Z → (Fin m → Ω) → Srv)
+      (hs : ∀ z ∈ Zs, ∀ ω, schedOf z ω ∈ Ss) (dec : (Fin m → Ω) → (Conn → List (ℕ × CellView Cell)) → Z)
+      (hdz : ∀ z ∈ Zs, ∀ ω, dec ω (run tap (schedOf z ω, srvOf z ω)).1 = z)
+      (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop)
+      (hacc : ∀ z i ω ω', (∀ j, j < i → ω j = ω' j) → acc z i ω = acc z i ω')
+      (W : Z → (Fin m → Ω) → Fin m → Finset ℕ)
+      (hW : ∀ z i ω ω', (∀ j, j < i → ω j = ω' j) → W z ω i = W z ω' i)
+      (hWn : ∀ z ω i, W z ω i ⊆ range (n i)) (e e' : Fin m → ℝ) (he : ∀ i, 0 ≤ e i)
+      (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
+      (hesc : ∀ z ∈ Zs, ∀ i ω, Pr (acc z i ω) ≤ (1 - q) ^ (W z ω i).card + e i)
+      (hleak : ∀ z ∈ Zs, ∀ i, Pr (fun ω => acc z i ω (ω i) ∧
+        ¬LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i) (W z ω i) ((run tap (schedOf z ω, srvOf z ω)).2 i)) ≤ e' i)
+      (δ : ℝ) (hδ : 0 < δ) (Fmax : ℕ) (hF : Real.log (1 / δ) ≤ q * Fmax),
+      (∀ z ∈ Zs, Pr (fun ω => (∀ i, acc z i ω (ω i)) ∧
+          ¬(∑ i, (W z ω i).card < Fmax ∧ ∀ i, LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i) (W z ω i)
+            ((run tap (schedOf z ω, srvOf z ω)).2 i))) ≤
+          δ + ∑ i, e i + ∑ i, e' i) ∧
+        ∀ ω, {z | z ∈ Zs ∧ (∑ i, (W z ω i).card < Fmax ∧ ∀ i, LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i)
+            (W z ω i) ((run tap (schedOf z ω, srvOf z ω)).2 i))}.encard ≤
+          Ss.encard * (((∏ c, (cap c + 1)) * ((∑ i, n i) + 1) ^ Fmax * 2 ^ (b * Fmax) *
+            ∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ reg (sw i)).card * Dj ^ k (sw i)) : ℕ) :
+              ℕ∞) := by
+  intro L K S lay k reg Dj m sw Pw ρ op n b hb Ω _ _ Conn Cell Srv Dev Z _ arr f tap run htrust cap Ss hcap hfit Zs
+    schedOf srvOf hs dec hdz acc hacc W hW hWn e e' he q hq0 hq1 hesc hleak δ hδ Fmax hF
+  exact h lay k reg Dj sw Pw ρ (fun i _ => op i) n b hb arr f tap run htrust cap Ss hcap hfit Zs
+    schedOf srvOf hs dec hdz acc hacc W hW hWn e e' he q hq0 hq1 hesc hleak δ hδ Fmax hF
 
 end NetTiming
