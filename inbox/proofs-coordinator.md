@@ -59883,3 +59883,43 @@ All six were active at 17:54Z, each records run in a Lean `build` slot of its ow
 **What the quick tiers out now are for.** They are at the merged heads, to learn of a red an hour early. Each head moves once more when its regenerated records are committed, so each PR's quick tier and its records run without `--update` run again at the final head, and only those count for the mark.
 
 **Next:** read each `--update` run's kept records against the head's lock, `main`'s lock and the PR body's list; commit; #8940 takes #8934's records commit by a merge; the run without `--update` and the quick tier at each final head; the body line; the mark. I stop on a PR and write you if a regenerated guarantee record differs from what its body says moves.
+
+## 17:56Z KEPT: the interface of the kept verifier process, `verify-members`, on `cursor/proofs-keptverify-604f` at `f79f55cdc2` (on a branch, not on main); built and tested remotely; seconds expected, the measured ones follow
+
+Tags: [read: file:line] on my branch at `f79f55cdc2` under `verity/protocols/flock/verifier/` unless a path is given, [run: id], [derived], [guess], [proposed] (the caller's, not in my code).
+
+**Where this differs from the brief, my first entry and FLOCKPKG's reading**
+1. The command is `verify-members`, not `verify-window`, and its module `Flock/VerifyMembers.lean`: GLOSSARY.md retires "window" for a run, and FLOCKPKG's 13:17Z sizing already said `verify-members` [read: `FlockVerify.lean:1966`].
+2. A member still pays for its own files: expected about 21 s before its first check at the 152 MB program, against 53.3 s alone, not 1.6 s (item 3 below) [guess until `r20261111-174610-9a4b` ends].
+3. `a0.lean_verify` gives every member its own archive (`sdir/archive`) [read: `benchmarks/one_stage/a0.py:301`], so the archive named once is any one that holds the program's object; each member still names its own.
+4. `Flock/ProgramRead.lean` is changed on my branch (it is #8949's): `ProgramRead` keeps `digest` and no longer `json`; `jsonAt`, `jsonAt_of`, `programDigestOf_read` are gone, `digestAt`, `digestAt_of`, `Readers`, `readers_of` are new [read: `Flock/ProgramRead.lean:97-170`]. A later push to #8949 that touches them conflicts with mine; I merge it.
+
+**1. Name and arguments**
+- Once a run, the command line: `flock-verify verify-members [--archive DIR] --program F`. `F` is the registered program as `verify` takes `--program`: a path, or with `--archive DIR` its SHA-512 in that archive [read: `FlockVerify.lean:315-319`, `:1224-1228`]. Nothing else is read from the command line.
+- A member, one line on standard input: a JSON array of strings, `verify`'s argument list for that member, every word after `verify`, its own `--archive`, `--program`, `--partition`, `--registered`, `--zk`, `--session DIR...` among them, then a newline [read: `Flock/VerifyMembers.lean:16-20`, `:57-64`]. For today's caller that is `json.dumps(argv[2:])` of the list `a0.lean_verify` builds [read: `benchmarks/one_stage/a0.py:325-327`] [proposed]. `verify`'s own argument parsing is untouched: the member's check is `verify`'s body on that list [read: `FlockVerify.lean:930`, `:1210`].
+- A member's index is its line's, from 0; every line is a member, an empty one too [read: `Flock/VerifyMembers.lean:18-19`, `:89-90`].
+
+**2. What it prints, in what order; exit codes; what is a refusal**
+- Per member, on standard output, in the members' order: the `VERDICT` lines `verify` prints for that member alone, byte for byte, one a session in order; then `MEMBER {"exit":E,"index":I}`; then a flush [read: `Flock/VerifyMembers.lean:22-27`, `:102-103`]. Held by `test_lean_verify_members.py:88` on nine members against nine `verify` runs [run: `r20261111-173620-5514`, 3 passed, 0 skipped].
+- `E` is `verify`'s exit status on that list: 0 every session accepted; 1 a session refused, or an exception stopped it; 2 it stopped before any session (usage, an input it cannot read), with no `VERDICT` line. A line that is no argument list: no verdict and `MEMBER {"error":WHY,"exit":2,"index":I}` [read: `Flock/VerifyMembers.lean:24-26`, `:91-101`].
+- The process exits 0 when every member's `E` is 0, else 1; 2 with nothing on standard output, before any member is read, when `--program` is missing or unreadable [read: `Flock/VerifyMembers.lean:29-30`, `FlockVerify.lean:1227-1228`]. Standard error is `verify`'s for each member in order (`inputs:`, `setup (drawn):` and the session's ms lines) [read: `FlockVerify.lean:1108`, `:1126`, `:1199`].
+- A caller takes as refused [read: `Flock/VerifyMembers.lean:40-44`]: (a) a session whose `VERDICT` says `"accepted":false`; (b) a session of an answered member with no `VERDICT` line of its own before that member's `MEMBER` line, which is `proofs.py`'s rule today, the verdicts' sessions being the member's in order [read: `verity/protocols/spot/verifier/one_stage/proofs.py:425-428`]; (c) every session of a member with no `MEMBER` line (the process died or was closed), whatever `VERDICT` lines came first; (d) a `MEMBER` line whose index is not the member's place [proposed]. A member under (b) to (d) may be handed to `verify` alone, which is the same check.
+
+**3. What a member still pays** (152 MB program, 1.79 GB circuit; alone: `inputs` 34.7 s, setup 18.6 s, then the check 23.2 s [read: `r20261111-125728-8ab3` `out/job.log`, `tip1`])
+- Its own circuit, public file and partition read, hashed and parsed: about 20 s expected (`inputs` less the program's digest, 15.0 to 16.5 s [relayed: FLOCKPKG 15:43Z]) [guess].
+- Its own `--program` object read, hashed against its name under `--archive`, and compared with the kept bytes in full: about 1 s expected [guess] [read: `Flock/ProgramRead.lean:111-126`].
+- Its session's statement set up at its sample: about 0.5 s expected [read: `8ab3` `tip-twice`, the second session's `setup (drawn): 524 ms`].
+- Once a process, in its first member: the program's JSON read, its digest and two readings, about 15 s and 18 s expected [derived from the same lines]. The readings stay in memory for the process's life.
+- Measured figures: `benchmarks/verifier_cost/flock_members.sh` (three members a way, two rounds, one core; its guard is the verdict bytes) [run: `r20261111-174610-9a4b`, waiting for a slot on cpu-1; next entry].
+
+**4. A stream, not one list**: the next line is read only after the last member's `MEMBER` line is flushed [read: `Flock/VerifyMembers.lean:88-105`], because members are proved one at a time, hours apart, and each verdict is wanted when its proof is; a death then costs only the members not yet answered. A caller with every member in hand writes every line and closes: the same stream. One process checks one member at a time; a caller that wants K at once runs K processes, each paying the one read.
+
+**5. The isolation, as the docstring states it**: "Nothing crosses from one member to the next but the kept program's digest and readings." [read: `Flock/VerifyMembers.lean:32-38`]; and of the member's check: "It takes the kept program and that member's arguments and nothing else" [read: `FlockVerify.lean:1206-1210`, `verifyMember (kept : ProgramRead) (args : List String) : IO UInt32`]. The equation: `verifyMember (ProgramRead.of kept) = fun args => verifyCmd args`, for every `kept` [read: `FlockVerify.lean:1214-1218`; run: `r20261111-172801-6a68`, axiom probe clean].
+
+**What the words above do not cover**
+- The equation is about a member's check. The loop (reading lines, the `MEMBER` line, the flush, an exception caught) is 24 lines of IO held by the test, not by a theorem [read: `Flock/VerifyMembers.lean:83-106`].
+- A session's coin key is held fresh among one member's sessions only, as with one `verify` a member: the same session handed in as two members is accepted twice [read: `FlockVerify.lean:1112`, `:1142`; `test_lean_verify_members.py:88`]. Freshness across members is the caller's, as it is today.
+- Proved here means: elaborates, axioms are the three, the package's fast records run passes with no record moved (`lean-fast/v1`: no kernel replay) [run: `r20261111-174821-ade7`, cpu-7, verifier package PASS, its requirers still running]. The replay is the merge queue's.
+- [derived] Members of one stratum share one circuit file [read: `benchmarks/one_stage/a0.py:291-293`], so most of the 20 s a member still pays reads the same 1.79 GB again. Keeping that too would be a second thing crossing members; I have not done it and will not without your yes.
+
+**Not done**: the measured seconds (`9a4b`), the quick tier (`r20261111-175042-926a`, cpu-6, running), the requirers of the records run, the PR (#8789, #8949 open; the one-parse PR not opened, at 17:46Z).
