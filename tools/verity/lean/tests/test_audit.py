@@ -3568,6 +3568,23 @@ def test_a_generic_entry_is_one_claim_s_only_entry_and_names_a_claim():
     assert generic_codes({**policy, "claims": {**rule, "generic": ["P.Compiler"]}}, f)[0] == ("claims.generic-form", None)
 
 
+def test_claims_not_excuses_no_closed_statement():
+    """A closed `def C : Prop` under `claims.modules` that `claims.not` lists fails with the fix (move it to
+    `claims.generic` with its guarantee and witnesses), and passes once it is there; a predicate with parameters under
+    `claims.not`, a helper, still passes."""
+    policy, f = generic_fixture()
+    rule = policy["claims"]
+    excused = {**policy, "claims": {**rule, "generic": {}, "not": {**rule["not"], "P.Compiler": "proved of every program"}}}
+    assert generic_codes(excused, f) == [("claims.not-closed", "P.Compiler")]
+    assert A.claim_failures(excused, f)[0] == (
+        "claims: P.Compiler (P.Claims) is a closed statement (`def P.Compiler : Prop`) that `claims.not` excuses, so "
+        "nothing holds it to witnesses: move it to `claims.generic` with the guarantee that states it (`theorem …: "
+        "P.Compiler`, under `guarantees`) and its `witnesses`, honest lemmas, its antecedents holding together at one "
+        "instance (at least two sessions or rounds where it composes them), and a nontrivial one, its conclusion failing "
+        "at an instance")
+    assert generic_codes(policy, f) == []
+
+
 def test_a_meets_witness_says_something_about_the_deployment():
     """A `meets` witness whose statement is `True`, a conjunction of `True`s, a reflexivity, one of its own
     hypotheses, a bound variable, a fact of Init alone, or anything under a `False` hypothesis fails; one whose every

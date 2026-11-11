@@ -1791,7 +1791,8 @@ def claim_failures(policy: dict, facts: dict) -> list[str]:
     parameters), its guarantee is listed under `guarantees` and states `C` itself (its pin's `body.head`, or its lift's),
     `witnesses` holds that guarantee to its honest and nontrivial lemmas with no `unwitnessed` entry, and its statement
     reads only `claims.modules`, Core and what no package of this repository builds (`generic_reads`). Its guarantee is then exempt from `inline_failures` and `shape`
-    (`generic_claims`), and held to every other rule."""
+    (`generic_claims`), and held to every other rule. `claims.not` excuses no closed statement (`claims.not-closed`): a
+    helper or a domain takes parameters, and a closed one is either a claim or `claims.generic`'s."""
     rule = policy.get("claims")
     if not rule:
         return []
@@ -1824,6 +1825,11 @@ def claim_failures(policy: dict, facts: dict) -> list[str]:
             fails.append(Failure("claims.both", c, f"claims: {c} is under both `claims.witnesses` and `claims.not`; keep one"))
         elif not str(why).strip():
             fails.append(Failure("claims.no-reason", c, f"claims: claims.not[{c}] gives no reason"))
+        elif c in found and c not in gen and specs[c].get("statement"):
+            fails.append(Failure("claims.not-closed", c, f"claims: {c} ({found[c]}) is a closed statement (`def {c} : "
+                                 f"Prop`) that `claims.not` excuses, so nothing holds it to witnesses: move it to "
+                                 f"`claims.generic` with the guarantee that states it (`theorem …: {c}`, under "
+                                 f"`guarantees`) and its `witnesses`, {GENERIC_WITNESSES}"))
     for c, g in sorted(gen.items()):
         if c in preds:
             fails += generic_failures(c, g, policy, facts, specs[c], in_ws=c in ws, in_not=c in nots)
