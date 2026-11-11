@@ -117,7 +117,7 @@ def record(c: CS.Committed, w: CS.Binding, got) -> dict:
         return json.loads((Path(d) / "registration.json").read_text())
 
 
-def probe_gateless() -> None:
+def probe_gateless():
     """A probe, not the verifier: core's partition check (`partition._check_units`) with its refusal of a template of no gate
     set aside for `SparseMlaHeadKeys_v1` alone, every other refusal as it is, to see what else refuses the window."""
     from verity.protocols.spot.verifier.one_stage import partition as P
@@ -135,6 +135,7 @@ def probe_gateless() -> None:
                 raise QueryRefused(f"an instance of {t} commits {bits} bits, more than the widest class, {UNIT_CLASS_MAX}",
                                    {"template": t, "bits": bits})
     P._check_units = check_units
+    return real
 
 
 def publics_of(c: CS.Committed) -> dict[str, bytes]:
@@ -272,6 +273,8 @@ def main() -> int:
     ap.add_argument("--no-check", action="store_true", help="skip the Definitions' checks on the rows")
     ap.add_argument("--probe-gateless", action="store_true", help="past the partition's refusal of the gate-free keys template, "
                     "set it aside for that template alone (`probe_gateless`) and run the rest")
+    ap.add_argument("--lean", action="store_true", help="the verifier of record's registration check (Python and Lean, "
+                    "`one_stage.verifier.check`, which builds the Lean verifier) on the record, the probe removed")
     a = ap.parse_args()
     t0 = time.perf_counter()
     S = {**GLM, "T": a.glm} if a.glm else TOY
@@ -317,10 +320,19 @@ def main() -> int:
         emit(fact="verifier partition (registration R2: partition.units)", refused=f"{type(e).__name__}: {e}")
         if not a.probe_gateless:
             return 2
-        probe_gateless()
+        real = probe_gateless()
         emit(fact="PROBE: partition's no-gate refusal set aside for SparseMlaHeadKeys_v1 alone",
              population=P.units(w.program, w.query))
     rec = record(c, w, got)
+    if a.lean:
+        from verity.protocols.spot.verifier.one_stage import verifier as V
+        if a.probe_gateless:
+            P._check_units = real
+        v = V.check(rec, w.program, w.query, w.law, CS.SCHEME, CS.expected_ports(w), leaf_layer=CS.leaf_layer(publics))
+        emit(fact="verifier of record (registration: Python and Lean), the record made under the probe, the probe removed",
+             verdict=v.to_json())
+        if a.probe_gateless:
+            probe_gateless()
     v = R.check(rec, w.program, w.query, w.law, CS.SCHEME, CS.expected_ports(w), leaf_layer=CS.leaf_layer(publics))
     emit(fact="verifier", registration=v.to_json(), wiring_check=WI.check(w.members, publics),
          check_drawn_every_unit=WI.check_drawn(w.members, publics, list(range(sum(m.n for m in w.members)))))
