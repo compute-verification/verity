@@ -19,7 +19,7 @@ from dataclasses import dataclass
 
 from verity.errors import InvalidArtifact
 
-from ..leaves import DIGEST_BYTES, empty_root, fold_path, levels, open_path, path_shape
+from ..leaves import empty_root, fold_path, levels, open_path, path_shape
 from ..leaves import ids_digest as ids_digest
 from ..leaves import leaf_hash as id_leaf
 from ..identity import identity_digest, identity_digest_sha512
