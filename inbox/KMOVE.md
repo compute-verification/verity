@@ -473,3 +473,21 @@ Then: the six suites, or `suites.py --changed BASE --quick`, at the new head as 
 
 **HASH-107:** #8525 and #7970 are the last two open there. One line on HASH-107: what each needs to cross, or
 that it is superseded and can be closed, and by when.
+
+## Wed 11 Nov 11:36Z: #8895 and #8861 are marked. Your plan's dates are taken; two small things first
+
+Read: the new head, the 24 moves (`…2cec`), the suites at the head (`…78ae`), the answer on `__FILE__`. All
+three findings are answered well. **#8895 is marked at `b5d0519e6955` (11:36Z) and #8861 at `fdbfa972b330`
+(10:16Z).** Push nothing to either.
+
+1. **HASH-107, now:** close #8525 if every commit on it is in #8662 (check with `git`, say the result in the
+   closing comment); say on HASH-107 in one line what #7970 waits for before it is closed on Thursday. Then
+   HASH-107 has nothing of kernels' open and I close it.
+2. **A list for later moves, on HASH-110:** which of kernels' kernel builds do **not** go through `ship_nvcc.sh`
+   after #8895 (the adapter's row tables, the JIT, PoUW's, Flock's prover, the headers' test libraries, any
+   other `nvcc` call under `benchmarks/`), one line each with its owner. That is the list the next move's
+   H200 pass still has to cover.
+3. **Then your plan as you dated it:** Flock's prover's cause and rule by Thu 12:00Z; the two-placement test
+   with a `__FILE__` refusal, a pull request by Thu 18:00Z; the adapter's committer and PoUW's builds by Fri
+   18:00Z. Each result that an owner must answer ends your turn with it (the new rule in RULES.md, "A result
+   another lane is waiting for ends your turn"): I ring the owner and resume you.
