@@ -12,12 +12,15 @@ under its name, and where a table holds other than C strings.
 
 Every program over the reads holds their SHA-512 openings, so building, digesting or checking one is far past a quick
 test's seconds. The module builds none at import (`_boundary`, `_program`), its tests share one round 1 (`staged`) and
-one interior over it (`honest`), and each test that needs a program is marked slow, with what it alone catches."""
+one interior over it (`honest`), and each test that needs a program is marked slow, with what it alone catches. Each
+of those takes a minute or more, or waits for the shared round 1 and interior, minutes to build, so it also runs only
+where ``VERITY_VLLM_INTERIOR_TABLE=1`` asks (`_opt_in`)."""
 
 from __future__ import annotations
 
 import functools
 import json
+import os
 from dataclasses import replace
 from pathlib import Path
 
@@ -70,6 +73,17 @@ LINKS = (*SUPPLIES, *OPERANDS)
 NAMES = tuple(BT.name(RUN, PROMPT, OUTPUTS, s, LAYER) for s in range(SPANS))
 #: a program digest for a table no program reads: round 1's own (`_program`) takes its boundary's program to derive
 UNREAD = "c5" * 64
+
+
+def _opt_in(takes: str) -> pytest.MarkDecorator:
+    """The skip of a test that runs only under ``VERITY_VLLM_INTERIOR_TABLE=1``; its reason says how long it ``takes``."""
+    return pytest.mark.skipif(os.environ.get("VERITY_VLLM_INTERIOR_TABLE") != "1",
+                              reason=f"VERITY_VLLM_INTERIOR_TABLE=1: {takes}")
+
+
+#: a test on the module's one round 1 (`staged`) or its interior (`honest`)
+SHARED = _opt_in("about 5 minutes on a CPU to build the module's round 1 and interior over the table reads once, then up to "
+                 "2 minutes a test")
 
 
 @functools.cache
@@ -179,6 +193,8 @@ def _history(rec, first, it) -> dict:
     return IR.history(rec, [NAMES[u] for u in first.units], 2, C, it.published, bodies)
 
 
+@_opt_in("about 12 minutes on a CPU, the verifier checking the reads' interior program three times on a stream of "
+         "the test's own")
 @pytest.mark.slow
 def test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves_its_reads_to_them():
     """Slow, on a stream of its own (a stream takes one interior a draw, and this test's accepts one): it catches the
@@ -255,6 +271,7 @@ def test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves
                        supplied=IR.sources(LINKS, Q, names), schemas=formats).digest
 
 
+@SHARED
 @pytest.mark.slow
 def test_a_table_round_1_did_not_register_is_refused(staged, honest):
     """A table that differs from the served one in one row: the interior refuses it by name before anything is committed,
@@ -287,6 +304,7 @@ def test_a_table_round_1_did_not_register_is_refused(staged, honest):
     assert refused.value.verdict.codes == (R.HISTORY,)
 
 
+@SHARED
 @pytest.mark.slow
 def test_every_table_of_a_class_publishes_its_c_strings_whatever_its_length(staged, honest):
     """Two spans of one class, of lengths 5 and 3, each publish C = 6 strings, so the strings never show a span's length:
@@ -310,6 +328,7 @@ def test_every_table_of_a_class_publishes_its_c_strings_whatever_its_length(stag
         _interior(reg, first, rec, [short[u] for u in first.units])
 
 
+@SHARED
 @pytest.mark.slow
 def test_a_table_reads_interior_without_a_test_key_registers_the_same_root_and_domain(staged, honest):
     """Serving gives no test key: the reads' interior commits with every salt fresh from the OS but its linked ports',
@@ -348,6 +367,7 @@ def test_a_tables_bytes_and_its_reads_rows_are_cores_history_read_vector():
     assert bits == v["supplied"]["rows_bits"]
 
 
+@SHARED
 @pytest.mark.slow
 @pytest.mark.parametrize("bad, why", [
     ("read row", "does not open its table there"),
@@ -371,6 +391,7 @@ def test_a_read_that_does_not_open_its_table_is_refused_before_anything_is_commi
         _interior(reg, first, rec, drawn, spans=[_with(spans[0], kind, port, 0, value), spans[1]])
 
 
+@SHARED
 @pytest.mark.slow
 def test_a_table_read_interior_is_refused_without_its_tables_or_with_tables_it_cannot_read(staged):
     """Each sampled span brings its table exactly when a template reads one, with round 1's record and its class's C, and
@@ -409,6 +430,7 @@ def test_a_drawn_spans_table_is_rebuilt_from_what_rank_0_kept_and_held_to_round_
         IR.kept_table(replace(kept, rows=rows))
 
 
+@SHARED
 @pytest.mark.slow
 def test_the_challengers_history_refuses_a_table_round_1_did_not_register(staged):
     """`history` names only tables round 1's record registers, under the domain of their words and leaves. Slow by
