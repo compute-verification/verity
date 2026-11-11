@@ -60,14 +60,20 @@ it, as does a module's `.hash` file when the module has no trace, and after a ru
 module or a checkout other than the manifest's, are taken again. A spec whose `proved_in` package's build did not pass
 never reads that package's `.lake` (`check.proved`), which an earlier or interrupted build left.
 
-Then it audits, the same way, every package whose guarantees' records read PKG's build (`requirers`: PKG is in its
-`closure`, by path or by `proved_in`), each after those it requires and on the records this run regenerated before it, its
-reports under `requirer-<path>/` beside PKG's. Of the facts documents, only PKG's own stays beside its reports
-(`check_argv`: `check.py --facts named`, which `trusted_size.py --run` reads); its provers' and the requirers' are not
-kept. A change to what another package's pinned guarantees read
+It audits with it, the same way, every package whose guarantees' records read PKG's build (`requirers`: PKG is in its
+`closure`, by path or by `proved_in`). Packages whose first audit takes the same flags share one check.py (`batches`), so
+a package that proves the guarantees of several of them is built, sampled and sealed once, and each of them is judged
+against that one build: one check.py for the whole run, except with `--update` alone, where PKG has its own and the
+requirers the next, on the record PKG's regenerated. Each package still has its own verdict and exit status, read from its
+own report and its provers' (`own_reports`, `own_exit`), and its own `audit.json`, a requirer's under `requirer-<path>/`
+beside PKG's; the reports check.py writes for each package (`audit-*/`) are under the first package's directory. Of the
+facts documents, only PKG's own stays beside its reports (`check_argv`: `check.py --facts named`, which
+`trusted_size.py --run` reads); its provers' and the requirers' are not kept. A change to what another package's pinned
+guarantees read
 (`security/Properties`' when `security` changes) fails here, not at the Lean check of `next`. With `--update`, a requirer whose every
-failure is a record difference (`settles`) is audited again with `--update`, so one run regenerates every lock the change
-moved; one failing for any other reason fails. With `--moved` too, each requirer's first audit takes `--update --moved`
+failure is a record difference (`settles`) is audited again with `--update`, in a check.py of its own, so one run
+regenerates every lock the change moved; one failing for any other reason fails. With `--moved` too, each requirer's first
+audit takes `--update --moved`
 (`first_update`; check.py reads `--moved` only with `--update`), so a rename its records read resolves before its
 failures are judged. The exit status is the first failure's. A slot tree
 keeps the copies of the packages one run audits (about 170k inodes, 8 GB each), so auditing another package that fetches
@@ -1245,55 +1251,70 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
             left, killed, ok = left_by(tree), {}, []
             put_left(tree, left, artifacts, log)
             env, fds = {**os.environ, "LEAN_NUM_THREADS": str(LA.COMMON.cores())}, () if slot is None else (slot,)
-            for p in todo:
-                t0 = time.monotonic()
-                mark(tree, package=p, phase="sync")
-                n = sync(closure(p), files, tree)
-                for f in (f"{q}/{LOCK}" for q in closure(p)):
-                    if f in new:
-                        (tree / f).write_bytes(new[f])
-                if left is not None:
-                    there = [q for q in [*(c for t in todo for c in closure(t)), left.get("package")]
-                             if isinstance(q, str) and (tree / q).is_dir()]
-                    repair(tree, list(dict.fromkeys(there)), links, left, log)
+            for first, batch in batches(todo, pkg, update, moved, log):
+                t0, n, who = time.monotonic(), 0, "+".join(batch)
+                for p in batch:
+                    mark(tree, package=p, phase="sync")
+                    n += sync(closure(p), files, tree)
+                    for f in (f"{q}/{LOCK}" for q in closure(p)):
+                        if f in new:
+                            (tree / f).write_bytes(new[f])
+                    if left is not None:
+                        there = [q for q in [*(c for t in todo for c in closure(t)), left.get("package"),
+                                             *(left.get("packages") or [])]
+                                 if isinstance(q, str) and (tree / q).is_dir()]
+                        repair(tree, list(dict.fromkeys(there)), links, left, log)
+                        write_links(tree, links)
+                        left = None
+                    else:
+                        repair(tree, closure(p), links, None, log)
+                    mark(tree, package=p, phase="deps")
+                    for other in [q for q in links if q not in todo and LA.deps_key(tree / p)]:
+                        unlink(other, tree, links)
+                    if not link(p, tree, deps, links, log, copy=True) and (k := LA.deps_key(tree / p)):
+                        links[p] = k
+                        log(f"lean-records: {p}: its dependencies are fetched cold, once for this tree")
                     write_links(tree, links)
-                    left = None
-                else:
-                    repair(tree, closure(p), links, None, log)
-                mark(tree, package=p, phase="deps")
-                for other in [q for q in links if q not in todo and LA.deps_key(tree / p)]:
-                    unlink(other, tree, links)
-                if not link(p, tree, deps, links, log, copy=True) and (k := LA.deps_key(tree / p)):
-                    links[p] = k
-                    log(f"lean-records: {p}: its dependencies are fetched cold, once for this tree")
-                write_links(tree, links)
-                mine_out, up, since = reports(out, pkg, p), first_update(p, pkg, update, moved, log), time.time()
-                mark(tree, package=p, phase="check", since=since, out=str(mine_out))
-                got = subprocess.run(check_argv(tree / p, mine_out, up, moved, p == pkg, artifacts=artifacts.store,
-                                                facts_cache=facts_dir()), cwd=tree, env=env, pass_fds=fds).returncode
-                if again := not up and regenerates(p, pkg, got, update, mine_out, tree / p, log):
-                    up, got = True, subprocess.run(check_argv(tree / p, mine_out, True, moved, p == pkg,
-                                                              artifacts=artifacts.store, facts_cache=facts_dir()),
-                                                   cwd=tree, env=env, pass_fds=fds).returncode
-                put_built(artifacts, LA.built(mine_out), since, log, f"lean-records: {p}")
-                if AUDIT.killed(got):
-                    killed[p] = got
-                label(mine_out)
-                log(f"lean-records: {p}: check.py{' --update' if again else ''} exit {got} in {time.monotonic() - t0:.0f} s on "
-                    f"{tree} ({n} files changed there), without the kernel replay or the tests: a {FAST_KIND} result, which "
-                    f"check and research merge refuse; reports in {mine_out}")
-                # Keep the regenerated record now: the next requirer iteration's `sync` restores the committed one over
-                # it, and a recorded run never writes ROOT (the commit's shared source tree), so without this copy the
-                # record a lane must commit survives nowhere the run keeps.
-                if (b := checked(p, pkg, got, tree / p / LOCK, committed[f"{p}/{LOCK}"], up, update, out, log)) is not None:
-                    new[f"{p}/{LOCK}"] = b
-                outcomes[p] = settled(p, pkg, got, mine_out, tree, out, new, b is not None, log)
-                if b is not None and outcomes[p] != FAILED:
-                    write_back(p, tree / p / LOCK, log)
-                if outcomes[p] == FAILED:
-                    rc = rc or got
-                else:
-                    ok.append((p, got))
+                all_out, since = reports(out, pkg, batch[0]), time.time()
+                mark(tree, package=batch[0], packages=batch, phase="check", since=since, out=str(all_out))
+                all_got = subprocess.run(check_argv([tree / p for p in batch], all_out, first, moved, pkg in batch,
+                                                    artifacts=artifacts.store, facts_cache=facts_dir()),
+                                         cwd=tree, env=env, pass_fds=fds).returncode
+                put_built(artifacts, LA.built(all_out), since, log, f"lean-records: {who}")
+                log(f"lean-records: {who}: check.py exit {all_got} in {time.monotonic() - t0:.0f} s on {tree} ({n} files "
+                    f"changed there), without the kernel replay or the tests: a {FAST_KIND} result, which check and research "
+                    f"merge refuse; reports in {all_out}")
+                if len(batch) > 1:
+                    own_reports(batch, pkg, out, tree, log)
+                for p in batch:
+                    mine_out, up = reports(out, pkg, p), first
+                    got = own_exit(all_got, mine_out) if len(batch) > 1 else all_got
+                    if not up and regenerates(p, pkg, got, update, mine_out, tree / p, log):
+                        t1, since = time.monotonic(), time.time()
+                        mark(tree, package=p, phase="check", since=since, out=str(mine_out))
+                        up, got = True, subprocess.run(check_argv([tree / p], mine_out, True, moved, p == pkg,
+                                                                  artifacts=artifacts.store, facts_cache=facts_dir()),
+                                                       cwd=tree, env=env, pass_fds=fds).returncode
+                        put_built(artifacts, LA.built(mine_out), since, log, f"lean-records: {p}")
+                        log(f"lean-records: {p}: check.py --update exit {got} in {time.monotonic() - t1:.0f} s on {tree}; "
+                            f"reports in {mine_out}")
+                    if AUDIT.killed(got):
+                        killed[p] = got
+                    label(mine_out)
+                    # Keep the regenerated record now: the next check.py's `sync` restores the committed one over it, and
+                    # a recorded run never writes ROOT (the commit's shared source tree), so without this copy the record
+                    # a lane must commit survives nowhere the run keeps.
+                    if (b := checked(p, pkg, got, tree / p / LOCK, committed[f"{p}/{LOCK}"], up, update, out, log)) is not None:
+                        new[f"{p}/{LOCK}"] = b
+                    outcomes[p] = settled(p, pkg, got, mine_out, tree, out, new, b is not None, log)
+                    if b is not None and outcomes[p] != FAILED:
+                        write_back(p, tree / p / LOCK, log)
+                    if len(batch) > 1:
+                        log(f"lean-records: {p}: {outcomes[p]} (of that check.py, its own records exit {got})")
+                    if outcomes[p] == FAILED:
+                        rc = rc or got
+                    else:
+                        ok.append((p, got))
             passes = {k: p for p, got in ok for k in passed(p, files, committed if got == 0 else committed | new, new, log)}
             if killed:
                 p, got = next(iter(killed.items()))
@@ -1334,25 +1355,33 @@ def dev_records(pkg: str, todo: list[str], update: bool, moved: Path | None, out
     new: dict[str, bytes] = {}
     outcomes: dict[str, str] = {}
     rc, ok, passes = 0, [], {}
-    for p in todo:
-        t0 = time.monotonic()
-        mine_out, up = reports(out, pkg, p), first_update(p, pkg, update, moved, log)
-        got = subprocess.run(check_argv(ROOT / p, mine_out, up, moved, p == pkg, dev=True, facts_cache=facts_dir()),
-                             cwd=ROOT).returncode
-        if again := not up and regenerates(p, pkg, got, update, mine_out, ROOT / p, log):
-            up, got = True, subprocess.run(check_argv(ROOT / p, mine_out, True, moved, p == pkg, dev=True,
-                                                      facts_cache=facts_dir()), cwd=ROOT).returncode
-        label(mine_out)
-        log(f"lean-records: {p}: check.py --dev-cache{' --update' if again else ''} exit {got} in {time.monotonic() - t0:.0f} s "
-            f"on {ROOT}, without the kernel replay or the tests: a {FAST_KIND} result, which check and research merge refuse; "
-            f"reports in {mine_out}")
-        if (b := checked(p, pkg, got, ROOT / p / LOCK, committed[f"{p}/{LOCK}"], up, update, out, log)) is not None:
-            new[f"{p}/{LOCK}"] = b
-        outcomes[p] = settled(p, pkg, got, mine_out, ROOT, out, new, b is not None, log)
-        if outcomes[p] == FAILED:
-            rc = rc or got
-        else:
-            ok.append((p, got))
+    for first, batch in batches(todo, pkg, update, moved, log):
+        t0, who, all_out = time.monotonic(), "+".join(batch), reports(out, pkg, batch[0])
+        all_got = subprocess.run(check_argv([ROOT / p for p in batch], all_out, first, moved, pkg in batch, dev=True,
+                                            facts_cache=facts_dir()), cwd=ROOT).returncode
+        log(f"lean-records: {who}: check.py --dev-cache exit {all_got} in {time.monotonic() - t0:.0f} s on {ROOT}, without the "
+            f"kernel replay or the tests: a {FAST_KIND} result, which check and research merge refuse; reports in {all_out}")
+        if len(batch) > 1:
+            own_reports(batch, pkg, out, ROOT, log)
+        for p in batch:
+            mine_out, up = reports(out, pkg, p), first
+            got = own_exit(all_got, mine_out) if len(batch) > 1 else all_got
+            if not up and regenerates(p, pkg, got, update, mine_out, ROOT / p, log):
+                t1 = time.monotonic()
+                up, got = True, subprocess.run(check_argv([ROOT / p], mine_out, True, moved, p == pkg, dev=True,
+                                                          facts_cache=facts_dir()), cwd=ROOT).returncode
+                log(f"lean-records: {p}: check.py --dev-cache --update exit {got} in {time.monotonic() - t1:.0f} s on {ROOT}; "
+                    f"reports in {mine_out}")
+            label(mine_out)
+            if (b := checked(p, pkg, got, ROOT / p / LOCK, committed[f"{p}/{LOCK}"], up, update, out, log)) is not None:
+                new[f"{p}/{LOCK}"] = b
+            outcomes[p] = settled(p, pkg, got, mine_out, ROOT, out, new, b is not None, log)
+            if len(batch) > 1:
+                log(f"lean-records: {p}: {outcomes[p]} (of that check.py, its own records exit {got})")
+            if outcomes[p] == FAILED:
+                rc = rc or got
+            else:
+                ok.append((p, got))
     for p, got in ok if files is not None else []:
         passes |= dict.fromkeys(passed(p, files, committed if got == 0 else committed | new, new, log), p)
     records = verdicts(outcomes, new, out, ROOT, files, skip, log, committed) if files is not None else \
@@ -1641,18 +1670,83 @@ def report(out: Path, at: Path) -> dict:
         if isinstance(reps, list) else {}
 
 
-def check_argv(at: Path, out: Path, update: bool, moved: Path | None, own: bool, dev: bool = False,
+def check_argv(ats: list[Path], out: Path, update: bool, moved: Path | None, own: bool, dev: bool = False,
                artifacts: Path | None = None, facts_cache: Path | None = None) -> list[str]:
-    """check.py on ``at`` (a package's directory), without the kernel replay or the tests, its builds reading the node's
-    ``artifacts`` cache where given; with ``update``, `--update` and `--moved`. Only PKG's run (``own``) keeps a facts
-    document, its own (`--facts named`, which `trusted_size.py --run` reads); a requirer's keeps none. With ``facts_cache``
-    every run also stores its sealed stage-A facts document there (`--facts-cache`, keyed by its build, read back only by
-    the key a tree computes: `read_cached_facts`); the run is still a records audit, never the kernel replay."""
+    """One check.py on ``ats`` (packages' directories), without the kernel replay or the tests, its builds reading the node's
+    ``artifacts`` cache where given; with ``update``, `--update` and `--moved`, which each of ``ats`` takes. Only the run
+    that audits PKG (``own``) keeps facts documents, each named package's own (`--facts named`: PKG's is the one
+    `trusted_size.py --run` reads, and `own_reports` drops the others'); a run of requirers alone keeps none. With
+    ``facts_cache`` every run also stores each named package's sealed stage-A facts document there (`--facts-cache`, keyed
+    by its build, read back only by the key a tree computes: `read_cached_facts`); the run is still a records audit, never
+    the kernel replay."""
     return [sys.executable, str(AUDIT_PY), *(["--dev-cache"] if dev else []), "--build", "--no-replay", "--no-runs",
             "--facts", "named" if own else "none", *(["--artifacts", str(artifacts)] if artifacts else []),
             *(["--facts-cache", str(facts_cache)] if facts_cache else []),
             *(["--update"] if update else []),
-            *(["--moved", str(moved.resolve())] if moved and update else []), "--out", str(out), str(at)]
+            *(["--moved", str(moved.resolve())] if moved and update else []), "--out", str(out), *map(str, ats)]
+
+
+def batches(todo: list[str], pkg: str, update: bool, moved: Path | None, log=print) -> list[tuple[bool, list[str]]]:
+    """``todo`` as the check.py processes that first audit it, [(whether it takes `--update`, its packages)]: consecutive
+    packages whose first audit takes the same flags (`first_update`) share one check.py, which audits a package that proves
+    the guarantees of several of them (`proved_in`) once for all of them, where a check.py for each audits it once for
+    each. So a run without `--update`, and one with `--moved`, is one check.py; with `--update` alone PKG has its own, since
+    check.py gives `--update` to every package it is named. A package also starts another check.py when one already in
+    this one, or a package proving one's guarantees, has its directory's name without being it: check.py names a
+    package's reports by that name where the package is outside its checkout, as a slot tree's is."""
+    out: list[tuple[bool, list[str]]] = []
+    names: dict[str, str] = {}
+    for p in todo:
+        up, mine = first_update(p, pkg, update, moved, log), {Path(q).name: q for q in (p, *provers(p))}
+        if out and out[-1][0] == up and all(names.get(n, q) == q for n, q in mine.items()):
+            out[-1][1].append(p)
+        else:
+            out.append((up, [p]))
+            names = {}
+        names |= mine
+    return out
+
+
+def own_reports(batch: list[str], pkg: str, out: Path, base: Path, log=print) -> None:
+    """After one check.py audited the several packages of ``batch`` (under ``base``; its reports under the first one's
+    directory, `reports`): each package's own `audit.json` under its own directory, as a check.py on it alone leaves it,
+    which is all the rest of the run reads of a package (`settled`, `regenerates`, `verdicts`): its report and those of the
+    packages proving its guarantees, with `failed` and `passed` of those alone. The facts document check.py kept of each
+    package but PKG is dropped (`check_argv`). Nothing where check.py left no `audit.json` (it was killed, or refused):
+    a package then has no report of its own, and `settled` fails it."""
+    gout = reports(out, pkg, batch[0])
+    try:
+        doc = json.loads((gout / "audit.json").read_text())
+        reps = {Path(str(r["package"])).resolve(): r for r in doc["packages"]}
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+        log(f"lean-records: check.py left no reports of {', '.join(batch)} that can be read ({e!r})")
+        return
+    others = {(base / p).resolve() for p in batch if p != pkg}
+    for kept in gout.glob(f"audit-*/{AUDIT.FACTS}"):
+        try:
+            whose = Path(str(json.loads((kept.parent / "report.json").read_text()).get("package"))).resolve()
+        except (OSError, ValueError, AttributeError):
+            continue
+        if whose in others:
+            kept.unlink()
+    for p in batch:
+        mine = [reps[at] for at in dict.fromkeys((base / q).resolve() for q in (p, *provers(p))) if at in reps]
+        failed = [str(r["package"]) for r in mine if r.get("failures")]
+        (d := reports(out, pkg, p)).mkdir(parents=True, exist_ok=True)
+        (d / "audit.json").write_text(json.dumps(doc | {"packages": mine, "failed": failed, "passed": not failed},
+                                                 indent=1, ensure_ascii=False) + "\n")
+
+
+def own_exit(got: int, mine_out: Path) -> int:
+    """The exit status of a check.py on one package alone, for one that audited it among others and exited ``got``: 0 when
+    that is 1 and the package's own `audit.json` under ``mine_out`` (`own_reports`) lists no failure, since check.py exits
+    1 when any package it audited fails; ``got`` otherwise, and when that file can't be read."""
+    if got != 1:
+        return got
+    try:
+        return 1 if json.loads((mine_out / "audit.json").read_text())["failed"] else 0
+    except (OSError, ValueError, KeyError, TypeError):
+        return got
 
 
 def settles(out: Path, at: Path) -> bool:

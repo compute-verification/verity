@@ -313,7 +313,9 @@ def pair(tmp_path, monkeypatch):
     `BUILT`'s, fail on a record difference otherwise (`regenerated` in the report names `BUILT`'s, which check.py wrote
     there), and `--update` writes `BUILT`'s; a package in the returned set fails for another reason (with `writes` in it,
     `--update` writes its record all the same, as check.py does), and with `proofs` in it `s/proofs`, audited beside `s`,
-    fails on a record difference. Each call is (package, `--update`, both locks as it saw them)."""
+    fails on a record difference. It audits every package it is named, and `s/proofs` once when `s` is among them. Each
+    call is (package, `--update`, both locks as its check.py saw them), and `LC.subprocess.run.audits` lists, for each
+    check.py, the packages it audited."""
     root = tmp_path / "root"
     files = dict(PAIR)
     for f, text in files.items():
@@ -333,32 +335,39 @@ def pair(tmp_path, monkeypatch):
     def run(argv, **kw):
         if argv[1:2] != [str(LC.AUDIT_PY)]:
             return real(argv, **kw)
-        at, out, update = Path(argv[-1]), Path(argv[argv.index("--out") + 1]), "--update" in argv
-        p = os.path.relpath(at, kw["cwd"])
-        calls.append((p, update, {q: (Path(kw["cwd"]) / q / LC.LOCK).read_text() for q in (S, P)}))
-        fails, regen = [], None
-        if p in other:
-            fails = ["fresh.rejected: fresh: the kernel rejected a declaration"]
-            if update and "writes" in other:
+        out, update = Path(argv[argv.index("--out") + 1]), "--update" in argv
+        ats = [Path(a) for a in argv[argv.index("--out") + 2:]]
+        locks = {q: (Path(kw["cwd"]) / q / LC.LOCK).read_text() for q in (S, P)}
+        reps = []
+        for at in ats:
+            p = os.path.relpath(at, kw["cwd"])
+            calls.append((p, update, locks))
+            fails, regen = [], None
+            if p in other:
+                fails = ["fresh.rejected: fresh: the kernel rejected a declaration"]
+                if update and "writes" in other:
+                    (at / LC.LOCK).write_text(BUILT[p])
+            elif update:
                 (at / LC.LOCK).write_text(BUILT[p])
-        elif update:
-            (at / LC.LOCK).write_text(BUILT[p])
-        elif (at / LC.LOCK).read_text() != BUILT[p]:
-            fails, regen = [f"guarantees.reads-changed: {p}: what G reads changed"], out / "audit-x" / LC.LOCK
-            regen.parent.mkdir(parents=True, exist_ok=True)
-            regen.write_text(BUILT[p])
-        reps = [{"package": str(at.resolve()), "failures": fails, **({"regenerated": str(regen)} if regen else {})}]
-        if p == S and "proofs" in other:
-            (side := out / "audit-proofs" / LC.LOCK).parent.mkdir(parents=True, exist_ok=True)
-            side.write_text(PROOFS)
-            reps.append({"package": str((at / "proofs").resolve()), "regenerated": str(side),
-                         "failures": ["assumptions.unread: proofs: an assumption no guarantee reads"]})
-        elif p == S:
-            reps.append({"package": str((at / "proofs").resolve()), "failures": []})
+            elif (at / LC.LOCK).read_text() != BUILT[p]:
+                fails, regen = [f"guarantees.reads-changed: {p}: what G reads changed"], out / f"audit-{at.name}" / LC.LOCK
+                regen.parent.mkdir(parents=True, exist_ok=True)
+                regen.write_text(BUILT[p])
+            reps.append({"package": str(at.resolve()), "failures": fails, **({"regenerated": str(regen)} if regen else {})})
+            if p == S and "proofs" in other:
+                (side := out / "audit-proofs" / LC.LOCK).parent.mkdir(parents=True, exist_ok=True)
+                side.write_text(PROOFS)
+                reps.append({"package": str((at / "proofs").resolve()), "regenerated": str(side),
+                             "failures": ["assumptions.unread: proofs: an assumption no guarantee reads"]})
+            elif p == S:
+                reps.append({"package": str((at / "proofs").resolve()), "failures": []})
+        run.audits.append([os.path.relpath(r["package"], Path(kw["cwd"]).resolve()) for r in reps])
         out.mkdir(parents=True, exist_ok=True)
-        (out / "audit.json").write_text(json.dumps({"passed": not any(r["failures"] for r in reps), "packages": reps}) + "\n")
-        return type("P", (), {"returncode": 1 if any(r["failures"] for r in reps) else 0})()
+        failed = [r["package"] for r in reps if r["failures"]]
+        (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reps}) + "\n")
+        return type("P", (), {"returncode": 1 if failed else 0})()
 
+    run.audits = []
     monkeypatch.setattr(LC.subprocess, "run", run)
     return root, calls, other
 
