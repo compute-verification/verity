@@ -20,15 +20,8 @@ from verity.circuits import Program, bind
 from verity.circuits import query_ast as G
 from verity.circuits.partition import Level, validate_partition
 from verity.definitions.ops import gemm
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
-from verity.protocols.spot.verifier.profile import (HARM_MARGIN, MARGIN, Bernoulli, IntegrityProfile, Stratified, Stratum, Subset, Work,
-                                          WorkStratum, work_k)
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-from verity.protocols.spot.verifier.profile import HARM_MARGIN, MARGIN, Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
-=======
 from verity.protocols.spot.verifier.profile import (ESCAPE_TERMS, HARM_MARGIN, MARGIN, Bernoulli, IntegrityProfile, Stratified,
-                                                    Stratum, Subset, neg_log_escape)
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
+                                                    Stratum, Subset, Work, WorkStratum, neg_log_escape, work_k)
 
 
 def two_level(n_r, n_v, p, k, delta, **facts) -> IntegrityProfile:

@@ -649,7 +649,6 @@ def work_k(k: int, work: int, size: int, total: int, floor: int) -> int:
     return min(size, max(floor, (k * work * size + total - 1) // total))
 
 
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
 @dataclass(frozen=True, slots=True)
 class WorkStratum:
     """A stratum of the work sampling design: `size` members, `k` of them sampled, each doing `work` (an integer in any
@@ -708,12 +707,5 @@ class Work:
 SamplingDesign = Bernoulli | Subset | Stratified | Work
 
 
-__all__ = ["HARM_MARGIN", "MARGIN", "WINDOW_DELTA", "Bernoulli", "IntegrityProfile", "SamplingDesign", "Stratified",
-           "Stratum", "Subset", "neg_log_ratio"]
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-__all__ = ["HARM_MARGIN", "MARGIN", "WINDOW_DELTA", "Bernoulli", "Draw", "IntegrityProfile", "Stratified", "Stratum",
-           "Subset", "neg_log_ratio"]
-=======
-__all__ = ["ESCAPE_TERMS", "HARM_MARGIN", "HARM_WHOLE", "MARGIN", "WINDOW_DELTA", "Bernoulli", "Draw", "IntegrityProfile",
-           "Stratified", "Stratum", "Subset", "neg_log_escape", "neg_log_ratio"]
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
+__all__ = ["ESCAPE_TERMS", "HARM_MARGIN", "HARM_WHOLE", "MARGIN", "WINDOW_DELTA", "Bernoulli", "IntegrityProfile",
+           "SamplingDesign", "Stratified", "Stratum", "Subset", "neg_log_escape", "neg_log_ratio"]

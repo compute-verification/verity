@@ -14,19 +14,9 @@ import pytest
 import verity.definitions.ops.prims  # noqa: F401  (with verity.definitions.ops.scalar, the primitives partition_vectors.json's descriptor names)
 import verity.definitions.ops.scalar  # noqa: F401
 from verity.circuits import codec, partition_object as PO
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
 from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind
-from verity.circuits.program import Program
-from verity.circuits.refs import tuple_of
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, Registry, bind
-from verity.circuits.program import Program
-from verity.circuits.refs import tuple_of
-=======
-from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, Registry, bind
 from verity.circuits.program import Program, is_input
 from verity.circuits.refs import array_of, tuple_of
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
 from verity.circuits.types import Array, Tuple, Value
 from verity.protocols.spot.verifier.one_stage import audit, draw as D, partition as P, registered as G, registration as R
 

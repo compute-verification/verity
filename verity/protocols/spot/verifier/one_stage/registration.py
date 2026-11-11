@@ -275,14 +275,6 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     table ``H`` (`history.resolve`).  History tables it can't read or hold to their roots raise `HistoryRefused`, which
     the verifier reports as `HISTORY` where its Lean refuses them too.  R3
     reads `ports` by name, so its codes come in the ports' sorted order whatever order the mapping has, as the Lean port
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
-    reads them.  `members`: the per-member form's members, each its units (`[lo, hi)` ranges) and its circuit's units a
-    proof block; after R7, `link-points` refuses the record when a member's fewest and most sampled units give different
-    link points (`link_points.refused`), no sample under the sampling design ends (`link_points.NEVER_ENDS`), or the
-    members or the sampling design are not well formed over the population."""
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-    reads them."""
-=======
     reads them.  Under a template query R8 refuses a run Input node the proof blocks don't each read alone, unless it
     is a parameter's that `registered` names (`partition.shared_inputs`) or one of `tied`'s, and the verdict carries the
     fan-out F of `query` on `program` (`partition.fanout`), which it publishes whatever its codes; under any other query it
@@ -290,8 +282,11 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     (the scan's slot entries, which the network period check ties to the blocks that registered them), which R8 lets
     through though several proof blocks read them, on that later check alone: the verdict publishes the ones it let
     through (`Verdict.rests_on_period_check`), and refuses a name that isn't a parameter of `program`, one `registered`
-    or `held` names, or one whose gates aren't one interval of run Input nodes (`R8-tied`)."""
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
+    or `held` names, or one whose gates aren't one interval of run Input nodes (`R8-tied`).  `members`: the per-member
+    form's members, each its units (`[lo, hi)` ranges) and its circuit's units a proof block; after R8, `link-points`
+    refuses the record when a member's fewest and most sampled units give different link points
+    (`link_points.refused`), no sample under the sampling design ends (`link_points.NEVER_ENDS`), or the members or the
+    sampling design are not well formed over the population."""
     c = _Collect()
     days = _declarations(day, declarations)
     v2 = bool(registered)
@@ -414,7 +409,11 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         if pool is not None:
             _pool_chain(c, rec, pool, pool_open(pool, rec, program, registered, formats, window, fixed, sup, earlier,
                                                 bound))
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
+    # R8
+    if bad:
+        c.fail("R8-tied", {"tied": bad, "why": TIED_WHY})
+    if shared:
+        c.fail("R8-shared-input", {"inputs": shared, "why": SHARED_WHY})
     if members:
         try:
             refused = LP.refused(*LP.law_of(program, query, law, work_table), members)
@@ -423,15 +422,6 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         else:
             if refused:
                 c.fail("link-points", {"members": refused})
-    return c.verdict()
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-    return c.verdict()
-=======
-    # R8
-    if bad:
-        c.fail("R8-tied", {"tied": bad, "why": TIED_WHY})
-    if shared:
-        c.fail("R8-shared-input", {"inputs": shared, "why": SHARED_WHY})
     return c.verdict(fanout=fan, rests_on_period_check=through)
 
 
@@ -467,7 +457,6 @@ def _tied(program: Program, tied: Sequence[str], registered: Sequence[str], held
         g = None if t in fixed else next(iter(G.held_gates(program, [t])), None)
         out.append(g if g is not None and P.run_inputs(program, g) else None)
     return out
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
 
 
 def _window(window_root: str | None, held: Sequence[str] | None, registered: Mapping[str, int],

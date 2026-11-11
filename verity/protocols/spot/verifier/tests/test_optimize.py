@@ -22,16 +22,8 @@ import pytest
 from verity.protocols.spot.verifier.profile import Stratified, Stratum
 from verity.protocols.spot.verifier.one_stage.draw import work_k, work_table
 from verity.protocols.spot.optimize import (HM96_ANDS, PROVING_ONLY, SHA512_ANDS, SHA512_ROWS, Candidate,
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
                                                            Cell, TensorCommit, CostModel, Grain, Objective, ReplayGrain,
-                                                           TemplateCost, _hit, _miss, certify, density_bound, density_exact,
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-                                                           Cell, Commitment, CostModel, Grain, Objective, ReplayGrain,
-                                                           TemplateCost, _hit, _miss, certify, density_bound, density_exact,
-=======
-                                                           Cell, Commitment, CostModel, Grain, Objective, ReplayGrain,
                                                            MISS_TERMS, TemplateCost, _hit, _log_miss, _miss, certify, density_bound, density_exact,
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
                                                            for_budget, for_target, frontier,
                                                            grain_costs, grain_optimum, leak_count, leak_draws, ln_bound,
                                                            ln_upper, loc_bits, max_harm, max_harm_check, met_replay,

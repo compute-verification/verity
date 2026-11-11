@@ -55,20 +55,14 @@ untraced = [
 # fixtures; `benchmarks/prove_path/records_audit.py`: prove_bundle's verifier window. `demos/vllm/serve_load.py`:
 # served_verdicts' load, whose timings file its tests read and whose fixed window `test_serve_load` runs against
 # serve-openai's endpoint (`adapters/vllm/verity_vllm`) over a stand-in engine; `demos/vllm/serve.sh`: the
-<<<<<<< ours
-# demo's endpoint (`test_vllm_example`). `verity/protocols/poub/device/live_verifier/host.py`: the compose gate, which `gate-compose`'s tests
+# demo's endpoint (`test_vllm_example`); `demos/vllm/commit.sh`: the demo's Commit, which `test_commit_records` runs
+# through bash in a toy tree. `verity/protocols/poub/device/live_verifier/host.py`: the compose gate, which `gate-compose`'s tests
 # send a hand-off through.
 # `test_served_pearlplus_lean`: served_pearlplus.sh's Lean step (`served_passes.py lean`) on the pouw suite's toy passes
 # (its `test_pearl_c_vllm` and what that imports by path), with PouwCheck.PearlPlus's `pouw-pearlplus`.
 # `benchmarks/prove_path/prove_path.py`, its `sources.json` and the checkpoint manifests it reads: inference_only's class
 # circuit under a φ (`prove_path.registered_of_serve`), which refuses a BF16 checkpoint under the int8 serve's.
 # `benchmarks/spot_proved/stage.py`: its allreduce and cuBLAS GEMM staging on fake captures,
-||||||| base
-# demo's endpoint (`test_vllm_example`). `benchmarks/spot_proved/stage.py`: its allreduce and cuBLAS GEMM staging on fake captures,
-=======
-# demo's endpoint (`test_vllm_example`); `demos/vllm/commit.sh`: the demo's Commit, which `test_commit_records` runs
-# through bash in a toy tree. `benchmarks/spot_proved/stage.py`: its allreduce and cuBLAS GEMM staging on fake captures,
->>>>>>> theirs
 # and the match gate's a11, which imports a6's `benchmarks/served_units/stage.py` and its circuit-check targets.
 inputs = ["verity/configuration/config/verity_config", "verity/protocols/pouw/clear", "benchmarks/pouw/pearl_c", "benchmarks/pouw/pearl_c_sm120",
           "benchmarks/pouw/pearl_c_sm90", "benchmarks/pouw/pearl_c_vllm", "benchmarks/pouw/tests/test_pearl_c_vllm.py",

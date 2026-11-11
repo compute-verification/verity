@@ -674,17 +674,11 @@ def _registration_verdict(p: dict, rec) -> Verdict:
     return R.check(rec, p["program"], p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
                    p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned"),
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
-                   p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool")).codes
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-                   seed_salt=p.get("seed_salt"), pool=p.get("pool")).codes
-=======
-                   seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"))
+                   p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"))
 
 
 def _registration(p: dict, rec) -> tuple[str, ...]:
     return _registration_verdict(p, rec).codes
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
 
 
 def _coins_of(p: dict, c: tuple[dict, bytes], e: dict) -> bytes | None:

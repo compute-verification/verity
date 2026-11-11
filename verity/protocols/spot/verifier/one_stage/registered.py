@@ -694,13 +694,7 @@ def bind_ports(file: Mapping[str, Any], ports: Iterable[str], roots: Mapping[str
 __all__ = ["BLOCK", "BOUND", "DIGEST", "ENTRY_KEYS", "OWNER", "PARAM_KEY", "PRODUCED_KEY", "READS", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "SCHEMAS", "SCHEMA_KEY",
            "SCHEMA_SEG", "SCHEMA_V2", "SESSION_KEY", "SOURCES", "SUPPLIED_SALT", "WIDTHS", "WIDTH_KEY", "WINDOW_KEY", "WINDOW_SALT",
            "WORD_BITS",
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
-           "bind_ports", "bit_words", "bytes_leaves", "digest_leaves", "digests", "domain", "leaf", "log_base", "parameter_gates", "reads", "reads_file", "registered_entries",
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-           "bit_words", "bytes_leaves", "digest_leaves", "digests", "domain", "leaf", "log_base", "parameter_gates", "reads", "reads_file", "registered_entries",
-=======
-           "bit_words", "bytes_leaves", "digest_leaves", "digests", "domain", "held_gates", "leaf", "log_base", "parameter_gates", "reads", "reads_file", "registered_entries",
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
+           "bind_ports", "bit_words", "bytes_leaves", "digest_leaves", "digests", "domain", "held_gates", "leaf", "log_base", "parameter_gates", "reads", "reads_file", "registered_entries",
            "row_digest", "row_leaves", "row_words", "schema_entry", "shape", "sources",
            "supplied_root", "supplied_rows", "supplied_salts", "supplied_value", "table", "verify_read", "width",
            "width_entry", "window_root", "window_salt"]
