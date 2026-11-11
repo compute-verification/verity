@@ -1,6 +1,6 @@
 /-
 The registration record (`one_stage/registration.py`): what serving is committed to, fixed before the verifier samples, its
-digest, and R1–R7 against the verifier's own copies (`check`).
+digest, and R1–R8 against the verifier's own copies (`check`).
 
     {"format": "verity/registration/v1", "protocol": "verity/sampled-proofs/one-stage/v1",
      "program": "<SHA-512 of the program>", "query": "<SHA-512 of the query>", "partition": "<partition digest>",
@@ -66,6 +66,15 @@ before it (`R6-pool-reset-week`). The resets are serving's choice, so they are a
 windows, the one serving reset at or none, log₂(n + 1) bits a week (log₂ 1009, 9.98 bits, for 600-second windows),
 which leakage charges; the spent marks and weeks are a function of the resets and the verifier's clock. R7 refuses a
 record whose entry for `pin` is not the pool its window opens (`poolOpen`) by name (`R7-pool-chain`).
+
+Under a template query that applies, R8 refuses a run Input node whose leaves the proof blocks don't each read alone,
+unless it is a parameter's the verifier expects registered (`heldGates`), which is a registered value, or a tied value's
+(`tiedGates`) (`Partition.readAlone`, `R8-shared-input`): a value another proof block writes that the program takes as an
+Input joins no proof blocks in the fan-out (`Partition.fanout`, which the registration piece publishes). A tied value
+is a run Input whose rows a later check ties to the registrations that computed them; R8 refuses a tied name that isn't
+a parameter of the program, neither registered nor held, whose gates are one interval of run Input nodes (`R8-tied`),
+and the registration piece publishes, beside the fan-out, the tied names it let through (`tiedThrough`), since
+acceptance rests on that later check.
 -/
 module
 
@@ -143,7 +152,7 @@ def Pool.spentBefore (p : Pool) (log : Array Json) : Bool :=
       jeq (getD (getD e "window") "pool_week") (Lean.toJson p.week)
   | none => false
 
-/-- The verifier's own copies that R1–R7 hold the record to. -/
+/-- The verifier's own copies that R1–R8 hold the record to. -/
 structure Verifier where
   program : Program
   query : Json
@@ -189,6 +198,9 @@ structure Verifier where
   and R7 holds to the chain (`poolChained`), and whose reset R6 holds the window to name, once a week; none for a
   program that carries none -/
   pool : Option Pool := none
+  /-- run Inputs, by parameter name, whose rows a later check ties to the registrations that computed them, which R8 lets
+  through though several proof blocks read them, on that later check alone (`tiedThrough`) -/
+  tied : Array String := #[]
 
 /-- The programs the declarations declare for `day`, in the log's order. -/
 def declaredOf (day : Nat) (ds : Array (Nat × String)) : List String :=
@@ -225,6 +237,34 @@ private def onceOk (pool : Option Pool) (log : Array Json) : Bool :=
   match pool with
   | some p => !(p.reset && p.spentBefore log)
   | none => true
+
+/-- The Input gates `(first, count)` of the parameters `v` expects registered, which R8 reads as registered values
+(`registered.held_gates`). -/
+def heldGates (v : Verifier) : Array (Nat × Nat) :=
+  v.params.filterMap fun p => if v.registered.any (·.1 == p.name) then p.gates else none
+
+/-- The Input gates `(first, count)` of tied name `t` where R8 may let it through: a parameter of the program that `v`
+neither expects registered nor holds, whose gates are one non-empty interval of run Input nodes
+(`Partition.runInputs`; `registration._tied`). A tied value is never a registered value: R7 holds nothing of it. -/
+def tiedGate (v : Verifier) (t : String) : Option (Nat × Nat) :=
+  if v.registered.any (·.1 == t) || v.held.contains t then none
+  else ((v.params.find? (·.name == t)).bind (·.gates)).filter fun (first, count) =>
+    Partition.runInputs v.program.prog first count
+
+/-- The gates of the tied names R8 may let through (`tiedGate`). -/
+def tiedGates (v : Verifier) : Array (Nat × Nat) := v.tied.filterMap (tiedGate v)
+
+/-- The tied names R8 can't let through (`R8-tied`). -/
+def tiedBad (v : Verifier) : Array String := v.tied.filter fun t => (tiedGate v t).isNone
+
+/-- The tied names R8 let through: each whose gates hold a run Input node the proof blocks don't each read alone outside
+the registered parameters' gates (`Partition.shared?`). The registration piece publishes them beside the fan-out:
+acceptance rests on the later check that ties their rows. -/
+def tiedThrough (v : Verifier) : Array String :=
+  let shared := Partition.shared? v.program v.query (heldGates v)
+  v.tied.filter fun t => match tiedGate v t with
+    | some (first, count) => shared.any (Partition.within v.program.prog first count)
+    | none => false
 
 /-- The values whose domain leaves the window's open root out: `held`, then the pinned, supplied and output values. -/
 def fixedOf (v : Verifier) : Array String :=
@@ -473,7 +513,14 @@ def poolMarks (w : Json) (pool : Option Pool) (log : Array Json) (c : Array Stri
         (kept (jeq (getD w "pool_reset") (optReset pool)) c "R6-pool-reset") "R6-pool-week") "R6-pool-spent")
     "R6-pool-reset-week"
 
-/-- `registration.check`'s failure codes, R1–R7 in order: empty when the record holds. -/
+/-- R8's codes added to `c`: a tied name it can't let through (`R8-tied`, `tiedBad`), then a run Input node the proof
+blocks don't each read alone outside the registered and tied parameters' gates (`R8-shared-input`,
+`Partition.readAlone`). One term, as `poolMarks` is, for `check_eq_checkRef`'s `simp`. -/
+def r8Codes (v : Verifier) (c : Array String) : Array String :=
+  kept (Partition.readAlone v.program v.query (heldGates v ++ tiedGates v)) (kept (tiedBad v).isEmpty c "R8-tied")
+    "R8-shared-input"
+
+/-- `registration.check`'s failure codes, R1–R8 in order: empty when the record holds. -/
 def check (rec : Json) (v : Verifier) : Array String := Id.run do
   let v2 := !v.registered.isEmpty
   if keys? rec != some (if v2 then KEYS_V2 else KEYS) then return #["keys"]
@@ -541,6 +588,8 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
         v.schemas)
       v.outputs v.log
     c := kept (poolChained rec v) c "R7-pool-chain"
+  -- R8
+  c := r8Codes v c
   return c
 
 /-- `check` as first written, R3 quadratic in the ports: each root's port compared, re-canonicalized, with every port
@@ -613,6 +662,8 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
         v.schemas)
       v.outputs v.log
     c := kept (poolChained rec v) c "R7-pool-chain"
+  -- R8
+  c := r8Codes v c
   return c
 
 /-! ## `check` is `checkRef` -/
@@ -709,6 +760,6 @@ theorem portIndex_find (roots : Array Json) (p : String) :
 set_option maxHeartbeats 400000 in -- its `simp` unfolds each join point of both checks into both of its branches
 /-- **R3 at `O(n)` hash-map operations is R3 as first written**: everything a guarantee reads of `check` is `checkRef`'s. -/
 theorem check_eq_checkRef (rec : Json) (v : Verifier) : check rec v = checkRef rec v := by
-  simp only [check, checkRef, portIndex_count, portIndex_has, portIndex_find]
+  simp (maxSteps := 400000) only [check, checkRef, portIndex_count, portIndex_has, portIndex_find]
 
 end Spot.Registration
