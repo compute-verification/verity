@@ -3119,24 +3119,26 @@ def forces_cold(files: Iterable[str]) -> bool:
     return False
 
 
-def merged_tree(repo: Path, base: str, head: str, *, plain: bool = True,
-                config: tuple[str, ...] | None = None) -> tuple[str | None, list[str], subprocess.CompletedProcess]:
+def merged_tree(repo: Path, base: str, head: str, *, plain: bool = True, config: tuple[str, ...] | None = None,
+                merge_base: str | None = None) -> tuple[str | None, list[str], subprocess.CompletedProcess]:
     """``head`` merged onto ``base`` by `git merge-tree` (no worktree touched), with ``base``'s merge drivers (`--attr-source`)
     run from ``base``'s tools (`base_drivers`, unless ``config`` gives git's `-c` options; drive's clone sits at `checked`'s
     tip, whose own `merge.py` predates one a member of `next` brings): (the merged tree, the conflicted files, `git
     merge-tree`'s result).  A merge whose every conflict is in a pin `repinned` rebuilds, or in a `.lean` file one side
     deleted that the other changed only by porting it (`port_deletions`), gives the tree with each pin rebuilt and each such
     file deleted, and those files (`taken` tells them apart); one that doesn't merge gives None.  A git without `--attr-source`
-    (before 2.40) merges without the drivers, or with ``plain`` False gives None and its refusal (exit 129)."""
+    (before 2.40) merges without the drivers, or with ``plain`` False gives None and its refusal (exit 129).  ``merge_base``
+    stands for their merge base (`--merge-base`), as a restack's merge across a move takes the move (`tools/move/restack.py`)."""
     if config is None:
         with base_drivers(repo, base) as config:
-            return merged_tree(repo, base, head, plain=plain, config=config)
-    r = _git(repo, *config, f"--attr-source={base}", "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head,
-             check=False)
+            return merged_tree(repo, base, head, plain=plain, config=config, merge_base=merge_base)
+    at = (f"--merge-base={merge_base}",) if merge_base else ()
+    r = _git(repo, *config, f"--attr-source={base}", "merge-tree", "--write-tree", "--name-only", "--no-messages", *at, base,
+             head, check=False)
     if r.returncode == 129 and "attr-source" in r.stderr:
         if not plain:
             return None, [], r
-        r = _git(repo, *config, "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head, check=False)
+        r = _git(repo, *config, "merge-tree", "--write-tree", "--name-only", "--no-messages", *at, base, head, check=False)
     if r.returncode == 1:
         files = sorted({f for f in r.stdout.splitlines()[1:] if f})
         tree, rest = port_deletions(repo, r.stdout.split()[0], base, head, files)

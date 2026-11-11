@@ -437,7 +437,7 @@ SLOT_WRAP = ["python3", "tools/verity/check/slot.py", "--"]
 #: the least slot memory a train check that runs pytest, lean-suites or circuit-check takes (slot.py's MIN_MEM_ENV): the train
 #: slots' mem=. In a lane slot every parallel suite gets one test worker, the one-process suites share one process and circuit-check
 #: runs one target at a time: two to four times a train slot's wall time
-TRAIN_GB = 300
+TRAIN_GB = 200
 #: the steps that need a train slot's memory
 TRAIN_STEPS = ("pytest", "lean-suites", "circuit-check")
 
