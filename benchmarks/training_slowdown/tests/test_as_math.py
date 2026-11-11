@@ -3,7 +3,7 @@ import json
 
 import pytest
 import torch
-from synthetic import JOBS, job_counted
+from synthetic import JOBS, LORA, job_counted
 from torch.utils import flop_counter
 
 from training_slowdown import as_math, flops, run
@@ -11,25 +11,29 @@ from training_slowdown import as_math, flops, run
 #: each job's attention backward: the tiny lora's adapter is on q alone in the one block, with nothing trained below it
 ASKED = {"lora": "q:1", "whole": "none"}
 OTHER = {"lora": "none", "whole": "q:1"}
+#: the same lora with its adapter on k: the products of its backward are also those of two calls asking for k's
+#: gradient with q's or with v's
+TRIED = {job: JOBS[job] for job in ASKED} | {
+    "k": {"route": "lora", "dials": LORA | {"targets": "blocks.0.wk.weight,blocks.0.w_up.weight"}}}
 
 
 @pytest.fixture(scope="module")
 def records(tmp_path_factory):
-    """Two jobs of the tiny start, each as the counter writes it and as a counter that holds a fused attention kernel
-    as one row at torch's formula wrote it, that one with the job's trace: (fused, now) by job."""
+    """Jobs of the tiny start, each as the counter writes it and as a counter that holds a fused attention kernel as
+    one row at torch's formula wrote it, that one with the job's trace: (fused, now) by job."""
     aten, formulas = torch.ops.aten, flop_counter.flop_registry
     one_row = dict(formulas) | {
         aten._scaled_dot_product_flash_attention_for_cpu: formulas[aten._scaled_dot_product_flash_attention],
         aten._scaled_dot_product_flash_attention_for_cpu_backward:
             formulas[aten._scaled_dot_product_flash_attention_backward]}
     out = {}
-    for job in ASKED:
+    for job, over in TRIED.items():
         root = tmp_path_factory.mktemp(job)
-        now, (cfg, route, model, optimizers) = job_counted(root / "now", 3, **JOBS[job])
+        now, (cfg, route, model, optimizers) = job_counted(root / "now", 3, **over)
         with pytest.MonkeyPatch.context() as patch:
             patch.setattr(flops, "FUSED_ATTENTION", set())
             patch.setattr(flops, "FLOP_FORMULAS", one_row)
-            fused, _ = job_counted(root / "fused", 3, **JOBS[job])
+            fused, _ = job_counted(root / "fused", 3, **over)
         out[job] = fused | {"trace": run.trace_step(cfg, route, model, optimizers, "cpu")}, now
     return out
 
@@ -88,6 +92,27 @@ def test_a_record_with_no_trace_rows_is_refused_unless_partial_says_the_ask(reco
     wrong = rewritten(fused, OTHER[job], trace=trace)
     assert (wrong["totals"]["macs"] > now["totals"]["macs"]) == (job == "lora") != (
         wrong["totals"]["macs"] < now["totals"]["macs"])
+
+
+def test_a_trace_that_leaves_more_than_one_ask_open_is_refused_until_partial_picks_one(records):
+    """A step whose attention backward asks for k's gradient alone: its trace's products are also those of twice the
+    calls asking for k's with q's or with v's, so the rewrite names the readings and assumes none. `--partial` picks
+    one of them, and then the record is the counter's; an ask the trace doesn't leave open is refused, and so is one
+    of more calls than the record's row holds."""
+    fused, now = records["k"]
+    assert counts(fused) != counts(now)
+    with pytest.raises(ValueError, match="trace leaves --partial k:1 or qk:2 or kv:2 open at .*: say which"):
+        rewritten(fused)
+    got = rewritten(fused, "k:1")
+    assert counts(got) == counts(now)
+    assert list(got["provenance"]["as_math"]["gradients_asked"].values()) == [{"asked": "k:1", "from": "its trace"}]
+    for flag in ("none", "q:1", "k:2"):
+        with pytest.raises(ValueError, match=f"trace says --partial k:1 or qk:2 or kv:2 at .* says --partial {flag}"):
+            rewritten(fused, flag)
+    with pytest.raises(ValueError, match="2 calls a step ask for qk's alone at .* the record's row holds 1"):
+        rewritten(fused, "qk:2")
+    with pytest.raises(ValueError, match="2 calls a step ask for q's alone at .* the record's row holds 1"):
+        rewritten(fused, "q:2", trace=None)
 
 
 SHAPE = (2, 3, 16, 4)  # b, h, s, d

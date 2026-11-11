@@ -34,7 +34,8 @@ A wrong ask is not on the safe side. Asking for more than the step did over-coun
 same factor, so S is unchanged where products bind and errs high where no term binds.
 
 A rewritten record says so in its `provenance`. A fused row that isn't self-attention of one shape, a trace whose
-backward is no one subset's, and fewer calls asked for than a row holds over several rows are refused."""
+backward is no one subset's, an ask of more calls than a row holds, and one of fewer than it holds over several rows
+are refused."""
 import argparse
 import json
 import sys
@@ -155,9 +156,10 @@ def rewrite(log: list, trace: list, flag: tuple[str, int] | None = None) -> tupl
         if calls and backwards.count(operands[0]) > 1:
             raise ValueError(f"{calls} calls a step ask for {subset}'s alone at {at}, and the record holds "
                              f"{backwards.count(operands[0])} backward rows of that shape: which holds them isn't in it")
+        if calls > n:
+            raise ValueError(f"{calls} calls a step ask for {subset}'s alone at {at}, and the record's row holds {n}")
         asks[at] = {"asked": said((subset, calls)), "from": source}
-        few = min(calls, n)
-        for asked, times in (("qkv", n - few), (subset, few)):
+        for asked, times in (("qkv", n - calls), (subset, calls)):
             products, scalings = backward(asked, b, h, s, d)
             for k, c in products.items():
                 add("bwd", role, "bmm", k, c * times, c * times * each, "matmul_macs")
