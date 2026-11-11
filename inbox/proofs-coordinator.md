@@ -40233,3 +40233,49 @@ So the answer I would give lean: **yes to item 1, by us, the day after the cut; 
 | `r20261111-060641-fad5` | quick tier, #8827's head | waiting for a slot |
 
 I end my turn here. Resume me when `819e` ends, to open the Core PR.
+
+## CROSS, Wed 11 Nov 06:12Z: ready to mark #8226 (at its record commit), #8454 and #8553; #8368's records regenerated in order only as expected, its head is now c833b3ff0a9b with the quick tier running
+
+**ready to mark #8226 at `f8a3b83aa0f0f4e3ed59ef571f2ebfdbc5f3e255`** `[run]`
+
+- Records run `r20261111-041602-67ce`, at the crossing `354f604cfdd1`: `"outcome": "regenerated"` for `security`
+  (`security: check.py exit 0 in 3725 s`), `pass` for `security/Properties` and `security/Proofs`. The head named
+  here is that commit plus the one record commit (entry order only, my 05:51Z entry).
+- Quick tier `r20261111-054926-06c4`, at `f8a3b83aa0f0`: `8 suites: 8 passed (0 cached), 0 failed`, with
+  `passed  repository  280 passed in 368 s`.
+- No records run at `f8a3b83aa0f0` itself: it changes no Lean file, and its lock is the file `67ce` wrote.
+
+**ready to mark #8454 at `4d87c7899a6d6f814f0fca8ca153e6ea7f3a78f6`** `[run]`
+
+- No records run: it changes no Lean file and no lock.
+- Quick tier `r20261111-052020-e5b6`, at that commit: `27 suites: 27 passed (2 cached), 0 failed`, with
+  `passed  repository  280 passed in 353 s`. The two cached are `verity-commitments-benchmarks` and `verity-tc-probe`.
+
+**ready to mark #8553 at `650593be39af763bcc46fad70307f80144f8ae6c`** `[run]`
+
+- It sits on #8523's crossed head `b61bbcfd88aa`, still that branch's head at 06:10Z, so it lands after #8523.
+- No records run: it changes no Lean file and no lock, against #8523 or against `main`.
+- Quick tier `r20261111-053338-8e00`, at that commit: `7 suites: 7 passed (1 cached), 0 failed`, with
+  `passed  repository  280 passed in 267 s`. The cached one is `benchmarks/unit_lowering`.
+
+For all three `[run]`: body edited with `research queue edit` (`Lane` and `Goal` lines kept); `pins.py --stale` exits 0;
+`git merge-tree` exits 0 against `main`, which moved again to `6735b7d3d42c` (#8798, two files, no Lean and no lock),
+and against each of our other heads, #8568, #8764, #8354, #8523 and #8820 included (153 pairs over 18 heads; the same
+five pairs as in my 06:06Z entry fail and no other).
+
+**#8368: records regenerated in order only; record commit added; quick tier running** `[run]`
+
+- `r20261111-052916-1e61` at `a92cff4f56a6`: `"outcome": "regenerated"` for `security`
+  (`security: check.py exit 0 in 739 s`), `pass` for the other two. The record is byte for byte the one #8226's run
+  wrote (sha256 `b2f5c6c6443f…35fb`), and the same JSON as the lock it replaces.
+- New head `c833b3ff0a9bfab5edd4776619f1f5e44b286845`, pushed 06:09Z as a fast-forward: one commit, only
+  `security/lean-audit.json` (+13 −13). Lock count: 4,175,579 bytes, 6, 0. `pins.py --stale` exits 0. CI-524 and
+  the mailbox read first; #8354's branch still at `5591b15e3b35`.
+- Quick tier at that commit: `r20261111-060941-57d5` (cpu-1), launched 06:09Z. ETA 06:40Z to 07:00Z `[guess]`.
+  The one before the record commit, `r20261111-052958-cd1f` at `a92cff4f56a6`: `4 suites: 4 passed (0 cached), 0 failed`.
+
+**Bodies of #8512 and #8527** `[run]`: each now has its verdicts and one line saying it lands through, or after, #8820
+and why. Neither head changed.
+
+Still out, read 06:08Z: records `7aba` (#8406); quick `76af` (#8139), `2ba5` (#8339), `e003` (#8406), `61dd` (#8414),
+`57d5` (#8368); the guard `7600` (#8339).
