@@ -1,8 +1,8 @@
 """Reference circuits: the declared Boolean circuits the properties are measured on, and the designation of their counted
 products.
 
-* `boolean_gemm`: `Gemm_v3{K,N,DOT=AmpereBF16TcDot16_v3}` (`verity.ml.circuits.ops.boolean.gemm`), one GEMM on bits.
-* `layer`: one transformer layer of the served b1 registry (`verity.ml.definitions.registry.b1`) at T positions, on bits:
+* `boolean_gemm`: `Gemm_v3{K,N,DOT=AmpereBF16TcDot16_v3}` (`verity.definitions.ops.boolean.gemm`), one GEMM on bits.
+* `layer`: one transformer layer of the served b1 registry (`verity.definitions.registry.b1`) at T positions, on bits:
   σ(`LayerPre_v1`), the Boolean `Attention_v3` (`Attention_v6`), σ(`LayerPost_v1`), wired as `_forward_positions_v4` wires
   one layer (not layer 0: the fused add+RMSNorm with the residual). The GEMMs are σ(b1's `Gemm_v1`), `Gemm_v4`, whose dot
   steps are `AmpereBF16TcDot16_v3`: a counted product is one lane of such a step under a `Gemm` (the activation `a`, the
@@ -10,7 +10,7 @@ products.
   `AttnDotStep`s, activation by activation, and are not counted.
 
 `configs` are the served workloads' configurations (b1's `B0_CONFIG`, `B1_CONFIG`, `SMOL360_CONFIG`) and two shapes with
-no served workload, b1's Definitions bound at Qwen2.5-7B's and Llama-3.1-405B's shapes, which are benchmarks/rho's
+no served workload, b1's Definitions bound at Qwen2.5-7B's and Llama-3.1-405B's shapes, which are verity/protocols/inference_only/rho's
 (its `data/models.toml`, read through `rho.instances`, imported by path).
 """
 
@@ -19,11 +19,11 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from verity.ml.circuits.boolean import bit_type
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Coll, concat
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.boolean import bit_type
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import Coll, concat
+from verity.circuits.types import Array, Tuple
 
 from .ops import Designation, Site
 
@@ -33,14 +33,14 @@ GEMM_PRODUCTS = Designation(sites=(Site(op=r"AmpereBF16TcDot16_v3", x="a", w="b"
 
 
 def boolean_gemm(K: int, N: int) -> Program:
-    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.definitions.ops.boolean import gemm as BG
     return Program(bind(BG.Gemm, K=K, N=N, **BG.GEMM_AMPERE), registered=("w",), theta=("w",))
 
 
 def rho_models() -> dict:
-    """benchmarks/rho's models by name (`rho.instances.models`). Its directory goes last on the path: it holds a `run.py`
+    """verity/protocols/inference_only/rho's models by name (`rho.instances.models`). Its directory goes last on the path: it holds a `run.py`
     and a `tests`, as this package's does, and must shadow neither."""
-    rho = str(Path(__file__).resolve().parents[2] / "rho")
+    rho = str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "inference_only" / "rho")
     if rho not in sys.path:
         sys.path.append(rho)
     from rho import instances
@@ -61,7 +61,7 @@ def shape(model) -> dict:
 
 def configs() -> dict[str, tuple[dict, str]]:
     """name -> (b1 configuration, where its shape comes from)."""
-    from verity.ml.definitions.registry import b1
+    from verity.definitions.registry import b1
     models = rho_models()
     qwen7 = b1.B1_CONFIG | shape(models["qwen25-7b"]) | {"model": "Qwen/Qwen2.5-7B"}
     llama = b1.B1_CONFIG | shape(models["llama3-405b"]) | {"model": "meta-llama/Llama-3.1-405B", "EPS": 1e-5,
@@ -78,8 +78,8 @@ def configs() -> dict[str, tuple[dict, str]]:
 def on_bits(word: CompositeDefinition, version: int, **bindings):
     """σ(``word``) at ``bindings`` (`boolean.lift_body`: each Call the Boolean version of its Definition), with the QKV bias
     add, `BiasAdd_v1`, which has no registered Boolean version, as σ(`BiasAdd_v1`) (its `Bf16Add`s on bits)."""
-    from verity.ml.definitions import boolean as BB
-    from verity.ml.definitions.registry import b1
+    from verity.definitions import boolean as BB
+    from verity.definitions.registry import b1
     bias = BB.sigma_lift(b1.BiasAdd, 2, register=False)
 
     def override(fn):
@@ -94,8 +94,8 @@ def on_bits(word: CompositeDefinition, version: int, **bindings):
 
 def layer_fn(C: dict, T: int = 1):
     """One b1 layer (not layer 0) at T positions on bits, as an unregistered root Definition."""
-    from verity.ml.definitions import boolean as BB
-    from verity.ml.definitions.registry import b1
+    from verity.definitions import boolean as BB
+    from verity.definitions.registry import b1
     BB.load()
     H, NH, KVH, D = C["H"], C["NH"], C["KVH"], C["D"]
     pre = on_bits(b1.LayerPre, 3, C=C, L0=False)
