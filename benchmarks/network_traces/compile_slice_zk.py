@@ -1,34 +1,44 @@
-"""The compile slice (`compile_slice.CompileSlice_v1`) proved in zero knowledge: one window of a few steps as one unit,
-proved by Flock `prove --zk` behind the Lean ZK server and held by Lean `verify --zk`, through N2's audit path
-(`n2_zk.py`: its stager, ZK server and received-pieces scan).
+"""The compile slice (`compile_slice_v7.CompileSlice_v7`: CompileSlice_v1 that also charges each certified arrival's
+length term) proved in zero knowledge: one window of a few steps as one unit, proved by Flock `prove --zk` behind the
+Lean ZK server and held by Lean `verify --zk`, or on Flock's plain path (``--plain``), through the one-stage audit path
+(`warden_zk._one_stage`: its stager, ZK server and received-pieces scan).
 
     python benchmarks/network_traces/compile_slice_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
-      [--slice demo|corpus|w212] [--g G] [--points 1] [--kinds K,...] [--dry]
+      [--slice demo|corpus|w212] [--g G] [--points 1] [--kinds K,...] [--plain] [--dry]
     python benchmarks/network_traces/compile_slice_zk.py rescan --from PROVE_OUT --out DIR
 
-* **The slice** (``--slice``): ``demo`` (the default), the demonstration class (`compile_slice.demo`, 59,341 ANDs a
-  unit), whose candidates take real prefix hits; ``corpus``, corpus-smallkv's first seven steps
-  (`verity/protocols/certifier/verifier/tests/fixtures/compile_slice_smallkv.json`, about 7.6M ANDs a unit), which `prove`
-  first checks is the corpus's (`replay_vectors.vectors` on corpus-smallkv: the arrivals, the decisions and the replay's
-  rows; `cache_vectors`' tokens of each arrival); or ``w212``, window 212 of vLLM's served run (the encodings'
-  ``vllm-8eb1`` fixture) padded into the run's public engine class, (R, W, A) = (8, 1, 9), Q 4, D 32, P 54, K 4, no
-  prefix caching, under the run's AsyncScheduler (AS = 1; `fixtures/compile_slice_w212_class_async.json`), with the
-  seal's rows as the served ones (`served_rows.step_rows`), which `prove` first checks is the run's (the window's
-  decisions as its replay asks them, `RP.decisions` on `replay_vectors.served_window`). The scheduler is the engine
-  class's, one AS for every window of the run: `prove` refuses a fixture whose engine isn't the trace header's.
-* **The charge** is from the session's carry (`charge_chain`) under the registered book (the arith fixture's
-  async-light stream's). The demo's and the corpus's window is the session's first, so its carry-in is the book's
-  priors under their public salt; w212's is the carry over windows 0 … 211 of the run, each window's decisions as its
-  replay asks them, which `prove` commits window by window (`charge_chain.commit_window`; a stand-in: those windows'
-  units aren't proved here), so w212's ``cin`` is window 211's carry-out row under its salt.
+* **The slice** (``--slice``): ``demo`` (the default), the demonstration class (`compile_slice_v7.demo`, 59,613 ANDs a
+  unit, max_tokens 8, 16 and 255), whose candidates take real prefix hits; ``corpus``, corpus-smallkv's first seven
+  steps (`verity/protocols/certifier/verifier/tests/fixtures/compile_slice_smallkv.json`, about 7.6M ANDs a unit, each
+  arrival's max_tokens its request's), which `prove` first checks is the corpus's (`replay_vectors.vectors` on
+  corpus-smallkv: the arrivals, the decisions and the replay's rows; `cache_vectors`' tokens of each arrival); or
+  ``w212``, window 212 of vLLM's served run (the encodings' ``vllm-8eb1`` fixture) padded into the run's public engine
+  class, (R, W, A) = (8, 1, 9), Q 4, D 32, P 54, K 4, no prefix caching, under the run's AsyncScheduler (AS = 1;
+  `fixtures/compile_slice_w212_class_async.json`), with the seal's rows as the served ones (`served_rows.step_rows`)
+  and each arrival's max_tokens its request's in the trace, which `prove` first checks is the run's (the window's
+  decisions as its replay asks them, `RP.decisions` on `replay_vectors.served_window`, and its requests). The
+  scheduler is the engine class's, one AS for every window of the run: `prove` refuses a fixture whose engine isn't
+  the trace header's.
+* **The charge** is `window_charge`'s ChargeLink_v2{D, 0, 0, K} from the session's carry under the registered book (the
+  arith fixture's async-light stream's): the window's decisions as CompileSlice_v1 charges them, and a length term for
+  each certified arrival, bitlen(max_tokens) + 1 bits read from its ``cert`` row's max_tokens and output length, as
+  code_v1 sends it (`lengths.widths`). The demo's and the corpus's window is the session's first, so its carry-in is
+  the book's first carry under its public salt; w212's is the carry over windows 0 … 211 of the run, each window's
+  decisions and its requests' length terms as its replay gives them, which `prove` commits window by window
+  (`window_charge.commit_window`; a stand-in: those windows' units aren't proved here), so w212's ``cin`` is window
+  211's carry-out row under its salt; `prove` checks that the unit charges window 212 what the chain does.
 * **The statement**: one template of n units, each the slice's rows under fresh salts, one unit a kind (the slice's
   `REFUSED`, or `--kinds`' in their order). ``honest``; ``flip``, a decision flipped in its window row (the advice row
-  stays the registered one); ``charge``, the charge one below the advice's; ``arrival``, arrival 1's prompt one token
-  longer in its ``cert`` row (an arrival not in the certified record); ``cleared``, advice that leaves the last asked
-  decision uncommitted (a cleared enable; on w212 also ``cleared-read``, the window row cut too, so the
-  scan reads past the count); ``carry``, a carry-out other than the charge's carry' (the priors on the demo and the
-  corpus, counts fitted to the window on w212); ``restart``, the charge from a carry-in of its own (zero counts on the
-  demo and the corpus, the fitted counts on w212, which charge 25 bits in place of 27) under a fresh salt. With prefix
+  stays the registered one); ``charge``, the charge one below the advice's; ``tails``, the decisions' charge alone
+  (CompileSlice_v1's, the length terms left out); ``max-tokens``, on the demo and the corpus, the arrival whose length
+  term its output length would most shorten with that max_tokens in its ``cert`` row, every check passing at the lower
+  charge (w212's requests all stop at their cap, so no lower max_tokens fits their output); ``arrival``, arrival 1's
+  prompt one token longer in its ``cert`` row (an arrival not in the certified record); ``cleared``, advice that leaves
+  the last asked decision uncommitted (a cleared enable; on w212 also ``cleared-read``, the window row cut too, so the
+  scan reads past the count); ``carry``, a carry-out other than the charge's carry' (the book's first carry on the demo
+  and the corpus, counts fitted to the window on w212); ``restart``, the charge from a carry-in of its own (zero counts
+  on the demo and the corpus, the fitted counts on w212, whose decisions charge 25 bits in place of 27) under a fresh
+  salt. With prefix
   caching (the demo and the corpus): ``table``, a made-up first cache table (`compile_slice.made_up`: request 2's first
   two blocks under ROOT on the demo, request 1's first block on the corpus, which gives it a 16-token hit at step 6);
   ``tokens``, request 1's first block made up in its ``cert`` row (9s on the demo, request 0's on the corpus); on the
@@ -48,26 +58,33 @@ proved by Flock `prove --zk` behind the Lean ZK server and held by Lean `verify 
   to the registered root), its ``srv`` row j is leaf i·(P / G) + j of the served rows' registration
   (`served_rows.leaf`, `served_rows.leaf_ok`), its
   ``cert`` row is the certified record's commitment (a stand-in: one ``cert`` row under the certifier's salt, b‖c as
-  `a7.opens` recomputes it), and its ``cin`` and ``cout`` rows are the window's carry rows in the session's chain
-  (`charge_chain.check_chain` on the earlier windows' openings and the unit's two).
+  `a7.opens` recomputes it; ``arrival``, ``tokens`` and ``max-tokens`` hold rows other than it, and ``max-tokens`` this
+  check alone refuses), and its ``cin`` and ``cout`` rows are the window's carry rows in the session's chain
+  (`window_charge.check_chain` on the earlier windows' openings and the unit's two).
 * **The verifier** opens each unit's ``pub`` row to its own copy (the declared charge and the registered book,
-  `compile_slice.pub`) and its verdict ``o0``, under the salts the prover sends for those two rows; never ``adv``,
+  `compile_slice_v7.pub`) and its verdict ``o0``, under the salts the prover sends for those two rows; never ``adv``,
   ``cert``, ``srv``, ``cin``, ``cout`` or ``wit``. A unit passes when its verdict is `compile_slice.ACCEPT` and its
   bindings hold. What the verifier received is scanned (`received`) for every piece of each unit's witness row, its
   ``srv`` rows and every row's salt (`scan_pieces`: each row cut whole, `leak_scan.public_pieces`, less the pieces the
   staged circuit holds, and each row shorter than the scan's 16-byte piece whole, an ``srv`` row of a few steps: 10
-  bytes at the demo's G = 2), and for each unit's carry rows whole (12 bytes; the session's first carry-in, the public
-  priors, excepted); the prover's instance file, which holds those rows, is the control. A found piece fails the run
-  when the lane's one rule calls it leaked (`leak_scan.scan`): there is no byte-count or witness-class exemption.
+  bytes at the demo's G = 2), and for each unit's carry rows whole (20 bytes; the session's first carry-in, the book's
+  public first carry, excepted); the prover's instance file, which holds those rows, is the control. A found piece
+  fails the run when the lane's one rule calls it leaked (`leak_scan.scan`): there is no byte-count or witness-class
+  exemption.
+* **Plain** (``--plain``): the same statement on Flock's plain path, no ZK server: `prove` without `--zk` on the keyed
+  coin tree (``FC_COINS=tree``, as `a3.py` runs it), held by Lean `verify --coins tree`. Its guarantee is soundness
+  alone, so the scan is recorded and gates nothing but its control.
 * **rescan**: a finished ``prove``'s scan taken again under that rule (`leak_scan.rescan`) from the verifier's files it
   kept, the pieces recomputed from its slice, kinds and partition (a salt the run sampled isn't, so a found salt reads
   leaked).
-* **Cost** (``--points``): sessions whose verifier samples the first k units, behind the ZK server (`a8.cost`).
+* **Cost** (``--points``, not with ``--plain``): sessions whose verifier samples the first k units, behind the ZK
+  server (`a8.cost`).
 """
 from __future__ import annotations
 
 import argparse
 import dataclasses
+import functools
 import hashlib
 import json
 import os
@@ -81,14 +98,14 @@ REPO = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 
 import leak_scan as LS  # noqa: E402
-import n2_zk as N2  # noqa: E402
-from verity.protocols.certifier.verifier import arith_encode as AE  # noqa: E402
 from verity.protocols.certifier.verifier import charge_chain as CC  # noqa: E402
 from verity.protocols.certifier.verifier import compile_slice as CS  # noqa: E402
 from verity.protocols.certifier.verifier import served_rows as SR  # noqa: E402
 from verity.commitments import advice as ADV  # noqa: E402
 from verity.commitments.frame_v3 import BitRowLeaf  # noqa: E402
 from verity.commitments.rowleaf import bit_row, row_leaf  # noqa: E402
+from verity.protocols.certifier.prover import compile_slice_v7 as V7  # noqa: E402
+from verity.protocols.certifier.prover import window_charge as WC  # noqa: E402
 
 FIXTURES = REPO / "verity/protocols/certifier/verifier/tests/fixtures"
 FIXTURE = FIXTURES / "compile_slice_smallkv.json"
@@ -96,17 +113,20 @@ W212 = FIXTURES / "compile_slice_w212_class_async.json"
 TRACE_8EB1 = REPO / "benchmarks/network_e2e/encodings/tests/fixtures/vllm-8eb1/advice_trace.jsonl.gz"
 WINDOW = 212
 #: counts fitted to w212, from which its decisions charge 25 bits in place of the session's 27
-FITTED = AE.Carry(((1, 0), (16, 0), (64, 16)), 0)
-ZERO = AE.Carry(((0, 0),) * AE.RUNS, 0)
-_BASE = {"honest": set(), "flip": {"load", "rows"}, "charge": {"charge"}, "arrival": {"rows"}, "cleared": {"load"},
-         "carry": {"code"}, "restart": set()}
-#: each slice's kinds, in order, and the checks the reference refuses each by (``restart`` the chain alone refuses)
+FITTED = WC.WindowCarry(((1, 0), (16, 0), (64, 16)))
+ZERO = WC.WindowCarry(((0, 0),) * WC.RUNS)
+_BASE = {"honest": set(), "flip": {"load", "rows"}, "charge": {"charge"}, "tails": {"charge"}, "arrival": {"rows"},
+         "cleared": {"load"}, "carry": {"code"}, "restart": set()}
+#: each slice's kinds, in order, and the checks the reference refuses each by (``restart`` the chain alone refuses,
+#: ``max-tokens`` the cert binding alone)
 REFUSED = {
-    "demo": {**_BASE, "table": {"cache"}, "tokens": {"rows"}, "short": {"cache", "rows"}, "unasked": {"cache"},
-             "hit": {"cache", "rows"}},
-    "corpus": {**_BASE, "table": {"cache"}, "tokens": {"rows"}, "hit": {"cache", "rows"}, "reread": {"steps", "rows"},
-               "untaken": {"steps", "rows"}, "sixpass": {"rows"}, "sixpass-own": set()},
+    "demo": {**_BASE, "max-tokens": set(), "table": {"cache"}, "tokens": {"rows"}, "short": {"cache", "rows"},
+             "unasked": {"cache"}, "hit": {"cache", "rows"}},
+    "corpus": {**_BASE, "max-tokens": set(), "table": {"cache"}, "tokens": {"rows"}, "hit": {"cache", "rows"},
+               "reread": {"steps", "rows"}, "untaken": {"steps", "rows"}, "sixpass": {"rows"}, "sixpass-own": set()},
     "w212": {**_BASE, "cleared-read": {"steps", "rows"}, "sixpass": {"rows"}, "sixpass-own": set()}}
+#: the kinds whose ``cert`` row isn't the certified record's
+CERT = {"arrival", "tokens", "max-tokens"}
 #: the decision each slice's ``flip`` flips, and the passes of its ``sixpass``
 FLIP = {"demo": 2, "corpus": 5, "w212": 12}
 PASSES = {"corpus": 6, "w212": 21}
@@ -129,20 +149,22 @@ def log(msg: str) -> None:
 def load(name: str, G: int | None = None) -> SimpleNamespace:
     """The slice ``name``, its ``srv`` rows G steps each (P unless given): its statics, its inputs, the served rows (the
     demo's and the corpus's the replay's, w212's the seal's), the carry-out its ``carry`` forges and the carry-in its
-    ``restart`` charges from. Its honest carry-in is set by `chain`."""
+    ``restart`` charges from. Its arrivals' max_tokens are the demo's, the corpus's requests' or the run's (`requests`).
+    Its honest carry-in is set by `chain`."""
     if name == "demo":
-        st, sl = CS.demo()
+        st, sl = V7.demo()
         st = CS.with_block(st, G)
         S = SimpleNamespace(**st)
-        return SimpleNamespace(name=name, st=st, S=S, sl=sl, rows=list(CS.case(S, sl, BOOK).steps),
-                               forged=AE.first_carry(BOOK), restart=ZERO)
+        return SimpleNamespace(name=name, st=st, S=S, sl=sl, rows=list(V7.case(S, sl, BOOK).steps),
+                               forged=WC.first_carry(BOOK), restart=ZERO)
     fx = json.loads((W212 if name == "w212" else FIXTURE).read_text())
     cached = {k: fx[k] for k in ("CN", "CTW", "CU") if k in fx}
-    st = CS.statics(fx["R"], fx["W"], fx["A"], fx["engine"], fx["IW"], Q=fx["Q"], D=fx["D"], P=fx["P"], K=fx["K"],
+    st = V7.statics(fx["R"], fx["W"], fx["A"], fx["engine"], fx["IW"], Q=fx["Q"], D=fx["D"], P=fx["P"], K=fx["K"],
                     G=G, **cached)
     S = SimpleNamespace(**st)
-    sl = CS.Slice(tuple(map(tuple, fx["arrivals"])), tuple(fx["decisions"]), fx["steps"],
-                  tuple(map(tuple, fx.get("tokens", ()))))
+    arrivals = tuple(map(tuple, fx["arrivals"]))
+    sl = V7.Slice(arrivals, tuple(fx["decisions"]), fx["steps"], tuple(map(tuple, fx.get("tokens", ()))),
+                  max_tokens(name, arrivals))
     if name == "w212":
         if fx["engine"] != engine_class():
             raise SystemExit(f"w212's fixture's engine {fx['engine']} isn't the run's engine class {engine_class()}: the "
@@ -150,7 +172,21 @@ def load(name: str, G: int | None = None) -> SimpleNamespace:
         return SimpleNamespace(name=name, st=st, S=S, sl=sl, rows=[SR.step_rows(S, s, fx["ids"]) for s in fx["served"]],
                                forged=FITTED, restart=FITTED, fx=fx)
     return SimpleNamespace(name=name, st=st, S=S, sl=sl, rows=[tuple(map(tuple, r)) for r in fx["rows"]],
-                           forged=AE.first_carry(BOOK), restart=ZERO)
+                           forged=WC.first_carry(BOOK), restart=ZERO)
+
+
+def max_tokens(name: str, arrivals: tuple[tuple[int, ...], ...]) -> tuple[int, ...]:
+    """Each arrival's max_tokens: its request's in corpus-smallkv's trace (arrival i is request i), or in window
+    `WINDOW` of the run's (`window_requests`, the window's arrivals in order). Refuses arrivals whose prompt and output
+    lengths aren't their requests'."""
+    if name == "w212":
+        mine = list(window_requests(WINDOW))
+    else:
+        reqs = corpus_trace().requests
+        mine = [reqs[a[0]] for a in arrivals if a[0] < len(reqs)]
+    if [(r.prompt_len, r.output_len) for r in mine] != [tuple(a[1:3]) for a in arrivals]:
+        raise SystemExit(f"{name}'s arrivals {arrivals} aren't its requests'")
+    return tuple(r.max_tokens for r in mine)
 
 
 def _encodings():
@@ -179,34 +215,65 @@ def engine_class() -> dict:
     return {k: v for k, v in dataclasses.asdict(e).items() if k != "policy"}
 
 
-def w212_decisions() -> list[list[int]]:
-    """Each of the run's windows 0 … `WINDOW` decisions, as the window's own replay asks them (`RP.decisions` on
-    `replay_vectors.served_window`)."""
+def _served(w: int):
+    """Window w of the run as its own replay reads it (`replay_vectors.served_window`, `RP.load_step_trace`)."""
+    RP, RV, _CV = _encodings()
+    return RP, RP.load_step_trace(RV.served_window(RP.records(TRACE_8EB1), w)[0])
+
+
+def window_requests(w: int) -> list:
+    """Window w's requests, its arrivals in order, each with its prompt and output lengths and its max_tokens."""
+    return _served(w)[1].requests
+
+
+@functools.cache
+def run_windows() -> list[tuple[list[int], list]]:
+    """Each of the run's windows 0 … `WINDOW`: its decisions, as the window's own replay asks them (`RP.decisions`),
+    and its requests."""
     RP, RV, _CV = _encodings()
     recs = RP.records(TRACE_8EB1)
     wins = sorted({r["window"] for r in recs if r.get("kind") == "window"})
     if wins[:WINDOW + 1] != list(range(WINDOW + 1)):
         raise SystemExit(f"the run's windows aren't 0 … {WINDOW}")
-    return [[int(d.arrived) for d in RP.decisions(RP.load_step_trace(RV.served_window(recs, w)[0]))[0]]
-            for w in range(WINDOW + 1)]
+    out = []
+    for w in range(WINDOW + 1):
+        tr = RP.load_step_trace(RV.served_window(recs, w)[0])
+        out.append(([int(d.arrived) for d in RP.decisions(tr)[0]], tr.requests))
+    return out
+
+
+def run_session(D: int, windows: list[tuple[list[int], list]]) -> list[tuple[int, tuple[int, ...], tuple[int, ...]]]:
+    """`window_charge.session` over the run's windows at D decision slots, each window's requests in its length slots
+    (their max_tokens and output lengths, as code_v1 sends them): each window's (bits, row_in, row_out)."""
+    L = max(1, *(len(rq) for _d, rq in windows))
+
+    def slots(d, rq):
+        pad = [0] * (L - len(rq))
+        return ([1] * len(d) + [0] * (D - len(d)), d + [0] * (D - len(d)), (), (), (), (), (), [1] * len(rq) + pad,
+                [r.max_tokens for r in rq] + pad, [r.output_len for r in rq] + pad)
+
+    return WC.session(D, 0, 0, L, BOOK, [slots(d, rq) for d, rq in windows])
 
 
 def chain(x: SimpleNamespace, program: str, registration: str) -> SimpleNamespace:
     """The session's carry chain before the slice's window: ``values``, the earlier windows' produced carry values
-    (`charge_chain.commit_window`, none for the session's first window), the window's honest carry-in ``carry`` and
-    the salt of its ``cin`` row (the last carry-out's, or the priors' public `start_salt`)."""
+    (`window_charge.commit_window`, none for the session's first window), the window's honest carry-in ``carry``, the
+    salt of its ``cin`` row (the last carry-out's, or the first carry's public `charge_chain.start_salt`) and on w212
+    ``window``, the chain's charge for window `WINDOW`."""
     if x.name != "w212":
-        return SimpleNamespace(values=[], carry=AE.first_carry(BOOK), salt=CC.start_salt(program), public=True)
-    per = w212_decisions()
-    if tuple(per[WINDOW]) != x.sl.decisions:
-        raise SystemExit(f"window {WINDOW}'s decisions {per[WINDOW]} aren't the fixture's {x.sl.decisions}")
-    D = x.S.D
-    ses = CC.session(D, BOOK, [([1] * len(d) + [0] * (D - len(d)), d + [0] * (D - len(d))) for d in per[:WINDOW]])
+        return SimpleNamespace(values=[], carry=WC.first_carry(BOOK), salt=CC.start_salt(program, WC.VALUE),
+                               public=True)
+    run = run_windows()
+    d, rq = run[WINDOW]
+    if tuple(d) != x.sl.decisions or tuple(r.max_tokens for r in rq) != x.sl.max_tokens:
+        raise SystemExit(f"window {WINDOW}'s decisions {d} and max_tokens {[r.max_tokens for r in rq]} aren't the "
+                         f"fixture's {x.sl.decisions} and {x.sl.max_tokens}")
+    ses = run_session(x.S.D, run)
     values = []
-    for _length, _row_in, row_out in ses:
-        values.append(CC.commit_window(program, BOOK, CC.carry_of(row_out), registration, values[-1] if values else None))
-    return SimpleNamespace(values=values, carry=CC.carry_of(ses[-1][2]), salt=values[-1].salts[-1], public=False,
-                           charged=sum(s[0] for s in ses))
+    for _length, _row_in, row_out in ses[:WINDOW]:
+        values.append(WC.commit_window(program, BOOK, WC.carry_of(row_out), registration, values[-1] if values else None))
+    return SimpleNamespace(values=values, carry=WC.carry_of(ses[WINDOW][1]), salt=values[-1].salts[-1], public=False,
+                           charged=sum(s[0] for s in ses[:WINDOW]), window=ses[WINDOW][0])
 
 
 def _corpus(tmp: Path) -> Path:
@@ -234,14 +301,21 @@ def _corpus(tmp: Path) -> Path:
     return tmp
 
 
+@functools.cache
+def corpus_trace():
+    """corpus-smallkv's trace as its replay reads it (`RP.read_corpus_trace` on `_corpus`)."""
+    import tempfile
+
+    RP, _RV, _CV = _encodings()
+    return RP.read_corpus_trace(_corpus(Path(tempfile.mkdtemp())))
+
+
 def corpus_check(x: SimpleNamespace) -> None:
     """The fixture is corpus-smallkv's first P steps: its arrivals, the decisions its replay asks, the replay's rows and
     each arrival's tokens (`cache_vectors`' trace, `derived.tokens_of`)."""
-    import tempfile
-
     enc = REPO / "benchmarks/network_e2e/encodings"
-    RP, RV, CV = _encodings()
-    t = RP.read_corpus_trace(_corpus(Path(tempfile.mkdtemp())))
+    _RP, RV, CV = _encodings()
+    t = corpus_trace()
     _st, cases = RV.vectors(t, R=x.S.R, W=x.S.W, A=x.S.A)
     reqs = t.requests
     arrivals = [(i, reqs[i].prompt_len, reqs[i].output_len) for i in range(x.S.K)]
@@ -260,7 +334,7 @@ def cases(x: SimpleNamespace, n: int, kinds: tuple[str, ...]) -> list[SimpleName
     server registered for it, the reference's verdict and whether its carry-in is the chain's (``chained``). `x.carry`
     is the window's honest carry-in (`chain`)."""
     out, red, demo = [], CS.phase9(x.S, x.sl), x.name == "demo"
-    six = CS.Slice(x.sl.arrivals, (0,) * PASSES.get(x.name, 0), x.sl.steps, x.sl.tokens)
+    six = dataclasses.replace(x.sl, decisions=(0,) * PASSES.get(x.name, 0))
     cut = x.sl.decisions[:-1]
     for i in range(n):
         kind = kinds[i] if i < len(kinds) else "honest"
@@ -271,7 +345,11 @@ def cases(x: SimpleNamespace, n: int, kinds: tuple[str, ...]) -> list[SimpleName
             flip[FLIP[x.name]] ^= 1
             kw["window"] = flip
         elif kind == "charge":
-            kw["charge"] = CS.case(x.S, x.sl, BOOK, carry=x.carry).length - 1
+            kw["charge"] = V7.case(x.S, x.sl, BOOK, carry=x.carry).length - 1
+        elif kind == "tails":
+            kw["charge"] = V7.case(x.S, x.sl, BOOK, carry=x.carry).length - tails(x.sl)
+        elif kind == "max-tokens":
+            sl = lowered(x.sl)
         elif kind == "cleared":
             kw["advice"] = cut
         elif kind == "cleared-read":
@@ -296,17 +374,33 @@ def cases(x: SimpleNamespace, n: int, kinds: tuple[str, ...]) -> list[SimpleName
             kw["hits"] = {0: (0, 0, 0)}
         elif kind == "sixpass-own":
             kw["served"] = None
-        c = CS.case(x.S, sl, BOOK, **kw)
+        c = V7.case(x.S, sl, BOOK, **kw)
         out.append(SimpleNamespace(kind=kind, case=c, charge=kw.get("charge", c.length),
                                    registered=list(c.steps) if kind == "table" else x.rows,
                                    words={r: CS.words(c.rows[r]) for r in CS.row_names(x.S)}, chained=kind != "restart"))
     return out
 
 
+def tails(sl: V7.Slice) -> int:
+    """The bits of the slice's length terms, bitlen(max_tokens) + 1 each (`window_charge.length_bits`)."""
+    return sum(WC.length_bits(m) for m in sl.max_tokens)
+
+
+def lowered(sl: V7.Slice) -> V7.Slice:
+    """`sl` with one arrival's max_tokens lowered to its output length, the arrival whose length term that shortens
+    most (the first of those); a request that stopped there could have had it, so the unit charges less and passes
+    every check. Refuses a slice whose arrivals all stop at their cap."""
+    drop = [WC.length_bits(m) - WC.length_bits(a[2]) for a, m in zip(sl.arrivals, sl.max_tokens)]
+    if max(drop, default=0) <= 0:
+        raise ValueError("every arrival stops at its cap: no lower max_tokens fits its output")
+    k = drop.index(max(drop))
+    return dataclasses.replace(sl, max_tokens=sl.max_tokens[:k] + (sl.arrivals[k][2],) + sl.max_tokens[k + 1:])
+
+
 def stager(M, x: SimpleNamespace, n: int, out: Path) -> SimpleNamespace:
     """The statement's program and partition (one template, n units) and its stager, the unit lowered by its builder."""
-    defn = CS.unit(**x.st)
-    bits = CS.row_bits(x.S)
+    defn = V7.unit(**x.st)
+    bits = CS.row_bits(x.S, V7.CODE)
     rows = [(r, M.V2, bits[r], [r]) for r in CS.row_names(x.S)]
     program = M.P.mixed_population_program([(defn, n)])
     query = M.P.template_instances_query([defn])
@@ -317,7 +411,7 @@ def stager(M, x: SimpleNamespace, n: int, out: Path) -> SimpleNamespace:
     bound = {"partition": M.P.digest(part), "program": part["program"]}
     t = time.time()
     st = M.CS.UnitStager(defn, "unit/compile-slice", rows, [(M.V2, (0,))], circuit=out / "circuit.txt", bind=bound)
-    st.pin
+    _ = st.pin
     (tid, base, cnt), = M.P.ranges(program, query)
     assert tid == M.P.template_id(defn) and cnt == n
     return SimpleNamespace(S=x.S, slice=x.name, defn=defn, rows=rows, program=program, query=query, n=n, base=base, st=st,
@@ -371,10 +465,15 @@ def stage(M, sg: SimpleNamespace, units: list[SimpleNamespace], salt_key: bytes,
     return m
 
 
-def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Path, port: int) -> dict:
+def _per(x, n: int):
+    return None if x is None else round(x / n, 3)
+
+
+def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Path, port: int, env: dict) -> dict:
     """The statement registered, every unit sampled by the verifier's Lean, proved --zk behind the ZK server and held by
-    Lean; then the verifier's side per unit: ``pub`` opened to its own copy, the verdict read, the bindings checked on
-    b‖c (`advice_leaf_ok`, `served_rows.leaf_ok`, `certified`, `charge_chain.check_chain`). Writes what the verifier
+    Lean `verify --zk` (or with ``a.plain`` proved plain on the keyed coin tree and held by Lean `verify --coins tree`);
+    then the verifier's side per unit: ``pub`` opened to its own copy, the verdict read, the bindings checked on b‖c
+    (`advice_leaf_ok`, `served_rows.leaf_ok`, `certified`, `window_charge.check_chain`). Writes what the verifier
     received under ``out / "verifier"``."""
     a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V
     out.mkdir(parents=True, exist_ok=True)
@@ -402,16 +501,27 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Pat
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     local = sorted(u - m["base"] for u in lean_draw["units"] if m["base"] <= u < m["base"] + n)
     sdir = out / "session"
-    record, live, proc = M.a8.session(a, m, sdir, local, port, env=N2.firewall(M, m))
+    if a.plain:
+        sdir.mkdir(parents=True, exist_ok=True)
+        (sdir / "draw.json").write_text(json.dumps({"law": "subset", "population": n, "k": len(local), "units": local},
+                                                   sort_keys=True))
+        t = time.time()
+        record, live = a0.session(a.bin, m, n, f"subset:{len(local)}", port, sdir, draw_file=sdir / "draw.json", env=env)
+        proc = {"wall_s": round(time.time() - t, 1)}
+        lv = a0.lean_verify(a.lean, m, n, sdir, flags=("--coins", "tree"))
+        tool = "flock-verify verify --coins tree --archive --partition --program"
+    else:
+        record, live, proc = M.a8.session(a, m, sdir, local, port, env=env)
+        lv = a0.lean_verify(a.lean, m, n, sdir, zk=True)
+        tool = "flock-verify verify --zk --archive --partition --program"
     draw_t = (record or {}).get("unit_draw") or {}
     v = V.check_draw(draw_t, {"population": n}, {"law": "subset", "k": len(local)})
     verdicts = {f"m0-verifier/{name}": {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True
                                         and (live or {}).get("roots") == fv["roots"] and v.ok,
                                         "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}}
-    lv = a0.lean_verify(a.lean, m, n, sdir, zk=True)
-    verdicts[f"lean-verify/{name}"] = {**lv, "tool": "flock-verify verify --zk --archive --partition --program"}
+    verdicts[f"lean-verify/{name}"] = {**lv, "tool": tool}
     proved = a0.proved_units(m["header"], live or {})
-    timing = {k: (live or {}).get(k) for k in N2.TIMING}
+    timing = {k: (live or {}).get(k) for k in a.timing}
     statement = {name: {"session_s": proc["wall_s"], **{k: (live or {}).get(k) for k in ("circuit_sha512", "statement_digest",
                                                                                          "sigma")},
                         "timing": timing, "process": proc, "lean_verify_s": lv.get("verify_s")}}
@@ -431,13 +541,13 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Pat
     for i, u in enumerate(units):
         word = m["oks"][i]
         opened = ((m["base"] + i) in held
-                  and a7.opens(port_["pub"], CS.pub(sg.S, u.charge, BOOK), m["salts"]["pub"][i], bcs[i]["pub"])
+                  and a7.opens(port_["pub"], V7.pub(sg.S, u.charge, BOOK), m["salts"]["pub"][i], bcs[i]["pub"])
                   and a7.opens(port_["o0"], [word], m["salts"]["o0"][i], bcs[i]["o0"]))
         adv_ok = advice_leaf_ok(binds["advice"], binds["binding"], n, i, bcs[i]["adv"], binds["n_bits"])
         srv_ok = all(SR.leaf_ok(record, binds["run_root"], k, bcs[i][r], served.registration.open(k).path)
                      for r, k in srv_leaves(sg.S, record, i))
         cert_ok = bcs[i]["cert"] == binds["certified"]
-        why = CC.check_chain(earlier + [[bcs[i]["cin"], bcs[i]["cout"]]], binds["program"], BOOK)
+        why = WC.check_chain(earlier + [[bcs[i]["cin"], bcs[i]["cout"]]], binds["program"], BOOK)
         bound = adv_ok and srv_ok and cert_ok and why is None
         verdict = ("malformed" if not opened else "accept" if word == CS.ACCEPT and bound else "reject")
         rows.append({"unit": m["base"] + i, "kind": u.kind, "verdict_word": word, "flags": u.case.flags, "adv_bound": adv_ok,
@@ -465,9 +575,9 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Pat
             "audit": {k: result.get(k) for k in ("accepted", "complete", "wrong_units")},
             "verdicts": {k: y.get("accepted") for k, y in verdicts.items()}, "why": {k: y.get("why") for k, y in verdicts.items()},
             "timing": statement[name], "lean_verify_s": lv.get("verify_s"),
-            "per_unit": {"prove_total_s": N2._per(timing.get("prove_total_s"), n), "e2e_s": N2._per(timing.get("e2e_s"), n),
-                         "proof_bytes": N2._per(sum(proofs) if proofs else None, n),
-                         "lean_verify_s": N2._per(lv.get("verify_s"), n)},
+            "per_unit": {"prove_total_s": _per(timing.get("prove_total_s"), n), "e2e_s": _per(timing.get("e2e_s"), n),
+                         "proof_bytes": _per(sum(proofs) if proofs else None, n),
+                         "lean_verify_s": _per(lv.get("verify_s"), n)},
             "opened_rows": list(OPENED)}
 
 
@@ -476,7 +586,7 @@ def _u16(words: list[int]) -> bytes:
 
 
 def _public_cin(u: SimpleNamespace, chain_: SimpleNamespace) -> bool:
-    """Whether the unit's ``cin`` is the session's first carry-in, the book's priors under their public salt."""
+    """Whether the unit's ``cin`` is the session's first carry-in, the book's first carry under its public salt."""
     return chain_.public and u.chained
 
 
@@ -484,7 +594,8 @@ def blobs_of(units: list[SimpleNamespace], salts: dict, chain_: SimpleNamespace,
              srv: tuple[str, ...] = ("srv",)) -> tuple[dict[str, bytes], set[str]]:
     """The witness pieces the verifier must not receive: each unit's ``wit`` and ``srv`` rows (`srv`, its rows' names) as
     the instance file holds them (u16 little-endian) and its ``adv``, ``cert``, ``srv``, ``cout``, ``wit`` and (but the
-    public priors') ``cin`` salts, when `salts` has them (a rescan's doesn't); the rows are what the control holds."""
+    public first carry's) ``cin`` salts, when `salts` has them (a rescan's doesn't); the rows are what the control
+    holds."""
     blobs, held = {}, set()
     for i, u in enumerate(units):
         for r in ("wit", *srv):
@@ -496,7 +607,8 @@ def blobs_of(units: list[SimpleNamespace], salts: dict, chain_: SimpleNamespace,
 
 
 def carry_rows(units: list[SimpleNamespace], chain_: SimpleNamespace) -> dict[str, bytes]:
-    """Each unit's ``cout`` and (but the public priors') ``cin`` rows as the instance file holds them, 12 bytes each."""
+    """Each unit's ``cout`` and (but the public first carry's) ``cin`` rows as the instance file holds them, 20 bytes
+    each."""
     return {f"{r} {i}": _u16(u.words[r]) for i, u in enumerate(units)
             for r in ("cout",) + (() if _public_cin(u, chain_) else ("cin",))}
 
@@ -505,11 +617,13 @@ def scan_pieces(a8, units: list[SimpleNamespace], salts: dict, chain_: SimpleNam
                 circuit: bytes) -> tuple[dict[str, bytes], set[str], list[str]]:
     """`blobs_of`'s rows as the scan finds them: each row of at least the scan's 16-byte piece cut whole, less the
     pieces the staged circuit holds (`leak_scan.public_pieces`), and each shorter row whole (an ``srv`` row of a few
-    steps, 10 bytes at the demo's G = 2, which `leak_scan.cut` refuses); the held ones, and the left-out pieces' hex."""
+    steps, 10 bytes at the demo's G = 2, which `leak_scan.cut` refuses); the held ones, and the left-out pieces' hex.
+    The instance file lays each row's words straight after the row before it (`circuit.write`), so a row's zero-padded
+    last chunk is scanned for but not held (``fields``): its last 16 bytes, which cover the same tail, are."""
     rows, held = blobs_of(units, salts, chain_, srv)
     short = {k: x for k, x in rows.items() if len(x) < a8.PIECE}
     long_ = {k: x for k, x in rows.items() if k not in short}
-    cut, kept, public = LS.public_pieces(a8, long_, held - set(short), circuit)
+    cut, kept, public = LS.public_pieces(a8, long_, held - set(short), circuit, fields=True)
     return {**cut, **short}, kept | (held & set(short)), public
 
 
@@ -526,7 +640,7 @@ def _find(a8, data: bytes, table: dict[bytes, str]) -> dict[str, int]:
 def found(a8, vdir: Path, control: Path | None, pieces: dict[str, bytes], held: set[str]) -> dict:
     """Every file under `vdir` (what the verifier received) and the prover's `control` (None on a rescan: a run doesn't
     keep it) scanned for each of `pieces` whole, raw or as hex (`_find`): `scan_pieces`' 16-byte pieces and its rows
-    shorter than that, or the 12-byte carry rows, which `a8.needles` doesn't cut. Each distinct value is found under its
+    shorter than that, or the 20-byte carry rows, each whole. Each distinct value is found under its
     first name (a chained unit's ``cin`` is the ``cout`` before it). The control is to hold every held piece."""
     first: dict[bytes, str] = {}
     for k, x in pieces.items():
@@ -568,25 +682,39 @@ def slice_check(x: SimpleNamespace, ch: SimpleNamespace) -> None:
         log(f"slice: the demonstration class's {x.S.P} steps, {x.sl.arrivals}, decisions {x.sl.decisions}")
 
 
+def charged(x: SimpleNamespace, ch: SimpleNamespace, units: list[SimpleNamespace]) -> dict:
+    """The honest unit's charge, of which its arrivals' length terms (`tails`), held on w212 to the chain's charge for
+    window `WINDOW` (code_v1's segment and its tails)."""
+    bits = next(u.case.length for u in units if u.kind == "honest")
+    if x.name == "w212" and bits != ch.window:
+        raise SystemExit(f"the unit charges window {WINDOW} {bits} bits, the chain {ch.window}")
+    out = {"bits": bits, "length_terms": tails(x.sl), "max_tokens": list(x.sl.max_tokens)}
+    log(f"charge: {bits} bits, {out['length_terms']} of them the length terms of max_tokens {x.sl.max_tokens}"
+        + (", the chain's" if x.name == "w212" else ""))
+    return out
+
+
 def prove(a) -> int:
     x = load(a.slice, a.g)
-    summary: dict = {"statics": x.st, "row_bits": CS.row_bits(x.S), "slice": {"name": x.name, **dataclasses.asdict(x.sl)},
-                     "kinds": a.kinds, "book": BOOK}
+    summary: dict = {"statics": x.st, "row_bits": CS.row_bits(x.S, V7.CODE), "slice": {"name": x.name, **dataclasses.asdict(x.sl)},
+                     "kinds": a.kinds, "book": BOOK, "plain": a.plain}
     secret = os.urandom(32)
     if a.dry:
         ch = chain(x, "compile-slice-zk-dry", "00" * 64)
         slice_check(x, ch)
         x.carry = ch.carry
         units = cases(x, len(a.kinds), a.kinds)
+        summary["charge"] = charged(x, ch, units)
         summary["reference"] = [{"kind": u.kind, "verdict": u.case.verdict, "flags": u.case.flags, "charge": u.case.length}
                                 for u in units]
         log(f"dry: {summary['reference']}")
         Path(a.out).mkdir(parents=True, exist_ok=True)
         (Path(a.out) / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
         return 0 if all(expected(x, u.kind, u.case.flags) for u in units) else 1
-    M = N2._one_stage()
+    import warden_zk as WZ
+
+    M = WZ._one_stage()
     out = Path(a.out)
-    CS.CompileSlice.build = CS._build
     probe = stager(M, x, len(a.kinds), out / "probe")
     n = population(probe.st.meta, a.kinds)
     log(f"probe: k_log {probe.st.meta['k_log']}, vus_per_block {probe.st.meta['vus_per_block']}, lowered in {probe.lower_s} s; "
@@ -603,6 +731,7 @@ def prove(a) -> int:
     for u in units:
         if not expected(x, u.kind, u.case.flags):
             raise SystemExit(f"{u.kind}: the reference's flags {u.case.flags} are not the kind's")
+    summary["charge"] = charged(x, ch, units)
     salt_key = hashlib.sha512(secret + b"row salts").digest()[:32]
     SB = M.CS.FC.SALT_BYTES
     cert_salt = os.urandom(SB)
@@ -640,8 +769,10 @@ def prove(a) -> int:
     same &= srv_same == srv_want and carry_same
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
 
-    av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta, points=a.points, arms=["fw"], cold=1)
-    res = audit(M, av, sg, m, units, binds, out / "slice", a.port)
+    av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta, points=a.points, arms=["fw"], cold=1,
+                         plain=a.plain, timing=WZ.TIMING)
+    res = audit(M, av, sg, m, units, binds, out / "slice", a.port,
+                env={"FC_COINS": "tree"} if a.plain else WZ.firewall(M, m))
     pieces, held, public = scan_pieces(M.a8, units, m["salts"], ch, srv, (m["dir"] / "circuit.txt").read_bytes())
     short = sum(len(x) < M.a8.PIECE for x in pieces.values())
     vdir, inst, carry = out / "slice" / "verifier", m["dir"] / f"inst-{n}.bin", carry_rows(units, ch)
@@ -651,17 +782,20 @@ def prove(a) -> int:
     want = ["accept" if u.kind == "honest" else "reject" for u in units]
     got = [r["verdict"] for r in res.get("units", [])]
     cr = rec["carry_rows"]
+    hidden = a.plain or (not rec["leaked"] and not cr["leaked"])
     ok = (res["accepted"] and all(res["verdicts"].values()) and got == want and same
           and [r["srv_bound"] for r in res.get("units", [])] == srv_want
+          and [r["cert_bound"] for r in res.get("units", [])] == [u.kind not in CERT for u in units]
           and [r["chain_bound"] for r in res.get("units", [])] == chain_want
-          and not rec["leaked"] and rec["control"]["holds_all"] and not cr["leaked"] and cr["control"]["holds_all"])
+          and hidden and rec["control"]["holds_all"] and cr["control"]["holds_all"])
     log(f"proofs {res['verdicts']}, audit {res['audit']}, first units {[(r['kind'], hex(r['verdict_word']), r['adv_bound'], r['srv_bound'], r['cert_bound'], r['chain_why'] or True, r['verdict']) for r in res.get('units', [])[:len(a.kinds)]]}, "
         f"per unit {res['per_unit']}, verifier received {rec['verifier_bytes']} bytes, witness pieces found there "
         f"(of {len(pieces)}, {short} of them rows shorter than a piece; {len(public)} the circuit holds left out): "
         f"leaked {rec['leaked'] or 'none'}, structured {rec['structured'] or 'none'}, control "
         f"{rec['control']['pieces_found']}; carry rows found there (of "
         f"{len(carry)}): leaked {cr['leaked'] or 'none'}, structured {cr['structured'] or 'none'}, control holds them: "
-        f"{cr['control']['holds_all']}; {'as expected' if ok else 'UNEXPECTED'}")
+        f"{cr['control']['holds_all']}{' (plain: the scan gates nothing but its control)' if a.plain else ''}; "
+        f"{'as expected' if ok else 'UNEXPECTED'}")
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     if a.points:
         rows = M.a8.cost(av, m, out / "cost", a.port + 20)
@@ -680,7 +814,9 @@ def rescan(a) -> int:
     each carry row. A salt is sampled by `prove` and not recomputed, so a salt the run found reads leaked."""
     src, out = Path(getattr(a, "from")), Path(a.out)
     summary = json.loads((src / "summary.json").read_text())
-    vdir, M = src / "slice" / "verifier", N2._one_stage()
+    import warden_zk as WZ
+
+    vdir, M = src / "slice" / "verifier", WZ._one_stage()
     x = load(summary["slice"]["name"], summary["statics"].get("G"))
     part = json.loads((vdir / "partition.json").read_text())
     ch = chain(x, part["program"], M.P.digest(part))
@@ -713,7 +849,7 @@ def main(argv=None) -> int:
     r = sub.add_parser("rescan", help="a finished prove's scan taken again from its summary and verifier files")
     r.add_argument("--from", required=True, help="the prove's --out")
     r.add_argument("--out", required=True)
-    p = sub.add_parser("prove", help="the slice's units proved --zk and held by Lean")
+    p = sub.add_parser("prove", help="the slice's units proved --zk (or plain) and held by Lean")
     p.add_argument("--bin")
     p.add_argument("--lean")
     p.add_argument("--out", required=True)
@@ -725,11 +861,15 @@ def main(argv=None) -> int:
                    "row a unit)")
     p.add_argument("--kinds", default="", help="the units' kinds in order, comma-separated, honest first (its cert row is "
                    "the certified record's); every kind of the slice by default")
+    p.add_argument("--plain", action="store_true", help="Flock's plain path: proved without --zk on the keyed coin tree "
+                   "and held by Lean verify --coins tree, no ZK server")
     p.add_argument("--dry", action="store_true", help="the slice and the reference only: nothing lowered or proved")
     a = ap.parse_args(argv)
     if a.command == "rescan":
         return rescan(a)
     a.points = [int(k) for k in a.points.split(",") if k]
+    if a.plain and a.points:
+        raise SystemExit("--points: the cost sessions are behind the ZK server (a8.cost), not --plain's")
     kinds = tuple(REFUSED[a.slice])
     a.kinds = tuple(k for k in a.kinds.split(",") if k) or kinds
     if a.kinds[0] != "honest" or not set(a.kinds) <= set(kinds):
