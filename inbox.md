@@ -21,3 +21,22 @@ Not run on that branch: the Lean check, the lock, any suite. Friction: on vy-neb
 
 Counts is COUNTS' and C1's: I give no date for it.
 
+[2026-11-11T10:12Z] 6af59c6ce91b
+library (TRN-104, TRN-113), Wed 2:15 AM PST.
+
+TRN-104: #8901 is ready for you to read. Draft, not marked. Head 3bd1ff4cf11dd114990593b33800c9f112bcc794 on cursor/training-muon-shampoo-whole-6e3e, stacked on #8840's 062c072e6e7b. Body has the table (run r20261111-093115-8bbe at 4bcb698ecbfa), the LATER clause in a line of its own, the before/after script with its result and how to rerun it, and the Goal line. Suites on nodes: r20261111-093152-6716 at 4bcb698ecbfa, 4 of 4 passed; r20261111-095239-8abc at the head (the README commit), 2 of 2 passed. The flags subset's dials do not carry are one comment on TRN-104.
+
+TRN-113, the list you asked for by Thu 10 AM: note training-20261111T1003Z-report-trn113-what-the-seven-need-beyond-todays-dials. Read from the inventory and the four trainer versions, nothing run. The seven need three things beyond today's dials:
+1. One dial on route ema. The search's average is not a constant decay: at step t it keeps 1 - 1/max(1, 0.1(t+1)) of itself (--ema-frac 0.1, the same line in all four trainers). I have written it as ema_horizon, default 0 = today's ema_decay, in ema's LATER, so no digest moves (13 entries' digests and tiny-shape outputs bit-identical before and after; not pushed yet).
+2. Fresh text, TRN-108's key (windows = "fresh", #8903, stacked on #8775, not on my stack): six of the seven. ref-optim/muon-lr does not pass it.
+3. Three starts the registry lacks: s100, m100, m50 (the pilot's). They are the runs of record of 3557ef15b2 (44 points), aaf16f0f96 (8) and 586171aef8 (5): 57 of the pilot's 60 points. starts.toml has the six v3 starts only, so config.load refuses them. I can write the four structures at s-t20, m-t20, l16-t20 now (e2d465d535, 2ce3c8013a, 00cee321c1, 51e16c95ff: v3's 16 points); the three others wait on a ruling: register the pilot's starts (whose job?), or list them.
+Everything else the 23 frontier runs pass maps onto a dial of subset as it stands at #8901 (rates a kind, --freeze-embed, wd, warmup, wsd as linear with decay, forwards a step as micro_batches).
+What a run does that no entry does, to be listed with the run: the raw-or-average choice on 16 held-back windows (two priced forwards a snapshot, in the run's count), and snapshots at 0.85 and 0.93 in two runs, off the harness's twentieths.
+
+Three questions:
+a. PORT's check: its branch (I see cursor/training-frontier-ports-9fba at b814fae66578, one commit, no check yet) and its data file's form, when it has them. I write none.
+b. Every config of attacks/ is a library entry: a row of the table, and tests/test_entries.py refuses one without a reference there. PORT's configs will meet that test. Do the search's configs sit in attacks/ beside the thirteen (then PORT adds a reference a config, and the table grows by each), or elsewhere?
+c. Names. I named mine by the search's keys: s-t20-1.1x-fullmuon-fe-wsd and -ema, m-t20-1.1x-fullmuon-wsd and -ema, l16-t20-1.1x-fullmuon-fe-wsd and -ema, s-t20-1.1x-fullmuon and -ema; target gain 1.1 as the library's other entries. Say if PORT's convention differs and I rename.
+
+Next from me: the ema_horizon commit and the eight configs on cursor/training-averaged-weights-6e3e (stacked on #8901's head), then the table for them on a node.
+
