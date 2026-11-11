@@ -53,8 +53,6 @@ import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.numerics import fa2_relation
-from verity.definitions.numerics import fa3_model as FM
 from verity.definitions.numerics import fa3_split_twins as TW
 from verity.definitions.registry import attention_vocab, hopper
 from verity.definitions.registry import fa3_check_inf as F3
@@ -104,6 +102,8 @@ def case_list(quick: bool = False) -> list[dict[str, Any]]:
 
 def plan(seqlens: list[int], num_splits: int) -> dict[str, Any]:
     """The launch's split count and each sequence's (`fa3_model.split_plan` for the served `num_splits = 0`; 1 for a pinned launch)."""
+    from verity.definitions.numerics import fa3_model as FM
+
     if num_splits == 1:
         return {"static": 1, "dynamic": [1] * len(seqlens)}
     static, dyn = FM.split_plan(seqlens, NH, NH, D, num_sms=NUM_SMS, Dv=DV)
@@ -283,6 +283,9 @@ def split_twin(q, k, v, rows, L: int, ns: int) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _compare(job: dict[str, Any]) -> dict[str, Any]:
+    from verity.definitions.numerics import fa2_relation
+    from verity.definitions.numerics import fa3_model as FM
+
     from verity_vllm.program.frontend import targets as TG
     from verity_vllm.program.frontend.rules import vllm_dsa_dense
     from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
