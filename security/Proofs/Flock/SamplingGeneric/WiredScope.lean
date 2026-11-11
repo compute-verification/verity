@@ -251,7 +251,7 @@ theorem Prog.Rewires.exists_correct {C : Prog} {P : Partition} {ω : ℕ → ℕ
 /-- **A map into earlier members rewires `C`**: `ω` moves only input gates, each to a returned gate of an earlier
 member (`mem`, a member's gates before every later member's) that is no input and no constant; the wired program
 returns no gate `ω` moves; each proof block has a gate that is no input, and the gates it holds or reads are one
-member's; and `ω` sends no two of them to one gate. -/
+member's; and `ω` sends no two of them that it moves to one gate. -/
 theorem Prog.Rewires.of_earlier {C : Prog} {P : Partition} {ω mem : ℕ → ℕ} {keep : ℕ → Bool}
     (hin : ∀ i, ω i ≠ i → C.gates[i]? = some .input)
     (hgate : ∀ i, ω i ≠ i → C.gates[ω i]? ≠ some .input ∧ ∀ c, C.gates[ω i]? ≠ some (.const c))
@@ -259,7 +259,7 @@ theorem Prog.Rewires.of_earlier {C : Prog} {P : Partition} {ω mem : ℕ → ℕ
     (hmem : ∀ i j, mem i < mem j → i < j) (hω : ∀ i, ω i ≠ i → mem (ω i) < mem i)
     (hkeep : ∀ i, ω i ≠ i → keep i = false)
     (hblk : ∀ u ∈ P.blocks, (∃ g ∈ u, C.gates[g]? ≠ some .input) ∧ ∃ t, ∀ i, C.Touches u i → mem i = t)
-    (hinj : ∀ u ∈ P.blocks, ∀ i j, C.Touches u i → C.Touches u j → ω i = ω j → i = j) :
+    (hinj : ∀ u ∈ P.blocks, ∀ i j, C.Touches u i → C.Touches u j → ω i ≠ i → ω j ≠ j → ω i = ω j → i = j) :
     C.Rewires P ω keep where
   input := hin
   noConst := fun i h => (hgate i h).2
@@ -271,6 +271,21 @@ theorem Prog.Rewires.of_earlier {C : Prog} {P : Partition} {ω mem : ℕ → ℕ
   off := fun u hu => by
     obtain ⟨t, ht⟩ := (hblk u hu).2
     exact off_of_earlier (fun g hg => ht g (Or.inl hg)) (fun g hg x hx i hi => ht i (Or.inr ⟨g, hg, x, hx, hi⟩)) hω
-  inj := hinj
+  inj := fun u hu i j hi hj hij => by
+    obtain ⟨t, ht⟩ := (hblk u hu).2
+    by_cases h1 : ω i = i
+    · by_cases h2 : ω j = j
+      · rw [h1, h2] at hij
+        exact hij
+      · exfalso
+        have hlt := hω j h2
+        rw [← hij, h1, ht i hi, ht j hj] at hlt
+        exact Nat.lt_irrefl t hlt
+    · by_cases h2 : ω j = j
+      · exfalso
+        have hlt := hω i h1
+        rw [hij, h2, ht j hj, ht i hi] at hlt
+        exact Nat.lt_irrefl t hlt
+      · exact hinj u hu i j hi hj h1 h2 hij
 
 end Claims.Sampling
