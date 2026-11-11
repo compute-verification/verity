@@ -84,7 +84,7 @@ fi
 
 bad=0
 for x in "${products[@]}"; do
-  e=$(exe "$x" "verity/core/protocols/$x") || { bad=1; continue; }
+  e=$(exe "$x" "verity/protocols/$x") || { bad=1; continue; }
   cases=() skips=("$P")
   [ -f "$D/h1/log.jsonl" ] && skips+=("$D/private/pouw")
   while IFS= read -r c; do cases+=(--cases "$c"); done < <("$TPY" - "$D/private" "$x" "${skips[@]}" <<'EOF'

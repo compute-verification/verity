@@ -83,13 +83,13 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 TRACES = ROOT / "benchmarks/network_e2e/traces"
-sys.path.insert(0, str(ROOT / "tools" / "config"))
+sys.path.insert(0, str(ROOT / "verity" / "configuration" / "config"))
 sys.path.append(str(ROOT))
-from verity_config.settings import SHARED  # noqa: E402 (from the tree's tools/config, put on sys.path above)
+from verity_config.settings import SHARED  # noqa: E402 (from the tree's verity/configuration/config, put on sys.path above)
 SCHEMA = "verity-bench/serve-tax/v0"
 PLUGIN_ENV = "VERITY_SERVETAX"
 TICK_MIDDLEWARE = "verity_vllm.pipeline.tick_plugin.TickFeed"
-TICK_PLUGIN = ROOT / "integrations/vllm/verity_vllm/pipeline/tick_plugin.py"
+TICK_PLUGIN = ROOT / "adapters/vllm/verity_vllm/pipeline/tick_plugin.py"
 #: two-sided 95% Student-t quantiles by degrees of freedom
 T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 8: 2.306, 10: 2.228, 20: 2.086, 30: 2.042}
 
@@ -246,7 +246,7 @@ def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int, num_gpu_blo
 def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float, kv_window_s: float,
                edges: dict | None = None, boundary_rows: dict | None = None) -> dict[str, str]:
     env = dict(os.environ, VLLM_SERVER_DEV_MODE="1", VLLM_BATCH_INVARIANT="0",
-               PYTHONPATH=os.pathsep.join([str(site), str(HERE), str(ROOT / "integrations/vllm"), str(ROOT),
+               PYTHONPATH=os.pathsep.join([str(site), str(HERE), str(ROOT / "adapters/vllm"), str(ROOT),
                                            *SHARED.PYTHONPATH]))
     env.update(arm.env)
     if "boundary_rows" in arm.plugin and not (isinstance(boundary_rows, dict) and boundary_rows.get("check")):
