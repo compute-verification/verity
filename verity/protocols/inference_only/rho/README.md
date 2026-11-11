@@ -184,9 +184,10 @@ way its suite names what it reads here among its `inputs`, so this lists every l
 git grep -n verity/protocols/inference_only/rho -- '*pyproject.toml'
 ~~~
 
-Among them, `verity/protocols/inference_only/nci` calls `theorem.multiple_bound` for its slowdown `D`, and `benchmarks/circuit_properties`
-reads a model's shapes (`instances`, `params`). In the other direction, `families.py` reads
-`verity/protocols/inference_only/nci/algorithms.json` when a family names an algorithm of that library (a family of kind `nci`).
+Among them, `verity/protocols/inference_only/nci` calls `theorem.multiple_bound` for its slowdown `D`, and
+`benchmarks/circuit_properties` reads a model's shapes (`instances`, `params`). In the other direction, `families.py`
+reads `verity/protocols/inference_only/nci/algorithms.json` when a family names an algorithm of that library (a family
+of kind `nci`).
 
 ## Status
 

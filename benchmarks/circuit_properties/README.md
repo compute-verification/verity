@@ -65,8 +65,8 @@ measures each and sets a_out, a_in and |𝒥| per position beside verity/protoco
 
 The package reads `verity.circuits` (Programs, the canonical layout, the Boolean GEMM) and the served b1 Definitions
 on bits (`verity.definitions`). For a model's shapes it loads the slowdown calculator where it sits, with
-`verity/protocols/inference_only/rho` put on `sys.path`: `rho.instances`, and `rho.params` for the registry. The suite names what it reads
-there among its `inputs`.
+`verity/protocols/inference_only/rho` put on `sys.path`: `rho.instances`, and `rho.params` for the registry. The suite
+names what it reads there among its `inputs`.
 
 The runner prints one JSON line a circuit and, with `--out DIR` (or `$OUT`), writes `DIR/properties.json`; without
 either it writes no file.
