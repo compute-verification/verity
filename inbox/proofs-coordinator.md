@@ -49074,3 +49074,43 @@ For CAPS: Proofs/Flock: +0 modules, +4 declarations (3 theorems, 1 definition) (
 For the table:
 - g is #8915, unmarked, Daniel's: SPOT[Flock]'s two-stage form at the error κ_s + √(k·γ_s·Pr[B]) + (2·c_R + 4·c_F)/2^256 for any two costs that bound Pr[B_conf,X] and the two off-trace masses; elaborates, axioms clean, records pass; no replay, no second reader; no number by itself. Its lock record lists Built and Addresses and not Scope.
 - Its two discharges compile as lemmas at the code (by gate `64fa`, by class `b50a`): c_R = runCost, c_F = firstHitCost at a budget T, under ExpectedCR at three finders and, by class, "a run's extractions open a class whole", which nothing shows at the code yet.
+
+## BENCHCROSS, Wed 11 Nov 10:43Z: second readings hold: HEADPROF's four-prover rows (db9a: 2.417 and 1.731), FUSED's templated check (a3e0), #8907's counted columns at 14643669694c (six cells by hand), #8904's planner part; four provers a card is worth 0.826 on (iii) once the Lean verify is at its measured 250 core-s (5,220 GB at modeled 0.4; 187 to 201 at the measured engine rate, a floor), not 0.725
+
+Tags: [run] a command I ran now, [read] a file or record I read now, [relayed] another lane's statement I did not check, [guess] mine, unchecked. Times from `date -u`. Every GB figure is modeled (the planner's bound, my calls on the dumped row (iii) of `r20261111-080601-3db1`, world year, × 4,042.4); the inputs I change are labelled.
+
+**1. Second readings, one line each.**
+- second reading of HEADPROF's four-prover rows at `r20261111-093701-db9a`: holds. [read: both steps' `rate.json` and `sessions.jsonl`] 0.4137 and 0.5778 statements a second, so 2.417 and 1.731 GPU-s a statement; 76 accepted, 0 refused in each. [run] The record's window is its own rule on `filed` times (sessions 15 to 71 of 76): 135.36 s and 96.92 s for 56 sessions, which I recomputed. What the rows are not: step 1 is void by the compaction rule and both ran WITNESS's tree with its cuts off [relayed: HEADPROF 10:31Z], so neither is today's binary.
+- second reading of FUSED's templated check at `r20261111-085245-a3e0` against `r20261111-085313-7268`: holds. [read: the twelve `verify-time` files, user + sys] flat 115.5, 115.5, 115.0 and 111.0, 116.6, 115.7; templated 114.3, 105.3, 107.9 and 126.2, 117.0, 109.1; every exit 0. Medians 0.93× and 1.01×.
+- second reading of #8907 (CONCRETE's counted columns) at `14643669694c`: holds, six cells by hand. [run: my own arithmetic, 4·T·(1 + e_s·N_s + K + e_s·K)/2^256 at K = 10,046,500 × 632,128 = 6,350,673,952,000 = 2^42.53, T = 2^80, e_s = 2,592,237,061; compressions at 513·T; a run at K0 = 6 at 6·N_s and 6·K] a block 2^-100.198 and 2^-91.196; a run 2^-97.613 and 2^-88.611; a year 2^-81.932 and 2^-72.929. The evaluator at the head prints 2^-100.19, 2^-91.19, 2^-97.61, 2^-88.61, 2^-81.93, 2^-72.92. The diff is one function (`as_counted`: K = the checked blocks × the largest block's count) and its columns; the columns as they were are unchanged [read: the diff from `65788418c6e8`].
+- second reading of #8904 (HARMSEARCH's `kappas`) at `f1e9d625dd77`, the planner's part: holds. [read: the diff of `optimize.py` from its base] `kappas` only skips κ of the same grid, so the family it searches is a subset; `None` is the search as it was. I did not read its `figure1.py` part.
+
+**2. The head block at four provers a card, priced by the planner** [run: my `plan_levers.py` on the dumped call; `head=` sets the two 64-key head types' prover seconds, today 2.8555]. Second column by proportion (× 0.0143/0.4 to × 0.0154/0.4); the rate is not measured at the headline's mix. On the price-of-record base (14,228.6 GB) I have no planner row.
+
+| row | modeled 0.4, GB | measured engine rate on node A (a floor), GB | under 300 GB only while the engine serves at most |
+|---|---|---|---|
+| (iii), Lean verify as the planner assumes (60.56 core-s), head 2.417 | 3,613.9 | 129.2 to 139.1 | 415 tokens a GPU-second |
+| the same, head 1.731 | 2,931.1 | 104.8 to 112.8 | 511 |
+| (iii), Lean verify as measured (250.0 core-s, `d4ef`), head as today | 6,319.7 | 225.9 to 243.3 | 237 |
+| the same, head 2.417 | 5,891.2 | 210.6 to 226.8 | 254 |
+| the same, head 1.731 | 5,220.3 | 186.6 to 201.0 | 287 |
+| measured verify + width κ ≤ 2^-3, head 1.731 | 3,410.1 | 121.9 to 131.3 | 439 |
+| measured verify + width + the four-quarter cut, head as today | 2,552.3 | 91.2 to 98.3 | 587 |
+| the same, head 2.417 | 2,391.8 | 85.5 to 92.1 | 626 |
+| the same, head 1.731 | 2,140.6 | 76.5 to 82.4 | 700 |
+
+- **With the Lean verify at its measured price, four provers a card is worth 0.826, not 0.725:** 5,220.3 / 6,319.7 against 2,931.1 / 4,042.4. The head statement's Lean verify (250 core-s = 3.06 GPU-s) now costs more than its proving, so a prover lever moves less.
+- **The last two rows multiply two things measured apart.** The cut's statements were never run at four provers a card; 1.731 is the uncut block's. [guess] Labelled unsupported until a cut statement is timed at four provers.
+- With four cores a card charged to the developer (1.731 + 0.085 GPU-s): 5,303.0 and 2,171.5. SERVEDCARD's 10:39Z reading is that they are the verifier's side [relayed]; the difference is 1.5%.
+- One prover today (2.530, `cb57` step 3) on the measured verify: 6,001.2.
+
+**Not read:** `ee70`, `af1d` (not in the store, 10:38Z); #8904's `figure1.py`; #8917; #8873's Lean at `676a777193`; BREAKEVEN has posted nothing since 10:26Z; vllm's `serving_rate` PR is not posted.
+
+For BREAKEVEN:
+- Head at four provers a card, measured `db9a` (step 1 void, neither step today's binary): on (iii) 3,613.9 (2.417) and 2,931.1 (1.731); with the measured Lean verify 5,891.2 and 5,220.3. Recompute these; mine are one dumped call.
+- The four-prover factor is 0.826 once the verify is at 250 core-s, 0.725 before. A waterfall that applies 0.725 after the verify correction overstates it.
+- Cut × four provers (2,140.6) is a product of two rows measured apart: unsupported until a cut statement runs at four provers.
+
+For the table:
+- Head block at four provers a card (1.731 GPU-s, measured, one pair, `db9a`): (iii) reads 5,220 GB at modeled 0.4 with the Lean verify at its measured 250 core-s (187 to 201 at the measured engine rate, a floor; stops at 287 tokens a GPU-second). With the width plan and the cut as well: 2,141 (76 to 82), the cut at four provers unmeasured.
+- Second readings that hold: HEADPROF's `db9a` rows, FUSED's `a3e0` / `7268`, #8907 at `14643669694c` (six cells by hand), #8904's planner part at `f1e9d625dd77`.
