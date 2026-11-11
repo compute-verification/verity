@@ -15,7 +15,7 @@ from training_slowdown.data import Data, Stream
 #: what depends on when a job ran, not on what it computed: its times, and the flags read from them
 TIMES = {"cpu_s", "wall_s", "gpu_s", "process_cpu_s", "process_wall_s", "children_cpu_s", "self_cpu_s", "elapsed_s",
          "flags"}
-BUDGET = {"steps": 6, "batch": 2}
+BUDGET = {"steps": 4, "batch": 2}
 KEY = "00112233445566778899aabbccddeeff"
 META = {"config": {"digest": "c" * 64}}
 
@@ -87,22 +87,34 @@ def segment(tiny, kept=None, state=None, stop_after=None):
     return te.finish(META)
 
 
-def test_a_segment_from_a_kept_state_runs_the_steps_that_remain_as_the_unbroken_job_does(tiny):
-    """The harness alone, in one process: a job stopped after the checkpoint of step 2 keeps the tensors and the
-    record so far; a second harness, told the next step and the digest key, loads θ, takes the tensors and runs steps
-    3 to 5; the two records joined are the unbroken job's, with every keyed weight digest. A kept state without its
-    optimizers' state gives other weights."""
-    whole = run.joined(None, segment(tiny))
-    assert [cp["step"] for cp in whole["checkpoints"]] == [0, 1, 2, 3, 4, 5]
-    first = segment(tiny, stop_after=2)
-    assert len(first["record"]["steps"]) == 3 and first["state"]["stream"] == 3 * BUDGET["batch"]
-    cut = run.joined(run.joined(None, first["record"]), segment(tiny, {"step": 3}, first["state"]))
-    assert_continues(whole, cut, at=3)
+@pytest.fixture(scope="module")
+def stopped(tiny):
+    """What the tiny job kept when it was stopped after the checkpoint of step 1."""
+    return segment(tiny, stop_after=1)
 
-    digests = [cp["output_sha256"] for cp in whole["checkpoints"]]
-    fresh = first["state"] | {"optimizers": [{"state": {}, "param_groups": o["param_groups"]}
-                                             for o in first["state"]["optimizers"]]}
-    assert [cp["output_sha256"] for cp in segment(tiny, {"step": 3}, fresh)["checkpoints"]] != digests[3:]
+
+@pytest.fixture(scope="module")
+def rest(tiny, stopped):
+    """The record of the segment that continues `stopped`: steps 2 and 3."""
+    return segment(tiny, {"step": 2}, stopped["state"])
+
+
+def test_a_segment_from_a_kept_state_runs_the_steps_that_remain_as_the_unbroken_job_does(tiny, stopped, rest):
+    """The harness alone, in one process: a job stopped after the checkpoint of step 1 keeps the tensors and the
+    record so far; a second harness, told the next step and the digest key, loads θ, takes the tensors and runs steps
+    2 and 3; the two records joined are the unbroken job's, with every keyed weight digest."""
+    whole = run.joined(None, segment(tiny))
+    assert [cp["step"] for cp in whole["checkpoints"]] == [0, 1, 2, 3]
+    assert len(stopped["record"]["steps"]) == 2 and stopped["state"]["stream"] == 2 * BUDGET["batch"]
+    assert_continues(whole, run.joined(run.joined(None, stopped["record"]), rest), at=2)
+
+
+def test_a_kept_state_without_its_optimizers_state_continues_to_other_weights(tiny, stopped, rest):
+    fresh = stopped["state"] | {"optimizers": [{"state": {}, "param_groups": o["param_groups"]}
+                                               for o in stopped["state"]["optimizers"]]}
+    again = segment(tiny, {"step": 2}, fresh)
+    assert [cp["step"] for cp in again["checkpoints"]] == [cp["step"] for cp in rest["checkpoints"]] == [2, 3]
+    assert all(a["output_sha256"] != b["output_sha256"] for a, b in zip(again["checkpoints"], rest["checkpoints"]))
 
 
 def test_the_generators_a_step_may_read_come_back_as_they_were_kept():
@@ -130,32 +142,31 @@ def test_a_segments_clock_starts_where_the_kept_states_stood(tmp_path):
     assert run.Harness({}, tmp_path, clock=lambda: 10.0, budget_s=40.0).elapsed() == 0.0
 
 
-def kept_state(tmp_path, tiny, **over):
-    """A state directory holding what the tiny job kept after step 2, with `over` in its record."""
-    first = segment(tiny, stop_after=2)
-    record = run.joined(None, first["record"] | {"seed": 0, "split": "final"}) | over
+def kept_state(tmp_path, stopped):
+    """A state directory holding what the tiny job kept after step 1."""
+    record = run.joined(None, stopped["record"] | {"seed": 0, "split": "final"})
     tensors = tmp_path / "handed.pt"
-    torch.save(first["state"], tensors)
+    torch.save(stopped["state"], tensors)
     state = run.Kept(tmp_path / "state")
     state.write(tensors, record, 1.5)
     return state, record
 
 
-def test_a_job_keeps_one_state_and_continues_only_its_own(tmp_path, tiny):
+def test_a_job_keeps_one_state_and_continues_only_its_own(tmp_path, stopped):
     """The state directory holds the last state alone, the tensors moved in and named by sha256. A state of another
     VERSION, seed or split, with tensors that aren't the ones it names or a model that isn't its record's last
     checkpoint's, is refused by what differs, and left as it was."""
-    state, record = kept_state(tmp_path, tiny)
-    assert sorted(p.name for p in state.dir.iterdir()) == ["state.json", "tensors-0000002.pt"]
+    state, record = kept_state(tmp_path, stopped)
+    assert sorted(p.name for p in state.dir.iterdir()) == ["state.json", "tensors-0000001.pt"]
     assert not (tmp_path / "handed.pt").exists()
     later = tmp_path / "later.pt"
-    later.write_bytes((state.dir / "tensors-0000002.pt").read_bytes())
-    state.write(later, record | {"checkpoints": record["checkpoints"] + [record["checkpoints"][-1] | {"step": 3}]}, 2.0)
-    assert sorted(p.name for p in state.dir.iterdir()) == ["state.json", "tensors-0000003.pt"]
-    state.write(state.dir / "tensors-0000003.pt", record, 1.5)
+    later.write_bytes((state.dir / "tensors-0000001.pt").read_bytes())
+    state.write(later, record | {"checkpoints": record["checkpoints"] + [record["checkpoints"][-1] | {"step": 2}]}, 2.0)
+    assert sorted(p.name for p in state.dir.iterdir()) == ["state.json", "tensors-0000002.pt"]
+    state.write(state.dir / "tensors-0000002.pt", record, 1.5)
     kept = state.load(0, "final")
     assert kept["record"] == json.loads(json.dumps(record)) and kept["elapsed_s"] == 1.5
-    assert (kept["tensors"], kept["sha256"]) == ("tensors-0000002.pt", run.file_sha256(state.dir / kept["tensors"]))
+    assert (kept["tensors"], kept["sha256"]) == ("tensors-0000001.pt", run.file_sha256(state.dir / kept["tensors"]))
 
     for seed, split, why in ((1, "final", "its seed is 0 and this job's is 1"),
                              (0, "search", "its split is 'final' and this job's is 'search'")):
@@ -177,22 +188,21 @@ def test_a_job_keeps_one_state_and_continues_only_its_own(tmp_path, tiny):
     refused(whole[:-9], "its state.json doesn't parse")
     refused(json.dumps({k: v for k, v in other.items() if k != "elapsed_s"}),
             "its state.json lacks what a state holds .KeyError: 'elapsed_s'.")
-    refused(json.dumps(other | {"sha256": "0" * 64}), f"its tensors, tensors-0000002.pt, have sha256 {other['sha256']}")
-    earlier = other["record"] | {"checkpoints": other["record"]["checkpoints"][:2]}
+    refused(json.dumps(other | {"sha256": "0" * 64}), f"its tensors, tensors-0000001.pt, have sha256 {other['sha256']}")
+    earlier = other["record"] | {"checkpoints": other["record"]["checkpoints"][:1]}
     refused(json.dumps(other | {"record": earlier}),
-            "its model hashes to .* its record's last checkpoint, of step 1, to")
+            "its model hashes to .* its record's last checkpoint, of step 0, to")
     assert state.load(0, "final") == kept
 
-    (state.dir / "tensors-0000002.pt").unlink()
-    with pytest.raises(SystemExit, match="its tensors, tensors-0000002.pt, are missing"):
+    (state.dir / "tensors-0000001.pt").unlink()
+    with pytest.raises(SystemExit, match="its tensors, tensors-0000001.pt, are missing"):
         state.load(0, "final")
     state.clear()
     assert not state.dir.exists() and run.Kept(state.dir).load(0, "final") is None
 
 
-def test_a_segment_that_names_another_job_than_the_kept_record_is_refused(tiny):
-    stopped = segment(tiny, stop_after=2)
-    first, rest = run.joined(None, stopped["record"]), segment(tiny, {"step": 3}, stopped["state"])
+def test_a_segment_that_names_another_job_than_the_kept_record_is_refused(stopped, rest):
+    first = run.joined(None, stopped["record"])
     for over, why in (({"config": {"digest": "b" * 64}}, "config digest"), ({"seed": 5}, "seed"),
                       ({"steps": rest["steps"][1:]}, "first step")):
         with pytest.raises(SystemExit, match=f"the kept record's {why} is .* no record is written"):
@@ -208,7 +218,7 @@ def test_a_route_that_names_a_signal_is_refused():
 def test_a_job_stopped_after_a_checkpoint_and_run_again_writes_the_unbroken_jobs_record(tmp_path, tiny, monkeypatch):
     """The job as a node runs it, four times, each two processes, so slow: what the quick tests above don't reach is
     the job's own process keeping the state, the stop, and the sandbox. An unbroken job; the same job told to stop
-    (SIGTERM) once it has kept its state after step 2, which ends with `STOPPED`, no record and the state left; a
+    (SIGTERM) once it has kept its state after step 1, which ends with `STOPPED`, no record and the state left; a
     job of another config on that state, refused by both digests before it trains, the state left; and the
     stopped job again, which continues while its state directory, hidden from the route's process, still holds the
     state, writes the unbroken job's record in two segments and removes the state."""
@@ -226,18 +236,18 @@ def test_a_job_stopped_after_a_checkpoint_and_run_again_writes_the_unbroken_jobs
 
     def stop_after(self, tensors, record, elapsed_s):
         write(self, tensors, record, elapsed_s)
-        if record["checkpoints"][-1]["step"] == 2:
+        if record["checkpoints"][-1]["step"] == 1:
             os.kill(os.getpid(), signal.SIGTERM)
 
     monkeypatch.setattr(run.Kept, "write", stop_after)
     assert job("cut", "state") == run.STOPPED and not (tmp_path / "cut" / "run.json").exists()
     monkeypatch.setattr(run.Kept, "write", write)
     kept = sorted(p.name for p in (tmp_path / "state").iterdir())
-    assert kept == ["state.json", "tensors-0000002.pt"]
+    assert kept == ["state.json", "tensors-0000001.pt"]
     so_far = json.loads((tmp_path / "state" / "state.json").read_text())["record"]
-    assert [cp["score"]["split"] for cp in so_far["checkpoints"]] == ["final"] * 3 and len(so_far["steps"]) == 3
+    assert [cp["score"]["split"] for cp in so_far["checkpoints"]] == ["final"] * 2 and len(so_far["steps"]) == 2
 
-    other = write_config(tmp_path / "other.toml", budget=BUDGET | {"steps": 7})
+    other = write_config(tmp_path / "other.toml", budget=BUDGET | {"steps": 5})
     with pytest.raises(SystemExit, match=f"its config digest is {so_far['config']['digest']} and this job's is "
                                          f"{config.load(other, starts.registry(reg)).digest}"):
         job("other", "state", other)
@@ -246,6 +256,6 @@ def test_a_job_stopped_after_a_checkpoint_and_run_again_writes_the_unbroken_jobs
     assert job("cut", "state") == 0 and not (tmp_path / "state").exists()
     cut = json.loads((tmp_path / "cut" / "run.json").read_text())
     assert cut["invalid"] == [] and cut["digest_key"] == so_far["digest_key"] != whole["digest_key"]
-    assert_continues(whole, cut, at=3, keyed=False)
+    assert_continues(whole, cut, at=2, keyed=False)
     assert [cp["score"] for cp in cut["checkpoints"]] == [cp["score"] for cp in whole["checkpoints"]]
     assert sorted(p.name for p in (tmp_path / "cut").iterdir()) == ["e", "run.json"]
