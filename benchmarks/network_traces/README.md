@@ -44,6 +44,9 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   runbook (below).
 - **The weights' load:** `load_relay.py` and `load_commit.py` (below).
 - **A memory wipe's egress:** `wipe_gate.sh` and `wipe_egress.py` (below).
+- **A cheating server.** `served_cheats.py` runs four cheats against a served record (`--stand-in`: an in-process
+  GLM-5.3 token endpoint), each refused or charged, and prints what the audit was expected to do and what it did
+  (below).
 - `tool.py`: the harness's store declarations.
 
 ## The demo's load
@@ -122,6 +125,22 @@ whose rows count each Commit period's requests, steps and outputs and its advice
 does the rest of the chain's out/ but what `PUBLIC` names (the report's verdicts and ε at δ, and the scan's answers):
 report.md, the report's other keys and the steps' summaries count the window's requests and outputs and the advice's
 bits. The leak guard (`--public`) moves any file the piece doesn't declare out of its directory.
+
+## A cheating server against a served record
+
+`served_cheats.py` runs four cheats of a served record, each a switch, and prints per switch what the network
+certifier's audit was expected to do and what it did (`negatives.py` is the catalogue of what each check refuses).
+`--stand-in` (the dry run) builds every record from an in-process endpoint that streams GLM-5.3's tokens on an
+injected clock, so it needs no GPU or served model; the served run points the same switches at a kept served GLM-5.3
+record (`served_session.py`). Each switch is refused or charged:
+
+    uv run benchmarks/network_traces/served_cheats.py --stand-in --switch tokens    # ids of the server's own choosing: the I/O tie refuses; count-only N2 does not
+    uv run benchmarks/network_traces/served_cheats.py --stand-in --switch length    # a response ended early or late: N2's counts refuse
+    uv run benchmarks/network_traces/served_cheats.py --stand-in --switch timing    # the release-time jitter channel: its bits an interval, under the budget (certifier_timing)
+    uv run benchmarks/network_traces/served_cheats.py --stand-in --switch failures  # connections failed on purpose: accepted, each charged in the schedule (leak_bounds)
+
+`--switch all` runs the four with an honest baseline. Its report is read from the run's published Attempt, never from
+this README.
 
 ## The chain's run of record
 
