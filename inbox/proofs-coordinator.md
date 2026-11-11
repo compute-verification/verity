@@ -47532,3 +47532,87 @@ For the table:
 - The proof system's weakest term is unchanged: the binding side's first-hit term, 2^-98.2 to 2^-97.6 a run by gates in calls [relayed: your 09:52Z table; modeled; the first-hit term of #8827's lemma, K as the Lean counts it]. Flock's own: a table 2^-205.01, a session's κ 2^-203.00 [run: exact replica of the Lean's bounds].
 - The level-0 length is worth 1.00 bit a halving on every row of the bits table [derived]. At tables of 2^33 bits the 2,647 GB plan by classes (at most 72) reads 2^-101.6 in compressions for 2^-99.6; needs the registration split, no Flock change; GB unpriced.
 - The wide leaf (m = 35 on m = 31's tower, +4.00 bits, salts 2.684 to 0.168 GB a statement): the soundness side builds in Lean with five files changed [run: `r20261111-093644-0d0a`, 361 modules]; the rest of `Proofs/Flock`, the prover and the card are not built. Daniel's.
+
+## EXTFORM, Wed 11 Nov 10:11Z: THE CANDIDATES (job 2): of (a) to (e) none is slack by proof alone. (a) needs a new extractor and (c′) a new finder, (c) is a parameter and (d) a restated event (1 bit each, Daniel's), (b) is already in #8827, (e) is forced and costs 0.02 bit. The one slack factor is K by classes, (f), in Lean with `hwit` kept as the target. Modeled, by classes of gates with the same readers the first-hit term reads 2^-110.6 a run in calls where by gates it reads 2^-98.3. NO PR YET, BLOCKED BY THE CHECK LINES: the two tries of the corollaries (`314e`, `6a1d`) have waited for a check slot since 09:46Z; the records run of the same tree is running
+
+**For Daniel, first:** the by-class theorems are new statements with new hypotheses: unmarked, no guarantee rests on them and no lock reads them. Of the others, (a) would change `Arg.ext` (a definition the locks read), (c) is the record's `waits`, (d) restates an event; none is built.
+
+Every bits figure below is **modeled: the first-hit term of #8827's lemma, at T = 2^80 SHA-512 calls in every run**, per sampled replay block or a run at K0 = 6 replay blocks as headed. It says nothing of the code, where the model's verifier accepts no run at these counts [relayed: DRAFT-CORE 09:33Z]. [derived: `slack_bits2.py` in my note, inputs relayed from SCALE 09:20Z and 09:52Z, ATTACK 09:39Z, PARAMS 08:25Z: K ≤ 2^41.81 gates and 10,046,500 checked blocks a sampled replay block at the plan of record, 2^32.07 classes by reader set a run, k = 12,343,986.]
+
+**1. The candidates.** The term is `4·T·(1 + N_s·e + (1 + e)·K)/2^256`, `e = 1 + 210·k`.
+
+| | candidate | verdict | bits gained | what it would take |
+|---|---|---|---|---|
+| (a) | `e` a query, not a session | **no** at the code; 7.64 only in the 200-tables column | 0 | a new `Arg.ext` that decodes one table of a session, with its own knowledge-soundness proof: a definition the locks read, and new math |
+| (b) | charge only the waited session | **already so** in #8827 | 0 | nothing |
+| (c) | the 210 | **forced** for this finder; the number is a parameter | 1.00 at `waits` = 105 | Daniel's: the record's `waits`, and κ's `2^-210` becomes `2^-105` |
+| (c′) | cut a further run's extraction at 2 failed waits | sketch only, not proved | 6.7 | a new finder and a plurality lemma for a table that opens less; new math |
+| (d) | the 4 against the paper's 2 | the finder's 2 is met; the doubling is forced as the event stands | 1.00 | a restated event (non-interior gates in `regTwo_split`'s third case); left, on your word |
+| (e) | `N_s·e` against `(1 + e)·K` | **forced**, never binding | 0 | nothing: it is the floor of (f) |
+| (f) | K by classes of gates | **slack by proof alone**; in Lean | 12.3 by same readers; 15.4 if rows were classes | a hypothesis on the code, `hwit`, that REGX proves (section 4) |
+
+**2. Each, with its sketch or its counterexample.**
+
+- **(a) No.** [read] `k` is not a count of queries that touch a block: it is the accepted reruns one wait collects so that Flock's decoder rebuilds one table's level-0 word, `k = ⌈4N₀/e⌉` (`Proofs/Flock/Claims/Numbers.lean:12-13`; `Arg.ofFlock`, `Definitions/Claims/SamplingGeneric.lean:920`). `opensAt` reads what the *witness* reveals (`sessExt`, `SamplingGeneric.lean:341`), and the witness is what `A.ext` returns: whole or none.
+  - At the code a session is one proof block's table: `skey` is its default, the slot (`SamplingGeneric.lean:249`), so `sessBlocks = [u]`. There is no part of a session's extraction to leave out.
+  - With 200 tables a session (k = 2,468,797,139, which the code does not accept [relayed: PARAMS]) a gate's value needs one table's word, so an extractor a table would pay one table's `k`: the 200-tables column would read the one-table column. That extractor is a new `Arg.ext` and a new proof of `Arg.KS`.
+- **(b) Already so.** [read] `runExtAt` (`RunExtAt.lean:65-73`) extracts, at a further run, only the sessions with a proof block needing the waited gate, and `callsBy g` is that. What #8827 still pays more than once is that extraction, once *for each gate*: (f).
+- **(c) The 210 is `E^rep`'s waits `m′`.** [read] It is in κ as `2^-m′` (`Numbers.lean:127-129`: κ ≤ 2^-203 + 2^-210 + 2^-231 + 2^-250) and in the cost as `1 + m′·k` (`ERep_runs_exp`, `ERepCost.lean:218-234`; `es`, `SamplingGeneric.lean:425-426`).
+  - [derived] The cost bound is met in the finder's accounting: a session entered with probability ε pays `k/ε` reruns a wait, so one whose waits never return a witness pays `210·k` whatever ε. A prover gives such a session a gate that another session opens; the finder then extracts it at every further run that samples it. So no proof lowers the constant for this finder.
+  - [derived] The least number for a 2^-100 line: `κ_s` is a largest-over-sessions (`maxBelow`), so `waits` = 105 leaves `2^-105` in it and gains exactly 1.00 bit. `κ_le_sum` takes `210 ≤ D.waits x`: it is the record's parameter, Daniel's.
+- **(c′) A finder that stops a further run's extraction after 2 failed waits.** [derived, sketch] `firstWait` returns at the first wait whose candidate passes (`Interaction.lean:242-248`), so a tape where waits succeed half the time pays about 2. Cutting at 2 or 3 makes the further runs' table open less often; the first-hit half then needs "the cut table opens at least `1 − 2^-m″` of each value's mass on good tapes" and a term for the bad ones. It would read `e ≈ 1 + 2k` on the further runs. I have not got the constants and would not plan on it.
+- **(d) The 4 stands.** [relayed: ATTACK 09:26Z] The finder's 2 is met at SPOT's shape (off/found 1.99, exact). [read] The other 2 is two finders (the boundary's and the interiors'), each over the whole sample, because the off-boundary event is over every gate and a prover may state the statement's roots as a replay block's interior roots (`TwoRegFirstHit.lean:827-828`, `TwoReg.lean:381`; nothing in `stmtOk` that I or ATTACK read refuses it). With the third case of `regTwo_split` restated on non-interior gates the K term would be at 2: 1.00 bit.
+- **(e) `N_s·e` is forced and is the floor of (f).** [read] It is `callsAt`: the first run with every session of its sample extracted once (`runExt`), which the finder must have to know what the first run opened. [derived] Per sampled replay block it is 2^54.53 against `(1 + e)·K` = 2^73.08 by gates, 2^60.76 by same readers, 2^57.51 by rows: it costs 0.00, 0.02 and 0.17 bit. It would cost 1.00 bit only at one class a checked block, where the two terms are equal.
+- **(f) K by classes.** #8827's finders pay, at a further run, one run with the needing sessions extracted *for each gate still waited for*. Where a run that opens a gate opens every gate of its class, paying once a class is enough, and the term is `4·E[c + Σ_{q ∈ classes of the sample} c_q]/2^256`. In Lean (section 4).
+  - **It cannot go below the count by reader sets with this finder** [derived, counterexample]. Take a block `u` whose gates fall in `c` reader sets, set `i` shared with one other block `u_i`. The prover's run opens only set `i` (through `u_i`), each with probability `1/c`, and `u`'s own extraction never returns. The finder then waits about `c` runs for set `i` and extracts `u` at each one that samples it: `u` is charged `c` times its sampling probability, which is the by-class count and `c` times a count by blocks. ATTACK's toy has the same shape (a count by blocks passed by 1.3).
+
+**3. The numbers** [derived; modeled as headed above]. Columns: one table a session; 200 tables a session (not accepted at the code); calls as compressions on 64 KiB rows (+9.00); a year of 600 s audits (+15.68); both.
+
+| form, **a run at K0 = 6 replay blocks**, the plan of record | one table | 200 tables | 64 KiB | a year | both |
+|---|---|---|---|---|---|
+| #8827 by gates, K ≤ 2^41.81 a replay block; (a), (b) and (e) leave it there | −98.33 | −90.69 | −89.33 | −82.65 | −73.65 |
+| (c) `waits` 105 [Daniel's] | −99.33 | −91.69 | −90.33 | −83.65 | −74.65 |
+| (d) the K term at 2 [a restated event] | −99.33 | −91.69 | −90.33 | −83.65 | −74.65 |
+| (c′) [sketch, not proved] | −105.05 | −97.40 | −96.05 | −89.37 | −80.37 |
+| **(f) by classes, same readers** (132 a head block [relayed: SCALE 09:52Z, derived there]) | **−110.64** | −103.00 | **−101.64** | −94.96 | −85.96 |
+| (f) if a row were a class (9 a head block; needs two facts of the circuits nothing checks) | −113.73 | −106.09 | −104.73 | −98.05 | −89.05 |
+| (f) same readers + (d) | −111.62 | −103.98 | −102.62 | −95.94 | −86.94 |
+| (f) same readers + (c′) [sketch] | −117.35 | −109.71 | −108.35 | −101.67 | −92.67 |
+| the floor of this form: one class a checked block (not reachable, (f)'s counterexample) | −115.88 | −108.24 | −106.88 | −100.20 | −91.20 |
+
+Per sampled replay block each row is 2.58 to 2.59 bits lower (by gates −100.92, by same readers −113.22).
+
+- With ATTACK's 09:47Z count of K as the Lean's lemmas give it (checked blocks times the largest block's needs, 2^42.53) the by-gates row is 0.72 bit worse [relayed]; the by-class rows need the same care once a Lean count of classes exists. None does.
+- Over a year no row that is proved reaches 2^-100, in calls or in compressions.
+
+**4. The Lean, in lines against #8827's** [run: `wc -l` at my head `e7b2e51d928b`].
+
+| | lines | state |
+|---|---|---|
+| #8827: `FirstHit.lean`, `TwoRegFirstHit.lean`, `RunExtAt.lean` | 1,599 + 1,421 + 185 | its head `946b7b72f26d` |
+| (f): `Proofs/Core/SamplingGeneric/FirstHitClass.lean` | 300 (19 declarations) | compiles through `pr_off_cls_le_ex` (runs `d409`, `1994`, `af42`); `clsOf` and its two lemmas pass `lake env lean` against Mathlib on my VM, not yet in a run |
+| (f): `Proofs/Flock/SamplingGeneric/TwoRegFirstHitClass.lean` | 642 (21 declarations) | compiles through `eventTwoX_le_firstHit_kept` (run `af42` at `6261228ec415`: 18 theorems, the three axioms); `_wit` and `_key` not yet in a run |
+| (d) | about 150 and a restated `regTwo_split` [guess] | not written |
+| (c′) | several hundred, new math [guess] | not written |
+| (a) | a new extractor and its `Arg.KS`: over 1,000 [guess] | not written |
+| (b), (c), (e) | 0 | nothing to write |
+
+The chain in the Flock file, each from the one before: `eventTwoX_le_firstHit_cls` (`hallX`, `hallI`: a run that opens a gate opens its class) ← `_kept` (what a run's extractions keep holds classes whole) ← `_wit` (`hwit`: what each returned witness reveals does) ← `_key` (the same at the classes of a key, so `hrep` is `hneeds` on keys).
+
+**5. State, and what blocks the PR** [run: `research status`, `git`, 10:09Z].
+- Head `e7b2e51d928b1b02e63531c2b849493c6abd2367`, pushed. Its tree is `2a8eb198e4ff`'s (`git diff` empty): the commit between them, `bf1db41932`, added a corollary taking REGX's `hwhole` and `hcls`, and I took it back out on your 10:06Z word. `hwit` is the target, unchanged since my 09:51Z entry.
+- **Blocked by the check lines, nobody's doing:** try `r20261111-094600-314e` (at `9c0cc34d8507`, on vy-nebius-cpu-7) and try `r20261111-094823-6a1d` (at `2a8eb198e4ff`, on vy-nebius-cpu-2) are both still waiting for a check slot. The watcher on my side gives up after 20 minutes (exit 79); the runs stay in line and I poll them.
+- Records run `r20261111-094935-d3c3` (`security/Proofs`, the same tree) is **running** on vy-nebius-cpu-8; it builds both files, so it also says whether they compile. Quick tier `r20261111-094939-bdf4` waits on vy-nebius-cpu-4.
+- I open the PR the moment one of them says the two corollaries compile, and write its number and the head here. If you can move one of the tries up a line, `6a1d` is the one.
+
+For KILIAN: stack on `e7b2e51d928b` once the line above says it compiles (or on `6261228ec415` now: `eventTwoX_le_firstHit_cls`, `_kept` and the finders `Compiled.finderXCls`, `CompiledTwo.finderICls` compile there, run `af42`). The sum you bound is `∑ c ∈ (univ.filter (fun g : Fin (L.nG x) => decide (∃ u ∈ L.checked x q.2.1, g.val ∈ needs u))).image cls, L.toCompiled.callsBy H P x s needs c.val q.1 q.2.1 q.2.2`; `Compiled.ex_callsCls_le` says it is at most #8827's sum.
+
+For REGX: `hwit` stays the target, as section 2 of my 09:51Z entry states it (`eventTwoX_le_firstHit_wit`, and `_key` at your class as a key). Your `hwhole` and `hcls` give it in five lines once `sessBlocks = [u]`: `u' ∈ sessBlocks` is the slot's own block, `hcls` gives the opening at `g'` in the same reveal under the same roots, `hwhole` its passing. That derivation is commit `bf1db41932` on `cursor/proofs-slack-3f5a` (`Compiled.sessBlocks_eq_of_skey`, `CompiledTwo.eventTwoX_le_firstHit_whole`, not compiled: try `r20261111-100130-8441` is in the line); cherry-pick it if it saves you the wiring, it is not in my PR.
+
+For SCALE: nothing changes in the form: `4·T·(1 + N_s·e + (1 + e)·K_cls)/2^256`, with `K_cls` the mean over the sample of the number of distinct keys (reader set, replay block, side) among the gates the checked blocks need, summed over the checked blocks' union. Your 2^32.07 a run is the count I use.
+
+For CONCRETE: the right-hand side by classes, in KILIAN's cost form, not instantiated in Lean: `4·(T·(1 + e_s·N_s + K_cls,s + e_s·K_cls,m) + (1 + K_cls,s)·n_PU·openCalls)/2^256`. Candidates (a) to (e) change no right-hand side.
+
+For the table:
+- Slack by proof alone in the first-hit term: only K. By classes of gates with the same readers it reads, modeled, 2^-110.6 a run in calls and 2^-101.6 in compressions at the plan of record (K0 = 6), against 2^-98.3 and 2^-89.3 by gates; in Lean as a theorem with a hypothesis on the code (`hwit`, REGX's to prove), a new statement; no PR yet, the tries wait for a check slot.
+- (a), (b), (e): nothing to gain. (c) `waits` 105 and (d) a restated event: 1 bit each, Daniel's, not built. (c′): 6.7 bits on paper, a sketch, not planned on.
