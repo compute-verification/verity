@@ -29,8 +29,9 @@ import hashlib
 import json
 import time
 from collections import Counter
+from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Any, Callable, Iterator
+from typing import Any
 
 import numpy as np
 from verity.circuits.query_ast import NameSel

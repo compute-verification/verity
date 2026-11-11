@@ -26,9 +26,10 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import Counter
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 import numpy as np
 from verity.circuits.codec import definition_digest

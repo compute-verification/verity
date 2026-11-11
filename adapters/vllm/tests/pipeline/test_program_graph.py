@@ -138,7 +138,8 @@ def test_catalog_deduplicates_specializations_across_rows(tmp_path):
     assert ix and all(set(e["rows"]) == {"rowA", "rowB"} for e in ix.values())
     shards = {}
     for p in (tmp_path / "graphs" / "definitions").glob("*.json.gz"):
-        shards.update(json.loads(gzip.open(p, "rt").read()))
+        with gzip.open(p, "rt") as f:
+            shards.update(json.load(f))
     assert len(shards) == len({e["digest"] for e in ix.values()})
     assert all(PG.definition_digest({k: x for k, x in v["definition"].items() if k != "fold"}) == h for h, v in shards.items())
     ops = json.loads((tmp_path / "graphs" / "rowA.ops.json").read_text())["ops"]

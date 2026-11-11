@@ -325,7 +325,7 @@ def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, mo
         assert record["commitment"]["coins"] == record["commitment"]["round_coins"]
         ledger = PHC.Ledger.load(auditor.heads(), KEY, pins=pins, main=main)
         mine = {sid, draw["session"]}
-        assert PHC.session_reason(record["commitment"], ledger, lambda s: tmp_path / s if s in mine else None) is None
+        assert PHC.session_reason(record["commitment"], ledger, lambda s, mine=mine: tmp_path / s if s in mine else None) is None
         assert run.details["challenger"] == {"closed": True}
     assert len(set(sids)) == 2 and ports == [7811] * 4
     reserves = [shlex.split(a[-1]) for a in auditor.argv if shlex.split(a[-1])[0] == "reserve"]

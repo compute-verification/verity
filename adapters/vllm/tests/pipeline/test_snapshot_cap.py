@@ -32,7 +32,7 @@ def test_the_32_mib_cap_of_record_skipped_the_1024_class_prefill_gate_up_and_the
     assert 1028 * LLAMA_1B["GU"] * 2 == 33_685_504 > RC.SNAPSHOT_CAP_FLOOR == 33_554_432
     # qwen H100 B1 1024/128: [1024, 17920] bf16 = 36,700,160 B
     assert 1024 * QWEN_15B["GU"] * 2 == 36_700_160 > RC.SNAPSHOT_CAP_FLOOR
-    assert 35_840 == QWEN_15B["GU"] * 2       # one row of that tensor = the committed identity's byte range
+    assert QWEN_15B["GU"] * 2 == 35_840       # one row of that tensor = the committed identity's byte range
     # the derived caps: rows = the engine's max_num_batched_tokens of the workload (the bound the scheduler enforces)
     cap, why = RC.snapshot_cap_bytes(_wl([1024] * 16, mnbt=5348), LLAMA_1B)
     assert cap == 5348 * 16384 * 2 and why["raised"] and why["rows_source"] == "engine max_num_batched_tokens" and why["rows"] == 5348
@@ -98,7 +98,8 @@ def test_main_derives_the_cap_only_when_none_is_given_and_records_the_derivation
     a2 = seen["a"]
     assert a2.snapshot_max_bytes == 4096 and a2.snapshot_cap_derivation is None
     # a run.json re-run (--run-dir) keeps the cap the capture ran with, never a re-derived one
-    run = tmp_path / "run"; run.mkdir()
+    run = tmp_path / "run"
+    run.mkdir()
     (run / RC.G.ARTIFACTS.get("run", "run.json")).write_text(json.dumps({"case": "LLAMA32_1B", "workload_path": str(wl), "profile": "derived_LLAMA32_1B",
                                                                        "config_id": "x", "snapshot_max_bytes": 777, "snapshot_cap_derivation": {"rows": 1}}))
     with pytest.raises(SystemExit):

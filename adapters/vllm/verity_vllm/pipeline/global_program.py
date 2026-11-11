@@ -159,7 +159,8 @@ def component_declared_target(d: str) -> dict | None:
     if not os.path.exists(p):
         return None
     try:
-        t = json.load(open(p)).get("target")
+        with open(p) as f:
+            t = json.load(f).get("target")
     except (OSError, ValueError, AttributeError):   # unreadable, not JSON, or not an object: it carries none
         return None
     return t.get("declared") if isinstance(t, dict) and isinstance(t.get("declared"), dict) else None
@@ -223,7 +224,8 @@ def component_spec_histogram(d: str) -> dict | None:
     if not os.path.exists(p):
         return None
     try:
-        h = json.load(open(p)).get("spec_histogram")
+        with open(p) as f:
+            h = json.load(f).get("spec_histogram")
     except (OSError, ValueError, AttributeError):   # unreadable, not JSON, or not an object: it carries none
         return None
     return h if isinstance(h, dict) else None
@@ -325,8 +327,8 @@ def modelled_engine(execution: str, comps: dict) -> tuple[dict, str | None]:
         facts.append(f)
     if not facts or any(not f or "cudagraph_mode" not in f for f in facts):
         return ({**base, "enforce_eager": False, "compilation": None},
-                f"components declare the compiled execution {ex!r} but no compilation facts (applicability.engine / applicability.compilation with "
-                f"cudagraph_mode, compilation_mode|mode, capture_sizes, backend): the Program cannot state the compiled execution it models")
+                (f"components declare the compiled execution {ex!r} but no compilation facts (applicability.engine / applicability.compilation with "
+                 f"cudagraph_mode, compilation_mode|mode, capture_sizes, backend): the Program cannot state the compiled execution it models"))
     if declared.get("enforce_eager") is True:
         return ({**base, "enforce_eager": False, "compilation": None},
                 f"components declare the compiled execution {ex!r} but an engine block with enforce_eager true")
@@ -341,7 +343,8 @@ def component_applicability(d: str) -> dict:
     for name in ("result.json", "artifact.json"):
         p = os.path.join(d, name)
         if os.path.exists(p):
-            j = json.load(open(p))
+            with open(p) as f:
+                j = json.load(f)
             a = j.get("applicability") or (j.get("artifact") or {}).get("applicability") or {}
             if a:
                 return a
@@ -429,7 +432,8 @@ def stop_rule(checkpoint_dir: str | None, eos_token_ids: list[int] | None, sampl
             p = os.path.join(checkpoint_dir, fn)
             if os.path.exists(p):
                 try:
-                    v = json.load(open(p)).get("eos_token_id")
+                    with open(p) as f:
+                        v = json.load(f).get("eos_token_id")
                 except Exception as e:  # noqa: BLE001
                     sources[fn] = f"unreadable: {e!r}"[:120]
                     continue
@@ -482,7 +486,8 @@ def weights_of_record_binding(components: dict[str, dict]) -> dict:
             per[key] = None
             continue
         try:
-            rec = json.load(open(p))
+            with open(p) as f:
+                rec = json.load(f)
         except Exception as e:  # noqa: BLE001
             return {"refusal": f"component {key}: weights_of_record.json unreadable ({e})", "components": per, "per_rank": None}
         tp = rec.get("tp") if isinstance(rec.get("tp"), dict) else {}
@@ -536,7 +541,8 @@ def weights_of_record_binding(components: dict[str, dict]) -> dict:
 
 
 def _refused(out: str, res: dict) -> dict:
-    json.dump(res, open(os.path.join(out, "workload_program.json"), "w"), indent=1)
+    with open(os.path.join(out, "workload_program.json"), "w") as f:
+        json.dump(res, f, indent=1)
     return res
 
 
@@ -672,9 +678,9 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     art["layout"] = build_paths.layout_block(artifact_root, workload_path, art["inputs"]["derived"])
     art["cost"] = {"component_secs": comp_secs, "compose_secs": round(time.time() - t2, 2), "total_secs": round(time.time() - t0, 2)}
     art["ok"] = True
-    json.dump(art, open(os.path.join(out, "workload_program.json"), "w"), indent=1)
-    json.dump(art["address_map"], open(os.path.join(out, "address_map.json"), "w"), indent=1)
-    json.dump(art["chronology"], open(os.path.join(out, "chronology.json"), "w"), indent=1)
+    for name, doc in (("workload_program.json", art), ("address_map.json", art["address_map"]), ("chronology.json", art["chronology"])):
+        with open(os.path.join(out, name), "w") as f:
+            json.dump(doc, f, indent=1)
     return art
 
 
@@ -683,9 +689,9 @@ class Options:
     workload: str = option("--workload", type=workload_arg)
     derived: list[str] = option("--derived", action="append", default=[])
     out: str = option("--out")
-    checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="the pinned checkpoint: its config.json / generation_config.json eos_token_id " "become the Program's declared stop rule")
+    checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="the pinned checkpoint: its config.json / generation_config.json eos_token_id become the Program's declared stop rule")
     eos_token_ids: str | None = option("--eos-token-ids", default=None, help="comma-separated EOS token ids declared explicitly (union with --checkpoint-dir's)")
-    artifact_root: str | None = option("--artifact-root", default=None, help="the dir the vllm-build/v1 tree is rooted at (holds build_workload/ and the " "build_request*/ dirs); the `layout` block's paths are relative to it. Default: the parent of --out")
+    artifact_root: str | None = option("--artifact-root", default=None, help="the dir the vllm-build/v1 tree is rooted at (holds build_workload/ and the build_request*/ dirs); the `layout` block's paths are relative to it. Default: the parent of --out")
     follow: float | None = option("--follow", type=float, default=None,
                                   help="started beside the derives: load each component as its derive finishes, waiting up to this many seconds")
     follow_done: str | None = option("--follow-done", default=None, help="with --follow: a file whose existence means every derive has ended")

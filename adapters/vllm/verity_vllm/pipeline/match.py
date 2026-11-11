@@ -534,7 +534,7 @@ class Options:
     workload: str | None = option("--workload", type=workload_arg, default=None)
     case: str | None = option("--case", default=None, help="checkpoint role (B0, B1, ... any role in checkpoints.json with a profile module)")
     out: str | None = option("--out", default=None, help="RUN_DIR (driver) or fold_summary.json (--worker fold)")
-    run_dir: str | None = option("--run-dir", default=None, help="an existing RUN_DIR: --out plus case/workload/profile/config-id/checkpoint-dir/steps from its run.json " "(the sealed verifier re-runs the CPU phase this way from a fresh checkout)")
+    run_dir: str | None = option("--run-dir", default=None, help="an existing RUN_DIR: --out plus case/workload/profile/config-id/checkpoint-dir/steps from its run.json (the sealed verifier re-runs the CPU phase this way from a fresh checkout)")
     phase: str = option("--phase", choices=["gpu", "cpu", "all"], default="all")
     python_gpu: str | None = option("--python-gpu", default=None, help="the pod's torch venv python (default: sys.executable)")
     python_cpu: str | None = option("--python-cpu", default=None, help="the torch-free 3.12 python (default: sys.executable)")
@@ -544,8 +544,8 @@ class Options:
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     engine_arg: list[str] = option("--engine-arg", action="append", default=[], help="LLM(**kw) override key=value (JSON value) for every GPU stage, repeatable; e.g. max_num_batched_tokens=64, enable_prefix_caching=true")
     max_tokens: int | None = option("--max-tokens", type=int, default=None, help="override the workload's max_tokens (passed to the GPU stages)")
-    snapshot_max_bytes: int | None = option("--snapshot-max-bytes", type=int, default=None, help="(capture) per-tensor snapshot cap in bytes (m1_capture default 32 MiB; a " "prefill MLP row block above the cap has no snapshot evidence -- raise it for long / batched prefills, the run.json records the value)")
-    snapshot_max_bytes_op: int | None = option("--snapshot-max-bytes-op", type=int, default=None, help="(capture) lower per-tensor cap at dispatcher-call events; Triton " "launch events keep --snapshot-max-bytes, so a large launch output is copied once (cov-moe: the fused-MoE intermediates of a " "2048-token prefill otherwise exceed the pod's pinned host memory; the run.json records the value)")
+    snapshot_max_bytes: int | None = option("--snapshot-max-bytes", type=int, default=None, help="(capture) per-tensor snapshot cap in bytes (m1_capture default 32 MiB; a prefill MLP row block above the cap has no snapshot evidence -- raise it for long / batched prefills, the run.json records the value)")
+    snapshot_max_bytes_op: int | None = option("--snapshot-max-bytes-op", type=int, default=None, help="(capture) lower per-tensor cap at dispatcher-call events; Triton launch events keep --snapshot-max-bytes, so a large launch output is copied once (cov-moe: the fused-MoE intermediates of a 2048-token prefill otherwise exceed the pod's pinned host memory; the run.json records the value)")
     checkpoints: str = option("--checkpoints", default=DEFAULT_CHECKPOINTS)
     checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="HF snapshot dir or model*.safetensors glob (compare --safetensors)")
     hf_config: str | None = option("--hf-config", default=None, help="HF config.json for per-field C provenance (analytic.config_of)")
@@ -569,7 +569,7 @@ class Options:
     sampler_construction: str | None = option("--sampler-construction", default=None, help="(--worker fold) the Programs' sampler construction (the driver passes it from --program-dir)")
     registered_values: bool = option("--registered-values", default=False, action="store_true", help="(--worker fold) the program's values are inputs (Profile.registered_values); the driver passes what the --program-dir Programs register")
     match_pipeline: str = option("--match-pipeline", env="MATCH_PIPELINE", default="", help="(--worker fold) the row's Match pipeline: under `shared` the access journal is compressed at level 1 (the same lines, a larger file)")
-    moe_construction: str | None = option("--moe-construction", default=None, help="(--worker fold) the workload's DECLARED MoE construction " "(manifest target.moe_construction: indexed-read | indexed-read-ordered | padded); the driver passes it from --workload")
+    moe_construction: str | None = option("--moe-construction", default=None, help="(--worker fold) the workload's DECLARED MoE construction (manifest target.moe_construction: indexed-read | indexed-read-ordered | padded); the driver passes it from --workload")
 
 
 def main(a: Options) -> int:
@@ -581,8 +581,8 @@ def main(a: Options) -> int:
         try:
             from verity_vllm.observe.fold.profiles import profile_module_for_case
             a.profile = profile_module_for_case(a.case)
-        except Exception as e:  # noqa: BLE001
-            raise UsageError(f"--profile not given and no profile module declares case {a.case!r}: {e}")
+        except Exception as e:
+            raise UsageError(f"--profile not given and no profile module declares case {a.case!r}: {e}") from e
     if a.config_id is None and a.case and a.workload:
         a.config_id = f"{a.case}-{Path(a.workload).stem}"
     for req in ("config_id", "profile", "workload", "case", "out"):

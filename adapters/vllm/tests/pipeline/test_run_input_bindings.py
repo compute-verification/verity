@@ -54,8 +54,8 @@ def test_rows_that_do_not_tile_the_batches_bind_nothing():
     out = run_input_bindings(short, [a, b])
     assert out["bindings"] == [] and len(out["refused"]) == 1 and out["refused"][0].startswith("r0: its run values' leaves")
     out = run_input_bindings({"requests": [_request(0, "wl-a", [("run", 10, 10 + na)])]}, [])
-    assert out["bindings"] == [] and out["refused"] == [f"r0: its run values' leaves [] don't tile its `run` Input batches [(0, {na})] "
-                                                        "(field k, one gate a leaf)"]
+    assert out["bindings"] == [] and out["refused"] == [(f"r0: its run values' leaves [] don't tile its `run` Input batches [(0, {na})] "
+                                                         "(field k, one gate a leaf)")]
     out = run_input_bindings({"requests": [_request(0, "wl-a", [("prompt", 0, 4)])]}, [a])
     assert out["bindings"] == [] and out["refused"] == ["r0: 1 run values and no `run` Input in the address map"]
     assert run_input_bindings({"requests": [_request(0, "wl-a", [("prompt", 0, 4)])]}, []) == {"bindings": [], "refused": []}

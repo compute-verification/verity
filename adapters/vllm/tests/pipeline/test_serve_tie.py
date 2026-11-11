@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import json
 import shlex
+from collections.abc import Callable
 from concurrent.futures import Future
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Callable
+from typing import Any
 
 import pytest
 from verity.circuits.codec import canonical_json

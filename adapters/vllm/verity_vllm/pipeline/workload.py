@@ -206,41 +206,40 @@ def prefix_sharers(p: dict) -> list[int]:
 # ---------------------------------------------------------------------------------------------------------------------------------
 def check_plan(p: dict) -> list[str]:
     """The sweep's workload requirements; returns the list of violations (empty = PASS).  The B >= 8 clauses apply only for B >= 8."""
-    B, I, O = int(p["batch"]), int(p["max_input"]), int(p["max_output"])
+    B, max_in, max_out = int(p["batch"]), int(p["max_input"]), int(p["max_output"])
     L, C = [int(x) for x in p["input_lengths"]], [int(x) for x in p["output_caps"]]
     lo, olo = int(p["min_input"]), int(p["min_output"])
     bad: list[str] = []
     if len(L) != B or len(C) != B:
         bad.append(f"vector lengths {len(L)}/{len(C)} != batch {B}")
-    if any(not (lo <= x <= I) for x in L):
-        bad.append(f"input length outside [{lo}, {I}]: {L}")
-    if any(not (1 <= c <= O) for c in C):
-        bad.append(f"output cap outside [1, {O}]: {C}")
-    if not any(abs(x - I) <= 3 for x in L):
+    if any(not (lo <= x <= max_in) for x in L):
+        bad.append(f"input length outside [{lo}, {max_in}]: {L}")
+    if any(not (1 <= c <= max_out) for c in C):
+        bad.append(f"output cap outside [1, {max_out}]: {C}")
+    if not any(abs(x - max_in) <= 3 for x in L):
         bad.append("no request within 3 tokens of max_input")
     if B >= 8:
         if len(set(L)) < 6:
             bad.append(f"only {len(set(L))} distinct input lengths (need >= 6)")
         if not any(x <= lo + 3 for x in L):
             bad.append("no request near the minimum input length")
-        qs = {_quartile_of(x, lo, I) for x in L}
+        qs = {_quartile_of(x, lo, max_in) for x in L}
         if qs != {0, 1, 2, 3}:
             bad.append(f"input quartiles covered {sorted(qs)} != [0,1,2,3]")
-        awk = [x for x in L if not _is_pow2(x) and x % 64 != 0 and x not in (I, lo)]
+        awk = [x for x in L if not _is_pow2(x) and x % 64 != 0 and x not in (max_in, lo)]
         if len(awk) < 3:
             bad.append(f"only {len(awk)} awkward non-power-of-two input lengths (need several >= 3)")
         if len(set(C)) < 6:
             bad.append(f"only {len(set(C))} distinct output caps (need >= 6)")
         if not any(c <= max(olo, 4) for c in C):
             bad.append("no very short output cap")
-        if not any(abs(c - O) <= 3 for c in C):
+        if not any(abs(c - max_out) <= 3 for c in C):
             bad.append("no output cap equal/near max_output")
-        cq = {_quartile_of(c, olo, O) for c in C}
+        cq = {_quartile_of(c, olo, max_out) for c in C}
         if len(cq) < 3:
             bad.append(f"output caps not spread across the range (quartiles {sorted(cq)})")
-    if p["sampling"] != "greedy":
-        if len(p["sampling_seeds"]) != B or len(set(p["sampling_seeds"])) != B:
-            bad.append("stochastic row without B distinct per-request sampling seeds")
+    if p["sampling"] != "greedy" and (len(p["sampling_seeds"]) != B or len(set(p["sampling_seeds"])) != B):
+        bad.append("stochastic row without B distinct per-request sampling seeds")
     if p["arrivals"] == "staggered" and B > 1:
         offs = p["arrival_offsets_s"]
         if offs[0] != 0.0 or offs != sorted(offs) or len(set(offs)) < min(B, 4):
@@ -344,7 +343,7 @@ def build_requests(tok: Tok, p: dict) -> list[dict]:
 
 
 def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok: Tok | None) -> dict:
-    B, I, O = int(p["batch"]), int(p["max_input"]), int(p["max_output"])
+    B, max_in, max_out = int(p["batch"]), int(p["max_input"]), int(p["max_output"])
     n, sharers = int(p["shared_prefix"]), prefix_sharers(p)
     reqs = build_requests(tok, p) if tok is not None else [
         {"request_id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"verity-sweep/{p['row_id']}/{i}")), "index": i,
@@ -362,11 +361,11 @@ def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok:
     doc = {
         "schema": SCHEMA, "model": hf_repo, "case": case,
         "engine": {"revision": revision, "vllm": VLLM,
-                   "args": {"max_num_batched_tokens": int(max(2048, total_prompt + B)), "max_model_len": int(I + O)}},
+                   "args": {"max_num_batched_tokens": int(max(2048, total_prompt + B)), "max_model_len": int(max_in + max_out)}},
         "seed": 0,
         "variants": variants, "seeds": list(p["sampling_seeds"]),
         "sampling": {"variant": variant, "seed": None, "n": 1, **({"ignore_eos": True} if of_record else {})},
-        "serving_profile": f"sweep-B{B}" + ("-staggered" if p["arrivals"] == "staggered" else ""), "context_class": f"I{I}-O{O}",
+        "serving_profile": f"sweep-B{B}" + ("-staggered" if p["arrivals"] == "staggered" else ""), "context_class": f"I{max_in}-O{max_out}",
         "length_seed": p["seed"], "prompt_seed": p["seed"], "replicate": 0,
         "length_rule": p["length_rule"],
         "expected_engine_steps": horizon,
@@ -378,7 +377,7 @@ def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok:
         "sweep": {k: p[k] for k in ("schema", "row_id", "seed", "batch", "max_input", "max_output", "min_input", "min_output", "sampling",
                                     "sampling_params", "arrivals", "input_lengths", "output_caps", "sampling_seeds", "arrival_offsets_s",
                                     "arrive_steps", "arrival_rule", "length_rule", "seed_rule")},
-        "note": (f"sweep {p['row_id']}: B={B} I<={I} O<={O} {variant} arrivals={p['arrivals']}; prompt lens {p['input_lengths']}, caps "
+        "note": (f"sweep {p['row_id']}: B={B} I<={max_in} O<={max_out} {variant} arrivals={p['arrivals']}; prompt lens {p['input_lengths']}, caps "
                  f"{p['output_caps']}, arrive steps {p['arrive_steps']}; every request to max_tokens => {horizon} engine steps; "
                  f"max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  "
                  + ("A row of record: sampling.ignore_eos, every request done only at its public cap." if of_record else "EOS untouched.")),

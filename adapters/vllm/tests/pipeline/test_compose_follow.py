@@ -35,10 +35,10 @@ def _request_dir(d: Path, LP: int, STEPS: int) -> None:
         f.write(canonical_json(desc))
     with gzip.open(d / "instances.json.gz", "wt") as f:
         json.dump({"schema": "cb-a/instance-sequence/v1", "params": [[n, repr(t)] for n, t in rep.flat_definition.signature()[0]], "rows": []}, f)
-    json.dump({"structural_inputs": {"LP": LP, "T": STEPS, "sampling": {"kind": "greedy"}}}, open(d / "construction_manifest.json", "w"))
-    json.dump({"ok": True, "program": {"digest": program_digest(desc)}, "sampling": {"kind": "greedy"},
-               "applicability": {"execution": "bi-eager", "numerics_profile": "stand-in", "sampler": {"kind": "greedy"},
-                                 "engine": {"enforce_eager": True, "enable_prefix_caching": False}}}, open(d / "result.json", "w"))
+    (d / "construction_manifest.json").write_text(json.dumps({"structural_inputs": {"LP": LP, "T": STEPS, "sampling": {"kind": "greedy"}}}))
+    (d / "result.json").write_text(json.dumps({"ok": True, "program": {"digest": program_digest(desc)}, "sampling": {"kind": "greedy"},
+                                               "applicability": {"execution": "bi-eager", "numerics_profile": "stand-in", "sampler": {"kind": "greedy"},
+                                                                 "engine": {"enforce_eager": True, "enable_prefix_caching": False}}}))
 
 
 @pytest.fixture(scope="module")

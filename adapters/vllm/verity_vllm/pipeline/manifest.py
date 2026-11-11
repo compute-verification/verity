@@ -27,9 +27,10 @@ import os
 import re
 import sys
 import time
+from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 from verity.definitions import cross_call
 from verity.definitions import word as word_query

@@ -44,7 +44,7 @@ def key(argv: list[str], *, workload: str | Path, tree: str | None, device: dict
         del args[i:i + 2]
     if "--workload" in args:
         i = args.index("--workload")
-        args[i + 1] = derive_inputs(args[i + 1] if not workload else workload)
+        args[i + 1] = derive_inputs(workload if workload else args[i + 1])
     doc = {"argv": args, "tree": tree, "device": device}
     return hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
 

@@ -377,7 +377,7 @@ def test_collective_record_names_own_and_peer_operands_at_worlds_2_4_and_8(W, ki
         g = torch.fx.Graph()
         parts = [g.placeholder(f"p{r}") for r in range(W)]
         peer_in = {parts[p]: f"in.{kind}.k0.r{p}" for p in range(W) if p != rank}
-        ctx = SimpleNamespace(is_input_storage=lambda a: peer_in.get(a))
+        ctx = SimpleNamespace(is_input_storage=peer_in.get)
         rec = E._collective_record(ctx, SimpleNamespace(args=tuple(parts) if W == 2 else (parts,)), kind, 3)
         assert rec["kind"] == kind and rec["occurrence"] == 3 and rec["own_operand"] == rank and rec["operand_ranks"] == list(range(W))
         if W == 2:
