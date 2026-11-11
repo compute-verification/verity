@@ -26,8 +26,10 @@ text prints beside it, and a credit above the class's linears is refused: its pa
 `--from RUN` reads the verifier's side of the run's record in the evidence store, and nothing the developer's node
 reports of what it served:
 
-- `out/pieces/pouw/pearlplus-answer.json`, the Pearl+ verifier's answer: its verdict, its credit, and the ε and δ the
-  credit holds at;
+- `out/pieces/pouw/pearlplus-answer.json`, the Pearl+ verifier's answer: its verdict, its credit, and its draw's ε_s
+  at δ_s (`epsilon_s`, `delta_s`): a draw that accepts misses more than the share ε_s of the credited work with
+  probability at most δ_s. They are sampling's alone, not the ε and δ the credit holds at: the assumption's gap ε_a
+  and its own δ_a, and the binding of the passes' commitments, are not in them;
 - `out/pieces/pouw/pearlplus-lean.json` and `pearlplus-lean-check.json`, the Lean verifier's verdict and the record's
   comparison of it with the answer: where the record holds them they must be the answer's, and where it holds no Lean
   verdict the text says so;
@@ -73,6 +75,8 @@ VERDICTS = "out/record/verdicts.json"
 RECORDS = [ANSWER, LEAN, LEAN_CHECK, POLICY, VERDICTS]
 ABSENT = ("absent: a Pearl+ answer holds its passes to no seconds, and the seconds the run served in stay on the "
           "developer's node")
+#: what the answer's ε and δ leave out, printed beside them
+SAMPLING_ALONE = "sampling's alone: the assumption's gap and δ, and binding, are not in them"
 #: how the store ends the reason of a withdrawal of only the files under some prefixes of a record
 SCOPED = re.compile(r" \(only ([^()]+)\)$")
 
@@ -180,7 +184,7 @@ def _held(tree: Path, path: str) -> Any:
 def credit(tree: Path) -> dict:
     """The Pearl+ verifier's credit in the record under `tree`: `NoNumber` unless its answer is Pearl+'s accept with a
     credit, and the Lean verifier's verdict and the record's comparison of the two, where it holds them, are the
-    answer's."""
+    answer's. `epsilon_s` and `delta_s` are the answer's `public.work.epsilon` and `profile.delta`, its draw's."""
     try:
         answer, lean, check = (_held(tree, p) for p in (ANSWER, LEAN, LEAN_CHECK))
         if answer is None:
@@ -204,8 +208,8 @@ def credit(tree: Path) -> dict:
             raise NoNumber(f"the Lean verifier's {name} is {str(lean_s)[:16]} and the answer's {str(answer_s)[:16]}")
     if differ:
         raise NoNumber(f"the record's comparison of the Lean verifier's verdict with the answer differs on {differ}")
-    return {"credited": credited, "passes": passes, "scheme": public.get("scheme"), "epsilon": work.get("epsilon"),
-            "delta": (answer.get("profile") or {}).get("delta"), "lean": theirs is not None}
+    return {"credited": credited, "passes": passes, "scheme": public.get("scheme"), "epsilon_s": work.get("epsilon"),
+            "delta_s": (answer.get("profile") or {}).get("delta"), "lean": theirs is not None}
 
 
 def load(tree: Path) -> dict:
@@ -265,7 +269,8 @@ def document(tree: Path, commit: str | None, run: str | None, withdrawn: list[st
     return {"value": c["credited"] / total, "unit": UNIT, "commit": commit, "run": run, "target": float(TARGET),
             "met": Fraction(c["credited"], total) >= TARGET, "credited_macs": c["credited"], "model_macs": total,
             "macs": macs, "linears_share": macs["linears"] / total, "passes_macs": c["passes"], "scheme": c["scheme"],
-            "epsilon": c["epsilon"], "delta": c["delta"], "lean": c["lean"], "record": record, "withdrawn": withdrawn,
+            "epsilon_s": c["epsilon_s"], "delta_s": c["delta_s"], "lean": c["lean"], "record": record,
+            "withdrawn": withdrawn,
             "model": served["model"], "class": served["class"], "policy_agrees": served["policy_agrees"],
             "tokens": served["tokens"], "tokens_from": "class", "wall_s": None, "capacity_share": None}
 
@@ -292,9 +297,10 @@ def text(doc: dict) -> str:
     lines = [f"compute: {100 * doc['value']:.2f}% of the served model's MACs are credited by Pearl+ "
              f"({doc['credited_macs']:,} of {doc['model_macs']:,}), {'at or above' if doc['met'] else 'below'} the "
              f"{100 * doc['target']:g}% target"]
-    at = ", ".join(f"{k} {doc[name]}" for k, name in (("ε", "epsilon"), ("δ", "delta")) if doc[name] is not None)
+    at = ", ".join(f"{k} {doc[name]}" for k, name in (("ε_s", "epsilon_s"), ("δ_s", "delta_s")) if doc[name] is not None)
     lines.append(f"  {doc['run'] or 'no recorded run'}, commit {doc['commit'] or 'unknown'}: Pearl+'s answer accepts"
-                 + (f" (scheme {doc['scheme']})" if doc["scheme"] else "") + (f" at {at}" if at else "")
+                 + (f" (scheme {doc['scheme']})" if doc["scheme"] else "")
+                 + (f" at its draw's {at} ({SAMPLING_ALONE})" if at else "")
                  + (", and the Lean verifier's verdict is the same" if doc["lean"] else ", and the record holds no Lean "
                     "verdict"))
     lines.append("  PoUW's row in the run's composed record " + ("accepts too" if record["verdict"] == "accept" else
