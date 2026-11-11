@@ -2,7 +2,7 @@
 r"""Serving's per-step row-table hashing on the GPU, overlapped: what ``row_tables_device.step_roots`` adds to a graphed int8
 decode step of Llama-3.1-8B at batch ``--batch``, on one GPU.
 
-    research run --on auto --cpus 8 --mem-gb 32 --cwd source -- bash -lc 'cd integrations/vllm && export PATH=/usr/local/cuda/bin:$PATH \
+    research run --on auto --cpus 8 --mem-gb 32 --cwd source -- bash -lc 'cd adapters/vllm && export PATH=/usr/local/cuda/bin:$PATH \
         PYTHONPATH=.:../..:../../tools/research/src && GPU_LEASE_WHO=<you> gpu-lease 1 --wait --max-min 20 -- \
         /workspace/jobs/venv312/bin/python3 ../../benchmarks/commitments/step_root_gpu.py'
 
