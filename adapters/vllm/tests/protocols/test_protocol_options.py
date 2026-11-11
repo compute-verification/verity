@@ -239,7 +239,7 @@ def test_a_commit_refuses_spot_under_vllm_v1_by_name_and_a_recorded_target_still
 def test_the_commit_context_is_none_for_the_default_and_checked_for_a_declared_set(monkeypatch):
     assert PO.commit_context(None) is None and PO.commit_context(TargetProfile()) is None
     versions: dict = {}
-    assert PO.commit_guard(TargetProfile(), hot=True, installs=False) == TargetProfile() and PO.commit_guard(None) is None
+    assert PO.commit_guard(TargetProfile(), installs=False) == TargetProfile() and PO.commit_guard(None) is None
     assert PO.at_commit(TargetProfile(), Model(), versions) is None and versions == {}
     PO.into_verdict(None, versions, "/nonexistent", TargetProfile(), program_digest=None, manifest=None)
     _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1",))
@@ -251,7 +251,7 @@ def test_the_commit_context_is_none_for_the_default_and_checked_for_a_declared_s
         PO.commit_context(p, world=2)
 
 
-@pytest.mark.parametrize("kw,match", [({"world": 2}, "TP 2"), ({"hot": True}, "the hot worker"), ({"installs": False}, "TP"),
+@pytest.mark.parametrize("kw,match", [({"world": 2}, "TP 2"), ({"installs": False}, "TP"),
                                       ({"settings": {"pous": {}}}, "does not enable")])
 def test_the_commit_guard_exits_3_naming_every_reason(monkeypatch, capsys, kw, match):
     _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1",))

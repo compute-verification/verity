@@ -59,7 +59,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "glue": ("verity_vllm.glue", "per model, the code its `__models__` markers tie to it and the hours from staged checkpoint to record"),
     "golden": ("verity_vllm.properties.golden", "golden corpus check"),
     "holdout": ("verity_vllm.properties.holdout", "holdout workload generator and assembler"),
-    "hot": ("verity_vllm.pipeline.hot", "hot Commit worker"),
     "kernel-identity": ("verity_vllm.engine.kernel_identity", "generated-kernel identity"),
     "launch-context": ("verity_vllm.pipeline.launch_context", "launch context of a workload's request shapes"),
     "m1-capture": ("verity_vllm.pipeline.m1_capture", "capture the observation log under the observer"),
@@ -138,7 +137,6 @@ MACHINE: dict[str, str] = {
     "RunEnv.hidden_so_fa3_guarded": "/workspace/cp/fa2/build/fa3_matReqG/verity_fa3_matReqG.so",
     "RunEnv.norm_tap_so": "/workspace/cp/norm_tap/build/verity_norm_tap.so",
     "RunEnv.router_tap_so": "/workspace/cp/router_tap/build/verity_router_tap.so",
-    "RunEnv.hot_root": "/workspace/cp/hot",
     "RunEnv.guard_preserve_file": "/root/dm/guard.preserve",
     "RunEnv.pod_guard": "/root/dm/pod_guard.sh",
 }
@@ -238,12 +236,6 @@ def _parse(command: str, argv: list[str], environ: Mapping[str, str]) -> tuple[a
         _add_options(by_name[name], cls, environ)
     ns = parser.parse_args(argv)
     return by_name[ns._sub], _options(subs[ns._sub], ns, environ), mod
-
-
-def set_environment(environ: Mapping[str, str]) -> None:
-    """Make the process environment ``environ``: each job of the hot worker (`hot.serve`) runs in its own environment."""
-    os.environ.clear()
-    os.environ.update(environ)
 
 
 def process_settings(environ: MutableMapping[str, str]) -> None:
