@@ -5,6 +5,7 @@ from synthetic import SHAPE, run_job
 from training_slowdown import config, run, starts
 from training_slowdown.codecs import ScaledQuant
 from training_slowdown.routes import subset
+from training_slowdown.routes._optimizers import newton_schulz
 
 
 def test_subsets_schedule_ramps_holds_then_falls_to_zero():
@@ -17,10 +18,16 @@ def test_subsets_schedule_ramps_holds_then_falls_to_zero():
     assert subset.schedule(share, 0, 838) == 1 / (0.02 * 838) and subset.schedule(share, 16, 838) == 1.0
 
 
+def test_every_module_of_routes_passes_the_screen_a_route_does():
+    """A route's load screens the route's own source; what it imports from beside it is held to the same names."""
+    for path in sorted(config.ROUTES.glob("*.py")):
+        assert run.screen(path.read_text()) == [], path.name
+
+
 def test_newton_schulz_brings_a_matrixs_singular_values_near_one():
     g = torch.randn(8, 16, generator=torch.Generator().manual_seed(0))
-    u = subset.newton_schulz(g)
-    assert u.dtype == g.dtype and torch.equal(subset.newton_schulz(g.T), u.T)
+    u = newton_schulz(g)
+    assert u.dtype == g.dtype and torch.equal(newton_schulz(g.T), u.T)
     s = torch.linalg.svdvals(u)
     assert 0.6 < s.min() and s.max() < 1.3
     a, _, b = torch.linalg.svd(g, full_matrices=False)
@@ -48,7 +55,7 @@ def test_muon_takes_the_matrices_and_adamw_the_gains():
     assert all(torch.equal(before[n], p) != p.requires_grad for n, p in after.items())
     # the first step's buffer is the gradient, so the orthogonalized direction is of (1 + momentum) times it
     lr = 0.01 * subset.schedule(dials, 0, 1)
-    want = before["blocks.0.w_up.weight"] * (1 - lr * 0.05) - lr * 2 ** 0.5 * subset.newton_schulz(1.95 * seen["grad"])
+    want = before["blocks.0.w_up.weight"] * (1 - lr * 0.05) - lr * 2 ** 0.5 * newton_schulz(1.95 * seen["grad"])
     assert torch.allclose(w, want, rtol=0, atol=1e-7)
     with pytest.raises(SystemExit, match="opt muon has no rule for the embedding"):
         subset.build(SHAPE, dials | {"trainable": "*"})

@@ -12,10 +12,21 @@ from synthetic import SHAPE as TINY
 from training_slowdown import config, library
 from training_slowdown.model import LM
 from training_slowdown.routes import subset
+from training_slowdown.routes._optimizers import newton_schulz
 
 #: six blocks, as the entries' patterns name them, 16 wide
 SHAPE = TINY | {"n_layer": 6}
 STEPS, BATCH, CTX = 3, 4, 8
+
+
+@pytest.fixture(autouse=True)
+def one_thread():
+    """Each entry and its reference run on one thread: on more, torch's Newton-Schulz in bf16 on a CPU doesn't return
+    the same matrix at every call, and now and then returns NaN."""
+    threads = torch.get_num_threads()
+    torch.set_num_threads(1)
+    yield
+    torch.set_num_threads(threads)
 
 
 def entry(name: str):
@@ -85,12 +96,53 @@ def muon_rule(p, g, state, group):
     """Muon: Nesterov momentum 0.95, the update orthogonalized (the route's Newton-Schulz, which test_routes holds
     to the SVD's polar factor) and scaled by the matrix's shape, the decay decoupled."""
     buf = state["buf"] = 0.95 * state.get("buf", torch.zeros_like(p)) + g
-    u = subset.newton_schulz(g + 0.95 * buf)
+    u = newton_schulz(g + 0.95 * buf)
     p.mul_(1 - group["lr"] * group["weight_decay"]).sub_(group["lr"] * max(1.0, p.shape[0] / p.shape[1]) ** 0.5 * u)
 
 
 def muon(d: dict):
     return lambda matrices, gains: [Rule(matrices, muon_rule, lr=d["lr"], weight_decay=d["weight_decay"]),
+                                    torch.optim.AdamW(gains, lr=d["lr"], betas=(0.9, 0.95), weight_decay=0.0)]
+
+
+def sgd(d: dict):
+    return lambda matrices, gains: [torch.optim.SGD(matrices + gains, lr=d["lr"], momentum=0.9, nesterov=True,
+                                                    weight_decay=d["weight_decay"])]
+
+
+def adafactor(d: dict):
+    return lambda matrices, gains: [torch.optim.Adafactor(matrices + gains, lr=d["lr"],
+                                                          weight_decay=d["weight_decay"])]
+
+
+def lion_rule(p, g, state, group):
+    """Lion: the step is the sign of 0.9 m + 0.1 g with the decay beside it, then m = 0.99 m + 0.01 g."""
+    m = state.get("m", torch.zeros_like(p))
+    p.sub_(group["lr"] * ((0.9 * m + 0.1 * g).sign() + group["weight_decay"] * p))
+    state["m"] = 0.99 * m + 0.01 * g
+
+
+def lion(d: dict):
+    return lambda matrices, gains: [Rule(matrices + gains, lion_rule, lr=d["lr"], weight_decay=d["weight_decay"])]
+
+
+def inverse_fourth_root(a: torch.Tensor) -> torch.Tensor:
+    u, s, _ = torch.linalg.svd(a)
+    return u @ torch.diag(s ** -0.25) @ u.T
+
+
+def shampoo_rule(p, g, state, group):
+    """Shampoo: L = 1e-4 I + the sum of G Gᵀ, R = 1e-4 I + the sum of Gᵀ G, the step L^(-1/4) G R^(-1/4), here with
+    the factors in float64 and each root from an SVD; the decay decoupled."""
+    g = g.double()
+    left = state["left"] = state.get("left", 1e-4 * torch.eye(len(g), dtype=g.dtype)) + g @ g.T
+    right = state["right"] = state.get("right", 1e-4 * torch.eye(g.shape[1], dtype=g.dtype)) + g.T @ g
+    u = inverse_fourth_root(left) @ g @ inverse_fourth_root(right)
+    p.mul_(1 - group["lr"] * group["weight_decay"]).sub_(group["lr"] * u.to(p.dtype))
+
+
+def shampoo(d: dict):
+    return lambda matrices, gains: [Rule(matrices, shampoo_rule, lr=d["lr"], weight_decay=d["weight_decay"]),
                                     torch.optim.AdamW(gains, lr=d["lr"], betas=(0.9, 0.95), weight_decay=0.0)]
 
 
@@ -100,13 +152,20 @@ CLOSE = 1e-3
 #: the same where the update passes Newton-Schulz in bf16, which turns a rounding in its input into a few percent of
 #: its output; a rule with another momentum, scale or decay is off by the whole move
 CLOSE_BF16 = 0.1
+#: beside it, a weight's own float32 rounding, a few times a step: all a sign step of a small rate differs by
+EPS, ROUNDINGS = torch.finfo(torch.float32).eps, 4 * STEPS
 #: each entry's reference: the optimizers plain torch steps with at the entry's dials, and how close the route's
 #: weights come to its own
 REFERENCES = {
     "s-t20-1.1x-accumulate": (adamw, CLOSE),
+    "s-t20-1.1x-adafactor": (adafactor, CLOSE),
     "s-t20-1.1x-adamw": (adamw, CLOSE),
+    "s-t20-1.1x-last-blocks": (adamw, CLOSE),
+    "s-t20-1.1x-lion": (lion, CLOSE),
     "s-t20-1.1x-ref-optim": (muon, CLOSE_BF16),
+    "s-t20-1.1x-sgd": (sgd, CLOSE),
     "s-t20-1.1x-shallow-strideshare": (muon, CLOSE_BF16),
+    "s-t20-1.1x-shampoo": (shampoo, CLOSE),
 }
 
 
@@ -125,5 +184,5 @@ def test_an_entrys_steps_end_at_its_references_weights(name):
     moved = [k for k in got if not torch.equal(got[k], start[k])]
     assert moved and set(moved) == {k for k in want if not torch.equal(want[k], start[k])}
     for k in moved:
-        move = (want[k] - start[k]).abs().max()
-        assert (got[k] - want[k]).abs().max() <= close * move, k
+        move, rounding = (want[k] - start[k]).abs().max(), ROUNDINGS * EPS * want[k].abs().max()
+        assert (got[k] - want[k]).abs().max() <= close * move + rounding, k
