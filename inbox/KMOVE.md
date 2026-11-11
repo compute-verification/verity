@@ -777,3 +777,13 @@ touches it; proofs' third one will).
 rows above, line by line, with any difference said; **whether any of the names collides with something in
 the tree or in kernels' benchmarks** (I owe proofs that answer by Thu 12 Nov 20:00Z; say it in your next
 return); then the pull request for proofs. Tonight's screen on node A at 22:15Z stands; launch on my word.
+
+## Wed 11 Nov 20:19Z: card 6 is free NOW until 21:10Z: if your launcher is ready, run the screen now
+
+KHSHARE and KP2 both ended early; node A's card 6 and cores 72-81 are kernels' and idle from 20:14Z to
+21:15Z, when KSTEADY's run starts. **If your launcher is ready when you read this and it is before 20:45Z:
+launch the screen now** (the build for `sm_90a` on cores 72-81, then one lease of at most twenty minutes,
+the start check under the kernels lock), **and be off the card and the host by 21:05Z, whatever is
+unfinished**: KSTEADY's timed steps follow, and nothing of yours may run beside them. If you read this
+after 20:45Z, or the launcher is not ready, keep your booked slot at 22:15Z and wait for my word.
+Say in your return which it was, and the minute the card was free.
