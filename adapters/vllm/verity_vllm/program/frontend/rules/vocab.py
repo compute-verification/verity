@@ -85,8 +85,9 @@ class Vocabulary:
     def to_json(self) -> dict:
         d = {"name": self.name, "version": self.version, "mode": self.mode, "profile": self.profile,
              "roles": {r: self.notes.get(r, "") for r in sorted(self.kinds)}}
-        if "_pin" in self.notes:
-            d["pin"] = self.notes["_pin"]
+        pin = self.notes.get("_pin")
+        if pin is not None:
+            d["pin"] = pin
         return d
 
 
