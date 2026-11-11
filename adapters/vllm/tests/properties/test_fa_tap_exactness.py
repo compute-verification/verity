@@ -246,8 +246,6 @@ def test_fa3_masked_from_follows_the_packed_tile():
 
 
 def test_check_ms_guards_only_the_check_inf_blocks_under_the_per_iteration_construction():
-    import numpy as np
-
     rows = [(0, 0, 1), (0, 1, 2), (0, 2, 2)]
     sl2 = X.scale_log2_bits({"softcap": 0.0}, 64)
     # row 1 visits block 1 with max +inf, then block 0 with -inf; row 2 -0 then NaN

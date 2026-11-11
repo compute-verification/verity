@@ -45,14 +45,12 @@ profile's allowlist are short tokens; `KERNEL_MATCH` is the explicit bridge.
 from __future__ import annotations
 
 import gzip
-import hashlib
 import json
 import re
 import time
 from collections import Counter, OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.config import UsageError, option, workload_arg
