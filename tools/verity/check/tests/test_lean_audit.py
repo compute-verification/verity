@@ -1185,6 +1185,51 @@ def test_an_artifact_was_last_used_when_an_entry_that_names_it_was(tmp_path):
         "2's first entry was used no later than what went, so it goes: a miss, and the module is built"
 
 
+def test_a_prune_waits_for_a_build_that_stages_from_the_artifact_cache(tmp_path, monkeypatch):
+    """`--prune` removed index entries, the records of modules `put` couldn't index and artifacts without the store's
+    lock, while a build's `module_keys.stage` read them under it (shared): the build then took an entry whose artifacts
+    were gone, or reported a refusal whose record was. It now takes that lock (`LakeArtifacts._lock`), as `put` and
+    `take` do around their prunes. The test holds the lock as a stage does: the prune asks for it and waits, and runs,
+    holding it, once the stage lets go."""
+    root, store = tmp_path / "cache", tmp_path / "cache" / "lean-artifacts"
+    store.mkdir(parents=True)
+    lock, real = store / LA.MK.LOCK, LA.fcntl.flock
+    waits, pruned, rc = threading.Event(), [], []
+
+    def flock(f, op):
+        if getattr(f, "name", None) == str(lock) and op == LA.fcntl.LOCK_EX:
+            waits.set()
+        return real(f, op)
+
+    def prune(self):
+        with open(lock, "a") as other:
+            try:
+                real(other, LA.fcntl.LOCK_SH | LA.fcntl.LOCK_NB)
+                pruned.append("unlocked")
+            except BlockingIOError:
+                pruned.append("held")
+        waits.set()
+        return 0
+
+    def run():
+        try:
+            rc.append(LA.main(["--prune", "--cache", str(root / "lean-audit")]))
+        finally:
+            waits.set()
+
+    monkeypatch.setattr(LA.fcntl, "flock", flock)
+    monkeypatch.setattr(LA.LakeArtifacts, "prune", prune)
+    monkeypatch.setattr(LA.signal, "signal", lambda *a: None)       # `main` sets its SIGTERM handler: main thread only
+    with open(lock, "a") as stage:
+        real(stage, LA.fcntl.LOCK_SH)
+        t = threading.Thread(target=run)
+        t.start()
+        waits.wait()
+        assert not pruned, "the prune ran while a build's stage held the store's lock"
+    t.join()
+    assert rc == [0] and pruned == ["held"], "once the stage let go, the prune ran holding the lock"
+
+
 TAKEN = "taken-v4"
 
 

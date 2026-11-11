@@ -2149,9 +2149,13 @@ def main(argv: list[str]) -> int:
     if argv[:1] == ["--prune"]:
         root = Path(argv[argv.index("--cache") + 1]).parent if "--cache" in argv else COMMON.cache_dir()
         got = {"lean-deps": WarmDeps(root / "lean-deps").evict(), "lean-builds": WarmBuilds(root / "lean-builds").evict(),
-               "lean-replay": prune_replays(root / "lean-replay"), "lean-records": prune_records(root / "lean-records"),
-               "lean-artifacts": LakeArtifacts(root / "lean-artifacts").prune(),
-               "lean-audit/unread": prune_facts(root / "lean-audit")}
+               "lean-replay": prune_replays(root / "lean-replay"), "lean-records": prune_records(root / "lean-records")}
+        # a build's `module_keys.stage` reads the index, the records of what `put` couldn't index and the artifacts under
+        # this lock, shared, and `put` and `take` prune under it already
+        artifacts = LakeArtifacts(root / "lean-artifacts")
+        with artifacts._lock():
+            got["lean-artifacts"] = artifacts.prune()
+        got["lean-audit/unread"] = prune_facts(root / "lean-audit")
         print("lean-audit --prune: removed " + ", ".join(f"{v} from {k}" for k, v in got.items()) + f" (under {root})")
         return 0
     if argv[:1] == ["--explain"] and len(argv) in (2, 4):
