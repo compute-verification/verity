@@ -46,10 +46,11 @@ def test_the_digest_is_pinned():
 def test_every_core_primitive_declares_only_library_tables():
     from verity.circuits.defs import PrimitiveDefinition
     from verity.definitions.ops import mufu  # noqa: F401  (registers the MUFU primitives)
+    core = ("verity.circuits.", "verity.definitions.circuits.", "verity.definitions.ops.", "verity.definitions.silicon.")
 
     names = {t.name for t in L.TABLES}
     declared = {d.id: d.tables for d in REGISTRY.defs.values()
-                if isinstance(d, PrimitiveDefinition) and d.evaluate.__module__.startswith("verity.circuits.") and d.tables}
+                if isinstance(d, PrimitiveDefinition) and d.evaluate.__module__.startswith(core) and d.tables}
     assert set(declared) >= {"MufuEx2Ftz_v1", "MufuRcpFtz_v1", "MufuTanh_v1"}
     for fid, tables in declared.items():
         assert all(kind == L.LIBRARY and n in names for n, kind in tables), fid
