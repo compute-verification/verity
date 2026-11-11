@@ -15,13 +15,13 @@ entry fails, so a change that adds ``Name_vN+1`` does one of three things:
 * deletes ``Name_vN`` with it;
 * deletes another superseded version and gives ``Name_vN`` its entry;
 * says which workload of record still names ``Name_vN``: ``"Name_vN": "<workload>"`` in the list's ``held`` table, the
-  workload's id as ``integrations/vllm/manifests/records.json`` has it.  A workload's pinned Programs name Definitions by id,
+  workload's id as ``adapters/vllm/manifests/records.json`` has it.  A workload's pinned Programs name Definitions by id,
   so the old version stays until the workload is pinned again.  The line is a statement nothing here checks: the index holds
   the Programs only by digest.
 
 The list is exact: an entry or a ``held`` line for a version that is gone or no longer superseded fails too, and so does an
 entry whose module no longer defines its version.  ``--prune`` drops the first and rewrites the second, and adds nothing.  The
-ratchet gate (``integrations/vllm/tools/ratchet_gate.py``) reports a change that leaves ``entries`` longer than it found them;
+ratchet gate (``adapters/vllm/tools/ratchet_gate.py``) reports a change that leaves ``entries`` longer than it found them;
 a ``held`` line is a declaration, which it doesn't count.
 
     uv run python tools/verity/circuit_check/tests/test_superseded_versions.py --prune   # drop what is gone, follow a moved module
@@ -43,7 +43,7 @@ ID = re.compile(r"(.+)_v(\d+)")
 FIX = ("A change that adds Name_vN+1 deletes Name_vN with it; or deletes another superseded version and gives this one its "
        "entry (the line below; `--prune` drops the deleted one's); or, where a workload of record still names the old version, "
        'says which: add "Name_vN": "<workload>" to the list\'s `held`, the workload\'s id as '
-       "integrations/vllm/manifests/records.json has it. A Boolean version registered with the word Definition it computes "
+       "adapters/vllm/manifests/records.json has it. A Boolean version registered with the word Definition it computes "
        "(`word=`) supersedes nothing.")
 PRUNE = f"uv run python {Path(__file__).resolve().relative_to(REPO)} --prune"
 
@@ -52,7 +52,7 @@ PRUNE = f"uv run python {Path(__file__).resolve().relative_to(REPO)} --prune"
 _LOAD = """
 import json, sys
 from circuit_check import sidecars, targets
-from verity.ml.circuits.defs import REGISTRY
+from verity.circuits.defs import REGISTRY
 targets.load_registries()
 print(json.dumps({i: [sidecars.rel(sys.modules[sidecars.owner(d)].__file__), getattr(d, "word", None) is not None]
                   for i in targets.REGISTERED for d in [REGISTRY.defs[i]]}))
