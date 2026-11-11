@@ -21,16 +21,6 @@ SHAPE = TINY | {"n_layer": 6}
 STEPS, BATCH, CTX = 3, 4, 8
 
 
-@pytest.fixture(autouse=True)
-def one_thread():
-    """Each entry and its reference run on one thread: on more, torch's Newton-Schulz in bf16 on a CPU doesn't return
-    the same matrix at every call, and now and then returns NaN."""
-    threads = torch.get_num_threads()
-    torch.set_num_threads(1)
-    yield
-    torch.set_num_threads(threads)
-
-
 def entry(name: str):
     """An entry's route and its dials, the route's defaults filled in, as a job reads them."""
     raw = tomllib.loads((library.ENTRIES / f"{name}.toml").read_text())
