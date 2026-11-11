@@ -8,8 +8,10 @@
 # cases (PoUS's and the wipe's, each under SERVE_DIR/private, with their Lean answers built by `exe` here) from
 # `onsite_cases` in the file ONSITE_PIECES names (`served_verdicts.sh`'s, which exports it). Then, where the tree has
 # `served_cases.py`, the cases on the window's registration record R (its docstring), each under SERVE_DIR/private:
-# sampled proofs' one-stage v1 case (onsite's), remote's sampled proofs case (a5's v2 case, which only a `--zk` audit of
-# one sampled member writes, in the form `one-stage`) and the inference-only case from the window's records audit
+# sampled proofs' one-stage v1 case (no composite takes it: its answer goes to OUT/verdicts.txt alone), both composites'
+# sampled proofs case (a5's v2 case, which only a `--zk` audit of one sampled member on a window of one member writes,
+# so a window of several members has none and each composite names sampled proofs missing, in the form `one-stage`)
+# and the inference-only case from the window's records audit
 # (SERVE_DIR/v3c-w*/audit; in a run without V3c whose H1 windows weren't tied, so with no SERVE_DIR/h1/log.jsonl,
 # `served_verdicts.sh`'s step 3's,
 # SERVE_DIR/sampled-proofs-served), the latter with the policy's α and Γ read off the case's own division

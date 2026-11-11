@@ -1617,6 +1617,10 @@
    "type_hash": "9404e8c98194fe63381cfeae308acc528bb4f66d2e8536b3c02ef613431d4c4b",
    "unfolded_hash": "5a3693102054db02f9527919b681090f753d8ed926ec5e3f69ab4b4a3fb11bbc"
   },
+  "Properties.NetworkPeriod.rowsTiedCharged": {
+   "type_hash": "967b07df0522c5dce4ce83861b18efea825ce959281ecbb6ee4dc28ca39efcd1",
+   "unfolded_hash": "01fba8c75836b4820c353663bbf4732e6991a2484048acf73454e8e5b333e868"
+  },
   "Properties.NetworkRecords.acceptMeans": {
    "type_hash": "4ee7e6626901cee51276b7be734ca7c3b2daeea3810674d3e4b0983856b300cf",
    "unfolded_hash": "e46253e695f1e33aacb647002aa9d21cbfd7fff4daeaec61dde92d32662eae71"
@@ -1878,10 +1882,6 @@
   "Properties.RemoteAudit.Line.SecurityProofs.lineHeld": {
    "type_hash": "869ce854c6e28bbfab9afec70664c0ff52cb2e286516fc98f0886488f20e2951",
    "unfolded_hash": "5d6522c2fa1998026a7581dd1f988c22e3d47501d065bdb2a2a7dff2c3aa27b3"
-  },
-  "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity": {
-   "type_hash": "32103c4822a99f98eae5a5aec862a2c834114c156876ace2daa1b364bb187a9f",
-   "unfolded_hash": "4702d0ea7598a05430cbdbc546545a5f9c84162241faca9085547695d486d619"
   },
   "Properties.RemoteAudit.Line.lineChecked": {
    "type_hash": "92521b24e4953445a0d2e7c4dec1648b2bb5b0afc4b6894f08334057afa8cf9a",
@@ -5983,6 +5983,19 @@
    },
    "type_hash": "9404e8c98194fe63381cfeae308acc528bb4f66d2e8536b3c02ef613431d4c4b",
    "unfolded_hash": "5a3693102054db02f9527919b681090f753d8ed926ec5e3f69ab4b4a3fb11bbc"
+  },
+  "Properties.NetworkPeriod.rowsTiedCharged": {
+   "owner": "@network-accounting",
+   "signature": ["Properties.NetworkPeriod.rowsTiedCharged : Properties.NetworkPeriod.RowsTiedCharged"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "967b07df0522c5dce4ce83861b18efea825ce959281ecbb6ee4dc28ca39efcd1",
+   "unfolded_hash": "01fba8c75836b4820c353663bbf4732e6991a2484048acf73454e8e5b333e868"
   },
   "Properties.NetworkRecords.acceptMeans": {
    "owner": "@network-accounting",
@@ -12605,6 +12618,10 @@
     "function": "NetworkCheck.Period.check",
     "outcome": "accept"
    },
+   "Properties.NetworkPeriod.rowsTiedCharged": {
+    "function": "NetworkCheck.Period.check",
+    "outcome": "accept"
+   },
    "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
     "function": "PouwCheck.Credit.Internal.credited",
     "outcome": "accept"
@@ -12949,7 +12966,7 @@
   "frozen": {
    "Pous.EndToEnd.SecurityProofs.endToEndRing": "frozen: a bound on a game's probability in the ring model, not a property of one function: it speaks of the deployed system only through pous-ring-device, pous-ring-speed, pous-ring-instantiation and prf/sha-512, and of the deployed verifier through runCheckAccepts, the composed check's property (PousCheck.Run.check); G-1 (one session per audit) and G-2 (the composed check) are fixed in code",
    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": "frozen: endToEndRing at one root's depth, D = 16,446, Q = 2^20, L = 2^64; frozen as it is",
-   "Pous.Period.SecurityProofs.periodHeld": "frozen (premise): Its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted: SetupProtocol.protocol.check and PousCheck.Run.check), but it is stated over an abstract joint run of the device model (Accounting.Run, whose fits field is no premise module's) and every prover strategy in the ring model (Pous.Period.Strategy), and takes CoinCommitHides, the device model Pous.Period.DeviceModel (pous-ring-device, pous-ring-speed: the strategy's state and, under the challenger-signed AnsweredOnTime, its time) and the instantiation Pous.Period.Instantiates (pous-ring-instantiation and prf/sha-512, in reduction form), and the certificate's fit in the ring game's state bound, none of them under shape.premises. The ring game's server is the fixed extractor Pous.Period.extract of the strategy, never a witness the prover picks.",
+   "Pous.Period.SecurityProofs.periodHeld": "frozen (premise): Its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted: SetupProtocol.protocol.check and PousCheck.Run.check), but it is stated over an abstract joint run of the device model (Accounting.Run, whose fits field is no premise module's) and every prover strategy in the ring model (Pous.Period.Strategy), and takes the device model Pous.Period.DeviceModel (pous-ring-device, pous-ring-speed: the strategy's state and, under the challenger-signed AnsweredOnTime, its time) and the instantiation Pous.Period.Instantiates (pous-ring-instantiation and prf/sha-512, in reduction form), and the certificate's fit in the ring game's state bound, none of them under shape.premises. The ring game's server is the fixed extractor Pous.Period.extract of the strategy, never a witness the prover picks.",
    "Pous.Period.SecurityProofs.periodCapacity": "frozen (premise,no-function): PeriodHeld's reading in the joint run: under PeriodHeld's premises and a capacity verdict that is the deployed acceptance outside a break, the capacity audit of an abstract run of the device model has CapacitySoundPerRun and CapacitySound, which bound Pouw.pr events of a verdict that is a field of the run, not a Lean function.",
    "Pous.EndToEnd.RunCertifies": "unstated: a step of periodHeld: it joins the composed check's runCheckAccepts with the setup check's acceptsDecodes and publishesRoot, all three proved, and runCertifies proves it from them",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
@@ -12967,15 +12984,15 @@
    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": "frozen (premise,no-function): PeriodHeld read as the coins model's .pous guarantee: under PeriodHeld's premises, for every prover strategy under DeviceModel and Instantiates, a PeriodRun that realizes its PoUS audit as an abstract joint run's capacity audit (RealizesSpaceOfPeriodHeld) has PeriodRun.Sound at δ + ε_max, a bound on a Pouw.pr event of a verdict that is a field of the run, not a Lean function; it holds at the challenge times PoUS grades until Pous.Guarantees.ContinuousAudit is tied to the deployed check.",
    "Accounting.SecurityProofs.Bridge.WorkOfCreditedWords": "frozen (no-function,world-unlisted): the joint period's PoUW guarantee (Accounting.PeriodRun.Sound at .pouw) at any price from any source game that credits words, at the source's error: the source's bound is a hypothesis over its own event, so no deployed function's outcome is one hypothesis (the verdict is a PeriodRun field and the source game's acceptance a parameter), and the event is a Pouw.pr through PeriodRun.Sound that shape.events does not list. Its premises are Accounting.Assumptions.WordCostsMacs and Accounting.Assumptions.HelpWithinCertifier, on the premises list; its honest instance is Accounting.SecurityProofs.Bridge.HonestH200.credited_sound.",
    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200": "frozen (no-function,world-unlisted): WorkOfH1CheckedCreditPeriod at the H200's INT8 price (Accounting.h200S8Price, W1's prices on W1Device.s8H100: an INT8 tensor-core multiply-add 1, a CUDA-core op 32), a K-deep R x C tile's 16 R C multiply-adds a word (Accounting.receiptWordMacs R C: 512 at PouwH1Tile_v1's 4 x 8, 16384 at _v5's and _v6's 32 x 32), its credited words' 2 (K/32) 16 R C a unit (Accounting.receiptUnitMacs K R C: 2048 at v1, 4194304 at a warp and K = 4096) and b_unit bits a unit, for every SHA-512 and fetch price, tile shape and unit width; as WorkOfH1CheckedCreditPeriod it has no deployed function's outcome as one hypothesis and its event is a Pouw.pr through PeriodRun.Sound. Its honest instance is Accounting.SecurityProofs.Bridge.HonestH200.h200_sound, at K = 64, 4 x 8 and b_unit = 1024, on a period whose PoUW verdict is the compiled check's (HonestH200.honestRun); its witnesses are Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200_honest, its hypotheses at one window, and _nontrivial, its conclusion failing at the verifier that accepts everything (HonestH200.acceptAll).",
-   "Pous.Period.SecurityProofs.obligationHeld": "frozen (premise): PeriodHeld at an audit window's snapshot of the mutable store, averaged over the other tags' key pairs: its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted), but it is stated over an abstract joint run of the device model (Accounting.Run) and every prover strategy, and takes PeriodHeld's premises (CoinCommitHides, P2RingAuditSecure, Pous.Period.DeviceModel and Pous.Period.Instantiates with the other tags' keys among the other audits' coins) and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
+   "Pous.Period.SecurityProofs.obligationHeld": "frozen (premise): PeriodHeld at an audit window's snapshot of the mutable store, averaged over the other tags' key pairs: its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted), but it is stated over an abstract joint run of the device model (Accounting.Run) and every prover strategy, and takes PeriodHeld's premises (P2RingAuditSecure, Pous.Period.DeviceModel and Pous.Period.Instantiates with the other tags' keys among the other audits' coins) and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
    "Pous.EndToEnd.SecurityProofs.endToEndRingAt": "frozen: endToEndRing's game at every block count N, a bound on a game's probability in the ring model, not a property of one function: c + ε from a bound c on P2's audit at N and the coin commitments' hiding ε at N; it speaks of the deployed system as endToEndRing does",
    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure": "frozen: endToEndRingAt with c from P2RingRoundSecure (PousP2Rounds.graded), at every N it covers (2^19 to 2^25); a bound on a game's probability in the ring model, not a property of one function",
    "Pous.EndToEnd.RunCertifiesAt": "unstated: RunCertifies at every point; it joins the composed check's runCheckAcceptsAt with the setup check's acceptsDecodes and publishesRoot, all three proved and the last two at every parameter set, and runCertifiesAt proves it from them",
    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecureWide": "frozen: endToEndRingAt with c from P2RingRoundSecureWide, at every N it covers (2^19 to 2^27); a bound on a game's probability in the ring model, not a property of one function, resting on the open conjecture P2RingRoundSecureWide, unchecked in N above 2^25",
    "Pous.EndToEnd.SecurityProofs.endToEndRingDemo": "frozen: endToEndRingOfRoundSecureWide at Demo B's store (1038*2^16 blocks, state bound 1,060,008,348,186 bits); a bound on a game's probability in the ring model, not a property of one function, resting on the open conjecture P2RingRoundSecureWide, unchecked in N above 2^25",
-   "Pous.Period.SecurityProofs.periodHeldAt": "frozen (premise): periodHeld at every point of the composed check (Pous.EndToEnd.AcceptedAt: SetupProtocol.protocol.check at the point's parameters and PousCheck.Run.checkAt) and every block count N of the ring game from 2^19 to 2^27; stated over an abstract joint run of the device model and takes CoinCommitHides at N, the open conjecture P2RingRoundSecureWide and Pous.Period.RingDeviceAt (pous-ring-device, pous-ring-instantiation and prf/sha-512 per run, read at N), and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
+   "Pous.Period.SecurityProofs.periodHeldAt": "frozen (premise): periodHeld at every point of the composed check (Pous.EndToEnd.AcceptedAt: SetupProtocol.protocol.check at the point's parameters and PousCheck.Run.checkAt) and every block count N of the ring game from 2^19 to 2^27; stated over an abstract joint run of the device model and takes the open conjecture P2RingRoundSecureWide and Pous.Period.RingDeviceAt (pous-ring-device, pous-ring-instantiation and prf/sha-512 per run, read at N), and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
    "Pous.Period.SecurityProofs.periodHeldDemo": "frozen (premise): periodHeldAt at Demo B's store, N = 1038*2^16 blocks, state bound 1,060,008,348,186 bits; its premises are periodHeldAt's.",
-   "Pous.Period.SecurityProofs.periodHeldDeployed": "frozen (premise): periodHeld at the deployed ring budget (RING_D, RING_Q, RING_L) = (16,446, 2^20, 2^64), the one pous-ring-speed derives from Delta + RTT = 854,000 ns and the measured round floor ROUND_NS = 361.55 / 3.490 ns (art:23a323f3, r20260929-060834-0ec4): DEADLINE_ROUNDS = 8,243 <= RING_D, and RING_D + 1 rounds take 1.995 x the limit; outside both regions where P2RingAuditSecure is refuted (D >= 32,894; L >= 2^169 at k = 105). Its premises are periodHeld's at that budget (CoinCommitHides, P2RingAuditSecure, Pous.Period.DeviceModel, Pous.Period.Instantiates), none under shape.premises.",
+   "Pous.Period.SecurityProofs.periodHeldDeployed": "frozen (premise): periodHeld at the deployed ring budget (RING_D, RING_Q, RING_L) = (16,446, 2^20, 2^64), the one pous-ring-speed derives from Delta + RTT = 854,000 ns and the measured round floor ROUND_NS = 361.55 / 3.490 ns: DEADLINE_ROUNDS = 8,243 <= RING_D, and RING_D + 1 rounds take 1.995 x the limit; outside both regions where P2RingAuditSecure is refuted (D >= 32,894; L >= 2^169 at k = 105). Its premises are periodHeld's at that budget (P2RingAuditSecure, Pous.Period.DeviceModel, Pous.Period.Instantiates), none under shape.premises.",
    "Properties.Pouw.ServedValues.SecurityProofs.rightValues": "frozen (no-function,world-unlisted): H1J10RCheckedCreditPeriod's period and premises, less UnitFixed and the play's folded words, with its bound in AND gates of the registered declaration D under the lowering pinned at registration (Verity.creditSize, Definitions.Core.Formalism): except with probability delta_s + n(delta_bind + delta_ks), delta_coin plus delta_crypto, an accepted period's right blocks (SampledLayer.Good under periodMode) have total AND count at least (1 - eps_skip)_+ S, S the credited size of the windows before the first refusal, eps_skip = sigma eps(j) N_live / S, and each block's AND count taken outside the ledger of gates another protocol credits; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. A values guarantee, not a compute claim: right values aren't work. Right is the accounting model's SampledLayer.Good, not yet tied to the committed values Credit.window checks. No premise beyond H1's: TileSampleIsCoin, TileServiceSound, RegisteredBeforeDraw, SaltIsLiveCoin and SharedNoiseLucks, the one computational premise. Proved from H1J10RCheckedCreditPeriod at a play whose fixed words are the right blocks' (Proofs.Pouw.ServedValues), with an honest and a nontrivial witness (Proofs.Pouw.ServedValues.Honest).",
    "Properties.Challenger.LiveAnswer": "unstated: a live check's answer at the coins its evidence reads is its answer, proved in security_proofs by Properties.Challenger.liveAnswer; a draft statement, which gets a guarantee entry once the one theorem reads it",
    "Properties.Challenger.DrawnByDevice": "unstated: Challenger.drawCoins accepts only coins a withheld session of the key's device released for that window and label, or the fixed finder findBreak outputs a break from the run (an LMS forgery or a SHA-512 collision), proved with no premise in security_proofs by Properties.Challenger.Drawn.drawnByDevice; euf-cma/lms-sha512-n64 and ecr/sha-512 bound that finder where a guarantee reads it; a draft statement, which gets a guarantee entry once the one theorem reads it",
@@ -22783,11 +22800,12 @@
    }
   },
   "PouwPearlPlus.Open": {
-   "digest": "caa78fe3e7fe32821562f62330754fb66ac5e7b6e9cc29bd57aed94c73f8ecd1",
+   "digest": "122460cf8f9a74c60862415b2559d64d690d9d0f7391ff030ee6473b6e320cc8",
    "definitions": {
     "PouwCheck.PearlPlus.f32Row": "ebafc87193fd06ce5495cb0f7947b5a862c6f3382f9b8381d1692a03b8545c2a",
+    "PouwCheck.PearlPlus.f32Slice": "3eaa72f6fd9c168a4e7cfb9c91f2bfc993d1a99a9ef1d64a415ca514b919cec3",
     "PouwCheck.PearlPlus.held": "b49af1ddce11d61c2db098e685217fe9cf262f557482599864bf2e9c056d70aa",
-    "PouwCheck.PearlPlus.opening": "eedd88b1e95263050df29ffdb61c48dec16399d603a34232ea825988ed4d2cd3",
+    "PouwCheck.PearlPlus.opening": "57c5c98269bb019609a5791222955a6e8e0b20756a73354b98180c48f2331e1c",
     "PouwCheck.PearlPlus.pathOf": "b44bf063c726f336a16d78e056f31ba86fadd781a3326a63d32aef0ed7e69974",
     "PouwCheck.PearlPlus.pow2": "333d09a1ef4fc3f2c31534f8c02852d1ceed5822b77bc0a9382503030c7a25e2",
     "PouwCheck.PearlPlus.str?": "159a502acca88c21397ca6e3532231dfb8d859b23dfbf92c8c8cb406297270ab",
@@ -22895,7 +22913,7 @@
    }
   },
   "PouwPearlPlus.Rule": {
-   "digest": "c008668f821e8b336649cf8a27fffc23ba0550d0de88d8dc0fca2aed44c51df3",
+   "digest": "04adf3501d37ff1c50fecf17fc430e2c2580edfe2fcdb45a575dbf87379e650a",
    "definitions": {
     "PouwCheck.PearlPlus.Rule.CAP_DEN": "99dcb14c409cf24823be6faeb0ce2eb4a67dd8441c5a8815c2dcf0cabe8d06f9",
     "PouwCheck.PearlPlus.Rule.CAP_NUM": "471ae5289d0a8b40f7bccbe5a2dd8b12ad09bbeb273613eded437d14b08ee837",
@@ -22943,7 +22961,7 @@
     "PouwCheck.PearlPlus.Rule.wordFlags": "6a3b9e1d4f134c1fdc245627f0825e007db0f90fa4ef721e1b5651adcd073270",
     "PouwCheck.PearlPlus.Rule.wordOf": "59f22e81d7759763b8a444399cc4be5098945d4d66510ff3e383824b31a0ddfd",
     "PouwCheck.PearlPlus.Rule.yOf": "6c59b7797b83c9805b27efd1f6181366fecbb3c8404e716ded32b4c1b3ad20f6",
-    "PouwCheck.PearlPlus.Rule.yReason": "5bcacbae442983aeaee5585e03be9e591f130905fb012b0a1121e377607b153f"
+    "PouwCheck.PearlPlus.Rule.yReason": "7c76a9273dd746d0df2950c69117e311011942e6c4f11cbe13094c913fe71409"
    }
   },
   "PouwPearlPlus.Run": {
@@ -24108,14 +24126,18 @@
    }
   },
   "Properties.NetworkPeriod": {
-   "digest": "748fac8d381639899bb16d46f8e4805dcf2624e8c8735e3bbab720a878b74f26",
+   "digest": "90782066c03a659fe50ef3667be4758c9b19dfb3333c2b25677fc7e8ae9ed8b2",
    "definitions": {
+    "Properties.NetworkPeriod.AuditFacts": "eada0fae9ca4b260e02678dfa27199fe761825968d364c252289b0b873513a4a",
     "Properties.NetworkPeriod.ClockKBoundsCount": "8cdb92caa40b67dd32763dd0bd4b5c1a316280f88dc25339058d7a54a38df555",
     "Properties.NetworkPeriod.RowsKBoundsCount": "61a3494840160823999dfc356fd013dad48ca366380e7809c37840c1160fc79c",
     "Properties.NetworkPeriod.RowsProgWired": "56037d243b6bcb5406f264b67aea64b8b1ede6bde74f457301a27e646ab0e3b1",
     "Properties.NetworkPeriod.RowsProgWiredAt": "5e7f3c60d8a285208fa801ab7225c2842566177cc45ea1e5326f99a323f83694",
     "Properties.NetworkPeriod.RowsStateTied": "a04739b3f4efea724b0ccc0993a8a603aad7fb5862c2d9544e779b31ff88f9ac",
-    "Properties.NetworkPeriod.RowsStateTiedAt": "ff582df8e2003fcfb754440ef36cc0eb6792c81f0298ed809b57414821dd7849"
+    "Properties.NetworkPeriod.RowsStateTiedAt": "ff582df8e2003fcfb754440ef36cc0eb6792c81f0298ed809b57414821dd7849",
+    "Properties.NetworkPeriod.RowsTiedCharged": "7e96450fcdb886ed24fd7ef8125e060d87b13ef8d0a6adbcdb584b0230af3f6c",
+    "Properties.NetworkPeriod.RowsTiedChargedAt": "e779721116429d1e2741a626ed232aa3caeb397070c1562d56bdd7e6074b614c",
+    "Properties.NetworkPeriod.tiedInPart": "81af3d439de76d2b6dab464e5e4f92f32511b01998f7c69bafca26e54f541ff7"
    }
   },
   "Properties.NetworkScan": {

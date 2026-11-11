@@ -22,7 +22,6 @@ public import Definitions.Accounting.Gates
 public import Definitions.Accounting.Headline
 public import Definitions.Accounting.HeadlineDc
 public import Definitions.Accounting.Joint
-public import Definitions.Accounting.JointBlocks
 public import Definitions.Accounting.JointPeriod
 public import Definitions.Accounting.JointBridge.CreditedWords
 public import Definitions.Accounting.JointBridge.H200
@@ -83,9 +82,8 @@ the lock's `layers` lists what they may import:
   audits); `JointPeriod` and `JointBridge` (a period audited by every subprotocol, and each subprotocol's per-period
   guarantee read as its account); `NetWitness` (the period run the network certifier's bridge fails at); `JointLive`
   (a period as a causal game, its claims on a fixed extractor's values);
-  `JointBlocks` and `Wipe` (server blocks, each opened by a memory wipe, and the streamed-label wipe on the device
-  model); `ReadUnit` (a unit that returns one row of a registered table at an index another unit picks, and what
-  binds it to that row).
+  `Wipe` (the streamed-label wipe on the device model); `ReadUnit` (a unit that returns one row of a registered table
+  at an index another unit picks, and what binds it to that row).
 * **Each audit's game.** The compute audit: `Pouw` and `PouwWork` (PoUW's game, and its work on one node of the actual
   circuit), `PouwWitness` (the run its witnesses fail at), `Compose` and `ComposeMonitoringPeriod` (PoUW as a compile pass over a registered circuit, over one execution phase
   and over a monitoring period), `HMu` and `CoinFlow` (the receipt-luck premise H-μ⁺ and a Program's coin flow),
