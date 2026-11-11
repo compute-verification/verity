@@ -1,7 +1,10 @@
 module
 
+public import Definitions.Assumptions.WeightSecurity
 public import Definitions.WeightSecurity.Assumptions
+public import Definitions.WeightSecurity.Faulted
 public import Definitions.WeightSecurity.Toy
+public import Definitions.WeightSecurity.ToyFaulted
 public import Definitions.WeightSecurity.ToyServed
 public import Definitions.WeightSecurity.ToyTied
 
@@ -27,6 +30,15 @@ advice, timing buckets, the overwrites the audit lets through and the halt. The 
 the audit leaves `M` incorrect proof blocks undetected, plus the probability that a release isn't local, which the
 network certifier and the dataflow discharge. Its witnesses
 `TheftServedHonest` and `TheftServedNontrivial` are at the toy deployment (`Definitions.WeightSecurity.ToyServed`).
+
+`TheftFaulted` is the same deployment under SPOT's fault model (`Definitions.WeightSecurity.Faulted`): a fault is an
+input to the faulted circuit, not an overwrite of a release, so SPOT's part of the channel is the fault patterns, of
+sizes summing to at most `M`, and the reach of a fault drops out. What faults at the patterns no cut covers do to the
+weights' exposure is the named assumption `FaultedUseHard` (λ), on a typical set of weights; a pattern an honest cut
+`κ` cuts (`Definitions.WeightSecurity.Cut`) counts in the channel by the cut's hint instead, and needs no assumption.
+`TheftServed` stays as the bound that takes no claim about the model. Its witnesses `TheftFaultedHonest` and
+`TheftFaultedNontrivial` are at the toy deployment with faults (`Definitions.WeightSecurity.ToyFaulted`), at the cut
+that cuts nothing.
 
 `TheftServedReq` is `TheftServed` per charge unit, in bits: the released outputs grouped into units (a request, or a
 request with the requests that read its state), each changed unit charged its whole output and its name, and the leakage
@@ -138,6 +150,82 @@ def TheftServedNontrivial : Prop :=
           (1 * 0 + (0 + 1) * Fintype.card Unit)).S * (1 / 256)) + 0 +
         Verity.Game.avg (fun z : ToyServed.W × Unit => Verity.Game.value
           (fun l => ¬ Served.Local ToyServed.C 1 ToyServed.thief 0 (ToyServed.gen z.1) z.2 l)
+          (ToyServed.leakRun (ToyServed.gen z.1) z.2))
+
+open scoped ENNReal in
+/-- **Model weight security at an audited deployment, faults as inputs.** The deployment serves `T` windows as in
+`TheftServed`, and its releases are faulted runs: each accepted window that releases released the faulted served
+function `Cf`'s answer at a fault pattern of size at most its incorrect proof blocks (`Served.Faithful`). If honest use
+steals a weight of the typical set `Typ` with probability at most `p` (`HonestUseHard`), faults at the patterns no cut
+covers hand out such a weight at most `N^(λ - 1)` times faster than honest use (`FaultedUseHard` at the faulted
+function on the patterns `κ.Interiors` alone, `N = patternCount` among them), the class `Af` holds the outsider with
+each fault channel string written in (`Simulable`), and the audit leaves `M` incorrect proof blocks undetected with
+probability at most `δ` (`Served.UndetectedLe`), then the outsider steals the weights with probability at most
+`Pr[gen ω ∉ Typ] + |S| · N^(λ - 1) · p + δ + Pr[a release isn't faithful]`. `|S|` is the fault channel's covert
+strings: each window's interior pattern or, where the cut `κ` cuts the window's pattern, `κ`'s hint, times the served
+channel's at the overwrite budget `(L + 1) · |O|`. So interior faults cost `N^λ = 2^(λ · C_arb)`, `N` and `λ` reading
+only the interior patterns, and a fault `κ` cuts adds only its hint to `|S|` and nothing to `N`, needing no
+`FaultedUseHard`, where `TheftServed` charges every value their reach `E` can overwrite. `N^(λ - 1)` still multiplies
+every string, those whose faults are all cut included. At `Cut.none` every pattern is interior. `φ₀` is the empty
+pattern (`NoFault`). -/
+def TheftFaulted : Prop :=
+  ∀ {Ω R Θ Q Adv O V Tick F Θ' : Type} [Fintype Ω] [Fintype R] [Fintype Adv] [Inhabited Adv] [Fintype O]
+    [DecidableEq O] [Fintype V] [Fintype Tick] [Inhabited Tick] [Fintype F]
+    (C : Θ → Q × Adv → O → V) (Cf : Θ → (Q × Adv) × F → O → V) (size : F → ℕ) (φ₀ : F)
+    (κ : Cut (Q × Adv) (O → V)) (gen : Ω → Θ) (Typ : Set Θ) (Stolen : Θ → Θ' → Prop)
+    (A : Set (Outsider R (Q × Adv) (O → V) Θ'))
+    (Af : Set (Outsider R ((Q × Adv) × κ.Interiors Cf size φ₀) (O → V) Θ')) (p lam : ℝ)
+    (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ') (T L M : ℕ) (δ : ℝ≥0∞)
+    (run : Θ → R → Verity.Game (List (Served O V Tick Adv))),
+    NoFault size φ₀ →
+    HonestUseHard C gen (fun θ θ' => θ ∈ Typ ∧ Stolen θ θ') T A p →
+    FaultedUseHard C (fun θ (x : (Q × Adv) × κ.Interiors Cf size φ₀) => Cf θ (x.1, x.2.1))
+      (fun φ : κ.Interiors Cf size φ₀ => size φ.1) gen (fun θ θ' => θ ∈ Typ ∧ Stolen θ θ') T M A Af lam →
+    Simulable Af (Ou.withFaults (⟨φ₀, Or.inl rfl⟩ : κ.Interiors Cf size φ₀))
+      (faultChannel R Q Adv O V Tick (κ.Interiors Cf size φ₀) κ (fun φ => size φ.1) ⟨φ₀, Or.inl rfl⟩ T M
+        ((L + 1) * Fintype.card O)) →
+    Served.UndetectedLe M δ run →
+      Verity.Game.avg (fun z : Ω × R => Verity.Game.value
+          (fun l => Stolen (gen z.1) (Ou.out z.2 (Served.view Ou L z.2 l T))) (run (gen z.1) z.2)) ≤
+        ENNReal.ofReal (Claims.Pr fun z : Ω × R => gen z.1 ∉ Typ) +
+          ENNReal.ofReal
+            (Fintype.card (faultChannel R Q Adv O V Tick (κ.Interiors Cf size φ₀) κ (fun φ => size φ.1)
+                ⟨φ₀, Or.inl rfl⟩ T M ((L + 1) * Fintype.card O)).S *
+              ((patternCount (fun φ : κ.Interiors Cf size φ₀ => size φ.1) T M : ℝ) ^ (lam - 1) * p)) +
+          δ + Verity.Game.avg (fun z : Ω × R =>
+            Verity.Game.value (fun l => ¬ Served.Faithful Cf size Ou L (gen z.1) z.2 l) (run (gen z.1) z.2))
+
+/-- **`TheftFaulted`'s premises hold together at the honest toy deployment**, with every weight typical, no halt lag,
+the budget `1` and `λ = 1`. Neither the served function nor the faulted one reads the weights, so every party steals
+them with probability at most `1/256`, faults or not. Every class holds the user with each covert string written in,
+and the honest run's audit leaves no incorrect proof block undetected. -/
+def TheftFaultedHonest : Prop :=
+  NoFault ToyServed.size none ∧
+    HonestUseHard ToyServed.C ToyServed.gen (fun θ θ' => θ ∈ Set.univ ∧ ToyServed.Stolen θ θ') 2 ToyServed.anyone
+      (1 / 256) ∧
+    FaultedUseHard ToyServed.C (fun θ (x : (Unit × Unit) × ToyServed.FaultI) => ToyServed.Cf θ (x.1, x.2.1))
+      (fun φ : ToyServed.FaultI => ToyServed.size φ.1) ToyServed.gen
+      (fun θ θ' => θ ∈ Set.univ ∧ ToyServed.Stolen θ θ') 2 1 ToyServed.anyone ToyServed.anyoneF 1 ∧
+    Simulable ToyServed.anyoneF (ToyServed.user.withFaults (⟨none, Or.inl rfl⟩ : ToyServed.FaultI))
+      (faultChannel Unit Unit Unit Unit (Fin 16) Unit ToyServed.FaultI (Cut.none _ _)
+        (fun φ : ToyServed.FaultI => ToyServed.size φ.1) ⟨none, Or.inl rfl⟩ 2 1 ((0 + 1) * Fintype.card Unit)) ∧
+    Served.UndetectedLe 1 0 ToyServed.honestRun
+
+open scoped ENNReal in
+/-- **`TheftFaulted`'s bound fails at the verifier that accepts everything.** The leaking toy deployment's window `i` is
+the faulted run with the weights' `i`-th value as its one fault, and its audit accepts on an empty sample. The thief then
+steals the weights on every coin, with every weight typical and every release faithful. At the budget `0`, `p = 1/256`,
+`λ = 1` and `δ = 0` the bound is below `1`, so it fails. -/
+def TheftFaultedNontrivial : Prop :=
+  ¬ Verity.Game.avg (fun z : ToyServed.W × Unit => Verity.Game.value
+        (fun l => ToyServed.Stolen (ToyServed.gen z.1) (ToyServed.thief.out z.2 (Served.view ToyServed.thief 0 z.2 l 2)))
+        (ToyServed.leakRun (ToyServed.gen z.1) z.2)) ≤
+      ENNReal.ofReal (Claims.Pr fun z : ToyServed.W × Unit => ToyServed.gen z.1 ∉ (Set.univ : Set ToyServed.W)) +
+        ENNReal.ofReal (Fintype.card (faultChannel Unit Unit Unit Unit (Fin 16) Unit ToyServed.FaultI (Cut.none _ _)
+            (fun φ : ToyServed.FaultI => ToyServed.size φ.1) ⟨none, Or.inl rfl⟩ 2 0 ((0 + 1) * Fintype.card Unit)).S *
+          ((patternCount (fun φ : ToyServed.FaultI => ToyServed.size φ.1) 2 0 : ℝ) ^ ((1 : ℝ) - 1) * (1 / 256))) + 0 +
+        Verity.Game.avg (fun z : ToyServed.W × Unit => Verity.Game.value
+          (fun l => ¬ Served.Faithful ToyServed.Cf ToyServed.size ToyServed.thief 0 (ToyServed.gen z.1) z.2 l)
           (ToyServed.leakRun (ToyServed.gen z.1) z.2))
 
 open scoped ENNReal in
