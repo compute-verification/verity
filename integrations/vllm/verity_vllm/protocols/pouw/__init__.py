@@ -108,7 +108,7 @@ QUANT_PARAMS = ("weight_scale", "weight_scale_inv", "input_scale", "weight_zero_
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
 KEYS = ("coins", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin", "schedule", "start_forward",
         "rows", "steps", "runner", "rounds", "challenger", "session", "admission", "gate", "served", "graphs", "period", "unit", "ks",
-        "backend", "draw_session", "commit_record")
+        "backend", "draw_session", "commit_record", "kept_rows")
 #: ``ncp-v2``'s negative controls (`Settings.tamper`): a prover that commits and opens one value wrong
 TAMPERS = ("tile", "bias")
 #: where the Commit computes `ncp-v2`'s values: the host (`pouw_native`, the default) or ``cuda``, the serving kernel
@@ -205,6 +205,9 @@ class Settings:
     draw_session: Mapping[str, Any] | None = None
     #: H1's Commit record named at the window's close in place of its tap's (`pouw_h1_commit.CommitRecord`), or None
     commit_record: Any = None
+    #: Pearl-C on the device: the served model's weight rows files, written once (`keep_rows`), which each install's
+    #: retained passes link where they would write the rows again; None, and each install writes its own
+    kept_rows: Mapping[str, Any] | None = None
 
     @classmethod
     def of(cls, raw: Mapping[str, Any]) -> Settings:
@@ -245,9 +248,12 @@ class Settings:
         if backend is not None and not all(callable(getattr(backend, f, None)) for f in PL.BACKEND):
             raise ValueError(f"pouw setting 'backend' is the lead's kernel (`lead.LeadBackend`): "
                              f"{', '.join(PL.BACKEND)}")
+        kept = raw.get("kept_rows")
+        if kept is not None and not isinstance(kept, Mapping):
+            raise ValueError("pouw setting 'kept_rows' is the served model's weight rows files, as `keep_rows` returns them")
         *h1, draw_session, commit_record = PHS.of(raw)
         return cls(coins, retain, tdir, draws, tamper, device, *paths, schedule, start, *h1, backend, draw_session,
-                   commit_record)
+                   commit_record, kept)
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
@@ -638,6 +644,16 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     return {"weight_roots": roots, "shapes": {str(w): list(v) for w, v in shapes.items()}}
 
 
+def keep_rows(scheme: str, target: Target, directory: Path) -> dict[str, Any]:
+    """Pearl-C on the device, with the model untouched: every linear layer's weight rows written once under `directory`
+    (`pearl_c.keep_rows`, each file named by the device's digests of its rows), the setting ``kept_rows`` of the model's
+    later installs.  A layer the scheme refuses is `_layers`' ValueError, as at install."""
+    settings = Settings.of(target.context.settings_of(NAME))
+    _, layers, _ = _layers(scheme, target)
+    return PPD.keep_rows(PPD.Kernel.load(settings.kernel, settings.cubin), {w: m.weight for w, m in enumerate(layers)}, scheme,
+                         Path(directory))
+
+
 def weights_claim(scheme: Any, curated: bool = False, needs_gamma_fold: bool = False) -> dict[str, Any]:
     """What served FP8 (Pearl-C) claims of the weights it serves, the commitment's ``registration``.  It claims registered
     weights only when `SERVED_TRANSFORMS` pass the registered-weights rule (`registration.check_registration`, Pearl-C4's
@@ -689,7 +705,8 @@ def install(scheme: str, target: Target) -> Option:
         if device:
             run = PPD.PearlCDeviceRun(s, entry, PPD.Kernel.load(settings.kernel, settings.cubin),
                                       {w: m.weight for w, m in enumerate(layers)}, roots, commitment, opening,
-                                      schedule=settings.schedule, salt_key=_SALT_KEYS.get(entry), pass_index=k)
+                                      schedule=settings.schedule, salt_key=_SALT_KEYS.get(entry), pass_index=k,
+                                      rows=settings.kept_rows)
             run.commits["registration"] = weights_claim(s)
         else:
             run = (_CircuitRun(scheme, entry, settings, roots, salt, commit=target.context.stage != "capture") if s is None

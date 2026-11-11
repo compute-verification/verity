@@ -25,6 +25,10 @@ product, one Pearl+ epoch a Commit window, under the server's own Commit, whose 
   and its coins (`pearl_c.window.coins_of`), which ``served_passes.py retain --window-record W`` and ``verify --tie W``
   read. A window whose passes with calls aren't its Commit's steps, each with every linear's call, is the window's error.
   The window's seal is the Commit's (``windows/w<k>/``); ``pearl/`` is outside it.
+* **The weights' rows** are written once for the served model, before the server listens (`PearlWindows.ready`,
+  ``pearl/rows/``), and every window's passes link them (the pouw setting ``kept_rows``): a pass's ``weights/`` holds the
+  files its manifest names, as when each window wrote them. A weight's tree is under its window's salt key, so each
+  window writes its own.
 
 Each window's outcome (`PearlWindows.close`) is its ``windows.jsonl`` line's ``pouw_pearl`` (`PearlWindows.outcome_key`),
 ``serve.json``'s ``protocols`` `PearlWindows.describe`, ``summary.json``'s ``commit.pouw_pearl`` `PearlWindows.summary`.
@@ -52,6 +56,8 @@ PRECISION = "bfloat16"
 CONFIG = ("device", "kernel", "cubin", "schedule")
 #: where each window's epoch goes under ``--out``: ``pearl/w<k>/``
 DIR = "pearl"
+#: where the served model's weight rows are kept under `DIR`, beside the windows
+ROWS = "rows"
 #: the subprotocol whose draw serve-openai's draw-gated release waits for (`serve_h1.DRAWER`), which Pearl+ never puts
 DRAWER = "pouw"
 #: serve-openai's gate options a live salt session takes, all three or none (`refusal`, `live`)
@@ -181,12 +187,16 @@ class PearlWindows:
         self.opened: dict[str, float] = {}
         self.outcomes: list[dict[str, Any]] = []
         self.readied: dict[str, Any] | None = None
+        self.rows: Mapping[str, Any] | None = None
 
     def ready(self) -> dict[str, Any]:
         """What window 0's open would otherwise do first, done before the server listens: the kernel loaded
-        (`pearl_c.Kernel.load`, once a process) and, for in-process coins, the Lean verifier of record built
-        (`verifier.executable`, their entropy); ``readied``, with each part's time."""
+        (`pearl_c.Kernel.load`, once a process), for in-process coins the Lean verifier of record built
+        (`verifier.executable`, their entropy), and the weights' rows written once for every window's passes to link
+        (`pouw.keep_rows`, in `dir_of` `ROWS`); ``readied``, with each part's time."""
         from verity.core.protocols.pouw import verifier
+        from verity_vllm import protocols as PO
+        from verity_vllm.protocols import pouw
         from verity_vllm.protocols.pouw import pearl_c as PPD
 
         pw, t0 = self.config["pouw"], self.clock()
@@ -195,9 +205,13 @@ class PearlWindows:
         if not self.given:
             verifier.executable()
         t2 = self.clock()
-        self.readied = {"seconds": {"kernel": round(t1 - t0, 4), "lean": round(t2 - t1, 4)}}
+        self.rows = pouw.keep_rows(SCHEME, PO.Target(self.model, context(self.config)), self.dir_of(ROWS))
+        t3 = self.clock()
+        self.readied = {"seconds": {"kernel": round(t1 - t0, 4), "lean": round(t2 - t1, 4), "rows": round(t3 - t2, 4)},
+                        "rows": {"files": len(self.rows), "bytes": sum(e["bytes"] for _, e in self.rows.values())}}
         print(f"[serve-pearl] ready: the kernel loaded in {t1 - t0:.1f} s"
-              + ("" if self.given else f", the Lean verifier built in {t2 - t1:.1f} s"), flush=True)
+              + ("" if self.given else f", the Lean verifier built in {t2 - t1:.1f} s")
+              + f", {len(self.rows)} weights' rows kept in {t3 - t2:.1f} s", flush=True)
         return self.readied
 
     def describe(self) -> dict[str, Any]:
@@ -205,13 +219,14 @@ class PearlWindows:
         where its coins come from, the linears a pass calls, the config and what `ready` did."""
         ctx = context(self.config)
         return {"entry": ENTRY, "composition": list(ctx.enabled), "cut": ENTRY, "stage": ctx.stage,
-                "epoch": f"{DIR}/w<k>/", "coins": "given" if self.given else "in-process", "release": "on the loop",
+                "epoch": f"{DIR}/w<k>/", "rows": f"{DIR}/{ROWS}/", "coins": "given" if self.given else "in-process",
+                "release": "on the loop",
                 "linears": self.linears, "config": self.config, "sealed": f"no: {DIR}/ is outside the window's seal",
                 "ready": self.readied}
 
-    def dir_of(self, window: int) -> Path:
-        """Window ``window``'s epoch directory, ``pearl/w<k>/`` under ``out``, owner-only."""
-        d = self.out / DIR / f"w{window}"
+    def dir_of(self, window: int | str) -> Path:
+        """Window ``window``'s epoch directory, ``pearl/w<k>/`` under ``out``, owner-only; `ROWS`' is ``pearl/rows/``."""
+        d = self.out / DIR / (window if isinstance(window, str) else f"w{window}")
         for p in (d.parent, d):
             p.mkdir(mode=0o700, exist_ok=True)
             p.chmod(0o700)
@@ -226,7 +241,8 @@ class PearlWindows:
             raise RuntimeError(f"{ENTRY}: window {window} opens while window {self.window}'s epoch is open")
         t0 = self.clock()
         coins = dict(self.coins(window))
-        ctx = context(self.config, {"transcript_dir": str(self.dir_of(window)), "runner": self.runner, **coins})
+        kept = {} if self.rows is None else {"kept_rows": self.rows}
+        ctx = context(self.config, {"transcript_dir": str(self.dir_of(window)), "runner": self.runner, **kept, **coins})
         self.comp = PO.install(self.model, ctx)
         self.window, self.reserved = window, coins.get("session")
         self.opened = {"install": round(self.clock() - t0, 4)}
@@ -316,5 +332,5 @@ def arm_of(opts: Any, llm: Any, com: Any, out: Path) -> PearlWindows | None:
     return arm
 
 
-__all__ = ["AT", "CONFIG", "DIR", "DRAWER", "ENTRY", "GATE", "PRECISION", "SCHEME", "PearlWindows", "arm_of", "config_of",
-           "context", "in_process", "live", "refusal"]
+__all__ = ["AT", "CONFIG", "DIR", "DRAWER", "ENTRY", "GATE", "PRECISION", "ROWS", "SCHEME", "PearlWindows", "arm_of",
+           "config_of", "context", "in_process", "live", "refusal"]

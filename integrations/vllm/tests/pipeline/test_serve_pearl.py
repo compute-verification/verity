@@ -118,7 +118,9 @@ class Run(PP.EpochCalls, PassEnds):
 
     lag_ends = False
 
-    def __init__(self, s, entry, kernel, weights, roots, coins, opening, schedule="serial", salt_key=None, pass_index=None):
+    def __init__(self, s, entry, kernel, weights, roots, coins, opening, schedule="serial", salt_key=None, pass_index=None,
+                 rows=None):
+        self.rows = rows
         workload = Workload(tuple(Matmul(w, Shape(16, t.shape[1], t.shape[0]), w) for w, t in weights.items()))
         self.epoch = PPD.epoch_of(workload, roots, coins, opening, pass_index)
         self.scheme, self.entry, self.salt, self.salt_key, self.coins = s, entry, self.epoch.salt, salt_key, coins
@@ -173,6 +175,8 @@ def _device_run_is_the_stand_in(monkeypatch):
     monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: None))
     monkeypatch.setattr(PPD, "weight_roots", lambda kernel, weights, scheme, salt_key=None: {
         w: bytes([w + 1]) * 32 + salt_key for w in weights})
+    monkeypatch.setattr(PPD, "keep_rows", lambda kernel, weights, scheme, directory: {
+        f"{w}.rows": (directory / f"{w}.rows", {"path": f"{w}.rows", "bytes": 2 * t.numel()}) for w, t in weights.items()})
     monkeypatch.setattr(PPD, "PearlCDeviceRun", Run)
     monkeypatch.setattr(pouw, "_SALT_KEYS", {})
     monkeypatch.setattr(verifier, "coins", random.Random(0).randbytes)
@@ -201,11 +205,19 @@ def test_each_window_is_one_epoch_a_pass_a_step_numbered_as_the_toys_and_its_w_r
     """Two requests of the toy's class, one a window: each window's epoch has its own salt and hm96 key, its passes are
     its steps, each with every linear's call at the toy's index, m₁₆ and real rows, and its W's entries are the roots of the
     x each linear was handed and the y it served, then each linear's weight's B root, once; its line's ``pouw_pearl`` is
-    its outcome, and every hook is off after."""
+    its outcome, and every hook is off after.  The weights' rows are kept once, when the arm is made ready, in
+    ``pearl/rows/``, and each window's run is given them."""
     original = vars(Forward)["execute_model"]
     runner = Forward(Model())
     with _serving(tmp_path, runner) as srv:
+        arm = srv.windows.arm
+        assert sorted(arm.rows) == [f"{c}.rows" for c in range(CALLS)] and RUNS == []
+        assert {p for p, _ in arm.rows.values()} == {tmp_path / SPL.DIR / SPL.ROWS / f"{c}.rows" for c in range(CALLS)}
+        assert (tmp_path / SPL.DIR / SPL.ROWS).stat().st_mode & 0o777 == 0o700
+        assert arm.describe()["ready"] == {"seconds": {"kernel": 0.0, "lean": 0.0, "rows": 0.0}, "rows": {
+            "files": CALLS, "bytes": sum(2 * n * k for n, k in SHAPES)}}
         _serve(srv, PROMPTS)
+    assert [r.rows for r in RUNS] == [arm.rows, arm.rows]
     wins, salts = records(tmp_path, "windows.jsonl"), []
     assert [w["window"] for w in wins] == [0, 1] and all("pouw_h1" not in w for w in wins)
     for k, line in enumerate(wins):
