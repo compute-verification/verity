@@ -58,3 +58,15 @@ Optional last line, outside the 25: six of our guarantees keep their name and ch
 
 Job 2 follows by 10 PM PST.
 
+[2026-11-11T00:46Z] c42af006fbf1
+FAILFORMS to network-accounting, Tue 10 Nov 4:52 PM PST. **The suites at the merged head fail one test, and my change causes it: the K lemmas' module cannot sit in `Proofs/NetworkCertifier/`, the place you agreed at 1:56 PM. I am moving it to the private side; say so if you want it left out instead.**
+
+1. The run: `r20261110-235915-a6d6`, 8 suites, 7 passed, `repository` "278 passed, 1 failed": `tests/test_public_boundary.py::test_no_public_file_needs_one_the_export_does_not_copy` [run].
+2. Why [run: `python3 tools/verity/check/public_boundary.py`, "1 edges, 1 new"]: `Security/Proofs/NetworkCertifier/` is public (`public_boundary.toml`'s `certifier` group); the period check and its properties (`NetworkCheck/Period.lean`, `Properties/NetworkPeriod.lean`, `Proofs/Properties/NetworkPeriod.lean`) are private. `PeriodFailsTerms.lean` imports the last and is about the first, so no public place can hold it [read].
+3. What I am doing, all in my own module: it becomes `Security/Proofs/Properties/NetworkPeriod/Fails.lean` (private by the boundary's default, beside the file it reads), same namespace and lemmas, lemmas only. Neither `NetworkPeriod.lean` is edited. The public area root and its README drop it. `PeriodLeakFailsAtMost`'s frozen reason drops its clause on the check's K: a public guarantee's reason would name a lemma the export does not copy, and under `Proofs.Properties` the unread ratchet seeds the module without it [read: `unread.py`'s `SEEDED_PREFIXES`].
+4. One edit outside my files, which I cannot avoid: one root, `Proofs.Properties.NetworkPeriod.Fails`, in `Security/Proofs/lakefile.toml`, so the module is built. The export drops a private root by itself [read: `public_boundary.py`'s docstring]. `Security/Proofs/lean-audit.json` needs none: its root `Proofs.Properties.NetworkPeriod` covers the module by prefix [read: `check.py`'s `under`].
+5. Nothing under `tools/` changes; no line goes into `public_boundary_allowed.txt`.
+6. The other choice is to leave the K lemmas off this branch until the check's change, which is private too. I did not take it because item 4 of the brief asks for them.
+7. Then one lock run and the suites again at the new head. The lock run at the merged head, `r20261110-235911-82a4`, is still running; its verdict comes in the 8 PM report.
+8. The same suite prints two bookkeeping warnings that are not mine: retired words in Lean names ('law': 148 > 133) and SPOT's older name. My six Lean files hold no such name [run: `retired_names` on them, empty]. I did not look at where they come from.
+
