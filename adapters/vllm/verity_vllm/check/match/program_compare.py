@@ -191,12 +191,12 @@ def _runs_of(P: RootView, canon_arg) -> list:
 def _canon_step_relative(P: RootView, i: int, seqs: list[list[int]], unfold: bool):
     """Canonical operands with node producers expressed as (N, step, index within the FILTERED step sequence)."""
     pos = getattr(P, "_pos_cache", None)
-    if pos is None or P._pos_cache_key != (unfold, id(seqs)):
+    if pos is None or P._pos_cache_key[0] != unfold or P._pos_cache_key[1] is not seqs:   # the list itself, kept: a freed list's address can be another's
         pos = {}
         for s, idxs in enumerate(seqs):
             for j, ii in enumerate(idxs):
                 pos[ii] = (s, j)
-        P._pos_cache, P._pos_cache_key, P._pos_ident = pos, (unfold, id(seqs)), not unfold and seqs == P.steps
+        P._pos_cache, P._pos_cache_key, P._pos_ident = pos, (unfold, seqs), not unfold and seqs == P.steps
     compact = getattr(P, "compact", False)
     if compact and P._pos_ident:   # the remap is the identity: canon's normal-form progressions compare exactly as their runs
         return [tuple(arg) for arg in P.canon(i, False)]

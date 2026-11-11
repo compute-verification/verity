@@ -5,6 +5,7 @@ instance and operand for operand, in both operand forms; and the Build's Program
 from __future__ import annotations
 
 import json
+import weakref
 from collections import Counter
 
 import pytest
@@ -12,7 +13,7 @@ import pytest
 from verity.circuits.codec import encode_program
 from verity_vllm.check.match import compiler_form as CF
 from verity_vllm.check.match.instance_sequence import RootView
-from verity_vllm.check.match.program_compare import compare_steps
+from verity_vllm.check.match.program_compare import _canon_step_relative, compare_steps
 from verity_vllm.program.predict import build as PB
 from verity_vllm.program.predict.phi import Phi
 
@@ -47,8 +48,7 @@ def test_the_unpruned_request_in_the_compilers_form_is_the_builds_request_progra
     built, ran = descriptors
     A = RootView("built", built, {}, tok_node=0, compact=compact)
     B = RootView("ran", ran, {}, tok_node=0, compact=compact)
-    # a view is put in the form before any comparison reads it, so the comparison before the form reads a view of its own
-    assert not compare_steps(A, RootView("ran", ran, {}, tok_node=0, compact=compact))["canonical_sha256"]["equal"]
+    assert not compare_steps(A, B)["canonical_sha256"]["equal"]
     ran_spec = {r["k"]: r["spec"] for r in B.inst}
     facts = B.to_compiler_form()
     assert facts == {"sampling_events": 4, "dead": DEAD,
@@ -63,6 +63,22 @@ def test_the_unpruned_request_in_the_compilers_form_is_the_builds_request_progra
     res = compare_steps(A, B)
     assert res["canonical_sha256"]["equal"] and res["totals"]["operands_different"] == 0
     assert res["totals"]["steps_spec_equal"] == len(A.steps) == len(B.steps) == 4
+
+
+class _Steps(list):
+    """A step list that a weak reference can watch, which a plain list can't be."""
+
+
+def test_a_view_keeps_the_step_list_its_position_map_is_of(descriptors):
+    """The comparer keeps on a view the positions of one step list, and reads them again only for that list.  So the view holds
+    the list as long as it holds its positions: a list that is freed leaves its address to a later one, and a later one's
+    operands, as after the form above, would be read through positions that are not its own."""
+    B = RootView("ran", descriptors[1], {}, tok_node=0)
+    steps = _Steps(B.steps)
+    _canon_step_relative(B, steps[0][0], steps, False)
+    kept = weakref.ref(steps)
+    del steps
+    assert kept() is not None
 
 
 @pytest.mark.parametrize("compact", [False, True])
