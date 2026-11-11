@@ -44,8 +44,8 @@ import numpy as np
 from dataclasses import dataclass
 
 from verity_vllm import settings
-from verity_vllm.config import (CHECKPOINTS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, RowConfig, option, row_execution, row_world,
-                                rows_of_record)
+from verity_vllm.config import (CHECKPOINTS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, RowConfig, option, row_execution, row_tokens,
+                                row_world, rows_of_record)
 from verity_vllm.engine import served
 from verity_vllm.engine.arrivals import realized_arrive_steps
 from verity_vllm.engine.profiles.transport import row_custom_all_reduce_off, row_p2p_env
@@ -473,7 +473,7 @@ def main(a: Options) -> int:
         if "env" in doc["engine"]:
             doc["engine"]["env"].update(tp.env())
         doc["sweep"]["execution"] = tp.execution_label
-        exec_suffix = a.row_id.rsplit("__", 1)[-1]
+        exec_suffix = row_tokens(a.row_id)[-1]
         if exec_suffix != tp.execution_label:
             print(f"[error] row id execution suffix {exec_suffix!r} != the target's execution label {tp.execution_label!r}", file=sys.stderr)
             return 3
