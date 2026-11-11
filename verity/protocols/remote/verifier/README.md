@@ -16,7 +16,7 @@ registered compiler, an execution block and an execution phase) are in `ARCHITEC
 Block and Period. Lean names keep some older names until they are renamed: `Dampener*` means overhead, `*Horizon` a
 monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window*` a period.
 
-**Which "remote".** Six things in the tree are called "remote", and this page means the first:
+**Which "remote".** Five things in the tree are called "remote", and this page means the first:
 
 - the remote protocol, this one: `Core.Remote` (`CoreRemote.lean`, id `verity/remote/v0`);
 - PoUB, an onsite subprotocol whose code names still say "remote" until they are renamed: its package
@@ -26,10 +26,8 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
   verifier;
 - `RemoteChallenger` (`verity/protocols/spot/device/remote.py`), the client of a challenger on another host;
 - `CertifierClient` (`verity/protocols/certifier/verifier/active.py`), onsite's network certifier reached over the network;
-- the overhead bound's remote regime, `Nci.Guarantees.DampenerRemote` (the inference-only policy's Lean is still named
-  `Nci`) and `verity/protocols/inference_only/rho`'s `regime.remote`: a bound over this protocol, not a part of it (the slowdown bound,
+- the overhead bound's remote regime, `Nci.Guarantees.DampenerRemote` and `verity/protocols/inference_only/rho`'s `regime.remote`: a bound over this protocol, not a part of it (the slowdown bound,
   part 6 of the security argument below);
-- "run remotely": a job run on a cluster node (`research run --on`), which has nothing to do with any protocol.
 
 ## Parties
 
@@ -67,7 +65,7 @@ the record, so it joins through a tie (`Core.Remote.windows`): every window of t
 as its Commit record (`windowRecords`, which `PouwCheck.Credit.commitOf?` reads), and a window on another record
 rejects remote unless it rejects already. Its executable is `remote id | check PARAMS COMMITMENT EVIDENCE | serve`
 (`RemoteMain.lean`). The Lake package `core_remote` is code: it has no Mathlib and nothing of `security/`
-(`lean-audit.json`). The product's rule and its difftest are the composition's ([README](remote/verifier/composition/README.md),
+(`lean-audit.json`). The product's rule and its difftest are the composition's ([README](composition/README.md),
 `verity/protocols/remote/verifier/composition/tests/test_composition_difftest.py`).
 
 ## Lifecycle
