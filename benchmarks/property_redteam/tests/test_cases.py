@@ -3,19 +3,16 @@
 from __future__ import annotations
 
 import struct
-import sys
 from pathlib import Path
 
+import cases as C
 import pytest
+import run as R
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+from verity.circuits.evaluation.reference import evaluate
+from verity.definitions.silicon.integer import S32_MAX, S32_MIN
 
-import cases as C  # noqa: E402
-import run as R  # noqa: E402
-
-from verity.circuits.evaluation.reference import evaluate  # noqa: E402
-from verity.definitions.silicon.integer import S32_MAX, S32_MIN  # noqa: E402
+CASES_JSON = Path(__file__).resolve().parents[1] / "cases.json"
 
 
 def _ids(cases):
@@ -56,7 +53,7 @@ def test_cases_name_a_verdict_a_charge_and_a_rule():
 
 def test_cases_json_is_the_metadata():
     """cases.json is `run.py --json`: regenerate it with `python run.py --json > cases.json` after changing a case."""
-    assert (HERE.parent / "cases.json").read_text() == R.render(R.metadata())
+    assert CASES_JSON.read_text() == R.render(R.metadata())
 
 
 def test_the_ruling_numbers():
@@ -191,5 +188,7 @@ def test_main_exit_status(capsys):
     assert R.main(["--check", "refuse-all", "--case", "carry-idiv", "--case", "imma-clamp-bare"]) == 0
     assert R.main(["--check", "accept-all", "--case", "carry-idiv"]) == 1
     assert "carry-idiv" in capsys.readouterr().out
-    with pytest.raises(SystemExit):
+    with pytest.raises(ValueError, match="MODULE:FUNCTION"):
         R.resolve("no-colon")
+    with pytest.raises(SystemExit, match="MODULE:FUNCTION"):
+        R.main(["--check", "no-colon"])

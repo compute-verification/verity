@@ -27,10 +27,12 @@ import random
 import struct
 import sys
 
+import verity.protocols.pouw.prover.circuit.words  # noqa: F401  (PoUW word primitives register on import)
 from verity.circuits.defs import REGISTRY, PrimitiveDefinition
 from verity.circuits.evaluation.reference import ScalarReference, evaluate
 from verity.circuits.types import Array, Value
 from verity.definitions.registry import catalog
+from verity.definitions.registry.ref_prims import gather_f32
 from verity.definitions.silicon.integer import BLACKWELL_SM120_S8_M16N8K32 as IMMA_SAT
 from verity.definitions.silicon.integer import (
     BLACKWELL_SM120_S8_M16N8K32_WRAP as IMMA_WRAP,
@@ -67,7 +69,6 @@ def classify(pid: str) -> str:
 def primitives() -> dict[str, PrimitiveDefinition]:
     """Every registered primitive, with the catalog's ops and registry loaded (`catalog.load`); a module that fails to
     import is named on stderr."""
-    import verity.protocols.pouw.prover.circuit.words  # noqa: F401  (PoUW word primitives register on import)
     for e in catalog.load(("ops", "registry"))[1]:
         print(f"skip {e}", file=sys.stderr)
     return {k: v for k, v in REGISTRY.defs.items() if isinstance(v, PrimitiveDefinition)}
@@ -214,7 +215,6 @@ def section_floors(prims: dict[str, PrimitiveDefinition]) -> dict:
     # A runtime-indexed gather over constant words is a lookup table: it realizes any function of the index.  Here a
     # 128-entry f32 column holds (i^2 + 7i) mod 251, and the gather returns its entry exactly: a data-dependent
     # nonlinearity property/v1 does not budget (the census counts gathers and fan-in, the budget does not read them).
-    from verity.definitions.registry.ref_prims import gather_f32
     table = [f32(float((i * i + 7 * i) % 251)) for i in range(128)]   # an arbitrary nonlinear table of the 7-bit index
     g = gather_f32(128)
     idx = 100

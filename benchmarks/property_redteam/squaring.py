@@ -54,6 +54,9 @@ marked modeled.
 
 from __future__ import annotations
 
+import argparse
+import json
+import random
 from collections.abc import Callable
 
 from gates import (
@@ -514,10 +517,6 @@ def measure(name: str, inputs: list[int]) -> dict:
 
 
 def main() -> None:
-    import argparse
-    import json
-    import random
-
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", required=True, help="the JSON file to write")
     ap.add_argument("--inputs", type=int, default=64, help="random inputs each construction is evaluated on")
