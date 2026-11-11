@@ -3,7 +3,7 @@ with the Program's own sampler Definition under the DECLARED inputs, and compare
 
 For every snapshotted engine step with a `_gumbel_sample_kernel` launch (row_pod's Match snapshots steps `MATCH_SNAP_STEPS`, default 0,1):
 
-    token', masked' = GumbelTopPTokenSelect_v1{V,S}(bf16 logits row, top_p, seed, pos, temperature)     # verity/definitions/registry/sampling.py
+    token', masked' = GumbelTopPTokenSelect_v1{V}(bf16 logits row, top_p, seed, pos, temperature, S)     # verity/definitions/registry/sampling.py
 
 with the bf16 logits row from the capture's snapshot of the sampler input (`SampleEnd.logits_view`), `seed` the request record's
 DECLARED seed (`RunHeader.workload.requests[*].seed`, i.e. the workload manifest -- the Program's runtime input), `pos` the row's
@@ -13,9 +13,8 @@ StepStart position, temperature / top_p the declared policy, and S the split ker
   * `masked' == _gumbel_sample_kernel.logits_ptr[row]` (the fp32 row the kernel consumed)        -> rows[*].masked_row_equal_lanes == V
   * the kernel-consumed facts (`seeds_ptr[idx_mapping[row]]`, `temp_ptr[..]`, the mask kernel's `P[row]`, `pos_ptr[row]`) equal the
     declared ones; a fact that was NOT snapshotted at a checked row FAILS                      -> rows[*].device_facts_match
-  * with `--build <row dir>`: the mask kernel's constexpr S equals the PROGRAM's S for the request's shape at this sampled event
-    (Build result.json `sampling.splits`: 'derived' -> S_t = SplitsFor_v1(#logits rows at t, geometry.num_sms); a fixed int or
-    per-event schedule otherwise)  -> rows[*].S_agree
+  * with `--build <row dir>`: the mask kernel's constexpr S equals the PROGRAM's S for the request's shape (Build result.json
+    `sampling.splits`, the registered split count; anything but an int is a named disagreement)  -> rows[*].S_agree
   * every sampled row of the record is value-checked, else INCOMPLETE; the report's `structure_note` says what
     is DECLARED (fold Const/Param from the run header) vs OBSERVED (device-tied, here)
 
@@ -37,6 +36,7 @@ import json
 import struct
 import time
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from dataclasses import dataclass
@@ -149,16 +149,14 @@ def _evaluate_all(jobs: list[tuple], n_jobs: int | None, evaluator: str = "lane"
         return list(pool.imap(fn, jobs, chunksize=1))
 
 
-def _program_splits(build_dir: str | Path | None, workload: str | Path | None) -> tuple[dict[str, list[int] | int | dict | None], list[str]]:
-    """The PROGRAM's S per request: `sampling.splits` of the Build's `result.json` for the request's (LP, T) shape --
-    `"derived"` (the Program takes S as its `splits` Input and declares the relation S_t = SplitsFor_v1(|live(t)|,
-    num_SMs); returned as {"derived": num_sms} so the check derives S_t from the record's live rows at step t), else a fixed int / per-event
-    schedule.  ({request_id: splits}, unreadable): a request whose shape has no Build result maps to None, and each Build result that
+def _program_splits(build_dir: str | Path | None, workload: str | Path | None) -> tuple[dict[str, Any], list[str]]:
+    """The PROGRAM's S per request: `sampling.splits` of the Build's `result.json` for the request's (LP, T) shape, the registered
+    split count.  ({request_id: splits}, unreadable): a request whose shape has no Build result maps to None, and each Build result that
     could not be read is named with its error."""
     if build_dir is None or workload is None:
         return {}, []
     import glob
-    by_shape: dict[tuple[int, int], list[int] | int | dict] = {}
+    by_shape: dict[tuple[int, int], Any] = {}
     unreadable: list[str] = []
     for p in sorted(glob.glob(str(Path(build_dir) / "build_request*" / "result.json"))):
         try:
@@ -169,13 +167,9 @@ def _program_splits(build_dir: str | Path | None, workload: str | Path | None) -
         if not r.get("ok", True) or r.get("wrapper") != "request":
             continue
         smp = r.get("sampling") or {}
-        sp = smp.get("splits")
-        if sp == "derived":
-            nsm = (smp.get("geometry") or {}).get("num_sms")
-            by_shape[(int(r["LP"]), int(r["T"]))] = {"derived": int(nsm)} if nsm is not None else {"derived": None}
-        elif sp is not None:
-            by_shape[(int(r["LP"]), int(r["T"]))] = sp
-    out: dict[str, list[int] | int | None] = {}
+        if smp.get("splits") is not None:
+            by_shape[(int(r["LP"]), int(r["T"]))] = smp["splits"]
+    out: dict[str, Any] = {}
     for q in Workload.load(workload_file(workload)).requests:
         out[q.request_id] = by_shape.get((q.prompt_length or 0, q.max_tokens - 1))
     return out, unreadable
@@ -293,7 +287,7 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
         try:
             for r in Workload.load(workload_file(workload)).requests:
                 wl_req[r.request_id] = {"prompt_len": r.prompt_length or 0, "cap": r.max_tokens}
-        except (OSError, ValueError) as e:  # noqa: BLE001
+        except (OSError, ValueError) as e:
             out["problems"].append(f"draw ledger: the workload manifest could not be read ({e!r}): prompt_len / cap unknown, the ledger is unjudged")
     sr = _stop_rule(build_dir)
     if sr.get("error"):
@@ -466,7 +460,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
     rows_without_seed = 0             # skipped rows whose request record declares no seed: a FAIL, not an INCOMPLETE
     steps_seen = 0
     sampled_rows_total = 0            # every sampled row of the record counts; the verdict names k of n value-checked
-    program_S, splits_unreadable = _program_splits(build_dir, workload)      # the Program's S per request (int or per-event schedule), if a Build is given
+    program_S, splits_unreadable = _program_splits(build_dir, workload)      # the Program's S per request, if a Build is given
     reasons.extend(f"Build result unreadable ({u}): the Program's S of its request shape is not read" for u in splits_unreadable)
     events_of: dict[str, int] = {}                         # sampled events attributed to each request so far (the event index of the next row)
     s_disagree: list[str] = []
@@ -537,36 +531,18 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
                    "gumbel_constexprs": {k: v for k, v in cx.items()}}
             if rid in program_S:      # record BOTH the kernel's S (mask constexpr) and the Program's S; name a disagreement
                 sp = program_S[rid]
-                if isinstance(sp, dict):       # derived: S_t = SplitsFor_v1(|live(t)|, num_SMs), |live(t)| = the record's logits rows at t
-                    from verity.definitions.registry.topp_geometry import splits_for as _sf
-                    nsm = sp.get("derived")
-                    pS = int(_sf(int(n_rows_step), int(nsm))) if nsm is not None and 1 <= int(n_rows_step) <= 64 else None
-                    rec["program_S"] = pS
-                    rec["S_source"] = {"kernel": "_topp_sb_mask_kernel constexpr S",
-                                       "program": f"derived: SplitsFor_v1(live={int(n_rows_step)}, num_SMs={nsm}) (Build sampling.splits 'derived')"}
-                    if pS is None:
-                        s_disagree.append(f"step {step} row {row} ({rid}): the Program's S is derived but num_SMs is undeclared or live {n_rows_step} "
-                                          f"is outside 1..64 -- S_t cannot be derived")
-                    elif S is not None and int(S) != pS:
-                        s_disagree.append(f"step {step} row {row} ({rid}) event {ev_i}: the mask kernel ran S={int(S)} but SplitsFor_v1(live={int(n_rows_step)}, "
-                                          f"num_SMs={nsm}) = {pS} -- the record's split geometry is not the derived one")
-                    rec["S_agree"] = (S is not None and pS is not None and int(S) == pS)
-                    continue_check = False
-                else:
-                    continue_check = True
-                if continue_check:
-                    pS = None if sp is None else (int(sp[ev_i]) if isinstance(sp, list) and ev_i < len(sp) else (int(sp) if isinstance(sp, int) else None))
-                    rec["program_S"] = pS
-                    rec["S_source"] = {"kernel": "_topp_sb_mask_kernel constexpr S", "program": "Build result.json sampling.splits" +
-                                       (f"[event {ev_i}]" if isinstance(sp, list) else "")}
-                    if sp is None:
-                        s_disagree.append(f"step {step} row {row} ({rid}): the Build has no request Program for this request's shape -- its S is undeclared")
-                    elif pS is None:
-                        s_disagree.append(f"step {step} row {row} ({rid}): sampled event {ev_i} beyond the Program's {len(sp)}-event schedule")
-                    elif S is not None and int(S) != pS:
-                        s_disagree.append(f"step {step} row {row} ({rid}) event {ev_i}: the mask kernel ran S={int(S)} but the Program declares "
-                                          f"TopPMask S={pS} (Build sampling.splits) -- the record's split geometry is not the declared one")
-                    rec["S_agree"] = (S is not None and pS is not None and int(S) == pS)
+                pS = sp if type(sp) is int else None
+                rec["program_S"] = pS
+                rec["S_source"] = {"kernel": "_topp_sb_mask_kernel constexpr S", "program": "Build result.json sampling.splits"}
+                if sp is None:
+                    s_disagree.append(f"step {step} row {row} ({rid}): the Build has no request Program for this request's shape -- its S is undeclared")
+                elif pS is None:
+                    s_disagree.append(f"step {step} row {row} ({rid}): the Build declares sampling.splits {sp!r}, not the registered split count "
+                                      f"(an int, a Const32[S] of the Program)")
+                elif S is not None and int(S) != pS:
+                    s_disagree.append(f"step {step} row {row} ({rid}) event {ev_i}: the mask kernel ran S={int(S)} but the Program declares "
+                                      f"TopPMask S={pS} (Build sampling.splits) -- the record's split geometry is not the declared one")
+                rec["S_agree"] = (S is not None and pS is not None and int(S) == pS)
             if f is None or f["seed"] is None:
                 rec.update(status="skipped", why="request record has no declared seed")
                 tally["skipped"] += 1

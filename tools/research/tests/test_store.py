@@ -777,10 +777,14 @@ class FakeS3:
     Multipart as S3 / R2 do it: `POST ?uploads` -> UploadId, `PUT ?partNumber=&uploadId=` stores a part (ETag = its MD5), `POST ?uploadId=`
     assembles the parts in PartNumber order and gives the object the multipart ETag `md5(md5s)-n` (kept in `etags`, so HEAD / GET report
     it), `DELETE ?uploadId=` aborts.  `fail_part` = a part number whose PUT answers 500 every time (the client must abort);
-    `uploads` holds the in-flight uploads, `aborted` the ids that were cleaned up."""
+    `uploads` holds the in-flight uploads, `aborted` the ids that were cleaned up.
+
+    `DELETE` of a key removes the object (204, present or not, as S3).  `authorize` models a credential scoped by S3 action, as an R2
+    temporary one is: it is called with each request's action (R2's names: PutObject, DeleteObject, ...) and headers, and a request
+    it refuses answers 403 AccessDenied, changes nothing and is logged as ("DENIED", action)."""
 
     def __init__(self, reject_conditional: int | None = None, corrupt: set[str] = frozenset(), head_404_once: set[str] = frozenset(),
-                 fail_part: int | None = None, throttle_once: set[str] = frozenset()):
+                 fail_part: int | None = None, throttle_once: set[str] = frozenset(), authorize=None):
         import http.server
         import threading
         import urllib.parse
@@ -793,6 +797,7 @@ class FakeS3:
         self.lock = threading.Lock()
         self.reject_conditional, self.corrupt, self.head_404_once, self.fail_part = reject_conditional, set(corrupt), set(head_404_once), fail_part
         self.throttle_once = set(throttle_once)     # keys whose first PUT answers 429 SlowDown (R2 under load), Retry-After: 0
+        self.authorize = authorize
         state = self
 
         def etag_of(key: str) -> str:
@@ -806,6 +811,28 @@ class FakeS3:
                 u = urllib.parse.urlsplit(self.path)
                 assert u.path.startswith("/bkt"), u.path
                 return urllib.parse.unquote(u.path[len("/bkt"):].lstrip("/")), dict(urllib.parse.parse_qsl(u.query, keep_blank_values=True))
+
+            def _action(self) -> str:
+                key, q = self._key()
+                return {"PUT": "UploadPart" if "partNumber" in q else "CopyObject" if self.headers.get("x-amz-copy-source") else "PutObject",
+                        "POST": "CreateMultipartUpload" if "uploads" in q else "DeleteObjects" if "delete" in q else "CompleteMultipartUpload",
+                        "DELETE": "AbortMultipartUpload" if "uploadId" in q else "DeleteObject", "HEAD": "HeadObject",
+                        "GET": "ListMultipartUploads" if "uploads" in q else "ListParts" if "uploadId" in q
+                        else "ListObjectsV2" if q.get("list-type") == "2" else "GetObject" if key else "ListObjectsV1"}[self.command]
+
+            def parse_request(self):
+                if not super().parse_request():
+                    return False
+                if state.authorize is None or state.authorize(self._action(), self.headers):
+                    return True
+                self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                with state.lock:
+                    state.log.append(("DENIED", self._action(), False))
+                if self.command == "HEAD":
+                    self._reply(403, head_only=True, headers={"Content-Length": "0"})
+                else:
+                    self._reply(403, b"<Error><Code>AccessDenied</Code></Error>")
+                return False
 
             def _reply(self, code: int, body: bytes = b"", headers: dict | None = None, head_only: bool = False):
                 self.send_response(code)
@@ -883,6 +910,11 @@ class FakeS3:
             def do_DELETE(self):
                 key, q = self._key()
                 with state.lock:
+                    if "uploadId" not in q:
+                        state.log.append(("DELETE", key, False))
+                        state.objects.pop(key, None)
+                        state.etags.pop(key, None)
+                        return self._reply(204)
                     up = state.uploads.pop(q.get("uploadId", ""), None)
                     state.log.append(("ABORT", key, False))
                     if up is None:
@@ -1166,6 +1198,34 @@ def test_throttled_put_is_retried_not_failed(fake_s3, tmp_path, monkeypatch):
     assert remote_s3.retry_delay("Wed, 21 Oct 2026 07:28:00 GMT", 2) == 0.0 and remote_s3.retry_delay(None, 1) == 0.0
 
 
+def test_the_labels_pack_is_replaced_in_place_and_taken_over_s3(fake_s3, tmp_path, monkeypatch):
+    from research.store import labels_sync as LS
+
+    monkeypatch.setattr(LS, "PACK_MIN_MISSING", 2)
+    s = fake_s3()
+    a = LocalStore(tmp_path / "A")
+    for i in range(4):
+        a.add_label("art:" + "4" * 64, "note", f"n{i}", "alice", ts="2026-09-23T01:00:00Z")
+    LS.sync(a)
+    p = LocalStore(tmp_path / "P")
+    first = LS.publish_pack(p)
+    a.add_label("art:" + "4" * 64, "note", "n4", "alice", ts="2026-09-23T01:00:00Z")
+    LS.sync(a)
+    second = LS.publish_pack(p)
+    assert (first["labels"], second["labels"]) == (4, 5) and first["sha256"] != second["sha256"]
+    assert s.puts("packs/") == [(LS.PACK_KEY, False), (LS.PACK_INFO_KEY, False)] * 2, "each a plain PUT over what the key held"
+    assert hashlib.sha256(s.objects[LS.PACK_KEY]).hexdigest() == second["sha256"] == json.loads(s.objects[LS.PACK_INFO_KEY])["sha256"]
+    (tmp_path / "other").write_bytes(b"other")
+    with pytest.raises(RemoteConflict):
+        s.remote().put(LS.PACK_INFO_KEY, tmp_path / "other")                          # `put` still never overwrites
+
+    b = LocalStore(tmp_path / "B")
+    del s.log[:]
+    rep = LS.sync(b, push=False)
+    assert len(rep["pulled"]) == 5 and rep["pack"] == 5 and set(LS.local_labels(b)) == set(LS.local_labels(a))
+    assert [k for m, k, _ in s.log if m == "GET" and k] == [LS.PACK_INFO_KEY, LS.PACK_KEY], "after the listing, the pack alone"
+
+
 @pytest.mark.slow
 def test_cli_push_reports_rate_and_takes_jobs_and_verify(fake_s3, tmp_path, capsys):
     s = fake_s3()
@@ -1409,6 +1469,16 @@ def test_mint_resolves_inputs_from_config_and_env_and_the_cli_prints_env_lines(e
     assert {"accessKeyId", "secretAccessKey", "sessionToken", "expires_utc"} <= set(doc)
     assert main(["mint-credential", "--ttl", "8d"]) == 1 and "604800" in capsys.readouterr().err
     assert main(["mint-credential", "--via", "api"]) == 1 and "CLOUDFLARE_API_TOKEN" in capsys.readouterr().err
+    # --job: a cluster job's key, the three variables alone, with custody's actions whatever another flag would say
+    from research.store import custody as CU
+
+    assert main(["mint-credential", "--job", "fetch", "--ttl", "2h"]) == 0
+    key = json.loads(capsys.readouterr().out)
+    assert sorted(key) == ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "expires_utc"]
+    claims = C.decode_jwt(__import__("base64").b64decode(key["AWS_SESSION_TOKEN"]).decode()[len("jwt/"):])[1]
+    assert claims["actions"] == list(CU.READ_ACTIONS) and claims["exp"] - claims["iat"] == 7200 and claims["bucket"] == "b2"
+    assert main(["mint-credential", "--job", "push", "--actions", "DeleteObject", "--prefix", "p/"]) == 1
+    assert "--job push fixes the key's actions" in (err := capsys.readouterr().err) and "drop --actions, --prefix" in err
     assert not list(env.rglob("*token*")) and not list(env.rglob("*.env")), "nothing written to disk"
 
 

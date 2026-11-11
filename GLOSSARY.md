@@ -209,7 +209,7 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "ACCEL" naming the protocol, and PoUW's `accel/` directory; the coin domain `verity/pouw-accel/<kind>/v1` in a Lean docstring (`security/Definitions/Pouw/Assumptions/Dither.lean`), until renamed | Dither |
 | "the accelerator model", "the machine model" for 𝓜 (`benchmarks/pouw/machine_model/` and its `machine-model` command keep the name) | the ACCEL model |
 | `ShaSpeed` and `ServiceSound`, the Lean's names until renamed | `SAKSha` (SAK for SHA) and `ProofSystemSound` |
-| "overhead", "rho" and ρ for the training-cost ratio, overhead(𝒢, 𝒜, η), "the overhead lower bound"; "the circuit-size slowdown" for \|C\|/T_0, "training efficiency" η, "hardware multiple"; `verity/protocols/inference_only/rho` (`Overhead`, `Overhead.rho`, `theorem.overhead`, the `rho` command), until renamed | slowdown(𝒢, 𝒜, η); the slowdown lower bound (honest overhead γ, and ρ as 𝓜's resource rate, stay) |
+| "overhead", "rho" and ρ for the training-cost ratio, overhead(𝒢, 𝒜, η), "the overhead lower bound"; "the circuit-size slowdown" for \|C\|/T_0, "training efficiency" η, "hardware multiple"; `verity/protocols/inference_only/rho` (`Overhead`, `Overhead.rho`, `theorem.overhead`), until renamed | slowdown(𝒢, 𝒜, η); the slowdown lower bound (honest overhead γ, and ρ as 𝓜's resource rate, stay) |
 | "dampener", "compute dampener" D; the Lean's `Nci.Dampener` and `Dampener*` names, until renamed | the slowdown |
 | T_0 and the reference circuit C_0 as overhead's normalizer; T_target ≥ L·T_0/Φ_total | the training cost T_𝒢(η; 𝓕); the time to the task, at least T_𝒢(η; 𝒜) GPU-hours |
 | A_phys, A_i(S), δ_i(S), A′ in roman letters; "layer 1", "layer 2", "layer 3"; "the one theorem", "soundness one theorem" | 𝓕, 𝒜_p, δ_p, 𝒜; the feasible set, protocol soundness, the slowdown lower bound |
@@ -236,7 +236,7 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "words" for Dither's committed 16-bit sums | prefix sums |
 | "staging", "the staging decode" for copying a stored model's bytes into GPU memory and decoding them to the served weights; `benchmarks/torch_gpu/p2_stage`, until renamed | the store's load |
 | "post-landing run", "postland" | after-landing run |
-| "train" for a batch of PRs landed on one check | none: drive lands the reviewed prefix of `next` |
+| "train" for a batch of PRs landed on one check | candidate |
 | "draw" (noun, verb), "drawn proof block", "drawn unit", "sampled unit"; `DrawIsCoin`, `Remote.Draw.Session`, `--draw`, until renamed | the sample, a sampled proof block; to sample (coins are flipped) |
 | "components", "product" for a composite's parts and their joining, and the Lean's and wire format's names | subprotocols; composition |
 | "firewall"; `flock-firewall`, `Flock.Firewall`, `FC_FIREWALL*`, until renamed | the ZK server |
@@ -359,6 +359,9 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   registration*); the *second stage* samples k_t of its n_t proof blocks of each template t on fresh coins, and misses
   every incorrect one with probability at most ∏_t C(n_t − w_t, k_t)/C(n_t, k_t), w_t of them template t's.
   Harm is read at ρ's *footprint* w(ρ), the fewest incorrect proof blocks of any interior its boundary commitment allows.
+  A replay block is *closed* when it reads no other replay block's values, recomputing from its own inputs any it
+  needs; the *fan-out* F is the most replay blocks one group joined by such reads holds, 1 when all are closed, and a
+  served cap of S bits charges each replay block at most F S.
 - **Cell**: one benchmark result: a proof system (or an archived one's backend id) × statement × input set × prover
   hardware.
 - **Input block** (`INPUT_UNIT` in `verity.circuits.partition`): the part of a partition that holds every input gate.
@@ -390,25 +393,34 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   record means a guarantee now says something else. It protects only the guarantees
   and what they read, though it lists many lemmas too.
 - **Checking and landing** (the team skill, "Landing"):
-  - **Ready mark**: an owner's statement that a PR's head may land; it admits that head to `next`.
+  - **Ready mark**: an owner's statement that a PR's head may land; it admits that head to the verified queue.
   - **Land verdict**: a reviewer's `land` or `hold` on one PR head, recorded as a label; the owner's own doesn't count.
-  - **`next`**: drive's branch of admitted PRs, one merge each, above `main`, which fast-forwards to its reviewed prefix.
-  - **Preflight**: `research queue ready`'s checks of a head merged onto `next`, before the mark; the sync runs none.
-  - **Landing gate**: a script at `main` that every PR's merge onto `next` must pass.
-  - **Warn gate**: a script run as a landing gate is, whose failure keeps no PR out: drive lands it and tells its owner.
-  - **Warn step**: a step of the after-landing run whose red is never reverted (drive.toml's `warn_steps`: ratchet-gate):
-    drive rings each culprit's lane, which fixes it forward in its next PR.
-  - **Low-risk lane**: drive landing a PR on `checked` on its ready mark alone, when its merge changes nothing drive.toml's
-    `lowrisk_excludes` names (no Lean, lock or soundness-path change).
-  - **Lock run**: drive's run of `lean-audit` alone on `checked`'s tip after a landing that changes Lean, a lock or the spec,
-    which lands on its verdict like any other; drive commits the lock records it regenerated there (`Lock records regenerated
-    for #N...`), and the after-landing run checks that commit.
-  - **After-landing run**: the full check of `checked`'s tip after each landing; `main` moves only to tips that passed every step on the merge gate.
-  - **Culprit**: the one landing whose change touches what a red's failure names, never found by bisecting; its lane fixes
-    it forward within 30 min, or drive reverts it on `checked`, unless the red is a warn step's.
+  - **Verified queue**: the one landing path, ci's loop (`research queue vqueue`): it merges the PRs ready to land onto
+    `main` as candidates, and fast-forwards `main` only to one with no new failure: each gating task passed or fails on its
+    base too.
+  - **Candidate**: `main`'s tip, or the candidate below it, with one `Queue: #N` merge per PR on top, pushed as
+    `queue/<sha12>` and checked as one.
+  - **Suspect**: a PR of a failed candidate whose change touches what a failure its base doesn't share names (every PR
+    when none does); a lone suspect is ejected, its ready mark withdrawn, and several are bisected.
+  - **Preflight**: `research queue ready`'s checks of a head before the mark.
+  - **Landing gate**: a script at `main` that a head must pass at its mark's preflight (drive.toml's `landing_gates`).
+  - **Warn gate**: a script run as a landing gate is, whose failure only warns (drive.toml's `warn_gates`).
+  - **Off-gate step**: a step of the check off the merge gate (policy.toml's `off_gate` and drive.toml's `warn_steps`:
+    circuit-check, lean-changed, ratchet-gate); a candidate's check still runs it (lean-changed aside, which no shard
+    runs), and its red holds nothing. Under `--gate check`, a red the run beside its base's check doesn't share rings who
+    acts on it.
+  - **Low-risk lane**: the verified queue taking a PR on its ready mark alone, when its change touches nothing drive.toml's
+    `lowrisk_excludes` names (no Lean, lock or soundness-path change); never a layout move's PR.
+  - **Records run**: a candidate's run of `lean-audit` alone before its check, when a PR of it changes Lean, a lock or the
+    spec; the lock records it regenerated are committed on top (`Lock records regenerated for #N...`), and that commit is
+    what is checked.
+  - **After-landing run**: the whole check (every ci.toml job: `--kind after-landing`), which gates a candidate when the
+    verified queue runs with `--gate check`: one beside each candidate and beside `main` each time it moves, `main`'s saying
+    which failures a candidate inherits. Under `--gate graph2`, the default, graph2's tasks check a candidate, with
+    lean-agreement and ratchet-gate run beside them.
   - **Pass**: a part of the check, reused while its declared inputs are unchanged. A verdict is a review's, never a pass.
   - **Pure move**: a change that only renames paths, certified by `move_check`. A layout move's PR (`Move: tools/move/MAP.toml`)
-    lands from `next` on its review, regenerated by drive on the tip below it and certified there.
+    lands as any PR does, on a land verdict.
 - **Running jobs** (`tools/research`, `infra/`):
   - **Attempt**: the evidence store's record of one run, completed or failed, with its outputs; `research run` is the
     command that makes one.

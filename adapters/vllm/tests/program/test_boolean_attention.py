@@ -3,7 +3,8 @@ profiles (FA2 on mma.sync, FA3 on wgmma), the v8 chain at the served FA2 binding
 v9's with the scale an input) and `Fa3InvSum_v2` are Boolean, agree with their word views (the v3, v2, v5, v4 and v13 chains and
 `Fa3InvSum_v1`) on random words and on words that reach
 every guard (a zero query, signed zeros, subnormals, infinities, NaNs, scores that overflow), and are pinned by gate count and
-program digest."""
+program digest.  The units a head is cut into (`AttnBlockFirst_v3`, `AttnHeadEnd_v2`) agree with theirs (`AttnBlockFirst_v1`,
+`AttnHeadEnd_v1`) the same way, and the switch never picks them."""
 from __future__ import annotations
 
 import numpy as np
@@ -81,6 +82,18 @@ AGREEMENT = PINNED[:2] + [bind(BAt.AttnBlockV6, D=16, NVIS=9, FIRST=False, BN=32
     bind(BAt.AttnBlockV16, D=16, NVIS=3, FIRST=True, BN=16, DOT=FA3["DOT"], CHECK=True),
     bind(BAt.AttnBlockV16, D=16, NVIS=16, FIRST=False, BN=16, DOT=FA3["DOT"], CHECK=False),
     bind(BAt.AttentionHeadV16, T=20, D=16, BN=16, MASKED_FROM=1, **FA3)]
+
+#: the units a head is cut into: a first block of one key, of fewer keys than lanes, of part of a k-step, of a whole block and of
+#: a k-step and a key (BN = 32), and the end over each inverse sum; then at a served head's statics (D = 64, BN = 192), a first
+#: block of 1, 35 and all 192 keys, and the end
+CUT = [bind(BAt.AttnBlockFirstV3, D=16, NVIS=nvis, BN=bn, DOT=FA3["DOT"])
+       for nvis, bn in ((1, 16), (3, 16), (5, 16), (16, 16), (17, 32))] + [
+    bind(BAt.AttnHeadEndV2, D=16, INV=inv) for inv in (FA2["INV"], FA3["INV"])] + [
+    bind(BAt.AttnBlockFirstV3, D=64, NVIS=nvis, BN=192, DOT=FA3["DOT"]) for nvis in (1, 35, 192)] + [
+    bind(BAt.AttnHeadEndV2, D=64, INV=FA3["INV"])]
+
+#: f32 words that reach the epilogue's guards: signed zeros, a subnormal, the normal range's ends, infinities, a NaN
+F32_SPECIALS = np.array([0, 0x80000000, 1, 0x00800000, 0x7F7FFFFF, 0x7F800000, 0xFF800000, 0x7FC00000], np.uint32)
 
 #: bf16 words that reach FA2's guards: signed zeros, subnormals, the normal range's ends, infinities, NaNs, 2^63
 SPECIALS = np.array([0x0000, 0x8000, 0x0001, 0x807F, 0x0080, 0x7F7F, 0xFF7F, 0x7F80, 0xFF80, 0x7FC0, 0xFFC1, 0x5F00, 0xDF00],
@@ -224,6 +237,40 @@ def test_agrees_with_its_word_view(target) -> None:
     ref = np.asarray(E.evaluate_batch(word, *inputs)).astype(np.uint64)
     bad = np.flatnonzero((got != ref).reshape(len(got), -1).any(axis=1))
     assert not bad.size, f"{target.id}: {bad.size} of {len(ref)} instances differ from {word.id}, first {bad[:5]}"
+
+
+@pytest.mark.parametrize("target", [pytest.param(t, marks=pytest.mark.slow) if t.bindings.get("NVIS") == 192 else t for t in CUT],
+                         ids=lambda t: t.id)
+def test_a_cut_unit_agrees_with_its_word_view(target) -> None:
+    """`AttnBlockFirst_v3` and `AttnHeadEnd_v2` are Boolean, name `AttnBlockFirst_v1` and `AttnHeadEnd_v1` at their own statics
+    as their words, and return their words' bits, at small statics and at a served head's; the end also on lane sums and rows
+    planted with the f32 special words.  A block's first third of instances, at softmax's working scales, must return finite
+    words that differ from instance to instance, so the comparison is of its arithmetic and not of one NaN row with itself."""
+    word = TR.word_of(target)
+    lifted = {k: (TR.word_of(x) if k in ("DOT", "INV") else x) for k, x in target.bindings.items()}
+    assert BL.is_boolean(target) and (word.defn.name, word.defn.version, word.bindings) == (target.defn.name, 1, lifted)
+    inputs = _inputs(word, 96, sum(map(ord, target.id)))
+    if target.defn.name == "AttnHeadEnd":
+        rng = np.random.default_rng(len(target.id))
+        for a in inputs:
+            m = rng.random(a[:48].shape) < 0.1
+            a[:48][m] = rng.choice(F32_SPECIALS, int(m.sum()))
+    got = np.asarray(BS.evaluate_words(target, *inputs)).astype(np.uint64)
+    ref = np.asarray(E.evaluate_batch(word, *inputs)).astype(np.uint64)
+    bad = np.flatnonzero((got != ref).reshape(len(got), -1).any(axis=1))
+    assert not bad.size, f"{target.id}: {bad.size} of {len(ref)} instances differ from {word.id}, first {bad[:5]}"
+    if target.defn.name == "AttnBlockFirst":
+        working = ref.reshape(len(ref), -1)[:len(ref) // 3]
+        assert (((working >> 23) & 0xFF) != 0xFF).all() and len({r.tobytes() for r in working}) == len(working)
+
+
+def test_the_switch_never_picks_a_cut_unit() -> None:
+    """`AttnBlockFirst_v3` and `AttnHeadEnd_v2` are opt-in: `boolean_version` of their words finds none, so no Program moves to
+    them until its caller names them."""
+    for target in (CUT[0], CUT[-1]):
+        assert target.defn.opt_in
+        with pytest.raises(SW.NoBooleanVersion):
+            SW.boolean_version(TR.word_of(target))
 
 
 @pytest.mark.parametrize("block", [BAt.AttnBlockV8, BAt.AttnBlockV9], ids=lambda d: d.id)

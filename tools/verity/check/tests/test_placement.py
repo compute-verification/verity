@@ -109,7 +109,7 @@ def test_a_train_that_needs_a_train_slots_memory_skips_a_machine_of_smaller_slot
     big = machine([{**slot("b", HOLDER), "mem": 300, "trains": True}])                 # a train slot, held
     got, why, skipped = CHECK.choose([N1, N2], {N1: small, N2: big}, priority=True, min_mem=CHECK.TRAIN_GB)
     assert got == N2 and "b held" in why and skipped == [f"{N1}: no slot in /workspace/research/locks/slots holds this check's "
-                                                         "300 GB (c 64 GB, d 64 GB): it takes a train slot"]
+                                                         f"{CHECK.TRAIN_GB} GB (c 64 GB, d 64 GB): it takes a train slot"]
     assert CHECK.choose([N1, N2], {N1: small, N2: big}, priority=True)[0] == N1         # a Lean check takes the free small one
     assert CHECK.placement(machine([{**slot("a"), "mem": None}]), True, CHECK.TRAIN_GB)[0] is True   # no mem=: any size
 
@@ -153,7 +153,7 @@ def test_with_no_machine_readable_auto_refuses_and_launches_nothing(monkeypatch,
 
 def test_record_on_auto_or_a_list_launches_on_the_machine_chosen(monkeypatch, capsys):
     docs = {N1: machine([slot("c", HOLDER)], [waiter()], pools=lean()), N2: machine([slot("d")])}
-    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d, **k: None)
     asked = []
     monkeypatch.setattr(CHECK, "read_slots", lambda names: asked.append(names) or {n: docs[n] for n in names})
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
