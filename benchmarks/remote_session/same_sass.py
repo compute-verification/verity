@@ -7,7 +7,8 @@ each library, split at its `Function :` lines. A kernel is the lines under its o
 Prints how many of BASE's kernels NEW holds and names the ones it does not; FILE gets those, the kernels NEW holds
 under another name, and NEW's kernels BASE has none equal to. DIR gets, for each of BASE's kernels NEW does not hold
 (the --listings-max shortest), its listing beside NEW's kernel of that name (a template's instance at 16 rows first)
-and their diff. Exits 0 whatever it finds, 2 if a library lists no kernel: `rows.sh` records what it prints.
+and their diff. Exits 0 whatever it finds, 2 if cuobjdump fails on a library (with what it said, on one line) or a
+library lists no kernel: `rows.sh` records what it prints.
 """
 from __future__ import annotations
 
@@ -23,7 +24,11 @@ from pathlib import Path
 def kernels(lib: str) -> dict[str, list[str]]:
     """`lib`'s kernels by mangled name: each one's disassembly, a line an entry, its runs of blanks made one (the
     column cuobjdump puts the encodings in is as wide as the library's longest instruction)."""
-    text = subprocess.run(["cuobjdump", "-sass", lib], capture_output=True, text=True, check=True).stdout
+    done = subprocess.run(["cuobjdump", "-sass", lib], capture_output=True, text=True)
+    if done.returncode:
+        said = " ".join(((done.stderr or "") + " " + (done.stdout or "")[-2000:]).split())
+        raise RuntimeError(f"cuobjdump -sass {lib} exits {done.returncode}: {said[:600] or 'it said nothing'}")
+    text = done.stdout
     out: dict[str, list[str]] = {}
     body = None
     for line in text.splitlines():
@@ -53,7 +58,11 @@ def main() -> int:
     ap.add_argument("--listings", type=Path, metavar="DIR")
     ap.add_argument("--listings-max", type=int, default=6)
     a = ap.parse_args()
-    base_text, new_text = kernels(a.base), kernels(a.new)
+    try:
+        base_text, new_text = kernels(a.base), kernels(a.new)
+    except RuntimeError as e:
+        print(f"no comparison: {e}", file=sys.stderr)
+        return 2
     if not base_text or not new_text:
         print(f"no kernel listed: {len(base_text)} in {a.base}, {len(new_text)} in {a.new}", file=sys.stderr)
         return 2

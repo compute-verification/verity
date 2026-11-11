@@ -1,6 +1,6 @@
 """`same_sass.py`: a kernel is the same when its listing is, whatever its name and however wide cuobjdump made the
 encodings' column; a kernel whose instructions changed is named, with its listing beside the new build's. cuobjdump is
-a stub that prints each library's canned listing."""
+a stub that prints each library's canned listing. A cuobjdump that fails is said on one line, with what it said."""
 from __future__ import annotations
 
 import json
@@ -50,3 +50,13 @@ def test_a_changed_kernel_is_named_with_its_listing_beside_its_16_row_instance(t
     assert doc["same"] == 0 and doc["changed"] == [name] and f"changed: {name}" in said
     diff = next((tmp_path / "sass").glob("chain_prepare_kernel-*.diff")).read_text()
     assert "+++ _ZN2rb20chain_prepare_kernelILi16EEEvv" in diff and "-/*0000*/ LEA.HI R13, R0, R5 ; /* 0x00 */" in diff
+
+
+def test_a_cuobjdump_that_fails_is_said_on_one_line_with_its_message(monkeypatch, capsys):
+    monkeypatch.setattr(subprocess, "run", lambda argv, **kw: subprocess.CompletedProcess(
+        argv, 1, "", "cuobjdump fatal   : no disassembler\nfor this file\n"))
+    monkeypatch.setattr(sys, "argv", ["same_sass.py", "base.so", "new.so"])
+    assert same_sass.main() == 2
+    said = capsys.readouterr()
+    assert said.out == "" and said.err == ("no comparison: cuobjdump -sass base.so exits 1: cuobjdump fatal : no "
+                                           "disassembler for this file\n")
