@@ -80,13 +80,13 @@ theorem zkSchedule_n {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m
 
 /-- **`ZkTables.Level0.ProverRuns`**: the masked prover's Ligerito returns wherever its pair coins are independent. -/
 theorem proverRuns : ProverRuns := by
-  intro resp h m v T cm0 tb b lay hv rep extra lanePad salt nonce t l _ _ _ hv0 hrho
+  intro wideLeaf resp h m v T cm0 tb b lay hv rep extra lanePad salt nonce t l _ _ _ hv0 hrho
   exact ligeritoPZk_ret resp h _ v.1 T cm0 tb b lay hv rep v.2 extra lanePad salt nonce (zkSchedule_n hv0)
     (zkSchedule_shape hv0).1 t l hrho
 
 /-- **`ZkTables.Level0.ProverShape`**: the masked prover's Ligerito proof has its lengths. -/
 theorem proverShape : ProverShape := by
-  intro resp h m v sh T cm0 tb b lay hv rep extra lanePad salt0 salt nonce t t' l l' P zl rc h64 h25 h35 hv0 hsch
+  intro wideLeaf resp h m v sh T cm0 tb b lay hv rep extra lanePad salt0 salt nonce t t' l l' P zl rc h64 h25 h35 hv0 hsch
     hhl hsl ht _ hcm hrun
   have hn : ∀ l r v, (MerkleScheme.hm96Sha512.opsWith (Hashes.ofSha512 h : Hashes V)).node l r = .ok v →
       v.size = sh.hashLen := fun _ _ _ e => by
@@ -103,7 +103,7 @@ theorem proverShape : ProverShape := by
 
 /-- **`ZkTables.Level0.Lanes`**: the masked prover's lane phase in closed form. -/
 theorem lanes : Lanes := by
-  intro resp h m v T cm0 tb b lay hv rep extra lanePad salt nonce t t' l l' P zl rc _ _ hv0 _ _ hrun
+  intro wideLeaf resp h m v T cm0 tb b lay hv rep extra lanePad salt nonce t t' l l' P zl rc _ _ hv0 _ _ hrun
   exact ligeritoPZk_lanes resp _ _ v.1 T cm0 tb b lay hv rep v.2 extra lanePad salt nonce (zkSchedule_n hv0)
     (zkSchedule_shape hv0).1 hrun
 

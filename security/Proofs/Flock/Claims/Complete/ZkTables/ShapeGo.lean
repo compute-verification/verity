@@ -352,7 +352,7 @@ theorem shapeRest (H : Claims.Msg → Claims.Msg) : ShapeRest H := by
     rw [hmerk]
     rfl
   have htb : (packed tr (Setup.ofCircuit st).m).size = 2 ^ v.1.n := by simp [packed, hn]; rfl
-  obtain ⟨hLg, hyb⟩ := h1 _ (Claims.hOf H) (Setup.ofCircuit st).m v (shapeZk (Setup.ofCircuit st) v.1 e.size) _ cm
+  obtain ⟨hLg, hyb⟩ := h1 (Setup.ofCircuit st).wideLeaf _ (Claims.hOf H) (Setup.ofCircuit st).m v (shapeZk (Setup.ofCircuit st) v.1 e.size) _ cm
     _ _ _ _ rep (ω.extra i) (ω.lanePad i) (ω.salt i 0 0) (ω.salt i rep) (ω.nonce i rep) _ tI lL lI lg zl rec
     (JsonRT.hOf_size h64) h25 h35 hin.schedule rfl (by rw [hH]; rfl) (by rw [hS]; rfl) htb
     (by simp [basisVals, hn]; rfl) hcm hlg

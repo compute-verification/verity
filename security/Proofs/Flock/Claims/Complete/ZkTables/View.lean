@@ -508,7 +508,7 @@ theorem view (hV : Level0.Verifier) (h64 : Claims.Out64 H) (st : Flock.Stmt) (tr
     simp only [hlL, tPiop, Rs.tEnd_k, LcZ.tEnd_k, ZcZ.tEnd_k, hcs, piopSends]
     show l.size + (3 + _ + 3 + _ + (2 + e.size + 1)) = l.size + (0 + 3 + _ + 3 + _ + (2 + e.size) + 1)
     omega
-  obtain ⟨hLgV, htIk⟩ := hV resp (Claims.hOf H) (Setup.ofCircuit st).m v
+  obtain ⟨hLgV, htIk⟩ := hV (Setup.ofCircuit st).wideLeaf resp (Claims.hOf H) (Setup.ofCircuit st).m v
     (Rs.T tr (claimsR resp (Setup.ofCircuit st) tr l.size e) (rsCoinsR resp (Setup.ofCircuit st) l.size e)) cm
     (packed tr (Setup.ofCircuit st).m)
     (basisVals (Rs.sws (claimsR resp (Setup.ofCircuit st) tr l.size e) (rsCoinsR resp (Setup.ofCircuit st) l.size e))
