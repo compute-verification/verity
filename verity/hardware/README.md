@@ -48,8 +48,10 @@ the card's numbers itself, and `tests/test_lean.py` holds it to each Lean table.
 
 **The Lean tables are generated** (`verity.hardware.lean`). A GPU card file that names a Lean table (`lean`) gives
 that module: `render(card)` is its text, the card file's numbers (`table(card)`) under the namespace, `clock`,
-`tensorClock` and `card` its importers read, and nobody edits it. A field of ℕ in it has no division, and `render`
-refuses a card file that would leave a fraction there.
+`tensorClock` and `card` its importers read, and nobody edits it. The text's shape is fixed (the module's docstring
+gives it): the Lean check's record of a definition digests the term, so a number written another way, or an arm moved,
+is a changed record though no number changed. A division in a field of ℕ is exact, and `render` refuses a card file
+whose entry would make Lean's ℕ division truncate.
 
 **Changing a number:** change the card file, then write its table:
 

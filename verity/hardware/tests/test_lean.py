@@ -137,15 +137,16 @@ def test_the_b200_sheet_agrees_with_its_card_file() -> None:
 
 
 def test_a_changed_number_is_a_disagreement() -> None:
-    """The check above isn't vacuous: one changed rate, a changed weight and a dropped arm are each reported."""
+    """The check above isn't vacuous: one changed rate, a changed default weight and a dropped arm are each reported."""
     card = load("rtx-pro-6000-server")
     text = (ROOT / card["lean"]).read_text(encoding="utf-8")
     assert disagreements(card, text) == []
     faster = text.replace("188 * 1024 * clock", "188 * 1025 * clock")
     assert disagreements(card, faster) == [f"ρ tensor: Lean 188 * 1025 * clock = {188 * 1025 * 2430 * 10 ** 6}, "
                                          f"card file {188 * 1024 * 2430 * 10 ** 6}"]
-    heavier = text.replace("    | .tf32 => 4\n", "    | .tf32 => 5\n")
-    assert disagreements(card, heavier) == ["weight tf32: Lean 5 = 5, card file 4"]
+    default = text.replace("    | _ => 1\n", "    | _ => 2\n")
+    assert sorted(m.split(":")[0] for m in disagreements(card, default)) == [
+        f"weight {f}" for f in ("b1", "e2m1", "e4m3", "e5m2", "s8", "u8")]
     dropped = text.replace("    | .l2 => 188 * 5 * clock\n", "")
     assert disagreements(card, dropped) == ["ρ l2: Lean has no arm"]
 
@@ -232,16 +233,40 @@ def test_a_generated_table_follows_its_card_file() -> None:
     assert disagreements(card, untimed) == []
 
 
+def test_a_generated_table_has_one_shape() -> None:
+    """The Lean check's record of ``card`` digests the term, so the text's shape is fixed: bytes in the largest binary
+    unit that divides them, arms in the card file's order with equal ones sharing the first's, and ``weight``'s arms
+    in ``FORMATS``' order (a format it doesn't name after them) before the default, which every weight of 1 takes."""
+    assert [lean.binary(Fraction(n), nat="n") for n in (50 * 2 ** 20, 2 ** 27, 141 * 2 ** 30, 3 * 2 ** 10, 1000)] == [
+        "50 * 2 ^ 20", "128 * 2 ^ 20", "141 * 2 ^ 30", "3 * 2 ^ 10", "1000"]
+    assert lean.arms([("a", "1"), ("b", "2"), ("c", "1")], "0") == ["    | .a | .c => 1", "    | .b => 2", "    | _ => 0"]
+    card = copy.deepcopy(load("h200-sxm-141gb"))
+    card["weight"]["u8"]["value"], card["weight"]["nvf4"]["value"], card["weight"]["s8"]["value"] = 3, "0.5", 3
+    text = lean.render(card)
+    assert text.split("  weight\n")[1].split("  exact")[0].splitlines() == [
+        "    | .nvf4 => 1 / 2", "    | .f16 | .bf16 => 2", "    | .tf32 => 4", "    | .f64 => 59 / 2", "    | .b1 => 1 / 8",
+        "    | .s8 | .u8 => 3", "    | _ => 1"]
+    assert text.split("  ρ\n")[1].split("  weight")[0].splitlines() == [
+        "    | .tensor => 132 * 4096 * tensorClock", "    | .issue => 132 * 4 * clock",
+        "    | .alu | .imad | .f64 => 132 * 64 * clock", "    | .shfl | .smem => 132 * 32 * clock",
+        "    | .sfu => 132 * 16 * clock", "    | .l2 => 132 * 512 * clock", "    | .dram => 1229184 * 10 ^ 6"]
+    assert disagreements(card, text) == []
+    for weight in card["weight"].values():
+        weight["value"] = 2
+    assert "| _ =>" not in lean.render(card)
+
+
 @pytest.mark.parametrize("section, key, value, named", [
     ("store", "l2", 50 * 2 ** 20 + 2, "store.l2 in words"), ("store", "smem", 262146, "store.smem in words"),
     ("store", "reg", "65536.5", "store.reg"), ("sm", "count", "131.5", "sm.count"),
     ("model", "instruction_bytes", 7, "store.dram over model.instruction_bytes"), ("model", "exact", "30.5", "model.exact")])
 def test_a_generated_table_has_no_truncating_division(section: str, key: str, value: object, named: str) -> None:
-    """A field of ℕ in a generated table is whole numbers with no ``/``, so Lean's ℕ division has nothing to truncate; a
-    card file whose entry would leave a fraction there is refused, naming the entry."""
+    """A field of ℕ in a generated table divides only where the division is exact, as ``evaluate`` reads it, since
+    Lean's ℕ division truncates; a card file whose entry would leave a fraction there is refused, naming the entry."""
     for sku in LEAN:
         _, fields = card_table(lean.render(sku))
-        assert not any("/" in arm for arm in [*fields["size"].values(), fields["exact"], fields["text"]])
+        divided = [arm for arm in [*fields["size"].values(), fields["exact"], fields["text"]] if "/" in arm]
+        assert divided and all(evaluate(arm, nat=True).denominator == 1 for arm in divided)
     card = copy.deepcopy(load("h200-sxm-141gb"))
     card[section][key]["value"] = value
     with pytest.raises(InvalidArtifact, match=f"{re.escape(named)} is .*not a whole number"):

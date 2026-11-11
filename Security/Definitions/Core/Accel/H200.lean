@@ -22,34 +22,24 @@ def card : Card where
   size
     | .reg => 132 * (65536 + 4494)
     | .smem => 132 * 65536
-    | .l2 => 13107200
-    | .dram => 37849399296
+    | .l2 => 50 * 2 ^ 20 / 4
+    | .dram => 141 * 2 ^ 30 / 4
   size_pos := by intro s; cases s <;> decide
   ρ
     | .tensor => 132 * 4096 * tensorClock
     | .issue => 132 * 4 * clock
-    | .alu => 132 * 64 * clock
-    | .imad => 132 * 64 * clock
-    | .shfl => 132 * 32 * clock
-    | .f64 => 132 * 64 * clock
+    | .alu | .imad | .f64 => 132 * 64 * clock
+    | .shfl | .smem => 132 * 32 * clock
     | .sfu => 132 * 16 * clock
-    | .smem => 132 * 32 * clock
     | .l2 => 132 * 512 * clock
-    | .dram => 1229184000000
+    | .dram => 1229184 * 10 ^ 6
   weight
-    | .s8 => 1
-    | .u8 => 1
-    | .b1 => 1 / 8
-    | .e4m3 => 1
-    | .e5m2 => 1
-    | .e2m1 => 1
-    | .f16 => 2
-    | .bf16 => 2
+    | .f16 | .bf16 => 2
     | .tf32 => 4
-    | .nvf4 => 1
-    | .mxf4 => 1
     | .f64 => 59 / 2
+    | .b1 => 1 / 8
+    | _ => 1
   exact := 31
-  text := 9462349824
+  text := 141 * 2 ^ 30 / 16
 
 end Verity.Accel.H200

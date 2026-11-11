@@ -2,19 +2,29 @@
 
 A GPU card file that names a Lean table (``lean``, the module's path) gives that module: the namespace
 ``Verity.Accel.<the file's name>`` with its ``clock``, its ``tensorClock`` where the card's tensor has a clock of its own,
-and its ``card : Card``. ``table`` is the table's numbers as exact rationals, and ``render`` is the module's text:
-each per-SM entry as ``SMs * the entry``, each rate as that times the name of its clock, and every other number as one
-numeral. A field of ℕ holds whole numbers and no division, since Lean's ℕ division truncates; a fraction is written
-``p / q`` in ℚ≥0, where the division is exact. ``render`` refuses a card whose stores are not whole words, and an arm
-it wrote as a product that is not the number ``table`` gives.
+and its ``card : Card``. ``table`` is the table's numbers as exact rationals, and ``render`` is the module's text.
+
+The text's shape is fixed, since the Lean check's record of a definition is a digest of the term Lean elaborates from
+it, so a number written another way, or an arm moved, is a changed record though no number changed:
+
+- a clock, and device memory's rate, is its millions times ``10 ^ 6``; every other rate is ``SMs * the entry *`` the name
+  of its clock;
+- a per-SM store is ``SMs * the entry``; a store in bytes is the bytes in binary units (``binary``) over the bytes of a
+  word, and ``text`` the same over an instruction's bytes;
+- a field's arms are in the card file's order, and constructors whose arms read the same share the first one's
+  (``arms``); ``weight``'s arms are the formats whose weight is not 1, in ``FORMATS``' order, and the rest are its
+  default.
+
+Lean's ℕ division truncates, so ``render`` writes one only where it divides exactly and refuses the card file where it
+does not; a fraction is written ``p / q`` in ℚ≥0, where the division is exact.
 
     uv run python -m verity.hardware.lean            name each generated module its card file no longer gives; exit 1 if any
     uv run python -m verity.hardware.lean --write    write them
 
 ``modules`` is every generated module by its path, which ``--write`` writes (``write``; ``stale`` names the ones to
 write) and ``tests/test_lean.py`` holds the committed files to, byte for byte. Another kind of record generated from
-the card files is one more ``render`` function and its line in ``modules``; ``header`` and ``numeral`` serve both.
-Stdlib only, and it imports no other unit.
+the card files is one more ``render`` function and its line in ``modules``; ``header``, ``numeral``, ``binary`` and
+``arms`` serve both. Stdlib only, and it imports no other unit.
 """
 
 from __future__ import annotations
@@ -28,6 +38,9 @@ from verity.hardware.cards import CARDS, WORD, load, number, rate, skus
 
 #: The Lean module that declares ``Verity.Accel.Card``, which a card table imports.
 CARD = "Definitions.Core.Accel.Card"
+#: ``weight``'s arms, in order: the formats that have one where their weight is not 1. A format this doesn't name goes
+#: after these, in the card file's order. An arm's place is part of the term (a match's alternatives are positional).
+FORMATS = ("nvf4", "mxf4", "f16", "bf16", "tf32", "f64", "b1")
 #: The one command that writes the generated modules: each module's header names it, and so does the test's failure.
 COMMAND = "uv run python -m verity.hardware.lean --write"
 
@@ -76,6 +89,26 @@ def numeral(q: Fraction, *, nat: str | None = None) -> str:
     return f"{q.numerator} / {q.denominator}"
 
 
+def binary(q: Fraction, *, nat: str) -> str:
+    """A whole number of bytes ``q`` in binary units: ``m * 2 ^ k`` at the largest of 2^30, 2^20 and 2^10 that divides it,
+    and one numeral where none does. ``nat`` names the number, as ``numeral``'s."""
+    text = numeral(q, nat=nat)
+    for k in (30, 20, 10):
+        if q and q % 2 ** k == 0:
+            return f"{q.numerator >> k} * 2 ^ {k}"
+    return text
+
+
+def arms(pairs: list[tuple[str, str]], default: str | None = None) -> list[str]:
+    """A matched field's arms, from each constructor and the text of its arm, in order: constructors whose texts are the
+    same share the first one's arm, and ``default`` is the arm of every constructor not among them."""
+    shared: dict[str, list[str]] = {}
+    for kind, text in pairs:
+        shared.setdefault(text, []).append(kind)
+    out = [f"    | {' | '.join(f'.{kind}' for kind in kinds)} => {text}" for text, kinds in shared.items()]
+    return out + ([f"    | _ => {default}"] if default is not None else [])
+
+
 def header(sku: str) -> str:
     """The comment a generated module opens with: what wrote it, from which card file, and that nobody edits it."""
     source = (CARDS / f"{sku}.toml").resolve().relative_to(root()).as_posix()
@@ -83,8 +116,8 @@ def header(sku: str) -> str:
 
 
 def render(card: dict | str) -> str:
-    """The Lean module of a card's table (or of the card of a SKU): ``table``'s numbers under the names
-    ``Verity.Accel.<name>.clock``, ``.tensorClock`` (where the card's tensor has a clock of its own) and ``.card``."""
+    """The Lean module of a card (or of a SKU's card) that names a Lean table: ``clock``, ``tensorClock`` where the
+    card's ``clock.tensor`` is not its ``clock.sm``, and ``card``, in the shape the module's docstring gives."""
     card = load(card) if isinstance(card, str) else card
     sku = card["sku"]
     if "lean" not in card:
@@ -101,40 +134,42 @@ def render(card: dict | str) -> str:
         text = numeral(q)
         return f"({text})" if "/" in text else text
 
-    def arm(kind: str, text: str) -> str:
-        return f"    | .{kind} => {text}"
+    def millions(q: Fraction) -> str:
+        return f"{factor(q / 10 ** 6)} * 10 ^ 6"
 
-    def product(field: str, kind: str, text: str, value: Fraction) -> str:
-        if value != fields[field][kind]:
-            raise InvalidArtifact(f"{sku}: {field} {kind}: {text} is {value}, and the table's number is {fields[field][kind]}")
-        return arm(kind, text)
+    def over(key: str, unit: Fraction, named: str) -> str:
+        size = number(store[key])
+        whole(size / unit, named)
+        return f"{binary(size, nat=f'{sku}: store.{key}')} / {whole(unit, f'what {named} divides by')}"
 
     def resource(r: str) -> str:
         if r not in card["rate"]:
-            return arm(r, numeral(fields["ρ"][r]))
-        tick, units = "tensorClock" if r == "tensor" and own else "clock", number(card["rate"][r])
-        return product("ρ", r, f"{factor(sms)} * {factor(units)} * {tick}", sms * units * clocks[tick])
+            return millions(fields["ρ"][r])
+        tick = "tensorClock" if r == "tensor" and own else "clock"
+        return f"{factor(sms)} * {factor(number(card['rate'][r]))} * {tick}"
 
-    count, reg, extra = whole(sms, "sm.count"), number(store["reg"]), number(store["reg_extra"])
-    smem = number(store["smem"]) / WORD
-    size = [product("size", "reg", f"{count} * ({whole(reg, 'store.reg')} + {whole(extra, 'store.reg_extra')})",
-                    sms * (reg + extra)),
-            product("size", "smem", f"{count} * {whole(smem, 'store.smem in words')}", sms * smem),
-            *(arm(s, whole(fields["size"][s], f"store.{s} in words")) for s in ("l2", "dram"))]
-    hz = {tick: f"{factor(clocks[tick] / 10 ** 6)} * 10 ^ 6" for tick in clocks}
+    count = whole(sms, "sm.count")
+    size = [("reg", f"{count} * ({whole(number(store['reg']), 'store.reg')} + "
+                    f"{whole(number(store['reg_extra']), 'store.reg_extra')})"),
+            ("smem", f"{count} * {whole(number(store['smem']) / WORD, 'store.smem in words')}"),
+            *((s, over(s, Fraction(WORD), f"store.{s} in words")) for s in ("l2", "dram"))]
+    weights = fields["weight"]
+    listed = sorted((f for f in weights if weights[f] != 1),
+                    key=lambda f: FORMATS.index(f) if f in FORMATS else len(FORMATS))
     others = "every resource's clock but the tensor's" if own else "every resource's clock"
     return "\n".join([
         "module", "", f"public import {CARD}", "", header(sku), "", "@[expose] public section", "",
         "open scoped NNRat", "", f"namespace Verity.Accel.{name}", "",
-        f"/-- The card file's `clock.sm` in Hz: {others}. -/", f"def clock : ℚ≥0 := {hz['clock']}", "",
+        f"/-- The card file's `clock.sm` in Hz: {others}. -/", f"def clock : ℚ≥0 := {millions(clocks['clock'])}", "",
         *(["/-- The card file's `clock.tensor` in Hz: the tensor's clock. -/",
-           f"def tensorClock : ℚ≥0 := {hz['tensorClock']}", ""] if own else []),
+           f"def tensorClock : ℚ≥0 := {millions(clocks['tensorClock'])}", ""] if own else []),
         f"/-- The table of the card file `{sku}.toml`. -/", "def card : Card where",
-        "  size", *size, "  size_pos := by intro s; cases s <;> decide",
-        "  ρ", *(resource(r) for r in fields["ρ"]),
-        "  weight", *(arm(f, numeral(w)) for f, w in fields["weight"].items()),
+        "  size", *arms(size), "  size_pos := by intro s; cases s <;> decide",
+        "  ρ", *arms([(r, resource(r)) for r in fields["ρ"]]),
+        "  weight", *arms([(f, numeral(weights[f])) for f in listed], "1" if len(listed) < len(weights) else None),
         f"  exact := {whole(fields['exact'], 'model.exact')}",
-        f"  text := {whole(fields['text'], 'store.dram over model.instruction_bytes')}", "",
+        "  text := " + over("dram", number(card["model"]["instruction_bytes"]), "store.dram over model.instruction_bytes"),
+        "",
         f"end Verity.Accel.{name}", ""])
 
 

@@ -19,34 +19,25 @@ def card : Card where
   size
     | .reg => 188 * (65536 + 3371)
     | .smem => 188 * 32768
-    | .l2 => 33554432
-    | .dram => 25769803776
+    | .l2 => 128 * 2 ^ 20 / 4
+    | .dram => 96 * 2 ^ 30 / 4
   size_pos := by intro s; cases s <;> decide
   ρ
     | .tensor => 188 * 1024 * clock
     | .issue => 188 * 4 * clock
-    | .alu => 188 * 64 * clock
-    | .imad => 188 * 64 * clock
-    | .shfl => 188 * 32 * clock
+    | .alu | .imad => 188 * 64 * clock
+    | .shfl | .smem => 188 * 32 * clock
     | .f64 => 188 * 2 * clock
     | .sfu => 188 * 16 * clock
-    | .smem => 188 * 32 * clock
     | .l2 => 188 * 5 * clock
-    | .dram => 399392000000
+    | .dram => 399392 * 10 ^ 6
   weight
-    | .s8 => 1
-    | .u8 => 1
-    | .b1 => 1
-    | .e4m3 => 1
-    | .e5m2 => 1
-    | .e2m1 => 1
-    | .f16 => 2
-    | .bf16 => 2
+    | .nvf4 | .mxf4 => 1 / 2
+    | .f16 | .bf16 => 2
     | .tf32 => 4
-    | .nvf4 => 1 / 2
-    | .mxf4 => 1 / 2
     | .f64 => 32
+    | _ => 1
   exact := 31
-  text := 6442450944
+  text := 96 * 2 ^ 30 / 16
 
 end Verity.Accel.Sm120
