@@ -171,10 +171,11 @@ of every period it accepts.
 
 Every tied audit of an accepted period names no more sampled than its level holds: the check reads both counts off the
 answer's profile, the level's size and its `subset`'s `k` or its strata's `k` summed, and refuses a profile that names
-more sampled than the level has, or more of a stratum than the stratum has (`factsOf`). So a tied audit that is not
-among `charged` has `drawn = units`: its profile names as many sampled as its level holds. Of a `subset` sample that
-is the level sampled whole. Of a stratified one it is each stratum sampled whole where the strata's sizes sum to the
-level's, which the check does not hold a profile to, and the statement says nothing of a profile's strata. -/
+more sampled than the level has (`factsOf`). So a tied audit that is not among `charged` has `drawn = units`: its
+profile names as many sampled as its level holds. Of a `subset` sample that is the level sampled whole. Of a
+stratified one it is each stratum sampled whole, because the check also refuses a profile with a stratum that samples
+more than it holds, and one whose strata's sizes do not sum to the level's. That the strata are the level's units is
+the audit's own verifier's, which the period check does not read. -/
 def RowsTiedCharged : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsTiedChargedAt p c e pub

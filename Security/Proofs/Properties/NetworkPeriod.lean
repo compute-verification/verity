@@ -23,7 +23,9 @@ connections and the windows (the compute audits, or the scans) are sums over `Fi
 its facts and every link-window's its scan's, so the public's `audits` and `units` hold them position for position
 (`getElem?_filterMap_of_isSome`), `charged` is `chargedOf` over the audits (`charged_eq`), and a link-window's term's
 `faultyEntries` is `faultyEntries` of its registration. An audit's facts are `factsOf`'s, which refuses a profile
-sampling more than its level holds (`factsOf_sampled_le_units`).
+sampling more than its level holds (`factsOf_sampled_le_units`). It also refuses a stratified profile with a stratum
+sampling more than it holds, and one whose strata's sizes do not sum to the level's, so facts with `drawn = units` are
+of a profile whose every stratum is sampled whole (`factsOf_stratified_whole`, by `strata_whole`).
 -/
 
 @[expose] public section
@@ -397,6 +399,46 @@ theorem factsOf_sampled_le_units {what : String} {prof : Core.Integrity} {pub : 
     repeat' split at h
     all_goals cases h
     all_goals assumption
+
+/-- Strata that each sample no more than they hold, and in all as many as they hold, are each sampled whole. -/
+theorem strata_whole (xs : List Core.Stratum) (hle : ∀ st ∈ xs, st.k ≤ st.size) (a b : ℕ) (hab : a ≤ b)
+    (h : xs.foldl (fun n st => n + st.k) a = xs.foldl (fun n st => n + st.size) b) :
+    a = b ∧ ∀ st ∈ xs, st.k = st.size := by
+  induction xs generalizing a b with
+  | nil => exact ⟨h, fun _ m => nomatch m⟩
+  | cons x xs ih =>
+    have hx := hle x List.mem_cons_self
+    obtain ⟨e, r⟩ := ih (fun st m => hle st (List.mem_cons_of_mem _ m)) (a + x.k) (b + x.size) (by omega) h
+    refine ⟨by omega, fun st m => ?_⟩
+    rcases List.mem_cons.mp m with rfl | m
+    · omega
+    · exact r st m
+
+/-- The facts `factsOf` gives of a stratified profile with `drawn = units` are of every stratum sampled whole: it
+refuses a profile with a stratum that samples more than it holds, and one whose strata's sizes do not sum to the
+level's. -/
+theorem factsOf_stratified_whole {what : String} {prof : Core.Integrity} {pub : Lean.Json} {f : Facts}
+    {l : Core.Level} {ss : Array Core.Stratum} (h : factsOf what prof pub = .ok f) (hl : prof.levels = #[l])
+    (hs : l.draw = some (.stratified ss)) (hw : f.drawn = f.units) : ∀ st ∈ ss, st.k = st.size := by
+  have one : ∀ (body : Core.Level → Found Facts) (alt : Found Facts),
+      (match prof.levels with | #[l] => body l | _ => alt) = .ok f → body l = .ok f := by
+    intro body alt hm
+    rw [hl] at hm
+    exact hm
+  unfold factsOf at h
+  replace h := one _ _ h
+  simp only [hs, bind, Except.bind, pure, Except.pure, refuse] at h
+  repeat' split at h
+  all_goals cases h
+  have hnone : ∀ st, ss.find? (fun st => decide (st.size < st.k)) = some st → False := by assumption
+  have hsum : ss.foldl (fun n st => n + st.size) 0 = l.size := by assumption
+  have hle : ∀ st ∈ ss.toList, st.k ≤ st.size := fun st m => by
+    have := Array.find?_eq_none.mp (Option.eq_none_iff_forall_ne_some.mpr hnone) st (Array.mem_toList_iff.mp m)
+    simpa using this
+  have hk : ss.toList.foldl (fun n st => n + st.k) 0 = ss.toList.foldl (fun n st => n + st.size) 0 := by
+    rw [Array.foldl_toList, Array.foldl_toList]
+    exact hw.trans hsum.symm
+  exact fun st m => (strata_whole ss.toList hle 0 0 (Nat.le_refl 0) hk).2 st (Array.mem_toList_iff.mpr m)
 
 /-- A link-window with no finding has its scan's facts and its tied audits' free inputs. -/
 theorem rowsWindows_ok {p : Params} {c : Commitment} {e : Evidence} {s : Schedule} {sd : ByteArray}
