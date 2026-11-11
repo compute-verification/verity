@@ -15,9 +15,11 @@ value its plan refuses, a policy neither the calculator's registry nor `policy.p
     trainable = "blocks.5.*,norm"
 
 The digest (`Config.digest`) is the sha256 of the canonical JSON of what decides a job's run (`Config.run`): the start
-and its θ's file, its data, the route and its VERSION, every dial (the route's defaults filled in) and the budget. The
-seeds and the split name a job within it (`Job.label`); the target, the policy and the honest config are only the
-grade's, and a new `training_slowdown` VERSION leaves it alone (the record says which VERSION wrote it).
+and its θ's file, its data, the route and its VERSION, every dial (the route's defaults filled in) and the budget, less
+the dials of the route's `LATER` that the config leaves at their default: such a dial's default is the step without the
+dial, so a config digests as it did before its route had it. The seeds and the split name a job within it
+(`Job.label`); the target, the policy and the honest config are only the grade's, and a new `training_slowdown` VERSION
+leaves it alone (the record says which VERSION wrote it).
 """
 from __future__ import annotations
 
@@ -97,6 +99,8 @@ class Config:
     route: str
     route_version: int
     dials: dict
+    #: the route's `LATER` dials this config leaves at their default, which its digest leaves out
+    undigested: tuple
     budget: dict
     seeds: dict
     target: dict
@@ -109,7 +113,8 @@ class Config:
 
     def run(self) -> dict:
         return {"start": self.start.name, "theta": self.start.theta_file_sha256, "data": self.start.data,
-                "route": self.route, "route_version": self.route_version, "dials": self.dials, "budget": self.budget}
+                "route": self.route, "route_version": self.route_version,
+                "dials": {k: v for k, v in self.dials.items() if k not in self.undigested}, "budget": self.budget}
 
     @property
     def digest(self) -> str:
@@ -169,7 +174,8 @@ def load(path: Path, reg: dict | None = None) -> Config:
     except ValueError as e:
         raise SystemExit(f"{where}: {e}") from None
     return Config(path=path, text=text, start=start, route=raw["route"], route_version=int(mod.VERSION),
-                  dials=given, budget=dict(raw["budget"]), seeds=dict(seeds),
+                  dials=given, undigested=tuple(k for k in getattr(mod, "LATER", ()) if given[k] == mod.DIALS[k]),
+                  budget=dict(raw["budget"]), seeds=dict(seeds),
                   target=dict(raw["target"]), policy=raw["policy"], honest=raw.get("honest", ""))
 
 

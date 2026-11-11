@@ -1,12 +1,15 @@
+import math
 from fnmatch import fnmatchcase
 
 import pytest
 import torch
+import torch.nn.functional as F
 from synthetic import SHAPE, run_job, tiny_registry, write_config
 
 from training_slowdown import config, run, starts
 from training_slowdown.codecs import ScaledQuant
 from training_slowdown.data import Data, Stream
+from training_slowdown.model import LM
 from training_slowdown.routes import subset
 from training_slowdown.routes._optimizers import newton_schulz
 
@@ -19,6 +22,17 @@ def test_subsets_schedule_ramps_holds_then_falls_to_zero():
     assert [subset.schedule(held, t, 1400) for t in (1120, 1399)] == pytest.approx([0.5, 1 / 1400 / 0.4])
     share = linear | {"warmup": 0.02, "decay": 0.4}
     assert subset.schedule(share, 0, 838) == 1 / (0.02 * 838) and subset.schedule(share, 16, 838) == 1.0
+
+
+def test_subsets_schedule_after_the_ramp_is_linear_half_a_cosine_or_constant():
+    cosine = subset.DIALS | {"schedule": "cosine"}
+    assert [subset.schedule(cosine, t, 4) for t in range(4)] == pytest.approx(
+        [1.0, (1 + 0.5 ** 0.5) / 2, 0.5, (1 - 0.5 ** 0.5) / 2])
+    assert subset.schedule(cosine | {"warmup": 2}, 0, 4) == 0.5
+    constant = subset.DIALS | {"schedule": "constant", "warmup": 2, "decay": 0.5}
+    assert [subset.schedule(constant, t, 4) for t in range(4)] == [0.5, 1.0, 1.0, 1.0]
+    lora = config.route("lora").DIALS
+    assert "schedule" not in lora and [subset.schedule(lora, t, 4) for t in range(4)] == [1.0, 0.75, 0.5, 0.25]
 
 
 def test_every_module_of_routes_passes_the_screen_a_route_does():
@@ -60,8 +74,72 @@ def test_muon_takes_the_matrices_and_adamw_the_gains():
     lr = 0.01 * subset.schedule(dials, 0, 1)
     want = before["blocks.0.w_up.weight"] * (1 - lr * 0.05) - lr * 2 ** 0.5 * newton_schulz(1.95 * seen["grad"])
     assert torch.allclose(w, want, rtol=0, atol=1e-7)
-    with pytest.raises(SystemExit, match="opt muon has no rule for the embedding"):
-        subset.build(SHAPE, dials | {"trainable": "*"})
+
+
+GAINS = ["norm", "blocks.0.attn_norm", "blocks.0.mlp_norm"]
+BLOCK = [f"blocks.0.{w}.weight" for w in ("wq", "wk", "wv", "wo", "w_gate", "w_up", "w_down")]
+
+
+def grouped(model, optimizer) -> list:
+    """Each of the optimizer's groups: its rate and its tensors' names."""
+    names = {p: n for n, p in model.named_parameters()}
+    return [(g["lr"], [names[p] for p in g["params"]]) for g in optimizer.param_groups]
+
+
+@pytest.mark.parametrize("opt", sorted(subset.MATRICES))
+def test_the_embedding_trains_under_adamw_beside_the_matrices_optimizer_or_under_it(opt):
+    """The whole model under Muon or Shampoo: the block's matrices under it at `lr`, the embedding and the gains under
+    one undecayed AdamW at their own rates, or the embedding among the optimizer's matrices where the config says so.
+    Every tensor moves, and a later step scales each group's own rate, not the last step's."""
+    dials = subset.DIALS | {"trainable": "*", "opt": opt, "lr": 0.01, "weight_decay": 0.05, "gain_lr": 0.002,
+                            "embed_lr": 0.003}
+    torch.manual_seed(0)
+    model, (matrices, adamw) = subset.build(SHAPE, dials)
+    assert isinstance(matrices, subset.MATRICES[opt]) and grouped(model, matrices) == [(0.01, BLOCK)]
+    assert isinstance(adamw, torch.optim.AdamW) and adamw.defaults["weight_decay"] == 0.0
+    assert grouped(model, adamw) == [(0.003, ["embed"]), (0.002, GAINS)]
+    before = {n: p.detach().clone() for n, p in model.named_parameters()}
+    rows = torch.randint(0, SHAPE["vocab"], (2, 9), generator=torch.Generator().manual_seed(1))
+    for t in (1, 2):
+        subset.step(model, rows, [matrices, adamw], dials, t, 4)
+        factor = subset.schedule(dials, t, 4)
+        assert grouped(model, matrices) == [(0.01 * factor, BLOCK)]
+        assert grouped(model, adamw) == [(0.003 * factor, ["embed"]), (0.002 * factor, GAINS)]
+    assert not any(torch.equal(before[n], p) for n, p in model.named_parameters())
+    model, (matrices, adamw) = subset.build(SHAPE, dials | {"embed": "opt"})
+    assert grouped(model, matrices) == [(0.003, ["embed"]), (0.01, BLOCK)] and grouped(model, adamw) == [(0.002, GAINS)]
+    model, (matrices, adamw) = subset.build(SHAPE, dials | {"gain_lr": 0.0, "embed_lr": 0.0})
+    assert grouped(model, matrices) == [(0.01, BLOCK)] and grouped(model, adamw) == [(0.01, ["embed", *GAINS])]
+
+
+def test_three_rates_under_one_optimizer_are_torchs_three_groups():
+    """AdamW over the whole model with a rate for the gains and one for the embedding, on a cosine schedule, against
+    torch's AdamW over three groups stepped at those rates: the same weights."""
+    dials = subset.DIALS | {"lr": 0.01, "gain_lr": 0.002, "embed_lr": 0.003, "weight_decay": 0.05, "warmup": 2,
+                            "schedule": "cosine"}
+    torch.manual_seed(0)
+    model, (opt,) = subset.build(SHAPE, dials)
+    assert grouped(model, opt) == [(0.003, ["embed"]), (0.002, GAINS), (0.01, BLOCK)]
+    torch.manual_seed(0)
+    plain = LM.of(SHAPE)
+    by_name = dict(plain.named_parameters())
+    rates = {0.003: ["embed"], 0.002: GAINS, 0.01: BLOCK}
+    theirs = torch.optim.AdamW([{"params": [by_name[n] for n in names], "lr": rate} for rate, names in rates.items()],
+                               betas=(0.9, 0.95), weight_decay=0.05)
+    g = torch.Generator().manual_seed(1)
+    for t in range(3):
+        rows = torch.randint(0, SHAPE["vocab"], (2, 9), generator=g)
+        subset.step(model, rows, [opt], dials, t, 3)
+        F.cross_entropy(plain(rows[:, :-1]).flatten(0, 1), rows[:, 1:].flatten()).backward()
+        torch.nn.utils.clip_grad_norm_(list(plain.parameters()), dials["clip"])
+        for group, rate in zip(theirs.param_groups, rates):
+            group["lr"] = rate * min(1.0, (t + 1) / 2) * 0.5 * (1 + math.cos(math.pi * t / 3))
+        theirs.step()
+        theirs.zero_grad()
+    torch.manual_seed(0)
+    start = LM.of(SHAPE).state_dict()
+    for n, p in model.named_parameters():
+        assert not torch.equal(p, start[n]) and torch.allclose(p, by_name[n], rtol=0, atol=1e-6), n
 
 
 def loop(tmp_path, **over):

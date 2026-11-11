@@ -17,6 +17,7 @@ from . import subset
 
 VERSION = 1
 DIALS = subset.DIALS | {"ema_decay": 0.99}
+LATER = subset.LATER
 
 
 def plan(dials: dict):
