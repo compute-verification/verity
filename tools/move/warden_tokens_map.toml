@@ -1,0 +1,198 @@
+# The retired name "warden", third step: the tokens the two certified moves leave (`warden_term_map.toml` renames the
+# prose, `warden_map.toml` the paths, modules and Lean declarations). Each kind below is a name a move's certificate
+# can't cover, so this map's commit is generated and reviewed, not certified: run it after those two.
+#
+# The tokens, by kind:
+# - constants and environment variables (`WARDEN`, `WARDEN_REQUESTS`, `CR_WARDEN_RUN`, `A5_WARDEN_UNITS`): `WARDEN` as
+#   one part of the name becomes `NETWORK_CERTIFIER`. Each name has its own row, and the name `WARDEN` one row for each
+#   form it is written in (`corpus.WARDEN`, `WARDEN =`, a script's `$WARDEN`), since the word alone is
+#   `warden_map.toml`'s and no row here is keyed on it;
+# - flags and what argparse makes of them (`--warden-run` and `a.warden_run`, `--warden` and `a.warden`);
+# - hyphenated names of tools, threads and scratch directories (`warden-serve`, `warden-zk`, `warden-publisher`);
+# - plurals in identifiers (`wardens`, a test's `..._the_wardens_...`);
+# - sentences in string literals (a message, a help text, a log line), which say "network certifier" as prose does.
+#
+# Kept bytes ([keep]), each a name something outside a commit's reach holds; `warden_map.toml`'s header says what to
+# regenerate to rename one:
+# - domain tags, format ids and circuit names; the word as a whole value, a path's segment or a class;
+# - a record's keys and a kept run's file names (`"warden_run"`, `warden_check`, `warden.json`,
+#   `warden-registration.json`) and the negatives' names;
+# - the gate's verb `warden-rehearse` and its refusal `warden-fails`: the deployed gate serves them;
+# - the trace corpus's labels (`warden-heavy`, `warden-smallkv`);
+# - a message code makes from a kept value (`f"{label} thread"`, `f"device {device}"`), which a test spells whole: no
+#   phrase below rewords "warden thread", "warden ticker" or "device warden".
+#
+# Not this concept, and left as they are: as `warden_map.toml` has them.
+
+[[words_in]]                              # whole words, tried first: the sentences, and the hyphenated names
+files = ["*"]
+
+[words_in.words]
+"warden's" = "network certifier's"
+"wardens'" = "network certifiers'"
+"the warden-" = "the network-certifier-"
+"The warden-" = "The network-certifier-"
+"a warden-" = "a network-certifier-"
+"A warden-" = "A network-certifier-"
+"the warden" = "the network certifier"
+"The warden" = "The network certifier"
+"the wardens" = "the network certifiers"
+"a warden" = "a network certifier"
+"A warden" = "A network certifier"
+"An honest warden" = "An honest network certifier"
+"active warden" = "active network certifier"
+"auditor's warden" = "auditor's network certifier"
+"its warden" = "its network certifier"
+"this warden" = "this network certifier"
+"that warden" = "that network certifier"
+"no warden" = "no network certifier"
+"each warden" = "each network certifier"
+"warden run" = "network certifier run"
+"warden runs" = "network certifier runs"
+"warden row" = "network certifier row"
+"warden rows" = "network certifier rows"
+"warden path" = "network certifier path"
+"warden port" = "network certifier port"
+"warden ports" = "network certifier ports"
+"warden link" = "network certifier link"
+"warden link-window" = "network certifier link-window"
+"warden link-windows" = "network certifier link-windows"
+"warden window" = "network certifier window"
+"warden windows" = "network certifier windows"
+"warden trace" = "network certifier trace"
+"warden traces" = "network certifier traces"
+"warden rehearsal" = "network certifier rehearsal"
+"warden rehearsals" = "network certifier rehearsals"
+"warden ordinal" = "network certifier ordinal"
+"warden cell" = "network certifier cell"
+"warden cells" = "network certifier cells"
+"warden profile" = "network certifier profile"
+"warden tests" = "network certifier tests"
+"warden view" = "network certifier view"
+"warden bucket" = "network certifier bucket"
+"warden release" = "network certifier release"
+"warden admission" = "network certifier admission"
+"warden program" = "network certifier program"
+"warden check" = "network certifier check"
+"warden ({" = "network certifier ({"
+"warden (its" = "network certifier (its"
+"another warden" = "another network certifier"
+"client / warden" = "client / network certifier"
+"warden arrival" = "network certifier arrival"
+"warden beside" = "network certifier beside"
+"warden in front" = "network certifier in front"
+"byte-cell warden" = "byte-cell network certifier"
+"whose warden" = "whose network certifier"
+"front's warden" = "front's network certifier"
+"same warden" = "same network certifier"
+"honest warden" = "honest network certifier"
+"synthetic warden" = "synthetic network certifier"
+"kept warden" = "kept network certifier"
+"▶ warden" = "▶ network certifier"
+"| warden " = "| network certifier "
+"warden-" = "network-certifier-"
+"-warden" = "-network-certifier"
+
+[words]
+"wardens" = "network_certifiers"
+"warden_run" = "network_certifier_run"
+"a.warden" = "a.network_certifier"
+# --- the constants and environment variables, each whole
+"A5_WARDEN_RUN" = "A5_NETWORK_CERTIFIER_RUN"
+"A5_WARDEN_UNITS" = "A5_NETWORK_CERTIFIER_UNITS"
+"CR_WARDEN_RUN" = "CR_NETWORK_CERTIFIER_RUN"
+"N2_WARDEN_RUN" = "N2_NETWORK_CERTIFIER_RUN"
+"PUBLIC_WARDEN" = "PUBLIC_NETWORK_CERTIFIER"
+"SC_WARDEN_RUN" = "SC_NETWORK_CERTIFIER_RUN"
+"WARDEN_COUNTS" = "NETWORK_CERTIFIER_COUNTS"
+"WARDEN_DIGEST" = "NETWORK_CERTIFIER_DIGEST"
+"WARDEN_END_S" = "NETWORK_CERTIFIER_END_S"
+"WARDEN_FILES" = "NETWORK_CERTIFIER_FILES"
+"WARDEN_PROMPTS_BYTES" = "NETWORK_CERTIFIER_PROMPTS_BYTES"
+"WARDEN_PROMPTS" = "NETWORK_CERTIFIER_PROMPTS"
+"WARDEN_PROMPT_IDS" = "NETWORK_CERTIFIER_PROMPT_IDS"
+"WARDEN_PROMPT_ID_BITS" = "NETWORK_CERTIFIER_PROMPT_ID_BITS"
+"WARDEN_PROMPT_REQUESTS" = "NETWORK_CERTIFIER_PROMPT_REQUESTS"
+"WARDEN_PROMPT_TOKENS" = "NETWORK_CERTIFIER_PROMPT_TOKENS"
+"WARDEN_PUBLIC" = "NETWORK_CERTIFIER_PUBLIC"
+"WARDEN_RATE" = "NETWORK_CERTIFIER_RATE"
+"WARDEN_READ" = "NETWORK_CERTIFIER_READ"
+"WARDEN_REQUESTS" = "NETWORK_CERTIFIER_REQUESTS"
+"WARDEN_ROWS_MODULE" = "NETWORK_CERTIFIER_ROWS_MODULE"
+"WARDEN_RUN" = "NETWORK_CERTIFIER_RUN"
+"WARDEN_SCHEDULE" = "NETWORK_CERTIFIER_SCHEDULE"
+"WARDEN_SEED" = "NETWORK_CERTIFIER_SEED"
+"WARDEN_SERVED_STUBBED" = "NETWORK_CERTIFIER_SERVED_STUBBED"
+"WARDEN_SERVE_C_ALLOCATOR" = "NETWORK_CERTIFIER_SERVE_C_ALLOCATOR"
+"WARDEN_STUBBED" = "NETWORK_CERTIFIER_STUBBED"
+"WARDEN_TAIL_S" = "NETWORK_CERTIFIER_TAIL_S"
+"WARDEN_TOKENS" = "NETWORK_CERTIFIER_TOKENS"
+"WARDEN_WHERE" = "NETWORK_CERTIFIER_WHERE"
+"WARDEN_WINDOW_LEAVES" = "NETWORK_CERTIFIER_WINDOW_LEAVES"
+"WARDEN_WINDOW_MS" = "NETWORK_CERTIFIER_WINDOW_MS"
+# --- the constant `WARDEN` and a script's variable of that name, in each form they are written
+"corpus.WARDEN" = "corpus.NETWORK_CERTIFIER"
+"chain_record.WARDEN" = "chain_record.NETWORK_CERTIFIER"
+"CR.WARDEN" = "CR.NETWORK_CERTIFIER"
+"cr.WARDEN" = "cr.NETWORK_CERTIFIER"
+"`WARDEN`" = "`NETWORK_CERTIFIER`"
+"WARDEN =" = "NETWORK_CERTIFIER ="
+"WARDEN.get" = "NETWORK_CERTIFIER.get"
+"in WARDEN" = "in NETWORK_CERTIFIER"
+"== WARDEN" = "== NETWORK_CERTIFIER"
+"WARDEN=" = "NETWORK_CERTIFIER="
+"$WARDEN" = "$NETWORK_CERTIFIER"
+"${WARDEN" = "${NETWORK_CERTIFIER"
+"export WARDEN" = "export NETWORK_CERTIFIER"
+"A5-WARDEN" = "A5-NETWORK_CERTIFIER"
+
+[keep]
+patterns = [
+    '[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b',          # a domain tag or a format id
+    'note:[\w./-]+',
+    'art:[0-9a-f]+',
+    'cursor/[\w./-]+',                                # a branch
+    '"warden"',                                       # the word as a whole value
+    """'warden'(?![a-z])""",
+    '''["']warden:''',
+    '(?<!certifier/)(?<=/)warden(?![\w-]|\.\w)',      # ... as a path's segment
+    '(?<![\w./-])warden/(?=[\w$<{*])',
+    'CR_PATH(?::-\}")?(?: = |=)warden',               # ... as a command's value, which reaches a quoted one
+    '--class (?:test\|served\|)?warden',
+    'N2_CLASS=warden',
+    'negatives\.py warden',
+    'client or warden',
+    'served or warden\)',
+    '''["'/]warden_(?:run(?!": None\}\)\))|check|endpoint|endpoint_served|certificates|cores|cores_busy|cpu_s|invol|cost|costs)["'/]''',
+    'warden\.json\b',
+    'warden-(?:registration|rehearse|fails|heavy|smallkv)',
+    '(?m)^\| "warden", "network warden".*$',          # the Glossary's row of older names
+]
+strings = [
+    "WardenRowIdentity",
+    "unit/warden-row",
+    "unit/a5-warden",
+    "a5-warden/rest/",
+    "prover-root-under-the-wardens-certificate",
+    "not-the-wardens",
+    "window-naming-another-warden-root",
+    "functions as an active warden",
+    "an *active warden*",
+    "a passive warden",
+    "this key reads only: a warden rehearsal",
+    '"on the warden path"',
+]
+
+[rewrite]
+exclude = [
+    "tools/move/**",
+    "tools/research/**",
+    "tests/test_retired_terms.py",
+    "archive/**",
+    "**/fixtures/**",
+    "**/CHANGELOG.md",
+    "*.patch",
+    "**/TRUSTED.sha256",
+    "uv.lock",
+    "**/*.lock",
+]
