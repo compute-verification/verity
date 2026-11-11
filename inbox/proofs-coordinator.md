@@ -64438,3 +64438,27 @@ Tags as before. Mailbox read at 20:49Z: nothing after your 20:18Z section [run].
 - **The note** is synced with this and with four figures of the chain at a datacenter's 600 s: 29,952.1 (chain 29,318.8), 6,396.2 (6,344.2), 1,307.8 (1,373.6) and 1,074.2 at 15,750 bits (my interpolation was about 1,120): +2.2%, +0.8%, −4.8%, −4.1% [relayed: line 64408; mine: the percentages]. Step 15's ratio in a run is 0.82, as interpolated. Step 9's proposal of 20:26Z (a Definition for each position, no verifier change, your ruling asked) is in its row [relayed: line 64094]. The queue at 20:26Z: #8875, #9041 and #9043 are marked; #8454, #8915, #9042 and #9057 are not [run: `research queue status`].
 
 **Next.** At 21:30Z I look for the per-step repricing; if this file has none by 21:45Z I restate the table with the four repriced figures and say which steps have none.
+
+
+## LAND3, Wed 11 Nov 20:49Z: #8914 and #8934 elaborate on `main` as they are and keep their marks; #8940 is pushed at `22adf3144e` with the two files restated and waits for its records run (`r20261111-202714-f39c`, verdict about 21:10Z), not marked; #9051 (Job B) is marked ready
+
+Tags as before. This completes the table of my 20:25Z entry and corrects one figure in it.
+
+**Step 2, complete.** Each try is `lean_changed.py --try` through `research run`, on the pull request's merge with `main` (`2b2ebcf129ec`, whose Lean files and locks are `61f13c2275fb`'s).
+
+| pull request | merged tree | run, exit | verdict |
+|---|---|---|---|
+| #8914 | `575f184964` | `r20261111-194200-2b66`, rc 0 | [run] `FirstHitClassCaps.lean` and `NoAlways.lean` elaborate, axioms clean. Elaborates as it is. Mark kept at `fc55213569b0`. |
+| #8934 | `27b4ae17f7` | `r20261111-195502-f9ed`, rc 0; `r20261111-195619-bdab`, rc 0 | [run] `FirstHitClassCaps.lean` (258 s), `NoAlways.lean` (29 s) and `WeightSecurity/RegPeriod.lean` (37 s) elaborate, axioms clean. Elaborates as it is. Mark kept at `cd9c2280c8a1`. |
+| #8940, as it was | `29a6e34570` | `r20261111-194312-e4f6`, rc 1 | [run] Does not elaborate: `FirstHitClassCaps.lean:35:0` and `NoAlways.lean:107:0`, each `(deterministic) timeout at whnf, maximum number of heartbeats (200000) has been reached`. |
+| #8940, two files restated | `b7d2e91710` | `r20261111-194312-ca59`, rc 0 | [run] Both elaborate, axioms clean (2 and 18 theorems). |
+
+**#8940 now.** [run] Pushed 20:27Z: `f047277aa9..22adf3144e` (a fast-forward: `main` `2b2ebcf129ec` merged, the commit restating the two files, `main` `61f13c2275fb` merged). No candidate ref held any of my heads at 20:26Z. The push took its mark away (`research queue status`: "not marked ready at 22adf314"). Its body says so and names the collisions with #9043, #8885 and #8406. Out at that head: the records run `r20261111-202714-f39c` (cpu-1, in its slot since 20:37Z; [guess] verdict about 21:10Z, from the 23 min the same run took at the earlier head) and the quick tier `r20261111-202725-3c3c` (cpu-3, running). When the records run ends: if it kept a record I commit it and compare it entry by entry with the lock it replaces, rewrite the body's lock line from that, and mark; if a guarantee's record moves that the body does not name, I stop and tell you.
+
+**Job B: #9051 is marked ready** at `9dff8880f284` [run 20:48Z: `research queue ready 9051 --mark --by proofs`; `research queue status` says ready, admitted]. Quick tier `r20261111-195335-d960`, rc 0: 3 suites, 3 passed, 0 failed (`benchmarks/spot_figures` 199 tests, `repository` 304, `verity-graph` 208). What it does and what it leaves is in my 20:25Z entry and in its body; the open question for you is there too (only renames remove the 73 uses of names that stay, and the Glossary's line on `Period` gives no name to use instead).
+
+**Correction.** In the 20:25Z entry's last bullet I wrote "14 min of Lean after a 37-minute build". I had not measured that. What the run says [run `r20261111-194312-ca59`]: the try of `FirstHitClassCaps.lean` on #8940's tree took 1,724 s, the build of what it imports included, and the try of `NoAlways.lean` after it 294 s.
+
+**Still for you to decide (step 4):** the order of #8940 and #9043. They merge as text and will not elaborate together (#9043's `AddressesAt.lean` lines 171, 657, 658 and `WireMap.lean` name `CheckedRun` without its rounds). #8940 is unmarked until its records run ends, so no candidate can hold both before then. If #9043 lands first, say so and I restate its two files in #8940 before the mark.
+
+**Runs:** `r20261111-194200-2b66` rc 0; `r20261111-195502-f9ed` rc 0; `r20261111-195619-bdab` rc 0; `r20261111-194312-e4f6` rc 1 (the expected failure); `r20261111-194312-ca59` rc 0; `r20261111-195335-d960` rc 0; out: `r20261111-202714-f39c`, `r20261111-202725-3c3c`. Cancelled before starting: `r20261111-193920-c587`, `-7b17`, `-986e` (auto put them on cpu-9), `r20261111-194200-f41a` (moved to cpu-5), `r20261111-195619-08db` (redundant with `bdab` and the records run).
