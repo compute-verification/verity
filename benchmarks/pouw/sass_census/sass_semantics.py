@@ -146,10 +146,10 @@ PREDICATE = {"ISETP", "FSETP", "DSETP", "HSETP2", "PSETP", "UISETP", "UFSETP", "
 
 
 def classify(base: str) -> dict:
-    if base in PREDICATE:
-        return {"mul": False, "word": False, "route": "control", "note": "compare / set-predicate (writes a predicate)"}
     """The semantic record for a SASS base opcode: `mul` (can form a product), `word` (writes a >=32-bit result that
     could be a committed word), `route` (the menu route that prices it, or None), and a human `note`."""
+    if base in PREDICATE:
+        return {"mul": False, "word": False, "route": "control", "note": "compare / set-predicate (writes a predicate)"}
     if base in MMA:
         fam = "wgmma" if base in MMA_WGMMA else "tcgen05" if base in MMA_TCGEN05 else "mma.sync"
         return {"mul": True, "word": True, "route": "tensor", "note": f"{fam} matrix multiply-accumulate"}
