@@ -426,7 +426,7 @@ def test_gpu_tasks_keep_compiled_kernels_per_tree_on_the_host(tmp_path):
                                  ("m__bi-compiled", True, "|/workspace/jobs/cache/jit/hidden_gpu"),
                                  ("m__bi-eager", False, "/workspace/jobs/cache/triton/T|")):
             tree = tmp_path / ("fixed" if fixed else "old") / "T"
-            jit = tree / "integrations/vllm/verity_vllm/commit/committer/native_jit.py"
+            jit = tree / "adapters/vllm/verity_vllm/commit/committer/native_jit.py"
             jit.parent.mkdir(parents=True, exist_ok=True)
             jit.write_text("def staged_sources(): ...\n" if fixed else "def jit_load(): ...\n")
             out = subprocess.run(["bash", "-c", block + '\necho "${TRITON_CACHE_DIR:-}|${HIDDEN_GPU_BUILD:-}"'], capture_output=True,
@@ -597,7 +597,7 @@ def test_a_job_tree_is_one_copy_per_content_and_a_passed_bootstrap_skips_the_loc
     sky.mkdir(parents=True)
     for s in ("job_tree.sh", "vllm_bootstrap.sh"):
         shutil.copy(SKY / s, sky / s)
-    ops = synced / "integrations/vllm/verity_vllm/ops"
+    ops = synced / "adapters/vllm/verity_vllm/ops"
     ops.mkdir(parents=True)
     (ops / "pod_bootstrap.sh").write_text('echo run >> "$WORK/count"; echo BOOTSTRAP-OK\n')
     jobs, trees = tmp_path / "jobs", tmp_path / "jobs" / "src"
@@ -611,7 +611,7 @@ def test_a_job_tree_is_one_copy_per_content_and_a_passed_bootstrap_skips_the_loc
     a, b = tree(synced), tree(synced)
     assert a == b and Path(a, ".copied").exists() and Path(a).parent == trees
     assert subprocess.run(["bash", str(sky / "job_tree.sh"), "--mine"], env=env, capture_output=True, text=True, check=True).stdout.strip() == a
-    (synced / "integrations/vllm/new.py").write_text("x = 1\n")
+    (synced / "adapters/vllm/new.py").write_text("x = 1\n")
     assert tree(synced) != a
 
     boot = Path(a) / "tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh"
@@ -637,7 +637,7 @@ def test_a_leased_bootstrap_takes_its_gpu_before_the_host_lock_so_others_bootstr
     sky = tree / "tools/research/src/research/pods/nebius/sky"
     sky.mkdir(parents=True)
     shutil.copy(SKY / "vllm_bootstrap.sh", sky / "vllm_bootstrap.sh")
-    ops = tree / "integrations/vllm/verity_vllm/ops"
+    ops = tree / "adapters/vllm/verity_vllm/ops"
     ops.mkdir(parents=True)
     (ops / "pod_bootstrap.sh").write_text('echo "$2 cvd=${CUDA_VISIBLE_DEVICES-unset}" >> "$WORK/seen"; echo BOOTSTRAP-OK\n')
     jobs = tmp_path / "jobs"
@@ -1026,7 +1026,7 @@ def test_retention_gc_runs_hourly_on_the_nodes_outside_a_timed_window(tmp_path):
     deploy = (SKY.parent / "deploy.toml").read_text()
     doc = tomllib.loads(deploy)
     files = {f["path"]: f for f in doc["file"]}
-    holds_runs = set(files["/etc/systemd/system/vy-store-evict-research.timer"]["nodes"]) | {m for m, _pool in auto.SPILL if m in doc["nodes"]}
+    holds_runs = set(files["/etc/systemd/system/vy-store-evict-research.timer"]["nodes"]) | {m for m in doc["nodes"] if auto.CPU_NODE.fullmatch(m)}
     for u, path in (("retention_gc.service", "vy-retention-gc.service"), ("retention_gc.timer", "vy-retention-gc.timer")):
         f = files[f"/etc/systemd/system/{path}"]
         assert f["src"] == f"tools/research/src/research/pods/nebius/sky/{u}" and f["run"] == ["systemd:vy-retention-gc.timer"]
