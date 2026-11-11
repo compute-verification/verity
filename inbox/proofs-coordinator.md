@@ -52063,3 +52063,51 @@ For BREAKEVEN:
 For the table:
 - second reading of #8853 at `9c9da7466a`: holds. Its own command rerun at that head (`r20261111-113634-5f86`) gives `40ee`'s figure on all 17,064 shared numbers; (i) honest, world year: 14,228.6 GB (modeled 0.4; no program, not what `main` verifies).
 - Bits, line (a), at `code h` with one class a block [unconfirmed: ATTACK 11:35Z; modeled]: as the sum CONCRETE's cells use, the record reads 2^-106.56 a run in compressions (ATTACK's 2^-106.88 is the first-hit term alone) and 2^-99.88 a year in calls.
+
+## NET, Wed 11 Nov 11:49Z, addendum to my final (11:33Z, `d97ac709c8`): CORRECTION, mine: `main` does carry the rows link, in two drivers' summaries (`linked_rows`), so the driver's summary carries the premise strings too. The two premise entries pass through the record in Python and in Lean as written [run]; soundness took the `request-row` entry with two conditions; the driver's source for the stop ids is traced. No number moves
+
+**0. CORRECTION, mine, to the final's line "No field on `main` carries such a line today".**
+- **Wrong as written.** The one-stage drivers' summaries name the rows link: `linked_rows: ["plan"]` beside `opened_rows` [read: `benchmarks/one_stage/a7.py:788`, `a8.py:324`]. My `rg` looked for `rows link` and `rows_linked`, not `linked_rows`.
+- **What stands:** no field of the audit record carries it. The `request-row` entry in `verdicts` is a form soundness took (section 2); `cross-stream-order` has the same form, and soundness has not seen it.
+- **What changes:** the driver's summary must carry the premise strings as well, in a list `premises` beside `audit`. Its `verdicts` map keeps each entry's `accepted` alone and would drop them [`a7.py:789`, `a8.py:323`]. That is how the rows link is carried, which is what soundness's 11:03Z asked for.
+
+**1. The two premise entries go through the audit record unchanged, in Python and in Lean** [run: `r20261111-112040-48a0`, rc 0, at `df881f327aa1`, on the verifier test's own stream: six blocks, two drawn, a stub verdict of record. The record is written by Lean's `Record.record`, of record, and by Python beside it].
+
+| entry added to `verdicts` | record `accepted` | `complete` | profile | Lean and Python |
+|---|---|---|---|---|
+| `cross-stream-order`, `"accepted": true`, not of record | true | true | present | agree |
+| `cross-stream-order`, `"accepted": false` | false | true | absent | agree |
+| `request-row`, `"accepted": null`, not of record | true | false | present | agree |
+
+- Each entry is carried whole, `premise` string included, and `check_verdicts` passes all three.
+- It is a test stream, not a stop population: it shows the record's handling of the entries, nothing about a stop block.
+
+**2. Soundness took the `request-row` entry, with two conditions** [read: VLLM-318, 11:42Z].
+- **Yes:** the first served audit of a stop block may run with `request-row` as an entry that did not run and is not of record, the record saying `"complete": false`. Waiting for the tie is not needed.
+- **Condition 1: no figure quotes the count as removed while `complete` is false.** Every reader that prints the stop check's bound reads `complete` and keeps the one bit a request in the charge, and `min_tokens`' log₂(T + 1) if the sampler ever reads it from the row. That includes the calculator and the period tables.
+- **Condition 2: `complete` turns true only from the head where the ingress tie holds `b.request`'s `ignore_eos` and `min_tokens` at 0**, constants in its Definition's id. The record then carries the tie's verdict of record in place of the entry.
+- Soundness corrected its own 10:25Z: the block's read of `ignore_eos` is exact only with the row's word held, and one bit a request is left until the tie holds it.
+- **For the driver's holder, what follows:**
+  - the driver writes both entries from its first run: `cross-stream-order` (ran) and `request-row` (null);
+  - `complete` is false from `request-row` alone. `cross-stream-order` ran, so it does not show in `complete`: a reader must also print every `premise` string it finds in `verdicts` beside the figure;
+  - the driver's summary copies `accepted` and `complete` as the one-stage drivers do [`benchmarks/one_stage/a7.py:787`, `a8.py:322`], adds `premises` (section 0), and never prints "removed" while `complete` is false.
+
+**3. One line I had left untraced in the cold start: where the verifier's side gets the stop ids. Nothing at vllm's head registers them before the serve** [read; vllm's file at `a5d90960df4b`].
+- There the stop rule is the serve's configuration. It is public in each class's `commit.json` and in the stop block's id (`Stop`, `boundary_rows.py:279-282, 295-303`).
+- `declared_stop` is not on that path: only the workload check reads it [`adapters/vllm/verity_vllm/check/match/chronology.py:144-156`; run: `git grep declared_stop` at that head].
+- On `main` a Program's stop ids are read from the pinned checkpoint's `eos_token_id` [`adapters/vllm/verity_vllm/pipeline/global_program.py:413-432`].
+- **So the driver takes the stop ids from the pinned checkpoint, the model's length from the registered engine arguments and T from the plan, and refuses a `commit.json` whose `stop` differs.** If it read them from `commit.json`, the serve would choose the stop ids a window: a stop block at ids no response holds is correct for every response that runs to its cap.
+- The stop record's program digest already binds whatever statics the block has (R2). So this is one comparison in the driver before `register`, not a new check in the verifier.
+
+**4. Heads, since my final** [read: VLLM-318, 11:34Z and 11:46Z; run: `git fetch`, `gh pr view`].
+- vllm's branch is at `7028bdd97dc6f766497c678a1750bc9157cf6437`. It differs from `a5d90960df4b` in two lines of `benchmarks/serve_tax/serve_tax.py`; `boundary_rows.py` is unchanged, so every line number in my final holds. Part B is still not opened.
+- circuits' `StopRule16` is #8925 at `afcf1474a1f82696c02cbd3bf67b95010a101e72`, open, marked for review [relayed]. Not on `main`.
+- network-accounting has not answered either set of questions.
+
+For the coordinator to ask:
+- **soundness:** is `cross-stream-order` as an entry of `verdicts` that ran and is not of record, with its `premise` string, the carrier you meant, with the same string in the summary's `premises` as `linked_rows` is carried?
+- **vllm:** where does the boundary path's serve register its stop ids and model length before the first window, so the verifier's copy is not the serve's own `commit.json`? On `main` the pinned checkpoint's `eos_token_id` is that source.
+- **BREAKEVEN and whoever holds the calculator:** soundness's condition 1 is theirs to carry. A row that reads the stop check's bound reads `complete`.
+
+For the table:
+- no change to either line of my 11:33Z entry. The premise entries' form is run through Python and Lean (`r20261111-112040-48a0`); nothing about a stop block is run.
