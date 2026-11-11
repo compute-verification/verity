@@ -55,7 +55,9 @@ def commit(out: Path) -> CS.Binding:
     return w
 
 
-def main() -> int:
+def main(commit=commit, root: str = ROOT, of: dict = OF, name: str = "A5-SPARSE-MLA") -> int:
+    """The audit of the window ``commit`` writes, a stand-in ``of`` under the session root ``root``; ``name`` starts its line
+    of results."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True)
@@ -73,19 +75,19 @@ def main() -> int:
     mine = commit(out / "window")
 
     def source(w: dict) -> dict:
-        ok = {"kind": w.get("kind") == "stand-in", "run": w.get("run") == mine.run, "of": w.get("of") == OF}
+        ok = {"kind": w.get("kind") == "stand-in", "run": w.get("run") == mine.run, "of": w.get("of") == of}
         return {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v], "detail": {"kind": w.get("kind"), "run": w.get("run")}}
 
-    a.rule, a.window_root = RULE, ROOT
-    manager, a.coins, finisher = AC.start("local", ROOT, [0], out / "challenger", a.main)
+    a.rule, a.window_root = RULE, root
+    manager, a.coins, finisher = AC.start("local", root, [0], out / "challenger", a.main)
     try:
-        s, ok = a5.audit(a, {}, out / "rank0", mine, out / "window", source, a.port, {"rank": 0, "standin": OF}, rank=0)
+        s, ok = a5.audit(a, {}, out / "rank0", mine, out / "window", source, a.port, {"rank": 0, "standin": of}, rank=0)
     finally:
         a.coins.skip(0)
         finisher.join()
         published = a.coins.evidence()
         manager.shutdown()
-    summary = {"root": ROOT, "session": (published.get("plan") or {}).get("session"),
+    summary = {"root": root, "session": (published.get("plan") or {}).get("session"),
                "window": {"population": mine.population, "members": [[m.key, m.n] for m in mine.members],
                           "wired": {m.key: [[p, o, list(ws)] for p, o, ws in m.wired] for m in mine.members if m.wired}},
                "challenger": {x: published.get(x) for x in ("trusted", "error")},
@@ -93,7 +95,7 @@ def main() -> int:
                                                 "circuits", "timing")},
                "accepted": ok and not published.get("error")}
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-    print("A5-SPARSE-MLA " + json.dumps({x: summary[x] for x in ("accepted", "window")} | {"draw": s.get("draw"),
+    print(name + " " + json.dumps({x: summary[x] for x in ("accepted", "window")} | {"draw": s.get("draw"),
                                          "negatives": s.get("negatives")}, sort_keys=True, default=str))
     return 0 if summary["accepted"] else 1
 
