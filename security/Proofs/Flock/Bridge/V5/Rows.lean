@@ -126,10 +126,10 @@ theorem _root_.Flock.Bridge.sampledKSLiveV5_rows :
   split
   swap
   · next hTags =>
-    rw [dif_neg hTags] at h
+    rw [dite_eq_right hTags] at h
     exact h
   rename_i hTags
-  rw [dif_pos hTags] at h
+  rw [dite_eq_left hTags] at h
   intro L P vb σ Xr Cc Lm rows roots Cd κ r ns δ hTab hLink
   have hlawOn : Bridge.LawOn law (Bridge.nsOf desc qr) kd := Bridge.lawOn_designAt hpop
   have hQs0 := Bridge.qs_vbP_execSel_le (dj := dj) (y₀ := y₀) (ht := ht) (hc := Flock.Desc.parseStmt_stmt hD)
