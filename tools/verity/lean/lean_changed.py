@@ -1318,7 +1318,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
             passes = {k: p for p, got in ok for k in passed(p, files, committed if got == 0 else committed | new, new, log)}
             if killed:
                 p, got = next(iter(killed.items()))
-                mark(tree, package=p, phase="check", killed=got)
+                mark(tree, package=p, packages=list(killed), phase="check", killed=got)
                 log(f"lean-records: check.py on {', '.join(killed)} was killed (exit {got}): the next run on {tree} checks "
                     "it before it is built")
             else:
@@ -1711,9 +1711,10 @@ def own_reports(batch: list[str], pkg: str, out: Path, base: Path, log=print) ->
     """After one check.py audited the several packages of ``batch`` (under ``base``; its reports under the first one's
     directory, `reports`): each package's own `audit.json` under its own directory, as a check.py on it alone leaves it,
     which is all the rest of the run reads of a package (`settled`, `regenerates`, `verdicts`): its report and those of the
-    packages proving its guarantees, with `failed` and `passed` of those alone. The facts document check.py kept of each
-    package but PKG is dropped (`check_argv`). Nothing where check.py left no `audit.json` (it was killed, or refused):
-    a package then has no report of its own, and `settled` fails it."""
+    packages proving its guarantees, with `failed` and `passed` of those alone; a package check.py left no report of is
+    `failed` there. The facts document check.py kept of each package but PKG is dropped (`check_argv`). Nothing where
+    check.py left no `audit.json` (it was killed, or refused): a package then has no `audit.json` of its own, or the
+    first one has one that lists no failure though check.py failed, and `settled` fails it either way."""
     gout = reports(out, pkg, batch[0])
     try:
         doc = json.loads((gout / "audit.json").read_text())
@@ -1730,8 +1731,9 @@ def own_reports(batch: list[str], pkg: str, out: Path, base: Path, log=print) ->
         if whose in others:
             kept.unlink()
     for p in batch:
-        mine = [reps[at] for at in dict.fromkeys((base / q).resolve() for q in (p, *provers(p))) if at in reps]
-        failed = [str(r["package"]) for r in mine if r.get("failures")]
+        ats = list(dict.fromkeys((base / q).resolve() for q in (p, *provers(p))))
+        mine = [reps[at] for at in ats if at in reps]
+        failed = [str(r["package"]) for r in mine if r.get("failures")] + [str(at) for at in ats[:1] if at not in reps]
         (d := reports(out, pkg, p)).mkdir(parents=True, exist_ok=True)
         (d / "audit.json").write_text(json.dumps(doc | {"packages": mine, "failed": failed, "passed": not failed},
                                                  indent=1, ensure_ascii=False) + "\n")

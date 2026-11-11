@@ -33,6 +33,11 @@ def no_store(monkeypatch):
 
 
 OLD = json.dumps({"guarantees": {"G": {"owner": "@lean"}}}) + "\n"
+
+
+def named(argv: list[str]) -> list[str]:
+    """The packages a check.py command line names: what follows its `--out DIR`, as `check_argv` writes it."""
+    return argv[argv.index("--out") + 2:]
 NEW = json.dumps({"guarantees": {"G": {"owner": "@lean", "type_hash": "new"}}}) + "\n"
 
 
@@ -71,8 +76,8 @@ def fast(tmp_path, monkeypatch):
 
     def run(argv, **kw):
         calls.append((argv, kw.get("cwd")))
-        if "--update" in argv:
-            (Path(argv[-1]) / "lean-audit.json").write_text(NEW)
+        for at in named(argv) if "--update" in argv else []:
+            (Path(at) / "lean-audit.json").write_text(NEW)
         return type("P", (), {"returncode": 0})()
 
     monkeypatch.setattr(LC.subprocess, "run", run)
@@ -146,8 +151,7 @@ def test_a_refused_build_slot_takes_the_dev_cache_path_on_the_checkout_and_its_r
     monkeypatch.setenv("RESEARCH_RUN_ID", "r-test")
     said = []
     assert LC.audit_records("pkg", tmp_path / "deps", update=True, log=said.append) == 0
-    assert [(a[a.index("--out") + 2:], cwd) for a, cwd in calls] == [([str(root / "pkg")], root),
-                                                                       ([str(root / "pkg/Req")], root)]
+    assert [(named(a), cwd) for a, cwd in calls] == [([str(root / "pkg")], root), ([str(root / "pkg/Req")], root)]
     assert all("--dev-cache" in a and "--no-replay" in a for a, _ in calls), "both steps take the --dev-cache path"
     assert "--update" in calls[0][0] and "--update" not in calls[1][0], "a requirer is checked, never updated"
     assert calls[1][0][calls[1][0].index("--out") + 1] == str(run_dir / "lean-audit" / "requirer-pkg_Req")
@@ -163,30 +167,31 @@ def test_a_build_slot_takes_the_slot_path(fast, tmp_path, monkeypatch):
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     said = []
     assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == 0
-    assert [a[-1] for a, _ in calls] == [str(tree / "pkg"), str(tree / "pkg/Req")]
+    assert [named(a) for a, _ in calls] == [[str(tree / "pkg"), str(tree / "pkg/Req")]], "one check.py audits both"
     assert not any("--dev-cache" in a for a, _ in calls)
     assert any("taking the slot path" in s for s in said)
 
 
+@pytest.mark.parametrize("rc", [0, 1, -9], ids=["passed", "failed", "killed"])
 def test_the_slot_path_reads_the_node_s_artifact_cache_and_fills_it_from_every_build_whatever_its_check_came_to(
-        fast, tmp_path, monkeypatch):
-    """A module is stored for what its compile read, which a failure elsewhere in its package doesn't change: the package
-    that passed, the requirer that failed and the one whose check.py was killed each put what they built, on check.py's
-    word that the build ran in the sandbox (its report; for the killed one, what it wrote as the build began)."""
+        fast, tmp_path, monkeypatch, rc):
+    """A module is stored for what its compile read, which a failure elsewhere in its package doesn't change: whether the
+    check.py that built the run's packages passed them, failed one of them or was killed, the run puts what each built, on
+    check.py's word that the build ran in the sandbox (its report; for a killed one, what it wrote as each build began)."""
     _, tree, calls = fast
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
-    monkeypatch.setattr(LC, "requirers", lambda *_: ["pkg/Req", "pkg/Killed"])
+    monkeypatch.setattr(LC, "requirers", lambda *_: ["pkg/Req", "pkg/Other"])
     put = []
 
     def run(argv, **kw):
         calls.append((argv, kw.get("cwd")))
-        if argv[-1].endswith("Killed"):
-            work = Path(argv[argv.index("--out") + 1]) / "audit-pkg_Killed"
+        for at in named(argv) if rc < 0 else []:
+            work = Path(argv[argv.index("--out") + 1]) / f"audit-{Path(at).name}"
             work.mkdir(parents=True)
-            (work / LC.LA.BUILDING).write_text(json.dumps({"package": argv[-1], "sandbox": True}))
-            return type("P", (), {"returncode": -9})()
-        _reported(argv, True)
-        return type("P", (), {"returncode": 1 if argv[-1].endswith("Req") else 0})()
+            (work / LC.LA.BUILDING).write_text(json.dumps({"package": at, "sandbox": True}))
+        if rc >= 0:
+            _reported(argv, True, failing=("Req",) if rc else ())
+        return type("P", (), {"returncode": rc})()
 
     def fake_put(self, reports, since=None, log=print):
         put.append((self.store, reports, since))
@@ -195,15 +200,16 @@ def test_the_slot_path_reads_the_node_s_artifact_cache_and_fills_it_from_every_b
     monkeypatch.setattr(LC.subprocess, "run", run)
     monkeypatch.setattr(LC.LA.LakeArtifacts, "put", fake_put)
     said = []
-    assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == 1
+    assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == rc
     store = (tmp_path / "lean-artifacts").resolve()
-    assert [a[a.index("--artifacts") + 1] for a, _ in calls] == [str(store)] * 3
-    assert [(s, p) for s, p, _ in put] == [(store, {tree / q: {"package": str(tree / q), "sandbox": True}})
-                                           for q in ("pkg", "pkg/Req", "pkg/Killed")]
+    assert [a[a.index("--artifacts") + 1] for a, _ in calls] == [str(store)], "one check.py builds the three"
+    assert [(s, {at: (r["package"], r["sandbox"]) for at, r in p.items()}) for s, p, _ in put] == [
+        (store, {tree / q: (str(tree / q), True) for q in ("pkg", "pkg/Req", "pkg/Other")})]
     assert all(isinstance(since, float) for _, _, since in put)
     assert [s for s in said if "new in the artifact cache" in s] == [
-        f"lean-records: {q}: 3 module version(s) new in the artifact cache" for q in ("pkg", "pkg/Req", "pkg/Killed")]
-    assert "since" not in json.loads((tree / LC.DIRTY).read_text()), "the killed check's build is stored: nothing is left to"
+        "lean-records: pkg+pkg/Req+pkg/Other: 3 module version(s) new in the artifact cache"]
+    if rc < 0:
+        assert "since" not in json.loads((tree / LC.DIRTY).read_text()), "the killed check's build is stored: nothing is left to"
 
 
 def test_a_run_stores_what_the_run_before_it_compiled_and_never_stored_before_it_syncs_the_tree(fast, tmp_path,
@@ -238,11 +244,15 @@ def test_a_run_stores_what_the_run_before_it_compiled_and_never_stored_before_it
     assert f"lean-records: {tree}: of what r-old left: 2 module version(s) new in the artifact cache" in said
 
 
-def _reported(argv: list[str], sandbox: bool) -> None:
-    """check.py's report on the package ``argv`` names, under its `--out`, built in the sandbox or not."""
+def _reported(argv: list[str], sandbox: bool, failing: tuple[str, ...] = ()) -> None:
+    """check.py's reports on the packages ``argv`` names, under its `--out`, each built in the sandbox or not, those whose
+    directory's name is in ``failing`` failed."""
     out = Path(argv[argv.index("--out") + 1])
     out.mkdir(parents=True, exist_ok=True)
-    (out / "audit.json").write_text(json.dumps({"packages": [{"package": argv[-1], "sandbox": sandbox}]}))
+    reps = [{"package": at, "sandbox": sandbox, "failures": ["fresh.rejected: x"] if Path(at).name in failing else []}
+            for at in named(argv)]
+    failed = [r["package"] for r in reps if r["failures"]]
+    (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reps}))
 
 
 def test_a_records_build_outside_the_sandbox_puts_nothing_in_the_artifact_cache(fast, tmp_path, monkeypatch):
@@ -255,9 +265,10 @@ def test_a_records_build_outside_the_sandbox_puts_nothing_in_the_artifact_cache(
     monkeypatch.setattr(LC.subprocess, "run", lambda argv, **kw: _reported(argv, False) or fake(argv, **kw))
     said = []
     assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == 0
-    assert [s for s in said if "artifact cache" in s] == [s for q in ("pkg", "pkg/Req") for s in (
-        f"lean-audit: {tree / q}: its report doesn't say it was built in the sandbox, so none of its modules go into the "
-        "artifact cache", f"lean-records: {q}: 0 module version(s) new in the artifact cache")]
+    assert [s for s in said if "artifact cache" in s] == [
+        *(f"lean-audit: {tree / q}: its report doesn't say it was built in the sandbox, so none of its modules go into the "
+          "artifact cache" for q in ("pkg", "pkg/Req")),
+        "lean-records: pkg+pkg/Req: 0 module version(s) new in the artifact cache"]
     assert not (tmp_path / "lean-artifacts" / "keys").exists()
 
 
@@ -267,7 +278,7 @@ def test_dev_cache_takes_that_path_even_where_a_build_slot_is_granted(fast, tmp_
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     said = []
     assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append, dev_cache=True) == 0
-    assert [a[-1] for a, _ in calls] == [str(root / "pkg"), str(root / "pkg/Req")]
+    assert [named(a) for a, _ in calls] == [[str(root / "pkg"), str(root / "pkg/Req")]]
     assert all("--dev-cache" in a for a, _ in calls) and any("asks for it; taking the --dev-cache path" in s for s in said)
     for argv in (["--dev-cache"], ["--records", "pkg", "--dev-cache", "--tree", str(tree)]):
         with pytest.raises(SystemExit):
@@ -445,8 +456,9 @@ def test_a_run_whose_only_failures_are_record_differences_exits_0_as_regenerated
                                                                                                        monkeypatch):
     """A run that found only record differences, here without `--update`, so that check.py fails each package and names
     the record that settles it, exits 0 with `outcome: regenerated`, each record
-    kept under `record/`, the requirer audited on the record kept before it, and `validation.status` passed, which the
-    records gate reads as it does for an `--update` run's kept records; a commit of both records then needs no run."""
+    kept under `record/`, both packages audited by one check.py on the locks the run found, and `validation.status`
+    passed, which the records gate reads as it does for an `--update` run's kept records; a commit of both records then
+    needs no run."""
     root, calls, _ = pair
     run_dir = tmp_path / "run"
     run_dir.mkdir()
@@ -455,7 +467,9 @@ def test_a_run_whose_only_failures_are_record_differences_exits_0_as_regenerated
     said = []
     assert LC.audit_records(S, tmp_path / "deps", log=said.append) == 0
     assert [(p, up) for p, up, _ in calls] == [(S, False), (P, False)], "nothing is audited again with --update"
-    assert calls[1][2][S] == BUILT[S], "the requirer is audited on the record kept for PKG"
+    assert LC.subprocess.run.audits == [[S, "s/proofs", P]], "one check.py audits both, and the package proving S's once"
+    assert calls[0][2] == calls[1][2] == {S: record("old", ["proofs"]), P: record("old")}, \
+        "each is judged on the locks the run found: a package's records read nothing of another's lock"
     out = run_dir / "lean-audit"
     kept = {S: out / "record" / S / LC.LOCK, P: out / "record" / P / LC.LOCK}
     assert {p: k.read_text() for p, k in kept.items()} == BUILT and (out / "record" / LC.LOCK).read_text() == BUILT[S]
@@ -539,28 +553,33 @@ def test_a_rename_a_requirers_unwitnessed_entry_reads_regenerates_it_in_one_upda
     fake, mine = LC.subprocess.run, []
 
     def run(argv, **kw):
-        if argv[1:2] != [str(LC.AUDIT_PY)] or os.path.relpath(argv[-1], kw["cwd"]) != P:
+        if argv[1:2] != [str(LC.AUDIT_PY)] or str(at := Path(kw["cwd"]) / P) not in named(argv):
             return fake(argv, **kw)
-        at, out, update = Path(argv[-1]), Path(argv[argv.index("--out") + 1]), "--update" in argv
+        out, update = Path(argv[argv.index("--out") + 1]), "--update" in argv
         moved = json.loads(Path(argv[argv.index("--moved") + 1]).read_text()) if "--moved" in argv else None
         mine.append((update, moved))
         if moved is not None and not update:
             return type("P", (), {"returncode": 2})()                      # check.py: --moved goes with --update
+        reps = []
+        if rest := [a for a in named(argv) if a != str(at)]:               # the pair's check.py on the others it names
+            fake([*argv[:argv.index("--out") + 2], *rest], **kw)
+            reps = json.loads((out / "audit.json").read_text())["packages"]
         entry = json.loads((at / LC.LOCK).read_text())["unwitnessed"]["G"]
         same = entry == "new" or (entry == "old" and (moved or {}).get("S.DrawIsCoin") == "S.SampleIsCoin")
         fails = [] if same else ["witnesses.unwitnessed-changed: G changed since `unwitnessed` listed it"]
         if update and same:
             (at / LC.LOCK).write_text(unwitnessed("new"))
+        reps.append({"package": str(at.resolve()), "failures": fails})
+        failed = [r["package"] for r in reps if r["failures"]]
         out.mkdir(parents=True, exist_ok=True)
-        (out / "audit.json").write_text(json.dumps({"passed": not fails, "packages": [
-            {"package": str(at.resolve()), "failures": fails}]}) + "\n")
-        return type("P", (), {"returncode": 1 if fails else 0})()
+        (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reps}) + "\n")
+        return type("P", (), {"returncode": 1 if failed else 0})()
 
     monkeypatch.setattr(LC.subprocess, "run", run)
     said, out = [], tmp_path / "out"
     assert LC.audit_records(S, tmp_path / "deps", update=True, moved=moves, out=out, log=said.append) == 0
     assert [(p, up) for p, up, _ in calls] == [(S, True)] and mine == [(True, {"S.DrawIsCoin": "S.SampleIsCoin"})], \
-        "the requirer's one audit takes --update --moved"
+        "the requirer's one audit takes --update --moved, in PKG's check.py: both take the same flags"
     assert {q: (out / "record" / q / LC.LOCK).read_text() for q in (S, P)} == {S: BUILT[S], P: unwitnessed("new")}
     got = outcome_line(said)
     assert (got["outcome"], got["records"][P]["outcome"]) == (LC.REGENERATED, LC.REGENERATED)
@@ -837,13 +856,14 @@ def test_a_killed_check_leaves_the_mark_for_the_next_run(fast, tmp_path, monkeyp
     monkeypatch.setenv("RESEARCH_RUN_ID", "r-killed")
 
     def run(argv, **_):
-        return type("P", (), {"returncode": -9 if argv[-1].endswith("Req") else 0})()
+        return type("P", (), {"returncode": -9 if "--update" not in argv else 0})()
 
     monkeypatch.setattr(LC.subprocess, "run", run)
     said = []
     assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == -9
     left = json.loads((tree / LC.DIRTY).read_text())
-    assert (left["run"], left["package"], left["phase"], left["killed"]) == ("r-killed", "pkg/Req", "check", -9)
+    assert (left["run"], left["package"], left["packages"], left["phase"], left["killed"]) == (
+        "r-killed", "pkg", ["pkg", "pkg/Req"], "check", -9), "the one check.py that audited both was killed"
     monkeypatch.setattr(LC.subprocess, "run", lambda argv, **_: type("P", (), {"returncode": 0})())
     said.clear()
     assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == 0
