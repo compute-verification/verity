@@ -101,7 +101,7 @@ research merge --mirror [SHA]                                           # main o
 research merge --canary [--tool check] [--json]                    # the gates' daily self-test, in scratch stores
 research queue vqueue|status|ready|review|eject|open|edit|link  # the verified queue onto `main` (vqueue_loop.py, queue.py)
 research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
-research queue stats [--json] [--short]  # the queue's numbers (queue_table.py); --log FILE: queue_stats.py
+research queue stats [--json] [--short] [--rounds] [--until TS]  # queue_table.py; --log FILE: queue_stats.py
 research lean-times ...  # Lean tasks' p95
 research run-times [--hours 12] [--on MACHINE,...] [--json]  # each run's wait to start, setup and run time, by kind, machine and pool (run_times.py)
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
