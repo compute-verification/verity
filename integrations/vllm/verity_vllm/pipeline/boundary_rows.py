@@ -18,6 +18,14 @@ program, partition, port, schema, N leaves, run); a u32 is two u16 words, low fi
 The step shapes are no value: they choose the Programs, and the window's advice commits them. Each leaf's salt is fresh
 from the OS (`commit`).
 
+**The return**, a third value of a class that says its replay block returns its check's verdicts (`Layout.verdicts`): the
+block's output port, named as round 2 names the value a return link reads (`return_port`: ``o0``, or ``<replay block's
+id>/o0`` in a record that names a port with a ``/``). Its rows are the ones round 2's return links read
+(`Layout.verdict_rows`), a span's block's in return order then the next span's, each bit a one: what the block returns
+where its check passes, so the serve writes them without a replay. A round 2 then holds each proof block's verdict to
+this port, where a record without it would leave the verdict to whatever the interior registered. The class says so
+because a return's type can't: bits that are an id are no verdicts.
+
 **The replay block** (`Layout.replay`) is a stand-in until the class's request Definition lands: `per_prompt * P +
 per_output * O` instances of one check template (`population`), so a window committed under it is audited with that one
 template; or, ``inline``, those instances with each one's body in place (`inlined`), audited with the templates that body
@@ -41,7 +49,7 @@ import secrets
 import struct
 import threading
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import cached_property
 from multiprocessing import util as mp_util
@@ -55,7 +63,7 @@ from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.population import population
 from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import coll_concat
+from verity.ml.circuits.refs import Affine, Concat, coll_concat
 from verity.ml.circuits.types import Array
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -66,6 +74,8 @@ from verity_vllm.records.boundary_commit import FILE as COMMIT, SCHEMA as FORMAT
 SCHEMA = CS.SCHEMA_HM96_SHA512_ROW_V2
 INGRESS, EGRESS = "b.ingress", "b.egress"
 PORTS = (INGRESS, EGRESS)
+#: the replay block's output port: its return's name where it is a value (`return_port`)
+RETURN = "o0"
 MIN_CAP = 2
 #: `b.ingress`'s fields before its ids, each a u32 (``u64``: two, low first) of the request's own sampling inputs
 FIELDS = (("lp", "u32"), ("max_tokens", "u32"), ("min_tokens", "u32"), ("ignore_eos", "u32"), ("temperature", "f32"),
@@ -163,6 +173,18 @@ def egress_row(span: Span, output_cap: int) -> np.ndarray:
     return _words([len(span.served), finish, *span.served] + [0] * (output_cap - len(span.served)))
 
 
+def return_port(block: str, ports: Iterable[str]) -> str:
+    """The name of replay block ``block``'s return in a record whose other ports are ``ports``, as round 2 names the
+    value a return link reads (`second_stage.replay_links`): `RETURN`, or ``<block>/o0`` where the record names a port
+    with a ``/``."""
+    return f"{block}/{RETURN}" if any("/" in p for p in ports) else RETURN
+
+
+def _parts(r: Any) -> list[Any]:
+    """A body reference's parts, its concatenations spliced in."""
+    return [x for q in r.parts for x in _parts(q)] if isinstance(r, Concat) else [r]
+
+
 def run_root(serve: str, window: int) -> str:
     """The window's run, which every domain binds: the SHA-512 over `FORMAT`, the serve's nonce and the window's index."""
     return hashlib.sha512(f"{FORMAT}\0{serve}\0{int(window)}".encode()).hexdigest()
@@ -193,8 +215,9 @@ class Layout:
     """One class's registration, from public items alone: the check template ``check``, its instances a span
     (``per_prompt`` a prompt row, ``per_output`` an output), the class (``prompt``, ``outputs``), the spans N and the run.
     ``inline``: the replay block holds them `inlined`, and the check's proof blocks are the templates the check template's
-    body calls (`templates`); else they are its instances (`population`). What the prover commits under and the
-    challenger's own copies (`ports`)."""
+    body calls (`templates`); else they are its instances (`population`). ``verdicts``: the replay block returns the
+    check's verdicts, every bit a one where it passes, and the class commits that return as a third value
+    (`verdict_rows`). What the prover commits under and the challenger's own copies (`ports`)."""
 
     check: SpecializedDefinition
     per_prompt: int
@@ -204,6 +227,7 @@ class Layout:
     spans: int
     run: str
     inline: bool = False
+    verdicts: bool = False
 
     def __post_init__(self) -> None:
         for k in ("prompt", "outputs"):
@@ -256,30 +280,74 @@ class Layout:
     def partition(self) -> dict[str, Any]:
         return P.partition(self.program, self.grain)
 
+    @cached_property
+    def verdict_rows(self) -> tuple[int, int] | None:
+        """The replay block's return as rows, where the class commits it (`verdicts`): ``(rows a block, bits a row)``, a
+        row what one of round 2's return links reads (`second_stage._return_links`): a member's share of one part of the
+        block's body's return, so an instance's whole output or, inlined, one field of a call's (a read's ``ok``). None
+        for a class that doesn't; ValueError for one whose block returns anything but bits in such rows of one width,
+        which round 2 links nothing to."""
+        if not self.verdicts:
+            return None
+        ret, body, widths = self.replay.signature()[1], self.replay.body, set()
+        for r in _parts(body.ret):
+            node = body.nodes[r.idx] if isinstance(r, Affine) and r.space == "n" else None
+            m = {"call": 1, "batch": getattr(node, "n", 0)}.get(getattr(node, "form", None), 0)
+            widths.add(r.count // m if m and r.count % m == 0 else 0)
+        w = widths.pop() if len(widths) == 1 else 0
+        if ret.width_set() != {1} or not w or ret.leaves % w:
+            raise ValueError(f"a class commits its replay block's return as verdicts where it is bits, in rows of one width "
+                             f"its body's nodes return, not {P.template_id(self.check)}'s {ret!r}")
+        return ret.leaves // w, w
+
+    @cached_property
+    def values(self) -> tuple[str, ...]:
+        """The values the serve commits rows of, in the record's order: `PORTS`, then the return where the class commits
+        it, under its name (`return_port`)."""
+        return PORTS if self.verdict_rows is None else (*PORTS, return_port(P.template_id(self.replay), PORTS))
+
+    def leaves(self, port: str) -> int:
+        """A value's rows: one a span, or the return's rows a block a span."""
+        return self.spans * (1 if port in PORTS else self.verdict_rows[0])
+
     def words(self, port: str) -> int:
+        if port not in PORTS:
+            return -(-self.verdict_rows[1] // 16)
         return 2 * (HEAD_U32 + self.prompt) if port == INGRESS else 2 * (2 + self.outputs)
 
     def domain(self, port: str) -> CommitmentDomain:
+        n = self.leaves(port)
         binding = identity_digest_sha512(CS.DOMAIN_TAG, {"program": self.partition["program"],
                                                          "partition": P.digest(self.partition), "port": port, "schema": SCHEMA,
-                                                         "leaves": self.spans, "run": self.run})
-        return CommitmentDomain(binding, CS.OWNER, RangeIndexedDomain(0, self.spans), hash="sha512")
+                                                         "leaves": n, "run": self.run})
+        return CommitmentDomain(binding, CS.OWNER, RangeIndexedDomain(0, n), hash="sha512")
 
     def ports(self) -> dict[str, dict[str, Any]]:
         """Each value's leaves and domain id, as `Stream.register` takes them."""
-        return {p: {"leaves": self.spans, "domain": self.domain(p).domain_id.hex()} for p in PORTS}
+        return {p: {"leaves": self.leaves(p), "domain": self.domain(p).domain_id.hex()} for p in self.values}
+
+    def schemas(self) -> dict[str, str]:
+        """Each value's row schema, in `ports`' order."""
+        return dict.fromkeys(self.values, SCHEMA)
 
     def provenance(self) -> dict[str, Any]:
         return {"prompt": self.prompt, "outputs": self.outputs, "check": P.template_id(self.check),
-                "per_prompt": self.per_prompt, "per_output": self.per_output, "inline": self.inline}
+                "per_prompt": self.per_prompt, "per_output": self.per_output, "inline": self.inline,
+                **({"verdicts": True} if self.verdicts else {})}
 
 
 def port_rows(spans: Sequence[Span], layout: Layout) -> dict[str, np.ndarray]:
-    """Each value's rows, (N, words) u16, span by span."""
+    """Each value's rows, (leaves, words) u16, span by span: the return's every bit a one, low bit first in its words,
+    as the block returns it where its check passes."""
     if len(spans) != layout.spans or any(s.shape != (layout.prompt, layout.outputs) for s in spans):
         raise ValueError(f"the spans are not {layout.spans} of class ({layout.prompt}, {layout.outputs})")
-    return {INGRESS: np.stack([ingress_row(s, layout.prompt) for s in spans]),
+    rows = {INGRESS: np.stack([ingress_row(s, layout.prompt) for s in spans]),
             EGRESS: np.stack([egress_row(s, layout.outputs) for s in spans])}
+    for p in layout.values[len(PORTS):]:
+        ones = (1 << layout.verdict_rows[1]) - 1
+        row = np.array([ones >> 16 * k & 0xFFFF for k in range(layout.words(p))], dtype=np.uint16)
+        rows[p] = np.tile(row, (layout.leaves(p), 1))
+    return rows
 
 
 @dataclass
@@ -307,7 +375,7 @@ class Committed:
         return BoundaryCommit(
             window=self.window, run=L.run, **L.provenance(), spans=L.spans, replay=P.template_id(L.replay),
             program=L.partition["program"], partition=P.digest(L.partition), schema=SCHEMA,
-            values={p: {"root": self.roots[p].hex(), "words": L.words(p), **ports[p]} for p in PORTS},
+            values={p: {"root": self.roots[p].hex(), "words": L.words(p), **ports[p]} for p in ports},
             index=self.index_leaf, index_rule=CS.INDEX_RULE, seconds=round(self.seconds, 3)).dump()
 
     def record(self, law: Mapping[str, Any], previous: str | None = None,
@@ -322,7 +390,7 @@ def layout_of(pub: Mapping[str, Any], check: SpecializedDefinition) -> Layout:
     c = BoundaryCommit.of(pub, COMMIT)
     if c.check != P.template_id(check):
         raise ValueError(f"a {FORMAT} commitment of check {c.check}, not {P.template_id(check)}")
-    return Layout(check, c.per_prompt, c.per_output, c.prompt, c.outputs, c.spans, c.run, c.inline)
+    return Layout(check, c.per_prompt, c.per_output, c.prompt, c.outputs, c.spans, c.run, c.inline, verdicts=bool(c.verdicts))
 
 
 def record(pub: Mapping[str, Any], check: SpecializedDefinition, law: Mapping[str, Any], previous: str | None = None,
@@ -333,7 +401,9 @@ def record(pub: Mapping[str, Any], check: SpecializedDefinition, law: Mapping[st
     binding)."""
     L, c = layout_of(pub, check), BoundaryCommit.of(pub, COMMIT)
     ports = L.ports()
-    roots = [{"port": p, "root": c.values[p]["root"], **ports[p]} for p in PORTS]
+    if set(c.values) != set(ports):
+        raise ValueError(f"the commitment's values {sorted(c.values)} are not its layout's {sorted(ports)}")
+    roots = [{"port": p, "root": c.values[p]["root"], **ports[p]} for p in ports]
     w = {"kind": "served", "run": L.run, "row": c.window, **L.provenance(), "index": c.index, "boundary": FORMAT,
          **(window or {})}
     return R.record(L.program, L.grain, law, CS.SCHEME, roots, w, previous=previous)
@@ -345,9 +415,9 @@ def commit(spans: Sequence[Span], layout: Layout, window: int, *, salts: Mapping
     unless ``salts`` gives them (`reopen`)."""
     t0 = clock()
     rows = port_rows(spans, layout)
-    domains = {p: layout.domain(p) for p in PORTS}
-    ys = {p: os.urandom(CS.SALT_BYTES * layout.spans) for p in PORTS} if salts is None else dict(salts)
-    roots, _bc = CS.commit_ports(domains, rows, {}, ys, schemas=dict.fromkeys(PORTS, SCHEMA))
+    domains = {p: layout.domain(p) for p in rows}
+    ys = {p: os.urandom(CS.SALT_BYTES * layout.leaves(p)) for p in rows} if salts is None else dict(salts)
+    roots, _bc = CS.commit_ports(domains, rows, {}, ys, schemas=layout.schemas())
     return Committed(window, layout, tuple(spans), roots, ys, os.urandom(CS.SALT_BYTES) if index_salt is None else index_salt,
                      clock() - t0)
 
@@ -356,7 +426,8 @@ def write(c: Committed, directory: Path) -> Path:
     """`c`'s files under ``directory`` (module docstring), ``commit.json`` last."""
     d = Path(directory)
     d.mkdir(parents=True, exist_ok=True)
-    for name, data in ((INDEX, c.index), (CS.INDEX_SALT, c.index_salt), (SALTS, b"".join(c.salts[p] for p in PORTS))):
+    for name, data in ((INDEX, c.index), (CS.INDEX_SALT, c.index_salt),
+                       (SALTS, b"".join(c.salts[p] for p in c.layout.values))):
         (d / name).write_bytes(data)
         os.chmod(d / name, 0o600)
     tmp = d / f".{COMMIT}"
@@ -372,11 +443,13 @@ def reopen(directory: Path, check: SpecializedDefinition) -> Committed:
     pub = BoundaryCommit.of(json.loads((d / COMMIT).read_text()), str(d / COMMIT))
     layout = layout_of(pub.dump(), check)
     spans = [Span.from_json(s) for s in json.loads((d / INDEX).read_bytes())["spans"]]
-    raw, n = (d / SALTS).read_bytes(), CS.SALT_BYTES * layout.spans
-    if len(raw) != n * len(PORTS):
-        raise ValueError(f"{d}: {len(raw)} bytes of salts, not {len(PORTS)} values' {n}")
-    c = commit(spans, layout, pub.window, salts={p: raw[k * n:(k + 1) * n] for k, p in enumerate(PORTS)},
-               index_salt=(d / CS.INDEX_SALT).read_bytes())
+    raw, salts, at = (d / SALTS).read_bytes(), {}, 0
+    for p in layout.values:
+        salts[p] = raw[at:at + CS.SALT_BYTES * layout.leaves(p)]
+        at += CS.SALT_BYTES * layout.leaves(p)
+    if len(raw) != at:
+        raise ValueError(f"{d}: {len(raw)} bytes of salts, not {at}: {CS.SALT_BYTES} a leaf of its {len(layout.values)} values")
+    c = commit(spans, layout, pub.window, salts=salts, index_salt=(d / CS.INDEX_SALT).read_bytes())
     got = BoundaryCommit.of(c.public(), str(d))
     for k in ("values", "index", "program", "partition"):
         if getattr(got, k) != getattr(pub, k):
@@ -554,6 +627,7 @@ class BoundaryWindows:
         return self
 
 
-__all__ = ["COMMIT", "EGRESS", "FIELDS", "FINISH", "FORMAT", "INDEX", "INGRESS", "MIN_CAP", "PORTS", "SALTS", "SCHEMA",
-           "BoundaryWindows", "Committed", "Layout", "Span", "cap", "check_template", "classes", "commit", "egress_row",
-           "ingress_row", "inlined", "layout_of", "port_rows", "record", "reopen", "run_root", "sampling_of", "write"]
+__all__ = ["COMMIT", "EGRESS", "FIELDS", "FINISH", "FORMAT", "INDEX", "INGRESS", "MIN_CAP", "PORTS", "RETURN", "SALTS",
+           "SCHEMA", "BoundaryWindows", "Committed", "Layout", "Span", "cap", "check_template", "classes", "commit",
+           "egress_row", "ingress_row", "inlined", "layout_of", "port_rows", "record", "reopen", "return_port", "run_root",
+           "sampling_of", "write"]

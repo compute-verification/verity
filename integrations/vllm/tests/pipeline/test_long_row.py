@@ -2,9 +2,9 @@
 
 * at the served statics it is 44 units of the mask's cut, 8 positions, the merge, 64 chunks, 2,048 slots and 2,048 reads, 4,213
   units of 56 templates an instance, and its body calls exactly those (built without any callee's body);
-* at small statics its body calls `units` in order, `boundary_rows.Layout` takes it inline over the window's class, and each
-  unit reads the window's operands and the units before it as round 2 links and wires them (`second_stage`'s node links and
-  node wires);
+* at small statics its body calls `units` in order, `boundary_rows.Layout` takes it inline over the window's class, with its
+  return, each read's ok, the boundary's third value, a row a read, and each unit reads the window's operands and the units
+  before it as round 2 links and wires them (`second_stage`'s node links and node wires);
 * where its index rows are `index_values` it returns `DsaTopKReadRows_v1`'s ok and its read units return that Definition's
   kv, so the check and the rows its reads commit are together `DsaTopKReadRows_v1`'s function (slow).
 """
@@ -24,7 +24,7 @@ from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.types import Array
 from verity.ml.commitments.gates.embedding import read
 from verity.ml.definitions.registry import dsa_topk_reads as R
-from verity_vllm.pipeline import long_row as LR
+from verity_vllm.pipeline import boundary_rows as BR, long_row as LR
 
 RUN = "0" * 128
 
@@ -83,6 +83,8 @@ def test_the_layout_takes_it_inline_and_round_two_links_and_wires_each_units_ope
     assert (L.per_prompt, L.per_output, L.prompt, L.outputs, L.n_rho) == (0, 1, 1 << 17, 2, 2)
     assert [descriptor_id(x) for x in L.templates] == list(dict.fromkeys(descriptor_id(n.fn) for n in nodes))
     assert L.provenance()["check"] == descriptor_id(t) and L.provenance()["inline"] is True
+    assert L.verdict_rows == (L.n_rho * t.bindings["TOPK"], 1) and L.values == (*BR.PORTS, BR.RETURN)
+    assert L.ports()[BR.RETURN]["leaves"] == L.spans * L.n_rho * t.bindings["TOPK"]
     defs = definitions(L.program)
     fn = defs[descriptor_id(L.replay)]
     cs = SS._callers_of(defs, fn)

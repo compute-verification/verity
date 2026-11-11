@@ -148,5 +148,6 @@ def served() -> SpecializedDefinition:
 
 def layout(run: str, check: SpecializedDefinition | None = None, spans: int = 1) -> BR.Layout:
     """The window's class registered over ``check`` (`served` when None) inline: per_prompt 0 and per_output 1 at (`PROMPT`,
-    `OUTPUTS`), so n_rho = 2, instance i the row at decode step i."""
-    return BR.Layout(served() if check is None else check, 0, 1, PROMPT, OUTPUTS, spans, run, inline=True)
+    `OUTPUTS`), so n_rho = 2, instance i the row at decode step i. Its replay block returns each read's ok, the check's
+    verdicts, which the class commits as its return (`boundary_rows.Layout.verdicts`)."""
+    return BR.Layout(served() if check is None else check, 0, 1, PROMPT, OUTPUTS, spans, run, inline=True, verdicts=True)
