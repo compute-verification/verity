@@ -169,17 +169,17 @@ theorem wireCell_wire {t : ℕ} {port : String} {c : ℕ} {y : ℕ × String × 
   cases hl : heldLink h (h.names.getD t "") port with
   | some l =>
     rw [hl] at hy
-    first | cases hy | simp at hy
+    cases hy
   | none =>
     cases hw : heldWire h (h.names.getD t "") port with
     | none =>
       rw [hl, hw] at hy
-      first | cases hy | simp at hy
+      cases hy
     | some w =>
       cases hr : heldRows h (h.names.getD t "") port with
       | none =>
         rw [hl, hw, hr] at hy
-        first | cases hy | simp at hy
+        cases hy
       | some r =>
         rw [hl, hw, hr] at hy
         have hy' : ((heldWriter h w.writer).bind fun tw => (cellRow r c).map fun x => (tw, w.wport, x)) = some y := hy
@@ -203,13 +203,12 @@ theorem wireCell_ne_self (hc : noSelfWire h = true) {t : ℕ} (ht : t < h.ms.len
   intro hcell
   obtain ⟨w, r, -, hw, -, -, -, -⟩ := wireCell_wire h hcell
   have hwm : w ∈ h.wires.getD #[] := Array.mem_of_find?_eq_some hw
-  have hwp : (w.template == h.names.getD t "" && w.port == port) = true := Array.find?_some hw
+  have hwp := Array.find?_some hw
   have hport : w.port = port := eq_of_beq (Bool.and_eq_true_iff.1 hwp).2
   have h1 := List.all_eq_true.1 hc t (List.mem_range.2 ht)
   have h2 := Array.all_eq_true_iff_forall_mem.1 h1 w hwm
   have h3 := List.all_eq_true.1 h2 c (List.mem_range.2 hcn)
-  rw [hport, hcell] at h3
-  simp at h3
+  simp [hport, hcell] at h3
 
 /-- **Where no unit is wired to itself, no member's unit's wire names the unit itself**, so the gate a source bit of
 the unit goes to is no gate of the unit. -/
@@ -308,7 +307,8 @@ theorem wireTarget_spec {x y : ℕ} (hxy : wireTarget h x = some y) :
   unfold wireTarget at hxy
   obtain ⟨⟨sx, st, sr⟩, hs, hxy1⟩ := Option.bind_eq_some_iff.1 hxy
   obtain ⟨⟨tw, wport, u⟩, hu, hxy2⟩ := Option.bind_eq_some_iff.1 hxy1
-  have hsx : sx = x := eq_of_beq (List.find?_some hs)
+  have hsp := List.find?_some hs
+  have hsx : sx = x := eq_of_beq hsp
   have hsm : (x, st, sr) ∈ sourceBits h.ms := by
     rw [← hsx]
     exact List.mem_of_find?_eq_some hs
@@ -328,7 +328,7 @@ theorem wireTarget_spec {x y : ℕ} (hxy : wireTarget h x = some y) :
         | simpa using hxy3
     obtain ⟨⟨zx, zt, zr⟩, hz, hzy⟩ := Option.map_eq_some_iff.1 hxy4
     have hzx : zx = y := hzy
-    have hzp : (zt == tw && zr == Spot.Bits.RowPos.mk wport u sr.bit) = true := List.find?_some hz
+    have hzp := List.find?_some hz
     have hzt : zt = tw := eq_of_beq (Bool.and_eq_true_iff.1 hzp).1
     have hzr : zr = Spot.Bits.RowPos.mk wport u sr.bit := eq_of_beq (Bool.and_eq_true_iff.1 hzp).2
     have hm : (zx, zt, zr) ∈ writtenBits h.ms := List.mem_of_find?_eq_some hz
