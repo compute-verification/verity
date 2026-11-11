@@ -9,7 +9,7 @@ under a bursty trace with it, `step_profile.py` profiles one decode step, and `f
 
 **Status: active.** `benchmarks/stacked_share/share.py` and `benchmarks/vllm_encoded/bench_arm.py` import it (`green.py`,
 the top-up), and `benchmarks/harness` builds `topup.cu`. Decided by `rg kv_filler` over `verity/`, `benchmarks/`,
-`examples/`, `tests/` and `integrations/`.
+`demos/`, `tests/` and `adapters/`.
 
 **Run:** `uv run tools/verity/check/suites.py benchmarks/kv_filler` runs what needs no GPU: the fill's reference, the
 lag's replay, the analysis, and the serving and profiling scripts' pure parts. `run.sh` builds `topup.cu` and
