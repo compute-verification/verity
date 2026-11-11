@@ -969,7 +969,7 @@ def of_record(record: dict, through: int | None = None) -> dict:
     """The `formalism` block ingest writes for a run record's prefix through step `through`: one part per step
     structure (its steps' gates by training_slowdown.gates, their tokens, the gates of their token blocks, its affected gates and
     Δ_grad), and the record's own `formalism` fields over these. In a record with traced structures
-    (`annotate.with_structures`), a traced structure's affected gates, token blocks' gates and Δ_grad are its measured
+    (`grade.with_circuit`), a traced structure's affected gates, token blocks' gates and Δ_grad are its measured
     shares of its counted gates and its measured Δ_grad, and its tokens are scaled by its token factor (`TRACED`), a
     step before the first update's too (its Δ_grad 0, measured); an untraced structure there has no affected gates and
     no Δ_grad (Fit fails at every k). Otherwise a structure's affected gates are the record's when it gives them

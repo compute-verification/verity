@@ -91,27 +91,6 @@ def test_an_update_of_the_tied_table_alone_is_read_at_its_lookup(tiny):
     assert st.depth == LOOKUP
 
 
-def test_a_record_counted_before_lookups_were_priced_gets_them_at_ingest(tiny, monkeypatch):
-    """`annotate.with_lookups` on a record counted as 3.5 did (no lookup priced) gives 3.6's annotation of the same run."""
-    from training_slowdown import flops
-    from training_slowdown.annotate import with_lookups
-
-    m, theta = tiny
-    want = annotate(train(m, theta))
-    torch.manual_seed(0)
-    m2 = type(m)()
-    monkeypatch.setattr(flops, "gather_macs", lambda *a: 0)
-    old = train(m2, theta)
-    monkeypatch.undo()
-    assert annotate(old).steps[1].depth == 2 * D * D
-    got = annotate(with_lookups(old, ["emb"]))
-    assert got.macs == want.macs
-    assert [(s.profile, s.depth, s.updated_per_token) for s in got.steps] == [
-        (s.profile, s.depth, s.updated_per_token) for s in want.steps]
-    assert annotate(with_lookups(old, ["w1.weight"])).steps[1].depth > annotate(old).steps[1].depth
-    assert annotate(with_lookups(old, ["head"])) == annotate(old)  # names no weight the record lists
-
-
 def test_new_weights_are_updated(tiny):
     m, theta = tiny
     for p in m.parameters():
