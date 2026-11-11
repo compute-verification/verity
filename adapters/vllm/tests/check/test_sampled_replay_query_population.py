@@ -677,10 +677,10 @@ def test_r4_c2_the_controller_statement_is_cross_checked_against_the_replays_own
     assert c6 is not None and c6["program_rows"] == 14 and c6["header_rows"] == 0 and c6["rows_agree"] is None
 
 def test_revb_n_2_16_1_the_sampler_families_mechanism_names_what_consumes_them():
-    """`sampler_seed` / `sampler_splits` are uncovered BY NAME with a mechanism that says what CONSUMES the
-    committed values (the sampler VU's exact replay in form (A); stoch_recompute's attribution), as `input_token_ids`' entry does --
-    not only the linkage check on the values themselves."""
-    for fam in ("sampler_seed", "sampler_splits"):
-        m = COV.QUERY_FAMILY_MECHANISM[fam]
-        assert "prescribed_input_linkage" in m and "GumbelTopPTokenSelect_v1" in m and "stoch_recompute" in m, m
+    """`sampler_seed` is uncovered BY NAME with a mechanism that says what CONSUMES the committed value (the sampler VU's exact
+    replay in form (A); stoch_recompute's attribution), as `input_token_ids`' entry does -- not only the linkage check on the values
+    themselves."""
+    m = COV.QUERY_FAMILY_MECHANISM["sampler_seed"]
+    assert "prescribed_input_linkage" in m and "GumbelTopPTokenSelect_v1" in m and "stoch_recompute" in m, m
+    assert "sampler_splits" not in COV.QUERY_FAMILY_MECHANISM
     assert "boundary linkage" in COV.QUERY_FAMILY_MECHANISM["input_token_ids"]
