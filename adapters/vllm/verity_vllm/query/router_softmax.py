@@ -18,6 +18,7 @@ from collections.abc import Callable, Mapping
 from functools import cache
 from typing import Any
 
+from verity_vllm.query.manifest import format as fmt
 from verity_vllm.query.manifest.format import identity_rows
 
 FAMILY = "router_softmax"
@@ -93,8 +94,6 @@ def kernel_rows(pop: Any, add: Callable[..., None], impl: Callable[[str], str], 
     """Add one `router_softmax` identity per (step, MoE layer): its range is the layer's router Calls at that step, `words` f32 each.
     `add` is `request_manifest`'s row writer (`aliases` is unused: MoE identities are named by layer).  Returns the words and rows by
     Definition family."""
-    from verity_vllm.query.manifest import format as fmt
-
     groups: dict[tuple[int, str], dict[str, Any]] = {}
     for c in pop.P.calls:
         if c.family not in ROUTERS:

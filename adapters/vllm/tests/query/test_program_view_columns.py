@@ -422,3 +422,11 @@ def test_a_repeated_parameter_operand_resolves_once_to_the_columns_and_reads_of_
         want: list[ValueRef] = []
         _resolve_reads_ref([C.runs_from_file_items(o) for o in ops], port_of, ins, ["call"] * len(rows), want)
         assert tuple(P.call(i).reads) == tuple(want), i
+
+
+def test_a_spec_the_registry_does_not_hold_has_no_ports_and_says_so():
+    with pytest.raises(KeyError, match="NoSuch_v1 is not a registered Definition"):
+        pv.definition_ports("NoSuch_v1{N=1}")
+    assert "NoSuch_v1{N=1}" not in pv._PORTS_CACHE
+    with pytest.raises(TypeError, match=r"Gemm_v1: statics \['N'\] are not in the spec"):
+        pv.definition_ports("Gemm_v1{K=4}")
