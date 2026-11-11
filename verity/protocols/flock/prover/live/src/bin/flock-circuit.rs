@@ -11,6 +11,8 @@
 //!   flock-circuit statement --instances PUB --circuit FILE    (the statement the verifier builds, its digest; nothing proved)
 //!   flock-circuit stacked  --table R.bin (--root-out ROOT.json | --points P.json --statement-digest HEX --verifier ADDR [--dump F])   (`stacked`)
 //!   flock-circuit unit-levels --circuit FILE [--net N] [--widths]   (the unit's level schedule, `unit_levels`; nothing proved)
+//!   flock-circuit walk-twin --instances FILE --circuit FILE [--slots N]   (the device's level walk on the host against the host's
+//!       builder on the statement's own unit slots, `walk_twin`; nothing proved)
 //!
 //! The verifier loads only its own public file (`verity_flock.circuit.stage(..., public_only=True)`: roots and each row's
 //! `b || c`, the output rows' too; no row, no salt, no output word) and the pinned circuit, from which it derives Δ, the regions and their values; it checks the
@@ -4935,6 +4937,96 @@ fn unit_levels(c: &Composite) {
     }
 }
 
+/// `walk-twin`: the device's level walk on the host (`circuit::unit_walk_words`: the device's arrays, `ir_block::WalkRows`,
+/// by the device's steps, from arrays of 0xA5 bytes) against the host's builder (`unit_ab_into`) on the statement's own unit
+/// slots, from the prover's instance file (`--slots N`: the first N; default every one). One `TWIN` line: the `u32` words
+/// compared and how many of a, of b and of z (against a & b) differ, with the first differing word; `same` needs every
+/// assertion to hold, no word to differ and every slot's z to say something. `control_differs`: the same compare with one
+/// level's rows left out of the walk's arrays must find a difference, so the compare reads what the levels wrote. Exits 1 unless `same` holds and the control differs.
+fn walk_twin(st: &Arc<Stmt>, inst: &Arc<Instances>) {
+    use flock_live::circuit::{unit_ab_into, unit_walk_words};
+    use flock_live::ir_block::{WalkRows, schedule};
+    use rayon::prelude::*;
+    let c = &st.c;
+    let (ni, net) = (c.unit_net, c.unit());
+    let rows = inst.instance_rows(c).unwrap_or_else(|| refuse("walk-twin: the prover's instance file, with its rows".into()));
+    let per = c.unit_range().count;
+    let all = st.blocks() * per;
+    let slots = arg("--slots", &all.to_string()).parse::<usize>().expect("--slots").min(all);
+    let ins: Vec<Vec<F128>> = (0..slots).into_par_iter().map(|x| st.unit_inputs(Some(&rows), x / per, x % per)).collect();
+    let sched = schedule(net);
+    let t = Instant::now();
+    let Some(wr) = WalkRows::of(net, &sched) else {
+        refuse(format!("walk-twin: {} has no level walk (no one-pass form, or a cut unit's two phases)", c.nets[ni].0));
+    };
+    let rows_s = t.elapsed().as_secs_f64();
+    let uw = 1usize << (net.unit_log - 7);
+    let mut want = vec![0xa5a5_a5a5_a5a5_a5a5u64; 4 * uw * slots];
+    let t = Instant::now();
+    let host = unit_ab_into(net, ni, uw, &ins, &mut want);
+    let host_s = t.elapsed().as_secs_f64();
+    let half = |w: &[u64], j: usize| (w[j / 2] >> (32 * (j % 2))) as u32;
+    // per slot: the words of a, of b and of z (against a & b) that differ, the first of them, and whether z says anything
+    let compare = |z: &[u32], a: &[u32], b: &[u32], slots: usize| -> (Vec<[usize; 3]>, Option<(usize, &'static str, usize)>, usize) {
+        let per_slot: Vec<([usize; 3], Option<(&'static str, usize)>, bool)> = (0..slots).into_par_iter().map(|x| {
+            let (wa, wb) = (&want[4 * uw * x..4 * uw * x + 2 * uw], &want[4 * uw * x + 2 * uw..4 * uw * (x + 1)]);
+            let (mut n, mut first, mut says) = ([0usize; 3], None, false);
+            for j in 0..4 * uw {
+                let at = 4 * uw * x + j;
+                for (k, (differs, what)) in [(a[at] != half(wa, j), "a"), (b[at] != half(wb, j), "b"), (z[at] != a[at] & b[at], "z")].into_iter().enumerate() {
+                    if differs {
+                        n[k] += 1;
+                        first.get_or_insert((what, j));
+                    }
+                }
+                says |= z[at] != 0;
+            }
+            (n, first, says)
+        }).collect();
+        let first = per_slot.iter().enumerate().find_map(|(x, s)| s.1.map(|(what, j)| (x, what, j)));
+        (per_slot.iter().map(|s| s.0).collect(), first, per_slot.iter().filter(|s| !s.2).count())
+    };
+    let t = Instant::now();
+    let [z, a, b] = unit_walk_words(net, &sched, &wr, 4 * uw, &ins);
+    let walk_s = t.elapsed().as_secs_f64();
+    let (n, first, silent) = compare(&z, &a, &b, slots);
+    let sum = |k: usize| n.iter().map(|s| s[k]).sum::<usize>();
+    let differing = sum(0) + sum(1) + sum(2);
+    drop((z, a, b));
+    // the control: the walk with its middle level's rows never written (they leave the schedule and the rows' arrays, so
+    // they stay as the arrays started), on the first pass's slots
+    let control = (sched.levels() > 0).then(|| {
+        let l = sched.levels() / 2;
+        let (k0, k1) = (sched.level_off[l] as usize, sched.level_off[l + 1] as usize);
+        let gone = wr.st[k1] - wr.st[k0];
+        let less = flock_live::ir_block::UnitSched {
+            levels0: sched.levels0, late_rows: Vec::new(), cut_rows: Vec::new(),
+            level_off: sched.level_off.iter().enumerate().map(|(i, &o)| if i > l { o - (k1 - k0) as u32 } else { o }).collect(),
+            order: [&sched.order[..k0], &sched.order[k1..]].concat(),
+        };
+        let cut = WalkRows {
+            st: wr.st[..k0].iter().copied().chain(wr.st[k1..].iter().map(|&x| x - gone)).collect(),
+            mid: wr.mid[..k0].iter().copied().chain(wr.mid[k1..].iter().map(|&x| x - gone)).collect(),
+            cols: [&wr.cols[..wr.st[k0] as usize], &wr.cols[wr.st[k1] as usize..]].concat(),
+            own: wr.own.clone(),
+        };
+        let n0 = slots.min(256);
+        let [z, a, b] = unit_walk_words(net, &less, &cut, 4 * uw, &ins[..n0]);
+        let (n, _, _) = compare(&z, &a, &b, n0);
+        (l, k1 - k0, n.iter().map(|s| s[0] + s[1] + s[2]).sum::<usize>())
+    });
+    println!("TWIN\t{}", json!({"net": ni, "name": c.nets[ni].0, "rows": net.useful, "levels": sched.levels(), "columns": wr.cols.len(),
+        "slots": slots, "of": all, "slots_with_inputs": ins.iter().filter(|w| w.iter().any(|x| *x != F128::ZERO)).count(),
+        "words": 3 * 4 * uw * slots, "host_ok": host, "a_differing": sum(0), "b_differing": sum(1), "z_differing": sum(2),
+        "first_differing": first.map(|(x, what, j)| json!({"slot": x, "of": what, "word": j, "rows": [32 * j, 32 * j + 31]})),
+        "slots_with_no_z": silent, "same": host && differing == 0 && silent == 0,
+        "control": control.map(|(l, rows, n)| json!({"level_left_out": l, "its_rows": rows, "words_differing": n, "differs": n > 0})),
+        "rows_s": rows_s, "host_s": host_s, "walk_s": walk_s}));
+    if !(host && differing == 0 && silent == 0 && control.is_none_or(|x| x.2 > 0)) {
+        std::process::exit(1);
+    }
+}
+
 /// `--tmpl-unit F`: a templated statement's unit rows at their positions (`flock-tmpl-unit`, `tests/lean/TmplUnit.lean`).
 fn load_composite(path: &str) -> Composite {
     let unit = Some(arg("--tmpl-unit", "")).filter(|p| !p.is_empty()).map(|p| std::fs::read_to_string(p).expect("--tmpl-unit"));
@@ -7677,6 +7769,7 @@ fn main() {
             "vus_per_block": st.c.g, "blocks": st.blocks_real, "k_log": st.c.k_log, "nbl": st.nbl, "dense_m": st.m,
             "regions": st.regions.len(), "circuit_sha512": hex(&st.c.sha512), "statement_digest": hex(&st.digest),
             "public_sha512": hex(&inst.public_sha512), "identity": st.identity})),
+        "walk-twin" => walk_twin(&st, &inst),
         "zkstat" => zkstat(&st, &inst),
         "zkaudit" => zkaudit(&st, &inst),
         "zkrewind" => zkrewind(&st, &inst),
@@ -7710,6 +7803,6 @@ fn main() {
                 println!("LIVE\t{v}");
             });
         }
-        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ... | stacked --table R.bin ... | unit-walk --circuit FILE [--slots N] [--wide 1,2,4,8] [--ahead 0,64] [--keep 0,1] [--huge-pages] | unit-levels --circuit FILE [--net N] [--widths]"),
+        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ... | stacked --table R.bin ... | unit-walk --circuit FILE [--slots N] [--wide 1,2,4,8] [--ahead 0,64] [--keep 0,1] [--huge-pages] | unit-levels --circuit FILE [--net N] [--widths] | walk-twin --instances FILE --circuit FILE [--slots N]"),
     }
 }
