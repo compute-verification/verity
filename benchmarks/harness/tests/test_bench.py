@@ -317,7 +317,7 @@ def test_dispatch_forwards_the_point_venv_and_the_launcher_runs_the_point_in_it(
     ran = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
     assert ran.returncode == 0, ran.stderr
     pythonpath, argv = ran.stdout.splitlines()
-    assert pythonpath.split(":")[:2] == [f"{root}/benchmarks/harness", f"{root}/integrations/vllm"]
+    assert pythonpath.split(":")[:2] == [f"{root}/benchmarks/harness", f"{root}/adapters/vllm"]
     assert argv == "-m verity_bench _vllm-point --point p"
 
 
@@ -1009,8 +1009,8 @@ def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_s
     stock FP8 as its control, and the device, kernel and setup-built cubin, with the harness's challenger as its coins,
     which the adapter's refusals accept."""
 
-    from verity.core.protocols.pouw import verifier
-    from verity.core.protocols.pouw.coins import CoinCommitment
+    from verity.protocols.pouw.verifier import verifier
+    from verity.protocols.pouw.verifier.coins import CoinCommitment
     from verity_vllm.protocols import pouw
     from verity_vllm.protocols.interface import Context
 
@@ -1096,7 +1096,7 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     A live run's coins name its challenge phase, its salt epoch and that epoch's root over the weights' root."""
 
     import torch
-    from verity.core.protocols.pouw.salt import epoch_open_root
+    from verity.protocols.pouw.verifier.salt import epoch_open_root
 
     from verity_bench.vllm import runner
 
