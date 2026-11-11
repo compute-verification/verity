@@ -163,7 +163,7 @@ def test_a_chain_row_holds_its_first_block_its_later_blocks_and_its_end():
                                                 ("in4", V2, 4 * 32, ["l_prev"]), ("in5", V2, 32 * DV, ["o_prev"])],
                                                [(V2, (0,)), (V2, (1,)), (V2, (2,))])
     assert CR.unit_rows(SRW.template(E)) == ([("in0", V2, 4 * 32, ["l"]), ("in1", V2, 32 * DV, ["o"])], [(V2, (0,))])
-    with pytest.raises(ValueError, match="visits a first block of 8, not NVIS=16"):
+    with pytest.raises(ValueError, match=re.escape("a row of T=40 keys in NS=1 splits holds no unit ('block', 16, True) of it")):
         CH.positions(SRW.template(block(16)), spec_statics(row()))
 
 
