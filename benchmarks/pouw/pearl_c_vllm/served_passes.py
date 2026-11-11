@@ -790,7 +790,9 @@ def case(args: argparse.Namespace) -> int:
     from verity.core.protocols.spot.one_stage import registration as REG
 
     try:
-        w = json.loads(Path(doc.get("tie_record") or "").read_text())
+        if not doc.get("tie_record"):
+            raise FileNotFoundError("verify --tie named no window record")
+        w = json.loads(Path(doc["tie_record"]).read_text())
     except (OSError, ValueError):
         return refuse("the Python verdict held the passes to no window record W (verify --tie) this can read, and the "
                       "case's commitment names W")
