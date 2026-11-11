@@ -9,15 +9,17 @@ commits it (`pipeline.serving_rows.read_all` on the fixture's served values, eac
 sample (`commit.wiring.check`), each template's circuit (`compose_circuit.py --template`; every one flat, `chunk_rows.reads`:
 a key block's EX2 is its body's gates, and the column end's and the combine's MUFU reads are inline), M0's `--zk` session of each
 sampled proof block (behind the ZK server under ``--firewall``), the Lean verifier, the stream's outcome and the negatives
-(`a5.wiring_negatives` among them). It stands in for step 16's 78 rows (at T = 272, per head, four 64-key first blocks, one
-16-key one, forty column ends and eight combines), whose units it does not prove. The run exits 0 only when the outcome
-is accepted and every negative refused. ``--out`` holds the window serving wrote (``window/``, its private files too) and a5's
-records (``rank0/``, ``challenger/``, ``summary.json``).
+(`a5.wiring_negatives` among them). It stands in for a partition that names whole key blocks (step 16's 78 rows at T = 272:
+per head, four 64-key first blocks, one 16-key one, forty column ends and eight combines), whose units it does not prove. The
+run exits 0 only when the outcome is accepted and every negative refused. ``--out`` holds the window serving wrote
+(``window/``, its private files too) and a5's records (``rank0/``, ``challenger/``, ``summary.json``).
 
 ``--units`` audits the row at DV = 64 (the fixture's ``HALF``) with each key block served as its scores unit and its values
 units on 32 columns, the fixture's ``UNITS_BITS``: per head and key block the Boolean ``SparseMlaHeadScores_v2`` and two
 ``SparseMlaHeadValues_v2``, each values unit's probabilities (and past a split's first block its rescale and the O before)
-wired to the unit that wrote them, each split's end on a column block and the two-split combine of one.
+wired to the unit that wrote them, each split's end on a column block and the two-split combine of one. It stands in for
+step 16's rows as the served partition (``glm53_sparse_mla_tp8_step16.json``) names them: at T = 272, per head, five scores
+units, forty values units and forty split ends on 64 columns, and eight combines.
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
       python benchmarks/one_stage/a5_sparse_mla.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\

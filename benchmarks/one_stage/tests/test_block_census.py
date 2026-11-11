@@ -88,6 +88,16 @@ def test_a_chain_row_takes_its_scores_and_values_units_and_whole_key_blocks_when
     assert B.cut(CHAIN_ROW, family(CHAIN_ROW, units, est_log=31)) == ("split", ways[None], None)
 
 
+def test_the_served_sparse_attention_partition_names_a_decode_rows_units_at_the_census_s_width():
+    """The served partition's templates are `CHAIN_ROW`'s units at `CHAIN_COLS` (a scores or values unit its Boolean form), so
+    the planner's card and the served partition hold one cut of the row."""
+    from verity_vllm.pipeline import serving_rows as SRW
+
+    served = json.loads((HERE.parent / "glm53_sparse_mla_tp8_step16.json").read_text())
+    assert list(served["chunk_cap"]) == served["templates"]
+    assert sorted(SRW.template(t).word for t in served["templates"]) == sorted(u for u, _n in dict(B.chain_ways(CHAIN_ROW))[B.CHAIN_COLS])
+
+
 def test_a_kchunks_rows_slot_is_its_coordinate_or_its_chunks_of_one_width():
     c = unit("MoeExpertFp8Gemm_v1{K=512,N=1}", 4)
     ch = [unit(f"MoeExpertFp8CoordinateChunk_v1{{K={k},FIRST={f},LAST={la}}}", n)
