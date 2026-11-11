@@ -70,7 +70,7 @@ session over the head's digest.
 
 **The port** (`port`) is the verifier's own `--registered` port of the proof blocks that read a table, one a row: proof
 block `reads_from + j` reads row j, so the head the verifier checked fixes every read. The lengths row's proof block
-(`verity.ml.protocols.certifier.lengths_row`) reads the fails table's row j through one and commits the row it
+(`verity.protocols.certifier.prover.lengths_row`) reads the fails table's row j through one and commits the row it
 returns as a read of the lengths table's row j through the other.
 """
 
@@ -82,19 +82,19 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import Any
 
-from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX
-from verity.ml.commitments import hm96
-from verity.ml.commitments.identity import identity_digest_sha512, tagged_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
-from verity.ml.commitments.rowleaf import row_leaf
-from verity.core.protocols.certifier.certificate import (DIGEST_BYTES, Certificate, Direction, Issuer, PublicKey, _text,
+from verity.circuits.partition_v2 import UNIT_CLASS_MAX
+from verity.commitments import hm96
+from verity.commitments.identity import identity_digest_sha512, tagged_sha512
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain, tree_levels
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
+from verity.commitments.rowleaf import row_leaf
+from verity.protocols.certifier.verifier.certificate import (DIGEST_BYTES, Certificate, Direction, Issuer, PublicKey, _text,
                                                          _u)
-from verity.core.protocols.certifier.warden import Released, WardenParams
-from verity.core.protocols.certifier.warden_rows import OWNER, SALT_BYTES, WORD_BITS, bc
-from verity.core.protocols.spot.one_stage import produced
-from verity.core.protocols.spot.one_stage import registered as G
+from verity.protocols.certifier.verifier.warden import Released, WardenParams
+from verity.protocols.certifier.verifier.warden_rows import OWNER, SALT_BYTES, WORD_BITS, bc
+from verity.protocols.spot.verifier.one_stage import produced
+from verity.protocols.spot.verifier.one_stage import registered as G
 
 DOMAIN_TAG = "verity-network-certifier/connection-rows-domain/v1"
 HEAD_TAG = "verity-network-certifier/connection-rows/v1"
