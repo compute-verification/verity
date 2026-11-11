@@ -298,7 +298,8 @@
         "security/Proofs/Accounting/TS.lean",
         "security/Proofs/Accounting/TS/",
         "archive/examples/h200/",
-        "demos/dither_full_util/"
+        "archive/examples/dither_full_util/",
+        "archive/benchmarks/pouw/"
       ],
       "branch_suffixes": [
         "e3fa",
@@ -452,6 +453,7 @@
         "security/Definitions/NetworkCertifier/",
         "security/Proofs/NetworkCertifier/",
         "benchmarks/network_traces/",
+        "benchmarks/certifier_term/",
         "benchmarks/network_e2e/",
         "benchmarks/datacenter/",
         "benchmarks/network_sim/",
