@@ -35126,3 +35126,54 @@ Then the entry: the arithmetic, what is needed and what is not, the smallest cha
   - Before it, `r20261111-002538-83d9` was launched with `--mem-gb 32` and sat 11th in line on cpu-1. I cancelled it before it took a slot and relaunched with `--mem-gb 24`.
 - [guess] **ETA about 01:30Z.** That is about 15 minutes of run (the uv sync, the stand-in TP Commit, two tests) once a cpu-2 slot frees. The pool gives up after 240 minutes of waiting, at 04:28Z. I'll report when it ends.
 - [run] **`9f3b`** (the #8539 records) is still running on cpu-3, peak 55.7 GiB so far; ETA about 01:15Z.
+
+## PRF-460 TWOWITNESS, Wed 11 Nov 00:31Z: `bb99` stopped in `InsSetup`'s `outPairs` on a parse error, a new kind; fixed in `9dc93b792e` and relaunched as `r20261111-002925-8ff5` on `vy-nebius-cpu-7`, ETA about 01:30Z
+
+- [run] `bb99` built `Setup` and `SetupAt`, then stopped in `InsSetup` (module 11,003 of 11,004) after 3,195 s.
+- [run] The first declaration that failed is `outPairs` (`InsSetup.lean:92`). The error is at 99:34: "expected ';' or line break".
+  - The line is `let (slot, sub) := where_[p]![k]!`, copied from `HmOut.delta`, and column 34 is its `!`.
+  - [guess] Flock imports no Mathlib, so the line parses there. Here Mathlib's `![…]` vector notation makes `![` one token.
+  - [run] A probe that declares a `![` term syntax confirms that the token changes how the line parses. Bracketing it as
+    `(where_[p]!)[k]!` parses, and the probe's `rfl` passes.
+- [run] Later errors, which follow from the first two [read]:
+  - Because `outPairs` didn't parse, `oA_eq` (115:8) and `oB_eq` (118:8) fail in the kernel ("declaration type mismatch",
+    `oA c p = oA c p`), and `shapeOk_stX` reports `sorry`.
+  - Separately, 138:70 "Unknown identifier `Ins`": `InsSetup` never opened `FlockDeploy (Ins)`. So `fwd_def setX setup_X` was
+    not added, and `setupOf_x` fails with "Unknown identifier `setup_X`" and unsolved goals.
+- [read] This is a new kind of stop: a parse error and a name that isn't in scope. It is neither the walk-rule kind
+  (`setup_stX`'s emptiness hypothesis) nor the code-generation kind (the `noncomputable` marks).
+- [run] The fix, `9dc93b792e` on `cursor/proofs-twowitness-0d28`: `(where_[p]!)[k]!` and `open FlockDeploy (Ins)`.
+  - `outPairs` still copies `HmOut.delta`'s loop name for name (`HmRow.byteAt`, `HmRow.rowSlots`, `portCols`) [read], so
+    `oA_eq` can hold by kernel defeq.
+  - `FlockDeploy.setupOf_of` and `insOf_x` are in scope through `SetupAt`'s public imports [read].
+  - The pre-launch scan now also looks for `]![`. It found nothing else [run].
+- [run] The relaunch is `r20261111-002925-8ff5`. `--on auto` placed it on `vy-nebius-cpu-7`'s research pool, because
+  `vy-nebius-2`'s ssh timed out, cpu-1 didn't answer and cpu-5's slots were full.
+  - My older placement list excludes cpu-7. I kept the run there because you asked for `--on auto`. Say if it should move.
+  - [run] It took slot `build/5` there and copied the dependencies, cached at `main`'s `2877eca3de0e`, in 64 s. At 00:31Z it
+    was unpacking module 9,381 of 11,004.
+- [guess] ETA about 01:30Z: Concrete's chain and `Setup` rebuild, as on cpu-3, where the whole chain took 53 min. If
+  `setup_X` walks as long as `setup_stX`, allow until 01:45Z.
+- [guess] (A) still holds for Thu 12 Nov 18:00Z. Two modules remain, and each further stop costs one round of about an hour
+  on a tree that has changed.
+
+**What is left after this stop**, for whoever continues:
+- [read] Everything is on `cursor/proofs-twowitness-0d28`, the chain `Security/Proofs/Flock/SpotFlock/InstanceStmt/`.
+  - Through `SetupAt`, everything builds.
+  - `InsSetup` has `shapeOk_stX`, the walk `setup_X` through `Ins.setup` (the registered reads, `RecSetup.checks`, the shape,
+    `RecCoins.check`, `RecVStar.checkPubRows`, the draw's law) and `setupOf_x`.
+  - `Scope` has `scopeCheck_x`, `zkOk_x`, `templateOk_x`, `stmtOf_x` and `sessionOk_x`. With `InsSetup`, that is (A).
+- [read] How to try it: run `research run --on auto --project verity --source . --as proofs --cwd clone --timeout 10800`
+  with `python3 tools/verity/lean/lean_changed.py --try Security/Proofs/Flock/SpotFlock/InstanceStmt/Scope.lean`.
+  - Before each launch, scan for a computable definition that names a `fwd_def` value, and for `]![`.
+- [read] After (A) builds:
+  - drop `checkPartition_X`'s `trace`;
+  - run a records run and `--siblings`;
+  - add the lock entries.
+- [read] (D), due Fri 13 Nov 12:00Z: the witness `wF` with `Claims.Flock.check … (x r) wF = true`, through
+  `relS_relation`, the same route as Concrete's `Live.lean`, `Trace.lean` and `Regions.lean`.
+  - Its net lemmas apply as they stand, but our unit needs its own `holds_unit*`.
+  - `HonestSession`'s fields: `small` from `Sizes`, `rounds` by `rfl`, `sess` from `sessionOk_x`, `setup` from `setupOf_x`.
+- [read] The witness PR must also correct or remove the lock's stale unwitnessed why of `SpotKSTwo` and `SpotExfilTwo`.
+  `Ref.scope` in TWOINSTANCE's `Ref` is still open.
+- [read] My checkpoints are in `lanes/proofs/20261109T2105Z-checkpoint-twowitness.md` in the notes.
