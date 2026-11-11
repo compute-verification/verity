@@ -1690,16 +1690,19 @@
   },
   "Claims.SamplingGeneric.CompiledTwo.BconfXLe": {
    "owner": "@proofs",
+   "digest": "3a1ec65ea9b187aa78ceb674a1673da7f723d1f89771a0b1df1f32fb5e5c3d1d",
    "issue": "PRF-524",
    "due": "2026-11-30"
   },
   "Claims.SamplingGeneric.CompiledTwo.OffIregLe": {
    "owner": "@proofs",
+   "digest": "06830b37c9650a435b076d574cabf663a298f4434d05a4f6314ab7f86a4fe76d",
    "issue": "PRF-524",
    "due": "2026-11-30"
   },
   "Claims.SamplingGeneric.CompiledTwo.OffRegXLe": {
    "owner": "@proofs",
+   "digest": "e3a2368cc87b7abffa68aa9dfd204d92324a010c40eeb26f429addd44e90f12b",
    "issue": "PRF-524",
    "due": "2026-11-30"
   },
@@ -12526,6 +12529,24 @@
    },
    "type_hash": "c988a93104be12490891b9c6f062bef07f7fc39a8bc0cca3901f23255751af48"
   },
+  "Claims.SamplingGeneric.compilerFirstHitTwoXAt_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerFirstHitTwoXAt_nontrivial :",
+    "  Not",
+    "    (Claims.SamplingGeneric.CompiledTwo.FirstHitTwoXAt FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksLTwo Bool)",
+    "      List.nil Claims.Witness.Sampling.toyStmt Claims.Witness.Sampling.toyPart Claims.Witness.SamplingGeneric.toyTwo",
+    "      Claims.Witness.silentP 0 0)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "303642d75bae702c458eafa845e7c67495fbcdd449ef31a5f06a8165a800ae3b"
+  },
   "Claims.SamplingGeneric.compilerHeadlineTwo": {
    "owner": "@proofs",
    "signature": ["Claims.SamplingGeneric.compilerHeadlineTwo : Claims.SamplingGeneric.CompilerHeadlineTwo"],
@@ -12728,9 +12749,6 @@
     "reads": []
    },
    "type_hash": "1c5778032c7e0e4cc9bb78d1c13a79028113581d86246dfcf2884d271e19adf7"
-  },
-  "Claims.SamplingGeneric.compilerFirstHitTwoXAt_nontrivial": {
-   "owner": "@proofs"
   },
   "Claims.SamplingGeneric.compilerKSReg": {
    "owner": "@proofs",
@@ -16381,7 +16399,13 @@
    "premises": {
     "assumptions": [],
     "domain": ["SpotFlock.Built"],
-    "open": ["SpotFlock.Addresses"],
+    "open": [
+     "Claims.SamplingGeneric.CompiledTwo.BconfXLe",
+     "Claims.SamplingGeneric.CompiledTwo.OffIregLe",
+     "Claims.SamplingGeneric.CompiledTwo.OffRegXLe",
+     "Claims.SamplingGeneric.CompiledTwo.Scope",
+     "SpotFlock.Addresses"
+    ],
     "reads": []
    },
    "type_hash": "542bec717239108d25c9aad4002dae67c607c347ce3ddae3b51c50ae7498324f"
@@ -28937,8 +28961,8 @@
     "∀ (z : Z) (i : Fin m) (ω ω' : Fin m → Ω), (∀ (j : Fin m), instLTFin.lt j i → Eq (ω j) (ω' j)) → Eq (W z ω i) (W z ω' i)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (z : Z) (ω : Fin m → Ω) (i : Fin m), Finset.instPartialOrder.le (W z ω i) (Finset.range (n i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m) (ω : Fin m → Ω), Real.instLE.le (Claims.Pr (acc z i ω)) (instHAdd.hAdd (instHPow.hPow (instHSub.hSub 1 q) (W z ω i).card) (e i))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (Real.log (instHDiv.hDiv 1 δ)) (instHMul.hMul q Fmax.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m), Real.instLE.le (Claims.Pr fun ω => And (acc z i ω (ω i)) (Not (NetTiming.LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i (NetTiming.runsBefore (run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)) (W z ω i) ((run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)))) (e' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m), Real.instLE.le (Claims.Pr fun ω => And (acc z i ω (ω i)) (Not (NetTiming.LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i (NetTiming.runsBefore (run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)) (W z ω i) ((run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)))) (e' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Real.instLE.le (Real.log (instHDiv.hDiv 1 δ)) (instHMul.hMul q Fmax.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.SampledLeakAccepted": {
     "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -51498,9 +51522,9 @@
    }
   },
   "Proofs.Flock.SamplingGeneric.SpotFirstHit": {
-   "digest": "843cdab64f48c6de10cdcdfa2f156d43b9d69a717fce8886ec0227e2711b921e",
+   "digest": "5f2e39404317f8efeb5996777d4bcc05a8844a74f7b71937a298b71cd1f867a6",
    "definitions": {
-    "Flock.Guarantees.SpotFirstHitTwo": "01b88cbb02a807af0640f279d5999e54e9a2ed7e7b42e50cd08004d4ae09a614"
+    "Flock.Guarantees.SpotFirstHitTwo": "4dd8f6969be7b3530a4aa5787bf9c14dc800787d080c0e906781f46f56a0cc96"
    }
   },
   "Proofs.Flock.SamplingGeneric.TwoAt": {
@@ -51535,9 +51559,12 @@
    }
   },
   "Proofs.Flock.SamplingGeneric.TwoFirstHitKS": {
-   "digest": "3c25bbb5729168e53db18445ec7c38ad62b177833b102f271d1de29c1f8bba2c",
+   "digest": "2a9973f0176d34e7720f6c98528b54d12cc505e7ea551ebb11b5e4c7ff41e87f",
    "definitions": {
-    "Claims.SamplingGeneric.CompiledTwo.KSFirstHitTwoX": "d529b2cf735a1013ba7158bca1e9a633047db00f4a6c4287ebbd97f2c3b01c2c",
+    "Claims.SamplingGeneric.CompiledTwo.BconfXLe": "3a1ec65ea9b187aa78ceb674a1673da7f723d1f89771a0b1df1f32fb5e5c3d1d",
+    "Claims.SamplingGeneric.CompiledTwo.FirstHitTwoXAt": "646125ae8f2b49e62cb43ed163e5cf48f6b1e4275ce10f30957955ab9c42b444",
+    "Claims.SamplingGeneric.CompiledTwo.OffIregLe": "06830b37c9650a435b076d574cabf663a298f4434d05a4f6314ab7f86a4fe76d",
+    "Claims.SamplingGeneric.CompiledTwo.OffRegXLe": "e3a2368cc87b7abffa68aa9dfd204d92324a010c40eeb26f429addd44e90f12b",
     "Claims.SamplingGeneric.CompiledTwo.εfirstTwoX": "496e9ebacea85bda892ca90f12e0214ecba59403bccc1e54073c82a3adabd5f7"
    }
   },
