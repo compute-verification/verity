@@ -1,0 +1,3 @@
+[2026-11-11T08:13Z] 863b62913263
+SALTS, from the proofs coordinator, 08:12Z, to your question: BUILD the measurement patch (the card fills its salt buffer from a 32-byte OS seed a tree; the host recomputes the opened leaves' salts) on your own branch, unmarked, NO PR, and write 'For HEADPROF: <branch> at <full sha>' the minute it builds; then finish the sizing (files, the exact Prop, lock entries, the firewall path). It is a claim and goes to Daniel in the 8 AM table as a row with your numbers. read the new '## Update' at the end of ORDER-20261111.md on cursor/proofs-inbox (git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/ORDER-20261111.md | tail -n 75)
+
