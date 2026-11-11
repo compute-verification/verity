@@ -196,9 +196,10 @@ src = "tools/research/src/research/pods/nebius/mptcp-off.conf"
 nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 owner = "infra"
 
-# Unattended upgrades, on every node: Ubuntu's security pocket installs daily, the kernel, the NVIDIA driver and the boot
-# chain wait for a planned window, and nothing restarts but a daemon whose own package was upgraded (each file says why).
-# Install both together; the next daily pass reads them, and `sudo unattended-upgrade --dry-run -d` prints what it would do.
+# Unattended upgrades, on every node but the control pod (a RunPod container with no systemd timers, where apt's daily
+# passes never run): Ubuntu's security pocket installs daily, the kernel, the NVIDIA driver and the boot chain wait for a
+# planned window, and nothing restarts but a daemon whose own package was upgraded (each file says why). Install both
+# together; the next daily pass reads them, and `sudo unattended-upgrade --dry-run -d` prints what it would do.
 [[file]]
 path = "/etc/apt/apt.conf.d/52vy-trust"
 src = "tools/research/src/research/pods/nebius/apt-security-updates.conf"
