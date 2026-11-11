@@ -5,7 +5,8 @@
 # on the serving node's loopback and is reached through one ssh local forward. A `research run` job from the shipped
 # tree's root (--cwd source); certside/launch.sh launches it:
 #   PEER=USER@HOST PORT=P [SSH_PORT=22] [KEY=FILE] [MODEL=NAME] [ID_BOUND=N] [schedule and traffic, below]
-#     [REACH_ONLY=1 | FAKE=1 [FIRST_MS=2000] [TOKEN_MS=220]] bash certside/job.sh
+#     [TRIES=2 [LANES2=64] [RATE2=1.67] [REQUESTS2=2000]]
+#     [REACH_ONLY=1 | FAKE=1 [FIRST_MS=2000] [TOKEN_MS=220] [FAKE_IDS=N]] bash certside/job.sh
 # 1. Reach, in under a minute, before anything is sent: KEY readable, the forward up (ssh -N, one -L from this node's
 #    127.0.0.1:LOCAL to the serving node's 127.0.0.1:PORT, and nothing else asked of the serving node: no command, no
 #    second forward), then the endpoint through it: $OUT/reach.json.
@@ -28,10 +29,19 @@
 #    file stay in the job's temporary directory, which is deleted; everything the job prints is also $OUT/job.log; and
 #    the job fails (exit 9), naming the file, if any file of $OUT holds an IPv4 address other than loopback's, an `@`
 #    before a name, or the serving node's host as PEER gave it.
+# TRIES=2 is two tries behind the one forward, for a server that starts once: 2 and 3 as try 1, under $OUT/try1/ in
+# place of $OUT, and then, if and only if try 1 is ACCEPTED (rehearse and check both exit 0), at once 2 and 3 again
+# as try 2, under $OUT/try2/, with LANES2, RATE2 and REQUESTS2 in place of LANES, RATE and REQUESTS and nothing else
+# changed. Each try is a rehearsal of its own: its own certifier process, run id, keys and watermark stream. Each
+# has its summary.json, and $OUT/summary.json names both verdicts, the seconds between the tries (between_s, from try
+# 1's rehearsal returning to try 2's start; between_buckets_s, from its last bucket to try 2's first), and what the
+# job kept. The exit: 0 both ACCEPTED; 1 try 1 is not, so try 2 was not started (the job says why, from try 1's record);
+# 6 try 1 is and try 2 is not. TRIES=1, the default, is one try, its files in $OUT itself, exit 0 or 1.
 # FAKE=1 is the dry run: no ssh; the job starts a fake endpoint on this node's loopback, in the id form at the
 # schedule's P, and then does 1 to 4 against it as against a forward. The fake is certside/paced.py: a request's first
-# id leaves FIRST_MS after the request and each next one TOKEN_MS later, as a model streams. TOKEN_MS=0 is
-# warden_serve's own fake instead, whose id form has no time a token: the whole answer at once, FIRST_MS after.
+# id leaves FIRST_MS after the request and each next one TOKEN_MS later, as a model streams, its ids below FAKE_IDS
+# when set (the fake's own are below 128,256). TOKEN_MS=0 is warden_serve's own fake instead, whose id form has no
+# time a token: the whole answer at once, FIRST_MS after.
 #
 # THE SCHEDULE, each number a variable, for GLM-5.3 behind the id front under a 220 ms tick:
 # - CELL_BYTES 4096, SLOTS 1 (r): in the id form a response is one id event a DATA cell, so r = 1 at BUCKET_MS 250
@@ -77,12 +87,17 @@ LANES=${LANES:-8}; QUEUE=${QUEUE:-64}; WINDOW=${WINDOW:-600}; INGRESS_CELLS=${IN
 INGRESS_BUCKETS=${INGRESS_BUCKETS:-16}; EGRESS_CELLS=${EGRESS_CELLS:-4096}; CAP=${CAP:-256}
 RATE=${RATE:-0.2}; REQUESTS=${REQUESTS:-240}; SEED=${SEED:-0}; PROMPT_MAX=${PROMPT_MAX:-1024}
 MAX_TOKENS=${MAX_TOKENS:-256}; TAIL=${TAIL:-120}
-SCHEDULE=(--cell-bytes "$CELL_BYTES" --slots "$SLOTS" --bucket-ms "$BUCKET_MS" --delay "$DELAY" --lanes "$LANES"
-          --queue "$QUEUE" --window "$WINDOW" --ingress-cells "$INGRESS_CELLS" --ingress-buckets "$INGRESS_BUCKETS"
-          --egress-cells "$EGRESS_CELLS")
-[ "$CAP" = none ] || SCHEDULE+=(--max-tokens-cap "$CAP")
-TRAFFIC=(--ids --requests "$REQUESTS" --rate "$RATE" --seed "$SEED" --prompt-max "$PROMPT_MAX"
-         --max-tokens "$MAX_TOKENS" --tail "$TAIL")
+TRIES=${TRIES:-1}; LANES2=${LANES2:-64}; RATE2=${RATE2:-1.67}; REQUESTS2=${REQUESTS2:-2000}
+plan() {   # SCHEDULE and TRAFFIC from the variables as they stand: try 2 changes LANES, RATE and REQUESTS
+  SCHEDULE=(--cell-bytes "$CELL_BYTES" --slots "$SLOTS" --bucket-ms "$BUCKET_MS" --delay "$DELAY" --lanes "$LANES"
+            --queue "$QUEUE" --window "$WINDOW" --ingress-cells "$INGRESS_CELLS" --ingress-buckets "$INGRESS_BUCKETS"
+            --egress-cells "$EGRESS_CELLS")
+  [ "$CAP" = none ] || SCHEDULE+=(--max-tokens-cap "$CAP")
+  TRAFFIC=(--ids --requests "$REQUESTS" --rate "$RATE" --seed "$SEED" --prompt-max "$PROMPT_MAX"
+           --max-tokens "$MAX_TOKENS" --tail "$TAIL")
+}
+plan
+[ "$TRIES" = 1 ] || [ "$TRIES" = 2 ] || { echo "certside: TRIES is 1 or 2, not $TRIES"; exit 2; }
 MODEL=${MODEL:-}
 peer=${PEER:-}; unset PEER   # the serving node's address: ssh's config file below holds it, and nothing else does
 W=$(mktemp -d); export TMPDIR=$W
@@ -294,8 +309,13 @@ from verity.protocols.certifier.verifier.warden import WardenParams
 print(WardenParams(cell_bytes=int(sys.argv[1])).payload)" "$CELL_BYTES") || { log "couldn't read the schedule's P"; exit 2; }
   FIRST_MS=${FIRST_MS:-2000}; TOKEN_MS=${TOKEN_MS:-220}
   fake=("$HERE/paced.py"); how="an id every $TOKEN_MS ms from $FIRST_MS ms after its request (certside/paced.py)"
-  [ "$TOKEN_MS" = 0 ] && { fake=(benchmarks/network_traces/warden_serve.py)
-                           how="each answer whole $FIRST_MS ms after its request (warden_serve's fake)"; }
+  if [ "$TOKEN_MS" = 0 ]; then
+    [ -z "${FAKE_IDS:-}" ] || { log "FAKE_IDS is paced.py's: not with TOKEN_MS=0"; exit 2; }
+    fake=(benchmarks/network_traces/warden_serve.py)
+    how="each answer whole $FIRST_MS ms after its request (warden_serve's fake)"
+  elif [ -n "${FAKE_IDS:-}" ]; then
+    fake+=(--ids-below "$FAKE_IDS"); how="$how, its ids below $FAKE_IDS"
+  fi
   PYTHONPATH=$SRC "$PY" "${fake[@]}" fake --listen 127.0.0.1:0 --first-ms "$FIRST_MS" --token-ms "$TOKEN_MS" \
     --id-payload "$payload" > "$W/fake.out" 2> "$W/fake.err" &
   FAKED=$!
@@ -314,25 +334,32 @@ REHEARSE=("$PY" benchmarks/network_traces/warden_serve.py)
 [ -n "${ID_BOUND:-}" ] && REHEARSE=("$PY" "$HERE/bounded.py" "$ID_BOUND")
 UPSTREAM=(--upstream "127.0.0.1:$LOCAL")
 [ -n "$MODEL" ] && UPSTREAM+=(--model "$MODEL")
-log "rehearse: ${UPSTREAM[*]}, ${TRAFFIC[*]}, ${SCHEDULE[*]}, watermark${ID_BOUND:+, prompt ids below $ID_BOUND}"
-peak "$W/rehearse.mb" "${REHEARSE[@]}" rehearse "${UPSTREAM[@]}" --watermark --out "$OUT/warden" "${TRAFFIC[@]}" \
-  "${SCHEDULE[@]}" 2>&1 | tee "$OUT/rehearse.log"
+# try DIR: steps 2 and 3 at SCHEDULE and TRAFFIC as they stand, every file under DIR; 0 when it is ACCEPTED (rehearse
+# and check both exit 0). TRY is the lines' label: none for the one try, "try N: " of two. Its body is not indented:
+# its two here-documents can't be.
+TRY=
+try() {
+local T=$1 rehearsed checked
+mkdir -p "$T"
+log "${TRY}rehearse: ${UPSTREAM[*]}, ${TRAFFIC[*]}, ${SCHEDULE[*]}, watermark${ID_BOUND:+, prompt ids below $ID_BOUND}"
+peak "$W/rehearse.mb" "${REHEARSE[@]}" rehearse "${UPSTREAM[@]}" --watermark --out "$T/warden" "${TRAFFIC[@]}" \
+  "${SCHEDULE[@]}" 2>&1 | tee "$T/rehearse.log"
 rehearsed=${PIPESTATUS[0]}
 mark rehearse
 if [ -n "$TUN" ]; then
-  if kill -0 "$TUN" 2>/dev/null; then log "forward: up to the end"; else log "forward: gone before the end"; fi
+  if kill -0 "$TUN" 2>/dev/null; then log "${TRY}forward: up to the end"; else log "${TRY}forward: gone before the end"; fi
 fi
-log "rehearse: rc $rehearsed"
+log "${TRY}rehearse: rc $rehearsed"
 if [ "${RECHECK:-1}" = 0 ]; then
   checked=$rehearsed   # rehearse's own exit is its check's verdict
-  log "check: not run again (RECHECK=0): check.json is rehearse's own, whose verdict is its last line above"
+  log "${TRY}check: not run again (RECHECK=0): check.json is rehearse's own, whose verdict is its last line above"
 else
-  peak "$W/check.mb" "$PY" benchmarks/network_traces/warden_serve.py check --run "$OUT/warden" > "$OUT/check.txt" 2>&1
+  peak "$W/check.mb" "$PY" benchmarks/network_traces/warden_serve.py check --run "$T/warden" > "$T/check.txt" 2>&1
   checked=$?
-  log "check: rc $checked: $(head -c 600 "$OUT/check.txt")"
+  log "${TRY}check: rc $checked: $(head -c 600 "$T/check.txt")"
 fi
 mark check
-"$PY" - "$OUT" "$rehearsed" "$checked" "$W" "${MARKS[@]}" <<'EOF'
+"$PY" - "$T" "$rehearsed" "$checked" "$W" "${MARKS[@]}" <<'EOF'
 import json, pathlib, sys
 out, tmp = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[4])
 
@@ -377,6 +404,76 @@ summary = {"accepted": check["accepted"], "problems": check["problems"][:10], "s
 print(json.dumps({k: summary[k] for k in ("accepted", "released", "peak_open", "watermark", "out_bytes", "seconds",
                                           "max_rss_mb", "cgroup")}))
 EOF
-"$PY" "$HERE/report.py" "$OUT" | tee "$OUT/report.txt"
-log "done in $SECONDS s: rehearse rc $rehearsed, check rc $checked, report rc ${PIPESTATUS[0]}"
+"$PY" "$HERE/report.py" "$T" | tee "$T/report.txt"
+log "${TRY}done in $SECONDS s: rehearse rc $rehearsed, check rc $checked, report rc ${PIPESTATUS[0]}"
 [ "$rehearsed" = 0 ] && [ "$checked" = 0 ]
+}
+
+if [ "$TRIES" = 1 ]; then
+  try "$OUT"
+  exit
+fi
+# Two tries. `seconds` in a try's summary.json are the job's own, from its start: `start` is the try's.
+TRY="try 1: "; mark start
+try "$OUT/try1"; first=$?
+second=
+if [ "$first" = 0 ]; then
+  log "try 1 ACCEPTED: try 2 starts, with --lanes $LANES2, --rate $RATE2, --requests $REQUESTS2"
+  LANES=$LANES2; RATE=$RATE2; REQUESTS=$REQUESTS2; plan
+  TRY="try 2: "; mark start
+  try "$OUT/try2"; second=$?
+else
+  log "try 1 is NOT ACCEPTED: try 2 is not started. Why, from its record (out/try1/report.txt, above, has its counts):"
+fi
+"$PY" - "$OUT" "$first" "$second" <<'EOF'
+import json, pathlib, sys
+out, first, second = pathlib.Path(sys.argv[1]), int(sys.argv[2]), sys.argv[3]
+
+
+def read(path):
+    try:
+        return json.loads((out / path).read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def of(name, rc):
+    """A try's part of the job's summary: its verdict, its exits, its seconds of the job and what its record counts."""
+    s, deployment = read(f"{name}/summary.json"), read(f"{name}/warden/deployment.json") or {}
+    if s is None:
+        return {"run": True, "accepted": False, "exit": rc, "why": "the try left no summary.json: read its rehearse.log"}
+    params, origin = deployment.get("params") or {}, deployment.get("origin_unix")
+    return {"run": True, "accepted": bool(s["accepted"]) and rc == 0, "exit": s["exit"], "seconds": s["seconds"],
+            "released": s["released"], "problems": len(s["problems"]), "out_bytes": s["out_bytes"],
+            "digest": (deployment.get("digest") or "")[:16], "windows": deployment.get("windows"),
+            # its buckets' first and last instants, unix seconds: the certifier's origin and its windows after it
+            "buckets": None if origin is None else
+            [origin, origin + deployment["windows"] * params["window"] * params["bucket_ms"] / 1000]}
+
+
+tries = {"try1": of("try1", first)}
+tries["try2"] = of("try2", int(second)) if second else {"run": False, "accepted": False,
+                                                       "why": "try 1 was not ACCEPTED, so try 2 was not started"}
+if first:
+    for problem in (read("try1/summary.json") or {}).get("problems") or ["no problem is listed: read out/try1/rehearse.log"]:
+        print("  - " + str(problem)[:300])
+both = [tries[name].get("seconds") for name in ("try1", "try2")]
+buckets = [tries[name].get("buckets") for name in ("try1", "try2")]
+files = [p for p in out.rglob("*") if p.is_file()]
+try:
+    path = pathlib.Path("/sys/fs/cgroup" + open("/proc/self/cgroup").read().strip().rpartition("::")[2])
+    peak_mb = int((path / "memory.peak").read_text()) >> 20
+except (OSError, ValueError):
+    peak_mb = None
+summary = {"tries": 2, "accepted": tries["try1"]["accepted"] and tries["try2"]["accepted"], **tries,
+           # from try 1's rehearsal returning to try 2's being started: try 1's check, summary and report
+           "between_s": both[1]["start"] - both[0]["rehearse"] if all(both) else None,
+           # from try 1's last bucket's end to try 2's first bucket: what the serving node sees of no certifier
+           "between_buckets_s": round(buckets[1][0] - buckets[0][1], 1) if all(buckets) else None,
+           "cgroup_peak_mb": peak_mb, "out_bytes": sum(p.stat().st_size for p in files), "out_files": len(files)}
+(out / "summary.json").write_text(json.dumps(summary, indent=1))
+print(json.dumps(summary))
+EOF
+[ "$first" = 0 ] || { log "done in $SECONDS s: try 1 NOT ACCEPTED, try 2 not started"; exit 1; }
+[ "$second" = 0 ] || { log "done in $SECONDS s: try 1 ACCEPTED, try 2 NOT ACCEPTED"; exit 6; }
+log "done in $SECONDS s: try 1 ACCEPTED, try 2 ACCEPTED"
