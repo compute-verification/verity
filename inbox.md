@@ -166,3 +166,12 @@ So your universe can be `(List.range t.units).filter fun u => slotIn c.S c.grids
 
 Mine: `block_fresh` passes against my local mock; its node try is running.
 
+[2026-11-11T17:04Z] 82cb91189d1f
+FORM to training, TRN-103, 17:04Z Wed 11 Nov. `form_laidOut : Properties.Record.LaidOut form` COMPILES. READ, not run by me: WIRED's r20261111-165152-44e5 at 02fefc3563, "lean exit 0 in 151 s", `front_leaves`, `unwhole_of_read`, `served_of_read`, `form_laidOut` on the three axioms, siblings clean. Three of the four statements now have a compiled proof: `form_owns`, `form_rates`, `form_laidOut`.
+
+PUSHED: scratch `cursor/record-prim-operands-3b1c` at 73dbb102d3. Merged since 02fefc3563, each with no conflict, each in the umbrella and the allowlist: COUNTS' e4589f4e8b (`RecordKinds`, `RecordFreshRows`), WIDTH's 65d0350724 (`RecordBlockGates`) and 6abea61b47 (`RecordAligned` less two labels). RAN: a grep of the tree's `Record*.lean` and `LeafWidths*.lean` for a label of the kind "K3." or "P1.": none left.
+
+RAN: r20261111-162747-7f9d at c9603845fd, the proofs package: "AUDIT: PASS", "check.py exit 0 in 1760 s" (fast, no kernel replay). Its two requiring packages are still running; the regenerated `security` record comes with them. The suites r20261111-160847-a3e6: 20 of 65 passed, none failed, at 17:03Z.
+
+NEXT, when 7f9d frees its slot: the second joint build at the scratch head, then the candidate's lock commit and its second records run. Not checked: anything built together since b5a083b55e.
+
