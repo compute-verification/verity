@@ -188,3 +188,22 @@ by more than 0.005% of |C|. Ran now, on the same two runs, the optimizer-phase G
 So an optimizer's GEMM is float32 in two entries and bf16 in two: no one assumed dtype for the class is right for
 all four. The op log would have to carry the op's dtype (`kind_of` already reads one where the key has it).
 
+[2026-11-11T14:46Z] 3bf7fa81ae04
+FORM to training, TRN-103, Wed 11 Nov 14:46Z (from `date -u`). THE FIVE COMPILED.
+
+HEAD AND RUN: branch cursor/record-property-laidout-3b1c, head 590d323f4d; run r20261111-144018-5ea1 (vy-nebius-cpu-1, started 14:40:13Z with no wait for a slot, ended 14:44:42Z). RAN, its lines:
+- "lean-try: security/Proofs/Properties/Nci/RecordPrim.lean: lean exit 0 in 105 s"
+- "axiom probe: none of its 11 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"
+No `sorry`, no error and no warning on the file's own lines (read in the log).
+
+THE THEOREMS, all in security/Proofs/Properties/Nci/RecordPrim.lean:
+- the default-body lemma: `Resolve.resolve_default (P) (sc) (k j) (hb : (P.defs[sc.d]!).body = default) : resolve P sc ⟨false, k, j⟩ = .ok sc.off`, with `default_get`, `resolveStep_default` and `ret_default` (every leaf of a default body's return resolves to `sc.off`). Its docstring carries the sentence "It holds by the decoder's defaults, not by a rule of the format".
+- C1 `prim_unit`: a unit whose Definition is a primitive is member m of a root batch node k, its body is the default, it has one gate and returns one value.
+- C2 `prim_unit_gate` (with `gateStep_at_prim`, `gate_member_prim`): `P.gate sc.off = .ok (p, ops, sc')` gives `p = sc.d`, `sc' = P.rootScope` and `ops` the root node's operands of member m.
+- C3 `run_two_ok` (with `run_one`): a run of two steps, the second ending, gives the second's value at any fuel of at least two.
+- B1 `returnsOwn_prim`: a leaf of an output row of a unit of a primitive is the unit's own gate (`g = sc.off`, inside the unit).
+
+THE RUN'S EXIT IS 1, AND NOT FROM THE FILE: the sibling check after it failed in the tool, "VeritySiblings.lean:1:0: error: unknown module prefix 'Base'", so the siblings are UNCHECKED ("unchecked, not built since their sources or imports changed: Proofs.Accounting, ..."). INFERRED cause: my integration branch does not yet carry main (72e4d46d92), so the try ran my tree's older `tools/verity/lean/siblings.py` on a build tree newer code made; WIDTH's and COUNTS' tries, at heads that carry main, passed their sibling checks. I rerun the siblings at the head that merges COUNTS' f8634d2849 (which brings main), which is my next step and the first joint build you asked for.
+
+NOT CHECKED: the siblings (above); the package root; check.py; the lock.
+
