@@ -30,9 +30,9 @@ LAW = S.Law("stratified-rate:1/3")
 PUBLIC = (*RECORD_ITEMS, *(S.Public(f"population:{P.template_id(t)}", "structure", "a template's stratum") for t in WINDOW))
 
 
-def _check(program=None, query=QUERY) -> S.Check:
+def _check(program=None, query=QUERY, tied=()) -> S.Check:
     return S.Check(tuple(P.program_digest(Program(t)) for t in WINDOW) if program is None else program, query,
-                   proof_deadline=60.0)
+                   proof_deadline=60.0, tied=tied)
 
 
 def _spec(check=None, selection=LAW) -> S.Spec:
@@ -181,6 +181,34 @@ def test_a_window_in_another_form_runs_on_the_challengers_own_copy_of_it():
                                  "one range a template")):
         with pytest.raises(ValueError, match=why):
             FC.Stream(spec, unit, budget=2, delta=DELTA, challenger="c", **{"program": gathered, **kw})
+
+
+def test_a_tied_window_runs_to_an_accepted_outcome_by_the_lean_run():
+    """The gathered form at two PAIR instances: instance 0 reads rows 0 and 1 of ``t`` and instance 1 rows 1 and 2, so
+    two proof blocks read ``t``, a run Input, which R8 refuses unless the check names it tied. Named tied
+    (`Check(tied=)`), the registration is let through on both verifiers and publishes ``t``, and the outcome is
+    accepted with the whole run the Lean's (`Run.run`, which reads the tied names from its params). Named nothing, or
+    the other parameter instead, both verifiers refuse the registration (``R8-shared-input``)."""
+    counts = {P.template_id(PAIR): 2, P.template_id(TRIPLE): 8}
+    gathered = _gathered(counts)
+    rec, ports = _record(counts, form=gathered), _ports(counts, program=gathered)
+
+    def stream(tied):
+        return FC.Stream(_spec(_check(tied=tied)), WINDOW, budget=2, delta=DELTA, challenger="challenger-test",
+                         clock=Clock(), program=gathered)
+
+    tied = stream(("t",))
+    reg = tied.register(rec, ports, counts=counts)
+    assert reg.rests_on_period_check == ("t",)
+    draw = tied.select(reg)
+    assert tied.deliver(draw, [SESSION]) is None
+    out = tied.outcome(draw, _lean(), {"statement": "stub"})
+    assert out.accepted and "run" not in tied.records[-1]["audit"]["checks"] and tied._entries[reg.order].read
+    for names in ((), ("1.x",)):
+        with pytest.raises(S.Refused) as e:
+            stream(names).register(rec, ports, counts=counts)
+        assert e.value.verdict.codes == ("R8-shared-input",), names
+        assert e.value.verdict.verifiers["lean"]["codes"] == ["R8-shared-input"], names
 
 
 def test_a_stratum_short_of_its_floor_is_refused():
