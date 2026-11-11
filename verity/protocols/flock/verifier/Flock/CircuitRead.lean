@@ -149,10 +149,15 @@ def CircuitRead.Readers.anew : CircuitRead.Readers := ⟨KeptAt.of Sha512.hash, 
 
 /-- The readers through what `kept` holds: a file's SHA-512 is the kept one where the file's bytes are the kept file's,
 and its parse the kept one where everything the parse is a function of is what the kept parse is at, each compared in
-full and with nothing else; anything else is made anew. With nothing kept, the readers anew. -/
-def CircuitRead.readers : Option CircuitRead → CircuitRead.Readers
-  | none => .anew
-  | some kept => ⟨kept.hash.reuse, kept.parse.reuse⟩
+full and with nothing else; anything else is made anew. With nothing kept, the readers anew. Each reader holds `kept`
+itself, so what is kept lives as long as a reader of it does and no longer: who hands `kept` here hands it over. -/
+def CircuitRead.readers (kept : Option CircuitRead) : CircuitRead.Readers :=
+  ⟨fun file => match kept with
+      | some kept => kept.hash.reuse file
+      | none => KeptAt.of Sha512.hash file,
+    fun circuit => match kept with
+      | some kept => kept.parse.reuse circuit
+      | none => KeptAt.of CircuitAt.parse circuit⟩
 
 /-- **The readers through what is kept are the readers anew, whatever is kept.** -/
 theorem CircuitRead.readers_eq (kept : Option CircuitRead) : CircuitRead.readers kept = .anew := by
