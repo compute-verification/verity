@@ -86,8 +86,6 @@ FORMAT = "verity/one-stage/stop-audit/v0"
 TOOL = "benchmarks/one_stage/stop_audit.py"
 #: the statement's one member, and its output row's circuit port
 MEMBER, OUT = "stop", "o0"
-#: the fewest outputs of a class whose stop block's statement Flock's circuit file takes: an ids row of 112 bytes
-MIN_OUTPUTS = 28
 
 LEAN, M0, READS = f"lean-verify/{MEMBER}", f"m0-verifier/{MEMBER}", "registered-reads"
 ORDER, BOUNDARY_AUDIT, REQUEST_ROW, STOP_RULE = TS.ORDER_REFUSED, "boundary-audit", "request-row", "stop-rule"
