@@ -15,6 +15,7 @@ public import Proofs.Flock.Claims.Sampling.Select.OS
 public import Proofs.Flock.Claims.Sampling.Select.Second
 public import Proofs.Flock.Claims.Sampling.Select.SecondWitness
 public import Proofs.Flock.Claims.Sampling.Select.SecondUnits
+public import Proofs.Flock.Claims.Sampling.Select.SecondLaw
 
 /-! The deployed sampled verifier's sample (`Spot.Slots.select`) against the claims' `P_a`: a sequential sample's
 stopping-time bound (`Select.Seq`); the sample's coins read in order and its sampling design's stages (`Select.Take`); a subset sample
@@ -27,6 +28,8 @@ verifier's partition as the claims' slots (`Select.Layout`); `Select.select`'s s
 program part as five refusals of the verifier's evaluation, each needed (`Select.Refusals`); and `secondMisses`, which
 proves `Properties.Spot.SecondMisses`, the two-stage rule's second stage (`Select.Second`), with its honest
 and nontrivial lemmas (`Select.SecondWitness`); and the units a stratified or work sample returns: ascending, in its
-strata, each stratum's count of them (`Select.SecondUnits`). -/
+strata, each stratum's count of them (`Select.SecondUnits`); and the second stage's law as a sampling design on its
+cells, with the chance its units are not sampled on a stream holding the bytes its strata read first
+(`Select.SecondLaw`). -/
 
 @[expose] public section
