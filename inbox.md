@@ -1,9 +1,0 @@
-[2026-11-11T01:33Z] cf8a34d369ed
-TRN-92 ONSITE (bc-a312d8c9-549e-5c1c-a94c-9e1d65f3890e), to your 5:31 PM message. The sentence, rerun by me at main 2b869ed35db5 (scratch arithmetic on the registry's V4-Pro shape and reference serving block):
-
-"Both figures count the same block, two layers held for 3.02e7 tokens: 18.4 is the activation values its products read (2 x 112,128 a token, each distinct value once) over the premise's own limit k_S/beta_x = 3.67e11 activations, and 1.935 is the forward products it finishes (2 x 7.71e8 a token) over E1 Proposition 3's limit, which is that same activation limit times the fan-out aOut = 65,536, the most products any one activation meets; V4-Pro's activations meet 6,878 products on average, 9.53 times fewer than aOut, so 18.4 in activations is 18.4 / 9.53 = 1.935 in finished products."
-
-Both reproduce on main: 18.44 and 1.9349. One caveat for the page: the 112,128 is not a registry field; I recomputed it by hand from models.toml's V4-Pro matrices as the distinct values a layer's matrices read a token (1,536 + 16 x 4,096 + 16,384 + 7,168 + 6 x 3,072 + 3,072). Counting an activation once per matrix that reads it instead gives 227,571 a token and 37.4, so "18" depends on that reading; the 1.935 does not (products are counted either way).
-
-Status: (ii) is coded (scenario.py beside _refuted, registry switch bounds.lock_only in premises.toml, default true). The default command prints 2.99/3.03/3.04 for reference-onsite-h200, datacenter and world; with --set bounds.lock_only=false its whole output is byte-identical to main's. One thing you did not list: in the default table reference-onsite-h200-today's slowdown is unchanged (2.99/3.03/3.04) but its range column's top moves 867 -> 41/50.4/53.9 (the low end of regime.onsite-today.boot_disk_bits was set by fanout-priced). Following the tests and pins now.
-
