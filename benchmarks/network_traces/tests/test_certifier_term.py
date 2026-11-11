@@ -384,6 +384,7 @@ def test_nothing_counted_by_capacity_scales_with_the_requests():
 def test_the_document_names_its_value_unit_commit_and_run(capsys):
     doc = LB.document(small(), commit="c0ffee", run="r1")
     assert (doc["unit"], doc["commit"], doc["run"], doc["model"]) == ("GB", "c0ffee", "r1", "GLM-5.3")
+    assert doc["schema"] == "certifier-term/v2"
     assert doc["value"] == 171_477_000 / LB.GB and "world's year" in doc["name"]
     assert "two release schedules (D_j = 2)" in doc["name"] and "D_j = 1" not in doc["name"]
     assert doc["with_set_time_card"] == {"value": 147_825_000 / LB.GB, "unit": "GB",

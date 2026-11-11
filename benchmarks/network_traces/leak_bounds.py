@@ -784,7 +784,7 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
             for r in table(inp)]
     head = next(r for r in rows if (r["scope"], r["period"], r["row"]) == ("world", "year", "scan"))
     connections = head["requests"] * inp["connections"].value
-    return {"schema": "certifier-term/v1",
+    return {"schema": "certifier-term/v2",
             "name": f"the network certifier's term for {MODEL} over the world's year, as the scan's check charges "
                     f"it today at two release schedules (D_j = {OF_RECORD})",
             "value": head["term"][str(OF_RECORD)]["GB"], "unit": "GB",
