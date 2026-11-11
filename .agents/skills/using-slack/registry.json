@@ -253,6 +253,7 @@
         "benchmarks/int8_class_rate/",
         "benchmarks/tensor_duty/",
         "benchmarks/unit_lowering/",
+        "benchmarks/compute/",
         ".agents/skills/kernel-engineering/",
         "adapters/vllm/verity_vllm/protocols/pouw/__init__.py",
         "adapters/vllm/verity_vllm/protocols/pouw/circuit.py",
@@ -703,6 +704,7 @@
       "owns": [
         "verity/protocols/inference_only/rho/",
         "benchmarks/circuit_properties/",
+        "benchmarks/inference_only/",
         "benchmarks/training_slowdown/"
       ],
       "branch_suffixes": [

@@ -71,6 +71,9 @@ PUBLIC = {
                                               "refusal counted in its place, which benchmarks/route_capture's gap reads",
     "verity_vllm.program.predict.naming": "I7: a request Program's Build with the names I2's compile gives it, the verifier's "
                                           "own Build without a trace",
+    "verity_vllm.program.predict.block_counts": "I7: a circuit record's inference blocks counted as the Lean count counts "
+                                                "them (the session Definition, its Boolean gates by the gate table, a "
+                                                "block's fresh bits), which benchmarks/inference_only prices",
     "verity_vllm.program.predict.window_weights": "I7: the window circuit's weights, the committer's registration and the "
                                                   "verifier's pins of it (VLLM-113)",
     "verity_vllm.pipeline.expert_tables": "I7: the per-expert cut's tables, their layout and record, the committer's "
