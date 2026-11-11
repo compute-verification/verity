@@ -48736,3 +48736,34 @@ For CAPS (numbers; the PR numbers follow with their ready lines): Proofs/Flock +
 
 For the table:
 - By classes: the by-class bound's hypothesis on the code, `hwit`, compiles at SPOT[Flock]'s two-stage code (`code_hwit`, try `99d2`), with `hneeds` and `hblock`, under `Built h` and `Addresses h` and nothing else. Left before a number: `ExpectedCR` at the two by-class finders, `hpos`, and the class counts (KILIAN's cost twin, SCALE's count by this key). Modeled; no new number.
+
+## PARAMS, Wed 11 Nov 10:33Z: WITHDRAWN, mine: tables of 2^33 bits as a cheap way to 2 bits. The Lean verifier's work is fixed a statement, so four statements for one cost about +9,000 GB. And the same measurement prices the second repetition: it is half the Lean verifier's time on a head statement, about 125 of 250 core-s (Daniel's, unbuilt)
+
+Clock: `date -u` read 10:33Z. Order reread through 10:07Z (no update since); mailbox unchanged. Everything below is derived from FLOCKPKG's 10:24Z measurement, which I relay and did not rerun; no run of mine.
+
+**1. Withdrawn: "tables of 2^33 bits" in my 10:10Z and 10:16Z entries, as a way that costs little.**
+- The Lean verifier takes 250.0 core-s a head statement and under 0.003 core-s a block on the two kinds measured by block count [relayed: FLOCKPKG 10:24Z, `r20261111-081919-d4ef`; the head's own 1-, 2- and 4-block sessions are due about 11:10Z].
+- So 64 head blocks a statement is four verifies for one: +750 core-s for 256 head blocks. By the slope FLOCKPKG used (12.0 GB a core-second [relayed: FUSED]) that is about +9,000 GB a world year at modeled 0.4, on a row BENCHCROSS now reads at 6,320 [guess: my arithmetic on a relayed slope, no planner run].
+- The 2.00 bits are real and the arithmetic of my 10:16Z table stands. The price does not: on the κ ladder the same 2.00 bits cost about 101 GB [relayed: SCALE 10:30Z: width at κ 2^-4, 2,688 GB and 2^-100.23; at κ 2^-6, 2,789 GB and 2^-102.23].
+- What is left of the level-0 lever is the wide leaf alone: it keeps one statement for 256 head blocks, so one verify. Daniel's, unbuilt.
+
+**2. The second repetition, priced on the verifier** [derived].
+- The Lean verifier folds the circuit's matrix once a repetition, at 91 ns an entry on the head block [relayed: FLOCKPKG]. 1,368,418,074 entries × 91 ns is 124.5 s; twice is 249.1 s, and the measured session is 250.0 s. So a head statement's Lean verify is the two folds, and the second repetition is half of it: **about 125 core-s a statement**, 1.53 GPU-s at the planner's 81.818 cores a GPU.
+- That is more than the second repetition costs the prover (0.278 s of the card and about 4.2 host CPU-s a statement [run: `6773`'s medians; modeled]). By the same slope it is about 1,500 GB a world year at modeled 0.4 [guess, as above].
+- FLOCKPKG's cut "one walk of the matrix for both repetitions" takes up to 100 of those 125 s with no parameter changed (a Lean twin with its proof). One repetition would add the rest and the prover's side.
+- What one repetition costs in bits has changed since my 09:32Z entry, because the line moved to reader sets [derived; modeled]:
+  - A session's κ goes from 2^-203.00 to 2^-104.38 [run: the replica; Lean probe `r20261111-090054-1852`]. More queries do not lower it: the floor is the PIOP's term over GF(2^128), 2^-106.52 a repetition.
+  - In calls, Flock's own term becomes the weakest on the reader-set rows: the record reads 2^-104.36 for 2^-110.63.
+  - In compressions it costs 0.06 to 0.20 bit: the record 2^-101.43 for 2^-101.63, SCALE's two cheapest rows 2^-100.20 and 2^-100.15 for 2^-100.28 and 2^-100.23. They hold, with 0.15 bit of room.
+
+**3. The same arithmetic the other way** [guess; not a recommendation tonight].
+- The verifier's fixed term a block halves when a statement doubles, and `fast100` stops at 2^35 bits. On the wide leaf's tower a table of 2^36 or 2^37 bits keeps the level-0 length 2^19 and the table error 2^-205.06 [run: the replica], so the bits move by +4.00, not −1.00 or −2.00.
+- Costs I can name: the card's memory (36.9 GB for the first prover at 2^35 bits [relayed: HEADPROF 10:19Z], so two provers a card for four), and every `m ≤ 35` scope in the Lean and the code.
+
+For BREAKEVEN: no row for tables of 2^33 bits; it reads about +9,000 GB. If a what-if row for one repetition is kept, its verifier side is 125 of the head block's 250 Lean core-s a statement, beside 0.278 s of card and 4.2 host CPU-s; unsupported until built.
+
+For FLOCKPKG (through you): is the fold once a repetition as I read your 91 ns, and how much of the second repetition's 124.5 s does one walk for both keep?
+
+For the table:
+- Largest slack: the second repetition, 100 bits no bound reads: 41% of the card's proving time [run: `r20261111-061047-6773`] and about half of the Lean verifier's 250 core-s a head statement [derived from FLOCKPKG's measured `d4ef`]. Daniel's, unbuilt; with it a session's κ is 2^-104.38.
+- Tables of 2^33 bits: +2.00 bits, about +9,000 GB [guess]. Not a lever.
