@@ -5,7 +5,9 @@ during development. One installable package, one CLI (`research`), stdlib
 only. It runs commands and records what happened; it imports nothing from
 Verity's packages (enforced by `tests/test_cli.py::test_no_packages_import`).
 
-This file is for people changing the tool.
+The user-facing procedure (when to record a run, how to find one, how to hand
+off) will be a repo-level skill, once it exists. This file is for people changing
+the tool.
 
 ## Layout and provenance
 
@@ -91,6 +93,7 @@ research pods register|unregister|registry ...                    # the pod regi
 research pods ssh TARGET [--print] [-- CMD...]                    # TARGET = machines.toml name | pod id | pod name (pods/connect.py)
 research pods sync TARGET [SRC] [--dest DIR] [--exclude G]...     # the worktree's git-visible files -> DIR (default /workspace/src)
 research tele SUBCOMMAND ...             # the harness's own surface
+research data SUBCOMMAND ...             # the evidence store (below)
 research merge REF [--into main] [--tool check] [-m MSG] [--push] [--dry-run]   # the merge gate (merge.py)
 research merge --train A B C [--on MACHINE --project P] [--command CMD] [--push]  # several refs, one checked candidate
 research merge --train --prepare BRANCH [--onto BASE] [--allow-removal PATH] N@SHA ...  # build, lint, push a train
@@ -282,8 +285,8 @@ any launch while an exclusive holder is.
 The shipped tree is extracted with extraction mtimes (`tar -m`), not the commit time `git archive` stamps: a build dir shared
 across commits (Cargo's `/workspace/sp1-target`) judges freshness by mtime, and with commit times an older commit shipped after a
 newer build looked built and ran the newer binary. Installed binaries (`/workspace/bin`, or `$RESEARCH_BIN_DIRS`) carry their
-own provenance: a build runs `python -m research.binprov record BINARY --source TREE` after installing,
-writing `BINARY.provenance.json` (sha256, source commit/tree/dirty), and every run records each binary's sha256
+own provenance: a build runs `python -m research.binprov record BINARY --source TREE` after installing (the SP1 and Ligero
+bootstraps do), writing `BINARY.provenance.json` (sha256, source commit/tree/dirty), and every run records each binary's sha256
 with its provenance `recorded` / `stale` (replaced since) / `missing` in job.json `run.binaries` (`binprov.py`).
 
 `--mem-gb N` is memory admission on the machine (`mem.py`). A pod's processes
@@ -363,7 +366,9 @@ keeps them all (`store/evict.py`).
 
 `src/research/store/` is the evidence store; its `README.md` is the contract
 (four objects: Tool, Derivation, Attempt, Artifact; two relations: Replica,
-Label). Local root `~/.research/store` (or `$RESEARCH_STORE`); an optional remote in
+Label). Artifacts are immutable, typed, content-addressed manifests with an
+optional file or tree payload; the id is the sha256 of the canonical manifest.
+Local root `~/.research/store` (or `$RESEARCH_STORE`); an optional remote in
 `~/.research/store.toml` (or `$RESEARCH_STORE_CONFIG`: `fs` directory or
 `s3`/R2 via stdlib SigV4). The sqlite catalog is disposable (`reindex`).
 
@@ -433,9 +438,8 @@ What `research run` does:
 ### Retention of node data: `research keep`, `research retention`
 
 `src/research/retention.py`: nothing under a node's `/workspace` is deleted without a record that allows it. A record
-(`research/retention/v0`) is a sidecar, `<dir>/.retention.json` or `<file>.retention.json`, so it travels with its data: `path`
-(relative to the root), `node`, `owner` (a lane handle), `by`, `created`, `expires` (UTC, or null for never), `priority`
-(`low|normal|high|keep`), `preserved` (an art id or null), `regenerate` (a command or null), `why`. It covers everything beneath its
+(`research/retention/v0`) is a sidecar, `<dir>/.retention.json` or `<file>.retention.json`, so it travels with its data.
+It covers everything beneath its
 path. A directory its owner made read-only gets its record beside it, `<dir>.retention.json`. A directory with both is invalid, and
 gc leaves a tree whole while any directory in it is read-only. A run dir whose `.custody` says `preserved: true` and which has no sidecar has an implicit record: owner its lane, else its
 campaign, else `runner`; `preserved` its run record; `expires` 48 h after `verified_utc` (`RUN_EXPIRY`); priority `normal`. Nothing
@@ -460,14 +464,13 @@ nested record, and no file in `/workspace/pouw/fill/queue`, `/workspace/pouw/fil
 `--apply` deletes a path, its record and the job scripts are read again. A preserved path also needs its artifact to hold every file
 now under it at its size, so files custody trimmed never count as preserved, and its stored copy `verified`, `expired` or
 `withdrawn` on the remote; one that can't be asked about fails the pass (`retention.STORED`). An implicit record's marker must still
-vouch for the run dir (the store README's §10.1). A path without a record is never deleted. Without `--apply` gc deletes nothing and
+vouch for the run dir (the store README's §10.1). Without `--apply` gc deletes nothing and
 reads no remote; either way it prints every deletion and every skip with its reason. The failure it prevents: hundreds of GiB of
 unowned, unpreserved files on a node that nobody can decide to delete.
 
 `rm` is the one way to delete data you don't own on a node, for a cleanup the policy doesn't reach. It deletes a path only when a
 record covers it (its own or an ancestor's), and that record and every record beneath it (sidecars and implicit ones) name the
-`--approved-by` handle as owner and are not `keep`. No job script may name the path, and nothing in it may be read-only or a mount. A
-path no record covers has nobody to say yes and is never deleted. The records are read again just before `--apply` deletes. Each
+`--approved-by` handle as owner and are not `keep`. No job script may name the path, and nothing in it may be read-only or a mount. Each
 decision of an `--apply` (delete, refuse, failed) is a `research/retention-log/v1` line in `/workspace/research/retention/deletions.jsonl`
 with `--by` (default `$RESEARCH_AGENT_URL`), the approver and `--ref`. The failure it prevents: a disk cleanup's bare `rm -rf` of
 outputs whose record names another lane as owner, approved by a lane that doesn't own them, which loses them. Here that `rm` is
