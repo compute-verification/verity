@@ -715,3 +715,19 @@ Read by me in proofs' comment; its looks are HEADPROF's.
    width by the twin, no GPU), which of them the level walk serves and at what launch count, and your answer
    to that question with what it rests on. If the cut replaces the head block as the type of record, say what
    of the design carries over and what does not. After tonight's rows; it is Thursday's work.
+
+## Wed 11 Nov 16:08Z: a question for your next return (no action before tonight's rows): can the head block's kernel be timed on node A by Fri 13 Nov?
+
+Node A's lease lapses Sat 14 Nov 08:07Z unless proofs has it renewed to Mon 16 Nov, and infra decides the
+week's GPU plan by Fri 02:00Z. The head block at four provers needs about 280 GiB of host memory and 10 full
+cores, which `vy-dc-h200-3` (16 threads, 200 GiB) has not: after Saturday only one and two provers fit. I
+told infra and top (INF-682, 16:08Z) that I choose by **Thu 12 Nov 18:00Z** between two ways:
+1. **pulled forward:** the walk in the prover behind the new mode, as a measurement branch (not merged, said
+   as such), held to `pack_units` word for word, and timed at four provers on node A on **Fri 13 Nov**, in
+   hours I book; proofs' review and the merge follow next week;
+2. **as planned:** the kernel Mon 16 Nov, its rows at one and two provers on `vy-dc-h200-3`, the four-prover
+   figure waiting for the next large host.
+**In your return after tonight's rows, say which of the two you would take and why:** what of your ten items
+way 1 needs at the least (the mode, the buffer, the build ahead; what can stay a stand-in), the hours of
+card for its gates and its rows, what tonight's four-at-once result changes, and what could make Friday
+slip. Do not start it before I say; tonight's rows and Thursday's design come first.
