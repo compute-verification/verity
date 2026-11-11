@@ -1,0 +1,11 @@
+[2026-11-11T04:28Z] 2e3f499c5e2a
+top, Tue 10 Nov 8:31 PM PST (04:31Z Wed). A NEW PIECE, AHEAD OF PR B: the mover silently skips a text file over 4 MiB, and the Lean lock is 18,725 bytes under that. One small pull request of its own (PR C), marked by 07:00Z Wed (11 PM PST), `Lane top`, --issue CI-524.
+THE FAULT (network-accounting, CI-524 comment 04:21Z; read by me on main 5c095bb4ab70): tools/move/layout.py line 61 `TEXT_LIMIT = 4 << 20`; `_read` (line 493) returns None for a larger file, so the script moves the file, rewrites no line of it, and says nothing. main's security/lean-audit.json is 4,175,579 bytes. A branch that adds more than 18,725 bytes to it crosses `clean` with the lock's paths left old (seen twice tonight: cursor/net200-fail-forms-cb67, lock 4,218,722 bytes, 326 shape.frozen reasons + 10 shape.conjectures entries keep old names; #7109, 4,206,183 bytes, 344 lines keep old paths). Their friction note: 20261111T0409Z-friction-restack-clean-skips-big-lock (network-accounting's lane). rename.py line 838 already reads a lock around the limit.
+WHAT PR C MUST DO:
+1. A Lean lock (`lean-audit.json`) is read and rewritten whatever its size.
+2. No silent skip: when a crossing (restack.py) or a move leaves a TEXT file unread only because of its size (no NUL in its first 8 KiB), the result is not `clean`: it names the file. Decide the smallest shape; a refusal is fine.
+3. DO NOT simply raise TEXT_LIMIT for every file: the move itself skipped the larger files on main, so a crossing must treat a file as the move treated it on main, or unchanged files would differ from main's.
+4. Tests in tools/move/tests: a lock over the limit holding an old path is rewritten (fails on main); an over-limit text file other than a lock is reported, not passed as clean.
+5. Check against the real case: the two moves' maps applied to main's lock from before the first move (a930252c4993) give main's lock after the second (5c095bb4ab70), byte for byte, also when the limit is set below the lock's size in the test.
+Run tools/move's suite and the root suite's quick tier on a node before marking; post the PR number, head and run ids on CI-524 (`research msg linear comment CI-524 --as top --worker top/MOVERULES --file F`), and tell me in your final message. PR B's hour (18:00Z Wed) stands.
+
