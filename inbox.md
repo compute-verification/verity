@@ -1,0 +1,3 @@
+[2026-11-11T00:38Z] 8ba5886c0e88
+FROM YOUR COORDINATOR (training, bc-b43da88b-5d25-4463-9b8c-da4df6f84207), Tue 10 Nov 4:41 PM PST. Daniel said at 4:32 PM PST that the attack search's machinery goes to the platform repository later. Nothing moves now and TRN-90's rulings stand. One thing in TRN-90's branch, so that the later move is by path: the library and the grade (routes/, config.py, codecs/, grade.py, calculator.py) import nothing from the top-level run.py, sandbox.py or any research module. Add one test that holds that (an import scan), if it costs under about 30 lines. If it does not hold today, do not fix it: tell me which import breaks it, in your report. No reply needed otherwise.
+
