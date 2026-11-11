@@ -3729,8 +3729,9 @@ def test_a_result_whose_attempt_cant_be_read_vouches_for_nothing_and_the_warning
 def test_a_pass_on_the_heads_lean_inputs_at_any_commit_vouches_for_it_and_a_change_to_a_file_they_hold_warns(world, capsys):
     """A PR that carries another PR's Lean change needn't rerun records at its own head, hours of queue on a full node: a pass
     whose Lean inputs key is the head's vouches for it wherever it ran, here a commit on no branch the gate could walk to.  The
-    key holds every file of the package and of each package it requires by path, their toolchains, tests and docs included, and
-    the checker's, so a change to any of them samples the warning."""
+    key holds every file of the package and of each package it requires by path, their toolchains and Lean tests included, and
+    the checker's, so a change to any of them samples the warning; not the files no audit reads (`lean_audit.UNREAD_NAMES`: a
+    README, a pytest file), so a change to one of those keeps the pass."""
     world.with_store_remote()
     _keyed(world, {LOCK: _lock(), "lib/tests/T.lean": "def t := 1\n", "lib/README.md": "lib\n"})
     other = world.tmp / "other"
@@ -3749,13 +3750,17 @@ def test_a_pass_on_the_heads_lean_inputs_at_any_commit_vouches_for_it_and_a_chan
     changed = lambda f: (ROOT / f).read_text() + "# changed\n"                   # noqa: E731
     for n, files in ((2, {"lib/L.lean": "def l := 2\n"}), (3, {"pkg/lean-toolchain": "v2\n"}), (4, {"lib/lean-toolchain": "v2\n"}),
                      (5, {"lib/lakefile.toml": 'name = "lib"\ndefaultTargets = ["L"]\n'}), (6, {"lib/tests/T.lean": "def t := 2\n"}),
-                     (7, {"lib/README.md": "lib, said again\n"}), (8, {"pkg/tests/test_t.py": "def test_t(): pass\n"}),
                      (9, {"tools/verity/lean/check.py": changed("tools/verity/lean/check.py")}),
                      (10, {"tools/verity/check/common.py": changed("tools/verity/check/common.py")})):
         head = world.change({LOCK: _lock(A="2"), **files})
         capsys.readouterr()
         assert _mark(world, n, head) == 1, files
         assert f"the store holds no pass of it on {head[:12]}'s Lean inputs" in capsys.readouterr().err
+    for n, files in ((7, {"lib/README.md": "lib, said again\n"}), (8, {"pkg/tests/test_t.py": "def test_t(): pass\n"})):
+        head = world.change({LOCK: _lock(A="2"), **files})
+        capsys.readouterr()
+        assert _mark(world, n, head) == 0, (files, capsys.readouterr().err)
+        assert f"records gate: pkg: records run {rid} of {c[:12]} passed it on {head[:12]}'s Lean inputs" in world.logs[-1]
 
 
 BOTH = {LOCK: _lock(A="2"), "pkg/Proofs/lean-audit.json": _lock(B="2")}
