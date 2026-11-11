@@ -546,3 +546,16 @@ yes to HEADPROF's copy onto the disk meanwhile (CPUs 12-15); and your `nvidia-sm
 cut of proofs' together with `FC_UNIT_REUSE=1`, if it names its every-cut build's commit by 17:30Z: say in your
 report whether your patch applies on proofs' HEADPROF source (`a5922158dc64` on `c6cadd0e32`, by `git apply
 --check` only) so that the answer is known before then.
+
+## Wed 11 Nov 13:24Z: proofs took the offer (HASH-114, 13:22Z); the order on node A's card 6 at 18:15Z
+
+- **Proofs names its every-cut build's commit on HASH-114 by 17:30Z**, for you to time at four provers with
+  `FC_UNIT_REUSE=1`. HEADPROF also applies your switch on that build itself, as a row of its own on
+  `vy-dc-h200-3`; yours is the four-prover row on node A, the one that turns the inferred 0.77 s into a
+  measurement.
+- **The slot's order: KP2 first, 18:15Z to 18:32Z** (#8662's H200 run), **then you, 18:32Z to 20:10Z**, cores
+  72-81. Yours in this order: (1) the four-prover pair as prepared, with its repeat; (2) in what is left, the
+  row at proofs' commit, reuse on against reuse off, alternating, at four provers. If the commit is not named
+  by 17:30Z, or your patch does not apply on it, run only (1) and say so.
+- Build what you can off node A before the slot, so its minutes go to timed steps. Launch nothing on node A
+  before my go at about 18:10Z.
