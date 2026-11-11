@@ -91,7 +91,6 @@
     {"file": "Security/Definitions/Accounting/HeadlineDc/Sm100Measured.lean", "count": 3},
     {"file": "Security/Definitions/Accounting/HeadlineDc/Sm90.lean", "count": 4},
     {"file": "Security/Definitions/Accounting/HeadlineDc/Sm90Measured.lean", "count": 3},
-    {"file": "Security/Definitions/Accounting/JointBlocks.lean", "count": 8},
     {"file": "Security/Definitions/Accounting/JointBridge/BandwidthOfAuditPerRunPeriod.lean", "count": 7},
     {"file": "Security/Definitions/Accounting/JointBridge/CommOfPeriodLeakAccepted.lean", "count": 22},
     {"file": "Security/Definitions/Accounting/JointBridge/CreditedWords.lean", "count": 9},

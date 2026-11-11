@@ -93,7 +93,6 @@ WAITING = {
     ("Security/Definitions/Pouw/PearlC/TileCircuit.lean", "tests/test_circuit_tile_lean.py"): "both demo branches edit the file",
     ("Security/Definitions/Pouw/PearlC/WholeCircuit.lean", "tests/test_circuit_whole_lean.py"): "both demo branches edit the file",
     ("Security/Proofs/Pouw/Period/Accept.lean", "benchmarks/all_protocols/legs/pouw.py"): "both demo branches edit the file",
-    ("Security/Proofs/Pouw/TileBound/WinogradStrassen.lean", "winograd_strassen_check.py"): "both demo branches edit the file",
 }
 
 _TOKEN = re.compile(r"`([^`\s]+)`|\]\(([^)\s]+)\)")
