@@ -1,5 +1,6 @@
 """A stopped job continues from its kept state: what it keeps, what it refuses, and that its record over two segments
 is the unbroken job's."""
+import contextlib
 import io
 import json
 import os
@@ -78,13 +79,10 @@ def segment(tiny, kept=None, state=None, stop_after=None):
     te = run.Harness(theta, root / "out", start=cfg.start.entry(), clock=lambda: 0.0, keep=keep,
                      kept={"digest_key": KEY} | (kept or {}))
     stream = Stream(Data.of(cfg.start.data, registry), 0, ctx=int(cfg.start.shape["ctx"]))
-    try:
-        with te.counter:
-            model, optimizers = route.build(cfg.start.shape, cfg.dials)
-            run.train(te, cfg, route, stream, model, optimizers, state)
-    except run.Stopped:
-        return last
-    return te.finish(META)
+    with contextlib.nullcontext() if stop_after is None else pytest.raises(run.Stopped), te.counter:
+        model, optimizers = route.build(cfg.start.shape, cfg.dials)
+        run.train(te, cfg, route, stream, model, optimizers, state)
+    return te.finish(META) if stop_after is None else last
 
 
 @pytest.fixture(scope="module")
