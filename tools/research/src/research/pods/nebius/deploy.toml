@@ -89,7 +89,7 @@ managed = ["/usr/local/lib/vy-monitoring/oom_order.py", "/etc/systemd/system/vy-
            "/etc/systemd/system/user-1001.slice.d/50-vy-headroom.conf", "/etc/systemd/system/session-.scope.d/50-vy-job-memory.conf",
            "/etc/systemd/system/user@1001.service.d/50-vy-oom.conf", "/etc/systemd/system/ssh.service.d/50-vy-memory.conf"]
 
-# node 3 (landing capacity): two train slots, set by hand; only its peers file is deploy's so far
+# node 3 (landing capacity): two train slots, set by hand; only its peers file and the unattended upgrades are deploy's so far
 [nodes.vy-nebius-3]
 record = "/workspace/research/deploy/record.jsonl"
 managed = ["/etc/vy/peers"]
@@ -134,8 +134,9 @@ record = "/workspace/research/deploy/record.jsonl"
 managed = ["/etc/systemd/system/user-1001.slice.d/50-vy-headroom.conf", "/etc/systemd/system/session-.scope.d/50-vy-job-memory.conf",
            "/etc/systemd/system/user@1001.service.d/50-vy-oom.conf", "/etc/systemd/system/ssh.service.d/50-vy-memory.conf"]
 
-# cpu-13 (a train slot and a proofs pool): only the verified queue's loop, the lock-out's files (pods/nebius/lockout) and the
-# retention collector are deploy's there so far, and `managed` names just the loop's and the lock-out's
+# cpu-13 (a train slot and a proofs pool): only the verified queue's loop, the lock-out's files (pods/nebius/lockout),
+# the retention collector and the unattended upgrades are deploy's there so far, and `managed` names just the loop's
+# and the lock-out's
 [nodes.vy-nebius-cpu-13]
 record = "/workspace/research/deploy/record.jsonl"
 managed = ["/usr/local/sbin/vy-vqueue-*", "/usr/local/lib/vy-vqueue/*", "/usr/local/lib/vy-vqueue/bin/*", "/etc/systemd/system/vy-vqueue*",
@@ -143,7 +144,7 @@ managed = ["/usr/local/sbin/vy-vqueue-*", "/usr/local/lib/vy-vqueue/*", "/usr/lo
            "/usr/local/lib/vy-lockout/*", "/etc/systemd/system/vy-seal-runs.*", "/etc/systemd/system/vy-sudo-fallback-expire.*",
            "/etc/ssh/sshd_config.d/11-vy-admin.conf"]
 
-# circuits' H200 VMs: only the GPU-lease files are infra's to manage there
+# circuits' H200 VMs: only the GPU-lease files and the unattended upgrades are infra's to manage there
 [nodes.vy-glm53-eu]
 record = "/workspace/research/deploy/record.jsonl"
 managed = ["/workspace/verity-guest/bin/gpu_adopt.py", "/etc/systemd/system/vy-gpu-adopt.service", "/etc/vy/gpu-lease-host",
@@ -193,6 +194,25 @@ owner = "infra"
 path = "/etc/sysctl.d/90-vy-mptcp-off.conf"
 src = "tools/research/src/research/pods/nebius/mptcp-off.conf"
 nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
+owner = "infra"
+
+# Unattended upgrades, on every node: Ubuntu's security pocket installs daily, the kernel, the NVIDIA driver and the boot
+# chain wait for a planned window, and nothing restarts but a daemon whose own package was upgraded (each file says why).
+# Install both together; the next daily pass reads them, and `sudo unattended-upgrade --dry-run -d` prints what it would do.
+[[file]]
+path = "/etc/apt/apt.conf.d/52vy-trust"
+src = "tools/research/src/research/pods/nebius/apt-security-updates.conf"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4",
+         "vy-nebius-cpu-5", "vy-nebius-cpu-6", "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12",
+         "vy-nebius-cpu-13", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-glm53-eu", "vy-glm53-eu2"]
+owner = "infra"
+
+[[file]]
+path = "/etc/needrestart/conf.d/50-vy.conf"
+src = "tools/research/src/research/pods/nebius/needrestart-list-only.conf"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4",
+         "vy-nebius-cpu-5", "vy-nebius-cpu-6", "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12",
+         "vy-nebius-cpu-13", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-glm53-eu", "vy-glm53-eu2"]
 owner = "infra"
 
 # Memory: user 1001's slice, each login session's scope (a run's own cap), the user manager's OOM score, and ssh.service, where a
