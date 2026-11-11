@@ -591,7 +591,9 @@ def replay(o: Options) -> bool | None:
           f"weights root {str(wc['committed_root'])[:16]} ({wc['opened_by_source']}; unopened {wc['unopened_n']}) in {wc['wall_s']} s"
           + (f" -- {wc['why']}" if wc["why"] else ""), flush=True)
     args.replay_worker_peak = worker_peak(o)
-    vc, consumed, reads = row["commit"]["value_correspondence"], set(), {}
+    vc = row["commit"]["value_correspondence"]
+    consumed: set[str] = set()
+    reads: dict[str, Any] = {}
     site = C2.ReplaySources(args=args, out=out, pair=pair, com=store, rc=run, row=row, reqs=ctx["requests"], sampling=ctx["sampling"], tokens=ctx["tokens"],
                             manifest=man, stop_of_record=ctx["stop_of_record"], ids_full=ctx["ids_full"], versions={"git_head": ctx.get("code")},
                             components=vc.setdefault("components", {}), vc_result=ctx.get("vc_result"), weights_of=lambda p: provider(words, p, consumed),
