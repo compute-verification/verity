@@ -76,11 +76,11 @@ def marked(path: Path, root: Path = ROOT) -> tuple[str, ...]:
         return ()
     for node in ast.parse(src).body:
         if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == MARKER for t in node.targets):
-            v = node.value
-            if not (isinstance(v, (ast.Tuple, ast.List)) and v.elts and all(isinstance(e, ast.Constant) and isinstance(e.value, str)
-                                                                               for e in v.elts)):
+            elts = node.value.elts if isinstance(node.value, (ast.Tuple, ast.List)) else []
+            names = tuple(e.value for e in elts if isinstance(e, ast.Constant) and isinstance(e.value, str))
+            if not names or len(names) != len(elts):
                 raise ValueError(f"{path.relative_to(root)}:{node.lineno}: {MARKER} is a tuple of HF repo ids")
-            return tuple(e.value for e in v.elts)
+            return names
     return ()
 
 
@@ -175,12 +175,14 @@ def _lines(path: Path) -> int:
 
 
 def _rules(path: Path) -> list[str]:
-    out = []
+    out: list[str] = []
     for n in ast.walk(ast.parse(path.read_text())):
-        if isinstance(n, ast.Call) and getattr(n.func, "id", getattr(n.func, "attr", None)) == "RuleInfo" and n.args \
-                and isinstance(n.args[0], ast.Constant):
-            v = n.args[1].value if len(n.args) > 1 and isinstance(n.args[1], ast.Constant) else None
-            out.append(f"{n.args[0].value}_v{v}" if v is not None else n.args[0].value)
+        if not (isinstance(n, ast.Call) and getattr(n.func, "id", getattr(n.func, "attr", None)) == "RuleInfo" and n.args):
+            continue
+        name, version = n.args[0], n.args[1] if len(n.args) > 1 else None
+        if isinstance(name, ast.Constant) and isinstance(name.value, str):
+            v = version.value if isinstance(version, ast.Constant) and isinstance(version.value, (int, str)) else None
+            out.append(f"{name.value}_v{v}" if v is not None else name.value)
     return out
 
 

@@ -12,6 +12,7 @@ from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[2] / "tools" / "popread.py"
 _spec = importlib.util.spec_from_file_location("popread", SCRIPT)
+assert _spec is not None and _spec.loader is not None
 PR = importlib.util.module_from_spec(_spec)
 sys.modules.setdefault("popread", PR)
 _spec.loader.exec_module(PR)
@@ -131,7 +132,8 @@ def _prefix_planner(w: dict) -> list[int]:
     """Cached rows per request: the longest run of 2-token KV pages an earlier request's prompt shares."""
     if not w["engine"]["prefix_caching"]:
         return [0 for _ in w["requests"]]
-    out, seen = [], []
+    out: list[int] = []
+    seen: list[list[int]] = []
     for r in w["requests"]:
         ids, best = r["prompt_token_ids"], 0
         for q in seen:
