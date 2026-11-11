@@ -36,6 +36,7 @@ inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/veri
           "tools/research/src/research/secret_hint.py", "tools/research/src/research/timefmt.py",
           "tools/research/src/research/store", "tools/research/src/research/telemetry",
           "verity/protocols/flock/prover/tests/data/captured-101/slices/silumul-v1-i8192",
-          "verity/protocols/flock/prover/tests/data/captured-101/slices/rope-head-d64"]
+          "verity/protocols/flock/prover/tests/data/captured-101/slices/rope-head-d64",
+          "adapters/vllm/tests/__init__.py", "adapters/vllm/tests/regression/__init__.py"]
 # Each xdist worker starts its own evaluator; `verity_difftest.build` takes its lock, so the workers build one at a time.
 parallel = true

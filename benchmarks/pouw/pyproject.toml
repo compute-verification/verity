@@ -157,7 +157,11 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "benchmarks/hash/dither/settings.py", "benchmarks/hash/exactlin/exactlin.py",
           "benchmarks/served_units/summarize.py", "benchmarks/harness/verity_bench/overhead.py",
           "adapters/vllm/verity_vllm/protocols/pouw/h1/tables_device.py",
-          "adapters/vllm/verity_vllm/protocols/pouw/h1/words.py"]
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/words.py",
+          "verity/definitions/circuits", "verity/definitions/ops", "verity/definitions/silicon", "verity/protocols/__init__.py", "verity/protocols/pouw/__init__.py",
+          "verity/definitions/__init__.py", "benchmarks/harness/verity_bench/__init__.py",
+          "verity/protocols/pouw/clear/clear_audit.py", "verity/protocols/pouw/clear/clear_work.py",
+          "verity/protocols/pouw/clear/__init__.py"]
 # one process: 2,100 s beside a loaded check, too near suites.py's SUITE_TIMEOUT_S
 timeout_s = 7200
 # Build outputs the served challenger's checks of record run or skip on (`check` runs this suite after its Lean steps).

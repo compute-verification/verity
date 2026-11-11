@@ -127,10 +127,10 @@ fi
 # (REFS_PY, by sha); each is renamed aside, the tree checked once more, put back if named, and deleted.
 # Trees from before and after the layout move and the Lean move sit side by side, so every layout's paths are listed.
 # These are strings the moves' path rewriting must leave alone: each names where a tree of that age keeps them.
-LK_OLD="verity/protocols/flock/verifier verity/protocols/flock/verifier/level3 verity/protocols/flock/verifier/soundness"
+LK_OLD="verity/core/service/flock verity/core/service/flock/level3 verity/core/service/flock/soundness"
 LK_NEW="verity/core/protocols/verification/flock/lean security_proofs/flock/level3 security_proofs/flock/soundness"
 LK_LEAN="Security Security/Proofs"
-LK_DIR="security security/Proofs"
+LK_DIR="security security/Proofs verity/protocols/flock/verifier"
 LK="$LK_OLD $LK_NEW $LK_LEAN $LK_DIR"
 [ $LAKE = 1 ] && [ $DRY = 0 ] && for k in $LK; do for p in $SRC/*/$k/.lake/packages.rs-trash-*; do
   [ -d "$p" ] && gone "$p" $(age_h "$p") "$p (left by an interrupted sweep)"; done; done

@@ -1,7 +1,7 @@
 """Each population program recorded in `population_recorded.json` keeps its descriptor id and digest. The record (written on
 main before a unit's population gained its ports, `_instance_ports`) holds some of the programs this package's catalog makes:
 `TemplateInstances` v1 at N = 1 and 3 and v0 at N = 3 over each complete composite root of every circuit-check sidecar under
-`verity/circuits` (the Gemm family's word and Boolean templates, the served rows' coordinates among them), and
+`verity/circuits` and `verity/definitions`' `circuits`, `ops` and `silicon` (the Gemm family's word and Boolean templates, the served rows' coordinates among them), and
 `TemplatePopulations` v1 and v0 over each consecutive pair of them. A full record is past the repository's 256 KiB file limit.
 
 The test builds only the programs the record holds (`programs`' ``keys``). The catalog's others are held to no value, and
@@ -36,12 +36,13 @@ ABOUT = ("TemplateInstances / TemplatePopulations programs over verity/circuits'
 REWRITE = "`uv run python tools/verity/check/pins.py --write verity/circuits/tests/population_recorded.json`"
 #: the population programs' own families, which the sidecars bind as roots too: not templates of a population here
 POPULATIONS = ("TemplateInstances", "TemplatePopulations")
+SIDECARS = ((PACKAGE, ()), *((PACKAGE.parent / "definitions" / d, pre) for d, pre in (("circuits", ()), ("ops", ("ops",)), ("silicon", ("silicon",)))))
 
 
 def _templates() -> list[Any]:
-    """Each complete composite root of the package's sidecars, by sidecar path and root function, once each."""
+    """Each complete composite root of the catalog's sidecars (`SIDECARS`), by the path each had in the one tree and root function, once each."""
     out: dict[str, Any] = {}
-    for p in sorted(PACKAGE.rglob("*.circuit-check.py")):
+    for _, p in sorted(((*pre, *p.relative_to(d).parts), p) for d, pre in SIDECARS for p in d.rglob("*.circuit-check.py")):
         spec = importlib.util.spec_from_file_location(f"_population_recorded_{len(out)}_{p.stem.replace('.', '_')}", p)
         m = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(m)
