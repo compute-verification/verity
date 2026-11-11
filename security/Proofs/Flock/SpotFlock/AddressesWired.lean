@@ -80,7 +80,7 @@ def ReadsRegisteredWired (S : Address) (g : ℕ) : Prop :=
 like the unit's port, the session has one table, `g` is a gate of the unit's replay block that `ω` leaves alone and
 the wired program doesn't commit as that block sees it, and under the replay block's roots the address's slot names the
 template's port of the interior record; over any population the session's public file loads, the slot has the
-published tree's schema, its leaf count is the tree's and its leaf (`leafAt`) the sampled unit's row. -/
+published tree's schema, its leaf count is the tree's and its leaf (`leafAt`) the sampled proof block's row. -/
 def ReadsInteriorWired (S : Address) (g : ℕ) : Prop :=
   regNamed r.ins r.sts (S.port r.u) = none ∧ r.ins.read.I.count ≤ 1 ∧ S.port r.u < r.sts[0]!.c.ports.size ∧
     (g ∈ cutBlock ω r.rb ∧ (r.s.prog.wired ω keep).Boundary (cutBlock ω r.rb) g = false) ∧
