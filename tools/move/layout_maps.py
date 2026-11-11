@@ -272,7 +272,49 @@ NEW = {
     "verity/ml/flock/tests/test_rolled_lowering.py": "ml:flock-lowering",           # the roll's lowering
     "verity/ml/definitions/tests/test_sparse_mla_combine_columns.py": "ml:definitions-registry",   # tests `sparse_mla_split`
     "verity/ml/definitions/numerics/token_select_rows.py": "ml:definitions-numerics",              # a row kernel, as `stop_rows.py`
+    "verity/ml/commitments/pool_row.py": "ml:commitment-schemes",       # a row over `rowleaf`, as `row_table.py`; the
+    "verity/ml/commitments/tests/test_pool_row.py": "ml:commitment-schemes",        # certifier's compile slice imports it
+    "verity/ml/definitions/registry/dsa_topk_reads.py": "ml:definitions-registry",  # reads `dsa_topk_mask` and its cut
+    "verity/ml/definitions/registry/dsa_topk_reads.circuit-check.py": "ml:definitions-registry",
+    "verity/ml/definitions/registry/dsa_topk_reads.circuit-check.json": "ml:definitions-registry",
+    "verity/ml/definitions/tests/test_dsa_topk_reads.py": "ml:definitions-registry",
+    "verity/ml/definitions/registry/pearl_c_noise.py": "ml:definitions-registry",   # Pearl-C's noise, as `pearl_c_tile.py`
+    "verity/ml/definitions/registry/pearl_c_noise.circuit-check.py": "ml:definitions-registry",
+    "verity/ml/definitions/registry/pearl_c_noise.circuit-check.json": "ml:definitions-registry",
+    "verity/ml/definitions/tests/test_pearl_c_noise.py": "ml:definitions-registry",
+    "verity/ml/flock/python/verity_flock/struct_slots.py": "ml:flock-lowering",     # over `struct_lower`, as `read_slots.py`
+    "verity/ml/flock/tests/test_struct_slots.py": "ml:flock-lowering",
+    "verity/core/protocols/certifier/continuation.py": "core:certifier-python",     # reads `warden`, `active`, `grid`, `io_tie`
+    "verity/core/protocols/certifier/connection_rows.py": "core:certifier-python",  # the certifier's rows, as `warden_rows.py`
+    "verity/core/protocols/network/lean/NetworkCheck/Clocks.lean": "core:network-check-lean.period",   # `Period` imports it
+    "verity/core/protocols/network/tests/test_nci_record_difftest.py": "core:network-check-lean.period",   # as `test_nci_count_difftest.py`
+    "verity/ml/flock/tests/test_firewall_budget.py": "ml:flock-zk-release-python",  # tests `firewall.py`, as `test_firewall_release.py`
+    "verity/ml/definitions/registry/boolean_norms_split.py": "ml:definitions-registry-boolean",    # `boolean_norms`, cut
+    "verity/ml/definitions/registry/boolean_norms_split.circuit-check.py": "ml:definitions-registry-boolean",
+    "verity/ml/definitions/registry/boolean_norms_split.circuit-check.json": "ml:definitions-registry-boolean",
+    "verity/ml/definitions/registry/boolean_dsa_norm.circuit-check.json": "ml:definitions-registry-boolean",   # its module's pins
+    "verity/ml/definitions/registry/boolean_topp_stages.py": "ml:definitions-registry-boolean",    # `topp_stages` on bits
+    "verity/ml/definitions/registry/boolean_topp_stages.circuit-check.py": "ml:definitions-registry-boolean",
+    "verity/ml/definitions/registry/boolean_topp_stages.circuit-check.json": "ml:definitions-registry-boolean",
+    "verity/ml/definitions/tests/test_boolean_topp_stages.py": "ml:definitions-registry-boolean",
+    "verity/ml/definitions/registry/cuda_rmsnorm_split.py": "ml:definitions-registry",             # `cuda_rmsnorm`, cut
+    "verity/ml/definitions/registry/cuda_rmsnorm_split.circuit-check.py": "ml:definitions-registry",
+    "verity/ml/definitions/tests/test_cuda_rmsnorm_split.py": "ml:definitions-registry",
+    "verity/ml/definitions/registry/tp_allreduce_split.py": "ml:definitions-registry",             # `tp_allreduce`, cut
+    "verity/ml/definitions/registry/tp_allreduce_split.circuit-check.py": "ml:definitions-registry",
+    "verity/ml/definitions/tests/test_mnnvl_and_dsa_norm_splits.py": "ml:definitions-registry",    # tests `tp_allreduce_split`
+    "verity/ml/definitions/registry/greedy_stages.py": "ml:definitions-registry",   # greedy sampling's units, as `topp_stages.py`
+    "verity/ml/definitions/registry/greedy_stages.circuit-check.py": "ml:definitions-registry",
+    "verity/ml/definitions/tests/test_greedy_stages.py": "ml:definitions-registry",
     "benchmarks/memory/": "stays",                     # a benchmark of its own
+    "benchmarks/prove/": "stays",                      # as are these five
+    "benchmarks/certifier_term/": "stays",
+    "benchmarks/inference_only/": "stays",
+    "benchmarks/compute/": "stays",
+    "benchmarks/proof_overhead/": "stays",
+    "benchmarks/network_traces/tests/test_certifier_term.py": "stays",  # its directory stays whole (`KEEP`)
+    "benchmarks/training_slowdown/": "stays",          # a benchmark that stays, but for the two files the data archives
+    "archive/": "stays",                               # a file a change archives itself is where the archive's files go
     "benchmarks/pouw/pearlplus_lean/": "stays",        # a benchmark's Lean, in a directory part of which is archived
     "benchmarks/network_traces/tests/test_scan_zk_v3c.py": "stays",
     "benchmarks/pouw/np_kernel/": "archived",          # its owner archives the kernel: only its test imports it,
