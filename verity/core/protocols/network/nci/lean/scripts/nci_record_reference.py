@@ -113,7 +113,8 @@ def closure_digest(desc: dict, key: str) -> str:
 
 
 def fields_of(ret) -> tuple:
-    """A return type's fields, each one output row: a Tuple's or a Record's fields, else the type itself."""
+    """A return type's fields, each one output row: a Tuple's or a Record's fields, else the type itself. A Tuple or a
+    Record of no field is itself its one field, as `verity.ml.windows.interface` takes it: a row with no bit."""
     return tuple(f[1] if isinstance(f, tuple) else f for f in (getattr(ret, "fields", None) or (ret,)))
 
 

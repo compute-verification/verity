@@ -1,8 +1,8 @@
 """The inference-only policy's check of an execution phase's circuit record (`NciCheck.Record`) against the Python
 reference: the Python half.
 
-`verity/core/protocols/network/nci/lean/scripts/record_difftest_vectors.py` writes 664 cases (600 random circuits,
-two in five broken in one way, and 64 shaped ones, most in the shape of a served class) and, on each,
+`verity/core/protocols/network/nci/lean/scripts/record_difftest_vectors.py` writes 666 cases (600 random circuits,
+two in five broken in one way, and 66 shaped ones, most in the shape of a served class) and, on each,
 `scripts/nci_record_reference.py`'s results, which visit every row of every unit. `check` runs the Lean half in its
 Lean audit (`runs` in that package's `lean-audit.json`): `NciCheck/RecordDifftestMain.lean` fails unless
 `Record` and `RecordCount` give Python's results on every case, and unless SPOT's reader reads the
@@ -23,7 +23,8 @@ and input bits apart by exactly the rows no gate reads. The tenth holds the refe
 `verity.ml.windows.interface`, the rules a lowering states a record by: the stage that refuses a record, each unit's
 slot, and `input_count`'s totals. The eleventh is that a row is declared once: the served shape's record with one
 declaration more into a row it already declares is refused, whatever the two declarations are, and the second alone
-is taken.
+is taken. The twelfth is that an output has a bit: a template that returns no field, or a field of no bit, is refused
+with its templates, and the interface lays out no unit of it.
 
 The tenth holds to `input_count` only where every opening it counts registered is one the form holds (`held`: the
 reader's Definition pinned, with table reads of the table's root and domain id over the opening's units). Where one is
@@ -73,6 +74,8 @@ LISTED, BARE = "2x3 a record that lists its members", "2x3 a text of no wire tha
 TEXT = {LISTED: "wires", BARE: "templates"}
 #: the cases on a row declared twice, each with the stage that refuses it
 TWICE = {f"2x3 {what}": stage for what, (stage, *_) in vectors.TWICE.items()}
+#: the cases on a template with an output that has no bit, each with the stage that refuses it
+BITLESS = {f"2x3 {what}": "templates" for what in vectors.BITLESS}
 
 
 @pytest.fixture(scope="module")
@@ -87,7 +90,7 @@ def shaped() -> dict[str, dict]:
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 664 cases and the reference's results, byte for byte as the record pins them."""
+    """All 666 cases and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{record_difftest/cases.jsonl}", "{record_difftest/python.jsonl}", str(vectors.total())]
@@ -130,7 +133,7 @@ def test_the_served_shape(shaped):
     block's fresh bits then its scan state's alone; refused by the rate rule, and by the count on its fresh bits,
     with none registered or committed, under another root, with an opening that reads no root, with an opening whose
     reader is another Definition under the pinned one's name, and with one wire from the next slot."""
-    got = {what: vectors.results(m["case"]) for what, m in shaped.items() if what not in LAYOUT | ROWS | TEXT | TWICE}
+    got = {what: vectors.results(m["case"]) for what, m in shaped.items() if what not in LAYOUT | ROWS | TEXT | TWICE | BITLESS}
     verdicts = {what: (r["detail"]["failure"], r["count"]["failure"]) for what, r in got.items()}
     refused = ("nci", "fresh")
     assert verdicts == {
@@ -193,7 +196,7 @@ def test_a_pinned_readers_layout(shaped, monkeypatch):
     The layout's stage alone refuses them: without it the reference refuses none, and accepts the token among the
     ports with a block's fresh bits those of the case that wires it."""
     assert {what for what, m in shaped.items() if m["broken"]} == {
-        what for what, v in (LAYOUT | ROWS | TEXT | TWICE).items() if isinstance(v, str)}
+        what for what, v in (LAYOUT | ROWS | TEXT | TWICE | BITLESS).items() if isinstance(v, str)}
     got = {what: vectors.results(shaped[what]["case"]) for what in LAYOUT}
     for what, want in LAYOUT.items():
         detail, count, m = got[what]["detail"], got[what]["count"], shaped[what]
@@ -614,6 +617,29 @@ def test_a_row_is_declared_once(shaped):
         assert alone != built, what
         declare(alone)
         declarations(alone)
+
+
+def test_an_output_has_a_bit(shaped):
+    """A template with an output that has no bit is refused with its templates. A return of no field is itself its
+    one output, of no bit, as the interface lays a return out, and a field of no bit is an output of no bit beside
+    one of 16. Such an output has no word, so no wire could read it, and the interface lays out no unit of such a
+    template, so no record it writes holds one."""
+    returns = {"a template that returns no field": ["Tuple", []],
+               "a return field of no bit": ["Tuple", [["Value", 16], ["Tuple", []]]]}
+    assert set(returns) == set(vectors.BITLESS)
+    for what, (name, outs, plan) in vectors.BITLESS.items():
+        m = shaped[f"2x3 {what}"]
+        r = vectors.results(m["case"])
+        assert r["detail"] == r["public"] == r["kinds"] == r["exported"] == r["count"] == {"error": "templates"}, what
+        fn = vectors.template(name, [("p", vectors.Value(16))], outs, plan)
+        tid = codec.descriptor_id(fn)
+        assert json.loads(m["case"]["instance"]["record"])["templates"] == [[tid, 2]], what
+        program = json.loads(m["case"]["instance"]["program"])
+        assert program["definitions"][tid]["body"]["ret_type"] == returns[what], what
+        fields = ref.fields_of(fn.signature()[1])
+        assert [sum(t.leaf_widths()) for t in fields] == [*(16 for _ in outs[:-1]), 0], what
+        with pytest.raises(ValueError, match=f"o{len(fields) - 1}: its leaves are .* 0 in all"):
+            IF.layout(fn)
 
 
 def _interface(made: dict):

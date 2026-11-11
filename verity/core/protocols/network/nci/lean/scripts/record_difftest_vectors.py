@@ -50,7 +50,9 @@ a row every unit shares, and with a row of computed gates. Then a text the form 
 record as one that lists its members, which states no wires, refused by the wires' reader; and the text of no wire
 and nothing else, which names no Program, refused with its templates. Then a row declared twice (`TWICE`): the served
 shape's record with one declaration more, into a row it already declares, a case each pair of a wire, a registered
-read, a table read, an opening's port and ingress, each refused.
+read, a table read, an opening's port and ingress, each refused. Then a template with an output that has no bit
+(`BITLESS`): one that returns no field, and one with a field of no bit beside a field of 16, each refused with its
+templates.
 
 Every wire of every case is one `Record.sameSlot`'s search decides within its fuel (`searched`, the search
 mirrored and held to the expansion as the cases are made), so the Lean's count of a wire is the reference's.
@@ -197,16 +199,16 @@ def template(name: str, params: list, outs: list, plan: list):
     the output's leaves parameter `i`'s one-bit `leaves`, at least two, passed on (`passed`; `how` one of `PASSES`,
     `"direct"` where none is given); else per output leaf `(form, r, operands)`, a primitive returning `Value<r>`
     over the parameter leaves `operands` (`(parameter, leaf)` each), called directly (`"op"`) or inside a composite
-    of its own (`"sub"`)."""
+    of its own (`"sub"`). An output of no leaf, a Tuple of no field, has no gate."""
     ret = outs[0] if len(outs) == 1 else Tuple(*outs)
 
     def body(B, S, *args):
         ls, hs = [leaves_of(a) for a in args], []
         for j, (t, made) in enumerate(zip(outs, plan, strict=True)):
-            if made[0] == "batch":
+            if made and made[0] == "batch":
                 hs.append(B.batch(prim((args[made[1]].type.elem.w,), made[2]), args[made[1]], axes=(0,)))
                 continue
-            if made[0] == "pass":
+            if made and made[0] == "pass":
                 hs.append(passed(B, f"{name}Hand{j}", [ls[made[1]][k] for k in made[2]], (*made, "direct")[3]))
                 continue
             got = []
@@ -807,6 +809,13 @@ TWICE: dict[str, tuple] = {
     "ingress into an opened row": ("inputs", _put("ingress", _ingress(EMBED, "row")), _take("openings", EMBED, "row")),
 }
 
+#: a template with an output that has no bit: its name, its return's fields and its plan (`template`), its one
+#: parameter a word. A return of no field is itself its one output, as `verity.ml.windows.interface` lays it out.
+BITLESS: dict[str, tuple] = {
+    "a template that returns no field": ("NoField", [], []),
+    "a return field of no bit": ("NoBit", [Value(16), Tuple()], [[("op", 16, [(0, 0)])], []]),
+}
+
 
 def shaped() -> list[dict]:
     """The cases on `lowered` circuits, at two slots and three positions and at four slots and 35, each size under one
@@ -843,7 +852,11 @@ def shaped() -> list[dict]:
     Then the accepted case with one row declared twice (`TWICE`): its record with one declaration more, into a row
     the record already declares, a case each pair of a wire, a registered read, a table read, an opening's port and
     ingress that the circuit has a row for. Two wires into one row are refused by the wires' own check (`wires`), and
-    every other pair with the declarations (`inputs`)."""
+    every other pair with the declarations (`inputs`).
+
+    Then the accepted case with its Program and record those of one template with an output that has no bit
+    (`BITLESS`), a unit a slot: a template that returns no field, and one whose return has a field of no bit beside a
+    field of 16. Each is refused with its templates (`templates`)."""
     out = []
     first = None
     for n, (S, T) in enumerate([(2, 3), (4, 35)]):
@@ -852,9 +865,10 @@ def shaped() -> list[dict]:
 
         def one(what: str, c: Circuit, seed: int, *, held=WEIGHTS, committed=WEIGHTS, moved=(), beside=False,
                 before=2, policy=policy, pins=pins, n=n, edit=None, pinned=None, broken=None, refused=None,
-                reroot=None) -> None:
+                reroot=None, alone=None) -> None:
             """The case on `c`; with `edit`, its record then edited; with `reroot`, its Program's root then edited;
-            with `pinned`, its pins then those; `broken`, the stage that refuses it; `refused`, that stage where it
+            with `alone`, its Program and record then those of a circuit of that one template (`_alone`); with
+            `pinned`, its pins then those; `broken`, the stage that refuses it; `refused`, that stage where it
             refuses the circuit as built."""
             rng = random.Random(50_000 + 100 * n + seed)
             roots = {p: _hex(rng) for p in c.params}
@@ -869,6 +883,8 @@ def shaped() -> list[dict]:
                 _rewrite(made, edit)
             if reroot is not None:
                 _reroot(made, reroot)
+            if alone is not None:
+                _alone(made["case"], c, alone)
             if broken in EARLY:
                 made["case"]["spot"] = None
             if pinned is not None:
@@ -969,6 +985,9 @@ def shaped() -> list[dict]:
           edit=lambda d: (d.clear(), d.update(wires=[])), broken="templates")
     for k, (what, (stage, declare, _)) in enumerate(TWICE.items()):
         first(f"2x3 {what}", lowered(2, 3), 47 + k, edit=declare, broken=stage)
+    for k, (what, (name, outs, plan)) in enumerate(BITLESS.items()):
+        first(f"2x3 {what}", lowered(2, 3), 47 + len(TWICE) + k, broken="templates",
+              alone=template(name, [("p", Value(16))], outs, plan))
     return out
 
 
@@ -1248,11 +1267,8 @@ def _break(rng, made: dict, how: str) -> bool:
             return False
         _rewrite(made, lambda d: d.update(templates=d["templates"][::-1]))
     elif how == "half-word":
-        fn = template(f"Half{c.name}", [("p", Value(rng.choice([8, 24])))], [Value(16)], [[("op", 16, [(0, 0)])]])
-        text, digest = Circuit.program(_only(c, fn))
-        inst["program"] = text
-        _commit(case, IF.circuit_bytes({**doc, "program": digest, "templates": [[codec.descriptor_id(fn), c.slots]],
-                                         "wires": [], "cuts": {}}).decode(), digest)
+        _alone(case, c, template(f"Half{c.name}", [("p", Value(rng.choice([8, 24])))], [Value(16)],
+                                 [[("op", 16, [(0, 0)])]]))
     elif how in BROKEN["own-rows"]:
         desc = json.loads(inst["program"])
         nodes, types = desc["definitions"][desc["root"]]["body"]["nodes"], desc["types"]
@@ -1490,6 +1506,16 @@ def _only(c: Circuit, fn) -> Circuit:
     return out
 
 
+def _alone(case: dict, c: Circuit, fn) -> None:
+    """The case's Program and record replaced by those of a circuit of the one template `fn`, a unit a slot of `c`'s,
+    with no wire and no cut; the record's other fields kept."""
+    doc = json.loads(case["instance"]["record"])
+    text, digest = Circuit.program(_only(c, fn))
+    case["instance"]["program"] = text
+    _commit(case, IF.circuit_bytes({**doc, "program": digest, "templates": [[codec.descriptor_id(fn), c.slots]],
+                                     "wires": [], "cuts": {}}).decode(), digest)
+
+
 def _other_width(c: Circuit, w: dict) -> dict | None:
     """Wire `w` reading an output of another width, where its writer has one."""
     fn = next(fn for fn, _ in c.templates if codec.descriptor_id(fn) == w["writer"])
@@ -1525,7 +1551,7 @@ NAMES = ("cases", "python")
 
 def total() -> int:
     """How many cases the audit's data has: the random ones and `shaped()`'s."""
-    return COUNT + 50 + len(TWICE)
+    return COUNT + 50 + len(TWICE) + len(BITLESS)
 
 
 def results(case: dict) -> dict:
