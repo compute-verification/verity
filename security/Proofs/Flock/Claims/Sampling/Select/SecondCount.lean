@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Sampling.Select.Second
 public import Proofs.Flock.Claims.Sampling.Select.Size
-import all Spot.Draw
+import Spot.Draw
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 import Proofs.Core.QSort
