@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-EXAMPLE = ROOT / "examples" / "vllm"
+EXAMPLE = ROOT / "demos" / "vllm"
 ROW = "llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager"
 
 FAKE_CLI = '''import json, os, sys
@@ -41,7 +41,7 @@ def _serve(tmp_path: Path, row: str = "write", compare: str = "equal") -> tuple[
     refusal (``row``) and `predict compare` equal or not (``compare``), and whose `serve-openai` exits before it listens, under a
     `sleep` that returns at once: the exit status, the cli's calls in order, and serve.sh's output."""
     tree, venv, bin_ = tmp_path / "tree", tmp_path / "venv" / "bin", tmp_path / "bin"
-    for d in (tree / "integrations" / "vllm", venv, bin_):
+    for d in (tree / "adapters" / "vllm", venv, bin_):
         d.mkdir(parents=True)
     (tmp_path / "cli.py").write_text(FAKE_CLI)
     (tmp_path / "answers.json").write_text(json.dumps({"row": row, "compare": compare}))

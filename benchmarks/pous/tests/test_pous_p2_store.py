@@ -26,10 +26,10 @@ sys.path.insert(0, str(BENCH))
 from p2_v1 import reference  # noqa: E402
 from p2_v1 import store as S  # noqa: E402
 
-from verity.core.protocols.pous import protocol, setup, verifier  # noqa: E402
-from verity.core.protocols.pous.layout import Layout, decode_tensor  # noqa: E402
-from verity.core.protocols.pous.schemes.p2 import P2, P2Params, decode_segment, encode_segment, expand_prefix  # noqa: E402
-from verity.core.protocols.pous.verifier import VerifierKey  # noqa: E402
+from verity.protocols.pous.verifier import protocol, setup, verifier  # noqa: E402
+from verity.protocols.pous.verifier.layout import Layout, decode_tensor  # noqa: E402
+from verity.protocols.pous.verifier.schemes.p2 import P2, P2Params, decode_segment, encode_segment, expand_prefix  # noqa: E402
+from verity.protocols.pous.verifier.verifier import VerifierKey  # noqa: E402
 
 TOY = json.loads((S.TOY_DIR / "toy.json").read_text())
 SPOT = json.loads((S.TOY_DIR / "spot.json").read_text())
@@ -357,18 +357,18 @@ def test_parts_join_to_the_whole_store(gen: tuple[str, str], tmp_path: Path) -> 
     assert (joined["root"], joined["w_root"], joined["tie"]) == (whole["root"], whole["w_root"], whole["tie"])
 
 
-H200_DEMO = BENCH.parents[1] / "examples" / "h200"
+H200_DEMO = BENCH.parents[1] / "archive" / "examples" / "h200"
 
 
 def test_generated_with_the_default_generator(gen: tuple[str, str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """The store's default generator (`S.GENERATOR`, run with `examples/h200` on the path), not the stand-in. At `h200`
+    """The store's default generator (`S.GENERATOR`, run with `archive/examples/h200` on the path), not the stand-in. At `h200`
     `Generated` is the frozen store under the generator's `model_id`, its tensors are the generator's parts' bytes, and
     `pieces` knows the generator's manifest by its `"model"`: it refuses another seed's, and this seed's only for the
     digests it lacks. A manifest with digests generates the whole stream, so `pieces` and `commit` run whole at `tiny`,
     where `setup.json` holds that name as `"program"`. The stand-in has no name, and its manifest no key, that the
     default generator's lacks."""
     monkeypatch.syspath_prepend(str(H200_DEMO))
-    mod = importlib.import_module("e2e_h200.served_weights")
+    mod = importlib.import_module("benchmarks.torch_gpu.p2_stage.served_weights")
     seed, h200 = mod.TEST_SEED, mod.H200
     real = S.Generated(S.GENERATOR, "h200", seed)
     assert real.mod is mod and S.layout_sha512(real.store) == S.LAYOUT_SHA512
