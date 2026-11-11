@@ -503,6 +503,89 @@ impl IrUnitNet {
     }
 }
 
+/// The unit's expanded circuit's level schedule: level 0 the input rows and the constant, a row one past its deepest operand
+/// (itself, in an assertion row, excluded), so a level's rows read only earlier levels' and are computed in any order. The
+/// device reads its rows beside it as CSR (`gpu::csr`).
+pub struct UnitSched {
+    /// levels [0, levels0) read no late input row; the rest do
+    pub levels0: usize,
+    pub late_rows: Vec<u32>,
+    pub cut_rows: Vec<u32>,
+    pub level_off: Vec<u32>,
+    pub order: Vec<u32>,
+}
+
+impl UnitSched {
+    /// The levels past level 0, both phases'.
+    pub fn levels(&self) -> usize {
+        self.level_off.len() - 1
+    }
+
+    /// Level `l + 1`'s rows.
+    pub fn level(&self, l: usize) -> &[u32] {
+        &self.order[self.level_off[l] as usize..self.level_off[l + 1] as usize]
+    }
+}
+
+/// The unit's schedule; a cut unit's (a second input group: its late rows, the cut words the tail computes; a second output
+/// group: its cut output rows) in two phases: the rows that read no late row, then the rest.
+pub fn schedule(net: &IrUnitNet) -> UnitSched {
+    schedule_of(net, &net.a, &net.b)
+}
+
+/// [`schedule`] of `net`'s layout with its rows `a` and `b` read through [`RowRead`].
+pub(crate) fn schedule_of<R: RowRead + ?Sized>(net: &IrUnitNet, a: &R, b: &R) -> UnitSched {
+    let (u, first, cpos) = (net.useful, net.in_words * WORD, net.const_pos);
+    let rows_of = |g: &Group| -> Vec<u32> { (0..g.bits.iter().sum::<usize>()).map(|j| (g.col * WORD + j) as u32).collect() };
+    let mut late_rows: Vec<u32> = net.in_groups.get(1).map(rows_of).unwrap_or_default();
+    let mut cut_rows: Vec<u32> = if late_rows.is_empty() { vec![] } else { net.out_groups.last().map(rows_of).unwrap_or_default() };
+    let mut late = vec![false; u];
+    for &r in &late_rows {
+        late[r as usize] = true;
+    }
+    for i in first..u {
+        if i != cpos {
+            late[i] = a.row_cols(i).chain(b.row_cols(i)).any(|c| c != i && c != cpos && late[c]);
+        }
+    }
+    if cut_rows.iter().any(|&r| late[r as usize]) {
+        // not two-phase (a cut output reads a late input: attention's and GEMM's tensor-core steps): one phase; such a unit's
+        // witness is the host's (flock-circuit keeps it off the device)
+        late_rows.clear();
+        cut_rows.clear();
+        late = vec![false; u];
+    }
+    let mut level_off = vec![0u32];
+    let mut order = Vec::new();
+    let mut levels0 = 0;
+    for phase in [false, true] {
+        let mut level = vec![0u32; u];
+        let mut max = 0;
+        for i in first..u {
+            if i == cpos || late[i] != phase {
+                continue;
+            }
+            let l = 1 + a.row_cols(i).chain(b.row_cols(i)).filter(|&c| c != i && c != cpos && late[c] == phase && c >= first).map(|c| level[c]).max().unwrap_or(0);
+            level[i] = l;
+            max = max.max(l);
+        }
+        let mut by: Vec<Vec<u32>> = vec![Vec::new(); max as usize];
+        for i in first..u {
+            if i != cpos && late[i] == phase {
+                by[level[i] as usize - 1].push(i as u32);
+            }
+        }
+        for l in by {
+            order.extend(l);
+            level_off.push(order.len() as u32);
+        }
+        if !phase {
+            levels0 = level_off.len() - 1;
+        }
+    }
+    UnitSched { levels0, late_rows, cut_rows, level_off, order }
+}
+
 fn bit(w: &F128, t: usize) -> bool {
     (if t < 64 { w.lo >> t } else { w.hi >> (t - 64) }) & 1 == 1
 }
@@ -1147,6 +1230,46 @@ mod tests {
         let mut fwd = random_net(5, 1, 400);
         fwd.a = appended(&fwd.a, WORD + 3, WORD + 8);
         assert!(fwd.eval_wide(|_| Row2::splat(1)).is_none(), "a row reading a later column has no one-pass form");
+    }
+
+    #[test]
+    fn the_schedule_puts_every_row_one_level_past_its_deepest_operand() {
+        let g = |col: usize| Group { col, words: 1, bits: vec![WORD] };
+        for (seed, in_words, useful, cut) in [(3u64, 1usize, 600usize, false), (0x51ed, 2, 5000, true), (0x51ed, 2, 5000, false), (99, 3, 40_000, false)] {
+            let mut net = random_net(seed, in_words, useful);
+            if in_words == 2 {
+                // a cut unit: late input rows 128..256, cut output rows 256..384, which read no late row where `cut`
+                net.in_groups = vec![g(0), g(1)];
+                net.out_groups = vec![g(30), g(2)];
+                for i in 2 * WORD..3 * WORD {
+                    let early = |rows: &Rows| -> Vec<usize> { rows.row_cols(i).map(|c| if cut && c < i { c % WORD } else { c }).collect() };
+                    (net.a, net.b) = (net.a.with_row(i, &early(&net.a)), net.b.with_row(i, &early(&net.b)));
+                }
+            }
+            let (first, cp) = (in_words * WORD, net.const_pos);
+            let x = schedule(&net);
+            let y = schedule_of(&net, net.a.to_vecs().as_slice(), net.b.to_vecs().as_slice());
+            assert_eq!((x.levels0, &x.late_rows, &x.cut_rows, &x.level_off, &x.order), (y.levels0, &y.late_rows, &y.cut_rows, &y.level_off, &y.order),
+                       "net {seed}: the schedule from vectors");
+            assert_eq!(x.cut_rows.is_empty(), !cut, "net {seed}: two phases where the cut rows read no late row, else one");
+            assert_eq!((x.late_rows.is_empty(), x.levels0 == x.levels()), (!cut, !cut), "net {seed}: the late rows and their levels");
+            let mut rows = x.order.clone();
+            rows.sort_unstable();
+            assert!(rows.iter().map(|&r| r as usize).eq(first..cp), "net {seed}: every row past the inputs once");
+            let mut level = vec![0usize; useful];
+            for l in 0..x.levels() {
+                assert!(!x.level(l).is_empty(), "net {seed}: level {} is empty", l + 1);
+                x.level(l).iter().for_each(|&r| level[r as usize] = l + 1);
+            }
+            for i in first..cp {
+                let deepest = net.a.row_cols(i).chain(net.b.row_cols(i)).filter(|&c| c != i && c != cp).map(|c| level[c]).max().unwrap_or(0);
+                let phase_start = level[i] == 1 || level[i] == x.levels0 + 1;
+                assert!(deepest < level[i] && (deepest + 1 == level[i] || phase_start), "net {seed}: row {i} at level {}, its deepest operand at {deepest}", level[i]);
+            }
+            assert!(x.late_rows.iter().all(|&r| level[r as usize] == 0) && x.cut_rows.iter().all(|&r| level[r as usize] <= x.levels0),
+                    "net {seed}: a cut output past the first phase");
+            assert!(x.levels() > 3, "net {seed}: a schedule of under three levels");
+        }
     }
 
     #[test]

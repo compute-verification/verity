@@ -10,6 +10,7 @@
 //!   flock-circuit selftest --instances INST --circuit FILE [--gpu] [--only CASE]
 //!   flock-circuit statement --instances PUB --circuit FILE    (the statement the verifier builds, its digest; nothing proved)
 //!   flock-circuit stacked  --table R.bin (--root-out ROOT.json | --points P.json --statement-digest HEX --verifier ADDR [--dump F])   (`stacked`)
+//!   flock-circuit unit-levels --circuit FILE [--net N] [--widths]   (the unit's level schedule, `unit_levels`; nothing proved)
 //!
 //! The verifier loads only its own public file (`verity_flock.circuit.stage(..., public_only=True)`: roots and each row's
 //! `b || c`, the output rows' too; no row, no salt, no output word) and the pinned circuit, from which it derives Δ, the regions and their values; it checks the
@@ -3613,7 +3614,7 @@ fn with_gpu_src<R>(st: &Stmt, wt: &WitData, f: impl FnOnce(flock_live::gpu_circu
         WitData::Host((z, a, b, _)) => CircuitSrc::Host { z, a, b },
         WitData::Dev(r, h, i) => CircuitSrc::Device { rows: r, host: h, inputs: i },
         WitData::DevCut(r, h, i, ui) => {
-            let sched = flock_live::gpu_circuit::schedule(st.c.unit());
+            let sched = flock_live::ir_block::schedule(st.c.unit());
             let cut_rows: Vec<usize> = sched.cut_rows.iter().map(|&r| r as usize).collect();
             let late_rows: Vec<usize> = sched.late_rows.iter().map(|&r| r as usize).collect();
             mid_fn = move |cut: &[u32]| st.host_tail(&**ui, cut, &cut_rows, &late_rows);
@@ -4878,6 +4879,42 @@ fn unit_walk(c: &Composite) {
                     "same": want.0 == ok && want.1 == out}));
             }
         }
+    }
+}
+
+/// `unit-levels`: circuit `--net`'s (default the statement's unit's) level schedule (`ir_block::schedule`, the walk
+/// `unit_ab_levels` and the device's unit kernel take), one `LEVELS` line: its rows and nonzeros, its levels, the rows a
+/// level (least, median, mean, most), how many of its widest levels hold half, 90% and 99% of the rows, and the levels and
+/// their rows by width (`by_width`: the levels of under 32 rows, of under 1,024, 32,768 and 1,048,576, and the rest). The
+/// schedule reads the rows by column, so it is a walk of the net only where `one_pass` is true. `--widths`: a `WIDTHS` line
+/// after it, every level's rows, in level order.
+fn unit_levels(c: &Composite) {
+    let ni: usize = arg("--net", &c.unit_net.to_string()).parse().expect("--net");
+    let net = &c.nets[ni].1;
+    let s = flock_live::ir_block::schedule(net);
+    let widths: Vec<usize> = (0..s.levels()).map(|l| s.level(l).len()).collect();
+    let rows: usize = widths.iter().sum();
+    let mut sorted = widths.clone();
+    sorted.sort_unstable_by(|a, b| b.cmp(a));
+    let holding = |share: f64| -> usize {
+        let mut held = 0;
+        sorted.iter().position(|&w| { held += w; held as f64 >= share * rows as f64 }).map_or(0, |i| i + 1)
+    };
+    let bounds = [32usize, 1 << 10, 1 << 15, 1 << 20, usize::MAX];
+    let by_width: Vec<Value> = bounds.iter().enumerate().map(|(k, &hi)| {
+        let lo = if k == 0 { 0 } else { bounds[k - 1] };
+        let of: Vec<usize> = widths.iter().copied().filter(|&w| lo <= w && w < hi).collect();
+        json!({"under": (hi != usize::MAX).then_some(hi), "levels": of.len(), "rows": of.iter().sum::<usize>()})
+    }).collect();
+    println!("LEVELS\t{}", json!({"net": ni, "name": c.nets[ni].0, "unit_log": net.unit_log, "rows": net.useful,
+        "inputs": net.in_words * 128, "nnz_a": net.a.nnz(), "nnz_b": net.b.nnz(), "one_pass": net.one_pass(),
+        "position_map": net.order.is_some(), "levels": s.levels(), "levels0": s.levels0, "late_rows": s.late_rows.len(),
+        "cut_rows": s.cut_rows.len(), "level_rows": rows,
+        "rows_a_level": {"min": sorted.last(), "median": sorted.get(sorted.len() / 2), "mean": rows as f64 / widths.len().max(1) as f64,
+                         "max": sorted.first()},
+        "widest_levels_holding": {"0.5": holding(0.5), "0.9": holding(0.9), "0.99": holding(0.99)}, "by_width": by_width}));
+    if flag("--widths") {
+        println!("WIDTHS\t{}", json!(widths));
     }
 }
 
@@ -7526,6 +7563,9 @@ fn main() {
     if cmd == "unit-walk" {
         return unit_walk(&c);
     }
+    if cmd == "unit-levels" {
+        return unit_levels(&c);
+    }
     let pin = arg("--pin", "");
     if cmd == "serve" && pin.is_empty() {
         refuse("serve needs --pin (the pinned circuit's SHA-512)".into());
@@ -7612,6 +7652,6 @@ fn main() {
                 println!("LIVE\t{v}");
             });
         }
-        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ... | stacked --table R.bin ... | unit-walk --circuit FILE [--slots N] [--wide 1,2,4,8]"),
+        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ... | stacked --table R.bin ... | unit-walk --circuit FILE [--slots N] [--wide 1,2,4,8] | unit-levels --circuit FILE [--net N] [--widths]"),
     }
 }

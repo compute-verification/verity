@@ -17,7 +17,7 @@ use crate::{
     LiveChallenger,
     chunk::comp,
     gpu::{ChunkParams, ProveParams, Rounds, csc_from_rows, csc_of, csr, decode_with, link_cb, prove_params, sched, statics_for},
-    ir_block::{IrUnitNet, RowRead},
+    ir_block::{IrUnitNet, UnitSched, schedule},
     circuit::{Kind, Stmt},
 };
 
@@ -804,76 +804,6 @@ pub enum CircuitSrc<'a> {
     Device { rows: &'a [F128], host: &'a HostSlots, inputs: &'a [F128] },
 }
 
-/// The unit's expanded circuit's level schedule: level 0 the input rows and the constant, a row one past its deepest operand
-/// (itself, in an assertion row, excluded). The device reads its rows beside it as CSR ([`csr`]).
-pub struct UnitSched {
-    /// levels [0, levels0) read no late input row; the rest do
-    pub levels0: usize,
-    pub late_rows: Vec<u32>,
-    pub cut_rows: Vec<u32>,
-    pub level_off: Vec<u32>,
-    pub order: Vec<u32>,
-}
-
-/// The unit's schedule; a cut unit's (a second input group: its late rows, the cut words the tail computes; a second output
-/// group: its cut output rows) in two phases: the rows that read no late row, then the rest.
-pub fn schedule(net: &IrUnitNet) -> UnitSched {
-    schedule_of(net, &net.a, &net.b)
-}
-
-/// [`schedule`] of `net`'s layout with its rows `a` and `b` read through [`RowRead`].
-fn schedule_of<R: RowRead + ?Sized>(net: &IrUnitNet, a: &R, b: &R) -> UnitSched {
-    let (u, first, cpos) = (net.useful, net.in_words * 128, net.const_pos);
-    let rows_of = |g: &crate::ir_block::Group| -> Vec<u32> { (0..g.bits.iter().sum::<usize>()).map(|j| (g.col * 128 + j) as u32).collect() };
-    let mut late_rows: Vec<u32> = net.in_groups.get(1).map(rows_of).unwrap_or_default();
-    let mut cut_rows: Vec<u32> = if late_rows.is_empty() { vec![] } else { net.out_groups.last().map(rows_of).unwrap_or_default() };
-    let mut late = vec![false; u];
-    for &r in &late_rows {
-        late[r as usize] = true;
-    }
-    for i in first..u {
-        if i != cpos {
-            late[i] = a.row_cols(i).chain(b.row_cols(i)).any(|c| c != i && c != cpos && late[c]);
-        }
-    }
-    if cut_rows.iter().any(|&r| late[r as usize]) {
-        // not two-phase (a cut output reads a late input: attention's and GEMM's tensor-core steps): one phase; such a unit's
-        // witness is the host's (flock-circuit keeps it off the device)
-        late_rows.clear();
-        cut_rows.clear();
-        late = vec![false; u];
-    }
-    let mut level_off = vec![0u32];
-    let mut order = Vec::new();
-    let mut levels0 = 0;
-    for phase in [false, true] {
-        let mut level = vec![0u32; u];
-        let mut max = 0;
-        for i in first..u {
-            if i == cpos || late[i] != phase {
-                continue;
-            }
-            let l = 1 + a.row_cols(i).chain(b.row_cols(i)).filter(|&c| c != i && c != cpos && late[c] == phase && c >= first).map(|c| level[c]).max().unwrap_or(0);
-            level[i] = l;
-            max = max.max(l);
-        }
-        let mut by: Vec<Vec<u32>> = vec![Vec::new(); max as usize];
-        for i in first..u {
-            if i != cpos && late[i] == phase {
-                by[level[i] as usize - 1].push(i as u32);
-            }
-        }
-        for l in by {
-            order.extend(l);
-            level_off.push(order.len() as u32);
-        }
-        if !phase {
-            levels0 = level_off.len() - 1;
-        }
-    }
-    UnitSched { levels0, late_rows, cut_rows, level_off, order }
-}
-
 /// A slot type's circuit as the device reads it, CSC over its slot's columns: A's and B's column pointers and nonzero counts,
 /// and their row indices, the bulk ([`Types::types_gen`]'s set 0). The device holds one copy of them per GPU, which every prover
 /// there with the same slot types maps ([`arrays_key`]), and they're freed here. With `FC_CSC_HOST_MIB=M`, rows of at least M
@@ -1399,7 +1329,7 @@ mod tests {
 
     #[test]
     fn device_builders_read_rows_alike() {
-        use crate::ir_block::{Group, Rows};
+        use crate::ir_block::{Group, Rows, schedule_of};
         let g = |col: usize| Group { col, words: 1, bits: vec![128] };
         // a one-phase unit, and a cut unit (late input rows 128..256, cut output rows 256..384, which read no late row)
         for (seed, useful, ins, outs) in [(3u64, 600usize, vec![g(0)], vec![g(4)]), (0x51ed, 5000, vec![g(0), g(1)], vec![g(30), g(2)])] {
