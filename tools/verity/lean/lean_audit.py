@@ -4,7 +4,8 @@ packages whose passes can't be reused, with dependencies kept warm.
     python tools/verity/lean/lean_audit.py --out DIR [--cache DIR] [--deps DIR] [--fresh] [--urls FILE] [--export DIR] [--package PKG]...
                                                       (only those packages: a shard's share, `check.py --shard`)
                                                       [--regenerate] (the Lean check of `next`: record differences pass,
-                                                      and audit.json's `regenerated` names the records drive commits)
+                                                      and audit.json's `regenerated` names the records drive commits,
+                                                      `rekeyed` the passes kept for that commit)
                                                       [--bookkeeping warn] (with --regenerate, drive's lock run: the
                                                       bookkeeping repaired and warned, `repaired` the caps drive commits)
                                                       [--bundle] (a recorded check: the module versions it built, for other nodes)
@@ -46,6 +47,18 @@ stored under its key, and a failure is never stored. One read is outside the scr
 in `lean-audit.json`) reads this checkout (`check.py --repo`). Its output is used only with the SHA-256 the record holds for
 it, and the key covers the record, so it cannot pass a test on other data. The package's own Python tests check that the
 generator still writes that data.
+
+A lock run (`--regenerate`) passes a package on its regenerated lock, the lock of another tree: the commit drive makes of
+the regenerated locks, where that package, each package requiring it by path and the spec it proves have other keys, so
+no pass of the run answers there. After a whole lock run passes, each such package it audited is judged on that tree
+from the facts document its own audit stored (`keep_regenerated`: `check.py --facts-from` with every regenerated lock in
+place, every check that reads the live locks and no build), and where that leaves nothing its pass is stored under the
+new key (audit.json's `rekeyed`): the audit of the lock commit reuses it and builds nothing. A pass is kept only where
+each regenerated lock the package's audit reads agrees with the lock it replaces on all the build, the seal, `Facts.lean`,
+the replay and the tests take from a lock (`check.py`'s `build_inputs`), so those steps would run on the same inputs
+there. That holds for a build and tests that read their lock only through the audit, as every package's do; one that
+read its own `lean-audit.json` would be a read its pass does not cover, which the nightly uncached check shows as a
+disagreement, as it does a read outside a key.
 
 A package's fetched dependencies (`.lake/packages`: Mathlib's cache, ArkLib's build) are kept on this machine under
 `lake-manifest.json` plus `lean-toolchain`. They're moved into the scratch package's own `.lake` before its build (the only place
@@ -92,6 +105,7 @@ from __future__ import annotations
 import argparse
 import base64
 import fcntl
+import functools
 import gzip
 import hashlib
 import importlib.util
@@ -132,21 +146,17 @@ SETTINGS = _module(Path(__file__).resolve().parent / "settings.py", "lean_settin
 CONTRACT = "tools/verity/graph/verity_graph/contract.py"
 
 
+@functools.cache
+def lean_check():
+    """`check.py` beside this file, loaded once: the auditor, for the functions of it this job calls itself."""
+    return _module(Path(__file__).resolve().parent / "check.py", "lean_check_for_lean_audit")
+
+
 def sandboxed() -> bool:
     """Whether check.py builds in its sandbox on this node, by its own probe (`check.sandboxed`). Outside it a build's
     compile-time code runs as the user and may leave any output, and the sampled recompile, which binds a restored module to
     its source, doesn't run, so nothing a build restores would be checked."""
-    return _check().sandboxed()
-
-
-_CHECK: list = []
-
-
-def _check():
-    """check.py, loaded once."""
-    if not _CHECK:
-        _CHECK.append(_module(Path(__file__).resolve().parent / "check.py", "lean_check_for_lean_audit"))
-    return _CHECK[0]
+    return lean_check().sandboxed()
 
 
 def runs_code(pkg: Path) -> str | None:
@@ -160,7 +170,7 @@ def runs_code(pkg: Path) -> str | None:
     its trace, which nothing then tells from Lake's. A passing audit says there is no such code in the package it
     audits (`check.scans`); the artifact cache takes builds no audit passed, so `LakeArtifacts.put` asks it of every
     build, the sources being the ones the build read: the sandbox lets no build write them."""
-    a = _check()
+    a = lean_check()
     for d in [pkg.resolve(), *a.path_deps(pkg)]:
         try:
             if (d / "lakefile.lean").exists():
@@ -400,10 +410,15 @@ def tool_files(files: list[str]) -> list[str]:
     return sorted({*tool, "tools/verity/check/common.py", CONTRACT})
 
 
+def read_packages(pkg: str) -> list[str]:
+    """The packages whose files an audit of ``pkg`` can read: itself, those it requires by path, and each package its
+    `proved_in` names with those that one requires."""
+    return list(dict.fromkeys([pkg, *path_deps(pkg), *(d for q in provers(pkg) for d in (q, *path_deps(q)))]))
+
+
 def inputs(pkg: str, files: list[str]) -> list[str]:
     """Every tracked file an audit of ``pkg`` can read."""
-    pkgs = [pkg, *path_deps(pkg), *(d for q in provers(pkg) for d in (q, *path_deps(q)))]
-    own = [f for p in dict.fromkeys(pkgs) for f in own_files(p, files)]
+    own = [f for p in read_packages(pkg) for f in own_files(p, files)]
     return sorted({*own, *tool_files(files)})
 
 
@@ -451,24 +466,28 @@ WHERE = "(where the package is)"
 CONFIG = ("lakefile.toml", "lakefile.lean", "lake-manifest.json", "lean-toolchain", "lean-audit.json")
 
 
-def content(pkg: str, files: list[str], _memo: dict | None = None) -> dict[str, str]:
+def content(pkg: str, files: list[str], _memo: dict | None = None, locks: dict[str, bytes] | None = None) -> dict[str, str]:
     """{path relative to the package: sha256} of its own files, so that the package moved to another directory with the same
     content has the same map. Its lakefile and manifest name each package it requires by path by that package's own content
     (`content_key`), not by where it is: moving the required package and rewriting the paths to it keeps the map too. A package
     that may read beyond its directory by a relative path keeps its path in the map (`WHERE`): a `..` left in a file Lake or
-    the audit read paths from, or a module's `include_str`."""
+    the audit read paths from, or a module's `include_str`. ``locks`` ({a lock's path in the repository: its bytes}) stand
+    for those files' bytes here: the map of the tree with them written (`keep_regenerated`)."""
     memo = {} if _memo is None else _memo
     spelled = _required(pkg, files)
     out, escapes = {}, False
     for f in own_files(pkg, files):
         rel, p = f[len(pkg) + 1:], ROOT / f
-        if not p.is_file():
+        if locks and f in locks:
+            text = locks[f]
+        elif not p.is_file():
             out[rel] = "-"
             continue
-        text = p.read_bytes()
+        else:
+            text = p.read_bytes()
         if rel in ("lakefile.toml", "lake-manifest.json") and spelled:
             text, out[rel] = _spelled_as(text, "path" if rel == "lakefile.toml" else "dir", spelled,
-                                         lambda d: content_key(d, files, memo))
+                                         lambda d: content_key(d, files, memo, locks))
         else:
             out[rel] = hashlib.sha256(text).hexdigest()
         escapes |= (b".." in text) if rel in CONFIG else rel.endswith(".lean") and b"include_str" in text
@@ -477,10 +496,10 @@ def content(pkg: str, files: list[str], _memo: dict | None = None) -> dict[str, 
     return out
 
 
-def content_key(pkg: str, files: list[str], _memo: dict | None = None) -> str:
+def content_key(pkg: str, files: list[str], _memo: dict | None = None, locks: dict[str, bytes] | None = None) -> str:
     memo = {} if _memo is None else _memo
     if pkg not in memo:
-        memo[pkg] = hashlib.sha256(json.dumps(sorted(content(pkg, files, memo).items())).encode()).hexdigest()
+        memo[pkg] = hashlib.sha256(json.dumps(sorted(content(pkg, files, memo, locks).items())).encode()).hexdigest()
     return memo[pkg]
 
 
@@ -493,15 +512,16 @@ def _lake_name(pkg: str, dep: str) -> str:
     return dep
 
 
-def components(pkg: str, files: list[str], flags: list[str]) -> dict:
+def components(pkg: str, files: list[str], flags: list[str], locks: dict[str, bytes] | None = None) -> dict:
     """What a package's key hashes, none of it a path of the package: the schema, the audit's flags, the package's `content`,
     that of each package it requires by path (under the name its manifest gives it), that of each package its `proved_in`
     names (under its path, which the policy already holds), and each of the auditor's files at its
-    path in the repository. A pass keeps them beside it, so `--explain` can say what a miss changed."""
+    path in the repository. A pass keeps them beside it, so `--explain` can say what a miss changed. With ``locks``
+    (`content`), those of the tree with those locks written: the commit drive makes of a lock run's regenerated records."""
     memo: dict = {}
-    return {"schema": SCHEMA, "flags": flags, "files": content(pkg, files, memo),
-            "requires": {_lake_name(pkg, d): content(d, files, memo) for d in path_deps(pkg)},
-            "proved_in": {q: content(q, files, memo) for q in provers(pkg)},
+    return {"schema": SCHEMA, "flags": flags, "files": content(pkg, files, memo, locks),
+            "requires": {_lake_name(pkg, d): content(d, files, memo, locks) for d in path_deps(pkg)},
+            "proved_in": {q: content(q, files, memo, locks) for q in provers(pkg)},
             "tool": {f: (_sha(ROOT / f) if (ROOT / f).is_file() else "-") for f in tool_files(files)}}
 
 
@@ -1537,16 +1557,33 @@ def transient(rep: dict) -> bool:
     return bool(fs) and all(f.startswith(("setup:", "build:")) and any(t in f for t in TRANSIENT) for f in fs)
 
 
+def keep_pass(cache: Path, pkg: str, k: str, rep: dict, comps: dict | None, out: Path, log=print) -> bool:
+    """Store ``pkg``'s pass, its report ``rep``, in ``cache`` under its key ``k``, with what the key hashes (``comps``)
+    beside it; for a package of `UNREAD_FACTS`, first the facts its audit wrote under ``out`` (`keep_facts`), without which
+    (logged) no pass is stored.  Whether it is stored."""
+    if pkg in UNREAD_FACTS and not keep_facts(cache, pkg, k, rep, out):
+        log(f"lean-audit: {pkg}: its pass is not stored: its audit wrote no facts for the ratchet (`unread_facts`)")
+        return False
+    cache.mkdir(parents=True, exist_ok=True)
+    tmp = cache / f".{k}.tmp"
+    tmp.write_text(json.dumps({"schema": SCHEMA, "package": pkg, "key": k, "report": rep, "components": comps}))
+    os.replace(tmp, cache / f"{k}.json")
+    return True
+
+
 def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: Path, cache: Path, deps: Path, fresh: bool,
            log, urls: dict[str, str] | None = None, comps: dict | None = None,
-           regenerate: bool = False, bundle: bool = False, bookkeeping: bool = False) -> tuple[list[str], list[str]]:
+           regenerate: bool = False, bundle: bool = False, bookkeeping: bool = False,
+           documents: Path | None = None) -> tuple[list[str], list[str]]:
     """Audit ``missed`` on a scratch tree of their inputs (the packages they require by path included), and store each pass.
     ``regenerate`` (`check.py --regenerate`, the Lean check of `next`) passes a package whose every failure is a record
-    difference; such a pass is never stored, since its lock changes when drive commits the record.  What each package's build
-    compiled in the sandbox goes into the artifact cache whether the package passed, failed or check.py was killed
-    (`built`, `LakeArtifacts.put`), and ``bundle`` (a recorded check) writes the module versions it
-    indexed to ``out`` for other nodes (`LakeArtifacts.bundle`).  Where builds aren't sandboxed (`sandboxed`) none of that
-    happens and no kept build or artifact cache is read: every package builds cold.  Returns (the failed, the audited)."""
+    difference; such a pass is never stored here, since its lock changes when drive commits the record (`keep_regenerated`
+    stores the pass of the tree with that lock, from the facts document this audit leaves in ``documents``, `check.py
+    --facts-cache`).  What each package's build compiled in the sandbox goes into the artifact cache whether the package
+    passed, failed or check.py was killed (`built`, `LakeArtifacts.put`), and ``bundle`` (a recorded check) writes the
+    module versions it indexed to ``out`` for other nodes (`LakeArtifacts.bundle`).  Where builds aren't sandboxed
+    (`sandboxed`) none of that happens and no kept build or artifact cache is read: every package builds cold.  Returns
+    (the failed, the audited)."""
     deps.mkdir(parents=True, exist_ok=True)
     # beside the dependencies: moves, not copies. Resolved, because check.py names each package by its resolved path, and a
     # cache reached through a symlink would otherwise match no report to its package
@@ -1583,6 +1620,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
                             "--replay-cache", str((work if fresh else cache.parent) / "lean-replay"),
                             *([] if fresh or cold else ["--artifacts", str(artifacts.store)]),
                             *(["--regenerate"] if regenerate else []), *(["--bookkeeping", "warn"] if bookkeeping else []),
+                            *(["--facts-cache", str(documents)] if documents else []),
                             "--repo", str(ROOT), "--out", str(out)], cwd=work, env=env)
         log(f"lean-audit: {', '.join(audited)} audited in {time.monotonic() - t0:.0f} s (exit {r.returncode})")
         doc = json.loads((out / "audit.json").read_text()) if (out / "audit.json").exists() else {"failed": ["check.py"]}
@@ -1590,16 +1628,10 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         for rep in doc.get("packages", []):
             p = os.path.relpath(rep["package"], work)
             rep["package"] = p
+            rep.pop("facts_document", None)             # a path under ``documents``, gone with this run; `facts_key` names it
             reports[p] = rep
             if not rep["failures"] and not rep.get("settled") and r.returncode in (0, 1) and p in keys and not fresh:
-                if p in UNREAD_FACTS and not keep_facts(cache, p, keys[p], rep, out):
-                    log(f"lean-audit: {p}: its pass is not stored: its audit wrote no facts for the ratchet (`unread_facts`)")
-                    continue
-                cache.mkdir(parents=True, exist_ok=True)
-                tmp = cache / f".{keys[p]}.tmp"
-                tmp.write_text(json.dumps({"schema": SCHEMA, "package": p, "key": keys[p], "report": rep,
-                                           "components": (comps or {}).get(p)}))
-                os.replace(tmp, cache / f"{keys[p]}.json")
+                keep_pass(cache, p, keys[p], rep, (comps or {}).get(p), out, log)
         if r.returncode not in (0, 1) and not failed:
             failed = [f"check.py exit {r.returncode}"]
         # a pass vouches for its dependencies; so does a failure only in fetching them (Lake clones every dependency, each at
@@ -1628,6 +1660,126 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
     return failed, audited
 
 
+#: under a lock run's ``--out``: the judgments of the tree with its regenerated locks written (`keep_regenerated`), each
+#: package's report and log. Not ``--out`` itself, where a second audit of a package removes the lock the first regenerated
+LOCK_COMMIT = "lock-commit"
+#: what a full audit's report holds of the build, the seal, the kernel replay and the tests, which `check.py --facts-from`
+#: runs none of (`audit_from_facts`): a pass `keep_regenerated` keeps has them from the lock run's own audit of the package
+BUILT = ("sandbox", "build_threads", "staged", "sampled", "replay", "replay_cache", "pipeline", "proved_in", "unread_facts",
+         "peak_gib", "facts_key")
+
+
+def stored_document(documents: Path, k: str, schema: str) -> tuple[Path | None, str]:
+    """(The facts document `check.py --facts-cache` stored in ``documents`` under the facts key ``k``, "") when its sidecar
+    names ``schema``, that key and the SHA-256 its bytes have (`check.py`'s `read_cached_facts`, without decoding it); else
+    (None, why not)."""
+    doc, side = documents / f"{k}.json.gz", documents / f"{k}.json"
+    try:
+        meta = json.loads(side.read_text())
+        named = meta.get("schema") == schema and meta.get("key") == k and _sha(doc) == meta.get("sha256")
+    except (OSError, ValueError, AttributeError) as e:
+        return None, f"{type(e).__name__}: {e}"
+    return (doc, "") if named else (None, f"{side.name} names another schema, key or SHA-256 than {doc.name} has")
+
+
+def keep_regenerated(pkgs: list[str], files: list[str], keys: dict, reports: dict, regenerated: dict[str, str],
+                     audited: set[str], documents: Path, out: Path, cache: Path, log=print) -> dict[str, str]:
+    """After a lock run that passed: store the passes of the tree with its regenerated locks written, the commit drive
+    makes of them, so that commit's audit reuses them and builds nothing.  {package: its key on that tree} for each kept.
+
+    A lock run's pass on a regenerated lock is of another tree than the one audited, so `_audit` stores none, and the
+    regenerated lock moves the key of its package, of each package requiring it by path and of the spec it proves.  Each
+    such package is judged here on that tree from the facts document its own audit in this run stored (``documents``,
+    `check.py --facts-cache`): `check.py --facts-from` on a scratch tree of its inputs with every regenerated lock in
+    place, which runs every check of a full audit that reads the live locks (`audit_from_facts`) and no build.  Its pass
+    is stored under the new key only when that leaves nothing (no failure, nothing settled or regenerated again), and its
+    report is that judgment's with the lock run's record of the build, the replay and the tests (`BUILT`, `seconds`).
+
+    That is a full audit's verdict of the new tree only if everything before the judge would run the same there, so a
+    package keeps no pass unless each regenerated lock its audit reads (`read_packages`) agrees with the lock it replaces
+    on `check.py`'s `build_inputs`: a lock that newly lists a premise, a guarantee or an inline name changes what
+    `Facts.lean` walks, and that package is audited in full on the new tree, as before.  Nor does a package this run
+    reused from the cache (no facts of this run), one whose audit stored no document (a node without the sandbox, a
+    tamper), or any package of a run that failed or audited a shard (`run` calls this for neither)."""
+    try:
+        locks = {f"{p}/lean-audit.json": Path(f).read_bytes() for p, f in regenerated.items()}
+    except OSError as e:
+        log(f"lean-audit: no pass kept for the commit of the regenerated records: {type(e).__name__}: {e}")
+        return {}
+    new = {p: components(p, files, FLAGS, locks) for p in pkgs}
+    moved = [p for p in pkgs if key_of(new[p]) != keys[p]]
+    chk = lean_check()
+
+    def same_build(p: str) -> bool:
+        """Whether ``p``'s regenerated lock gives every step before the judge what its lock gives; a lock that can't be
+        read, or has no `roots`, gives none of them anything."""
+        try:
+            return chk.build_inputs(chk.load(ROOT / p)) == chk.build_inputs(chk.load(Path(regenerated[p]).parent))
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            return False
+
+    same = {p: same_build(p) for p in regenerated}
+    todo: dict[str, Path] = {}
+    for p in moved:
+        rep = reports.get(p) or {}
+        doc, missing = stored_document(documents, str(rep.get("facts_key")), chk.FACTS_SCHEMA)
+        if p not in audited:
+            why = "this run reused its pass, so it has no facts of this run to judge from"
+        elif rep.get("failures") != []:
+            why = "its audit here did not pass"
+        elif doc is None:
+            why = f"its audit stored no facts document to judge from ({rep.get('facts_cache') or missing})"
+        elif differ := [d for d in read_packages(p) if d in regenerated and not same[d]]:
+            why = (f"the regenerated lock of {', '.join(differ)} changes what the build, the facts or the tests read "
+                   f"(`check.py`'s `build_inputs`: a guarantee, a premise or an inline name it newly lists or drops)")
+        else:
+            todo[p] = doc
+            continue
+        log(f"lean-audit: {p}: no pass kept for the commit of the regenerated records, whose audit runs in full: {why}")
+    if not todo:
+        return {}
+    kept: dict[str, str] = {}
+    dest = out / LOCK_COMMIT
+    dest.mkdir(parents=True, exist_ok=True)
+    tree = Path(tempfile.mkdtemp(prefix=f"{SCRATCH}{os.getpid()}-", dir=documents.parent)).resolve()
+    try:
+        union = sorted({f for p in todo for f in inputs(p, files)})
+        scratch_tree(tree, union)
+        for f, data in locks.items():
+            if f in union:
+                (tree / f).write_bytes(data)
+        for p, doc in todo.items():
+            t0 = time.monotonic()
+            (dest / "audit.json").unlink(missing_ok=True)
+            # its output goes to a file: an `AUDIT pkg: PASS|FAIL` line in this job's log is the lock run's own verdict
+            r = subprocess.run([sys.executable, str(tree / "tools" / "verity" / "lean" / "check.py"), str(tree / p),
+                                "--facts-from", str(doc), "--repo", str(ROOT), "--out", str(dest)], cwd=tree,
+                               capture_output=True, text=True)
+            (dest / f"{re.sub(r'[^A-Za-z0-9]+', '_', p)}.log").write_text(r.stdout + r.stderr)
+            took = round(time.monotonic() - t0, 1)
+            try:
+                (rep,) = json.loads((dest / "audit.json").read_text())["packages"]
+            except (OSError, ValueError, KeyError, TypeError):
+                rep = {"failures": [f"check.py --facts-from exit {r.returncode} with no report"]}
+            if r.returncode or rep.get("failures") != [] or rep.get("settled") or rep.get("regenerated") \
+                    or os.path.relpath(str(rep.get("package")), tree) != p:
+                log(f"lean-audit: {p}: no pass kept for the commit of the regenerated records, whose audit runs in full: "
+                    f"judged on that tree from this run's facts, it fails (exit {r.returncode}, "
+                    f"{len(rep.get('failures') or []) + len(rep.get('settled') or [])} failures; {dest})")
+                continue
+            was, k = reports[p], key_of(new[p])
+            rep = rep | {"package": p} | {f: was[f] for f in BUILT if f in was} | {
+                "seconds": {**was.get("seconds", {}), "regenerated-lock": took}, "judged_from": keys[p]}
+            if keep_pass(cache, p, k, rep, new[p], out, log):
+                kept[p] = k
+                log(f"lean-audit: {p}: PASS kept for the commit of the regenerated records ({k[:12]}): judged on that tree "
+                    f"from this run's facts in {took:.0f} s with no build, nothing left")
+    finally:
+        shutil.rmtree(tree, ignore_errors=True)
+        shutil.rmtree(dest / "tool", ignore_errors=True)
+    return kept
+
+
 def select(pkgs: list[str], only: list[str] | None) -> list[str]:
     """``pkgs`` less those ``only`` (`--package`, a shard's share) leaves out; ValueError naming one ``only`` has and ``pkgs``
     lacks."""
@@ -1641,6 +1793,21 @@ def select(pkgs: list[str], only: list[str] | None) -> list[str]:
 def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls: dict[str, str] | None = None,
         export: Path | None = None, only: list[str] | None = None, regenerate: bool = False, bundle: bool = False,
         bookkeeping: bool = False) -> int:
+    """The job (the module's docstring).  With ``regenerate`` and a cache, the audits leave their facts documents in a
+    directory of this run's own beside the scratch trees (outside all a build writes, in no verdict pack, swept with them
+    if this process is killed), from which `keep_regenerated` judges the tree with the regenerated locks."""
+    if not regenerate or fresh:
+        return _run(out, cache, deps, fresh, log, urls, export, only, regenerate, bundle, bookkeeping, None)
+    deps.mkdir(parents=True, exist_ok=True)
+    documents = Path(tempfile.mkdtemp(prefix=f"{SCRATCH}{os.getpid()}-facts-", dir=deps.parent)).resolve()
+    try:
+        return _run(out, cache, deps, fresh, log, urls, export, only, regenerate, bundle, bookkeeping, documents)
+    finally:
+        shutil.rmtree(documents, ignore_errors=True)
+
+
+def _run(out: Path, cache: Path, deps: Path, fresh: bool, log, urls: dict[str, str] | None, export: Path | None,
+         only: list[str] | None, regenerate: bool, bundle: bool, bookkeeping: bool, documents: Path | None) -> int:
     files = COMMON.tracked_files(ROOT)
     if files is None:
         log("lean-audit: the tree's files cannot be listed; nothing is cached")
@@ -1655,10 +1822,13 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
         log(f"lean-audit: FAIL: --bookkeeping warn holds the caps to every package's lock, and --package leaves out "
             f"{', '.join(left)}: drive's lock run audits every package")
         return 1
+    if fresh or len(pkgs) != len(packages(files)):      # nothing is cached; a shard: another's regenerated locks move its keys
+        documents = None
     comps = {p: components(p, files, FLAGS) for p in pkgs}
     keys = {p: key_of(c) for p, c in comps.items()}
     out.mkdir(parents=True, exist_ok=True)
     reports, cached, facts = {}, {}, {}
+    ran: set[str] = set()
     for p, k in keys.items():
         entry = cache / f"{k}.json"
         if not fresh and entry.is_file():
@@ -1675,7 +1845,8 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
         if not todo:
             break
         now, audited = _audit(todo, files, keys, reports, out, cache, deps, fresh, log, urls, comps, regenerate, bundle,
-                              bookkeeping)
+                              bookkeeping, documents)
+        ran |= set(audited)
         failed = [f for f in failed if f not in audited] + now
         retry = [p for p in audited if p in now and transient(reports.get(p, {}))]
         if not retry or attempt == len(RETRIES):
@@ -1717,9 +1888,17 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
                 warned += lines
     for w in warned:
         log(f"lean-audit: WARN: {w}")
+    rekeyed: dict[str, str] = {}
+    if documents and regenerated and not failed:
+        try:                                            # it changes no verdict of this run, so its own error fails none
+            rekeyed = keep_regenerated(pkgs, files, keys, reports, regenerated, ran, documents, out, cache, log)
+        except (OSError, EOFError, ValueError, LookupError, TypeError, AttributeError, ImportError, SyntaxError) as e:
+            log(f"lean-audit: WARN: no pass kept for the commit of the regenerated records, whose audit runs in full: "
+                f"{type(e).__name__}: {e}")
     (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "cached": cached,
                                                 "packages": [reports[p] for p in pkgs if p in reports],
                                                 "regenerated": regenerated, "unread": unread} | (
+                                                    {"rekeyed": rekeyed} if regenerate else {}) | (
                                                     {"repaired": repaired, "bookkeeping": warned} if bookkeeping else {}),
                                                indent=1) + "\n")
     log(f"lean-audit: {'PASS' if not failed else 'FAIL (' + ', '.join(failed) + ')'}: {len(cached)} of {len(pkgs)} packages reused")
