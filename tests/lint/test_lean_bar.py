@@ -21,7 +21,7 @@ The rules, each a finding in code only, never in a comment or a string literal:
 Not held here: theorem names (Mathlib's snake_case is a rename campaign of its own) and ``linter.missingDocs`` (an option of
 every package's lakefile, not a reading of the text).
 
-Findings are counted per ``(file, rule)``, the key the ratchet gate (``integrations/vllm/tools/ratchet_gate.py``) pools a
+Findings are counted per ``(file, rule)``, the key the ratchet gate (``adapters/vllm/tools/ratchet_gate.py``) pools a
 list's counts by, so each rule's total is held apart.  An entry ``{"file", "rule", "count"}`` allows ``count`` findings of its
 pair; ``module-doc`` and ``long-file`` find one a file.  The tree is held to the list and to nothing else: no base commit
 is read.  A pair found more often than its entry allows, or found with no entry, is reported with each site and its fix,
