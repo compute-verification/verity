@@ -10,14 +10,21 @@ store, with no GPU and no node.
   (`total`, with its parts `PARTS`) and its bound in bits (`bound_bits`). The command takes one case (`ROW`, `STEP`,
   `WORLD`), and for each scope reads off the budget at which the total is the share (`at_share`): the total is linear
   in β, a least-squares line over the pinned budgets, and ln(bound) is linear in ln β between the two that bracket
-  it. The row plans for the weights / λ (`weights_bits / target_bits`), and the part is λ times its bound.
+  it. The row plans for the weights / λ (`weights_bits / target_bits`), and the part is λ times its bound. The requests
+  a row is priced over are its sampled replays over the probability a request is sampled (`replay_sample / q`); its
+  `requests` field is the planner's default scope's count, another request's, and is not read.
+* **How that part's proving is priced** is read from the row's plan, where a run of record holds one (`PLAN_FILE`, the
+  sampling plan the row is priced over at one audit budget): each cell's share of the plan's proving time, summed by
+  block family, each family priced as the rows say (`split.families`, `priced`). The shares `split.families` holds are
+  not read: they are written before the row's levers multiply its blocks. A plan is held to the rows it is read with:
+  the same requests, and the rows' bound at its budget. With no plan the command says so and marks no proving measured.
 * **The network certifier's part** is `verity bench certifier_term`'s (`benchmarks/network_traces/leak_bounds.py`:
   `inputs`, `document`): the schedules, the fail cells and the jitter of each of its rows, at the same scopes.
 
-Both count over the same requests: the planner's, of the plan its rows are priced on (`PLAN`, read from the planner
-in the tree, `benchmarks/spot_figures/breakeven/`), handed to the network certifier's calculator as the world's
-requests a year in place of the census's it would count. The two parts must cover the same GPU-seconds and the same
-weights, or the command refuses.
+Both count over the same requests: the planner's (`PLAN`, read from the planner in the tree,
+`benchmarks/spot_figures/breakeven/`), handed to the network certifier's calculator as the world's requests a year in
+place of the census's it would count. The two parts must cover the same GPU-seconds, the same requests (the count the
+rows of record are priced over) and the same weights, or the command refuses.
 
 A link's execution phase carries K = schedules + cells + jitter + min(entries, advice + the wrong blocks' output
 bits at δ). The first three are the network certifier's part, the last term's second branch is the compute audit's
@@ -47,6 +54,15 @@ MODEL = "GLM-5.3"
 #: the record whose runs hold the planner's rows, and the rows' file in a run's files
 RECORD = "exfiltration-glm53-compute-audit"
 ROWS_FILE = "out/rows.jsonl"
+#: a row's plan in a run's files: the sampling plan the row is priced over at one audit budget (`beta`), with each
+#: cell's block and its share of the plan's proving time (`cells`, and `left_out` for the cells it lists apart)
+PLAN_FILE = "out/mix.json"
+#: a plan's bound and its rows' at the plan's budget agree to this, or it is another row's plan
+PLAN_TOLERANCE = 1e-3
+#: the field in which the planner's driver names a row's variant, where it writes several of one row
+VARIANT = "h8"
+#: how a block family is priced where the rows don't say
+UNSTATED = "in no stated way"
 #: the share of total compute the figure is read at
 SHARE = 0.10
 #: the network check's own proving as a share of total compute, which the planner's rows don't count: no run measures it
@@ -55,7 +71,7 @@ NETWORK_CHECK_SHARE = 0.003
 #: cut with every modeled lever at its measured value, and the step of that row that prices the verifier as measured
 #: (a prefix of the step's name)
 WORLD, ROW, STEP = "ours", "(i) honest", "+ the verifier as measured"
-#: the planner's case whose line carries the plan the rows of record are priced on, and so its requests
+#: the planner's case whose line carries the request the rows of record are priced over, and so its requests
 PLAN = "P5+poolwin600"
 #: a row's parts of total compute; `wait` is a part of `serve`
 PARTS = ("serve", "wait", "prove", "replay", "pool", "edge", "compile")
@@ -89,44 +105,64 @@ def _label(key: str = RUN_OF_RECORD, value: str = RECORD) -> str:
     return f"`research data label RUN {key} {value} --by LANE`"
 
 
-def read_rows(store: Any, run: str) -> tuple[list[dict], str | None]:
-    """The planner's rows in a run's files, or why the run holds none."""
+def read_run(store: Any, run: str) -> tuple[list[dict], dict | None, str | None]:
+    """The planner's rows and the plan in a run's files, either of which it may lack, or why the run holds neither."""
 
     attempt = store.get_attempt(run)
     if attempt is None:
-        return [], "not in the store or on its remote"
+        return [], None, "not in the store or on its remote"
     out = attempt.get("outputs") or {}
     files = out.get("run_files") or out.get("run_record")
     if not files:
-        return [], "kept no run files"
-    if not store.listing(files, [ROWS_FILE]):
-        return [], f"holds no planner rows (`{ROWS_FILE}`)"
-    text = (Path(store.fetch(files, paths=[ROWS_FILE])) / ROWS_FILE).read_text()
-    return [json.loads(line) for line in text.splitlines() if line.strip()], None
+        return [], None, "kept no run files"
+    held = [name for name in (ROWS_FILE, PLAN_FILE) if store.listing(files, [name])]
+    if not held:
+        return [], None, f"holds no planner rows (`{ROWS_FILE}`) and no plan (`{PLAN_FILE}`)"
+    at = Path(store.fetch(files, paths=held))
+    rows = [json.loads(line) for line in (at / ROWS_FILE).read_text().splitlines() if line.strip()] if ROWS_FILE in held else []
+    return rows, json.loads((at / PLAN_FILE).read_text()) if PLAN_FILE in held else None, None
 
 
-def rows_of_record(store: Any, *, row: str = ROW, step: str = STEP, world: str = WORLD) -> tuple[dict, list[str], list[dict]]:
-    """The case's rows of record by scope, each scope's from the one run that holds it, with the runs read and the
-    runs left out with why."""
+def _case(x: Mapping, row: str, step: str, world: str) -> bool:
+    return (x.get("world"), x.get("row")) == (world, row) and str(x.get("step", "")).startswith(step)
+
+
+def rows_of_record(store: Any, *, row: str = ROW, step: str = STEP, world: str = WORLD,
+                   variant: str | None = None) -> tuple[dict, dict, list[str], list[dict]]:
+    """The case's rows of record by scope, each scope's from the one run that holds it, and its plans of record the
+    same way, with the runs read and the runs left out with why. A run that holds a scope's plan may hold the plan's
+    own row, at the plan's budget: it is the plan's, and is not read off. With ``variant``, only the rows the
+    planner's driver names so (`VARIANT`) are read."""
 
     labelled = record_runs(store, records(store).get(RECORD, []))
     if not labelled:
         raise ValueError(f"no planner rows of record: nothing in the store carries `{RUN_OF_RECORD}={RECORD}` "
                          f"(label each run that holds them: {_label()})")
     scopes: dict[str, tuple[str, list[dict]]] = {}
+    plans: dict[str, tuple[str, dict]] = {}
     runs, refused = [], []
     for run in sorted({run for run, _ in labelled}, reverse=True):
+        found, plan = [], None
         if superseded := [str(lab.value) for lab in store.labels(run, key=SUPERSEDED_BY)]:
-            found, why = [], f"superseded by {', '.join(superseded)}"
+            why = f"superseded by {', '.join(superseded)}"
         else:
-            found, why = read_rows(store, run)
-            found = [r for r in found if not r.get("error") and (r.get("world"), r.get("row")) == (world, row)
-                     and str(r.get("step", "")).startswith(step)]
-            why = why or (None if found else f"holds no row `{row}` at a step `{step}...` of the world `{world}`")
+            found, plan, why = read_run(store, run)
+            found = [r for r in found if not r.get("error") and _case(r, row, step, world)
+                     and variant in (None, r.get(VARIANT))]
+            if plan is not None and _case(plan, row, step, world):
+                found = [r for r in found if (r["scope"], r["b10"]) != (plan["scope"], plan["beta"])]
+            else:
+                plan = None
+            why = why or (None if found or plan else f"holds no row `{row}` at a step `{step}...` of the world `{world}`")
         if why:
             refused.append({"target": run, "record": RECORD, "why": why})
             continue
         runs.append(run)
+        if plan:
+            if plan["scope"] in plans:
+                raise ValueError(f"{plans[plan['scope']][0]} and {run} both hold the {plan['scope']}'s plan and neither is "
+                                 f"superseded: label the one the other replaces ({_label(SUPERSEDED_BY, 'NEWER')})")
+            plans[plan["scope"]] = (run, plan)
         by: dict[str, list[dict]] = {}
         for r in found:
             by.setdefault(r["scope"], []).append(r)
@@ -139,9 +175,13 @@ def rows_of_record(store: Any, *, row: str = ROW, step: str = STEP, world: str =
                                  f"(--step): {'; '.join(steps)}")
             scopes[scope] = (run, its)
     if not scopes:
-        left = "; ".join(f"{x['target']} {x['why']}" for x in refused)
+        left = "; ".join(f"{x['target']} {x['why']}" for x in refused) or f"{', '.join(runs)} hold a plan alone"
         raise ValueError(f"no run of record holds the planner's rows: {left} (label one that does: {_label()})")
-    return scopes, runs, refused
+    for scope in sorted(set(plans) - set(scopes)):
+        refused.append({"target": plans.pop(scope)[0], "record": RECORD,
+                        "why": f"holds the {scope}'s plan, and no run of record holds that scope's rows"})
+    read = {run for run, _ in (*scopes.values(), *plans.values())}
+    return scopes, plans, [run for run in runs if run in read], refused
 
 
 def _fit(points: Sequence[tuple[float, float]]) -> tuple[float, float]:
@@ -165,32 +205,69 @@ def _between(rows: Sequence[Mapping], key: str, beta: float, *, log: bool = Fals
     return lo[key] + (hi[key] - lo[key]) * (beta - lo["b10"]) / (hi["b10"] - lo["b10"])
 
 
-def _priced(row: Mapping) -> dict[str, dict]:
-    """A row's proving time by how its block families are priced: each way's share of it and its families, largest
-    first."""
+def _requests(x: Mapping) -> float | None:
+    """The requests a row or a plan is priced over: its sampled replays over the probability a request is sampled."""
 
+    q, sample = x.get("q"), x.get("replay_sample")
+    return sample / q if q and sample else None
+
+
+def _priced(plan: Mapping, row: Mapping) -> dict[str, dict]:
+    """A plan's proving time by how its block families are priced: each way's share of it and its families with
+    theirs, largest first. A cell's share is the plan's; how its family is priced is the row's account
+    (`split.families`, `priced`), and `UNSTATED` for a family the row doesn't name."""
+
+    said = (row.get("split") or {}).get("families") or {}
+    shares: dict[str, float] = {}
+    for cell in (*plan["cells"], *plan.get("left_out", ())):
+        family = cell["block"].split("{")[0]
+        shares[family] = shares.get(family, 0.0) + cell["share"]
     out: dict[str, dict] = {}
-    families = ((row.get("split") or {}).get("families") or {}).items()
-    for family, f in sorted(families, key=lambda kv: -kv[1]["share"]):
-        way = out.setdefault(" and ".join(sorted(f["priced"], reverse=True)), {"share": 0.0, "families": []})
-        way["share"] += f["share"]
-        way["families"].append(family)
+    for family, its in sorted(shares.items(), key=lambda kv: -kv[1]):
+        ways = (said.get(family) or {}).get("priced")
+        way = out.setdefault(" and ".join(sorted(ways, reverse=True)) if ways else UNSTATED, {"share": 0.0, "families": {}})
+        way["share"] += its
+        way["families"][family] = its
     return out
 
 
-def at_share(scope: str, run: str, rows: Sequence[Mapping], share: float) -> dict:
+def _held(scope: str, run: str, rows: Sequence[Mapping], requests: float, of: str, plan: Mapping) -> dict:
+    """``of``'s plan of a scope as these rows' plan: how its proving is priced (`_priced`), once it counts the rows'
+    requests and bounds what they do at its budget."""
+
+    count, theirs = _requests(plan), _between(rows, "bound_bits", plan["beta"], log=True)
+    if count is None or not _same(count, requests):
+        raise ValueError(f"{of}'s plan of the {scope} is priced over {count or 0:.6g} requests and {run}'s rows over "
+                         f"{requests:.6g}: it is not these rows' plan")
+    if not math.isclose(plan["bound_bits"], theirs, rel_tol=PLAN_TOLERANCE):
+        raise ValueError(f"{of}'s plan of the {scope} bounds {plan['bound_bits'] / GB:,.1f} GB at β = {plan['beta']:.4%}, "
+                         f"where {run}'s rows give {theirs / GB:,.1f} GB: it is not these rows' plan")
+    return {"run": of, "beta": plan["beta"],
+            "ways": _priced(plan, min(rows, key=lambda r: abs(r["b10"] - plan["beta"])))}
+
+
+def at_share(scope: str, run: str, rows: Sequence[Mapping], share: float,
+             plan: tuple[str, Mapping] | None = None) -> dict:
     """One scope's rows read off at the audit budget where the total is ``share`` of the compute: the budget, whether
     the pinned budgets bracket it, the bound there at λ = 1 and λ times it, each part of the total, and what the
-    rows hold fixed (λ, δ, the most bits a request's output holds, the scope's GPU-seconds and the weights)."""
+    rows hold fixed (λ, δ, the most bits a request's output holds, the scope's GPU-seconds, the requests they are
+    priced over and the weights). With ``plan``, a run and the scope's plan it holds, how the plan's proving is
+    priced (`_held`); without, None."""
 
     rows = sorted(rows, key=lambda r: r["b10"])
+    if len(kinds := sorted({str(r[VARIANT]) for r in rows if r.get(VARIANT) is not None})) > 1:
+        raise ValueError(f"{run}'s {scope} rows are {len(kinds)} variants of the row ({', '.join(kinds)}), each on its "
+                         "own premises: a run of record holds one, or --variant names the one meant")
+    counts = [_requests(r) for r in rows]
+    if None in counts:
+        raise ValueError(f"{run}'s {scope} rows don't say what requests they are priced over (`replay_sample / q`)")
     fixed = {"lambda": {r["weights_bits"] / r["target_bits"] for r in rows}, "delta": {r["delta_seen"] for r in rows},
              "output_bits": {r["S"] for r in rows}, "gpu_seconds": {r["gpu_seconds"] for r in rows},
              "weights_bits": {r["weights_bits"] for r in rows}}
     if len({r["b10"] for r in rows}) < 2 or len({r["b10"] for r in rows}) != len(rows):
         raise ValueError(f"{run}'s {scope} rows pin {len(rows)} audit budgets, {len({r['b10'] for r in rows})} distinct: "
                          "the total's line needs two or more, each once")
-    if moved := sorted(k for k, v in fixed.items() if len(v) != 1):
+    if moved := sorted([k for k, v in fixed.items() if len(v) != 1] + ["requests"] * (not _same(min(counts), max(counts)))):
         raise ValueError(f"{run}'s {scope} rows differ in {', '.join(moved)}, which one plan holds fixed over its "
                          "audit budgets")
     slope, intercept = _fit([(r["b10"], r["total"]) for r in rows])
@@ -200,24 +277,23 @@ def at_share(scope: str, run: str, rows: Sequence[Mapping], share: float) -> dic
                          f"brings the total to {share:.2%}")
     lam = fixed["lambda"].pop()
     bits = _between(rows, "bound_bits", beta, log=True)
-    near = min(rows, key=lambda r: abs(r["b10"] - beta))
     compute, _, period = scope.rpartition(" ")
     return {"scope": scope, "compute": compute, "period": period, "run": run, "step": rows[0]["step"],
             "mix": rows[0].get("mix"), "pinned": [r["b10"] for r in rows], "beta": beta,
             "inside": rows[0]["b10"] <= beta <= rows[-1]["b10"],
             "residual": max(abs(r["total"] - (intercept + slope * r["b10"])) for r in rows),
-            **{k: v.pop() for k, v in fixed.items() if k != "lambda"}, "lambda": lam,
+            **{k: v.pop() for k, v in fixed.items() if k != "lambda"}, "lambda": lam, "requests": counts[0],
             "bound": {"bits": bits, "GB": bits / GB}, "bits": bits * lam, "GB": bits * lam / GB,
             "parts": {p: _between(rows, p, beta) for p in PARTS if all(r.get(p) is not None for r in rows)},
-            "priced": _priced(near)}
+            "priced": plan and _held(scope, run, rows, counts[0], *plan)}
 
 
 # ---- the requests both parts count over, and the network certifier's part ---------------------------------------------
 
 
 def plan(root: Path) -> dict:
-    """The plan the rows of record are priced on, from the planner in the tree: each scope's requests and GPU-seconds,
-    and what a request is."""
+    """The request the rows of record are priced over, from the planner in the tree: each scope's requests and
+    GPU-seconds, and what a request is."""
 
     sweep = _load(root, "spot_figures", "breakeven.sweep")
     line = sweep.build(sweep.cases()[PLAN])
@@ -230,7 +306,8 @@ def plan(root: Path) -> dict:
                            "source": f"{where}: the workload card's served MACs a token with the indexer's blocks scaled "
                                      "to the keys the plan reads (reprice.workload at reprice.C343)"},
             "source": f"{where}: the world fleet's GPU-seconds x mfu_serve x peak_flops / (request_tokens x 2 x "
-                      "token_macs), the requests of the plan the rows of record are priced on"}
+                      "token_macs), the requests the rows of record are priced over (their `replay_sample / q`, held "
+                      "equal to these)"}
 
 
 def certifier(root: Path, requests: float, source: str) -> dict:
@@ -277,8 +354,10 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, plan
         one(audit, "output_bits", head["output_bits"], "bit/request", "assumed",
             f"{where} `S`: the most bits a request's output holds, which no check certifies"),
         *(one(audit, f"proving priced {way}", p["share"], "of proving time", "measured" if way == "measured" else "modeled",
-              f"{where} `split.families`: {len(p['families'])} block families, the largest "
-              f"{', '.join(p['families'][:2])}") for way, p in head["priced"].items()),
+              f"`{RECORD}` ({head['priced']['run']}) `{PLAN_FILE}`: the row's plan at β = {_part(head['priced']['beta'])}, "
+              f"block {'families' if len(p['families']) > 1 else 'family'} {', '.join(list(p['families'])[:2])}"
+              f"{f' and {len(p["families"]) - 2} smaller' if len(p['families']) > 2 else ''}; how each is priced is the "
+              f"rows' account (`split.families`)") for way, p in (head["priced"] or {"ways": {}})["ways"].items()),
         one(audit, "network_check_share", network_check, "", "assumed",
             "no run: the network check's own proving as a share of total compute, which the planner's rows don't "
             "count (--network-check-share)"),
@@ -293,10 +372,11 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, plan
 
 
 def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, row: str = ROW, step: str = STEP,
-          store: Any = None, root: Path | None = None, local_only: bool = False) -> dict:
+          variant: str | None = None, store: Any = None, root: Path | None = None, local_only: bool = False) -> dict:
     """The two parts from the store's rows of record and the tree: the inputs with their marks, the compute audit's
     part at ``share`` of total compute for each scope of record, the network certifier's rows at the world's year,
-    and the two side by side for each scope and monitoring period, summed under each of `TOGETHER`."""
+    and the two side by side for each scope and monitoring period, summed under each of `TOGETHER`. It refuses rows
+    of record priced over other requests than the network certifier's part counts."""
 
     if not (0 < share < 1 and 0 <= network_check < share):
         raise ValueError(f"the share of total compute is in (0, 1) and the network check's own below it, not {share!r} "
@@ -305,11 +385,12 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
     completion = jobs.StoreCompletion(store, root=root, local_only=local_only)
     if not local_only:
         completion.pull_labels()
-    scopes, runs, refused = rows_of_record(completion.store, row=row, step=step)
-    points = {scope: at_share(scope, run, its, share) for scope, (run, its) in scopes.items()}
+    scopes, plans, runs, refused = rows_of_record(completion.store, row=row, step=step, variant=variant)
+    points = {scope: at_share(scope, run, its, share, plans.get(scope)) for scope, (run, its) in scopes.items()}
     if "world year" not in points:
-        raise ValueError(f"no run of record holds the world year's rows ({', '.join(runs)} hold {', '.join(sorted(points))}): "
-                         f"label the run that does ({_label()})")
+        held = sorted({run for run, _ in scopes.values()})
+        raise ValueError(f"no run of record holds the world year's rows ({', '.join(held)} hold{'s' * (len(held) == 1)} "
+                         f"{', '.join(sorted(points))}): label the run that does ({_label()})")
     head = points["world year"]
     less = at_share("world year", *scopes["world year"], share - network_check)
 
@@ -326,6 +407,7 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
         scope = f"{compute} {period}"
         point, its = points.get(scope), planned["scopes"][scope]
         for name, mine, theirs in (("GPU-seconds", point and point["gpu_seconds"], at["gpu_seconds"]),
+                                   ("requests", point and point["requests"], at["requests"]),
                                    ("GPU-seconds", its["gpu_seconds"], at["gpu_seconds"]),
                                    ("requests", its["requests"], at["requests"])):
             if mine is not None and not _same(mine, theirs):
@@ -348,7 +430,8 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
     return {"schema": SCHEMA, "model": MODEL,
             "name": f"{MODEL}'s exfiltration capacity over the world's year at {_pct(share)} of total compute: the "
                     "compute audit's part",
-            "value": head["GB"], "unit": "GB", "status": "modeled", "share": share, "row": row, "record": RECORD,
+            "value": head["GB"], "unit": "GB", "status": "modeled", "share": share, "row": row, "variant": variant,
+            "record": RECORD,
             "runs": runs, "refused": refused, "weights": {"bits": weights, "GB": weights / GB, "label": term["weights"]["label"]},
             "inputs": _inputs(points, runs, term, planned, share, network_check, row),
             "compute_audit": sorted(points.values(), key=lambda p: (p["scope"] not in order, order.get(p["scope"], 0))),
@@ -387,17 +470,35 @@ def _table(head: Sequence[str], body: Sequence[Sequence[str]]) -> list[str]:
     return ["| " + " | ".join(head) + " |", "|" + " --- |" * len(head), *("| " + " | ".join(r) + " |" for r in body)]
 
 
+def _how(priced: Mapping | None) -> str:
+    """How a scope's proving time is priced, by its plan: each way's share and the largest families; or that no plan
+    of record says."""
+
+    if priced is None:
+        return (f"how the row's proving time is priced is not read, and none of it is marked measured: no run of record "
+                f"holds the row's plan (`{PLAN_FILE}`), and the rows' own account of it (`split.families`) is written "
+                "before the row's levers multiply its blocks")
+    largest = sorted(((s, family, way) for way, p in priced["ways"].items() for family, s in p["families"].items()),
+                     reverse=True)[:3]
+    return ("of the row's proving time, by its plan at β = " + _part(priced["beta"]) + f" ({priced['run']}), "
+            + "the share in block families priced each way is "
+            + ", ".join(f"{_pct(p['share'])} {way}" for way, p in priced["ways"].items())
+            + ": the largest families are " + ", ".join(f"{family} ({_pct(s)}, {way})" for s, family, way in largest))
+
+
 def render(doc: Mapping[str, Any]) -> str:
     """``doc`` (`build`) as text: the figure and what it is, the inputs with their marks, each part, and the two side
     by side for every scope and monitoring period."""
 
     share, net, w = doc["share"], doc["network_check"], doc["weights"]
     head = next(p for p in doc["compute_audit"] if p["scope"] == "world year")
+    planned = [p for p in doc["compute_audit"] if p["priced"]]
     year = next(p for p in doc["periods"] if (p["compute"], p["period"]) == ("world", "year"))
     scan = next(r for r in doc["certifier"]["rows"] if r["row"] == "scan")
     marks = {m: sum(i["mark"] == m for i in doc["inputs"]) for m in MARKS}
     outside = "" if head["inside"] else ", outside the pinned budgets: extrapolated"
     what = ", the registered and served cut with every modeled lever at its measured value" if doc["row"] == ROW else ""
+    what += f", in its variant `{doc['variant']}`" if doc["variant"] else ""
     lines = [
         f"# verity bench exfiltration: {doc['model']}'s exfiltration capacity over a monitoring period, at "
         f"{_pct(share)} of total compute", "",
@@ -406,7 +507,9 @@ def render(doc: Mapping[str, Any]) -> str:
         f"({w['label']}, {_n(w['GB'])} GB) and {_n(year['compute_audit']['bits_a_request'])} bits a request. It is the "
         f"planner's row `{doc['row']}`{what}, read at the audit budget where its total is {_pct(share)} of the compute, "
         f"β = {_part(head['beta'])}{outside}: its bound, "
-        f"{_n(head['bound']['GB'])} GB, times λ = {_n(head['lambda'])}.",
+        f"{_n(head['bound']['GB'])} GB, times λ = {_n(head['lambda'])}. The row is priced over "
+        f"{_n(head['requests'])} requests, the count the network certifier's part is over.",
+        f"- {_how(head['priced'])}.",
         f"- **the network certifier's part: {_n(scan['term']['1']['GB'])} GB** (modeled, on an assumed class) "
         f"{TOGETHER['scan']}, {_n(scan['term']['1']['bits_a_request'])} bits a request, and "
         + ", ".join(f"{_n(year['together'][name]['certifier_GB'])} GB {what}" for name, what in TOGETHER.items()
@@ -419,24 +522,32 @@ def render(doc: Mapping[str, Any]) -> str:
         f"- with the network check's own proving at {_pct(net['share'])} of total compute, which the planner's rows "
         f"don't count (assumed, no run), the audit budget is β = {_part(net['beta'])} and the compute audit's part "
         f"{_n(net['GB'])} GB.",
-        f"- of {len(doc['inputs'])} inputs, {marks['measured']} are measured, {marks['modeled']} modeled and "
-        f"{marks['assumed']} assumed.", "",
+        f"- of {len(doc['inputs'])} inputs, {marks['measured']} {'is' if marks['measured'] == 1 else 'are'} measured, "
+        f"{marks['modeled']} modeled and {marks['assumed']} assumed.", "",
         f"Inputs, each a labelled record of the store (`{RUN_OF_RECORD}`):", "",
         f"- compute-audit: {', '.join(doc['runs'])} (`{doc['record']}`): the planner's rows, "
         f"{sum(len(p['pinned']) for p in doc['compute_audit'])} of row `{doc['row']}` at step `{head['step']}` over "
-        f"{len(doc['compute_audit'])} scopes",
+        f"{len(doc['compute_audit'])} scopes"
+        + "".join(f", and the {p['scope']}'s plan ({p['priced']['run']})" for p in planned),
         "- the network certifier's part and the requests both parts count over (modeled or assumed, read from the tree, "
         "not records): `verity bench certifier_term`'s inputs and the planner's plan, in the table below", "",
         "## Inputs", "",
         *_table(("part", "input", "value", "unit", "mark", "source"),
                 [(i["part"], i["input"], _n(i["value"]), i["unit"], i["mark"], i["source"]) for i in doc["inputs"]]), "",
         f"## The compute audit's part at {_pct(share)} of total compute", "",
-        "Each scope's rows of record, read at the audit budget β where their total is the share. The parts are shares of "
-        "total compute; the wait is part of serving.", "",
-        *_table(("scope", "run", "β", "bound at λ = 1, GB", "GB", "x weights", *PARTS),
+        "Each scope's rows of record, read at the audit budget β where their total is the share. The requests are the "
+        "count the rows are priced over. The parts are shares of total compute; the wait is part of serving.", "",
+        *_table(("scope", "run", "β", "bound at λ = 1, GB", "GB", "x weights", "requests", *PARTS),
                 [(p["scope"], p["run"], _part(p["beta"]) + ("" if p["inside"] else " (extrapolated)"), _n(p["bound"]["GB"]),
-                  _n(p["GB"]), _n(p["bits"] / w["bits"]), *(_part(p["parts"].get(part)) for part in PARTS))
+                  _n(p["GB"]), _n(p["bits"] / w["bits"]), _n(p["requests"]), *(_part(p["parts"].get(part)) for part in PARTS))
                  for p in doc["compute_audit"]]), "",
+        *(line for p in planned for line in (
+            f"The {p['scope']}'s proving time by block family, from its plan at β = {_part(p['priced']['beta'])} "
+            f"({p['priced']['run']}); how each family is priced is the rows' account:", "",
+            *_table(("priced", "share of proving time", "block families", "the largest"),
+                    [(way, _part(x["share"]), str(len(x["families"])),
+                      ", ".join(f"{family} {_part(s)}" for family, s in list(x["families"].items())[:3]))
+                     for way, x in p["priced"]["ways"].items()]), "")),
         "## The network certifier's part over the world's year", "",
         "`verity bench certifier_term`'s rows, at the planner's requests. The term is the schedules, the fail cells and "
         "the jitter; the entries are the compute side's.", "",
@@ -480,10 +591,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                          f"count (default {NETWORK_CHECK_SHARE}, assumed)")
     ap.add_argument("--row", default=ROW, help=f"the planner's row (default `{ROW}`)")
     ap.add_argument("--step", default=STEP, help=f"the row's step, or the beginning of its name (default `{STEP}`)")
+    ap.add_argument("--variant", help=f"the row's variant, as the planner's driver names it (`{VARIANT}`), where a run "
+                                      "holds several (default: a run holds one)")
     ap.add_argument("--local-only", action="store_true", help="read this machine's catalog alone, not the store's remote")
     a = ap.parse_args(argv)
     try:
-        doc = build(share=a.share, network_check=a.network_check_share, row=a.row, step=a.step, local_only=a.local_only)
+        doc = build(share=a.share, network_check=a.network_check_share, row=a.row, step=a.step, variant=a.variant,
+                    local_only=a.local_only)
     except (ValueError, RuntimeError) as e:
         print(f"verity bench exfiltration: {e}", file=sys.stderr)
         return 2

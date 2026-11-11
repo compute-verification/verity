@@ -1,9 +1,10 @@
 """`verity bench exfiltration` with no GPU and no node: the rule that reads a scope's rows off at a share of total
-compute, on small rows; then the store side on a real store with a directory remote that holds the planner's rows as
-`fixtures/exfiltration/` holds them (two runs' rows, cut to the fields the command reads and to the case it takes plus
-three it must pass over; `records.json` names the runs they were cut from): the figures a hand computation gave on
-those rows, the network certifier's part beside them at the planner's requests, every input's mark, each refusal by
-name, and the command."""
+compute and the rule that reads how its proving is priced from the row's plan, on small rows; then the store side on a
+real store with a directory remote that holds the planner's runs as `fixtures/exfiltration/` holds them (`records.json`
+names the runs they were cut from: one run's rows, cut to the fields the command reads and to the case it takes plus
+two it must pass over, and the run of that case's plan over the world's year, its plan cut to each cell's block and
+share): the figures a hand computation gave on those rows, the network certifier's part beside them at the planner's
+requests, every input's mark, each refusal by name, and the command."""
 
 from __future__ import annotations
 
@@ -18,18 +19,22 @@ from verity_bench import exfiltration as E
 
 REPO = Path(__file__).resolve().parents[3]
 FIXTURES = Path(__file__).parent / "fixtures" / "exfiltration"
-YEAR, OTHERS = json.loads((FIXTURES / "records.json").read_text())["compute-audit"]
+RECORDS = json.loads((FIXTURES / "records.json").read_text())["compute-audit"]
+ROWS, PLAN = RECORDS["rows"], RECORDS["plan"]
+#: the world year's figure a hand computation gave on the fixture's rows, in GB
+YEAR_GB = 14239.837095861332
 
-# ---- the rule, on small rows -------------------------------------------------------------------------------------------------
+# ---- the rules, on small rows ------------------------------------------------------------------------------------------------
 
 
 def row(beta: float, total: float, bits: float, **more) -> dict:
     return {"scope": "world year", "step": "s", "mix": "m", "b10": beta, "total": total, "bound_bits": bits,
             "target_bits": 50.0, "weights_bits": 100.0, "delta_seen": 0.01, "S": 8.0, "gpu_seconds": 4.0, "serve": 0.01,
-            "prove": total - 0.01, **more}
+            "prove": total - 0.01, "q": 0.5, "replay_sample": 3.0, "requests": 7.0, **more}
 
 
-#: the total is 0.02 + 2β and the bound 1/β, so at 10% β is 0.04 and the bound 25 bits, counted twice at λ = 2
+#: the total is 0.02 + 2β and the bound 1/β, so at 10% β is 0.04 and the bound 25 bits, counted twice at λ = 2; the
+#: rows are priced over 3 / 0.5 = 6 requests, where their `requests` field says 7
 TOY = [row(0.02, 0.06, 50.0), row(0.03, 0.08, 100 / 3), row(0.05, 0.12, 20.0)]
 
 
@@ -40,7 +45,9 @@ def test_a_scope_is_read_at_the_budget_where_its_total_is_the_share():
     assert at["GB"] == pytest.approx(50.0 / 8e9) and (at["compute"], at["period"]) == ("world", "year")
     assert at["parts"] == pytest.approx({"serve": 0.01, "prove": 0.09})
     assert (at["delta"], at["output_bits"], at["gpu_seconds"], at["weights_bits"]) == (0.01, 8.0, 4.0, 100.0)
-    assert at["pinned"] == [0.02, 0.03, 0.05] and at["priced"] == {}
+    assert at["pinned"] == [0.02, 0.03, 0.05] and at["priced"] is None
+    # the requests are the count the rows are priced over, not the field that names another request's
+    assert at["requests"] == 6.0
     # at a pinned budget it is that row's bound, and past the last the line through the nearest two, said to be so
     assert E.at_share("world year", "r1", TOY, 0.08)["bound"]["bits"] == pytest.approx(100 / 3)
     past = E.at_share("world year", "r1", TOY, 0.14)
@@ -52,18 +59,47 @@ def test_a_scope_is_read_at_the_budget_where_its_total_is_the_share():
         E.at_share("world year", "r1", [*TOY[:2], TOY[0]], 0.10)
     with pytest.raises(ValueError, match="rows differ in delta, gpu_seconds, which one plan holds fixed"):
         E.at_share("world year", "r1", [*TOY[:2], TOY[2] | {"delta_seen": 0.02, "gpu_seconds": 5.0}], 0.10)
+    with pytest.raises(ValueError, match="rows differ in requests, which one plan holds fixed"):
+        E.at_share("world year", "r1", [*TOY[:2], TOY[2] | {"q": 0.25}], 0.10)
+    with pytest.raises(ValueError, match="rows don't say what requests they are priced over \\(`replay_sample / q`\\)"):
+        E.at_share("world year", "r1", [{k: v for k, v in r.items() if k != "q"} for r in TOY], 0.10)
+    with pytest.raises(ValueError, match="r1's world year rows are 2 variants of the row \\(h1lin, h8lin\\), each on its own "
+                                         "premises: a run of record holds one"):
+        E.at_share("world year", "r1", [r | {"h8": h} for r in TOY for h in ("h8lin", "h1lin")], 0.10)
     with pytest.raises(ValueError, match="spend 2.00% of the compute before any audit: no audit budget brings the total to 1.00%"):
         E.at_share("world year", "r1", TOY, 0.01)
 
 
-def test_proving_time_is_summed_by_how_its_block_families_are_priced():
-    split = {"families": {"A_v1": {"priced": ["measured"], "share": 0.5}, "B_v1": {"priced": ["computed"], "share": 0.125},
-                          "C_v1": {"priced": ["computed", "measured"], "share": 0.25},
-                          "D_v1": {"priced": ["measured"], "share": 0.125}}}
-    at = E.at_share("world year", "r1", [r | {"split": split} for r in TOY], 0.10)
-    assert at["priced"] == {"measured": {"share": 0.625, "families": ["A_v1", "D_v1"]},
-                            "measured and computed": {"share": 0.25, "families": ["C_v1"]},
-                            "computed": {"share": 0.125, "families": ["B_v1"]}}
+def test_proving_time_is_priced_by_the_rows_plan_not_by_the_rows_own_shares():
+    """The shares are the plan's cells', summed by block family; how a family is priced is the rows' account, whose own
+    shares, written before the row's levers multiply its blocks, are not read. A plan is held to its rows."""
+
+    split = {"families": {"A_v1": {"priced": ["measured"], "share": 0.97}, "B_v1": {"priced": ["computed"], "share": 0.01},
+                          "C_v1": {"priced": ["computed", "measured"], "share": 0.01},
+                          "D_v1": {"priced": ["measured"], "share": 0.01}}}
+    rows = [r | {"split": split} for r in TOY]
+    plan = {"scope": "world year", "beta": 0.04, "q": 0.25, "replay_sample": 1.5, "bound_bits": 25.0,
+            "cells": [{"block": "B_v1{K=1}", "share": 0.5}, {"block": "A_v1{K=1}", "share": 0.125},
+                      {"block": "C_v1{K=2}", "share": 0.125}, {"block": "B_v1{K=2}", "share": 0.0625},
+                      {"block": "D_v1", "share": 0.0625}, {"block": "E_v1{K=1}", "share": 0.0625}],
+            "left_out": [{"block": "Copy[8 bits]", "share": 0.0625}]}
+    priced = E.at_share("world year", "r1", rows, 0.10, ("r2", plan))["priced"]
+    assert (priced["run"], priced["beta"]) == ("r2", 0.04)
+    assert priced["ways"] == {
+        "computed": {"share": 0.5625, "families": {"B_v1": 0.5625}},
+        "measured": {"share": 0.1875, "families": {"A_v1": 0.125, "D_v1": 0.0625}},
+        "measured and computed": {"share": 0.125, "families": {"C_v1": 0.125}},
+        E.UNSTATED: {"share": 0.125, "families": {"E_v1": 0.0625, "Copy[8 bits]": 0.0625}}}
+    assert sum(w["share"] for w in priced["ways"].values()) == 1.0
+    assert E.at_share("world year", "r1", rows, 0.10)["priced"] is None
+
+    with pytest.raises(ValueError, match="r2's plan of the world year is priced over 12 requests and r1's rows over 6: it is "
+                                         "not these rows' plan"):
+        E.at_share("world year", "r1", rows, 0.10, ("r2", plan | {"q": 0.125}))
+    with pytest.raises(ValueError, match="r2's plan of the world year bounds 0.0 GB at β = 4.0000%, where r1's rows give "
+                                         "0.0 GB: it is not these rows' plan"):
+        E.at_share("world year", "r1", rows, 0.10, ("r2", plan | {"bound_bits": 50.0}))
+    assert E.at_share("world year", "r1", rows, 0.10, ("r2", plan | {"bound_bits": 25.0 * (1 + 5e-4)}))["priced"]
 
 
 # ---- the store side ----------------------------------------------------------------------------------------------------------
@@ -87,17 +123,21 @@ class Store:
 
         return LocalStore(self.tmp / name, config_path=self.config)
 
-    def ran(self, run: str, rows: list[dict] | None, *, name: str = E.ROWS_FILE) -> str:
-        """A run's attempt on the remote, its run record holding `rows` as the planner's rows (None: it kept no files)."""
+    def ran(self, run: str, rows: list[dict] | None, *, plan: dict | None = None, name: str = E.ROWS_FILE) -> str:
+        """A run's attempt on the remote, its run record holding `rows` as the planner's rows and `plan` as its plan
+        (neither: it kept no files)."""
 
         from research.store import canon
 
         record = None
-        if rows is not None:
-            path = self.tmp / "run-files" / f"{run}-{self._ts}" / name
-            path.parent.mkdir(parents=True)
-            path.write_text("".join(json.dumps(r) + "\n" for r in rows))
-            record = self.store.put_artifact("run-record/v1", {}, tree=path.parents[len(Path(name).parts) - 1])
+        if rows is not None or plan is not None:
+            tree = self.tmp / "run-files" / f"{run}-{self._ts}"
+            for path, text in ((name, rows and "".join(json.dumps(r) + "\n" for r in rows)),
+                               (E.PLAN_FILE, plan and json.dumps(plan))):
+                if text:
+                    (tree / path).parent.mkdir(parents=True, exist_ok=True)
+                    (tree / path).write_text(text)
+            record = self.store.put_artifact("run-record/v1", {}, tree=tree)
             self.store.push(record)
         attempt = {
             "schema": "research/attempt/v0.1", "id": run, "tool": {"name": "bash", "version": None},
@@ -117,54 +157,146 @@ class Store:
         return target
 
 
-def rows(run: str) -> list[dict]:
+def rows(run: str = ROWS) -> list[dict]:
     return [json.loads(line) for line in (FIXTURES / run / "rows.jsonl").read_text().splitlines()]
 
 
-def mine(run: str) -> list[dict]:
-    """A fixture run's rows of the case the command takes."""
-
-    return [r for r in rows(run) if (r["world"], r["row"]) == (E.WORLD, E.ROW) and r["step"].startswith(E.STEP)]
+def plan() -> dict:
+    return json.loads((FIXTURES / PLAN / "mix.json").read_text())
 
 
-def recorded(tmp: Path) -> Store:
-    """The fixtures' two runs in a store, each labelled the record: the world's year, and the other five scopes."""
+def mine(scope: str | None = None) -> list[dict]:
+    """The fixture's rows of the case the command takes: the row's variant on one request count, at eight heads."""
+
+    return [r for r in rows() if (r["world"], r["row"], r["h8"]) == (E.WORLD, E.ROW, "h8lin") and r["step"].startswith(E.STEP)
+            and scope in (None, r["scope"])]
+
+
+def record() -> list[dict]:
+    """What a run of record holds of the fixture's rows: one variant of each row."""
+
+    return [r for r in rows() if (r["row"], r["h8"]) != (E.ROW, "h8")]
+
+
+def recorded(tmp: Path, *, planned: bool = True) -> Store:
+    """The fixtures' runs in a store, each labelled the record: the rows over the two year scopes, and with `planned`
+    the run that holds the world year's plan and the plan's own row."""
 
     s = Store(tmp)
-    for run in (YEAR, OTHERS):
-        s.label(s.ran(run, rows(run)))
+    s.label(s.ran(ROWS, record()))
+    if planned:
+        s.label(s.ran(PLAN, rows(PLAN), plan=plan()))
     return s
 
 
 def test_the_hand_computation_is_reproduced_from_the_rows_it_read(tmp_path):
     """The figures a hand computation gave on these rows, to the digits it kept: the world year's audit budget at 10%, its
     bound at λ = 1 and at the rows' λ, each part of the 10%, the figure with the network check's own proving taken off the
-    budget, and the other five scopes'. A fresh machine gets them from the store's remote alone."""
+    budget, and the datacenter year's. A fresh machine gets them from the store's remote alone."""
 
     doc = E.build(store=recorded(tmp_path).fresh(), root=REPO)
-    assert (doc["schema"], doc["unit"], doc["status"], doc["runs"], doc["refused"]) == (E.SCHEMA, "GB", "modeled", [OTHERS, YEAR], [])
+    assert (doc["schema"], doc["unit"], doc["status"], doc["runs"], doc["refused"]) == (E.SCHEMA, "GB", "modeled", [PLAN, ROWS], [])
     by = {p["scope"]: p for p in doc["compute_audit"]}
+    assert list(by) == ["datacenter year", "world year"]
     year = by["world year"]
-    assert doc["value"] == year["GB"] == pytest.approx(8455.87878178061, rel=1e-12)
-    assert year["beta"] == pytest.approx(0.05542142320531889, rel=1e-12) and year["inside"] and year["residual"] < 1e-9
-    assert year["bound"]["GB"] == pytest.approx(8053.217887410105, rel=1e-12) and year["lambda"] == pytest.approx(1.05)
-    assert (year["run"], year["mix"], year["delta"], year["output_bits"]) == (YEAR, "B128", 0.01, 28000.0)
-    assert year["step"].startswith(E.STEP) and year["pinned"] == [0.035, 0.045, 0.055, 0.065]
+    assert doc["value"] == year["GB"] == pytest.approx(YEAR_GB, rel=1e-12)
+    assert year["beta"] == pytest.approx(0.05542238712065398, rel=1e-12) and year["inside"] and year["residual"] < 1e-9
+    assert year["bound"]["GB"] == pytest.approx(13561.74961510603, rel=1e-12) and year["lambda"] == pytest.approx(1.05)
+    assert (year["run"], year["mix"], year["delta"], year["output_bits"]) == (ROWS, "B128", 0.01, 28000.0)
+    assert year["step"].startswith(E.STEP) and year["pinned"] == [0.05, 0.055, 0.06, 0.15, 0.4, 1.0, 2.5, 6.0, 15.0]
     assert {k: round(100 * v, 3) for k, v in year["parts"].items()} == {
-        "serve": 4.339, "wait": 2.293, "prove": 5.369, "replay": 0.173, "pool": 0.07, "edge": 0.044, "compile": 0.006}
+        "serve": 4.339, "wait": 2.293, "prove": 5.372, "replay": 0.17, "pool": 0.07, "edge": 0.044, "compile": 0.005}
     assert sum(v for k, v in year["parts"].items() if k != "wait") == pytest.approx(0.10, abs=1e-5)
-    assert {k: round(v["share"], 4) for k, v in year["priced"].items()} == {
-        "measured": 0.9857, "measured and computed": 0.0135, "computed": 0.0008}
-    assert sum(v["share"] for v in year["priced"].values()) == pytest.approx(1.0)
-    assert year["priced"]["measured"]["families"][:2] == ["MoeExpertFp8CoordinateChunk_v1", "MoeExpertFp8GemmW_v1"]
-    assert {scope: round(p["GB"], 1) for scope, p in by.items() if scope != "world year"} == {
-        "world week": 8150.7, "world month": 8263.0, "datacenter week": 7510.9, "datacenter month": 7624.4,
-        "datacenter year": 7819.2}
-    assert {p["run"] for scope, p in by.items() if scope != "world year"} == {OTHERS}
+    other = by["datacenter year"]
+    assert other["GB"] == pytest.approx(13707.861447630507, rel=1e-12) and other["run"] == ROWS and other["priced"] is None
+    assert other["beta"] == pytest.approx(0.055420109073442365, rel=1e-12)
     net = doc["network_check"]
-    assert net["share"] == 0.003 and net["GB"] == pytest.approx(8939.28531191602, rel=1e-12) and net["inside"]
-    assert net["beta"] == pytest.approx(0.05242440579315158, rel=1e-12)
+    assert net["share"] == 0.003 and net["GB"] == pytest.approx(15053.889111429447, rel=1e-12) and net["inside"]
+    assert net["beta"] == pytest.approx(0.052425317582956925, rel=1e-12)
     assert E.build(share=0.097, network_check=0, store=recorded(tmp_path / "again").fresh(), root=REPO)["value"] == net["GB"]
+
+
+def test_the_rows_requests_are_the_count_they_are_priced_over(tmp_path):
+    """A row is priced over its sampled replays / the probability a request is sampled, which is the planner's count and
+    the network certifier's part's, and not the row's `requests` field. Rows priced over another count are refused: the
+    fixture's variant of the row whose indexer is stated against fewer linears is."""
+
+    doc = E.build(store=recorded(tmp_path).fresh(), root=REPO)
+    year = next(p for p in doc["compute_audit"] if p["scope"] == "world year")
+    field = {r["requests"] for r in mine("world year")}
+    assert field == {2.02900114160274e16} and year["requests"] == pytest.approx(1.7784008649596718e16, rel=1e-12)
+    assert year["requests"] == pytest.approx(doc["periods"][-1]["requests"], rel=1e-12)
+    assert year["requests"] == pytest.approx(E.plan(REPO)["scopes"]["world year"]["requests"], rel=1e-12)
+    assert "The row is priced over 1.778e+16 requests, the count the network certifier's part is over." in E.render(doc)
+
+    s = Store(tmp_path / "other")
+    s.label(s.ran(ROWS, [r for r in rows() if (r["row"], r["h8"]) == (E.ROW, "h8")]))
+    with pytest.raises(ValueError, match="the two parts cover different compute over the world year: 2.11575e\\+16 requests on "
+                                         "the compute audit's side and 1.7784e\\+16 on the network certifier's"):
+        E.build(store=s.store, root=REPO)
+    # the run as the planner's driver wrote it, several variants of the row in one scope, is refused by name, and
+    # read at the variant named
+    both = Store(tmp_path / "both")
+    both.label(both.ran(ROWS, rows()))
+    with pytest.raises(ValueError, match=f"{ROWS}'s world year rows are 2 variants of the row \\(h8, h8lin\\), each on its own "
+                                         "premises: a run of record holds one, or --variant names the one meant"):
+        E.build(store=both.store, root=REPO)
+    named = E.build(store=both.store, root=REPO, variant="h8lin")
+    assert named["value"] == pytest.approx(YEAR_GB, rel=1e-12) and named["variant"] == "h8lin" and doc["variant"] is None
+    assert "in its variant `h8lin`, read at the audit budget" in E.render(named)
+
+
+def test_how_the_proving_is_priced_is_the_plans_account(tmp_path):
+    """The world year's proving time by how its block families are priced, from the row's plan of record: the sparse
+    attention's split part, priced by computation, is over half of it, where the rows' own shares, written before the
+    row's levers multiply its blocks, put it under a thousandth and 98.6% in families priced from measured statements.
+    Without a plan of record the command says none is read and marks no proving measured."""
+
+    doc = E.build(store=recorded(tmp_path).fresh(), root=REPO)
+    priced = next(p for p in doc["compute_audit"] if p["scope"] == "world year")["priced"]
+    said = mine("world year")[0]["split"]["families"]
+    assert sum(f["share"] for f in said.values() if f["priced"] == ["measured"]) == pytest.approx(0.9857, abs=1e-4)
+    assert said["SparseMlaSplitPart_v1"]["share"] < 1e-3 and said["SparseMlaSplitPart_v1"]["priced"] == ["computed"]
+    assert (priced["run"], priced["beta"]) == (PLAN, plan()["beta"]) and priced["beta"] == pytest.approx(0.0554224, abs=1e-7)
+    ways = priced["ways"]
+    assert sum(w["share"] for w in ways.values()) == pytest.approx(1.0, abs=1e-9)
+    assert {k: round(w["share"], 4) for k, w in ways.items()} == {
+        "computed": 0.5236, "measured": 0.4713, "measured and computed": 0.0051, E.UNSTATED: 0.0}
+    assert list(ways["computed"]["families"])[0] == "SparseMlaSplitPart_v1"
+    assert ways["computed"]["families"]["SparseMlaSplitPart_v1"] == pytest.approx(0.5229, abs=5e-4)
+    mla = sum(s for w in ways.values() for f, s in w["families"].items() if f.startswith("SparseMla"))
+    assert mla == pytest.approx(0.5826, abs=5e-4)
+    by = {i["input"]: i for i in doc["inputs"]}
+    assert (by["proving priced measured"]["mark"], by["proving priced measured"]["value"]) == ("measured", ways["measured"]["share"])
+    assert (by["proving priced computed"]["mark"], by["proving priced measured and computed"]["mark"]) == ("modeled", "modeled")
+    assert f"({PLAN}) `out/mix.json`: the row's plan at β = 5.542%" in by["proving priced computed"]["source"]
+    text = E.render(doc)
+    assert (f"- of the row's proving time, by its plan at β = 5.542% ({PLAN}), the share in block families priced each way is "
+            "52.36% computed, 47.13% measured, 0.5086% measured and computed, 0.00179% in no stated way: the largest "
+            "families are SparseMlaSplitPart_v1 (52.29%, computed), MoeExpertFp8CoordinateChunk_v1 (27.19%, measured), "
+            "MoeExpertFp8GemmW_v1 (13%, measured).") in text
+    assert f", and the world year's plan ({PLAN})" in text
+    assert "| computed | 52.358% | 7 | SparseMlaSplitPart_v1 52.291%, " in text and "98.6" not in text
+
+    # a plan of another row's, or of the row on other premises, is not these rows' plan
+    for change, why in (({"q": plan()["q"] / 2}, f"{PLAN}'s plan of the world year is priced over 3.5568e\\+16 requests and "
+                                                   f"{ROWS}'s rows over 1.7784e\\+16: it is not these rows' plan"),
+                        ({"bound_bits": plan()["bound_bits"] / 2}, f"{PLAN}'s plan of the world year bounds 6,78\\d.\\d GB at "
+                                                                   f"β = 5.5422%, where {ROWS}'s rows give 13,56\\d.\\d GB")):
+        s = Store(tmp_path / next(iter(change)))
+        s.label(s.ran(ROWS, record()))
+        s.label(s.ran(PLAN, None, plan=plan() | change))
+        with pytest.raises(ValueError, match=why):
+            E.build(store=s.store, root=REPO)
+
+    bare = E.build(store=recorded(tmp_path / "bare", planned=False).fresh(), root=REPO)
+    assert bare["value"] == doc["value"] and bare["runs"] == [ROWS]
+    assert all(p["priced"] is None for p in bare["compute_audit"])
+    assert not [i for i in bare["inputs"] if i["input"].startswith("proving priced")]
+    assert [i["input"] for i in bare["inputs"] if i["mark"] == "measured"] == ["weights"]
+    text = E.render(bare)
+    assert ("- how the row's proving time is priced is not read, and none of it is marked measured: no run of record holds "
+            "the row's plan (`out/mix.json`)") in text and "1 is measured" in text and "block families priced" not in text
 
 
 def test_the_network_certifiers_part_is_beside_it_at_the_planners_requests(tmp_path):
@@ -191,7 +323,7 @@ def test_the_network_certifiers_part_is_beside_it_at_the_planners_requests(tmp_p
 
     audit, together = year["compute_audit"], year["together"]
     assert audit["GB"] == doc["value"] and audit["bits_a_request"] == pytest.approx(audit["bits"] / year["requests"])
-    assert audit["of_weights"] == pytest.approx(doc["value"] / doc["weights"]["GB"]) == pytest.approx(22.449, abs=5e-4)
+    assert audit["of_weights"] == pytest.approx(doc["value"] / doc["weights"]["GB"]) == pytest.approx(37.805, abs=5e-4)
     assert list(together) == list(E.TOGETHER) == ["scan", "N2", "all three", "design"]
     assert together["scan"]["certifier_GB"] == pytest.approx(57_798_028, abs=1)
     assert together["scan"]["GB"] == pytest.approx(together["scan"]["certifier_GB"] + audit["GB"])
@@ -201,9 +333,12 @@ def test_the_network_certifiers_part_is_beside_it_at_the_planners_requests(tmp_p
     assert together["all three"]["GB"] == together["design"]["GB"] == pytest.approx(audit["GB"])
     # the entries stand in for the compute audit's part where the scan charges them and they are fewer
     assert scan["entries"]["bits"] > audit["bits"]
+    dc = doc["periods"][2]
+    assert dc["compute_audit"]["GB"] == pytest.approx(13707.9, abs=0.05) and dc["compute_audit"]["run"] == ROWS
+    assert dc["requests"] == pytest.approx(planned["scopes"]["datacenter year"]["requests"], rel=1e-12)
+    # a scope no run of record holds has the network certifier's part alone
     week = doc["periods"][0]
-    assert week["compute_audit"]["GB"] == pytest.approx(7510.9, abs=0.05) and week["compute_audit"]["run"] == OTHERS
-    assert week["requests"] == pytest.approx(planned["scopes"]["datacenter week"]["requests"], rel=1e-12)
+    assert week["compute_audit"] is None and week["together"]["N2"]["GB"] is None and week["together"]["N2"]["certifier_GB"] > 0
 
 
 def test_every_input_is_marked_measured_modeled_or_assumed_with_its_source(tmp_path):
@@ -213,16 +348,15 @@ def test_every_input_is_marked_measured_modeled_or_assumed_with_its_source(tmp_p
                for i in doc["inputs"])
     assert {k: (by[k]["part"], by[k]["mark"], by[k]["value"]) for k in (
         "planner_rows", "compute_share", "delta", "output_bits", "network_check_share", "advice")} == {
-        "planner_rows": ("compute audit", "modeled", 24), "compute_share": ("compute audit", "assumed", 0.1),
+        "planner_rows": ("compute audit", "modeled", 18), "compute_share": ("compute audit", "assumed", 0.1),
         "delta": ("compute audit", "assumed", 0.01), "output_bits": ("compute audit", "assumed", 28000.0),
         "network_check_share": ("compute audit", "assumed", 0.003), "advice": ("compute audit", "assumed", 0)}
     assert by["lambda"]["mark"] == "assumed" and by["lambda"]["value"] == pytest.approx(1.05)
-    assert f"`{E.RECORD}` ({OTHERS}, {YEAR})" in by["planner_rows"]["source"] and "6 scopes" in by["planner_rows"]["source"]
-    assert (by["proving priced measured"]["mark"], by["proving priced computed"]["mark"],
-            by["proving priced measured and computed"]["mark"]) == ("measured", "modeled", "modeled")
+    assert f"`{E.RECORD}` ({PLAN}, {ROWS})" in by["planner_rows"]["source"] and "2 scopes" in by["planner_rows"]["source"]
     # the world's requests are the planner's, marked so, where the certifier's command takes them as a given option
     requests = by["world_requests"]
     assert (requests["part"], requests["mark"]) == ("both", "modeled") and "benchmarks/spot_figures/breakeven" in requests["source"]
+    assert "the requests the rows of record are priced over" in requests["source"]
     assert (by["weights"]["part"], by["weights"]["mark"]) == ("both", "measured")
     assert (by["response_ids"]["part"], by["response_ids"]["mark"]) == ("network certifier", "assumed")
     assert (by["mfu_serve"]["part"], by["mfu_serve"]["mark"], by["mfu_serve"]["value"]) == ("both", "assumed", 0.4)
@@ -237,22 +371,24 @@ def test_every_input_is_marked_measured_modeled_or_assumed_with_its_source(tmp_p
     text = E.render(doc)
     assert text.startswith("# verity bench exfiltration: GLM-5.3's exfiltration capacity over a monitoring period, at 10% of "
                            "total compute\n")
-    assert "- **the compute audit's part: 8,456 GB** (modeled), 22.45 copies of the weights (GLM-5.3 in FP4, 376.7 GB)" in text
-    assert "β = 5.542%: its bound, 8,053 GB, times λ = 1.05." in text
+    assert "- **the compute audit's part: 14,240 GB** (modeled), 37.81 copies of the weights (GLM-5.3 in FP4, 376.7 GB)" in text
+    assert "β = 5.542%: its bound, 13,562 GB, times λ = 1.05." in text
     assert "- **the network certifier's part: 57,798,028 GB** (modeled, on an assumed class) as the scan's check charges it today" in text
-    assert "8,456 GB with the lengths held, the timing taken once and the entries charged through the compute audit" in text
-    assert "the audit budget is β = 5.242% and the compute audit's part 8,939 GB." in text
-    assert f"- compute-audit: {OTHERS}, {YEAR} (`{E.RECORD}`): the planner's rows, 24 of row `(i) honest`" in text
+    assert "14,240 GB with the lengths held, the timing taken once and the entries charged through the compute audit" in text
+    assert "the audit budget is β = 5.243% and the compute audit's part 15,054 GB." in text
+    assert f"- compute-audit: {PLAN}, {ROWS} (`{E.RECORD}`): the planner's rows, 18 of row `(i) honest`" in text
     marks = {m: sum(i["mark"] == m for i in doc["inputs"]) for m in E.MARKS}
     assert f"of {len(doc['inputs'])} inputs, {marks['measured']} are measured, {marks['modeled']} modeled and {marks['assumed']} assumed" in text
-    assert "| world year | " + YEAR + " | 5.542% | 8,053 | 8,456 | 22.45 | 4.339% | 2.293% | 5.369% |" in text
-    assert "| world | year | 1.182e+16 | 1.778e+16 | 8,456 | 0.003804 | 57,798,028 | 10,104 | 0 | 0 | 57,806,484 | 18,560 | 8,456 | 8,456 |" in text
+    assert "| world year | " + ROWS + " | 5.542% | 13,562 | 14,240 | 37.81 | 1.778e+16 | 4.339% | 2.293% | 5.372% |" in text
+    assert "| world | year | 1.182e+16 | 1.778e+16 | 14,240 | 0.006406 | 57,798,028 | 10,104 | 0 | 0 | 57,812,268 | 24,344 | 14,240 | 14,240 |" in text
+    assert "| world | week | 2.268e+14 | 3.411e+14 | no rows of record | none | " in text
     assert "Refused" not in text and text.count("\n| datacenter | ") == 3
 
 
 def test_an_unlabelled_superseded_or_ambiguous_record_is_refused_by_name(tmp_path):
     s = Store(tmp_path)
-    year, others = s.ran(YEAR, rows(YEAR)), s.ran(OTHERS, rows(OTHERS))
+    held, planned = s.ran(ROWS, record()), s.ran(PLAN, rows(PLAN), plan=plan())
+    year = s.ran("r20261111-000000-0000", mine("world year"))
 
     def build(**kw) -> dict:
         return E.build(store=s.store, root=REPO, **kw)
@@ -260,39 +396,59 @@ def test_an_unlabelled_superseded_or_ambiguous_record_is_refused_by_name(tmp_pat
     with pytest.raises(ValueError, match=f"no planner rows of record: nothing in the store carries `run_of_record={E.RECORD}`"
                                          f".*research data label RUN run_of_record {E.RECORD} --by LANE"):
         build()
-    s.label(others)
-    with pytest.raises(ValueError, match=f"no run of record holds the world year's rows \\({OTHERS} hold datacenter month, "):
+    # a plan alone is no figure: its own row, at its budget, is not read off
+    s.label(planned)
+    with pytest.raises(ValueError, match=f"no run of record holds the planner's rows: {PLAN} hold a plan alone"):
         build()
-    s.label(year)
-    assert build()["value"] == pytest.approx(8455.87878178061)
+    other = s.label(s.ran("r20261111-000000-0009", mine("datacenter year")))
+    with pytest.raises(ValueError, match=f"no run of record holds the world year's rows \\({other} holds datacenter year\\)"):
+        build()
+    s.label(other, E.SUPERSEDED_BY, held)
+    s.label(held)
+    assert build()["value"] == pytest.approx(YEAR_GB)
 
     # a second run holding the world's year: refused until one is superseded, then the newer one is read
-    newer = s.label(s.ran("r20261111-000000-0001", [r | {"bound_bits": 2 * r["bound_bits"]} for r in mine(YEAR)]))
-    with pytest.raises(ValueError, match=f"{newer} and {YEAR} both hold the world year's rows and neither is superseded: label "
+    with pytest.raises(ValueError, match=f"{ROWS} and {year} both hold the world year's rows and neither is superseded: label "
                                          "the one the other replaces .*superseded_by NEWER"):
-        build()
-    s.label(YEAR, E.SUPERSEDED_BY, newer)
+        s.label(year) and build()
+    s.label(year, E.SUPERSEDED_BY, held)
+    newer = s.label(s.ran("r20261112-000000-0001", [r | {"bound_bits": 2 * r["bound_bits"]} for r in mine("world year")]))
+    s.label(planned, E.SUPERSEDED_BY, newer)
+    s.label(held, E.SUPERSEDED_BY, newer)
     doc = build()
-    assert doc["value"] == pytest.approx(2 * 8455.87878178061) and doc["runs"] == [newer, OTHERS]
-    assert doc["refused"] == [{"target": YEAR, "record": E.RECORD, "why": f"superseded by {newer}"}]
-    assert f"- {YEAR} (`{E.RECORD}`): superseded by {newer}" in E.render(doc)
+    assert doc["value"] == pytest.approx(2 * YEAR_GB) and doc["runs"] == [newer]
+    assert {x["target"]: x["why"] for x in doc["refused"]}[ROWS] == f"superseded by {newer}"
+    assert f"- {ROWS} (`{E.RECORD}`): superseded by {newer}" in E.render(doc)
+    # a second plan of the scope is refused the same way, and a plan of a scope with no rows is left out and listed
+    a = s.label(s.ran("r20261112-000000-000a", None, plan=plan() | {"bound_bits": 2 * plan()["bound_bits"]}))
+    assert build()["compute_audit"][0]["priced"]["run"] == a
+    b = s.label(s.ran("r20261112-000000-000b", None, plan=plan()))
+    with pytest.raises(ValueError, match=f"{b} and {a} both hold the world year's plan and neither is superseded"):
+        build()
+    s.label(b, E.SUPERSEDED_BY, a)
+    c = s.label(s.ran("r20261112-000000-000c", None, plan=plan() | {"scope": "world week"}))
+    assert {x["target"]: x["why"] for x in build()["refused"]}[c] == (
+        "holds the world week's plan, and no run of record holds that scope's rows")
 
     # runs of record that can't be read are left out and listed
-    s.label(s.ran("r20261111-000000-0002", None))
-    s.label(s.ran("r20261111-000000-0003", [{}], name="out/other.jsonl"))
-    s.label(s.ran("r20261111-000000-0004", [r | {"error": "timed out"} for r in mine(YEAR)]))
-    s.label("r20261111-000000-0005")
-    assert {x["target"][-1]: x["why"] for x in build()["refused"] if x["target"] != YEAR} == {
-        "2": "kept no run files", "3": "holds no planner rows (`out/rows.jsonl`)",
+    s.label(s.ran("r20261112-000000-0002", None))
+    s.label(s.ran("r20261112-000000-0003", [{}], name="out/other.jsonl"))
+    s.label(s.ran("r20261112-000000-0004", [r | {"error": "timed out"} for r in mine("world year")]))
+    s.label("r20261112-000000-0005")
+    assert {x["target"][-1]: x["why"] for x in build()["refused"] if x["target"].startswith("r20261112") and x["target"][-1] < "a"} == {
+        "2": "kept no run files", "3": "holds no planner rows (`out/rows.jsonl`) and no plan (`out/mix.json`)",
         "4": "holds no row `(i) honest` at a step `+ the verifier as measured...` of the world `ours`",
         "5": "not in the store or on its remote"}
 
     # another row of the plan, a step two steps begin with, and a row no run holds
     both = recorded(tmp_path / "both").store
-    other = E.build(store=both, root=REPO, row="(iii) honest")
-    assert other["runs"] == [YEAR] and other["refused"][0]["target"] == OTHERS and other["value"] < 8455
-    with pytest.raises(ValueError, match=f"`\\+ ` begins 2 steps of {YEAR}'s row `\\(i\\) honest`: give more of the one meant"):
-        E.build(store=both, root=REPO, step="+ ")
+    third = E.build(store=both, root=REPO, row="(iii) honest")
+    assert third["runs"] == [ROWS] and third["refused"][0]["target"] == PLAN and third["value"] == pytest.approx(2459.2, abs=0.05)
+    assert third["compute_audit"][0]["priced"] is None
+    steps = Store(tmp_path / "steps")
+    steps.label(steps.ran(ROWS, [r | {"step": r["step"] + more} for r in mine("world year") for more in ("", ", again")]))
+    with pytest.raises(ValueError, match=f"`\\+ ` begins 2 steps of {ROWS}'s row `\\(i\\) honest`: give more of the one meant"):
+        E.build(store=steps.store, root=REPO, step="+ ")
     with pytest.raises(ValueError, match="no run of record holds the planner's rows: .*holds no row `\\(iv\\)`"):
         build(row="(iv)")
     with pytest.raises(ValueError, match="the share of total compute is in \\(0, 1\\) and the network check's own below it"):
@@ -302,13 +458,16 @@ def test_an_unlabelled_superseded_or_ambiguous_record_is_refused_by_name(tmp_pat
 def test_the_two_parts_must_cover_the_same_compute_and_weights(tmp_path):
     def build(name: str, **change) -> dict:
         s = Store(tmp_path / name)
-        s.label(s.ran(YEAR, [r | change for r in mine(YEAR)]))
+        s.label(s.ran(ROWS, [r | change for r in mine("world year")]))
         return E.build(store=s.store, root=REPO)
 
-    assert build("same")["value"] == pytest.approx(8455.87878178061)
+    assert build("same")["value"] == pytest.approx(YEAR_GB)
     with pytest.raises(ValueError, match="the two parts cover different compute over the world year: 1e\\+16 GPU-seconds on the "
                                          "compute audit's side and 1.18247e\\+16 on the network certifier's"):
         build("compute", gpu_seconds=1e16)
+    with pytest.raises(ValueError, match="the two parts cover different compute over the world year: 2e\\+16 requests on the "
+                                         "compute audit's side and 1.7784e\\+16 on the network certifier's"):
+        build("requests", q=1e-7, replay_sample=2e9)
     with pytest.raises(ValueError, match="the two parts are shares of different weights: the rows of record hold 3,000,000,000,000"):
         build("weights", weights_bits=3_000_000_000_000, target_bits=3_000_000_000_000 / 1.05)
 
@@ -332,10 +491,10 @@ def test_verity_bench_exfiltration_is_the_commands_runner(tmp_path, monkeypatch,
 
     code, out, _ = run()
     assert code == 0 and out.startswith("# verity bench exfiltration: GLM-5.3's exfiltration capacity")
-    assert "- **the compute audit's part: 8,456 GB** (modeled)" in out and "## Inputs" in out
+    assert "- **the compute audit's part: 14,240 GB** (modeled)" in out and "## Inputs" in out
     code, out, _ = run("--json", "--share", "0.097", "--network-check-share", "0")
     doc = json.loads(out)
-    assert code == 0 and doc["schema"] == E.SCHEMA and doc["value"] == pytest.approx(8939.28531191602)
+    assert code == 0 and doc["schema"] == E.SCHEMA and doc["value"] == pytest.approx(15053.889111429447)
     code, out, err = run("--row", "(iv)")
     assert code == 2 and out == "" and "verity bench exfiltration: no run of record holds the planner's rows" in err
     # this machine's catalog alone holds no label

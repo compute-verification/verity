@@ -10,6 +10,7 @@ directory holds its runner.
 verity bench exfiltration                 the figure, the inputs, each part, and the two side by side a period
 verity bench exfiltration --json          the same as one document: value, unit, inputs, parts, periods
 verity bench exfiltration --share 0.05    read at another share of total compute
+verity bench exfiltration --variant V     read one variant of the row, in a run that holds several
 verity bench exfiltration --local-only    read this machine's catalog alone, not the store's remote
 verity bench exfiltration --help          every parameter and its default
 ```
@@ -34,11 +35,14 @@ audit's, so the command also prints their sum under the network certifier's rows
 the scan with all three changes, and the design. Where a row charges the entries and they are fewer than the compute
 audit's part, they stand in its place. The command prices no advice, and says so among its inputs.
 
-Both parts count the same requests: the planner's, of the plan its rows are priced on, which the command reads from
-the planner in the tree and hands to the network certifier's calculator as the world's requests a year. They are
-fewer than the census's, which `verity bench certifier_term` counts by default: a request of the plan has fewer
-computed tokens at more served MACs a token. The command refuses if the two parts don't cover the same GPU-seconds
-or aren't shares of the same weights.
+Both parts count the same requests: the planner's, which the command reads from the planner in the tree and hands to
+the network certifier's calculator as the world's requests a year. They are fewer than the census's, which
+`verity bench certifier_term` counts by default: a request of the plan has fewer computed tokens at more served MACs
+a token. The requests a row of record is priced over are its `replay_sample / q`, the sampled replays over the
+probability a request is sampled; the row's `requests` field is the planner's default scope's count, another
+request's, and is not read. The command refuses if the two parts don't cover the same GPU-seconds, if the rows of
+record are priced over other requests than the network certifier's part counts, or if the two aren't shares of the
+same weights.
 
 ## The records it reads
 
@@ -46,33 +50,46 @@ The planner's rows are a labelled record of the store, never named in code. The 
 `run_of_record=exfiltration-glm53-compute-audit` and no `superseded_by`, and in each the file `out/rows.jsonl` of its
 run files: one JSON object a line, a row of the plan at one scope (`world year`, `datacenter week`, ...) and one
 pinned budget, with its `world`, `row`, `step`, `scope`, `b10` (the budget), `total` and its parts, `bound_bits`,
-`weights_bits`, `target_bits`, `delta_seen`, `S`, `gpu_seconds` and its proving time's `split` by block family.
+`weights_bits`, `target_bits`, `delta_seen`, `S`, `gpu_seconds`, `q` and `replay_sample`, and how each block family
+is priced (`split.families`, `priced`). A run holds one variant of a row: where the planner's driver wrote several
+(`h8`), the command refuses to mix them, and `--variant` reads the one it names.
+
+A run of the record may also hold a row's plan, `out/mix.json`: the sampling plan the row is priced over at one audit
+budget (`row`, `step`, `world`, `scope`, `beta`, `q`, `replay_sample`, `bound_bits`), with each cell's `block` and its
+`share` of the plan's proving time (`cells`, `left_out`). The command reads from it how the row's proving is priced:
+the cells' shares summed by block family, each family priced as the rows say (a family they don't name is priced
+in no stated way). It does not read the shares in `split.families`, which are written before the row's levers
+multiply its blocks. A plan must be its rows' plan: priced over the same requests, with the bound the rows give at
+its budget. The row a plan's run holds at the plan's budget is the plan's own and is not read off. With no plan of
+record the command says so and marks no proving measured.
 
 ```text
-research data label RUN run_of_record exfiltration-glm53-compute-audit --by LANE     a run that holds the rows
+research data label RUN run_of_record exfiltration-glm53-compute-audit --by LANE     a run that holds the rows, or a plan
 research data label RUN superseded_by NEWER --by LANE                                a run a newer one replaces
 ```
 
 Several runs may hold the record, each its own scopes: the world's year is required, and the other scopes appear in
 the tables as their runs are labelled. The command refuses when nothing carries the label and when two unsuperseded
-runs hold the same scope, and says which. A run that is superseded, or holds no rows of the case, is left out and
-listed under "Refused".
+runs hold the same scope's rows, or its plan, and says which. A run that is superseded, or holds neither rows nor a
+plan of the case, is left out and listed under "Refused".
 
 ## What it prints
 
-- **The figure**: over the world's year, the compute audit's part in GB with its copies of the weights and its bits a
-  request, then the network certifier's part under each of its rows, then the two summed. Beside them are the
+- **The figure**: over the world's year, the compute audit's part in GB with its copies of the weights, its bits a
+  request and the requests it is priced over, how its proving time is priced by the row's plan, then the network
+  certifier's part under each of its rows, then the two summed. Beside them are the
   errors: the compute audit's δ over the monitoring period, and the scan's ε, its execution phases' δ summed, which
   bounds nothing at 1 or more. One more line gives the compute audit's part with the network check's own proving
   taken off the audit budget (`--network-check-share`, assumed: no run measures it and the planner's rows don't
   count it).
 - **Inputs**: every input's part, value, unit, mark and source. A mark is `measured` (a run measured it), `modeled`
-  (derived from other figures) or `assumed`. The compute audit's come from its rows of record: the share of proving
-  time each way of pricing a block family covers (measured statements, computed, or both), δ, λ and the most
-  bits a request's output holds. The network certifier's are its calculator's own marks. The fleet, a request of the plan and the
-  weights are read by both.
+  (derived from other figures) or `assumed`. The compute audit's come from its rows of record: δ, λ and the most
+  bits a request's output holds; and from the row's plan, where one is of record: the share of proving time each way
+  of pricing a block family covers (measured statements, computed, or both). The network certifier's are its
+  calculator's own marks. The fleet, a request of the plan and the weights are read by both.
 - **The compute audit's part**: each scope of record, with its run, its β at the share, its bound at λ = 1 and at the
-  row's λ, and each part of the total there. A β outside the pinned budgets is marked extrapolated.
+  row's λ, the requests its rows are priced over, and each part of the total there. A β outside the pinned budgets is
+  marked extrapolated. Under it, for each scope with a plan, its proving time by how its block families are priced.
 - **The network certifier's part over the world's year**: each of its rows' schedules, cells, term at D_j = 1 and
   D_j = 2, and the entries.
 - **Each monitoring period over all compute**: a week, a month and a year of the reference datacenter and of the
