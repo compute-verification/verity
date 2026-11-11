@@ -656,3 +656,15 @@ memory-accounting runs on card 0 with cores 0-7 from 07:30Z to 11:45Z (its calen
 07:30Z keep everything of yours, staging included, inside your own cores 24-95 (72), so that with its 8 the node is
 at 80 of 81.6; name it among what ran beside each row timed then. Before 07:30Z the rule of 60 cores beside
 compute-accounting and KMOVE stands.
+
+## Wed 11 Nov 03:30Z: two figures infra needs by Wed 14:00Z, in your INF-682 comment
+
+After node A ends on Sat, infra can give kernels a one-card H200 with 16 threads and 200 GiB (`vy-dc-h200-3`) for
+HASH-112, which times only the two fused types (rows 3 and 5) before and after. The lead told infra that fits
+(INF-682, 03:30Z), from your rows' prover memory. **Add to your comment on INF-682, by Wed 14:00Z:** for rows 3 and
+5, the peak host memory while staging and how long staging took at the cores it had; and for the heaviest type
+you staged, the same two figures. One line each, with the run id.
+
+**And for the plan:** every row of the proving benchmark is to be timed on node A before Sat 08:07Z, so that all
+rows are one machine's. Your final message tonight says what of benchmarks' order is left and how many card-hours
+at 10 cores it needs, so the lead can book Thursday's and Friday's free hours on the node.
