@@ -37979,3 +37979,23 @@ Your message of this hour is read and done as far as the runs. I pushed nothing 
 **What I do meanwhile**: prepare (b) without touching the PR's head: `restack.py --dry-run` on a node (its script runs `uv lock`, so not on my VM), nothing pushed. I move the head only on your word.
 
 **Left**: `c174`'s verdict lines; your pick; then either nothing more from me before the mark (a), or the crossing's result, its records run and quick tier, and "ready to mark" (b).
+
+## PRF-371 MEMBERS, Wed 11 Nov 03:36Z: strata sizes, the honest closed session and the decoder's roundtrip build at `43f313ea6b`; the crossing of #8769 is running; the wording for vllm is below
+
+Branch `cursor/proofs-v2-members-9810`, head `43f313ea6b`. Still refused: `checkMembersAt_refuses` holds, nothing in `protocol` reaches the port. No PR. Note `20261111T0334Z-checkpoint-prf371-members`.
+
+**Built since 02:31Z** [run]
+- `Member.population` holds the member's strata sizes (`Member.sizes`: per stratum of the registration, the member's units in it, zeros kept; refusal `MEMBER_STRATA`) before its indices. `r20261111-032403-e0f0`, `OneStageZk.lean --siblings`, exit 0, axiom probe clean.
+- An honest closed pair of sessions passes `membersTreeReason` through `coinTreesOf` on lines built in Lean, in two layouts; the same lines refuse on wrong evidence, an unclosed session, interleaving and the other order. `r20261111-031918-a72d`, exit 0.
+- The decoder's roundtrip: `evidenceParts (evidenceBytes ps) = some ps` and `evidenceBytes_inj`, in `Security/Proofs/Properties/Verity/Sampled/MemberForm/Evidence.lean`. `r20261111-032215-ded1`, exit 0; axioms `propext`, `Classical.choice`, `Quot.sound`. Elaborates and axioms clean; not yet the `check.py` replay or a red team.
+- `membersOrderFrom` now carries its last tree and `membersTreeReason` is a match (first refused session, then `SHARED_TREE`, `UNUSED_TREE`, `MEMBERS_ORDER`), same acceptance, so the proof reads it by `split`.
+
+**The crossing**: `origin/main` is `5c095bb4ab` [read 03:32Z]. `restack.py cursor/proofs-v2-members-9810 --json --kept` started 03:33Z from a detached worktree of `main` on my VM (git and the moves' script, no `lake`). If its script needs what my VM lacks, I rerun it with `research run`. I push the result to my branch only.
+
+**`membersOrder` to `OpensInOrder` and `EvidenceRecorded`: next, not written.** I read LEG at `66a4360c93` (`Window/Order.lean`, `Record.lean`, `Closing.lean`) and import none of it. `main`'s `Sampled/RoundsRead.lean` already ties each opening the read shows to its line with counts (`readLog_opening`, `readLog_round`), so my side is the scan's lemmas and three theorems on the read: `OpensInOrder`'s body; the four facts `SessionRead.of_dropped` takes for each session (its closing opening, on the `session` stream, after one opening of it, answering the evidence's SHA-512, nothing of the tree after); and `EvidenceRecorded`'s body.
+
+**Where it cannot meet LEG yet, with the exact field**: `of_dropped`'s `hu : (openedTrees Lc)[u]? = some i` reads LEG's `openedTrees`, which `main` does not have. I give instead: session `u`'s tree index `i` (`KeyAt (heldTrees trees) i s root TREE_SESSION`), an opening of it in `Lc`, and `OpensInOrder`; LEG turns those into `openedTrees` on its side. The nine fields of `SessionOpens` on the log less the closings are not started: they need `coinTreesOf` of the lines less the closing lines to give the trees less their closing rounds, which nothing proves today.
+
+**For vllm, word for word**: "In the served window's registered record, `roots` is a list of `{port, root, leaves, domain}`. For each entry, which member's is it, as a function the verifier computes from the entry's `port` and the window's public member table (the members' names and unit ranges) alone, with nothing from the prover: for example 'the port named `<member>/<x>`', or 'the port of the proof block whose units lie in the member's ranges'. Is any entry the window's and no member's, or read by two members? The port refuses a record where an entry falls to no member or to two, so such an entry needs its own rule, stated."
+
+**The date for the wiring's PR**: in my entry by 20:00Z, as you asked.
