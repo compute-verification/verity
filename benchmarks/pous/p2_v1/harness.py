@@ -4,7 +4,7 @@ The kernels take a setup's key prefix, so one arm runs either framing, both on v
 
 - `V1` (`p2-v1-gpu`): the v4 spec as `reference.py` states it, audited by `memory_challenger.py`'s own loop.
 - `V3` (`p2-16448/v4`, `p2-v3-gpu`): `verity`'s registered scheme, whose commitment, 24-byte salt, key prefix and leaves are
-  the protocol's (`schemes.p2`, `setup`, `verifier`), audited by `protocol.TimedAudit` through `verity/core/devices/memory_challenger/timed_audit.py --strict`, which
+  the protocol's (`schemes.p2`, `setup`, `verifier`), audited by `protocol.TimedAudit` through `verity/protocols/pous/device/timed_audit.py --strict`, which
   refuses any `k` or `Δ + RTT` the certificate does not cover.  Its extra gate (`codec`) decodes segment 0 of the device's `C`
   with the scheme's own codec back to `W`'s, when that segment is wholly encoded.
 - `MC` (`p2-v3-mc-gpu`): `V3`'s blocks audited by the memory challenger (`memory_challenger/live.py`) at `Δ` plus the RTT
@@ -105,17 +105,17 @@ class V1:
 
 
 class V3(V1):
-    """`p2-16448/v4` (`verity.core.protocols.pous.schemes.p2`): `protocol.commit`'s commitment to `W` under the
+    """`p2-16448/v4` (`verity.protocols.pous.verifier.schemes.p2`): `protocol.commit`'s commitment to `W` under the
     scheme's manifest, `protocol.draw_salt`'s 24-byte salt, its key prefix (which frames that salt and no commitment) and `vk`'s
-    leaves, audited by `protocol.TimedAudit` (`verity/core/devices/memory_challenger/timed_audit.py --strict`), which refuses any `k` or `Δ + RTT` the
+    leaves, audited by `protocol.TimedAudit` (`verity/protocols/pous/device/timed_audit.py --strict`), which refuses any `k` or `Δ + RTT` the
     certificate does not cover.  `research` (the CPU tests' widths, where P2 has no certificate) audits anyway and lists
     the gaps."""
 
     impl, live = "p2-v3-gpu", H.MEMORY_CHALLENGER
 
     def __init__(self, P: R.Params, w_host: bytes, research: bool = False) -> None:
-        from verity.core.protocols.pous import protocol, schemes
-        from verity.core.protocols.pous.schemes import p2
+        from verity.protocols.pous.verifier import protocol, schemes
+        from verity.protocols.pous.verifier.schemes import p2
 
         self.P, self.p2 = P, p2
         self.params = schemes.P2Params(P.w, P.c0, P.blocks_per_segment, P.segments)
@@ -135,7 +135,7 @@ class V3(V1):
         return self.p2.block_keys(self.params, self.salt, *divmod(i, self.P.blocks_per_segment))
 
     def leaf(self, i: int, block: bytes) -> bytes:
-        from verity.core.protocols.pous.verifier import leaf_hash
+        from verity.protocols.pous.verifier.verifier import leaf_hash
         return leaf_hash(self.params, self.salt, i, block)
 
     def ready(self) -> dict[str, Any]:
@@ -179,7 +179,7 @@ class MC(V3):
                                          else ("--signer", "test")))
 
     def leaf(self, i: int, block: bytes) -> bytes:
-        from verity.core.protocols.pous.memory_challenger import block_digest
+        from verity.protocols.pous.device.memory_challenger import block_digest
         return block_digest(block)
 
 
@@ -256,7 +256,7 @@ def rows(values: list[int], width: int, device: Any) -> Any:
     return torch.tensor([list(v.to_bytes(width, "big")) for v in values], dtype=torch.uint8, device=device)
 
 
-KEYS = Path(__file__).resolve().parents[3] / "verity/core/protocols/pous/tests/fixtures/p2-v4-keys.json"
+KEYS = Path(__file__).resolve().parents[3] / "verity/protocols/pous/verifier/tests/fixtures/p2-v4-keys.json"
 """The pinned v4 keys (`p2_v1.vectors` writes them from `vectors.json`), which the vector gate holds the device's keys to."""
 
 

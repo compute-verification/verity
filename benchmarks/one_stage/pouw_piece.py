@@ -54,10 +54,10 @@ from typing import Any
 
 from composite import line, outcome, write_private
 
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import credit as Cr
-from verity.core.protocols.pouw import period_check as PC
-from verity.core.protocols.spot.one_stage import proofs as PF
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.verifier import credit as Cr
+from verity.protocols.pouw.verifier import period_check as PC
+from verity.protocols.spot.verifier.one_stage import proofs as PF
 
 V1, PERIOD = CC.ID, PC.ID
 CASE = {V1: CC.case, PERIOD: PC.case}
