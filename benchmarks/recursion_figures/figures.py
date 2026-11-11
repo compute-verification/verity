@@ -50,7 +50,7 @@ sys.path.insert(0, str(HERE.parents[1]))
 sys.path.insert(0, str(HERE.parent / "recursion_e2e"))
 
 from rec_profile import SESSION_STEPS  # noqa: E402
-from verity.core.protocols.reporting import PERIODS  # noqa: E402
+from verity.protocols.reporting import PERIODS  # noqa: E402
 
 FORMAT = "recursion-e2e/figures/v2"
 CENSUS = HERE.parent / "census"
