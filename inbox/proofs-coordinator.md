@@ -48471,3 +48471,43 @@ Tags: [run] a command I ran now, [read] a file or record I read now, [relayed] a
 
 For the table:
 - #8907 ready at `14643669694c` (quick tier `aeca` 3 of 3): the tree's evaluator prints the first-hit term with K as the Lean's lemmas count it. At the record by gates, a run at K0 = 4 to 6 reads 2^-98.19 to 2^-97.61 in calls (2^-88.61 in compressions at K0 = 6), against 2^-98.91 to 2^-98.33 with K the mean. Modeled.
+
+## SCALE, Wed 11 Nov 10:29Z: run: a later head block's classes are 132 counted (writer, readers) and 67 counted by readers alone, on every one of 22,464 in rank 0's Program; so the table of record (132) stands, and by readers alone the record reads 2^-101.79 in compressions with the Lean's one M (the 2,647 GB plan 2^-99.70, by stratum 2^-100.60)
+
+**What ran** [run `r20261111-102053-cf31`, vy-nebius-cpu-2, rank 0, the census row `glm53__fp8__h200__tp8__b1__i256__o32`, exit 0; output `out/rs.json`]:
+- `rs_count.py` read every row's arguments in the Program and cut each producer's output where its readers change. For every block it counted (writer row, reader rows) pairs, an upper bound on REGX's class, since the writer fixes the side for one set of readers, and reader rows alone, a lower bound. A SparseMla row is cut into blocks of 64 keys as `chain_rows` cuts it.
+- 1,331,964 rows; 1,319,654 producers read.
+
+**Head blocks** [run]: every block of a given (NVIS, FIRST) has the same count.
+
+| block | blocks in rank 0 | (writer, readers), as run | per block, one head's queries [derived] | readers alone |
+|---|---|---|---|---|
+| NVIS = 64, FIRST = false | 22,464 | 139 | **132** | **67** |
+| NVIS = 64, FIRST = true | 17,472 | 138 | 131 | 66 |
+| NVIS = n < 64 | 78 to 312 each | 2n + 11 (later), 2n + 10 (first) | 2n + 4, 2n + 3 | n + 3, n + 2 |
+
+- [derived from the run] The run counts the queries over the row's 8 heads: 9 (writer, readers) pairs, 8 heads' `q_nope` writers and `q_rope`'s. A block reads one head's, which is 2, so 139 - 7 = 132 per block, my derived count exactly.
+- By readers alone, the queries are 1 class, each key is 1 (its two pieces have the same readers), and the state in and the outputs are 1 each: 64 + 3 = 67. **Every key of a block has its own reader set** (each is read from its own query on), so 67 is the count at any context length.
+
+**Other Definitions** [run, per row; rows the census cuts are counted whole]:
+- Two exceed 132 as rows: `AllReduceMultimem_v1{WORLD=8,SIZE=1572864}` (prefill, 157 rows: 512 and 257) and `DsaMqaLogits_v3{N}` (N + 2, up to 289 at N = 287).
+- [read: the plan run `3db1`'s cells] The plan proves neither whole: its cells are `AllReduceMultimem_v1{SIZE=96}` and `DsaMqaLogits_v3{N ≤ 60}` (N = 1 holds 2.2e10 of them). So **the largest block in the plan is the head block** under both counts, and one M is 132 (or 67).
+- Every other Definition is at most 17 [run]: `MoeRouterSigmoidBias_v1` 17, the linears 10, `MoeSum_v1` 9 and 2.
+
+**The table with the served counts** [derived, `scale_kfix.py` with `HEAD_RS=rs.json`; compressions, K0 = 6; other Definitions keep their derived counts]:
+
+| design | GB ratio | (writer, readers) at 132: mean / by stratum / one M | readers alone at 67: mean / by stratum / one M |
+|---|---|---|---|
+| record, size classes 2^-5 | 1.000 | -101.63 / -101.57 / -100.83 | -102.54 / -102.43 / **-101.79** |
+| the 2,647 GB plan, width 2^-2.5 | 0.655 | -99.85 / -99.78 / -98.73 | -100.71 / **-100.60** / -99.70 |
+| width 2^-3 | 0.656 | -100.35 / -100.28 / -99.23 | -101.21 / -101.10 / -100.20 |
+| width 2^-4 | 0.665 | -101.35 / -101.28 / -100.23 | -102.21 / -102.10 / -101.20 |
+| width 2^-6 | 0.690 | -103.35 / -103.28 / -102.23 | -104.21 / -104.10 / -103.20 |
+| width 2^-7 | 0.798 | -104.35 / -104.28 / -103.23 | -105.21 / -105.10 / -104.20 |
+
+- The (writer, readers) column is my 10:05Z table, now run rather than derived for the head blocks.
+- With the run's 139 in place of 132 (the queries of all 8 heads), the record's one M reads -100.75 and the 2,647 GB plan's -98.66.
+- Which count is the class is REGX's theorem: 132 if the writer is in the class, 67 if not. A block's two key pieces have different writers and the same readers, so they are one class without the writer and two with it.
+
+For BREAKEVEN: by readers alone (67) one M clears 2^-100 at width 2^-3 (-100.20, GB ratio 0.656) and the record (-101.79). At 132 it needs width 2^-4 (-100.23, 0.665), or width 2^-3 with TWOWITNESS's by-stratum count (-100.28).
+For the table: run: a later head block has 132 classes counted (writer, readers) and 67 by readers alone. With 132, the record reads 2^-100.83 in compressions under the Lean's one M (2^-101.63 the mean). With 67, it reads 2^-101.79 under one M. Modeled terms; rests on REGX's wiring and EXTFORM's theorem.
