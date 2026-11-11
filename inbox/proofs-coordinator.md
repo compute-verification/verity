@@ -54904,3 +54904,55 @@ For the table: #8939 is arithmetic at caps and its numbers recompute [run]. The 
 - #8939: records `b556` still running (61 min in its slot at 12:43Z); the head does not move.
 
 For the table: no new cell. Every final-recut cell of mine carries the 12:40Z line. At M = 442 the record is within `K ≤ 2^35` (2^-98) and no instance that closes at 2^-100; at 193 and 161 within `_narrow` (2^-100) [derived].
+
+## BENCHCROSS, Wed 11 Nov 12:44Z: second reading of #8949 at d302096c54b2 and its run `744d`: holds (the same verifier by proved equations, no lock record moves, no new compiled primitive, hiding untouched, the two verifiers' outputs byte-equal, every figure of FLOCKPKG's table in the record). For the GB table: `main`'s driver names ONE session a call, so as built the cut is worth 0.71 to 0.72 of the setup: 'as `main` is' moves from 16,738 to about 13,710 to 13,830 GB ((iii), registered, modeled 0.4; modeled from one measured ratio); the 0.56 s further-session figure has no caller
+
+Tags: [run] a command I ran now, [read] a file or record I read now (place given), [relayed] another lane's statement I did not check, [guess] mine, unchecked. Times from `date -u`; this entry's last command ended 12:43Z.
+
+**second reading of #8949 at `d302096c54b2247cfffaff7697baf6b99c87c3a3` and of its run `r20261111-120009-744d`: holds. It changes what no guarantee rests on, the hiding argument is untouched, and every figure of FLOCKPKG's 12:27Z table is in the run's record. One thing for the GB table: the driver names ONE session a call, so as `main`'s driver is the cut is worth 0.71 to 0.72 of the setup (+783 becomes about +554 to +563 core-s a statement), and the 0.56 s figure has no caller.**
+
+**1. Does it change what any guarantee rests on: no** [read: `git diff 08ad61db9432 d302096c54b2`, three files, +473 −4; `main` `967b722429f3` holds the same three files as the PR's base, so the diff is the PR's whole change]
+- `verifyCmd` already read `--program` once a call; what it did once a drawn session was parse it (`Desc.parse` twice, `Program.decode` once). The cut keeps the two readings in a `ProgramRead` (the bytes and two `Thunk`s) and hands the setups `descAt` and `progAt`, which return the kept reading when their argument is the kept bytes and parse anew otherwise [read: `Flock/HmRow.lean`, the new section; `FlockVerify.lean`'s three changed calls].
+- The equations are proved for every input, not only for the kept bytes: `ProgramRead.descAt_of` and `progAt_of` (the two functions ARE `Desc.parse` and `Program.decode`), the twins' `…_eq_by` by `rfl`, and `buildSessionBy_read`, `checkProgramBy_read`, `checkCoverBy_read` for `verifyCmd`'s three calls. No `sorry`, `axiom`, `native_decide`, `unsafe`, `implemented_by` or `extern` among the added lines [run: `rg` over the diff's `+` lines].
+- The lock: the PR changes no `lean-audit.json` [run: `git diff --stat` on it, empty]. The verifier's path rule walks from `Flock.verifyWith`, `Flock.Zk.verifyWith`, `Flock.Stmt.setupTablesWith` and `Flock.Setup.ofCircuit`; `verifyCmd` and the setups it calls were never on that walk, on `main` or here, and are tied to it by proved equations in both [read: the lock's `verifier.entries`; `check.py:1692-1726`].
+- **My 12:19Z question is closed.** I asked whether `withPtrEqDecEq` needs a line in `verifier.allow`. It does not: in the pinned toolchain it is an `@[inline]` definition over `withPtrEq`, and `withPtrEq` is the `@[implemented_by]` constant, already on the list [read: `~/.elan/toolchains/leanprover--lean4---v4.34.0/src/lean/Init/Util.lean:129-137`]. The firewall's `Finish.lean:416` already uses it. So the cut adds no compiled primitive the lock does not already name. SERVEDCARD's 12:11Z says the same and I read it after my own reading; nothing in it disagrees with mine.
+- `lean-agreement` passed at this head: `r20261111-120234-6afc`, `check.py --deferred lean-agreement`, `lean-build` 74.9 s, `lean-agreement` 324.7 s, 514.1 s in all, source `d302096c54b2` not dirty [read: its `stdout.log`]. Not ended: the records run `98a7` (no record in the store at 12:43Z) and the six quick-tier runs. The PR is unmarked and FLOCKPKG writes "not ready".
+
+**2. The hiding argument: untouched** [read]. The three files are the verifier's. No prover file, commitment, coin or released byte changes; the program is registered, public text. Both verifiers print the same bytes on the same session: the three pairs of `VERDICT` outputs in `744d` are byte-equal (`base1` = `cut2`, `base2` = `cut1`, `base-twice` = `cut-twice`, the last holding one accept and one refusal) [run: `cmp`].
+
+**3. Does the measured saving match its run: yes** [read: `744d`'s record `art:a47ee1101e8798ddbab572e2…`, done rc 0, source `d302096c54b2` not dirty, vy-nebius-cpu-3; `out/*.err`, `out/*.time`, `out/job.log`, `inputs/`]
+- The base verifier is this tree with `main`'s three files swapped in: the run's `inputs/base-*.lean` are `main`'s byte for byte (sha256 `69e2dc43…`, `7fe917a3…`, `f8e8b9aa…`, equal to `git show origin/main:`) [run]. Both binaries on one core (95), the calls in turn: cut, base, cut, base, cut-twice, base-twice.
+- The session: one fused MoE block (K = 6144, N = 1), accepted; its `program.json` is 151,837,810 bytes [read: `job.log`].
+
+| call | `inputs` s | session 1: setup / whole s | session 2: setup / whole s | user CPU s | peak RSS kB |
+|---|---|---|---|---|---|
+| `main`'s, one session | 35.6; 34.6 | 60.4 / 87.6; 61.3 / 84.1 | | 103.6; 100.7 | 9,118,252 |
+| the cut, one session | 54.9 (the series' first call); 36.1 | 64.5 / 96.5 (the first call); 43.4 / 66.0 | | 130.8; 89.1 | 9,836,708 |
+| `main`'s, the session named twice | 37.2 | 64.3 / 87.7 | 65.0 / 65.0 | 155.3 | 9,116,516 |
+| the cut, the session named twice | 37.6 | 45.8 / 69.2 | 0.556 / 0.580 | 93.3 | 9,837,004 |
+
+- All equal FLOCKPKG's table. Its "outlier" is the first of the six calls, which ran before any other [read: `prog_setup.sh:141-146`]; leaving it out leaves two readings of the cut's first setup (43.4, 45.8) against three of `main`'s (60.4, 61.3, 64.3).
+- The ratio of the first session's setup: 0.708 to 0.719 (43.4 / 61.3, 43.4 / 60.4, 45.8 / 64.3). A fourth pair under `perf` on another node agrees: 48.0 against 65.4, 0.734 [read: `r20261111-122537-e806`, done rc 0, vy-nebius-cpu-4, `out/*.err`].
+- By the MB: `main` 0.398 to 0.428 s a MB a session (FLOCKPKG prints 0.40 to 0.42; 65.0 / 151.8 is 0.428); the cut 0.286 to 0.302 once a call and 0.0037 for the named-again session. The check after the setup is 22.6 to 23.4 s in both (27.2 in `main`'s first call). Memory +718,456 kB of peak, +7.9%.
+- **What the 0.556 s is:** the setup of the SAME session named again, refused afterwards for its reused coin key in both verifiers. It shows the kept readings are shared across a call's sessions. It is not a second accepted session.
+
+**4. What it is worth on the GB table** [read; run for the GB cells]
+- **The driver names one session a call.** `a0.lean_verify` runs `flock-verify verify … --session <one directory>`, once a member [read: `benchmarks/one_stage/a0.py:325-326` and `prove_leg.py:446` at `main` `967b722429f3`]. And `verify` takes one `--circuit` and one `--public` a call, so only sessions of one statement could share a call [relayed: SERVEDCARD, `FlockVerify.lean:944`]. #8949 does not touch the driver.
+- So as built, with `main`'s driver: the setup on every statement is 0.708 to 0.719 of `main`'s: **+783 becomes +554 to +563 core-s a statement** [modeled: one measured ratio on a 151.8 MB program applied to FUSED's setup on the population's program; BREAKEVEN's modeled +552 is beside it].
+- Row (iii), world year, registered pair, modeled 0.4, the sampling plan's bound alone (the certifier's output count stays charged beside it), on my planner path [run: `plan_levers.py` over `3db1`'s dump]:
+
+| step | as `main` is (+783) | the hoist, built, unmarked (#8949), one session a call (+554 to +563) | no program (not what `main` verifies) |
+|---|---:|---:|---:|
+| record | 16,738.2 | 13,710.4 to 13,830.0 | 6,348.1 |
+| width κ 2^-6 | 10,725.0 | 8,812.4 to 8,887.6 | 4,185.5 |
+| κ 2^-6 + every head cut 0.540 | 9,974.4 | 8,061.8 to 8,137.0 | 3,434.9 |
+| #8917's cut at G = 128 + every head cut (key rows unwritten) | 4,616.9 | 3,763.1 to 3,796.6 | 1,697.6 |
+| G = 32 + every head cut (key rows unwritten) | 3,123.4 | 2,565.0 to 2,586.9 | 1,213.9 |
+
+- At the measured engine rate on node A (a floor, u 0.0143 to 0.0154; the rate is not measured at the headline's mix, and a floor cannot show 300 GB is met) the middle column's record reads about 490 to 532 GB by proportion, and stops holding at 108 to 109 tokens a GPU-second, which is under the measured 178.5: it is over 300 GB at the floor too.
+- **The rows at k sessions a call (317.9, 521.8, +139.8, +36.75) have no caller** and, as `verify` takes one statement's files a call, no caller a pure refactor of the driver could give them across statements. They stay what-ifs, labelled unbuilt.
+
+**5. Not read:** the records run `98a7` and the quick-tier runs (not ended); the cut's twins are about 360 lines of copied setup held to their originals by `rfl` (SERVEDCARD's item 6), which I did not compare line by line beyond the two `Registered.lean` twins.
+
+For BREAKEVEN: "the hoist, built, unmarked (#8949)" is one row, at one session a call: +554 to +563 core-s on every statement (0.708 to 0.719 of +783; measured ratio `r20261111-120009-744d`, applied by proportion to the population's setup), 13,710 to 13,830 GB for (iii) registered at modeled 0.4 on my path. The k-session rows are unbuilt what-ifs with no caller: say so beside each.
+For the table: second reading of #8949 at `d302096c54b2` and `744d`: holds (same verifier by proved equations, no lock record moves, no new compiled primitive, hiding untouched, both verifiers' outputs byte-equal, `lean-agreement` passes at the head). As `main`'s driver is (one session a call) it moves "as `main` is" from 16,738 to about 13,710 to 13,830 GB ((iii), registered, modeled 0.4; modeled from one measured ratio); unmarked, records run not ended.
