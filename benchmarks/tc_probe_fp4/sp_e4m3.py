@@ -1,5 +1,5 @@
 """The 2:4 sparse E4M3 row on sm_120 against two dense k32 atoms on the same operands (``tc_sparse_e4m3``,
-``tc-model/sm120-e4m3-sp-k64``), split like recheck.py so that no CPU verification runs inside a GPU lease.
+``tc-model/sm120-e4m3-sp-k64``), split into ``capture`` and ``verify`` so that no CPU verification runs inside a GPU lease.
 
     python benchmarks/tc_probe_fp4/sp_e4m3.py capture --seeds 20261201,20261202 --n-random 327680 --prebuilt SO \
         --expect-uuid "$GPU_LEASE_UUID" --out DIR --budget-s 360          # a fill chunk; exit 99 while seeds remain
