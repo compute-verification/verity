@@ -54,7 +54,7 @@ audit rebuilds every record of the merged tree and fails on any difference, as f
 regenerates the records, and the landing DM shows each one that changed against `main`.
 
 Git runs a driver from the worktree of the side merged into, so a branch whose checkout took older merge rules would merge
-`main` by those: an older copy that merged `main` into an old branch collapsed `Security`'s 1,316 `reads` groups to one. The
+`main` by those: an older copy that merged `main` into an old branch collapsed `security`'s 1,316 `reads` groups to one. The
 command `--install` registers (`driver`, the one `research.clone.RECORD_DRIVER` holds) runs `origin/main`'s copy of this
 directory wherever the repository has that ref, and the worktree's otherwise; a path already absolute (`research queue`'s
 `base_drivers`, the drivers of the tip it merges onto) runs as given. Three guards leave git's conflict, saying why on
@@ -79,7 +79,7 @@ the module system and the other's isn't (a branch made before the port), the one
 rerunning the codemod on that branch would. For a `lakefile.toml`
 (`--lakefile`, `lakefile-lists`), a conflict all of whose sides are `[[require]]` blocks merges as a set of blocks, and one all
 of whose sides are a string array's items (`roots`) merges as a list, wrapped as ours wraps it: two branches that each require a
-package or add a root to `Security/Properties` merge. Any other conflict, and a result that is not TOML, stays git's. For a
+package or add a root to `security/Properties` merge. Any other conflict, and a result that is not TOML, stays git's. For a
 `pyproject.toml` (`--pyproject`, `pyproject-test-lists`), the same merge of string arrays stands only when every value outside
 `[tool.verity.tests]`'s lists (`inputs`, `untraced`, a `reads` entry's `paths` and `tests`) is the three-way merge of the
 sides: two branches that each add a file a suite reads merge, and anything else stays git's. In
@@ -126,7 +126,7 @@ ITEM_LINE = re.compile(r'\s*(\w+\s*=\s*\[)?\s*("[^"]*"\s*,?\s*)+\]?\s*$')
 #: the ratchet caps of `tests/test_lean_packages.py`, each on one line there
 CAP_NAMES = ("UNWITNESSED", "INLINE", "ROOM", "TREES_EXCEPT", "FOUR_NAMES_EXCEPT", "UNDOCUMENTED", "SPEC_THEOREMS", "OVERLONG",
              "RETIRED_NAMES", "IMPORT_ALL_USES")
-#: a ratchet cap's line (`UNWITNESSED = {"Security": 355, "verity/protocols/flock/verifier": 7}`), and one of its entries
+#: a ratchet cap's line (`UNWITNESSED = {"security": 355, "verity/protocols/flock/verifier": 7}`), and one of its entries
 CAP_LINE = re.compile(rf'(\s*(?:{"|".join(CAP_NAMES)}) = )\{{([^{{}}]*)\}}\s*$')
 CAP_ENTRY = re.compile(r'\s*"([^"\\]*)"\s*:\s*(\d+)\s*')
 #: where a merged string array wraps
