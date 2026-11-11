@@ -392,6 +392,11 @@ def test_ask_without_a_group_id_uses_plain_text_and_the_body_can_come_from_a_fil
     assert fake.messages[COORD][0]["text"].startswith("@memory-accounting a frontend")
 
 
+def test_ask_tags_its_owner_once_when_the_body_already_leads_with_the_tag(fake, registry, capsys):
+    assert run(capsys, "ask", "--as", "compute-accounting", "--to", "@infra", "--text", "@infra: 4 GPUs by 20:00Z?")[0] == 0
+    assert fake.messages[COORD][0]["text"] == "<!subteam^SINFRA|@infra> 4 GPUs by 20:00Z?"
+
+
 def test_no_token_and_no_cursor_identity_is_an_error_and_dry_run_sends_nothing(fake, registry, capsys, monkeypatch):
     monkeypatch.delenv("SLACK_BOT_TOKEN")
     rc, _, err = run(capsys, "ask", "--as", "memory-accounting", "--to", "infra", "--text", "x")
@@ -2020,6 +2025,24 @@ def test_resolve_records_a_thread_answer_and_says_clearly_when_there_is_no_such_
     route.answer = (403, {"error": "not_your_card"})
     rc, _, err = run(capsys, "ask-daniel", "resolve", "42", "--choice", "no")
     assert rc == 2 and "only a card's own asker" in err
+
+
+def test_resolve_records_a_decision_outside_the_cards_options_as_daniels_and_where_he_said_it(route, registry, capsys):
+    """Daniel's page decided something no option names (card ee27f7dd): `otherwise` records it, with his words and
+    `page`, and never as the lane's own provisional decision."""
+    route.resolve = True
+    run(capsys, "ask-daniel", "resolve", "42", "--choice", "otherwise", "--note", "both, in order", "--on-page")
+    assert route.requests[-1] == ("POST", "/api/agent-approvals/42/resolve",
+                                  {"choice": "otherwise", "note": "both, in order", "page": True})
+    run(capsys, "ask-daniel", "resolve", "42", "--choice", "a", "--on-page")
+    assert route.requests[-1][2] == {"choice": "a", "page": True}
+    sent = len(route.requests)
+    for extra, why in ((["--note", " "], "needs --note"), (["--note", "x" * 1001], "1 to 1000"),
+                       (["--note", "both", "--provisional"], "never provisional"), ([], "needs --note"),
+                       (["--note", "both", "--on-page", "--provisional"], "one or the other")):
+        rc, _, err = run(capsys, "ask-daniel", "resolve", "42", "--choice", "otherwise", *extra)
+        assert rc == 2 and why in err, (extra, err)
+    assert len(route.requests) == sent
 
 
 def test_extend_moves_a_cards_deadline_and_withdraw_takes_it_back(route, registry, capsys):
