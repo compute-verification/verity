@@ -2898,8 +2898,6 @@
     {"file": "verity_vllm/protocols/pouw/circuit.py", "kind": "UP037", "symbol": "Group.update", "detail": "Remove quotes from type annotation"},
     {"file": "verity_vllm/protocols/pouw/credit_gate.py", "kind": "UP035", "symbol": "<module>", "detail": "Import from `collections.abc` instead: `Iterable`, `Mapping`, `Sequence`"},
     {"file": "verity_vllm/protocols/pouw/device.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "verity_vllm/protocols/pouw/h1/__init__.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "verity_vllm/protocols/pouw/h1/__init__.py", "kind": "UP035", "symbol": "<module>", "detail": "Import from `collections.abc` instead: `Callable`, `Mapping`, `Sequence`"},
     {"file": "verity_vllm/protocols/pouw/h1/drawn.py", "kind": "T201", "symbol": "check", "detail": "`print` found"},
     {"file": "verity_vllm/protocols/pouw/h1/drawn.py", "kind": "T201", "symbol": "run", "detail": "`print` found"},
     {"file": "verity_vllm/protocols/pouw/h1/drawn.py", "kind": "T201", "symbol": "stage", "detail": "`print` found", "count": 4},
