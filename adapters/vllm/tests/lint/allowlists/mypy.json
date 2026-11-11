@@ -9,6 +9,8 @@
   },
   "entries": [
     {"file": "tests/acquire/test_compiled_source.py", "kind": "attr-defined", "symbol": "test_a_lone_requests_replayed_kernels_are_drained_under_the_geometry_key", "detail": ""},
+    {"file": "tests/acquire/test_dsv4_moe_source.py", "kind": "attr-defined", "symbol": "test_a_launch_with_the_router_weight_on_its_input_is_refused", "detail": ""},
+    {"file": "tests/acquire/test_dsv4_moe_source.py", "kind": "attr-defined", "symbol": "test_a_scored_router_call_that_dsv4_topk_refuses_is_not_bound", "detail": ""},
     {"file": "tests/acquire/test_fa2_tap_geometry.py", "kind": "arg-type", "symbol": "_oracle", "detail": ""},
     {"file": "tests/acquire/test_fa2_tap_geometry.py", "kind": "union-attr", "symbol": "_oracle", "detail": "", "count": 2},
     {"file": "tests/acquire/test_gate.py", "kind": "name-defined", "symbol": "Layer", "detail": ""},
@@ -25,6 +27,8 @@
     {"file": "tests/acquire/test_kv_slots_source.py", "kind": "name-defined", "symbol": "Attn", "detail": ""},
     {"file": "tests/acquire/test_kv_slots_source.py", "kind": "name-defined", "symbol": "IndexerCache", "detail": ""},
     {"file": "tests/acquire/test_mla_attention_hidden.py", "kind": "call-overload", "symbol": "test_a_manifest_with_two_hidden_families_is_refused", "detail": ""},
+    {"file": "tests/acquire/test_scale_products_source.py", "kind": "assignment", "symbol": "test_the_source_commits_only_inside_the_site_during_a_step", "detail": ""},
+    {"file": "tests/acquire/test_scale_products_source.py", "kind": "attr-defined", "symbol": "test_the_source_commits_only_inside_the_site_during_a_step", "detail": ""},
     {"file": "tests/acquire/test_vocab_range_source.py", "kind": "assignment", "symbol": "test_the_source_commits_only_inside_the_site_during_a_step", "detail": ""},
     {"file": "tests/acquire/test_vocab_range_source.py", "kind": "attr-defined", "symbol": "test_the_source_commits_only_inside_the_site_during_a_step", "detail": ""},
     {"file": "tests/acquire/test_vocab_range_source.py", "kind": "func-returns-value", "symbol": "test_the_source_commits_only_inside_the_site_during_a_step", "detail": ""},
