@@ -649,7 +649,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         m_node_bytes = m_node_bytes or spec.get("m_dyn_node_bytes")
         source = {"decoder": str(a.decoder), "spec": spec}
     else:
-        sys.path.insert(0, str(Path(__file__).resolve().parent))
         from units import load
 
         from verity.definitions.circuits.census import census, step_ends
