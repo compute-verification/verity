@@ -106,13 +106,16 @@ def dead_units(body: Body) -> list[int]:
 
 
 def _renumbered(r: Refs, new: list[int], memo: dict[int, Refs], logs: dict[int, list]) -> Refs:
+    """`r` with each node index k moved to `new[k]`. `memo` (by id) holds each `Concat` and `Explicit` and each `Affine` or `Strided`
+    rebuilt, so a reference shared stays shared; one that doesn't move is itself and has no entry."""
+    if isinstance(r, (Affine, Strided)) and not (r.space == "n" and r.count and new[r.idx] != r.idx):
+        return r
     if (hit := memo.get(id(r))) is not None:
         return hit
     if isinstance(r, Affine):
-        out = Affine("n", new[r.idx], r.base, r.count) if r.space == "n" and r.count and new[r.idx] != r.idx else r
+        out = Affine("n", new[r.idx], r.base, r.count)
     elif isinstance(r, Strided):
-        out = (Strided("n", new[r.idx], r.base, r.inner, r.outer_stride, r.inner_stride, r.count)
-               if r.space == "n" and r.count and new[r.idx] != r.idx else r)
+        out = Strided("n", new[r.idx], r.base, r.inner, r.outer_stride, r.inner_stride, r.count)
     elif isinstance(r, Concat):
         out = _mapped(r, lambda p: _renumbered(p, new, memo, logs), logs)
     elif isinstance(r, Explicit):
@@ -124,14 +127,18 @@ def _renumbered(r: Refs, new: list[int], memo: dict[int, Refs], logs: dict[int, 
     return out
 
 
-def without_dead_units(body: Body) -> tuple[Body, list[int]]:
-    """`body` without its dead units, and the index in `body` of each node kept, in order."""
+def without_dead_units(body: Body, *, consume: bool = False) -> tuple[Body, list[int]]:
+    """`body` without its dead units, and the index in `body` of each node kept, in order. The form is written into the node and
+    offset lists, each kept node over its own slot or an earlier one and its old node dropped as it is read, so no node is held
+    twice: `body`'s own lists where `consume` (the caller hands `body` over), else copies."""
     kept = [k for k, v in enumerate(live_units(body)) if v]
     if len(kept) == len(body.nodes):
         return body, kept
     new = list(range(len(body.nodes)))
     for i, k in enumerate(kept):
         new[k] = i
+    # keyed by id with nothing held: every reference looked up was made before this pass, so a reference freed during it never
+    # shares an id with one looked up
     memo: dict[int, Refs] = {}
     logs: dict[int, list] = {}
 
@@ -139,11 +146,12 @@ def without_dead_units(body: Body) -> tuple[Body, list[int]]:
         r = _renumbered(a.refs, new, memo, logs)
         return a if r is a.refs else Coll(a.type, r)
 
-    nodes, offsets = [], [0]
-    for k in kept:
-        n = body.nodes[k]
-        nodes.append(replace(n, args=tuple(coll(a) for a in n.args)))
-        offsets.append(offsets[-1] + n.gates)
+    nodes, offsets = (body.nodes, body.offsets) if consume else (list(body.nodes), list(body.offsets))
+    for i, k in enumerate(kept):
+        n, nodes[k] = nodes[k], None
+        nodes[i] = replace(n, args=tuple(coll(a) for a in n.args))
+        offsets[i + 1] = offsets[i] + n.gates
+    del nodes[len(kept):], offsets[len(kept) + 1:]
     return Body(body.params, body.ret_type, nodes, _renumbered(body.ret, new, memo, logs), offsets), kept
 
 
@@ -155,16 +163,20 @@ def dead_free_versions() -> dict[str, Any]:
             "Attention_v5": DF.AttentionV18}
 
 
-def swapped(body: Body) -> Body:
-    """`body` with each node of a Definition `dead_free_versions` names bound to its dead-free version at the same statics."""
+def swapped(body: Body, *, consume: bool = False) -> Body:
+    """`body` with each node of a Definition `dead_free_versions` names bound to its dead-free version at the same statics.
+    `consume`: in `body`'s own node and offset lists."""
     table = dead_free_versions()
-    nodes = [replace(n, fn=bind(table[n.fn.base_id], **n.fn.bindings)) if getattr(n.fn, "base_id", None) in table else n
-             for n in body.nodes]
-    if all(a is b for a, b in zip(nodes, body.nodes)):
+    nodes, first = body.nodes if consume else list(body.nodes), None
+    for k, n in enumerate(nodes):
+        if getattr(n.fn, "base_id", None) in table:
+            nodes[k] = replace(n, fn=bind(table[n.fn.base_id], **n.fn.bindings))
+            first = k if first is None else first
+    if first is None:
         return body
-    offsets = [0]
-    for n in nodes:
-        offsets.append(offsets[-1] + n.gates)
+    offsets = body.offsets if consume else list(body.offsets)
+    for k in range(first, len(nodes)):
+        offsets[k + 1] = offsets[k] + nodes[k].gates
     return Body(body.params, body.ret_type, nodes, body.ret, offsets)
 
 
@@ -340,18 +352,17 @@ def _joined(parts: list[Refs]) -> list[Refs]:
     return out
 
 
-def _moved(r: Refs, at: list[tuple[int, int]], memo: dict[int, Refs], logs: dict[int, list]) -> Refs:
-    """`r` with each leaf j of node k moved to leaf `at[k][1]` + j of node `at[k][0]`, each reference kept in its form but a plain
-    Concat's, whose neighbouring runs are joined (`_joined`)."""
+def _moved(r: Refs, at: tuple[list[int], list[int]], memo: dict[int, Refs], logs: dict[int, list]) -> Refs:
+    """`r` with each leaf j of node k moved to leaf `at[1][k]` + j of node `at[0][k]`, each reference kept in its form but a plain
+    Concat's, whose neighbouring runs are joined (`_joined`). `memo` as `_renumbered`'s."""
+    if isinstance(r, (Affine, Strided)) and (r.space != "n" or not r.count or (at[0][r.idx] == r.idx and not at[1][r.idx])):
+        return r
     if (hit := memo.get(id(r))) is not None:
         return hit
     if isinstance(r, (Affine, Strided)):
-        if r.space != "n" or not r.count or at[r.idx] == (r.idx, 0):
-            out = r
-        else:
-            k, o = at[r.idx]
-            out = (Affine("n", k, o + r.base, r.count) if isinstance(r, Affine) else
-                   Strided("n", k, o + r.base, r.inner, r.outer_stride, r.inner_stride, r.count))
+        k, o = at[0][r.idx], at[1][r.idx]
+        out = (Affine("n", k, o + r.base, r.count) if isinstance(r, Affine) else
+               Strided("n", k, o + r.base, r.inner, r.outer_stride, r.inner_stride, r.count))
     elif isinstance(r, Concat):
         if r.prefix is None:
             parts = [_moved(p, at, memo, logs) for p in r.parts]
@@ -359,7 +370,7 @@ def _moved(r: Refs, at: list[tuple[int, int]], memo: dict[int, Refs], logs: dict
         else:
             out = _mapped(r, lambda p: _moved(p, at, memo, logs), logs)
     elif isinstance(r, Explicit):
-        items = tuple(("n", at[i][0], at[i][1] + j) if s == "n" else (s, i, j) for s, i, j in r.items)
+        items = tuple(("n", at[0][i], at[1][i] + j) if s == "n" else (s, i, j) for s, i, j in r.items)
         out = r if items == r.items else Explicit(items)
     else:
         raise TypeError(f"a reference sequence of an unknown form, {type(r).__name__}")
@@ -367,10 +378,14 @@ def _moved(r: Refs, at: list[tuple[int, int]], memo: dict[int, Refs], logs: dict
     return out
 
 
-def batched_form(body: Body) -> tuple[Body, list[int]]:
-    """`body` in the batched form (module docstring), and how many of `body`'s nodes each of its nodes holds, in order."""
+def batched_form(body: Body, *, consume: bool = False) -> tuple[Body, list[int]]:
+    """`body` in the batched form (module docstring), and how many of `body`'s nodes each of its nodes holds, in order. `consume`:
+    the caller hands `body` over, and its offsets are dropped and each of its nodes once batched, so no node is held twice; the
+    memos are keyed as `without_dead_units`' are."""
     nodes, peers = body.nodes, frozenset(i for i, (name, _) in enumerate(body.params) if name.startswith(PEERS))
-    at: list[tuple[int, int]] = []
+    if consume:
+        body.offsets.clear()
+    at: tuple[list[int], list[int]] = ([], [])   # node k of `body` is leaves at[1][k].. of node at[0][k] of the form
     out: list[Node] = []
     sizes: list[int] = []
     memo: dict[int, Refs] = {}
@@ -387,7 +402,8 @@ def batched_form(body: Body) -> tuple[Body, list[int]]:
         if hi == k + 1:
             args = tuple(a if (r := _moved(a.refs, at, memo, logs)) is a.refs else Coll(a.type, r) for a in n.args)
             out.append(n if all(x is y for x, y in zip(args, n.args)) else replace(n, args=args))
-            at.append((j, 0))
+            at[0].append(j)
+            at[1].append(0)
         else:
             members, args, axes = nodes[k:hi], [], []
             for g, a in enumerate(n.args):
@@ -396,12 +412,18 @@ def batched_form(body: Body) -> tuple[Body, list[int]]:
                 args.append(Coll(a.type, rs[0]) if shared else Coll(Array(len(rs), a.type), _stacked(rs)))
                 axes.append(None if shared else 0)
             out.append(Node("batch", n.fn, tuple(args), Array(hi - k, n.out), axes=tuple(axes), n=hi - k, name=n.name))
-            at.extend((j, m * n.out.leaves) for m in range(hi - k))
+            at[0].extend([j] * (hi - k))
+            at[1].extend(m * n.out.leaves for m in range(hi - k))
         sizes.append(hi - k)
+        if consume:
+            nodes[k:hi] = [None] * (hi - k)
         k = hi
-    if len(out) == len(nodes):
+    if len(out) == len(nodes) and not consume:
         return body, sizes
-    return Body(body.params, body.ret_type, out, _moved(body.ret, at, memo, logs), [0, *accumulate(n.gates for n in out)]), sizes
+    ret = _moved(body.ret, at, memo, logs)
+    if consume:
+        nodes.clear()
+    return Body(body.params, body.ret_type, out, ret, [0, *accumulate(n.gates for n in out)]), sizes
 
 
 def registered_form(ir: str | None) -> bool | str:
@@ -410,24 +432,24 @@ def registered_form(ir: str | None) -> bool | str:
     return BITS if ir == "boolean" else True
 
 
-def _dead_free(body: Body, *, swap: bool = True) -> tuple[Body, list[int], dict[int, tuple[int, int]]]:
-    pruned, kept = without_dead_units(body)
-    form, cols = narrowed(swapped(pruned) if swap else pruned)
+def _dead_free(body: Body, *, swap: bool = True, consume: bool = False) -> tuple[Body, list[int], dict[int, tuple[int, int]]]:
+    pruned, kept = without_dead_units(body, consume=consume)
+    form, cols = narrowed(swapped(pruned, consume=consume) if swap else pruned)
     return form, kept, cols
 
 
 def dead_free(body: Body, *, swap: bool = True, batched: bool = False, consume: bool = False) -> tuple[Body, list[int]]:
     """`body` in the registered compiler's form: without its dead units, the rest `swapped` (unless not `swap`) and `narrowed`, then
     `batched_form` where `batched`; and the index in `body` of each node kept, in order (before `batched_form`). `consume`: the
-    caller hands `body` over, and its node and offset lists (a `Builder`'s, which `finish` shares) are emptied once the form
-    without dead units is built, before `batched_form`, so the flat body is never alive beside the batched one."""
-    form, kept, _ = _dead_free(body, swap=swap)
+    caller hands `body` over (its node and offset lists are a `Builder`'s, which `finish` shares): the form without dead units
+    is built in those lists and `batched_form` empties them as it goes, so no node is held twice."""
+    form, kept, _ = _dead_free(body, swap=swap, consume=consume)
     if consume:
         if form.nodes is not body.nodes:
             body.nodes.clear()
         if form.offsets is not body.offsets:
             body.offsets.clear()
-    return (batched_form(form)[0] if batched else form), kept
+    return (batched_form(form, consume=consume)[0] if batched else form), kept
 
 
 def _cut(slot: dict, lo: int, hi: int) -> dict:
