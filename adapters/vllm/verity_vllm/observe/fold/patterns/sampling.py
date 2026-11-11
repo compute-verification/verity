@@ -267,10 +267,9 @@ class TokenSelectGumbelTopP:
     -- the registry composite (`verity/definitions/registry/sampling.py`: TemperatureScale -> TopPMask{V} (topp_split model) -> GumbelSelectF32),
     the same instance the derived Program's `GumbelTopPTokenSelect[vllm]` rule emits: temperature / top_p / pos are Program constants
     (the fold emits their `Const` instances in operand order right before the select), the seed is the request's `seed` PARAMETER.  S
-    (the 6th operand, `Const32[S]` "splits") is read from the split kernels' constexpr (the launch geometry:
-    live batch x SM count), must agree across the three kernels, and is bound at compare to the request Program's `splits` Input entry
-    for the event (or held equal to a single-request Program's own `Const32[S]`); the relation S = SplitsFor_v1(|live(t)|, num_SMs) is
-    checked per engine step by GM-01 G6.  Values (which seed / T / p the kernels consumed) are NOT read from device memory here: they
+    (the 6th operand, `Const32[S]` "splits") is read from the split kernels' constexpr, must agree across the three kernels, and is
+    held equal at compare to the Program's own `Const32[S]`; that it is the registered split count (`topp_geometry.registered_splits`)
+    is checked per engine step by GM-01 G6.  Values (which seed / T / p the kernels consumed) are NOT read from device memory here: they
     are the header's request record; the value check
     (`bench.stoch_recompute`) recomputes the served token from the snapshotted logits under the DECLARED seed and fails on a wrong one.
 
@@ -530,7 +529,7 @@ class TokenSelectGumbelTopP:
         from verity.definitions.registry import sampling_vocab
         construction = self.construction or target_of(ctx)[0].effective_sampler_construction()
         spec = bind(sampling_vocab.select_for(_sampling.GumbelTopPTokenSelect, construction), V=V)
-        S = int(s2["S"])        # the split kernels' constexpr: the launch's S -> the 6th operand (bound to the Program's `splits` Input)
+        S = int(s2["S"])        # the split kernels' constexpr: the launch's S -> the 6th operand (held to the Program's Const32[S])
         kernels = (*s2["kernels"], "ArgMaxOps", "gather_kernel")
         parts = []
         run = getattr(ctx.profile, "registered_values", False)

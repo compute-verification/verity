@@ -404,16 +404,16 @@ def GumbelTokenSelect(B, S, logits, seed, pos, temp):
 # ---------------------------------------------------------------------------------------------------------
 #
 # The pipeline masks a row IN PLACE to -inf outside the nucleus; its keep predicate per lane is a function of the whole fp32 row,
-# p, and S (the split count = f(sampler batch size, SM count), `topp_geometry.splits_for`).  A primitive returns exactly one Value and
+# p, and S (the split count; vLLM picks it from the sampler batch, `topp_geometry.splits_for`, and serving pins it to
+# `topp_geometry.registered_splits`).  A primitive returns exactly one Value and
 # a per-lane Array-input primitive would cost V^2 operand references, so the row-level result is ONE `Value<V>` keep word
 # (`TopPMaskWordx{V}`, reference = `topp_split.topp_keep_row`, bit-exact on 63 captured + 368 random rows over 11 V and on the GPU
 # fixture at every S) and `TopPMask_v1{V}` applies it lane by lane (`SelectF32(BitAt(keep, i), x, -inf)`) so the masked row IS an
 # Array Program value the Gumbel select composes into.
 #
-# S is an OPERAND (i32), not a static: the split count is the launch geometry
-# S_t = SplitsFor_v1(|live(t)|, num_SMs) (`topp_geometry.splits_for_v1`), a WORKLOAD-level derived value -- the request Program reads it
-# from its request-owned `splits` Input per sampling event, the fold carries the split kernels' constexpr S as a `Const32[S]` operand,
-# and the global Match checks the relation per engine step (its sampler-geometry check).  The keep word is TOTAL over the i32 operand:
+# S is an OPERAND (i32), not a static: the split count is the launch geometry, the registered S = `registered_splits(num_SMs)` at
+# every served launch.  The Program carries it as a `Const32[S]` operand, the fold carries the split kernels' constexpr S the same
+# way, and the global Match holds the fold's to the registered one (its sampler-geometry check).  The keep word is TOTAL over the i32 operand:
 # an S outside {1, 2, 4, 8, 16, 32} keeps no lane (`topp_keep`), a word no launched S produces; it never defaults to a split count.
 
 _TOPP_WORDS: dict = {}
@@ -449,13 +449,11 @@ def topp_keep(x_f32, p: float, splits: int):
 def topp_mask_word(vocab: int) -> PrimitiveDefinition:
     """`TopPMaskWordx{V}`: (logits: Array<V, f32>, top_p: f32, splits: i32) -> Value<V>; bit v = the split top-p pipeline's `keep` for
     lane v under S = splits (all ones when the pipeline leaves the row untouched: p >= 1, (nearly) uniform / empty row, `nomask` search
-    outcome; ones on its lanes when only one warp half stops, `topp_keep`).  `splits` is the launch's split count as an OPERAND (`SplitsFor_v1(|live|, num_SMs)`: 32 at one live request on any GPU
-    with >= 64 SMs, 16 at 8 live on 142 SMs).  The word is defined for every i32 `splits`: any value outside {1, 2, 4, 8, 16, 32}
+    outcome; ones on its lanes when only one warp half stops, `topp_keep`).  `splits` is the launch's split count as an OPERAND (the registered `registered_splits(num_SMs)`: 32 on any GPU with >= 64
+    SMs).  The word is defined for every i32 `splits`: any value outside {1, 2, 4, 8, 16, 32}
     (0, negative, not a power of two, above 32) keeps no lane -- word 0.  Every launched split count keeps at least one lane, so word 0
-    is a value no served S produces (a wrong S is not mapped onto a plausible one), and the served S is held to the workload outside
-    this word: the global Match's sampler geometry (S == SplitsFor_v1(|live(t)|, num_SMs) per engine step) and the Commit's
-    prescribed-input linkage (the committed `splits` == SplitsFor_v1(committed live count, num_SMs of record)), both of which yield only
-    the six split counts."""
+    is a value no served S produces (a wrong S is not mapped onto a plausible one), and the served S is held to the registered one
+    outside this word: the Program's `Const32[S]` and the global Match's sampler geometry (every launch's S == registered_splits(num_SMs))."""
     key = int(vocab)
     prim = _TOPP_WORDS.get(key)
     if prim is None:
@@ -499,7 +497,7 @@ def TopPMaskStep(B, S, i, x, keep):
 def TopPMask(B, S, logits, top_p, splits):
     """`apply_top_k_top_p_triton` for a row of a batch <= 64 without top-k (`_apply_topp_split`, `splits` splits): the fp32 row with
     every lane outside the top-p nucleus set to -inf, exactly as the three Triton kernels compute it (registry/topp_split.py).  `splits`
-    (i32) is the launch's split count S_t = SplitsFor_v1(|live(t)|, num_SMs), an OPERAND of the event (a derived value of the workload)."""
+    (i32) is the launch's split count, an OPERAND of the event (the registered `registered_splits(num_SMs)`, a `Const32[S]`)."""
     keep = B.call(topp_mask_word(S.V), logits, top_p, splits)
     res = B.scan(bind(TopPMaskStep, V=S.V), B.call(const(32, 0)), xs=(logits,), shared=(keep,))
     return res[1]
@@ -513,8 +511,8 @@ def GumbelTopPTokenSelect(B, S, logits, top_p, seed, pos, temp, splits):
     `Sampler.sample`: `_temperature_kernel` -> `apply_top_k_top_p_triton` (split pipeline, `splits` splits) -> `_gumbel_sample_kernel`
     + argmax, on the fp32 widening of the bf16 logits row.  temp / top_p are the request's SamplingParams (structural inputs of the
     row's declared policy, bound as operands); seed (int64) and pos are OPERANDS; `splits` (i32, the 6th operand) is the launch
-    geometry S_t = SplitsFor_v1(|live(t)|, num_SMs) -- a derived value of the workload the request Program reads from its `splits`
-    Input per sampling event and the fold carries as the split kernels' constexpr (`Const32[S]`)."""
+    geometry, the registered S = `registered_splits(num_SMs)`, which the request Program carries as a `Const32[S]` and the fold as
+    the split kernels' constexpr."""
     scaled = B.call(bind(TemperatureScale, V=S.V), logits, temp)
     masked = B.call(bind(TopPMask, V=S.V), scaled, top_p, splits)
     return B.call(bind(GumbelSelectF32, V=S.V), masked, seed, pos, temp)
