@@ -63,13 +63,11 @@ from .model import LM
 HELD = Path(__file__).with_name("of_record.toml")
 SCHEMA = "of-record/v1"
 #: a record's E `format` beside the codec kinds (`codecs.Codec.kind`) that are the same kind of encoding: the trained
-#: tensors whole, and their deltas in codes with a scale a group, the codes a rounding of the trained delta
-#: (`scaledquant`) or the ternary ones the run trained (`sparseternary`)
-E_KINDS = {"full": ("identity",), "quant": ("scaledquant", "sparseternary")}
-#: a codec that packs the same encoding another way than the records' program did, so that its size is expected to
-#: differ from a record's by the packing alone: named in the entry's E line
-E_PACKING = {"sparseternary": "one xz stream a matrix at one setting, where the record's program kept the smallest "
-                              "of several settings' streams of all its matrices"}
+#: tensors whole, and their deltas in codes with a scale a group. A format may have several kinds
+E_KINDS = {"full": ("identity",), "quant": ("scaledquant",)}
+#: a codec kind that packs the same encoding another way than the records' program did, beside how, so that its size
+#: is expected to differ from a record's by the packing alone: named in the entry's E line
+E_PACKING: dict[str, str] = {}
 #: how many of a config's steps are counted; the last is the one compared
 STEPS = 2
 FAIR = ("Each config's step was counted at the model's own initialisation on random tokens, one row a forward, on a "
