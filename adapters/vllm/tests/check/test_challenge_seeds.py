@@ -16,6 +16,8 @@ def test_the_seed_has_no_default(module, name):
         pytest.importorskip("torch")
     fn = getattr(importlib.import_module(module), name)
     assert inspect.signature(fn).parameters["seed"].default is inspect.Parameter.empty
+
+
 def test_the_derivations_of_record_are_pinned():
     from verity_vllm.commit import challenge as CH
 
