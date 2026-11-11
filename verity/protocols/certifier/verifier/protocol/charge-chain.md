@@ -92,7 +92,7 @@ the whole window: its decisions and both counts with their values, as one `windo
 finish, then its length terms' plain tail. With H = O = L = 0 its charge, counts and run are `ChargeCount_v1{N}`'s; the
 tests check this on the fixture's windows and on random ones.
 
-**The symbols**, in `window_code.code_window`'s order. Each is a (cum, freq, total) step of code.py's 32-bit `ArithEncoder`,
+**The symbols**, in `window_code.code_executionPhase`'s order. Each is a (cum, freq, total) step of code.py's 32-bit `ArithEncoder`,
 counted by `ArithCountStep_v1{18, BIN, 20}`:
 1. n_arrived = a, then each decision's KT bit at context min(run, 2) (BIN = 1), as in v1.
 2. n_hits = h, then each hit's value s ∈ [0, 2^16].
@@ -196,7 +196,7 @@ premise (`hAs` in `security/Definitions/NetworkCertifier/Guarantees/SampledCharg
   - each value's range is a constant;
   - a uniform step's total is fixed by its bin.
 
-  So `window_code.code_window` decodes the symbols back one by one, and no window's sequence is a proper prefix of another's.
+  So `window_code.code_executionPhase` decodes the symbols back one by one, and no window's sequence is a proper prefix of another's.
   At each step the coder splits its interval among the alphabet in proportion to the frequencies, which sum to at most
   the total: bins 0 … bitlen(S) of a count's table reach at most T.
 - *The tail is a fixed-width code given the record.* Its terms and their max_tokens are the certified record's, fixed

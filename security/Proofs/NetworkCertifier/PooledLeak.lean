@@ -40,7 +40,7 @@ import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Sampling.Draws
 import Proofs.Flock.Soundness.Audit.Periods
 import Proofs.Flock.Soundness.Game
-import Proofs.NetworkCertifier.PeriodSum
+import Proofs.NetworkCertifier.MonitoringPeriodSum
 import Proofs.NetworkCertifier.Pooled
 import Proofs.NetworkCertifier.SampledCharge
 import Proofs.NetworkCertifier.SampledLeak

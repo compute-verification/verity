@@ -19,7 +19,7 @@ from typing import Any
 from verity.protocols.certifier.prover.window_charge import Window
 from verity_vllm.pipeline.advice_code.window_code import (
     Book, Caps, DEFAULT_CAPS, decode as decode, Decoder as Decoder, encode as encode, Encoded as Encoded,
-    Encoder as Encoder, ints, context_key, KT, pack as pack, CoderState, unpack as unpack, code_window,
+    Encoder as Encoder, ints, context_key, KT, pack as pack, CoderState, unpack as unpack, code_executionPhase,
 )
 
 HERE = Path(__file__).resolve().parent
@@ -93,7 +93,7 @@ def ideal_bits(windows: Sequence[Window], book: Book) -> list[float]:
     c, st, out = _Ideal(book), CoderState(), []
     for win in windows:
         before = c.bits
-        code_window(c, win, st)
+        code_executionPhase(c, win, st)
         out.append(c.bits - before)
     return out
 
@@ -106,7 +106,7 @@ def fit_book(history: Iterable[Sequence[Window]], caps: Caps = DEFAULT_CAPS, pri
     for windows in history:
         st = CoderState()
         for win in windows:
-            code_window(c, win, st)
+            code_executionPhase(c, win, st)
     models = {n: C.Binned(C.fit_table([C.bin_of(v) for v in c.ints.get(n, [])], 0, C.bin_of(hi)))
               for n, (_, hi) in ints(caps).items()}
     priors = {}

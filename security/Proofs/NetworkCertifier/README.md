@@ -46,10 +46,10 @@ content and order. Conventions follow POUS's package (`verity/protocols/pous/lea
 ../../Definitions/NetworkCertifier/TapRows.lean  trusted: the network certifier's rows: its registration at the
                                transfer gates (certifierVal, CertifierRegisters), the leak relation at them (RLeakCertifier) and the
                                collision finder against its openings (Btap)
-../../Definitions/NetworkCertifier/Period.lean  trusted: a monitoring period of sampled audits: a statement registered
-                               as a window's (SameRegistration) and a window's good event (WindowGood)
-../../Definitions/NetworkCertifier/Guarantees/Period.lean  trusted: the leak through the network certifier over a
-                               monitoring period of sampled audits (PeriodLeakAccepted)
+../../Definitions/NetworkCertifier/MonitoringPeriod.lean  trusted: a monitoring period of sampled audits: a statement registered
+                               as a window's (SameRegistration) and a window's good event (ExecutionPhaseGood)
+../../Definitions/NetworkCertifier/Guarantees/MonitoringPeriod.lean  trusted: the leak through the network certifier over a
+                               monitoring period of sampled audits (MonitoringPeriodLeakAccepted)
 ../../Definitions/NetworkCertifier/Guarantees/Pooled.lean  trusted: the wrong units over a monitoring period of sampled
                                audits on independent live coins (PooledIncorrectBlocksLe)
 ../../Definitions/NetworkCertifier/PooledLeak.lean  trusted: a window's leak relation at one faulty set (LeakAt) and a
@@ -60,8 +60,8 @@ content and order. Conventions follow POUS's package (`verity/protocols/pous/lea
 ../../Definitions/NetworkCertifier/Checked.lean  trusted: the sequences accepted with a run a check passes
                                (AcceptedChecked, AccSeqsChecked, LeakAtChecked, RLeakChecked), a check that pins its
                                inputs (CheckedUnique) and misses at most εchk (CheckedWitness), and the monitoring
-                               period's good event and named inputs (PooledGoodChecked, PeriodChannel, PeriodAdaptive,
-                               PeriodEscapes, PeriodLeaksChecked)
+                               period's good event and named inputs (PooledGoodChecked, MonitoringPeriodChannel, MonitoringPeriodAdaptive,
+                               MonitoringPeriodEscapes, MonitoringPeriodLeaksChecked)
 ../../Definitions/NetworkCertifier/Guarantees/Checked.lean  trusted: the leak bound with checked inputs
                                (SampledLeakChecked)
 ../../Definitions/NetworkCertifier/Carried.lean  trusted: runs chained through the pool's root: the record rule over a
@@ -108,9 +108,9 @@ TapRows.lean    the leak bound at the network certifier's rows: the sampling rel
                                          (certifierColl_of_disagree); sampledLeak_certifier
 Period.lean     the leak through the network certifier over a monitoring period: each good window's
                                          registered observations are among AccSeqsSampled at its registration
-                                         (mem_accSeqsSampled_of_windowGood), and the secrets the network certifier's
+                                         (mem_accSeqsSampled_of_executionPhaseGood), and the secrets the network certifier's
                                          cells decode to, read back from those observations and counted over the
-                                         windows (encard_periodGood_le, periodLeak)
+                                         windows (encard_monitoringPeriodGood_le, periodLeak)
 PeriodSum.lean  the period sum: per-window leak bounds `Pr[acc w ∧ b w < moved w] ≤ ε w` summed over a
                                          period's windows by a union bound (Pr_exists_mem_le_sum, periodLeak_le_sum)
 Pooled.lean     the wrong units over a monitoring period: a uniform draw misses `f` units with probability at most
@@ -264,9 +264,9 @@ theorems whose bounds the calibration reports (`verity.protocols.certifier.verif
 "Capacity"):
 
 - egress, for the shipped schedule (`NetTiming.SecurityProofs.Schedule`, `NetTiming.SecurityProofs.PerWindow`):
-  `EncardDecodableLeConstantRate` and `EncardDecodableLeConstantRatePerWindow`;
+  `EncardDecodableLeConstantRate` and `EncardDecodableLeConstantRatePerExecutionPhase`;
 - ingress, the K charge (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
-  `EncardIngressObsDecodableLe` and `EncardIngressObsDecodableLePerWindow`.
+  `EncardIngressObsDecodableLe` and `EncardIngressObsDecodableLePerExecutionPhase`.
 
 The other 23 are the rest of the Capacity table's bounds and the schedule's causality rule:
 
@@ -275,10 +275,10 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
 - **Theorem 3** (`NetTiming.SecurityProofs.Advice`): `EncardAccSeqsLeSync`, `EncardAccSeqsLeFixedClock`.
 - **Theorem 3 for the constant-rate Program** (`NetTiming.SecurityProofs.Schedule`, `NetTiming.SecurityProofs.PerWindow`):
   `EncardAccSeqsLeConstantRate`, `EncardAccSeqsLeConstantRateFixedClock`, `ExpectedRowCausal`,
-  `EncardAccSeqsLeConstantRateWindows`, `EncardAccSeqsLeConstantRatePerWindow`.
+  `EncardAccSeqsLeConstantRateExecutionPhases`, `EncardAccSeqsLeConstantRatePerExecutionPhase`.
 - **The ingress bound** (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
   `EncardIngressDecodableLe`, `EncardIngressObsDecodableLeContents`, `EncardIngressDecodableLeContents`,
-  `EncardIngressObsDecodableLeContentsPerWindow`.
+  `EncardIngressObsDecodableLeContentsPerExecutionPhase`.
 - **The sampled audit implies `Accepted`** (`SampledAuditAccepted.lean`): `SampledAuditAccepted`, the bound of
   `Claims.SamplingGeneric.Compiled.KS` at `RAcc δ`, at any compiled sampled verifier, on the statements whose layout
   fits the program: no incorrect proof block is sampled `all`, and the advice holding the incorrect proof blocks'
@@ -296,11 +296,11 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
   `sampledLeak_reg`. `RAcc` pins the inputs to the trace, so the values at `reg` are the trace's; that the
   registration's commitment binds them is a separate statement, not yet proved. `Compiled.KS` is an open premise in
   the lock, and `SampledAuditAccepted` is proved.
-- **The leak through the network certifier over a monitoring period** (`Period.lean`): `PeriodLeakAccepted` composes
+- **The leak through the network certifier over a monitoring period** (`Period.lean`): `MonitoringPeriodLeakAccepted` composes
   the leak bound at the network certifier's rows (`TapRows.lean`'s `sampledLeak_certifier`) with the read-back of its
   record, so the bound's content term comes from the audits: over a monitoring period's windows, each registered as a
   statement, where the network certifier registers its observations at the transfer gates (`CertifierRegisters`, its openings
-  under the statement's roots), the secrets of a covert sender whose every window meets its good event (`WindowGood`)
+  under the statement's roots), the secrets of a covert sender whose every window meets its good event (`ExecutionPhaseGood`)
   number at most `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`, and each
   window's audit fails the leak relation at the network certifier's rows (`RLeakCertifier`) with probability at most
   `δ + ε_ks + ε_bind + Pr[B_tap]`. Every proof block outside the incorrect set is correct, so the extracted trace opens every
@@ -354,10 +354,10 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
   - `SampledLeakCarried` is `SampledLeakChecked` for a run that opens a row at its opening gates (`OpensAtInputs`)
     and leaves one at its closing gates. Its count charges `freeInputs \ (reg ∪ chk ∪ prow)` at a fixed opened row.
   - `PooledLeakCarried` is `PooledLeakAccepted` with each run's leak relation so taken (`LeakAtCarried`), over runs
-    that open the row the run before left (`PoolChained`). Its period inputs are named (`PeriodChannel`,
-    `PeriodAdaptive`, `PeriodEscapes`, `PeriodLeaksCarried`), and the escape is at `(1 − q)^Fmax` plus a collision
+    that open the row the run before left (`PoolChained`). Its period inputs are named (`MonitoringPeriodChannel`,
+    `MonitoringPeriodAdaptive`, `MonitoringPeriodEscapes`, `PeriodLeaksCarried`), and the escape is at `(1 − q)^Fmax` plus a collision
     term per opening. At the empty pool it gives the bound over windows that each hold a pool of their own, at their
-    leak relations with a valid run (`LeakAtChecked`, `PeriodLeaksChecked`; `pooledLeakChecked_of_carried`).
+    leak relations with a valid run (`LeakAtChecked`, `MonitoringPeriodLeaksChecked`; `pooledLeakChecked_of_carried`).
   - `CheckedUnique` and `CheckedWitness` are open premises of all three: a deployed check proved to pin its inputs and
     bound its miss discharges them. `SampledLeakCarried`'s honest lemma is its premises at the toy code, with a run
     that opens its row at its circuit's input gates (`SampledLeakCarried_honest`). `PooledLeakCarried`'s waits on the
@@ -421,9 +421,9 @@ lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The wit
 1. **Steps are buckets across all of ∂X.** The note states its bounds per execution phase of a link. The guarantees count steps, and
    Theorem 1(b)'s tree lemma is still stated per step. The per-window ones read the horizon of the run's first `m` whole
    windows of `T` buckets, `n = m·T`, each with its parent's hypotheses at that horizon and no other: the shipped
-   schedule's bound is `#Ac · (#Σ_sync · D^T)^m` (`EncardAccSeqsLeConstantRatePerWindow`,
-   `EncardDecodableLeConstantRatePerWindow`), and the ingress bound `(∏_ℓ (r ℓ + 1)^T · D^T)^m` per content assignment
-   (`EncardIngressObsDecodableLePerWindow`, and its `Contents` version). The egress factor per window is the bound's,
+   schedule's bound is `#Ac · (#Σ_sync · D^T)^m` (`EncardAccSeqsLeConstantRatePerExecutionPhase`,
+   `EncardDecodableLeConstantRatePerExecutionPhase`), and the ingress bound `(∏_ℓ (r ℓ + 1)^T · D^T)^m` per content assignment
+   (`EncardIngressObsDecodableLePerExecutionPhase`, and its `Contents` version). The egress factor per window is the bound's,
    not a count per window: content advice and an earlier window's sync can first show in a later window, so one window
    may continue a given prefix in more than `#Σ_sync · D^T` ways. So the egress bound is cumulative from the run's
    first window, and a temporal unit that starts later is not bounded by its own windows. Ingress is not affected:
@@ -458,7 +458,7 @@ The ingress bound adds these:
 11. **One allocation per link, one bucket width.** Link `ℓ` has allocation `r ℓ` (`Allocated`) within the shared slot
     count `S`, and every link shares the step, a bucket of ∂X. Ingress links with different bucket widths are not
     modelled. Over the first `m` whole windows each execution phase contributes `(r ℓ + 1)^T`
-    (`EncardIngressObsDecodableLePerWindow`).
+    (`EncardIngressObsDecodableLePerExecutionPhase`).
 12. **No Program, no clock.** The bound reads no Program and no advice: the outside sender chooses when frames arrive,
     so no clock pins ingress timing. Jitter on the inward release adds `D^n` (J, `D = 1` when tested ideal). W3's frame
     length and the FIFO rule are not used; the FIFO certifier attains the bound (`EncardFifoGrids`, read for the ingress

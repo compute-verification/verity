@@ -61,7 +61,7 @@ Each guarantee that says what an accepted run establishes has two lemmas (the tw
 `G_honest`, its premises at an honest instance, and `G_nontrivial`, its conclusion false at an instance whose verifier
 accepts everything. Each builds its instance and takes no hypothesis.
 
-* `SampledAuditAccepted`, `SampledLeakAccepted`, `SampledLeakRegistered`, `PeriodLeakAccepted` (and
+* `SampledAuditAccepted`, `SampledLeakAccepted`, `SampledLeakRegistered`, `MonitoringPeriodLeakAccepted` (and
   `Accounting.Guarantees.Bridge.CommOfMonitoringPeriodLeakAccepted`). Their premise `Compiled.KS` holds at SHA-512 at the
   deployed compiled form over the masked Flock record at the deployed relation, at a toy code that parses no statement,
   accepts no run and opens no session (`SamplingDeploy.toyCode`): `ks_toy`, from the compiler at Flock's KS there
@@ -71,7 +71,7 @@ accepts everything. Each builds its instance and takes no hypothesis.
   `RelS`; the leak bounds at `leakL`, `sksL` at a statement whose program negates its input. There, with nothing
   opened, the trace holds `false` at the negation, which the circuit computes `true` from the ingress the trace
   carries; the one unit is sampled `all`, so no possible incorrect set holds it, and no witness is in `RLeak`.
-  `PeriodLeakAccepted`'s at `certL`, `leakL` under a commitment whose openings of `true` pass (`trueCm`): the network
+  `MonitoringPeriodLeakAccepted`'s at `certL`, `leakL` under a commitment whose openings of `true` pass (`trueCm`): the network
   certifier's openings (`certOps`) register a frame at the input `true`, where the circuit's negation holds none, and no
   witness is in `RLeakCertifier`. These statements read the toy verifiers of `Witnesses.SamplingGeneric` (`sksL`,
   `leakL`, `certL`) and the layouts and openings of `Definitions.NetworkCertifier.Witness` (`trivLay`, `notLay`,
@@ -136,7 +136,7 @@ set_option synthInstance.maxSize 1024 in
 theorem SampledAuditAccepted_honest : (toyL).KS shaD := ks_toy
 
 set_option synthInstance.maxSize 1024 in
-/-- **`PeriodLeakAccepted`'s premises at the toy code**, which are `SampledLeakRegistered`'s and
+/-- **`MonitoringPeriodLeakAccepted`'s premises at the toy code**, which are `SampledLeakRegistered`'s and
 `CommOfMonitoringPeriodLeakAccepted`'s too: `Compiled.KS` (`ks_toy`), and the code's commitment binds (`binds_deployOf`). -/
 theorem PeriodLeakAccepted_honest : (toyL).KS shaD ∧ (toyL).commit.Binds shaD :=
   ⟨ks_toy, binds_deployOf (FlockDeploy.deployZk relD) SamplingDeploy.toyCode shaD⟩
@@ -380,7 +380,7 @@ theorem leakL_reg_bound_fails (H : Msg → Msg) (Rx : Rel Claims.Sampling.Wit) (
   simp only [hp, hb, mul_zero, Real.sqrt_zero, add_zero, leakL_bext, leakL_breg] at h
   linarith
 
-/-- `PeriodLeakAccepted`'s bound fails at `certL`'s silent prover, at a relation with no witness at `x` and a bound
+/-- `MonitoringPeriodLeakAccepted`'s bound fails at `certL`'s silent prover, at a relation with no witness at `x` and a bound
 `κ' < 1`. -/
 theorem certL_bound_fails (H : Msg → Msg) (Rx : Rel Claims.Sampling.Wit) (κ' : ℝ) (x : Msg) (hR : ∀ w, ¬ Rx x w)
     (hκ : κ' < 1) :
@@ -431,7 +431,7 @@ theorem SampledLeakRegistered_nontrivial :
           []).Pr shaD :=
   leakL_reg_bound_fails shaD _ _ [] (leakL_noRLeak shaD _ []) (by linarith [leakL_κ (Coin := Bool) []])
 
-/-- **`PeriodLeakAccepted`'s acceptance conclusion fails at the accepting verifier** `certL`, at one step at `δ = 0`,
+/-- **`MonitoringPeriodLeakAccepted`'s acceptance conclusion fails at the accepting verifier** `certL`, at one step at `δ = 0`,
 with no input registered: at the statement `[]`, its silent prover's bound fails (`certL_noWit`). -/
 theorem PeriodLeakAccepted_nontrivial :
     ¬ PrBad shaD (certL Bool).V

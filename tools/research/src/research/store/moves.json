@@ -2198,6 +2198,17 @@
         "security/Proofs/Properties/Accounting/Remote/Session.lean": "security/Proofs/Properties/Accounting/Remote/Run.lean",
         "security/Properties/Accounting/JointBridge/WorkOfH1CheckedCreditPeriod.lean": "security/Properties/Accounting/JointBridge/WorkOfH1CheckedCreditMonitoringPeriod.lean"
       }
+    },
+    {
+      "paths": {
+        "security/Definitions/NetworkCertifier/Guarantees/Period.lean": "security/Definitions/NetworkCertifier/Guarantees/MonitoringPeriod.lean",
+        "security/Definitions/NetworkCertifier/Period.lean": "security/Definitions/NetworkCertifier/MonitoringPeriod.lean",
+        "security/Proofs/NetworkCertifier/Period.lean": "security/Proofs/NetworkCertifier/MonitoringPeriod.lean",
+        "security/Proofs/NetworkCertifier/PeriodSum.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodSum.lean",
+        "security/Proofs/Properties/NetworkCertifier/Check/LinkWindow.lean": "security/Proofs/Properties/NetworkCertifier/Check/TransferBlocks.lean",
+        "security/Properties/NetworkCertifier/Check/LinkWindow.lean": "security/Properties/NetworkCertifier/Check/TransferBlocks.lean",
+        "verity/protocols/certifier/verifier/lean/NetworkCheck/LinkWindow.lean": "verity/protocols/certifier/verifier/lean/NetworkCheck/TransferBlocks.lean"
+      }
     }
   ]
 }

@@ -11,7 +11,7 @@ the schedule (`warden.WardenParams`) and the verifier's read of each row registr
 (`warden_rows.check_registration`), and the scan's terms read off its Program's descriptor (`_scan`), as each compute
 audit's units and their committed bits are read off its own (`_audit`). Its verdict,
 public, profile and digest are Lean's exactly; its reason is its own. Public is `K` and its terms over
-`PeriodLeakAccepted`'s windows (the clock form's audits, the rows form's scans, all at one δ), each with its `delta`,
+`MonitoringPeriodLeakAccepted`'s windows (the clock form's audits, the rows form's scans, all at one δ), each with its `delta`,
 and `eps`, the union of those deltas as an exact ratio string.
 
 `build(m, seed, small)` makes a period with one change `m` (`EXPECT`, each aimed at one path of the check, or malformed
@@ -843,7 +843,7 @@ def records(link: str) -> tuple[tuple[str, Direction], ...]:
 
 def _rows_window_check(p: Params, audits: list[dict], w: int, reg: dict,
                        x: Window) -> tuple[Facts, int]:
-    """`rowsWindowCheck`: on acceptance the scan's facts and its tied audits' free inputs, the parameters' `free` of
+    """`rowsExecutionPhaseCheck`: on acceptance the scan's facts and its tied audits' free inputs, the parameters' `free` of
     each audit its `prog` is an output of (`_tied_audits`)."""
     what = f"window {w}"
     if x.registrations is None:
@@ -932,7 +932,7 @@ def _terms(free: int, steps: int, per_unit: int, f: Facts, jitter: int) -> dict:
 
 
 def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int]] | None = None) -> dict:
-    """K and its terms over `PeriodLeakAccepted`'s windows: the clock form's compute audits, or the rows form's
+    """K and its terms over `MonitoringPeriodLeakAccepted`'s windows: the clock form's compute audits, or the rows form's
     link-windows' scans (`scans`, each its facts and its tied audits' free inputs; None in the clock form), where a
     compute audit's own terms are in none and a tied audit's free inputs are in its link-window's `free`."""
     cells = sum(clog2(cap + 1) for cap in p.cells)

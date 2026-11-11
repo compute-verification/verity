@@ -2,7 +2,7 @@ module
 
 public import Definitions.NetworkCertifier.Guarantees
 public import Definitions.NetworkCertifier.Guarantees.Pooled
-public import Definitions.NetworkCertifier.Guarantees.Period
+public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriod
 public import Definitions.NetworkCertifier.Guarantees.PooledLeak
 public import Definitions.NetworkCertifier.Guarantees.Checked
 public import Definitions.NetworkCertifier.Guarantees.Carried
@@ -17,10 +17,10 @@ public import Proofs.NetworkCertifier.SampledCharge
 public import Proofs.NetworkCertifier.SampledLeak
 public import Proofs.NetworkCertifier.SampledLeakReg
 public import Proofs.NetworkCertifier.SampledLeakRegPlain
-public import Proofs.NetworkCertifier.PeriodSum
+public import Proofs.NetworkCertifier.MonitoringPeriodSum
 public import Proofs.NetworkCertifier.Pooled
 public import Proofs.NetworkCertifier.TapRows
-public import Proofs.NetworkCertifier.Period
+public import Proofs.NetworkCertifier.MonitoringPeriod
 public import Proofs.NetworkCertifier.PooledLeak
 public import Proofs.NetworkCertifier.Schedule
 public import Proofs.NetworkCertifier.PerWindow
@@ -134,8 +134,8 @@ theorem EncardAccSeqsLeConstantRate : NetTiming.Guarantees.EncardAccSeqsLeConsta
 theorem EncardAccSeqsLeConstantRateFixedClock : NetTiming.Guarantees.EncardAccSeqsLeConstantRateFixedClock :=
   fun T W ss hfix frames op n D _ => NetTiming.encard_accSeqs_le_constantRate_fixedClock T W ss hfix frames op n D
 theorem ExpectedRowCausal : NetTiming.Guarantees.ExpectedRowCausal := @NetTiming.expectedRow_causal
-theorem EncardAccSeqsLeConstantRateWindows : NetTiming.Guarantees.EncardAccSeqsLeConstantRateWindows :=
-  fun T W ss frames op n D m _ hm => NetTiming.encard_accSeqs_le_constantRate_windows T W ss frames op n D m hm
+theorem EncardAccSeqsLeConstantRateExecutionPhases : NetTiming.Guarantees.EncardAccSeqsLeConstantRateExecutionPhases :=
+  fun T W ss frames op n D m _ hm => NetTiming.encard_accSeqs_le_constantRate_executionPhases T W ss frames op n D m hm
 theorem EncardDecodableLeConstantRate : NetTiming.Guarantees.EncardDecodableLeConstantRate :=
   fun I T W ss frames n D m _ hm => NetTiming.encard_decodable_le_constantRate I T W ss frames n D m hm
 
@@ -148,15 +148,15 @@ theorem EncardIngressObsDecodableLeContents : NetTiming.Guarantees.EncardIngress
 theorem EncardIngressDecodableLeContents : NetTiming.Guarantees.EncardIngressDecodableLeContents :=
   @NetTiming.encard_ingress_decodable_le_contents
 
-theorem EncardAccSeqsLeConstantRatePerWindow : NetTiming.Guarantees.EncardAccSeqsLeConstantRatePerWindow :=
-  fun T W ss frames op m D _ => NetTiming.encard_accSeqs_le_constantRate_perWindow T W ss frames op m D
-theorem EncardDecodableLeConstantRatePerWindow : NetTiming.Guarantees.EncardDecodableLeConstantRatePerWindow :=
-  fun I T W ss frames m D _ => NetTiming.encard_decodable_le_constantRate_perWindow I T W ss frames m D
-theorem EncardIngressObsDecodableLePerWindow : NetTiming.Guarantees.EncardIngressObsDecodableLePerWindow :=
-  @NetTiming.encard_ingress_obsDecodable_le_perWindow
-theorem EncardIngressObsDecodableLeContentsPerWindow :
-    NetTiming.Guarantees.EncardIngressObsDecodableLeContentsPerWindow :=
-  @NetTiming.encard_ingress_obsDecodable_le_contents_perWindow
+theorem EncardAccSeqsLeConstantRatePerExecutionPhase : NetTiming.Guarantees.EncardAccSeqsLeConstantRatePerExecutionPhase :=
+  fun T W ss frames op m D _ => NetTiming.encard_accSeqs_le_constantRate_perExecutionPhase T W ss frames op m D
+theorem EncardDecodableLeConstantRatePerExecutionPhase : NetTiming.Guarantees.EncardDecodableLeConstantRatePerExecutionPhase :=
+  fun I T W ss frames m D _ => NetTiming.encard_decodable_le_constantRate_perExecutionPhase I T W ss frames m D
+theorem EncardIngressObsDecodableLePerExecutionPhase : NetTiming.Guarantees.EncardIngressObsDecodableLePerExecutionPhase :=
+  @NetTiming.encard_ingress_obsDecodable_le_perExecutionPhase
+theorem EncardIngressObsDecodableLeContentsPerExecutionPhase :
+    NetTiming.Guarantees.EncardIngressObsDecodableLeContentsPerExecutionPhase :=
+  @NetTiming.encard_ingress_obsDecodable_le_contents_perExecutionPhase
 
 theorem EncardAccSeqsSampledLe : NetTiming.Guarantees.EncardAccSeqsSampledLe := @NetTiming.encard_accSeqsSampled_le
 theorem SampledLeakAccepted : NetTiming.Guarantees.SampledLeakAccepted :=
@@ -169,7 +169,7 @@ theorem SampledLeakRegistered : NetTiming.Guarantees.SampledLeakRegistered := by
     fun x hx s P hs hP op =>
       (NetTiming.sampledLeak_reg hSA H D hks L K S lay k δ hδ reg β Dj hβ).2 x hx s P hs hP op _⟩
 
-theorem PeriodLeakAccepted : NetTiming.Guarantees.PeriodLeakAccepted := NetTiming.periodLeak
+theorem MonitoringPeriodLeakAccepted : NetTiming.Guarantees.MonitoringPeriodLeakAccepted := NetTiming.monitoringPeriodLeak
 theorem PooledIncorrectBlocksLe : NetTiming.Guarantees.PooledIncorrectBlocksLe := NetTiming.pooledIncorrectBlocks
 theorem PooledLeakAccepted : NetTiming.Guarantees.PooledLeakAccepted := NetTiming.pooledLeak
 theorem SampledLeakChecked : NetTiming.Guarantees.SampledLeakChecked := NetTiming.sampledLeakChecked
