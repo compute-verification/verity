@@ -633,6 +633,29 @@ def test_a_workspaces_members_and_a_directory_beside_its_own_parts_follow_the_to
         '[tool.gate]\nkeyed = ["verity/flock", "other"]\nlevels = ["verity/flock/prover", "verity/flock/agreement"]\n')
 
 
+NAMES = {**BELOW, "tests/test_gate.py": "", "job.sh": "#!/bin/sh\n", "other/x.py": "X = 1\n",
+         "suites.py": 'AFTER = ("flock-suite", "lib/flock", "other")\nARGV = ["tool", "--project", "lib/flock"]\nPATHS = ("lib/flock", "other")\n',
+         "gates.toml": 'after = ["lib/flock", "flock-suite"]\npaths = ["lib/flock", "a.sh", "lib/gone/x.py"]\n'}
+
+
+def test_a_list_with_an_entry_of_one_name_that_no_path_ends_in_holds_names_and_is_no_cover(tmp_path):
+    """`lib/flock/` goes three ways. A list that names it beside one name no path of the tree ends in, a suite named by its
+    distribution (`flock-suite`) or a command's words (`tool`, `--project`), holds names, and the directory's is the name
+    of one thing: it follows the `[tokens]` row, and `[split]` must acknowledge it as it must any reference to the
+    directory. A list of paths is one whose every entry is a path or a name some path ends in (`a.sh`, a pattern), also
+    a path the tree no longer has (`lib/gone/x.py`): there the directory becomes where its files went (`PATHS`,
+    `paths`). Without the rows the move fails and names each file with the directory."""
+    ack = '\n[split]\n"suites.py: lib/flock" = "the suite and the project are the prover\'s"\n"gates.toml: lib/flock" = "the suite"\n'
+    r, p = _run(tmp_path / "acknowledged", NAMES, BELOW_MAP + ack)
+    assert p.returncode == 0, p.stderr
+    assert (r / "suites.py").read_text() == ('AFTER = ("flock-suite", "verity/flock/prover", "other")\n'
+                                             'ARGV = ["tool", "--project", "verity/flock/prover"]\nPATHS = ("verity/flock", "other")\n')
+    assert (r / "gates.toml").read_text() == ('after = ["verity/flock/prover", "flock-suite"]\n'
+                                              'paths = ["verity/flock", "a.sh", "lib/gone/x.py"]\n')
+    _, bare = _run(tmp_path / "bare", NAMES, BELOW_MAP)
+    assert bare.returncode != 0 and "suites.py: lib/flock (" in bare.stderr and "gates.toml: lib/flock (" in bare.stderr
+
+
 PART = {**BELOW, "tests/test_gate.py": "", "job.sh": "#!/bin/sh\n",
         "suites.py": 'AFTER = ("lib/flock", "other-suite")\n', "run.sh": '#!/bin/sh\nexe "lib/flock/$x"\n',
         "doc.md": "The prover is `lib/flock/`.\n"}

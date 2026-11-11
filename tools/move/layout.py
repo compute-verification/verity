@@ -22,7 +22,9 @@ What it rewrites, in every tracked text file the map doesn't exclude:
 - lists of paths (a Python list, tuple or set of strings, a TOML or JSON array, the objects of `git rev-parse`, the
   members of `tar`): an entry that names what has no one place after the move, a directory the map splits or empties or
   a file it deletes, becomes the fewest directories and files that hold where the list's files went and no others; and
-  where the list named the `__init__.py` of a package the move deletes, the package levels above those;
+  where the list named the `__init__.py` of a package the move deletes, the package levels above those. A list of
+  strings with an entry of one name that no path of the tree ends in holds names (suites, a command's words), and a
+  directory's in it is one more: it follows the [tokens] row, which [split] must acknowledge;
 - modules: import statements (split when their names now live in different modules, each statement keeping the comment
   that ended a one-line import, and one of them the lines a longer import went on over, as written; made absolute when a
   relative one no longer resolves), `from M import n` in strings, and every dotted name (`-m`, `import_module`,
@@ -753,20 +755,31 @@ class Run:
         with a row, and another entry of the list above or below it, is not read so: such a list names levels, and the
         row says which the directory is. Neither is a workspace's `members`, each one distribution's directory, which
         `_members` keeps, nor any list of a file under a `tests/` directory, where a list is as often the files of a
-        stand-in tree as the tree's own and nothing in it says which. Returns the text with a mark where each rewritten
+        stand-in tree as the tree's own and nothing in it says which. Nor is a list of strings (Python, TOML, JSON) with
+        an entry of one name, no `/` in it, that no path of the tree ends in: its entries are names (suites, each named
+        by its distribution or else by its directory; a command's words), a directory's among them is the name of one
+        thing, and the other rewrites send it where the `[tokens]` row says, which `[split]` must acknowledge. A name
+        some path ends in is a pattern for those paths (`lean-audit.json` in a gate), a path the tree no longer has is
+        still a path, and a shell command of `SH_LIST` says itself that its words are paths: those lists are read as
+        before. Returns the text with a mark where each rewritten
         entry was, and what each mark stands for, so that no later rewrite reads the new paths as old ones."""
         if not hasattr(self, "_parts_re"):
             names = [p for p in (*self.old_dirs, *self.dropped, *self.leftover) if self._parts(p)]
             self._parts_re = re.compile(alternation(names)) if names else None
+            self._last_names = {posixpath.basename(p) for p in (*self.known_old, *self.old_dirs)}
         if self._parts_re is None or "tests" in path.split("/")[:-1] or not self._parts_re.search(text):
             return text, {}
         edits, marks = [], {}
         members = {m.start("body") - 1 for m in MEMBERS.finditer(text)} if posixpath.basename(path) == "pyproject.toml" else ()
+        strings = path.endswith((".py", ".toml", ".json"))
         for sep, (start, _), spans in lists(path, text):
             if start in members:
                 continue
-            named = [(a, b, m) for a, b in spans if (m := ENTRY.fullmatch(text, a, b))
-                     and (m["p"] in self.old_dirs or m["p"] in self.tracked_old) and not self.L.kept(m["p"], path)]
+            formed = [(a, b, m) for a, b in spans if (m := ENTRY.fullmatch(text, a, b))]
+            if strings and any("/" not in m["p"] and m["p"] not in self._last_names for _, _, m in formed):
+                continue
+            named = [(a, b, m) for a, b, m in formed
+                     if (m["p"] in self.old_dirs or m["p"] in self.tracked_old) and not self.L.kept(m["p"], path)]
             names = {m["p"] for _, _, m in named}
             # entries one above the other name levels, not the files below them: those are left to the other rewrites
             # where a row gives the directory a place, and one whose [split] row names the part the file means is that part
