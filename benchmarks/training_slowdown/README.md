@@ -144,7 +144,11 @@ A job trains the config's start along its route and scores each checkpoint on it
 owns the loop, the batches, the checkpoints and each checkpoint's E, the weights that differ from θ encoded by the
 route's plan. A checkpoint's output model, the one scored, is what E rebuilds from θ: the trained weights under a
 plan that keeps them whole, and the model the kept bits give under one that keeps less. Everything a route computes
-through torch is counted; the harness's own work (loading, evaluating, encoding) isn't. A route that names anything of `training_slowdown` but the codecs and the model,
+through torch is counted; the harness's own work (loading, evaluating, encoding) isn't. The count calls a forward
+product updated when it reads a weight that has left θ. A buffer of the model that θ doesn't hold (a position
+table, in the state dict or not) is held at the value it has when the model is registered and checked like θ's
+weights: a product with it is θ's, a buffer a step writes is an updated weight from that write on, under its own
+name, and one written where the counter can't see makes the run invalid, as for a weight. A route that names anything of `training_slowdown` but the codecs and the model,
 or a route around the dispatcher (`screen.FORBIDDEN`), is refused, and one that uses an op the counter can't price, reads
 token data out of torch, starts a thread or a process, or imports a module the screen refuses makes its run invalid
 (`screen.py` has the screen).

@@ -320,7 +320,12 @@ class Harness:
         return self.register(model)
 
     def register(self, model: torch.nn.Module) -> torch.nn.Module:
-        self.counter.register(model.state_dict(keep_vars=True))
+        """Name θ's weights in `model`, and hold each buffer of it that θ lacks (a position table, in the state dict
+        or not) as a constant, at its value now: the counter checks and counts it as it does θ's weights, so a
+        product with a table is θ's, a buffer a step writes is an updated weight from then on, and a write the
+        dispatcher doesn't see makes the run invalid (`Counter.register`). A constant is no part of θ, of E or of the
+        output."""
+        self.counter.register(model.state_dict(keep_vars=True), dict(model.named_buffers()))
         self.model = model
         self._measure(model)
         return model

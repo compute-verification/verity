@@ -291,9 +291,11 @@ def retrace(record: dict) -> str:
 def changed_steps(record: dict, through: int | None) -> list[dict]:
     """The record's steps through `through` (None: all) after the run's first update: each that read a weight the run
     had changed, as the counter lists a step's `weights` (`flops`). A weight of θ is listed only where its value
-    differs from θ's, and a value derived from a gradient always; a tensor θ doesn't hold (`new/…`: a table a model
-    builds, an adapter) is listed by every step that reads it, so it counts once a value it is read at isn't the
-    first it was read at (a record without digests shows none as changed)."""
+    differs from θ's, as is a buffer of the model under its name (a position table a step wrote), and a value
+    derived from a gradient always; a tensor neither θ nor the model's buffers hold (`new/…`: an adapter, an
+    optimizer's state; in a record of a harness that held no buffers, a table the model builds) is listed by every
+    step that reads it, so it counts once a value it is read at isn't the first it was read at (a record without
+    digests shows none as changed)."""
     first, out = {}, []
     for s in record["steps"]:
         changed = [not key.startswith("new/") or any(v != first.setdefault(key, values[0]) for v in values)

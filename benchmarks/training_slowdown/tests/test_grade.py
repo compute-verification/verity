@@ -477,10 +477,11 @@ def ran(tmp_path_factory):
 
 def test_a_jobs_own_record_is_graded_from_the_trace_its_job_took(ran):
     """The record a job writes, with the trace its job took of its own step, grades as it is: its rows priced by the
-    capture, over the steps after the run's first update (step 0 reads θ and the tables the model builds), of the
-    traced step's own shape. Its trace says more than the grade reads, and a refused one has no ρ."""
+    capture, over the steps after the run's first update (step 0 reads θ and the tables the model builds, which the
+    job holds as θ's, so it lists no weight), of the traced step's own shape. Its trace says more than the grade
+    reads, and a refused one has no ρ."""
     assert set(G.TRACE) < set(ran["trace"]) and ran["trace"]["capture"] == products.CAPTURE
-    assert [s["step"] for s in G.changed_steps(ran, None)] == [1, 2] and ran["steps"][0]["weights"]
+    assert [s["step"] for s in G.changed_steps(ran, None)] == [1, 2] and ran["steps"][0]["weights"] == {}
     f = G.traced(ran, G.rows_of(ran)[-1])["formalism"]
     assert f["trace"]["products"]["rows"] == [products.priced(r) for r in ran["trace"]["rows"]]
     assert f["products"]["he"]["steps"] == 2 and "stand_in" not in f["products"] and f["trace"]["affected_share"] > 0

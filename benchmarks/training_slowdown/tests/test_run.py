@@ -311,6 +311,43 @@ def test_the_job_traces_its_routes_step(ran):
     assert 0 < c["affected_share"] < c["sigma"] < 1
 
 
+def test_the_counters_split_of_a_step_on_a_model_with_position_tables_is_the_traces(ran):
+    """The start's model rotates its queries and keys by position tables, buffers outside its state dict. They are
+    θ's to the counter as they are constants to the capture. Of the traced step's forward products of a token row
+    with a weight, the counter calls updated the ones whose weight the trace says an update reaches, and θ's the
+    rest: the same products by op and dimensions, as many, at the same MACs. A rotation by a table is θ's product, so
+    the counter's updated MACs are those products' and nothing else's, the first step, which reads θ alone, has none,
+    and no step lists a table as a weight the route made."""
+    rec, cfg = ran[0], ran[1]
+    tr, shape = rec["trace"], cfg.start.shape
+    step = rec["steps"][tr["step"]]
+    log = [row for row in rec["structures"][step["struct"]]["log"] if row[0] == "fwd"]
+    counted, traced = ({"theta": {}, "updated": {}} for _ in range(2))
+
+    def add(side: dict, kind: str, key: tuple, count: int, macs: int) -> None:
+        was = side[kind].get(key, (0, 0))
+        side[kind][key] = (was[0] + count, was[1] + macs)
+
+    for _, kind, op, shapes, count, macs in log:
+        if kind in counted and op in ("mm", "addmm"):
+            (m, k), (_, n) = json.loads(shapes)[-2:]
+            add(counted, kind, (op, m, k, n), count, macs)
+    for r in tr["rows"]:
+        if r["phase"] == "forward" and r["token_dims"] == ["m"]:
+            d = r["dims"]
+            add(traced, "updated" if r["affected"][1] else "theta", (r["op"], d["m"], d["k"], d["n"]), r["count"],
+                r["count"] * products.priced(r)["macs"])
+    assert counted == traced and counted["updated"] and counted["theta"]
+    assert step["by"]["fwd/updated"] == sum(macs for _, macs in counted["updated"].values())
+    assert {row[1] for row in log if row[2] != "mm"} <= {"theta", "act"}
+
+    table = [shape["ctx"], shape["d_model"] // shape["n_head"] // 2]
+    rotations = [row for row in log if json.loads(row[3])[-1] == table]
+    assert rotations and {(row[1], row[2]) for row in rotations} == {("theta", "mul")}
+    assert "fwd/updated" not in rec["steps"][0]["by"] and rec["steps"][0]["weights"] == {}
+    assert not [key for s in rec["steps"] for key in s["weights"] if key.startswith("new/")]
+
+
 @pytest.mark.parametrize("steps, traced", [(1, 0), (2, 1), (5, 3)])
 def test_the_traced_step_has_a_step_before_it_where_the_run_has_one(tmp_path, steps, traced):
     """The traced step is the middle one of the run's last three, the second of a run of two, and the only step of a
