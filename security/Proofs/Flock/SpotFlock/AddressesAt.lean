@@ -34,6 +34,9 @@ side by side, each reading only its own gates and constants:
   own terms: under `Addresses h` every needed gate has an address whose registered read round 2 doesn't read off the
   interior record, and one accepted run with a checked unit that needs a gate, all of whose session's registered reads
   round 2 reads off the interior record, refutes `Addresses h`.
+* `CheckedRun.not_addresses_of_boundary`, `CheckedRun.not_addresses_of_input`,
+  `CheckedRun.not_addresses_of_input_readsInterior`: the refutation at one gate with no hypothesis on the program: the
+  gate is on its replay block's boundary, as every input gate is.
 -/
 
 @[expose] public section
@@ -293,6 +296,45 @@ theorem not_addresses_of_readsInterior (hcl : SideBySide h) (hr : r.Ok h) {g : �
       readsInterior (ownOf h st rec draw r.c₀) (h.names.getD (templateOf h.ms r.u) "") reg.name reg.value = true) :
     ¬ Addresses h :=
   not_addresses hcl hr hg fun S _ reg hreg =>
+    readRoots_of_readsInterior h hx hm hd r.ρ (templateOf h.ms r.u) reg.name reg.value (hI (S.port r.u) reg hreg)
+
+/-! ## At an input gate, with no hypothesis on the program -/
+
+/-- **`Addresses` fails at a gate on its replay block's boundary whose rows round 2 reads under the interior roots**:
+one accepted run with a checked unit and a gate it needs, on its replay block's boundary, such that every registered
+read named like a port whose row holds the gate's bit (`RowAt`) is read by round 2 under the replay block's interior
+roots, refutes `Addresses h`. -/
+theorem not_addresses_of_boundary (hr : r.Ok h) {g : ℕ} (hg : r.s.prog.Needs r.b g)
+    (hB : r.s.prog.Boundary r.rb g = true)
+    (hI : ∀ S : Address, r.RowAt h S g → ∀ reg, regNamed r.ins r.sts (S.port r.u) = some reg →
+      readRoots h r.x r.m₁ r.c₀ r.c₁ r.ρ (templateOf h.ms r.u) reg.name reg.value = irootsOf r.m₁ r.ρ) :
+    ¬ Addresses h := by
+  intro hA
+  obtain ⟨S, hS⟩ := hA g
+  have hH := hS r hr hg
+  obtain ⟨reg, hreg, -, hne⟩ := addressHolds_reads_of_boundary hr hB hH
+  exact hne (hI S hH.2.1 reg hreg)
+
+/-- **`Addresses` fails at an input gate whose rows round 2 reads under the interior roots**: an input gate is on
+every set's boundary (`Prog.boundary_of_input`), so the statement's program needs no hypothesis. -/
+theorem not_addresses_of_input (hr : r.Ok h) {g : ℕ} (hg : r.s.prog.Needs r.b g)
+    (hin : r.s.prog.gates[g]? = some .input)
+    (hI : ∀ S : Address, r.RowAt h S g → ∀ reg, regNamed r.ins r.sts (S.port r.u) = some reg →
+      readRoots h r.x r.m₁ r.c₀ r.c₁ r.ρ (templateOf h.ms r.u) reg.name reg.value = irootsOf r.m₁ r.ρ) :
+    ¬ Addresses h :=
+  not_addresses_of_boundary hr hg (Prog.boundary_of_input r.rb hin) hI
+
+/-- **`Addresses` fails where a checked unit needs an input gate and round 2 reads its session's registered reads off
+the interior record**: one accepted run whose statement decodes, whose round-1 message is a record and whose second
+draw evaluates, with a checked unit that needs an input gate of the statement's program and every one of whose
+session's registered reads round 2 reads off the interior record (`readsInterior`), refutes `Addresses h`. -/
+theorem not_addresses_of_input_readsInterior (hr : r.Ok h) {g : ℕ} (hg : r.s.prog.Needs r.b g)
+    (hin : r.s.prog.gates[g]? = some .input) {st : Roots} {rec draw : Json} (hx : decode r.x = some st)
+    (hm : jsonMsg r.m₁ = some rec) (hd : secondDraw h r.c₀ r.c₁ = some draw)
+    (hI : ∀ q reg, regNamed r.ins r.sts q = some reg →
+      readsInterior (ownOf h st rec draw r.c₀) (h.names.getD (templateOf h.ms r.u) "") reg.name reg.value = true) :
+    ¬ Addresses h :=
+  not_addresses_of_input hr hg hin fun S _ reg hreg =>
     readRoots_of_readsInterior h hx hm hd r.ρ (templateOf h.ms r.u) reg.name reg.value (hI (S.port r.u) reg hreg)
 
 end CheckedRun
