@@ -65424,3 +65424,37 @@ Corrections and state:
 
 For BREAKEVEN: the split head's Lean check a statement, measured: scores 47.086 core-s (0.5755 GPU-s at 81.82 cores a GPU), values at 64 columns 7.949 core-s (0.0972 GPU-s), against the 250.0 (3.0554 GPU-s) `cutg` keeps on each. In `cutg` a head cell's fixed seconds are f × (prover fixed + 3.0554) with f = 1.13902 on `hffv250allreg` at modeled 0.4 (read off the cell and its `types` row; the script asserts all 65 head cells agree). `g64_widths_k6` with own check and prover seconds: 912.0 GB against 1,373.6 (modeled); own check alone 1,014.4.
 For the table: split head at 64 columns, Lean check a statement: scores 47.1 core-s, values 7.9 core-s, 55.0 for the pair against 500 charged and the head block's 250.0 (measured, one pinned core, kept sessions; `r20261111-211713-1e63`, `r20261111-211639-20e3`; branch trees, not `main`, not the served engine). Cost model, 64 columns with every head change, registered engine, world year: 912.0 GB with own check and prover seconds against 1,373.6 (modeled from `f8bd`'s rows).
+
+## LAND3, Wed 11 Nov 21:47Z: all four are marked ready: #8940 at `22adf3144ef0` (its records run passed, no record regenerated); a candidate now on origin holds #8885 and #8907, and when it lands #8940 and #9051 stop merging, each on one docstring; both resolutions are saved
+
+Tags: [run] a command I ran now or a run of mine (id given), [read] a file read now, [relayed], [guess]. Times from `date -u`.
+
+| pull request | head on origin | state [run `research queue status`, 21:42Z] |
+|---|---|---|
+| #8914 | `fc55213569b04320e3cb086945d5f14b174028ad` | ready, admitted (unchanged; its merge with `main` elaborates) |
+| #8934 | `cd9c2280c8a1ae4452bf85604ae296593568e5fb` | ready, admitted (unchanged; its merge with `main` elaborates) |
+| #8940 | `22adf3144ef0b72c929b47dbd65d70be008f9bb3` | ready, admitted, marked 21:41Z |
+| #9051 | `9dff8880f28475d84ff1f83e9c7f7c328db9f86e` | ready, admitted, marked 20:48Z |
+
+**#8940, step 3 done.**
+- [run] The records run `r20261111-202714-f39c` ended rc 0: outcome `pass` for `security`, `security/Properties` and `security/Proofs`, "0 files changed there" for each lock, no `lean-audit/record/` directory. So the head I pushed at 20:27Z is the head that is marked; there is no record commit. It built all of `security/Proofs` at this head ("195011 declarations in 3880 modules; axioms propext, Classical.choice, Quot.sound"), `FirstHitClassCaps` and `NoAlways` among them. It is the fast path: no kernel replay, no tests. It took 71 minutes after its slot because the slot's kept build had a half-written `Flock/Tags` and about 1,580 proof modules were rebuilt.
+- [run] The quick tier `r20261111-202725-3c3c` ended rc 0: 9 suites, 9 passed.
+- [run] `research queue ready 8940 --mark --by proofs` printed: "records gate: security: records run r20261111-202714-f39c of 22adf3144ef0 passed it on 22adf3144ef0's Lean inputs" and "preflight: #8940 at 22adf3144ef0 merged onto `main` at 75ef75838f99: checks skipped: Lean: not built: 204 modules are or import what it changes, over the 40 the preflight builds; … the checks that ran passed".
+- [run] The lock at this head against `main`'s, entry by entry (`lockdiff.py`): what the body named at the head marked before and #8934's own, nothing else. No lock names `NoAlways` or `FirstHitClassCaps`, so restating them moves no record. The body's sections about the lock are rewritten at this head, and its last section says this one lands before #9043, whose branch then restates its two files (your ruling of 20:57Z). I did nothing to #9043.
+- [run] `main` is `75ef75838f99` now; against `61f13c2275fb` it changes 61 files, none Lean, a lock or a lakefile, and all four heads merge with it (`git merge-tree`, exit 0 each).
+
+**#9051.** [read] Its body already has the remainder you ruled on, under "What would remove the rest": 73 uses stay, all names, and the Glossary gives `Period` no name to use instead. Nothing changed there.
+
+**New, for you and ci: the candidate that is on origin now collides with two of the four.**
+- [run] Four `queue/*` refs were pushed between 21:10Z and 21:31Z, each holding the one before: `118003ab7aca` (8 pull requests), `15caba15d7de` (31), `a01c390b2d51` (54), `855190d4cdf9` (65). None holds any of my four heads (`git merge-base --is-ancestor`), so step 1's rule did not stop the mark.
+- [run] `855190d4cdf9` holds #8885 (the extractor's waits give up after 2^192·k reruns) and #8907 (spot_figures: the gates as a count of the sample).
+  - #8940 onto it: one conflict, `security/Proofs/Flock/SpotFlock/Accepting.lean`, inside the docstring of `accepting` only. #8885 writes `2^{−182}` where the paragraph had `2^{−125}`; #8940 rewords the same paragraph. The resolution is #8940's paragraph with `2^{−182}`. `security/lean-audit.json` merges by the driver. In the merged tree no Lean file reads one round's coin any more (`rg`).
+  - #9051 onto it: one conflict, `benchmarks/spot_figures/binding.py`, two docstring hunks, against #8907 and not #8885. Resolved in a throwaway merge: the lint's counts stay at what the allowlist has (18, 13, 10) and `test_binding.py` passes (60 tests).
+  - #8914 and #8934 merge onto it without conflict; they share only lock files with it.
+- [guess] The merge of #8940 with that candidate elaborates: #8885 changes three definitions' constants (`Sampling.Deploy.cap`, `capOut`, `capIn`), `Accepting.lean` and `Sampled/NonVacuity.lean`, and of the files #8940 changes only `Accepting.lean` is among them. I did not try it: the candidate also moves the base of Flock's Lean package (#8789), so a try of `Accepting.lean` there builds 1,678 files from the bottom, which is what the records run after the merge does anyway.
+- So when `main` holds #8885 or #8907, the queue will refuse #8940 and #9051 ("conflicts with `main` …: merge `main` into the branch and re-mark it"). I can not act before that: I merge `main`, never a candidate. Then: for #9051, merge `main`, the saved resolution, the ratchet gate, the quick tier, mark (no Lean). For #8940, merge `main`, the saved resolution, a try of `Accepting.lean`, one records run, the body's lock lines, mark. Both resolved files are in the lane's notes, `land3/followup/`.
+- For ci, if you want it asked (step 4): the order that keeps the most marks is #8940 before #8885, which needs #8885 out of the candidate being checked; otherwise #8885 lands first and #8940 follows by the steps above. #8934 before #8940 as before.
+
+**Runs, with exit codes.** `r20261111-194200-2b66` 0 (#8914's merge, two files tried). `r20261111-195502-f9ed` 0 and `r20261111-195619-bdab` 0 (#8934's merge, three files tried). `r20261111-194312-e4f6` 1 (#8940 as it was: the failure reported at 20:25Z). `r20261111-194312-ca59` 0 (#8940 restated, two files tried). `r20261111-202714-f39c` 0 (#8940's records run). `r20261111-202725-3c3c` 0 (#8940's quick tier). `r20261111-195335-d960` 0 (#9051's quick tier). Cancelled before they started: `r20261111-193920-c587`, `-7b17`, `-986e`, `r20261111-194200-f41a`, `r20261111-195619-08db`. Nothing of mine is running.
+
+**What a fresh worker does next.** Nothing until `main` moves. Then read `research queue status` for the four; for each one refused, the steps above. Checkpoint: `lanes/proofs/20261111T2123Z-report-land3-jobs-ab-3.md` and the one after it.
