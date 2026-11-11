@@ -43,10 +43,11 @@ def reads(tp: Any) -> str:
     k_log 25, proved in 118 s, a 272 s session at 27 GB, accepted by Lean with its three negatives refused) and for its heads' per-key-block Calls, else inline, as step 16's 16-key part and
     five-split combine were proved, and the RMSNorm rows (``RMSNormTriton_v5``, ``RMSNormFusedCuda_v2``, 41 to 56 nonzeros
     an AND inline) at their served shapes; a ``CHAINS`` values unit, end, column end and combine inline as that combine. A ``STAGES`` stage
-    reads in slots: a stats part or a probabilities block reads EX2 a lane, thousands of them. A Boolean template's reads are
-    inline whatever its layout, a key block's Boolean body (``SparseMlaHeadBlock_v2``) at every key count among them: a body
-    whose MUFU is gates has no table to read, and one that still read a table would keep it in its own rows, so its unit
-    returns its own outputs, the one form ``verify --zk`` takes (`zk_refusal`, `one_stage.proofs.ks_form_why`)."""
+    reads in slots: a top-p stats part or a probabilities block reads EX2 a lane, thousands of them; a greedy select's stage
+    reads no table, so it lowers flat either way. A Boolean template's reads are inline whatever its layout, a key block's
+    Boolean body (``SparseMlaHeadBlock_v2``) at every key count among them: a body whose MUFU is gates has no table to read,
+    and one that still read a table would keep it in its own rows, so its unit returns its own outputs, the one form
+    ``verify --zk`` takes (`zk_refusal`, `one_stage.proofs.ks_form_why`)."""
     from verity_vllm.pipeline import chain_rows as CH
     from verity_vllm.query.program_view import spec_base, spec_statics
 
