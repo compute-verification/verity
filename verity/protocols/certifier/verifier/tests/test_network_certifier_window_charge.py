@@ -1,7 +1,7 @@
-"""window_charge: `ChargeCount_v2` charges advice v1's whole window, its hits, order entries and length terms with its
-decisions. Held to v1's own charges (each fixture stream's windows at their own sizes, the hits and length terms
-included), to `code_v1`'s on windows with hits, order entries and length terms seeded and on their cut into slots, to
-`ChargeCount_v1` on windows of decisions alone, and the circuits to their reference."""
+"""window_charge: `ChargeCount_v2` charges a whole window, its hits, order entries and length terms with its
+decisions. Held to v1's own charges (each fixture stream's windows at their own sizes, the length terms included; v1
+sends no hits), to `code_v1`'s on windows with hits, order entries and length terms seeded and on their cut into
+slots, to `ChargeCount_v1` on windows of decisions alone, and the circuits to their reference."""
 from __future__ import annotations
 
 import json
@@ -52,10 +52,9 @@ def _cut(stream):
 
 def test_each_window_at_its_own_sizes_is_v1s_charge():
     """Every fixture stream's own windows, decisions, hits, order entries and length terms each in as many slots as it
-    sends, are charged v1's charges over the whole stream, each window's segment and its length terms' tail:
-    async-prefix-cache's first window sends 27 hits, which `ChargeCount_v1` leaves out. The same windows with 12 hits,
-    10 order entries and 8 length terms seeded in are charged `code_v1`'s, as is their cut into (4, 2, 2, 2) slots with
-    gaps."""
+    sends, are charged v1's charges over the whole stream, each window's segment and its length terms' tail. They send
+    no hits: every hit is the replay's block pool's. The same windows with 12 hits, 10 order entries and 8 length terms
+    seeded in are charged `code_v1`'s, as is their cut into (4, 2, 2, 2) slots with gaps."""
     windows = hits = terms = seeded = cut = 0
     for s in _streams():
         win = s["window"]
@@ -72,7 +71,7 @@ def test_each_window_at_its_own_sizes_is_v1s_charge():
         terms += sum(len(w[4]) for w in win["own"])
         seeded += sum(len(w[1]) + len(w[2]) + len(w[4]) for w in win["seeded"])
         cut += len(slots)
-    assert (windows, hits, terms, seeded, cut) == (15, 27, 56, 203, 214)
+    assert (windows, hits, terms, seeded, cut) == (15, 0, 56, 176, 191)
 
 
 def _random_book(rng, N, H, O):
