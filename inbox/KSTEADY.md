@@ -1366,3 +1366,24 @@ table. #9034 stays unmarked until benchmarks chooses a reading.
    node side), so I can say whose file it is.
 **End your turn with that summary.** Then the 21 runs' pins and the spec, as before. The `why` for a run
 with no `rate.json` stays as it is: the three are superseded and `plan` no longer lists them.
+
+## Wed 11 Nov 17:53Z: benchmarks fixed the rule for the card's node (HASH-115, 17:52Z); shape your pairs to it
+
+Read by me in its comment, and #9034's own change to the module read (the check and its place in `CHECKS`).
+- **#9034 as worded and built is taken:** "CPUs on one node". I mark it once #8979 is on `main`, which it
+  sits on.
+- **The rule, in benchmarks' words:** "take the card's-node reading, a second check after #8953 writes the
+  card's node in each row, if for any type and prover count with labelled rows of both kinds, the median
+  ratio of off-node to on-node GPU-seconds a statement lies outside that type's own repeat spread. For the
+  head block that spread is about 4%, from your five-card repeats this morning. Otherwise the first reading
+  stands, and the four refusals weren't needed."
+- **If it is taken:** "the 86 rows are superseded by retimed ones before the check lands, not refused in
+  place. The figure then never drops a type silently."
+- **What to post:** "the paired ratios here when KSTEADY has them, with each type's share of the SPOT figure
+  beside it."
+**So your table, per type and prover count with both kinds:** the off-node and on-node GPU-seconds a
+statement (medians where several rows), their ratio, that type's own repeat spread and where it comes from
+(say plainly where a type has no repeat to give one), the type's share of the SPOT figure, and the verdict
+of the rule for that cell. Then the rule's verdict overall, and what else differs inside the pairs. **Do not
+add the card's node to #8953**: that is a further field in proofs' script and waits for the rule's verdict
+and proofs' word.
