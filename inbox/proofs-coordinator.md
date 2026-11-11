@@ -64361,3 +64361,46 @@ In plain words: except with probability δ + Σ_t ε_t, no accepted phase's samp
 ### 7. Next
 
 The run's verdict (it should start about 20:50Z; I expect errors on a first elaboration of 560 unbuilt lines and will fix and rerun, one run at a time). Then the 23:00Z entry: how far it compiled, what is still a hypothesis, and the statements and sizes of pieces (2) and (3). Mailbox read at 20:33Z: the 20:32Z rule on `unread-caps.json` is noted for the day a pull request is opened; none is.
+
+## WIDEZK, Wed 11 Nov 20:45Z: first count. No run has tried a file of mine yet: 217 of my 237 files sit on the analysis's base, which does not elaborate, and my own run is in its first build. From reading: the script changed 65 of the 237, nine needed a hand so far, and two files outside my directories need a change of WIDELEAF's. Thu 12 Nov 18:00Z holds for the errors in my own files; the clean axiom check waits on the base
+
+**Branch.** `cursor/proofs-widezk-3e4d` at `fdbf31a0d8`, pushed, with WIDELEAF's head `5fa334aa31` merged in [read: `git rev-parse`, 20:26Z]. My mailbox holds one message, your 20:32Z rule for proof modules ahead of their guarantee; I add no module and open no pull request, so it changes nothing of mine [read: `git show`, 20:43Z].
+
+**The count you asked for.** I cannot give it as a run's count yet, and I say why rather than guess it.
+
+- The two directories hold 237 Lean files, not 49 [read: `git ls-files`]. The script changed 65 of them, and WIDELEAF has changed none of the 237 since [read: `git diff --name-only 0bfe402a6c 5fa334aa31` on the two directories].
+- 217 of the 237 import a changed file of `security/` outside my directories; each of the 65 the script changed imports 87 to 125 of them [read: the import graph of the tree at `fdbf31a0d8`, script `/tmp/widezk/imports.py`]. That base does not elaborate yet: 9 of its 57 files build [relayed: WIDELEAF's 20:14Z entry]. So no file of the 217 can be tried as it is. The brief says the verifier half elaborates; it does [relayed], and my files do not sit on it but on the analysis's base.
+- The other 20 import no changed file of `security/` and nobody changed them. I expect them to elaborate as they are [guess]; the run below tries them.
+- Elaborate as the script left them: not known. Need a hand: nine so far, found by reading, none of them built [read: my diff against `5fa334aa31`].
+
+**Changed by hand: 9 files in 5 commits, none elaborated yet** [read: `git log 5fa334aa31..fdbf31a0d8` on the two directories].
+
+- `SessionLoop/PcsRank.lean`, `SessionLoop/RoundSwitchRank.lean`, `SessionLoop/Level0SrcSat.lean`: the script put `variable {wideLeaf : Bool}` between `set_option maxHeartbeats N in` and its theorem, so the option applied to the variable line and not to the theorem. I moved the variable line above the option. In the first two a proof named the version the statement does not mention; it now leaves it to be inferred.
+- `SessionLoop/FinPiopRet.lean` (`JsonRT.zkSchedule_cap0_lt`): the table checked case by case (`decide +kernel` over m = 25 to 35) cannot evaluate the schedule at an unknown version. It now checks both versions, 22 cases where it checked 11. This one I ran on my VM against the verifier package alone: it elaborates, axioms `propext`, `Quot.sound` [run: local `lake env lean` on one file, no run id].
+- `SessionLoop/Level0SrcSat.lean`: `ofDraws` and `build` written without their namespace, which the script's patterns did not match.
+- `ZkAny/RelayFresh.lean`, `RelayFreshStart.lean`, `RelayLoopJ.lean`, `RelayLoopL0.lean`, `RelayLoopFirst.lean` (the last one the script did not touch): `Level0.build` takes the version, and `Finish.tabOfLevel0` has one more refusal (a level 0 sampled for the other version), so each proof that walks its checks has one more step.
+
+**Statements whose text changed beyond the added argument: six helper lemmas, no guarantee. Yours to rule whether this is threading.** In each the new hypothesis says the two sides are at the same version, which the old statement could not say because there was one version; every use in my files discharges it by `rfl` or by the verifier's new `Level0.ofDraws_wideLeaf` (a level 0 sampled at a version carries it). No bound is weaker, no size is dropped, and no named premise is added [read: the diff].
+
+- `In_ext` (`Level0SrcSat.lean`). Before: `(h1 : a.m = b.m) (h2 : a.g = b.g) (h3 …) (h4 …) (h5 …) : a = b`. After: the same with `(h0 : a.wideLeaf = b.wideLeaf)` first. `Link.In` has the new field, so two of them are equal only if it agrees.
+- `Level0.ofDraws_inBytes` (`Level0SrcSat.lean`). Before: `… (i : Link.In) (hm : i.m = m) … : ∃ l, ofDraws m i.g (inBytes lv tPad i) = .ok l ∧ l.toIn = i`. After: `… (i : Link.In) (hw : i.wideLeaf = wideLeaf) (hm : i.m = m) … : ∃ l, ofDraws wideLeaf m i.g (inBytes lv tPad i) = .ok l ∧ l.toIn = i`.
+- `tab_of_same` (`RelayLoopFirst.lean`). Before: `(hm : l'.m = l.m) (htp : l'.tPad = l.tPad)`. After: `(hm : l'.m = l.m) (hw : l'.wideLeaf = l.wideLeaf) (htp : l'.tPad = l.tPad)`.
+- `cap_root_build` (`RelayFresh.lean`), `buildRows_size` (`RelayFreshStart.lean`), `build_of_ofDraws` (`RelayLoopJ.lean`): `Level0.build m …` became `Level0.build wide m …` (the argument, on a name the script missed).
+
+**Outside my directories: two changes for WIDELEAF.** I have not made them on my branch.
+
+1. `security/Proofs/Flock/Claims/ZK/LinkRecheck.lean:147-149`, `Masked.linkIn`: the `Link.In` it builds lacks the new first field. Add `wideLeaf := (stAt x j).wideLeaf`. My `Loop.level0Src_tapeSrc` (`Level0SrcSat.lean`) then discharges the new `hw` by `rfl`.
+2. `security/Proofs/Flock/Claims/ZK/SessionLean.lean:127` and `:135`, the statements of `repCoins_ok` and `repCoins_size`: `repCoins m kLog claims` is written without its namespace and was not rewritten; it is `repCoins wideLeaf m kLog claims`. Line 167, in a proof: `repCoins st.m st.c.kLog …` is `repCoins st.wideLeaf st.m st.c.kLog …`. My `SessionLoop/FinInnerRet.lean:327` reads `repCoins_ok`.
+
+Both are in `Claims/ZK/**`, the third worker's list by WIDELEAF's 20:14Z entry [relayed]; pass them where they belong.
+
+**What I run while the base is open.** A scratch tree that is never pushed: my branch, the two outside changes above, and every proof outside my two directories replaced by `sorry` before the build (about 40,400 proofs), so that only the base's statements and definitions must elaborate. On it a loop builds my 237 files and lists every error in them. It tells me which of my proofs fail and why. It cannot give the axiom check: every theorem of mine there rests on `sorryAx` through the base. The check the done-condition names is `lean_changed.py --build` on my branch as it is, once the base elaborates.
+
+**Runs** [run: each id; fates from `research inspect` and my own cancels].
+
+- `r20261111-202155-2c63` (vy-nebius-cpu-8): the loop above on `fdbf31a0d8`. It waited in the check line from 20:22Z and started at 20:32Z. At 20:43Z its first build is at job 10,613 of 10,942 and has not reached a file of mine. It has met nine errors, all in four files outside my directories and all the version not inferred or named where the statement does not mention it: `Claims/ZK/SessionLean.lean:96` and `:115`, `Claims/ZK/OneTape.lean:344`, `Claims/Complete/Zk/Level0Premises.lean:75`, `:81` and `:98`, `Claims/Complete/ZkTables/View.lean:401` and `:426`. These are in short proofs my tool left as they were, so they are the base's own at `5fa334aa31`; whoever holds those files will meet them. The list of errors in my files should be there by about 21:00Z [guess].
+- Cancelled by me, none with a verdict: `r20261111-193659-34ad` (no outside proofs replaced: the first build had not ended after 15 minutes, and the base moved); `r20261111-195640-cb51` (my replacing tool broke four kinds of statement; fixed); `r20261111-200949-a050` and `r20261111-201649-8017` (both still in line; relaunched for the two outside changes and for WIDELEAF's new head).
+
+**My date.** Thu 12 Nov 18:00Z for every error inside my files, shown on the scratch tree [guess: I have no error list yet, and the nine found by reading were all small]. The done-condition's clean axiom check is one run after the base elaborates; its date is WIDELEAF's, not mine. I will say within an hour of the first error list whether the 18:00Z still holds.
+
+**Next.** Read the run's error list; fix my files in import order, one commit a change, a push at least hourly; merge WIDELEAF's branch when it moves; tell you each further file outside my directories that needs a change.
