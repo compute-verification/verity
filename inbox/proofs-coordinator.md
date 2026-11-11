@@ -49936,3 +49936,39 @@ For BREAKEVEN:
 
 For the table:
 - The head block's cut is unmeasured (no statement of it timed; prices by 2^k_log). In #8917's form with the Lean verify measured and width at κ ≤ 2^-6: 1,889 GB at modeled 0.4 (G = 128), 1,267 (G = 32); 68 to 73 and 45 to 49 at the measured engine rate (a floor); stops at 793 and 1,183 tokens a GPU-second. My 10:49Z "2,270" priced a 2^26 unit that is not the PR's.
+
+
+## EXTFORM, Wed 11 Nov 10:58Z: CORRECTION to my 10:50Z table line and my 10:11Z row (f): both were at 132 classes a head block, a count over served rows; #8906's key is by PROOF BLOCKS, where ATTACK derives 643. At 643 the by-class bound reads 2^-108.41 a run in calls and 2^-99.41 in compressions: it holds 2^-100 in calls and misses it in compressions by 0.59 bit, and no proof gets that back. #8906 unmoved; the merged-tree build is out
+
+Tags: [run] a command I ran now, [read] a file or record I read now, [relayed] another worker's statement I did not check, [derived] my arithmetic, [guess] mine. Times from `date -u`.
+
+**1. The correction.**
+- What #8906's key is [read: `eventTwoX_le_firstHit_key` at `e7b2e51d928b`]: `hneeds` says gates of one key are needed by the same `u`, and `u` ranges over the proof blocks of the statement's partition. A proof block needs the gates it writes at its boundary. So a class is a set of gates with the same needing proof blocks, the writing block among them. ATTACK's 10:42Z and 10:55Z reading of it is right, and REGX's `gateKey` is that key.
+- What I posted [read: my entries]: the 10:50Z `For the table:` line relayed SCALE's 2^-101.57 by stratum, and the 10:11Z row "(f) same readers" used 2^32.07 classes a run. Both are at 132 a head block, which counts the row that writes a head block's 512 query words as one writer [relayed: ATTACK 10:42Z, on `rs_count.py`'s docstring]. The plan proves that row one word a block, so by #8906's key a later head block has 643 classes [relayed: ATTACK, derived; its run over units is out].
+- The row (f) at 643 [derived: `slack_bits2.py`, rerun, K = 2^34.31 classes a run from ATTACK's 10:42Z table; modeled; the first-hit term of #8827's lemma by classes; a run at K0 = 6, T = 2^80 calls in every run; K a mean; at a registration with no always-checked block; the model's verifier accepts no run at these sizes]:
+
+| form | one table | 200 tables | 64 KiB | a year | both |
+|---|---|---|---|---|---|
+| #8827 by gates | -98.33 | -90.69 | -89.33 | -82.65 | -73.65 |
+| by classes at 132 (served rows; not #8906's key), as posted | -110.64 | -103.00 | -101.64 | -94.96 | -85.96 |
+| **by classes at 643 (the needing proof blocks; #8906's key)** | **-108.41** | **-100.77** | **-99.41** | **-92.73** | **-83.73** |
+| floor: one class a checked block (not reachable) | -115.88 | -108.24 | -106.88 | -100.20 | -91.20 |
+
+- So by classes the record holds 2^-100 a run in calls, with one table and with 200 tables a session, and misses it in compressions by 0.59 bit (K a mean; by stratum and under one M it reads 2^-99.38 and 2^-98.55 [relayed: ATTACK 10:42Z]).
+- Nothing in the proof gets the 2.2 bits back. The by-class finder is charged once for each class it still waits for, and a run that samples one writing block of a word and not another opens one word and not the other [ATTACK's toy, 10:25Z, relayed]. The count is set by how the plan cuts the writer: the same row proved a head is one writing block and gives 132 back [relayed: ATTACK 10:42Z item 4, a guess nobody priced]. That is the plan's lever, not a proof's.
+- #8906's body is corrected [run: `research queue edit`; the head did not move]: it names the key, says 643 is a count of it and 132 is not, and quotes no bits.
+
+**2. Runs** [run: `research status`, 10:56Z].
+- The class-count file passes its own try at its final text: `r20261111-104232-3aba`, exit 0, `lean exit 0 in 53 s`, no warning in the file, siblings clean, "none of its 8 theorems uses an axiom beyond" the three. ATTACK read the patch whole (10:55Z): nothing found.
+- #8906's records `r20261111-094935-d3c3` and quick tier `r20261111-094939-bdf4`: still running.
+- **The merged tree** [run]: `main` `8f5d3c3823f0` merged with the marked heads that touch #8906's two aggregators or a file under `SamplingGeneric/` (#8827 `946b7b72`, #8781 `b7c268c7`, #8828 `53dd644b`, #8836 `ae8886e9`, #8857 `96985b18`, #8871 `2d4670d6`, #8874 `b3fb5853`, #8882 `da385b86`; these hold #8785, #8820 and #8879), then #8906's head. Each is the head `research queue status` shows marked; every `git merge` is clean; the scratch merge is commit `006505edad95` (tree `75a813c668a2`), on no branch. Its build is `r20261111-105440-e606` (`lean_changed.py --build security/Proofs/Flock.lean security/Proofs/Core.lean`, cpu-7), in line for a slot, about 17 minutes [the launcher's estimate], then a whole-package build.
+
+For TWOPROVE (the by-class counts at the code are yours by the 10:49Z update): the two steps `G l ≤ Σ w` are written and compile: `lanes/proofs/tools/extform_class_count.patch` in the lane's notes, on KILIAN's `c6412ff63497`. `ex_cls_le` and `ex_sessCountIn_cls_le` turn TWOWITNESS's `code_hKs` and `code_hKm` at `needs := clsNeeds nG cls needs` into #8905's `hKs` and `hKm`. Take the file into your branch; I open no PR for it.
+
+For SCALE: the count #8906 needs is over the plan's proof blocks, not rows: distinct (needing proof blocks, replay block, side) among the gates a block needs.
+
+For CONCRETE: the by-class line of #8906 at the record is K = 2^34.31 a run by the mean [relayed], over your `K ≤ 2^33` instance.
+
+For the table:
+- CORRECTION: strike my 10:50Z "2^-101.57 by stratum at 132". By #8906's key (the needing proof blocks) a later head block has 643 classes [relayed: ATTACK, derived], and the by-class bound at the record reads 2^-108.41 a run in calls and 2^-99.41 in compressions with K a mean [derived]: it misses 2^-100 in compressions by 0.59 bit. Modeled; the first-hit term of #8827's lemma by classes; a run at K0 = 6, T = 2^80 calls in every run; at a registration with no always-checked block; it rests on the expected-time premise at two finders no guarantee names.
+- By proof alone K by classes is the one factor that moved (12.3 bits at 132, 10.1 bits at 643, against by gates); the rest of the 2.2 bits is the plan's cut of the block that writes a head block's queries, not a proof.
