@@ -20,7 +20,7 @@ from verity.definitions.registry import flashmla as F
 from verity.definitions.registry import flashmla_prefill as P
 
 from tests.properties import dsv4_flashmla_capture_gpu as X
-from verity_vllm.properties.record import REGISTRY, digest_of
+from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
 FLIP = (6, 3, 100)
 PFLIP, WFLIP = (2, 5, 300), (1, 3, 77)
@@ -520,7 +520,5 @@ def test_main_end_to_end_on_stubbed_launches(swa, pswa, tmp_path, monkeypatch, c
 
 
 def test_the_record_is_a_registered_property() -> None:
-    from verity_vllm.properties.record import seal
-
     doc = seal(_doc(), X._verdict(_doc()))
     assert REGISTRY["dsv4_flashmla_capture"].schema == X.SCHEMA and doc["ok"] and doc["digest"] == digest_of(doc)

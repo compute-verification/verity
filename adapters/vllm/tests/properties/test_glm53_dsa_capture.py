@@ -7,8 +7,11 @@ from __future__ import annotations
 
 __models__ = ("zai-org/GLM-5.3",)
 
+import contextlib
 import copy
 import json
+import sys
+import types
 from pathlib import Path
 
 import numpy as np
@@ -25,7 +28,7 @@ from verity.definitions.registry import sparse_mla as M
 
 from tests.properties import glm53_dsa_capture_gpu as X
 from verity_vllm.engine.env import SERVED_DEFAULTS
-from verity_vllm.properties.record import REGISTRY, digest_of
+from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
 PAIRS = [(a, b) for fs in (X.L_FORMS, X.H_FORMS) for i, a in enumerate(fs) for b in fs[i + 1:]]
 
@@ -500,10 +503,6 @@ def test_main_refuses_a_run_it_cannot_make(tmp_path, capsys, args: list[str], me
 def _stub_main(tmp_path, monkeypatch) -> tuple[list[dict], dict, list[dict]]:
     """`main`'s surroundings stood in for (vLLM's config module, the gate, the PTX scan, the bindings): what `served` saw of the
     environment, a k-slots job and the logits jobs."""
-    import contextlib
-    import sys
-    import types
-
     vc = types.ModuleType("vllm.config")
     vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
                     set_current_vllm_config=lambda cfg: contextlib.nullcontext())
@@ -591,7 +590,5 @@ def test_main_on_the_logits_alone_at_131072_keys(tmp_path, monkeypatch, capsys) 
 
 
 def test_the_record_is_a_registered_property() -> None:
-    from verity_vllm.properties.record import seal
-
     doc = seal(_doc(), X._verdict(_doc()))
     assert REGISTRY["glm53_dsa_capture"].schema == X.SCHEMA and doc["ok"] and doc["digest"] == digest_of(doc)

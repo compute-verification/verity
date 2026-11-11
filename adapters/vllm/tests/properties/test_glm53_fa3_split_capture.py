@@ -8,6 +8,9 @@ __models__ = ("zai-org/GLM-5.3",)
 
 import copy
 import json
+import os
+import sys
+import types
 from typing import Any
 
 import numpy as np
@@ -217,9 +220,6 @@ def test_each_launch_has_its_own_verdict() -> None:
 
 
 def _stub_envs(monkeypatch, batch_invariant: bool = False) -> None:
-    import sys
-    import types
-
     envs = types.ModuleType("vllm.envs")
     vars(envs).update(VLLM_BATCH_INVARIANT=batch_invariant)
     monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
@@ -237,8 +237,6 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     """`main --quick` with the GPU's phases stood in for (the jobs of the tests above, the attention words the twin's with one
     flipped), every served-default switch inherited set: the switches cleared before vLLM reads them and read back, the jobs
     through the spawned worker pool, the per-launch verdicts, the sealed record and the exit status."""
-    import os
-
     for k in SERVED_DEFAULTS:
         monkeypatch.setenv(k, "0")
     for k in ("VLLM_ENABLE_V1_MULTIPROCESSING", "TRITON_CACHE_DIR"):
