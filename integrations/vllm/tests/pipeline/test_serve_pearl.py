@@ -264,7 +264,7 @@ def test_each_window_is_one_epoch_a_pass_a_step_numbered_as_the_toys_and_its_w_r
             "salt": RUNS[k].salt.hex(), "weights_root": weights_root(roots).hex(), "coin_source": "in-process",
             "served": f"{SPL.DIR}/w{k}/served.json", "seconds": None}
         seconds = line["pouw_pearl"]["seconds"]
-        assert sorted(seconds) == ["ahead", "epoch", "hooks", "install", "lead", "record", "release", "unhook"]
+        assert sorted(seconds) == ["ahead", "epoch", "hooks", "install", "next", "record", "release", "unhook"]
         assert sorted(seconds["epoch"]) == ["coins", "run", "salt", "weights"]
         assert d.stat().st_mode & 0o777 == 0o700 and RUNS[k].finished
     assert salts[0][0] != salts[1][0] and salts[0][1] != salts[1][1]
@@ -343,8 +343,8 @@ def test_an_epoch_that_cant_be_made_ahead_is_its_windows_failure_at_its_open_and
         _serve(s, [*PROMPTS, PROMPTS[0]])
     lines = records(tmp_path, "windows.jsonl")
     assert [w["pouw_pearl"].get("error") for w in lines] == [None, "open: ValueError: no coins for window 1", None]
-    assert asked == [0, 1, 2, 3] and "lead" in lines[0]["pouw_pearl"]["seconds"]
-    assert "lead" not in lines[2]["pouw_pearl"]["seconds"] and not (tmp_path / SPL.DIR / "w1").exists()
+    assert asked == [0, 1, 2, 3] and "ahead" in lines[0]["pouw_pearl"]["seconds"]
+    assert "ahead" not in lines[2]["pouw_pearl"]["seconds"] and not (tmp_path / SPL.DIR / "w1").exists()
     assert s.windows.summary()["pouw_pearl"] == {"windows": 2, "served": 2, "passes": 4, "calls": 16, "failed": [1],
                                                  "closing": [], "ahead": {"made": 2, "taken": 1, "unused": 0,
                                                                           "failed": [1]}}
@@ -478,12 +478,14 @@ def _calls(asked):
     return [a[:2] if a[0] in ("open", "close") else [a[0], *a[-2:]] if a[0] == "reserve" else a for a in asked]
 
 
-def test_a_live_session_is_made_ahead_only_when_asked_and_the_window_then_opens_without_the_gate(tmp_path, monkeypatch):
+def test_a_live_session_is_made_ahead_only_when_asked_and_the_window_then_opens_without_the_gate(tmp_path, monkeypatch,
+                                                                                                capsys):
     """Live coins.  Without ``ahead`` nothing reaches the gate until a window opens: the ledger, its reserve, its open on
     the weights' root, and its close at the window's close.  With it, window 0's session is reserved and opened on its
     weights' root when the arm is made ready, each reserve before its open; the window's open asks the gate nothing (the
     gate's next word after the session's open is its close, at the window's close), and the next window's session
-    follows at that close, the old epoch freed.  The one made ahead that no window takes is closed at the drain, unused."""
+    follows at that close, the old epoch freed.  The one made ahead that no window takes is closed at the drain, unused.
+    The arm says one line when it makes a session ahead and one when it closes one unused."""
     period = [{"kind": "period-open", "session": None, "body": {"period": "p7", "lane": LANE}}]
     reserve = lambda k: ["reserve", "--epoch", str(k)]  # noqa: E731
     for name, ahead in (("at-open", None), ("ahead", True)):
@@ -504,10 +506,16 @@ def test_a_live_session_is_made_ahead_only_when_asked_and_the_window_then_opens_
         assert asked[2][2] == RUNS[0].epoch.weights_root.hex()
         if not ahead:
             assert ready == [] and served == [["ledger"], reserve(0), ["open", "s-0"], ["close", "s-0"]]
-            assert _calls(asked) == served and len(RUNS) == 1 and "lead" not in line["seconds"]
+            assert _calls(asked) == served and len(RUNS) == 1 and not {"ahead", "next"} & set(line["seconds"])
+            assert "made ahead" not in capsys.readouterr().out
         else:
             assert ready == [["ledger"], reserve(0), ["open", "s-0"]]
             assert served == [*ready, ["close", "s-0"], ["ledger"], reserve(1), ["open", "s-1"]]
             assert asked[6][2] == RUNS[1].epoch.weights_root.hex() != asked[2][2]
             assert _calls(asked) == [*served, ["close", "s-1"]] and [r.finished for r in RUNS] == [True, True]
-            assert arm.summary()["ahead"] == {"made": 2, "taken": 1, "unused": 1, "failed": []} and "lead" in line["seconds"]
+            assert arm.summary()["ahead"] == {"made": 2, "taken": 1, "unused": 1, "failed": []}
+            assert {"ahead", "next"} <= set(line["seconds"])
+            said = [x for x in capsys.readouterr().out.splitlines() if "made ahead" in x]
+            assert [x.split(": its epoch made ahead ")[0] for x in said] == [f"[serve-pearl] window {k}" for k in (0, 1, 1)]
+            assert "live session s-1" in said[2] and "closed unused" in said[2] and "refuses its lane's open period" in said[2]
+            assert "live session s-0" in said[0] and "closed unused" not in said[0] + said[1]

@@ -189,6 +189,12 @@ class Made:
     error: Exception | None = None
 
 
+def _session(made: Made) -> str:
+    """The live session ``made``'s epoch holds, for a log line: nothing for in-process coins."""
+    sid = (made.coins.get("session") or {}).get("session")
+    return "" if sid is None else f" (live session {sid}, reserved and opened; unused, it refuses its lane's open period)"
+
+
 class PearlWindows:
     """The arm over ``model`` (the served `verity_vllm.LLM`'s), its model ``runner`` and the server's committer ``com``:
     ``config`` the pouw settings of ``--protocols-config`` (`config_of`), ``out`` the serve dir each window's epoch goes
@@ -291,6 +297,8 @@ class PearlWindows:
         try:
             self.made = self.make(window)
             self.aheads["made"] += 1
+            print(f"[serve-pearl] window {window}: its epoch made ahead in {self.clock() - t0:.1f} s{_session(self.made)}",
+                  flush=True)
         except (ValueError, RuntimeError, OSError) as e:
             self.made = Made(window, t0, error=e)
             self.aheads["failed"] = [*self.aheads["failed"], window][:20]
@@ -303,6 +311,8 @@ class PearlWindows:
         made, self.made = self.made, None
         if made is not None and made.epoch is not None:
             self.aheads["unused"] += 1
+            print(f"[serve-pearl] window {made.window}: its epoch made ahead is closed unused, no window having opened on "
+                  f"it{_session(made)}", flush=True)
             try:
                 made.epoch.close()
             except (ValueError, RuntimeError, OSError) as e:
@@ -314,19 +324,19 @@ class PearlWindows:
         the window's composition installed over it (`context`, the pouw setting ``prepared``), which hooks the model
         onto its run, its passes retained in `dir_of`.  ``opened``: the open's seconds on the loop (``install``), of
         them the hooks' (``hooks``), what making the epoch took wherever it was made (``epoch``), and for one made
-        ahead how long before the open its making began (``lead``)."""
+        ahead how long before the open its making began, a live session's reserve first (``ahead``)."""
         from verity_vllm import protocols as PO
 
         if self.comp is not None:
             raise RuntimeError(f"{ENTRY}: window {window} opens while window {self.window}'s epoch is open")
         t0 = self.clock()
-        made, lead = self.made, {}
+        made, ahead = self.made, {}
         if made is not None and made.window == window:
             self.made = None
             if made.error is not None:
                 raise made.error
             self.aheads["taken"] += 1
-            lead = {"lead": round(t0 - made.at, 4)}
+            ahead = {"ahead": round(t0 - made.at, 4)}
         else:
             self.drop()
             made = self.make(window)
@@ -341,12 +351,12 @@ class PearlWindows:
             raise
         self.window, self.reserved = window, made.coins.get("session")
         t2 = self.clock()
-        self.opened = {"install": round(t2 - t0, 4), "hooks": round(t2 - t1, 4), "epoch": dict(made.seconds), **lead}
+        self.opened = {"install": round(t2 - t0, 4), "hooks": round(t2 - t1, 4), "epoch": dict(made.seconds), **ahead}
 
     def close(self, window: int) -> dict[str, Any] | None:
         """Window ``window``'s epoch closed, on the loop: its hooks off, its option closed, its ``coins.json`` and
         ``served.json`` written (`record`); its outcome, with ``error`` when any of it failed. None when no epoch is open.
-        Under ``ahead`` the next window's epoch is then made (`make_ahead`), its seconds the outcome's ``ahead``."""
+        Under ``ahead`` the next window's epoch is then made (`make_ahead`), its seconds the outcome's ``next``."""
         if self.comp is None:
             return None
         comp, reserved, seconds = self.comp, self.reserved, dict(self.opened)
@@ -370,9 +380,9 @@ class PearlWindows:
         del comp, opt
         gc.collect()                       # the epoch's device buffers (B̃, the pass buffers) freed before the next is made
         t3 = self.clock()
-        ahead = {"ahead": self.make_ahead(window + 1)} if self.ahead else {}
+        after = {"next": self.make_ahead(window + 1)} if self.ahead else {}
         out["seconds"] = {**seconds, "unhook": round(t1 - t0, 4), "release": round(t2 - t1, 4), "record": round(t3 - t2, 4),
-                          **ahead}
+                          **after}
         self.outcomes.append(out)
         return out
 
