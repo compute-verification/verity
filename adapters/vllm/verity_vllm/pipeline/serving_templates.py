@@ -28,10 +28,18 @@ WIDE_COORDS = ("ScaledMmFp8BlockSharedScale_v1",)
 #: the row Definitions elementwise along the last axis of every parameter and of the output, by that axis's static: a row W wide
 #: is W / w units of its Definition at width w (a halving of W), unit j reading and returning columns [jw, jw + w), the ``cols``
 #: layout (`moe.MoeSum`'s top-k sum, `tp_allreduce.AllReduceMnnvl`'s all-reduce and its residual add, torch's multimem
-#: all-reduce, `tp_allreduce.AllReduceMultimem`, where `cols_refused` admits its blocks, `b1.ResidualAdd`'s residual add, and
-#: `act.SiluMul`'s gated activation, whose one parameter is two rows I wide, the gate then the up)
+#: all-reduce, `tp_allreduce.AllReduceMultimem`, where `cols_refused` admits its blocks, and `b1.ResidualAdd`'s residual add)
 COLS = {"MoeSum_v1": "H", "AllReduceMnnvl_v1": "N", "AllReduceResidualMnnvl_v1": "N", "AllReduceMultimem_v1": "SIZE",
-        "ResidualAdd_v1": "N", "SiluMul_v2": "I"}
+        "ResidualAdd_v1": "N"}
+#: the row Definitions likewise elementwise along their static's axis whose rows a window also names whole, as rows: a template
+#: of one is read in column blocks as a ``COLS`` family's (the ``cols`` layout: at its row's own width, the row), but its units
+#: are chunks only where the partition's ``chunk_cap`` names it, a row template's rule, so a window that names its row whole
+#: and gives it no cap reads it as it did (a template narrower than a row it reads needs its cap, as a ``COLS`` family's
+#: does); and a reader that chooses a ``COLS`` family's width chooses none for it
+#: (`act.SiluMul`'s gated activation, whose one parameter is two rows I wide, the gate then the up)
+ROW_COLS = {"SiluMul_v2": "I"}
+#: each column-block family's axis
+COL_AXIS = {**COLS, **ROW_COLS}
 #: the row Definitions that are batches along axes of their statics, which some parameters carry and the others don't: a row of
 #: extents a_0, a_1, .. along its axes is a_0 a_1 .. units of its Definition at every axis 1, unit (i_0, i_1, ..) (row-major)
 #: reading element i_k along axis k of each parameter that carries it and the others whole, and returning the output's element
@@ -200,7 +208,7 @@ def template(t: str) -> Template:
         widths = {x for ty in types for x in ty.width_set()}
         view = types
     word = descriptor_id(w)
-    layout = ("coord" if coord_width(word) else "cols" if spec_base(word) in COLS
+    layout = ("coord" if coord_width(word) else "cols" if spec_base(word) in COL_AXIS
               else "part" if spec_base(word) in PART_OF else "slice" if slice_width(word)
               else "kchunk" if spec_base(word) in KCHUNKS.values()
               else "chain" if spec_base(word) in CHAIN_OF else "stage" if spec_base(word) in STAGE_OF
@@ -401,7 +409,7 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
                         hit += ((descriptor_id(c), n // w),)
                 if n > 1 and (c := _bind(spec, fam, **over, N=1)) is not None:
                     hit += ((descriptor_id(c), n),)
-            if (axis := COLS.get(fam)) is not None:
+            if (axis := COL_AXIS.get(fam)) is not None:
                 W, k = int(spec_statics(spec)[axis]), 2
                 while W % k == 0:
                     c = _bind(spec, None if own else fam, **over, **{axis: W // k})

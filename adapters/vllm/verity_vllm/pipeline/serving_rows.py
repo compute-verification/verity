@@ -147,9 +147,9 @@ from verity_vllm.pipeline import kchunk_rows as KC, part_rows as PR
 from verity_vllm.pipeline import s8_rows as S8, slice_rows as SL
 from verity_vllm.pipeline import stage_rows as ST, weight_rows as WT
 from verity_vllm.pipeline.chunk_rows import s8_words
-from verity_vllm.pipeline.serving_templates import (CHAINS, COLS, COORDS, CUT, ELEMENTS, KCHUNKS, LAYOUTS, PACKED,  # noqa: F401
-                                                    PART_OF, PARTS, SLICES, STAGES, WIDE_COORDS, WIDE_SLICES, Template, _bind,
-                                                    coord_width, part, slice_width, template, unit_templates)
+from verity_vllm.pipeline.serving_templates import (CHAINS, COL_AXIS, COLS, COORDS, CUT, ELEMENTS, KCHUNKS, LAYOUTS,  # noqa: F401
+                                                    PACKED, PART_OF, PARTS, ROW_COLS, SLICES, STAGES, WIDE_COORDS, WIDE_SLICES,
+                                                    Template, _bind, coord_width, part, slice_width, template, unit_templates)
 from verity_vllm.pipeline.window_law import law_of, work_table_of
 from verity_vllm.program.compact import runs_from_file_items
 
@@ -270,7 +270,7 @@ def row_units(t: str, d: Mapping[str, Any]) -> int:
     if tp.layout == "history":
         return HR.blocks(S)
     if tp.layout == "cols":
-        axis = COLS[spec_base(tp.word)]
+        axis = COL_AXIS[spec_base(tp.word)]
         return int(S[axis]) // int(spec_statics(tp.word)[axis])
     if tp.layout == "coord":
         return int(S["N"]) // coord_width(tp.word)
@@ -286,11 +286,11 @@ def chunk_caps(tmpls: Sequence[str]) -> dict[str, int]:
 
 def chunked(t: str, caps: Mapping[str, int] | None) -> bool:
     """Whether template ``t``'s units are chunks on bit rows (`chunk_rows.unit_rows`): a ``CHUNKED`` layout's (a window names the
-    caps), or a row template's or a whole ``PARTS`` part's when ``caps`` names it, its rows staged as the Definition's own ports
-    (no input set read)."""
-    layout = template(t).layout
-    return ((layout in CHUNKED and (layout in ALWAYS_CHUNKED or caps is not None))
-            or (layout in ("row", "part") and t in (caps or {})))
+    caps), or a row template's, a whole ``PARTS`` part's or a ``ROW_COLS`` family's when ``caps`` names it, its rows staged as
+    the Definition's own ports (no input set read)."""
+    layout, named = template(t).layout, t in (caps or {})
+    return ((layout in CHUNKED and (layout in ALWAYS_CHUNKED or caps is not None) and (named or template(t).word.partition("{")[0] not in ROW_COLS))
+            or (layout in ("row", "part") and named))
 
 
 def unit_member(t: str, n: int, base: int = 0, name: str = "", seg: bool = False) -> CS.Member:
@@ -306,8 +306,8 @@ def unit_member(t: str, n: int, base: int = 0, name: str = "", seg: bool = False
 def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[int] | None = None,
             caps: Mapping[str, int] | None = None, seg: Collection[str] = ()) -> list[CS.Member]:
     """Each template's ports, instance count and base, read off its first row; ``counts`` (the Definitions' own) must agree.  A
-    chunked template's units (`chunked`: a ``CHUNKED`` layout's, or a row template's that ``caps`` names) are consecutive chunks of
-    at most its ``caps`` entry, one member each, on its `chunk_rows.unit_rows`; a window always names the caps (`population`).
+    chunked template's units (`chunked`: a ``CHUNKED`` layout's, or a row template's that ``caps`` names; a ``ROW_COLS`` template
+    narrower than a row it reads is a ``COLS`` one) are chunks of at most its ``caps`` entry, one member each, on its `chunk_rows.unit_rows`; a window always names the caps (`population`).
     With no ``caps`` at all (a tool reading one Call's units, ``benchmarks/one_stage/m1_unit.py``), a ``COORDS`` or ``COLS``
     template is one member of word rows.  A chunked template ``seg`` names (`history_rows.seg`: a history table's writer)
     commits its output rows as ``hm96-sha512/row-seg/v1``, its table's leaves, every other one's as ``hm96-sha512/row/v2``."""
@@ -316,7 +316,7 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
         _rid, _pi, r, d = rs[0]
         layout = template(t).layout
         n = sum(row_units(t, x[3]) for x in rs) if layout != "gemm" else 0
-        if chunked(t, caps):
+        if chunked(t, caps) or (caps is not None and layout == "cols" and n != len(rs)):
             cap = (caps or {}).get(t)
             if not isinstance(cap, int) or cap < 1:
                 raise ValueError(f"{t}: no chunk cap; a partition file names each chunked template's flock-circuit chunk cap as "
@@ -554,7 +554,7 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
             cols["cs"].append(np.broadcast_to(np.asarray(ops[1], dtype=np.uint16).reshape(1, D), (nh, D)))
             cols["out"].append(outs[0].reshape(nh, D))
         elif layout == "cols":
-            axis = COLS[spec_base(tp.word)]
+            axis = COL_AXIS[spec_base(tp.word)]
             W, w = int(d["statics"][axis]), int(spec_statics(tp.word)[axis])
             if W % w:
                 raise ValueError(f"row {r['i']} ({d['op_path']}): {axis}={W} is no whole number of member {m.key}'s {axis}={w} columns")

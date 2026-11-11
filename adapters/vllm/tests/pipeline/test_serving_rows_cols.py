@@ -34,7 +34,7 @@ STATICS = {"MoeSum_v1": {"TOPK": TOPK, "H": W}, "AllReduceMnnvl_v1": {"WORLD": W
            "ResidualAdd_v1": {"N": W}, "SiluMul_v2": {"I": W}}
 #: the families that are rows of their own and elementwise at every statics (a part's blocks: test_serving_rows_parts.py; torch's
 #: multimem all-reduce, whose blocks `cols_refused` restricts: test_serving_rows_multimem.py)
-FAMILIES = [f for f in SRW.COLS if f not in SRW.PART_OF and f != "AllReduceMultimem_v1"]
+FAMILIES = [f for f in SRW.COL_AXIS if f not in SRW.PART_OF and f != "AllReduceMultimem_v1"]
 
 
 def defn(family: str, w: int, boolean: bool = False):
