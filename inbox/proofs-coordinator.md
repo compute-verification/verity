@@ -57573,3 +57573,198 @@ Mailbox (newest section 13:44Z, unchanged) and ORDER through 14:14Z reread at 14
 For the table:
 - RELAX | the select's units staged on their cut rows [run `9a0b`, `2749`] | group unit 162 rows, 2^27; combine 244 rows, 2^27; the gates fit; 122 blocks of 2^27 a select | under 2^27 only with a combine of combines (a new Definition) or a 16-word LM head
 - RELAX | the adapter draft `cursor/proofs-recut-c2b3` at `20ac4fee7711`, unmarked | lists all twelve: eleven widths and the select's split | no quick tier ended yet (`7022`: 20 suites passed, 0 failed, `verity-vllm` running; `c5a0` at the head: 16 passed, 0 failed); not offered; the census sizes the select's units 22 and 26 (its sizer reads uncut ports)
+
+
+## EXTFORM (PRF-528), Wed 11 Nov 14:44Z: the 15:30Z entry. (A): what is compiled, what is a reading, what is a verifier change; ATTACK's four points; (i) is a check, with its diff
+
+**Verdict:** the scope and the decoded side of (A) are compiled: for any program and map, and at `code h` for any map that meets one named proposition (`Prog.Rewires`) [run]. That the code's map meets it is a reading. The frame side (`Addresses` at the wired program) does not transport and is not started, so (A) does not prove the premise. (i) is a check, a second line of `wiresOk`; both lines are compiled, mirrored and run, with no PR.
+
+**1. The one list.**
+
+Compiled. Each is one file elaborated alone with the axiom probe (three axioms, no warning); no kernel replay; a second reader only where said. Branch `cursor/proofs-addresses-3f5a` at `d3506ad0989f23754f038d711f7c372c3e1a7b0d`, no PR.
+- **(a) The premise fails side by side.** `SpotFlock/AddressesAt.lean`, 21 theorems [run: `r20261111-123549-d61c`; read whole by ATTACK]. An implication from one accepted run of the named kind; no such run is exhibited.
+- **(b) The wired program, for any program and map.** `Claims/Sampling/Rewire.lean`, 46 theorems [run: `r20261111-141039-fbdd` at `d3210a1877`, exit 0 in 30 s; ATTACK read the first 30 at `04973e17d07c`, relayed]. A proof block correct side by side is correct, cut, at the wired program (`Prog.correct_wired`), also at a decoder (`Prog.exists_correct_wired`). What a cut block's correctness reads there is the image of what it read (`Prog.needs_wired`), so no gate the map moves (`Prog.fixed_of_needs_wired`).
+- **(c) The scope, for any program and map.** `SamplingGeneric/WiredScope.lean`, 15 theorems [run: `r20261111-142718-1d4f` at `d3506ad098`, exit 0 in 46 s]. The cut partition partitions the wired program (`Partition.partitions_cut`: every gate covered, no empty block, the class widths; the statement ATTACK found missing). `InScopeTwo` side by side gives `InScopeTwo` at the wired program (`inScopeTwo_cut`). Each cell holds the proof blocks it held (`cell_cut`), so no count the design reads moves.
+- **(d) One proposition for the map.** `Prog.Rewires C P ω keep`, nine fields, each decidable over tables: ω moves only input gates; each to a gate that is no constant; which the program returns; and is no later; ω moves no gate it sends a wire to; the wired program returns no moved gate; every proof block keeps a gate; no proof block reads its own gate through ω; ω sends no two gates one block holds or reads to one gate. `Prog.Rewires.of_earlier` gives all nine from a shorter list: ω moves only input gates, each to a returned gate of an earlier member that is no input and no constant, and no two moved gates of one block to one gate [run: `1d4f`].
+- **(e) At `code h`, for any map.** `SpotFlock/WiredAt.lean`, 4 theorems [run: `r20261111-140657-3185` at `7c895121ea`, exit 0, siblings no clash among 61 imported; `decoded_wired` alone also in `r20261111-134803-17a4`. Its text is the same at the head; `WiredScope.lean` changed after in one theorem it does not read]. `scope_rewired`: a run's statement in the two-stage scope is in it at the members' programs wired by ω, its partitions cut. `decoded_rewired`: a checked unit's decoded values give values on which its cut block is correct at the wired program. Both take `(bitsProgs h.ms).Rewires (membersPart h.ms) ω keep` and nothing else about ω.
+- **(f) The two `wiresOk` lines** of item 3, in Lean and Python.
+
+A reading, no theorem.
+- **The code's map meets `Prog.Rewires`.** `wireMap h` is REGX's, on its branch (`24b588e7fe`: `wiredProg` is on `Prog.wired` now; I read its declarations, built nothing). By field: it moves only input gates, each to a returned gate that is no input and no constant, by the lowering [read by ATTACK and by me: `Spot/Bits.lean:249-251, 566`]. Earlier member: from line 2 of item 3, once a gate's member is defined in Lean and a member's blocks and reads are shown its own [read: `sideBySide`]. No two to one gate: item 4, a condition a registration can fail.
+- **"(A) removes the contradiction".** Compiled part: at the wired program no cut block holds a moved gate (`mem_cutBlock`) or reads one in its correctness (`Prog.fixed_of_needs_wired`), and a moved gate is an unread input (`Prog.unread_wired_of_moved`). So (a)'s argument has no instance at a gate ω moves. It still has one at a wired bit ω leaves (ATTACK's (ii)). Nobody has shown the premise at the wired program holds.
+- **A registered Definition's wires have an order** (item 3) [derived from three definitions read; no lemma].
+
+A verifier change (Daniel's).
+- **Line 1:** no wire reads an output the replay block returns.
+- **Line 2:** a wire's writer's part is before its reader's.
+- **Which program `parse` reads** (the ruling): three definitions, `parse`, `partition`, `two`.
+- **Perhaps a third line** (item 4), or a restated `Decodes`.
+
+**2. ATTACK's four points, a line each.**
+- **(i) The order: a check, line 2 of `wiresOk`.** Not a reordering inside the model. Reasons and the diff in item 3.
+- **(ii) A wired bit ω leaves.** REGX's: its branch now has the condition decided (`wiresMove`) [read, not built by me]. My statements hold for any ω, so (b) to (e) stay true at such a bit; the frame side does not: the bit is still an input gate of its cut block read under the interior roots, and (a) applies to it [derived; (a) is compiled side by side only]. So "every wired source bit moves" is a tenth condition, for the frame side only.
+- **(iii) ω x against `wired_read`'s row.** REGX's. Nothing in (b) to (e) reads it; the frame side needs it.
+- **(iv) `wiredProg` and `htgt`.** `wiredProg` is `(bitsProgs h.ms).wired (wireMap h) (returned h)` on REGX's branch now [read]. "No unit is wired to itself" is the field `off`; `off_of_earlier` gives it from line 2 [run, generic].
+- **The partition statement:** compiled, (c).
+
+**3. (i): the order is a check. Both lines as one diff** (it replaces my 13:50Z diff). No PR, nothing pushed: four local commits on `86c03d1840cb`, the last `acf7136f9c`.
+- **Why not a reordering inside the model.** The model's wires are data (`Held.wires`); nothing in `code h` says they come from a body in order. So a reordering needs an order to exist, which is again a check or a hypothesis. It also needs a permutation of the wired program's gates carried through every statement: a generic file about the size of (b) and (c) together (61 theorems) and every address of the frame side read through it [guess]. Line 2 is one conjunct and gives two fields, `le` and `off`.
+- **[run] Today's design check accepts two templates wired to each other.** `main`'s own difftest (`test_round_two_holds_a_wired_port_to_its_writers_output`) has the case, triple.x from pair.out and pair.x from triple.out, and expects no `second-wires`; it passes with line 1 alone (`r20261111-134107-92a0`). Under line 2 Lean and Python both answer `second-wires` (`r20261111-135905-7db5`: the two agree, the old expectation fails). That expectation is the diff's one line of test.
+- **Not reachable from a registered Definition, by reading** [derived]. The wires are derived from the body (`wiresOf`); a body's node reads only earlier nodes (`Flock/Program.lean:1112`, its docstring); every caller of a template reads a wired port from one writer template (`gather`, `fits`). So the templates have an order with every writer first. What a registration can still do is list its members in another order; line 2 refuses it and the developer reorders them.
+- **An honest registration:** the toy lists writers first and passes [run: `r20261111-135838-84b7`, 3 passed]. The served adapter's order is not read [guess: the body's].
+- **Runs on both lines:** Lean `r20261111-135838-f64d` (`Spot/SecondStage.lean` exit 0, 25 theorems on the three axioms; the one file, not its importers). Difftest `r20261111-140533-f5a2`: the 47 tests named wire, wired or link pass, with the one expectation changed. A new difftest case for line 1, a wire whose writer's port a link names, fails `second-wires` in Lean and Python alike (`r20261111-143153-777d`, 2 passed). The quick tier on both lines (`r20261111-141708-d305`, launched before the new case, still running): 114 suites passed so far, none failed, `verity/protocols/spot/verifier` (843 tests) among them.
+- **Not done:** the whole check, the lock's records, the `security/` packages built against it (no proof there unfolds `wiresOk` [run: `rg`]).
+
+```diff
+diff --git a/verity/protocols/spot/verifier/lean/Spot/SecondStage.lean b/verity/protocols/spot/verifier/lean/Spot/SecondStage.lean
+index fa27df4412..53af0eb786 100644
+--- a/verity/protocols/spot/verifier/lean/Spot/SecondStage.lean
++++ b/verity/protocols/spot/verifier/lean/Spot/SecondStage.lean
+@@ -153,7 +153,8 @@ def LINKS_WHY : String :=
+ def WIRES_WHY : String :=
+   "the replay block's Definition reads a node other than as a template's parameter that is one field of one " ++
+   "instance of another template, alike at every caller, or a wire names a template of no part, or its rows don't " ++
+-  "place its part's units or its writer's"
++  "place its part's units or its writer's, or it reads an output the replay block returns, or its writer's part " ++
++  "is not before its reader's"
+ 
+ def INTERIOR_ORDER_WHY : String :=
+   "the interior record's replay sample (window.replay_sample) is not the verifier's own, in its order"
+@@ -607,13 +608,21 @@ def linksOk (ps : Array Part) (own : Own) : Bool :=
+   | some ls => ls.all fun l => ps.any fun p => p.template == l.template && placed own p l.port
+   | none => false
+ 
++/-- Template `t`'s position among the parts `ps`, its first part's: the index of its member in the interior window,
++whose members are the parts in order (the interior program's strata's); `ps.size`, no member's, for none. -/
++def posOf (ps : Array Part) (t : String) : Nat := (ps.findIdx? (·.template == t)).getD ps.size
++
+ /-- The wires are derived, each between templates parts `ps` are of, its reader's units placed by its rows (`placed`),
+-whose rows a block are its writer's units a block. -/
++whose rows a block are its writer's units a block, whose writer's port no link names, and whose writer's part is before
++its reader's (`posOf`). An output the replay block returns is committed at the boundary, and no unit inside it reads
++that output off the interior record. With each writer's part before its reader's, the members' circuits with every
++wired read sent to its writer's output read only earlier gates, and no unit reads its own output. -/
+ def wiresOk (ps : Array Part) (own : Own) : Bool :=
+   match own.wires with
+   | some ws => ws.all fun w =>
+     ps.any (fun p => p.template == w.template && placed own p w.port) &&
+-      ps.any fun p => p.template == w.writer && (rowsOf own w.template w.port).any (·.per == p.n)
++      (ps.any fun p => p.template == w.writer && (rowsOf own w.template w.port).any (·.per == p.n)) &&
++      (linkOf own w.writer w.wport).isNone && decide (posOf ps w.writer < posOf ps w.template)
+   | none => false
+ 
+ /-- The wire that names template `t`'s session port `port`. -/
+@@ -932,10 +941,6 @@ def detailOf (i : Nat) (t : Json) : Json := Json.mkObj [("statement", Lean.toJso
+ /-- The templates statements `ss` are for, those that are statements. -/
+ def templates (ss : List Json) : List String := ss.filterMap fun j => (Stmt.ofJson? j).map (·.template)
+ 
+-/-- Template `t`'s position among the parts `ps`, its first part's: the index of its member in the interior window,
+-whose members are the parts in order (the interior program's strata's); `ps.size`, no member's, for none. -/
+-def posOf (ps : Array Part) (t : String) : Nat := (ps.findIdx? (·.template == t)).getD ps.size
+-
+ /-- Statement `i` of `ss`'s failures, `(code, detail)` each: `second-statement` for one that is not a statement,
+ `second-template` for one for no part's template or an earlier statement's, else its failing checks, its header placed
+ at its template's position (`posOf`). -/
+diff --git a/verity/protocols/spot/verifier/lean/tests/test_difftest.py b/verity/protocols/spot/verifier/lean/tests/test_difftest.py
+index 88c1540375..0a996d218d 100644
+--- a/verity/protocols/spot/verifier/lean/tests/test_difftest.py
++++ b/verity/protocols/spot/verifier/lean/tests/test_difftest.py
+@@ -6196,7 +6196,7 @@ def test_round_two_holds_a_wired_port_to_its_writers_output(pieces):
+         ({**wired, "wires": [{**wire, "wport": "x"}]}, ["second-header", "second-read"]),
+         ({**wired, "wires": [wire, {"template": pair, "port": "x", "writer": triple, "wport": "out"}],
+           "rows": [*wired["rows"], {"template": pair, "port": "x", "per": 2, "runs": [[0, 3, 0, 0]]}]},
+-         ["second-header", "second-read"]),
++         ["second-wires"]),
+         ({**wired, "wires": [wire, {"template": pair, "port": "x", "writer": triple, "wport": "out"}]},
+          ["second-wires"]),
+         ({**wired, "wires": None}, ["second-wires"]),
+@@ -6216,6 +6216,20 @@ def test_round_two_holds_a_wired_port_to_its_writers_output(pieces):
+         assert got["codes"] == codes and got["ok"] == (codes == []), (codes, got)
+ 
+ 
++def test_round_two_refuses_a_wire_that_reads_a_returned_output(pieces):
++    """A wire whose writer's port a link names reads an output the replay block returns: the boundary record commits
++    that output and the interior record's port is what the reader is held to, two entries nothing holds to each other.
++    The design fails `second-wires`, its links derived, alike in both."""
++    pair, triple = SECOND_MIXED.templates
++    wired = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], wires=[(triple, pair)], allow=True)
++    per, n = BOUNDARY.ports[BX]["leaves"] // BOUNDARY.population, wired["rows"][0]["per"]
++    case = {**wired, "links": [{"template": pair, "port": "out", "value": BX}],
++            "rows": [*wired["rows"], {"template": pair, "port": "out", "per": per, "runs": _runs(n, per)}]}
++    got = second_statements(copy.deepcopy(case))
++    assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), got
++    assert "second-wires" in got["codes"] and "second-links" not in got["codes"], got
++
++
+ def test_round_two_reads_each_unit_at_the_row_its_rows_name(pieces):
+     """Round 2's rows, Lean's the Python's whole, over the two-template interior after a replay sample of two: a slot of
+     a linked or wired port reads exactly its unit's row of its cell's replay block, of the rows a block the design
+diff --git a/verity/protocols/spot/verifier/second_stage.py b/verity/protocols/spot/verifier/second_stage.py
+index 8fc47a1db8..ef7b1c9c97 100644
+--- a/verity/protocols/spot/verifier/second_stage.py
++++ b/verity/protocols/spot/verifier/second_stage.py
+@@ -89,7 +89,8 @@ LINKS_WHY = ("the replay block's Definition reads a parameter, or returns, other
+              "one field, alike at every caller, or a link's rows don't place its part's units")
+ WIRES_WHY = ("the replay block's Definition reads a node other than as a template's parameter that is one field of one "
+              "instance of another template, alike at every caller, or a wire names a template of no part, or its rows "
+-             "don't place its part's units or its writer's")
++             "don't place its part's units or its writer's, or it reads an output the replay block returns, or its "
++             "writer's part is not before its reader's")
+ INTERIOR_ORDER_WHY = "the interior record's replay sample (window.replay_sample) is not the verifier's own, in its order"
+ STMT_KEYS = ["draw", "header", "registered", "template"]
+ #: The most leaves a tree a session reads may have: its positions are 64-bit (`SecondStage.MAX_LEAVES`).
+@@ -725,10 +726,12 @@ def _links_ok(ps: Sequence[Part], own: Own) -> bool:
+ 
+ def _wires_ok(ps: Sequence[Part], own: Own) -> bool:
+     """`SecondStage.wiresOk`: the wires are derived, each between templates the parts are of, its reader's units placed
+-    by its rows (`_placed`), whose rows a block are its writer's units a block."""
++    by its rows (`_placed`), whose rows a block are its writer's units a block, whose writer's port no link names, and
++    whose writer's part is before its reader's (`_pos_of`)."""
+     def writer_ok(w: Wire) -> bool:
+         r = _rows_of(own, w.template, w.port)
+-        return r is not None and any(p.template == w.writer and r.per == p.n for p in ps)
++        return (r is not None and any(p.template == w.writer and r.per == p.n for p in ps)
++                and _link_of(own, w.writer, w.wport) is None and _pos_of(ps, w.writer) < _pos_of(ps, w.template))
+     return own.wires is not None and all(any(p.template == w.template and _placed(own, p, w.port) for p in ps)
+                                          and writer_ok(w) for w in own.wires)
+ 
+```
+
+**4. What (A) still needs, and the count.**
+- **A. `Prog.Rewires` at `wireMap h`.** REGX's file, plus a gate's member in Lean and "a member's blocks and reads are its own" (the nearest statement in the tree is my `SideBySide h`, an unproved proposition). [guess] 20 to 30 declarations in one or two files.
+- **B. No two gates of one unit to one gate.** A unit that reads one bit of its writer at two of its own inputs (a body that passes one node's field to two parameters of one call). There one decoder a unit is not enough: its session holds two values that only the commitment ties. Either a third line refusing it, or `Decodes` at the wired program stated up to the conflict event. Whether a served template does this is not read.
+- **C. The ruling and the three definitions.** With (c) and (e) the scope needs no new check beyond the two lines.
+- **D. The decoded side at the wired program**, from `decoded_rewired`: the use sites in `Format.lean` 3, `UnitEmbeds.lean` 3, `Facts.lean` 4, `Cap.lean` 1, `Guarantees.lean` 1.
+- **E. The frame side, which does not transport:** `Reveals` and `Addresses` at the wired program, the reader's opening placed at its writer's gate. Use sites: `LayoutAt.lean` 3, `RowsOpen.lean` 2, `Placement.lean` 2, `Frame.lean` 2, `SlotsAt.lean` 1, `FrameIsBuilt.lean` 1. It needs REGX's (ii) and (iii). Until it is proved `Addresses` stays a premise.
+- **Count** [run: the same name-match script as 12:45Z on `main`'s tree; an upper bound on use sites, not on work]: 23 declarations in 11 files change. New declarations for A and E: 60 to 90 [guess].
+
+**5. #8940.** `AddressesAt.lean` reads both `SpotFlock.Addresses` and `CheckedRun`. `Rewire.lean` and `WiredScope.lean` read neither. `WiredAt.lean` reads neither; it reads `stmtOk`, `h.reg.checked`, `decodes_of_embeds` and `layoutFor` (the last in `RevealAt.lean`). If #8940 gives those the stage's coins, its three statements re-merge mechanically.
+
+**6. A value both records hold.** At such an output REGX's map leaves the reader's bit, so the wired program holds two gates for one value and (A) says nothing about them. The condition is line 1 as a check of round 2. An honest registration that returns a value its units read passes it by returning the value through a link template, as the toy does [run].
+
+**7. The report's sentence.** The order's 14:14Z correction has the three conditions and I agree with each. One word: the first and the third are conditions of what is compiled (`le`, `inj` in `Prog.Rewires`); the second (every wired bit moves) is a condition of the frame side, which is not started. In full: "(A) is compiled for any map under one named condition; that the served wiring meets it is a reading, and two lines of `wiresOk` would check two of its parts (neither reachable while `FORM` is off). It removes the contradiction at every wired bit the map moves. It does not prove the premise."
+
+**8. REGX's 14:32Z, your three (14:38Z).**
+- **1. `Addresses` at the wired program is false at a wire's gate: HOLDS, as a reading** [read: `RevealAt.lean:172-175`, `SlotsAt.lean:128-152`; REGX's `addresses_one_way` is compiled side by side, its use at the wired program is derived by both of us]. An address has one slot and one place a gate. At the wired program a wire's gate is needed by its writer's block and by its reader's (`Prog.needs_rewire_both`, compiled). The writer's session has no registered read named like its output port, so only `ReadsInterior` can hold: sized. The reader's has one, so only `ReadsRegistered` can hold: not sized. One slot cannot be both. The same question stands for the bit's place in the row (REGX's "one row format on both ends").
+- **The smaller change is the registered arm, not a slot a unit.** A third arm of `AddressHolds`: a registered read whose value is an interior record's port sits at that port's own slot, sized, at the row the wiring names. REGX's `wired_read` is what proves it. That is one definition and the one lemma that reads it (`slotsAtGate`) [guess for the size]. A slot a unit changes `Address`, `slotsOf` and the slot `SlotsAt` and the conflict events are keyed by, and it undoes what (A) is for: with two slots at one gate nothing ties the reader's opening to the writer's.
+- **2. "The model's verifier never runs the design check": HOLDS** [run: `rg -w` under `security/` finds none of `designOk`, `linksOk`, `wiresOk`; read: `SpotFlock/Code.lean:445-489`, `stmtOk` runs `partition`, `two`, `sessionOk` and `readsOk`, which is `interiorOrderOk`, `codesOk` and `pinOk`]. So my two lines change the served verifier and nothing in Lean. At `code h` each condition is a Boolean on the auditor's copies (`h.wires`, `h.links`, `h.rows`, `h.names`), to be asked by `two h` (scope) or taken as a hypothesis.
+- **The report's sentence on my lines becomes:** "Two lines of the served verifier's design check (no wire reads a returned output; a wire's writer's part is before its reader's) make it refuse what (A)'s scope leaves out. The model's verifier does not run that check, so in Lean both are conditions on the registration, not something an accepted run gives."
+- **3. The conditions on `h`, one list.**
+
+| condition | in Lean | the served verifier today |
+|---|---|---|
+| no wire reads a returned output (`noReturnedWired`) | decided from `h`, with its lemma [REGX, compiled]. No field of `Prog.Rewires`: the frame side needs it | not checked [relayed: ATTACK's run on the Python mirror]. Line 1 adds it [run] |
+| every wired source bit moves (`wiresMove`) | decided from `h`, with its lemma [REGX, compiled]. No field of `Prog.Rewires`: the frame side needs it | in part [REGX's reading]: the rows hold every position (`placed` in `wiresOk`); nothing reads a row's format on both ends |
+| no unit is wired to itself (`noSelfWire`) | decided from `h`, with its lemma [REGX, compiled]. From it to my field `off`: a reading. The order implies it | not as such. Line 2 implies it |
+| each wire's writer's part before its reader's | the field `le`, and `off`, through `of_earlier` [compiled, generic]. As a Boolean on `h`: not written | not checked [run: two templates wired to each other pass the design check]. Line 2 adds it [run] |
+| no unit reads one writer bit at two inputs | the field `inj` [compiled, generic]. As a Boolean on `h`: not written | not checked [read: `nodeWires` takes two parameters of one call on one node's field] |
+
+- REGX's item 4 (a linked read the round-1 message registers; a value only the interior record registers): NOT READ by me.
+
+**The one sentence for (A) at 16:00Z** (60 words): "(A), the wired program in place of the units side by side, is compiled for any wiring under one named condition: the scope and each checked unit's values, no kernel replay. That the served wiring meets the condition is a reading; five conditions on the registration are not checked by the model's verifier; the address premise there is not proved."
+
+**For REGX.** Your target is one term: `(bitsProgs h.ms).Rewires (membersPart h.ms) (wireMap h) (returned h)`. `Prog.Rewires.of_earlier` (`WiredScope.lean`) is the way in: it asks a function `mem` on gates with `mem i < mem j → i < j`, and `mem (wireMap h i) < mem i` at every moved gate. Its `hkeep` is at the moved gate, `returned h x = false` for a source bit x (a source bit is no written bit); your `returned_wireMap` is at the target, which my lemmas do not ask. Everything in my files since your merge of `70986393` is added; no name moved.
+
+For CAPS (no PR; if these go into one): `Proofs/Flock`: +4 modules, all wholly unread, no lock change: `Flock/SpotFlock/AddressesAt.lean` 23 declarations, `Flock/Claims/Sampling/Rewire.lean` 51, `Flock/SamplingGeneric/WiredScope.lean` 17, `Flock/SpotFlock/WiredAt.lean` 4.
+
+For the table: no number moves. (b)'s label gains nothing from this entry: no Lean statement at the code is behind it.
