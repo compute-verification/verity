@@ -242,6 +242,8 @@ def test_a_difference_no_rule_names_is_printed_and_the_command_exits_1(tmp_path,
     assert of_record.main(argv) == 0
     out = capsys.readouterr().out
     assert out.startswith("a, held to r-made-up (out/run/run.json): equal\n") and "DIFFERS" not in out
+    assert ("  step      the config's step 2, 2 forwards of one row, counted on a CPU, beside the record's modal "
+            "structure, which 3 of its 3 steps have, 1 row a forward divided out\n") in out
     assert "  updated   1 of the record's 1 uses" in out and "  log       2 of the record's 2 products" in out
     assert "  E         identity, 10 B after 2 steps; the record's full, 20 B after 3" in out
 

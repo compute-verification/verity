@@ -371,9 +371,9 @@ def row(cfg: config.Config, h: dict, rec: dict, out: Path) -> dict:
     r["facts"] = [
         ("start", f"{cfg.start.name} ({cfg.start.digest[:12]})"),
         ("steps", f"{cfg.budget['steps']}"),
-        ("step", f"the config's step {STEPS} of {_plural(batch // rows, 'forward')} of one row, counted on a CPU, "
+        ("step", f"the config's step {STEPS}, {_plural(batch // rows, 'forward')} of one row, counted on a CPU, "
                  f"beside the record's modal structure, which {n} of its {len(rec['steps'])} steps have, "
-                 f"{rows} rows a forward divided out"),
+                 f"{_plural(rows, 'row')} a forward divided out"),
         ("updated", f"{found['uses']} of the record's {len(theirs['updated'])} uses of an updated weight, by MACs a "
                     "token and updated MACs upstream"),
         ("log", f"{found['products']} of the record's {len(theirs['log'])} products, by phase, kind, op, operand "
