@@ -40306,3 +40306,39 @@ Still out, read 06:08Z: records `7aba` (#8406); quick `76af` (#8139), `2ba5` (#8
 - **The PR body's four checks** [run]: every statement elaborates, and its axioms are clean (`9bb6`'s audit, plus `8b37`'s per-theorem probe before the move). None is kernel-replayed yet (the fast path), and none is red-teamed.
 - **This turn:** the VM had been reset, so I rebuilt the worktree from the pushed branch. I reread `AGENTS.md` at `6735b7d3d4`: #8794 rewrote the Map for the move, and no rule I work under changed [read]. Nothing went to Linear.
 - **Next:** when you resume me with `fb5d`'s verdict, I write `ready to mark #8828 at 53dd644bda` or name the red. The `second-return` check for PRF-477 is a PR of its own after this one; not started.
+
+## CROSS, Wed 11 Nov 06:21Z: ready to mark #8339 (quick tier and its guard both passed); #8414's quick tier passed, no ready line (it is inside marked #8539); #8406's quick tier passed, its records and guard still run
+
+**ready to mark #8339 at `9fd291257ffc0a84cec5d62f1ae3c6401f20e8ed`** `[run]`
+
+- No records run: it changes one line of `fixtures/artifacts.json`, no Lean file and no lock.
+- Quick tier `r20261111-051841-2ba5`, at that commit: `6 suites: 6 passed (0 cached), 0 failed`, with
+  `passed  repository  280 passed in 352 s`.
+- The guard `r20261111-054119-7600`, at that commit: `1 suites: 1 passed (0 cached), 0 failed` (`benchmarks/two_stage`,
+  9 passed, 3 skipped); `benchmarks/two_stage/tests/fixtures/guard.tar.xz: OK` against sha256 `c5716deffbe5…`;
+  `guard_node.py --pytest`: `3 passed in 2088.23s (0:34:48)`, exit 0. So the fixture this PR names passes the guard
+  on the moved tree's Lean.
+- Body edited; the line that said its two old-head runs had not finished now gives their verdicts
+  (`r20261110-214339-d576`: `6 suites: 6 passed (0 cached), 0 failed`; `r20261110-214445-9e11`: 3 guard tests passed
+  in 2,211 s). Merges clean with `main` at `6735b7d3d42c`.
+- **It does not merge with #8406** (`fixtures/artifacts.json`: `art:24eb213c…` here, `art:19b595e3…` there). Mark one
+  of the two; the other needs a merge that settles which fixture the line names.
+
+**#8414 at `359724056748523f6a4e999332f3007042d87f39`: quick tier passed; no ready line** `[run]`
+
+- `r20261111-051948-61dd`, at that commit: `65 suites: 65 passed (0 cached), 0 failed`, with
+  `passed  repository  280 passed in 255 s`. No records run: no Lean file, no lock.
+- By the two checks it is ready. I write no ready line because it does not merge with marked #8539, which holds its
+  whole change (my 06:06Z entry). Its body now says so. If you want it marked anyway, the head and the run are above.
+
+**#8406 at `3d8e9aa8c0af063b57680303f8faaa620dcbb74a`: one of three runs in** `[run]`
+
+- Quick tier `r20261111-051916-e003`: `13 suites: 13 passed (0 cached), 0 failed`, with
+  `passed  repository  280 passed in 350 s`. `benchmarks/two_stage` passed 9 and skipped 6: the guard tests.
+- Records run `r20261111-051724-7aba` (cpu-11) is still in its first package's build. ETA 06:45Z to 07:15Z `[guess]`.
+- **I run its guard tests too:** this PR changes `guard.py`, `TwoGuard.lean`, `test_guard.py` and the fixture's id, and
+  the quick tier skips those six tests. `r20261111-061321-6e01` (cpu-4, launched 06:13Z):
+  the `benchmarks/two_stage` suite, then `guard_node.py --pytest`. ETA 06:55Z to 07:15Z `[guess]`.
+
+Still out: quick `76af` (#8139; 64 of 70 suites passed at 06:19Z), quick `57d5` (#8368 at `c833b3ff0a9b`; started, none
+of its 8 suites done at 06:19Z), and #8406's two above.
