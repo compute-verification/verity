@@ -48682,3 +48682,26 @@ For the table: head block at four provers a card: 2.42 s today, 1.73 s with the 
 **Still running at `88bc52e`:** circuit-check `r20261111-102121-9fe9`, quick tier and tests `r20261111-102121-de66`. The PR opens when both read.
 
 For the table: HEADCIRC | the cut's four statements staged [run]: scores 2^27 (16.72 M ANDs), values 2^25 / 2^24 / 2^23 at G = 128 / 64 / 32 (3.95 M / 1.97 M / 0.99 M) | 0.32 / 0.20 / 0.135 of the head block by width [modeled], unpriced until HEADPROF's rows | PR pending `9fe9`, `de66`.
+
+## CROSS, Wed 11 Nov 10:32Z: the loop has ALREADY rebuilt: `ee28015ba726` (10:24:16Z) holds four of our ten and six more of ours, none that changes a lock; `3dd5` does not cover that tree; the six lock-changing heads of the ten are in no candidate
+
+Your 10:21Z message, points (1) and (2). (3) and (4) follow: `2b3b` and `dc0b` are still building, and the eight new marks go into table 4.
+
+**(2) What was dropped, and where each is now** [run: `/data/vqueue/live/decisions.jsonl`, the `queue/*` refs, `research queue status --json`, 10:29Z to 10:31Z].
+- 10:19:29Z `c91f5995afd5` judged fail, 10:19:48Z `4ff79d86930a` judged fail; dropped 10:22:41Z and 10:23:03Z. The record: "#8713 isn't taken now: held by top (red in candidates c91f5995afd5 and 4ff79d86930a: tools/verity/circuit_check tests/test_declared_tables.py::test_every_registered_primitive_declares_the_tables_it_reads fails on PearlCSeedBByte_v1 ...)", and for ours "its base was dropped". No failure of ours is recorded: the one failed task in `4ff79d86930a`'s record is `step pytest`, the same step as `c91f`'s.
+- Ours in the two: #8517 (`c91f`) and the ten (`4ff7`). Nothing of ours was above `4ff7`.
+- **10:24:16Z the loop built `ee28015ba726` on `08ad61db9432`, 16 members, by its ordinary rule (`--lean 0`)**: **#8877, #8819, #8841, #8857** (four of the ten), **#8866, #8888, #8354, #8536, #8890**, then #8658, #8739, #8784, #8742, #8709, #8594 and **#8517**. Still below it: the cold batch `8f5d3c3823f0` and `08ad61db9432` (with #8568).
+- **In no candidate: #8785, #8820, #8827, #8788, #8828, #8781**, the six of the ten that change a lock. All six are still marked and admitted at their heads. They wait for ci's pinned rebuild.
+
+**(1) The new candidate against my trees** [run].
+- `ee28015ba726` equals, in every `.lean` file, lock, lakefile, toolchain file and `unread-caps.json`, my scratch `3f93b354a649c97da982ebd69f0cd1073988c5d8` = `main` `0a722c6ec984` + #8877 `b16bb41f1657`, #8819 `9a8a32c7c85b`, #8841 `5f197bc45539`, #8857 `96985b18aafb`, #8866 `e19752e7b617`, #8888 `746c43e0c848`, #8354 `5591b15e3b35`, #8536 `7c9387e95a73`, #8890 `3abd6b5bc8e2` (nine merges, each exit 0; `git diff --name-only` of the two over those paths: empty). Against `main` it changes 18 Lean files, 13 of them new, and no lock.
+- **`3dd5` does not cover it.** `3dd5` built the nine together; this tree has #8819 and #8857 without #8785, #8820, #8827, #8788, #8828, #8781, and has #8866, #8888, #8354, #8536 which the nine lacked. What covers each piece: each of the six Lean PRs passed its own records run alone on `main` [relayed, their ready lines; #8819 and #8857 also in `3dd5`]; #8888 was built on #8819 by DRAFT-CORE [relayed]. **No run has built these six together without the lock-changing heads.** The two builds that hold all six, with more, are `2b3b` (#8819, #8857, #8354, #8536) and `dc0b` (all six), both running.
+- I have not launched a records run of `3f93b354a649`: the candidate's own check builds the same tree and would end about when mine did. Say `CROSS build ee28` and I launch it.
+- **The unread ratchet on it, by bound** [derived, not measured: the caps file on `main` as the worst case for `main`'s count, plus every new module taken as wholly unread at its PR's count: #8819's four 29, #8888's `PublicRows` 3, #8354's `ScopeOf` 40, #8536's three 46, #8866 one declaration; the counts are CAPS's and DRAFT-CORE's, not recounted]: `Proofs/Flock` at most 250 / 1,962 and `Proofs/Core` at most 5 / 134 (with #8857's `FirstHit`, 80, which nothing reads without #8827), under #8890's 267 / 2,217 and 6 / 144. It passes, and would under #8877's caps alone.
+- **When ci pins the six on top of `ee28015ba726`**, that tree is the nine + #8866, #8888, #8354, #8536 + #8890: between `3dd5`'s tree and `dc0b`'s. I diff it against both when it is named and say which run covers it; if none does exactly, `dc0b` (a superset by #8226, #8368, #8539, #8764, #8458, #8730, #8836) is the nearest, and I build the exact tree if you want it.
+
+**Runs out, mine** [run, 10:28Z]: `r20261111-094021-2b3b` (the 18, vy-nebius-cpu-1, building since 10:04Z); `r20261111-101145-dc0b` (all 21 with #8836, vy-nebius-cpu-3, building since 10:18Z). ETAs 10:45Z to 11:15Z and 11:15Z to 11:45Z [guess].
+
+For the table:
+- LANDING: `c91f5995afd5` and our candidate `4ff79d86930a` were dropped at 10:23Z on #8713's red (not ours). The loop built `ee28015ba726` at 10:24:16Z with #8877, #8819, #8841, #8857, #8866, #8888, #8354, #8536, #8890 and #8517; #8568 is in `08ad61db9432` below it. The six lock-changing heads (#8785, #8820, #8827, #8788, #8828, #8781) are in no candidate [run].
+- `ee28015ba726`'s Lean and caps equal my scratch `3f93b354a649`; no run of mine has built that tree; the unread ratchet passes on it by bound [run; derived].
