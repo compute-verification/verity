@@ -59,7 +59,7 @@ def _split(point: run.Point, root: bytes, respond, signer: mc.Signer, warmups: i
         with a:
             got["session"] = CP.serve(CS.Polled(a), CS.request_of("n0", point, root), signer=signer,
                                       log=ts.session_log(), coins=COINS, domain=period.SESSION_DOMAIN, clock=Clock(),
-                                      warmups=warmups, draw=draw)
+                                      warmups=warmups, entropy=draw)
 
     t = threading.Thread(target=side)
     t.start()
@@ -247,7 +247,7 @@ def test_an_audits_session_runs_under_the_id_its_salt_fixes(tmp_path) -> None:
     from the coins) is refused."""
     p, point, published, blocks, digests = _in_process()
     salts, log = _salt_log(tmp_path), ts.session_log(tmp_path)
-    source = CP.give_salt(salts, {"audit": AUDIT.hex(), "commitment": published.commitment.hex()}, draw=lambda n: COINS)
+    source = CP.give_salt(salts, {"audit": AUDIT.hex(), "commitment": published.commitment.hex()}, entropy=lambda n: COINS)
     assert source == COINS and salts.get(AUDIT) == (published.commitment, published.salt)
     signer = ts.TestSigner(b"auditor", 2)
     sid, session = _audit_session(point, published, lambda i: blocks[i], signer, salts, log)
@@ -269,7 +269,7 @@ def test_a_second_session_for_an_audit_is_refused_never_redrawn(tmp_path) -> Non
     coins again, and the session log holds the one id."""
     _, point, published, blocks, _ = _in_process()
     salts, log = _salt_log(tmp_path), ts.session_log(tmp_path)
-    CP.give_salt(salts, {"audit": AUDIT.hex(), "commitment": published.commitment.hex()}, draw=lambda n: COINS)
+    CP.give_salt(salts, {"audit": AUDIT.hex(), "commitment": published.commitment.hex()}, entropy=lambda n: COINS)
     sid, _ = _audit_session(point, published, lambda i: blocks[i], ts.TestSigner(b"once", 2), salts, log)
     request = CS.request_of("n0", point, published.root, audit=AUDIT, published=published)
     assert _refused(request, salts, log) == (f"a session has run for audit {AUDIT.hex()}: the memory challenger runs one "
@@ -311,7 +311,7 @@ def test_a_setup_under_the_provers_salt_fails_the_verifier_though_its_root_carri
     _, point, _, _, _ = _in_process()
     mine = period.setup_store(STORE, hashlib.sha512(b"the prover's own coins").digest(), point)
     salts, log = _salt_log(tmp_path), ts.session_log(tmp_path)
-    CP.give_salt(salts, {"audit": AUDIT.hex(), "commitment": mine.published.commitment.hex()}, draw=lambda n: COINS)
+    CP.give_salt(salts, {"audit": AUDIT.hex(), "commitment": mine.published.commitment.hex()}, entropy=lambda n: COINS)
     shown = run.Setup(mine.published.blocks, mine.published.commitment, mine.published.root, salts.get(AUDIT)[1])
     assert shown.salt != mine.published.salt
     signer = ts.TestSigner(b"fooled", 2)
