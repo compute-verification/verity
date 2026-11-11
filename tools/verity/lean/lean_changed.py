@@ -23,7 +23,12 @@ them against the outputs in place. It never runs check.py, so it reads and write
 no record; where the node grants no `build` slot it refuses, naming the machines whose Lean slots file has that pool (each
 one `slot.py`'s PEERS lists, read over ssh: `pool_machines`), else how to list a machine's Lean pools. Dependencies the
 slot tree holds that no `--records` run took (not in its `links.json`) are kept as they are; without a sandbox Lake runs
-unsandboxed, and fetches dependencies the node does not keep.
+unsandboxed, and fetches dependencies the node does not keep. In the sandbox the tree's fetched dependencies are mounted
+read-only, so that no try changes what the next one builds against. Before that mount a dependency with a `lakefile.lean` and
+no `.lake` gets an empty one, in the tree's own directory and never in the ones the audit keeps (`READ_ONLY`): Lake makes
+it before it compiles that configuration at a dependency order the tree was not loaded at, and a slot tree whose dependencies
+were fetched again under the `.lake/config` it kept has none. A write Lake is still refused there is no verdict on FILE: the
+try says so, names the path and the `--records` run that builds the dependencies writable, and exits 2 (`refused_write`).
 
 `--records` is a lane's fast path to the records in PKG's `lean-audit.json` (PKG: its path, or a unique part of one):
 `tools/verity/lean/check.py --build --no-replay --no-runs` on PKG in a slot tree (one per slot), which prints what the audit prints,
@@ -105,10 +110,7 @@ names under `proved_in`, at their paths in this repository, with each package's 
 what imports them. A package's fetched dependencies are hard links to the ones the audit keeps (`--deps`, `lean_audit.WarmDeps`),
 taken under their lock while the step tree has none for its manifest and toolchain; the build runs in the audit's sandbox
 (`tools/verity/lean/sandbox.sh`), where they are mounted read-only, so it cannot write what the audit reads, and a concurrent audit can
-move them away without touching the links. Before that mount a dependency with a `lakefile.lean` and no `.lake` gets an empty
-one, in the tree's own directory and never in the ones the audit keeps, since Lake makes it before it compiles that
-configuration at a dependency order the tree was not loaded at (`READ_ONLY`). The first build of a package here is cold;
-later ones are not.
+move them away without touching the links. The first build of a package here is cold; later ones are not.
 
 A package with guarantees then has its roots built (`lake build +ROOT`, as the audit does) and its guarantees' records
 compared with that build (`records`): `check.py`'s own reading of the `.olean` files (`Facts.lean`, in the sandbox) and its
