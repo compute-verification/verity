@@ -1,9 +1,10 @@
-"""The long row's units written as Calls (`dsa_topk_reads.DsaPositionsMerge_v2`, `boolean_dsa_topk_mask.DsaRadixTies_v2` and
-the mask units that call it, `dsa_topk_mask_cut.DsaTopKDigitPick_v2`, `dsa_topk_reads.DsaMaskPositions_v2`): each has its
-traced version's signature and is that version and its reference bit for bit; the merge and the pick have the traced one's
-ANDs count for count, and the ties and the positions no more from a few dozen keys on; the pieces are the steps they name; at
-the served statics a description is a few rows of Calls and the unit fits a Flock block; and the pieces lower by their
-builders to the circuit their gates lower to."""
+"""The long row's units written as Calls (`dsa_topk_reads.DsaPositionsMerge_v2`, `boolean_dsa_topk_mask.DsaRadixTies_v2`,
+`DsaRadixPass_v2` and `DsaRowValid_v2` and the mask units that call them, `dsa_topk_mask_cut.DsaTopKDigitPick_v2`,
+`dsa_topk_reads.DsaMaskPositions_v2`): each has its traced version's signature and is that version and its reference bit for
+bit; the merge, the pick and the valid bits have the traced one's ANDs count for count, the ties and the positions no more
+from a few dozen keys on, and the pass a few more past a chunk of keys; the pieces are the steps they name; at the served
+statics a description is a few rows of Calls and the unit fits a Flock block; and the pieces lower by their builders to the
+circuit their gates lower to."""
 from __future__ import annotations
 
 __models__ = ("zai-org/GLM-5.3",)
@@ -26,6 +27,8 @@ SERVED = dict(M=8, K=2048)
 PIECES = (R.DsaPositionsKeep, R.DsaPositionsShift, R.DsaPositionsShiftIn, R.DsaPositionsFirstOffset, R.DsaPositionsOffset)
 TIES_PIECES = (BM.DsaCountSum, BM.DsaCountSplit, BM.DsaRadixTie)
 POSITION_PIECES = (BM.DsaCountSum, BM.DsaCountSplit, BM.DsaButterflyTag, R.DsaBitAppend, R.DsaPositionWord)
+SELECT_PIECES = (BM.DsaRadixPassCount, BM.DsaRadixPassLeft, BM.DsaRadixPassKey, BM.DsaRowValidRoot, BM.DsaRowValidStep,
+                 BM.DsaRowValidLast, X.DsaRowValidOffset)
 PICK_PIECES = (X.DsaTopKCountAdd, X.DsaTopKDigitGe, X.DsaTopKDigitEdge, X.DsaTopKDigitTake, X.DsaTopKDigitBits,
                X.DsaTopKDigitLeft, X.DsaTopKDigitShare)
 
@@ -88,14 +91,15 @@ def test_the_merges_pieces_are_its_steps(K: int) -> None:
 
 
 def test_the_merge_as_calls_stays_small_at_the_served_statics() -> None:
-    """At the served statics the merge written as Calls is a few rows of Calls a block: its Program's description is under a
-    byte for every 64 of its gates (the traced merge's holds every gate; what grows with K here is the keep bits' trie,
-    `DsaRowValid_v1{K}`, an AND a slot), and its Flock block, read off the Definition as circuit-check's ``block`` reads
-    it, is within the proved range."""
+    """At the served statics the merge written as Calls is a few rows of Calls a block: its Program's description is under
+    128 KiB and under a byte for every 128 of its gates (the traced merge's holds every gate; what grows with K here is a row
+    for each of K's bits, a stage of the shift and a level of the keep bits' trie), and its Flock block, read off the
+    Definition as circuit-check's ``block`` reads it, is within the proved range."""
     from verity_flock import circuit as FC
 
     unit = bind(R.DsaPositionsMergeV2, **SERVED)
-    assert len(canonical_json(encode_program(Program(unit)))) * 64 < unit.gates
+    size = len(canonical_json(encode_program(Program(unit))))
+    assert size < 1 << 17 and size * 128 < unit.gates
     b = FC.unit_block(unit)
     assert FC.past_block(b) is None, (unit.id, b["k_log"])
 
@@ -204,10 +208,97 @@ def test_the_ties_pieces_are_its_steps() -> None:
         assert got == [x ^ (y & int(k < z)) for x, y, k, z in zip(g, q, c, r)]
 
 
-@pytest.mark.parametrize("N,AT", [(8, 0), (6, 8), (40, 16)])
+def _pass_rows(N: int, TOPK: int, rows: int) -> tuple[list[np.ndarray], np.ndarray]:
+    """``rows`` instances of a pass's operands and its rule on each, (eq, gt, r) side by side: eq sparse, dense and all ones,
+    gt apart from eq as the select leaves it and (every other row) any bits, r at 0, 1, the count, one past it and TOPK, then
+    at random."""
+    rng = random.Random(N * 1000 + TOPK)
+    RB = TOPK.bit_length()
+    args, want = [[], [], [], []], []
+    for t in range(rows):
+        p = (0.1, 0.5, 0.9, 1.0)[t % 4]
+        eq = [int(rng.random() < p) for _ in range(N)]
+        gt = [0 if q else rng.getrandbits(1) for q in eq] if t % 2 else [rng.getrandbits(1) for _ in range(N)]
+        e = [rng.getrandbits(1) for _ in range(N)]
+        a = [q & x for q, x in zip(eq, e)]
+        cnt = sum(a)
+        r = (0, 1, cnt, cnt + 1, TOPK)[t % 5] % (1 << RB) if t < 10 else rng.randrange(1 << RB)
+        take = int(cnt >= r)
+        left = r if take else r - cnt
+        for x, v in zip(args, (eq, gt, [r >> i & 1 for i in range(RB)], e)):
+            x.append(v)
+        want.append([*(q & int(x == take) for q, x in zip(eq, e)), *(g ^ (x & (1 - take)) for g, x in zip(gt, a)),
+                     *(left >> i & 1 for i in range(RB))])
+    return [np.array(x, dtype=np.uint8) for x in args], np.array(want, dtype=np.uint8)
+
+
+@pytest.mark.parametrize("N,TOPK", [(1, 1), (5, 3), (20, 16), (37, 8), (300, 16), (600, 512), (1000, 100), (2048, 64),
+                                    (2560, 2048)])
+def test_the_pass_as_calls_is_the_traced_pass(N: int, TOPK: int) -> None:
+    """`DsaRadixPass_v2` has `_v1`'s signature and its function, the pass's rule (the reference: the pass has no word view):
+    p says the keys level with the threshold whose bit is set number r or more, a level key stays level where its bit is p,
+    a key with its bit set where p is 0 goes above (gt XOR it, an OR where gt and eq are apart, as the select leaves them),
+    and r drops by the count where p is 0.  Rows of under a chunk, of chunks and a rest, and of a count of chunks that is
+    and is not a power of two.  Up to a chunk of keys it has `_v1`'s ANDs (one more at a single key, where the traced one
+    folds a constant); past that, the ANDs of summing the chunks' counts, under one for every 16 keys."""
+    calls, traced = bind(BM.DsaRadixPassV2, N=N, TOPK=TOPK), bind(BM.DsaRadixPass, N=N, TOPK=TOPK)
+    assert calls.signature() == traced.signature()
+    args, want = _pass_rows(N, TOPK, 30)
+    for unit in (calls, traced):
+        assert np.array_equal(_flat(BS.evaluate_bits(unit, *args), len(want)), want), unit.id
+    more = BS.compile(calls).counts["and"] - BS.compile(traced).counts["and"]
+    assert more == (N == 1) if N <= BM.PASS_CHUNK else 0 < more < N // 16
+
+
+@pytest.mark.parametrize("N", [1, 2, 3, 5, 8, 13, 20, 37, 300, 2048])
+def test_the_valid_bits_as_calls_are_the_traced_bits(N: int) -> None:
+    """`DsaRowValid_v2` has `_v1`'s signature and its function, bit j n > j (the reference), and its ANDs, count for count:
+    n from 0 to past the row, at the trie's top 2^L and past 2^31."""
+    rng = random.Random(N)
+    top = 1 << (N - 1).bit_length()
+    n = [0, 1, N - 1, N, N + 1, top - 1, top, top + 1, 1 << 31, (1 << 32) - 1, *(rng.randrange(N + 2) for _ in range(30))]
+    calls, traced = bind(BM.DsaRowValidV2, N=N), bind(BM.DsaRowValid, N=N)
+    assert calls.signature() == traced.signature()
+    want = [[int(x > j) for j in range(N)] for x in n]
+    for unit in (calls, traced):
+        assert np.asarray(BS.evaluate_bits(unit, _bits(n))).reshape(len(n), -1).tolist() == want, unit.id
+    assert BS.compile(calls).counts["and"] == BS.compile(traced).counts["and"]
+
+
+def test_the_selects_pieces_are_their_steps() -> None:
+    """A chunk's count, a pass's p and r past it, a key past a pass, the trie's root, a node's two children and its two keys,
+    and n past a block's start, on random operands and at their edges."""
+    rng = random.Random(11)
+    n = 64
+    one = lambda d, *args, width: [r[0] for r in _words(BS.evaluate_bits(d, *args), width)]  # noqa: E731
+    for N in (1, 2, 7, 44, 256):
+        a = _masks(N, n, N)
+        assert one(bind(BM.DsaRadixPassCount, N=N), a, width=N.bit_length()) == a.sum(axis=1).tolist()
+    for w, rb in ((1, 3), (9, 5), (16, 12), (6, 12)):
+        cnt, r = ([rng.choice((0, 1, (1 << b) - 1, rng.randrange(1 << b))) for _ in range(n)] for b in (w, rb))
+        got = one(bind(BM.DsaRadixPassLeft, W=w, RB=rb), _bits(cnt, w), _bits(r, rb), width=1 + rb)
+        assert got == [int(c >= x) | (x if c >= x else (x - c) % (1 << rb)) << 1 for c, x in zip(cnt, r)]
+    q, g, a, p = ([rng.getrandbits(1) for _ in range(n)] for _ in range(4))
+    got = one(bind(BM.DsaRadixPassKey), *(_bits(x, 1) for x in (q, g, a, p)), width=2)
+    assert got == [x ^ y ^ (t & x) | (z ^ y ^ (t & y)) << 1 for x, z, y, t in zip(q, g, a, p)]
+    word = [rng.choice((0, 1, (1 << 32) - 1, rng.getrandbits(32), rng.getrandbits(8))) for _ in range(n)]
+    for L in (0, 4, 16, 31):
+        assert one(bind(BM.DsaRowValidRoot, L=L), _bits(word), width=2) == [int(x < 1 << L) | int(x >= 1 << L) << 1 for x in word]
+    node, b = [rng.randrange(4) for _ in range(n)], [rng.getrandbits(1) for _ in range(n)]
+    t = [x & 1 & y for x, y in zip(node, b)]
+    got = _words(BS.evaluate_bits(bind(BM.DsaRowValidStep), _bits(node, 2), _bits(b, 1)), 2)
+    assert got == [[(x & 1 ^ k) | (x >> 1 ^ k) << 1, k | (x >> 1) << 1] for x, k in zip(node, t)]
+    assert one(bind(BM.DsaRowValidLast), _bits(node, 2), _bits(b, 1), width=2) == [(x >> 1 ^ k) | (x >> 1) << 1 for x, k in zip(node, t)]
+    for AT in (1, 16, 16384, (1 << 31) + 5):
+        at = [AT - 1, AT, AT + 1, *word[3:]]
+        assert one(bind(X.DsaRowValidOffset, AT=AT), _bits(at), width=32) == [max(x - AT, 0) for x in at]
+
+
+@pytest.mark.parametrize("N,AT", [(8, 0), (6, 8), (40, 16), (600, 0)])
 def test_the_mask_units_as_calls_are_the_traced_units(N: int, AT: int) -> None:
     """`DsaTopKMaskBlock_v2` and `DsaTopKMaskWhole_v2` have their `_v1`'s signature and its mask, on rows of few distinct
-    scores (so keys tie at the threshold), n inside the block, at its edges and past it, and r from 0 up."""
+    scores (so keys tie at the threshold), n inside the block, at its edges and past it, and r from 0 up; a row of two
+    chunks of a pass's count and a rest among them."""
     TOPK, rows = 4, 40
     rng = random.Random(N + AT)
     pool = [rng.getrandbits(32) for _ in range(3)]
@@ -235,6 +326,41 @@ def test_the_ties_as_calls_stay_small_at_the_served_statics(N: int) -> None:
     unit = bind(BM.DsaRadixTiesV2, N=N, TOPK=2048)
     size = len(canonical_json(encode_program(Program(unit))))
     assert size < 1 << 20 and size * 3 < unit.gates
+
+
+@pytest.mark.parametrize("N,AT", [(X.BLOCK, 0), (X.BLOCK, X.BLOCK), (X.WHOLE_MAX, None)])
+def test_the_mask_units_as_calls_stay_small_at_the_served_statics(N: int, AT: int | None) -> None:
+    """At the long row's served statics a mask unit written as Calls (a block of the cut, its first and one past the row's
+    start, and the longest row masked whole, its passes and its valid bits Calls too) has a description under a mebibyte,
+    where `_v1`'s holds every gate of its ties, its valid bits and a pass; a pass's is under 128 KiB and the valid bits' under
+    16 KiB.  The mask whole is within a Flock block's proved range."""
+    from verity_flock import circuit as FC
+
+    size = lambda d: len(canonical_json(encode_program(Program(d))))  # noqa: E731
+    if AT is None:
+        unit = bind(X.DsaTopKMaskWholeV2, N=N, TOPK=2048)
+        assert size(bind(BM.DsaRadixPassV2, N=N, TOPK=2048)) < 1 << 17
+        b = FC.unit_block(unit)
+        assert FC.past_block(b) is None, (unit.id, b["k_log"])
+    else:
+        unit = bind(X.DsaTopKMaskBlockV2, N=N, AT=AT, TOPK=2048)
+    assert size(unit) < 1 << 20 and size(bind(BM.DsaRowValidV2, N=N)) < 1 << 14
+
+
+def test_the_selects_builders_lower_to_their_gates(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Each piece of the pass and of the valid bits carries a builder, as the merge's do: the circuit Flock's flat lowering
+    makes of a pass over two chunks and a rest, of the valid bits of 13 keys, of a block's mask past the row's start and of
+    the mask whole is the one their gates lower to, AND for AND."""
+    units = [bind(BM.DsaRadixPassV2, N=2 * BM.PASS_CHUNK + 88, TOPK=16), bind(BM.DsaRowValidV2, N=13),
+             bind(X.DsaTopKMaskBlockV2, N=13, AT=16, TOPK=4), bind(X.DsaTopKMaskWholeV2, N=13, TOPK=4)]
+    names = {p.name for p in SELECT_PIECES}
+    with_builders = [_lowered(u) for u in units]
+    assert set().union(*(built for _, built in with_builders)) >= names
+    for piece in SELECT_PIECES:
+        monkeypatch.delattr(piece, "build")
+    for unit, (circuit, _) in zip(units, with_builders, strict=True):
+        by_gates, built = _lowered(unit)
+        assert not names & set(built) and by_gates == circuit, unit.id
 
 
 def test_the_ties_builders_lower_to_their_gates(monkeypatch: pytest.MonkeyPatch) -> None:
