@@ -14,9 +14,9 @@ sys.path.insert(0, str(HERE.parent))
 
 import cases as C  # noqa: E402
 import products_pass as T  # noqa: E402
-from verity.ml.circuits import stacking as P  # noqa: E402
-from verity.ml.circuits.ops import prims  # noqa: E402
-from verity.ml.circuits.refs import array_of  # noqa: E402
+from verity.definitions.circuits import stacking as P  # noqa: E402
+from verity.definitions.ops import prims  # noqa: E402
+from verity.circuits.refs import array_of  # noqa: E402
 
 BITS, BYTE = (0, 1), (-128, 127)
 

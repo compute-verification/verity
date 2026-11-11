@@ -86,18 +86,18 @@ import active_replay as ar
 import graph
 import records
 from datacenter import Cadence
-from verity.core.protocols.certifier import calibration
-from verity.core.protocols.certifier import certificate as CT
-from verity.core.protocols.certifier.active import CANONICAL_STREAM, DATA, PAD, decode_frame, event_data, \
+from verity.protocols.certifier.verifier import calibration
+from verity.protocols.certifier.verifier import certificate as CT
+from verity.protocols.certifier.verifier.active import CANONICAL_STREAM, DATA, PAD, decode_frame, event_data, \
     request_frames
-from verity.core.protocols.certifier.active import event as canonical_event
-from verity.core.protocols.certifier.audit import Audit
-from verity.core.protocols.certifier.certificate import Direction, parameters_digest, record_head
-from verity.core.protocols.certifier.schedule import ClockSync
-from verity.core.protocols.certifier.served import Admission, ServedProfile, derive
-from verity.core.protocols.certifier.service import LEAVES, LinkWindows
-from verity.ml.commitments import hm96
-from verity.ml.crypto import lms
+from verity.protocols.certifier.verifier.active import event as canonical_event
+from verity.protocols.certifier.verifier.audit import Audit
+from verity.protocols.certifier.verifier.certificate import Direction, parameters_digest, record_head
+from verity.protocols.certifier.verifier.schedule import ClockSync
+from verity.protocols.certifier.verifier.served import Admission, ServedProfile, derive
+from verity.protocols.certifier.verifier.service import LEAVES, LinkWindows
+from verity.commitments import hm96
+from verity.commitments.crypto import lms
 
 from . import framing as F
 from . import lab as L
@@ -108,7 +108,7 @@ from .hardware import OUTSIDE, DeviceGraph
 
 BUCKET_MS, WINDOW_BUCKETS, FRAME_BYTES, QUEUE = 100, 60, 4096, 1 << 16
 FABRIC_MS = 10  # the model's delay between a proxy and the client, each way
-PATHS = [*mockdc.PATHS, str(mockdc.ROOT / "integrations" / "vllm")]
+PATHS = [*mockdc.PATHS, str(mockdc.ROOT / "adapters" / "vllm")]
 TAMPERS = ("late", "extra")
 
 
