@@ -395,7 +395,7 @@ def test_the_circuit_record_states_each_templates_statement_as_compose_composes_
     monkeypatch.setattr(SRW, "registered", lambda _ms, _rows, _histories=None: None)
     monkeypatch.setattr(IF, "circuit_record", lambda _w, _name, _templates, sts, **_kw: sts)
     tmpls = [SLOTS, READ_W, READ_WS, BLOCK, PROJ["w13"].fused]
-    sts = SRW.circuit_record(SimpleNamespace(members=[SimpleNamespace(template=t, schemas=True) for t in tmpls], row_tables=()), [])
+    sts = SRW.circuit_record(SimpleNamespace(members=[CR.unit_member(SRW.template(t), 1) for t in tmpls], row_tables=()), [])
     for t in tmpls:
         assert {k: v for k, v in sts[t].items() if k not in ("in_rows", "out_rows")} == CR.statement(SRW.template(t)), t
     assert "reads" not in sts[READ_WS] and sts[BLOCK]["reads"] == CR.reads(SRW.template(BLOCK))

@@ -730,7 +730,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             circ = circuit_of(circuit, made, read)
             composed[m.template] = (circuit, made, circ)
         else:
-            src = ["--template", m.template, *(["--cache", a.compose_cache] if a.compose_cache else [])] if chunked else \
+            seg = [x for p, s in m.schemas if s == CS.SCHEMA_HM96_SHA512_ROW_SEG for x in ("--seg", p)]
+            src = ["--template", m.template, *seg, *(["--cache", a.compose_cache] if a.compose_cache else [])] if chunked else \
                 ["--input-set", str(sets[m.template][0])]
             p = a0.run([sys.executable, str(HERE / "compose_circuit.py"), *src, "--out", str(st_dir / "circuit.txt"),
                         "--partition", pd, "--program", part["program"]], st_dir / "compose.log", {"PYTHONPATH": a.m0_pythonpath},

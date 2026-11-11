@@ -2,14 +2,15 @@
 the statement binds the given partition and program digests. Run in the circuit prover's tree (its `verity_flock`).
 
     python compose_circuit.py --input-set DIR --out FILE [--partition H --program H]
-    python compose_circuit.py --template ID --out FILE --partition H --program H [--reads slots] [--cache DIR]
+    python compose_circuit.py --template ID --out FILE --partition H --program H [--seg ROW ...] [--reads slots] [--cache DIR]
 
 ``--template``: a serving-rows template whose units are bit rows (`verity_vllm.pipeline.serving_rows.chunked`: a
 ``ScaledMmS8Coordinate``, a ``COORDS`` coordinate, a ``COLS`` column block, a ``SLICES`` slice, a ``KCHUNKS`` K-chunk, a
 ``CHAINS`` key block, end, column end or combine, or a row template the partition's ``chunk_cap`` names), composed by Flock's `UnitStager` on
-the rows the window commits (`verity_vllm.pipeline.chunk_rows.unit_rows`) as the template's statement (`chunk_rows.statement`:
-a table read's is the templated statement of the verifier's read template), bound to the partition and program; no input set
-is read. ``--reads slots``: a flat statement's `UnitStager` ``reads``, a unit reading a pinned MUFU table laid out in lookup slots
+the rows the window commits (`verity_vllm.pipeline.chunk_rows.unit_rows`, each ``--seg`` row ``hm96-sha512/row-seg/v1``: the
+rows a member's schemas say it commits so, a history table's writer's ``o0``) as the template's statement
+(`chunk_rows.statement`: a table read's is the templated statement of the verifier's read template), bound to the partition
+and program; no input set is read. ``--reads slots``: a flat statement's `UnitStager` ``reads``, a unit reading a pinned MUFU table laid out in lookup slots
 (``MoeRouterSigmoidBias``'s sigmoid inline is about 5e10 nonzeros), with the MUFU tables the prover reads written beside the
 circuit (``tables/``); a unit reading none keeps its flat circuit. The default is the template's own (`chunk_rows.reads`), the
 circuit a5 composes: slots for a ``CHAINS`` key block of a whole block (`verity_vllm.pipeline.chain_rows`) and for a whole attention
@@ -209,11 +210,13 @@ def cached(cache: Path, key: str, out: Path | None, bind: dict, compose: Callabl
     return {**restamp(entry / "circuit.txt", kept, out, bind), "meta": head(out)}
 
 
-def template_inputs(tid: str, tp: object, stmt: dict) -> list:
+def template_inputs(tid: str, tp: object, stmt: dict, rows: tuple) -> list:
     """What a ``--template`` compose reads besides its binding and its code (`cache_key`'s ``what``): the template, its
-    statement's form and, for a table read, the executable whose template its unit is (`read_tmpl.digest`)."""
+    statement's form, its ``rows`` as `UnitStager` takes them (`chunk_rows.unit_rows`: each row's schema, so a circuit of
+    v2 rows is never taken for one whose ``--seg`` rows are row-seg) and, for a table read, the executable whose template
+    its unit is (`read_tmpl.digest`)."""
     form = stmt.get("reads") or json.dumps(stmt, sort_keys=True)
-    return ["unit/serving-rows", tid, form, *([RT.digest()] if RT.is_read(tp.fn) else [])]
+    return ["unit/serving-rows", tid, form, rows, *([RT.digest()] if RT.is_read(tp.fn) else [])]
 
 
 def template(a: argparse.Namespace) -> int:
@@ -230,8 +233,9 @@ def template(a: argparse.Namespace) -> int:
             raise SystemExit(f"--reads lays out a flat statement's table reads, and {a.template}'s statement is templated: {stmt}")
         stmt = {**stmt, "reads": a.reads}
 
+    in_rows, out_rows = CR.unit_rows(tp, a.seg)
+
     def compose(out: Path) -> dict:
-        in_rows, out_rows = CR.unit_rows(tp)
         st = UnitStager(tp.fn, "unit/serving-rows", in_rows, out_rows, circuit=out, bind=bind, **stmt)
         if stmt.get("reads") == "slots":
             FC.IL.write_tables(out.parent / "tables")
@@ -240,7 +244,7 @@ def template(a: argparse.Namespace) -> int:
 
     out = Path(a.out)
     if a.cache:
-        made = cached(Path(a.cache), cache_key(template_inputs(a.template, tp, stmt)), out, bind, compose)
+        made = cached(Path(a.cache), cache_key(template_inputs(a.template, tp, stmt, (in_rows, out_rows))), out, bind, compose)
     else:
         out.unlink(missing_ok=True)
         made = compose(out)
@@ -261,9 +265,13 @@ def main() -> int:
     ap.add_argument("--reads", choices=("inline", "slots"), default=None, help="with --template: a flat statement's "
                     "UnitStager reads, a pinned MUFU table's reads inline or in lookup slots (default: the template's own, "
                     "chunk_rows.statement); a table read's templated statement takes none")
+    ap.add_argument("--seg", action="append", default=[], metavar="ROW", help="with --template: a row its members commit as "
+                    "hm96-sha512/row-seg/v1 (a history table's writer's o0: chunk_rows.unit_rows); repeat for each")
     a = ap.parse_args()
     if bool(a.input_set) == bool(a.template):
         ap.error("give either --input-set or --template")
+    if a.seg and not a.template:
+        ap.error("--seg names a --template unit's rows; an input set's rows are its own")
     if a.cache and not a.template:
         ap.error("--cache keeps --template circuits only")
     if a.reads and not a.template:

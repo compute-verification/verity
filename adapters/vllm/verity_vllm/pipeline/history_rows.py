@@ -75,10 +75,10 @@ def writer(t: str) -> bool:
     return _base(template(t).word) in WRITERS
 
 
-def seg(tmpls: Sequence[str], histories: bool) -> frozenset[str]:
-    """The templates whose ``o0`` a window of ``tmpls`` commits as ``hm96-sha512/row-seg/v1`` rows: with ``histories``, its
-    history writers."""
-    return frozenset(t for t in tmpls if histories and writer(t))
+def seg(tmpls: Sequence[str], histories: bool) -> frozenset[tuple[str, str]]:
+    """The rows a window of ``tmpls`` commits as ``hm96-sha512/row-seg/v1`` rows, by ``(template, row)`` as
+    `interface.seg_rows` names them from the window's declared tables: with ``histories``, each history writer's ``o0``."""
+    return frozenset((t, OUT) for t in tmpls if histories and writer(t))
 
 
 def blocks(statics: Mapping[str, Any]) -> int:
@@ -131,7 +131,7 @@ class Plan:
                     runs.append((u, 0, k))
                 runs[-1] = (runs[-1][0], runs[-1][1] + 1, k)
             self.tables[t] = runs
-        self.writers = [t for t in tmpls if histories and writer(t)]
+        self.writers = [t for t in tmpls if (t, OUT) in seg(tmpls, histories)]
         if len(self.writers) > 1:
             raise ValueError(f"history writers {self.writers}: one template's units are a window's latent rows")
         self.written: dict[tuple[str, int], list[tuple[str, int]]] = {}

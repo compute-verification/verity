@@ -172,11 +172,11 @@ def light(ms) -> SimpleNamespace:
     return SimpleNamespace(members=tuple(ms), row_tables=(), partition_digest="ef" * 64)
 
 
-def statements(monkeypatch, ms) -> dict:
-    """The statements `serving_rows.circuit_record` records for members ``ms``, by template, taken off a `light` window:
-    the record's other fields need its population program."""
+def statements(monkeypatch, ms, reg=None) -> dict:
+    """The statements `serving_rows.circuit_record` records for members ``ms``, by template, taken off a `light` window
+    whose registered declarations are ``reg``: the record's other fields need its population program."""
     monkeypatch.setattr(IF, "templates_of", lambda _w: [])
-    monkeypatch.setattr(SRW, "registered", lambda *_a: None)
+    monkeypatch.setattr(SRW, "registered", lambda *_a: reg)
     monkeypatch.setattr(IF, "circuit_record", lambda _w, _name, _templates, sts, **_kw: sts)
     return SRW.circuit_record(light(ms), [])
 
@@ -194,6 +194,22 @@ def test_every_member_commits_each_port_under_the_schema_its_statement_states(se
     off = SRW.members([LAT], served.windows[0][:1], None, CAPS)
     sts = statements(monkeypatch, off)
     assert unstated(off, sts) == [] and [s for s, _ports in sts[LAT]["out_rows"]] == [V2]
+
+
+def test_a_record_whose_members_and_declared_tables_disagree_on_the_row_seg_rows_is_refused(served, monkeypatch):
+    """`serving_rows.circuit_record` refuses a template whose members commit a row under two schemas (it has one statement),
+    and a declared history table whose writer's row (`interface.seg_rows`) the members commit v2; `chunk_rows.unit_rows`
+    refuses a row-seg row that is none of the template's."""
+    rows = served.windows[0]
+    _plan, ms = cut(rows)
+    with pytest.raises(ValueError, match="a template has one statement"):
+        statements(monkeypatch, [*ms, CR.unit_member(SRW.template(LAT), 1)])
+    declared = SimpleNamespace(histories=(SimpleNamespace(writer=LAT, out=HR.OUT),))
+    assert statements(monkeypatch, ms, declared)[LAT]["out_rows"] == [(SEG, (0,))]
+    with pytest.raises(ValueError, match="are not committed row-seg"):
+        statements(monkeypatch, SRW.members([LAT], rows[:1], None, CAPS), declared)
+    with pytest.raises(ValueError, match=r"\['o1'\] is no row of its"):
+        CR.unit_rows(SRW.template(LAT), ["o1"])
 
 
 def recomputed(h: IF.History, ms, strings_of, held) -> list[bytes]:
@@ -236,6 +252,7 @@ def windows(served, commit=None):
             hs.strings("r0", key[1], range(edges[key], hs.edge(*key))) for key in plan.keys())
         assert roots == {H.name(*key): hs.tables[key].root.hex() for key in plan.keys()}
         assert [h.name for h in hreg.histories] == [H.name(*key) for key in plan.keys()]
+        assert IF.seg_rows(hreg) == HR.seg(TMPLS, True) == {(LAT, "o0")}
         assert [h.runs[0].get("held") for h in hreg.histories] == [h.name if k else None for h in hreg.histories]
         for h in hreg.histories:
             bcs = recomputed(h, ms, strings_of, held)

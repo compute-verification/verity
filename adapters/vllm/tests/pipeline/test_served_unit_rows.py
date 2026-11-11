@@ -9,7 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from verity.commitments.windows import interface as IF
-from verity_vllm.pipeline import serving_rows as SRW, weight_rows as WT
+from verity_vllm.pipeline import chunk_rows as CR, serving_rows as SRW, weight_rows as WT
 
 SERVED = [Path(__file__).resolve().parents[4] / "benchmarks/one_stage" / f"glm53_{p}.json"
           for p in ("all_families_tp8_step16", "sparse_mla_tp8_step16", "prefill_tp8_step0")]
@@ -22,7 +22,7 @@ def test_the_served_templates_statements_are_the_bytes_vllm_s_own_rows_gave(monk
     monkeypatch.setattr(IF, "templates_of", lambda _w: [])
     monkeypatch.setattr(WT, "reads", lambda _ms, _rows, _units: None)
     monkeypatch.setattr(IF, "circuit_record", lambda _w, _name, _templates, sts, **_kw: sts)
-    members = [SimpleNamespace(template=t, schemas=True) for t in tmpls]
+    members = [CR.unit_member(SRW.template(t), 1) for t in tmpls]
     sts = SRW.circuit_record(SimpleNamespace(members=members, row_tables=()), [])
     got = hashlib.sha512(IF.circuit_bytes(sts)).hexdigest()
     assert len(sts) == 43 and got == STATEMENTS, got
