@@ -41,7 +41,7 @@ import Proofs.Flock.SoundAtBridge.ServedProof
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
 import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 import Proofs.Pouw.RelativeSecurity
 
 /-!
@@ -57,7 +57,7 @@ is, at one of its sessions, an unsound proof of the checked layer where its port
 (`Accounting.TS.Checked.checkedOn_soundAt`'s `SoundAt δ`, `CheckedSessionSound`'s argument with those asked only where
 they hold, which the known-read check's names give at known content naming `ok`: `names_of_check`, with full checking
 asked there too) or an accepted outcome that isn't the session's write of a live run (`RowsSession.Written`), which
-has probability `0` in every session's game (`RowsSession.prob_unwritten`) and so on the window (`WindowLaw`). At a
+has probability `0` in every session's game (`RowsSession.prob_unwritten`) and so on the window (`WindowDesign`). At a
 written outcome the leaf verifier's sample check (`PouwWindow.Lanes.checkFull`) gives full checking: the record's sample is
 `subset` of every unit of a non-empty population, and the session's custody makes it the verifier's sample `subset kd`
 over `n` units, so the outcome samples every unit, `kd = n` and `0 < n` (`RowsSession.full_of_check`), and every unit
@@ -289,7 +289,7 @@ theorem group_soundAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} {ι V : Type} [Fint
     (full : Paths Ω S → Fin S → Fin nπ → ι → Array String)
     (want : Paths Ω S → Fin S → Fin nπ → ι → List _root_.Flock.Registered.Port)
     (gate : Paths Ω S → Fin S → Fin nπ → Prop) (ok : String) (δ : ℝ)
-    (hCR : Accounting.Premises.TS.SessionsCR sess) (hLaw : Accounting.Premises.TS.WindowLaws sess out)
+    (hCR : Accounting.Premises.TS.SessionsCR sess) (hLaw : Accounting.Premises.TS.WindowDesigns sess out)
     (hS : ∀ x w i k, PouwWindow.Lanes.checkOneRead (sess x w i k).own = .ok () →
       ∀ u, (sess x w i k).ServedRegistered u)
     (hO : ∀ x w i k, ∃ ks, (ok, ks) ∈ known x w i k)
@@ -371,7 +371,7 @@ theorem not_soundAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} [Nonempty 
     (w : Fin S) (i : Fin nπ) (h : ∀ x, pf.Unsound x w i) {ε : ℝ} (hε : ε < 1) : ¬ pf.SoundAt ε := by
   intro hs
   have z : Pouw.RelativeSecurity.prob (fun x => ¬ pf.Unsound x w i) = 0 := by
-    unfold Pouw.RelativeSecurity.prob
+    unfold Pouw.RelativeSecurity.prob Claims.prUniform
     simp [h]
   have e := Pouw.RelativeSecurity.prob_add_not (fun x => pf.Unsound x w i)
   linarith [hs w i]

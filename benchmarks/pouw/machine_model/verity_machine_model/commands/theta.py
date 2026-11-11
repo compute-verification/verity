@@ -89,9 +89,9 @@ def run(args) -> int:
         print(f"  honest {f.profile} ({f.status}, {f.fold}, L = {f.L}): "
               + ", ".join(f"{c} {v:.4f} (the fold's {f.minimal[c]:g})" for c, v in f.per_word.items())
               + f": r_H = {f.r_h:.4f}, r_min = {f.r_min:g}")
-        g = (f"{f.measured:g} / {f.lone:.2f} = {f.gamma:.3f}" if f.gamma is not None
+        g = (f"{f.measured:g} / {f.lone:.2f} − 1 = {f.gamma:.3f}" if f.gamma is not None
              else "not measured (a provisional profile)")
-        print(f"    γ, SMSP-cycles a MMA over the lone INT8 MMA's (words · depth · {T.SMSPS} / ρ₈ measured): {g}")
+        print(f"    γ, SMSP-cycles a MMA over the lone INT8 MMA's (words · depth · {T.SMSPS} / ρ₈ measured), less 1: {g}")
         for reading in T.READINGS:
             x = f.exchange[reading]
             tail = (f"; over the cheapest exchange {x:.3f}: {100 * f.eps(reading):.2f}%" if x is not None

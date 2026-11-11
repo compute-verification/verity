@@ -3,20 +3,30 @@ registered Definitions, as a rule set of their own (`training_rules()`): the def
 them. The default rules are unchanged; a node either kind of rule lowers is lowered as before unless a training rule claims it first,
 and the training rules placed first claim only what the defaults lower per row or cannot represent at a step's sizes.
 
-Arithmetic is the reference vocabulary's (`ref_prims`): each element-wise op is the f32 operation torch's CPU kernel performs for it
-(true division, IEEE `sqrt`, `pow` 2 and 3 as products, `rsqrt` as `1 / sqrt`, `lerp` as `fma(w, end - start, start)` or
-`fma(w - 1, end - start, end)`, `addcmul` as `fma(value * t1, t2, self)`), and each reduction is the vocabulary's sequential one (`DotRef`, ascending from +0, where torch's kernels
-sum in blocks). Matrix products and the element-wise ops of `Binary` and `Unary` also take bf16 values: a product is
-`LinearRef_v1{DT=bf16}` (operands widened, the f32 dot, its result rounded), and an element-wise op widens its bf16 operands to f32
-(`Bf16ToF32_v1`, exact), performs the f32 operation and rounds a bf16 result once (`F32ToBf16Rn_v1`), as torch CPU's bf16 kernels
-do; where torch's bf16 kernel rounds otherwise, the rule refuses. At a compute capability `cc`, a bf16 `mm` is instead F.linear's
-GEMM as that GPU's cuBLAS computes it (`Matmul`): the route its capture fitted (`cublas_bf16.train_route`), each k16 step the tensor
-core's dot (`HopperBF16WgmmaDot16_v1`). A training op with no Definition to lower it to is refused with the Definition it needs
-(`_log_softmax`: a correctly-rounded f32 log, `F32LogRn`).
+Arithmetic is the reference vocabulary's (`ref_prims`): each element-wise op is the f32 operation torch's CPU kernel performs for
+it (true division, IEEE `sqrt`, `pow` 2 and 3 as products, `rsqrt` as `1 / sqrt`, `lerp` as `fma(w, end - start, start)` or
+`fma(w - 1, end - start, end)`, `addcmul` as `fma(value * t1, t2, self)`, `addcdiv` as `self + (value * t1) / t2`, `silu_backward`
+as `(dy * s) * fma(x, 1 - s, 1)`), and each reduction is the vocabulary's sequential one (`DotRef`, ascending from +0, where torch's
+kernels sum in blocks). Matrix products and the element-wise ops of `Binary`, `Unary` and `SiluBackward` also take bf16 values: a
+product is `LinearRef_v1{DT=bf16}` (operands widened, the f32 dot, its result rounded), and an element-wise op widens its bf16
+operands to f32 (`Bf16ToF32_v1`, exact), performs the f32 operation and rounds a bf16 result once (`F32ToBf16Rn_v1`), as torch
+CPU's bf16 kernels do; where torch's bf16 kernel rounds otherwise, the rule refuses. At a compute capability `cc`, a bf16 `mm` or
+`mv` is instead F.linear's GEMM as that GPU's cuBLAS computes it (`Matmul`): the route its capture fitted
+(`cublas_bf16.train_route`), each k16 step the tensor core's dot (`HopperBF16WgmmaDot16_v1`); `add`, `sub`, `mul` and `div` are
+the GPU's (`Binary`), as are the element-wise ops' operations, `silu_backward`'s, `lerp`'s, `addcdiv`'s, `_foreach_add`'s and a
+fused AdamW step's (`Unary`, `SiluBackward`, `Lerp`, `Addcdiv`, `ForeachAdd`, `FusedAdamW`, whose `beta^step` is
+`exp(step * log(beta))`: CUDA's `powf` is not modeled); `exp`, alone or inside `sigmoid` and `silu_backward`, is CUDA's `expf`
+(`NvExpf_v1`); a vector norm or a sum of a whole tensor is its `reduce_kernel`'s (`rules.training_reduce.FullReduce`); an f32
+embedding's gradient is its kernels' (`EmbeddingDenseBackward`); and the conversions to bf16, to and from f16 and from f32 to
+int64 and uint8, a clamp and a `kthvalue` are its own (`rules.training_masks`), and `log` is CUDA's `logf` (`Log`).
 
-    training_rules(min_view_leaves, cc) -> RuleSet     the training rule set
+    training_rules(min_view_leaves, cc, tf32) -> RuleSet     the training rule set
 
-Views and static float tensors are `rules.training_views`'s; a survey of what the rules refuse is `rules.training_survey`'s.
+Views and static float tensors are `rules.training_views`'s, matrix products `rules.training_matmul`'s, softmax and log-softmax
+`rules.training_softmax`'s, torch's flash attention forward at a compute capability `rules.training_attention`'s, comparisons,
+masks, integer sums, adds, shifts and ands, conversions, functionalized copies, table lookups, `amax` and `kthvalue`
+`rules.training_masks`'s and the helpers the rules emit with `rules.training_emit`'s; a survey of what the rules refuse is
+`rules.training_survey`'s.
 """
 
 from __future__ import annotations
@@ -26,337 +36,63 @@ import math
 import numpy as np
 import torch
 
-from verity.ml.circuits.boolean.trace import word_of
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import scalar as SC
-from verity.ml.circuits.ops.prims import const
 from verity.ml.circuits.refs import Affine, Coll, Strided, broadcast, concat
 from verity.ml.circuits.types import Array, Value
-from verity.ml.definitions.registry import cublas_bf16 as CB
+from verity.ml.definitions.registry import int8_exact as IE
+from verity.ml.definitions.registry import moe as MOE
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry import ref_prims as R
-from verity_vllm.program.frontend.derive import refuse
-from verity_vllm.program.frontend.errors import FrontendError
-from verity_vllm.program.frontend.rules.base import OpRule, RuleSet
-from verity_vllm.program.frontend.rules.training_views import (_PARTS, BoxPermute, StaticFloat, StaticFloats, _info, _view_expand,
-                                                               _view_permute)
+from verity.ml.definitions.registry import sampling as SM
+from verity.ml.definitions.registry import torch_embedding_f32 as TEF
+from verity_vllm.program.frontend.rules.base import RuleSet
+from verity_vllm.program.frontend.rules.training_attention import FlashSdpa
+from verity_vllm.program.frontend.rules.training_emit import (_DT, BIT, F32, _alpha, _batch, _bits, _call, _const, _ew, _flat,
+                                                              _iota, _operand, _operand_ok, _ones, _per_row, _ref, _rounded, _shape,
+                                                              _tokens, _TrainRule, _widened, aten)
+from verity_vllm.program.frontend.rules.training_masks import (AMax, Cast, Clamp, Compare, Copy, Index, IntOps, IntSum, KthValue,
+                                                               Logic, Where)
+from verity_vllm.program.frontend.rules.training_matmul import Matmul
+from verity_vllm.program.frontend.rules.training_reduce import FullReduce
+from verity_vllm.program.frontend.rules.training_softmax import LogSoftmax, LogSoftmaxBackward, SafeSoftmax, SoftmaxBackward
+from verity_vllm.program.frontend.rules.training_views import BoxPermute, StaticFloat, StaticFloats, _info, _view_permute
 from verity_vllm.program.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.value_types import shape_of
-
-aten = torch.ops.aten
-F32, BF16, BIT = Value(32), Value(16), Value(1)
-_DT = {torch.float32: "f32", torch.bfloat16: "bf16"}
-
-
-# ---------------------------------------------------------------------------------------------------------
-# emitting
-# ---------------------------------------------------------------------------------------------------------
-
-
-def _bits(x: float) -> int:
-    return int(np.float32(x).view(np.uint32))
-
-
-def _note(ctx, node, k0: int) -> None:
-    for k in range(k0, len(ctx.B.nodes)):
-        ctx.node_hints.setdefault(k, ctx.hint_name(node))
-        ctx.node_sources.setdefault(k, node.name)
-        ctx.node_fx.setdefault(k, node)
-
-
-def _batch(ctx, node, fn, *args, axes, n=None) -> Coll:
-    k0 = len(ctx.B.nodes)
-    try:
-        out = ctx.B.batch(fn, *args, axes=axes, n=n, name=ctx.hint_name(node))
-    except TypeError as e:
-        refuse("shape", node, ctx.module_path(node), f"{getattr(fn, 'id', fn)}: {e}")
-    _note(ctx, node, k0)
-    return out
-
-
-def _call(ctx, node, fn, *args) -> Coll:
-    return ctx.call(fn, *args, node=node)
-
-
-def _const(ctx, node, bits: int, w: int = 32) -> Coll:
-    """One constant gate per distinct word in the derivation (a node a refused rule removed is made again)."""
-    cache = ctx.state.setdefault("train_consts", {})
-    fn = const(w, bits & ((1 << w) - 1))
-    k = cache.get((w, bits))
-    if k is None or k >= len(ctx.B.nodes) or ctx.B.nodes[k].fn is not fn:
-        _call(ctx, node, fn)
-        k = cache[(w, bits)] = len(ctx.B.nodes) - 1
-    return Coll(Value(w), Affine("n", k, 0, 1))
-
-
-def _static_coll(ctx, node, t: torch.Tensor) -> Coll:
-    """A static f32 tensor as references to one constant gate per distinct word, run by run."""
-    bits = t.contiguous().view(torch.int32).reshape(-1).numpy().astype(np.uint32)
-    n = bits.size
-    starts = np.concatenate([[0], np.flatnonzero(np.diff(bits)) + 1])
-    if starts.size > _PARTS:
-        refuse("shape", node, ctx.module_path(node), f"a constant tensor of {starts.size} runs (limit {_PARTS})")
-    ends = np.concatenate([starts[1:], [n]])
-    parts = []
-    for a, b in zip(starts.tolist(), ends.tolist()):
-        c = _const(ctx, node, int(bits[a]))
-        parts.append(broadcast(c.refs.space, c.refs.idx, c.refs.base, b - a))
-    return Coll(Array(n, F32), concat(parts))
-
-
-def _shape(ctx, a) -> tuple[int, ...]:
-    if isinstance(a, torch.fx.Node):
-        s = ctx.shape_of_node(a)
-        if s is not None:
-            return s
-        v = ctx.val(a)
-        if isinstance(v, StaticFloat):
-            return tuple(v.tensor.shape)
-    if isinstance(a, (int, float)):
-        return ()
-    raise TypeError(a)
-
-
-def _operand_ok(ctx, a, dtypes=(torch.float32,)) -> str | None:
-    """None if `a` is an element-wise operand (a value of one of `dtypes`, a static float tensor or a Python number), else why
-    not."""
-    if isinstance(a, bool):
-        return "a bool operand"
-    if isinstance(a, (int, float)):
-        return None
-    if not isinstance(a, torch.fx.Node):
-        return f"operand {a!r}"
-    v = ctx.val(a)
-    if isinstance(v, StaticFloat):
-        return None
-    if not isinstance(v, Coll):
-        return f"{a.name} is not a value ({type(v).__name__})"
-    if ctx.dtype_of(a) not in dtypes:
-        return (f"numerics_unregistered: {a.name} has dtype {ctx.dtype_of(a)} (this rule lowers "
-                f"{' and '.join(_DT[d] for d in dtypes)})")
-    return None
-
-
-def _bf16_held(ctx, a) -> bool:
-    """Whether a Python number or static float operand is a bf16 value (its f32 word survives rounding to bf16)."""
-    t = torch.as_tensor(a if isinstance(a, (int, float)) else ctx.val(a).tensor, dtype=torch.float32)
-    return torch.equal(t.to(torch.bfloat16).to(torch.float32).view(torch.int32), t.view(torch.int32))
-
-
-def _widened(ctx, node, x: Coll) -> Coll:
-    """A bf16 value's words widened to f32 (`Bf16ToF32_v1`, exact), in its shape."""
-    S = shape_of(x.type)[0]
-    if x.type.leaves == 1:
-        return Coll(_tensor_type(S, 32), _call(ctx, node, P.Bf16ToF32, Coll(BF16, x.refs)).refs)
-    return _batch(ctx, node, P.Bf16ToF32, x.reshape(Array(math.prod(S), BF16)), axes=(0,)).reshape(_tensor_type(S, 32))
-
-
-def _rounded(ctx, node, y: Coll, S: tuple[int, ...]) -> Coll:
-    """An f32 result `y` of shape `S` in the node's dtype: `y` for f32, each word rounded to bf16 (`F32ToBf16Rn_v1`) for bf16."""
-    if ctx.dtype_of(node) != torch.bfloat16:
-        return y
-    if not S:
-        return _call(ctx, node, P.F32ToBf16Rn, Coll(F32, y.refs))
-    return _batch(ctx, node, P.F32ToBf16Rn, y.reshape(Array(math.prod(S), F32)), axes=(0,)).reshape(_tensor_type(S, 16))
-
-
-def _operand(ctx, node, a, S: tuple[int, ...]) -> tuple[Coll, int | None]:
-    """(collection, batch axis) of an element-wise operand broadcast to the output shape `S`: a shared word, or `S`'s elements;
-    f32 words, a bf16 value's widened."""
-    n = math.prod(S)
-    if isinstance(a, (int, float)):
-        return _const(ctx, node, _bits(a)), None
-    v = ctx.val(a)
-    if isinstance(v, StaticFloat):
-        if v.tensor.numel() == 1:
-            return _const(ctx, node, _bits(v.tensor.reshape(()).item())), None
-        return _static_coll(ctx, node, v.tensor.broadcast_to(S)), 0
-    x = ctx.coll(a)
-    if ctx.dtype_of(a) == torch.bfloat16:
-        x = _widened(ctx, node, x)
-    sx = tuple(shape_of(x.type)[0])
-    if x.type.leaves == 1:
-        return Coll(F32, x.refs), None
-    if sx != tuple(S):
-        x = _view_expand(x.reshape(_tensor_type([1] * (len(S) - len(sx)) + list(sx), 32)), list(S), node.name)
-    return x.reshape(Array(n, F32)), 0
-
-
-def _ew(ctx, node, fn, ops: list[tuple[Coll, int | None]], S: tuple[int, ...]) -> Coll:
-    """`fn` element by element over the output shape `S`."""
-    n = math.prod(S)
-    args, axes = [c for c, _ in ops], [ax for _, ax in ops]
-    if n == 1 and all(ax is None for ax in axes):
-        out = _call(ctx, node, fn, *args)
-        return out if not S else Coll(_tensor_type(S, 32), out.refs)
-    return _batch(ctx, node, fn, *args, axes=axes, n=n).reshape(_tensor_type(S, 32))
-
-
-def _flat(c: Coll, S) -> tuple[Coll, int]:
-    return c.reshape(Array(math.prod(S), F32)), 0
-
-
-def _rows(x: Coll, S) -> tuple[Coll, int, int]:
-    N = S[-1]
-    Rn = math.prod(S[:-1])
-    return x.reshape(Array(Rn, Array(N, F32))), Rn, N
-
-
-def _per_row(v: Coll, Rn: int, N: int) -> Coll:
-    """Each of a row value's `Rn` words, repeated over its row's `N` elements (`v` one run)."""
-    r = v.refs
-    if not isinstance(r, Affine):
-        raise FrontendError("E_UNSUPPORTED_VIEW", "a per-row value that is not one run", "training")
-    return Coll(Array(Rn * N, v.type.elem if isinstance(v.type, Array) else v.type), Strided(r.space, r.idx, r.base, N, 1, 0, Rn * N))
-
-
-def _ones(ctx, node, N: int) -> Coll:
-    c = _const(ctx, node, _bits(1.0))
-    return Coll(Array(N, F32), broadcast(c.refs.space, c.refs.idx, c.refs.base, N))
-
-
-def _iota(ctx, node, V: int) -> Coll:
-    """The I32 words 0..V-1 as one run (doubling `I32Add`s, then one `I32Add` of 0 that lays them out contiguously)."""
-    cache = ctx.state.setdefault("train_iota", {})
-    hit = cache.get(V)
-    if hit is not None and hit[0] < len(ctx.B.nodes) and ctx.B.nodes[hit[0]] is hit[1]:
-        return Coll(Array(V, Value(32)), Affine("n", hit[0], 0, V))
-    parts, have = [_const(ctx, node, 0).refs], 1
-    while have < V:
-        m = min(have, V - have)
-        base = Coll(Array(m, Value(32)), concat(parts).slice(0, m))
-        parts.append(_batch(ctx, node, SC.I32Add, base, _const(ctx, node, have), axes=(0, None)).refs)
-        have += m
-    out = _batch(ctx, node, SC.I32Add, Coll(Array(V, Value(32)), concat(parts)), _const(ctx, node, 0), axes=(0, None))
-    k = len(ctx.B.nodes) - 1
-    cache[V] = (k, ctx.B.nodes[k])
-    return out
-
-
-def _tokens(ctx, node, a) -> Coll:
-    """Integer token ids as I32 words (`I64ToI32`, range-checked, for int64)."""
-    t = ctx.coll(a)
-    n = t.type.leaves
-    if ctx.dtype_of(a) == torch.int64:
-        return _batch(ctx, node, R.I64ToI32, t.reshape(Array(n, Value(64))), axes=(0,))
-    return t.reshape(Array(n, Value(32)))
-
-
-class _TrainRule(OpRule):
-    modes = frozenset({"reference"})
-
-
-# ---------------------------------------------------------------------------------------------------------
-# matmul
-# ---------------------------------------------------------------------------------------------------------
-
-
-#: F.linear's GEMM at x (M, K), W (N, K) by its mm's operand layouts (`_layout`) as autograd lays them out: x @ W^T, dY @ W, dY^T @ X
-_ROLES = {("row", "col"): "fwd", ("row", "row"): "dX", ("col", "row"): "dW"}
-#: F.linear's (M, K, N) from its role's mm(a[Mm, Km], b[Km, Nm])
-_LINEAR_DIMS = {"fwd": lambda Mm, Km, Nm: (Mm, Km, Nm), "dX": lambda Mm, Km, Nm: (Mm, Nm, Km), "dW": lambda Mm, Km, Nm: (Km, Nm, Mm)}
-
-
-def _layout(t) -> str | None:
-    """A dense matrix's layout in memory: "row" (row-major), "col" (column-major: a row-major one transposed), else None."""
-    if t is None or t.dim() != 2 or t.storage_offset() != 0:
-        return None
-    rows, cols = t.shape
-    return {(cols, 1): "row", (1, rows): "col"}.get(tuple(t.stride()))
-
-
-class Matmul(_TrainRule):
-    """`mm(a[M,K], b[K,N])` / `bmm(a[B,M,K], b[B,K,N])` of f32 or bf16 values -> one `batch` of `LinearRef_v1{K,N,DT}` over the rows
-    of `a` (per batch index for `bmm`), with `b` transposed by reference.  At a compute capability ``cc`` whose cuBLAS routes are
-    captured (`cublas_bf16.TRAIN_CC`), a bf16 `mm` is one batch of F.linear's row GEMM as its cuBLAS computes it instead: its role
-    read off the operands' layouts (`_ROLES`), its route the capture's (`cublas_bf16.train_route`) and its Definition the route's on
-    words.  The rule still claims a bf16 product it can't lower that way (a `bmm`, a layout no role has, a shape the capture doesn't
-    cover, a route with no Definition on words) and refuses it, so that no other rule lowers it with torch CPU's arithmetic."""
-    info = _info("Matmul", "aten.mm / aten.bmm of f32 or bf16 values", "both operands are values of one dtype, f32 or bf16",
-                 "one batch of LinearRef rows per matrix")
-
-    def __init__(self, cc: tuple[int, int] | None = None):
-        if cc is not None and tuple(cc) != CB.TRAIN_CC:
-            raise ValueError(f"Matmul: cc {tuple(cc)} has no captured cuBLAS routes (cublas_bf16.TRAIN_CC is {CB.TRAIN_CC})")
-        self.cc = None if cc is None else f"cc{cc[0]}.{cc[1]}"
-        if cc is not None:
-            self.info = _info(f"Matmul_{self.cc}", "aten.mm / aten.bmm of f32 or bf16 values",
-                              "both operands are values of one dtype, f32 or bf16",
-                              f"a bf16 mm: one of F.linear's GEMMs, at a shape and route {self.cc}'s capture covers",
-                              "one batch of rows per matrix: the cuBLAS route's GEMM for a bf16 mm, else LinearRef")
-
-    def targets(self):
-        return {aten.mm.default, aten.bmm.default}
-
-    def applies(self, node, ctx):
-        for a in node.args[:2]:
-            if not isinstance(a, torch.fx.Node) or not isinstance(ctx.val(a), Coll):
-                return "an operand is not a value"
-        dts = {ctx.dtype_of(a) for a in node.args[:2]}
-        if len(dts) != 1 or not dts <= set(_DT):
-            return f"numerics_unregistered: dtypes {sorted(map(str, dts))}"
-        return True
-
-    def emit(self, node, ctx):
-        if self.cc is not None and ctx.dtype_of(node.args[0]) == torch.bfloat16:
-            return self._emit_gpu(node, ctx)
-        a, b = ctx.coll(node.args[0]), ctx.coll(node.args[1])
-        sa, sb = _shape(ctx, node.args[0]), _shape(ctx, node.args[1])
-        nb = sa[0] if len(sa) == 3 else 1
-        M, K, N = sa[-2], sa[-1], sb[-1]
-        dt = ctx.dtype_of(node.args[0])
-        E = BF16 if dt == torch.bfloat16 else F32
-        fn = ctx.kind("linear", node, K=K, N=N, DT=_DT[dt], BIAS=False)
-        a3 = a.reshape(Array(nb, Array(M, Array(K, E))))
-        b3 = b.reshape(Array(nb, Array(K, Array(N, E))))
-        outs = []
-        for i in range(nb):
-            bT = _view_permute(b3[i], (1, 0), node.name)
-            outs.append(_batch(ctx, node, fn, a3[i], bT, axes=(0, None)))
-        ctx.define(node, Coll(_tensor_type(list(sa[:-1]) + [N], E.w), concat([o.refs for o in outs])))
-        ctx.record(self, node, {"batch": nb, "M": M, "K": K, "N": N}, emitted=f"{fn.id} x{nb * M}")
-
-    def _emit_gpu(self, node, ctx):
-        def no(why: str):
-            refuse("numerics_unregistered", node, ctx.module_path(node), f"a bf16 {node.target} on {self.cc}: {why}")
-
-        if node.target is not aten.mm.default:
-            no("only F.linear's GEMMs have captured routes (cublas_bf16.TRAIN_CAPTURE); without a cc it is torch CPU's")
-        layouts = tuple(_layout(ctx.tensor_meta(a)) for a in node.args[:2])
-        if layouts not in _ROLES:
-            no(f"operand layouts {layouts}, none of F.linear's GEMMs' "
-               f"({', '.join(f'{r} {a} x {b}' for (a, b), r in _ROLES.items())})")
-        role = _ROLES[layouts]
-        (Mm, Km), Nm = _shape(ctx, node.args[0]), _shape(ctx, node.args[1])[1]
-        M, K, N = _LINEAR_DIMS[role](Mm, Km, Nm)
-        try:
-            route = CB.train_route(role, M, K, N)
-            fn = word_of(CB.route_gemm(route, *CB.TRAIN_LINEAR_ROLES[role][2](M, K, N)))
-        except (ValueError, KeyError) as e:
-            no(f"F.linear's {role} GEMM at x ({M}, {K}), W ({N}, {K}): {e.args[0]}")
-        a = ctx.coll(node.args[0]).reshape(Array(Mm, Array(Km, BF16)))
-        bT = _view_permute(ctx.coll(node.args[1]).reshape(Array(Km, Array(Nm, BF16))), (1, 0), node.name)
-        out = _batch(ctx, node, fn, a, bT, axes=(0, None))
-        ctx.define(node, Coll(_tensor_type([Mm, Nm], 16), out.refs))
-        ctx.record(self, node, {"role": role, "M": M, "K": K, "N": N, "route": route}, emitted=f"{fn.id} x{Mm}")
 
 
 # ---------------------------------------------------------------------------------------------------------
 # element-wise
 # ---------------------------------------------------------------------------------------------------------
 
-_BINARY = {aten.add.Tensor: P.F32Add, aten.add.Scalar: P.F32Add, aten.sub.Tensor: R.F32Sub, aten.sub.Scalar: R.F32Sub,
-           aten.mul.Tensor: P.F32Mul, aten.mul.Scalar: P.F32Mul, aten.div.Tensor: P.F32Div, aten.div.Scalar: P.F32Div}
+_BINARY = {aten.add.Tensor: "add", aten.add.Scalar: "add", aten.sub.Tensor: "sub", aten.sub.Scalar: "sub", aten.mul.Tensor: "mul",
+           aten.mul.Scalar: "mul", aten.div.Tensor: "div", aten.div.Scalar: "div"}
+#: each operation's f32 Definition: torch CPU's, and the GPU's (every NaN result `F32_NAN_PTX`)
+_F32 = {"add": (P.F32Add, P.F32AddV2), "sub": (R.F32Sub, P.F32SubV2), "mul": (P.F32Mul, P.F32MulV2), "div": (P.F32Div, P.F32DivV2),
+        "fma": (P.F32Fma, P.F32FmaV2)}
+#: `exp`: the reference vocabulary's (correctly rounded) on the CPU, and CUDA's `expf` (`moe.NvExpf`) on the GPU
+_EXP = (R.F32ExpRn, MOE.NvExpf)
 
 
 class Binary(_TrainRule):
-    """`add` / `sub` / `mul` / `div` (`.Tensor`, `.Scalar`) of f32 or bf16 values, static float tensors and Python numbers,
-    broadcast: `F32Add_v1`, `F32Sub_v1`, `F32Mul_v1`, `F32Div_v1` (true division) element by element; a number is its f32 word, a
-    bf16 operand is widened and a bf16 result rounded. A bf16 result's numbers are bf16 values: torch rounds a number to bf16
-    for `add` and `sub` and keeps its f32 value for `mul` and `div`, which agree only then."""
-    info = _info("Binary", "aten add/sub/mul/div .Tensor/.Scalar with broadcasting, f32 or bf16", "operands are f32 or bf16 values, "
-                 "static float tensors or Python numbers", "a bf16 result's numbers and static operands are bf16 values",
-                 "alpha == 1, no rounding_mode", "one batch over the output's elements")
+    """`add` / `sub` / `mul` / `div` (`.Tensor`, `.Scalar`) of f32, bf16, bool or int64 values, static float tensors and Python
+    numbers, broadcast, element by element as torch's CPU kernels compute them: `F32Add_v1`, `F32Sub_v1`, `F32Mul_v1`, `F32Div_v1`
+    (true division), and `add` (`sub`) with alpha != 1 one `F32Fma_v1(b, f32(alpha), a)` (`-alpha`). A bf16 operand is widened,
+    a bool one is 1.0 or +0 (`SelectF32_v1`), an int64 one of an f32 result rounded to nearest (`I64ToF32Rn_v1`) and a bf16
+    result rounded once (`F32ToBf16Rn_v1`). A number is its f32 word, but in a bf16 `add` or `sub` torch CPU first rounds it (and
+    a 0-d static) to bf16. At a compute capability `cc` they are the GPU's: the same operations with its NaN (`F32Add_v2`,
+    `F32Sub_v2`, `F32Mul_v2`, `F32Div_v2`, `F32Fma_v2`), a bf16 result rounded by `F2fpBf16_v1`, every number its f32 word, and a
+    division by a number the product by its reciprocal, `RN(1 / f32(s))`, which torch's CUDA kernel computes on the host.
+    Refused: a bf16 add with alpha != 1, an int64 operand of a bf16 result (torch rounds it to bf16 first), a rounding mode, and
+    at `cc` a division by a 0-d static tensor (the GPU multiplies by a CPU scalar's reciprocal and divides by a device tensor, and
+    the graph doesn't say which)."""
+    info = _info("Binary", "aten add/sub/mul/div .Tensor/.Scalar with broadcasting, f32 or bf16", "operands are f32, bf16, bool or "
+                 "int64 values, static float tensors or Python numbers", "alpha != 1 only for an f32 add or sub",
+                 "int64 operands only of an f32 result", "no rounding_mode", "at cc: no division by a 0-d static tensor",
+                 "one batch over the output's elements")
+
+    def __init__(self, cc: tuple[int, int] | None = None):
+        self.cc = cc
 
     def targets(self):
         return set(_BINARY)
@@ -364,43 +100,83 @@ class Binary(_TrainRule):
     def applies(self, node, ctx):
         if ctx.dtype_of(node) not in _DT:
             return f"numerics_unregistered: result dtype {ctx.dtype_of(node)}"
-        if node.kwargs.get("alpha", 1) != 1 or node.kwargs.get("rounding_mode") is not None:
-            return "numerics_unregistered: alpha != 1 or a rounding mode"
-        whys = [w for w in (_operand_ok(ctx, a, tuple(_DT)) for a in node.args[:2]) if w]
+        if node.kwargs.get("rounding_mode") is not None:
+            return "numerics_unregistered: a rounding mode"
+        if _alpha(node) != 1 and ctx.dtype_of(node) != torch.float32:
+            return "numerics_unregistered: a bf16 add with alpha != 1"
+        whys = [w for w in (_operand_ok(ctx, a, (*_DT, torch.bool, torch.int64)) for a in node.args[:2]) if w]
         if whys:
             return whys[0]
-        statics = [a for a in node.args[:2] if not (isinstance(a, torch.fx.Node) and isinstance(ctx.val(a), Coll))]
-        if len(statics) == 2:
+        if all(not (isinstance(a, torch.fx.Node) and isinstance(ctx.val(a), Coll)) for a in node.args[:2]):
             return "no operand is a value (a static result: StaticFloats)"
-        if ctx.dtype_of(node) == torch.bfloat16 and not all(_bf16_held(ctx, a) for a in statics):
-            return "numerics_unregistered: a bf16 op with a number that bf16 doesn't hold"
+        if ctx.dtype_of(node) != torch.float32 and any(isinstance(a, torch.fx.Node) and ctx.dtype_of(a) == torch.int64
+                                                       for a in node.args[:2]):
+            return "numerics_unregistered: an int64 operand of a bf16 result (torch rounds it to bf16 first)"
+        b = node.args[1]
+        if (self.cc and _BINARY[node.target] == "div" and isinstance(b, torch.fx.Node) and isinstance(ctx.val(b), StaticFloat)
+                and _shape(ctx, b) == ()):
+            return ("numerics_unregistered: a division by a 0-d static tensor on the GPU (a CPU scalar's reciprocal or a device "
+                    "tensor's quotient)")
         return True
+
+    def _static(self, ctx, node, a):
+        """A value operand as it is; a number or static one as the f32 words this op reads (`StaticFloat`): in a bf16 add or sub
+        on the CPU, a number or 0-d static rounded to bf16."""
+        if isinstance(a, torch.fx.Node) and isinstance(ctx.val(a), Coll):
+            return a
+        t = torch.as_tensor(a if isinstance(a, (int, float)) else ctx.val(a).tensor, dtype=torch.float32)
+        if self.cc is None and ctx.dtype_of(node) == torch.bfloat16 and _BINARY[node.target] in ("add", "sub") and t.numel() == 1:
+            t = t.to(torch.bfloat16).to(torch.float32)
+        return StaticFloat(t.contiguous())
 
     def emit(self, node, ctx):
         S = ctx.shape_of_node(node)
-        fn = _BINARY[node.target]
-        out = _ew(ctx, node, fn, [_operand(ctx, node, a, S) for a in node.args[:2]], S)
-        ctx.define(node, _rounded(ctx, node, out, S))
-        ctx.record(self, node, {"shape": list(S), "dtype": _DT[ctx.dtype_of(node)]}, emitted=f"{fn.id} x{math.prod(S)}")
+        op, gpu = _BINARY[node.target], self.cc is not None
+        a, b = node.args[:2]
+        if gpu and op == "div" and isinstance(b, (int, float)):
+            with np.errstate(all="ignore"):
+                b, op = float(np.float32(1.0) / np.float32(b)), "mul"
+        a, b = (self._static(ctx, node, x) for x in (a, b))
+        alpha = _alpha(node)
+        if alpha != 1:
+            sign = -1 if op == "sub" else 1
+            ops = [_operand(ctx, node, b, S), (_const(ctx, node, _bits(sign * alpha)), None), _operand(ctx, node, a, S)]
+            fn = _F32["fma"][gpu]
+        else:
+            ops, fn = [_operand(ctx, node, x, S) for x in (a, b)], _F32[op][gpu]
+        out = _ew(ctx, node, fn, ops, S)
+        ctx.define(node, _rounded(ctx, node, out, S, P.F2fpBf16 if gpu else P.F32ToBf16Rn))
+        ctx.record(self, node, {"shape": list(S), "dtype": _DT[ctx.dtype_of(node)], "alpha": alpha},
+                   emitted=f"{fn.id} x{math.prod(S)}")
 
 
 class Unary(_TrainRule):
-    """`neg`, `sqrt`, `rsqrt`, `reciprocal`, `exp`, `sigmoid`, `pow.Tensor_Scalar` of an f32 or bf16 value, as torch's CPU kernels
-    compute them: `rsqrt` = 1 / sqrt, `sigmoid` = 1 / (1 + exp(-x)), `pow` 2 / 3 products, 0.5 sqrt, -0.5 rsqrt, -1 and -2
-    reciprocals, 1 the operand, 0 one; `exp` is `F32ExpRn_v1` (correctly rounded, where torch's vectorized exp is not). `sqrt` is
-    IEEE's (`F32Sqrt_v1`, as CUDA's `sqrt.rn`); torch CPU's (and its `pow` 0.5) is MKL's, which is not IEEE's on some CPUs. A bf16
-    operand is widened and the result rounded to bf16, except where torch's bf16 kernel rounds in between, which is refused: `pow`
-    3 and -2 round the square, and `rsqrt` (and `pow` -0.5) the square root in its scalar loop."""
-    info = _info("Unary", "aten neg/sqrt/rsqrt/reciprocal/exp/sigmoid/pow.Tensor_Scalar of f32 or bf16", "the operand is an f32 or "
-                 "bf16 value", "pow's exponent is one torch special-cases (0, 0.5, 1, 2, 3, -0.5, -1, -2)",
-                 "bf16: not rsqrt, nor pow 3, -2 or -0.5", "one batch per step over the elements")
+    """`neg`, `abs`, `floor`, `sqrt`, `rsqrt`, `reciprocal`, `exp`, `sigmoid`, `pow.Tensor_Scalar` of an f32 or bf16 value, as
+    torch's CPU kernels compute them: `abs` clears the sign bit (`F32Fabs_v1`, f32 only), `floor` is `F32Rint_v1` less one where
+    that rounded up (`F32GtStrict_v1`, `F32Sub_v1`, f32 only; exact on every word, an x rounded up being no integer, so below 2^23
+    in magnitude; a NaN quieted), `rsqrt` = 1 / sqrt, `sigmoid` = 1 / (1 + exp(-x)), `pow` 2 / 3 products, 0.5 sqrt, -0.5 rsqrt,
+    -1 and -2 reciprocals, 1 the operand, 0 one; `exp` is `F32ExpRn_v1` (correctly rounded, where torch's vectorized exp is not).
+    `sqrt` is IEEE's (`F32Sqrt_v1`, as CUDA's `sqrt.rn`); torch CPU's (and its `pow` 0.5) is MKL's, which is not IEEE's on some
+    CPUs. A bf16 operand is widened and the result rounded to bf16, except where torch's bf16 kernel rounds in between, which is
+    refused: `pow` 3 and -2 round the square, and `rsqrt` (and `pow` -0.5) the square root in its scalar loop; a bf16 `abs` is
+    refused too (torch's CPU kernel keeps a NaN's payload, its CUDA kernel rounds through f32). At a compute capability `cc`,
+    `exp` is CUDA's `expf` (`NvExpf_v1`, which its CUDA kernel calls), `sigmoid` its CUDA kernel's `1 / (1 + expf(-x))`, the
+    divisions, products and sums are the GPU's (`F32Div_v2`, `F32Mul_v2`, `F32Add_v2`) and a bf16 result is rounded by
+    `F2fpBf16_v1`."""
+    info = _info("Unary", "aten neg/abs/floor/sqrt/rsqrt/reciprocal/exp/sigmoid/pow.Tensor_Scalar of f32 or bf16", "the operand is "
+                 "an f32 or bf16 value", "pow's exponent is one torch special-cases (0, 0.5, 1, 2, 3, -0.5, -1, -2)",
+                 "bf16: not abs, floor or rsqrt, nor pow 3, -2 or -0.5", "one batch per step over the elements")
+
+    def __init__(self, cc: tuple[int, int] | None = None):
+        self.cc = cc
 
     def targets(self):
-        return {aten.neg.default, aten.sqrt.default, aten.rsqrt.default, aten.reciprocal.default, aten.exp.default,
-                aten.sigmoid.default, aten.pow.Tensor_Scalar}
+        return {aten.neg.default, aten.abs.default, aten.floor.default, aten.sqrt.default, aten.rsqrt.default,
+                aten.reciprocal.default, aten.exp.default, aten.sigmoid.default, aten.pow.Tensor_Scalar}
 
     def applies(self, node, ctx):
-        why = _operand_ok(ctx, node.args[0], tuple(_DT))
+        f32_only = node.target in (aten.abs.default, aten.floor.default)
+        why = _operand_ok(ctx, node.args[0], (torch.float32,) if f32_only else tuple(_DT))
         if why or not isinstance(ctx.val(node.args[0]), Coll):
             return why or "the operand is not a value"
         e = node.args[1] if node.target is aten.pow.Tensor_Scalar else None
@@ -413,6 +189,8 @@ class Unary(_TrainRule):
 
     def emit(self, node, ctx):
         S = ctx.shape_of_node(node)
+        gpu = self.cc is not None
+        div, mul, add = (_F32[op][gpu] for op in ("div", "mul", "add"))
         one = (_const(ctx, node, _bits(1.0)), None)
 
         def ew(fn, *ops):
@@ -428,54 +206,114 @@ class Unary(_TrainRule):
         x = _flat(_widened(ctx, node, x) if ctx.dtype_of(node.args[0]) == torch.bfloat16 else x, S)
         if t is aten.neg.default:
             y = ew(SC.F32Neg, x)
+        elif t is aten.abs.default:
+            y = ew(SC.F32Fabs, x)
+        elif t is aten.floor.default:
+            r = ew(IE.F32Rint, x)
+            y = ew(SC.SelectF32, _flat(_ew(ctx, node, R.F32GtStrict, [r, x], S, w=1), S, 1), ew(R.F32Sub, r, one), r)
         elif t is aten.sqrt.default or e == 0.5:
             y = ew(R.F32Sqrt, x)
         elif t is aten.rsqrt.default or e == -0.5:
-            y = ew(P.F32Div, one, ew(R.F32Sqrt, x))
+            y = ew(div, one, ew(R.F32Sqrt, x))
         elif t is aten.reciprocal.default or e == -1:
-            y = ew(P.F32Div, one, x)
+            y = ew(div, one, x)
         elif t is aten.exp.default:
-            y = ew(R.F32ExpRn, x)
+            y = ew(_EXP[gpu], x)
         elif t is aten.sigmoid.default:
-            y = ew(P.F32Div, one, ew(P.F32Add, ew(R.F32ExpRn, ew(SC.F32Neg, x)), one))
+            y = ew(div, one, ew(add, ew(_EXP[gpu], ew(SC.F32Neg, x)), one))
         elif e == 2:
-            y = ew(P.F32Mul, x, x)
+            y = ew(mul, x, x)
         elif e == 3:
-            y = ew(P.F32Mul, ew(P.F32Mul, x, x), x)
+            y = ew(mul, ew(mul, x, x), x)
         elif e == -2:
-            y = ew(P.F32Div, one, ew(P.F32Mul, x, x))
+            y = ew(div, one, ew(mul, x, x))
         else:
-            y = ew(P.F32Add, one, (_const(ctx, node, 0), None))
-        ctx.define(node, _rounded(ctx, node, y[0].reshape(_tensor_type(S, 32)), S))
+            y = ew(add, one, (_const(ctx, node, 0), None))
+        ctx.define(node, _rounded(ctx, node, y[0].reshape(_tensor_type(S, 32)), S, P.F2fpBf16 if gpu else P.F32ToBf16Rn))
         ctx.record(self, node, {"op": str(t), "exponent": e, "dtype": _DT[ctx.dtype_of(node)]}, emitted=f"x{math.prod(S)}")
 
 
-class Lerp(_TrainRule):
-    """`lerp.Scalar(start, end, w)`, torch CPU's vectorized form: `fma(c, end - start, base)` with `c, base = (w, start)` if
-    |w| < 0.5 else `(w - 1, end)` (`F32Sub_v1`, `F32Fma_v1`)."""
-    info = _info("Lerp", "aten.lerp.Scalar of f32 values", "start and end are f32 values or static", "the weight is a Python number")
+class Log(_TrainRule):
+    """`log` of an f32 or bf16 value at a compute capability `cc`, as torch's CUDA kernel computes it: CUDA's `logf`, which is
+    libdevice's ``__nv_logf`` without flush-to-zero (`NvLogf_v4`, every NaN result 0x7FFFFFFF; on bits `NvLogf_v5`), a bf16
+    operand widened and the result rounded by `F2fpBf16_v1`. Without `cc` it refuses: torch CPU's vectorized log is not
+    modeled."""
+    info = _info("Log", "aten.log of f32 or bf16 at a compute capability", "a compute capability",
+                 "the operand is an f32 or bf16 value", "one batch per step over the elements")
+
+    def __init__(self, cc: tuple[int, int] | None = None):
+        self.cc = cc
 
     def targets(self):
-        return {aten.lerp.Scalar}
+        return {aten.log.default}
 
     def applies(self, node, ctx):
-        whys = [w for w in (_operand_ok(ctx, a) for a in node.args[:2]) if w]
+        if self.cc is None:
+            return "numerics_unregistered: torch CPU's log is not modeled; at a compute capability it is CUDA's logf"
+        why = _operand_ok(ctx, node.args[0], tuple(_DT))
+        if why or not isinstance(ctx.val(node.args[0]), Coll):
+            return why or "the operand is not a value"
+        return True
+
+    def emit(self, node, ctx):
+        S = ctx.shape_of_node(node)
+        y = _ew(ctx, node, SM.NvLogfV4, [_operand(ctx, node, node.args[0], S)], S)
+        ctx.define(node, _rounded(ctx, node, y, S, P.F2fpBf16))
+        ctx.record(self, node, {"shape": list(S), "dtype": _DT[ctx.dtype_of(node)]}, emitted=f"NvLogf_v4 x{math.prod(S)}")
+
+
+class Lerp(_TrainRule):
+    """`lerp.Scalar(start, end, w)` and `_foreach_lerp.Scalar` (each pair of its lists, an EMA's update), as torch's kernels
+    compute it (`Lerp.h`, the CPU's vectorized form alike): `fma(c, end - start, base)` with `c, base = (w, start)` if |w| < 0.5
+    else `(w - 1, end)` (`F32Sub_v1`, `F32Fma_v1`), and at a compute capability `cc` the GPU's operations (`F32Sub_v2`,
+    `F32Fma_v2`): its `self + w * (end - self)` and `end - (end - self) * (1 - w)` are each one FFMA."""
+    info = _info("Lerp", "aten.lerp.Scalar / _foreach_lerp.Scalar of f32 values", "start and end are f32 values or static, of one "
+                 "shape in a foreach pair", "the weight is a Python number")
+
+    def __init__(self, cc: tuple[int, int] | None = None):
+        self.cc = cc
+
+    def targets(self):
+        return {aten.lerp.Scalar, aten._foreach_lerp.Scalar}
+
+    def _pairs(self, node):
+        if node.target is aten._foreach_lerp.Scalar:
+            return list(zip(node.args[0], node.args[1])) if len(node.args[0]) == len(node.args[1]) else None
+        return [tuple(node.args[:2])]
+
+    def applies(self, node, ctx):
+        pairs = self._pairs(node)
+        if pairs is None:
+            return "the lists' lengths differ"
+        whys = [w for pair in pairs for w in (_operand_ok(ctx, a) for a in pair) if w]
         if whys:
             return whys[0]
+        if node.target is aten._foreach_lerp.Scalar and any(_shape(ctx, s) != _shape(ctx, e) for s, e in pairs):
+            return "a pair's shapes differ"
         if not isinstance(node.args[2], (int, float)) or isinstance(node.args[2], bool):
             return "the weight is not a Python number"
         return True
 
     def emit(self, node, ctx):
-        S = ctx.shape_of_node(node)
+        gpu = self.cc is not None
         w = float(np.float32(node.args[2]))
-        start, end = (_operand(ctx, node, a, S) for a in node.args[:2])
-        diff = _flat(_ew(ctx, node, R.F32Sub, [end, start], S), S)
         small = abs(w) < 0.5
-        c = _const(ctx, node, _bits(w if small else float(np.float32(w) - np.float32(1.0))))
-        out = _ew(ctx, node, P.F32Fma, [(c, None), diff, start if small else end], S)
-        ctx.define(node, out)
-        ctx.record(self, node, {"weight": w, "small": small}, emitted=f"F32Sub_v1+F32Fma_v1 x{math.prod(S)}")
+        c = (_const(ctx, node, _bits(w if small else float(np.float32(w) - np.float32(1.0)))), None)
+        outs = []
+        for s, e in self._pairs(node):
+            S = _shape(ctx, s) if node.target is aten._foreach_lerp.Scalar else ctx.shape_of_node(node)
+            start, end = (_operand(ctx, node, a, S) for a in (s, e))
+            diff = _flat(_ew(ctx, node, _F32["sub"][gpu], [end, start], S), S)
+            outs.append(_ew(ctx, node, _F32["fma"][gpu], [c, diff, start if small else end], S))
+        ctx.define(node, outs if node.target is aten._foreach_lerp.Scalar else outs[0])
+        sub, fma = _F32["sub"][gpu].id, _F32["fma"][gpu].id
+        ctx.record(self, node, {"weight": w, "small": small, "tensors": len(outs)},
+                   emitted=f"{sub}+{fma} x{sum(o.type.leaves for o in outs)}")
+
+
+def _value(node):
+    """`addcmul` / `addcdiv`'s value (keyword-only in their schemas)."""
+    return node.kwargs.get("value", node.args[3] if len(node.args) > 3 else 1)
 
 
 class Addcmul(_TrainRule):
@@ -492,14 +330,214 @@ class Addcmul(_TrainRule):
     def emit(self, node, ctx):
         S = ctx.shape_of_node(node)
         s, t1, t2 = (_operand(ctx, node, a, S) for a in node.args[:3])
-        v = (_const(ctx, node, _bits(node.kwargs.get("value", node.args[3] if len(node.args) > 3 else 1))), None)
+        v = (_const(ctx, node, _bits(_value(node))), None)
         vt1 = _flat(_ew(ctx, node, P.F32Mul, [v, t1], S), S)
         ctx.define(node, _ew(ctx, node, P.F32Fma, [vt1, t2, s], S))
         ctx.record(self, node, {"shape": list(S)}, emitted=f"F32Mul_v1 + F32Fma_v1 x{math.prod(S)}")
 
 
+class Addcdiv(_TrainRule):
+    """`addcdiv(self, t1, t2, value)` of f32 values as torch's kernels compute it: torch CPU's `self + (value * t1) / t2`
+    (`F32Mul_v1`, `F32Div_v1`, `F32Add_v1`), and at a compute capability `cc` the GPU's `fma(value, t1 / t2, self)` (`F32Div_v2`,
+    `F32Fma_v2`), the explicit `std::fma` of its `pointwise_op_impl` (`registry.torch_optim`'s step 6)."""
+    info = _info("Addcdiv", "aten.addcdiv of f32 values", "operands are f32 values or static", "value is a Python number")
+
+    def __init__(self, cc: tuple[int, int] | None = None):
+        self.cc = cc
+
+    def targets(self):
+        return {aten.addcdiv.default}
+
+    def applies(self, node, ctx):
+        whys = [w for w in (_operand_ok(ctx, a) for a in node.args[:3]) if w]
+        if whys:
+            return whys[0]
+        return True if type(_value(node)) in (int, float) else "value is not a Python number"
+
+    def emit(self, node, ctx):
+        gpu = self.cc is not None
+        S = ctx.shape_of_node(node)
+        s, t1, t2 = (_operand(ctx, node, a, S) for a in node.args[:3])
+        v = (_const(ctx, node, _bits(_value(node))), None)
+        mul, div, add, fma = (_F32[k][gpu] for k in ("mul", "div", "add", "fma"))
+        if gpu:
+            fns = (div, fma)
+            y = _ew(ctx, node, fma, [v, _flat(_ew(ctx, node, div, [t1, t2], S), S), s], S)
+        else:
+            fns = (mul, div, add)
+            vt1 = _flat(_ew(ctx, node, mul, [v, t1], S), S)
+            y = _ew(ctx, node, add, [s, _flat(_ew(ctx, node, div, [vt1, t2], S), S)], S)
+        ctx.define(node, y)
+        ctx.record(self, node, {"shape": list(S), "value": _value(node)},
+                   emitted=f"{' + '.join(f.id for f in fns)} x{math.prod(S)}")
+
+
+class SiluBackward(_TrainRule):
+    """`silu_backward(dy, x)` = `(dy * s) * fma(x, 1 - s, 1)` with `s = 1 / (1 + exp(-x))`, the form of torch's kernels (its
+    CPU kernel's scalar loop exactly; nvcc contracts `1 + x * (1 - s)` to one FFMA): `F32ExpRn_v1` as `Unary`'s `exp`,
+    `F32Add_v1`, `F32Div_v1`, `F32Sub_v1`, `F32Fma_v1`, `F32Mul_v1`. bf16 operands are widened and the result rounded once
+    (`F32ToBf16Rn_v1`), as both kernels compute in f32. At a compute capability `cc` the operations are the GPU's
+    (`F32Add_v2`, ..., `F32Mul_v2`), `exp` CUDA's `expf` (`NvExpf_v1`, as `Unary`'s) and a bf16 result is rounded by
+    `F2fpBf16_v1`."""
+    info = _info("SiluBackward", "aten.silu_backward of f32 or bf16", "dy and x are values of the result's dtype",
+                 "one batch per step over the elements")
+
+    def __init__(self, cc: tuple[int, int] | None = None):
+        self.cc = cc
+
+    def targets(self):
+        return {aten.silu_backward.default}
+
+    def applies(self, node, ctx):
+        for a in node.args[:2]:
+            why = _operand_ok(ctx, a, tuple(_DT))
+            if why or not isinstance(ctx.val(a), Coll):
+                return why or "an operand is not a value"
+            if ctx.dtype_of(a) != ctx.dtype_of(node):
+                return f"numerics_unregistered: {a.name} has dtype {ctx.dtype_of(a)}, the result {ctx.dtype_of(node)}"
+        return True
+
+    def emit(self, node, ctx):
+        S = ctx.shape_of_node(node)
+        gpu = self.cc is not None
+        one = (_const(ctx, node, _bits(1.0)), None)
+
+        def ew(op, *ops):
+            return _flat(_ew(ctx, node, _F32[op][gpu] if isinstance(op, str) else op, list(ops), S), S)
+
+        dy, x = (_operand(ctx, node, a, S) for a in node.args[:2])
+        s = ew("div", one, ew("add", one, ew(_EXP[gpu], ew(SC.F32Neg, x))))
+        t = ew("fma", x, ew("sub", one, s), one)
+        y = _ew(ctx, node, _F32["mul"][gpu], [ew("mul", dy, s), t], S)
+        ctx.define(node, _rounded(ctx, node, y, S, P.F2fpBf16 if gpu else P.F32ToBf16Rn))
+        ctx.record(self, node, {"shape": list(S), "dtype": _DT[ctx.dtype_of(node)]}, emitted=f"x{math.prod(S)}")
+
+
+class ForeachAdd(_TrainRule):
+    """`_foreach_add.Scalar(tensors, s)`: each f32 tensor plus the number `s` (an optimizer's step counts), element by element,
+    `F32Add_v1`, and at a compute capability `cc` its kernel's `F32Add_v2`; the results a list."""
+    info = _info("ForeachAdd", "aten._foreach_add.Scalar of f32 values", "each tensor is an f32 value",
+                 "the scalar is a Python number")
+
+    def __init__(self, cc: tuple[int, int] | None = None):
+        self.cc = cc
+
+    def targets(self):
+        return {aten._foreach_add.Scalar}
+
+    def applies(self, node, ctx):
+        ts, s = node.args[:2]
+        if not isinstance(s, (int, float)) or isinstance(s, bool):
+            return "the scalar is not a Python number"
+        for a in ts:
+            why = _operand_ok(ctx, a)
+            if why or not isinstance(ctx.val(a), Coll):
+                return why or "a tensor is not a value"
+        return True
+
+    def emit(self, node, ctx):
+        ts, s = node.args[:2]
+        fn = _F32["add"][self.cc is not None]
+        c = (_const(ctx, node, _bits(s)), None)
+        outs = [_ew(ctx, node, fn, [_operand(ctx, node, a, _shape(ctx, a)), c], _shape(ctx, a)) for a in ts]
+        ctx.define(node, outs)
+        ctx.record(self, node, {"tensors": len(ts), "scalar": s},
+                   emitted=f"{fn.id} x{sum(math.prod(_shape(ctx, a)) for a in ts)}")
+
+
+_ADAMW_KW = ("lr", "beta1", "beta2", "weight_decay", "eps")
+
+
+class FusedAdamW(_TrainRule):
+    """`_fused_adamw` (`_fused_adamw_` functionalized: `torch.optim.AdamW(fused=True)`'s step) of f32 parameters, gradients,
+    moments and step counts at a compute capability `cc`, element by element as torch's CUDA kernel computes it in f32
+    (`FusedAdamMathFunctor`), each hyperparameter its f32 word and `t = RN(lr * weight_decay)` a constant:
+
+        p1 = fma(-t, p, p)                                    `param -= lr * weight_decay * param`, one FFMA (none at decay 0)
+        m1 = fma(beta1, m, fma(-beta1, g, g))
+        v1 = fma(beta2, v, fma(-beta2, g * g, g * g))
+        p2 = p1 - RN(step_size * m1) / (sqrt(v1) / bc2_sqrt + eps)
+
+    (`F32Fma_v2`, `F32Mul_v2`, `F32Div_v2`, `F32Add_v2`, `F32Sub_v2`; `sqrt` IEEE's, `F32Sqrt_v1`), each tensor's
+    `step_size = lr / bc1`, `bc1 = 1 - beta1^step` and `bc2_sqrt = sqrt(1 - beta2^step)` from its step count. The kernel's `beta^step`
+    is CUDA's `powf`, which no Definition models: here it is `exp(step * log(beta))`, the product `F32Mul_v2`, the exp
+    `F32ExpRn_v1` and `log(beta)` a correctly rounded constant. The gradients are returned as given. Refused without `cc` (torch
+    CPU's fused kernel computes in double), and amsgrad, maximize, a gradient scale or inf flag, or a tensor not f32 (the
+    mixed-precision kernel is another)."""
+    info = _info("FusedAdamW", "aten._fused_adamw of f32 values at a compute capability", "every tensor an f32 value, each step "
+                 "count one word", "no amsgrad, maximize, grad_scale or found_inf", "beta^step is exp(step * log(beta)), not "
+                 "CUDA's powf")
+
+    def __init__(self, cc: tuple[int, int] | None = None):
+        self.cc = cc
+
+    def targets(self):
+        return {aten._fused_adamw.default}
+
+    def applies(self, node, ctx):
+        if self.cc is None:
+            return ("numerics_unregistered: torch CPU's fused AdamW computes in double; the GPU's kernel is lowered at a compute "
+                    "capability (training_rules(cc=...))")
+        kw = node.kwargs
+        if kw.get("amsgrad") or kw.get("maximize") or kw.get("grad_scale") is not None or kw.get("found_inf") is not None:
+            return "numerics_unregistered: amsgrad, maximize, a gradient scale or an inf flag"
+        ps, gs, ms, vs, mx, ss = node.args[:6]
+        if mx or not len(ps) == len(gs) == len(ms) == len(vs) == len(ss):
+            return "the lists' lengths differ (or max_exp_avg_sqs is not empty)"
+        for a in (*ps, *gs, *ms, *vs, *ss):
+            if not isinstance(a, torch.fx.Node) or not isinstance(ctx.val(a), Coll) or ctx.dtype_of(a) != torch.float32:
+                return "numerics_unregistered: a tensor that is not an f32 value (the mixed-precision kernel is another)"
+        for p, g, m, v, s in zip(ps, gs, ms, vs, ss):
+            if not _shape(ctx, p) == _shape(ctx, g) == _shape(ctx, m) == _shape(ctx, v) or math.prod(_shape(ctx, s)) != 1:
+                return "a parameter's gradient or moments have another shape, or a step count is not one word"
+        if not all(isinstance(kw.get(k), (int, float)) for k in _ADAMW_KW):
+            return "a hyperparameter is not a Python number"
+        return True
+
+    def emit(self, node, ctx):
+        ps, gs, ms, vs, _mx, ss = node.args[:6]
+        lr, b1, b2, wd, eps = (np.float32(node.kwargs[k]) for k in _ADAMW_KW)
+        fma, mul, div, add, sub = (_F32[k][1] for k in ("fma", "mul", "div", "add", "sub"))
+
+        def c(x) -> tuple[Coll, None]:
+            return _const(ctx, node, _bits(x)), None
+
+        T = len(ps)
+        steps = Coll(Array(T, F32), concat([ctx.coll(s).reshape(Array(1, F32)).refs for s in ss]))
+
+        def one_minus_pow(beta) -> Coll:
+            log_beta = _const(ctx, node, R.f32_log_rn_bits(_bits(beta)))
+            x = _batch(ctx, node, R.F32ExpRn, _batch(ctx, node, mul, steps, log_beta, axes=(0, None)), axes=(0,))
+            return _batch(ctx, node, sub, _const(ctx, node, _bits(1.0)), x, axes=(None, 0))
+
+        step_size = _batch(ctx, node, div, _const(ctx, node, _bits(lr)), one_minus_pow(b1), axes=(None, 0))
+        bc2_sqrt = _batch(ctx, node, R.F32Sqrt, one_minus_pow(b2), axes=(0,))
+        new_p, new_m, new_v = [], [], []
+        for i, (p, g, m, v) in enumerate(zip(ps, gs, ms, vs)):
+            S = _shape(ctx, p)
+
+            def op(fn, *xs):
+                return _flat(_ew(ctx, node, fn, list(xs), S), S)
+
+            P_, G_, M_, V_ = (_operand(ctx, node, a, S) for a in (p, g, m, v))
+            p1 = op(fma, c(-(lr * wd)), P_, P_) if wd != 0 else P_
+            m1 = op(fma, c(b1), M_, op(fma, c(-b1), G_, G_))
+            gg = op(mul, G_, G_)
+            v1 = op(fma, c(b2), V_, op(fma, c(-b2), gg, gg))
+            den = op(add, op(div, op(R.F32Sqrt, v1), (bc2_sqrt[i], None)), c(eps))
+            p2 = op(sub, p1, op(div, op(mul, (step_size[i], None), m1), den))
+            new_p.append(p2[0].reshape(_tensor_type(S, 32)))
+            new_m.append(m1[0].reshape(_tensor_type(S, 32)))
+            new_v.append(v1[0].reshape(_tensor_type(S, 32)))
+        ctx.define(node, [new_p, [ctx.coll(g) for g in gs], new_m, new_v, []])
+        n = sum(math.prod(_shape(ctx, p)) for p in ps)
+        ctx.record(self, node, {"tensors": T, "elements": n, **{k: float(x) for k, x in zip(_ADAMW_KW, (lr, b1, b2, wd, eps))},
+                                "pow": "exp(step * log(beta)): F32Mul_v2, F32ExpRn_v1 (CUDA's powf is not modeled)"},
+                   emitted=f"F32Fma_v2 x{(5 if wd != 0 else 4) * n} + F32Mul_v2/F32Div_v2/F32Add_v2/F32Sub_v2/F32Sqrt_v1 per element")
+
+
 # ---------------------------------------------------------------------------------------------------------
-# reductions, softmax and the loss
+# reductions and the loss
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -540,115 +578,6 @@ class Reduce(_TrainRule):
         ctx.record(self, node, {"dims": dims, "rows": Rn, "N": N}, emitted=f"DotRef_v1{{K={N}}} x{Rn}")
 
 
-def _last_dim(ctx, node, a, dim) -> str | None:
-    S = _shape(ctx, a)
-    if not S or dim % len(S) != len(S) - 1:
-        return f"over dim {dim} of {list(S)}, not the last"
-    return None
-
-
-class SafeSoftmax(_TrainRule):
-    """`_safe_softmax(x, -1)` (SDPA's math path) = `where(all(x == -inf), 0, softmax(x))` per row: `SoftmaxRef_v1{N,f32}` rows,
-    `F32Eq_v1` against -inf, a `BitAnd_v1` fold, `SelectF32_v1`."""
-    info = _info("SafeSoftmax", "aten._safe_softmax over the last axis of f32", "the operand is an f32 value", "no dtype argument")
-
-    def targets(self):
-        return {aten._safe_softmax.default}
-
-    def applies(self, node, ctx):
-        why = _operand_ok(ctx, node.args[0])
-        if why or not isinstance(ctx.val(node.args[0]), Coll):
-            return why or "the operand is not a value"
-        if len(node.args) > 2 and node.args[2] is not None or node.kwargs.get("dtype") is not None:
-            return "numerics_unregistered: a dtype argument"
-        return _last_dim(ctx, node, node.args[0], node.args[1]) or True
-
-    def emit(self, node, ctx):
-        x = ctx.coll(node.args[0])
-        S = shape_of(x.type)[0]
-        x2, Rn, N = _rows(x, S)
-        sm = _batch(ctx, node, ctx.kind("softmax", node, N=N, DT="f32"), x2, axes=(0,))
-        eq = _batch(ctx, node, SC.F32Eq, x.reshape(Array(Rn * N, F32)), _const(ctx, node, 0xFF800000), axes=(0, None))
-        r = eq.refs
-        acc = Coll(Array(Rn, BIT), Strided(r.space, r.idx, r.base, 1, N, 0, Rn))
-        for i in range(1, N):
-            acc = _batch(ctx, node, SC.BitAnd, acc, Coll(Array(Rn, BIT), Strided(r.space, r.idx, r.base + i, 1, N, 0, Rn)), axes=(0, 0))
-        out = _batch(ctx, node, SC.SelectF32, _per_row(acc, Rn, N), _const(ctx, node, 0), sm.reshape(Array(Rn * N, F32)),
-                     axes=(0, None, 0))
-        ctx.define(node, out.reshape(_tensor_type(S, 32)))
-        ctx.record(self, node, {"rows": Rn, "N": N}, emitted=f"SoftmaxRef_v1{{N={N},DT=f32}} x{Rn} + mask")
-
-
-class SoftmaxBackward(_TrainRule):
-    """`_softmax_backward_data(g, y, -1, f32)` = `y * (g - sum(g * y))` per row, torch CPU's form: `DotRef_v1{N}(g, y)`, `F32Sub_v1`,
-    `F32Mul_v1`."""
-    info = _info("SoftmaxBackward", "aten._softmax_backward_data over the last axis, f32", "g and y are f32 values",
-                 "input_dtype is float32")
-
-    def targets(self):
-        return {aten._softmax_backward_data.default}
-
-    def applies(self, node, ctx):
-        for a in node.args[:2]:
-            why = _operand_ok(ctx, a)
-            if why or not isinstance(ctx.val(a), Coll):
-                return why or "an operand is not a value"
-        if node.args[3] != torch.float32:
-            return f"numerics_unregistered: input_dtype {node.args[3]}"
-        return _last_dim(ctx, node, node.args[0], node.args[2]) or True
-
-    def emit(self, node, ctx):
-        g, y = ctx.coll(node.args[0]), ctx.coll(node.args[1])
-        S = shape_of(g.type)[0]
-        g2, Rn, N = _rows(g, S)
-        y2 = _rows(y, S)[0]
-        dot = _batch(ctx, node, bind(R.DotRef, K=N), g2, y2, axes=(0, 0))
-        diff = _batch(ctx, node, R.F32Sub, g.reshape(Array(Rn * N, F32)), _per_row(dot, Rn, N), axes=(0, 0))
-        out = _batch(ctx, node, P.F32Mul, y.reshape(Array(Rn * N, F32)), diff, axes=(0, 0))
-        ctx.define(node, out.reshape(_tensor_type(S, 32)))
-        ctx.record(self, node, {"rows": Rn, "N": N}, emitted=f"DotRef_v1{{K={N}}} x{Rn} + F32Sub/F32Mul")
-
-
-class LogSoftmax(_TrainRule):
-    """`_log_softmax`: refused. Its value is `x - max - log(sum(exp(x - max)))`, and the reference vocabulary has no f32 log: it needs
-    a correctly-rounded `F32LogRn` (the twin of `F32ExpRn_v1`), registered with its Boolean version."""
-    info = _info("LogSoftmax", "aten._log_softmax (refused: no f32 log Definition)", "never applies")
-
-    def targets(self):
-        return {aten._log_softmax.default}
-
-    def applies(self, node, ctx):
-        return ("numerics_unregistered: log_softmax needs a correctly-rounded f32 log (F32LogRn, the twin of F32ExpRn_v1) and the "
-                "reference vocabulary has none")
-
-    def emit(self, node, ctx):
-        raise AssertionError("never applies")
-
-
-class LogSoftmaxBackward(_TrainRule):
-    """`_log_softmax_backward_data(g, y, -1, f32)` = `g - exp(y) * sum(g)` per row, torch CPU's form: `DotRef_v1{N}(g, ones)`,
-    `F32ExpRn_v1`, `F32Mul_v1`, `F32Sub_v1`."""
-    info = _info("LogSoftmaxBackward", "aten._log_softmax_backward_data over the last axis, f32", "g and y are f32 values",
-                 "input_dtype is float32")
-
-    def targets(self):
-        return {aten._log_softmax_backward_data.default}
-
-    def applies(self, node, ctx):
-        return SoftmaxBackward.applies(self, node, ctx)
-
-    def emit(self, node, ctx):
-        g, y = ctx.coll(node.args[0]), ctx.coll(node.args[1])
-        S = shape_of(g.type)[0]
-        g2, Rn, N = _rows(g, S)
-        s = _batch(ctx, node, bind(R.DotRef, K=N), g2, _ones(ctx, node, N), axes=(0, None))
-        e = _batch(ctx, node, R.F32ExpRn, y.reshape(Array(Rn * N, F32)), axes=(0,))
-        p = _batch(ctx, node, P.F32Mul, e, _per_row(s, Rn, N), axes=(0, 0))
-        out = _batch(ctx, node, R.F32Sub, g.reshape(Array(Rn * N, F32)), p, axes=(0, 0))
-        ctx.define(node, out.reshape(_tensor_type(S, 32)))
-        ctx.record(self, node, {"rows": Rn, "N": N}, emitted=f"DotRef_v1{{K={N}}} x{Rn} + F32ExpRn/F32Mul/F32Sub")
-
-
 def _nll_ok(ctx, node, logp, target, weight, reduction) -> str | None:
     why = _operand_ok(ctx, logp)
     if why or not isinstance(ctx.val(logp), Coll):
@@ -659,17 +588,18 @@ def _nll_ok(ctx, node, logp, target, weight, reduction) -> str | None:
         return "the target is not an int32/int64 value"
     if weight is not None:
         return "numerics_unregistered: class weights"
-    if reduction != 1:
-        return f"numerics_unregistered: reduction {reduction} (only mean)"
+    if reduction not in (0, 1):
+        return f"numerics_unregistered: reduction {reduction} (only none and mean)"
     return None
 
 
 class NllLossForward(_TrainRule):
-    """`nll_loss_forward(logp[M,V], target[M], None, mean, ignore_index)` -> (loss, total_weight): the target's entry of each row
-    (`GatherF32x{V}_v1`), rows whose target is `ignore_index` zeroed (`I32Eq_v1`, `SelectF32_v1`), the loss
-    `-sum / count` and the count, sums sequential (`DotRef_v1{M}`; torch sums in a cascade)."""
-    info = _info("NllLossForward", "aten.nll_loss_forward, mean reduction, no weights, [M, V] input", "logp is an f32 value, the target "
-                 "an integer value", "an out-of-range target reads NaN (GatherF32x's extension; torch raises)")
+    """`nll_loss_forward(logp[M,V], target[M], None, reduction, ignore_index)` -> (loss, total_weight): the target's entry of each
+    row (`GatherF32x{V}_v1`), rows whose target is `ignore_index` zeroed (`I32Eq_v1`, `SelectF32_v1`). With the mean reduction the
+    loss is `-sum / count` and total_weight the count, sums sequential (`DotRef_v1{M}`; torch sums in a cascade); with none the loss
+    is each row's `-entry` (`F32Neg_v1`: torch's kernels' `-1 * entry`, a sign flip) and total_weight +0, as both kernels set it."""
+    info = _info("NllLossForward", "aten.nll_loss_forward, mean or no reduction, no weights, [M, V] input", "logp is an f32 value, "
+                 "the target an integer value", "an out-of-range target reads NaN (GatherF32x's extension; torch raises)")
 
     def targets(self):
         return {aten.nll_loss_forward.default}
@@ -684,6 +614,13 @@ class NllLossForward(_TrainRule):
         ign = _batch(ctx, node, SC.I32Eq, t, _const(ctx, node, node.args[4] & 0xFFFFFFFF), axes=(0, None))
         picked = _batch(ctx, node, R.gather_f32(V), t, logp.reshape(Array(M, Array(V, F32))), axes=(0, 0))
         zero = _const(ctx, node, 0)
+        if node.args[3] == 0:
+            neg = _batch(ctx, node, SC.F32Neg, picked, axes=(0,))
+            rows = _batch(ctx, node, SC.SelectF32, ign, zero, neg, axes=(0, None, 0))
+            ctx.define(node, [rows.reshape(_tensor_type([M], 32)), StaticFloat(torch.zeros(()))])
+            ctx.record(self, node, {"M": M, "V": V, "ignore_index": node.args[4], "reduction": "none"},
+                       emitted=f"GatherF32x{V}_v1 x{M} + F32Neg_v1/SelectF32_v1 x{M}")
+            return
         sel = _batch(ctx, node, SC.SelectF32, ign, zero, picked, axes=(0, None, 0))
         neg = _call(ctx, node, bind(R.DotRef, K=M), sel, Coll(Array(M, F32), broadcast(*_ref(_const(ctx, node, _bits(-1.0))), M)))
         w = _batch(ctx, node, SC.SelectF32, ign, zero, _const(ctx, node, _bits(1.0)), axes=(0, None, None))
@@ -691,10 +628,6 @@ class NllLossForward(_TrainRule):
         loss = _call(ctx, node, P.F32Div, neg, cnt)
         ctx.define(node, [loss, cnt])
         ctx.record(self, node, {"M": M, "V": V, "ignore_index": node.args[4]}, emitted=f"GatherF32x{V}_v1 x{M} + DotRef_v1{{K={M}}} x2")
-
-
-def _ref(c: Coll) -> tuple[str, int, int]:
-    return c.refs.space, c.refs.idx, c.refs.base
 
 
 def _one_hot(ctx, node, t: Coll, M: int, V: int) -> Coll:
@@ -710,11 +643,12 @@ def _one_hot(ctx, node, t: Coll, M: int, V: int) -> Coll:
 
 
 class NllLossBackward(_TrainRule):
-    """`nll_loss_backward(go, logp[M,V], target, None, mean, ignore_index, total_weight)` = `-(go / total_weight)` at each row's target,
-    +0 elsewhere and on the rows whose target is `ignore_index` (`F32Div_v1`, `F32Neg_v1`; per row the gradient or +0 by
-    `I32Eq_v1` against `ignore_index`, as `NllLossForward` masks its rows; a one-hot of `I32Eq_v1`; `SelectF32_v1`)."""
-    info = _info("NllLossBackward", "aten.nll_loss_backward, mean reduction, no weights", "go and total_weight are 0-d f32",
-                 "an out-of-range target selects nothing (torch raises)")
+    """`nll_loss_backward(go, logp[M,V], target, None, reduction, ignore_index, total_weight)`: with the mean reduction
+    `-(go / total_weight)` (`F32Div_v1`, `F32Neg_v1`), with none each row's `-go[m]` (`F32Neg_v1`, torch's kernels' `-1 * go[m]`),
+    at each row's target, +0 elsewhere and on the rows whose target is `ignore_index` (per row the gradient or +0 by `I32Eq_v1`
+    against `ignore_index`, as `NllLossForward` masks its rows; a one-hot of `I32Eq_v1`; `SelectF32_v1`)."""
+    info = _info("NllLossBackward", "aten.nll_loss_backward, mean or no reduction, no weights", "mean: go and total_weight are 0-d "
+                 "f32", "none: go is f32 of shape [M]", "an out-of-range target selects nothing (torch raises)")
 
     def targets(self):
         return {aten.nll_loss_backward.default}
@@ -722,28 +656,43 @@ class NllLossBackward(_TrainRule):
     def applies(self, node, ctx):
         go, logp, target, weight, reduction, _ign, tw = node.args[:7]
         why = _nll_ok(ctx, node, logp, target, weight, reduction) or _operand_ok(ctx, go) or _operand_ok(ctx, tw)
-        return why or True
+        if why:
+            return why
+        M = _shape(ctx, logp)[0]
+        want = (M,) if reduction == 0 else ()
+        return True if _shape(ctx, go) == want else f"go of shape {list(_shape(ctx, go))} (reduction {reduction}: {list(want)})"
 
     def emit(self, node, ctx):
-        go, logp, target, _w, _r, ignore, tw = node.args[:7]
+        go, logp, target, _w, reduction, ignore, tw = node.args[:7]
         M, V = _shape(ctx, logp)
-        g = _call(ctx, node, SC.F32Neg, _call(ctx, node, P.F32Div, _operand(ctx, node, go, ())[0], _operand(ctx, node, tw, ())[0]))
+        if reduction == 0:
+            g, ax = _operand(ctx, node, go, (M,))
+            g, gax = (_batch(ctx, node, SC.F32Neg, g, axes=(0,)), 0) if ax is not None else (_call(ctx, node, SC.F32Neg, g), None)
+        else:
+            g = _call(ctx, node, SC.F32Neg, _call(ctx, node, P.F32Div, _operand(ctx, node, go, ())[0], _operand(ctx, node, tw, ())[0]))
+            gax = None
         t = _tokens(ctx, node, target)
         zero = _const(ctx, node, 0)
         ign = _batch(ctx, node, SC.I32Eq, t, _const(ctx, node, ignore & 0xFFFFFFFF), axes=(0, None))
-        row = _batch(ctx, node, SC.SelectF32, ign, zero, g, axes=(0, None, None))
+        row = _batch(ctx, node, SC.SelectF32, ign, zero, g, axes=(0, None, gax))
         hot = _one_hot(ctx, node, t, M, V)
         out = _batch(ctx, node, SC.SelectF32, hot, _per_row(row, M, V), zero, axes=(0, 0, None))
         ctx.define(node, out.reshape(_tensor_type([M, V], 32)))
-        ctx.record(self, node, {"M": M, "V": V, "ignore_index": ignore}, emitted=f"I32Eq_v1 + SelectF32_v1 x{M * (V + 1)}")
+        ctx.record(self, node, {"M": M, "V": V, "ignore_index": ignore, "reduction": "none" if reduction == 0 else "mean"},
+                   emitted=f"I32Eq_v1 + SelectF32_v1 x{M * (V + 1)}")
 
 
 class EmbeddingDenseBackward(_TrainRule):
-    """`embedding_dense_backward(g[..., H], ids, V, -1, False)`: row v of the weight's gradient is the sum, in token order from +0, of
-    the gradient rows of the tokens with id v (torch CPU's per-row `add_`): per token one `SelectF32_v1` of its gradient row into
-    the rows whose id matches (a one-hot of `I32Eq_v1`) and one `F32Add_v1` into the accumulator, V x H words each."""
+    """`embedding_dense_backward(g[..., H], ids, V, -1, False)`: row v of the weight's gradient is the sum of the gradient rows of the
+    tokens with id v. Without a `cc` it is torch CPU's per-row `add_` in token order from +0: per token one `SelectF32_v1` of its
+    gradient row into the rows whose id matches (a one-hot of `I32Eq_v1`) and one `F32Add_v1` into the accumulator, V x H words
+    each. At a compute capability `cc` it is the CUDA kernels' (`torch_embedding_f32.EmbeddingGradF32_v1`): the rows sorted by
+    id, each id's tokens summed in its kernel's order and each sum routed to its id's row."""
     info = _info("EmbeddingDenseBackward", "aten.embedding_dense_backward, padding_idx -1, no scale_grad_by_freq",
                  "g is an f32 value, ids an integer value", "an out-of-range id adds nothing")
+
+    def __init__(self, cc: tuple[int, int] | None = None):
+        self.cc = cc
 
     def targets(self):
         return {aten.embedding_dense_backward.default}
@@ -757,6 +706,11 @@ class EmbeddingDenseBackward(_TrainRule):
             return "the ids are not an integer value"
         if pad != -1 or freq:
             return "numerics_unregistered: padding_idx or scale_grad_by_freq"
+        if self.cc:
+            try:
+                bind(TEF.EmbeddingGradF32, M=ctx.val(ids).type.leaves, V=V, H=_shape(ctx, g)[-1])
+            except ValueError as e:
+                return f"numerics_unregistered: {e}"
         return True
 
     def emit(self, node, ctx):
@@ -765,6 +719,11 @@ class EmbeddingDenseBackward(_TrainRule):
         H = _shape(ctx, g)[-1]
         t = _tokens(ctx, node, ids)
         M = t.type.leaves
+        if self.cc:
+            fn = bind(TEF.EmbeddingGradF32, M=M, V=V, H=H)
+            ctx.define(node, _call(ctx, node, fn, t, gc.reshape(Array(M, Array(H, F32)))).reshape(_tensor_type([V, H], 32)))
+            ctx.record(self, node, {"tokens": M, "V": V, "H": H}, emitted=f"{fn.id} x1")
+            return
         hot = _one_hot(ctx, node, t, M, V)
         gr = gc.refs
         if not isinstance(gr, Affine):
@@ -781,20 +740,35 @@ class EmbeddingDenseBackward(_TrainRule):
         ctx.record(self, node, {"tokens": M, "V": V, "H": H}, emitted=f"(SelectF32_v1 + F32Add_v1) x{M * V * H}")
 
 
-def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None) -> RuleSet:
+def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, tf32: bool = False) -> RuleSet:
     """The default rules with the training rules: views of static floats, `BoxPermute` (views of more than `min_view_leaves` leaves
-    that are not one run) and `Matmul` before them, the element-wise, reduction, softmax, loss and embedding rules after.
-    `min_view_leaves` is 0 by default: the default views write a permuted view of fewer leaves than their limit as a list of its
-    leaves, which the root's replay then substitutes as one reference part per leaf.  `cc` (`cublas_bf16.TRAIN_CC`): bf16 `mm`s as
-    that GPU's cuBLAS computes them (`Matmul`), in the rule set ``training-cc<major>.<minor>``."""
+    that are not one run) and `Matmul` before them, the element-wise, optimizer-count, reduction, softmax, loss, embedding,
+    comparison, mask, integer, conversion, lookup, order-statistic and copy rules after. `min_view_leaves` is 0 by default:
+    the default views write a permuted view of fewer leaves than their limit as a list of its leaves, which the root's replay then
+    substitutes as one reference part per leaf.  `cc` (`cublas_bf16.TRAIN_CC`): bf16 `mm`s and `mv`s as that GPU's cuBLAS computes
+    them (`Matmul`), every add, sub, mul and div as its kernels do (`Binary`; `Unary`, `SiluBackward`, `ForeachAdd`, `Lerp` and
+    `Addcdiv` take the same operations, and `Unary`'s and `SiluBackward`'s `exp` is CUDA's `expf`) and the conversions to bf16,
+    to and from f16 and from f32 to int64 and uint8 as its kernels do (`Cast`), both placed first, before the default rules' CPU kinds, a whole tensor's vector norm or sum as its `reduce_kernel` does
+    (`FullReduce`, before `Reduce`), an f32 embedding's gradient as its kernels do (`EmbeddingDenseBackward`), a fused AdamW step
+    and a clamp as their kernels do (`FusedAdamW`, `Clamp`), `kthvalue` as its radix select does (`KthValue`) and torch's flash
+    attention forward as its kernels do (`FlashSdpa`, placed first), in the rule set
+    ``training-cc<major>.<minor>``.  `tf32`, at a `cc`: the step sets cuda.matmul.allow_tf32, which the traced graph doesn't
+    show, so its f32 `mm`s and `bmm`s are cuBLAS's TF32 GEMMs: `Matmul` lowers an `mm` at a shape the TF32 capture covers
+    (`cublas_bf16.TRAIN_TF32`) as cuBLAS's unsplit TF32 GEMM (`GemmTf32_v1`) and refuses the rest
+    (``training-cc<major>.<minor>-tf32``)."""
     from verity_vllm.program.frontend.rules import DEFAULT_RULES
 
-    first = [StaticFloats(), BoxPermute(min_view_leaves), Matmul(cc)]
-    last = [Binary(), Unary(), Lerp(), Addcmul(), Reduce(), SafeSoftmax(), SoftmaxBackward(), LogSoftmax(), LogSoftmaxBackward(),
-            NllLossForward(), NllLossBackward(), EmbeddingDenseBackward()]
-    name = "training" if cc is None else f"training-cc{cc[0]}.{cc[1]}"
-    return RuleSet(name, first + list(DEFAULT_RULES.rules) + last, list(DEFAULT_RULES.families))
+    first = [StaticFloats(cc), BoxPermute(min_view_leaves), Matmul(cc, tf32)] + ([Binary(cc), Cast(cc)] if cc else [])
+    last = ([] if cc else [Binary()]) + [Unary(cc), Lerp(cc), Addcmul(), Addcdiv(cc), SiluBackward(cc), ForeachAdd(cc),
+                                         FusedAdamW(cc), FullReduce(cc), Reduce(), IntSum(), AMax(), SafeSoftmax(),
+                                         SoftmaxBackward(), LogSoftmax(), LogSoftmaxBackward(), NllLossForward(), NllLossBackward(),
+                                         EmbeddingDenseBackward(cc), Log(cc), Compare(), Logic(), IntOps(), Where(), Clamp(cc), Index(),
+                                         KthValue(cc), Copy(cc)] + ([] if cc else [Cast()])
+    name = "training" if cc is None else f"training-cc{cc[0]}.{cc[1]}" + ("-tf32" if tf32 else "")
+    return RuleSet(name, first + ([FlashSdpa(cc)] if cc else []) + list(DEFAULT_RULES.rules) + last, list(DEFAULT_RULES.families))
 
 
-__all__ = ["training_rules", "Matmul", "Binary", "Unary", "Lerp", "Addcmul", "Reduce", "SafeSoftmax", "SoftmaxBackward", "LogSoftmax",
-           "LogSoftmaxBackward", "NllLossForward", "NllLossBackward", "EmbeddingDenseBackward"]
+__all__ = ["training_rules", "Matmul", "Binary", "Unary", "Lerp", "Addcmul", "Addcdiv", "SiluBackward", "ForeachAdd", "FusedAdamW",
+           "FullReduce", "Reduce", "IntSum", "AMax", "SafeSoftmax", "SoftmaxBackward", "LogSoftmax", "LogSoftmaxBackward",
+           "NllLossForward", "NllLossBackward", "EmbeddingDenseBackward", "Log", "Compare", "Logic", "IntOps", "Where", "Clamp", "Cast",
+           "Index", "KthValue", "Copy"]

@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
-public import SampledProofs.Run
+public import Spot.Run
 
 /-!
 # The sampled verifier's sessions at the code with its Lean sample
@@ -16,8 +16,9 @@ and `SessionRuns`, `SessionOpens` and `InnerNumbers` are one statement about the
   reveals, for every checked unit, openings that make it correct; it is `SessionOpens` (`sessionOpens_code_iff`).
 * `innerNumbers_code_iff`: `InnerNumbers` is Flock's numbers at the one session's statement.
 
-And of `SampledProofs.Run.run` itself, `run_decided`: a run that doesn't refuse (a `{"step", "codes"}` object) passed
-the population and R1–R7 (`Registration.check`) under the sampling design of the rule over the population (`Select.Rule.over`), ran
+And of `Spot.Run.run` itself, `run_decided`: a run that doesn't refuse (a `{"step", "codes"}` object) passed
+the population and R1–R7 (`Registration.check`) under the sampling design of the rule over the population (`Select.Rule.over`)
+and the work table it expands (`Select.Rule.tableOver`), ran
 the sample of record (`Select.select`, under `Select.resolve`'s rule) on the challenger's bytes (`source`) and held it to
 the registration (`Draw.checkDraw`), and its `draw` and `read` are that sample's (under a two-stage rule, the first
 stage's, with the second stage's after them).
@@ -101,7 +102,7 @@ theorem innerNumbers_code_iff :
 
 end SamplingDeploy
 
-namespace SampledProofs.Run
+namespace Spot.Run
 
 open Lean (Json)
 open Flock (V)
@@ -116,18 +117,21 @@ theorem ite_eq_ok {c : Prop} [Decidable c] {a j : Json} {rest : V Json}
 -- `run` unfolds to about 50 decided leaves under one `match` or `if` per step, hence the heartbeat budget.
 set_option maxHeartbeats 4000000 in
 /-- **A decided run passed its registration and ran the sample of record**: `run` either refuses at a step or passed the
-population, R1–R7 under the sampling design of the rule over it (`Rule.over`, a rate law's `subset:K`), and the sample's own check,
+population, R1–R7 under the sampling design of the rule over it and the program's strata (`Rule.over`, `strataSizes`, a
+rate law's `subset:K`) and the work table it expands (`Rule.tableOver`, a work rate law's), and the sample's own check,
 with its `draw` and `read` those of `Select.select` under `Select.resolve`'s rule on the challenger's bytes. -/
 theorem run_decided (i : Input) (j : Json) (h : run i = .ok j) :
     (∃ (step : String) (codes : Array String),
       j = Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]) ∨
-    ∃ n rule law, nat? (getD i.record "population") = some n ∧ ¬(n == 0) = true ∧ i.rule.over n = some rule ∧
-      rule.lawOver n = .ok law ∧ ¬(!(Registration.check i.record { i.params.verifier with law }).isEmpty) = true ∧
-      ∃ derived, Draw.derive i.params.verifier.program i.params.verifier.query law i.params.verifier.workTable =
-          .ok derived ∧
+    ∃ n rule law workTable, nat? (getD i.record "population") = some n ∧ ¬(n == 0) = true ∧ i.rule.over n
+        (Select.strataSizes i.params.verifier.program i.params.verifier.query) = some rule ∧
+      rule.lawOver n = .ok law ∧
+      i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable = .ok workTable ∧
+      ¬(!(Registration.check i.record { i.params.verifier with law, workTable }).isEmpty) = true ∧
+      ∃ derived, Draw.derive i.params.verifier.program i.params.verifier.query law workTable = .ok derived ∧
         ∃ resolved, Select.resolve i.rule i.params.verifier.program i.params.verifier.query = .ok resolved ∧
         ∃ draw rest read, Select.select resolved i.params.verifier.program i.params.verifier.query
-            i.params.verifier.workTable i.closure i.source = .ok (draw, rest, read) ∧
+            workTable i.closure i.source = .ok (draw, rest, read) ∧
           ¬(!(Draw.checkDraw draw (getD i.record "population") derived).isEmpty) = true ∧
           ∃ receipt symbol pub audit staged, j = Json.mkObj ([("receipt", receipt), ("draw", draw),
             ("read", Lean.toJson read), ("symbol", symbol), ("public", pub), ("audit", audit)] ++ staged) := by
@@ -139,7 +143,8 @@ theorem run_decided (i : Input) (j : Json) (h : run i = .ok j) :
     | focus (cases h; done)
     | (obtain ⟨_, h⟩ | ⟨_, h⟩ := ite_eq_ok h; exact Or.inl ⟨_, _, h.symm⟩)
     | exact Or.inl ⟨_, _, (Except.ok.inj h).symm⟩
-    | exact Or.inr ⟨_, _, _, by assumption, by assumption, by assumption, by assumption, by assumption, _,
-        by assumption, _, by assumption, _, _, _, by assumption, by assumption, _, _, _, _, _, (Except.ok.inj h).symm⟩
+    | exact Or.inr ⟨_, _, _, _, by assumption, by assumption, by assumption, by assumption, by assumption,
+        by assumption, _, by assumption, _, by assumption, _, _, _, by assumption, by assumption, _, _, _, _, _,
+        (Except.ok.inj h).symm⟩
 
-end SampledProofs.Run
+end Spot.Run

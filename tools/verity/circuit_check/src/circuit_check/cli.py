@@ -27,10 +27,13 @@ each rule holds: every spot checked, and each passing.
 
 Exit status 1 when a check fails (each failure is named, `FAIL NAME`, and in the summary), 0 otherwise: the verdict is every
 target's real one, and whether a failure may stay red is drive's policy (`research.policy`, policy.toml's allowances), never
-this command's.  Redundant and dead gates, an
-unpinned or untyped lowering, and a Definition over the partition's budget are warnings, which never fail
+this command's.  A Call over the partition's budget is partitioned by its callees (`checks.by_callees`, whose callees fail
+by name) or fails by its own name (``partition/unpartitioned``).  Redundant and dead gates, an
+unpinned or untyped lowering, a Definition over the partition's budget that is no Call, and a target no realization compared on a random
+vector (``vectors/edge-only``, ``vectors/none``: `checks.vector_class`) are warnings, which never fail
 (``--fail-on-warnings`` makes them fail too): a target with one is logged ``unchecked``, not ``ok``, the warnings are printed
-under ``unchecked`` by check, with counts, and the last line counts them.  A shard fails on its own targets' failures alone
+under ``unchecked`` by check, with counts, a line before the last counts the targets of each vector class (the summary's
+``vectors`` names them), and the last line counts the warnings.  A shard fails on its own targets' failures alone
 (a by-calls root's callees' verdicts only ``--combine`` sees), and ``--combine``
 exits 2 when it refuses the shards it was given (`shard.read`).  ``--binding`` fails as a shard does, and exits 2 when the
 bindings' records give no task list, its ``--slice`` is not of this tree or the catalog has no binding of that name; its
@@ -97,11 +100,12 @@ def _info(task: tuple) -> dict:
 
 
 def _one(kind: str, label: str, fn: Callable[[], dict]) -> dict:
-    """``fn()``'s result with the target's ``seconds`` and its ``seconds_by_check`` (`checks.spent`), heaviest first."""
+    """``fn()``'s result, with its warning when no realization compared it on a random vector (`checks.classified`), the
+    target's ``seconds`` and its ``seconds_by_check`` (`checks.spent`), heaviest first."""
     CK.SPENT.clear()
     t0 = time.time()
     try:
-        r = fn()
+        r = CK.classified(fn())
     except Exception as e:  # noqa: BLE001  (a target the checks cannot run on is a failure by name, not a crash)
         r = {"failures": [{"check": "circuit-check", "code": "error", "definition": label,
                            "name": f"circuit-check/error {label}: {type(e).__name__}: {str(e)[:200]}"}], "warnings": []}
@@ -790,7 +794,7 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
             got = [CC.lookup(cache, hit[0]["keys"][i], REPO, moved=False) for i in idx]
             if all(g is not None and not _errored(g[0]) for g in got):
                 records = [{**g[0], "cache": {"hit": g[1]}} for g in got]
-                rep = CK.report(records, opts) if shard is None and binding is None else SH.unjoined(records, opts)
+                rep = CK.report(records, opts, catalog=True) if shard is None and binding is None else SH.unjoined(records, opts)
                 rep["peaks"] = []
                 rep["cache"] = {"hits": len(got), "stored": 0, "untraced": [], "errors": [], "changed": [], "task_list": hit[1]}
                 if shard is not None:
@@ -1023,12 +1027,18 @@ def _joined(a: dict | None, b: dict) -> dict:
     return out
 
 
+def _probed(d: dict) -> dict:
+    """Read set ``d`` with its probes as `cache.probed` declares them now, but those its files hold."""
+    return {**d, "probes": sorted(CC.probed(REPO, d.get("probes", ())) - set(d.get("files", ())))}
+
+
 def update_reads(rep: dict, every: bool) -> list[str]:
     """`READS` with what each catalog binding ``rep`` (`run`'s, with ``reads``) has an entry of every target for read, added to
     what it declares, and ``registries`` and ``loaded`` as declared and as now, both: what a binding's run reads depends on
     how it runs (``--binding`` makes only its own binding's roots, so a target reads what making another binding's roots
     reads where it makes them), so a declaration holds every way it ran.  With ``every`` (a run of every binding) a binding
-    the catalog no longer has is dropped.  Remove `READS` to start over.  The bindings left as they were (``incomplete``)."""
+    the catalog no longer has is dropped.  Each probe is written as `cache.probed` declares it now, those `READS` held already
+    too.  Remove `READS` to start over.  The bindings left as they were (``incomplete``)."""
     new, have = rep["reads"], _reads_file()
     incomplete = sorted(new.get("incomplete", {}))
     done = {n: _joined(have["bindings"].get(n), d) for n, d in new["bindings"].items() if n not in incomplete}
@@ -1036,8 +1046,9 @@ def update_reads(rep: dict, every: bool) -> list[str]:
         bindings = {n: d for n in new["bindings"] if (d := done.get(n, have["bindings"].get(n))) is not None}
     else:
         bindings = {**have["bindings"], **done}
-    regs = {k: sorted({*have["registries"].get(k, ()), *new["registries"].get(k, ())}) for k in CC.DECLARED}
-    loaded = sorted({*have["loaded"], *new["loaded"]})
+    bindings = {n: _probed(d) for n, d in bindings.items()}
+    regs = _probed({k: sorted({*have["registries"].get(k, ()), *new["registries"].get(k, ())}) for k in CC.DECLARED})
+    loaded = sorted(CC.probed(REPO, {*have["loaded"], *new["loaded"]}))
     READS.mkdir(parents=True, exist_ok=True)
     for part, got in (("registries.json", {"registries": regs}), ("loaded.json", {"loaded": loaded}),
                       ("bindings.json", grouped(bindings))):
@@ -1221,7 +1232,7 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
             r, got = _checked(tasks[i]) if tracing else (_one(*tasks[i][:3]), None)
             done(i, r, *(_observe(r, got) if tracing else (None, None, None)))
     records = [r for r in out if r is not None]
-    rep = CK.report(records, opts) if only is None else SH.unjoined(records, opts)
+    rep = CK.report(records, opts, catalog=everything and not specs) if only is None else SH.unjoined(records, opts)
     rep["peaks"] = heaviest(rep["targets"])
     if tracing:
         rep["cache"] = stats
@@ -1241,7 +1252,7 @@ def combined(dirs: list[Path]) -> tuple[dict, dict]:
     (`checks.report`), with its ``peaks``, the shards' cache counts summed (each shard's under ``shards``) and ``combined``:
     N, the list's digest and each shard's wall time, prologue (`run`'s ``prologue_s``) and jobs."""
     request, records, manifests = SH.read(dirs)
-    rep = CK.report(records, CK.Options(**request["options"]))
+    rep = CK.report(records, CK.Options(**request["options"]), catalog=request["all"] and not request["specs"])
     rep["peaks"] = heaviest(rep["targets"])
     if caches := [m["cache"] for m in manifests if m.get("cache") is not None]:
         rep["cache"] = {"hits": sum(c["hits"] for c in caches), "stored": sum(c["stored"] for c in caches),
@@ -1543,7 +1554,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="lower a Definition whole when the piece pins estimate at most this many ANDs")
     ap.add_argument("--struct-max-gates", type=int, default=CK.Options.struct_max_gates,
                     help="realize a composite of at most this many IR gates by its structural lowering too "
-                         "(c-flock:struct_lower: verity_flock.struct_lower's template, evaluated from the template; 0: none)")
+                         "(c-flock:struct_lower: verity_flock.struct_lower's template, evaluated from the template; 0: none "
+                         "but each family's struct budget, its sidecar's struct_max_gates pin)")
     ap.add_argument("--as-call", action=argparse.BooleanOptionalAction, default=None,
                     help="hold a Definition target to the partition invariant as a Call, or not (--no-as-call) (default: when its "
                          "family is a Call of a served Program, `targets.is_call`, which refuses one it can't decide without "
@@ -1789,6 +1801,8 @@ def verdict(rep: dict, *, out: Path | None, fail_on_warnings: bool = False, what
     s = rep["summary"]
     for name in s["failure_names"]:
         print(f"FAIL {name}")
+    for d, why in s.get("block_held", {}).items():
+        print(f"held block/past-range {d}: {why}")
     for k, w in s["warnings"].items():
         print(f"unchecked {k}: {w['total']} over {w['definitions']} target(s)")
     if "shard" not in rep and (rs := RG.section(rep["targets"])):
@@ -1803,6 +1817,11 @@ def verdict(rep: dict, *, out: Path | None, fail_on_warnings: bool = False, what
         out.write_text(json.dumps(rep, indent=1, default=str) + "\n")
     across = s.get("recomputed_across") or {}
     refused = s.get("q_call_refused") or {}
+    v = s.get("vectors") or {}
+    if any(v.get(c, {}).get("count") for c in CK.VECTOR_CLASSES):
+        print("circuit-check: vectors a realization compared with the reference on: "
+              + ", ".join(f"{v[c]['count']} {c}" for c in CK.VECTOR_CLASSES)
+              + (f" ({v['lazy']['count']} read lazily)" if v["lazy"]["count"] else ""))
     what = what or f"{len(rep['targets'])} target(s)"
     u = s["unchecked"]
     print(f"circuit-check: {what}, {s['failures']} failure(s), {u['items']} unchecked (warnings, which never fail) on {u['definitions']} Definition(s)"

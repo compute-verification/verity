@@ -12,8 +12,9 @@ responses.
   reason the recorded one, then its usage and ``[DONE]``. serve-openai records token ids, not the HTTP bytes it sent, so the
   bytes are rendered again from them; a request the window doesn't hold is answered 404.
 * **The run** (`rehearse`): as `warden_serve.py rehearse` runs one (a key in scratch, ``serve`` and ``client`` as processes, then
-  ``check``), with that traffic and that upstream. ``--out`` holds the warden's files (``deployment.json``, the records,
-  ``cells.jsonl``; ``cells.salts`` is witness) and ``check.json``.
+  ``check``), with that traffic and that upstream, in the ``bytes`` egress form (`warden`'s "The egress form"): the upstream
+  answers in vLLM's completion form, which the id form refuses. ``--out`` holds the warden's files (``deployment.json``, the
+  records, ``cells.jsonl``; ``cells.salts`` is witness) and ``check.json``.
 
     python benchmarks/one_stage/warden_replay.py rehearse --serve-run RUN --serve-window K --out DIR [--gap S] [--token-ms 20] [schedule]
     python benchmarks/one_stage/warden_replay.py endpoint --serve-run RUN --serve-window K --listen HOST:PORT [--token-ms 20]
@@ -24,7 +25,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import dataclasses
 import json
 import math
 import re
@@ -38,11 +38,10 @@ from pathlib import Path
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
-TRACES = HERE.parent / "network_traces"
+TRACES = Path(__file__).resolve().parents[2] / "benchmarks/network_traces"
 sys.path.insert(0, str(TRACES))
 
 import warden_serve as ws  # noqa: E402
-from verity.core.protocols.certifier.warden import WardenParams  # noqa: E402
 
 
 def served_requests(run: str | Path, window: int) -> list[dict]:
@@ -162,7 +161,7 @@ def rehearse(args) -> int:
     params = ws._params(args)
     sent = traffic(args.serve_run, args.serve_window, start_s=args.start, gap_s=args.gap)
     (out / "traffic.json").write_text(json.dumps(sent))
-    warden = [sys.executable, str(TRACES / "warden_serve.py")]
+    warden = [sys.executable, str(Path(__file__).resolve().parents[2] / "benchmarks/network_traces/warden_serve.py")]
     scratch = Path(tempfile.mkdtemp(prefix="warden-replay-"))
     procs: list[subprocess.Popen] = []
     try:
@@ -216,8 +215,7 @@ def parser() -> argparse.ArgumentParser:
     r.add_argument("--height", type=int, default=ws.cs.HEIGHT, help="the LMS key's tree height")
     r.add_argument("--start-in", type=float, default=2.0, help="the origin, seconds after the warden is up")
     r.add_argument("--slack", type=float, default=0.025, help="seconds a tick may run late before it faults")
-    for f in dataclasses.fields(WardenParams):
-        r.add_argument(f"--{f.name.replace('_', '-')}", type=int, default=ws.SCHEDULE[f.name])
+    ws.schedule_flags(r, "bytes")
     return ap
 
 

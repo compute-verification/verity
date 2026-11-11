@@ -8,7 +8,8 @@
                      none declined inside the reference's domain unless the kernel is partial; else ``kernel-<fault>``), a
                      template's evaluated target where it is another Definition, and
                      the Flock Boolean lowering (`verity_flock.ir_lower`: the whole Definition when it is small, a template's
-                     proof blocks otherwise) and, under ``Options.struct_max_gates``, the structural lowering's template
+                     proof blocks otherwise) and, under ``Options.struct_max_gates`` or its family's struct budget
+                     (`struct_budget`), the structural lowering's template
                      (``c-flock:struct_lower``, `struct_lowering`, evaluated from the template); the word Definition a
                      Boolean Definition names
                      (`verity.ml.circuits.boolean.trace.word_of`) must equal the Boolean gates through the word view
@@ -18,7 +19,12 @@
                      operand over the input budget (`targets.LAZY_OPERANDS`, a weight) takes its edge and random words one
                      vector at a time and is read lazily (`vectors.wide_words`), recorded under ``wide`` with the reads of
                      its words, plus a random vector per index probe (`targets.OPERAND_PROBES`: a shard's or an expert
-                     count's first and last index), and one that no vector reads is a warning; on both paths the kernels decline, as they take arrays, and the lowering takes every leaf
+                     count's first and last index), and one that no vector reads is a warning; on both paths the kernels decline, as they take arrays, and the lowering takes every leaf.
+                     Each realization is compared on at least ``Options.random_floor`` random vectors within
+                     ``Options.random_budget``: a lowering on random ones added to the vectors (`floored`), a kernel on
+                     those its own sampler samples in its domain (`_sampled`); a target no realization compared on a random
+                     vector is a warning, ``vectors/edge-only`` when one compared it on all-edge vectors only, else
+                     ``vectors/none`` (`vector_class`)
     ports            a Definition's declared return intervals (`verity.ml.circuits.ports`, PROTOCOL.md §12), which the Build takes
                      as facts about a primitive: its reference on edge and random operands, each leaf of a bounded parameter
                      folded into its bound, returns every leaf within its interval; and a primitive's transfer, on sampled
@@ -39,7 +45,13 @@
                      beside it (`q_call`: proof blocks, committed bits, values computed in two proof blocks; or why it refuses,
                      a warning).
                      Both resolve every parameter leaf, so a Definition over ``partition_max_leaves`` is not partitioned,
-                     nor is one over ``partition_max_gates`` gates (each a warning, ``partition/unchecked``)
+                     nor is one over ``partition_max_gates`` gates not cut member by member, or cut so down to a member
+                     over the budget that isn't (`uncut`); such a Call is
+                     partitioned by its callees where each is a Call (`by_callees`: each callee's partition checked as a
+                     Call's, failing by its name), and otherwise fails by its own name, ``partition/unpartitioned``, with why
+                     its callees can't partition it (`callee_gap`: one is no Call, or is a primitive over the budget): every
+                     gate of a served Call sits in a Call whose partition is checked.  A Definition that is no Call is
+                     partitioned inside the Call that contains it, so over the budget it is a warning, ``partition/unchecked``
     lowering pins    a lowering's AND/XOR/NOT counts and its circuit's digest (``type``, `lowering_type`) against its pin, which
                      must hold both (a piece's, a Boolean Definition's whole lowering's,
                      a template proof block's, in the sidecar of the module that defines it or its file in ``pins/``,
@@ -48,10 +60,12 @@
                      export's gate lists checked against the proof block's circuit (`verity_flock.boolean_export`); a gated
                      Definition's circuit digest (``gated``: a Program holds it as one gate naming the digest, such as N2's
                      head check) against its ``digests`` pin, as is any Definition's that holds one (a served-size binding)
-    block            the witness bits a whole Definition needs as one Flock unit, read off it (its ANDs and port bits,
-                     `verity_flock.circuit.unit_witness`), within Flock's proved range of 2^``K_MAX`` (`block_range`): past
-                     it, `UnitStager` refuses the unit before lowering, and `compose` would have refused it after.  Failed
-                     for the Definitions staged whole as one unit (PoUW's, `UNIT_OWNERS`), recorded for the rest
+    block            the Flock block a whole Definition needs as one unit, read off it before lowering
+                     (`verity_flock.circuit.unit_block`: its rows' sha512x3 and hm96 slots and the mask beside its own slot
+                     of ANDs and ports, as `compose` places them), within Flock's proved range of 2^``K_MAX`` (`block_range`):
+                     past it, `compose` refuses the unit.  Failed for every Definition checked whole, as PoUW and a served
+                     window's templates each stage one, unless `block_held.HELD` says why not (the report's, `summarize`);
+                     a Call serving stages as its cut (its module's ``CUTS``, `cut_of`), for each unit of the cut instead
 
 Correctness and invariant violations are failures, each with a name (``"<check>/<code> <definition> ..."``); redundant and dead
 gates are warnings with counts (they become failures with the re-baseline's common-subexpression pass).  An unpinned lowering,
@@ -60,7 +74,9 @@ property left unchecked, and the report prints it under ``unchecked``, apart fro
 """
 from __future__ import annotations
 
+import importlib
 import random
+import sys
 import time
 from collections import Counter
 from contextlib import contextmanager
@@ -91,16 +107,21 @@ _LIMB = (1 << 64) - 1
 class Options:
     """``vectors`` input vectors per correspondence check (the all-edge ones first), fewer when the reference would spend more
     than ``reference_budget`` gate evaluations on them (never fewer than ``min_vectors``); ``X`` / ``W`` / ``extras`` the word
-    query; Definitions over ``partition_max_gates`` gates or ``partition_max_leaves`` parameter leaves are not partitioned, over
+    query; the word view draws 16 times the vectors within 16 times the budget (`_word_vectors`); Definitions over
+    ``partition_max_gates`` gates or ``partition_max_leaves`` parameter leaves are not partitioned, over
     ``lower_max_gates`` gates or about ``lower_max_ands`` ANDs (the piece pins' estimate) not lowered whole; ``input_budget``
     bounds vectors x input leaves, ``lane_budget`` vectors x proof blocks when a template's proof blocks are evaluated;
     a composite of at most ``struct_max_gates`` gates is realized by its structural lowering too (`struct_lowering`; 0, the
-    default: none)."""
+    default: none).  Each realization is compared on at least ``random_floor`` random vectors while the reference's work on those
+    the floor adds is at most ``random_budget`` gate evaluations (and a template's lanes on them at most ``lane_budget``):
+    added after the all-edge ones for a lowering (`floored`), sampled by a kernel's own sampler for it (`_sampled`)."""
 
     vectors: int = 64
     min_vectors: int = 4
     seed: int = 20260926
     reference_budget: int = 400_000
+    random_floor: int = 2
+    random_budget: int = 10_000_000
     X: int = 16
     W: int = 32
     extras: int = 0
@@ -181,6 +202,33 @@ def _n_vectors(t: Any, opts: Options, lazy: int | Iterable[int] = ()) -> int:
     leaves = sum(pt.leaves for j, pt in enumerate(params) if j not in skip)
     n = max(opts.min_vectors, min(opts.vectors, opts.reference_budget // max(1, _gates(t))))
     return max(1, min(n, opts.input_budget // max(1, leaves)))
+
+
+def _lazy_vectors(t: Any, opts: Options, wide: Sequence[int]) -> tuple[int, bool]:
+    """``(vectors, capped)`` of a Definition whose ``wide`` operands are read lazily (`_wide_correspondence`): `_n_vectors`',
+    which the input budget doesn't bound (a vector reads only what it selects of them), unless the vectors its
+    ``opts.min_vectors`` floor adds past what ``opts.reference_budget`` pays for take the reference's work past
+    ``opts.random_budget``; then, capped, as many as ``opts.reference_budget`` pays for and at least ``opts.random_floor + 1``, at
+    most half of them all-edge and at least ``opts.random_floor`` random, as the word view splits its own past its budget."""
+    n, g = _n_vectors(t, opts, wide), max(1, _gates(t))
+    paid = opts.reference_budget // g
+    if n <= paid or (n - paid) * g <= opts.random_budget:
+        return n, False
+    return min(n, max(paid, opts.random_floor + 1)), True
+
+
+def floored(t: Any, n: int, edge: int, opts: Options, lanes: int = 0) -> tuple[int, int]:
+    """``(vectors, all-edge vectors)`` for a realization of ``t`` compared on ``n`` vectors of parameters with ``edge`` edge
+    words: the all-edge ones first, as many as fit in ``n``, then the random ones, which the floor makes at least
+    ``opts.random_floor`` by adding vectors when the reference's work on them is within ``opts.random_budget`` gate evaluations
+    and their ``lanes`` (a template's proof blocks a vector) within ``opts.lane_budget``.  Past either the target keeps ``n`` and
+    may compare on edge vectors only (`vector_class`).  The added vectors may take the arrays past ``opts.input_budget`` leaves,
+    to at most ``1 + opts.random_floor`` times it, as each vector is within it (a parameter over it is read lazily)."""
+    e = min(n, edge)
+    add = max(0, opts.random_floor - (n - e))
+    if add * max(1, _gates(t)) > opts.random_budget or add * lanes > opts.lane_budget:
+        add = 0
+    return n + add, e
 
 
 def reference_outputs(t: Any, params: Sequence, arrays: Sequence[np.ndarray]) -> tuple[list[tuple[int, ...] | None], list[dict]]:
@@ -269,21 +317,23 @@ def _unread_operand(t: Any, params: Sequence, wide: Sequence[int]) -> str | None
 
 
 def _wide_correspondence(t: Any, params: Sequence, wide: Sequence[int], opts: Options, F: Findings) -> tuple[dict, None, list]:
-    """The reference on the vectors of a Definition with operands over the input budget (`targets.LAZY_OPERANDS`): every
-    parameter takes its edge and random words, the wide ones one vector at a time (`vectors.wide_words`), each read lazily as a
-    `RegisteredTable`, then one random vector per index probe (`targets.OPERAND_PROBES`) with its index parameters set.  An
-    operand no vector reads is a warning.  No kernel takes them."""
+    """The reference on the vectors of a Definition with operands over the input budget (`targets.LAZY_OPERANDS`; how many,
+    `_lazy_vectors`): every parameter takes its edge and random words, the wide ones one vector at a time
+    (`vectors.wide_words`), each read lazily as a `RegisteredTable`, then one random vector per index probe
+    (`targets.OPERAND_PROBES`) with its index parameters set.  An operand no vector reads is a warning.  No kernel takes them."""
     from verity.ml.circuits.evaluation import RegisteredTable
     from verity.ml.circuits.types import Value
 
     from .targets import operand_probes
     from .vectors import edges, wide_words
 
-    n = _n_vectors(t, opts, wide)
+    n, capped = _lazy_vectors(t, opts, wide)
     rest = [j for j in range(len(params)) if j not in wide]
     other = [params[j] for j in rest]
-    arrays = vectors(other, n, opts.seed)
     n_edge = min(n, max([edge_count(other)] + [len(edges(params[j].homogeneous_width())) for j in wide]))
+    if capped:
+        n_edge = max(0, min(n_edge, n // 2, n - opts.random_floor))
+    arrays = vectors(other, n, opts.seed, n_edge if capped else None)
     names = [nm for nm, _ in resolve(t).signature()[0]]
     reads = dict.fromkeys(wide, 0)
     probes = operand_probes(t)
@@ -343,10 +393,52 @@ def _wide_correspondence(t: Any, params: Sequence, wide: Sequence[int], opts: Op
     return rec, None, ref
 
 
-def correspondence(t: Any, opts: Options, F: Findings) -> tuple[dict, list[np.ndarray] | None, list]:
+def _lowered(t: Any, opts: Options, lower_whole: bool) -> bool:
+    """Whether a lowering takes ``t``'s correspondence vectors, so `floored` adds random ones to them: the Flock lowering of it
+    whole (a primitive's piece; a composite under ``lower_max_gates`` gates, or Boolean) or its structural lowering.  A lowering
+    takes every input; a kernel declines what is outside its domain, so it takes its floor from its own sampler (`_sampled`)."""
+    if isinstance(t, ScalarReference):
+        return False
+    if isinstance(t, PrimitiveDefinition):
+        from verity_flock import ir_lower as IL
+
+        return bool(t.params) and (t.id in IL.PIECES or t.id.startswith("TopPMaskWordx"))
+    return (lower_whole and (t.gates <= opts.lower_max_gates or is_boolean(t))) or t.gates <= opts.struct_max_gates
+
+
+def _sampled(t: Any, name: str, rec: dict, opts: Options, F: Findings) -> None:
+    """The floor for kernel ``name``, which ``rec`` says compared ``random`` of the shared random vectors without a fault: up to
+    ``opts.random_floor`` more, sampled by the kernel's own sampler (`self_check`'s: random inputs in its domain, where the
+    shared ones over many leaves almost always hold a word it declines, a NaN), while the reference's work on them is within
+    ``opts.random_budget`` gate evaluations; recorded under ``sampled`` and counted in ``random``.  A mismatch fails as on the
+    shared vectors; a sampler whose every vector the kernel declines leaves it compared on edge vectors only."""
+    want = opts.random_floor - rec["random"]
+    if want <= 0 or want * max(1, _gates(t)) > opts.random_budget:
+        return
+    try:
+        sc = self_check(t, kernel=name, n=want, seed=opts.seed + 3)
+    except Exception as e:  # noqa: BLE001  (a sampler or kernel that can't sample or take its vectors: no random one, recorded)
+        rec["sampled"] = {"vectors": want, "compared": 0, "raised": f"{type(e).__name__}: {str(e)[:200]}"}
+        return
+    rec["sampled"] = {"vectors": sc.n, "compared": sc.compared, "mismatches": len(sc.mismatches)}
+    rec["random"] += sc.compared
+    if sc.mismatches:
+        F.fail("correspondence", "kernel-mismatch", t.id, f"[{name}]: {len(sc.mismatches)} of the {sc.n} sampled vectors",
+               via=f"kernel:{name}", examples=[{"instance": i, "args": _short(a), "kernel": _short(k), "reference": _short(r)}
+                                                for i, a, k, r in sc.mismatches[:_EXAMPLES]])
+    elif not sc.partial and sc.declined != sc.outside:
+        F.fail("correspondence", "kernel-declined-in-domain", t.id, f"[{name}]: declined {sc.declined} of the {sc.n} sampled "
+               f"vectors, {sc.outside} outside the reference's domain", via=f"kernel:{name}")
+
+
+def correspondence(t: Any, opts: Options, F: Findings, *, lower_whole: bool = True) -> tuple[dict, list[np.ndarray] | None, list]:
     """The reference on the vectors (totality) and every registered kernel against it; ``None`` for the vectors when the
     Definition reads a registered table (probed, `_probed_correspondence`) or an operand over the input budget (read lazily,
-    `_wide_correspondence`), or has a parameter over the input budget that is neither (a failure)."""
+    `_wide_correspondence`), or has a parameter over the input budget that is neither: a failure, but for a Boolean composite
+    with a word view a warning (``correspondence/unchecked``), as its reference is its gates and `word_view` compares them.
+    Where a lowering takes the vectors (`_lowered`; ``lower_whole`` as `check_definition`'s) the floor adds random ones
+    (`floored`), and each kernel takes its floor from its own sampler (`_sampled`); its record's ``random`` counts the random
+    vectors it compared on, at least (of the shared ones, those it compared past the all-edge ones)."""
     from .targets import table_probe
 
     params, _ret = signature_of(t)
@@ -358,12 +450,22 @@ def correspondence(t: Any, opts: Options, F: Findings) -> tuple[dict, list[np.nd
         why = _unread_operand(t, params, wide)
         if why is None:
             return _wide_correspondence(t, params, wide, opts, F)
-        F.fail("correspondence", "unprobed-table", t.id, why)
-        return {"vectors": 0, "edge_vectors": 0, "reference_raised": 0, "realizations": []}, None, []
-    n = _n_vectors(t, opts)
-    arrays = vectors(params, n, opts.seed)
+        word = _word_or_none(t)
+        if word is None:
+            F.fail("correspondence", "unprobed-table", t.id, why)
+            return {"vectors": 0, "edge_vectors": 0, "reference_raised": 0, "realizations": []}, None, []
+        names = [n for n, _ in resolve(t).signature()[0]]
+        over = [names[j] for j in wide]
+        why = (f"operand {', '.join(f'{names[j]!r} ({params[j].leaves} leaves)' for j in wide)} over the input budget "
+               f"({opts.input_budget}): a Boolean Definition's reference is its gates, total on every input, and its word view "
+               f"compares them with {word.id}")
+        F.warn("correspondence", "unchecked", t.id, 1, why, operands=over)
+        return {"vectors": 0, "edge_vectors": 0, "reference_raised": 0, "realizations": [], "unchecked": why}, None, []
+    n, edge = _n_vectors(t, opts), edge_count(params)
+    n, edge = floored(t, n, edge, opts) if _lowered(t, opts, lower_whole) else (n, min(n, edge))
+    arrays = vectors(params, n, opts.seed, edge)
     ref, raised = reference_outputs(t, params, arrays)
-    rec: dict[str, Any] = {"vectors": n, "edge_vectors": min(n, edge_count(params)), "reference_raised": len(raised), "realizations": []}
+    rec: dict[str, Any] = {"vectors": n, "edge_vectors": edge, "reference_raised": len(raised), "realizations": []}
     if raised:
         if isinstance(t, ScalarReference):
             rec["partial_domain"] = f"{t.id} is a ScalarReference with a declared domain; {len(raised)} of {n} vectors are outside it"
@@ -375,14 +477,16 @@ def correspondence(t: Any, opts: Options, F: Findings) -> tuple[dict, list[np.nd
         except ValueError as e:
             rec["realizations"].append({"via": f"kernel:{name}", "declines": str(e)[:200]})
             continue
-        rec["realizations"].append({"via": f"kernel:{name}", "compared": sc.compared, "declined": sc.declined,
-                                    "mismatches": len(sc.mismatches), **({"fault": sc.fault} if sc.fault else {})})
+        rec["realizations"].append({"via": f"kernel:{name}", "compared": sc.compared, "random": max(0, sc.compared - edge),
+                                    "declined": sc.declined, "mismatches": len(sc.mismatches), **({"fault": sc.fault} if sc.fault else {})})
         if sc.fault == "mismatch":
             F.fail("correspondence", "kernel-mismatch", t.id, f"[{name}]: {len(sc.mismatches)} of {sc.n} vectors", via=f"kernel:{name}",
                    examples=[{"instance": i, "args": _short(a), "kernel": _short(k), "reference": _short(r)} for i, a, k, r in sc.mismatches[:_EXAMPLES]])
         elif sc.fault:
             F.fail("correspondence", f"kernel-{sc.fault}", t.id, f"[{name}]: declined {sc.declined} of {sc.n} vectors, "
                    f"{sc.outside} outside the reference's domain", via=f"kernel:{name}")
+        else:
+            _sampled(t, name, rec["realizations"][-1], opts, F)
     return rec, arrays, ref
 
 
@@ -474,7 +578,8 @@ def port_intervals(t: Any, opts: Options, F: Findings) -> dict | None:
 
 
 def target_equivalence(target: Any, definition: Any, opts: Options, F: Findings) -> dict | None:
-    """A template evaluated through another Definition (``Subcircuit.target``) against its own Definition's reference."""
+    """A template evaluated through another Definition (``Subcircuit.target``) against its own Definition's reference, on the
+    floored vectors (`floored`); ``random``, the random vectors it compared on."""
     from verity.ml.circuits.evaluation import evaluate_batch
 
     if target is definition or getattr(target, "id", None) == getattr(definition, "id", None):
@@ -483,7 +588,8 @@ def target_equivalence(target: Any, definition: Any, opts: Options, F: Findings)
     pd, rd = signature_of(definition)
     if [p.leaf_widths() for p in pt] != [p.leaf_widths() for p in pd] or rt.leaf_widths() != rd.leaf_widths():
         return {"target": target.id, "compared": 0, "reason": "the target's leaves are not the Definition's"}
-    arrays = vectors(pd, _n_vectors(definition, opts), opts.seed + 1)
+    n, e = floored(definition, _n_vectors(definition, opts), edge_count(pd), opts)
+    arrays = vectors(pd, n, opts.seed + 1, e)
     want, _raised = reference_outputs(definition, pd, arrays)
     rows = [i for i, w in enumerate(want) if w is not None]
     got = np.asarray(evaluate_batch(target, *[a[rows].reshape(len(rows), -1) for a in arrays])).reshape(len(rows), -1)
@@ -491,7 +597,7 @@ def target_equivalence(target: Any, definition: Any, opts: Options, F: Findings)
     if bad:
         F.fail("correspondence", "target-mismatch", definition.id, f"[{target.id}]: {len(bad)} of {len(rows)} vectors", via=target.id,
                examples=[{"instance": i, "target": _short(g), "reference": _short(w)} for i, g, w in bad[:_EXAMPLES]])
-    return {"target": target.id, "compared": len(rows), "mismatches": len(bad)}
+    return {"target": target.id, "compared": len(rows), "random": sum(i >= e for i in rows), "mismatches": len(bad)}
 
 
 def _wide_words(t: Any, words: Sequence[Any], ret: Any, params: Sequence[Any], arrays: Sequence[np.ndarray], n: int) -> np.ndarray:
@@ -519,22 +625,45 @@ def _wide_words(t: Any, words: Sequence[Any], ret: Any, params: Sequence[Any], a
     return out
 
 
-def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
-    """The word Definition a Boolean Definition names (`verity.ml.circuits.boolean.trace.word_of`) against the Boolean one, which is
-    the definition: on the word Definition's edge and random vectors, the word Definition must equal the Boolean gates through the
-    word view (`verity.ml.circuits.evaluation.bits.evaluate_words`, which evaluates the gates)."""
+def _word_or_none(t: Any) -> Any:
+    """The word Definition a Boolean composite names (`verity.ml.circuits.boolean.trace.word_of`), or None."""
     if isinstance(t, (PrimitiveDefinition, ScalarReference)) or not is_boolean(t):
         return None
-    from verity.ml.circuits.evaluation import evaluate_batch
-    from verity.ml.circuits.evaluation.bits import evaluate_words
     from verity.ml.circuits.boolean.trace import word_of
 
     try:
-        word = word_of(t)
+        return word_of(t)
     except KeyError:
         return None
+
+
+#: the word view compares a Boolean Definition with its word Definition on at least this many random vectors, whatever it costs
+WORD_RANDOM_FLOOR = 2
+
+
+def _word_vectors(word: Any, pw: Sequence, opts: Options) -> tuple[int, int]:
+    """``(vectors, all-edge vectors)`` of the word view: ``16 * opts.vectors``, the all-edge ones first, while the word
+    reference's work on them is within ``16 * opts.reference_budget`` gate evaluations; past it, as many as that pays for and at
+    least ``opts.min_vectors``, at most half of them all-edge; and at least `WORD_RANDOM_FLOOR` of them random either way, so a
+    Definition too large for the full count is still compared on random vectors."""
+    full = 16 * opts.vectors
+    n = max(opts.min_vectors, WORD_RANDOM_FLOOR, min(full, 16 * opts.reference_budget // max(1, _gates(resolve(word)))))
+    return n, min(edge_count(pw), n if n == full else n // 2, n - WORD_RANDOM_FLOOR)
+
+
+def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
+    """The word Definition a Boolean Definition names (`verity.ml.circuits.boolean.trace.word_of`) against the Boolean one, which is
+    the definition: on the word Definition's edge and random vectors (`_word_vectors`), the word Definition must equal the Boolean
+    gates through the word view (`verity.ml.circuits.evaluation.bits.evaluate_words`, which evaluates the gates)."""
+    word = _word_or_none(t)
+    if word is None:
+        return None
+    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity.ml.circuits.evaluation.bits import evaluate_words
+
     pw, rw = signature_of(word)
-    arrays = vectors(pw, 16 * opts.vectors, opts.seed + 2)
+    n, edge = _word_vectors(word, pw, opts)
+    arrays = vectors(pw, n, opts.seed + 2, edge)
     n = arrays[0].shape[0] if arrays else 1
     pb, rb = signature_of(t)
     single_bits = [BL.word_type(p) for p in (*pb, rb)] != [*pw, rw] and [BL.bit_type(p) for p in (*pw, rw)] == [*pb, rb]
@@ -554,7 +683,8 @@ def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
         F.fail("correspondence", "word-mismatch", t.id, f"[{word.id}]: {len(bad)} of {n} vectors", via=f"word:{word.id}",
                examples=[{"instance": i, "args": _short(instance_args(pw, arrays, i)), "word": _short(got[i].tolist()),
                           "boolean": _short(boolean[i].tolist())} for i in bad[:_EXAMPLES]])
-    return {"via": f"word:{word.id}", "compared": n, "mismatches": len(bad)}
+    return {"via": f"word:{word.id}", "compared": n, "edge_vectors": min(n, edge), "random": n - min(n, edge),
+            "mismatches": len(bad)}
 
 
 # --- Boolean circuits -------------------------------------------------------------------------------------------------------
@@ -836,6 +966,20 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
 
 
 STRUCT_VIA = "c-flock:struct_lower"
+#: a family's struct budget is its key under this kind in its module's sidecar pins (``{"struct_max_gates": {family: gates}}``)
+STRUCT_PINS = "struct_max_gates"
+
+
+def struct_budget(t: Any, opts: Options, pins: Any) -> tuple[int, int | None]:
+    """``(gates, declared)``: a composite of at most ``gates`` gates is realized by its structural lowering, the larger of
+    ``opts.struct_max_gates`` and its family's struct budget, ``declared``, the ``struct_max_gates`` entry of its module's
+    sidecar pins (None when there is none).  Read as a pin, so every run checks a family the same way and a target's cached
+    result holds the entry by its value, or its absence."""
+    from .targets import family
+
+    budgets = pins.get(STRUCT_PINS)
+    declared = None if budgets is None else budgets.get(family(t))
+    return max(opts.struct_max_gates, int(declared or 0)), None if declared is None else int(declared)
 
 
 def struct_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: list, F: Findings) -> dict:
@@ -925,7 +1069,8 @@ def dead_gates(fn: Any, opts: Options, F: Findings) -> dict:
 
 def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = True, q_word: int = 1) -> tuple[dict, dict]:
     """`Q_word_v1` on one Call of ``fn`` (its record and `word.unit_rule`).  Where the invariant applies (``fn`` is a Call of a
-    served Program) every violation fails by name; elsewhere the cut of ``fn`` alone is recorded (``isolated``), since its gates
+    served Program) every violation fails by name, a member over the budget that `word.unit_rule` leaves whole too
+    (``partition/unpartitioned``); elsewhere the cut of ``fn`` alone is recorded (``isolated``), since its gates
     are partitioned inside the Call that contains it.  With ``q_word=2`` (a Boolean Call: `Q_word` v2) a value computed in two
     proof blocks is no failure: ``recomputed_across`` records how many gates are (the whole cut's v2 view, else
     `word.unit_rule`'s count;
@@ -953,7 +1098,10 @@ def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = T
         elif v["class"] == "too-large":
             rec["checked"] = False
             rec["reason"] = f"{v['gates']} gates: over the partition budget {v['limit']}"
-            P.warn("partition", "unchecked", d, 1, rec["reason"])
+            if applies:
+                P.fail("partition", "unpartitioned", d, f"{rec['reason']}, and not cut member by member")
+            else:
+                P.warn("partition", "unchecked", d, 1, rec["reason"])
         else:
             P.fail("partition", "width", d, f"{v['class']}: |out(S)| = {v['out_bits']} b over {v['out_gates']} gate(s), limit "
                    f"{v['limit'][0]} b or one gate of {v['limit'][1]} b", unit_class=v["class"], units=v.get("units"))
@@ -1015,6 +1163,127 @@ def q_call(fn: Any, opts: Options, F: Findings, memo: dict) -> dict:
             "recomputed_across": v.detail["recomputed_across"]["n"], "redundant_gates": v.detail["redundant_gates"], "codes": list(v.codes)}
 
 
+def uncut(fn: Any, opts: Options = DEFAULTS) -> str | None:
+    """Why `partition` can't check a Call of ``fn`` itself, or None: its parameters' leaves are over ``partition_max_leaves`` (the
+    word query and `Q_call` resolve every leaf), or it is a composite over its gate budget (``partition_max_gates``,
+    `word.gate_limit`) whose body `word.unit_rule` doesn't cut member by member (`cut.separable`), or cuts so down to a member
+    over its own budget that it doesn't (``too-large``)."""
+    from verity.ml.circuits.cut import separable
+    from verity.ml.definitions import word as W
+
+    if isinstance(fn, ScalarReference):
+        return None
+    if (leaves := sum(pt.leaves for pt in signature_of(fn)[0])) > opts.partition_max_leaves:
+        return (f"its parameters' {leaves} leaves are over the partition's leaf budget {opts.partition_max_leaves}: the word query "
+                "and Q_call resolve every leaf")
+    todo, seen = [fn], set()
+    while todo:
+        u = todo.pop()
+        if u.id in seen or isinstance(u, PrimitiveDefinition) or not hasattr(u, "body") \
+                or u.gates <= (limit := W.gate_limit(u, opts.partition_max_gates)):
+            continue
+        seen.add(u.id)
+        if (sep := separable(u)) is None:
+            return (f"{fn.gates} gates: over the partition budget {limit}" if u is fn else
+                    f"its member {u.id}'s {u.gates} gates are over the partition budget {limit}, and not cut member by member")
+        todo += [c for c, _m in sep]
+    return None
+
+
+def _callees(fn: Any) -> list[Any]:
+    return list({n.fn.id: n.fn for n in fn.body.nodes}.values())
+
+
+def _decided_call(fn: Any) -> bool:
+    from .targets import Undecided, family, is_call
+
+    try:
+        return is_call(family(fn))
+    except Undecided:
+        return False
+
+
+def callee_gap(fn: Any, opts: Options = DEFAULTS, seen: dict[str, str | None] | None = None) -> str | None:
+    """Why `by_callees` can't partition a Call of ``fn``, or None when it can: ``fn`` is a primitive, which has no callees; or a
+    callee is no Call (`targets.is_call`; one it can't decide without the catalog is not); or a callee is `uncut` itself and is
+    a primitive (over the leaf budget: nothing partitions it), or a composite with such a gap of its own."""
+    seen = {} if seen is None else seen
+    if fn.id not in seen:
+        seen[fn.id] = f"{fn.id} reaches itself"
+        seen[fn.id] = _gap(fn, opts, seen)
+    return seen[fn.id]
+
+
+def _gap(fn: Any, opts: Options, seen: dict[str, str | None]) -> str | None:
+    if isinstance(fn, PrimitiveDefinition) or not hasattr(fn, "body"):
+        return f"{fn.id} is a primitive, with no callees to partition it"
+    for c in _callees(fn):
+        if not _decided_call(c):
+            return f"{c.id} is no Call"
+        if (why := uncut(c, opts)) is not None:
+            if isinstance(c, PrimitiveDefinition):
+                return f"{c.id} is a primitive and {why}"
+            if (inner := callee_gap(c, opts, seen)) is not None:
+                return f"{c.id}: {inner}"
+    return None
+
+
+def callees_are_calls(fn: Any, opts: Options = DEFAULTS, seen: dict[str, str | None] | None = None) -> bool:
+    """Whether `by_callees` partitions a Call of ``fn``: `callee_gap` finds no gap."""
+    return callee_gap(fn, opts, seen) is None
+
+
+def by_callees(fn: Any, opts: Options, F: Findings, memo: dict, why: str) -> dict | None:
+    """The partition of a Call of ``fn`` that `partition` can't check itself (``why``, `uncut`), when every Definition its body
+    calls is a Call (`targets.is_call`; `targets.CALLEE_CALLS` lists the families that are one for this reason): each callee's
+    partition checked as a Call's (`partition`; `q_call` for a primitive; one `uncut` itself, by its callees in turn), whose
+    violations fail by the callee's name, so every gate of ``fn`` sits in a Call whose partition is checked; and, where ``fn``'s
+    body nodes read only its parameters (`cut.separable`), the values two of its members compute (`cross_call.members_check`:
+    each a failure under `Q_word` v1, counted under v2).  Values two callees compute in a body that isn't separable are not
+    compared, as between two Calls of a Program.  ``max_out_bits`` is the widest unit output over its callees' records (a
+    primitive callee's `word.unit_rule`'s: its gate's output, none for a constant, which is wired).  None, so the partition stays
+    unchecked, where `callee_gap` finds a gap (its record names it).  ``memo`` keeps each callee's record and findings across
+    targets."""
+    from verity.ml.circuits import boolean as BL
+    from verity.ml.circuits.cut import separable
+    from verity.ml.definitions import word as W
+
+    if callee_gap(fn, opts, memo.setdefault("callee_gap", {})) is not None:
+        return None
+    done = memo.setdefault("by_callees", {})
+    word = memo.setdefault("word", {})
+    out: dict[str, Any] = {}
+    for c in _callees(fn):
+        if c.id not in done:
+            G = Findings()
+            if isinstance(c, PrimitiveDefinition):
+                rule = W.unit_rule(c, opts.X, opts.W, opts.extras, memo=word, max_gates=opts.partition_max_gates)
+                rec = {"checked": True, "max_out_bits": rule["max_out_bits"], "q_call": q_call(c, opts, G, word)}
+            elif (inner := uncut(c, opts)) is not None:
+                rec = by_callees(c, opts, G, memo, inner)
+            else:
+                rec, _ = partition(c, opts, G, word, applies=True, q_word=2 if BL.is_boolean(c) else 1)
+                rec.pop("_graph", None)
+            done[c.id] = (rec, G)
+        rec, G = done[c.id]
+        F.extend(G)
+        out[c.id] = rec
+    v2 = BL.is_boolean(fn)
+    part: dict[str, Any] = {"applies": True, "checked": True, "reason": why, "q_word": 2 if v2 else 1,
+                            "max_out_bits": max((r.get("max_out_bits") or 0 for r in out.values()), default=0), "by_callees": out}
+    if separable(fn) is not None:
+        from verity.ml.definitions.cross_call import members_check
+
+        with spent("partition-members"):
+            across = members_check(fn, word)
+        if v2:
+            part["recomputed_across"] = across["recomputed_gates"]
+        elif across["recomputes"]:
+            F.fail("partition", "gate-recomputed", fn.id, f"({across['recomputed_gates']} gate(s) between node members)",
+                   classes=across["recomputes"][:8])
+    return part
+
+
 # --- one Definition ---------------------------------------------------------------------------------------------------------
 
 def conformance_of(t: Any) -> str | None:
@@ -1052,20 +1321,31 @@ def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = N
     entry: dict[str, Any] = {"definition": t.id, "form": kind, "conformance": conformance_of(t),
                              "gates": None if kind == "reference" else _gates(t)}
     with spent("correspondence"):
-        corr, arrays, ref = correspondence(t, opts, F)
+        corr, arrays, ref = correspondence(t, opts, F, lower_whole=lower_whole)
     params, _ = signature_of(t)
     with spent("lowering"):
         if arrays is None:
             low = {"lowered": False, "reason": "a lowering takes every input leaf, and this Definition's correspondence reads a "
                    "registered table lazily" if "table" in corr else "a lowering takes every input leaf, and this Definition's "
-                   "correspondence reads an operand over the input budget lazily" if "wide" in corr else "no vectors"}
+                   "correspondence reads an operand over the input budget lazily" if "wide" in corr else "a lowering takes every "
+                   "input leaf, and this Definition has an operand over the input budget" if "unchecked" in corr else "no vectors"}
         elif lower_whole or kind != "composite":
             low = whole_lowering(t, params, arrays, ref, opts, F, pins, memo)
         else:
             low = {"lowered": False, "reason": "lowered as its template's units"}
         corr["realizations"].append({"via": "c-flock:ir_lower", **low})
-        if kind == "composite" and arrays is not None and t.gates <= opts.struct_max_gates:
+        budget, declared = struct_budget(t, opts, pins)
+        if kind == "composite" and arrays is not None and t.gates <= budget:
             corr["realizations"].append(struct_lowering(t, params, arrays, ref, F))
+        elif kind == "composite" and declared is not None:
+            corr["realizations"].append({"via": STRUCT_VIA, "lowered": False, "reason": (
+                f"{t.gates} gates: over its family's struct budget, {declared} (its sidecar's {STRUCT_PINS!r})"
+                if t.gates > budget else "no vectors to compare it on")})
+        # a lowering compares on every vector the reference took, so its random ones are those past the all-edge ones
+        late = sum(r is not None for r in ref[corr["edge_vectors"]:])
+        for rec in corr["realizations"]:
+            if rec.get("compared") and "random" not in rec:
+                rec["random"] = late
     with spent("word-view"):
         wv = word_view(t, opts, F)
     if wv is not None:
@@ -1075,10 +1355,21 @@ def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = N
         ports = port_intervals(t, opts, F)
     if ports is not None:
         entry["ports"] = ports
-    leaves = 0 if kind == "reference" else sum(pt.leaves for pt in params)
-    if kind != "reference" and leaves > opts.partition_max_leaves:
-        why = (f"its parameters' {leaves} leaves are over the partition's leaf budget {opts.partition_max_leaves}: the word query "
-               "and Q_call resolve every leaf")
+    why, part = uncut(t, opts), None
+    if as_call and kind != "reference" and why is not None:
+        if kind == "composite":
+            with spent("partition"):
+                part = by_callees(t, opts, F, memo, why)
+        if part is None:
+            gap = callee_gap(t, opts, memo.setdefault("callee_gap", {}))
+            F.fail("partition", "unpartitioned", t.id, f"{why}; {gap}")
+            part = {"applies": True, "checked": False, "q_word": 2 if is_boolean(t) else 1, "reason": why, "callee_gap": gap}
+    if part is not None:
+        entry["partition"] = part
+        entry["redundant_gates"] = {"checked": False}
+        with spent("dead-gates"):
+            entry["dead_gates"] = dead_gates(t, opts, F) if kind == "composite" else {"count": 0}
+    elif kind != "reference" and sum(pt.leaves for pt in params) > opts.partition_max_leaves:
         F.warn("partition", "unchecked", t.id, 1, why)
         entry["partition"] = {"applies": as_call, "checked": False, "reason": why}
         entry["redundant_gates"] = {"checked": False}
@@ -1111,29 +1402,79 @@ def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = N
     return entry
 
 
-#: the packages whose Definitions are each staged whole as one Flock unit (`verity_flock.class_statement.UnitStager`), so
-#: `block_range` fails one past the range: PoUW's.  A served Program's Call is proved as its partition's proof blocks
-#: (`partition`), so a Call's whole count bounds none of them and is recorded, not failed.
-UNIT_OWNERS = ("verity.core.protocols.pouw.",)
-
-
 def unit_block(t: Any, F: Findings, lower_whole: bool = True) -> dict:
-    """`block_range` of ``t``, failed past the range where ``t`` is staged whole as one unit: checked whole (``lower_whole``) and
-    owned under `UNIT_OWNERS` (`sidecars.owner`)."""
-    return block_range(t, F, applies=lower_whole and (SC.owner(t) or "").startswith(UNIT_OWNERS))
+    """`block_range` of ``t``, failed past the range where ``t`` is checked whole (``lower_whole``)."""
+    return block_range(t, F, applies=lower_whole)
 
 
 def block_range(t: Any, F: Findings, applies: bool = True) -> dict:
-    """The witness bits ``t`` needs as one Flock unit, read off its Definition (`verity_flock.circuit.unit_witness`), against
-    Flock's proved range of 2^``K_MAX``; past it a failure where ``t`` is one unit (``applies``: checked whole, not as a
-    subcircuit whose units are its template's proof blocks, and owned under `UNIT_OWNERS`), the one `UnitStager` raises
-    before lowering."""
+    """The Flock block ``t`` needs as one unit, read off its Definition (`verity_flock.circuit.unit_block`: its rows'
+    sha512x3 and hm96 slots and the mask beside its own slot, as `compose` places them), against Flock's proved range of
+    2^``K_MAX``; past it a failure where ``t`` is checked whole (``applies``: not as a subcircuit whose units are its
+    template's proof blocks).  Which of those failures are held is the report's (`summarize`, `block_held`), so no target's
+    verdict reads the list.  A Call serving stages as its cut (`cut_of`) never needs its own block: each unit of the cut is
+    held to the range in its place, a failure naming the Call and the unit, and the entry's ``k_log`` and ``bits`` are the
+    largest unit's, its ``whole`` the Call's, its ``cut`` each unit's with how many of it."""
     from verity_flock import circuit as FC
 
-    w = FC.unit_witness(t)
-    if applies and (why := FC.past_range(w)) is not None:
-        F.fail("block", "past-range", t.id, why, **w)
-    return {**w, "applies": applies}
+    b = FC.unit_block(t)
+    if (cut := cut_of(t)) is None:
+        if applies and (why := FC.past_block(b)) is not None:
+            F.fail("block", "past-range", t.id, why, **b)
+        return {**b, "applies": applies}
+    units = []
+    for u, n in cut:
+        ub = FC.unit_block(u)
+        units.append({"unit": u.id, "count": n, **{k: ub[k] for k in ("ands", "bits", "k_log")}})
+        if applies and (why := FC.past_block(ub)) is not None:
+            F.fail("block", "past-range", t.id, f"its cut's unit {u.id}: {why}", **ub)
+    top = max(units, key=lambda u: u["bits"])
+    return {**b, "applies": applies, "k_log": top["k_log"], "bits": top["bits"],
+            "whole": {"k_log": b["k_log"], "bits": b["bits"]}, "cut": units}
+
+
+def cut_of(t: Any) -> list[tuple[Any, int]] | None:
+    """The units serving stages Call ``t`` as, each Definition bound with how many of it, where the module whose function
+    builds ``t`` names its family in ``CUTS`` (family -> its cut at a binding's statics, `sparse_mla.CUTS`, or the name of the
+    module whose ``cut`` it is, `sampling.CUTS`); else None.  Only that module is read, which ``t``'s check reads already, and
+    the module it names, imported by that name."""
+    from . import cache as CC
+
+    mod = sys.modules.get(CC._function_module(getattr(t, "defn", t)) or "")
+    cut = getattr(mod, "CUTS", {}).get(getattr(t, "base_id", None))
+    if isinstance(cut, str):
+        cut = importlib.import_module(cut).cut
+    return None if cut is None else cut(t)
+
+
+def _held_blocks(entries: list[dict], catalog: bool = False) -> tuple[dict[str, str], list[dict]]:
+    """Of ``entries``, the Definitions `block_held.HELD` holds past the block, each with why, and a ``block/stale-hold``
+    failure for each held one checked whole whose block fits (a cut Call's, each unit of its cut); over the whole catalog
+    (``catalog``: an unsharded ``--all`` or every shard of one), a ``block/absent-hold`` failure for each held id no entry
+    names, which nothing is checked as any longer."""
+    from .block_held import HELD
+
+    fix = "delete its entry (tools/verity/circuit_check/src/circuit_check/block_held.py) and lower MAX"
+    held, stale, seen = {}, [], set()
+    for e in entries:
+        d, b = e.get("definition") or e.get("target"), e.get("block") or {}
+        seen.add(d)
+        if d not in HELD or not b.get("applies"):
+            continue
+        if b["k_log"] > b["k_max"]:
+            held[d] = HELD[d]
+            continue
+        fits = (f"each unit of its cut fits 2^{b['k_max']} (the largest 2^{b['k_log']} bits)" if "cut" in b else
+                f"its block of 2^{b['k_log']} bits fits 2^{b['k_max']}")
+        F = Findings()
+        F.fail("block", "stale-hold", d, f"{fits}, but block_held.HELD holds it ({HELD[d]}): {fix}", **b)
+        stale += F.failures
+    for d in sorted(set(HELD) - seen) if catalog else ():
+        F = Findings()
+        F.fail("block", "absent-hold", d, f"block_held.HELD holds it ({HELD[d]}), but the catalog checks no Definition of that "
+               f"id any longer: {fix}")
+        stale += F.failures
+    return held, stale
 
 
 def circuit_digest_pin(t: Any, pins: dict, F: Findings) -> dict:
@@ -1163,6 +1504,18 @@ def _traced(build: Callable[[], Any]) -> tuple[Any, Any]:
     return BE.trace(build)
 
 
+def _traced_owner_names(build: Callable[[], Any], n: int) -> Callable[[int], str]:
+    """`_owner_names` of a traced ``build()``, built when a bit's owner is first asked for: a unit circuit the lowering built
+    already is built again only to name where a redundant AND is."""
+    got: list[Callable[[int], str]] = []
+
+    def owner(v: int) -> str:
+        if not got:
+            got.append(_owner_names(_traced(build)[1], n))
+        return got[0](v)
+    return owner
+
+
 def _export_counts(build: Callable[[], Any], name: str, C: Any = None) -> dict:
     """The Boolean export of one proof block's circuit (`boolean_export.CircuitTypeTable.type_of`): its circuit types' AND/XOR/NOT counts, each
     distinct sub-circuit once, every type validated and the root evaluated against the circuit (``C``, one ``build`` made
@@ -1181,9 +1534,9 @@ def _export_counts(build: Callable[[], Any], name: str, C: Any = None) -> dict:
 def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pins: dict) -> dict:
     """A subcircuit's Flock proof blocks: one proof block's circuit digest against its module's pin, its counts against
     their pin and the Boolean export, its redundant ANDs, and the laid-out proof blocks against the reference on the edge and
-    random vectors."""
+    random vectors (`floored`, its lanes a vector the proof blocks); ``random``, the random vectors it compared on."""
     from verity_flock import ir_lower as IL
-    from verity_numerical.bench import lowerings
+    from verity_flock import lowerings
 
     reg = lowerings.registry("C-Flock")
     tid = sub.template.id
@@ -1218,20 +1571,25 @@ def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pi
         if pin != digest:
             F.fail("lowering", "digest-mismatch", sub.id, f"[{name}]: {digest[:16]} != pinned {pin[:16]}", pinned=pin, digest=digest)
     if isinstance(low, IL.Lowering):
-        build = low.units.circuit
+        build, C = low.units.circuit, low.circuit
     else:
         from verity_flock import ir_sampling as S
 
         def build():
             return S.lane_circuit(int(sub.params["V"]))
-    C, root = _traced(build)
+        C = None
+    if C is None:
+        C, root = _traced(build)
+        owner = _owner_names(root, len(C.kind))
+    else:
+        owner = _traced_owner_names(build, len(C.kind))
     typ = lowering_type(C)
     counts = _export_counts(build, f"{name} unit", C)
     rec["export"] = counts
     if counts["flat_ands"] != rec["ands"]:
         F.fail("lowering", "export-count", sub.id, f"[{name}]: the export's circuit has {counts['flat_ands']} ANDs, the layout {rec['ands']}")
     rec["pin"] = _counts_against_pin("units", sub.id, {**{k: counts[k] for k in ("and", "xor", "not")}, "type": typ}, pins, F, sub.id)
-    red, by = redundant_ands(C, _owner_names(root, len(C.kind)))
+    red, by = redundant_ands(C, owner)
     rec["redundant_ands"] = {"count": red, "where": dict(by.most_common())}
     if red:
         F.warn("redundant-gates", "boolean", sub.id, red, f"ANDs on identical operands in the {name} unit", where=dict(by.most_common()))
@@ -1241,8 +1599,8 @@ def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pi
                                  "vocabulary position of the row")
         return rec
     params, _ = signature_of(d)
-    n = max(1, min(opts.vectors, opts.lane_budget // max(1, low.units.n)))
-    arrays = vectors(params, n, opts.seed + 2)
+    n, e = floored(d, max(1, min(opts.vectors, opts.lane_budget // max(1, low.units.n))), edge_count(params), opts, low.units.n)
+    arrays = vectors(params, n, opts.seed + 2, e)
     ref, _raised = reference_outputs(d, params, arrays)
     rows = [i for i, r in enumerate(ref) if r is not None]
     fin = flat(arrays)[rows]
@@ -1254,7 +1612,8 @@ def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pi
     if cuts is not None:
         bad |= (cut_out != cuts).any(axis=1)
     lanes = len(rows) * low.units.n
-    rec.update(compared=len(rows), mismatches=int(bad.sum()), unsatisfied_lanes=lanes - bin(ok).count("1") if lanes else 0)
+    rec.update(compared=len(rows), random=sum(i >= e for i in rows), mismatches=int(bad.sum()),
+               unsatisfied_lanes=lanes - bin(ok).count("1") if lanes else 0)
     if bad.any():
         idx = np.flatnonzero(bad).tolist()
         F.fail("correspondence", "lowering-mismatch", sub.id, f"[{name}]: {len(idx)} of {len(rows)} vectors", via=f"c-flock:{name}",
@@ -1351,19 +1710,72 @@ def check_row(path: str | Path, opts: Options = DEFAULTS, *, memo: dict | None =
 
 # --- reports ------------------------------------------------------------------------------------------------------------------
 
-def summarize(entries: Iterable[dict]) -> dict:
+#: what a target's realizations compared it with the reference on (`vector_class`), best first
+VECTOR_CLASSES = ("random", "edge-only", "none")
+_VECTOR_WARNINGS = {"edge-only": "its realizations compared it with the reference on all-edge vectors only, on no random one",
+                    "none": "no realization compared it with the reference, so only the reference's totality was checked"}
+
+
+def _corrs(r: dict) -> list[dict]:
+    """``r``'s correspondences that read an input: a Definition without parameters (a constant) has no vector to sample."""
+    return [c for e in (r, *r.get("definitions", ())) if (c := e.get("correspondence"))
+            and not (c.get("vectors") and not c.get("edge_vectors") and "table" not in c and "wide" not in c)]
+
+
+def vector_class(r: dict) -> str | None:
+    """A target's result (a Definition's entry, a template's or a row's) by what its realizations compared it with the reference
+    on: ``random`` when one compared it on a random vector (a realization's ``random``: those past the all-edge ones),
+    ``edge-only`` when they compared it on all-edge vectors only, ``none`` when none did (no realization took the vectors or
+    each declined: the reference only ran, which shows it total).  A row's is its worst Definition's.  None for a result with
+    no correspondence over an input: a by-calls root (its callees are targets of their own), a constant, a structural or ambient
+    check, a check that raised."""
+    if r.get("mode") == "by-calls":
+        return None
+    if "row" in r:
+        got = [c for e in r.get("definitions", ()) if (c := vector_class(e)) is not None]
+        return max(got, key=VECTOR_CLASSES.index) if got else None
+    corrs = _corrs(r)
+    units = r["lowering"] if isinstance(r.get("lowering"), list) else []
+    if not corrs and not units:
+        return None
+    recs = [x for c in corrs for x in c.get("realizations", ())]
+    recs += [*r.get("target_equivalence", ()), *(x for x in units if x.get("lowered"))]
+    if any((x.get("random") or 0) > 0 for x in recs):
+        return "random"
+    return "edge-only" if any((x.get("compared") or 0) > 0 for x in recs) else "none"
+
+
+def classified(r: dict) -> dict:
+    """A target's result with a warning when it is `vector_class` ``edge-only`` (``vectors/edge-only``) or ``none``
+    (``vectors/none``): its semantics were held to no random vector, a property left unchecked, as every warning is."""
+    c = vector_class(r)
+    if c is None or c == "random":
+        return r
+    F = Findings()
+    F.warn("vectors", c, r.get("definition") or r.get("subcircuit") or r.get("row") or "?", 1, _VECTOR_WARNINGS[c])
+    return {**r, "warnings": [*r.get("warnings", ()), *F.warnings]}
+
+
+def summarize(entries: Iterable[dict], catalog: bool = False) -> dict:
     """Totals over entries: failures by name (`ok` is none: whether one may stay red is drive's policy, never the runner's),
     warnings' counts by check and by Definition (a finding two entries share, such as a template's Definition checked on its own
     too, once), ``unchecked``: how many warnings (each a property no check enforces: it never fails) on how many Definitions,
     ``recomputed_across``: each Boolean Call (`Q_word` v2) that computes a value in two proof blocks, with its count, and
     ``q_call_refused``: each Definition `Q_call` v1 does not apply to, with why; ``by_calls``: each root checked by its calls
-    (`circuit_check.by_calls`), not lowered whole, with the targets its callees rely on."""
+    (`circuit_check.by_calls`), not lowered whole, with the targets its callees rely on; ``by_callees``: each Call partitioned by
+    its callees (`by_callees`), with them; ``vectors``: the targets of each `vector_class`, by name, and ``lazy``, those whose
+    correspondence read a table or an operand lazily (where kernels decline and no lowering runs); ``block_held``: each
+    Definition past the Flock block that `block_held.HELD` holds, with why, its ``block/past-range`` failure not counted, and
+    over the whole catalog (``catalog``) each held id it no longer has failed (`_held_blocks`)."""
     entries = list(entries)
     fails: dict[str, dict] = {}
     warns: dict[str, dict] = {}
+    held, stale = _held_blocks(entries, catalog)
     for e in entries:
-        fails.update((f["name"], f) for f in e.get("failures", []))
+        fails.update((f["name"], f) for f in e.get("failures", [])
+                     if (f["check"], f["code"]) != ("block", "past-range") or f["definition"] not in held)
         warns.update((w["name"], w) for w in e.get("warnings", []))
+    fails.update((f["name"], f) for f in stale)
     fails, warns = list(fails.values()), list(warns.values())
     by_check: Counter = Counter()
     by_def: dict[str, Counter] = {}
@@ -1371,9 +1783,11 @@ def summarize(entries: Iterable[dict]) -> dict:
         k = f"{w['check']}/{w['code']}"
         by_check[k] += w["count"]
         by_def.setdefault(k, Counter())[w["definition"]] += w["count"]
-    across, refused, by_calls = {}, {}, {}
+    across, refused, by_calls, by_callee = {}, {}, {}, {}
     for e in entries:
         p = e.get("partition") or {}
+        if "by_callees" in p:
+            by_callee[e.get("definition") or e.get("target")] = sorted(p["by_callees"])
         if p.get("q_word") == 2 and p.get("recomputed_across"):
             across[e.get("definition") or e.get("target")] = p["recomputed_across"]
         if "inapplicable" in (p.get("q_call") or {}):
@@ -1381,24 +1795,34 @@ def summarize(entries: Iterable[dict]) -> dict:
         if e.get("mode") == "by-calls":
             by_calls[e.get("definition") or e.get("target")] = sorted({c["binding"] for c in (e.get("by_calls") or {}).get("callees", [])
                                                                      if c.get("binding")})
+    classes: dict[str, list[str]] = {c: [] for c in (*VECTOR_CLASSES, "lazy")}
+    for e in entries:
+        if (c := vector_class(e)) is not None:
+            name = e.get("target") or e.get("definition") or e.get("subcircuit") or e.get("row")
+            classes[c].append(name)
+            if any("table" in x or "wide" in x for x in _corrs(e)):
+                classes["lazy"].append(name)
     return {"ok": not fails, "failures": len(fails), "failure_names": [f["name"] for f in fails],
             "recomputed_across": dict(sorted(across.items())), "q_call_refused": dict(sorted(refused.items())),
-            "by_calls": dict(sorted(by_calls.items())),
+            "by_calls": dict(sorted(by_calls.items())), "by_callees": dict(sorted(by_callee.items())),
+            "vectors": {c: {"count": len(v), "targets": sorted(v)} for c, v in classes.items()},
+            **({"block_held": dict(sorted(held.items()))} if held else {}),
             "unchecked": {"items": len(warns), "definitions": len({w["definition"] for w in warns})},
             "warnings": {k: {"total": v, "definitions": len(by_def[k]), "by_definition": dict(by_def[k].most_common())}
                          for k, v in by_check.most_common()}}
 
 
-def report(targets: list[dict], opts: Options) -> dict:
-    """The report over ``targets``, each by-calls root with its callees' targets' verdicts (`circuit_check.by_calls.joined`)."""
+def report(targets: list[dict], opts: Options, catalog: bool = False) -> dict:
+    """The report over ``targets``, each by-calls root with its callees' targets' verdicts (`circuit_check.by_calls.joined`);
+    ``catalog`` where they are the whole catalog's (`summarize`)."""
     from .by_calls import joined
 
     targets = joined(targets)
-    return {"schema": SCHEMA, "options": {k: getattr(opts, k) for k in opts.__dataclass_fields__}, "summary": summarize(targets),
-            "targets": targets}
+    return {"schema": SCHEMA, "options": {k: getattr(opts, k) for k in opts.__dataclass_fields__},
+            "summary": summarize(targets, catalog), "targets": targets}
 
 
-__all__ = ["Findings", "Options", "SCHEMA", "UNIT_OWNERS", "block_range", "check_definition", "check_row", "check_subcircuit",
-           "conformance_of", "correspondence", "dead_gates", "is_commit", "load_pins", "partition", "redundant_ands",
-           "redundant_gates", "report", "summarize", "target_equivalence", "template_lowering", "unit_block",
-           "whole_lowering"]
+__all__ = ["Findings", "Options", "SCHEMA", "VECTOR_CLASSES", "block_range", "by_callees", "callee_gap",
+           "callees_are_calls", "check_definition", "check_row", "check_subcircuit", "classified", "conformance_of", "correspondence", "cut_of", "dead_gates",
+           "floored", "is_commit", "load_pins", "partition", "redundant_ands", "redundant_gates", "report", "summarize",
+           "target_equivalence", "template_lowering", "uncut", "unit_block", "vector_class", "whole_lowering"]

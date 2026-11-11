@@ -126,7 +126,7 @@ def OuterKS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (D
       (D.nums x s).κ + Real.sqrt ((D.nums x s).γ * D.V.k x * PrB H D.V P x)
 
 /-- `collect` gives up only where one of its programs does. -/
-theorem collect_none {R α : Type} (H : Msg → Msg) (run : R → Trace) :
+theorem collect_none {R α : Type} (H : Msg → Msg) (run : R → Transcript) :
     ∀ ps : List (RP R (Option α)), ((collect ps).eval H run).1 = none → ∃ p ∈ ps, (p.eval H run).1 = none
   | [], h => by simp [collect, RP.eval] at h
   | p :: ps, h => by
@@ -148,11 +148,11 @@ theorem EO_none_session (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (
     (c : (EO D I DO decO).C x) (hacc : (run H P D.V x ω r₀).out = .acc)
     (h : ((EO D I DO decO).eval H P x ω r₀ c).1 = none) :
     ∃ s : Fin (D.nS x), ((EOs D I DO decO s).eval H P x ω r₀ (c s)).1 = none := by
-  simp only [Extractor.eval, EO, RP.eval, Trace.seen, hacc, ↓reduceIte] at h
+  simp only [Extractor.eval, EO, RP.eval, Transcript.seen, hacc, ↓reduceIte] at h
   obtain ⟨p, hp, hpn⟩ := collect_none H _ _ h
   obtain ⟨s, _, rfl⟩ := List.mem_map.1 hp
   refine ⟨s, ?_⟩
-  simp only [Extractor.eval, EOs, RP.eval, Trace.seen, hacc, ↓reduceIte]
+  simp only [Extractor.eval, EOs, RP.eval, Transcript.seen, hacc, ↓reduceIte]
   rw [(RP.eval_bind H _ _ _).1, hpn]
   rfl
 

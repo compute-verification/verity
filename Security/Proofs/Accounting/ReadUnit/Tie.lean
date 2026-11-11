@@ -38,21 +38,16 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The read unit's gates refine its reference, where its rows hold the read's program
+# The read unit's gates refine its reference, from its rows' values
 
-`gatesRefine_of_holdsRead`: let unit `u` of a game partition be an instance of the rows `R` (`IsRowsUnit`), and let `R`
-hold the read's program (`HoldsRead`: the program's input bits at `R`'s input columns and its outputs at computed ones,
-and wherever `R`'s rows hold with their constant set, the program's rows hold and its outputs are those columns'). Then,
-where the four parts' statements hold, the read's gates refine `Hash.EmbeddingRead` at SHA-512
-(`ReadUnit.GatesRefine`) in core's view of the partition, at the ports through the unit's wires (`readPorts`), wherever
-the constant's gate is registered as 1.
-
-A unit's rows hold at its local evaluation whatever the transcript (`sat_localEval`). A correct unit's committed gates
-hold that evaluation, and its input columns are gates outside it, so the evaluation is the transcript on the read's
-ports. The core, `gatesRefine_of_vals`, needs only that: values satisfying `R` that are the transcript's bits at the
-read's ports wherever the unit is correct, so it serves as well a unit whose rows hold the read as one copy of a stack.
-What remains of the read's gate refinement is `HoldsRead` for the registered template, which a per-Definition check of
-the template against the parts' generators gives.
+`gatesRefine_of_vals`: let the rows `R` hold the read's program (`HoldsRead`: the program's input bits at `R`'s input
+columns and its outputs at computed ones, and wherever `R`'s rows hold with their constant set, the program's rows hold
+and its outputs are those columns'), for a run that computes the read's reference at the rows' values. Then, where
+values satisfying `R` are a unit's local evaluation at the read's ports, the read's gates refine `Hash.EmbeddingRead`
+at SHA-512 (`ReadUnit.GatesRefine`) at the ports through `R`'s columns' gates (`readPorts`). The refinement is stated
+at the local evaluation, so the read's outputs need not be committed: of its gates in the unit, only its verdict is.
+`computes_of_vals` gives the read's reference at its ports from such values, so the read may be one copy of a stack.
+A template the read's check accepts gives `HoldsRead` and its reference (`read_of_check`).
 -/
 
 @[expose] public section
@@ -61,40 +56,6 @@ namespace Accounting.ReadUnit.Gates
 
 open Flock.HmNets hiding and
 open FlockSoundness.Discharge.Hm
-
-/-! ## A unit's rows hold at its local evaluation -/
-
-/-- **A unit's rows hold at its local evaluation**, whatever the transcript: each computed row's gate is the row of its
-columns' gates, which the local evaluation applies. -/
-theorem sat_localEval {C : FlockSoundness.Audit.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : Fin n}
-    {R : FlockSoundness.Rows} (I : P.IsRowsUnit u R) (tr : Fin C.N → Bool) :
-    R.Sat fun c => P.localEval tr u (I.wire c) := by
-  intro i
-  show P.localEval tr u (I.wire (R.comp i)) = _
-  rw [P.localEval_of_mem tr (I.mem i), I.op i]
-  simp only [FlockSoundness.Audit.Op.apply, FlockSoundness.Audit.xorSum_map, Function.comp_def]
-
-theorem ofBits_bit {C : FlockSoundness.Audit.Circuit} (tr : (Verity.Circuit.ofAudit C).Transcript) :
-    Verity.Circuit.ofBits (fun g => ReadUnit.bit tr g) = tr := by
-  funext g
-  apply BitVec.eq_of_getLsbD_eq
-  intro i hi
-  have hi0 : i = 0 := by
-    have : i < 1 := hi
-    omega
-  subst hi0
-  simp [Verity.Circuit.ofBits, ReadUnit.bit]
-
-/-- A unit correct in core's view of a game partition is correct in the game's, at its bits. -/
-theorem correct_bits {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {u : Fin n}
-    {tr : (Verity.Circuit.ofAudit C).Transcript} (h : (Verity.Partition.ofAudit P).Correct tr u) :
-    P.Correct (fun g => ReadUnit.bit tr g) u := by
-  by_contra hc
-  have hw := Verity.Partition.wrong_ofAudit P (fun g => ReadUnit.bit tr g)
-  rw [ofBits_bit] at hw
-  have hm : u ∈ P.wrong fun g => ReadUnit.bit tr g := (P.mem_wrong).2 hc
-  rw [← hw] at hm
-  exact ((Verity.Partition.ofAudit P).mem_wrong.1 hm) h
 
 /-! ## The read's program -/
 
@@ -107,14 +68,6 @@ def ins (k n : ℕ) : List Lin := (List.range n).map fun i => Lin.var (k + i)
 
 /-- `m` input words from bit `k`. -/
 def insW (k m : ℕ) : List Word := (List.range m).map fun j => ins (k + 64 * j) 64
-
-/-- **The read's program**: its input bits in port order, then the read's net over them. -/
-def readProg (D H : ℕ) (rowSeg : List Lin → M (List Word)) (leaf : List Word → List Word → M (List Word))
-    (frame : List Word → List Word → List Word → List Lin → List (List Word) → M Lin)
-    (select : List Lin → Lin → List Lin → M (List Lin × Lin)) : M (List Lin × Lin) := do
-  let _ ← input (readIn H D)
-  readNet D rowSeg leaf frame select (ins 0 32) (insW 32 8) (insW 544 8) (ins 1056 (16 * H))
-    (insW (1056 + 16 * H) 24) ((List.range D).map fun j => insW (2592 + 16 * H + 512 * j) 8)
 
 /-- **A unit's rows hold a program** of `N` input bits, built to `st` with outputs `outs`: under the column map `φ`, the
 program's input bits sit at the rows' input columns and its outputs at computed ones (`out`), and wherever the rows hold
@@ -195,39 +148,6 @@ def readDomain (z : Var → Bool) : Verity.Digest := wordsDigest z (insW 544 8)
 def readOpening (H D : ℕ) (z : Var → Bool) : Hash.RowLeaf.Opening :=
   openingOf z (ins 1056 (16 * H)) (insW (1056 + 16 * H) 24) ((List.range D).map fun j => insW (2592 + 16 * H + 512 * j) 8)
 
-/-- **Where rows hold the read's program, they compute the read's reference**, whatever the unit's boundary: if the
-program's rows hold at the rows' values under the column map `φ` wherever the rows hold with their constant set
-(`HoldsRead.rows`), then at any such values `z`, the program's row output is
-`Hash.EmbeddingRead.h` of its token and opening, and where its verdict is set, `Hash.EmbeddingRead.ok` accepts them at
-SHA-512. The read's own unit reads it through its ports (`gatesRefine_of_holdsRead`); a block the read is fused into
-reads it at its interior columns. -/
-theorem holdsRead_sound (key : Hash.Msg) {V H D : ℕ} (hD : D = Hash.Tree.depth V) (hVD : V ≤ 2 ^ D) (hD32 : D ≤ 32)
-    (hH : 16 * H < 2 ^ 64) {rowSeg : List Lin → M (List Word)} {leaf : List Word → List Word → M (List Word)}
-    {frame : List Word → List Word → List Word → List Lin → List (List Word) → M Lin}
-    {select : List Lin → Lin → List Lin → M (List Lin × Lin)} (hA : RowSegSpec (16 * H) rowSeg)
-    (hB : Hm96LeafSpec key leaf) (hC : FrameReadSpec D Hash.RowLeaf.Format.seg.schema frame)
-    (hS : SelectSpec V select) {R : FlockSoundness.Rows} {φ : Var → Fin R.w}
-    (hrows : ∀ z : Fin R.w → Bool, R.Sat z → z R.one = true →
-      stHolds (fun v => z (φ v)) ((readProg D H rowSeg leaf frame select).run St.empty).2)
-    (z : Fin R.w → Bool) (hsat : R.Sat z) (h1 : z R.one = true) :
-    evs (fun v => z (φ v)) ((readProg D H rowSeg leaf frame select).run St.empty).1.1 =
-        Hash.EmbeddingRead.h V H (readTok fun v => z (φ v)) (readOpening H D fun v => z (φ v)) ∧
-      (ev (fun v => z (φ v)) ((readProg D H rowSeg leaf frame select).run St.empty).1.2 = true →
-        Hash.EmbeddingRead.ok Verity.sha512 Verity.sha512 ⟨readDomain fun v => z (φ v), V, fun r => r⟩ key
-          (readRoot fun v => z (φ v)) V (readTok fun v => z (φ v)) (readOpening H D fun v => z (φ v))) := by
-  have hrun : (readProg D H rowSeg leaf frame select).run St.empty =
-      (readNet D rowSeg leaf frame select (ins 0 32) (insW 32 8) (insW 544 8) (ins 1056 (16 * H))
-        (insW (1056 + 16 * H) 24) ((List.range D).map fun j => insW (2592 + 16 * H + 512 * j) 8)).run
-        ((input (readIn H D)).run St.empty).2 :=
-    rfl
-  have hst := hrows z hsat h1
-  rw [hrun] at hst ⊢
-  exact (readNet_sound key hD hVD hD32 hH hA hB hC hS (ins 0 32) (insW 32 8) (insW 544 8) (ins 1056 (16 * H))
-    (insW (1056 + 16 * H) 24) ((List.range D).map fun j => insW (2592 + 16 * H + 512 * j) 8)
-    ((input (readIn H D)).run St.empty).2).2 _ hst (length_ins 0 32) (shaped_insW 32 8) (shaped_insW 544 8)
-    (length_ins 1056 (16 * H)) (shaped_insW _ 24) (by simp)
-    (fun s hs => by obtain ⟨j, -, rfl⟩ := List.mem_map.1 hs; exact shaped_insW _ 8)
-
 /-! ## The tie -/
 
 /-- The row the read returns has the table's row length, whichever branch of the reference returns it. -/
@@ -238,14 +158,13 @@ theorem length_h (V H D : ℕ) (z : Var → Bool) :
   · simp [readOpening, openingOf, length_evs, length_ins]
   · exact length_fill H
 
-/-- **The read's gate refinement from its rows' values.** Let the rows `R` hold the read's program for a run (`hr`)
-that computes the read's reference at the rows' values (`hsound`, which `holdsRead_sound` gives), and let `wire` put
-`R`'s columns on gates of `C`. If wherever unit `u` of `P` is correct and matches the registered constants, some values
-satisfy `R`, set its constant to 1, and equal the transcript's bits at `R`'s input columns and at the read's outputs
-(`hvals`), then the read's gates refine `Hash.EmbeddingRead` at SHA-512 under the hm96 key `key`, at the read's ports
-through `wire`. -/
-theorem gatesRefine_of_vals (key : Hash.Msg) {V H : ℕ} {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n)
-    (u : Fin n) {R : FlockSoundness.Rows} (wire : Fin R.w → Fin C.N) {run : (List Lin × Lin) × St}
+/-- **The read's reference at its ports, from its rows' values.** Let the rows `R` hold the read's program for a run
+(`hr`) that computes the read's reference at the rows' values (`hsound`), and let `wire` put `R`'s columns on gates of
+`C`. If some values satisfy `R`, set its constant to 1, and equal the transcript `tr`'s
+bits at `R`'s input columns and at the read's outputs, then the read's ports through `wire` hold `Hash.EmbeddingRead`
+at SHA-512 under the hm96 key `key` in `tr`. -/
+theorem computes_of_vals (key : Hash.Msg) {V H : ℕ} {C : Verity.Circuit} {R : FlockSoundness.Rows}
+    (wire : Fin R.w → Fin C.N) {run : (List Lin × Lin) × St}
     (hr : HoldsRead R (readIn H (Hash.Tree.depth V)) run.2 (run.1.1 ++ [run.1.2]))
     (hsound : ∀ z : Fin R.w → Bool, R.Sat z → z R.one = true →
       evs (fun v => z (hr.φ v)) run.1.1 =
@@ -255,15 +174,10 @@ theorem gatesRefine_of_vals (key : Hash.Msg) {V H : ℕ} {C : Verity.Circuit} {n
           Hash.EmbeddingRead.ok Verity.sha512 Verity.sha512 ⟨readDomain fun v => z (hr.φ v), V, fun r => r⟩ key
             (readRoot fun v => z (hr.φ v)) V (readTok fun v => z (hr.φ v))
             (readOpening H (Hash.Tree.depth V) fun v => z (hr.φ v))))
-    (consts : Fin C.N → Option Bool)
-    (hvals : ∀ tr : C.Transcript, P.Correct tr u →
-      (∀ g ∈ P.io u, ∀ b, consts g = some b → ReadUnit.bit tr g = b) →
-      ∃ z : Fin R.w → Bool, R.Sat z ∧ z R.one = true ∧
-        (∀ c : Fin R.w, c.val < R.nIn → z c = ReadUnit.bit tr (wire c)) ∧
-        ∀ j < 16 * H + 1, z (hr.out j) = ReadUnit.bit tr (wire (hr.out j))) :
-    ReadUnit.GatesRefine Verity.sha512 Verity.sha512 key consts P u (readPorts wire hr V H) := by
-  intro tr hcorrect hconsts
-  obtain ⟨z, hsat, hz1, hzin, hzout⟩ := hvals tr hcorrect hconsts
+    (tr : C.Trace) (z : Fin R.w → Bool) (hsat : R.Sat z) (hz1 : z R.one = true)
+    (hzin : ∀ c : Fin R.w, c.val < R.nIn → z c = ReadUnit.bit tr (wire c))
+    (hzout : ∀ j < 16 * H + 1, z (hr.out j) = ReadUnit.bit tr (wire (hr.out j))) :
+    (readPorts wire hr V H).Computes Verity.sha512 Verity.sha512 key tr := by
   have hin : ∀ v < readIn H (Hash.Tree.depth V), z (hr.φ v) = ReadUnit.bit tr (wire (hr.φ v)) := fun v hv =>
     hzin _ (hr.input v hv)
   obtain ⟨hh, hok⟩ := hsound z hsat hz1
@@ -312,6 +226,7 @@ theorem gatesRefine_of_vals (key : Hash.Msg) {V H : ℕ} {C : Verity.Circuit} {n
         ((List.range (Hash.Tree.depth V)).map fun j => insW (2592 + 16 * H + 512 * j) 8).map (wordsDigest z')⟩
     rw [e1, e2, e3]
     rfl
+  show _ ∧ _
   refine ⟨?_, fun hokX => ?_⟩
   · show ReadUnit.bits tr (readPorts wire hr V H).h =
       Hash.EmbeddingRead.h V H ((readPorts wire hr V H).tokOf tr) ((readPorts wire hr V H).opening tr)
@@ -336,15 +251,15 @@ theorem gatesRefine_of_vals (key : Hash.Msg) {V H : ℕ} {C : Verity.Circuit} {n
     rw [hdomain, hroot, htok, hopen]
     exact hok hok2
 
-
-/-- **The read's own unit gives the read's gate refinement at its ports**, for any run of the read's program whose
-program the rows `R` hold (`hr`) and which computes the read's reference at the rows' values (`hsound`): where the
-constant's gate is registered as 1 and among `u`'s inputs, and the read's output gates are committed. A correct unit's
-committed gates hold its local evaluation, where its rows hold, and its input columns are gates outside it, so the
-evaluation gives `gatesRefine_of_vals` its values. -/
-theorem gatesRefine_of_run (key : Hash.Msg) {V H : ℕ} {C : FlockSoundness.Audit.Circuit} {n : ℕ}
-    (P : FlockSoundness.Audit.Partition C n) (u : Fin n) {R : FlockSoundness.Rows} (I : P.IsRowsUnit u R)
-    {run : (List Lin × Lin) × St} (hr : HoldsRead R (readIn H (Hash.Tree.depth V)) run.2 (run.1.1 ++ [run.1.2]))
+/-- **The read's gate refinement from its rows' values.** Let the rows `R` hold the read's program for a run (`hr`)
+that computes the read's reference at the rows' values (`hsound`), and let `wire` put `R`'s columns on gates of `C`. If
+wherever unit `u` of `P` is correct and matches the registered constants, some values satisfy `R`, set its constant to
+1, and equal the bits of `u`'s local evaluation at `R`'s input columns and at the read's outputs (`hvals`), and the
+read's input columns and its verdict are committed where they lie in `u` (`hin`, `hok`), then the read's gates refine
+`Hash.EmbeddingRead` at SHA-512 under the hm96 key `key`, at the read's ports through `wire`. -/
+theorem gatesRefine_of_vals (key : Hash.Msg) {V H : ℕ} {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n)
+    (u : Fin n) {R : FlockSoundness.Rows} (wire : Fin R.w → Fin C.N) {run : (List Lin × Lin) × St}
+    (hr : HoldsRead R (readIn H (Hash.Tree.depth V)) run.2 (run.1.1 ++ [run.1.2]))
     (hsound : ∀ z : Fin R.w → Bool, R.Sat z → z R.one = true →
       evs (fun v => z (hr.φ v)) run.1.1 =
           Hash.EmbeddingRead.h V H (readTok fun v => z (hr.φ v))
@@ -353,61 +268,20 @@ theorem gatesRefine_of_run (key : Hash.Msg) {V H : ℕ} {C : FlockSoundness.Audi
           Hash.EmbeddingRead.ok Verity.sha512 Verity.sha512 ⟨readDomain fun v => z (hr.φ v), V, fun r => r⟩ key
             (readRoot fun v => z (hr.φ v)) V (readTok fun v => z (hr.φ v))
             (readOpening H (Hash.Tree.depth V) fun v => z (hr.φ v))))
-    (consts : Fin C.N → Option Bool) (hone : consts (I.wire R.one) = some true)
-    (hone_io : I.wire R.one ∈ (Verity.Partition.ofAudit P).io u)
-    (hcom : ∀ j < 16 * H + 1, I.wire (hr.out j) ∈ P.committed) :
-    ReadUnit.GatesRefine Verity.sha512 Verity.sha512 key consts (Verity.Partition.ofAudit P) u
-      (readPorts I.wire hr V H) := by
-  refine gatesRefine_of_vals key (Verity.Partition.ofAudit P) u I.wire hr hsound consts
-    fun tr hcorrect hconsts => ?_
-  have hc := correct_bits P hcorrect
-  let xs : Fin C.N → Bool := fun g => ReadUnit.bit tr g
-  let z : Fin R.w → Bool := fun c => P.localEval xs u (I.wire c)
-  have hsat : R.Sat z := sat_localEval I xs
-  have hnot : ∀ c : Fin R.w, c.val < R.nIn ∨ c = R.one → z c = xs (I.wire c) := by
-    intro c hc'
-    refine P.localEval_of_not_mem xs (I.outside c fun i hi => ?_)
-    have h3 : (R.comp i).val = R.nIn + i.val := rfl
-    rcases hc' with hlt | hc1
-    · have h2 : (R.comp i).val < R.nIn := hi ▸ hlt
-      omega
-    · have h1 : R.nIn + R.nComp = (R.comp i).val := congrArg Fin.val (hc1.symm.trans hi)
-      have h2 := i.isLt
-      omega
-  have hz1 : z R.one = true := by
-    rw [hnot R.one (Or.inr rfl)]
-    exact hconsts _ hone_io true hone
-  refine ⟨z, hsat, hz1, fun c hc' => hnot c (Or.inl hc'), fun j hj => ?_⟩
-  have hlen1 : run.1.1.length = 16 * H := by
-    have := congrArg List.length (hsound z hsat hz1).1
-    rwa [length_evs, length_h] at this
-  obtain ⟨i, hi⟩ := hr.output j (by simp [hlen1]; omega)
-  exact (hc _ (hcom j hj) (by rw [hi]; exact I.mem i)).symm
-
-/-- **The read's gates refine its reference, where its rows hold the read's program.** Let unit `u` of the game
-partition `P` be an instance of the rows `R` (`I`), and let `R` hold the read's program over the four parts' generators
-(`hr`), for a table of `V ≤ 2 ^ D` rows of `H` words with `D` its tree's depth. If the four parts' statements hold, the
-constant's gate is registered as 1 and is among `u`'s inputs, and the read's output gates are committed, then the read's
-gates refine `Hash.EmbeddingRead` at SHA-512 under the hm96 key `key`, in core's view of the partition, at the read's
-ports through `u`'s wires. -/
-theorem gatesRefine_of_holdsRead (key : Hash.Msg) {V H D : ℕ} (hD : D = Hash.Tree.depth V) (hVD : V ≤ 2 ^ D)
-    (hD32 : D ≤ 32) (hH : 16 * H < 2 ^ 64) {rowSeg : List Lin → M (List Word)}
-    {leaf : List Word → List Word → M (List Word)}
-    {frame : List Word → List Word → List Word → List Lin → List (List Word) → M Lin}
-    {select : List Lin → Lin → List Lin → M (List Lin × Lin)} (hA : RowSegSpec (16 * H) rowSeg)
-    (hB : Hm96LeafSpec key leaf) (hC : FrameReadSpec D Hash.RowLeaf.Format.seg.schema frame)
-    (hS : SelectSpec V select) {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
-    (u : Fin n) {R : FlockSoundness.Rows} (I : P.IsRowsUnit u R)
-    (hr : HoldsRead R (readIn H D) ((readProg D H rowSeg leaf frame select).run St.empty).2
-      (((readProg D H rowSeg leaf frame select).run St.empty).1.1 ++
-        [((readProg D H rowSeg leaf frame select).run St.empty).1.2]))
-    (consts : Fin C.N → Option Bool) (hone : consts (I.wire R.one) = some true)
-    (hone_io : I.wire R.one ∈ (Verity.Partition.ofAudit P).io u)
-    (hcom : ∀ j < 16 * H + 1, I.wire (hr.out j) ∈ P.committed) :
-    ReadUnit.GatesRefine Verity.sha512 Verity.sha512 key consts (Verity.Partition.ofAudit P) u
-      (readPorts I.wire hr V H) := by
-  subst hD
-  exact gatesRefine_of_run key P u I hr
-    (fun z hsat h1 => holdsRead_sound key rfl hVD hD32 hH hA hB hC hS hr.rows z hsat h1) consts hone hone_io hcom
+    (consts : Fin C.N → Option Bool)
+    (hvals : ∀ tr : C.Trace, P.Correct tr u →
+      (∀ g ∈ P.io u, ∀ b, consts g = some b → ReadUnit.bit tr g = b) →
+      ∃ z : Fin R.w → Bool, R.Sat z ∧ z R.one = true ∧
+        (∀ c : Fin R.w, c.val < R.nIn → z c = ReadUnit.bit (P.localEval tr u) (wire c)) ∧
+        ∀ j < 16 * H + 1, z (hr.out j) = ReadUnit.bit (P.localEval tr u) (wire (hr.out j)))
+    (hin : ∀ c : Fin R.w, c.val < R.nIn → P.unit (wire c) = some u → wire c ∈ P.committed)
+    (hok : P.unit (wire (hr.out (16 * H))) = some u → wire (hr.out (16 * H)) ∈ P.committed) :
+    ReadUnit.GatesRefine Verity.sha512 Verity.sha512 key consts P u (readPorts wire hr V H) := by
+  have hlt : ∀ k < 1056, k < readIn H (Hash.Tree.depth V) := fun k hk => by unfold readIn; omega
+  refine ⟨fun tr hcorrect hconsts => ?_,
+    fun i => hin _ (hr.input (32 + i) (hlt _ (by have := i.isLt; omega))),
+    fun i => hin _ (hr.input (544 + i) (hlt _ (by have := i.isLt; omega))), hok⟩
+  obtain ⟨z, hsat, hz1, hzin, hzout⟩ := hvals tr hcorrect hconsts
+  exact computes_of_vals key wire hr hsound (P.localEval tr u) z hsat hz1 hzin hzout
 
 end Accounting.ReadUnit.Gates

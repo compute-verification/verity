@@ -2,7 +2,20 @@ module
 
 public import Definitions.Accounting.ReadUnit
 public import Proofs.Flock.Soundness.Discharge.Hm.Gadget
-public import Properties.Verity.Game
+public import Properties.Composition
+public import Properties.Flock.Circuit.CircuitOf
+public import Properties.Verity.Sha512
+public import Definitions.Accounting.JointLive
+public import Definitions.Core.Blocks
+public import Definitions.Core.Game
+public import Definitions.Core.Site
+public import Definitions.Hash.Assumptions
+public import Definitions.Hash.RowLeaf
+public import Definitions.Nci
+public import Flock.CoinTree
+public import Flock.Hash
+public import Flock.Hm96
+public import Lms.Verify
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -50,9 +63,9 @@ net computes whenever its rows hold (`FlockSoundness.Discharge.Hm.Sound`), again
 * `SelectSpec`: `EmbeddingReadSelect_v1{V, H}`, the row or the fill row by the token, and the verdict.
 
 Each statement takes its part's generator as a parameter, so a generator that mirrors the part's Python lowering is
-proved against it, and `readNet` composes the four as `EmbeddingRead_v1`'s body does. Each holds of every input, with
-the inputs' shapes premises of what it concludes, as `FlockSoundness.Discharge.Hm`'s gadgets' statements do, so that
-`Sound.bind'` composes them. A digest or a byte string is held in 64-bit words of forms in leaf order, each word's bits
+proved against it; the read's template composes the four as `EmbeddingRead_v1`'s body does. Each holds of every
+input, with the inputs' shapes premises of what it concludes, as `FlockSoundness.Discharge.Hm`'s gadgets' statements
+do, so that `Sound.bind'` composes them. A digest or a byte string is held in 64-bit words of forms in leaf order, each word's bits
 least significant first and its bytes big-endian (`Accounting.ReadUnit.bytesOf`), as a read unit's ports hold them.
 -/
 
@@ -114,17 +127,5 @@ def FrameReadSpec (D : ℕ) (schema : String)
         (Verity.sha512 (Hash.Tree.leafMsg (denseDomain D (wordsDigest z domain)) (num (evs z pos)) schema
           (wordsDigest z leaf).bytes))
         (path.map (wordsDigest z))).2 = wordsDigest z root
-
-/-- **The read's net**, as `EmbeddingRead_v1{V, H}`'s body composes its parts: the row's digest (`rowSeg`), its hm96
-leaf under the salt (`leaf`), the frame-v3 read of that leaf at the token's low `D` bits (`frame`), and the select
-(`select`), which returns the row and the verdict. -/
-def readNet (D : ℕ) (rowSeg : List Lin → M (List Word)) (leaf : List Word → List Word → M (List Word))
-    (frame : List Word → List Word → List Word → List Lin → List (List Word) → M Lin)
-    (select : List Lin → Lin → List Lin → M (List Lin × Lin)) (tok : List Lin) (root domain : List Word)
-    (row : List Lin) (salt : List Word) (path : List (List Word)) : M (List Lin × Lin) := do
-  let x ← rowSeg row
-  let bcl ← leaf x salt
-  let opened ← frame root domain (bcl.drop 16) (tok.take D) path
-  select tok opened row
 
 end Accounting.ReadUnit.Gates

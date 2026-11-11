@@ -6,7 +6,7 @@ Checked today, against ``allowlists/p09_layering.json``:
   (``_imports.LAYER``; order ``pipeline`` > ``check|properties`` > ``acquire`` > ``observe|commit`` > ``engine`` >
   ``query|correspondence`` > ``program`` > ``collectives`` > ``config`` > core).  One entry per (importer, imported)
   module pair.
-* ``package-cycle``: two top-level packages importing each other (``engine.hooks``, ``engine.env`` and
+* ``package-cycle``: two top-level packages importing each other (``engine.hooks``, ``engine.env``, ``engine.makers`` and
   ``engine.profiles.layer_classes``, which import nothing, count apart from ``engine``).
 * ``module-cycle``: a strongly connected component of the module import graph.  The entry names its members, so a
   cycle that gains a member fails too.
@@ -58,10 +58,10 @@ def layer_violations() -> list[R.Violation]:
     return out
 
 
-#: Engine modules every layer calls (the patch owner, the env-pin writer and the value check's layer-class table); they import
-#: nothing from the package.
+#: Engine modules every layer calls (the patch owner, the env-pin writer, a seam's parts and the value check's layer-class
+#: table); they import nothing from the package.
 LEAF_MODULES = frozenset(p.removesuffix(".py").replace("/", ".") for p in PATCH_OWNERS) | {
-    "verity_vllm.engine.env", "verity_vllm.engine.profiles.layer_classes"}
+    "verity_vllm.engine.env", "verity_vllm.engine.makers", "verity_vllm.engine.profiles.layer_classes"}
 
 
 #: The unit a package cycle counts these modules and subpackages in (longest prefix wins), whatever package they sit in:
@@ -70,8 +70,10 @@ PACKAGE_OF = {
     "verity_vllm.protocols": "protocol_options",
     "verity_vllm.protocols.linear": "linear",
     "verity_vllm.protocols.remote_bandwidth": "store",
+    "verity_vllm.protocols.remote_bandwidth.commit_map": "pipeline",
     "verity_vllm.program.predict": "predict",
     "verity_vllm.engine.collectives": "collectives",
+    "verity_vllm.engine.served_seed": "served_seed",
     "verity_vllm.engine.spec": "pipeline",
     "verity_vllm.llm": "pipeline",
 }
@@ -237,7 +239,7 @@ def file_violations(src: str, rel: str, module: str = "", is_package: bool = Fal
             if hit:
                 emit("runtime-patch", node, symbol, f"{hit}.{t.attr}")
             elif owner not in ("self", "cls") and t.attr == "forward":
-                emit("runtime-patch", node, symbol, f"<instance>.forward")
+                emit("runtime-patch", node, symbol, "<instance>.forward")
             elif owner not in ("self", "cls") and owner not in fresh.get(symbol, ()) and value is not None and (
                     isinstance(value, ast.Lambda)
                     or (isinstance(value, ast.Name) and value.id in nested_defs.get(symbol, ()))
@@ -286,7 +288,8 @@ def test_leaf_modules_import_nothing() -> None:
 
 def test_layer_map_names_existing_modules() -> None:
     known = I.modules()
-    missing = [m for m in I.LAYER if m not in known and not any(k.startswith(m + ".") for k in known)]
+    missing = [m for m in I.LAYER if m not in known and not any(k.startswith(m + ".") for k in known)
+               and not any(m == o or m.startswith(o + ".") for o in I.OPTIONAL)]
     assert not missing, f"LAYER names modules or packages that no longer exist (update the map): {missing}"
     assert all(v in I.RANK for v in I.LAYER.values())
     for m in known:

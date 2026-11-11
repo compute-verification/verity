@@ -514,8 +514,8 @@ def test_a_conflicting_pr_is_left_out_with_the_queued_pr_that_touched_the_file_a
 
 
 POUS = "verity/core/protocols/pous/lean"
-TRUSTED, EXFIL = f"{POUS}/TRUSTED.sha256", "verity/core/protocols/sampled_proofs/tests/fixtures/exfiltration_lean.json"
-UP = "../../../../../Security/Proofs/lakefile.toml"
+TRUSTED, EXFIL = f"{POUS}/TRUSTED.sha256", "verity/core/protocols/spot/tests/fixtures/exfiltration_lean.json"
+UP = posixpath.relpath("Security/Proofs/lakefile.toml", POUS)
 #: what `_pin_main`'s pins record: PoUS's, relative to its directory, and the JSON pin's
 MAIN_TRUSTED, MAIN_EXFIL = ["lean-toolchain", "lakefile.toml", "Old.lean", UP], ["Security/Proofs/lakefile.toml", "x.lean"]
 VECTORS = ('{"a": 1}', '{"b": 2}')
@@ -1886,7 +1886,7 @@ def test_status_on_any_vm_applies_the_rules_cutoff_as_drive_does(world, monkeypa
     assert research_main(argv) == 0
     got = {e["pr"]: (e["state"], e["why"]) for e in json.loads(capsys.readouterr().out)}
     assert got[1][0] == "waiting" and got[1][1].startswith("ignored: marked before cutoff") and "2026-10-05T09:00:00Z" in got[1][1]
-    assert got[2][0] == "ready" and "the next sync merges it onto `next`" in got[2][1]
+    assert got[2][0] == "ready" and "the verified queue builds it into a batch onto `main`" in got[2][1]
     assert research_main([*argv, "--marked-after", "2026-10-01T00:00:00Z"]) == 0
     assert {e["pr"]: e["state"] for e in json.loads(capsys.readouterr().out)} == {1: "ready", 2: "ready"}
 
@@ -1949,6 +1949,35 @@ def test_status_and_the_review_listing_free_the_queue_lock_before_they_read_labe
     assert research_main(["queue", "status", "--json", *common]) == 0 and free == [True]
     assert research_main(["queue", "review", *common]) == 0 and free == [True, True]
     capsys.readouterr()
+
+
+def test_the_review_listing_names_the_marked_prs_onto_main_not_on_it_lacking_a_land_verdict_oldest_mark_first(world, capsys):
+    """The verified queue builds from the marked PRs, not from `next`'s members, so the listing reviewers work from is those:
+    each open PR onto `main` marked at its head, not on `main` yet, with no land verdict there by a non-owner, oldest mark first."""
+    from research.queue import StoreLabels
+
+    world.with_store_remote()
+    world.gh.put(1, world.change({"1.txt": "x\n"}))
+    world.gh.put(2, world.change({"2.txt": "x\n"}))
+    world.gh.put(3, world.change({"3.txt": "x\n"}), ready=False)
+    world.gh.put(4, on := world.change({"4.txt": "x\n"}))
+    world.gh.put(5, world.change({"pkg/lean-audit.json": "{}"}))
+    world.gh.put(6, world.change({"6.txt": "x\n"}))
+    world.gh.prs[6] = dataclasses.replace(world.gh.prs[6], base="checked")
+    _git(world.origin, "update-ref", "refs/heads/main", on)
+    world.store.add_label(label_target(2, world.gh.prs[2].head), vocab.REVIEWED, "land", "reviewer", ts="2026-11-09T12:00:00Z")
+    world.store.add_label(label_target(1, world.gh.prs[1].head), vocab.REVIEWED, "land", "lane-1", ts="2026-11-09T12:00:00Z")
+    marks = {n: f"2026-11-09T{h:02d}:00:00Z" for n, h in {1: 10, 2: 8, 4: 7, 5: 9, 6: 6}.items()}
+    q = world.queue(marked_at=lambda n, h: marks.get(n))
+    labels = StoreLabels(world.store, log=lambda s: None)
+    assert Q.review(q, world.store, labels, None, None, None, None, as_json=True) == 0
+    rows = json.loads(capsys.readouterr().out)
+    assert [(r["pr"], r["marked"], r["why"]) for r in rows] == [
+        (5, marks[5], "no land verdict"), (1, marks[1], "no land verdict but its owner's own (lane-1), which doesn't count")]
+    assert (rows[0]["lean"], rows[0]["files"], rows[1]["lean"], rows[1]["files"]) == (True, ["pkg/lean-audit.json"], False, ["1.txt"])
+    assert Q.review(q, world.store, labels, None, None, None, None) == 0
+    out = capsys.readouterr().out
+    assert out.index("#5 ") < out.index("#1 ") and "2 marked PR(s) not on `main` lack a land verdict" in out, out
 
 
 def test_an_ejection_withdraws_the_heads_ready_mark_in_the_store(world):
@@ -2736,6 +2765,20 @@ def test_the_preflight_refuses_a_head_that_conflicts_with_next_naming_the_paths_
     assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=None) == 0         # --no-preflight: the lander's
 
 
+def test_the_preflight_merges_onto_the_landing_tip_when_next_no_longer_holds_it(world, capsys):
+    """A `next` the landing branch has moved past is no queue above it, so the head merges onto the landing branch's tip, and a
+    conflict with a PR only that `next` holds refuses nothing."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    _preflight_main(world)
+    main = _move_main(world, {"pkg/other.py": "X = 1\n"})
+    world.gh.put(2, h2 := world.change({"pkg/rows.json": '{"r9": 1}\n'}), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    said = next(s for s in world.logs if "preflight" in s)
+    assert f"merged onto `main` at {main[:12]} (`next` at" in said and "doesn't hold it)" in said, said
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
+
+
 def test_the_preflight_finds_a_prs_merge_on_next_past_a_lock_commit_on_checked_when_it_walks_from_main(world, capsys):
     """When `checked` can't be fetched the preflight walks `next` from `main`, across the commit drive puts on `checked`
     without the queue's trailers (`Lock records regenerated for #N`).  A PR already on `next` still merges onto the commit
@@ -3317,7 +3360,7 @@ def test_ready_mark_from_an_agent_vm_builds_the_lean_it_reaches_on_a_node_refuse
         "  - Lean: 6 module(s) that are or import what it changes couldn't be built: "
         + "; ".join(f"its build on {n} exited 1 without a result line: research run: {n}: ssh: connect to host: Connection "
                     "refused" for n in PREFLIGHT_LEAN_ON)
-        + f": mark again once {first} or {second} builds them (`build` Lean slots are @infra's; `research status` there says "
+        + f": mark again once {first} or {second} builds them in its `build` Lean slots (`research status` there says "
           "why not)"], err
     assert [a[2] for a in launched] == [first, second]
     assert StoreLabels(world.store, log=world.logs.append).ready(3, h3) is False and _no_worktree_left(world)
@@ -3379,7 +3422,7 @@ def test_the_lean_step_falls_back_to_the_next_node_when_one_cannot_start_the_bui
         assert isinstance(got, str) and got == (
             f"its build on {first} exited 255 without a result line: ssh: connect to host {first} port 22: Connection timed "
             f"out; its build on {second} (run r20261030-190002-abcd) exited 1 without a result line: research: run "
-            f"r20261030-190002-abcd refused on {second}: the node is drained: mark again once {first} or {second} builds them (`build` Lean slots are @infra's; `research status` there says why not)"), got
+            f"r20261030-190002-abcd refused on {second}: the node is drained: mark again once {first} or {second} builds them in its `build` Lean slots (`research status` there says why not)"), got
 
 
 def test_the_lean_step_ships_the_merged_tree_to_a_node_for_ready_on_and_reads_its_result(tmp_path):
@@ -4862,7 +4905,7 @@ def _restated(d: dict) -> None:
 
 #: the head's lock -> what its merge onto `next` drops that `next` needs; None: the head leaves the lock alone
 LOCK_DROPS = {
-    # the record driver keeps a premise one side dropped while the merged record lists its guarantee
+    # the record driver drops a premise the head dropped where `next` didn't restate its guarantee: the head's own drop
     "a dropped premise": (lambda d: d["shape"]["inline"]["G"].pop("p1"), []),
     "a dropped frozen key": (lambda d: d["shape"]["frozen"].pop("F"), ["pkg/lean-audit.json: shape.frozen[F]"]),
     "a renamed guarantee": (_renamed, []),
@@ -4913,6 +4956,29 @@ def test_dropped_entries_reads_a_frozen_reason_reworded_at_its_key_as_kept_and_a
     (f, why), = base["shape"]["frozen"].items()
     assert dropped_entries(base, lock(lambda d: d["shape"]["frozen"].update({f: why + " (reworded)"}))) == []
     assert dropped_entries(base, lock(lambda d: d["shape"]["frozen"].pop(f))) == [f"shape.frozen[{f}]"]
+
+
+@pytest.mark.parametrize("names", [
+    {"witnesses": {"W": {"nontrivial": "F"}}},
+    {"witnesses": {"W": {"nontrivial": ["E", "F"], "honest": ["H"]}}},
+    {"witnesses": {"W": {"nontrivial": "E", "honest": ["F"]}}},
+    {"claims": {"witnesses": {"C": {"fails": "F"}}}},
+    {"claims": {"witnesses": {"C": {"fails": "E", "meets": ["F"]}}}},
+    {"claims": {"generic": {"C": "F"}}},
+])
+def test_dropped_entries_lets_a_head_drop_the_frozen_entry_of_a_theorem_held_to_its_form(names):
+    """`check.py` holds a theorem `witnesses`, `claims.witnesses` or `claims.generic` names to its form instead of `shape`,
+    and reads no frozen entry of its: a head may drop it while the theorem stays listed, and the same drop of a guarantee
+    none of them names still drops it."""
+    from research.queue import dropped_entries
+
+    def lock(edit: Callable[[dict], object]) -> dict:
+        return json.loads(_lock_text(edit))
+
+    base = lock(lambda d: d.update(json.loads(json.dumps(names))))
+    assert dropped_entries(base, lock(lambda d: (d.update(json.loads(json.dumps(names))),
+                                                 d["shape"]["frozen"].pop("F")))) == []
+    assert dropped_entries(lock(lambda d: None), lock(lambda d: d["shape"]["frozen"].pop("F"))) == ["shape.frozen[F]"]
 
 
 def test_dropped_entries_keeps_a_premise_moved_under_a_new_key_and_one_of_a_guarantee_recorded_otherwise():

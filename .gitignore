@@ -54,6 +54,7 @@ runs/
 verity/ml/commitments/tests/fixtures/layouts
 benchmarks/nci/sources
 benchmarks/one_stage/tests/fixtures/bundle-window
+benchmarks/two_stage/tests/fixtures/guard.tar.xz
 verity/ml/flock/tests/fixtures/f1-gate
 verity/ml/flock/tests/fixtures/forged-proofs
 verity/ml/flock/tests/fixtures/hidden-outputs
@@ -70,6 +71,7 @@ verity/ml/flock/tests/fixtures/rec-c3-inner
 verity/ml/flock/tests/fixtures/rec-coins
 verity/ml/flock/tests/fixtures/rec-links
 verity/ml/flock/tests/fixtures/zk-sessions
+verity/core/protocols/spot/tests/fixtures/form-refusals
 integrations/vllm/tests/protocols/fixtures/challenger_periods
 benchmarks/network_e2e/encodings/tests/fixtures
 benchmarks/network_e2e/tests/data/endpoint_carry/advice_trace.jsonl

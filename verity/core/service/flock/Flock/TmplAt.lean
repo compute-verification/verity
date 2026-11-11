@@ -93,6 +93,14 @@ def unrollWhy (t : Tmpl) (lays : Array Lay) : String :=
   else if !identOk t lays then "a layout marked ident moves a column, or the input rows move"
   else "an output group is outside the root's columns or its committed slot (D11)"
 
+/-- `unrollOk` of a template known well formed and ordered: its other checks (`unrollOk_eq_rest`). -/
+def unrollRest (t : Tmpl) (lays : Array Lay) : Bool :=
+  t.apart && t.inputsT && t.groupsOk && (List.range t.defs.size).all (layApart t lays) && identOk t lays && outsAt t lays
+
+theorem unrollOk_eq_rest {t : Tmpl} (wf : t.wellFormed = true) (ord : t.ordered = true) (lays : Array Lay) :
+    unrollOk t lays = unrollRest t lays := by
+  simp only [unrollOk, unrollRest, wf, ord, Bool.true_and, Bool.and_true]
+
 end Flock.Tmpl
 
 namespace Flock
@@ -119,5 +127,39 @@ def TmplUnit.read (t : Tmpl.Tmpl) (mode : Tmpl.Mode) : V TmplUnit :=
       if ok : Tmpl.unrollOk t lays = true then pure ⟨t, mode, lays, Tmpl.unitNet t lays, wf, laid, ok, rfl⟩
       else throw s!"template: {Tmpl.unrollWhy t lays}"
   else throw "template: not well-formed"
+
+/-- `TmplUnit.read` of a template known well formed and ordered, which it doesn't check again (`readKnown_eq`). -/
+def TmplUnit.readKnown (t : Tmpl.Tmpl) (mode : Tmpl.Mode) (wf : t.wellFormed = true) (ord : t.ordered = true) :
+    V TmplUnit :=
+  match laid : Tmpl.layoutM t mode with
+  | .error e => throw e
+  | .ok lays =>
+    if ok : Tmpl.unrollRest t lays = true then
+      pure ⟨t, mode, lays, Tmpl.unitNet t lays, wf, laid, (Tmpl.unrollOk_eq_rest wf ord lays).trans ok, rfl⟩
+    else throw s!"template: {Tmpl.unrollWhy t lays}"
+
+theorem TmplUnit.readKnown_eq (t : Tmpl.Tmpl) (mode : Tmpl.Mode) (wf : t.wellFormed = true) (ord : t.ordered = true) :
+    TmplUnit.readKnown t mode wf ord = TmplUnit.read t mode := by
+  unfold readKnown read
+  simp only [dite_eq_left wf, Tmpl.unrollOk_eq_rest wf ord]
+
+/-- `TmplUnit.read` of the template `Tmpl.parseAt` reads off its lines' accessors, without repeating the checks the parse
+ends with (`Tmpl.parseAt_checked`, `readParsedAt_eq`). -/
+def TmplUnit.readParsedAt (n : Nat) (line : Nat → String) (nums : Nat → Option (Array Nat)) (mode : Tmpl.Mode) :
+    V TmplUnit :=
+  match h : Tmpl.parseAt n line nums with
+  | .ok t => TmplUnit.readKnown t mode (Tmpl.parseAt_checked h).2 (Tmpl.parseAt_checked h).1
+  | .error e => throw e
+
+theorem TmplUnit.readParsedAt_eq (n : Nat) (line : Nat → String) (nums : Nat → Option (Array Nat)) (mode : Tmpl.Mode) :
+    TmplUnit.readParsedAt n line nums mode = (do TmplUnit.read (← Tmpl.parseAt n line nums) mode) := by
+  unfold readParsedAt
+  split
+  · rename_i t h
+    rw [readKnown_eq, h]
+    rfl
+  · rename_i e h
+    rw [h]
+    rfl
 
 end Flock

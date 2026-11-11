@@ -5,7 +5,7 @@ what an auditor with no devices at the site establishes about a datacenter servi
 Llama-3.2-1B INT8 on one H200 gives its verdict, and the same run carries the onsite protocol's subprotocols beside it.
 The remote protocol composes three subprotocols, tied to one record, and accepts only when all three accept:
 
-- **integrity**, by sampled proofs' one-stage audit (`verity/core/protocols/sampled_proofs/`): every value the serving
+- **integrity**, by sampled proofs' one-stage audit (`verity/core/protocols/spot/`): every value the serving
   computes is committed under hiding commitments, live coins sample proof blocks from a sealed execution phase, the
   prover proves each sampled block with Flock `--zk` behind the Lean ZK server, and the Lean verifier gives the verdict;
 - **work**, by proof of useful work (PoUW, `verity/core/protocols/pouw/`), on the served model itself: the endpoint
@@ -26,8 +26,8 @@ errors. But the remote protocol has no guarantee in Lean for the demo to instant
 yet, and no Lean statement carries the acceptance of remote's one-stage form, one-stage v2, which runs the proof check
 itself, to `SampledKSLiveV3`'s event (`verity/core/protocols/remote/README.md`, "What's open"). PoUW's proof layer needs `AcceptedLive`, which no served path
 meets. Onsite's chain has a gap of its own: network certification's `NetTiming.Guarantees.SampledAuditAccepted` takes
-`Claims.Sampling.KS` as a hypothesis, and the theorem that gives it at the deployed record,
-`Claims.Sampling.sampling_assembled`, is not a lock guarantee and takes the verifier's own facts as hypotheses
+`Claims.SamplingGeneric.Compiled.KS` as a hypothesis, and the theorem that gives it at the deployed record,
+`SamplingDeploy.ks_compiled`, is not a lock guarantee and takes the verifier's own facts as hypotheses
 (`benchmarks/prove_path/e2e_chains/README.md`).
 
 ## What runs

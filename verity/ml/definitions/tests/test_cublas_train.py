@@ -1,10 +1,13 @@
 """`verity.ml.definitions.registry.cublas_bf16`'s training bindings: `train_route` is the route table the capture fitted
-(`TRAIN_CAPTURE`) and refuses what it did not capture, `route_gemm` binds each route's Definition on bits, which equals that
-route's numpy model (`bf16_gemm_check.cublas_route_rows`) on spread and cancelling words, `aligned_bounds` makes the B 8 x S 512
-dW's grid.z slices, and `attention_bmm` is `BatchedGemm_v2` at each bmm's reduction and output lengths.  Each model's agreement
+(`TRAIN_CAPTURE`) and refuses what it did not capture, `route_gemm` binds each route's Definition on bits, which, and whose word,
+equals that route's numpy model (`bf16_gemm_check.cublas_route_rows`) on spread and cancelling words (an unsplit one at a K that
+is not a multiple of 16 on the operands padded with +0 words), `aligned_bounds` makes the B 8 x S 512 dW's grid.z slices and
+the m and xl steps', and `attention_bmm` is `BatchedGemm_v2` at each bmm's reduction and output lengths.  Each model's agreement
 with sm_120's words is the capture's (`cublas_bf16.TRAIN_CAPTURE`); the grid.z dW's is also held here on words of a full-tensor
 dump of that step that tell its k-tile layouts apart (`fixtures/cublas_dw_grid_z_sm120.npz`), and the lf model's s step's routes
-on the capture's words that tell each from every other GEMM route (`fixtures/cublas_train_lf_sm120.npz`)."""
+on the capture's words that tell each from every other GEMM route (`fixtures/cublas_train_lf_sm120.npz`).  `train_tf32` binds
+`GemmTf32_v1` at each shape the TF32 capture covers and refuses the rest, and the TF32 GEMM, on words and on bits, gives the
+capture's words that tell it from each alternative (`fixtures/cublas_tf32_sm120.npz`)."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -44,7 +47,7 @@ def test_train_routes_are_the_capture() -> None:
         elif key in ALIGNED:
             z, t = ALIGNED[key]
             assert route == {"kernel": "splitk", "SPLIT_K": z, "partial": "bf16", "align": 8, "tile_k": t}
-            assert CB.train_linear(key[3], *key[:3]).id == (f"CublasSplitKGemmBf16PartialsAligned_v1{{K=4096,N={key[1]},"
+            assert CB.train_linear(key[3], *key[:3]).id == (f"CublasSplitKGemmBf16PartialsAligned_v2{{K=4096,N={key[1]},"
                                                             f"SPLIT_K={z},ALIGN=8,TILE_K={t},{HOP}}}")
         else:
             M, K, N, role = key
@@ -59,8 +62,10 @@ def test_train_route_refuses_what_the_capture_does_not_cover() -> None:
             CB.train_linear(*args)
     with pytest.raises(ValueError, match="role 'dY'"):
         CB.train_route("dY", 256, 576, 576)
-    with pytest.raises(ValueError, match="no Definition on bits"):
-        CB.route_gemm({"kernel": "splitk", "SPLIT_K": 4}, 64, 3)
+    for route in ({"kernel": "splitk", "SPLIT_K": 4}, {"kernel": "splitk", "SPLIT_K": 3, "align": 8, "tile_k": 16},
+                  {"kernel": "serialk", "SPLIT_K": 3, "partial": "bf16", "align": 8, "tile_k": 16}):
+        with pytest.raises(ValueError, match="no Definition on bits"):
+            CB.route_gemm(route, 64, 3)
     with pytest.raises(ValueError, match="gemv"):
         CB.route_gemm({"kernel": "gemv", "LANES": 32}, 64, 3)
     with pytest.raises(ValueError, match="SPLIT_K_in_2_to_K_over_16"):
@@ -83,6 +88,13 @@ def test_aligned_bounds_are_the_capture_slices() -> None:
     for z in (8, 4):
         assert CB.aligned_bounds(2048, z, 8) == CB.split_bounds(2048, z), "the s step's dW is the plain bf16-workspace route"
         assert all(CB.residue_first(lo, hi, 32) == (0, 0) for lo, hi in CB.split_bounds(2048, z))
+    # the m and xl steps' grid.z dW at K 2048: 3 slices with no reduction kernel, whose first two take a residue tile of 16
+    # words, 5 with a bf16 workspace in whole tiles, and an f32 workspace's 12, each a residue tile first
+    for z, sizes, tiles in ((3, [688, 688, 672], [(16, 16), (16, 16), (0, 0)]), (5, [416] * 4 + [384], [(0, 0)] * 5),
+                            (12, [176] * 11 + [112], [(16, 16)] * 12)):
+        bounds = CB.aligned_bounds(2048, z, 8)
+        assert [hi - lo for lo, hi in bounds] == sizes and [CB.residue_first(lo, hi, 32) for lo, hi in bounds] == tiles, z
+        assert bounds != CB.split_bounds(2048, z)
 
 
 def test_the_grid_z_dw_is_sm120s_on_the_dump_words() -> None:
@@ -133,8 +145,66 @@ def test_attention_bmm_is_batched_gemm_at_each_op() -> None:
             CB.attention_bmm(*args)
 
 
+def test_train_tf32_is_the_tf32_capture() -> None:
+    assert CB.TRAIN_TF32 == ((4096, 64, 64), (11264, 64, 64), (301056, 64, 64), (2048, 512, 512))
+    for M, K, N in CB.TRAIN_TF32:
+        assert CB.train_tf32(M, K, N).id == f"GemmTf32_v1{{K={K},N={N}}}"
+    for args in ((4096, 64, 32), (2048, 512, 1408), (512, 512, 512)):
+        with pytest.raises(ValueError, match="is not captured"):
+            CB.train_tf32(*args)
+    assert "whole k8 TF32 steps" in CB.GemmTf32.refuse({"K": 12}) and CB.GemmTf32.refuse({"K": 16}) is None
+
+
+def test_the_tf32_gemm_is_sm120s_on_the_capture_words() -> None:
+    """Words of the cc 12.0 capture's f32 mm's under allow_tf32 at each `TRAIN_TF32` shape in each of the four operand layouts
+    (an unsplit `cutlass_80_tensorop_s1688gemm` kernel in each): `GemmTf32_v1` on words and its σ `GemmTf32_v2` on bits give
+    every word, and every alternative the fit tried misses one: the k8 step's products in groups of 8, 4 + 4 or 2 + 2 + 2 + 2
+    at adder widths 24 to 28, each operand rounded to TF32 by RNE, RNA or truncation (all but the step itself), and an f32
+    FFMA chain."""
+    import dataclasses
+
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluation.reference import evaluate
+    from verity.ml.definitions.numerics import mhc_twin as MT
+    from verity.ml.definitions.numerics import torch_kernels as TK
+    from verity.ml.definitions.registry import boolean_sigma as SG
+    from verity.ml.definitions.registry import mhc as MHC
+
+    d = np.load(FIXTURES / "cublas_tf32_sm120.npz")
+    cases = sorted({k.rsplit("/", 1)[0] for k in d.files})
+    assert cases == sorted(f"{M}x{K}x{N}/{la}{lb}" for M, K, N in CB.TRAIN_TF32 for la in "nt" for lb in "nt"), cases
+    base = MHC.HOPPER_TF32_WGMMA_K8_CANDIDATE
+    alts = {(g, w, r): dataclasses.replace(base, groups=g, width=w) for g in ((8,), (4, 4), (2, 2, 2, 2)) for w in range(24, 29)
+            for r in ("rne", "rna", "trunc") if (g, w, r) != (tuple(base.groups), base.width, "rne")}
+    missed = dict.fromkeys([*alts, "ffma"], False)
+    for case in cases:
+        x, w, y = (d[f"{case}/{a}"] for a in "xwy")
+        K = x.shape[1]
+        gemm = bind(CB.GemmTf32, K=K, N=1)
+        words = [int(np.ravel(evaluate(gemm, [int(v) for v in xi], [int(v) for v in wi]))[0]) for xi, wi in zip(x, w)]
+        assert words == y.tolist(), case
+        bits = np.asarray(BS.evaluate_words(bind(SG.GemmTf32, K=K, N=1), x, w[:, None, :])).reshape(-1).astype(np.uint32)
+        assert np.array_equal(bits, y), case
+        for (g, width, r), model in alts.items():
+            acc = np.zeros(len(y), np.uint32)
+            for k in range(0, K, 8):
+                acc = MT.tf32_dot8(acc, x[:, k:k + 8], w[:, k:k + 8], model, r, r)
+            missed[(g, width, r)] |= not np.array_equal(acc, y)
+        acc = np.zeros(len(y), np.uint32)
+        for k in range(K):
+            acc = TK.fma(x[:, k], w[:, k], acc)
+        missed["ffma"] |= not np.array_equal(acc, y)
+    assert all(missed.values()), [h for h, m in missed.items() if not m]
+
+
+#: one route of each kind at K 64, N 3; the grid.z ones over chunks of [24, 24, 16] at k-tile 16, each 24-word chunk's residue
+#: tile 8 words and 8 zeros
+GRID_Z = [{"kernel": "splitk", "SPLIT_K": 3, "partial": "bf16", "align": 8, "tile_k": 16},
+          {"kernel": "splitk", "SPLIT_K": 3, "partial": "f32", "align": 8, "tile_k": 16},
+          {"kernel": "serialk", "SPLIT_K": 3, "align": 8, "tile_k": 16}]
 ROUTES = [{"kernel": "nosplit"}, {"kernel": "splitk", "SPLIT_K": 4, "partial": "bf16"}, {"kernel": "serialk", "SPLIT_K": 4},
-          {"kernel": "splitk", "SPLIT_K": 3, "partial": "bf16", "align": 8, "tile_k": 16}]
+          *GRID_Z]
+ROUTE_IDS = ["nosplit", "splitk-bf16", "serialk", "splitk-bf16-align8", "splitk-f32-align8", "serialk-align8"]
 
 
 def test_the_training_routes_bind_the_opt_in_step_and_the_served_programs_keep_v2() -> None:
@@ -148,7 +218,7 @@ def test_the_training_routes_bind_the_opt_in_step_and_the_served_programs_keep_v
     assert CB.TRAIN_DOT is BG.HopperBF16WgmmaDot16V3 and CB.TRAIN_DOT.opt_in
     assert word_of(CB.TRAIN_DOT) is word_of(BG.HopperBF16WgmmaDot16) is P.HopperBF16WgmmaDot16
     assert boolean_version(P.HopperBF16WgmmaDot16).id == "HopperBF16WgmmaDot16_v2"
-    for route in ROUTES[:3]:
+    for route in ROUTES:
         target = CB.route_gemm(route, 64, 3)
         assert target.bindings["DOT"].id == "HopperBF16WgmmaDot16_v3"
         assert boolean_version(word_of(target)).id == target.id.replace("_v3}", "_v2}")
@@ -183,21 +253,52 @@ def test_the_training_steps_chain_parts_give_the_served_steps_words() -> None:
     assert special_out.sum() > 1000 and (~special_out).sum() > 1000
 
 
-@pytest.mark.parametrize("route", ROUTES, ids=["nosplit", "splitk-bf16", "serialk", "splitk-bf16-align8"])
+@pytest.mark.parametrize("route", ROUTES, ids=ROUTE_IDS)
 def test_route_gemm_on_bits_is_the_route_model(route) -> None:
+    """Each route's Definition on bits is its numpy model on the spread and cancelling words, and no other route's model fits the
+    cancelling words: the closest two, serial split-K over 4 chunks and over the 3 grid.z ones, differ at 32 of the 48 words."""
     rng = np.random.default_rng(117)
     target = CB.route_gemm(route, 64, 3)
     for x, w in BC.route_probe_rows(16, 64, 3, rng):
         got = np.asarray(BS.evaluate_words(target, x, np.broadcast_to(w, (len(x), *w.shape)))).astype(np.uint16)
         assert np.array_equal(got, BC.cublas_route_rows(route, x, w)), route
-    assert all((got != BC.cublas_route_rows(r, x, w)).all() for r in ROUTES if r != route), "the cancelling words tell routes apart"
+    assert all((got != BC.cublas_route_rows(r, x, w)).sum() >= 32 for r in ROUTES if r != route), "the cancelling words tell routes apart"
 
 
-def test_aligned_route_on_bits_takes_each_residue_tile_first() -> None:
+@pytest.mark.parametrize("route", ROUTES, ids=ROUTE_IDS)
+def test_route_gemm_on_words_is_the_route_model(route) -> None:
+    """Each route's Definition on words, what the grader prices and the training rules bind, is its numpy model on the spread
+    and cancelling words, evaluated by the reference evaluator."""
+    from verity.ml.circuits.boolean.trace import word_of
+    from verity.ml.circuits.evaluation.reference import evaluate
+
+    word = word_of(CB.route_gemm(route, 64, 3))
+    for x, w in BC.route_probe_rows(4, 64, 3, np.random.default_rng(119)):
+        got = np.array([evaluate(word, [int(v) for v in row], [int(v) for v in w.reshape(-1)]) for row in x], np.uint16)
+        assert np.array_equal(got, BC.cublas_route_rows(route, x, w)), route
+
+
+def test_an_unsplit_route_pads_k_to_whole_k16_steps() -> None:
+    """At a K that is not a multiple of 16 an unsplit route is `GemmPad_v2`: on bits, the route's model on x and W's rows padded
+    with +0 words at the back to the next multiple of 16.  A split route there is refused."""
+    from verity.ml.circuits.boolean.trace import word_of
+    from verity.ml.definitions.boolean import boolean_version
+
+    target = CB.route_gemm({"kernel": "nosplit"}, 40, 3)
+    assert target.id == f"GemmPad_v2{{T=40,K=48,N=3,{HOP}}}"
+    assert boolean_version(word_of(target)).id == target.id.replace("_v3}", "_v2}")
+    for x, w in BC.route_probe_rows(16, 40, 3, np.random.default_rng(117)):
+        got = np.asarray(BS.evaluate_words(target, x, np.broadcast_to(w, (len(x), *w.shape)))).astype(np.uint16)
+        assert np.array_equal(got, BC.cublas_route_rows({"kernel": "nosplit"}, *(np.pad(a, ((0, 0), (0, 8))) for a in (x, w))))
+    with pytest.raises(ValueError, match="K_positive_multiple_of_16"):
+        CB.route_gemm({"kernel": "serialk", "SPLIT_K": 2}, 40, 3)
+
+
+@pytest.mark.parametrize("route", GRID_Z, ids=ROUTE_IDS[3:])
+def test_aligned_route_on_bits_takes_each_residue_tile_first(route) -> None:
     """At K 64 over 3 slices at k-tile 16, a +-2^13 pair at words 0 and 12 sits in one k16 step of a chain with the zeros at each
     slice's back, and in two of the residue-first chain (8 words and 8 zeros, then 16 words), so the small words each step
-    absorbs differ and the bits tell the two layouts apart."""
-    route = ROUTES[-1]
+    absorbs differ and the bits tell the two layouts apart, whatever the slices' partials meet in."""
     x, w = BC.route_probe_rows(16, 64, 3, np.random.default_rng(117))[1]
     wf = np.where(np.abs(BC.DR.bf16_to_f32_words(w).view(np.float32)) >= 256, np.float32(2.0 ** -8),
                   BC.DR.bf16_to_f32_words(w).view(np.float32))

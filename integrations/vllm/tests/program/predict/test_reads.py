@@ -15,6 +15,7 @@ from dataclasses import fields, replace
 
 import pytest
 
+from verity.ml.circuits.refs import Affine
 from verity.ml.circuits.types import Array, field_types
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.program.predict import reads as R
@@ -66,7 +67,7 @@ def test_every_field_the_compiler_reads_is_an_output_certified_or_advice():
     (R.Field("body", "temperature", "advice", role="policy"), "body.temperature: a certified body's field, account 'advice'"),
     (R.Field("body", "min_p", "certified", role="policy", inert=(0,)), "body.min_p: role 'policy' with inert values (0,)"),
     (R.Field("body", "seed", "advice", role="policy"), "body.seed: a stochastic request's seed is certified, its body's seed or "
-                                                       "derived from its id and the window's coin"),
+                                                       "derived from its id and the window's seed salt"),
     (R.Field("served", "seed", "output"), "served.seed: a stochastic request's seed is certified"),
     (R.Field("row", "cache_hit", "advice"), "row.cache_hit: a prefix-cache hit is a row's advice, charged at its width, under "
                                             "enable_prefix_caching: never derived by verifier-side Python"),
@@ -74,13 +75,46 @@ def test_every_field_the_compiler_reads_is_an_output_certified_or_advice():
     (R.Field("served", "cache_hit", "output"), "served.cache_hit: a prefix-cache hit is a row's advice"),
     (R.Field("body", "stream", "certified", role="transport", switch=R.PREFIX_CACHE),
      "body.stream: switched by enable_prefix_caching, so it is advice the registration can switch off, not 'certified'"),
-    (R.Field("window", "salt", "certified"), "window.salt: of the window the compiler reads only its verifier coin"),
-    (R.Field("window", "coin", "advice"), "window.coin: a stochastic request's seed is certified"),
+    (R.Field("window", "salt", "certified"), "window.salt: of the window the compiler reads only its seed salt"),
+    (R.Field("window", "coin", "certified"), "window.coin: of the window the compiler reads only its seed salt, certified"),
+    (R.Field("window", "seed_salt", "advice"), "window.seed_salt: a stochastic request's seed is certified"),
 ])
 def test_a_field_the_accounting_cant_take_is_refused_by_name(field, why):
     table = tuple(f for f in R.READS if (f.record, f.name) != (field.record, field.name)) + (field,)
     assert any(m.startswith(why) for m in R.refusals(table)), R.refusals(table)
     assert R.refusals(R.READS + R.READS[:1]) == ["advice.requests: declared twice"]
+
+
+@pytest.mark.slow
+def test_a_seed_is_charged_nothing_only_where_the_program_returns_its_seed_rule():
+    """Each stochastic request Program the compiler builds returns its seed rule (`SEED_RULE`, an output) as its first check, the
+    `SeedCheck_v2` Call over its sampler's seed and certified parameters, and no greedy one does; a table that reads a seed but
+    doesn't declare that output is refused by name, and the gate refuses a seed read from the advice by name."""
+    from verity_vllm.program.frontend import seed_rule as SEED
+    assert R.SEED_RULE == ("program", SEED.NAME)
+    reg = _registered()
+    c = compile_steps(reg, *_mixed())
+    assert sorted(u.policy["kind"] for u in c.requests) == ["greedy", "greedy", "stochastic"]
+    for u in c.requests:
+        body, of = c.programs[u.digest].fn.body, request_program(reg, u).checks["of"]
+        calls = [n for n in body.nodes if n.name == SEED.NAME]
+        if u.policy["kind"] == "stochastic":
+            assert [n.fn.id for n in calls] == ["SeedCheck_v2{COIN=64,RID=2}"] and of[0].startswith("the seed rule")
+            params, at = dict(body.params), [n for n, _ in body.params]
+            assert [repr(a.refs) for a in calls[0].args] == [repr(Affine("p", at.index(n), 0, params[n].leaves))
+                                                             for n in ("seed", *SEED.PARAMS)]
+        else:
+            assert not calls and not any(w.startswith("the seed rule") for w in of)
+    unchecked = tuple(f for f in R.READS if (f.record, f.name) != R.SEED_RULE)
+    assert [m.split(":")[0] for m in R.refusals(unchecked)] == ["program.seed_rule"]
+    assert R.refusals(unchecked)[0].startswith("program.seed_rule: not a declared output, so a seed read from body.seed, "
+                                               "window.seed_salt holds nothing the sampler reads, which is 64 bits a request")
+    assert R.refusals(tuple(f for f in unchecked if (f.record, f.name) not in R.SEED)) == []
+    g = R.gate(A_WHOLE)
+    for read, at in ((lambda: g.requests[0].seed, "request.seed"), (lambda: g.seed_salt, "advice.seed_salt")):
+        with pytest.raises(R.UndeclaredRead, match=re.escape(f"the compiler reads the advice's {at}: a stochastic request's seed is "
+                                                             f"certified")):
+            read()
 
 
 def test_the_gate_refuses_a_field_reads_doesnt_declare_by_name():
@@ -98,12 +132,12 @@ def test_the_gate_refuses_a_field_reads_doesnt_declare_by_name():
 
 def test_the_table_is_the_compilers_read_path(monkeypatch):
     """Without its declaration a field the planner reads fails it by name, and the planner's body roles are the table's."""
-    from verity_vllm.program.predict import steps
+    from verity_vllm.program.predict import ingress_policy as IP
     monkeypatch.setattr(R, "_DECLARED", R._DECLARED - {("request", "finish")})
     with pytest.raises(R.UndeclaredRead, match=re.escape("the compiler reads request.finish")):
         plan_steps(_registered(), *_mixed())
-    assert steps._INERT == {f.name: f.inert for f in R.READS if f.role == "inert"}
-    assert set(steps._KNOWN) | set(steps._TRANSPORT) == {f.name for f in R.READS if f.record == "body"}
+    assert IP._INERT == {f.name: f.inert for f in R.READS if f.role == "inert"}
+    assert set(IP._KNOWN) | set(IP._TRANSPORT) == {f.name for f in R.READS if f.record == "body"}
 
 
 def test_the_compiler_reads_every_field_the_gate_passes(monkeypatch, tmp_path):
@@ -222,8 +256,14 @@ def _prefix_stable(reg: Registered, advice, ingress: dict) -> set[str]:
 
 
 def _calls(program) -> list[str]:
-    """``program``'s calls but its length rule's (`RequestUnit.stop`), the last call, whose config `READS` charges as advice."""
-    return [n.fn.id for n in program.fn.body.nodes if not n.fn.id.startswith("StopCheck_")]
+    """``program``'s calls but its length rule's (`RequestUnit.stop`), the last call, whose config `READS` charges as advice, and
+    a stochastic request's seed rule's (`reads.SEED_RULE`), which reads no output."""
+    return [n.fn.id for n in program.fn.body.nodes if not n.fn.id.startswith(("StopCheck_", "SeedCheck_"))]
+
+
+def _members(program) -> list[str]:
+    """`_calls`, a batch's once per member: the Calls a batched Program makes (`prune.batched_form`)."""
+    return [i for n in program.fn.body.nodes if not n.fn.id.startswith("StopCheck_") for i in [n.fn.id] * n.n]
 
 
 def test_a_batch_invariant_plan_is_prefix_stable_and_a_length_sets_only_its_t():
@@ -237,8 +277,8 @@ def test_a_batch_invariant_plan_is_prefix_stable_and_a_length_sets_only_its_t():
 @pytest.mark.slow
 def test_a_batch_invariant_program_is_prefix_stable_in_its_length():
     """At every cut each request compiles to the Program it has whole, and its Programs at each length its body allows are,
-    call for call but its length rule's check, prefixes of one another, returning its token ids first, ``Array(L, I32)``: its
-    length sizes only its later decodes and its length rule (about 6 s)."""
+    call for call but its length rule's and seed rule's checks, prefixes of one another, returning its token ids first,
+    ``Array(L, I32)``: its length sizes only its later decodes and its length rule (about 6 s)."""
     reg = _registered()
     advice, ingress = _mixed()
     whole = compile_steps(reg, advice, ingress)
@@ -315,7 +355,7 @@ def test_a_class_g_program_is_prefix_stable_at_every_cut_but_for_its_edges_index
     stops, runs = (request_program(reg, plan_steps(reg, a, ingress).requests[1]).program for a in (cut, _running_on(cut, 1, 4)))
     left = iter(_calls(runs))
     assert all(f in left for f in _calls(stops))
-    assert Counter(_calls(runs)) - Counter(_calls(stops)) == Counter(
+    assert Counter(_members(runs)) - Counter(_members(stops)) == Counter(
         {"CublasSplitKGemm_v1{K=6144,N=160,SPLIT_K=4,DOT=HopperBF16WgmmaDot16_v1}": 9, "DsaIndexerKRow_v1{D=128,ROPE=64,EPS=1e-06}": 9})
     ret = [field_types(p.fn.signature()[1]) for p in (stops, runs)]
     assert ret[1][:len(ret[0])] == ret[0] and len(ret[1]) == len(ret[0]) + 2

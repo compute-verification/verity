@@ -81,7 +81,7 @@ def _sha(b: bytes) -> str:
 def _capture(tmp: Path, monkeypatch, fused_op, norm_out_given: bool):
     """Each rank's call recorded by capture.py's recorder, committed in the layout stage.py's `Capture` checks."""
     capture = _load("capture", monkeypatch)
-    S = capture._State({"capture": str(tmp), "steps": [STEP], "mla_tokens": 0, "open": {}, "keep": "all"})
+    S = capture._State({"capture": str(tmp), "steps": [STEP], "mla_tokens": 0, "open": {}, "keep": "all", "min_free_gib": 0})
     monkeypatch.setattr(capture, "S", S)
     rng = np.random.default_rng(7 + norm_out_given)
     PARTS["parts"] = parts = _bf16(rng, (W, T, H), 0.5)
@@ -93,6 +93,7 @@ def _capture(tmp: Path, monkeypatch, fused_op, norm_out_given: bool):
         out = torch.empty_like(x) if norm_out_given else None
         with capture.Recorder():
             fused_op(x, rs, g, EPS, W, True, True, 42, 1, out)
+        capture._drain()
         sd = tmp / f"rank{r}" / f"step{STEP}"
         sd.mkdir(parents=True, exist_ok=True)
         ops = "".join(json.dumps(e, sort_keys=True, separators=(",", ":")) + "\n" for e in S.events).encode()

@@ -84,7 +84,7 @@ def phi_of(rec: dict, *, hf_home: str | None = None, checkpoints: dict | None = 
 
 
 #: the policy fields a component Program reads (`vllm_meta.make_wrapper`); the rest of the Build's policy record is provenance
-_POLICY_FIELDS = ("kind", "temperature", "top_p", "top_k", "seeded", "splits")
+_POLICY_FIELDS = ("kind", "temperature", "top_p", "top_k", "seeded", "splits", "rid")
 
 
 def sampling_of(w: dict, phi: Phi) -> dict:
@@ -167,37 +167,35 @@ def _workload_task(task: dict) -> dict:
     return out
 
 
-def request_component(r, canon: dict):
-    """A predicted request Program as GP-01's component (`program.workload.request_component`), its definitions shared through
-    `canon` (one dict a composition)."""
-    from verity.ml.circuits.defs import REGISTRY
+def request_component(r):
+    """A predicted request Program (a `BuildResult`) as GP-01's component (`program.workload.program_component`): its own root,
+    whose definitions are this process's, so nothing is decoded."""
+    from verity.ml.circuits.codec import descriptor_id
     from verity_vllm.program import workload as W
-    from verity.ml.definitions.registry.catalog import load as load_registry
-    load_registry()
     params = [(name, repr(t)) for name, t in r.program.fn.signature()[0]]
-    return W.request_component(r.desc, REGISTRY, params, canon=canon, digest=r.digest)
+    fn = getattr(r.program, "program_fn_id", None) or descriptor_id(r.program.fn)
+    return W.program_component(r.program.root, r.digest, fn, params)
 
 
-def predict_workload(phi: Phi, comps: dict | None = None, canon: dict | None = None) -> dict:
+def predict_workload(phi: Phi, comps: dict | None = None) -> dict:
     """`workload_program`'s digest, function id, root node count and lag."""
-    wl = workload_program(phi, comps, canon)
+    wl = workload_program(phi, comps)
     return {"digest": wl.digest, "function": wl.fn.id[:300], "n_root_nodes": len(wl.program.root.body.nodes), "lag": wl.lag}
 
 
-def workload_program(phi: Phi, comps: dict | None = None, canon: dict | None = None):
+def workload_program(phi: Phi, comps: dict | None = None):
     """GP-01's composition (`program.workload.WorkloadProgram`) over the predicted request components, manifest order, with the
-    lag the declared target resolves (`TargetProfile.lag()`); `comps` holds components already built under `canon`
-    (`request_component`), by (LP, T), so a caller that has each request's Program need not hold them all."""
+    lag the declared target resolves (`TargetProfile.lag()`); `comps` holds components already built (`request_component`), by
+    (LP, T), so a caller that has each request's Program need not hold them all."""
     from verity_vllm.pipeline.global_program import request_id_of
     from verity_vllm.program import workload as W
     reqs = phi.requests
     if any(int(r.get("n") or 1) != 1 for r in reqs):
         raise Unexpressible("a request with n > 1 (parallel sampling) in the workload")
-    canon = {} if canon is None else canon
     comps = dict(comps or {})
     for LP, T in phi.request_shapes():
         if (LP, T) not in comps:
-            comps[(LP, T)] = request_component(build_program(phi, "request", LP=LP, T=T), canon)
+            comps[(LP, T)] = request_component(build_program(phi, "request", LP=LP, T=T))
     wreqs = []
     for i, q in enumerate(reqs):
         lp, cap = int(q["prompt_len"]), int(q["max_tokens"])

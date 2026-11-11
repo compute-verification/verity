@@ -12,6 +12,11 @@ dependencies = [
 [project.scripts]
 verity-vllm = "verity_vllm.pipeline.cli:main"
 
+# vLLM calls each general plugin in every process it loads plugins in (vllm/plugins/__init__.py): this one puts the canonical
+# moe_align_block_size on the Marlin MoE path (verity_vllm/engine/moe_align.py)
+[project.entry-points."vllm.general_plugins"]
+verity_moe_align = "verity_vllm.engine.moe_align:register"
+
 [project.optional-dependencies]
 # The CPU half (compare / replay / gates / derivation tests) needs torch; the pod runtime adds vLLM through pod_bootstrap.sh.
 torch = ["torch>=2.4"]
@@ -52,6 +57,7 @@ markers = [
 untraced = [
     "tests/lint/test_merge_allowlist.py",
     "tests/lint/test_ruff.py",
+    "tests/lint/test_ruff_vllm.py",
     "tests/migrate/test_superseded_quarantine.py",
     "tests/ops/test_epoch_row.py",
     "tests/ops/test_pod_bootstrap.py",
@@ -60,6 +66,7 @@ untraced = [
     "tests/pipeline/test_commit_tree_of_record.py",
     "tests/pipeline/test_experiment_index.py",
     "tests/pipeline/test_gpu_lease.py",
+    "tests/pipeline/test_interior_rows.py",
     "tests/pipeline/test_research_tools.py",
     "tests/pipeline/test_row.py",
     "tests/pipeline/test_row_tables_stream.py",
@@ -94,15 +101,16 @@ untraced = [
 # (benchmarks/one_stage/glm53_*.json);
 # tests/protocols/test_pous_option.py encodes and spot-checks C* with P2's store (benchmarks/pous/p2_v1/store.py and the
 # reference decode it imports); tests/tools/test_ratchet_gate.py commits the repository's lints (tests/lint/test_repo_env_reads.py,
-# test_repo_ruff.py, test_repo_silent_excepts.py and test_repo_lane_text.py) into the repositories it gates.
+# test_repo_ruff.py, test_repo_silent_excepts.py, test_repo_lane_text.py and test_repo_retired_terms.py) into the repositories it gates.
 # The tests build and run the Lake packages whose lakefiles they list: tests/pipeline/test_row_tables_stream.py
 # `sampled-proofs-verifier`, tests/protocol_options/test_pouw_h1.py `pouw-check-difftest` and test_remote_session.py
 # `remote-audit-verifier`.
 # tests/protocols/pouw_h1_circuits.py lowers K's circuit file with h1_prove's h1unit.py under hidden_zk's fast_stage.py and the
 # compact_stage.py it imports (test_pouw_h1_drawn.py builds one), and reads the live Program from h1_prove's live.py (test_pouw_h1_circuits.py).
+# The root ruff.toml is what ruff.toml extends, and tests/lint/test_ruff_vllm.py reads its selection.
 inputs_only = true
 inputs = ["verity", "verity/README.md", "tools/config/verity_config", "fixtures/artifacts.json", "examples/vllm/workloads/SHA256SUMS", ".gitignore",
-          "verity/core/service/sampled_proofs/lakefile.toml", "verity/core/protocols/pouw/lean/check/lakefile.toml",
+          "verity/core/service/spot/lakefile.toml", "verity/core/protocols/pouw/lean/check/lakefile.toml",
           "verity/core/protocols/remote_bandwidth/lean/lakefile.toml",
           "benchmarks/ppl/steps.py", "benchmarks/ppl/matmul.py", "benchmarks/ppl/gates.py", "benchmarks/ppl/spec.py", "benchmarks/ppl/methodology.py", "benchmarks/ppl/model.py",
           "benchmarks/ppl/windows.py", "benchmarks/ppl/datasets.json", "benchmarks/pouw/edited_gemm/fattn_ref.py",
@@ -113,8 +121,8 @@ inputs = ["verity", "verity/README.md", "tools/config/verity_config", "fixtures/
           "benchmarks/pous/p2_v1/__init__.py", "benchmarks/pous/p2_v1/store.py", "benchmarks/pous/p2_v1/reference.py",
           "benchmarks/one_stage/glm53_all_families_tp8_step16.json", "benchmarks/one_stage/glm53_sparse_mla_tp8_step16.json",
           "benchmarks/one_stage/glm53_prefill_tp8_step0.json",
-          "tests/lint/test_repo_env_reads.py", "tests/lint/test_repo_ruff.py", "tests/lint/test_repo_silent_excepts.py",
-          "tests/lint/test_repo_lane_text.py",
+          "ruff.toml", "tests/lint/test_repo_env_reads.py", "tests/lint/test_repo_ruff.py", "tests/lint/test_repo_silent_excepts.py",
+          "tests/lint/test_repo_lane_text.py", "tests/lint/test_repo_retired_terms.py",
           "tools/research/src/research/__init__.py", "tools/research/src/research/cli.py", "tools/research/src/research/clone.py",
           "tools/research/src/research/compare.py", "tools/research/src/research/env.py", "tools/research/src/research/pythonpath.py",
           "tools/research/src/research/record.py", "tools/research/src/research/remote.py", "tools/research/src/research/result.py",
@@ -159,7 +167,6 @@ paths = ["integrations/vllm/verity_vllm/acquire/norm_tap_src"]
 tests = [
     "tests/check/test_capture_map.py",
     "tests/pipeline/test_tp_gpu_lease.py",
-    "tests/pipeline/test_tp_rejudge.py",
 ]
 paths = ["integrations/vllm/verity_vllm/pipeline/tp"]
 
@@ -220,7 +227,7 @@ tests = ["tests/lint/test_ratchet.py"]
 paths = ["integrations/vllm/tests/lint"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/lint/test_ruff.py"]
+tests = ["tests/lint/test_ruff.py", "tests/lint/test_ruff_vllm.py"]
 paths = ["integrations/vllm/tests", "integrations/vllm/tools"]
 
 [[tool.verity.tests.reads]]
@@ -313,5 +320,5 @@ tests = ["tests/query/test_word.py"]
 paths = ["integrations/vllm/verity_vllm/pipeline", "verity/ml/circuits"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_imports_resolve.py", "tests/test_no_dead_modules.py"]
+tests = ["tests/test_dead_code_tests_for.py", "tests/test_imports_resolve.py", "tests/test_no_dead_modules.py"]
 paths = ["integrations/vllm/tests", "integrations/vllm/verity_vllm"]

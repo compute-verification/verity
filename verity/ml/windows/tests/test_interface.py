@@ -5,8 +5,9 @@ the units change inference block, its step and slot and a form of the window's),
 against the Definitions before it commits, a wire pattern wires whole members unit by unit under its writers' salts, a
 cut port's rows are each wired from their own writer, a registered read's ports are tables of the registered rows under
 the value's salts, every other input row is
-declared registered, ingress or free and counted from the description, and the verifier's window (and its registered
-reads) is rebuilt from the circuit record alone, its members stated by cap, wires, cuts and reads. A window written under
+declared registered, ingress or free and counted from the description, the verifier's window (and its registered
+reads) is rebuilt from the circuit record alone, its members stated by cap, wires, cuts and reads, and a history table's
+writer commits each row as the table's leaf, whose root the verifier pins from the public bodies. A window written under
 core's registration, and `of_records` against it, are the records audit's tests
 (`benchmarks/prove_path/tests/test_records_audit.py`), since these may not import core."""
 from __future__ import annotations
@@ -32,12 +33,13 @@ from verity.ml.circuits.evaluation.bits import evaluate_words
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.ops.boolean import cast as BC, gemm as BG
 from verity.ml.circuits.types import Array, Tuple, Value
-from verity.ml.commitments import row_table as RT
+from verity.ml.commitments import history as HT, row_table as RT
 from verity.ml.commitments.gates import embedding as E
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, bit_row
-from verity.ml.windows import flock_inputs as FI, interface as I, rows as CS, wiring as WI
+from verity.ml.commitments.rowleaf import (SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2, bit_row,
+                                           row_leaf)
+from verity.ml.windows import flock_inputs as FI, history as HW, interface as I, rows as CS, wiring as WI
 
 K = 64
 COORD = bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8)
@@ -280,6 +282,17 @@ def test_the_verifiers_window_is_the_circuit_records(templates):
                                       "out_rows": [[V2, [0]]], "reads": "inline"}
 
 
+def test_a_templated_statement_is_recorded_by_its_layout_and_a_flat_one_by_its_reads():
+    """A template whose unit is a templated statement records its layout mode and ``structural`` in place of ``reads``, as
+    Flock's `UnitStager` takes the one or the other; a flat one keeps ``reads``."""
+    win = I.Window(I.Circuit("rec", ((COORD, 3), (ACC, 2))), RUN, LAW, 4)
+    rows = {t: dict(zip(("in_rows", "out_rows"), I.unit_rows(fn))) for t, fn in ((TID, COORD), (AID, ACC))}
+    sts = {TID: {**rows[TID], "layout": "iv/hybrid/4", "structural": True}, AID: {**rows[AID], "reads": "slots"}}
+    doc = json.loads(I.circuit_bytes(I.circuit_record(win.window, "rec", [(TID, 3), (AID, 2)], sts)))
+    assert {t: {k: v for k, v in st.items() if k not in ("in_rows", "out_rows")} for t, st in doc["statements"].items()} == {
+        TID: {"layout": "iv/hybrid/4", "structural": True}, AID: {"reads": "slots"}}
+
+
 def test_a_circuit_record_its_templates_dont_make_is_refused():
     win = I.Window(I.Circuit("rec", ((COORD, 10),)), RUN, LAW, 4)
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
@@ -303,12 +316,13 @@ REQUESTS, STEPS, LAYERS = 2, 2, 2
 def chain() -> I.Circuit:
     """Two requests' two decode steps through two layers, a ``Gemm_v2{K=16, N=16}`` unit each, in (layer, step, request)
     order: layer 1 reads layer 0's output at its step and request, layer 0 at step s + 1 reads layer 1's output at step s,
-    and layer 0's input at step 0 (the embedding) is external."""
+    and layer 0's input at step 0 (the embedding) is external. The template reads itself, so the circuit states an order,
+    a range each layer and step (`ordered`)."""
     layer = REQUESTS * STEPS
-    return I.Circuit("chain", ((GEMM, LAYERS * layer),), external=(f"{GID}/x",),
-                     wires=(I.Wire(GID, "x", GID, "o0", at=layer, radix=(STEPS, REQUESTS), base=0, step=(REQUESTS, 1)),
-                            I.Wire(GID, "x", GID, "o0", at=REQUESTS, radix=(STEPS - 1, REQUESTS), base=layer,
-                                   step=(REQUESTS, 1))))
+    wires = (I.Wire(GID, "x", GID, "o0", at=layer, radix=(STEPS, REQUESTS), base=0, step=(REQUESTS, 1)),
+             I.Wire(GID, "x", GID, "o0", at=REQUESTS, radix=(STEPS - 1, REQUESTS), base=layer, step=(REQUESTS, 1)))
+    return I.Circuit("chain", ((GEMM, LAYERS * layer),), external=(f"{GID}/x",), wires=wires,
+                     order=I.ordered({GID: LAYERS * layer}, wires, {GID: range(0, LAYERS * layer, REQUESTS)}))
 
 
 def chain_values(seed: int = 0, first: np.ndarray | None = None) -> tuple[list[np.ndarray], list[np.ndarray]]:
@@ -363,6 +377,38 @@ def test_a_wire_pattern_wires_whole_members_unit_by_unit_under_their_writers_sal
         bad.close(salt_key=bytes(32))
 
 
+def test_a_wired_port_with_no_tree_of_its_own_is_its_writers_leaves(monkeypatch):
+    """With no wired trees (`rows.Member.wired_trees`), a wired port commits no tree, domain or root, and the verifier's
+    window derives no port for it: its rows are its writer's output value, its writer units' leaves of its writer's tree
+    (`rows.Binding.held`, `held_leaves`), given as `rows.WIRED`, and its ``b || c`` its writer's. Given as rows it is
+    refused, and so is a wire of several members' units, which no one tree holds, and, in a member with no tables, one
+    that isn't its writer's rows in order."""
+    win = I.Window(chain(), RUN, LAW, 2)
+    ins, outs = chain_values()
+    win.record(GEMM, ins, outs, {"chain": 0})
+    given = {}
+    monkeypatch.setattr(CS, "commit", lambda window, data, **kw: given.setdefault("data", data))
+    win.close(salt_key=bytes(32))
+    monkeypatch.undo()
+    ms = tuple(replace(m, wired_trees=False) for m in win.window.members)
+    held = replace(win.window, members=ms)
+    data = [{**d, "rows": {**d["rows"], **{p: CS.WIRED for p, _o, _ws in m.wired}}} for d, m in zip(given["data"], ms)]
+    c, plain = CS.commit(held, data, salt_key=bytes(32)), win.close(salt_key=bytes(32))
+    wired = {m.port(p) for m in ms for p, _o, _ws in m.wired}
+    assert len(wired) == 3 and not wired & (set(c.roots) | set(c.domains) | set(CS.expected_ports(held)))
+    assert set(plain.roots) == set(c.roots) | wired and set(CS.expected_ports(win.window)) == set(CS.expected_ports(held)) | wired
+    assert (held.held(ms[0], "x"), held.held_leaves(ms[0], "x")) == (ms[0].port("x"), (0, 1))
+    assert [(held.held(m, "x"), held.held_leaves(m, "x")) for m in ms[1:]] == [
+        (ms[2].port("o0"), (0, 1)), (ms[0].port("o0"), (0, 1)), (ms[1].port("o0"), (0, 1))]
+    assert all(c.bc[m.port("x")] == c.bc[held.held(m, "x")] == plain.bc[m.port("x")] for m in ms[1:])
+    with pytest.raises(ValueError, match="given as"):
+        CS.commit(held, given["data"], salt_key=bytes(32))
+    with pytest.raises(ValueError, match="several members' outputs"):
+        replace(held, members=(ms[0], replace(ms[1], wired=(("x", "o0", (0, 4)),)), *ms[2:]))
+    with pytest.raises(ValueError, match="in its writer's order"):
+        replace(held, members=(ms[0], replace(ms[1], wired=(("x", "o0", (5, 4)),)), *ms[2:]))
+
+
 def test_the_record_states_members_by_cap_and_wires_and_the_verifier_derives_them():
     win = I.Window(chain(), RUN, LAW, 2)
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
@@ -370,8 +416,10 @@ def test_the_record_states_members_by_cap_and_wires_and_the_verifier_derives_the
     assert "members" not in doc and doc["cap"] == 2 and tuple(I.Wire.of(w) for w in doc["wires"]) == chain().wires
     mine = I.window_of_record(doc, LAW, by_id)
     assert mine.members == win.window.members and mine.partition_digest == win.window.partition_digest
-    assert I.window_of_record({**doc, "wires": [{**doc["wires"][0], "base": 1}, doc["wires"][1]]}, LAW, by_id).members \
+    assert I.window_of_record({**doc, "wires": [{**doc["wires"][0], "step": [2, 0]}, *doc["wires"][1:]]}, LAW, by_id).members \
         != win.window.members
+    with pytest.raises(ValueError, match="order: wire 0"):
+        I.window_of_record({**doc, "wires": [{**doc["wires"][0], "base": 1}, *doc["wires"][1:]]}, LAW, by_id)
     for bad, why in [({k: v for k, v in doc.items() if k != "cap"}, "one or the other"), ({**doc, "members": []}, "one or the other"),
                      ({**doc, "wires": [{**doc["wires"][0], "radix": 2}]}, "radix and step lists"),
                      ({**doc, "wires": [{**doc["wires"][0], "extra": 0}]}, "a wire's record"),
@@ -495,9 +543,14 @@ def test_a_listed_records_registered_reads_fill_its_members_rows_and_count_regis
 def test_a_wire_reads_whole_rows_among_its_templates_units_each_reader_port_once():
     """A wire's checks are per wire: its ends are its templates' ports, its reader and writer units are among theirs, it reads
     a row of its writer's words (a gathered row is refused), and no reader unit's port is wired twice. A step of 0 is a
-    fan-out."""
+    fan-out. A template's wire to its own later instances passes with no order too, and one reading the same instances
+    or later ones is refused (``order``)."""
     w = {"reader": GID, "port": "x", "writer": GID, "out": "o0", "at": 4, "radix": (2, 2), "base": 0, "step": (2, 1)}
-    I.Circuit("ok", ((GEMM, 8),), wires=(I.Wire(**w),))
+    I.Circuit("ok", ((GEMM, 8),), wires=(I.Wire(**w),), order=((GID, 0, 4), (GID, 4, 4)))
+    I.Circuit("unordered", ((GEMM, 8),), wires=(I.Wire(**w),))
+    for edit in ({"base": 4}, {"at": 0, "base": 4}, {"base": 5, "step": (0, 0)}):
+        with pytest.raises(ValueError, match="order: wire 0 "):
+            I.Circuit("self", ((GEMM, 8),), wires=(I.Wire(**{**w, **edit}),))
     for edit, why in [({"writer": TID}, "templates of the circuit"), ({"port": "o0"}, "parameters"), ({"out": "x"}, "outputs"),
                       ({"port": "w"}, "gathered from several writers"), ({"at": 5}, "reader units"),
                       ({"base": 5}, "writer units"), ({"step": (-2, 1)}, "writer units"), ({"radix": ()}, "at least one digit"),
@@ -508,6 +561,47 @@ def test_a_wire_reads_whole_rows_among_its_templates_units_each_reader_port_once
         I.Circuit("twice", ((GEMM, 8),), wires=(I.Wire(**w), I.Wire(**{**w, "at": 5, "radix": (1, 2)})))
     fan = I.Wire(GID, "x", GID, "o0", at=4, radix=(2, 2), base=1, step=(0, 2))
     assert fan.writers(4, 4).tolist() == [1, 3, 1, 3] and fan.span() == (1, 3)
+
+
+def test_a_wires_box_bounds_the_writers_of_the_reader_indices_between_two():
+    """`Wire.box` bounds the writers of reader indices ``lo`` to ``hi`` digit by digit (`Spot.Wires.Wire.box`,
+    `writerAt_mem_box`): every writer between them lies in it, and over a run of whole values of a digit, such as a range
+    of whole steps, its bounds are writers."""
+    rng = np.random.default_rng(1)
+    for _ in range(500):
+        nd = int(rng.integers(1, 4))
+        w = I.Wire(GID, "x", GID, "o0", at=0, radix=tuple(int(x) for x in rng.integers(1, 4, nd)), base=int(rng.integers(0, 9)),
+                   step=tuple(int(x) for x in rng.integers(-3, 4, nd)))
+        lo = int(rng.integers(0, w.units))
+        hi = int(rng.integers(lo, w.units))
+        got = w.source(np.arange(lo, hi + 1))
+        a, b = w.box(lo, hi)
+        assert a <= got.min() and got.max() <= b, (w, lo, hi)
+    w = I.Wire(GID, "x", GID, "o0", at=0, radix=(3, 2, 2), base=9, step=(4, -1, 2))
+    for d in range(3):
+        got = w.source(np.arange(4 * d, 4 * d + 4))
+        assert w.box(4 * d, 4 * d + 3) == (got.min(), got.max())
+
+
+def test_the_wires_dataflow_is_acyclic_under_the_circuits_order():
+    """`chain`'s template reads itself, and with no order its units in unit order don't fit its wires (layer 1's step 0,
+    units 2 and 3, reads layer 0's step 1, units 4 and 5); its order, a range each layer and step (`ordered`), puts every
+    range a wire reads in a range below that range. An order where a range reads a later one is refused naming the first
+    such wire, an order that doesn't tile each template's units by name, and a cut into ranges no order can rank (layer
+    0's steps one range, read by layer 1's step 0 and reading it) as a cycle."""
+    c = chain()
+    assert c.order == ((GID, 0, 2), (GID, 4, 2), (GID, 2, 2), (GID, 6, 2))
+    with pytest.raises(ValueError, match="order: wire 1 "):
+        I.check_order(c.units, c.wires)
+    for order, why in [(((GID, 0, 4), (GID, 4, 4)), "order: wire 1 "), (((GID, 0, 2), (GID, 2, 2), (GID, 4, 2), (GID, 6, 2)),
+                                                                        "order: wire 1 "),
+                       (((GID, 4, 2), (GID, 0, 2), (GID, 2, 2), (GID, 6, 2)), "order: wire 0 "),
+                       (((GID, 0, 2), (GID, 4, 2), (GID, 2, 2)), "don't tile"), (((GID, 0, 4), (GID, 3, 5)), "don't tile"),
+                       (((GID, 0, 8), (GID, 8, 0)), "don't tile"), ((("Z", 0, 8),), "order: range 0")]:
+        with pytest.raises(ValueError, match=why):
+            I.check_order(c.units, c.wires, order)
+    with pytest.raises(ValueError, match="cycle: no order of the ranges"):
+        I.ordered(c.units, c.wires, {GID: (4,)})
 
 
 EMB = I.resolve("EmbeddingRead_v1{V=4,H=16}")
@@ -646,6 +740,184 @@ def test_a_window_commits_a_cut_ports_rows_each_under_its_writers_salt():
     bad.record(GEMM, [x, ins[1]], [np.asarray(evaluate_batch(GEMM, x, ins[1], kernel="reference"), dtype=np.uint16).reshape(3, 16)])
     with pytest.raises(ValueError, match="x#1 row is not the o0 row"):
         bad.close(salt_key=bytes(32))
+
+
+def latent(n: int = 6, at: int = 0, capacity: int = 16, **edit) -> I.History:
+    """History table ``latent``: `sliced`'s six ``Gemm_v2{K=16, N=8}`` outputs, unit u at position ``at + u``, after ``at``
+    rows the verifier holds from the table's earlier windows."""
+    runs = ([{"start": 0, "count": at, "held": "latent", "row": 0}] if at else []) + [
+        {"start": at, "count": n, "writer": G8ID, "out": "o0", "radix": [n], "base": 0, "step": [1]}]
+    return I.History(**{"name": "latent", "program": "program", "writer": G8ID, "out": "o0", "words": 8, "runs": runs,
+                        "capacity": capacity, **edit})
+
+
+def history_window(table: HT.HistoryTable, seed: int = 0) -> tuple[I.Window, CS.Committed, dict[str, bytes]]:
+    """`sliced`, its slices' outputs appended to ``table`` as history table ``latent``'s next rows, committed: -> the
+    window, its commitment and its members' public bodies."""
+    ins8, outs8, ins, outs = sliced_values(seed)
+    at = len(table.rows)
+    table.append(outs8[0])
+    win = I.Window(sliced(registered=I.Registered({}, histories=(latent(at=at, capacity=table.leaves),))), RUN, LAW, 2,
+                   registered={"latent": table})
+    win.record(G8, ins8, outs8)
+    win.record(GEMM, ins, outs)
+    got = win.close(salt_key=bytes(32))
+    return win, got, {m.key: got.public_body(k) for k, m in enumerate(win.window.members)}
+
+
+def test_a_history_tables_writer_commits_each_row_as_the_tables_leaf():
+    """A history table's writer's output rows, and the rows a wire fills from them, are ``hm96-sha512/row-seg/v1`` rows,
+    each unit's under the table's salt at its position, so its public string is the table's leaf and the wiring check
+    holds; the record states them so, and the verifier derives the same members from it, stated or listed, and the same
+    history tables, whose root the verifier of record computes from its writers' public bodies, the root the window
+    registers and the verifier pins; a later window's positions follow the rows it holds of the earlier ones."""
+    table = HT.HistoryTable("program", "latent", 8, 16)
+    win, got, publics = history_window(table)
+    ms = win.window.members
+    assert [(m.template, m.schema("o0")) for m in ms] == [(G8ID, SEG)] * 3 + [(GID, V2)] * 2
+    assert [m.schema(p) for p in ("x#0", "x#1", "w") for m in ms[3:4]] == [SEG, SEG, V2]
+    assert b"".join(bytes(s) for m in ms[:3] for s in WI.strings(publics, m, "o0")) == b"".join(table.bcs)
+    assert WI.check(ms, publics) == {}
+    doc = json.loads(I.circuit_bytes(win.circuit_record()))
+    assert doc["statements"][G8ID]["out_rows"] == [[SEG, [0]]] and doc["registered"]["histories"] == [latent().doc()]
+    assert [r[1] for r in doc["statements"][GID]["in_rows"]] == [SEG, SEG, V2]
+    assert I.Registered.of(doc["registered"]) == win.circuit.registered
+    resolve = {GID: GEMM, G8ID: G8}.__getitem__
+    mine = I.window_of_record(doc, LAW, resolve)
+    assert mine.members == ms
+    roots = {"latent": table.root.hex()}
+    pinned = HW.pins(doc, roots)
+    hist = HW.params(doc, mine, publics, pinned)
+    assert HT.roots_of(CS.leaf_layer(publics), hist) == {"latent": (table.root, table.domain.domain_id)}
+    assert pinned == {"latent": table.entry()} and hist["registered"] == {"latent": pinned["latent"]["root"]}
+    strings = {"latent": HW.strings(win.circuit.registered.histories[0], mine, publics, {})}
+    assert strings == {"latent": table.bcs}
+    listed = json.loads(I.circuit_bytes(I.circuit_record(win.window, "sliced", [(G8ID, 6), (GID, 3)], doc["statements"],
+                                                         declared={"registered": doc["registered"]})))
+    assert I.window_of_record(listed, LAW, resolve).members == ms
+    assert HW.params(listed, mine, publics, HW.pins(listed, roots)) == hist and HW.pins(listed, roots) == pinned
+    later, _, bodies = history_window(table, seed=1)
+    doc2 = json.loads(I.circuit_bytes(later.circuit_record()))
+    roots2, mine2 = {"latent": table.root.hex()}, I.window_of_record(doc2, LAW, resolve)
+    hist2 = HW.params(doc2, mine2, bodies, HW.pins(doc2, roots2), strings)
+    assert len(table.rows) == 12 and hist2["held"] == {"latent": {"latent": [s.hex() for s in strings["latent"]]}}
+    assert HT.roots_of(CS.leaf_layer(bodies), hist2) == {"latent": (table.root, table.domain.domain_id)}
+    assert HW.strings(later.circuit.registered.histories[0], mine2, bodies, strings) == table.bcs
+    assert table.bcs[:6] == strings["latent"]
+    with pytest.raises(ValueError, match="holds no rows of"):
+        HT.roots_of(CS.leaf_layer(bodies), HW.params(doc2, later.window, bodies, HW.pins(doc2, roots2)))
+
+
+def test_the_verifier_of_record_holds_the_registered_history_root_to_the_writers_strings():
+    """The verifier's history tables (`history.params`) hold the window's registered root to the root over its writers'
+    public strings, the root of the pin the reads are made from (`history.pins`): a registered root over other rows, a
+    body whose strings another unit wrote (under the leaf layer over it, or the window's), a registration naming no root
+    for the table, a table without a pin or with another table's, and a writer member's missing body are each refused."""
+    table = HT.HistoryTable("program", "latent", 8, 16)
+    win, _got, publics = history_window(table)
+    doc = json.loads(I.circuit_bytes(win.circuit_record()))
+    roots, leaf = {"latent": table.root.hex()}, CS.leaf_layer(publics)
+    pinned = HW.pins(doc, roots)
+    assert HT.roots_of(leaf, HW.params(doc, win.window, publics, pinned))["latent"][0] == table.root
+    other = HT.HistoryTable("program", "latent", 8, 16)
+    other.append(np.stack(table.rows[::-1]), table.salts[::-1])
+    with pytest.raises(ValueError, match="not the table's root"):
+        HT.roots_of(leaf, HW.params(doc, win.window, publics, HW.pins(doc, {"latent": other.root.hex()})))
+    m0 = win.window.members[0]
+    body = bytearray(publics[m0.key])
+    body[-1] ^= 1
+    flipped = {**publics, m0.key: bytes(body)}
+    with pytest.raises(ValueError, match="not the table's root"):
+        HT.roots_of(CS.leaf_layer(flipped), HW.params(doc, win.window, flipped, pinned))
+    with pytest.raises(ValueError, match="not the leaf layer"):
+        HT.roots_of(leaf, HW.params(doc, win.window, flipped, pinned))
+    with pytest.raises(ValueError, match="records no root"):
+        HW.pins(doc, {})
+    for wrong in ({}, {"latent": {**pinned["latent"], "words": 16}}, {"latent": {**pinned["latent"], "value": "other"}}):
+        with pytest.raises(ValueError, match="is not the table's"):
+            HW.params(doc, win.window, publics, wrong)
+    with pytest.raises(ValueError, match="no public body"):
+        HW.params(doc, win.window, {k: v for k, v in publics.items() if k != m0.key}, pinned)
+
+
+def test_a_history_tables_window_refuses_rows_it_cant_commit_as_the_tables():
+    """The committer refuses a history table not given, or given for another program, rows other than its runs'
+    positions, a writer's output that isn't the table's row at its position, a unit writing two positions, and a unit of
+    the writer writing none, since its row would need a salt of its own."""
+    ins8, outs8, ins, outs = sliced_values()
+
+    def close(table: HT.HistoryTable | None, history: I.History) -> None:
+        win = I.Window(sliced(registered=I.Registered({}, histories=(history,))), RUN, LAW, 2,
+                       registered=None if table is None else {"latent": table})
+        win.record(G8, ins8, outs8)
+        win.record(GEMM, ins, outs)
+        win.close(salt_key=bytes(32))
+
+    table = HT.HistoryTable("program", "latent", 8, 16)
+    table.append(outs8[0])
+    close(table, latent())
+    with pytest.raises(ValueError, match="give its committed table"):
+        close(None, latent())
+    with pytest.raises(ValueError, match=r"committed as \(program, table, words, capacity\)"):
+        close(HT.HistoryTable("other", "latent", 8, 16), latent())
+    short = HT.HistoryTable("program", "latent", 8, 16)
+    short.append(outs8[0][:5])
+    with pytest.raises(ValueError, match="holds 5 rows, not its runs' 6 positions"):
+        close(short, latent())
+    wrong = HT.HistoryTable("program", "latent", 8, 16)
+    wrong.append(outs8[0][::-1])
+    with pytest.raises(ValueError, match="not its history table's row"):
+        close(wrong, latent())
+    twice = {"start": 0, "count": 6, "writer": G8ID, "out": "o0", "radix": [2, 3], "base": 0, "step": [0, 1]}
+    with pytest.raises(ValueError, match="writes two positions"):
+        close(table, latent(runs=[twice]))
+    with pytest.raises(ValueError, match=r"units \[5\] write no history table's row"):
+        five = HT.HistoryTable("program", "latent", 8, 16)
+        five.append(outs8[0][:5])
+        close(five, latent(n=5))
+
+
+def test_a_history_is_declared_by_its_writers_output_and_runs_and_read_as_a_table():
+    """A history table names its writer's output and runs that tile its positions over the writer's units, and is
+    refused otherwise; its table reads and openings take its supplied root, domain id and 1 from the verifier's pin of
+    it, a parameter of its own, and count registered where the window registers the pinned root."""
+    with pytest.raises(ValueError, match="at most its capacity"):
+        latent(capacity=4)
+    with pytest.raises(ValueError, match="its runs are"):
+        latent(runs=[{"start": 0, "count": 6}])
+    for edit, why in [(dict(out="o1"), "whose output o1 is 8 words"), (dict(words=4), "whose output o0 is 4 words"),
+                      (dict(writer=GID), f"its writer {re.escape(GID)}"), (dict(n=7), "outside the writer's 6"),
+                      (dict(runs=[{"start": 1, "count": 6, "writer": G8ID, "out": "o0", "radix": [6], "base": 0,
+                                   "step": [1]}]), "leave a gap or overlap"),
+                      (dict(runs=[{"start": 0, "count": 6, "writer": GID, "out": "o0", "radix": [6], "base": 0,
+                                   "step": [1]}]), "not the table's writer")]:
+        with pytest.raises(ValueError, match=why):
+            sliced(registered=I.Registered({}, histories=(latent(**edit),)))
+    with pytest.raises(ValueError, match="a new name"):
+        sliced(registered=I.Registered({"latent": 8}, histories=(latent(),)))
+    with pytest.raises(ValueError, match="a registered read names its writer's o0"):
+        sliced(registered=I.Registered({"y": 48}, reads=(I.Read(G8ID, "o0", "y", 0, (6,), 0, (8,)),),
+                                       histories=(latent(),)))
+    reg = I.Registered({}, (), (), (I.TableRead(EID, "root", "latent", "root", 0, 3),
+                                    I.TableRead(EID, "domain", "latent", "domain", 0, 3)),
+                       (I.Opening(EID, "latent", "tok", ("row", "salt", "path"), "o1", 0, 3),),
+                       histories=(latent(words=16, out="o0", writer=EID, runs=[
+                           {"start": 0, "count": 3, "writer": EID, "out": "o0", "radix": [3], "base": 0, "step": [1]}],
+                           capacity=4),))
+    c = I.Circuit("read", ((EMB, 3),), registered=reg)
+    assert I.seg_rows(c.registered) == {(EID, "o0")}
+    assert [(r.port, r.param) for r in I.committed_reads(reg)] == [
+        ("root", "latent/root"), ("domain", "latent/domain"), ("o1", "latent/opened")]
+    table = HT.HistoryTable("program", "latent", 16, 4)
+    got = I.supplied(reg, {"latent": table.entry()}, "p", module=REG)
+    assert {v: x.rows.tolist() for v, x in got.items()} == {
+        "latent/root": [I.digest_words(table.root)], "latent/domain": [I.digest_words(table.domain.domain_id)],
+        "latent/opened": [[1]]}
+    words = dict(I.layout(EMB).rows)
+    pin = {"latent": table.root.hex()}
+    assert I.input_count(c.description(), pins=pin, roots=pin)["registered"] == 16 * 3 * (
+        64 + words["row"] + words["salt"] + words["path"])
+    assert I.input_count(c.description(), pins=pin, roots={"latent": "cd" * 64})["registered"] == 0
 
 
 def test_every_input_row_is_wired_registered_ingress_or_free_and_counted_from_the_description():
@@ -1012,7 +1284,7 @@ def fed_chain() -> tuple[I.Circuit, Bound, list[np.ndarray], list[np.ndarray], l
     read = I.Read(GID, "w", "w", at=0, radix=(LAYERS, layer), base=0, step=(256, 0))
     circuit = replace(chain(), templates=((SRC, REQUESTS), (GEMM, LAYERS * layer)), external=(f"{SID}/x", f"{SID}/w"),
                       wires=(I.Wire(GID, "x", SID, "o0", at=0, radix=(REQUESTS,), base=0, step=(1,)), *chain().wires),
-                      registered=I.Registered({"w": LAYERS * 256}, reads=(read,)))
+                      registered=I.Registered({"w": LAYERS * 256}, reads=(read,)), order=((SID, 0, REQUESTS), *chain().order))
     return circuit, w, [sx, sw], [sy], ins, outs
 
 
@@ -1063,7 +1335,8 @@ def _long_chain(layers: int, d: Path) -> None:
              for j in range(layers)]
     reads = tuple(I.Read(GID, "w", "w", at=2 * j, radix=(2,), base=256 * j, step=(0,)) for j in range(layers))
     circuit = I.Circuit("long", ((SRC, 2), (GEMM, 2 * layers)), external=(f"{SID}/x", f"{SID}/w"), wires=tuple(wires),
-                        registered=I.Registered({"w": 256 * layers}, reads=reads))
+                        registered=I.Registered({"w": 256 * layers}, reads=reads),
+                        order=I.ordered({SID: 2, GID: 2 * layers}, wires, {GID: range(0, 2 * layers, 2)}))
     win = I.Window(circuit, RUN, LAW, 1, registered={"w": Bound("w", w.reshape(layers, 256))})
     win.record(SRC, [sx, sw], ys[:1])
     win.record(GEMM, [None, None], [np.concatenate(ys[1:])])
@@ -1189,8 +1462,9 @@ def test_a_windows_value_rows_and_paths_are_written_once_and_a_drawn_members_bod
             "subcircuit": "gemm"}
     got = FI.flock_input_files(tmp_path, k, "flock-circuit v2\nMETA " + json.dumps(meta) + "\n", tmp_path / "staged")
     head, body = Path(got["inst"]).read_bytes().split(b"\n", 1)
-    assert json.loads(head)["registered"] == win._entries[ms[k].key] and body == c.private_body(k) + c.public_body(k)
-    assert json.loads(Path(got["pub"]).read_bytes().split(b"\n", 1)[0])["registered"] == win._entries[ms[k].key]
+    entries = {**win._entries[ms[k].key], **CS.own_entries(mem, c.public_body(k), win._entries[ms[k].key])}
+    assert json.loads(head)["registered"] == entries and body == c.private_body(k) + c.public_body(k)
+    assert json.loads(Path(got["pub"]).read_bytes().split(b"\n", 1)[0])["registered"] == entries
     row = mem["registered"]["w"]["positions"][0]
     feed = _first(win.window, SID)
     for edit, read, why in [
@@ -1218,6 +1492,65 @@ def test_a_windows_value_rows_and_paths_are_written_once_and_a_drawn_members_bod
     win._entries[ms[k].key] = {"w": {**win._entries[ms[k].key]["w"], "paths": ["00" * 64]}}
     with pytest.raises(ValueError, match="given two paths"):
         win.write(c, tmp_path / "again", {"by": "test"}, registrar=reg)
+
+
+def _climb(dom: CommitmentDomain, position: int, leaf: bytes, path: bytes) -> bytes:
+    """The root ``leaf`` at ``position`` climbs to through ``path``, as Lean's `Registered.opensLeaf` climbs it."""
+    digest, i = leaf, position
+    for level in range(len(path) // 64):
+        sib = path[64 * level:64 * (level + 1)]
+        digest = dom.node(level, i >> 1, *((digest, sib) if i % 2 == 0 else (sib, digest)))
+        i >>= 1
+    return digest
+
+
+def test_a_member_reading_a_registered_value_registers_every_other_port_at_the_registrations_root(tmp_path):
+    """Lean checks a statement against registered reads only when they name every port of its circuit
+    (`Flock.Registered.checkComplete`), so `fed_chain`'s chained GEMMs, which read ``w``, are staged with each other port
+    registered as rows of its own tree: the header (`rows.own_entries`) gives row i at position i, its path climbing to
+    the root the registration holds for ``<member>/<port>``, and the verifier's file (`rows.own_reads`) reads that root,
+    unit ``base + i`` row i, as a value no registration port is named (`rows.own_value`). A member reading nothing gains
+    no reads, a port the registration holds no root for is refused, and so is a body whose rows don't make the registered
+    root."""
+    circuit, w, feed_ins, feed, _ins, outs = fed_chain()
+    win = I.Window(circuit, RUN, LAW, 2, registered={"w": w})
+    win.record(SRC, feed_ins, feed)
+    win.record(GEMM, [None, None], outs)
+    c = win.close(salt_key=bytes(32))
+    reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "digest": staticmethod(lambda rec: "d"),
+                         "record": staticmethod(lambda *x, **k: {"leaf_layer": "l", "window": x[5]})})
+    win.write(c, tmp_path, {"by": "test"}, registrar=reg)
+    doc, ms = json.loads((tmp_path / "window.json").read_text()), win.window.members
+    roots = {m.port(p): {"root": c.roots[m.port(p)].hex(), "domain": c.domains[m.port(p)].domain_id.hex(),
+                         "leaves": c.domains[m.port(p)].count} for m in ms for p, _w in m.all_rows}
+    chained = [k for k, m in enumerate(ms) if m.template == GID]
+    for k in chained:
+        m, mem = ms[k], doc["members"][k]
+        got = CS.own_entries(mem, c.public_body(k), mem["registered"])
+        assert set(got) == {p for p, _w in m.all_rows} - {"w"}
+        for p, e in got.items():
+            dom, bc = c.domains[m.port(p)], c.bc[m.port(p)]
+            assert e["value"] == CS.own_value(m.port(p)) not in roots and e["positions"] == list(range(m.n))
+            leaves = [row_leaf(dom, i, CS.INST.tree_leaf(CS.INST.default_key, bc[CS.BC_BYTES * i:CS.BC_BYTES * (i + 1)]),
+                               m.schema(p)) for i in range(m.n)]
+            assert all(_climb(dom, i, leaves[i], bytes.fromhex(x)) == c.roots[m.port(p)] for i, x in enumerate(e["paths"]))
+    reads = {ms[k].key: {"format": REG.READS_V1, "ports": {"w": {"value": "w"}}} for k in chained}
+    files = CS.own_reads(reads, win.window, roots, registered=REG)
+    assert set(files) == set(reads)
+    for k in chained:
+        m = ms[k]
+        ports = files[m.key]["ports"]
+        assert list(ports) == sorted(p for p, _w in m.all_rows) and ports["w"] == {"value": "w"}
+        assert all(ports[p] == {"value": CS.own_value(m.port(p)), "root": roots[m.port(p)]["root"], "leaves": m.n, "words": n,
+                                "word_bits": 16, "domain": roots[m.port(p)]["domain"], "row_schema": m.schema(p),
+                                "reads": list(range(m.n)), "reads_from": m.base} for p, n in m.rows + m.outs if p != "w")
+    k = chained[0]
+    with pytest.raises(ValueError, match="holds no root for it"):
+        CS.own_reads(reads, win.window, {x: e for x, e in roots.items() if x != ms[k].port("x")}, registered=REG)
+    body = bytearray(c.public_body(k))
+    body[len(body) - 4 * ms[k].n * len(ms[k].all_rows) - 1] ^= 1   # the last port's last string: an output row's
+    with pytest.raises(ValueError, match="not its frame_v3 root"):
+        CS.own_entries(doc["members"][k], bytes(body), doc["members"][k]["registered"])
 
 
 def test_a_cut_ports_rows_recorded_by_reference_are_each_its_writers_output_row(tmp_path):

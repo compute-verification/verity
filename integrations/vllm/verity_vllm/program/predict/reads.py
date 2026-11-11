@@ -7,14 +7,20 @@ The output accounting bounds what the compiled circuit can carry of the served o
 registration, by the advice's length and the wrong blocks' bits. That holds where each field the compiler reads is one of
 `ACCOUNTS`:
 - ``output``: a checked circuit output, one a request Program returns and the audit holds to y;
-- ``certified``: a field of x, a request's certified body, or a field of the advice held to one, or the window's verifier coin,
+- ``certified``: a field of x, a request's certified body, or a field of the advice held to one, or the window's seed salt,
   public and nobody serving's choice;
 - ``advice``: a field of the committed advice, charged in its length, whether or not y fixes it.
 
-**A stochastic request's seed** is certified: its body's ``seed``, else derived from its certified id and the window's verifier
-coin (``window.coin``, `engine.served_seed.derived`), never one the server draws or fills in. `seed_of` refuses by name any
-other: a request with no seed in its body where the compile has no coin, and one the window carries in, whose seed is its
-admitting window's.
+**A stochastic request's seed** is certified: its body's ``seed``, else derived from its certified id and the window's seed salt
+(``window.seed_salt``, `engine.served_seed.derived`), never one the server draws or fills in. The seed salt is the challenger's
+coin released at the window's open and held in the window record as certified input, 128 lowercase hex characters, which the
+compile takes as their bytes (``bytes.fromhex(window["seed_salt"])``). `seed_of` refuses by name any other: a request with no
+seed in its body where the compile has no seed salt, and one the window carries in, whose seed is its admitting window's. The
+seed its sampler reads is a witness its Program holds to that one: a stochastic request's Program returns its seed rule
+(``program.seed_rule``, `frontend.seed_rule`'s `SeedCheck_v2` over its certified ``seeded``, ``body_seed`` and ``user`` and the
+window's ``seed_salt``), which any other seed makes 0 and the replay refuses by name (`check.replay.checks`), so the seed is
+charged nothing. Without that output a seed would be 64 bits a request of the prover's choosing: `refusals` refuses a seed
+read where the table doesn't declare it, and the gate refuses a seed read from the advice by name.
 
 **A prefix-cache hit** (a row's ``cache_hit`` and ``sources``, and a carried request's ``C``, the hit it was admitted on) is
 advice charged at its width, its words in the committed advice (I1's ``cache_hit`` and ``sources``), where the registration
@@ -37,7 +43,7 @@ the close returns them, where its last row, after the close, reads past INDEX_TO
   returns a request it leaves with outputs to keep with its indexer's keys and scales on its edge where its last row reads past
   INDEX_TOPK keys (`segment.edge_groups`); and it sets the request's length rule (`steps.stop_of`, `RequestUnit.stop`);
 - each response's finish reason: ``finish``, advice, read ahead to set the request's length rule (`RequestUnit.stop`), and to
-  refuse a record its body contradicts (`steps.request_of`);
+  refuse a record its body contradicts (`ingress_policy.request_of`);
 - the outputs a request kept before the window opened: its carried ``kept``, advice, held to the last window's close
   (`window_advice.follows`);
 - when each output was released: ``release``, never read; the gate refuses it.
@@ -67,15 +73,19 @@ ACCOUNTS = ("output", "certified", "advice")
 #: the advice's records by name, as `window_advice.decode` builds them
 RECORDS = {"advice": WA.Advice, "request": WA.RequestAdvice, "step": WA.StepAdvice, "row": WA.Row, "source": WA.Source,
            "carried": WA.Carried}
-#: what the compiler reads of the window beside its advice and bodies: its verifier coin (`steps.compile_steps`'s ``coin``)
-WINDOW = ("coin",)
+#: what the compiler reads of the window beside its advice and bodies: its seed salt (`steps.compile_steps`'s ``salt``)
+WINDOW = ("seed_salt",)
 #: the fields a stochastic request's seed is read from, the only two (`seed_of`)
-SEED = (("body", "seed"), ("window", "coin"))
+SEED = (("body", "seed"), ("window", "seed_salt"))
+#: the request Program's output that holds its sampler to that seed (`frontend.seed_rule.NAME`, its Call)
+SEED_RULE = ("program", "seed_rule")
+_SEED_WHY = ("a stochastic request's seed is certified, its body's seed or derived from its id and the window's seed salt, and "
+             "its Program's seed rule holds the seed its sampler reads to it: never a value the server draws or fills in")
 #: the registration's switch the prefix-cache hit's fields are under
 PREFIX_CACHE = "enable_prefix_caching"
-#: a certified body's field roles: the prompt (read apart, `steps.request_of`); how the response travels, which computes nothing;
-#: what only finishes a request (its T, which the advice's rows carry; `max_tokens` and `ignore_eos` hold its `output_len` and
-#: `finish`); what the sampling policy reads (`steps.policy_of`); and a parameter refused off its inert values
+#: a certified body's field roles: the prompt (read apart, `ingress_policy.request_of`); how the response travels, which computes
+#: nothing; what only finishes a request (its T, which the advice's rows carry; `max_tokens` and `ignore_eos` hold its `output_len`
+#: and `finish`); what the sampling policy reads (`ingress_policy.policy_of`); and a parameter refused off its inert values
 ROLES = ("prompt", "transport", "finish", "policy", "inert")
 
 
@@ -116,7 +126,8 @@ READS: tuple[Field, ...] = (
         ("min_p", (None, 0, 0.0)), ("presence_penalty", (None, 0, 0.0)), ("frequency_penalty", (None, 0, 0.0)),
         ("repetition_penalty", (None, 1, 1.0)), ("min_tokens", (None, 0)), ("logit_bias", (None, {})), ("n", (None, 1)),
         ("top_k", (None, 0, -1)))),
-    Field("window", "coin", "certified"),
+    Field("window", "seed_salt", "certified"),
+    Field(*SEED_RULE, "output"),
 )
 
 
@@ -131,20 +142,20 @@ def off(engine: Mapping[str, Any]) -> frozenset[tuple[str, str]]:
     return frozenset((f.record, f.name) for f in READS if f.switch and engine.get(f.switch) is False)
 
 
-def seed_of(i: int, request_id: str, seed: int | None, coin: bytes | None, carried: bool = False) -> int:
+def seed_of(i: int, request_id: str, seed: int | None, seed_salt: bytes | None, carried: bool = False) -> int:
     """Request ``i``'s seed, a stochastic request's, read from `SEED`: its certified body's ``seed``, else `served_seed.derived`
-    from its certified ``request_id`` and the window's ``coin``. Refused by name where it would be neither: with no coin, and for
-    a request the window carries in (``carried``), whose seed is derived from its admitting window's coin."""
+    from its certified ``request_id`` and the window's ``seed_salt``. Refused by name where it would be neither: with no seed
+    salt, and for a request the window carries in (``carried``), whose seed is derived from its admitting window's seed salt."""
     if seed is not None:
         return int(seed)
-    if coin is None or carried or type(coin) is not bytes or not coin:
-        why = ("the window carries it in, so its seed derives from its admitting window's coin, which this compile doesn't read"
-               if carried else "the compile has no window coin to derive one from" if coin is None else
-               f"the window's verifier coin isn't non-empty bytes ({type(coin).__name__} {coin!r})")
+    if seed_salt is None or carried or type(seed_salt) is not bytes or not seed_salt:
+        why = ("the window carries it in, so its seed derives from its admitting window's seed salt, which this compile doesn't "
+               "read" if carried else "the compile has no window seed salt to derive one from" if seed_salt is None else
+               f"the window's seed salt isn't non-empty bytes ({type(seed_salt).__name__} {seed_salt!r})")
         raise Unexpressible(f"request {i} ({request_id!r}): stochastic with no seed in its certified body, and {why}: a seed serving "
                             f"fills in (`served_seed.DEFAULT_SEED`) or draws is neither its body's nor derived from its id and the "
-                            f"window's verifier coin (`served_seed.derived`)")
-    return served_seed.derived(coin, request_id)
+                            f"window's seed salt (`served_seed.derived`)")
+    return served_seed.derived(seed_salt, request_id)
 
 
 def hits_off(advice: Any, engine: Mapping[str, Any]) -> list[tuple[int, str]]:
@@ -163,9 +174,12 @@ def refusals(table: tuple[Field, ...] = READS) -> list[str]:
     """Each field of ``table`` the output accounting can't take, by name and why: declared twice; of an account other than
     `ACCOUNTS`; of no record the compiler receives; an advice record's field its encoding doesn't carry (neither committed nor
     held to x); an advice or body field declared a circuit output; a body field off a role, or with inert values off the inert
-    role; a field read ahead that isn't advice; a seed read from anything but `SEED`, certified; or a prefix-cache hit's field
-    other than advice under `PREFIX_CACHE`."""
+    role; a field read ahead that isn't advice; a seed read from anything but `SEED`, certified, or where the request Program's
+    seed rule (`SEED_RULE`) isn't an output; or a prefix-cache hit's field other than advice under `PREFIX_CACHE`."""
     out, seen = [], set()
+    if any((f.record, f.name) in SEED for f in table) and SEED_RULE not in {(f.record, f.name) for f in table if f.account == "output"}:
+        out.append(f"{'.'.join(SEED_RULE)}: not a declared output, so a seed read from {', '.join('.'.join(s) for s in SEED)} holds "
+                   f"nothing the sampler reads, which is 64 bits a request of the prover's choosing: {_SEED_WHY}")
     for f in table:
         at = f"{f.record}.{f.name}"
         if (f.record, f.name) in seen:
@@ -174,8 +188,7 @@ def refusals(table: tuple[Field, ...] = READS) -> list[str]:
         if f.account not in ACCOUNTS:
             out.append(f"{at}: account {f.account!r}, none of {', '.join(ACCOUNTS)}: a read the output accounting can't charge")
         if ((f.record, f.name) in SEED or f.name == "seed") and ((f.record, f.name) not in SEED or f.account != "certified"):
-            out.append(f"{at}: a stochastic request's seed is certified, its body's seed or derived from its id and the window's "
-                       f"coin: never a value the server draws or fills in")
+            out.append(f"{at}: {_SEED_WHY}")
         if f.name in ("cache_hit", "sources") and (f.record, f.account, f.switch) != ("row", "advice", PREFIX_CACHE):
             out.append(f"{at}: a prefix-cache hit is a row's advice, charged at its width, under {PREFIX_CACHE}: never derived by "
                        f"verifier-side Python (a replay of the engine's block pool) nor read from the served record")
@@ -194,10 +207,10 @@ def refusals(table: tuple[Field, ...] = READS) -> list[str]:
                            f"for an inert one)")
         elif f.record == "window":
             if f.name not in WINDOW or f.account != "certified":
-                out.append(f"{at}: of the window the compiler reads only its verifier coin, certified ({', '.join(WINDOW)})")
+                out.append(f"{at}: of the window the compiler reads only its seed salt, certified ({', '.join(WINDOW)})")
         elif f.record != "program" or f.account != "output":
             out.append(f"{at}: of no record the compiler receives (the advice's {', '.join(RECORDS)}, a certified body, the window's "
-                       f"coin, or a request Program's outputs, account output)")
+                       f"seed salt, or a request Program's outputs, account output)")
         if f.ahead and f.account != "advice":
             out.append(f"{at}: read ahead of the step that outputs it (it shapes {', '.join(f.ahead)}), so it must be committed "
                        f"advice: the circuit before that step may depend on it (class G's edge does)")
@@ -234,6 +247,8 @@ class _View:
         record, read = self._record, self._read
         if name not in read:
             kind = _KIND[type(record)]
+            if (kind, name) not in _DECLARED and "seed" in name:
+                raise UndeclaredRead(f"the compiler reads the advice's {kind}.{name}: {_SEED_WHY}")
             if (kind, name) not in _DECLARED:
                 raise UndeclaredRead(f"the compiler reads {kind}.{name}, which `predict.reads.READS` doesn't declare: declare it with "
                                      f"its account (output, certified or advice) or don't read it")

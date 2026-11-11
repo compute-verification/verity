@@ -71,12 +71,21 @@ def served_inputs(run: Path, window: int) -> tuple[Path, dict, dict, dict]:
 
 def engine_of(meta: dict, rank: int) -> tuple[dict, dict]:
     """The registration's tensor-parallel world at ``rank`` and its engine args (`REGISTERED_ENGINE`), from the run's engine record
-    (`LLM.engine_record`'s ``engine_kwargs``); a ValueError for a rank the world doesn't have."""
-    kw = (meta.get("engine_record") or {}).get("engine_kwargs") or {}
+    (`LLM.engine_record`'s ``engine_kwargs``), and, from a record of the environment its build set (``env_flags``), the DSA top-k's
+    (`engine_classes.DSA_TOPK_ENV`) as set or not, so `predict.dsa` refuses a row past INDEX_TOPK the engine served in the kernels'
+    own order; a ValueError for a rank the world doesn't have."""
+    from verity_vllm.engine.profiles.engine_classes import DSA_TOPK_ENV
+
+    rec = meta.get("engine_record") or {}
+    kw = rec.get("engine_kwargs") or {}
     world = int(kw.get("tensor_parallel_size") or 1)
     if not 0 <= rank < world:
         raise ValueError(f"rank {rank}: the run's engine has tensor-parallel world {world}")
-    return {"world": world, "rank": rank}, {k: kw[k] for k in REGISTERED_ENGINE if k in kw}
+    engine = {k: kw[k] for k in REGISTERED_ENGINE if k in kw}
+    if "env_flags" in rec:
+        flags = rec["env_flags"] or {}
+        engine["env"] = {k: flags[k] for k in DSA_TOPK_ENV if k in flags}
+    return {"world": world, "rank": rank}, engine
 
 
 def checkpoint_dtype(hf_config: dict) -> str | None:

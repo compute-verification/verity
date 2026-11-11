@@ -87,43 +87,41 @@ ALLOWED = {
     # samples with them (`service.Stream.select`); every coin source is named by a claim instance (`challenger.coin_claim`).
     # SPOT[Flock]'s inference server, proof server and verifier, the core deployment's ZK server and workers, and the
     # challenger both run are parties of the deployment layer (`parties`), their messages the wire's.
-    "core.protocols.sampled_proofs": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
+    "core.protocols.spot": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
                                       "ml.randomness", "core.protocols.profile", "core.protocols.record"},
     # The wipe's memory challenger and prover are parties of the
-    # deployment layer (`wipe_parties`), their messages the wire's. The
-    # memory challenger reports its sessions under its party's per-period root (`core.attest`).
-    "core.protocols.pous": {"core.claims", "core.attest", "core.wire", "core.deploy", "ml.commitments", "ml.crypto",
-                            "ml.randomness"},
-    # The bandwidth audit's store is PoUS's `C*`,
-    # under its setup and `vk`, reused as they are.
-    "core.protocols.bandwidth": {"ml.crypto", "ml.randomness", "core.protocols.pous"},
+    # deployment layer (`wipe_parties`), their messages the wire's.
+    "core.protocols.pous": {"core.claims", "core.wire", "core.deploy", "ml.commitments", "ml.crypto",
+                            "ml.randomness", "core.protocols.reporting"},
     # The memory challenger, an auditor-trusted device, over PoUS's protocol and verifier; its party is a party of the
     # deployment layer, its messages the wire's.
     "core.devices.memory_challenger": {"core.protocols.pous", "core.wire", "core.deploy"},
     # The verifier's side runs where `period.json` puts it, a side of the deployment layer (`verity.core.deploy.stream`).
     # The remote bandwidth audit commits receipts in frame-v3-sha512
     # trees, samples from the verifier's secret, and records its openings as an integrity profile.  Its coins are the
-    # proof system's one challenger's (`sampled_proofs.challenger`).
+    # proof system's one challenger's (`spot.challenger`).
     # The remote bandwidth audit is over the P2-encoded weights store, and a P2 store is PoUS's `C*`, under its setup and `vk`, reused as they are (`p2.py`).
     # The session's verifier and prover are parties of the deployment layer (`session_parties`), their messages the wire's.
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness", "core.protocols.profile",
-                                        "core.protocols.sampled_proofs", "core.protocols.pous", "core.wire",
-                                        "core.deploy"},
+                                        "core.protocols.spot", "core.protocols.pous", "core.wire",
+                                        "core.deploy", "core.protocols.reporting"},
     # PoUW's tile check is a sampled proof (`.agents/skills/friction/SKILL.md`).
     "core.protocols.pouw": {"ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness", "core.protocols.profile",
-                            "core.protocols.sampled_proofs"},
+                            "core.protocols.spot"},
     # N2 of the proof-system plan: a link-window's network certificates are registered through the proof system; they
     # are LMS signatures (`ml.crypto.lms`).
-    "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.sampled_proofs"},
+    "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.spot"},
     # A record entry (`Core.Record`): the form every protocol's signed, chained record entries take.
     "core.protocols.record": set(),
+    # The reporting grid every monitoring-period report states, its periods and δs: stdlib only.
+    "core.protocols.reporting": set(),
     # What the protocols' provers build and their verifiers don't read, which no core unit imports.  PoUW's and the
     # certifier's are stated over their protocol's parameters and records in core (`ML_IMPORTS_CORE`), and PoUW's schemes
     # and circuits over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts).
     "ml.protocols.pouw": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto",
-                          "ml.randomness", "core.protocols.pouw", "core.protocols.profile", "core.protocols.sampled_proofs"},
+                          "ml.randomness", "core.protocols.pouw", "core.protocols.profile", "core.protocols.spot"},
     "ml.protocols.pous": {"ml.circuits", "ml.commitments"},
-    "ml.protocols.certifier": {"ml.circuits", "ml.commitments", "core.protocols.certifier", "core.protocols.sampled_proofs"},
+    "ml.protocols.certifier": {"ml.circuits", "ml.commitments", "core.protocols.certifier", "core.protocols.spot"},
 }
 #: Import names ``verity`` never imports or names as a string: the other workspace distributions, external runtimes, and the
 #: repository's own directories.
@@ -166,7 +164,7 @@ ML_IMPORTS_CORE = {
                                                         "entry), and moves with them in the follow-up to T2",
     "ml/protocols/pouw/*": "PoUW's circuits and schemes, which its verifier doesn't read, are stated over the protocol's "
                            "parameters, records and Python references in core (`pouw.protocol`, `registration`, `window`, "
-                           "`sampled_proofs.one_stage`, ...); they shrink as those references leave core",
+                           "`spot.one_stage`, ...); they shrink as those references leave core",
     "ml/protocols/certifier/*": "the certifier's Boolean Definitions that core doesn't read extend the ones it does "
                                 "(`head_check`'s gates, `cache_step`, `compile_slice`, `replay_chain`, `arith_encode`, "
                                 "`io_tie`, ...) and are stated over its advice and link-window layout in core (`advice`, "
@@ -178,9 +176,8 @@ ML_IMPORTS_CORE = {
 #: and gains none; a core unit not listed has none.  When ``ALLOWED`` drops an edge, drop it here too.
 CORE_ML_EDGES = {
     "core.protocols.profile": {"ml.circuits"},
-    "core.protocols.sampled_proofs": {"ml.circuits", "ml.commitments", "ml.randomness"},
+    "core.protocols.spot": {"ml.circuits", "ml.commitments", "ml.randomness"},
     "core.protocols.pous": {"ml.commitments", "ml.crypto", "ml.randomness"},
-    "core.protocols.bandwidth": {"ml.crypto", "ml.randomness"},
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness"},
     "core.protocols.pouw": {"ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"},
     "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto"},
@@ -196,13 +193,13 @@ LEAN_OF_RECORD = ("a verifier imports no verity.ml code (AGENTS.md \"Design rule
 #: SPOT[Flock] stands on its own, and the network certifier is a layer beside it: SPOT reads the certifier's stamp as a
 #: certified input and imports none of the certifier, and the two compose only above both.  SPOT's Python units, the
 #: trees each of whose Python files (tests included) is checked, its Lean packages and its analysis (Security's Flock and
-#: SampledProofs areas and the sampling claims); then the certifier's Python units, modules and Lean (its packages and its
+#: Spot areas and the sampling claims); then the certifier's Python units, modules and Lean (its packages and its
 #: Security areas).
-SPOT_PYTHON = ("core.protocols.sampled_proofs",)
-SPOT_TREES = ("verity/core/protocols/sampled_proofs", "verity/core/service/sampled_proofs", "verity/core/service/flock",
-              "verity/ml/flock")
-SPOT_LEAN = ("verity/core/service/sampled_proofs", "verity/core/service/flock")
-SPOT_SECURITY = ("Security/*/Flock", "Security/*/Flock.lean", "Security/*/SampledProofs", "Security/*/SampledProofs.lean",
+SPOT_PYTHON = ("core.protocols.spot",)
+SPOT_TREES = ("verity/core/protocols/spot", "verity/core/service/spot", "verity/core/service/flock",
+              "verity/ml/flock", "verity/ml/flock/pod", "verity/ml/flock/verifier", "verity/ml/flock/tool.py")
+SPOT_LEAN = ("verity/core/service/spot", "verity/core/service/flock")
+SPOT_SECURITY = ("Security/*/Flock", "Security/*/Flock.lean", "Security/*/Spot", "Security/*/Spot.lean",
                  "Security/Definitions/Claims/Sampling*")
 CERTIFIER_PYTHON = ("core.protocols.certifier", "ml.protocols.certifier")
 CERTIFIER_MODULES = ("verity.core.protocols.certifier", "verity.ml.protocols.certifier", "verity.core.devices.certifier")
@@ -213,7 +210,7 @@ SPOT_NOT_CERTIFIER = ("SPOT[Flock] never imports the network certifier, which co
 #: Files outside ``infra/`` that import a package of it, each with why.
 INFRA_IMPORTERS = {
     "tools/research/console/verity_console.py": "the console reads `cluster.usage`, and moves to infra/ with research's pods, "
-                                                "deploy and Slack code in the follow-up to the platform layout move (#1450)",
+                                                "deploy and Slack code",
 }
 #: Files outside ``benchmarks/`` that import a module of it, by name or by path, each with its owner and what it imports.
 #: ``benchmarks/`` is measurement only: a number a protocol uses reaches it
@@ -239,29 +236,15 @@ BENCHMARKS_IMPORTERS = {
     "integrations/vllm/verity_vllm/protocols/remote_bandwidth/in_place.py": "proofs: the remote session's `device` and "
                                                                             "`inplace` (`benchmarks/remote_session`)",
     "integrations/vllm/verity_vllm/engine/int8_credited_env.py": "circuits (vllm): `benchmarks/vllm_encoded/paged.py`",
-    "verity/ml/flock/python/verity_flock/struct_lower.py": "proofs: H1's unit (`benchmarks/pouw/h1_prove`, `hidden_zk`)",
-    # Flock and circuit-check build statements from the numerical benchmarks' templates and lowerings
+    # Flock's measurement campaign, its tests, and the frozen instance sets `instances` reads
     **dict.fromkeys((
-        "verity/ml/flock/pod/gemm_hill.py", "verity/ml/flock/pod/read_gadget.py", "verity/ml/flock/pod/rec_inner.py",
-        "verity/ml/flock/python/verity_flock/bench.py", "verity/ml/flock/python/verity_flock/boolean_export.py",
-        "verity/ml/flock/python/verity_flock/circuit.py", "verity/ml/flock/python/verity_flock/circuit_bench.py",
+        "verity/ml/flock/pod/gemm_hill.py", "verity/ml/flock/pod/read_gadget.py",
+        "verity/ml/flock/python/verity_flock/bench.py", "verity/ml/flock/python/verity_flock/circuit_bench.py",
         "verity/ml/flock/python/verity_flock/instances.py", "verity/ml/flock/python/verity_flock/ir_bench.py",
         "verity/ml/flock/python/verity_flock/register.py",
-        "verity/ml/flock/tests/plain_hidden.py",
-        "verity/ml/flock/tests/test_backend.py", "verity/ml/flock/tests/test_circuit.py",
-        "verity/ml/flock/tests/test_class_statement.py", "verity/ml/flock/tests/test_derive.py",
-        "verity/ml/flock/tests/test_flock_rows.py", "verity/ml/flock/tests/test_gemm_hill.py",
-        "verity/ml/flock/tests/test_inner_registered.py", "verity/ml/flock/tests/test_ir_lowering.py",
-        "verity/ml/flock/tests/test_ir_sampling.py", "verity/ml/flock/tests/test_lean_hidden_outputs.py",
-        "verity/ml/flock/tests/test_lean_plain_hidden_tables.py",
-        "verity/ml/flock/tests/test_lean_registered_bit_rows.py", "verity/ml/flock/tests/test_lean_registered_reads.py",
-        "verity/ml/flock/tests/test_lean_served_registered.py", "verity/ml/flock/tests/test_lean_session_tables.py",
-        "verity/ml/flock/tests/test_lean_typed_statement.py", "verity/ml/flock/tests/test_lean_verifier.py",
-        "verity/ml/flock/tests/test_stage_typed.py", "verity/ml/flock/tests/test_typed_statement.py",
-        "verity/ml/flock/tests/tmpl_statement.py",
-    ), "proofs: `verity_numerical.bench` (`benchmarks/numerical`)'s templates, generator, input sets and lowerings"),
-    "tools/verity/circuit_check/src/circuit_check/checks.py":
-        "circuits: `verity_numerical.bench` (`benchmarks/numerical`)'s lowerings, as circuit-check targets",
+        "verity/ml/flock/tests/test_backend_bench.py", "verity/ml/flock/tests/test_class_statement.py",
+        "verity/ml/flock/tests/test_gemm_hill.py", "verity/ml/flock/tests/test_ir_lowering_bench.py",
+    ), "proofs: `verity_numerical.bench` (`benchmarks/numerical`)'s contract, cell, generator suites and frozen instances"),
     # research's registry of measuring tools
     **dict.fromkeys(("tools/research/src/research/store/tools_registry.py", "tools/research/tests/test_store_prov.py"),
                     "infra: the store's tool registry names `benchmarks.<probe>.tool` modules (tc_probe, tc_probe_fp4, "
@@ -300,7 +283,7 @@ BENCHMARKS_IMPORTERS = {
 #: with the file that defines it and why tests need it.
 TEST_ONLY = {
     "_build_unchecked": ("verity/ml/circuits/partition_v2.py",
-                         "`partition_v2.build` without its refusal of units of several size classes (CIR-64), for the tests "
+                         "`partition_v2.build` without its refusal of units of several size classes, for the tests "
                          "of `check` on advice past the builder's scope, as a prover may send it"),
 }
 
@@ -539,14 +522,15 @@ def _covered(rel: str, globs: Iterable[str]) -> bool:
 
 
 def _spot_python_offenders() -> list[str]:
-    """Each import of a certifier module (``CERTIFIER_MODULES``) in a Python file of ``SPOT_TREES``, its tests included."""
+    """Each import of a certifier module (``CERTIFIER_MODULES``) in a Python file of ``SPOT_TREES`` (a tree, or one file), its
+    tests included."""
     out = []
-    for tree in SPOT_TREES:
-        for path in sorted((ROOT / tree).rglob("*.py")):
-            if {".lake", "__pycache__"} & set(path.relative_to(ROOT).parts):
-                continue
-            out += [f"{path.relative_to(ROOT)}:{line}: {name}" for name, line, _ in _imports(path)
-                    if any(name == m or name.startswith(m + ".") for m in CERTIFIER_MODULES)]
+    files = {p for tree in SPOT_TREES for p in ([ROOT / tree] if (ROOT / tree).is_file() else (ROOT / tree).rglob("*.py"))}
+    for path in sorted(files):
+        if {".lake", "__pycache__"} & set(path.relative_to(ROOT).parts):
+            continue
+        out += [f"{path.relative_to(ROOT)}:{line}: {name}" for name, line, _ in _imports(path)
+                if any(name == m or name.startswith(m + ".") for m in CERTIFIER_MODULES)]
     return out
 
 

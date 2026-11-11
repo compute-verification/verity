@@ -45,8 +45,8 @@ probability at most `(1 - q)^F` plus the windows' soundness errors `ε i`, whate
 `F ≥ ln (1/δ) / q` that is at most `δ + Σ_i ε_i`.
 
 The statement is a fact of probability over every sample, acceptance event and error: the sample's law and each window's
-soundness are its hypotheses. A deployment's instances of them (A3 for the sample, `Claims.Sampling.KS` for each
-window) come in where it is applied to the sampled verifier.
+soundness are its hypotheses. A deployment's instances of them (A3 for the sample, `Claims.SamplingGeneric.Compiled.KS`
+for each window) come in where it is applied to the sampled verifier.
 -/
 
 @[expose] public section
@@ -68,7 +68,7 @@ before that window's sample, and each window's audit accepting while its sample 
   `(1 - q)^F + Σ_i ε i`;
 * `(1 - q)^F ≤ δ` once `ln (1/δ) ≤ q · F`, so at most `ln (1/δ) / q` incorrect proof blocks pass the whole monitoring period
   except with probability `δ + Σ_i ε i`. -/
-def PooledWrongUnitsLe : Prop :=
+def PooledIncorrectBlocksLe : Prop :=
   ∀ {m : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] (n k : Fin m → ℕ) (draw : (i : Fin m) → Ω → Finset (Fin (n i)))
     (hcard : ∀ i x, (draw i x).card = k i)
     (hunif : ∀ i (S : Finset (Fin (n i))), S.card = k i →

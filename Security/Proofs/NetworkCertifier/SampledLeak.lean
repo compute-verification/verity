@@ -171,38 +171,39 @@ theorem encard_asReg_le {L S : ℕ} (C : Prog) (lay : BoundaryGates L S) (k : �
         rw [Set.encard_coe_eq_coe_finsetCard]
         simp
 
-/-! ### The leak bound, at any deployment -/
+/-! ### The leak bound, at any compiled sampled verifier -/
 
-section Deploy
+section Compiled
 
-variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
+open Claims.SamplingGeneric (Arg Compiled)
 
-/-- **The leak bound under a sampled audit**, at any deployment `D` of the sampled verifier where `KS` holds, given
-`SampledAuditAccepted`. Take a public layout `lay` and horizon `k` of each statement, `δ ≥ 0`, a decoder that
-lists every trace within Flock's radius, and for each statement and values `ρ` inputs besides the ingress `As s ρ`, at
-most `2^c` of them, that suffice for the inputs `ρ` (`AdviceIn`), and `β` bounding each possible incorrect set's committed
-bits (`faultyBits`). On the statements in scope:
+variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
+
+/-- **The leak bound under a sampled audit**, at any compiled sampled verifier `D` where `Compiled.KS` holds, given
+`SampledAuditAccepted`. Take a public layout `lay` and horizon `k` of each statement, `δ ≥ 0`, and for each statement
+and values `ρ` inputs besides the ingress `As s ρ`, at most `2^c` of them, that suffice for the inputs `ρ`
+(`AdviceIn`), and `β` bounding each possible incorrect set's committed bits (`faultyBits`). On the statements in
+scope:
 
 * `Pr[acc ∧ ¬RLeak δ] ≤ δ + ε_ks + ε_bind`, `KSAccepted`'s bound: except with that probability, every observation
   sequence of length `k` with jitter below `Dj` that the trace's transfer gates carry with every status complete is among
   the sequences `AccSeqsSampled` counts at `As s ρ`, `ρ` the trace's committed values;
 * at every `ρ`, those sequences number at most `2^c · #faultySets(δ) · 2^β · Dj^k`, which the statement, `δ`, `As`, `ρ`,
   the operator and `Dj` fix: the leak is at most `c + log2 #faultySets(δ) + β + k·log2 Dj` bits. -/
-theorem sampledLeak (hSA : Guarantees.SampledAuditAccepted) (H : Msg → Msg) (D : Deploy Coin Col T) (hks : KS H D)
-    (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
-    (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode)
+theorem sampledLeak (hSA : Guarantees.SampledAuditAccepted) (H : Msg → Msg) (D : Compiled Coin A) (hks : D.KS H)
+    (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ)
     (As : AuditStatement → (ℕ → Bool) → Set (ℕ → Bool)) (c β : AuditStatement → ℕ) (Dj : ℕ)
     (hAs : ∀ s ρ, (As s ρ).encard ≤ ((2 ^ c s : ℕ) : ℕ∞))
     (hβ : ∀ s P, D.partition s = some P → ∀ F ∈ faultySets s.design P δ, faultyBits s.prog P F ≤ β s)
     (hin : ∀ s P, D.partition s = some P → ∀ ρ, AdviceIn K s.prog P s.design (lay s) (k s) ρ (As s ρ) δ) :
-    KSLinOn H D.V (ScopeAcc D lay k) (RLeak H D.commit D.parse D.partition L K S lay k δ As Dj) (E D decode)
-        (κ D δ) (γ D) (fun _ => 1) (Bext H D.V (E D decode)) ∧
+    KSLinOn H D.V (ScopeAcc D lay k) (RLeak H D.commit D.parse D.partition L K S lay k δ As Dj) D.E
+        (D.κ δ) D.γ (fun _ => 1) (Bext H D.V D.E) ∧
       ∀ x, ScopeAcc D lay k x → ∀ s P, D.parse x = some s → D.partition s = some P →
         ∀ (op : ℕ → List (Obs L K S) → List Bool) (ρ : ℕ → Bool),
           (AccSeqsSampled s.prog P s.design (lay s) (k s) (As s ρ) δ op Dj).encard ≤
             ((2 ^ c s * (faultySets s.design P δ).card * 2 ^ β s * Dj ^ k s : ℕ) : ℕ∞) := by
   refine ⟨ksLinOn_rLeak H D.commit D.parse D.partition L K S lay k δ As Dj D.V _ _ _ _ _ _ hin
-    (hSA H D L K S lay k hks δ decode hδ hdec), fun x hx s P hs hP op ρ => ?_⟩
+    (hSA H D L K S lay k hks δ hδ), fun x hx s P hs hP op ρ => ?_⟩
   obtain ⟨s', hs', hfits⟩ := hx.2
   rw [Option.some_injective _ (hs'.symm.trans hs)] at hfits
   exact encard_accSeqsSampled_le s.prog P s.design (lay s) (k s) hfits δ (As s ρ) (c s) (hAs s ρ) (β s) (hβ s P hP) op Dj
@@ -210,22 +211,21 @@ theorem sampledLeak (hSA : Guarantees.SampledAuditAccepted) (H : Msg → Msg) (D
 /-- **The leak bound under a sampled audit, with the registered inputs pinned**: `sampledLeak` at the inputs pinned to
 the trace at each statement's `reg` and `false` off the free inputs (`AsReg`), which suffice for every circuit, so `c`
 is the number of free inputs not in `reg` (`freeInputs`). -/
-theorem sampledLeak_reg (hSA : Guarantees.SampledAuditAccepted) (H : Msg → Msg) (D : Deploy Coin Col T)
-    (hks : KS H D) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T)
-    (hδ : 0 ≤ δ) (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : AuditStatement → Finset ℕ)
-    (β : AuditStatement → ℕ) (Dj : ℕ)
+theorem sampledLeak_reg (hSA : Guarantees.SampledAuditAccepted) (H : Msg → Msg) (D : Compiled Coin A)
+    (hks : D.KS H) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ)
+    (hδ : 0 ≤ δ) (reg : AuditStatement → Finset ℕ) (β : AuditStatement → ℕ) (Dj : ℕ)
     (hβ : ∀ s P, D.partition s = some P → ∀ F ∈ faultySets s.design P δ, faultyBits s.prog P F ≤ β s) :
     KSLinOn H D.V (ScopeAcc D lay k)
         (RLeak H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj)
-        (E D decode) (κ D δ) (γ D) (fun _ => 1) (Bext H D.V (E D decode)) ∧
+        D.E (D.κ δ) D.γ (fun _ => 1) (Bext H D.V D.E) ∧
       ∀ x, ScopeAcc D lay k x → ∀ s P, D.parse x = some s → D.partition s = some P →
         ∀ (op : ℕ → List (Obs L K S) → List Bool) (ρ : ℕ → Bool),
           (AccSeqsSampled s.prog P s.design (lay s) (k s) (AsReg s.prog (lay s) (k s) (reg s) ρ) δ op Dj).encard ≤
             ((2 ^ (freeInputs s.prog (lay s) (k s) \ reg s).card * (faultySets s.design P δ).card * 2 ^ β s *
               Dj ^ k s : ℕ) : ℕ∞) :=
-  sampledLeak hSA H D hks L K S lay k δ decode hδ hdec _ (fun s => (freeInputs s.prog (lay s) (k s) \ reg s).card) β
+  sampledLeak hSA H D hks L K S lay k δ hδ _ (fun s => (freeInputs s.prog (lay s) (k s) \ reg s).card) β
     Dj (fun _ _ => encard_asReg_le _ _ _ _ _) hβ fun _ _ _ _ => adviceIn_asReg K _ _ _ _ _ _ _ _
 
-end Deploy
+end Compiled
 
 end NetTiming

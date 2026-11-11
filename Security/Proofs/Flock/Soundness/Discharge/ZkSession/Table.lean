@@ -5,8 +5,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkSession.Compose
 public import Proofs.Flock.Soundness.SoundnessPad
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Defs
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Soundness of a `--zk` table (live/PROTOCOL.md §1, §4, §5, §7)

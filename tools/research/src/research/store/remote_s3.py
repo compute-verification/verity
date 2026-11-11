@@ -32,8 +32,8 @@ this (r20) each request opened its own TLS connection: 259,030 blobs / 46 GB too
 the bounded thread pool `put_many` runs on; `LocalStore.push` brings its own pool, of
 the same size, over `put`.
 
-MEASURED (2026-09-23, runpod pod vyv-v2cpu3 -> R2, 10k x 4 KiB blobs pushed through `LocalStore.push`, then re-pushed, then fetched,
-plus one 512 MiB blob; `tools/research/bench` figures in the r20 report):
+MEASURED (a RunPod pod -> R2, 10k x 4 KiB blobs pushed through `LocalStore.push`, then re-pushed, then fetched, plus one 512 MiB
+blob; `tools/research/bench`):
 
     client              first push        re-push (all skipped)   get           512 MiB put / get
     old (TLS/request)   21.1 blobs/s       85 blobs/s              55 blobs/s     25 MB/s / 43 MB/s
@@ -105,8 +105,8 @@ MIN_UPLOAD_RATE = 8 * 1024       # the same for a request body (a PUT from the l
 STALL_WINDOW_S = 120.0           # a part PUT is cut off when a window this long passes with under STALL_MIN_BYTES of its body sent,
 STALL_MIN_BYTES = 1 << 20        # or (body sent) with no response: its whole-body deadline above is hours for a 256 MiB part
 GET_STALL_MIN_BYTES = 32 << 20   # a GET body is cut off (and the GET retried) when a STALL_WINDOW_S window brings under this much (~280
-                                 # KB/s): a stalled stream that still trickles kept a 16 GiB part going at 13-170 KB/s for an hour while a
-                                 # fresh connection on the same node got 45-70 MB/s (INF-214); its whole-body deadline was 73 h
+                                 # KB/s): a stalled stream that still trickles can keep a 16 GiB part going at 13-170 KB/s for an hour
+                                 # while a fresh connection on the same node gets 45-70 MB/s, under a whole-body deadline of 73 h
 HEAD_DEADLINE_S = 30.0           # a HEAD carries no body: a much shorter deadline, and HEAD_RETRIES tries after the first
 HEAD_RETRIES = 1
 RETRIES = 3                     # transient 5xx / 429 / connection errors: 4 tries, 1 s, 2 s, 4 s backoff (or the service's Retry-After)
@@ -715,6 +715,27 @@ class S3Remote:
                 self.conditional_put_error = "`If-None-Match: *` ignored (a second PUT of a fresh key answered 2xx, not 412); HEAD-then-plain-PUT for the rest of this session"
                 self.conditional_put = False
                 res["fallback"] = self.conditional_put_error
+
+    def create(self, key: str, path: Path) -> dict:
+        """Create `key` without reading the bucket, for a key that may write but not read (the public export's): one `PUT
+        If-None-Match: *`.  2xx -> `created`; 412 -> `exists` (the service checks the key before the precondition, so a 412 also
+        proves the key may write); anything else raises.  Nothing compares the bytes already there with this file: the caller's keys
+        are content addresses, and a reader checks every byte against its id.  Above `single_put_max` it refuses, since a multipart
+        upload's completion takes no precondition on R2."""
+        path = Path(path)
+        sha, md5, size = hash_file(path)
+        if size > self.single_put_max:
+            raise ValueError(f"{key}: {size} bytes is above the {self.single_put_max}-byte single PUT, and a multipart create "
+                             "can't be conditional without reading the bucket")
+        res: dict = {"action": "created", "bytes": size, "etag": None, "md5": md5, "sha256": sha, "conditional": True, "fallback": None}
+        try:
+            with self._request("PUT", key, body=path, headers={"if-none-match": "*"}, payload_hash=sha) as r:
+                res["etag"] = etag_value(r.headers.get("ETag"))
+        except urllib.error.HTTPError as e:
+            if e.code != 412:
+                raise
+            res["action"] = "exists"
+        return res
 
     def presign(self, key: str, expires_s: int, method: str = "GET") -> str:
         """A URL for one `method` request on `key`, valid `expires_s` seconds (`presign`): read access to one object for a machine
