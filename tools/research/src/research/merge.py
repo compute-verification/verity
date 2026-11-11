@@ -20,8 +20,8 @@ the verdict passed and no step listed twice.  A sharded check (`check.py --shard
 `check-shard/v1`) passes only through the Attempt of `check.py --combine RUN...` on the same commit, and only when the gate,
 reading the shards itself (`shard_set`), finds them a passing check of that clean commit (one plan, K = 1..N once each, the
 commit's own `tools/verity/check/`, every part once, every job its `ci.toml` puts on the gate, no step failed) and the combine's
-steps theirs; a shard alone passes nothing.  A job off the gate (drive's policy, policy.toml's `off_gate`: circuit-check,
-ratchet-gate) is required of no check, whole or sharded, and a recorded check doesn't run it: it runs after landing, in drive's after-landing run, and its red
+steps theirs; a shard alone passes nothing.  A job off the gate (drive's policy, policy.toml's `off_gate`) is required of no
+check, whole or sharded, and a recorded check doesn't run it: it runs after landing, in drive's after-landing run, and its red
 there names its culprit.  With a usable remote the catalog's attempts are refreshed first, so an attempt
 recorded on another machine counts.  Refused as well: a
 target checkout that is not on BRANCH or has tracked changes, and a REF the target has moved past (the target's tip is not an
@@ -216,8 +216,8 @@ def declared(repo: Path, commit: str) -> list[dict] | None:
 def declared_jobs(repo: Path, commit: str) -> list[str] | str:
     """The names of the jobs ``commit``'s own `tools/verity/check/ci.toml` declares that are on the merge gate (every job but
     those ``commit``'s drive policy, `policy.toml`, names in `off_gate`, or its ci.toml marks `gate = false`), or why they
-    can't be read.  A job off the gate (circuit-check, ratchet-gate) runs after landing, in drive's after-landing run, whose red
-    names its culprit; no check needs it to pass a merge, and a recorded check doesn't run it."""
+    can't be read.  A job off the gate runs after landing, in drive's after-landing run, whose red names its culprit; no check
+    needs it to pass a merge, and a recorded check doesn't run it."""
     from . import policy
 
     pol = policy.at(repo, commit)
@@ -513,7 +513,7 @@ def _regenerated_in(run_id: str, audit) -> dict[str, str]:
 
 def fetch_run(rid: str, names: list[str], cwd: Path | None = None, refresh: bool = False) -> tuple[Path, dict] | None:
     """(run ``rid``'s local dir, its `research status --json` row) with ``names``, paths under its run dir, fetched from its node
-    (`research status RID --json --also NAME...`, as `drive.evidence` reads a running check), or None when it can't be read.
+    (`research status RID --json --also NAME...`, as `landing.evidence` reads a running check), or None when it can't be read.
     ``refresh`` fetches them for a run that has ended too (`--refresh`), which a plain read answers from what is kept here."""
     also = [x for n in names for x in ("--also", n)]
     r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *(["--refresh"] if refresh else []), *also],
@@ -547,17 +547,22 @@ def live_records(rid: str, fetch=fetch_run) -> dict[str, tuple[str, Path | None]
     return {pkg: (hashlib.sha256((got[0] / p).read_bytes()).hexdigest(), got[0] / p) for pkg, p in want.items()}
 
 
+def lean_report(store, rid: str, fetch=fetch_run):
+    """Run ``rid``'s Lean report (`AUDIT`, parsed), read from its files in the store, else from its run dir on its node
+    (``fetch``); None when neither has it to read.  Raises when it is listed and can't be read or parsed."""
+    if (art := _run_files(store, rid)) and AUDIT in {f["path"] for f in store.listing(art)}:
+        with tempfile.TemporaryDirectory() as d:
+            return json.loads((store.fetch(art, Path(d), paths=[AUDIT]) / AUDIT).read_text())
+    if (got := fetch(rid, [AUDIT])) is not None:
+        return json.loads((got[0] / AUDIT).read_text())
+    return None
+
+
 def bookkeeping_warnings(store, rid: str, fetch=fetch_run) -> list[str]:
-    """The warnings of lock run ``rid``'s bookkeeping repairs (its Lean report's `bookkeeping`), read from its files in the
-    store, else from its run dir on its node (``fetch``); empty when it has none or its report can't be read: drive tells
-    them and puts them in the lock commit, and nothing waits on them."""
+    """The warnings of lock run ``rid``'s bookkeeping repairs (its Lean report's `bookkeeping`, `lean_report`); empty when it
+    has none or its report can't be read: drive tells them and puts them in the lock commit, and nothing waits on them."""
     try:
-        audit = None
-        if (art := _run_files(store, rid)) and AUDIT in {f["path"] for f in store.listing(art)}:
-            with tempfile.TemporaryDirectory() as d:
-                audit = json.loads((store.fetch(art, Path(d), paths=[AUDIT]) / AUDIT).read_text())
-        elif (got := fetch(rid, [AUDIT])) is not None:
-            audit = json.loads((got[0] / AUDIT).read_text())
+        audit = lean_report(store, rid, fetch)
         warned = audit.get("bookkeeping") if isinstance(audit, dict) else None
         return [str(w) for w in warned] if isinstance(warned, list) else []
     except Exception as e:  # noqa: BLE001  (warnings only: no report, no warnings)

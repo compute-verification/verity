@@ -676,29 +676,27 @@ theorem slotRuns_some (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : Aud
   rw [h, Option.map_some, Option.getD_some]
   exact dite_eq_left ⟨u.isLt, hf⟩
 
-/-- **Slot `i`'s expected reruns given acceptance**: over the second stage `d` at `r`, acceptance times slot `i`'s
-expected reruns is at most `e_s` where slot `i` is its session's first, and `0` elsewhere. Resampling its block's
-session's rounds keeps the sample (`fixed`), so slot `i` stays first, and on them the session's extraction is `A`'s
-extractor against one prover `P'` at uniform coins, which reruns at most `1 + m′·k` of the block's shape in
-expectation (`Arg.rerunsExp_le`). -/
-theorem slot_exp_le (hS : L.CostContract H) {x : Msg} (s : AuditStatement)
+/-- **Slot `i`'s expected reruns**: over the second stage `d` at `r`, slot `i`'s expected reruns is at most `e_s` where
+slot `i` is its session's first, and `0` elsewhere. Resampling its block's session's rounds keeps the sample (`fixed`),
+so slot `i` stays first, and on them the session's extraction is `A`'s extractor against one prover `P'` at uniform
+coins, which reruns at most `1 + m′·k` of the block's shape in expectation (`Arg.rerunsExp_le`). -/
+theorem slot_exp_le_un (hS : L.CostContract H) {x : Msg} (s : AuditStatement)
     {Ω : Type} (P : Prover Ω) (ω : Ω) (i : Fin (L.nPU x)) (r : Fin (L.V.k x) → Coin) :
-    Ex (fun d : Fin (L.V.k x) → Coin => (if (run H P L.V x ω (forkOn (L.stage2 x) r d)).out = .acc then (1 : ℝ) else 0) *
+    Ex (fun d : Fin (L.V.k x) → Coin =>
         Ex fun ρ : L.BlockEC x => L.slotRuns H x s (run H P L.V x ω) i (forkOn (L.stage2 x) r d) ρ) ≤
       Ex fun d : Fin (L.V.k x) → Coin =>
         if (L.sessSlots x (L.checked x (forkOn (L.stage2 x) r d)) i).head? = some i.val then L.es x else 0 := by
   have he0 : 0 ≤ L.es x := maxBelow_nonneg _ _
   have hres := Ex_resample (fun d => L.selRounds x (L.firstSel x i) (forkOn (L.stage2 x) r d))
     (selRounds_resample hS.toRunsFixed (L.firstSel x i) r) fun d =>
-      (if (run H P L.V x ω (forkOn (L.stage2 x) r d)).out = .acc then (1 : ℝ) else 0) *
-        Ex fun ρ : L.BlockEC x => L.slotRuns H x s (run H P L.V x ω) i (forkOn (L.stage2 x) r d) ρ
+      Ex fun ρ : L.BlockEC x => L.slotRuns H x s (run H P L.V x ω) i (forkOn (L.stage2 x) r d) ρ
   beta_reduce at hres
   rw [← hres]
   refine Ex_mono fun d => ?_
   cases h : L.selSlot x (L.firstSel x i) (forkOn (L.stage2 x) r d) with
   | none =>
     rw [selRounds_none h]
-    simp only [forkOn_empty, slotRuns_none H L x s (run H P L.V x ω) i h, Ex_const, mul_zero]
+    simp only [forkOn_empty, slotRuns_none H L x s (run H P L.V x ω) i h, Ex_const]
     split_ifs
     · exact he0
     · exact le_rfl
@@ -736,28 +734,15 @@ theorem slot_exp_le (hS : L.CostContract H) {x : Msg} (s : AuditStatement)
         exact hfi.1
       rw [slotRuns_some H L x s _ hmσ hfσ ρ, L.sessExt_runs_eq H P ω P' (forkOn (L.stage2 x) r d) hshape hcard
         (fun r' h => (hview r' h).1) (hag σ) s _ (ρ u), L.coinsOf_forkOn hcard]
-    calc Ex (fun σ : Fin (L.V.k x) → Coin =>
-          (if (run H P L.V x ω (forkOn (L.rounds x u) (forkOn (L.stage2 x) r d) σ)).out = .acc then (1 : ℝ) else 0) *
-            Ex fun ρ : L.BlockEC x =>
-              L.slotRuns H x s (run H P L.V x ω) i (forkOn (L.rounds x u) (forkOn (L.stage2 x) r d) σ) ρ)
-        ≤ Ex (fun σ : Fin (L.V.k x) → Coin => Ex fun c : A.EC (L.sh x u) =>
+    calc Ex (fun σ : Fin (L.V.k x) → Coin => Ex fun ρ : L.BlockEC x =>
+            L.slotRuns H x s (run H P L.V x ω) i (forkOn (L.rounds x u) (forkOn (L.stage2 x) r d) σ) ρ)
+        = Ex (fun σ : Fin (L.V.k x) → Coin => Ex fun c : A.EC (L.sh x u) =>
             ((A.E.eval H P' xS () (fun t => σ (L.emb x u xS hcard t)) (cast (congrArg A.EC hshape.symm) c)).2.2 :
               ℝ)) := by
-          refine Ex_mono fun σ => ?_
-          have hρ : (Ex fun ρ : L.BlockEC x =>
-                L.slotRuns H x s (run H P L.V x ω) i (forkOn (L.rounds x u) (forkOn (L.stage2 x) r d) σ) ρ) =
-              Ex fun c : A.EC (L.sh x u) => ((A.E.eval H P' xS () (fun t => σ (L.emb x u xS hcard t))
-                (cast (congrArg A.EC hshape.symm) c)).2.2 : ℝ) := by
-            simp only [hunit σ]
-            exact Ex_pi_eval_dep (E := fun v : Fin (L.nPU x) => A.EC (L.sh x v)) u fun c : A.EC (L.sh x u) =>
-              ((A.E.eval H P' xS () (fun t => σ (L.emb x u xS hcard t)) (cast (congrArg A.EC hshape.symm) c)).2.2 : ℝ)
-          rw [hρ]
-          have hnn : 0 ≤ Ex fun c : A.EC (L.sh x u) => ((A.E.eval H P' xS () (fun t => σ (L.emb x u xS hcard t))
-              (cast (congrArg A.EC hshape.symm) c)).2.2 : ℝ) :=
-            Ex_nonneg fun _ => Nat.cast_nonneg _
-          split_ifs
-          · exact (one_mul _).le
-          · exact (zero_mul _).le.trans hnn
+          refine congrArg Ex (funext fun σ => ?_)
+          simp only [hunit σ]
+          exact Ex_pi_eval_dep (E := fun v : Fin (L.nPU x) => A.EC (L.sh x v)) u fun c : A.EC (L.sh x u) =>
+            ((A.E.eval H P' xS () (fun t => σ (L.emb x u xS hcard t)) (cast (congrArg A.EC hshape.symm) c)).2.2 : ℝ)
       _ = Ex (fun p : (Fin (L.V.k x) → Coin) × A.EC (L.sh x u) => ((A.E.eval H P' xS ()
             (fun t => p.1 (L.emb x u xS hcard t)) (cast (congrArg A.EC hshape.symm) p.2)).2.2 : ℝ)) :=
           (Ex_prod fun p : (Fin (L.V.k x) → Coin) × A.EC (L.sh x u) => ((A.E.eval H P' xS ()
@@ -768,6 +753,68 @@ theorem slot_exp_le (hS : L.CostContract H) {x : Msg} (s : AuditStatement)
       _ ≤ 1 + A.waits (A.shape xS) * A.k (A.shape xS) := A.rerunsExp_le H xS Unit P' ()
       _ = 1 + A.waits (L.sh x u) * A.k (L.sh x u) := by rw [hshape]
       _ ≤ L.es x := le_maxBelow (fun v => 1 + (A.waits (L.sh x v) : ℝ) * A.k (L.sh x v)) u.isLt
+
+/-- **Slot `i`'s expected reruns given acceptance**: acceptance times slot `i`'s expected reruns is at most slot `i`'s
+expected reruns (`slot_exp_le_un`). -/
+theorem slot_exp_le (hS : L.CostContract H) {x : Msg} (s : AuditStatement)
+    {Ω : Type} (P : Prover Ω) (ω : Ω) (i : Fin (L.nPU x)) (r : Fin (L.V.k x) → Coin) :
+    Ex (fun d : Fin (L.V.k x) → Coin => (if (run H P L.V x ω (forkOn (L.stage2 x) r d)).out = .acc then (1 : ℝ) else 0) *
+        Ex fun ρ : L.BlockEC x => L.slotRuns H x s (run H P L.V x ω) i (forkOn (L.stage2 x) r d) ρ) ≤
+      Ex fun d : Fin (L.V.k x) → Coin =>
+        if (L.sessSlots x (L.checked x (forkOn (L.stage2 x) r d)) i).head? = some i.val then L.es x else 0 :=
+  calc Ex (fun d : Fin (L.V.k x) → Coin =>
+          (if (run H P L.V x ω (forkOn (L.stage2 x) r d)).out = .acc then (1 : ℝ) else 0) *
+            Ex fun ρ : L.BlockEC x => L.slotRuns H x s (run H P L.V x ω) i (forkOn (L.stage2 x) r d) ρ)
+      ≤ Ex (fun d : Fin (L.V.k x) → Coin =>
+          Ex fun ρ : L.BlockEC x => L.slotRuns H x s (run H P L.V x ω) i (forkOn (L.stage2 x) r d) ρ) :=
+        Ex_mono fun d => by
+          have hnn : 0 ≤ Ex fun ρ : L.BlockEC x =>
+              L.slotRuns H x s (run H P L.V x ω) i (forkOn (L.stage2 x) r d) ρ :=
+            Ex_nonneg fun ρ => slotRuns_nonneg H L x s _ i _ ρ
+          split_ifs
+          · exact (one_mul _).le
+          · exact (zero_mul _).le.trans hnn
+    _ ≤ _ := slot_exp_le_un hS s P ω i r
+
+/-- **Expected reruns of a run's extractions**: over the run's coins and the extractor's, at most `n_sess·e_s`. Each
+slot weighs at most `e_s` where it is its session's first and `0` elsewhere (`slot_exp_le_un`, the second stage's coins
+fresh at uniform coins, `Ex_forkOn`), and a sample has at most `n_sess` first slots (`card_first_le`). -/
+theorem runExt_runs_exp (hS : L.CostContract H) {x : Msg} {Ω : Type} (P : Prover Ω) (ω : Ω) (s : AuditStatement) :
+    Ex (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
+        (((L.runExt x s p.1 (run H P L.V x ω p.1).seen p.2).eval H (run H P L.V x ω)).2.2 : ℝ)) ≤
+      L.nSess x * L.es x := by
+  have he0 : 0 ≤ L.es x := maxBelow_nonneg _ _
+  have hslot : ∀ i : Fin (L.nPU x), Ex (fun r : Fin (L.V.k x) → Coin =>
+      Ex fun ρ : L.BlockEC x => L.slotRuns H x s (run H P L.V x ω) i r ρ) ≤
+        Ex fun r : Fin (L.V.k x) → Coin =>
+          if (L.sessSlots x (L.checked x r) i).head? = some i.val then L.es x else 0 := by
+    intro i
+    rw [← Ex_forkOn (L.stage2 x) (fun r => Ex fun ρ : L.BlockEC x => L.slotRuns H x s (run H P L.V x ω) i r ρ),
+      ← Ex_forkOn (L.stage2 x) (fun r =>
+        if (L.sessSlots x (L.checked x r) i).head? = some i.val then L.es x else 0), Ex_prod, Ex_prod]
+    exact Ex_mono fun r => slot_exp_le_un hS s P ω i r
+  calc Ex (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
+          (((L.runExt x s p.1 (run H P L.V x ω p.1).seen p.2).eval H (run H P L.V x ω)).2.2 : ℝ))
+      = Ex (fun r : Fin (L.V.k x) → Coin =>
+          ∑ i, Ex fun ρ : L.BlockEC x => L.slotRuns H x s (run H P L.V x ω) i r ρ) := by
+        rw [Ex_prod]
+        refine congrArg Ex (funext fun r => ?_)
+        simp only [runExt_runs_eq]
+        rw [Ex_finsum]
+        exact Finset.sum_congr rfl fun i _ => Ex_pi_eval i fun ρ => L.slotRuns H x s (run H P L.V x ω) i r ρ
+    _ = ∑ i, Ex (fun r : Fin (L.V.k x) → Coin =>
+          Ex fun ρ : L.BlockEC x => L.slotRuns H x s (run H P L.V x ω) i r ρ) := by
+        rw [Ex_finsum]
+    _ ≤ ∑ i : Fin (L.nPU x), Ex (fun r : Fin (L.V.k x) → Coin =>
+          if (L.sessSlots x (L.checked x r) i).head? = some i.val then L.es x else 0) :=
+        Finset.sum_le_sum fun i _ => hslot i
+    _ = Ex (fun r : Fin (L.V.k x) → Coin => ∑ i : Fin (L.nPU x),
+          if (L.sessSlots x (L.checked x r) i).head? = some i.val then L.es x else 0) := by
+        rw [Ex_finsum]
+    _ ≤ Ex (fun _ : Fin (L.V.k x) → Coin => (L.nSess x : ℝ) * L.es x) := Ex_mono fun r => by
+        rw [← Finset.sum_filter, Finset.sum_const, nsmul_eq_mul]
+        exact mul_le_mul_of_nonneg_right (Nat.cast_le.2 (card_first_le hS.keys x _)) he0
+    _ = L.nSess x * L.es x := Ex_const _
 
 theorem Ex_slotStep (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
     (run' : (Fin (L.V.k x) → Coin) → Transcript) (j : Fin (L.kOut x)) (l : Fin (L.kIn x)) (r : Fin (L.V.k x) → Coin) :
