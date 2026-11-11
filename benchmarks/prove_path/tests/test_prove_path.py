@@ -515,7 +515,7 @@ def test_i2_loads_only_a_single_gpu_session_and_only_programs_a_build_dir_holds(
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128,
         "num_attention_heads": 4, "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5,
         "tie_word_embeddings": True, "max_position_embeddings": 64, "hidden_act": "silu"}
-STOCHASTIC = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": "derived", "rid": 4}
+STOCHASTIC = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": 32, "rid": 4}
 
 
 def _request_build(sampling: dict | None = None, named: bool = False, **shape):
@@ -535,7 +535,7 @@ def _request_program(sampling: dict | None = None, **shape):
 
 @pytest.fixture(scope="module")
 def requests_of_tiny():
-    """TINY's greedy request Programs at (LP, T) = (4, 1) and (4, 2), its stochastic one (seed, splits and its seed rule's inputs beside the prompt)
+    """TINY's greedy request Programs at (LP, T) = (4, 1) and (4, 2), its stochastic one (a seed and its seed rule's inputs beside the prompt)
     and its cached one (a prefix of 16 rows beside the prompt)."""
     return {"greedy": _request_program(LP=4, T=1), "longer": _request_program(LP=4, T=2),
             "stochastic": _request_program(STOCHASTIC, LP=4, T=2), "cached": _request_program(LP=24, T=2, C=16)}
@@ -576,7 +576,7 @@ def _load(root: Path, digest: str):
 
 def test_i2_loads_a_build_whose_body_is_the_program_it_compiled(tmp_path, requests_of_tiny):
     """I2's adapter holds each Build dir to the digest I2 compiled (`build_of`) before the window reads its rows: an honest
-    Build of each request Program loads, its Input batches read as the parameters they bind (prompt, seed, splits, prefix,
+    Build of each request Program loads, its Input batches read as the parameters they bind (prompt, seed, prefix,
     weights)."""
     for name, program in requests_of_tiny.items():
         dg = _build(tmp_path / name / "build_request", program)
