@@ -77,3 +77,32 @@ WHAT WOULD SHOW IT: one retrace of f0ed and of 106f with the recorder of commit 
 
 Commit, the nine's cells and the list follow in one message when the rebuild in c09f ends.
 
+[2026-11-11T10:28Z] 11ee597e1783
+grade to training, TRN-102 item 4 (the harness, no fix), Wed 11 Nov 10:28Z. Ran unless marked. Harness: training_slowdown 4.19.0 at 95239b187833 (#8809's head); Python 3.12.14, torch 2.15.0+cpu; CPU nodes.
+
+THE SMALLEST CASE (r20261111-102141-1a19, file jobs/case_e.py):
+
+    import copy
+    import torch
+    from training_slowdown.capture import capture_steps
+    
+    def step(model, batch, optimizers):
+        copy.deepcopy(model)  # the deep copy, inside the step
+        model(batch).sum().backward()
+        optimizers[0].step()
+        optimizers[0].zero_grad(set_to_none=True)
+    
+    model = torch.nn.Linear(64, 64)
+    capture_steps([step] * 3, model, torch.zeros(2, 64), measured=1, optimizers=[torch.optim.AdamW(model.parameters())])
+    print("capture_steps returned")
+
+16 of 16 tries die, each a process of its own: SIGSEGV, no refusal, after one torch warning ("Accessing the data pointer of FakeTensor is deprecated", torch/_tensor.py:161, in the deep copy). With the deep copy's line removed, 4 of 4 return. The same on the suite's tiny decoder: 16 of 16 die, 4 of 4 return without the line. The deep copy itself returns; the process dies later, in optimizers[0].step() (torch/optim/adam.py:415, an op of AdamW on its state, under the capture's fake tensors).
+
+WHAT IT TAKES (r20261111-101559-1be8, by parts, 3 tries a cell): it dies only with AdamW and with three steps (capture_steps): nn.Linear 6 of 9, tiny decoder 9 of 9, whether the copy is dropped, run under no_grad, or run with a backward. Never with SGD (0 of 36), never with one step (capture_fn, 0 of 36), never without the copy (0 of 8). Deaths are SIGSEGV or SIGABRT ("corrupted double-linked list", "malloc(): smallbin double linked list corrupted"); one try printed "returned" and then aborted at exit. So my "24 of 24" was this: AdamW, three steps. Why AdamW's state and not SGD: not found, and I did not look further (no fix ruled).
+
+WHAT THE JOB'S RECORD HOLDS: a dead job and no record. A job of the harness through its own entry (python -m training_slowdown.run, the suite's tiny start, 3 steps of 2 windows), its route `subset` with one line added to step, copy.deepcopy(model): exit 245, no run.json, 5 of 5 (r20261111-095611-6b70, 1be8). Its out/ holds only e/step0000002.bin, the last checkpoint's E. The training itself ran: the three steps and their checkpoints are done, and the route's process is killed by SIGSEGV inside trace_step (run.py:735, after the last checkpoint), before the record is written; the job's own process then returns the child's status and writes nothing (run.py: "if child.returncode or not record.is_file(): return"). The same job with `subset` itself: exit 0, run.json with its trace. Read, not run: the bench command would then write job.json {"rc": 245} (--local) or show the job FAILED "rc 245, no record" (the store), and "a failed job is never run again".
+
+So a route that deep-copies its model in a step, with AdamW, loses its whole record, counts and scores included, not only its trace; and nothing names the cause.
+
+Files: /cursor/stores/self/trn102/jobs/ (case_e.py, case_f.py, deepcopy_matrix.py, harness_job.py, deepcopy{,2,3}.sh).
+
