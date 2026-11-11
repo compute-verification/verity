@@ -54321,3 +54321,26 @@ For the table:
 
 For the table: the hoist is built (PR #8949, unmarked, `d302096c54b2`): measured on one accepted session with its 151.8 MB program, a call's further sessions set up in 0.56 s where `main` takes 65.0 s, the first in 43 to 46 s where `main` takes 60 to 64 s [`744d`]; `lean-agreement` passes [`6afc`].
 For BREAKEVEN: "the hoist, built, unmarked": Lean seconds a call = no-program seconds + (0.29 to 0.30 s) × (MB of the population program) once a CALL + 0.004 s a MB for each further session, measured [`r20261111-120009-744d`]; "as `main` is" on the same node: 0.40 to 0.42 s a MB a SESSION (FUSED: 0.37). Both verifiers' `inputs` also holds one more reading of the program (`programDigest`), about 0.11 s a MB once a call [guess: `inputs` minus the circuit's read at 10.3 ns a byte].
+
+## REGX, Wed 11 Nov 12:30Z: ready to mark #8924 at d025f81332e674746d26e91dea64f5166cb64f7f. A lemma PR: no lock record, no guarantee, no named premise added. Its statement is true as stated and, at a two-stage registration with a checked interior row, holds from a false premise (`Addresses h`): the body says so first. #8912 and #8922 follow when their records runs end
+
+**ready to mark #8924 at d025f81332e674746d26e91dea64f5166cb64f7f**
+- **What it is** [read]: `SpotFlock.code_eventTwoX_le_cls_at_budget` and `SpotFlock.code_hpos`, one new module `security/Proofs/Flock/SpotFlock/FirstHitClassAt.lean` and its import line. The head is #8922's head merged with #8916's head, plus that file. It has not moved since its runs started [run: `gh pr view` 12:28Z].
+- **Try** `r20261111-105516-b35a` at the head: lean exit 0, both theorems on `propext`, `Classical.choice`, `Quot.sound` only [run].
+- **Quick tier** `r20261111-110240-b2fd` (`suites.py --changed … --quick`): done rc 0 SUCCESS; the 8 suites it selected ran and passed, none failed [run].
+- **Records** `r20261111-110235-0111` (`lean_changed.py --records security/Proofs --update`): rc 0; `security/Proofs` AUDIT: PASS (`check.py` exit 0), its requirers `security` and `security/Properties` AUDIT: PASS; `"regenerated": {}`, so no lock record changes [run].
+- **Kernel replay:** the candidate's check. **Second reader:** EXTFORM 11:29Z, the three files whole [relayed].
+- **Merges** [run 12:28Z]: `git merge-tree --write-tree` exits 0 with `main` at `967b722429f3`, and with the heads of #8871 `2d4670d64165`, #8906 `e7b2e51d928b`, #8916 `8784a105de5b` and #8931 `2cc7decd36a6` (#8836 is merged).
+- **The merged tree builds, at `main` as it was at 12:05Z** [run]: the merge of the head with `main` `86c03d1840cb` (local, `f14dac637169`, tree `6ebef91844ba`, pushed nowhere), try `r20261111-120604-a868`: lean exit 0 in 884 s, run exit 0; `Definitions.Claims.SamplingGeneric` as `main` has it, `OpensWhole` and `OpensClass` built under it.
+- **Not yet built at `main` as it is now.** `main` moved to `967b722429f3` between my reads of 12:12Z and 12:28Z and brought 34 more Lean files and lock changes, the verifier's `Spot/Registration.lean`, `Spot/Run.lean` and `Spot/Partition.lean` and `Claims/Sampling/Select/Code.lean` among them. The merge is clean; its build is out: local merge `199dec76431f` (tree `fa4876e44b01`), try `r20261111-122853-f321` (vy-nebius-cpu-7), launched 12:28Z; ETA 12:50Z [guess]. I post its verdict the minute it ends. Whether you mark before it is yours.
+- **The body** (rewritten 12:28Z; the head did not move) has, in order: the change; the premise line you asked for ("under `Addresses h`, which as defined is false at a registration whose checked units have a row in the interior record … holds there from a false premise"), with the sentence that the code's program is the units side by side; the four checks; no lock record changes; the run ids; the merged-tree build; the module it adds.
+- For CAPS: Proofs/Flock: +1 module, +2 declarations (#8924: SpotFlock/FirstHitClassAt.lean)
+
+**#8912 at `62eb1fdc64de` and #8922 at `5b37c49d6a5c`: not ready lines yet** [run, read 12:27Z].
+- #8912: quick tier `r20261111-104254-a55f` rc 0, 8 suites passed. Records `r20261111-115811-84f6`: `security/Proofs` AUDIT: PASS, `check.py` exit 0 in 1335 s, `"regenerated": {}`; the run is still on the packages that require it.
+- #8922: quick tier `r20261111-105117-067a` rc 0, 8 suites passed. Records `r20261111-120152-80c2`: `security/Proofs` AUDIT: PASS, `check.py` exit 0 in 1218 s, `"regenerated": {}`; the run is still on the packages that require it.
+- Both are ancestors of #8924's head, so `a868` and `f321` are their merged-tree builds too. Their bodies carry the premise line since 12:15Z.
+- A second hedge for #8922's records, `r20261111-122204-08b8`, ran 3 min and was cancelled by me when `80c2` printed its verdict.
+
+For the table:
+- #8924 (`code_eventTwoX_le_cls_at_budget`): ready at `d025f81332e6`; quick tier, records and the merged-tree build at `main` `86c03d1840cb` pass; the build at `main` `967b722429f3` is out (`f321`). A lemma, true as stated; it is under `Addresses h`, false as defined at a registration with a checked interior row, and is about the units side by side.
