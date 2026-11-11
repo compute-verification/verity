@@ -34,6 +34,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 from verity_flock.class_statement import UnitStager
+from verity.commitments.windows import interface as IF
 from verity.commitments.windows import rows as CS
 from verity.commitments.windows import wiring as WI
 from verity_vllm.pipeline import chain_rows as CH
@@ -53,6 +54,7 @@ from verity_vllm.query.program_view import spec_statics
 from verity.protocols.spot.verifier.one_stage import draw as D
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
+from verity.circuits.types import Tuple, field_types
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
@@ -627,6 +629,28 @@ def test_a_row_at_the_served_statics_reads_and_wires_its_744_units_in_columns_of
     ms = members(s, tmpls, dict.fromkeys(tmpls, 512))
     assert [(m.template, m.n) for m in ms] == list(zip(tmpls, (32, 8, 256, 64, 320, 64)))
     assert committed(ms, read(s, ms, tmpls))[ms[-1].port("o0")].reshape(-1).tolist() == s.y.tolist()
+
+
+#: what a partition names to serve step 16's rows in scores and values units of 64 columns: each key block's scores unit and
+#: values units their Boolean bodies, a split's end on a column block and the combine served beside whole key blocks too
+SERVED_UNITS = [scores(64, GLM, True), scores(16, GLM, True), values(64, GLM, True, 64), values(16, GLM, True, 64),
+                split_end(GLM, 64), comb(5, GLM)]
+
+
+def test_every_served_scores_and_values_unit_composes_and_verify_zk_takes_it():
+    """At GLM-5.3's statics each unit of a row served in scores and values units of 64 columns is a proof block Flock's
+    composer takes (`interface.check_proof_block`: each has a row past 111 bytes, and its rows fit 2^26 bits at most), and
+    `verify --zk` takes it (`chunk_rows.zk_refusal`): a scores or values unit's Boolean body reads no table, and a split's end
+    and the combine read theirs inline.  Every returned field, each one a wire may read, is whole 16-bit words."""
+    floors = []
+    for t in SERVED_UNITS:
+        tp = SRW.template(t)
+        assert CR.zk_refusal(tp) is None and CR.statement(tp)["reads"] == "inline", t
+        assert CR.slot_tables(tp.fn) == (() if tp.id != tp.word else CR.slot_tables(tp.fn)), t
+        ret = tp.fn.signature()[1]
+        assert all(sum(f.leaf_widths()) % 16 == 0 for f in (field_types(ret) if isinstance(ret, Tuple) else (ret,))), t
+        floors.append(IF.check_proof_block(tp.fn))
+    assert floors == [26, 24, 23, 22, 22, 22]
 
 
 def test_a_window_of_scores_and_values_units_commits_and_its_wires_hold():
