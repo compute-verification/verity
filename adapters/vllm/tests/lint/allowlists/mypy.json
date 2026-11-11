@@ -1754,8 +1754,6 @@
     {"file": "verity_vllm/check/match/compiler_form.py", "kind": "var-annotated", "symbol": "_narrowed", "detail": ""},
     {"file": "verity_vllm/check/match/declaration.py", "kind": "arg-type", "symbol": "_manifest_of_record", "detail": ""},
     {"file": "verity_vllm/check/match/declaration.py", "kind": "arg-type", "symbol": "from_gprog", "detail": ""},
-    {"file": "verity_vllm/check/match/declaration.py", "kind": "arg-type", "symbol": "manifest_sampling", "detail": ""},
-    {"file": "verity_vllm/check/match/declaration.py", "kind": "index", "symbol": "manifest_sampling", "detail": ""},
     {"file": "verity_vllm/check/match/declaration.py", "kind": "index", "symbol": "record_engine_facts", "detail": "", "count": 2},
     {"file": "verity_vllm/check/match/declaration.py", "kind": "operator", "symbol": "record_engine_facts", "detail": ""},
     {"file": "verity_vllm/check/match/declaration.py", "kind": "union-attr", "symbol": "from_gprog", "detail": ""},

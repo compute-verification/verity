@@ -55,7 +55,7 @@ def manifest_sampling(wl: Workload | Mapping[str, Any], variant: str | None = No
     w = Workload.of(wl, "workload")
     sweep = w.sweep or {}
     v = variant or w.sampling_variant or sweep.get("sampling")
-    per_key: dict[str, dict[str, object]] = {}   # key -> {source: value}
+    per_key: dict[str, dict[str, float]] = {}   # key -> {source: value}
     def put(src: str, k: str, val) -> None:
         if val is not None:
             per_key.setdefault(k, {})[src] = val
@@ -65,8 +65,7 @@ def manifest_sampling(wl: Workload | Mapping[str, Any], variant: str | None = No
             put("variants_table", k, table.get(k))
     if v == "greedy":
         put("label", "temperature", 0.0)
-    elif isinstance(v, str) and _VARIANT_RE.match(v):
-        m = _VARIANT_RE.match(v)
+    elif isinstance(v, str) and (m := _VARIANT_RE.match(v)) is not None:
         put("label", "temperature", float(m["t"]))
         put("label", "top_p", float(m["p"]))
         put("label", "top_k", int(m["k"] or 0))
