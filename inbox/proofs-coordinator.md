@@ -35185,3 +35185,28 @@ Then the entry: the arithmetic, what is needed and what is not, the smallest cha
 I cancelled it at 00:30Z (`CANCELLED_MANUAL`) [run]. The profile is no longer needed: the cuts are made. Every number I gave from `acf7` is from a step that had ended with rc 0 before the cancel (`summary.txt`, `phases-remote-agrees.*`, `phases-rest.*`, `lean-by-subprotocol.txt`), and `research cancel` keeps a run's custody [read `research cancel --help`; the 19 files of its `out/` fetch after the cancel, run].
 
 Now nothing of mine is running or queued [run `research status` on `e39b`, `7cdc`, `718b`, `3c1b`, `acf7`; the others ended or were cancelled earlier]. #8767 is unchanged.
+
+## TWOPROVE, Wed 11 Nov 00:32Z: part 1's quick tier fails only on the lock entries the records run fills, so it reruns after the records commit; C7 and C8′ elaborate and pass the axiom probe
+
+**Part 1** (`cursor/proofs-bconf-cost-5987` at `be19220288208a4c2dacdfd6671f019962eb6be2`):
+
+- [run] The quick tier `r20261110-234622-3206` (vy-nebius-cpu-8) exited rc 1 with "8 suites: 6 passed (0 cached), 2 failed".
+  - All 7 failed tests fail with `KeyError: 'signature'` on the three guarantees I listed by hand as `{"owner": "@proofs"}`. They are:
+    - in `verity/core/protocols/pouw`, `tests/test_lean_package.py::test_cited_theorems_are_guarantees`, at line 33 (`" ".join(g["signature"])`);
+    - in `benchmarks/pouw`, `test_ledger.py`'s two pinned-twin tests and the four `test_price_twins_accounting.py::test_h100_gamma_is_rev1s_pin` cases, each at `harness/price_twins.py:114`.
+  - The records run fills `signature`. So I rerun the quick tier after committing the records: the records come first.
+- [run] The records run `r20261111-000350-0c4d` (vy-nebius-cpu-7) is running. ETA about 01:15Z [guess].
+
+**Part 2** (`cursor/proofs-bconf-two-9502`, now at `165eeb74ddcdfd9b5843049d09843bb9e9dddc1a`, pushed):
+
+- [run] The first try, `r20261111-000536-857d` (vy-nebius-cpu-1), failed with `TwoRegAt.lean:26:22: unexpected token 'X'; expected '}'`.
+  - `TwoRegAt`'s imports bring in ArkLib's global `notation3 "X"` [read: `Security/Proofs/Flock/SoundAtBridge/Statement.lean:57`], so `X` can't name a type variable there.
+  - Its only other errors were the two unknown-identifier errors that followed from it. Commit `165eeb74dd` renames the variables to `α` and `β`.
+- [run] The relaunched try, `r20261111-002354-d3bb` (vy-nebius-cpu-1, at `165eeb74dd`), logged:
+  - "Build completed successfully (10828 jobs)", which covers `Definitions.Claims.SamplingTwoReg` and `Proofs.Flock.SamplingGeneric.TwoRegAt`;
+  - "lean-try: …/Witnesses/SamplingTwoRegAt.lean: lean exit 0 in 31 s";
+  - "axiom probe: none of its 5 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- [run] That try's rc 1 comes only from the sibling check. Its stub failed with "`VeritySiblings.lean:1:0: error: unknown module prefix 'Circuits'`" before checking anything.
+  - Neither `main` nor this branch has a `Circuits` root under `Security/Proofs` [run: `git ls-tree`]. My guess is that cpu-1's slot tree `build-0` still holds another branch's module list.
+  - In place of the sibling check, a grep finds each of the 17 names part 2 adds declared exactly once in `Security` and `verity` [run].
+- [run] The build of the two importers, `r20261111-003040-f010` (vy-nebius-cpu-8), runs `lean_changed.py --build Security/Proofs/Flock/SamplingGeneric.lean Security/Proofs/Flock/Claims/Witnesses.lean`. ETA about 00:50Z [guess].
