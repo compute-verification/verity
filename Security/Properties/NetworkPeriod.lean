@@ -39,8 +39,9 @@ alters one of the scan's transitions is no Program's input. `RowsTiedCharged` sa
 the charge itself: `charged` is the facts of each tied audit sampled in part (`drawn < units`), each once, so each
 one's δ is in `eps` (`Public.eps` sums the terms' facts' and `charged`'s, and nothing else), and where such an audit's
 bound is at least one incorrect proof block, the term of every link-window whose scan's `prog` is its output has every
-slot entry bit (`faultyEntries` at `scan.entries`), the number `RowsKBoundsCount` takes as `faulty`. Each says its
-conclusion (`RowsProgWiredAt`, `RowsStateTiedAt`,
+slot entry bit (`faultyEntries` at `scan.entries`), the number `RowsKBoundsCount` takes as `faulty`. No tied audit
+names more sampled than its level holds (`factsOf` refuses a profile that does), so one that is not charged names as
+many: `drawn = units`. Each says its conclusion (`RowsProgWiredAt`, `RowsStateTiedAt`,
 `RowsTiedChargedAt`) of every period `check` accepts, and so is, by definition, its property of any period check at
 `check` (`RowsProgWiredOf`, `RowsStateTiedOf`, `RowsTiedChargedOf`), which the nontrivial lemmas state false at
 `acceptAllRows`, a check that accepts every period. Each guarantee writes its acceptance of `check` out rather than
@@ -138,15 +139,16 @@ def tiedInPart (tied : ℕ → Bool) (facts : Array Facts) : Array Facts :=
 
 /-- What `RowsTiedCharged` says of a period its check accepted with the public `pub`: in the rows form, `pub.charged`
 is `tiedInPart` of the public's audits' facts under the commitment's ties (`tiedIn`), and each tied audit `i` has an
-answer `x` whose facts `f` (`AuditFacts`) are the public's `audits[i]`; if it is sampled in part (`f.drawn < f.units`),
-`f` is among `pub.charged` and, when its bound is at least one incorrect proof block (`1 ≤ f.wrong`), every
-link-window `w` whose scan's `prog` is its output (`tiedAudits`) has `faultyEntries = scan.entries` in the public's
-term `pub.units[w]`. -/
+answer `x` whose facts `f` (`AuditFacts`) are the public's `audits[i]` and name no more sampled than its level holds
+(`f.drawn ≤ f.units`); if it is sampled in part (`f.drawn < f.units`), `f` is among
+`pub.charged` and, when its bound is at least one incorrect proof block (`1 ≤ f.wrong`), every link-window `w` whose
+scan's `prog` is its output (`tiedAudits`) has `faultyEntries = scan.entries` in the public's term `pub.units[w]`. -/
 def RowsTiedChargedAt (p : Params) (c : Commitment) (e : Evidence) (pub : Public) : Prop :=
   ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
     pub.charged = tiedInPart (tiedIn c.audits c.windows) pub.audits ∧
     ∀ (i : ℕ) (reg : Lean.Json), c.audits[i]? = some reg → tiedIn c.audits c.windows i = true →
       ∃ (x : Core.Answer) (f : Facts), e.audits[i]? = some x ∧ AuditFacts i reg x f ∧ pub.audits[i]? = some f ∧
+        f.drawn ≤ f.units ∧
         (f.drawn < f.units → f ∈ pub.charged ∧ (1 ≤ f.wrong →
           ∀ (w : ℕ) (wreg : Lean.Json), c.windows[w]? = some wreg →
             (tiedAudits c.audits wreg).contains i = true →
@@ -167,9 +169,13 @@ link-window whose scan's `prog` is its output has `faultyEntries` at the scan's 
 which `K` sums. So the `faulty` `RowsKBoundsCount` takes and the δ of the audits it is read from are the check's own,
 of every period it accepts.
 
-It says nothing of a tied audit with `units ≤ drawn`. The check charges by `drawn < units` (`chargedOf`) and reads both
-off the answer's profile, so a profile naming more members drawn than its level has is neither charged nor refused
-here. -/
+Every tied audit of an accepted period names no more sampled than its level holds: the check reads both counts off the
+answer's profile, the level's size and its `subset`'s `k` or its strata's `k` summed, and refuses a profile that names
+more sampled than the level has (`factsOf`). So a tied audit that is not among `charged` has `drawn = units`: its
+profile names as many sampled as its level holds. Of a `subset` sample that is the level sampled whole. Of a
+stratified one it is each stratum sampled whole, because the check also refuses a profile with a stratum that samples
+more than it holds, and one whose strata's sizes do not sum to the level's. That the strata are the level's units is
+the audit's own verifier's, which the period check does not read. -/
 def RowsTiedCharged : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsTiedChargedAt p c e pub

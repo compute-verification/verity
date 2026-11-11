@@ -501,6 +501,80 @@ def test_an_audit_is_held_to_its_program(server):
             assert verdict == REJECT and json.loads(out)["reason"].startswith("params:"), (form, bad, out)
 
 
+#: The changes whose answer's profile samples more than its level holds: a compute audit's in each form, the tied
+#: audit's of the aimed scan, and a scan's.
+OVERSAMPLED = ("audit-oversampled", "rows-audit-oversampled", "rows-tied-oversampled", "rows-answer-oversampled")
+#: The change whose answer's profile samples more of a stratum than the stratum holds, in a level whose total holds: the
+#: aimed scan's tied audit's.
+STRATUM_OVERSAMPLED = "rows-tied-stratum-oversampled"
+#: The change whose answer's profile has strata whose sizes do not sum to its level's, no stratum sampling more than it
+#: holds: the aimed scan's tied audit's.
+STRATA_SIZES = "rows-tied-strata-sizes"
+
+
+def sampled(level: dict) -> int:
+    """How many of its units a profile's level samples: its `subset`'s k, or its strata's summed."""
+    design = level["draw"]
+    return design["subset"] if "subset" in design else sum(s["k"] for s in design["strata"])
+
+
+def unheld(level: dict) -> str | None:
+    """Which of `factsOf`'s three refusals a profile's level meets, the first in its order: the level samples more than
+    it holds, a stratum more than the stratum holds, or the strata's sizes do not sum to the level's; `None`: none."""
+    strata = level["draw"].get("strata")
+    if sampled(level) > level["size"]:
+        return "level"
+    if any(s["k"] > s["size"] for s in strata or ()):
+        return "stratum"
+    return "sizes" if strata is not None and sum(s["size"] for s in strata) != level["size"] else None
+
+
+def test_a_profile_that_is_no_sample_of_its_level_is_refused(server):
+    """A profile whose level samples more than it holds is no sample of the level. Neither is a stratified one with a
+    stratum that samples more than the stratum holds though the level's total holds, or whose strata's sizes do not sum
+    to the level's though no stratum samples more than it holds. The charge of a tied audit sampled in part would miss
+    all three (the last where the strata hold more than the level), the last two as an audit sampled whole with a
+    stratum in part. Lean and the mirror each refuse the one answer that carries it, where they read its sample: by the
+    level a compute audit's in either form, tied to a scan or not, and a scan's, sampled `subset:k` or stratified; by
+    the stratum and by the strata's sizes, above the level's and below, the aimed scan's tied audit's. They refuse it
+    before they read the public's bound (with the bound gone too the reason is still the sample's), and for that alone:
+    with the level sampled whole instead, in one stratum where the strata's sizes were not the level's, Lean accepts
+    the period with the mirror's public."""
+    seen = Counter()
+    for m, why in [*((m, PC.OVERSAMPLED) for m in OVERSAMPLED), (STRATUM_OVERSAMPLED, PC.STRATUM_OVERSAMPLED),
+                   (STRATA_SIZES, PC.STRATA_SIZES)]:
+        for n in range(4):
+            case = build(m, n, small=n % 2 == 0)
+            c, e = (json.loads(bytes.fromhex(case[k])) for k in ("commitment", "evidence"))
+            answers = [("audit", x) for x in e["audits"]] + [("scan", w["answer"]) for w in e["windows"]]
+            (i, kind, x), = [(i, kind, x) for i, (kind, x) in enumerate(answers)
+                             if unheld(x["profile"]["levels"][0])]
+            level, bound = x["profile"]["levels"][0], x["public"]
+            design, how = level["draw"], unheld(level)
+            tied = kind == "audit" and PC._tied_in(c["audits"], c["windows"], i)
+            assert tied or m not in ("rows-tied-oversampled", STRATUM_OVERSAMPLED, STRATA_SIZES), (m, n)
+            assert how == {PC.OVERSAMPLED: "level", PC.STRATUM_OVERSAMPLED: "stratum", PC.STRATA_SIZES: "sizes"}[why]
+            seen.update([kind, "subset" if "subset" in design else "stratified", how,
+                         *(["tied" if tied else "untied"] if kind == "audit" else []),
+                         *(["above" if sum(s["size"] for s in design["strata"]) > level["size"] else "below"]
+                           if how == "sizes" else [])])
+            x["public"] = {}
+            for broken in (case, case | {"evidence": D.canonical(e).encode().hex()}):
+                assert why in reference(broken)["reason"], (m, n, reference(broken))
+                verdict, out = D.replay(PORT, broken, server)
+                assert verdict == REJECT and why in json.loads(out)["reason"], (m, n, out)
+            x["public"] = bound
+            level["draw"] = {"subset": level["size"]} if "subset" in design else design | {"strata": (
+                [design["strata"][0] | {"k": level["size"], "size": level["size"]}] if how == "sizes"
+                else [s | {"k": s["size"]} for s in design["strata"]])}
+            whole = case | {"evidence": D.canonical(e).encode().hex()}
+            assert reference(whole)["verdict"] == ACCEPT, (m, n, reference(whole))
+            verdict, out = D.replay(PORT, whole, server)
+            assert verdict == ACCEPT and json.loads(out)["public"] == reference(whole)["public"], (m, n, out)
+    assert all(seen[k] for k in ("audit", "scan", "subset", "stratified", "tied", "untied", "level", "stratum", "sizes",
+                                 "above", "below")), seen
+
+
 def test_the_mirror_reads_a_registration_as_the_network_certifier_writes_it():
     """The rows form's honest registrations are `warden_rows.registration`'s documents, which its own
     `check_registration` reads back under the period's key, session and schedule."""

@@ -136,14 +136,16 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   `scan/prog<j>` entry names the root and domain of an output port's entry (`<unit>/o<j>`, j ≥ 1) or a `SlotEntry_v1`
   or `SelectEntry_v1` template's entries port's (`<descriptor id>/c<j>/o0`, `entriesPortName`) in the `roots` of an
   audit's registration, so a scan whose `prog` the prover committed alone is refused; and the answer is one-stage's
-  for that registration's digest, accepted with one level of the scan's 2T units sampled `subset:k` or stratified, and
-  its `bound`;
+  for that registration's digest, accepted with one level of the scan's 2T units sampled `subset:k` or stratified,
+  sampling no more than the level holds and no more of a stratum than the stratum holds, its strata's sizes summing
+  to the level's (`factsOf` refuses a profile that fails any of the three), and its `bound`;
 * in the rows form, every accepted link-window's scan is at one δ, `PeriodLeakAccepted`'s;
 * audit `i`: its registration names its Program (the descriptor's SHA-512), and the answer is one-stage's for its
   registration's digest, accepted with one level of its Program's units sampled `subset:k` or stratified (a work sampling design's
-  sample is stratified), and its `bound`, at any sample: this is the consistency check (each audit's answer is its
-  registration's, and in the rows form its outputs are the scan's `prog` and its `SCAN_STATE` the scan's state, below),
-  and what a sample in part leaves unproved is in `K` (in the rows form, a tied audit's `faulty_entries` and δ, below);
+  sample is stratified), held to the same three (`factsOf`), and its `bound`, at any sample: this is the consistency
+  check (each audit's answer is its registration's, and in the rows form its outputs are the scan's `prog` and its
+  `SCAN_STATE` the scan's state, below), and what a sample in part leaves unproved is in `K` (in the rows form, a tied
+  audit's `faulty_entries` and δ, below);
 * in the rows form, link-window `w`'s scan's Programs' rows are a compute audit's slot entries, a lane a chunk
   (`wired`): for each lane `j`, its `scan/prog<j>` entry names the root and domain of the entries port
   `<descriptor id>/c<j>/o0`, of T / `every` leaves, in the `roots` of one audit's registration, where the descriptor id
@@ -179,9 +181,10 @@ sample leaves possible; `drawn` is the sample's `k`, or its `Σ k` stratified),
 `bitsOf`: the committed values `faultyBits` counts, the outputs an incorrect proof block computes and other proof blocks or
 the client read), `jitter` = `⌈log2 Dj^steps⌉`, and `K` the sum of the terms. The schedules term counts every assignment
 of a sync of Σ_sync to the `m` execution phases, so it is the same whichever syncs the certifier ran them under, and
-needs none of them. `eps` is the probability that `K` fails to bound the period's leak, the union of its audits' `δ`:
-their exact sum in lowest terms (`Core.Ratio.toString`, `"0"` with no audits), as PoUS's and remote bandwidth's publics
-carry theirs.
+needs none of them. `eps` is the `δ` part of the probability that `K` fails to bound the period's leak, the union of
+its audits' `δ`; each audit's knowledge error and collision errors add to it, and the check evaluates neither: their
+exact sum in lowest terms (`Core.Ratio.toString`, `"0"` with no audits), as PoUS's and remote bandwidth's publics carry
+theirs.
 
 In the rows form the terms are `PeriodLeakAccepted`'s over its windows, the link-windows' scans, whose statements read
 the network certifier's rows. A compute audit reads none, so its own terms are in none (it is an acceptance condition),
@@ -1120,13 +1123,23 @@ def records (link : String) : Array (String × Direction) :=
   #[(link, .ingress), (link, .egress), (link ++ "-fails", .egress)]
 
 /-- An accepted scan's or audit's facts: one level sampled `subset:k` or stratified (a work sample's profile is
-stratified, its `Σ k_s` sampled), and its bound. -/
+stratified, its `Σ k_s` sampled), and its bound. A profile that names more sampled than its level holds is no sample
+of the level and is refused. So is a stratified one that names more sampled of a stratum than the stratum holds, or
+whose strata's sizes do not sum to the level's size: with both held, a level sampled whole is every stratum sampled
+whole. -/
 def factsOf (what : String) (prof : Core.Integrity) (pub : Json) : Found Facts := do
   let #[l] := prof.levels | refuse s!"{what}: profile: not one level"
   let drawn ← match l.draw with
     | some (.subset k) => pure k
     | some (.stratified ss) => pure (ss.foldl (fun n st => n + st.k) 0)
     | _ => refuse s!"{what}: profile: not a subset or stratified draw"
+  unless drawn ≤ l.size do refuse s!"{what}: profile: {drawn} sampled of {l.size} units: more than the level holds"
+  if let some (.stratified ss) := l.draw then
+    if let some st := ss.find? (fun st => st.size < st.k) then
+      refuse s!"{what}: profile: stratum '{st.name}': {st.k} sampled of {st.size} units: more than the stratum holds"
+    let held := ss.foldl (fun n st => n + st.size) 0
+    unless held = l.size do
+      refuse s!"{what}: profile: strata of {held} units in a level of {l.size}: their sizes do not sum to the level's"
   match Flock.J.nat pub "bound" "public" with
   | .ok b => pure { units := l.size, drawn, delta := prof.delta, wrong := b }
   | .error e => refuse s!"{what}: {e}"
@@ -1563,6 +1576,33 @@ def clocksFn (j : Json) : Except String Json := do
   let whole : Array (Found Facts) := #[.ok ⟨16, 16, ⟨1, 100⟩, 0⟩]
   tiedIn c.audits c.windows 0 && (chargedOf p c one 0).isSome && faultyEntries p c one scan (at_ (progName 0)) == 896 &&
     (chargedOf p c whole 0).isNone && faultyEntries p c whole scan (at_ (progName 0)) == 0
+-- `factsOf` reads a profile of one level sampled within it, `subset:k` or stratified, whole or in part, and refuses
+-- one that names more sampled than the level has, 3 of 2 or strata of 2 of 1 and 1 of 1, then one that names more
+-- sampled of a stratum than the stratum has, strata of 2 of 1 and 0 of 1 in a level of 2, then one whose strata's
+-- sizes do not sum to the level's, strata of 1 of 2 and 1 of 2 or of 1 of 1 alone in a level of 2, each before the
+-- bound is read
+#guard
+  let facts := fun (size : Nat) (d : Core.SamplingDesign) =>
+    match (factsOf "x" ⟨#[], #[], false, #[], #[⟨"unit", none, size, some d⟩], ⟨1, 100⟩, #[]⟩
+      (Json.mkObj [("bound", toJson (1 : Nat))])).toOption with
+    | some ⟨units, k, _, b⟩ => some (units, k, b)
+    | none => none
+  facts 2 (.subset 2) == some (2, 2, 1) && facts 2 (.subset 1) == some (2, 1, 1) &&
+    facts 3 (.stratified #[⟨"a", 2, 2⟩, ⟨"b", 1, 0⟩]) == some (3, 2, 1) &&
+    facts 2 (.subset 3) == none && facts 2 (.stratified #[⟨"a", 1, 2⟩, ⟨"b", 1, 1⟩]) == none &&
+    facts 2 (.stratified #[⟨"a", 1, 2⟩, ⟨"b", 1, 0⟩]) == none &&
+    facts 2 (.stratified #[⟨"a", 2, 1⟩, ⟨"b", 2, 1⟩]) == none && facts 2 (.stratified #[⟨"a", 1, 1⟩]) == none
+#guard
+  let reason := fun (d : Core.SamplingDesign) =>
+    match factsOf "x" ⟨#[], #[], false, #[], #[⟨"unit", none, 2, some d⟩], ⟨1, 100⟩, #[]⟩ (Json.mkObj []) with
+    | .error (_, r) => r
+    | .ok _ => ""
+  reason (.subset 3) == "x: profile: 3 sampled of 2 units: more than the level holds" &&
+    reason (.stratified #[⟨"a", 1, 2⟩, ⟨"b", 1, 1⟩]) == "x: profile: 3 sampled of 2 units: more than the level holds" &&
+    reason (.stratified #[⟨"a", 1, 2⟩, ⟨"b", 1, 0⟩]) ==
+      "x: profile: stratum 'a': 2 sampled of 1 units: more than the stratum holds" &&
+    reason (.stratified #[⟨"a", 2, 1⟩, ⟨"b", 2, 1⟩]) ==
+      "x: profile: strata of 4 units in a level of 2: their sizes do not sum to the level's"
 -- a unit's output port past o0, its index in ASCII digits without a leading zero; never o0, an input, or no unit's
 #guard outputPort "block-3/o1" && outputPort "a/b/o10" && outputPort "/o2"
 #guard !(outputPort "o1" || outputPort "u/o0" || outputPort "u/o01" || outputPort "u/o" || outputPort "u/O1" ||
