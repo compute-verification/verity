@@ -129,8 +129,9 @@ class Rule:
     proof blocks ``k`` the second stage samples of each check template in each sampled span, the interior values the replay
     side commits, the proof deadline, and the replay block's parameters the interior registration registers as values
     (``span_values``: as round 2 names them, each ``(name, rows a sampled span, leaf type)``, the stream's per-span
-    values, `interior_rows.span_values`: those the verifier supplies and those the replay gives). A fixed count
-    ``subset:Q`` is refused: the serve sizes a class's N, and Q/N falls as it pads N."""
+    values, `interior_rows.span_values`: those the verifier supplies and those the replay gives; none where a rule's
+    JSON leaves them out). A fixed count ``subset:Q`` is refused: the serve sizes a class's N, and Q/N falls as it pads
+    N."""
 
     replay: str
     k: int
@@ -151,7 +152,7 @@ class Rule:
     @classmethod
     def from_json(cls, d: Mapping[str, Any]) -> Rule:
         return cls(d["replay"], int(d["k"]), tuple((str(n), str(s)) for n, s in d["interior"]), float(d["proof_deadline"]),
-                   _span_values(d["span_values"]))
+                   _span_values(d.get("span_values", ())))
 
 
 def _span_values(values: Any) -> tuple[tuple[str, int, tuple[int, ...]], ...]:

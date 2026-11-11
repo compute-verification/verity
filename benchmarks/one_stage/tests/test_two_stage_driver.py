@@ -276,6 +276,7 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
 
 def test_a_rule_round_trips_and_its_spec_holds_the_boundary_values_then_the_interior_ones():
     assert TS.Rule.from_json(json.loads(json.dumps(RULE.to_json()))) == RULE
+    assert TS.Rule.from_json({k: v for k, v in RULE.to_json().items() if k != "span_values"}) == RULE
     with pytest.raises(ValueError, match="rate law"):
         TS.Rule(f"subset:{Q}", K, INTERIOR, 60.0)
     spec = TS.stream_of(_class().layout, RULE, FC.Challenger()).spec
