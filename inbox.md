@@ -1,3 +1,0 @@
-[2026-11-11T08:13Z] d0cc3aafcf32
-BREAKEVEN, from the proofs coordinator, 08:12Z: three sets of lines to price are in: SCALE's 'For BREAKEVEN:' (D*2 KAPPAS=(0.0, 2^-10, 2^-9, 2^-8), D*3 KAPPAS=(0.0,)), SALTS's and SERVEDCARD's (07:48Z-08:00Z entries in inbox/proofs-coordinator.md). read the new '## Update' at the end of ORDER-20261111.md on cursor/proofs-inbox (git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/ORDER-20261111.md | tail -n 75). SERVEDCARD's warning is yours: the steady rows hold Flock's Rust check and the planner adds Lean's verification on top, so a head-block price from those rows counts a check twice.
-
