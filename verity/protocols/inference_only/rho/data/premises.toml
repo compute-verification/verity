@@ -1,0 +1,114 @@
+# Assumptions the training classes cite (rho/classes.py, premise_status): where each stands and up to what block
+# size it is credible. An assumption has its `standing` for blocks of at most `credible_bits` novel bits
+# and its `beyond` above. Standings: supported (measured evidence for it), assumed (stated, no evidence either way),
+# contested (evidence against it at the scale, or a construction it hasn't answered), refuted (a measured execution
+# breaks it). `lean` is the cited name: a Lean assumption from a lock, or a `draft:` id of E1's premises.
+#
+# The weight assumptions' scale is one optimizer step's data at Kimi K2's batch, 6.7e7 tokens x 17 bits: a block that reads
+# it replays the step from the registered weights (E1, Lemma 9 and precondition P0), so they fail for the first
+# min(k/u, C/F) steps after each registration.
+
+[premise.update-hardness]
+lean = "Nci.Cover.Assumptions.UpdateHardness"
+standing = "supported"
+beyond = "contested"
+credible_bits = { value = 1.1e9, unit = "bit", source = "E1 Lemma 9 / P0: one step's data at Kimi K2's batch, 6.7e7 tokens x 17 bits", status = "derived" }
+
+[premise.parameter-hard]
+lean = "Nci.Assumptions.ParameterHard"
+standing = "supported"
+beyond = "contested"
+credible_bits = { value = 1.1e9, unit = "bit", source = "as premise.update-hardness: one step's data replays the step (E1 P0)", status = "derived" }
+
+[premise.parameter-hard-at]
+lean = "Nci.Assumptions.ParameterHardAt"
+standing = "supported"
+beyond = "contested"
+credible_bits = { value = 1.1e9, unit = "bit", source = "as premise.update-hardness: one step's data replays the step (E1 P0)", status = "derived" }
+
+[premise.weights-incompressible]
+lean = "Nci.Assumptions.WeightsIncompressible"
+standing = "assumed"
+beyond = "contested"
+credible_bits = { value = 1.1e9, unit = "bit", source = "as premise.update-hardness: one step's data replays the step (E1 P0)", status = "derived" }
+
+[premise.activation-chained]
+lean = "Nci.Assumptions.ActivationChained"
+standing = "supported"
+beyond = "supported"
+credible_bits = { value = inf, unit = "bit", source = "Nci.Assumptions.ActivationChainedAt docstring: an activation's own bits are a cut, c_a about its width; the depth D it needs at k is classes.chained_share", status = "derived" }
+
+[premise.activation-chained-at]
+lean = "Nci.Assumptions.ActivationChainedAt"
+standing = "supported"
+beyond = "supported"
+credible_bits = { value = inf, unit = "bit", source = "the premise's Lean docstring: an activation's own bits are a cut, c_a about its width; the depth D it needs at k is classes.chained_share", status = "derived" }
+
+[premise.upstream]
+lean = "Nci.Cover.MulBlocks.Upstream"
+standing = "supported"
+beyond = "supported"
+credible_bits = { value = inf, unit = "bit", source = "the premise's Lean docstring: a structural property of the training circuit; the depth D it needs at k is classes.upstream_share", status = "derived" }
+
+[premise.baseline-registered]
+lean = "Nci.Assumptions.ThetaRegistered"
+standing = "supported"
+beyond = "supported"
+credible_bits = { value = inf, unit = "bit", source = "Nci.Assumptions.ThetaRegistered: what registration enforces (no dark value in the declaration's θ)", status = "derived" }
+
+[premise.reference-layered]
+lean = "Nci.Assumptions.ReferenceLayered"
+standing = "assumed"
+beyond = "assumed"
+credible_bits = { value = inf, unit = "bit", source = "Nci.Guarantees.ReferenceThreaded: the named conjecture at Kimi K2's shapes; its block-size limit is the threaded class's thread_k", status = "conjecture" }
+
+[premise.e1-activation-rate]
+lean = "draft:E1-activation-rate"
+standing = "assumed"
+beyond = "contested"
+credible_bits = { value = 1.1e9, unit = "bit", source = "E1 P0: past one step's data a block replays the step and with it the activations; the cheap-input prefix below is classes.expensive_share", status = "derived" }
+
+[premise.e1-h-gamma]
+lean = "draft:E1-H-gamma"
+standing = "assumed"
+beyond = "contested"
+credible_bits = { value = 1.1e9, unit = "bit", source = "E1 P0, as premise.e1-activation-rate; exact coverings measured splitting at 1.1-1.5x", status = "derived" }
+
+[premise.e1-r]
+lean = "draft:E1-R"
+standing = "assumed"
+beyond = "contested"
+credible_bits = { value = 1.1e9, unit = "bit", source = "E1 P0, as premise.e1-activation-rate; priced only under an exact nonlinear optimizer consumer (Adam, Muon), not SGD", status = "derived" }
+
+[premise.e1-output-premise]
+lean = "draft:E1-output-premise"
+standing = "assumed"
+beyond = "contested"
+credible_bits = { value = 7.2e6, unit = "bit", source = "E1 Proposition 6b: k* = 0.9-23 MB at FP8 (beta_w 0.06-0.19, F_in 2.7-6.2 kbit, beta_v^R 0.18-0.63), the low end; recipe-kept tiles at NVFP4 reach 0.39-0.97 of the beta_v count (measured)", status = "derived" }
+
+# The elementary uncertified cap's premise (rho/classes.py Structure): q_U(U) = omega_max U / s_times counts an
+# uncertified or dark gate's operations at s_times gates each only if no counted operation has gates on both sides of
+# the certified boundary. Not in Lean; an operation split across it is counted by neither side's cap.
+[premise.no-straddle]
+lean = "draft:no-straddle"
+standing = "assumed"
+beyond = "assumed"
+credible_bits = { value = inf, unit = "bit", source = "a property of the circuit's operations, not of a block's bits", status = "derived" }
+
+# The min-cut bound's two conjectures, keyed by their ids in the claims registry (verity/claims,
+# Security/Definitions/Assumptions.lean), which the class min-cut takes (rho/min_cut.py, which reads `beta` from this
+# file itself: it is standard library only, loaded by path).
+# `beta`: (H)'s β for an activation by block size, rows (k bits, β bits a value), k rising. Past the last row there is
+# no β, and the class bounds no block.
+[premise.training-cut-hardness]
+lean = "Nci.Cut.Assumptions.Hardness"
+standing = "assumed"
+beyond = "contested"
+credible_bits = { value = 8e8, unit = "bit", source = "beta's last k: no β is stated past it, and the min-cut class bounds no block there", status = "derived" }
+beta = { value = [[145568, 15.9], [800000, 15.3], [8e6, 10.8], [8e7, 2.7], [8e8, 0.37]], unit = "(bit, bit/value)", source = "measured: the least ratio κ(S) / |val(S ∩ X)| a red team of (H) found over its sets S with κ(S) ≤ k, on one traced step of a small dense model in bf16. (H) is refuted there at any β above a row, and a row is not evidence (H) holds at it; between rows rho/min_cut.py takes β linear in log k. The red team's generator is not in the tree", status = "assumed" }
+
+[premise.training-cut-exports]
+lean = "Nci.Cut.Assumptions.Exports"
+standing = "assumed"
+beyond = "assumed"
+credible_bits = { value = inf, unit = "bit", source = "a property of the work's MACs and outputs (a set of computed gates pays b cut gates for each output it finishes), not of a block's bits", status = "derived" }
