@@ -37,6 +37,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
+import Proofs.Pous.Prob
 
 /-!
 # The bandwidth audit v0 in the random-oracle model: the proof
@@ -221,7 +222,7 @@ end AuditRO
 
 theorem pr_eq_zero_of_card {Ω : Type} [Fintype Ω] (P : Ω → Prop) (h : Fintype.card Ω = 0) : pr P = 0 := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   have : (Finset.univ.filter P).card = 0 := Nat.eq_zero_of_le_zero (h ▸ Finset.card_le_univ _)
   simp [this]
 

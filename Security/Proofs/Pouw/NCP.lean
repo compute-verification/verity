@@ -13,7 +13,7 @@ public import Proofs.Pouw.Lemmas.NCP
 
 One theorem `Pouw.SecurityProofs.NCP.G : Pouw.Guarantees.NCP.G` per guarantee, which is the theorem in
 `Pouw.NCP.Proofs`, `Pouw.NCP.GameProofs`, `Pouw.NCP.RelationWitness`, `Pouw.NCP.RouteUProofs` and
-`Pouw.NCP.RouteUWordProofs` that proves the same statement under its old name. `GammaFromTTNCP_U`'s statement keeps its
+`Pouw.NCP.RouteUWordProofs` that proves the same statement under its old name. `GapFromTTNCP_U`'s statement keeps its
 source's namespace, `Pouw.NCP.RouteU`.
 -/
 
@@ -22,9 +22,9 @@ source's namespace, `Pouw.NCP.RouteU`.
 namespace Pouw.SecurityProofs.NCP
 
 theorem TTNCPUIff : Pouw.Guarantees.NCP.TTNCPUIff := Pouw.NCP.RouteUProofs.ttncpUIff
-theorem GammaFromTTNCP_U : Pouw.NCP.RouteU.GammaFromTTNCP_U := Pouw.NCP.RouteUProofs.gammaFromTTNCP_U
-theorem GammaFromTTNCP_U_v1 : Pouw.Guarantees.NCP.GammaFromTTNCP_U_v1 := Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_v1
-theorem GammaFromTTNCP_U_C2 : Pouw.Guarantees.NCP.GammaFromTTNCP_U_C2 := Pouw.NCP.RouteUProofs.gammaFromTTNCP_U_C2
+theorem GapFromTTNCP_U : Pouw.NCP.RouteU.GapFromTTNCP_U := Pouw.NCP.RouteUProofs.gapFromTTNCP_U
+theorem GapFromTTNCP_U_v1 : Pouw.Guarantees.NCP.GapFromTTNCP_U_v1 := Pouw.NCP.RouteUProofs.gapFromTTNCP_U_v1
+theorem GapFromTTNCP_U_C2 : Pouw.Guarantees.NCP.GapFromTTNCP_U_C2 := Pouw.NCP.RouteUProofs.gapFromTTNCP_U_C2
 theorem TTNCPUWitness : Pouw.Guarantees.NCP.TTNCPUWitness := Pouw.NCP.RouteUProofs.ttncpUWitness
 theorem NCPWordFloorIndU : Pouw.Guarantees.NCP.NCPWordFloorIndU := Pouw.NCP.RouteUWordProofs.ncpWordFloorIndU
 theorem Int7Int32UPos : Pouw.Guarantees.NCP.Int7Int32UPos := Pouw.NCP.RouteUWordProofs.int7Int32UPos

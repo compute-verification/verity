@@ -43,7 +43,7 @@ selection has probability at least `2^-k`; min-entropy hardness at deficit `Λ` 
 `Σ_{i ∈ U} price_i ≤ k + Λ`. No decoder, no time budget and no block index enter. -/
 def StatHeldBudget : Prop :=
   ∀ (R : Committed) (c k : ℕ), R.d.𝓘.IsCK R.d c k →
-    ∀ {ι : Type} (X : Items R.d.D ι) (μ : PMF R.d.D.Transcript) (Λ : ℝ),
+    ∀ {ι : Type} (X : Items R.d.D ι) (μ : PMF R.d.D.Trace) (Λ : ℝ),
       (∀ a ∈ μ.support, R.Honest a) → Assumptions.MinEntropyHard R X μ Λ →
       HeldPriceAtMost R X ((k : ℝ) + Λ)
 
@@ -53,7 +53,7 @@ ambiguity give, for every proof block, `βv · J u ≤ k + ⌈log₂ B⌉ + aBlk
 outputs, `amb ≤ ε · J u` with `ε < βv`, this is `(βv − ε) · J u ≤ k' + δ`: ambiguity lowers the information per output. -/
 def RecoveredBudget : Prop :=
   ∀ (R : Committed) (c k : ℕ), R.d.𝓘.IsCK R.d c k →
-    ∀ (ρ : Type) (M : Decoder ρ) (r : ρ) (τ aBlk : ℕ) (e : List Bool) (z : R.d.D.Transcript → List Bool)
+    ∀ (ρ : Type) (M : Decoder ρ) (r : ρ) (τ aBlk : ℕ) (e : List Bool) (z : R.d.D.Trace → List Bool)
       (ℓz δ βv amb : ℝ) (J : Fin R.d.n → ℕ), e.length ≤ aBlk →
       Assumptions.SourceHard R M r τ z ℓz δ → Assumptions.Recovers R M r τ e z ℓz βv amb J →
       ∀ u, βv * J u ≤ (k + Nat.clog 2 R.d.n + aBlk : ℕ) + δ + amb

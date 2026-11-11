@@ -641,6 +641,34 @@ def test_the_lowest_member_waiting_for_a_land_verdict_rings_the_reviewers_and_to
     assert len(rings()) == 3, "a held member waits on its owner, not on a reviewer"
 
 
+def test_the_bottom_ring_goes_only_to_drive_tomls_bottom_ring_after_its_bottom_wait_min(world, monkeypatch):
+    """drive.toml's `bottom_ring` names every handle `_bottom` rings, and `bottom_wait_min` the minutes before each ring: with
+    ci's reviewer pool reviewing `next`'s bottom, drive.toml rings ci alone, and top hears nothing."""
+    h = Review(world, monkeypatch)
+    h.d.bottom_ring, h.d.bottom_wait_min = ("@ci",), 45
+    rung: list[tuple[str, tuple[str, ...]]] = []
+    h.d.post = lambda text, to=(): rung.append((text, to)) or True
+
+    def rings() -> list[tuple[str, tuple[str, ...]]]:
+        return [(text, to) for text, to in rung if "lowest member" in text]
+
+    def wait(s: float) -> str:
+        h.clock += s
+        return h.tick()
+
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    assert h.tick().startswith("nothing reviewed lands: #1"), world.logs
+    assert wait(45 * 60 - 60).startswith("nothing reviewed lands: #1") and rings() == [], "it waits 45 min, not the default's 30"
+    wait(60)
+    ((text, to),) = rings()
+    assert to == ("@ci",) and text.startswith("@ci queue: #1 (owner lane-1)") and "@top" not in text, text
+    assert "has waited 45 min with no land verdict" in text, text
+    wait(45 * 60 - 60)
+    assert len(rings()) == 1, "at most once per head per 45 min"
+    wait(60)
+    assert [to for _, to in rings()] == [("@ci",), ("@ci",)] and "has waited 90 min" in rings()[-1][0]
+
+
 def test_a_lean_change_lands_on_its_verdict_and_the_after_landing_lean_audit_takes_no_regenerated_record(world, monkeypatch):
     """A PR that changes a guarantee's statement, or a definition it reads, without its lock lands on its verdict as any PR
     does, with no Lean check before it; the after-landing lean-audit fails on the record it leaves stale (`--no-regenerate`)
@@ -664,7 +692,7 @@ FLOCK_LOCK = {"verity/core/service/flock/lean-audit.json": "{}\n"}
 
 
 def test_every_lean_change_but_proofs_is_one_a_lock_run_follows_whatever_its_title(world, monkeypatch):
-    """A "two demos" title exempts no Lean change.  The spec (Lean under `Security/Definitions/`, `Security/Models.lean` and
+    """A "two demos" title exempts no Lean change.  The spec (Lean under `Security/Definitions/`, `Security/Definitions.lean` and
     `Security/`'s Lake files: what the guarantees' statements read), every lock and Lean that runs as code (outside `Security/`,
     in a package with a lock: Flock's verifier) are Lean changes (`queue.lean_change`) in a two-demos PR too, which a lock
     run follows on `checked`: with no regenerated lock commit after them, they leave a record stale for the after-landing
@@ -676,7 +704,7 @@ def test_every_lean_change_but_proofs_is_one_a_lock_run_follows_whatever_its_tit
                  2: {"Security/Definitions/X.lean": "def x := 1\n"},
                  3: {"pkg/lean-audit.json": "{}"},
                  4: {"Security/Proofs/Y.lean": "theorem Y : True := trivial\n"},
-                 5: {"Security/Models.lean": "import Definitions.X\n"},
+                 5: {"Security/Definitions.lean": "import Definitions.X\n"},
                  6: {"Security/lakefile.toml": "name = \"security\"\n"},
                  7: {"Security/lean-toolchain": "leanprover/lean4:v4.0.0\n"},
                  8: {"verity/core/service/flock/Flock/X.lean": "def x := Nat.gcd 4 6\n"}}
@@ -855,7 +883,7 @@ def _red_landing(world, monkeypatch, tmp_path, before=lambda h: None) -> tuple[R
     return h, tip
 
 
-def test_an_after_landing_failure_rings_its_culprits_lane_and_the_suites_owner_and_reverts_it_two_hours_on_with_no_fix(
+def test_an_after_landing_failure_rings_its_culprits_lane_and_the_suites_owner_and_reverts_it_once_its_window_passed_unfixed(
         world, monkeypatch, tmp_path):
     """Without a culprit, PRs keep landing on a `main` whose after-landing runs all fail, each failure going to ci alone.
     Drive names the one landing whose change touches the failing test and rings its lane with the suite's owner in one post
@@ -873,8 +901,8 @@ def test_an_after_landing_failure_rings_its_culprits_lane_and_the_suites_owner_a
                          "`fixes suite pkg`, or one whose change touches what failed), or drive reverts #2 then."), ring
     r = h.postland()["red"]["suite pkg"]
     assert r["culprit"][0] == 2 and r["named_at"] == h.clock and not r.get("reverted"), r
-    assert any(f"suite pkg's culprit #2 isn't reverted: 120 min are left to fix it forward, until {due} UTC" in x
-               for x in world.logs), world.logs
+    assert any(f"suite pkg's culprit #2 isn't reverted: {D.FIX_FORWARD_S // 60} min are left to fix it forward, until {due} UTC"
+               in x for x in world.logs), world.logs
     h.clock += D.FIX_FORWARD_S - 1
     h.tick()
     assert _main(world) == tip and not [p for p in h.posts if "reverted" in p] and len(h.posted) == 1, world.logs
@@ -885,8 +913,8 @@ def test_an_after_landing_failure_rings_its_culprits_lane_and_the_suites_owner_a
     assert "pkg/tests/test_x.py" not in _git(world.origin, "ls-tree", "-r", "--name-only", main)
     (post,) = [p for p in h.posts if "reverted" in p]
     assert post.startswith("@lane-2 @pkg-owner queue: #2 reverted on `main`: suite pkg is red on `main`"), post
-    assert post.endswith("#2 is its culprit (its change touches pkg/tests/test_x.py), and 2 h after it was named no fix of "
-                         "it is marked. Fix and re-mark"), post
+    assert post.endswith(f"#2 is its culprit (its change touches pkg/tests/test_x.py), and {D.FIX_FORWARD_S // 60} min after it "
+                         "was named no fix of it is marked. Fix and re-mark"), post
     assert "@ci" not in post and "@top" not in post, post
     assert h.posted[-1][0] == main and h.launched == []                                  # the next run checks the new tip
     h.tick()

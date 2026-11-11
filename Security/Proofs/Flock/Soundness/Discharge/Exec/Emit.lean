@@ -8,7 +8,7 @@ import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import VCVio.Prelude.Core
 
 /-!
-# The frames a run emits (R11b)
+# The frames a run emits (for the decoder premise)
 
 A run of the replay transcript appends frames to its pending bytes, and each squeeze of at least one coin closes a
 round: the round retained the pending bytes and the squeeze's header, when the server retains round bytes (every

@@ -12,8 +12,9 @@
 # env: A11_MODE  A11_MEM_GB (the job's memory, GB)  A11_JOBS (a11_kinds' --jobs)  A11_CHILD_GB (its --mem-gb)  A11_ONLY (its --only)
 #      A11_K (a11.py's --k)  A11_CACHE (the build cache, kept on the node)  A11_ARGS (more a11.py arguments)  A11_REPROBE
 #      A11_BOOLEAN (a11_kinds' --boolean: kinds probed through their Boolean version first)
-# Kept in $OUT/a11: a11's records and logs, the public files and the sessions; never a prover's file (inst-*), a circuit (its
-# pin is kept) or a session's archive.
+#      A11_LAYOUT (a11.py's --layout: each template a templated statement, its unit placed by flock-tmpl-unit, built here)
+# Kept in $OUT/a11: a11's records and logs, the public files and the sessions; never a prover's file (inst-*, unit.placed),
+# a circuit (its pin is kept) or a session's archive.
 set -uo pipefail
 export HZ_CONFIGS=a11 HZ_MEM_GB=${A11_MEM_GB:?}
 export HZ_CACHE=${A11_CACHE:-$HOME/.cache/verity-a11}
@@ -43,8 +44,14 @@ kinds)
   ;;
 audit)
   setup
-  (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+  (cd verity/core/service/spot && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
     || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
+  TARG=()
+  if [ -n "${A11_LAYOUT:-}" ]; then
+    TU=$(cached tmplunit "$(tree_key verity/core/service/flock verity/ml/flock/tests/lean/TmplUnit.lean)" build_tmpl_unit)/.lake/build/bin/flock-tmpl-unit
+    [ -x "$TU" ] || { log "flock-tmpl-unit build FAILED: $(tail -20 "$OUT/build-tmplunit.log")"; exit 1; }
+    TARG=(--layout "$A11_LAYOUT" --tmpl-unit-bin "$TU")
+  fi
   V=$W/values && mkdir -p "$V"
   if compgen -G "$IN/a11-saved*.tar" >/dev/null; then
     tar -xf "$(ls "$IN"/a11-saved*.tar | head -1)" -C "$V" && VARG=(--load-values "$V")
@@ -63,11 +70,12 @@ audit)
   fi
   # shellcheck disable=SC2086
   "$PY" benchmarks/one_stage/a11.py --bin "$BIN" --lean "$LEAN" "${VARG[@]}" --kinds "$KINDS" \
-    --roles "$IN/derive-report.json" --out "$W/a11" ${A11_K:+--k "$A11_K"} ${A11_ARGS:-} \
+    --roles "$IN/derive-report.json" --out "$W/a11" ${A11_K:+--k "$A11_K"} "${TARG[@]}" ${A11_ARGS:-} \
     2>&1 | tee -a "$OUT/a11.log" | cut -c1-4000
   rc=${PIPESTATUS[0]}
   mkdir -p "$OUT/a11"
-  (cd "$W/a11" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 | xargs -0 -I{} cp --parents {} "$OUT/a11/")
+  (cd "$W/a11" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name unit.placed ! -path '*/archive/*' -print0 \
+    | xargs -0 -I{} cp --parents {} "$OUT/a11/")
   log "a11: done, rc $rc"
   exit "$rc"
   ;;

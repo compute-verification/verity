@@ -72,7 +72,7 @@ run realized (`PeriodWorld`: accounts, window, schedule and the network certifie
 verdict. A subprotocol's per-period guarantee (`PeriodLive.Sound`) bounds its failure over the whole game at every
 strategy: its coins may come before, between or after the other subprotocols', and the prover may adapt every byte to
 every coin released before it. The joint guarantees are union bounds over the one game
-(`Accounting.Guarantees.JointPeriodLive`, `JointHorizonLive`, `JointHorizonBlocksLive`).
+(`Accounting.Guarantees.JointPeriodLive`, `JointPooledLive`, `JointPooledBlocksLive`).
 
 The period's game may be a horizon's: one game, several periods, each read off the same run, each period's parameters
 and commitment sent after the coins of the periods before it, so a period's extractor may read the run's prefix up to
@@ -90,13 +90,13 @@ open Classical in
 /-- **The units `X` doesn't bind**: those wrong in `X`, and those that read or write a committed value (`Partition.io`)
 that `opens` doesn't open to `X`'s value there. -/
 noncomputable def unbound {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n)
-    (opens : (g : Fin C.N) → BitVec (C.w g) → Prop) (X : C.Transcript) : Finset (Fin n) :=
+    (opens : (g : Fin C.N) → BitVec (C.w g) → Prop) (X : C.Trace) : Finset (Fin n) :=
   Finset.univ.filter fun u => ¬ P.Correct X u ∨ ∃ g ∈ P.io u, ¬ opens g (X g)
 
 /-- **The integrity claim on a transcript**, at share `ε`: at most an `ε` share of `P`'s units are unbound in `X` under
 the openings `opens`. -/
 def IntegrityHolds {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n)
-    (opens : (g : Fin C.N) → BitVec (C.w g) → Prop) (X : C.Transcript) (ε : ℝ) : Prop :=
+    (opens : (g : Fin C.N) → BitVec (C.w g) → Prop) (X : C.Trace) (ε : ℝ) : Prop :=
   ((unbound P opens X).card : ℝ) ≤ ε * n
 
 /-- **The world a run realized** on device `d` with accounts `α`: whose account each resource is charged to, the window,
@@ -121,7 +121,7 @@ structure PeriodLive {ι : Type} (d : Device ι) (α : Type) [Fintype α] (C : V
   /-- the commitment opens gate `g` to `v` -/
   opens : (g : Fin C.N) → BitVec (C.w g) → Prop
   /-- `E`: the transcript the period's extractor reads off the strategy, on the run -/
-  extract : Verity.Game.Strategy G → O → C.Transcript
+  extract : Verity.Game.Strategy G → O → C.Trace
   /-- `B`: a subprotocol's collision finder, built from the strategy -/
   finder : Audit → Verity.Game.Strategy G → Claims.Finder
   /-- the circuit's gates the run computed after their window's coin, over the period's windows -/
@@ -180,7 +180,7 @@ noncomputable def condError {O : Type} {G : Verity.Game O} (P : Verity.Game.Stra
 /-- A horizon of `B` server-time blocks read off one run of the game `G`: each block's period, over its own circuit,
 its PoUS challenge times on the run, and the read deadline. The wipe that opens each block is core's `Verity.Wipe`,
 read on the run through a map of the run into the wipe's game at its boundary (`Verity.Wipe.OfRun`), which the joint
-guarantee takes beside the horizon (`Accounting.Guarantees.JointHorizonBlocksLive`). -/
+guarantee takes beside the horizon (`Accounting.Guarantees.JointPooledBlocksLive`). -/
 structure BlocksLive {ι : Type} (d : Device ι) (α : Type) [Fintype α] (B : ℕ) (C : Fin B → Verity.Circuit)
     {O : Type} (G : Verity.Game O) where
   /-- block `b`'s period -/

@@ -2,7 +2,7 @@
 
 * **Off the node** (`Endpoint`: its id, the HOST:PORT its challenger listens on, the secret its hello carries and the
   coin commitment's root the gate's open answered): the proof system's challenger on its auditor host
-  (`sampled_proofs.remote.RemoteChallenger`), one session a window, from infra's gate in two steps; lanes don't start
+  (`spot.remote.RemoteChallenger`), one session a window, from infra's gate in two steps; lanes don't start
   challenger sessions themselves. `reserve` (``ssh GATE reserve`` with the peer node and the window's layout) gives the
   window's session id; the reserve counts toward its lane's open period, and one not opened by its ``expires_utc`` is
   that period's refused window. `open_window` (``ssh GATE open --session S --root R``) opens it on the window's root R,
@@ -30,7 +30,7 @@
   commitment; a sample session the gate opens plain is refused before any coin. The prover's record says only
   ``coins=off-node session ID at HOST:PORT (unchecked)``: what it writes about its coins is the prover's.
 * **In-process** (no address): `window.live_challenger` and `window.draw_challenger` in the serving process, on the
-  prover's node. It stays for CPU tests, and every run that uses it carries `IN_PROCESS`, ``coins=in-process (not
+  developer's node. It stays for CPU tests, and every run that uses it carries `IN_PROCESS`, ``coins=in-process (not
   certified)``.
 
 `check` is the verifier's side. It reads the session as infra's gate publishes it (``fetch SESSION``: the challenger's
@@ -77,8 +77,8 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.sampled_proofs import challenger as Ch
-from verity.core.protocols.sampled_proofs import remote as R
+from verity.core.protocols.spot import challenger as Ch
+from verity.core.protocols.spot import remote as R
 
 CHALLENGER_ENV, SESSION_ENV, SECRET_ENV = "POUW_CHALLENGER", "POUW_CHALLENGER_SESSION", "POUW_CHALLENGER_SECRET_FILE"
 COMMITMENT_ENV, GATE_ENV = "POUW_CHALLENGER_COMMITMENT", "POUW_CHALLENGER_GATE"

@@ -28,8 +28,8 @@ tiles, so a sample of K′ without replacement misses it with probability at mos
 **The fixed length**: correct tokens served past the honest run's end of sequence are not useful work.  A row of record serves its slot's public max_tokens whatever it samples (vLLM's ``ignore_eos``), so W_use is
 public: the `length` item is ``{"stop": "fixed", "max_tokens": [...], "served": [...]}``, one entry a slot, and
 `length_problem` refuses an EOS-keyed row (`window-form: eos-keyed-row`) and a slot that served another length
-(`window-form: length-mismatch`).  A registration made before the rule carries `LEGACY_REGISTERED`, without the item,
-and is not of record.
+(`window-form: length-mismatch`).  A window commitment record made before the rule carries `LEGACY_REGISTERED`, without
+the item, and is not of record.
 
 **The advice** (L2): one entry per committed call, then one filler entry, then empty entries up to the public bound P, each
 an `Entry` row committed in one execution phase root registered before the sample.  A call's sides are dense: each side tree holds only
@@ -52,7 +52,7 @@ leaves (`DEPTHS`) padded with frame-v3's pad leaf under the execution phase's si
 **Live execution phases**.  The check item's optional ``coins`` is the execution phase's coin mode, ``live`` or ``seeded``
 (`mode`; an item that names none is seeded, as Pearl-C's served path registers).  A seeded execution phase's noise is its scheme's
 derivation from the salt and the prover's roots.  A live execution phase's comes from the proof system's challenger
-(`verity.core.protocols.sampled_proofs.challenger`), whose first client this is: the execution phase's coins are the layout
+(`verity.core.protocols.spot.challenger`), whose first client this is: the execution phase's coins are the layout
 `live_families(R)` under `LIVE_SCHEME`, its salt coin and R round coins (``pouw/round``, rounds numbered from 0 as
 Compose's `Declared.round` numbers them), all committed before the execution phase. Its sampling coin is a session of its own
 (`DRAW_FAMILIES`), opened withheld on the execution phase's sample root, so its coin root reaches the prover only after that root
@@ -78,7 +78,7 @@ from fractions import Fraction
 from functools import lru_cache
 from typing import Any, Mapping, Sequence
 
-from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.spot import challenger as Ch
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.commitments import domains, hm96
 from verity.ml.commitments.identity import identity_digest_sha512
@@ -104,10 +104,10 @@ PUBLIC = (
     ("drawn", "coins", "outcome", "the verifier's own draw, after the receipt"),
     ("root_W", "commitment", "parameter", "the weights' salted root: what the tiles' weight rows are committed to, hiding"),
 )
-#: the items a registration carries; the verdict and the sample come after it
+#: the items an execution phase's window commitment record carries; the verdict and the sample come after it
 REGISTERED = ("work", "check", "sampling", "length", "root_W")
-#: what a registration made before the fixed-length rule carries: no `length`, so not of record
-LEGACY_REGISTERED = ("work", "check", "sampling", "root_W")
+#: what a window commitment record made before the fixed-length rule carries, `REGISTERED` without `length`: not of record
+LEGACY_REGISTERED = tuple(i for i in REGISTERED if i != "length")
 KINDS = ("call", "filler", "none")
 #: the check item's coin mode (`mode`), Compose's `CoinMode`
 COINS = "coins"

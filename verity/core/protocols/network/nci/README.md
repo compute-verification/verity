@@ -38,14 +38,19 @@ scenarios register a policy as if it were a subprotocol.
   gates complies at rate α = k/c (`Nci.SecurityProofs.compliesRate_of_complies`, which takes that tiling as a
   hypothesis). The way back is proved too: on a Boolean declaration a partition complying at rate α is
   a (c, ⌊αc⌋)-partition (`Nci.Guarantees.CompliesCK`), and `Nci.Guarantees.ExpandComplies` carries the rate through the
-  bit-level expansion at c·W for gates up to W bits wide.
+  bit-level expansion at c·W for gates up to W bits wide. With its constants registered
+  (`Verity.RegisteredCircuit.constInputs`) a declaration needs neither Boolean gates nor positive fan-in for those
+  partitions (`Nci.SecurityProofs.constInputs_isCK`, `constInputs_expand_isCK`), which is how the policy's acceptance
+  gives them (`Properties.Remote.PolicyMet`).
 - **The guarantees**, `Security/Definitions/Nci/Guarantees/`, each proved in `Security/Proofs/Nci/` as
   `Nci.SecurityProofs.G`. `ReadBound` turns a lower bound on fresh input into a lower bound on size, `Inference` shows
   honest inference complies, and the covering, training and threading statements are pricing arguments.
   `Nci.Guarantees.DampenerRemote` and its relatives state the remote composition's overhead at (c, k).
 - **The count of (c, k)-inference blocks**, `Nci.CompliesAtMost c k n` (`Security/Definitions/Nci.lean`): D's
   computed gates divide into at most n proof blocks of a (c, k)-partition (`Verity.Partition.IsCK`,
-  `Security/Definitions/Core/Formalism.lean`).
+  `Security/Definitions/Core/Formalism.lean`). It is the day's bound's only premise on the circuit
+  (`Nci.Cut.Guarantees.CountHE`, with (H) and (E) on the work), and `DampenerRemote` and `DampenerRemotePeriod` take
+  it for each declared day.
 - **The registered information's provenance**, `Nci.Assumptions.BaselineRegistered`: every θ entry is registered
   public data, never an earlier run's output.
 

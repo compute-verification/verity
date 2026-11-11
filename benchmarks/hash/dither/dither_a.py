@@ -74,6 +74,7 @@ from __future__ import annotations
 import ctypes as C
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
@@ -83,16 +84,23 @@ import triton.language as tl
 import dither_fused as DF
 import dither_one as DO
 import forms as F
-from dither_fused import CM, CR, H1R, Call, unwords
 import h1c as H1CM
+from dither_fused import CM, CR, H1R, Call, unwords
 from h1c import Dom, Tab
-from hb_side import auto_j
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "exactlin"))
 import exactlin as EL
 from verity_config.settings import of
 
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+
 settings = of(__file__)
+
+
+def auto_j(units: int, nb: int, sms: int) -> int:
+    """The largest J (noise chunks a lane) that still leaves about 64 warps an SM."""
+    return max(1, min(32, (units * nb) // (32 * sms * 64)))
 
 
 def arm_label() -> dict:
@@ -388,7 +396,8 @@ class Side:
     def label(self) -> dict:
         return F.form_of("dither-a", self.z, self.in_order, self.unadopted(), self.adopted())
 
-    def __init__(self, win: DO.DitherState, unit: str, h1u: str | None, z: str = "row", ao: str = "", pt: bool = False):
+    def __init__(self, win: DO.DitherState, unit: str, h1u: str | None, z: str = "row", ao: str = "",
+                 pt: bool = False) -> None:
         if unit not in UNITS:
             raise ValueError(f"dither-a's unit: one of {UNITS}, not {unit!r}")
         if ao not in AO or (ao in AO_SEEDS and unit == "h1r") or (ao == "mn" and unit not in KONE):
@@ -518,7 +527,8 @@ class Side:
             self.ys = torch.empty((win.t, nmax), dtype=torch.bfloat16, device=dev)
             self.s_unit = torch.zeros_like(win.S)
 
-    def gemm(self, w: int, xq: torch.Tensor, s_a: torch.Tensor, wt: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor):
+    def gemm(self, w: int, xq: torch.Tensor, s_a: torch.Tensor, wt: torch.Tensor, s_w: torch.Tensor,
+             y: torch.Tensor) -> None:
         win = self.win
         M, k = xq.shape
         n = wt.shape[0]
@@ -575,7 +585,7 @@ class Side:
         for w in range(win.L):
             (ur, uc), n = self.unit_of[w], win.nk[w][0]
             if ur != 32:
-                raise RuntimeError(f"${ZDEAD_ENV}: the window's live flags are 32-row blocks, linear {w}'s units {ur} rows")
+                raise RuntimeError(f"${ZDEAD_ENV}: the execution phase's live flags are 32-row blocks, linear {w}'s units {ur} rows")
             pad = E.dequantize(torch.zeros((1, n), dtype=torch.int32, device=win.dev),
                                torch.zeros(1, dtype=torch.float32, device=win.dev), win.sw[w]).view(torch.int16)
             pad = pad.reshape(n // uc, 1, uc).expand(n // uc, ur, uc).cpu().numpy().astype("<i2")
@@ -845,7 +855,7 @@ _LIB.impl("mm", _mm_cuda, "CUDA")
 
 
 @torch.library.register_fake(f"{LIB}::mm")
-def _mm_fake(x, w, s_w, idx):
+def _mm_fake(x: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, idx: int) -> torch.Tensor:
     return x.new_empty((x.shape[0], w.shape[0]), dtype=torch.bfloat16)
 
 
@@ -864,7 +874,8 @@ def patch(t: int, h1c: str, h1o: str, unit: str = "h1r", h1u: str | None = None,
     settings.setdefault("DITHER_A_FORM", "3")
     DO.patch(t=t, h1c=h1c, h1o=h1o, key=key, gate=True)
 
-    def apply(self, layer, x, bias=None):
+    def apply(self: IV.Int8PlainLinearMethod, layer: torch.nn.Module, x: torch.Tensor,
+              bias: torch.Tensor | None = None) -> torch.Tensor:
         if bias is not None or x.dtype != torch.bfloat16:
             raise ValueError(f"{self.prefix}: dither-a takes bf16 activations and no bias")
         lead, k = x.shape[:-1], x.shape[-1]
@@ -877,7 +888,7 @@ def patch(t: int, h1c: str, h1o: str, unit: str = "h1r", h1u: str | None = None,
     IV.Int8PlainLinearMethod.apply = apply
 
 
-def stats(win: DO.DitherState):
+def stats(win: DO.DitherState) -> Callable[[], dict]:
     def doc() -> dict:
         return {**win.stats(), **arm_label(), "dither_a": SIDE[0].info() if SIDE else None}
     return doc
@@ -892,7 +903,7 @@ POOL_MIN = 4096
 _POOL: list = []
 
 
-def table_root(dom, key: bytes, label: str, rows) -> bytes:
+def table_root(dom: CM.CommitmentDomain, key: bytes, label: str, rows: Sequence[bytes] | np.ndarray) -> bytes:
     """`CM.levels`' root over each row's `CM.leaf` (rows: byte strings or a 2-D uint8 array), the leaves hashed in
     CHECK_WORKERS_ENV's pool when there are POOL_MIN or more."""
     n = settings.get(CHECK_WORKERS_ENV)

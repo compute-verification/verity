@@ -13,7 +13,6 @@ import hashlib
 import importlib.util
 import json
 import os
-import re
 import subprocess
 from pathlib import Path
 
@@ -465,6 +464,65 @@ def test_a_package_failing_for_another_reason_keeps_no_record_though_update_wrot
     assert (got[S], got[P]["outcome"]) == ({"outcome": LC.FAILED, "inputs_key": got[S]["inputs_key"]}, LC.REGENERATED)
 
 
+def unwitnessed(h: str) -> str:
+    """`s/props`' lock whose guarantee G, which reads `S.DrawIsCoin`, has an `unwitnessed` entry: its statement's hash."""
+    return json.dumps({"guarantees": {"G": {"type_hash": h}}, "unwitnessed": {"G": h}}) + "\n"
+
+
+@pytest.mark.parametrize("hold", [lambda *a, **k: None, refuse], ids=["slot", "dev-cache"])
+def test_a_rename_a_requirers_unwitnessed_entry_reads_regenerates_it_in_one_update_moved_run(pair, tmp_path, monkeypatch,
+                                                                                            hold):
+    """A PR renames `DrawIsCoin` in Security, and statements of Security/Properties read it: 8 of its `unwitnessed` entries
+    hold such a statement's hash, which the build under the new name no longer has. check.py fails that as
+    `witnesses.unwitnessed-changed`, no record difference, unless `--moved` says the text under the old names is the
+    record's, and it reads `--moved` only with `--update`. So `--records Security --update --moved` audits the requirer
+    with `--update --moved` from the first, and both records are regenerated; with the requirer's first audit left without
+    them, as before, it failed there, never reached `regenerates`, and the PR could not pass its records."""
+    root, calls, _ = pair
+    monkeypatch.setattr(LC.LEAN_SLOT, "hold", hold)
+    (root / P / LC.LOCK).write_text(unwitnessed("old"))
+    moves = tmp_path / "MOVES.json"
+    moves.write_text(json.dumps({"S.DrawIsCoin": "S.SampleIsCoin"}))
+    fake, mine = LC.subprocess.run, []
+
+    def run(argv, **kw):
+        if argv[1:2] != [str(LC.AUDIT_PY)] or os.path.relpath(argv[-1], kw["cwd"]) != P:
+            return fake(argv, **kw)
+        at, out, update = Path(argv[-1]), Path(argv[argv.index("--out") + 1]), "--update" in argv
+        moved = json.loads(Path(argv[argv.index("--moved") + 1]).read_text()) if "--moved" in argv else None
+        mine.append((update, moved))
+        if moved is not None and not update:
+            return type("P", (), {"returncode": 2})()                      # check.py: --moved goes with --update
+        entry = json.loads((at / LC.LOCK).read_text())["unwitnessed"]["G"]
+        same = entry == "new" or (entry == "old" and (moved or {}).get("S.DrawIsCoin") == "S.SampleIsCoin")
+        fails = [] if same else ["witnesses.unwitnessed-changed: G changed since `unwitnessed` listed it"]
+        if update and same:
+            (at / LC.LOCK).write_text(unwitnessed("new"))
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "audit.json").write_text(json.dumps({"passed": not fails, "packages": [
+            {"package": str(at.resolve()), "failures": fails}]}) + "\n")
+        return type("P", (), {"returncode": 1 if fails else 0})()
+
+    monkeypatch.setattr(LC.subprocess, "run", run)
+    said, out = [], tmp_path / "out"
+    assert LC.audit_records(S, tmp_path / "deps", update=True, moved=moves, out=out, log=said.append) == 0
+    assert [(p, up) for p, up, _ in calls] == [(S, True)] and mine == [(True, {"S.DrawIsCoin": "S.SampleIsCoin"})], \
+        "the requirer's one audit takes --update --moved"
+    assert {q: (out / "record" / q / LC.LOCK).read_text() for q in (S, P)} == {S: BUILT[S], P: unwitnessed("new")}
+    got = outcome_line(said)
+    assert (got["outcome"], got["records"][P]["outcome"]) == (LC.REGENERATED, LC.REGENERATED)
+    assert any(f"{P} requires {S}: check.py --update --moved on it from its first audit" in s for s in said)
+
+    calls.clear()
+    mine.clear()
+    said.clear()
+    for q, text in ((S, record("old", ["proofs"])), (P, unwitnessed("old"))):
+        (root / q / LC.LOCK).write_text(text)
+    assert LC.audit_records(S, tmp_path / "deps", update=True, out=tmp_path / "out2", log=said.append) == 1
+    assert mine == [(False, None)], "without --moved the requirer fails on its first audit and is not updated"
+    assert outcome_line(said)["records"][P]["outcome"] == LC.FAILED
+
+
 def test_a_package_beside_two_that_fails_otherwise_in_one_ends_failed_and_its_record_goes(pair, tmp_path):
     """A package audited beside two others takes the worse outcome. A report that fails without naming the record that
     settles it (`regenerated`) is `failed` though an earlier report's record was kept, and that record is removed."""
@@ -909,13 +967,87 @@ def test_try_keeps_dependencies_no_records_run_took_and_leaves_them_out_of_links
     assert calls["link"] == [] and LC.read_links(tree) == {"Sec": "k"}, "a later --records run never drops them"
 
 
-def test_try_refuses_without_a_build_slot_naming_how_to_list_the_pools(trying, tmp_path, monkeypatch):
+def test_a_tree_s_builds_and_links_follow_a_layout_move_before_the_packages_are_synced(tmp_path, monkeypatch):
+    """A slot's tree is keyed by package paths, and a move renames tracked files only: the build of `Old/Proofs` would stay
+    there while `new/Proofs` compiled every module again and took its dependencies again. Under the tree's lock the build
+    directories and their `LINKS` entries move with their packages, and the former directory's stale copies go: where the
+    step takes the lock itself, and in `hold_tree` for every other run, before its caller reads the tree."""
+    def a_tree(name: str) -> Path:
+        tree = tmp_path / name
+        for pkg, built in (("Old", "spec"), ("Old/Proofs", "proofs"), ("code", "code")):
+            (tree / pkg / ".lake" / "build").mkdir(parents=True)
+            (tree / pkg / ".lake" / "build" / "olean").write_text(built)
+            (tree / pkg / "A.lean").write_text("-- a copy the last run synced\n")
+        LC.write_links(tree, {"Old": "k0", "Old/Proofs": "k1", "code": "k2"})
+        return tree
+
+    def carried(tree: Path) -> bool:
+        return (LC.read_links(tree) == {"new": "k0", "new/Proofs": "k1", "code": "k2"} and not (tree / "Old").exists()
+                and [(tree / p / ".lake" / "build" / "olean").read_text() for p in ("new", "new/Proofs", "code")]
+                == ["spec", "proofs", "code"])
+
+    monkeypatch.setattr(LC._moved(), "recorded", lambda root: [{"Older/": "Old/"}, {"Old/": "new/"}])
+    checkout = tmp_path / "checkout"
+    for f in ("new/lakefile.toml", "new/A.lean", "new/Proofs/lakefile.toml", "code/lakefile.lean", "README.md"):
+        (checkout / f).parent.mkdir(parents=True, exist_ok=True)
+        (checkout / f).write_text("")
+    monkeypatch.setattr(LC, "ROOT", checkout)
+    tree, said = a_tree("step"), []
+    LC.carry_builds(tree, said.append)
+    assert carried(tree) and len(said) == 2 and "new/Proofs: its build directory moved with it from Old/Proofs" in said[1]
+    LC.carry_builds(tree, said.append)
+    assert carried(tree) and len(said) == 2, "nothing to carry the next time"
+
+    tree, said = a_tree("records"), []
+    with open(tree / ".lock", "w") as held:
+        assert LC.hold_tree(held, tree, said.append) and carried(tree) and len(said) == 2
+    (checkout / "new" / "Proofs" / "lakefile.toml").unlink()
+    tree = a_tree("no-package")
+    with open(tree / ".lock", "w") as held:
+        assert LC.hold_tree(held, tree, said.append)
+    assert (tree / "Old" / "Proofs" / ".lake").is_dir() and (tree / "new" / ".lake").is_dir(), \
+        "a build whose path the checkout has no package at stays, and its directory with it"
+
+
+def test_try_refuses_without_a_build_slot_naming_the_machines_whose_slots_have_one(trying, tmp_path, monkeypatch):
     _, calls = trying
     monkeypatch.setattr(LC.LEAN_SLOT, "hold", refuse)
+    files = {"a": "build 3\naudit 2\n", "b": "check 4\naudit 4\n", "c": "# NAME N\nbuild 2   # a note\n"}
+
+    def read(ssh):
+        if ssh[-1] not in files:
+            raise OSError("exit 255: Permission denied (publickey).")
+        return files[ssh[-1]]
+
+    peers = {name: ["-i", "KEY", name] for name in ("c", "b", "a", "self")}
+    monkeypatch.setattr(LC.LEAN_SLOT.SLOT, "peers", lambda: peers)
+    monkeypatch.setattr(LC, "slots_there", read)
     said = []
     assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 2
-    assert calls["build"] == [] and any("lean_slot.py --status" in s and "nothing ran" in s for s in said)
-    assert not any(re.search(r"\b(vy-nebius|cpu-\d)", s) for s in said), "a refusal names no node"
+    assert calls["build"] == [], "nothing runs without a build slot"
+    [line] = [s for s in said if "nothing ran" in s]
+    assert "have `build`: a, c (`verity lean try Sec/Proofs/Flock/X.lean --on MACHINE`)" in line, line
+    assert line.endswith("; not read: self"), "a machine it can't read is named, never counted as having none"
+    assert LC.pool_machines("build", {}, read) == ([], {})
+    peers.clear()
+    said.clear()
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 2
+    assert any("no machine in" in s and "lean_slot.py --status" in s for s in said), "none read: how to list a machine's pools"
+
+
+def test_slots_there_reads_the_path_every_machine_keeps_whatever_lean_slots_says_here(monkeypatch, tmp_path):
+    monkeypatch.setattr(LC.LEAN_SLOT, "SLOTS", tmp_path / "lean-slots")
+    ran = []
+
+    def run(argv, **kw):
+        ran.append(argv)
+        return subprocess.CompletedProcess(argv, 255 if len(ran) > 1 else 0, "build 2\n", "Permission denied (publickey).\n")
+
+    monkeypatch.setattr(LC.subprocess, "run", run)
+    assert LC.slots_there(["-i", "KEY", "research@peer"]) == "build 2\n"
+    assert ran[0][-2:] == ["research@peer", f"cat {LC.LEAN_SLOT.SLOTS_PATH}"] and "BatchMode=yes" in ran[0]
+    with pytest.raises(OSError, match="exit 255: Permission denied"):
+        LC.slots_there(["research@peer"])
 
 
 def test_try_refuses_a_file_in_no_package_and_a_sandbox_without_dependencies(trying, tmp_path, monkeypatch):
@@ -1006,26 +1138,6 @@ def test_module_of_reads_the_packages_src_dir(trying):
     assert LC.module_of("Plain", "Plain/A/B.lean") == "A.B"
 
 
-def test_the_merge_queues_records_gate_counts_exactly_the_checker_files_a_records_run_reads():
-    """The merge queue's records gate (`research.queue.records_read`) lets a records run at another commit vouch for a head
-    whose checker differs only in files no records run reads; a list narrower than this one's would vouch across a change
-    that decides the run.  It counts every file of the checker Lean's records key does (`tool_inputs`), new ones included,
-    and `merge.py`, which a run loads to merge a lock across a merge of `main` (`merged`), and nothing else."""
-    from research.queue import RECORDS_SHARED, records_read
-
-    tool = LC.LA.LEAN_TOOL
-    files = sorted(tool + p.name for p in HERE.parent.iterdir() if p.is_file())
-    files += [tool + "tests/test_new.py", tool + "tests/fixtures/control/New.lean", tool + "NOTES.md", tool + "new.py",
-              "tools/verity/check/common.py", LC.LA.CONTRACT]
-    assert {tool.rstrip("/"), "tools/verity/check/common.py", LC.LA.CONTRACT} <= set(RECORDS_SHARED)
-    want, got = {*LC.tool_inputs(files), tool + "merge.py"}, {f for f in files if records_read(f)}
-    assert got == want, (
-        f"research's records gate (`records_read` in tools/research/src/research/queue.py) counts {sorted(got - want)} that "
-        f"Lean's records key doesn't, and misses {sorted(want - got)}: a file of {tool} a records run never reads goes in both "
-        "`lean_audit.NOT_READ` and `research.queue.RECORDS_TOOL_UNREAD`, and one it reads in neither (`merge.py` is in "
-        "`NOT_READ` alone)")
-
-
 def test_the_sandbox_is_handed_the_resolved_lake_paths_of_a_linked_slot_tree(tmp_path, monkeypatch):
     """A slot tree is a link into the node's cache root, and mountinfo names a mount by its resolved path, which
     `sandbox.sh` keeps writable: the `.lake` paths (and their `packages`, kept read-only) are the resolved ones."""
@@ -1039,3 +1151,40 @@ def test_the_sandbox_is_handed_the_resolved_lake_paths_of_a_linked_slot_tree(tmp
     box = argv.index(str(LC.SANDBOX))
     assert argv[box + 1:argv.index("--", box)] == [str(real / "Sec" / ".lake"), str(real / "Dep" / ".lake")]
     assert argv[argv.index("ro") + 1:argv.index("--", argv.index("ro"))] == [str(real / "Sec" / ".lake" / "packages")]
+
+
+def test_the_records_facts_cache_is_outside_every_slot_tree_s_build_roots(tmp_path, monkeypatch):
+    """The records step keeps its facts cache (`facts_dir`) beside its slot trees, so no sandboxed build in any slot's tree
+    can write it: neither `check.py`'s (`writable`, path dependencies included) nor this module's (`in_sandbox`, the
+    closure's `.lake`s). check.py refuses an overlapping `--facts-cache` (`build_roots_over`); this keeps that from firing."""
+    monkeypatch.setattr(LC.LA.COMMON, "cache_dir", lambda: tmp_path / "cache")
+    monkeypatch.setattr(LC, "closure", lambda p: [p, "Security"])
+    for slot in ("build/1", "build/2", None):
+        if slot:
+            monkeypatch.setenv(LC.LEAN_SLOT.HELD, slot)
+        else:
+            monkeypatch.delenv(LC.LEAN_SLOT.HELD, raising=False)
+        tree = LC.records_tree()
+        pkgs = [tree / "Security", tree / "Security" / "Proofs"]
+        for p in pkgs:
+            p.mkdir(parents=True, exist_ok=True)
+        (pkgs[1] / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": "s", "type": "path", "dir": ".."}]}))
+        assert LC.AUDIT.build_roots_over(LC.facts_dir(), pkgs) == []
+        box = LC.in_sandbox("Security/Proofs", tree, ["lake", "build"])
+        rw = box[box.index(str(LC.SANDBOX)) + 1:box.index("--", box.index(str(LC.SANDBOX)))]
+        assert rw and not any(LC.facts_dir().resolve().is_relative_to(d) or Path(d).is_relative_to(LC.facts_dir().resolve())
+                              for d in rw)
+
+
+def test_records_takes_a_packages_lake_name_as_well_as_its_path(tmp_path):
+    """`--records network_check` names the package whose `lakefile.toml` says `name = "network_check"`: matching it by
+    path alone refused it as matching no package, after the run had waited for its slot."""
+    pkgs = ["verity/core/protocols/network/lean", "verity/core/protocols/network/nci/lean", "Security"]
+    for p, n in zip(pkgs, ["network_check", "nci_check", "security"]):
+        (tmp_path / p).mkdir(parents=True)
+        (tmp_path / p / "lakefile.toml").write_text(f'name = "{n}"\n\n[[require]]\nname = "mathlib"\n')
+    assert LC.matching("network_check", pkgs, tmp_path) == ["verity/core/protocols/network/lean"]
+    assert LC.matching("verity/core/protocols/network/lean/", pkgs, tmp_path) == ["verity/core/protocols/network/lean"]
+    assert LC.matching("network/lean", pkgs, tmp_path) == ["verity/core/protocols/network/lean"]
+    assert LC.matching("network", pkgs, tmp_path) == pkgs[:2]
+    assert LC.matching("network_check", pkgs) == []

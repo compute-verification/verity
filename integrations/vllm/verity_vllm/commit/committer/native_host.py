@@ -720,6 +720,8 @@ def memtrace(where: str, step: int | None = None) -> None:
 
 class NativeHostCommitter(WindowViews, NativeRangeOpenings):
     name = "native_host"
+    #: whether `_end_step` ends each source's step (`on_step_end`); a source that commits there refuses a committer without it
+    ends_source_steps = False
 
     def __init__(self, engine: Any, *, program_digest: bytes | None = None, run_id: str = "run",
                  hash_threads: int = 2, retain_values: bool = True, acquire_classes: set[str] | None = None, staging: str = "arena",

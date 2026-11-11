@@ -8,7 +8,7 @@ leaves those rows untouched (no kernel runs when no row of the call can be longe
 place the selected indices with shared-memory atomics, so their order varies run to run, and they admit the keys tied at
 the k-th score in atomic order, so the set can vary too; the sparse attention then sums over the keys in that order.
 The canonical row's selection is the registered relation's top-k set (`verity.ml.definitions.registry.dsa_topk`'s
-``topk_set``, which ``DsaTopKOrder`` checks), and its order is ascending:
+``topk_set``, which ``DsaTopKLongRow`` checks), and its order is ascending:
 
 - each score's key is the fast kernels' own, ``convert_to_uint32_v2`` of its 32 bits, here as the signed integer of the
   same order (`ordered`): ``-0`` below ``+0``, a positive NaN above ``+inf`` and a negative one below ``-inf``;
@@ -255,8 +255,9 @@ def wrappers(canon: Canon) -> dict[str, Callable[[Callable[..., Any]], Callable[
 
 
 def install(ns: Any = None, canon: Canon | None = None) -> Canon:
-    """Wrap each of `OPS` on ``ns`` (default ``torch.ops._C``) with its `wrappers` entry; an op already wrapped stays
-    as it is, so installing twice wraps once. Returns the wrappers' `Canon`."""
+    """Wrap each of `OPS` on ``ns`` (default ``torch.ops._C``) with its `wrappers` entry, which keeps the real op's
+    overloads (``.default``) as attributes; an op already wrapped stays as it is, so installing twice wraps once.
+    Returns the wrappers' `Canon`."""
     if ns is None:
         import torch
 
@@ -275,6 +276,9 @@ def install(ns: Any = None, canon: Canon | None = None) -> Canon:
         fn = wraps[name](real)
         fn.dsa_topk_canon = canon  # type: ignore[attr-defined]
         fn.real = real  # type: ignore[attr-defined]
+        # under a TorchDispatchMode, torch finds the op's Python overload as torch.ops._C.<name>.<overload>
+        for o in getattr(real, "overloads", lambda: [])():
+            setattr(fn, o, getattr(real, o))
         setattr(ns, name, fn)
     return canon
 

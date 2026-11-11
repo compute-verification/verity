@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Claims.SamplingTwo
+public import Definitions.Claims.SamplingServed
 public import Proofs.Flock.Claims.Witnesses.SamplingGeneric
 public import Proofs.Flock.SamplingGeneric.Two
 public import Proofs.Flock.Claims.Deploy
@@ -54,6 +54,8 @@ claims `CompiledTwo.KS` and `CompiledTwo.Exfil` they read have their `fails` wit
   (replay blocks the proof blocks `{0}`, `{1}`, first stage `all`, `k = 1`), sampling both replay blocks. It meets
   `CompiledTwo.Sessions` at every hash (`twoSessionsTwo_meets`): the first stage misses a set only when it is empty, and
   the second stage misses `X` only when `X` holds no proof block, where each cell escapes.
+* `CapTwo`'s premises hold at `toyTwo`, both rates `1` (`capTwo_honest`), and its conclusion fails at `zeroTwo`, the toy
+  with a second stage that samples nothing (`capTwo_nontrivial`).
 -/
 
 @[expose] public section
@@ -242,6 +244,9 @@ theorem twoLTwo_sessions {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited
       refine (Pr_le_one _).trans (le_of_eq (Finset.prod_eq_one fun ρ _ => Finset.prod_eq_one fun t _ => ?_).symm)
       rw [hc ρ t, Finset.card_empty, Claims.Sampling.escCell_zero]
   slots _ _ := le_rfl
+  shared := (twoL_sessions (Coin := Coin) H).shared
+  unions x s Pt d hs hP _ _ :=
+    (twoLTwo Coin).unions_of_nPU_le (fun _ => le_rfl) (fun _ => le_rfl) x s Pt d hs hP
   refuses x _ _ _ _ _ := twoLTwo_scope x
   interior _ _ _ _ _ _ _ := rfl
   fixed := (twoL_sessions (Coin := Coin) H).fixed
@@ -259,6 +264,7 @@ theorem twoLTwo_sessions {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited
     refine ⟨[u], u, [u], hb, by interval_cases u <;> decide, hb, fun val ι hq => ?_⟩
     have hv := (hq (twoStmt.roots, ⟨u, true, []⟩) (List.mem_singleton_self _) rfl).1 rfl
     exact two_correct hu2 val ι hv
+  keys := (twoL_sessions (Coin := Coin) H).keys
 
 /-- **Two sampled sessions meet the two-stage contract** (`twoLTwo`, at every hash): over a knowledge-sound proof
 system (`twoA`) with a binding commitment, a compiled two-stage verifier whose first stage samples both replay blocks of
@@ -307,3 +313,194 @@ theorem CompiledTwo.Exfil_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [In
 theorem compilerExfilTwo_nontrivial : ¬ (sksLTwo Bool).Exfil FlockDeploy.sha512 := compiledTwoExfil_fails _
 
 end Claims.SamplingGeneric
+
+/-! ## The patterns' form says something -/
+
+namespace Claims.Witness.SamplingGeneric
+
+open Claims.Sampling
+
+/-- **`InfluenceTwoPatterns`'s premise holds** at the two-session toy: it is in the two-stage scope, the scope its
+compiled two-stage verifier checks. -/
+theorem influenceTwoPatterns_honest : InScopeTwo twoPart twoTwo twoStmt ∧ (twoLTwo Bool).Scope [] :=
+  ⟨inScopeTwo_two, twoLTwo_scope []⟩
+
+/-- A commitment scheme under which every opening opens. -/
+def openCm : CommitmentScheme Bool := ⟨fun _ _ => .ret true, fun _ _ _ => []⟩
+
+/-- A statement whose one gate, an empty `and`, is returned; no gate is an input. -/
+def openStmt : AuditStatement := ⟨[], ⟨[.and []], [0]⟩, ⟨"", 0, []⟩, ⟨[]⟩, []⟩
+
+/-- The partition with no proof blocks: it partitions no gate of `openStmt`, which is outside the two-stage scope. -/
+def noPart : Partition := ⟨[]⟩
+
+/-- The two-stage design over no replay blocks, with no first-stage rule and no stratum. -/
+def noTwo : Design.Two := ⟨noPart, ⟨[]⟩, []⟩
+
+/-- The witness that opens the returned gate at `b`. -/
+def openW (b : Bool) : Wit := ⟨[⟨0, b, []⟩]⟩
+
+/-- Over no replay blocks the first stage samples nothing and the second stage misses nothing: `P̄_a = 1`. -/
+theorem noTwo_Pa (fp : ℕ → ℕ → ℕ) : noTwo.Pa noPart fp = 1 := by
+  have hl : noTwo.part.blocks.length = 0 := rfl
+  unfold Design.Two.Pa
+  rw [hl, Finset.range_zero, Finset.powerset_empty, Finset.sum_singleton]
+  simp only [Finset.prod_empty, Finset.sdiff_self, mul_one]
+  rfl
+
+theorem admissibleTwo_noTwo : admissibleTwo noPart noTwo 0 = {∅} := by
+  ext T
+  have hl : noPart.blocks.length = 0 := rfl
+  simp only [admissibleTwo, Finset.mem_filter, Finset.mem_powerset, Finset.mem_singleton, hl, Finset.range_zero,
+    Finset.subset_empty]
+  refine ⟨fun h => h.1, fun h => ⟨h, ?_⟩⟩
+  show (0 : ℝ) < noTwo.Pa noPart _
+  rw [noTwo_Pa]
+  exact one_pos
+
+theorem inputsOf_open (b : Bool) : inputsOf id openCm openStmt (openW b) = fun _ => none := by
+  funext g
+  have h : openStmt.prog.gates[g]? ≠ some .input := by
+    match g with
+    | 0 => simp [openStmt]
+    | n + 1 => simp [openStmt]
+  simp [inputsOf, h]
+
+theorem served_open (b : Bool) : served id openCm openStmt (openW b) = fun _ => b := by
+  funext ⟨k, hk⟩
+  match k, hk with
+  | 0, _ => cases b <;> rfl
+  | n + 1, hk => exact absurd hk (by simp [openStmt])
+
+/-- Two witnesses serve `true` and `false` on no inputs, each at a footprint in `M̄_0`. -/
+theorem two_le_card_influence_open : 2 ≤ (influenceTwo id openCm openStmt noPart noTwo 0 fun _ => none).card := by
+  classical
+  have hmem : ∀ b, (fun _ => b) ∈ influenceTwo id openCm openStmt noPart noTwo 0 (fun _ => none) := by
+    intro b
+    unfold influenceTwo
+    refine Finset.mem_filter.2 ⟨Finset.mem_univ _, openW b, inputsOf_open b, ⟨fun _ _ => false, ?_⟩, served_open b⟩
+    show (0 : ℝ) < noTwo.Pa noPart _
+    rw [noTwo_Pa]
+    exact one_pos
+  have hne : (fun _ => true : Fin openStmt.prog.outs.length → Bool) ≠ fun _ => false := by
+    intro h
+    have := congrFun h ⟨0, Nat.zero_lt_one⟩
+    simp at this
+  calc 2 = ({fun _ => true, fun _ => false} : Finset (Fin openStmt.prog.outs.length → Bool)).card :=
+        (Finset.card_pair hne).symm
+    _ ≤ _ := Finset.card_le_card fun y hy => by
+        rcases Finset.mem_insert.1 hy with rfl | hy
+        · exact hmem true
+        · rw [Finset.mem_singleton.1 hy]
+          exact hmem false
+
+/-- The admissible sets are `{∅}`, whose one pattern touches no request: the patterns' sum is `2^0`. -/
+theorem patterns_noTwo :
+    ∑ p ∈ (admissibleTwo noPart noTwo 0).image
+        (fun T r => lightOf openStmt noPart (servedBits (fun _ : Fin openStmt.prog.outs.length => ()) r)
+          (blocksTo openStmt.prog noPart (fun _ => ()) T r)),
+      2 ^ ∑ r, lightBits openStmt noPart (servedBits (fun _ : Fin openStmt.prog.outs.length => ()) r) (p r) = 1 := by
+  rw [admissibleTwo_noTwo, Finset.image_singleton, Finset.sum_singleton]
+  simp [blocksTo, lightOf, lightBits]
+
+/-- **`InfluenceTwoPatterns`'s conclusion fails** outside the two-stage scope: at `openStmt` over the partition with no
+proof blocks, two witnesses serve different outputs at footprints in `M̄_0`, so the influence set has two members, and
+the patterns' sum is `1`. -/
+theorem influenceTwoPatterns_nontrivial :
+    ¬ ((influenceTwo id openCm openStmt noPart noTwo 0 fun _ => none).card ≤
+      ∑ p ∈ (admissibleTwo noPart noTwo 0).image
+          (fun T r => lightOf openStmt noPart (servedBits (fun _ : Fin openStmt.prog.outs.length => ()) r)
+            (blocksTo openStmt.prog noPart (fun _ => ()) T r)),
+        2 ^ ∑ r, lightBits openStmt noPart (servedBits (fun _ : Fin openStmt.prog.outs.length => ()) r) (p r)) := by
+  rw [patterns_noTwo]
+  have := two_le_card_influence_open
+  omega
+
+end Claims.Witness.SamplingGeneric
+
+/-! ## The per-window cap says something -/
+
+namespace Claims.Witness.SamplingGeneric
+
+open Claims.Sampling
+open Claims.Witness.Sampling (rejCm toyStmt toyPart toy_Pa)
+
+/-- The toy's first stage `all` catches its one replay block at rate `1`. -/
+theorem toyTwo_firstRate : toyTwo.FirstRate 1 := by
+  intro T hT
+  show toyStmt.design.Pa toyPart T ≤ (1 - 1) ^ T.card
+  rw [toy_Pa, sub_self]
+  split_ifs with hw
+  · have hT0 : T = ∅ := by
+      refine Finset.eq_empty_of_forall_notMem fun v hv => ?_
+      have hlen : toyTwo.part.blocks.length = 1 := rfl
+      have hv0 : v = 0 := by
+        have := Finset.mem_range.1 (hT hv)
+        omega
+      subst hv0
+      have h0w : 0 ∈ Claims.Sampling.window 0 1 T := by simp [Claims.Sampling.window, hv]
+      rw [hw] at h0w
+      simp at h0w
+    subst hT0
+    simp
+  · exact pow_nonneg le_rfl _
+
+/-- The toy's second stage samples its one cell, of one proof block, whole: rate `1`. -/
+theorem toyTwo_secondRate : toyTwo.SecondRate toyPart 1 := by
+  intro ρ hρ t ht _
+  have hlen : toyTwo.part.blocks.length = 1 := rfl
+  have hs : toyPart.strata.length = 1 := rfl
+  obtain rfl : ρ = 0 := by omega
+  obtain rfl : t = 0 := by omega
+  have hc : (cell toyPart toyTwo.part 0 0).card = 1 := by decide
+  rw [hc]
+  norm_num [toyTwo]
+
+/-- **`CapTwo`'s premises hold** at the toy: its first stage catches its replay block at rate `1` and its second stage
+samples its cell at rate `1`. -/
+theorem capTwo_honest : toyTwo.FirstRate 1 ∧ toyTwo.SecondRate toyPart 1 := ⟨toyTwo_firstRate, toyTwo_secondRate⟩
+
+/-- The toy with a second stage that samples nothing (`k = 0`). -/
+def zeroTwo : Design.Two := ⟨toyPart, toyStmt.design, [0]⟩
+
+theorem escCell_k0 (n m : ℕ) : escCell n 0 m = 1 := by simp [escCell]
+
+theorem zeroTwo_esc (fp : ℕ → ℕ → ℕ) (ρ : ℕ) : zeroTwo.esc toyPart fp ρ = 1 := by
+  unfold Design.Two.esc
+  refine Finset.prod_eq_one fun t _ => ?_
+  have hk : zeroTwo.k.getD t 0 = 0 := by cases t <;> simp [zeroTwo]
+  rw [hk, escCell_k0]
+
+/-- A second stage that samples nothing never catches: `P̄_a = 1` at every footprint. -/
+theorem zeroTwo_Pa (fp : ℕ → ℕ → ℕ) : zeroTwo.Pa toyPart fp = 1 := by
+  have hlen : zeroTwo.part.blocks.length = 1 := rfl
+  have h1 : zeroTwo.replay.Pa zeroTwo.part ∅ = 1 := by
+    show toyStmt.design.Pa toyPart ∅ = 1
+    rw [toy_Pa]
+    simp [Claims.Sampling.window]
+  have hps : ({0} : Finset ℕ).powerset = {∅, {0}} := by
+    ext t
+    simp [Finset.subset_singleton_iff]
+  unfold Design.Two.Pa
+  rw [hlen, Finset.range_one, hps, Finset.sum_pair (Finset.singleton_ne_empty 0).symm]
+  simp [zeroTwo_esc, h1]
+
+theorem zeroTwo_wrongBlocks {fp : ℕ → ℕ → ℕ} (h : 1 ≤ fp 0 0) : (zeroTwo.wrongBlocks toyPart fp).card = 1 := by
+  have hlen : zeroTwo.part.blocks.length = 1 := rfl
+  have hs : toyPart.strata.length = 1 := rfl
+  have hp : ∃ t < toyPart.strata.length, 0 < fp 0 t := ⟨0, by rw [hs]; exact Nat.one_pos, h⟩
+  unfold Design.Two.wrongBlocks
+  rw [hlen, Finset.range_one, Finset.filter_singleton, if_pos hp, Finset.card_singleton]
+
+/-- **`CapTwo`'s conclusion fails** at a second stage that samples nothing: the toy's one proof block is incorrect at
+every interior, so the footprint marks its one replay block and the bound at rates `1` and `1` is `0`, while
+`P̄_a = 1`. -/
+theorem capTwo_nontrivial :
+    ¬ (zeroTwo.Pa toyPart (footprint id rejCm toyStmt toyPart zeroTwo.part ⟨[]⟩ fun _ _ => false) ≤
+      (1 - 1 * 1) ^ (zeroTwo.wrongBlocks toyPart
+        (footprint id rejCm toyStmt toyPart zeroTwo.part ⟨[]⟩ fun _ _ => false)).card) := by
+  rw [zeroTwo_Pa, zeroTwo_wrongBlocks (fp := footprint id rejCm toyStmt toyPart zeroTwo.part ⟨[]⟩ fun _ _ => false)
+    (toy_footprint id ⟨[]⟩ _)]
+  norm_num
+
+end Claims.Witness.SamplingGeneric

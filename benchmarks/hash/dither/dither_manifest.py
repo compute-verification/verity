@@ -23,9 +23,13 @@ import hashlib
 import json
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import dither_one as DO
 from dither_fused import CM, CO
+
+if TYPE_CHECKING:
+    from verity.core.protocols.spot.challenger import ChallengerKey
 
 SCHEMA = "verity/dither-so/window-manifest/v1"
 TAIL_KIND, FINAL_KIND, LATE_KIND, MANIFEST_KIND = "receipt-tail", "round-final", "round-late", "window-manifest"
@@ -100,8 +104,8 @@ def expect(m: dict) -> dict:
             "manifest_root_listed": mroot.hex() == m["manifest_root"]}
 
 
-def check(manifest: str | Path, challenger_out: str | Path, heads: list[str], pins: list[str], main: list[str], key=None,
-          period: str | None = None, root: bytes | None = None) -> dict:
+def check(manifest: str | Path, challenger_out: str | Path, heads: list[str], pins: list[str], main: list[str],
+          key: ChallengerKey | None = None, period: str | None = None, root: bytes | None = None) -> dict:
     """`coins.check` of the execution phase's coins against the challenger's run, over the round roots and manifest root `expect`
     recomputes, with the host's pins log `pins` (its lines) and the verifier's first-parent history of main `main`;
     ``ok`` only when it passes and the recomputed roots are the manifest's."""
@@ -118,17 +122,18 @@ def check(manifest: str | Path, challenger_out: str | Path, heads: list[str], pi
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    c = sub.add_parser("check", help="an ended window's manifest against the challenger's own run")
+    c = sub.add_parser("check", help="an ended execution phase's manifest against the challenger's own run")
     c.add_argument("--manifest", required=True)
-    c.add_argument("--challenger-out", required=True, help="the session as the challenger's gate publishes it, or its out/")
+    c.add_argument("--challenger-out", required=True,
+                   help="the challenge phase as the challenger's gate publishes it, or its out/")
     c.add_argument("--ledger", action="append", required=True, help="a head of the auditor's ledger, once for each")
     c.add_argument("--pins", type=Path, required=True, help="the challenger host's pins log as infra published it, a "
                    "line a pin (its `challenger-pins head` label)")
     c.add_argument("--main", type=Path, required=True, help="the verifier's own `git rev-list --first-parent "
                    "origin/main`, a commit a line")
     c.add_argument("--key-record", help="the challenger's key record from its deployment (challenger-key/v1)")
-    c.add_argument("--period", help="the window's period, as the verifier knows it")
-    c.add_argument("--root", help="the window's root as the verifier recomputes it (128 hex digits)")
+    c.add_argument("--period", help="the execution phase's period, as the verifier knows it")
+    c.add_argument("--root", help="the execution phase's root as the verifier recomputes it (128 hex digits)")
     a = ap.parse_args(argv)
     key = CO.key_record(a.key_record) if a.key_record else None
     pins = [x for x in a.pins.read_text().split("\n") if x]

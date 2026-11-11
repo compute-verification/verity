@@ -82,7 +82,7 @@ def tokenGates [Fintype L] : Finset (Fin d.D.N) := univ.biUnion A.tokens.holds
 
 /-- **The total update** `Δ` on the run of `d` on the inputs `a`: the bits the decoder `M` needs to describe `θ'`'s
 values given `θ`'s within `c` steps, the decoder model's form of a decoder of at most `c` gates. -/
-noncomputable def totalUpdate (M : Verity.Decoder (List Bool)) (c : ℕ) (a : d.D.Transcript) : ℕ∞ :=
+noncomputable def totalUpdate (M : Verity.Decoder (List Bool)) (c : ℕ) (a : d.D.Trace) : ℕ∞ :=
   Verity.LDL M c (d.D.bits (d.D.eval a) (d.θ.sort (· ≤ ·))) (d.D.bits (d.D.eval a) (A.θ'.sort (· ≤ ·)))
 
 /-- **The state bits** of `T` that `S` reads, `|in(S) \ θ ∩ T|`: the gates of `T`'s token block it reads and doesn't
