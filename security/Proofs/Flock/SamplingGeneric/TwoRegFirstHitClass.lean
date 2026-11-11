@@ -49,6 +49,11 @@ have a proof block needing the representative `q` extracted (`callsBy`).
 * **At the classes of a key** (`CompiledTwo.eventTwoX_le_firstHit_key`): where the classes are those of a key of the
   gates (`Verity.FirstHit.clsOf`), and gates of one key are needed by the same proof blocks and lie in the same replay
   block, the hypotheses on the representatives hold by the key.
+* **From reveals that pass whole** (`CompiledTwo.eventTwoX_le_firstHit_whole`, and `_whole_key` at the classes of a
+  key): where each slot of a sample is its own session (`hskey`), `hwit` splits in a fact about `reveal` that reads no
+  opening check (`hcls`: a reveal that holds an opening at a gate holds one, under the same roots, at each gate of its
+  class) and one about the opening check (`hwhole`: every opening passes that a witness returned by a sampled proof
+  block's extraction reveals at that block).
 * **What the finders read.** The seed, the sample, the waits and the output are the by-position finders'. At a further
   run the output reads the extraction of the sessions with a proof block needing the gate it compares
   (`Compiled.collBy`), and the finder is charged the sessions with a proof block needing that gate's representative.
@@ -63,7 +68,8 @@ have a proof block needing the representative `q` extracted (`callsBy`).
 namespace Claims.SamplingGeneric
 
 open Claims Finset
-open Claims.Sampling (AuditStatement Partition InScopeTwo ownLog forkOn wrongAllAt wrongAllAt_subset gateBlock flatMapRP)
+open Claims.Sampling (AuditStatement Partition InScopeTwo ownLog forkOn wrongAllAt wrongAllAt_subset gateBlock
+  flatMapRP)
 
 /-- Filtering what a weaker filter keeps by a stronger one is filtering by the stronger one. -/
 theorem filter_filter_of_imp {β : Type} (k1 k2 : β → Bool) (h : ∀ b, k1 b = true → k2 b = true) (l : List β) :
@@ -81,6 +87,20 @@ theorem flatMapRP_hashes_filter_le_of_imp {R β γ : Type} (H : Msg → Msg) (ru
     ((flatMapRP f (l.filter k1)).eval H run).2.1 ≤ ((flatMapRP f (l.filter k2)).eval H run).2.1 := by
   rw [← filter_filter_of_imp k1 k2 h l]
   exact flatMapRP_hashes_filter_le H run f k1 (l.filter k2)
+
+/-- An entry of a list zipped with the indices below `n` is at its index in the list. -/
+theorem getElem?_of_mem_zip_finRange {n : ℕ} {β : Type} {l : List β} {iu : Fin n × β}
+    (h : iu ∈ (List.finRange n).zip l) : l[iu.1.val]? = some iu.2 := by
+  obtain ⟨k, hk⟩ := List.mem_iff_getElem?.1 h
+  rw [List.getElem?_zip_eq_some] at hk
+  obtain ⟨h1, h2⟩ := hk
+  have hk' : iu.1.val = k := by
+    obtain ⟨hlt, he⟩ := List.getElem?_eq_some_iff.1 h1
+    rw [List.getElem_finRange] at he
+    rw [← he]
+    rfl
+  rw [hk']
+  exact h2
 
 namespace Compiled
 
@@ -151,6 +171,20 @@ theorem mem_kept_of_sessExt (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} 
   · exact hq
   · rename_i hn
     exact absurd hu hn
+
+/-- **Each slot its own session**: where the slots of a sample have distinct session keys (`hskey`), the proof blocks
+of a slot's session are the slot's own. -/
+theorem sessBlocks_eq_of_skey (L : Compiled Coin A) (x : Msg) (l : List ℕ)
+    (hskey : ∀ i j : ℕ, L.skey x l i = L.skey x l j → i = j) {iu : Fin (L.nPU x) × ℕ}
+    (hiu : iu ∈ (List.finRange (L.nPU x)).zip l) {u' : ℕ} (hu' : u' ∈ L.sessBlocks x l iu.1) : u' = iu.2 := by
+  unfold sessBlocks at hu'
+  obtain ⟨j, hj, hju⟩ := List.mem_filterMap.1 hu'
+  unfold sessSlots at hj
+  have hj2 := (List.mem_filter.1 hj).2
+  have hj3 : (L.skey x l j == L.skey x l iu.1.val) = true := (Bool.and_eq_true_iff.1 hj2).2
+  have hje : j = iu.1.val := hskey j iu.1.val (beq_iff_eq.1 hj3)
+  rw [hje, getElem?_of_mem_zip_finRange hiu] at hju
+  exact (Option.some.inj hju).symm
 
 /-- **A run's extractions keep classes whole, where the witnesses they extract reveal classes whole**: for each
 session of the run's sample, extracted at its first slot, each witness `w` its extraction returns and each proof block
@@ -636,6 +670,84 @@ theorem eventTwoX_le_firstHit_key {H : Msg → Msg} {L : CompiledTwo Coin A} (hA
   eventTwoX_le_firstHit_wit hA hbind hS hs hPt hd hin P needs hpos (Verity.FirstHit.clsOf key)
     (fun u g hg => hneeds g (Verity.FirstHit.clsOf key g) (Verity.FirstHit.key_clsOf key g).symm u hg)
     (fun g g' h => hblock g g' ((Verity.FirstHit.clsOf_eq_iff key g g').1 h)) hwit hX hI
+
+/-- **The event of `KSRegTwoX` with the by-class finders' terms, from reveals that pass whole**:
+`eventTwoX_le_firstHit_wit` where each slot of a sample is its own session (`hskey`: distinct session keys), a class's
+gates are revealed together under the same roots (`hcls`: whatever the transcript and the witness, a reveal that holds
+an opening at a gate holds one, under the same roots, at each gate of its class) and every opening passes that a
+witness returned by a sampled proof block's extraction reveals at that block (`hwhole`). Only `hwhole` reads the
+opening check; it is asked only of the witnesses the extractions return, at every run, accepted or not. -/
+theorem eventTwoX_le_firstHit_whole {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H)
+    (hbind : L.commit.Binds H) (hS : L.Sessions H) {x : Msg} {s : AuditStatement} {Pt : Partition}
+    {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d)
+    (hin : InScopeTwo Pt d s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
+    (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u) (cls : Fin (L.nG x) → Fin (L.nG x))
+    (hrep : ∀ u (g : Fin (L.nG x)), g.val ∈ needs u → (cls g).val ∈ needs u)
+    (hblock : ∀ g g' : Fin (L.nG x), cls g = cls g' → gateBlock d.part g.val = gateBlock d.part g'.val)
+    (hskey : ∀ (r : Fin (L.V.k x) → Coin) (i j : ℕ),
+      L.skey x (L.checked x r) i = L.skey x (L.checked x r) j → i = j)
+    (hcls : ∀ u v w, ∀ p ∈ L.reveal s u v w, ∀ g g' : Fin (L.nG x), p.2.pos = g.val → cls g = cls g' →
+      ∃ p' ∈ L.reveal s u v w, p'.1 = p.1 ∧ p'.2.pos = g'.val)
+    (hwhole : ∀ (ω : Ω) (r : Fin (L.V.k x) → Coin) (u : ℕ) (c : A.EC (L.sh x u)) (w : A.W), u ∈ L.checked x r →
+      ((L.sessWit x u r (run H P L.V x ω r).seen c).eval H (run H P L.V x ω)).1 = some w →
+        ∀ p ∈ L.reveal s u (run H P L.V x ω r).seen w, L.commit.Opens H p.1 p.2 = true)
+    (hX : ∀ K : ℕ, ExpectedCR H (L.toCompiled.finderXCls H P x s needs cls K))
+    (hI : ∀ K : ℕ, ExpectedCR H (L.finderICls H P x s d.part needs cls K)) :
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+        ∃ u ∈ L.checked x p.2, u ∈ L.FregTwoX H P x p.1 p.2) ≤
+      L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + (Compiled.BconfX H L.toCompiled Ω P x).Pr H +
+        4 * Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+          ((L.callsAt H P x s q.1 q.2.1 q.2.2 +
+            ∑ c ∈ (univ.filter (fun g : Fin (L.nG x) =>
+                decide (∃ u ∈ L.checked x q.2.1, g.val ∈ needs u))).image cls,
+              L.toCompiled.callsBy H P x s needs c.val q.1 q.2.1 q.2.2 : ℕ) : ℝ)) /
+          2 ^ (256 : ℝ) :=
+  eventTwoX_le_firstHit_wit hA hbind hS hs hPt hd hin P needs hpos cls hrep hblock
+    (by
+      intro ω r c iu hiu hu w hw u' hu' p hp _ g g' hg hgg
+      have e : u' = iu.2 := L.toCompiled.sessBlocks_eq_of_skey x (L.checked x r) (hskey r) hiu hu'
+      subst e
+      obtain ⟨p', hp', h1, h2⟩ := hcls _ _ w p hp g g' hg hgg
+      exact ⟨p', hp', h1, h2, hwhole ω r iu.2 (c iu.1 ⟨iu.2, hu.1⟩) w (List.of_mem_zip hiu).2 hw p' hp'⟩)
+    hX hI
+
+/-- **The event of `KSRegTwoX` with the by-class finders' terms, from reveals that pass whole, at the classes of a
+key**: `eventTwoX_le_firstHit_whole` at the classes a key of the gates gives (`Verity.FirstHit.clsOf`). Where gates of
+one key are needed by the same proof blocks (`hneeds`), lie in the same replay block of the first stage's partition
+(`hblock`) and are revealed together under the same roots (`hcls`), each slot of a sample is its own session
+(`hskey`), and every opening passes that a witness returned by a sampled proof block's extraction reveals at that block
+(`hwhole`), the bound has one term for each key among the gates the proof blocks of the run's sample need. -/
+theorem eventTwoX_le_firstHit_whole_key {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H)
+    (hbind : L.commit.Binds H) (hS : L.Sessions H) {x : Msg} {s : AuditStatement} {Pt : Partition}
+    {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d)
+    (hin : InScopeTwo Pt d s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
+    (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u) {Key : Type} [DecidableEq Key]
+    (key : Fin (L.nG x) → Key)
+    (hneeds : ∀ g g' : Fin (L.nG x), key g = key g' → ∀ u, g.val ∈ needs u → g'.val ∈ needs u)
+    (hblock : ∀ g g' : Fin (L.nG x), key g = key g' → gateBlock d.part g.val = gateBlock d.part g'.val)
+    (hskey : ∀ (r : Fin (L.V.k x) → Coin) (i j : ℕ),
+      L.skey x (L.checked x r) i = L.skey x (L.checked x r) j → i = j)
+    (hcls : ∀ u v w, ∀ p ∈ L.reveal s u v w, ∀ g g' : Fin (L.nG x), p.2.pos = g.val → key g = key g' →
+      ∃ p' ∈ L.reveal s u v w, p'.1 = p.1 ∧ p'.2.pos = g'.val)
+    (hwhole : ∀ (ω : Ω) (r : Fin (L.V.k x) → Coin) (u : ℕ) (c : A.EC (L.sh x u)) (w : A.W), u ∈ L.checked x r →
+      ((L.sessWit x u r (run H P L.V x ω r).seen c).eval H (run H P L.V x ω)).1 = some w →
+        ∀ p ∈ L.reveal s u (run H P L.V x ω r).seen w, L.commit.Opens H p.1 p.2 = true)
+    (hX : ∀ K : ℕ, ExpectedCR H (L.toCompiled.finderXCls H P x s needs (Verity.FirstHit.clsOf key) K))
+    (hI : ∀ K : ℕ, ExpectedCR H (L.finderICls H P x s d.part needs (Verity.FirstHit.clsOf key) K)) :
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+        ∃ u ∈ L.checked x p.2, u ∈ L.FregTwoX H P x p.1 p.2) ≤
+      L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + (Compiled.BconfX H L.toCompiled Ω P x).Pr H +
+        4 * Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+          ((L.callsAt H P x s q.1 q.2.1 q.2.2 +
+            ∑ c ∈ (univ.filter (fun g : Fin (L.nG x) =>
+                decide (∃ u ∈ L.checked x q.2.1, g.val ∈ needs u))).image (Verity.FirstHit.clsOf key),
+              L.toCompiled.callsBy H P x s needs c.val q.1 q.2.1 q.2.2 : ℕ) : ℝ)) /
+          2 ^ (256 : ℝ) :=
+  eventTwoX_le_firstHit_whole hA hbind hS hs hPt hd hin P needs hpos (Verity.FirstHit.clsOf key)
+    (fun u g hg => hneeds g (Verity.FirstHit.clsOf key g) (Verity.FirstHit.key_clsOf key g).symm u hg)
+    (fun g g' h => hblock g g' ((Verity.FirstHit.clsOf_eq_iff key g g').1 h)) hskey
+    (fun u v w p hp g g' hg hgg => hcls u v w p hp g g' hg ((Verity.FirstHit.clsOf_eq_iff key g g').1 hgg))
+    hwhole hX hI
 
 end CompiledTwo
 
