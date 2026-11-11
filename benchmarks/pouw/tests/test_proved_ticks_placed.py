@@ -14,8 +14,8 @@ from datacenter import (FLEET_CLOSED, Assumption, Cadence, Computed, Credit, Dat
                         Plan, Zone, account, ands, crossings, names, place, register)
 from datacenter.logical import census_of
 from datacenter.models import s8_grid
-from verity.ml.protocols.pouw.circuit import compile as pouw
-from verity.ml.protocols.pouw.circuit import h1tile
+from verity.protocols.pouw.prover.circuit import compile as pouw
+from verity.protocols.pouw.prover.circuit import h1tile
 
 spec = importlib.util.spec_from_file_location("pouw_proved_ticks", Path(__file__).parents[1] / "proved_ticks.py")
 PT = importlib.util.module_from_spec(spec)
