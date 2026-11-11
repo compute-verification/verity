@@ -1,0 +1,110 @@
+# The paths the comments and docstrings of the analysis's Lean (`security/`) still write as they stood before the layout
+# move, each to where that move put its file: `tools/move/rename.py --map tools/move/doc_paths_map.toml` rewrites them.
+# The layout's maps leave every Lean file's bytes alone, since a module's source is in its build key, so these wait for a
+# move that compiles the Lean again. A row is one file's old path and its new one, as `layout_one_map.toml`'s rows give
+# it; it is a whole word, so a `::symbol` or `:LINE` after it stays. Only `security/`'s Lean is read (the files
+# `tests/test_doc_paths.py` reads); none of these paths stands outside a comment there, so no declaration, statement or
+# string changes, and `rename.py --moves` prints `{}`.
+#
+# Not here, because no row can write them: a path whose file was deleted (the sentence needs a person), and a Lean name
+# the doc-path test reads as a file (an entry of its `NOT_PATHS`).
+
+[words]
+
+[[words_in]]
+files = ["security/*.lean"]
+
+[words_in.words]
+"benchmarks/nci/fit.py" = "verity/protocols/inference_only/nci/fit.py"
+"benchmarks/nci/kappa.py" = "verity/protocols/inference_only/nci/kappa.py"
+"benchmarks/nci/tiers.py" = "verity/protocols/inference_only/nci/tiers.py"
+"benchmarks/pouw/clear/clear_audit.py" = "verity/protocols/pouw/clear/clear_audit.py"
+"benchmarks/pouw/receipts/receipt_folds.py" = "verity/protocols/pouw/receipts/receipt_folds.py"
+"verity/core/claims/__init__.py" = "verity/claims/__init__.py"
+"verity/core/devices/certifier/lean/CertifierDevice/Device.lean" = "verity/protocols/certifier/device/lean/CertifierDevice/Device.lean"
+"verity/core/protocols/certifier/arith_encode.py" = "verity/protocols/certifier/verifier/arith_encode.py"
+"verity/core/protocols/certifier/service.py" = "verity/protocols/certifier/verifier/service.py"
+"verity/core/protocols/certifier/tests/test_network_certifier_warden.py" = "verity/protocols/certifier/verifier/tests/test_network_certifier_warden.py"
+"verity/core/protocols/certifier/warden.py" = "verity/protocols/certifier/verifier/warden.py"
+"verity/core/protocols/certifier/warden_rows.py" = "verity/protocols/certifier/verifier/warden_rows.py"
+"verity/core/protocols/interface/CoreProtocol/Site.lean" = "verity/protocols/interface/CoreProtocol/Site.lean"
+"verity/core/protocols/network/nci/lean/NciCheck/Baseline.lean" = "verity/protocols/inference_only/verifier/nci/lean/NciCheck/Baseline.lean"
+"verity/core/protocols/network/nci/lean/NciCheck/Check.lean" = "verity/protocols/inference_only/verifier/nci/lean/NciCheck/Check.lean"
+"verity/core/protocols/network/nci/lean/NciCheck/Count.lean" = "verity/protocols/inference_only/verifier/nci/lean/NciCheck/Count.lean"
+"verity/core/protocols/network/nci/lean/NciCheck/Desc.lean" = "verity/protocols/inference_only/verifier/nci/lean/NciCheck/Desc.lean"
+"verity/core/protocols/network/nci/lean/NciCheck/Protocol.lean" = "verity/protocols/inference_only/verifier/nci/lean/NciCheck/Protocol.lean"
+"verity/core/protocols/pous/PROTOCOL.md" = "verity/protocols/pous/verifier/PROTOCOL.md"
+"verity/core/protocols/pous/check/PousCheck/Verdict.lean" = "verity/protocols/pous/verifier/check/PousCheck/Verdict.lean"
+"verity/core/protocols/pous/check/tests/test_verdict_difftest.py" = "verity/protocols/pous/verifier/check/tests/test_verdict_difftest.py"
+"verity/core/protocols/pous/streamed_wipe.py" = "verity/protocols/pous/verifier/streamed_wipe.py"
+"verity/core/protocols/pous/wipe_store.py" = "verity/protocols/pous/verifier/wipe_store.py"
+"verity/core/protocols/pouw/audit.py" = "verity/protocols/pouw/verifier/audit.py"
+"verity/core/protocols/pouw/coins.py" = "verity/protocols/pouw/verifier/coins.py"
+"verity/core/protocols/pouw/core_check.py" = "verity/protocols/pouw/verifier/core_check.py"
+"verity/core/protocols/pouw/lean/scripts/fp8atom_vectors.py" = "verity/protocols/pouw/verifier/lean/scripts/fp8atom_vectors.py"
+"verity/core/protocols/pouw/lean/scripts/h1t_vectors.py" = "verity/protocols/pouw/verifier/lean/scripts/h1t_vectors.py"
+"verity/core/protocols/pouw/lean/scripts/row_prims_vectors.py" = "verity/protocols/pouw/verifier/lean/scripts/row_prims_vectors.py"
+"verity/core/protocols/pouw/tests/test_cap_lean.py" = "verity/protocols/pouw/verifier/tests/test_cap_lean.py"
+"verity/core/protocols/pouw/tests/test_circuit_row_lean.py" = "verity/protocols/pouw/verifier/tests/test_circuit_row_lean.py"
+"verity/core/protocols/pouw/tests/test_circuit_whole4_lean.py" = "verity/protocols/pouw/verifier/tests/test_circuit_whole4_lean.py"
+"verity/core/protocols/pouw/tests/test_h1_gates.py" = "verity/protocols/pouw/verifier/tests/test_h1_gates.py"
+"verity/core/protocols/pouw/tests/test_row_prims_lean.py" = "verity/protocols/pouw/verifier/tests/test_row_prims_lean.py"
+"verity/core/protocols/pouw/window.py" = "verity/protocols/pouw/verifier/window.py"
+"verity/core/protocols/remote_bandwidth/codec.py" = "verity/protocols/poub/verifier/codec.py"
+"verity/core/protocols/remote_bandwidth/lean/RemoteAudit/Pooled.lean" = "verity/protocols/poub/verifier/lean/RemoteAudit/Pooled.lean"
+"verity/core/protocols/remote_bandwidth/lean/RemoteAudit/Schedule.lean" = "verity/protocols/poub/verifier/lean/RemoteAudit/Schedule.lean"
+"verity/core/protocols/remote_bandwidth/memory_map.py" = "verity/protocols/poub/verifier/memory_map.py"
+"verity/core/protocols/remote_bandwidth/p2.py" = "verity/protocols/poub/verifier/p2.py"
+"verity/core/protocols/remote_bandwidth/tests/test_key_binding.py" = "verity/protocols/poub/verifier/tests/test_key_binding.py"
+"verity/core/protocols/remote_bandwidth/tests/test_sketch_reading.py" = "verity/protocols/poub/verifier/tests/test_sketch_reading.py"
+"verity/core/protocols/spot/challenger.py" = "verity/protocols/spot/device/challenger.py"
+"verity/core/protocols/spot/service.py" = "verity/protocols/spot/verifier/service.py"
+"verity/core/service/flock/Flock/Proof.lean" = "verity/protocols/flock/verifier/Flock/Proof.lean"
+"verity/core/service/flock/Flock/RecSetup.lean" = "verity/protocols/flock/verifier/Flock/RecSetup.lean"
+"verity/core/service/vstar/tests/test_vstar_menu.py" = "verity/protocols/recursion/verifier/vstar_cli/tests/test_vstar_menu.py"
+"verity/core/service/vstar/tests/test_vstar_trace_difftest.py" = "verity/protocols/recursion/verifier/vstar_cli/tests/test_vstar_trace_difftest.py"
+"verity/ml/circuits/PROTOCOL.md" = "verity/circuits/PROTOCOL.md"
+"verity/ml/circuits/boolean/forms.py" = "verity/circuits/boolean/forms.py"
+"verity/ml/circuits/boundary.py" = "verity/circuits/boundary.py"
+"verity/ml/circuits/census.py" = "verity/definitions/circuits/census.py"
+"verity/ml/circuits/ops/fp32.py" = "verity/definitions/ops/fp32.py"
+"verity/ml/circuits/ops/prims.py" = "verity/definitions/ops/prims.py"
+"verity/ml/circuits/ops/tests/fixtures/golden/ada_e4m3_m16n8k32.json" = "verity/definitions/ops/tests/fixtures/golden/ada_e4m3_m16n8k32.json"
+"verity/ml/circuits/ops/tests/test_lean_fp32_vectors.py" = "verity/definitions/ops/tests/test_lean_fp32_vectors.py"
+"verity/ml/circuits/ops/tests/test_lean_scalar_vectors.py" = "verity/definitions/ops/tests/test_lean_scalar_vectors.py"
+"verity/ml/circuits/ops/tests/test_lean_vectors.py" = "verity/definitions/ops/tests/test_lean_vectors.py"
+"verity/ml/circuits/ports.py" = "verity/circuits/ports.py"
+"verity/ml/circuits/silicon/integer.py" = "verity/definitions/silicon/integer.py"
+"verity/ml/circuits/stacking.py" = "verity/definitions/circuits/stacking.py"
+"verity/ml/circuits/tests/test_lean_gates.py" = "verity/circuits/tests/test_lean_gates.py"
+"verity/ml/commitments/frame_v3/PROTOCOL.md" = "verity/commitments/frame_v3/PROTOCOL.md"
+"verity/ml/commitments/gates/embedding.py" = "verity/commitments/gates/embedding.py"
+"verity/ml/commitments/hm96/PROTOCOL.md" = "verity/commitments/hm96/PROTOCOL.md"
+"verity/ml/commitments/tests/test_boolean_embedding.py" = "verity/commitments/tests/test_boolean_embedding.py"
+"verity/ml/flock/live/PROTOCOL.md" = "verity/protocols/flock/prover/live/PROTOCOL.md"
+"verity/ml/flock/live/src/bin/flock-circuit.rs" = "verity/protocols/flock/prover/live/src/bin/flock-circuit.rs"
+"verity/ml/flock/live/src/coin_open_vectors.json" = "verity/protocols/flock/prover/live/src/coin_open_vectors.json"
+"verity/ml/flock/live/src/coin_tree.rs" = "verity/protocols/flock/prover/live/src/coin_tree.rs"
+"verity/ml/flock/live/src/lib.rs" = "verity/protocols/flock/prover/live/src/lib.rs"
+"verity/ml/flock/live/src/zk_hooks.rs" = "verity/protocols/flock/prover/live/src/zk_hooks.rs"
+"verity/ml/flock/live/src/zk_veil.rs" = "verity/protocols/flock/prover/live/src/zk_veil.rs"
+"verity/ml/flock/tests/test_lean_coin_open.py" = "verity/protocols/flock/prover/tests/test_lean_coin_open.py"
+"verity/ml/flock/tests/test_lean_ks_form.py" = "verity/protocols/flock/prover/tests/test_lean_ks_form.py"
+"verity/ml/flock/tests/test_lean_rec_record.py" = "verity/protocols/flock/prover/tests/test_lean_rec_record.py"
+"verity/ml/flock/verifier/README.md" = "verity/protocols/flock/agreement/README.md"
+"verity/ml/flock/verifier/agree.py" = "verity/protocols/flock/agreement/agree.py"
+"verity/ml/flock/verifier/firewall_controls.sh" = "verity/protocols/flock/agreement/firewall_controls.sh"
+"verity/ml/flock/verifier/firewall_finish_agree.sh" = "verity/protocols/flock/agreement/firewall_finish_agree.sh"
+"verity/ml/protocols/certifier/window_charge.py" = "verity/protocols/certifier/prover/window_charge.py"
+"verity/ml/protocols/pous/verdict_circuit.py" = "verity/protocols/pous/prover/verdict_circuit.py"
+"verity/ml/protocols/pouw/circuit/h1tile.py" = "verity/protocols/pouw/prover/circuit/h1tile.py"
+"verity/ml/protocols/pouw/circuit/h1zy.py" = "verity/protocols/pouw/prover/circuit/h1zy.py"
+"verity/ml/protocols/pouw/circuit/live.py" = "verity/protocols/pouw/prover/circuit/live.py"
+"verity/ml/protocols/pouw/circuit/plan.py" = "verity/protocols/pouw/prover/circuit/plan.py"
+"verity/ml/protocols/pouw/circuit/seeds.py" = "verity/protocols/pouw/prover/circuit/seeds.py"
+"verity/ml/protocols/pouw/schemes/pearl_c.py" = "verity/protocols/pouw/prover/schemes/pearl_c.py"
+"verity/ml/protocols/pouw/schemes/pearl_c_u.py" = "verity/protocols/pouw/prover/schemes/pearl_c_u.py"
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps).
+exclude = ["tools/move/**", "archive/**"]
