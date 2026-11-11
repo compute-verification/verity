@@ -8,9 +8,11 @@
                             verdicts; TAG.time, /usr/bin/time -v).
 
 A call's seconds are the verifier's own lines: ``inputs`` is its read of the statement (the circuit and the public file,
-once a call), and each session's line is that session's whole check, its ``setup`` line included. ``by_blocks`` is the
-median session seconds at each block count (a verdict's ``unit_draw.k``), and ``fit`` their least-squares line: the
-seconds a session pays whatever its blocks, and the seconds a block.
+once a call), and each session's line is that session's whole check, its ``setup`` line included. A session counts as
+``checked`` where the verifier accepted it or refused it only for want of ``--program``, its last refusal, which a
+census statement always ends in; one refused earlier stopped early and is left out. ``by_blocks`` is the median
+seconds of the checked sessions at each block count (a verdict's ``unit_draw.k``), and ``fit`` their least-squares
+line: the seconds a session pays whatever its blocks, and the seconds a block.
 """
 from __future__ import annotations
 
@@ -22,6 +24,8 @@ import time
 from pathlib import Path
 
 SCHEMA = "verity/flock-sessions/v1"
+#: how the verifier's last refusal starts: the one a statement that binds no Program ends in once every check has passed
+NO_PROGRAM = "refused: a session without the verifier's program"
 
 
 def stage(spec: str, out: Path, ns: list[int]) -> None:
@@ -83,7 +87,8 @@ def call(out: Path, tag: str) -> dict | None:
             setup = None
     verdicts = [json.loads(x.split(" ", 1)[1]) for x in (out / f"{tag}.out").read_text().splitlines() if x.startswith("VERDICT ")]
     sessions = [{"blocks": (v.get("unit_draw") or {}).get("k"), "session_s": s, "setup_s": u, "accepted": v.get("accepted") is True,
-                 "why": v.get("why")} for (s, u), v in zip(whole, verdicts, strict=True)]
+                 "checked": v.get("accepted") is True or str(v.get("why") or "").startswith(NO_PROGRAM), "why": v.get("why")}
+                for (s, u), v in zip(whole, verdicts, strict=True)]
     return {"tag": tag, "read_s": read[0], "sessions": sessions, **timed(out / f"{tag}.time")}
 
 
@@ -94,7 +99,7 @@ def summary(out: Path) -> dict:
     at: dict[int, list[float]] = {}
     for c in calls:
         for s in c["sessions"]:
-            if s["blocks"]:
+            if s["blocks"] and s["checked"]:
                 at.setdefault(s["blocks"], []).append(s["session_s"])
     by = {n: round(statistics.median(v), 3) for n, v in sorted(at.items())}
     fit = None
@@ -119,7 +124,8 @@ def main() -> None:
               f"{s['full_blocks']} blocks a full statement")
         for c in s["calls"]:
             ses = ", ".join(f"{x['blocks']} blocks {x['session_s']} s (setup {x['setup_s']} s, "
-                            f"{'accepted' if x['accepted'] else 'refused'})" for x in c["sessions"])
+                            f"{'accepted' if x['accepted'] else 'checked, no Program' if x['checked'] else 'refused early'})"
+                            for x in c["sessions"])
             print(f"  {c['tag']}: read {c['read_s']} s; {ses}; cpu {c['cpu_s']} s, wall {c['wall_s']} s, peak {c['maxrss_gib']} GiB")
         print(f"  read once a call: {s['read_s']} s; a session by its blocks: {s['by_blocks']}; fit: {s['fit']}")
     else:

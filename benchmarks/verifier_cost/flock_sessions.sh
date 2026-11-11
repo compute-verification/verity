@@ -6,8 +6,8 @@
 #      and from the same lowering the statement's first N blocks for each N given
 #   3. per N: one loopback --zk session of the CPU prover sampling all N blocks (job.sh's `session`), then
 #      `flock-verify verify --zk` on it FS_REPS times, as the proof server's verdict pool calls it (the statement and
-#      the public file by their archive keys), pinned to one core under /usr/bin/time -v; for the first N, one more
-#      `verify` handed that session twice, a call of two sessions
+#      the public file by their archive keys), pinned to one core under /usr/bin/time -v; for the first N, a second
+#      session of the same statement and one `verify` handed both, a call of two sessions
 #   4. sessions.tar, where it is sent: a proof server's saved sessions of the full statement (one directory a session),
 #      all handed to one `verify` FS_REPS times, then the first of them alone
 #   5. flock-read on the circuit (the read's phases), one `verify` under `perf record` where the node has perf, and
@@ -22,7 +22,7 @@
 # N...: the block counts (default 1 2 4; one at or above `full` is left out).
 # env: FS_MEM_GB (the job's --mem-gb)  FS_REPS=2  FS_CORE (the core every verify is pinned to; default the last one this
 #      process may run on)  FS_PIN (a prefix the staged circuit's SHA-512 must have)  FS_CACHE (job.sh's HZ_CACHE)
-# $OUT gets stage.json and pin.txt (stage.py's), per call TAG.{err,out,time} (TAG nN-repI, nN-twice, saved-repI or saved-one), per N
+# $OUT gets stage.json and pin.txt (stage.py's), per call TAG.{err,out,time} (TAG nN-repI, nN-pair, saved-repI or saved-one), per N
 # nN/ (job.sh's session files and session.json), phases.jsonl, perf-symbols.txt and summary.json.
 set -uo pipefail
 SPEC=${1:?usage: flock_sessions.sh census:NAME [N...]}
@@ -96,13 +96,21 @@ for N in $NS; do
   [ -f "$d/pub.bin" ] || { log "n$N: not staged"; continue; }
   mkdir -p "$O" && ln -s "$D/circuit.txt" "$D/pin.txt" "$d/"
   session "$d" "$O" || { log "n$N: the CPU session failed: $(tail -2 "$O/prove.err" | tr '\n' '|' | cut -c1-300)"; continue; }
-  s=$(ls -d "$d"/sessions/*/ 2> /dev/null | tail -1)
+  s=$(ls -dt "$d"/sessions/*/ 2> /dev/null | head -1)
   [ -n "$s" ] || { log "n$N: no session record"; continue; }
   cp "$s/session.json" "$O/"
   log "n$N: proved: $(cat "$O/prove.time")"
   for i in $(seq 1 "$REPS"); do verify "n$N-rep$i" "$d/pub.bin" "${s%/}"; done
-  [ -n "$FIRST" ] || verify "n$N-twice" "$d/pub.bin" "${s%/}" "${s%/}"
-  [ -n "$FIRST" ] || FIRST="$d/pub.bin ${s%/}"
+  if [ -z "$FIRST" ]; then   # the verifier refuses a session key it has seen in the call, so the pair is two sessions
+    mkdir -p "$O/second"
+    if session "$d" "$O/second"; then
+      s2=$(ls -dt "$d"/sessions/*/ | head -1)
+      [ "$s2" = "$s" ] || verify "n$N-pair" "$d/pub.bin" "${s%/}" "${s2%/}"
+    else
+      log "n$N: the second CPU session failed"
+    fi
+    FIRST="$d/pub.bin ${s%/}"
+  fi
 done
 
 if [ -n "$READ" ]; then
