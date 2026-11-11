@@ -15,13 +15,15 @@ import pytest
 import research.merge as M
 import research.queue as Q
 import research.vqueue_loop as L
-from research import vqueue, vqueue_slim
+from research import carry, vqueue, vqueue_slim
 from research.drive import PREFLIGHT
 from research.executor import GRAPH_V2, Executor, FileTransport
+from research.queue import DRIVE_FLAGS
+from research.store import vocab
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Advance, Build, Drop, Eject, Outcome, Red, Rerun, Retry,
                              Ring, Snapshot, Verdict)
 from research.vqueue_loop import Loop, World, _Clone, _said, branch
-from test_queue import World as Origin, _git
+from test_queue import World as Origin, _git, _merge
 
 T0 = 1_900_000_000.0
 #: the env's spec files in each listed graph
@@ -37,16 +39,23 @@ class Lab:
 
 
 class Labels:
-    """A PR's ready mark is the fake GitHub's (`ready`), and each marked head has a land verdict by `reviewer` unless ``held``."""
+    """A PR's ready mark is the fake GitHub's (`ready`), and each marked head has a land verdict by `reviewer` unless ``held``,
+    but a head ``verdicts`` gives its own ({(PR, head): its `reviewed` labels}), which are its PR's other heads' too."""
 
     def __init__(self, gh):
-        self.gh, self.held = gh, set()
+        self.gh, self.held, self.verdicts = gh, set(), {}
 
     def ready(self, n: int, head: str) -> bool:
         return (n, head) in self.gh.ready
 
     def reviews(self, n: int, head: str) -> list[Lab]:
+        if (n, head) in self.verdicts:
+            return list(self.verdicts[n, head])
         return [Lab("reviewer", "hold" if n in self.held else "land", "2026-01-01T00:00:00Z")]
+
+    def _other_heads(self, n: int, head: str, key: str) -> dict[str, list[Lab]]:
+        return {h: list(labs) for (m, h), labs in self.verdicts.items()
+                if key == vocab.REVIEWED and m == n and h != head and labs}
 
     def ready_by(self, n: int, head: str) -> str:
         return f"lane-{n}"
@@ -280,7 +289,8 @@ def test_a_retry_reruns_its_infra_keys_itself_while_graph2_s_own_verdict_isnt_in
     main = env.main()
     env.put(1, {"a.txt": "1\n"})
     loop = env.loop(vqueue.decide)
-    script = env.graph2_script(loop, {"state": said})
+    script = env.graph2_script(loop, {"state": said, "failed": [{"task": "pytest:r", "key": "sha512:red"}] if said == FAIL
+                                      else []})
     (built,) = loop.tick()
     sha, red = built["sha"], {"pytest:r": "sha512:red"}
     keys = env.listed(sha, {"pytest:a": ["a.txt"], **({"pytest:b": ["b.txt"]} if said == PENDING else {}),
@@ -635,10 +645,11 @@ def test_a_fail_whose_every_failure_is_inherited_hasn_t_ended_while_graph2_count
     keys = env.listed(sha, {"pytest:a": ["a.txt"], "pytest:z": ["z.txt"]}, keys={"pytest:z": z})
     env.result(keys["pytest:a"], "pytest:a", PASS)
     env.result(z, "pytest:z", FAIL)
-    script = env.graph2_script(loop, {"state": FAIL, "pending": 1})
+    failed = [{"task": "pytest:z", "key": z}]
+    script = env.graph2_script(loop, {"state": FAIL, "pending": 1, "failed": failed})
     v = loop.world.verdict(sha, base).verdict
     assert (v.state, [f.base_key for f in v.failed], v.ended, vqueue._reading(v)) == (FAIL, [z], False, PENDING)
-    Path(f"{script}.verdict").write_text(json.dumps({"state": FAIL, "pending": 0}))
+    Path(f"{script}.verdict").write_text(json.dumps({"state": FAIL, "pending": 0, "failed": failed}))
     v = loop.world.verdict(sha, base).verdict
     assert (v.ended, vqueue._reading(v)) == (True, PASS)
 
@@ -726,6 +737,127 @@ def test_a_task_the_verdict_needs_holds_it_on_graph2_s_fail_or_infra_but_one_off
     assert (j.verdict, j.disputed) == (Verdict(PENDING), (L.Dispute("pytest:a", INFRA, "sha512:a-graph2", made["pytest:a"]),))
     labelled = {"state": FAIL, "labelled": "2026-01-01T00:00:00Z", "failed": [{"task": "pytest:a", "key": "sha512:a-graph2"}]}
     assert L._disputed(labelled, ["pytest:a"], {"pytest:a": (PASS, None)}, {"pytest:a": made["pytest:a"]}) == ()
+
+
+def test_a_fail_at_its_base_s_key_graph2_s_verdict_on_the_base_doesn_t_list_holds_the_candidate_and_rings_ci_once(env):
+    """A fail labelled `--by executor` at the base's key is self-asserted too: written beside a candidate's own failure of the
+    task, it would make that failure inherited.  While graph2's verdict on `ready:<base>` hasn't ended, the failure waits on
+    the base, which is enqueued and rung as one not yet listed is; once that verdict has ended without naming the fail, or
+    names the task at another key, the candidate is held, pending, and `CI` is rung once with the task, the base, both keys
+    and both readings.  Once graph2's verdict lists the fail at the base's key, the failure is inherited and it lands."""
+    env.put(1, {"t.py": "1\n"})
+    loop = env.loop(vqueue.decide)
+    script = env.graph2_script(loop)
+    (built,) = loop.tick()
+    sha, main, w, at = built["sha"], built["base"], loop.world, "sha512:base-t"
+    env.listed(main, {"pytest:t": ["t.py"]}, keys={"pytest:t": at})
+    keys = env.listed(sha, {"pytest:a": ["a.txt"], "pytest:t": ["t.py"]})
+    env.result(keys["pytest:a"], "pytest:a", PASS)
+    env.result(keys["pytest:t"], "pytest:t", FAIL, tests=["test_t.py::a"])
+    env.result(at, "pytest:t", FAIL, tests=["test_t.py::a"])          # the base's fail no graph2 verdict lists
+    Path(f"{script}.verdict.ready:{sha}").write_text(json.dumps({"state": FAIL, "pending": 0, "failed": [
+        {"task": "pytest:t", "key": keys["pytest:t"], "tests": ["test_t.py::a"]}]}))
+    on_base = Path(f"{script}.verdict.ready:{main}")
+    on_base.write_text(json.dumps({"state": PENDING, "why": "not requested"}))
+    j = w.verdict(sha, main)
+    assert (j.verdict, j.waits_on, j.disputed) == (Verdict(PENDING), (main, L.BaseWait(L.BASE_UNSAID, "pytest:t")), ())
+    assert j.note == f"graph2 says fail; waiting for its base {main[:12]}: {L.BASE_UNSAID} (pytest:t)"
+    (base,) = loop.tick()
+    assert (base["action"], base["sha"], env.graph2.enqueued()[-1]["check"]) == ("base", main, f"ready:{main}")
+    env.clock += L.BASE_RING_S
+    again, ring = loop.tick()
+    assert (again["action"], ring["action"], ring["why"], ring["to"]) == (
+        "base", "ring", f"base {main[:12]}: {L.BASE_UNSAID}", ["@ci", "@infra"])
+    assert f"holds up ready:{sha[:12]}: {L.BASE_UNSAID} (pytest:t), 30 min after it was first asked for" in ring["text"]
+    on_base.write_text(json.dumps({"state": PASS, "pending": 0}))
+    held = L.Dispute("pytest:t", "", "", at, main)
+    assert str(held) == f"graph2's verdict on its base {main[:12]} names no fail of pytest:t, and the loop reads it fail there at {at}"
+    j = w.verdict(sha, main)
+    assert (j.verdict, j.waits_on, j.disputed) == (Verdict(PENDING), None, (held,))
+    acts = [r for _ in range(3) for r in loop.tick()]
+    (ring,) = acts
+    assert (ring["action"], ring["sha"], ring["why"], ring["to"], ring["done"], ring["task"], ring["check"]) == (
+        "ring", sha, str(held), ["@ci"], True, "pytest:t", f"ready:{main}")
+    assert (ring["graph2"], ring["mine"]) == ({"state": None, "key": None}, {"state": FAIL, "key": at})
+    assert env.posts[-1] == f"@ci vqueue: {ring['text']}" and f"ready:{sha} (#1) while graph2's" in ring["text"]
+    on_base.write_text(json.dumps({"state": FAIL, "pending": 0, "failed": [
+        {"task": "pytest:t", "key": "sha512:other", "tests": ["test_t.py::a"]}]}))
+    assert w.verdict(sha, main).disputed == (L.Dispute("pytest:t", FAIL, "sha512:other", at, main),)
+    assert env.main() == main and env.withdrawn == [] and not {"red", "eject", "rerun"} & set(_acts(env.lines()))
+    on_base.write_text(json.dumps({"state": FAIL, "pending": 0, "failed": [
+        {"task": "pytest:t", "key": at, "tests": ["test_t.py::a"]}]}))
+    assert _acts(loop.tick()) == ["red", "advance", "on_main", "drop"] and env.main() == sha
+    assert [p for p in env.posts if "while graph2's verdict" in p] == [f"@ci vqueue: {ring['text']}"]
+
+
+@pytest.mark.parametrize(("tests", "inherits"), [(["test_t.py::a"], True), (["test_t.py::b"], False)])
+def test_a_fail_graph2_s_verdict_on_the_base_lists_at_its_key_is_inherited_with_the_failing_tests_it_names(env, tests,
+                                                                                                          inherits):
+    """A fail at the base that graph2's verdict on `ready:<base>` lists at the key the loop read counts toward a failure's
+    being inherited, with the failing tests that verdict names: a fail labelled at that key before graph2's own, naming a
+    test more, is the one a label reads (`fold_results`) but widens nothing.  A failure among graph2's tests is inherited and
+    its candidate lands, `main` told red; one of a test only that label names is the candidate's own, and its PR ejected."""
+    one = env.put(1, {"t.py": "1\n"})
+    loop = env.loop(vqueue.decide)
+    script = env.graph2_script(loop)
+    (built,) = loop.tick()
+    sha, main, w, at = built["sha"], built["base"], loop.world, "sha512:base-t"
+    env.listed(main, {"pytest:t": ["t.py"]}, keys={"pytest:t": at})
+    keys = env.listed(sha, {"pytest:a": ["a.txt"], "pytest:t": ["t.py"]})
+    env.result(keys["pytest:a"], "pytest:a", PASS)
+    env.result(keys["pytest:t"], "pytest:t", FAIL, tests=tests)
+    env.result(at, "pytest:t", FAIL, tests=["test_t.py::a", "test_t.py::b"])
+    env.result(at, "pytest:t", FAIL, tests=["test_t.py::a"])          # graph2's own
+    Path(f"{script}.verdict.ready:{main}").write_text(json.dumps({"state": FAIL, "pending": 0, "failed": [
+        {"task": "pytest:t", "key": at, "tests": ["test_t.py::a"]}]}))
+    Path(f"{script}.verdict.ready:{sha}").write_text(json.dumps({"state": FAIL, "pending": 0, "failed": [
+        {"task": "pytest:t", "key": keys["pytest:t"], "tests": tests}]}))
+    j = w.verdict(sha, main)
+    (f,) = j.verdict.failed
+    assert (f.base_key, f.base_tests, j.waits_on, j.disputed) == (at, frozenset({"test_t.py::a"}), None, ())
+    assert vqueue._inherited(f) is inherits
+    if inherits:
+        assert _acts(loop.tick()) == ["red", "advance", "on_main", "drop"] and env.main() == sha
+    else:
+        assert _acts(loop.tick()) == ["eject", "drop"] and env.withdrawn == [(1, one)] and env.main() == main
+
+
+def test_a_listing_other_than_the_one_graph2_runs_holds_its_candidate_and_rings_ci_once(env):
+    """The listing the loop reads, the `verity_graph` label on a candidate's commit, is self-asserted too: one that leaves a
+    gating task out hides its fail.  graph2's verdict names the listing it runs (`art`, the id of its contents): while the
+    loop's isn't it, the candidate is held, pending, and `CI` is rung once with both, their sizes and the tasks graph2 names
+    that the loop's lacks; while graph2 has labelled none, a pass waits; once they are one, it lands."""
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(vqueue.decide)
+    script = env.graph2_script(loop)
+    (built,) = loop.tick()
+    sha, w = built["sha"], loop.world
+    keys = env.listed(sha, {"pytest:a": ["a.txt"]})                     # graph2 runs `pytest:z` too, and failed it
+    env.result(keys["pytest:a"], "pytest:a", PASS)
+    ours = w.tasks.graph_v2(f"ready:{sha}")[0]
+    verdict = Path(f"{script}.verdict.ready:{sha}")
+    verdict.write_text(json.dumps({"state": FAIL, "pending": 0, "tasks": 2, "off_gate": 0, "art": "art:graph2s", "failed": [
+        {"task": "pytest:z", "key": "sha512:z", "tests": ["test_z.py::z"], "inputs": ["z.txt"], "reads": []}]}))
+    held = L.Relisted("art:graph2s", ours, 2, 1, ("pytest:z",))
+    assert str(held) == (f"graph2 runs the listing art:graph2s (2 task(s)), and the loop read {ours} (1 task(s)), which "
+                         "lacks pytest:z")
+    j = w.verdict(sha, built["base"])
+    assert (j.verdict, j.disputed, j.note) == (Verdict(PENDING), (held,),
+                                               f"graph2 says fail; held until graph2 and the loop agree: {held}")
+    acts = [r for _ in range(3) for r in loop.tick()]
+    (ring,) = acts
+    assert (ring["action"], ring["sha"], ring["why"], ring["to"], ring["done"]) == ("ring", sha, str(held), ["@ci"], True)
+    assert (ring["graph2"], ring["mine"], ring["lacks"]) == (
+        {"art": "art:graph2s", "tasks": 2}, {"art": ours, "tasks": 1}, ["pytest:z"])
+    assert env.posts == [f"@ci vqueue: {ring['text']}"] and f"commit:{sha} --key verity_graph" in ring["text"]
+    assert env.main() != sha and env.withdrawn == []
+    verdict.write_text(json.dumps({"state": PASS, "pending": 0, "tasks": 1, "off_gate": 0, "art": None}))
+    j = w.verdict(sha, built["base"])
+    assert (j.verdict, j.disputed, j.note) == (Verdict(PENDING), (),
+                                               "graph2 says pass; held: graph2 hasn't labelled the listing it runs yet")
+    assert L._relisted({"labelled": "2026-01-01T00:00:00Z", "art": "art:graph2s"}, ours, {}) is None
+    verdict.write_text(json.dumps({"state": PASS, "pending": 0, "tasks": 1, "off_gate": 0, "art": ours}))
+    assert _acts(loop.tick()) == ["advance", "on_main", "drop"] and env.main() == sha and len(env.posts) == 1
 
 
 def test_a_fault_main_has_too_is_inherited_by_what_it_names_so_no_pr_touching_its_inputs_is_ejected(env):
@@ -900,6 +1032,124 @@ def test_each_tick_reads_the_labels_afresh_as_drive_reads_them(env):
     w = loop.world
     assert len(made) == 2 and w.labels is made[-1] and w.q.ready == made[-1].ready and w.q.marked_at == made[-1].marked_at
     assert made[-1].change == w.q.own_change and made[-1].since == w.q.rules().marked_after
+
+
+#: a land verdict by a reviewer, not the PR's owner
+LAND = Lab("reviewer", "land", "2026-01-01T00:00:00Z")
+
+
+def _carry_main(env: Env, mode: str) -> str:
+    """`main` moved to a commit setting drive.toml's `verdict_carry` to ``mode``, its check listed with no task."""
+    main = env.o.change({DRIVE_FLAGS: f'verdict_carry = "{mode}"\n'})
+    _git(env.o.origin, "update-ref", "refs/heads/main", main)
+    env.graph2.list_graph(f"ready:{main}", {"schema": GRAPH_V2, "commit": main, "tasks": []})
+    return main
+
+
+@pytest.mark.parametrize("mode", ["on", "shadow", "off"])
+def test_a_land_at_an_older_head_carries_to_its_merge_of_main_as_drive_toml_s_verdict_carry_says_logged_once(
+        env, monkeypatch, mode):
+    """#1's land verdict is at ``old``, and its head only merges `main` into it: drive's verdict carry
+    (`Driver._carried_from`) takes it, logged once a head.  With "on" #1 counts as reviewed and is built, with "shadow" the
+    carry is only logged, and with "off" nothing is judged; each `carry.delta` is judged once while `main` stays."""
+    judged, real = [], carry.delta
+    monkeypatch.setattr(carry, "delta", lambda repo, old, new, trust: judged.append((old, new)) or real(repo, old, new, trust))
+    old = env.o.change({"a.txt": "1\n"})
+    main = _carry_main(env, mode)
+    env.o.gh.put(1, new := _merge(env.o, old, main))
+    env.labels.verdicts |= {(1, old): [LAND], (1, new): []}
+    loop = env.loop(policy)
+    recs = loop.tick()
+    verb = {"on": "carried", "shadow": "would carry"}.get(mode)
+    assert [(r["number"], r["heads"], r["old"], r["carries"], r["why"]) for r in recs if r["action"] == "carry"] == (
+        [(1, [new], old, True, f"{verb} #1's land from {old[:12]} to {new[:12]} (its 1 commit(s) since only merge {main[:12]} "
+                               "as the queue would)")] if verb else [])
+    assert [r["members"] for r in recs if r["action"] == "build"] == ([[1]] if mode == "on" else [])
+    assert [r for r in loop.tick() if r["action"] == "carry"] == [] and judged == ([(old, new)] if verb else [])
+    assert env.labels.verdicts[1, new] == []                            # the loop writes no verdict
+
+
+@pytest.mark.parametrize("change, because", [
+    ("a.txt", "authored: {new} changes a.txt"),
+    ("Security/Proofs/P.lean", "authored: {new} changes Security/Proofs/P.lean"),
+    ("held", "held by other (the merge breaks a) at {new}")])
+def test_a_head_that_changes_more_than_its_merge_of_main_or_is_held_carries_no_land(env, change, because):
+    """drive's safety checks carry over: a commit of the PR's own since the land (a Lean one too) or a hold at the head keeps
+    the land where it is, and the loop logs that it did not carry it."""
+    old = env.o.change({"a.txt": "1\n"})
+    main = _carry_main(env, "on")
+    new = _merge(env.o, old, main)
+    if change != "held":
+        new = env.o.change({change: "2\n"}, base=new)
+    env.o.gh.put(1, new)
+    env.labels.verdicts |= {(1, old): [LAND],
+                            (1, new): [Lab("other", "hold", "2026-01-02T00:00:00Z", "the merge breaks a")] if change == "held" else []}
+    (rec,) = env.loop(policy).tick()
+    assert (rec["action"], rec["carries"], rec["why"]) == (
+        "carry", False, f"did not carry #1's land from {old[:12]} to {new[:12]} ({because.format(new=new[:12])})")
+
+
+def test_a_land_by_the_pr_s_owner_at_an_older_head_carries_nothing(env):
+    """#1's owning lane isn't its ready mark's author here, and its own land at ``old`` counts no more than at its head."""
+    old = env.o.change({"a.txt": "1\n"})
+    main = _carry_main(env, "on")
+    env.o.gh.put(1, new := _merge(env.o, old, main), body="Lane `lane-9`.")
+    env.labels.verdicts |= {(1, old): [Lab("lane-9", "land", "2026-01-01T00:00:00Z")], (1, new): []}
+    assert env.loop(policy).tick() == []
+
+
+def test_a_land_carries_only_to_a_head_marked_ready_there_and_not_to_one_the_hold_label_keeps_out(env):
+    """The carry stands in for a land verdict alone, and judges only an admitted PR, as drive judges only `next`'s marked
+    members: #1's merge of `main` takes no land while it isn't marked ready there (the mark at ``old`` counts no more) or
+    while the hold label keeps it out, and takes it once it is marked and the label is gone."""
+    old = env.o.change({"a.txt": "1\n"})
+    main = _carry_main(env, "on")
+    new = _merge(env.o, old, main)
+    env.o.gh.put(1, old)
+    env.o.gh.put(1, new, ready=False)
+    env.labels.verdicts |= {(1, old): [LAND], (1, new): []}
+    loop = env.loop(policy)
+    assert loop.tick() == []
+    env.o.gh.put(1, new, labels=("hold",))
+    assert loop.tick() == []
+    env.o.gh.put(1, new)
+    assert [(r["action"], r["members"], r.get("carries")) for r in loop.tick() if r["action"] in ("carry", "build")] == [
+        ("carry", [1], True), ("build", [1], None)]
+
+
+@pytest.mark.parametrize("two", ["reviewed", "carried"])
+def test_a_merge_of_another_pr_s_head_carries_once_that_head_lands_on_its_own_verdict_or_a_carried_one(env, two):
+    """#1 merges #2's head, which has a land verdict of its own or one #2's carry takes: #2 is judged first, as #1 contains it,
+    so #1's merge is of a trusted head and its land carries too, and both are built, #2 first."""
+    old2, old1 = env.o.change({"b.txt": "2\n"}), env.o.change({"a.txt": "1\n"})
+    main = _carry_main(env, "on")
+    new2 = _merge(env.o, old2, main)
+    new1 = _merge(env.o, old1, new2)
+    env.o.gh.put(1, new1)
+    env.o.gh.put(2, new2)
+    env.labels.verdicts |= {(1, old1): [LAND], (1, new1): []}
+    env.labels.verdicts |= {(2, new2): [LAND]} if two == "reviewed" else {(2, old2): [LAND], (2, new2): []}
+    recs = env.loop(policy).tick()
+    assert [(r["number"], r["carries"], r["why"].split(" (")[1]) for r in recs if r["action"] == "carry"] == [
+        (1, True, f"its 1 commit(s) since only merge {new2[:12]} as the queue would)"),
+        *([(2, True, f"its 1 commit(s) since only merge {main[:12]} as the queue would)")] if two == "carried" else [])]
+    assert [r["members"] for r in recs if r["action"] == "build"] == [[2, 1]]
+
+
+def test_a_merge_of_the_old_path_s_checked_carries_a_land_as_drive_trusts_checked_beside_main(env):
+    """`checked`, frozen since the switch, holds what landed under drive's rules and reaches `main` in an aggregate of it: a
+    head that only merges it carries its land, as drive's carry trusts the tips of `checked` and `main` (`carry.trust`)."""
+    old = env.o.change({"a.txt": "1\n"})
+    _carry_main(env, "on")
+    checked = env.o.change({"c.txt": "landed on checked\n"})
+    _git(env.o.origin, "update-ref", "refs/heads/checked", checked)
+    env.o.gh.put(1, new := _merge(env.o, old, checked))
+    env.labels.verdicts |= {(1, old): [LAND], (1, new): []}
+    recs = env.loop(policy).tick()
+    assert [(r["number"], r["carries"], r["why"]) for r in recs if r["action"] == "carry"] == [
+        (1, True, f"carried #1's land from {old[:12]} to {new[:12]} (its 1 commit(s) since only merge {checked[:12]} as the "
+                  "queue would)")]
+    assert [r["members"] for r in recs if r["action"] == "build"] == [[1]]
 
 
 def test_only_the_loop_s_own_builds_are_candidates_and_another_queue_branch_is_ignored_logged_once(env):
