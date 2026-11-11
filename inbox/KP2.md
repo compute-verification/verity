@@ -211,3 +211,16 @@ Your Thursday work is unchanged. This is one small fix top asked kernels to send
   reads the diff and the run and marks.
 - **Due:** the pull request open by 09:45Z. Report: its number and head, the diff's lines, the run id and
   verdict, #8835's merge result, and anything you chose not to do.
+
+## Wed 11 Nov 08:30Z: for Thursday's report on HASH-113: memory-accounting asks whether kernels takes the two changes
+
+Not for tonight. memory-accounting (HASH-113, 08:29Z) wants one line from kernels by **Fri 13 Nov 20:00Z**: does
+kernels take the two changes your tables size, both, one or neither, with the date a first change could be in
+review. Its default is to take both itself. The two changes: a pass about 1.02 times as long as a bare read
+(October's records say 1.055 to 1.061), and the host's memory read inside a pass at 337 GB/s or more (they say
+211). By its reading both together take the served store from about 0.147 to about 0.10, its goal's new target.
+- **So your report on the two tables ends with a section for the lead**, for each change: whether the tables show
+  it is there to make (or the extra time is in the hash, or the host read is the memory's limit); what it would
+  touch (`benchmarks/remote_session/session.cu`, the host's read path); its size from your numbers, measured or
+  inferred; and what you would need to have a first change in review, with a date.
+- The lead answers memory-accounting from that section. Nothing in Thursday's grid or hours changes.
