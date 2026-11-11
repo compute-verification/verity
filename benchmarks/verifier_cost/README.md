@@ -175,6 +175,21 @@ digest and sections), with the template's size against the unrolled unit's (rows
 through the calls) into stmt.jsonl; `--base REV` first times the same `flock-tmpl` built against REV's verifier on the
 same staged statement (stmt-base.jsonl).
 
+`flock_members.sh` measures what a member of a run waits before its first check when one process verifies the run's
+members in turn (`verify-members`, which reads the run's program once) against a process a member (`verify`). Per spec,
+`one_stage/m1_unit.py` stages, proves and verifies one statement bound to its program, and `flock_members.py` hands that
+member in `FM_MEMBERS` times each way, pinned to one core, the two ways alternating over `FM_ROUNDS` rounds. Its numbers
+are a member's `before_check_ms` (the verifier's own `inputs:` and `setup:` stage lines) alone, as the kept process's
+first member, which pays the one read, and as a later member. Its guard: each kept member's `VERDICT` lines are byte for
+byte `verify`'s alone, every member is accepted and the kept process exits 0; a run that fails it exits nonzero and
+none of its figures counts. The target is a later member's wait with nothing of the program's in it: what is left reads
+the member's own circuit and public file.
+
+~~~sh
+research run --as proofs --on auto --cpus 16 --mem-gb 64 --max-min 150 --cwd source -- \
+  env FM_MEM_GB=64 bash benchmarks/verifier_cost/flock_members.sh
+~~~
+
 `table_root/table_root.sh` measures the Lean verifier's SHA-512 rate and what a history table's root costs it at the
 pinned capacity (`Spot.HistoryTable.CAPACITY`, `2^17` ranks): `table_root/Main.lean`, built in a scratch Lake package
 against the checkout's verifier, times `Flock.Sha512.hash` at the message lengths the verifier hashes and at 1 MiB, the
