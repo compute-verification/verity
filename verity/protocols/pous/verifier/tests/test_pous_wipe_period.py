@@ -328,6 +328,26 @@ def test_a_challenger_on_its_own_host_with_no_key_pinned_is_refused(tmp_path, mo
     assert not started and not (tmp_path / "out").exists()
 
 
+def test_run_itself_refuses_a_party_on_another_host_with_no_key_pinned(monkeypatch) -> None:
+    """`run`, whoever calls it: a party on another host than the node with `trusted_sha512` unset is refused before
+    its session starts, so no caller's session is ever judged under the key it came with. The same party under a pin,
+    and an unpinned one on the node itself, reach their sessions."""
+    started = []
+
+    def session(party, *args, **kw):
+        started.append(party.host)
+        raise ConnectionError("the session started")
+    monkeypatch.setattr(WP, "session", session)
+    there, here = Side("auditor", ("true",)), Side("n0", ("true",))
+    with pytest.raises(ValueError, match=r"no key is pinned \(trusted_sha512\) with the memory challenger on auditor"):
+        W.run("n0", SMALL, party=there)
+    assert not started
+    for party, pin in ((there, "ab" * 64), (here, None)):
+        with pytest.raises(ConnectionError, match="the session started"):
+            W.run("n0", SMALL, party=party, trusted_sha512=pin)
+    assert started == ["auditor", "n0"]
+
+
 @pytest.mark.parametrize("pin", ["ab" * 63, "AB" * 64, "ab" * 64 + "\n", 7])
 def test_a_pin_is_a_sha512_in_lowercase_hex(pin) -> None:
     with pytest.raises(ValueError, match="wipe.trusted_sha512 is null or the SHA-512"):
