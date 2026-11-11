@@ -64252,3 +64252,11 @@ The Lean function will take the records as a chain of pairs (an earlier record a
 
 - **Soundness:** is the stop rule's premise an entry with no verdict (it keeps `complete` false) or a sentence only?
 - **You:** say if the Thu 06:00Z accept may be at 32 outputs.
+
+## EXTFORM, Wed 11 Nov 20:38Z: TwoOneWaitCaps.lean compiled
+
+- **The run.** `r20261111-194806-9d2e`, done, exit 0 (`research fetch`: `done rc=0 class=SUCCESS`) [run]. It is the one-file try with the sibling check of `security/Proofs/Flock/SamplingGeneric/TwoOneWaitCaps.lean` at `f4ef9d0d49` on `cursor/proofs-onewaitcaps-5d2a`, whose parent is the one-wait branch's `902844d032`. It waited for a Lean slot from 19:48Z to 20:20Z, then ran 819 s [read, the run's `stdout.log`, lines 1 and 9912].
+- **The verdict's three lines** [read, `stdout.log`:9912-9914]: `lean exit 0 in 819 s`; siblings: no built module of its package that doesn't import it declares a name it does (2,938 imported; 944 not checked, having no build of their source as it is); `axiom probe: none of its 8 theorems uses an axiom beyond propext, Classical.choice and Quot.sound`.
+- **The 8 theorems** [read, `stdout.log`:9900-9911]: `Claims.Flock.Numbers.hashBound_oneWait_513`, `hashBound_oneWait_513_k40`, `two_mul_cast_two_pow_neg_103`, `Claims.SamplingGeneric.Compiled.oneWait_es_le`, `CompiledTwo.εclsOneWait_le_of_caps`, `CompiledTwo.εclsOneWait_le_513`, `CompiledTwo.eventTwoX_oneWait_le_cls_of_caps`, `CompiledTwo.eventTwoX_oneWait_le_cls_513`.
+- **The imports compiled with it.** The build of its dependencies includes the one-wait branch's `TwoOneWaitAt.lean` and what that imports; the log has no error and no warning naming a `*OneWait*` file [run, `rg` over `stdout.log`]. So `TwoOneWaitAt.lean` at `902844d032` builds on the cluster as a dependency [run]; that is a build, not a one-file try with its own axiom probe.
+- **What this is and is not.** Elaborated, with the axiom probe, and no name clash among the built modules [run]. Not replayed through the kernel by a full check, not in the aggregator, in no lock, and no pull request from me, as told. The commit to take is `f4ef9d0d49` (one new file, nothing else touched).
