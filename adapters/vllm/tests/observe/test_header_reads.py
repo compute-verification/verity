@@ -161,19 +161,23 @@ def test_a_kv_group_without_a_block_table_for_the_request_is_a_geometry_error():
 
 def test_a_sampler_without_its_first_stage_claims_no_argmax_and_no_gather():
     """The argmax and the gather of a step whose blockwise kernel no sampler has seen: each two-stage sampler leaves them to the
-    patterns after it, with no scratch of its own and with one that holds other views."""
+    patterns after it, with no state of its own, with the state it makes, and with one that holds only another view's records."""
     events, start = decode_step(sampler="gumbel")
     roots = {root.op: root for root in step_events(events).roots}
     stochastic = {"greedy": False, "temperature": 0.7}
-    samplers = [(TokenSelectGumbelTwoStage(vocab=V, block_size=PROF.SAMPLER_BLOCK_SIZE), "token_select", None),
-                (TokenSelectGumbelTopP(vocab=V), "topp_token_select", stochastic),
-                (OV.TokenSampleGumbel(vocab=V), OV.SCRATCH_OV, stochastic)]
-    for sampler, key, sampling in samplers:
-        for scratch in ({}, {key: {"rows": {}, "gathers": {}, "stage1": {}, "stage2": {}}}, {key: {"stage1": {-1: {}}, "stage2": {-1: {}}}}):
+    samplers = [(TokenSelectGumbelTwoStage(vocab=V, block_size=PROF.SAMPLER_BLOCK_SIZE), None),
+                (TokenSelectGumbelTopP(vocab=V), stochastic), (OV.TokenSampleGumbel(vocab=V), stochastic)]
+    for sampler, sampling in samplers:
+        for state in ("none", "made", "another view's"):
             ctx = context(start, None, **({} if sampling is None else {"sampling": sampling}))
-            ctx.scratch.update(scratch)
-            assert sampler.match(roots["aten.argmax.default"], ctx) is None, (sampler.name, scratch)
-            assert sampler.match(roots["aten.gather.default"], ctx) is None, (sampler.name, scratch)
+            if state != "none":
+                tables = [table for table in sampler._state(ctx).values() if isinstance(table, dict)]
+                assert len(tables) >= 2
+                if state != "made":
+                    for table in tables:
+                        table[-1] = {}
+            assert sampler.match(roots["aten.argmax.default"], ctx) is None, (sampler.name, state)
+            assert sampler.match(roots["aten.gather.default"], ctx) is None, (sampler.name, state)
 
 
 def test_the_external_buffers_note_gives_the_views_it_records_with_an_offset_and_strides():
