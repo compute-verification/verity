@@ -237,11 +237,11 @@ what its steps had passed.  `--record` declares it an output, so custody uploads
 leaves no result.json, and the pack is then in the attempt's run record alone (`attempt_pack` reads either).  Custody misses it only
 where it uploads nothing: `--no-custody-r2` and a run without `--on`, and a run whose runner is killed or whose machine is lost.
 `--record` without `--no-cache` (or with `--circuit-cache` beside it, for circuit-check's entries alone) sends presigned URLs of
-the newest recorded checks' packs, failed and cancelled ones' too, since a pack holds only passes, up to `GATHER_BYTES` of them
-(`verdict_url_file`), and of the packs the Lean audits of ready marks left (`PACKERS`): the newest, and before them those of the
-marks of the PRs this checkout holds, however old (`common.merged_heads`).  The launcher fetches none, and the run fetches and
-imports each before its steps (`verdicts_fetched`), beside a `--verdicts-in` pack, never in its place, so every machine reuses
-every pass a recorded check earned; each pack imported is named in the result's `verdicts`.
+the newest recorded checks' packs, failed and cancelled ones' too, since a pack holds only passes, up to `GATHER_BYTES` of them,
+with the packs the Lean audits of ready marks left (`PACKERS`), those of the marks of the PRs this checkout holds before the newest
+(`verdict_url_file`): the launcher fetches none, and the run fetches and imports each before its steps (`verdicts_fetched`),
+beside a `--verdicts-in` pack, never in its place, so every machine reuses every pass a recorded check earned; each pack imported
+is named in the result's `verdicts`.
 
 The evidence store.  A recorded check runs the store-backed tests (integrations/vllm's `store_io`) on the store's remote, never
 skipped: its steps get VERITY_STORE_REQUIRED=1 (a missing remote fails those tests) and, as CHECK_STORE_CUSTODY, the run's custody
