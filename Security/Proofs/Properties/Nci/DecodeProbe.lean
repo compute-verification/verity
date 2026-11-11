@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Nci.RecordServed
+public import Proofs.Properties.Nci.DecodeText
 import Batteries.Tactic.OpenPrivate
 import Std.Data.HashMap.Lemmas
 import Std.Data.HashSet.Lemmas
@@ -52,7 +52,6 @@ hash of a `String` from the bucket's index.
 namespace Flock.Program.Closed
 
 open Lean (Json JsonNumber)
-open NciCheck.Properties.Record.Attack (programEmpty)
 open private getDef composite staticFns DecState DecState.defs DecState.index DecState.busy Desc Desc.types Desc.callees
   Desc.ddefs liftV at_ paramsOf buildNode natJ? from Flock.Program
 
@@ -103,5 +102,34 @@ theorem stop_composite :
 theorem stop_getDef : (getDef 3 descProbe "Root_v1" {}).toOption.isSome = true := by decide +kernel
 
 theorem stop_decode : (decode programEmpty.toUTF8).toOption.isSome = true := by decide +kernel
+
+/-! ### Controls: a recursion by well-founded order that reads no string, and the domain's leaves -/
+
+/-- A definition by well-founded recursion on a number. -/
+def halfProbe (n : Nat) : Nat := if h : n < 2 then 0 else 1 + halfProbe (n - 2)
+termination_by n
+decreasing_by omega
+
+theorem stop_wf : halfProbe 4 = 2 := by decide +kernel
+
+theorem stop_domainNull : (domainError .null).isNone = true := by decide +kernel
+
+theorem stop_domainNum : (domainError (.num ⟨1, 0⟩)).isNone = true := by decide +kernel
+
+theorem stop_recordPairs : (recordPairs "Root_v1").isEmpty = true := by decide +kernel
+
+/-! ### The same answers by the definitions' equations -/
+
+theorem eq_domainNull : domainError .null = none := by simp [domainError]
+
+theorem eq_domainLeaf : domainError (.str "a") = none := by simp [domainError]
+
+theorem eq_domainLeafKernel : domainError (.str "a") = none := by
+  rw [domainError]
+  decide +kernel
+
+theorem eq_domainArr : domainError (.arr #[.str "a", .null]) = none := by simp [domainError]
+
+theorem eq_ty : (Ty.ofJson (.arr #[.str "Tuple", .arr #[]])).toOption.isSome = true := by simp [Ty.ofJson]
 
 end Flock.Program.Closed

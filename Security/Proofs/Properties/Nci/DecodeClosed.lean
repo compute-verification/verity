@@ -1,6 +1,7 @@
 module
 
-public import Proofs.Properties.Nci.RecordServed
+public import Proofs.Properties.Nci.DecodeText
+public import Flock.TemplateQuery
 import Proofs.Flock.SessionLoop.Concrete.Fwd
 import Batteries.Tactic.OpenPrivate
 import Std.Data.HashMap.Lemmas
@@ -62,7 +63,6 @@ text is reached in three moves.
 namespace Flock.Program.Closed
 
 open Lean (Json JsonNumber)
-open NciCheck.Properties.Record.Attack (programEmpty)
 open private getDef composite staticFns DecState DecState.defs DecState.index DecState.busy Desc Desc.types Desc.callees
   Desc.ddefs liftV at_ paramsOf buildNode natJ? from Flock.Program
 
@@ -303,12 +303,12 @@ def answerEmpty : V Prog :=
     (walkRest descEmpty "Root_v1" (getDefRest (Steps.FUEL - 1) descEmpty "Root_v1" rootEmpty {}))
 
 /-- The Program of no node. -/
-def progEmpty : Prog := getOk answerEmpty
+public def progEmpty : Prog := getOk answerEmpty
 
 theorem answerEmpty_isOk : answerEmpty.toOption.isSome = true := by decide +kernel
 
 /-- **The decoder reads `programEmpty`**, with no hypothesis. -/
-theorem decode_empty : decode programEmpty.toUTF8 = .ok progEmpty := by
+public theorem decode_empty : decode programEmpty.toUTF8 = .ok progEmpty := by
   rw [decode_eq, fromUTF8?_toUTF8]
   show decodeT walk programEmpty = .ok progEmpty
   rw [decodeT_empty walk, walk_eq, getDef_empty]
@@ -330,25 +330,16 @@ theorem progEmpty_rootDef :
 theorem progEmpty_index : progEmpty.index = (∅ : Std.HashMap String Nat).insert "Root_v1" 0 := by
   kernel_rfl'
 
-end Flock.Program.Closed
-
-namespace NciCheck.Properties.Record.Attack
-
-open Flock.Program.Closed (progEmpty decode_empty ok_empty okEmpty)
+/-- The Program of no node has no gate. -/
+public theorem progEmpty_gates : (progEmpty.defs[progEmpty.root]!).gates = 0 := by decide +kernel
 
 theorem evaluate_empty_isOk :
     okEmpty (Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg progEmpty) #[]) = true := by
   decide +kernel
 
-theorem gates_empty : gates progEmpty = 0 := by decide +kernel
+/-- The template query finds no unit in the Program of no node. -/
+public theorem evaluate_empty :
+    Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg progEmpty) #[] = .ok #[] :=
+  ok_empty evaluate_empty_isOk
 
-/-- **A served record, with no hypothesis**: the record of no wire over the Program of no node lays out the circuit
-of no gate. -/
-theorem served_empty_closed : Served (formEmpty (some [])) () dEmpty :=
-  served_empty_stated decode_empty (ok_empty evaluate_empty_isOk) gates_empty
-
-/-- The same where the wiring states no order. -/
-theorem served_empty_closed_default : Served (formEmpty none) () dEmpty :=
-  served_empty none check_empty_default decode_empty (ok_empty evaluate_empty_isOk) gates_empty
-
-end NciCheck.Properties.Record.Attack
+end Flock.Program.Closed

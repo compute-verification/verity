@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Nci.RecordServed
+public import Proofs.Properties.Nci.DecodeText
 import Batteries.Tactic.OpenPrivate
 import Std.Data.HashMap.Lemmas
 import Std.Data.HashSet.Lemmas
@@ -50,7 +50,6 @@ node; `way_parse` is the same `decide` on the parse alone.
 
 namespace Flock.Program.Closed
 
-open NciCheck.Properties.Record.Attack (programEmpty)
 
 theorem way_parse : (JsonParse.parse programEmpty).toOption.isSome = true := by decide
 
