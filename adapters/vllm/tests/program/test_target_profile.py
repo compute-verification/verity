@@ -43,6 +43,22 @@ def test_default_profile_is_the_admitted_sm89_record_and_canonical():
     assert TargetProfile(compute_capability=[8, 9]) == p  # list vs tuple canonicalise to the same profile
 
 
+def test_canonical_bytes_are_compact_sorted_ascii_json_with_a_set_as_its_sorted_list():
+    """The bytes an artifact's identity hashes: a tuple is a list and a set its sorted list at any depth, keys are sorted and
+    kept as JSON writes them, and what JSON cannot hold is a TypeError."""
+    obj = {"b": (1, [2, {"z": frozenset({3, 1, 2})}]), "a": {"y", "x"}, 3: None, "é": 1.5, "t": ((0, 5), {(1, 2), (0, 7)})}
+    plain = {"b": [1, [2, {"z": [1, 2, 3]}]], "a": ["x", "y"], "3": None, "é": 1.5, "t": [[0, 5], [[0, 7], [1, 2]]]}
+    with pytest.raises(TypeError):
+        canonical_bytes(obj)  # an int key beside str keys has no order
+    del obj[3], plain["3"]
+    want = b'{"a":["x","y"],"b":[1,[2,{"z":[1,2,3]}]],"t":[[0,5],[[0,7],[1,2]]],"\\u00e9":1.5}'
+    assert canonical_bytes(obj) == canonical_bytes(plain) == want
+    assert canonical_bytes({2: "b", 10: "a"}) == b'{"2":"b","10":"a"}'  # sorted as the ints they are
+    for bad in (object(), {"a": object()}, [{1, "a"}], {(1, 2): 3}):
+        with pytest.raises(TypeError):
+            canonical_bytes(bad)
+
+
 def test_profile_rejects_unknown_and_invalid_fields():
     with pytest.raises(ValueError):
         TargetProfile.from_json({"compute_capability": [8, 9], "gpu_name": "L40S"})
