@@ -21,12 +21,12 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `formalism.py` | a record's quantities (`of_record`, `measure`), Fit and Slowdown at (c, k) (`at`), the one bound and its sensitivities (`bound`), the products term (`he_products`, `he_figure`) and the published ρ with what it rests on (`published`) |
 | `policy.py` | a start's reference shapes and the (c, k) grid; the console's policy (`CONSOLE`), one session of the 45M reference model; `named`, the one place a config's policy name becomes (c, k) |
 | `grade.py` | the grade: a config's slowdown S = p·ρ from its jobs' records and its honest config's, printed and written as `slowdown.json` (below) |
-| `calculator.py` | the slowdown calculator (`benchmarks/rho`) as this package reads it: a fixed policy's numbers, the fleets and periods a figure is presented over, and the bound of record |
+| `calculator.py` | the slowdown calculator (`verity/protocols/inference_only/rho`) as this package reads it: a fixed policy's numbers, the fleets and periods a figure is presented over, and the bound of record |
 | `counterexample.py` | a program's counterexample families: their writer and the sampled bit-for-bit rebuild check |
 | `codecs/` | update codes: identity, low rank, sparse mask, quantized delta, seed replay and their composition |
 | `starts.py` | a start's entry in the starts registry the run command reads |
 
-The reference shapes are the lf model's (`integrations/vllm/tests/program/train_step_lf.py`), which the suite checks.
+The reference shapes are the lf model's (`adapters/vllm/tests/program/train_step_lf.py`), which the suite checks.
 
 ## Running a program
 
@@ -73,7 +73,7 @@ config's records, `DIR/<seed>/<split>/run.json` (`split` is `search` or `final`)
 
 A config's `policy` is a name, and `policy.named` resolves it: `console` is the rule relative to the start (c one
 session of the reference model of the start's size, k the session's input ids), and any other name is a fixed policy
-of the calculator's registry (`benchmarks/rho/data`, its `[policy.*]` tables). The block says which kind it was, and a
+of the calculator's registry (`verity/protocols/inference_only/rho/data`, its `[policy.*]` tables). The block says which kind it was, and a
 name that is neither is refused. p is read on the final set where the attack and its honest config each have a final
 record, else on the search split, and the block says which. Without a traced search record there is no ρ and no S.
 
