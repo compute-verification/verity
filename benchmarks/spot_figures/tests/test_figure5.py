@@ -14,10 +14,14 @@ SURFACE = {"meta": {"weights_bits": {"FP8": 2 * FP4, "FP4": FP4}},
            "rows": [_row(c, s, 0.02, beta, one) for c, beta, one in (("A", 11.0, 3e15), ("F", 1.8, 5e14))
                     for s in (f1.PRIMARY, f1.SECONDARY)]}
 LATER = {"meta": {"weights_bits": {"FP4": FP4}}, "rows": [_row("F", f1.PRIMARY, 0.02, 1.5, 4e14)]}
-PATH = {"steps": [{"label": "today", "status": "measured", "cases": {"two-stage": "A"}, "note": "as served"},
-                  {"label": "a cache", "status": "assumed", "cases": {"two-stage": None}, "note": "pending"},
-                  {"label": "the cut", "status": "modeled", "cases": {"two-stage": "F"}, "note": "fused"}],
-        "off": [{"label": "a hash cut", "status": "assumed", "owner": None, "after": "today",
+PATH = {"design": "the cut isn't served",
+        "steps": [{"label": "today", "status": "measured", "basis": "served-card-priced", "cases": {"two-stage": "A"},
+                   "note": "as served"},
+                  {"label": "a cache", "status": "assumed", "basis": "served-card-priced",
+                   "cases": {"two-stage": None}, "note": "pending"},
+                  {"label": "the cut", "status": "modeled", "basis": "design", "cases": {"two-stage": "F"},
+                   "note": "fused"}],
+        "off": [{"label": "a hash cut", "status": "assumed", "basis": "design", "owner": None, "after": "today",
                  "cases": {"two-stage": "F"}, "note": "off"}],
         "unpriced": [{"label": "a slice (modeled)", "status": "modeled", "note": "adds to every step"},
                      {"label": "the advice charge", "status": "charged", "note": "until a rule lands"}]}
@@ -58,6 +62,43 @@ def test_a_status_outside_the_three_is_refused():
         f.run([SURFACE], bad)
 
 
+def test_a_basis_outside_the_three_or_a_design_without_its_reason_is_refused():
+    with pytest.raises(ValueError, match="basis 'served' is not one of"):
+        f.run([SURFACE], {"steps": [PATH["steps"][0] | {"basis": "served"}]})
+    with pytest.raises(ValueError, match="basis None is not one of"):
+        f.run([SURFACE], {"steps": [{k: v for k, v in PATH["steps"][0].items() if k != "basis"}]})
+    with pytest.raises(ValueError, match="doesn't say what makes it one"):
+        f.run([SURFACE], {"steps": PATH["steps"]})
+
+
+def test_the_caption_calls_no_design_today_and_names_where_the_path_turns_to_one(out):
+    text = f.caption(out)
+    assert "Today, the served cut at card prices, breaks even at 1,102%" in text
+    assert "From the cut on, every total is a design not served: the cut isn't served." in text
+    measured = f.run([SURFACE, LATER], PATH | {"steps": [PATH["steps"][0] | {"basis": "served-measured"}]})
+    assert "Today's measured system breaks even at 1,102%" in f.caption(measured)
+    design = f.run([SURFACE, LATER], PATH | {"steps": [PATH["steps"][0] | {"basis": "design"}]})
+    assert "Today's measured system" not in f.caption(design)
+    assert "Today, a design not served, breaks even" in f.caption(design)
+
+
+def test_the_headline_cards_rows_are_stated_with_their_basis():
+    import cards
+    cells = {"trace S": {"without m = 37": {f1.PRIMARY: 0.1806}, "with m = 37": {f1.PRIMARY: 0.1347}}}
+    row = {"row": "(ii)", "label": "(ii) a fused cut", "pricing": "on its own premises", "basis": "design",
+           "basis_from": ["a cut no serving path commits"], "rests_on": [], "cells": cells,
+           "runs": ["r20261109-192926-0dd9"]}
+    card = {"schema": cards.SCHEMA, "slot": "headline", "model": "GLM-5.3", "status": "modeled", "provisional": True,
+            "source": "a run", "runs": ["r20261109-192926-0dd9"], "owner": "@proofs",
+            "value": {"bases": list(cards.BASES), "rows": [row], "quote": "none"}}
+    out = f.run([SURFACE, LATER], PATH, card)
+    assert out["headline"][0]["basis"] == "design"
+    assert ("(ii) a fused cut, on its own premises (a design not served): trace S 18.1% without m = 37 and "
+            "13.5% with m = 37. No row is served and measured.") in f.caption(out)
+    with pytest.raises(ValueError, match="a measured headline card holds only served-measured rows"):
+        f.run([SURFACE], PATH, card | {"status": "measured"})
+
+
 def test_an_off_path_lever_is_priced_beside_its_step_and_a_bad_branch_is_refused(out):
     (hash_cut,) = out["off"]
     assert hash_cut["after_index"] == 0 and hash_cut["at"]["two-stage"][f1.PRIMARY]["beta"] == 1.5
@@ -78,5 +119,6 @@ def test_the_figure_renders(out, tmp_path):
 def test_the_default_path_names_a_case_and_a_status_for_every_step():
     assert f.PATH["steps"][0]["cases"] == {"two-stage": "R0"}
     assert {st["status"] for st in f.PATH["steps"] + f.PATH["off"]} <= set(f.STATUSES)
+    assert {st["basis"] for st in f.PATH["steps"] + f.PATH["off"]} == {"design"} and f.PATH["design"]
     assert not any("hash" in c for st in f.PATH["steps"] for c in st["cases"].values() if c)
     assert [a["status"] for a in f.PATH["unpriced"]] == ["modeled", "charged"]
